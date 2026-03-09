@@ -1,0 +1,85 @@
+# Skill: tmux-monitor
+
+Smart monitoring of all worker panes — detects DONE, WORKING, ERROR, and IDLE states.
+
+## Usage
+`/tmux-monitor`
+
+## Prompt
+You are monitoring the status of all Claude Code worker instances in TMUX.
+
+### Quick Status Check (all workers)
+
+```bash
+for i in $(seq 2 11); do
+  echo "=== Worker 0.$i ==="
+  tmux capture-pane -t "claude-team:0.$i" -p -S -5 2>/dev/null || echo "(pane not found)"
+  echo ""
+done
+```
+
+### State Detection
+
+Read the last 5-10 lines of each worker's captured output and classify:
+
+| State | How to detect | Display |
+|-------|---------------|---------|
+| **IDLE** | Shows `❯` prompt, no task text above | `⬚ IDLE` |
+| **WORKING** | Shows `thinking`, `working`, tool calls in progress, spinner chars (`✳ ✶ ✻`) | `⏳ WORKING` |
+| **DONE** | Shows `Worked for Xs` or `✻ Worked for` followed by `❯` prompt | `✅ DONE` |
+| **ERROR** | Shows `Error`, `failed`, `SIGTERM`, or red error text | `❌ ERROR` |
+| **QUEUED** | Shows pasted text but no processing started (text visible, no tool calls) | `📋 QUEUED` |
+
+### Output Format
+
+Present a clean status table:
+
+```
+Worker Status    Task                      Time
+─────  ──────   ─────────────────────────  ─────
+W2     ✅ DONE  Overview + tree edits      1m 22s
+W3     ✅ DONE  Packages + tech stack      50s
+W4     ⏳ WORK  Getting started + scripts  ...
+W5     ⬚ IDLE   -                          -
+W6     ⬚ IDLE   -                          -
+...
+```
+
+### Deep Inspect a Single Worker
+
+If the user asks to inspect a specific worker, capture more lines:
+
+```bash
+tmux capture-pane -t claude-team:0.X -p -S -80
+```
+
+This shows the full recent history — useful for debugging errors or reviewing completed work.
+
+### Watching (continuous monitoring)
+
+If waiting for workers to finish, use this polling pattern:
+
+1. Check all workers
+2. If any are still WORKING, sleep 20-30s and check again
+3. Once all are DONE/IDLE/ERROR, report final status
+
+**Do NOT poll more frequently than every 15 seconds** — it wastes tokens.
+
+### Error Recovery
+
+When a worker shows ERROR state:
+
+1. Capture full output: `tmux capture-pane -t claude-team:0.X -p -S -80`
+2. Identify the error type:
+   - **Edit conflict** (line numbers shifted) — worker usually auto-retries
+   - **File not found** — bad path in task prompt, fix and re-dispatch
+   - **Type error** — may need different approach, escalate to user
+   - **Timeout/SIGTERM** — task was too large, break it down further
+3. If worker is stuck at error with `❯` prompt, it's idle and can be re-tasked
+
+### Rules
+
+1. Never interrupt a WORKING worker
+2. Report errors immediately — don't wait for other workers
+3. Include timing info when available (workers show "Worked for Xs")
+4. If a QUEUED worker hasn't started after 10s, send Enter again
