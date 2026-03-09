@@ -55,10 +55,9 @@ git clone https://github.com/frikk-gyldendal/claude-code-tmux-team.git
 cd claude-code-tmux-team && ./install.sh
 ```
 
-**Then reload your shell and launch:**
+**Then launch from any project directory:**
 
 ```bash
-source ~/.zshrc   # or open a new terminal
 claude-team       # default 6x2 grid (10 workers)
 ```
 

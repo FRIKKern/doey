@@ -23,33 +23,24 @@ echo "  ✓ Installed agent definitions"
 cp "$SCRIPT_DIR/skills/"*.md ~/.claude/skills/
 echo "  ✓ Installed skills (slash commands)"
 
-# 4. Source the shell function
-SHELL_FUNC="$SCRIPT_DIR/shell/claude-team.sh"
+# 4. Install the claude-team script
+mkdir -p ~/.local/bin
+cp "$SCRIPT_DIR/shell/claude-team.sh" ~/.local/bin/claude-team
+chmod +x ~/.local/bin/claude-team
+echo "  ✓ Installed claude-team to ~/.local/bin/claude-team"
 
-# Detect shell config file
-if [[ -f ~/.zshrc ]]; then
-  SHELL_RC=~/.zshrc
-elif [[ -f ~/.bashrc ]]; then
-  SHELL_RC=~/.bashrc
-else
-  SHELL_RC=~/.profile
-fi
-
-# Add source line if not already present
-if ! grep -q "claude-team.sh" "$SHELL_RC" 2>/dev/null; then
-  echo "" >> "$SHELL_RC"
-  echo "# TMUX Claude Team" >> "$SHELL_RC"
-  echo "source \"$SHELL_FUNC\"" >> "$SHELL_RC"
-  echo "  ✓ Added shell function to $SHELL_RC"
-else
-  echo "  ✓ Shell function already in $SHELL_RC"
+# 5. Check if ~/.local/bin is on PATH
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
+  echo ""
+  echo "  ⚠  ~/.local/bin is not in your PATH."
+  echo "     Add this to your shell config (~/.zshrc or ~/.bashrc):"
+  echo ""
+  echo "       export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo ""
 fi
 
 echo ""
-echo "Done! Restart your shell or run:"
-echo "  source $SHELL_RC"
-echo ""
-echo "Then start the team with:"
+echo "Done! Start the team with:"
 echo "  claude-team          # in current directory, default 6x2 grid"
 echo "  claude-team 4x3      # custom grid"
 echo ""
