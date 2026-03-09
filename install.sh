@@ -80,6 +80,12 @@ printf "  ${BRAND}[1/4]${RESET} Creating directories..."
 # Save repo location so /tmux-reinstall can find it later
 echo "$SCRIPT_DIR" > ~/.claude/claude-team/repo-path
 
+# Clean up stale files from previous installs
+# Skills were moved from ~/.claude/skills/ to ~/.claude/commands/ in v0.2
+rm -f ~/.claude/skills/tmux-*.md 2>/dev/null
+# Remove any orphaned skills directory if empty
+rmdir ~/.claude/skills 2>/dev/null || true
+
 # ── Step 2: Agent definitions ─────────────────────────────────────────
 AGENT_COUNT=$(find "$SCRIPT_DIR/agents" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
 printf "  ${BRAND}[2/4]${RESET} Installing agent definitions (${BOLD}%s${RESET})..." "$AGENT_COUNT"

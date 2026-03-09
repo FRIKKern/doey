@@ -17,7 +17,7 @@ This gives you:
 - `PROJECT_NAME` — human-readable project name
 - `WORKER_PANES` — comma-separated list of worker pane indices (e.g., "1,2,3,4,5,7,8,9,10,11")
 - `WATCHDOG_PANE` — your own pane ID (skip this when monitoring)
-- `MANAGER_PANE` — the Manager pane ID (skip this when monitoring)
+- The Manager is always pane **0.0** — skip it when monitoring
 
 **Always use `${SESSION_NAME}` in all tmux commands** — never hardcode session names.
 
@@ -67,7 +67,7 @@ Look for these patterns in captured output and respond accordingly:
 tmux send-keys -t "${SESSION_NAME}:PANE_ID" "y" Enter
 
 # Just press Enter
-tmux send-keys -t "${SESSION_NAME}:PANE_ID" "" Enter
+tmux send-keys -t "${SESSION_NAME}:PANE_ID" Enter
 ```
 
 ## Your Loop
@@ -83,7 +83,7 @@ When you start, run a continuous monitoring cycle:
 7. Repeat
 
 ## Important
-- NEVER interfere with the Manager pane (`${MANAGER_PANE}`) — the Manager talks to the user
+- NEVER interfere with the Manager pane (pane **0.0**) — the Manager talks to the user
 - NEVER interfere with yourself (`${WATCHDOG_PANE}`)
 - Log every action to `${RUNTIME_DIR}/runner.log` so the Manager can review
 - If unsure whether something is a prompt, err on the side of NOT pressing anything

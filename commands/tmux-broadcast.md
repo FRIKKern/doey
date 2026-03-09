@@ -15,7 +15,6 @@ You are broadcasting a message to all other Claude Code instances in your TMUX s
    RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
-   MY_SESSION=$(tmux display-message -p '#{session_name}')
    ```
 
 2. Ask the user for the broadcast message (if not already provided).
@@ -33,7 +32,7 @@ You are broadcasting a message to all other Claude Code instances in your TMUX s
 
 4. Send the `/tmux-inbox` trigger to every OTHER pane in the session:
    ```bash
-   for pane in $(tmux list-panes -s -t "$MY_SESSION" -F '#{session_name}:#{window_index}.#{pane_index}'); do
+   for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
      if [ "$pane" != "$MY_PANE" ]; then
        # Also write a per-pane message so they see it in inbox
        PANE_SAFE=${pane//[:.]/_}

@@ -13,12 +13,13 @@ You are showing the team overview of all Claude Code instances running in TMUX.
 1. Discover runtime directory and identify yourself:
    ```bash
    RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+   source "${RUNTIME_DIR}/session.env"
    MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    ```
 
 2. List all panes with details:
    ```bash
-   tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} | PID: #{pane_pid} | #{pane_width}x#{pane_height} | #{pane_current_command}'
+   tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} | PID: #{pane_pid} | #{pane_width}x#{pane_height} | #{pane_current_command}'
    ```
 
 3. Check for status files:
@@ -30,7 +31,7 @@ You are showing the team overview of all Claude Code instances running in TMUX.
 
 4. Check for unread messages per pane:
    ```bash
-   for pane in $(tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index}'); do
+   for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
      PANE_SAFE=${pane//[:.]/_}
      COUNT=$(ls "${RUNTIME_DIR}/messages/${PANE_SAFE}_"*.msg 2>/dev/null | wc -l)
      echo "$pane: $COUNT unread messages"

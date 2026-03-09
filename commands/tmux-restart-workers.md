@@ -64,7 +64,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 7. **Restart all Worker panes**:
    ```bash
    for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
-     tmux send-keys -t "$SESSION_NAME:0.$i" "claude --dangerously-skip-permissions" Enter
+     tmux send-keys -t "$SESSION_NAME:0.$i" "claude --dangerously-skip-permissions --model opus" Enter
      sleep 0.3
    done
    ```

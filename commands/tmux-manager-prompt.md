@@ -15,7 +15,7 @@ This gives you:
 - `SESSION_NAME` — tmux session name (use in all tmux commands)
 - `PROJECT_DIR` — absolute path to the project directory
 - `PROJECT_NAME` — human-readable project name
-- `WORKER_PANES` — list of worker pane IDs
+- `WORKER_PANES` — comma-separated list of worker pane indices (e.g., "1,2,3,4,5,7,8,9,10,11")
 - `WATCHDOG_PANE` — the watchdog pane ID
 - `RUNTIME_DIR` — runtime directory for messages/status files
 
@@ -91,7 +91,7 @@ for f in "${RUNTIME_DIR}/status/"*.status; do cat "$f"; echo "---"; done
 5. You report back to the user with consolidated results
 
 ## Important
-- Panes 0.1 through 0.N are your teammates — they are regular Claude Code instances
+- Worker pane indices are in the manifest as `WORKER_PANES`. The Watchdog pane is `WATCHDOG_PANE`. Never touch the Watchdog.
 - Wait for Claude to be ready (showing the `>` prompt) before sending tasks
 - You can check if a pane is idle by capturing its output and looking for the input prompt
 - Keep track of assignments so you don't double-assign work

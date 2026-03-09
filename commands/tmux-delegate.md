@@ -14,7 +14,7 @@ You are delegating a task to another Claude Code instance running in a TMUX pane
    ```bash
    RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
-   tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
+   tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
    ```
 
 2. Identify your own pane:

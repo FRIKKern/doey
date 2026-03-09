@@ -13,7 +13,8 @@ You are sending a message to another Claude Code instance running in a TMUX pane
 1. Discover runtime directory and list available panes:
    ```bash
    RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
-   tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
+   source "${RUNTIME_DIR}/session.env"
+   tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
    ```
 
 2. Identify your own pane:
