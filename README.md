@@ -42,21 +42,33 @@ You talk to the Manager. The Manager runs the team. You ship 10x faster.
 
 ## Quick Start
 
+**One command — no clone needed:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-team/main/web-install.sh | bash
+```
+
+**Or clone and install locally:**
+
 ```bash
 git clone https://github.com/frikk-gyldendal/claude-code-tmux-team.git
 cd claude-code-tmux-team && ./install.sh
-source ~/.zshrc  # or ~/.bashrc
 ```
 
-Then, from any project directory:
+**Then reload your shell and launch:**
 
 ```bash
-claude-team          # Launch default 6x2 grid (10 workers)
-claude-team 4x3      # Custom grid layout
-claude-team 3x2      # Smaller team (4 workers)
+source ~/.zshrc   # or open a new terminal
+claude-team       # default 6x2 grid (10 workers)
 ```
 
 That's it. The Manager boots up, workers come online, and you're asked what to work on.
+
+```bash
+claude-team 4x3      # custom grid layout
+claude-team 3x2      # smaller team (4 workers)
+claude-team --help   # all options
+```
 
 ---
 
