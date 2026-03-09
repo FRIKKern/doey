@@ -44,8 +44,10 @@ find_project() {
 }
 
 # Check if a tmux session exists
+# NOTE: < /dev/null prevents tmux from consuming stdin, which breaks
+# when this is called inside a `while read ... done < file` loop.
 session_exists() {
-  tmux has-session -t "$1" 2>/dev/null
+  tmux has-session -t "$1" < /dev/null 2>/dev/null
 }
 
 # Register a directory as a project
@@ -103,7 +105,7 @@ stop_project() {
     printf "  ${WARN}No project registered for $(pwd)${RESET}\n"
     return 1
   fi
-  if tmux kill-session -t "ct-${name}" 2>/dev/null; then
+  if tmux kill-session -t "ct-${name}" < /dev/null 2>/dev/null; then
     printf "  ${SUCCESS}Stopped${RESET} ct-${name}\n"
   else
     printf "  ${DIM}No active session for ${name}${RESET}\n"

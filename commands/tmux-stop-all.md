@@ -10,15 +10,23 @@ You need to stop all running Claude Team tmux sessions.
 
 ### Steps
 
-1. Read the projects registry and find running sessions:
+1. **Resolve tmux path first** — inside `while read` loops, `tmux` may not resolve from PATH. Always capture the full path upfront:
+
+   ```bash
+   TMUX_BIN=$(command -v tmux)
+   ```
+
+2. Read the projects registry and find running sessions:
+
    ```bash
    PROJECTS_FILE="$HOME/.claude/claude-team/projects"
+   TMUX_BIN=$(command -v tmux)
    while IFS=: read -r name path; do
      [ -z "$name" ] && continue
      SESSION="ct-${name}"
-     if tmux has-session -t "$SESSION" 2>/dev/null; then
+     if "$TMUX_BIN" has-session -t "$SESSION" 2>/dev/null; then
        echo "Stopping $SESSION ($path)..."
-       tmux kill-session -t "$SESSION"
+       "$TMUX_BIN" kill-session -t "$SESSION"
        echo "  ✓ Stopped"
      else
        echo "  ○ $SESSION — not running"
@@ -26,4 +34,4 @@ You need to stop all running Claude Team tmux sessions.
    done < "$PROJECTS_FILE"
    ```
 
-2. Report what was stopped and what was already offline.
+3. Report what was stopped and what was already offline.
