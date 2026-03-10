@@ -16,8 +16,8 @@ Communication is via tmux commands (`send-keys`, `capture-pane`) and runtime fil
 
 - `agents/` -- Agent definitions (tmux-manager.md, tmux-watchdog.md), installed to `~/.claude/agents/`
 - `commands/` -- Slash command skills (tmux-*.md), installed to `~/.claude/commands/`
-- `.claude/hooks/` -- Hook scripts (status-hook.sh) for status tracking, watchdog keep-alive, research enforcement, notifications
-- `.claude/settings.local.json` -- Hook registration (maps events to status-hook.sh)
+- `.claude/hooks/` -- Modular hook scripts: common.sh (shared utilities), on-prompt-submit.sh, on-stop.sh, on-pre-tool-use.sh, on-pre-compact.sh
+- `.claude/settings.local.json` -- Hook registration (maps 4 events to modular hook scripts)
 - `shell/` -- Launcher script (claude-team.sh), installed to `~/.local/bin/claude-team` with `ct` symlink
 - `docs/` -- Platform guides (linux-server.md, windows-wsl2.md) and context-reference.md
 
@@ -41,7 +41,12 @@ Communication is via tmux commands (`send-keys`, `capture-pane`) and runtime fil
 ## Important Files
 
 - `shell/claude-team.sh` -- Main launcher: init, start, stop, restart, status, doctor, update, grid setup
-- `.claude/hooks/status-hook.sh` -- Control plane: WORKING/IDLE status tracking, watchdog keep-alive (blocks Stop on watchdog pane), research report enforcement, Manager-only macOS notifications
+- `.claude/hooks/common.sh` -- Shared hook utilities: pane identity resolution, runtime dir detection
+- `.claude/hooks/on-prompt-submit.sh` -- UserPromptSubmit handler: sets WORKING status
+- `.claude/hooks/on-stop.sh` -- Stop handler: sets IDLE status, research report enforcement, watchdog keep-alive, Manager notifications
+- `.claude/hooks/on-pre-tool-use.sh` -- PreToolUse handler: safety guards for tool usage
+- `.claude/hooks/on-pre-compact.sh` -- PreCompact handler: context preservation before compaction
+- `.claude/hooks/status-hook.sh` -- Legacy monolithic hook (kept as reference, no longer registered)
 - `install.sh` -- Copies agents, commands, shell script to user directories; registers repo path
 
 ## Context Reference

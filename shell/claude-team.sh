@@ -348,7 +348,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" -g mouse on
 
   # Suppress terminal bell from worker panes — prevents notification spam
-  # Our status-hook.sh handles Manager-only notifications via osascript
+  # Our on-stop.sh hook handles Manager-only notifications via osascript
   tmux set-option -t "$session" bell-action none
   tmux set-option -t "$session" visual-bell off
 
@@ -393,11 +393,9 @@ WORKER_CONTEXT
     "claude --dangerously-skip-permissions --agent tmux-manager" Enter
   sleep 0.5
 
-  # Auto-enable fast mode and send initial briefing once Manager is ready
+  # Send initial briefing once Manager is ready
   (
     sleep 8
-    tmux send-keys -t "$session:0.0" "/fast" Enter
-    sleep 3
     worker_panes=""
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
@@ -914,8 +912,6 @@ WORKER_CONTEXT
 
   (
     sleep 8
-    tmux send-keys -t "$session:0.0" "/fast" Enter
-    sleep 3
     worker_panes=""
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
@@ -1008,7 +1004,10 @@ run_test() {
   # Copy hooks and settings from the repo
   local repo_dir
   repo_dir="$(cat "$HOME/.claude/claude-team/repo-path")"
-  cp "${repo_dir}/.claude/hooks/status-hook.sh" "${project_dir}/.claude/hooks/status-hook.sh"
+  # Copy all hook scripts
+  for hook_file in "${repo_dir}"/.claude/hooks/*.sh; do
+    [ -f "$hook_file" ] && cp "$hook_file" "${project_dir}/.claude/hooks/$(basename "$hook_file")"
+  done
   cp "${repo_dir}/.claude/settings.local.json" "${project_dir}/.claude/settings.local.json"
 
   git add -A

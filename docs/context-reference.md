@@ -31,7 +31,7 @@ Load Order (bottom = loaded first, top = loaded last / highest precedence)
   +----------------------------------------------------------+
   |  4. Skills/Commands     (~/.claude/commands/tmux-*.md)   |
   +----------------------------------------------------------+
-  |  3. Hook System         (.claude/hooks/status-hook.sh)   |
+  |  3. Hook System         (.claude/hooks/ modular scripts) |
   +----------------------------------------------------------+
   |  2. Claude Code Settings (4-file merge chain)            |
   +----------------------------------------------------------+
@@ -43,7 +43,7 @@ Load Order (bottom = loaded first, top = loaded last / highest precedence)
 |-------|-------------|------------|-----------|
 | 1. Agent Definitions | `agents/tmux-manager.md`, `agents/tmux-watchdog.md` | Manager, Watchdog | Startup (via `--agent`) |
 | 2. Claude Code Settings | 4-file merge chain (see below) | All | Startup |
-| 3. Hook System | `.claude/hooks/status-hook.sh` | All (registered in project settings) | Runtime (on events) |
+| 3. Hook System | `.claude/hooks/common.sh` + `on-*.sh` scripts | All (registered in project settings) | Runtime (on events) |
 | 4. Skills/Commands | `commands/tmux-*.md` (15 files) | Manager primarily; some Watchdog | On-demand (`/skill-name`) |
 | 5. Persistent Memory | `~/.claude/agent-memory/tmux-manager/MEMORY.md` | Manager | Startup (system prompt) |
 | 6. Environment Variables | `session.env`, tmux env, Claude Code env | All | Startup + Runtime |
@@ -117,10 +117,10 @@ scalars; arrays like `permissions.allow` are additive):
 Not present. Would be committed to repo for shared project settings.
 
 **`<project>/.claude/settings.local.json`** (project local):
-- Registers `status-hook.sh` for `UserPromptSubmit` and `Stop` events
+- Registers 4 hook events: `UserPromptSubmit`, `Stop`, `PreToolUse`, `PreCompact`
+- Each event maps to a modular script in `.claude/hooks/on-*.sh`
 - `matcher: ""` matches all prompts (no filtering)
 - `$CLAUDE_PROJECT_DIR` is expanded by Claude Code at runtime
-- Hook command: `"$CLAUDE_PROJECT_DIR"/.claude/hooks/status-hook.sh`
 
 ### Merge Behavior
 
@@ -131,12 +131,29 @@ Not present. Would be committed to repo for shared project settings.
 
 ## Layer 3: Hook System
 
+### Architecture
+
+The hook system uses a modular architecture with a shared utilities file and individual handler scripts:
+
+| File | Purpose |
+|------|---------|
+| `.claude/hooks/common.sh` | Shared utilities: pane identity resolution, runtime dir detection, status file helpers |
+| `.claude/hooks/on-prompt-submit.sh` | UserPromptSubmit handler |
+| `.claude/hooks/on-stop.sh` | Stop handler |
+| `.claude/hooks/on-pre-tool-use.sh` | PreToolUse handler |
+| `.claude/hooks/on-pre-compact.sh` | PreCompact handler |
+| `.claude/hooks/status-hook.sh` | Legacy monolithic hook (kept as reference, no longer registered) |
+
+Each `on-*.sh` script sources `common.sh` for shared functionality.
+
 ### Registered Events
 
-| Event | Trigger | Payload Fields |
-|-------|---------|----------------|
-| `UserPromptSubmit` | When a prompt is submitted to any Claude instance | `hook_event_name`, `prompt` |
-| `Stop` | When a Claude instance finishes responding | `hook_event_name`, `last_assistant_message`, `stop_hook_active` |
+| Event | Script | Trigger | Payload Fields |
+|-------|--------|---------|----------------|
+| `UserPromptSubmit` | `on-prompt-submit.sh` | When a prompt is submitted to any Claude instance | `hook_event_name`, `prompt` |
+| `Stop` | `on-stop.sh` | When a Claude instance finishes responding | `hook_event_name`, `last_assistant_message`, `stop_hook_active` |
+| `PreToolUse` | `on-pre-tool-use.sh` | Before a tool is executed | `hook_event_name`, `tool_name`, `tool_input` |
+| `PreCompact` | `on-pre-compact.sh` | Before context compaction occurs | `hook_event_name` |
 
 ### Exit Code Semantics
 
@@ -146,41 +163,43 @@ Not present. Would be committed to repo for shared project settings.
 | 1 | Block + show error to user |
 | 2 | Block + show stderr as feedback (Claude sees it and can act on it) |
 
-### Complete Flow: `status-hook.sh`
+### Hook Flows
 
+**on-prompt-submit.sh (UserPromptSubmit):**
+- Writes STATUS: WORKING to the pane's status file
+- exit 0
+
+**on-stop.sh (Stop):**
 ```
-stdin (JSON) --> Bail if no TMUX_PANE or no RUNTIME_DIR
-                     |
-                     v
-              Resolve pane identity via tmux display-message -t "$TMUX_PANE"
-                     |
-          +----------+----------+
-          |                     |
-    UserPromptSubmit          Stop
-          |                     |
-    Write STATUS: WORKING     Write STATUS: IDLE
-    exit 0                      |
-                          +-----+-----+
-                          | .task but  |--yes--> exit 2: "Write report first"
-                          | no .report?|
-                          +-----+-----+
-                                |no
-                          +-----+-----+
-                          | Watchdog   |--yes--> exit 2: "Continue monitoring"
-                          | pane?      |
-                          +-----+-----+
-                                |no
-                          +-----+-----+
-                          | Pane 0.0   |--yes--> osascript notification
-                          | (Manager)? |
-                          +-----+-----+
-                                |no
-                             exit 0
+Write STATUS: IDLE
+    |
++-----+-----+
+| .task but  |--yes--> exit 2: "Write report first"
+| no .report?|
++-----+-----+
+      |no
++-----+-----+
+| Watchdog   |--yes--> exit 2: "Continue monitoring"
+| pane?      |
++-----+-----+
+      |no
++-----+-----+
+| Pane 0.0   |--yes--> osascript notification
+| (Manager)? |
++-----+-----+
+      |no
+   exit 0
 ```
+
+**on-pre-tool-use.sh (PreToolUse):**
+- Safety guards for tool usage
+
+**on-pre-compact.sh (PreCompact):**
+- Preserves critical context before compaction
 
 ### TMUX_PANE Identity Resolution
 
-The hook uses `tmux display-message -t "$TMUX_PANE"` (with `-t` targeting the
+The hooks use `tmux display-message -t "$TMUX_PANE"` (with `-t` targeting the
 specific pane) instead of a bare `tmux display-message`. Without `-t`, tmux
 returns info for whichever pane the client is focused on (usually 0.0), which
 caused all workers to think they were the Manager and spam notifications.
@@ -391,7 +410,7 @@ tmux set-option -t "$session" bell-action none
 tmux set-option -t "$session" visual-bell off
 ```
 
-Custom notifications are handled by `status-hook.sh` via `osascript` instead
+Custom notifications are handled by `on-stop.sh` via `osascript` instead
 of terminal bells, preventing notification spam from worker panes.
 
 ### Theme and Display Settings
@@ -493,7 +512,7 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 - Key directories (`agents/`, `commands/`, `.claude/hooks/`, `shell/`, `docs/`)
 - Development conventions (frontmatter format, hook exit codes, shell conventions)
 - Testing guidance (what to restart when changing agents, hooks, commands, launcher)
-- Important file reference (`claude-team.sh`, `status-hook.sh`, `install.sh`)
+- Important file reference (`claude-team.sh`, hook scripts, `install.sh`)
 - Link to this context reference document
 
 
@@ -555,7 +574,7 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 | Manager uses wrong session name | Not reading manifest; verify `tmux show-environment CLAUDE_TEAM_RUNTIME` returns valid path |
 | Manager dispatches to Watchdog pane | `WATCHDOG_PANE` in session.env may be wrong; verify grid math |
 | Manager sends empty tasks | `send-keys "" Enter` bug; check that task text is non-empty before the Enter keystroke |
-| Manager gets no notifications on Stop | Check `status-hook.sh` is registered in `.claude/settings.local.json`; verify pane resolves to `0.0` |
+| Manager gets no notifications on Stop | Check `on-stop.sh` is registered in `.claude/settings.local.json`; verify pane resolves to `0.0` |
 | Manager waits for confirmation on safe tasks | Agent definition may have been modified; check delegation-first rules in body text |
 
 ### When the Watchdog Misbehaves
@@ -577,7 +596,7 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 | All panes think they're Manager | Hook using bare `tmux display-message` without `-t "$TMUX_PANE"` | Fixed in current version; verify hook uses `$TMUX_PANE` |
 | Notification spam | Watchdog notifications + hook notifications both active | Hooks only notify for Manager (pane 0.0); Watchdog notifies for workers |
 | Stale memory causing bad behavior | Outdated patterns in MEMORY.md | Review and clean `~/.claude/agent-memory/tmux-manager/MEMORY.md` |
-| Research worker stops without report | Hook not installed or not blocking | Check exit code 2 path in `status-hook.sh`; verify `.task` file was created |
+| Research worker stops without report | Hook not installed or not blocking | Check exit code 2 path in `on-stop.sh`; verify `.task` file was created |
 | Workers don't pick up hook changes | Hooks load at Claude Code startup | Restart workers via `/tmux-restart-workers` |
 
 ### How to Trace Which Layer Caused a Behavior
@@ -585,7 +604,7 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 1. **Is it in the system prompt?** Check agent definition body text.
 2. **Is it from memory?** Check `~/.claude/agent-memory/<agent>/MEMORY.md`.
 3. **Is it a settings issue?** Dump merged settings: check all 4 files in merge order.
-4. **Is it a hook issue?** Add `echo "DEBUG: ..." >&2` to `status-hook.sh` and watch stderr.
+4. **Is it a hook issue?** Add `echo "DEBUG: ..." >&2` to the relevant `on-*.sh` hook and watch stderr.
 5. **Is it a skill issue?** Read the skill file in `commands/`; skills compose with agent context.
 6. **Is it an environment issue?** Check `session.env` and `tmux show-environment`.
 7. **Is it a runtime state issue?** Inspect files in `/tmp/claude-team/<name>/`.

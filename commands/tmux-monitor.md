@@ -29,6 +29,8 @@ If the manifest is missing, fall back by detecting session name from tmux: `SESS
 ```bash
 RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+# Write timestamp for statusbar countdown
+date +%s > "${RUNTIME_DIR}/status/last_monitor.ts"
 SESSION="${SESSION_NAME}"
 PANES="${WORKER_PANES:-1,2,3,4,5,7,8,9,10,11}"
 for i in $(echo "$PANES" | tr ',' ' '); do
