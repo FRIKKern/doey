@@ -8,7 +8,7 @@ set -euo pipefail
 INPUT=$(cat)
 
 # Bail silently if not in tmux
-if ! tmux display-message -p '' >/dev/null 2>&1; then
+if [ -z "${TMUX_PANE:-}" ] || ! tmux display-message -t "${TMUX_PANE}" -p '' >/dev/null 2>&1; then
   exit 0
 fi
 
@@ -17,7 +17,10 @@ RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f
 [ -z "$RUNTIME_DIR" ] && exit 0
 
 # Get pane identity
-PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
+# IMPORTANT: Use -t "$TMUX_PANE" to resolve THIS pane's identity, not the client's focused pane.
+# Without -t, tmux display-message returns info for whichever pane the user is viewing (usually 0.0),
+# which caused ALL workers to think they were the Manager and spam notifications.
+PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
 PANE_SAFE=${PANE//[:.]/_}
 
 # Ensure status dir exists
