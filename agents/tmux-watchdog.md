@@ -59,7 +59,7 @@ These are routine confirmations that the watchdog handles automatically by sendi
 
 These indicate a worker needs human attention. Do NOT auto-accept — send a macOS notification instead:
 
-- **Idle worker**: The `❯` prompt is visible with no task text above it — worker finished and is waiting for new instructions
+- **Task complete (transition only)**: A worker that was previously WORKING has now returned to the `❯` prompt — it just finished a task. Do NOT notify for workers that were already idle on the previous check.
 - **Open-ended questions**: "What should I...", "Which approach...", "Should I... or ...", "How do you want...", "Which file/database/method should I..."
 - **Ambiguity questions**: "Do you want me to..." followed by multiple options or a choice the worker can't make alone
 - **Errors that stopped the worker**: Unrecoverable errors, stack traces followed by the `❯` prompt, `SIGTERM`, permission denied
@@ -68,6 +68,20 @@ These indicate a worker needs human attention. Do NOT auto-accept — send a mac
 - **Stuck workers**: A worker showing the same error output for multiple consecutive checks (no progress)
 
 **Key distinction**: If it's a simple yes/no with an obvious safe answer → auto-accept. If it requires judgment, a choice between options, or new instructions → notify.
+
+## State Transition Rules
+
+Notifications should only fire on **state changes**, never on steady states:
+
+| Previous State | Current State | Action |
+|----------------|---------------|--------|
+| working | idle (`❯` prompt) | **Notify** — task just completed |
+| idle | idle | **Silent** — nothing changed |
+| idle | working | **Silent** — worker picked up a task |
+| working | working | **Silent** — still in progress |
+| any | error/question | **Notify** — needs attention |
+
+**Critical**: Workers that are idle when monitoring starts should be recorded as "idle" and NEVER generate notifications unless their state changes first.
 
 ## macOS Notifications
 
@@ -90,10 +104,10 @@ osascript -e 'display notification "BODY" with title "TITLE" sound name "Ping"'
 
 To prevent notification storms:
 
-- **Maximum 1 notification per worker per 30 seconds** — if you already notified about Worker 5 within the last 30 seconds, skip
-- Track a `last_notified` timestamp per worker pane in your state
-- If a worker's state hasn't changed since the last notification (same prompt/error text), don't re-notify even after 30 seconds
-- Only re-notify if the worker's state has meaningfully changed (new question, different error, etc.)
+- **Transition-based, not timer-based** — only notify when a worker's state meaningfully changes (e.g., working → idle, working → error)
+- **Never re-notify for the same state** — if a worker is idle and you already notified (or it was idle from the start), do not notify again until it works and finishes again
+- **Maximum 1 notification per worker per 60 seconds** as a hard safety cap — even on genuine transitions
+- Track `previous_state` per worker pane to detect transitions accurately
 
 ### Notification examples
 
@@ -138,7 +152,8 @@ Execute this loop:
 Maintain a mental record of:
 - Which prompts you've already answered (pane ID + prompt text hash) to avoid double-answering
 - Which notifications you've already sent per worker (pane ID + notification body + timestamp) for rate limiting
-- The last known state of each worker pane (idle, working, error, prompt) to detect meaningful state changes
+- The previous state of each worker pane (idle, working, error, prompt) — this is CRITICAL for transition detection. Only notify when state changes, never for steady states.
+- Whether each worker was idle at monitoring start (these should never trigger idle notifications until they work and finish)
 - Any panes that had errors or unusual output
 - Count of total interventions made (auto-accepts and notifications separately)
 
