@@ -35,14 +35,30 @@ This gives you:
 RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
-# 1. Rename the worker pane so the task is visible at a glance
+# 1. Kill the current Claude process by PID (reliable — /exit is not)
+PANE_PID=$(tmux display-message -t "${SESSION_NAME}:0.X" -p '#{pane_pid}')
+CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+[ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
+sleep 3
+
+# 2. Verify it died — if not, SIGKILL
+CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+[ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
+
+# 3. Start a fresh Claude session
+tmux send-keys -t "${SESSION_NAME}:0.X" "claude --dangerously-skip-permissions --model opus" Enter
+
+# 4. Wait for Claude to boot
+sleep 8
+
+# 5. Rename the worker pane so the task is visible at a glance
 tmux send-keys -t "${SESSION_NAME}:0.X" "/rename short-task-name" Enter
 sleep 1
 
-# 2. Ensure temp dir exists
+# 6. Ensure temp dir exists
 mkdir -p "${RUNTIME_DIR}"
 
-# 3. Write task to temp file (avoids escaping issues)
+# 7. Write task to temp file (avoids escaping issues)
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
 You are a worker on the Claude Team for project: ${PROJECT_NAME}
@@ -53,19 +69,19 @@ Your detailed task prompt here.
 Multi-line is fine.
 TASK
 
-# 4. Load into tmux buffer and paste into target pane
+# 8. Load into tmux buffer and paste into target pane
 tmux load-buffer "$TASKFILE"
 tmux paste-buffer -t "${SESSION_NAME}:0.X"
 
-# 5. CRITICAL: sleep then bare Enter — this is what actually submits
+# 9. CRITICAL: sleep then bare Enter — this is what actually submits
 sleep 0.5
 tmux send-keys -t "${SESSION_NAME}:0.X" Enter
 
-# 6. Cleanup
+# 10. Cleanup
 rm "$TASKFILE"
 ```
 
-The `/rename` sets the pane border title so you can see what each worker is doing (e.g., "bokmål-priority", "git-commits") instead of generic "Claude Code".
+Each dispatch starts a fresh Claude session. The old session is exited first to ensure clean context and no stale state from previous tasks.
 
 ### Pre-flight: Check if worker is idle
 
@@ -76,6 +92,8 @@ tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -3
 ```
 
 Look for `❯` prompt at the end. If you see `thinking`, `working`, or active tool output — the worker is busy. Do NOT send tasks to busy workers.
+
+If the worker is idle, it still has an old session. The dispatch handles exiting and restarting automatically.
 
 ### Post-flight: Verify task was received
 
@@ -96,12 +114,18 @@ tmux send-keys -t "${SESSION_NAME}:0.X" Enter
 
 For independent tasks, dispatch to multiple workers in a single message. Use separate Bash calls per worker — do NOT chain them with `&&` since they are independent.
 
-Each Bash call should contain the full dispatch sequence for one worker (including `/rename`):
+Each Bash call should contain the full dispatch sequence for one worker (exit, fresh start, `/rename`):
 
 ```bash
 # Worker A — all in one Bash call
 RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+PANE_PID=$(tmux display-message -t "${SESSION_NAME}:0.2" -p '#{pane_pid}')
+CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+[ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
+sleep 3
+tmux send-keys -t "${SESSION_NAME}:0.2" "claude --dangerously-skip-permissions --model opus" Enter
+sleep 8
 tmux send-keys -t "${SESSION_NAME}:0.2" "/rename task-a-name" Enter
 sleep 1
 mkdir -p "${RUNTIME_DIR}"
@@ -124,6 +148,12 @@ rm "$TASKFILE"
 # Worker B — separate Bash call, runs in parallel
 RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+PANE_PID=$(tmux display-message -t "${SESSION_NAME}:0.3" -p '#{pane_pid}')
+CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+[ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
+sleep 3
+tmux send-keys -t "${SESSION_NAME}:0.3" "claude --dangerously-skip-permissions --model opus" Enter
+sleep 8
 tmux send-keys -t "${SESSION_NAME}:0.3" "/rename task-b-name" Enter
 sleep 1
 mkdir -p "${RUNTIME_DIR}"
@@ -144,13 +174,21 @@ rm "$TASKFILE"
 
 ### Short tasks (< 200 chars, no special chars)
 
-For very short, simple tasks you can skip the temp file:
+Even short tasks need a fresh Claude session. Exit and restart before dispatching:
 
 ```bash
+RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+PANE_PID=$(tmux display-message -t "${SESSION_NAME}:0.X" -p '#{pane_pid}')
+CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+[ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
+sleep 3
+tmux send-keys -t "${SESSION_NAME}:0.X" "claude --dangerously-skip-permissions --model opus" Enter
+sleep 8
 tmux send-keys -t "${SESSION_NAME}:0.X" "Your short task here" Enter
 ```
 
-This works because `send-keys` with a non-empty string + Enter is reliable. The bug only affects `"" Enter` (empty string before Enter).
+This ensures every task — even short ones — gets a clean context with no stale state.
 
 ### Rules
 
@@ -162,6 +200,7 @@ This works because `send-keys` with a non-empty string + Enter is reliable. The 
 6. **Worker pane indices are in the manifest** as `WORKER_PANES` — always read from manifest, never hardcode
 7. **Always include project context in every task prompt** — workers need to know the project name, directory, and that paths should be absolute
 8. **Read the manifest first** — discover runtime dir and source session.env before dispatching
+9. **Always exit the old session before dispatching** — every task gets a fresh Claude context
 
 ### Troubleshooting
 
