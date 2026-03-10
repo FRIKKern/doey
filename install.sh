@@ -80,33 +80,64 @@ printf "  ${BRAND}[1/4]${RESET} Creating directories..."
 # Save repo location so /tmux-reinstall can find it later
 echo "$SCRIPT_DIR" > ~/.claude/claude-team/repo-path
 
-# Clean up stale files from previous installs
+# Write version info
+INSTALLED_VERSION=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+INSTALLED_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+cat > ~/.claude/claude-team/version << VEOF
+version=$INSTALLED_VERSION
+date=$INSTALLED_DATE
+repo=$SCRIPT_DIR
+VEOF
+
+# ── Clean up stale files from previous installs ───────────────────────
 # Skills were moved from ~/.claude/skills/ to ~/.claude/commands/ in v0.2
 rm -f ~/.claude/skills/tmux-*.md 2>/dev/null
 # Remove any orphaned skills directory if empty
 rmdir ~/.claude/skills 2>/dev/null || true
 
 # ── Step 2: Agent definitions ─────────────────────────────────────────
-AGENT_COUNT=$(find "$SCRIPT_DIR/agents" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+shopt -s nullglob
+agent_files=("$SCRIPT_DIR/agents/"*.md)
+shopt -u nullglob
+if [[ ${#agent_files[@]} -eq 0 ]]; then
+  die "No agent files found in $SCRIPT_DIR/agents/"
+fi
+AGENT_COUNT=${#agent_files[@]}
 printf "  ${BRAND}[2/4]${RESET} Installing agent definitions (${BOLD}%s${RESET})..." "$AGENT_COUNT"
 {
-  cp "$SCRIPT_DIR/agents/"*.md ~/.claude/agents/
+  cp "${agent_files[@]}" ~/.claude/agents/
 } && step_ok || { step_fail; die "Failed to copy agent definitions."; }
 
-for f in "$SCRIPT_DIR/agents/"*.md; do
+for f in "${agent_files[@]}"; do
   detail "$(basename "$f" .md)"
 done
 
+# Remove orphaned tmux-* agents no longer in the repo
+for installed in ~/.claude/agents/tmux-*.md; do
+  [[ -f "$installed" ]] || continue
+  local_name="$(basename "$installed")"
+  if [[ ! -f "$SCRIPT_DIR/agents/$local_name" ]]; then
+    rm -f "$installed"
+    detail "removed orphan: $local_name"
+  fi
+done
+
 # ── Step 3: Slash commands ───────────────────────────────────────────
-CMD_COUNT=$(find "$SCRIPT_DIR/commands" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+shopt -s nullglob
+cmd_files=("$SCRIPT_DIR/commands/"*.md)
+shopt -u nullglob
+if [[ ${#cmd_files[@]} -eq 0 ]]; then
+  die "No command files found in $SCRIPT_DIR/commands/"
+fi
+CMD_COUNT=${#cmd_files[@]}
 printf "  ${BRAND}[3/4]${RESET} Installing slash commands (${BOLD}%s${RESET})..." "$CMD_COUNT"
 {
-  cp "$SCRIPT_DIR/commands/"*.md ~/.claude/commands/
+  cp "${cmd_files[@]}" ~/.claude/commands/
 } && step_ok || { step_fail; die "Failed to copy commands."; }
 
 # Show command names in a compact line
 CMD_NAMES=""
-for f in "$SCRIPT_DIR/commands/"*.md; do
+for f in "${cmd_files[@]}"; do
   NAME=$(basename "$f" .md)
   if [ -z "$CMD_NAMES" ]; then
     CMD_NAMES="/$NAME"
@@ -116,13 +147,41 @@ for f in "$SCRIPT_DIR/commands/"*.md; do
 done
 detail "$CMD_NAMES"
 
+# Remove orphaned tmux-* commands no longer in the repo
+for installed in ~/.claude/commands/tmux-*.md; do
+  [[ -f "$installed" ]] || continue
+  local_name="$(basename "$installed")"
+  if [[ ! -f "$SCRIPT_DIR/commands/$local_name" ]]; then
+    rm -f "$installed"
+    detail "removed orphan: $local_name"
+  fi
+done
+
 # ── Step 4: CLI script ───────────────────────────────────────────────
+
+# Check if ct already exists and points elsewhere
+CT_TARGET="$HOME/.local/bin/ct"
+if [[ -e "$CT_TARGET" || -L "$CT_TARGET" ]]; then
+  existing_target=$(readlink "$CT_TARGET" 2>/dev/null || echo "unknown")
+  if [[ "$existing_target" != "claude-team" && "$existing_target" != "$HOME/.local/bin/claude-team" ]]; then
+    warn_msg "~/.local/bin/ct exists and points to: $existing_target"
+    detail "It will be overwritten to point to claude-team"
+  fi
+fi
+
+# Check if /usr/local/bin/ct would shadow our symlink
+if [[ -e "/usr/local/bin/ct" ]]; then
+  warn_msg "/usr/local/bin/ct exists and may shadow the ct shorthand"
+  detail "After install, verify with: which ct"
+fi
+
 printf "  ${BRAND}[4/4]${RESET} Installing claude-team command..."
 {
   cp "$SCRIPT_DIR/shell/claude-team.sh" ~/.local/bin/claude-team
   chmod +x ~/.local/bin/claude-team
+  ln -sf ~/.local/bin/claude-team ~/.local/bin/ct
 } && step_ok || { step_fail; die "Failed to install claude-team to ~/.local/bin."; }
-detail "~/.local/bin/claude-team"
+detail "~/.local/bin/claude-team (+ ct alias)"
 
 # Check if ~/.local/bin is on PATH
 PATH_OK=true
@@ -143,16 +202,16 @@ printf "${SUCCESS}│${RESET}                                            ${SUCCE
 printf "${SUCCESS}│${RESET}  ${BOLD}Installed:${RESET}                                ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %s agent definitions                  ${SUCCESS}│${RESET}\n" "$AGENT_COUNT"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %s slash commands                     ${SUCCESS}│${RESET}\n" "$CMD_COUNT"
-printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} claude-team CLI                       ${SUCCESS}│${RESET}\n"
+printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} claude-team CLI (+ ct shorthand)       ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}  ${BOLD}Quick start:${RESET}                              ${SUCCESS}│${RESET}\n"
 if [ "$PATH_OK" = false ]; then
   printf "${SUCCESS}│${RESET}    ${WARN}1. Add ~/.local/bin to PATH (see above)${RESET} ${SUCCESS}│${RESET}\n"
   printf "${SUCCESS}│${RESET}    2. ${BRAND}cd /your/project${RESET}                      ${SUCCESS}│${RESET}\n"
-  printf "${SUCCESS}│${RESET}    3. ${BRAND}claude-team${RESET}                            ${SUCCESS}│${RESET}\n"
+  printf "${SUCCESS}│${RESET}    3. ${BRAND}ct${RESET}                                    ${SUCCESS}│${RESET}\n"
 else
   printf "${SUCCESS}│${RESET}    1. ${BRAND}cd /your/project${RESET}                      ${SUCCESS}│${RESET}\n"
-  printf "${SUCCESS}│${RESET}    2. ${BRAND}claude-team${RESET}                            ${SUCCESS}│${RESET}\n"
+  printf "${SUCCESS}│${RESET}    2. ${BRAND}ct${RESET}                                    ${SUCCESS}│${RESET}\n"
 fi
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}└────────────────────────────────────────────┘${RESET}\n"

@@ -11,12 +11,12 @@ set -euo pipefail
 #   claude-team update       # Pull latest + reinstall (alias: reinstall)
 #   claude-team doctor       # Check installation health & prerequisites
 #   claude-team remove NAME  # Unregister a project from the registry
+#   claude-team uninstall    # Remove all Claude Team files
 #   claude-team version      # Show version and install info
 #   claude-team 4x3          # Launch/reattach with specific grid
 #   claude-team --help       # Show usage
 #
-# Alias suggestion:
-#   alias ct="claude-team"
+# Shorthand: "ct" is installed automatically as a symlink to this script.
 # ──────────────────────────────────────────────────────────────────────
 
 # ── Color palette ─────────────────────────────────────────────────────
@@ -443,18 +443,72 @@ update_system() {
   printf "  ${BRAND}Updating claude-code-tmux-team...${RESET}\n"
   printf '\n'
 
+  local old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
+
+  # Warn about local changes
+  if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
+    printf "  ${WARN}⚠ Repo has local changes — git pull may fail or require merge${RESET}\n"
+  fi
+
   printf "  ${DIM}Pulling latest changes...${RESET}\n"
   if ! git -C "$repo_dir" pull; then
     printf "  ${WARN}git pull failed — continuing with reinstall${RESET}\n"
   fi
+
+  local new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
+  if [[ "$old_hash" == "$new_hash" ]]; then
+    printf "  ${SUCCESS}Already up to date${RESET} ${DIM}($old_hash)${RESET}\n"
+  else
+    printf "  ${SUCCESS}Updated${RESET} ${DIM}$old_hash → $new_hash${RESET}\n"
+  fi
   printf '\n'
 
   printf "  ${DIM}Running install.sh...${RESET}\n"
-  bash "$repo_dir/install.sh"
+  if ! bash "$repo_dir/install.sh"; then
+    printf "\n  ${ERROR}✗ Install failed during update.${RESET}\n"
+    printf "  ${DIM}Repo is at $new_hash. Run install.sh manually to retry.${RESET}\n"
+    exit 1
+  fi
   printf '\n'
+
+  rm -f "$HOME/.claude/claude-team/last-update-check.available"
 
   printf "  ${SUCCESS}Update complete.${RESET}\n"
   printf "  Running sessions need a restart: ${BOLD}claude-team stop && claude-team${RESET}\n"
+}
+
+# ── Uninstall ──────────────────────────────────────────────────────
+uninstall_system() {
+  printf '\n'
+  printf "  ${BRAND}Claude Team — Uninstall${RESET}\n"
+  printf '\n'
+
+  printf "  This will remove:\n"
+  printf "    ${DIM}• ~/.local/bin/claude-team${RESET}\n"
+  printf "    ${DIM}• ~/.local/bin/ct${RESET}\n"
+  printf "    ${DIM}• ~/.claude/agents/tmux-*.md${RESET}\n"
+  printf "    ${DIM}• ~/.claude/commands/tmux-*.md${RESET}\n"
+  printf "    ${DIM}• ~/.claude/claude-team/ (config & state)${RESET}\n"
+  printf '\n'
+  printf "  ${DIM}Will NOT remove: git repo, /tmp/claude-team, or agent-memory${RESET}\n"
+  printf '\n'
+
+  read -rp "  Continue? [y/N] " confirm
+  if [[ "$confirm" != [yY] ]]; then
+    printf "  ${DIM}Cancelled.${RESET}\n\n"
+    return 0
+  fi
+
+  rm -f ~/.local/bin/claude-team
+  rm -f ~/.local/bin/ct
+  rm -f ~/.claude/agents/tmux-*.md
+  rm -f ~/.claude/commands/tmux-*.md
+  rm -rf ~/.claude/claude-team
+
+  printf '\n'
+  printf "  ${SUCCESS}✓ Uninstalled successfully.${RESET}\n"
+  printf "  ${DIM}To reinstall: cd <repo> && ./install.sh${RESET}\n"
+  printf '\n'
 }
 
 # ── Doctor — check installation health ────────────────────────────────
@@ -519,6 +573,17 @@ check_doctor() {
     printf "  ${ERROR}✗${RESET} Repo path not registered  ${DIM}~/.claude/claude-team/repo-path missing${RESET}\n"
   fi
 
+  # Version tracking
+  local version_file="$HOME/.claude/claude-team/version"
+  if [[ -f "$version_file" ]]; then
+    local ver vdate
+    ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
+    vdate="$(grep "^date=" "$version_file" | cut -d= -f2)"
+    printf "  ${SUCCESS}✓${RESET} Version tracked  ${DIM}${ver} (${vdate})${RESET}\n"
+  else
+    printf "  ${WARN}⚠${RESET} No version file  ${DIM}Run 'ct update' to generate${RESET}\n"
+  fi
+
   printf '\n'
 }
 
@@ -567,14 +632,31 @@ show_version() {
   printf "  ${BRAND}Claude Code TMUX Team${RESET}\n"
   printf '\n'
 
-  local repo_path_file="$HOME/.claude/claude-team/repo-path"
-  if [[ -f "$repo_path_file" ]]; then
-    local repo_dir
-    repo_dir="$(cat "$repo_path_file")"
-    if [[ -d "$repo_dir" ]]; then
-      local version_info
-      version_info="$(git -C "$repo_dir" log -1 --format="%h (%ci)" 2>/dev/null || echo 'unknown')"
-      printf "  ${DIM}Version${RESET}    ${BOLD}${version_info}${RESET}\n"
+  local version_file="$HOME/.claude/claude-team/version"
+  if [[ -f "$version_file" ]]; then
+    local ver installed_date repo_dir
+    ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
+    installed_date="$(grep "^date=" "$version_file" | cut -d= -f2)"
+    repo_dir="$(grep "^repo=" "$version_file" | cut -d= -f2)"
+    printf "  ${DIM}Version${RESET}    ${BOLD}${ver}${RESET}  ${DIM}(installed ${installed_date})${RESET}\n"
+    if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir" ]]; then
+      local latest
+      latest="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo '')"
+      if [[ -n "$latest" ]] && [[ "$latest" != "$ver" ]]; then
+        printf "  ${DIM}Update${RESET}     ${WARN}${latest} available${RESET}  ${DIM}(run 'ct update')${RESET}\n"
+      fi
+    fi
+  else
+    # Fallback to git if no version file (pre-version-tracking install)
+    local repo_path_file="$HOME/.claude/claude-team/repo-path"
+    if [[ -f "$repo_path_file" ]]; then
+      local repo_dir
+      repo_dir="$(cat "$repo_path_file")"
+      if [[ -d "$repo_dir" ]]; then
+        local version_info
+        version_info="$(git -C "$repo_dir" log -1 --format="%h (%ci)" 2>/dev/null || echo 'unknown')"
+        printf "  ${DIM}Version${RESET}    ${BOLD}${version_info}${RESET}  ${DIM}(no version file — reinstall to track)${RESET}\n"
+      fi
     fi
   fi
 
@@ -589,6 +671,56 @@ show_version() {
   printf "  ${DIM}Projects${RESET}   ${BOLD}${project_count} registered${RESET}\n"
 
   printf '\n'
+}
+
+# ── Auto-update check ─────────────────────────────────────────────
+check_for_updates() {
+  local state_dir="$HOME/.claude/claude-team"
+  local last_check_file="$state_dir/last-update-check"
+  local cache_file="$state_dir/last-update-check.available"
+  local repo_path_file="$state_dir/repo-path"
+  local check_interval=86400  # 24 hours
+
+  # Skip if no repo registered
+  [[ ! -f "$repo_path_file" ]] && return 0
+  local repo_dir
+  repo_dir="$(cat "$repo_path_file")"
+  [[ ! -d "$repo_dir/.git" ]] && return 0
+
+  local now
+  now=$(date +%s)
+
+  # Show cached result if available
+  if [[ -f "$cache_file" ]]; then
+    local behind
+    behind=$(cat "$cache_file")
+    if [[ "$behind" -gt 0 ]] 2>/dev/null; then
+      printf "  ${WARN}⚠ Update available${RESET} ${DIM}(%s commit(s) behind — run: ct update)${RESET}\n" "$behind"
+    fi
+  fi
+
+  # Should we fetch?
+  local should_fetch=true
+  if [[ -f "$last_check_file" ]]; then
+    local last_ts
+    last_ts=$(cat "$last_check_file")
+    if (( now - last_ts < check_interval )); then
+      should_fetch=false
+    fi
+  fi
+
+  if [[ "$should_fetch" == true ]]; then
+    # Background fetch + cache result (non-blocking)
+    (
+      echo "$now" > "$last_check_file"
+      if git -C "$repo_dir" fetch origin main --quiet 2>/dev/null; then
+        local behind_count
+        behind_count=$(git -C "$repo_dir" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+        echo "$behind_count" > "$cache_file"
+      fi
+    ) &
+    disown 2>/dev/null
+  fi
 }
 
 # ── Main Dispatch ─────────────────────────────────────────────────────
@@ -611,6 +743,7 @@ case "${1:-}" in
     update     Pull latest changes and reinstall (alias: reinstall)
     doctor     Check installation health and prerequisites
     remove     Unregister a project (by name, or current dir)
+    uninstall  Remove all Claude Team files (keeps git repo and agent-memory)
     version    Show version and installation info
     --help     Show this help
 
@@ -627,6 +760,7 @@ case "${1:-}" in
     claude-team update       # pull latest + reinstall
     claude-team doctor       # check system health
     claude-team remove myapp # unregister a project
+    claude-team uninstall    # remove all installed files
     claude-team version      # show install info
 HELP
     printf '\n'
@@ -656,6 +790,10 @@ HELP
     remove_project "${2:-}"
     exit 0
     ;;
+  uninstall)
+    uninstall_system
+    exit 0
+    ;;
   version|--version|-v)
     show_version
     exit 0
@@ -674,6 +812,8 @@ HELP
 esac
 
 # ── Smart Launch ──────────────────────────────────────────────────────
+
+check_for_updates
 
 dir="$(pwd)"
 name="$(find_project "$dir")"

@@ -46,11 +46,11 @@ curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-te
 
 ```bash
 cd /path/to/your/project
-claude-team init
-claude-team
+ct init
+ct
 ```
 
-That's it — from here, the experience is identical to macOS and Linux. Follow the [Quick Start](../README.md#quick-start) in the main README for usage instructions.
+That's it — `ct` is installed automatically as a shorthand for `claude-team`. From here, the experience is identical to macOS and Linux. Follow the [Quick Start](../README.md#quick-start) in the main README for usage instructions.
 
 ### Tips for WSL2 Users
 

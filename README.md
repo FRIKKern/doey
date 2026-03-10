@@ -63,17 +63,19 @@ The installer validates prerequisites automatically (Claude Code CLI, tmux, shel
 
 ```bash
 cd ~/your-project
-claude-team            # first time: shows project picker, choose "init"
-claude-team            # next time: auto-launches your team
+ct                     # first time: shows project picker, choose "init"
+ct                     # next time: auto-launches your team
 ```
 
-That's it. No config files. No shell reload. Just `claude-team`.
+That's it. No config files. No shell reload. Just `ct` (or `claude-team` — both work).
+
+> `ct` is installed automatically as a symlink to `claude-team`. No alias setup needed.
 
 ---
 
 ## What You'll See
 
-When you run `claude-team`, the startup sequence gives you full visibility into what's happening:
+When you run `ct` (or `claude-team`), the startup sequence gives you full visibility into what's happening:
 
 1. **ASCII art banner** with your session configuration (grid size, worker count, working directory)
 2. **Step-by-step progress** — each phase (grid creation, pane setup, agent launches) shows a checkmark as it completes
@@ -82,24 +84,26 @@ When you run `claude-team`, the startup sequence gives you full visibility into 
 
 Once the summary appears, switch to the Manager pane (`0.0`) and start giving it tasks.
 
-> Run `claude-team` to see the premium startup experience.
+> Run `ct` to see the premium startup experience.
 
 ---
 
 ## Commands
 
+> `ct` is a built-in shorthand for `claude-team` — installed automatically as a symlink.
+
 | Command | Description |
 |---------|-------------|
-| `claude-team` | Smart launch — auto-attach, launch, or show project picker |
-| `claude-team init` | Register current directory as a project |
-| `claude-team list` | Show all projects with running/stopped status |
-| `claude-team stop` | Stop the team for the current project |
-| `claude-team update` | Pull latest changes and reinstall |
-| `claude-team doctor` | Check installation health and prerequisites |
-| `claude-team remove` | Unregister a project by name or current directory |
-| `claude-team version` | Show version and installation info |
-| `claude-team 4x3` | Launch with a custom grid layout |
-| `claude-team --help` | Show all options |
+| `ct` | Smart launch — auto-attach, launch, or show project picker |
+| `ct init` | Register current directory as a project |
+| `ct list` | Show all projects with running/stopped status |
+| `ct stop` | Stop the team for the current project |
+| `ct update` | Pull latest changes and reinstall |
+| `ct doctor` | Check installation health and prerequisites |
+| `ct remove` | Unregister a project by name or current directory |
+| `ct version` | Show version and installation info |
+| `ct 4x3` | Launch with a custom grid layout |
+| `ct --help` | Show all options |
 
 ---
 
@@ -108,11 +112,11 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 <table>
 <tr>
 <td width="40" align="center"><strong>0</strong></td>
-<td>You register your project: <code>claude-team init</code> (one time per project)</td>
+<td>You register your project: <code>ct init</code> (one time per project)</td>
 </tr>
 <tr>
 <td align="center"><strong>1</strong></td>
-<td>You run <code>claude-team</code> — it auto-launches or reattaches to an existing session</td>
+<td>You run <code>ct</code> — it auto-launches or reattaches to an existing session</td>
 </tr>
 <tr>
 <td align="center"><strong>2</strong></td>
@@ -206,7 +210,7 @@ All runtime data lives under `/tmp/claude-team/<project>/`:
 
 ### Project Registry
 
-Registered projects are stored in `~/.claude/claude-team/projects` as `name:path` entries (one per line). This file is managed by `claude-team init` and `claude-team remove`.
+Registered projects are stored in `~/.claude/claude-team/projects` as `name:path` entries (one per line). This file is managed by `ct init` and `ct remove`.
 
 ### Status Hooks
 
@@ -223,7 +227,7 @@ cp /path/to/claude-code-tmux-team/.claude/settings.local.json your-project/.clau
 
 ## Grid Configurations
 
-The grid argument to `claude-team` is a `COLSxROWS` specification. Two panes are always reserved (Manager + Watchdog):
+The grid argument to `ct` (or `claude-team`) is a `COLSxROWS` specification. Two panes are always reserved (Manager + Watchdog):
 
 | Grid | Panes | Workers | Best for |
 |------|-------|---------|----------|
@@ -285,7 +289,7 @@ claude-code-tmux-team/
 │   ├── tmux-team.md
 │   └── tmux-watchdog-compact.md
 └── shell/
-    └── claude-team.sh           # CLI launcher → ~/.local/bin/claude-team
+    └── claude-team.sh           # CLI launcher → ~/.local/bin/claude-team (+ ct symlink)
 ```
 
 </details>
@@ -303,12 +307,11 @@ claude-code-tmux-team/
 
 ## Tips
 
-**Aliases** — Add these to your shell config for quick access:
+**Shortcuts** — `ct` is installed automatically as a symlink — no alias needed. You can add more shortcuts if you like:
 
 ```bash
-alias ct="claude-team"
-alias ct4="claude-team 4x2"
-alias cts="claude-team 3x2"   # small team
+alias ct4="ct 4x2"
+alias cts="ct 3x2"            # small team
 ```
 
 **Project commands** — Copy the commands into your project for project-scoped access:
@@ -360,12 +363,12 @@ Run `claude` manually in a regular terminal to authenticate first. The Watchdog 
 <details>
 <summary><strong>Terminal too small for grid</strong></summary>
 
-Use a smaller grid like `claude-team 3x2` or maximize your terminal window. The default `6x2` grid needs approximately 200 columns to render properly.
+Use a smaller grid like `ct 3x2` or maximize your terminal window. The default `6x2` grid needs approximately 200 columns to render properly.
 
 </details>
 
 <details>
-<summary><strong><code>claude-team update</code> fails after web install</strong></summary>
+<summary><strong><code>ct update</code> fails after web install</strong></summary>
 
 The web installer's temporary directory was deleted after install. Fix: clone the repo manually, then run `./install.sh` to update the stored repo path:
 
@@ -391,7 +394,7 @@ Check System Preferences > Notifications and ensure your terminal app is allowed
 </details>
 
 <details>
-<summary><strong><code>claude-team</code> command not found</strong></summary>
+<summary><strong><code>ct</code> / <code>claude-team</code> command not found</strong></summary>
 
 Add `~/.local/bin` to your PATH by adding this line to your shell config (`~/.zshrc` or `~/.bashrc`):
 
@@ -404,9 +407,9 @@ Then restart your shell or run `source ~/.zshrc`.
 </details>
 
 <details>
-<summary><strong><code>claude-team doctor</code> reports issues</strong></summary>
+<summary><strong><code>ct doctor</code> reports issues</strong></summary>
 
-Run `claude-team doctor` and follow the suggestions it provides. It checks tmux, Claude CLI, PATH configuration, agents, commands, and repo path. Most issues can be fixed by re-running `./install.sh`.
+Run `ct doctor` and follow the suggestions it provides. It checks tmux, Claude CLI, PATH configuration, agents, commands, and repo path. Most issues can be fixed by re-running `./install.sh`.
 
 </details>
 

@@ -55,8 +55,8 @@ cd claude-code-tmux-team && ./install.sh
 
 # 5. Init your project and launch
 cd ~/your-project
-claude-team init
-claude-team
+ct init
+ct
 ```
 
 ### Headless / SSH Usage
@@ -69,7 +69,7 @@ ssh user@your-server
 
 # On the server — start or reattach
 cd ~/your-project
-claude-team
+ct
 
 # Give the Manager a task, then detach when ready
 # Ctrl+B, D  →  detaches from tmux (team keeps running)
@@ -78,12 +78,12 @@ claude-team
 exit
 ```
 
-Reconnect anytime — `claude-team` auto-reattaches to the running session:
+Reconnect anytime — `ct` auto-reattaches to the running session:
 
 ```bash
 ssh user@your-server
 cd ~/your-project
-claude-team              # picks up right where you left off
+ct                       # picks up right where you left off
 ```
 
 <details>
@@ -214,5 +214,5 @@ Once the team is running, follow the [Quick Start](../README.md#quick-start) in 
 | **tmux version too old** (< 2.4) | Install from source or use a backports repo: `sudo apt install -t bullseye-backports tmux` |
 | **`node` not found after fnm install** | Run `source ~/.bashrc` or open a new shell — fnm needs the PATH update |
 | **Locale / UTF-8 errors** (garbled ASCII art) | `sudo apt install -y locales && sudo locale-gen en_US.UTF-8 && export LANG=en_US.UTF-8` |
-| **`claude-team` command not found** | Ensure `~/.local/bin` is on your PATH: `export PATH="$HOME/.local/bin:$PATH"` |
+| **`ct` / `claude-team` command not found** | Ensure `~/.local/bin` is on your PATH: `export PATH="$HOME/.local/bin:$PATH"` |
 | **Workers fail to start** | Check that `claude` CLI works standalone first: `claude --version` |
