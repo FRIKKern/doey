@@ -101,6 +101,23 @@ if is_worker; then
 EOF
 fi
 
+# --- Auto-simplify for workers ---
+# After a real task completes, send /simplify to review changed code.
+# Uses a flag file to prevent infinite loops (simplify -> stop -> simplify -> ...).
+if is_worker; then
+  SIMPLIFY_FLAG="${RUNTIME_DIR}/status/simplify_done_${PANE_INDEX}.flag"
+  if [ -f "$SIMPLIFY_FLAG" ]; then
+    # Worker just finished /simplify — remove flag, don't loop
+    rm -f "$SIMPLIFY_FLAG"
+  else
+    # Real task completion — set flag and send /simplify
+    touch "$SIMPLIFY_FLAG"
+    tmux copy-mode -q -t "$PANE" 2>/dev/null || true
+    sleep 1
+    tmux send-keys -t "$PANE" "/simplify" Enter
+  fi
+fi
+
 # --- macOS notification — ONLY for the Manager pane (0.0) ---
 # Workers and Watchdog do not notify — only the Manager talks to the user
 if is_manager && [ "$STOP_HOOK_ACTIVE" != "true" ] && [ -n "$LAST_MSG" ]; then
