@@ -177,6 +177,35 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 | Broadcasts | `/tmp/claude-team/<project>/broadcasts/` |
 | Status tracking | `/tmp/claude-team/<project>/status/` |
 
+### Context Layer Model
+
+Each agent's behavior is shaped by multiple context layers that merge at startup and runtime:
+
+| # | Layer | Source | Affects |
+|---|-------|--------|---------|
+| 1 | Agent Definitions | `agents/*.md` | Manager, Watchdog |
+| 2 | Settings | `~/.claude/settings*.json`, `.claude/settings*.json` | All |
+| 3 | Hooks | `.claude/hooks/status-hook.sh` | All |
+| 4 | Skills/Commands | `commands/tmux-*.md` | Manager primarily |
+| 5 | Persistent Memory | `~/.claude/agent-memory/` | Manager |
+| 6 | Environment Variables | `session.env`, tmux env | All |
+| 7 | CLI Flags | `--agent`, `--model`, etc. | All |
+| 8 | tmux Integration | Session config, pane detection | All |
+| 9 | Runtime State | `status/`, `research/`, `reports/` | All |
+| 10 | CLAUDE.md | Project root | All |
+
+For complete documentation of each layer, see [Context Reference](docs/context-reference.md).
+
+---
+
+## Deep Dive
+
+For comprehensive documentation of the system internals:
+
+- **[Context Reference](docs/context-reference.md)** — Complete documentation of every context layer that influences Manager and Watchdog behavior: agent definitions, settings, hooks, skills, memory, environment variables, CLI flags, tmux integration, runtime state, and CLAUDE.md.
+- **[Linux Server Guide](docs/linux-server.md)** — Deploying on headless Linux servers.
+- **[Windows WSL2 Guide](docs/windows-wsl2.md)** — Running on Windows via WSL2.
+
 ---
 
 ## Configuration
@@ -268,11 +297,14 @@ Once installed, these commands are available in any Claude Code instance:
 
 ```
 claude-code-tmux-team/
+├── CLAUDE.md                    # Project-level context for Claude Code instances
 ├── install.sh                   # Installer
 ├── web-install.sh               # Web installer (curl | bash)
 ├── agents/
 │   ├── tmux-manager.md          # Manager agent → ~/.claude/agents/
 │   └── tmux-watchdog.md         # Watchdog agent → ~/.claude/agents/
+├── docs/
+│   └── context-reference.md     # Deep reference for agent context layers
 ├── commands/                    # Slash commands → ~/.claude/commands/
 │   ├── tmux-broadcast.md
 │   ├── tmux-delegate.md
