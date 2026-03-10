@@ -82,14 +82,17 @@ tmux copy-mode -q -t "$SESSION_NAME:0.4" 2>/dev/null
 tmux load-buffer "$TASKFILE"
 tmux paste-buffer -t "$SESSION_NAME:0.4"
 sleep 0.5
+tmux copy-mode -q -t "$SESSION_NAME:0.4" 2>/dev/null
 tmux send-keys -t "$SESSION_NAME:0.4" Enter
 rm "$TASKFILE"
 ```
 
 **CRITICAL**: Never use `send-keys "" Enter` — the empty string swallows the Enter keystroke. Always use bare `Enter` after `sleep 0.5`.
 
-### Verify dispatch was received
-After dispatching, wait 5s then check the worker started:
+**PREFER `/tmux-dispatch`** for fresh-context tasks (new work). The `/tmux-dispatch` skill handles copy-mode defense, task file creation, and verification automatically. Use inline paste-buffer only for follow-up tasks to an existing worker session where the worker already has context.
+
+### Verify dispatch was received (MANDATORY)
+After dispatching, **always** wait 5s then verify the worker started — never skip this step:
 ```bash
 sleep 5
 tmux capture-pane -t "$SESSION_NAME:0.4" -p -S -5
@@ -101,6 +104,19 @@ tmux copy-mode -q -t "$SESSION_NAME:0.4" 2>/dev/null
 # 2. Re-send Enter
 tmux send-keys -t "$SESSION_NAME:0.4" Enter
 ```
+
+### Recover a stuck worker
+If a worker is unresponsive, stuck in copy-mode, or otherwise jammed, use this sequence to reset it:
+```bash
+# Unstick a worker pane
+tmux copy-mode -q -t "$SESSION_NAME:0.X" 2>/dev/null
+tmux send-keys -t "$SESSION_NAME:0.X" C-c
+sleep 0.5
+tmux send-keys -t "$SESSION_NAME:0.X" C-u
+sleep 0.5
+tmux send-keys -t "$SESSION_NAME:0.X" Enter
+```
+After recovery, wait for the worker to return to idle (`>` prompt) before re-dispatching.
 
 ### Monitor a worker's progress
 ```bash

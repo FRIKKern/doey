@@ -237,6 +237,26 @@ launch_session() {
   printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
   printf '\n'
 
+  # ── Pre-accept trust for project directory ───────────────────
+  # Prevents the "Do you trust this directory?" prompt from appearing
+  # in every pane at startup, saving 30+ seconds of manual clicking.
+  local claude_settings="$HOME/.claude/settings.json"
+  if command -v jq &>/dev/null; then
+    if [ -f "$claude_settings" ]; then
+      if ! jq -e ".trustedDirectories // [] | index(\"$dir\")" "$claude_settings" > /dev/null 2>&1; then
+        jq "(.trustedDirectories // []) |= . + [\"$dir\"]" "$claude_settings" > "${claude_settings}.tmp" \
+          && mv "${claude_settings}.tmp" "$claude_settings"
+        printf "   ${DIM}Trusted project directory added to ~/.claude/settings.json${RESET}\n"
+      fi
+    else
+      mkdir -p "$(dirname "$claude_settings")"
+      printf '{"trustedDirectories": ["%s"]}\n' "$dir" > "$claude_settings"
+      printf "   ${DIM}Created ~/.claude/settings.json with trusted directory${RESET}\n"
+    fi
+  else
+    printf "   ${WARN}jq not found — skipping auto-trust (you may see trust prompts)${RESET}\n"
+  fi
+
   # ── Build worker pane list (needed for manifest and briefings) ──
   local worker_panes_csv=""
   for (( i=1; i<total; i++ )); do
