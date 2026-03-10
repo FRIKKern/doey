@@ -301,6 +301,11 @@ MANIFEST
   # Enable mouse for pane selection, scrolling, resizing
   tmux set-option -t "$session" -g mouse on
 
+  # Suppress terminal bell from worker panes — prevents notification spam
+  # Our status-hook.sh handles Manager-only notifications via osascript
+  tmux set-option -t "$session" bell-action none
+  tmux set-option -t "$session" visual-bell off
+
   step_done
 
   # ── Step 3: Build grid ─────────────────────────────────────────
