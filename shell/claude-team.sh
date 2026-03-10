@@ -372,9 +372,11 @@ WORKER_CONTEXT
     "claude --dangerously-skip-permissions --agent tmux-manager" Enter
   sleep 0.5
 
-  # Auto-send initial briefing once Manager is ready
+  # Auto-enable fast mode and send initial briefing once Manager is ready
   (
-    sleep 10
+    sleep 8
+    tmux send-keys -t "$session:0.0" "/fast" Enter
+    sleep 3
     worker_panes=""
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
@@ -889,7 +891,9 @@ WORKER_CONTEXT
   sleep 0.5
 
   (
-    sleep 10
+    sleep 8
+    tmux send-keys -t "$session:0.0" "/fast" Enter
+    sleep 3
     worker_panes=""
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
