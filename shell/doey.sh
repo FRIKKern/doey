@@ -667,7 +667,7 @@ update_system() {
    ██║  ██║██║   ██║██╔══╝    ╚██╔╝
    ██████╔╝╚██████╔╝███████╗   ██║
    ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-   Let Doey do it for you
+   Let me Doey for you
 BANNER
   printf "${RESET}\n"
 
