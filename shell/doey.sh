@@ -355,7 +355,7 @@ DOG
   printf '   ██████╔╝╚██████╔╝███████╗   ██║   \n'
   printf '   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   \n'
   printf "${RESET}"
-  printf "   ${DIM}Let Doey do it for you${RESET}\n"
+  printf "   ${DIM}Let me Doey for you${RESET}\n"
   printf '\n'
   printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}${grid}${RESET}  ${DIM}Workers${RESET} ${BOLD}${worker_count}${RESET}\n"
   printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
