@@ -1,9 +1,9 @@
-# Skill: tmux-status
+# Skill: doey-status
 
 Share your status or check the status of other Claude instances.
 
 ## Usage
-`/tmux-status`
+`/doey-status`
 
 ## Prompt
 You are managing status updates across Claude Code instances in TMUX.
@@ -12,7 +12,7 @@ You are managing status updates across Claude Code instances in TMUX.
 
 1. Discover runtime directory and identify yourself:
    ```bash
-   RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    MY_PANE_SAFE=${MY_PANE//[:.]/_}

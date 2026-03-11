@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # ──────────────────────────────────────────────────────────────────────
-# claude-team — Project-aware TMUX Claude Team launcher
+# doey — Project-aware TMUX Doey launcher
 #
 # Usage:
-#   claude-team              # Smart launch (auto-attach or project picker)
-#   claude-team init         # Register current directory as a project
-#   claude-team list         # Show all registered projects + status
-#   claude-team stop         # Stop session for current project
-#   claude-team update       # Pull latest + reinstall (alias: reinstall)
-#   claude-team doctor       # Check installation health & prerequisites
-#   claude-team remove NAME  # Unregister a project from the registry
-#   claude-team uninstall    # Remove all Claude Team files
-#   claude-team test         # Run E2E integration test
-#   claude-team version      # Show version and install info
-#   claude-team 4x3          # Launch/reattach with specific grid
-#   claude-team --help       # Show usage
+#   doey              # Smart launch (auto-attach or project picker)
+#   doey init         # Register current directory as a project
+#   doey list         # Show all registered projects + status
+#   doey stop         # Stop session for current project
+#   doey update       # Pull latest + reinstall (alias: reinstall)
+#   doey doctor       # Check installation health & prerequisites
+#   doey remove NAME  # Unregister a project from the registry
+#   doey uninstall    # Remove all Doey files
+#   doey test         # Run E2E integration test
+#   doey version      # Show version and install info
+#   doey 4x3          # Launch/reattach with specific grid
+#   doey --help       # Show usage
 #
-# Shorthand: "ct" is installed automatically as a symlink to this script.
+# CLI command: "doey" is installed to ~/.local/bin/doey.
 # ──────────────────────────────────────────────────────────────────────
 
 # ── Color palette ─────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ BOLD='\033[1m'        # Bold
 RESET='\033[0m'       # Reset
 
 # ── Project registry ─────────────────────────────────────────────────
-PROJECTS_FILE="$HOME/.claude/claude-team/projects"
+PROJECTS_FILE="$HOME/.claude/doey/projects"
 mkdir -p "$(dirname "$PROJECTS_FILE")"
 touch "$PROJECTS_FILE"
 
@@ -81,14 +81,14 @@ register_project() {
 # List all projects with running status
 list_projects() {
   printf '\n'
-  printf "  ${BRAND}Claude Code TMUX Team — Projects${RESET}\n"
+  printf "  ${BRAND}Doey — Projects${RESET}\n"
   printf '\n'
   local has_projects=false
   while IFS=: read -r name path; do
     [[ -z "$name" ]] && continue
     has_projects=true
     local short_path="${path/#$HOME/\~}"
-    if session_exists "ct-${name}"; then
+    if session_exists "doey-${name}"; then
       printf "  ${SUCCESS}●${RESET} ${BOLD}%-20s${RESET} %s\n" "$name" "$short_path"
     else
       printf "  ${DIM}○${RESET} %-20s ${DIM}%s${RESET}\n" "$name" "$short_path"
@@ -110,8 +110,8 @@ stop_project() {
     printf "  ${WARN}No project registered for $(pwd)${RESET}\n"
     return 1
   fi
-  if tmux kill-session -t "ct-${name}" < /dev/null 2>/dev/null; then
-    printf "  ${SUCCESS}Stopped${RESET} ct-${name}\n"
+  if tmux kill-session -t "doey-${name}" < /dev/null 2>/dev/null; then
+    printf "  ${SUCCESS}Stopped${RESET} doey-${name}\n"
   else
     printf "  ${DIM}No active session for ${name}${RESET}\n"
   fi
@@ -122,7 +122,7 @@ show_menu() {
   local grid="${1:-6x2}"
 
   printf '\n'
-  printf "  ${BRAND}Claude Code TMUX Team${RESET}\n"
+  printf "  ${BRAND}Doey${RESET}\n"
   printf '\n'
   printf "  ${WARN}No project registered for $(pwd)${RESET}\n"
   printf '\n'
@@ -133,7 +133,7 @@ show_menu() {
     [[ -z "$name" ]] && continue
     names+=("$name")
     paths+=("$path")
-    if session_exists "ct-${name}"; then
+    if session_exists "doey-${name}"; then
       statuses+=("${SUCCESS}● running${RESET}")
     else
       statuses+=("${DIM}○ stopped${RESET}")
@@ -163,7 +163,7 @@ show_menu() {
       if [[ $idx -ge 0 && $idx -lt ${#names[@]} ]]; then
         local selected_name="${names[$idx]}"
         local selected_path="${paths[$idx]}"
-        local selected_session="ct-${selected_name}"
+        local selected_session="doey-${selected_name}"
         if session_exists "$selected_session"; then
           tmux attach -t "$selected_session"
         else
@@ -176,7 +176,7 @@ show_menu() {
       ;;
     i|I|init)
       register_project "$(pwd)"
-      printf "  Run ${BOLD}claude-team${RESET} again to launch.\n"
+      printf "  Run ${BOLD}doey${RESET} again to launch.\n"
       ;;
     q|Q) return 0 ;;
     *)
@@ -215,8 +215,8 @@ launch_session() {
   local total=$(( cols * rows ))
   local worker_count=$(( total - 2 ))
   local watchdog_pane=$cols
-  local session="ct-${name}"
-  local runtime_dir="/tmp/claude-team/${name}"
+  local session="doey-${name}"
+  local runtime_dir="/tmp/doey/${name}"
   local short_dir="${dir/#$HOME/~}"
 
   cd "$dir"
@@ -224,14 +224,13 @@ launch_session() {
   # ── Banner ──────────────────────────────────────────────────────
   printf '\n'
   printf "${BRAND}"
-  printf '    ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗\n'
-  printf '   ██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝\n'
-  printf '   ██║     ██║     ███████║██║   ██║██║  ██║█████╗  \n'
-  printf '   ██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  \n'
-  printf '   ╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗\n'
-  printf '    ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝╚══════╝\n'
+  printf '   ██████╗  ██████╗ ███████╗██╗   ██╗\n'
+  printf '   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝\n'
+  printf '   ██║  ██║██║   ██║█████╗   ╚████╔╝ \n'
+  printf '   ██║  ██║██║   ██║██╔══╝    ╚██╔╝  \n'
+  printf '   ██████╔╝╚██████╔╝███████╗   ██║   \n'
+  printf '   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   \n'
   printf "${RESET}"
-  printf "${DIM}                    T E A M${RESET}\n"
   printf '\n'
   printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}${grid}${RESET}  ${DIM}Workers${RESET} ${BOLD}${worker_count}${RESET}\n"
   printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
@@ -287,9 +286,9 @@ MANIFEST
 
   # Generate shared worker system prompt (appended to Claude Code's default prompt)
   cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
-# Claude Team Worker
+# Doey Worker
 
-You are a **Worker** on the Claude Team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
+You are a **Worker** on the Doey team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
 
 ## Rules
 1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
@@ -310,7 +309,7 @@ WORKER_PROMPT
 WORKER_CONTEXT
 
   tmux new-session -d -s "$session" -c "$dir"
-  tmux set-environment -t "$session" CLAUDE_TEAM_RUNTIME "${runtime_dir}"
+  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
   step_done
 
   # ── Step 2: Apply theme ────────────────────────────────────────
@@ -330,7 +329,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" status-left-length 50
   tmux set-option -t "$session" status-right-length 70
   tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold]  CLAUDE TEAM: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
+    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
     "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] ${worker_count} workers "
   tmux set-option -t "$session" status-interval 5
@@ -390,7 +389,7 @@ WORKER_CONTEXT
 
   # Launch Manager (pane 0.0)
   tmux send-keys -t "$session:0.0" \
-    "claude --dangerously-skip-permissions --agent tmux-manager" Enter
+    "claude --dangerously-skip-permissions --agent doey-manager" Enter
   sleep 0.5
 
   # Send initial briefing once Manager is ready
@@ -408,7 +407,7 @@ WORKER_CONTEXT
 
   # Launch Watchdog (pane 0.$watchdog_pane)
   tmux send-keys -t "$session:0.$watchdog_pane" \
-    "claude --dangerously-skip-permissions --model haiku --agent tmux-watchdog" Enter
+    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
   sleep 0.5
 
   # Auto-start the watchdog loop
@@ -459,7 +458,7 @@ WORKER_CONTEXT
   # ── Final summary ──────────────────────────────────────────────
   printf '\n'
   printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${SUCCESS}Claude Team is ready${RESET}                           ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}                           ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Manager${RESET}    ${DIM}0.0${RESET}   Online                      ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}0.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
@@ -481,7 +480,7 @@ WORKER_CONTEXT
 
 # ── Update / Reinstall ───────────────────────────────────────────────
 update_system() {
-  local repo_path_file="$HOME/.claude/claude-team/repo-path"
+  local repo_path_file="$HOME/.claude/doey/repo-path"
   local repo_dir
 
   if [[ ! -f "$repo_path_file" ]]; then
@@ -528,26 +527,25 @@ update_system() {
   fi
   printf '\n'
 
-  rm -f "$HOME/.claude/claude-team/last-update-check.available"
+  rm -f "$HOME/.claude/doey/last-update-check.available"
 
   printf "  ${SUCCESS}Update complete.${RESET}\n"
-  printf "  Running sessions need a restart: ${BOLD}claude-team stop && claude-team${RESET}\n"
+  printf "  Running sessions need a restart: ${BOLD}doey stop && doey${RESET}\n"
 }
 
 # ── Uninstall ──────────────────────────────────────────────────────
 uninstall_system() {
   printf '\n'
-  printf "  ${BRAND}Claude Team — Uninstall${RESET}\n"
+  printf "  ${BRAND}Doey — Uninstall${RESET}\n"
   printf '\n'
 
   printf "  This will remove:\n"
-  printf "    ${DIM}• ~/.local/bin/claude-team${RESET}\n"
-  printf "    ${DIM}• ~/.local/bin/ct${RESET}\n"
-  printf "    ${DIM}• ~/.claude/agents/tmux-*.md${RESET}\n"
-  printf "    ${DIM}• ~/.claude/commands/tmux-*.md${RESET}\n"
-  printf "    ${DIM}• ~/.claude/claude-team/ (config & state)${RESET}\n"
+  printf "    ${DIM}• ~/.local/bin/doey${RESET}\n"
+  printf "    ${DIM}• ~/.claude/agents/doey-*.md${RESET}\n"
+  printf "    ${DIM}• ~/.claude/commands/doey-*.md${RESET}\n"
+  printf "    ${DIM}• ~/.claude/doey/ (config & state)${RESET}\n"
   printf '\n'
-  printf "  ${DIM}Will NOT remove: git repo, /tmp/claude-team, or agent-memory${RESET}\n"
+  printf "  ${DIM}Will NOT remove: git repo, /tmp/doey, or agent-memory${RESET}\n"
   printf '\n'
 
   read -rp "  Continue? [y/N] " confirm
@@ -556,11 +554,10 @@ uninstall_system() {
     return 0
   fi
 
-  rm -f ~/.local/bin/claude-team
-  rm -f ~/.local/bin/ct
-  rm -f ~/.claude/agents/tmux-*.md
-  rm -f ~/.claude/commands/tmux-*.md
-  rm -rf ~/.claude/claude-team
+  rm -f ~/.local/bin/doey
+  rm -f ~/.claude/agents/doey-*.md
+  rm -f ~/.claude/commands/doey-*.md
+  rm -rf ~/.claude/doey
 
   printf '\n'
   printf "  ${SUCCESS}✓ Uninstalled successfully.${RESET}\n"
@@ -571,7 +568,7 @@ uninstall_system() {
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   printf '\n'
-  printf "  ${BRAND}Claude Team — System Check${RESET}\n"
+  printf "  ${BRAND}Doey — System Check${RESET}\n"
   printf '\n'
 
   # tmux
@@ -596,28 +593,28 @@ check_doctor() {
   fi
 
   # Agents installed
-  if [[ -f "$HOME/.claude/agents/tmux-manager.md" ]]; then
-    printf "  ${SUCCESS}✓${RESET} Agents installed  ${DIM}~/.claude/agents/tmux-manager.md${RESET}\n"
+  if [[ -f "$HOME/.claude/agents/doey-manager.md" ]]; then
+    printf "  ${SUCCESS}✓${RESET} Agents installed  ${DIM}~/.claude/agents/doey-manager.md${RESET}\n"
   else
-    printf "  ${ERROR}✗${RESET} Agents not installed  ${DIM}~/.claude/agents/tmux-manager.md missing${RESET}\n"
+    printf "  ${ERROR}✗${RESET} Agents not installed  ${DIM}~/.claude/agents/doey-manager.md missing${RESET}\n"
   fi
 
   # Commands installed
-  if [[ -f "$HOME/.claude/commands/tmux-dispatch.md" ]]; then
-    printf "  ${SUCCESS}✓${RESET} Commands installed  ${DIM}~/.claude/commands/tmux-dispatch.md${RESET}\n"
+  if [[ -f "$HOME/.claude/commands/doey-dispatch.md" ]]; then
+    printf "  ${SUCCESS}✓${RESET} Commands installed  ${DIM}~/.claude/commands/doey-dispatch.md${RESET}\n"
   else
-    printf "  ${ERROR}✗${RESET} Commands not installed  ${DIM}~/.claude/commands/tmux-dispatch.md missing${RESET}\n"
+    printf "  ${ERROR}✗${RESET} Commands not installed  ${DIM}~/.claude/commands/doey-dispatch.md missing${RESET}\n"
   fi
 
   # CLI installed
-  if [[ -f "$HOME/.local/bin/claude-team" ]]; then
-    printf "  ${SUCCESS}✓${RESET} CLI installed  ${DIM}~/.local/bin/claude-team${RESET}\n"
+  if [[ -f "$HOME/.local/bin/doey" ]]; then
+    printf "  ${SUCCESS}✓${RESET} CLI installed  ${DIM}~/.local/bin/doey${RESET}\n"
   else
-    printf "  ${ERROR}✗${RESET} CLI not installed  ${DIM}~/.local/bin/claude-team missing${RESET}\n"
+    printf "  ${ERROR}✗${RESET} CLI not installed  ${DIM}~/.local/bin/doey missing${RESET}\n"
   fi
 
   # Repo path
-  local repo_path_file="$HOME/.claude/claude-team/repo-path"
+  local repo_path_file="$HOME/.claude/doey/repo-path"
   if [[ -f "$repo_path_file" ]]; then
     local repo_dir
     repo_dir="$(cat "$repo_path_file")"
@@ -627,18 +624,18 @@ check_doctor() {
       printf "  ${ERROR}✗${RESET} Repo path registered but directory missing  ${DIM}${repo_dir}${RESET}\n"
     fi
   else
-    printf "  ${ERROR}✗${RESET} Repo path not registered  ${DIM}~/.claude/claude-team/repo-path missing${RESET}\n"
+    printf "  ${ERROR}✗${RESET} Repo path not registered  ${DIM}~/.claude/doey/repo-path missing${RESET}\n"
   fi
 
   # Version tracking
-  local version_file="$HOME/.claude/claude-team/version"
+  local version_file="$HOME/.claude/doey/version"
   if [[ -f "$version_file" ]]; then
     local ver vdate
     ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
     vdate="$(grep "^date=" "$version_file" | cut -d= -f2)"
     printf "  ${SUCCESS}✓${RESET} Version tracked  ${DIM}${ver} (${vdate})${RESET}\n"
   else
-    printf "  ${WARN}⚠${RESET} No version file  ${DIM}Run 'ct update' to generate${RESET}\n"
+    printf "  ${WARN}⚠${RESET} No version file  ${DIM}Run 'doey update' to generate${RESET}\n"
   fi
 
   printf '\n'
@@ -663,7 +660,7 @@ remove_project() {
       printf "    ${BOLD}${pname}${RESET}  ${DIM}${ppath}${RESET}\n"
     done < "$PROJECTS_FILE"
     printf '\n'
-    printf "  Usage: ${BOLD}claude-team remove <name>${RESET}\n"
+    printf "  Usage: ${BOLD}doey remove <name>${RESET}\n"
     return 1
   fi
 
@@ -678,18 +675,18 @@ remove_project() {
   printf "  ${SUCCESS}Removed '${name}' from project registry${RESET}\n"
 
   # Hint about running session
-  if session_exists "ct-${name}"; then
-    printf "  ${WARN}Session ct-${name} is still running. Use 'claude-team stop' in that directory to stop it.${RESET}\n"
+  if session_exists "doey-${name}"; then
+    printf "  ${WARN}Session doey-${name} is still running. Use 'doey stop' in that directory to stop it.${RESET}\n"
   fi
 }
 
 # ── Version — show installation info ─────────────────────────────────
 show_version() {
   printf '\n'
-  printf "  ${BRAND}Claude Code TMUX Team${RESET}\n"
+  printf "  ${BRAND}Doey${RESET}\n"
   printf '\n'
 
-  local version_file="$HOME/.claude/claude-team/version"
+  local version_file="$HOME/.claude/doey/version"
   if [[ -f "$version_file" ]]; then
     local ver installed_date repo_dir
     ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
@@ -700,12 +697,12 @@ show_version() {
       local latest
       latest="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo '')"
       if [[ -n "$latest" ]] && [[ "$latest" != "$ver" ]]; then
-        printf "  ${DIM}Update${RESET}     ${WARN}${latest} available${RESET}  ${DIM}(run 'ct update')${RESET}\n"
+        printf "  ${DIM}Update${RESET}     ${WARN}${latest} available${RESET}  ${DIM}(run 'doey update')${RESET}\n"
       fi
     fi
   else
     # Fallback to git if no version file (pre-version-tracking install)
-    local repo_path_file="$HOME/.claude/claude-team/repo-path"
+    local repo_path_file="$HOME/.claude/doey/repo-path"
     if [[ -f "$repo_path_file" ]]; then
       local repo_dir
       repo_dir="$(cat "$repo_path_file")"
@@ -719,7 +716,7 @@ show_version() {
 
   printf "  ${DIM}Agents${RESET}     ${BOLD}~/.claude/agents/${RESET}\n"
   printf "  ${DIM}Commands${RESET}   ${BOLD}~/.claude/commands/${RESET}\n"
-  printf "  ${DIM}CLI${RESET}        ${BOLD}~/.local/bin/claude-team${RESET}\n"
+  printf "  ${DIM}CLI${RESET}        ${BOLD}~/.local/bin/doey${RESET}\n"
 
   local project_count=0
   if [[ -f "$PROJECTS_FILE" ]]; then
@@ -732,7 +729,7 @@ show_version() {
 
 # ── Auto-update check ─────────────────────────────────────────────
 check_for_updates() {
-  local state_dir="$HOME/.claude/claude-team"
+  local state_dir="$HOME/.claude/doey"
   local last_check_file="$state_dir/last-update-check"
   local cache_file="$state_dir/last-update-check.available"
   local repo_path_file="$state_dir/repo-path"
@@ -752,7 +749,7 @@ check_for_updates() {
     local behind
     behind=$(cat "$cache_file")
     if [[ "$behind" -gt 0 ]] 2>/dev/null; then
-      printf "  ${WARN}⚠ Update available${RESET} ${DIM}(%s commit(s) behind — run: ct update)${RESET}\n" "$behind"
+      printf "  ${WARN}⚠ Update available${RESET} ${DIM}(%s commit(s) behind — run: doey update)${RESET}\n" "$behind"
     fi
   fi
 
@@ -794,8 +791,8 @@ launch_session_headless() {
   local total=$(( cols * rows ))
   local worker_count=$(( total - 2 ))
   local watchdog_pane=$cols
-  local session="ct-${name}"
-  local runtime_dir="/tmp/claude-team/${name}"
+  local session="doey-${name}"
+  local runtime_dir="/tmp/doey/${name}"
 
   cd "$dir"
 
@@ -827,9 +824,9 @@ PASTE_SETTLE_MS=500
 MANIFEST
 
   cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
-# Claude Team Worker
+# Doey Worker
 
-You are a **Worker** on the Claude Team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
+You are a **Worker** on the Doey team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
 
 ## Rules
 1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
@@ -850,7 +847,7 @@ WORKER_PROMPT
 WORKER_CONTEXT
 
   tmux new-session -d -s "$session" -c "$dir"
-  tmux set-environment -t "$session" CLAUDE_TEAM_RUNTIME "${runtime_dir}"
+  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # ── Apply theme ──
   printf "  ${DIM}Applying theme...${RESET}\n"
@@ -865,7 +862,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" status-left-length 50
   tmux set-option -t "$session" status-right-length 70
   tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold]  CLAUDE TEAM: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
+    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
     "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] ${worker_count} workers "
   tmux set-option -t "$session" status-interval 5
@@ -907,7 +904,7 @@ WORKER_CONTEXT
   # ── Launch Manager & Watchdog ──
   printf "  ${DIM}Launching Manager & Watchdog...${RESET}\n"
   tmux send-keys -t "$session:0.0" \
-    "claude --dangerously-skip-permissions --agent tmux-manager" Enter
+    "claude --dangerously-skip-permissions --agent doey-manager" Enter
   sleep 0.5
 
   (
@@ -923,7 +920,7 @@ WORKER_CONTEXT
   ) &
 
   tmux send-keys -t "$session:0.$watchdog_pane" \
-    "claude --dangerously-skip-permissions --model haiku --agent tmux-watchdog" Enter
+    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
   sleep 0.5
 
   (
@@ -980,12 +977,12 @@ run_test() {
   done
 
   local test_id="e2e-test-$(date +%s)"
-  local test_root="/tmp/claude-team-test/${test_id}"
+  local test_root="/tmp/doey-test/${test_id}"
   local project_dir="${test_root}/project"
   local report_file="${test_root}/report.md"
 
   printf '\n'
-  printf "  ${BRAND}Claude Team — E2E Test${RESET}\n"
+  printf "  ${BRAND}Doey — E2E Test${RESET}\n"
   printf '\n'
   printf "  ${DIM}Test ID${RESET}    ${BOLD}${test_id}${RESET}\n"
   printf "  ${DIM}Grid${RESET}       ${BOLD}${grid}${RESET}\n"
@@ -998,12 +995,12 @@ run_test() {
   mkdir -p "${project_dir}/.claude/hooks"
   cd "$project_dir"
   git init -q
-  printf '# E2E Test Sandbox\n\nThis project was created by `ct test` for automated testing.\n' > README.md
+  printf '# E2E Test Sandbox\n\nThis project was created by `doey test` for automated testing.\n' > README.md
   printf 'E2E Test Sandbox - build whatever is requested\n' > CLAUDE.md
 
   # Copy hooks and settings from the repo
   local repo_dir
-  repo_dir="$(cat "$HOME/.claude/claude-team/repo-path")"
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path")"
   # Copy all hook scripts
   for hook_file in "${repo_dir}"/.claude/hooks/*.sh; do
     [ -f "$hook_file" ] && cp "$hook_file" "${project_dir}/.claude/hooks/$(basename "$hook_file")"
@@ -1019,7 +1016,7 @@ run_test() {
   local last8="${test_id: -8}"
   local test_project_name="e2e-test-${last8}"
   echo "${test_project_name}:${project_dir}" >> "$PROJECTS_FILE"
-  local session="ct-${test_project_name}"
+  local session="doey-${test_project_name}"
   printf "  ${SUCCESS}Registered${RESET} ${BOLD}${test_project_name}${RESET}\n"
 
   # ── Step 3: Launch team ──
@@ -1044,7 +1041,7 @@ run_test() {
   printf '\n'
 
   claude --dangerously-skip-permissions --agent test-driver --model opus \
-    "Run the E2E test. Session: ${session}. Project name: ${test_project_name}. Project dir: ${project_dir}. Runtime dir: /tmp/claude-team/${test_project_name}. Journey file: ${journey_file}. Observations dir: ${test_root}/observations. Report file: ${report_file}. Test ID: ${test_id}"
+    "Run the E2E test. Session: ${session}. Project name: ${test_project_name}. Project dir: ${project_dir}. Runtime dir: /tmp/doey/${test_project_name}. Journey file: ${journey_file}. Observations dir: ${test_root}/observations. Report file: ${report_file}. Test ID: ${test_id}"
 
   # ── Step 6: Display results ──
   printf '\n'
@@ -1085,7 +1082,7 @@ run_test() {
     printf "  ${BOLD}Kept for inspection:${RESET}\n"
     printf "    ${DIM}Session${RESET}   tmux attach -t ${session}\n"
     printf "    ${DIM}Sandbox${RESET}   ${project_dir}\n"
-    printf "    ${DIM}Runtime${RESET}   /tmp/claude-team/${test_project_name}\n"
+    printf "    ${DIM}Runtime${RESET}   /tmp/doey/${test_project_name}\n"
     printf "    ${DIM}Report${RESET}    ${report_file}\n"
     printf '\n'
   fi
@@ -1098,10 +1095,10 @@ grid=""
 case "${1:-}" in
   --help|-h)
     printf '\n'
-    printf "  ${BRAND}Claude Code TMUX Team${RESET}\n"
+    printf "  ${BRAND}Doey${RESET}\n"
     printf '\n'
     cat << 'HELP'
-  Usage: claude-team [command] [grid]
+  Usage: doey [command] [grid]
 
   Commands:
     (none)     Smart launch — auto-attach or show project picker
@@ -1111,7 +1108,7 @@ case "${1:-}" in
     update     Pull latest changes and reinstall (alias: reinstall)
     doctor     Check installation health and prerequisites
     remove     Unregister a project (by name, or current dir)
-    uninstall  Remove all Claude Team files (keeps git repo and agent-memory)
+    uninstall  Remove all Doey files (keeps git repo and agent-memory)
     test       Run E2E integration test (--keep, --open, --grid NxM)
     version    Show version and installation info
     --help     Show this help
@@ -1121,16 +1118,16 @@ case "${1:-}" in
                Only used when launching a new session
 
   Examples:
-    claude-team              # smart launch
-    claude-team init         # register current dir
-    claude-team 4x3          # launch with 4x3 grid
-    claude-team list         # show all projects
-    claude-team stop         # stop current project session
-    claude-team update       # pull latest + reinstall
-    claude-team doctor       # check system health
-    claude-team remove myapp # unregister a project
-    claude-team uninstall    # remove all installed files
-    claude-team version      # show install info
+    doey              # smart launch
+    doey init         # register current dir
+    doey 4x3          # launch with 4x3 grid
+    doey list         # show all projects
+    doey stop         # stop current project session
+    doey update       # pull latest + reinstall
+    doey doctor       # check system health
+    doey remove myapp # unregister a project
+    doey uninstall    # remove all installed files
+    doey version      # show install info
 HELP
     printf '\n'
     exit 0
@@ -1180,7 +1177,7 @@ HELP
     ;;
   *)
     printf "  ${ERROR}Unknown command: $1${RESET}\n"
-    printf "  Run ${BOLD}claude-team --help${RESET} for usage\n"
+    printf "  Run ${BOLD}doey --help${RESET} for usage\n"
     exit 1
     ;;
 esac
@@ -1194,7 +1191,7 @@ name="$(find_project "$dir")"
 
 if [[ -n "$name" ]]; then
   # Known project
-  session="ct-${name}"
+  session="doey-${name}"
   if session_exists "$session"; then
     # Already running — just attach
     printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}${session}${RESET}...\n"

@@ -1,8 +1,8 @@
 # Linux Server Deployment
 
-> Part of [Claude Code TMUX Team](../README.md)
+> Part of [Doey](../README.md)
 
-Running Claude Code TMUX Team on a Linux server is one of the best use cases — your team of agents keeps working even after you disconnect from SSH. Start a task, detach, close your laptop, and come back later to find the work done.
+Running Doey on a Linux server is one of the best use cases — your team of agents keeps working even after you disconnect from SSH. Start a task, detach, close your laptop, and come back later to find the work done.
 
 ### Prerequisites
 
@@ -49,14 +49,14 @@ fnm install --lts
 npm install -g @anthropic-ai/claude-code
 claude auth
 
-# 4. Install claude-code-tmux-team
+# 4. Install Doey
 git clone https://github.com/frikk-gyldendal/claude-code-tmux-team.git
 cd claude-code-tmux-team && ./install.sh
 
 # 5. Init your project and launch
 cd ~/your-project
-ct init
-ct
+doey init
+doey
 ```
 
 ### Headless / SSH Usage
@@ -69,7 +69,7 @@ ssh user@your-server
 
 # On the server — start or reattach
 cd ~/your-project
-ct
+doey
 
 # Give the Manager a task, then detach when ready
 # Ctrl+B, D  →  detaches from tmux (team keeps running)
@@ -78,24 +78,24 @@ ct
 exit
 ```
 
-Reconnect anytime — `ct` auto-reattaches to the running session:
+Reconnect anytime — `doey` auto-reattaches to the running session:
 
 ```bash
 ssh user@your-server
 cd ~/your-project
-ct                       # picks up right where you left off
+doey                     # picks up right where you left off
 ```
 
 <details>
 <summary><strong>Running as a Background Service (Advanced)</strong></summary>
 
-You can configure a systemd user service to auto-start a claude-team session on boot.
+You can configure a systemd user service to auto-start a doey session on boot.
 
-Create `~/.config/systemd/user/claude-team.service`:
+Create `~/.config/systemd/user/doey.service`:
 
 ```ini
 [Unit]
-Description=Claude Code TMUX Team
+Description=Doey
 After=network-online.target
 Wants=network-online.target
 
@@ -104,8 +104,8 @@ Type=forking
 Environment=HOME=%h
 Environment=PATH=%h/.local/bin:%h/.fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/your-project
-ExecStart=/usr/bin/tmux new-session -d -s claude-team "%h/.local/bin/claude-team"
-ExecStop=/usr/bin/tmux kill-session -t claude-team
+ExecStart=/usr/bin/tmux new-session -d -s doey "%h/.local/bin/doey"
+ExecStop=/usr/bin/tmux kill-session -t doey
 Restart=on-failure
 RestartSec=10
 
@@ -120,11 +120,11 @@ Enable and start:
 sudo loginctl enable-linger $USER
 
 systemctl --user daemon-reload
-systemctl --user enable claude-team
-systemctl --user start claude-team
+systemctl --user enable doey
+systemctl --user start doey
 
 # Check status
-systemctl --user status claude-team
+systemctl --user status doey
 ```
 
 > This is optional. Most users will prefer the manual SSH + detach workflow above.
@@ -133,7 +133,7 @@ systemctl --user status claude-team
 
 ### Cloud Providers
 
-Claude Team is network-bound (API calls to Anthropic), not CPU/RAM-intensive — even the smallest instances work. Any Linux VPS with tmux and Node.js is enough.
+Doey is network-bound (API calls to Anthropic), not CPU/RAM-intensive — even the smallest instances work. Any Linux VPS with tmux and Node.js is enough.
 
 <details>
 <summary><strong>Hetzner Cloud (~€3.29/mo)</strong></summary>
@@ -214,5 +214,5 @@ Once the team is running, follow the [Quick Start](../README.md#quick-start) in 
 | **tmux version too old** (< 2.4) | Install from source or use a backports repo: `sudo apt install -t bullseye-backports tmux` |
 | **`node` not found after fnm install** | Run `source ~/.bashrc` or open a new shell — fnm needs the PATH update |
 | **Locale / UTF-8 errors** (garbled ASCII art) | `sudo apt install -y locales && sudo locale-gen en_US.UTF-8 && export LANG=en_US.UTF-8` |
-| **`ct` / `claude-team` command not found** | Ensure `~/.local/bin` is on your PATH: `export PATH="$HOME/.local/bin:$PATH"` |
+| **`doey` command not found** | Ensure `~/.local/bin` is on your PATH: `export PATH="$HOME/.local/bin:$PATH"` |
 | **Workers fail to start** | Check that `claude` CLI works standalone first: `claude --version` |

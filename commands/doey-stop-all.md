@@ -1,12 +1,12 @@
-# Skill: tmux-stop-all
+# Skill: doey-stop-all
 
-Stop all running Claude Team sessions at once.
+Stop all running Doey sessions at once.
 
 ## Usage
-`/tmux-stop-all`
+`/doey-stop-all`
 
 ## Prompt
-You need to stop all running Claude Team tmux sessions.
+You need to stop all running Doey tmux sessions.
 
 ### Steps
 
@@ -19,11 +19,11 @@ You need to stop all running Claude Team tmux sessions.
 2. Read the projects registry and find running sessions:
 
    ```bash
-   PROJECTS_FILE="$HOME/.claude/claude-team/projects"
+   PROJECTS_FILE="$HOME/.claude/doey/projects"
    TMUX_BIN=$(command -v tmux)
    while IFS=: read -r name path; do
      [ -z "$name" ] && continue
-     SESSION="ct-${name}"
+     SESSION="doey-${name}"
      if "$TMUX_BIN" has-session -t "$SESSION" 2>/dev/null; then
        echo "Stopping $SESSION ($path)..."
        "$TMUX_BIN" kill-session -t "$SESSION"

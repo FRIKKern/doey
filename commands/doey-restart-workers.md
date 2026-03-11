@@ -1,10 +1,17 @@
+# Skill: doey-restart-workers
+
 Restart all Claude Code worker instances (and the Watchdog) without restarting the Manager (pane 0.0). Uses process-based killing (not keystrokes) and deterministic verify loops.
 
-## Steps
+## Usage
+`/doey-restart-workers`
+
+## Prompt
+
+### Steps
 
 1. **Read Project Context** — discover the runtime directory and source the session manifest:
    ```bash
-   RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    ```
    This gives you:
@@ -65,7 +72,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 
 5. **Phase 4: START — Launch all instances.** Start the Watchdog first, then workers with 0.5s gaps:
    ```bash
-   tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "claude --dangerously-skip-permissions --model haiku --agent tmux-watchdog" Enter
+   tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
    sleep 1
    for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
      tmux send-keys -t "$SESSION_NAME:0.$i" "claude --dangerously-skip-permissions --model opus" Enter
@@ -117,7 +124,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 
 ## Important Notes
 - NEVER restart pane 0.0 — that's you (the Manager)
-- The Watchdog uses `--model haiku --agent tmux-watchdog`, workers use `--model opus`
+- The Watchdog uses `--model haiku --agent doey-watchdog`, workers use `--model opus`
 - If a worker shows "Not logged in", run `/login` on it: `tmux send-keys -t "$SESSION_NAME:0.X" "/login" Enter`
 - Pane counts and indices are dynamic — always read from the manifest, never hardcode
 - If the VERIFY KILLED phase fails, do NOT proceed — report the stuck panes and stop

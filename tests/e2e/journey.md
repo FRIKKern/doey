@@ -1,15 +1,15 @@
-# E2E Journey: Build a Claude Teams Marketing Website
+# E2E Journey: Build a Doey Marketing Website
 
 ## Overview
 
-The test driver sends a realistic website-building task to the Manager and monitors the full team (Manager, Watchdog, Workers) as they collaborate to build a multi-page marketing website about Claude Teams. This exercises delegation, parallel work, file creation, mid-journey interaction, and end-to-end coordination.
+The test driver sends a realistic website-building task to the Manager and monitors the full team (Manager, Watchdog, Workers) as they collaborate to build a multi-page marketing website about Doey. This exercises delegation, parallel work, file creation, mid-journey interaction, and end-to-end coordination.
 
 ## Initial Task Prompt
 
 The exact text to send to the Manager:
 
 ```
-Build a marketing website for "Claude Teams" — the tmux-based multi-agent orchestration system for Claude Code.
+Build a marketing website for "Doey" — the tmux-based multi-agent orchestration system for Claude Code.
 
 Requirements:
 1. Multi-page site with at least: index.html, features.html, how-it-works.html
@@ -17,10 +17,10 @@ Requirements:
 3. A shared JavaScript file (script.js) for mobile nav toggle and smooth scrolling
 4. Navigation bar on all pages linking to each page
 5. Content should cover:
-   - Hero section: what Claude Teams is and why it matters
+   - Hero section: what Doey is and why it matters
    - Features: Manager orchestration, parallel workers, Watchdog auto-accept, slash commands
    - How it works: tmux grid layout, task dispatch, status monitoring, worker lifecycle
-   - Get Started: installation steps (git clone, ./install.sh, cd project, ct)
+   - Get Started: installation steps (git clone, ./install.sh, cd project, doey)
 6. Responsive design (mobile-friendly)
 7. Professional color scheme: dark backgrounds (#1a1a2e, #16213e), cyan accents (#00d2ff), white text
 8. Clean typography using system fonts
@@ -35,7 +35,7 @@ After the Manager reports initial pages are complete (or asks if anything else i
 
 ```
 Great work! Two additions:
-1. Add a footer to ALL pages with "Built with Claude Teams" and a copyright year
+1. Add a footer to ALL pages with "Built with Doey" and a copyright year
 2. Add a dark mode toggle button in the navigation bar — it should toggle a .dark-mode class on the body element, with appropriate CSS for both themes
 ```
 
@@ -69,7 +69,7 @@ Great work! Two additions:
 
 ### After Mid-Journey
 
-- Footer text "Built with Claude Teams" appears in at least one HTML file
+- Footer text "Built with Doey" appears in at least one HTML file
 - Dark mode toggle: a button element in nav/header
 - CSS contains .dark-mode rules
 

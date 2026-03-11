@@ -3,7 +3,7 @@
 ## Overview
 
 This document maps every context layer that influences the behavior of the
-Manager and Watchdog agents in Claude Code TMUX Team. Use it to debug
+Manager and Watchdog agents in Doey. Use it to debug
 unexpected behavior, understand load order, and optimize agent performance.
 
 Each Claude Code instance receives context from up to 10 layers, merged in a
@@ -29,41 +29,41 @@ Load Order (bottom = loaded first, top = loaded last / highest precedence)
   +----------------------------------------------------------+
   |  5. Persistent Memory   (~/.claude/agent-memory/)        |
   +----------------------------------------------------------+
-  |  4. Skills/Commands     (~/.claude/commands/tmux-*.md)   |
+  |  4. Skills/Commands     (~/.claude/commands/doey-*.md)   |
   +----------------------------------------------------------+
   |  3. Hook System         (.claude/hooks/ modular scripts) |
   +----------------------------------------------------------+
   |  2. Claude Code Settings (4-file merge chain)            |
   +----------------------------------------------------------+
-  |  1. Agent Definitions   (agents/tmux-manager.md, etc.)   |
+  |  1. Agent Definitions   (agents/doey-manager.md, etc.)   |
   +----------------------------------------------------------+
 ```
 
 | Layer | Source Files | Applies To | Load Time |
 |-------|-------------|------------|-----------|
-| 1. Agent Definitions | `agents/tmux-manager.md`, `agents/tmux-watchdog.md` | Manager, Watchdog | Startup (via `--agent`) |
+| 1. Agent Definitions | `agents/doey-manager.md`, `agents/doey-watchdog.md` | Manager, Watchdog | Startup (via `--agent`) |
 | 2. Claude Code Settings | 4-file merge chain (see below) | All | Startup |
 | 3. Hook System | `.claude/hooks/common.sh` + `on-*.sh` scripts | All (registered in project settings) | Runtime (on events) |
-| 4. Skills/Commands | `commands/tmux-*.md` (15 files) | Manager primarily; some Watchdog | On-demand (`/skill-name`) |
-| 5. Persistent Memory | `~/.claude/agent-memory/tmux-manager/MEMORY.md` | Manager | Startup (system prompt) |
+| 4. Skills/Commands | `commands/doey-*.md` (15 files) | Manager primarily; some Watchdog | On-demand (`/skill-name`) |
+| 5. Persistent Memory | `~/.claude/agent-memory/doey-manager/MEMORY.md` | Manager | Startup (system prompt) |
 | 6. Environment Variables | `session.env`, tmux env, Claude Code env | All | Startup + Runtime |
 | 7. CLI Launch Flags | `--agent`, `--model`, `--dangerously-skip-permissions` | Per-instance | Startup |
 | 8. tmux Integration | tmux session config, pane structure | All | Startup (session creation) |
-| 9. Runtime State | `/tmp/claude-team/<name>/` tree | All | Runtime (continuous) |
+| 9. Runtime State | `/tmp/doey/<name>/` tree | All | Runtime (continuous) |
 | 10. CLAUDE.md | `CLAUDE.md` in project root | All | Startup (project context) |
 
 
 ## Layer 1: Agent Definitions
 
 **Files:**
-- `agents/tmux-manager.md` -- installed to `~/.claude/agents/tmux-manager.md`
-- `agents/tmux-watchdog.md` -- installed to `~/.claude/agents/tmux-watchdog.md`
+- `agents/doey-manager.md` -- installed to `~/.claude/agents/doey-manager.md`
+- `agents/doey-watchdog.md` -- installed to `~/.claude/agents/doey-watchdog.md`
 
 ### Frontmatter Fields
 
 | Field | Manager | Watchdog | Effect |
 |-------|---------|----------|--------|
-| `name` | `tmux-manager` | `tmux-watchdog` | Agent identifier for `--agent` flag |
+| `name` | `doey-manager` | `doey-watchdog` | Agent identifier for `--agent` flag |
 | `model` | `opus` | `haiku` | Default model; overridden by CLI `--model` |
 | `color` | `green` | `yellow` | Status line color in Claude Code UI |
 | `memory` | `user` | `user` | Memory scope; stores to `~/.claude/agent-memory/<name>/` |
@@ -206,7 +206,7 @@ caused all workers to think they were the Manager and spam notifications.
 
 `$TMUX_PANE` is set automatically by tmux for each process running inside a
 pane (e.g., `%0`, `%1`, `%12`). The hook resolves it to the human-readable
-format `session:window.pane` (e.g., `ct-myproject:0.4`).
+format `session:window.pane` (e.g., `doey-myproject:0.4`).
 
 
 ## Layer 4: Skills/Commands
@@ -215,19 +215,19 @@ All 13 skills are installed to `~/.claude/commands/` and invoked via `/skill-nam
 
 | Skill | File | Primary Agent | Purpose |
 |-------|------|---------------|---------|
-| `/tmux-dispatch` | `tmux-dispatch.md` | Manager | Send task to one or more idle worker panes (primary dispatch primitive) |
-| `/tmux-delegate` | `tmux-delegate.md` | Manager | Delegate a task to a specific worker pane |
-| `/tmux-research` | `tmux-research.md` | Manager | Dispatch research task with guaranteed report-back (Stop hook enforced) |
-| `/tmux-monitor` | `tmux-monitor.md` | Manager | Smart monitoring: detect DONE, WORKING, ERROR, IDLE states |
-| `/tmux-status` | `tmux-status.md` | Manager/Workers | Share or check status of Claude instances |
-| `/tmux-broadcast` | `tmux-broadcast.md` | Manager | Broadcast message to ALL other instances |
-| `/tmux-send` | `tmux-send.md` | Manager | Send message to a specific pane |
-| `/tmux-inbox` | `tmux-inbox.md` | Any | Check and read messages from other instances |
-| `/tmux-team` | `tmux-team.md` | Manager | View full team layout and pane overview |
-| `/tmux-stop-all` | `tmux-stop-all.md` | Manager | Stop all running Claude Team sessions |
-| `/tmux-restart-workers` | `tmux-restart-workers.md` | Manager | Restart all workers and Watchdog (not Manager) |
-| `/tmux-reinstall` | `tmux-reinstall.md` | Manager | Pull latest from git and re-run installer |
-| `/tmux-watchdog-compact` | `tmux-watchdog-compact.md` | Manager | Send `/compact` to Watchdog to reduce token usage |
+| `/doey-dispatch` | `doey-dispatch.md` | Manager | Send task to one or more idle worker panes (primary dispatch primitive) |
+| `/doey-delegate` | `doey-delegate.md` | Manager | Delegate a task to a specific worker pane |
+| `/doey-research` | `doey-research.md` | Manager | Dispatch research task with guaranteed report-back (Stop hook enforced) |
+| `/doey-monitor` | `doey-monitor.md` | Manager | Smart monitoring: detect DONE, WORKING, ERROR, IDLE states |
+| `/doey-status` | `doey-status.md` | Manager/Workers | Share or check status of Claude instances |
+| `/doey-broadcast` | `doey-broadcast.md` | Manager | Broadcast message to ALL other instances |
+| `/doey-send` | `doey-send.md` | Manager | Send message to a specific pane |
+| `/doey-inbox` | `doey-inbox.md` | Any | Check and read messages from other instances |
+| `/doey-team` | `doey-team.md` | Manager | View full team layout and pane overview |
+| `/doey-stop-all` | `doey-stop-all.md` | Manager | Stop all running Doey sessions |
+| `/doey-restart-workers` | `doey-restart-workers.md` | Manager | Restart all workers and Watchdog (not Manager) |
+| `/doey-reinstall` | `doey-reinstall.md` | Manager | Pull latest from git and re-run installer |
+| `/doey-watchdog-compact` | `doey-watchdog-compact.md` | Manager | Send `/compact` to Watchdog to reduce token usage |
 
 ### How Skills Load
 
@@ -238,19 +238,19 @@ content composes on top of it as additional user-turn instructions.
 
 ### Agent-Skill Mapping
 
-- **Manager** uses: `/tmux-dispatch`, `/tmux-delegate`, `/tmux-research`,
-  `/tmux-monitor`, `/tmux-status`, `/tmux-broadcast`, `/tmux-send`,
-  `/tmux-team`, `/tmux-stop-all`, `/tmux-restart-workers`, `/tmux-reinstall`,
-  `/tmux-watchdog-compact`
+- **Manager** uses: `/doey-dispatch`, `/doey-delegate`, `/doey-research`,
+  `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-send`,
+  `/doey-team`, `/doey-stop-all`, `/doey-restart-workers`, `/doey-reinstall`,
+  `/doey-watchdog-compact`
 - **Watchdog** uses: none (operates from its agent definition, not skills)
-- **Workers** use: `/tmux-inbox`, `/tmux-status` (when explicitly told to)
+- **Workers** use: `/doey-inbox`, `/doey-status` (when explicitly told to)
 
 
 ## Layer 5: Persistent Memory
 
 ### Manager Memory
 
-**Path:** `~/.claude/agent-memory/tmux-manager/MEMORY.md`
+**Path:** `~/.claude/agent-memory/doey-manager/MEMORY.md`
 
 Key topics: tmux dispatch pattern (exit/restart/rename/paste-buffer),
 concurrent file edit mitigations, worker management, slash command locations,
@@ -258,7 +258,7 @@ delegation-first rule, skill-first usage rule, hook behavior summary.
 
 ### Watchdog Memory
 
-**Path:** `~/.claude/agent-memory/tmux-watchdog/MEMORY.md`
+**Path:** `~/.claude/agent-memory/doey-watchdog/MEMORY.md`
 
 Status: File may not exist or may be empty. The Watchdog runs on Haiku and
 rarely accumulates persistent memory. This is a gap -- the Watchdog could
@@ -284,9 +284,9 @@ conclusions, anything that duplicates CLAUDE.md instructions.
 ### Bootstrap Chain
 
 ```
-claude-team.sh --> tmux set-environment CLAUDE_TEAM_RUNTIME "/tmp/claude-team/<name>"
+doey.sh       --> tmux set-environment DOEY_RUNTIME "/tmp/doey/<name>"
               --> writes session.env to that directory
-Agents read:  --> tmux show-environment CLAUDE_TEAM_RUNTIME | cut -d= -f2-
+Agents read:  --> tmux show-environment DOEY_RUNTIME | cut -d= -f2-
               --> source "${RUNTIME_DIR}/session.env"
 ```
 
@@ -296,13 +296,13 @@ Agents read:  --> tmux show-environment CLAUDE_TEAM_RUNTIME | cut -d= -f2-
 |----------|---------|-------------|
 | `PROJECT_DIR` | `/Users/user/myproject` | Absolute path to project root |
 | `PROJECT_NAME` | `myproject` | Sanitized project name |
-| `SESSION_NAME` | `ct-myproject` | tmux session name |
+| `SESSION_NAME` | `doey-myproject` | tmux session name |
 | `GRID` | `6x2` | Grid layout (columns x rows) |
 | `TOTAL_PANES` | `12` | Total pane count |
 | `WORKER_COUNT` | `10` | Number of worker panes |
 | `WATCHDOG_PANE` | `6` | Pane index of the Watchdog |
 | `WORKER_PANES` | `1,2,3,4,5,7,8,9,10,11` | Comma-separated worker pane indices |
-| `RUNTIME_DIR` | `/tmp/claude-team/myproject` | Path to runtime state directory |
+| `RUNTIME_DIR` | `/tmp/doey/myproject` | Path to runtime state directory |
 
 ### tmux-Provided Variables
 
@@ -330,18 +330,18 @@ Agents read:  --> tmux show-environment CLAUDE_TEAM_RUNTIME | cut -d= -f2-
 
 **Manager (pane 0.0):**
 ```bash
-claude --dangerously-skip-permissions --agent tmux-manager
+claude --dangerously-skip-permissions --agent doey-manager
 ```
 
 **Watchdog (pane 0.N where N = first pane in second row):**
 ```bash
-claude --dangerously-skip-permissions --model haiku --agent tmux-watchdog
+claude --dangerously-skip-permissions --model haiku --agent doey-watchdog
 ```
 
 **Workers (all remaining panes):**
 ```bash
 claude --dangerously-skip-permissions --model opus \
-  --append-system-prompt-file /tmp/claude-team/<name>/worker-system-prompt-<N>.md
+  --append-system-prompt-file /tmp/doey/<name>/worker-system-prompt-<N>.md
 ```
 
 ### Flag Precedence
@@ -354,7 +354,7 @@ CLI flags  >  Agent definition frontmatter  >  Settings files
   (same value here, but explicit).
 - `--model haiku` on Watchdog overrides its own frontmatter `model: haiku`
   (redundant but explicit).
-- `--agent tmux-manager` loads the agent definition, which sets model to opus.
+- `--agent doey-manager` loads the agent definition, which sets model to opus.
   No CLI `--model` is given for Manager, so it uses the agent definition value.
 
 ### --dangerously-skip-permissions
@@ -421,7 +421,7 @@ of terminal bells, preventing notification spam from worker panes.
 | `pane-border-lines` | `heavy` | Thick border lines between panes |
 | `pane-border-format` | Role-aware with color | Shows pane title; active pane in cyan bold |
 | `status-position` | `top` | Status bar at top of terminal |
-| `status-left` | Branded with session/project name | Cyan "CLAUDE TEAM: name" badge |
+| `status-left` | Branded with session/project name | Cyan "DOEY: name" badge |
 | `status-right` | Pane title + time + worker count | Shows focused pane info |
 | `set-titles` | `on` | Updates terminal tab title |
 | `mouse` | `on` | Enables mouse for pane selection and scrolling |
@@ -440,22 +440,22 @@ of terminal bells, preventing notification spam from worker panes.
 ### Directory Tree
 
 ```
-/tmp/claude-team/<project-name>/
+/tmp/doey/<project-name>/
   session.env                          # Session manifest (Layer 6)
   worker-system-prompt.md              # Base worker system prompt
   worker-system-prompt-1.md            # Per-worker prompt (base + identity)
   worker-system-prompt-2.md            # ...
   worker-system-prompt-N.md            # One per worker
   status/
-    ct-<name>_0_0.status               # Manager status
-    ct-<name>_0_1.status               # Worker 1 status
-    ct-<name>_0_6.status               # Watchdog status
+    doey-<name>_0_0.status              # Manager status
+    doey-<name>_0_1.status              # Worker 1 status
+    doey-<name>_0_6.status              # Watchdog status
     ...                                # One per pane
   research/
-    ct-<name>_0_4.task                 # Research task marker (topic text)
+    doey-<name>_0_4.task                # Research task marker (topic text)
     ...
   reports/
-    ct-<name>_0_4.report               # Research report (written by worker)
+    doey-<name>_0_4.report              # Research report (written by worker)
     ...
   messages/
     ...                                # Inter-pane message files
@@ -469,7 +469,7 @@ of terminal bells, preventing notification spam from worker panes.
 Each status file contains 4 lines:
 
 ```
-PANE: ct-myproject:0.4
+PANE: doey-myproject:0.4
 UPDATED: 2026-03-10T14:23:01+01:00
 STATUS: WORKING
 TASK: Refactor hero-section component to use new design tokens
@@ -480,7 +480,7 @@ characters of the prompt (on UserPromptSubmit) or is empty (on Stop).
 
 ### Research Lifecycle
 
-1. Manager dispatches via `/tmux-research` -- skill creates `research/<pane>.task` marker
+1. Manager dispatches via `/doey-research` -- skill creates `research/<pane>.task` marker
 2. Worker investigates using Agent subagents
 3. Worker attempts to stop -- Stop hook sees `.task` but no `.report` -- exit 2 blocks
 4. Worker writes report to `reports/<pane>.report`, stops again -- hook cleans up `.task`
@@ -489,8 +489,8 @@ characters of the prompt (on UserPromptSubmit) or is empty (on Stop).
 ### Message Bus
 
 Messages between panes use files in the `messages/` and `broadcasts/`
-directories. The `/tmux-send` and `/tmux-broadcast` skills manage creation;
-`/tmux-inbox` reads them.
+directories. The `/doey-send` and `/doey-broadcast` skills manage creation;
+`/doey-inbox` reads them.
 
 ### Worker System Prompt Files
 
@@ -512,7 +512,7 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 - Key directories (`agents/`, `commands/`, `.claude/hooks/`, `shell/`, `docs/`)
 - Development conventions (frontmatter format, hook exit codes, shell conventions)
 - Testing guidance (what to restart when changing agents, hooks, commands, launcher)
-- Important file reference (`claude-team.sh`, hook scripts, `install.sh`)
+- Important file reference (`doey.sh`, hook scripts, `install.sh`)
 - Link to this context reference document
 
 
@@ -524,13 +524,13 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
  1. ~/.claude/settings.json                          (global settings)
  2. ~/.claude/settings.local.json                    (global local settings)
  3. .claude/settings.local.json                      (project hooks registration)
- 4. agents/tmux-manager.md frontmatter               (model=opus, memory=user)
- 5. agents/tmux-manager.md body                      (system prompt: 253 lines)
- 6. ~/.claude/agent-memory/tmux-manager/MEMORY.md    (persistent memory)
- 7. CLI: --dangerously-skip-permissions --agent tmux-manager
- 8. tmux env: CLAUDE_TEAM_RUNTIME -> session.env     (project/session context)
+ 4. agents/doey-manager.md frontmatter               (model=opus, memory=user)
+ 5. agents/doey-manager.md body                      (system prompt: 253 lines)
+ 6. ~/.claude/agent-memory/doey-manager/MEMORY.md    (persistent memory)
+ 7. CLI: --dangerously-skip-permissions --agent doey-manager
+ 8. tmux env: DOEY_RUNTIME -> session.env             (project/session context)
  9. Runtime: status/, research/, reports/             (live state)
-10. Skills: loaded on-demand via /tmux-*             (12 skills used)
+10. Skills: loaded on-demand via /doey-*             (12 skills used)
 ```
 
 ### Watchdog Context (load order)
@@ -539,11 +539,11 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
  1. ~/.claude/settings.json                          (global settings)
  2. ~/.claude/settings.local.json                    (global local settings)
  3. .claude/settings.local.json                      (project hooks registration)
- 4. agents/tmux-watchdog.md frontmatter              (model=haiku, memory=user)
- 5. agents/tmux-watchdog.md body                     (system prompt: 175 lines)
- 6. ~/.claude/agent-memory/tmux-watchdog/MEMORY.md   (persistent memory -- likely empty)
- 7. CLI: --dangerously-skip-permissions --model haiku --agent tmux-watchdog
- 8. tmux env: CLAUDE_TEAM_RUNTIME -> session.env     (session context)
+ 4. agents/doey-watchdog.md frontmatter              (model=haiku, memory=user)
+ 5. agents/doey-watchdog.md body                     (system prompt: 175 lines)
+ 6. ~/.claude/agent-memory/doey-watchdog/MEMORY.md   (persistent memory -- likely empty)
+ 7. CLI: --dangerously-skip-permissions --model haiku --agent doey-watchdog
+ 8. tmux env: DOEY_RUNTIME -> session.env             (session context)
  9. Runtime: reads pane output via capture-pane       (live state)
 10. Skills: none (operates from agent definition)
 ```
@@ -558,9 +558,9 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
  5. --append-system-prompt-file worker-system-prompt-N.md  (rules + identity)
  6. No persistent memory (workers don't have memory scope)
  7. CLI: --dangerously-skip-permissions --model opus
- 8. tmux env: CLAUDE_TEAM_RUNTIME -> session.env     (available but rarely used)
+ 8. tmux env: DOEY_RUNTIME -> session.env             (available but rarely used)
  9. Runtime: status/ (written by hooks)              (passive -- hooks write, worker doesn't read)
-10. Skills: /tmux-inbox, /tmux-status (if invoked)
+10. Skills: /doey-inbox, /doey-status (if invoked)
 ```
 
 
@@ -570,8 +570,8 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 
 | Symptom | Check |
 |---------|-------|
-| Manager tries to read/edit code itself | Memory file may lack delegation-first rules; check `~/.claude/agent-memory/tmux-manager/MEMORY.md` |
-| Manager uses wrong session name | Not reading manifest; verify `tmux show-environment CLAUDE_TEAM_RUNTIME` returns valid path |
+| Manager tries to read/edit code itself | Memory file may lack delegation-first rules; check `~/.claude/agent-memory/doey-manager/MEMORY.md` |
+| Manager uses wrong session name | Not reading manifest; verify `tmux show-environment DOEY_RUNTIME` returns valid path |
 | Manager dispatches to Watchdog pane | `WATCHDOG_PANE` in session.env may be wrong; verify grid math |
 | Manager sends empty tasks | `send-keys "" Enter` bug; check that task text is non-empty before the Enter keystroke |
 | Manager gets no notifications on Stop | Check `on-stop.sh` is registered in `.claude/settings.local.json`; verify pane resolves to `0.0` |
@@ -585,19 +585,19 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 | Watchdog spams notifications | State tracking lost after context compression; rate limiting (60s cap) should catch this |
 | Watchdog auto-accepts dangerous prompts | Review safety rules in agent definition; pattern matching may be too broad |
 | Watchdog ignores prompts | Pane capture may not include the prompt line; check `-S -15` range |
-| Watchdog runs on wrong model | Verify `--model haiku` in launch command in `claude-team.sh` line 389 |
+| Watchdog runs on wrong model | Verify `--model haiku` in launch command in `doey.sh` |
 
 ### Common Issues
 
 | Issue | Root Cause | Fix |
 |-------|-----------|-----|
-| Wrong model on any instance | CLI flag missing or overridden | Check launch commands in `claude-team.sh` |
+| Wrong model on any instance | CLI flag missing or overridden | Check launch commands in `doey.sh` |
 | Hooks not firing | Settings file not in correct location | Verify `.claude/settings.local.json` exists in project root |
 | All panes think they're Manager | Hook using bare `tmux display-message` without `-t "$TMUX_PANE"` | Fixed in current version; verify hook uses `$TMUX_PANE` |
 | Notification spam | Watchdog notifications + hook notifications both active | Hooks only notify for Manager (pane 0.0); Watchdog notifies for workers |
-| Stale memory causing bad behavior | Outdated patterns in MEMORY.md | Review and clean `~/.claude/agent-memory/tmux-manager/MEMORY.md` |
+| Stale memory causing bad behavior | Outdated patterns in MEMORY.md | Review and clean `~/.claude/agent-memory/doey-manager/MEMORY.md` |
 | Research worker stops without report | Hook not installed or not blocking | Check exit code 2 path in `on-stop.sh`; verify `.task` file was created |
-| Workers don't pick up hook changes | Hooks load at Claude Code startup | Restart workers via `/tmux-restart-workers` |
+| Workers don't pick up hook changes | Hooks load at Claude Code startup | Restart workers via `/doey-restart-workers` |
 
 ### How to Trace Which Layer Caused a Behavior
 
@@ -607,5 +607,5 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 4. **Is it a hook issue?** Add `echo "DEBUG: ..." >&2` to the relevant `on-*.sh` hook and watch stderr.
 5. **Is it a skill issue?** Read the skill file in `commands/`; skills compose with agent context.
 6. **Is it an environment issue?** Check `session.env` and `tmux show-environment`.
-7. **Is it a runtime state issue?** Inspect files in `/tmp/claude-team/<name>/`.
-8. **Is it a CLI flag issue?** Check the exact launch command in `claude-team.sh`.
+7. **Is it a runtime state issue?** Inspect files in `/tmp/doey/<name>/`.
+8. **Is it a CLI flag issue?** Check the exact launch command in `doey.sh`.

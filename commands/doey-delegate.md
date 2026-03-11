@@ -1,9 +1,9 @@
-# Skill: tmux-delegate
+# Skill: doey-delegate
 
 Delegate a task to another Claude instance by sending it a prompt.
 
 ## Usage
-`/tmux-delegate`
+`/doey-delegate`
 
 ## Prompt
 You are delegating a task to another Claude Code instance running in a TMUX pane.
@@ -12,7 +12,7 @@ You are delegating a task to another Claude Code instance running in a TMUX pane
 
 1. Discover runtime directory and list available panes:
    ```bash
-   RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
    ```
@@ -54,5 +54,5 @@ You are delegating a task to another Claude Code instance running in a TMUX pane
 
 ### Notes
 - The target Claude will receive this as user input in its conversation
-- You can check on their progress later with `/tmux-status`
+- You can check on their progress later with `/doey-status`
 - The target instance must be idle (waiting for input) for this to work

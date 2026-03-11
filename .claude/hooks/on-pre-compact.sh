@@ -63,7 +63,7 @@ cat <<CONTEXT
 **Recently Modified Files:**
 ${RECENT_FILES:-None detected}
 
-**Important:** You are a Claude Team worker. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
+**Important:** You are a Doey worker. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
 exit 0

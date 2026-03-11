@@ -24,7 +24,7 @@ source "$(dirname "$0")/common.sh"
 
 # Lightweight init: skip stdin read and redundant tmux validation
 [ -z "${TMUX_PANE:-}" ] && exit 0
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
 [ -z "$RUNTIME_DIR" ] && exit 0
 PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
 PANE_SAFE=${PANE//[:.]/_}

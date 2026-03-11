@@ -1,9 +1,9 @@
-# Skill: tmux-send
+# Skill: doey-send
 
 Send a message to another Claude instance in TMUX.
 
 ## Usage
-`/tmux-send`
+`/doey-send`
 
 ## Prompt
 You are sending a message to another Claude Code instance running in a TMUX pane.
@@ -12,7 +12,7 @@ You are sending a message to another Claude Code instance running in a TMUX pane
 
 1. Discover runtime directory and list available panes:
    ```bash
-   RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
    ```
@@ -39,7 +39,7 @@ You are sending a message to another Claude Code instance running in a TMUX pane
 
 5. Then send a keyboard notification to the target pane so the other Claude sees it:
    ```bash
-   tmux send-keys -t "$TARGET_PANE" "/tmux-inbox" Enter
+   tmux send-keys -t "$TARGET_PANE" "/doey-inbox" Enter
    ```
 
 This triggers the target Claude to check its inbox.

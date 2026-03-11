@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tmux-statusbar.sh — Fast status-right renderer for claude-team sessions.
+# tmux-statusbar.sh — Fast status-right renderer for doey sessions.
 # Called by tmux every 1s via status-interval. Must stay lightweight.
 
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 [ -z "$RUNTIME_DIR" ] && { echo "Monitor:--s | Workers:--"; exit 0; }
 
 # --- Countdown timer ---

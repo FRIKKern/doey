@@ -1,9 +1,9 @@
-# Skill: tmux-dispatch
+# Skill: doey-dispatch
 
 Send a task to one or more idle worker panes reliably. This is the primary dispatch primitive for the TMUX Manager.
 
 ## Usage
-`/tmux-dispatch`
+`/doey-dispatch`
 
 ## Prompt
 You are dispatching tasks to Claude Code worker instances in TMUX panes.
@@ -13,19 +13,19 @@ You are dispatching tasks to Claude Code worker instances in TMUX panes.
 **Before dispatching any tasks**, discover the runtime directory and read the session manifest:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 
 This gives you:
-- `SESSION_NAME` — tmux session name (use instead of hardcoded "claude-team")
+- `SESSION_NAME` — tmux session name (use instead of hardcoded session name)
 - `PROJECT_DIR` — absolute path to the project directory
 - `PROJECT_NAME` — human-readable project name
 - `WORKER_PANES` — list of worker pane IDs
 - `WATCHDOG_PANE` — the watchdog pane ID
 - `PASTE_SETTLE_MS` — settle time in ms between paste-buffer and Enter (default 500)
 
-**Always use `${SESSION_NAME}` in all tmux commands** — never hardcode "claude-team".
+**Always use `${SESSION_NAME}` in all tmux commands** — never hardcode the session name.
 
 ### Reliable Dispatch Sequence
 
@@ -35,7 +35,7 @@ Every Bash call must start by reading the manifest, then follow all steps for th
 
 ```bash
 # (reads SESSION_NAME, PROJECT_NAME, PROJECT_DIR from manifest)
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 PANE="${SESSION_NAME}:0.X"
@@ -75,7 +75,7 @@ mkdir -p "${RUNTIME_DIR}"
 # 10. Write task to temp file (avoids escaping issues)
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
-You are a worker on the Claude Team for project: ${PROJECT_NAME}
+You are a worker on the Doey for project: ${PROJECT_NAME}
 Project directory: ${PROJECT_DIR}
 All file paths should be absolute.
 
@@ -235,7 +235,7 @@ The Manager should check for active locks before dispatching a new worker to the
 If dispatch verification (step 15) reports failure, or a worker appears stuck/non-responsive, run this unstick sequence:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 PANE="${SESSION_NAME}:0.X"

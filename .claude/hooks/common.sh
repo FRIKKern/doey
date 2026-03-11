@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Common utilities for Claude Team hooks
+# Common utilities for Doey hooks
 # Sourced by individual hook scripts — do not run directly.
 
 set -euo pipefail
@@ -12,7 +12,7 @@ init_hook() {
   [ -z "${TMUX_PANE:-}" ] && exit 0
 
   # Get runtime dir — bail if not set
-  RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+  RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   [ -z "$RUNTIME_DIR" ] && exit 0
 
   # Get pane identity

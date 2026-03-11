@@ -1,9 +1,9 @@
-# Skill: tmux-watchdog-compact
+# Skill: doey-watchdog-compact
 
 Send `/compact` to the Watchdog pane to reduce its token usage.
 
 ## Usage
-`/tmux-watchdog-compact`
+`/doey-watchdog-compact`
 
 ## Prompt
 You need to send the `/compact` command to the Watchdog pane to free up context.
@@ -12,7 +12,7 @@ You need to send the `/compact` command to the Watchdog pane to free up context.
 
 1. Discover the runtime directory and source the session manifest:
    ```bash
-   RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    ```
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Claude Code TMUX Team
+# Doey
 
 **Run 10 Claude Code agents in parallel. One terminal.**
 
@@ -34,7 +34,7 @@ You have 30 files to refactor. One Claude Code instance. You wait for each file,
 
 ## The Solution
 
-TMUX Claude Team launches **10 Claude Code instances in parallel**, coordinated by a Manager agent that breaks your task into subtasks, dispatches them to idle workers, and monitors progress — all in a single tmux session.
+Doey launches **10 Claude Code instances in parallel**, coordinated by a Manager agent that breaks your task into subtasks, dispatches them to idle workers, and monitors progress — all in a single tmux session.
 
 You talk to the Manager. The Manager runs the team. You ship 10x faster.
 
@@ -45,14 +45,14 @@ You talk to the Manager. The Manager runs the team. You ship 10x faster.
 **Install:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-team/main/web-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-doey-team/main/web-install.sh | bash
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/frikk-gyldendal/claude-code-tmux-team.git
-cd claude-code-tmux-team && ./install.sh
+git clone https://github.com/frikk-gyldendal/claude-code-doey-team.git
+cd claude-code-doey-team && ./install.sh
 ```
 
 The installer validates prerequisites automatically (Claude Code CLI, tmux, shell config) and provides clear feedback with colored output.
@@ -63,19 +63,17 @@ The installer validates prerequisites automatically (Claude Code CLI, tmux, shel
 
 ```bash
 cd ~/your-project
-ct                     # first time: shows project picker, choose "init"
-ct                     # next time: auto-launches your team
+doey                   # first time: shows project picker, choose "init"
+doey                   # next time: auto-launches your team
 ```
 
-That's it. No config files. No shell reload. Just `ct` (or `claude-team` — both work).
-
-> `ct` is installed automatically as a symlink to `claude-team`. No alias setup needed.
+That's it. No config files. No shell reload. Just `doey`.
 
 ---
 
 ## What You'll See
 
-When you run `ct` (or `claude-team`), the startup sequence gives you full visibility into what's happening:
+When you run `doey`, the startup sequence gives you full visibility into what's happening:
 
 1. **ASCII art banner** with your session configuration (grid size, worker count, working directory)
 2. **Step-by-step progress** — each phase (grid creation, pane setup, agent launches) shows a checkmark as it completes
@@ -84,26 +82,24 @@ When you run `ct` (or `claude-team`), the startup sequence gives you full visibi
 
 Once the summary appears, switch to the Manager pane (`0.0`) and start giving it tasks.
 
-> Run `ct` to see the premium startup experience.
+> Run `doey` to see the premium startup experience.
 
 ---
 
 ## Commands
 
-> `ct` is a built-in shorthand for `claude-team` — installed automatically as a symlink.
-
 | Command | Description |
 |---------|-------------|
-| `ct` | Smart launch — auto-attach, launch, or show project picker |
-| `ct init` | Register current directory as a project |
-| `ct list` | Show all projects with running/stopped status |
-| `ct stop` | Stop the team for the current project |
-| `ct update` | Pull latest changes and reinstall |
-| `ct doctor` | Check installation health and prerequisites |
-| `ct remove` | Unregister a project by name or current directory |
-| `ct version` | Show version and installation info |
-| `ct 4x3` | Launch with a custom grid layout |
-| `ct --help` | Show all options |
+| `doey` | Smart launch — auto-attach, launch, or show project picker |
+| `doey init` | Register current directory as a project |
+| `doey list` | Show all projects with running/stopped status |
+| `doey stop` | Stop the team for the current project |
+| `doey update` | Pull latest changes and reinstall |
+| `doey doctor` | Check installation health and prerequisites |
+| `doey remove` | Unregister a project by name or current directory |
+| `doey version` | Show version and installation info |
+| `doey 4x3` | Launch with a custom grid layout |
+| `doey --help` | Show all options |
 
 ---
 
@@ -112,11 +108,11 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 <table>
 <tr>
 <td width="40" align="center"><strong>0</strong></td>
-<td>You register your project: <code>ct init</code> (one time per project)</td>
+<td>You register your project: <code>doey init</code> (one time per project)</td>
 </tr>
 <tr>
 <td align="center"><strong>1</strong></td>
-<td>You run <code>ct</code> — it auto-launches or reattaches to an existing session</td>
+<td>You run <code>doey</code> — it auto-launches or reattaches to an existing session</td>
 </tr>
 <tr>
 <td align="center"><strong>2</strong></td>
@@ -148,13 +144,13 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 - **Smart orchestration** — Manager plans, delegates, and monitors without writing code itself
 - **Auto-unblocking** — Watchdog handles `y/n` prompts, permission dialogs, and confirmations
 - **Premium startup experience** — ASCII banner, step-by-step progress indicators, and a summary dashboard
-- **Session manifest** — Project context written to `/tmp/claude-team/<project>/session.env` so all tools and agents share config
+- **Session manifest** — Project context written to `/tmp/doey/<project>/session.env` so all tools and agents share config
 - **Project-aware** — Register projects, auto-attach to running sessions, interactive picker
 - **Flexible grid** — Configure `COLSxROWS` to match your screen and workload
 - **Message bus** — Workers, Manager, and Watchdog communicate through a lightweight file-based system
-- **Slash commands** — Built-in `/tmux-dispatch`, `/tmux-monitor`, `/tmux-team` and more
+- **Slash commands** — Built-in `/doey-dispatch`, `/doey-monitor`, `/doey-team` and more
 - **Zero config** — Install, init, launch. Works with any project.
-- **Restartable** — Restart workers without killing the Manager with `/tmux-restart-workers`
+- **Restartable** — Restart workers without killing the Manager with `/doey-restart-workers`
 
 ---
 
@@ -172,10 +168,10 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 |---------|-----------|
 | Task dispatch | `tmux send-keys` / `tmux paste-buffer` |
 | Progress monitoring | `tmux capture-pane` |
-| Session manifest | `/tmp/claude-team/<project>/session.env` — shared config for all agents |
-| Inter-pane messages | `/tmp/claude-team/<project>/messages/` |
-| Broadcasts | `/tmp/claude-team/<project>/broadcasts/` |
-| Status tracking | `/tmp/claude-team/<project>/status/` |
+| Session manifest | `/tmp/doey/<project>/session.env` — shared config for all agents |
+| Inter-pane messages | `/tmp/doey/<project>/messages/` |
+| Broadcasts | `/tmp/doey/<project>/broadcasts/` |
+| Status tracking | `/tmp/doey/<project>/status/` |
 
 ### Context Layer Model
 
@@ -186,7 +182,7 @@ Each agent's behavior is shaped by multiple context layers that merge at startup
 | 1 | Agent Definitions | `agents/*.md` | Manager, Watchdog |
 | 2 | Settings | `~/.claude/settings*.json`, `.claude/settings*.json` | All |
 | 3 | Hooks | `.claude/hooks/status-hook.sh` | All |
-| 4 | Skills/Commands | `commands/tmux-*.md` | Manager primarily |
+| 4 | Skills/Commands | `commands/doey-*.md` | Manager primarily |
 | 5 | Persistent Memory | `~/.claude/agent-memory/` | Manager |
 | 6 | Environment Variables | `session.env`, tmux env | All |
 | 7 | CLI Flags | `--agent`, `--model`, etc. | All |
@@ -210,13 +206,13 @@ For comprehensive documentation of the system internals:
 
 ## Configuration
 
-The session manifest (`session.env`) and runtime directory are created automatically by `ct init`. For detailed documentation of the manifest variables, runtime directory structure, status hooks, and all system internals, see the [Context Reference](docs/context-reference.md).
+The session manifest (`session.env`) and runtime directory are created automatically by `doey init`. For detailed documentation of the manifest variables, runtime directory structure, status hooks, and all system internals, see the [Context Reference](docs/context-reference.md).
 
 ---
 
 ## Grid Configurations
 
-The grid argument to `ct` (or `claude-team`) is a `COLSxROWS` specification. Two panes are always reserved (Manager + Watchdog):
+The grid argument to `doey` is a `COLSxROWS` specification. Two panes are always reserved (Manager + Watchdog):
 
 | Grid | Panes | Workers | Best for |
 |------|-------|---------|----------|
@@ -235,19 +231,19 @@ Once installed, these commands are available in any Claude Code instance:
 
 | Command | Description |
 |---------|-------------|
-| `/tmux-dispatch` | Dispatch tasks to workers (primary send mechanism) |
-| `/tmux-delegate` | Delegate a task to a specific pane |
-| `/tmux-monitor` | Check status of all workers |
-| `/tmux-team` | View full team overview with statuses |
-| `/tmux-send` | Send a message to another pane |
-| `/tmux-broadcast` | Broadcast a message to all panes |
-| `/tmux-inbox` | Check incoming messages |
-| `/tmux-status` | Set or view pane statuses |
-| `/tmux-research` | Dispatch research task with guaranteed report-back |
-| `/tmux-stop-all` | Stop all workers gracefully |
-| `/tmux-restart-workers` | Restart all workers (keeps Manager alive) |
-| `/tmux-reinstall` | Reinstall from the repo without leaving Claude Code |
-| `/tmux-watchdog-compact` | Load the compact Watchdog prompt |
+| `/doey-dispatch` | Dispatch tasks to workers (primary send mechanism) |
+| `/doey-delegate` | Delegate a task to a specific pane |
+| `/doey-monitor` | Check status of all workers |
+| `/doey-team` | View full team overview with statuses |
+| `/doey-send` | Send a message to another pane |
+| `/doey-broadcast` | Broadcast a message to all panes |
+| `/doey-inbox` | Check incoming messages |
+| `/doey-status` | Set or view pane statuses |
+| `/doey-research` | Dispatch research task with guaranteed report-back |
+| `/doey-stop-all` | Stop all workers gracefully |
+| `/doey-restart-workers` | Restart all workers (keeps Manager alive) |
+| `/doey-reinstall` | Reinstall from the repo without leaving Claude Code |
+| `/doey-watchdog-compact` | Load the compact Watchdog prompt |
 
 </details>
 
@@ -255,30 +251,30 @@ Once installed, these commands are available in any Claude Code instance:
 <summary><strong>File Structure</strong></summary>
 
 ```
-claude-code-tmux-team/
+claude-code-doey-team/
 ├── CLAUDE.md                    # Project-level context for Claude Code instances
 ├── install.sh                   # Installer
 ├── web-install.sh               # Web installer (curl | bash)
 ├── agents/
-│   ├── tmux-manager.md          # Manager agent → ~/.claude/agents/
-│   └── tmux-watchdog.md         # Watchdog agent → ~/.claude/agents/
+│   ├── doey-manager.md          # Manager agent → ~/.claude/agents/
+│   └── doey-watchdog.md         # Watchdog agent → ~/.claude/agents/
 ├── docs/
 │   └── context-reference.md     # Deep reference for agent context layers
 ├── commands/                    # Slash commands → ~/.claude/commands/
-│   ├── tmux-broadcast.md
-│   ├── tmux-delegate.md
-│   ├── tmux-dispatch.md
-│   ├── tmux-inbox.md
-│   ├── tmux-monitor.md
-│   ├── tmux-reinstall.md
-│   ├── tmux-restart-workers.md
-│   ├── tmux-send.md
-│   ├── tmux-status.md
-│   ├── tmux-stop-all.md
-│   ├── tmux-team.md
-│   └── tmux-watchdog-compact.md
+│   ├── doey-broadcast.md
+│   ├── doey-delegate.md
+│   ├── doey-dispatch.md
+│   ├── doey-inbox.md
+│   ├── doey-monitor.md
+│   ├── doey-reinstall.md
+│   ├── doey-restart-workers.md
+│   ├── doey-send.md
+│   ├── doey-status.md
+│   ├── doey-stop-all.md
+│   ├── doey-team.md
+│   └── doey-watchdog-compact.md
 └── shell/
-    └── claude-team.sh           # CLI launcher → ~/.local/bin/claude-team (+ ct symlink)
+    └── doey.sh                  # CLI launcher → ~/.local/bin/doey
 ```
 
 </details>
@@ -288,7 +284,7 @@ claude-code-tmux-team/
 
 | Variable | Description |
 |----------|-------------|
-| `CLAUDE_TEAM_RUNTIME` | Path to the session runtime directory (set as tmux environment variable). Contains `session.env` manifest, messages, broadcasts, and status files. |
+| `DOEY_RUNTIME` | Path to the session runtime directory (set as tmux environment variable). Contains `session.env` manifest, messages, broadcasts, and status files. |
 
 </details>
 
@@ -296,17 +292,17 @@ claude-code-tmux-team/
 
 ## Tips
 
-**Shortcuts** — `ct` is installed automatically as a symlink — no alias needed. You can add more shortcuts if you like:
+**Shortcuts** — You can add shortcuts if you like:
 
 ```bash
-alias ct4="ct 4x2"
-alias cts="ct 3x2"            # small team
+alias doey4="doey 4x2"
+alias doeys="doey 3x2"            # small team
 ```
 
 **Project commands** — Copy the commands into your project for project-scoped access:
 
 ```bash
-cp -r /path/to/claude-code-tmux-team/commands/ .claude/commands/
+cp -r /path/to/claude-code-doey-team/commands/ .claude/commands/
 ```
 
 ---
@@ -318,7 +314,7 @@ cp -r /path/to/claude-code-tmux-team/commands/ .claude/commands/
 | **Windows** | [Windows Installation (WSL2)](docs/windows-wsl2.md) — full setup via WSL2 in 4 steps |
 | **Linux Server** | [Linux Server Deployment](docs/linux-server.md) — headless SSH, cloud providers, systemd |
 
-> Claude Team works on macOS out of the box. Windows and Linux require a few extra setup steps — see the guides above.
+> Doey works on macOS out of the box. Windows and Linux require a few extra setup steps — see the guides above.
 
 ---
 
@@ -352,18 +348,18 @@ Run `claude` manually in a regular terminal to authenticate first. The Watchdog 
 <details>
 <summary><strong>Terminal too small for grid</strong></summary>
 
-Use a smaller grid like `ct 3x2` or maximize your terminal window. The default `6x2` grid needs approximately 200 columns to render properly.
+Use a smaller grid like `doey 3x2` or maximize your terminal window. The default `6x2` grid needs approximately 200 columns to render properly.
 
 </details>
 
 <details>
-<summary><strong><code>ct update</code> fails after web install</strong></summary>
+<summary><strong><code>doey update</code> fails after web install</strong></summary>
 
 The web installer's temporary directory was deleted after install. Fix: clone the repo manually, then run `./install.sh` to update the stored repo path:
 
 ```bash
-git clone https://github.com/frikk-gyldendal/claude-code-tmux-team.git
-cd claude-code-tmux-team && ./install.sh
+git clone https://github.com/frikk-gyldendal/claude-code-doey-team.git
+cd claude-code-doey-team && ./install.sh
 ```
 
 </details>
@@ -371,7 +367,7 @@ cd claude-code-tmux-team && ./install.sh
 <details>
 <summary><strong>Workers get stuck</strong></summary>
 
-The Manager can use `/tmux-restart-workers` to kill and restart all workers without restarting itself. This is useful when workers become unresponsive or are in a bad state.
+The Manager can use `/doey-restart-workers` to kill and restart all workers without restarting itself. This is useful when workers become unresponsive or are in a bad state.
 
 </details>
 
@@ -383,7 +379,7 @@ Check System Preferences > Notifications and ensure your terminal app is allowed
 </details>
 
 <details>
-<summary><strong><code>ct</code> / <code>claude-team</code> command not found</strong></summary>
+<summary><strong><code>doey</code> command not found</strong></summary>
 
 Add `~/.local/bin` to your PATH by adding this line to your shell config (`~/.zshrc` or `~/.bashrc`):
 
@@ -396,9 +392,9 @@ Then restart your shell or run `source ~/.zshrc`.
 </details>
 
 <details>
-<summary><strong><code>ct doctor</code> reports issues</strong></summary>
+<summary><strong><code>doey doctor</code> reports issues</strong></summary>
 
-Run `ct doctor` and follow the suggestions it provides. It checks tmux, Claude CLI, PATH configuration, agents, commands, and repo path. Most issues can be fixed by re-running `./install.sh`.
+Run `doey doctor` and follow the suggestions it provides. It checks tmux, Claude CLI, PATH configuration, agents, commands, and repo path. Most issues can be fixed by re-running `./install.sh`.
 
 </details>
 
@@ -414,6 +410,6 @@ Run `ct doctor` and follow the suggestions it provides. It checks tmux, Claude C
 
 **Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code)**
 
-If you find this useful, [give it a star](https://github.com/frikk-gyldendal/claude-code-tmux-team) — it helps others find it.
+If you find this useful, [give it a star](https://github.com/frikk-gyldendal/claude-code-doey-team) — it helps others find it.
 
 </div>

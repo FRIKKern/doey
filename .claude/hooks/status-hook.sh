@@ -13,7 +13,7 @@ if [ -z "${TMUX_PANE:-}" ] || ! tmux display-message -t "${TMUX_PANE}" -p '' >/d
 fi
 
 # Get runtime dir — bail if not set
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
 [ -z "$RUNTIME_DIR" ] && exit 0
 
 # Get pane identity
@@ -172,7 +172,7 @@ EOF
         NOTIFY_BODY="${LAST_MSG:0:150}"
         NOTIFY_BODY="${NOTIFY_BODY//\"/\'}"
         NOTIFY_BODY=$(printf '%s' "$NOTIFY_BODY" | tr '\n' ' ')
-        osascript -e "display notification \"${NOTIFY_BODY}\" with title \"Claude Team — Manager\" sound name \"Ping\"" &
+        osascript -e "display notification \"${NOTIFY_BODY}\" with title \"Doey — Manager\" sound name \"Ping\"" &
       fi
     fi
     ;;

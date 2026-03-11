@@ -1,18 +1,18 @@
-# Skill: tmux-reinstall
+# Skill: doey-reinstall
 
-Reinstall the Claude Team system from the source repo to pick up any changes.
+Reinstall the Doey system from the source repo to pick up any changes.
 
 ## Usage
-`/tmux-reinstall`
+`/doey-reinstall`
 
 ## Prompt
-You need to reinstall the Claude Team system. This pulls the latest changes from git and re-runs the installer to update all agent definitions, slash commands, and the CLI script.
+You need to reinstall the Doey system. This pulls the latest changes from git and re-runs the installer to update all agent definitions, slash commands, and the CLI script.
 
 ### Steps
 
 1. Find the source repo location:
    ```bash
-   REPO_DIR=$(cat ~/.claude/claude-team/repo-path 2>/dev/null)
+   REPO_DIR=$(cat ~/.claude/doey/repo-path 2>/dev/null)
    ```
 
 2. If the file is missing or the directory doesn't exist, tell the user:
@@ -32,4 +32,4 @@ You need to reinstall the Claude Team system. This pulls the latest changes from
 
 5. After successful install, tell the user:
    - "Reinstall complete. New sessions will use the updated files."
-   - "Running sessions need a restart: `claude-team stop && claude-team`"
+   - "Running sessions need a restart: `doey stop && doey`"

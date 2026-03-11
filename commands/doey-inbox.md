@@ -1,9 +1,9 @@
-# Skill: tmux-inbox
+# Skill: doey-inbox
 
 Check and read messages from other Claude instances.
 
 ## Usage
-`/tmux-inbox`
+`/doey-inbox`
 
 ## Prompt
 You are checking your inbox for messages from other Claude Code instances in TMUX.
@@ -12,7 +12,7 @@ You are checking your inbox for messages from other Claude Code instances in TMU
 
 1. Discover runtime directory and identify your pane:
    ```bash
-   RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    MY_PANE_SAFE=${MY_PANE//[:.]/_}
    ```
@@ -32,4 +32,4 @@ You are checking your inbox for messages from other Claude Code instances in TMU
 
 5. If no messages found, tell the user the inbox is empty.
 
-6. If a message requires a response, ask the user if they want to reply using `/tmux-send`.
+6. If a message requires a response, ask the user if they want to reply using `/doey-send`.

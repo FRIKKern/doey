@@ -128,7 +128,7 @@ if is_manager && [ "$STOP_HOOK_ACTIVE" != "true" ] && [ -n "$LAST_MSG" ]; then
     NOTIFY_BODY="${LAST_MSG:0:150}"
     NOTIFY_BODY="${NOTIFY_BODY//\"/\'}"
     NOTIFY_BODY=$(printf '%s' "$NOTIFY_BODY" | tr '\n' ' ')
-    send_notification "Claude Team — Manager" "$NOTIFY_BODY"
+    send_notification "Doey — Manager" "$NOTIFY_BODY"
   fi
 fi
 

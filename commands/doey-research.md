@@ -1,9 +1,9 @@
-# Skill: tmux-research
+# Skill: doey-research
 
 Dispatch a research & planning task to a worker with guaranteed report-back. The worker investigates thoroughly, then proposes a plan with alternatives. The worker cannot stop until it writes a structured report.
 
 ## Usage
-`/tmux-research`
+`/doey-research`
 
 ## Prompt
 You are dispatching a research task to a Claude Code worker instance in TMUX. The worker's Stop hook blocks it from finishing until a report file is written.
@@ -13,7 +13,7 @@ You are dispatching a research task to a Claude Code worker instance in TMUX. Th
 **Before dispatching**, discover the runtime directory and read the session manifest:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 
@@ -41,7 +41,7 @@ Look for the `❯` prompt. If busy, pick a different one.
 **Step 2: Create the task marker file.**
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 TARGET_PANE="${SESSION_NAME}:0.X"
@@ -80,7 +80,7 @@ sleep 1
 **Step 5: Write and dispatch the task prompt.**
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 TARGET_PANE="${SESSION_NAME}:0.X"
@@ -90,7 +90,7 @@ REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 mkdir -p "${RUNTIME_DIR}"
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
-You are a Senior Research & Planning Agent on the Claude Team for project: ${PROJECT_NAME}
+You are a Senior Research & Planning Agent on the Doey for project: ${PROJECT_NAME}
 Project directory: ${PROJECT_DIR}
 All file paths should be absolute.
 
@@ -132,7 +132,7 @@ Agent(subagent_type="Explore", prompt="Find all hook-related files in ${PROJECT_
 
 Agent(subagent_type="Explore", prompt="Find all CLI command files and shell scripts in ${PROJECT_DIR}. Map which commands exist, their entry points, and shared utilities.", description="explore CLI")
 
-Agent(subagent_type="general-purpose", prompt="Read ${PROJECT_DIR}/install.sh and ${PROJECT_DIR}/shell/claude-team.sh. Document the install flow, project registration, and session launch sequence. Note all directory paths used.", description="analyze install flow")
+Agent(subagent_type="general-purpose", prompt="Read ${PROJECT_DIR}/install.sh and ${PROJECT_DIR}/shell/doey.sh. Document the install flow, project registration, and session launch sequence. Note all directory paths used.", description="analyze install flow")
 \`\`\`
 
 **Important:** Always spawn at least 2 agents in parallel. Serial file reading is too slow — use the swarm.
@@ -188,7 +188,7 @@ Use this exact structure:
 **Files:** [absolute file paths]
 **Prompt:**
 \`\`\`
-You are a worker on the Claude Team for project: ${PROJECT_NAME}
+You are a worker on the Doey for project: ${PROJECT_NAME}
 Project directory: ${PROJECT_DIR}
 All file paths should be absolute.
 
@@ -244,7 +244,7 @@ tmux send-keys -t "${TARGET_PANE}" Enter
 After the worker finishes (shows idle), read the report:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 TARGET_PANE="${SESSION_NAME}:0.X"
@@ -268,7 +268,7 @@ cat "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 Reports persist in `${RUNTIME_DIR}/reports/` until manually cleaned. Task markers in `${RUNTIME_DIR}/research/` are auto-cleaned by the Stop hook.
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 rm -f "${RUNTIME_DIR}/research/"*.task
 rm -f "${RUNTIME_DIR}/reports/"*.report
 ```

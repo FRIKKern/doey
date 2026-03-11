@@ -1,9 +1,9 @@
-# Skill: tmux-monitor
+# Skill: doey-monitor
 
 Smart monitoring of all worker panes — detects DONE, WORKING, ERROR, and IDLE states.
 
 ## Usage
-`/tmux-monitor`
+`/doey-monitor`
 
 ## Prompt
 You are monitoring the status of all Claude Code worker instances in TMUX.
@@ -13,12 +13,12 @@ You are monitoring the status of all Claude Code worker instances in TMUX.
 First, discover the runtime directory and source the session manifest:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 
 This gives you:
-- `SESSION_NAME` — tmux session name (replaces hardcoded "claude-team")
+- `SESSION_NAME` — tmux session name (replaces hardcoded session name)
 - `WORKER_PANES` — comma-separated worker pane indices (e.g., "1,2,3,4,5,7,8,9,10,11")
 - `WORKER_COUNT`, `WATCHDOG_PANE`, `TOTAL_PANES`, `PROJECT_NAME`, `PROJECT_DIR`
 
@@ -27,7 +27,7 @@ If the manifest is missing, fall back by detecting session name from tmux: `SESS
 ### Quick Status Check (all workers)
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 # Write timestamp for statusbar countdown
 date +%s > "${RUNTIME_DIR}/status/last_monitor.ts"
@@ -72,7 +72,7 @@ W6     ⬚ IDLE   -                          -
 If the user asks to inspect a specific worker, capture more lines:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -80
 ```

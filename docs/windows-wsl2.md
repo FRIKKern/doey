@@ -1,8 +1,8 @@
 # Windows Installation (WSL2)
 
-> Part of [Claude Code TMUX Team](../README.md)
+> Part of [Doey](../README.md)
 
-Claude Team runs natively on Windows through WSL2 (Windows Subsystem for Linux). No dual-boot or VM needed — WSL2 gives you a real Linux kernel inside Windows with full tmux support.
+Doey runs natively on Windows through WSL2 (Windows Subsystem for Linux). No dual-boot or VM needed — WSL2 gives you a real Linux kernel inside Windows with full tmux support.
 
 ### Prerequisites
 
@@ -32,13 +32,13 @@ source ~/.bashrc
 fnm install --lts
 ```
 
-### Step 3: Install Claude Code & Team
+### Step 3: Install Claude Code & Doey
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude auth
 
-# Install Claude Team
+# Install Doey
 curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-team/main/web-install.sh | bash
 ```
 
@@ -46,11 +46,11 @@ curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-te
 
 ```bash
 cd /path/to/your/project
-ct init
-ct
+doey init
+doey
 ```
 
-That's it — `ct` is installed automatically as a shorthand for `claude-team`. From here, the experience is identical to macOS and Linux. Follow the [Quick Start](../README.md#quick-start) in the main README for usage instructions.
+That's it — from here, the experience is identical to macOS and Linux. Follow the [Quick Start](../README.md#quick-start) in the main README for usage instructions.
 
 ### Tips for WSL2 Users
 

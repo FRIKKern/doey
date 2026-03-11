@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Claude Code TMUX Team — Web Installer
+# Doey — Web Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-team/main/web-install.sh | bash
 
 REPO_URL="https://github.com/frikk-gyldendal/claude-code-tmux-team.git"
 CLONE_DIR="${TMPDIR:-/tmp}/claude-code-tmux-team-install"
 
 echo ""
-echo "  Claude Code TMUX Team — Web Installer"
+echo "  Doey — Web Installer"
 echo "  ======================================"
 echo ""
 

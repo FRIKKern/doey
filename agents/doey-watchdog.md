@@ -1,6 +1,6 @@
 ---
-name: tmux-watchdog
-description: "Use this agent when you need to continuously monitor all tmux panes in the current tmux session, checking their output every 5 seconds and automatically accepting any prompts or confirmations that appear. This is useful during long-running development workflows where multiple processes are running in tmux panes and may require user input (e.g., 'Do you want to continue? (y/N)', 'Press Enter to confirm', package install confirmations, overwrite prompts, etc.).\n\nExamples:\n\n- User: \"I'm running builds in multiple tmux panes and they keep asking for confirmations\"\n  Assistant: \"I'll launch the tmux-watchdog agent to monitor all your panes and auto-accept any prompts.\"\n  (Use the Agent tool to launch the tmux-watchdog agent)\n\n- User: \"Start the watchdog to keep an eye on my tmux session\"\n  Assistant: \"I'll start the tmux-watchdog agent to continuously monitor your tmux panes every 5 seconds.\"\n  (Use the Agent tool to launch the tmux-watchdog agent)\n\n- Context: A long-running process is started that may produce interactive prompts.\n  Assistant: \"This process may ask for confirmations. Let me start the tmux-watchdog agent to auto-accept any prompts.\"\n  (Use the Agent tool to launch the tmux-watchdog agent proactively)"
+name: doey-watchdog
+description: "Use this agent when you need to continuously monitor all tmux panes in the current tmux session, checking their output every 5 seconds and automatically accepting any prompts or confirmations that appear. This is useful during long-running development workflows where multiple processes are running in tmux panes and may require user input (e.g., 'Do you want to continue? (y/N)', 'Press Enter to confirm', package install confirmations, overwrite prompts, etc.).\n\nExamples:\n\n- User: \"I'm running builds in multiple tmux panes and they keep asking for confirmations\"\n  Assistant: \"I'll launch the doey-watchdog agent to monitor all your panes and auto-accept any prompts.\"\n  (Use the Agent tool to launch the doey-watchdog agent)\n\n- User: \"Start the watchdog to keep an eye on my tmux session\"\n  Assistant: \"I'll start the doey-watchdog agent to continuously monitor your tmux panes every 5 seconds.\"\n  (Use the Agent tool to launch the doey-watchdog agent)\n\n- Context: A long-running process is started that may produce interactive prompts.\n  Assistant: \"This process may ask for confirmations. Let me start the doey-watchdog agent to auto-accept any prompts.\"\n  (Use the Agent tool to launch the doey-watchdog agent proactively)"
 model: haiku
 color: yellow
 memory: user
@@ -31,7 +31,7 @@ Use these shell commands to interact with tmux:
 
 ```bash
 # Read session context
-RUNTIME_DIR=$(tmux show-environment CLAUDE_TEAM_RUNTIME 2>/dev/null | cut -d= -f2-)
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 # List all panes in the team session
@@ -103,7 +103,7 @@ osascript -e 'display notification "BODY" with title "TITLE" sound name "Ping"'
 
 ### Notification format
 
-- **Title**: `Claude Team — Worker N` (where N is the worker number derived from the pane index)
+- **Title**: `Doey — Worker N` (where N is the worker number derived from the pane index)
 - **Body**: A short, actionable snippet of what needs attention. Examples:
   - `Task complete — waiting for next instructions`
   - `Asking: Which database migration strategy?`
@@ -123,13 +123,13 @@ To prevent notification storms:
 
 ```bash
 # Worker finished a task
-osascript -e 'display notification "Task complete — waiting for next instructions" with title "Claude Team — Worker 3" sound name "Ping"'
+osascript -e 'display notification "Task complete — waiting for next instructions" with title "Doey — Worker 3" sound name "Ping"'
 
 # Worker asking an open-ended question
-osascript -e 'display notification "Asking: Should I use PostgreSQL or SQLite?" with title "Claude Team — Worker 7" sound name "Ping"'
+osascript -e 'display notification "Asking: Should I use PostgreSQL or SQLite?" with title "Doey — Worker 7" sound name "Ping"'
 
 # Worker hit an error
-osascript -e 'display notification "Error: ENOENT — cannot find module react-dom" with title "Claude Team — Worker 1" sound name "Ping"'
+osascript -e 'display notification "Error: ENOENT — cannot find module react-dom" with title "Doey — Worker 1" sound name "Ping"'
 ```
 
 ## Safety Rules
