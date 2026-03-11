@@ -34,7 +34,7 @@
    ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
 </pre>
 
-<h3>Let Doey do it for you</h3>
+<h3>Let me Doey for you</h3>
 
 <p><em>Your loyal AI team assistant — run 10 Claude Code agents in parallel, one terminal</em></p>
 
