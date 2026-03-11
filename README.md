@@ -185,6 +185,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 - **Slash commands** — Built-in `/doey-dispatch`, `/doey-monitor`, `/doey-team` and more
 - **Zero config** — Install, init, launch. Works with any project.
 - **Restartable** — Restart workers without killing the Manager with `/doey-restart-workers`
+- **Human reservation** — Auto-reserves a pane for 60s when you type in it; use `/doey-reserve` for permanent or timed reservation
 
 ---
 
@@ -194,7 +195,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 |------|------|-------------|
 | **Manager** | `0.0` | Plans tasks, delegates to workers, monitors progress. Never writes code. |
 | **Watchdog** | `0.{cols}` | Monitors all worker panes. Auto-accepts prompts and confirmations. |
-| **Workers** | All others | Standard Claude Code instances that do the actual implementation work. |
+| **Workers** | All others | Standard Claude Code instances that do the actual implementation work. Status: IDLE, WORKING, or RESERVED. |
 
 ### Communication
 
@@ -205,7 +206,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 | Session manifest | `/tmp/doey/<project>/session.env` — shared config for all agents |
 | Inter-pane messages | `/tmp/doey/<project>/messages/` |
 | Broadcasts | `/tmp/doey/<project>/broadcasts/` |
-| Status tracking | `/tmp/doey/<project>/status/` |
+| Status tracking | `/tmp/doey/<project>/status/` — IDLE, WORKING, RESERVED (with RSV countdown) |
 
 ### Context Layer Model
 
@@ -277,6 +278,7 @@ Once installed, these commands are available in any Claude Code instance:
 | `/doey-stop-all` | Stop all workers gracefully |
 | `/doey-restart-workers` | Restart all workers (keeps Manager alive) |
 | `/doey-reinstall` | Reinstall from the repo without leaving Claude Code |
+| `/doey-reserve` | Reserve a worker pane for human use (permanent or timed) |
 | `/doey-watchdog-compact` | Load the compact Watchdog prompt |
 
 </details>
@@ -301,6 +303,7 @@ doey/
 │   ├── doey-inbox.md
 │   ├── doey-monitor.md
 │   ├── doey-reinstall.md
+│   ├── doey-reserve.md
 │   ├── doey-restart-workers.md
 │   ├── doey-send.md
 │   ├── doey-status.md

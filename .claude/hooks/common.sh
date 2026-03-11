@@ -54,6 +54,54 @@ is_worker() {
   ! is_manager && ! is_watchdog
 }
 
+# Check if this pane is reserved (has unexpired reservation)
+is_reserved() {
+  local reserve_file="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+  [ -f "$reserve_file" ] || return 1
+  local expiry
+  expiry=$(head -1 "$reserve_file" 2>/dev/null) || return 1
+  # "permanent" means reserved indefinitely
+  [ "$expiry" = "permanent" ] && return 0
+  local now
+  now=$(date +%s)
+  [ "$now" -lt "$expiry" ] && return 0
+  # Expired — clean up
+  rm -f "$reserve_file"
+  return 1
+}
+
+# Reserve this pane. Args: duration_seconds ("permanent" for indefinite)
+reserve_pane() {
+  local duration="$1"
+  local reserve_file="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+  if [ "$duration" = "permanent" ]; then
+    echo "permanent" > "$reserve_file"
+  else
+    local expiry
+    expiry=$(( $(date +%s) + duration ))
+    echo "$expiry" > "$reserve_file"
+  fi
+}
+
+# Unreserve this pane
+unreserve_pane() {
+  rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+}
+
+# Get reservation info. Returns: "none", "permanent", or seconds remaining
+get_reservation_info() {
+  local reserve_file="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+  [ -f "$reserve_file" ] || { echo "none"; return; }
+  local expiry
+  expiry=$(head -1 "$reserve_file" 2>/dev/null) || { echo "none"; return; }
+  [ "$expiry" = "permanent" ] && { echo "permanent"; return; }
+  local now remaining
+  now=$(date +%s)
+  remaining=$(( expiry - now ))
+  [ "$remaining" -le 0 ] && { rm -f "$reserve_file"; echo "none"; return; }
+  echo "$remaining"
+}
+
 # Cross-platform desktop notification
 send_notification() {
   local title="${1:-Claude Code}"

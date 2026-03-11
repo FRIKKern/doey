@@ -20,6 +20,9 @@ You are managing status updates across Claude Code instances in TMUX.
 
 2. Ask the user: **set** your status or **view** all statuses?
 
+### Status values
+Valid statuses: IDLE, WORKING, RESERVED. RESERVED is set by `/doey-reserve` (permanent) or auto-reserve (60s on human input).
+
 ### Setting status
 Write your current status:
 ```bash
@@ -40,4 +43,16 @@ for f in "${RUNTIME_DIR}/status/"*.status; do
 done
 ```
 
-Display a summary table showing each pane, its status, and what task it's working on.
+Check for reserved panes:
+```bash
+for f in "${RUNTIME_DIR}/status/"*.reserved; do
+  if [ -f "$f" ]; then
+    EXPIRY=$(head -1 "$f")
+    if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
+      echo "RESERVED: $(basename "$f" .reserved) (expires: $EXPIRY)"
+    fi
+  fi
+done
+```
+
+Display a summary table showing each pane, its status, and what task it's working on. Show RESERVED status for panes with active `.reserved` files.

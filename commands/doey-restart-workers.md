@@ -123,6 +123,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    Use the Watchdog pane index to label it "Watchdog"; all others are "Worker".
 
 ## Important Notes
+- Restarting workers clears timed reservations (they expire naturally). Permanent reservations (`.reserved` files with `permanent`) survive restarts.
 - NEVER restart pane 0.0 — that's you (the Manager)
 - The Watchdog uses `--model haiku --agent doey-watchdog`, workers use `--model opus`
 - If a worker shows "Not logged in", run `/login` on it: `tmux send-keys -t "$SESSION_NAME:0.X" "/login" Enter`

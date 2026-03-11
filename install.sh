@@ -163,6 +163,8 @@ printf "  ${BRAND}[4/4]${RESET} Installing doey command..."
 {
   cp "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
   chmod +x ~/.local/bin/doey
+  cp "$SCRIPT_DIR/shell/tmux-statusbar.sh" "$HOME/.local/bin/tmux-statusbar.sh"
+  chmod +x "$HOME/.local/bin/tmux-statusbar.sh"
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
 detail "~/.local/bin/doey"
 

@@ -22,7 +22,19 @@ You are delegating a task to another Claude Code instance running in a TMUX pane
    MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    ```
 
-3. Ask the user:
+3. Check for reserved panes before delegating:
+   ```bash
+   PANE_SAFE=${TARGET_PANE//[:.]/_}
+   RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+   if [ -f "$RESERVE_FILE" ]; then
+     EXPIRY=$(head -1 "$RESERVE_FILE")
+     if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
+       echo "Pane is reserved — pick another"
+     fi
+   fi
+   ```
+
+4. Ask the user:
    - Which pane to delegate to (if not specified)
    - What task/prompt to send
 
@@ -53,6 +65,7 @@ You are delegating a task to another Claude Code instance running in a TMUX pane
 5. Confirm to the user that the task was sent and which pane received it.
 
 ### Notes
+- Do not delegate to a RESERVED pane — check for `.reserved` file first
 - The target Claude will receive this as user input in its conversation
 - You can check on their progress later with `/doey-status`
 - The target instance must be idle (waiting for input) for this to work

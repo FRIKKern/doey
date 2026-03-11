@@ -89,6 +89,7 @@ Notifications should only fire on **state changes**, never on steady states:
 | idle | idle | **Silent** — nothing changed |
 | idle | working | **Silent** — worker picked up a task |
 | working | working | **Silent** — still in progress |
+| any | reserved | **Silent** — pane reserved by human or `/doey-reserve` |
 | any | error/question | **Notify** — needs attention |
 
 **Critical**: Workers that are idle when monitoring starts should be recorded as "idle" and NEVER generate notifications unless their state changes first.
@@ -140,6 +141,7 @@ osascript -e 'display notification "Error: ENOENT — cannot find module react-d
 - **NEVER** send input to panes where the prompt appears to be asking for a password or sensitive data — send a notification instead
 - **NEVER** send destructive confirmations like `rm -rf` confirmations or database drop confirmations — flag these, skip, and send a notification
 - **DO NOT** re-answer a prompt you already answered (track which pane+prompt combinations you've responded to)
+- **NEVER** send input to panes with a `.reserved` file — these are under human control. Check `${RUNTIME_DIR}/status/${PANE_SAFE}.reserved` before acting on any pane.
 - **DO** auto-login workers that show "Not logged in" — this is a routine auth issue, not a security concern. The `/login` command uses the existing OAuth credentials.
 - If unsure whether something is a prompt or a question needing human judgment, **notify** rather than auto-accept
 
@@ -190,7 +192,7 @@ EOF
 #   rm -f "$RUNTIME_DIR/status/alerts/pane_${PANE_INDEX}.alert" 2>/dev/null
 ```
 
-**Important**: Only flag a pane as stuck if it is in a WORKING state (not idle at the `❯` prompt). An idle worker showing the same prompt is normal.
+**Important**: Only flag a pane as stuck if it is in a WORKING state (not idle at the `❯` prompt). An idle worker showing the same prompt is normal. Skip panes that have a `.reserved` file — reserved panes are intentionally human-controlled and should never be flagged as stuck.
 
 ### 3. Crashed pane detection
 
@@ -237,7 +239,13 @@ This runs at the END of each scan cycle, after all panes have been checked.
 Execute this loop (start it IMMEDIATELY — see "Immediate Self-Start" above):
 
 1. Run `tmux list-panes -s -t "$SESSION_NAME"` to get all panes in the team session
-2. **For each pane, check and exit copy-mode** (see Health Monitoring §1 above)
+2. **For each pane, check for reservation** — skip reserved panes from all further processing (auto-accept, stuck detection, crash detection):
+   ```bash
+   PANE_SAFE=$(echo "${SESSION_NAME}_0_${pane}" | tr ':.' '_')
+   RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+   [ -f "$RESERVE_FILE" ] && continue  # Skip reserved panes
+   ```
+3. **For each pane, check and exit copy-mode** (see Health Monitoring §1 above)
 3. **For each pane, check for crashed pane** (see Health Monitoring §3 above) — write alert file if crashed, clear alert if recovered
 4. For each pane, run `tmux capture-pane -t <pane> -p -S -15` to get recent output
 5. **For each pane, check for stuck worker** (see Health Monitoring §2 above) — write alert file if stuck, clear alert if output changes
@@ -257,7 +265,7 @@ Execute this loop (start it IMMEDIATELY — see "Immediate Self-Start" above):
 Maintain a mental record of:
 - Which prompts you've already answered (pane ID + prompt text hash) to avoid double-answering
 - Which notifications you've already sent per worker (pane ID + notification body + timestamp) for rate limiting
-- The previous state of each worker pane (idle, working, error, prompt) — this is CRITICAL for transition detection. Only notify when state changes, never for steady states.
+- The previous state of each worker pane (idle, working, error, prompt, reserved) — this is CRITICAL for transition detection. Only notify when state changes, never for steady states.
 - Whether each worker was idle at monitoring start (these should never trigger idle notifications until they work and finish)
 - Any panes that had errors or unusual output
 - Count of total interventions made (auto-accepts and notifications separately)

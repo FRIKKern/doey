@@ -147,7 +147,21 @@ Each dispatch starts a fresh Claude session. The old session is exited first to 
 
 ### Pre-flight: Check if worker is idle
 
-**Always check before dispatching.** A worker is idle when its last few lines show the `❯` or `>` prompt:
+**Always check before dispatching.** First verify the pane is not reserved, then check if it's idle.
+
+Check for reservation:
+```bash
+PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
+RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+if [ -f "$RESERVE_FILE" ]; then
+  EXPIRY=$(head -1 "$RESERVE_FILE")
+  if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
+    echo "Pane is reserved — skip this worker, pick another"
+  fi
+fi
+```
+
+A worker is idle when its last few lines show the `❯` or `>` prompt:
 
 ```bash
 # (uses SESSION_NAME, PROJECT_NAME, PROJECT_DIR from manifest)
@@ -173,6 +187,8 @@ Verification is built into the dispatch sequence (step 15). It automatically:
 
 For independent tasks, dispatch to multiple workers in a single message. Use **separate Bash calls per worker** — do NOT chain them with `&&` since they are independent.
 
+**Filter out reserved panes** before selecting workers for batch dispatch. Check each candidate pane's `.reserved` file and skip any with active reservations.
+
 Each Bash call contains the full dispatch sequence (steps 1–15) for one worker, with the appropriate pane index and task content. Repeat for each additional worker in parallel Bash calls — same pattern, different pane index and task content.
 
 ### Short tasks (< 200 chars, no special chars)
@@ -181,15 +197,26 @@ Use the same dispatch sequence above (steps 1–8 are mandatory — every task g
 
 ### Rules
 
-1. **Never use `send-keys "" Enter`** — the empty string swallows the Enter keystroke
-2. **Always sleep between `paste-buffer` and `send-keys Enter`** — uses `PASTE_SETTLE_MS` from session.env (default 500ms), auto-scales for large prompts
-3. **Always exit copy-mode before every `paste-buffer` and `send-keys`** — copy-mode silently swallows all input
-4. **Always check idle first** — don't interrupt a working pane
-5. **Always verify after dispatch** — step 15 is mandatory, not optional
-6. **Always include project context in every task prompt** — workers need to know the project name, directory, and that paths should be absolute
-7. **Always exit the old session before dispatching** — every task gets a fresh Claude context
-8. **If verification fails, run the unstick sequence** before retrying dispatch
-9. See also: Manager agent definition rules (always active in your context)
+1. **RESERVATION CHECK (mandatory before dispatch):** Before dispatching to ANY pane, check if a .reserved file exists:
+   ```bash
+   RESERVE_FILE="${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"
+   if [ -f "$RESERVE_FILE" ]; then
+     EXPIRY=$(head -1 "$RESERVE_FILE")
+     if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
+       echo "Pane is reserved — skip this worker, pick another"
+     fi
+   fi
+   ```
+   **Never dispatch to a RESERVED pane.** If all workers are reserved, report this to the user and wait.
+2. **Never use `send-keys "" Enter`** — the empty string swallows the Enter keystroke
+3. **Always sleep between `paste-buffer` and `send-keys Enter`** — uses `PASTE_SETTLE_MS` from session.env (default 500ms), auto-scales for large prompts
+4. **Always exit copy-mode before every `paste-buffer` and `send-keys`** — copy-mode silently swallows all input
+5. **Always check idle first** — don't interrupt a working pane
+6. **Always verify after dispatch** — step 15 is mandatory, not optional
+7. **Always include project context in every task prompt** — workers need to know the project name, directory, and that paths should be absolute
+8. **Always exit the old session before dispatching** — every task gets a fresh Claude context
+9. **If verification fails, run the unstick sequence** before retrying dispatch
+10. See also: Manager agent definition rules (always active in your context)
 
 ### File Conflict Prevention
 

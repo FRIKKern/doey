@@ -130,6 +130,7 @@ Each iteration:
    | Watchdog dead | No watchdog scan activity for 60+ seconds (check watchdog pane output) | MEDIUM |
    | Manager hung | Manager pane output unchanged for 2+ minutes (diff consecutive captures) | HIGH |
    | Worker panic loop | Worker showing repeated tool errors or permission denials | MEDIUM |
+   | Manager dispatched to reserved pane | Manager sent a task to a pane that has a `.reserved` file | HIGH |
 
    Log each anomaly with timestamp, pane, severity, and description.
 
@@ -141,7 +142,7 @@ Each iteration:
 
 4. **Check for task completion:**
    - Read status files for all worker panes
-   - If all workers that were `WORKING` have returned to `IDLE`, AND the Manager is `IDLE` with a completion summary visible → check if mid-journey interaction is needed
+   - If all workers that were `WORKING` have returned to `IDLE` or `RESERVED`, AND the Manager is `IDLE` with a completion summary visible → check if mid-journey interaction is needed
    - If mid-journey not yet sent and journey file has one → transition to **MID_JOURNEY**
    - Otherwise → transition to **VERIFYING**
 
@@ -290,6 +291,7 @@ Score: X / 10
 | 8 | HTTP server returns 200 | PASS/FAIL | Status: N |
 | 9 | Manager delegated (not coded directly) | PASS/FAIL | |
 | 10 | >= 2 workers used | PASS/FAIL | N workers observed |
+| 11 | Manager did not dispatch to reserved panes | PASS/FAIL | |
 
 ## Pass Criteria
 
@@ -300,6 +302,7 @@ PASS requires ALL of:
 - Claude/Anthropic content present
 - Manager delegated to workers (did not code directly)
 - >= 2 workers were used
+- Manager did not dispatch to any reserved pane
 - No HIGH severity anomalies
 - Completed within 10 minute timeout
 

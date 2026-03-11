@@ -14,4 +14,11 @@ STATUS: WORKING
 TASK: $TASK
 EOF
 
+# Auto-reserve pane for 60 seconds when human types
+# (Only for workers — Manager and Watchdog don't get reserved)
+# Don't downgrade a permanent or longer reservation to 60s
+if is_worker && ! is_reserved; then
+  reserve_pane 60
+fi
+
 exit 0
