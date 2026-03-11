@@ -1,8 +1,6 @@
 <div align="center">
 
-# Doey
-
-```
+<pre>
             .
            ...      :-=++++==--:
                .-***=-:.   ..:=+#%*:
@@ -34,14 +32,13 @@
    ██║  ██║██║   ██║██╔══╝    ╚██╔╝
    ██████╔╝╚██████╔╝███████╗   ██║
    ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-   Let Doey do it for you
-```
+</pre>
 
-*Your loyal AI team assistant*
+<h3>Let Doey do it for you</h3>
 
-**Run 10 Claude Code agents in parallel. One terminal.**
+<p><em>Your loyal AI team assistant — run 10 Claude Code agents in parallel, one terminal</em></p>
 
-Orchestrate a fleet of AI coding agents with a Manager that plans, Workers that execute,<br>and a Watchdog that keeps everything running — all inside tmux.
+<p>Orchestrate a fleet of AI coding agents with a Manager that plans, Workers that execute,<br>and a Watchdog that keeps everything running — all inside tmux.</p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-CLI-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
