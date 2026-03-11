@@ -484,19 +484,19 @@ update_system() {
   local repo_dir
 
   if [[ ! -f "$repo_path_file" ]]; then
-    printf "  ${ERROR}Could not find the claude-code-tmux-team repo.${RESET}\n"
+    printf "  ${ERROR}Could not find the doey repo.${RESET}\n"
     printf "  Run ${BOLD}./install.sh${RESET} from the repo to register its location.\n"
     exit 1
   fi
 
   repo_dir="$(cat "$repo_path_file")"
   if [[ ! -d "$repo_dir" ]]; then
-    printf "  ${ERROR}Could not find the claude-code-tmux-team repo.${RESET}\n"
+    printf "  ${ERROR}Could not find the doey repo.${RESET}\n"
     printf "  Run ${BOLD}./install.sh${RESET} from the repo to register its location.\n"
     exit 1
   fi
 
-  printf "  ${BRAND}Updating claude-code-tmux-team...${RESET}\n"
+  printf "  ${BRAND}Updating doey...${RESET}\n"
   printf '\n'
 
   local old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)

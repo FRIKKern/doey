@@ -50,8 +50,8 @@ npm install -g @anthropic-ai/claude-code
 claude auth
 
 # 4. Install Doey
-git clone https://github.com/frikk-gyldendal/claude-code-tmux-team.git
-cd claude-code-tmux-team && ./install.sh
+git clone https://github.com/frikk-gyldendal/doey.git
+cd doey && ./install.sh
 
 # 5. Init your project and launch
 cd ~/your-project

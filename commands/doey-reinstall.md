@@ -16,7 +16,7 @@ You need to reinstall the Doey system. This pulls the latest changes from git an
    ```
 
 2. If the file is missing or the directory doesn't exist, tell the user:
-   - "Could not find the claude-code-tmux-team repo. Run `./install.sh` from the repo once to register its location."
+   - "Could not find the doey repo. Run `./install.sh` from the repo once to register its location."
    - Stop here.
 
 3. Pull latest changes:

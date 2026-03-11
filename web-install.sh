@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # Doey — Web Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-team/main/web-install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/doey/main/web-install.sh | bash
 
-REPO_URL="https://github.com/frikk-gyldendal/claude-code-tmux-team.git"
-CLONE_DIR="${TMPDIR:-/tmp}/claude-code-tmux-team-install"
+REPO_URL="https://github.com/frikk-gyldendal/doey.git"
+CLONE_DIR="${TMPDIR:-/tmp}/doey-install"
 
 echo ""
 echo "  Doey — Web Installer"

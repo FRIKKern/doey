@@ -45,14 +45,14 @@ You talk to the Manager. The Manager runs the team. You ship 10x faster.
 **Install:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-doey-team/main/web-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/doey/main/web-install.sh | bash
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/frikk-gyldendal/claude-code-doey-team.git
-cd claude-code-doey-team && ./install.sh
+git clone https://github.com/frikk-gyldendal/doey.git
+cd doey && ./install.sh
 ```
 
 The installer validates prerequisites automatically (Claude Code CLI, tmux, shell config) and provides clear feedback with colored output.
@@ -251,7 +251,7 @@ Once installed, these commands are available in any Claude Code instance:
 <summary><strong>File Structure</strong></summary>
 
 ```
-claude-code-doey-team/
+doey/
 ├── CLAUDE.md                    # Project-level context for Claude Code instances
 ├── install.sh                   # Installer
 ├── web-install.sh               # Web installer (curl | bash)
@@ -302,7 +302,7 @@ alias doeys="doey 3x2"            # small team
 **Project commands** — Copy the commands into your project for project-scoped access:
 
 ```bash
-cp -r /path/to/claude-code-doey-team/commands/ .claude/commands/
+cp -r /path/to/doey/commands/ .claude/commands/
 ```
 
 ---
@@ -358,8 +358,8 @@ Use a smaller grid like `doey 3x2` or maximize your terminal window. The default
 The web installer's temporary directory was deleted after install. Fix: clone the repo manually, then run `./install.sh` to update the stored repo path:
 
 ```bash
-git clone https://github.com/frikk-gyldendal/claude-code-doey-team.git
-cd claude-code-doey-team && ./install.sh
+git clone https://github.com/frikk-gyldendal/doey.git
+cd doey && ./install.sh
 ```
 
 </details>
@@ -410,6 +410,6 @@ Run `doey doctor` and follow the suggestions it provides. It checks tmux, Claude
 
 **Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code)**
 
-If you find this useful, [give it a star](https://github.com/frikk-gyldendal/claude-code-doey-team) — it helps others find it.
+If you find this useful, [give it a star](https://github.com/frikk-gyldendal/doey) — it helps others find it.
 
 </div>

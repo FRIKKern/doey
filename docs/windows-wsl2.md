@@ -39,7 +39,7 @@ npm install -g @anthropic-ai/claude-code
 claude auth
 
 # Install Doey
-curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/claude-code-tmux-team/main/web-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/doey/main/web-install.sh | bash
 ```
 
 ### Step 4: Launch
