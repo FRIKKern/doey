@@ -38,6 +38,18 @@ tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -3
 
 Look for the `❯` prompt. If busy, pick a different one.
 
+Also check for reservation before selecting a worker:
+```bash
+PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
+RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+if [ -f "$RESERVE_FILE" ]; then
+  EXPIRY=$(head -1 "$RESERVE_FILE")
+  if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
+    echo "Reserved — pick another"
+  fi
+fi
+```
+
 **Step 2: Create the task marker file.**
 
 ```bash

@@ -11,11 +11,17 @@ STOP_HOOK_ACTIVE=$(parse_field "stop_hook_active")
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
-# Write IDLE status
+# Determine status — RESERVED if pane has active reservation, else IDLE
+if is_reserved; then
+  STOP_STATUS="RESERVED"
+else
+  STOP_STATUS="IDLE"
+fi
+
 cat > "$STATUS_FILE" <<EOF
 PANE: $PANE
 UPDATED: $NOW
-STATUS: IDLE
+STATUS: ${STOP_STATUS}
 TASK:
 EOF
 
@@ -84,6 +90,10 @@ if is_worker; then
   # Extract pane title (task name) for context
   PANE_TITLE=$(tmux display-message -t "$SESSION_NAME:0.$PANE_INDEX" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE=""
 
+  # Escape pane title for safe JSON embedding
+  PANE_TITLE_ESCAPED="${PANE_TITLE//\\/\\\\}"
+  PANE_TITLE_ESCAPED="${PANE_TITLE_ESCAPED//\"/\\\"}"
+
   # JSON-encode the last 5 lines of output safely (prefer jq over python3 for speed)
   LAST_OUTPUT=$(echo "$OUTPUT" | tail -5 | jq -Rs '.' 2>/dev/null) || \
     LAST_OUTPUT=$(echo "$OUTPUT" | tail -5 | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
@@ -94,7 +104,7 @@ if is_worker; then
 {
   "pane": "0.$PANE_INDEX",
   "status": "$RESULT_STATUS",
-  "title": "$PANE_TITLE",
+  "title": "$PANE_TITLE_ESCAPED",
   "timestamp": $(date +%s),
   "last_output": $LAST_OUTPUT
 }
@@ -114,7 +124,7 @@ if is_worker; then
     touch "$SIMPLIFY_FLAG"
     tmux copy-mode -q -t "$PANE" 2>/dev/null || true
     sleep 1
-    tmux send-keys -t "$PANE" "/simplify" Enter
+    tmux send-keys -t "$PANE" "/simplify" Enter 2>/dev/null || true
   fi
 fi
 

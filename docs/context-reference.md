@@ -137,7 +137,7 @@ The hook system uses a modular architecture with a shared utilities file and ind
 
 | File | Purpose |
 |------|---------|
-| `.claude/hooks/common.sh` | Shared utilities: pane identity resolution, runtime dir detection, status file helpers |
+| `.claude/hooks/common.sh` | Shared utilities: pane identity resolution, runtime dir detection, status file helpers, reservation management (`is_reserved()`, `reserve_pane()`, `unreserve_pane()`, `get_reservation_info()`) |
 | `.claude/hooks/on-prompt-submit.sh` | UserPromptSubmit handler |
 | `.claude/hooks/on-stop.sh` | Stop handler |
 | `.claude/hooks/on-pre-tool-use.sh` | PreToolUse handler |
@@ -167,6 +167,7 @@ Each `on-*.sh` script sources `common.sh` for shared functionality.
 
 **on-prompt-submit.sh (UserPromptSubmit):**
 - Writes STATUS: WORKING to the pane's status file
+- Calls `reserve_pane 60` for worker panes (auto-reserve on human input; won't downgrade existing longer reservations)
 - exit 0
 
 **on-stop.sh (Stop):**
@@ -211,7 +212,7 @@ format `session:window.pane` (e.g., `doey-myproject:0.4`).
 
 ## Layer 4: Skills/Commands
 
-All 13 skills are installed to `~/.claude/commands/` and invoked via `/skill-name`.
+All 14 skills are installed to `~/.claude/commands/` and invoked via `/skill-name`.
 
 | Skill | File | Primary Agent | Purpose |
 |-------|------|---------------|---------|
@@ -227,6 +228,7 @@ All 13 skills are installed to `~/.claude/commands/` and invoked via `/skill-nam
 | `/doey-stop-all` | `doey-stop-all.md` | Manager | Stop all running Doey sessions |
 | `/doey-restart-workers` | `doey-restart-workers.md` | Manager | Restart all workers and Watchdog (not Manager) |
 | `/doey-reinstall` | `doey-reinstall.md` | Manager | Pull latest from git and re-run installer |
+| `/doey-reserve` | `doey-reserve.md` | Manager/Workers | Reserve or unreserve a worker pane for human use |
 | `/doey-watchdog-compact` | `doey-watchdog-compact.md` | Manager | Send `/compact` to Watchdog to reduce token usage |
 
 ### How Skills Load
@@ -241,9 +243,9 @@ content composes on top of it as additional user-turn instructions.
 - **Manager** uses: `/doey-dispatch`, `/doey-delegate`, `/doey-research`,
   `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-send`,
   `/doey-team`, `/doey-stop-all`, `/doey-restart-workers`, `/doey-reinstall`,
-  `/doey-watchdog-compact`
+  `/doey-watchdog-compact`, `/doey-reserve`
 - **Watchdog** uses: none (operates from its agent definition, not skills)
-- **Workers** use: `/doey-inbox`, `/doey-status` (when explicitly told to)
+- **Workers** use: `/doey-inbox`, `/doey-status`, `/doey-reserve` (when explicitly told to)
 
 
 ## Layer 5: Persistent Memory
@@ -422,7 +424,7 @@ of terminal bells, preventing notification spam from worker panes.
 | `pane-border-format` | Role-aware with color | Shows pane title; active pane in cyan bold |
 | `status-position` | `top` | Status bar at top of terminal |
 | `status-left` | Branded with session/project name | Cyan "DOEY: name" badge |
-| `status-right` | Pane title + time + worker count | Shows focused pane info |
+| `status-right` | Pane title + time + worker summary (NW/NI/NR) | Shows focused pane info; NW=working, NI=idle, NR=reserved. Reserved panes show RSV:Xs countdown or RESERVED badge |
 | `set-titles` | `on` | Updates terminal tab title |
 | `mouse` | `on` | Enables mouse for pane selection and scrolling |
 
@@ -450,7 +452,8 @@ of terminal bells, preventing notification spam from worker panes.
     doey-<name>_0_0.status              # Manager status
     doey-<name>_0_1.status              # Worker 1 status
     doey-<name>_0_6.status              # Watchdog status
-    ...                                # One per pane
+    doey-<name>_0_1.reserved           # Worker 1 reservation marker (optional)
+    ...                                # One .status per pane; .reserved optional
   research/
     doey-<name>_0_4.task                # Research task marker (topic text)
     ...
@@ -475,8 +478,24 @@ STATUS: WORKING
 TASK: Refactor hero-section component to use new design tokens
 ```
 
-`STATUS` is either `WORKING` or `IDLE`. `TASK` contains the first 80
+`STATUS` is `WORKING`, `IDLE`, or `RESERVED`. `TASK` contains the first 80
 characters of the prompt (on UserPromptSubmit) or is empty (on Stop).
+
+### Reservation File Format
+
+Optional file at `${RUNTIME_DIR}/status/${PANE_SAFE}.reserved`. If present,
+the pane is reserved. First line contains:
+- `permanent` — reserved indefinitely until manually unreserved
+- Unix timestamp (epoch seconds) — reserved until this time, auto-expires
+
+Created by:
+- `on-prompt-submit.sh` auto-reserve (60s) on human input to worker panes
+- `/doey-reserve` command for permanent or timed reservations
+
+Consumed by:
+- `common.sh:is_reserved()` — checks if reservation is active
+- `tmux-statusbar.sh` — displays RSV:Xs countdown or RESERVED badge
+- Manager dispatch logic — skips reserved panes
 
 ### Research Lifecycle
 
@@ -530,7 +549,7 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
  7. CLI: --dangerously-skip-permissions --agent doey-manager
  8. tmux env: DOEY_RUNTIME -> session.env             (project/session context)
  9. Runtime: status/, research/, reports/             (live state)
-10. Skills: loaded on-demand via /doey-*             (12 skills used)
+10. Skills: loaded on-demand via /doey-*             (13 skills used)
 ```
 
 ### Watchdog Context (load order)
@@ -598,6 +617,7 @@ Claude Code into every instance's context (Manager, Watchdog, and all Workers).
 | Stale memory causing bad behavior | Outdated patterns in MEMORY.md | Review and clean `~/.claude/agent-memory/doey-manager/MEMORY.md` |
 | Research worker stops without report | Hook not installed or not blocking | Check exit code 2 path in `on-stop.sh`; verify `.task` file was created |
 | Workers don't pick up hook changes | Hooks load at Claude Code startup | Restart workers via `/doey-restart-workers` |
+| Manager dispatches to reserved pane | `.reserved` file missing or hooks not running | Check `.reserved` file exists in `status/` dir; verify hooks are running and `is_reserved()` returns correctly |
 
 ### How to Trace Which Layer Caused a Behavior
 

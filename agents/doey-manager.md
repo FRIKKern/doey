@@ -63,6 +63,28 @@ tmux list-panes -s -t "$SESSION_NAME" -F '#{pane_index} #{pane_title} #{pane_pid
 tmux capture-pane -t "$SESSION_NAME:0.4" -p -S -3
 ```
 
+### Pane Reservations
+
+Workers can be **reserved** by humans or via `/doey-reserve`. Reserved panes must NEVER receive dispatched tasks.
+
+**How to check:** Before dispatching to any worker, run:
+```bash
+RESERVE_FILE="${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"
+[ -f "$RESERVE_FILE" ] && echo "RESERVED — skip"
+```
+
+**Reservation types:**
+- **Auto-reserve (60s):** Created when a human types in a worker pane. Expires automatically. Won't downgrade existing longer or permanent reservations.
+- **Permanent:** Created via `/doey-reserve`. Persists until explicitly unreserved.
+- **Timed:** Created via `/doey-reserve` with a duration. Auto-expires.
+
+**Rules:**
+- Always check for .reserved files before dispatch
+- If a pane's status file says RESERVED, skip it
+- If ALL workers are reserved, tell the user and wait
+- The `/doey-monitor` command shows reservation status (🔒 RESERVED)
+- Reservations are stored at: `${RUNTIME_DIR}/status/${PANE_SAFE}.reserved`
+
 ### Send a task to a worker
 ```bash
 # ALWAYS exit copy-mode first (prevents silent task loss if pane was scrolled)
@@ -214,6 +236,7 @@ When dispatching multiple workers that may touch the same files, enforce file ow
     [ -f "$f" ] && cat "$f" && echo ""
   done
   ```
+- **Exclude RESERVED panes from completion checks** — a reserved pane is under human control and is not a blocker. "All workers idle" means all non-reserved workers are idle.
 - When a worker finishes, note its completion and check if the next wave can start
 - If a worker errors out, capture the error and decide: retry, reassign, or escalate to user
 - **While monitoring, stay responsive to new user requests** — you can dispatch new tasks to idle workers even while other tasks are in progress
@@ -286,9 +309,10 @@ You are Worker N on the Doey team working on PROJECT_NAME.
 8. **Batch parallel work** — if 8 tasks are independent, send 8 at once to 8 workers
 9. **Dispatch immediately for safe tasks** — only ask for confirmation when changes are destructive or architectural
 10. **Escalate blockers** — if something needs a decision, ask the user rather than guessing
-11. **Be concise with the user** — they see your pane on a small tmux split. Short updates, clear tables, no walls of text.
-12. **Always use absolute paths** — read `PROJECT_DIR` from the session manifest (via `DOEY_RUNTIME` env var) and use it as the base for ALL file paths in task prompts. Never use relative paths.
-13. **Read the manifest first** — before your first dispatch, always discover the runtime dir via `tmux show-environment DOEY_RUNTIME` and `source "${RUNTIME_DIR}/session.env"` to know your project context.
+11. **Never dispatch to reserved panes** — check for `.reserved` files before every dispatch. Human work is sacred.
+12. **Be concise with the user** — they see your pane on a small tmux split. Short updates, clear tables, no walls of text.
+13. **Always use absolute paths** — read `PROJECT_DIR` from the session manifest (via `DOEY_RUNTIME` env var) and use it as the base for ALL file paths in task prompts. Never use relative paths.
+14. **Read the manifest first** — before your first dispatch, always discover the runtime dir via `tmux show-environment DOEY_RUNTIME` and `source "${RUNTIME_DIR}/session.env"` to know your project context.
 
 ## Communication with User
 
@@ -310,6 +334,7 @@ Progress:
   W2  feature-modules        DONE
   W3  latest-news            working... (editing component)
   W4  newsletter             DONE
+  W5  --                     🔒 RESERVED (human)
 
 Waiting on W3...
 ```

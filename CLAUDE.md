@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers (default 10) in a single tmux session, enabling parallel task execution across multiple Claude Code instances. The CLI entry point is `doey`.
+Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers (default 10) in a single tmux session, enabling parallel task execution across multiple Claude Code instances. Workers can be reserved by humans for direct interaction (auto-reserve on keystroke or permanent via `/doey-reserve`). The CLI entry point is `doey`.
 
 ## Architecture
 
-- **Manager (pane 0.0):** Orchestrator — plans and delegates, never writes code. Uses `--agent doey-manager` (Opus).
+- **Manager (pane 0.0):** Orchestrator — plans and delegates, never writes code. Respects pane reservations (skips reserved workers). Uses `--agent doey-manager` (Opus).
 - **Watchdog (pane 0.{cols}):** Monitors workers, auto-accepts prompts. Uses `--agent doey-watchdog` (Haiku).
 - **Workers (remaining panes):** Standard Claude Code instances (Opus) that execute tasks.
 
@@ -29,7 +29,7 @@ Communication is via tmux commands (`send-keys`, `capture-pane`) and runtime fil
 - Shell scripts use `set -euo pipefail`
 - The installer (`install.sh`) copies agents/ to `~/.claude/agents/` and commands/ to `~/.claude/commands/`
 - Session names follow the pattern `doey-<project-name>`
-- Runtime data lives under `/tmp/doey/<project>/`
+- Runtime data lives under `/tmp/doey/<project>/` (status files, messages, `.reserved` files)
 
 ## Testing Changes
 
@@ -42,10 +42,11 @@ Communication is via tmux commands (`send-keys`, `capture-pane`) and runtime fil
 
 - `shell/doey.sh` -- Main launcher: init, start, stop, restart, status, doctor, update, grid setup
 - `.claude/hooks/common.sh` -- Shared hook utilities: pane identity resolution, runtime dir detection
-- `.claude/hooks/on-prompt-submit.sh` -- UserPromptSubmit handler: sets WORKING status
-- `.claude/hooks/on-stop.sh` -- Stop handler: sets IDLE status, research report enforcement, watchdog keep-alive, Manager notifications
+- `.claude/hooks/on-prompt-submit.sh` -- UserPromptSubmit handler: sets WORKING status, auto-reserves pane (60s) on human input
+- `.claude/hooks/on-stop.sh` -- Stop handler: sets IDLE/RESERVED status, research report enforcement, watchdog keep-alive, Manager notifications
 - `.claude/hooks/on-pre-tool-use.sh` -- PreToolUse handler: safety guards for tool usage
 - `.claude/hooks/on-pre-compact.sh` -- PreCompact handler: context preservation before compaction
+- `commands/doey-reserve.md` -- Slash command for human pane reservation (permanent or timed)
 - `.claude/hooks/status-hook.sh` -- Legacy monolithic hook (kept as reference, no longer registered)
 - `install.sh` -- Copies agents, commands, shell script to user directories; registers repo path
 

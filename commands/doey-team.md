@@ -22,10 +22,22 @@ You are showing the team overview of all Claude Code instances running in TMUX.
    tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} | PID: #{pane_pid} | #{pane_width}x#{pane_height} | #{pane_current_command}'
    ```
 
-3. Check for status files:
+3. Check for status files and reservation files:
    ```bash
    for f in "${RUNTIME_DIR}/status/"*.status; do
      [ -f "$f" ] && cat "$f" && echo "---"
+   done
+   ```
+   ```bash
+   for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
+     PANE_SAFE=${pane//[:.]/_}
+     RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+     if [ -f "$RESERVE_FILE" ]; then
+       EXPIRY=$(head -1 "$RESERVE_FILE")
+       if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
+         echo "$pane: RESERVED"
+       fi
+     fi
    done
    ```
 
@@ -40,7 +52,7 @@ You are showing the team overview of all Claude Code instances running in TMUX.
 
 5. Present a formatted team overview table:
    - Pane ID
-   - Status (from status files, or "unknown")
+   - Status (from status files, or "unknown"). Show 🔒 RESERVED for panes with active `.reserved` files
    - Current task (from status files, or "unknown")
    - Unread message count
    - Mark YOUR pane with `<-- you` indicator

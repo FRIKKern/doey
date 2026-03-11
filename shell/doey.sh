@@ -30,6 +30,9 @@ ERROR='\033[0;31m'    # Red
 BOLD='\033[1m'        # Bold
 RESET='\033[0m'       # Reset
 
+# ── Script directory ─────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ── Project registry ─────────────────────────────────────────────────
 PROJECTS_FILE="$HOME/.claude/doey/projects"
 mkdir -p "$(dirname "$PROJECTS_FILE")"
@@ -359,7 +362,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" status-left \
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] ${worker_count} workers "
+    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #(${SCRIPT_DIR}/tmux-statusbar.sh) "
   tmux set-option -t "$session" status-interval 5
 
   # Window status styling
@@ -905,7 +908,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" status-left \
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] ${worker_count} workers "
+    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #(${SCRIPT_DIR}/tmux-statusbar.sh) "
   tmux set-option -t "$session" status-interval 5
   tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
   tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '

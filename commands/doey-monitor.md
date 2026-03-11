@@ -42,7 +42,25 @@ done
 
 ### State Detection
 
-Read the last 5-10 lines of each worker's captured output and classify:
+Read the last 5-10 lines of each worker's captured output and classify. **Before classifying output-based states, check for reservations first** — a reserved pane overrides other states:
+
+```bash
+# Check reservation status (do this per-pane before output-based detection)
+PANE_SAFE="${SESSION}_0_${i}"
+RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+if [ -f "$RESERVE_FILE" ]; then
+  read -r EXPIRY < "$RESERVE_FILE" 2>/dev/null || EXPIRY=""
+  NOW_TS=$(date +%s)
+  if [ "$EXPIRY" = "permanent" ]; then
+    STATE="RESERVED (permanent)"
+  elif [ -n "$EXPIRY" ] && [ "$NOW_TS" -lt "$EXPIRY" ]; then
+    REMAINING=$(( EXPIRY - NOW_TS ))
+    STATE="RESERVED (${REMAINING}s)"
+  fi
+fi
+```
+
+Output-based states:
 
 | State | How to detect | Display |
 |-------|---------------|---------|
@@ -51,6 +69,7 @@ Read the last 5-10 lines of each worker's captured output and classify:
 | **DONE** | Shows `Worked for Xs` or `✻ Worked for` followed by `❯` prompt | `✅ DONE` |
 | **ERROR** | Shows `Error`, `failed`, `SIGTERM`, or red error text | `❌ ERROR` |
 | **QUEUED** | Shows pasted text but no processing started (text visible, no tool calls) | `📋 QUEUED` |
+| **RESERVED** | `.reserved` file exists with valid (unexpired) timestamp or "permanent" | `🔒 RESERVED` |
 
 ### Output Format
 
