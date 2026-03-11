@@ -107,17 +107,103 @@ list_projects() {
 
 # Stop session for current directory's project
 stop_project() {
+  # 1) If inside a doey tmux session, stop it directly
+  if [[ -n "${TMUX:-}" ]]; then
+    local current_session
+    current_session="$(tmux display-message -p '#S' 2>/dev/null || true)"
+    if [[ "$current_session" == doey-* ]]; then
+      printf "  Stopping doey session: ${BOLD}${current_session}${RESET}...\n"
+      _kill_doey_session "$current_session"
+      printf "  ${SUCCESS}Stopped${RESET} ${current_session}\n"
+      return 0
+    fi
+  fi
+
+  # 2) If pwd matches a registered project, stop that
   local name
   name="$(find_project "$(pwd)")"
-  if [[ -z "$name" ]]; then
-    printf "  ${WARN}No project registered for $(pwd)${RESET}\n"
-    return 1
+  if [[ -n "$name" ]]; then
+    local session="doey-${name}"
+    if session_exists "$session"; then
+      printf "  Stopping doey session: ${BOLD}${session}${RESET}...\n"
+      _kill_doey_session "$session"
+      printf "  ${SUCCESS}Stopped${RESET} ${session}\n"
+    else
+      printf "  ${DIM}No active session for ${name}${RESET}\n"
+    fi
+    return 0
   fi
-  if tmux kill-session -t "doey-${name}" < /dev/null 2>/dev/null; then
-    printf "  ${SUCCESS}Stopped${RESET} doey-${name}\n"
-  else
-    printf "  ${DIM}No active session for ${name}${RESET}\n"
+
+  # 3) Otherwise, find all running doey sessions and show picker
+  local -a running_sessions=()
+  while IFS= read -r sess; do
+    [[ "$sess" == doey-* ]] && running_sessions+=("$sess")
+  done < <(tmux list-sessions -F '#S' 2>/dev/null || true)
+
+  if [[ ${#running_sessions[@]} -eq 0 ]]; then
+    printf "  ${DIM}No running Doey sessions found.${RESET}\n"
+    return 0
   fi
+
+  if [[ ${#running_sessions[@]} -eq 1 ]]; then
+    printf '\n'
+    read -rp "  Stop ${BOLD}${running_sessions[0]}${RESET}? (y/N) " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      _kill_doey_session "${running_sessions[0]}"
+      printf "  ${SUCCESS}Stopped${RESET} ${running_sessions[0]}\n"
+    else
+      printf "  ${DIM}Cancelled${RESET}\n"
+    fi
+    return 0
+  fi
+
+  # Multiple running sessions — numbered picker
+  printf '\n'
+  printf "  ${BRAND}Running Doey sessions:${RESET}\n"
+  for i in "${!running_sessions[@]}"; do
+    printf "    ${BOLD}%d)${RESET} %s\n" $((i+1)) "${running_sessions[$i]}"
+  done
+  printf '\n'
+  read -rp "  Stop which session? (number or 'all'): " choice
+
+  case "$choice" in
+    all|ALL)
+      for sess in "${running_sessions[@]}"; do
+        _kill_doey_session "$sess"
+        printf "  ${SUCCESS}Stopped${RESET} ${sess}\n"
+      done
+      ;;
+    [0-9]*)
+      local idx=$((choice - 1))
+      if [[ $idx -ge 0 && $idx -lt ${#running_sessions[@]} ]]; then
+        _kill_doey_session "${running_sessions[$idx]}"
+        printf "  ${SUCCESS}Stopped${RESET} ${running_sessions[$idx]}\n"
+      else
+        printf "  ${ERROR}Invalid selection${RESET}\n"
+        return 1
+      fi
+      ;;
+    *)
+      printf "  ${DIM}Cancelled${RESET}\n"
+      ;;
+  esac
+}
+
+# Kill a doey tmux session gracefully: kill Claude processes first, then session, then cleanup
+_kill_doey_session() {
+  local session="$1"
+  # Kill Claude processes in all panes
+  for pane_id in $(tmux list-panes -s -t "$session" -F '#{pane_id}' 2>/dev/null); do
+    local pane_pid
+    pane_pid=$(tmux display-message -t "$pane_id" -p '#{pane_pid}' 2>/dev/null || true)
+    [[ -n "$pane_pid" ]] && pkill -P "$pane_pid" 2>/dev/null || true
+  done
+  sleep 1
+  # Kill the tmux session
+  tmux kill-session -t "$session" < /dev/null 2>/dev/null || true
+  # Clean up runtime directory
+  local project_name="${session#doey-}"
+  rm -rf "/tmp/doey/${project_name}" 2>/dev/null || true
 }
 
 # Show interactive project picker menu
@@ -168,7 +254,11 @@ show_menu() {
         local selected_path="${paths[$idx]}"
         local selected_session="doey-${selected_name}"
         if session_exists "$selected_session"; then
-          tmux attach -t "$selected_session"
+          if [[ -n "${TMUX:-}" ]]; then
+            tmux switch-client -t "$selected_session"
+          else
+            tmux attach -t "$selected_session"
+          fi
         else
           launch_session "$selected_name" "$selected_path" "$grid"
         fi
@@ -179,7 +269,11 @@ show_menu() {
       ;;
     i|I|init)
       register_project "$(pwd)"
-      printf "  Run ${BOLD}doey${RESET} again to launch.\n"
+      local init_name
+      init_name="$(find_project "$(pwd)")"
+      if [[ -n "$init_name" ]]; then
+        launch_session "$init_name" "$(pwd)" "$grid"
+      fi
       ;;
     q|Q) return 0 ;;
     *)
@@ -506,7 +600,11 @@ WORKER_CONTEXT
 
   # ── Focus on Manager pane, attach ──────────────────────────────
   tmux select-pane -t "$session:0.0"
-  tmux attach -t "$session"
+  if [[ -n "${TMUX:-}" ]]; then
+    tmux switch-client -t "$session"
+  else
+    tmux attach -t "$session"
+  fi
 }
 
 # ── Update / Reinstall ───────────────────────────────────────────────
@@ -1178,6 +1276,11 @@ HELP
     ;;
   init)
     register_project "$(pwd)"
+    dir="$(pwd)"
+    name="$(find_project "$dir")"
+    if [[ -n "$name" ]]; then
+      launch_session "$name" "$dir" "${grid:-6x2}"
+    fi
     exit 0
     ;;
   list)
@@ -1239,7 +1342,11 @@ if [[ -n "$name" ]]; then
   if session_exists "$session"; then
     # Already running — just attach
     printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}${session}${RESET}...\n"
-    tmux attach -t "$session"
+    if [[ -n "${TMUX:-}" ]]; then
+      tmux switch-client -t "$session"
+    else
+      tmux attach -t "$session"
+    fi
   else
     # Known but not running — launch with premium UI
     launch_session "$name" "$dir" "${grid:-6x2}"
