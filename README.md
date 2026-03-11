@@ -36,7 +36,7 @@
 
 <h3>Let me Doey for you</h3>
 
-<p><em>Your loyal AI team assistant — run 10 Claude Code agents in parallel, one terminal</em></p>
+<p><em>Your loyal AI team doggo assistant — run 10 Claude Code agents in parallel, one terminal</em></p>
 
 <p>Orchestrate a fleet of AI coding agents with a Manager that plans, Workers that execute,<br>and a Watchdog that keeps everything running — all inside tmux.</p>
 
