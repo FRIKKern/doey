@@ -161,6 +161,9 @@ done
 
 printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
 {
+  # Remove stale files/symlinks first (broken symlinks block cp)
+  rm -f ~/.local/bin/doey
+  rm -f "$HOME/.local/bin/tmux-statusbar.sh"
   cp "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
   chmod +x ~/.local/bin/doey
   cp "$SCRIPT_DIR/shell/tmux-statusbar.sh" "$HOME/.local/bin/tmux-statusbar.sh"
