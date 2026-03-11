@@ -213,7 +213,7 @@ cat << 'DOG'
    ██║  ██║██║   ██║██╔══╝    ╚██╔╝
    ██████╔╝╚██████╔╝███████╗   ██║
    ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-   Let Doey do it for you
+   Let me Doey for you
 DOG
 printf "${RESET}"
 echo ""
