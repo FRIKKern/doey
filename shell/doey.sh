@@ -40,6 +40,36 @@ touch "$PROJECTS_FILE"
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
+# Resolve the doey repo directory
+resolve_repo_dir() {
+  if [ -f "$HOME/.claude/doey/repo-path" ]; then
+    cat "$HOME/.claude/doey/repo-path"
+  else
+    (cd "$SCRIPT_DIR/.." && pwd)
+  fi
+}
+
+# Install Doey hooks and settings into a target project directory
+# Usage: install_doey_hooks <target_dir> [indent]
+install_doey_hooks() {
+  local target_dir="$1"
+  local indent="${2:-   }"
+  local repo_dir
+  repo_dir="$(resolve_repo_dir)"
+  if [ "$target_dir" = "$repo_dir" ]; then
+    return 0
+  fi
+  mkdir -p "$target_dir/.claude/hooks"
+  cp "${repo_dir}"/.claude/hooks/*.sh "$target_dir/.claude/hooks/" 2>/dev/null && \
+    chmod +x "$target_dir"/.claude/hooks/*.sh || true
+  if [ ! -f "$target_dir/.claude/settings.local.json" ]; then
+    cp "${repo_dir}/.claude/settings.local.json" "$target_dir/.claude/settings.local.json"
+  else
+    printf "${indent}${WARN}Existing .claude/settings.local.json found — verify hooks are registered${RESET}\n"
+  fi
+  printf "${indent}${DIM}Installed Doey hooks${RESET}\n"
+}
+
 # Write a status file for a pane (used during boot to set initial READY state)
 # Usage: write_pane_status <runtime_dir> <session:window.pane> <status> [task]
 write_pane_status() {
@@ -381,7 +411,7 @@ DOG
   if command -v jq &>/dev/null; then
     if [ -f "$claude_settings" ]; then
       if ! jq -e ".trustedDirectories // [] | index(\"$dir\")" "$claude_settings" > /dev/null 2>&1; then
-        jq "(.trustedDirectories // []) |= . + [\"$dir\"]" "$claude_settings" > "${claude_settings}.tmp" \
+        jq "(.trustedDirectories // []) |= . + [\"$dir\"]" "$claude_settings" 2>/dev/null > "${claude_settings}.tmp" \
           && mv "${claude_settings}.tmp" "$claude_settings"
         printf "   ${DIM}Trusted project directory added to ~/.claude/settings.json${RESET}\n"
       fi
@@ -393,6 +423,9 @@ DOG
   else
     printf "   ${WARN}jq not found — skipping auto-trust (you may see trust prompts)${RESET}\n"
   fi
+
+  # ── Install Doey hooks into target project ─────────────────────
+  install_doey_hooks "$dir" "   "
 
   # ── Build worker pane list (needed for manifest and briefings) ──
   local worker_panes_csv=""
@@ -564,7 +597,7 @@ WORKER_CONTEXT
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
     tmux send-keys -t "$session:0.$watchdog_pane" \
-      '/loop 3m /compact "Continue work as watchdog"' Enter
+      '/loop 5m /compact "Continue monitoring. Read watchdog_pane_states.json from RUNTIME_DIR/status/ to restore pane state."' Enter
   ) &
 
   step_done
@@ -974,6 +1007,9 @@ launch_session_headless() {
     worker_panes_csv+="$i"
   done
 
+  # ── Install Doey hooks into target project ──
+  install_doey_hooks "$dir" "  "
+
   # ── Create session ──
   printf "  ${DIM}Creating session ${session}...${RESET}\n"
   tmux kill-session -t "$session" 2>/dev/null || true
@@ -1108,7 +1144,7 @@ WORKER_CONTEXT
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
     tmux send-keys -t "$session:0.$watchdog_pane" \
-      '/loop 3m /compact "Continue work as watchdog"' Enter
+      '/loop 5m /compact "Continue monitoring. Read watchdog_pane_states.json from RUNTIME_DIR/status/ to restore pane state."' Enter
   ) &
 
   # ── Boot workers ──
@@ -1177,13 +1213,7 @@ run_test() {
   printf 'E2E Test Sandbox - build whatever is requested\n' > CLAUDE.md
 
   # Copy hooks and settings from the repo
-  local repo_dir
-  repo_dir="$(cat "$HOME/.claude/doey/repo-path")"
-  # Copy all hook scripts
-  for hook_file in "${repo_dir}"/.claude/hooks/*.sh; do
-    [ -f "$hook_file" ] && cp "$hook_file" "${project_dir}/.claude/hooks/$(basename "$hook_file")"
-  done
-  cp "${repo_dir}/.claude/settings.local.json" "${project_dir}/.claude/settings.local.json"
+  install_doey_hooks "$project_dir" "  "
 
   git add -A
   git commit -q -m "Initial sandbox commit"

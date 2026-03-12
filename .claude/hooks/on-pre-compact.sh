@@ -67,4 +67,19 @@ ${RECENT_FILES:-None detected}
 **Important:** You are a Doey worker. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
+# Append watchdog pane states if this is the watchdog
+if is_watchdog; then
+  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states.json" 2>/dev/null || echo "{}")
+  if [ "$WATCHDOG_STATE" != "{}" ]; then
+    cat <<WDSTATE
+
+## WATCHDOG STATE (restore after compaction)
+You are the Watchdog. The following pane states were being tracked before compaction. Restore this into your monitoring state:
+\`\`\`json
+${WATCHDOG_STATE}
+\`\`\`
+WDSTATE
+  fi
+fi
+
 exit 0
