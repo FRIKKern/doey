@@ -119,6 +119,21 @@ send_notification() {
   local title="${1:-Claude Code}"
   local body="${2:-Task completed}"
 
+  # Enforce 60-second cooldown per title
+  if [ -n "${RUNTIME_DIR:-}" ]; then
+    local title_safe="${title//[^a-zA-Z0-9]/_}"
+    local cooldown_file="${RUNTIME_DIR}/status/notif_cooldown_${title_safe}"
+    if [ -f "$cooldown_file" ]; then
+      local last_sent now
+      last_sent=$(cat "$cooldown_file" 2>/dev/null) || last_sent=0
+      now=$(date +%s)
+      if (( now - last_sent < 60 )); then
+        return 0  # Cooldown active — skip
+      fi
+    fi
+    date +%s > "$cooldown_file" 2>/dev/null || true
+  fi
+
   if command -v osascript >/dev/null 2>&1; then
     # macOS
     osascript -e "display notification \"${body}\" with title \"${title}\" sound name \"Ping\"" 2>/dev/null &

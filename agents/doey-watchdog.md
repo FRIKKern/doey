@@ -109,6 +109,7 @@ osascript -e 'display notification "Task complete — waiting for next instructi
 - **Never re-notify** for the same state
 - **Max 1 notification per worker per 60 seconds** (hard cap)
 - Track `previous_state` per pane
+- **Persist state to disk**: After each scan, write current pane states to `$RUNTIME_DIR/status/watchdog_pane_states.json` (JSON object mapping pane index to state string, e.g., `{"1": "idle", "2": "working", "3": "idle"}`). At the START of each scan loop iteration, read this file to restore `previous_state` if your in-memory tracking is empty (e.g., after context compaction). This ensures state survives compaction.
 
 ## Safety Rules
 
@@ -172,7 +173,7 @@ Run BEFORE prompt detection — copy-mode shows stale output.
 
 ### 2. Stuck worker detection
 
-Track last 5 lines per pane across scans. If same output for **3+ consecutive scans** and pane is WORKING (not idle at `❯`): write alert to `$RUNTIME_DIR/status/alerts/pane_${PANE_INDEX}.alert` (JSON with pane, type, detected_at, message), notify once per episode. Clear alert when output changes. Skip reserved panes.
+Track last 5 lines per pane across scans. If same output for **3+ consecutive scans** and pane is WORKING (not idle at `❯`): ensure `mkdir -p "$RUNTIME_DIR/status/alerts"` before writing, then write alert to `$RUNTIME_DIR/status/alerts/pane_${PANE_INDEX}.alert` (JSON with pane, type, detected_at, message), notify once per episode. Clear alert when output changes. Skip reserved panes.
 
 ### 3. Crashed pane detection
 
