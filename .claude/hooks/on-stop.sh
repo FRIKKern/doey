@@ -6,11 +6,9 @@ init_hook
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
-# --- Watchdog keep-alive ---
-if is_watchdog; then
-  echo "Continue monitoring." >&2
-  exit 2
-fi
+# --- Watchdog: no keep-alive ---
+# The watchdog is allowed to stop between scan cycles.
+# /loop (configured in doey.sh) periodically wakes it to resume scanning.
 
 # --- Determine status ---
 if is_reserved; then

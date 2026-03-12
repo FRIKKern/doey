@@ -597,7 +597,7 @@ WORKER_CONTEXT
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
     tmux send-keys -t "$session:0.$watchdog_pane" \
-      '/loop 5m /compact "Continue monitoring. Read watchdog_pane_states.json from RUNTIME_DIR/status/ to restore pane state."' Enter
+      '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
   step_done
@@ -1144,7 +1144,7 @@ WORKER_CONTEXT
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
     tmux send-keys -t "$session:0.$watchdog_pane" \
-      '/loop 5m /compact "Continue monitoring. Read watchdog_pane_states.json from RUNTIME_DIR/status/ to restore pane state."' Enter
+      '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
   # ── Boot workers ──

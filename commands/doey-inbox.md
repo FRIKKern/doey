@@ -12,7 +12,7 @@ Check your inbox for messages from other Claude Code instances.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
+MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 MY_PANE_SAFE=${MY_PANE//[:.]/_}
 
 mkdir -p "${RUNTIME_DIR}/messages/delivered"

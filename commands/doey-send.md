@@ -15,7 +15,7 @@ You are sending a message to another Claude Code instance in a TMUX pane.
    RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
-   MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
+   MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
    ```
 
 2. Ask which pane and what message (if not specified).
