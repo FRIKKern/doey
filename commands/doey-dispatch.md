@@ -55,27 +55,36 @@ PANE="${SESSION_NAME}:0.X"
 # 1. Exit copy-mode
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 
-# 2. Kill current Claude process by PID
+# 1b. Readiness check — skip restart if worker is already idle
 PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
 CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
-[ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
-sleep 3
+OUTPUT=$(tmux capture-pane -t "$PANE" -p 2>/dev/null)
+ALREADY_READY=false
+if [ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯'; then
+  ALREADY_READY=true
+fi
 
-# 3. Verify it died — SIGKILL if not
-CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
-[ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
+if [ "$ALREADY_READY" = "false" ]; then
+  # 2. Kill current Claude process by PID
+  [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
+  sleep 3
 
-# 4. Exit copy-mode (killing can trigger scroll)
-tmux copy-mode -q -t "$PANE" 2>/dev/null
+  # 3. Verify it died — SIGKILL if not
+  CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
 
-# 5. Start fresh Claude
-tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus" Enter
+  # 4. Exit copy-mode (killing can trigger scroll)
+  tmux copy-mode -q -t "$PANE" 2>/dev/null
 
-# 6. Wait for boot
-sleep 8
+  # 5. Start fresh Claude
+  tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus" Enter
 
-# 7. Exit copy-mode
-tmux copy-mode -q -t "$PANE" 2>/dev/null
+  # 6. Wait for boot
+  sleep 8
+
+  # 7. Exit copy-mode
+  tmux copy-mode -q -t "$PANE" 2>/dev/null
+fi
 
 # 8. Rename pane
 tmux send-keys -t "$PANE" "/rename short-task-name" Enter

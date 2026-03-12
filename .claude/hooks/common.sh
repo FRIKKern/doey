@@ -26,8 +26,8 @@ init_hook() {
   NOW=$(date -Iseconds)
 
   # Ensure runtime dirs exist (fast-path: skip if all present)
-  if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ]; then
-    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results"
+  if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/inbox" ]; then
+    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/inbox"
   fi
 }
 
@@ -43,7 +43,7 @@ parse_field() {
 is_watchdog() {
   [ -f "${RUNTIME_DIR}/session.env" ] || return 1
   local wd_pane
-  wd_pane=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
+  wd_pane=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
   [ "$PANE_INDEX" = "$wd_pane" ]
 }
 
