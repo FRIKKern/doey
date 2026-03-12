@@ -18,7 +18,7 @@ Ask the user for the broadcast message if not already provided as an argument. S
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-TIMESTAMP=$(date +%s%N)
+TIMESTAMP=$(gdate +%s%N 2>/dev/null || date +%s%N 2>/dev/null || echo "$(date +%s)$$")
 
 mkdir -p "${RUNTIME_DIR}/broadcasts" "${RUNTIME_DIR}/messages"
 

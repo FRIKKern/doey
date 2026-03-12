@@ -575,7 +575,7 @@ WORKER_CONTEXT
       worker_panes+="0.$i"
     done
     tmux send-keys -t "$session:0.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane 0.$watchdog_pane is the Watchdog (auto-accepts prompts). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane 0.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
   # Launch Watchdog (pane 0.$watchdog_pane)
@@ -1124,7 +1124,7 @@ WORKER_CONTEXT
       worker_panes+="0.$i"
     done
     tmux send-keys -t "$session:0.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane 0.$watchdog_pane is the Watchdog (auto-accepts prompts). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane 0.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
   tmux send-keys -t "$session:0.$watchdog_pane" \

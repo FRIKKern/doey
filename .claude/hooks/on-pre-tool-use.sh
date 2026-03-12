@@ -47,7 +47,7 @@ fi
 
 # Watchdog — allow everything EXCEPT sending keystrokes to worker panes.
 # Workers run --dangerously-skip-permissions and never show interactive prompts,
-# so auto-accept "y" is never needed and causes y-spam when Haiku hallucinates prompts.
+# so there are no prompts to accept, and sending "y" causes y-spam when Haiku hallucinates prompts.
 if is_watchdog; then
   case "$TOOL_COMMAND" in
     *"send-keys"*|*"send-key"*|*"paste-buffer"*)
@@ -56,7 +56,7 @@ if is_watchdog; then
         exit 0
       fi
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
-      echo "Workers use --dangerously-skip-permissions and never need auto-accept." >&2
+      echo "Workers use --dangerously-skip-permissions and have no interactive prompts." >&2
       echo "Report stuck workers to the Manager instead." >&2
       exit 2
       ;;

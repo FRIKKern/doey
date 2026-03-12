@@ -1,6 +1,6 @@
 ---
 name: doey-watchdog
-description: "Continuously monitors all tmux panes in the current Doey session every 5 seconds, auto-accepting routine prompts/confirmations and sending macOS notifications when workers need human attention. Launch proactively when long-running processes may produce interactive prompts."
+description: "Continuously monitors all tmux panes in the current Doey session, sending macOS notifications on state changes and delivering inbox messages to idle workers."
 model: haiku
 color: yellow
 memory: user

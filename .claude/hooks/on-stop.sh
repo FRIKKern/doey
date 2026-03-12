@@ -32,7 +32,7 @@ if is_worker; then
   OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -80 2>/dev/null) || OUTPUT=""
 
   # Filter UI noise from captured output
-  FILTERED_OUTPUT=$(echo "$OUTPUT" | grep -vE '❯|───|Ctx █|bypass permissions|shift\+tab|MCP server|/doctor' | sed -e :a -e '/^[[:space:]]*$/{ $d; N; ba; }') || FILTERED_OUTPUT=""
+  FILTERED_OUTPUT=$(echo "$OUTPUT" | grep -vE '❯|───|Ctx █|bypass permissions|shift\+tab|MCP server|/doctor') || FILTERED_OUTPUT=""
 
   if echo "$FILTERED_OUTPUT" | grep -qiE '(error|failed|exception)'; then
     RESULT_STATUS="error"
@@ -49,7 +49,8 @@ if is_worker; then
 
   TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='"worker-'"$PANE_INDEX"'"'
 
-  cat > "$RUNTIME_DIR/results/pane_${PANE_INDEX}.json" <<EOF
+  TMPFILE_RESULT=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX")
+  cat > "$TMPFILE_RESULT" <<EOF
 {
   "pane": "0.$PANE_INDEX",
   "title": $TITLE_JSON,
@@ -58,14 +59,18 @@ if is_worker; then
   "last_output": $LAST_OUTPUT
 }
 EOF
+  mv "$TMPFILE_RESULT" "$RUNTIME_DIR/results/pane_${PANE_INDEX}.json"
 
   # Write human-readable inbox message for the manager
   mkdir -p "$RUNTIME_DIR/inbox"
-  cat > "$RUNTIME_DIR/inbox/$(date +%s)_pane${PANE_INDEX}_${PANE_TITLE}.md" <<INBOX
+  INBOX_FILE="$RUNTIME_DIR/inbox/$(date +%s)_pane${PANE_INDEX}_${PANE_TITLE}.md"
+  TMPFILE_INBOX=$(mktemp "${RUNTIME_DIR}/inbox/.tmp_XXXXXX")
+  cat > "$TMPFILE_INBOX" <<INBOX
 # Worker 0.${PANE_INDEX} — ${PANE_TITLE} — ${RESULT_STATUS}
 
 ${FILTERED_OUTPUT}
 INBOX
+  mv "$TMPFILE_INBOX" "$INBOX_FILE"
 fi
 
 # --- macOS notification for Manager ---

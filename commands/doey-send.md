@@ -22,7 +22,7 @@ You are sending a message to another Claude Code instance in a TMUX pane.
 
 3. **Write message and notify:**
    ```bash
-   TIMESTAMP=$(date +%s%N)
+   TIMESTAMP=$(gdate +%s%N 2>/dev/null || date +%s%N 2>/dev/null || echo "$(date +%s)$$")
    cat > "${RUNTIME_DIR}/messages/${TARGET_PANE//[:.]/_}_${TIMESTAMP}.msg" <<EOF
    FROM: $MY_PANE
    TO: $TARGET_PANE
@@ -30,5 +30,6 @@ You are sending a message to another Claude Code instance in a TMUX pane.
    ---
    $MESSAGE
    EOF
+   tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
    tmux send-keys -t "$TARGET_PANE" "/doey-inbox" Enter
    ```

@@ -52,7 +52,7 @@ Load Order (bottom = first, top = last / highest precedence)
 | `color` | `green` | `yellow` | Status line color |
 | `memory` | `user` | `user` | Stores to `~/.claude/agent-memory/<name>/` |
 
-Body text below frontmatter becomes the system prompt. Manager: ~253 lines (identity, workflow, delegation rules). Watchdog: ~175 lines (monitoring loop, prompt detection, auto-accept rules).
+Body text below frontmatter becomes the system prompt. Manager: ~253 lines (identity, workflow, delegation rules). Watchdog: ~175 lines (monitoring loop, prompt detection, monitoring rules).
 
 Precedence: CLI `--model` > frontmatter `model` > settings `model`.
 

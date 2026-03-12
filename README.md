@@ -131,7 +131,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 </tr>
 <tr>
 <td align="center"><strong>5</strong></td>
-<td>The Watchdog monitors workers and auto-accepts permission prompts to keep them unblocked</td>
+<td>The Watchdog monitors workers, delivers messages, and sends notifications on state changes</td>
 </tr>
 <tr>
 <td align="center"><strong>6</strong></td>
@@ -145,7 +145,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 
 - **Parallel execution** — 10 workers running simultaneously, not sequentially
 - **Smart orchestration** — Manager plans, delegates, and monitors without writing code itself
-- **Auto-unblocking** — Watchdog handles `y/n` prompts, permission dialogs, and confirmations
+- **Always-on monitoring** — Watchdog tracks worker state, delivers messages, and sends desktop notifications
 - **Premium startup experience** — ASCII banner, step-by-step progress indicators, and a summary dashboard
 - **Session manifest** — Project context written to `/tmp/doey/<project>/session.env` so all tools and agents share config
 - **Project-aware** — Register projects, auto-attach to running sessions, interactive picker
@@ -163,7 +163,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 | Role | Pane | Description |
 |------|------|-------------|
 | **Manager** | `0.0` | Plans tasks, delegates to workers, monitors progress. Never writes code. |
-| **Watchdog** | `0.{cols}` | Monitors all worker panes. Auto-accepts prompts and confirmations. |
+| **Watchdog** | `0.{cols}` | Monitors all worker panes. Delivers messages and sends notifications. |
 | **Workers** | All others | Standard Claude Code instances that do the actual implementation work. Status: READY, BUSY, FINISHED, or RESERVED. |
 
 ### Communication

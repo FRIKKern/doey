@@ -18,7 +18,7 @@ Requirements:
 4. Navigation bar on all pages linking to each page
 5. Content should cover:
    - Hero section: what Doey is and why it matters
-   - Features: Manager orchestration, parallel workers, Watchdog auto-accept, slash commands
+   - Features: Manager orchestration, parallel workers, Watchdog monitoring, slash commands
    - How it works: tmux grid layout, task dispatch, status monitoring, worker lifecycle
    - Get Started: installation steps (git clone, ./install.sh, cd project, doey)
 6. Responsive design (mobile-friendly)
