@@ -6,20 +6,20 @@ Broadcast a message to ALL other Claude instances in TMUX.
 `/doey-broadcast`
 
 ## Prompt
-You are broadcasting a message to all other Claude Code instances in your TMUX session.
+You are broadcasting a message to all other Claude Code instances.
 
 ### Steps
 
-1. Discover runtime directory and identify yourself:
+1. **Discover runtime and identity:**
    ```bash
    RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    ```
 
-2. Ask the user for the broadcast message (if not already provided).
+2. Ask the user for the broadcast message (if not provided).
 
-3. Write a broadcast file:
+3. **Write broadcast and notify all other panes:**
    ```bash
    TIMESTAMP=$(date +%s%N)
    cat > "${RUNTIME_DIR}/broadcasts/${TIMESTAMP}.broadcast" <<EOF
@@ -28,18 +28,11 @@ You are broadcasting a message to all other Claude Code instances in your TMUX s
    ---
    $MESSAGE
    EOF
-   ```
-
-4. Send the `/doey-inbox` trigger to every OTHER pane in the session:
-   ```bash
    for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
-     if [ "$pane" != "$MY_PANE" ]; then
-       # Also write a per-pane message so they see it in inbox
+     [ "$pane" != "$MY_PANE" ] && {
        PANE_SAFE=${pane//[:.]/_}
        cp "${RUNTIME_DIR}/broadcasts/${TIMESTAMP}.broadcast" "${RUNTIME_DIR}/messages/${PANE_SAFE}_${TIMESTAMP}.msg"
        tmux send-keys -t "$pane" "/doey-inbox" Enter
-     fi
+     }
    done
    ```
-
-This notifies all other panes to check their inbox.

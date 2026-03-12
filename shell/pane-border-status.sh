@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Fast pane border label: shows pane title + 🔒 if reserved
+# Called by tmux pane-border-format via #()
+
+PANE_ID="${1:-}"
+[ -z "$PANE_ID" ] && exit 0
+
+TITLE=$(tmux display-message -t "$PANE_ID" -p '#{pane_title}' 2>/dev/null) || TITLE=""
+
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+if [ -n "$RUNTIME_DIR" ]; then
+  PANE_SAFE=$(echo "$PANE_ID" | tr ':.' '_')
+  RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+  if [ -f "$RESERVE_FILE" ]; then
+    read -r VAL < "$RESERVE_FILE" 2>/dev/null || VAL=""
+    if [ "$VAL" = "permanent" ]; then
+      echo "${TITLE} 🔒"
+      exit 0
+    elif [ -n "$VAL" ]; then
+      NOW=$(date +%s)
+      if [ "$VAL" -gt "$NOW" ] 2>/dev/null; then
+        echo "${TITLE} 🔒"
+        exit 0
+      fi
+    fi
+  fi
+fi
+
+echo "$TITLE"
