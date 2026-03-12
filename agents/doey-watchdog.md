@@ -25,7 +25,11 @@ When unsure about any pane: **do nothing**.
 
 ## Monitoring Loop
 
-Run `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh"` every 5 seconds.
+Run the following every 5 seconds (resolves project dir from tmux env, works in cron):
+
+```bash
+PROJECT_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2- | xargs -I{} grep '^PROJECT_DIR=' {}/session.env | cut -d= -f2 | tr -d '"') && bash "$PROJECT_DIR/.claude/hooks/watchdog-scan.sh"
+```
 
 The script returns a structured report per pane. Act ONLY on these statuses:
 
