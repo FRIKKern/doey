@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# Claude Code hook: Stop — marks pane as IDLE, enforces research reports,
-# keeps Watchdog alive, captures worker results, notifies Manager.
+# Claude Code hook: Stop — state machine (BUSY→FINISHED→READY idle loop),
+# research enforcement, Watchdog keep-alive, result capture, notifications.
+#
+# Worker lifecycle:
+#   Task dispatched → BUSY (prompt-submit)
+#   Task done       → BUSY (pre-simplify, sends /simplify)
+#   /simplify done  → FINISHED (captures results, enters idle loop)
+#   Idle heartbeat  → READY (5s sleep loop, fresh timestamps)
+#   New task        → BUSY (prompt-submit, after Manager kills+restarts)
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
@@ -10,12 +17,35 @@ STOP_HOOK_ACTIVE=$(parse_field "stop_hook_active")
 [ -z "$STOP_HOOK_ACTIVE" ] && STOP_HOOK_ACTIVE="false"
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+SIMPLIFY_FLAG="${RUNTIME_DIR}/status/simplify_done_${PANE_INDEX}.flag"
 
-# Determine status — RESERVED if pane has active reservation, else IDLE
+# --- Determine stop status ---
+# Read current status to distinguish idle loop (FINISHED/READY) from pre-simplify (BUSY)
+CURRENT_STATUS=""
+if [ -f "$STATUS_FILE" ]; then
+  while IFS= read -r line; do
+    if [[ "$line" == STATUS:* ]]; then
+      CURRENT_STATUS="${line#STATUS: }"
+      break
+    fi
+  done < "$STATUS_FILE"
+fi
+
 if is_reserved; then
   STOP_STATUS="RESERVED"
+elif is_worker; then
+  if [ -f "$SIMPLIFY_FLAG" ]; then
+    # Post-simplify: task fully complete → FINISHED
+    STOP_STATUS="FINISHED"
+  elif [ "$CURRENT_STATUS" = "FINISHED" ] || [ "$CURRENT_STATUS" = "READY" ]; then
+    # Idle loop: already done, refresh timestamp → READY
+    STOP_STATUS="READY"
+  else
+    # Pre-simplify: real task just completed → stay BUSY
+    STOP_STATUS="BUSY"
+  fi
 else
-  STOP_STATUS="IDLE"
+  STOP_STATUS="READY"
 fi
 
 cat > "$STATUS_FILE" <<EOF
@@ -26,7 +56,6 @@ TASK:
 EOF
 
 # --- Research report enforcement ---
-# If this pane has a pending research task but no report, block the stop.
 TASK_FILE="${RUNTIME_DIR}/research/${PANE_SAFE}.task"
 REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 if [ -f "$TASK_FILE" ] && [ ! -f "$REPORT_FILE" ]; then
@@ -56,15 +85,12 @@ if [ -f "$TASK_FILE" ] && [ ! -f "$REPORT_FILE" ]; then
   echo "Use the Write tool to create the file at the path above, then you may stop." >&2
   exit 2
 fi
-# If task AND report both exist, clean up the task marker (research complete)
 if [ -f "$TASK_FILE" ] && [ -f "$REPORT_FILE" ]; then
   rm -f "$TASK_FILE"
 fi
 
 # --- Watchdog keep-alive ---
-# If this is the Watchdog pane, block the stop so it keeps monitoring.
 if is_watchdog; then
-  # If stop_hook_active is true, this is already a retry — allow some breathing room
   if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
     sleep 2
   fi
@@ -72,34 +98,25 @@ if is_watchdog; then
   exit 2
 fi
 
-# --- Result capture for worker panes ---
-# Capture structured result data so the Manager can read JSON instead of scraping pane output.
-if is_worker; then
+# --- Result capture (only on real task completion, not idle heartbeats) ---
+if is_worker && [ "$STOP_STATUS" = "BUSY" ]; then
   PANE_SAFE_RESULT="pane_${PANE_INDEX}"
-
-  # Capture last 20 lines of pane output
   OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -20 2>/dev/null) || OUTPUT=""
 
-  # Determine status based on output
   if echo "$OUTPUT" | grep -qiE '(error|failed|✗|exception)'; then
     RESULT_STATUS="error"
   else
     RESULT_STATUS="done"
   fi
 
-  # Extract pane title (task name) for context
   PANE_TITLE=$(tmux display-message -t "$SESSION_NAME:0.$PANE_INDEX" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE=""
-
-  # Escape pane title for safe JSON embedding
   PANE_TITLE_ESCAPED="${PANE_TITLE//\\/\\\\}"
   PANE_TITLE_ESCAPED="${PANE_TITLE_ESCAPED//\"/\\\"}"
 
-  # JSON-encode the last 5 lines of output safely (prefer jq over python3 for speed)
   LAST_OUTPUT=$(echo "$OUTPUT" | tail -5 | jq -Rs '.' 2>/dev/null) || \
     LAST_OUTPUT=$(echo "$OUTPUT" | tail -5 | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
     LAST_OUTPUT='""'
 
-  # Write result file
   cat > "$RUNTIME_DIR/results/${PANE_SAFE_RESULT}.json" <<EOF
 {
   "pane": "0.$PANE_INDEX",
@@ -111,29 +128,36 @@ if is_worker; then
 EOF
 fi
 
-# --- Auto-simplify for workers ---
-# After a real task completes, send /simplify to review changed code.
-# Uses a flag file to prevent infinite loops (simplify -> stop -> simplify -> ...).
+# --- Simplify + idle loop for workers ---
+# Three possible states:
+#   BUSY     → real task just finished: capture results above, send /simplify
+#   FINISHED → /simplify just finished: clean up flag, enter idle loop
+#   READY    → idle heartbeat: stay alive, sleep 5s
 if is_worker; then
-  SIMPLIFY_FLAG="${RUNTIME_DIR}/status/simplify_done_${PANE_INDEX}.flag"
-  if [ -f "$SIMPLIFY_FLAG" ]; then
-    # Worker just finished /simplify — remove flag, don't loop
-    rm -f "$SIMPLIFY_FLAG"
-  else
-    # Real task completion — set flag and send /simplify
+  if [ "$STOP_STATUS" = "BUSY" ]; then
+    # Pre-simplify: set flag and send /simplify
     touch "$SIMPLIFY_FLAG"
     tmux copy-mode -q -t "$PANE" 2>/dev/null || true
     sleep 1
     tmux send-keys -t "$PANE" "/simplify" Enter 2>/dev/null || true
+    # Allow this stop — /simplify arrives as new input
+    :
+  elif [ "$STOP_STATUS" = "FINISHED" ]; then
+    # Post-simplify: clean up flag, block stop to enter idle loop
+    rm -f "$SIMPLIFY_FLAG"
+    echo "Task complete. Run: sleep 5" >&2
+    exit 2
+  elif [ "$STOP_STATUS" = "READY" ]; then
+    # Idle heartbeat: keep alive, status timestamp already refreshed above
+    echo "Waiting for tasks. Run: sleep 5" >&2
+    exit 2
   fi
 fi
 
 # --- macOS notification — ONLY for the Manager pane (0.0) ---
-# Workers and Watchdog do not notify — only the Manager talks to the user
 if is_manager && [ "$STOP_HOOK_ACTIVE" != "true" ] && [ -n "$LAST_MSG" ]; then
-  # Filter out UI artifact messages (status bar, permission prompts, etc.)
   if echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯"; then
-    : # Skip — this is UI chrome, not a real message
+    : # Skip UI chrome
   else
     NOTIFY_BODY="${LAST_MSG:0:150}"
     NOTIFY_BODY="${NOTIFY_BODY//\"/\'}"

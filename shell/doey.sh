@@ -40,6 +40,19 @@ touch "$PROJECTS_FILE"
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
+# Write a status file for a pane (used during boot to set initial READY state)
+# Usage: write_pane_status <runtime_dir> <session:window.pane> <status> [task]
+write_pane_status() {
+  local rt_dir="$1" pane_id="$2" status="$3" task="${4:-}"
+  local safe="${pane_id//[:.]/_}"
+  cat > "${rt_dir}/status/${safe}.status" <<EOF
+PANE: ${pane_id}
+UPDATED: $(date -Iseconds)
+STATUS: ${status}
+TASK: ${task}
+EOF
+}
+
 # Derive a sanitized project name from a directory path
 project_name_from_dir() {
   basename "$1" | tr '[:upper:] .' '[:lower:]--' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//'
@@ -517,6 +530,8 @@ WORKER_CONTEXT
     "claude --dangerously-skip-permissions --agent doey-manager" Enter
   sleep 0.5
 
+  write_pane_status "$runtime_dir" "${session}:0.0" "READY"
+
   # Send initial briefing once Manager is ready
   (
     sleep 8
@@ -546,6 +561,10 @@ WORKER_CONTEXT
     done
     tmux send-keys -t "$session:0.$watchdog_pane" \
       "Start monitoring session $session. Total panes: $total. Skip pane 0.0 (Manager) and 0.$watchdog_pane (yourself). Monitor panes ${watch_panes}." Enter
+    # Schedule periodic compact to keep Watchdog context lean
+    sleep 20
+    tmux send-keys -t "$session:0.$watchdog_pane" \
+      '/loop 3m /compact "Continue work as watchdog"' Enter
   ) &
 
   step_done
@@ -577,6 +596,8 @@ WORKER_CONTEXT
     worker_cmd+=" --append-system-prompt-file ${worker_prompt_file}"
     tmux send-keys -t "$session:0.$i" "$worker_cmd" Enter
     sleep 0.3
+
+    write_pane_status "$runtime_dir" "${session}:0.${i}" "READY"
   done
   printf "${SUCCESS}done${RESET}\n"
 
@@ -1049,6 +1070,8 @@ WORKER_CONTEXT
     "claude --dangerously-skip-permissions --agent doey-manager" Enter
   sleep 0.5
 
+  write_pane_status "$runtime_dir" "${session}:0.0" "READY"
+
   (
     sleep 8
     worker_panes=""
@@ -1075,6 +1098,10 @@ WORKER_CONTEXT
     done
     tmux send-keys -t "$session:0.$watchdog_pane" \
       "Start monitoring session $session. Total panes: $total. Skip pane 0.0 (Manager) and 0.$watchdog_pane (yourself). Monitor panes ${watch_panes}." Enter
+    # Schedule periodic compact to keep Watchdog context lean
+    sleep 20
+    tmux send-keys -t "$session:0.$watchdog_pane" \
+      '/loop 3m /compact "Continue work as watchdog"' Enter
   ) &
 
   # ── Boot workers ──
@@ -1092,6 +1119,8 @@ WORKER_CONTEXT
     worker_cmd+=" --append-system-prompt-file ${worker_prompt_file}"
     tmux send-keys -t "$session:0.$i" "$worker_cmd" Enter
     sleep 0.3
+
+    write_pane_status "$runtime_dir" "${session}:0.${i}" "READY"
   done
 
   printf "  ${SUCCESS}Team launched${RESET} — session ${BOLD}${session}${RESET} with ${worker_count} workers\n"

@@ -25,8 +25,10 @@ init_hook() {
   PANE_INDEX="${PANE##*.}"
   NOW=$(date -Iseconds)
 
-  # Ensure runtime dirs exist (skip if already created)
-  [ -d "${RUNTIME_DIR}/status" ] || mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results"
+  # Ensure runtime dirs exist (fast-path: skip if all present)
+  if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ]; then
+    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results"
+  fi
 }
 
 parse_field() {
@@ -100,6 +102,16 @@ get_reservation_info() {
   remaining=$(( expiry - now ))
   [ "$remaining" -le 0 ] && { rm -f "$reserve_file"; echo "none"; return; }
   echo "$remaining"
+}
+
+# Check if this prompt was dispatched by Manager/Watchdog (not human)
+is_dispatched() {
+  local marker="${RUNTIME_DIR}/status/${PANE_SAFE}.dispatched"
+  if [ -f "$marker" ]; then
+    rm -f "$marker"  # consume the marker
+    return 0
+  fi
+  return 1
 }
 
 # Cross-platform desktop notification

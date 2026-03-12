@@ -43,8 +43,8 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 - `shell/doey.sh` -- Launcher: init/start/stop/restart/status/doctor/update
 - `.claude/hooks/common.sh` -- Shared utilities: pane identity, runtime dir
-- `.claude/hooks/on-prompt-submit.sh` -- Sets WORKING status, auto-reserves (60s)
-- `.claude/hooks/on-stop.sh` -- Sets IDLE/RESERVED, research enforcement, watchdog keep-alive
+- `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status, auto-reserves (5m)
+- `.claude/hooks/on-stop.sh` -- Sets FINISHED/RESERVED, research enforcement, watchdog keep-alive
 - `.claude/hooks/on-pre-tool-use.sh` -- Tool usage safety guards
 - `.claude/hooks/on-pre-compact.sh` -- Context preservation before compaction
 - `commands/doey-reserve.md` -- Pane reservation command

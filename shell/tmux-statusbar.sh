@@ -37,17 +37,20 @@ fi
 shopt -s nullglob
 status_files=("$RUNTIME_DIR/status/"*.status)
 if [ ${#status_files[@]} -eq 0 ]; then
-  read -r WORKING IDLE RESERVED <<< "0 0 0"
+  read -r BUSY READY FINISHED RESERVED <<< "0 0 0 0"
 else
-  read -r WORKING IDLE RESERVED <<< "$(awk '/STATUS: WORKING/{w++} /STATUS: IDLE/{i++} /STATUS: RESERVED/{r++} END{print w+0, i+0, r+0}' "${status_files[@]}")"
+  read -r BUSY READY FINISHED RESERVED <<< "$(awk '/STATUS: BUSY/{b++} /STATUS: READY/{r++} /STATUS: FINISHED/{f++} /STATUS: RESERVED/{v++} END{print b+0, r+0, f+0, v+0}' "${status_files[@]}")"
 fi
 
+WORKERS=""
+if [ "$BUSY" -gt 0 ]; then
+  WORKERS="#[fg=cyan]${BUSY}B#[fg=default]"
+fi
+if [ -n "$WORKERS" ]; then WORKERS+="/"; fi
+WORKERS+="${READY}R"
+[ "$FINISHED" -gt 0 ] && { [ -n "$WORKERS" ] && WORKERS+="/"; WORKERS+="${FINISHED}F"; }
 if [ "$RESERVED" -gt 0 ]; then
-  WORKERS="${WORKING}W/${IDLE}I/#[fg=red]${RESERVED}R#[fg=default]"
-elif [ "$WORKING" -gt 0 ]; then
-  WORKERS="#[fg=cyan]${WORKING}W#[fg=default]/${IDLE}I"
-else
-  WORKERS="${IDLE}I"
+  WORKERS+="/#[fg=red]${RESERVED}Rsv#[fg=default]"
 fi
 
 # --- Output ---

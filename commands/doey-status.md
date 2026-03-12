@@ -21,7 +21,7 @@ You are managing status updates across Claude Code instances in TMUX.
 2. Ask the user: **set** your status or **view** all statuses?
 
 ### Setting status
-Valid values: IDLE, WORKING, RESERVED.
+Valid values: READY, BUSY, FINISHED, RESERVED.
 ```bash
 cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" <<EOF
 PANE: $MY_PANE

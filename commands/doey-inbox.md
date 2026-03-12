@@ -8,18 +8,30 @@ Check and read messages from other Claude instances.
 ## Prompt
 Check your inbox for messages from other Claude Code instances.
 
-### Steps
+### Read and archive all messages
 
-1. **Discover runtime and identity:**
-   ```bash
-   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-   MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
-   MY_PANE_SAFE=${MY_PANE//[:.]/_}
-   ```
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
+MY_PANE_SAFE=${MY_PANE//[:.]/_}
 
-2. **Read messages:** `ls -t "${RUNTIME_DIR}/messages/${MY_PANE_SAFE}_"*.msg 2>/dev/null`
-   Display each message to user.
+mkdir -p "${RUNTIME_DIR}/messages/delivered"
 
-3. **Archive:** `mkdir -p "${RUNTIME_DIR}/messages/archive" && mv "${RUNTIME_DIR}/messages/${MY_PANE_SAFE}_"*.msg "${RUNTIME_DIR}/messages/archive/" 2>/dev/null`
+MSGS=$(ls -t "${RUNTIME_DIR}/messages/${MY_PANE_SAFE}_"*.msg 2>/dev/null)
 
-4. If no messages, report inbox empty. If message needs response, suggest `/doey-send`.
+if [ -z "$MSGS" ]; then
+  echo "Inbox empty — no unread messages."
+else
+  COUNT=0
+  for msg in $MSGS; do
+    COUNT=$((COUNT + 1))
+    echo "=== Message ${COUNT} ==="
+    cat "$msg"
+    echo "---"
+    mv "$msg" "${RUNTIME_DIR}/messages/delivered/"
+  done
+  echo "Read and archived ${COUNT} message(s)."
+fi
+```
+
+If messages were found, display them to the user. If any message requests a response, suggest using `/doey-send`.
