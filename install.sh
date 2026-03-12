@@ -182,16 +182,14 @@ fi
 
 # ── Step 5: Context audit ───────────────────────────────────────────
 printf "  ${BRAND}[5/5]${RESET} Running context audit..."
-if bash "$SCRIPT_DIR/shell/context-audit.sh" --repo --no-color > /tmp/doey-audit-$$.txt 2>&1; then
+AUDIT_OUTPUT=""
+if AUDIT_OUTPUT=$(bash "$SCRIPT_DIR/shell/context-audit.sh" --repo --no-color 2>&1); then
   step_ok
 else
   step_fail
-  printf "\n"
-  cat /tmp/doey-audit-$$.txt
-  printf "\n"
+  printf "\n%s\n\n" "$AUDIT_OUTPUT"
   warn_msg "Context audit found issues — review above before launching sessions"
 fi
-rm -f /tmp/doey-audit-$$.txt
 
 # ── Summary ───────────────────────────────────────────────────────────
 echo ""
