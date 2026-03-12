@@ -14,17 +14,8 @@ if [ -n "$RUNTIME_DIR" ]; then
   PANE_SAFE=$(echo "$PANE_ID" | tr ':.' '_')
   RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
   if [ -f "$RESERVE_FILE" ]; then
-    read -r VAL < "$RESERVE_FILE" 2>/dev/null || VAL=""
-    if [ "$VAL" = "permanent" ]; then
-      echo "${TITLE} 🔒"
-      exit 0
-    elif [ -n "$VAL" ]; then
-      NOW=$(date +%s)
-      if [ "$VAL" -gt "$NOW" ] 2>/dev/null; then
-        echo "${TITLE} 🔒"
-        exit 0
-      fi
-    fi
+    echo "${TITLE} 🔒"
+    exit 0
   fi
 fi
 

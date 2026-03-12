@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 # tmux-statusbar.sh — Dynamic status-right renderer for doey sessions.
-# Called by tmux every 5s via status-interval. Must stay lightweight (<50ms).
+# Called by tmux every 2s via status-interval. Must stay lightweight (<50ms).
 # Shows: reservation status for focused pane + worker summary counts.
 # NOTE: This script is read-only — it never mutates state. Hooks own cleanup.
 
@@ -16,21 +16,7 @@ RESERVE_FILE="${RUNTIME_DIR}/status/${FOCUSED_SAFE}.reserved"
 RESERVE_INFO=""
 
 if [ -f "$RESERVE_FILE" ]; then
-  read -r EXPIRY < "$RESERVE_FILE" 2>/dev/null || EXPIRY=""
-  if [ "$EXPIRY" = "permanent" ]; then
-    RESERVE_INFO="#[fg=red,bold] RESERVED#[fg=default,nobold]"
-  elif [[ "$EXPIRY" =~ ^[0-9]+$ ]]; then
-    NOW=$(date +%s)
-    REMAINING=$(( EXPIRY - NOW ))
-    if [ "$REMAINING" -gt 0 ]; then
-      if [ "$REMAINING" -le 10 ]; then
-        RESERVE_INFO="#[fg=yellow] RSV:${REMAINING}s#[fg=default]"
-      else
-        RESERVE_INFO="#[fg=red] RSV:${REMAINING}s#[fg=default]"
-      fi
-    fi
-    # Expired reservations are NOT cleaned up here — hooks own cleanup
-  fi
+  RESERVE_INFO="#[fg=red,bold] RESERVED#[fg=default,nobold]"
 fi
 
 # --- Worker counts (single awk pass, skip if no status files) ---

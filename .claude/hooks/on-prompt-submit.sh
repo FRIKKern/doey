@@ -27,19 +27,7 @@ EOF
     ;;
 esac
 
-# Auto-reserve pane for 5 minutes when human types
-# (Only for workers — Manager and Watchdog don't get reserved)
-# Don't downgrade a permanent or longer reservation to 5m
-if is_worker && ! is_reserved && ! is_dispatched; then
-  reserve_pane 300
-fi
-
-# Determine status
-if is_reserved; then
-  NEW_STATUS="RESERVED"
-else
-  NEW_STATUS="BUSY"
-fi
+NEW_STATUS="BUSY"
 
 cat > "$STATUS_FILE" <<EOF
 PANE: $PANE

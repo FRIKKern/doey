@@ -49,11 +49,8 @@ TARGET_PANE="${SESSION_NAME}:0.X"
 PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')
 RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
 if [ -f "$RESERVE_FILE" ]; then
-  EXPIRY=$(head -1 "$RESERVE_FILE")
-  if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
-    echo "RESERVED — pick another pane"
-    exit 1
-  fi
+  echo "RESERVED — pick another pane"
+  exit 1
 fi
 echo "Not reserved — OK"
 ```

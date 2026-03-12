@@ -45,11 +45,12 @@ if [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ]; then
       -print0 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null | \
       awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
   else
-    # Linux: use -mmin
+    # Linux: use stat -c to get modification times, sort by recency
     RECENT_FILES=$(find "$PROJECT_DIR" -maxdepth 4 \
       \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
       -not -path '*/node_modules/*' -not -path '*/.git/*' \
-      -mmin -10 2>/dev/null | head -10 || true)
+      -print0 2>/dev/null | xargs -0 stat -c '%Y %n' 2>/dev/null | \
+      awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
   fi
 fi
 

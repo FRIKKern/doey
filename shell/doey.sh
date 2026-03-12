@@ -456,7 +456,7 @@ WORKER_CONTEXT
   # Pane borders — heavy lines with role-aware titles
   tmux set-option -t "$session" pane-border-status top
   tmux set-option -t "$session" pane-border-format \
-    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#(${SCRIPT_DIR}/pane-border-status.sh #{session_name}:#{window_index}.#{pane_index}) #[default]"
+    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   tmux set-option -t "$session" pane-border-style 'fg=colour238'
   tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
   tmux set-option -t "$session" pane-border-lines heavy
@@ -469,8 +469,8 @@ WORKER_CONTEXT
   tmux set-option -t "$session" status-left \
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #(${SCRIPT_DIR}/tmux-statusbar.sh) "
-  tmux set-option -t "$session" status-interval 1
+    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
+  tmux set-option -t "$session" status-interval 2
 
   # Window status styling
   tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
@@ -593,7 +593,7 @@ WORKER_CONTEXT
     printf '\n\n## Identity\nYou are Worker %s in pane 0.%s of session %s.\n' "$booted" "$i" "$session" >> "$worker_prompt_file"
 
     local worker_cmd="claude --dangerously-skip-permissions --model opus"
-    worker_cmd+=" --append-system-prompt-file ${worker_prompt_file}"
+    worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "$session:0.$i" "$worker_cmd" Enter
     sleep 0.3
 
@@ -1023,7 +1023,7 @@ WORKER_CONTEXT
   printf "  ${DIM}Applying theme...${RESET}\n"
   tmux set-option -t "$session" pane-border-status top
   tmux set-option -t "$session" pane-border-format \
-    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#(${SCRIPT_DIR}/pane-border-status.sh #{session_name}:#{window_index}.#{pane_index}) #[default]"
+    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   tmux set-option -t "$session" pane-border-style 'fg=colour238'
   tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
   tmux set-option -t "$session" pane-border-lines heavy
@@ -1034,8 +1034,8 @@ WORKER_CONTEXT
   tmux set-option -t "$session" status-left \
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #(${SCRIPT_DIR}/tmux-statusbar.sh) "
-  tmux set-option -t "$session" status-interval 1
+    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
+  tmux set-option -t "$session" status-interval 2
   tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
   tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '
   tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
@@ -1123,7 +1123,7 @@ WORKER_CONTEXT
     printf '\n\n## Identity\nYou are Worker %s in pane 0.%s of session %s.\n' "$booted" "$i" "$session" >> "$worker_prompt_file"
 
     local worker_cmd="claude --dangerously-skip-permissions --model opus"
-    worker_cmd+=" --append-system-prompt-file ${worker_prompt_file}"
+    worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "$session:0.$i" "$worker_cmd" Enter
     sleep 0.3
 

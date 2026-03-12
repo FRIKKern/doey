@@ -35,8 +35,8 @@ EOF
 ```bash
 for f in "${RUNTIME_DIR}/status/"*.status; do echo "---"; cat "$f"; done
 for f in "${RUNTIME_DIR}/status/"*.reserved; do
-  [ -f "$f" ] || continue; EXPIRY=$(head -1 "$f")
-  { [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; } && echo "RESERVED: $(basename "$f" .reserved) ($EXPIRY)"
+  [ -f "$f" ] || continue
+  echo "RESERVED: $(basename "$f" .reserved)"
 done
 ```
 

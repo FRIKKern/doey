@@ -49,14 +49,8 @@ for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
   RESERVE_FILE="${STATUS_DIR}/${PANE_SAFE}.reserved"
   RESERVED="-"
   if [ -f "$RESERVE_FILE" ]; then
-    EXPIRY=$(head -1 "$RESERVE_FILE" 2>/dev/null || echo "")
-    if [ "$EXPIRY" = "permanent" ]; then
-      RESERVED="permanent"
-      STATUS="RESERVED"
-    elif [ -n "$EXPIRY" ] && [ "$NOW" -lt "$EXPIRY" ] 2>/dev/null; then
-      RESERVED="$((EXPIRY - NOW))s left"
-      STATUS="RESERVED"
-    fi
+    RESERVED="RESERVED"
+    STATUS="RESERVED"
   fi
 
   # Read task name from pane title
@@ -135,12 +129,7 @@ while true; do
     IS_RESERVED=false
     RESERVED="-"
     if [ -f "$RESERVE_FILE" ]; then
-      EXPIRY=$(head -1 "$RESERVE_FILE" 2>/dev/null || echo "")
-      if [ "$EXPIRY" = "permanent" ]; then
-        RESERVED="permanent"; IS_RESERVED=true; STATUS="RESERVED"
-      elif [ -n "$EXPIRY" ] && [ "$NOW" -lt "$EXPIRY" ] 2>/dev/null; then
-        RESERVED="$((EXPIRY - NOW))s left"; IS_RESERVED=true; STATUS="RESERVED"
-      fi
+      RESERVED="RESERVED"; IS_RESERVED=true; STATUS="RESERVED"
     fi
 
     # Task name

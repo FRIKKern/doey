@@ -44,7 +44,7 @@ Before dispatching, check reservations — reserved panes must NEVER receive tas
 RESERVE_FILE="${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"
 [ -f "$RESERVE_FILE" ] && echo "RESERVED — skip"
 ```
-Reservations are auto (5m on human keystroke), permanent (`/doey-reserve`), or timed. If ALL workers are reserved, tell the user and wait.
+Reservations are permanent only, created by `/doey-reserve`. If ALL workers are reserved, tell the user and wait.
 
 ### Send a task to a worker
 

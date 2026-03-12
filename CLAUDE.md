@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers (default 10) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans (auto-reserve on keystroke or permanent via `/doey-reserve`). CLI entry point: `doey`.
+Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers (default 10) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans via `/doey-reserve` (permanent until explicitly unreserved). CLI entry point: `doey`.
 
 ## Architecture
 
@@ -43,7 +43,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 - `shell/doey.sh` -- Launcher: init/start/stop/restart/status/doctor/update
 - `.claude/hooks/common.sh` -- Shared utilities: pane identity, runtime dir
-- `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status, auto-reserves (5m)
+- `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status
 - `.claude/hooks/on-stop.sh` -- Sets FINISHED/RESERVED, research enforcement, watchdog keep-alive
 - `.claude/hooks/on-pre-tool-use.sh` -- Tool usage safety guards
 - `.claude/hooks/on-pre-compact.sh` -- Context preservation before compaction

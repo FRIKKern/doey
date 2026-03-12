@@ -34,10 +34,7 @@ source "${RUNTIME_DIR}/session.env"
 PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
 RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
 if [ -f "$RESERVE_FILE" ]; then
-  EXPIRY=$(head -1 "$RESERVE_FILE")
-  if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
-    echo "Pane is reserved — skip this worker, pick another"
-  fi
+  echo "Pane is reserved — skip this worker, pick another"
 fi
 
 # Check idle (look for ❯ prompt; if you see thinking/working/tool output — busy)

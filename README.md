@@ -154,7 +154,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 - **Slash commands** — Built-in `/doey-dispatch`, `/doey-monitor`, `/doey-team` and more
 - **Zero config** — Install, init, launch. Works with any project.
 - **Restartable** — Restart workers without killing the Manager with `/doey-restart-workers`
-- **Human reservation** — Auto-reserves a pane for 60s when you type in it; use `/doey-reserve` for permanent or timed reservation
+- **Human reservation** — Use `/doey-reserve` to permanently reserve a pane for human use
 
 ---
 
@@ -175,7 +175,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 | Session manifest | `/tmp/doey/<project>/session.env` — shared config for all agents |
 | Inter-pane messages | `/tmp/doey/<project>/messages/` |
 | Broadcasts | `/tmp/doey/<project>/broadcasts/` |
-| Status tracking | `/tmp/doey/<project>/status/` — READY, BUSY, FINISHED, RESERVED (with RSV countdown) |
+| Status tracking | `/tmp/doey/<project>/status/` — READY, BUSY, FINISHED, RESERVED |
 
 ### Context Layer Model
 
@@ -247,7 +247,7 @@ Once installed, these commands are available in any Claude Code instance:
 | `/doey-stop-all` | Stop all workers gracefully |
 | `/doey-restart-workers` | Restart all workers (keeps Manager alive) |
 | `/doey-reinstall` | Reinstall from the repo without leaving Claude Code |
-| `/doey-reserve` | Reserve a worker pane for human use (permanent or timed) |
+| `/doey-reserve` | Reserve a worker pane for human use |
 | `/doey-watchdog-compact` | Load the compact Watchdog prompt |
 
 </details>

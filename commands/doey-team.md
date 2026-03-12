@@ -38,13 +38,7 @@ for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window
   RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
   RESERVED="-"
   if [ -f "$RESERVE_FILE" ]; then
-    EXPIRY=$(head -1 "$RESERVE_FILE")
-    if [ "$EXPIRY" = "permanent" ]; then
-      RESERVED="PERM"
-    elif [ "$NOW" -lt "$EXPIRY" ] 2>/dev/null; then
-      REMAINING=$(( (EXPIRY - NOW) / 60 ))
-      RESERVED="${REMAINING}m"
-    fi
+    RESERVED="RSV"
   fi
 
   # Unread messages

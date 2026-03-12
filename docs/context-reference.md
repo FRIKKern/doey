@@ -76,7 +76,7 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 | File | Purpose |
 |------|---------|
 | `common.sh` | Shared: pane identity, runtime dir, reservation helpers (`is_reserved()`, `reserve_pane()`, etc.) |
-| `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY, auto-reserves worker panes (60s) |
+| `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY |
 | `on-stop.sh` | Stop: sets FINISHED/RESERVED, blocks research workers without reports (exit 2), watchdog keep-alive, Manager notifications |
 | `on-pre-tool-use.sh` | PreToolUse: safety guards |
 | `on-pre-compact.sh` | PreCompact: context preservation |
@@ -188,7 +188,7 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
   worker-system-prompt-N.md          # Per-worker prompt (base + identity)
   status/
     <pane_safe>.status               # 4-line: PANE, UPDATED, STATUS, TASK
-    <pane_safe>.reserved             # "permanent" or unix timestamp
+    <pane_safe>.reserved             # contains "permanent"
   research/
     <pane_safe>.task                  # Research task marker
   reports/
@@ -199,7 +199,7 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
 
 **Status values:** READY, BUSY, FINISHED, RESERVED.
 
-**Reservation:** Created by auto-reserve (60s on human input) or `/doey-reserve`. Consumed by `is_reserved()`, statusbar, and Manager dispatch.
+**Reservation:** Created by `/doey-reserve` (permanent only). Consumed by `is_reserved()`, statusbar, and Manager dispatch.
 
 **Research lifecycle:** Manager dispatches → `.task` created → worker investigates → Stop hook blocks until `.report` written → Manager reads report.
 
