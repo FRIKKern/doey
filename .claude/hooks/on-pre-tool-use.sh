@@ -31,12 +31,12 @@ PANE_SAFE=${PANE//[:.]/_}
 SESSION_NAME="${PANE%%:*}"
 PANE_INDEX="${PANE##*.}"
 
-# Manager and Watchdog — allow everything
-if is_manager || is_watchdog; then
+# Manager — allow everything
+if is_manager; then
   exit 0
 fi
 
-# Extract command
+# Extract command (needed for both Watchdog filtering and Worker blocking)
 if command -v jq >/dev/null 2>&1; then
   TOOL_COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || TOOL_COMMAND=""
 else
@@ -45,7 +45,26 @@ fi
 
 [ -z "$TOOL_COMMAND" ] && exit 0
 
-# Check blocked patterns using case statement (no subshells per pattern)
+# Watchdog — allow everything EXCEPT sending keystrokes to worker panes.
+# Workers run --dangerously-skip-permissions and never show interactive prompts,
+# so auto-accept "y" is never needed and causes y-spam when Haiku hallucinates prompts.
+if is_watchdog; then
+  case "$TOOL_COMMAND" in
+    *"send-keys"*|*"send-key"*|*"paste-buffer"*)
+      # Allow safe commands: inbox delivery, login, copy-mode control
+      if echo "$TOOL_COMMAND" | grep -qE '(doey-inbox|/login|/compact|copy-mode)'; then
+        exit 0
+      fi
+      echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
+      echo "Workers use --dangerously-skip-permissions and never need auto-accept." >&2
+      echo "Report stuck workers to the Manager instead." >&2
+      exit 2
+      ;;
+  esac
+  exit 0
+fi
+
+# Check blocked patterns for Workers using case statement (no subshells per pattern)
 case "$TOOL_COMMAND" in
   *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
     MSG="git/gh commands" ;;
