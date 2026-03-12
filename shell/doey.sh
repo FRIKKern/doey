@@ -470,7 +470,7 @@ WORKER_CONTEXT
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
     "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #(${SCRIPT_DIR}/tmux-statusbar.sh) "
-  tmux set-option -t "$session" status-interval 5
+  tmux set-option -t "$session" status-interval 1
 
   # Window status styling
   tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
@@ -1028,7 +1028,7 @@ WORKER_CONTEXT
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
   tmux set-option -t "$session" status-right \
     "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #(${SCRIPT_DIR}/tmux-statusbar.sh) "
-  tmux set-option -t "$session" status-interval 5
+  tmux set-option -t "$session" status-interval 1
   tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
   tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '
   tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
