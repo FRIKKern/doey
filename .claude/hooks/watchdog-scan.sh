@@ -16,8 +16,9 @@ else
   hash_fn() { printf '%s' "$1" | md5sum | cut -d' ' -f1; }
 fi
 
-# --- Collect pane states for JSON output ---
-declare -A PANE_STATES
+# --- Collect pane states (bash 3 compatible, no associative arrays) ---
+# States stored as PANE_STATE_<index>=value
+
 
 # --- Scan each worker pane ---
 IFS=',' read -ra PANES <<< "$WORKER_PANES"
@@ -28,7 +29,7 @@ for i in "${PANES[@]}"; do
   # Check reservation
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
     echo "PANE ${i} RESERVED"
-    PANE_STATES[$i]="RESERVED"
+    eval "PANE_STATE_${i}=RESERVED"
     continue
   fi
 
@@ -42,7 +43,7 @@ for i in "${PANES[@]}"; do
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
   if [[ "$CURRENT_CMD" =~ ^(bash|zsh|sh|fish)$ ]]; then
     echo "PANE ${i} CRASHED"
-    PANE_STATES[$i]="CRASHED"
+    eval "PANE_STATE_${i}=CRASHED"
     continue
   fi
 
@@ -57,7 +58,7 @@ for i in "${PANES[@]}"; do
 
   if [ "$HASH" = "$OLD_HASH" ]; then
     echo "PANE ${i} UNCHANGED"
-    PANE_STATES[$i]="UNCHANGED"
+    eval "PANE_STATE_${i}=UNCHANGED"
     continue
   fi
 
@@ -67,14 +68,14 @@ for i in "${PANES[@]}"; do
   # Classify the change
   if [[ "$CAPTURE" == *'❯'* ]]; then
     echo "PANE ${i} IDLE"
-    PANE_STATES[$i]="IDLE"
+    eval "PANE_STATE_${i}=IDLE"
   elif [[ "$CAPTURE" =~ thinking|working|Bash|Read|Edit|Write|Grep|Glob|Agent ]]; then
     echo "PANE ${i} WORKING"
-    PANE_STATES[$i]="WORKING"
+    eval "PANE_STATE_${i}=WORKING"
   else
     echo "PANE ${i} CHANGED"
     echo "$CAPTURE" | sed 's/^/  /'
-    PANE_STATES[$i]="CHANGED"
+    eval "PANE_STATE_${i}=CHANGED"
   fi
 done
 
@@ -85,7 +86,7 @@ INBOX_COUNT=${#INBOX_FILES[@]}
 shopt -u nullglob
 
 # --- Write heartbeat ---
-printf -v SCAN_TIME '%(%s)T' -1
+SCAN_TIME=$(date +%s)
 echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" && \
   mv "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" "${RUNTIME_DIR}/status/watchdog.heartbeat"
 
@@ -93,7 +94,7 @@ echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" && \
 JSON="{"
 FIRST=true
 for i in "${PANES[@]}"; do
-  STATE="${PANE_STATES[$i]:-UNKNOWN}"
+  eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"
   if [ "$FIRST" = true ]; then
     JSON+="\"${i}\":\"${STATE}\""
     FIRST=false

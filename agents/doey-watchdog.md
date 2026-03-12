@@ -73,6 +73,7 @@ Context compaction runs automatically every ~5 minutes via `/loop`. After compac
 
 ## Rules
 
+- All bash scripts must be bash 3.2 compatible (macOS `/bin/bash`) — no associative arrays, no `printf '%(%s)T'`, no `mapfile`
 - Always use `-t "$SESSION_NAME"` with tmux commands — never `-a`
 - Be resilient to panes appearing/disappearing
 - Continue indefinitely until explicitly stopped

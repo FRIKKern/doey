@@ -27,6 +27,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 - Commands: `# Skill: name` + `## Usage` + `## Prompt`
 - Hook exit codes: 0=allow, 1=block+error, 2=block+feedback
 - Shell scripts: `set -euo pipefail`
+- Shell scripts must be bash 3.2 compatible (macOS `/bin/bash`). Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `[[ =~` capture groups. Use `date +%s`, `while read` loops, eval-based key-value stores instead.
 - Session names: `doey-<project-name>`
 - Runtime data: `/tmp/doey/<project>/`
 
@@ -38,6 +39,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 | Hooks | Restart ALL workers (loaded at startup) |
 | Commands/skills | No restart (loaded on-demand) |
 | Launcher | `doey stop && doey` or new `doey init` |
+| Shell scripts | Run `tests/test-bash-compat.sh` |
 
 ## Important Files
 
