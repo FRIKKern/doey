@@ -410,8 +410,8 @@ DOG
   local claude_settings="$HOME/.claude/settings.json"
   if command -v jq &>/dev/null; then
     if [ -f "$claude_settings" ]; then
-      if ! jq -e ".trustedDirectories // [] | index(\"$dir\")" "$claude_settings" > /dev/null 2>&1; then
-        jq "(.trustedDirectories // []) |= . + [\"$dir\"]" "$claude_settings" 2>/dev/null > "${claude_settings}.tmp" \
+      if ! jq --arg dir "$dir" -e '.trustedDirectories // [] | index($dir)' "$claude_settings" > /dev/null 2>&1; then
+        jq --arg dir "$dir" '(.trustedDirectories // []) |= . + [$dir]' "$claude_settings" 2>/dev/null > "${claude_settings}.tmp" \
           && mv "${claude_settings}.tmp" "$claude_settings"
         printf "   ${DIM}Trusted project directory added to ~/.claude/settings.json${RESET}\n"
       fi
@@ -443,16 +443,16 @@ DOG
 
   # Write session manifest — readable by Manager, Watchdog, and all skills/commands
   cat > "${runtime_dir}/session.env" << MANIFEST
-PROJECT_DIR=$dir
-PROJECT_NAME=$name
-SESSION_NAME=$session
-GRID=$grid
-TOTAL_PANES=$total
-WORKER_COUNT=$worker_count
-WATCHDOG_PANE=$watchdog_pane
-WORKER_PANES=$worker_panes_csv
-RUNTIME_DIR=${runtime_dir}
-PASTE_SETTLE_MS=500
+PROJECT_DIR="$dir"
+PROJECT_NAME="$name"
+SESSION_NAME="$session"
+GRID="$grid"
+TOTAL_PANES="$total"
+WORKER_COUNT="$worker_count"
+WATCHDOG_PANE="$watchdog_pane"
+WORKER_PANES="$worker_panes_csv"
+RUNTIME_DIR="${runtime_dir}"
+PASTE_SETTLE_MS="500"
 MANIFEST
 
   # Generate shared worker system prompt (appended to Claude Code's default prompt)
@@ -1017,16 +1017,16 @@ launch_session_headless() {
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
 
   cat > "${runtime_dir}/session.env" << MANIFEST
-PROJECT_DIR=$dir
-PROJECT_NAME=$name
-SESSION_NAME=$session
-GRID=$grid
-TOTAL_PANES=$total
-WORKER_COUNT=$worker_count
-WATCHDOG_PANE=$watchdog_pane
-WORKER_PANES=$worker_panes_csv
-RUNTIME_DIR=${runtime_dir}
-PASTE_SETTLE_MS=500
+PROJECT_DIR="$dir"
+PROJECT_NAME="$name"
+SESSION_NAME="$session"
+GRID="$grid"
+TOTAL_PANES="$total"
+WORKER_COUNT="$worker_count"
+WATCHDOG_PANE="$watchdog_pane"
+WORKER_PANES="$worker_panes_csv"
+RUNTIME_DIR="${runtime_dir}"
+PASTE_SETTLE_MS="500"
 MANIFEST
 
   cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
@@ -1238,6 +1238,8 @@ run_test() {
 
   # ── Step 5: Launch test driver ──
   printf "  ${DIM}[5/6]${RESET} Launching test driver...\n"
+  local repo_dir
+  repo_dir="$(resolve_repo_dir)"
   local journey_file="${repo_dir}/tests/e2e/journey.md"
   if [[ ! -f "$journey_file" ]]; then
     printf "  ${ERROR}Journey file not found: ${journey_file}${RESET}\n"

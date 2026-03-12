@@ -15,7 +15,7 @@ Run this single bash block to print the full team table:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
-MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
+MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 NOW=$(date +%s)
 
 printf "%-14s %-12s %-10s %-6s %s\n" "PANE" "STATUS" "RESERVED" "MSGS" "LAST_UPDATE"
