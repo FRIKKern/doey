@@ -66,8 +66,9 @@ EOF
   [[ "$TMPFILE_RESULT" != *"pane_${PANE_INDEX}.json" ]] && mv "$TMPFILE_RESULT" "$RUNTIME_DIR/results/pane_${PANE_INDEX}.json"
 
   # Write human-readable inbox message for the manager
-  SAFE_TITLE=$(printf '%s' "$PANE_TITLE" | tr -cd '[:alnum:]._- ')
-  INBOX_FILE="$RUNTIME_DIR/inbox/${NOW%%T*}_${NOW##*T}_pane${PANE_INDEX}_${SAFE_TITLE}.md"
+  SAFE_TITLE=$(printf '%s' "$PANE_TITLE" | tr -cd '[:alnum:]._-')
+  SAFE_TIME=$(echo "${NOW##*T}" | tr ':+' '-p')
+  INBOX_FILE="$RUNTIME_DIR/inbox/${NOW%%T*}_${SAFE_TIME}_pane${PANE_INDEX}_${SAFE_TITLE}.md"
   TMPFILE_INBOX=$(mktemp "${RUNTIME_DIR}/inbox/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_INBOX="$INBOX_FILE"
   cat > "$TMPFILE_INBOX" <<INBOX
 # Worker 0.${PANE_INDEX} — ${PANE_TITLE} — ${RESULT_STATUS}

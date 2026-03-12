@@ -9,27 +9,42 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 
 ### Steps
 
-1. **Read Project Context:**
+1. **Read Project Context + Check Readiness:**
    ```bash
    RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    ALL_PANES="$WATCHDOG_PANE $(echo "$WORKER_PANES" | tr ',' ' ')"
+   WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
+
+   # Check which worker panes are already ready (idle Claude with bypass permissions)
+   # Watchdog is ALWAYS restarted regardless of readiness.
+   SKIP_PANES=""
+   for i in $WORKER_PANES_LIST; do
+     PANE_PID=$(tmux display-message -t "$SESSION_NAME:0.$i" -p '#{pane_pid}')
+     CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+     OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$i" -p 2>/dev/null)
+     if [ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯'; then
+       SKIP_PANES="$SKIP_PANES $i"
+     fi
+   done
    ```
 
-2. **KILL + VERIFY** — Kill Claude processes by PID, then verify. Do NOT use `/exit` or `send-keys` — they are unreliable mid-tool-call.
+2. **KILL + VERIFY** — Kill Claude processes by PID, then verify. Do NOT use `/exit` or `send-keys` — they are unreliable mid-tool-call. Skip worker panes that are already ready (in `$SKIP_PANES`). Watchdog is always killed.
    ```bash
-   # Kill child process of each pane's shell
+   # Kill child process of each pane's shell (skip ready workers)
    for i in $ALL_PANES; do
+     if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
      PANE_PID=$(tmux display-message -t "$SESSION_NAME:0.$i" -p '#{pane_pid}')
      CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
      [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
    done
    sleep 3
 
-   # Verify killed — max 5 attempts, escalate to SIGKILL
+   # Verify killed — max 5 attempts, escalate to SIGKILL (only check non-skipped panes)
    for attempt in 1 2 3 4 5; do
      STILL_RUNNING=0; STUCK_PANES=""
      for i in $ALL_PANES; do
+       if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
        PANE_PID=$(tmux display-message -t "$SESSION_NAME:0.$i" -p '#{pane_pid}')
        CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
        if [ -n "$CHILD_PID" ]; then
@@ -43,19 +58,21 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    ```
    If `$STILL_RUNNING` != 0 after loop: report "FAILED: Panes $STUCK_PANES still have processes after 5 kill attempts. Manual intervention needed." and **STOP**.
 
-3. **CLEAR** — Clean terminals:
+3. **CLEAR** — Clean terminals (skip ready workers):
    ```bash
    for i in $ALL_PANES; do
+     if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
      tmux send-keys -t "$SESSION_NAME:0.$i" "clear" Enter 2>/dev/null
    done
    sleep 1
    ```
 
-4. **START + VERIFY** — Launch all instances, then verify boot. Watchdog first, then workers with 0.5s gaps:
+4. **START + VERIFY** — Launch killed instances, then verify boot. Watchdog first, then workers with 0.5s gaps. Skip workers that were already ready.
    ```bash
    tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
    sleep 1
-   for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
+   for i in $WORKER_PANES_LIST; do
+     if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
      tmux send-keys -t "$SESSION_NAME:0.$i" "claude --dangerously-skip-permissions --model opus" Enter
      sleep 0.5
    done
@@ -87,13 +104,14 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "Start monitoring. Total panes: $TOTAL_PANES. Skip pane 0.0 (Manager) and 0.$WATCHDOG_PANE (yourself). Monitor panes ${WORKER_LIST}." Enter
    ```
 
-6. **FINAL REPORT** — Show status for each pane:
+6. **FINAL REPORT** — Show status for each pane. Distinguish skipped (already ready) from restarted panes:
    ```
    Pane    Role        Status
-   0.1     Worker      ✅ UP  (or ❌ DOWN)
-   0.N     Watchdog    ✅ UP
+   0.1     Worker      ✅ UP (already ready — skipped)
+   0.2     Worker      ✅ UP (restarted)
+   0.N     Watchdog    ✅ UP (restarted)
    ```
-   Use `$WATCHDOG_PANE` to label "Watchdog"; all others are "Worker".
+   Use `$WATCHDOG_PANE` to label "Watchdog"; all others are "Worker". Check `$SKIP_PANES` to determine if a worker was skipped or restarted.
 
 ## Important Notes
 - Restarting clears timed reservations; permanent ones (`.reserved` with `permanent`) survive
