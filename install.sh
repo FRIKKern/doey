@@ -67,7 +67,7 @@ fi
 echo ""
 
 # ── Step 1: Directories ──────────────────────────────────────────────
-printf "  ${BRAND}[1/4]${RESET} Creating directories..."
+printf "  ${BRAND}[1/5]${RESET} Creating directories..."
 {
   mkdir -p ~/.claude/agents
   mkdir -p ~/.claude/commands
@@ -103,7 +103,7 @@ if [[ ${#agent_files[@]} -eq 0 ]]; then
   die "No agent files found in $SCRIPT_DIR/agents/"
 fi
 AGENT_COUNT=${#agent_files[@]}
-printf "  ${BRAND}[2/4]${RESET} Installing agent definitions (${BOLD}%s${RESET})..." "$AGENT_COUNT"
+printf "  ${BRAND}[2/5]${RESET} Installing agent definitions (${BOLD}%s${RESET})..." "$AGENT_COUNT"
 {
   cp "${agent_files[@]}" ~/.claude/agents/
 } && step_ok || { step_fail; die "Failed to copy agent definitions."; }
@@ -130,7 +130,7 @@ if [[ ${#cmd_files[@]} -eq 0 ]]; then
   die "No command files found in $SCRIPT_DIR/commands/"
 fi
 CMD_COUNT=${#cmd_files[@]}
-printf "  ${BRAND}[3/4]${RESET} Installing slash commands (${BOLD}%s${RESET})..." "$CMD_COUNT"
+printf "  ${BRAND}[3/5]${RESET} Installing slash commands (${BOLD}%s${RESET})..." "$CMD_COUNT"
 {
   cp "${cmd_files[@]}" ~/.claude/commands/
 } && step_ok || { step_fail; die "Failed to copy commands."; }
@@ -159,7 +159,7 @@ done
 
 # ── Step 4: CLI script ───────────────────────────────────────────────
 
-printf "  ${BRAND}[4/4]${RESET} Installing doey command..."
+printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
 {
   cp "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
   chmod +x ~/.local/bin/doey
@@ -179,6 +179,19 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
   printf "     ${DIM}Add to your shell config (~/.zshrc or ~/.bashrc):${RESET}\n"
   printf "     ${BRAND}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}\n"
 fi
+
+# ── Step 5: Context audit ───────────────────────────────────────────
+printf "  ${BRAND}[5/5]${RESET} Running context audit..."
+if bash "$SCRIPT_DIR/shell/context-audit.sh" --repo --no-color > /tmp/doey-audit-$$.txt 2>&1; then
+  step_ok
+else
+  step_fail
+  printf "\n"
+  cat /tmp/doey-audit-$$.txt
+  printf "\n"
+  warn_msg "Context audit found issues — review above before launching sessions"
+fi
+rm -f /tmp/doey-audit-$$.txt
 
 # ── Summary ───────────────────────────────────────────────────────────
 echo ""

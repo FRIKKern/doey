@@ -841,6 +841,22 @@ check_doctor() {
     printf "  ${WARN}⚠${RESET} No version file  ${DIM}Run 'doey update' to generate${RESET}\n"
   fi
 
+  # Context audit
+  local audit_repo_dir
+  audit_repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null)"
+  if [[ -n "$audit_repo_dir" ]] && [[ -f "$audit_repo_dir/shell/context-audit.sh" ]]; then
+    local audit_tmp="/tmp/doey-doctor-audit-$$.txt"
+    if bash "$audit_repo_dir/shell/context-audit.sh" --installed --no-color > "$audit_tmp" 2>&1; then
+      printf "  ${SUCCESS}✓${RESET} Context audit clean\n"
+    else
+      printf "  ${WARN}⚠${RESET} Context audit found issues:\n"
+      sed 's/^/    /' "$audit_tmp"
+    fi
+    rm -f "$audit_tmp"
+  else
+    printf "  ${DIM}–${RESET} Context audit skipped  ${DIM}(script not found)${RESET}\n"
+  fi
+
   printf '\n'
 }
 
