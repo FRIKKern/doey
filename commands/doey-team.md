@@ -1,6 +1,6 @@
 # Skill: doey-team
 
-View the full team of Claude instances and their pane layout.
+View the full team of Claude instances, their status, reservations, and unread messages.
 
 ## Usage
 `/doey-team`
@@ -8,36 +8,54 @@ View the full team of Claude instances and their pane layout.
 ## Prompt
 You are showing the team overview of all Claude Code instances in TMUX.
 
-### Steps
+### Gather and display team status
 
-1. **Discover runtime and identity:**
-   ```bash
-   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-   source "${RUNTIME_DIR}/session.env"
-   MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
-   ```
+Run this single bash block to print the full team table:
 
-2. **List all panes:**
-   ```bash
-   tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} | PID: #{pane_pid} | #{pane_width}x#{pane_height} | #{pane_current_command}'
-   ```
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
+NOW=$(date +%s)
 
-3. **Read status and reservation files:**
-   ```bash
-   for f in "${RUNTIME_DIR}/status/"*.status; do [ -f "$f" ] && cat "$f" && echo "---"; done
-   for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
-     PANE_SAFE=${pane//[:.]/_}; RF="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
-     [ -f "$RF" ] && { EXPIRY=$(head -1 "$RF"); [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; } && echo "$pane: RESERVED"
-   done
-   ```
+printf "%-14s %-12s %-10s %-6s %s\n" "PANE" "STATUS" "RESERVED" "MSGS" "LAST_UPDATE"
+printf "%-14s %-12s %-10s %-6s %s\n" "----" "------" "--------" "----" "-----------"
 
-4. **Check unread messages per pane:**
-   ```bash
-   for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
-     PANE_SAFE=${pane//[:.]/_}
-     COUNT=$(ls "${RUNTIME_DIR}/messages/${PANE_SAFE}_"*.msg 2>/dev/null | wc -l)
-     echo "$pane: $COUNT unread"
-   done
-   ```
+for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
+  PANE_SAFE=${pane//[:.]/_}
 
-5. **Present formatted table:** Pane ID, Status (RESERVED shown with lock icon), Current task, Unread count, mark YOUR pane with `<-- you`.
+  # Status
+  STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+  if [ -f "$STATUS_FILE" ]; then
+    STATUS=$(grep '^STATUS: ' "$STATUS_FILE" 2>/dev/null | head -1 | cut -d' ' -f2- || echo "UNKNOWN")
+    LAST_MOD=$(stat -f "%Sm" -t "%H:%M:%S" "$STATUS_FILE" 2>/dev/null || stat -c "%y" "$STATUS_FILE" 2>/dev/null | cut -d. -f1)
+  else
+    STATUS="UNKNOWN"
+    LAST_MOD="-"
+  fi
+
+  # Reservation
+  RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+  RESERVED="-"
+  if [ -f "$RESERVE_FILE" ]; then
+    EXPIRY=$(head -1 "$RESERVE_FILE")
+    if [ "$EXPIRY" = "permanent" ]; then
+      RESERVED="PERM"
+    elif [ "$NOW" -lt "$EXPIRY" ] 2>/dev/null; then
+      REMAINING=$(( (EXPIRY - NOW) / 60 ))
+      RESERVED="${REMAINING}m"
+    fi
+  fi
+
+  # Unread messages
+  MSG_COUNT=$(ls "${RUNTIME_DIR}/messages/${PANE_SAFE}_"*.msg 2>/dev/null | wc -l | tr -d ' ')
+
+  # Mark current pane
+  MARKER=""
+  [ "$pane" = "$MY_PANE" ] && MARKER=" <-- you"
+
+  printf "%-14s %-12s %-10s %-6s %s%s\n" "$pane" "$STATUS" "$RESERVED" "$MSG_COUNT" "$LAST_MOD" "$MARKER"
+done
+```
+
+Report the table output to the user. If any panes show issues (UNKNOWN status, high message counts), note them briefly.

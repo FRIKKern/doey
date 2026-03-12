@@ -18,12 +18,14 @@ Continuous monitoring loop:
 
 1. **Every 5 seconds**, capture visible content of all panes in `$SESSION_NAME`
 2. **Analyze** each pane for prompts, confirmations, errors, or idle states
-3. **Auto-accept** routine y/n confirmations
-4. **Health checks**: copy-mode, stuck workers, crashed panes
-5. **Write heartbeat**: `$RUNTIME_DIR/status/watchdog.heartbeat` with current timestamp
-6. **Notify** via macOS notification when a worker needs human attention
-7. **Log** detections and actions taken
-8. **Repeat** indefinitely until told to stop
+3. **Skip bypass-permissions panes** — if pane status shows "bypass permissions", skip all auto-accept logic for that pane (it handles its own permissions)
+4. **Auto-accept** routine y/n confirmations
+5. **Health checks**: copy-mode, stuck workers, crashed panes
+6. **Deliver messages**: check inbox for unread `.msg` files, deliver to idle recipients
+7. **Write heartbeat**: `$RUNTIME_DIR/status/watchdog.heartbeat` with current timestamp
+8. **Notify** via macOS notification when a worker needs human attention
+9. **Log** detections and actions taken
+10. **Repeat** indefinitely until told to stop
 
 ## How to Monitor
 
@@ -43,6 +45,18 @@ tmux send-keys -t "$SESSION_NAME:<window>.<pane>" 'y' Enter
 ```
 
 ## Prompt Detection Patterns
+
+### Pre-check: Skip bypass-permissions panes
+
+Before checking any auto-accept patterns, verify the pane is NOT in bypass-permissions mode:
+```bash
+PANE_STATUS=$(tmux capture-pane -t "$SESSION_NAME:0.$pane" -p -S -3 2>/dev/null)
+if echo "$PANE_STATUS" | grep -q 'bypass permissions'; then
+  # Skip this pane entirely — it auto-handles all permissions
+  continue
+fi
+```
+If the pane shows "bypass permissions" in its status bar, skip ALL auto-accept logic for that pane.
 
 ### Auto-accept patterns
 
@@ -100,10 +114,46 @@ osascript -e 'display notification "Task complete — waiting for next instructi
 
 - **ALWAYS** use `-t "$SESSION_NAME"` with tmux commands — never `-a` (all sessions)
 - **NEVER** send input to: text editors (vim/nvim/nano/emacs/code), interactive REPLs (unless clear y/n prompt), password/sensitive prompts, destructive confirmations (`rm -rf`, database drops)
+- **NEVER** send input to panes in bypass-permissions mode — check for "bypass permissions" in pane status line before any auto-accept. These panes handle permissions automatically and do not show y/n prompts.
 - **NEVER** send input to reserved panes — check `${RUNTIME_DIR}/status/${PANE_SAFE}.reserved` first
 - **DO NOT** re-answer prompts already answered (track pane+prompt combinations)
 - **DO** auto-login workers showing "Not logged in" (routine OAuth, not a security concern)
 - When unsure: **notify** rather than auto-accept
+
+## Inbox Delivery
+
+Every scan cycle, check for unread messages and deliver them to idle recipients.
+
+```bash
+# Check for unread messages
+for msg in "${RUNTIME_DIR}/messages/"*.msg; do
+  [ -f "$msg" ] || continue
+  # Extract target pane from filename: {pane_safe}_{timestamp}.msg
+  BASENAME=$(basename "$msg" .msg)
+  # Read the TO: line from the message
+  TARGET=$(grep '^TO: ' "$msg" | head -1 | cut -d' ' -f2-)
+  [ -z "$TARGET" ] && continue
+  TARGET_SAFE=${TARGET//[:.]/_}
+
+  # Only deliver if recipient is idle (shows ❯ prompt)
+  PANE_OUTPUT=$(tmux capture-pane -t "$TARGET" -p -S -3 2>/dev/null) || continue
+  if echo "$PANE_OUTPUT" | grep -q '❯'; then
+    # Deliver: send /doey-inbox to the recipient
+    tmux copy-mode -q -t "$TARGET" 2>/dev/null
+    tmux send-keys -t "$TARGET" "/doey-inbox" Enter
+    # Move to delivered folder
+    mkdir -p "${RUNTIME_DIR}/messages/delivered"
+    mv "$msg" "${RUNTIME_DIR}/messages/delivered/"
+  fi
+done
+```
+
+**Rules:**
+- Only deliver to **idle** panes (showing `❯` prompt) — never interrupt busy workers or the Manager mid-thought
+- Deliver to the **Manager (0.0)** with priority — check it first each cycle
+- Move delivered messages to `delivered/` — never re-deliver
+- If a recipient stays busy for 60+ seconds with pending mail, send a macOS notification: "Doey — Mail pending for Worker N"
+- Skip reserved panes — they'll get mail when unreserved
 
 ## Health Monitoring
 

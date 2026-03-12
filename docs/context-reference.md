@@ -76,8 +76,8 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 | File | Purpose |
 |------|---------|
 | `common.sh` | Shared: pane identity, runtime dir, reservation helpers (`is_reserved()`, `reserve_pane()`, etc.) |
-| `on-prompt-submit.sh` | UserPromptSubmit: sets WORKING, auto-reserves worker panes (60s) |
-| `on-stop.sh` | Stop: sets IDLE/RESERVED, blocks research workers without reports (exit 2), watchdog keep-alive, Manager notifications |
+| `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY, auto-reserves worker panes (60s) |
+| `on-stop.sh` | Stop: sets FINISHED/RESERVED, blocks research workers without reports (exit 2), watchdog keep-alive, Manager notifications |
 | `on-pre-tool-use.sh` | PreToolUse: safety guards |
 | `on-pre-compact.sh` | PreCompact: context preservation |
 | `status-hook.sh` | Legacy (reference only, not registered) |
@@ -96,7 +96,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `/doey-dispatch` | Manager | Send task to idle workers |
 | `/doey-delegate` | Manager | Delegate to specific worker |
 | `/doey-research` | Manager | Research task with report enforcement |
-| `/doey-monitor` | Manager | Detect DONE/WORKING/ERROR/IDLE |
+| `/doey-monitor` | Manager | Detect FINISHED/BUSY/ERROR/READY |
 | `/doey-status` | Manager/Workers | Share or check status |
 | `/doey-broadcast` | Manager | Message all instances |
 | `/doey-send` | Manager | Message specific pane |
@@ -177,7 +177,7 @@ Default grid: 6x2 (12 panes). Pane 0.0 = Manager. Watchdog = pane at column coun
 | `capture-pane` | Read pane output |
 
 Bell suppression: `bell-action none`, `visual-bell off`. Notifications via `osascript` in hooks.
-Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabled, status bar shows NW/NI/NR counts.
+Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabled, status bar shows NB/NR/NF counts.
 
 
 ## Layer 9: Runtime State
@@ -197,7 +197,7 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
   broadcasts/                        # Broadcast messages
 ```
 
-**Status values:** WORKING, IDLE, RESERVED.
+**Status values:** READY, BUSY, FINISHED, RESERVED.
 
 **Reservation:** Created by auto-reserve (60s on human input) or `/doey-reserve`. Consumed by `is_reserved()`, statusbar, and Manager dispatch.
 

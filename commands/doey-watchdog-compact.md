@@ -1,36 +1,53 @@
 # Skill: doey-watchdog-compact
 
-Send `/compact` to the Watchdog pane to reduce its token usage.
+Send `/compact` to the Watchdog pane to reduce its token usage, then verify it resumes.
 
 ## Usage
 `/doey-watchdog-compact`
 
 ## Prompt
-Send `/compact` to the Watchdog and resume its monitoring loop.
+Send `/compact` to the Watchdog and verify it resumes monitoring.
 
-### Steps
+### Step 1: Send compact command
 
-1. **Discover runtime:**
-   ```bash
-   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-   source "${RUNTIME_DIR}/session.env"
-   ```
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+WATCHDOG="${SESSION_NAME}:0.${WATCHDOG_PANE}"
 
-2. **Send compact:**
-   ```bash
-   tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "/compact" Enter
-   ```
+tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
+tmux send-keys -t "$WATCHDOG" "/compact" Enter
+echo "Sent /compact to Watchdog pane ${WATCHDOG}"
+```
 
-3. **Resume monitoring:**
-   ```bash
-   sleep 6
-   tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "Resume your watchdog monitoring loop. Continue checking all worker panes every 5 seconds, auto-accepting prompts and sending notifications as before." Enter
-   ```
+### Step 2: Wait and verify output
 
-4. **Verify:**
-   ```bash
-   sleep 5
-   tmux capture-pane -t "$SESSION_NAME:0.$WATCHDOG_PANE" -p -S -15
-   ```
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+WATCHDOG="${SESSION_NAME}:0.${WATCHDOG_PANE}"
 
-5. Report success/failure based on captured output.
+sleep 15
+OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)
+echo "$OUTPUT"
+
+if echo "$OUTPUT" | grep -qiE '(compact|summariz|monitor|check|pane|worker)'; then
+  echo "---"
+  echo "SUCCESS: Watchdog shows activity after compact"
+else
+  echo "---"
+  echo "RETRY: No activity detected — sending /doey-monitor to restart loop"
+  tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
+  tmux send-keys -t "$WATCHDOG" "/doey-monitor" Enter
+  sleep 15
+  OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)
+  echo "$OUTPUT"
+  if echo "$OUTPUT" | grep -qiE '(compact|summariz|monitor|check|pane|worker)'; then
+    echo "SUCCESS: Watchdog resumed after retry"
+  else
+    echo "FAILED: Watchdog not responding — manual intervention needed"
+  fi
+fi
+```
+
+Report the result. Success means the Watchdog pane shows new monitoring output within 15 seconds of compact.

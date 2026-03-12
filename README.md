@@ -164,7 +164,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 |------|------|-------------|
 | **Manager** | `0.0` | Plans tasks, delegates to workers, monitors progress. Never writes code. |
 | **Watchdog** | `0.{cols}` | Monitors all worker panes. Auto-accepts prompts and confirmations. |
-| **Workers** | All others | Standard Claude Code instances that do the actual implementation work. Status: IDLE, WORKING, or RESERVED. |
+| **Workers** | All others | Standard Claude Code instances that do the actual implementation work. Status: READY, BUSY, FINISHED, or RESERVED. |
 
 ### Communication
 
@@ -175,7 +175,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 | Session manifest | `/tmp/doey/<project>/session.env` — shared config for all agents |
 | Inter-pane messages | `/tmp/doey/<project>/messages/` |
 | Broadcasts | `/tmp/doey/<project>/broadcasts/` |
-| Status tracking | `/tmp/doey/<project>/status/` — IDLE, WORKING, RESERVED (with RSV countdown) |
+| Status tracking | `/tmp/doey/<project>/status/` — READY, BUSY, FINISHED, RESERVED (with RSV countdown) |
 
 ### Context Layer Model
 
