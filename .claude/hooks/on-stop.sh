@@ -29,26 +29,43 @@ EOF
 
 # --- Result capture for workers ---
 if is_worker; then
-  OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -20 2>/dev/null) || OUTPUT=""
+  OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -80 2>/dev/null) || OUTPUT=""
 
-  if echo "$OUTPUT" | grep -qiE '(error|failed|exception)'; then
+  # Filter UI noise from captured output
+  FILTERED_OUTPUT=$(echo "$OUTPUT" | grep -vE '❯|───|Ctx █|bypass permissions|shift\+tab|MCP server|/doctor' | sed -e :a -e '/^[[:space:]]*$/{ $d; N; ba; }') || FILTERED_OUTPUT=""
+
+  if echo "$FILTERED_OUTPUT" | grep -qiE '(error|failed|exception)'; then
     RESULT_STATUS="error"
   else
     RESULT_STATUS="done"
   fi
 
-  LAST_OUTPUT=$(echo "$OUTPUT" | tail -5 | jq -Rs '.' 2>/dev/null) || \
-    LAST_OUTPUT=$(echo "$OUTPUT" | tail -5 | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
+  # Get pane title for identification
+  PANE_TITLE=$(tmux display-message -t "$SESSION_NAME:0.$PANE_INDEX" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
+
+  LAST_OUTPUT=$(echo "$FILTERED_OUTPUT" | jq -Rs '.' 2>/dev/null) || \
+    LAST_OUTPUT=$(echo "$FILTERED_OUTPUT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
     LAST_OUTPUT='""'
+
+  TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='"worker-'"$PANE_INDEX"'"'
 
   cat > "$RUNTIME_DIR/results/pane_${PANE_INDEX}.json" <<EOF
 {
   "pane": "0.$PANE_INDEX",
+  "title": $TITLE_JSON,
   "status": "$RESULT_STATUS",
   "timestamp": $(date +%s),
   "last_output": $LAST_OUTPUT
 }
 EOF
+
+  # Write human-readable inbox message for the manager
+  mkdir -p "$RUNTIME_DIR/inbox"
+  cat > "$RUNTIME_DIR/inbox/$(date +%s)_pane${PANE_INDEX}_${PANE_TITLE}.md" <<INBOX
+# Worker 0.${PANE_INDEX} — ${PANE_TITLE} — ${RESULT_STATUS}
+
+${FILTERED_OUTPUT}
+INBOX
 fi
 
 # --- macOS notification for Manager ---
