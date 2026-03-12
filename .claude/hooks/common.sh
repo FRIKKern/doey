@@ -84,6 +84,11 @@ send_notification() {
   local title="${1:-Claude Code}"
   local body="${2:-Task completed}"
 
+  # Defense-in-depth: only Manager sends notifications
+  if ! is_manager; then
+    return 0
+  fi
+
   # Enforce 60-second cooldown per title
   if [ -n "${RUNTIME_DIR:-}" ]; then
     local title_safe="${title//[^a-zA-Z0-9]/_}"
@@ -98,6 +103,12 @@ send_notification() {
     fi
     date +%s > "$cooldown_file" 2>/dev/null || true
   fi
+
+  # Sanitize for AppleScript string safety
+  title="${title//\\/\\\\}"
+  title="${title//\"/\\\"}"
+  body="${body//\\/\\\\}"
+  body="${body//\"/\\\"}"
 
   if command -v osascript >/dev/null 2>&1; then
     # macOS

@@ -19,7 +19,8 @@ Stop all running Doey tmux sessions.
      if "$TMUX_BIN" has-session -t "$SESSION" 2>/dev/null; then
        echo "Stopping $SESSION ($path)..."
        "$TMUX_BIN" kill-session -t "$SESSION"
-       echo "  Stopped"
+       rm -rf "/tmp/doey/${name}"
+       echo "  Stopped (session killed, runtime cleaned)"
      else
        echo "  $SESSION — not running"
      fi

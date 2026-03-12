@@ -131,7 +131,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 </tr>
 <tr>
 <td align="center"><strong>5</strong></td>
-<td>The Watchdog monitors workers, delivers messages, and sends notifications on state changes</td>
+<td>The Watchdog monitors workers and delivers inbox messages</td>
 </tr>
 <tr>
 <td align="center"><strong>6</strong></td>
@@ -145,7 +145,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 
 - **Parallel execution** — 10 workers running simultaneously, not sequentially
 - **Smart orchestration** — Manager plans, delegates, and monitors without writing code itself
-- **Always-on monitoring** — Watchdog tracks worker state, delivers messages, and sends desktop notifications
+- **Always-on monitoring** — Watchdog tracks worker state and delivers inbox messages
 - **Premium startup experience** — ASCII banner, step-by-step progress indicators, and a summary dashboard
 - **Session manifest** — Project context written to `/tmp/doey/<project>/session.env` so all tools and agents share config
 - **Project-aware** — Register projects, auto-attach to running sessions, interactive picker
@@ -163,7 +163,7 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 | Role | Pane | Description |
 |------|------|-------------|
 | **Manager** | `0.0` | Plans tasks, delegates to workers, monitors progress. Never writes code. |
-| **Watchdog** | `0.{cols}` | Monitors all worker panes. Delivers messages and sends notifications. |
+| **Watchdog** | `0.{cols}` | Monitors all worker panes. Delivers inbox messages. |
 | **Workers** | All others | Standard Claude Code instances that do the actual implementation work. Status: READY, BUSY, FINISHED, or RESERVED. |
 
 ### Communication
@@ -185,7 +185,7 @@ Each agent's behavior is shaped by multiple context layers that merge at startup
 |---|-------|--------|---------|
 | 1 | Agent Definitions | `agents/*.md` | Manager, Watchdog |
 | 2 | Settings | `~/.claude/settings*.json`, `.claude/settings*.json` | All |
-| 3 | Hooks | `.claude/hooks/status-hook.sh` | All |
+| 3 | Hooks | `.claude/hooks/` (6 event hooks + utilities) | All |
 | 4 | Skills/Commands | `commands/doey-*.md` | Manager primarily |
 | 5 | Persistent Memory | `~/.claude/agent-memory/` | Manager |
 | 6 | Environment Variables | `session.env`, tmux env | All |
@@ -244,6 +244,7 @@ Once installed, these commands are available in any Claude Code instance:
 | `/doey-inbox` | Check incoming messages |
 | `/doey-status` | Set or view pane statuses |
 | `/doey-research` | Dispatch research task with guaranteed report-back |
+| `/doey-stop` | Stop a specific worker |
 | `/doey-stop-all` | Stop all workers gracefully |
 | `/doey-restart-workers` | Restart all workers (keeps Manager alive) |
 | `/doey-reinstall` | Reinstall from the repo without leaving Claude Code |
@@ -276,6 +277,7 @@ doey/
 │   ├── doey-restart-workers.md
 │   ├── doey-send.md
 │   ├── doey-status.md
+│   ├── doey-stop.md
 │   ├── doey-stop-all.md
 │   ├── doey-team.md
 │   └── doey-watchdog-compact.md

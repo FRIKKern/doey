@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -uo pipefail
+# No -e: tmux callbacks must not crash on transient failures
 
 # Fast pane border label: shows pane title + 🔒 if reserved
 # Called by tmux pane-border-format via #()

@@ -20,7 +20,7 @@ You are sending a message to another Claude Code instance in a TMUX pane.
 
 2. Ask which pane and what message (if not specified).
 
-3. **Write message and notify:**
+3. **Write message file:**
    ```bash
    TIMESTAMP=$(gdate +%s%N 2>/dev/null || echo "$(date +%s)$$")
    cat > "${RUNTIME_DIR}/messages/${TARGET_PANE//[:.]/_}_${TIMESTAMP}.msg" <<EOF
@@ -30,6 +30,7 @@ You are sending a message to another Claude Code instance in a TMUX pane.
    ---
    $MESSAGE
    EOF
-   tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
-   tmux send-keys -t "$TARGET_PANE" "/doey-inbox" Enter
+   # Delivery handled by Watchdog (checks idle state before sending)
    ```
+
+4. Confirm to the user that the message was queued for delivery.

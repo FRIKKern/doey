@@ -13,12 +13,14 @@ STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 case "$PROMPT" in
   /compact*)
     # After compact, context is clean → READY
-    cat > "$STATUS_FILE" <<EOF
+    TMPFILE_STATUS=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_STATUS="$STATUS_FILE"
+    cat > "$TMPFILE_STATUS" <<EOF
 PANE: $PANE
 UPDATED: $NOW
 STATUS: READY
 TASK:
 EOF
+    [[ "$TMPFILE_STATUS" != "$STATUS_FILE" ]] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
     exit 0
     ;;
   /simplify*|/loop*|/rename*|/exit*|/help*|/status*|/doey*)
@@ -29,11 +31,13 @@ esac
 
 NEW_STATUS="BUSY"
 
-cat > "$STATUS_FILE" <<EOF
+TMPFILE_STATUS=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_STATUS="$STATUS_FILE"
+cat > "$TMPFILE_STATUS" <<EOF
 PANE: $PANE
 UPDATED: $NOW
 STATUS: $NEW_STATUS
 TASK: $TASK
 EOF
+[[ "$TMPFILE_STATUS" != "$STATUS_FILE" ]] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
 
 exit 0

@@ -72,7 +72,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-declare -a SCAN_FILES=()
+SCAN_FILES=()
 
 if [[ "$MODE" == "installed" ]]; then
   # Installed files
@@ -109,7 +109,7 @@ YSPAM_RE='auto.accept|auto.unblock|handle.*y/n|handle.*prompt.*confirmation|acce
 IDENTITY_RE='send-keys.*"[yY]"|send-keys.*"yes"|type.*yes.*into.*pane|press.*[yY].*pane'
 
 # Stale reference patterns (references to removed features/old behavior)
-STALE_RE='auto-accepts prompts|auto-accepting prompts|automatically accepts|auto.reserve|status-hook\.sh'
+STALE_RE='auto-accepts prompts|auto-accepting prompts|automatically accepts|auto.reserve|status-hook\.sh|on-stop\.sh'
 
 # Allowlist — single combined regex for fast checking
 ALLOWLIST_RE='NEVER.*send.*[yY]|never.*need.*auto.accept|no.*prompts.*to.*accept|causes.*y.spam|DO NOT.*auto.accept|do not.*send.*yes|block.*send-keys|prohibited.*send-keys|safety.*net|y-spam|y.spam.*risk|context-audit'
@@ -118,7 +118,7 @@ ALLOWLIST_RE='NEVER.*send.*[yY]|never.*need.*auto.accept|no.*prompts.*to.*accept
 YSPAM_CRITICAL_GLOB="doey-watchdog"
 
 # ── Issue tracking ──────────────────────────────────────────────────
-declare -a ISSUES=()
+ISSUES=()
 ISSUE_COUNT=0
 
 DELIM=$'\x1f'  # Unit separator — safe delimiter for structured fields

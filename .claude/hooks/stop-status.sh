@@ -16,12 +16,24 @@ else
   STOP_STATUS="READY"
 fi
 
-# --- Write status file ---
-cat > "$STATUS_FILE" <<EOF
+# --- Write status file (atomic: tmp + mv) ---
+TMPFILE_STATUS=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_STATUS="$STATUS_FILE"
+cat > "$TMPFILE_STATUS" <<EOF
 PANE: $PANE
 UPDATED: $NOW
 STATUS: ${STOP_STATUS}
 TASK:
 EOF
+[[ "$TMPFILE_STATUS" != "$STATUS_FILE" ]] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
+
+# --- Research enforcement: block stop if task exists but no report ---
+if is_worker; then
+  TASK_FILE="${RUNTIME_DIR}/research/${PANE_SAFE}.task"
+  REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
+  if [ -f "$TASK_FILE" ] && [ ! -f "$REPORT_FILE" ]; then
+    echo '{"decision": "block", "reason": "Research task requires a report. Write your report to '"${REPORT_FILE}"' using the Write tool before stopping."}' >&2
+    exit 2
+  fi
+fi
 
 exit 0

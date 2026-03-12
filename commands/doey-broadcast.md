@@ -44,19 +44,8 @@ echo "Broadcast delivered to ${DELIVERED} panes"
 
 Replace `YOUR_MESSAGE_HERE` with the actual message before running.
 
-### Step 3: Notify all panes to check inbox
+### Step 3: Confirm delivery
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
+# Delivery handled by Watchdog (checks idle state before sending)
 
-for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
-  [ "$pane" = "$MY_PANE" ] && continue
-  tmux copy-mode -q -t "$pane" 2>/dev/null
-  tmux send-keys -t "$pane" "/doey-inbox" Enter
-done
-echo "Inbox check triggered on all panes"
-```
-
-Report how many panes received the broadcast.
+Report how many panes the broadcast was queued for. The Watchdog will deliver to each pane when it is idle.

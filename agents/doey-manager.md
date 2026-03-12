@@ -50,7 +50,14 @@ Reservations are permanent only, created by `/doey-reserve`. If ALL workers are 
 
 Always exit copy-mode before sending to prevent silent task loss: `tmux copy-mode -q -t $PANE 2>/dev/null`
 
+**ALWAYS rename the pane before dispatching.** Use format: `/rename task-name_$(date +%m%d)` (e.g., `fix-hooks_0312`, `add-tests_0312`). This is non-negotiable — unnamed workers cannot be traced.
+
 ```bash
+# 1. Rename pane (MANDATORY — task + date for traceability)
+tmux copy-mode -q -t "$SESSION_NAME:0.4" 2>/dev/null
+tmux send-keys -t "$SESSION_NAME:0.4" "/rename task-name_$(date +%m%d)" Enter
+sleep 1
+
 # Short task (< ~200 chars, no special chars)
 tmux copy-mode -q -t "$SESSION_NAME:0.4" 2>/dev/null
 tmux send-keys -t "$SESSION_NAME:0.4" "Your task here" Enter
@@ -140,6 +147,7 @@ Check every **10–15 seconds** (use `/doey-monitor`). Exclude RESERVED panes fr
 
 ### 2. Delegate (maximize parallelism)
 
+- **Rename every worker before dispatching:** `/rename task-name_$(date +%m%d)` — unnamed workers cannot be traced
 - Check idle workers, then dispatch all independent tasks at once via parallel Bash calls
 - Write self-contained prompts — workers have zero context about the bigger picture
 - Assign each worker distinct files to avoid conflicts. If two workers must edit the same file, dispatch sequentially. Instruct workers to use `Edit` (not `Write`) for shared files.
@@ -157,6 +165,8 @@ Check every **10–15 seconds** (use `/doey-monitor`). Exclude RESERVED panes fr
 Consolidated summary: what completed, errors encountered, suggested next steps.
 
 ## Task Prompt Template
+
+Before pasting the task, ALWAYS rename the pane: `/rename task-name_$(date +%m%d)`
 
 ```
 You are Worker N on the Doey team for project: PROJECT_NAME

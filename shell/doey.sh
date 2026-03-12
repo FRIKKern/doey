@@ -116,7 +116,7 @@ register_project() {
   # Handle name collision
   if grep -q "^${name}:" "$PROJECTS_FILE" 2>/dev/null; then
     local i=2
-    while grep -q "^${name}-${i}:" "$PROJECTS_FILE" 2>/dev/null; do ((i++)); done
+    while grep -q "^${name}-${i}:" "$PROJECTS_FILE" 2>/dev/null; do i=$((i + 1)); done
     name="${name}-${i}"
   fi
 
@@ -518,7 +518,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" mouse on
 
   # Suppress terminal bell from worker panes — prevents notification spam
-  # Our on-stop.sh hook handles Manager-only notifications via osascript
+  # Our stop-notify.sh hook handles Manager-only notifications via osascript
   tmux set-option -t "$session" bell-action none
   tmux set-option -t "$session" visual-bell off
 
@@ -549,7 +549,7 @@ WORKER_CONTEXT
   local wnum=0
   for (( i=1; i<total; i++ )); do
     [[ $i -eq $watchdog_pane ]] && continue
-    (( wnum++ ))
+    wnum=$((wnum + 1))
     tmux select-pane -t "$session:0.$i" -T "W${wnum} Worker ${wnum}"
   done
 
@@ -610,7 +610,7 @@ WORKER_CONTEXT
   local bar_width=30
   for (( i=1; i<total; i++ )); do
     [[ $i -eq $watchdog_pane ]] && continue
-    (( booted++ ))
+    booted=$((booted + 1))
 
     # Progress bar
     local filled=$(( booted * bar_width / worker_count ))
@@ -887,7 +887,7 @@ remove_project() {
   fi
 
   # Remove matching line
-  sed -i '' "/^${name}:/d" "$PROJECTS_FILE"
+  grep -v "^${name}:" "$PROJECTS_FILE" > "${PROJECTS_FILE}.tmp" && mv "${PROJECTS_FILE}.tmp" "$PROJECTS_FILE"
   printf "  ${SUCCESS}Removed '${name}' from project registry${RESET}\n"
 
   # Hint about running session
@@ -1116,7 +1116,7 @@ WORKER_CONTEXT
   local wnum=0
   for (( i=1; i<total; i++ )); do
     [[ $i -eq $watchdog_pane ]] && continue
-    (( wnum++ ))
+    wnum=$((wnum + 1))
     tmux select-pane -t "$session:0.$i" -T "W${wnum} Worker ${wnum}"
   done
 
@@ -1165,7 +1165,7 @@ WORKER_CONTEXT
   local booted=0
   for (( i=1; i<total; i++ )); do
     [[ $i -eq $watchdog_pane ]] && continue
-    (( booted++ ))
+    booted=$((booted + 1))
 
     local worker_prompt_file="${runtime_dir}/worker-system-prompt-${booted}.md"
     cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file"
@@ -1297,7 +1297,7 @@ run_test() {
   if [[ "$keep" == false ]]; then
     printf "  ${DIM}Cleaning up...${RESET}\n"
     tmux kill-session -t "$session" 2>/dev/null || true
-    sed -i '' "/^${test_project_name}:/d" "$PROJECTS_FILE"
+    grep -v "^${test_project_name}:" "$PROJECTS_FILE" > "${PROJECTS_FILE}.tmp" && mv "${PROJECTS_FILE}.tmp" "$PROJECTS_FILE"
     rm -rf "$test_root"
     printf "  ${SUCCESS}Cleaned up${RESET}\n"
   else

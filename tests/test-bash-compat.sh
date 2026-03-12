@@ -44,6 +44,7 @@ while IFS= read -r file; do
   check_pattern "$file" '\|&' 'pipe stderr shorthand |& (bash 4+)'
   check_pattern "$file" '&>>' 'append both streams &>> (bash 4+)'
   check_pattern "$file" 'coproc[[:space:]]' 'coproc (bash 4+)'
+  check_pattern "$file" 'BASH_REMATCH' 'BASH_REMATCH capture groups (bash 3.2 unreliable)'
 
 done < <(find "$PROJECT_ROOT" -name '*.sh' \
   -not -path '*/node_modules/*' \

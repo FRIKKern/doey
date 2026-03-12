@@ -102,8 +102,8 @@ if [ "$ALREADY_READY" = "false" ]; then
   tmux copy-mode -q -t "$PANE" 2>/dev/null
 fi
 
-# 8. Rename pane
-tmux send-keys -t "$PANE" "/rename research-<short-topic>" Enter
+# 8. Rename pane (MANDATORY — task + date for traceability)
+tmux send-keys -t "$PANE" "/rename research-topic_$(date +%m%d)" Enter
 sleep 1
 ```
 

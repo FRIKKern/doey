@@ -8,6 +8,9 @@ init_hook
 # Only workers produce results
 is_worker || exit 0
 
+TMPFILE_RESULT="" TMPFILE_INBOX=""
+trap 'rm -f "$TMPFILE_RESULT" "$TMPFILE_INBOX" 2>/dev/null' EXIT
+
 OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -80 2>/dev/null) || OUTPUT=""
 
 # Filter UI noise and detect errors in a single pass

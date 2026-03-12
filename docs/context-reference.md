@@ -32,7 +32,7 @@ Load Order (bottom = first, top = last / highest precedence)
 |-------|-------------|------------|-----------|
 | 1. Agent Definitions | `agents/doey-manager.md`, `agents/doey-watchdog.md` | Manager, Watchdog | Startup (via `--agent`) |
 | 2. Settings | 4-file merge chain | All | Startup |
-| 3. Hooks | `.claude/hooks/common.sh` + `on-*.sh` | All | Runtime (on events) |
+| 3. Hooks | `.claude/hooks/` modular scripts | All | Runtime (on events) |
 | 4. Skills | `commands/doey-*.md` | Manager primarily | On-demand |
 | 5. Memory | `~/.claude/agent-memory/<agent>/MEMORY.md` | Manager | Startup |
 | 6. Env Vars | `session.env`, tmux env | All | Startup + Runtime |
@@ -66,7 +66,7 @@ Merge order (later wins for scalars; arrays are additive):
 | `~/.claude/settings.json` | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`, `skipDangerousModePermissionPrompt: true`, `model: "opus"`, `notifications: false` |
 | `~/.claude/settings.local.json` | `permissions.allow: ["Bash(brew install:*)"]` |
 | `<project>/.claude/settings.json` | Not present |
-| `<project>/.claude/settings.local.json` | Registers 4 hook events mapping to `.claude/hooks/on-*.sh` scripts |
+| `<project>/.claude/settings.local.json` | Registers 6 hook events |
 
 Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 
@@ -76,11 +76,15 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 | File | Purpose |
 |------|---------|
 | `common.sh` | Shared: pane identity, runtime dir, reservation helpers (`is_reserved()`, `reserve_pane()`, etc.) |
+| `on-session-start.sh` | SessionStart: initial setup |
 | `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY |
-| `on-stop.sh` | Stop: sets FINISHED/RESERVED, blocks research workers without reports (exit 2), watchdog keep-alive, Manager notifications |
 | `on-pre-tool-use.sh` | PreToolUse: safety guards |
 | `on-pre-compact.sh` | PreCompact: context preservation |
-| `status-hook.sh` | Legacy (reference only, not registered) |
+| `post-tool-lint.sh` | PostToolUse: linting after tool use |
+| `stop-status.sh` | Stop: sets FINISHED/RESERVED, blocks research workers without reports (exit 2) |
+| `stop-results.sh` | Stop: collects and writes results |
+| `stop-notify.sh` | Stop: Manager notifications |
+| `watchdog-scan.sh` | Utility: called directly by Watchdog for pane scanning (not a registered hook) |
 
 Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
@@ -89,7 +93,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
 ## Layer 4: Skills/Commands
 
-14 skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
+15 skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
 
 | Skill | Primary Agent | Purpose |
 |-------|---------------|---------|
@@ -106,6 +110,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `/doey-restart-workers` | Manager | Restart workers + Watchdog |
 | `/doey-reinstall` | Manager | Pull + re-install |
 | `/doey-reserve` | Manager/Workers | Reserve/unreserve panes |
+| `/doey-stop` | Manager | Stop a specific worker |
 | `/doey-watchdog-compact` | Manager | Compact Watchdog context |
 
 Agent usage: Manager uses all except `/doey-inbox`. Watchdog uses none. Workers use `/doey-inbox`, `/doey-status`, `/doey-reserve`.
@@ -217,12 +222,12 @@ Loaded by all instances. Contains: project overview, architecture, key directori
 | Manager uses wrong session | `tmux show-environment DOEY_RUNTIME` invalid |
 | Manager dispatches to Watchdog | `WATCHDOG_PANE` in session.env wrong |
 | Manager sends empty tasks | Task text empty before Enter |
-| Manager gets no stop notifications | `on-stop.sh` not registered; pane not resolving to 0.0 |
+| Manager gets no stop notifications | `stop-notify.sh` not registered; pane not resolving to 0.0 |
 | Watchdog stops monitoring | Stop hook keep-alive failing; check `WATCHDOG_PANE` |
 | Watchdog spams notifications | State tracking lost after compaction |
 | All panes think they're Manager | Hook using bare `tmux display-message` without `-t "$TMUX_PANE"` |
 | Hooks not firing | `.claude/settings.local.json` missing |
-| Research worker stops without report | Check exit 2 path in `on-stop.sh`; verify `.task` created |
+| Research worker stops without report | Check exit 2 path in `stop-status.sh`; verify `.task` created |
 | Workers don't pick up hook changes | Restart workers (`/doey-restart-workers`) |
 | Dispatch to reserved pane | Check `.reserved` file exists; verify `is_reserved()` |
 

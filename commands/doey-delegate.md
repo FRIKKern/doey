@@ -87,8 +87,8 @@ TARGET_PANE="${SESSION_NAME}:0.X"
 # 1. Exit copy-mode
 tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
 
-# 2. Rename pane
-tmux send-keys -t "$TARGET_PANE" "/rename short-task-name" Enter
+# 2. Rename pane (MANDATORY — task + date for traceability)
+tmux send-keys -t "$TARGET_PANE" "/rename task-name_$(date +%m%d)" Enter
 sleep 1
 
 # 3. Write task to temp file

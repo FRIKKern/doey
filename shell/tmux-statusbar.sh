@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -uo pipefail
+# No -e: tmux status bar must not crash on transient failures
 # tmux-statusbar.sh — Dynamic status-right renderer for doey sessions.
 # Called by tmux every 2s via status-interval. Must stay lightweight (<50ms).
 # Shows: reservation status for focused pane + worker summary counts.
