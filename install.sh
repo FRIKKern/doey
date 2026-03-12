@@ -165,6 +165,8 @@ printf "  ${BRAND}[4/4]${RESET} Installing doey command..."
   chmod +x ~/.local/bin/doey
   cp "$SCRIPT_DIR/shell/tmux-statusbar.sh" "$HOME/.local/bin/tmux-statusbar.sh"
   chmod +x "$HOME/.local/bin/tmux-statusbar.sh"
+  cp "$SCRIPT_DIR/shell/pane-border-status.sh" "$HOME/.local/bin/pane-border-status.sh"
+  chmod +x "$HOME/.local/bin/pane-border-status.sh"
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
 detail "~/.local/bin/doey"
 

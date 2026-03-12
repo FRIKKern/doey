@@ -482,7 +482,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" set-titles-string "🤖 #{session_name} — #{pane_title}"
 
   # Enable mouse for pane selection, scrolling, resizing
-  tmux set-option -t "$session" -g mouse on
+  tmux set-option -t "$session" mouse on
 
   # Suppress terminal bell from worker panes — prevents notification spam
   # Our on-stop.sh hook handles Manager-only notifications via osascript
@@ -790,6 +790,13 @@ check_doctor() {
     printf "  ${ERROR}✗${RESET} Repo path not registered  ${DIM}~/.claude/doey/repo-path missing${RESET}\n"
   fi
 
+  # jq (optional — used for auto-trust in launch)
+  if command -v jq &>/dev/null; then
+    printf "  ${SUCCESS}✓${RESET} jq installed  ${DIM}$(jq --version 2>/dev/null || echo 'unknown version')${RESET}\n"
+  else
+    printf "  ${WARN}⚠${RESET} jq not found — auto-trust during launch will be skipped\n"
+  fi
+
   # Version tracking
   local version_file="$HOME/.claude/doey/version"
   if [[ -f "$version_file" ]]; then
@@ -1034,7 +1041,7 @@ WORKER_CONTEXT
   tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
   tmux set-option -t "$session" set-titles on
   tmux set-option -t "$session" set-titles-string "🤖 #{session_name} — #{pane_title}"
-  tmux set-option -t "$session" -g mouse on
+  tmux set-option -t "$session" mouse on
   tmux set-option -t "$session" bell-action none
   tmux set-option -t "$session" visual-bell off
 
