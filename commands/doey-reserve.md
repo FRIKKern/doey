@@ -1,6 +1,6 @@
 # Skill: doey-reserve
 
-Reserve or unreserve a worker pane to prevent the Manager from dispatching tasks to it.
+Reserve or unreserve a worker pane to prevent Manager dispatch.
 
 ## Usage
 `/doey-reserve`
@@ -19,53 +19,31 @@ You are managing pane reservations for the Doey team.
    MY_PANE_SAFE=${MY_PANE//[:.]/_}
    ```
 
-2. **Ask the user what they want to do:**
-   - **Reserve this pane** — permanently reserve the current pane
-   - **Reserve another pane** — pick a worker pane to reserve
-   - **Unreserve a pane** — remove reservation from a pane
-   - **List reservations** — show all current reservations
-   - **Reserve with timer** — reserve for N minutes (e.g., 5m, 30m)
+2. **Ask the user:** Reserve this pane, reserve another pane, unreserve a pane, list reservations, or reserve with timer.
 
-3. **For "Reserve this pane" or "Reserve another pane":**
+3. **Reserve (permanent or timed):**
    ```bash
-   # Permanent reservation
+   # Permanent
    echo "permanent" > "${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"
+   # Timed (DURATION_SECONDS from user input)
+   echo "$(( $(date +%s) + DURATION_SECONDS ))" > "${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"
    ```
 
-   For timed reservation:
-   ```bash
-   # Timed reservation (DURATION_SECONDS calculated from user input)
-   EXPIRY=$(( $(date +%s) + DURATION_SECONDS ))
-   echo "$EXPIRY" > "${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"
-   ```
+4. **Unreserve:** `rm -f "${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"`
 
-4. **For "Unreserve a pane":**
-   ```bash
-   rm -f "${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved"
-   ```
-
-5. **For "List reservations":**
+5. **List reservations:**
    ```bash
    for f in "${RUNTIME_DIR}/status/"*.reserved; do
      [ -f "$f" ] || continue
-     PANE_SAFE=$(basename "$f" .reserved)
-     EXPIRY=$(head -1 "$f")
-     if [ "$EXPIRY" = "permanent" ]; then
-       echo "${PANE_SAFE}: PERMANENT"
-     else
-       NOW=$(date +%s)
-       REMAINING=$(( EXPIRY - NOW ))
-       if [ "$REMAINING" -gt 0 ]; then
-         echo "${PANE_SAFE}: ${REMAINING}s remaining"
-       else
-         echo "${PANE_SAFE}: EXPIRED (cleaning up)"
-         rm -f "$f"
-       fi
+     PANE_SAFE=$(basename "$f" .reserved); EXPIRY=$(head -1 "$f")
+     if [ "$EXPIRY" = "permanent" ]; then echo "${PANE_SAFE}: PERMANENT"
+     else NOW=$(date +%s); R=$(( EXPIRY - NOW ))
+       [ "$R" -gt 0 ] && echo "${PANE_SAFE}: ${R}s remaining" || { echo "${PANE_SAFE}: EXPIRED"; rm -f "$f"; }
      fi
    done
    ```
 
-6. **Update the pane's status file** to reflect reservation:
+6. **Update status file** to reflect RESERVED status:
    ```bash
    cat > "${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.status" << EOF
 PANE: ${TARGET_PANE}
@@ -75,12 +53,10 @@ TASK:
 EOF
    ```
 
-7. **Confirm** the action to the user with a summary of current reservations.
+7. **Confirm** with a summary of current reservations.
 
 ### Rules
-- The Manager MUST respect reservations — never dispatch to a RESERVED pane
-- Permanent reservations persist until explicitly unreserved
-- Timed reservations auto-expire (cleaned up by statusbar script and hooks)
-- The .reserved file format: first line is either "permanent" or a unix timestamp (expiry)
-- Pane safe names replace `:` and `.` with underscores: `doey-project:0.4` becomes `doey-project_0_4`
-- When listing panes for user selection, show pane index, title, and current status
+- Manager MUST respect reservations — never dispatch to RESERVED panes
+- Timed reservations auto-expire; `.reserved` file: first line is "permanent" or unix timestamp
+- Pane safe names: replace `:` and `.` with `_`
+- When listing panes for selection, show index, title, and status

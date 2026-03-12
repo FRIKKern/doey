@@ -6,40 +6,29 @@ Send a message to another Claude instance in TMUX.
 `/doey-send`
 
 ## Prompt
-You are sending a message to another Claude Code instance running in a TMUX pane.
+You are sending a message to another Claude Code instance in a TMUX pane.
 
 ### Steps
 
-1. Discover runtime directory and list available panes:
+1. **Discover runtime and list panes:**
    ```bash
    RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
+   MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    ```
 
-2. Identify your own pane:
-   ```bash
-   tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}'
-   ```
+2. Ask which pane and what message (if not specified).
 
-3. Ask the user which pane to message and what to say (if not already specified).
-
-4. Write the message to the shared message bus:
+3. **Write message and notify:**
    ```bash
    TIMESTAMP=$(date +%s%N)
-   FROM=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    cat > "${RUNTIME_DIR}/messages/${TARGET_PANE//[:.]/_}_${TIMESTAMP}.msg" <<EOF
-   FROM: $FROM
+   FROM: $MY_PANE
    TO: $TARGET_PANE
    TIME: $(date -Iseconds)
    ---
    $MESSAGE
    EOF
-   ```
-
-5. Then send a keyboard notification to the target pane so the other Claude sees it:
-   ```bash
    tmux send-keys -t "$TARGET_PANE" "/doey-inbox" Enter
    ```
-
-This triggers the target Claude to check its inbox.

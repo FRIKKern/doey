@@ -1,35 +1,30 @@
 # Skill: doey-reinstall
 
-Reinstall the Doey system from the source repo to pick up any changes.
+Reinstall the Doey system from the source repo.
 
 ## Usage
 `/doey-reinstall`
 
 ## Prompt
-You need to reinstall the Doey system. This pulls the latest changes from git and re-runs the installer to update all agent definitions, slash commands, and the CLI script.
+Reinstall Doey by pulling latest changes and re-running the installer.
 
 ### Steps
 
-1. Find the source repo location:
+1. **Find repo:**
    ```bash
    REPO_DIR=$(cat ~/.claude/doey/repo-path 2>/dev/null)
    ```
+   If missing: tell user to run `./install.sh` from repo first. Stop.
 
-2. If the file is missing or the directory doesn't exist, tell the user:
-   - "Could not find the doey repo. Run `./install.sh` from the repo once to register its location."
-   - Stop here.
-
-3. Pull latest changes:
+2. **Pull latest:**
    ```bash
    cd "$REPO_DIR" && git pull
    ```
-   If git pull fails (e.g., uncommitted changes), warn the user but continue with the install anyway — they may have local modifications they want to deploy.
+   If git pull fails (uncommitted changes), warn but continue.
 
-4. Run the installer:
+3. **Run installer:**
    ```bash
    bash "$REPO_DIR/install.sh"
    ```
 
-5. After successful install, tell the user:
-   - "Reinstall complete. New sessions will use the updated files."
-   - "Running sessions need a restart: `doey stop && doey`"
+4. **Report:** "Reinstall complete. New sessions use updated files. Running sessions need: `doey stop && doey`"

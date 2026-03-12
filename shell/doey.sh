@@ -443,7 +443,7 @@ WORKER_CONTEXT
   # Pane borders — heavy lines with role-aware titles
   tmux set-option -t "$session" pane-border-status top
   tmux set-option -t "$session" pane-border-format \
-    ' #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#{pane_title} #[default]'
+    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#(${SCRIPT_DIR}/pane-border-status.sh #{session_name}:#{window_index}.#{pane_index}) #[default]"
   tmux set-option -t "$session" pane-border-style 'fg=colour238'
   tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
   tmux set-option -t "$session" pane-border-lines heavy
@@ -995,7 +995,7 @@ WORKER_CONTEXT
   printf "  ${DIM}Applying theme...${RESET}\n"
   tmux set-option -t "$session" pane-border-status top
   tmux set-option -t "$session" pane-border-format \
-    ' #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#{pane_title} #[default]'
+    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#(${SCRIPT_DIR}/pane-border-status.sh #{session_name}:#{window_index}.#{pane_index}) #[default]"
   tmux set-option -t "$session" pane-border-style 'fg=colour238'
   tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
   tmux set-option -t "$session" pane-border-lines heavy

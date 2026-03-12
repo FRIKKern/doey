@@ -6,53 +6,38 @@ View the full team of Claude instances and their pane layout.
 `/doey-team`
 
 ## Prompt
-You are showing the team overview of all Claude Code instances running in TMUX.
+You are showing the team overview of all Claude Code instances in TMUX.
 
 ### Steps
 
-1. Discover runtime directory and identify yourself:
+1. **Discover runtime and identity:**
    ```bash
    RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    MY_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
    ```
 
-2. List all panes with details:
+2. **List all panes:**
    ```bash
    tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} | PID: #{pane_pid} | #{pane_width}x#{pane_height} | #{pane_current_command}'
    ```
 
-3. Check for status files and reservation files:
+3. **Read status and reservation files:**
    ```bash
-   for f in "${RUNTIME_DIR}/status/"*.status; do
-     [ -f "$f" ] && cat "$f" && echo "---"
-   done
-   ```
-   ```bash
+   for f in "${RUNTIME_DIR}/status/"*.status; do [ -f "$f" ] && cat "$f" && echo "---"; done
    for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
-     PANE_SAFE=${pane//[:.]/_}
-     RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
-     if [ -f "$RESERVE_FILE" ]; then
-       EXPIRY=$(head -1 "$RESERVE_FILE")
-       if [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; then
-         echo "$pane: RESERVED"
-       fi
-     fi
+     PANE_SAFE=${pane//[:.]/_}; RF="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
+     [ -f "$RF" ] && { EXPIRY=$(head -1 "$RF"); [ "$EXPIRY" = "permanent" ] || [ "$(date +%s)" -lt "$EXPIRY" ]; } && echo "$pane: RESERVED"
    done
    ```
 
-4. Check for unread messages per pane:
+4. **Check unread messages per pane:**
    ```bash
    for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
      PANE_SAFE=${pane//[:.]/_}
      COUNT=$(ls "${RUNTIME_DIR}/messages/${PANE_SAFE}_"*.msg 2>/dev/null | wc -l)
-     echo "$pane: $COUNT unread messages"
+     echo "$pane: $COUNT unread"
    done
    ```
 
-5. Present a formatted team overview table:
-   - Pane ID
-   - Status (from status files, or "unknown"). Show 🔒 RESERVED for panes with active `.reserved` files
-   - Current task (from status files, or "unknown")
-   - Unread message count
-   - Mark YOUR pane with `<-- you` indicator
+5. **Present formatted table:** Pane ID, Status (RESERVED shown with lock icon), Current task, Unread count, mark YOUR pane with `<-- you`.

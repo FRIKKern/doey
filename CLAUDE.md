@@ -2,54 +2,55 @@
 
 ## Project Overview
 
-Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers (default 10) in a single tmux session, enabling parallel task execution across multiple Claude Code instances. Workers can be reserved by humans for direct interaction (auto-reserve on keystroke or permanent via `/doey-reserve`). The CLI entry point is `doey`.
+Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers (default 10) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans (auto-reserve on keystroke or permanent via `/doey-reserve`). CLI entry point: `doey`.
 
 ## Architecture
 
-- **Manager (pane 0.0):** Orchestrator — plans and delegates, never writes code. Respects pane reservations (skips reserved workers). Uses `--agent doey-manager` (Opus).
-- **Watchdog (pane 0.{cols}):** Monitors workers, auto-accepts prompts. Uses `--agent doey-watchdog` (Haiku).
-- **Workers (remaining panes):** Standard Claude Code instances (Opus) that execute tasks.
+- **Manager (pane 0.0, Opus):** Orchestrator — plans and delegates, never writes code. Skips reserved workers.
+- **Watchdog (pane 0.{cols}, Haiku):** Monitors workers, auto-accepts prompts.
+- **Workers (remaining panes, Opus):** Execute tasks.
 
-Communication is via tmux commands (`send-keys`, `capture-pane`) and runtime files under `/tmp/doey/<project>/`. See `docs/context-reference.md` for details.
+Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 ## Key Directories
 
-- `agents/` -- Agent definitions (doey-manager.md, doey-watchdog.md), installed to `~/.claude/agents/`
-- `commands/` -- Slash command skills (doey-*.md), installed to `~/.claude/commands/`
-- `.claude/hooks/` -- Modular hook scripts: common.sh (shared utilities), on-prompt-submit.sh, on-stop.sh, on-pre-tool-use.sh, on-pre-compact.sh
-- `.claude/settings.local.json` -- Hook registration (maps 4 events to modular hook scripts)
-- `shell/` -- Launcher script (doey.sh), installed to `~/.local/bin/doey`
-- `docs/` -- Platform guides (linux-server.md, windows-wsl2.md) and context-reference.md
+- `agents/` -- Agent definitions, installed to `~/.claude/agents/`
+- `commands/` -- Slash commands (doey-*.md), installed to `~/.claude/commands/`
+- `.claude/hooks/` -- Modular hooks: common.sh, on-prompt-submit.sh, on-stop.sh, on-pre-tool-use.sh, on-pre-compact.sh
+- `.claude/settings.local.json` -- Hook registration (4 events)
+- `shell/` -- Launcher (doey.sh), installed to `~/.local/bin/doey`
+- `docs/` -- Platform guides and context-reference.md
 
 ## Development Conventions
 
-- Agent definitions use YAML frontmatter: name, model, color, memory, description
-- Commands follow the format: `# Skill: name` + `## Usage` + `## Prompt`
-- Hook exit codes: 0 = allow, 1 = block with error, 2 = block with feedback message
-- Shell scripts use `set -euo pipefail`
-- The installer (`install.sh`) copies agents/ to `~/.claude/agents/` and commands/ to `~/.claude/commands/`
-- Session names follow the pattern `doey-<project-name>`
-- Runtime data lives under `/tmp/doey/<project>/` (status files, messages, `.reserved` files)
+- Agent definitions: YAML frontmatter (name, model, color, memory, description)
+- Commands: `# Skill: name` + `## Usage` + `## Prompt`
+- Hook exit codes: 0=allow, 1=block+error, 2=block+feedback
+- Shell scripts: `set -euo pipefail`
+- Session names: `doey-<project-name>`
+- Runtime data: `/tmp/doey/<project>/`
 
 ## Testing Changes
 
-- **Agent definitions:** restart the Manager or Watchdog to pick up changes
-- **Hook changes:** restart ALL workers (hooks are loaded at startup per-instance)
-- **Command/skill changes:** no restart needed (loaded on-demand)
-- **Launcher changes:** need `doey stop && doey` or new `doey init`
+| Changed | Action |
+|---------|--------|
+| Agent definitions | Restart Manager or Watchdog |
+| Hooks | Restart ALL workers (loaded at startup) |
+| Commands/skills | No restart (loaded on-demand) |
+| Launcher | `doey stop && doey` or new `doey init` |
 
 ## Important Files
 
-- `shell/doey.sh` -- Main launcher: init, start, stop, restart, status, doctor, update, grid setup
-- `.claude/hooks/common.sh` -- Shared hook utilities: pane identity resolution, runtime dir detection
-- `.claude/hooks/on-prompt-submit.sh` -- UserPromptSubmit handler: sets WORKING status, auto-reserves pane (60s) on human input
-- `.claude/hooks/on-stop.sh` -- Stop handler: sets IDLE/RESERVED status, research report enforcement, watchdog keep-alive, Manager notifications
-- `.claude/hooks/on-pre-tool-use.sh` -- PreToolUse handler: safety guards for tool usage
-- `.claude/hooks/on-pre-compact.sh` -- PreCompact handler: context preservation before compaction
-- `commands/doey-reserve.md` -- Slash command for human pane reservation (permanent or timed)
-- `.claude/hooks/status-hook.sh` -- Legacy monolithic hook (kept as reference, no longer registered)
-- `install.sh` -- Copies agents, commands, shell script to user directories; registers repo path
+- `shell/doey.sh` -- Launcher: init/start/stop/restart/status/doctor/update
+- `.claude/hooks/common.sh` -- Shared utilities: pane identity, runtime dir
+- `.claude/hooks/on-prompt-submit.sh` -- Sets WORKING status, auto-reserves (60s)
+- `.claude/hooks/on-stop.sh` -- Sets IDLE/RESERVED, research enforcement, watchdog keep-alive
+- `.claude/hooks/on-pre-tool-use.sh` -- Tool usage safety guards
+- `.claude/hooks/on-pre-compact.sh` -- Context preservation before compaction
+- `commands/doey-reserve.md` -- Pane reservation command
+- `.claude/hooks/status-hook.sh` -- Legacy hook (reference only)
+- `install.sh` -- Installs agents, commands, shell script
 
 ## Context Reference
 
-For deep documentation of all context layers (settings, hooks, memory, env vars, CLI flags, tmux integration, runtime state), see `docs/context-reference.md`.
+See `docs/context-reference.md` for all context layers.
