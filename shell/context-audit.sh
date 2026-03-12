@@ -22,8 +22,8 @@
 set -euo pipefail
 
 # ── Color palette ─────────────────────────────────────────────────────
-WARN_COLOR='\033[0;33m'   # Yellow
-ERROR_COLOR='\033[0;31m'  # Red
+WARN='\033[0;33m'         # Yellow
+ERROR='\033[0;31m'        # Red
 DIM='\033[0;90m'          # Gray
 BOLD='\033[1m'            # Bold
 SUCCESS='\033[0;32m'      # Green
@@ -60,8 +60,8 @@ fi
 
 # Disable colors if requested or if not a terminal
 if $NO_COLOR || [[ ! -t 1 ]]; then
-  WARN_COLOR=""
-  ERROR_COLOR=""
+  WARN=""
+  ERROR=""
   DIM=""
   BOLD=""
   SUCCESS=""
@@ -96,7 +96,7 @@ else
 fi
 
 if [[ ${#SCAN_FILES[@]} -eq 0 ]]; then
-  printf "${WARN_COLOR}  No files found to audit in %s mode${RESET}\n" "$MODE"
+  printf "${WARN}  No files found to audit in %s mode${RESET}\n" "$MODE"
   exit 0
 fi
 
@@ -121,9 +121,10 @@ YSPAM_CRITICAL_GLOB="doey-watchdog"
 declare -a ISSUES=()
 ISSUE_COUNT=0
 
+DELIM=$'\x1f'  # Unit separator — safe delimiter for structured fields
 add_issue() {
   ISSUE_COUNT=$((ISSUE_COUNT + 1))
-  ISSUES+=("${1}|${2}|${3}|${4}|${5}")
+  ISSUES+=("${1}${DELIM}${2}${DELIM}${3}${DELIM}${4}${DELIM}${5}")
 }
 
 # Get display-friendly file path
@@ -176,7 +177,7 @@ for file in "${SCAN_FILES[@]}"; do
   fi
 
   # Identity confusion — only watchdog files
-  if [[ "$bname" == *watchdog* ]]; then
+  if [[ "$bname" == *"$YSPAM_CRITICAL_GLOB"* ]]; then
     scan_matches "identity-confusion" "$IDENTITY_RE" \
       "Watchdog should never send keystrokes to confirm prompts" \
       "$file" "$display"
@@ -194,11 +195,11 @@ if [[ $ISSUE_COUNT -eq 0 ]]; then
   exit 0
 fi
 
-printf "\n${ERROR_COLOR}${BOLD}  CONTEXT AUDIT: %d issue(s) found${RESET}\n\n" "$ISSUE_COUNT"
+printf "\n${ERROR}${BOLD}  CONTEXT AUDIT: %d issue(s) found${RESET}\n\n" "$ISSUE_COUNT"
 
 for issue in "${ISSUES[@]}"; do
-  IFS='|' read -r category file lnum pattern_desc risk_desc <<< "$issue"
-  printf "  ${WARN_COLOR}⚠  %s${RESET}: ${BOLD}%s:%s${RESET}\n" "$category" "$file" "$lnum"
+  IFS="$DELIM" read -r category file lnum pattern_desc risk_desc <<< "$issue"
+  printf "  ${WARN}⚠  %s${RESET}: ${BOLD}%s:%s${RESET}\n" "$category" "$file" "$lnum"
   printf "     ${DIM}Pattern: %s${RESET}\n" "$pattern_desc"
   printf "     ${DIM}Risk: %s${RESET}\n" "$risk_desc"
   printf "\n"
