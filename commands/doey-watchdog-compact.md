@@ -36,9 +36,9 @@ if echo "$OUTPUT" | grep -qiE '(compact|summariz|monitor|check|pane|worker)'; th
   echo "SUCCESS: Watchdog shows activity after compact"
 else
   echo "---"
-  echo "RETRY: No activity detected — sending /doey-monitor to restart loop"
+  echo "RETRY: No activity detected — re-sending /compact to Watchdog"
   tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
-  tmux send-keys -t "$WATCHDOG" "/doey-monitor" Enter
+  tmux send-keys -t "$WATCHDOG" "/compact" Enter
   sleep 15
   OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)
   echo "$OUTPUT"

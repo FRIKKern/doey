@@ -26,7 +26,7 @@ MESSAGE="YOUR_MESSAGE_HERE"
 
 cat > "${RUNTIME_DIR}/broadcasts/${TIMESTAMP}.broadcast" <<EOF
 FROM: $MY_PANE
-TIME: $(date -Iseconds)
+TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
 ---
 $MESSAGE
 EOF

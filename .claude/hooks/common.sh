@@ -23,7 +23,7 @@ init_hook() {
   PANE_SAFE=${PANE//[:.]/_}
   SESSION_NAME="${PANE%%:*}"
   PANE_INDEX="${PANE##*.}"
-  NOW=$(date -Iseconds)
+  NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
   # Ensure runtime dirs exist (fast-path: skip if all present)
   if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/inbox" ]; then
@@ -117,8 +117,10 @@ send_notification() {
     # Linux (libnotify)
     notify-send "$title" "$body" 2>/dev/null &
   elif command -v powershell.exe >/dev/null 2>&1; then
-    # WSL2
-    powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${body}', '${title}')" 2>/dev/null &
+    # WSL2 — escape single quotes for PowerShell string safety
+    local ps_title="${title//\'/\'\'}"
+    local ps_body="${body//\'/\'\'}"
+    powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${ps_body}', '${ps_title}')" 2>/dev/null &
   fi
   # Silent fallback if none available
   return 0

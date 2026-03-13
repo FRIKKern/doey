@@ -77,7 +77,7 @@ write_pane_status() {
   local safe="${pane_id//[:.]/_}"
   cat > "${rt_dir}/status/${safe}.status" <<EOF
 PANE: ${pane_id}
-UPDATED: $(date -Iseconds)
+UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: ${status}
 TASK: ${task}
 EOF
@@ -109,7 +109,7 @@ register_project() {
 
   # Already registered?
   if grep -q ":${dir}$" "$PROJECTS_FILE" 2>/dev/null; then
-    printf "  ${SUCCESS}Already registered as '$(find_project "$dir")'${RESET}\n"
+    printf "  ${SUCCESS}Already registered as '%s'${RESET}\n" "$(find_project "$dir")"
     return 0
   fi
 
@@ -121,7 +121,7 @@ register_project() {
   fi
 
   echo "${name}:${dir}" >> "$PROJECTS_FILE"
-  printf "  ${SUCCESS}Registered${RESET} ${BOLD}${name}${RESET} ${DIM}→${RESET} ${dir}\n"
+  printf "  ${SUCCESS}Registered${RESET} ${BOLD}%s${RESET} ${DIM}→${RESET} %s\n" "$name" "$dir"
 }
 
 # List all projects with running status
@@ -155,9 +155,9 @@ stop_project() {
     local current_session
     current_session="$(tmux display-message -p '#S' 2>/dev/null || true)"
     if [[ "$current_session" == doey-* ]]; then
-      printf "  Stopping doey session: ${BOLD}${current_session}${RESET}...\n"
+      printf "  Stopping doey session: ${BOLD}%s${RESET}...\n" "$current_session"
       _kill_doey_session "$current_session"
-      printf "  ${SUCCESS}Stopped${RESET} ${current_session}\n"
+      printf "  ${SUCCESS}Stopped${RESET} %s\n" "$current_session"
       return 0
     fi
   fi
@@ -168,11 +168,11 @@ stop_project() {
   if [[ -n "$name" ]]; then
     local session="doey-${name}"
     if session_exists "$session"; then
-      printf "  Stopping doey session: ${BOLD}${session}${RESET}...\n"
+      printf "  Stopping doey session: ${BOLD}%s${RESET}...\n" "$session"
       _kill_doey_session "$session"
-      printf "  ${SUCCESS}Stopped${RESET} ${session}\n"
+      printf "  ${SUCCESS}Stopped${RESET} %s\n" "$session"
     else
-      printf "  ${DIM}No active session for ${name}${RESET}\n"
+      printf "  ${DIM}No active session for %s${RESET}\n" "$name"
     fi
     return 0
   fi
@@ -239,7 +239,10 @@ _kill_doey_session() {
   for pane_id in $(tmux list-panes -s -t "$session" -F '#{pane_id}' 2>/dev/null); do
     local pane_pid
     pane_pid=$(tmux display-message -t "$pane_id" -p '#{pane_pid}' 2>/dev/null || true)
-    [[ -n "$pane_pid" ]] && pkill -P "$pane_pid" 2>/dev/null || true
+    if [[ -n "$pane_pid" ]]; then
+      pkill -P "$pane_pid" 2>/dev/null || true
+      kill -- -"$pane_pid" 2>/dev/null || true
+    fi
   done
   sleep 1
   # Kill the tmux session
@@ -256,7 +259,7 @@ show_menu() {
   printf '\n'
   printf "  ${BRAND}Doey${RESET}\n"
   printf '\n'
-  printf "  ${WARN}No project registered for $(pwd)${RESET}\n"
+  printf "  ${WARN}No project registered for %s${RESET}\n" "$(pwd)"
   printf '\n'
 
   # Read projects into arrays
@@ -539,6 +542,15 @@ WORKER_CONTEXT
   done
 
   sleep 2
+
+  # Verify pane count
+  local actual
+  actual=$(tmux list-panes -t "$session" 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$actual" -ne "$total" ]]; then
+    printf "\n"
+    printf "   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
+  fi
+
   step_done
 
   # ── Step 4: Name panes ─────────────────────────────────────────
@@ -600,6 +612,9 @@ WORKER_CONTEXT
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
+  # Clean up background jobs on early exit
+  trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM
+
   step_done
 
   # ── Step 6: Boot workers ───────────────────────────────────────
@@ -653,6 +668,8 @@ WORKER_CONTEXT
   printf '\n'
 
   # ── Focus on Manager pane, attach ──────────────────────────────
+  # Clear the trap — background briefing jobs should complete normally after attach
+  trap - EXIT INT TERM
   tmux select-pane -t "$session:0.0"
   if [[ -n "${TMUX:-}" ]]; then
     tmux switch-client -t "$session"
@@ -666,47 +683,69 @@ update_system() {
   local repo_path_file="$HOME/.claude/doey/repo-path"
   local repo_dir
 
-  if [[ ! -f "$repo_path_file" ]]; then
-    printf "  ${ERROR}Could not find the doey repo.${RESET}\n"
-    printf "  Run ${BOLD}./install.sh${RESET} from the repo to register its location.\n"
-    exit 1
+  if [[ -f "$repo_path_file" ]]; then
+    repo_dir="$(cat "$repo_path_file")"
   fi
 
-  repo_dir="$(cat "$repo_path_file")"
-  if [[ ! -d "$repo_dir" ]]; then
-    printf "  ${ERROR}Could not find the doey repo.${RESET}\n"
-    printf "  Run ${BOLD}./install.sh${RESET} from the repo to register its location.\n"
-    exit 1
-  fi
+  if [[ -n "${repo_dir:-}" ]] && [[ -d "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
+    # Local repo update path
+    printf "  ${BRAND}Updating doey...${RESET}\n"
+    printf '\n'
 
-  printf "  ${BRAND}Updating doey...${RESET}\n"
-  printf '\n'
+    local old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
 
-  local old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
+    # Warn about local changes
+    if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
+      printf "  ${WARN}⚠ Repo has local changes — git pull may fail or require merge${RESET}\n"
+    fi
 
-  # Warn about local changes
-  if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
-    printf "  ${WARN}⚠ Repo has local changes — git pull may fail or require merge${RESET}\n"
-  fi
+    printf "  ${DIM}Pulling latest changes...${RESET}\n"
+    if ! git -C "$repo_dir" pull; then
+      printf "  ${WARN}git pull failed — continuing with reinstall${RESET}\n"
+    fi
 
-  printf "  ${DIM}Pulling latest changes...${RESET}\n"
-  if ! git -C "$repo_dir" pull; then
-    printf "  ${WARN}git pull failed — continuing with reinstall${RESET}\n"
-  fi
+    local new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
+    if [[ "$old_hash" == "$new_hash" ]]; then
+      printf "  ${SUCCESS}Already up to date${RESET} ${DIM}($old_hash)${RESET}\n"
+    else
+      printf "  ${SUCCESS}Updated${RESET} ${DIM}$old_hash → $new_hash${RESET}\n"
+    fi
+    printf '\n'
 
-  local new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
-  if [[ "$old_hash" == "$new_hash" ]]; then
-    printf "  ${SUCCESS}Already up to date${RESET} ${DIM}($old_hash)${RESET}\n"
+    printf "  ${DIM}Running install.sh...${RESET}\n"
+    if ! bash "$repo_dir/install.sh"; then
+      printf "\n  ${ERROR}✗ Install failed during update.${RESET}\n"
+      printf "  ${DIM}Repo is at $new_hash. Run install.sh manually to retry.${RESET}\n"
+      exit 1
+    fi
   else
-    printf "  ${SUCCESS}Updated${RESET} ${DIM}$old_hash → $new_hash${RESET}\n"
-  fi
-  printf '\n'
+    # Web update fallback — no local repo available
+    local web_repo_url="https://github.com/frikk-gyldendal/doey.git"
+    local clone_dir
+    clone_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
 
-  printf "  ${DIM}Running install.sh...${RESET}\n"
-  if ! bash "$repo_dir/install.sh"; then
-    printf "\n  ${ERROR}✗ Install failed during update.${RESET}\n"
-    printf "  ${DIM}Repo is at $new_hash. Run install.sh manually to retry.${RESET}\n"
-    exit 1
+    printf "  ${BRAND}Updating doey...${RESET}\n"
+    printf '\n'
+    printf "  ${DIM}No local repo found — updating from remote...${RESET}\n"
+
+    printf "  ${DIM}Cloning latest version...${RESET}\n"
+    if ! git clone --depth 1 "$web_repo_url" "$clone_dir"; then
+      printf "\n  ${ERROR}✗ Failed to clone repository.${RESET}\n"
+      printf "  ${DIM}Make sure git is installed and you have network access.${RESET}\n"
+      rm -rf "$clone_dir"
+      exit 1
+    fi
+    printf "  ${SUCCESS}✓ Repository cloned${RESET}\n"
+    printf '\n'
+
+    printf "  ${DIM}Running install.sh...${RESET}\n"
+    if ! bash "$clone_dir/install.sh"; then
+      printf "\n  ${ERROR}✗ Install failed during update.${RESET}\n"
+      rm -rf "$clone_dir"
+      exit 1
+    fi
+
+    rm -rf "$clone_dir"
   fi
   printf '\n'
 
@@ -769,14 +808,14 @@ check_doctor() {
 
   # tmux
   if command -v tmux &>/dev/null; then
-    printf "  ${SUCCESS}✓${RESET} tmux installed  ${DIM}$(tmux -V)${RESET}\n"
+    printf "  ${SUCCESS}✓${RESET} tmux installed  ${DIM}%s${RESET}\n" "$(tmux -V)"
   else
     printf "  ${ERROR}✗${RESET} tmux not installed\n"
   fi
 
   # claude CLI
   if command -v claude &>/dev/null; then
-    printf "  ${SUCCESS}✓${RESET} claude CLI installed  ${DIM}$(claude --version 2>/dev/null || echo 'unknown version')${RESET}\n"
+    printf "  ${SUCCESS}✓${RESET} claude CLI installed  ${DIM}%s${RESET}\n" "$(claude --version 2>/dev/null || echo 'unknown version')"
   else
     printf "  ${WARN}⚠${RESET} claude CLI not found in PATH\n"
   fi
@@ -815,9 +854,9 @@ check_doctor() {
     local repo_dir
     repo_dir="$(cat "$repo_path_file")"
     if [[ -d "$repo_dir" ]]; then
-      printf "  ${SUCCESS}✓${RESET} Repo registered  ${DIM}${repo_dir}${RESET}\n"
+      printf "  ${SUCCESS}✓${RESET} Repo registered  ${DIM}%s${RESET}\n" "$repo_dir"
     else
-      printf "  ${ERROR}✗${RESET} Repo path registered but directory missing  ${DIM}${repo_dir}${RESET}\n"
+      printf "  ${ERROR}✗${RESET} Repo path registered but directory missing  ${DIM}%s${RESET}\n" "$repo_dir"
     fi
   else
     printf "  ${ERROR}✗${RESET} Repo path not registered  ${DIM}~/.claude/doey/repo-path missing${RESET}\n"
@@ -825,7 +864,7 @@ check_doctor() {
 
   # jq (optional — used for auto-trust in launch)
   if command -v jq &>/dev/null; then
-    printf "  ${SUCCESS}✓${RESET} jq installed  ${DIM}$(jq --version 2>/dev/null || echo 'unknown version')${RESET}\n"
+    printf "  ${SUCCESS}✓${RESET} jq installed  ${DIM}%s${RESET}\n" "$(jq --version 2>/dev/null || echo 'unknown version')"
   else
     printf "  ${WARN}⚠${RESET} jq not found — auto-trust during launch will be skipped\n"
   fi
@@ -836,7 +875,7 @@ check_doctor() {
     local ver vdate
     ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
     vdate="$(grep "^date=" "$version_file" | cut -d= -f2)"
-    printf "  ${SUCCESS}✓${RESET} Version tracked  ${DIM}${ver} (${vdate})${RESET}\n"
+    printf "  ${SUCCESS}✓${RESET} Version tracked  ${DIM}%s (%s)${RESET}\n" "$ver" "$vdate"
   else
     printf "  ${WARN}⚠${RESET} No version file  ${DIM}Run 'doey update' to generate${RESET}\n"
   fi
@@ -868,31 +907,37 @@ remove_project() {
 
   # Still no name — error with hint
   if [[ -z "$name" ]]; then
-    printf "  ${ERROR}No project specified and no project registered for $(pwd)${RESET}\n"
+    printf "  ${ERROR}No project specified and no project registered for %s${RESET}\n" "$(pwd)"
     printf '\n'
     printf "  ${DIM}Registered projects:${RESET}\n"
     while IFS=: read -r pname ppath; do
       [[ -z "$pname" ]] && continue
-      printf "    ${BOLD}${pname}${RESET}  ${DIM}${ppath}${RESET}\n"
+      printf "    ${BOLD}%s${RESET}  ${DIM}%s${RESET}\n" "$pname" "$ppath"
     done < "$PROJECTS_FILE"
     printf '\n'
     printf "  Usage: ${BOLD}doey remove <name>${RESET}\n"
     return 1
   fi
 
+  # Validate name format (only allow sanitized project names)
+  if [[ ! "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    printf "  ${ERROR}Invalid project name: %s${RESET}\n" "$name"
+    return 1
+  fi
+
   # Check if project exists in registry
   if ! grep -q "^${name}:" "$PROJECTS_FILE" 2>/dev/null; then
-    printf "  ${ERROR}No project named '${name}' in registry${RESET}\n"
+    printf "  ${ERROR}No project named '%s' in registry${RESET}\n" "$name"
     return 1
   fi
 
   # Remove matching line
   grep -v "^${name}:" "$PROJECTS_FILE" > "${PROJECTS_FILE}.tmp" && mv "${PROJECTS_FILE}.tmp" "$PROJECTS_FILE"
-  printf "  ${SUCCESS}Removed '${name}' from project registry${RESET}\n"
+  printf "  ${SUCCESS}Removed '%s' from project registry${RESET}\n" "$name"
 
   # Hint about running session
   if session_exists "doey-${name}"; then
-    printf "  ${WARN}Session doey-${name} is still running. Use 'doey stop' in that directory to stop it.${RESET}\n"
+    printf "  ${WARN}Session doey-%s is still running. Use 'doey stop' in that directory to stop it.${RESET}\n" "$name"
   fi
 }
 
@@ -908,12 +953,12 @@ show_version() {
     ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
     installed_date="$(grep "^date=" "$version_file" | cut -d= -f2)"
     repo_dir="$(grep "^repo=" "$version_file" | cut -d= -f2)"
-    printf "  ${DIM}Version${RESET}    ${BOLD}${ver}${RESET}  ${DIM}(installed ${installed_date})${RESET}\n"
+    printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(installed %s)${RESET}\n" "$ver" "$installed_date"
     if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir" ]]; then
       local latest
       latest="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo '')"
       if [[ -n "$latest" ]] && [[ "$latest" != "$ver" ]]; then
-        printf "  ${DIM}Update${RESET}     ${WARN}${latest} available${RESET}  ${DIM}(run 'doey update')${RESET}\n"
+        printf "  ${DIM}Update${RESET}     ${WARN}%s available${RESET}  ${DIM}(run 'doey update')${RESET}\n" "$latest"
       fi
     fi
   else
@@ -925,7 +970,7 @@ show_version() {
       if [[ -d "$repo_dir" ]]; then
         local version_info
         version_info="$(git -C "$repo_dir" log -1 --format="%h (%ci)" 2>/dev/null || echo 'unknown')"
-        printf "  ${DIM}Version${RESET}    ${BOLD}${version_info}${RESET}  ${DIM}(no version file — reinstall to track)${RESET}\n"
+        printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(no version file — reinstall to track)${RESET}\n" "$version_info"
       fi
     fi
   fi
@@ -938,7 +983,7 @@ show_version() {
   if [[ -f "$PROJECTS_FILE" ]]; then
     project_count="$(grep -c '.' "$PROJECTS_FILE" 2>/dev/null || echo 0)"
   fi
-  printf "  ${DIM}Projects${RESET}   ${BOLD}${project_count} registered${RESET}\n"
+  printf "  ${DIM}Projects${RESET}   ${BOLD}%s registered${RESET}\n" "$project_count"
 
   printf '\n'
 }
@@ -1109,6 +1154,13 @@ WORKER_CONTEXT
 
   sleep 2
 
+  # Verify pane count
+  local actual
+  actual=$(tmux list-panes -t "$session" 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$actual" -ne "$total" ]]; then
+    printf "  ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
+  fi
+
   # ── Name panes ──
   printf "  ${DIM}Naming panes...${RESET}\n"
   tmux select-pane -t "$session:0.0" -T "MGR Manager"
@@ -1160,6 +1212,9 @@ WORKER_CONTEXT
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
+  # Clean up background jobs on early exit
+  trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM
+
   # ── Boot workers ──
   printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
   local booted=0
@@ -1179,7 +1234,9 @@ WORKER_CONTEXT
     write_pane_status "$runtime_dir" "${session}:0.${i}" "READY"
   done
 
-  printf "  ${SUCCESS}Team launched${RESET} — session ${BOLD}${session}${RESET} with ${worker_count} workers\n"
+  # Clear the trap — background briefing jobs should complete normally
+  trap - EXIT INT TERM
+  printf "  ${SUCCESS}Team launched${RESET} — session ${BOLD}%s${RESET} with %s workers\n" "$session" "$worker_count"
 }
 
 # ── E2E Test Runner ───────────────────────────────────────────────────
@@ -1197,7 +1254,7 @@ run_test() {
       --grid) grid="$2"; shift 2 ;;
       [0-9]*x[0-9]*) grid="$1"; shift ;;
       *)
-        printf "  ${ERROR}Unknown test flag: $1${RESET}\n"
+        printf "  ${ERROR}Unknown test flag: %s${RESET}\n" "$1"
         return 1
         ;;
     esac
@@ -1255,7 +1312,7 @@ run_test() {
   repo_dir="$(resolve_repo_dir)"
   local journey_file="${repo_dir}/tests/e2e/journey.md"
   if [[ ! -f "$journey_file" ]]; then
-    printf "  ${ERROR}Journey file not found: ${journey_file}${RESET}\n"
+    printf "  ${ERROR}Journey file not found: %s${RESET}\n" "$journey_file"
     return 1
   fi
   mkdir -p "${test_root}/observations"
@@ -1404,7 +1461,7 @@ HELP
     # No args — fall through to smart launch
     ;;
   *)
-    printf "  ${ERROR}Unknown command: $1${RESET}\n"
+    printf "  ${ERROR}Unknown command: %s${RESET}\n" "$1"
     printf "  Run ${BOLD}doey --help${RESET} for usage\n"
     exit 1
     ;;
@@ -1422,7 +1479,7 @@ if [[ -n "$name" ]]; then
   session="doey-${name}"
   if session_exists "$session"; then
     # Already running — just attach
-    printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}${session}${RESET}...\n"
+    printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}%s${RESET}...\n" "$session"
     if [[ -n "${TMUX:-}" ]]; then
       tmux switch-client -t "$session"
     else

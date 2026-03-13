@@ -20,36 +20,14 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 
-### Step 1: Discover identity and parse argument
+### Step 1: Determine action
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
+Read the user's argument after `/doey-reserve`:
+- No argument or empty → **reserve** (go to Step 2a)
+- `off` or `unreserve` → **unreserve** (go to Step 2b)
+- `list` → **list** (go to Step 2c)
 
-MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-MY_PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
-mkdir -p "${RUNTIME_DIR}/status"
-
-ARG="$USER_ARGUMENT"  # text after /doey-reserve
-
-case "$ARG" in
-  ""|" ")
-    ACTION="permanent"
-    ;;
-  off|unreserve)
-    ACTION="unreserve"
-    ;;
-  list)
-    ACTION="list"
-    ;;
-  *)
-    echo "Unknown argument: $ARG — use: off or list"
-    exit 1
-    ;;
-esac
-
-echo "Pane: $MY_PANE | Action: $ACTION"
-```
+Then run the appropriate step below. **Do not use a shell variable for the argument** — determine the action yourself from the user's message and jump to the correct step.
 
 ### Step 2a: Reserve permanently (when ACTION=permanent)
 
@@ -65,7 +43,7 @@ echo "permanent" > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.reserved"
 
 cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" << EOF
 PANE: ${MY_PANE}
-UPDATED: $(date -Iseconds)
+UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: RESERVED
 TASK:
 EOF
@@ -86,7 +64,7 @@ rm -f "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.reserved"
 
 cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" << EOF
 PANE: ${MY_PANE}
-UPDATED: $(date -Iseconds)
+UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: READY
 TASK:
 EOF

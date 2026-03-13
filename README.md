@@ -263,9 +263,12 @@ doey/
 ├── web-install.sh               # Web installer (curl | bash)
 ├── agents/
 │   ├── doey-manager.md          # Manager agent → ~/.claude/agents/
-│   └── doey-watchdog.md         # Watchdog agent → ~/.claude/agents/
+│   ├── doey-watchdog.md         # Watchdog agent → ~/.claude/agents/
+│   └── test-driver.md           # E2E test driver agent → ~/.claude/agents/
 ├── docs/
-│   └── context-reference.md     # Deep reference for agent context layers
+│   ├── context-reference.md     # Deep reference for agent context layers
+│   ├── linux-server.md          # Linux server deployment guide
+│   └── windows-wsl2.md          # Windows WSL2 installation guide
 ├── commands/                    # Slash commands → ~/.claude/commands/
 │   ├── doey-broadcast.md
 │   ├── doey-delegate.md
@@ -273,6 +276,7 @@ doey/
 │   ├── doey-inbox.md
 │   ├── doey-monitor.md
 │   ├── doey-reinstall.md
+│   ├── doey-research.md
 │   ├── doey-reserve.md
 │   ├── doey-restart-workers.md
 │   ├── doey-send.md

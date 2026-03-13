@@ -51,8 +51,11 @@ fi
 if is_watchdog; then
   case "$TOOL_COMMAND" in
     *"send-keys"*|*"send-key"*|*"paste-buffer"*)
-      # Allow safe commands: inbox delivery, login, copy-mode control
-      if echo "$TOOL_COMMAND" | grep -qE '(doey-inbox|/login|/compact|copy-mode)'; then
+      # Allow specific watchdog operations by matching complete tmux patterns.
+      # Only permit: sending /doey-inbox, /login, /compact, bare Enter, and copy-mode.
+      # Match command structure to prevent allowlist bypass via string containment
+      # (e.g. "echo doey-inbox; malicious" would pass a simple substring check).
+      if echo "$TOOL_COMMAND" | grep -qE '^tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( |$)|copy-mode )'; then
         exit 0
       fi
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2

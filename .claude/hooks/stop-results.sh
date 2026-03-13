@@ -9,7 +9,7 @@ init_hook
 is_worker || exit 0
 
 TMPFILE_RESULT="" TMPFILE_INBOX=""
-trap 'rm -f "$TMPFILE_RESULT" "$TMPFILE_INBOX" 2>/dev/null' EXIT
+trap '[[ -n "${TMPFILE_RESULT:-}" ]] && rm -f "$TMPFILE_RESULT" 2>/dev/null; [[ -n "${TMPFILE_INBOX:-}" ]] && rm -f "$TMPFILE_INBOX" 2>/dev/null' EXIT
 
 OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -80 2>/dev/null) || OUTPUT=""
 
@@ -19,7 +19,7 @@ RESULT_STATUS="done"
 while IFS= read -r line; do
   [[ "$line" =~ ❯|───|Ctx\ █|bypass\ permissions|shift\+tab|MCP\ server|/doctor ]] && continue
   FILTERED_OUTPUT+="$line"$'\n'
-  [[ "$RESULT_STATUS" == "done" ]] && [[ "$line" =~ [Ee]rror|[Ff]ailed|[Ee]xception ]] && RESULT_STATUS="error"
+  [[ "$RESULT_STATUS" == "done" ]] && [[ "$line" =~ (^|[[:space:]])(error|Error|ERROR|failed|Failed|FAILED|exception|Exception|EXCEPTION)([[:space:]]|:|$) ]] && RESULT_STATUS="error"
 done <<< "$OUTPUT"
 
 # Get pane title for identification
@@ -47,6 +47,7 @@ cat > "$TMPFILE_RESULT" <<EOF
 }
 EOF
 [[ "$TMPFILE_RESULT" != *"pane_${PANE_INDEX}.json" ]] && mv "$TMPFILE_RESULT" "$RUNTIME_DIR/results/pane_${PANE_INDEX}.json"
+TMPFILE_RESULT=""
 
 # --- Write human-readable inbox message for the manager ---
 SAFE_TITLE=$(printf '%s' "$PANE_TITLE" | tr -cd '[:alnum:]._-')
@@ -59,5 +60,6 @@ cat > "$TMPFILE_INBOX" <<INBOX
 ${FILTERED_OUTPUT}
 INBOX
 [[ "$TMPFILE_INBOX" != "$INBOX_FILE" ]] && mv "$TMPFILE_INBOX" "$INBOX_FILE"
+TMPFILE_INBOX=""
 
 exit 0

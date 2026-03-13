@@ -5,7 +5,8 @@ set -euo pipefail
 # Usage: curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/doey/main/web-install.sh | bash
 
 REPO_URL="https://github.com/frikk-gyldendal/doey.git"
-CLONE_DIR="${TMPDIR:-/tmp}/doey-install"
+CLONE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/doey-install.XXXXXX")
+trap 'rm -rf "$CLONE_DIR"' EXIT
 
 cat << 'DOG'
 
@@ -46,12 +47,9 @@ cat << 'DOG'
 
 DOG
 
-# Clean up any previous install attempt
-rm -rf "$CLONE_DIR"
-
 # Clone the repo
 echo "  Cloning repository..."
-if git clone --depth 1 "$REPO_URL" "$CLONE_DIR" 2>/dev/null; then
+if git clone --depth 1 "$REPO_URL" "$CLONE_DIR"; then
   echo "  ✓ Repository cloned"
 else
   echo "  ✗ Failed to clone repository"
@@ -63,6 +61,3 @@ echo ""
 
 # Run the real installer
 bash "$CLONE_DIR/install.sh"
-
-# Clean up
-rm -rf "$CLONE_DIR"

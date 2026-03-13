@@ -183,9 +183,11 @@ fi
 # ── Step 5: Context audit ───────────────────────────────────────────
 printf "  ${BRAND}[5/5]${RESET} Running context audit..."
 AUDIT_OUTPUT=""
+AUDIT_FAILED=false
 if AUDIT_OUTPUT=$(bash "$SCRIPT_DIR/shell/context-audit.sh" --repo --no-color 2>&1); then
   step_ok
 else
+  AUDIT_FAILED=true
   step_fail
   printf "\n%s\n\n" "$AUDIT_OUTPUT"
   warn_msg "Context audit found issues — review above before launching sessions"
@@ -232,11 +234,15 @@ printf "${RESET}"
 echo ""
 printf "${SUCCESS}┌────────────────────────────────────────────┐${RESET}\n"
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
+if [ "$AUDIT_FAILED" = true ]; then
+printf "${SUCCESS}│${RESET}  ${WARN}${BOLD}Installed with warnings${RESET}  ${DIM}(see audit above)${RESET}  ${SUCCESS}│${RESET}\n"
+else
 printf "${SUCCESS}│${RESET}  ${SUCCESS}${BOLD}Installation complete!${RESET}                     ${SUCCESS}│${RESET}\n"
+fi
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}  ${BOLD}Installed:${RESET}                                ${SUCCESS}│${RESET}\n"
-printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %s agent definitions                  ${SUCCESS}│${RESET}\n" "$AGENT_COUNT"
-printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %s slash commands                     ${SUCCESS}│${RESET}\n" "$CMD_COUNT"
+printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s agent definitions                 ${SUCCESS}│${RESET}\n" "$AGENT_COUNT"
+printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s slash commands                    ${SUCCESS}│${RESET}\n" "$CMD_COUNT"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} doey CLI                               ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}  ${BOLD}Quick start:${RESET}                              ${SUCCESS}│${RESET}\n"

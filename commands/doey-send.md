@@ -26,7 +26,7 @@ You are sending a message to another Claude Code instance in a TMUX pane.
    cat > "${RUNTIME_DIR}/messages/${TARGET_PANE//[:.]/_}_${TIMESTAMP}.msg" <<EOF
    FROM: $MY_PANE
    TO: $TARGET_PANE
-   TIME: $(date -Iseconds)
+   TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
    ---
    $MESSAGE
    EOF

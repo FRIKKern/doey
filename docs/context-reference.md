@@ -44,13 +44,13 @@ Load Order (bottom = first, top = last / highest precedence)
 
 ## Layer 1: Agent Definitions
 
-**Files:** `agents/doey-manager.md`, `agents/doey-watchdog.md` (installed to `~/.claude/agents/`)
+**Files:** `agents/doey-manager.md`, `agents/doey-watchdog.md`, `agents/test-driver.md` (installed to `~/.claude/agents/`)
 
 | Field | Manager | Watchdog | Effect |
 |-------|---------|----------|--------|
 | `model` | `opus` | `haiku` | Default model; CLI `--model` overrides |
 | `color` | `green` | `yellow` | Status line color |
-| `memory` | `user` | `user` | Stores to `~/.claude/agent-memory/<name>/` |
+| `memory` | `user` | `none` | Manager stores to `~/.claude/agent-memory/<name>/`; Watchdog has no memory |
 
 Body text below frontmatter becomes the system prompt. Manager: ~253 lines (identity, workflow, delegation rules). Watchdog: ~175 lines (monitoring loop, prompt detection, monitoring rules).
 
@@ -67,6 +67,8 @@ Merge order (later wins for scalars; arrays are additive):
 | `~/.claude/settings.local.json` | `permissions.allow: ["Bash(brew install:*)"]` |
 | `<project>/.claude/settings.json` | Not present |
 | `<project>/.claude/settings.local.json` | Registers 6 hook events |
+
+*Note: Values shown for `~/.claude/settings.json` and `~/.claude/settings.local.json` are examples from the project's setup. Your user-level settings may differ.*
 
 Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 

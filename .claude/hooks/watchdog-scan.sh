@@ -23,6 +23,8 @@ fi
 # --- Scan each worker pane ---
 IFS=',' read -ra PANES <<< "$WORKER_PANES"
 for i in "${PANES[@]}"; do
+  # Validate pane index before use in eval/variable expansion
+  [[ "$i" =~ ^[0-9]+$ ]] || continue
   PANE_REF="${SESSION_NAME}:0.${i}"
   PANE_SAFE="${SESSION_NAME//[:.]/_}_0_${i}"
 
@@ -40,10 +42,20 @@ for i in "${PANES[@]}"; do
   fi
 
   # Check for crash (shell prompt without claude/node running)
+  # Cross-check with status file to avoid false-positives on normally finished workers
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
   if [[ "$CURRENT_CMD" =~ ^(bash|zsh|sh|fish)$ ]]; then
-    echo "PANE ${i} CRASHED"
-    eval "PANE_STATE_${i}=CRASHED"
+    STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+    if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
+      echo "PANE ${i} FINISHED"
+      eval "PANE_STATE_${i}=FINISHED"
+    elif [ -f "$STATUS_FILE" ] && grep -q '^STATUS: RESERVED' "$STATUS_FILE"; then
+      echo "PANE ${i} RESERVED"
+      eval "PANE_STATE_${i}=RESERVED"
+    else
+      echo "PANE ${i} CRASHED"
+      eval "PANE_STATE_${i}=CRASHED"
+    fi
     continue
   fi
 
@@ -94,6 +106,8 @@ echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" && \
 JSON="{"
 FIRST=true
 for i in "${PANES[@]}"; do
+  # Validate pane index before eval to prevent injection
+  [[ "$i" =~ ^[0-9]+$ ]] || continue
   eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"
   if [ "$FIRST" = true ]; then
     JSON+="\"${i}\":\"${STATE}\""

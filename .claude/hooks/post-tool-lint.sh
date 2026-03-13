@@ -71,6 +71,7 @@ check_pattern "$FILE_PATH" "printf[[:space:]].*'%\(.*\)T'" 'printf time format (
 check_pattern "$FILE_PATH" 'printf[[:space:]]+-v[[:space:]].*%\(.*\)T' 'printf -v time format (bash 4.2+)'
 check_pattern "$FILE_PATH" 'mapfile[[:space:]]' 'mapfile (bash 4+)'
 check_pattern "$FILE_PATH" 'readarray[[:space:]]' 'readarray (bash 4+)'
+# Note: may match |& inside strings/comments (acceptable false positive rate)
 check_pattern "$FILE_PATH" '\|&' 'pipe stderr shorthand |& (bash 4+)'
 check_pattern "$FILE_PATH" '&>>' 'append both streams &>> (bash 4+)'
 check_pattern "$FILE_PATH" 'coproc[[:space:]]' 'coproc (bash 4+)'
@@ -85,7 +86,7 @@ fi
 reason=$(printf "Bash 3.2 compatibility violations in %s (%d found):\n%b" "$FILE_PATH" "$count" "$violations")
 
 # Escape for JSON: backslashes, quotes, newlines
-reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' ')
+reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')
 
 # Output block decision as JSON
 echo "{\"decision\": \"block\", \"reason\": \"${reason_escaped}\"}"
