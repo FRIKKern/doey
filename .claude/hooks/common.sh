@@ -25,6 +25,15 @@ init_hook() {
   PANE_INDEX="${PANE##*.}"
   NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
+  # Stable pane ID (survives pane add/remove, unlike PANE_INDEX)
+  PANE_ID=""
+  if [[ -n "$TMUX_PANE" ]]; then
+    PANE_ID="$TMUX_PANE"  # TMUX_PANE env var IS the pane ID (e.g., %5)
+  fi
+
+  # Export pane identity for subprocesses
+  export PANE_ID
+
   # Ensure runtime dirs exist (fast-path: skip if all present)
   if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/inbox" ]; then
     mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/inbox"
@@ -77,6 +86,31 @@ is_dispatched() {
     return 0
   fi
   return 1
+}
+
+# Get stable pane ID for a given pane reference
+# Usage: pane_id=$(get_pane_id "$SESSION_NAME:0.3")
+get_pane_id() {
+  local pane_ref="$1"
+  tmux display-message -t "$pane_ref" -p '#{pane_id}' 2>/dev/null
+}
+
+# Get current pane index for a stable pane ID
+# Usage: pane_idx=$(get_pane_index "%5")
+get_pane_index() {
+  local pane_id="$1"
+  tmux list-panes -s -F '#{pane_id} #{pane_index}' 2>/dev/null | \
+    awk -v id="$pane_id" '$1 == id { print $2 }'
+}
+
+# Rebuild pane ID → index mapping for all panes in session
+# Writes to $RUNTIME_DIR/status/pane_map
+refresh_pane_map() {
+  local session="${1:-$SESSION_NAME}"
+  local runtime="${2:-$RUNTIME_DIR}"
+  mkdir -p "${runtime}/status"
+  tmux list-panes -s -t "$session" -F '#{pane_id} #{pane_index} #{pane_title}' \
+    > "${runtime}/status/pane_map" 2>/dev/null
 }
 
 # Cross-platform desktop notification
