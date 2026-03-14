@@ -40,4 +40,28 @@ TASK: $TASK
 EOF
 [[ "$TMPFILE_STATUS" != "$STATUS_FILE" ]] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
 
+# Expand column if collapsed (human needs to see the pane)
+if is_worker; then
+  # Quick check: are ANY columns collapsed?
+  HAS_COLLAPSED=false
+  for _f in "${RUNTIME_DIR}/status"/col_*.collapsed; do
+    [ -f "$_f" ] && HAS_COLLAPSED=true && break
+  done
+  if $HAS_COLLAPSED; then
+    COLS=$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | cut -dx -f1)
+    # Handle dynamic grid mode
+    if [[ "$COLS" == "dynamic" || -z "$COLS" ]]; then
+      COLS=$(grep '^CURRENT_COLS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)
+    fi
+    if [[ -n "$COLS" ]] && (( COLS > 0 )); then
+      COL_IDX=$(( PANE_INDEX % COLS ))
+      COLLAPSED_FILE="${RUNTIME_DIR}/status/col_${COL_IDX}.collapsed"
+      if [[ -f "$COLLAPSED_FILE" ]]; then
+        tmux resize-pane -t "${PANE}" -x 80 2>/dev/null || true
+        rm -f "$COLLAPSED_FILE"
+      fi
+    fi
+  fi
+fi
+
 exit 0

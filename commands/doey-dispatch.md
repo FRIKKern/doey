@@ -23,6 +23,98 @@ This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `W
 
 `tmux copy-mode -q -t "$PANE" 2>/dev/null` — exits copy-mode (idempotent, always safe). **Run this before every `paste-buffer` and `send-keys`** throughout the dispatch. Copy-mode silently swallows all input. Used repeatedly in the sequence below without further explanation.
 
+### Pre-flight: Expand collapsed column
+
+Before dispatching, expand the target worker's column if it was auto-collapsed:
+
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+
+PANE="${SESSION_NAME}:0.X"
+PANE_INDEX=X  # numeric index of the target worker pane
+
+# Expand column if it was auto-collapsed (idle columns shrink to width 3)
+if [ "$GRID" = "dynamic" ]; then
+  COLS=$(grep '^CURRENT_COLS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)
+else
+  COLS="${GRID%x*}"
+fi
+COLS="${COLS:-6}"  # fallback
+if [ -n "$COLS" ] && [ "$COLS" -gt 0 ] 2>/dev/null; then
+  COL_IDX=$(( PANE_INDEX % COLS ))
+  COLLAPSED_FILE="${RUNTIME_DIR}/status/col_${COL_IDX}.collapsed"
+  if [ -f "$COLLAPSED_FILE" ]; then
+    WINDOW_WIDTH=$(tmux display-message -t "${SESSION_NAME}" -p '#{window_width}')
+    COLLAPSED_COUNT=0
+    for _f in "${RUNTIME_DIR}/status"/col_*.collapsed; do
+      [ -f "$_f" ] && COLLAPSED_COUNT=$(( COLLAPSED_COUNT + 1 ))
+    done
+    COLLAPSED_COUNT=$(( COLLAPSED_COUNT - 1 ))  # this column is about to expand
+    [ "$COLLAPSED_COUNT" -lt 0 ] && COLLAPSED_COUNT=0
+    EXPANDED_COUNT=$(( COLS - COLLAPSED_COUNT ))
+    [ "$EXPANDED_COUNT" -lt 1 ] && EXPANDED_COUNT=1
+    BORDERS=$(( COLS - 1 ))
+    FAIR_WIDTH=$(( (WINDOW_WIDTH - COLLAPSED_COUNT * 3 - BORDERS) / EXPANDED_COUNT ))
+    [ "$FAIR_WIDTH" -lt 10 ] && FAIR_WIDTH=10
+
+    tmux resize-pane -t "$PANE" -x "$FAIR_WIDTH" 2>/dev/null
+    rm -f "$COLLAPSED_FILE"
+  fi
+fi
+```
+
+### Auto-scale: Add workers in dynamic grid mode
+
+In dynamic grid mode (`GRID=dynamic` in session.env), the grid starts with only Manager + Watchdog and no workers. Before selecting a worker, check if any idle workers exist — if not, auto-add a column via `doey add`.
+
+**Run this BEFORE scanning for idle workers:**
+
+```bash
+# Auto-scale: in dynamic mode, add a column if no idle workers available
+GRID_MODE=$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)
+if [[ "$GRID_MODE" == "dynamic" ]]; then
+  # Check if any idle, unreserved workers exist
+  HAS_IDLE=false
+  if [ -n "$WORKER_PANES" ]; then
+    IFS=',' read -ra _widx_arr <<< "$WORKER_PANES"
+    for WIDX in "${_widx_arr[@]}"; do
+      # Skip reserved
+      W_SAFE="${SESSION_NAME}:0.${WIDX}"
+      W_SAFE="${W_SAFE//:/_}"
+      W_SAFE="${W_SAFE//./_}"
+      [ -f "${RUNTIME_DIR}/status/${W_SAFE}.reserved" ] && continue
+      # Check idle
+      W_OUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WIDX}" -p -S -3 2>/dev/null)
+      if [[ "$W_OUT" == *'❯'* ]]; then
+        HAS_IDLE=true
+        break
+      fi
+    done
+  fi
+
+  if [[ "$HAS_IDLE" == "false" ]]; then
+    WORKER_COUNT="${WORKER_COUNT:-0}"
+    MAX_WORKERS="${MAX_WORKERS:-20}"
+
+    if (( WORKER_COUNT < MAX_WORKERS )); then
+      # Add a new worker column
+      doey add 2>/dev/null
+
+      # Wait for Claude to boot in new panes
+      sleep 10
+
+      # Re-source session.env to get updated WORKER_PANES
+      source "${RUNTIME_DIR}/session.env"
+    else
+      echo "All workers busy and max reached ($MAX_WORKERS). Queue or wait."
+    fi
+  fi
+fi
+```
+
+This block is a no-op in fixed grid mode (when `GRID` is unset or not `dynamic`). It handles empty `WORKER_PANES` (no workers yet) by treating that as "no idle workers available" and triggering the add.
+
 ### Pre-flight: Check worker availability
 
 **Always check before dispatching.** First verify the pane is not reserved, then check if it's idle.
