@@ -18,19 +18,17 @@
 ---
 
 ```
-┌──────────┬──────────┬──────────┐       ┌──────────┬──────────┬──────────┬──────────┬──────────┐
-│ MANAGER  │ Worker 1 │ Worker 3 │       │ MANAGER  │ Worker 1 │ Worker 3 │ Worker 5 │ Worker 7 │
-├──────────┼──────────┼──────────┤       ├──────────┼──────────┼──────────┼──────────┼──────────┤
-│ WATCHDOG │ Worker 2 │ Worker 4 │       │ WATCHDOG │ Worker 2 │ Worker 4 │ Worker 6 │ Worker 8 │
-└──────────┴──────────┴──────────┘       └──────────┴──────────┴──────────┴──────────┴──────────┘
-        Default — 4 workers                         After doey add ×2 — 8 workers
-
-┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
-│ MANAGER  │ Worker 1 │ Worker 3 │ Worker 5 │ Worker 7 │ Worker 9 │ Worker 11│
-├──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┤
-│ WATCHDOG │ Worker 2 │ Worker 4 │ Worker 6 │ Worker 8 │ Worker 10│ Worker 12│
-└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘
-                      Full fleet — 12 workers for heavy refactors
+┌──────────┬──────────────────┬──────────────────┐
+│ MANAGER  │ Worker 1         │ Worker 3         │
+│          │  ┌─agent─┐       │  ┌─agent─┐       │
+│ plans &  │  │ ↓ ↓ ↓ │ ...   │  │ ↓ ↓ ↓ │ ...   │
+│ delegates│  └───────┘       │  └───────┘       │    scales as needed →
+├──────────┼──────────────────┼──────────────────┤
+│ WATCHDOG │ Worker 2         │ Worker 4         │    each worker spawns its
+│          │  ┌─agent─┐       │  ┌─agent─┐       │    own agent swarms
+│ monitors │  │ ↓ ↓ ↓ │ ...   │  │ ↓ ↓ ↓ │ ...   │
+│ & heals  │  └───────┘       │  └───────┘       │
+└──────────┴──────────────────┴──────────────────┘
 ```
 
 ---
