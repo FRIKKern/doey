@@ -74,13 +74,12 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    for i in $WORKER_PANES_LIST; do
      if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
      WORKER_PROMPT=$(grep -l "pane 0\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
-     WORKER_CMD="claude --dangerously-skip-permissions --model opus"
      if [ -n "$WORKER_PROMPT" ]; then
-       WORKER_CMD="$WORKER_CMD --append-system-prompt-file \"$WORKER_PROMPT\""
+       tmux send-keys -t "$SESSION_NAME:0.$i" "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter
      else
        echo "WARNING: No system prompt file found for pane 0.$i — launching without Doey identity"
+       tmux send-keys -t "$SESSION_NAME:0.$i" "claude --dangerously-skip-permissions --model opus" Enter
      fi
-     tmux send-keys -t "$SESSION_NAME:0.$i" "$WORKER_CMD" Enter
      sleep 0.5
    done
 
