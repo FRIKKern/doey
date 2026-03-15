@@ -10,7 +10,7 @@ You are dispatching tasks to Claude Code worker instances in TMUX panes.
 
 ### Project Context
 
-Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)` then `source "${RUNTIME_DIR}/session.env"`. This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `PASTE_SETTLE_MS`. Always use `${SESSION_NAME}` — never hardcode session names.
+Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)` then `source "${RUNTIME_DIR}/session.env"`. This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. Always use `${SESSION_NAME}` — never hardcode session names.
 
 ### Copy-mode pattern
 
@@ -135,7 +135,7 @@ tmux copy-mode -q -t "$PANE" 2>/dev/null
 tmux load-buffer "$TASKFILE"
 tmux paste-buffer -t "$PANE"
 
-# 13. Settle, then submit (scale by prompt size: >200 lines=2s, >100=1.5s, else PASTE_SETTLE_MS)
+# 13. Settle, then submit (scale by prompt size: >200 lines=2s, >100=1.5s, else 0.5s)
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
 if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then SETTLE_S=2
@@ -183,7 +183,7 @@ When dispatching multiple workers in parallel:
 ### Rules
 
 1. **Never use `send-keys "" Enter`** — the empty string swallows the Enter keystroke
-2. **Always sleep between `paste-buffer` and `send-keys Enter`** — uses `PASTE_SETTLE_MS`, auto-scales for large prompts
+2. **Always sleep between `paste-buffer` and `send-keys Enter`** — auto-scales based on prompt line count (>200 lines=2s, >100=1.5s, else 0.5s)
 3. **Always check idle + reservation before dispatch** — don't interrupt busy or reserved panes
 4. **Always verify after dispatch (step 15)** — if it fails, run unstick before retrying
 5. **Always include project context** (`PROJECT_NAME`, `PROJECT_DIR`, absolute paths) in every task prompt

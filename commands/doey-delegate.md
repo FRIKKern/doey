@@ -17,7 +17,7 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 
-This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `PASTE_SETTLE_MS` (default 500). **Always use `${SESSION_NAME}`** — never hardcode session names.
+This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. **Always use `${SESSION_NAME}`** — never hardcode session names.
 
 ### Copy-mode pattern
 
@@ -81,14 +81,14 @@ Follow the `/doey-dispatch` **Reliable Dispatch Sequence** (steps 8–15), using
 Key points:
 - **Rename pane** with `/rename task-name_$(date +%m%d)` before sending
 - **Use tmpfile/load-buffer** — never `send-keys "" Enter` for task text
-- **Settle time auto-scales** for large prompts via `PASTE_SETTLE_MS`
+- **Settle time auto-scales** based on prompt line count (>200 lines=2s, >100=1.5s, else 0.5s)
 - **Mandatory verification** — grep for `thinking|working|Read|Edit|Bash` after 5s; retry Enter once if not processing
 
 ### Rules
 
 1. **Never use `send-keys "" Enter`** — the empty string swallows the Enter keystroke
 2. **Always use tmpfile/load-buffer** — handles all prompt sizes and special characters reliably
-3. **Always sleep between `paste-buffer` and `send-keys Enter`** — uses `PASTE_SETTLE_MS`, auto-scales for large prompts
+3. **Always sleep between `paste-buffer` and `send-keys Enter`** — auto-scales based on prompt line count
 4. **Always check idle + reservation before delegating** — don't interrupt busy or reserved panes
-5. **Always verify after dispatch (step 6)** — if it fails, check the pane manually
+5. **Always verify after dispatch (per /doey-dispatch step 15)** — if it fails, check the pane manually
 6. **Do not delegate to your own pane** — compare `TARGET_PANE` against `MY_PANE`

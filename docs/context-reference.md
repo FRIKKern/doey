@@ -52,7 +52,7 @@ Load Order (bottom = first, top = last / highest precedence)
 | `color` | `green` | `yellow` | Status line color |
 | `memory` | `user` | `none` | Manager stores to `~/.claude/agent-memory/<name>/`; Watchdog has no memory |
 
-Body text below frontmatter becomes the system prompt. Manager: ~239 lines (identity, workflow, delegation rules). Watchdog: ~161 lines (monitoring loop, prompt detection, monitoring rules).
+Body text below frontmatter becomes the system prompt (line counts include YAML frontmatter). Manager: ~239 lines (identity, workflow, delegation rules). Watchdog: ~161 lines (monitoring loop, prompt detection, monitoring rules).
 
 Precedence: CLI `--model` > frontmatter `model` > settings `model`.
 
@@ -66,7 +66,7 @@ Merge order (later wins for scalars; arrays are additive):
 | `~/.claude/settings.json` | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`, `skipDangerousModePermissionPrompt: true`, `model: "opus"`, `notifications: false` |
 | `~/.claude/settings.local.json` | User-level local overrides (permissions, etc.) |
 | `<project>/.claude/settings.json` | Project-level settings (if present) |
-| `<project>/.claude/settings.local.json` | Bash permission allow-list (4 rules) — stored in the doey repo at `.claude/settings.local.json`, copied to target projects during `doey init`. Claude Code auto-discovers hooks from `.claude/hooks/` directory; no hook registration is needed here. |
+| `<project>/.claude/settings.local.json` | Bash permission allow-list — stored in the doey repo at `.claude/settings.local.json`, copied to target projects during `doey init`. Claude Code auto-discovers hooks from `.claude/hooks/` directory; no hook registration is needed here. |
 
 *Note: User-level settings vary per machine. The doey repo contains a base `settings.local.json` with permission rules. During `doey init`, hooks are copied to the target project directory. Claude Code auto-discovers hooks from `.claude/hooks/` — no explicit hook registration is required.*
 
@@ -77,7 +77,7 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 
 | File | Purpose |
 |------|---------|
-| `common.sh` | Shared: `init_hook()` (stdin JSON, pane identity, runtime dirs), `parse_field()` (JSON extraction with jq fallback), role checks (`is_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()` (cross-platform, Manager-only, 60s cooldown) |
+| `common.sh` | Shared: `init_hook()` (stdin JSON, pane identity, runtime dirs), `parse_field()` (JSON extraction with jq fallback), role checks (`is_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()` (cross-platform, Manager-only, 60s cooldown), `NL` (portable newline var), `is_numeric()` (numeric validation), `atomic_write()` (atomic file write via tmp+mv) |
 | `on-session-start.sh` | SessionStart: initial setup |
 | `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY status, sets READY on `/compact`, expands collapsed tmux columns |
 | `on-pre-tool-use.sh` | PreToolUse: safety guards |
@@ -246,7 +246,7 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
   broadcasts/                        # [init-time] Broadcast messages
 ```
 
-*Init-time directories (`status/`, `messages/`, `broadcasts/`) are created during `doey init`. The remaining directories (`research/`, `reports/`, `results/`) are created eagerly by `common.sh init_hook()` on the first hook invocation in any pane (not lazily on first use).*
+*Init-time directories (`messages/`, `broadcasts/`, `status/`) are created during `doey init`. On the first hook invocation in any pane, `common.sh init_hook()` eagerly ensures `status/`, `research/`, `reports/`, `results/`, and `messages/` all exist (fast-path skip if already present).*
 
 **Status values:** READY, BUSY, FINISHED, RESERVED.
 
@@ -276,7 +276,7 @@ Loaded by all instances. Contains: project overview, architecture, key directori
 | Research worker stops without report | Check exit 2 path in `stop-status.sh`; verify `.task` created |
 | Workers don't pick up hook changes | Restart workers (`/doey-restart-workers`) |
 | Dispatch to reserved pane | Check `.reserved` file exists; verify `is_reserved()` |
-| Messages not delivered | Check `messages/` vs `inbox/` — inter-pane messages go to `messages/`, result summaries go to `inbox/` |
+| Messages not delivered | Check `messages/` dir — inter-pane messages go to `messages/<pane_safe>_<timestamp>.msg`, consumed messages move to `messages/delivered/` |
 | Runtime file not found | Verify PANE_SAFE escaping: `${PANE//[:.]/_}`. Directories are created eagerly by `init_hook()` — check that hooks have fired at least once |
 
 **Trace order:** 1. Agent definition → 2. Memory → 3. Settings (4-file merge) → 4. Hook scripts → 5. Skill files → 6. session.env / tmux env → 7. Runtime state → 8. CLI flags in doey.sh.

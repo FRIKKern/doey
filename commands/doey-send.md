@@ -31,7 +31,7 @@ TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
 ---
 $MESSAGE
 EOF
-   # Delivery handled by Watchdog (checks idle state before sending)
+   # File is immediately available to /doey-inbox. The Watchdog additionally delivers messages to idle panes via send-keys.
    ```
 
 4. Confirm to the user that the message was queued for delivery.

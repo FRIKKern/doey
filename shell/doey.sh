@@ -562,17 +562,6 @@ _purge_scan_runtime() {
     done
   fi
 
-  # Inbox files (always purgeable — write-once/read-once)
-  local inbox_count=0
-  for f in "$rt"/inbox/*; do
-    [[ -f "$f" ]] || continue
-    _purge_collect "$f" "$list_file"
-    inbox_count=$((inbox_count + 1))
-  done
-  if [[ $inbox_count -gt 0 ]]; then
-    printf "         Found %d consumed inbox messages\n" "$inbox_count"
-  fi
-
   # Delivered messages (always purgeable — already consumed)
   local delivered_count=0
   if [[ -d "$rt/messages/delivered" ]]; then
@@ -2206,30 +2195,34 @@ doey_remove_column() {
   # Find worker panes to remove
   # Workers are listed in WORKER_PANES as comma-separated indices
   # Each column has 2 workers (top + bottom), added as consecutive pairs
-  local -a wp_array
-  IFS=',' read -ra wp_array <<< "${WORKER_PANES}"
+  # Convert comma-separated WORKER_PANES to positional params (bash 3.2 safe)
+  local _old_ifs="$IFS"
+  IFS=','
+  set -- $WORKER_PANES
+  IFS="$_old_ifs"
+  local wp_count=$#
 
-  if [[ ${#wp_array[@]} -lt 2 ]]; then
+  if [ "$wp_count" -lt 2 ]; then
     printf "  ${ERROR}Not enough worker panes to remove a column${RESET}\n"
     return 1
   fi
 
   # Determine which 2 panes to remove
   local remove_top remove_bottom
-  if [[ "$col_index" == "last" ]]; then
+  if [ "$col_index" = "last" ]; then
     # Remove the last two entries (last column added)
-    remove_top="${wp_array[$(( ${#wp_array[@]} - 2 ))]}"
-    remove_bottom="${wp_array[$(( ${#wp_array[@]} - 1 ))]}"
+    eval "remove_top=\${$(( wp_count - 1 ))}"
+    eval "remove_bottom=\${${wp_count}}"
   else
     # Remove specific column by position (1-indexed among worker columns)
     local ci=$(( col_index ))
-    if (( ci < 1 || ci > worker_count / 2 )); then
+    if [ "$ci" -lt 1 ] || [ "$ci" -gt $(( worker_count / 2 )) ]; then
       printf "  ${ERROR}Invalid worker column: ${col_index} (valid: 1-$(( worker_count / 2 )))${RESET}\n"
       return 1
     fi
-    local pair_start=$(( (ci - 1) * 2 ))
-    remove_top="${wp_array[$pair_start]}"
-    remove_bottom="${wp_array[$(( pair_start + 1 ))]}"
+    local pair_start=$(( (ci - 1) * 2 + 1 ))
+    eval "remove_top=\${${pair_start}}"
+    eval "remove_bottom=\${$(( pair_start + 1 ))}"
   fi
 
   printf "  ${DIM}Removing worker panes 0.${remove_top} and 0.${remove_bottom}...${RESET}\n"

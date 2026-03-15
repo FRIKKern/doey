@@ -60,8 +60,8 @@ case "$MGR_CMD" in
 esac
 
 # --- Scan each worker pane ---
-IFS=',' read -ra PANES <<< "$WORKER_PANES"
-for i in "${PANES[@]}"; do
+PANES_LIST="${WORKER_PANES//,/ }"
+for i in $PANES_LIST; do
   # Validate pane index before use in eval/variable expansion
   is_numeric "$i" || continue
   PANE_REF="${SESSION_NAME}:0.${i}"
@@ -170,12 +170,13 @@ done
 # --- Per-pane inbox detection ---
 # Single glob, then classify by pane index (avoids N readdir calls)
 TOTAL_INBOX=0
-ALL_MSGS=("${RUNTIME_DIR}/messages/"*.msg)
-if [ -e "${ALL_MSGS[0]}" ]; then
+HAS_MSGS=false
+for _test_msg in "${RUNTIME_DIR}/messages/"*.msg; do [ -e "$_test_msg" ] && HAS_MSGS=true; break; done
+if [ "$HAS_MSGS" = true ]; then
   # Count messages per idle pane using filename prefix matching
-  for msg in "${ALL_MSGS[@]}"; do
+  for msg in "${RUNTIME_DIR}/messages/"*.msg; do
     msg_name=$(basename "$msg")
-    for i in "${PANES[@]}"; do
+    for i in $PANES_LIST; do
       is_numeric "$i" || continue
       eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
       [ "$PSTATE" = "IDLE" ] || continue
@@ -186,7 +187,7 @@ if [ -e "${ALL_MSGS[0]}" ]; then
     done
   done
   # Report per-pane inbox counts
-  for i in "${PANES[@]}"; do
+  for i in $PANES_LIST; do
     is_numeric "$i" || continue
     eval "IC=\${INBOX_COUNT_${i}:-0}"
     if [ "$IC" -gt 0 ]; then
@@ -197,9 +198,7 @@ if [ -e "${ALL_MSGS[0]}" ]; then
 fi
 
 # --- Check for worker completion events ---
-COMPLETION_FILES=("${RUNTIME_DIR}/status"/completion_pane_*)
-
-for cf in "${COMPLETION_FILES[@]}"; do
+for cf in "${RUNTIME_DIR}/status"/completion_pane_*; do
   [ -f "$cf" ] || continue
   # Source the key=value file directly (written by stop-results.sh, trusted)
   PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
@@ -217,7 +216,7 @@ echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" && \
 # --- Write pane states JSON (atomic) ---
 JSON="{"
 FIRST=true
-for i in "${PANES[@]}"; do
+for i in $PANES_LIST; do
   # Validate pane index before eval to prevent injection
   is_numeric "$i" || continue
   eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"

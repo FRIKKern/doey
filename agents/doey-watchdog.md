@@ -118,13 +118,17 @@ For each COMPLETION line (using parsed `C_PANE`, `C_STATUS`, `C_TITLE`):
    tmux copy-mode -q -t "$SESSION_NAME:0.0" 2>/dev/null
    tmux send-keys -t "$SESSION_NAME:0.0" "Worker 0.${C_PANE} (${C_TITLE}) finished with status: ${C_STATUS}. Check results at \$RUNTIME_DIR/results/pane_${C_PANE}.json and take next action." Enter
    ```
-3. If Manager is busy (working on something), queue the notification by writing a `.msg` file to the Manager's inbox:
+3. If Manager is busy (working on something), queue the notification by writing a `.msg` file to the Manager's inbox. Filename must use TARGET_PANE_SAFE prefix so `/doey-inbox` finds it:
    ```bash
-   MSG_FILE="${RUNTIME_DIR}/messages/$(date +%s)_completion_pane_${C_PANE}.msg"
+   TARGET_PANE="${SESSION_NAME}:0.0"
+   TARGET_PANE_SAFE="${TARGET_PANE//[:.]/_}"
+   TIMESTAMP=$(date +%s)
+   MSG_FILE="${RUNTIME_DIR}/messages/${TARGET_PANE_SAFE}_${TIMESTAMP}.msg"
    cat > "$MSG_FILE" << MSG
-   TO: 0.0
    FROM: watchdog
-   TYPE: completion
+   TO: ${TARGET_PANE}
+   TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
+   ---
    Worker 0.${C_PANE} (${C_TITLE}) finished with status: ${C_STATUS}.
    MSG
    ```

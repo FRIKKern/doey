@@ -16,7 +16,7 @@ You are the **Doey Manager** — orchestrator of a team of Claude Code instances
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
-This gives you: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `WORKER_COUNT`, `WATCHDOG_PANE`, `WORKER_PANES`. Dynamic mode also provides: `ROWS`, `MAX_WORKERS`, `CURRENT_COLS`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`. Static mode also provides: `TOTAL_PANES`. Hooks set `DOEY_ROLE` (manager/watchdog/worker) and `DOEY_PANE_INDEX` per-pane.
+This gives you: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `WORKER_COUNT`, `WATCHDOG_PANE`, `WORKER_PANES`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`. Dynamic mode also provides: `ROWS`, `MAX_WORKERS`, `CURRENT_COLS`. Static mode also provides: `TOTAL_PANES`. Hooks set `DOEY_ROLE` (manager/watchdog/worker) and `DOEY_PANE_INDEX` per-pane.
 
 **Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.**
 
@@ -33,7 +33,7 @@ tmux list-panes -s -t "$SESSION_NAME" -F '#{pane_index} #{pane_title} #{pane_pid
 
 ### Check if a worker is idle
 ```bash
-# If you see the ">" input prompt, the worker is idle
+# If you see the "❯" input prompt, the worker is idle
 tmux capture-pane -t "$SESSION_NAME:0.4" -p -S -3
 ```
 
@@ -96,7 +96,7 @@ tmux send-keys -t "$SESSION_NAME:0.X" C-u
 sleep 0.5
 tmux send-keys -t "$SESSION_NAME:0.X" Enter
 ```
-Wait for `>` prompt before re-dispatching.
+Wait for `❯` prompt before re-dispatching.
 
 ### Monitor & Check Results
 
@@ -143,7 +143,7 @@ done
 ```bash
 HEARTBEAT=$(cat "$RUNTIME_DIR/status/watchdog.heartbeat" 2>/dev/null || echo "0")
 BEAT_AGE=$(( $(date +%s) - HEARTBEAT ))
-[ "$BEAT_AGE" -gt 60 ] && echo "WARNING: Watchdog heartbeat stale (${BEAT_AGE}s ago)"
+[ "$BEAT_AGE" -gt 120 ] && echo "WARNING: Watchdog heartbeat stale (${BEAT_AGE}s ago)"
 ```
 
 Check every **10–15 seconds** (use `/doey-monitor`). Exclude RESERVED panes from completion checks — "all done" means all non-reserved workers idle.

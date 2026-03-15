@@ -27,10 +27,10 @@ check_pattern() {
 }
 
 while IFS= read -r file; do
-  # Skip self — patterns in this file would false-positive
-  if [ "$file" = "$SELF" ]; then
-    continue
-  fi
+  # Skip self and post-tool-lint.sh — both contain check patterns as string literals
+  case "$file" in
+    "$SELF"|*/post-tool-lint.sh) continue ;;
+  esac
   files_scanned=$((files_scanned + 1))
 
   check_pattern "$file" 'declare[[:space:]]+-A[[:space:]]' 'declare -A (associative arrays, bash 4+)'
@@ -44,6 +44,7 @@ while IFS= read -r file; do
   check_pattern "$file" '\|&' 'pipe stderr shorthand |& (bash 4+)'
   check_pattern "$file" '&>>' 'append both streams &>> (bash 4+)'
   check_pattern "$file" 'coproc[[:space:]]' 'coproc (bash 4+)'
+  check_pattern "$file" 'read[[:space:]]+-[^ ]*a[[:space:]]' 'read -a (array read, bash 4+ — use while-read loop instead)'
   check_pattern "$file" 'BASH_REMATCH' 'BASH_REMATCH capture groups (bash 3.2 unreliable)'
 
 done < <(find "$PROJECT_ROOT" -name '*.sh' \
