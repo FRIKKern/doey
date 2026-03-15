@@ -18,7 +18,7 @@ You are running the Doey purge tool to clean stale runtime files and audit conte
    Available flags:
    - `--dry-run` — report only, no deletions (default if user just wants to check)
    - `--force` — skip confirmation, purge immediately
-   - `--scope runtime` — only clean stale runtime files (status, inbox, messages, results)
+   - `--scope runtime` — only clean stale runtime files (status, inbox, messages, old results)
    - `--scope context` — only audit agent/command/CLAUDE.md sizes
    - `--scope hooks` — only run context-audit.sh
    - `--scope all` — everything (default)
