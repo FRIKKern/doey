@@ -19,17 +19,8 @@ fi
 [ "$TOOL_NAME" != "Bash" ] && exit 0
 
 # Now do the heavier init only for Bash tool calls.
-# Source common.sh for helper functions but skip init_hook (we already read stdin).
 source "$(dirname "$0")/common.sh"
-
-# Lightweight init: skip stdin read and redundant tmux validation
-[ -z "${TMUX_PANE:-}" ] && exit 0
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
-[ -z "$RUNTIME_DIR" ] && exit 0
-PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
-PANE_SAFE=${PANE//[:.]/_}
-SESSION_NAME="${PANE%%:*}"
-PANE_INDEX="${PANE##*.}"
+init_hook <<< "$INPUT"
 
 # Manager — allow everything
 if is_manager; then
