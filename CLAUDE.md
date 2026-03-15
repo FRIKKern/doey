@@ -18,7 +18,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 - `agents/` -- Agent definitions, installed to `~/.claude/agents/`
 - `commands/` -- Slash commands (doey-*.md), installed to `~/.claude/commands/`
 - `.claude/hooks/` -- Modular hooks: common.sh, on-session-start.sh, on-prompt-submit.sh, on-pre-tool-use.sh, on-pre-compact.sh, post-tool-lint.sh, stop-status.sh, stop-results.sh, stop-notify.sh, watchdog-scan.sh
-- `.claude/settings.local.json` -- Hook registration (6 events)
+- `.claude/settings.local.json` -- Hook registration template (6 events, created per-project during `doey init`)
 - `shell/` -- Launcher (doey.sh), installed to `~/.local/bin/doey`
 - `docs/` -- Platform guides and context-reference.md
 
