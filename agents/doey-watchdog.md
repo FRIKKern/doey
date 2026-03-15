@@ -118,11 +118,16 @@ When the scan output contains `COMPLETION` lines, the Watchdog MUST notify the M
 
 ### Detection
 
-After running the scan script, check for lines matching `COMPLETION <pane_index> <status> <title>`. Each line means a worker just finished its task.
+After running the scan script, check for lines matching `COMPLETION <pane_index> <status> <title>`. Each line means a worker just finished its task. Parse the fields:
+
+```bash
+# Example line: "COMPLETION 3 done hero-section_0315"
+# Fields:       COMPLETION <C_PANE> <C_STATUS> <C_TITLE>
+```
 
 ### Notification
 
-For each COMPLETION line:
+For each COMPLETION line (using parsed `C_PANE`, `C_STATUS`, `C_TITLE`):
 
 1. Check if Manager (pane 0.0) is idle (shows `❯` prompt):
    ```bash
@@ -131,16 +136,16 @@ For each COMPLETION line:
 2. If Manager is idle, send a completion notification:
    ```bash
    tmux copy-mode -q -t "$SESSION_NAME:0.0" 2>/dev/null
-   tmux send-keys -t "$SESSION_NAME:0.0" "Worker 0.${PANE_INDEX} (${TITLE}) finished with status: ${STATUS}. Check results at \$RUNTIME_DIR/results/pane_${PANE_INDEX}.json and take next action." Enter
+   tmux send-keys -t "$SESSION_NAME:0.0" "Worker 0.${C_PANE} (${C_TITLE}) finished with status: ${C_STATUS}. Check results at \$RUNTIME_DIR/results/pane_${C_PANE}.json and take next action." Enter
    ```
 3. If Manager is busy (working on something), queue the notification by writing a `.msg` file to the Manager's inbox:
    ```bash
-   MSG_FILE="${RUNTIME_DIR}/messages/$(date +%s)_completion_pane_${PANE_INDEX}.msg"
+   MSG_FILE="${RUNTIME_DIR}/messages/$(date +%s)_completion_pane_${C_PANE}.msg"
    cat > "$MSG_FILE" << MSG
    TO: 0.0
    FROM: watchdog
    TYPE: completion
-   Worker 0.${PANE_INDEX} (${TITLE}) finished with status: ${STATUS}.
+   Worker 0.${C_PANE} (${C_TITLE}) finished with status: ${C_STATUS}.
    MSG
    ```
 

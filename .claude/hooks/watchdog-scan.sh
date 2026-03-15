@@ -105,10 +105,11 @@ shopt -u nullglob
 if [ ${#COMPLETION_FILES[@]} -gt 0 ]; then
   for cf in "${COMPLETION_FILES[@]}"; do
     [ -f "$cf" ] || continue
-    C_PANE=$(grep '^PANE_INDEX=' "$cf" | cut -d= -f2)
-    C_STATUS=$(grep '^STATUS=' "$cf" | cut -d= -f2)
-    C_TITLE=$(grep '^PANE_TITLE=' "$cf" | cut -d= -f2)
-    echo "COMPLETION ${C_PANE} ${C_STATUS} ${C_TITLE}"
+    # Source the key=value file directly (written by stop-results.sh, trusted)
+    PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
+    # shellcheck disable=SC1090
+    . "$cf"
+    echo "COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}"
     rm -f "$cf"
   done
 fi
