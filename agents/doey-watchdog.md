@@ -40,6 +40,7 @@ The script returns a structured report per pane. Act ONLY on these statuses:
 | CRASHED | Log only |
 | IDLE + pending inbox | Send `/doey-inbox` to that pane (see Inbox Delivery) |
 | COPY_MODE_FIXED | Log only |
+| COMPLETION | Notify Manager (see Manager Completion Notifications) |
 | UNCHANGED / WORKING | **Do nothing** |
 
 For all other statuses: do nothing, produce no output.
@@ -110,6 +111,50 @@ osascript -e 'display notification "Asking: Should I use PostgreSQL or SQLite?" 
 # Worker hit an error
 osascript -e 'display notification "Error: ENOENT — cannot find module react-dom" with title "Doey — Worker 1" sound name "Ping"'
 ```
+
+## Manager Completion Notifications
+
+When the scan output contains `COMPLETION` lines, the Watchdog MUST notify the Manager (pane 0.0) so it can dispatch follow-up work or report to the user.
+
+### Detection
+
+After running the scan script, check for lines matching `COMPLETION <pane_index> <status> <title>`. Each line means a worker just finished its task.
+
+### Notification
+
+For each COMPLETION line:
+
+1. Check if Manager (pane 0.0) is idle (shows `❯` prompt):
+   ```bash
+   MGR_OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.0" -p -S -3 2>/dev/null)
+   ```
+2. If Manager is idle, send a completion notification:
+   ```bash
+   tmux copy-mode -q -t "$SESSION_NAME:0.0" 2>/dev/null
+   tmux send-keys -t "$SESSION_NAME:0.0" "Worker 0.${PANE_INDEX} (${TITLE}) finished with status: ${STATUS}. Check results at \$RUNTIME_DIR/results/pane_${PANE_INDEX}.json and take next action." Enter
+   ```
+3. If Manager is busy (working on something), queue the notification by writing a `.msg` file to the Manager's inbox:
+   ```bash
+   MSG_FILE="${RUNTIME_DIR}/messages/$(date +%s)_completion_pane_${PANE_INDEX}.msg"
+   cat > "$MSG_FILE" << MSG
+   TO: 0.0
+   FROM: watchdog
+   TYPE: completion
+   Worker 0.${PANE_INDEX} (${TITLE}) finished with status: ${STATUS}.
+   MSG
+   ```
+
+### Batching
+
+If multiple workers complete in the same scan cycle, batch them into a single notification:
+```bash
+tmux send-keys -t "$SESSION_NAME:0.0" "Workers completed: 0.3 (hero-section, done), 0.5 (api-client, done), 0.7 (tests, error). Check results and take next action." Enter
+```
+
+### Rules
+- Always exit copy-mode on pane 0.0 before sending
+- Never notify for RESERVED panes
+- Only notify once per completion event (the completion file is consumed by the scan script)
 
 ## Safety Rules
 

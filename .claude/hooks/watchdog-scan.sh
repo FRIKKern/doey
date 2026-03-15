@@ -97,6 +97,22 @@ INBOX_FILES=("${RUNTIME_DIR}/messages/"*.msg)
 INBOX_COUNT=${#INBOX_FILES[@]}
 shopt -u nullglob
 
+# --- Check for worker completion events ---
+shopt -s nullglob
+COMPLETION_FILES=("${RUNTIME_DIR}/status"/completion_pane_*)
+shopt -u nullglob
+
+if [ ${#COMPLETION_FILES[@]} -gt 0 ]; then
+  for cf in "${COMPLETION_FILES[@]}"; do
+    [ -f "$cf" ] || continue
+    C_PANE=$(grep '^PANE_INDEX=' "$cf" | cut -d= -f2)
+    C_STATUS=$(grep '^STATUS=' "$cf" | cut -d= -f2)
+    C_TITLE=$(grep '^PANE_TITLE=' "$cf" | cut -d= -f2)
+    echo "COMPLETION ${C_PANE} ${C_STATUS} ${C_TITLE}"
+    rm -f "$cf"
+  done
+fi
+
 # --- Write heartbeat ---
 SCAN_TIME=$(date +%s)
 echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" && \
