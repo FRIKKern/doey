@@ -1468,26 +1468,17 @@ WORKER_CONTEXT
 
   step_done
 
-  # ── Step 3: Build 2x2 grid ────────────────────────────────────
-  step_start 3 "Building dynamic 2x2 grid..."
+  # ── Step 3: Build initial grid (Manager + Watchdog share column 0)
+  step_start 3 "Building grid..."
 
-  # Start: pane 0.0 = Manager top
-  # split-window -h → 0.0 (MGR top), 0.1 (WDG top)
-  tmux split-window -h -t "$session:0.0" -c "$dir"
-  # split-window -v -t 0.0 → MGR top splits into top/bottom
-  # After: 0.0 (MGR top), 0.1 (MGR bottom), 0.2 (WDG top)
+  # Single column: Manager (top), Watchdog (bottom)
   tmux split-window -v -t "$session:0.0" -c "$dir"
-  # split-window -v on WDG top → 0.2 splits into top/bottom
-  # After: 0.0 (MGR top), 0.1 (MGR bottom), 0.2 (WDG top), 0.3 (WDG bottom)
-  tmux split-window -v -t "$session:0.2" -c "$dir"
+  # After: 0.0 (MGR top), 0.1 (WDG bottom)
 
-  sleep 1
+  sleep 0.5
 
-  # Read actual pane indices to be safe
   local mgr_pane=0
-  local mgr_bottom_pane=1
-  local watchdog_pane=2
-  local wdg_bottom_pane=3
+  local watchdog_pane=1
 
   step_done
 
@@ -1495,9 +1486,7 @@ WORKER_CONTEXT
   step_start 4 "Naming panes..."
 
   tmux select-pane -t "$session:0.${mgr_pane}" -T "MGR Manager"
-  tmux select-pane -t "$session:0.${mgr_bottom_pane}" -T "MGR-B Status"
   tmux select-pane -t "$session:0.${watchdog_pane}" -T "WDG Watchdog"
-  tmux select-pane -t "$session:0.${wdg_bottom_pane}" -T "WDG-B Status"
 
   step_done
 
@@ -1514,9 +1503,7 @@ MAX_WORKERS=$max_workers
 WORKER_PANES=
 WORKER_COUNT=0
 WATCHDOG_PANE=$watchdog_pane
-CURRENT_COLS=2
-MGR_BOTTOM_PANE=$mgr_bottom_pane
-WDG_BOTTOM_PANE=$wdg_bottom_pane
+CURRENT_COLS=1
 RUNTIME_DIR=${runtime_dir}
 PASTE_SETTLE_MS=500
 IDLE_COLLAPSE_AFTER=60
@@ -1527,12 +1514,6 @@ MANIFEST
 
   # ── Step 6: Launch Manager & Watchdog ──────────────────────────
   step_start 6 "Launching Manager & Watchdog..."
-
-  # Status messages in bottom panes
-  tmux send-keys -t "$session:0.${mgr_bottom_pane}" \
-    "echo 'Doey — Manager status pane'" Enter
-  tmux send-keys -t "$session:0.${wdg_bottom_pane}" \
-    "echo 'Doey — Watchdog status pane'" Enter
 
   # Launch Manager (pane 0.0)
   tmux send-keys -t "$session:0.0" \
@@ -1604,21 +1585,71 @@ MANIFEST
 }
 
 # ── Add a worker column to a dynamic grid session ────────────────────
+
+# Compute tmux layout checksum (rotating 16-bit sum)
+_layout_checksum() {
+  local s="$1" csum=0 i c
+  for ((i=0; i<${#s}; i++)); do
+    c=$(printf '%d' "'${s:$i:1}")
+    csum=$(( ((csum >> 1) + ((csum & 1) << 15) + c) & 0xffff ))
+  done
+  printf '%04x' "$csum"
+}
+
+# Generate and apply a column-based layout: N equal columns, each with 2 rows.
+# Panes must be ordered: col0_top, col0_bot, col1_top, col1_bot, ...
+# This ensures worker pairs share a column regardless of tmux's layout tree.
+rebalance_grid_layout() {
+  local session="$1"
+  local win_w win_h
+  win_w="$(tmux display-message -t "$session:0" -p '#{window_width}')"
+  win_h="$(tmux display-message -t "$session:0" -p '#{window_height}')"
+
+  # Collect pane IDs in index order
+  local pane_ids=()
+  while IFS=$'\t' read -r _idx _pid; do
+    pane_ids+=("${_pid#%}")
+  done < <(tmux list-panes -t "$session:0" -F '#{pane_index}	#{pane_id}')
+
+  local num_panes=${#pane_ids[@]}
+  local num_cols=$((num_panes / 2))
+  if (( num_cols < 2 )); then return 0; fi
+
+  local top_h=$((win_h / 2))
+  local bot_h=$((win_h - top_h - 1))
+  local body="" x=0
+
+  local c w
+  for ((c=0; c<num_cols; c++)); do
+    if ((c == num_cols - 1)); then
+      w=$((win_w - x))
+    else
+      w=$((win_w / num_cols))
+    fi
+    local tp="${pane_ids[$((c*2))]}"
+    local bp="${pane_ids[$((c*2+1))]}"
+    [[ -n "$body" ]] && body+=","
+    body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
+    x=$((x + w + 1))
+  done
+
+  local layout_str="${win_w}x${win_h},0,0{${body}}"
+  local csum
+  csum="$(_layout_checksum "$layout_str")"
+  tmux select-layout -t "$session:0" "${csum},${layout_str}" 2>/dev/null || true
+}
+
 # Rebuild pane state from tmux pane titles
-# Sets: _wdg_pane, _mgr_bottom, _wdg_bottom, _worker_panes
+# Sets: _wdg_pane, _worker_panes
 rebuild_pane_state() {
   local session="$1"
   _wdg_pane=""
-  _mgr_bottom=""
-  _wdg_bottom=""
   _worker_panes=""
 
   local pidx ptitle
   while IFS=' ' read -r pidx ptitle; do
     case "$ptitle" in
-      "WDG Watchdog") _wdg_pane="$pidx" ;;
-      "WDG-B"*) _wdg_bottom="$pidx" ;;
-      "MGR-B"*) _mgr_bottom="$pidx" ;;
+      "WDG Watchdog"|*doey-watchdog*) _wdg_pane="$pidx" ;;
       W[0-9]*)
         [[ -n "$_worker_panes" ]] && _worker_panes+=","
         _worker_panes+="$pidx"
@@ -1654,88 +1685,34 @@ doey_add_column() {
 
   printf "  ${DIM}Adding worker column...${RESET}\n"
 
-  # Strategy: split the watchdog top pane horizontally with -b (insert before)
-  # This creates a new pane to the LEFT of the watchdog, pushing it right
-  tmux split-window -h -b -t "$session:0.${watchdog_pane}" -c "$dir"
-  sleep 0.5
+  # Strategy: split the last pane horizontally (adds column on the right),
+  # then split that new pane vertically for 2 worker rows.
+  local last_pane
+  last_pane="$(tmux list-panes -t "$session:0" -F '#{pane_index}' | tail -1)"
+  tmux split-window -h -t "$session:0.${last_pane}" -c "$dir"
+  sleep 0.3
 
-  # The new pane took the watchdog's old index; watchdog shifted right
-  # Now split the new pane vertically for the bottom worker
-  local new_top_pane="$watchdog_pane"
-  tmux split-window -v -t "$session:0.${new_top_pane}" -c "$dir"
-  sleep 0.5
+  # The new pane is the new last pane
+  local new_pane_top
+  new_pane_top="$(tmux list-panes -t "$session:0" -F '#{pane_index}' | tail -1)"
+  tmux split-window -v -t "$session:0.${new_pane_top}" -c "$dir"
+  sleep 0.3
 
-  # Re-read pane list to get actual indices
-  local pane_list
-  pane_list="$(tmux list-panes -t "$session" -F '#{pane_index} #{pane_title}')"
+  # Bottom pane is now the last pane
+  local new_pane_bottom
+  new_pane_bottom="$(tmux list-panes -t "$session:0" -F '#{pane_index}' | tail -1)"
 
-  # Find the watchdog by title (it shifted)
-  local new_watchdog_pane
-  new_watchdog_pane="$(echo "$pane_list" | grep "WDG Watchdog" | awk '{print $1}')"
-  if [[ -z "$new_watchdog_pane" ]]; then
-    # Fallback: watchdog is now at a higher index after our splits
-    # After split -h -b: old watchdog_pane becomes new worker, watchdog goes +1
-    # After split -v: another pane inserted, watchdog goes +1 again
-    new_watchdog_pane=$(( watchdog_pane + 2 ))
-    printf "  ${WARN}Could not find watchdog by title, using index ${new_watchdog_pane}${RESET}\n"
-  fi
-
-  # Find the WDG bottom pane by title
-  local new_wdg_bottom
-  new_wdg_bottom="$(echo "$pane_list" | grep "WDG-B" | awk '{print $1}')"
-  if [[ -z "$new_wdg_bottom" ]]; then
-    new_wdg_bottom=$(( new_watchdog_pane + 1 ))
-  fi
-
-  # Find MGR bottom pane by title
-  local new_mgr_bottom
-  new_mgr_bottom="$(echo "$pane_list" | grep "MGR-B" | awk '{print $1}')"
-  if [[ -z "$new_mgr_bottom" ]]; then
-    new_mgr_bottom="${MGR_BOTTOM_PANE}"
-  fi
-
-  # Determine new worker numbers and pane indices
+  # Determine new worker numbers
   local w1_num=$(( worker_count + 1 ))
   local w2_num=$(( worker_count + 2 ))
-
-  # The new panes are the ones without known titles
-  # After split -h -b on watchdog: new pane is at old watchdog index
-  # After split -v on that: the top stays, bottom is inserted after
-  # Find unnamed panes (those without MGR/WDG/Worker titles)
-  local new_pane_top=""
-  local new_pane_bottom=""
-  while IFS=' ' read -r pidx ptitle; do
-    case "$ptitle" in
-      MGR*|WDG*|W[0-9]*) continue ;;
-      *)
-        if [[ -z "$new_pane_top" ]]; then
-          new_pane_top="$pidx"
-        else
-          new_pane_bottom="$pidx"
-        fi
-        ;;
-    esac
-  done <<< "$pane_list"
-
-  # If we couldn't find by title exclusion, use positional logic
-  if [[ -z "$new_pane_top" ]]; then
-    new_pane_top="$watchdog_pane"
-    new_pane_bottom=$(( watchdog_pane + 1 ))
-  fi
-  if [[ -z "$new_pane_bottom" ]]; then
-    new_pane_bottom=$(( new_pane_top + 1 ))
-  fi
 
   # Name the new worker panes
   tmux select-pane -t "$session:0.${new_pane_top}" -T "W${w1_num} Worker ${w1_num}"
   tmux select-pane -t "$session:0.${new_pane_bottom}" -T "W${w2_num} Worker ${w2_num}"
 
-  # Rebuild ALL pane indices from titles (indices shift after splits)
+  # Rebuild worker pane list from titles
   rebuild_pane_state "$session"
   local new_worker_panes="$_worker_panes"
-  new_watchdog_pane="$_wdg_pane"
-  new_mgr_bottom="$_mgr_bottom"
-  new_wdg_bottom="$_wdg_bottom"
 
   local new_worker_count=$(( worker_count + 2 ))
   local new_cols=$(( current_cols + 1 ))
@@ -1750,10 +1727,8 @@ ROWS=2
 MAX_WORKERS=$max_workers
 WORKER_PANES=$new_worker_panes
 WORKER_COUNT=$new_worker_count
-WATCHDOG_PANE=${new_watchdog_pane:-$watchdog_pane}
+WATCHDOG_PANE=$watchdog_pane
 CURRENT_COLS=$new_cols
-MGR_BOTTOM_PANE=${new_mgr_bottom:-$MGR_BOTTOM_PANE}
-WDG_BOTTOM_PANE=${new_wdg_bottom:-$WDG_BOTTOM_PANE}
 RUNTIME_DIR=${runtime_dir}
 PASTE_SETTLE_MS=500
 IDLE_COLLAPSE_AFTER=60
@@ -1781,8 +1756,8 @@ MANIFEST
   worker_cmd2+=" --append-system-prompt-file ${worker_prompt_file_2}"
   tmux send-keys -t "$session:0.${new_pane_bottom}" "$worker_cmd2" Enter
 
-  # Rebalance layout
-  tmux select-layout -t "$session:0" even-horizontal 2>/dev/null || true
+  # Rebalance to proper column layout (each column = 2 rows)
+  rebalance_grid_layout "$session"
 
   printf "  ${SUCCESS}Added${RESET} workers ${BOLD}W${w1_num}${RESET} (0.${new_pane_top}) and ${BOLD}W${w2_num}${RESET} (0.${new_pane_bottom})\n"
   printf "  ${DIM}Total workers: ${new_worker_count} in ${new_cols} columns${RESET}\n"
@@ -1874,9 +1849,6 @@ doey_remove_column() {
 
   # After killing panes, ALL indices shift — must re-read everything
   rebuild_pane_state "$session"
-  local new_watchdog_pane="$_wdg_pane"
-  local new_mgr_bottom="$_mgr_bottom"
-  local new_wdg_bottom="$_wdg_bottom"
   local new_worker_panes="$_worker_panes"
 
   local new_worker_count=$(( worker_count - 2 ))
@@ -1892,10 +1864,8 @@ ROWS=2
 MAX_WORKERS=${MAX_WORKERS:-20}
 WORKER_PANES=$new_worker_panes
 WORKER_COUNT=$new_worker_count
-WATCHDOG_PANE=${new_watchdog_pane:-$WATCHDOG_PANE}
+WATCHDOG_PANE=${WATCHDOG_PANE}
 CURRENT_COLS=$new_cols
-MGR_BOTTOM_PANE=${new_mgr_bottom:-$MGR_BOTTOM_PANE}
-WDG_BOTTOM_PANE=${new_wdg_bottom:-$WDG_BOTTOM_PANE}
 RUNTIME_DIR=${runtime_dir}
 PASTE_SETTLE_MS=500
 IDLE_COLLAPSE_AFTER=60
@@ -1903,8 +1873,8 @@ IDLE_REMOVE_AFTER=300
 MANIFEST
   mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
 
-  # Rebalance layout
-  tmux select-layout -t "$session:0" even-horizontal 2>/dev/null || true
+  # Rebalance to proper column layout (each column = 2 rows)
+  rebalance_grid_layout "$session"
 
   printf "  ${SUCCESS}Removed${RESET} worker column — ${BOLD}${new_worker_count}${RESET} workers remaining\n"
 }
