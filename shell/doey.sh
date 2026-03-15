@@ -475,9 +475,8 @@ _purge_collect() {
 # Args: <runtime_dir> <session_active> <session_name> <list_file>
 # Writes stale file paths to list_file, one per line (size:path format)
 _purge_scan_runtime() {
-  local rt="$1" active="$2" session_name="$3" list_file="$4"
-  local now count=0
-  now="$(date +%s)"
+  local rt="$1" active="$2" session_name="$3" list_file="$4" now="$5"
+  local count=0
 
   # Get list of live panes (if session active)
   local live_panes=""
@@ -501,20 +500,14 @@ _purge_scan_runtime() {
       status_count=$((status_count + 1))
     fi
   done
-  [[ $status_count -gt 0 ]] && printf "         Found %d stale status files\n" "$status_count" || true
+  if [[ $status_count -gt 0 ]]; then
+    printf "         Found %d stale status files\n" "$status_count"
+  fi
 
-  # Scan dispatched markers (same logic as status)
+  # Scan dispatched markers — always safe to clean (consumed on read by is_dispatched)
   for f in "$rt"/status/*.dispatched; do
     [[ -f "$f" ]] || continue
-    if $active; then
-      local base_name
-      base_name="$(basename "$f" .dispatched)"
-      if [[ ! -f "$rt/status/${base_name}.status" ]] || ! echo "$live_panes" | grep -qF "${base_name//_/:}"; then
-        _purge_collect "$f" "$list_file"
-      fi
-    else
-      _purge_collect "$f" "$list_file"
-    fi
+    _purge_collect "$f" "$list_file"
   done
 
   # Notification cooldown markers (always safe)
@@ -524,13 +517,15 @@ _purge_scan_runtime() {
     _purge_collect "$f" "$list_file"
     cooldown_count=$((cooldown_count + 1))
   done
-  [[ $cooldown_count -gt 0 ]] && printf "         Found %d cooldown markers\n" "$cooldown_count" || true
+  if [[ $cooldown_count -gt 0 ]]; then
+    printf "         Found %d cooldown markers\n" "$cooldown_count"
+  fi
 
   # Session-stopped-only files
   if ! $active; then
     for f in "$rt"/status/pane_map "$rt"/status/col_*.collapsed \
-             "$rt"/pane_hash_* "$rt"/watchdog.heartbeat \
-             "$rt"/watchdog_pane_states.json "$rt"/watchdog.log; do
+             "$rt"/status/pane_hash_* "$rt"/status/watchdog.heartbeat \
+             "$rt"/status/watchdog_pane_states.json; do
       [[ -f "$f" ]] || continue
       _purge_collect "$f" "$list_file"
     done
@@ -543,7 +538,9 @@ _purge_scan_runtime() {
     _purge_collect "$f" "$list_file"
     inbox_count=$((inbox_count + 1))
   done
-  [[ $inbox_count -gt 0 ]] && printf "         Found %d consumed inbox messages\n" "$inbox_count" || true
+  if [[ $inbox_count -gt 0 ]]; then
+    printf "         Found %d consumed inbox messages\n" "$inbox_count"
+  fi
 
   # Delivered messages (always purgeable — already consumed)
   local delivered_count=0
@@ -554,7 +551,9 @@ _purge_scan_runtime() {
       delivered_count=$((delivered_count + 1))
     done
   fi
-  [[ $delivered_count -gt 0 ]] && printf "         Found %d delivered messages\n" "$delivered_count" || true
+  if [[ $delivered_count -gt 0 ]]; then
+    printf "         Found %d delivered messages\n" "$delivered_count"
+  fi
 
   # Old undelivered messages (>1h)
   local msg_count=0
@@ -567,7 +566,9 @@ _purge_scan_runtime() {
       msg_count=$((msg_count + 1))
     fi
   done
-  [[ $msg_count -gt 0 ]] && printf "         Found %d stale undelivered messages\n" "$msg_count" || true
+  if [[ $msg_count -gt 0 ]]; then
+    printf "         Found %d stale undelivered messages\n" "$msg_count"
+  fi
 
   # Old broadcasts (>1h)
   for f in "$rt"/broadcasts/*.broadcast; do
@@ -590,15 +591,16 @@ _purge_scan_runtime() {
       result_count=$((result_count + 1))
     fi
   done
-  [[ $result_count -gt 0 ]] && printf "         Found %d old result files (>24h)\n" "$result_count" || true
+  if [[ $result_count -gt 0 ]]; then
+    printf "         Found %d old result files (>24h)\n" "$result_count"
+  fi
 }
 
 # Scan expired research/reports (48h TTL)
-# Args: <runtime_dir> <list_file>
+# Args: <runtime_dir> <list_file> <now_epoch>
 _purge_scan_research() {
-  local rt="$1" list_file="$2"
-  local now count=0 ttl=172800
-  now="$(date +%s)"
+  local rt="$1" list_file="$2" now="$3"
+  local count=0 ttl=172800
 
   for dir in "$rt/research" "$rt/reports"; do
     [[ -d "$dir" ]] || continue
@@ -856,7 +858,9 @@ doey_purge() {
 
   if session_exists "$session"; then
     session_active=true
-    runtime_dir="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
+    local tmux_rt
+    tmux_rt="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
+    [[ -n "$tmux_rt" ]] && runtime_dir="$tmux_rt"
   fi
 
   if [[ ! -d "$runtime_dir" ]]; then
@@ -874,19 +878,22 @@ doey_purge() {
   fi
   printf '\n\n'
 
-  # Calculate step count based on scope
+  # Calculate step count based on scope (use local to avoid mutating global)
   local step=0
+  local purge_steps
   case "$scope" in
-    runtime) STEP_TOTAL=3 ;;
-    context) STEP_TOTAL=2 ;;
-    hooks)   STEP_TOTAL=2 ;;
-    all)     STEP_TOTAL=5 ;;
+    runtime) purge_steps=2 ;;
+    context) purge_steps=2 ;;
+    hooks)   purge_steps=2 ;;
+    all)     purge_steps=5 ;;
   esac
+  STEP_TOTAL=$purge_steps
 
   # Temp file for collecting stale file list
-  local list_file
+  local list_file now
   list_file="$(mktemp /tmp/doey_purge_XXXXXX)"
   trap "rm -f '$list_file'" RETURN
+  now="$(date +%s)"
 
   local rt_files=0 rt_bytes=0 res_files=0 res_bytes=0
 
@@ -895,28 +902,22 @@ doey_purge() {
     step=$((step + 1))
     step_start "$step" "Scanning stale runtime files..."
     step_done
-    _purge_scan_runtime "$runtime_dir" "$session_active" "$session" "$list_file"
+    _purge_scan_runtime "$runtime_dir" "$session_active" "$session" "$list_file" "$now"
     _purge_tally "$list_file"
     rt_files=$_COUNT
     rt_bytes=$_BYTES
   fi
 
-  # Step: Scan research artifacts
-  if [[ "$scope" == "runtime" || "$scope" == "all" ]]; then
+  # Step: Scan research artifacts (only for --scope all)
+  if [[ "$scope" == "all" ]]; then
     step=$((step + 1))
-    local research_list
-    research_list="$(mktemp /tmp/doey_purge_res_XXXXXX)"
+    local rt_count_before=$_COUNT
     step_start "$step" "Scanning expired research artifacts..."
     step_done
-    _purge_scan_research "$runtime_dir" "$research_list"
-    _purge_tally "$research_list"
-    res_files=$_COUNT
-    res_bytes=$_BYTES
-    # Append research files to main list
-    if [[ -s "$research_list" ]]; then
-      cat "$research_list" >> "$list_file"
-    fi
-    rm -f "$research_list"
+    _purge_scan_research "$runtime_dir" "$list_file" "$now"
+    _purge_tally "$list_file"
+    res_files=$((_COUNT - rt_count_before))
+    res_bytes=$((_BYTES - rt_bytes))
   fi
 
   # Step: Audit context
