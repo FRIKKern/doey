@@ -98,7 +98,7 @@ done
 $CRASH_FOUND || echo "No crash alerts."
 
 # Watchdog heartbeat
-HB_FILE="${RUNTIME_DIR}/status/watchdog_heartbeat"
+HB_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
 if [ -f "$HB_FILE" ]; then
   HB_TIME=$(cat "$HB_FILE")
   HB_AGO=$(( NOW - HB_TIME ))

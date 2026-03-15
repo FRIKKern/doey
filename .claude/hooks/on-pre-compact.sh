@@ -73,11 +73,13 @@ CONTEXT
 if is_manager; then
   WORKER_ASSIGNMENTS=$(tmux list-panes -s -t "$SESSION_NAME" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
   PENDING_RESULTS=""
+  HAS_JQ=false
+  command -v jq >/dev/null 2>&1 && HAS_JQ=true
   for rf in "$RUNTIME_DIR"/results/pane_*.json; do
     [ -f "$rf" ] || continue
     rf_name=$(basename "$rf")
     rf_status=""
-    if command -v jq >/dev/null 2>&1; then
+    if $HAS_JQ; then
       rf_status=$(jq -r '.status // "unknown"' "$rf" 2>/dev/null || echo "unknown")
     else
       rf_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$rf" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"$//' || echo "unknown")
