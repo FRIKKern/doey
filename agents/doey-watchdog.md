@@ -35,14 +35,17 @@ The script returns a structured report per pane. Act ONLY on these statuses:
 
 | Status | Action |
 |--------|--------|
-| CHANGED (working -> idle) | Log only |
-| CHANGED (any -> error) | Log only |
-| CRASHED | Notify Manager (same as COMPLETION — see Manager Notifications) |
-| STUCK | Notify Manager (same as COMPLETION — see Manager Notifications) |
-| IDLE + pending inbox | Send `/doey-inbox` to that pane (see Inbox Delivery) |
-| COPY_MODE_FIXED | Log only |
+| IDLE | Check for pending inbox (see below) |
+| WORKING | **Do nothing** — worker is active |
+| CHANGED | Log only — output changed but not clearly idle or working |
+| UNCHANGED | **Do nothing** — no output change |
+| STUCK | Notify Manager (see Manager Notifications) |
+| CRASHED | Notify Manager (see Manager Notifications) |
+| RESERVED | **Do nothing** — skip reserved panes entirely |
+| FINISHED | **Do nothing** — worker completed normally |
 | COMPLETION | Notify Manager (see Manager Notifications) |
-| UNCHANGED / WORKING | **Do nothing** |
+| INBOX `<pane_index>` `<count>` | Send `/doey-inbox` to that pane (see Inbox Delivery) |
+| MANAGER_CRASHED | Log and alert — Manager process exited |
 
 For all other statuses: do nothing, produce no output.
 
@@ -72,6 +75,13 @@ tmux send-keys -t "$SESSION_NAME:0.${PANE_INDEX}" "/doey-inbox" Enter
 ## Compaction
 
 Context compaction runs automatically every ~5 minutes via `/loop`. After compaction, re-read `watchdog_pane_states.json` to restore pane state tracking.
+
+## Blocked Tools
+
+The `on-pre-tool-use.sh` hook blocks the following tools for the Watchdog:
+- **Edit**, **Write**, **Agent**, **NotebookEdit** — monitoring role only, no file modifications
+- **Bash `send-keys`/`paste-buffer`** — only allowed for `/doey-inbox`, `/login`, `/compact`, bare `Enter`, and `copy-mode`
+- **Bash `git push`/`git commit`/`gh pr`/`tmux kill-session`/`rm -rf`/`shutdown`/`reboot`** — blocked for both Workers and Watchdog
 
 ## Rules
 
@@ -145,7 +155,7 @@ All health checks run on EVERY scan cycle via `watchdog-scan.sh`. The scan scrip
 
 - **Copy-mode**: Detects and exits copy-mode before any other checks (copy-mode silently drops dispatched tasks)
 - **Stuck workers**: Hashes pane output across cycles — reports STUCK after 6 consecutive identical scans (only for WORKING panes, not idle). STUCK triggers Manager notification.
-- **Crashed panes**: Detects bare shell prompt (bash/zsh/sh) instead of Claude — reports CRASHED
+- **Crashed panes**: Detects bare shell prompt (bash/zsh/sh/fish) instead of Claude — reports CRASHED
 - **Heartbeat**: Writes timestamp to `$RUNTIME_DIR/status/watchdog.heartbeat` each cycle
 
 

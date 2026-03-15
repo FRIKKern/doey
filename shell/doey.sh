@@ -105,6 +105,44 @@ session_exists() {
   tmux has-session -t "$1" < /dev/null 2>/dev/null
 }
 
+# Validate and auto-fix session.env files with encoding/quoting issues
+# This catches any files created with unquoted variables (spaces in paths)
+validate_session_env() {
+  local session_env="$1"
+  if [ ! -f "$session_env" ]; then
+    return 0
+  fi
+
+  # Test if the file can be sourced without errors by running it in a subshell
+  # Redirecting to /dev/null catches stderr, return code tells us if sourcing failed
+  if ! (source "$session_env" 2>/dev/null) 2>/dev/null; then
+    printf "  ${WARN}Fixing malformed session.env (unquoted paths with spaces)${RESET}\n" >&2
+    # Create a properly quoted version
+    local temp_file="${session_env}.fixed"
+    {
+      while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        if [ -z "$key" ] || [[ "$key" =~ ^[[:space:]]*# ]]; then
+          echo "$key=$value"
+          continue
+        fi
+        # Quote the value if it's not already quoted and if it looks like it needs quoting
+        if [[ "$value" =~ ^\".*\"$ ]] || [[ "$value" =~ ^\'.*\'$ ]]; then
+          # Already quoted
+          echo "$key=$value"
+        elif [[ "$value" =~ [[:space:]] ]]; then
+          # Contains spaces, needs quoting
+          echo "$key=\"$value\""
+        else
+          # No spaces, but quote for safety
+          echo "$key=\"$value\""
+        fi
+      done < "$session_env"
+    } > "$temp_file"
+    mv "$temp_file" "$session_env"
+  fi
+}
+
 # Register a directory as a project
 register_project() {
   local dir="$1"
@@ -2044,6 +2082,7 @@ doey_add_column() {
 
   # Source current state
   # shellcheck disable=SC1090
+  validate_session_env "${runtime_dir}/session.env"
   source "${runtime_dir}/session.env"
 
   if [[ "${GRID:-}" != "dynamic" ]]; then
@@ -2098,20 +2137,20 @@ doey_add_column() {
 
   # Rewrite session.env BEFORE launching Claude (hooks read it during boot)
   cat > "${runtime_dir}/session.env.tmp" << MANIFEST
-PROJECT_DIR=$dir
-PROJECT_NAME=$name
-SESSION_NAME=$session
-GRID=dynamic
-ROWS=2
-MAX_WORKERS=$max_workers
-WORKER_PANES=$new_worker_panes
-WORKER_COUNT=$new_worker_count
-WATCHDOG_PANE=$watchdog_pane
-CURRENT_COLS=$new_cols
-RUNTIME_DIR=${runtime_dir}
-PASTE_SETTLE_MS=500
-IDLE_COLLAPSE_AFTER=60
-IDLE_REMOVE_AFTER=300
+PROJECT_DIR="$dir"
+PROJECT_NAME="$name"
+SESSION_NAME="$session"
+GRID="dynamic"
+ROWS="2"
+MAX_WORKERS="$max_workers"
+WORKER_PANES="$new_worker_panes"
+WORKER_COUNT="$new_worker_count"
+WATCHDOG_PANE="$watchdog_pane"
+CURRENT_COLS="$new_cols"
+RUNTIME_DIR="${runtime_dir}"
+PASTE_SETTLE_MS="500"
+IDLE_COLLAPSE_AFTER="60"
+IDLE_REMOVE_AFTER="300"
 MANIFEST
   mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
 
@@ -2150,6 +2189,7 @@ doey_remove_column() {
 
   # Source current state
   # shellcheck disable=SC1090
+  validate_session_env "${runtime_dir}/session.env"
   source "${runtime_dir}/session.env"
 
   if [[ "${GRID:-}" != "dynamic" ]]; then
@@ -2235,20 +2275,20 @@ doey_remove_column() {
 
   # Rewrite session.env (atomic via tmp+mv)
   cat > "${runtime_dir}/session.env.tmp" << MANIFEST
-PROJECT_DIR=$dir
-PROJECT_NAME=$name
-SESSION_NAME=$session
-GRID=dynamic
-ROWS=2
-MAX_WORKERS=${MAX_WORKERS:-20}
-WORKER_PANES=$new_worker_panes
-WORKER_COUNT=$new_worker_count
-WATCHDOG_PANE=${WATCHDOG_PANE}
-CURRENT_COLS=$new_cols
-RUNTIME_DIR=${runtime_dir}
-PASTE_SETTLE_MS=500
-IDLE_COLLAPSE_AFTER=60
-IDLE_REMOVE_AFTER=300
+PROJECT_DIR="$dir"
+PROJECT_NAME="$name"
+SESSION_NAME="$session"
+GRID="dynamic"
+ROWS="2"
+MAX_WORKERS="${MAX_WORKERS:-20}"
+WORKER_PANES="$new_worker_panes"
+WORKER_COUNT="$new_worker_count"
+WATCHDOG_PANE="${WATCHDOG_PANE}"
+CURRENT_COLS="$new_cols"
+RUNTIME_DIR="${runtime_dir}"
+PASTE_SETTLE_MS="500"
+IDLE_COLLAPSE_AFTER="60"
+IDLE_REMOVE_AFTER="300"
 MANIFEST
   mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
 
@@ -2528,6 +2568,7 @@ HELP
         if session_exists "$session"; then
           runtime_dir="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
           # shellcheck disable=SC1090
+          validate_session_env "${runtime_dir}/session.env"
           source "${runtime_dir}/session.env"
           if [[ "${GRID:-}" == "dynamic" ]]; then
             doey_remove_column "$session" "$runtime_dir"

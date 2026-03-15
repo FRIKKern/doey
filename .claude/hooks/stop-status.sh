@@ -16,17 +16,8 @@ else
   STOP_STATUS="READY"
 fi
 
-# --- Write status file (atomic: tmp + mv) ---
-TMPFILE_STATUS=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_STATUS="$STATUS_FILE"
-cat > "$TMPFILE_STATUS" <<EOF
-PANE: $PANE
-UPDATED: $NOW
-STATUS: ${STOP_STATUS}
-TASK:
-EOF
-[[ "$TMPFILE_STATUS" != "$STATUS_FILE" ]] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
-
 # --- Research enforcement: block stop if task exists but no report ---
+# Must run BEFORE writing status so FINISHED isn't written on a blocked stop.
 if is_worker; then
   TASK_FILE="${RUNTIME_DIR}/research/${PANE_SAFE}.task"
   REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
@@ -35,5 +26,18 @@ if is_worker; then
     exit 2
   fi
 fi
+
+# --- Write status file (atomic: tmp + mv) ---
+TMPFILE_STATUS=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_STATUS="$STATUS_FILE"
+cat > "$TMPFILE_STATUS" <<EOF
+PANE: $PANE
+UPDATED: $NOW
+STATUS: ${STOP_STATUS}
+TASK:
+EOF
+case "$TMPFILE_STATUS" in
+  "$STATUS_FILE") ;;
+  *) mv "$TMPFILE_STATUS" "$STATUS_FILE" ;;
+esac
 
 exit 0

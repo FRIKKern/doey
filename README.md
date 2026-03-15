@@ -87,7 +87,7 @@ No config files. No shell reload. Just `doey`.
 - **Always-on monitoring** — Watchdog tracks worker state and delivers inbox messages
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
 - **Message bus** — file-based inter-pane communication (inbox, broadcasts, status)
-- **15+ slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-research`, and more
+- **16 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-research`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -100,12 +100,12 @@ No config files. No shell reload. Just `doey`.
 | `doey` | Smart launch — attach, launch, or show project picker |
 | `doey init` | Register current directory as a project |
 | `doey add` | Add workers to a running session |
-| `doey remove` | Remove workers from a running session |
+| `doey remove` | Remove a worker column (by number) or unregister a project (by name) |
 | `doey stop` | Stop the team |
 | `doey purge` | Clean stale runtime files, audit context bloat |
 | `doey list` | Show all projects with status |
 | `doey doctor` | Check installation health |
-| `doey update` | Pull latest and reinstall |
+| `doey update` | Pull latest and reinstall (alias: `reinstall`) |
 | `doey version` | Show version info |
 | `doey 4x3` | Launch with a static grid layout |
 
@@ -145,6 +145,7 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-stop-all` | Stop all workers |
 | `/doey-restart-workers` | Restart workers (keeps Manager) |
 | `/doey-reinstall` | Reinstall from repo |
+| `/doey-watchdog-compact` | Compact Watchdog context |
 
 </details>
 
@@ -164,13 +165,16 @@ doey/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (15 total)
+│   └── ... (16 total)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
 │   ├── linux-server.md
 │   └── windows-wsl2.md
 ├── shell/
-│   └── doey.sh                  # CLI → ~/.local/bin/doey
+│   ├── doey.sh                  # CLI → ~/.local/bin/doey
+│   ├── context-audit.sh         # Context pattern auditor
+│   ├── tmux-statusbar.sh        # Dynamic status-right renderer
+│   └── pane-border-status.sh    # Pane border label renderer
 └── .claude/hooks/               # Modular event hooks
     ├── common.sh
     ├── on-session-start.sh

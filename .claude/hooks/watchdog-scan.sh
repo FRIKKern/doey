@@ -34,7 +34,7 @@ if [ -f "$PREV_STATES_FILE" ]; then
   while IFS=: read -r pidx pstate; do
     pidx="${pidx// /}"
     pstate="${pstate// /}"
-    [[ "$pidx" =~ ^[0-9]+$ ]] || continue
+    case "$pidx" in *[!0-9]*|'') continue ;; esac
     # Validate state value before eval to prevent injection from corrupted JSON
     case "$pstate" in
       IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|UNKNOWN) ;;
@@ -48,21 +48,18 @@ fi
 
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 
-# Shell names that indicate a crashed pane (no Claude/node running)
-SHELL_PATTERN='^(bash|zsh|sh|fish)$'
-
 # --- Manager health check (pane 0.0) ---
 MGR_REF="${SESSION_NAME}:0.0"
 MGR_CMD=$(tmux display-message -t "$MGR_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
-if [[ "$MGR_CMD" =~ $SHELL_PATTERN ]]; then
-  echo "MANAGER_CRASHED"
-fi
+case "$MGR_CMD" in
+  bash|zsh|sh|fish) echo "MANAGER_CRASHED" ;;
+esac
 
 # --- Scan each worker pane ---
 IFS=',' read -ra PANES <<< "$WORKER_PANES"
 for i in "${PANES[@]}"; do
   # Validate pane index before use in eval/variable expansion
-  [[ "$i" =~ ^[0-9]+$ ]] || continue
+  case "$i" in *[!0-9]*|'') continue ;; esac
   PANE_REF="${SESSION_NAME}:0.${i}"
   PANE_SAFE="${SESSION_SAFE}_0_${i}"
 
@@ -82,7 +79,9 @@ for i in "${PANES[@]}"; do
   # Check for crash (shell prompt without claude/node running)
   # Cross-check with status file to avoid false-positives on normally finished workers
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
-  if [[ "$CURRENT_CMD" =~ $SHELL_PATTERN ]]; then
+  IS_SHELL=false
+  case "$CURRENT_CMD" in bash|zsh|sh|fish) IS_SHELL=true ;; esac
+  if $IS_SHELL; then
     STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
     if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
       echo "PANE ${i} FINISHED"
@@ -147,42 +146,44 @@ CRASH_EOF
   echo "$HASH" > "${HASH_FILE}.tmp" && mv "${HASH_FILE}.tmp" "$HASH_FILE"
 
   # Classify the change
-  if [[ "$CAPTURE" == *'❯'* ]]; then
-    echo "PANE ${i} IDLE"
-    eval "PANE_STATE_${i}=IDLE"
-  elif [[ "$CAPTURE" =~ thinking|working|Bash|Read|Edit|Write|Grep|Glob|Agent ]]; then
-    echo "PANE ${i} WORKING"
-    eval "PANE_STATE_${i}=WORKING"
-  else
-    echo "PANE ${i} CHANGED"
-    echo "$CAPTURE" | sed 's/^/  /'
-    eval "PANE_STATE_${i}=CHANGED"
-  fi
+  case "$CAPTURE" in
+    *'❯'*)
+      echo "PANE ${i} IDLE"
+      eval "PANE_STATE_${i}=IDLE"
+      ;;
+    *thinking*|*working*|*Bash*|*Read*|*Edit*|*Write*|*Grep*|*Glob*|*Agent*)
+      echo "PANE ${i} WORKING"
+      eval "PANE_STATE_${i}=WORKING"
+      ;;
+    *)
+      echo "PANE ${i} CHANGED"
+      echo "$CAPTURE" | sed 's/^/  /'
+      eval "PANE_STATE_${i}=CHANGED"
+      ;;
+  esac
 done
 
 # --- Per-pane inbox detection ---
 # Single glob, then classify by pane index (avoids N readdir calls)
 TOTAL_INBOX=0
-shopt -s nullglob
 ALL_MSGS=("${RUNTIME_DIR}/messages/"*.msg)
-shopt -u nullglob
-if [ ${#ALL_MSGS[@]} -gt 0 ]; then
+if [ -e "${ALL_MSGS[0]}" ]; then
   # Count messages per idle pane using filename prefix matching
   for msg in "${ALL_MSGS[@]}"; do
     msg_name=$(basename "$msg")
     for i in "${PANES[@]}"; do
-      [[ "$i" =~ ^[0-9]+$ ]] || continue
+      case "$i" in *[!0-9]*|'') continue ;; esac
       eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
       [ "$PSTATE" = "IDLE" ] || continue
-      if [[ "$msg_name" == "${SESSION_SAFE}_0_${i}_"* ]]; then
+      case "$msg_name" in "${SESSION_SAFE}_0_${i}_"*)
         eval "INBOX_COUNT_${i}=\$(( \${INBOX_COUNT_${i}:-0} + 1 ))"
         break
-      fi
+        ;; esac
     done
   done
   # Report per-pane inbox counts
   for i in "${PANES[@]}"; do
-    [[ "$i" =~ ^[0-9]+$ ]] || continue
+    case "$i" in *[!0-9]*|'') continue ;; esac
     eval "IC=\${INBOX_COUNT_${i}:-0}"
     if [ "$IC" -gt 0 ]; then
       echo "INBOX ${i} ${IC}"
@@ -192,21 +193,17 @@ if [ ${#ALL_MSGS[@]} -gt 0 ]; then
 fi
 
 # --- Check for worker completion events ---
-shopt -s nullglob
 COMPLETION_FILES=("${RUNTIME_DIR}/status"/completion_pane_*)
-shopt -u nullglob
 
-if [ ${#COMPLETION_FILES[@]} -gt 0 ]; then
-  for cf in "${COMPLETION_FILES[@]}"; do
-    [ -f "$cf" ] || continue
-    # Source the key=value file directly (written by stop-results.sh, trusted)
-    PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
-    # shellcheck disable=SC1090
-    . "$cf"
-    echo "COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}"
-    rm -f "$cf"
-  done
-fi
+for cf in "${COMPLETION_FILES[@]}"; do
+  [ -f "$cf" ] || continue
+  # Source the key=value file directly (written by stop-results.sh, trusted)
+  PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
+  # shellcheck disable=SC1090
+  . "$cf"
+  echo "COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}"
+  rm -f "$cf"
+done
 
 # --- Write heartbeat ---
 SCAN_TIME=$(date +%s)
@@ -218,7 +215,7 @@ JSON="{"
 FIRST=true
 for i in "${PANES[@]}"; do
   # Validate pane index before eval to prevent injection
-  [[ "$i" =~ ^[0-9]+$ ]] || continue
+  case "$i" in *[!0-9]*|'') continue ;; esac
   eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"
   if [ "$FIRST" = true ]; then
     JSON+="\"${i}\":\"${STATE}\""

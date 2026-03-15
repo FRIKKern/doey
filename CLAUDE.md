@@ -7,11 +7,16 @@ Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It la
 ## Architecture
 
 - **Manager (pane 0.0, Opus):** Orchestrator — plans and delegates, never writes code. Skips reserved workers.
-- **Watchdog (pane 0.{cols}, Haiku):** Monitors workers, delivers inbox messages.
+- **Watchdog (pane 0.1 dynamic, 0.{cols} static; Haiku):** Monitors workers, delivers inbox messages.
 - **Test Driver (E2E, Opus):** Automated test runner that drives Doey sessions through journeys.
 - **Workers (remaining panes, Opus):** Execute tasks.
 
 Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
+
+**Tool restrictions** (enforced by `on-pre-tool-use.sh`):
+- **Manager:** No restrictions (full access)
+- **Watchdog:** Blocked from Edit, Write, Agent, NotebookEdit tools; send-keys limited to /doey-inbox, /login, /compact, bare Enter, copy-mode
+- **Workers:** Blocked from git push/commit, gh pr create/merge, tmux send-keys/kill-session, rm -rf ~/\$HOME, shutdown/reboot
 
 ## Key Directories
 
@@ -47,9 +52,9 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 ## Important Files
 
 - `shell/doey.sh` -- Launcher: smart-launch, init, stop, update/reinstall, doctor, list, purge, test, version, dynamic/d, add, remove, uninstall
-- `.claude/hooks/common.sh` -- Shared utilities: pane identity, runtime dir
+- `.claude/hooks/common.sh` -- Shared utilities: `init_hook()`, `parse_field()`, role checks (`is_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()`
 - `.claude/hooks/on-session-start.sh` -- SessionStart: initial setup
-- `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status
+- `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status, sets READY on /compact, expands collapsed columns
 - `.claude/hooks/on-pre-tool-use.sh` -- Tool usage safety guards
 - `.claude/hooks/on-pre-compact.sh` -- Context preservation before compaction
 - `.claude/hooks/post-tool-lint.sh` -- PostToolUse: linting after tool use
@@ -57,7 +62,7 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 - `.claude/hooks/stop-results.sh` -- Stop: collects and writes results
 - `.claude/hooks/stop-notify.sh` -- Stop: Manager notifications
 - `commands/doey-reserve.md` -- Pane reservation command
-- `shell/context-audit.sh` -- Context audit tool (file sizes, bash 3.2 compat checks)
+- `shell/context-audit.sh` -- Context audit tool (detects contradictory patterns, identity confusion, stale references)
 - `install.sh` -- Installs agents, commands, shell script
 
 ## Context Reference

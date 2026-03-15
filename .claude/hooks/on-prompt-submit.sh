@@ -20,7 +20,7 @@ UPDATED: $NOW
 STATUS: READY
 TASK:
 EOF
-    [[ "$TMPFILE_STATUS" != "$STATUS_FILE" ]] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
+    case "$TMPFILE_STATUS" in "$STATUS_FILE") ;; *) mv "$TMPFILE_STATUS" "$STATUS_FILE" ;; esac
     exit 0
     ;;
   /simplify*|/loop*|/rename*|/exit*|/help*|/status*|/doey*)
@@ -38,7 +38,7 @@ UPDATED: $NOW
 STATUS: $NEW_STATUS
 TASK: $TASK
 EOF
-[[ "$TMPFILE_STATUS" != "$STATUS_FILE" ]] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
+case "$TMPFILE_STATUS" in "$STATUS_FILE") ;; *) mv "$TMPFILE_STATUS" "$STATUS_FILE" ;; esac
 
 # Expand column if collapsed (human needs to see the pane)
 if is_worker; then
@@ -50,13 +50,13 @@ if is_worker; then
   if $HAS_COLLAPSED; then
     COLS=$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | cut -dx -f1)
     # Handle dynamic grid mode
-    if [[ "$COLS" == "dynamic" || -z "$COLS" ]]; then
+    if [ "$COLS" = "dynamic" ] || [ -z "$COLS" ]; then
       COLS=$(grep '^CURRENT_COLS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)
     fi
-    if [[ -n "$COLS" ]] && (( COLS > 0 )); then
+    if [ -n "$COLS" ] && [ "$COLS" -gt 0 ]; then
       COL_IDX=$(( PANE_INDEX % COLS ))
       COLLAPSED_FILE="${RUNTIME_DIR}/status/col_${COL_IDX}.collapsed"
-      if [[ -f "$COLLAPSED_FILE" ]]; then
+      if [ -f "$COLLAPSED_FILE" ]; then
         tmux resize-pane -t "${PANE}" -x 80 2>/dev/null || true
         rm -f "$COLLAPSED_FILE"
       fi
