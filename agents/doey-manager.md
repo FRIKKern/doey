@@ -120,11 +120,30 @@ for f in "$RUNTIME_DIR/results"/pane_*.json; do
 done
 ```
 
-**Check Watchdog alerts** during each sweep:
+**Quick pane state overview** (avoids per-pane capture-pane calls):
 ```bash
-for f in "$RUNTIME_DIR/status/alerts"/*.alert; do
+cat "$RUNTIME_DIR/status/watchdog_pane_states.json" 2>/dev/null
+```
+
+**Check crash/alert files** during each sweep:
+```bash
+for f in "$RUNTIME_DIR/status"/crash_pane_*; do
   [ -f "$f" ] && cat "$f" && echo ""
 done
+```
+
+**Fallback: check for unprocessed completions** (in case Watchdog is down):
+```bash
+for f in "$RUNTIME_DIR/status"/completion_pane_*; do
+  [ -f "$f" ] && cat "$f" && echo ""
+done
+```
+
+**Check Watchdog health:**
+```bash
+HEARTBEAT=$(cat "$RUNTIME_DIR/status/watchdog.heartbeat" 2>/dev/null || echo "0")
+BEAT_AGE=$(( $(date +%s) - HEARTBEAT ))
+[ "$BEAT_AGE" -gt 60 ] && echo "WARNING: Watchdog heartbeat stale (${BEAT_AGE}s ago)"
 ```
 
 Check every **10–15 seconds** (use `/doey-monitor`). Exclude RESERVED panes from completion checks — "all done" means all non-reserved workers idle.

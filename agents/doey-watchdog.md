@@ -37,10 +37,11 @@ The script returns a structured report per pane. Act ONLY on these statuses:
 |--------|--------|
 | CHANGED (working -> idle) | Log only |
 | CHANGED (any -> error) | Log only |
-| CRASHED | Log only |
+| CRASHED | Notify Manager (same as COMPLETION — see Manager Notifications) |
+| STUCK | Notify Manager (same as COMPLETION — see Manager Notifications) |
 | IDLE + pending inbox | Send `/doey-inbox` to that pane (see Inbox Delivery) |
 | COPY_MODE_FIXED | Log only |
-| COMPLETION | Notify Manager (see Manager Completion Notifications) |
+| COMPLETION | Notify Manager (see Manager Notifications) |
 | UNCHANGED / WORKING | **Do nothing** |
 
 For all other statuses: do nothing, produce no output.
@@ -59,14 +60,14 @@ State is persisted by `watchdog-scan.sh` to `$RUNTIME_DIR/status/watchdog_pane_s
 
 ## Inbox Delivery
 
-Every scan cycle, check for `.msg` files in `${RUNTIME_DIR}/messages/`. For each unread message:
+When the scan output reports `INBOX <pane_index> <count>`, the target pane is idle and has pending messages. Send `/doey-inbox` to trigger the recipient to read and archive its own messages:
 
-1. Extract target pane from the `TO:` line
-2. Only deliver if recipient is idle (shows `❯` prompt) — never interrupt busy workers
-3. Send: `tmux send-keys -t "$TARGET" "/doey-inbox" Enter`
-4. Move delivered messages to `${RUNTIME_DIR}/messages/delivered/`
+```bash
+tmux copy-mode -q -t "$SESSION_NAME:0.${PANE_INDEX}" 2>/dev/null
+tmux send-keys -t "$SESSION_NAME:0.${PANE_INDEX}" "/doey-inbox" Enter
+```
 
-Deliver to Manager (0.0) first. Skip reserved panes.
+**Do NOT move or touch `.msg` files** — `/doey-inbox` handles reading and archiving. Deliver to Manager (0.0) first. Skip reserved panes.
 
 ## Compaction
 
@@ -81,13 +82,13 @@ Context compaction runs automatically every ~5 minutes via `/loop`. After compac
 - If tmux is not running or no session found, report clearly and wait
 - When asked for status: report monitoring duration, messages delivered, current pane states
 
-## Manager Completion Notifications
+## Manager Notifications
 
-When the scan output contains `COMPLETION` lines, the Watchdog MUST notify the Manager (pane 0.0) so it can dispatch follow-up work or report to the user.
+When the scan output contains `COMPLETION`, `CRASHED`, or `STUCK` lines, the Watchdog MUST notify the Manager (pane 0.0) so it can dispatch follow-up work or take action.
 
 ### Detection
 
-After running the scan script, check for lines matching `COMPLETION <pane_index> <status> <title>`. Each line means a worker just finished its task. Parse the fields:
+After running the scan script, check for lines matching `COMPLETION <pane_index> <status> <title>`, `CRASHED <pane_index>`, or `STUCK <pane_index>`. Parse the fields:
 
 ```bash
 # Example line: "COMPLETION 3 done hero-section_0315"
@@ -143,7 +144,7 @@ tmux send-keys -t "$SESSION_NAME:0.0" "Workers completed: 0.3 (hero-section, don
 All health checks run on EVERY scan cycle via `watchdog-scan.sh`. The scan script handles:
 
 - **Copy-mode**: Detects and exits copy-mode before any other checks (copy-mode silently drops dispatched tasks)
-- **Stuck workers**: Hashes pane output across cycles — reports UNCHANGED after 3+ identical scans (only for WORKING panes, not idle)
+- **Stuck workers**: Hashes pane output across cycles — reports STUCK after 6 consecutive identical scans (only for WORKING panes, not idle). STUCK triggers Manager notification.
 - **Crashed panes**: Detects bare shell prompt (bash/zsh/sh) instead of Claude — reports CRASHED
 - **Heartbeat**: Writes timestamp to `$RUNTIME_DIR/status/watchdog.heartbeat` each cycle
 

@@ -45,6 +45,13 @@ for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
     STATUS="UNKNOWN"
   fi
 
+  # Enrich FINISHED with done/error from result JSON
+  RESULT_FILE="${RUNTIME_DIR}/results/pane_${i}.json"
+  if [ "$STATUS" = "FINISHED" ] && [ -f "$RESULT_FILE" ]; then
+    RESULT_STATUS=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$RESULT_FILE" | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"//')
+    [ -n "$RESULT_STATUS" ] && STATUS="FINISHED (${RESULT_STATUS})"
+  fi
+
   # Read reservation
   RESERVE_FILE="${STATUS_DIR}/${PANE_SAFE}.reserved"
   RESERVED="-"
@@ -70,6 +77,39 @@ for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
 
   printf "%-6s | %-12s | %-10s | %-30s | %s\n" "W${i}" "$STATUS" "$RESERVED" "$TASK" "$UPDATED"
 done
+```
+
+### Crash Alerts & Watchdog Health
+
+Run after the status table to surface crash alerts and check Watchdog heartbeat.
+
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+NOW=$(date +%s)
+
+# Crash alerts
+CRASH_FOUND=false
+for f in "${RUNTIME_DIR}/status"/crash_pane_*; do
+  [ -f "$f" ] || continue
+  CRASH_FOUND=true
+  echo "⚠️  CRASH ALERT:" && cat "$f"
+done
+$CRASH_FOUND || echo "No crash alerts."
+
+# Watchdog heartbeat
+HB_FILE="${RUNTIME_DIR}/status/watchdog_heartbeat"
+if [ -f "$HB_FILE" ]; then
+  HB_TIME=$(cat "$HB_FILE")
+  HB_AGO=$(( NOW - HB_TIME ))
+  if [ "$HB_AGO" -gt 120 ]; then
+    echo "⚠️  Watchdog heartbeat stale: ${HB_AGO}s ago"
+  else
+    echo "Watchdog heartbeat: ${HB_AGO}s ago (healthy)"
+  fi
+else
+  echo "⚠️  No Watchdog heartbeat file found"
+fi
 ```
 
 ### Deep Inspect

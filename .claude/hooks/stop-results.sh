@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop hook: Capture worker results and write inbox message.
+# Stop hook: Capture worker results and write completion event.
 # Runs async — allowed to be slower.
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
@@ -8,8 +8,8 @@ init_hook
 # Only workers produce results
 is_worker || exit 0
 
-TMPFILE_RESULT="" TMPFILE_INBOX=""
-trap '[[ -n "${TMPFILE_RESULT:-}" ]] && rm -f "$TMPFILE_RESULT" 2>/dev/null; [[ -n "${TMPFILE_INBOX:-}" ]] && rm -f "$TMPFILE_INBOX" 2>/dev/null' EXIT
+TMPFILE_RESULT=""
+trap '[[ -n "${TMPFILE_RESULT:-}" ]] && rm -f "$TMPFILE_RESULT" 2>/dev/null' EXIT
 
 OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -80 2>/dev/null) || OUTPUT=""
 
@@ -48,19 +48,6 @@ cat > "$TMPFILE_RESULT" <<EOF
 EOF
 [[ "$TMPFILE_RESULT" != *"pane_${PANE_INDEX}.json" ]] && mv "$TMPFILE_RESULT" "$RUNTIME_DIR/results/pane_${PANE_INDEX}.json"
 TMPFILE_RESULT=""
-
-# --- Write human-readable inbox message for the manager ---
-SAFE_TITLE=$(printf '%s' "$PANE_TITLE" | tr -cd '[:alnum:]._-')
-SAFE_TIME=$(echo "${NOW##*T}" | tr ':+' '-p')
-INBOX_FILE="$RUNTIME_DIR/inbox/${NOW%%T*}_${SAFE_TIME}_pane${PANE_INDEX}_${SAFE_TITLE}.md"
-TMPFILE_INBOX=$(mktemp "${RUNTIME_DIR}/inbox/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_INBOX="$INBOX_FILE"
-cat > "$TMPFILE_INBOX" <<INBOX
-# Worker 0.${PANE_INDEX} — ${PANE_TITLE} — ${RESULT_STATUS}
-
-${FILTERED_OUTPUT}
-INBOX
-[[ "$TMPFILE_INBOX" != "$INBOX_FILE" ]] && mv "$TMPFILE_INBOX" "$INBOX_FILE"
-TMPFILE_INBOX=""
 
 # --- Write completion event for watchdog to pick up ---
 COMPLETION_FILE="${RUNTIME_DIR}/status/completion_pane_${PANE_INDEX}"
