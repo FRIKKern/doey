@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers (default 10) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans via `/doey-reserve` (permanent until explicitly unreserved). CLI entry point: `doey`.
+Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers in a dynamic grid (default: 2 columns = 4 workers, auto-expands when all busy) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans via `/doey-reserve` (permanent until explicitly unreserved). CLI entry point: `doey`.
 
 ## Architecture
 
@@ -18,9 +18,11 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 - `agents/` -- Agent definitions, installed to `~/.claude/agents/`
 - `commands/` -- Slash commands (doey-*.md), installed to `~/.claude/commands/`
 - `.claude/hooks/` -- Modular hooks: common.sh, on-session-start.sh, on-prompt-submit.sh, on-pre-tool-use.sh, on-pre-compact.sh, post-tool-lint.sh, stop-status.sh, stop-results.sh, stop-notify.sh, watchdog-scan.sh
-- `.claude/settings.local.json` -- Hook registration template (6 events, created per-project during `doey init`)
-- `shell/` -- Launcher (doey.sh), installed to `~/.local/bin/doey`
+- `.claude/settings.local.json` -- Permission rules for Bash tool patterns (allow-list for common CLI commands)
+- `shell/` -- Launcher and utilities (doey.sh, context-audit.sh, pane-border-status.sh, tmux-statusbar.sh), installed to `~/.local/bin/`
 - `docs/` -- Platform guides and context-reference.md
+
+Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remove` manage columns at runtime.
 
 ## Development Conventions
 
@@ -44,7 +46,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 ## Important Files
 
-- `shell/doey.sh` -- Launcher: init/start/stop/restart/status/doctor/update
+- `shell/doey.sh` -- Launcher: smart-launch, init, stop, update/reinstall, doctor, list, purge, test, version, dynamic/d, add, remove, uninstall
 - `.claude/hooks/common.sh` -- Shared utilities: pane identity, runtime dir
 - `.claude/hooks/on-session-start.sh` -- SessionStart: initial setup
 - `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status
@@ -55,6 +57,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 - `.claude/hooks/stop-results.sh` -- Stop: collects and writes results
 - `.claude/hooks/stop-notify.sh` -- Stop: Manager notifications
 - `commands/doey-reserve.md` -- Pane reservation command
+- `shell/context-audit.sh` -- Context audit tool (file sizes, bash 3.2 compat checks)
 - `install.sh` -- Installs agents, commands, shell script
 
 ## Context Reference
