@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+# Numeric-only validation (bash 3.2 safe)
+is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
+
 # --- Load session environment ---
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { echo "ERROR: not in doey session"; exit 1; }
 # Safe key-value parse (no arbitrary code execution)
@@ -34,7 +37,7 @@ if [ -f "$PREV_STATES_FILE" ]; then
   while IFS=: read -r pidx pstate; do
     pidx="${pidx// /}"
     pstate="${pstate// /}"
-    case "$pidx" in *[!0-9]*|'') continue ;; esac
+    is_numeric "$pidx" || continue
     # Validate state value before eval to prevent injection from corrupted JSON
     case "$pstate" in
       IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|UNKNOWN) ;;
@@ -59,7 +62,7 @@ esac
 IFS=',' read -ra PANES <<< "$WORKER_PANES"
 for i in "${PANES[@]}"; do
   # Validate pane index before use in eval/variable expansion
-  case "$i" in *[!0-9]*|'') continue ;; esac
+  is_numeric "$i" || continue
   PANE_REF="${SESSION_NAME}:0.${i}"
   PANE_SAFE="${SESSION_SAFE}_0_${i}"
 
@@ -79,32 +82,32 @@ for i in "${PANES[@]}"; do
   # Check for crash (shell prompt without claude/node running)
   # Cross-check with status file to avoid false-positives on normally finished workers
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
-  IS_SHELL=false
-  case "$CURRENT_CMD" in bash|zsh|sh|fish) IS_SHELL=true ;; esac
-  if $IS_SHELL; then
-    STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-    if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
-      echo "PANE ${i} FINISHED"
-      eval "PANE_STATE_${i}=FINISHED"
-    elif [ -f "$STATUS_FILE" ] && grep -q '^STATUS: RESERVED' "$STATUS_FILE"; then
-      echo "PANE ${i} RESERVED"
-      eval "PANE_STATE_${i}=RESERVED"
-    else
-      echo "PANE ${i} CRASHED"
-      eval "PANE_STATE_${i}=CRASHED"
-      # Write crash alert file for Manager consumption
-      CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${i}"
-      if [ ! -f "$CRASH_FILE" ]; then
-        CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
-        cat > "$CRASH_FILE" << CRASH_EOF
+  case "$CURRENT_CMD" in
+    bash|zsh|sh|fish)
+      STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+      if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
+        echo "PANE ${i} FINISHED"
+        eval "PANE_STATE_${i}=FINISHED"
+      elif [ -f "$STATUS_FILE" ] && grep -q '^STATUS: RESERVED' "$STATUS_FILE"; then
+        echo "PANE ${i} RESERVED"
+        eval "PANE_STATE_${i}=RESERVED"
+      else
+        echo "PANE ${i} CRASHED"
+        eval "PANE_STATE_${i}=CRASHED"
+        # Write crash alert file for Manager consumption
+        CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${i}"
+        if [ ! -f "$CRASH_FILE" ]; then
+          CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
+          cat > "$CRASH_FILE" << CRASH_EOF
 PANE_INDEX=${i}
 TIMESTAMP=$(date +%s)
 LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
 CRASH_EOF
+        fi
       fi
-    fi
-    continue
-  fi
+      continue
+      ;;
+  esac
 
   # Capture last 5 lines
   CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || CAPTURE=""
@@ -113,12 +116,12 @@ CRASH_EOF
   HASH=$(hash_fn "$CAPTURE")
 
   HASH_FILE="${RUNTIME_DIR}/status/pane_hash_${PANE_SAFE}"
-  OLD_HASH=$(cat "$HASH_FILE" 2>/dev/null) || true
+  read -r OLD_HASH < "$HASH_FILE" 2>/dev/null || OLD_HASH=""
 
   if [ "$HASH" = "$OLD_HASH" ]; then
     # Stuck-worker counter: increment on UNCHANGED, check previous state
     COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${i}"
-    OLD_COUNT=$(cat "$COUNTER_FILE" 2>/dev/null) || OLD_COUNT=0
+    read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
     NEW_COUNT=$((OLD_COUNT + 1))
     echo "$NEW_COUNT" > "$COUNTER_FILE"
 
@@ -172,7 +175,7 @@ if [ -e "${ALL_MSGS[0]}" ]; then
   for msg in "${ALL_MSGS[@]}"; do
     msg_name=$(basename "$msg")
     for i in "${PANES[@]}"; do
-      case "$i" in *[!0-9]*|'') continue ;; esac
+      is_numeric "$i" || continue
       eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
       [ "$PSTATE" = "IDLE" ] || continue
       case "$msg_name" in "${SESSION_SAFE}_0_${i}_"*)
@@ -183,7 +186,7 @@ if [ -e "${ALL_MSGS[0]}" ]; then
   done
   # Report per-pane inbox counts
   for i in "${PANES[@]}"; do
-    case "$i" in *[!0-9]*|'') continue ;; esac
+    is_numeric "$i" || continue
     eval "IC=\${INBOX_COUNT_${i}:-0}"
     if [ "$IC" -gt 0 ]; then
       echo "INBOX ${i} ${IC}"
@@ -215,7 +218,7 @@ JSON="{"
 FIRST=true
 for i in "${PANES[@]}"; do
   # Validate pane index before eval to prevent injection
-  case "$i" in *[!0-9]*|'') continue ;; esac
+  is_numeric "$i" || continue
   eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"
   if [ "$FIRST" = true ]; then
     JSON+="\"${i}\":\"${STATE}\""

@@ -16,8 +16,6 @@ OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:0.$PANE_INDEX" -p -S -80 2>/dev/nul
 # Filter UI noise and detect errors in a single pass
 FILTERED_OUTPUT=""
 RESULT_STATUS="done"
-NL='
-'
 while IFS= read -r line; do
   case "$line" in
     *"❯"*|*"───"*|*"Ctx █"*|*"bypass permissions"*|*"shift+tab"*|*"MCP server"*|*/doctor*) continue ;;
@@ -63,9 +61,9 @@ TMPFILE_RESULT=""
 # --- Write completion event for watchdog to pick up ---
 COMPLETION_FILE="${RUNTIME_DIR}/status/completion_pane_${PANE_INDEX}"
 cat > "${COMPLETION_FILE}.tmp" <<COMPLETE
-PANE_INDEX=$PANE_INDEX
-PANE_TITLE=$PANE_TITLE
-STATUS=$RESULT_STATUS
+PANE_INDEX="$PANE_INDEX"
+PANE_TITLE="$PANE_TITLE"
+STATUS="$RESULT_STATUS"
 TIMESTAMP=$(date +%s)
 COMPLETE
 mv "${COMPLETION_FILE}.tmp" "$COMPLETION_FILE"
