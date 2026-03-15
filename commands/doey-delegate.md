@@ -74,82 +74,15 @@ else
 fi
 ```
 
-### Step 5: Rename and send task via tmpfile
+### Step 5: Rename, send task, settle, verify
 
-**ALWAYS use the tmpfile/load-buffer method.** Never use `send-keys "" Enter` for task text — it breaks on special characters and long prompts.
+Follow the `/doey-dispatch` **Reliable Dispatch Sequence** (steps 8–15), using `TARGET_PANE` as `$PANE`. The delegate workflow skips steps 1–7 (kill/restart) since the worker is already idle.
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-TARGET_PANE="${SESSION_NAME}:0.X"
-
-# 1. Exit copy-mode
-tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
-
-# 2. Rename pane (MANDATORY — task + date for traceability)
-tmux send-keys -t "$TARGET_PANE" "/rename task-name_$(date +%m%d)" Enter
-sleep 1
-
-# 3. Write task to temp file
-mkdir -p "${RUNTIME_DIR}"
-TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
-cat > "$TASKFILE" << 'TASK'
-Your detailed task prompt here.
-TASK
-
-# 4. Exit copy-mode before paste
-tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
-
-# 5. Load and paste
-tmux load-buffer "$TASKFILE"
-tmux paste-buffer -t "$TARGET_PANE"
-
-# 6. Settle, then submit — auto-scales for large prompts
-tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
-TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
-if command -v bc >/dev/null 2>&1; then
-  SETTLE_S=$(echo "scale=2; ${PASTE_SETTLE_MS:-500} / 1000" | bc)
-  if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then MIN_SETTLE="2.0"
-  elif [ "$TASK_LINES" -gt 100 ] 2>/dev/null; then MIN_SETTLE="1.5"
-  else MIN_SETTLE="$SETTLE_S"; fi
-  SETTLE_S=$(echo "if ($MIN_SETTLE > $SETTLE_S) $MIN_SETTLE else $SETTLE_S" | bc)
-else
-  if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then SETTLE_S="2.0"
-  elif [ "$TASK_LINES" -gt 100 ] 2>/dev/null; then SETTLE_S="1.5"
-  else SETTLE_S="0.5"; fi
-fi
-sleep $SETTLE_S
-tmux send-keys -t "$TARGET_PANE" Enter
-
-# 7. Cleanup
-rm "$TASKFILE"
-```
-
-### Step 6: Mandatory verification
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-TARGET_PANE="${SESSION_NAME}:0.X"
-sleep 5
-OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5)
-if echo "$OUTPUT" | grep -qE '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-  echo "✓ Worker started processing"
-else
-  echo "⚠ Worker not processing — retrying Enter..."
-  tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
-  tmux send-keys -t "$TARGET_PANE" Enter
-  sleep 3
-  OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5)
-  if echo "$OUTPUT" | grep -qE '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-    echo "✓ Worker started after retry"
-  else
-    echo "✗ Worker FAILED — check pane manually"
-  fi
-fi
-```
+Key points:
+- **Rename pane** with `/rename task-name_$(date +%m%d)` before sending
+- **Use tmpfile/load-buffer** — never `send-keys "" Enter` for task text
+- **Settle time auto-scales** for large prompts via `PASTE_SETTLE_MS`
+- **Mandatory verification** — grep for `thinking|working|Read|Edit|Bash` after 5s; retry Enter once if not processing
 
 ### Rules
 

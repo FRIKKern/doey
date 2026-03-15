@@ -8,6 +8,7 @@ set -euo pipefail
 #   doey init         # Register current directory as a project
 #   doey list         # Show all registered projects + status
 #   doey stop         # Stop session for current project
+#   doey purge        # Scan and clean stale runtime files
 #   doey update       # Pull latest + reinstall (alias: reinstall)
 #   doey doctor       # Check installation health & prerequisites
 #   doey remove NAME  # Unregister a project from the registry
@@ -441,6 +442,538 @@ attach_or_switch() {
   else
     tmux attach -t "$session"
   fi
+}
+
+# ── Purge helpers ─────────────────────────────────────────────────────
+
+# Format bytes as human-readable (B/KB/MB)
+_purge_format_bytes() {
+  local bytes="$1"
+  if [[ "$bytes" -ge 1048576 ]]; then
+    printf "%.1f MB" "$(echo "$bytes 1048576" | awk '{printf "%.1f", $1/$2}')"
+  elif [[ "$bytes" -ge 1024 ]]; then
+    printf "%.1f KB" "$(echo "$bytes 1024" | awk '{printf "%.1f", $1/$2}')"
+  else
+    printf "%d B" "$bytes"
+  fi
+}
+
+# Get file modification time (cross-platform)
+_purge_file_mtime() {
+  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
+# Add a file to the purge list (appends to temp file)
+_purge_collect() {
+  local file="$1" list_file="$2"
+  local size
+  size=$(wc -c < "$file" 2>/dev/null | tr -d ' ')
+  echo "${size}:${file}" >> "$list_file"
+}
+
+# Scan stale runtime files
+# Args: <runtime_dir> <session_active> <session_name> <list_file>
+# Writes stale file paths to list_file, one per line (size:path format)
+_purge_scan_runtime() {
+  local rt="$1" active="$2" session_name="$3" list_file="$4"
+  local now count=0
+  now="$(date +%s)"
+
+  # Get list of live panes (if session active)
+  local live_panes=""
+  if $active; then
+    live_panes="$(tmux list-panes -s -t "$session_name" -F '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null | tr '\n' '|')"
+  fi
+
+  # Scan status files for dead panes
+  local status_count=0
+  for f in "$rt"/status/*.status; do
+    [[ -f "$f" ]] || continue
+    if $active; then
+      local pane_id
+      pane_id="$(head -1 "$f" | sed 's/^PANE: //')"
+      if ! echo "$live_panes" | grep -qF "$pane_id"; then
+        _purge_collect "$f" "$list_file"
+        status_count=$((status_count + 1))
+      fi
+    else
+      _purge_collect "$f" "$list_file"
+      status_count=$((status_count + 1))
+    fi
+  done
+  [[ $status_count -gt 0 ]] && printf "         Found %d stale status files\n" "$status_count" || true
+
+  # Scan dispatched markers (same logic as status)
+  for f in "$rt"/status/*.dispatched; do
+    [[ -f "$f" ]] || continue
+    if $active; then
+      local base_name
+      base_name="$(basename "$f" .dispatched)"
+      if [[ ! -f "$rt/status/${base_name}.status" ]] || ! echo "$live_panes" | grep -qF "${base_name//_/:}"; then
+        _purge_collect "$f" "$list_file"
+      fi
+    else
+      _purge_collect "$f" "$list_file"
+    fi
+  done
+
+  # Notification cooldown markers (always safe)
+  local cooldown_count=0
+  for f in "$rt"/status/notif_cooldown_*; do
+    [[ -f "$f" ]] || continue
+    _purge_collect "$f" "$list_file"
+    cooldown_count=$((cooldown_count + 1))
+  done
+  [[ $cooldown_count -gt 0 ]] && printf "         Found %d cooldown markers\n" "$cooldown_count" || true
+
+  # Session-stopped-only files
+  if ! $active; then
+    for f in "$rt"/status/pane_map "$rt"/status/col_*.collapsed \
+             "$rt"/pane_hash_* "$rt"/watchdog.heartbeat \
+             "$rt"/watchdog_pane_states.json "$rt"/watchdog.log; do
+      [[ -f "$f" ]] || continue
+      _purge_collect "$f" "$list_file"
+    done
+  fi
+
+  # Inbox files (always purgeable — write-once/read-once)
+  local inbox_count=0
+  for f in "$rt"/inbox/*; do
+    [[ -f "$f" ]] || continue
+    _purge_collect "$f" "$list_file"
+    inbox_count=$((inbox_count + 1))
+  done
+  [[ $inbox_count -gt 0 ]] && printf "         Found %d consumed inbox messages\n" "$inbox_count" || true
+
+  # Delivered messages (always purgeable — already consumed)
+  local delivered_count=0
+  if [[ -d "$rt/messages/delivered" ]]; then
+    for f in "$rt"/messages/delivered/*; do
+      [[ -f "$f" ]] || continue
+      _purge_collect "$f" "$list_file"
+      delivered_count=$((delivered_count + 1))
+    done
+  fi
+  [[ $delivered_count -gt 0 ]] && printf "         Found %d delivered messages\n" "$delivered_count" || true
+
+  # Old undelivered messages (>1h)
+  local msg_count=0
+  for f in "$rt"/messages/*.msg; do
+    [[ -f "$f" ]] || continue
+    local mtime
+    mtime="$(_purge_file_mtime "$f")"
+    if [[ $((now - mtime)) -gt 3600 ]]; then
+      _purge_collect "$f" "$list_file"
+      msg_count=$((msg_count + 1))
+    fi
+  done
+  [[ $msg_count -gt 0 ]] && printf "         Found %d stale undelivered messages\n" "$msg_count" || true
+
+  # Old broadcasts (>1h)
+  for f in "$rt"/broadcasts/*.broadcast; do
+    [[ -f "$f" ]] || continue
+    local mtime
+    mtime="$(_purge_file_mtime "$f")"
+    if [[ $((now - mtime)) -gt 3600 ]]; then
+      _purge_collect "$f" "$list_file"
+    fi
+  done
+
+  # Old results (>24h)
+  local result_count=0
+  for f in "$rt"/results/*; do
+    [[ -f "$f" ]] || continue
+    local mtime
+    mtime="$(_purge_file_mtime "$f")"
+    if [[ $((now - mtime)) -gt 86400 ]]; then
+      _purge_collect "$f" "$list_file"
+      result_count=$((result_count + 1))
+    fi
+  done
+  [[ $result_count -gt 0 ]] && printf "         Found %d old result files (>24h)\n" "$result_count" || true
+}
+
+# Scan expired research/reports (48h TTL)
+# Args: <runtime_dir> <list_file>
+_purge_scan_research() {
+  local rt="$1" list_file="$2"
+  local now count=0 ttl=172800
+  now="$(date +%s)"
+
+  for dir in "$rt/research" "$rt/reports"; do
+    [[ -d "$dir" ]] || continue
+    for f in "$dir"/*; do
+      [[ -f "$f" ]] || continue
+      local mtime
+      mtime="$(_purge_file_mtime "$f")"
+      if [[ $((now - mtime)) -gt $ttl ]]; then
+        _purge_collect "$f" "$list_file"
+        count=$((count + 1))
+      fi
+    done
+  done
+
+  if [[ $count -gt 0 ]]; then
+    printf "         Found %d research/report files older than 48h\n" "$count"
+  else
+    printf "         ${DIM}No expired research artifacts${RESET}\n"
+  fi
+}
+
+# Audit context file sizes (report only, no deletions)
+_purge_audit_context() {
+  local total_bytes=0
+  local recommendations=""
+  local rec_count=0
+
+  printf '\n'
+
+  # Check installed agents
+  for f in "$HOME"/.claude/agents/doey-*.md; do
+    [[ -f "$f" ]] || continue
+    local size lines short_name
+    size=$(wc -c < "$f" | tr -d ' ')
+    lines=$(wc -l < "$f" | tr -d ' ')
+    short_name="~/.claude/agents/$(basename "$f")"
+    printf "         %-45s %s  (%d lines)\n" "$short_name" "$(_purge_format_bytes "$size")" "$lines"
+    total_bytes=$((total_bytes + size))
+    if [[ $size -gt 8192 ]]; then
+      recommendations="${recommendations}         - $(basename "$f") is >8KB — consider splitting rules into memory\n"
+      rec_count=$((rec_count + 1))
+    fi
+  done
+
+  # Check installed commands/skills
+  local skill_count=0 skill_bytes=0
+  for f in "$HOME"/.claude/commands/doey-*.md; do
+    [[ -f "$f" ]] || continue
+    local size
+    size=$(wc -c < "$f" | tr -d ' ')
+    skill_bytes=$((skill_bytes + size))
+    skill_count=$((skill_count + 1))
+    if [[ $size -gt 3072 ]]; then
+      recommendations="${recommendations}         - $(basename "$f") is >3KB — consider compressing\n"
+      rec_count=$((rec_count + 1))
+    fi
+  done
+  if [[ $skill_count -gt 0 ]]; then
+    printf "         %-45s %s total\n" "${skill_count} skills" "$(_purge_format_bytes "$skill_bytes")"
+    total_bytes=$((total_bytes + skill_bytes))
+  fi
+  if [[ $skill_bytes -gt 30720 ]]; then
+    recommendations="${recommendations}         - ${skill_count} skills total >30KB — consider per-role skill sets\n"
+    rec_count=$((rec_count + 1))
+  fi
+
+  # Check project CLAUDE.md
+  local project_dir
+  project_dir="$(pwd)"
+  if [[ -f "$project_dir/CLAUDE.md" ]]; then
+    local size lines
+    size=$(wc -c < "$project_dir/CLAUDE.md" | tr -d ' ')
+    lines=$(wc -l < "$project_dir/CLAUDE.md" | tr -d ' ')
+    printf "         %-45s %s  (%d lines)\n" "CLAUDE.md" "$(_purge_format_bytes "$size")" "$lines"
+    total_bytes=$((total_bytes + size))
+    if [[ $size -gt 5120 ]]; then
+      recommendations="${recommendations}         - CLAUDE.md is >5KB — consider moving stable info to memory\n"
+      rec_count=$((rec_count + 1))
+    fi
+  fi
+
+  printf "         %-45s ~%s\n" "Total loaded context:" "$(_purge_format_bytes "$total_bytes")"
+
+  if [[ $rec_count -gt 0 ]]; then
+    printf '\n'
+    printf "         ${WARN}Recommendations:${RESET}\n"
+    printf "$recommendations"
+  fi
+  printf '\n'
+}
+
+# Run context-audit.sh if available
+_purge_audit_hooks() {
+  local repo_dir
+  repo_dir="$(resolve_repo_dir)"
+  local audit_script="${repo_dir}/shell/context-audit.sh"
+
+  if [[ ! -x "$audit_script" ]]; then
+    printf "         ${DIM}context-audit.sh not found — skipping${RESET}\n"
+    return 0
+  fi
+
+  local audit_output
+  audit_output="$("$audit_script" --installed --no-color 2>&1)" || true
+
+  if [[ -z "$audit_output" ]]; then
+    printf "         ${SUCCESS}Context audit: clean${RESET}\n"
+  else
+    printf "%s\n" "$audit_output"
+  fi
+}
+
+# Print purge summary table
+# Args: <runtime_files> <runtime_bytes> <research_files> <research_bytes> <dry_run>
+_purge_summary() {
+  local rt_files="$1" rt_bytes="$2" res_files="$3" res_bytes="$4" dry_run="$5"
+  local total_files=$((rt_files + res_files))
+  local total_bytes=$((rt_bytes + res_bytes))
+
+  printf '\n'
+  printf "         ${DIM}┌─────────────┬────────┬──────────────┐${RESET}\n"
+  printf "         ${DIM}│${RESET} ${BOLD}Category${RESET}    ${DIM}│${RESET} ${BOLD}Files${RESET}  ${DIM}│${RESET} ${BOLD}Size${RESET}         ${DIM}│${RESET}\n"
+  printf "         ${DIM}├─────────────┼────────┼──────────────┤${RESET}\n"
+  printf "         ${DIM}│${RESET} Runtime     ${DIM}│${RESET} %5d  ${DIM}│${RESET} %-12s ${DIM}│${RESET}\n" "$rt_files" "$(_purge_format_bytes "$rt_bytes")"
+  printf "         ${DIM}│${RESET} Research    ${DIM}│${RESET} %5d  ${DIM}│${RESET} %-12s ${DIM}│${RESET}\n" "$res_files" "$(_purge_format_bytes "$res_bytes")"
+  printf "         ${DIM}├─────────────┼────────┼──────────────┤${RESET}\n"
+  printf "         ${DIM}│${RESET} ${BOLD}Total${RESET}       ${DIM}│${RESET} ${BOLD}%5d${RESET}  ${DIM}│${RESET} ${BOLD}%-12s${RESET} ${DIM}│${RESET}\n" "$total_files" "$(_purge_format_bytes "$total_bytes")"
+  printf "         ${DIM}└─────────────┴────────┴──────────────┘${RESET}\n"
+
+  if $dry_run; then
+    printf "         ${DIM}(dry run — no files were deleted)${RESET}\n"
+  fi
+  printf '\n'
+}
+
+# Delete collected stale files
+# Args: <list_file>
+_purge_execute() {
+  local list_file="$1"
+  local count=0 bytes=0
+
+  while IFS=: read -r size path; do
+    [[ -z "$path" ]] && continue
+    rm -f "$path" 2>/dev/null && {
+      count=$((count + 1))
+      bytes=$((bytes + size))
+    }
+  done < "$list_file"
+
+  printf "   ${SUCCESS}Purged %d files, freed %s.${RESET}\n" "$count" "$(_purge_format_bytes "$bytes")"
+}
+
+# Write purge report JSON
+# Args: <runtime_dir> <project> <session_active> <dry_run> <scope>
+#        <rt_files> <rt_bytes> <res_files> <res_bytes>
+_purge_write_report() {
+  local rt="$1" project="$2" active="$3" dry_run="$4" scope="$5"
+  local rt_files="$6" rt_bytes="$7" res_files="$8" res_bytes="$9"
+  local total_files=$((rt_files + res_files))
+  local total_bytes=$((rt_bytes + res_bytes))
+  local ts
+  ts="$(date '+%Y-%m-%dT%H:%M:%S%z')"
+  local report_name="purge_report_$(date '+%Y%m%d_%H%M%S').json"
+
+  mkdir -p "$rt/results"
+  cat > "$rt/results/$report_name" << REPORT_EOF
+{
+  "timestamp": "$ts",
+  "project": "$project",
+  "session_active": $active,
+  "dry_run": $dry_run,
+  "scope": "$scope",
+  "runtime": { "files_found": $rt_files, "bytes_freed": $rt_bytes },
+  "research": { "files_found": $res_files, "bytes_freed": $res_bytes },
+  "total_files_purged": $total_files,
+  "total_bytes_freed": $total_bytes
+}
+REPORT_EOF
+  printf "   Report: ${DIM}%s${RESET}\n" "$rt/results/$report_name"
+}
+
+# Count files and total bytes from a list file (size:path per line)
+# Sets _COUNT and _BYTES globals
+_purge_tally() {
+  local list_file="$1"
+  _COUNT=0
+  _BYTES=0
+  if [[ -s "$list_file" ]]; then
+    while IFS=: read -r size path; do
+      [[ -z "$path" ]] && continue
+      _COUNT=$((_COUNT + 1))
+      _BYTES=$((_BYTES + size))
+    done < "$list_file"
+  fi
+}
+
+# Help text for doey purge
+purge_usage() {
+  cat << 'PURGE_HELP'
+
+  Usage: doey purge [options]
+
+  Scan and clean stale runtime files, audit context bloat.
+
+  Options:
+    --dry-run    Report only, no deletions
+    --force      Skip confirmation prompt
+    --scope X    Limit scope: runtime, context, hooks, all (default: all)
+    -h, --help   Show this help
+
+  Examples:
+    doey purge                    # Interactive scan and clean
+    doey purge --dry-run          # See what would be purged
+    doey purge --force            # Purge without asking
+    doey purge --scope runtime    # Only clean runtime files
+
+PURGE_HELP
+}
+
+# Main entry point for doey purge
+doey_purge() {
+  local dry_run=false
+  local force=false
+  local scope="all"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run)  dry_run=true ;;
+      --force)    force=true ;;
+      --scope)    scope="${2:?--scope requires a value}"; shift ;;
+      -h|--help)  purge_usage; return 0 ;;
+      *)          printf "  ${ERROR}Unknown purge flag: %s${RESET}\n" "$1"; return 1 ;;
+    esac
+    shift
+  done
+
+  # Validate scope
+  case "$scope" in
+    runtime|context|hooks|all) ;;
+    *) printf "  ${ERROR}Invalid scope: %s (use: runtime, context, hooks, all)${RESET}\n" "$scope"; return 1 ;;
+  esac
+
+  # Resolve project
+  local dir name session runtime_dir session_active
+  dir="$(pwd)"
+  name="$(find_project "$dir")"
+  if [[ -z "$name" ]]; then
+    printf "  ${DIM}No project registered for %s — nothing to purge${RESET}\n" "$dir"
+    return 0
+  fi
+
+  session="doey-${name}"
+  runtime_dir="/tmp/doey/${name}"
+  session_active=false
+
+  if session_exists "$session"; then
+    session_active=true
+    runtime_dir="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
+  fi
+
+  if [[ ! -d "$runtime_dir" ]]; then
+    printf "  ${DIM}No runtime directory found — nothing to purge${RESET}\n"
+    return 0
+  fi
+
+  # Header
+  printf '\n'
+  printf "  ${BRAND}Doey — Purge${RESET}"
+  if $session_active; then
+    printf "  ${DIM}(session active)${RESET}"
+  else
+    printf "  ${DIM}(session stopped)${RESET}"
+  fi
+  printf '\n\n'
+
+  # Calculate step count based on scope
+  local step=0
+  case "$scope" in
+    runtime) STEP_TOTAL=3 ;;
+    context) STEP_TOTAL=2 ;;
+    hooks)   STEP_TOTAL=2 ;;
+    all)     STEP_TOTAL=5 ;;
+  esac
+
+  # Temp file for collecting stale file list
+  local list_file
+  list_file="$(mktemp /tmp/doey_purge_XXXXXX)"
+  trap "rm -f '$list_file'" RETURN
+
+  local rt_files=0 rt_bytes=0 res_files=0 res_bytes=0
+
+  # Step: Scan runtime files
+  if [[ "$scope" == "runtime" || "$scope" == "all" ]]; then
+    step=$((step + 1))
+    step_start "$step" "Scanning stale runtime files..."
+    step_done
+    _purge_scan_runtime "$runtime_dir" "$session_active" "$session" "$list_file"
+    _purge_tally "$list_file"
+    rt_files=$_COUNT
+    rt_bytes=$_BYTES
+  fi
+
+  # Step: Scan research artifacts
+  if [[ "$scope" == "runtime" || "$scope" == "all" ]]; then
+    step=$((step + 1))
+    local research_list
+    research_list="$(mktemp /tmp/doey_purge_res_XXXXXX)"
+    step_start "$step" "Scanning expired research artifacts..."
+    step_done
+    _purge_scan_research "$runtime_dir" "$research_list"
+    _purge_tally "$research_list"
+    res_files=$_COUNT
+    res_bytes=$_BYTES
+    # Append research files to main list
+    if [[ -s "$research_list" ]]; then
+      cat "$research_list" >> "$list_file"
+    fi
+    rm -f "$research_list"
+  fi
+
+  # Step: Audit context
+  if [[ "$scope" == "context" || "$scope" == "all" ]]; then
+    step=$((step + 1))
+    step_start "$step" "Auditing context file sizes..."
+    step_done
+    _purge_audit_context
+  fi
+
+  # Step: Audit hooks
+  if [[ "$scope" == "hooks" || "$scope" == "all" ]]; then
+    step=$((step + 1))
+    step_start "$step" "Running context audit..."
+    step_done
+    _purge_audit_hooks
+  fi
+
+  # Step: Summary
+  step=$((step + 1))
+  step_start "$step" "Summary"
+  printf '\n'
+
+  local total_files=$((rt_files + res_files))
+  local total_bytes=$((rt_bytes + res_bytes))
+
+  if [[ $total_files -eq 0 ]]; then
+    printf "         ${SUCCESS}Nothing to purge — runtime is clean.${RESET}\n\n"
+    _purge_write_report "$runtime_dir" "$name" "$session_active" "$dry_run" "$scope" \
+      "$rt_files" "$rt_bytes" "$res_files" "$res_bytes"
+    return 0
+  fi
+
+  _purge_summary "$rt_files" "$rt_bytes" "$res_files" "$res_bytes" "$dry_run"
+
+  # Dry run — stop here
+  if $dry_run; then
+    _purge_write_report "$runtime_dir" "$name" "$session_active" "$dry_run" "$scope" \
+      "$rt_files" "$rt_bytes" "$res_files" "$res_bytes"
+    return 0
+  fi
+
+  # Confirmation prompt (unless --force)
+  if ! $force; then
+    local confirm
+    printf "   Found %d stale files (%s). Purge? (y/N) " "$total_files" "$(_purge_format_bytes "$total_bytes")"
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      printf "  ${DIM}Cancelled${RESET}\n"
+      return 0
+    fi
+  fi
+
+  # Execute purge
+  _purge_execute "$list_file"
+  _purge_write_report "$runtime_dir" "$name" "$session_active" "$dry_run" "$scope" \
+    "$rt_files" "$rt_bytes" "$res_files" "$res_bytes"
 }
 
 # ── Initial worker columns ────────────────────────────────────────────
@@ -1880,6 +2413,7 @@ case "${1:-}" in
     (none)     Smart launch — auto-attach or show project picker
     init       Register current directory as a project
     list       Show all registered projects and their status
+    purge      Scan and clean stale runtime files, audit context bloat
     stop       Stop the session for the current project
     update     Pull latest changes and reinstall (alias: reinstall)
     doctor     Check installation health and prerequisites
@@ -1926,6 +2460,11 @@ HELP
   list)
     list_projects
     exit 0
+    ;;
+  purge)
+    shift
+    doey_purge "$@"
+    exit $?
     ;;
   stop)
     stop_project

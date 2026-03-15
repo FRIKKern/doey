@@ -16,8 +16,8 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    ALL_PANES="$WATCHDOG_PANE $(echo "$WORKER_PANES" | tr ',' ' ')"
    WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
 
-   # Check which worker panes are already ready (idle Claude with bypass permissions)
-   # Watchdog is ALWAYS restarted regardless of readiness.
+   # Detect already-ready workers (has child process + "bypass permissions" + prompt visible) — skip them.
+   # Watchdog is ALWAYS restarted regardless.
    SKIP_PANES=""
    for i in $WORKER_PANES_LIST; do
      PANE_PID=$(tmux display-message -t "$SESSION_NAME:0.$i" -p '#{pane_pid}')
@@ -94,14 +94,10 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    done
    ```
 
-5. **INSTRUCT WATCHDOG:**
+5. **INSTRUCT WATCHDOG** — Build comma-separated worker pane list from `$WORKER_PANES` and send monitoring start command:
    ```bash
-   WORKER_LIST=""
-   for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
-     [[ -n "$WORKER_LIST" ]] && WORKER_LIST+=", "
-     WORKER_LIST+="0.$i"
-   done
-   tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "Start monitoring. Total panes: $TOTAL_PANES. Skip pane 0.0 (Manager) and 0.$WATCHDOG_PANE (yourself). Monitor panes ${WORKER_LIST}." Enter
+   WORKER_LIST=""; for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [[ -n "$WORKER_LIST" ]] && WORKER_LIST+=", "; WORKER_LIST+="0.$i"; done
+   tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "Start monitoring. Skip pane 0.0 and 0.$WATCHDOG_PANE. Monitor panes ${WORKER_LIST}." Enter
    ```
 
 6. **FINAL REPORT** — Show status for each pane. Distinguish skipped (already ready) from restarted panes:
