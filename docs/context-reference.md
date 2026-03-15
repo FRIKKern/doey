@@ -204,15 +204,15 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
 /tmp/doey/<project>/
   session.env                        # Session manifest
   worker-system-prompt-N.md          # Per-worker prompt (base + identity)
-  pane_map                           # Pane ID-to-index mapping cache
   pane_hash_*                        # Watchdog output hashes for change detection
   watchdog.heartbeat                 # Watchdog liveness marker
   watchdog_pane_states.json          # Watchdog state snapshot
-  notif_cooldown_*                   # Notification rate-limiting markers
   status/                            # [init-time]
     <pane_safe>.status               # 4-line: PANE, UPDATED, STATUS, TASK
     <pane_safe>.reserved             # contains "permanent"
     <pane_safe>.dispatched           # Dispatch tracking marker
+    pane_map                         # Pane ID-to-index mapping cache
+    notif_cooldown_*                 # Notification rate-limiting markers
     col_*.collapsed                  # Collapsed column markers
   research/                          # [lazy-created]
     <pane_safe>.task                  # Research task marker
