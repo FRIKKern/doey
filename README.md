@@ -87,7 +87,7 @@ No config files. No shell reload. Just `doey`.
 - **Always-on monitoring** — Watchdog tracks worker state and delivers inbox messages
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
 - **Message bus** — file-based inter-pane communication (inbox, broadcasts, status)
-- **16 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-research`, and more
+- **17 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -146,6 +146,7 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-restart-workers` | Restart workers (keeps Manager) |
 | `/doey-reinstall` | Reinstall from repo |
 | `/doey-watchdog-compact` | Compact Watchdog context |
+| `/doey-analyze` | Full project analysis — find and fix doc obscurities |
 
 </details>
 
@@ -165,7 +166,7 @@ doey/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (16 total)
+│   └── ... (17 total)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
 │   ├── linux-server.md
