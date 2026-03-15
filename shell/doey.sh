@@ -88,7 +88,7 @@ EOF
 
 # Derive a sanitized project name from a directory path
 project_name_from_dir() {
-  basename "$1" | tr '[:upper:] .' '[:lower:]--' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//'
+  basename "$1" | tr '[:upper:] .' '[:lower:]--' | sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//;s/-$//'
 }
 
 # Find the project name registered for a given directory (empty if none)
@@ -303,11 +303,7 @@ show_menu() {
         local selected_path="${paths[$idx]}"
         local selected_session="doey-${selected_name}"
         if session_exists "$selected_session"; then
-          if [[ -n "${TMUX:-}" ]]; then
-            tmux switch-client -t "$selected_session"
-          else
-            tmux attach -t "$selected_session"
-          fi
+          attach_or_switch "$selected_session"
         else
           launch_with_grid "$selected_name" "$selected_path" "$grid"
         fi
@@ -344,76 +340,107 @@ step_done() {
   printf "${SUCCESS}done${RESET}\n"
 }
 
-step_fail() {
-  printf "${ERROR}fail${RESET}\n"
+# ── Shared launch helpers ────────────────────────────────────────────
+
+# Write the shared worker system prompt to <runtime_dir>/worker-system-prompt.md
+# Usage: write_worker_system_prompt <runtime_dir> <name> <dir>
+write_worker_system_prompt() {
+  local runtime_dir="$1" name="$2" dir="$3"
+  cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
+# Doey Worker
+
+You are a **Worker** on the Doey team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
+
+## Rules
+1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
+2. **Stay in scope** — Only make changes within the scope of your assigned task. Do not refactor, clean up, or "improve" code outside your task.
+3. **Concurrent awareness** — Other workers are editing other files in this codebase simultaneously. Avoid broad sweeping changes (global renames, config modifications, formatter runs) unless your task explicitly requires it.
+4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Manager will check your output.
+5. **If blocked, describe and stop** — If you encounter an unrecoverable error, describe it clearly and stop.
+6. **No git commits** — Do not create git commits unless your task explicitly says to. The Manager coordinates commits.
+7. **No tmux interaction** — Do not try to communicate with other panes. Just do your work.
+WORKER_PROMPT
+
+  cat >> "${runtime_dir}/worker-system-prompt.md" << WORKER_CONTEXT
+
+## Project
+- **Name:** ${name}
+- **Root:** ${dir}
+- **Runtime directory:** ${runtime_dir}
+WORKER_CONTEXT
 }
 
-# ── Column collapse/expand ────────────────────────────────────────────
+# Apply the Doey tmux theme to a session
+# Usage: apply_doey_theme <session> <name> <pane_border_format> <status_interval>
+apply_doey_theme() {
+  local session="$1" name="$2" pane_border_fmt="$3" status_interval="$4"
 
-# Return the column index for a given pane index in a grid with `cols` columns
-column_for_pane() {
-  local pane_index="$1"
-  local cols="$2"
-  echo $(( pane_index % cols ))
+  # Pane borders — heavy lines with role-aware titles
+  tmux set-option -t "$session" pane-border-status top
+  tmux set-option -t "$session" pane-border-format "$pane_border_fmt"
+  tmux set-option -t "$session" pane-border-style 'fg=colour238'
+  tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
+  tmux set-option -t "$session" pane-border-lines heavy
+
+  # Status bar — dark bg, branded left segment
+  tmux set-option -t "$session" status-position top
+  tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
+  tmux set-option -t "$session" status-left-length 50
+  tmux set-option -t "$session" status-right-length 70
+  tmux set-option -t "$session" status-left \
+    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
+  tmux set-option -t "$session" status-right \
+    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
+  tmux set-option -t "$session" status-interval "$status_interval"
+
+  # Window status styling
+  tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
+  tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '
+  tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
+
+  # Terminal tab/window title — shows project name in macOS Terminal tabs
+  tmux set-option -t "$session" set-titles on
+  tmux set-option -t "$session" set-titles-string "🤖 #{session_name} — #{pane_title}"
+
+  # Enable mouse for pane selection, scrolling, resizing
+  tmux set-option -t "$session" mouse on
+
+  # Suppress terminal bell from worker panes — prevents notification spam
+  tmux set-option -t "$session" bell-action none
+  tmux set-option -t "$session" visual-bell off
 }
 
-# Collapse a column to minimal width (3 chars)
-collapse_column() {
-  local session="$1"
-  local col_index="$2"
-  local runtime_dir="$3"
-
-  if [[ "$col_index" -eq 0 ]]; then
-    printf "  ${ERROR}Cannot collapse column 0 (Manager column)${RESET}\n"
-    return 1
-  fi
-
-  tmux resize-pane -t "${session}:0.${col_index}" -x 3
-  touch "${runtime_dir}/status/col_${col_index}.collapsed"
-  printf "  ${SUCCESS}Collapsed${RESET} column ${BOLD}${col_index}${RESET}\n"
-}
-
-# Expand a column back to fair width
-expand_column() {
-  local session="$1"
-  local col_index="$2"
-  local fair_width="$3"
-  local runtime_dir="$4"
-
-  tmux resize-pane -t "${session}:0.${col_index}" -x "$fair_width"
-  rm -f "${runtime_dir}/status/col_${col_index}.collapsed"
-  printf "  ${SUCCESS}Expanded${RESET} column ${BOLD}${col_index}${RESET}\n"
-}
-
-# Rebalance all columns: collapsed get 3 chars, expanded share remaining width
-rebalance_columns() {
-  local session="$1"
-  local cols="$2"
-  local runtime_dir="$3"
-
-  local window_width
-  window_width="$(tmux display-message -t "$session" -p '#{window_width}')"
-
-  local collapsed_count=0
-  for (( c=0; c<cols; c++ )); do
-    [[ -f "${runtime_dir}/status/col_${c}.collapsed" ]] && (( collapsed_count++ ))
-  done
-
-  local expanded_count=$(( cols - collapsed_count ))
-  if [[ "$expanded_count" -le 0 ]]; then
-    printf "  ${WARN}All columns collapsed — nothing to rebalance${RESET}\n"
-    return 0
-  fi
-
-  local fair_width=$(( (window_width - collapsed_count * 3 - (cols - 1)) / expanded_count ))
-
-  for (( c=0; c<cols; c++ )); do
-    if [[ -f "${runtime_dir}/status/col_${c}.collapsed" ]]; then
-      tmux resize-pane -t "${session}:0.${c}" -x 3 2>/dev/null || true
-      continue
+# Pre-accept trust for the project directory in Claude settings
+# Usage: ensure_project_trusted <dir> [indent]
+ensure_project_trusted() {
+  local dir="$1" indent="${2:-   }"
+  local claude_settings="$HOME/.claude/settings.json"
+  if command -v jq &>/dev/null; then
+    if [ -f "$claude_settings" ]; then
+      if ! jq --arg dir "$dir" -e '.trustedDirectories // [] | index($dir)' "$claude_settings" > /dev/null 2>&1; then
+        jq --arg dir "$dir" '(.trustedDirectories // []) |= . + [$dir]' "$claude_settings" 2>/dev/null > "${claude_settings}.tmp" \
+          && mv "${claude_settings}.tmp" "$claude_settings"
+        printf "${indent}${DIM}Trusted project directory added to ~/.claude/settings.json${RESET}\n"
+      fi
+    else
+      mkdir -p "$(dirname "$claude_settings")"
+      printf '{"trustedDirectories": ["%s"]}\n' "$dir" > "$claude_settings"
+      printf "${indent}${DIM}Created ~/.claude/settings.json with trusted directory${RESET}\n"
     fi
-    tmux resize-pane -t "${session}:0.${c}" -x "$fair_width" 2>/dev/null || true
-  done
+  else
+    printf "${indent}${WARN}jq not found — skipping auto-trust (you may see trust prompts)${RESET}\n"
+  fi
+}
+
+# Attach to or switch to a tmux session (handles both inside/outside tmux)
+# Usage: attach_or_switch <session>
+attach_or_switch() {
+  local session="$1"
+  if [[ -n "${TMUX:-}" ]]; then
+    tmux switch-client -t "$session"
+  else
+    tmux attach -t "$session"
+  fi
 }
 
 # ── Initial worker columns ────────────────────────────────────────────
@@ -494,24 +521,7 @@ DOG
   printf '\n'
 
   # ── Pre-accept trust for project directory ───────────────────
-  # Prevents the "Do you trust this directory?" prompt from appearing
-  # in every pane at startup, saving 30+ seconds of manual clicking.
-  local claude_settings="$HOME/.claude/settings.json"
-  if command -v jq &>/dev/null; then
-    if [ -f "$claude_settings" ]; then
-      if ! jq --arg dir "$dir" -e '.trustedDirectories // [] | index($dir)' "$claude_settings" > /dev/null 2>&1; then
-        jq --arg dir "$dir" '(.trustedDirectories // []) |= . + [$dir]' "$claude_settings" 2>/dev/null > "${claude_settings}.tmp" \
-          && mv "${claude_settings}.tmp" "$claude_settings"
-        printf "   ${DIM}Trusted project directory added to ~/.claude/settings.json${RESET}\n"
-      fi
-    else
-      mkdir -p "$(dirname "$claude_settings")"
-      printf '{"trustedDirectories": ["%s"]}\n' "$dir" > "$claude_settings"
-      printf "   ${DIM}Created ~/.claude/settings.json with trusted directory${RESET}\n"
-    fi
-  else
-    printf "   ${WARN}jq not found — skipping auto-trust (you may see trust prompts)${RESET}\n"
-  fi
+  ensure_project_trusted "$dir"
 
   # ── Install Doey hooks into target project ─────────────────────
   install_doey_hooks "$dir" "   "
@@ -546,29 +556,8 @@ IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 MANIFEST
 
-  # Generate shared worker system prompt (appended to Claude Code's default prompt)
-  cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
-# Doey Worker
-
-You are a **Worker** on the Doey team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
-
-## Rules
-1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
-2. **Stay in scope** — Only make changes within the scope of your assigned task. Do not refactor, clean up, or "improve" code outside your task.
-3. **Concurrent awareness** — Other workers are editing other files in this codebase simultaneously. Avoid broad sweeping changes (global renames, config modifications, formatter runs) unless your task explicitly requires it.
-4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Manager will check your output.
-5. **If blocked, describe and stop** — If you encounter an unrecoverable error, describe it clearly and stop.
-6. **No git commits** — Do not create git commits unless your task explicitly says to. The Manager coordinates commits.
-7. **No tmux interaction** — Do not try to communicate with other panes. Just do your work.
-WORKER_PROMPT
-
-  cat >> "${runtime_dir}/worker-system-prompt.md" << WORKER_CONTEXT
-
-## Project
-- **Name:** ${name}
-- **Root:** ${dir}
-- **Runtime directory:** ${runtime_dir}
-WORKER_CONTEXT
+  # Generate shared worker system prompt
+  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
@@ -576,43 +565,8 @@ WORKER_CONTEXT
 
   # ── Step 2: Apply theme ────────────────────────────────────────
   step_start 2 "Applying theme..."
-
-  # Pane borders — heavy lines with role-aware titles
-  tmux set-option -t "$session" pane-border-status top
-  tmux set-option -t "$session" pane-border-format \
-    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
-  tmux set-option -t "$session" pane-border-style 'fg=colour238'
-  tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
-  tmux set-option -t "$session" pane-border-lines heavy
-
-  # Status bar — dark bg, branded left segment
-  tmux set-option -t "$session" status-position top
-  tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
-  tmux set-option -t "$session" status-left-length 50
-  tmux set-option -t "$session" status-right-length 70
-  tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
-  tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
-  tmux set-option -t "$session" status-interval 2
-
-  # Window status styling
-  tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
-  tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '
-  tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
-
-  # Terminal tab/window title — shows project name in macOS Terminal tabs
-  tmux set-option -t "$session" set-titles on
-  tmux set-option -t "$session" set-titles-string "🤖 #{session_name} — #{pane_title}"
-
-  # Enable mouse for pane selection, scrolling, resizing
-  tmux set-option -t "$session" mouse on
-
-  # Suppress terminal bell from worker panes — prevents notification spam
-  # Our stop-notify.sh hook handles Manager-only notifications via osascript
-  tmux set-option -t "$session" bell-action none
-  tmux set-option -t "$session" visual-bell off
-
+  local border_fmt=" #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  apply_doey_theme "$session" "$name" "$border_fmt" 2
   step_done
 
   # ── Step 3: Build grid ─────────────────────────────────────────
@@ -759,11 +713,7 @@ WORKER_CONTEXT
   # Clear the trap — background briefing jobs should complete normally after attach
   trap - EXIT INT TERM
   tmux select-pane -t "$session:0.0"
-  if [[ -n "${TMUX:-}" ]]; then
-    tmux switch-client -t "$session"
-  else
-    tmux attach -t "$session"
-  fi
+  attach_or_switch "$session"
 }
 
 # ── Update / Reinstall ───────────────────────────────────────────────
@@ -1177,57 +1127,15 @@ IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 MANIFEST
 
-  cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
-# Doey Worker
-
-You are a **Worker** on the Doey team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
-
-## Rules
-1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
-2. **Stay in scope** — Only make changes within the scope of your assigned task. Do not refactor, clean up, or "improve" code outside your task.
-3. **Concurrent awareness** — Other workers are editing other files in this codebase simultaneously. Avoid broad sweeping changes (global renames, config modifications, formatter runs) unless your task explicitly requires it.
-4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Manager will check your output.
-5. **If blocked, describe and stop** — If you encounter an unrecoverable error, describe it clearly and stop.
-6. **No git commits** — Do not create git commits unless your task explicitly says to. The Manager coordinates commits.
-7. **No tmux interaction** — Do not try to communicate with other panes. Just do your work.
-WORKER_PROMPT
-
-  cat >> "${runtime_dir}/worker-system-prompt.md" << WORKER_CONTEXT
-
-## Project
-- **Name:** ${name}
-- **Root:** ${dir}
-- **Runtime directory:** ${runtime_dir}
-WORKER_CONTEXT
+  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # ── Apply theme ──
   printf "  ${DIM}Applying theme...${RESET}\n"
-  tmux set-option -t "$session" pane-border-status top
-  tmux set-option -t "$session" pane-border-format \
-    " #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
-  tmux set-option -t "$session" pane-border-style 'fg=colour238'
-  tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
-  tmux set-option -t "$session" pane-border-lines heavy
-  tmux set-option -t "$session" status-position top
-  tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
-  tmux set-option -t "$session" status-left-length 50
-  tmux set-option -t "$session" status-right-length 70
-  tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
-  tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
-  tmux set-option -t "$session" status-interval 2
-  tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
-  tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '
-  tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
-  tmux set-option -t "$session" set-titles on
-  tmux set-option -t "$session" set-titles-string "🤖 #{session_name} — #{pane_title}"
-  tmux set-option -t "$session" mouse on
-  tmux set-option -t "$session" bell-action none
-  tmux set-option -t "$session" visual-bell off
+  local border_fmt=" #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  apply_doey_theme "$session" "$name" "$border_fmt" 2
 
   # ── Build grid ──
   printf "  ${DIM}Building ${cols}x${rows} grid (${total} panes)...${RESET}\n"
@@ -1388,22 +1296,7 @@ DOG
   printf '\n'
 
   # ── Pre-accept trust for project directory ───────────────────
-  local claude_settings="$HOME/.claude/settings.json"
-  if command -v jq &>/dev/null; then
-    if [ -f "$claude_settings" ]; then
-      if ! jq -e ".trustedDirectories // [] | index(\"$dir\")" "$claude_settings" > /dev/null 2>&1; then
-        jq "(.trustedDirectories // []) |= . + [\"$dir\"]" "$claude_settings" > "${claude_settings}.tmp" \
-          && mv "${claude_settings}.tmp" "$claude_settings"
-        printf "   ${DIM}Trusted project directory added to ~/.claude/settings.json${RESET}\n"
-      fi
-    else
-      mkdir -p "$(dirname "$claude_settings")"
-      printf '{"trustedDirectories": ["%s"]}\n' "$dir" > "$claude_settings"
-      printf "   ${DIM}Created ~/.claude/settings.json with trusted directory${RESET}\n"
-    fi
-  else
-    printf "   ${WARN}jq not found — skipping auto-trust (you may see trust prompts)${RESET}\n"
-  fi
+  ensure_project_trusted "$dir"
 
   # ── Step 1: Create session ─────────────────────────────────────
   step_start 1 "Creating session for ${name}..."
@@ -1412,28 +1305,7 @@ DOG
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
 
   # Generate shared worker system prompt
-  cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
-# Doey Worker
-
-You are a **Worker** on the Doey team, coordinated by a Manager in pane 0.0. You receive tasks via this chat and execute them independently.
-
-## Rules
-1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
-2. **Stay in scope** — Only make changes within the scope of your assigned task. Do not refactor, clean up, or "improve" code outside your task.
-3. **Concurrent awareness** — Other workers are editing other files in this codebase simultaneously. Avoid broad sweeping changes (global renames, config modifications, formatter runs) unless your task explicitly requires it.
-4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Manager will check your output.
-5. **If blocked, describe and stop** — If you encounter an unrecoverable error, describe it clearly and stop.
-6. **No git commits** — Do not create git commits unless your task explicitly says to. The Manager coordinates commits.
-7. **No tmux interaction** — Do not try to communicate with other panes. Just do your work.
-WORKER_PROMPT
-
-  cat >> "${runtime_dir}/worker-system-prompt.md" << WORKER_CONTEXT
-
-## Project
-- **Name:** ${name}
-- **Root:** ${dir}
-- **Runtime directory:** ${runtime_dir}
-WORKER_CONTEXT
+  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
@@ -1441,31 +1313,8 @@ WORKER_CONTEXT
 
   # ── Step 2: Apply theme ────────────────────────────────────────
   step_start 2 "Applying theme..."
-
-  tmux set-option -t "$session" pane-border-status top
-  tmux set-option -t "$session" pane-border-format \
-    ' #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#{pane_title} #[default]'
-  tmux set-option -t "$session" pane-border-style 'fg=colour238'
-  tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
-  tmux set-option -t "$session" pane-border-lines heavy
-  tmux set-option -t "$session" status-position top
-  tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
-  tmux set-option -t "$session" status-left-length 50
-  tmux set-option -t "$session" status-right-length 70
-  tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
-  tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #(${SCRIPT_DIR}/tmux-statusbar.sh) "
-  tmux set-option -t "$session" status-interval 5
-  tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
-  tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '
-  tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
-  tmux set-option -t "$session" set-titles on
-  tmux set-option -t "$session" set-titles-string "🤖 #{session_name} — #{pane_title}"
-  tmux set-option -t "$session" -g mouse on
-  tmux set-option -t "$session" bell-action none
-  tmux set-option -t "$session" visual-bell off
-
+  local border_fmt=' #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#{pane_title} #[default]'
+  apply_doey_theme "$session" "$name" "$border_fmt" 5
   step_done
 
   # ── Step 3: Build initial grid (Manager + Watchdog share column 0)
@@ -1577,11 +1426,7 @@ MANIFEST
 
   # ── Focus on Manager pane, attach ──────────────────────────────
   tmux select-pane -t "$session:0.0"
-  if [[ -n "${TMUX:-}" ]]; then
-    tmux switch-client -t "$session"
-  else
-    tmux attach -t "$session"
-  fi
+  attach_or_switch "$session"
 }
 
 # ── Add a worker column to a dynamic grid session ────────────────────
@@ -2041,8 +1886,6 @@ case "${1:-}" in
     remove     Unregister a project (by name) or worker column (by number)
     uninstall  Remove all Doey files (keeps git repo and agent-memory)
     test       Run E2E integration test (--keep, --open, --grid NxM)
-    collapse   Collapse a column to minimal width (e.g., doey collapse 2)
-    expand     Expand a collapsed column back to fair width
     dynamic    Launch with dynamic grid (add workers on demand)
     add        Add a worker column (2 workers) to a dynamic grid session
     version    Show version and installation info
@@ -2118,11 +1961,7 @@ HELP
       session="doey-${name}"
       if session_exists "$session"; then
         printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}${session}${RESET}...\n"
-        if [[ -n "${TMUX:-}" ]]; then
-          tmux switch-client -t "$session"
-        else
-          tmux attach -t "$session"
-        fi
+        attach_or_switch "$session"
       else
         launch_session_dynamic "$name" "$dir"
       fi
@@ -2164,34 +2003,6 @@ HELP
       exit 0
     fi
     ;;
-  collapse)
-    col="${2:?Usage: doey collapse <column>}"
-    require_running_session
-    # shellcheck disable=SC1090
-    source "${runtime_dir}/session.env"
-    if [[ "$GRID" == "dynamic" ]]; then
-      cols="${CURRENT_COLS}"
-    else
-      cols="${GRID%x*}"
-    fi
-    collapse_column "$session" "$col" "$runtime_dir"
-    rebalance_columns "$session" "$cols" "$runtime_dir"
-    exit 0
-    ;;
-  expand)
-    col="${2:?Usage: doey expand <column>}"
-    require_running_session
-    # shellcheck disable=SC1090
-    source "${runtime_dir}/session.env"
-    if [[ "$GRID" == "dynamic" ]]; then
-      cols="${CURRENT_COLS}"
-    else
-      cols="${GRID%x*}"
-    fi
-    expand_column "$session" "$col" 80 "$runtime_dir"  # temporary width, rebalance corrects it
-    rebalance_columns "$session" "$cols" "$runtime_dir"
-    exit 0
-    ;;
   [0-9]*x[0-9]*)
     grid="$1"
     ;;
@@ -2219,11 +2030,7 @@ if [[ -n "$name" ]]; then
   if session_exists "$session"; then
     # Already running — just attach
     printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}%s${RESET}...\n" "$session"
-    if [[ -n "${TMUX:-}" ]]; then
-      tmux switch-client -t "$session"
-    else
-      tmux attach -t "$session"
-    fi
+    attach_or_switch "$session"
   else
     # Known but not running — launch with premium UI
     launch_with_grid "$name" "$dir" "$grid"
