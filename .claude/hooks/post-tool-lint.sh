@@ -45,6 +45,9 @@ case "$FILE_PATH" in
 esac
 
 # --- Bash 3.2 compatibility checks on the single file ---
+# Portable newline for string building (bash 3.2 safe)
+NL='
+'
 violations=""
 count=0
 
@@ -57,7 +60,7 @@ check_pattern() {
   if [ -n "$matches" ]; then
     while IFS= read -r match; do
       local line_num="${match%%:*}"
-      violations="${violations}${FILE_PATH}:${line_num} — ${description}\n"
+      violations="${violations}${FILE_PATH}:${line_num} — ${description}${NL}"
       count=$((count + 1))
     done <<< "$matches"
   fi
@@ -75,6 +78,7 @@ check_pattern "$FILE_PATH" 'readarray[[:space:]]' 'readarray (bash 4+)'
 check_pattern "$FILE_PATH" '\|&' 'pipe stderr shorthand |& (bash 4+)'
 check_pattern "$FILE_PATH" '&>>' 'append both streams &>> (bash 4+)'
 check_pattern "$FILE_PATH" 'coproc[[:space:]]' 'coproc (bash 4+)'
+check_pattern "$FILE_PATH" 'read[[:space:]]+-[^ ]*a[[:space:]]' 'read -a (array read, use while-read loop instead)'
 
 # If no violations, exit cleanly
 if [ "$count" -eq 0 ]; then
@@ -82,8 +86,7 @@ if [ "$count" -eq 0 ]; then
 fi
 
 # Format violation details for the reason field
-# Use printf to handle \n sequences
-reason=$(printf "Bash 3.2 compatibility violations in %s (%d found):\n%b" "$FILE_PATH" "$count" "$violations")
+reason=$(printf "Bash 3.2 compatibility violations in %s (%d found):\n%s" "$FILE_PATH" "$count" "$violations")
 
 # Escape for JSON: backslashes, quotes, newlines
 reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')

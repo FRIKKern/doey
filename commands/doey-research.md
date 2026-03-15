@@ -10,7 +10,7 @@ You are dispatching a research task to a Claude Code worker instance in TMUX. Th
 
 ### Project Context
 
-Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)` then `source "${RUNTIME_DIR}/session.env"`. This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `PASTE_SETTLE_MS`. Always use `${SESSION_NAME}` — never hardcode session names.
+Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)` then `source "${RUNTIME_DIR}/session.env"`. This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. Always use `${SESSION_NAME}` — never hardcode session names.
 
 ### Copy-mode pattern
 

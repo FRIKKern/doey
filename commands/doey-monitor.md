@@ -145,7 +145,7 @@ Wrap the Quick Status Check loop in a `while true` poll with 15-second sleep. Ad
 
 **Unstick a worker** (ERROR or unresponsive): exit copy-mode, then send `C-c`, wait 0.5s, `C-u`, wait 0.5s, `Enter`, wait 3s, capture output. If `❯` prompt appears, worker recovered. If still stuck after 2 attempts, force-kill and restart — see `/doey-dispatch` **Troubleshooting: Unstick a non-responsive worker**.
 
-**Nudge a QUEUED worker** that hasn't started after 10s: exit copy-mode, send `Enter`, wait 5s, check for `thinking|working|Read|Edit|Bash` in captured output. If still idle, use the unstick sequence above or re-dispatch.
+**Nudge a dispatched worker** that hasn't started after 10s: exit copy-mode, send `Enter`, wait 5s, check for `thinking|working|Read|Edit|Bash` in captured output. If still idle, use the unstick sequence above or re-dispatch.
 
 ### Rules
 
