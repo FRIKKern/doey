@@ -23,7 +23,7 @@ source ~/.bashrc && fnm install --lts
 **3. Install Claude Code & Doey:**
 ```bash
 npm install -g @anthropic-ai/claude-code && claude auth
-curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/doey/main/web-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash
 ```
 
 **4. Launch:**

@@ -793,7 +793,7 @@ update_system() {
     fi
   else
     # Web update fallback — no local repo available
-    local web_repo_url="https://github.com/frikk-gyldendal/doey.git"
+    local web_repo_url="https://github.com/FRIKKern/doey.git"
     local clone_dir
     clone_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
 

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Doey — Web Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/doey/main/web-install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash
 
-REPO_URL="https://github.com/frikk-gyldendal/doey.git"
+REPO_URL="https://github.com/FRIKKern/doey.git"
 CLONE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/doey-install.XXXXXX")
 trap 'rm -rf "$CLONE_DIR"' EXIT
 

@@ -48,13 +48,13 @@ You talk to the Manager. The Manager runs the team. You ship 10x faster.
 **Install:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/frikk-gyldendal/doey/main/web-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash
 ```
 
 Or clone and install locally:
 
 ```bash
-git clone https://github.com/frikk-gyldendal/doey.git
+git clone https://github.com/FRIKKern/doey.git
 cd doey && ./install.sh
 ```
 
@@ -370,7 +370,7 @@ Use a smaller grid like `doey 3x2` or maximize your terminal window. The default
 The web installer's temporary directory was deleted after install. Fix: clone the repo manually, then run `./install.sh` to update the stored repo path:
 
 ```bash
-git clone https://github.com/frikk-gyldendal/doey.git
+git clone https://github.com/FRIKKern/doey.git
 cd doey && ./install.sh
 ```
 
@@ -422,6 +422,6 @@ Run `doey doctor` and follow the suggestions it provides. It checks tmux, Claude
 
 **Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code)**
 
-If you find this useful, [give it a star](https://github.com/frikk-gyldendal/doey) — it helps others find it.
+If you find this useful, [give it a star](https://github.com/FRIKKern/doey) — it helps others find it.
 
 </div>
