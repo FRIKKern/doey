@@ -21,9 +21,9 @@ if [ "$TOOL_NAME" != "Bash" ]; then
     Edit|Write|Agent|NotebookEdit)
       # Cheap check: only do expensive init_hook if this MIGHT be the Watchdog.
       # Workers/Manager are the common case — skip them fast.
-      RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+      RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
       WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2-) || exit 0
-      CURRENT_PANE=$(tmux display-message -p '#{pane_index}' 2>/dev/null) || exit 0
+      CURRENT_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{pane_index}' 2>/dev/null) || exit 0
       if [ "$CURRENT_PANE" = "$WD_PANE" ]; then
         echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
         exit 2

@@ -77,7 +77,7 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 
 | File | Purpose |
 |------|---------|
-| `common.sh` | Shared: pane identity, runtime dir, reservation helpers (`is_reserved()`, `reserve_pane()`, etc.), dispatch helpers (`is_dispatched()`, `get_pane_id()`, `get_pane_index()`, `refresh_pane_map()`) |
+| `common.sh` | Shared: `init_hook()` (stdin JSON, pane identity, runtime dirs), `parse_field()` (JSON extraction with jq fallback), role checks (`is_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()` (cross-platform, Manager-only, 60s cooldown) |
 | `on-session-start.sh` | SessionStart: initial setup |
 | `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY status, expands collapsed tmux columns |
 | `on-pre-tool-use.sh` | PreToolUse: safety guards |
@@ -95,7 +95,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
 ## Layer 4: Skills/Commands
 
-15 skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
+16 skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
 
 | Skill | Primary Agent | Purpose |
 |-------|---------------|---------|
@@ -114,6 +114,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `/doey-reserve` | Manager/Workers | Reserve/unreserve panes |
 | `/doey-stop` | Manager | Stop a specific worker |
 | `/doey-watchdog-compact` | Manager | Compact Watchdog context |
+| `/doey-purge` | Manager | Scan and clean stale runtime files |
 
 Agent usage: Manager uses all except `/doey-inbox`. Watchdog uses none. Workers use `/doey-inbox`, `/doey-status`, `/doey-reserve`.
 
@@ -123,7 +124,7 @@ Agent usage: Manager uses all except `/doey-inbox`. Watchdog uses none. Workers 
 | Agent | Path | Notes |
 |-------|------|-------|
 | Manager | `~/.claude/agent-memory/doey-manager/MEMORY.md` | Stores dispatch patterns, delegation rules, hook behavior |
-| Watchdog | `~/.claude/agent-memory/doey-watchdog/MEMORY.md` | May be empty (Haiku rarely accumulates memory) |
+| Watchdog | `~/.claude/agent-memory/doey-watchdog/MEMORY.md` | Disabled (agent definition has `memory: none`) |
 
 Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
 
@@ -138,8 +139,11 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `PROJECT_DIR` | Absolute path to project root | doey.sh |
 | `PROJECT_NAME` | Sanitized project name | doey.sh |
 | `SESSION_NAME` | tmux session name (`doey-<name>`) | doey.sh |
-| `GRID` | Grid layout (e.g., `6x2`) | doey.sh |
-| `TOTAL_PANES` | Total pane count | doey.sh |
+| `GRID` | Grid layout (e.g., `6x2`) or `dynamic` | doey.sh |
+| `ROWS` | Number of rows in grid | doey.sh |
+| `MAX_WORKERS` | Maximum worker count (dynamic grid) | doey.sh |
+| `CURRENT_COLS` | Current column count (dynamic grid only, updated as grid expands) | doey.sh |
+| `TOTAL_PANES` | Total pane count (absent in dynamic mode) | doey.sh |
 | `WORKER_COUNT` | Number of workers | doey.sh |
 | `WATCHDOG_PANE` | Watchdog pane index | doey.sh |
 | `WORKER_PANES` | Comma-separated worker indices | doey.sh |
@@ -170,7 +174,7 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Default grid: 6x2 (12 panes). Pane 0.0 = Manager. Watchdog = pane at column count index. Rest = workers.
+Default grid: dynamic (starts with 2 columns = 4 panes, auto-expands when all workers busy). Pane 0.0 = Manager. Watchdog = pane at column count index. Rest = workers.
 
 ```
 +--------+--------+--------+--------+--------+--------+
@@ -204,16 +208,18 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
 /tmp/doey/<project>/
   session.env                        # Session manifest
   worker-system-prompt-N.md          # Per-worker prompt (base + identity)
-  pane_hash_*                        # Watchdog output hashes for change detection
-  watchdog.heartbeat                 # Watchdog liveness marker
-  watchdog_pane_states.json          # Watchdog state snapshot
   status/                            # [init-time]
     <pane_safe>.status               # 4-line: PANE, UPDATED, STATUS, TASK
     <pane_safe>.reserved             # contains "permanent"
-    <pane_safe>.dispatched           # Dispatch tracking marker
+    pane_hash_<pane_safe>            # Watchdog output hashes for change detection
+    unchanged_count_<index>          # Watchdog stuck-detection counter per pane
+    watchdog.heartbeat               # Watchdog liveness marker
+    watchdog_pane_states.json        # Watchdog state snapshot
     pane_map                         # Pane ID-to-index mapping cache
     notif_cooldown_*                 # Notification rate-limiting markers
     col_*.collapsed                  # Collapsed column markers
+    completion_pane_<index>          # Worker completion events (consumed by Watchdog)
+    crash_pane_<index>               # Crash alerts (written by Watchdog)
   research/                          # [lazy-created]
     <pane_safe>.task                  # Research task marker
   reports/                           # [lazy-created]
