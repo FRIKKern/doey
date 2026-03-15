@@ -18,14 +18,14 @@
 ---
 
 ```
-┌───────────┬───────────┬───────────┬───────────┬───────────┐
-│ 0.0       │           │           │           │           │
-│ MANAGER   │ Worker 1  │ Worker 2  │ Worker 3  │ Worker 4  │
-├───────────┤           │           │           │           │
-│ 0.1       │           │           │           │           │
-│ WATCHDOG  │           │           │           │           │
-└───────────┴───────────┴───────────┴───────────┴───────────┘
-    Dynamic grid — starts with 4 workers, grows on demand
+┌───────────┬───────────┬───────────┐
+│ 0.0       │ 0.2       │ 0.4       │
+│ MANAGER   │ Worker 1  │ Worker 3  │
+├───────────┼───────────┼───────────┤
+│ 0.1       │ 0.3       │ 0.5       │
+│ WATCHDOG  │ Worker 2  │ Worker 4  │
+└───────────┴───────────┴───────────┘
+  Dynamic grid — starts with 4 workers, grows on demand
 ```
 
 ---
