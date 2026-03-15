@@ -102,7 +102,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 
 5. **INSTRUCT WATCHDOG** — Build comma-separated worker pane list from `$WORKER_PANES` and send monitoring start command:
    ```bash
-   WORKER_LIST=""; for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [[ -n "$WORKER_LIST" ]] && WORKER_LIST+=", "; WORKER_LIST+="0.$i"; done
+   WORKER_LIST=""; for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ -n "$WORKER_LIST" ] && WORKER_LIST="${WORKER_LIST}, "; WORKER_LIST="${WORKER_LIST}0.$i"; done
    tmux send-keys -t "$SESSION_NAME:0.$WATCHDOG_PANE" "Start monitoring. Skip pane 0.0 and 0.$WATCHDOG_PANE. Monitor panes ${WORKER_LIST}." Enter
    ```
 
@@ -116,7 +116,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    Use `$WATCHDOG_PANE` to label "Watchdog"; all others are "Worker". Check `$SKIP_PANES` to determine if a worker was skipped or restarted.
 
 ## Important Notes
-- Restarting clears timed reservations; permanent ones (`.reserved` with `permanent`) survive
+- Restarting skips permanently reserved panes (`.reserved` file). Reservations are always permanent and survive restarts
 - NEVER restart pane 0.0 — that's the Manager
 - Watchdog: `--model haiku --agent doey-watchdog`, Workers: `--model opus`
 - If "Not logged in" appears, run `/login`: `tmux send-keys -t "$SESSION_NAME:0.X" "/login" Enter`

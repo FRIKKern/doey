@@ -25,8 +25,7 @@ GRID_MODE=$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2
 if [[ "$GRID_MODE" == "dynamic" ]]; then
   HAS_IDLE=false
   if [ -n "$WORKER_PANES" ]; then
-    IFS=',' read -ra _widx_arr <<< "$WORKER_PANES"
-    for WIDX in "${_widx_arr[@]}"; do
+    for WIDX in $(echo "$WORKER_PANES" | tr ',' ' '); do
       W_SAFE=$(echo "${SESSION_NAME}:0.${WIDX}" | tr ':.' '_')
       [ -f "${RUNTIME_DIR}/status/${W_SAFE}.reserved" ] && continue
       W_OUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WIDX}" -p -S -3 2>/dev/null)
@@ -151,7 +150,7 @@ rm "$TASKFILE"
 # 15. MANDATORY VERIFICATION
 sleep 5
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
-if echo "$OUTPUT" | grep -qE '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
+if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
   echo "✓ Worker 0.X started processing"
 else
   echo "⚠ Worker 0.X not processing — retrying..."
@@ -159,7 +158,7 @@ else
   tmux send-keys -t "$PANE" Enter
   sleep 3
   OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
-  if echo "$OUTPUT" | grep -qE '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
+  if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
     echo "✓ Worker 0.X started after retry"
   else
     echo "✗ Worker 0.X FAILED — run unstick sequence"

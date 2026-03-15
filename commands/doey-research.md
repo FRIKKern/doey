@@ -191,7 +191,7 @@ Then: present summary to user, ask which option to proceed with, dispatch the re
 
 1. **Always create task marker BEFORE dispatching** — the Stop hook needs it to enforce reporting
 2. **Always clear old report file before dispatching** — stale reports bypass enforcement
-3. **`PANE_SAFE` must match exactly** — full pane ref with `:` and `.` replaced by `_`
+3. **`PANE_SAFE` must match exactly** — use `PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')` to convert full pane ref (e.g., `doey-proj:0.5` becomes `doey-proj_0_5`)
 4. **Include report path in task prompt** — worker needs to know where to write
 5. **Always check idle + reservation before dispatch** — don't interrupt busy or reserved panes
 6. **Always verify after dispatch (Step 5)** — if it fails, run unstick before retrying
