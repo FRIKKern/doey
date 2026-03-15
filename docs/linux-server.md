@@ -31,7 +31,7 @@ sudo apt update && sudo apt install -y tmux git curl
 curl -fsSL https://fnm.vercel.app/install | bash
 source ~/.bashrc && fnm install --lts
 npm install -g @anthropic-ai/claude-code && claude auth
-git clone https://github.com/frikk-gyldendal/doey.git
+git clone https://github.com/FRIKKern/doey.git
 cd doey && ./install.sh
 cd ~/your-project && doey init && doey
 ```
