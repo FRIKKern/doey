@@ -15,8 +15,20 @@ if [ -z "$TOOL_NAME" ]; then
   TOOL_NAME=$(echo "$INPUT" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"tool_name"[[:space:]]*:[[:space:]]*"//;s/"$//')
 fi
 
-# Only Bash commands need guarding — allow everything else immediately
-[ "$TOOL_NAME" != "Bash" ] && exit 0
+# Non-Bash tools: block Edit/Write/Agent/NotebookEdit for Watchdog, allow all else
+if [ "$TOOL_NAME" != "Bash" ]; then
+  case "$TOOL_NAME" in
+    Edit|Write|Agent|NotebookEdit)
+      source "$(dirname "$0")/common.sh"
+      init_hook <<< "$INPUT"
+      if is_watchdog; then
+        echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
+        exit 2
+      fi
+      ;;
+  esac
+  exit 0
+fi
 
 # Now do the heavier init only for Bash tool calls.
 source "$(dirname "$0")/common.sh"
@@ -55,10 +67,13 @@ if is_watchdog; then
       exit 2
       ;;
   esac
-  exit 0
+  # Fall through to destructive-command checks below
 fi
 
-# Check blocked patterns for Workers using case statement (no subshells per pattern)
+# Check blocked patterns for Workers and Watchdog using case statement (no subshells per pattern)
+ROLE="Workers"
+is_watchdog && ROLE="Watchdog"
+
 case "$TOOL_COMMAND" in
   *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
     MSG="git/gh commands" ;;
@@ -72,6 +87,6 @@ case "$TOOL_COMMAND" in
     exit 0 ;;
 esac
 
-echo "BLOCKED: Workers cannot run ${MSG}. Only the Manager can do this." >&2
+echo "BLOCKED: ${ROLE} cannot run ${MSG}. Only the Manager can do this." >&2
 echo "If you need this operation, finish your task and let the Manager handle it." >&2
 exit 2

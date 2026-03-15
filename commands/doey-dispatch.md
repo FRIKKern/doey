@@ -98,8 +98,14 @@ if [ "$ALREADY_READY" = "false" ]; then
   # 4. Exit copy-mode (killing can trigger scroll)
   tmux copy-mode -q -t "$PANE" 2>/dev/null
 
-  # 5. Start fresh Claude
-  tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus" Enter
+  # 5. Start fresh Claude (with worker system prompt for identity + rules)
+  PANE_IDX="${PANE##*.}"
+  WORKER_PROMPT=$(grep -l "pane 0\.${PANE_IDX} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
+  if [ -n "$WORKER_PROMPT" ]; then
+    tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter
+  else
+    tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus" Enter
+  fi
 
   # 6. Wait for boot
   sleep 8
@@ -186,4 +192,4 @@ When dispatching multiple workers in parallel:
 ### Troubleshooting: Unstick a non-responsive worker
 
 1. Try `C-c`, `C-u`, `Enter` (with `copy-mode -q` first). Wait 3s, check output.
-2. If still stuck after 2 attempts: `kill -9` the child PID (`pgrep -P $PANE_PID`), wait 2s, relaunch Claude with `send-keys "claude --dangerously-skip-permissions --model opus" Enter`, wait 8s, then re-dispatch.
+2. If still stuck after 2 attempts: `kill -9` the child PID (`pgrep -P $PANE_PID`), wait 2s, relaunch Claude with the worker system prompt (find it via `grep -l "pane 0.${PANE_IDX}" "${RUNTIME_DIR}/worker-system-prompt-"*.md`), e.g. `send-keys "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter`, wait 8s, then re-dispatch.

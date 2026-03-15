@@ -34,23 +34,25 @@ if [ -f "${RUNTIME_DIR}/session.env" ]; then
   PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" | cut -d= -f2-)
 fi
 
-# Find recently modified project files (last 10 minutes)
+# Find recently modified project files (last 10 minutes) — skip for Watchdog (irrelevant)
 RECENT_FILES=""
-if [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ]; then
-  if stat -f '%m' /dev/null 2>/dev/null; then
-    # macOS: use stat -f to get modification times, sort by recency
-    RECENT_FILES=$(find "$PROJECT_DIR" -maxdepth 4 \
-      \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
-      -not -path '*/node_modules/*' -not -path '*/.git/*' \
-      -print0 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null | \
-      awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
-  else
-    # Linux: use stat -c to get modification times, sort by recency
-    RECENT_FILES=$(find "$PROJECT_DIR" -maxdepth 4 \
-      \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
-      -not -path '*/node_modules/*' -not -path '*/.git/*' \
-      -print0 2>/dev/null | xargs -0 stat -c '%Y %n' 2>/dev/null | \
-      awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
+if ! is_watchdog; then
+  if [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ]; then
+    if stat -f '%m' /dev/null 2>/dev/null; then
+      # macOS: use stat -f to get modification times, sort by recency
+      RECENT_FILES=$(find "$PROJECT_DIR" -maxdepth 4 \
+        \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
+        -not -path '*/node_modules/*' -not -path '*/.git/*' \
+        -print0 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null | \
+        awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
+    else
+      # Linux: use stat -c to get modification times, sort by recency
+      RECENT_FILES=$(find "$PROJECT_DIR" -maxdepth 4 \
+        \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
+        -not -path '*/node_modules/*' -not -path '*/.git/*' \
+        -print0 2>/dev/null | xargs -0 stat -c '%Y %n' 2>/dev/null | \
+        awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
+    fi
   fi
 fi
 
@@ -66,6 +68,53 @@ ${RECENT_FILES:-None detected}
 
 **Important:** You are a Doey worker. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
+
+# Append Manager orchestration state if this is the Manager
+if is_manager; then
+  WORKER_ASSIGNMENTS=$(tmux list-panes -s -t "$SESSION_NAME" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
+  PENDING_RESULTS=""
+  for rf in "$RUNTIME_DIR"/results/pane_*.json; do
+    [ -f "$rf" ] || continue
+    rf_name=$(basename "$rf")
+    rf_status=""
+    if command -v jq >/dev/null 2>&1; then
+      rf_status=$(jq -r '.status // "unknown"' "$rf" 2>/dev/null || echo "unknown")
+    else
+      rf_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$rf" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"$//' || echo "unknown")
+    fi
+    PENDING_RESULTS="${PENDING_RESULTS}  ${rf_name} (status: ${rf_status})
+"
+  done
+  COMPLETION_FILES=""
+  for cf in "$RUNTIME_DIR"/status/completion_pane_*; do
+    [ -f "$cf" ] || continue
+    COMPLETION_FILES="${COMPLETION_FILES}  $(basename "$cf")
+"
+  done
+  CRASH_FILES=""
+  for crf in "$RUNTIME_DIR"/status/crash_pane_*; do
+    [ -f "$crf" ] || continue
+    CRASH_FILES="${CRASH_FILES}  $(basename "$crf")
+"
+  done
+  cat <<MGRSTATE
+
+## MANAGER ORCHESTRATION STATE (restore after compaction)
+You are the Manager. The following orchestration state was captured before compaction.
+
+**Worker Assignments (pane_index title):**
+${WORKER_ASSIGNMENTS:-No panes found}
+
+**Pending Result Files:**
+${PENDING_RESULTS:-None}
+
+**Unprocessed Completion Files:**
+${COMPLETION_FILES:-None}
+
+**Crash Alerts:**
+${CRASH_FILES:-None}
+MGRSTATE
+fi
 
 # Append watchdog pane states if this is the watchdog
 if is_watchdog; then

@@ -25,6 +25,30 @@ fi
 # --- Collect pane states (bash 3 compatible, no associative arrays) ---
 # States stored as PANE_STATE_<index>=value
 
+# --- Load previous pane states from JSON (for stuck detection & suppression) ---
+PREV_STATES_FILE="${RUNTIME_DIR}/status/watchdog_pane_states.json"
+if [ -f "$PREV_STATES_FILE" ]; then
+  PREV_JSON=$(cat "$PREV_STATES_FILE" 2>/dev/null) || PREV_JSON="{}"
+  # Parse "index":"STATE" pairs — bash 3.2 compatible
+  PREV_PAIRS=$(echo "$PREV_JSON" | sed 's/[{}"]//g' | tr ',' '\n')
+  while IFS=: read -r pidx pstate; do
+    pidx=$(echo "$pidx" | tr -d ' ')
+    pstate=$(echo "$pstate" | tr -d ' ')
+    [[ "$pidx" =~ ^[0-9]+$ ]] || continue
+    [ -n "$pstate" ] && eval "PREV_STATE_${pidx}=\"${pstate}\""
+  done <<EOF
+$PREV_PAIRS
+EOF
+fi
+
+SESSION_SAFE="${SESSION_NAME//[:.]/_}"
+
+# --- Manager health check (pane 0.0) ---
+MGR_REF="${SESSION_NAME}:0.0"
+MGR_CMD=$(tmux display-message -t "$MGR_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
+if [[ "$MGR_CMD" =~ ^(bash|zsh|sh|fish)$ ]]; then
+  echo "MANAGER_CRASHED"
+fi
 
 # --- Scan each worker pane ---
 IFS=',' read -ra PANES <<< "$WORKER_PANES"
@@ -61,6 +85,16 @@ for i in "${PANES[@]}"; do
     else
       echo "PANE ${i} CRASHED"
       eval "PANE_STATE_${i}=CRASHED"
+      # Write crash alert file for Manager consumption
+      CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${i}"
+      if [ ! -f "$CRASH_FILE" ]; then
+        CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
+        cat > "$CRASH_FILE" << CRASH_EOF
+PANE_INDEX=${i}
+TIMESTAMP=$(date +%s)
+LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
+CRASH_EOF
+      fi
     fi
     continue
   fi
@@ -75,10 +109,31 @@ for i in "${PANES[@]}"; do
   OLD_HASH=$(cat "$HASH_FILE" 2>/dev/null) || true
 
   if [ "$HASH" = "$OLD_HASH" ]; then
-    echo "PANE ${i} UNCHANGED"
-    eval "PANE_STATE_${i}=UNCHANGED"
+    # Stuck-worker counter: increment on UNCHANGED, check previous state
+    COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${i}"
+    OLD_COUNT=$(cat "$COUNTER_FILE" 2>/dev/null) || OLD_COUNT=0
+    NEW_COUNT=$((OLD_COUNT + 1))
+    echo "$NEW_COUNT" > "$COUNTER_FILE"
+
+    eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
+
+    # After 6 consecutive UNCHANGED cycles, escalate to STUCK
+    # BUT only if previous state was WORKING or CHANGED (active work)
+    if [ "$NEW_COUNT" -ge 6 ] && { [ "$PREV" = "WORKING" ] || [ "$PREV" = "CHANGED" ] || [ "$PREV" = "UNCHANGED" ]; }; then
+      echo "PANE ${i} STUCK (unchanged for ${NEW_COUNT} cycles)"
+      eval "PANE_STATE_${i}=STUCK"
+    elif [ "$PREV" = "IDLE" ] || [ "$PREV" = "FINISHED" ] || [ "$PREV" = "RESERVED" ]; then
+      # Suppress pure UNCHANGED for panes that were idle/finished/reserved
+      eval "PANE_STATE_${i}=UNCHANGED"
+    else
+      echo "PANE ${i} UNCHANGED"
+      eval "PANE_STATE_${i}=UNCHANGED"
+    fi
     continue
   fi
+
+  # Hash changed — reset unchanged counter
+  rm -f "${RUNTIME_DIR}/status/unchanged_count_${i}" 2>/dev/null
 
   # Hash changed — update stored hash (atomic write)
   echo "$HASH" > "${HASH_FILE}.tmp" && mv "${HASH_FILE}.tmp" "$HASH_FILE"
@@ -97,10 +152,21 @@ for i in "${PANES[@]}"; do
   fi
 done
 
-# --- Inbox check ---
+# --- Per-pane inbox detection ---
+# Cross-reference IDLE panes with pending messages
+TOTAL_INBOX=0
 shopt -s nullglob
-INBOX_FILES=("${RUNTIME_DIR}/messages/"*.msg)
-INBOX_COUNT=${#INBOX_FILES[@]}
+for i in "${PANES[@]}"; do
+  [[ "$i" =~ ^[0-9]+$ ]] || continue
+  eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
+  [ "$PSTATE" = "IDLE" ] || continue
+  PANE_MSGS=("${RUNTIME_DIR}/messages/${SESSION_SAFE}_0_${i}_"*.msg)
+  PANE_MSG_COUNT=${#PANE_MSGS[@]}
+  if [ "$PANE_MSG_COUNT" -gt 0 ]; then
+    echo "INBOX ${i} ${PANE_MSG_COUNT}"
+    TOTAL_INBOX=$((TOTAL_INBOX + PANE_MSG_COUNT))
+  fi
+done
 shopt -u nullglob
 
 # --- Check for worker completion events ---
@@ -145,4 +211,4 @@ echo "$JSON" > "${RUNTIME_DIR}/status/watchdog_pane_states.json.tmp" && \
 
 # --- Summary footer ---
 echo "SCAN_TIME=${SCAN_TIME}"
-echo "INBOX: ${INBOX_COUNT} pending"
+echo "INBOX: ${TOTAL_INBOX} pending"
