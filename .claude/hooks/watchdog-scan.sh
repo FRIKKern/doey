@@ -14,7 +14,8 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || 
 while IFS='=' read -r key value; do
   value="${value%\"}" && value="${value#\"}"
   case "$key" in
-    WORKER_PANES|SESSION_NAME) eval "$key=\"$value\"" ;;
+    WORKER_PANES) WORKER_PANES="$value" ;;
+    SESSION_NAME) SESSION_NAME="$value" ;;
   esac
 done < "${RUNTIME_DIR}/session.env"
 

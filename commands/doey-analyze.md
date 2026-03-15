@@ -15,7 +15,7 @@ Every Bash call that touches tmux must start with:
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
-This gives you: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`.
+This gives you all session variables including: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WORKER_COUNT`, `GRID`, and grid-mode-specific vars.
 
 ### What to Analyze
 
@@ -65,7 +65,7 @@ Each worker writes a structured report to `${RUNTIME_DIR}/reports/analyze_<domai
 - **Report:** `${RUNTIME_DIR}/reports/analyze_hooks.md`
 
 #### Worker C: Commands/Skills
-- **Read:** All 17 `commands/*.md` files
+- **Read:** All `commands/*.md` files
 - **Cross-ref:** Agent definitions (command references), `README.md` (command table), `shell/doey.sh` (session.env vars)
 - **Focus:** Consistent patterns (idle detection, copy-mode, error handling, mkdir -p), bash 3.2 in code blocks
 - **Report:** `${RUNTIME_DIR}/reports/analyze_commands.md`

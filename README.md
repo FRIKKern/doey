@@ -107,6 +107,9 @@ No config files. No shell reload. Just `doey`.
 | `doey doctor` | Check installation health |
 | `doey update` | Pull latest and reinstall (alias: `reinstall`) |
 | `doey version` | Show version info |
+| `doey dynamic` | Launch in dynamic grid mode (alias: `d`) |
+| `doey test` | Run test suite |
+| `doey uninstall` | Remove doey completely |
 | `doey 4x3` | Launch with a static grid layout |
 
 ---
@@ -116,7 +119,7 @@ No config files. No shell reload. Just `doey`.
 | Role | Pane | What it does |
 |------|------|-------------|
 | **Manager** | `0.0` | Plans, delegates, monitors. Never writes code. |
-| **Watchdog** | `0.1` | Monitors workers, delivers messages, catches crashes. |
+| **Watchdog** | `0.1` (dynamic mode) | Monitors workers, delivers messages, catches crashes. |
 | **Workers** | `0.2+` | Claude Code instances that do the actual work. |
 
 Manager and Watchdog share column 0. Workers get their own columns — one per `doey add`.

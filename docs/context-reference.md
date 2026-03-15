@@ -52,7 +52,7 @@ Load Order (bottom = first, top = last / highest precedence)
 | `color` | `green` | `yellow` | Status line color |
 | `memory` | `user` | `none` | Manager stores to `~/.claude/agent-memory/<name>/`; Watchdog has no memory |
 
-Body text below frontmatter becomes the system prompt. Manager: ~239 lines (identity, workflow, delegation rules). Watchdog: ~151 lines (monitoring loop, prompt detection, monitoring rules).
+Body text below frontmatter becomes the system prompt. Manager: ~239 lines (identity, workflow, delegation rules). Watchdog: ~161 lines (monitoring loop, prompt detection, monitoring rules).
 
 Precedence: CLI `--model` > frontmatter `model` > settings `model`.
 
@@ -66,9 +66,9 @@ Merge order (later wins for scalars; arrays are additive):
 | `~/.claude/settings.json` | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`, `skipDangerousModePermissionPrompt: true`, `model: "opus"`, `notifications: false` |
 | `~/.claude/settings.local.json` | User-level local overrides (permissions, etc.) |
 | `<project>/.claude/settings.json` | Project-level settings (if present) |
-| `<project>/.claude/settings.local.json` | Hook event registration (6 events) and Bash permission allow-list — stored in the doey repo at `.claude/settings.local.json`, copied to target projects during `doey init` |
+| `<project>/.claude/settings.local.json` | Bash permission allow-list (4 rules) — stored in the doey repo at `.claude/settings.local.json`, copied to target projects during `doey init`. Claude Code auto-discovers hooks from `.claude/hooks/` directory; no hook registration is needed here. |
 
-*Note: User-level settings vary per machine. The doey repo contains a base `settings.local.json` with hook registrations and permission rules. During `doey init`, hooks are copied to the target project directory.*
+*Note: User-level settings vary per machine. The doey repo contains a base `settings.local.json` with permission rules. During `doey init`, hooks are copied to the target project directory. Claude Code auto-discovers hooks from `.claude/hooks/` — no explicit hook registration is required.*
 
 Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 
@@ -79,9 +79,9 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 |------|---------|
 | `common.sh` | Shared: `init_hook()` (stdin JSON, pane identity, runtime dirs), `parse_field()` (JSON extraction with jq fallback), role checks (`is_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()` (cross-platform, Manager-only, 60s cooldown) |
 | `on-session-start.sh` | SessionStart: initial setup |
-| `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY status, expands collapsed tmux columns |
+| `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY status, sets READY on `/compact`, expands collapsed tmux columns |
 | `on-pre-tool-use.sh` | PreToolUse: safety guards |
-| `on-pre-compact.sh` | PreCompact: context preservation, preserves watchdog-specific state from `watchdog_pane_states.json` |
+| `on-pre-compact.sh` | PreCompact: context preservation — preserves Manager orchestration state (worker assignments, pending results, completion files) and Watchdog-specific state from `watchdog_pane_states.json` |
 | `post-tool-lint.sh` | PostToolUse: linting after tool use. Returns JSON decision format (`{"decision": "block", "reason": "..."}`) |
 | `stop-status.sh` | Stop: sets FINISHED (workers), RESERVED (if reserved), or READY (Manager/Watchdog); blocks research workers without reports (exit 2) |
 | `stop-results.sh` | Stop: collects and writes results |
@@ -95,7 +95,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
 ## Layer 4: Skills/Commands
 
-16 skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
+17 skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
 
 | Skill | Primary Agent | Purpose |
 |-------|---------------|---------|
@@ -115,6 +115,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `/doey-stop` | Manager | Stop a specific worker |
 | `/doey-watchdog-compact` | Manager | Compact Watchdog context |
 | `/doey-purge` | Manager | Scan and clean stale runtime files |
+| `/doey-analyze` | Manager | Full project context analysis — find and fix doc obscurities |
 
 Agent usage: Manager uses all except `/doey-inbox`. Watchdog uses none. Workers use `/doey-inbox`, `/doey-status`, `/doey-reserve`.
 
@@ -174,22 +175,22 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Default grid: **dynamic** (starts with 1 column for Manager+Watchdog, auto-adds 2-worker columns when all workers are busy). Pane 0.0 = Manager, 0.1 = Watchdog. Workers are added in pairs as columns expand.
+Default grid: **dynamic** (launches with 2 worker columns (4 workers), auto-adds more when all workers are busy). Pane 0.0 = Manager, 0.1 = Watchdog. Workers are added in pairs as columns expand.
 
 ```
-Dynamic grid (default) — initial state, then after `doey add`:
+Dynamic grid (default) — post-launch state, then after `doey add`:
 
- Initial (0 workers)     After 1st add (2 workers)    After 2nd add (4 workers)
-+--------+              +--------+--------+           +--------+--------+--------+
-|  0.0   |              |  0.0   |  0.2   |           |  0.0   |  0.2   |  0.4   |
-|  MGR   |              |  MGR   |  W1    |           |  MGR   |  W1    |  W3    |
-+--------+              +--------+--------+           +--------+--------+--------+
-|  0.1   |              |  0.1   |  0.3   |           |  0.1   |  0.3   |  0.5   |
-|  WDG   |              |  WDG   |  W2    |           |  WDG   |  W2    |  W4    |
-+--------+              +--------+--------+           +--------+--------+--------+
+ Initial (4 workers)                                  After `doey add` (6 workers)
++--------+--------+--------+                         +--------+--------+--------+--------+
+|  0.0   |  0.2   |  0.4   |                         |  0.0   |  0.2   |  0.4   |  0.6   |
+|  MGR   |  W1    |  W3    |                         |  MGR   |  W1    |  W3    |  W5    |
++--------+--------+--------+                         +--------+--------+--------+--------+
+|  0.1   |  0.3   |  0.5   |                         |  0.1   |  0.3   |  0.5   |  0.7   |
+|  WDG   |  W2    |  W4    |                         |  WDG   |  W2    |  W4    |  W6    |
++--------+--------+--------+                         +--------+--------+--------+--------+
 ```
 
-Static grid (legacy, via `doey --grid 6x2`): Watchdog at column-count index (0.6 for 6-col).
+Static grid (legacy, via `doey 6x2`): Watchdog at column-count index (0.6 for 6-col).
 
 ```
 +--------+--------+--------+--------+--------+--------+
@@ -240,13 +241,12 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
   reports/                           # [hook-init] Created by common.sh init_hook()
     <pane_safe>.report               # Research report
   results/                           # [hook-init] Structured result JSON files
-  inbox/                             # [hook-init] Result delivery (created by stop hooks)
-  messages/                          # [init-time] Inter-pane messages
+  messages/                          # [hook-init] Inter-pane messages
     delivered/                       # Consumed messages subdirectory
   broadcasts/                        # [init-time] Broadcast messages
 ```
 
-*Init-time directories (`status/`, `messages/`, `broadcasts/`) are created during `doey init`. The remaining directories (`research/`, `reports/`, `results/`, `inbox/`) are created eagerly by `common.sh init_hook()` on the first hook invocation in any pane (not lazily on first use).*
+*Init-time directories (`status/`, `messages/`, `broadcasts/`) are created during `doey init`. The remaining directories (`research/`, `reports/`, `results/`) are created eagerly by `common.sh init_hook()` on the first hook invocation in any pane (not lazily on first use).*
 
 **Status values:** READY, BUSY, FINISHED, RESERVED.
 
@@ -277,6 +277,6 @@ Loaded by all instances. Contains: project overview, architecture, key directori
 | Workers don't pick up hook changes | Restart workers (`/doey-restart-workers`) |
 | Dispatch to reserved pane | Check `.reserved` file exists; verify `is_reserved()` |
 | Messages not delivered | Check `messages/` vs `inbox/` — inter-pane messages go to `messages/`, result summaries go to `inbox/` |
-| Runtime file not found | Verify PANE_SAFE escaping: `${PANE//[:.]/_}`. Check if directory is lazy-created |
+| Runtime file not found | Verify PANE_SAFE escaping: `${PANE//[:.]/_}`. Directories are created eagerly by `init_hook()` — check that hooks have fired at least once |
 
 **Trace order:** 1. Agent definition → 2. Memory → 3. Settings (4-file merge) → 4. Hook scripts → 5. Skill files → 6. session.env / tmux env → 7. Runtime state → 8. CLI flags in doey.sh.

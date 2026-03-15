@@ -49,9 +49,11 @@ if is_worker; then
   done
   if $HAS_COLLAPSED; then
     COLS=$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | cut -dx -f1)
+    COLS="${COLS//\"/}"
     # Handle dynamic grid mode
     if [ "$COLS" = "dynamic" ] || [ -z "$COLS" ]; then
       COLS=$(grep '^CURRENT_COLS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)
+      COLS="${COLS//\"/}"
     fi
     if [ -n "$COLS" ] && [ "$COLS" -gt 0 ]; then
       COL_IDX=$(( PANE_INDEX % COLS ))

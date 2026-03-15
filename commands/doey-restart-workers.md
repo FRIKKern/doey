@@ -62,6 +62,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    ```bash
    for i in $ALL_PANES; do
      if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
+     tmux copy-mode -q -t "$SESSION_NAME:0.$i" 2>/dev/null
      tmux send-keys -t "$SESSION_NAME:0.$i" "clear" Enter 2>/dev/null
    done
    sleep 1
