@@ -109,38 +109,31 @@ session_exists() {
 # This catches any files created with unquoted variables (spaces in paths)
 validate_session_env() {
   local session_env="$1"
-  if [ ! -f "$session_env" ]; then
-    return 0
-  fi
+  [ -f "$session_env" ] || return 0
 
-  # Test if the file can be sourced without errors by running it in a subshell
-  # Redirecting to /dev/null catches stderr, return code tells us if sourcing failed
-  if ! (source "$session_env" 2>/dev/null) 2>/dev/null; then
+  if ! (source "$session_env") 2>/dev/null; then
     printf "  ${WARN}Fixing malformed session.env (unquoted paths with spaces)${RESET}\n" >&2
-    # Create a properly quoted version
     local temp_file="${session_env}.fixed"
     {
       while IFS='=' read -r key value; do
-        # Skip empty lines and comments
-        if [ -z "$key" ] || [[ "$key" =~ ^[[:space:]]*# ]]; then
-          echo "$key=$value"
-          continue
-        fi
-        # Quote the value if it's not already quoted and if it looks like it needs quoting
-        if [[ "$value" =~ ^\".*\"$ ]] || [[ "$value" =~ ^\'.*\'$ ]]; then
-          # Already quoted
-          echo "$key=$value"
-        elif [[ "$value" =~ [[:space:]] ]]; then
-          # Contains spaces, needs quoting
-          echo "$key=\"$value\""
-        else
-          # No spaces, but quote for safety
-          echo "$key=\"$value\""
-        fi
+        case "$key" in
+          ''|'#'*) echo "$key${value:+=$value}"; continue ;;
+        esac
+        case "$value" in
+          \"*\"|\'*\') echo "$key=$value" ;;
+          *)           echo "$key=\"$value\"" ;;
+        esac
       done < "$session_env"
     } > "$temp_file"
     mv "$temp_file" "$session_env"
   fi
+}
+
+# Source session.env with validation
+safe_source_session_env() {
+  validate_session_env "$1"
+  # shellcheck disable=SC1090
+  source "$1"
 }
 
 # Register a directory as a project
@@ -2081,9 +2074,7 @@ doey_add_column() {
   local dir="$3"
 
   # Source current state
-  # shellcheck disable=SC1090
-  validate_session_env "${runtime_dir}/session.env"
-  source "${runtime_dir}/session.env"
+  safe_source_session_env "${runtime_dir}/session.env"
 
   if [[ "${GRID:-}" != "dynamic" ]]; then
     printf "  ${ERROR}Session is not using dynamic grid mode${RESET}\n"
@@ -2188,9 +2179,7 @@ doey_remove_column() {
   local col_index="${3:-}"
 
   # Source current state
-  # shellcheck disable=SC1090
-  validate_session_env "${runtime_dir}/session.env"
-  source "${runtime_dir}/session.env"
+  safe_source_session_env "${runtime_dir}/session.env"
 
   if [[ "${GRID:-}" != "dynamic" ]]; then
     printf "  ${ERROR}Session is not using dynamic grid mode${RESET}\n"
@@ -2567,9 +2556,7 @@ HELP
         session="doey-${name}"
         if session_exists "$session"; then
           runtime_dir="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
-          # shellcheck disable=SC1090
-          validate_session_env "${runtime_dir}/session.env"
-          source "${runtime_dir}/session.env"
+          safe_source_session_env "${runtime_dir}/session.env"
           if [[ "${GRID:-}" == "dynamic" ]]; then
             doey_remove_column "$session" "$runtime_dir"
             exit 0
