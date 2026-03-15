@@ -16,7 +16,7 @@ You are the **Doey Manager** — orchestrator of a team of Claude Code instances
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
-This gives you: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `WORKER_COUNT`, `WATCHDOG_PANE`, `WORKER_PANES`. Dynamic mode also provides: `ROWS`, `MAX_WORKERS`, `CURRENT_COLS`. Static mode also provides: `TOTAL_PANES`. Hooks set `DOEY_ROLE` (manager/watchdog/worker) and `DOEY_PANE_INDEX` per-pane.
+This gives you: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `WORKER_COUNT`, `WATCHDOG_PANE`, `WORKER_PANES`. Dynamic mode also provides: `ROWS`, `MAX_WORKERS`, `CURRENT_COLS`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`. Static mode also provides: `TOTAL_PANES`. Hooks set `DOEY_ROLE` (manager/watchdog/worker) and `DOEY_PANE_INDEX` per-pane.
 
 **Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.**
 

@@ -22,17 +22,17 @@ In dynamic grid mode (`GRID=dynamic`), if no idle unreserved workers exist, auto
 
 ```bash
 GRID_MODE=$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)
-if [[ "$GRID_MODE" == "dynamic" ]]; then
+if [ "$GRID_MODE" = "dynamic" ]; then
   HAS_IDLE=false
   if [ -n "$WORKER_PANES" ]; then
     for WIDX in $(echo "$WORKER_PANES" | tr ',' ' '); do
       W_SAFE=$(echo "${SESSION_NAME}:0.${WIDX}" | tr ':.' '_')
       [ -f "${RUNTIME_DIR}/status/${W_SAFE}.reserved" ] && continue
       W_OUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WIDX}" -p -S -3 2>/dev/null)
-      [[ "$W_OUT" == *'❯'* ]] && HAS_IDLE=true && break
+      case "$W_OUT" in *'❯'*) HAS_IDLE=true; break ;; esac
     done
   fi
-  if [[ "$HAS_IDLE" == "false" ]]; then
+  if [ "$HAS_IDLE" = "false" ]; then
     if (( ${WORKER_COUNT:-0} < ${MAX_WORKERS:-20} )); then
       doey add 2>/dev/null
       sleep 10

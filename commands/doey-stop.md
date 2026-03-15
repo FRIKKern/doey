@@ -18,7 +18,7 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 
-This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `TOTAL_PANES`. **Always use `${SESSION_NAME}`** — never hardcode session names.
+This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. **Always use `${SESSION_NAME}`** — never hardcode session names.
 
 ### Step 1: Parse argument and validate target
 

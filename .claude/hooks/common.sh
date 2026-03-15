@@ -26,8 +26,8 @@ init_hook() {
   NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
   # Ensure runtime dirs exist (fast-path: skip if all present)
-  if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/inbox" ]; then
-    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/inbox"
+  if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/messages" ]; then
+    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/messages"
   fi
 }
 
@@ -44,7 +44,8 @@ is_watchdog() {
   # Cache result to avoid re-reading session.env on repeated calls
   if [ -z "${_DOEY_WD_PANE+x}" ]; then
     [ -f "${RUNTIME_DIR}/session.env" ] || return 1
-    _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
+    _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
+    _DOEY_WD_PANE="${_DOEY_WD_PANE//\"/}"
   fi
   [ "$PANE_INDEX" = "$_DOEY_WD_PANE" ]
 }

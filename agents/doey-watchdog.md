@@ -45,7 +45,7 @@ The script returns a structured report per pane. Act ONLY on these statuses:
 | FINISHED | **Do nothing** — worker completed normally |
 | COMPLETION | Notify Manager (see Manager Notifications) |
 | INBOX `<pane_index>` `<count>` | Send `/doey-inbox` to that pane (see Inbox Delivery) |
-| MANAGER_CRASHED | Log and alert — Manager process exited |
+| MANAGER_CRASHED | Log and alert — Manager process exited. Check if Manager pane can be restarted (`tmux respawn-pane`). Notify user via macOS notification as last resort if Manager cannot recover. |
 
 For all other statuses: do nothing, produce no output.
 
@@ -81,7 +81,7 @@ Context compaction runs automatically every ~5 minutes via `/loop`. After compac
 The `on-pre-tool-use.sh` hook blocks the following tools for the Watchdog:
 - **Edit**, **Write**, **Agent**, **NotebookEdit** — monitoring role only, no file modifications
 - **Bash `send-keys`/`paste-buffer`** — only allowed for `/doey-inbox`, `/login`, `/compact`, bare `Enter`, and `copy-mode`
-- **Bash `git push`/`git commit`/`gh pr`/`tmux kill-session`/`rm -rf`/`shutdown`/`reboot`** — blocked for both Workers and Watchdog
+- **Bash `git push`/`git commit`/`gh pr`/`tmux kill-session`/`tmux kill-server`/`tmux send-keys`/`rm -rf`/`shutdown`/`reboot`** — blocked for Workers (Workers are blocked from ALL send-keys, unlike Watchdog which has an allowlist)
 
 ## Rules
 
@@ -154,7 +154,7 @@ tmux send-keys -t "$SESSION_NAME:0.0" "Workers completed: 0.3 (hero-section, don
 All health checks run on EVERY scan cycle via `watchdog-scan.sh`. The scan script handles:
 
 - **Copy-mode**: Detects and exits copy-mode before any other checks (copy-mode silently drops dispatched tasks)
-- **Stuck workers**: Hashes pane output across cycles — reports STUCK after 6 consecutive identical scans (only for WORKING panes, not idle). STUCK triggers Manager notification.
+- **Stuck workers**: Hashes pane output across cycles — reports STUCK after 6 consecutive identical scans (only for active panes — WORKING, CHANGED, UNCHANGED — not idle/finished/reserved). STUCK triggers Manager notification.
 - **Crashed panes**: Detects bare shell prompt (bash/zsh/sh/fish) instead of Claude — reports CRASHED
 - **Heartbeat**: Writes timestamp to `$RUNTIME_DIR/status/watchdog.heartbeat` each cycle
 

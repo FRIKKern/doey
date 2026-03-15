@@ -23,6 +23,7 @@ if [ "$TOOL_NAME" != "Bash" ]; then
       # Workers/Manager are the common case — skip them fast.
       RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
       WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2-) || exit 0
+      WD_PANE="${WD_PANE//\"/}"
       CURRENT_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{pane_index}' 2>/dev/null) || exit 0
       if [ "$CURRENT_PANE" = "$WD_PANE" ]; then
         echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
@@ -61,7 +62,7 @@ if is_watchdog; then
       # Only permit: sending /doey-inbox, /login, /compact, bare Enter, and copy-mode.
       # Match command structure to prevent allowlist bypass via string containment
       # (e.g. "echo doey-inbox; malicious" would pass a simple substring check).
-      if echo "$TOOL_COMMAND" | grep -qE '^tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( |$)|copy-mode )'; then
+      if echo "$TOOL_COMMAND" | grep -qE '^[[:space:]]*tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( |$)|copy-mode )'; then
         exit 0
       fi
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2

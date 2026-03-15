@@ -20,6 +20,8 @@ SESSION_ENV="${RUNTIME_DIR}/session.env"
 # Read variables from session.env (single-pass parse, no eval — /tmp is world-writable)
 SESSION_NAME="" PROJECT_DIR="" PROJECT_NAME="" WATCHDOG_PANE=""
 while IFS='=' read -r key value; do
+  # Strip surrounding quotes (session.env values may be quoted)
+  value="${value%\"}" && value="${value#\"}"
   case "$key" in
     SESSION_NAME) SESSION_NAME="$value" ;;
     PROJECT_DIR)  PROJECT_DIR="$value" ;;
