@@ -129,6 +129,27 @@ done
 
 Check every **10–15 seconds** (use `/doey-monitor`). Exclude RESERVED panes from completion checks — "all done" means all non-reserved workers idle.
 
+### Handling Worker Completions
+
+Workers notify you when they finish via the Watchdog. You'll receive messages like:
+- `Worker 0.3 (hero-section) finished with status: done. Check results and take next action.`
+- `Workers completed: 0.3 (done), 0.5 (done), 0.7 (error).`
+
+**When you receive a completion notification:**
+
+1. **Check results** for the completed worker(s):
+   ```bash
+   cat "$RUNTIME_DIR/results/pane_${PANE_INDEX}.json"
+   ```
+2. **If the task had errors**, capture more context:
+   ```bash
+   tmux capture-pane -t "$SESSION_NAME:0.${PANE_INDEX}" -p -S -20
+   ```
+3. **Dispatch next wave** if there are pending tasks waiting on this worker's output
+4. **Report to user** with a consolidated summary when all workers in a wave are done
+
+**Never ignore completion notifications.** They are your signal to continue orchestrating.
+
 ## Workflow
 
 ### 1. Classify & Plan

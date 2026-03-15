@@ -62,4 +62,14 @@ INBOX
 [[ "$TMPFILE_INBOX" != "$INBOX_FILE" ]] && mv "$TMPFILE_INBOX" "$INBOX_FILE"
 TMPFILE_INBOX=""
 
+# --- Write completion event for watchdog to pick up ---
+COMPLETION_FILE="${RUNTIME_DIR}/status/completion_pane_${PANE_INDEX}"
+cat > "${COMPLETION_FILE}.tmp" <<COMPLETE
+PANE_INDEX=$PANE_INDEX
+PANE_TITLE=$PANE_TITLE
+STATUS=$RESULT_STATUS
+TIMESTAMP=$(date +%s)
+COMPLETE
+mv "${COMPLETION_FILE}.tmp" "$COMPLETION_FILE"
+
 exit 0

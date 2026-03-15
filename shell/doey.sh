@@ -257,7 +257,7 @@ _kill_doey_session() {
 
 # Show interactive project picker menu
 show_menu() {
-  local grid="${1:-6x2}"
+  local grid="$1"
 
   printf '\n'
   printf "  ${BRAND}Doey${RESET}\n"
@@ -309,7 +309,7 @@ show_menu() {
             tmux attach -t "$selected_session"
           fi
         else
-          launch_session "$selected_name" "$selected_path" "$grid"
+          launch_with_grid "$selected_name" "$selected_path" "$grid"
         fi
       else
         printf "  ${ERROR}Invalid selection${RESET}\n"
@@ -321,7 +321,7 @@ show_menu() {
       local init_name
       init_name="$(find_project "$(pwd)")"
       if [[ -n "$init_name" ]]; then
-        launch_session "$init_name" "$(pwd)" "$grid"
+        launch_with_grid "$init_name" "$(pwd)" "$grid"
       fi
       ;;
     q|Q) return 0 ;;
@@ -414,6 +414,21 @@ rebalance_columns() {
     fi
     tmux resize-pane -t "${session}:0.${c}" -x "$fair_width" 2>/dev/null || true
   done
+}
+
+# ── Initial worker columns ────────────────────────────────────────────
+# Number of worker columns to add on dynamic launch (2 workers per column)
+INITIAL_WORKER_COLS=2
+
+# ── Launch dispatcher ─────────────────────────────────────────────────
+# Routes to dynamic or static launch based on grid type.
+launch_with_grid() {
+  local name="$1" dir="$2" grid="$3"
+  if [[ "$grid" == "dynamic" || "$grid" == "d" ]]; then
+    launch_session_dynamic "$name" "$dir"
+  else
+    launch_session "$name" "$dir" "$grid"
+  fi
 }
 
 # ── Launch Session ────────────────────────────────────────────────────
@@ -1367,7 +1382,8 @@ DOG
   printf "${RESET}"
   printf "   ${DIM}Let Doey do it for you${RESET}\n"
   printf '\n'
-  printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}dynamic${RESET}  ${DIM}Workers${RESET} ${BOLD}0 (add with: doey add)${RESET}\n"
+  local initial_workers=$(( INITIAL_WORKER_COLS * 2 ))
+  printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}dynamic${RESET}  ${DIM}Workers${RESET} ${BOLD}${initial_workers} (auto-expands)${RESET}\n"
   printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
   printf '\n'
 
@@ -1527,7 +1543,7 @@ MANIFEST
   (
     sleep 8
     tmux send-keys -t "$session:0.0" \
-      "Team is online (project: ${name}, dir: $dir). Dynamic grid mode — no workers yet. Use 'doey add' from CLI to add worker columns (2 workers per column). Pane 0.$watchdog_pane is the Watchdog. Session: $session. Awaiting tasks — workers will be added on demand." Enter
+      "Team is online (project: ${name}, dir: $dir). Dynamic grid — started with ${initial_workers} workers, auto-expands when all are busy. Use doey add to add more. Pane 0.$watchdog_pane is the Watchdog. Session: $session. All workers are idle and awaiting tasks." Enter
   ) &
 
   # Launch Watchdog (pane 0.$watchdog_pane)
@@ -1539,10 +1555,26 @@ MANIFEST
   (
     sleep 12
     tmux send-keys -t "$session:0.$watchdog_pane" \
-      "Start monitoring session $session. Dynamic grid mode — no workers yet. Skip pane 0.0 (Manager) and 0.$watchdog_pane (yourself). I'll notify you when workers are added." Enter
+      "Start monitoring session $session. Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy. Skip pane 0.0 (Manager) and 0.$watchdog_pane (yourself). Monitor all worker panes for status changes." Enter
   ) &
 
   step_done
+
+  # ── Step 7: Add initial worker columns ──────────────────────────
+  STEP_TOTAL=7
+  step_start 7 "Adding ${INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
+
+  # Wait for Manager/Watchdog to settle before adding columns
+  sleep 3
+
+  local _col_i
+  for (( _col_i=0; _col_i<INITIAL_WORKER_COLS; _col_i++ )); do
+    doey_add_column "$session" "$runtime_dir" "$dir"
+    (( _col_i < INITIAL_WORKER_COLS - 1 )) && sleep 1
+  done
+
+  step_done
+  STEP_TOTAL=6
 
   # ── Final summary ──────────────────────────────────────────────
   printf '\n'
@@ -1551,14 +1583,14 @@ MANIFEST
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Manager${RESET}    ${DIM}0.0${RESET}   Online                      ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}0.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
-  printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}0${RESET}     ${DIM}Add with: doey add${RESET}            ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}%-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}      ${DIM}│${RESET}\n" "$initial_workers"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"
   printf "   ${DIM}│${RESET}  ${DIM}Grid${RESET}      ${BOLD}dynamic${RESET}  ${DIM}Max workers${RESET}  ${BOLD}%-13s${RESET} ${DIM}│${RESET}\n" "$max_workers"
   printf "   ${DIM}│${RESET}  ${DIM}Session${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$session"
   printf "   ${DIM}│${RESET}  ${DIM}Manifest${RESET}  ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "${runtime_dir}/session.env"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${DIM}Tip: doey add — adds 2 workers (1 column)${RESET}      ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${DIM}Tip: doey add — adds 2 more workers${RESET}            ${DIM}│${RESET}\n"
   printf "   ${DIM}└─────────────────────────────────────────────────┘${RESET}\n"
   printf '\n'
 
@@ -2019,7 +2051,7 @@ require_running_session() {
 
 # ── Main Dispatch ─────────────────────────────────────────────────────
 
-grid=""
+grid="dynamic"
 
 case "${1:-}" in
   --help|-h)
@@ -2074,11 +2106,7 @@ HELP
     dir="$(pwd)"
     name="$(find_project "$dir")"
     if [[ -n "$name" ]]; then
-      if [[ "${grid}" == "dynamic" || "${grid}" == "d" ]]; then
-        launch_session_dynamic "$name" "$dir"
-      else
-        launch_session "$name" "$dir" "${grid:-6x2}"
-      fi
+      launch_with_grid "$name" "$dir" "$grid"
     fi
     exit 0
     ;;
@@ -2228,13 +2256,9 @@ if [[ -n "$name" ]]; then
     fi
   else
     # Known but not running — launch with premium UI
-    if [[ "${grid}" == "dynamic" || "${grid}" == "d" ]]; then
-      launch_session_dynamic "$name" "$dir"
-    else
-      launch_session "$name" "$dir" "${grid:-6x2}"
-    fi
+    launch_with_grid "$name" "$dir" "$grid"
   fi
 else
   # Unknown directory — show interactive menu
-  show_menu "${grid:-6x2}"
+  show_menu "${grid}"
 fi
