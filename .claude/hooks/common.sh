@@ -41,10 +41,12 @@ parse_field() {
 }
 
 is_watchdog() {
-  [ -f "${RUNTIME_DIR}/session.env" ] || return 1
-  local wd_pane
-  wd_pane=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
-  [ "$PANE_INDEX" = "$wd_pane" ]
+  # Cache result to avoid re-reading session.env on repeated calls
+  if [ -z "${_DOEY_WD_PANE+x}" ]; then
+    [ -f "${RUNTIME_DIR}/session.env" ] || return 1
+    _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
+  fi
+  [ "$PANE_INDEX" = "$_DOEY_WD_PANE" ]
 }
 
 is_manager() {

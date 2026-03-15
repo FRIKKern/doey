@@ -32,10 +32,15 @@ if [ -f "$PREV_STATES_FILE" ]; then
   # Parse "index":"STATE" pairs — bash 3.2 compatible
   PREV_PAIRS=$(echo "$PREV_JSON" | sed 's/[{}"]//g' | tr ',' '\n')
   while IFS=: read -r pidx pstate; do
-    pidx=$(echo "$pidx" | tr -d ' ')
-    pstate=$(echo "$pstate" | tr -d ' ')
+    pidx="${pidx// /}"
+    pstate="${pstate// /}"
     [[ "$pidx" =~ ^[0-9]+$ ]] || continue
-    [ -n "$pstate" ] && eval "PREV_STATE_${pidx}=\"${pstate}\""
+    # Validate state value before eval to prevent injection from corrupted JSON
+    case "$pstate" in
+      IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|UNKNOWN) ;;
+      *) continue ;;
+    esac
+    eval "PREV_STATE_${pidx}=\"${pstate}\""
   done <<EOF
 $PREV_PAIRS
 EOF
@@ -43,10 +48,13 @@ fi
 
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 
+# Shell names that indicate a crashed pane (no Claude/node running)
+SHELL_PATTERN='^(bash|zsh|sh|fish)$'
+
 # --- Manager health check (pane 0.0) ---
 MGR_REF="${SESSION_NAME}:0.0"
 MGR_CMD=$(tmux display-message -t "$MGR_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
-if [[ "$MGR_CMD" =~ ^(bash|zsh|sh|fish)$ ]]; then
+if [[ "$MGR_CMD" =~ $SHELL_PATTERN ]]; then
   echo "MANAGER_CRASHED"
 fi
 
@@ -56,7 +64,7 @@ for i in "${PANES[@]}"; do
   # Validate pane index before use in eval/variable expansion
   [[ "$i" =~ ^[0-9]+$ ]] || continue
   PANE_REF="${SESSION_NAME}:0.${i}"
-  PANE_SAFE="${SESSION_NAME//[:.]/_}_0_${i}"
+  PANE_SAFE="${SESSION_SAFE}_0_${i}"
 
   # Check reservation
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
@@ -74,7 +82,7 @@ for i in "${PANES[@]}"; do
   # Check for crash (shell prompt without claude/node running)
   # Cross-check with status file to avoid false-positives on normally finished workers
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
-  if [[ "$CURRENT_CMD" =~ ^(bash|zsh|sh|fish)$ ]]; then
+  if [[ "$CURRENT_CMD" =~ $SHELL_PATTERN ]]; then
     STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
     if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
       echo "PANE ${i} FINISHED"
@@ -153,21 +161,35 @@ CRASH_EOF
 done
 
 # --- Per-pane inbox detection ---
-# Cross-reference IDLE panes with pending messages
+# Single glob, then classify by pane index (avoids N readdir calls)
 TOTAL_INBOX=0
 shopt -s nullglob
-for i in "${PANES[@]}"; do
-  [[ "$i" =~ ^[0-9]+$ ]] || continue
-  eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
-  [ "$PSTATE" = "IDLE" ] || continue
-  PANE_MSGS=("${RUNTIME_DIR}/messages/${SESSION_SAFE}_0_${i}_"*.msg)
-  PANE_MSG_COUNT=${#PANE_MSGS[@]}
-  if [ "$PANE_MSG_COUNT" -gt 0 ]; then
-    echo "INBOX ${i} ${PANE_MSG_COUNT}"
-    TOTAL_INBOX=$((TOTAL_INBOX + PANE_MSG_COUNT))
-  fi
-done
+ALL_MSGS=("${RUNTIME_DIR}/messages/"*.msg)
 shopt -u nullglob
+if [ ${#ALL_MSGS[@]} -gt 0 ]; then
+  # Count messages per idle pane using filename prefix matching
+  for msg in "${ALL_MSGS[@]}"; do
+    msg_name=$(basename "$msg")
+    for i in "${PANES[@]}"; do
+      [[ "$i" =~ ^[0-9]+$ ]] || continue
+      eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
+      [ "$PSTATE" = "IDLE" ] || continue
+      if [[ "$msg_name" == "${SESSION_SAFE}_0_${i}_"* ]]; then
+        eval "INBOX_COUNT_${i}=\$(( \${INBOX_COUNT_${i}:-0} + 1 ))"
+        break
+      fi
+    done
+  done
+  # Report per-pane inbox counts
+  for i in "${PANES[@]}"; do
+    [[ "$i" =~ ^[0-9]+$ ]] || continue
+    eval "IC=\${INBOX_COUNT_${i}:-0}"
+    if [ "$IC" -gt 0 ]; then
+      echo "INBOX ${i} ${IC}"
+      TOTAL_INBOX=$((TOTAL_INBOX + IC))
+    fi
+  done
+fi
 
 # --- Check for worker completion events ---
 shopt -s nullglob
