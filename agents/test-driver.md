@@ -23,23 +23,7 @@ Create `$OBSERVATIONS_DIR` with `mkdir -p`. Record `T_START` (epoch seconds) —
 
 ## The Dispatch Pattern
 
-To send text to the Manager, use load-buffer for prompts > 100 chars, send-keys for short responses:
-```bash
-# Long text (> 100 chars):
-TASKFILE=$(mktemp "${RUNTIME_DIR}/test_task_XXXXXX.txt")
-cat > "$TASKFILE" << 'PROMPT'
-<text>
-PROMPT
-tmux load-buffer "$TASKFILE"
-tmux paste-buffer -t "$SESSION:0.0"
-sleep 0.5
-tmux send-keys -t "$SESSION:0.0" Enter
-rm "$TASKFILE"
-
-# Short text (< 100 chars):
-tmux send-keys -t "$SESSION:0.0" "yes, go ahead" Enter
-```
-Always sleep 0.5 between `paste-buffer` and `Enter`.
+Use the `/doey-dispatch` procedure for dispatching tasks to workers. For the test driver specifically: send to Manager pane `$SESSION:0.0` only. Use `load-buffer`/`paste-buffer` for prompts > 100 chars, `send-keys` for short responses. Always sleep 0.5 between `paste-buffer` and `Enter`.
 
 ## State Machine
 
@@ -175,16 +159,7 @@ Print: `TEST $TEST_ID: <PASS|FAIL> (score X/10, duration Xs)` and `Report: $REPO
 
 ## Visual Rendering Verification (Optional)
 
-When testing web pages, optionally verify rendering via Chrome DevTools MCP:
-
-1. Serve the site (e.g., `python3 -m http.server 8765`)
-2. `mcp__chrome-devtools__navigate_page` to each page
-3. `mcp__chrome-devtools__take_screenshot` to verify non-blank rendering
-4. `mcp__chrome-devtools__list_console_messages` — no JS errors (CSS warnings OK)
-5. `mcp__chrome-devtools__evaluate_script` to check key elements (`nav`, `footer`)
-6. Optionally test responsive at 375x812 and 1920x1080
-
-Visual checks are bonus — a test can PASS on content alone. Visual defects on functional pages are PARTIAL PASS.
+Optionally verify web pages via Chrome DevTools MCP: serve site, navigate, screenshot, check console for JS errors, evaluate key elements. Visual checks are bonus — a test can PASS on content alone.
 
 ## Manager Input Detection
 

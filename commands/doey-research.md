@@ -8,16 +8,9 @@ Dispatch a research & planning task to a worker with guaranteed report-back. The
 ## Prompt
 You are dispatching a research task to a Claude Code worker instance in TMUX. The worker's Stop hook blocks it from finishing until a report file is written.
 
-### Project Context (read once per Bash call)
+### Project Context
 
-Every Bash call that touches tmux must start with:
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-```
-
-This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `PASTE_SETTLE_MS` (default 500). **Always use `${SESSION_NAME}`** — never hardcode session names.
+Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)` then `source "${RUNTIME_DIR}/session.env"`. This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `PASTE_SETTLE_MS`. Always use `${SESSION_NAME}` — never hardcode session names.
 
 ### Copy-mode pattern
 
@@ -60,52 +53,9 @@ MARKER
 rm -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 ```
 
-### Step 3: Kill old session and start fresh Claude (skip if already ready)
+### Step 3: Ensure worker is ready
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-PANE="${SESSION_NAME}:0.X"
-
-# 1. Exit copy-mode
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-
-# 1b. Readiness check — skip restart if worker is already idle
-PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
-CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
-OUTPUT=$(tmux capture-pane -t "$PANE" -p 2>/dev/null)
-ALREADY_READY=false
-if [ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯'; then
-  ALREADY_READY=true
-fi
-
-if [ "$ALREADY_READY" = "false" ]; then
-  # 2. Kill current Claude process by PID
-  [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
-  sleep 3
-
-  # 3. Verify it died — SIGKILL if not
-  CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
-  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
-
-  # 4. Exit copy-mode (killing can trigger scroll)
-  tmux copy-mode -q -t "$PANE" 2>/dev/null
-
-  # 5. Start fresh Claude
-  tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus" Enter
-
-  # 6. Wait for boot
-  sleep 8
-
-  # 7. Exit copy-mode
-  tmux copy-mode -q -t "$PANE" 2>/dev/null
-fi
-
-# 8. Rename pane (MANDATORY — task + date for traceability)
-tmux send-keys -t "$PANE" "/rename research-topic_$(date +%m%d)" Enter
-sleep 1
-```
+Use the same readiness check and kill/restart/launch sequence as `/doey-dispatch` (Reliable Dispatch Sequence steps 1–7). Skip restart if already idle. Then rename the pane: `tmux send-keys -t "$PANE" "/rename research-topic_$(date +%m%d)" Enter` and `sleep 1`.
 
 ### Step 4: Write and dispatch the task prompt
 
@@ -143,22 +93,7 @@ All file paths should be absolute.
    - \`general-purpose\` — multi-step research needing multiple rounds.
 3. Combine all agent outputs into the Findings section. If gaps remain, spawn a second wave.
 
-**Example invocation (single message, 3 agents):**
-
-Agent tool call 1:
-  subagent_type: "Explore"
-  prompt: "Find all hook files in ${PROJECT_DIR}. Map their connections and call chains."
-  description: "explore hooks"
-
-Agent tool call 2:
-  subagent_type: "Explore"
-  prompt: "Find all CLI commands and shell scripts in ${PROJECT_DIR}. Map entry points and dependencies."
-  description: "explore CLI"
-
-Agent tool call 3:
-  subagent_type: "general-purpose"
-  prompt: "Read install.sh and doey.sh in ${PROJECT_DIR}. Document the full install flow, paths created, and files copied."
-  description: "analyze install flow"
+Spawn 3+ agents in a single message, e.g.: Explore for hook mapping, Explore for CLI/scripts, general-purpose for install flow analysis.
 
 ### Phase 2: Propose a Plan
 
@@ -223,20 +158,12 @@ tmux copy-mode -q -t "$PANE" 2>/dev/null
 tmux load-buffer "$TASKFILE"
 tmux paste-buffer -t "$PANE"
 
-# Settle, then submit — auto-scales for large prompts
+# Settle, then submit (scale by prompt size: >200 lines=2s, >100=1.5s, else 0.5s)
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
-if command -v bc >/dev/null 2>&1; then
-  SETTLE_S=$(echo "scale=2; ${PASTE_SETTLE_MS:-500} / 1000" | bc)
-  if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then MIN_SETTLE="2.0"
-  elif [ "$TASK_LINES" -gt 100 ] 2>/dev/null; then MIN_SETTLE="1.5"
-  else MIN_SETTLE="$SETTLE_S"; fi
-  SETTLE_S=$(echo "if ($MIN_SETTLE > $SETTLE_S) $MIN_SETTLE else $SETTLE_S" | bc)
-else
-  if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then SETTLE_S="2.0"
-  elif [ "$TASK_LINES" -gt 100 ] 2>/dev/null; then SETTLE_S="1.5"
-  else SETTLE_S="0.5"; fi
-fi
+if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then SETTLE_S=2
+elif [ "$TASK_LINES" -gt 100 ] 2>/dev/null; then SETTLE_S=1.5
+else SETTLE_S=0.5; fi
 sleep $SETTLE_S
 tmux send-keys -t "$PANE" Enter
 
@@ -246,66 +173,19 @@ rm "$TASKFILE"
 
 ### Step 5: Verify dispatch
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
+Use the same verification procedure as `/doey-dispatch` step 15 (MANDATORY VERIFICATION). Sleep 5s, capture output, grep for `thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent`. If not processing, retry with `send-keys Enter`, wait 3s, check again. If still failed, run the unstick sequence from `/doey-dispatch`.
 
-PANE="${SESSION_NAME}:0.X"
+### Reading & Acting on Reports
 
-sleep 5
-OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
-if echo "$OUTPUT" | grep -qE '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-  echo "✓ Research worker 0.X started processing"
-else
-  echo "⚠ Research worker 0.X not processing — retrying..."
-  tmux copy-mode -q -t "$PANE" 2>/dev/null
-  tmux send-keys -t "$PANE" Enter
-  sleep 3
-  OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
-  if echo "$OUTPUT" | grep -qE '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-    echo "✓ Research worker 0.X started after retry"
-  else
-    echo "✗ Research worker 0.X FAILED — run unstick sequence from /doey-dispatch"
-  fi
-fi
-```
-
-### Reading Reports
-
-After the worker finishes (shows idle prompt ❯):
+After the worker finishes (shows ❯ prompt), read the report:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
 PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
 REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
-
-# Verification: confirm report exists
-if [ -f "$REPORT_FILE" ]; then
-  echo "✓ Report found at ${REPORT_FILE}"
-  cat "$REPORT_FILE"
-else
-  echo "✗ Report NOT found at ${REPORT_FILE} — task failed. Check worker output:"
-  tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -20
-fi
+[ -f "$REPORT_FILE" ] && cat "$REPORT_FILE" || echo "✗ No report — check worker output"
 ```
 
-### Acting on the Report
-
-```bash
-# 1. Read report and present summary to user
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
-cat "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
-```
-
-Then:
-1. Present a concise summary to the user (findings, recommended option, alternatives).
-2. Ask user which option to proceed with.
-3. On confirmation, dispatch using the ready-to-paste task prompts from the report via `/doey-dispatch`.
-4. Monitor completion, dispatch subsequent waves, run verification commands from the report.
+Then: present summary to user, ask which option to proceed with, dispatch the ready-to-paste task prompts via `/doey-dispatch`.
 
 ### Rules
 

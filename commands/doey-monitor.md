@@ -95,133 +95,17 @@ tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || echo "(pane not found)"
 
 ### Watching Mode (continuous)
 
-Polls every 15 seconds. Exits when all non-reserved workers show FINISHED or READY.
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-STATUS_DIR="${RUNTIME_DIR}/status"
-
-while true; do
-  NOW=$(date +%s)
-  ALL_DONE=true
-  clear
-
-  printf "[%s] Worker Status\n\n" "$(date +%H:%M:%S)"
-  printf "%-6s | %-12s | %-10s | %-30s | %s\n" "PANE" "STATUS" "RESERVED" "TASK" "LAST_UPDATED"
-  printf "%-6s-+-%-12s-+-%-10s-+-%-30s-+-%s\n" "------" "------------" "----------" "------------------------------" "------------"
-
-  for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
-    PANE_ID="${SESSION_NAME}:0.${i}"
-    PANE_SAFE=$(echo "${PANE_ID}" | tr ':.' '_')
-
-    # Read status
-    STATUS_FILE="${STATUS_DIR}/${PANE_SAFE}.status"
-    if [ -f "$STATUS_FILE" ]; then
-      STATUS=$(grep '^STATUS: ' "$STATUS_FILE" 2>/dev/null | head -1 | cut -d' ' -f2- || echo "UNKNOWN")
-    else
-      STATUS="UNKNOWN"
-    fi
-
-    # Read reservation
-    RESERVE_FILE="${STATUS_DIR}/${PANE_SAFE}.reserved"
-    IS_RESERVED=false
-    RESERVED="-"
-    if [ -f "$RESERVE_FILE" ]; then
-      RESERVED="RESERVED"; IS_RESERVED=true; STATUS="RESERVED"
-    fi
-
-    # Task name
-    TASK=$(tmux display-message -t "$PANE_ID" -p '#{pane_title}' 2>/dev/null || echo "-")
-    [ -z "$TASK" ] && TASK="-"
-
-    # Last updated
-    if [ -f "$STATUS_FILE" ]; then
-      MTIME=$(stat -f %m "$STATUS_FILE" 2>/dev/null || stat -c %Y "$STATUS_FILE" 2>/dev/null || echo "$NOW")
-      AGO=$(( NOW - MTIME ))
-      if [ "$AGO" -lt 60 ]; then UPDATED="${AGO}s ago"
-      elif [ "$AGO" -lt 3600 ]; then UPDATED="$(( AGO / 60 ))m ago"
-      else UPDATED="$(( AGO / 3600 ))h ago"; fi
-    else
-      UPDATED="-"
-    fi
-
-    printf "%-6s | %-12s | %-10s | %-30s | %s\n" "W${i}" "$STATUS" "$RESERVED" "$TASK" "$UPDATED"
-
-    # Check if this worker is still active (not done)
-    if [ "$IS_RESERVED" = "false" ] && [ "$STATUS" != "FINISHED" ] && [ "$STATUS" != "READY" ]; then
-      ALL_DONE=false
-    fi
-  done
-
-  echo ""
-  if [ "$ALL_DONE" = "true" ]; then
-    echo "All non-reserved workers are FINISHED or READY. Exiting watch."
-    break
-  fi
-
-  echo "Watching... (next check in 15s)"
-  sleep 15
-done
-```
+Wrap the Quick Status Check loop in a `while true` poll with 15-second sleep. Add these changes:
+- Print timestamp header: `printf "[%s] Worker Status\n\n" "$(date +%H:%M:%S)"`
+- Track `ALL_DONE=true`; set to `false` if any non-reserved worker is not FINISHED/READY
+- After the table, if `ALL_DONE` is true, print "All non-reserved workers are FINISHED or READY" and `break`
+- Otherwise print "Watching... (next check in 15s)" and `sleep 15`
 
 ### Error Recovery
 
-Concrete recovery commands for common failure states.
+**Unstick a worker** (ERROR or unresponsive): exit copy-mode, then send `C-c`, wait 0.5s, `C-u`, wait 0.5s, `Enter`, wait 3s, capture output. If `❯` prompt appears, worker recovered. If still stuck after 2 attempts, force-kill and restart — see `/doey-dispatch` **Troubleshooting: Unstick a non-responsive worker**.
 
-**Unstick a worker showing ERROR or unresponsive state:**
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-PANE="${SESSION_NAME}:0.X"
-
-# Exit copy-mode first
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-
-# Send Ctrl+C to interrupt, then clear input
-tmux send-keys -t "$PANE" C-c
-sleep 1
-tmux send-keys -t "$PANE" C-u
-sleep 0.5
-
-# Check if worker recovered to prompt
-OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5 2>/dev/null)
-if echo "$OUTPUT" | grep -q '❯'; then
-  echo "Worker 0.X recovered — idle at prompt, ready for re-dispatch"
-else
-  echo "Worker 0.X still stuck — force-killing process"
-  PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
-  CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
-  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null
-  sleep 2
-  tmux copy-mode -q -t "$PANE" 2>/dev/null
-  tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus" Enter
-  sleep 8
-  echo "Worker 0.X restarted — ready for re-dispatch"
-fi
-```
-
-**Nudge a QUEUED worker that hasn't started processing after 10s:**
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-PANE="${SESSION_NAME}:0.X"
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-tmux send-keys -t "$PANE" Enter
-sleep 5
-
-OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5 2>/dev/null)
-if echo "$OUTPUT" | grep -qE '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-  echo "Worker 0.X now processing"
-else
-  echo "Worker 0.X still not processing — use error recovery or re-dispatch"
-fi
-```
+**Nudge a QUEUED worker** that hasn't started after 10s: exit copy-mode, send `Enter`, wait 5s, check for `thinking|working|Read|Edit|Bash` in captured output. If still idle, use the unstick sequence above or re-dispatch.
 
 ### Rules
 
