@@ -3,8 +3,8 @@
 Add a new team window to the current Doey session with its own Window Manager, Watchdog, and Workers.
 
 ## Usage
-`/doey-add-window [grid]` — add a team window (default grid: 2x2)
-`/doey-add-window 3x2` — add a 3x2 team window (6 panes: MGR + WDG + 4 workers)
+`/doey-add-window [grid]` — add a team window (default grid: 4x2)
+`/doey-add-window 4x2` — add a 4x2 team window (6 panes: MGR + WDG + 4 workers)
 
 ## Prompt
 You are adding a new team window to a running Doey tmux session.
@@ -22,13 +22,13 @@ This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`. **Always use `${SE
 
 ### Step 1: Parse grid argument
 
-Parse the grid from the user argument. Default is `2x2`. Validate NxM format.
+Parse the grid from the user argument. Default is `4x2`. Validate NxM format.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
-GRID="${1:-2x2}"
+GRID="${1:-4x2}"
 COLS=$(echo "$GRID" | cut -dx -f1)
 ROWS=$(echo "$GRID" | cut -dx -f2)
 

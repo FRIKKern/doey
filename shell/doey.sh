@@ -445,18 +445,18 @@ apply_doey_theme() {
   # Status bar — dark bg, branded left segment
   tmux set-option -t "$session" status-position top
   tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
-  tmux set-option -t "$session" status-left-length 40
+  tmux set-option -t "$session" status-left-length 20
   tmux set-option -t "$session" status-right-length 100
   tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour233,nobold] "
+    "#[fg=colour233,bg=cyan,bold] DOEY #[bg=colour233] "
   tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{=20:pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
+    "#[fg=colour245]#{=20:pane_title} #[fg=colour233,bg=colour240] %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
   tmux set-option -t "$session" status-interval "$status_interval"
 
   # Window status — colored segments with Dashboard distinction
   # Apply window options to ALL existing windows (tmux 3.6+ requires per-window targeting)
-  local _wsfmt='#{?#{==:#I,0},#[fg=colour233,bg=colour97]#[fg=colour255,bg=colour97]  Dashboard #[fg=colour97,bg=colour233],#[fg=colour233,bg=colour236]#[fg=colour250,bg=colour236] #I #W #[fg=colour236,bg=colour233]}'
-  local _wscfmt='#{?#{==:#I,0},#[fg=colour233,bg=colour141]#[fg=colour233,bg=colour141,bold]  Dashboard #[fg=colour141,bg=colour233,nobold],#[fg=colour233,bg=cyan]#[fg=colour233,bg=cyan,bold] #I #W #[fg=cyan,bg=colour233,nobold]}'
+  local _wsfmt='#[fg=colour250,bg=colour236] #I #W #[fg=colour236,bg=colour233]'
+  local _wscfmt='#[fg=colour233,bg=cyan,bold] #I #W #[fg=cyan,bg=colour233,nobold]'
 
   for _win in $(tmux list-windows -t "$session" -F '#I'); do
     tmux set-window-option -t "$session:$_win" window-status-separator ''
@@ -1890,7 +1890,7 @@ MANIFEST
 }
 
 # ── Dynamic Grid — 2-row × N-column mode ─────────────────────────────
-# Creates a minimal 2x2 grid (Window Manager + Watchdog) with worker columns
+# Creates a minimal 4x2 grid (Window Manager + Watchdog) with worker columns
 # added/removed on demand via `doey add` / `doey remove <col>`.
 
 launch_session_dynamic() {
@@ -2429,7 +2429,7 @@ MANIFEST
 # Add a new team window with its own Window Manager, Watchdog, and Workers
 # Usage: add_team_window <session> <runtime_dir> <dir> [grid]
 add_team_window() {
-  local session="$1" runtime_dir="$2" dir="$3" grid="${4:-2x2}"
+  local session="$1" runtime_dir="$2" dir="$3" grid="${4:-4x2}"
   local cols rows total_panes watchdog_pane worker_panes worker_count
 
   cols="${grid%x*}"
@@ -2977,7 +2977,7 @@ HELP
     ;;
   add-window|add-team)
     require_running_session
-    add_team_window "$session" "$runtime_dir" "$dir" "${2:-2x2}"
+    add_team_window "$session" "$runtime_dir" "$dir" "${2:-4x2}"
     exit 0
     ;;
   kill-window|kill-team)
