@@ -442,21 +442,21 @@ apply_doey_theme() {
   tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
   tmux set-option -t "$session" pane-border-lines heavy
 
-  # Status bar — dark bg, branded left segment
-  tmux set-option -t "$session" status-position top
-  tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
-  tmux set-option -t "$session" status-left-length 20
-  tmux set-option -t "$session" status-right-length 100
+  # Status bar — transparent, minimal
+  tmux set-option -t "$session" status-position bottom
+  tmux set-option -t "$session" status-style 'bg=default,fg=colour240'
+  tmux set-option -t "$session" status-left-length 10
+  tmux set-option -t "$session" status-right-length 60
   tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold] DOEY #[bg=colour233] "
+    "#[fg=cyan,dim] DOEY #[default] "
   tmux set-option -t "$session" status-right \
-    "#[fg=colour245]#{=20:pane_title} #[fg=colour233,bg=colour240] %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
+    "#[fg=colour240]%H:%M  #[fg=colour245]#('${SCRIPT_DIR}/tmux-statusbar.sh') "
   tmux set-option -t "$session" status-interval "$status_interval"
 
   # Window status — colored segments with Dashboard distinction
   # Apply window options to ALL existing windows (tmux 3.6+ requires per-window targeting)
-  local _wsfmt='#[fg=colour250,bg=colour236] #I #W #[fg=colour236,bg=colour233]'
-  local _wscfmt='#[fg=colour233,bg=cyan,bold] #I #W #[fg=cyan,bg=colour233,nobold]'
+  local _wsfmt='#[fg=colour245,bg=default] #I #W '
+  local _wscfmt='#[fg=cyan,bg=default,bold] #I #W #[nobold]'
 
   for _win in $(tmux list-windows -t "$session" -F '#I'); do
     tmux set-window-option -t "$session:$_win" window-status-separator ''
@@ -1165,9 +1165,9 @@ MANIFEST
 
   # Dashboard window (window 0) — info panel (left) + session manager (right)
   tmux split-window -h -t "$session:0.0" -c "$dir"
-  tmux select-pane -t "$session:0.0" -T "INFO Info Panel"
+  tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "SM Session Manager"
-  tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
   tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
@@ -1764,9 +1764,9 @@ MANIFEST
 
   # Dashboard window (window 0) — info panel (left) + session manager (right)
   tmux split-window -h -t "$session:0.0" -c "$dir"
-  tmux select-pane -t "$session:0.0" -T "INFO Info Panel"
+  tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "SM Session Manager"
-  tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
   tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
@@ -1964,9 +1964,9 @@ DOG
 
   # Dashboard window (window 0) — info panel (left) + session manager (right)
   tmux split-window -h -t "$session:0.0" -c "$dir"
-  tmux select-pane -t "$session:0.0" -T "INFO Info Panel"
+  tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "SM Session Manager"
-  tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
   tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
