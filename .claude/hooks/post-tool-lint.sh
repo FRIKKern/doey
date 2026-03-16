@@ -66,24 +66,40 @@ check_pattern() {
   fi
 }
 
-check_pattern "$FILE_PATH" 'declare[[:space:]]+-A[[:space:]]' 'declare -A (associative arrays, bash 4+)'
-check_pattern "$FILE_PATH" 'declare[[:space:]]+-n[[:space:]]' 'declare -n (namerefs, bash 4.3+)'
-check_pattern "$FILE_PATH" 'declare[[:space:]]+-l[[:space:]]' 'declare -l (lowercase, bash 4+)'
-check_pattern "$FILE_PATH" 'declare[[:space:]]+-u[[:space:]]' 'declare -u (uppercase, bash 4+)'
-check_pattern "$FILE_PATH" "printf[[:space:]].*'%\(.*\)T'" 'printf time format (bash 4.2+)'
-check_pattern "$FILE_PATH" 'printf[[:space:]]+-v[[:space:]].*%\(.*\)T' 'printf -v time format (bash 4.2+)'
-check_pattern "$FILE_PATH" 'mapfile[[:space:]]' 'mapfile (bash 4+)'
-check_pattern "$FILE_PATH" 'readarray[[:space:]]' 'readarray (bash 4+)'
-# Note: may match |& inside strings/comments (acceptable false positive rate)
-check_pattern "$FILE_PATH" '\|&' 'pipe stderr shorthand |& (bash 4+)'
-check_pattern "$FILE_PATH" '&>>' 'append both streams &>> (bash 4+)'
-check_pattern "$FILE_PATH" 'coproc[[:space:]]' 'coproc (bash 4+)'
-check_pattern "$FILE_PATH" 'read[[:space:]]+-[^ ]*a[[:space:]]' 'read -a (array read, use while-read loop instead)'
-check_pattern "$FILE_PATH" 'BASH_REMATCH' 'BASH_REMATCH (regex capture groups, bash 3.2 unreliable)'
-check_pattern "$FILE_PATH" '\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}' '${var,,} (lowercase, bash 4+)'
-check_pattern "$FILE_PATH" '\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}' '${var^^} (uppercase, bash 4+)'
-check_pattern "$FILE_PATH" '\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}' '${!prefix@} (indirect expansion, bash 4+)'
-check_pattern "$FILE_PATH" 'shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)' 'shopt globstar/lastpipe (bash 4+)'
+# All patterns in one grep pass to avoid 17 separate forks
+COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|read[[:space:]]+-[^ ]*a[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)'
+ALL_MATCHES=$(grep -nE "$COMBINED_PATTERN" "$FILE_PATH" 2>/dev/null || true)
+
+if [ -n "$ALL_MATCHES" ]; then
+  # Classify each match line against individual patterns
+  while IFS= read -r match; do
+    line_num="${match%%:*}"
+    line_content="${match#*:}"
+    desc=""
+    case "$line_content" in
+      *'declare '*-A*) desc="declare -A (associative arrays, bash 4+)" ;;
+      *'declare '*-n*) desc="declare -n (namerefs, bash 4.3+)" ;;
+      *'declare '*-l*) desc="declare -l (lowercase, bash 4+)" ;;
+      *'declare '*-u*) desc="declare -u (uppercase, bash 4+)" ;;
+      *printf*'%('*')T'*) desc="printf time format (bash 4.2+)" ;;
+      *mapfile*) desc="mapfile (bash 4+)" ;;
+      *readarray*) desc="readarray (bash 4+)" ;;
+      *'|&'*) desc="pipe stderr shorthand |& (bash 4+)" ;;
+      *'&>>'*) desc="append both streams &>> (bash 4+)" ;;
+      *coproc*) desc="coproc (bash 4+)" ;;
+      *'read '*-*a*) desc="read -a (array read, use while-read loop instead)" ;;
+      *BASH_REMATCH*) desc="BASH_REMATCH (regex capture groups, bash 3.2 unreliable)" ;;
+      *'${'*',,}'*) desc="\${var,,} (lowercase, bash 4+)" ;;
+      *'${'*'^^}'*) desc="\${var^^} (uppercase, bash 4+)" ;;
+      *'${!'*'@}'*) desc="\${!prefix@} (indirect expansion, bash 4+)" ;;
+      *shopt*globstar*|*shopt*lastpipe*) desc="shopt globstar/lastpipe (bash 4+)" ;;
+    esac
+    if [ -n "$desc" ]; then
+      violations="${violations}${FILE_PATH}:${line_num} — ${desc}${NL}"
+      count=$((count + 1))
+    fi
+  done <<< "$ALL_MATCHES"
+fi
 
 # If no violations, exit cleanly
 if [ "$count" -eq 0 ]; then
