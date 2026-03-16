@@ -1149,9 +1149,14 @@ MANIFEST
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
-  # Dashboard window (window 0) — info panel
+  # Dashboard window (window 0) — info panel (left) + session manager (right)
+  tmux split-window -h -t "$session:0.0" -c "$dir"
+  tmux select-pane -t "$session:0.0" -T "INFO Info Panel"
+  tmux select-pane -t "$session:0.1" -T "SM Session Manager"
   tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
+  write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 
   # Team grid window (window 1)
   local team_window=1
@@ -1228,6 +1233,13 @@ MANIFEST
       "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane ${team_window}.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
+  # Brief Session Manager (pane 0.1) after it boots
+  (
+    sleep 15
+    tmux send-keys -t "$session:0.1" \
+      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has $((total - 2)) workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
+  ) &
+
   # Launch Watchdog (pane $team_window.$watchdog_pane)
   tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
@@ -1292,7 +1304,7 @@ MANIFEST
   printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
   printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}                           ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel                    ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel + Session Manager  ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}${team_window}.0${RESET}   Online                      ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}${team_window}.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
   printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}%-4s${RESET}  Booting...                   ${DIM}│${RESET}\n" "$worker_count"
@@ -1735,9 +1747,14 @@ MANIFEST
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
-  # Dashboard window (window 0) — info panel
+  # Dashboard window (window 0) — info panel (left) + session manager (right)
+  tmux split-window -h -t "$session:0.0" -c "$dir"
+  tmux select-pane -t "$session:0.0" -T "INFO Info Panel"
+  tmux select-pane -t "$session:0.1" -T "SM Session Manager"
   tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
+  write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 
   # Team grid window (window 1)
   local team_window=1
@@ -1799,6 +1816,13 @@ MANIFEST
     done
     tmux send-keys -t "$session:${team_window}.0" \
       "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane ${team_window}.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+  ) &
+
+  # Brief Session Manager (pane 0.1) after it boots
+  (
+    sleep 15
+    tmux send-keys -t "$session:0.1" \
+      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has $((total - 2)) workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
 
   tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
@@ -1922,9 +1946,14 @@ DOG
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
-  # Dashboard window (window 0) — info panel
+  # Dashboard window (window 0) — info panel (left) + session manager (right)
+  tmux split-window -h -t "$session:0.0" -c "$dir"
+  tmux select-pane -t "$session:0.0" -T "INFO Info Panel"
+  tmux select-pane -t "$session:0.1" -T "SM Session Manager"
   tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
+  write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 
   # Team grid window (window 1)
   local team_window=1
@@ -2001,6 +2030,13 @@ MANIFEST
       "Team is online (project: ${name}, dir: $dir). Dynamic grid — started with ${initial_workers} workers, auto-expands when all are busy. Use doey add to add more. Pane ${team_window}.$watchdog_pane is the Watchdog. Session: $session. All workers are idle and awaiting tasks." Enter
   ) &
 
+  # Brief Session Manager (pane 0.1) after it boots
+  (
+    sleep 15
+    tmux send-keys -t "$session:0.1" \
+      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${initial_workers} workers (dynamic grid, auto-expands). Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
+  ) &
+
   # Launch Watchdog (pane $team_window.$watchdog_pane)
   tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
@@ -2036,7 +2072,7 @@ MANIFEST
   printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
   printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}                ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel                    ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel + Session Manager  ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}${team_window}.0${RESET}   Online                      ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}${team_window}.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
   printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}%-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}      ${DIM}│${RESET}\n" "$initial_workers"
