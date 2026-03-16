@@ -69,6 +69,13 @@ case "$MGR_CMD" in
   bash|zsh|sh|fish) echo "MANAGER_CRASHED" ;;
 esac
 
+# --- Manager idle detection (for inbox delivery) ---
+MGR_CAPTURE=$(tmux capture-pane -t "$MGR_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
+case "$MGR_CAPTURE" in
+  *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
+  *) PANE_STATE_0="WORKING" ;;
+esac
+
 # --- Scan each worker pane ---
 PANES_LIST="${WORKER_PANES//,/ }"
 for i in $PANES_LIST; do
@@ -184,9 +191,11 @@ HAS_MSGS=false
 for _test_msg in "${RUNTIME_DIR}/messages/"*.msg; do [ -e "$_test_msg" ] && HAS_MSGS=true; break; done
 if [ "$HAS_MSGS" = true ]; then
   # Count messages per idle pane using filename prefix matching
+  # Include Manager (pane 0) so it can receive inbox deliveries too
+  INBOX_PANES="0 $PANES_LIST"
   for msg in "${RUNTIME_DIR}/messages/"*.msg; do
     msg_name=$(basename "$msg")
-    for i in $PANES_LIST; do
+    for i in $INBOX_PANES; do
       is_numeric "$i" || continue
       eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
       [ "$PSTATE" = "IDLE" ] || continue
@@ -197,7 +206,7 @@ if [ "$HAS_MSGS" = true ]; then
     done
   done
   # Report per-pane inbox counts
-  for i in $PANES_LIST; do
+  for i in $INBOX_PANES; do
     is_numeric "$i" || continue
     eval "IC=\${INBOX_COUNT_${i}:-0}"
     if [ "$IC" -gt 0 ]; then
