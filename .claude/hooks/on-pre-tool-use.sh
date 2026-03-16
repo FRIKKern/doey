@@ -69,7 +69,21 @@ fi
 # so there are no prompts to accept, and sending "y" causes y-spam when Haiku hallucinates prompts.
 if is_watchdog; then
   case "$TOOL_COMMAND" in
-    *"send-keys"*|*"send-key"*|*"paste-buffer"*)
+    *"send-keys"*|*"send-key"*|*"paste-buffer"*|*"load-buffer"*)
+      # Block ALL send-keys to the Manager pane when Manager is crashed.
+      # This prevents the Watchdog death-loop: Watchdog detects MANAGER_CRASHED,
+      # sends keys to "notify" the dead Manager, killing any restart attempts.
+      TEAM_WINDOW="${DOEY_TEAM_WINDOW:-}"
+      if [ -n "$TEAM_WINDOW" ] && [ -n "${RUNTIME_DIR:-}" ]; then
+        if [ -f "${RUNTIME_DIR}/status/manager_crashed_W${TEAM_WINDOW}" ]; then
+          # Check if the command targets the Manager pane (W.0)
+          if echo "$TOOL_COMMAND" | grep -qE "${TEAM_WINDOW}\.0|${TEAM_WINDOW}\.\"?0"; then
+            echo "BLOCKED: Watchdog cannot send keys to crashed Manager pane ${TEAM_WINDOW}.0." >&2
+            echo "Write an alert file for the Session Manager instead." >&2
+            exit 2
+          fi
+        fi
+      fi
       # Allow specific watchdog operations by matching complete tmux patterns.
       # Only permit: sending /doey-inbox, /login, /compact, bare Enter, and copy-mode.
       # Match command structure to prevent allowlist bypass via string containment
