@@ -95,7 +95,19 @@ fi
 
 MGR_CMD=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
 case "$MGR_CMD" in
-  bash|zsh|sh|fish) echo "MANAGER_CRASHED"; SCAN_HAD_OUTPUT=true ;;
+  bash|zsh|sh|fish)
+    echo "MANAGER_CRASHED"; SCAN_HAD_OUTPUT=true
+    # Write alert file so on-pre-tool-use.sh can block send-keys to the dead Manager
+    CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
+    if [ ! -f "$CRASH_ALERT" ]; then
+      echo "TEAM_WINDOW=${TARGET_WINDOW}" > "$CRASH_ALERT"
+      echo "TIMESTAMP=$(date +%s)" >> "$CRASH_ALERT"
+    fi
+    ;;
+  *)
+    # Manager is alive — clean up any stale crash alert
+    rm -f "${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}" 2>/dev/null
+    ;;
 esac
 
 # --- Manager idle detection (for inbox delivery) ---

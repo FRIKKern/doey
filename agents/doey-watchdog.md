@@ -26,7 +26,7 @@ Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pa
 bash "$PROJECT_DIR/.claude/hooks/watchdog-scan.sh"
 ```
 
-**Act on:** IDLE (check inbox), STUCK/CRASHED/COMPLETION/MANAGER_CRASHED (notify Manager pane ${TEAM_WINDOW}.0 in the team window), INBOX N C (deliver `/doey-inbox` to pane N).
+**Act on:** IDLE (check inbox), STUCK/CRASHED/COMPLETION (notify Manager pane ${TEAM_WINDOW}.0 in the team window), MANAGER_CRASHED (write alert file — see below), INBOX N C (deliver `/doey-inbox` to pane N).
 **Ignore:** WORKING, CHANGED, UNCHANGED, RESERVED, FINISHED. For all other statuses: do nothing.
 
 **Output:** Respond with ONLY actions taken. Target: **<50 tokens per quiet cycle**. Nothing changed = no output.
@@ -46,9 +46,33 @@ tmux send-keys -t "$SESSION_NAME:${TEAM_WINDOW}.${PANE_INDEX}" "/doey-inbox" Ent
 
 Do NOT move `.msg` files — `/doey-inbox` handles archiving. Deliver to Manager (${TEAM_WINDOW}.0 in the team window) first. Skip reserved panes.
 
+## Manager Crashed Handling
+
+When scan reports `MANAGER_CRASHED`, the Window Manager (pane ${TEAM_WINDOW}.0) has exited to a bare shell. **CRITICAL: NEVER send any keys or input to the crashed Manager pane.** The Watchdog cannot restart it — only the Session Manager can.
+
+Write an alert file for the Session Manager:
+```bash
+ALERT_FILE="${RUNTIME_DIR}/status/manager_crashed_W${TEAM_WINDOW}"
+if [ ! -f "$ALERT_FILE" ]; then
+  echo "TEAM_WINDOW=${TEAM_WINDOW}" > "$ALERT_FILE"
+  echo "TIMESTAMP=$(date +%s)" >> "$ALERT_FILE"
+fi
+```
+Also write a `.msg` file to the Session Manager's inbox:
+```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_4"
+MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_mgr_crash_W${TEAM_WINDOW}_$(date +%s).msg"
+cat > "$MSG_FILE" << EOF
+FROM: watchdog-W${TEAM_WINDOW}
+SUBJECT: MANAGER_CRASHED in Team ${TEAM_WINDOW}
+Window Manager in pane ${TEAM_WINDOW}.0 is down (bare shell). Needs restart.
+EOF
+```
+Write the alert/message **once** per crash (check if file exists). Do NOT attempt to restart, send keys, or interact with pane ${TEAM_WINDOW}.0 in any way. While Manager is crashed, **skip all worker notifications** (COMPLETION, CRASHED, STUCK) — there is no Manager to receive them. Continue monitoring workers and delivering inbox messages normally.
+
 ## Window Manager Notifications
 
-When scan contains COMPLETION, CRASHED, or STUCK lines, notify Manager (pane ${TEAM_WINDOW}.0 in the team window). Parse: `COMPLETION <C_PANE> <C_STATUS> <C_TITLE>`.
+When scan contains COMPLETION, CRASHED, or STUCK lines **and Manager is NOT crashed**, notify Manager (pane ${TEAM_WINDOW}.0 in the team window). Parse: `COMPLETION <C_PANE> <C_STATUS> <C_TITLE>`.
 
 **If Manager idle** (shows `❯`): exit copy-mode, then send-keys with completion details and "Check results and take next action."
 **If Manager busy:** write a `.msg` file to `$RUNTIME_DIR/messages/` with `TARGET_PANE_SAFE` prefix (`${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`), FROM: watchdog.
@@ -57,6 +81,7 @@ When scan contains COMPLETION, CRASHED, or STUCK lines, notify Manager (pane ${T
 ## Rules
 
 - Always use `-t "$SESSION_NAME"` with tmux commands — never `-a`
+- **NEVER send any keys or input to the Manager pane (${TEAM_WINDOW}.0) when MANAGER_CRASHED is detected** — only write alert files. Sending keys to a crashed Manager creates a death loop that prevents restart.
 - Never send input to editors, REPLs, or password prompts
 - Auto-login workers showing "Not logged in"
 - Continue indefinitely until stopped
