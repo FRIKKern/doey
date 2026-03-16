@@ -56,10 +56,11 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 | Commands/skills | No restart (loaded on-demand) |
 | Launcher | `doey stop && doey` or new `doey init` |
 | Shell scripts | Run `tests/test-bash-compat.sh` |
+| Live reload | `doey reload` or `/doey-reload` (Manager+Watchdog), `doey reload --workers` (all) |
 
 ## Important Files
 
-- `shell/doey.sh` -- Launcher: smart-launch, init, stop, update/reinstall, doctor, list, purge, test, version, dynamic/d, add, remove, uninstall, add-team/add-window, kill-team/kill-window, list-teams/list-windows
+- `shell/doey.sh` -- Launcher: smart-launch, init, stop, update/reinstall, reload, doctor, list, purge, test, version, dynamic/d, add, remove, uninstall, add-team/add-window, kill-team/kill-window, list-teams/list-windows
 - `shell/info-panel.sh` -- Dashboard for window 0 (team status, worker counts, recent events)
 - `.claude/hooks/common.sh` -- Shared utilities: `init_hook()`, `parse_field()`, `load_team_env()`, role checks (`is_manager()`, `is_session_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()`, `NL` (newline var), `is_numeric()`
 - `.claude/hooks/on-session-start.sh` -- SessionStart: initial setup

@@ -10,6 +10,7 @@ set -euo pipefail
 #   doey stop         # Stop session for current project
 #   doey purge        # Scan and clean stale runtime files
 #   doey update       # Pull latest + reinstall (alias: reinstall)
+#   doey reload       # Hot-reload running session (Manager + Watchdog)
 #   doey doctor       # Check installation health & prerequisites
 #   doey remove NAME  # Unregister a project from the registry
 #   doey uninstall    # Remove all Doey files
@@ -1475,7 +1476,221 @@ BANNER
   printf "${RESET}\n"
 
   printf "  ${SUCCESS}Update complete.${RESET}\n"
-  printf "  Running sessions need a restart: ${BOLD}doey stop && doey${RESET}\n"
+  printf "  Running sessions need a restart: ${BOLD}doey stop && doey${RESET} or ${BOLD}doey reload${RESET}\n"
+}
+
+# ── Reload (hot-reload a running session) ─────────────────────────
+# Updates files on disk, then kills + relaunches Manager and Watchdog
+# so they pick up new agent definitions. Workers are optionally restarted.
+reload_session() {
+  local restart_workers=false
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --workers|--all) restart_workers=true; shift ;;
+      *) shift ;;
+    esac
+  done
+
+  # 1. Find running session
+  local dir name session runtime_dir
+  dir="$(pwd)"
+  name="$(find_project "$dir")"
+  if [ -z "$name" ]; then
+    printf "  ${ERROR}✗ No doey project found for %s${RESET}\n" "$dir"
+    exit 1
+  fi
+  session="doey-${name}"
+  runtime_dir="/tmp/doey/${name}"
+
+  if ! session_exists "$session"; then
+    printf "  ${ERROR}✗ No running session: ${session}${RESET}\n"
+    exit 1
+  fi
+
+  printf "  ${BRAND}Reloading ${session}...${RESET}\n\n"
+
+  # 2. Run install.sh (updates agents, commands, shell scripts on disk)
+  local repo_dir
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || echo "")"
+  if [ -n "$repo_dir" ] && [ -d "$repo_dir" ]; then
+    printf "  ${DIM}Installing latest files...${RESET}\n"
+    bash "$repo_dir/install.sh" 2>&1 | sed 's/^/    /'
+    printf "\n  ${SUCCESS}✓ Files installed${RESET}\n\n"
+  else
+    printf "  ${WARN}⚠ No repo path found — skipping install${RESET}\n\n"
+  fi
+
+  # 3. Copy hooks to project dir (if not the doey repo itself)
+  install_doey_hooks "$dir" "  "
+
+  # 4. Source current session.env to know the layout
+  if [ ! -f "${runtime_dir}/session.env" ]; then
+    printf "  ${ERROR}✗ session.env not found${RESET}\n"
+    exit 1
+  fi
+  safe_source_session_env "${runtime_dir}/session.env"
+
+  # 5. Regenerate worker system prompts
+  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
+  printf "  ${SUCCESS}✓ Worker system prompts updated${RESET}\n"
+
+  # 6. Reload Manager(s) and Watchdog(s) — kill + relaunch
+  printf "\n  ${DIM}Reloading Manager and Watchdog...${RESET}\n"
+
+  # Find all team windows from team_*.env files
+  local team_windows=""
+  local tf tw
+  for tf in "${runtime_dir}"/team_*.env; do
+    [ -f "$tf" ] || continue
+    tw=$(grep '^WINDOW_INDEX=' "$tf" | cut -d= -f2)
+    tw="${tw//\"/}"
+    [ -n "$tw" ] && team_windows="$team_windows $tw"
+  done
+
+  for tw in $team_windows; do
+    local team_env="${runtime_dir}/team_${tw}.env"
+    [ -f "$team_env" ] || continue
+
+    local mgr_pane wdg_pane
+    mgr_pane=$(grep '^MANAGER_PANE=' "$team_env" | cut -d= -f2)
+    mgr_pane="${mgr_pane//\"/}"
+    wdg_pane=$(grep '^WATCHDOG_PANE=' "$team_env" | cut -d= -f2)
+    wdg_pane="${wdg_pane//\"/}"
+
+    # Kill and relaunch Manager (team_window.mgr_pane)
+    local mgr_ref="${session}:${tw}.${mgr_pane:-0}"
+    printf "    Manager %s..." "$mgr_ref"
+    local mgr_shell_pid mgr_child attempt
+    mgr_shell_pid=$(tmux display-message -t "$mgr_ref" -p '#{pane_pid}' 2>/dev/null || true)
+    if [ -n "$mgr_shell_pid" ]; then
+      mgr_child=$(pgrep -P "$mgr_shell_pid" 2>/dev/null || true)
+      [ -n "$mgr_child" ] && kill "$mgr_child" 2>/dev/null || true
+      sleep 2
+      for attempt in 1 2 3; do
+        mgr_child=$(pgrep -P "$mgr_shell_pid" 2>/dev/null || true)
+        [ -z "$mgr_child" ] && break
+        kill -9 "$mgr_child" 2>/dev/null || true
+        sleep 1
+      done
+      tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
+      sleep 0.5
+      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --agent doey-manager" Enter
+      printf " ${SUCCESS}✓${RESET}\n"
+
+      # Re-brief manager after boot
+      local worker_panes_csv
+      worker_panes_csv=$(grep '^WORKER_PANES=' "$team_env" | cut -d= -f2)
+      worker_panes_csv="${worker_panes_csv//\"/}"
+      local worker_count_tw
+      worker_count_tw=$(grep '^WORKER_COUNT=' "$team_env" | cut -d= -f2)
+      worker_count_tw="${worker_count_tw//\"/}"
+      local wp_list=""
+      local wp
+      for wp in $(echo "$worker_panes_csv" | tr ',' ' '); do
+        [ -n "$wp_list" ] && wp_list="${wp_list}, "
+        wp_list="${wp_list}${tw}.${wp}"
+      done
+      (
+        sleep 8
+        tmux send-keys -t "$mgr_ref" \
+          "Team is online (project: ${name}, dir: $dir). You have ${worker_count_tw:-0} workers in panes ${wp_list}. Your workers are in window ${tw}. Watchdog is in Dashboard pane ${wdg_pane:-0.1}. Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+      ) &
+    else
+      printf " ${WARN}(not found)${RESET}\n"
+    fi
+
+    # Kill and relaunch Watchdog (Dashboard slot — wdg_pane is like "0.1")
+    if [ -n "$wdg_pane" ]; then
+      local wdg_ref="${session}:${wdg_pane}"
+      printf "    Watchdog %s..." "$wdg_ref"
+      local wdg_shell_pid wdg_child
+      wdg_shell_pid=$(tmux display-message -t "$wdg_ref" -p '#{pane_pid}' 2>/dev/null || true)
+      if [ -n "$wdg_shell_pid" ]; then
+        wdg_child=$(pgrep -P "$wdg_shell_pid" 2>/dev/null || true)
+        [ -n "$wdg_child" ] && kill "$wdg_child" 2>/dev/null || true
+        sleep 2
+        for attempt in 1 2 3; do
+          wdg_child=$(pgrep -P "$wdg_shell_pid" 2>/dev/null || true)
+          [ -z "$wdg_child" ] && break
+          kill -9 "$wdg_child" 2>/dev/null || true
+          sleep 1
+        done
+        tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
+        sleep 0.5
+        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
+        printf " ${SUCCESS}✓${RESET}\n"
+
+        # Re-brief watchdog after boot
+        (
+          sleep 12
+          tmux send-keys -t "$wdg_ref" \
+            "Start monitoring session ${session} window ${tw}. Skip pane ${wdg_pane} (yourself, in Dashboard). Manager is in team window pane ${tw}.0. Monitor panes ${wp_list}." Enter
+          sleep 20
+          tmux send-keys -t "$wdg_ref" \
+            '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
+        ) &
+      else
+        printf " ${WARN}(not found)${RESET}\n"
+      fi
+    fi
+  done
+
+  printf "\n  ${SUCCESS}✓ Manager + Watchdog reloaded${RESET}\n"
+
+  # 7. Optionally restart workers
+  if $restart_workers; then
+    printf "\n  ${DIM}Restarting workers...${RESET}\n"
+    for tw in $team_windows; do
+      local team_env="${runtime_dir}/team_${tw}.env"
+      [ -f "$team_env" ] || continue
+      local worker_panes_csv
+      worker_panes_csv=$(grep '^WORKER_PANES=' "$team_env" | cut -d= -f2)
+      worker_panes_csv="${worker_panes_csv//\"/}"
+
+      for wp in $(echo "$worker_panes_csv" | tr ',' ' '); do
+        local pane_ref="${session}:${tw}.${wp}"
+        local shell_pid child_pid
+        shell_pid=$(tmux display-message -t "$pane_ref" -p '#{pane_pid}' 2>/dev/null || true)
+        [ -z "$shell_pid" ] && continue
+        child_pid=$(pgrep -P "$shell_pid" 2>/dev/null || true)
+
+        # Skip already-ready workers
+        local output
+        output=$(tmux capture-pane -t "$pane_ref" -p 2>/dev/null || true)
+        if [ -n "$child_pid" ] && echo "$output" | grep -q "bypass permissions" && echo "$output" | grep -q '❯'; then
+          printf "    %s.%s ${DIM}(already ready — skipped)${RESET}\n" "$tw" "$wp"
+          continue
+        fi
+
+        [ -n "$child_pid" ] && kill "$child_pid" 2>/dev/null || true
+        sleep 1
+        child_pid=$(pgrep -P "$shell_pid" 2>/dev/null || true)
+        [ -n "$child_pid" ] && kill -9 "$child_pid" 2>/dev/null || true
+        sleep 0.5
+
+        tmux send-keys -t "$pane_ref" "clear" Enter 2>/dev/null || true
+        sleep 0.5
+
+        local worker_prompt
+        worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
+        if [ -n "$worker_prompt" ]; then
+          tmux send-keys -t "$pane_ref" "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${worker_prompt}\"" Enter
+        else
+          tmux send-keys -t "$pane_ref" "claude --dangerously-skip-permissions --model opus" Enter
+        fi
+        printf "    %s.%s ${SUCCESS}✓${RESET}\n" "$tw" "$wp"
+        sleep 0.5
+      done
+    done
+    printf "\n  ${SUCCESS}✓ Workers restarted${RESET}\n"
+  fi
+
+  printf "\n  ${SUCCESS}✓ Reload complete!${RESET}\n"
+  printf "  ${DIM}Hooks + commands take effect immediately (no restart needed).${RESET}\n"
+  printf "  ${DIM}Manager + Watchdog relaunched with latest agent definitions.${RESET}\n"
+  if ! $restart_workers; then
+    printf "  ${DIM}Workers kept running. Use 'doey reload --workers' to restart them too.${RESET}\n"
+  fi
 }
 
 # ── Uninstall ──────────────────────────────────────────────────────
@@ -2919,6 +3134,7 @@ case "${1:-}" in
     purge      Scan and clean stale runtime files, audit context bloat
     stop       Stop the session for the current project
     update     Pull latest changes and reinstall (alias: reinstall)
+    reload     Hot-reload running session (--workers to restart workers too)
     doctor     Check installation health and prerequisites
     remove     Unregister a project (by name) or worker column (by number)
     uninstall  Remove all Doey files (keeps git repo and agent-memory)
@@ -2946,6 +3162,8 @@ case "${1:-}" in
     doey list         # show all projects
     doey stop         # stop current project session
     doey update       # pull latest + reinstall
+    doey reload       # hot-reload Manager + Watchdog
+    doey reload --workers  # also restart workers
     doey doctor       # check system health
     doey remove myapp # unregister a project
     doey uninstall    # remove all installed files
@@ -2981,6 +3199,11 @@ HELP
     ;;
   update|reinstall)
     update_system
+    exit 0
+    ;;
+  reload)
+    shift
+    reload_session "$@"
     exit 0
     ;;
   doctor)
