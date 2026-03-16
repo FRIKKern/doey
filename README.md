@@ -107,6 +107,7 @@ No config files. No shell reload. Just `doey`.
 | `doey list` | Show all projects with status |
 | `doey doctor` | Check installation health |
 | `doey update` | Pull latest and reinstall (alias: `reinstall`) |
+| `doey reload` | Hot-reload running session (Manager + Watchdog; `--workers` for all) |
 | `doey version` | Show version info |
 | `doey dynamic` | Launch in dynamic grid mode (alias: `d`) |
 | `doey add-window` | Add a new team window with its own Window Manager and Workers (Watchdog in Dashboard) |
@@ -155,6 +156,7 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-kill-session` | Kill entire Doey session |
 | `/doey-kill-all-sessions` | Kill all running Doey sessions across all projects |
 | `/doey-list-windows` | List all team windows with status |
+| `/doey-reload` | Hot-reload session (install files, restart Manager + Watchdog) |
 | `/doey-restart-window` | Restart workers and Watchdog in a window |
 | `/doey-stop` | Stop a specific worker |
 | `/doey-stop-all` | Stop all running Doey sessions *(deprecated, replaced by `/doey-kill-session`)* |
