@@ -8,7 +8,7 @@ Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It la
 
 - **Manager (pane 0.0, Opus):** Orchestrator — plans and delegates, never writes code. Skips reserved workers.
 - **Watchdog (pane 0.1 dynamic, 0.{cols} static; Haiku):** Monitors workers, delivers inbox messages.
-- **Test Driver (E2E, Opus):** Automated test runner that drives Doey sessions through journeys.
+- **Test Driver (E2E, Opus):** Automated test runner that drives Doey sessions through journeys. Runs outside the tmux grid (separate Claude process via `doey test`).
 - **Workers (remaining panes, Opus):** Execute tasks.
 
 Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.

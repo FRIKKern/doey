@@ -74,14 +74,14 @@ tmux send-keys -t "$SESSION_NAME:0.${PANE_INDEX}" "/doey-inbox" Enter
 
 ## Compaction
 
-Context compaction runs automatically every ~5 minutes via `/loop`. After compaction, re-read `watchdog_pane_states.json` to restore pane state tracking.
+The scan loop runs every ~30 seconds via `/loop`. Context compaction is triggered automatically by Claude Code when context usage is high. After compaction, re-read `watchdog_pane_states.json` to restore pane state tracking.
 
 ## Blocked Tools
 
-The `on-pre-tool-use.sh` hook blocks the following tools for the Watchdog:
+The `on-pre-tool-use.sh` hook blocks the following for the Watchdog:
 - **Edit**, **Write**, **Agent**, **NotebookEdit** — monitoring role only, no file modifications
 - **Bash `send-keys`/`paste-buffer`** — only allowed for `/doey-inbox`, `/login`, `/compact`, bare `Enter`, and `copy-mode`
-- **Bash `git push`/`git commit`/`gh pr`/`tmux kill-session`/`tmux kill-server`/`tmux send-keys`/`rm -rf`/`shutdown`/`reboot`** — blocked for Workers (Workers are blocked from ALL send-keys, unlike Watchdog which has an allowlist)
+- **Bash destructive patterns** — `git push`, `git commit`, `gh pr`, `tmux kill-session`, `tmux kill-server`, `rm -rf ~/`, `shutdown`, `reboot` (also blocked for Workers)
 
 ## Rules
 

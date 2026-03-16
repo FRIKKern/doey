@@ -61,7 +61,7 @@ Each worker writes a structured report to `${RUNTIME_DIR}/reports/analyze_<domai
 #### Worker B: Hooks & Safety Rules
 - **Read:** All 10 `.claude/hooks/*.sh` files, `.claude/settings.local.json`
 - **Cross-ref:** Agent definitions (claimed behaviors), `docs/context-reference.md` (hook descriptions)
-- **Focus:** Bash 3.2 violations (`[[ ]]`, `shopt`, `read -a`, `$'\n'`, `+=`), exit code accuracy, race conditions, dead code
+- **Focus:** Bash 3.2 violations (`declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `[[ =~` capture groups, `${var,,}`/`${var^^}`, bash 4+ `shopt` options like `globstar`/`lastpipe`), exit code accuracy, race conditions, dead code
 - **Report:** `${RUNTIME_DIR}/reports/analyze_hooks.md`
 
 #### Worker C: Commands/Skills

@@ -33,7 +33,7 @@ if [ "$GRID_MODE" = "dynamic" ]; then
     done
   fi
   if [ "$HAS_IDLE" = "false" ]; then
-    if (( ${WORKER_COUNT:-0} < ${MAX_WORKERS:-20} )); then
+    if [ "${WORKER_COUNT:-0}" -lt "${MAX_WORKERS:-20}" ]; then
       doey add 2>/dev/null
       sleep 10
       source "${RUNTIME_DIR}/session.env"

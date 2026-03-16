@@ -18,7 +18,7 @@ You are managing status updates across Claude Code instances in TMUX.
    MY_PANE_SAFE=${MY_PANE//[:.]/_}
    ```
 
-2. Ask the user: **set** your status or **view** all statuses?
+2. **Default action: view all statuses** (run the "Viewing statuses" block below). Only use "Setting status" if the user explicitly asked to set/update their status.
 
 ### Setting status
 Valid values: READY, BUSY, FINISHED, RESERVED.
