@@ -658,19 +658,6 @@ _purge_scan_runtime() {
     done
   fi
 
-  # Delivered messages (always purgeable — already consumed)
-  local delivered_count=0
-  if [[ -d "$rt/messages/delivered" ]]; then
-    for f in "$rt"/messages/delivered/*; do
-      [[ -f "$f" ]] || continue
-      _purge_collect "$f" "$list_file"
-      delivered_count=$((delivered_count + 1))
-    done
-  fi
-  if [[ $delivered_count -gt 0 ]]; then
-    printf "         Found %d delivered messages\n" "$delivered_count"
-  fi
-
   # Old undelivered messages (>1h)
   local msg_count=0
   for f in "$rt"/messages/*.msg; do
@@ -1295,7 +1282,7 @@ MANIFEST
       worker_panes+="${team_window}.$i"
     done
     tmux send-keys -t "$session:${team_window}.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1 (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1 (monitors workers). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
   # Brief Session Manager (pane 0.4) after it boots
@@ -2141,7 +2128,7 @@ MANIFEST
       worker_panes+="${team_window}.$i"
     done
     tmux send-keys -t "$session:${team_window}.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1 (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1 (monitors workers). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
   # Brief Session Manager (pane 0.4) after it boots

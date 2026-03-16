@@ -1,6 +1,6 @@
 # Skill: doey-team
 
-View the full team of Claude instances, their status, reservations, and unread messages.
+View the full team of Claude instances, their status, and reservations.
 
 ## Usage
 `/doey-team`
@@ -18,8 +18,8 @@ source "${RUNTIME_DIR}/session.env"
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 NOW=$(date +%s)
 
-printf "%-14s %-12s %-10s %-6s %s\n" "PANE" "STATUS" "RESERVED" "MSGS" "LAST_UPDATE"
-printf "%-14s %-12s %-10s %-6s %s\n" "----" "------" "--------" "----" "-----------"
+printf "%-14s %-12s %-10s %s\n" "PANE" "STATUS" "RESERVED" "LAST_UPDATE"
+printf "%-14s %-12s %-10s %s\n" "----" "------" "--------" "-----------"
 
 for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
   PANE_SAFE=$(echo "$pane" | tr ':.' '_')
@@ -41,15 +41,12 @@ for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window
     RESERVED="RSV"
   fi
 
-  # Unread messages
-  MSG_COUNT=0; for _mf in "${RUNTIME_DIR}/messages/${PANE_SAFE}_"*.msg; do [ -f "$_mf" ] && MSG_COUNT=$((MSG_COUNT + 1)); done
-
   # Mark current pane
   MARKER=""
   [ "$pane" = "$MY_PANE" ] && MARKER=" <-- you"
 
-  printf "%-14s %-12s %-10s %-6s %s%s\n" "$pane" "$STATUS" "$RESERVED" "$MSG_COUNT" "$LAST_MOD" "$MARKER"
+  printf "%-14s %-12s %-10s %s%s\n" "$pane" "$STATUS" "$RESERVED" "$LAST_MOD" "$MARKER"
 done
 ```
 
-Report the table output to the user. If any panes show issues (UNKNOWN status, high message counts), note them briefly.
+Report the table output to the user. If any panes show issues (UNKNOWN status), note them briefly.

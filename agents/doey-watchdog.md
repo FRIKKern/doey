@@ -1,6 +1,6 @@
 ---
 name: doey-watchdog
-description: "Live team monitor — displays status, delivers inbox, escalates events."
+description: "Live team monitor — displays status, escalates events."
 model: haiku
 color: yellow
 memory: none
@@ -42,33 +42,21 @@ Where: `W`=working, `I`=idle, `S`=stuck, `C`=crashed. Show active worker titles.
 T2 | Mgr:IDLE | 3W 3I | 1:fix-hooks 3:refactor-api 4:test-suite
   → Worker 5 COMPLETED (FINISHED) "update-readme"
   → Notified Manager: "Worker 5 done. Check results."
-  → Delivered /doey-inbox to pane 2
 ```
 
 ### Act On Events
 
 | Scan Output | Action |
 |-------------|--------|
-| `IDLE` + inbox | Deliver `/doey-inbox` to that pane |
 | `COMPLETION` | Notify Manager (see below) |
 | `CRASHED` / `STUCK` | Notify Manager (see below) |
 | `MANAGER_CRASHED` | Alert Session Manager (see below) |
 | `MANAGER_COMPLETED` | Notify Session Manager (see below) |
-| `INBOX N C` | Deliver `/doey-inbox` to pane N |
 | Everything else | Display in status, no action needed |
 
-Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pane. Only send `/doey-inbox` to idle non-reserved panes. When unsure: **do nothing**.
+Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pane. When unsure: **do nothing**.
 
 After compaction, re-read `$RUNTIME_DIR/status/watchdog_pane_states_W${TEAM_WINDOW}.json` to restore state.
-
-## Inbox Delivery
-
-When scan reports `INBOX <pane_index> <count>`:
-```bash
-tmux copy-mode -q -t "$SESSION_NAME:${TEAM_WINDOW}.${PANE_INDEX}" 2>/dev/null
-tmux send-keys -t "$SESSION_NAME:${TEAM_WINDOW}.${PANE_INDEX}" "/doey-inbox" Enter
-```
-Deliver to Manager (pane 0) first. Skip reserved panes.
 
 ## Manager Crashed Handling
 
@@ -103,6 +91,21 @@ When scan contains COMPLETION, CRASHED, or STUCK lines **and Manager is NOT cras
 
 **If Manager idle** (shows `❯`): send-keys with details and "Check results and take next action."
 **If Manager busy:** write a `.msg` file to `$RUNTIME_DIR/messages/` with `TARGET_PANE_SAFE` prefix (`${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`), FROM: watchdog.
+
+## Self-Compact at 30%
+
+Check your own context usage every scan cycle. The status line writes your context percentage to a runtime file:
+```bash
+PANE_INDEX=$(tmux display-message -t "$TMUX_PANE" -p '#{pane_index}' 2>/dev/null)
+CTX_PCT=$(cat "$RUNTIME_DIR/status/context_pct_0_${PANE_INDEX}" 2>/dev/null) || CTX_PCT="0"
+CTX_INT="${CTX_PCT%%.*}"
+```
+
+When `CTX_INT` ≥ 30, run `/compact` immediately. After compaction:
+1. Re-read `$RUNTIME_DIR/status/watchdog_pane_states_W${TEAM_WINDOW}.json` to restore pane state
+2. Resume the monitoring loop
+
+Do not wait — compact as soon as you detect ≥ 30%.
 
 ## Rules
 

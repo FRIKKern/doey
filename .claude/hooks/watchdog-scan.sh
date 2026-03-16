@@ -113,7 +113,7 @@ case "$MGR_CMD" in
     ;;
 esac
 
-# --- Manager idle detection (for inbox delivery + completion notification) ---
+# --- Manager idle detection (for completion notification) ---
 MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
 case "$MGR_CAPTURE" in
   *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
@@ -267,38 +267,6 @@ printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_worki
 [ -n "$_active_titles" ] && printf ' | %s' "$_active_titles"
 printf '\n'
 
-# --- Per-pane inbox detection ---
-# Single glob, then classify by pane index (avoids N readdir calls)
-TOTAL_INBOX=0
-HAS_MSGS=false
-for _test_msg in "${RUNTIME_DIR}/messages/"*.msg; do [ -e "$_test_msg" ] && HAS_MSGS=true; break; done
-if [ "$HAS_MSGS" = true ]; then
-  # Count messages per idle pane using filename prefix matching
-  # Include Manager (pane 0) so it can receive inbox deliveries too
-  INBOX_PANES="0 $PANES_LIST"
-  for msg in "${RUNTIME_DIR}/messages/"*.msg; do
-    msg_name=$(basename "$msg")
-    for i in $INBOX_PANES; do
-      is_numeric "$i" || continue
-      eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
-      [ "$PSTATE" = "IDLE" ] || continue
-      case "$msg_name" in "${SESSION_SAFE}_${TARGET_WINDOW}_${i}_"*)
-        eval "INBOX_COUNT_${i}=\$(( \${INBOX_COUNT_${i}:-0} + 1 ))"
-        break
-        ;; esac
-    done
-  done
-  # Report per-pane inbox counts
-  for i in $INBOX_PANES; do
-    is_numeric "$i" || continue
-    eval "IC=\${INBOX_COUNT_${i}:-0}"
-    if [ "$IC" -gt 0 ]; then
-      echo "INBOX ${i} ${IC}"
-      TOTAL_INBOX=$((TOTAL_INBOX + IC))
-    fi
-  done
-fi
-
 # --- Check for worker completion events ---
 for cf in "${RUNTIME_DIR}/status"/completion_pane_${TARGET_WINDOW}_*; do
   [ -f "$cf" ] || continue
@@ -342,4 +310,3 @@ echo "$JSON" > "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.jso
 
 # --- Summary footer ---
 echo "SCAN_TIME=${SCAN_TIME}"
-echo "INBOX: ${TOTAL_INBOX} pending"

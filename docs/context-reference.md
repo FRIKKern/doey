@@ -105,8 +105,6 @@ Skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-
 | `/doey-monitor` | Window Manager | Detect FINISHED/BUSY/ERROR/READY |
 | `/doey-status` | Window Manager/Workers | Share or check status |
 | `/doey-broadcast` | Window Manager | Message all instances |
-| `/doey-send` | Window Manager | Message specific pane |
-| `/doey-inbox` | Any | Read messages |
 | `/doey-team` | Window Manager | Team layout overview |
 | `/doey-add-window` | Session Manager | Add a new team window |
 | `/doey-kill-window` | Session Manager | Kill a team window and all its processes |
@@ -124,7 +122,7 @@ Skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-
 | `/doey-stop-all` | Window Manager | Stop all sessions *(deprecated, replaced by `/doey-kill-session`)* |
 | `/doey-restart-workers` | Window Manager | Restart workers + Watchdog *(deprecated, replaced by `/doey-restart-window`)* |
 
-Agent usage: Window Manager uses all except `/doey-inbox` and window-management commands. Session Manager uses `/doey-list-windows`, `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`. Watchdog uses none. Workers use `/doey-inbox`, `/doey-status`, `/doey-reserve`.
+Agent usage: Window Manager uses all except window-management commands. Session Manager uses `/doey-list-windows`, `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`. Watchdog uses none. Workers use `/doey-status`, `/doey-reserve`.
 
 
 ## Layer 5: Persistent Memory
@@ -285,12 +283,10 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
   reports/                           # [hook-init] Created by common.sh init_hook()
     <pane_safe>.report               # Research report
   results/                           # [hook-init] Structured result JSON files
-  messages/                          # [hook-init] Inter-pane messages
-    delivered/                       # Consumed messages subdirectory
   broadcasts/                        # [init-time] Broadcast messages
 ```
 
-*Init-time directories (`messages/`, `broadcasts/`, `status/`) are created during `doey init`. On the first hook invocation in any pane, `common.sh init_hook()` eagerly ensures `status/`, `research/`, `reports/`, `results/`, and `messages/` all exist (fast-path skip if already present).*
+*Init-time directories (`broadcasts/`, `status/`) are created during `doey init`. On the first hook invocation in any pane, `common.sh init_hook()` eagerly ensures `status/`, `research/`, `reports/`, and `results/` all exist (fast-path skip if already present).*
 
 **Status values:** READY, BUSY, FINISHED, RESERVED.
 
@@ -320,7 +316,6 @@ Loaded by all instances. Contains: project overview, architecture, key directori
 | Research worker stops without report | Check exit 2 path in `stop-status.sh`; verify `.task` created |
 | Workers don't pick up hook changes | Restart workers (`/doey-restart-window`) |
 | Dispatch to reserved pane | Check `.reserved` file exists; verify `is_reserved()` |
-| Messages not delivered | Check `messages/` dir — inter-pane messages go to `messages/<pane_safe>_<timestamp>.msg`, consumed messages move to `messages/delivered/` |
 | Runtime file not found | Verify PANE_SAFE escaping: `${PANE//[:.]/_}`. Directories are created eagerly by `init_hook()` — check that hooks have fired at least once |
 
 **Trace order:** 1. Agent definition → 2. Memory → 3. Settings (4-file merge) → 4. Hook scripts → 5. Skill files → 6. session.env / tmux env → 7. Runtime state → 8. CLI flags in doey.sh.
