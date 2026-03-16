@@ -25,11 +25,11 @@ if [ "$TOOL_NAME" != "Bash" ]; then
       read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
       # Multi-window: check team_<W>.env first, fall back to session.env
       TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-      if [ -f "$TEAM_ENV" ]; then
-        WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
-      else
-        WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2-)
+      # Dashboard (window 0) has no team env — its panes are never Watchdogs
+      if [ ! -f "$TEAM_ENV" ]; then
+        exit 0
       fi
+      WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
       WD_PANE="${WD_PANE//\"/}"
       if [ "$CURRENT_PANE" = "$WD_PANE" ]; then
         echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
