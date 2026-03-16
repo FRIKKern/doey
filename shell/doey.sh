@@ -451,7 +451,7 @@ apply_doey_theme() {
   tmux set-option -t "$session" status-left \
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour233,nobold] "
   tmux set-option -t "$session" status-right \
-    "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
+    "#[fg=colour245] #{=20:pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
   tmux set-option -t "$session" status-interval "$status_interval"
 
   # Window status — colored segments with Dashboard distinction
@@ -1174,7 +1174,7 @@ MANIFEST
 
   # ── Step 2: Apply theme ────────────────────────────────────────
   step_start 2 "Applying theme..."
-  local border_fmt=" #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   apply_doey_theme "$session" "$name" "$border_fmt" 2
   step_done
 
@@ -1771,7 +1771,7 @@ MANIFEST
 
   # ── Apply theme ──
   printf "  ${DIM}Applying theme...${RESET}\n"
-  local border_fmt=" #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   apply_doey_theme "$session" "$name" "$border_fmt" 2
 
   # ── Build grid ──
@@ -1973,7 +1973,7 @@ DOG
 
   # ── Step 2: Apply theme ────────────────────────────────────────
   step_start 2 "Applying theme..."
-  local border_fmt=' #{?pane_active,#[fg=cyan#,bold],#[fg=colour245]}#{pane_title} #[default]'
+  local border_fmt=' #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#{pane_title} #[default]'
   apply_doey_theme "$session" "$name" "$border_fmt" 5
   step_done
 
