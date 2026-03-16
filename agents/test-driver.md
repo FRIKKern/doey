@@ -32,8 +32,8 @@ Use the `/doey-dispatch` procedure for dispatching tasks to workers. For the tes
 
 Wait for the Window Manager to be ready (max 60s, check every 5s).
 
-1. Read status: `cat "$RUNTIME_DIR/status/${PANE_SAFE}.status"` where `PANE_SAFE=$(echo "${SESSION_NAME}_1_0" | tr ':.' '_')`
-2. Capture: `tmux capture-pane -t "$SESSION_NAME:1.0" -p -S -10`
+1. Read status: `cat "$RUNTIME_DIR/status/${PANE_SAFE}.status"` where `PANE_SAFE=$(echo "${SESSION}_1_0" | tr ':.' '_')`
+2. Capture: `tmux capture-pane -t "$SESSION:1.0" -p -S -10`
 3. **Ready when:** status contains `READY`, or pane shows team briefing / `❯` prompt / Claude running
 4. **Timeout:** → REPORTING with FAIL, "Window Manager failed to boot within 60s"
 

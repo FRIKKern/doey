@@ -79,12 +79,12 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 # Pane 0 = Window Manager, Pane 1+ = Workers (Watchdog is in Dashboard)
-tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "MGR-W${NEW_WIN}"
+tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "MGR Window Manager"
 
 WORKER_PANES_LIST=""
 W_NUM=1
 for i in $(seq 1 $((TOTAL - 1))); do
-  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -T "W${W_NUM}-W${NEW_WIN}"
+  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -T "W${W_NUM} Worker ${W_NUM}"
   if [ -n "$WORKER_PANES_LIST" ]; then
     WORKER_PANES_LIST="${WORKER_PANES_LIST},${i}"
   else
@@ -166,7 +166,10 @@ for slot in 1 2 3; do
 done
 
 if [ -n "$WDG_SLOT" ]; then
+  tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "Watchdog — Team ${NEW_WIN}"
   tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
+  # Write WATCHDOG_PANE back to team env
+  echo "WATCHDOG_PANE=\"${WDG_SLOT}\"" >> "${RUNTIME_DIR}/team_${NEW_WIN}.env"
   echo "Watchdog launched in Dashboard pane 0.${WDG_SLOT}"
 else
   echo "WARNING: No available Dashboard slot (0.1-0.3) for Watchdog"

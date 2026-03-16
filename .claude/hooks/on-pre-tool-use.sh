@@ -23,9 +23,22 @@ if [ "$TOOL_NAME" != "Bash" ]; then
       # Workers/Window Manager are the common case — skip them fast.
       RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
       read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
-      # Multi-window: check team_<W>.env first, fall back to session.env
+      # Watchdogs live in Dashboard (window 0). Check all team_*.env files
+      # for a matching WATCHDOG_PANE="0.<pane_index>" (mirrors is_watchdog() in common.sh).
+      if [ "$WINDOW_INDEX" = "0" ]; then
+        for _pt_tf in "${RUNTIME_DIR}"/team_*.env; do
+          [ -f "$_pt_tf" ] || continue
+          _pt_wd=$(grep '^WATCHDOG_PANE=' "$_pt_tf" | cut -d= -f2-)
+          _pt_wd="${_pt_wd//\"/}"
+          if [ "$_pt_wd" = "0.${CURRENT_PANE}" ]; then
+            echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
+            exit 2
+          fi
+        done
+        exit 0
+      fi
+      # Team windows (1+): check if this pane is the Watchdog for this window
       TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-      # Dashboard (window 0) has no team env — its panes are never Watchdogs
       if [ ! -f "$TEAM_ENV" ]; then
         exit 0
       fi
@@ -68,7 +81,7 @@ if is_watchdog; then
       # Only permit: sending /doey-inbox, /login, /compact, bare Enter, and copy-mode.
       # Match command structure to prevent allowlist bypass via string containment
       # (e.g. "echo doey-inbox; malicious" would pass a simple substring check).
-      if echo "$TOOL_COMMAND" | grep -qE '^[[:space:]]*tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( Enter)?( |$)|copy-mode )'; then
+      if echo "$TOOL_COMMAND" | grep -qE '^[[:space:]]*tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( Enter)?[[:space:]]*$|copy-mode .+$)'; then
         exit 0
       fi
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2

@@ -18,7 +18,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
    TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
    [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
-   ALL_PANES="$WATCHDOG_PANE $(echo "$WORKER_PANES" | tr ',' ' ')"
+   ALL_PANES=$(echo "$WORKER_PANES" | tr ',' ' ')
    WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
 
    # Detect already-ready workers (has child process + "bypass permissions" + prompt visible) — skip them.
@@ -36,7 +36,12 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 
 2. **KILL + VERIFY** — Kill Claude processes by PID, then verify. Do NOT use `/exit` or `send-keys` — they are unreliable mid-tool-call. Skip worker panes that are already ready (in `$SKIP_PANES`). Watchdog is always killed.
    ```bash
-   # Kill child process of each pane's shell (skip ready workers)
+   # Kill Watchdog (lives in Dashboard, WATCHDOG_PANE is already a full window.pane ref like "0.1")
+   WDG_PID=$(tmux display-message -t "$SESSION_NAME:${WATCHDOG_PANE}" -p '#{pane_pid}' 2>/dev/null)
+   WDG_CHILD=$(pgrep -P "$WDG_PID" 2>/dev/null)
+   [ -n "$WDG_CHILD" ] && kill "$WDG_CHILD" 2>/dev/null
+
+   # Kill child process of each worker pane's shell (skip ready workers)
    for i in $ALL_PANES; do
      if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
      PANE_PID=$(tmux display-message -t "$SESSION_NAME:${WINDOW_INDEX}.$i" -p '#{pane_pid}')
@@ -48,6 +53,14 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    # Verify killed — max 5 attempts, escalate to SIGKILL (only check non-skipped panes)
    for attempt in 1 2 3 4 5; do
      STILL_RUNNING=0; STUCK_PANES=""
+     # Check Watchdog
+     WDG_PID=$(tmux display-message -t "$SESSION_NAME:${WATCHDOG_PANE}" -p '#{pane_pid}' 2>/dev/null)
+     WDG_CHILD=$(pgrep -P "$WDG_PID" 2>/dev/null)
+     if [ -n "$WDG_CHILD" ]; then
+       STILL_RUNNING=$((STILL_RUNNING + 1)); STUCK_PANES="$STUCK_PANES ${WATCHDOG_PANE}"
+       kill -9 "$WDG_CHILD" 2>/dev/null
+     fi
+     # Check workers
      for i in $ALL_PANES; do
        if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
        PANE_PID=$(tmux display-message -t "$SESSION_NAME:${WINDOW_INDEX}.$i" -p '#{pane_pid}')
@@ -65,6 +78,10 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 
 3. **CLEAR** — Clean terminals (skip ready workers):
    ```bash
+   # Clear Watchdog
+   tmux copy-mode -q -t "$SESSION_NAME:${WATCHDOG_PANE}" 2>/dev/null
+   tmux send-keys -t "$SESSION_NAME:${WATCHDOG_PANE}" "clear" Enter 2>/dev/null
+   # Clear workers
    for i in $ALL_PANES; do
      if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
      tmux copy-mode -q -t "$SESSION_NAME:${WINDOW_INDEX}.$i" 2>/dev/null
@@ -75,7 +92,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 
 4. **START + VERIFY** — Launch killed instances, then verify boot. Watchdog first, then workers with 0.5s gaps. Skip workers that were already ready.
    ```bash
-   tmux send-keys -t "$SESSION_NAME:${WINDOW_INDEX}.$WATCHDOG_PANE" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
+   tmux send-keys -t "$SESSION_NAME:${WATCHDOG_PANE}" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
    sleep 1
    for i in $WORKER_PANES_LIST; do
      if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
@@ -93,6 +110,14 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
    # Ready = child process exists AND visible pane contains "bypass permissions"
    for attempt in 1 2 3 4 5 6 7 8 9 10; do
      NOT_READY=0; DOWN_PANES=""
+     # Check Watchdog
+     WDG_PID=$(tmux display-message -t "$SESSION_NAME:${WATCHDOG_PANE}" -p '#{pane_pid}' 2>/dev/null)
+     WDG_CHILD=$(pgrep -P "$WDG_PID" 2>/dev/null)
+     WDG_OUT=$(tmux capture-pane -t "$SESSION_NAME:${WATCHDOG_PANE}" -p 2>/dev/null)
+     if [ -z "$WDG_CHILD" ] || ! echo "$WDG_OUT" | grep -q "bypass permissions"; then
+       NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${WATCHDOG_PANE}"
+     fi
+     # Check workers
      for i in $ALL_PANES; do
        PANE_PID=$(tmux display-message -t "$SESSION_NAME:${WINDOW_INDEX}.$i" -p '#{pane_pid}')
        CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
@@ -109,7 +134,7 @@ Restart all Claude Code worker instances (and the Watchdog) without restarting t
 5. **INSTRUCT WATCHDOG** — Build comma-separated worker pane list from `$WORKER_PANES` and send monitoring start command:
    ```bash
    WORKER_LIST=""; for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ -n "$WORKER_LIST" ] && WORKER_LIST="${WORKER_LIST}, "; WORKER_LIST="${WORKER_LIST}${WINDOW_INDEX}.$i"; done
-   tmux send-keys -t "$SESSION_NAME:${WINDOW_INDEX}.$WATCHDOG_PANE" "Start monitoring. Skip pane ${WINDOW_INDEX}.0 and ${WINDOW_INDEX}.$WATCHDOG_PANE. Monitor panes ${WORKER_LIST}." Enter
+   tmux send-keys -t "$SESSION_NAME:${WATCHDOG_PANE}" "Start monitoring. Skip pane ${WINDOW_INDEX}.0 and ${WATCHDOG_PANE}. Monitor panes ${WORKER_LIST}." Enter
    ```
 
 6. **FINAL REPORT** — Show status for each pane. Distinguish skipped (already ready) from restarted panes:

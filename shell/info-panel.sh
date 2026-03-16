@@ -2,7 +2,7 @@
 # Doey Info Panel — full-width two-column dashboard for window 0
 # Displays team status, worker counts, recent events, and usage guide.
 # Runs in a loop, refreshing every 5 minutes.
-set -euo pipefail
+set -uo pipefail
 
 RUNTIME_DIR="${1:-${DOEY_RUNTIME:-}}"
 if [ -z "$RUNTIME_DIR" ]; then

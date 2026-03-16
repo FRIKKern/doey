@@ -16,7 +16,7 @@ source "${RUNTIME_DIR}/session.env"
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
-WATCHDOG="${SESSION_NAME}:${WINDOW_INDEX}.${WATCHDOG_PANE}"
+WATCHDOG="${SESSION_NAME}:${WATCHDOG_PANE}"
 
 tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
 tmux send-keys -t "$WATCHDOG" "/compact" Enter
@@ -31,7 +31,7 @@ source "${RUNTIME_DIR}/session.env"
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
-WATCHDOG="${SESSION_NAME}:${WINDOW_INDEX}.${WATCHDOG_PANE}"
+WATCHDOG="${SESSION_NAME}:${WATCHDOG_PANE}"
 
 sleep 15
 OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)
