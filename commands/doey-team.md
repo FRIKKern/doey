@@ -42,7 +42,7 @@ for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window
   fi
 
   # Unread messages
-  MSG_COUNT=$(ls "${RUNTIME_DIR}/messages/${PANE_SAFE}_"*.msg 2>/dev/null | wc -l | tr -d ' ')
+  MSG_COUNT=0; for _mf in "${RUNTIME_DIR}/messages/${PANE_SAFE}_"*.msg; do [ -f "$_mf" ] && MSG_COUNT=$((MSG_COUNT + 1)); done
 
   # Mark current pane
   MARKER=""

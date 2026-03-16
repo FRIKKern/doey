@@ -2,29 +2,37 @@
 
 ## Project Overview
 
-Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Manager, Watchdog, and N Workers in a dynamic grid (default: 2 columns = 4 workers, auto-expands when all busy) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans via `/doey-reserve` (permanent until explicitly unreserved). CLI entry point: `doey`.
+Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Window Manager, Watchdog, and N Workers in a dynamic grid (default: 2 columns = 4 workers, auto-expands when all busy) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans via `/doey-reserve` (permanent until explicitly unreserved). CLI entry point: `doey`.
 
 ## Architecture
 
-- **Manager (pane 0.0, Opus):** Orchestrator — plans and delegates, never writes code. Skips reserved workers.
-- **Watchdog (pane 0.1 dynamic, 0.{cols} static; Haiku):** Monitors workers, delivers inbox messages.
-- **Test Driver (E2E, Opus):** Automated test runner that drives Doey sessions through journeys. Runs outside the tmux grid (separate Claude process via `doey test`).
+**Single-window mode (default):**
+- **Window Manager (pane W.0, Opus):** Orchestrator — plans and delegates, never writes code. Skips reserved workers.
+- **Watchdog (pane W.1 dynamic, W.{cols} static; Haiku):** Monitors workers, delivers inbox messages.
 - **Workers (remaining panes, Opus):** Execute tasks.
+
+**Multi-window mode** (via `doey add-team`):
+- **Info Panel (pane 0.0, shell script):** Dashboard showing team status, worker counts, recent events.
+- **Session Manager (pane 0.1, Opus):** Top-level orchestrator that routes tasks between team windows. Never dispatches to workers directly.
+- Each team window (1+) has its own Window Manager (W.0), Watchdog (W.1), and Workers (W.2+).
+
+**Other:**
+- **Test Driver (E2E, Opus):** Automated test runner. Runs outside the tmux grid (separate Claude process via `doey test`).
 
 Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 **Tool restrictions** (enforced by `on-pre-tool-use.sh`):
-- **Manager:** No restrictions (full access)
+- **Window Manager:** No restrictions (full access)
 - **Watchdog:** Blocked from Edit, Write, Agent, NotebookEdit tools; send-keys limited to /doey-inbox, /login, /compact, bare Enter, copy-mode
 - **Workers:** Blocked from git push/commit, gh pr create/merge, ALL tmux send-keys, tmux kill-session/kill-server, rm -rf ~/\$HOME, shutdown/reboot
 
 ## Key Directories
 
-- `agents/` -- Agent definitions, installed to `~/.claude/agents/`
-- `commands/` -- Slash commands (doey-*.md), installed to `~/.claude/commands/`
+- `agents/` -- Agent definitions (doey-manager, doey-session-manager, doey-watchdog, test-driver), installed to `~/.claude/agents/`
+- `commands/` -- Slash commands (23 doey-*.md files), installed to `~/.claude/commands/`
 - `.claude/hooks/` -- Modular hooks: common.sh, on-session-start.sh, on-prompt-submit.sh, on-pre-tool-use.sh, on-pre-compact.sh, post-tool-lint.sh, stop-status.sh, stop-results.sh, stop-notify.sh, watchdog-scan.sh
 - `.claude/settings.local.json` -- Permission rules for Bash tool patterns (allow-list for common CLI commands)
-- `shell/` -- Launcher and utilities (doey.sh, context-audit.sh, pane-border-status.sh, tmux-statusbar.sh); doey.sh, pane-border-status.sh, and tmux-statusbar.sh are installed to `~/.local/bin/` (context-audit.sh is not installed)
+- `shell/` -- Launcher and utilities (doey.sh, info-panel.sh, context-audit.sh, pane-border-status.sh, tmux-statusbar.sh); doey.sh, info-panel.sh, pane-border-status.sh, and tmux-statusbar.sh are installed to `~/.local/bin/` (context-audit.sh is not installed)
 - `docs/` -- Platform guides and context-reference.md
 
 Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remove` manage columns at runtime.
@@ -43,7 +51,7 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 
 | Changed | Action |
 |---------|--------|
-| Agent definitions | Restart Manager or Watchdog |
+| Agent definitions | Restart Window Manager or Watchdog |
 | Hooks | Restart ALL workers (loaded at startup) |
 | Commands/skills | No restart (loaded on-demand) |
 | Launcher | `doey stop && doey` or new `doey init` |
@@ -51,16 +59,17 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 
 ## Important Files
 
-- `shell/doey.sh` -- Launcher: smart-launch, init, stop, update/reinstall, doctor, list, purge, test, version, dynamic/d, add, remove, uninstall
-- `.claude/hooks/common.sh` -- Shared utilities: `init_hook()`, `parse_field()`, role checks (`is_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()`, `NL` (newline var), `is_numeric()`, `atomic_write()`
+- `shell/doey.sh` -- Launcher: smart-launch, init, stop, update/reinstall, doctor, list, purge, test, version, dynamic/d, add, remove, uninstall, add-team/add-window, kill-team/kill-window, list-teams/list-windows
+- `shell/info-panel.sh` -- Multi-window dashboard for pane 0.0 (team status, worker counts, recent events)
+- `.claude/hooks/common.sh` -- Shared utilities: `init_hook()`, `parse_field()`, `load_team_env()`, role checks (`is_manager()`, `is_session_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()`, `NL` (newline var), `is_numeric()`
 - `.claude/hooks/on-session-start.sh` -- SessionStart: initial setup
 - `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status, sets READY on /compact, expands collapsed columns
 - `.claude/hooks/on-pre-tool-use.sh` -- Tool usage safety guards
 - `.claude/hooks/on-pre-compact.sh` -- Context preservation before compaction
 - `.claude/hooks/post-tool-lint.sh` -- PostToolUse: linting after tool use
-- `.claude/hooks/stop-status.sh` -- Stop: sets FINISHED/RESERVED for workers, READY for Manager/Watchdog, research enforcement
+- `.claude/hooks/stop-status.sh` -- Stop: sets FINISHED/RESERVED for workers, READY for Window Manager/Watchdog, research enforcement
 - `.claude/hooks/stop-results.sh` -- Stop: collects and writes results
-- `.claude/hooks/stop-notify.sh` -- Stop: Manager notifications
+- `.claude/hooks/stop-notify.sh` -- Stop: Session Manager notifications
 - `commands/doey-reserve.md` -- Pane reservation command
 - `shell/context-audit.sh` -- Context audit tool (detects contradictory patterns, identity confusion, stale references)
 - `install.sh` -- Installs agents, commands, shell script

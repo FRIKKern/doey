@@ -15,9 +15,12 @@ Every Bash call that touches tmux or status files must start with:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WORKER_COUNT`, `WATCHDOG_PANE`. **Always use `${SESSION_NAME}`** — never hardcode session names.
+This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WORKER_COUNT`, `WATCHDOG_PANE`, `WINDOW_INDEX`. **Always use `${SESSION_NAME}`** — never hardcode session names.
 
 ### Quick Status Check
 
@@ -26,6 +29,9 @@ Single bash block — reads all status files and prints a formatted table.
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
 STATUS_DIR="${RUNTIME_DIR}/status"
 NOW=$(date +%s)
@@ -34,7 +40,7 @@ printf "%-6s | %-12s | %-10s | %-30s | %s\n" "PANE" "STATUS" "RESERVED" "TASK" "
 printf "%-6s-+-%-12s-+-%-10s-+-%-30s-+-%s\n" "------" "------------" "----------" "------------------------------" "------------"
 
 for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
-  PANE_ID="${SESSION_NAME}:0.${i}"
+  PANE_ID="${SESSION_NAME}:${WINDOW_INDEX}.${i}"
   PANE_SAFE=$(echo "${PANE_ID}" | tr ':.' '_')
 
   # Read status file
@@ -46,7 +52,7 @@ for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
   fi
 
   # Enrich FINISHED with done/error from result JSON
-  RESULT_FILE="${RUNTIME_DIR}/results/pane_${i}.json"
+  RESULT_FILE="${RUNTIME_DIR}/results/pane_${WINDOW_INDEX}_${i}.json"
   if [ "$STATUS" = "FINISHED" ] && [ -f "$RESULT_FILE" ]; then
     RESULT_STATUS=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$RESULT_FILE" | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"//')
     [ -n "$RESULT_STATUS" ] && STATUS="FINISHED (${RESULT_STATUS})"
@@ -86,6 +92,9 @@ Run after the status table to surface crash alerts and check Watchdog heartbeat.
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 NOW=$(date +%s)
 
 # Crash alerts
@@ -98,7 +107,7 @@ done
 $CRASH_FOUND || echo "No crash alerts."
 
 # Watchdog heartbeat
-HB_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
+HB_FILE="${RUNTIME_DIR}/status/watchdog_W${WINDOW_INDEX}.heartbeat"
 if [ -f "$HB_FILE" ]; then
   HB_TIME=$(cat "$HB_FILE")
   HB_AGO=$(( NOW - HB_TIME ))
@@ -119,8 +128,11 @@ Capture last 20 lines of a specific worker pane for detailed inspection.
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-PANE="${SESSION_NAME}:0.X"
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 echo "=== Deep Inspect: ${PANE} ==="
 
 # Status file contents

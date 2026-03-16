@@ -17,19 +17,19 @@ MY_PANE_SAFE=${MY_PANE//[:.]/_}
 
 mkdir -p "${RUNTIME_DIR}/messages/delivered"
 
-MSGS=$(ls -t "${RUNTIME_DIR}/messages/${MY_PANE_SAFE}_"*.msg 2>/dev/null)
+COUNT=0
+for msg in "${RUNTIME_DIR}/messages/${MY_PANE_SAFE}_"*.msg; do
+  [ -f "$msg" ] || continue
+  COUNT=$((COUNT + 1))
+  echo "=== Message ${COUNT} ==="
+  cat "$msg"
+  echo "---"
+  mv "$msg" "${RUNTIME_DIR}/messages/delivered/"
+done
 
-if [ -z "$MSGS" ]; then
+if [ "$COUNT" -eq 0 ]; then
   echo "Inbox empty — no unread messages."
 else
-  COUNT=0
-  for msg in $MSGS; do
-    COUNT=$((COUNT + 1))
-    echo "=== Message ${COUNT} ==="
-    cat "$msg"
-    echo "---"
-    mv "$msg" "${RUNTIME_DIR}/messages/delivered/"
-  done
   echo "Read and archived ${COUNT} message(s)."
 fi
 ```

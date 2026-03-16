@@ -1,6 +1,6 @@
 # Skill: doey-watchdog-compact
 
-Send `/compact` to the Watchdog pane to reduce its token usage, then verify it resumes. The watchdog auto-compacts every 5 minutes via `/loop 5m /compact`. After compaction, the watchdog restores pane state from `watchdog_pane_states.json` in the runtime status directory. Monitoring uses a shell pre-filter (`watchdog-scan.sh`) to minimize per-cycle token usage.
+Send `/compact` to the Watchdog to reduce its context window. After compaction, the watchdog restores pane state from `watchdog_pane_states_W${WINDOW_INDEX}.json` in the runtime status directory. Monitoring uses a shell pre-filter (`watchdog-scan.sh`) to minimize per-cycle token usage.
 
 ## Usage
 `/doey-watchdog-compact`
@@ -13,7 +13,10 @@ Send `/compact` to the Watchdog and verify it resumes monitoring.
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
-WATCHDOG="${SESSION_NAME}:0.${WATCHDOG_PANE}"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
+WATCHDOG="${SESSION_NAME}:${WINDOW_INDEX}.${WATCHDOG_PANE}"
 
 tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
 tmux send-keys -t "$WATCHDOG" "/compact" Enter
@@ -25,7 +28,10 @@ echo "Sent /compact to Watchdog pane ${WATCHDOG}"
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
-WATCHDOG="${SESSION_NAME}:0.${WATCHDOG_PANE}"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
+WATCHDOG="${SESSION_NAME}:${WINDOW_INDEX}.${WATCHDOG_PANE}"
 
 sleep 15
 OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)

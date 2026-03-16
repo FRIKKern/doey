@@ -6,7 +6,7 @@ Run a full project analysis to detect documentation obscurities, inaccuracies, c
 `/doey-analyze`
 
 ## Prompt
-You are the Doey Manager running a full-project analysis sweep. This is a two-wave operation: first analyze, then fix.
+You are the Doey Window Manager running a full-project analysis sweep. This is a two-wave operation: first analyze, then fix.
 
 ### Project Context
 
@@ -14,8 +14,11 @@ Every Bash call that touches tmux must start with:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
-This gives you all session variables including: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WORKER_COUNT`, `GRID`, and grid-mode-specific vars.
+This gives you all session variables including: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WORKER_COUNT`, `GRID`, `WINDOW_INDEX`, and grid-mode-specific vars.
 
 ### What to Analyze
 
@@ -24,7 +27,7 @@ The analysis covers ALL context files that Claude Code instances consume:
 | Category | Location | Examples |
 |----------|----------|---------|
 | CLAUDE.md files | Project root + parents | Architecture, conventions, important files |
-| Agent definitions | `agents/*.md` | Manager, Watchdog, Test Driver roles |
+| Agent definitions | `agents/*.md` | Window Manager, Watchdog, Test Driver roles |
 | Hook scripts | `.claude/hooks/*.sh` | Safety rules, context injection, status tracking |
 | Commands/skills | `commands/*.md` | Slash commands available to agents |
 | Documentation | `docs/*.md` | Context reference, platform guides |

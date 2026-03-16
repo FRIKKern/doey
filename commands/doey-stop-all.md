@@ -6,6 +6,9 @@ Stop all running Doey sessions at once.
 `/doey-stop-all`
 
 ## Prompt
+
+> ⚠️ **DEPRECATED:** Replaced by `/doey-kill-session`. This command will be removed in a future version.
+
 Stop all running Doey tmux sessions.
 
 ### Steps

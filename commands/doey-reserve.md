@@ -1,6 +1,6 @@
 # Skill: doey-reserve
 
-Reserve the current pane to prevent Manager dispatch. Supports permanent reserve, unreserve, and list.
+Reserve the current pane to prevent Window Manager dispatch. Supports permanent reserve, unreserve, and list.
 
 ## Usage
 `/doey-reserve` — permanent reserve on this pane
@@ -91,7 +91,7 @@ done
 ### Rules
 
 1. **Always target THIS pane** (`$MY_PANE` / `$MY_PANE_SAFE`) — never ask which pane
-2. **Manager MUST respect reservations** — never dispatch to RESERVED panes
+2. **Window Manager MUST respect reservations** — never dispatch to RESERVED panes
 3. **Reservations are permanent** — `.reserved` file always contains `permanent`
 4. **Pane safe names:** replace `:` and `.` with `_`
 5. **Do NOT ask for confirmation** — just do it immediately

@@ -7,6 +7,7 @@ Stop a specific worker by pane number. Kills the Claude process, updates status,
 `/doey-stop` — lists workers, then ask which to stop
 
 ## Prompt
+
 You are stopping a specific Claude Code worker instance in TMUX by pane number.
 
 ### Project Context (read once per Bash call)
@@ -16,9 +17,12 @@ Every Bash call must start with:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. **Always use `${SESSION_NAME}`** — never hardcode session names.
+This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WINDOW_INDEX`. **Always use `${SESSION_NAME}`** — never hardcode session names.
 
 ### Step 1: Parse argument and validate target
 
@@ -27,16 +31,19 @@ If the user provided a pane number (e.g., `/doey-stop 4`), use it directly. If n
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
 TARGET="$PANE_NUMBER"  # set from user argument
 
-# Validate target is a worker pane (not Manager 0.0 or Watchdog)
+# Validate target is a worker pane (not Window Manager or Watchdog)
 if [ "$TARGET" = "0" ]; then
-  echo "ERROR: Cannot stop pane 0.0 — that is the Manager"
+  echo "ERROR: Cannot stop pane ${WINDOW_INDEX}.0 — that is the Window Manager"
   exit 1
 fi
 if [ "$TARGET" = "$WATCHDOG_PANE" ]; then
-  echo "ERROR: Cannot stop pane 0.${WATCHDOG_PANE} — that is the Watchdog. Use /doey-restart-workers instead."
+  echo "ERROR: Cannot stop pane ${WINDOW_INDEX}.${WATCHDOG_PANE} — that is the Watchdog. Use /doey-restart-window instead."
   exit 1
 fi
 
@@ -46,11 +53,11 @@ for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
   [ "$i" = "$TARGET" ] && VALID=true
 done
 if [ "$VALID" = "false" ]; then
-  echo "ERROR: Pane 0.${TARGET} is not a worker pane. Valid workers: ${WORKER_PANES}"
+  echo "ERROR: Pane ${WINDOW_INDEX}.${TARGET} is not a worker pane. Valid workers: ${WORKER_PANES}"
   exit 1
 fi
 
-echo "Target: pane 0.${TARGET}"
+echo "Target: pane ${WINDOW_INDEX}.${TARGET}"
 ```
 
 ### Step 2: Kill the Claude process by PID
@@ -58,8 +65,11 @@ echo "Target: pane 0.${TARGET}"
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-PANE="${SESSION_NAME}:0.${TARGET}"
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.${TARGET}"
 
 # Exit copy-mode first
 tmux copy-mode -q -t "$PANE" 2>/dev/null
@@ -69,7 +79,7 @@ PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
 CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
 
 if [ -z "$CHILD_PID" ]; then
-  echo "No Claude process found in pane 0.${TARGET} — already stopped"
+  echo "No Claude process found in pane ${WINDOW_INDEX}.${TARGET} — already stopped"
 else
   kill "$CHILD_PID" 2>/dev/null
   sleep 3
@@ -84,12 +94,12 @@ else
   # Final check
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   if [ -n "$CHILD_PID" ]; then
-    echo "ERROR: Failed to stop Claude in pane 0.${TARGET} — manual intervention needed"
+    echo "ERROR: Failed to stop Claude in pane ${WINDOW_INDEX}.${TARGET} — manual intervention needed"
     exit 1
   fi
 fi
 
-echo "Claude process stopped in pane 0.${TARGET}"
+echo "Claude process stopped in pane ${WINDOW_INDEX}.${TARGET}"
 ```
 
 ### Step 3: Update status file
@@ -97,8 +107,11 @@ echo "Claude process stopped in pane 0.${TARGET}"
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-PANE="${SESSION_NAME}:0.${TARGET}"
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.${TARGET}"
 PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/status"
 
@@ -109,12 +122,12 @@ STATUS: FINISHED
 TASK: manually stopped
 EOF
 
-echo "Status updated to FINISHED for pane 0.${TARGET}"
+echo "Status updated to FINISHED for pane ${WINDOW_INDEX}.${TARGET}"
 ```
 
 ### Rules
-- **Never stop pane 0.0** — that is the Manager
-- **Never stop the Watchdog pane** — use `/doey-restart-workers` instead
+- **Never stop the Window Manager pane** (pane index 0 in each window)
+- **Never stop the Watchdog pane** — use `/doey-restart-window` instead
 - **Always kill by PID** — never use `/exit` or `send-keys` to stop Claude
 - **Always update the status file** after stopping
-- The pane shell remains alive — the worker can be restarted via `/doey-dispatch` or `/doey-restart-workers`
+- The pane shell remains alive — the worker can be restarted via `/doey-dispatch` or `/doey-restart-window`

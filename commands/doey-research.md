@@ -10,7 +10,17 @@ You are dispatching a research task to a Claude Code worker instance in TMUX. Th
 
 ### Project Context
 
-Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)` then `source "${RUNTIME_DIR}/session.env"`. This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. Always use `${SESSION_NAME}` — never hardcode session names.
+Every Bash call that touches tmux must start with:
+
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
+```
+
+This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WINDOW_INDEX`. Always use `${SESSION_NAME}` — never hardcode session names.
 
 ### Copy-mode pattern
 
@@ -23,16 +33,19 @@ Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-envi
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
+PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
 RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
 if [ -f "$RESERVE_FILE" ]; then
   echo "Pane is reserved — skip this worker, pick another"
 fi
 
 # Check idle (look for ❯ prompt; if you see thinking/working/tool output — busy)
-tmux copy-mode -q -t "${SESSION_NAME}:0.X" 2>/dev/null
-tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -3
+tmux copy-mode -q -t "${SESSION_NAME}:${WINDOW_INDEX}.X" 2>/dev/null
+tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 ```
 
 **Never dispatch to a RESERVED pane.** If all workers are reserved, report to the user and wait.
@@ -42,8 +55,11 @@ tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -3
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-TARGET_PANE="${SESSION_NAME}:0.X"
+TARGET_PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')
 
 mkdir -p "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports"
@@ -62,8 +78,11 @@ Use the same readiness check and kill/restart/launch sequence as `/doey-dispatch
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-PANE="${SESSION_NAME}:0.X"
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 
@@ -180,7 +199,7 @@ Use the same verification procedure as `/doey-dispatch` step 15 (MANDATORY VERIF
 After the worker finishes (shows ❯ prompt), read the report:
 
 ```bash
-PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
+PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
 REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 [ -f "$REPORT_FILE" ] && cat "$REPORT_FILE" || echo "✗ No report — check worker output"
 ```
@@ -191,7 +210,7 @@ Then: present summary to user, ask which option to proceed with, dispatch the re
 
 1. **Always create task marker BEFORE dispatching** — the Stop hook needs it to enforce reporting
 2. **Always clear old report file before dispatching** — stale reports bypass enforcement
-3. **`PANE_SAFE` must match exactly** — use `PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')` to convert full pane ref (e.g., `doey-proj:0.5` becomes `doey-proj_0_5`)
+3. **`PANE_SAFE` must match exactly** — use `PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')` to convert full pane ref (e.g., `doey-proj:0.5` becomes `doey-proj_0_5`, `doey-proj:1.3` becomes `doey-proj_1_3`)
 4. **Include report path in task prompt** — worker needs to know where to write
 5. **Always check idle + reservation before dispatch** — don't interrupt busy or reserved panes
 6. **Always verify after dispatch (Step 5)** — if it fails, run unstick before retrying

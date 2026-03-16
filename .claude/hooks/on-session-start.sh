@@ -41,14 +41,24 @@ EOF
 # Determine pane identity
 PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
 PANE_INDEX="${PANE##*.}"
+# Extract window index for multi-window support
+_WP="${PANE#*:}"
+WINDOW_INDEX="${_WP%.*}"
 
-# WATCHDOG_PANE already parsed from session.env above
+# Multi-window: check team_<W>.env for per-window watchdog, fall back to session.env
+TEAM_WD_PANE=""
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+if [ -f "$TEAM_ENV" ]; then
+  TEAM_WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
+  TEAM_WD_PANE="${TEAM_WD_PANE%\"}" && TEAM_WD_PANE="${TEAM_WD_PANE#\"}"
+fi
+# Fall back to session.env WATCHDOG_PANE (already parsed above)
+[ -z "$TEAM_WD_PANE" ] && TEAM_WD_PANE="$WATCHDOG_PANE"
 
-# Determine role
-WINDOW_PANE="${PANE#*:}"
-if [ "$WINDOW_PANE" = "0.0" ]; then
+# Determine role — pane 0 is always manager in any window
+if [ "$PANE_INDEX" = "0" ]; then
   ROLE="manager"
-elif [ "$PANE_INDEX" = "$WATCHDOG_PANE" ]; then
+elif [ "$PANE_INDEX" = "$TEAM_WD_PANE" ]; then
   ROLE="watchdog"
 else
   ROLE="worker"
@@ -57,4 +67,5 @@ fi
 cat >> "$CLAUDE_ENV_FILE" << EOF
 export DOEY_ROLE="$ROLE"
 export DOEY_PANE_INDEX="$PANE_INDEX"
+export DOEY_WINDOW_INDEX="$WINDOW_INDEX"
 EOF
