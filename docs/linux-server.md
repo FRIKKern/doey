@@ -100,7 +100,7 @@ All providers: create smallest Ubuntu 24.04 instance, SSH in, run the Quick Setu
 
 ### Platform Notes
 
-- macOS notifications (`osascript`) are silently skipped on Linux. All other functionality works identically.
+- Notifications use `notify-send` on Linux (install `libnotify-bin` if missing). On macOS, `osascript` is used. All other functionality works identically.
 
 ### Troubleshooting
 

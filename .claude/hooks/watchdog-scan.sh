@@ -7,7 +7,22 @@ set -euo pipefail
 
 # --- Load session environment ---
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { echo "ERROR: not in doey session"; exit 1; }
-source "${RUNTIME_DIR}/session.env"
+
+# Safe parse — no eval/source on world-writable /tmp (matches on-session-start.sh pattern)
+SESSION_NAME="" PROJECT_DIR="" PROJECT_NAME="" WORKER_PANES="" WATCHDOG_PANE="" TOTAL_PANES=""
+while IFS='=' read -r key value; do
+  # Strip surrounding quotes from value
+  value="${value%\"}"
+  value="${value#\"}"
+  case "$key" in
+    SESSION_NAME)  SESSION_NAME="$value" ;;
+    PROJECT_DIR)   PROJECT_DIR="$value" ;;
+    PROJECT_NAME)  PROJECT_NAME="$value" ;;
+    WORKER_PANES)  WORKER_PANES="$value" ;;
+    WATCHDOG_PANE) WATCHDOG_PANE="$value" ;;
+    TOTAL_PANES)   TOTAL_PANES="$value" ;;
+  esac
+done < "${RUNTIME_DIR}/session.env"
 
 # --- Resolve hash command once (avoid per-pane fork) ---
 if command -v md5 >/dev/null 2>&1; then

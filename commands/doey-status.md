@@ -23,6 +23,7 @@ You are managing status updates across Claude Code instances in TMUX.
 ### Setting status
 Valid values: READY, BUSY, FINISHED, RESERVED.
 ```bash
+mkdir -p "${RUNTIME_DIR}/status"
 cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" <<EOF
 PANE: $MY_PANE
 UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
