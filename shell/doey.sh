@@ -2665,7 +2665,7 @@ doey_remove_column() {
 
   # Read team-level state from team env (same pattern as doey_add_column)
   local team_env="${runtime_dir}/team_${team_window}.env"
-  local worker_count=0 watchdog_pane="${WATCHDOG_PANE}" current_cols=2 team_grid="${GRID:-dynamic}"
+  local worker_count=0 watchdog_pane="" current_cols=2 team_grid="${GRID:-dynamic}" team_worker_panes=""
   if [ -f "$team_env" ]; then
     worker_count=$(grep '^WORKER_COUNT=' "$team_env" | cut -d= -f2)
     worker_count="${worker_count//\"/}"
@@ -2675,18 +2675,13 @@ doey_remove_column() {
     team_grid=$(grep '^GRID=' "$team_env" | cut -d= -f2)
     team_grid="${team_grid//\"/}"
     team_grid="${team_grid:-dynamic}"
+    team_worker_panes=$(grep '^WORKER_PANES=' "$team_env" | cut -d= -f2)
+    team_worker_panes="${team_worker_panes//\"/}"
     # Count current columns from pane count
     local _pane_count
     _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')
     current_cols=$(( (_pane_count - 1) / 2 ))
     [ "$current_cols" -lt 1 ] && current_cols=1
-  fi
-
-  # Read WORKER_PANES from team env
-  local team_worker_panes=""
-  if [ -f "$team_env" ]; then
-    team_worker_panes=$(grep '^WORKER_PANES=' "$team_env" | cut -d= -f2)
-    team_worker_panes="${team_worker_panes//\"/}"
   fi
 
   if [[ "$team_grid" != "dynamic" ]]; then

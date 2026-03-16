@@ -23,30 +23,23 @@ if [ "$TOOL_NAME" != "Bash" ]; then
       # Workers/Window Manager are the common case — skip them fast.
       RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
       read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
-      # Watchdogs live in Dashboard (window 0). Check all team_*.env files
-      # for a matching WATCHDOG_PANE="0.<pane_index>" (mirrors is_watchdog() in common.sh).
+      # Watchdogs live in Dashboard (window 0), panes 0.1-0.3 only.
+      # Skip scan entirely for non-Dashboard windows and non-Watchdog slots.
       if [ "$WINDOW_INDEX" = "0" ]; then
-        for _pt_tf in "${RUNTIME_DIR}"/team_*.env; do
-          [ -f "$_pt_tf" ] || continue
-          _pt_wd=$(grep '^WATCHDOG_PANE=' "$_pt_tf" | cut -d= -f2-)
-          _pt_wd="${_pt_wd//\"/}"
-          if [ "$_pt_wd" = "0.${CURRENT_PANE}" ]; then
-            echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
-            exit 2
-          fi
-        done
-        exit 0
-      fi
-      # Team windows (1+): check if this pane is the Watchdog for this window
-      TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-      if [ ! -f "$TEAM_ENV" ]; then
-        exit 0
-      fi
-      WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
-      WD_PANE="${WD_PANE//\"/}"
-      if [ "$CURRENT_PANE" = "$WD_PANE" ]; then
-        echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
-        exit 2
+        case "$CURRENT_PANE" in
+          1|2|3)
+            # Could be a Watchdog — scan team envs to confirm
+            for _pt_tf in "${RUNTIME_DIR}"/team_*.env; do
+              [ -f "$_pt_tf" ] || continue
+              _pt_wd=$(grep '^WATCHDOG_PANE=' "$_pt_tf" | cut -d= -f2)
+              _pt_wd="${_pt_wd//\"/}"
+              if [ "$_pt_wd" = "0.${CURRENT_PANE}" ]; then
+                echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
+                exit 2
+              fi
+            done
+            ;;
+        esac
       fi
       ;;
   esac
