@@ -8,7 +8,7 @@ Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It la
 
 **Window 0 — Dashboard (always present):**
 - **Info Panel (pane 0.0, shell script):** Live dashboard showing team status, worker counts, recent events. User lands here on attach.
-- **Watchdog slots (panes 0.1-0.3, Haiku):** One Watchdog per team window. Monitors workers, delivers inbox messages.
+- **Watchdog slots (panes 0.1-0.3, Haiku):** One Watchdog per team window. Monitors workers, catches crashes.
 - **Session Manager (pane 0.4, Opus):** Top-level orchestrator that routes tasks between team windows. Never dispatches to workers directly. Present when multiple teams exist.
 
 **Window 1+ — Team windows:**
@@ -23,7 +23,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 **Tool restrictions** (enforced by `on-pre-tool-use.sh`):
 - **Window Manager:** No restrictions (full access)
-- **Watchdog:** Blocked from Edit, Write, Agent, NotebookEdit tools; send-keys limited to /doey-inbox, /login, /compact, bare Enter, copy-mode; also blocked from git push/commit, gh pr create/merge, destructive rm, shutdown/reboot, tmux kill-session/server
+- **Watchdog:** Blocked from Edit, Write, Agent, NotebookEdit tools; send-keys limited to /login, /compact, bare Enter, copy-mode; also blocked from git push/commit, gh pr create/merge, destructive rm, shutdown/reboot, tmux kill-session/server
 - **Workers:** Blocked from git push/commit, gh pr create/merge, ALL tmux send-keys, tmux kill-session/kill-server, rm -rf ~/\$HOME, shutdown/reboot
 
 ## Key Directories
@@ -71,7 +71,7 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 - `.claude/hooks/post-tool-lint.sh` -- PostToolUse: bash 3.2 compatibility lint on .sh files
 - `.claude/hooks/stop-results.sh` -- Stop: writes result JSON and completion events
 - `.claude/hooks/stop-notify.sh` -- Stop: Session Manager notifications
-- `.claude/hooks/watchdog-scan.sh` -- Watchdog: pane state detection, inbox delivery, heartbeat
+- `.claude/hooks/watchdog-scan.sh` -- Watchdog: pane state detection, heartbeat
 - `commands/doey-reserve.md` -- Pane reservation command
 - `shell/context-audit.sh` -- Context audit tool (detects contradictory patterns, identity confusion, stale references)
 

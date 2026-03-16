@@ -85,10 +85,9 @@ No config files. No shell reload. Just `doey`.
 - **Dynamic grid** — starts with 6 workers, scale up with `doey add`, scale down with `doey remove`
 - **Parallel execution** — workers run simultaneously, not sequentially
 - **Smart orchestration** — Window Manager plans and delegates, never writes code itself
-- **Always-on monitoring** — Watchdog tracks worker state and delivers inbox messages
+- **Always-on monitoring** — Watchdog tracks worker state and catches crashes
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
-- **Message bus** — file-based inter-pane communication (inbox, broadcasts, status)
-- **24 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
+- **22 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -145,9 +144,7 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-monitor` | Check all worker statuses |
 | `/doey-team` | Full team overview |
 | `/doey-research` | Dispatch research with guaranteed report |
-| `/doey-send` | Message another pane |
 | `/doey-broadcast` | Message all panes |
-| `/doey-inbox` | Check incoming messages |
 | `/doey-status` | View or set pane status |
 | `/doey-purge` | Run purge from inside a session |
 | `/doey-reserve` | Reserve a pane for human use |
@@ -184,7 +181,7 @@ doey/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (24 total)
+│   └── ... (22 total)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
 │   ├── linode-setup.md          # Linode VPS deployment guide

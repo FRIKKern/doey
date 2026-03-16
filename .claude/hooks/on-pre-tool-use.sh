@@ -99,7 +99,7 @@ if is_watchdog; then
       # Target pane pattern: quoted ("...") or unquoted token
       _TP='(\"[^\"]*\"|[^[:space:]]+)'
       # Pattern 1: Slash commands — target + exactly one allowed command + Enter
-      if echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+\"?(/doey-inbox|/login|/compact)\"?[[:space:]]+Enter[[:space:]]*$"; then
+      if echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+\"?(/login|/compact)\"?[[:space:]]+Enter[[:space:]]*$"; then
         exit 0
       fi
       # Pattern 2: Bare Enter — target + Enter only (no text payload)

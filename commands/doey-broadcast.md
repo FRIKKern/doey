@@ -46,4 +46,4 @@ Replace `YOUR_MESSAGE_HERE` with the actual message before running.
 
 ### Step 3: Confirm delivery
 
-Report how many panes the message was delivered to. Files are immediately available to `/doey-inbox`. The Watchdog additionally delivers messages to idle panes via `send-keys`.
+Report how many panes the message was delivered to. The Watchdog delivers messages to idle panes via `send-keys`.
