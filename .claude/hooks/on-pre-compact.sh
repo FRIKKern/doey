@@ -81,12 +81,14 @@ ${RECENT_FILES:-None detected}
 CONTEXT
 
 # Append Window Manager orchestration state if this is the Window Manager
+# Managers live in Dashboard (window 0) but manage a team window — use DOEY_TEAM_WINDOW
 if is_manager; then
-  WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$WINDOW_INDEX" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
+  _TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
+  WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
   PENDING_RESULTS=""
   HAS_JQ=false
   command -v jq >/dev/null 2>&1 && HAS_JQ=true
-  for rf in "$RUNTIME_DIR"/results/pane_${WINDOW_INDEX}_*.json; do
+  for rf in "$RUNTIME_DIR"/results/pane_${_TEAM_W:-$WINDOW_INDEX}_*.json; do
     [ -f "$rf" ] || continue
     rf_name=$(basename "$rf")
     rf_status=""
@@ -99,13 +101,13 @@ if is_manager; then
 "
   done
   COMPLETION_FILES=""
-  for cf in "$RUNTIME_DIR"/status/completion_pane_${WINDOW_INDEX}_*; do
+  for cf in "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W:-$WINDOW_INDEX}_*; do
     [ -f "$cf" ] || continue
     COMPLETION_FILES="${COMPLETION_FILES}  $(basename "$cf")
 "
   done
   CRASH_FILES=""
-  for crf in "$RUNTIME_DIR"/status/crash_pane_${WINDOW_INDEX}_*; do
+  for crf in "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W:-$WINDOW_INDEX}_*; do
     [ -f "$crf" ] || continue
     CRASH_FILES="${CRASH_FILES}  $(basename "$crf")
 "
@@ -131,7 +133,7 @@ fi
 
 # Append watchdog pane states if this is the watchdog
 if is_watchdog; then
-  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${WINDOW_INDEX}.json" 2>/dev/null || echo "{}")
+  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${_TEAM_W:-$WINDOW_INDEX}.json" 2>/dev/null || echo "{}")
   if [ "$WATCHDOG_STATE" != "{}" ]; then
     cat <<WDSTATE
 

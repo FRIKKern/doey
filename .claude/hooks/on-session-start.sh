@@ -45,27 +45,59 @@ PANE_INDEX="${PANE##*.}"
 _WP="${PANE#*:}"
 WINDOW_INDEX="${_WP%.*}"
 
-# Multi-window: check team_<W>.env for per-window watchdog, fall back to session.env
-TEAM_WD_PANE=""
-TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-if [ -f "$TEAM_ENV" ]; then
-  TEAM_WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
-  TEAM_WD_PANE="${TEAM_WD_PANE%\"}" && TEAM_WD_PANE="${TEAM_WD_PANE#\"}"
-fi
-# Fall back to session.env WATCHDOG_PANE (already parsed above)
-[ -z "$TEAM_WD_PANE" ] && TEAM_WD_PANE="$WATCHDOG_PANE"
+# Determine role based on new architecture:
+# - Window 0 (Dashboard): pane 0.0=Info Panel, 0.1-0.3=Window Manager slots, 0.4=Session Manager
+# - Window 1+ (Team):     pane W.0=Watchdog, W.1+=Workers
+ROLE="worker"
+DOEY_TEAM_WINDOW=""
 
-# Determine role — pane 0 is always manager in any window
-if [ "$PANE_INDEX" = "0" ]; then
-  ROLE="manager"
-elif [ "$PANE_INDEX" = "$TEAM_WD_PANE" ]; then
-  ROLE="watchdog"
+if [ "$WINDOW_INDEX" = "0" ]; then
+  # Dashboard window — check if this pane is a Window Manager slot
+  SM_PANE=""
+  sm_val=$(grep '^SM_PANE=' "$SESSION_ENV" | cut -d= -f2- || true)
+  sm_val="${sm_val%\"}" && sm_val="${sm_val#\"}"
+  [ -n "$sm_val" ] && SM_PANE="$sm_val"
+
+  if [ "0.${PANE_INDEX}" = "${SM_PANE:-0.4}" ]; then
+    ROLE="session_manager"
+  elif [ "$PANE_INDEX" = "0" ]; then
+    ROLE="info_panel"
+  else
+    # Check if this pane is a Window Manager for any team
+    for _ss_tf in "${RUNTIME_DIR}"/team_*.env; do
+      [ -f "$_ss_tf" ] || continue
+      _ss_mgr=$(grep '^MANAGER_PANE=' "$_ss_tf" | cut -d= -f2-)
+      _ss_mgr="${_ss_mgr%\"}" && _ss_mgr="${_ss_mgr#\"}"
+      if [ "$_ss_mgr" = "0.${PANE_INDEX}" ]; then
+        ROLE="manager"
+        # Extract team window index from filename (team_N.env)
+        _ss_fn="${_ss_tf##*/}"   # team_N.env
+        _ss_fn="${_ss_fn#team_}" # N.env
+        DOEY_TEAM_WINDOW="${_ss_fn%.env}"  # N
+        break
+      fi
+    done
+  fi
 else
-  ROLE="worker"
+  # Team window — pane 0 is Watchdog, rest are Workers
+  TEAM_WD_PANE=""
+  TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  if [ -f "$TEAM_ENV" ]; then
+    TEAM_WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
+    TEAM_WD_PANE="${TEAM_WD_PANE%\"}" && TEAM_WD_PANE="${TEAM_WD_PANE#\"}"
+  fi
+  [ -z "$TEAM_WD_PANE" ] && TEAM_WD_PANE="${WATCHDOG_PANE:-0}"
+
+  if [ "$PANE_INDEX" = "$TEAM_WD_PANE" ]; then
+    ROLE="watchdog"
+  else
+    ROLE="worker"
+  fi
 fi
 
 cat >> "$CLAUDE_ENV_FILE" << EOF
 export DOEY_ROLE="$ROLE"
 export DOEY_PANE_INDEX="$PANE_INDEX"
 export DOEY_WINDOW_INDEX="$WINDOW_INDEX"
+export DOEY_TEAM_WINDOW="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
 EOF

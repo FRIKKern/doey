@@ -80,30 +80,44 @@ is_watchdog() {
 }
 
 is_manager() {
-  # Check team env's MANAGER_PANE first (handles pane index shifts from window renumbering).
-  # Fall back to pane 0 (default manager position in any team window).
-  if [ -n "${_DOEY_MGR_PANE+x}" ]; then
-    [ "$PANE_INDEX" = "$_DOEY_MGR_PANE" ] && return 0
-  else
-    local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-    if [ -f "$team_file" ]; then
-      _DOEY_MGR_PANE=$(grep '^MANAGER_PANE=' "$team_file" | cut -d= -f2)
-      _DOEY_MGR_PANE="${_DOEY_MGR_PANE//\"/}"
-      [ "$PANE_INDEX" = "$_DOEY_MGR_PANE" ] && return 0
-    fi
+  # Window Managers live in Dashboard (window 0), panes 0.1, 0.2, 0.3.
+  # Each team_W.env has MANAGER_PANE="0.X" referencing the Dashboard pane.
+  if [ "$WINDOW_INDEX" = "0" ]; then
+    # Check if this Dashboard pane is a manager slot for any team
+    for _mgr_tf in "${RUNTIME_DIR}"/team_*.env; do
+      [ -f "$_mgr_tf" ] || continue
+      local _mgr_val
+      _mgr_val=$(grep '^MANAGER_PANE=' "$_mgr_tf" | cut -d= -f2)
+      _mgr_val="${_mgr_val//\"/}"
+      [ "$_mgr_val" = "0.${PANE_INDEX}" ] && return 0
+    done
+    return 1
   fi
-  [ "$PANE_INDEX" = "0" ]
+  # Not in Dashboard — never a manager (managers only live in window 0)
+  return 1
 }
 
 is_session_manager() {
-  # True only for the global session manager (window 0, pane 1)
-  # In multi-window mode, 0.0 is the Info Panel; 0.1 is the Session Manager.
+  # True only for the Session Manager — Dashboard pane 0.4.
+  # Read from session.env SM_PANE if available, else default to 0.4.
+  if [ "$WINDOW_INDEX" != "0" ]; then
+    return 1
+  fi
+  local sm_pane="0.4"
+  if [ -f "${RUNTIME_DIR}/session.env" ]; then
+    local _sm_val
+    _sm_val=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
+    _sm_val="${_sm_val//\"/}"
+    [ -n "$_sm_val" ] && sm_pane="$_sm_val"
+  fi
   local wp="${PANE#*:}"
-  [ "$wp" = "0.1" ]
+  [ "$wp" = "$sm_pane" ]
 }
 
 is_worker() {
-  ! is_manager && ! is_watchdog
+  # Workers live in team windows (1+), not in Dashboard (0)
+  [ "$WINDOW_INDEX" = "0" ] && return 1
+  ! is_watchdog
 }
 
 is_reserved() {
@@ -122,7 +136,7 @@ send_notification() {
   local title="${1:-Claude Code}"
   local body="${2:-Task completed}"
 
-  # Defense-in-depth: only Session Manager (0.1) sends notifications
+  # Defense-in-depth: only Session Manager (0.4) sends notifications
   if ! is_session_manager; then
     return 0
   fi

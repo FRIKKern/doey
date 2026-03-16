@@ -62,15 +62,24 @@ fi
 
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 
-# --- Window Manager health check (pane W.0) ---
-MGR_REF="${SESSION_NAME}:${WINDOW_INDEX}.0"
-MGR_CMD=$(tmux display-message -t "$MGR_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
+# --- Window Manager health check (reads MANAGER_PANE from team env) ---
+MGR_PANE_REF=""
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+if [ -f "$TEAM_ENV" ]; then
+  _wds_mgr=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
+  _wds_mgr="${_wds_mgr%\"}" && _wds_mgr="${_wds_mgr#\"}"
+  [ -n "$_wds_mgr" ] && MGR_PANE_REF="${SESSION_NAME}:${_wds_mgr}"
+fi
+# Fallback for legacy layout
+[ -z "$MGR_PANE_REF" ] && MGR_PANE_REF="${SESSION_NAME}:${WINDOW_INDEX}.0"
+
+MGR_CMD=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
 case "$MGR_CMD" in
   bash|zsh|sh|fish) echo "MANAGER_CRASHED" ;;
 esac
 
 # --- Manager idle detection (for inbox delivery) ---
-MGR_CAPTURE=$(tmux capture-pane -t "$MGR_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
+MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
 case "$MGR_CAPTURE" in
   *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
   *) PANE_STATE_0="WORKING" ;;
@@ -78,6 +87,7 @@ esac
 
 # --- Scan each worker pane ---
 PANES_LIST="${WORKER_PANES//,/ }"
+SCAN_HAD_OUTPUT=false
 for i in $PANES_LIST; do
   # Validate pane index before use in eval/variable expansion
   is_numeric "$i" || continue
@@ -86,7 +96,7 @@ for i in $PANES_LIST; do
 
   # Check reservation
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
-    echo "PANE ${i} RESERVED"
+    echo "PANE ${i} RESERVED"; SCAN_HAD_OUTPUT=true
     eval "PANE_STATE_${i}=RESERVED"
     continue
   fi
@@ -104,13 +114,13 @@ for i in $PANES_LIST; do
     bash|zsh|sh|fish)
       STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
       if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
-        echo "PANE ${i} FINISHED"
+        echo "PANE ${i} FINISHED"; SCAN_HAD_OUTPUT=true
         eval "PANE_STATE_${i}=FINISHED"
       elif [ -f "$STATUS_FILE" ] && grep -q '^STATUS: RESERVED' "$STATUS_FILE"; then
-        echo "PANE ${i} RESERVED"
+        echo "PANE ${i} RESERVED"; SCAN_HAD_OUTPUT=true
         eval "PANE_STATE_${i}=RESERVED"
       else
-        echo "PANE ${i} CRASHED"
+        echo "PANE ${i} CRASHED"; SCAN_HAD_OUTPUT=true
         eval "PANE_STATE_${i}=CRASHED"
         # Write crash alert file for Window Manager consumption
         CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${WINDOW_INDEX}_${i}"
@@ -148,13 +158,10 @@ CRASH_EOF
     # After 6 consecutive UNCHANGED cycles, escalate to STUCK
     # BUT only if previous state was WORKING or CHANGED (active work)
     if [ "$NEW_COUNT" -ge 6 ] && { [ "$PREV" = "WORKING" ] || [ "$PREV" = "CHANGED" ] || [ "$PREV" = "UNCHANGED" ]; }; then
-      echo "PANE ${i} STUCK (unchanged for ${NEW_COUNT} cycles)"
+      echo "PANE ${i} STUCK (unchanged for ${NEW_COUNT} cycles)"; SCAN_HAD_OUTPUT=true
       eval "PANE_STATE_${i}=STUCK"
-    elif [ "$PREV" = "IDLE" ] || [ "$PREV" = "FINISHED" ] || [ "$PREV" = "RESERVED" ]; then
-      # Suppress pure UNCHANGED for panes that were idle/finished/reserved
-      eval "PANE_STATE_${i}=UNCHANGED"
     else
-      echo "PANE ${i} UNCHANGED"
+      # Suppress UNCHANGED output — only STUCK gets printed
       eval "PANE_STATE_${i}=UNCHANGED"
     fi
     continue
@@ -169,20 +176,24 @@ CRASH_EOF
   # Classify the change
   case "$CAPTURE" in
     *'❯'*)
-      echo "PANE ${i} IDLE"
+      echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
       eval "PANE_STATE_${i}=IDLE"
       ;;
     *thinking*|*working*|*Bash*|*Read*|*Edit*|*Write*|*Grep*|*Glob*|*Agent*)
-      echo "PANE ${i} WORKING"
+      echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
       eval "PANE_STATE_${i}=WORKING"
       ;;
     *)
-      echo "PANE ${i} CHANGED"
-      echo "$CAPTURE" | sed 's/^/  /'
+      echo "PANE ${i} CHANGED"; SCAN_HAD_OUTPUT=true
       eval "PANE_STATE_${i}=CHANGED"
       ;;
   esac
 done
+
+# --- No-changes shortcut (single token confirmation) ---
+if [ "$SCAN_HAD_OUTPUT" = false ]; then
+  echo "OK"
+fi
 
 # --- Per-pane inbox detection ---
 # Single glob, then classify by pane index (avoids N readdir calls)
