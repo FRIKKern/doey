@@ -7,6 +7,18 @@ init_hook
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
+# --- Research enforcement: block stop if task exists but no report ---
+# Must run BEFORE writing status, otherwise FINISHED is written then exit 2 leaves stale status.
+# Skip reserved workers — humans using reserved panes shouldn't be blocked.
+if is_worker && ! is_reserved; then
+  TASK_FILE="${RUNTIME_DIR}/research/${PANE_SAFE}.task"
+  REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
+  if [ -f "$TASK_FILE" ] && [ ! -f "$REPORT_FILE" ]; then
+    echo '{"decision": "block", "reason": "Research task requires a report. Write your report to '"${REPORT_FILE}"' using the Write tool before stopping."}'
+    exit 2
+  fi
+fi
+
 # --- Determine status ---
 if is_reserved; then
   STOP_STATUS="RESERVED"
@@ -14,17 +26,6 @@ elif is_worker; then
   STOP_STATUS="FINISHED"
 else
   STOP_STATUS="READY"
-fi
-
-# --- Research enforcement: block stop if task exists but no report ---
-# Must run BEFORE writing status so FINISHED isn't written on a blocked stop.
-if is_worker; then
-  TASK_FILE="${RUNTIME_DIR}/research/${PANE_SAFE}.task"
-  REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
-  if [ -f "$TASK_FILE" ] && [ ! -f "$REPORT_FILE" ]; then
-    echo "Research task incomplete. Write your report to ${REPORT_FILE} using the Write tool before stopping." >&2
-    exit 2
-  fi
 fi
 
 # --- Write status file (atomic: tmp + mv) ---
