@@ -48,15 +48,10 @@ if is_worker; then
     [ -f "$_f" ] && HAS_COLLAPSED=true && break
   done
   if $HAS_COLLAPSED; then
-    COLS=$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | cut -dx -f1)
-    COLS="${COLS//\"/}"
-    # Handle dynamic grid mode
-    if [ "$COLS" = "dynamic" ] || [ -z "$COLS" ]; then
-      COLS=$(grep '^CURRENT_COLS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)
-      COLS="${COLS//\"/}"
-    fi
-    if [ -n "$COLS" ] && [ "$COLS" -gt 0 ]; then
-      COL_IDX=$(( PANE_INDEX % COLS ))
+    # Worker pane indices start at 1 (pane 0 is Manager).
+    # Each worker column has 2 panes, so column index = (pane_index - 1) / 2
+    if [ "$PANE_INDEX" -gt 0 ]; then
+      COL_IDX=$(( (PANE_INDEX - 1) / 2 ))
       COLLAPSED_FILE="${RUNTIME_DIR}/status/col_${COL_IDX}.collapsed"
       if [ -f "$COLLAPSED_FILE" ]; then
         tmux resize-pane -t "${PANE}" -x 80 2>/dev/null || true
