@@ -1,5 +1,5 @@
 #!/bin/bash
-# Doey Info Panel — dashboard for pane 0.0
+# Doey Info Panel — dashboard for window 0
 # Displays team status, worker counts, and recent events.
 # Runs in a loop, refreshing every 5 seconds.
 set -euo pipefail

@@ -6,15 +6,15 @@ Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It la
 
 ## Architecture
 
-**Single-window mode (default):**
+**Window 0 — Dashboard (always present):**
+- **Info Panel (window 0, shell script):** Live dashboard showing team status, worker counts, recent events. User lands here on attach.
+- **Session Manager (pane 0.1, Opus):** Top-level orchestrator that routes tasks between team windows. Never dispatches to workers directly. Present when multiple teams exist.
+
+**Window 1+ — Team windows:**
 - **Window Manager (pane W.0, Opus):** Orchestrator — plans and delegates, never writes code. Skips reserved workers.
 - **Watchdog (pane W.1 dynamic, W.{cols} static; Haiku):** Monitors workers, delivers inbox messages.
 - **Workers (remaining panes, Opus):** Execute tasks.
-
-**Multi-window mode** (via `doey add-team`):
-- **Info Panel (pane 0.0, shell script):** Dashboard showing team status, worker counts, recent events.
-- **Session Manager (pane 0.1, Opus):** Top-level orchestrator that routes tasks between team windows. Never dispatches to workers directly.
-- Each team window (1+) has its own Window Manager (W.0), Watchdog (W.1), and Workers (W.2+).
+- Additional teams added via `doey add-team` (window 2, 3, etc.).
 
 **Other:**
 - **Test Driver (E2E, Opus):** Automated test runner. Runs outside the tmux grid (separate Claude process via `doey test`).
@@ -60,7 +60,7 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 ## Important Files
 
 - `shell/doey.sh` -- Launcher: smart-launch, init, stop, update/reinstall, doctor, list, purge, test, version, dynamic/d, add, remove, uninstall, add-team/add-window, kill-team/kill-window, list-teams/list-windows
-- `shell/info-panel.sh` -- Multi-window dashboard for pane 0.0 (team status, worker counts, recent events)
+- `shell/info-panel.sh` -- Dashboard for window 0 (team status, worker counts, recent events)
 - `.claude/hooks/common.sh` -- Shared utilities: `init_hook()`, `parse_field()`, `load_team_env()`, role checks (`is_manager()`, `is_session_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()`, `NL` (newline var), `is_numeric()`
 - `.claude/hooks/on-session-start.sh` -- SessionStart: initial setup
 - `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status, sets READY on /compact, expands collapsed columns
