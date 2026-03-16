@@ -81,7 +81,7 @@ ${RECENT_FILES:-None detected}
 CONTEXT
 
 # Append Window Manager orchestration state if this is the Window Manager
-# Managers live in Dashboard (window 0) but manage a team window — use DOEY_TEAM_WINDOW
+# DOEY_TEAM_WINDOW is set for consistency (equals WINDOW_INDEX for managers in team windows)
 if is_manager; then
   _TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
   WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
@@ -133,7 +133,8 @@ fi
 
 # Append watchdog pane states if this is the watchdog
 if is_watchdog; then
-  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${_TEAM_W:-$WINDOW_INDEX}.json" 2>/dev/null || echo "{}")
+  _WD_TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
+  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${_WD_TEAM_W}.json" 2>/dev/null || echo "{}")
   if [ "$WATCHDOG_STATE" != "{}" ]; then
     cat <<WDSTATE
 

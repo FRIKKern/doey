@@ -1,12 +1,12 @@
 # Skill: doey-restart-window
 
-Restart all workers and the Watchdog in a specific team window. Does not restart the Window Manager. Uses process-based killing and deterministic verify loops.
+Restart all workers in a specific team window. Does not restart the Window Manager (W.0) or the Watchdog (in Dashboard). Uses process-based killing and deterministic verify loops.
 
 ## Usage
 `/doey-restart-window [window_index]` — restart a specific team window (default: current window)
 
 ## Prompt
-You are restarting workers and the Watchdog in a team window.
+You are restarting workers in a team window. The Watchdog runs in Dashboard (pane 0.1-0.3), not in the team window.
 
 ### Project Context
 
@@ -35,15 +35,14 @@ if [ -f "$TEAM_ENV" ]; then
     value="${value%\"}" && value="${value#\"}"
     case "$key" in
       WORKER_PANES) WORKER_PANES="$value" ;;
-      WATCHDOG_PANE) WATCHDOG_PANE="$value" ;;
     esac
   done < "$TEAM_ENV"
 fi
 
-ALL_PANES="$WATCHDOG_PANE $(echo "$WORKER_PANES" | tr ',' ' ')"
+ALL_PANES=$(echo "$WORKER_PANES" | tr ',' ' ')
 WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
 
-# Detect already-ready workers — skip them. Watchdog is ALWAYS restarted.
+# Detect already-ready workers — skip them.
 SKIP_PANES=""
 for i in $WORKER_PANES_LIST; do
   PANE_PID=$(tmux display-message -t "$SESSION_NAME:${TARGET_WIN}.$i" -p '#{pane_pid}')
@@ -55,13 +54,13 @@ for i in $WORKER_PANES_LIST; do
 done
 
 echo "Target window: ${TARGET_WIN}"
-echo "Workers: ${WORKER_PANES}, Watchdog: ${WATCHDOG_PANE}"
+echo "Workers: ${WORKER_PANES} (Watchdog runs in Dashboard, not restarted here)"
 [ -n "$SKIP_PANES" ] && echo "Skipping (already ready):${SKIP_PANES}"
 ```
 
 ### Step 2: Kill processes
 
-Kill Claude processes by PID. Skip ready workers. Watchdog is always killed.
+Kill Claude processes by PID. Skip ready workers.
 
 ```bash
 for i in $ALL_PANES; do
@@ -104,12 +103,9 @@ sleep 1
 
 ### Step 4: Launch instances
 
-Watchdog first, then workers with 0.5s gaps. Skip already-ready workers.
+Launch workers with 0.5s gaps. Skip already-ready workers. Watchdog runs in Dashboard and is not managed here.
 
 ```bash
-tmux send-keys -t "$SESSION_NAME:${TARGET_WIN}.$WATCHDOG_PANE" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-sleep 1
-
 for i in $WORKER_PANES_LIST; do
   if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
   WORKER_PROMPT=$(grep -l "pane ${TARGET_WIN}\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
@@ -141,33 +137,22 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
 done
 ```
 
-### Step 6: Instruct Watchdog
-
-```bash
-WORKER_LIST=""
-for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
-  [ -n "$WORKER_LIST" ] && WORKER_LIST="${WORKER_LIST}, "
-  WORKER_LIST="${WORKER_LIST}${TARGET_WIN}.$i"
-done
-tmux send-keys -t "$SESSION_NAME:${TARGET_WIN}.$WATCHDOG_PANE" "Start monitoring. Skip pane ${TARGET_WIN}.0 and ${TARGET_WIN}.$WATCHDOG_PANE. Monitor panes ${WORKER_LIST}." Enter
-```
-
-### Step 7: Final report
+### Step 6: Final report
 
 Show status table distinguishing skipped (already ready) from restarted panes:
 ```
 Pane          Role        Status
-${TARGET_WIN}.1     Watchdog    UP (restarted)
-${TARGET_WIN}.2     Worker      UP (already ready — skipped)
+${TARGET_WIN}.1     Worker      UP (already ready — skipped)
+${TARGET_WIN}.2     Worker      UP (restarted)
 ${TARGET_WIN}.3     Worker      UP (restarted)
 ```
 
-Use `$WATCHDOG_PANE` to label "Watchdog"; others are "Worker". Check `$SKIP_PANES`.
+All panes are Workers (Watchdog is in Dashboard, not in team window). Check `$SKIP_PANES`.
 
 ### Rules
-- **Never restart the Window Manager** (pane W.0) — only workers and watchdog
+- **Never restart the Window Manager** (pane W.0) — only workers
+- **Watchdog is in Dashboard** (pane 0.1-0.3) — not restarted by this command
 - **Always kill by PID** — never use `/exit` or `send-keys` to stop Claude
-- **Watchdog is always restarted** regardless of readiness state
 - **Skip workers that are already ready** (has child process + bypass permissions + prompt visible)
 - **If VERIFY KILLED fails, STOP** — do not proceed to launch
 - **All sleep durations are intentional** — do not shorten

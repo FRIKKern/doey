@@ -174,8 +174,8 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `WINDOW_INDEX` | Window index (matches `<W>` in filename) |
 | `GRID` | Grid layout for this window |
 | `MANAGER_PANE` | Window Manager pane index (always `0`) |
-| `WATCHDOG_PANE` | Watchdog pane index |
-| `WORKER_PANES` | Comma-separated worker pane indices |
+| `WATCHDOG_PANE` | Watchdog Dashboard pane index (0.1-0.3) |
+| `WORKER_PANES` | Comma-separated worker pane indices (W.1+) |
 | `WORKER_COUNT` | Number of workers in this window |
 | `SESSION_NAME` | tmux session name (same as session.env) |
 
@@ -197,32 +197,39 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Window 0 is always the Dashboard (Info Panel full-screen, Session Manager in pane 0.1 when multiple teams exist). Team grids start at window 1+.
+Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel, panes 0.1-0.3 = Watchdog slots (one per team), pane 0.4 = Session Manager (when multiple teams exist). Team grids start at window 1+.
 
-Default grid: **dynamic** (launches with 2 worker columns (4 workers), auto-adds more when all workers are busy). In dynamic mode: pane W.0 = Window Manager, W.1 = Watchdog (share column 0). In static mode: pane W.0 = Window Manager, W.{cols} = Watchdog (first pane of second row). Workers fill remaining panes.
+Default grid: **dynamic** (launches with 2 worker columns (4 workers), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.1-0.3).
 
 ```
+Dashboard (window 0):
++--------+--------+--------+--------+--------+
+|  0.0   |  0.1   |  0.2   |  0.3   |  0.4   |
+|  INFO  |  WDG1  |  WDG2  |  WDG3  |  SMGR  |
+| PANEL  | (team1)| (team2)| (team3)|        |
++--------+--------+--------+--------+--------+
+
 Dynamic grid (default) — team window layout, then after `doey add`:
 
  Initial (4 workers, window W)                        After `doey add` (6 workers)
 +--------+--------+--------+                         +--------+--------+--------+--------+
-|  W.0   |  W.2   |  W.4   |                         |  W.0   |  W.2   |  W.4   |  W.6   |
+|  W.0   |  W.1   |  W.3   |                         |  W.0   |  W.1   |  W.3   |  W.5   |
 |  MGR   |  W1    |  W3    |                         |  MGR   |  W1    |  W3    |  W5    |
 +--------+--------+--------+                         +--------+--------+--------+--------+
-|  W.1   |  W.3   |  W.5   |                         |  W.1   |  W.3   |  W.5   |  W.7   |
-|  WDG   |  W2    |  W4    |                         |  WDG   |  W2    |  W4    |  W6    |
+|        |  W.2   |  W.4   |                         |        |  W.2   |  W.4   |  W.6   |
+|        |  W2    |  W4    |                         |        |  W2    |  W4    |  W6    |
 +--------+--------+--------+                         +--------+--------+--------+--------+
 ```
 
-Static grid (legacy, via `doey 6x2`): Watchdog at column-count index (W.6 for 6-col).
+Static grid (legacy, via `doey 6x2`): all panes are Workers except W.0 (Manager).
 
 ```
 +--------+--------+--------+--------+--------+--------+
 |  W.0   |  W.1   |  W.2   |  W.3   |  W.4   |  W.5   |
 |  MGR   |  W1    |  W2    |  W3    |  W4    |  W5    |
 +--------+--------+--------+--------+--------+--------+
-|  W.6   |  W.7   |  W.8   |  W.9   |  W.10  |  W.11  |
-|  WDG   |  W6    |  W7    |  W8    |  W9    |  W10   |
+|        |  W.6   |  W.7   |  W.8   |  W.9   |  W.10  |
+|        |  W6    |  W7    |  W8    |  W9    |  W10   |
 +--------+--------+--------+--------+--------+--------+
 ```
 
@@ -295,7 +302,7 @@ Loaded by all instances. Contains: project overview, architecture, key directori
 | Window Manager uses wrong session | `tmux show-environment DOEY_RUNTIME` invalid |
 | Window Manager dispatches to Watchdog | `WATCHDOG_PANE` in session.env wrong |
 | Window Manager sends empty tasks | Task text empty before Enter |
-| Session Manager gets no stop notifications | `stop-notify.sh` not registered; pane not resolving to 0.1 in Dashboard window |
+| Session Manager gets no stop notifications | `stop-notify.sh` not registered; pane not resolving to 0.4 in Dashboard window |
 | Watchdog stops monitoring | Stop hook keep-alive failing; check `WATCHDOG_PANE` |
 | Watchdog spams notifications | State tracking lost after compaction |
 | All panes think they're Window Manager | Hook using bare `tmux display-message` without `-t "$TMUX_PANE"` |

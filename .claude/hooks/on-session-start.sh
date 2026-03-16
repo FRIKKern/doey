@@ -46,13 +46,13 @@ _WP="${PANE#*:}"
 WINDOW_INDEX="${_WP%.*}"
 
 # Determine role based on new architecture:
-# - Window 0 (Dashboard): pane 0.0=Info Panel, 0.1-0.3=Window Manager slots, 0.4=Session Manager
-# - Window 1+ (Team):     pane W.0=Watchdog, W.1+=Workers
+# - Window 0 (Dashboard): pane 0.0=Info Panel, 0.1-0.3=Watchdog slots, 0.4=Session Manager
+# - Window 1+ (Team):     pane W.0=Manager, W.1+=Workers
 ROLE="worker"
 DOEY_TEAM_WINDOW=""
 
 if [ "$WINDOW_INDEX" = "0" ]; then
-  # Dashboard window — check if this pane is a Window Manager slot
+  # Dashboard window — check if this pane is a Watchdog slot
   SM_PANE=""
   sm_val=$(grep '^SM_PANE=' "$SESSION_ENV" | cut -d= -f2- || true)
   sm_val="${sm_val%\"}" && sm_val="${sm_val#\"}"
@@ -63,13 +63,13 @@ if [ "$WINDOW_INDEX" = "0" ]; then
   elif [ "$PANE_INDEX" = "0" ]; then
     ROLE="info_panel"
   else
-    # Check if this pane is a Window Manager for any team
+    # Check if this pane is a Watchdog for any team
     for _ss_tf in "${RUNTIME_DIR}"/team_*.env; do
       [ -f "$_ss_tf" ] || continue
-      _ss_mgr=$(grep '^MANAGER_PANE=' "$_ss_tf" | cut -d= -f2-)
-      _ss_mgr="${_ss_mgr%\"}" && _ss_mgr="${_ss_mgr#\"}"
-      if [ "$_ss_mgr" = "0.${PANE_INDEX}" ]; then
-        ROLE="manager"
+      _ss_wd=$(grep '^WATCHDOG_PANE=' "$_ss_tf" | cut -d= -f2-)
+      _ss_wd="${_ss_wd%\"}" && _ss_wd="${_ss_wd#\"}"
+      if [ "$_ss_wd" = "0.${PANE_INDEX}" ]; then
+        ROLE="watchdog"
         # Extract team window index from filename (team_N.env)
         _ss_fn="${_ss_tf##*/}"   # team_N.env
         _ss_fn="${_ss_fn#team_}" # N.env
@@ -79,17 +79,17 @@ if [ "$WINDOW_INDEX" = "0" ]; then
     done
   fi
 else
-  # Team window — pane 0 is Watchdog, rest are Workers
-  TEAM_WD_PANE=""
+  # Team window — pane 0 is Manager, rest are Workers
+  TEAM_MGR_PANE=""
   TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   if [ -f "$TEAM_ENV" ]; then
-    TEAM_WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
-    TEAM_WD_PANE="${TEAM_WD_PANE%\"}" && TEAM_WD_PANE="${TEAM_WD_PANE#\"}"
+    TEAM_MGR_PANE=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
+    TEAM_MGR_PANE="${TEAM_MGR_PANE%\"}" && TEAM_MGR_PANE="${TEAM_MGR_PANE#\"}"
   fi
-  [ -z "$TEAM_WD_PANE" ] && TEAM_WD_PANE="${WATCHDOG_PANE:-0}"
+  [ -z "$TEAM_MGR_PANE" ] && TEAM_MGR_PANE="0"
 
-  if [ "$PANE_INDEX" = "$TEAM_WD_PANE" ]; then
-    ROLE="watchdog"
+  if [ "$PANE_INDEX" = "$TEAM_MGR_PANE" ]; then
+    ROLE="manager"
   else
     ROLE="worker"
   fi

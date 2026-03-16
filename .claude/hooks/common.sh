@@ -62,39 +62,48 @@ load_team_env() {
 }
 
 is_watchdog() {
-  # Cache result to avoid re-reading env files on repeated calls.
-  # Multi-window: check team_<W>.env first, fall back to session.env.
-  if [ -z "${_DOEY_WD_PANE+x}" ]; then
-    local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-    if [ -f "$team_file" ]; then
-      _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "$team_file" | cut -d= -f2)
-      _DOEY_WD_PANE="${_DOEY_WD_PANE//\"/}"
-    elif [ -f "${RUNTIME_DIR}/session.env" ]; then
-      _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
-      _DOEY_WD_PANE="${_DOEY_WD_PANE//\"/}"
-    else
-      return 1
-    fi
+  # Cache result — this is called on every tool hook invocation
+  if [ -n "${_DOEY_IS_WD+x}" ]; then
+    return "$_DOEY_IS_WD"
   fi
-  [ "$PANE_INDEX" = "$_DOEY_WD_PANE" ]
+  _DOEY_IS_WD=1  # default: not a watchdog
+  # Watchdogs live in Dashboard (window 0), panes 0.1-0.3.
+  # Each team_W.env has WATCHDOG_PANE="0.X" referencing the Dashboard pane.
+  if [ "$WINDOW_INDEX" = "0" ]; then
+    for _wd_tf in "${RUNTIME_DIR}"/team_*.env; do
+      [ -f "$_wd_tf" ] || continue
+      local _wd_val
+      _wd_val=$(grep '^WATCHDOG_PANE=' "$_wd_tf" | cut -d= -f2)
+      _wd_val="${_wd_val//\"/}"
+      if [ "$_wd_val" = "0.${PANE_INDEX}" ]; then
+        _DOEY_IS_WD=0
+        break
+      fi
+    done
+  fi
+  return "$_DOEY_IS_WD"
 }
 
 is_manager() {
-  # Window Managers live in Dashboard (window 0), panes 0.1, 0.2, 0.3.
-  # Each team_W.env has MANAGER_PANE="0.X" referencing the Dashboard pane.
-  if [ "$WINDOW_INDEX" = "0" ]; then
-    # Check if this Dashboard pane is a manager slot for any team
-    for _mgr_tf in "${RUNTIME_DIR}"/team_*.env; do
-      [ -f "$_mgr_tf" ] || continue
-      local _mgr_val
-      _mgr_val=$(grep '^MANAGER_PANE=' "$_mgr_tf" | cut -d= -f2)
-      _mgr_val="${_mgr_val//\"/}"
-      [ "$_mgr_val" = "0.${PANE_INDEX}" ] && return 0
-    done
-    return 1
+  # Cache result — this is called on every tool hook invocation
+  if [ -n "${_DOEY_IS_MGR+x}" ]; then
+    return "$_DOEY_IS_MGR"
   fi
-  # Not in Dashboard — never a manager (managers only live in window 0)
-  return 1
+  _DOEY_IS_MGR=1  # default: not a manager
+  # Managers live in team windows (W≥1), pane 0.
+  # Each team_W.env has MANAGER_PANE="0" (pane index within the team window).
+  if [ "$WINDOW_INDEX" != "0" ]; then
+    local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+    if [ -f "$team_file" ]; then
+      local _mgr_val
+      _mgr_val=$(grep '^MANAGER_PANE=' "$team_file" | cut -d= -f2)
+      _mgr_val="${_mgr_val//\"/}"
+      if [ "$PANE_INDEX" = "$_mgr_val" ]; then
+        _DOEY_IS_MGR=0
+      fi
+    fi
+  fi
+  return "$_DOEY_IS_MGR"
 }
 
 is_session_manager() {
@@ -115,9 +124,9 @@ is_session_manager() {
 }
 
 is_worker() {
-  # Workers live in team windows (1+), not in Dashboard (0)
+  # Workers live in team windows (1+), not in Dashboard (0), and are not the Manager (pane 0)
   [ "$WINDOW_INDEX" = "0" ] && return 1
-  ! is_watchdog
+  ! is_manager
 }
 
 is_reserved() {
