@@ -202,17 +202,19 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel, panes 0.1-0.3 = Watchdog slots (one per team), pane 0.4 = Session Manager (when multiple teams exist). Team grids start at window 1+.
+Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel (left column, full height), pane 0.4 = Session Manager (top-right), panes 0.1-0.3 = Watchdog slots (bottom-right, side-by-side). Team grids start at window 1+.
 
 Default grid: **dynamic** (launches with 3 worker columns (6 workers), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.1-0.3).
 
 ```
 Dashboard (window 0):
-+--------+--------+--------+--------+--------+
-|  0.0   |  0.1   |  0.2   |  0.3   |  0.4   |
-|  INFO  |  WDG1  |  WDG2  |  WDG3  |  SMGR  |
-| PANEL  | (team1)| (team2)| (team3)|        |
-+--------+--------+--------+--------+--------+
++----------+----------------------------+
+|          |     0.4  Session Manager   |
+|   0.0    +--------+--------+----------+
+|   INFO   |  0.1   |  0.2   |  0.3    |
+|  PANEL   |  WDG1  |  WDG2  |  WDG3   |
+|          | (team1)| (team2)| (team3)  |
++----------+--------+--------+----------+
 
 Dynamic grid (default) — team window layout, then after `doey add`:
 
