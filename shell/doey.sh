@@ -1095,7 +1095,7 @@ doey_purge() {
 
 # ── Initial worker columns ────────────────────────────────────────────
 # Number of worker columns to add on dynamic launch (2 workers per column)
-INITIAL_WORKER_COLS=2
+INITIAL_WORKER_COLS=3
 # Number of team windows to create on dynamic launch (max 3, one per Dashboard watchdog slot)
 INITIAL_TEAMS=3
 
@@ -2454,12 +2454,15 @@ _layout_checksum() {
   printf '%04x' "$csum"
 }
 
-# Generate and apply a column-based layout: N equal columns, each with 2 rows.
-# Panes must be ordered: col0_top, col0_bot, col1_top, col1_bot, ...
-# This ensures worker pairs share a column regardless of tmux's layout tree.
+# Generate and apply a Manager-aware column layout.
+# Pane 0 is the Manager — gets a narrow full-height column on the left.
+# Remaining panes are workers — paired into equal-width 2-row columns.
+# Handles odd worker counts (last column gets 1 full-height pane).
 rebalance_grid_layout() {
   local session="$1"
   local team_window="${2:-1}"
+  local mgr_width=60  # Fixed width for Manager column
+
   local win_w win_h
   win_w="$(tmux display-message -t "$session:${team_window}" -p '#{window_width}')"
   win_h="$(tmux display-message -t "$session:${team_window}" -p '#{window_height}')"
@@ -2471,24 +2474,51 @@ rebalance_grid_layout() {
   done < <(tmux list-panes -t "$session:${team_window}" -F '#{pane_index}	#{pane_id}')
 
   local num_panes=${#pane_ids[@]}
-  local num_cols=$((num_panes / 2))
-  if (( num_cols < 2 )); then return 0; fi
+  # Need at least Manager + 2 workers to do anything useful
+  if (( num_panes < 3 )); then return 0; fi
 
+  local num_workers=$((num_panes - 1))
+  local worker_cols=$(( (num_workers + 1) / 2 ))  # ceiling division for odd counts
+
+  # Ensure Manager column doesn't eat too much space (cap at 25% of window)
+  local max_mgr=$((win_w / 4))
+  if (( mgr_width > max_mgr )); then
+    mgr_width=$max_mgr
+  fi
+
+  local worker_area=$((win_w - mgr_width - 1))  # -1 for border between mgr and workers
   local top_h=$((win_h / 2))
   local bot_h=$((win_h - top_h - 1))
+
+  # Build layout string: Manager column first, then worker columns
   local body="" x=0
 
-  local c w
-  for ((c=0; c<num_cols; c++)); do
-    if ((c == num_cols - 1)); then
-      w=$((win_w - x))
+  # Manager column: single pane, full height
+  local mgr_id="${pane_ids[0]}"
+  body="${mgr_width}x${win_h},${x},0,${mgr_id}"
+  x=$((mgr_width + 1))
+
+  # Worker columns: each has 2 rows (top + bottom worker)
+  local c w wi
+  for ((c=0; c<worker_cols; c++)); do
+    if ((c == worker_cols - 1)); then
+      w=$((win_w - x))  # last column gets remaining width
     else
-      w=$((win_w / num_cols))
+      w=$((worker_area / worker_cols))
     fi
-    local tp="${pane_ids[$((c*2))]}"
-    local bp="${pane_ids[$((c*2+1))]}"
-    [[ -n "$body" ]] && body+=","
-    body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
+
+    wi=$((c * 2 + 1))  # worker pane index (1-based, skipping Manager)
+    local tp="${pane_ids[$wi]}"
+
+    body+=","
+    if (( wi + 1 < num_panes )); then
+      # Normal column: 2 workers (top + bottom)
+      local bp="${pane_ids[$((wi + 1))]}"
+      body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
+    else
+      # Odd worker count: last column has 1 worker at full height
+      body+="${w}x${win_h},${x},0,${tp}"
+    fi
     x=$((x + w + 1))
   done
 
