@@ -62,7 +62,7 @@ if is_watchdog; then
       # Only permit: sending /doey-inbox, /login, /compact, bare Enter, and copy-mode.
       # Match command structure to prevent allowlist bypass via string containment
       # (e.g. "echo doey-inbox; malicious" would pass a simple substring check).
-      if echo "$TOOL_COMMAND" | grep -qE '^[[:space:]]*tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( |$)|copy-mode )'; then
+      if echo "$TOOL_COMMAND" | grep -qE '^[[:space:]]*tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( Enter)?( |$)|copy-mode )'; then
         exit 0
       fi
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
