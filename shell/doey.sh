@@ -446,10 +446,10 @@ apply_doey_theme() {
   # Status bar — dark bg, branded left segment
   tmux set-option -t "$session" status-position top
   tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
-  tmux set-option -t "$session" status-left-length 50
+  tmux set-option -t "$session" status-left-length 40
   tmux set-option -t "$session" status-right-length 70
   tmux set-option -t "$session" status-left \
-    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour236,nobold] #S #[fg=colour236,bg=colour233] "
+    "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour233,nobold] "
   tmux set-option -t "$session" status-right \
     "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
   tmux set-option -t "$session" status-interval "$status_interval"
