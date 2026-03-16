@@ -26,12 +26,7 @@ echo "Sent /compact to Watchdog pane ${WATCHDOG}"
 ### Step 2: Wait and verify output
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
-WATCHDOG="${SESSION_NAME}:${WATCHDOG_PANE}"
+# (vars from step 1)
 
 sleep 15
 OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)

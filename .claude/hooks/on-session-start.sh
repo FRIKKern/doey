@@ -101,3 +101,12 @@ export DOEY_PANE_INDEX="$PANE_INDEX"
 export DOEY_WINDOW_INDEX="$WINDOW_INDEX"
 export DOEY_TEAM_WINDOW="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
 EOF
+
+# Set descriptive pane title based on role + team
+_team_w="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
+case "$ROLE" in
+  watchdog)       tmux select-pane -t "${TMUX_PANE}" -T "Watchdog T${_team_w}" ;;
+  manager)        tmux select-pane -t "${TMUX_PANE}" -T "Manager T${_team_w}" ;;
+  session_manager) tmux select-pane -t "${TMUX_PANE}" -T "Session Manager" ;;
+  worker)         tmux select-pane -t "${TMUX_PANE}" -T "W${PANE_INDEX} T${_team_w}" ;;
+esac

@@ -95,7 +95,7 @@ Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
 ## Layer 4: Skills/Commands
 
-24 skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
+Skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
 
 | Skill | Primary Agent | Purpose |
 |-------|---------------|---------|
@@ -132,6 +132,7 @@ Agent usage: Window Manager uses all except `/doey-inbox` and window-management 
 | Agent | Path | Notes |
 |-------|------|-------|
 | Window Manager | `~/.claude/agent-memory/doey-manager/MEMORY.md` | Stores dispatch patterns, delegation rules, hook behavior |
+| Session Manager | `~/.claude/agent-memory/doey-session-manager/MEMORY.md` | Routing patterns, team coordination |
 | Watchdog | `~/.claude/agent-memory/doey-watchdog/MEMORY.md` | Disabled (agent definition has `memory: none`) |
 
 Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
@@ -153,7 +154,7 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `CURRENT_COLS` | Current column count (updated as grid expands) | doey.sh | dynamic only |
 | `TOTAL_PANES` | Total pane count | doey.sh | static only |
 | `WORKER_COUNT` | Number of workers | doey.sh | both |
-| `WATCHDOG_PANE` | Watchdog pane index | doey.sh | both |
+| `WATCHDOG_PANE` | Watchdog Dashboard slot ref (e.g., `0.1`) | doey.sh | both |
 | `WORKER_PANES` | Comma-separated worker indices | doey.sh | both |
 | `RUNTIME_DIR` | Runtime state directory | doey.sh | both |
 | `PASTE_SETTLE_MS` | Paste buffer settle time in ms | doey.sh | both |
@@ -164,6 +165,10 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `CLAUDECODE` | Set when inside Claude Code | Claude Code | both |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `1` — enables Agent Teams | Claude Code | both |
 | `TEAM_WINDOWS` | Comma-separated list of active team window indices (e.g., `"0,1,2"`) | doey.sh | both |
+| `WDG_SLOT_1` | Dashboard Watchdog pane ref for team 1 (e.g., `0.1`) | doey.sh | both |
+| `WDG_SLOT_2` | Dashboard Watchdog pane ref for team 2 (e.g., `0.2`) | doey.sh | both |
+| `WDG_SLOT_3` | Dashboard Watchdog pane ref for team 3 (e.g., `0.3`) | doey.sh | both |
+| `SM_PANE` | Session Manager pane ref (e.g., `0.4`) | doey.sh | both |
 | `DOEY_ROLE` | Pane role (manager/watchdog/worker) | hooks | both |
 | `DOEY_PANE_INDEX` | Pane index within session | hooks | both |
 | `DOEY_WINDOW_INDEX` | Window index for this pane | hooks | both |
@@ -190,7 +195,7 @@ Loaded by hooks via `load_team_env()` and by commands via manual sourcing. Team 
 |----------|---------|
 | Window Manager | `claude --dangerously-skip-permissions --agent doey-manager` |
 | Watchdog | `claude --dangerously-skip-permissions --model haiku --agent doey-watchdog` |
-| Workers | `claude --dangerously-skip-permissions --model opus --append-system-prompt-file /tmp/doey/<name>/worker-system-prompt-<N>.md` |
+| Workers | `claude --dangerously-skip-permissions --model opus --append-system-prompt-file /tmp/doey/<name>/worker-system-prompt-w<W>-<N>.md` |
 
 Precedence: CLI flags > agent frontmatter > settings files.
 
@@ -259,7 +264,9 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
 /tmp/doey/<project>/
   session.env                        # Session manifest (includes TEAM_WINDOWS)
   team_<W>.env                       # Per-window team config (W = window index)
-  worker-system-prompt-N.md          # Per-worker prompt (base + identity)
+  worker-system-prompt.md            # Shared base worker prompt template
+  worker-system-prompt-w<W>-<N>.md   # Per-worker prompt (base + identity, W=window, N=worker)
+  mgr<W>_*.log                       # Manager launch debug logs (debug, launch, script, stderr)
   status/                            # [init-time]
     <pane_safe>.status               # 4-line: PANE, UPDATED, STATUS, TASK
     <pane_safe>.reserved             # contains "permanent"
@@ -272,6 +279,7 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
     col_*.collapsed                  # Collapsed column markers
     completion_pane_<W>_<index>      # Worker completion events (consumed by Watchdog)
     crash_pane_<W>_<index>           # Crash alerts (written by Watchdog)
+    manager_crashed_W<N>             # Manager crash detection marker (per window)
   research/                          # [hook-init] Created by common.sh init_hook()
     <pane_safe>.task                  # Research task marker
   reports/                           # [hook-init] Created by common.sh init_hook()

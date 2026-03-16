@@ -1,12 +1,12 @@
 # Skill: doey-analyze
 
-Run a full project analysis to detect documentation obscurities, inaccuracies, contradictions, gaps, and bash 3.2 violations across all context files. Dispatches parallel analysis workers, collects reports, then dispatches fix workers.
+Full project analysis: detect doc inaccuracies, contradictions, gaps, and bash 3.2 violations. Dispatches parallel analysis workers, collects reports, then dispatches fix workers.
 
 ## Usage
 `/doey-analyze`
 
 ## Prompt
-You are the Doey Window Manager running a full-project analysis sweep. This is a two-wave operation: first analyze, then fix.
+You are the Doey Window Manager running a two-wave analysis sweep (analyze, then fix).
 
 ### Project Context
 
@@ -18,137 +18,91 @@ WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
-This gives you all session variables including: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WORKER_COUNT`, `GRID`, `WINDOW_INDEX`, and grid-mode-specific vars.
+Provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WORKER_COUNT`, `GRID`, `WINDOW_INDEX`, and grid-mode vars.
 
-### What to Analyze
+### Scope
 
-The analysis covers ALL context files that Claude Code instances consume:
-
-| Category | Location | Examples |
-|----------|----------|---------|
-| CLAUDE.md files | Project root + parents | Architecture, conventions, important files |
-| Agent definitions | `agents/*.md` | Window Manager, Watchdog, Test Driver roles |
-| Hook scripts | `.claude/hooks/*.sh` | Safety rules, context injection, status tracking |
-| Commands/skills | `commands/*.md` | Slash commands available to agents |
-| Documentation | `docs/*.md` | Context reference, platform guides |
-| Shell scripts | `shell/*.sh` | CLI launcher, utilities |
-| Config | `.claude/settings.local.json` | Permissions, hook registration |
-| Install | `install.sh` | What gets installed where |
-| Other | `README.md`, `tests/`, memory files | User-facing docs, E2E tests |
+Analyze ALL context files: CLAUDE.md files, `agents/*.md`, `.claude/hooks/*.sh`, `commands/*.md`, `docs/*.md`, `shell/*.sh`, `.claude/settings.local.json`, `install.sh`, `README.md`, `tests/`, memory files.
 
 ### Issue Categories
 
-Each worker classifies findings as:
-
-- **INACCURATE** — doc says X, code does Y (with file:line references)
+- **INACCURATE** — doc says X, code does Y (file:line refs)
 - **CONTRADICTORY** — file A says X, file B says Y
-- **OBSCURE** — unclear, misleading, or confusing documentation
-- **GAPS** — undocumented behavior that should be documented
-- **REDUNDANT** — same thing in multiple places (drift risk)
+- **OBSCURE** — unclear or misleading docs
+- **GAPS** — undocumented behavior
+- **REDUNDANT** — duplicated info (drift risk)
 - **CODE QUALITY** — bash 3.2 violations, bugs, race conditions, dead code
-- **OUTDATED** — references to removed or changed features
+- **OUTDATED** — references to removed/changed features
 
-Severity: HIGH (actively misleading/buggy), MED (confusing/outdated), LOW (nitpick).
+Severity: HIGH (misleading/buggy), MED (confusing/outdated), LOW (nitpick).
 
 ### Wave 1: Analysis (parallel)
 
-Dispatch 4 workers, each owning a domain. Use `/doey-dispatch` or direct dispatch. **Tell workers: Do NOT use the Agent tool — read files directly to avoid context overflow.**
+Dispatch 4 workers via `/doey-dispatch`. **Tell all workers: Do NOT use the Agent tool.** Each writes to `${RUNTIME_DIR}/reports/analyze_<domain>.md`.
 
-Each worker writes a structured report to `${RUNTIME_DIR}/reports/analyze_<domain>.md`.
+**Worker A — Agents & CLAUDE.md:** Read all agent `.md` + both CLAUDE.md. Cross-ref `shell/doey.sh`, `.claude/hooks/`, `commands/`.
 
-#### Worker A: Agent Definitions & CLAUDE.md
-- **Read:** All agent `.md` files, both CLAUDE.md files
-- **Cross-ref:** `shell/doey.sh` (launch logic, env vars), `.claude/hooks/` (actual rules), `commands/` (referenced commands)
-- **Report:** `${RUNTIME_DIR}/reports/analyze_agents.md`
+**Worker B — Hooks & Safety:** Read all `.claude/hooks/*.sh` + `settings.local.json`. Cross-ref agent defs, `docs/context-reference.md`. Focus: bash 3.2 violations (`declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `[[ =~` capture groups, `${var,,}`/`${var^^}`, `globstar`/`lastpipe`), exit codes, races, dead code.
 
-#### Worker B: Hooks & Safety Rules
-- **Read:** All 10 `.claude/hooks/*.sh` files, `.claude/settings.local.json`
-- **Cross-ref:** Agent definitions (claimed behaviors), `docs/context-reference.md` (hook descriptions)
-- **Focus:** Bash 3.2 violations (`declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `[[ =~` capture groups, `${var,,}`/`${var^^}`, bash 4+ `shopt` options like `globstar`/`lastpipe`), exit code accuracy, race conditions, dead code
-- **Report:** `${RUNTIME_DIR}/reports/analyze_hooks.md`
+**Worker C — Commands/Skills:** Read all `commands/*.md`. Cross-ref agent defs, `README.md`, `shell/doey.sh`. Focus: consistent patterns (idle detection, copy-mode, error handling, mkdir -p), bash 3.2 in code blocks.
 
-#### Worker C: Commands/Skills
-- **Read:** All `commands/*.md` files
-- **Cross-ref:** Agent definitions (command references), `README.md` (command table), `shell/doey.sh` (session.env vars)
-- **Focus:** Consistent patterns (idle detection, copy-mode, error handling, mkdir -p), bash 3.2 in code blocks
-- **Report:** `${RUNTIME_DIR}/reports/analyze_commands.md`
-
-#### Worker D: Docs, README, Install & Shell
-- **Read:** `docs/context-reference.md`, `README.md`, `install.sh`, `docs/*.md`, `shell/*.sh`
-- **Cross-ref:** Actual file structure, actual CLI commands, actual hook chain
-- **Focus:** context-reference.md accuracy (master architecture doc), README completeness, install correctness
-- **Report:** `${RUNTIME_DIR}/reports/analyze_docs.md`
+**Worker D — Docs, README, Install & Shell:** Read `docs/*.md`, `README.md`, `install.sh`, `shell/*.sh`. Cross-ref actual file structure, CLI commands, hook chain. Focus: context-reference.md accuracy, README completeness, install correctness.
 
 ### Worker Task Template
 
 ```
-You are Worker N analyzing [DOMAIN] for the Doey Analyze project.
+You are Worker N analyzing [DOMAIN] for Doey Analyze.
 Project directory: PROJECT_DIR
 
-**CRITICAL: Do NOT use the Agent tool. Read files directly yourself.**
+**Do NOT use the Agent tool. Read files directly.**
 
-**Goal:** Find all inaccuracies, contradictions, obscurities, gaps, and redundancies.
-
-**Step 1:** Read these files (Read tool): [LIST]
-**Step 2:** Cross-check claims via Grep: [TARGETS]
-**Step 3:** Write report to REPORT_PATH using Write tool.
+**Step 1:** Read: [LIST]
+**Step 2:** Cross-check via Grep: [TARGETS]
+**Step 3:** Write report to REPORT_PATH.
 
 Report format:
 # Doey Analyze: [DOMAIN]
 ## Issues Found
-### INACCURATE - [severity] file:line — what's wrong — what's true
-### CONTRADICTORY - [severity] fileA vs fileB — contradiction
-### OBSCURE - [severity] file:line — what's unclear
-### GAPS - [severity] — what's missing
-### REDUNDANT - [severity] files — what's duplicated
-### CODE QUALITY - [severity] file:line — bugs, bash 3.2 violations
+### CATEGORY - [severity] file:line — description
 ## Summary
-- Total issues: N (HIGH: N, MED: N, LOW: N)
+- Total: N (HIGH: N, MED: N, LOW: N)
 - Files needing updates: [list]
 ```
 
 ### Between Waves
 
 After all 4 reports land:
-1. Read all 4 report files from `${RUNTIME_DIR}/reports/analyze_*.md`
-2. Present a consolidated summary table to the user: totals by severity, top HIGH issues, files needing most attention
+1. Read all reports from `${RUNTIME_DIR}/reports/analyze_*.md`
+2. Present consolidated summary: totals by severity, top HIGH issues, files needing attention
 3. Propose Wave 2 fix assignments
-4. **Ask the user for confirmation** before dispatching fixes
+4. **Ask user for confirmation** before dispatching fixes
 
 ### Wave 2: Fix (parallel)
 
-Based on analysis findings, dispatch workers to fix issues. Typical assignment:
+Dispatch workers to fix issues by priority:
+- **A:** Fix bash 3.2 violations in hooks (Critical)
+- **B:** Fix bash 3.2 violations in commands (Critical)
+- **C:** Fix doc inaccuracies — context-reference, README (High)
+- **D:** Fix agent definitions and CLAUDE.md (High)
 
-| Worker | Task | Priority |
-|--------|------|----------|
-| A | Fix bash 3.2 violations in hooks | Critical |
-| B | Fix bash 3.2 violations in commands | Critical |
-| C | Fix documentation inaccuracies (context-reference, README) | High |
-| D | Fix agent definitions and CLAUDE.md | High |
-
-**Important:** Tell fix workers to use Edit tool (not Write), read files before editing, and run `bash -n` on shell files after editing.
+Tell fix workers: use Edit tool (not Write), read before editing, run `bash -n` on shell files after.
 
 ### Verification
 
-After Wave 2, run:
+After Wave 2:
 ```bash
-# Syntax check all hooks
 for f in .claude/hooks/*.sh; do bash -n "$f" && echo "OK: $f" || echo "FAIL: $f"; done
-
-# Check for bash 3.2 violations
 grep -rn '\[\[' .claude/hooks/*.sh | grep -v 'grep\|sed\|echo\|check_pattern\|declare\|printf\|mapfile'
-
-# Context audit
 bash shell/context-audit.sh --repo
 ```
 
-Present results to user. If clean, offer to commit + push. If issues remain, dispatch another fix round.
+Present results. If clean, offer to commit + push. If issues remain, dispatch another fix round.
 
 ### Rules
 
-1. **Always dispatch with "Do NOT use the Agent tool"** — subagent research overflows context and triggers compaction data loss
-2. **Always rename panes before dispatching** — `/rename analyze-<domain>_$(date +%m%d)` for Wave 1, `/rename fix-<domain>_$(date +%m%d)` for Wave 2
-3. **Always verify dispatch** — sleep 5s, check for tool activity
-4. **Always read reports before presenting** — don't summarize from memory
-5. **Ask user before Wave 2** — analysis findings may change priorities
-6. **Run /simplify after fixes** — catches reuse opportunities and quality issues the fix workers missed
+1. **Always dispatch with "Do NOT use the Agent tool"** — prevents context overflow
+2. **Always rename panes** — `/rename analyze-<domain>_$(date +%m%d)` for Wave 1, `/rename fix-<domain>_$(date +%m%d)` for Wave 2
+3. **Verify dispatch** — sleep 5s, check for tool activity
+4. **Read reports before presenting** — don't summarize from memory
+5. **Ask user before Wave 2**
+6. **Run /simplify after fixes**

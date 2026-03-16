@@ -11,34 +11,27 @@ Reserve the current pane to prevent Window Manager dispatch. Supports permanent 
 
 You are reserving or unreserving the pane where this command was typed. **Do NOT ask for confirmation — just do it immediately.**
 
-### Project Context (read once per Bash call)
-
-Every Bash call must start with:
+### Step 1: Read context and determine action
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
-```
-
-### Step 1: Determine action
-
-Read the user's argument after `/doey-reserve`:
-- No argument or empty → **reserve** (go to Step 2a)
-- `off` or `unreserve` → **unreserve** (go to Step 2b)
-- `list` → **list** (go to Step 2c)
-
-Then run the appropriate step below. **Do not use a shell variable for the argument** — determine the action yourself from the user's message and jump to the correct step.
-
-### Step 2a: Reserve permanently (when ACTION=permanent)
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 MY_PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/status"
+```
 
+Read the user's argument after `/doey-reserve`:
+- No argument or empty → **reserve** (Step 2a)
+- `off` or `unreserve` → **unreserve** (Step 2b)
+- `list` → **list** (Step 2c)
+
+Determine the action yourself from the user's message and jump to the correct step.
+
+### Step 2a: Reserve permanently
+
+```bash
+# (vars from step 1)
 echo "permanent" > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.reserved"
 
 cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" << EOF
@@ -51,15 +44,10 @@ EOF
 echo "✓ Pane ${MY_PANE} reserved permanently"
 ```
 
-### Step 2b: Unreserve (when ACTION=unreserve)
+### Step 2b: Unreserve
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-MY_PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
-
+# (vars from step 1)
 rm -f "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.reserved"
 
 cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" << EOF
@@ -72,12 +60,10 @@ EOF
 echo "✓ Pane ${MY_PANE} unreserved"
 ```
 
-### Step 2c: List all reservations (when ACTION=list)
+### Step 2c: List all reservations
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
+# (vars from step 1)
 FOUND=0
 for f in "${RUNTIME_DIR}/status/"*.reserved; do
   [ -f "$f" ] || continue
@@ -89,10 +75,6 @@ done
 ```
 
 ### Rules
-
-1. **Always target THIS pane** (`$MY_PANE` / `$MY_PANE_SAFE`) — never ask which pane
-2. **Window Manager MUST respect reservations** — never dispatch to RESERVED panes
-3. **Reservations are permanent** — `.reserved` file always contains `permanent`
-4. **Pane safe names:** replace `:` and `.` with `_`
-5. **Do NOT ask for confirmation** — just do it immediately
-6. **Always `mkdir -p`** the status directory before writing
+- Always target THIS pane (`$MY_PANE`) — never ask which pane. Pane safe names: replace `:` and `.` with `_`.
+- Reservations are permanent (`.reserved` contains `permanent`). Do NOT ask for confirmation.
+- Always `mkdir -p` the status directory before writing.

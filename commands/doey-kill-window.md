@@ -9,34 +9,19 @@ Kill an entire team window — stops all Claude processes, removes the tmux wind
 ## Prompt
 You are killing a team window in a running Doey tmux session.
 
-### Project Context
-
-Every Bash call must start with:
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-```
-
 ### Step 1: Parse target window and validate
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-
-# Use argument if provided, otherwise current window
 TARGET_WIN="${1:-$WINDOW_INDEX}"
 
-# Cannot kill window 0 — that's the Dashboard
 if [ "$TARGET_WIN" = "0" ]; then
-  echo "ERROR: Cannot kill window 0 — that is the Dashboard window."
-  echo "Use /doey-kill-session to tear down the entire session."
+  echo "ERROR: Cannot kill window 0 (Dashboard). Use /doey-kill-session for full teardown."
   exit 1
 fi
 
-# Verify window exists
 if ! tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' | grep -qx "$TARGET_WIN"; then
   echo "ERROR: Window ${TARGET_WIN} does not exist in session ${SESSION_NAME}"
   exit 1
@@ -47,10 +32,10 @@ echo "Target: window ${TARGET_WIN}"
 
 ### Step 2: Read team config and kill all processes
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
+Uses vars from Step 1.
 
+```bash
+# (vars from step 1)
 TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WIN}.env"
 if [ -f "$TEAM_ENV" ]; then
   T_WORKER_PANES="" T_WATCHDOG_PANE="" T_MANAGER_PANE=""
@@ -64,7 +49,6 @@ if [ -f "$TEAM_ENV" ]; then
   done < "$TEAM_ENV"
 fi
 
-# Kill all pane child processes in the target window
 KILLED=0
 for pane_pid in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do
   CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
@@ -73,11 +57,9 @@ for pane_pid in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_
     KILLED=$((KILLED + 1))
   fi
 done
-
 echo "Sent SIGTERM to ${KILLED} processes"
 sleep 3
 
-# Verify + SIGKILL stragglers
 for pane_pid in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do
   CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
   [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null
@@ -88,9 +70,7 @@ sleep 1
 ### Step 3: Kill the tmux window
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
+# (vars from step 1)
 tmux kill-window -t "${SESSION_NAME}:${TARGET_WIN}"
 echo "Window ${TARGET_WIN} killed"
 ```
@@ -98,30 +78,20 @@ echo "Window ${TARGET_WIN} killed"
 ### Step 4: Clean up runtime files
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-
-# Remove team env file
+# (vars from step 1)
 rm -f "${RUNTIME_DIR}/team_${TARGET_WIN}.env"
 
-# Remove status/result/completion files for this window
-SESSION_SAFE="${SESSION_NAME//[:.]/_}"
-for f in "${RUNTIME_DIR}/status/${SESSION_SAFE}_${TARGET_WIN}_"*; do
-  [ -f "$f" ] && rm -f "$f"
-done
-for f in "${RUNTIME_DIR}/results/pane_${TARGET_WIN}_"*.json; do
-  [ -f "$f" ] && rm -f "$f"
-done
-for f in "${RUNTIME_DIR}/status/completion_pane_${TARGET_WIN}_"*; do
-  [ -f "$f" ] && rm -f "$f"
-done
-for f in "${RUNTIME_DIR}/status/crash_pane_${TARGET_WIN}_"*; do
-  [ -f "$f" ] && rm -f "$f"
+SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
+for pattern in \
+  "${RUNTIME_DIR}/status/${SESSION_SAFE}_${TARGET_WIN}_"* \
+  "${RUNTIME_DIR}/results/pane_${TARGET_WIN}_"*.json \
+  "${RUNTIME_DIR}/status/completion_pane_${TARGET_WIN}_"* \
+  "${RUNTIME_DIR}/status/crash_pane_${TARGET_WIN}_"*; do
+  for f in $pattern; do [ -f "$f" ] && rm -f "$f"; done
 done
 rm -f "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WIN}.json"
 rm -f "${RUNTIME_DIR}/status/watchdog_W${TARGET_WIN}.heartbeat"
 
-# Update TEAM_WINDOWS in session.env (remove TARGET_WIN)
 CURRENT_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
 NEW_WINDOWS=$(echo "$CURRENT_WINDOWS" | tr ',' '\n' | grep -v "^${TARGET_WIN}$" | tr '\n' ',' | sed 's/,$//')
 TMPENV=$(mktemp "${RUNTIME_DIR}/session.env.tmp_XXXXXX")

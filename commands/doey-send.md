@@ -24,7 +24,7 @@ You are sending a message to another Claude Code instance in a TMUX pane.
    ```bash
    mkdir -p "${RUNTIME_DIR}/messages"
    TIMESTAMP=$(gdate +%s%N 2>/dev/null || echo "$(date +%s)$$")
-   cat > "${RUNTIME_DIR}/messages/${TARGET_PANE//[:.]/_}_${TIMESTAMP}.msg" << EOF
+   cat > "${RUNTIME_DIR}/messages/$(echo "$TARGET_PANE" | tr ':.' '_')_${TIMESTAMP}.msg" << EOF
 FROM: $MY_PANE
 TO: $TARGET_PANE
 TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')

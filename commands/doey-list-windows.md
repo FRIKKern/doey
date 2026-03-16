@@ -8,18 +8,17 @@ List all team windows in the current Doey session with their status.
 ## Prompt
 You are listing all team windows in the current Doey session.
 
-### Project Context
+### Step 1: Read context
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 
-### Step 1: Discover all windows and collect status
+### Step 2: Discover all windows and collect status
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
+# (vars from step 1)
 
 echo "Session: ${SESSION_NAME}"
 echo ""
@@ -29,9 +28,7 @@ echo "------  ------  ------  ----------  -------"
 WINDOWS=$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null)
 
 for w in $WINDOWS; do
-  # Window 0 is always the Dashboard
   if [ "$w" = "0" ]; then
-    # Check if Session Manager is running in pane 0.4
     SM_CMD=$(tmux display-message -t "${SESSION_NAME}:0.4" -p '#{pane_current_command}' 2>/dev/null) || SM_CMD=""
     case "$SM_CMD" in
       bash|zsh|sh|fish|"") SM_STATUS="—" ;;
@@ -56,20 +53,15 @@ for w in $WINDOWS; do
       esac
     done < "$TEAM_ENV"
   else
-    W_GRID="unknown"
-    W_WORKER_PANES=""
-    W_WATCHDOG="0.1"
-    W_WORKER_COUNT="0"
+    W_GRID="unknown"; W_WORKER_PANES=""; W_WATCHDOG="0.1"; W_WORKER_COUNT="0"
   fi
 
-  # Window Manager status
   MGR_CMD=$(tmux display-message -t "${SESSION_NAME}:${w}.0" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
   case "$MGR_CMD" in
     bash|zsh|sh|fish) MGR_STATUS="DOWN" ;;
     *) MGR_STATUS="UP" ;;
   esac
 
-  # Watchdog status (check heartbeat age)
   WDG_STATUS="?"
   if [ -n "$W_WATCHDOG" ]; then
     WDG_CMD=$(tmux display-message -t "${SESSION_NAME}:${W_WATCHDOG}" -p '#{pane_current_command}' 2>/dev/null) || WDG_CMD=""
@@ -88,10 +80,9 @@ for w in $WINDOWS; do
     esac
   fi
 
-  # Worker status: count busy vs total
   BUSY_COUNT=0
   TOTAL_W="${W_WORKER_COUNT:-0}"
-  SESSION_SAFE="${SESSION_NAME//[:.]/_}"
+  SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
   for i in $(echo "$W_WORKER_PANES" | tr ',' ' '); do
     PANE_SAFE="${SESSION_SAFE}_${w}_${i}"
     STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
@@ -108,8 +99,6 @@ done
 ```
 
 ### Rules
-- **Read-only operation** — this command never modifies any files or processes
-- **Window 0 is always the Dashboard** — display it with its own format, no team_0.env needed
-- **Fall back gracefully** if team_W.env doesn't exist for team windows
-- **Check watchdog heartbeat age** to detect stale watchdogs (>120s = stale)
-- All bash must be 3.2 compatible
+- **Read-only** — never modifies files or processes
+- Window 0 is always Dashboard. Fall back gracefully if team_W.env missing.
+- Check watchdog heartbeat age: >120s = stale. All bash must be 3.2 compatible.

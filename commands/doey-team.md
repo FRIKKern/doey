@@ -22,7 +22,7 @@ printf "%-14s %-12s %-10s %-6s %s\n" "PANE" "STATUS" "RESERVED" "MSGS" "LAST_UPD
 printf "%-14s %-12s %-10s %-6s %s\n" "----" "------" "--------" "----" "-----------"
 
 for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
-  PANE_SAFE=${pane//[:.]/_}
+  PANE_SAFE=$(echo "$pane" | tr ':.' '_')
 
   # Status
   STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"

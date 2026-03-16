@@ -63,29 +63,24 @@ Use `/doey-kill-window [W]` to tear down a team window and clean up its runtime 
 Use `/doey-list-windows` to get a summary of all active team windows.
 
 ### Send a task to a team's Window Manager
-Window Managers live in team windows at pane W.0. Read `MANAGER_PANE` from the team env (it's the pane index, always `"0"`):
 ```bash
-# Find Team 2's Window Manager pane
 W=2
 MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
-# Route task — MGR_PANE is "0", so target is "$SESSION_NAME:2.0"
-tmux copy-mode -q -t "$SESSION_NAME:${W}.${MGR_PANE}" 2>/dev/null
-tmux send-keys -t "$SESSION_NAME:${W}.${MGR_PANE}" "Your task description here" Enter
-```
+TARGET="$SESSION_NAME:${W}.${MGR_PANE}"
+tmux copy-mode -q -t "$TARGET" 2>/dev/null
 
-For long tasks, use load-buffer:
-```bash
-W=2
-MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
+# Short task: send-keys directly
+tmux send-keys -t "$TARGET" "Your task description here" Enter
+
+# Long/multi-line task: use load-buffer
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task for Team 2.
 TASK
-tmux copy-mode -q -t "$SESSION_NAME:${W}.${MGR_PANE}" 2>/dev/null
 tmux load-buffer "$TASKFILE"
-tmux paste-buffer -t "$SESSION_NAME:${W}.${MGR_PANE}"
+tmux paste-buffer -t "$TARGET"
 sleep 0.5
-tmux send-keys -t "$SESSION_NAME:${W}.${MGR_PANE}" Enter
+tmux send-keys -t "$TARGET" Enter
 rm "$TASKFILE"
 ```
 
@@ -98,8 +93,9 @@ sleep 5
 tmux capture-pane -t "$SESSION_NAME:${W}.${MGR_PANE}" -p -S -5
 ```
 
-### Check team health
+### Monitor teams (health, results, crashes)
 ```bash
+# Watchdog health
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
   HEARTBEAT=$(cat "${RUNTIME_DIR}/status/watchdog_W${W}.heartbeat" 2>/dev/null || echo "0")
   BEAT_AGE=$(( $(date +%s) - HEARTBEAT ))
@@ -109,53 +105,24 @@ for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
     echo "OK: Team $W Watchdog alive (${BEAT_AGE}s ago)"
   fi
 done
-```
-
-### Check results across all teams
-```bash
-for f in "$RUNTIME_DIR/results"/pane_*.json; do
-  [ -f "$f" ] && cat "$f" && echo ""
-done
-```
-
-### Check crashes across all teams
-```bash
-for f in "$RUNTIME_DIR/status"/crash_pane_*; do
-  [ -f "$f" ] && cat "$f" && echo ""
-done
+# Results
+for f in "$RUNTIME_DIR/results"/pane_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
+# Crashes
+for f in "$RUNTIME_DIR/status"/crash_pane_*; do [ -f "$f" ] && cat "$f" && echo ""; done
 ```
 
 ## Workflow
 
-### 1. Classify & Route
-
-- **Single-team task**: Route to any team's Window Manager with available workers.
-- **Multi-team task**: Split into sub-tasks and route each to a different team's Window Manager.
-- **Research task**: Route `/doey-research` to a team with idle workers.
-- Present a brief routing plan:
-  ```
-  Routing plan:
-    Team 1 → hero-section + feature-modules (4 workers)
-    Team 2 → API refactor (6 workers)
-    Team 3 → test suite (6 workers)
-  ```
-
-### 2. Delegate
-
-- Route all independent sub-tasks to Window Managers in parallel.
-- Write self-contained task descriptions — Window Managers have zero context about the bigger picture.
-- **Never block.** After routing, report what you sent and stay responsive.
-
-### 3. Monitor
-
-- Track team assignments: team → task → status.
-- When a team's Window Manager reports completion, route follow-up work.
-- If a team's Watchdog is down, alert the user.
-- Handle multiple task streams concurrently.
-
-### 4. Report
-
-Consolidated summary across all teams: what completed, errors encountered, suggested next steps.
+1. **Classify & Route** — Single-team: route to any Window Manager with capacity. Multi-team: split into sub-tasks, route each to a different team. Research: route `/doey-research` to a team with idle workers. Present a routing plan:
+   ```
+   Routing plan:
+     Team 1 → hero-section + feature-modules (4 workers)
+     Team 2 → API refactor (6 workers)
+     Team 3 → test suite (6 workers)
+   ```
+2. **Delegate** — Route independent sub-tasks in parallel. Write self-contained descriptions (Window Managers have zero context). Never block — report what you sent and stay responsive.
+3. **Monitor** — Track team → task → status. Route follow-up work on completion. Alert user if a Watchdog is down.
+4. **Report** — Consolidated summary: what completed, errors, next steps.
 
 ## Communication
 
