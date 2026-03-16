@@ -88,7 +88,7 @@ send_notification() {
       local last_sent now
       last_sent=$(cat "$cooldown_file" 2>/dev/null) || last_sent=0
       now=$(date +%s)
-      if (( now - last_sent < 60 )); then
+      if [ "$((now - last_sent))" -lt 60 ]; then
         return 0  # Cooldown active — skip
       fi
     fi
