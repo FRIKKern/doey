@@ -52,9 +52,13 @@ read_env_file() {
   while IFS='=' read -r _ref_key _ref_val; do
     _ref_val="${_ref_val%\"}" && _ref_val="${_ref_val#\"}"
     for _ref_k in "$@"; do
-      [ "$_ref_key" = "$_ref_k" ] && eval "_ENV_${_ref_k}=\"\$_ref_val\"" && break
+      if [ "$_ref_key" = "$_ref_k" ]; then
+        eval "_ENV_${_ref_k}=\"\$_ref_val\""
+        break
+      fi
     done
   done < "$_ref_file"
+  return 0
 }
 
 # Format seconds into human-readable uptime
@@ -230,11 +234,11 @@ while true; do
       TEAM_COUNT=$((TEAM_COUNT + 1))
       TEAM_FILE="${RUNTIME_DIR}/team_${W}.env"
 
-      read_env_file "$TEAM_FILE" WATCHDOG_PANE WORKER_PANES WORKER_COUNT GRID_MODE
+      read_env_file "$TEAM_FILE" WATCHDOG_PANE WORKER_PANES WORKER_COUNT GRID
       WD_PANE="$_ENV_WATCHDOG_PANE"
       WORKER_PANES="$_ENV_WORKER_PANES"
       WORKER_COUNT="$_ENV_WORKER_COUNT"
-      GRID_MODE="$_ENV_GRID_MODE"
+      GRID_MODE="$_ENV_GRID"
       [ -z "$WORKER_COUNT" ] && WORKER_COUNT=0
       [ -z "$GRID_MODE" ] && GRID_MODE="dynamic"
       TOTAL_WORKERS=$((TOTAL_WORKERS + WORKER_COUNT))
@@ -254,6 +258,8 @@ while true; do
       [ ! -f "$HEARTBEAT_FILE" ] && HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
       if [ -f "$HEARTBEAT_FILE" ]; then
         BEAT=$(cat "$HEARTBEAT_FILE" 2>/dev/null || echo "0")
+        case "$BEAT" in *[!0-9]*) BEAT=0 ;; esac
+        [ -z "$BEAT" ] && BEAT=0
         BEAT_AGE=$((NOW - BEAT))
         if [ "$BEAT_AGE" -lt 120 ]; then
           WDG_ST="OK"
@@ -284,10 +290,10 @@ while true; do
   else
     # Single-window fallback
     TEAM_COUNT=1
-    read_env_file "$SESSION_ENV" WORKER_COUNT WORKER_PANES GRID_MODE
+    read_env_file "$SESSION_ENV" WORKER_COUNT WORKER_PANES GRID
     WORKER_COUNT="$_ENV_WORKER_COUNT"
     WORKER_PANES="$_ENV_WORKER_PANES"
-    GRID_MODE="$_ENV_GRID_MODE"
+    GRID_MODE="$_ENV_GRID"
     [ -z "$WORKER_COUNT" ] && WORKER_COUNT=0
     [ -z "$GRID_MODE" ] && GRID_MODE="dynamic"
     TOTAL_WORKERS=$WORKER_COUNT
@@ -304,6 +310,8 @@ while true; do
     HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
     if [ -f "$HEARTBEAT_FILE" ]; then
       BEAT=$(cat "$HEARTBEAT_FILE" 2>/dev/null || echo "0")
+      case "$BEAT" in *[!0-9]*) BEAT=0 ;; esac
+      [ -z "$BEAT" ] && BEAT=0
       BEAT_AGE=$((NOW - BEAT))
       if [ "$BEAT_AGE" -lt 120 ]; then
         WDG_ST="OK"
