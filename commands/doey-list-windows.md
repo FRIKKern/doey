@@ -31,8 +31,8 @@ WINDOWS=$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null)
 for w in $WINDOWS; do
   # Window 0 is always the Dashboard
   if [ "$w" = "0" ]; then
-    # Check if Session Manager is running in pane 0.1
-    SM_CMD=$(tmux display-message -t "${SESSION_NAME}:0.1" -p '#{pane_current_command}' 2>/dev/null) || SM_CMD=""
+    # Check if Session Manager is running in pane 0.4
+    SM_CMD=$(tmux display-message -t "${SESSION_NAME}:0.4" -p '#{pane_current_command}' 2>/dev/null) || SM_CMD=""
     case "$SM_CMD" in
       bash|zsh|sh|fish|"") SM_STATUS="—" ;;
       *) SM_STATUS="UP" ;;
@@ -58,7 +58,7 @@ for w in $WINDOWS; do
   else
     W_GRID="unknown"
     W_WORKER_PANES=""
-    W_WATCHDOG="1"
+    W_WATCHDOG="0.1"
     W_WORKER_COUNT="0"
   fi
 
@@ -72,7 +72,7 @@ for w in $WINDOWS; do
   # Watchdog status (check heartbeat age)
   WDG_STATUS="?"
   if [ -n "$W_WATCHDOG" ]; then
-    WDG_CMD=$(tmux display-message -t "${SESSION_NAME}:${w}.${W_WATCHDOG}" -p '#{pane_current_command}' 2>/dev/null) || WDG_CMD=""
+    WDG_CMD=$(tmux display-message -t "${SESSION_NAME}:${W_WATCHDOG}" -p '#{pane_current_command}' 2>/dev/null) || WDG_CMD=""
     case "$WDG_CMD" in
       bash|zsh|sh|fish) WDG_STATUS="DOWN" ;;
       *)

@@ -3,7 +3,7 @@
 Stop a specific worker by pane number. Kills the Claude process, updates status, and leaves the pane shell intact for restart.
 
 ## Usage
-`/doey-stop 4` — stop worker in pane 0.4
+`/doey-stop 4` — stop worker in pane W.4
 `/doey-stop` — lists workers, then ask which to stop
 
 ## Prompt
@@ -42,8 +42,10 @@ if [ "$TARGET" = "0" ]; then
   echo "ERROR: Cannot stop pane ${WINDOW_INDEX}.0 — that is the Window Manager"
   exit 1
 fi
-if [ "$TARGET" = "$WATCHDOG_PANE" ]; then
-  echo "ERROR: Cannot stop pane ${WINDOW_INDEX}.${WATCHDOG_PANE} — that is the Watchdog. Use /doey-restart-window instead."
+# WATCHDOG_PANE is a full window.pane ref like "0.1" — extract just the pane index for comparison
+WATCHDOG_PANE_INDEX="${WATCHDOG_PANE##*.}"
+if [ "$TARGET" = "$WATCHDOG_PANE_INDEX" ] && [ "$WINDOW_INDEX" = "${WATCHDOG_PANE%%.*}" ]; then
+  echo "ERROR: Cannot stop pane ${WATCHDOG_PANE} — that is the Watchdog. Use /doey-restart-window instead."
   exit 1
 fi
 

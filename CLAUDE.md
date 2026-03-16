@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Window Manager, Watchdog, and N Workers in a dynamic grid (default: 2 columns = 4 workers, auto-expands when all busy) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans via `/doey-reserve` (permanent until explicitly unreserved). CLI entry point: `doey`.
+Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It launches a Window Manager, Watchdog, and N Workers in a dynamic grid (default: 3 columns = 6 workers, auto-expands when all busy) in a single tmux session, enabling parallel task execution. Workers can be reserved by humans via `/doey-reserve` (permanent until explicitly unreserved). CLI entry point: `doey`.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 ## Key Directories
 
 - `agents/` -- Agent definitions (doey-manager, doey-session-manager, doey-watchdog, test-driver), installed to `~/.claude/agents/`
-- `commands/` -- Slash commands (23 doey-*.md files), installed to `~/.claude/commands/`
+- `commands/` -- Slash commands (24 doey-*.md files), installed to `~/.claude/commands/`
 - `.claude/hooks/` -- Modular hooks: common.sh, on-session-start.sh, on-prompt-submit.sh, on-pre-tool-use.sh, on-pre-compact.sh, post-tool-lint.sh, stop-status.sh, stop-results.sh, stop-notify.sh, watchdog-scan.sh
 - `.claude/settings.local.json` -- Permission rules for Bash tool patterns (allow-list for common CLI commands)
 - `shell/` -- Launcher and utilities (doey.sh, info-panel.sh, context-audit.sh, pane-border-status.sh, tmux-statusbar.sh); doey.sh, info-panel.sh, pane-border-status.sh, and tmux-statusbar.sh are installed to `~/.local/bin/` (context-audit.sh is not installed)

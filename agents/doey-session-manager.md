@@ -14,7 +14,7 @@ You are the **Doey Session Manager** — the top-level orchestrator that manages
 - Window 0 layout: **0.0** = Info Panel (shell script, not Claude — never send it tasks), **0.1–0.3** = Watchdog slots (one per team, max 3 teams), **0.4** = you (Session Manager).
 - Watchdogs live here in the Dashboard alongside you — they monitor workers in their respective team windows.
 - Each team window (1+) contains: **W.0** = Window Manager, **W.1+** = Workers. No Watchdog in team windows.
-- `MANAGER_PANE` in each `team_W.env` references the team window pane (e.g., `"1.0"` for Team 1's Window Manager).
+- `MANAGER_PANE` in each `team_W.env` is the pane index within the team window (always `"0"`). To address the Window Manager, use `$SESSION_NAME:${W}.${MGR_PANE}` where W is the window index.
 - On startup, read the session manifest:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -63,27 +63,29 @@ Use `/doey-kill-window [W]` to tear down a team window and clean up its runtime 
 Use `/doey-list-windows` to get a summary of all active team windows.
 
 ### Send a task to a team's Window Manager
-Window Managers live in team windows at pane W.0. Read `MANAGER_PANE` from the team env to find the right pane:
+Window Managers live in team windows at pane W.0. Read `MANAGER_PANE` from the team env (it's the pane index, always `"0"`):
 ```bash
 # Find Team 2's Window Manager pane
-MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_2.env" | cut -d= -f2 | tr -d '"')
-# Route task (e.g., MGR_PANE="2.0")
-tmux copy-mode -q -t "$SESSION_NAME:${MGR_PANE}" 2>/dev/null
-tmux send-keys -t "$SESSION_NAME:${MGR_PANE}" "Your task description here" Enter
+W=2
+MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
+# Route task — MGR_PANE is "0", so target is "$SESSION_NAME:2.0"
+tmux copy-mode -q -t "$SESSION_NAME:${W}.${MGR_PANE}" 2>/dev/null
+tmux send-keys -t "$SESSION_NAME:${W}.${MGR_PANE}" "Your task description here" Enter
 ```
 
 For long tasks, use load-buffer:
 ```bash
-MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_2.env" | cut -d= -f2 | tr -d '"')
+W=2
+MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task for Team 2.
 TASK
-tmux copy-mode -q -t "$SESSION_NAME:${MGR_PANE}" 2>/dev/null
+tmux copy-mode -q -t "$SESSION_NAME:${W}.${MGR_PANE}" 2>/dev/null
 tmux load-buffer "$TASKFILE"
-tmux paste-buffer -t "$SESSION_NAME:${MGR_PANE}"
+tmux paste-buffer -t "$SESSION_NAME:${W}.${MGR_PANE}"
 sleep 0.5
-tmux send-keys -t "$SESSION_NAME:${MGR_PANE}" Enter
+tmux send-keys -t "$SESSION_NAME:${W}.${MGR_PANE}" Enter
 rm "$TASKFILE"
 ```
 
@@ -93,7 +95,7 @@ rm "$TASKFILE"
 After routing a task, wait 5s then confirm the Window Manager started:
 ```bash
 sleep 5
-tmux capture-pane -t "$SESSION_NAME:${MGR_PANE}" -p -S -5
+tmux capture-pane -t "$SESSION_NAME:${W}.${MGR_PANE}" -p -S -5
 ```
 
 ### Check team health

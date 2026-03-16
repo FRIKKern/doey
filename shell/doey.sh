@@ -2202,8 +2202,8 @@ MANIFEST
 }
 
 # ── Dynamic Grid — 2-row × N-column mode ─────────────────────────────
-# Creates a minimal 4x2 grid (Window Manager + Watchdog) with worker columns
-# added/removed on demand via `doey add` / `doey remove <col>`.
+# Creates a Manager-only pane, then adds 3 worker columns (6 workers default).
+# Columns added/removed on demand via `doey add` / `doey remove <col>`.
 
 launch_session_dynamic() {
   local name="$1"
@@ -2630,7 +2630,7 @@ doey_add_column() {
     "$w1_num" "$team_window" "$new_pane_top" "$session" >> "$worker_prompt_file_1"
 
   local worker_cmd="claude --dangerously-skip-permissions --model opus"
-  worker_cmd+=" --append-system-prompt-file ${worker_prompt_file_1}"
+  worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file_1}\""
   tmux send-keys -t "$session:$team_window.${new_pane_top}" "$worker_cmd" Enter
   sleep 0.3
 
@@ -2640,7 +2640,7 @@ doey_add_column() {
     "$w2_num" "$team_window" "$new_pane_bottom" "$session" >> "$worker_prompt_file_2"
 
   local worker_cmd2="claude --dangerously-skip-permissions --model opus"
-  worker_cmd2+=" --append-system-prompt-file ${worker_prompt_file_2}"
+  worker_cmd2+=" --append-system-prompt-file \"${worker_prompt_file_2}\""
   tmux send-keys -t "$session:$team_window.${new_pane_bottom}" "$worker_cmd2" Enter
 
   # Rebalance to proper column layout (each column = 2 rows)
@@ -2657,18 +2657,42 @@ doey_remove_column() {
   local col_index="${3:-}"
   local team_window="${4:-1}"
 
-  # Source current state
+  # Source session-level settings (for PROJECT_NAME, PROJECT_DIR, MAX_WORKERS)
   safe_source_session_env "${runtime_dir}/session.env"
 
-  if [[ "${GRID:-}" != "dynamic" ]]; then
-    printf "  ${ERROR}Session is not using dynamic grid mode${RESET}\n"
-    return 1
-  fi
-
-  local worker_count="${WORKER_COUNT:-0}"
-  local current_cols="${CURRENT_COLS:-2}"
   local name="${PROJECT_NAME}"
   local dir="${PROJECT_DIR}"
+
+  # Read team-level state from team env (same pattern as doey_add_column)
+  local team_env="${runtime_dir}/team_${team_window}.env"
+  local worker_count=0 watchdog_pane="${WATCHDOG_PANE}" current_cols=2 team_grid="${GRID:-dynamic}"
+  if [ -f "$team_env" ]; then
+    worker_count=$(grep '^WORKER_COUNT=' "$team_env" | cut -d= -f2)
+    worker_count="${worker_count//\"/}"
+    worker_count="${worker_count:-0}"
+    watchdog_pane=$(grep '^WATCHDOG_PANE=' "$team_env" | cut -d= -f2)
+    watchdog_pane="${watchdog_pane//\"/}"
+    team_grid=$(grep '^GRID=' "$team_env" | cut -d= -f2)
+    team_grid="${team_grid//\"/}"
+    team_grid="${team_grid:-dynamic}"
+    # Count current columns from pane count
+    local _pane_count
+    _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')
+    current_cols=$(( (_pane_count - 1) / 2 ))
+    [ "$current_cols" -lt 1 ] && current_cols=1
+  fi
+
+  # Read WORKER_PANES from team env
+  local team_worker_panes=""
+  if [ -f "$team_env" ]; then
+    team_worker_panes=$(grep '^WORKER_PANES=' "$team_env" | cut -d= -f2)
+    team_worker_panes="${team_worker_panes//\"/}"
+  fi
+
+  if [[ "$team_grid" != "dynamic" ]]; then
+    printf "  ${ERROR}Team window %s is not using dynamic grid mode${RESET}\n" "$team_window"
+    return 1
+  fi
 
   if (( worker_count == 0 )); then
     printf "  ${ERROR}No worker columns to remove${RESET}\n"
@@ -2676,8 +2700,6 @@ doey_remove_column() {
   fi
 
   # If no column specified, remove the last worker column
-  # Worker columns are between col 0 (MGR) and the last col (WDG)
-  # The last worker column contains the two highest-indexed worker panes
   if [[ -z "$col_index" ]]; then
     col_index="last"
   fi
@@ -2688,7 +2710,7 @@ doey_remove_column() {
   # Convert comma-separated WORKER_PANES to positional params (bash 3.2 safe)
   local _old_ifs="$IFS"
   IFS=','
-  set -- $WORKER_PANES
+  set -- $team_worker_panes
   IFS="$_old_ifs"
   local wp_count=$#
 
@@ -2745,32 +2767,8 @@ doey_remove_column() {
   local new_worker_count=$(( worker_count - 2 ))
   local new_cols=$(( current_cols - 1 ))
 
-  # Preserve TEAM_WINDOWS from existing session.env
-  local _team_windows
-  _team_windows=$(read_team_windows "$runtime_dir")
-
-  # Rewrite session.env (atomic via tmp+mv)
-  cat > "${runtime_dir}/session.env.tmp" << MANIFEST
-PROJECT_DIR="$dir"
-PROJECT_NAME="$name"
-SESSION_NAME="$session"
-GRID="dynamic"
-ROWS="2"
-MAX_WORKERS="${MAX_WORKERS:-20}"
-WORKER_PANES="$new_worker_panes"
-WORKER_COUNT="$new_worker_count"
-WATCHDOG_PANE="${WATCHDOG_PANE}"
-CURRENT_COLS="$new_cols"
-RUNTIME_DIR="${runtime_dir}"
-PASTE_SETTLE_MS="500"
-IDLE_COLLAPSE_AFTER="60"
-IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="${_team_windows}"
-MANIFEST
-  mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
-
-  # Update team env with new worker state
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "${WATCHDOG_PANE}" "$new_worker_panes" "$new_worker_count"
+  # Update team env only (session.env is session-level, not per-team)
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count"
 
   # Rebalance to proper column layout (each column = 2 rows)
   rebalance_grid_layout "$session" "$team_window"
@@ -3048,7 +3046,7 @@ add_team_window() {
       "$wnum" "$window_index" "$i" "$session" >> "$worker_prompt_file"
 
     local worker_cmd="claude --dangerously-skip-permissions --model opus"
-    worker_cmd+=" --append-system-prompt-file ${worker_prompt_file}"
+    worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "${session}:${window_index}.${i}" "$worker_cmd" Enter
     sleep 0.3
 

@@ -47,6 +47,8 @@ if [ "$GRID_MODE" = "dynamic" ]; then
       doey add 2>/dev/null
       sleep 10
       source "${RUNTIME_DIR}/session.env"
+      TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+      [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
     else
       echo "All workers busy and max reached (${MAX_WORKERS:-20}). Queue or wait."
     fi

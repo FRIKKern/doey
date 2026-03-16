@@ -44,7 +44,7 @@ Doey launches **parallel Claude Code instances** coordinated by a Window Manager
 
 You talk to the Window Manager. The Window Manager runs the team. You ship faster.
 
-The grid is **dynamic by default** — starts lean with 4 workers, then use `doey add` to scale up when you need more horsepower. No restarts needed.
+The grid is **dynamic by default** — starts lean with 6 workers, then use `doey add` to scale up when you need more horsepower. No restarts needed.
 
 ---
 
@@ -64,7 +64,7 @@ Or clone locally: `git clone https://github.com/FRIKKern/doey.git && cd doey && 
 
 No config files. No shell reload. Just `doey`.
 
-> **Other platforms:** [Linux server](docs/linux-server.md) · [Windows WSL2](docs/windows-wsl2.md)
+> **Other platforms:** [Linux server](docs/linux-server.md) · [Windows WSL2](docs/windows-wsl2.md) · [Linode VPS](docs/linode-setup.md)
 
 ---
 
@@ -82,13 +82,13 @@ No config files. No shell reload. Just `doey`.
 
 ## Features
 
-- **Dynamic grid** — starts with 4 workers, scale up with `doey add`, scale down with `doey remove`
+- **Dynamic grid** — starts with 6 workers, scale up with `doey add`, scale down with `doey remove`
 - **Parallel execution** — workers run simultaneously, not sequentially
 - **Smart orchestration** — Window Manager plans and delegates, never writes code itself
 - **Always-on monitoring** — Watchdog tracks worker state and delivers inbox messages
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
 - **Message bus** — file-based inter-pane communication (inbox, broadcasts, status)
-- **23 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
+- **24 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -184,9 +184,10 @@ doey/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (23 total)
+│   └── ... (24 total)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
+│   ├── linode-setup.md          # Linode VPS deployment guide
 │   ├── linux-server.md
 │   └── windows-wsl2.md
 ├── shell/
@@ -215,8 +216,8 @@ doey/
 ## Tips
 
 ```bash
-alias doeys="doey 3x2"   # small team (4 workers)
-alias doey4="doey 4x2"   # medium team (6 workers)
+alias doeys="doey 3x2"   # small team (5 workers)
+alias doey4="doey 4x2"   # medium team (7 workers)
 ```
 
 Copy commands into your project for project-scoped access:
