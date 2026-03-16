@@ -42,7 +42,7 @@ cd ~/your-project && doey init && doey
 ssh user@your-server
 cd ~/your-project
 doey                     # starts or reattaches
-# Give Manager a task, then: Ctrl+B, D (detach)
+# Give Window Manager a task, then: Ctrl+B, D (detach)
 exit                     # team keeps running
 ```
 

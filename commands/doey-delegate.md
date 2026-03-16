@@ -15,9 +15,12 @@ Every Bash call that touches tmux must start with:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. **Always use `${SESSION_NAME}`** — never hardcode session names.
+This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WINDOW_INDEX`. **Always use `${SESSION_NAME}`** — never hardcode session names.
 
 ### Copy-mode pattern
 
@@ -28,6 +31,9 @@ This provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `W
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 echo "I am: $MY_PANE"
@@ -35,7 +41,7 @@ echo "I am: $MY_PANE"
 
 ### Step 2: Ask the user
 
-If the user did not specify a target pane and task, ask them now. Then set `TARGET_PANE` (e.g. `${SESSION_NAME}:0.3`).
+If the user did not specify a target pane and task, ask them now. Then set `TARGET_PANE` (e.g. `${SESSION_NAME}:${WINDOW_INDEX}.3`).
 
 ### Step 3: Pre-flight — reservation check
 
@@ -44,8 +50,11 @@ If the user did not specify a target pane and task, ask them now. Then set `TARG
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-TARGET_PANE="${SESSION_NAME}:0.X"
+TARGET_PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')
 RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
 if [ -f "$RESERVE_FILE" ]; then
@@ -62,8 +71,11 @@ Capture the last few lines and look for the `❯` prompt to confirm the worker i
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-TARGET_PANE="${SESSION_NAME}:0.X"
+TARGET_PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
 OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5)
 echo "$OUTPUT"

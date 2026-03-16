@@ -218,8 +218,8 @@ cd doey
 
 The installer will:
 - Create directories (`~/.claude/agents/`, `~/.claude/commands/`, etc.)
-- Install agent definitions (Manager, Watchdog, Test Driver)
-- Install slash commands (17 total)
+- Install agent definitions (Window Manager, Session Manager, Watchdog, Test Driver)
+- Install slash commands (23 total)
 - Install the `doey` CLI to `~/.local/bin/doey`
 - Run a context audit
 
@@ -270,17 +270,17 @@ doey init
 doey
 ```
 
-This starts a tmux session with the Manager, Watchdog, and Workers in a dynamic grid. You'll be attached to the session automatically.
+This starts a tmux session with the Window Manager, Watchdog, and Workers in a dynamic grid. You'll be attached to the session automatically.
 
-### Give the Manager a Task
+### Give the Window Manager a Task
 
-Click on the Manager pane (top-left, pane 0.0) and type your task:
+Click on the Window Manager pane (top-left, pane 0.0) and type your task:
 
 ```
 Refactor all API endpoints to use the new validation middleware
 ```
 
-The Manager will plan, break it into subtasks, and dispatch to workers.
+The Window Manager will plan, break it into subtasks, and dispatch to workers.
 
 ### Detach (Keep Running)
 
@@ -371,7 +371,7 @@ doey
 
 ### Check Worker Status
 
-From inside a Doey session, the Manager can use:
+From inside a Doey session, the Window Manager can use:
 - `/doey-monitor` — Quick status check of all workers
 - `/doey-team` — Full team overview
 - `/doey-status` — View or set pane status
@@ -412,7 +412,7 @@ git pull
 ./install.sh
 ```
 
-After updating hooks, restart all workers with `/doey-restart-workers` from the Manager pane.
+After updating hooks, restart all workers with `/doey-restart-window` from the Window Manager pane.
 
 ---
 
@@ -465,7 +465,7 @@ doey update                                # Doey itself
 | Workers show "Not logged in" | Run `claude` once in a regular terminal to authenticate |
 | tmux too old | Ubuntu 24.04 ships tmux 3.4 — shouldn't be an issue. If using 22.04: `sudo apt install tmux` gives 3.2a (sufficient) |
 | Session won't start | Check `doey doctor` — fix any red items |
-| Workers stuck | Manager can run `/doey-restart-workers` |
+| Workers stuck | Window Manager can run `/doey-restart-window` |
 | Disk full | Run `doey purge` and check `du -sh /tmp/doey/` |
 | SSH disconnects frequently | Use mosh (see Tips below) |
 | systemd service won't start | Check logs: `journalctl --user -u doey -f` |
@@ -505,7 +505,7 @@ ssh doey@YOUR_LINODE_IP
 cd ~/your-project && doey   # Attaches to the same session
 ```
 
-Both terminals see the same panes. Useful for watching workers on a large monitor while giving the Manager tasks from another.
+Both terminals see the same panes. Useful for watching workers on a large monitor while giving the Window Manager tasks from another.
 
 ### Resource Monitoring
 

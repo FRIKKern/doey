@@ -20,11 +20,17 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Edit|Write|Agent|NotebookEdit)
       # Cheap check: only do expensive init_hook if this MIGHT be the Watchdog.
-      # Workers/Manager are the common case — skip them fast.
+      # Workers/Window Manager are the common case — skip them fast.
       RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
-      WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2-) || exit 0
+      read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
+      # Multi-window: check team_<W>.env first, fall back to session.env
+      TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+      if [ -f "$TEAM_ENV" ]; then
+        WD_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2-)
+      else
+        WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2-)
+      fi
       WD_PANE="${WD_PANE//\"/}"
-      CURRENT_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{pane_index}' 2>/dev/null) || exit 0
       if [ "$CURRENT_PANE" = "$WD_PANE" ]; then
         echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
         exit 2
@@ -38,7 +44,7 @@ fi
 source "$(dirname "$0")/common.sh"
 init_hook <<< "$INPUT"
 
-# Manager — allow everything
+# Window Manager — allow everything
 if is_manager; then
   exit 0
 fi
@@ -67,7 +73,7 @@ if is_watchdog; then
       fi
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
       echo "Workers use --dangerously-skip-permissions and have no interactive prompts." >&2
-      echo "Report stuck workers to the Manager instead." >&2
+      echo "Report stuck workers to the Window Manager instead." >&2
       exit 2
       ;;
   esac
@@ -91,6 +97,6 @@ case "$TOOL_COMMAND" in
     exit 0 ;;
 esac
 
-echo "BLOCKED: ${ROLE} cannot run ${MSG}. Only the Manager can do this." >&2
-echo "If you need this operation, finish your task and let the Manager handle it." >&2
+echo "BLOCKED: ${ROLE} cannot run ${MSG}. Only the Window Manager can do this." >&2
+echo "If you need this operation, finish your task and let the Window Manager handle it." >&2
 exit 2

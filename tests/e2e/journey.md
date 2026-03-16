@@ -2,11 +2,11 @@
 
 ## Overview
 
-The test driver sends a realistic website-building task to the Manager and monitors the full team (Manager, Watchdog, Workers) as they collaborate to build a multi-page marketing website about Doey. This exercises delegation, parallel work, file creation, mid-journey interaction, and end-to-end coordination.
+The test driver sends a realistic website-building task to the Window Manager and monitors the full team (Window Manager, Watchdog, Workers) as they collaborate to build a multi-page marketing website about Doey. This exercises delegation, parallel work, file creation, mid-journey interaction, and end-to-end coordination.
 
 ## Initial Task Prompt
 
-The exact text to send to the Manager:
+The exact text to send to the Window Manager:
 
 ```
 Build a marketing website for "Doey" — the tmux-based multi-agent orchestration system for Claude Code.
@@ -18,7 +18,7 @@ Requirements:
 4. Navigation bar on all pages linking to each page
 5. Content should cover:
    - Hero section: what Doey is and why it matters
-   - Features: Manager orchestration, parallel workers, Watchdog monitoring, slash commands
+   - Features: Window Manager orchestration, parallel workers, Watchdog monitoring, slash commands
    - How it works: tmux grid layout, task dispatch, status monitoring, worker lifecycle
    - Get Started: installation steps (git clone, ./install.sh, cd project, doey)
 6. Responsive design (mobile-friendly)
@@ -31,7 +31,7 @@ Make it look polished — this is a real marketing site.
 
 ## Mid-Journey Interaction
 
-After the Manager reports initial pages are complete (or asks if anything else is needed), send:
+After the Window Manager reports initial pages are complete (or asks if anything else is needed), send:
 
 ```
 Great work! Two additions:
@@ -53,18 +53,18 @@ Great work! Two additions:
 ### Content Checks
 
 - index.html contains "Claude" (case-insensitive)
-- At least one page mentions "worker" or "dispatch" or "Manager"
+- At least one page mentions "worker" or "dispatch" or "Window Manager"
 - CSS contains color definitions (#00d2ff or similar)
 - HTML files contain `<nav>` element
 - HTML files link to styles.css
 
 ### Behavioral Checks
 
-- Manager delegated to workers (did NOT create files itself)
+- Window Manager delegated to workers (did NOT create files itself)
 - At least 2 workers were dispatched in parallel
 - Watchdog pane showed scan activity
 - No worker stuck on same error 3+ times
-- Manager didn't crash
+- Window Manager didn't crash
 - Completed within 10 minutes
 
 ### After Mid-Journey
@@ -75,7 +75,7 @@ Great work! Two additions:
 
 ## Anomaly Criteria
 
-- Manager pane shows Write/Edit tool calls -> Manager is coding directly (SHOULD delegate)
+- Window Manager pane shows Write/Edit tool calls -> Window Manager is coding directly (SHOULD delegate)
 - Worker shows "Permission denied" or "SIGTERM" -> crash
-- Manager pane unchanged for 2+ minutes -> possible hang
+- Window Manager pane unchanged for 2+ minutes -> possible hang
 - Watchdog pane shows no timestamps for 60s+ -> watchdog stopped

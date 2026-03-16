@@ -10,14 +10,24 @@ is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
 # --- Load session environment ---
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { echo "ERROR: not in doey session"; exit 1; }
-# Safe key-value parse (no arbitrary code execution)
+
+# --- Detect window index (multi-window support) ---
+WINDOW_INDEX=$(tmux display-message -t "${TMUX_PANE}" -p '#{window_index}' 2>/dev/null) || WINDOW_INDEX="0"
+
+# Safe key-value parse — try per-window team file first, fall back to session.env
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+if [ -f "$TEAM_ENV" ]; then
+  _ENV_SRC="$TEAM_ENV"
+else
+  _ENV_SRC="${RUNTIME_DIR}/session.env"
+fi
 while IFS='=' read -r key value; do
   value="${value%\"}" && value="${value#\"}"
   case "$key" in
     WORKER_PANES) WORKER_PANES="$value" ;;
     SESSION_NAME) SESSION_NAME="$value" ;;
   esac
-done < "${RUNTIME_DIR}/session.env"
+done < "$_ENV_SRC"
 
 # --- Resolve hash command once (avoid per-pane fork) ---
 if command -v md5 >/dev/null 2>&1; then
@@ -30,7 +40,7 @@ fi
 # States stored as PANE_STATE_<index>=value
 
 # --- Load previous pane states from JSON (for stuck detection & suppression) ---
-PREV_STATES_FILE="${RUNTIME_DIR}/status/watchdog_pane_states.json"
+PREV_STATES_FILE="${RUNTIME_DIR}/status/watchdog_pane_states_W${WINDOW_INDEX}.json"
 if [ -f "$PREV_STATES_FILE" ]; then
   PREV_JSON=$(cat "$PREV_STATES_FILE" 2>/dev/null) || PREV_JSON="{}"
   # Parse "index":"STATE" pairs — bash 3.2 compatible
@@ -52,8 +62,8 @@ fi
 
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 
-# --- Manager health check (pane 0.0) ---
-MGR_REF="${SESSION_NAME}:0.0"
+# --- Window Manager health check (pane W.0) ---
+MGR_REF="${SESSION_NAME}:${WINDOW_INDEX}.0"
 MGR_CMD=$(tmux display-message -t "$MGR_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
 case "$MGR_CMD" in
   bash|zsh|sh|fish) echo "MANAGER_CRASHED" ;;
@@ -64,8 +74,8 @@ PANES_LIST="${WORKER_PANES//,/ }"
 for i in $PANES_LIST; do
   # Validate pane index before use in eval/variable expansion
   is_numeric "$i" || continue
-  PANE_REF="${SESSION_NAME}:0.${i}"
-  PANE_SAFE="${SESSION_SAFE}_0_${i}"
+  PANE_REF="${SESSION_NAME}:${WINDOW_INDEX}.${i}"
+  PANE_SAFE="${SESSION_SAFE}_${WINDOW_INDEX}_${i}"
 
   # Check reservation
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
@@ -95,8 +105,8 @@ for i in $PANES_LIST; do
       else
         echo "PANE ${i} CRASHED"
         eval "PANE_STATE_${i}=CRASHED"
-        # Write crash alert file for Manager consumption
-        CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${i}"
+        # Write crash alert file for Window Manager consumption
+        CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${WINDOW_INDEX}_${i}"
         if [ ! -f "$CRASH_FILE" ]; then
           CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
           cat > "$CRASH_FILE" << CRASH_EOF
@@ -121,7 +131,7 @@ CRASH_EOF
 
   if [ "$HASH" = "$OLD_HASH" ]; then
     # Stuck-worker counter: increment on UNCHANGED, check previous state
-    COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${i}"
+    COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${WINDOW_INDEX}_${i}"
     read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
     NEW_COUNT=$((OLD_COUNT + 1))
     echo "$NEW_COUNT" > "$COUNTER_FILE"
@@ -144,7 +154,7 @@ CRASH_EOF
   fi
 
   # Hash changed — reset unchanged counter
-  rm -f "${RUNTIME_DIR}/status/unchanged_count_${i}" 2>/dev/null
+  rm -f "${RUNTIME_DIR}/status/unchanged_count_${WINDOW_INDEX}_${i}" 2>/dev/null
 
   # Hash changed — update stored hash (atomic write)
   echo "$HASH" > "${HASH_FILE}.tmp" && mv "${HASH_FILE}.tmp" "$HASH_FILE"
@@ -180,7 +190,7 @@ if [ "$HAS_MSGS" = true ]; then
       is_numeric "$i" || continue
       eval "PSTATE=\${PANE_STATE_${i}:-UNKNOWN}"
       [ "$PSTATE" = "IDLE" ] || continue
-      case "$msg_name" in "${SESSION_SAFE}_0_${i}_"*)
+      case "$msg_name" in "${SESSION_SAFE}_${WINDOW_INDEX}_${i}_"*)
         eval "INBOX_COUNT_${i}=\$(( \${INBOX_COUNT_${i}:-0} + 1 ))"
         break
         ;; esac
@@ -198,7 +208,7 @@ if [ "$HAS_MSGS" = true ]; then
 fi
 
 # --- Check for worker completion events ---
-for cf in "${RUNTIME_DIR}/status"/completion_pane_*; do
+for cf in "${RUNTIME_DIR}/status"/completion_pane_${WINDOW_INDEX}_*; do
   [ -f "$cf" ] || continue
   # Safe key-value parse (completion files live in /tmp, avoid sourcing)
   PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
@@ -217,8 +227,8 @@ done
 
 # --- Write heartbeat ---
 SCAN_TIME=$(date +%s)
-echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" && \
-  mv "${RUNTIME_DIR}/status/watchdog.heartbeat.tmp" "${RUNTIME_DIR}/status/watchdog.heartbeat"
+echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog_W${WINDOW_INDEX}.heartbeat.tmp" && \
+  mv "${RUNTIME_DIR}/status/watchdog_W${WINDOW_INDEX}.heartbeat.tmp" "${RUNTIME_DIR}/status/watchdog_W${WINDOW_INDEX}.heartbeat"
 
 # --- Write pane states JSON (atomic) ---
 JSON="{"
@@ -235,8 +245,8 @@ for i in $PANES_LIST; do
   fi
 done
 JSON+="}"
-echo "$JSON" > "${RUNTIME_DIR}/status/watchdog_pane_states.json.tmp" && \
-  mv "${RUNTIME_DIR}/status/watchdog_pane_states.json.tmp" "${RUNTIME_DIR}/status/watchdog_pane_states.json"
+echo "$JSON" > "${RUNTIME_DIR}/status/watchdog_pane_states_W${WINDOW_INDEX}.json.tmp" && \
+  mv "${RUNTIME_DIR}/status/watchdog_pane_states_W${WINDOW_INDEX}.json.tmp" "${RUNTIME_DIR}/status/watchdog_pane_states_W${WINDOW_INDEX}.json"
 
 # --- Summary footer ---
 echo "SCAN_TIME=${SCAN_TIME}"

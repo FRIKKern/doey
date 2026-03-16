@@ -67,7 +67,7 @@ check_pattern() {
 }
 
 # All patterns in one grep pass to avoid 17 separate forks
-COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|read[[:space:]]+-[^ ]*a[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)'
+COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)'
 ALL_MATCHES=$(grep -nE "$COMBINED_PATTERN" "$FILE_PATH" 2>/dev/null || true)
 
 if [ -n "$ALL_MATCHES" ]; then
@@ -87,7 +87,6 @@ if [ -n "$ALL_MATCHES" ]; then
       *'|&'*) desc="pipe stderr shorthand |& (bash 4+)" ;;
       *'&>>'*) desc="append both streams &>> (bash 4+)" ;;
       *coproc*) desc="coproc (bash 4+)" ;;
-      *'read '*-*a*) desc="read -a (array read, use while-read loop instead)" ;;
       *BASH_REMATCH*) desc="BASH_REMATCH (regex capture groups, bash 3.2 unreliable)" ;;
       *'${'*',,}'*) desc="\${var,,} (lowercase, bash 4+)" ;;
       *'${'*'^^}'*) desc="\${var^^} (uppercase, bash 4+)" ;;

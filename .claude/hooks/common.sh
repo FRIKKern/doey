@@ -18,11 +18,14 @@ init_hook() {
   # Get pane identity
   # IMPORTANT: Use -t "$TMUX_PANE" to resolve THIS pane's identity, not the client's focused pane.
   # Without -t, tmux display-message returns info for whichever pane the user is viewing (usually 0.0),
-  # which caused ALL workers to think they were the Manager and spam notifications.
+  # which caused ALL workers to think they were the Window Manager and spam notifications.
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
   PANE_SAFE=${PANE//[:.]/_}
   SESSION_NAME="${PANE%%:*}"
   PANE_INDEX="${PANE##*.}"
+  # Extract window index for multi-window support
+  local _wp="${PANE#*:}"          # "1.5"
+  WINDOW_INDEX="${_wp%.*}"        # "1"
   NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
   # Ensure runtime dirs exist (fast-path: skip if all present)
@@ -40,19 +43,53 @@ parse_field() {
   fi
 }
 
+load_team_env() {
+  # Load per-window team env file (multi-window support).
+  # Populates _TEAM_WD_PANE, _TEAM_MGR_PANE, _TEAM_WORKER_PANES, _TEAM_WORKER_COUNT.
+  # Returns 1 if no team file exists for this window.
+  local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  [ -f "$team_file" ] || return 1
+  _TEAM_WD_PANE="" _TEAM_MGR_PANE="" _TEAM_WORKER_PANES="" _TEAM_WORKER_COUNT=""
+  while IFS='=' read -r key value; do
+    value="${value%\"}" && value="${value#\"}"
+    case "$key" in
+      WATCHDOG_PANE)  _TEAM_WD_PANE="$value" ;;
+      WORKER_PANES)   _TEAM_WORKER_PANES="$value" ;;
+      MANAGER_PANE)   _TEAM_MGR_PANE="$value" ;;
+      WORKER_COUNT)   _TEAM_WORKER_COUNT="$value" ;;
+    esac
+  done < "$team_file"
+}
+
 is_watchdog() {
-  # Cache result to avoid re-reading session.env on repeated calls
+  # Cache result to avoid re-reading env files on repeated calls.
+  # Multi-window: check team_<W>.env first, fall back to session.env.
   if [ -z "${_DOEY_WD_PANE+x}" ]; then
-    [ -f "${RUNTIME_DIR}/session.env" ] || return 1
-    _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
-    _DOEY_WD_PANE="${_DOEY_WD_PANE//\"/}"
+    local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+    if [ -f "$team_file" ]; then
+      _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "$team_file" | cut -d= -f2)
+      _DOEY_WD_PANE="${_DOEY_WD_PANE//\"/}"
+    elif [ -f "${RUNTIME_DIR}/session.env" ]; then
+      _DOEY_WD_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
+      _DOEY_WD_PANE="${_DOEY_WD_PANE//\"/}"
+    else
+      return 1
+    fi
   fi
   [ "$PANE_INDEX" = "$_DOEY_WD_PANE" ]
 }
 
 is_manager() {
+  # Pane index 0 is always the Window Manager in any team window.
+  # Info Panel (0.0 in multi-window) is a shell script — hooks never run there, so this is safe.
+  [ "$PANE_INDEX" = "0" ]
+}
+
+is_session_manager() {
+  # True only for the global session manager (window 0, pane 1)
+  # In multi-window mode, 0.0 is the Info Panel; 0.1 is the Session Manager.
   local wp="${PANE#*:}"
-  [ "$wp" = "0.0" ]
+  [ "$wp" = "0.1" ]
 }
 
 is_worker() {
@@ -75,8 +112,8 @@ send_notification() {
   local title="${1:-Claude Code}"
   local body="${2:-Task completed}"
 
-  # Defense-in-depth: only Manager sends notifications
-  if ! is_manager; then
+  # Defense-in-depth: only Session Manager (0.1) sends notifications
+  if ! is_session_manager; then
     return 0
   fi
 

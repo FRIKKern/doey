@@ -60,7 +60,7 @@ fi
 
 # Determine role label for context message
 if is_manager; then
-  ROLE_LABEL="the Doey Manager"
+  ROLE_LABEL="the Doey Window Manager"
 elif is_watchdog; then
   ROLE_LABEL="the Doey Watchdog"
 else
@@ -80,13 +80,13 @@ ${RECENT_FILES:-None detected}
 **Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
-# Append Manager orchestration state if this is the Manager
+# Append Window Manager orchestration state if this is the Window Manager
 if is_manager; then
-  WORKER_ASSIGNMENTS=$(tmux list-panes -s -t "$SESSION_NAME" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
+  WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$WINDOW_INDEX" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
   PENDING_RESULTS=""
   HAS_JQ=false
   command -v jq >/dev/null 2>&1 && HAS_JQ=true
-  for rf in "$RUNTIME_DIR"/results/pane_*.json; do
+  for rf in "$RUNTIME_DIR"/results/pane_${WINDOW_INDEX}_*.json; do
     [ -f "$rf" ] || continue
     rf_name=$(basename "$rf")
     rf_status=""
@@ -99,21 +99,21 @@ if is_manager; then
 "
   done
   COMPLETION_FILES=""
-  for cf in "$RUNTIME_DIR"/status/completion_pane_*; do
+  for cf in "$RUNTIME_DIR"/status/completion_pane_${WINDOW_INDEX}_*; do
     [ -f "$cf" ] || continue
     COMPLETION_FILES="${COMPLETION_FILES}  $(basename "$cf")
 "
   done
   CRASH_FILES=""
-  for crf in "$RUNTIME_DIR"/status/crash_pane_*; do
+  for crf in "$RUNTIME_DIR"/status/crash_pane_${WINDOW_INDEX}_*; do
     [ -f "$crf" ] || continue
     CRASH_FILES="${CRASH_FILES}  $(basename "$crf")
 "
   done
   cat <<MGRSTATE
 
-## MANAGER ORCHESTRATION STATE (restore after compaction)
-You are the Manager. The following orchestration state was captured before compaction.
+## WINDOW MANAGER ORCHESTRATION STATE (restore after compaction)
+You are the Window Manager. The following orchestration state was captured before compaction.
 
 **Worker Assignments (pane_index title):**
 ${WORKER_ASSIGNMENTS:-No panes found}
@@ -131,7 +131,7 @@ fi
 
 # Append watchdog pane states if this is the watchdog
 if is_watchdog; then
-  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states.json" 2>/dev/null || echo "{}")
+  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${WINDOW_INDEX}.json" 2>/dev/null || echo "{}")
   if [ "$WATCHDOG_STATE" != "{}" ]; then
     cat <<WDSTATE
 

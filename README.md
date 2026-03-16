@@ -7,7 +7,7 @@
 
 <p><em>Your loyal AI team doggo — run parallel Claude Code agents in one terminal</em></p>
 
-<p>A Manager that plans, Workers that build, and a Watchdog that keeps it all running — inside tmux.</p>
+<p>A Window Manager that plans, Workers that build, and a Watchdog that keeps it all running — inside tmux.</p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-CLI-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
@@ -39,9 +39,9 @@ You have 30 files to refactor. One Claude Code instance. You wait for each file,
 
 ## The Solution
 
-Doey launches **parallel Claude Code instances** coordinated by a Manager that breaks your task into subtasks, dispatches them to workers, and monitors progress — all in one tmux session.
+Doey launches **parallel Claude Code instances** coordinated by a Window Manager that breaks your task into subtasks, dispatches them to workers, and monitors progress — all in one tmux session.
 
-You talk to the Manager. The Manager runs the team. You ship faster.
+You talk to the Window Manager. The Window Manager runs the team. You ship faster.
 
 The grid is **dynamic by default** — starts lean with 4 workers, then use `doey add` to scale up when you need more horsepower. No restarts needed.
 
@@ -71,11 +71,11 @@ No config files. No shell reload. Just `doey`.
 
 1. **Init** — `doey init` registers your project (once)
 2. **Launch** — `doey` starts the team or reattaches to a running session
-3. **Tell the Manager** — *"Refactor all components to use the new design tokens"*
-4. **Manager plans** — breaks the task into independent, parallelizable subtasks
+3. **Tell the Window Manager** — *"Refactor all components to use the new design tokens"*
+4. **Window Manager plans** — breaks the task into independent, parallelizable subtasks
 5. **Workers execute** — each gets a self-contained prompt and works autonomously
 6. **Watchdog monitors** — tracks state, delivers messages, catches crashes
-7. **Manager reports** — consolidated summary when everything's done
+7. **Window Manager reports** — consolidated summary when everything's done
 
 ---
 
@@ -83,11 +83,11 @@ No config files. No shell reload. Just `doey`.
 
 - **Dynamic grid** — starts with 4 workers, scale up with `doey add`, scale down with `doey remove`
 - **Parallel execution** — workers run simultaneously, not sequentially
-- **Smart orchestration** — Manager plans and delegates, never writes code itself
+- **Smart orchestration** — Window Manager plans and delegates, never writes code itself
 - **Always-on monitoring** — Watchdog tracks worker state and delivers inbox messages
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
 - **Message bus** — file-based inter-pane communication (inbox, broadcasts, status)
-- **17 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
+- **23 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -108,6 +108,9 @@ No config files. No shell reload. Just `doey`.
 | `doey update` | Pull latest and reinstall (alias: `reinstall`) |
 | `doey version` | Show version info |
 | `doey dynamic` | Launch in dynamic grid mode (alias: `d`) |
+| `doey add-window` | Add a new team window with its own Window Manager, Watchdog, and Workers |
+| `doey kill-window <N>` | Kill a team window and all its processes |
+| `doey list-windows` | List all team windows with status |
 | `doey test` | Run test suite |
 | `doey uninstall` | Remove doey completely |
 | `doey 4x3` | Launch with a static grid layout |
@@ -118,11 +121,13 @@ No config files. No shell reload. Just `doey`.
 
 | Role | Pane | What it does |
 |------|------|-------------|
-| **Manager** | `0.0` | Plans, delegates, monitors. Never writes code. |
-| **Watchdog** | `0.1` (dynamic mode) | Monitors workers, delivers messages, catches crashes. |
-| **Workers** | `0.2+` | Claude Code instances that do the actual work. |
+| **Info Panel** | `0.0` (multi-window) | Live dashboard showing team status, events, worker counts. |
+| **Session Manager** | `0.1` (multi-window) | Session-level orchestrator — coordinates across team windows. |
+| **Window Manager** | `W.0` | Per-window orchestrator. Plans, delegates, monitors. Never writes code. |
+| **Watchdog** | `W.1` (dynamic mode) | Monitors workers, delivers messages, catches crashes. |
+| **Workers** | `W.2+` | Claude Code instances that do the actual work. |
 
-Manager and Watchdog share column 0. Workers get their own columns — one per `doey add`.
+In multi-window mode, window 0 hosts the Info Panel and Session Manager. Each team window (W) has its own Window Manager, Watchdog, and Workers. In single-window mode, pane 0.0 is the Window Manager and 0.1 is the Watchdog.
 
 Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results, research reports. See [Context Reference](docs/context-reference.md) for the full picture.
 
@@ -144,9 +149,15 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-status` | View or set pane status |
 | `/doey-purge` | Run purge from inside a session |
 | `/doey-reserve` | Reserve a pane for human use |
+| `/doey-add-window` | Add a new team window |
+| `/doey-kill-window` | Kill a team window and all its processes |
+| `/doey-kill-session` | Kill entire Doey session |
+| `/doey-kill-all-sessions` | Kill all running Doey sessions across all projects |
+| `/doey-list-windows` | List all team windows with status |
+| `/doey-restart-window` | Restart workers and Watchdog in a window |
 | `/doey-stop` | Stop a specific worker |
-| `/doey-stop-all` | Stop all running Doey sessions |
-| `/doey-restart-workers` | Restart workers and Watchdog (keeps Manager) |
+| `/doey-stop-all` | Stop all running Doey sessions *(deprecated, replaced by `/doey-kill-session`)* |
+| `/doey-restart-workers` | Restart workers and Watchdog *(deprecated, replaced by `/doey-restart-window`)* |
 | `/doey-reinstall` | Reinstall from repo |
 | `/doey-watchdog-compact` | Compact Watchdog context |
 | `/doey-analyze` | Full project analysis — find and fix doc obscurities |
@@ -162,20 +173,22 @@ doey/
 ├── install.sh                   # Installer
 ├── web-install.sh               # Web installer (curl | bash)
 ├── agents/
-│   ├── doey-manager.md          # Manager agent definition
+│   ├── doey-manager.md          # Window Manager agent definition
+│   ├── doey-session-manager.md  # Session Manager (multi-window orchestrator)
 │   ├── doey-watchdog.md         # Watchdog agent definition
 │   └── test-driver.md           # E2E test driver
 ├── commands/                    # Slash commands → ~/.claude/commands/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (17 total)
+│   └── ... (23 total)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
 │   ├── linux-server.md
 │   └── windows-wsl2.md
 ├── shell/
 │   ├── doey.sh                  # CLI → ~/.local/bin/doey
+│   ├── info-panel.sh            # Live info panel dashboard (window 0.0)
 │   ├── context-audit.sh         # Context pattern auditor
 │   ├── tmux-statusbar.sh        # Dynamic status-right renderer
 │   └── pane-border-status.sh    # Pane border label renderer
@@ -240,7 +253,7 @@ Then restart your shell.
 <details>
 <summary><strong>Workers stuck</strong></summary>
 
-The Manager can run `/doey-restart-workers` to restart all workers without killing itself.
+The Window Manager can run `/doey-restart-window` to restart all workers without killing itself.
 
 </details>
 

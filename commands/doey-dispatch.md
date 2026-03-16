@@ -1,6 +1,6 @@
 # Skill: doey-dispatch
 
-Send a task to one or more idle worker panes reliably. This is the primary dispatch primitive for the TMUX Manager.
+Send a task to one or more idle worker panes reliably. This is the primary dispatch primitive for the TMUX Window Manager.
 
 ## Usage
 `/doey-dispatch`
@@ -10,7 +10,17 @@ You are dispatching tasks to Claude Code worker instances in TMUX panes.
 
 ### Project Context
 
-Every Bash call that touches tmux must start with: `RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)` then `source "${RUNTIME_DIR}/session.env"`. This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`. Always use `${SESSION_NAME}` — never hardcode session names.
+Every Bash call that touches tmux must start with:
+
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
+```
+
+This gives you `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WINDOW_INDEX`. Always use `${SESSION_NAME}` — never hardcode session names.
 
 ### Copy-mode pattern
 
@@ -26,9 +36,9 @@ if [ "$GRID_MODE" = "dynamic" ]; then
   HAS_IDLE=false
   if [ -n "$WORKER_PANES" ]; then
     for WIDX in $(echo "$WORKER_PANES" | tr ',' ' '); do
-      W_SAFE=$(echo "${SESSION_NAME}:0.${WIDX}" | tr ':.' '_')
+      W_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${WIDX}" | tr ':.' '_')
       [ -f "${RUNTIME_DIR}/status/${W_SAFE}.reserved" ] && continue
-      W_OUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WIDX}" -p -S -3 2>/dev/null)
+      W_OUT=$(tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.${WIDX}" -p -S -3 2>/dev/null)
       case "$W_OUT" in *'❯'*) HAS_IDLE=true; break ;; esac
     done
   fi
@@ -50,15 +60,15 @@ fi
 
 ```bash
 # Check reservation
-PANE_SAFE=$(echo "${SESSION_NAME}:0.X" | tr ':.' '_')
+PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
 RESERVE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.reserved"
 if [ -f "$RESERVE_FILE" ]; then
   echo "Pane is reserved — skip this worker, pick another"
 fi
 
 # Check idle (look for ❯ prompt; if you see thinking/working/tool output — busy)
-tmux copy-mode -q -t "${SESSION_NAME}:0.X" 2>/dev/null
-tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -3
+tmux copy-mode -q -t "${SESSION_NAME}:${WINDOW_INDEX}.X" 2>/dev/null
+tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 ```
 
 **Never dispatch to a RESERVED pane.** If all workers are reserved, report to the user and wait.
@@ -70,8 +80,11 @@ tmux capture-pane -t "${SESSION_NAME}:0.X" -p -S -3
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
+TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+[ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
-PANE="${SESSION_NAME}:0.X"
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 
 # 1. Exit copy-mode
 tmux copy-mode -q -t "$PANE" 2>/dev/null
@@ -99,7 +112,7 @@ if [ "$ALREADY_READY" = "false" ]; then
 
   # 5. Start fresh Claude (with worker system prompt for identity + rules)
   PANE_IDX="${PANE##*.}"
-  WORKER_PROMPT=$(grep -l "pane 0\.${PANE_IDX} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
+  WORKER_PROMPT=$(grep -l "pane ${WINDOW_INDEX}\.${PANE_IDX} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
   if [ -n "$WORKER_PROMPT" ]; then
     tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter
   else
@@ -151,17 +164,17 @@ rm "$TASKFILE"
 sleep 5
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
 if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-  echo "✓ Worker 0.X started processing"
+  echo "✓ Worker ${WINDOW_INDEX}.X started processing"
 else
-  echo "⚠ Worker 0.X not processing — retrying..."
+  echo "⚠ Worker ${WINDOW_INDEX}.X not processing — retrying..."
   tmux copy-mode -q -t "$PANE" 2>/dev/null
   tmux send-keys -t "$PANE" Enter
   sleep 3
   OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
   if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-    echo "✓ Worker 0.X started after retry"
+    echo "✓ Worker ${WINDOW_INDEX}.X started after retry"
   else
-    echo "✗ Worker 0.X FAILED — run unstick sequence"
+    echo "✗ Worker ${WINDOW_INDEX}.X FAILED — run unstick sequence"
   fi
 fi
 ```
@@ -178,7 +191,7 @@ When dispatching multiple workers in parallel:
 - **Explicit file ownership:** Tell each worker which files it owns exclusively. "Do NOT modify any other files."
 - **Section ownership for shared files:** Assign non-overlapping sections. "Use Edit with targeted replacements only. Never use Write."
 - **Sequential dispatch for overlapping edits:** Wait for first worker to finish before dispatching second.
-- **Optional lockfiles:** Workers create `$RUNTIME_DIR/locks/<file>.lock` before editing shared files; Manager checks before dispatching to same file.
+- **Optional lockfiles:** Workers create `$RUNTIME_DIR/locks/<file>.lock` before editing shared files; Window Manager checks before dispatching to same file.
 
 ### Rules
 
@@ -191,4 +204,4 @@ When dispatching multiple workers in parallel:
 ### Troubleshooting: Unstick a non-responsive worker
 
 1. Try `C-c`, `C-u`, `Enter` (with `copy-mode -q` first). Wait 3s, check output.
-2. If still stuck after 2 attempts: `kill -9` the child PID (`pgrep -P $PANE_PID`), wait 2s, relaunch Claude with the worker system prompt (find it via `grep -l "pane 0.${PANE_IDX}" "${RUNTIME_DIR}/worker-system-prompt-"*.md`), e.g. `send-keys "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter`, wait 8s, then re-dispatch.
+2. If still stuck after 2 attempts: `kill -9` the child PID (`pgrep -P $PANE_PID`), wait 2s, relaunch Claude with the worker system prompt (find it via `grep -l "pane ${WINDOW_INDEX}.${PANE_IDX}" "${RUNTIME_DIR}/worker-system-prompt-"*.md`), e.g. `send-keys "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter`, wait 8s, then re-dispatch.
