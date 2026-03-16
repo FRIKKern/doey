@@ -172,6 +172,16 @@ setup_dashboard() {
   tmux swap-pane -s "$session:0.1" -t "$session:0.2"
   # Result: 0.1=bot-left(WD1), 0.2=bot-mid(WD2), 0.3=bot-right(WD3), 0.4=top-right(SM)
 
+  # Balance watchdog pane widths (tmux percentage rounding causes uneven splits)
+  local w1 w2 w3 total target
+  w1=$(tmux display-message -t "$session:0.1" -p '#{pane_width}')
+  w2=$(tmux display-message -t "$session:0.2" -p '#{pane_width}')
+  w3=$(tmux display-message -t "$session:0.3" -p '#{pane_width}')
+  total=$((w1 + w2 + w3))
+  target=$((total / 3))
+  tmux resize-pane -t "$session:0.1" -x "$target"
+  tmux resize-pane -t "$session:0.2" -x "$target"
+
   # Name panes
   tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "Watchdog T1"
