@@ -79,6 +79,11 @@ check_pattern "$FILE_PATH" '\|&' 'pipe stderr shorthand |& (bash 4+)'
 check_pattern "$FILE_PATH" '&>>' 'append both streams &>> (bash 4+)'
 check_pattern "$FILE_PATH" 'coproc[[:space:]]' 'coproc (bash 4+)'
 check_pattern "$FILE_PATH" 'read[[:space:]]+-[^ ]*a[[:space:]]' 'read -a (array read, use while-read loop instead)'
+check_pattern "$FILE_PATH" 'BASH_REMATCH' 'BASH_REMATCH (regex capture groups, bash 3.2 unreliable)'
+check_pattern "$FILE_PATH" '\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}' '${var,,} (lowercase, bash 4+)'
+check_pattern "$FILE_PATH" '\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}' '${var^^} (uppercase, bash 4+)'
+check_pattern "$FILE_PATH" '\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}' '${!prefix@} (indirect expansion, bash 4+)'
+check_pattern "$FILE_PATH" 'shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)' 'shopt globstar/lastpipe (bash 4+)'
 
 # If no violations, exit cleanly
 if [ "$count" -eq 0 ]; then

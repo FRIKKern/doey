@@ -32,6 +32,8 @@ fi
 PROJECT_DIR=""
 if [ -f "${RUNTIME_DIR}/session.env" ]; then
   PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" | cut -d= -f2-)
+  PROJECT_DIR="${PROJECT_DIR%\"}"
+  PROJECT_DIR="${PROJECT_DIR#\"}"
 fi
 
 # Find recently modified project files (last 10 minutes) — skip for Watchdog (irrelevant)
@@ -56,6 +58,15 @@ if ! is_watchdog; then
   fi
 fi
 
+# Determine role label for context message
+if is_manager; then
+  ROLE_LABEL="the Doey Manager"
+elif is_watchdog; then
+  ROLE_LABEL="the Doey Watchdog"
+else
+  ROLE_LABEL="a Doey worker"
+fi
+
 # Output context preservation message to stdout
 cat <<CONTEXT
 ## Context Preservation (Pre-Compaction)
@@ -66,7 +77,7 @@ cat <<CONTEXT
 **Recently Modified Files:**
 ${RECENT_FILES:-None detected}
 
-**Important:** You are a Doey worker. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
+**Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
 # Append Manager orchestration state if this is the Manager

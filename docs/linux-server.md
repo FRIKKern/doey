@@ -64,9 +64,9 @@ Type=forking
 Environment=HOME=%h
 Environment=PATH=%h/.local/bin:%h/.fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/your-project
-ExecStart=/usr/bin/tmux new-session -d -s doey "%h/.local/bin/doey"
-ExecStop=/usr/bin/tmux kill-session -t doey
-# Note: session name should match your project — e.g. doey-myproject
+# Replace "myproject" below with your actual project name from `doey list`
+ExecStart=%h/.local/bin/doey
+ExecStop=/usr/bin/tmux kill-session -t doey-myproject
 Restart=on-failure
 RestartSec=10
 

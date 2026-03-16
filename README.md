@@ -145,8 +145,8 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-purge` | Run purge from inside a session |
 | `/doey-reserve` | Reserve a pane for human use |
 | `/doey-stop` | Stop a specific worker |
-| `/doey-stop-all` | Stop all workers |
-| `/doey-restart-workers` | Restart workers (keeps Manager) |
+| `/doey-stop-all` | Stop all running Doey sessions |
+| `/doey-restart-workers` | Restart workers and Watchdog (keeps Manager) |
 | `/doey-reinstall` | Reinstall from repo |
 | `/doey-watchdog-compact` | Compact Watchdog context |
 | `/doey-analyze` | Full project analysis — find and fix doc obscurities |

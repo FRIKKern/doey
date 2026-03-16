@@ -70,15 +70,6 @@ NL='
 # Numeric-only validation (bash 3.2 safe)
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
-# Atomic file write: writes stdin to tmpfile then renames to target
-# Usage: atomic_write "$dest" <<EOF ... EOF
-atomic_write() {
-  local dest="$1" tmpfile
-  tmpfile=$(mktemp "${dest%/*}/.tmp_XXXXXX" 2>/dev/null) || tmpfile="$dest"
-  cat > "$tmpfile"
-  case "$tmpfile" in "$dest") ;; *) mv "$tmpfile" "$dest" ;; esac
-}
-
 # Cross-platform desktop notification
 send_notification() {
   local title="${1:-Claude Code}"

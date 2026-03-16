@@ -52,7 +52,7 @@ Load Order (bottom = first, top = last / highest precedence)
 | `color` | `green` | `yellow` | Status line color |
 | `memory` | `user` | `none` | Manager stores to `~/.claude/agent-memory/<name>/`; Watchdog has no memory |
 
-Body text below frontmatter becomes the system prompt (line counts include YAML frontmatter). Manager: ~239 lines (identity, workflow, delegation rules). Watchdog: ~161 lines (monitoring loop, prompt detection, monitoring rules).
+Body text below frontmatter becomes the system prompt. Manager: identity, workflow, delegation rules. Watchdog: monitoring loop, prompt detection, monitoring rules. See `agents/*.md` for current content.
 
 Precedence: CLI `--model` > frontmatter `model` > settings `model`.
 
@@ -135,29 +135,29 @@ Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not se
 Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session.env`.
 Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source session.env`.
 
-| Variable | Description | Source |
-|----------|-------------|--------|
-| `PROJECT_DIR` | Absolute path to project root | doey.sh |
-| `PROJECT_NAME` | Sanitized project name | doey.sh |
-| `SESSION_NAME` | tmux session name (`doey-<name>`) | doey.sh |
-| `GRID` | Grid layout (e.g., `6x2`) or `dynamic` | doey.sh |
-| `ROWS` | Number of rows in grid | doey.sh |
-| `MAX_WORKERS` | Maximum worker count (dynamic grid) | doey.sh |
-| `CURRENT_COLS` | Current column count (dynamic grid only, updated as grid expands) | doey.sh |
-| `TOTAL_PANES` | Total pane count (absent in dynamic mode) | doey.sh |
-| `WORKER_COUNT` | Number of workers | doey.sh |
-| `WATCHDOG_PANE` | Watchdog pane index | doey.sh |
-| `WORKER_PANES` | Comma-separated worker indices | doey.sh |
-| `RUNTIME_DIR` | Runtime state directory | doey.sh |
-| `PASTE_SETTLE_MS` | Paste buffer settle time in ms | doey.sh |
-| `IDLE_COLLAPSE_AFTER` | Seconds before idle column collapse | doey.sh |
-| `IDLE_REMOVE_AFTER` | Seconds before idle column removal (dynamic grid) | doey.sh |
-| `TMUX_PANE` | tmux auto-set pane ID (e.g., `%0`) | tmux |
-| `CLAUDE_PROJECT_DIR` | Claude Code project dir | Claude Code |
-| `CLAUDECODE` | Set when inside Claude Code | Claude Code |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `1` — enables Agent Teams | Claude Code |
-| `DOEY_ROLE` | Pane role (manager/watchdog/worker) | hooks |
-| `DOEY_PANE_INDEX` | Pane index within session | hooks |
+| Variable | Description | Source | Mode |
+|----------|-------------|--------|------|
+| `PROJECT_DIR` | Absolute path to project root | doey.sh | both |
+| `PROJECT_NAME` | Sanitized project name | doey.sh | both |
+| `SESSION_NAME` | tmux session name (`doey-<name>`) | doey.sh | both |
+| `GRID` | Grid layout (e.g., `6x2`) or `dynamic` | doey.sh | both |
+| `ROWS` | Number of rows in grid (always `2`) | doey.sh | dynamic only |
+| `MAX_WORKERS` | Maximum worker count | doey.sh | dynamic only |
+| `CURRENT_COLS` | Current column count (updated as grid expands) | doey.sh | dynamic only |
+| `TOTAL_PANES` | Total pane count | doey.sh | static only |
+| `WORKER_COUNT` | Number of workers | doey.sh | both |
+| `WATCHDOG_PANE` | Watchdog pane index | doey.sh | both |
+| `WORKER_PANES` | Comma-separated worker indices | doey.sh | both |
+| `RUNTIME_DIR` | Runtime state directory | doey.sh | both |
+| `PASTE_SETTLE_MS` | Paste buffer settle time in ms | doey.sh | both |
+| `IDLE_COLLAPSE_AFTER` | Seconds before idle column collapse | doey.sh | both |
+| `IDLE_REMOVE_AFTER` | Seconds before idle column removal | doey.sh | both |
+| `TMUX_PANE` | tmux auto-set pane ID (e.g., `%0`) | tmux | both |
+| `CLAUDE_PROJECT_DIR` | Claude Code project dir | Claude Code | both |
+| `CLAUDECODE` | Set when inside Claude Code | Claude Code | both |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `1` — enables Agent Teams | Claude Code | both |
+| `DOEY_ROLE` | Pane role (manager/watchdog/worker) | hooks | both |
+| `DOEY_PANE_INDEX` | Pane index within session | hooks | both |
 
 
 ## Layer 7: CLI Launch Flags
@@ -175,7 +175,7 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Default grid: **dynamic** (launches with 2 worker columns (4 workers), auto-adds more when all workers are busy). Pane 0.0 = Manager, 0.1 = Watchdog. Workers are added in pairs as columns expand.
+Default grid: **dynamic** (launches with 2 worker columns (4 workers), auto-adds more when all workers are busy). In dynamic mode: pane 0.0 = Manager, 0.1 = Watchdog (share column 0). In static mode: pane 0.0 = Manager, 0.{cols} = Watchdog (first pane of second row). Workers fill remaining panes.
 
 ```
 Dynamic grid (default) — post-launch state, then after `doey add`:
@@ -209,7 +209,7 @@ Static grid (legacy, via `doey 6x2`): Watchdog at column-count index (0.6 for 6-
 | `capture-pane` | Read pane output |
 
 Bell suppression: `bell-action none`, `visual-bell off`. Notifications via `osascript` in hooks.
-Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabled, status bar shows NB/NR/NF counts.
+Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabled, status bar shows NB/NR/NF/NRsv counts (Busy/Ready/Finished/Reserved).
 
 **PANE_SAFE escaping:** `${PANE//[:.]/_}` — e.g., `doey-project:0.5` becomes `doey-project_0_5`. Used in all runtime file names.
 

@@ -22,7 +22,7 @@ if is_worker; then
   TASK_FILE="${RUNTIME_DIR}/research/${PANE_SAFE}.task"
   REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
   if [ -f "$TASK_FILE" ] && [ ! -f "$REPORT_FILE" ]; then
-    echo '{"decision": "block", "reason": "Research task requires a report. Write your report to '"${REPORT_FILE}"' using the Write tool before stopping."}' >&2
+    echo "Research task incomplete. Write your report to ${REPORT_FILE} using the Write tool before stopping." >&2
     exit 2
   fi
 fi

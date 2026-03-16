@@ -1209,7 +1209,7 @@ MANIFEST
   ) &
 
   # Clean up background jobs on early exit
-  trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM
+  trap 'jobs -p | xargs kill 2>/dev/null' EXIT INT TERM
 
   step_done
 
@@ -1382,6 +1382,8 @@ uninstall_system() {
   fi
 
   rm -f ~/.local/bin/doey
+  rm -f ~/.local/bin/tmux-statusbar.sh
+  rm -f ~/.local/bin/pane-border-status.sh
   rm -f ~/.claude/agents/doey-*.md
   rm -f ~/.claude/commands/doey-*.md
   rm -rf ~/.claude/doey
@@ -1765,7 +1767,7 @@ MANIFEST
   ) &
 
   # Clean up background jobs on early exit
-  trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM
+  trap 'jobs -p | xargs kill 2>/dev/null' EXIT INT TERM
 
   # ── Boot workers ──
   printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
@@ -1897,20 +1899,20 @@ DOG
   step_start 5 "Writing session manifest..."
 
   cat > "${runtime_dir}/session.env" << MANIFEST
-PROJECT_DIR=$dir
-PROJECT_NAME=$name
-SESSION_NAME=$session
-GRID=dynamic
-ROWS=2
-MAX_WORKERS=$max_workers
-WORKER_PANES=
-WORKER_COUNT=0
-WATCHDOG_PANE=$watchdog_pane
-CURRENT_COLS=1
-RUNTIME_DIR=${runtime_dir}
-PASTE_SETTLE_MS=500
-IDLE_COLLAPSE_AFTER=60
-IDLE_REMOVE_AFTER=300
+PROJECT_DIR="$dir"
+PROJECT_NAME="$name"
+SESSION_NAME="$session"
+GRID="dynamic"
+ROWS="2"
+MAX_WORKERS="$max_workers"
+WORKER_PANES=""
+WORKER_COUNT="0"
+WATCHDOG_PANE="$watchdog_pane"
+CURRENT_COLS="1"
+RUNTIME_DIR="${runtime_dir}"
+PASTE_SETTLE_MS="500"
+IDLE_COLLAPSE_AFTER="60"
+IDLE_REMOVE_AFTER="300"
 MANIFEST
 
   step_done

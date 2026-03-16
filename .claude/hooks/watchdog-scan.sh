@@ -200,10 +200,17 @@ fi
 # --- Check for worker completion events ---
 for cf in "${RUNTIME_DIR}/status"/completion_pane_*; do
   [ -f "$cf" ] || continue
-  # Source the key=value file directly (written by stop-results.sh, trusted)
+  # Safe key-value parse (completion files live in /tmp, avoid sourcing)
   PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
-  # shellcheck disable=SC1090
-  . "$cf"
+  while IFS='=' read -r _cf_key _cf_val; do
+    _cf_val="${_cf_val%\"}" && _cf_val="${_cf_val#\"}"
+    case "$_cf_key" in
+      PANE_INDEX) PANE_INDEX="$_cf_val" ;;
+      PANE_TITLE) PANE_TITLE="$_cf_val" ;;
+      STATUS) STATUS="$_cf_val" ;;
+      TIMESTAMP) TIMESTAMP="$_cf_val" ;;
+    esac
+  done < "$cf"
   echo "COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}"
   rm -f "$cf"
 done
