@@ -455,16 +455,17 @@ apply_doey_theme() {
   tmux set-option -t "$session" status-interval "$status_interval"
 
   # Window status — colored segments with Dashboard distinction
-  tmux set-option -t "$session" window-status-separator ''
-  tmux set-option -t "$session" window-status-format \
+  # These are window options — use set-window-option so they apply in tmux 3.6+
+  tmux set-window-option -t "$session" window-status-separator ''
+  tmux set-window-option -t "$session" window-status-format \
     '#{?#{==:#I,0},#[fg=colour233,bg=colour97]#[fg=colour255,bg=colour97]  Dashboard #[fg=colour97,bg=colour233],#[fg=colour233,bg=colour236]#[fg=colour250,bg=colour236] #I #W #[fg=colour236,bg=colour233]}'
-  tmux set-option -t "$session" window-status-current-format \
+  tmux set-window-option -t "$session" window-status-current-format \
     '#{?#{==:#I,0},#[fg=colour233,bg=colour141]#[fg=colour233,bg=colour141,bold]  Dashboard #[fg=colour141,bg=colour233,nobold],#[fg=colour233,bg=cyan]#[fg=colour233,bg=cyan,bold] #I #W #[fg=cyan,bg=colour233,nobold]}'
   tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
 
   # Activity monitoring — highlight windows with new output
-  tmux set-option -t "$session" window-status-activity-style 'fg=colour214,bg=colour236,bold'
-  tmux set-option -t "$session" monitor-activity on
+  tmux set-window-option -t "$session" window-status-activity-style 'fg=colour214,bg=colour236,bold'
+  tmux set-window-option -t "$session" monitor-activity on
   tmux set-option -t "$session" visual-activity off
 
   # Terminal tab/window title — shows project name in macOS Terminal tabs

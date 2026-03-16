@@ -1,7 +1,7 @@
 #!/bin/bash
 # Doey Info Panel — full-width two-column dashboard for window 0
 # Displays team status, worker counts, recent events, and usage guide.
-# Runs in a loop, refreshing every 5 seconds.
+# Runs in a loop, refreshing every 5 minutes.
 set -euo pipefail
 
 RUNTIME_DIR="${1:-${DOEY_RUNTIME:-}}"
@@ -723,8 +723,8 @@ while true; do
   # ── Footer ────────────────────────────────────────────────────────
   printf '\n'
   printf '%b%s%b\n' "${C_DIM}" "$HR" "${C_RESET}"
-  printf '%b  Refreshing every 5s  │  Ctrl+C to stop  │  %b%s%b%b\n' \
+  printf '%b  Refreshing every 5m  │  Ctrl+C to stop  │  %b%s%b%b\n' \
     "${C_DIM}" "${C_RESET}" "$(date '+%H:%M:%S')" "${C_DIM}" "${C_RESET}"
 
-  sleep 5
+  sleep 300
 done
