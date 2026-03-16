@@ -135,33 +135,44 @@ TEAMEOF
   mv "${runtime_dir}/team_${window_index}.env.tmp" "${runtime_dir}/team_${window_index}.env"
 }
 
-# Build the Dashboard window (window 0) with 3 columns:
-#   Left: Info Panel | Middle: 3 watchdog slots (stacked) | Right: Session Manager
+# Build the Dashboard window (window 0) with 2 columns:
+#   Left: Info Panel (full height)
+#   Right: Session Manager (top) + 3 Watchdog slots side-by-side (bottom)
+#
+#   ┌──────────┬──────────────────────────┐
+#   │          │    Session Manager       │
+#   │  Info    ├────────┬────────┬────────┤
+#   │  Panel   │  WD 1  │  WD 2  │  WD 3  │
+#   └──────────┴────────┴────────┴────────┘
+#
 # Usage: setup_dashboard <session> <dir> <runtime_dir>
-# Sets: WDG_SLOT_1, WDG_SLOT_2, WDG_SLOT_3 (pane indices in window 0)
+# Sets: WDG_SLOT_1, WDG_SLOT_2, WDG_SLOT_3, SM_PANE (pane indices in window 0)
 setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
 
-  # Start: single pane 0.0
-  # Split into left (info+middle) and right (session manager — compact)
-  tmux split-window -h -t "$session:0.0" -l 55 -c "$dir"
-  # Now: 0.0=left(wide), 0.1=right(55w session-manager)
+  # Start: single pane 0.0 (will become Info Panel)
+  # Split left/right — right column gets 60%
+  tmux split-window -h -t "$session:0.0" -p 60 -c "$dir"
+  # Indices: 0.0=info(left), 0.1=right
 
-  # Split left to carve out middle column for watchdog slots
-  tmux split-window -h -t "$session:0.0" -l 55 -c "$dir"
-  # Now: 0.0=info, 0.1=middle(55w), 0.2=session-manager(55w)
+  # Split right column: top 65% (SM area) + bottom 35% (watchdog row)
+  tmux split-window -v -t "$session:0.1" -p 35 -c "$dir"
+  # Indices: 0.0=info, 0.1=top-right, 0.2=bottom-right
 
-  # Split middle pane into 3 vertical slots
-  local mid_height
-  mid_height=$(tmux display-message -t "$session:0.1" -p '#{pane_height}')
-  local slot_h=$(( (mid_height - 2) / 3 ))  # account for 2 borders
+  # Split bottom-right into 3 horizontal watchdog slots
+  tmux split-window -h -t "$session:0.2" -p 67 -c "$dir"
+  tmux split-window -h -t "$session:0.3" -p 50 -c "$dir"
+  # Indices: 0.0=info, 0.1=top-right, 0.2=bot-left, 0.3=bot-mid, 0.4=bot-right
+  # Positions: 0.1 at top-right, 0.2/0.3/0.4 across bottom-right
 
-  tmux split-window -v -t "$session:0.1" -l $((slot_h * 2 + 1)) -c "$dir"
-  # Now: 0.1=slot1, 0.2=slot2+3, 0.3=session-manager
-  tmux split-window -v -t "$session:0.2" -l $slot_h -c "$dir"
-  # Now: 0.1=slot1, 0.2=slot2, 0.3=slot3, 0.4=session-manager
+  # Swap panes so indices match convention: 0.1-0.3=watchdogs, 0.4=SM
+  # tmux swap-pane moves pane content between positions; indices stay with panes
+  tmux swap-pane -s "$session:0.1" -t "$session:0.4"
+  tmux swap-pane -s "$session:0.1" -t "$session:0.3"
+  tmux swap-pane -s "$session:0.1" -t "$session:0.2"
+  # Result: 0.1=bot-left(WD1), 0.2=bot-mid(WD2), 0.3=bot-right(WD3), 0.4=top-right(SM)
 
-  # Name panes — use distinct Doey roles, not tmux terms
+  # Name panes
   tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "Watchdog T1"
   tmux select-pane -t "$session:0.2" -T "Watchdog T2"
@@ -179,7 +190,7 @@ setup_dashboard() {
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.4" "READY"
 
-  # Export slot pane indices (these are stable after creation)
+  # Export slot pane indices (stable after creation)
   WDG_SLOT_1="0.1"
   WDG_SLOT_2="0.2"
   WDG_SLOT_3="0.3"
