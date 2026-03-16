@@ -143,13 +143,13 @@ setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
 
   # Start: single pane 0.0
-  # Split into left (info+middle) and right (session manager — narrow)
-  tmux split-window -h -t "$session:0.0" -l 80 -c "$dir"
-  # Now: 0.0=left(wide), 0.1=right(80w session-manager)
+  # Split into left (info+middle) and right (session manager — compact)
+  tmux split-window -h -t "$session:0.0" -l 55 -c "$dir"
+  # Now: 0.0=left(wide), 0.1=right(55w session-manager)
 
   # Split left to carve out middle column for watchdog slots
-  tmux split-window -h -t "$session:0.0" -l 120 -c "$dir"
-  # Now: 0.0=info, 0.1=middle(120w), 0.2=session-manager(80w)
+  tmux split-window -h -t "$session:0.0" -l 55 -c "$dir"
+  # Now: 0.0=info, 0.1=middle(55w), 0.2=session-manager(55w)
 
   # Split middle pane into 3 vertical slots
   local mid_height
@@ -1096,6 +1096,8 @@ doey_purge() {
 # ── Initial worker columns ────────────────────────────────────────────
 # Number of worker columns to add on dynamic launch (2 workers per column)
 INITIAL_WORKER_COLS=2
+# Number of team windows to create on dynamic launch (max 3, one per Dashboard watchdog slot)
+INITIAL_TEAMS=3
 
 # ── Launch dispatcher ─────────────────────────────────────────────────
 # Routes to dynamic or static launch based on grid type.
@@ -1530,6 +1532,27 @@ reload_session() {
   fi
   safe_source_session_env "${runtime_dir}/session.env"
 
+  # 4b. Fix stale session.env WATCHDOG_PANE if needed
+  local cur_ses_wdg
+  cur_ses_wdg=$(grep '^WATCHDOG_PANE=' "${runtime_dir}/session.env" | cut -d= -f2)
+  cur_ses_wdg="${cur_ses_wdg//\"/}"
+  case "$cur_ses_wdg" in
+    0.*) ;; # already correct
+    *)
+      # Rewrite WATCHDOG_PANE to "0.1" (default Dashboard slot for team 1)
+      sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.1"/' "${runtime_dir}/session.env"
+      # Add WDG_SLOT entries if missing
+      if ! grep -q '^WDG_SLOT_1=' "${runtime_dir}/session.env"; then
+        printf 'WDG_SLOT_1="0.1"\nWDG_SLOT_2="0.2"\nWDG_SLOT_3="0.3"\n' >> "${runtime_dir}/session.env"
+      fi
+      # Remove stale MGR_SLOT entries
+      sed -i '' '/^MGR_SLOT_/d' "${runtime_dir}/session.env"
+      printf "  ${DIM}Fixed stale session.env: WATCHDOG_PANE=%s → 0.1${RESET}\n" "$cur_ses_wdg"
+      # Re-source with fixed values
+      safe_source_session_env "${runtime_dir}/session.env"
+      ;;
+  esac
+
   # 5. Regenerate worker system prompts
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
   printf "  ${SUCCESS}✓ Worker system prompts updated${RESET}\n"
@@ -1545,6 +1568,34 @@ reload_session() {
     tw=$(grep '^WINDOW_INDEX=' "$tf" | cut -d= -f2)
     tw="${tw//\"/}"
     [ -n "$tw" ] && team_windows="$team_windows $tw"
+  done
+
+  # Rewrite team envs if WATCHDOG_PANE looks stale (should be "0.X" for Dashboard slot)
+  for tw in $team_windows; do
+    local team_env="${runtime_dir}/team_${tw}.env"
+    [ -f "$team_env" ] || continue
+    local cur_wdg
+    cur_wdg=$(grep '^WATCHDOG_PANE=' "$team_env" | cut -d= -f2)
+    cur_wdg="${cur_wdg//\"/}"
+    # If WATCHDOG_PANE doesn't start with "0." it's stale — fix it
+    case "$cur_wdg" in
+      0.*) ;; # already correct
+      *)
+        # Find which Dashboard slot this team uses from session.env
+        local slot_key="WDG_SLOT_${tw}"
+        local slot_val
+        slot_val=$(grep "^${slot_key}=" "${runtime_dir}/session.env" | cut -d= -f2)
+        slot_val="${slot_val//\"/}"
+        [ -z "$slot_val" ] && slot_val="0.${tw}"  # fallback: 0.1 for team 1, 0.2 for team 2, etc.
+        local cur_wpanes cur_wcount
+        cur_wpanes=$(grep '^WORKER_PANES=' "$team_env" | cut -d= -f2)
+        cur_wpanes="${cur_wpanes//\"/}"
+        cur_wcount=$(grep '^WORKER_COUNT=' "$team_env" | cut -d= -f2)
+        cur_wcount="${cur_wcount//\"/}"
+        write_team_env "$runtime_dir" "$tw" "dynamic" "$slot_val" "$cur_wpanes" "$cur_wcount" "0"
+        printf "    ${DIM}Fixed stale team_${tw}.env: WATCHDOG_PANE=%s → %s${RESET}\n" "$cur_wdg" "$slot_val"
+        ;;
+    esac
   done
 
   for tw in $team_windows; do
@@ -1574,7 +1625,7 @@ reload_session() {
       done
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
-      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --agent doey-manager" Enter
+      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model opus --agent doey-manager" Enter
       printf " ${SUCCESS}✓${RESET}\n"
 
       # Re-brief manager after boot
@@ -2301,12 +2352,7 @@ MANIFEST
       "Team is online (project: ${name}, dir: $dir). Dynamic grid — started with ${initial_workers} workers, auto-expands when all are busy. Use doey add to add more. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1. Session: $session. All workers are idle and awaiting tasks." Enter
   ) &
 
-  # Brief Session Manager (pane 0.4) after it boots
-  (
-    sleep 15
-    tmux send-keys -t "$session:0.4" \
-      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${initial_workers} workers (dynamic grid, auto-expands). Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
-  ) &
+  # Session Manager briefing deferred until all teams are created (after step 8)
 
   # Launch Watchdog in Dashboard slot 1 (pane 0.1)
   tmux send-keys -t "$session:0.1" C-c
@@ -2339,7 +2385,38 @@ MANIFEST
   done
 
   step_done
+
+  # ── Step 8: Add additional team windows ────────────────────────────
+  local _extra_teams=$((INITIAL_TEAMS - 1))
+  if [ "$_extra_teams" -gt 0 ]; then
+    STEP_TOTAL=8
+    step_start 8 "Adding ${_extra_teams} more team windows..."
+
+    local _team_i
+    for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir"
+      (( _team_i < _extra_teams - 1 )) && sleep 2
+    done
+
+    step_done
+  fi
   STEP_TOTAL=6
+
+  # Read final team windows list for summary
+  local final_team_windows
+  final_team_windows=$(read_team_windows "$runtime_dir")
+  local team_count=0
+  local _tw
+  for _tw in $(echo "$final_team_windows" | tr ',' ' '); do
+    team_count=$((team_count + 1))
+  done
+
+  # Re-brief Session Manager with all teams
+  (
+    sleep 20
+    tmux send-keys -t "$session:0.4" \
+      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
+  ) &
 
   # ── Final summary ──────────────────────────────────────────────
   printf '\n'
@@ -2347,9 +2424,9 @@ MANIFEST
   printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}                ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel + Session Manager  ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}${team_window}.0${RESET}   Online                      ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}0.1${RESET}   Online (Dashboard)              ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}%-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}      ${DIM}│${RESET}\n" "$initial_workers"
+  printf "   ${DIM}│${RESET}  ${BOLD}Teams${RESET}      ${DIM}%-4s${RESET} ${DIM}windows (${final_team_windows})${RESET}              ${DIM}│${RESET}\n" "$team_count"
+  printf "   ${DIM}│${RESET}  ${BOLD}Watchdogs${RESET}  ${DIM}0.1-0.3${RESET} ${DIM}Online (Dashboard)${RESET}          ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}T1: %-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}  ${DIM}│${RESET}\n" "$initial_workers"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"
   printf "   ${DIM}│${RESET}  ${DIM}Grid${RESET}      ${BOLD}dynamic${RESET}  ${DIM}Max workers${RESET}  ${BOLD}%-13s${RESET} ${DIM}│${RESET}\n" "$max_workers"
@@ -2446,26 +2523,42 @@ doey_add_column() {
   local dir="$3"
   local team_window="${4:-1}"
 
-  # Source current state
+  # Source session-level settings
   safe_source_session_env "${runtime_dir}/session.env"
 
-  if [[ "${GRID:-}" != "dynamic" ]]; then
-    printf "  ${ERROR}Session is not using dynamic grid mode${RESET}\n"
-    return 1
+  local max_workers="${MAX_WORKERS:-20}"
+  local name="${PROJECT_NAME}"
+
+  # Read team-level state from team env (falls back to session.env for team 1 compat)
+  local team_env="${runtime_dir}/team_${team_window}.env"
+  local worker_count=0 watchdog_pane="${WATCHDOG_PANE}" current_cols="${CURRENT_COLS:-1}" team_grid="${GRID:-dynamic}"
+  if [ -f "$team_env" ]; then
+    worker_count=$(grep '^WORKER_COUNT=' "$team_env" | cut -d= -f2)
+    worker_count="${worker_count//\"/}"
+    worker_count="${worker_count:-0}"
+    watchdog_pane=$(grep '^WATCHDOG_PANE=' "$team_env" | cut -d= -f2)
+    watchdog_pane="${watchdog_pane//\"/}"
+    team_grid=$(grep '^GRID=' "$team_env" | cut -d= -f2)
+    team_grid="${team_grid//\"/}"
+    team_grid="${team_grid:-dynamic}"
+    # Count current columns from pane count: (panes - 1 manager) / 2 rows + 1 for manager col
+    local _pane_count
+    _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')
+    current_cols=$(( (_pane_count - 1) / 2 ))
+    [ "$current_cols" -lt 1 ] && current_cols=1
   fi
 
-  local worker_count="${WORKER_COUNT:-0}"
-  local max_workers="${MAX_WORKERS:-20}"
-  local watchdog_pane="${WATCHDOG_PANE}"
-  local current_cols="${CURRENT_COLS:-2}"
-  local name="${PROJECT_NAME}"
+  if [[ "$team_grid" != "dynamic" ]]; then
+    printf "  ${ERROR}Team window %s is not using dynamic grid mode${RESET}\n" "$team_window"
+    return 1
+  fi
 
   if (( worker_count >= max_workers )); then
     printf "  ${ERROR}Max workers reached (${max_workers})${RESET}\n"
     return 1
   fi
 
-  printf "  ${DIM}Adding worker column...${RESET}\n"
+  printf "  ${DIM}Adding worker column to team %s...${RESET}\n" "$team_window"
 
   # Strategy: split the last pane horizontally (adds column on the right),
   # then split that new pane vertically for 2 worker rows.
@@ -2499,35 +2592,11 @@ doey_add_column() {
   local new_worker_count=$(( worker_count + 2 ))
   local new_cols=$(( current_cols + 1 ))
 
-  # Preserve TEAM_WINDOWS from existing session.env
-  local _team_windows
-  _team_windows=$(read_team_windows "$runtime_dir")
-
-  # Rewrite session.env BEFORE launching Claude (hooks read it during boot)
-  cat > "${runtime_dir}/session.env.tmp" << MANIFEST
-PROJECT_DIR="$dir"
-PROJECT_NAME="$name"
-SESSION_NAME="$session"
-GRID="dynamic"
-ROWS="2"
-MAX_WORKERS="$max_workers"
-WORKER_PANES="$new_worker_panes"
-WORKER_COUNT="$new_worker_count"
-WATCHDOG_PANE="$watchdog_pane"
-CURRENT_COLS="$new_cols"
-RUNTIME_DIR="${runtime_dir}"
-PASTE_SETTLE_MS="500"
-IDLE_COLLAPSE_AFTER="60"
-IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="${_team_windows}"
-MANIFEST
-  mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
-
   # Update team env with new worker state
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count"
 
   # Launch Claude in both new panes
-  local worker_prompt_file_1="${runtime_dir}/worker-system-prompt-${w1_num}.md"
+  local worker_prompt_file_1="${runtime_dir}/worker-system-prompt-w${team_window}-${w1_num}.md"
   cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file_1"
   printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
     "$w1_num" "$team_window" "$new_pane_top" "$session" >> "$worker_prompt_file_1"
@@ -2537,7 +2606,7 @@ MANIFEST
   tmux send-keys -t "$session:$team_window.${new_pane_top}" "$worker_cmd" Enter
   sleep 0.3
 
-  local worker_prompt_file_2="${runtime_dir}/worker-system-prompt-${w2_num}.md"
+  local worker_prompt_file_2="${runtime_dir}/worker-system-prompt-w${team_window}-${w2_num}.md"
   cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file_2"
   printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
     "$w2_num" "$team_window" "$new_pane_bottom" "$session" >> "$worker_prompt_file_2"
@@ -2685,6 +2754,129 @@ MANIFEST
 
 # Add a new team window with its own Window Manager, Watchdog, and Workers
 # Usage: add_team_window <session> <runtime_dir> <dir> [grid]
+# Add a dynamic-grid team window (Manager only, then add worker columns)
+# Usage: add_dynamic_team_window <session> <runtime_dir> <dir> [initial_cols]
+add_dynamic_team_window() {
+  local session="$1" runtime_dir="$2" dir="$3" initial_cols="${4:-$INITIAL_WORKER_COLS}"
+
+  # Create new window with just the Manager pane
+  tmux new-window -t "$session" -c "$dir"
+  sleep 0.5
+  local window_index
+  window_index=$(tmux display-message -t "$session" -p '#{window_index}')
+
+  printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
+
+  # Name Manager pane
+  tmux select-pane -t "${session}:${window_index}.0" -T "MGR Window Manager"
+  tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
+
+  # Find next available Dashboard watchdog slot
+  local wdg_slot=""
+  local slot_key=""
+  local sn
+  for sn in 1 2 3; do
+    local slot_val=""
+    slot_val=$(grep "^WDG_SLOT_${sn}=" "${runtime_dir}/session.env" | cut -d= -f2)
+    slot_val="${slot_val//\"/}"
+    # Check if this slot is already claimed by an existing team
+    local slot_taken=""
+    local tf
+    for tf in "${runtime_dir}"/team_*.env; do
+      [ -f "$tf" ] || continue
+      local tf_wdg
+      tf_wdg=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
+      tf_wdg="${tf_wdg//\"/}"
+      if [ "$tf_wdg" = "$slot_val" ]; then
+        slot_taken="yes"
+        break
+      fi
+    done
+    if [ -z "$slot_taken" ]; then
+      wdg_slot="$slot_val"
+      slot_key="$sn"
+      break
+    fi
+  done
+
+  if [ -z "$wdg_slot" ]; then
+    printf "  ${ERROR}All 3 Dashboard watchdog slots are occupied — cannot add more teams${RESET}\n"
+    tmux kill-window -t "${session}:${window_index}" 2>/dev/null
+    return 1
+  fi
+
+  # Write team env with dynamic grid, 0 workers initially
+  write_team_env "$runtime_dir" "$window_index" "dynamic" "$wdg_slot" "" "0" "0"
+
+  # Update session.env TEAM_WINDOWS (atomic)
+  local current_windows
+  current_windows=$(read_team_windows "$runtime_dir")
+  local new_windows="${current_windows},${window_index}"
+  sed "s/^TEAM_WINDOWS=.*/TEAM_WINDOWS=\"${new_windows}\"/" "${runtime_dir}/session.env" > "${runtime_dir}/session.env.tmp"
+  mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
+
+  # Ensure shared worker system prompt exists
+  if [ ! -f "${runtime_dir}/worker-system-prompt.md" ]; then
+    local project_name
+    project_name=$(grep '^PROJECT_NAME=' "${runtime_dir}/session.env" | cut -d= -f2)
+    project_name="${project_name//\"/}"
+    write_worker_system_prompt "$runtime_dir" "$project_name" "$dir"
+  fi
+
+  # Launch Window Manager in team window pane 0
+  tmux send-keys -t "${session}:${window_index}.0" \
+    "claude --dangerously-skip-permissions --agent doey-manager" Enter
+  tmux select-pane -t "${session}:${window_index}.0" -T "MGR Window Manager"
+  sleep 0.5
+
+  write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
+
+  # Launch Watchdog in Dashboard slot
+  tmux send-keys -t "${session}:${wdg_slot}" C-c
+  sleep 0.3
+  tmux send-keys -t "${session}:${wdg_slot}" \
+    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
+  tmux select-pane -t "${session}:${wdg_slot}" -T "Watchdog — Team ${window_index}"
+  sleep 0.5
+
+  # Add initial worker columns
+  local _col_i
+  for (( _col_i=0; _col_i<initial_cols; _col_i++ )); do
+    doey_add_column "$session" "$runtime_dir" "$dir" "$window_index"
+    (( _col_i < initial_cols - 1 )) && sleep 1
+  done
+
+  # Build worker pane list for briefings
+  local wp_list=""
+  local _pi
+  local _pane_list
+  _pane_list=$(tmux list-panes -t "${session}:${window_index}" -F '#{pane_index}')
+  for _pi in $_pane_list; do
+    [ "$_pi" = "0" ] && continue
+    [ -n "$wp_list" ] && wp_list="${wp_list}, "
+    wp_list="${wp_list}${window_index}.${_pi}"
+  done
+  local worker_count
+  worker_count=$(grep '^WORKER_COUNT=' "${runtime_dir}/team_${window_index}.env" | cut -d= -f2)
+  worker_count="${worker_count//\"/}"
+
+  # Brief the new Window Manager after boot
+  (
+    sleep 8
+    tmux send-keys -t "${session}:${window_index}.0" \
+      "Team is online in window ${window_index}. Dynamic grid — ${worker_count} workers, auto-expands when all are busy. Your workers are in panes ${wp_list}. Watchdog is in Dashboard pane ${wdg_slot}. Session: ${session}. All workers are idle and awaiting tasks. What should we work on?" Enter
+  ) &
+
+  # Start watchdog monitoring
+  (
+    sleep 12
+    tmux send-keys -t "${session}:${wdg_slot}" \
+      "Start monitoring session ${session} window ${window_index}. Dynamic grid — auto-expands when all are busy. Skip pane ${wdg_slot} (yourself, in Dashboard). Manager is in team window pane ${window_index}.0. Monitor panes ${wp_list}." Enter
+  ) &
+
+  printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$worker_count" "$slot_key"
+}
+
 add_team_window() {
   local session="$1" runtime_dir="$2" dir="$3" grid="${4:-4x2}"
   local cols rows total_panes watchdog_pane worker_panes worker_count
