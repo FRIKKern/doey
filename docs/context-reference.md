@@ -52,7 +52,7 @@ Load Order (bottom = first, top = last / highest precedence)
 | `color` | `green` | `yellow` | Status line color |
 | `memory` | `user` | `none` | Manager stores to `~/.claude/agent-memory/<name>/`; Watchdog has no memory |
 
-Body text below frontmatter becomes the system prompt. Manager: ~253 lines (identity, workflow, delegation rules). Watchdog: ~175 lines (monitoring loop, prompt detection, monitoring rules).
+Body text below frontmatter becomes the system prompt. Manager: identity, workflow, delegation rules. Watchdog: monitoring loop, prompt detection, monitoring rules.
 
 Precedence: CLI `--model` > frontmatter `model` > settings `model`.
 
@@ -123,7 +123,7 @@ Agent usage: Manager uses all except `/doey-inbox`. Watchdog uses none. Workers 
 | Agent | Path | Notes |
 |-------|------|-------|
 | Manager | `~/.claude/agent-memory/doey-manager/MEMORY.md` | Stores dispatch patterns, delegation rules, hook behavior |
-| Watchdog | `~/.claude/agent-memory/doey-watchdog/MEMORY.md` | May be empty (Haiku rarely accumulates memory) |
+| Watchdog | N/A | Agent has `memory: none` — no persistent memory |
 
 Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
 
@@ -144,6 +144,7 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `WATCHDOG_PANE` | Watchdog pane index |
 | `WORKER_PANES` | Comma-separated worker indices |
 | `RUNTIME_DIR` | Runtime state directory |
+| `PASTE_SETTLE_MS` | Delay (ms) after paste-buffer for tmux to settle |
 | `TMUX_PANE` | tmux auto-set pane ID (e.g., `%0`) |
 | `CLAUDE_PROJECT_DIR` | Claude Code project dir |
 | `CLAUDECODE` | Set when inside Claude Code |
@@ -183,7 +184,7 @@ Default grid: 6x2 (12 panes). Pane 0.0 = Manager. Watchdog = pane at column coun
 | `load-buffer` + `paste-buffer` | Long/multi-line tasks |
 | `capture-pane` | Read pane output |
 
-Bell suppression: `bell-action none`, `visual-bell off`. Notifications via `osascript` in hooks.
+Bell suppression: `bell-action none`, `visual-bell off`. Notifications via `osascript` (macOS), `notify-send` (Linux), or PowerShell (WSL2) in hooks.
 Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabled, status bar shows NB/NR/NF counts.
 
 
@@ -192,6 +193,7 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
 ```
 /tmp/doey/<project>/
   session.env                        # Session manifest
+  worker-system-prompt.md            # Base worker prompt
   worker-system-prompt-N.md          # Per-worker prompt (base + identity)
   status/
     <pane_safe>.status               # 4-line: PANE, UPDATED, STATUS, TASK
@@ -200,7 +202,11 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
     <pane_safe>.task                  # Research task marker
   reports/
     <pane_safe>.report               # Research report
-  messages/                          # Inter-pane messages
+  results/
+    <pane_safe>.md                   # Collected worker results (from stop-results.sh)
+  inbox/
+    <timestamp>_pane<N>_<title>.md   # Worker result inbox entries
+  messages/                          # Inter-pane messages (.msg files)
   broadcasts/                        # Broadcast messages
 ```
 

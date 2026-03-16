@@ -17,7 +17,8 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 - `agents/` -- Agent definitions, installed to `~/.claude/agents/`
 - `commands/` -- Slash commands (doey-*.md), installed to `~/.claude/commands/`
-- `.claude/hooks/` -- Modular hooks: common.sh, on-session-start.sh, on-prompt-submit.sh, on-pre-tool-use.sh, on-pre-compact.sh, post-tool-lint.sh, stop-status.sh, stop-results.sh, stop-notify.sh, watchdog-scan.sh
+- `.claude/hooks/` -- Modular hooks: common.sh, on-session-start.sh, on-prompt-submit.sh, on-pre-tool-use.sh, on-pre-compact.sh, post-tool-lint.sh, stop-status.sh, stop-results.sh, stop-notify.sh
+- `.claude/hooks/watchdog-scan.sh` -- Standalone script invoked by Watchdog agent (not a registered hook event handler)
 - `.claude/settings.local.json` -- Hook registration (6 events)
 - `shell/` -- Launcher (doey.sh), installed to `~/.local/bin/doey`
 - `docs/` -- Platform guides and context-reference.md
@@ -44,7 +45,7 @@ Runtime files: `/tmp/doey/<project>/`. See `docs/context-reference.md`.
 
 ## Important Files
 
-- `shell/doey.sh` -- Launcher: init/start/stop/restart/status/doctor/update
+- `shell/doey.sh` -- Launcher: init/list/stop/update/doctor/remove/uninstall/test/version
 - `.claude/hooks/common.sh` -- Shared utilities: pane identity, runtime dir
 - `.claude/hooks/on-session-start.sh` -- SessionStart: initial setup
 - `.claude/hooks/on-prompt-submit.sh` -- Sets BUSY status

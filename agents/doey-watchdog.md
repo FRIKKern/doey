@@ -25,7 +25,7 @@ When unsure about any pane: **do nothing**.
 
 ## Monitoring Loop
 
-Run the following every 5 seconds (resolves project dir from tmux env, works in cron):
+Run the following every 30 seconds (scheduled by the launcher via `/loop 30s`):
 
 ```bash
 PROJECT_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2- | xargs -I{} grep '^PROJECT_DIR=' {}/session.env | cut -d= -f2 | tr -d '"') && bash "$PROJECT_DIR/.claude/hooks/watchdog-scan.sh"
@@ -69,7 +69,7 @@ Deliver to Manager (0.0) first. Skip reserved panes.
 
 ## Compaction
 
-Context compaction runs automatically every ~5 minutes via `/loop`. After compaction, re-read `watchdog_pane_states.json` to restore pane state tracking.
+Context compaction is triggered automatically by Claude Code when context grows large. After compaction, re-read `watchdog_pane_states.json` to restore pane state tracking.
 
 ## Rules
 

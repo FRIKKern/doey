@@ -100,6 +100,8 @@ Once the summary appears, switch to the Manager pane (`0.0`) and start giving it
 | `doey update` | Pull latest changes and reinstall |
 | `doey doctor` | Check installation health and prerequisites |
 | `doey remove` | Unregister a project by name or current directory |
+| `doey uninstall` | Remove all Doey files (keeps git repo and agent-memory) |
+| `doey test` | Run E2E integration test (`--keep`, `--open`, `--grid NxM`) |
 | `doey version` | Show version and installation info |
 | `doey 4x3` | Launch with a custom grid layout |
 | `doey --help` | Show all options |
@@ -245,11 +247,11 @@ Once installed, these commands are available in any Claude Code instance:
 | `/doey-status` | Set or view pane statuses |
 | `/doey-research` | Dispatch research task with guaranteed report-back |
 | `/doey-stop` | Stop a specific worker |
-| `/doey-stop-all` | Stop all workers gracefully |
+| `/doey-stop-all` | Stop all running Doey sessions |
 | `/doey-restart-workers` | Restart all workers (keeps Manager alive) |
 | `/doey-reinstall` | Reinstall from the repo without leaving Claude Code |
 | `/doey-reserve` | Reserve a worker pane for human use |
-| `/doey-watchdog-compact` | Load the compact Watchdog prompt |
+| `/doey-watchdog-compact` | Compact the Watchdog's context |
 
 </details>
 
@@ -285,8 +287,28 @@ doey/
 │   ├── doey-stop-all.md
 │   ├── doey-team.md
 │   └── doey-watchdog-compact.md
-└── shell/
-    └── doey.sh                  # CLI launcher → ~/.local/bin/doey
+├── shell/
+│   ├── doey.sh                  # CLI launcher → ~/.local/bin/doey
+│   ├── tmux-statusbar.sh        # Status bar counts (NB/NR/NF) → ~/.local/bin/
+│   ├── pane-border-status.sh    # Pane border role labels → ~/.local/bin/
+│   └── context-audit.sh         # Context contradiction scanner
+├── tests/
+│   ├── test-bash-compat.sh      # Bash 3.2 compatibility linter
+│   └── e2e/
+│       └── journey.md           # E2E test journey definition
+├── .claude/
+│   ├── hooks/                   # Hook scripts (sourced at runtime)
+│   │   ├── common.sh            # Shared utilities
+│   │   ├── on-session-start.sh  # SessionStart hook
+│   │   ├── on-prompt-submit.sh  # UserPromptSubmit hook
+│   │   ├── on-pre-tool-use.sh   # PreToolUse hook
+│   │   ├── on-pre-compact.sh    # PreCompact hook
+│   │   ├── post-tool-lint.sh    # PostToolUse hook
+│   │   ├── stop-status.sh       # Stop hook: status updates
+│   │   ├── stop-results.sh      # Stop hook: result collection
+│   │   ├── stop-notify.sh       # Stop hook: notifications
+│   │   └── watchdog-scan.sh     # Watchdog pane scanner (utility)
+│   └── settings.local.json      # Hook registration (6 events)
 ```
 
 </details>
@@ -386,7 +408,7 @@ The Manager can use `/doey-restart-workers` to kill and restart all workers with
 <details>
 <summary><strong>macOS notifications not working</strong></summary>
 
-Check System Preferences > Notifications and ensure your terminal app is allowed to send notifications. On Linux, notifications are not supported (the notification system uses macOS-only `osascript`).
+Check System Preferences > Notifications and ensure your terminal app is allowed to send notifications. On Linux, notifications use `notify-send` (install `libnotify` if missing). On WSL2, notifications use PowerShell.
 
 </details>
 

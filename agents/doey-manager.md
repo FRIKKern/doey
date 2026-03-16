@@ -120,11 +120,9 @@ for f in "$RUNTIME_DIR/results"/pane_*.json; do
 done
 ```
 
-**Check Watchdog alerts** during each sweep:
+**Check pane states** (written by watchdog-scan.sh each cycle):
 ```bash
-for f in "$RUNTIME_DIR/status/alerts"/*.alert; do
-  [ -f "$f" ] && cat "$f" && echo ""
-done
+cat "$RUNTIME_DIR/status/watchdog_pane_states.json" 2>/dev/null
 ```
 
 Check every **10–15 seconds** (use `/doey-monitor`). Exclude RESERVED panes from completion checks — "all done" means all non-reserved workers idle.

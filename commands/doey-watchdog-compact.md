@@ -1,6 +1,6 @@
 # Skill: doey-watchdog-compact
 
-Send `/compact` to the Watchdog pane to reduce its token usage, then verify it resumes. The watchdog auto-compacts every 5 minutes via `/loop 5m /compact`. After compaction, the watchdog restores pane state from `watchdog_pane_states.json` in the runtime status directory. Monitoring uses a shell pre-filter (`watchdog-scan.sh`) to minimize per-cycle token usage.
+Send `/compact` to the Watchdog pane to reduce its token usage, then verify it resumes. The watchdog runs scan cycles via `/loop 30s` using `watchdog-scan.sh`. After compaction, the watchdog restores pane state from `watchdog_pane_states.json` in the runtime status directory. Monitoring uses a shell pre-filter (`watchdog-scan.sh`) to minimize per-cycle token usage.
 
 ## Usage
 `/doey-watchdog-compact`
