@@ -4,7 +4,7 @@ Add a new team window to the current Doey session with its own Window Manager, W
 
 ## Usage
 `/doey-add-window [grid]` — add a team window (default grid: 4x2)
-`/doey-add-window 4x2` — add a 4x2 team window (6 panes: MGR + WDG + 4 workers)
+`/doey-add-window 4x2` — add a 4x2 team window (7 panes: MGR + 6 workers) + Watchdog in Dashboard
 
 ## Prompt
 You are adding a new team window to a running Doey tmux session.
@@ -37,13 +37,13 @@ case "$COLS" in [1-9]|[1-9][0-9]) ;; *) echo "ERROR: Invalid grid cols: $COLS"; 
 case "$ROWS" in [1-9]|[1-9][0-9]) ;; *) echo "ERROR: Invalid grid rows: $ROWS"; exit 1 ;; esac
 
 TOTAL=$((COLS * ROWS))
-if [ "$TOTAL" -lt 3 ]; then
-  echo "ERROR: Grid $GRID has $TOTAL panes — need at least 3 (MGR + WDG + 1 worker)"
+if [ "$TOTAL" -lt 2 ]; then
+  echo "ERROR: Grid $GRID has $TOTAL panes — need at least 2 (MGR + 1 worker)"
   exit 1
 fi
 
-WORKER_COUNT=$((TOTAL - 2))
-echo "Grid: ${GRID} (${TOTAL} panes: 1 MGR + 1 WDG + ${WORKER_COUNT} workers)"
+WORKER_COUNT=$((TOTAL - 1))
+echo "Grid: ${GRID} (${TOTAL} panes: 1 MGR + ${WORKER_COUNT} workers, Watchdog in Dashboard)"
 ```
 
 ### Step 2: Create the new window and build the grid
@@ -78,13 +78,12 @@ echo "Window ${NEW_WIN} created with ${TOTAL} panes"
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
-# Pane 0 = Window Manager, Pane 1 = Watchdog, Pane 2+ = Workers
+# Pane 0 = Window Manager, Pane 1+ = Workers (Watchdog is in Dashboard)
 tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "MGR-W${NEW_WIN}"
-tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.1" -T "WDG-W${NEW_WIN}"
 
 WORKER_PANES_LIST=""
 W_NUM=1
-for i in $(seq 2 $((TOTAL - 1))); do
+for i in $(seq 1 $((TOTAL - 1))); do
   tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -T "W${W_NUM}-W${NEW_WIN}"
   if [ -n "$WORKER_PANES_LIST" ]; then
     WORKER_PANES_LIST="${WORKER_PANES_LIST},${i}"
@@ -112,7 +111,6 @@ WINDOW_INDEX=${NEW_WIN}
 GRID=${GRID}
 TOTAL_PANES=${TOTAL}
 MANAGER_PANE=0
-WATCHDOG_PANE=1
 WORKER_PANES=${WORKER_PANES_LIST}
 WORKER_COUNT=${WORKER_COUNT}
 TEAM_EOF
@@ -145,19 +143,34 @@ echo "team_${NEW_WIN}.env written. TEAM_WINDOWS=${NEW_WINDOWS}"
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
-# Window Manager
+# Window Manager (pane W.0 in team window)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --agent doey-manager" Enter
 sleep 1
 
-# Watchdog
-tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.1" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-sleep 1
-
-# Workers
+# Workers (pane W.1+ in team window)
 for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
   tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "claude --dangerously-skip-permissions --model opus" Enter
   sleep 0.5
 done
+
+# Watchdog in next available Dashboard slot (0.1-0.3)
+WDG_SLOT=""
+for slot in 1 2 3; do
+  SLOT_OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${slot}" -p 2>/dev/null || true)
+  SLOT_PID=$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || true)
+  SLOT_CHILD=$(pgrep -P "$SLOT_PID" 2>/dev/null || true)
+  if [ -z "$SLOT_CHILD" ]; then
+    WDG_SLOT="$slot"
+    break
+  fi
+done
+
+if [ -n "$WDG_SLOT" ]; then
+  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
+  echo "Watchdog launched in Dashboard pane 0.${WDG_SLOT}"
+else
+  echo "WARNING: No available Dashboard slot (0.1-0.3) for Watchdog"
+fi
 
 echo "All panes launched in window ${NEW_WIN}"
 ```
@@ -171,7 +184,8 @@ source "${RUNTIME_DIR}/session.env"
 sleep 8
 
 NOT_READY=0; DOWN_PANES=""
-for i in 0 1 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
+# Check Manager + Workers in team window
+for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
   PANE_PID=$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null)
@@ -179,6 +193,16 @@ for i in 0 1 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
     NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"
   fi
 done
+
+# Check Watchdog in Dashboard slot
+if [ -n "$WDG_SLOT" ]; then
+  WDG_PID=$(tmux display-message -t "${SESSION_NAME}:0.${WDG_SLOT}" -p '#{pane_pid}')
+  WDG_CHILD=$(pgrep -P "$WDG_PID" 2>/dev/null)
+  WDG_OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -p 2>/dev/null)
+  if [ -z "$WDG_CHILD" ] || ! echo "$WDG_OUTPUT" | grep -q "bypass permissions"; then
+    NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES 0.$WDG_SLOT"
+  fi
+fi
 
 if [ "$NOT_READY" -eq 0 ]; then
   echo "All panes booted successfully in window ${NEW_WIN}"
@@ -194,14 +218,15 @@ Output a summary table:
 Team window ${NEW_WIN} created:
   Grid:      ${GRID}
   Win Mgr:   ${NEW_WIN}.0
-  Watchdog:  ${NEW_WIN}.1
-  Workers:   ${NEW_WIN}.2 — ${NEW_WIN}.$((TOTAL-1))  (${WORKER_COUNT} workers)
+  Workers:   ${NEW_WIN}.1 — ${NEW_WIN}.$((TOTAL-1))  (${WORKER_COUNT} workers)
+  Watchdog:  0.${WDG_SLOT} (Dashboard)
 ```
 
 ### Rules
 - **Always validate grid format** before creating panes
-- **Minimum 3 panes** per team window (MGR + WDG + 1 worker)
-- **Pane 0 is always Window Manager, pane 1 is always Watchdog** in new windows
+- **Minimum 2 panes** per team window (MGR + 1 worker)
+- **Pane 0 is always Window Manager, pane 1+ are Workers** in team windows
+- **Watchdog goes to next available Dashboard slot** (0.1-0.3)
 - **Always write team_W.env** before launching Claude instances
 - **Always update TEAM_WINDOWS** in session.env (atomic write)
 - **Never hardcode window indices** — always read from tmux

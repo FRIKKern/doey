@@ -24,11 +24,12 @@
 │ plans &  │  │ ↓ ↓ ↓ │ ...   │  │ ↓ ↓ ↓ │ ...   │
 │ delegates│  └───────┘       │  └───────┘       │    scales as needed →
 ├──────────┼──────────────────┼──────────────────┤
-│ WATCHDOG │ Worker 2         │ Worker 4         │    each worker spawns its
+│          │ Worker 2         │ Worker 4         │    each worker spawns its
 │          │  ┌─agent─┐       │  ┌─agent─┐       │    own agent swarms
-│ monitors │  │ ↓ ↓ ↓ │ ...   │  │ ↓ ↓ ↓ │ ...   │
-│ & heals  │  └───────┘       │  └───────┘       │
+│          │  │ ↓ ↓ ↓ │ ...   │  │ ↓ ↓ ↓ │ ...   │
+│          │  └───────┘       │  └───────┘       │
 └──────────┴──────────────────┴──────────────────┘
+ WATCHDOG monitors from Dashboard (window 0)
 ```
 
 ---
@@ -108,7 +109,7 @@ No config files. No shell reload. Just `doey`.
 | `doey update` | Pull latest and reinstall (alias: `reinstall`) |
 | `doey version` | Show version info |
 | `doey dynamic` | Launch in dynamic grid mode (alias: `d`) |
-| `doey add-window` | Add a new team window with its own Window Manager, Watchdog, and Workers |
+| `doey add-window` | Add a new team window with its own Window Manager and Workers (Watchdog in Dashboard) |
 | `doey kill-window <N>` | Kill a team window and all its processes |
 | `doey list-windows` | List all team windows with status |
 | `doey test` | Run test suite |
@@ -121,13 +122,13 @@ No config files. No shell reload. Just `doey`.
 
 | Role | Pane | What it does |
 |------|------|-------------|
-| **Info Panel** | `0.0` (multi-window) | Live dashboard showing team status, events, worker counts. |
-| **Session Manager** | `0.1` (multi-window) | Session-level orchestrator — coordinates across team windows. |
+| **Info Panel** | `0.0` (Dashboard) | Live dashboard showing team status, events, worker counts. |
+| **Watchdog** | `0.1-0.3` (Dashboard) | One per team. Monitors workers, delivers messages, catches crashes. |
+| **Session Manager** | `0.4` (Dashboard) | Session-level orchestrator — coordinates across team windows. |
 | **Window Manager** | `W.0` | Per-window orchestrator. Plans, delegates, monitors. Never writes code. |
-| **Watchdog** | `W.1` (dynamic mode) | Monitors workers, delivers messages, catches crashes. |
-| **Workers** | `W.2+` | Claude Code instances that do the actual work. |
+| **Workers** | `W.1+` | Claude Code instances that do the actual work. |
 
-In multi-window mode, window 0 hosts the Info Panel and Session Manager. Each team window (W) has its own Window Manager, Watchdog, and Workers. In single-window mode, pane 0.0 is the Window Manager and 0.1 is the Watchdog.
+Window 0 (Dashboard) hosts the Info Panel, up to 3 Watchdog slots (one per team), and the Session Manager. Each team window (W≥1) has its own Window Manager and Workers.
 
 Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results, research reports. See [Context Reference](docs/context-reference.md) for the full picture.
 

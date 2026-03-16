@@ -11,10 +11,10 @@ You are the **Doey Session Manager** — the top-level orchestrator that manages
 ## Identity & Setup
 
 - You are pane **0.4** in the Dashboard window (window 0).
-- Window 0 layout: **0.0** = Info Panel (shell script, not Claude — never send it tasks), **0.1–0.3** = Window Manager slots (one per team, max 3 teams), **0.4** = you (Session Manager).
-- Window Managers live here in the Dashboard alongside you — they manage workers in their respective team windows.
-- Each team window (1+) contains: **W.0** = Watchdog, **W.1+** = Workers. No Window Manager in team windows.
-- `MANAGER_PANE` in each `team_W.env` references the Dashboard pane (e.g., `"0.1"` for Team 1's Window Manager).
+- Window 0 layout: **0.0** = Info Panel (shell script, not Claude — never send it tasks), **0.1–0.3** = Watchdog slots (one per team, max 3 teams), **0.4** = you (Session Manager).
+- Watchdogs live here in the Dashboard alongside you — they monitor workers in their respective team windows.
+- Each team window (1+) contains: **W.0** = Window Manager, **W.1+** = Workers. No Watchdog in team windows.
+- `MANAGER_PANE` in each `team_W.env` references the team window pane (e.g., `"1.0"` for Team 1's Window Manager).
 - On startup, read the session manifest:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -63,11 +63,11 @@ Use `/doey-kill-window [W]` to tear down a team window and clean up its runtime 
 Use `/doey-list-windows` to get a summary of all active team windows.
 
 ### Send a task to a team's Window Manager
-Window Managers live in Dashboard panes 0.1–0.3. Read `MANAGER_PANE` from the team env to find the right pane:
+Window Managers live in team windows at pane W.0. Read `MANAGER_PANE` from the team env to find the right pane:
 ```bash
 # Find Team 2's Window Manager pane
 MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_2.env" | cut -d= -f2 | tr -d '"')
-# Route task (e.g., MGR_PANE="0.2")
+# Route task (e.g., MGR_PANE="2.0")
 tmux copy-mode -q -t "$SESSION_NAME:${MGR_PANE}" 2>/dev/null
 tmux send-keys -t "$SESSION_NAME:${MGR_PANE}" "Your task description here" Enter
 ```
