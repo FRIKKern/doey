@@ -1218,7 +1218,7 @@ MANIFEST
   # Generate shared worker system prompt
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
-  tmux new-session -d -s "$session" -c "$dir"
+  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
@@ -2075,7 +2075,7 @@ MANIFEST
 
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
-  tmux new-session -d -s "$session" -c "$dir"
+  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
@@ -2271,7 +2271,7 @@ DOG
   # Generate shared worker system prompt
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
-  tmux new-session -d -s "$session" -c "$dir"
+  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
@@ -2528,23 +2528,21 @@ rebalance_grid_layout() {
   tmux select-layout -t "$session:${team_window}" "${csum},${layout_str}" 2>/dev/null || true
 }
 
-# Rebuild pane state from tmux pane titles
+# Rebuild pane state from tmux pane list.
+# Pane 0 = Manager, all others = workers (titles are unreliable — Claude Code overwrites them).
 # Sets: _wdg_pane, _worker_panes
 rebuild_pane_state() {
   local session="$1"
   _wdg_pane=""
   _worker_panes=""
 
-  local pidx ptitle
-  while IFS=' ' read -r pidx ptitle; do
-    case "$ptitle" in
-      "WDG Watchdog"|*doey-watchdog*) _wdg_pane="$pidx" ;;
-      W[0-9]*)
-        [[ -n "$_worker_panes" ]] && _worker_panes+=","
-        _worker_panes+="$pidx"
-        ;;
-    esac
-  done < <(tmux list-panes -t "$session" -F '#{pane_index} #{pane_title}')
+  local pidx
+  while IFS='' read -r pidx; do
+    # Skip pane 0 (Manager)
+    [ "$pidx" = "0" ] && continue
+    [ -n "$_worker_panes" ] && _worker_panes+=","
+    _worker_panes+="$pidx"
+  done < <(tmux list-panes -t "$session" -F '#{pane_index}')
 }
 
 doey_add_column() {
