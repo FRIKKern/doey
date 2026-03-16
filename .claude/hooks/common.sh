@@ -80,8 +80,8 @@ is_watchdog() {
 }
 
 is_manager() {
-  # Pane index 0 is always the Window Manager in any team window.
-  # Info Panel (0.0 in multi-window) is a shell script — hooks never run there, so this is safe.
+  # Pane index 0 is always the Window Manager in any team window (1+).
+  # Info Panel runs in window 0 (Dashboard) as a shell script — hooks never run there, so this is safe.
   [ "$PANE_INDEX" = "0" ]
 }
 

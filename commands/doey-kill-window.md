@@ -29,9 +29,9 @@ WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 # Use argument if provided, otherwise current window
 TARGET_WIN="${1:-$WINDOW_INDEX}"
 
-# Cannot kill window 0 — that's the original session window
+# Cannot kill window 0 — that's the Dashboard
 if [ "$TARGET_WIN" = "0" ]; then
-  echo "ERROR: Cannot kill window 0 — that is the primary session window."
+  echo "ERROR: Cannot kill window 0 — that is the Dashboard window."
   echo "Use /doey-kill-session to tear down the entire session."
   exit 1
 fi
@@ -141,7 +141,7 @@ Window ${TARGET_WIN} killed and cleaned up.
 ```
 
 ### Rules
-- **NEVER kill window 0** — use `/doey-kill-session` for full teardown
+- **NEVER kill window 0** (Dashboard) — use `/doey-kill-session` for full teardown
 - **Always kill processes before killing the window** — prevents orphan processes
 - **Always clean up runtime files** after killing
 - **Always update TEAM_WINDOWS** in session.env (atomic write)

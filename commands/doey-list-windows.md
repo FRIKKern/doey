@@ -29,6 +29,19 @@ echo "------  ------  ------  ----------  -------"
 WINDOWS=$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null)
 
 for w in $WINDOWS; do
+  # Window 0 is always the Dashboard
+  if [ "$w" = "0" ]; then
+    # Check if Session Manager is running in pane 0.1
+    SM_CMD=$(tmux display-message -t "${SESSION_NAME}:0.1" -p '#{pane_current_command}' 2>/dev/null) || SM_CMD=""
+    case "$SM_CMD" in
+      bash|zsh|sh|fish|"") SM_STATUS="—" ;;
+      *) SM_STATUS="UP" ;;
+    esac
+    printf "%-7s %-7s %-7s %-11s %s\n" \
+      "0" "—" "—" "—" "Dashboard (Session Mgr: ${SM_STATUS})"
+    continue
+  fi
+
   TEAM_ENV="${RUNTIME_DIR}/team_${w}.env"
   W_GRID="" W_WORKER_PANES="" W_WATCHDOG="" W_WORKER_COUNT=""
 
@@ -43,11 +56,10 @@ for w in $WINDOWS; do
       esac
     done < "$TEAM_ENV"
   else
-    # Fallback for window 0 without team file
-    W_GRID="${GRID:-unknown}"
-    W_WORKER_PANES="${WORKER_PANES:-}"
-    W_WATCHDOG="${WATCHDOG_PANE:-1}"
-    W_WORKER_COUNT="${WORKER_COUNT:-0}"
+    W_GRID="unknown"
+    W_WORKER_PANES=""
+    W_WATCHDOG="1"
+    W_WORKER_COUNT="0"
   fi
 
   # Window Manager status
@@ -97,6 +109,7 @@ done
 
 ### Rules
 - **Read-only operation** — this command never modifies any files or processes
-- **Fall back gracefully** if team_W.env doesn't exist (window 0 may use session.env)
+- **Window 0 is always the Dashboard** — display it with its own format, no team_0.env needed
+- **Fall back gracefully** if team_W.env doesn't exist for team windows
 - **Check watchdog heartbeat age** to detect stale watchdogs (>120s = stale)
 - All bash must be 3.2 compatible

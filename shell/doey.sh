@@ -1137,17 +1137,26 @@ RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="0"
+TEAM_WINDOWS="1"
 MANIFEST
 
-  # Write per-window team env for window 0
-  write_team_env "$runtime_dir" "0" "$grid" "$watchdog_pane" "$worker_panes_csv" "$worker_count"
+  # Write per-window team env for window 1
+  write_team_env "$runtime_dir" "1" "$grid" "$watchdog_pane" "$worker_panes_csv" "$worker_count"
 
   # Generate shared worker system prompt
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
+
+  # Dashboard window (window 0) — info panel
+  tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux rename-window -t "$session:0" "Dashboard"
+
+  # Team grid window (window 1)
+  local team_window=1
+  tmux new-window -t "$session" -c "$dir"
+
   step_done
 
   # ── Step 2: Apply theme ────────────────────────────────────────
@@ -1160,13 +1169,13 @@ MANIFEST
   step_start 3 "Building ${cols}x${rows} grid (${total} panes)..."
 
   for (( r=1; r<rows; r++ )); do
-    tmux split-window -v -t "$session:0.0" -c "$dir"
+    tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
   done
-  tmux select-layout -t "$session" even-vertical
+  tmux select-layout -t "$session:${team_window}" even-vertical
 
   for (( r=0; r<rows; r++ )); do
     for (( c=1; c<cols; c++ )); do
-      tmux split-window -h -t "$session:0.$((r * cols))" -c "$dir"
+      tmux split-window -h -t "$session:${team_window}.$((r * cols))" -c "$dir"
     done
   done
 
@@ -1174,7 +1183,7 @@ MANIFEST
 
   # Verify pane count
   local actual
-  actual=$(tmux list-panes -t "$session" 2>/dev/null | wc -l | tr -d ' ')
+  actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$actual" -ne "$total" ]]; then
     printf "\n"
     printf "   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
@@ -1185,13 +1194,13 @@ MANIFEST
   # ── Step 4: Name panes ─────────────────────────────────────────
   step_start 4 "Naming panes..."
 
-  tmux select-pane -t "$session:0.0" -T "MGR Window Manager"
-  tmux select-pane -t "$session:0.$watchdog_pane" -T "WDG Watchdog"
+  tmux select-pane -t "$session:${team_window}.0" -T "MGR Window Manager"
+  tmux select-pane -t "$session:${team_window}.$watchdog_pane" -T "WDG Watchdog"
   local wnum=0
   for (( i=1; i<total; i++ )); do
     [[ $i -eq $watchdog_pane ]] && continue
     wnum=$((wnum + 1))
-    tmux select-pane -t "$session:0.$i" -T "W${wnum} Worker ${wnum}"
+    tmux select-pane -t "$session:${team_window}.$i" -T "W${wnum} Worker ${wnum}"
   done
 
   step_done
@@ -1199,12 +1208,12 @@ MANIFEST
   # ── Step 5: Launch Window Manager & Watchdog ──────────────────
   step_start 5 "Launching Window Manager & Watchdog..."
 
-  # Launch Window Manager (pane 0.0)
-  tmux send-keys -t "$session:0.0" \
+  # Launch Window Manager (pane $team_window.0)
+  tmux send-keys -t "$session:${team_window}.0" \
     "claude --dangerously-skip-permissions --agent doey-manager" Enter
   sleep 0.5
 
-  write_pane_status "$runtime_dir" "${session}:0.0" "READY"
+  write_pane_status "$runtime_dir" "${session}:${team_window}.0" "READY"
 
   # Send initial briefing once Window Manager is ready
   (
@@ -1213,14 +1222,14 @@ MANIFEST
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
       [[ -n "$worker_panes" ]] && worker_panes+=", "
-      worker_panes+="0.$i"
+      worker_panes+="${team_window}.$i"
     done
-    tmux send-keys -t "$session:0.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane 0.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+    tmux send-keys -t "$session:${team_window}.0" \
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane ${team_window}.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
-  # Launch Watchdog (pane 0.$watchdog_pane)
-  tmux send-keys -t "$session:0.$watchdog_pane" \
+  # Launch Watchdog (pane $team_window.$watchdog_pane)
+  tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
   sleep 0.5
 
@@ -1231,13 +1240,13 @@ MANIFEST
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
       [[ -n "$watch_panes" ]] && watch_panes+=", "
-      watch_panes+="0.$i"
+      watch_panes+="${team_window}.$i"
     done
-    tmux send-keys -t "$session:0.$watchdog_pane" \
-      "Start monitoring session $session. Total panes: $total. Skip pane 0.0 (Window Manager) and 0.$watchdog_pane (yourself). Monitor panes ${watch_panes}." Enter
+    tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
+      "Start monitoring session $session. Total panes: $total. Skip pane ${team_window}.0 (Window Manager) and ${team_window}.$watchdog_pane (yourself). Monitor panes ${watch_panes}." Enter
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
-    tmux send-keys -t "$session:0.$watchdog_pane" \
+    tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
@@ -1267,14 +1276,14 @@ MANIFEST
     # Create per-worker system prompt file (base prompt + worker identity)
     local worker_prompt_file="${runtime_dir}/worker-system-prompt-${booted}.md"
     cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file"
-    printf '\n\n## Identity\nYou are Worker %s in pane 0.%s of session %s.\n' "$booted" "$i" "$session" >> "$worker_prompt_file"
+    printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' "$booted" "$team_window" "$i" "$session" >> "$worker_prompt_file"
 
     local worker_cmd="claude --dangerously-skip-permissions --model opus"
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
-    tmux send-keys -t "$session:0.$i" "$worker_cmd" Enter
+    tmux send-keys -t "$session:${team_window}.$i" "$worker_cmd" Enter
     sleep 0.3
 
-    write_pane_status "$runtime_dir" "${session}:0.${i}" "READY"
+    write_pane_status "$runtime_dir" "${session}:${team_window}.${i}" "READY"
   done
   printf "${SUCCESS}done${RESET}\n"
 
@@ -1283,8 +1292,9 @@ MANIFEST
   printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
   printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}                           ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}0.0${RESET}   Online                      ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}0.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
+  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel                    ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}${team_window}.0${RESET}   Online                      ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}${team_window}.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
   printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}%-4s${RESET}  Booting...                   ${DIM}│${RESET}\n" "$worker_count"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"
@@ -1296,10 +1306,10 @@ MANIFEST
   printf "   ${DIM}└─────────────────────────────────────────────────┘${RESET}\n"
   printf '\n'
 
-  # ── Focus on Window Manager pane, attach ──────────────────────────────
+  # ── Focus on Dashboard window, attach ──────────────────────────────
   # Clear the trap — background briefing jobs should complete normally after attach
   trap - EXIT INT TERM
-  tmux select-pane -t "$session:0.0"
+  tmux select-window -t "$session:0"
   attach_or_switch "$session"
 }
 
@@ -1714,16 +1724,24 @@ RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="0"
+TEAM_WINDOWS="1"
 MANIFEST
 
-  # Write per-window team env for window 0
-  write_team_env "$runtime_dir" "0" "$grid" "$watchdog_pane" "$worker_panes_csv" "$worker_count"
+  # Write per-window team env for window 1
+  write_team_env "$runtime_dir" "1" "$grid" "$watchdog_pane" "$worker_panes_csv" "$worker_count"
 
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
+
+  # Dashboard window (window 0) — info panel
+  tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux rename-window -t "$session:0" "Dashboard"
+
+  # Team grid window (window 1)
+  local team_window=1
+  tmux new-window -t "$session" -c "$dir"
 
   # ── Apply theme ──
   printf "  ${DIM}Applying theme...${RESET}\n"
@@ -1733,13 +1751,13 @@ MANIFEST
   # ── Build grid ──
   printf "  ${DIM}Building ${cols}x${rows} grid (${total} panes)...${RESET}\n"
   for (( r=1; r<rows; r++ )); do
-    tmux split-window -v -t "$session:0.0" -c "$dir"
+    tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
   done
-  tmux select-layout -t "$session" even-vertical
+  tmux select-layout -t "$session:${team_window}" even-vertical
 
   for (( r=0; r<rows; r++ )); do
     for (( c=1; c<cols; c++ )); do
-      tmux split-window -h -t "$session:0.$((r * cols))" -c "$dir"
+      tmux split-window -h -t "$session:${team_window}.$((r * cols))" -c "$dir"
     done
   done
 
@@ -1747,29 +1765,29 @@ MANIFEST
 
   # Verify pane count
   local actual
-  actual=$(tmux list-panes -t "$session" 2>/dev/null | wc -l | tr -d ' ')
+  actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$actual" -ne "$total" ]]; then
     printf "  ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
   fi
 
   # ── Name panes ──
   printf "  ${DIM}Naming panes...${RESET}\n"
-  tmux select-pane -t "$session:0.0" -T "MGR Window Manager"
-  tmux select-pane -t "$session:0.$watchdog_pane" -T "WDG Watchdog"
+  tmux select-pane -t "$session:${team_window}.0" -T "MGR Window Manager"
+  tmux select-pane -t "$session:${team_window}.$watchdog_pane" -T "WDG Watchdog"
   local wnum=0
   for (( i=1; i<total; i++ )); do
     [[ $i -eq $watchdog_pane ]] && continue
     wnum=$((wnum + 1))
-    tmux select-pane -t "$session:0.$i" -T "W${wnum} Worker ${wnum}"
+    tmux select-pane -t "$session:${team_window}.$i" -T "W${wnum} Worker ${wnum}"
   done
 
   # ── Launch Window Manager & Watchdog ──
   printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
-  tmux send-keys -t "$session:0.0" \
+  tmux send-keys -t "$session:${team_window}.0" \
     "claude --dangerously-skip-permissions --agent doey-manager" Enter
   sleep 0.5
 
-  write_pane_status "$runtime_dir" "${session}:0.0" "READY"
+  write_pane_status "$runtime_dir" "${session}:${team_window}.0" "READY"
 
   (
     sleep 8
@@ -1777,13 +1795,13 @@ MANIFEST
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
       [[ -n "$worker_panes" ]] && worker_panes+=", "
-      worker_panes+="0.$i"
+      worker_panes+="${team_window}.$i"
     done
-    tmux send-keys -t "$session:0.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane 0.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+    tmux send-keys -t "$session:${team_window}.0" \
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 2)) workers in panes ${worker_panes}. Pane ${team_window}.$watchdog_pane is the Watchdog (monitors workers, delivers messages). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
-  tmux send-keys -t "$session:0.$watchdog_pane" \
+  tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
   sleep 0.5
 
@@ -1793,13 +1811,13 @@ MANIFEST
     for (( i=1; i<total; i++ )); do
       [[ $i -eq $watchdog_pane ]] && continue
       [[ -n "$watch_panes" ]] && watch_panes+=", "
-      watch_panes+="0.$i"
+      watch_panes+="${team_window}.$i"
     done
-    tmux send-keys -t "$session:0.$watchdog_pane" \
-      "Start monitoring session $session. Total panes: $total. Skip pane 0.0 (Window Manager) and 0.$watchdog_pane (yourself). Monitor panes ${watch_panes}." Enter
+    tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
+      "Start monitoring session $session. Total panes: $total. Skip pane ${team_window}.0 (Window Manager) and ${team_window}.$watchdog_pane (yourself). Monitor panes ${watch_panes}." Enter
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
-    tmux send-keys -t "$session:0.$watchdog_pane" \
+    tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
@@ -1815,18 +1833,19 @@ MANIFEST
 
     local worker_prompt_file="${runtime_dir}/worker-system-prompt-${booted}.md"
     cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file"
-    printf '\n\n## Identity\nYou are Worker %s in pane 0.%s of session %s.\n' "$booted" "$i" "$session" >> "$worker_prompt_file"
+    printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' "$booted" "$team_window" "$i" "$session" >> "$worker_prompt_file"
 
     local worker_cmd="claude --dangerously-skip-permissions --model opus"
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
-    tmux send-keys -t "$session:0.$i" "$worker_cmd" Enter
+    tmux send-keys -t "$session:${team_window}.$i" "$worker_cmd" Enter
     sleep 0.3
 
-    write_pane_status "$runtime_dir" "${session}:0.${i}" "READY"
+    write_pane_status "$runtime_dir" "${session}:${team_window}.${i}" "READY"
   done
 
   # Clear the trap — background briefing jobs should complete normally
   trap - EXIT INT TERM
+  tmux select-window -t "$session:0"
   printf "  ${SUCCESS}Team launched${RESET} — session ${BOLD}%s${RESET} with %s workers\n" "$session" "$worker_count"
 }
 
@@ -1902,6 +1921,15 @@ DOG
 
   tmux new-session -d -s "$session" -c "$dir"
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
+
+  # Dashboard window (window 0) — info panel
+  tmux send-keys -t "$session:0.0" "info-panel.sh '${runtime_dir}'" Enter
+  tmux rename-window -t "$session:0" "Dashboard"
+
+  # Team grid window (window 1)
+  local team_window=1
+  tmux new-window -t "$session" -c "$dir"
+
   step_done
 
   # ── Step 2: Apply theme ────────────────────────────────────────
@@ -1914,8 +1942,8 @@ DOG
   step_start 3 "Building grid..."
 
   # Single column: Window Manager (top), Watchdog (bottom)
-  tmux split-window -v -t "$session:0.0" -c "$dir"
-  # After: 0.0 (MGR top), 0.1 (WDG bottom)
+  tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
+  # After: $team_window.0 (MGR top), $team_window.1 (WDG bottom)
 
   sleep 0.5
 
@@ -1927,8 +1955,8 @@ DOG
   # ── Step 4: Name panes ─────────────────────────────────────────
   step_start 4 "Naming panes..."
 
-  tmux select-pane -t "$session:0.${mgr_pane}" -T "MGR Window Manager"
-  tmux select-pane -t "$session:0.${watchdog_pane}" -T "WDG Watchdog"
+  tmux select-pane -t "$session:${team_window}.${mgr_pane}" -T "MGR Window Manager"
+  tmux select-pane -t "$session:${team_window}.${watchdog_pane}" -T "WDG Watchdog"
 
   step_done
 
@@ -1950,39 +1978,39 @@ RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="0"
+TEAM_WINDOWS="1"
 MANIFEST
 
-  # Write per-window team env for window 0 (dynamic starts with 0 workers)
-  write_team_env "$runtime_dir" "0" "dynamic" "$watchdog_pane" "" "0"
+  # Write per-window team env for window 1 (dynamic starts with 0 workers)
+  write_team_env "$runtime_dir" "1" "dynamic" "$watchdog_pane" "" "0"
 
   step_done
 
   # ── Step 6: Launch Window Manager & Watchdog ──────────────────
   step_start 6 "Launching Window Manager & Watchdog..."
 
-  # Launch Window Manager (pane 0.0)
-  tmux send-keys -t "$session:0.0" \
+  # Launch Window Manager (pane $team_window.0)
+  tmux send-keys -t "$session:${team_window}.0" \
     "claude --dangerously-skip-permissions --agent doey-manager" Enter
   sleep 0.5
 
   # Send initial briefing once Window Manager is ready
   (
     sleep 8
-    tmux send-keys -t "$session:0.0" \
-      "Team is online (project: ${name}, dir: $dir). Dynamic grid — started with ${initial_workers} workers, auto-expands when all are busy. Use doey add to add more. Pane 0.$watchdog_pane is the Watchdog. Session: $session. All workers are idle and awaiting tasks." Enter
+    tmux send-keys -t "$session:${team_window}.0" \
+      "Team is online (project: ${name}, dir: $dir). Dynamic grid — started with ${initial_workers} workers, auto-expands when all are busy. Use doey add to add more. Pane ${team_window}.$watchdog_pane is the Watchdog. Session: $session. All workers are idle and awaiting tasks." Enter
   ) &
 
-  # Launch Watchdog (pane 0.$watchdog_pane)
-  tmux send-keys -t "$session:0.$watchdog_pane" \
+  # Launch Watchdog (pane $team_window.$watchdog_pane)
+  tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
   sleep 0.5
 
   # Auto-start watchdog loop (no workers to monitor yet)
   (
     sleep 12
-    tmux send-keys -t "$session:0.$watchdog_pane" \
-      "Start monitoring session $session. Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy. Skip pane 0.0 (Window Manager) and 0.$watchdog_pane (yourself). Monitor all worker panes for status changes." Enter
+    tmux send-keys -t "$session:${team_window}.$watchdog_pane" \
+      "Start monitoring session $session. Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy. Skip pane ${team_window}.0 (Window Manager) and ${team_window}.$watchdog_pane (yourself). Monitor all worker panes for status changes." Enter
   ) &
 
   step_done
@@ -2008,8 +2036,9 @@ MANIFEST
   printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
   printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}                ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}0.0${RESET}   Online                      ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}0.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
+  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel                    ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}${team_window}.0${RESET}   Online                      ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}${team_window}.%-3s${RESET} Online                      ${DIM}│${RESET}\n" "$watchdog_pane"
   printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}%-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}      ${DIM}│${RESET}\n" "$initial_workers"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"
@@ -2021,8 +2050,8 @@ MANIFEST
   printf "   ${DIM}└─────────────────────────────────────────────────┘${RESET}\n"
   printf '\n'
 
-  # ── Focus on Window Manager pane, attach ──────────────────────────────
-  tmux select-pane -t "$session:0.0"
+  # ── Focus on Dashboard window, attach ──────────────────────────────
+  tmux select-window -t "$session:0"
   attach_or_switch "$session"
 }
 
@@ -2043,15 +2072,16 @@ _layout_checksum() {
 # This ensures worker pairs share a column regardless of tmux's layout tree.
 rebalance_grid_layout() {
   local session="$1"
+  local team_window="${2:-1}"
   local win_w win_h
-  win_w="$(tmux display-message -t "$session:0" -p '#{window_width}')"
-  win_h="$(tmux display-message -t "$session:0" -p '#{window_height}')"
+  win_w="$(tmux display-message -t "$session:${team_window}" -p '#{window_width}')"
+  win_h="$(tmux display-message -t "$session:${team_window}" -p '#{window_height}')"
 
   # Collect pane IDs in index order
   local pane_ids=()
   while IFS=$'\t' read -r _idx _pid; do
     pane_ids+=("${_pid#%}")
-  done < <(tmux list-panes -t "$session:0" -F '#{pane_index}	#{pane_id}')
+  done < <(tmux list-panes -t "$session:${team_window}" -F '#{pane_index}	#{pane_id}')
 
   local num_panes=${#pane_ids[@]}
   local num_cols=$((num_panes / 2))
@@ -2078,7 +2108,7 @@ rebalance_grid_layout() {
   local layout_str="${win_w}x${win_h},0,0{${body}}"
   local csum
   csum="$(_layout_checksum "$layout_str")"
-  tmux select-layout -t "$session:0" "${csum},${layout_str}" 2>/dev/null || true
+  tmux select-layout -t "$session:${team_window}" "${csum},${layout_str}" 2>/dev/null || true
 }
 
 # Rebuild pane state from tmux pane titles
@@ -2104,6 +2134,7 @@ doey_add_column() {
   local session="$1"
   local runtime_dir="$2"
   local dir="$3"
+  local team_window="${4:-1}"
 
   # Source current state
   safe_source_session_env "${runtime_dir}/session.env"
@@ -2129,30 +2160,30 @@ doey_add_column() {
   # Strategy: split the last pane horizontally (adds column on the right),
   # then split that new pane vertically for 2 worker rows.
   local last_pane
-  last_pane="$(tmux list-panes -t "$session:0" -F '#{pane_index}' | tail -1)"
-  tmux split-window -h -t "$session:0.${last_pane}" -c "$dir"
+  last_pane="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
+  tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$dir"
   sleep 0.3
 
   # The new pane is the new last pane
   local new_pane_top
-  new_pane_top="$(tmux list-panes -t "$session:0" -F '#{pane_index}' | tail -1)"
-  tmux split-window -v -t "$session:0.${new_pane_top}" -c "$dir"
+  new_pane_top="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
+  tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$dir"
   sleep 0.3
 
   # Bottom pane is now the last pane
   local new_pane_bottom
-  new_pane_bottom="$(tmux list-panes -t "$session:0" -F '#{pane_index}' | tail -1)"
+  new_pane_bottom="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
 
   # Determine new worker numbers
   local w1_num=$(( worker_count + 1 ))
   local w2_num=$(( worker_count + 2 ))
 
   # Name the new worker panes
-  tmux select-pane -t "$session:0.${new_pane_top}" -T "W${w1_num} Worker ${w1_num}"
-  tmux select-pane -t "$session:0.${new_pane_bottom}" -T "W${w2_num} Worker ${w2_num}"
+  tmux select-pane -t "$session:$team_window.${new_pane_top}" -T "W${w1_num} Worker ${w1_num}"
+  tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "W${w2_num} Worker ${w2_num}"
 
   # Rebuild worker pane list from titles
-  rebuild_pane_state "$session"
+  rebuild_pane_state "$session:$team_window"
   local new_worker_panes="$_worker_panes"
 
   local new_worker_count=$(( worker_count + 2 ))
@@ -2182,33 +2213,33 @@ TEAM_WINDOWS="${_team_windows}"
 MANIFEST
   mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
 
-  # Update team_0.env with new worker state
-  write_team_env "$runtime_dir" "0" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count"
+  # Update team env with new worker state
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count"
 
   # Launch Claude in both new panes
   local worker_prompt_file_1="${runtime_dir}/worker-system-prompt-${w1_num}.md"
   cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file_1"
-  printf '\n\n## Identity\nYou are Worker %s in pane 0.%s of session %s.\n' \
-    "$w1_num" "$new_pane_top" "$session" >> "$worker_prompt_file_1"
+  printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
+    "$w1_num" "$team_window" "$new_pane_top" "$session" >> "$worker_prompt_file_1"
 
   local worker_cmd="claude --dangerously-skip-permissions --model opus"
   worker_cmd+=" --append-system-prompt-file ${worker_prompt_file_1}"
-  tmux send-keys -t "$session:0.${new_pane_top}" "$worker_cmd" Enter
+  tmux send-keys -t "$session:$team_window.${new_pane_top}" "$worker_cmd" Enter
   sleep 0.3
 
   local worker_prompt_file_2="${runtime_dir}/worker-system-prompt-${w2_num}.md"
   cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file_2"
-  printf '\n\n## Identity\nYou are Worker %s in pane 0.%s of session %s.\n' \
-    "$w2_num" "$new_pane_bottom" "$session" >> "$worker_prompt_file_2"
+  printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
+    "$w2_num" "$team_window" "$new_pane_bottom" "$session" >> "$worker_prompt_file_2"
 
   local worker_cmd2="claude --dangerously-skip-permissions --model opus"
   worker_cmd2+=" --append-system-prompt-file ${worker_prompt_file_2}"
-  tmux send-keys -t "$session:0.${new_pane_bottom}" "$worker_cmd2" Enter
+  tmux send-keys -t "$session:$team_window.${new_pane_bottom}" "$worker_cmd2" Enter
 
   # Rebalance to proper column layout (each column = 2 rows)
-  rebalance_grid_layout "$session"
+  rebalance_grid_layout "$session" "$team_window"
 
-  printf "  ${SUCCESS}Added${RESET} workers ${BOLD}W${w1_num}${RESET} (0.${new_pane_top}) and ${BOLD}W${w2_num}${RESET} (0.${new_pane_bottom})\n"
+  printf "  ${SUCCESS}Added${RESET} workers ${BOLD}W${w1_num}${RESET} (${team_window}.${new_pane_top}) and ${BOLD}W${w2_num}${RESET} (${team_window}.${new_pane_bottom})\n"
   printf "  ${DIM}Total workers: ${new_worker_count} in ${new_cols} columns${RESET}\n"
 }
 
@@ -2217,6 +2248,7 @@ doey_remove_column() {
   local session="$1"
   local runtime_dir="$2"
   local col_index="${3:-}"
+  local team_window="${4:-1}"
 
   # Source current state
   safe_source_session_env "${runtime_dir}/session.env"
@@ -2276,12 +2308,12 @@ doey_remove_column() {
     eval "remove_bottom=\${$(( pair_start + 1 ))}"
   fi
 
-  printf "  ${DIM}Removing worker panes 0.${remove_top} and 0.${remove_bottom}...${RESET}\n"
+  printf "  ${DIM}Removing worker panes ${team_window}.${remove_top} and ${team_window}.${remove_bottom}...${RESET}\n"
 
   # Kill Claude processes in the target panes
   for pane_idx in "$remove_top" "$remove_bottom"; do
     local pane_pid
-    pane_pid=$(tmux display-message -t "$session:0.${pane_idx}" -p '#{pane_pid}' 2>/dev/null || true)
+    pane_pid=$(tmux display-message -t "$session:$team_window.${pane_idx}" -p '#{pane_pid}' 2>/dev/null || true)
     [[ -n "$pane_pid" ]] && pkill -P "$pane_pid" 2>/dev/null || true
   done
   sleep 1
@@ -2295,12 +2327,12 @@ doey_remove_column() {
     first_kill="$remove_bottom"
     second_kill="$remove_top"
   fi
-  tmux kill-pane -t "$session:0.${first_kill}" 2>/dev/null || true
-  tmux kill-pane -t "$session:0.${second_kill}" 2>/dev/null || true
+  tmux kill-pane -t "$session:$team_window.${first_kill}" 2>/dev/null || true
+  tmux kill-pane -t "$session:$team_window.${second_kill}" 2>/dev/null || true
   sleep 0.5
 
   # After killing panes, ALL indices shift — must re-read everything
-  rebuild_pane_state "$session"
+  rebuild_pane_state "$session:$team_window"
   local new_worker_panes="$_worker_panes"
 
   local new_worker_count=$(( worker_count - 2 ))
@@ -2330,11 +2362,11 @@ TEAM_WINDOWS="${_team_windows}"
 MANIFEST
   mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
 
-  # Update team_0.env with new worker state
-  write_team_env "$runtime_dir" "0" "dynamic" "${WATCHDOG_PANE}" "$new_worker_panes" "$new_worker_count"
+  # Update team env with new worker state
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "${WATCHDOG_PANE}" "$new_worker_panes" "$new_worker_count"
 
   # Rebalance to proper column layout (each column = 2 rows)
-  rebalance_grid_layout "$session"
+  rebalance_grid_layout "$session" "$team_window"
 
   printf "  ${SUCCESS}Removed${RESET} worker column — ${BOLD}${new_worker_count}${RESET} workers remaining\n"
 }
@@ -2847,7 +2879,7 @@ HELP
       session="doey-${name}"
       if session_exists "$session"; then
         printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}${session}${RESET}...\n"
-        tmux select-pane -t "$session:0.0"
+        tmux select-window -t "$session:0"
         attach_or_switch "$session"
       else
         launch_session_dynamic "$name" "$dir"
@@ -2933,9 +2965,9 @@ if [[ -n "$name" ]]; then
   # Known project
   session="doey-${name}"
   if session_exists "$session"; then
-    # Already running — just attach
+    # Already running — just attach (land on dashboard window 0)
     printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}%s${RESET}...\n" "$session"
-    tmux select-pane -t "$session:0.0"
+    tmux select-window -t "$session:0"
     attach_or_switch "$session"
   else
     # Known but not running — launch with premium UI
