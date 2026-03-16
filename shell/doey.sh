@@ -454,10 +454,18 @@ apply_doey_theme() {
     "#[fg=colour245] #{pane_title} #[fg=colour233,bg=colour240]  %H:%M #[fg=colour233,bg=colour245,bold] #('${SCRIPT_DIR}/tmux-statusbar.sh') "
   tmux set-option -t "$session" status-interval "$status_interval"
 
-  # Window status styling
-  tmux set-option -t "$session" window-status-format '#[fg=colour245] #I #W '
-  tmux set-option -t "$session" window-status-current-format '#[fg=cyan,bold] #I #W '
+  # Window status — colored segments with Dashboard distinction
+  tmux set-option -t "$session" window-status-separator ''
+  tmux set-option -t "$session" window-status-format \
+    '#{?#{==:#I,0},#[fg=colour233,bg=colour97]#[fg=colour255,bg=colour97]  Dashboard #[fg=colour97,bg=colour233],#[fg=colour233,bg=colour236]#[fg=colour250,bg=colour236] #I #W #[fg=colour236,bg=colour233]}'
+  tmux set-option -t "$session" window-status-current-format \
+    '#{?#{==:#I,0},#[fg=colour233,bg=colour141]#[fg=colour233,bg=colour141,bold]  Dashboard #[fg=colour141,bg=colour233,nobold],#[fg=colour233,bg=cyan]#[fg=colour233,bg=cyan,bold] #I #W #[fg=cyan,bg=colour233,nobold]}'
   tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
+
+  # Activity monitoring — highlight windows with new output
+  tmux set-option -t "$session" window-status-activity-style 'fg=colour214,bg=colour236,bold'
+  tmux set-option -t "$session" monitor-activity on
+  tmux set-option -t "$session" visual-activity off
 
   # Terminal tab/window title — shows project name in macOS Terminal tabs
   tmux set-option -t "$session" set-titles on
@@ -1207,6 +1215,7 @@ MANIFEST
     wnum=$((wnum + 1))
     tmux select-pane -t "$session:${team_window}.$i" -T "W${wnum} Worker ${wnum}"
   done
+  tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
 
   step_done
 
@@ -1797,6 +1806,7 @@ MANIFEST
     wnum=$((wnum + 1))
     tmux select-pane -t "$session:${team_window}.$i" -T "W${wnum} Worker ${wnum}"
   done
+  tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
 
   # ── Launch Window Manager & Watchdog ──
   printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
@@ -1986,6 +1996,7 @@ DOG
 
   tmux select-pane -t "$session:${team_window}.${mgr_pane}" -T "MGR Window Manager"
   tmux select-pane -t "$session:${team_window}.${watchdog_pane}" -T "WDG Watchdog"
+  tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
 
   step_done
 
@@ -2478,6 +2489,7 @@ add_team_window() {
     wnum=$((wnum + 1))
     tmux select-pane -t "${session}:${window_index}.${i}" -T "W${wnum} Worker ${wnum}"
   done
+  tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
 
   # Write team env
   write_team_env "$runtime_dir" "$window_index" "$grid" "$watchdog_pane" "$worker_panes" "$worker_count"
