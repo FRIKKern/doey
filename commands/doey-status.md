@@ -15,7 +15,7 @@ You are managing status updates across Claude Code instances in TMUX.
    RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
    source "${RUNTIME_DIR}/session.env"
    MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-   MY_PANE_SAFE=${MY_PANE//[:.]/_}
+   MY_PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
    ```
 
 2. **Default action: view all statuses** (run the "Viewing statuses" block below). Only use "Setting status" if the user explicitly asked to set/update their status.

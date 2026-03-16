@@ -81,6 +81,7 @@ EOF
 fi
 
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
+SCAN_HAD_OUTPUT=false
 
 # --- Window Manager health check (Manager is pane 0 in the target team window) ---
 MGR_PANE_REF=""
@@ -100,8 +101,10 @@ case "$MGR_CMD" in
     # Write alert file so on-pre-tool-use.sh can block send-keys to the dead Manager
     CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
     if [ ! -f "$CRASH_ALERT" ]; then
-      echo "TEAM_WINDOW=${TARGET_WINDOW}" > "$CRASH_ALERT"
-      echo "TIMESTAMP=$(date +%s)" >> "$CRASH_ALERT"
+      # Atomic write via temp+mv (consistent with heartbeat pattern)
+      _crash_tmp="${CRASH_ALERT}.tmp"
+      printf 'TEAM_WINDOW=%s\nTIMESTAMP=%s\n' "${TARGET_WINDOW}" "$(date +%s)" > "$_crash_tmp"
+      mv "$_crash_tmp" "$CRASH_ALERT"
     fi
     ;;
   *)
@@ -110,16 +113,25 @@ case "$MGR_CMD" in
     ;;
 esac
 
-# --- Manager idle detection (for inbox delivery) ---
+# --- Manager idle detection (for inbox delivery + completion notification) ---
 MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
 case "$MGR_CAPTURE" in
   *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
   *) PANE_STATE_0="WORKING" ;;
 esac
 
+# Detect Manager WORKING→IDLE transition (completion event for Session Manager)
+MGR_PREV_FILE="${RUNTIME_DIR}/status/manager_prev_state_W${TARGET_WINDOW}"
+read -r MGR_PREV_STATE < "$MGR_PREV_FILE" 2>/dev/null || MGR_PREV_STATE="UNKNOWN"
+echo "$PANE_STATE_0" > "$MGR_PREV_FILE"
+if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
+  echo "MANAGER_COMPLETED"
+  SCAN_HAD_OUTPUT=true
+fi
+
 # --- Scan each worker pane ---
 PANES_LIST="${WORKER_PANES//,/ }"
-SCAN_HAD_OUTPUT=false
+# Note: SCAN_HAD_OUTPUT may already be true from MANAGER_CRASHED above — don't reset
 for i in $PANES_LIST; do
   # Validate pane index before use in eval/variable expansion
   is_numeric "$i" || continue
@@ -222,10 +234,38 @@ CRASH_EOF
   esac
 done
 
-# --- No-changes shortcut (single token confirmation) ---
-if [ "$SCAN_HAD_OUTPUT" = false ]; then
-  echo "OK"
-fi
+# --- Status summary (always printed for Watchdog display) ---
+# Manager status
+case "$MGR_CMD" in
+  bash|zsh|sh|fish) _mgr_label="CRASHED" ;;
+  *) _mgr_label="$PANE_STATE_0" ;;
+esac
+MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
+
+# Build compact worker summary: count by state + list active titles
+_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_other=0
+_active_titles=""
+for i in $PANES_LIST; do
+  is_numeric "$i" || continue
+  eval "_st=\${PANE_STATE_${i}:-UNKNOWN}"
+  case "$_st" in
+    WORKING|CHANGED) _n_working=$((_n_working + 1))
+      _pt=$(tmux display-message -t "${SESSION_NAME}:${TARGET_WINDOW}.${i}" -p '#{pane_title}' 2>/dev/null) || _pt=""
+      [ -n "$_pt" ] && _active_titles="${_active_titles:+${_active_titles}, }${i}:${_pt}"
+      ;;
+    IDLE|FINISHED) _n_idle=$((_n_idle + 1)) ;;
+    STUCK) _n_stuck=$((_n_stuck + 1)) ;;
+    CRASHED) _n_crashed=$((_n_crashed + 1)) ;;
+    *) _n_other=$((_n_other + 1)) ;;
+  esac
+done
+
+# Print summary line
+printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_working" "$_n_idle"
+[ "$_n_stuck" -gt 0 ] && printf ' %dS' "$_n_stuck"
+[ "$_n_crashed" -gt 0 ] && printf ' %dC' "$_n_crashed"
+[ -n "$_active_titles" ] && printf ' | %s' "$_active_titles"
+printf '\n'
 
 # --- Per-pane inbox detection ---
 # Single glob, then classify by pane index (avoids N readdir calls)

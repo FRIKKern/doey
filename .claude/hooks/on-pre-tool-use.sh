@@ -55,6 +55,11 @@ if is_manager; then
   exit 0
 fi
 
+# Session Manager — allow everything (routes tasks to Window Managers via send-keys)
+if is_session_manager; then
+  exit 0
+fi
+
 # Extract command (needed for both Watchdog filtering and Worker blocking)
 if command -v jq >/dev/null 2>&1; then
   TOOL_COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || TOOL_COMMAND=""
@@ -77,18 +82,32 @@ if is_watchdog; then
       if [ -n "$TEAM_WINDOW" ] && [ -n "${RUNTIME_DIR:-}" ]; then
         if [ -f "${RUNTIME_DIR}/status/manager_crashed_W${TEAM_WINDOW}" ]; then
           # Check if the command targets the Manager pane (W.0)
-          if echo "$TOOL_COMMAND" | grep -qE "${TEAM_WINDOW}\.0|${TEAM_WINDOW}\.\"?0"; then
-            echo "BLOCKED: Watchdog cannot send keys to crashed Manager pane ${TEAM_WINDOW}.0." >&2
-            echo "Write an alert file for the Session Manager instead." >&2
-            exit 2
-          fi
+          # Anchor with ":" prefix to prevent false-positives on multi-digit
+          # windows (e.g. TEAM_WINDOW=2 must not match "12.0")
+          case "$TOOL_COMMAND" in
+            *":${TEAM_WINDOW}.0"*)
+              echo "BLOCKED: Watchdog cannot send keys to crashed Manager pane ${TEAM_WINDOW}.0." >&2
+              echo "Write an alert file for the Session Manager instead." >&2
+              exit 2
+              ;;
+          esac
         fi
       fi
-      # Allow specific watchdog operations by matching complete tmux patterns.
-      # Only permit: sending /doey-inbox, /login, /compact, bare Enter, and copy-mode.
-      # Match command structure to prevent allowlist bypass via string containment
-      # (e.g. "echo doey-inbox; malicious" would pass a simple substring check).
-      if echo "$TOOL_COMMAND" | grep -qE '^[[:space:]]*tmux (send-keys .+ (/doey-inbox|/login|/compact|Enter)( Enter)?[[:space:]]*$|copy-mode .+$)'; then
+      # Allow specific watchdog operations with strict payload validation.
+      # Strip trailing stderr redirect for cleaner matching.
+      CLEAN_CMD=$(echo "$TOOL_COMMAND" | sed 's/[[:space:]]*2>\/dev\/null[[:space:]]*$//')
+      # Target pane pattern: quoted ("...") or unquoted token
+      _TP='(\"[^\"]*\"|[^[:space:]]+)'
+      # Pattern 1: Slash commands — target + exactly one allowed command + Enter
+      if echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+\"?(/doey-inbox|/login|/compact)\"?[[:space:]]+Enter[[:space:]]*$"; then
+        exit 0
+      fi
+      # Pattern 2: Bare Enter — target + Enter only (no text payload)
+      if echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Enter[[:space:]]*$"; then
+        exit 0
+      fi
+      # Pattern 3: Copy-mode — any copy-mode command
+      if echo "$CLEAN_CMD" | grep -qE '^[[:space:]]*tmux copy-mode[[:space:]]'; then
         exit 0
       fi
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2

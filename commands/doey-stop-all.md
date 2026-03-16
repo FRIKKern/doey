@@ -7,7 +7,7 @@ Stop all running Doey sessions at once.
 
 ## Prompt
 
-> ⚠️ **DEPRECATED:** Replaced by `/doey-kill-session`. This command will be removed in a future version.
+> ⚠️ **DEPRECATED:** Replaced by `/doey-kill-all-sessions`. This command will be removed in a future version.
 
 Stop all running Doey tmux sessions.
 

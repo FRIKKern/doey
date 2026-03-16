@@ -8,41 +8,25 @@ Restart all workers in a specific team window. Does not restart the Window Manag
 ## Prompt
 You are restarting workers in a team window. The Watchdog runs in Dashboard (pane 0.1-0.3), not in the team window.
 
-### Project Context
-
-Every Bash call must start with:
-
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-```
-
 ### Step 1: Read project context and determine target window
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-
-# Use argument if provided, otherwise current window
 TARGET_WIN="${1:-$WINDOW_INDEX}"
 
-# Read team config for target window
 TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WIN}.env"
 if [ -f "$TEAM_ENV" ]; then
   while IFS='=' read -r key value; do
     value="${value%\"}" && value="${value#\"}"
-    case "$key" in
-      WORKER_PANES) WORKER_PANES="$value" ;;
-    esac
+    case "$key" in WORKER_PANES) WORKER_PANES="$value" ;; esac
   done < "$TEAM_ENV"
 fi
 
 ALL_PANES=$(echo "$WORKER_PANES" | tr ',' ' ')
-WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
+WORKER_PANES_LIST="$ALL_PANES"
 
-# Detect already-ready workers — skip them.
 SKIP_PANES=""
 for i in $WORKER_PANES_LIST; do
   PANE_PID=$(tmux display-message -t "$SESSION_NAME:${TARGET_WIN}.$i" -p '#{pane_pid}')
@@ -60,9 +44,10 @@ echo "Workers: ${WORKER_PANES} (Watchdog runs in Dashboard, not restarted here)"
 
 ### Step 2: Kill processes
 
-Kill Claude processes by PID. Skip ready workers.
+Kill Claude processes by PID. Skip ready workers. Uses vars from Step 1.
 
 ```bash
+# (vars from step 1)
 for i in $ALL_PANES; do
   if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
   PANE_PID=$(tmux display-message -t "$SESSION_NAME:${TARGET_WIN}.$i" -p '#{pane_pid}')
@@ -71,7 +56,6 @@ for i in $ALL_PANES; do
 done
 sleep 3
 
-# Verify killed — max 5 attempts, escalate to SIGKILL
 for attempt in 1 2 3 4 5; do
   STILL_RUNNING=0; STUCK_PANES=""
   for i in $ALL_PANES; do
@@ -93,6 +77,7 @@ If `$STILL_RUNNING` != 0 after loop: report "FAILED: Panes $STUCK_PANES still ha
 ### Step 3: Clear terminals
 
 ```bash
+# (vars from step 1)
 for i in $ALL_PANES; do
   if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
   tmux copy-mode -q -t "$SESSION_NAME:${TARGET_WIN}.$i" 2>/dev/null
@@ -103,9 +88,10 @@ sleep 1
 
 ### Step 4: Launch instances
 
-Launch workers with 0.5s gaps. Skip already-ready workers. Watchdog runs in Dashboard and is not managed here.
+Launch workers with 0.5s gaps. Skip already-ready workers.
 
 ```bash
+# (vars from step 1)
 for i in $WORKER_PANES_LIST; do
   if echo "$SKIP_PANES" | grep -qw "$i"; then continue; fi
   WORKER_PROMPT=$(grep -l "pane ${TARGET_WIN}\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
@@ -121,7 +107,7 @@ done
 ### Step 5: Verify boot
 
 ```bash
-# Max 10 attempts, 5s apart
+# (vars from step 1)
 for attempt in 1 2 3 4 5 6 7 8 9 10; do
   NOT_READY=0; DOWN_PANES=""
   for i in $ALL_PANES; do
@@ -147,7 +133,7 @@ ${TARGET_WIN}.2     Worker      UP (restarted)
 ${TARGET_WIN}.3     Worker      UP (restarted)
 ```
 
-All panes are Workers (Watchdog is in Dashboard, not in team window). Check `$SKIP_PANES`.
+All panes are Workers (Watchdog is in Dashboard). Check `$SKIP_PANES`.
 
 ### Rules
 - **Never restart the Window Manager** (pane W.0) — only workers
