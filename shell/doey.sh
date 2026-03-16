@@ -441,6 +441,7 @@ apply_doey_theme() {
   tmux set-option -t "$session" pane-border-style 'fg=colour238'
   tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
   tmux set-option -t "$session" pane-border-lines heavy
+  tmux set-option -t "$session" allow-rename off
 
   # Status bar — dark bg, branded left segment
   tmux set-option -t "$session" status-position top
@@ -2846,6 +2847,7 @@ HELP
       session="doey-${name}"
       if session_exists "$session"; then
         printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}${session}${RESET}...\n"
+        tmux select-pane -t "$session:0.0"
         attach_or_switch "$session"
       else
         launch_session_dynamic "$name" "$dir"
@@ -2933,6 +2935,7 @@ if [[ -n "$name" ]]; then
   if session_exists "$session"; then
     # Already running — just attach
     printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}%s${RESET}...\n" "$session"
+    tmux select-pane -t "$session:0.0"
     attach_or_switch "$session"
   else
     # Known but not running — launch with premium UI
