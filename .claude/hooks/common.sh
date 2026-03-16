@@ -80,8 +80,18 @@ is_watchdog() {
 }
 
 is_manager() {
-  # Pane index 0 is always the Window Manager in any team window (1+).
-  # Info Panel runs in window 0 (Dashboard) as a shell script — hooks never run there, so this is safe.
+  # Check team env's MANAGER_PANE first (handles pane index shifts from window renumbering).
+  # Fall back to pane 0 (default manager position in any team window).
+  if [ -n "${_DOEY_MGR_PANE+x}" ]; then
+    [ "$PANE_INDEX" = "$_DOEY_MGR_PANE" ] && return 0
+  else
+    local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+    if [ -f "$team_file" ]; then
+      _DOEY_MGR_PANE=$(grep '^MANAGER_PANE=' "$team_file" | cut -d= -f2)
+      _DOEY_MGR_PANE="${_DOEY_MGR_PANE//\"/}"
+      [ "$PANE_INDEX" = "$_DOEY_MGR_PANE" ] && return 0
+    fi
+  fi
   [ "$PANE_INDEX" = "0" ]
 }
 

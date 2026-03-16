@@ -441,13 +441,12 @@ apply_doey_theme() {
   tmux set-option -t "$session" pane-border-style 'fg=colour238'
   tmux set-option -t "$session" pane-active-border-style 'fg=cyan'
   tmux set-option -t "$session" pane-border-lines heavy
-  tmux set-option -t "$session" allow-rename off
 
   # Status bar — dark bg, branded left segment
   tmux set-option -t "$session" status-position top
   tmux set-option -t "$session" status-style 'bg=colour233,fg=colour248'
   tmux set-option -t "$session" status-left-length 40
-  tmux set-option -t "$session" status-right-length 70
+  tmux set-option -t "$session" status-right-length 100
   tmux set-option -t "$session" status-left \
     "#[fg=colour233,bg=cyan,bold]  DOEY: ${name} #[fg=cyan,bg=colour233,nobold] "
   tmux set-option -t "$session" status-right \
@@ -455,17 +454,23 @@ apply_doey_theme() {
   tmux set-option -t "$session" status-interval "$status_interval"
 
   # Window status — colored segments with Dashboard distinction
-  # These are window options — use set-window-option so they apply in tmux 3.6+
-  tmux set-window-option -t "$session" window-status-separator ''
-  tmux set-window-option -t "$session" window-status-format \
-    '#{?#{==:#I,0},#[fg=colour233,bg=colour97]#[fg=colour255,bg=colour97]  Dashboard #[fg=colour97,bg=colour233],#[fg=colour233,bg=colour236]#[fg=colour250,bg=colour236] #I #W #[fg=colour236,bg=colour233]}'
-  tmux set-window-option -t "$session" window-status-current-format \
-    '#{?#{==:#I,0},#[fg=colour233,bg=colour141]#[fg=colour233,bg=colour141,bold]  Dashboard #[fg=colour141,bg=colour233,nobold],#[fg=colour233,bg=cyan]#[fg=colour233,bg=cyan,bold] #I #W #[fg=cyan,bg=colour233,nobold]}'
-  tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
+  # Apply window options to ALL existing windows (tmux 3.6+ requires per-window targeting)
+  local _wsfmt='#{?#{==:#I,0},#[fg=colour233,bg=colour97]#[fg=colour255,bg=colour97]  Dashboard #[fg=colour97,bg=colour233],#[fg=colour233,bg=colour236]#[fg=colour250,bg=colour236] #I #W #[fg=colour236,bg=colour233]}'
+  local _wscfmt='#{?#{==:#I,0},#[fg=colour233,bg=colour141]#[fg=colour233,bg=colour141,bold]  Dashboard #[fg=colour141,bg=colour233,nobold],#[fg=colour233,bg=cyan]#[fg=colour233,bg=cyan,bold] #I #W #[fg=cyan,bg=colour233,nobold]}'
 
-  # Activity monitoring — highlight windows with new output
-  tmux set-window-option -t "$session" window-status-activity-style 'fg=colour214,bg=colour236,bold'
-  tmux set-window-option -t "$session" monitor-activity on
+  for _win in $(tmux list-windows -t "$session" -F '#I'); do
+    tmux set-window-option -t "$session:$_win" window-status-separator ''
+    tmux set-window-option -t "$session:$_win" window-status-format "$_wsfmt"
+    tmux set-window-option -t "$session:$_win" window-status-current-format "$_wscfmt"
+    tmux set-window-option -t "$session:$_win" window-status-activity-style 'fg=colour214,bg=colour236,bold'
+    tmux set-window-option -t "$session:$_win" monitor-activity on
+    tmux set-window-option -t "$session:$_win" allow-rename off
+  done
+
+  # Ensure new windows also get the theme
+  tmux set-hook -t "$session" after-new-window "set-window-option window-status-separator ''; set-window-option window-status-format \"$_wsfmt\"; set-window-option window-status-current-format \"$_wscfmt\"; set-window-option window-status-activity-style 'fg=colour214,bg=colour236,bold'; set-window-option monitor-activity on; set-window-option allow-rename off"
+
+  tmux set-option -t "$session" message-style 'bg=colour233,fg=cyan'
   tmux set-option -t "$session" visual-activity off
 
   # Terminal tab/window title — shows project name in macOS Terminal tabs

@@ -17,7 +17,7 @@ RESERVE_FILE="${RUNTIME_DIR}/status/${FOCUSED_SAFE}.reserved"
 RESERVE_INFO=""
 
 if [ -f "$RESERVE_FILE" ]; then
-  RESERVE_INFO="#[fg=red,bold] RESERVED#[fg=default,nobold]"
+  RESERVE_INFO="#[fg=red,bold] RESERVED#[fg=colour248,nobold]"
 fi
 
 # --- Worker counts (single awk pass, skip if no status files) ---
@@ -31,13 +31,13 @@ fi
 
 WORKERS=""
 if [ "$BUSY" -gt 0 ]; then
-  WORKERS="#[fg=cyan]${BUSY}B#[fg=default]"
+  WORKERS="#[fg=cyan]${BUSY}B#[fg=colour248]"
 fi
 if [ -n "$WORKERS" ]; then WORKERS+="/"; fi
 WORKERS+="${READY}R"
 [ "$FINISHED" -gt 0 ] && { [ -n "$WORKERS" ] && WORKERS+="/"; WORKERS+="${FINISHED}F"; }
 if [ "$RESERVED" -gt 0 ]; then
-  WORKERS+="/#[fg=red]${RESERVED}Rsv#[fg=default]"
+  WORKERS+="/#[fg=red]${RESERVED}Rsv#[fg=colour248]"
 fi
 
 # --- Output ---
