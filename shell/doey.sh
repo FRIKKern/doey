@@ -20,6 +20,18 @@ set -euo pipefail
 #   doey dynamic      # Launch with dynamic grid (add workers on demand)
 #   doey add          # Add a worker column (2 workers) to dynamic session
 #   doey remove 2     # Remove worker column 2 from dynamic session
+#   doey status       # Show worker status across all teams
+#   doey monitor      # Live worker monitor (--watch for continuous)
+#   doey team         # Full team overview
+#   doey dispatch     # Send task to a specific worker pane
+#   doey delegate     # Send task to a Window Manager
+#   doey broadcast    # Broadcast message to all panes
+#   doey research     # Dispatch research task to a Window Manager
+#   doey reserve      # Reserve/unreserve a worker pane
+#   doey stop-worker  # Stop a specific worker
+#   doey restart-window # Restart workers in a team window
+#   doey kill-session # Kill entire session
+#   doey kill-all     # Kill all Doey sessions
 #   doey --help       # Show usage
 #
 # CLI command: "doey" is installed to ~/.local/bin/doey.
@@ -37,6 +49,14 @@ RESET='\033[0m'       # Reset
 
 # ── Script directory ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ── Source CLI extension modules ────────────────────────────────────
+# shellcheck source=cli-monitoring.sh
+[ -f "${SCRIPT_DIR}/cli-monitoring.sh" ] && source "${SCRIPT_DIR}/cli-monitoring.sh"
+# shellcheck source=cli-tasks.sh
+[ -f "${SCRIPT_DIR}/cli-tasks.sh" ] && source "${SCRIPT_DIR}/cli-tasks.sh"
+# shellcheck source=cli-control.sh
+[ -f "${SCRIPT_DIR}/cli-control.sh" ] && source "${SCRIPT_DIR}/cli-control.sh"
 
 # ── Project registry ─────────────────────────────────────────────────
 PROJECTS_FILE="$HOME/.claude/doey/projects"
@@ -3364,6 +3384,28 @@ case "${1:-}" in
     version    Show version and installation info
     --help     Show this help
 
+  Monitoring:
+    status     Show worker status across all teams (or specific window)
+    monitor    Live worker monitor (--watch for continuous polling)
+    team       Full team overview including Manager and Watchdog
+    analyze    Dispatch /doey-analyze to a team's Window Manager
+
+  Tasks:
+    dispatch   Send a task to a specific worker pane
+    delegate   Send a task to a team's Window Manager
+    broadcast  Broadcast a message to all Claude panes
+    research   Dispatch a research task to a Window Manager
+    reserve    Reserve/unreserve a worker pane, or list reservations
+
+  Control:
+    stop-worker       Stop a specific worker by W.pane
+    stop-all-workers  Stop all workers across all teams
+    restart-window    Restart all workers in a team window
+    restart-workers   (deprecated) Use restart-window instead
+    watchdog-compact  Send /compact to a team's Watchdog
+    kill-session      Kill entire Doey session (with confirmation)
+    kill-all          Kill ALL Doey sessions (with confirmation)
+
   Grid:
     NxM        Grid layout (e.g., 6x2, 4x3, 3x2)
     dynamic|d  Dynamic grid — start minimal, add workers with 'doey add'
@@ -3388,6 +3430,19 @@ case "${1:-}" in
     doey add-team 3x2 # add a team window (3x2 grid)
     doey kill-team 1  # kill team window 1
     doey list-teams   # show all team windows
+    doey status       # show worker status
+    doey status 2     # status for team window 2 only
+    doey monitor --watch  # continuous monitoring
+    doey team         # full team overview
+    doey dispatch "Build the login page" 1.3  # send task to pane 1.3
+    doey delegate "Refactor auth module" 2    # delegate to Team 2 WM
+    doey broadcast "Switch to feature branch"
+    doey research "How does the auth flow work?" 1
+    doey reserve 1.3  # reserve pane 1.3
+    doey reserve list # list all reservations
+    doey stop-worker 1.3    # stop worker in pane 1.3
+    doey restart-window 2   # restart Team 2 workers
+    doey kill-session       # kill session (asks confirmation)
 HELP
     printf '\n'
     exit 0
@@ -3491,6 +3546,126 @@ HELP
       exit 0
     fi
     ;;
+  # ── Monitoring Commands ────────────────────────────────────────────
+  status)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    doey_cli_status "${2:-}"
+    exit 0
+    ;;
+  monitor)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    doey_cli_monitor "${2:-}"
+    exit 0
+    ;;
+  team)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    doey_cli_team "${2:-}"
+    exit 0
+    ;;
+  analyze)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    doey_cli_analyze
+    exit 0
+    ;;
+  reserve)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    shift
+    doey_cli_reserve "$@"
+    exit 0
+    ;;
+  # ── Task Commands ─────────────────────────────────────────────────
+  dispatch)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    if [ -z "${2:-}" ] || [ -z "${3:-}" ]; then
+      printf "  ${ERROR}Usage: doey dispatch \"task text\" <W.pane>${RESET}\n"
+      exit 1
+    fi
+    doey_cli_dispatch "$2" "$3"
+    exit 0
+    ;;
+  delegate)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    if [ -z "${2:-}" ]; then
+      printf "  ${ERROR}Usage: doey delegate \"task text\" [W]${RESET}\n"
+      exit 1
+    fi
+    doey_cli_delegate "$2" "${3:-}"
+    exit 0
+    ;;
+  broadcast)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    if [ -z "${2:-}" ]; then
+      printf "  ${ERROR}Usage: doey broadcast \"message\"${RESET}\n"
+      exit 1
+    fi
+    doey_cli_broadcast "$2"
+    exit 0
+    ;;
+  research)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    if [ -z "${2:-}" ]; then
+      printf "  ${ERROR}Usage: doey research \"topic\" [W]${RESET}\n"
+      exit 1
+    fi
+    doey_cli_research "$2" "${3:-}"
+    exit 0
+    ;;
+  # ── Control Commands ──────────────────────────────────────────────
+  stop-worker)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    if [ -z "${2:-}" ]; then
+      printf "  ${ERROR}Usage: doey stop-worker <W.pane>${RESET}\n"
+      exit 1
+    fi
+    doey_cli_stop_worker "$2"
+    exit 0
+    ;;
+  stop-all-workers)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    doey_cli_stop_all_workers
+    exit 0
+    ;;
+  kill-session)
+    require_running_session
+    doey_cli_kill_session
+    exit 0
+    ;;
+  kill-all)
+    doey_cli_kill_all
+    exit 0
+    ;;
+  restart-window)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    if [ -z "${2:-}" ]; then
+      printf "  ${ERROR}Usage: doey restart-window <W>${RESET}\n"
+      exit 1
+    fi
+    doey_cli_restart_window "$2"
+    exit 0
+    ;;
+  restart-workers)
+    doey_cli_restart_workers
+    exit 0
+    ;;
+  watchdog-compact)
+    require_running_session
+    safe_source_session_env "${runtime_dir}/session.env"
+    doey_cli_watchdog_compact "${2:-}"
+    exit 0
+    ;;
+  # ── Team Window Commands ──────────────────────────────────────────
   add-window|add-team)
     require_running_session
     add_team_window "$session" "$runtime_dir" "$dir" "${2:-4x2}"
