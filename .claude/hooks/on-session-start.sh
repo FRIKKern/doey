@@ -102,6 +102,20 @@ export DOEY_WINDOW_INDEX="$WINDOW_INDEX"
 export DOEY_TEAM_WINDOW="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
 EOF
 
+# --- Worktree-aware team directory ---
+_tw="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
+_team_env="${RUNTIME_DIR}/team_${_tw}.env"
+_wt_dir=""
+if [ -f "$_team_env" ]; then
+  _wt_dir=$(grep '^WORKTREE_DIR=' "$_team_env" 2>/dev/null | head -1 | cut -d= -f2-)
+  _wt_dir="${_wt_dir%\"}"
+  _wt_dir="${_wt_dir#\"}"
+fi
+
+cat >> "$CLAUDE_ENV_FILE" << EOF
+export DOEY_TEAM_DIR="${_wt_dir:-$PROJECT_DIR}"
+EOF
+
 # Set descriptive pane title based on role + team
 _team_w="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
 case "$ROLE" in

@@ -1,10 +1,11 @@
 # Skill: doey-add-window
 
-Add a new team window to the current Doey session with its own Window Manager, Watchdog, and Workers.
+Add a new team window to the current Doey session with its own Window Manager, Watchdog, and Workers. Supports `--worktree` for git worktree isolation.
 
 ## Usage
-`/doey-add-window [grid]` — add a team window (default grid: 4x2)
+`/doey-add-window [grid] [--worktree]` — add a team window, optionally isolated in a git worktree
 `/doey-add-window 4x2` — add a 4x2 team window (7 panes: MGR + 6 workers) + Watchdog in Dashboard
+`/doey-add-window --worktree` — add a default team window isolated in its own git worktree branch
 
 ## Prompt
 You are adding a new team window to a running Doey tmux session.
@@ -31,7 +32,17 @@ if [ "$TOTAL" -lt 2 ]; then
 fi
 
 WORKER_COUNT=$((TOTAL - 1))
+
+# Parse --worktree flag
+WORKTREE_MODE="false"
+for _aw_arg in "$@"; do
+  [ "$_aw_arg" = "--worktree" ] && WORKTREE_MODE="true"
+done
+
 echo "Grid: ${GRID} (${TOTAL} panes: 1 MGR + ${WORKER_COUNT} workers, Watchdog in Dashboard)"
+if [ "$WORKTREE_MODE" = "true" ]; then
+  echo "Worktree isolation: enabled"
+fi
 ```
 
 ### Step 2: Create window and build grid
@@ -156,6 +167,51 @@ fi
 echo "All panes launched in window ${NEW_WIN}"
 ```
 
+### Step 5b: Create worktree (if --worktree)
+
+```bash
+# (vars from previous steps)
+
+# If --worktree flag was set, create a worktree for the new team
+WT_DIR="" WT_BRANCH=""
+if [ "$WORKTREE_MODE" = "true" ]; then
+  WT_BRANCH="doey/team-${NEW_WIN}-$(date +%m%d-%H%M)"
+  WT_DIR="${PROJECT_DIR}/.doey-worktrees/team-${NEW_WIN}"
+
+  # Create worktree directory parent
+  mkdir -p "${PROJECT_DIR}/.doey-worktrees"
+
+  # Create git worktree
+  if ! git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$WT_BRANCH" 2>&1; then
+    echo "WARNING: Failed to create worktree. Team created without isolation."
+    WT_DIR="" WT_BRANCH=""
+  else
+    # Copy settings.local.json (gitignored, won't be in worktree)
+    if [ -f "${PROJECT_DIR}/.claude/settings.local.json" ]; then
+      mkdir -p "${WT_DIR}/.claude"
+      cp "${PROJECT_DIR}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"
+    fi
+
+    # Update team env with worktree info
+    TEAM_ENV="${RUNTIME_DIR}/team_${NEW_WIN}.env"
+    if [ -f "$TEAM_ENV" ]; then
+      _tmp_env=$(mktemp "${RUNTIME_DIR}/team_env_XXXXXX")
+      cat "$TEAM_ENV" > "$_tmp_env"
+      printf 'WORKTREE_DIR="%s"\n' "$WT_DIR" >> "$_tmp_env"
+      printf 'WORKTREE_BRANCH="%s"\n' "$WT_BRANCH" >> "$_tmp_env"
+      mv "$_tmp_env" "$TEAM_ENV"
+    fi
+
+    # NOTE: For workers to actually run in the worktree directory,
+    # the doey.sh launcher needs the Wave 2 wiring (add_dynamic_team_window
+    # accepting a worktree path). Until then, workers start in PROJECT_DIR
+    # and the Window Manager should instruct them to work in WT_DIR.
+
+    echo "Worktree created: $WT_DIR (branch: $WT_BRANCH)"
+  fi
+fi
+```
+
 ### Step 6: Verify boot
 
 ```bash
@@ -191,6 +247,13 @@ fi
 
 ### Step 7: Report
 
+If worktree mode succeeded, rename the tmux window:
+```bash
+if [ "$WORKTREE_MODE" = "true" ] && [ -n "$WT_DIR" ] && [ -d "$WT_DIR" ]; then
+  tmux rename-window -t "${SESSION_NAME}:${NEW_WIN}" "T${NEW_WIN} [worktree]"
+fi
+```
+
 Output a summary table:
 ```
 Team window ${NEW_WIN} created:
@@ -199,6 +262,11 @@ Team window ${NEW_WIN} created:
   Workers:   ${NEW_WIN}.1 — ${NEW_WIN}.$((TOTAL-1))  (${WORKER_COUNT} workers)
   Watchdog:  0.${WDG_SLOT} (Dashboard)
 ```
+If worktree was created, also show:
+```
+  Worktree:  ${WT_DIR}
+  Branch:    ${WT_BRANCH}
+```
 
 ### Rules
 - Validate grid format, minimum 2 panes (MGR + 1 worker)
@@ -206,3 +274,6 @@ Team window ${NEW_WIN} created:
 - Write team_W.env before launching Claude; update TEAM_WINDOWS atomically
 - Never hardcode window indices — read from tmux
 - All bash must be 3.2 compatible
+- `--worktree` creates a git worktree at `${PROJECT_DIR}/.doey-worktrees/team-W/`
+- Worktree creation is best-effort — team is still created even if worktree fails
+- `.claude/settings.local.json` must be copied into worktree (it's gitignored)

@@ -36,20 +36,23 @@ if [ -f "${RUNTIME_DIR}/session.env" ]; then
   PROJECT_DIR="${PROJECT_DIR#\"}"
 fi
 
+# Prefer team-specific directory (worktree) if available
+SEARCH_DIR="${DOEY_TEAM_DIR:-$PROJECT_DIR}"
+
 # Find recently modified project files (last 10 minutes) — skip for Watchdog (irrelevant)
 RECENT_FILES=""
 if ! is_watchdog; then
-  if [ -n "$PROJECT_DIR" ] && [ -d "$PROJECT_DIR" ]; then
+  if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
     if stat -f '%m' /dev/null 2>/dev/null; then
       # macOS: use stat -f to get modification times, sort by recency
-      RECENT_FILES=$(find "$PROJECT_DIR" -maxdepth 4 \
+      RECENT_FILES=$(find "$SEARCH_DIR" -maxdepth 4 \
         \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
         -not -path '*/node_modules/*' -not -path '*/.git/*' \
         -print0 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null | \
         awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
     else
       # Linux: use stat -c to get modification times, sort by recency
-      RECENT_FILES=$(find "$PROJECT_DIR" -maxdepth 4 \
+      RECENT_FILES=$(find "$SEARCH_DIR" -maxdepth 4 \
         \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
         -not -path '*/node_modules/*' -not -path '*/.git/*' \
         -print0 2>/dev/null | xargs -0 stat -c '%Y %n' 2>/dev/null | \

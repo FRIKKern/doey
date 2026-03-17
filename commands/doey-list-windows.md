@@ -56,6 +56,22 @@ for w in $WINDOWS; do
     W_GRID="unknown"; W_WORKER_PANES=""; W_WATCHDOG="0.1"; W_WORKER_COUNT="0"
   fi
 
+  # Check for worktree
+  _wt_badge=""
+  _wt_branch_info=""
+  if [ -f "${RUNTIME_DIR}/team_${w}.env" ]; then
+    _wt_dir=$(grep '^WORKTREE_DIR=' "${RUNTIME_DIR}/team_${w}.env" 2>/dev/null | head -1 | cut -d= -f2-)
+    _wt_dir="${_wt_dir%\"}"
+    _wt_dir="${_wt_dir#\"}"
+    if [ -n "$_wt_dir" ]; then
+      _wt_badge=" [worktree]"
+      _wt_branch=$(grep '^WORKTREE_BRANCH=' "${RUNTIME_DIR}/team_${w}.env" 2>/dev/null | head -1 | cut -d= -f2-)
+      _wt_branch="${_wt_branch%\"}"
+      _wt_branch="${_wt_branch#\"}"
+      [ -n "$_wt_branch" ] && _wt_branch_info="  branch: $_wt_branch"
+    fi
+  fi
+
   MGR_CMD=$(tmux display-message -t "${SESSION_NAME}:${w}.0" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
   case "$MGR_CMD" in
     bash|zsh|sh|fish) MGR_STATUS="DOWN" ;;
@@ -93,8 +109,8 @@ for w in $WINDOWS; do
 
   IDLE_COUNT=$((TOTAL_W - BUSY_COUNT))
 
-  printf "%-7s %-7s %-7s %-11s %s (%s busy, %s idle)\n" \
-    "$w" "$W_GRID" "$MGR_STATUS" "$WDG_STATUS" "$TOTAL_W" "$BUSY_COUNT" "$IDLE_COUNT"
+  printf "%-7s %-7s %-7s %-11s %s (%s busy, %s idle)%s%s\n" \
+    "$w" "$W_GRID" "$MGR_STATUS" "$WDG_STATUS" "$TOTAL_W" "$BUSY_COUNT" "$IDLE_COUNT" "$_wt_badge" "$_wt_branch_info"
 done
 ```
 
