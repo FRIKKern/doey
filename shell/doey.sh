@@ -1290,7 +1290,7 @@ MANIFEST
   local wnum=0
   for (( i=1; i<total; i++ )); do
     wnum=$((wnum + 1))
-    tmux select-pane -t "$session:${team_window}.$i" -T "W${wnum} Worker ${wnum}"
+    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${wnum}"
   done
   tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
 
@@ -1379,7 +1379,7 @@ MANIFEST
     cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file"
     printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' "$booted" "$team_window" "$i" "$session" >> "$worker_prompt_file"
 
-    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${booted} T${team_window}\""
+    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${booted}\""
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "$session:${team_window}.$i" "$worker_cmd" Enter
     sleep 0.3
@@ -1748,7 +1748,7 @@ reload_session() {
         sleep 0.5
 
         local w_name
-        w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "W${wp} T${tw}")
+        w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "T${tw} W${wp}")
 
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
@@ -2146,7 +2146,7 @@ MANIFEST
   local wnum=0
   for (( i=1; i<total; i++ )); do
     wnum=$((wnum + 1))
-    tmux select-pane -t "$session:${team_window}.$i" -T "W${wnum} Worker ${wnum}"
+    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${wnum}"
   done
   tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
 
@@ -2217,7 +2217,7 @@ MANIFEST
     cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file"
     printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' "$booted" "$team_window" "$i" "$session" >> "$worker_prompt_file"
 
-    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${booted} T${team_window}\""
+    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${booted}\""
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "$session:${team_window}.$i" "$worker_cmd" Enter
     sleep 0.3
@@ -2645,8 +2645,8 @@ doey_add_column() {
   local w2_num=$(( worker_count + 2 ))
 
   # Name the new worker panes
-  tmux select-pane -t "$session:$team_window.${new_pane_top}" -T "W${w1_num} Worker ${w1_num}"
-  tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "W${w2_num} Worker ${w2_num}"
+  tmux select-pane -t "$session:$team_window.${new_pane_top}" -T "T${team_window} W${w1_num}"
+  tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "T${team_window} W${w2_num}"
 
   # Rebuild worker pane list from titles
   rebuild_pane_state "$session:$team_window"
@@ -2664,7 +2664,7 @@ doey_add_column() {
   printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
     "$w1_num" "$team_window" "$new_pane_top" "$session" >> "$worker_prompt_file_1"
 
-  local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${w1_num} T${team_window}\""
+  local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${w1_num}\""
   worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file_1}\""
   tmux send-keys -t "$session:$team_window.${new_pane_top}" "$worker_cmd" Enter
   sleep 0.3
@@ -2674,7 +2674,7 @@ doey_add_column() {
   printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
     "$w2_num" "$team_window" "$new_pane_bottom" "$session" >> "$worker_prompt_file_2"
 
-  local worker_cmd2="claude --dangerously-skip-permissions --model opus --name \"W${w2_num} T${team_window}\""
+  local worker_cmd2="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${w2_num}\""
   worker_cmd2+=" --append-system-prompt-file \"${worker_prompt_file_2}\""
   tmux send-keys -t "$session:$team_window.${new_pane_bottom}" "$worker_cmd2" Enter
 
@@ -2823,6 +2823,14 @@ add_dynamic_team_window() {
 
   printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
 
+  # Apply pane border theme to the new window
+  local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  tmux set-window-option -t "${session}:${window_index}" pane-border-status top
+  tmux set-window-option -t "${session}:${window_index}" pane-border-format "$border_fmt"
+  tmux set-window-option -t "${session}:${window_index}" pane-border-style 'fg=colour238'
+  tmux set-window-option -t "${session}:${window_index}" pane-active-border-style 'fg=cyan'
+  tmux set-window-option -t "${session}:${window_index}" pane-border-lines heavy
+
   # Name Manager pane
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
@@ -2959,6 +2967,14 @@ add_team_window() {
 
   printf "  ${DIM}Creating team window %s (%s grid, %s panes)...${RESET}\n" "$window_index" "$grid" "$total_panes"
 
+  # Apply pane border theme to the new window
+  local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  tmux set-window-option -t "${session}:${window_index}" pane-border-status top
+  tmux set-window-option -t "${session}:${window_index}" pane-border-format "$border_fmt"
+  tmux set-window-option -t "${session}:${window_index}" pane-border-style 'fg=colour238'
+  tmux set-window-option -t "${session}:${window_index}" pane-active-border-style 'fg=cyan'
+  tmux set-window-option -t "${session}:${window_index}" pane-border-lines heavy
+
   # Build grid: pane 0 already exists from new-window
   # First create rows by splitting vertically
   local r
@@ -3033,7 +3049,7 @@ add_team_window() {
   local wnum=0
   for (( i=1; i<total_panes; i++ )); do
     wnum=$((wnum + 1))
-    tmux select-pane -t "${session}:${window_index}.${i}" -T "W${wnum} Worker ${wnum}"
+    tmux select-pane -t "${session}:${window_index}.${i}" -T "T${team_window} W${wnum}"
   done
   tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
 
@@ -3082,7 +3098,7 @@ add_team_window() {
     printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
       "$wnum" "$window_index" "$i" "$session" >> "$worker_prompt_file"
 
-    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${wnum} T${window_index}\""
+    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"T${window_index} W${wnum}\""
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "${session}:${window_index}.${i}" "$worker_cmd" Enter
     sleep 0.3

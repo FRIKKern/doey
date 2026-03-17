@@ -108,5 +108,5 @@ case "$ROLE" in
   watchdog)       tmux select-pane -t "${TMUX_PANE}" -T "T${_team_w} Watchdog" ;;
   manager)        tmux select-pane -t "${TMUX_PANE}" -T "T${_team_w} Window Manager" ;;
   session_manager) tmux select-pane -t "${TMUX_PANE}" -T "Session Manager" ;;
-  worker)         tmux select-pane -t "${TMUX_PANE}" -T "W${PANE_INDEX} T${_team_w}" ;;
+  worker)         tmux select-pane -t "${TMUX_PANE}" -T "T${_team_w} W${PANE_INDEX}" ;;
 esac
