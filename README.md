@@ -93,6 +93,29 @@ No config files. No shell reload. Just `doey`.
 
 ---
 
+## Worktree Isolation
+
+Teams can run in **isolated git worktrees** — each team gets its own branch and working directory, so workers operate on a copy of the repo rather than the original.
+
+```bash
+# Add an isolated team
+doey add-team --worktree
+```
+
+**How it works:**
+- Creates a worktree at `/tmp/doey/<project>/worktrees/team-N/`
+- On branch `doey/team-N-MMDD-HHMM`
+- All changes are isolated from the main repo until the branch is merged
+
+**Benefits:**
+- Safe parallel development — teams can't step on each other
+- No merge conflicts between teams working simultaneously
+- Easy to discard or merge completed work
+
+**Cleanup:** `doey kill-team N` auto-saves uncommitted changes, removes the worktree, and preserves the branch for merging.
+
+---
+
 ## Commands
 
 | Command | Description |
