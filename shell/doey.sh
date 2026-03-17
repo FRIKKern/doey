@@ -181,9 +181,9 @@ setup_dashboard() {
   # Name panes
   tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "Session Manager"
-  tmux select-pane -t "$session:0.2" -T "Watchdog T1"
-  tmux select-pane -t "$session:0.3" -T "Watchdog T2"
-  tmux select-pane -t "$session:0.4" -T "Watchdog T3"
+  tmux select-pane -t "$session:0.2" -T "T1 Watchdog"
+  tmux select-pane -t "$session:0.3" -T "T2 Watchdog"
+  tmux select-pane -t "$session:0.4" -T "T3 Watchdog"
 
   # Show placeholder in empty Watchdog slots
   tmux send-keys -t "$session:0.2" "echo 'Watchdog slot — awaiting team assignment...'" Enter
@@ -1269,7 +1269,7 @@ MANIFEST
   # ── Step 4: Name panes ─────────────────────────────────────────
   step_start 4 "Naming panes..."
 
-  tmux select-pane -t "$session:${team_window}.0" -T "Manager"
+  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   local wnum=0
   for (( i=1; i<total; i++ )); do
     wnum=$((wnum + 1))
@@ -1284,8 +1284,8 @@ MANIFEST
 
   # Launch Window Manager in team window pane 0
   tmux send-keys -t "$session:${team_window}.0" \
-    "claude --dangerously-skip-permissions --agent doey-manager" Enter
-  tmux select-pane -t "$session:${team_window}.0" -T "Manager"
+    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent doey-manager" Enter
+  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   sleep 0.5
 
   write_pane_status "$runtime_dir" "${session}:${team_window}.0" "READY"
@@ -1313,8 +1313,8 @@ MANIFEST
   tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "Watchdog T${team_window}"
+    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent doey-watchdog" Enter
+  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
   # Auto-start the watchdog loop
@@ -1629,7 +1629,7 @@ reload_session() {
       done
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
-      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model opus --agent doey-manager" Enter
+      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model opus --name \"T${tw} Window Manager\" --agent doey-manager" Enter
       printf " ${SUCCESS}✓${RESET}\n"
 
       # Re-brief manager after boot
@@ -1672,7 +1672,7 @@ reload_session() {
         done
         tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
-        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
+        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --name \"T${tw} Watchdog\" --agent doey-watchdog" Enter
         printf " ${SUCCESS}✓${RESET}\n"
 
         # Re-brief watchdog after boot
@@ -2118,7 +2118,7 @@ MANIFEST
 
   # ── Name panes ──
   printf "  ${DIM}Naming panes...${RESET}\n"
-  tmux select-pane -t "$session:${team_window}.0" -T "Manager"
+  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   local wnum=0
   for (( i=1; i<total; i++ )); do
     wnum=$((wnum + 1))
@@ -2131,8 +2131,8 @@ MANIFEST
 
   # Launch Window Manager in team window pane 0
   tmux send-keys -t "$session:${team_window}.0" \
-    "claude --dangerously-skip-permissions --agent doey-manager" Enter
-  tmux select-pane -t "$session:${team_window}.0" -T "Manager"
+    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent doey-manager" Enter
+  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   sleep 0.5
 
   write_pane_status "$runtime_dir" "${session}:${team_window}.0" "READY"
@@ -2159,8 +2159,8 @@ MANIFEST
   tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "Watchdog T${team_window}"
+    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent doey-watchdog" Enter
+  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
   (
@@ -2305,7 +2305,7 @@ DOG
   # ── Step 4: Name panes ─────────────────────────────────────────
   step_start 4 "Naming panes..."
 
-  tmux select-pane -t "$session:${team_window}.0" -T "Manager"
+  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
 
   step_done
@@ -2345,8 +2345,8 @@ MANIFEST
 
   # Launch Window Manager in team window pane 0
   tmux send-keys -t "$session:${team_window}.0" \
-    "claude --dangerously-skip-permissions --agent doey-manager" Enter
-  tmux select-pane -t "$session:${team_window}.0" -T "Manager"
+    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent doey-manager" Enter
+  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   sleep 0.5
 
   # Send initial briefing once Window Manager is ready
@@ -2362,8 +2362,8 @@ MANIFEST
   tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "Watchdog T${team_window}"
+    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent doey-watchdog" Enter
+  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
   # Auto-start watchdog loop (no workers to monitor yet)
@@ -2793,7 +2793,7 @@ add_dynamic_team_window() {
   printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
 
   # Name Manager pane
-  tmux select-pane -t "${session}:${window_index}.0" -T "Manager"
+  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
 
   # Find next available Dashboard watchdog slot
@@ -2850,8 +2850,8 @@ add_dynamic_team_window() {
 
   # Launch Window Manager in team window pane 0
   tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --agent doey-manager" Enter
-  tmux select-pane -t "${session}:${window_index}.0" -T "Manager"
+    "claude --dangerously-skip-permissions --name \"T${window_index} Window Manager\" --agent doey-manager" Enter
+  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   sleep 0.5
 
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
@@ -2860,8 +2860,8 @@ add_dynamic_team_window() {
   tmux send-keys -t "${session}:${wdg_slot}" C-c
   sleep 0.3
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "${session}:${wdg_slot}" -T "Watchdog T${window_index}"
+    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent doey-watchdog" Enter
+  tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.5
 
   # Add initial worker columns
@@ -2993,7 +2993,7 @@ add_team_window() {
   fi
 
   # Name panes
-  tmux select-pane -t "${session}:${window_index}.0" -T "Manager"
+  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   local wnum=0
   for (( i=1; i<total_panes; i++ )); do
     wnum=$((wnum + 1))
@@ -3021,8 +3021,8 @@ add_team_window() {
 
   # Launch Window Manager in team window pane 0
   tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --agent doey-manager" Enter
-  tmux select-pane -t "${session}:${window_index}.0" -T "Manager"
+    "claude --dangerously-skip-permissions --name \"T${window_index} Window Manager\" --agent doey-manager" Enter
+  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   sleep 0.5
 
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
@@ -3031,8 +3031,8 @@ add_team_window() {
   tmux send-keys -t "${session}:${wdg_slot}" C-c
   sleep 0.3
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "${session}:${wdg_slot}" -T "Watchdog T${window_index}"
+    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent doey-watchdog" Enter
+  tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.5
 
   # Launch Workers
