@@ -179,7 +179,7 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `WINDOW_INDEX` | Window index (matches `<W>` in filename) |
 | `GRID` | Grid layout for this window |
 | `MANAGER_PANE` | Window Manager pane index (always `0`) |
-| `WATCHDOG_PANE` | Watchdog Dashboard pane index (0.2-0.5) |
+| `WATCHDOG_PANE` | Watchdog Dashboard pane index (0.2-0.7) |
 | `WORKER_PANES` | Comma-separated worker pane indices (W.1+) |
 | `WORKER_COUNT` | Number of workers in this window |
 | `SESSION_NAME` | tmux session name (same as session.env) |
@@ -192,7 +192,7 @@ Loaded by hooks via `load_team_env()` and by commands via manual sourcing. Team 
 | Instance | Command |
 |----------|---------|
 | Window Manager | `claude --dangerously-skip-permissions --agent doey-manager` |
-| Watchdog | `claude --dangerously-skip-permissions --model haiku --agent doey-watchdog` |
+| Watchdog | `claude --dangerously-skip-permissions --model haiku --effort low --agent doey-watchdog` |
 | Workers | `claude --dangerously-skip-permissions --model opus --append-system-prompt-file /tmp/doey/<name>/worker-system-prompt-w<W>-<N>.md` |
 
 Precedence: CLI flags > agent frontmatter > settings files.
@@ -202,19 +202,19 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel (left column, full height), pane 0.1 = Session Manager (top-right), panes 0.2-0.5 = Watchdog slots (bottom-right, side-by-side). Team grids start at window 1+.
+Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel (left column, full height), pane 0.1 = Session Manager (top-right), panes 0.2-0.7 = Watchdog slots (bottom-right, side-by-side). Team grids start at window 1+.
 
-Default grid: **dynamic** (launches with 3 worker columns (6 workers), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.2-0.5).
+Default grid: **dynamic** (launches with 3 worker columns (6 workers), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.2-0.7).
 
 ```
 Dashboard (window 0):
-+----------+--------------------------------------+
-|          |        0.1  Session Manager          |
-|   0.0    +--------+--------+--------+-----------+
-|   INFO   |  0.2   |  0.3   |  0.4   |   0.5    |
-|  PANEL   |  WDG1  |  WDG2  |  WDG3  |   WDG4   |
-|          | (team1)| (team2)| (team3) |  (team4) |
-+----------+--------+--------+--------+-----------+
++----------+------------------------------------------------------+
+|          |              0.1  Session Manager                     |
+|   0.0    +--------+--------+--------+--------+--------+---------+
+|   INFO   |  0.2   |  0.3   |  0.4   |  0.5   |  0.6   |  0.7   |
+|  PANEL   |  WDG1  |  WDG2  |  WDG3  |  WDG4  |  WDG5  |  WDG6  |
+|          | (team1)| (team2)| (team3)| (team4)| (team5) | (team6)|
++----------+--------+--------+--------+--------+--------+---------+
 
 Dynamic grid (default) — team window layout, then after `doey add`:
 

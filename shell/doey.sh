@@ -232,7 +232,7 @@ _worktree_safe_remove() {
 
 # Build the Dashboard window (window 0) with 2 columns:
 #   Left: Info Panel (full height)
-#   Right: Session Manager (top) + 4 Watchdog slots side-by-side (bottom)
+#   Right: Session Manager (top) + 6 Watchdog slots side-by-side (bottom)
 #
 #   ┌──────────┬────────────────────────────────────┐
 #   │          │         Session Manager             │
@@ -241,7 +241,7 @@ _worktree_safe_remove() {
 #   └──────────┴────────┴────────┴────────┴──────────┘
 #
 # Usage: setup_dashboard <session> <dir> <runtime_dir>
-# Sets: WDG_SLOT_1..4, SM_PANE (pane indices in window 0)
+# Sets: WDG_SLOT_1..6, SM_PANE (pane indices in window 0)
 setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
 
@@ -254,23 +254,24 @@ setup_dashboard() {
   tmux split-window -v -t "$session:0.1" -l 28 -c "$dir"
   # Indices: 0.0=info, 0.1=top-right, 0.2=bottom-right
 
-  # Split bottom-right into 4 horizontal watchdog slots
-  tmux split-window -h -t "$session:0.2" -l 112 -c "$dir"
-  tmux split-window -h -t "$session:0.2" -l 37 -c "$dir"
-  tmux split-window -h -t "$session:0.4" -l 37 -c "$dir"
-  # Indices: 0.0=info, 0.1=SM, 0.2=WD1, 0.3=WD2, 0.4=WD3, 0.5=WD4
+  # Split bottom-right into 6 horizontal watchdog slots
+  tmux split-window -h -t "$session:0.2" -l 125 -c "$dir"
+  tmux split-window -h -t "$session:0.2" -l 100 -c "$dir"
+  tmux split-window -h -t "$session:0.2" -l 75 -c "$dir"
+  tmux split-window -h -t "$session:0.4" -l 50 -c "$dir"
+  tmux split-window -h -t "$session:0.6" -l 25 -c "$dir"
+  # Indices: 0.0=info, 0.1=SM, 0.2=WD1, 0.3=WD2, 0.4=WD3, 0.5=WD4, 0.6=WD5, 0.7=WD6
 
-  # Balance watchdog pane widths (tmux percentage rounding causes uneven splits)
-  local w1 w2 w3 w4 total target
-  w1=$(tmux display-message -t "$session:0.2" -p '#{pane_width}')
-  w2=$(tmux display-message -t "$session:0.3" -p '#{pane_width}')
-  w3=$(tmux display-message -t "$session:0.4" -p '#{pane_width}')
-  w4=$(tmux display-message -t "$session:0.5" -p '#{pane_width}')
-  total=$((w1 + w2 + w3 + w4))
-  target=$((total / 4))
-  tmux resize-pane -t "$session:0.2" -x "$target"
-  tmux resize-pane -t "$session:0.3" -x "$target"
-  tmux resize-pane -t "$session:0.4" -x "$target"
+  # Balance watchdog pane widths
+  local _wd_total=0 _wd_w _wd_target
+  for _wd_i in 2 3 4 5 6 7; do
+    _wd_w=$(tmux display-message -t "$session:0.${_wd_i}" -p '#{pane_width}')
+    _wd_total=$((_wd_total + _wd_w))
+  done
+  _wd_target=$((_wd_total / 6))
+  for _wd_i in 2 3 4 5 6; do
+    tmux resize-pane -t "$session:0.${_wd_i}" -x "$_wd_target"
+  done
 
   # Name panes
   tmux select-pane -t "$session:0.0" -T ""
@@ -279,12 +280,14 @@ setup_dashboard() {
   tmux select-pane -t "$session:0.3" -T "T2 Watchdog"
   tmux select-pane -t "$session:0.4" -T "T3 Watchdog"
   tmux select-pane -t "$session:0.5" -T "T4 Watchdog"
+  tmux select-pane -t "$session:0.6" -T "T5 Watchdog"
+  tmux select-pane -t "$session:0.7" -T "T6 Watchdog"
 
   # Show placeholder in empty Watchdog slots
-  tmux send-keys -t "$session:0.2" "echo 'Watchdog slot — awaiting team assignment...'" Enter
-  tmux send-keys -t "$session:0.3" "echo 'Watchdog slot — awaiting team assignment...'" Enter
-  tmux send-keys -t "$session:0.4" "echo 'Watchdog slot — awaiting team assignment...'" Enter
-  tmux send-keys -t "$session:0.5" "echo 'Watchdog slot — awaiting team assignment...'" Enter
+  local _wd_s
+  for _wd_s in 2 3 4 5 6 7; do
+    tmux send-keys -t "$session:0.${_wd_s}" "echo 'Watchdog slot — awaiting team assignment...'" Enter
+  done
 
   # Launch info panel and session manager
   tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
@@ -297,6 +300,8 @@ setup_dashboard() {
   WDG_SLOT_2="0.3"
   WDG_SLOT_3="0.4"
   WDG_SLOT_4="0.5"
+  WDG_SLOT_5="0.6"
+  WDG_SLOT_6="0.7"
   SM_PANE="0.1"
 }
 
@@ -1220,7 +1225,7 @@ doey_purge() {
 # ── Initial worker columns ────────────────────────────────────────────
 # Number of worker columns to add on dynamic launch (2 workers per column)
 INITIAL_WORKER_COLS=3
-# Number of team windows to create on dynamic launch (max 4, one per Dashboard watchdog slot)
+# Number of team windows to create on dynamic launch (max 6, one per Dashboard watchdog slot)
 INITIAL_TEAMS=3
 
 # ── Launch dispatcher ─────────────────────────────────────────────────
@@ -1334,6 +1339,8 @@ WDG_SLOT_1="0.2"
 WDG_SLOT_2="0.3"
 WDG_SLOT_3="0.4"
 WDG_SLOT_4="0.5"
+WDG_SLOT_5="0.6"
+WDG_SLOT_6="0.7"
 SM_PANE="0.1"
 MANIFEST
 
@@ -1436,7 +1443,7 @@ MANIFEST
   sleep 0.3
   wdg_agent=$(generate_team_agent "doey-watchdog" "$team_window")
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
+    "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
@@ -1680,7 +1687,7 @@ reload_session() {
       sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.2"/' "${runtime_dir}/session.env"
       # Add WDG_SLOT entries if missing
       if ! grep -q '^WDG_SLOT_1=' "${runtime_dir}/session.env"; then
-        printf 'WDG_SLOT_1="0.2"\nWDG_SLOT_2="0.3"\nWDG_SLOT_3="0.4"\nWDG_SLOT_4="0.5"\n' >> "${runtime_dir}/session.env"
+        printf 'WDG_SLOT_1="0.2"\nWDG_SLOT_2="0.3"\nWDG_SLOT_3="0.4"\nWDG_SLOT_4="0.5"\nWDG_SLOT_5="0.6"\nWDG_SLOT_6="0.7"\n' >> "${runtime_dir}/session.env"
       fi
       # Remove stale MGR_SLOT entries
       sed -i '' '/^MGR_SLOT_/d' "${runtime_dir}/session.env"
@@ -1807,7 +1814,7 @@ reload_session() {
         tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
         wdg_agent=$(generate_team_agent "doey-watchdog" "$tw")
-        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
+        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
         printf " ${SUCCESS}✓${RESET}\n"
 
         # Re-brief watchdog after boot
@@ -2210,6 +2217,8 @@ WDG_SLOT_1="0.2"
 WDG_SLOT_2="0.3"
 WDG_SLOT_3="0.4"
 WDG_SLOT_4="0.5"
+WDG_SLOT_5="0.6"
+WDG_SLOT_6="0.7"
 SM_PANE="0.1"
 MANIFEST
 
@@ -2300,7 +2309,7 @@ MANIFEST
   sleep 0.3
   wdg_agent=$(generate_team_agent "doey-watchdog" "$team_window")
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
+    "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
@@ -2474,6 +2483,8 @@ WDG_SLOT_1="0.2"
 WDG_SLOT_2="0.3"
 WDG_SLOT_3="0.4"
 WDG_SLOT_4="0.5"
+WDG_SLOT_5="0.6"
+WDG_SLOT_6="0.7"
 SM_PANE="0.1"
 MANIFEST
 
@@ -2506,7 +2517,7 @@ MANIFEST
   sleep 0.3
   wdg_agent=$(generate_team_agent "doey-watchdog" "$team_window")
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
+    "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
@@ -2552,10 +2563,18 @@ MANIFEST
     step_done
   fi
 
-  # ── Step 9: Add isolated worktree team ──────────────────────────
+  # ── Step 9: Add isolated worktree teams ─────────────────────────
   STEP_TOTAL=9
-  step_start 9 "Adding isolated worktree team..."
-  if add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto"; then
+  local INITIAL_WORKTREE_TEAMS=3
+  step_start 9 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
+  local _wt_i _wt_ok=0
+  for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
+    if add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto"; then
+      _wt_ok=$((_wt_ok + 1))
+    fi
+    (( _wt_i < INITIAL_WORKTREE_TEAMS - 1 )) && sleep 2
+  done
+  if [ "$_wt_ok" -gt 0 ]; then
     step_done
   else
     printf "${WARN}skipped${RESET}\n"
@@ -2584,7 +2603,7 @@ MANIFEST
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel + Session Manager  ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Teams${RESET}      ${DIM}%-4s${RESET} ${DIM}windows (${final_team_windows})${RESET}              ${DIM}│${RESET}\n" "$team_count"
-  printf "   ${DIM}│${RESET}  ${BOLD}Watchdogs${RESET}  ${DIM}0.2-0.5${RESET} ${DIM}Online (Dashboard)${RESET}          ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Watchdogs${RESET}  ${DIM}0.2-0.7${RESET} ${DIM}Online (Dashboard)${RESET}          ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}T1: %-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}  ${DIM}│${RESET}\n" "$initial_workers"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"
@@ -3021,7 +3040,7 @@ add_dynamic_team_window() {
   local wdg_slot=""
   local slot_key=""
   local sn
-  for sn in 1 2 3 4; do
+  for sn in 1 2 3 4 5 6; do
     local slot_val=""
     slot_val=$(grep "^WDG_SLOT_${sn}=" "${runtime_dir}/session.env" | cut -d= -f2)
     slot_val="${slot_val//\"/}"
@@ -3082,7 +3101,7 @@ add_dynamic_team_window() {
     sleep 0.3
     wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
     tmux send-keys -t "${session}:${wdg_slot}" \
-      "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
+      "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
     tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
     sleep 0.5
   fi
@@ -3228,7 +3247,7 @@ add_team_window() {
   # Find next available Dashboard watchdog slot
   local wdg_slot=""
   local slot_key=""
-  for sn in 1 2 3 4; do
+  for sn in 1 2 3 4 5 6; do
     local slot_val=""
     slot_val=$(grep "^WDG_SLOT_${sn}=" "${runtime_dir}/session.env" | cut -d= -f2)
     slot_val="${slot_val//\"/}"
@@ -3303,7 +3322,7 @@ add_team_window() {
   sleep 0.3
   wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
+    "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.5
 

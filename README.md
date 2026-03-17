@@ -147,11 +147,11 @@ doey add-team --worktree
 |------|------|-------------|
 | **Info Panel** | `0.0` (Dashboard) | Live dashboard showing team status, events, worker counts. |
 | **Session Manager** | `0.1` (Dashboard) | Session-level orchestrator — coordinates across team windows. |
-| **Watchdog** | `0.2-0.5` (Dashboard) | One per team. Monitors workers, delivers messages, catches crashes. |
+| **Watchdog** | `0.2-0.7` (Dashboard) | One per team. Monitors workers, delivers messages, catches crashes. |
 | **Window Manager** | `W.0` | Per-window orchestrator. Plans, delegates, monitors. Never writes code. |
 | **Workers** | `W.1+` | Claude Code instances that do the actual work. |
 
-Window 0 (Dashboard) hosts the Info Panel, up to 4 Watchdog slots (one per team), and the Session Manager. Each team window (W≥1) has its own Window Manager and Workers.
+Window 0 (Dashboard) hosts the Info Panel, up to 6 Watchdog slots (one per team), and the Session Manager. Each team window (W≥1) has its own Window Manager and Workers.
 
 Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results, research reports. See [Context Reference](docs/context-reference.md) for the full picture.
 
