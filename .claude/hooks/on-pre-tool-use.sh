@@ -23,7 +23,7 @@ if [ "$TOOL_NAME" != "Bash" ]; then
       # Workers/Window Manager are the common case — skip them fast.
       RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
       read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
-      # Watchdogs live in Dashboard (window 0), panes 0.2-0.4 only.
+      # Watchdogs live in Dashboard (window 0), panes 0.2-0.5 only.
       # Skip scan entirely for non-Dashboard windows and non-Watchdog slots.
       if [ "$WINDOW_INDEX" = "0" ]; then
         case "$CURRENT_PANE" in
