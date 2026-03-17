@@ -135,6 +135,23 @@ TEAMEOF
   mv "${runtime_dir}/team_${window_index}.env.tmp" "${runtime_dir}/team_${window_index}.env"
 }
 
+# Generate a team-specific agent definition copy
+# Usage: generate_team_agent <base_agent_name> <team_number>
+# Example: generate_team_agent "doey-watchdog" 1 → outputs "t1-watchdog"
+generate_team_agent() {
+  local base_name="$1" team_num="$2"
+  local role="${base_name#doey-}"
+  local new_name="t${team_num}-${role}"
+  local src="$HOME/.claude/agents/${base_name}.md"
+  local dst="$HOME/.claude/agents/${new_name}.md"
+  if [ -f "$src" ]; then
+    cp "$src" "$dst"
+    sed "s/name: ${base_name}/name: ${new_name}/" "$dst" > "${dst}.tmp"
+    mv "${dst}.tmp" "$dst"
+  fi
+  echo "$new_name"
+}
+
 # Build the Dashboard window (window 0) with 2 columns:
 #   Left: Info Panel (full height)
 #   Right: Session Manager (top) + 3 Watchdog slots side-by-side (bottom)
@@ -1283,8 +1300,9 @@ MANIFEST
   step_start 5 "Launching Window Manager & Watchdog..."
 
   # Launch Window Manager in team window pane 0
+  mgr_agent=$(generate_team_agent "doey-manager" "$team_window")
   tmux send-keys -t "$session:${team_window}.0" \
-    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent doey-manager" Enter
+    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   sleep 0.5
 
@@ -1312,8 +1330,9 @@ MANIFEST
   # Launch Watchdog in Dashboard slot 1 (pane ${WDG_SLOT_1})
   tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
+  wdg_agent=$(generate_team_agent "doey-watchdog" "$team_window")
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent doey-watchdog" Enter
+    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
@@ -1629,7 +1648,8 @@ reload_session() {
       done
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
-      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model opus --name \"T${tw} Window Manager\" --agent doey-manager" Enter
+      mgr_agent=$(generate_team_agent "doey-manager" "$tw")
+      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model opus --name \"T${tw} Window Manager\" --agent \"$mgr_agent\"" Enter
       printf " ${SUCCESS}✓${RESET}\n"
 
       # Re-brief manager after boot
@@ -1672,7 +1692,8 @@ reload_session() {
         done
         tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
-        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --name \"T${tw} Watchdog\" --agent doey-watchdog" Enter
+        wdg_agent=$(generate_team_agent "doey-watchdog" "$tw")
+        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
         printf " ${SUCCESS}✓${RESET}\n"
 
         # Re-brief watchdog after boot
@@ -2130,8 +2151,9 @@ MANIFEST
   printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
 
   # Launch Window Manager in team window pane 0
+  mgr_agent=$(generate_team_agent "doey-manager" "$team_window")
   tmux send-keys -t "$session:${team_window}.0" \
-    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent doey-manager" Enter
+    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   sleep 0.5
 
@@ -2158,8 +2180,9 @@ MANIFEST
   # Launch Watchdog in Dashboard slot 1 (pane ${WDG_SLOT_1})
   tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
+  wdg_agent=$(generate_team_agent "doey-watchdog" "$team_window")
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent doey-watchdog" Enter
+    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
@@ -2344,8 +2367,9 @@ MANIFEST
   step_start 6 "Launching Window Manager & Watchdog..."
 
   # Launch Window Manager in team window pane 0
+  mgr_agent=$(generate_team_agent "doey-manager" "$team_window")
   tmux send-keys -t "$session:${team_window}.0" \
-    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent doey-manager" Enter
+    "claude --dangerously-skip-permissions --name \"T${team_window} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   sleep 0.5
 
@@ -2361,8 +2385,9 @@ MANIFEST
   # Launch Watchdog in Dashboard slot 1 (pane ${WDG_SLOT_1})
   tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
+  wdg_agent=$(generate_team_agent "doey-watchdog" "$team_window")
   tmux send-keys -t "$session:${WDG_SLOT_1}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent doey-watchdog" Enter
+    "claude --dangerously-skip-permissions --model haiku --name \"T${team_window} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "$session:${WDG_SLOT_1}" -T "T${team_window} Watchdog"
   sleep 0.5
 
@@ -2371,6 +2396,9 @@ MANIFEST
     sleep 12
     tmux send-keys -t "$session:${WDG_SLOT_1}" \
       "Start monitoring session $session. Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy. Skip pane ${WDG_SLOT_1} (yourself, in Dashboard). Manager is in team window pane ${team_window}.0. Monitor all worker panes for status changes." Enter
+    sleep 20
+    tmux send-keys -t "$session:${WDG_SLOT_1}" \
+      '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
   step_done
@@ -2849,8 +2877,9 @@ add_dynamic_team_window() {
   fi
 
   # Launch Window Manager in team window pane 0
+  mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --name \"T${window_index} Window Manager\" --agent doey-manager" Enter
+    "claude --dangerously-skip-permissions --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   sleep 0.5
 
@@ -2859,8 +2888,9 @@ add_dynamic_team_window() {
   # Launch Watchdog in Dashboard slot
   tmux send-keys -t "${session}:${wdg_slot}" C-c
   sleep 0.3
+  wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent doey-watchdog" Enter
+    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.5
 
@@ -2897,6 +2927,9 @@ add_dynamic_team_window() {
     sleep 12
     tmux send-keys -t "${session}:${wdg_slot}" \
       "Start monitoring session ${session} window ${window_index}. Dynamic grid — auto-expands when all are busy. Skip pane ${wdg_slot} (yourself, in Dashboard). Manager is in team window pane ${window_index}.0. Monitor panes ${wp_list}." Enter
+    sleep 20
+    tmux send-keys -t "${session}:${wdg_slot}" \
+      '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
   printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$worker_count" "$slot_key"
@@ -3020,8 +3053,9 @@ add_team_window() {
   fi
 
   # Launch Window Manager in team window pane 0
+  mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --name \"T${window_index} Window Manager\" --agent doey-manager" Enter
+    "claude --dangerously-skip-permissions --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   sleep 0.5
 
@@ -3030,8 +3064,9 @@ add_team_window() {
   # Launch Watchdog in Dashboard slot (pane $wdg_slot)
   tmux send-keys -t "${session}:${wdg_slot}" C-c
   sleep 0.3
+  wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent doey-watchdog" Enter
+    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.5
 
@@ -3071,6 +3106,9 @@ add_team_window() {
     sleep 12
     tmux send-keys -t "${session}:${wdg_slot}" \
       "Start monitoring session ${session} window ${window_index}. Skip pane ${wdg_slot} (yourself, in Dashboard). Manager is in team window pane ${window_index}.0. Monitor panes ${wp_list}." Enter
+    sleep 20
+    tmux send-keys -t "${session}:${wdg_slot}" \
+      '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
   printf "  ${SUCCESS}Team window %s created${RESET} — grid %s, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$grid" "$worker_count" "$slot_key"
@@ -3122,6 +3160,10 @@ kill_team_window() {
 
   # Remove team env file
   rm -f "$team_env"
+
+  # Clean up team-specific agent files
+  rm -f "$HOME/.claude/agents/t${window}-watchdog.md" 2>/dev/null || true
+  rm -f "$HOME/.claude/agents/t${window}-manager.md" 2>/dev/null || true
 
   # Clean status/results files for this window's panes
   local safe_prefix="${session//[:.]/_}_${window}_"
