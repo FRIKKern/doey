@@ -68,7 +68,7 @@ ask_install() {
 run_install() {
   local name="$1" cmd="$2"
   printf "     ${DIM}Running: %s${RESET}\n" "$cmd"
-  if eval "$cmd"; then
+  if bash -c "$cmd"; then
     printf "  ${SUCCESS}✓${RESET} %s installed successfully\n" "$name"
     return 0
   else
@@ -147,6 +147,29 @@ else
 fi
 
 # ── Node.js 18+ (required for Claude Code) ──
+offer_node_install() {
+  # Shared logic for installing Node.js — called when missing or too old
+  case "$PLATFORM" in
+    macos)
+      if [ "$HAS_BREW" = true ]; then
+        run_install "Node.js" "brew install node" && HAS_NODE=true
+      else
+        warn_msg "Install Homebrew (https://brew.sh) then: brew install node"
+      fi
+      ;;
+    linux)
+      echo ""
+      printf "     ${BOLD}To install Node.js on Linux, run:${RESET}\n"
+      printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash${RESET}\n"
+      printf "     ${BRAND}fnm install 22${RESET}\n"
+      printf "     ${DIM}Then re-run this installer.${RESET}\n"
+      ;;
+    *)
+      warn_msg "Install Node.js 18+ from https://nodejs.org"
+      ;;
+  esac
+}
+
 if command -v node &>/dev/null; then
   NODE_VER=$(node -v 2>/dev/null | sed 's/^v//')
   NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
@@ -156,50 +179,14 @@ if command -v node &>/dev/null; then
   else
     warn_msg "Node.js 18+ required (you have v${NODE_VER})"
     if ask_install "Node.js 18+"; then
-      case "$PLATFORM" in
-        macos)
-          if [ "$HAS_BREW" = true ]; then
-            run_install "Node.js" "brew install node" && HAS_NODE=true
-          else
-            warn_msg "Install Homebrew (https://brew.sh) then: brew install node"
-          fi
-          ;;
-        linux)
-          echo ""
-          printf "     ${BOLD}To install Node.js on Linux, run:${RESET}\n"
-          printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash${RESET}\n"
-          printf "     ${BRAND}fnm install 22${RESET}\n"
-          printf "     ${DIM}Then re-run this installer.${RESET}\n"
-          ;;
-        *)
-          warn_msg "Install Node.js 18+ from https://nodejs.org"
-          ;;
-      esac
+      offer_node_install
     else
       warn_msg "Node.js 18+ is needed for Claude Code — install later from https://nodejs.org"
     fi
   fi
 else
   if ask_install "Node.js"; then
-    case "$PLATFORM" in
-      macos)
-        if [ "$HAS_BREW" = true ]; then
-          run_install "Node.js" "brew install node" && HAS_NODE=true
-        else
-          warn_msg "Install Homebrew (https://brew.sh) then: brew install node"
-        fi
-        ;;
-      linux)
-        echo ""
-        printf "     ${BOLD}To install Node.js on Linux, run:${RESET}\n"
-        printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash${RESET}\n"
-        printf "     ${BRAND}fnm install 22${RESET}\n"
-        printf "     ${DIM}Then re-run this installer.${RESET}\n"
-        ;;
-      *)
-        warn_msg "Install Node.js 18+ from https://nodejs.org"
-        ;;
-    esac
+    offer_node_install
   else
     warn_msg "Node.js is needed for Claude Code — install later from https://nodejs.org"
   fi

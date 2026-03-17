@@ -16,59 +16,59 @@ You are diagnosing and repairing the Doey Dashboard (tmux window 0). The Dashboa
 └──────────┴────────┴────────┴────────┘
 ```
 
-### Step 1: Load environment
+### Step 1: Load environment and build watchdog-team mapping
 
-Every Bash call must start with:
+Run a single Bash call to load all context:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+
+# Build watchdog slot → team mapping (once, reused in diagnosis and repair)
+TEAM_FOR_02="" TEAM_FOR_03="" TEAM_FOR_04=""
+for tf in "${RUNTIME_DIR}"/team_*.env; do
+  [ -f "$tf" ] || continue
+  WD_VAL=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
+  WD_VAL="${WD_VAL%\"}" && WD_VAL="${WD_VAL#\"}"
+  TW=$(basename "$tf" | sed 's/team_//;s/\.env//')
+  case "$WD_VAL" in
+    0.2) TEAM_FOR_02="$TW" ;;
+    0.3) TEAM_FOR_03="$TW" ;;
+    0.4) TEAM_FOR_04="$TW" ;;
+  esac
+done
+echo "Watchdog mapping: 0.2→T${TEAM_FOR_02:-none} 0.3→T${TEAM_FOR_03:-none} 0.4→T${TEAM_FOR_04:-none}"
 ```
 
-This gives you `SESSION_NAME`, `PROJECT_DIR`, `SM_PANE` (default "0.1"), `WDG_SLOT_1`/`WDG_SLOT_2`/`WDG_SLOT_3`.
+This gives you `SESSION_NAME`, `PROJECT_DIR`, `SM_PANE` (default "0.1"), `WDG_SLOT_1`/`WDG_SLOT_2`/`WDG_SLOT_3`, and the team mapping.
 
 ### Step 2: Diagnose all Dashboard panes
 
-Check each pane in window 0 (panes 0.0 through 0.4). For each pane, run:
+Use a single `tmux list-panes` call to get all pane info at once, then check child processes:
 
 ```bash
-PANE_TARGET="$SESSION_NAME:0.X"  # replace X with pane index
+# Get all pane info in one call
+tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_index}|#{pane_pid}|#{pane_current_command}|#{pane_title}' 2>/dev/null
 
-# Does pane exist?
-SHELL_PID=$(tmux display-message -t "$PANE_TARGET" -p '#{pane_pid}' 2>/dev/null) || { echo "PANE 0.X: MISSING"; continue; }
-
-# What's running?
-PANE_CMD=$(tmux display-message -t "$PANE_TARGET" -p '#{pane_current_command}' 2>/dev/null) || PANE_CMD="unknown"
-PANE_TITLE=$(tmux display-message -t "$PANE_TARGET" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="unknown"
-
-# Is something running inside the shell?
-CHILD_PID=$(pgrep -P "$SHELL_PID" 2>/dev/null) || CHILD_PID=""
-
-echo "PANE 0.X: pid=$SHELL_PID cmd=$PANE_CMD title=$PANE_TITLE child=$CHILD_PID"
+# For each pane, check if a child process is running
+for IDX in 0 1 2 3 4; do
+  SHELL_PID=$(tmux display-message -t "$SESSION_NAME:0.${IDX}" -p '#{pane_pid}' 2>/dev/null) || { echo "0.${IDX}: MISSING"; continue; }
+  CHILD_PID=$(pgrep -P "$SHELL_PID" 2>/dev/null) || CHILD_PID=""
+  echo "0.${IDX}: child=${CHILD_PID:-none}"
+done
 ```
 
+If any pane is MISSING (not returned by `list-panes`), report: "Dashboard structure is damaged (pane 0.X missing). Run `doey reload` to rebuild." and **STOP** — do not attempt repairs.
+
 Build a table classifying each pane as:
-- **HEALTHY** — expected process is running
-- **IDLE** — pane exists but nothing running (shell prompt visible, no child process)
-- **WRONG** — pane exists but unexpected process
-- **MISSING** — pane doesn't exist
+- **HEALTHY** — expected process is running (has a child process)
+- **IDLE** — pane exists but nothing running (no child process)
+- **UNUSED** — watchdog slot with no team assigned
 
 For determining health:
-- **0.0 (Info Panel):** HEALTHY if `pane_current_command` contains `bash` AND capture-pane output contains "Doey" or "Team" or box-drawing chars. IDLE if just a shell prompt.
+- **0.0 (Info Panel):** HEALTHY if `pane_current_command` contains `bash` AND the pane title or capture output contains "Doey" or "Team" or box-drawing chars. IDLE if just a shell prompt.
 - **0.1 (Session Manager):** HEALTHY if there's a child process. IDLE if no child.
-- **0.2-0.4 (Watchdog slots):** HEALTHY if there's a child process. To find which team a slot belongs to, check team_*.env files:
-  ```bash
-  for tf in "${RUNTIME_DIR}"/team_*.env; do
-    [ -f "$tf" ] || continue
-    WD_VAL=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
-    WD_VAL="${WD_VAL%\"}" && WD_VAL="${WD_VAL#\"}"
-    if [ "$WD_VAL" = "0.X" ]; then
-      TEAM_W=$(basename "$tf" | sed 's/team_//;s/\.env//')
-      echo "  Assigned to Team $TEAM_W"
-    fi
-  done
-  ```
-  A watchdog slot with no matching team_*.env is UNUSED (not broken).
+- **0.2-0.4 (Watchdog slots):** HEALTHY if there's a child process. Use the mapping from Step 1 (`TEAM_FOR_02`/`03`/`04`) to show which team it belongs to. A slot with no team assigned is UNUSED (not broken).
 
 Print a summary table like:
 ```
@@ -80,11 +80,9 @@ Dashboard Diagnosis:
   0.4  Watchdog slot     UNUSED
 ```
 
-**CRITICAL:** If any pane is MISSING (not just idle), report: "Dashboard structure is damaged (pane 0.X missing). Run `doey reload` to rebuild." and STOP — do not attempt repairs.
-
 ### Step 3: Repair broken panes
 
-For each IDLE pane, repair it based on its role:
+For each IDLE pane, repair it based on its role. Use the team mapping from Step 1 — do NOT re-scan team_*.env files.
 
 **Info Panel (0.0):**
 ```bash
@@ -98,23 +96,11 @@ tmux send-keys -t "$SESSION_NAME:0.1" "claude --dangerously-skip-permissions --a
 ```
 Wait 8s, verify Claude started.
 
-**Watchdog slot (0.2-0.4):** Only repair if the slot is assigned to a team (has a matching team_*.env). Find the team number first:
-```bash
-TEAM_W=""
-for tf in "${RUNTIME_DIR}"/team_*.env; do
-  [ -f "$tf" ] || continue
-  WD_VAL=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
-  WD_VAL="${WD_VAL%\"}" && WD_VAL="${WD_VAL#\"}"
-  if [ "$WD_VAL" = "0.X" ]; then
-    TEAM_W=$(basename "$tf" | sed 's/team_//;s/\.env//')
-    break
-  fi
-done
-```
-If no team found, skip — it's an unused slot.
+**Watchdog slot (0.2-0.4):** Only repair if the slot is assigned to a team. Use the `TEAM_FOR_0X` variable from Step 1. If empty, skip — it's an unused slot.
 
 If team found, respawn:
 ```bash
+TEAM_W="$TEAM_FOR_0X"  # from Step 1 mapping
 WDG_AGENT_NAME="t${TEAM_W}-watchdog"
 tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model haiku --name \"T${TEAM_W} Watchdog\" --agent \"${WDG_AGENT_NAME}\"" Enter
 ```
@@ -125,7 +111,7 @@ tmux send-keys -t "$SESSION_NAME:0.X" "Start monitoring session $SESSION_NAME wi
 
 ### Step 4: Verify repairs
 
-After all repairs, re-run the diagnosis check from Step 2 on any pane that was repaired. Report final status.
+After all repairs, re-check child processes on any pane that was repaired. Report final status.
 
 ### Safety rules
 
