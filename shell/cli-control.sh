@@ -325,7 +325,7 @@ doey_cli_restart_window() {
 
     local launch_cmd="claude --dangerously-skip-permissions --model opus"
     if [ -f "$system_prompt" ]; then
-      launch_cmd="claude --dangerously-skip-permissions --model opus --system-prompt ${system_prompt}"
+      launch_cmd="claude --dangerously-skip-permissions --model opus --append-system-prompt-file ${system_prompt}"
     fi
 
     tmux send-keys -t "$target" "$launch_cmd" Enter

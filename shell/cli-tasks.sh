@@ -96,7 +96,7 @@ TASKEOF
   rm -f "$tmpfile"
 
   # Report result
-  if echo "$verify_output" | grep -q "thinking\|working\|Read\|Edit\|Bash\|Write\|Grep\|Glob"; then
+  if echo "$verify_output" | grep -qE "thinking|working|Read|Edit|Bash|Write|Grep|Glob"; then
     echo "${SUCCESS}Dispatched task to ${window_idx}.${pane_idx}${RESET}"
   else
     echo "${WARNING}Warning:${RESET} Task sent to ${window_idx}.${pane_idx} but dispatch may not have started"
@@ -155,7 +155,7 @@ doey_cli_delegate() {
   # Clean up tmpfile
   rm -f "$tmpfile"
 
-  if echo "$verify_output" | grep -q "thinking\|working\|Read\|Edit\|Bash\|dispatch\|Dispatch"; then
+  if echo "$verify_output" | grep -qE "thinking|working|Read|Edit|Bash|dispatch|Dispatch"; then
     echo "${SUCCESS}Delegated to Window Manager ${window}.0${RESET}"
   else
     echo "${WARNING}Task sent to Window Manager ${window}.0 but activity not yet detected${RESET}"
@@ -272,7 +272,7 @@ doey_cli_research() {
   rm -f "$tmpfile"
 
   # Report result
-  if echo "$verify_output" | grep -q "thinking\|working\|Read\|Edit\|Bash\|Write\|Grep\|Glob\|research"; then
+  if echo "$verify_output" | grep -qE "thinking|working|Read|Edit|Bash|Write|Grep|Glob|research"; then
     echo "${SUCCESS}Research dispatched to Window Manager ${window_idx}.0${RESET}: ${topic}"
   else
     echo "${WARNING}Warning:${RESET} Research sent to Window Manager ${window_idx}.0 but may not have started: ${topic}"
