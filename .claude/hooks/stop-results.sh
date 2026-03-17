@@ -68,4 +68,7 @@ TIMESTAMP=$(date +%s)
 COMPLETE
 mv "${COMPLETION_FILE}.tmp" "$COMPLETION_FILE"
 
+# --- Wake the Watchdog immediately (event-driven instead of 30s poll) ---
+touch "${RUNTIME_DIR}/status/watchdog_trigger_W${WINDOW_INDEX}" 2>/dev/null || true
+
 exit 0

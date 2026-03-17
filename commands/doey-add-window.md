@@ -144,9 +144,9 @@ for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
   sleep 0.5
 done
 
-# Find next available Dashboard slot (0.2-0.5) for Watchdog
+# Find next available Dashboard slot (0.2-0.7) for Watchdog
 WDG_SLOT=""
-for slot in 2 3 4 5; do
+for slot in 2 3 4 5 6 7; do
   SLOT_PID=$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || true)
   SLOT_CHILD=$(pgrep -P "$SLOT_PID" 2>/dev/null || true)
   if [ -z "$SLOT_CHILD" ]; then
@@ -157,11 +157,11 @@ done
 
 if [ -n "$WDG_SLOT" ]; then
   tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "Watchdog — Team ${NEW_WIN}"
-  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
+  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model haiku --effort low --agent doey-watchdog" Enter
   sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
   echo "Watchdog launched in Dashboard pane 0.${WDG_SLOT}"
 else
-  echo "WARNING: No available Dashboard slot (0.2-0.5) for Watchdog"
+  echo "WARNING: No available Dashboard slot (0.2-0.7) for Watchdog"
 fi
 
 echo "All panes launched in window ${NEW_WIN}"
@@ -270,7 +270,7 @@ If worktree was created, also show:
 
 ### Rules
 - Validate grid format, minimum 2 panes (MGR + 1 worker)
-- Pane 0 = Window Manager, pane 1+ = Workers; Watchdog goes to Dashboard slot 0.2-0.5
+- Pane 0 = Window Manager, pane 1+ = Workers; Watchdog goes to Dashboard slot 0.2-0.7
 - Write team_W.env before launching Claude; update TEAM_WINDOWS atomically
 - Never hardcode window indices — read from tmux
 - All bash must be 3.2 compatible

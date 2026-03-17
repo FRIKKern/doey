@@ -8,12 +8,12 @@
 You are diagnosing and repairing the Doey Dashboard (tmux window 0). The Dashboard has this layout:
 
 ```
-┌──────────┬────────────────────────────────────┐
-│          │         Session Manager (0.1)       │
-│  Info    ├────────┬────────┬────────┬──────────┤
-│  Panel   │ WD 1   │ WD 2   │ WD 3   │  WD 4   │
-│  (0.0)   │ (0.2)  │ (0.3)  │ (0.4)  │  (0.5)  │
-└──────────┴────────┴────────┴────────┴──────────┘
+┌──────────┬──────────────────────────────────────────────────┐
+│          │               Session Manager (0.1)              │
+│  Info    ├────────┬────────┬────────┬────────┬──────┬───────┤
+│  Panel   │ WD 1   │ WD 2   │ WD 3   │ WD 4   │ WD 5 │ WD 6 │
+│  (0.0)   │ (0.2)  │ (0.3)  │ (0.4)  │ (0.5)  │ (0.6)│ (0.7)│
+└──────────┴────────┴────────┴────────┴────────┴──────┴───────┘
 ```
 
 ### Step 1: Load environment and build watchdog-team mapping
@@ -36,12 +36,14 @@ for tf in "${RUNTIME_DIR}"/team_*.env; do
     0.3) TEAM_FOR_03="$TW" ;;
     0.4) TEAM_FOR_04="$TW" ;;
     0.5) TEAM_FOR_05="$TW" ;;
+    0.6) TEAM_FOR_06="$TW" ;;
+    0.7) TEAM_FOR_07="$TW" ;;
   esac
 done
-echo "Watchdog mapping: 0.2→T${TEAM_FOR_02:-none} 0.3→T${TEAM_FOR_03:-none} 0.4→T${TEAM_FOR_04:-none} 0.5→T${TEAM_FOR_05:-none}"
+echo "Watchdog mapping: 0.2→T${TEAM_FOR_02:-none} 0.3→T${TEAM_FOR_03:-none} 0.4→T${TEAM_FOR_04:-none} 0.5→T${TEAM_FOR_05:-none} 0.6→T${TEAM_FOR_06:-none} 0.7→T${TEAM_FOR_07:-none}"
 ```
 
-This gives you `SESSION_NAME`, `PROJECT_DIR`, `SM_PANE` (default "0.1"), `WDG_SLOT_1`..`WDG_SLOT_4`, and the team mapping.
+This gives you `SESSION_NAME`, `PROJECT_DIR`, `SM_PANE` (default "0.1"), `WDG_SLOT_1`..`WDG_SLOT_6`, and the team mapping.
 
 ### Step 2: Diagnose all Dashboard panes
 
@@ -69,7 +71,7 @@ Build a table classifying each pane as:
 For determining health:
 - **0.0 (Info Panel):** HEALTHY if `pane_current_command` contains `bash` AND the pane title or capture output contains "Doey" or "Team" or box-drawing chars. IDLE if just a shell prompt.
 - **0.1 (Session Manager):** HEALTHY if there's a child process. IDLE if no child.
-- **0.2-0.5 (Watchdog slots):** HEALTHY if there's a child process. Use the mapping from Step 1 (`TEAM_FOR_02`/`03`/`04`/`05`) to show which team it belongs to. A slot with no team assigned is UNUSED (not broken).
+- **0.2-0.7 (Watchdog slots):** HEALTHY if there's a child process. Use the mapping from Step 1 (`TEAM_FOR_02`/`03`/`04`/`05`/`06`/`07`) to show which team it belongs to. A slot with no team assigned is UNUSED (not broken).
 
 Print a summary table like:
 ```
@@ -97,13 +99,13 @@ tmux send-keys -t "$SESSION_NAME:0.1" "claude --dangerously-skip-permissions --a
 ```
 Wait 8s, verify Claude started.
 
-**Watchdog slot (0.2-0.5):** Only repair if the slot is assigned to a team. Use the `TEAM_FOR_0X` variable from Step 1. If empty, skip — it's an unused slot.
+**Watchdog slot (0.2-0.7):** Only repair if the slot is assigned to a team. Use the `TEAM_FOR_0X` variable from Step 1. If empty, skip — it's an unused slot.
 
 If team found, respawn:
 ```bash
 TEAM_W="$TEAM_FOR_0X"  # from Step 1 mapping
 WDG_AGENT_NAME="t${TEAM_W}-watchdog"
-tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model haiku --name \"T${TEAM_W} Watchdog\" --agent \"${WDG_AGENT_NAME}\"" Enter
+tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${TEAM_W} Watchdog\" --agent \"${WDG_AGENT_NAME}\"" Enter
 ```
 Wait 12s, then brief it:
 ```bash

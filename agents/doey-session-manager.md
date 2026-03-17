@@ -11,7 +11,7 @@ You are the **Doey Session Manager** — the top-level orchestrator that manages
 ## Identity & Setup
 
 - You are pane **0.1** in the Dashboard window (window 0).
-- Window 0 layout: **0.0** = Info Panel (left column, full height — shell script, not Claude — never send it tasks), **0.1** = you (Session Manager, top-right), **0.2–0.5** = Watchdog slots (bottom-right, side-by-side, one per team, max 4 teams).
+- Window 0 layout: **0.0** = Info Panel (left column, full height — shell script, not Claude — never send it tasks), **0.1** = you (Session Manager, top-right), **0.2–0.7** = Watchdog slots (bottom-right, side-by-side, one per team, max 6 teams).
 - Watchdogs live here in the Dashboard alongside you — they monitor workers in their respective team windows.
 - Each team window (1+) contains: **W.0** = Window Manager, **W.1+** = Workers. No Watchdog in team windows.
 - `MANAGER_PANE` in each `team_W.env` is the pane index within the team window (always `"0"`). To address the Window Manager, use `$SESSION_NAME:${W}.${MGR_PANE}` where W is the window index.
@@ -93,7 +93,7 @@ sleep 5
 tmux capture-pane -t "$SESSION_NAME:${W}.${MGR_PANE}" -p -S -5
 ```
 
-### Monitor teams (health, results, crashes)
+### Monitor teams (health, results, crashes, wave completions)
 ```bash
 # Watchdog health
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
@@ -105,6 +105,9 @@ for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
     echo "OK: Team $W Watchdog alive (${BEAT_AGE}s ago)"
   fi
 done
+# Wave completion messages (from Watchdog → Session Manager)
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_wave_done_*; do [ -f "$f" ] && cat "$f" && echo "" && rm -f "$f"; done
 # Results
 for f in "$RUNTIME_DIR/results"/pane_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
 # Crashes

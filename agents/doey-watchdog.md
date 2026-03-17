@@ -76,13 +76,14 @@ Parse the snapshot from the scan output and print a compact status block:
 
 **Duration:** < 60s → `Xs`, 60-3600 → `XmYs`, > 3600 → `XhYm`. For WORKING workers show `[TOOL]` if available.
 
-**Events section** (from `EVENTS` block in snapshot): `STATE_CHANGE` → `↗ W{pane} {old}→{new}`, `COMPLETION` → `✅ W{pane} FINISHED`. No events → `No events`.
+**Events section** (from `EVENTS` block in snapshot): `STATE_CHANGE` → `↗ W{pane} {old}→{new}`, `COMPLETION` → `✅ W{pane} FINISHED`, `WAVE_COMPLETE` → `🏁 Wave complete — all idle`. No events → `No events`.
 
 ### Step 3: Act on events (ONLY if events exist)
 
 | Event | Action |
 |-------|--------|
 | `COMPLETION` | Notify Manager (see below) |
+| `WAVE_COMPLETE` | Notify Manager + Session Manager (see below) |
 | `CRASHED` / `STUCK` | Notify Manager (see below) |
 | `MANAGER_CRASHED` | Alert Session Manager (see below) |
 | `MANAGER_COMPLETED` | Notify Session Manager (see below) |
@@ -92,7 +93,7 @@ Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pa
 
 ### Step 4: Loop
 
-1. Run: `sleep 30`
+1. Run: `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` — this sleeps up to 30s but wakes within 1s when a worker finishes (event-driven via trigger file).
 2. Go back to Step 1. No output between cycles.
 3. After 2 cycles, yield. The `/loop` safety net will re-trigger you.
 
@@ -109,6 +110,21 @@ Window Manager in pane ${TEAM_WINDOW}.0 is down (bare shell). Needs restart.
 EOF
 ```
 Write once per crash (check if alert file exists). While Manager is crashed, skip worker notifications. Show 🔥 in dashboard.
+
+## Wave Complete (notify Manager + Session Manager)
+
+When scan reports `WAVE_COMPLETE` (all workers transitioned from working to idle):
+1. **Notify Manager** (if not crashed and idle): send-keys "All workers idle — wave complete. Check results in $RUNTIME_DIR/results/ and dispatch next wave or report completion to Session Manager."
+2. **Write `.msg` to Session Manager:**
+```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_4"
+MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_wave_done_W${TEAM_WINDOW}_$(date +%s).msg"
+cat > "$MSG_FILE" << EOF
+FROM: watchdog-W${TEAM_WINDOW}
+SUBJECT: Team ${TEAM_WINDOW} wave complete
+All workers are now idle. Wave finished. Manager should check results and dispatch next wave.
+EOF
+```
 
 ## Manager Completed (notify Session Manager)
 
