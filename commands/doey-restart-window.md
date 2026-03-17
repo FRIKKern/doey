@@ -6,7 +6,7 @@ Restart all workers in a specific team window. Does not restart the Window Manag
 `/doey-restart-window [window_index]` — restart a specific team window (default: current window)
 
 ## Prompt
-You are restarting workers in a team window. The Watchdog runs in Dashboard (pane 0.2-0.4), not in the team window.
+You are restarting workers in a team window. The Watchdog runs in Dashboard (pane 0.2-0.5), not in the team window.
 
 ### Step 1: Read project context and determine target window
 
@@ -137,7 +137,7 @@ All panes are Workers (Watchdog is in Dashboard). Check `$SKIP_PANES`.
 
 ### Rules
 - **Never restart the Window Manager** (pane W.0) — only workers
-- **Watchdog is in Dashboard** (pane 0.2-0.4) — not restarted by this command
+- **Watchdog is in Dashboard** (pane 0.2-0.5) — not restarted by this command
 - **Always kill by PID** — never use `/exit` or `send-keys` to stop Claude
 - **Skip workers that are already ready** (has child process + bypass permissions + prompt visible)
 - **If VERIFY KILLED fails, STOP** — do not proceed to launch

@@ -67,7 +67,7 @@ is_watchdog() {
     return "$_DOEY_IS_WD"
   fi
   _DOEY_IS_WD=1  # default: not a watchdog
-  # Watchdogs live in Dashboard (window 0), panes 0.2-0.4.
+  # Watchdogs live in Dashboard (window 0), panes 0.2-0.5.
   # Each team_W.env has WATCHDOG_PANE="0.X" referencing the Dashboard pane.
   if [ "$WINDOW_INDEX" = "0" ]; then
     for _wd_tf in "${RUNTIME_DIR}"/team_*.env; do
