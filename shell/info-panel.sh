@@ -442,50 +442,19 @@ while true; do
   add_left "     to claim it for yourself."
   add_left ""
   add_left ""
-  add_left "$(printf '%b  ARCHITECTURE%b' "${C_BOLD_CYAN}" "${C_RESET}")"
-  add_left ""
-  add_left "$(printf '  %bWindow 0%b = Dashboard (this window)' "${C_WHITE}" "${C_RESET}")"
-  add_left "$(printf '  %bWindow 1+%b = Team windows' "${C_WHITE}" "${C_RESET}")"
-  add_left ""
-  add_left "$(printf '  Each team: %bManager%b (plans) + %bWatchdog%b (monitors)' "${C_CYAN}" "${C_RESET}" "${C_YELLOW}" "${C_RESET}")"
-  add_left "$(printf '             + %bWorkers%b (execute code)' "${C_GREEN}" "${C_RESET}")"
-  add_left ""
-  add_left "$(printf '  Dynamic grid auto-expands when all workers busy.')"
-  add_left ""
-  add_left ""
   add_left "$(printf '%b  ESSENTIAL COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
 
   CMD_W=$((LEFT_W - 4))  # usable width inside the column with indent
 
-  add_left "$(printf '  %bTasking:%b' "${C_WHITE}" "${C_RESET}")"
   add_left "  $(dotted_leader "$(printf '%b/doey-dispatch%b' "${C_GREEN}" "${C_RESET}")" "Send task to a worker" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%b/doey-research%b' "${C_GREEN}" "${C_RESET}")" "Deep research with report" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%b/doey-broadcast%b' "${C_GREEN}" "${C_RESET}")" "Send to all workers" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-delegate%b' "${C_GREEN}" "${C_RESET}")" "Delegate to another team" "$CMD_W")"
-  add_left ""
-  add_left "$(printf '  %bMonitoring:%b' "${C_WHITE}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-team%b' "${C_CYAN}" "${C_RESET}")" "Show team overview" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-status%b' "${C_CYAN}" "${C_RESET}")" "Detailed worker status" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-monitor%b' "${C_CYAN}" "${C_RESET}")" "Live monitoring mode" "$CMD_W")"
-  add_left ""
-  add_left "$(printf '  %bWorkers:%b' "${C_WHITE}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-reserve%b' "${C_MAGENTA}" "${C_RESET}")" "Claim a worker for yourself" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-stop%b' "${C_MAGENTA}" "${C_RESET}")" "Stop current worker" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-stop-all%b' "${C_MAGENTA}" "${C_RESET}")" "Stop all workers" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-restart-workers%b' "${C_MAGENTA}" "${C_RESET}")" "Restart all workers" "$CMD_W")"
-  add_left ""
-  add_left "$(printf '  %bTeams:%b' "${C_WHITE}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-add-window%b' "${C_YELLOW}" "${C_RESET}")" "Add a new team" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-kill-window%b' "${C_YELLOW}" "${C_RESET}")" "Remove a team" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-list-windows%b' "${C_YELLOW}" "${C_RESET}")" "List all teams" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-restart-window%b' "${C_YELLOW}" "${C_RESET}")" "Restart a team" "$CMD_W")"
-  add_left ""
-  add_left "$(printf '  %bSystem:%b' "${C_WHITE}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-analyze%b' "${C_RED}" "${C_RESET}")" "Analyze codebase" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-purge%b' "${C_RED}" "${C_RESET}")" "Clean runtime files" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-reinstall%b' "${C_RED}" "${C_RESET}")" "Reinstall Doey" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-kill-session%b' "${C_RED}" "${C_RESET}")" "Kill entire session" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-reserve%b' "${C_GREEN}" "${C_RESET}")" "Claim a worker pane" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-stop-all%b' "${C_GREEN}" "${C_RESET}")" "Stop all workers" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-add-window%b' "${C_GREEN}" "${C_RESET}")" "Add a new team" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-kill-window%b' "${C_GREEN}" "${C_RESET}")" "Remove a team" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-status%b' "${C_GREEN}" "${C_RESET}")" "Detailed status" "$CMD_W")"
 
   # ── RIGHT COLUMN ──────────────────────────────────────────────────
 
@@ -586,31 +555,6 @@ while true; do
       i=$((i + 1))
     done
   fi
-
-  add_right ""
-  add_right ""
-  add_right "$(printf '%b  TMUX NAVIGATION%b' "${C_BOLD_CYAN}" "${C_RESET}")"
-  add_right ""
-
-  NAV_W=$((RIGHT_W - 4))
-
-  add_right "  $(dotted_leader "$(printf '%bCtrl-b 0%b' "${C_WHITE}" "${C_RESET}")" "Dashboard" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bCtrl-b 1%b' "${C_WHITE}" "${C_RESET}")" "Team 1" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bCtrl-b arrow%b' "${C_WHITE}" "${C_RESET}")" "Switch pane" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bCtrl-b z%b' "${C_WHITE}" "${C_RESET}")" "Zoom pane" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bCtrl-b d%b' "${C_WHITE}" "${C_RESET}")" "Detach" "$NAV_W")"
-
-  add_right ""
-  add_right ""
-  add_right "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
-  add_right ""
-
-  add_right "  $(dotted_leader "$(printf '%bdoey%b' "${C_WHITE}" "${C_RESET}")" "Launch session" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bdoey add%b' "${C_WHITE}" "${C_RESET}")" "Add column" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bdoey add-team%b' "${C_WHITE}" "${C_RESET}")" "Add team window" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bdoey stop%b' "${C_WHITE}" "${C_RESET}")" "Stop session" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bdoey doctor%b' "${C_WHITE}" "${C_RESET}")" "Health check" "$NAV_W")"
-  add_right "  $(dotted_leader "$(printf '%bdoey list%b' "${C_WHITE}" "${C_RESET}")" "List sessions" "$NAV_W")"
 
   # ══════════════════════════════════════════════════════════════════
   # ██  OUTPUT  ██

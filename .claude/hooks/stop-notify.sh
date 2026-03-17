@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
 
-# Only the Session Manager (Dashboard window 0, pane 0.4) gets notifications
+# Only the Session Manager (Dashboard window 0, pane 0.1) gets notifications
 is_session_manager || exit 0
 
 LAST_MSG=$(parse_field "last_assistant_message")

@@ -151,60 +151,56 @@ setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
 
   # Start: single pane 0.0 (will become Info Panel)
-  # Split left/right — right column gets 60%
-  tmux split-window -h -t "$session:0.0" -p 60 -c "$dir"
+  # Split left/right — right column gets 60% (use -l for tmux 3.4 detached compat)
+  tmux split-window -h -t "$session:0.0" -l 150 -c "$dir"
   # Indices: 0.0=info(left), 0.1=right
 
   # Split right column: top 65% (SM area) + bottom 35% (watchdog row)
-  tmux split-window -v -t "$session:0.1" -p 35 -c "$dir"
+  tmux split-window -v -t "$session:0.1" -l 28 -c "$dir"
   # Indices: 0.0=info, 0.1=top-right, 0.2=bottom-right
 
   # Split bottom-right into 3 horizontal watchdog slots
-  tmux split-window -h -t "$session:0.2" -p 67 -c "$dir"
-  tmux split-window -h -t "$session:0.3" -p 50 -c "$dir"
+  tmux split-window -h -t "$session:0.2" -l 100 -c "$dir"
+  tmux split-window -h -t "$session:0.3" -l 50 -c "$dir"
   # Indices: 0.0=info, 0.1=top-right, 0.2=bot-left, 0.3=bot-mid, 0.4=bot-right
   # Positions: 0.1 at top-right, 0.2/0.3/0.4 across bottom-right
 
-  # Swap panes so indices match convention: 0.1-0.3=watchdogs, 0.4=SM
-  # tmux swap-pane moves pane content between positions; indices stay with panes
-  tmux swap-pane -s "$session:0.1" -t "$session:0.4"
-  tmux swap-pane -s "$session:0.1" -t "$session:0.3"
-  tmux swap-pane -s "$session:0.1" -t "$session:0.2"
-  # Result: 0.1=bot-left(WD1), 0.2=bot-mid(WD2), 0.3=bot-right(WD3), 0.4=top-right(SM)
+  # Layout: 0.0=info(left), 0.1=SM(top-right), 0.2=WD1(bot-left), 0.3=WD2(bot-mid), 0.4=WD3(bot-right)
+  # No swap needed — natural split order already matches desired layout
 
   # Balance watchdog pane widths (tmux percentage rounding causes uneven splits)
   local w1 w2 w3 total target
-  w1=$(tmux display-message -t "$session:0.1" -p '#{pane_width}')
-  w2=$(tmux display-message -t "$session:0.2" -p '#{pane_width}')
-  w3=$(tmux display-message -t "$session:0.3" -p '#{pane_width}')
+  w1=$(tmux display-message -t "$session:0.2" -p '#{pane_width}')
+  w2=$(tmux display-message -t "$session:0.3" -p '#{pane_width}')
+  w3=$(tmux display-message -t "$session:0.4" -p '#{pane_width}')
   total=$((w1 + w2 + w3))
   target=$((total / 3))
-  tmux resize-pane -t "$session:0.1" -x "$target"
   tmux resize-pane -t "$session:0.2" -x "$target"
+  tmux resize-pane -t "$session:0.3" -x "$target"
 
   # Name panes
   tmux select-pane -t "$session:0.0" -T ""
-  tmux select-pane -t "$session:0.1" -T "Watchdog T1"
-  tmux select-pane -t "$session:0.2" -T "Watchdog T2"
-  tmux select-pane -t "$session:0.3" -T "Watchdog T3"
-  tmux select-pane -t "$session:0.4" -T "Session Manager"
+  tmux select-pane -t "$session:0.1" -T "Session Manager"
+  tmux select-pane -t "$session:0.2" -T "Watchdog T1"
+  tmux select-pane -t "$session:0.3" -T "Watchdog T2"
+  tmux select-pane -t "$session:0.4" -T "Watchdog T3"
 
   # Show placeholder in empty Watchdog slots
-  tmux send-keys -t "$session:0.1" "echo 'Watchdog slot — awaiting team assignment...'" Enter
   tmux send-keys -t "$session:0.2" "echo 'Watchdog slot — awaiting team assignment...'" Enter
   tmux send-keys -t "$session:0.3" "echo 'Watchdog slot — awaiting team assignment...'" Enter
+  tmux send-keys -t "$session:0.4" "echo 'Watchdog slot — awaiting team assignment...'" Enter
 
   # Launch info panel and session manager
   tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
-  tmux send-keys -t "$session:0.4" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
+  tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
-  write_pane_status "$runtime_dir" "${session}:0.4" "READY"
+  write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 
   # Export slot pane indices (stable after creation)
-  WDG_SLOT_1="0.1"
-  WDG_SLOT_2="0.2"
-  WDG_SLOT_3="0.3"
-  SM_PANE="0.4"
+  WDG_SLOT_1="0.2"
+  WDG_SLOT_2="0.3"
+  WDG_SLOT_3="0.4"
+  SM_PANE="0.1"
 }
 
 # Validate and auto-fix session.env files with encoding/quoting issues
@@ -1207,26 +1203,26 @@ SESSION_NAME="$session"
 GRID="$grid"
 TOTAL_PANES="$total"
 WORKER_COUNT="$worker_count"
-WATCHDOG_PANE="0.1"
+WATCHDOG_PANE="0.2"
 WORKER_PANES="$worker_panes_csv"
 RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
-WDG_SLOT_1="0.1"
-WDG_SLOT_2="0.2"
-WDG_SLOT_3="0.3"
-SM_PANE="0.4"
+WDG_SLOT_1="0.2"
+WDG_SLOT_2="0.3"
+WDG_SLOT_3="0.4"
+SM_PANE="0.1"
 MANIFEST
 
-  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.1, manager in team pane 0)
-  write_team_env "$runtime_dir" "1" "$grid" "0.1" "$worker_panes_csv" "$worker_count" "0"
+  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
+  write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0"
 
   # Generate shared worker system prompt
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
-  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir"
+  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
@@ -1547,15 +1543,15 @@ reload_session() {
   case "$cur_ses_wdg" in
     0.*) ;; # already correct
     *)
-      # Rewrite WATCHDOG_PANE to "0.1" (default Dashboard slot for team 1)
-      sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.1"/' "${runtime_dir}/session.env"
+      # Rewrite WATCHDOG_PANE to "0.2" (default Dashboard slot for team 1)
+      sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.2"/' "${runtime_dir}/session.env"
       # Add WDG_SLOT entries if missing
       if ! grep -q '^WDG_SLOT_1=' "${runtime_dir}/session.env"; then
-        printf 'WDG_SLOT_1="0.1"\nWDG_SLOT_2="0.2"\nWDG_SLOT_3="0.3"\n' >> "${runtime_dir}/session.env"
+        printf 'WDG_SLOT_1="0.2"\nWDG_SLOT_2="0.3"\nWDG_SLOT_3="0.4"\n' >> "${runtime_dir}/session.env"
       fi
       # Remove stale MGR_SLOT entries
       sed -i '' '/^MGR_SLOT_/d' "${runtime_dir}/session.env"
-      printf "  ${DIM}Fixed stale session.env: WATCHDOG_PANE=%s → 0.1${RESET}\n" "$cur_ses_wdg"
+      printf "  ${DIM}Fixed stale session.env: WATCHDOG_PANE=%s → 0.2${RESET}\n" "$cur_ses_wdg"
       # Re-source with fixed values
       safe_source_session_env "${runtime_dir}/session.env"
       ;;
@@ -2065,25 +2061,25 @@ SESSION_NAME="$session"
 GRID="$grid"
 TOTAL_PANES="$total"
 WORKER_COUNT="$worker_count"
-WATCHDOG_PANE="0.1"
+WATCHDOG_PANE="0.2"
 WORKER_PANES="$worker_panes_csv"
 RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
-WDG_SLOT_1="0.1"
-WDG_SLOT_2="0.2"
-WDG_SLOT_3="0.3"
-SM_PANE="0.4"
+WDG_SLOT_1="0.2"
+WDG_SLOT_2="0.3"
+WDG_SLOT_3="0.4"
+SM_PANE="0.1"
 MANIFEST
 
-  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.1, manager in team pane 0)
-  write_team_env "$runtime_dir" "1" "$grid" "0.1" "$worker_panes_csv" "$worker_count" "0"
+  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
+  write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0"
 
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
-  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir"
+  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
@@ -2279,7 +2275,7 @@ DOG
   # Generate shared worker system prompt
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
-  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir"
+  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
@@ -2326,21 +2322,21 @@ ROWS="2"
 MAX_WORKERS="$max_workers"
 WORKER_PANES=""
 WORKER_COUNT="0"
-WATCHDOG_PANE="0.1"
+WATCHDOG_PANE="0.2"
 CURRENT_COLS="1"
 RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
-WDG_SLOT_1="0.1"
-WDG_SLOT_2="0.2"
-WDG_SLOT_3="0.3"
-SM_PANE="0.4"
+WDG_SLOT_1="0.2"
+WDG_SLOT_2="0.3"
+WDG_SLOT_3="0.4"
+SM_PANE="0.1"
 MANIFEST
 
-  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.1, manager in team pane 0)
-  write_team_env "$runtime_dir" "1" "dynamic" "0.1" "" "0" "0"
+  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
+  write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0"
 
   step_done
 

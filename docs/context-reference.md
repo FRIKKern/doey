@@ -152,7 +152,7 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `CURRENT_COLS` | Current column count (updated as grid expands) | doey.sh | dynamic only |
 | `TOTAL_PANES` | Total pane count | doey.sh | static only |
 | `WORKER_COUNT` | Number of workers | doey.sh | both |
-| `WATCHDOG_PANE` | Watchdog Dashboard slot ref (e.g., `0.1`) | doey.sh | both |
+| `WATCHDOG_PANE` | Watchdog Dashboard slot ref (e.g., `0.2`) | doey.sh | both |
 | `WORKER_PANES` | Comma-separated worker indices | doey.sh | both |
 | `RUNTIME_DIR` | Runtime state directory | doey.sh | both |
 | `PASTE_SETTLE_MS` | Paste buffer settle time in ms | doey.sh | both |
@@ -163,10 +163,10 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `CLAUDECODE` | Set when inside Claude Code | Claude Code | both |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `1` — enables Agent Teams | Claude Code | both |
 | `TEAM_WINDOWS` | Comma-separated list of active team window indices (e.g., `"0,1,2"`) | doey.sh | both |
-| `WDG_SLOT_1` | Dashboard Watchdog pane ref for team 1 (e.g., `0.1`) | doey.sh | both |
-| `WDG_SLOT_2` | Dashboard Watchdog pane ref for team 2 (e.g., `0.2`) | doey.sh | both |
-| `WDG_SLOT_3` | Dashboard Watchdog pane ref for team 3 (e.g., `0.3`) | doey.sh | both |
-| `SM_PANE` | Session Manager pane ref (e.g., `0.4`) | doey.sh | both |
+| `WDG_SLOT_1` | Dashboard Watchdog pane ref for team 1 (e.g., `0.2`) | doey.sh | both |
+| `WDG_SLOT_2` | Dashboard Watchdog pane ref for team 2 (e.g., `0.3`) | doey.sh | both |
+| `WDG_SLOT_3` | Dashboard Watchdog pane ref for team 3 (e.g., `0.4`) | doey.sh | both |
+| `SM_PANE` | Session Manager pane ref (e.g., `0.1`) | doey.sh | both |
 | `DOEY_ROLE` | Pane role (manager/watchdog/worker) | hooks | both |
 | `DOEY_PANE_INDEX` | Pane index within session | hooks | both |
 | `DOEY_WINDOW_INDEX` | Window index for this pane | hooks | both |
@@ -179,7 +179,7 @@ Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source ses
 | `WINDOW_INDEX` | Window index (matches `<W>` in filename) |
 | `GRID` | Grid layout for this window |
 | `MANAGER_PANE` | Window Manager pane index (always `0`) |
-| `WATCHDOG_PANE` | Watchdog Dashboard pane index (0.1-0.3) |
+| `WATCHDOG_PANE` | Watchdog Dashboard pane index (0.2-0.4) |
 | `WORKER_PANES` | Comma-separated worker pane indices (W.1+) |
 | `WORKER_COUNT` | Number of workers in this window |
 | `SESSION_NAME` | tmux session name (same as session.env) |
@@ -202,16 +202,16 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel (left column, full height), pane 0.4 = Session Manager (top-right), panes 0.1-0.3 = Watchdog slots (bottom-right, side-by-side). Team grids start at window 1+.
+Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel (left column, full height), pane 0.1 = Session Manager (top-right), panes 0.2-0.4 = Watchdog slots (bottom-right, side-by-side). Team grids start at window 1+.
 
-Default grid: **dynamic** (launches with 3 worker columns (6 workers), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.1-0.3).
+Default grid: **dynamic** (launches with 3 worker columns (6 workers), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.2-0.4).
 
 ```
 Dashboard (window 0):
 +----------+----------------------------+
-|          |     0.4  Session Manager   |
+|          |     0.1  Session Manager   |
 |   0.0    +--------+--------+----------+
-|   INFO   |  0.1   |  0.2   |  0.3    |
+|   INFO   |  0.2   |  0.3   |  0.4    |
 |  PANEL   |  WDG1  |  WDG2  |  WDG3   |
 |          | (team1)| (team2)| (team3)  |
 +----------+--------+--------+----------+
@@ -310,7 +310,7 @@ Loaded by all instances. Contains: project overview, architecture, key directori
 | Window Manager uses wrong session | `tmux show-environment DOEY_RUNTIME` invalid |
 | Window Manager dispatches to Watchdog | `WATCHDOG_PANE` in session.env wrong |
 | Window Manager sends empty tasks | Task text empty before Enter |
-| Session Manager gets no stop notifications | `stop-notify.sh` not registered; pane not resolving to 0.4 in Dashboard window |
+| Session Manager gets no stop notifications | `stop-notify.sh` not registered; pane not resolving to 0.1 in Dashboard window |
 | Watchdog stops monitoring | Stop hook keep-alive failing; check `WATCHDOG_PANE` |
 | Watchdog spams notifications | State tracking lost after compaction |
 | All panes think they're Window Manager | Hook using bare `tmux display-message` without `-t "$TMUX_PANE"` |
