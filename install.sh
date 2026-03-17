@@ -38,23 +38,194 @@ printf "${BRAND}│${RESET}  ${DIM}Multi-agent orchestration for Claude Code${RE
 printf "${BRAND}└────────────────────────────────────────────┘${RESET}\n"
 echo ""
 
+# ── Platform detection ──────────────────────────────────────────────
+detect_platform() {
+  case "$(uname -s)" in
+    Darwin) echo "macos" ;;
+    Linux)  echo "linux" ;;
+    *)      echo "unknown" ;;
+  esac
+}
+PLATFORM=$(detect_platform)
+IS_INTERACTIVE=false
+[ -t 0 ] && IS_INTERACTIVE=true
+
+ask_install() {
+  local name="$1"
+  printf "  ${WARN}⚠${RESET}  ${BOLD}%s${RESET} is not installed.\n" "$name"
+  if [ "$IS_INTERACTIVE" = true ]; then
+    printf "     Install it now? ${DIM}[y/N]${RESET} "
+    read -r reply
+    case "$reply" in
+      [Yy]*) return 0 ;;
+      *)     return 1 ;;
+    esac
+  else
+    return 1
+  fi
+}
+
+run_install() {
+  local name="$1" cmd="$2"
+  printf "     ${DIM}Running: %s${RESET}\n" "$cmd"
+  if eval "$cmd"; then
+    printf "  ${SUCCESS}✓${RESET} %s installed successfully\n" "$name"
+    return 0
+  else
+    printf "  ${ERROR}✗${RESET} Failed to install %s\n" "$name"
+    return 1
+  fi
+}
+
 # ── Prerequisite checks ──────────────────────────────────────────────
 printf "${BOLD}  Checking prerequisites...${RESET}\n"
+echo ""
+HAS_NODE=false
+HAS_BREW=false
+if command -v brew &>/dev/null; then
+  HAS_BREW=true
+fi
 
-# tmux — required
+# ── git (required) ──
+if command -v git &>/dev/null; then
+  printf "  ${SUCCESS}✓${RESET} git\n"
+else
+  if ask_install "git"; then
+    case "$PLATFORM" in
+      macos)
+        if [ "$HAS_BREW" = true ]; then
+          run_install "git" "brew install git" || die "Failed to install git."
+        else
+          die "git is not installed and Homebrew is not available." \
+              "Install Homebrew first: https://brew.sh  — then re-run this installer."
+        fi
+        ;;
+      linux)
+        run_install "git" "sudo apt-get update && sudo apt-get install -y git" || die "Failed to install git."
+        ;;
+      *)
+        die "git is not installed." "Please install git manually and re-run this installer."
+        ;;
+    esac
+  else
+    die "git is required." \
+        "Install: brew install git (macOS) | apt install git (Linux)"
+  fi
+fi
+
+# ── tmux (required) ──
 if command -v tmux &>/dev/null; then
   TMUX_VER=$(tmux -V 2>/dev/null | head -1)
   printf "  ${SUCCESS}✓${RESET} tmux ${DIM}(%s)${RESET}\n" "$TMUX_VER"
+  # Check version — warn if < 3.0
+  TMUX_MAJOR=$(echo "$TMUX_VER" | sed 's/[^0-9.]//g' | cut -d. -f1)
+  if [ -n "$TMUX_MAJOR" ] && [ "$TMUX_MAJOR" -lt 3 ] 2>/dev/null; then
+    warn_msg "tmux 3.0+ recommended (you have $TMUX_VER)"
+  fi
 else
-  die "tmux is not installed — it is required." \
-      "Install: brew install tmux  (macOS) | apt install tmux  (Linux)"
+  if ask_install "tmux"; then
+    case "$PLATFORM" in
+      macos)
+        if [ "$HAS_BREW" = true ]; then
+          run_install "tmux" "brew install tmux" || die "Failed to install tmux."
+        else
+          die "tmux is not installed and Homebrew is not available." \
+              "Install Homebrew first: https://brew.sh  — then re-run this installer."
+        fi
+        ;;
+      linux)
+        run_install "tmux" "sudo apt-get update && sudo apt-get install -y tmux" || die "Failed to install tmux."
+        ;;
+      *)
+        die "tmux is not installed." "Please install tmux manually and re-run this installer."
+        ;;
+    esac
+  else
+    die "tmux is required." \
+        "Install: brew install tmux (macOS) | apt install tmux (Linux)"
+  fi
 fi
 
-# claude CLI — recommended
+# ── Node.js 18+ (required for Claude Code) ──
+if command -v node &>/dev/null; then
+  NODE_VER=$(node -v 2>/dev/null | sed 's/^v//')
+  NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
+  if [ -n "$NODE_MAJOR" ] && [ "$NODE_MAJOR" -ge 18 ] 2>/dev/null; then
+    printf "  ${SUCCESS}✓${RESET} Node.js ${DIM}(v%s)${RESET}\n" "$NODE_VER"
+    HAS_NODE=true
+  else
+    warn_msg "Node.js 18+ required (you have v${NODE_VER})"
+    if ask_install "Node.js 18+"; then
+      case "$PLATFORM" in
+        macos)
+          if [ "$HAS_BREW" = true ]; then
+            run_install "Node.js" "brew install node" && HAS_NODE=true
+          else
+            warn_msg "Install Homebrew (https://brew.sh) then: brew install node"
+          fi
+          ;;
+        linux)
+          echo ""
+          printf "     ${BOLD}To install Node.js on Linux, run:${RESET}\n"
+          printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash${RESET}\n"
+          printf "     ${BRAND}fnm install 22${RESET}\n"
+          printf "     ${DIM}Then re-run this installer.${RESET}\n"
+          ;;
+        *)
+          warn_msg "Install Node.js 18+ from https://nodejs.org"
+          ;;
+      esac
+    else
+      warn_msg "Node.js 18+ is needed for Claude Code — install later from https://nodejs.org"
+    fi
+  fi
+else
+  if ask_install "Node.js"; then
+    case "$PLATFORM" in
+      macos)
+        if [ "$HAS_BREW" = true ]; then
+          run_install "Node.js" "brew install node" && HAS_NODE=true
+        else
+          warn_msg "Install Homebrew (https://brew.sh) then: brew install node"
+        fi
+        ;;
+      linux)
+        echo ""
+        printf "     ${BOLD}To install Node.js on Linux, run:${RESET}\n"
+        printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash${RESET}\n"
+        printf "     ${BRAND}fnm install 22${RESET}\n"
+        printf "     ${DIM}Then re-run this installer.${RESET}\n"
+        ;;
+      *)
+        warn_msg "Install Node.js 18+ from https://nodejs.org"
+        ;;
+    esac
+  else
+    warn_msg "Node.js is needed for Claude Code — install later from https://nodejs.org"
+  fi
+fi
+
+# ── Claude Code CLI (recommended) ──
 if command -v claude &>/dev/null; then
   printf "  ${SUCCESS}✓${RESET} claude CLI\n"
 else
-  warn_msg "claude CLI not found (install later: npm i -g @anthropic-ai/claude-code)"
+  if [ "$HAS_NODE" = true ]; then
+    if ask_install "Claude Code CLI"; then
+      run_install "Claude Code" "npm install -g @anthropic-ai/claude-code" || \
+        warn_msg "Failed to install Claude Code — try manually: npm i -g @anthropic-ai/claude-code"
+    else
+      warn_msg "claude CLI not found (install later: npm i -g @anthropic-ai/claude-code)"
+    fi
+  else
+    warn_msg "claude CLI not found — install Node.js first, then: npm i -g @anthropic-ai/claude-code"
+  fi
+fi
+
+# ── jq (optional) ──
+if command -v jq &>/dev/null; then
+  printf "  ${SUCCESS}✓${RESET} jq\n"
+else
+  warn_msg "jq not found (optional — hooks will use python3 fallback)"
 fi
 
 # Already installed?

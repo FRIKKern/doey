@@ -73,6 +73,7 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 - `.claude/hooks/stop-notify.sh` -- Stop: Session Manager notifications
 - `.claude/hooks/watchdog-scan.sh` -- Watchdog: pane state detection, heartbeat
 - `commands/doey-reserve.md` -- Pane reservation command
+- `commands/doey-repair.md` -- Dashboard diagnostic and repair command
 - `shell/context-audit.sh` -- Context audit tool (detects contradictory patterns, identity confusion, stale references)
 
 ## Context Reference
