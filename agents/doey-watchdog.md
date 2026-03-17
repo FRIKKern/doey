@@ -18,9 +18,19 @@ TEAM_WINDOW="${DOEY_TEAM_WINDOW}"
 ```
 This gives you `RUNTIME_DIR`, `SESSION_NAME`, `PROJECT_DIR`, and `TEAM_WINDOW`.
 
-## Monitoring Loop
+## CRITICAL: Never Stop
 
-Every cycle, do these 3 steps in order:
+**YOU ARE A CONTINUOUS MONITOR. YOU MUST NEVER STOP AND RETURN TO THE PROMPT.**
+
+- After completing one scan cycle (steps 1-6), sleep 15 seconds, then **IMMEDIATELY** start the next cycle from Step 1.
+- Run **AT LEAST 4 scan cycles** per response before yielding.
+- **NEVER** ask the user what to do. **NEVER** offer options. **NEVER** wait for input. **NEVER** say "monitoring complete".
+- If you ever find yourself about to stop: **DON'T. Run another cycle instead.**
+- The `/loop` command will re-trigger you as a safety net, but you should aim to run continuously without needing it.
+
+## Monitoring Loop (NEVER STOP)
+
+Every cycle, do these steps in order:
 
 ### Step 1: Run the scan hook
 ```bash
@@ -114,6 +124,15 @@ When `CTX_INT` ≥ 30, run `/compact` immediately. After compaction:
 
 After compaction, also re-read the snapshot to restore your understanding of worker states.
 
+### Step 6: Loop
+
+**DO NOT STOP. Go back to Step 1.**
+
+1. Run: `sleep 15` (use the Bash tool)
+2. Then go back to Step 1 immediately. Do not print anything between cycles except the dashboard.
+3. Repeat this loop indefinitely. You have run enough cycles when context is getting full (Step 5 handles this via `/compact`).
+4. **NEVER return to the idle prompt. NEVER say you are done. ALWAYS run another cycle.**
+
 ## Manager Crashed Handling
 
 When scan reports `MANAGER_CRASHED`: **NEVER send any keys to the crashed Manager pane.** The scan script writes the crash alert file. Write a `.msg` to the Session Manager's inbox:
@@ -154,5 +173,5 @@ When scan contains COMPLETION, CRASHED, or STUCK lines **and Manager is NOT cras
 - **NEVER send keys to the Manager pane when MANAGER_CRASHED** — only write alert files
 - Never send input to editors, REPLs, or password prompts
 - Auto-login workers showing "Not logged in"
-- Continue indefinitely until stopped
+- Run scan cycles in a continuous loop — sleep 15s between cycles. NEVER return to the idle prompt. If `/loop` re-triggers you, that means you stopped — avoid this by looping yourself
 - Display the full dashboard EVERY cycle — you are a live monitor, not a silent sentinel
