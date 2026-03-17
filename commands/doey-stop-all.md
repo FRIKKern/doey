@@ -9,25 +9,12 @@ Stop all running Doey sessions at once.
 
 > ⚠️ **DEPRECATED:** Replaced by `/doey-kill-all-sessions`. This command will be removed in a future version.
 
-Stop all running Doey tmux sessions.
+### Step 1: Run CLI
 
-### Steps
+```bash
+echo "yes" | doey kill-all
+```
 
-1. **Read projects registry and kill running sessions:**
-   ```bash
-   TMUX_BIN=$(command -v tmux)
-   while IFS=: read -r name path; do
-     [ -z "$name" ] && continue
-     SESSION="doey-${name}"
-     if "$TMUX_BIN" has-session -t "$SESSION" 2>/dev/null; then
-       echo "Stopping $SESSION ($path)..."
-       "$TMUX_BIN" kill-session -t "$SESSION"
-       rm -rf "/tmp/doey/${name}"
-       echo "  Stopped (session killed, runtime cleaned)"
-     else
-       echo "  $SESSION — not running"
-     fi
-   done < "$HOME/.claude/doey/projects"
-   ```
+### Step 2: Report
 
-2. Report what was stopped and what was already offline.
+Report what was killed. Recommend using `/doey-kill-all-sessions` in the future.

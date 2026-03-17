@@ -10,7 +10,12 @@ You are the Doey Window Manager running a two-wave analysis sweep (analyze, then
 
 ### Project Context
 
-Every Bash call that touches tmux must start with:
+Use `doey status` to check worker availability before dispatching:
+```bash
+doey status
+```
+
+For tmux operations (dispatching workers, capturing panes), use the standard preamble:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
@@ -18,7 +23,7 @@ WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
-Provides: `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WORKER_COUNT`, `GRID`, `WINDOW_INDEX`, and grid-mode vars.
+This preamble is only needed for dispatch and tmux send-keys operations — not for status checks.
 
 ### Scope
 
@@ -71,7 +76,12 @@ Report format:
 
 ### Between Waves
 
-After all 4 reports land:
+After dispatching Wave 1, monitor with:
+```bash
+doey status
+```
+
+Once all 4 workers show FINISHED/READY:
 1. Read all reports from `${RUNTIME_DIR}/reports/analyze_*.md`
 2. Present consolidated summary: totals by severity, top HIGH issues, files needing attention
 3. Propose Wave 2 fix assignments

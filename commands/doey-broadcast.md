@@ -1,49 +1,25 @@
 # Skill: doey-broadcast
 
-Broadcast a message to ALL other Claude instances in TMUX.
+Broadcast a message to all Claude instances in the session.
 
 ## Usage
-`/doey-broadcast`
+`/doey-broadcast [message]`
 
 ## Prompt
-You are broadcasting a message to all other Claude Code instances.
+You are broadcasting a message to all Claude Code instances in the tmux session.
 
 ### Step 1: Get the message
 
-Ask the user for the broadcast message if not already provided as an argument. Store it in `$MESSAGE`.
+If a message was provided as an argument, use it. Otherwise ask the user what they want to broadcast.
 
-### Step 2: Create broadcast and deliver to all panes
+### Step 2: Broadcast
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-TIMESTAMP=$(gdate +%s%N 2>/dev/null || echo "$(date +%s)$$")
-
-mkdir -p "${RUNTIME_DIR}/broadcasts" "${RUNTIME_DIR}/messages"
-
-MESSAGE="YOUR_MESSAGE_HERE"
-
-cat > "${RUNTIME_DIR}/broadcasts/${TIMESTAMP}.broadcast" <<EOF
-FROM: $MY_PANE
-TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
----
-$MESSAGE
-EOF
-
-DELIVERED=0
-for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
-  [ "$pane" = "$MY_PANE" ] && continue
-  PANE_SAFE=$(echo "$pane" | tr ':.' '_')
-  cp "${RUNTIME_DIR}/broadcasts/${TIMESTAMP}.broadcast" "${RUNTIME_DIR}/messages/${PANE_SAFE}_${TIMESTAMP}.msg"
-  DELIVERED=$((DELIVERED + 1))
-done
-
-echo "Broadcast delivered to ${DELIVERED} panes"
+doey broadcast "Your message here"
 ```
 
-Replace `YOUR_MESSAGE_HERE` with the actual message before running.
+The CLI handles: creating broadcast files, delivering to all pane message queues, counting deliveries.
 
-### Step 3: Confirm delivery
+### Step 3: Confirm
 
-Report how many panes the message was delivered to. The Watchdog delivers messages to idle panes via `send-keys`.
+Report the CLI output — how many panes received the broadcast. The Watchdog delivers queued messages to idle panes automatically.
