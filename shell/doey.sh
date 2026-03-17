@@ -255,10 +255,11 @@ setup_dashboard() {
   # Indices: 0.0=info, 0.1=top-right, 0.2=bottom-right
 
   # Split bottom-right into 6 horizontal watchdog slots
+  # Each split targets the NEW (right/larger) pane from the previous split
   tmux split-window -h -t "$session:0.2" -l 125 -c "$dir"
-  tmux split-window -h -t "$session:0.2" -l 100 -c "$dir"
-  tmux split-window -h -t "$session:0.2" -l 75 -c "$dir"
-  tmux split-window -h -t "$session:0.4" -l 50 -c "$dir"
+  tmux split-window -h -t "$session:0.3" -l 100 -c "$dir"
+  tmux split-window -h -t "$session:0.4" -l 75 -c "$dir"
+  tmux split-window -h -t "$session:0.5" -l 50 -c "$dir"
   tmux split-window -h -t "$session:0.6" -l 25 -c "$dir"
   # Indices: 0.0=info, 0.1=SM, 0.2=WD1, 0.3=WD2, 0.4=WD3, 0.5=WD4, 0.6=WD5, 0.7=WD6
 
