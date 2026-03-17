@@ -221,38 +221,72 @@ CRASH_EOF
   read -r OLD_HASH < "$HASH_FILE" 2>/dev/null || OLD_HASH=""
 
   if [ "$HASH" = "$OLD_HASH" ]; then
-    # Stuck-worker counter: increment on UNCHANGED, check previous state
-    COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
-    read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
-    NEW_COUNT=$((OLD_COUNT + 1))
-    echo "$NEW_COUNT" > "$COUNTER_FILE"
-
-    eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
-
-    # After 6 consecutive UNCHANGED cycles, escalate to STUCK
-    # BUT only if previous state was WORKING or CHANGED (active work)
-    _unch_state=""
-    if [ "$NEW_COUNT" -ge 6 ] && { [ "$PREV" = "WORKING" ] || [ "$PREV" = "CHANGED" ] || [ "$PREV" = "UNCHANGED" ]; }; then
-      echo "PANE ${i} STUCK (unchanged for ${NEW_COUNT} cycles)"; SCAN_HAD_OUTPUT=true
-      _unch_state="STUCK"
-    else
-      # Suppress UNCHANGED output — only STUCK gets printed
-      _unch_state="UNCHANGED"
-    fi
-    eval "PANE_STATE_${i}='${_unch_state}'"
-    # Duration tracking — state hasn't changed display-wise, keep existing since
+    # Content unchanged — but is the pane idle or actually working?
+    # Check if pane is sitting at the prompt (idle) vs actively processing
     _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
     eval "PANE_TITLE_${i}='${_pt}'"
     eval "PANE_TOOL_${i}=''"
-    STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
-    # Map UNCHANGED→WORKING/IDLE for display state comparison
-    case "$PREV" in
-      WORKING|CHANGED|STUCK) _display_state="WORKING" ;;
-      *) _display_state="IDLE" ;;
+
+    # Re-check capture for idle prompt — an idle worker at ❯ is not stuck
+    _unch_capture=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || _unch_capture=""
+    _is_at_prompt=""
+    case "$_unch_capture" in
+      *'❯'*|*'● Ready'*) _is_at_prompt="yes" ;;
     esac
-    read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
-    eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
-    eval "PANE_PREV_DISPLAY_${i}='${_display_state}'"
+
+    eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
+    STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
+
+    if [ -n "$_is_at_prompt" ]; then
+      # Pane is at the prompt — it's IDLE, not stuck
+      rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
+      _unch_state="IDLE"
+      # Only print if this is a state change
+      if [ "$PREV" != "IDLE" ] && [ "$PREV" != "UNCHANGED" ] || [ "$PREV" = "UNCHANGED" ]; then
+        # Suppress repeated IDLE — only report on transition
+        case "$PREV" in
+          IDLE|UNCHANGED) ;;
+          *) echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true ;;
+        esac
+      fi
+      # Display state for duration tracking
+      _display_prev="IDLE"
+      case "$PREV" in
+        WORKING|CHANGED|STUCK) _display_prev="WORKING" ;;
+        IDLE|UNCHANGED|FINISHED) _display_prev="IDLE" ;;
+        *) _display_prev="$PREV" ;;
+      esac
+      if [ "$_display_prev" != "IDLE" ]; then
+        echo "$SCAN_TIME" > "$STATE_SINCE_FILE"
+        eval "PANE_DURATION_${i}=0"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${i} ${_display_prev}->IDLE${NL}"
+      else
+        read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
+        eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
+      fi
+      eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
+    else
+      # Pane content unchanged and NOT at prompt — could be stuck
+      COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
+      read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
+      NEW_COUNT=$((OLD_COUNT + 1))
+      echo "$NEW_COUNT" > "$COUNTER_FILE"
+
+      # After 6 consecutive UNCHANGED cycles while not at prompt, escalate to STUCK
+      _unch_state=""
+      if [ "$NEW_COUNT" -ge 6 ]; then
+        echo "PANE ${i} STUCK (unchanged for ${NEW_COUNT} cycles, not at prompt)"; SCAN_HAD_OUTPUT=true
+        _unch_state="STUCK"
+      else
+        _unch_state="UNCHANGED"
+      fi
+      # Display state for duration tracking
+      _display_state="WORKING"
+      read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
+      eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
+      eval "PANE_PREV_DISPLAY_${i}='${_display_state}'"
+    fi
+    eval "PANE_STATE_${i}='${_unch_state}'"
     continue
   fi
 
@@ -317,7 +351,8 @@ CRASH_EOF
     *) _display_now="$_classified_state" ;;
   esac
   case "$_prev_for_dur" in
-    WORKING|CHANGED|UNCHANGED) _display_prev="WORKING" ;;
+    WORKING|CHANGED|UNCHANGED|STUCK) _display_prev="WORKING" ;;
+    IDLE|FINISHED) _display_prev="IDLE" ;;
     *) _display_prev="$_prev_for_dur" ;;
   esac
   STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
@@ -349,7 +384,7 @@ for i in $PANES_LIST; do
   eval "_st=\${PANE_STATE_${i}:-UNKNOWN}"
   eval "_dur=\${PANE_DURATION_${i}:-0}"
   case "$_st" in
-    WORKING|CHANGED) _n_working=$((_n_working + 1))
+    WORKING|CHANGED|UNCHANGED) _n_working=$((_n_working + 1))
       eval "_pt=\${PANE_TITLE_${i}:-}"
       [ -n "$_pt" ] && _active_titles="${_active_titles:+${_active_titles}, }${i}:${_pt}"
       # Track longest-running worker
@@ -432,9 +467,10 @@ SNAPSHOT_TMP="${SNAPSHOT_FILE}.tmp"
     eval "_sn_dur=\${PANE_DURATION_${i}:-0}"
     eval "_sn_tool=\${PANE_TOOL_${i}:-}"
     eval "_sn_prev=\${PANE_PREV_DISPLAY_${i}:-}"
-    # Normalize display state (CHANGED/UNCHANGED→WORKING for snapshot)
+    # Normalize display state for snapshot
     case "$_sn_st" in
-      CHANGED|UNCHANGED) _sn_st="WORKING" ;;
+      CHANGED) _sn_st="WORKING" ;;
+      UNCHANGED) _sn_st="WORKING" ;;  # Brief transitional state before IDLE or STUCK
     esac
     printf '%s|%s|%s|%s|%s|%s\n' "$i" "$_sn_st" "$_sn_title" "$_sn_dur" "$_sn_tool" "$_sn_prev"
   done
@@ -465,6 +501,30 @@ done
 JSON+="}"
 echo "$JSON" > "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json.tmp" && \
   mv "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json.tmp" "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json"
+
+# --- Append snapshot inline (so watchdog doesn't need a second tool call) ---
+if [ -f "$SNAPSHOT_FILE" ]; then
+  echo "--- SNAPSHOT ---"
+  cat "$SNAPSHOT_FILE"
+  echo "--- END SNAPSHOT ---"
+fi
+
+# --- Context check: detect watchdog's own context % from pane status line ---
+# Parse "Ctx ████░░░░░░ 42%" from the watchdog's pane (TMUX_PANE = self)
+_ctx_line=$(tmux capture-pane -t "${TMUX_PANE}" -p -S -5 2>/dev/null | grep 'Ctx ' | tail -1) || _ctx_line=""
+_ctx_pct=""
+if [ -n "$_ctx_line" ]; then
+  # Extract percentage number from "Ctx ████░░░░░░ 42%"
+  _ctx_pct=$(echo "$_ctx_line" | sed 's/.*Ctx [^ ]* //;s/%.*//')
+  # Strip whitespace
+  _ctx_pct="${_ctx_pct// /}"
+fi
+is_numeric "$_ctx_pct" || _ctx_pct="0"
+if [ "$_ctx_pct" -ge 25 ]; then
+  echo ""
+  echo "⚠️  COMPACT_NOW — context at ${_ctx_pct}% (threshold: 25%)"
+  echo "You MUST run /compact immediately. Do NOT run another scan cycle first."
+fi
 
 # --- Summary footer ---
 echo "SCAN_TIME=${SCAN_TIME}"
