@@ -115,11 +115,13 @@ read_team_windows() {
   echo "${tw:-0}"
 }
 
-# Usage: write_team_env <runtime_dir> <window_index> <grid> <watchdog_pane> <worker_panes> <worker_count>
+# Usage: write_team_env <runtime_dir> <window_index> <grid> <watchdog_pane> <worker_panes> <worker_count> [manager_pane] [worktree_dir] [worktree_branch]
 write_team_env() {
   local runtime_dir="$1" window_index="$2" grid="$3"
   local watchdog_pane="$4" worker_panes="$5" worker_count="$6"
   local manager_pane="${7:-0}"
+  local worktree_dir="${8:-}"
+  local worktree_branch="${9:-}"
   local session_name
   session_name=$(grep '^SESSION_NAME=' "${runtime_dir}/session.env" | cut -d= -f2)
   session_name="${session_name//\"/}"
@@ -131,6 +133,8 @@ WATCHDOG_PANE="${watchdog_pane}"
 WORKER_PANES="${worker_panes}"
 WORKER_COUNT="${worker_count}"
 SESSION_NAME="${session_name}"
+WORKTREE_DIR="${worktree_dir}"
+WORKTREE_BRANCH="${worktree_branch}"
 TEAMEOF
   mv "${runtime_dir}/team_${window_index}.env.tmp" "${runtime_dir}/team_${window_index}.env"
 }
@@ -150,6 +154,80 @@ generate_team_agent() {
     mv "${dst}.tmp" "$dst"
   fi
   echo "$new_name"
+}
+
+# Create a git worktree for a team window (isolated repo copy).
+# Usage: create_team_worktree <project_dir> <team_window> [branch_name]
+# Echoes the worktree path on success; returns 1 on failure.
+create_team_worktree() {
+  local project_dir="$1" team_window="$2" branch_name="${3:-}"
+  if [ -z "$branch_name" ]; then
+    branch_name="doey/team-${team_window}-$(date +%m%d-%H%M)"
+  fi
+  local project_name
+  project_name="$(basename "$project_dir")"
+  local wt_path="/tmp/doey/${project_name}/worktrees/team-${team_window}"
+  mkdir -p "$(dirname "$wt_path")"
+  if ! git -C "$project_dir" worktree add "$wt_path" -b "$branch_name" 2>/dev/null; then
+    if ! git -C "$project_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
+      echo "Error: failed to create worktree at $wt_path for branch $branch_name" >&2
+      return 1
+    fi
+  fi
+  # Copy hook settings into the worktree so Claude Code picks them up
+  if [ -f "$project_dir/.claude/settings.local.json" ]; then
+    mkdir -p "$wt_path/.claude"
+    cp "$project_dir/.claude/settings.local.json" "$wt_path/.claude/"
+  fi
+  echo "$wt_path"
+}
+
+# Remove a git worktree and prune stale entries.
+# Usage: remove_team_worktree <project_dir> <worktree_dir>
+remove_team_worktree() {
+  local project_dir="$1" worktree_dir="$2"
+  [ -z "$worktree_dir" ] && return 0
+  [ -d "$worktree_dir" ] || return 0
+  git -C "$project_dir" worktree remove "$worktree_dir" --force 2>/dev/null || true
+  git -C "$project_dir" worktree prune 2>/dev/null || true
+}
+
+# Safely remove a worktree, auto-saving uncommitted changes first.
+# Calls remove_team_worktree() for the actual removal after preserving work.
+# Usage: _worktree_safe_remove <project_dir> <worktree_dir> [force]
+_worktree_safe_remove() {
+  local project_dir="$1" worktree_dir="$2" force="${3:-false}"
+
+  # Guard: nothing to do if dir doesn't exist
+  if [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ]; then
+    return 0
+  fi
+
+  # Check for uncommitted changes
+  local dirty=""
+  dirty=$(git -C "$worktree_dir" status --porcelain 2>/dev/null) || true
+
+  if [ -n "$dirty" ] && [ "$force" != "true" ]; then
+    # Auto-commit to preserve work
+    local branch_name
+    branch_name=$(git -C "$worktree_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    git -C "$worktree_dir" add -A 2>/dev/null || true
+    git -C "$worktree_dir" commit -m "doey: auto-save before teardown $(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null || true
+    printf '  Worktree had uncommitted changes — auto-saved to branch: %s\n' "$branch_name"
+  fi
+
+  # Report if branch has unmerged commits
+  local branch_name commits_ahead
+  branch_name=$(git -C "$worktree_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if [ -n "$branch_name" ] && [ "$branch_name" != "HEAD" ]; then
+    commits_ahead=$(git -C "$project_dir" rev-list --count "HEAD..${branch_name}" 2>/dev/null || echo "0")
+    if [ "$commits_ahead" -gt 0 ] 2>/dev/null; then
+      printf '  Branch %s has %s commit(s). Merge with: git merge %s\n' "$branch_name" "$commits_ahead" "$branch_name"
+    fi
+  fi
+
+  # Remove worktree via existing helper
+  remove_team_worktree "$project_dir" "$worktree_dir"
 }
 
 # Build the Dashboard window (window 0) with 2 columns:
@@ -397,8 +475,26 @@ _kill_doey_session() {
   sleep 1
   # Kill the tmux session
   tmux kill-session -t "$session" < /dev/null 2>/dev/null || true
-  # Clean up runtime directory
+  # Clean up worktrees before removing runtime dir
   local project_name="${session#doey-}"
+  local _sess_env="/tmp/doey/${project_name}/session.env"
+  if [ -f "$_sess_env" ]; then
+    local _proj_dir
+    _proj_dir=$(grep '^PROJECT_DIR=' "$_sess_env" | cut -d= -f2- | tr -d '"')
+    if [ -n "$_proj_dir" ]; then
+      local _te _wt_dir
+      for _te in "/tmp/doey/${project_name}"/team_*.env; do
+        [ -f "$_te" ] || continue
+        _wt_dir=$(grep '^WORKTREE_DIR=' "$_te" | cut -d= -f2- | tr -d '"')
+        if [ -n "$_wt_dir" ]; then
+          _worktree_safe_remove "$_proj_dir" "$_wt_dir"
+        fi
+      done
+      git -C "$_proj_dir" worktree prune 2>/dev/null || true
+    fi
+  fi
+
+  # Clean up runtime directory
   rm -rf "/tmp/doey/${project_name}" 2>/dev/null || true
 }
 
@@ -514,6 +610,11 @@ WORKER_PROMPT
 - **Name:** ${name}
 - **Root:** ${dir}
 - **Runtime directory:** ${runtime_dir}
+
+## Workspace
+- If your working directory differs from the main project, you are on an isolated worktree branch
+- Use absolute paths based on your working directory
+- Other teams cannot see your file changes until the branch is merged
 WORKER_CONTEXT
 }
 
@@ -1234,7 +1335,7 @@ SM_PANE="0.1"
 MANIFEST
 
   # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
-  write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0"
+  write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0" "" ""
 
   # Generate shared worker system prompt
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
@@ -1548,6 +1649,16 @@ reload_session() {
   # 3. Copy hooks to project dir (if not the doey repo itself)
   install_doey_hooks "$dir" "  "
 
+  # 3b. Also refresh hooks in worktree directories
+  for _te in "${runtime_dir}"/team_*.env; do
+    [ -f "$_te" ] || continue
+    local _wt_dir
+    _wt_dir=$(grep '^WORKTREE_DIR=' "$_te" | cut -d= -f2- | tr -d '"')
+    if [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ]; then
+      install_doey_hooks "$_wt_dir" "  "
+    fi
+  done
+
   # 4. Source current session.env to know the layout
   if [ ! -f "${runtime_dir}/session.env" ]; then
     printf "  ${ERROR}✗ session.env not found${RESET}\n"
@@ -1615,7 +1726,7 @@ reload_session() {
         cur_wpanes="${cur_wpanes//\"/}"
         cur_wcount=$(grep '^WORKER_COUNT=' "$team_env" | cut -d= -f2)
         cur_wcount="${cur_wcount//\"/}"
-        write_team_env "$runtime_dir" "$tw" "dynamic" "$slot_val" "$cur_wpanes" "$cur_wcount" "0"
+        write_team_env "$runtime_dir" "$tw" "dynamic" "$slot_val" "$cur_wpanes" "$cur_wcount" "0" "" ""
         printf "    ${DIM}Fixed stale team_${tw}.env: WATCHDOG_PANE=%s → %s${RESET}\n" "$cur_wdg" "$slot_val"
         ;;
     esac
@@ -2099,7 +2210,7 @@ SM_PANE="0.1"
 MANIFEST
 
   # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
-  write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0"
+  write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0" "" ""
 
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
@@ -2362,7 +2473,7 @@ SM_PANE="0.1"
 MANIFEST
 
   # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
-  write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0"
+  write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
 
   step_done
 
@@ -2407,7 +2518,7 @@ MANIFEST
   step_done
 
   # ── Step 7: Add initial worker columns ──────────────────────────
-  STEP_TOTAL=7
+  STEP_TOTAL=9
   step_start 7 "Adding ${INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
 
   # Wait for Window Manager/Watchdog to settle before adding columns
@@ -2424,7 +2535,7 @@ MANIFEST
   # ── Step 8: Add additional team windows ────────────────────────────
   local _extra_teams=$((INITIAL_TEAMS - 1))
   if [ "$_extra_teams" -gt 0 ]; then
-    STEP_TOTAL=8
+    STEP_TOTAL=9
     step_start 8 "Adding ${_extra_teams} more team windows..."
 
     local _team_i
@@ -2435,7 +2546,15 @@ MANIFEST
 
     step_done
   fi
-  STEP_TOTAL=6
+
+  # ── Step 9: Add isolated worktree team ──────────────────────────
+  STEP_TOTAL=9
+  step_start 9 "Adding isolated worktree team..."
+  if add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto"; then
+    step_done
+  else
+    printf "${WARN}skipped${RESET}\n"
+  fi
 
   # Read final team windows list for summary
   local final_team_windows
@@ -2611,6 +2730,16 @@ doey_add_column() {
     [ "$current_cols" -lt 1 ] && current_cols=1
   fi
 
+  # Check if this team uses a worktree; if so, use worktree path for new panes
+  local team_dir="$dir"
+  if [ -f "$team_env" ]; then
+    local _wt_dir
+    _wt_dir=$(grep '^WORKTREE_DIR=' "$team_env" | cut -d= -f2- | tr -d '"')
+    if [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ]; then
+      team_dir="$_wt_dir"
+    fi
+  fi
+
   if [[ "$team_grid" != "dynamic" ]]; then
     printf "  ${ERROR}Team window %s is not using dynamic grid mode${RESET}\n" "$team_window"
     return 1
@@ -2627,13 +2756,13 @@ doey_add_column() {
   # then split that new pane vertically for 2 worker rows.
   local last_pane
   last_pane="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
-  tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$dir"
+  tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$team_dir"
   sleep 0.3
 
   # The new pane is the new last pane
   local new_pane_top
   new_pane_top="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
-  tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$dir"
+  tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$team_dir"
   sleep 0.3
 
   # Bottom pane is now the last pane
@@ -2656,7 +2785,7 @@ doey_add_column() {
   local new_cols=$(( current_cols + 1 ))
 
   # Update team env with new worker state
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count"
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count" "" "" ""
 
   # Launch Claude in both new panes
   local worker_prompt_file_1="${runtime_dir}/worker-system-prompt-w${team_window}-${w1_num}.md"
@@ -2798,7 +2927,7 @@ doey_remove_column() {
   local new_cols=$(( current_cols - 1 ))
 
   # Update team env only (session.env is session-level, not per-team)
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count"
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count" "" "" ""
 
   # Rebalance to proper column layout (each column = 2 rows)
   rebalance_grid_layout "$session" "$team_window"
@@ -2814,14 +2943,42 @@ doey_remove_column() {
 # Usage: add_dynamic_team_window <session> <runtime_dir> <dir> [initial_cols]
 add_dynamic_team_window() {
   local session="$1" runtime_dir="$2" dir="$3" initial_cols="${4:-$INITIAL_WORKER_COLS}"
+  local worktree_spec="${5:-}"
 
-  # Create new window with just the Manager pane
+  # Create worktree if requested
+  local team_dir="$dir"
+  local worktree_branch=""
+  local wt_dir_for_env=""
+
+  # Create new window with just the Manager pane (need window_index first for worktree)
   tmux new-window -t "$session" -c "$dir"
   sleep 0.5
   local window_index
   window_index=$(tmux display-message -t "$session" -p '#{window_index}')
 
-  printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
+  # Set up worktree if requested (now that we know window_index)
+  if [ -n "$worktree_spec" ]; then
+    # "auto" means auto-generate branch name; anything else is a literal branch name
+    local _wt_branch_arg=""
+    if [ "$worktree_spec" != "auto" ]; then
+      _wt_branch_arg="$worktree_spec"
+    fi
+    team_dir=$(create_team_worktree "$dir" "$window_index" "$_wt_branch_arg") || {
+      printf "  ${WARN}Worktree creation failed for team %s — falling back to shared repo${RESET}\n" "$window_index"
+      team_dir="$dir"
+      worktree_spec=""
+    }
+    if [ -n "$worktree_spec" ]; then
+      worktree_branch=$(git -C "$team_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "doey/team-${window_index}")
+      wt_dir_for_env="$team_dir"
+    fi
+  fi
+
+  if [ -n "$wt_dir_for_env" ]; then
+    printf "  ${DIM}Creating dynamic team window %s [worktree: %s]...${RESET}\n" "$window_index" "$worktree_branch"
+  else
+    printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
+  fi
 
   # Apply pane border theme to the new window
   local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
@@ -2831,9 +2988,13 @@ add_dynamic_team_window() {
   tmux set-window-option -t "${session}:${window_index}" pane-active-border-style 'fg=cyan'
   tmux set-window-option -t "${session}:${window_index}" pane-border-lines heavy
 
-  # Name Manager pane
+  # Name Manager pane and window
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
-  tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
+  if [ -n "$wt_dir_for_env" ]; then
+    tmux rename-window -t "${session}:${window_index}" "T${window_index} [wt]"
+  else
+    tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
+  fi
 
   # Find next available Dashboard watchdog slot
   local wdg_slot=""
@@ -2865,12 +3026,13 @@ add_dynamic_team_window() {
 
   if [ -z "$wdg_slot" ]; then
     printf "  ${ERROR}All 3 Dashboard watchdog slots are occupied — cannot add more teams${RESET}\n"
+    [ -n "$wt_dir_for_env" ] && remove_team_worktree "$dir" "$wt_dir_for_env"
     tmux kill-window -t "${session}:${window_index}" 2>/dev/null
     return 1
   fi
 
   # Write team env with dynamic grid, 0 workers initially
-  write_team_env "$runtime_dir" "$window_index" "dynamic" "$wdg_slot" "" "0" "0"
+  write_team_env "$runtime_dir" "$window_index" "dynamic" "$wdg_slot" "" "0" "0" "$wt_dir_for_env" "$worktree_branch"
 
   # Update session.env TEAM_WINDOWS (atomic)
   local current_windows
@@ -2884,7 +3046,7 @@ add_dynamic_team_window() {
     local project_name
     project_name=$(grep '^PROJECT_NAME=' "${runtime_dir}/session.env" | cut -d= -f2)
     project_name="${project_name//\"/}"
-    write_worker_system_prompt "$runtime_dir" "$project_name" "$dir"
+    write_worker_system_prompt "$runtime_dir" "$project_name" "$team_dir"
   fi
 
   # Launch Window Manager in team window pane 0
@@ -2908,7 +3070,7 @@ add_dynamic_team_window() {
   # Add initial worker columns
   local _col_i
   for (( _col_i=0; _col_i<initial_cols; _col_i++ )); do
-    doey_add_column "$session" "$runtime_dir" "$dir" "$window_index"
+    doey_add_column "$session" "$runtime_dir" "$team_dir" "$window_index"
     (( _col_i < initial_cols - 1 )) && sleep 1
   done
 
@@ -2927,10 +3089,14 @@ add_dynamic_team_window() {
   worker_count="${worker_count//\"/}"
 
   # Brief the new Window Manager after boot
+  local _wt_brief=""
+  if [ -n "$wt_dir_for_env" ]; then
+    _wt_brief=" ISOLATED WORKTREE: branch ${worktree_branch}, dir ${wt_dir_for_env}. Workers operate on this isolated copy — changes do NOT affect the main repo until merged."
+  fi
   (
     sleep 8
     tmux send-keys -t "${session}:${window_index}.0" \
-      "Team is online in window ${window_index}. Dynamic grid — ${worker_count} workers, auto-expands when all are busy. Your workers are in panes ${wp_list}. Watchdog is in Dashboard pane ${wdg_slot}. Session: ${session}. All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online in window ${window_index}. Dynamic grid — ${worker_count} workers, auto-expands when all are busy. Your workers are in panes ${wp_list}. Watchdog is in Dashboard pane ${wdg_slot}. Session: ${session}.${_wt_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
   # Start watchdog monitoring
@@ -2943,11 +3109,16 @@ add_dynamic_team_window() {
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
-  printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$worker_count" "$slot_key"
+  if [ -n "$wt_dir_for_env" ]; then
+    printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog slot %s, ${BOLD}worktree${RESET} (%s)\n" "$window_index" "$worker_count" "$slot_key" "$worktree_branch"
+  else
+    printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$worker_count" "$slot_key"
+  fi
 }
 
 add_team_window() {
   local session="$1" runtime_dir="$2" dir="$3" grid="${4:-4x2}"
+  local worktree_spec="${5:-}"
   local cols rows total_panes watchdog_pane worker_panes worker_count
 
   cols="${grid%x*}"
@@ -2965,6 +3136,20 @@ add_team_window() {
   local window_index
   window_index=$(tmux display-message -t "$session" -p '#{window_index}')
 
+  # Set up worktree if requested (now that we know window_index)
+  local team_dir="$dir"
+  local worktree_branch=""
+  local wt_dir_for_env=""
+  if [ -n "$worktree_spec" ]; then
+    team_dir=$(create_team_worktree "$dir" "$window_index" "$worktree_spec") || {
+      echo "Error: Failed to create worktree for team window $window_index" >&2
+      tmux kill-window -t "${session}:${window_index}" 2>/dev/null
+      return 1
+    }
+    worktree_branch=$(git -C "$team_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$worktree_spec")
+    wt_dir_for_env="$team_dir"
+  fi
+
   printf "  ${DIM}Creating team window %s (%s grid, %s panes)...${RESET}\n" "$window_index" "$grid" "$total_panes"
 
   # Apply pane border theme to the new window
@@ -2979,7 +3164,7 @@ add_team_window() {
   # First create rows by splitting vertically
   local r
   for (( r=1; r<rows; r++ )); do
-    tmux split-window -v -t "${session}:${window_index}.0" -c "$dir"
+    tmux split-window -v -t "${session}:${window_index}.0" -c "$team_dir"
   done
   if [ "$rows" -gt 1 ]; then
     tmux select-layout -t "${session}:${window_index}" even-vertical
@@ -2989,7 +3174,7 @@ add_team_window() {
   local c
   for (( r=0; r<rows; r++ )); do
     for (( c=1; c<cols; c++ )); do
-      tmux split-window -h -t "${session}:${window_index}.$((r * cols))" -c "$dir"
+      tmux split-window -h -t "${session}:${window_index}.$((r * cols))" -c "$team_dir"
     done
   done
 
@@ -3053,8 +3238,13 @@ add_team_window() {
   done
   tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
 
+  # Rename window to indicate worktree if applicable
+  if [ -n "$worktree_spec" ]; then
+    tmux rename-window -t "${session}:${window_index}" "Team ${window_index} [wt]"
+  fi
+
   # Write team env (watchdog in Dashboard slot, manager in team pane 0)
-  write_team_env "$runtime_dir" "$window_index" "$grid" "$wdg_slot" "$worker_panes" "$worker_count" "0"
+  write_team_env "$runtime_dir" "$window_index" "$grid" "$wdg_slot" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch"
 
   # Update session.env TEAM_WINDOWS (atomic)
   local current_windows
@@ -3068,7 +3258,7 @@ add_team_window() {
     local project_name
     project_name=$(grep '^PROJECT_NAME=' "${runtime_dir}/session.env" | cut -d= -f2)
     project_name="${project_name//\"/}"
-    write_worker_system_prompt "$runtime_dir" "$project_name" "$dir"
+    write_worker_system_prompt "$runtime_dir" "$project_name" "$team_dir"
   fi
 
   # Launch Window Manager in team window pane 0
@@ -3176,6 +3366,19 @@ kill_team_window() {
 
   # Kill the tmux window
   tmux kill-window -t "${session}:${window}" 2>/dev/null || true
+
+  # Clean up worktree if this team had one
+  if [ -f "$team_env" ]; then
+    local _wt_dir
+    _wt_dir=$(grep '^WORKTREE_DIR=' "$team_env" | cut -d= -f2- | tr -d '"')
+    if [ -n "$_wt_dir" ]; then
+      local _proj_dir
+      _proj_dir=$(grep '^PROJECT_DIR=' "${runtime_dir}/session.env" | cut -d= -f2- | tr -d '"')
+      if [ -n "$_proj_dir" ]; then
+        _worktree_safe_remove "$_proj_dir" "$_wt_dir"
+      fi
+    fi
+  fi
 
   # Remove team env file
   rm -f "$team_env"
@@ -3554,7 +3757,20 @@ HELP
     ;;
   add-window|add-team)
     require_running_session
-    add_team_window "$session" "$runtime_dir" "$dir" "${2:-4x2}"
+    _wt_spec=""
+    _grid_arg="4x2"
+    shift
+    for _arg in "$@"; do
+      case "$_arg" in
+        --worktree) _wt_spec="auto" ;;
+        *x*) _grid_arg="$_arg" ;;
+      esac
+    done
+    if [ -n "$_wt_spec" ]; then
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "$_wt_spec"
+    else
+      add_team_window "$session" "$runtime_dir" "$dir" "$_grid_arg"
+    fi
     exit 0
     ;;
   kill-window|kill-team)

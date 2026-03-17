@@ -67,7 +67,53 @@ done
 sleep 1
 ```
 
-### Step 3: Kill the tmux window
+### Step 3: Worktree cleanup (if applicable)
+
+Uses vars from Step 1. Must run BEFORE deleting team env files.
+
+```bash
+# (vars from step 1)
+
+# Check if this team had a worktree
+_wt_dir=""
+_wt_branch=""
+if [ -f "${RUNTIME_DIR}/team_${TARGET_WIN}.env" ]; then
+  _wt_dir=$(grep '^WORKTREE_DIR=' "${RUNTIME_DIR}/team_${TARGET_WIN}.env" 2>/dev/null | head -1 | cut -d= -f2-)
+  _wt_dir="${_wt_dir%\"}"
+  _wt_dir="${_wt_dir#\"}"
+  _wt_branch=$(grep '^WORKTREE_BRANCH=' "${RUNTIME_DIR}/team_${TARGET_WIN}.env" 2>/dev/null | head -1 | cut -d= -f2-)
+  _wt_branch="${_wt_branch%\"}"
+  _wt_branch="${_wt_branch#\"}"
+fi
+
+if [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ]; then
+  echo "Worktree detected: $_wt_dir (branch: $_wt_branch)"
+
+  # Check for uncommitted changes
+  _dirty=$(git -C "$_wt_dir" status --porcelain 2>/dev/null) || true
+  if [ -n "$_dirty" ]; then
+    echo "  Uncommitted changes found — auto-saving..."
+    git -C "$_wt_dir" add -A 2>/dev/null || true
+    git -C "$_wt_dir" commit -m "doey: auto-save before teardown $(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null || true
+    echo "  Auto-saved to branch: $_wt_branch"
+  fi
+
+  # Check commits ahead
+  if [ -n "$_wt_branch" ]; then
+    _ahead=$(git -C "$PROJECT_DIR" rev-list --count "HEAD..${_wt_branch}" 2>/dev/null || echo "0")
+    if [ "$_ahead" -gt 0 ] 2>/dev/null; then
+      echo "  Branch $_wt_branch has $_ahead commit(s). Merge with: git merge $_wt_branch"
+    fi
+  fi
+
+  # Remove worktree
+  git -C "$PROJECT_DIR" worktree remove "$_wt_dir" --force 2>/dev/null || true
+  git -C "$PROJECT_DIR" worktree prune 2>/dev/null || true
+  echo "  Worktree removed."
+fi
+```
+
+### Step 4: Kill the tmux window
 
 ```bash
 # (vars from step 1)
@@ -75,7 +121,7 @@ tmux kill-window -t "${SESSION_NAME}:${TARGET_WIN}"
 echo "Window ${TARGET_WIN} killed"
 ```
 
-### Step 4: Clean up runtime files
+### Step 5: Clean up runtime files
 
 ```bash
 # (vars from step 1)
@@ -101,7 +147,7 @@ mv "$TMPENV" "${RUNTIME_DIR}/session.env"
 echo "Runtime files cleaned for window ${TARGET_WIN}"
 ```
 
-### Step 5: Report
+### Step 6: Report
 
 ```
 Window ${TARGET_WIN} killed and cleaned up.

@@ -233,11 +233,13 @@ while true; do
       TEAM_COUNT=$((TEAM_COUNT + 1))
       TEAM_FILE="${RUNTIME_DIR}/team_${W}.env"
 
-      read_env_file "$TEAM_FILE" WATCHDOG_PANE WORKER_PANES WORKER_COUNT GRID
+      read_env_file "$TEAM_FILE" WATCHDOG_PANE WORKER_PANES WORKER_COUNT GRID WORKTREE_DIR WORKTREE_BRANCH
       WD_PANE="$_ENV_WATCHDOG_PANE"
       WORKER_PANES="$_ENV_WORKER_PANES"
       WORKER_COUNT="$_ENV_WORKER_COUNT"
       GRID_MODE="$_ENV_GRID"
+      WT_DIR="$_ENV_WORKTREE_DIR"
+      WT_BRANCH="$_ENV_WORKTREE_BRANCH"
       [ -z "$WORKER_COUNT" ] && WORKER_COUNT=0
       [ -z "$GRID_MODE" ] && GRID_MODE="dynamic"
       TOTAL_WORKERS=$((TOTAL_WORKERS + WORKER_COUNT))
@@ -284,6 +286,8 @@ while true; do
       eval "TEAM_RESV_${TEAM_LINE_COUNT}=\"${RESV_COUNT}\""
       eval "TEAM_WCNT_${TEAM_LINE_COUNT}=\"${WORKER_COUNT}\""
       eval "TEAM_GRID_${TEAM_LINE_COUNT}=\"${GRID_MODE}\""
+      eval "TEAM_WT_DIR_${TEAM_LINE_COUNT}=\"${WT_DIR}\""
+      eval "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}=\"${WT_BRANCH}\""
       TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
     done
   else
@@ -458,6 +462,46 @@ while true; do
 
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
   printf '\n'
+
+  # ── Team Status ─────────────────────────────────────────────────
+  if [ "$TEAM_LINE_COUNT" -gt 0 ]; then
+    printf '  %b TEAM STATUS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+    _ti=0
+    while [ "$_ti" -lt "$TEAM_LINE_COUNT" ]; do
+      eval "_tw=\$TEAM_WIN_${_ti}"
+      eval "_twc=\$TEAM_WCNT_${_ti}"
+      eval "_tb=\$TEAM_BUSY_${_ti}"
+      eval "_tidle=\$TEAM_IDLE_${_ti}"
+      eval "_tr=\$TEAM_RESV_${_ti}"
+      eval "_twtd=\${TEAM_WT_DIR_${_ti}:-}"
+      eval "_twtb=\${TEAM_WT_BRANCH_${_ti}:-}"
+
+      # Team name with optional [wt] badge
+      if [ -n "$_twtd" ]; then
+        _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
+      else
+        _tname="$(printf '  Team %s     ' "$_tw")"
+      fi
+
+      # Worker summary
+      _tsummary="$(printf '%sW (%b%s busy%b, %b%s idle%b' "$_twc" "${C_YELLOW}" "$_tb" "${C_RESET}" "${C_GREEN}" "$_tidle" "${C_RESET}")"
+      if [ "$_tr" -gt 0 ]; then
+        _tsummary="${_tsummary}$(printf ', %b%s rsv%b)' "${C_MAGENTA}" "$_tr" "${C_RESET}")"
+      else
+        _tsummary="${_tsummary})"
+      fi
+
+      # Branch name (dimmed) for worktree teams
+      if [ -n "$_twtb" ]; then
+        printf '%b  %-20s %s  %b%s%b\n' "${C_RESET}" "$_tname" "$_tsummary" "${C_DIM}" "$_twtb" "${C_RESET}"
+      else
+        printf '%b  %s %s\n' "${C_RESET}" "$_tname" "$_tsummary"
+      fi
+
+      _ti=$((_ti + 1))
+    done
+    printf '\n'
+  fi
 
   # ── Single-Column Body ────────────────────────────────────────────
   row=0
