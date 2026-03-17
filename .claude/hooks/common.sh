@@ -108,17 +108,11 @@ is_manager() {
 
 is_session_manager() {
   # True only for the Session Manager — Dashboard pane 0.1.
-  # Read from session.env SM_PANE if available, else default to 0.1.
   if [ "$WINDOW_INDEX" != "0" ]; then
     return 1
   fi
-  local sm_pane="0.1"
-  if [ -f "${RUNTIME_DIR}/session.env" ]; then
-    local _sm_val
-    _sm_val=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
-    _sm_val="${_sm_val//\"/}"
-    [ -n "$_sm_val" ] && sm_pane="$_sm_val"
-  fi
+  local sm_pane
+  sm_pane=$(get_sm_pane)
   local wp="${PANE#*:}"
   [ "$wp" = "$sm_pane" ]
 }
@@ -127,6 +121,41 @@ is_worker() {
   # Workers live in team windows (1+), not in Dashboard (0), and are not the Manager (pane 0)
   [ "$WINDOW_INDEX" = "0" ] && return 1
   ! is_manager
+}
+
+# Get Session Manager pane address (e.g. "0.1"). Reads SM_PANE from session.env, defaults to "0.1".
+get_sm_pane() {
+  local sm_pane="0.1"
+  if [ -f "${RUNTIME_DIR}/session.env" ]; then
+    local _sm_val
+    _sm_val=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
+    _sm_val="${_sm_val//\"/}"
+    [ -n "$_sm_val" ] && sm_pane="$_sm_val"
+  fi
+  echo "$sm_pane"
+}
+
+# Send a message to another pane via tmux send-keys.
+# Exits copy-mode first, suppresses errors silently.
+# Usage: send_to_pane <target> <message>
+send_to_pane() {
+  local target="$1" msg="$2"
+  tmux copy-mode -q -t "$target" 2>/dev/null
+  tmux send-keys -t "$target" "$msg" Enter 2>/dev/null
+}
+
+# Sanitize and truncate a message for tmux delivery.
+# Collapses newlines/whitespace, truncates to max_len chars.
+# Usage: sanitize_message <text> [max_len]
+sanitize_message() {
+  local text="$1" max_len="${2:-100}"
+  # Collapse newlines and multiple spaces
+  text=$(printf '%s' "$text" | tr '\n' ' ' | sed 's/  */ /g')
+  if [ "${#text}" -gt "$max_len" ]; then
+    local cut_len=$((max_len - 3))
+    text="${text:0:$cut_len}..."
+  fi
+  echo "$text"
 }
 
 is_reserved() {

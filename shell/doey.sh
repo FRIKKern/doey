@@ -1379,7 +1379,7 @@ MANIFEST
     cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file"
     printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' "$booted" "$team_window" "$i" "$session" >> "$worker_prompt_file"
 
-    local worker_cmd="claude --dangerously-skip-permissions --model opus"
+    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${booted} T${team_window}\""
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "$session:${team_window}.$i" "$worker_cmd" Enter
     sleep 0.3
@@ -1747,12 +1747,15 @@ reload_session() {
         tmux send-keys -t "$pane_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
 
+        local w_name
+        w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "W${wp} T${tw}")
+
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
         if [ -n "$worker_prompt" ]; then
-          tmux send-keys -t "$pane_ref" "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${worker_prompt}\"" Enter
+          tmux send-keys -t "$pane_ref" "claude --dangerously-skip-permissions --model opus --name \"${w_name}\" --append-system-prompt-file \"${worker_prompt}\"" Enter
         else
-          tmux send-keys -t "$pane_ref" "claude --dangerously-skip-permissions --model opus" Enter
+          tmux send-keys -t "$pane_ref" "claude --dangerously-skip-permissions --model opus --name \"${w_name}\"" Enter
         fi
         printf "    %s.%s ${SUCCESS}✓${RESET}\n" "$tw" "$wp"
         sleep 0.5
@@ -2214,7 +2217,7 @@ MANIFEST
     cp "${runtime_dir}/worker-system-prompt.md" "$worker_prompt_file"
     printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' "$booted" "$team_window" "$i" "$session" >> "$worker_prompt_file"
 
-    local worker_cmd="claude --dangerously-skip-permissions --model opus"
+    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${booted} T${team_window}\""
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "$session:${team_window}.$i" "$worker_cmd" Enter
     sleep 0.3
@@ -2661,7 +2664,7 @@ doey_add_column() {
   printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
     "$w1_num" "$team_window" "$new_pane_top" "$session" >> "$worker_prompt_file_1"
 
-  local worker_cmd="claude --dangerously-skip-permissions --model opus"
+  local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${w1_num} T${team_window}\""
   worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file_1}\""
   tmux send-keys -t "$session:$team_window.${new_pane_top}" "$worker_cmd" Enter
   sleep 0.3
@@ -2671,7 +2674,7 @@ doey_add_column() {
   printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
     "$w2_num" "$team_window" "$new_pane_bottom" "$session" >> "$worker_prompt_file_2"
 
-  local worker_cmd2="claude --dangerously-skip-permissions --model opus"
+  local worker_cmd2="claude --dangerously-skip-permissions --model opus --name \"W${w2_num} T${team_window}\""
   worker_cmd2+=" --append-system-prompt-file \"${worker_prompt_file_2}\""
   tmux send-keys -t "$session:$team_window.${new_pane_bottom}" "$worker_cmd2" Enter
 
@@ -3079,7 +3082,7 @@ add_team_window() {
     printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
       "$wnum" "$window_index" "$i" "$session" >> "$worker_prompt_file"
 
-    local worker_cmd="claude --dangerously-skip-permissions --model opus"
+    local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"W${wnum} T${window_index}\""
     worker_cmd+=" --append-system-prompt-file \"${worker_prompt_file}\""
     tmux send-keys -t "${session}:${window_index}.${i}" "$worker_cmd" Enter
     sleep 0.3
