@@ -2789,8 +2789,16 @@ doey_add_column() {
   local new_worker_count=$(( worker_count + 2 ))
   local new_cols=$(( current_cols + 1 ))
 
+  # Preserve existing worktree fields
+  local _existing_wt_dir=""
+  local _existing_wt_branch=""
+  if [ -f "$team_env" ]; then
+    _existing_wt_dir=$(grep '^WORKTREE_DIR=' "$team_env" | cut -d= -f2- | tr -d '"')
+    _existing_wt_branch=$(grep '^WORKTREE_BRANCH=' "$team_env" | cut -d= -f2- | tr -d '"')
+  fi
+
   # Update team env with new worker state
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count" "" "" ""
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count" "" "$_existing_wt_dir" "$_existing_wt_branch"
 
   # Launch Claude in both new panes
   local worker_prompt_file_1="${runtime_dir}/worker-system-prompt-w${team_window}-${w1_num}.md"
@@ -2931,8 +2939,16 @@ doey_remove_column() {
   local new_worker_count=$(( worker_count - 2 ))
   local new_cols=$(( current_cols - 1 ))
 
+  # Preserve existing worktree fields
+  local _existing_wt_dir=""
+  local _existing_wt_branch=""
+  if [ -f "$team_env" ]; then
+    _existing_wt_dir=$(grep '^WORKTREE_DIR=' "$team_env" | cut -d= -f2- | tr -d '"')
+    _existing_wt_branch=$(grep '^WORKTREE_BRANCH=' "$team_env" | cut -d= -f2- | tr -d '"')
+  fi
+
   # Update team env only (session.env is session-level, not per-team)
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count" "" "" ""
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$watchdog_pane" "$new_worker_panes" "$new_worker_count" "" "$_existing_wt_dir" "$_existing_wt_branch"
 
   # Rebalance to proper column layout (each column = 2 rows)
   rebalance_grid_layout "$session" "$team_window"
