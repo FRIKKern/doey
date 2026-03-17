@@ -8,6 +8,10 @@ set -euo pipefail
 # Numeric-only validation (bash 3.2 safe)
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
+# Newline variable for string building (bash 3.2 safe)
+NL='
+'
+
 # --- Load session environment ---
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { echo "ERROR: not in doey session"; exit 1; }
 
@@ -82,6 +86,10 @@ fi
 
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 SCAN_HAD_OUTPUT=false
+SCAN_TIME=$(date +%s)
+
+# --- Snapshot tracking variables ---
+SNAPSHOT_EVENTS=""
 
 # --- Window Manager health check (Manager is pane 0 in the target team window) ---
 MGR_PANE_REF=""
@@ -142,6 +150,10 @@ for i in $PANES_LIST; do
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
     echo "PANE ${i} RESERVED"; SCAN_HAD_OUTPUT=true
     eval "PANE_STATE_${i}=RESERVED"
+    eval "PANE_TITLE_${i}=''"
+    eval "PANE_TOOL_${i}=''"
+    eval "PANE_DURATION_${i}=0"
+    eval "PANE_PREV_DISPLAY_${i}=''"
     continue
   fi
 
@@ -157,15 +169,16 @@ for i in $PANES_LIST; do
   case "$CURRENT_CMD" in
     bash|zsh|sh|fish)
       STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+      _crash_state=""
       if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
         echo "PANE ${i} FINISHED"; SCAN_HAD_OUTPUT=true
-        eval "PANE_STATE_${i}=FINISHED"
+        _crash_state="FINISHED"
       elif [ -f "$STATUS_FILE" ] && grep -q '^STATUS: RESERVED' "$STATUS_FILE"; then
         echo "PANE ${i} RESERVED"; SCAN_HAD_OUTPUT=true
-        eval "PANE_STATE_${i}=RESERVED"
+        _crash_state="RESERVED"
       else
         echo "PANE ${i} CRASHED"; SCAN_HAD_OUTPUT=true
-        eval "PANE_STATE_${i}=CRASHED"
+        _crash_state="CRASHED"
         # Write crash alert file for Window Manager consumption
         CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${TARGET_WINDOW}_${i}"
         if [ ! -f "$CRASH_FILE" ]; then
@@ -177,6 +190,23 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
 CRASH_EOF
         fi
       fi
+      eval "PANE_STATE_${i}='${_crash_state}'"
+      # Duration tracking for crashed/finished/reserved panes
+      _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
+      eval "PANE_TITLE_${i}='${_pt}'"
+      eval "PANE_TOOL_${i}=''"
+      # State-since tracking
+      eval "_prev_for_dur=\${PREV_STATE_${i}:-UNKNOWN}"
+      STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
+      if [ "$_prev_for_dur" != "$_crash_state" ]; then
+        echo "$SCAN_TIME" > "$STATE_SINCE_FILE"
+        eval "PANE_DURATION_${i}=0"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${i} ${_prev_for_dur}->${_crash_state}${NL}"
+      else
+        read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || _since="$SCAN_TIME"
+        eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
+      fi
+      eval "PANE_PREV_DISPLAY_${i}='${_prev_for_dur}'"
       continue
       ;;
   esac
@@ -201,13 +231,28 @@ CRASH_EOF
 
     # After 6 consecutive UNCHANGED cycles, escalate to STUCK
     # BUT only if previous state was WORKING or CHANGED (active work)
+    _unch_state=""
     if [ "$NEW_COUNT" -ge 6 ] && { [ "$PREV" = "WORKING" ] || [ "$PREV" = "CHANGED" ] || [ "$PREV" = "UNCHANGED" ]; }; then
       echo "PANE ${i} STUCK (unchanged for ${NEW_COUNT} cycles)"; SCAN_HAD_OUTPUT=true
-      eval "PANE_STATE_${i}=STUCK"
+      _unch_state="STUCK"
     else
       # Suppress UNCHANGED output — only STUCK gets printed
-      eval "PANE_STATE_${i}=UNCHANGED"
+      _unch_state="UNCHANGED"
     fi
+    eval "PANE_STATE_${i}='${_unch_state}'"
+    # Duration tracking — state hasn't changed display-wise, keep existing since
+    _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
+    eval "PANE_TITLE_${i}='${_pt}'"
+    eval "PANE_TOOL_${i}=''"
+    STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
+    # Map UNCHANGED→WORKING/IDLE for display state comparison
+    case "$PREV" in
+      WORKING|CHANGED|STUCK) _display_state="WORKING" ;;
+      *) _display_state="IDLE" ;;
+    esac
+    read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
+    eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
+    eval "PANE_PREV_DISPLAY_${i}='${_display_state}'"
     continue
   fi
 
@@ -218,20 +263,73 @@ CRASH_EOF
   echo "$HASH" > "${HASH_FILE}.tmp" && mv "${HASH_FILE}.tmp" "$HASH_FILE"
 
   # Classify the change
+  _classified_state=""
   case "$CAPTURE" in
     *'❯'*)
       echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
-      eval "PANE_STATE_${i}=IDLE"
+      _classified_state="IDLE"
       ;;
     *thinking*|*working*|*Bash*|*Read*|*Edit*|*Write*|*Grep*|*Glob*|*Agent*)
       echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
-      eval "PANE_STATE_${i}=WORKING"
+      _classified_state="WORKING"
       ;;
     *)
       echo "PANE ${i} CHANGED"; SCAN_HAD_OUTPUT=true
-      eval "PANE_STATE_${i}=CHANGED"
+      _classified_state="CHANGED"
       ;;
   esac
+  eval "PANE_STATE_${i}='${_classified_state}'"
+
+  # Capture pane title
+  _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
+  eval "PANE_TITLE_${i}='${_pt}'"
+
+  # Extract last tool name from capture (for WORKING/CHANGED panes)
+  _last_tool=""
+  if [ "$_classified_state" = "WORKING" ] || [ "$_classified_state" = "CHANGED" ]; then
+    # Scan capture for tool names — last match wins
+    _remaining="$CAPTURE"
+    while [ -n "$_remaining" ]; do
+      _line="${_remaining%%${NL}*}"
+      case "$_line" in
+        *Agent*) _last_tool="Agent" ;;
+        *Bash*)  _last_tool="Bash" ;;
+        *Read*)  _last_tool="Read" ;;
+        *Edit*)  _last_tool="Edit" ;;
+        *Write*) _last_tool="Write" ;;
+        *Grep*)  _last_tool="Grep" ;;
+        *Glob*)  _last_tool="Glob" ;;
+      esac
+      # Advance to next line
+      if [ "$_remaining" = "$_line" ]; then
+        break
+      fi
+      _remaining="${_remaining#*${NL}}"
+    done
+  fi
+  eval "PANE_TOOL_${i}='${_last_tool}'"
+
+  # Duration tracking — detect state changes
+  eval "_prev_for_dur=\${PREV_STATE_${i}:-UNKNOWN}"
+  # Map to display states for comparison (CHANGED→WORKING, UNCHANGED→keep prev)
+  case "$_classified_state" in
+    WORKING|CHANGED) _display_now="WORKING" ;;
+    *) _display_now="$_classified_state" ;;
+  esac
+  case "$_prev_for_dur" in
+    WORKING|CHANGED|UNCHANGED) _display_prev="WORKING" ;;
+    *) _display_prev="$_prev_for_dur" ;;
+  esac
+  STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
+  if [ "$_display_prev" != "$_display_now" ]; then
+    echo "$SCAN_TIME" > "$STATE_SINCE_FILE"
+    eval "PANE_DURATION_${i}=0"
+    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${i} ${_display_prev}->${_display_now}${NL}"
+  else
+    read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
+    eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
+  fi
+  eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
 done
 
 # --- Status summary (always printed for Watchdog display) ---
@@ -243,28 +341,52 @@ esac
 MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
 
 # Build compact worker summary: count by state + list active titles
-_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_other=0
+_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_other=0
 _active_titles=""
+_longest_pane="" _longest_dur=0
 for i in $PANES_LIST; do
   is_numeric "$i" || continue
   eval "_st=\${PANE_STATE_${i}:-UNKNOWN}"
+  eval "_dur=\${PANE_DURATION_${i}:-0}"
   case "$_st" in
     WORKING|CHANGED) _n_working=$((_n_working + 1))
-      _pt=$(tmux display-message -t "${SESSION_NAME}:${TARGET_WINDOW}.${i}" -p '#{pane_title}' 2>/dev/null) || _pt=""
+      eval "_pt=\${PANE_TITLE_${i}:-}"
       [ -n "$_pt" ] && _active_titles="${_active_titles:+${_active_titles}, }${i}:${_pt}"
+      # Track longest-running worker
+      if [ "$_dur" -gt "$_longest_dur" ]; then
+        _longest_dur="$_dur"
+        _longest_pane="$i"
+      fi
       ;;
     IDLE|FINISHED) _n_idle=$((_n_idle + 1)) ;;
     STUCK) _n_stuck=$((_n_stuck + 1)) ;;
     CRASHED) _n_crashed=$((_n_crashed + 1)) ;;
+    RESERVED) _n_reserved=$((_n_reserved + 1)) ;;
     *) _n_other=$((_n_other + 1)) ;;
   esac
 done
+
+# Format longest duration as HhMmSs
+_longest_label=""
+if [ -n "$_longest_pane" ] && [ "$_longest_dur" -gt 0 ]; then
+  _lh=$((_longest_dur / 3600))
+  _lm=$(((_longest_dur % 3600) / 60))
+  _ls=$((_longest_dur % 60))
+  if [ "$_lh" -gt 0 ]; then
+    _longest_label="${_longest_pane}@${_lh}h${_lm}m${_ls}s"
+  elif [ "$_lm" -gt 0 ]; then
+    _longest_label="${_longest_pane}@${_lm}m${_ls}s"
+  else
+    _longest_label="${_longest_pane}@${_ls}s"
+  fi
+fi
 
 # Print summary line
 printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_working" "$_n_idle"
 [ "$_n_stuck" -gt 0 ] && printf ' %dS' "$_n_stuck"
 [ "$_n_crashed" -gt 0 ] && printf ' %dC' "$_n_crashed"
 [ -n "$_active_titles" ] && printf ' | %s' "$_active_titles"
+[ -n "$_longest_label" ] && printf ' | longest:%s' "$_longest_label"
 printf '\n'
 
 # --- Check for worker completion events ---
@@ -282,11 +404,47 @@ for cf in "${RUNTIME_DIR}/status"/completion_pane_${TARGET_WINDOW}_*; do
     esac
   done < "$cf"
   echo "COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}"
+  SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}${NL}"
   rm -f "$cf"
 done
 
+# --- Write team snapshot file ---
+SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
+SNAPSHOT_TMP="${SNAPSHOT_FILE}.tmp"
+{
+  printf 'SNAPSHOT_TIME=%s\n' "$SCAN_TIME"
+  printf 'MANAGER=%s\n' "$_mgr_label"
+  printf 'MANAGER_TITLE=%s\n' "$MGR_TITLE"
+  _total=0
+  for _ci in $PANES_LIST; do is_numeric "$_ci" && _total=$((_total + 1)); done
+  printf 'TOTAL_WORKERS=%s\n' "$_total"
+  printf 'WORKING=%s\n' "$_n_working"
+  printf 'IDLE=%s\n' "$_n_idle"
+  printf 'STUCK=%s\n' "$_n_stuck"
+  printf 'CRASHED=%s\n' "$_n_crashed"
+  printf 'RESERVED=%s\n' "$_n_reserved"
+  printf -- '---\n'
+  printf 'PANE|STATE|TITLE|DURATION_SECS|LAST_TOOL|PREV_STATE\n'
+  for i in $PANES_LIST; do
+    is_numeric "$i" || continue
+    eval "_sn_st=\${PANE_STATE_${i}:-UNKNOWN}"
+    eval "_sn_title=\${PANE_TITLE_${i}:-}"
+    eval "_sn_dur=\${PANE_DURATION_${i}:-0}"
+    eval "_sn_tool=\${PANE_TOOL_${i}:-}"
+    eval "_sn_prev=\${PANE_PREV_DISPLAY_${i}:-}"
+    # Normalize display state (CHANGED/UNCHANGED→WORKING for snapshot)
+    case "$_sn_st" in
+      CHANGED|UNCHANGED) _sn_st="WORKING" ;;
+    esac
+    printf '%s|%s|%s|%s|%s|%s\n' "$i" "$_sn_st" "$_sn_title" "$_sn_dur" "$_sn_tool" "$_sn_prev"
+  done
+  printf -- '---\n'
+  printf 'EVENTS\n'
+  # Print collected events (trailing newline already in each entry)
+  printf '%s' "$SNAPSHOT_EVENTS"
+} > "$SNAPSHOT_TMP" && mv "$SNAPSHOT_TMP" "$SNAPSHOT_FILE"
+
 # --- Write heartbeat ---
-SCAN_TIME=$(date +%s)
 echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat.tmp" && \
   mv "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat.tmp" "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat"
 
