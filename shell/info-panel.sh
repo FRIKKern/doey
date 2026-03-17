@@ -394,7 +394,7 @@ while true; do
   add_left "  $(dotted_leader "$(printf '%b/doey-reinstall%b' "${C_MAGENTA}" "${C_RESET}")" "Reinstall Doey" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%b/doey-purge%b' "${C_MAGENTA}" "${C_RESET}")" "Clean stale runtime files" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%b/doey-kill-session%b' "${C_MAGENTA}" "${C_RESET}")" "Kill this session" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-watchdog-compact%b' "${C_MAGENTA}" "${C_RESET}")" "Compact watchdog context" "$CMD_W")
+  add_left "  $(dotted_leader "$(printf '%b/doey-watchdog-compact%b' "${C_MAGENTA}" "${C_RESET}")" "Compact watchdog context" "$CMD_W")"
   add_left ""
   add_left "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
