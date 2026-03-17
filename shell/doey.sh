@@ -168,8 +168,8 @@ create_team_worktree() {
   project_name="$(basename "$project_dir")"
   local wt_path="/tmp/doey/${project_name}/worktrees/team-${team_window}"
   mkdir -p "$(dirname "$wt_path")"
-  if ! git -C "$project_dir" worktree add "$wt_path" -b "$branch_name" 2>/dev/null; then
-    if ! git -C "$project_dir" worktree add "$wt_path" "$branch_name" 2>/dev/null; then
+  if ! git -C "$project_dir" worktree add "$wt_path" -b "$branch_name" >/dev/null 2>&1; then
+    if ! git -C "$project_dir" worktree add "$wt_path" "$branch_name" >/dev/null 2>&1; then
       echo "Error: failed to create worktree at $wt_path for branch $branch_name" >&2
       return 1
     fi
