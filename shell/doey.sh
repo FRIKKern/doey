@@ -1299,22 +1299,22 @@ MANIFEST
       worker_panes+="${team_window}.$i"
     done
     tmux send-keys -t "$session:${team_window}.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1 (monitors workers). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane ${WDG_SLOT_1} (monitors workers). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
-  # Brief Session Manager (pane 0.4) after it boots
+  # Brief Session Manager (pane ${SM_PANE}) after it boots
   (
     sleep 15
-    tmux send-keys -t "$session:0.4" \
+    tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has $((total - 1)) workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
 
-  # Launch Watchdog in Dashboard slot 1 (pane 0.1)
-  tmux send-keys -t "$session:0.1" C-c
+  # Launch Watchdog in Dashboard slot 1 (pane ${WDG_SLOT_1})
+  tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
-  tmux send-keys -t "$session:0.1" \
+  tmux send-keys -t "$session:${WDG_SLOT_1}" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "$session:0.1" -T "Watchdog T${team_window}"
+  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "Watchdog T${team_window}"
   sleep 0.5
 
   # Auto-start the watchdog loop
@@ -1325,11 +1325,11 @@ MANIFEST
       [[ -n "$watch_panes" ]] && watch_panes+=", "
       watch_panes+="${team_window}.$i"
     done
-    tmux send-keys -t "$session:0.1" \
-      "Start monitoring session $session. Total panes: $total. Skip pane 0.1 (yourself, in Dashboard). Manager is in team window pane ${team_window}.0. Monitor panes ${watch_panes}." Enter
+    tmux send-keys -t "$session:${WDG_SLOT_1}" \
+      "Start monitoring session $session. Total panes: $total. Skip pane ${WDG_SLOT_1} (yourself, in Dashboard). Manager is in team window pane ${team_window}.0. Monitor panes ${watch_panes}." Enter
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
-    tmux send-keys -t "$session:0.1" \
+    tmux send-keys -t "$session:${WDG_SLOT_1}" \
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
@@ -2145,22 +2145,22 @@ MANIFEST
       worker_panes+="${team_window}.$i"
     done
     tmux send-keys -t "$session:${team_window}.0" \
-      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1 (monitors workers). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online (project: ${name}, dir: $dir). You have $((total - 1)) workers in panes ${worker_panes}. Your workers are in window ${team_window}. Watchdog is in Dashboard pane ${WDG_SLOT_1} (monitors workers). Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 
-  # Brief Session Manager (pane 0.4) after it boots
+  # Brief Session Manager (pane ${SM_PANE}) after it boots
   (
     sleep 15
-    tmux send-keys -t "$session:0.4" \
+    tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has $((total - 1)) workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
 
-  # Launch Watchdog in Dashboard slot 1 (pane 0.1)
-  tmux send-keys -t "$session:0.1" C-c
+  # Launch Watchdog in Dashboard slot 1 (pane ${WDG_SLOT_1})
+  tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
-  tmux send-keys -t "$session:0.1" \
+  tmux send-keys -t "$session:${WDG_SLOT_1}" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "$session:0.1" -T "Watchdog T${team_window}"
+  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "Watchdog T${team_window}"
   sleep 0.5
 
   (
@@ -2170,11 +2170,11 @@ MANIFEST
       [[ -n "$watch_panes" ]] && watch_panes+=", "
       watch_panes+="${team_window}.$i"
     done
-    tmux send-keys -t "$session:0.1" \
-      "Start monitoring session $session. Total panes: $total. Skip pane 0.1 (yourself, in Dashboard). Manager is in team window pane ${team_window}.0. Monitor panes ${watch_panes}." Enter
+    tmux send-keys -t "$session:${WDG_SLOT_1}" \
+      "Start monitoring session $session. Total panes: $total. Skip pane ${WDG_SLOT_1} (yourself, in Dashboard). Manager is in team window pane ${team_window}.0. Monitor panes ${watch_panes}." Enter
     # Schedule periodic compact to keep Watchdog context lean
     sleep 20
-    tmux send-keys -t "$session:0.1" \
+    tmux send-keys -t "$session:${WDG_SLOT_1}" \
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
@@ -2353,24 +2353,24 @@ MANIFEST
   (
     sleep 8
     tmux send-keys -t "$session:${team_window}.0" \
-      "Team is online (project: ${name}, dir: $dir). Dynamic grid — started with ${initial_workers} workers, auto-expands when all are busy. Use doey add to add more. Your workers are in window ${team_window}. Watchdog is in Dashboard pane 0.1. Session: $session. All workers are idle and awaiting tasks." Enter
+      "Team is online (project: ${name}, dir: $dir). Dynamic grid — started with ${initial_workers} workers, auto-expands when all are busy. Use doey add to add more. Your workers are in window ${team_window}. Watchdog is in Dashboard pane ${WDG_SLOT_1}. Session: $session. All workers are idle and awaiting tasks." Enter
   ) &
 
   # Session Manager briefing deferred until all teams are created (after step 8)
 
-  # Launch Watchdog in Dashboard slot 1 (pane 0.1)
-  tmux send-keys -t "$session:0.1" C-c
+  # Launch Watchdog in Dashboard slot 1 (pane ${WDG_SLOT_1})
+  tmux send-keys -t "$session:${WDG_SLOT_1}" C-c
   sleep 0.3
-  tmux send-keys -t "$session:0.1" \
+  tmux send-keys -t "$session:${WDG_SLOT_1}" \
     "claude --dangerously-skip-permissions --model haiku --agent doey-watchdog" Enter
-  tmux select-pane -t "$session:0.1" -T "Watchdog T${team_window}"
+  tmux select-pane -t "$session:${WDG_SLOT_1}" -T "Watchdog T${team_window}"
   sleep 0.5
 
   # Auto-start watchdog loop (no workers to monitor yet)
   (
     sleep 12
-    tmux send-keys -t "$session:0.1" \
-      "Start monitoring session $session. Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy. Skip pane 0.1 (yourself, in Dashboard). Manager is in team window pane ${team_window}.0. Monitor all worker panes for status changes." Enter
+    tmux send-keys -t "$session:${WDG_SLOT_1}" \
+      "Start monitoring session $session. Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy. Skip pane ${WDG_SLOT_1} (yourself, in Dashboard). Manager is in team window pane ${team_window}.0. Monitor all worker panes for status changes." Enter
   ) &
 
   step_done
@@ -2418,7 +2418,7 @@ MANIFEST
   # Re-brief Session Manager with all teams
   (
     sleep 20
-    tmux send-keys -t "$session:0.4" \
+    tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
 
@@ -2429,7 +2429,7 @@ MANIFEST
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel + Session Manager  ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Teams${RESET}      ${DIM}%-4s${RESET} ${DIM}windows (${final_team_windows})${RESET}              ${DIM}│${RESET}\n" "$team_count"
-  printf "   ${DIM}│${RESET}  ${BOLD}Watchdogs${RESET}  ${DIM}0.1-0.3${RESET} ${DIM}Online (Dashboard)${RESET}          ${DIM}│${RESET}\n"
+  printf "   ${DIM}│${RESET}  ${BOLD}Watchdogs${RESET}  ${DIM}0.2-0.4${RESET} ${DIM}Online (Dashboard)${RESET}          ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}T1: %-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}  ${DIM}│${RESET}\n" "$initial_workers"
   printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
   printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"

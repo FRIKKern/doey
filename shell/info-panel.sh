@@ -188,9 +188,8 @@ while true; do
     TERM_W=80
   fi
 
-  # Column widths
+  # Column width for commands
   LEFT_W=$((TERM_W * 55 / 100))
-  RIGHT_W=$((TERM_W - LEFT_W - 3))  # 3 for " │ " gutter
 
   # Read session info (single-pass, cached for stable keys)
   if [ -z "$_CACHED_SESSION_NAME" ]; then
@@ -338,93 +337,14 @@ while true; do
     TEAM_LINE_COUNT=1
   fi
 
-  # ── Collect Recent Events ─────────────────────────────────────────
-  EVENT_COUNT=0
-  for f in "$RUNTIME_DIR/results"/pane_*.json; do
-    [ -f "$f" ] || continue
-    E_PANE="" E_STATUS="" E_TITLE="" E_TS=""
-    while IFS= read -r _jl; do
-      case "$_jl" in
-        *'"pane"'*)    _jv="${_jl#*\": \"}"; E_PANE="${_jv%%\"*}" ;;
-        *'"status"'*)  _jv="${_jl#*\": \"}"; E_STATUS="${_jv%%\"*}" ;;
-        *'"title"'*)   _jv="${_jl#*\": \"}"; E_TITLE="${_jv%%\"*}" ;;
-        *'"timestamp"'*) _jv="${_jl#*: }"; E_TS="${_jv%%[, ]*}" ;;
-      esac
-    done < "$f"
-    [ -z "$E_TS" ] && E_TS=0
-    [ -z "$E_TITLE" ] && E_TITLE="unknown"
-    [ -z "$E_STATUS" ] && E_STATUS="?"
-    [ -z "$E_PANE" ] && E_PANE="?"
-
-    if [ "$E_TS" -gt 0 ] 2>/dev/null; then
-      E_TIME=$(date -r "$E_TS" '+%H:%M' 2>/dev/null || date -d "@${E_TS}" '+%H:%M' 2>/dev/null || echo "??:??")
-    else
-      E_TIME="??:??"
-    fi
-
-    # Sanitize values before eval
-    E_TITLE="${E_TITLE//\"/}"; E_TITLE="${E_TITLE//\`/}"; E_TITLE="${E_TITLE//\$/}"
-    E_PANE="${E_PANE//\"/}"; E_PANE="${E_PANE//\`/}"; E_PANE="${E_PANE//\$/}"
-    E_STATUS="${E_STATUS//\"/}"; E_STATUS="${E_STATUS//\`/}"; E_STATUS="${E_STATUS//\$/}"
-    eval "EVENT_TS_${EVENT_COUNT}=${E_TS}"
-    eval "EVENT_TIME_${EVENT_COUNT}=\"${E_TIME}\""
-    eval "EVENT_PANE_${EVENT_COUNT}=\"${E_PANE}\""
-    eval "EVENT_STATUS_${EVENT_COUNT}=\"${E_STATUS}\""
-    eval "EVENT_TITLE_${EVENT_COUNT}=\"${E_TITLE}\""
-    EVENT_COUNT=$((EVENT_COUNT + 1))
-  done
-
-  # Check crash files too
-  for f in "$RUNTIME_DIR/status"/crash_pane_*; do
-    [ -f "$f" ] || continue
-    C_PANE=$(echo "$f" | sed 's/.*crash_pane_//' | sed 's/\..*//')
-    if stat -f '%m' "$f" >/dev/null 2>&1; then
-      C_TS=$(stat -f '%m' "$f")
-    else
-      C_TS=$(stat -c '%Y' "$f" 2>/dev/null || echo "0")
-    fi
-    C_TIME=$(date -r "$C_TS" '+%H:%M' 2>/dev/null || date -d "@${C_TS}" '+%H:%M' 2>/dev/null || echo "??:??")
-
-    C_PANE="${C_PANE//\"/}"; C_PANE="${C_PANE//\`/}"; C_PANE="${C_PANE//\$/}"
-    eval "EVENT_TS_${EVENT_COUNT}=${C_TS}"
-    eval "EVENT_TIME_${EVENT_COUNT}=\"${C_TIME}\""
-    eval "EVENT_PANE_${EVENT_COUNT}=\"pane.${C_PANE}\""
-    eval "EVENT_STATUS_${EVENT_COUNT}=\"CRASH\""
-    eval "EVENT_TITLE_${EVENT_COUNT}=\"\""
-    EVENT_COUNT=$((EVENT_COUNT + 1))
-  done
-
-  # Sort events by timestamp (bubble sort, bash 3.2 safe)
-  i=0
-  while [ "$i" -lt "$EVENT_COUNT" ]; do
-    j=$((i + 1))
-    while [ "$j" -lt "$EVENT_COUNT" ]; do
-      eval "ts_i=\${EVENT_TS_${i}}"
-      eval "ts_j=\${EVENT_TS_${j}}"
-      if [ "$ts_i" -lt "$ts_j" ] 2>/dev/null; then
-        # Swap all fields
-        for _sf in TS TIME PANE STATUS TITLE; do
-          eval "tmp=\${EVENT_${_sf}_${i}}"
-          eval "EVENT_${_sf}_${i}=\${EVENT_${_sf}_${j}}"
-          eval "EVENT_${_sf}_${j}=\"\${tmp}\""
-        done
-      fi
-      j=$((j + 1))
-    done
-    i=$((i + 1))
-  done
-
-  # Limit to last 10 events
-  MAX_EVENTS=10
-  [ "$EVENT_COUNT" -gt "$MAX_EVENTS" ] && EVENT_COUNT=$MAX_EVENTS
+  # (Events collection removed per user preference)
 
   # ══════════════════════════════════════════════════════════════════
   # ██  RENDER  ██
   # ══════════════════════════════════════════════════════════════════
 
-  # Initialize column line arrays
-  LC=0  # left column line count
-  RC=0  # right column line count
+  # Initialize line array
+  LC=0
 
   # ── LEFT COLUMN ───────────────────────────────────────────────────
 
@@ -442,119 +362,52 @@ while true; do
   add_left "     to claim it for yourself."
   add_left ""
   add_left ""
-  add_left "$(printf '%b  ESSENTIAL COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
+  add_left "$(printf '%b  SLASH COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
 
   CMD_W=$((LEFT_W - 4))  # usable width inside the column with indent
 
+  add_left "$(printf '  %b Tasks%b' "${C_BOLD_WHITE}" "${C_RESET}")"
   add_left "  $(dotted_leader "$(printf '%b/doey-dispatch%b' "${C_GREEN}" "${C_RESET}")" "Send task to a worker" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-research%b' "${C_GREEN}" "${C_RESET}")" "Deep research with report" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-delegate%b' "${C_GREEN}" "${C_RESET}")" "Delegate task to a team" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%b/doey-broadcast%b' "${C_GREEN}" "${C_RESET}")" "Send to all workers" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-research%b' "${C_GREEN}" "${C_RESET}")" "Deep research with report" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%b/doey-reserve%b' "${C_GREEN}" "${C_RESET}")" "Claim a worker pane" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-stop-all%b' "${C_GREEN}" "${C_RESET}")" "Stop all workers" "$CMD_W")"
+  add_left ""
+  add_left "$(printf '  %b Monitoring%b' "${C_BOLD_WHITE}" "${C_RESET}")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-status%b' "${C_GREEN}" "${C_RESET}")" "Detailed status" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-monitor%b' "${C_GREEN}" "${C_RESET}")" "Live worker monitor" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-analyze%b' "${C_GREEN}" "${C_RESET}")" "Analyze session health" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-list-windows%b' "${C_GREEN}" "${C_RESET}")" "Show all team windows" "$CMD_W")"
+  add_left ""
+  add_left "$(printf '  %b Team Management%b' "${C_BOLD_WHITE}" "${C_RESET}")"
   add_left "  $(dotted_leader "$(printf '%b/doey-add-window%b' "${C_GREEN}" "${C_RESET}")" "Add a new team" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%b/doey-kill-window%b' "${C_GREEN}" "${C_RESET}")" "Remove a team" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-status%b' "${C_GREEN}" "${C_RESET}")" "Detailed status" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-restart-window%b' "${C_GREEN}" "${C_RESET}")" "Restart a team window" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-restart-workers%b' "${C_GREEN}" "${C_RESET}")" "Restart all workers" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-team%b' "${C_GREEN}" "${C_RESET}")" "Team info & actions" "$CMD_W")"
+  add_left ""
+  add_left "$(printf '  %b Control%b' "${C_BOLD_WHITE}" "${C_RESET}")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-stop%b' "${C_GREEN}" "${C_RESET}")" "Stop a worker" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-stop-all%b' "${C_GREEN}" "${C_RESET}")" "Stop all workers" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-reload%b' "${C_GREEN}" "${C_RESET}")" "Hot-reload session" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-reinstall%b' "${C_GREEN}" "${C_RESET}")" "Reinstall Doey" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-purge%b' "${C_GREEN}" "${C_RESET}")" "Clean stale runtime files" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-kill-session%b' "${C_GREEN}" "${C_RESET}")" "Kill this session" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%b/doey-watchdog-compact%b' "${C_GREEN}" "${C_RESET}")" "Compact watchdog context" "$CMD_W")"
+  add_left ""
+  add_left "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
+  add_left ""
+  add_left "  $(dotted_leader "$(printf '%bdoey%b' "${C_YELLOW}" "${C_RESET}")" "Launch (dynamic grid)" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%bdoey add%b' "${C_YELLOW}" "${C_RESET}")" "Add worker column" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%bdoey stop%b' "${C_YELLOW}" "${C_RESET}")" "Stop session" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%bdoey reload%b' "${C_YELLOW}" "${C_RESET}")" "Hot-reload (--workers)" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%bdoey list%b' "${C_YELLOW}" "${C_RESET}")" "List all projects" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%bdoey doctor%b' "${C_YELLOW}" "${C_RESET}")" "Check installation" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%bdoey test%b' "${C_YELLOW}" "${C_RESET}")" "Run E2E tests" "$CMD_W")"
+  add_left "  $(dotted_leader "$(printf '%bdoey version%b' "${C_YELLOW}" "${C_RESET}")" "Show version info" "$CMD_W")"
 
-  # ── RIGHT COLUMN ──────────────────────────────────────────────────
-
-  add_right ""
-  add_right "$(printf '%b  LIVE STATUS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
-  add_right ""
-
-  # Per-team status blocks
-  i=0
-  while [ "$i" -lt "$TEAM_LINE_COUNT" ]; do
-    eval "t_win=\${TEAM_WIN_${i}}"
-    eval "t_mgr=\${TEAM_MGR_${i}}"
-    eval "t_wdg=\${TEAM_WDG_${i}}"
-    eval "t_idle=\${TEAM_IDLE_${i}}"
-    eval "t_busy=\${TEAM_BUSY_${i}}"
-    eval "t_resv=\${TEAM_RESV_${i}}"
-    eval "t_wcnt=\${TEAM_WCNT_${i}}"
-    eval "t_grid=\${TEAM_GRID_${i}}"
-
-    add_right "$(printf '  %b Team %s%b  (window %s, %s grid)' "${C_BOLD_WHITE}" "$((i + 1))" "${C_RESET}" "$t_win" "$t_grid")"
-
-    # Manager status with color
-    case "$t_mgr" in
-      READY)    mgr_color="${C_BOLD_GREEN}" ;;
-      BUSY|WORKING) mgr_color="${C_BOLD_YELLOW}" ;;
-      *)        mgr_color="${C_BOLD_RED}" ;;
-    esac
-    add_right "$(printf '    Manager %b....%b %b%s%b' "${C_DIM}" "${C_RESET}" "$mgr_color" "$t_mgr" "${C_RESET}")"
-
-    # Watchdog status with color
-    case "$t_wdg" in
-      OK)    wdg_color="${C_BOLD_GREEN}" ;;
-      STALE) wdg_color="${C_BOLD_RED}" ;;
-      *)     wdg_color="${C_YELLOW}" ;;
-    esac
-    add_right "$(printf '    Watchdog %b...%b %b%s%b' "${C_DIM}" "${C_RESET}" "$wdg_color" "$t_wdg" "${C_RESET}")"
-
-    # Worker summary
-    worker_parts=""
-    if [ "$t_idle" -gt 0 ]; then
-      worker_parts="$(printf '%b%s idle%b' "${C_GREEN}" "$t_idle" "${C_RESET}")"
-    fi
-    if [ "$t_busy" -gt 0 ]; then
-      if [ -n "$worker_parts" ]; then
-        worker_parts="${worker_parts}, "
-      fi
-      worker_parts="${worker_parts}$(printf '%b%s busy%b' "${C_YELLOW}" "$t_busy" "${C_RESET}")"
-    fi
-    if [ "$t_resv" -gt 0 ]; then
-      if [ -n "$worker_parts" ]; then
-        worker_parts="${worker_parts}, "
-      fi
-      worker_parts="${worker_parts}$(printf '%b%s reserved%b' "${C_MAGENTA}" "$t_resv" "${C_RESET}")"
-    fi
-    if [ -z "$worker_parts" ]; then
-      worker_parts="$(printf '%b0 idle%b' "${C_GRAY}" "${C_RESET}")"
-    fi
-    add_right "$(printf '    Workers %b....%b %s' "${C_DIM}" "${C_RESET}" "$worker_parts")"
-    add_right ""
-    i=$((i + 1))
-  done
-
-  add_right ""
-  add_right "$(printf '%b  RECENT EVENTS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
-  add_right ""
-
-  if [ "$EVENT_COUNT" -eq 0 ]; then
-    add_right "$(printf '  %b(no events yet)%b' "${C_DIM}" "${C_RESET}")"
-  else
-    i=0
-    while [ "$i" -lt "$EVENT_COUNT" ]; do
-      eval "e_time=\${EVENT_TIME_${i}}"
-      eval "e_pane=\${EVENT_PANE_${i}}"
-      eval "e_status=\${EVENT_STATUS_${i}}"
-      eval "e_title=\${EVENT_TITLE_${i}}"
-
-      # Color based on status
-      case "$e_status" in
-        *done*|*FINISHED*|*success*) evt_color="${C_GREEN}" ;;
-        *error*|*ERROR*|*CRASH*|*crash*) evt_color="${C_RED}" ;;
-        *) evt_color="${C_GRAY}" ;;
-      esac
-
-      # Truncate title if needed
-      max_title=$((RIGHT_W - 25))
-      if [ "$max_title" -lt 5 ]; then
-        max_title=5
-      fi
-      if [ "${#e_title}" -gt "$max_title" ]; then
-        e_title="$(printf '%.'"$((max_title - 3))"'s...' "$e_title")"
-      fi
-
-      if [ -n "$e_title" ]; then
-        add_right "$(printf '  %b%s%b  %-8s %b%-8s%b %s' "${C_DIM}" "$e_time" "${C_RESET}" "$e_pane" "$evt_color" "$e_status" "${C_RESET}" "$e_title")"
-      else
-        add_right "$(printf '  %b%s%b  %-8s %b%s%b' "${C_DIM}" "$e_time" "${C_RESET}" "$e_pane" "$evt_color" "$e_status" "${C_RESET}")"
-      fi
-      i=$((i + 1))
-    done
-  fi
+  # (Right column removed per user preference)
 
   # ══════════════════════════════════════════════════════════════════
   # ██  OUTPUT  ██
@@ -597,76 +450,22 @@ while true; do
   stat_uptime="$(printf '%b UPTIME %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$UPTIME_STR")"
   stat_teams="$(printf '%b TEAMS %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$TEAM_COUNT")"
 
-  # Worker summary with colors
-  stat_workers="$(printf '%b WORKERS %b %b%s%b idle  %b%s%b busy  %b%s%b reserved' \
-    "${C_BOLD_WHITE}" "${C_RESET}" \
-    "${C_GREEN}" "$TOTAL_IDLE" "${C_RESET}" \
-    "${C_YELLOW}" "$TOTAL_BUSY" "${C_RESET}" \
-    "${C_MAGENTA}" "$TOTAL_RESERVED" "${C_RESET}")"
-
   printf '  %b  %b│%b  %b  %b│%b  %b  %b│%b  %b\n' \
     "$stat_project" "${C_DIM}" "${C_RESET}" \
     "$stat_session" "${C_DIM}" "${C_RESET}" \
     "$stat_uptime" "${C_DIM}" "${C_RESET}" \
     "$stat_teams"
-  printf '  %b\n' "$stat_workers"
 
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
   printf '\n'
 
-  # ── Two-Column Body ───────────────────────────────────────────────
-  # Determine max lines
-  MAX_LINES=$LC
-  if [ "$RC" -gt "$MAX_LINES" ]; then
-    MAX_LINES=$RC
-  fi
-
-  # Render each row: left padded to LEFT_W, dim " │ ", right padded to RIGHT_W
+  # ── Single-Column Body ────────────────────────────────────────────
   row=0
-  while [ "$row" -lt "$MAX_LINES" ]; do
-    # Get left line
-    if [ "$row" -lt "$LC" ]; then
-      eval "left_line=\${L_${row}}"
-    else
-      left_line=""
-    fi
-
-    # Get right line
-    if [ "$row" -lt "$RC" ]; then
-      eval "right_line=\${R_${row}}"
-    else
-      right_line=""
-    fi
-
-    # Calculate visible lengths for padding
-    left_vis=$(visible_len "$left_line")
-    right_vis=$(visible_len "$right_line")
-
-    # Calculate padding needed
-    left_pad=$((LEFT_W - left_vis))
-    if [ "$left_pad" -lt 0 ]; then
-      left_pad=0
-    fi
-
-    # Build padding strings
-    lpad=""
-    lp_i=0
-    while [ "$lp_i" -lt "$left_pad" ]; do
-      lpad="${lpad} "
-      lp_i=$((lp_i + 1))
-    done
-
-    # Print the combined line
-    printf '%b%b %b│%b %b\n' "$left_line" "$lpad" "${C_DIM}" "${C_RESET}" "$right_line"
-
+  while [ "$row" -lt "$LC" ]; do
+    eval "left_line=\${L_${row}}"
+    printf '%b\n' "$left_line"
     row=$((row + 1))
   done
-
-  # ── Footer ────────────────────────────────────────────────────────
-  printf '\n'
-  printf '%b%s%b\n' "${C_DIM}" "$HR" "${C_RESET}"
-  printf '%b  Refreshing every 5m  │  Ctrl+C to stop  │  %b%s%b%b\n' \
-    "${C_DIM}" "${C_RESET}" "$(date '+%H:%M:%S')" "${C_DIM}" "${C_RESET}"
 
   sleep 300
 done
