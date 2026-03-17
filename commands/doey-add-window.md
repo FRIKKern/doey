@@ -133,9 +133,9 @@ for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
   sleep 0.5
 done
 
-# Find next available Dashboard slot (0.1-0.3) for Watchdog
+# Find next available Dashboard slot (0.2-0.4) for Watchdog
 WDG_SLOT=""
-for slot in 1 2 3; do
+for slot in 2 3 4; do
   SLOT_PID=$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || true)
   SLOT_CHILD=$(pgrep -P "$SLOT_PID" 2>/dev/null || true)
   if [ -z "$SLOT_CHILD" ]; then
@@ -150,7 +150,7 @@ if [ -n "$WDG_SLOT" ]; then
   sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
   echo "Watchdog launched in Dashboard pane 0.${WDG_SLOT}"
 else
-  echo "WARNING: No available Dashboard slot (0.1-0.3) for Watchdog"
+  echo "WARNING: No available Dashboard slot (0.2-0.4) for Watchdog"
 fi
 
 echo "All panes launched in window ${NEW_WIN}"
@@ -202,7 +202,7 @@ Team window ${NEW_WIN} created:
 
 ### Rules
 - Validate grid format, minimum 2 panes (MGR + 1 worker)
-- Pane 0 = Window Manager, pane 1+ = Workers; Watchdog goes to Dashboard slot 0.1-0.3
+- Pane 0 = Window Manager, pane 1+ = Workers; Watchdog goes to Dashboard slot 0.2-0.4
 - Write team_W.env before launching Claude; update TEAM_WINDOWS atomically
 - Never hardcode window indices — read from tmux
 - All bash must be 3.2 compatible

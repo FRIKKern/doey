@@ -123,8 +123,8 @@ No config files. No shell reload. Just `doey`.
 | Role | Pane | What it does |
 |------|------|-------------|
 | **Info Panel** | `0.0` (Dashboard) | Live dashboard showing team status, events, worker counts. |
-| **Watchdog** | `0.1-0.3` (Dashboard) | One per team. Monitors workers, delivers messages, catches crashes. |
-| **Session Manager** | `0.4` (Dashboard) | Session-level orchestrator — coordinates across team windows. |
+| **Session Manager** | `0.1` (Dashboard) | Session-level orchestrator — coordinates across team windows. |
+| **Watchdog** | `0.2-0.4` (Dashboard) | One per team. Monitors workers, delivers messages, catches crashes. |
 | **Window Manager** | `W.0` | Per-window orchestrator. Plans, delegates, monitors. Never writes code. |
 | **Workers** | `W.1+` | Claude Code instances that do the actual work. |
 

@@ -67,7 +67,7 @@ is_watchdog() {
     return "$_DOEY_IS_WD"
   fi
   _DOEY_IS_WD=1  # default: not a watchdog
-  # Watchdogs live in Dashboard (window 0), panes 0.1-0.3.
+  # Watchdogs live in Dashboard (window 0), panes 0.2-0.4.
   # Each team_W.env has WATCHDOG_PANE="0.X" referencing the Dashboard pane.
   if [ "$WINDOW_INDEX" = "0" ]; then
     for _wd_tf in "${RUNTIME_DIR}"/team_*.env; do
@@ -107,12 +107,12 @@ is_manager() {
 }
 
 is_session_manager() {
-  # True only for the Session Manager — Dashboard pane 0.4.
-  # Read from session.env SM_PANE if available, else default to 0.4.
+  # True only for the Session Manager — Dashboard pane 0.1.
+  # Read from session.env SM_PANE if available, else default to 0.1.
   if [ "$WINDOW_INDEX" != "0" ]; then
     return 1
   fi
-  local sm_pane="0.4"
+  local sm_pane="0.1"
   if [ -f "${RUNTIME_DIR}/session.env" ]; then
     local _sm_val
     _sm_val=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
@@ -145,7 +145,7 @@ send_notification() {
   local title="${1:-Claude Code}"
   local body="${2:-Task completed}"
 
-  # Defense-in-depth: only Session Manager (0.4) sends notifications
+  # Defense-in-depth: only Session Manager (0.1) sends notifications
   if ! is_session_manager; then
     return 0
   fi

@@ -46,7 +46,7 @@ _WP="${PANE#*:}"
 WINDOW_INDEX="${_WP%.*}"
 
 # Determine role based on new architecture:
-# - Window 0 (Dashboard): pane 0.0=Info Panel, 0.4=Session Manager, 0.1-0.3=Watchdog slots
+# - Window 0 (Dashboard): pane 0.0=Info Panel, 0.1=Session Manager, 0.2-0.4=Watchdog slots
 # - Window 1+ (Team):     pane W.0=Manager, W.1+=Workers
 ROLE="worker"
 DOEY_TEAM_WINDOW=""
@@ -58,7 +58,7 @@ if [ "$WINDOW_INDEX" = "0" ]; then
   sm_val="${sm_val%\"}" && sm_val="${sm_val#\"}"
   [ -n "$sm_val" ] && SM_PANE="$sm_val"
 
-  if [ "0.${PANE_INDEX}" = "${SM_PANE:-0.4}" ]; then
+  if [ "0.${PANE_INDEX}" = "${SM_PANE:-0.1}" ]; then
     ROLE="session_manager"
   elif [ "$PANE_INDEX" = "0" ]; then
     ROLE="info_panel"

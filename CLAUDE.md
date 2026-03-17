@@ -8,8 +8,8 @@ Doey is a CLI tool that creates a tmux-based multi-agent Claude Code team. It la
 
 **Window 0 — Dashboard (always present):**
 - **Info Panel (pane 0.0, shell script):** Live dashboard showing team status, worker counts, recent events. User lands here on attach.
-- **Watchdog slots (panes 0.1-0.3, Haiku):** One Watchdog per team window. Monitors workers, catches crashes.
-- **Session Manager (pane 0.4, Opus):** Top-level orchestrator that routes tasks between team windows. Never dispatches to workers directly. Present when multiple teams exist.
+- **Session Manager (pane 0.1, Opus):** Top-level orchestrator that routes tasks between team windows. Never dispatches to workers directly. Present when multiple teams exist.
+- **Watchdog slots (panes 0.2-0.4, Haiku):** One Watchdog per team window. Monitors workers, catches crashes.
 
 **Window 1+ — Team windows:**
 - **Window Manager (pane W.0, Opus):** Orchestrator — plans and delegates, never writes code. Skips reserved workers.
