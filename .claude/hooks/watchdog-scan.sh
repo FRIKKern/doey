@@ -536,9 +536,9 @@ if [ -n "$_ctx_line" ]; then
   _ctx_pct="${_ctx_pct// /}"
 fi
 is_numeric "$_ctx_pct" || _ctx_pct="0"
-if [ "$_ctx_pct" -ge 25 ]; then
+if [ "$_ctx_pct" -ge 60 ]; then
   echo ""
-  echo "⚠️  COMPACT_NOW — context at ${_ctx_pct}% (threshold: 25%)"
+  echo "⚠️  COMPACT_NOW — context at ${_ctx_pct}% (threshold: 60%)"
   echo "You MUST run /compact immediately. Do NOT run another scan cycle first."
 fi
 
