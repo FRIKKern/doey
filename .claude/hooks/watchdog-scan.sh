@@ -20,12 +20,12 @@ _parse_cpu_seconds() {
   case "${#_colons}" in
     1) # M:SS or M:SS.cc
       local _min="${t%%:*}" _rest="${t#*:}"
-      echo "$((_min * 60 + ${_rest%%.*}))"
+      echo "$((10#$_min * 60 + 10#${_rest%%.*}))"
       ;;
     2) # H:MM:SS
       local _h="${t%%:*}" _rest="${t#*:}"
       local _min="${_rest%%:*}" _sec="${_rest#*:}"
-      echo "$((_h * 3600 + _min * 60 + ${_sec%%.*}))"
+      echo "$((10#$_h * 3600 + 10#$_min * 60 + 10#${_sec%%.*}))"
       ;;
     *) echo "0" ;;
   esac
@@ -212,6 +212,7 @@ CRASH_EOF
       eval "PANE_STATE_${i}='${_crash_state}'"
       # Duration tracking for crashed/finished/reserved panes
       _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
+      _pt="${_pt//\'/}"
       eval "PANE_TITLE_${i}='${_pt}'"
       eval "PANE_TOOL_${i}=''"
       # State-since tracking

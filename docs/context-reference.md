@@ -86,7 +86,10 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 | `stop-status.sh` | Stop: sets FINISHED (workers), RESERVED (if reserved), or READY (Window Manager/Watchdog); blocks research workers without reports (exit 2) |
 | `stop-results.sh` | Stop: collects and writes results |
 | `stop-notify.sh` | Stop: Session Manager notifications |
+| `stop-notify-manager.sh` | Stop: notifies Window Manager when a worker finishes |
+| `stop-notify-session-manager.sh` | Stop: notifies Session Manager when Window Manager finishes |
 | `watchdog-scan.sh` | Utility: called directly by Watchdog for pane scanning (not a registered hook) |
+| `watchdog-wait.sh` | Utility: event-driven sleep between Watchdog scan cycles |
 
 Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
@@ -118,6 +121,8 @@ Skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-
 | `/doey-watchdog-compact` | Window Manager | Compact Watchdog context |
 | `/doey-purge` | Window Manager | Full audit & fix — context rot + code quality (bloat, staleness, bash 3.2, bugs) |
 | `/doey-stop` | Window Manager | Stop a specific worker |
+| `/doey-worktree` | Session Manager/Window Manager | Transform team to/from worktree isolation |
+| `/doey-restart-window` | Window Manager | Restart workers + Watchdog in a window |
 
 Agent usage: Window Manager uses all except window-management commands. Session Manager uses `/doey-list-windows`, `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`. Watchdog uses none. Workers use `/doey-status`, `/doey-reserve`.
 
@@ -201,7 +206,7 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel (left column, full height), pane 0.1 = Session Manager (top-right), panes 0.2-0.7 = Watchdog slots (bottom-right, side-by-side). Team grids start at window 1+.
 
-Default grid: **dynamic** (launches with 3 worker columns (6 workers), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.2-0.7).
+Default grid: **dynamic** (launches 2 local teams + 2 worktree teams, each with 3 worker columns (6 workers per team), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.2-0.7).
 
 ```
 Dashboard (window 0):
@@ -209,8 +214,7 @@ Dashboard (window 0):
 |          |              0.1  Session Manager                     |
 |   0.0    +--------+--------+--------+--------+--------+---------+
 |   INFO   |  0.2   |  0.3   |  0.4   |  0.5   |  0.6   |  0.7   |
-|  PANEL   |  WDG1  |  WDG2  |  WDG3  |  WDG4  |  WDG5  |  WDG6  |
-|          | (team1)| (team2)| (team3)| (team4)| (team5) | (team6)|
+|  PANEL   | T1 WDG | T2 WDG | T3 WDG | T4 WDG | T5 WDG | T6 WDG |
 +----------+--------+--------+--------+--------+--------+---------+
 
 Dynamic grid (default) — team window layout, then after `doey add`:
@@ -218,7 +222,7 @@ Dynamic grid (default) — team window layout, then after `doey add`:
  Initial (6 workers, window W)                                    After `doey add` (8 workers)
 +--------+--------+--------+--------+                         +--------+--------+--------+--------+--------+
 |  W.0   |  W.1   |  W.3   |  W.5   |                         |  W.0   |  W.1   |  W.3   |  W.5   |  W.7   |
-|  MGR   |  W1    |  W3    |  W5    |                         |  MGR   |  W1    |  W3    |  W5    |  W7    |
+|  Mgr   |  W1    |  W3    |  W5    |                         |  Mgr   |  W1    |  W3    |  W5    |  W7    |
 +--------+--------+--------+--------+                         +--------+--------+--------+--------+--------+
 |        |  W.2   |  W.4   |  W.6   |                         |        |  W.2   |  W.4   |  W.6   |  W.8   |
 |        |  W2    |  W4    |  W6    |                         |        |  W2    |  W4    |  W6    |  W8    |
@@ -230,7 +234,7 @@ Static grid (legacy, via `doey 6x2`): all panes are Workers except W.0 (Manager)
 ```
 +--------+--------+--------+--------+--------+--------+
 |  W.0   |  W.1   |  W.2   |  W.3   |  W.4   |  W.5   |
-|  MGR   |  W1    |  W2    |  W3    |  W4    |  W5    |
+|  Mgr   |  W1    |  W2    |  W3    |  W4    |  W5    |
 +--------+--------+--------+--------+--------+--------+
 |  W.6   |  W.7   |  W.8   |  W.9   |  W.10  |  W.11  |
 |  W6    |  W7    |  W8    |  W9    |  W10   |  W11   |
@@ -250,7 +254,7 @@ Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabl
 
 **PANE_SAFE escaping:** `${PANE//[:.]/_}` — e.g., `doey-project:0.5` becomes `doey-project_0_5`. Used in all runtime file names.
 
-**Pane title format:** `"MGR Manager"`, `"WDG Watchdog"`, `"W1 Worker 1"` etc. Used by `rebuild_pane_state()` to recover after pane index shifts.
+**Pane title format:** `"T<N> Window Manager"`, `"T<N> Watchdog"`, `"Session Manager"`, `"T<N> W<P>"` (e.g., `"T1 Window Manager"`, `"T1 W2"`). Used by `rebuild_pane_state()` to recover after pane index shifts.
 
 **Startup timing:** Window Manager briefing sent after 8s delay. Workers ready in ~15s.
 

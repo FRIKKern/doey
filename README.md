@@ -44,7 +44,7 @@ Doey launches **parallel Claude Code instances** coordinated by a Window Manager
 
 You talk to the Window Manager. The Window Manager runs the team. You ship faster.
 
-The grid is **dynamic by default** — starts lean with 6 workers, then use `doey add` to scale up when you need more horsepower. No restarts needed.
+The grid is **dynamic by default** — launches 4 teams (2 local + 2 worktree-isolated), each with 6 workers. Use `doey add` to scale up when you need more horsepower. No restarts needed.
 
 ---
 
@@ -82,12 +82,12 @@ No config files. No shell reload. Just `doey`.
 
 ## Features
 
-- **Dynamic grid** — starts with 6 workers, scale up with `doey add`, scale down with `doey remove`
+- **Dynamic grid** — launches 4 teams (2 local + 2 worktree), scale up with `doey add`, scale down with `doey remove`
 - **Parallel execution** — workers run simultaneously, not sequentially
 - **Smart orchestration** — Window Manager plans and delegates, never writes code itself
 - **Always-on monitoring** — Watchdog tracks worker state and catches crashes
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
-- **21 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-purge`, and more
+- **21 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-worktree`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -103,7 +103,7 @@ doey add-team --worktree
 ```
 
 **How it works:**
-- Creates a worktree at `/tmp/doey/<project>/worktrees/team-N/`
+- Creates a worktree at `<project-dir>/.doey-worktrees/team-N/`
 - On branch `doey/team-N-MMDD-HHMM`
 - All changes are isolated from the main repo until the branch is merged
 
@@ -132,9 +132,9 @@ doey add-team --worktree
 | `doey reload` | Hot-reload running session (Manager + Watchdog; `--workers` for all) |
 | `doey version` | Show version info |
 | `doey dynamic` | Launch in dynamic grid mode (alias: `d`) |
-| `doey add-window` | Add a new team window with its own Window Manager and Workers (Watchdog in Dashboard) |
-| `doey kill-window <N>` | Kill a team window and all its processes |
-| `doey list-windows` | List all team windows with status |
+| `doey add-window` | Add a new team window with its own Window Manager and Workers (alias: `add-team`) |
+| `doey kill-window <N>` | Kill a team window and all its processes (alias: `kill-team`) |
+| `doey list-windows` | List all team windows with status (alias: `list-teams`) |
 | `doey test` | Run test suite |
 | `doey uninstall` | Remove doey completely |
 | `doey 4x3` | Launch with a static grid layout |
@@ -180,6 +180,8 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-stop` | Stop a specific worker |
 | `/doey-reinstall` | Reinstall from repo |
 | `/doey-repair` | Dashboard diagnostic and repair |
+| `/doey-clear` | Clear and restart workers, Watchdog, or Window Manager |
+| `/doey-worktree` | Transform team to/from worktree isolation |
 | `/doey-watchdog-compact` | Compact Watchdog context |
 
 </details>
@@ -201,7 +203,7 @@ doey/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (21 total)
+│   └── ... (21 commands)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
 │   ├── linode-setup.md          # Linode VPS deployment guide

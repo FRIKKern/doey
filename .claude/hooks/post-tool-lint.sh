@@ -67,7 +67,7 @@ check_pattern() {
 }
 
 # All patterns in one grep pass to avoid 17 separate forks
-COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)'
+COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)|read[[:space:]]+-t[[:space:]]+[0-9]+\.[0-9]'
 ALL_MATCHES=$(grep -nE "$COMBINED_PATTERN" "$FILE_PATH" 2>/dev/null || true)
 
 if [ -n "$ALL_MATCHES" ]; then

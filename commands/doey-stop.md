@@ -92,7 +92,7 @@ echo "Status updated to FINISHED for pane ${WINDOW_INDEX}.${TARGET}"
 ```
 
 ### Rules
-- Never stop Window Manager (pane 0) or Watchdog — use `/doey-clear` for full resets
+- Never stop Window Manager (pane 0) or Watchdog — restart Watchdog via `/doey-repair` or manually from Dashboard
 - Always kill by PID, never via `/exit` or `send-keys`
 - Always update the status file after stopping
 - Pane shell stays alive for restart via `/doey-dispatch` or `/doey-clear`

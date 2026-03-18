@@ -8,6 +8,21 @@ init_hook
 # Only managers notify the Session Manager
 is_manager || exit 0
 
+# Only notify if the manager was actually BUSY (had a real task).
+# Skip if status file says READY or doesn't exist — avoids notification loops
+# when a manager goes idle without ever receiving work.
+STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+if [ -f "$STATUS_FILE" ]; then
+  _cur_status=$(grep '^STATUS:' "$STATUS_FILE" 2>/dev/null | head -1)
+  _cur_status="${_cur_status#STATUS: }"
+  case "$_cur_status" in
+    BUSY) ;;  # Was working — proceed with notification
+    *) exit 0 ;;  # READY/FINISHED/etc — no real work done, skip
+  esac
+else
+  exit 0  # No status file — never received a task
+fi
+
 # Find Session Manager pane (Dashboard window 0)
 SM_PANE=$(get_sm_pane)
 

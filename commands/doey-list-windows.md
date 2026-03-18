@@ -29,7 +29,7 @@ WINDOWS=$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null)
 
 for w in $WINDOWS; do
   if [ "$w" = "0" ]; then
-    SM_CMD=$(tmux display-message -t "${SESSION_NAME}:0.4" -p '#{pane_current_command}' 2>/dev/null) || SM_CMD=""
+    SM_CMD=$(tmux display-message -t "${SESSION_NAME}:0.1" -p '#{pane_current_command}' 2>/dev/null) || SM_CMD=""
     case "$SM_CMD" in
       bash|zsh|sh|fish|"") SM_STATUS="—" ;;
       *) SM_STATUS="UP" ;;
