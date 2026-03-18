@@ -101,7 +101,7 @@ Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pa
 
 When scan reports `MANAGER_CRASHED`: **NEVER send any keys to the crashed Manager pane.** Write a `.msg` to the Session Manager's inbox:
 ```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_4"
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
 MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_mgr_crash_W${TEAM_WINDOW}_$(date +%s).msg"
 cat > "$MSG_FILE" << EOF
 FROM: watchdog-W${TEAM_WINDOW}
@@ -117,7 +117,7 @@ When scan reports `WAVE_COMPLETE` (all workers transitioned from working to idle
 1. **Notify Manager** (if not crashed and idle): send-keys "All workers idle — wave complete. Check results in $RUNTIME_DIR/results/ and dispatch next wave or report completion to Session Manager."
 2. **Write `.msg` to Session Manager:**
 ```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_4"
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
 MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_wave_done_W${TEAM_WINDOW}_$(date +%s).msg"
 cat > "$MSG_FILE" << EOF
 FROM: watchdog-W${TEAM_WINDOW}
@@ -130,7 +130,7 @@ EOF
 
 When scan reports `MANAGER_COMPLETED`, write a `.msg` to Session Manager:
 ```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_4"
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
 MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_mgr_done_W${TEAM_WINDOW}_$(date +%s).msg"
 cat > "$MSG_FILE" << EOF
 FROM: watchdog-W${TEAM_WINDOW}

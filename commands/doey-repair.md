@@ -54,7 +54,7 @@ Use a single `tmux list-panes` call to get all pane info at once, then check chi
 tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_index}|#{pane_pid}|#{pane_current_command}|#{pane_title}' 2>/dev/null
 
 # For each pane, check if a child process is running
-for IDX in 0 1 2 3 4; do
+for IDX in 0 1 2 3 4 5 6 7; do
   SHELL_PID=$(tmux display-message -t "$SESSION_NAME:0.${IDX}" -p '#{pane_pid}' 2>/dev/null) || { echo "0.${IDX}: MISSING"; continue; }
   CHILD_PID=$(pgrep -P "$SHELL_PID" 2>/dev/null) || CHILD_PID=""
   echo "0.${IDX}: child=${CHILD_PID:-none}"

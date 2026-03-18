@@ -74,8 +74,9 @@ mkdir -p "${RUNTIME_DIR}/status"
 
 # Check if any worker is busy
 BUSY_WORKERS=""
+SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
 for i in $WORKER_PANES_LIST; do
-  STATUS_FILE="${RUNTIME_DIR}/status/pane_${TARGET_WIN}_${i}.status"
+  STATUS_FILE="${RUNTIME_DIR}/status/${SESSION_SAFE}_${TARGET_WIN}_${i}.status"
   if [ -f "$STATUS_FILE" ]; then
     PANE_STATUS=$(grep '^STATUS:' "$STATUS_FILE" | head -1 | sed 's/^STATUS: *//')
     if [ "$PANE_STATUS" = "BUSY" ]; then
@@ -307,7 +308,7 @@ Include booted count from verify step. If any workers failed to boot, list the d
 - Each step is a self-contained bash block — variables cascade with `# (vars from step 1)` comments
 - Kill by PID only — never use `/exit` or `send-keys C-c` to stop Claude
 - Use `tmux show-environment` for DOEY_RUNTIME — never hardcode paths
-- Status files: `${RUNTIME_DIR}/status/pane_${WIN}_${PANE}.status`
+- Status files: `${RUNTIME_DIR}/status/${SESSION_SAFE}_${WIN}_${PANE}.status` where `SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')`
 - Atomic file writes: write to temp file, then `mv`
 - Never transform window 0
 - The worktree branch is NOT deleted on `--back` — user merges manually when ready
