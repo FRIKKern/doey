@@ -67,12 +67,10 @@ install_doey_hooks() {
   mkdir -p "$target_dir/.claude/hooks"
   cp "${repo_dir}"/.claude/hooks/*.sh "$target_dir/.claude/hooks/" 2>/dev/null && \
     chmod +x "$target_dir"/.claude/hooks/*.sh || true
-  if [ ! -f "$target_dir/.claude/settings.local.json" ]; then
-    cp "${repo_dir}/.claude/settings.local.json" "$target_dir/.claude/settings.local.json"
-  else
-    printf "${indent}${WARN}Existing .claude/settings.local.json found — verify hooks are registered${RESET}\n"
-  fi
-  printf "${indent}${DIM}Installed Doey hooks${RESET}\n"
+  # Always write Doey hooks to settings.local.json (Doey owns this file).
+  # User hooks belong in their project's settings.json — Claude Code merges both.
+  cp "${repo_dir}/.claude/settings.json" "$target_dir/.claude/settings.local.json"
+  printf "${indent}${DIM}Doey hooks installed${RESET}\n"
 }
 
 # Write a status file for a pane (used during boot to set initial READY state)
