@@ -157,7 +157,7 @@ done
 
 if [ -n "$WDG_SLOT" ]; then
   tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "Watchdog — Team ${NEW_WIN}"
-  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model haiku --effort low --agent doey-watchdog" Enter
+  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model opus --agent doey-watchdog" Enter
   sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
   echo "Watchdog launched in Dashboard pane 0.${WDG_SLOT}"
 else
