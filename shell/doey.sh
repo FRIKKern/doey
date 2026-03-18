@@ -1227,7 +1227,7 @@ doey_purge() {
 # Number of worker columns to add on dynamic launch (2 workers per column)
 INITIAL_WORKER_COLS=3
 # Number of team windows to create on dynamic launch (max 6, one per Dashboard watchdog slot)
-INITIAL_TEAMS=3
+INITIAL_TEAMS=2
 
 # ── Launch dispatcher ─────────────────────────────────────────────────
 # Routes to dynamic or static launch based on grid type.
@@ -2566,7 +2566,7 @@ MANIFEST
 
   # ── Step 9: Add isolated worktree teams ─────────────────────────
   STEP_TOTAL=9
-  local INITIAL_WORKTREE_TEAMS=3
+  local INITIAL_WORKTREE_TEAMS=2
   step_start 9 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
   local _wt_i _wt_ok=0
   for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
