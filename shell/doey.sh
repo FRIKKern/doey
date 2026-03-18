@@ -90,6 +90,11 @@ EOF
 
 # Derive a sanitized project name from a directory path
 project_name_from_dir() {
+  # Allow projects to override the auto-derived name via .doey-name file
+  if [ -f "$1/.doey-name" ]; then
+    head -1 "$1/.doey-name" | tr '[:upper:] .' '[:lower:]--' | sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//;s/-$//'
+    return
+  fi
   basename "$1" | tr '[:upper:] .' '[:lower:]--' | sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//;s/-$//'
 }
 
