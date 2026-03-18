@@ -2202,30 +2202,50 @@ show_version() {
   printf '\n'
 
   local version_file="$HOME/.claude/doey/version"
+  local repo_dir=""
+
   if [[ -f "$version_file" ]]; then
-    local ver installed_date repo_dir
+    local ver installed_date
     ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
     installed_date="$(grep "^date=" "$version_file" | cut -d= -f2)"
     repo_dir="$(grep "^repo=" "$version_file" | cut -d= -f2)"
     printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(installed %s)${RESET}\n" "$ver" "$installed_date"
-    if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir" ]]; then
-      local latest
-      latest="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo '')"
-      if [[ -n "$latest" ]] && [[ "$latest" != "$ver" ]]; then
-        printf "  ${DIM}Update${RESET}     ${WARN}%s available${RESET}  ${DIM}(run 'doey update')${RESET}\n" "$latest"
-      fi
-    fi
   else
     # Fallback to git if no version file (pre-version-tracking install)
     local repo_path_file="$HOME/.claude/doey/repo-path"
     if [[ -f "$repo_path_file" ]]; then
-      local repo_dir
       repo_dir="$(cat "$repo_path_file")"
       if [[ -d "$repo_dir" ]]; then
         local version_info
         version_info="$(git -C "$repo_dir" log -1 --format="%h (%ci)" 2>/dev/null || echo 'unknown')"
         printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(no version file — reinstall to track)${RESET}\n" "$version_info"
       fi
+    fi
+  fi
+
+  # Check against remote for up-to-date status
+  if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
+    printf "  ${DIM}Status${RESET}     "
+    if git -C "$repo_dir" fetch origin main --quiet 2>/dev/null; then
+      local local_head remote_head behind_count
+      local_head="$(git -C "$repo_dir" rev-parse HEAD 2>/dev/null || echo '')"
+      remote_head="$(git -C "$repo_dir" rev-parse origin/main 2>/dev/null || echo '')"
+      if [[ -n "$local_head" ]] && [[ "$local_head" == "$remote_head" ]]; then
+        printf "${SUCCESS}✓ Up to date${RESET}\n"
+      else
+        behind_count=$(git -C "$repo_dir" rev-list --count HEAD..origin/main 2>/dev/null || echo '?')
+        local ahead_count
+        ahead_count=$(git -C "$repo_dir" rev-list --count origin/main..HEAD 2>/dev/null || echo '0')
+        if [[ "$behind_count" -gt 0 ]] 2>/dev/null; then
+          printf "${WARN}⚠ %s commit(s) behind${RESET}  ${DIM}(run: doey update)${RESET}\n" "$behind_count"
+        elif [[ "$ahead_count" -gt 0 ]] 2>/dev/null; then
+          printf "${SUCCESS}✓ Up to date${RESET}  ${DIM}(%s local commit(s) ahead)${RESET}\n" "$ahead_count"
+        else
+          printf "${SUCCESS}✓ Up to date${RESET}\n"
+        fi
+      fi
+    else
+      printf "${DIM}Could not reach remote${RESET}\n"
     fi
   fi
 
