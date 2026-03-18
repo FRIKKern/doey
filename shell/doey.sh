@@ -588,9 +588,18 @@ show_menu() {
     printf '\n'
   fi
 
+  # Count running sessions for the kill-all option
+  local running_count=0
+  for i in "${!names[@]}"; do
+    session_exists "doey-${names[$i]}" && running_count=$((running_count + 1))
+  done
+
   printf "  ${DIM}Options:${RESET}\n"
   printf "    ${BOLD}#${RESET})  Enter number to open a project\n"
   printf "    ${BOLD}i${RESET})  Init current directory as new project\n"
+  if [[ $running_count -gt 0 ]]; then
+    printf "    ${BOLD}k${RESET})  Kill all running sessions ${DIM}(%d active)${RESET}\n" "$running_count"
+  fi
   printf "    ${BOLD}q${RESET})  Quit\n"
   printf '\n'
 
@@ -619,6 +628,26 @@ show_menu() {
       init_name="$(find_project "$(pwd)")"
       if [[ -n "$init_name" ]]; then
         launch_with_grid "$init_name" "$(pwd)" "$grid"
+      fi
+      ;;
+    k|K|kill)
+      if [[ $running_count -eq 0 ]]; then
+        printf "  ${DIM}No running sessions to kill${RESET}\n"
+        return 0
+      fi
+      printf '\n'
+      read -rp "  Kill all ${running_count} running session(s)? (y/N) " confirm
+      if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        for i in "${!names[@]}"; do
+          local sess="doey-${names[$i]}"
+          if session_exists "$sess"; then
+            _kill_doey_session "$sess"
+            printf "  ${SUCCESS}Killed${RESET} %s\n" "$sess"
+          fi
+        done
+        printf '\n  ${SUCCESS}All sessions killed${RESET}\n'
+      else
+        printf "  ${DIM}Cancelled${RESET}\n"
       fi
       ;;
     q|Q) return 0 ;;
