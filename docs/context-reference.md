@@ -48,7 +48,7 @@ Load Order (bottom = first, top = last / highest precedence)
 
 | Field | Window Manager | Session Manager | Watchdog | Effect |
 |-------|----------------|-----------------|----------|--------|
-| `model` | `opus` | `opus` | `haiku` | Default model; CLI `--model` overrides |
+| `model` | `opus` | `opus` | `opus` | Default model; CLI `--model` overrides |
 | `color` | `green` | `#FF6B35` | `yellow` | Status line color |
 | `memory` | `user` | `user` | `none` | Window Manager/Session Manager store to `~/.claude/agent-memory/<name>/`; Watchdog has no memory |
 
@@ -192,7 +192,7 @@ Loaded by hooks via `load_team_env()` and by commands via manual sourcing. Team 
 | Instance | Command |
 |----------|---------|
 | Window Manager | `claude --dangerously-skip-permissions --agent doey-manager` |
-| Watchdog | `claude --dangerously-skip-permissions --model haiku --effort low --agent doey-watchdog` |
+| Watchdog | `claude --dangerously-skip-permissions --model opus --agent doey-watchdog` |
 | Workers | `claude --dangerously-skip-permissions --model opus --append-system-prompt-file /tmp/doey/<name>/worker-system-prompt-w<W>-<N>.md` |
 
 Precedence: CLI flags > agent frontmatter > settings files.

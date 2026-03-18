@@ -105,7 +105,7 @@ If team found, respawn:
 ```bash
 TEAM_W="$TEAM_FOR_0X"  # from Step 1 mapping
 WDG_AGENT_NAME="t${TEAM_W}-watchdog"
-tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model haiku --effort low --name \"T${TEAM_W} Watchdog\" --agent \"${WDG_AGENT_NAME}\"" Enter
+tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model opus --name \"T${TEAM_W} Watchdog\" --agent \"${WDG_AGENT_NAME}\"" Enter
 ```
 Wait 12s, then brief it:
 ```bash
