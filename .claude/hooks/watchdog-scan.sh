@@ -12,6 +12,25 @@ is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 NL='
 '
 
+# Parse ps cputime output (M:SS.cc or H:MM:SS) into whole seconds (bash 3.2 safe)
+_parse_cpu_seconds() {
+  local t="$1"
+  [ -z "$t" ] && echo "0" && return
+  local _colons="${t//[^:]/}"
+  case "${#_colons}" in
+    1) # M:SS or M:SS.cc
+      local _min="${t%%:*}" _rest="${t#*:}"
+      echo "$((_min * 60 + ${_rest%%.*}))"
+      ;;
+    2) # H:MM:SS
+      local _h="${t%%:*}" _rest="${t#*:}"
+      local _min="${_rest%%:*}" _sec="${_rest#*:}"
+      echo "$((_h * 3600 + _min * 60 + ${_sec%%.*}))"
+      ;;
+    *) echo "0" ;;
+  esac
+}
+
 # --- Load session environment ---
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { echo "ERROR: not in doey session"; exit 1; }
 
@@ -211,6 +230,40 @@ CRASH_EOF
       ;;
   esac
 
+  # --- CPU time detection (reliable IDLE vs WORKING signal) ---
+  # When Claude Code is running (node), compare CPU time between scans.
+  # Active work (thinking, tool execution) consumes CPU; idle waiting does not.
+  _pane_ppid=$(tmux display-message -t "$PANE_REF" -p '#{pane_pid}' 2>/dev/null) || _pane_ppid=""
+  _cpu_secs=0
+  if [ -n "$_pane_ppid" ]; then
+    _node_pid=$(pgrep -P "$_pane_ppid" 2>/dev/null | head -1)
+    if [ -n "$_node_pid" ]; then
+      _cputime_raw=$(ps -o cputime= -p "$_node_pid" 2>/dev/null | tr -d ' ')
+      [ -n "$_cputime_raw" ] && _cpu_secs=$(_parse_cpu_seconds "$_cputime_raw")
+    fi
+  fi
+  CPU_FILE="${RUNTIME_DIR}/status/cpu_${TARGET_WINDOW}_${i}"
+  _prev_cpu_secs=-1
+  [ -f "$CPU_FILE" ] && read -r _prev_cpu_secs < "$CPU_FILE" 2>/dev/null
+  echo "$_cpu_secs" > "$CPU_FILE"
+  if [ "$_prev_cpu_secs" -lt 0 ]; then
+    _cpu_delta=-1  # First scan — no comparison possible
+  else
+    _cpu_delta=$((_cpu_secs - _prev_cpu_secs))
+    [ "$_cpu_delta" -lt 0 ] && _cpu_delta=0  # Process restarted
+  fi
+  _cpu_active=""
+  [ "$_cpu_delta" -gt 1 ] && _cpu_active="yes"
+
+  # --- Hook-written status file (secondary signal) ---
+  # on-prompt-submit.sh writes BUSY, stop-status.sh writes FINISHED/READY
+  _hook_status=""
+  STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+  if [ -f "$STATUS_FILE" ]; then
+    _hook_status=$(grep '^STATUS:' "$STATUS_FILE" 2>/dev/null | head -1)
+    _hook_status="${_hook_status#STATUS: }"
+  fi
+
   # Capture last 5 lines
   CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || CAPTURE=""
 
@@ -221,35 +274,44 @@ CRASH_EOF
   read -r OLD_HASH < "$HASH_FILE" 2>/dev/null || OLD_HASH=""
 
   if [ "$HASH" = "$OLD_HASH" ]; then
-    # Content unchanged — but is the pane idle or actually working?
-    # Check if pane is sitting at the prompt (idle) vs actively processing
+    # Content unchanged — use CPU time to distinguish IDLE vs WORKING
     _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
     eval "PANE_TITLE_${i}='${_pt}'"
     eval "PANE_TOOL_${i}=''"
 
-    # Re-check capture for idle prompt — an idle worker at ❯ is not stuck
-    _unch_capture=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || _unch_capture=""
-    _is_at_prompt=""
-    case "$_unch_capture" in
-      *'❯'*|*'● Ready'*) _is_at_prompt="yes" ;;
-    esac
-
     eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
     STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
 
-    if [ -n "$_is_at_prompt" ]; then
-      # Pane is at the prompt — it's IDLE, not stuck
-      rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
-      _unch_state="IDLE"
-      # Only print if this is a state change
-      if [ "$PREV" != "IDLE" ] && [ "$PREV" != "UNCHANGED" ] || [ "$PREV" = "UNCHANGED" ]; then
-        # Suppress repeated IDLE — only report on transition
+    if [ -n "$_cpu_active" ] || [ "$_hook_status" = "BUSY" ]; then
+      # CPU active OR hook says BUSY = working (thinking/processing, no visible output yet)
+      COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
+      read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
+      NEW_COUNT=$((OLD_COUNT + 1))
+      echo "$NEW_COUNT" > "$COUNTER_FILE"
+
+      # After 6 consecutive CPU-active-but-no-output cycles, escalate to STUCK
+      if [ "$NEW_COUNT" -ge 6 ]; then
+        echo "PANE ${i} STUCK (CPU active but no output for ${NEW_COUNT} cycles)"; SCAN_HAD_OUTPUT=true
+        _unch_state="STUCK"
+      else
+        _unch_state="WORKING"
         case "$PREV" in
-          IDLE|UNCHANGED) ;;
-          *) echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true ;;
+          WORKING|CHANGED|UNCHANGED) ;;
+          *) echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true ;;
         esac
       fi
-      # Display state for duration tracking
+      _display_prev="WORKING"
+      read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
+      eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
+      eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
+    else
+      # No CPU activity + hash unchanged = truly IDLE
+      rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
+      _unch_state="IDLE"
+      case "$PREV" in
+        IDLE|UNCHANGED) ;;
+        *) echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true ;;
+      esac
       _display_prev="IDLE"
       case "$PREV" in
         WORKING|CHANGED|STUCK) _display_prev="WORKING" ;;
@@ -265,91 +327,48 @@ CRASH_EOF
         eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
       fi
       eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
-    else
-      # Pane content unchanged and NOT at prompt — could be stuck
-      COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
-      read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
-      NEW_COUNT=$((OLD_COUNT + 1))
-      echo "$NEW_COUNT" > "$COUNTER_FILE"
-
-      # After 6 consecutive UNCHANGED cycles while not at prompt, escalate to STUCK
-      _unch_state=""
-      if [ "$NEW_COUNT" -ge 6 ]; then
-        echo "PANE ${i} STUCK (unchanged for ${NEW_COUNT} cycles, not at prompt)"; SCAN_HAD_OUTPUT=true
-        _unch_state="STUCK"
-      else
-        _unch_state="UNCHANGED"
-      fi
-      # Display state for duration tracking
-      _display_state="WORKING"
-      read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
-      eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
-      eval "PANE_PREV_DISPLAY_${i}='${_display_state}'"
     fi
     eval "PANE_STATE_${i}='${_unch_state}'"
     continue
   fi
 
-  # Hash changed — reset unchanged counter
+  # Hash changed — content is updating, pane is actively producing output
   rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
 
-  # Hash changed — update stored hash (atomic write)
+  # Update stored hash (atomic write)
   echo "$HASH" > "${HASH_FILE}.tmp" && mv "${HASH_FILE}.tmp" "$HASH_FILE"
 
-  # Classify the change
-  _classified_state=""
-  case "$CAPTURE" in
-    *'❯'*)
-      echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
-      _classified_state="IDLE"
-      ;;
-    *thinking*|*working*|*Bash*|*Read*|*Edit*|*Write*|*Grep*|*Glob*|*Agent*)
-      echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
-      _classified_state="WORKING"
-      ;;
-    *)
-      echo "PANE ${i} CHANGED"; SCAN_HAD_OUTPUT=true
-      _classified_state="CHANGED"
-      ;;
-  esac
+  # Hash changed = WORKING (content is actively updating)
+  _classified_state="WORKING"
+  echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
   eval "PANE_STATE_${i}='${_classified_state}'"
 
   # Capture pane title
   _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
   eval "PANE_TITLE_${i}='${_pt}'"
 
-  # Extract last tool name from capture (for WORKING/CHANGED panes)
+  # Extract last tool name from capture (for display)
   _last_tool=""
-  if [ "$_classified_state" = "WORKING" ] || [ "$_classified_state" = "CHANGED" ]; then
-    # Scan capture for tool names — last match wins
-    _remaining="$CAPTURE"
-    while [ -n "$_remaining" ]; do
-      _line="${_remaining%%${NL}*}"
-      case "$_line" in
-        *Agent*) _last_tool="Agent" ;;
-        *Bash*)  _last_tool="Bash" ;;
-        *Read*)  _last_tool="Read" ;;
-        *Edit*)  _last_tool="Edit" ;;
-        *Write*) _last_tool="Write" ;;
-        *Grep*)  _last_tool="Grep" ;;
-        *Glob*)  _last_tool="Glob" ;;
-      esac
-      # Advance to next line
-      if [ "$_remaining" = "$_line" ]; then
-        break
-      fi
-      _remaining="${_remaining#*${NL}}"
-    done
-  fi
+  _remaining="$CAPTURE"
+  while [ -n "$_remaining" ]; do
+    _line="${_remaining%%${NL}*}"
+    case "$_line" in
+      *Agent*) _last_tool="Agent" ;;
+      *Bash*)  _last_tool="Bash" ;;
+      *Read*)  _last_tool="Read" ;;
+      *Edit*)  _last_tool="Edit" ;;
+      *Write*) _last_tool="Write" ;;
+      *Grep*)  _last_tool="Grep" ;;
+      *Glob*)  _last_tool="Glob" ;;
+    esac
+    if [ "$_remaining" = "$_line" ]; then break; fi
+    _remaining="${_remaining#*${NL}}"
+  done
   eval "PANE_TOOL_${i}='${_last_tool}'"
 
   # Duration tracking — detect state changes
   eval "_prev_for_dur=\${PREV_STATE_${i}:-UNKNOWN}"
-  # Map to display states for comparison (CHANGED→WORKING, UNCHANGED→keep prev)
-  case "$_classified_state" in
-    WORKING|CHANGED) _display_now="WORKING" ;;
-    *) _display_now="$_classified_state" ;;
-  esac
+  _display_now="WORKING"
   case "$_prev_for_dur" in
     WORKING|CHANGED|UNCHANGED|STUCK) _display_prev="WORKING" ;;
     IDLE|FINISHED) _display_prev="IDLE" ;;
