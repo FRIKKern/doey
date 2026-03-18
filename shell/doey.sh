@@ -238,20 +238,67 @@ _worktree_safe_remove() {
   remove_team_worktree "$project_dir" "$worktree_dir"
 }
 
+# Balance watchdog pane widths in Dashboard window 0.
+# Usage: _balance_watchdog_panes <session> <num_slots>
+_balance_watchdog_panes() {
+  local session="$1" num_slots="$2"
+  local _bw_total=0 _bw_w _bw_target
+  local _bw_last=$((num_slots + 1))
+  local _bw_i
+  for (( _bw_i=2; _bw_i<=_bw_last; _bw_i++ )); do
+    _bw_w=$(tmux display-message -t "$session:0.${_bw_i}" -p '#{pane_width}')
+    _bw_total=$((_bw_total + _bw_w))
+  done
+  _bw_target=$((_bw_total / num_slots))
+  for (( _bw_i=2; _bw_i<_bw_last; _bw_i++ )); do
+    tmux resize-pane -t "$session:0.${_bw_i}" -x "$_bw_target"
+  done
+}
+
+# Find the next available Dashboard watchdog slot.
+# Sets: _FWS_SLOT (pane address, e.g. "0.3") or "" if none free.
+# Usage: _find_free_watchdog_slot <runtime_dir>
+_find_free_watchdog_slot() {
+  local runtime_dir="$1"
+  _FWS_SLOT=""
+  local sn slot_val slot_taken tf tf_wdg
+  for sn in 1 2 3 4 5 6; do
+    slot_val=$(grep "^WDG_SLOT_${sn}=" "${runtime_dir}/session.env" | cut -d= -f2)
+    slot_val="${slot_val//\"/}"
+    [ -n "$slot_val" ] || continue
+    slot_taken=""
+    for tf in "${runtime_dir}"/team_*.env; do
+      [ -f "$tf" ] || continue
+      tf_wdg=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
+      tf_wdg="${tf_wdg//\"/}"
+      if [ "$tf_wdg" = "$slot_val" ]; then
+        slot_taken="yes"
+        break
+      fi
+    done
+    if [ -z "$slot_taken" ]; then
+      _FWS_SLOT="$slot_val"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Build the Dashboard window (window 0) with 2 columns:
 #   Left: Info Panel (full height)
-#   Right: Session Manager (top) + 6 Watchdog slots side-by-side (bottom)
+#   Right: Session Manager (top) + N Watchdog slots side-by-side (bottom)
 #
 #   ┌──────────┬────────────────────────────────────┐
 #   │          │         Session Manager             │
-#   │  Info    ├────────┬────────┬────────┬──────────┤
-#   │  Panel   │  WD 1  │  WD 2  │  WD 3  │  WD 4  │
-#   └──────────┴────────┴────────┴────────┴──────────┘
+#   │  Info    ├────────┬────────┬── ... ──┬─────────┤
+#   │  Panel   │  WD 1  │  WD 2  │        │  WD N  │
+#   └──────────┴────────┴────────┴── ... ──┴─────────┘
 #
-# Usage: setup_dashboard <session> <dir> <runtime_dir>
-# Sets: WDG_SLOT_1..6, SM_PANE (pane indices in window 0)
+# Usage: setup_dashboard <session> <dir> <runtime_dir> [num_slots]
+# Sets: WDG_SLOT_1..N, SM_PANE (pane indices in window 0)
 setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
+  local num_slots="${4:-6}"
 
   # Start: single pane 0.0 (will become Info Panel)
   # Split left/right — right column gets 60% (use -l for tmux 3.4 detached compat)
@@ -262,39 +309,32 @@ setup_dashboard() {
   tmux split-window -v -t "$session:0.1" -l 28 -c "$dir"
   # Indices: 0.0=info, 0.1=top-right, 0.2=bottom-right
 
-  # Split bottom-right into 6 horizontal watchdog slots
-  # Each split targets the NEW (right/larger) pane from the previous split
-  tmux split-window -h -t "$session:0.2" -l 125 -c "$dir"
-  tmux split-window -h -t "$session:0.3" -l 100 -c "$dir"
-  tmux split-window -h -t "$session:0.4" -l 75 -c "$dir"
-  tmux split-window -h -t "$session:0.5" -l 50 -c "$dir"
-  tmux split-window -h -t "$session:0.6" -l 25 -c "$dir"
-  # Indices: 0.0=info, 0.1=SM, 0.2=WD1, 0.3=WD2, 0.4=WD3, 0.5=WD4, 0.6=WD5, 0.7=WD6
+  # Split bottom-right into $num_slots horizontal watchdog slots
+  if [ "$num_slots" -gt 1 ]; then
+    local _wd_total_w
+    _wd_total_w=$(tmux display-message -t "$session:0.2" -p '#{pane_width}')
+    local _wd_n
+    for (( _wd_n=1; _wd_n<num_slots; _wd_n++ )); do
+      local _wd_remaining=$((num_slots - _wd_n))
+      local _wd_frac=$(( _wd_total_w * _wd_remaining / num_slots ))
+      tmux split-window -h -t "$session:0.$((_wd_n + 1))" -l "$_wd_frac" -c "$dir"
+    done
+  fi
+  # Indices: 0.0=info, 0.1=SM, 0.2..0.(num_slots+1)=WD slots
 
   # Balance watchdog pane widths
-  local _wd_total=0 _wd_w _wd_target
-  for _wd_i in 2 3 4 5 6 7; do
-    _wd_w=$(tmux display-message -t "$session:0.${_wd_i}" -p '#{pane_width}')
-    _wd_total=$((_wd_total + _wd_w))
-  done
-  _wd_target=$((_wd_total / 6))
-  for _wd_i in 2 3 4 5 6; do
-    tmux resize-pane -t "$session:0.${_wd_i}" -x "$_wd_target"
-  done
+  _balance_watchdog_panes "$session" "$num_slots"
 
   # Name panes
   tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "Session Manager"
-  tmux select-pane -t "$session:0.2" -T "T1 Watchdog"
-  tmux select-pane -t "$session:0.3" -T "T2 Watchdog"
-  tmux select-pane -t "$session:0.4" -T "T3 Watchdog"
-  tmux select-pane -t "$session:0.5" -T "T4 Watchdog"
-  tmux select-pane -t "$session:0.6" -T "T5 Watchdog"
-  tmux select-pane -t "$session:0.7" -T "T6 Watchdog"
+  for (( _wd_i=1; _wd_i<=num_slots; _wd_i++ )); do
+    tmux select-pane -t "$session:0.$((_wd_i + 1))" -T "T${_wd_i} Watchdog"
+  done
 
   # Show placeholder in empty Watchdog slots
   local _wd_s
-  for _wd_s in 2 3 4 5 6 7; do
+  for (( _wd_s=2; _wd_s<=num_slots+1; _wd_s++ )); do
     tmux send-keys -t "$session:0.${_wd_s}" "echo 'Watchdog slot — awaiting team assignment...'" Enter
   done
 
@@ -305,12 +345,9 @@ setup_dashboard() {
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 
   # Export slot pane indices (stable after creation)
-  WDG_SLOT_1="0.2"
-  WDG_SLOT_2="0.3"
-  WDG_SLOT_3="0.4"
-  WDG_SLOT_4="0.5"
-  WDG_SLOT_5="0.6"
-  WDG_SLOT_6="0.7"
+  for (( _wd_i=1; _wd_i<=num_slots; _wd_i++ )); do
+    printf -v "WDG_SLOT_${_wd_i}" '%s' "0.$((_wd_i + 1))"
+  done
   SM_PANE="0.1"
 }
 
@@ -1234,8 +1271,10 @@ doey_purge() {
 # ── Initial worker columns ────────────────────────────────────────────
 # Number of worker columns to add on dynamic launch (2 workers per column)
 INITIAL_WORKER_COLS=3
-# Number of team windows to create on dynamic launch (max 6, one per Dashboard watchdog slot)
+# Number of team windows to create on dynamic launch
 INITIAL_TEAMS=2
+# Maximum Dashboard watchdog slots (one per team, hard limit)
+MAX_WATCHDOG_SLOTS=6
 
 # ── Launch dispatcher ─────────────────────────────────────────────────
 # Routes to dynamic or static launch based on grid type.
@@ -1349,13 +1388,8 @@ PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
-WDG_SLOT_1="0.2"
-WDG_SLOT_2="0.3"
-WDG_SLOT_3="0.4"
-WDG_SLOT_4="0.5"
-WDG_SLOT_5="0.6"
-WDG_SLOT_6="0.7"
 SM_PANE="0.1"
+WDG_SLOT_1="0.2"
 MANIFEST
 
   # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
@@ -1368,7 +1402,7 @@ MANIFEST
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
-  setup_dashboard "$session" "$dir" "$runtime_dir"
+  setup_dashboard "$session" "$dir" "$runtime_dir" 1
 
   # Team grid window (window 1)
   local team_window=1
@@ -1699,9 +1733,9 @@ reload_session() {
     *)
       # Rewrite WATCHDOG_PANE to "0.2" (default Dashboard slot for team 1)
       sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.2"/' "${runtime_dir}/session.env"
-      # Add WDG_SLOT entries if missing
+      # Add WDG_SLOT_1 entry if missing (minimal — additional slots added by add-team)
       if ! grep -q '^WDG_SLOT_1=' "${runtime_dir}/session.env"; then
-        printf 'WDG_SLOT_1="0.2"\nWDG_SLOT_2="0.3"\nWDG_SLOT_3="0.4"\nWDG_SLOT_4="0.5"\nWDG_SLOT_5="0.6"\nWDG_SLOT_6="0.7"\n' >> "${runtime_dir}/session.env"
+        printf 'WDG_SLOT_1="0.2"\n' >> "${runtime_dir}/session.env"
       fi
       # Remove stale MGR_SLOT entries
       sed -i '' '/^MGR_SLOT_/d' "${runtime_dir}/session.env"
@@ -2232,13 +2266,8 @@ PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
-WDG_SLOT_1="0.2"
-WDG_SLOT_2="0.3"
-WDG_SLOT_3="0.4"
-WDG_SLOT_4="0.5"
-WDG_SLOT_5="0.6"
-WDG_SLOT_6="0.7"
 SM_PANE="0.1"
+WDG_SLOT_1="0.2"
 MANIFEST
 
   # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
@@ -2250,7 +2279,7 @@ MANIFEST
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
-  setup_dashboard "$session" "$dir" "$runtime_dir"
+  setup_dashboard "$session" "$dir" "$runtime_dir" 1
 
   # Team grid window (window 1)
   local team_window=1
@@ -2453,7 +2482,7 @@ DOG
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   # Dashboard window (window 0) — info panel + watchdog slots + session manager
-  setup_dashboard "$session" "$dir" "$runtime_dir"
+  setup_dashboard "$session" "$dir" "$runtime_dir" "$INITIAL_TEAMS"
 
   # Team grid window (window 1)
   local team_window=1
@@ -2503,14 +2532,14 @@ PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
-WDG_SLOT_1="0.2"
-WDG_SLOT_2="0.3"
-WDG_SLOT_3="0.4"
-WDG_SLOT_4="0.5"
-WDG_SLOT_5="0.6"
-WDG_SLOT_6="0.7"
 SM_PANE="0.1"
 MANIFEST
+
+  # Write WDG_SLOT entries (only as many as initial teams)
+  local _si
+  for (( _si=1; _si<=INITIAL_TEAMS; _si++ )); do
+    echo "WDG_SLOT_${_si}=\"0.$((_si + 1))\"" >> "${runtime_dir}/session.env"
+  done
 
   # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
   write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
@@ -3001,6 +3030,56 @@ doey_remove_column() {
 
 # ── Team Window Lifecycle ─────────────────────────────────────────────
 
+# Add a new watchdog pane to the Dashboard's bottom-right row.
+# Splits the last existing watchdog pane horizontally.
+# Updates session.env with the new WDG_SLOT_N entry.
+# Returns: sets WDG_NEW_SLOT to the new pane's "0.X" address.
+# Usage: add_dashboard_watchdog_slot <session> <runtime_dir> <dir>
+add_dashboard_watchdog_slot() {
+  local session="$1" runtime_dir="$2" dir="$3"
+
+  # Count existing WDG_SLOT entries (single-pass grep)
+  local slot_count=0
+  local last_slot=""
+  local _line _sv
+  while IFS= read -r _line; do
+    _sv="${_line#*=}"
+    _sv="${_sv//\"/}"
+    [ -n "$_sv" ] || continue
+    slot_count=$((slot_count + 1))
+    last_slot="$_sv"
+  done < <(grep '^WDG_SLOT_[0-9]*=' "${runtime_dir}/session.env" 2>/dev/null)
+
+  if [ "$slot_count" -ge "$MAX_WATCHDOG_SLOTS" ]; then
+    WDG_NEW_SLOT=""
+    return 1
+  fi
+
+  # Split the last watchdog pane to create a new one
+  tmux split-window -h -t "${session}:${last_slot}" -c "$dir"
+  sleep 0.3
+
+  # The new pane gets the next index
+  local new_slot_num=$((slot_count + 1))
+  local new_pane_idx=$((new_slot_num + 1))
+  local new_slot="0.${new_pane_idx}"
+
+  # Name it
+  tmux select-pane -t "${session}:${new_slot}" -T "T${new_slot_num} Watchdog"
+
+  # Balance all watchdog panes
+  _balance_watchdog_panes "$session" "$new_slot_num"
+
+  # Add WDG_SLOT to session.env
+  echo "WDG_SLOT_${new_slot_num}=\"${new_slot}\"" >> "${runtime_dir}/session.env"
+
+  # Show placeholder
+  tmux send-keys -t "${session}:${new_slot}" "echo 'Watchdog slot — awaiting team assignment...'" Enter
+
+  WDG_NEW_SLOT="$new_slot"
+  return 0
+}
+
 # Add a new team window with its own Window Manager, Watchdog, and Workers
 # Usage: add_team_window <session> <runtime_dir> <dir> [grid]
 # Add a dynamic-grid team window (Manager only, then add worker columns)
@@ -3062,34 +3141,12 @@ add_dynamic_team_window() {
 
   # Find next available Dashboard watchdog slot
   local wdg_slot=""
-  local slot_key=""
-  local sn
-  for sn in 1 2 3 4 5 6; do
-    local slot_val=""
-    slot_val=$(grep "^WDG_SLOT_${sn}=" "${runtime_dir}/session.env" | cut -d= -f2)
-    slot_val="${slot_val//\"/}"
-    # Check if this slot is already claimed by an existing team
-    local slot_taken=""
-    local tf
-    for tf in "${runtime_dir}"/team_*.env; do
-      [ -f "$tf" ] || continue
-      local tf_wdg
-      tf_wdg=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
-      tf_wdg="${tf_wdg//\"/}"
-      if [ "$tf_wdg" = "$slot_val" ]; then
-        slot_taken="yes"
-        break
-      fi
-    done
-    if [ -z "$slot_taken" ]; then
-      wdg_slot="$slot_val"
-      slot_key="$sn"
-      break
-    fi
-  done
-
-  if [ -z "$wdg_slot" ]; then
-    printf "  ${WARN}All 3 Dashboard watchdog slots are occupied — team %s will run without a Watchdog${RESET}\n" "$window_index"
+  if _find_free_watchdog_slot "$runtime_dir"; then
+    wdg_slot="$_FWS_SLOT"
+  elif add_dashboard_watchdog_slot "$session" "$runtime_dir" "$team_dir"; then
+    wdg_slot="$WDG_NEW_SLOT"
+  else
+    printf "  ${WARN}All %s Dashboard watchdog slots are occupied — team %s will run without a Watchdog${RESET}\n" "$MAX_WATCHDOG_SLOTS" "$window_index"
   fi
 
   # Write team env with dynamic grid, 0 workers initially
@@ -3183,7 +3240,7 @@ add_dynamic_team_window() {
   if [ -n "$wt_dir_for_env" ]; then
     printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, ${BOLD}worktree${RESET} (%s)\n" "$window_index" "$worker_count" "$worktree_branch"
   else
-    printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$worker_count" "$slot_key"
+    printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$worker_count" "$wdg_slot"
   fi
 }
 
@@ -3270,32 +3327,12 @@ add_team_window() {
 
   # Find next available Dashboard watchdog slot
   local wdg_slot=""
-  local slot_key=""
-  for sn in 1 2 3 4 5 6; do
-    local slot_val=""
-    slot_val=$(grep "^WDG_SLOT_${sn}=" "${runtime_dir}/session.env" | cut -d= -f2)
-    slot_val="${slot_val//\"/}"
-    # Check if this slot is already claimed by an existing team
-    local slot_taken=""
-    for tf in "${runtime_dir}"/team_*.env; do
-      [ -f "$tf" ] || continue
-      local tf_wdg
-      tf_wdg=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
-      tf_wdg="${tf_wdg//\"/}"
-      if [ "$tf_wdg" = "$slot_val" ]; then
-        slot_taken="yes"
-        break
-      fi
-    done
-    if [ -z "$slot_taken" ]; then
-      wdg_slot="$slot_val"
-      slot_key="$sn"
-      break
-    fi
-  done
-
-  if [ -z "$wdg_slot" ]; then
-    printf "  ${ERROR}All 3 Dashboard watchdog slots are occupied — cannot add more teams${RESET}\n"
+  if _find_free_watchdog_slot "$runtime_dir"; then
+    wdg_slot="$_FWS_SLOT"
+  elif add_dashboard_watchdog_slot "$session" "$runtime_dir" "$dir"; then
+    wdg_slot="$WDG_NEW_SLOT"
+  else
+    printf "  ${ERROR}All %s Dashboard watchdog slots are occupied — cannot add more teams${RESET}\n" "$MAX_WATCHDOG_SLOTS"
     tmux kill-window -t "${session}:${window_index}" 2>/dev/null
     return 1
   fi
@@ -3391,7 +3428,7 @@ add_team_window() {
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
 
-  printf "  ${SUCCESS}Team window %s created${RESET} — grid %s, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$grid" "$worker_count" "$slot_key"
+  printf "  ${SUCCESS}Team window %s created${RESET} — grid %s, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$grid" "$worker_count" "$wdg_slot"
 }
 
 # Kill a team window and clean up its resources
@@ -3437,6 +3474,42 @@ kill_team_window() {
 
   # Kill the tmux window
   tmux kill-window -t "${session}:${window}" 2>/dev/null || true
+
+  # Kill the Dashboard watchdog pane for this team
+  if [ -n "$watchdog_pane" ]; then
+    # Kill any process in the watchdog pane
+    local _wdg_pid
+    _wdg_pid=$(tmux display-message -t "${session}:${watchdog_pane}" -p '#{pane_pid}' 2>/dev/null) || true
+    if [ -n "$_wdg_pid" ]; then
+      pkill -P "$_wdg_pid" 2>/dev/null || true
+      kill -- -"$_wdg_pid" 2>/dev/null || true
+    fi
+    sleep 0.5
+    tmux kill-pane -t "${session}:${watchdog_pane}" 2>/dev/null || true
+
+    # Remove all old WDG_SLOT lines from session.env
+    sed '/^WDG_SLOT_[0-9]*=/d' "${runtime_dir}/session.env" > "${runtime_dir}/session.env.tmp"
+    mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
+
+    # Re-query actual pane indices after the kill (they shift!)
+    # Rebuild WDG_SLOT entries and update team_*.env in a single pass
+    local _new_idx=1
+    local _pane_idx _pane_title
+    while IFS=' ' read -r _pane_idx _pane_title; do
+      # Skip info panel (0) and session manager (1)
+      if [ "$_pane_idx" = "0" ] || [ "$_pane_idx" = "1" ]; then continue; fi
+      local _new_wdg="0.${_pane_idx}"
+      echo "WDG_SLOT_${_new_idx}=\"${_new_wdg}\"" >> "${runtime_dir}/session.env"
+      _new_idx=$((_new_idx + 1))
+      # Extract team number from title "T<N> Watchdog" and update team env
+      local _team_num
+      _team_num=$(echo "$_pane_title" | sed -n 's/^T\([0-9]*\) Watchdog$/\1/p')
+      if [ -n "$_team_num" ] && [ -f "${runtime_dir}/team_${_team_num}.env" ]; then
+        sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=\"${_new_wdg}\"/" "${runtime_dir}/team_${_team_num}.env" > "${runtime_dir}/team_${_team_num}.env.tmp"
+        mv "${runtime_dir}/team_${_team_num}.env.tmp" "${runtime_dir}/team_${_team_num}.env"
+      fi
+    done < <(tmux list-panes -t "${session}:0" -F '#{pane_index} #{pane_title}' 2>/dev/null)
+  fi
 
   # Clean up worktree if this team had one
   if [ -f "$team_env" ]; then
