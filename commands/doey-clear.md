@@ -129,7 +129,9 @@ sleep 0.5
 
 #### 4b. Clear the Watchdog (lives in Dashboard window 0) — skip if WORKERS_ONLY
 
-The Watchdog pane is in the Dashboard, not in the team window. Read `WATCHDOG_PANE` from team env:
+The Watchdog pane is in the Dashboard, not in the team window. Read `WATCHDOG_PANE` from team env.
+
+**CRITICAL**: After relaunching the Watchdog, you MUST send it a briefing message and start its scan loop. Without these, the Watchdog will sit idle and not monitor anything.
 
 ```bash
 WATCHDOG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2 | tr -d '"')
@@ -141,6 +143,24 @@ kill_pane_process "$WDG_PANE"
 tmux send-keys -t "$WDG_PANE" "claude --dangerously-skip-permissions --model opus --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\"" Enter
 echo "  ${WATCHDOG_PANE} Watchdog ✓"
 sleep 0.5
+```
+
+Then, **after all panes are relaunched** (at the end of Step 4), wait for each Watchdog to boot and send its briefing + scan loop in the background:
+
+```bash
+# Build worker pane list for briefing
+WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' ',')
+
+# Background: wait for boot, send briefing, start scan loop
+(
+  sleep 15
+  tmux send-keys -t "$WDG_PANE" \
+    "Start monitoring session ${SESSION_NAME} window ${W}. Skip pane ${WATCHDOG_PANE} (yourself, in Dashboard). Manager is in team window pane ${W}.0. Monitor panes ${WP_LIST}." Enter
+  sleep 20
+  tmux send-keys -t "$WDG_PANE" \
+    '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
+) &
+echo "  ${WATCHDOG_PANE} Watchdog briefing scheduled (background, ~35s)"
 ```
 
 #### 4c. Clear all Workers (panes W.1+)
