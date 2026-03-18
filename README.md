@@ -87,7 +87,7 @@ No config files. No shell reload. Just `doey`.
 - **Smart orchestration** — Window Manager plans and delegates, never writes code itself
 - **Always-on monitoring** — Watchdog tracks worker state and catches crashes
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
-- **22 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-analyze`, and more
+- **21 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-purge`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -169,7 +169,7 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-research` | Dispatch research with guaranteed report |
 | `/doey-broadcast` | Message all panes |
 | `/doey-status` | View or set pane status |
-| `/doey-purge` | Run purge from inside a session |
+| `/doey-purge` | Audit & fix context rot (bloat, redundancy, staleness) |
 | `/doey-reserve` | Reserve a pane for human use |
 | `/doey-add-window` | Add a new team window |
 | `/doey-kill-window` | Kill a team window and all its processes |
@@ -177,13 +177,10 @@ Runtime data lives in `/tmp/doey/<project>/` — status files, messages, results
 | `/doey-kill-all-sessions` | Kill all running Doey sessions across all projects |
 | `/doey-list-windows` | List all team windows with status |
 | `/doey-reload` | Hot-reload session (install files, restart Manager + Watchdog) |
-| `/doey-restart-window` | Restart workers and Watchdog in a window |
 | `/doey-stop` | Stop a specific worker |
-| `/doey-stop-all` | Stop all running Doey sessions *(deprecated, replaced by `/doey-kill-session`)* |
-| `/doey-restart-workers` | Restart workers and Watchdog *(deprecated, replaced by `/doey-restart-window`)* |
 | `/doey-reinstall` | Reinstall from repo |
+| `/doey-repair` | Dashboard diagnostic and repair |
 | `/doey-watchdog-compact` | Compact Watchdog context |
-| `/doey-analyze` | Full project analysis — find and fix doc obscurities |
 
 </details>
 
@@ -204,7 +201,7 @@ doey/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (22 total)
+│   └── ... (21 total)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
 │   ├── linode-setup.md          # Linode VPS deployment guide
@@ -277,7 +274,7 @@ Then restart your shell.
 <details>
 <summary><strong>Workers stuck</strong></summary>
 
-The Window Manager can run `/doey-restart-window` to restart all workers without killing itself.
+The Window Manager can run `/doey-clear workers` to restart all workers without killing itself.
 
 </details>
 

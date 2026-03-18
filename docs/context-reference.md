@@ -112,15 +112,12 @@ Skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-
 | `/doey-kill-all-sessions` | Session Manager | Kill all running Doey sessions across all projects |
 | `/doey-list-windows` | Session Manager | List all team windows with status |
 | `/doey-reload` | Window Manager | Hot-reload session (install files, restart Manager + Watchdog) |
-| `/doey-restart-window` | Window Manager | Restart workers + Watchdog in a window |
 | `/doey-reinstall` | Window Manager | Pull + re-install |
+| `/doey-repair` | Window Manager | Dashboard diagnostic and repair |
 | `/doey-reserve` | Window Manager/Workers | Reserve/unreserve panes |
 | `/doey-watchdog-compact` | Window Manager | Compact Watchdog context |
-| `/doey-purge` | Window Manager | Scan and clean stale runtime files |
-| `/doey-analyze` | Window Manager | Full project context analysis — find and fix doc obscurities |
+| `/doey-purge` | Window Manager | Full audit & fix — context rot + code quality (bloat, staleness, bash 3.2, bugs) |
 | `/doey-stop` | Window Manager | Stop a specific worker |
-| `/doey-stop-all` | Window Manager | Stop all sessions *(deprecated, replaced by `/doey-kill-session`)* |
-| `/doey-restart-workers` | Window Manager | Restart workers + Watchdog *(deprecated, replaced by `/doey-restart-window`)* |
 
 Agent usage: Window Manager uses all except window-management commands. Session Manager uses `/doey-list-windows`, `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`. Watchdog uses none. Workers use `/doey-status`, `/doey-reserve`.
 
@@ -316,7 +313,7 @@ Loaded by all instances. Contains: project overview, architecture, key directori
 | All panes think they're Window Manager | Hook using bare `tmux display-message` without `-t "$TMUX_PANE"` |
 | Hooks not firing | Project `.claude/settings.local.json` missing (should be created by `doey init`) |
 | Research worker stops without report | Check exit 2 path in `stop-status.sh`; verify `.task` created |
-| Workers don't pick up hook changes | Restart workers (`/doey-restart-window`) |
+| Workers don't pick up hook changes | Restart workers (`/doey-clear workers`) |
 | Dispatch to reserved pane | Check `.reserved` file exists; verify `is_reserved()` |
 | Runtime file not found | Verify PANE_SAFE escaping: `${PANE//[:.]/_}`. Directories are created eagerly by `init_hook()` — check that hooks have fired at least once |
 

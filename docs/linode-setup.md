@@ -413,7 +413,7 @@ ssh doey@$LINODE_IP "sudo apt update && sudo apt upgrade -y"
 ssh doey@$LINODE_IP "source ~/.bashrc && doey purge"
 
 # Restart workers (from inside session, via Manager)
-# /doey-restart-workers
+# /doey-clear workers
 ```
 
 ---
