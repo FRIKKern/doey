@@ -800,6 +800,23 @@ apply_doey_theme() {
   # Enable mouse for pane selection, scrolling, resizing
   tmux set-option -t "$session" mouse on
 
+  # Clipboard integration — drag-select copies to system clipboard automatically.
+  # Users can Cmd+C to copy selected text, Cmd+V to paste. No special knowledge needed.
+  tmux set-option -t "$session" set-clipboard on
+  if command -v pbcopy &>/dev/null; then
+    # macOS: pipe mouse-drag selections directly to system clipboard
+    tmux bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "pbcopy"
+    tmux bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "pbcopy"
+  elif command -v xclip &>/dev/null; then
+    # Linux (xclip)
+    tmux bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xclip -selection clipboard"
+    tmux bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xclip -selection clipboard"
+  elif command -v xsel &>/dev/null; then
+    # Linux (xsel)
+    tmux bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xsel --clipboard"
+    tmux bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xsel --clipboard"
+  fi
+
   # Suppress terminal bell from worker panes — prevents notification spam
   tmux set-option -t "$session" bell-action none
   tmux set-option -t "$session" visual-bell off
