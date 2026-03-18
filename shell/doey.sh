@@ -817,6 +817,10 @@ apply_doey_theme() {
     tmux bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xsel --clipboard"
   fi
 
+  # Clickable links — Cmd+click to open URLs, file paths, PR links, etc.
+  # Requires a terminal that supports OSC 8 (iTerm2, Ghostty, Kitty, Warp).
+  tmux set-option -t "$session" allow-passthrough on
+
   # Suppress terminal bell from worker panes — prevents notification spam
   tmux set-option -t "$session" bell-action none
   tmux set-option -t "$session" visual-bell off
