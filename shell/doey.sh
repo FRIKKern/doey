@@ -595,17 +595,62 @@ show_menu() {
   done
 
   printf "  ${DIM}Options:${RESET}\n"
-  printf "    ${BOLD}#${RESET})  Enter number to open a project\n"
-  printf "    ${BOLD}i${RESET})  Init current directory as new project\n"
+  printf "    ${BOLD}#${RESET})    Enter number to open a project\n"
+  printf "    ${BOLD}k#${RESET})   Kill a specific session ${DIM}(e.g. k1, k2)${RESET}\n"
+  printf "    ${BOLD}r#${RESET})   Restart a session ${DIM}(e.g. r1, r2)${RESET}\n"
+  printf "    ${BOLD}i${RESET})    Init current directory as new project\n"
   if [[ $running_count -gt 0 ]]; then
-    printf "    ${BOLD}k${RESET})  Kill all running sessions ${DIM}(%d active)${RESET}\n" "$running_count"
+    printf "    ${BOLD}k${RESET})    Kill all running sessions ${DIM}(%d active)${RESET}\n" "$running_count"
   fi
-  printf "    ${BOLD}q${RESET})  Quit\n"
+  printf "    ${BOLD}q${RESET})    Quit\n"
   printf '\n'
 
   read -rp "  > " choice
 
   case "$choice" in
+    [rR][0-9]*)
+      # e.g. "r1", "r2" — restart a specific session (kill + relaunch)
+      local restart_num="${choice#[rR]}"
+      local restart_idx=$((restart_num - 1))
+      if [[ $restart_idx -ge 0 && $restart_idx -lt ${#names[@]} ]]; then
+        local restart_name="${names[$restart_idx]}"
+        local restart_path="${paths[$restart_idx]}"
+        local restart_session="doey-${restart_name}"
+        if session_exists "$restart_session"; then
+          printf "  Restarting ${BOLD}%s${RESET}...\n" "$restart_session"
+          _kill_doey_session "$restart_session"
+          printf "  ${SUCCESS}Killed${RESET} %s\n" "$restart_session"
+        fi
+        printf "  Launching ${BOLD}%s${RESET}...\n" "$restart_name"
+        launch_with_grid "$restart_name" "$restart_path" "$grid"
+      else
+        printf "  ${ERROR}Invalid selection${RESET}\n"
+        return 1
+      fi
+      ;;
+    [kK][0-9]*)
+      # e.g. "k1", "k2" — kill a specific session
+      local kill_num="${choice#[kK]}"
+      local kill_idx=$((kill_num - 1))
+      if [[ $kill_idx -ge 0 && $kill_idx -lt ${#names[@]} ]]; then
+        local kill_name="${names[$kill_idx]}"
+        local kill_session="doey-${kill_name}"
+        if session_exists "$kill_session"; then
+          read -rp "  Kill ${BOLD}${kill_session}${RESET}? (y/N) " confirm
+          if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            _kill_doey_session "$kill_session"
+            printf "  ${SUCCESS}Killed${RESET} %s\n" "$kill_session"
+          else
+            printf "  ${DIM}Cancelled${RESET}\n"
+          fi
+        else
+          printf "  ${DIM}%s is not running${RESET}\n" "$kill_name"
+        fi
+      else
+        printf "  ${ERROR}Invalid selection${RESET}\n"
+        return 1
+      fi
+      ;;
     [0-9]*)
       local idx=$((choice - 1))
       if [[ $idx -ge 0 && $idx -lt ${#names[@]} ]]; then
