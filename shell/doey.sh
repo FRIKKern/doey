@@ -1451,7 +1451,7 @@ MANIFEST
     wnum=$((wnum + 1))
     tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${wnum}"
   done
-  tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
+  tmux rename-window -t "$session:${team_window}" "Local Team"
 
   step_done
 
@@ -2320,7 +2320,7 @@ MANIFEST
     wnum=$((wnum + 1))
     tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${wnum}"
   done
-  tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
+  tmux rename-window -t "$session:${team_window}" "Local Team"
 
   # ── Launch Window Manager & Watchdog ──
   printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
@@ -2509,7 +2509,7 @@ DOG
   step_start 4 "Naming panes..."
 
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
-  tmux rename-window -t "$session:${team_window}" "Team ${team_window}"
+  tmux rename-window -t "$session:${team_window}" "Local Team"
 
   step_done
 
@@ -3134,9 +3134,9 @@ add_dynamic_team_window() {
   # Name Manager pane and window
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   if [ -n "$wt_dir_for_env" ]; then
-    tmux rename-window -t "${session}:${window_index}" "T${window_index} [wt]"
+    tmux rename-window -t "${session}:${window_index}" "Worktree Team"
   else
-    tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
+    tmux rename-window -t "${session}:${window_index}" "Local Team"
   fi
 
   # Find next available Dashboard watchdog slot
@@ -3344,11 +3344,11 @@ add_team_window() {
     wnum=$((wnum + 1))
     tmux select-pane -t "${session}:${window_index}.${i}" -T "T${team_window} W${wnum}"
   done
-  tmux rename-window -t "${session}:${window_index}" "Team ${window_index}"
+  tmux rename-window -t "${session}:${window_index}" "Local Team"
 
   # Rename window to indicate worktree if applicable
   if [ -n "$worktree_spec" ]; then
-    tmux rename-window -t "${session}:${window_index}" "Team ${window_index} [wt]"
+    tmux rename-window -t "${session}:${window_index}" "Worktree Team"
   fi
 
   # Write team env (watchdog in Dashboard slot, manager in team pane 0)
