@@ -167,11 +167,19 @@ create_team_worktree() {
   local project_name
   project_name="$(basename "$project_dir")"
   local wt_path="/tmp/doey/${project_name}/worktrees/team-${team_window}"
+
+  # Belt-and-suspenders: prune stale worktree state
+  git -C "$project_dir" worktree prune 2>/dev/null || true
+  # Remove stale branch if it exists from a prior run
+  git -C "$project_dir" branch -D "$branch_name" 2>/dev/null || true
+
   mkdir -p "$(dirname "$wt_path")"
   if ! git -C "$project_dir" worktree add "$wt_path" -b "$branch_name" >/dev/null 2>&1; then
     if ! git -C "$project_dir" worktree add "$wt_path" "$branch_name" >/dev/null 2>&1; then
-      echo "Error: failed to create worktree at $wt_path for branch $branch_name" >&2
-      return 1
+      if ! git -C "$project_dir" worktree add --force "$wt_path" -b "$branch_name" >/dev/null 2>&1; then
+        echo "Error: failed to create worktree at $wt_path for branch $branch_name" >&2
+        return 1
+      fi
     fi
   fi
   # Copy hook settings into the worktree so Claude Code picks them up
@@ -1319,6 +1327,11 @@ DOG
   step_start 1 "Creating session for ${name}..."
   tmux kill-session -t "$session" 2>/dev/null || true
   rm -rf "$runtime_dir"
+  # Prune stale worktree metadata and remove leftover doey branches
+  git worktree prune 2>/dev/null || true
+  git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' | while read -r b; do
+    git branch -D "$b" 2>/dev/null || true
+  done
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
 
   # Write session manifest — readable by Window Manager, Watchdog, and all skills/commands
@@ -1465,7 +1478,7 @@ MANIFEST
   ) &
 
   # Clean up background jobs on early exit
-  trap 'jobs -p | xargs kill 2>/dev/null' EXIT INT TERM
+  trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
 
   step_done
 
@@ -2198,6 +2211,11 @@ launch_session_headless() {
   printf "  ${DIM}Creating session ${session}...${RESET}\n"
   tmux kill-session -t "$session" 2>/dev/null || true
   rm -rf "$runtime_dir"
+  # Prune stale worktree metadata and remove leftover doey branches
+  git worktree prune 2>/dev/null || true
+  git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' | while read -r b; do
+    git branch -D "$b" 2>/dev/null || true
+  done
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
 
   cat > "${runtime_dir}/session.env" << MANIFEST
@@ -2330,7 +2348,7 @@ MANIFEST
   ) &
 
   # Clean up background jobs on early exit
-  trap 'jobs -p | xargs kill 2>/dev/null' EXIT INT TERM
+  trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
 
   # ── Boot workers ──
   printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
@@ -2421,6 +2439,11 @@ DOG
   step_start 1 "Creating session for ${name}..."
   tmux kill-session -t "$session" 2>/dev/null || true
   rm -rf "$runtime_dir"
+  # Prune stale worktree metadata and remove leftover doey branches
+  git worktree prune 2>/dev/null || true
+  git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' | while read -r b; do
+    git branch -D "$b" 2>/dev/null || true
+  done
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
 
   # Generate shared worker system prompt
