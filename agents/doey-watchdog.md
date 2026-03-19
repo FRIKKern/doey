@@ -68,9 +68,7 @@ Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pa
 
 ## Notifications
 
-All `.msg` files target Session Manager: `SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"`.
-
-**Write `.msg` file** (same pattern for all events):
+All `.msg` files target Session Manager (`SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"`):
 ```bash
 SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
 MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_SLUG_W${TEAM_WINDOW}_$(date +%s).msg"
@@ -81,21 +79,16 @@ BODY_TEXT
 EOF
 ```
 
-| Event | SLUG | Subject / Body |
-|-------|------|----------------|
-| `MANAGER_CRASHED` | `mgr_crash` | "MANAGER_CRASHED in Team W" / "Manager down (bare shell). Needs restart." |
-| `WAVE_COMPLETE` | `wave_done` | "Team W wave complete" / "All workers idle. Manager should check results." |
-| `MANAGER_COMPLETED` | `mgr_done` | "Team W Manager completed" / "Manager finished. Route follow-up." |
-
-**Additional notification rules:**
-- **MANAGER_CRASHED:** Never send keys to crashed Manager. Write once per crash. Skip worker notifications while crashed. Show 🔥.
-- **WAVE_COMPLETE:** Also notify Manager if idle via send-keys: "All workers idle — wave complete. Check results in $RUNTIME_DIR/results/ and dispatch next wave."
-- **Worker events (COMPLETION/CRASHED/STUCK):** If Manager idle (`❯`): send-keys with details + "Check results and take next action." If busy: write `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`.
+| Event | SLUG | Subject / Body | Extra |
+|-------|------|----------------|-------|
+| `MANAGER_CRASHED` | `mgr_crash` | "MANAGER_CRASHED in Team W" / "Manager down. Needs restart." | Never send keys to crashed Manager. Write once per crash. Skip worker notifications while crashed. Show 🔥. |
+| `WAVE_COMPLETE` | `wave_done` | "Team W wave complete" / "All workers idle. Check results." | Also send-keys to Manager if idle: "All workers idle — wave complete. Check results in $RUNTIME_DIR/results/ and dispatch next wave." |
+| `MANAGER_COMPLETED` | `mgr_done` | "Team W Manager completed" / "Manager finished. Route follow-up." | — |
+| Worker `COMPLETION`/`CRASHED`/`STUCK` | — | Details + "Check results and take next action." | Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`. |
 
 ## Rules
 
 - Always use `-t "$SESSION_NAME"` — never `-a`
-- Never send keys to crashed Manager — only write alert files
 - Never send input to editors, REPLs, or password prompts
 - Auto-login workers showing "Not logged in"
 - One bash call per cycle; display dashboard every cycle

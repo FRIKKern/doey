@@ -22,18 +22,16 @@ echo "Target: window ${TARGET_WIN}"
 ### Step 2: Kill all processes
 
 ```bash
-KILLED=0
-for pane_pid in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do
-  CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
-  [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null && KILLED=$((KILLED + 1))
-done
-echo "Sent SIGTERM to ${KILLED} processes"
-sleep 3
-for pane_pid in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do
-  CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
-  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null
-done
-sleep 1
+# Signal all child processes: SIGTERM first, then SIGKILL stragglers
+kill_children() {
+  local sig="${1:--TERM}"
+  for pane_pid in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do
+    CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
+    [ -n "$CHILD_PID" ] && kill "$sig" "$CHILD_PID" 2>/dev/null && KILLED=$((KILLED + 1))
+  done
+}
+KILLED=0; kill_children; echo "Sent SIGTERM to ${KILLED} processes"
+sleep 3; kill_children -9; sleep 1
 ```
 
 ### Step 3: Worktree cleanup
@@ -41,17 +39,15 @@ sleep 1
 Must run BEFORE deleting team env files.
 
 ```bash
-_wt_dir="" _wt_branch=""
-if [ -f "${RUNTIME_DIR}/team_${TARGET_WIN}.env" ]; then
-  _wt_dir=$(grep '^WORKTREE_DIR=' "${RUNTIME_DIR}/team_${TARGET_WIN}.env" 2>/dev/null | head -1 | cut -d= -f2-)
-  _wt_dir="${_wt_dir%\"}" && _wt_dir="${_wt_dir#\"}"
-  _wt_branch=$(grep '^WORKTREE_BRANCH=' "${RUNTIME_DIR}/team_${TARGET_WIN}.env" 2>/dev/null | head -1 | cut -d= -f2-)
-  _wt_branch="${_wt_branch%\"}" && _wt_branch="${_wt_branch#\"}"
-fi
+# Helper: read a key from team env, strip quotes
+env_val() { grep "^${1}=" "${RUNTIME_DIR}/team_${TARGET_WIN}.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
+
+_wt_dir=$(env_val WORKTREE_DIR)
+_wt_branch=$(env_val WORKTREE_BRANCH)
+
 if [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ]; then
   echo "Worktree detected: $_wt_dir (branch: $_wt_branch)"
-  _dirty=$(git -C "$_wt_dir" status --porcelain 2>/dev/null) || true
-  if [ -n "$_dirty" ]; then
+  if [ -n "$(git -C "$_wt_dir" status --porcelain 2>/dev/null)" ]; then
     git -C "$_wt_dir" add -A 2>/dev/null || true
     git -C "$_wt_dir" commit -m "doey: auto-save before teardown $(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null || true
     echo "  Auto-saved to branch: $_wt_branch"

@@ -30,7 +30,7 @@ WORKTREE_MODE="false"
 for _aw_arg in "$@"; do [ "$_aw_arg" = "--worktree" ] && WORKTREE_MODE="true"; done
 ```
 
-### Step 2: Create window and build grid
+### Step 2: Create window, build grid, name panes
 
 ```bash
 tmux new-window -t "$SESSION_NAME" -c "$PROJECT_DIR"
@@ -42,13 +42,8 @@ for _s in $(seq 1 $((TOTAL - 1))); do
 done
 tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" tiled
 sleep 0.5
-```
 
-### Step 3: Name panes and build worker list
-
-```bash
 tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "MGR Window Manager"
-
 WORKER_PANES_LIST=""
 for i in $(seq 1 $((TOTAL - 1))); do
   tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -T "W${i} Worker ${i}"
@@ -56,7 +51,7 @@ for i in $(seq 1 $((TOTAL - 1))); do
 done
 ```
 
-### Step 4: Write team env and update session
+### Step 3: Write team env and update session
 
 ```bash
 TEAM_FILE="${RUNTIME_DIR}/team_${NEW_WIN}.env"
@@ -87,7 +82,7 @@ fi
 mv "$TMPENV" "${RUNTIME_DIR}/session.env"
 ```
 
-### Step 5: Launch Claude in all panes
+### Step 4: Launch Claude in all panes
 
 ```bash
 # Manager
@@ -103,14 +98,12 @@ for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
   sleep 0.5
 done
 
-# Watchdog — find next available Dashboard slot (0.2-0.7)
+# Watchdog — first available Dashboard slot (0.2-0.7)
 WDG_SLOT=""
 for slot in 2 3 4 5 6 7; do
-  SLOT_PID=$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || true)
-  SLOT_CHILD=$(pgrep -P "$SLOT_PID" 2>/dev/null || true)
+  SLOT_CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || echo 0)" 2>/dev/null || true)
   [ -z "$SLOT_CHILD" ] && { WDG_SLOT="$slot"; break; }
 done
-
 if [ -n "$WDG_SLOT" ]; then
   tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "Watchdog — Team ${NEW_WIN}"
   tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model opus --agent \"t${NEW_WIN}-watchdog\"" Enter
@@ -120,7 +113,7 @@ else
 fi
 ```
 
-### Step 6: Create worktree (if --worktree)
+### Step 5: Create worktree (if --worktree)
 
 Best-effort — team is still created if worktree fails.
 
@@ -145,15 +138,14 @@ if [ "$WORKTREE_MODE" = "true" ]; then
 fi
 ```
 
-### Step 7: Verify boot and report
+### Step 6: Verify boot and report
 
 ```bash
 sleep 8
 
 NOT_READY=0; DOWN_PANES=""
 for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
-  PANE_PID=$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')
-  CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+  CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null)
   OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null)
   if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then
     NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"
@@ -161,8 +153,7 @@ for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
 done
 
 if [ -n "$WDG_SLOT" ]; then
-  WDG_PID=$(tmux display-message -t "${SESSION_NAME}:0.${WDG_SLOT}" -p '#{pane_pid}')
-  WDG_CHILD=$(pgrep -P "$WDG_PID" 2>/dev/null)
+  WDG_CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:0.${WDG_SLOT}" -p '#{pane_pid}')" 2>/dev/null)
   WDG_OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -p 2>/dev/null)
   if [ -z "$WDG_CHILD" ] || ! echo "$WDG_OUTPUT" | grep -q "bypass permissions"; then
     NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES 0.$WDG_SLOT"

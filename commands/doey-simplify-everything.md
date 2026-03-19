@@ -15,9 +15,11 @@ You are the Session Manager running a codebase-wide simplification. Coordinate W
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
-# Require clean working tree
 DIRTY=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)
 [ -n "$DIRTY" ] && echo "ERROR: Uncommitted changes in $PROJECT_DIR. Commit or stash first." && exit 1
+
+# Line-count snapshot helper (reused in Consolidate)
+LINE_COUNT_CMD='wc -l "$PROJECT_DIR"/{agents,commands,docs}/*.md "$PROJECT_DIR"/CLAUDE.md "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn'
 
 echo "Session: $SESSION_NAME | Project: $PROJECT_NAME"
 echo ""
@@ -32,21 +34,13 @@ for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
   TEAM_COUNT=$((TEAM_COUNT + 1))
   TOTAL_WORKERS=$((TOTAL_WORKERS + WC))
 done
-echo ""; echo "Total: $TEAM_COUNT teams, $TOTAL_WORKERS workers"
-```
+echo "Total: $TEAM_COUNT teams, $TOTAL_WORKERS workers"
 
-Save line counts before starting:
-```bash
-BEFORE="${RUNTIME_DIR}/reports/simplify_before.txt"
 mkdir -p "${RUNTIME_DIR}/reports"
-wc -l "$PROJECT_DIR"/{agents,commands,docs}/*.md "$PROJECT_DIR"/CLAUDE.md \
-      "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh \
-      "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn | tee "$BEFORE"
+eval "$LINE_COUNT_CMD" | tee "${RUNTIME_DIR}/reports/simplify_before.txt"
 ```
 
 ### Assign domains
-
-Six domains, assigned by team count:
 
 | Domain | Files |
 |--------|-------|
@@ -57,57 +51,32 @@ Six domains, assigned by team count:
 | **D5: Docs + README** | `docs/*.md`, `README.md` |
 | **D6: Shell support** | `shell/{info-panel,context-audit,pane-border-status,tmux-statusbar}.sh`, `tests/` |
 
-**Assignment by team count:**
-- **4+:** D1, D2, D3+D4, D5+D6
-- **3:** D1+D6, D2+D4, D3+D5
-- **2:** D1+D2+D6, D3+D4+D5
-- **1:** All domains
+**Assignment by team count:** 4+: D1, D2, D3+D4, D5+D6 | 3: D1+D6, D2+D4, D3+D5 | 2: D1+D2+D6, D3+D4+D5 | 1: all
 
-Prefer worktree teams for low-conflict domains (docs, agents). Local teams for hooks/shell core.
-
-Present the plan and **ask user for confirmation** before dispatching.
+Prefer worktree teams for low-conflict domains (docs, agents). Local teams for hooks/shell core. Present the plan and **ask user for confirmation** before dispatching.
 
 ### Dispatch to Window Managers
 
 Send each Window Manager a self-contained task via `tmux load-buffer`/`paste-buffer`.
 
-**Task template:**
+**Task template** (fill in DOMAIN, N workers, PROJECT_DIR, file list with line counts, RUNTIME_DIR):
 
 ```
 Run a full simplification of [DOMAIN]. You have N workers — use /doey-dispatch to assign files.
-
 Project directory: PROJECT_DIR
 
-## Goal
-Genuinely simplify every file:
-- Reduce cognitive load: fewer concepts per section, clearer structure
-- Improve naming: self-documenting variables, functions, sections
-- Cut ceremony: boilerplate, over-commented obvious code
-- Align patterns: similar things should look similar across files
-- DRY: extract repeated logic when the abstraction is obvious
+**Goal:** Reduce cognitive load, improve naming, cut ceremony, align patterns, DRY repeated logic.
 
-## Your files
-[LIST EVERY FILE with line count]
+**Files:** [LIST EVERY FILE with line count]
 
-## Constraints
-- Tell all workers: Do NOT use the Agent tool
-- Shell (.sh): bash 3.2 compatible. Run `bash -n` after edits
-- Use Edit tool, not Write. Read before editing
-- Preserve all behavior — simplify, don't break
-- Commands (.md): bash code blocks must be 3.2 compatible
-- Rename worker panes: `/rename simplify-<file>_MMDD`
+**Constraints:** No Agent tool. Shell: bash 3.2, run `bash -n` after. Use Edit not Write. Read before editing. Preserve behavior. Commands (.md): bash blocks 3.2 compatible. Rename workers: `/rename simplify-<file>_MMDD`
 
-## Worker assignment
-1-3 files per worker based on complexity. Largest files get dedicated workers.
-Share full file list for cross-reference, but specify which files each worker EDITs.
+**Assignment:** 1-3 files/worker by complexity. Largest files = dedicated workers. Share full list for cross-reference.
 
-## When done
-1. Run `bash -n` on all .sh files
-2. Write summary to: RUNTIME_DIR/reports/simplify_team_W.md (per-file before/after + key changes)
-3. Report completion
+**When done:** `bash -n` all .sh, write summary to RUNTIME_DIR/reports/simplify_team_W.md (per-file before/after + key changes), report completion.
 ```
 
-**Dispatch:**
+**Dispatch each task:**
 ```bash
 W=<team_window>
 MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
@@ -122,38 +91,30 @@ tmux paste-buffer -t "$TARGET"
 sleep 0.5
 tmux send-keys -t "$TARGET" Enter
 rm "$TASKFILE"
-```
-
-**Verify each dispatch** (mandatory):
-```bash
+# Verify (mandatory)
 sleep 5
 tmux capture-pane -t "$TARGET" -p -S -5
 ```
 
 ### Monitor
 
-Poll every 60s for team reports:
+Poll every 60s. Also check Watchdog heartbeats and Window Manager output.
 ```bash
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  REPORT="${RUNTIME_DIR}/reports/simplify_team_${W}.md"
-  [ -f "$REPORT" ] && echo "Team $W: DONE" || echo "Team $W: working..."
+  [ -f "${RUNTIME_DIR}/reports/simplify_team_${W}.md" ] && echo "Team $W: DONE" || echo "Team $W: working..."
 done
 ```
-
-Also check Watchdog heartbeats and Window Manager output.
 
 ### Consolidate
 
 Once all teams finish:
 
 ```bash
-AFTER="${RUNTIME_DIR}/reports/simplify_after.txt"
-wc -l "$PROJECT_DIR"/{agents,commands,docs}/*.md "$PROJECT_DIR"/CLAUDE.md \
-      "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh \
-      "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn | tee "$AFTER"
+# Reuse LINE_COUNT_CMD from Inventory
+eval "$LINE_COUNT_CMD" | tee "${RUNTIME_DIR}/reports/simplify_after.txt"
 
 echo "=== Before/After ==="
-diff "${RUNTIME_DIR}/reports/simplify_before.txt" "$AFTER" || true
+diff "${RUNTIME_DIR}/reports/simplify_before.txt" "${RUNTIME_DIR}/reports/simplify_after.txt" || true
 
 echo "=== Syntax check ==="
 for f in "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh; do
@@ -164,9 +125,7 @@ echo "=== Context audit ==="
 bash "$PROJECT_DIR/shell/context-audit.sh" --repo
 ```
 
-Read all `${RUNTIME_DIR}/reports/simplify_team_*.md` and present consolidated results: total before/after line counts, per-domain breakdown, syntax/audit status, key improvements per team.
-
-If syntax or audit issues found, offer to dispatch a fix round.
+Read all `${RUNTIME_DIR}/reports/simplify_team_*.md` and present consolidated results: total before/after line counts, per-domain breakdown, syntax/audit status, key improvements per team. If syntax or audit issues found, offer to dispatch a fix round.
 
 ### Rules
 1. **Route through Window Managers** — never dispatch to workers directly

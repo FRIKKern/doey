@@ -24,7 +24,7 @@ Run `doey purge --force`, report results, stop.
 
 ### Full mode (default)
 
-#### Step 0: Inventory
+#### Inventory
 
 ```bash
 BEFORE="${RUNTIME_DIR}/reports/purge_before.txt"
@@ -47,7 +47,7 @@ Present as table, save for diffing after fixes.
 
 Dispatch via `/doey-dispatch`. **All workers: Do NOT use the Agent tool.** Each writes to `${RUNTIME_DIR}/reports/purge_<domain>.md`.
 
-**Issue categories** — severity HIGH (breaks behavior), MED (confusing/outdated), LOW (nitpick):
+**Issue categories** (HIGH = breaks behavior, MED = confusing/outdated, LOW = nitpick):
 
 | Category | Description |
 |----------|-------------|
@@ -62,12 +62,12 @@ Dispatch via `/doey-dispatch`. **All workers: Do NOT use the Agent tool.** Each 
 
 **Worker assignments:**
 
-- **A — Agents + CLAUDE.md:** Check env var accuracy, hook redundancy, stale refs. Cross-ref against commands/hooks/agents.
-- **B — Hooks + Shell + Settings:** Bash 3.2 violations (HIGH), race conditions, exit codes, dead code, setting/hook consistency.
-- **C — Commands:** Dead refs, overlap, repeated boilerplate, bash 3.2 in code blocks. Cross-ref agents/docs/hooks.
-- **D — Docs + README + Memory:** Verify context-reference claims, command table accuracy, stale memory.
+- **A — Agents + CLAUDE.md:** Env var accuracy, hook redundancy, stale refs
+- **B — Hooks + Shell + Settings:** Bash 3.2 violations (HIGH), race conditions, exit codes, dead code
+- **C — Commands:** Dead refs, overlap, repeated boilerplate, bash 3.2 in code blocks
+- **D — Docs + README + Memory:** Context-reference claims, command table accuracy, stale memory
 
-**Report format (per file):**
+**Report format:**
 
 ```
 ## File: path/file.md (N lines)
@@ -86,23 +86,23 @@ Project directory: PROJECT_DIR
 **Do NOT use the Agent tool. Read files directly.**
 Goal: Find every issue — context rot AND code quality.
 1. Read all files in your domain: [LIST]
-2. Cross-reference against filesystem (ls, grep) — verify every reference
+2. Cross-reference against filesystem — verify every reference
 3. Identify issues with line numbers and severity
 4. Estimate condensation per file
 5. Write report to REPORT_PATH
-Be aggressive. If a hook enforces a rule, the agent def doesn't need to explain it.
+If a hook enforces a rule, the agent def doesn't need to explain it.
 Every .sh file must pass bash 3.2 — flag violations as HIGH.
 ```
 
 #### Between Waves
 
-Read all `${RUNTIME_DIR}/reports/purge_*.md`. Present consolidated summary (files scanned, issue counts by category/severity, top savings, critical must-fix). Propose Wave 2 assignments. **Ask user for confirmation before dispatching fixes.**
+Read all `${RUNTIME_DIR}/reports/purge_*.md`. Present consolidated summary (files scanned, issue counts by category/severity, top savings, critical must-fix). Propose Wave 2 assignments. **Ask user before dispatching fixes.**
 
 #### Wave 2: Fix (4 parallel workers)
 
 Assign by file ownership (avoid edit conflicts): A=agents+CLAUDE.md, B=hooks+shell, C=commands, D=docs+README+memory.
 
-All fix workers: Use `Edit` not `Write`. Read before editing. Condense aggressively — **fewer words, not lost information**. `.sh` files: run `bash -n` after every edit. Commands: bash 3.2 compatible.
+All fix workers: `Edit` not `Write`. Read before editing. Condense aggressively — **fewer words, not lost information**. `.sh` files: `bash -n` after every edit. Bash 3.2 compatible.
 
 #### Verification
 
