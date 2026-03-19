@@ -109,6 +109,19 @@ add_cmd() {
   add_left "  $(dotted_leader "$(printf '%b%s%b' "$1" "$2" "${C_RESET}")" "$3" "$CMD_W")"
 }
 
+# add_cmd_pair — two commands side by side (second is optional)
+add_cmd_pair() {
+  local c1="$1" n1="$2" d1="$3" c2="${4:-}" n2="${5:-}" d2="${6:-}"
+  local left right
+  left="$(dotted_leader "$(printf '%b%s%b' "$c1" "$n1" "${C_RESET}")" "$d1" "$COL_W")"
+  if [ -n "$n2" ]; then
+    right="$(dotted_leader "$(printf '%b%s%b' "$c2" "$n2" "${C_RESET}")" "$d2" "$COL_W")"
+    add_left "  ${left}  ${right}"
+  else
+    add_left "  ${left}"
+  fi
+}
+
 dotted_leader() {
   local name="$1" desc="$2" max_w="$3"
   local name_vis desc_vis dots_needed
@@ -260,25 +273,27 @@ while true; do
   add_left ""
 
   CMD_W=$((LEFT_W - 4))
+  COL_W=$((CMD_W / 2 - 1))
 
-  _skills_dir="${_CACHED_PROJECT_DIR}/.claude/skills"
-  _skill_count=0
-  if [ -d "$_skills_dir" ]; then
-    for _sf in "$_skills_dir"/doey-*/SKILL.md; do
-      [ -f "$_sf" ] || continue
-      _sname="${_sf%/SKILL.md}"; _sname="/${_sname##*/}"
-      _sdesc=$(grep '^description:' "$_sf" | head -1 | sed 's/^description:[[:space:]]*//' | sed 's/^"//;s/"$//')
-      [ -z "$_sdesc" ] && _sdesc="(no description)"
-      case "$((_skill_count % 4))" in
-        0) _cc="${C_GREEN}" ;; 1) _cc="${C_CYAN}" ;; 2) _cc="${C_YELLOW}" ;; *) _cc="${C_MAGENTA}" ;;
-      esac
-      add_cmd "$_cc" "$_sname" "$_sdesc"
-      _skill_count=$((_skill_count + 1))
-    done
-  fi
-  if [ "$_skill_count" -eq 0 ]; then
-    add_left "$(printf '  %bNo skills found%b' "${C_DIM}" "${C_RESET}")"
-  fi
+  add_left "$(printf '  %b Tasks%b' "${C_BOLD_GREEN}" "${C_RESET}")"
+  add_cmd_pair "${C_GREEN}" "/doey-dispatch" "Send tasks" "${C_GREEN}" "/doey-delegate" "Delegate task"
+  add_cmd_pair "${C_GREEN}" "/doey-broadcast" "Broadcast" "${C_GREEN}" "/doey-research" "Research task"
+  add_cmd_pair "${C_GREEN}" "/doey-reserve" "Reserve pane"
+  add_left ""
+  add_left "$(printf '  %b Monitoring%b' "${C_BOLD_CYAN}" "${C_RESET}")"
+  add_cmd_pair "${C_CYAN}" "/doey-status" "Pane status" "${C_CYAN}" "/doey-monitor" "Monitor workers"
+  add_cmd_pair "${C_CYAN}" "/doey-list-windows" "List teams"
+  add_left ""
+  add_left "$(printf '  %b Team Management%b' "${C_BOLD_YELLOW}" "${C_RESET}")"
+  add_cmd_pair "${C_YELLOW}" "/doey-add-window" "Add team" "${C_YELLOW}" "/doey-kill-window" "Kill team"
+  add_cmd_pair "${C_YELLOW}" "/doey-worktree" "Git worktree" "${C_YELLOW}" "/doey-clear" "Relaunch"
+  add_cmd_pair "${C_YELLOW}" "/doey-reload" "Hot-reload"
+  add_left ""
+  add_left "$(printf '  %b Maintenance%b' "${C_BOLD_MAGENTA}" "${C_RESET}")"
+  add_cmd_pair "${C_MAGENTA}" "/doey-stop" "Stop worker" "${C_MAGENTA}" "/doey-purge" "Audit/fix"
+  add_cmd_pair "${C_MAGENTA}" "/doey-simplify-everything" "Simplify" "${C_MAGENTA}" "/doey-repair" "Fix Dashboard"
+  add_cmd_pair "${C_MAGENTA}" "/doey-watchdog-compact" "Compact" "${C_MAGENTA}" "/doey-reinstall" "Reinstall"
+  add_cmd_pair "${C_MAGENTA}" "/doey-kill-session" "Kill session" "${C_MAGENTA}" "/doey-kill-all-sessions" "Kill all"
   add_left ""
   add_left "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""

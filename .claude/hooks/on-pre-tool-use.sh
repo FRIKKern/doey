@@ -18,14 +18,10 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
   if [ "$WINDOW_INDEX" = "0" ]; then
     case "$CURRENT_PANE" in [2-9]|[1-9][0-9]*)
-      for _pt_tf in "${RUNTIME_DIR}"/team_*.env; do
-        [ -f "$_pt_tf" ] || continue
-        _pt_wd=$(grep '^WATCHDOG_PANE=' "$_pt_tf" | cut -d= -f2)
-        if [ "${_pt_wd//\"/}" = "0.${CURRENT_PANE}" ]; then
-          echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
-          exit 2
-        fi
-      done ;;
+      if grep -lq "^WATCHDOG_PANE=[\"]*0\.${CURRENT_PANE}[\"]*$" "${RUNTIME_DIR}"/team_*.env 2>/dev/null; then
+        echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
+        exit 2
+      fi ;;
     esac
   fi
   exit 0

@@ -13,20 +13,16 @@ if [ -z "$SESSIONS" ]; then echo "No Doey sessions found."; exit 0; fi
 
 echo "Found:"; for s in $SESSIONS; do echo "  - $s"; done; echo ""
 
-kill_all_children() {
-  local sig="${1:-}"
+for sig in TERM 9; do
   for SESSION in $SESSIONS; do
     for w in $(tmux list-windows -t "$SESSION" -F '#{window_index}' 2>/dev/null); do
-      for pane_pid in $(tmux list-panes -t "${SESSION}:${w}" -F '#{pane_pid}' 2>/dev/null); do
-        CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
-        [ -n "$CHILD_PID" ] && kill -"$sig" "$CHILD_PID" 2>/dev/null
+      for ppid in $(tmux list-panes -t "${SESSION}:${w}" -F '#{pane_pid}' 2>/dev/null); do
+        pid=$(pgrep -P "$ppid" 2>/dev/null) && kill -"$sig" "$pid" 2>/dev/null
       done
     done
   done
-}
-
-kill_all_children TERM; sleep 2
-kill_all_children 9; sleep 1
+  sleep 2
+done
 
 for SESSION in $SESSIONS; do tmux kill-session -t "$SESSION" 2>/dev/null; echo "  ${SESSION} killed"; done
 
