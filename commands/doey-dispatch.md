@@ -7,11 +7,9 @@ Send tasks to idle worker panes.
 
 ## Prompt
 
-Dispatch tasks to Claude Code workers in tmux panes.
+Dispatch tasks to Claude Code workers in tmux panes. Always `copy-mode -q` before `paste-buffer`/`send-keys`.
 
 ### Load Environment
-
-Run at the start of every Bash call. Always `copy-mode -q` before `paste-buffer`/`send-keys`.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -21,9 +19,9 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-### Auto-scale (run BEFORE scanning)
+### Auto-scale (before scanning)
 
-If grid is dynamic and no idle workers exist, add a column.
+Add a column if grid is dynamic and no idle workers exist.
 
 ```bash
 if [ "$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)" = "dynamic" ]; then
@@ -43,7 +41,7 @@ fi
 
 ### Pre-flight
 
-❯ = idle. **Never dispatch to reserved panes.**
+❯ = idle. Never dispatch to reserved panes.
 
 ```bash
 PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
@@ -53,8 +51,6 @@ tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 ```
 
 ### Dispatch Sequence
-
-Never `send-keys "" Enter` — empty string swallows Enter.
 
 ```bash
 PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
@@ -75,18 +71,16 @@ if [ "$ALREADY_READY" = "false" ]; then
   tmux copy-mode -q -t "$PANE" 2>/dev/null
   PANE_IDX="${PANE##*.}"
   WORKER_PROMPT=$(grep -l "pane ${WINDOW_INDEX}\.${PANE_IDX} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
-  if [ -n "$WORKER_PROMPT" ]; then
-    tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter
-  else
-    tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus" Enter
-  fi
+  CMD="claude --dangerously-skip-permissions --model opus"
+  [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
+  tmux send-keys -t "$PANE" "$CMD" Enter
   sleep 8; tmux copy-mode -q -t "$PANE" 2>/dev/null
 fi
 
 # 3. Rename pane
 tmux send-keys -t "$PANE" "/rename task-name_$(date +%m%d)" Enter; sleep 1
 
-# 4. Write + paste task
+# 4. Write + paste task (never send-keys "" Enter — empty string swallows Enter)
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
 You are a worker on the Doey for project: ${PROJECT_NAME}
@@ -98,7 +92,7 @@ TASK
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
 
-# 5. Settle + submit (scale delay by task size)
+# 5. Settle + submit (delay scales with task size)
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
 if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then SETTLE_S=2

@@ -24,35 +24,31 @@ mkdir -p "${RUNTIME_DIR}/status"
 ### Reserve
 
 ```bash
-# (preamble)
 echo "permanent" > "${RUNTIME_DIR}/status/${SAFE}.reserved"
-cat > "${RUNTIME_DIR}/status/${SAFE}.status" << EOF
-PANE: ${MY_PANE}
-UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
-STATUS: RESERVED
-TASK:
-EOF
-echo "Pane ${MY_PANE} reserved"
 ```
+Then write status (see below) with `STATUS: RESERVED` and print "Pane ${MY_PANE} reserved".
 
 ### Unreserve
 
 ```bash
-# (preamble)
 rm -f "${RUNTIME_DIR}/status/${SAFE}.reserved"
+```
+Then write status (see below) with `STATUS: READY` and print "Pane ${MY_PANE} unreserved".
+
+### Status file (shared by reserve/unreserve)
+
+```bash
 cat > "${RUNTIME_DIR}/status/${SAFE}.status" << EOF
 PANE: ${MY_PANE}
 UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
-STATUS: READY
+STATUS: ${NEW_STATUS}
 TASK:
 EOF
-echo "Pane ${MY_PANE} unreserved"
 ```
 
 ### List
 
 ```bash
-# (preamble)
 FOUND=0
 for f in "${RUNTIME_DIR}/status/"*.reserved; do
   [ -f "$f" ] || continue; FOUND=1

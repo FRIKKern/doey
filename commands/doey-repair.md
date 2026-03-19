@@ -21,18 +21,15 @@ Diagnose and repair the Doey Dashboard (window 0). Layout:
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
-# Build TEAM_FOR[pane_index] mapping from team env files
+# TEAM_FOR_0X holds the team number for each watchdog pane (empty = unused slot)
 TEAM_FOR_02="" TEAM_FOR_03="" TEAM_FOR_04="" TEAM_FOR_05="" TEAM_FOR_06="" TEAM_FOR_07=""
 for tf in "${RUNTIME_DIR}"/team_*.env; do
   [ -f "$tf" ] || continue
   WD_VAL=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2)
   WD_VAL="${WD_VAL%\"}" && WD_VAL="${WD_VAL#\"}"
   TW=$(basename "$tf" | sed 's/team_//;s/\.env//')
-  case "$WD_VAL" in
-    0.2) TEAM_FOR_02="$TW" ;; 0.3) TEAM_FOR_03="$TW" ;;
-    0.4) TEAM_FOR_04="$TW" ;; 0.5) TEAM_FOR_05="$TW" ;;
-    0.6) TEAM_FOR_06="$TW" ;; 0.7) TEAM_FOR_07="$TW" ;;
-  esac
+  SLOT=$(echo "$WD_VAL" | tr '.' '')  # "0.3" → "03"
+  eval "TEAM_FOR_${SLOT}=\$TW"
 done
 echo "Watchdog map: 0.2→T${TEAM_FOR_02:-?} 0.3→T${TEAM_FOR_03:-?} 0.4→T${TEAM_FOR_04:-?} 0.5→T${TEAM_FOR_05:-?} 0.6→T${TEAM_FOR_06:-?} 0.7→T${TEAM_FOR_07:-?}"
 ```
