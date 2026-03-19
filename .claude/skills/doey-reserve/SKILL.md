@@ -19,13 +19,10 @@ RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 SAFE=$(echo "$MY_PANE" | tr ':.' '_')
 mkdir -p "${RD}/status"
-ACTION="reserve"
 if [ "$ACTION" = "reserve" ]; then
-  echo "permanent" > "${RD}/status/${SAFE}.reserved"
-  STATUS="RESERVED"
+  echo "permanent" > "${RD}/status/${SAFE}.reserved"; STATUS="RESERVED"
 else
-  rm -f "${RD}/status/${SAFE}.reserved"
-  STATUS="READY"
+  rm -f "${RD}/status/${SAFE}.reserved"; STATUS="READY"
 fi
 cat > "${RD}/status/${SAFE}.status" << EOF
 PANE: ${MY_PANE}

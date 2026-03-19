@@ -23,11 +23,11 @@ tmux copy-mode -q -t "$PANE" 2>/dev/null
 PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
 CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
 if [ -z "$CHILD_PID" ]; then
-  echo "No Claude process in pane ${W}.${TARGET} — already stopped"
+  echo "No Claude process — already stopped"
 else
   kill "$CHILD_PID" 2>/dev/null; sleep 3
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
-  [ -n "$CHILD_PID" ] && { kill -9 "$CHILD_PID" 2>/dev/null; sleep 1; }
+  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && { echo "ERROR: Failed to stop — manual intervention needed"; exit 1; }
 fi
@@ -39,7 +39,7 @@ UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: FINISHED
 TASK: manually stopped
 EOF
-echo "Stopped pane ${W}.${TARGET} — status set to FINISHED"
+echo "Stopped pane ${W}.${TARGET}"
 ```
 
 ### Rules
