@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# PreCompact hook: outputs essential worker state to survive context compaction.
-# stdout from this hook is included in the compacted context.
-
+# PreCompact hook: outputs essential state to survive context compaction.
 set -euo pipefail
 
 source "$(dirname "$0")/common.sh"
 init_hook
 
-# Read current task, research topic, and project directory
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 CURRENT_TASK=$([ -f "$STATUS_FILE" ] && grep '^TASK:' "$STATUS_FILE" | cut -d: -f2- | sed 's/^ //' || true)
 RESEARCH_TOPIC=$(cat "${RUNTIME_DIR}/research/${PANE_SAFE}.task" 2>/dev/null || true)
@@ -16,38 +13,27 @@ REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 PROJECT_DIR=""
 [ -f "${RUNTIME_DIR}/session.env" ] && PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" | cut -d= -f2- | tr -d '"') || true
 
-# Prefer team-specific directory (worktree) if available
 SEARCH_DIR="${DOEY_TEAM_DIR:-$PROJECT_DIR}"
 
-# Find recently modified project files (last 10 minutes) — skip for Watchdog (irrelevant)
+# Recently modified project files (last 10 min) — skip for Watchdog
 RECENT_FILES=""
-if ! is_watchdog; then
-  if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
-    if stat -f '%m' /dev/null 2>/dev/null; then
-      # macOS: use stat -f to get modification times, sort by recency
-      RECENT_FILES=$(find "$SEARCH_DIR" -maxdepth 4 \
-        \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
-        -not -path '*/node_modules/*' -not -path '*/.git/*' \
-        -print0 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null | \
-        awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
-    else
-      # Linux: use stat -c to get modification times, sort by recency
-      RECENT_FILES=$(find "$SEARCH_DIR" -maxdepth 4 \
-        \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
-        -not -path '*/node_modules/*' -not -path '*/.git/*' \
-        -print0 2>/dev/null | xargs -0 stat -c '%Y %n' 2>/dev/null | \
-        awk -v cutoff="$(( $(date +%s) - 600 ))" '$1 >= cutoff {$1=""; print substr($0,2)}' | head -10 || true)
-    fi
+if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
+  FIND_CMD="find $SEARCH_DIR -maxdepth 4 \
+    \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
+    -not -path '*/node_modules/*' -not -path '*/.git/*' -print0"
+  CUTOFF_AWK='$1 >= cutoff {$1=""; print substr($0,2)}'
+  if stat -f '%m' /dev/null 2>/dev/null; then
+    STAT_FMT="stat -f '%m %N'"
+  else
+    STAT_FMT="stat -c '%Y %n'"
   fi
+  RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 $STAT_FMT 2>/dev/null | \
+    awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
-# Determine role label for context message
-if is_manager; then
-  ROLE_LABEL="the Doey Window Manager"
-elif is_watchdog; then
-  ROLE_LABEL="the Doey Watchdog"
-else
-  ROLE_LABEL="a Doey worker"
+if is_manager; then       ROLE_LABEL="the Doey Window Manager"
+elif is_watchdog; then    ROLE_LABEL="the Doey Watchdog"
+else                      ROLE_LABEL="a Doey worker"
 fi
 
 # Output context preservation message to stdout
@@ -63,12 +49,20 @@ ${RECENT_FILES:-None detected}
 **Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
-# Append Window Manager orchestration state if this is the Window Manager
-# DOEY_TEAM_WINDOW is set for consistency (equals WINDOW_INDEX for managers in team windows)
+# Collect basenames of matching files into a newline-separated string
+_collect_basenames() {
+  local result=""
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    result="${result}  $(basename "$f")${NL}"
+  done
+  printf '%s' "$result"
+}
+
 if is_manager; then
   _TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
   WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
-  # Collect result files with status
+
   PENDING_RESULTS=""
   HAS_JQ=false; command -v jq >/dev/null 2>&1 && HAS_JQ=true
   for rf in "$RUNTIME_DIR"/results/pane_${_TEAM_W}_*.json; do
@@ -78,25 +72,14 @@ if is_manager; then
     else
       rf_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$rf" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"$//' || echo "unknown")
     fi
-    PENDING_RESULTS="${PENDING_RESULTS}  $(basename "$rf") (status: ${rf_status})
-"
+    PENDING_RESULTS="${PENDING_RESULTS}  $(basename "$rf") (status: ${rf_status})${NL}"
   done
-  # Collect completion and crash alert files
-  _list_basenames() {
-    local result=""
-    for f in "$@"; do
-      [ -f "$f" ] || continue
-      result="${result}  $(basename "$f")${NL}"
-    done
-    printf '%s' "$result"
-  }
-  COMPLETION_FILES=$(_list_basenames "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W}_*)
-  CRASH_FILES=$(_list_basenames "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W}_*)
+
+  COMPLETION_FILES=$(_collect_basenames "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W}_*)
+  CRASH_FILES=$(_collect_basenames "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W}_*)
   cat <<MGRSTATE
 
 ## WINDOW MANAGER ORCHESTRATION STATE (restore after compaction)
-You are the Window Manager. The following orchestration state was captured before compaction.
-
 **Worker Assignments (pane_index title):**
 ${WORKER_ASSIGNMENTS:-No panes found}
 
@@ -111,7 +94,6 @@ ${CRASH_FILES:-None}
 MGRSTATE
 fi
 
-# Append watchdog pane states if this is the watchdog
 if is_watchdog; then
   _WD_TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
   WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${_WD_TEAM_W}.json" 2>/dev/null || echo "{}")
@@ -119,7 +101,6 @@ if is_watchdog; then
     cat <<WDSTATE
 
 ## WATCHDOG STATE (restore after compaction)
-You are the Watchdog. The following pane states were being tracked before compaction. Restore this into your monitoring state:
 \`\`\`json
 ${WATCHDOG_STATE}
 \`\`\`

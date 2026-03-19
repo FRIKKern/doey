@@ -1,7 +1,5 @@
 #!/bin/bash
-# Doey Info Panel — full-width two-column dashboard for window 0
-# Displays team status, worker counts, recent events, and usage guide.
-# Runs in a loop, refreshing every 5 minutes.
+# Doey Info Panel — dashboard for window 0, refreshes every 5 minutes.
 set -uo pipefail
 
 RUNTIME_DIR="${1:-${DOEY_RUNTIME:-}}"
@@ -34,9 +32,7 @@ C_BOLD_YELLOW='\033[1;33m'
 C_BOLD_RED='\033[1;31m'
 C_BOLD_MAGENTA='\033[1;35m'
 
-# Single-pass env file reader: reads all needed keys in one loop (0 forks).
-# Sets variables named _ENV_<KEY> for each requested key.
-# Usage: read_env_file <file> KEY1 KEY2 ...
+# Sets _ENV_<KEY> for each requested key from an env file (single-pass, 0 forks).
 read_env_file() {
   local _ref_file="$1"; shift
   # Clear output vars
@@ -54,7 +50,6 @@ read_env_file() {
   return 0
 }
 
-# Format seconds into human-readable uptime
 format_uptime() {
   local secs="$1"
   if [ "$secs" -lt 60 ]; then
@@ -72,17 +67,13 @@ format_uptime() {
   fi
 }
 
-# Build a repeated-character string of given length
 repeat_char() {
   local ch="$1" len="$2" out="" i=0
-  while [ "$i" -lt "$len" ]; do
-    out="${out}${ch}"
-    i=$((i + 1))
-  done
+  while [ "$i" -lt "$len" ]; do out="${out}${ch}"; i=$((i + 1)); done
   printf '%s' "$out"
 }
 
-# Read STATUS field from a .status file (0 forks)
+# Read STATUS field from a .status file (0 forks). Returns "?" if missing.
 read_pane_status() {
   local file="$1" status="?"
   if [ -f "$file" ]; then
@@ -93,71 +84,34 @@ read_pane_status() {
   printf '%s' "$status"
 }
 
-# Read watchdog heartbeat and return OK/STALE/?
-read_watchdog_status() {
-  local hb_file="$1" now="$2" beat
-  if [ ! -f "$hb_file" ]; then
-    printf '?'; return
-  fi
-  beat=$(cat "$hb_file" 2>/dev/null || echo "0")
-  case "$beat" in *[!0-9]*) beat=0 ;; esac
-  [ -z "$beat" ] && beat=0
-  if [ $((now - beat)) -lt 120 ]; then
-    printf 'OK'
-  else
-    printf 'STALE'
-  fi
-}
 
-# Count workers in a given state for a team (0 forks — pure shell)
-# Uses cached SESSION_NAME from outer scope
+# Count workers in a given state for a team. Uses _CACHED_SESSION_NAME from outer scope.
 count_team_workers() {
   local window="$1" worker_panes="$2" state="$3"
-  local count=0
+  local count=0 pane_status
   for p in $(echo "$worker_panes" | tr ',' ' '); do
-    local pane_safe="${_CACHED_SESSION_NAME}_${window}_${p}"
-    local status_file="${RUNTIME_DIR}/status/${pane_safe}.status"
-    if [ -f "$status_file" ]; then
-      local pane_status=""
-      while IFS= read -r _sw_line; do
-        case "$_sw_line" in
-          STATUS:*) pane_status="${_sw_line#STATUS: }"; break ;;
-        esac
-      done < "$status_file"
-      case "$state" in
-        idle)
-          case "$pane_status" in READY|FINISHED) count=$((count + 1)) ;; esac
-          ;;
-        busy)
-          case "$pane_status" in BUSY|WORKING) count=$((count + 1)) ;; esac
-          ;;
-        reserved)
-          case "$pane_status" in RESERVED) count=$((count + 1)) ;; esac
-          ;;
-      esac
-    else
-      # No status file = idle (freshly started)
-      case "$state" in idle) count=$((count + 1)) ;; esac
-    fi
+    pane_status=$(read_pane_status "${RUNTIME_DIR}/status/${_CACHED_SESSION_NAME}_${window}_${p}.status")
+    case "$state" in
+      idle)     case "$pane_status" in READY|FINISHED|"?") count=$((count + 1)) ;; esac ;;
+      busy)     case "$pane_status" in BUSY|WORKING) count=$((count + 1)) ;; esac ;;
+      reserved) case "$pane_status" in RESERVED) count=$((count + 1)) ;; esac ;;
+    esac
   done
   printf '%d' "$count"
 }
 
-# Strip ANSI escape codes for visible-length counting
-strip_ansi() {
-  # Use sed to remove ANSI escape sequences
-  printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'
-}
+strip_ansi() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
 
-visible_len() {
-  local stripped
-  stripped=$(strip_ansi "$1")
-  printf '%d' "${#stripped}"
-}
+visible_len() { local s; s=$(strip_ansi "$1"); printf '%d' "${#s}"; }
 
 add_left() {
   eval "L_${LC}=\"\$1\""
   LC=$((LC + 1))
+}
+
+# add_cmd <color> <name> <description> — shorthand for colored dotted_leader entry
+add_cmd() {
+  add_left "  $(dotted_leader "$(printf '%b%s%b' "$1" "$2" "${C_RESET}")" "$3" "$CMD_W")"
 }
 
 dotted_leader() {
@@ -185,37 +139,25 @@ dotted_leader() {
 _CACHED_SESSION_NAME=""
 _CACHED_PROJECT_NAME=""
 
-# ── Main Loop ───────────────────────────────────────────────────────
 while true; do
-  # Clear screen
   printf '\033[2J\033[H'
 
-  # Wait for session.env
   if [ ! -f "$SESSION_ENV" ]; then
     printf 'Doey Info Panel: waiting for session.env...\n'
     sleep 5
     continue
   fi
 
-  # Detect terminal dimensions
   TERM_W=$(tput cols 2>/dev/null || echo 120)
-  TERM_H=$(tput lines 2>/dev/null || echo 40)
-  # Minimum width guard
-  if [ "$TERM_W" -lt 80 ]; then
-    TERM_W=80
-  fi
-
-  # Column width for commands
+  [ "$TERM_W" -lt 80 ] && TERM_W=80
   LEFT_W=$((TERM_W * 55 / 100))
 
-  # Read session info (single-pass, cached for stable keys)
   if [ -z "$_CACHED_SESSION_NAME" ]; then
     read_env_file "$SESSION_ENV" SESSION_NAME PROJECT_NAME TEAM_WINDOWS
     _CACHED_SESSION_NAME="$_ENV_SESSION_NAME"
     _CACHED_PROJECT_NAME="$_ENV_PROJECT_NAME"
     TEAM_WINDOWS="$_ENV_TEAM_WINDOWS"
   else
-    # Only re-read TEAM_WINDOWS (can change when windows are added/removed)
     read_env_file "$SESSION_ENV" TEAM_WINDOWS
     TEAM_WINDOWS="$_ENV_TEAM_WINDOWS"
   fi
@@ -223,7 +165,6 @@ while true; do
   SESSION_NAME="$_CACHED_SESSION_NAME"
 
   NOW=$(date +%s)
-  # macOS stat vs Linux stat for uptime calculation
   if stat -f '%m' "$SESSION_ENV" >/dev/null 2>&1; then
     START_TIME=$(stat -f '%m' "$SESSION_ENV")
   else
@@ -232,11 +173,9 @@ while true; do
   UPTIME_SECS=$((NOW - START_TIME))
   UPTIME_STR=$(format_uptime "$UPTIME_SECS")
 
-  # ── Gather Team Data ──────────────────────────────────────────────
   TOTAL_WORKERS=0; TOTAL_IDLE=0; TOTAL_BUSY=0; TOTAL_RESERVED=0
   TEAM_COUNT=0; TEAM_LINE_COUNT=0
 
-  # Normalize: single-window mode uses window "0" with SESSION_ENV as team file
   [ -z "$TEAM_WINDOWS" ] && TEAM_WINDOWS="0"
 
   for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
@@ -248,19 +187,10 @@ while true; do
       TEAM_FILE="${RUNTIME_DIR}/team_${W}.env"
     fi
 
-    read_env_file "$TEAM_FILE" WORKER_PANES WORKER_COUNT GRID WORKTREE_DIR WORKTREE_BRANCH
+    read_env_file "$TEAM_FILE" WORKER_PANES WORKER_COUNT WORKTREE_DIR WORKTREE_BRANCH
     WORKER_PANES="$_ENV_WORKER_PANES"
     WORKER_COUNT="${_ENV_WORKER_COUNT:-0}"
-    GRID_MODE="${_ENV_GRID:-dynamic}"
-    WT_DIR="$_ENV_WORKTREE_DIR"
-    WT_BRANCH="$_ENV_WORKTREE_BRANCH"
     TOTAL_WORKERS=$((TOTAL_WORKERS + WORKER_COUNT))
-
-    MGR_ST=$(read_pane_status "${RUNTIME_DIR}/status/${SESSION_NAME}_${W}_0.status")
-
-    HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog_W${W}.heartbeat"
-    [ ! -f "$HEARTBEAT_FILE" ] && HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
-    WDG_ST=$(read_watchdog_status "$HEARTBEAT_FILE" "$NOW")
 
     IDLE_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "idle")
     BUSY_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "busy")
@@ -270,23 +200,16 @@ while true; do
     TOTAL_RESERVED=$((TOTAL_RESERVED + RESV_COUNT))
 
     eval "TEAM_WIN_${TEAM_LINE_COUNT}=\"${W}\""
-    eval "TEAM_MGR_${TEAM_LINE_COUNT}=\"${MGR_ST}\""
-    eval "TEAM_WDG_${TEAM_LINE_COUNT}=\"${WDG_ST}\""
     eval "TEAM_IDLE_${TEAM_LINE_COUNT}=\"${IDLE_COUNT}\""
     eval "TEAM_BUSY_${TEAM_LINE_COUNT}=\"${BUSY_COUNT}\""
     eval "TEAM_RESV_${TEAM_LINE_COUNT}=\"${RESV_COUNT}\""
     eval "TEAM_WCNT_${TEAM_LINE_COUNT}=\"${WORKER_COUNT}\""
-    eval "TEAM_GRID_${TEAM_LINE_COUNT}=\"${GRID_MODE}\""
-    eval "TEAM_WT_DIR_${TEAM_LINE_COUNT}=\"${WT_DIR}\""
-    eval "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}=\"${WT_BRANCH}\""
+    eval "TEAM_WT_DIR_${TEAM_LINE_COUNT}=\"${_ENV_WORKTREE_DIR}\""
+    eval "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}=\"${_ENV_WORKTREE_BRANCH}\""
     TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
   done
 
-  # ── RENDER ─────────────────────────────────────────────────────────
   LC=0
-
-  # ── LEFT COLUMN ───────────────────────────────────────────────────
-
   add_left ""
   add_left "$(printf '%b  HOW TO USE DOEY%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
@@ -304,54 +227,51 @@ while true; do
   add_left "$(printf '%b  SLASH COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
 
-  CMD_W=$((LEFT_W - 4))  # usable width inside the column with indent
+  CMD_W=$((LEFT_W - 4))
 
   add_left "$(printf '  %b Tasks%b' "${C_BOLD_GREEN}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-dispatch%b' "${C_GREEN}" "${C_RESET}")" "Send task to a worker" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-delegate%b' "${C_GREEN}" "${C_RESET}")" "Delegate task to a team" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-broadcast%b' "${C_GREEN}" "${C_RESET}")" "Send to all workers" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-research%b' "${C_GREEN}" "${C_RESET}")" "Deep research with report" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-reserve%b' "${C_GREEN}" "${C_RESET}")" "Claim a worker pane" "$CMD_W")"
+  add_cmd "${C_GREEN}" "/doey-dispatch"  "Send task to a worker"
+  add_cmd "${C_GREEN}" "/doey-delegate"  "Delegate task to a team"
+  add_cmd "${C_GREEN}" "/doey-broadcast" "Send to all workers"
+  add_cmd "${C_GREEN}" "/doey-research"  "Deep research with report"
+  add_cmd "${C_GREEN}" "/doey-reserve"   "Claim a worker pane"
   add_left ""
   add_left "$(printf '  %b Monitoring%b' "${C_BOLD_CYAN}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-status%b' "${C_CYAN}" "${C_RESET}")" "Detailed status" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-monitor%b' "${C_CYAN}" "${C_RESET}")" "Live worker monitor" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-purge%b' "${C_CYAN}" "${C_RESET}")" "Audit & fix context rot" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-list-windows%b' "${C_CYAN}" "${C_RESET}")" "Show all team windows" "$CMD_W")"
+  add_cmd "${C_CYAN}" "/doey-status"       "Detailed status"
+  add_cmd "${C_CYAN}" "/doey-monitor"      "Live worker monitor"
+  add_cmd "${C_CYAN}" "/doey-purge"        "Audit & fix context rot"
+  add_cmd "${C_CYAN}" "/doey-list-windows" "Show all team windows"
   add_left ""
   add_left "$(printf '  %b Team Management%b' "${C_BOLD_YELLOW}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-add-window%b' "${C_YELLOW}" "${C_RESET}")" "Add a new team" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-kill-window%b' "${C_YELLOW}" "${C_RESET}")" "Remove a team" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-worktree%b' "${C_YELLOW}" "${C_RESET}")" "Worktree isolation" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-clear%b' "${C_YELLOW}" "${C_RESET}")" "Clear & restart workers" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-team%b' "${C_YELLOW}" "${C_RESET}")" "Team info & actions" "$CMD_W")"
+  add_cmd "${C_YELLOW}" "/doey-add-window"  "Add a new team"
+  add_cmd "${C_YELLOW}" "/doey-kill-window" "Remove a team"
+  add_cmd "${C_YELLOW}" "/doey-worktree"    "Worktree isolation"
+  add_cmd "${C_YELLOW}" "/doey-clear"       "Clear & restart workers"
+  add_cmd "${C_YELLOW}" "/doey-team"        "Team info & actions"
   add_left ""
   add_left "$(printf '  %b Control%b' "${C_BOLD_MAGENTA}" "${C_RESET}")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-stop%b' "${C_MAGENTA}" "${C_RESET}")" "Stop a worker" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-kill-session%b' "${C_MAGENTA}" "${C_RESET}")" "Kill entire session" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-reload%b' "${C_MAGENTA}" "${C_RESET}")" "Hot-reload session" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-repair%b' "${C_MAGENTA}" "${C_RESET}")" "Fix dashboard panes" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-reinstall%b' "${C_MAGENTA}" "${C_RESET}")" "Reinstall Doey" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%b/doey-watchdog-compact%b' "${C_MAGENTA}" "${C_RESET}")" "Compact watchdog context" "$CMD_W")"
+  add_cmd "${C_MAGENTA}" "/doey-stop"             "Stop a worker"
+  add_cmd "${C_MAGENTA}" "/doey-kill-session"      "Kill entire session"
+  add_cmd "${C_MAGENTA}" "/doey-reload"            "Hot-reload session"
+  add_cmd "${C_MAGENTA}" "/doey-repair"            "Fix dashboard panes"
+  add_cmd "${C_MAGENTA}" "/doey-reinstall"         "Reinstall Doey"
+  add_cmd "${C_MAGENTA}" "/doey-watchdog-compact"  "Compact watchdog context"
   add_left ""
   add_left "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
-  add_left "  $(dotted_leader "$(printf '%bdoey%b' "${C_YELLOW}" "${C_RESET}")" "Launch (dynamic grid)" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%bdoey add%b' "${C_YELLOW}" "${C_RESET}")" "Add worker column" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%bdoey stop%b' "${C_YELLOW}" "${C_RESET}")" "Stop session" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%bdoey reload%b' "${C_YELLOW}" "${C_RESET}")" "Hot-reload (--workers)" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%bdoey list%b' "${C_YELLOW}" "${C_RESET}")" "List all projects" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%bdoey doctor%b' "${C_YELLOW}" "${C_RESET}")" "Check installation" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%bdoey test%b' "${C_YELLOW}" "${C_RESET}")" "Run E2E tests" "$CMD_W")"
-  add_left "  $(dotted_leader "$(printf '%bdoey version%b' "${C_YELLOW}" "${C_RESET}")" "Show version info" "$CMD_W")"
+  add_cmd "${C_YELLOW}" "doey"         "Launch (dynamic grid)"
+  add_cmd "${C_YELLOW}" "doey add"     "Add worker column"
+  add_cmd "${C_YELLOW}" "doey stop"    "Stop session"
+  add_cmd "${C_YELLOW}" "doey reload"  "Hot-reload (--workers)"
+  add_cmd "${C_YELLOW}" "doey list"    "List all projects"
+  add_cmd "${C_YELLOW}" "doey doctor"  "Check installation"
+  add_cmd "${C_YELLOW}" "doey test"    "Run E2E tests"
+  add_cmd "${C_YELLOW}" "doey version" "Show version info"
 
-  # ── OUTPUT ──────────────────────────────────────────────────────────
   HR=$(repeat_char "─" "$TERM_W")
   HR_THICK=$(repeat_char "═" "$TERM_W")
 
-  # ── Dynamic ASCII Art Title from PROJECT_NAME ─────────────────────
-  # Block-letter font: each char is 6 rows, variable width
-  # Returns rows via CHAR_R0..CHAR_R5 variables
+  # Block-letter font: each char is 6 rows. Sets CHAR_R0..CHAR_R5.
   get_block_char() {
     case "$1" in
       A) CHAR_R0=' █████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='███████║'; CHAR_R3='██╔══██║'; CHAR_R4='██║  ██║'; CHAR_R5='╚═╝  ╚═╝' ;;
@@ -398,7 +318,6 @@ while true; do
     esac
   }
 
-  # Build ASCII art title from PROJECT_NAME (uppercased)
   TITLE_NAME=$(printf '%s' "$PROJECT_NAME" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9 ._-' ' ')
   TITLE_R0=""; TITLE_R1=""; TITLE_R2=""; TITLE_R3=""; TITLE_R4=""; TITLE_R5=""
   _ci=0
@@ -411,7 +330,6 @@ while true; do
     _ci=$((_ci + 1))
   done
 
-  # Pick a random bold color for the title
   _color_idx=$((RANDOM % 6))
   case "$_color_idx" in
     0) TITLE_COLOR="${C_BOLD_CYAN}" ;;
@@ -428,10 +346,7 @@ while true; do
   done
   printf '%b\n' "${C_RESET}"
 
-  # ── Status Bar ────────────────────────────────────────────────────
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
-
-  # Build status items
   stat_project="$(printf '%b PROJECT %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$PROJECT_NAME")"
   stat_session="$(printf '%b SESSION %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$SESSION_NAME")"
   stat_uptime="$(printf '%b UPTIME %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$UPTIME_STR")"
@@ -446,7 +361,6 @@ while true; do
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
   printf '\n'
 
-  # ── Team Status ─────────────────────────────────────────────────
   if [ "$TEAM_LINE_COUNT" -gt 0 ]; then
     printf '  %b TEAM STATUS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
     _ti=0
@@ -459,14 +373,12 @@ while true; do
       eval "_twtd=\${TEAM_WT_DIR_${_ti}:-}"
       eval "_twtb=\${TEAM_WT_BRANCH_${_ti}:-}"
 
-      # Team name with optional [wt] badge
       if [ -n "$_twtd" ]; then
         _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
       else
         _tname="$(printf '  Team %s     ' "$_tw")"
       fi
 
-      # Worker summary
       _tsummary="$(printf '%sW (%b%s busy%b, %b%s idle%b' "$_twc" "${C_YELLOW}" "$_tb" "${C_RESET}" "${C_GREEN}" "$_tidle" "${C_RESET}")"
       if [ "$_tr" -gt 0 ]; then
         _tsummary="${_tsummary}$(printf ', %b%s rsv%b)' "${C_MAGENTA}" "$_tr" "${C_RESET}")"
@@ -474,7 +386,6 @@ while true; do
         _tsummary="${_tsummary})"
       fi
 
-      # Branch name (dimmed) for worktree teams
       if [ -n "$_twtb" ]; then
         printf '%b  %-20s %s  %b%s%b\n' "${C_RESET}" "$_tname" "$_tsummary" "${C_DIM}" "$_twtb" "${C_RESET}"
       else
@@ -486,7 +397,6 @@ while true; do
     printf '\n'
   fi
 
-  # ── Single-Column Body ────────────────────────────────────────────
   row=0
   while [ "$row" -lt "$LC" ]; do
     eval "left_line=\${L_${row}}"
