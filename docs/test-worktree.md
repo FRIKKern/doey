@@ -1,23 +1,14 @@
 # Worktree Test Guide
 
-## Prerequisites
+**Prerequisites:** Clean git repo (no uncommitted changes on main), no running Doey session, macOS with bash 3.2.
 
-- Clean git repo (no uncommitted changes on main)
-- No running Doey session (`doey stop` first)
-- macOS with bash 3.2
-
-## Setup
-
+**Setup** — get runtime vars for all tests:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION=$(grep SESSION_NAME= "$RUNTIME_DIR/session.env" | cut -d= -f2)
 ```
 
----
-
 ## Test 1: Fresh Launch (auto-isolated team 4)
-
-Tests `add_dynamic_team_window` with `"auto"` worktree spec.
 
 ```bash
 doey stop 2>/dev/null; doey
@@ -32,8 +23,6 @@ doey stop 2>/dev/null; doey
 | Worker CWD | `tmux display-message -t "$SESSION:4.1" -p '#{pane_current_path}'` | Worktree path |
 | Info panel badge | `tmux capture-pane -t "$SESSION:0.0" -p \| grep -i "team.*wt\|worktree"` | Team 4 `[wt]` |
 
----
-
 ## Test 2: `doey add-team --worktree`
 
 ```bash
@@ -47,27 +36,21 @@ doey add-team --worktree
 | Team env | `cat "$RUNTIME_DIR/team_5.env" \| grep WORKTREE` | Has worktree vars |
 | Session updated | `grep TEAM_WINDOWS "$RUNTIME_DIR/session.env"` | Includes new window |
 
----
-
 ## Test 3: `doey add-team` (no worktree)
 
 ```bash
 doey add-team 3x2
 ```
 
-**Verify:** No `[wt]` in name. `team_N.env` has empty `WORKTREE_DIR`. Workers CWD = main project dir.
-
----
+Verify: No `[wt]` in name. `team_N.env` has empty `WORKTREE_DIR`. Workers CWD = main project dir.
 
 ## Test 4: `/doey-add-window --worktree`
 
-Run inside any Claude Code pane. Same verification as Test 2.
-
----
+Run inside any Claude Code pane. Same checks as Test 2.
 
 ## Test 5: `/doey-worktree W` (transform existing team)
 
-Team must have all idle workers.
+Requires all workers idle.
 
 ```
 /doey-worktree 1
@@ -79,8 +62,6 @@ Team must have all idle workers.
 | Worktree exists | `git worktree list \| grep team-1` | Present |
 | Team env | `cat "$RUNTIME_DIR/team_1.env" \| grep WORKTREE` | Has worktree vars |
 | Worker CWD | `tmux display-message -t "$SESSION:1.1" -p '#{pane_current_path}'` | Worktree path |
-
----
 
 ## Test 6: `/doey-worktree W --back` (return to main)
 
@@ -104,13 +85,9 @@ echo "test" > "$WT_DIR/worktree-test.txt"
 | Worker CWD | `tmux display-message -t "$SESSION:1.1" -p '#{pane_current_path}'` | Main project dir |
 | Branch preserved | `git branch \| grep doey/team-1` | Exists |
 
----
-
 ## Test 7: `/doey-list-windows`
 
-**Verify:** `[worktree]` badge + branch for worktree teams; nothing extra for normal teams.
-
----
+Verify: `[worktree]` badge + branch for worktree teams; nothing extra for normal teams.
 
 ## Test 8: `/doey-kill-window W` (kill worktree team)
 
@@ -133,43 +110,14 @@ git -C "$WT_DIR" add -A && git -C "$WT_DIR" commit -m "test commit in worktree"
 | Runtime cleaned | `ls "$RUNTIME_DIR/team_4.env" 2>/dev/null` | No such file |
 | Window gone | `tmux list-windows ... \| grep "^4$"` | No match |
 
----
+## Tests 9–12: Quick Checks
 
-## Test 9: `doey stop` (full teardown)
-
-**Verify:** `git worktree list` shows only main tree. Branches with commits preserved. Session gone.
-
----
-
-## Test 10: `doey add` (worktree-aware column expansion)
-
-**Verify:** New workers in worktree team have worktree dir as CWD.
-
----
-
-## Test 11: `doey reload` (hook refresh)
-
-**Verify:** Hooks exist in worktree dir:
-```bash
-WT_DIR=$(grep WORKTREE_DIR "$RUNTIME_DIR/team_4.env" | cut -d= -f2- | tr -d '"')
-ls "$WT_DIR/.claude/hooks/"
-```
-
----
-
-## Test 12: `DOEY_TEAM_DIR` hook integration
-
-Only works on idle workers (shell prompt visible).
-
-```bash
-# Worktree worker → worktree path
-tmux send-keys -t "$SESSION:4.1" 'echo $DOEY_TEAM_DIR' Enter
-
-# Normal worker → main project path
-tmux send-keys -t "$SESSION:1.1" 'echo $DOEY_TEAM_DIR' Enter
-```
-
----
+| Test | Action | Verify |
+|------|--------|--------|
+| 9: `doey stop` | Full teardown | `git worktree list` shows only main. Branches with commits preserved. Session gone. |
+| 10: `doey add` | Column expansion in worktree team | New workers have worktree dir as CWD |
+| 11: `doey reload` | Hook refresh | `ls "$WT_DIR/.claude/hooks/"` shows hooks in worktree dir |
+| 12: `DOEY_TEAM_DIR` | `echo $DOEY_TEAM_DIR` on idle workers | Worktree worker → worktree path; normal worker → main path |
 
 ## Tests 13–15: Edge Cases
 
@@ -179,57 +127,34 @@ tmux send-keys -t "$SESSION:1.1" 'echo $DOEY_TEAM_DIR' Enter
 | 14: Already isolated | `/doey-worktree 4` (worktree team) | Error: already in worktree |
 | 15: --back on normal | `/doey-worktree 1 --back` (not isolated) | Error: not in worktree |
 
----
-
 ## Test 16: Info Panel
 
 ```bash
 tmux capture-pane -t "$SESSION:0.0" -p -S -40 | grep -A 20 "TEAM STATUS"
 ```
 
-Expected: `[wt]` badge in cyan for worktree teams, branch name dimmed, no badge for normal teams.
+Expected: `[wt]` badge in cyan for worktree teams, branch name dimmed.
 
 ```
 TEAM STATUS
   T1              6W (0 busy, 6 idle)
-  T2              6W (0 busy, 6 idle)
-  T3              6W (0 busy, 6 idle)
   T4 [wt]         6W (0 busy, 6 idle)  doey/team-4-0317-1700
 ```
-
----
 
 ## Quick Smoke Test
 
 ```bash
-# 1. Fresh launch
-doey stop 2>/dev/null; doey
-# Wait ~30s for boot
-
-# 2. Worktree created?
-git worktree list | grep team-4 && echo "PASS" || echo "FAIL"
-
-# 3. Badge visible?
-doey list-teams
-
-# 4. Kill worktree team — clean?
-doey kill-team 4
+doey stop 2>/dev/null; doey        # 1. Fresh launch (wait ~30s)
+git worktree list | grep team-4 && echo "PASS" || echo "FAIL"  # 2. Worktree created?
+doey list-teams                    # 3. Badge visible?
+doey kill-team 4                   # 4. Kill worktree team
 git worktree list | grep team-4 && echo "FAIL" || echo "PASS"
-
-# 5. Add worktree team
-doey add-team --worktree
+doey add-team --worktree           # 5. Add worktree team
 git worktree list | grep -c "worktrees/team-" | xargs -I{} test {} -ge 1 && echo "PASS" || echo "FAIL"
-
-# 6. Full stop — all cleaned?
-doey stop
+doey stop                          # 6. Full stop
 git worktree list | grep -c "worktrees" | xargs -I{} test {} -eq 0 && echo "PASS" || echo "FAIL"
 ```
 
----
-
 ## Bash 3.2 Compatibility
 
-Run after any shell script edits:
-```bash
-bash tests/test-bash-compat.sh
-```
+Run after any shell script edits: `bash tests/test-bash-compat.sh`
