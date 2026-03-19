@@ -75,23 +75,18 @@ fi
 if is_watchdog; then
   case "$TOOL_COMMAND" in
     *"send-keys"*|*"send-key"*|*"paste-buffer"*|*"load-buffer"*)
-      # Block ALL send-keys to the Manager pane when Manager is crashed.
-      # This prevents the Watchdog death-loop: Watchdog detects MANAGER_CRASHED,
-      # sends keys to "notify" the dead Manager, killing any restart attempts.
+      # Block send-keys to crashed Manager pane (prevents Watchdog death-loop:
+      # Watchdog detects crash, sends keys to dead Manager, kills restart attempts).
+      # Anchor ":W.0" prevents false-positives on multi-digit windows.
       TEAM_WINDOW="${DOEY_TEAM_WINDOW:-}"
-      if [ -n "$TEAM_WINDOW" ] && [ -n "${RUNTIME_DIR:-}" ]; then
-        if [ -f "${RUNTIME_DIR}/status/manager_crashed_W${TEAM_WINDOW}" ]; then
-          # Check if the command targets the Manager pane (W.0)
-          # Anchor with ":" prefix to prevent false-positives on multi-digit
-          # windows (e.g. TEAM_WINDOW=2 must not match "12.0")
-          case "$TOOL_COMMAND" in
-            *":${TEAM_WINDOW}.0"*)
-              echo "BLOCKED: Watchdog cannot send keys to crashed Manager pane ${TEAM_WINDOW}.0." >&2
-              echo "Write an alert file for the Session Manager instead." >&2
-              exit 2
-              ;;
-          esac
-        fi
+      if [ -n "$TEAM_WINDOW" ] && [ -f "${RUNTIME_DIR}/status/manager_crashed_W${TEAM_WINDOW}" ]; then
+        case "$TOOL_COMMAND" in
+          *":${TEAM_WINDOW}.0"*)
+            echo "BLOCKED: Watchdog cannot send keys to crashed Manager pane ${TEAM_WINDOW}.0." >&2
+            echo "Write an alert file for the Session Manager instead." >&2
+            exit 2
+            ;;
+        esac
       fi
       # Allow specific watchdog operations with strict payload validation.
       # Strip trailing stderr redirect for cleaner matching.

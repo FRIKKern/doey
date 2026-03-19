@@ -18,7 +18,7 @@ SESSION_ENV="${RUNTIME_DIR}/session.env"
 [ -f "$SESSION_ENV" ] || exit 0
 
 # Read variables from session.env (single-pass parse, no eval — /tmp is world-writable)
-SESSION_NAME="" PROJECT_DIR="" PROJECT_NAME="" WATCHDOG_PANE=""
+SESSION_NAME="" PROJECT_DIR="" PROJECT_NAME=""
 while IFS='=' read -r key value; do
   # Strip surrounding quotes (session.env values may be quoted)
   value="${value%\"}" && value="${value#\"}"
@@ -26,101 +26,79 @@ while IFS='=' read -r key value; do
     SESSION_NAME) SESSION_NAME="$value" ;;
     PROJECT_DIR)  PROJECT_DIR="$value" ;;
     PROJECT_NAME) PROJECT_NAME="$value" ;;
-    WATCHDOG_PANE) WATCHDOG_PANE="$value" ;;
   esac
 done < "$SESSION_ENV"
-
-# Write environment variables (append, don't overwrite)
-cat >> "$CLAUDE_ENV_FILE" << EOF
-export DOEY_RUNTIME="$RUNTIME_DIR"
-export SESSION_NAME="$SESSION_NAME"
-export PROJECT_DIR="$PROJECT_DIR"
-export PROJECT_NAME="$PROJECT_NAME"
-EOF
 
 # Determine pane identity
 PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
 PANE_INDEX="${PANE##*.}"
-# Extract window index for multi-window support
 _WP="${PANE#*:}"
 WINDOW_INDEX="${_WP%.*}"
 
-# Determine role based on new architecture:
-# - Window 0 (Dashboard): pane 0.0=Info Panel, 0.1=Session Manager, 0.2-0.7=Watchdog slots
-# - Window 1+ (Team):     pane W.0=Manager, W.1+=Workers
+# Determine role:
+#   Window 0 (Dashboard): 0.0=Info Panel, 0.1=Session Manager, 0.2-0.7=Watchdog slots
+#   Window 1+ (Team):     W.0=Manager, W.1+=Workers
 ROLE="worker"
-DOEY_TEAM_WINDOW=""
+TEAM_WINDOW="$WINDOW_INDEX"
 
 if [ "$WINDOW_INDEX" = "0" ]; then
-  # Dashboard window — check if this pane is a Watchdog slot
-  SM_PANE=""
   sm_val=$(grep '^SM_PANE=' "$SESSION_ENV" | cut -d= -f2- || true)
   sm_val="${sm_val%\"}" && sm_val="${sm_val#\"}"
-  [ -n "$sm_val" ] && SM_PANE="$sm_val"
 
-  if [ "0.${PANE_INDEX}" = "${SM_PANE:-0.1}" ]; then
+  if [ "0.${PANE_INDEX}" = "${sm_val:-0.1}" ]; then
     ROLE="session_manager"
   elif [ "$PANE_INDEX" = "0" ]; then
     ROLE="info_panel"
   else
-    # Check if this pane is a Watchdog for any team
-    for _ss_tf in "${RUNTIME_DIR}"/team_*.env; do
-      [ -f "$_ss_tf" ] || continue
-      _ss_wd=$(grep '^WATCHDOG_PANE=' "$_ss_tf" | cut -d= -f2-)
-      _ss_wd="${_ss_wd%\"}" && _ss_wd="${_ss_wd#\"}"
-      if [ "$_ss_wd" = "0.${PANE_INDEX}" ]; then
+    for tf in "${RUNTIME_DIR}"/team_*.env; do
+      [ -f "$tf" ] || continue
+      wd_pane=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2-)
+      wd_pane="${wd_pane%\"}" && wd_pane="${wd_pane#\"}"
+      if [ "$wd_pane" = "0.${PANE_INDEX}" ]; then
         ROLE="watchdog"
-        # Extract team window index from filename (team_N.env)
-        _ss_fn="${_ss_tf##*/}"   # team_N.env
-        _ss_fn="${_ss_fn#team_}" # N.env
-        DOEY_TEAM_WINDOW="${_ss_fn%.env}"  # N
+        fn="${tf##*/}"            # team_N.env
+        TEAM_WINDOW="${fn#team_}" # N.env
+        TEAM_WINDOW="${TEAM_WINDOW%.env}"
         break
       fi
     done
   fi
 else
-  # Team window — pane 0 is Manager, rest are Workers
-  TEAM_MGR_PANE=""
-  TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-  if [ -f "$TEAM_ENV" ]; then
-    TEAM_MGR_PANE=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
-    TEAM_MGR_PANE="${TEAM_MGR_PANE%\"}" && TEAM_MGR_PANE="${TEAM_MGR_PANE#\"}"
+  mgr_pane="0"
+  team_env="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  if [ -f "$team_env" ]; then
+    mgr_val=$(grep '^MANAGER_PANE=' "$team_env" | cut -d= -f2-)
+    mgr_val="${mgr_val%\"}" && mgr_val="${mgr_val#\"}"
+    [ -n "$mgr_val" ] && mgr_pane="$mgr_val"
   fi
-  [ -z "$TEAM_MGR_PANE" ] && TEAM_MGR_PANE="0"
-
-  if [ "$PANE_INDEX" = "$TEAM_MGR_PANE" ]; then
-    ROLE="manager"
-  else
-    ROLE="worker"
-  fi
+  [ "$PANE_INDEX" = "$mgr_pane" ] && ROLE="manager"
 fi
 
+# Worktree-aware team directory
+wt_dir=""
+wt_env="${RUNTIME_DIR}/team_${TEAM_WINDOW}.env"
+if [ -f "$wt_env" ]; then
+  wt_dir=$(grep '^WORKTREE_DIR=' "$wt_env" 2>/dev/null | head -1 | cut -d= -f2-)
+  wt_dir="${wt_dir%\"}" && wt_dir="${wt_dir#\"}"
+fi
+
+# Write all environment variables (single append)
 cat >> "$CLAUDE_ENV_FILE" << EOF
+export DOEY_RUNTIME="$RUNTIME_DIR"
+export SESSION_NAME="$SESSION_NAME"
+export PROJECT_DIR="$PROJECT_DIR"
+export PROJECT_NAME="$PROJECT_NAME"
 export DOEY_ROLE="$ROLE"
 export DOEY_PANE_INDEX="$PANE_INDEX"
 export DOEY_WINDOW_INDEX="$WINDOW_INDEX"
-export DOEY_TEAM_WINDOW="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
+export DOEY_TEAM_WINDOW="$TEAM_WINDOW"
+export DOEY_TEAM_DIR="${wt_dir:-$PROJECT_DIR}"
 EOF
 
-# --- Worktree-aware team directory ---
-_tw="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
-_team_env="${RUNTIME_DIR}/team_${_tw}.env"
-_wt_dir=""
-if [ -f "$_team_env" ]; then
-  _wt_dir=$(grep '^WORKTREE_DIR=' "$_team_env" 2>/dev/null | head -1 | cut -d= -f2-)
-  _wt_dir="${_wt_dir%\"}"
-  _wt_dir="${_wt_dir#\"}"
-fi
-
-cat >> "$CLAUDE_ENV_FILE" << EOF
-export DOEY_TEAM_DIR="${_wt_dir:-$PROJECT_DIR}"
-EOF
-
-# Set descriptive pane title based on role + team
-_team_w="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
+# Set descriptive pane title
 case "$ROLE" in
-  watchdog)       tmux select-pane -t "${TMUX_PANE}" -T "T${_team_w} Watchdog" ;;
-  manager)        tmux select-pane -t "${TMUX_PANE}" -T "T${_team_w} Window Manager" ;;
+  watchdog)        tmux select-pane -t "${TMUX_PANE}" -T "T${TEAM_WINDOW} Watchdog" ;;
+  manager)         tmux select-pane -t "${TMUX_PANE}" -T "T${TEAM_WINDOW} Window Manager" ;;
   session_manager) tmux select-pane -t "${TMUX_PANE}" -T "Session Manager" ;;
-  worker)         tmux select-pane -t "${TMUX_PANE}" -T "T${_team_w} W${PANE_INDEX}" ;;
+  worker)          tmux select-pane -t "${TMUX_PANE}" -T "T${TEAM_WINDOW} W${PANE_INDEX}" ;;
 esac

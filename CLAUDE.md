@@ -67,11 +67,14 @@ Dynamic grid mode: `doey` (default) launches dynamic grid; `doey add`/`doey remo
 - `.claude/hooks/on-pre-tool-use.sh` -- Tool usage safety guards
 - `.claude/hooks/on-pre-compact.sh` -- Context preservation before compaction
 - `.claude/hooks/stop-status.sh` -- Stop: sets FINISHED/RESERVED for workers, READY for Window Manager/Watchdog, research enforcement
-- `.claude/hooks/on-session-start.sh` -- SessionStart: sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX per-pane
+- `.claude/hooks/on-session-start.sh` -- SessionStart: sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX, DOEY_TEAM_WINDOW, DOEY_RUNTIME, DOEY_TEAM_DIR per-pane
 - `.claude/hooks/post-tool-lint.sh` -- PostToolUse: bash 3.2 compatibility lint on .sh files
 - `.claude/hooks/stop-results.sh` -- Stop: writes result JSON and completion events
-- `.claude/hooks/stop-notify.sh` -- Stop: Session Manager notifications
+- `.claude/hooks/stop-notify.sh` -- Stop: Session Manager macOS notifications
+- `.claude/hooks/stop-notify-manager.sh` -- Stop: Window Manager completion notifications
+- `.claude/hooks/stop-notify-session-manager.sh` -- Stop: Session Manager completion notifications
 - `.claude/hooks/watchdog-scan.sh` -- Watchdog: pane state detection, heartbeat
+- `.claude/hooks/watchdog-wait.sh` -- Watchdog: event-driven sleep (wakes on worker completion)
 - `commands/doey-reserve.md` -- Pane reservation command
 - `commands/doey-repair.md` -- Dashboard diagnostic and repair command
 - `shell/context-audit.sh` -- Context audit tool (detects contradictory patterns, identity confusion, stale references)

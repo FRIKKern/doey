@@ -9,11 +9,10 @@ init_hook
 is_session_manager || exit 0
 
 LAST_MSG=$(parse_field "last_assistant_message")
-if [ -n "$LAST_MSG" ]; then
-  if ! echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯"; then
-    NOTIFY_BODY=$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")
-    send_notification "Doey — Session Manager" "$NOTIFY_BODY"
-  fi
-fi
+[ -z "$LAST_MSG" ] && exit 0
+echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯" && exit 0
+
+NOTIFY_BODY=$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")
+send_notification "Doey — Session Manager" "$NOTIFY_BODY"
 
 exit 0

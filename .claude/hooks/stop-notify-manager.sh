@@ -18,27 +18,18 @@ tmux display-message -t "$MGR_PANE" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
 PANE_TITLE=$(tmux display-message -t "$SESSION_NAME:$WINDOW_INDEX.$PANE_INDEX" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="W${PANE_INDEX}"
 
 # Get result status from result JSON (written by stop-results.sh, which runs before us)
-STATUS="done"
 RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
+STATUS="done"
 if [ -f "$RESULT_FILE" ]; then
-  if command -v jq >/dev/null 2>&1; then
-    STATUS=$(jq -r '.status // "done"' "$RESULT_FILE" 2>/dev/null) || STATUS="done"
-  else
-    STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('status','done'))" < "$RESULT_FILE" 2>/dev/null) || STATUS="done"
-  fi
+  STATUS=$(jq -r '.status // "done"' "$RESULT_FILE" 2>/dev/null) \
+    || STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('status','done'))" < "$RESULT_FILE" 2>/dev/null) \
+    || STATUS="done"
 fi
 
 # Build notification message
-LAST_MSG=$(parse_field "last_assistant_message")
-SUMMARY=""
-if [ -n "$LAST_MSG" ]; then
-  SUMMARY=$(sanitize_message "$LAST_MSG" 100)
-fi
-
 MSG="Worker ${PANE_TITLE} finished (${STATUS})"
-if [ -n "$SUMMARY" ]; then
-  MSG="${MSG}: ${SUMMARY}"
-fi
+LAST_MSG=$(parse_field "last_assistant_message")
+[ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
 
 # Send to Window Manager
 send_to_pane "$MGR_PANE" "$MSG"

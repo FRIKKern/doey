@@ -145,8 +145,8 @@ scan_matches() {
     local lnum="${match_line%%:*}"
     local content="${match_line#*:}"
 
-    # Skip if allowlisted (single regex, no subshell)
-    if [[ "$content" =~ $ALLOWLIST_RE ]]; then
+    # Skip if allowlisted (grep -qE for bash 3.2 portable regex matching)
+    if echo "$content" | grep -qE "$ALLOWLIST_RE"; then
       continue
     fi
 

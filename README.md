@@ -87,7 +87,7 @@ No config files. No shell reload. Just `doey`.
 - **Smart orchestration** — Window Manager plans and delegates, never writes code itself
 - **Always-on monitoring** — Watchdog tracks worker state and catches crashes
 - **Context management** — `doey purge` scans for stale runtime files and audits context bloat
-- **21 slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-worktree`, and more
+- **20+ slash commands** — `/doey-dispatch`, `/doey-monitor`, `/doey-worktree`, and more
 - **Human reservation** — `/doey-reserve` locks a pane for your own use
 - **Zero config** — install, init, launch. Works with any project.
 
@@ -103,7 +103,7 @@ doey add-team --worktree
 ```
 
 **How it works:**
-- Creates a worktree at `<project-dir>/.doey-worktrees/team-N/`
+- Creates a worktree at `/tmp/doey/<project>/worktrees/team-N/`
 - On branch `doey/team-N-MMDD-HHMM`
 - All changes are isolated from the main repo until the branch is merged
 
@@ -203,7 +203,7 @@ doey/
 │   ├── doey-dispatch.md
 │   ├── doey-purge.md
 │   ├── doey-research.md
-│   └── ... (21 commands)
+│   └── ... (20+ commands)
 ├── docs/
 │   ├── context-reference.md     # Full context layer reference
 │   ├── linode-setup.md          # Linode VPS deployment guide

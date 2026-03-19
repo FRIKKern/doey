@@ -24,7 +24,7 @@ Create `$OBSERVATIONS_DIR` with `mkdir -p`. Record `T_START` (epoch seconds) —
 
 ## The Dispatch Pattern
 
-Use the `/doey-dispatch` procedure for dispatching tasks to workers. For the test driver specifically: send to Window Manager pane `$SESSION:1.0` only. Use `load-buffer`/`paste-buffer` for prompts > 100 chars, `send-keys` for short responses. Always sleep 0.5 between `paste-buffer` and `Enter`.
+Send to Window Manager pane `$SESSION:1.0` only. Use `load-buffer`/`paste-buffer` for prompts > 100 chars, `send-keys` for short responses. Always exit copy-mode first and sleep 0.5 between `paste-buffer` and `Enter`.
 
 ## State Machine
 
@@ -106,14 +106,7 @@ If journey file has a mid-journey prompt, send it to Window Manager using the di
 
 ### 6. VERIFYING
 
-Run checks against the project directory per the journey's `expectations` section. Standard suite:
-
-1. **File existence:** `ls -la "$PROJECT_DIR/index.html"`, count HTML/CSS/JS files
-2. **Content:** grep for expected keywords, nav elements, CSS links
-3. **Broken links:** extract `href="*.html"` references, verify targets exist
-4. **HTTP render:** start `python3 -m http.server 8765`, check `curl` returns 200 with non-empty body, kill server
-
-Record each check as PASS or FAIL. Optionally run visual verification (see below).
+Run checks against the project directory per the journey's `expectations` section. Typical checks: file existence, content keywords, broken links, HTTP render. Record each as PASS or FAIL. Optionally run visual verification (see below).
 
 → **REPORTING**
 
