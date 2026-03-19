@@ -3,14 +3,13 @@ name: doey-repair
 description: Diagnose and repair Doey Dashboard (window 0).
 ---
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-- Team files: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
+!`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); cat "$RD/session.env" 2>/dev/null; for f in "$RD"/team_*.env; do [ -f "$f" ] && echo "--- $(basename "$f") ---" && cat "$f" 2>/dev/null; done || true`
 
-Diagnose and repair Dashboard (window 0). Layout: 0.0=InfoPanel, 0.1=SessionMgr, 0.2-0.7=Watchdogs (one per team).
+Diagnose and repair Dashboard (window 0). Layout: 0.0=InfoPanel, 0.1=SessionMgr, 0.2-0.7=Watchdogs.
 
 ### Step 1: Build watchdog-team mapping
 
-Parse WATCHDOG_PANE from each `team_*.env` to map slot 0.X → team N. Use case statement for bash 3.2 safe assignment (no `declare -A`):
+Parse WATCHDOG_PANE from each `team_*.env` to map slot 0.X -> team N (case statement for bash 3.2):
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -24,7 +23,6 @@ for tf in "${RUNTIME_DIR}"/team_*.env; do
     05) TEAM_FOR_05="$TW" ;; 06) TEAM_FOR_06="$TW" ;; 07) TEAM_FOR_07="$TW" ;;
   esac
 done
-echo "Map: 0.2→T${TEAM_FOR_02:-?} 0.3→T${TEAM_FOR_03:-?} 0.4→T${TEAM_FOR_04:-?} 0.5→T${TEAM_FOR_05:-?} 0.6→T${TEAM_FOR_06:-?} 0.7→T${TEAM_FOR_07:-?}"
 ```
 
 ### Step 2: Diagnose
@@ -37,19 +35,19 @@ for IDX in 0 1 2 3 4 5 6 7; do
 done
 ```
 
-If any pane MISSING → report "Dashboard damaged. Run `doey reload`." and **STOP**.
+If any pane MISSING -> report "Dashboard damaged. Run `doey reload`." and **STOP**.
 
-Classify: **HEALTHY** = has child process | **IDLE** = no child | **UNUSED** = watchdog slot with no team assigned. Print diagnosis, then repair IDLE panes.
+Classify: **HEALTHY** = has child | **IDLE** = no child | **UNUSED** = watchdog slot with no team.
 
 ### Step 3: Repair IDLE panes
 
-Use team mapping from Step 1. Send commands to idle shells only:
+Send commands to idle shells only:
 
 | Pane | Command |
 |------|---------|
 | 0.0 | `tmux send-keys -t "$SESSION_NAME:0.0" "clear && info-panel.sh '${RUNTIME_DIR}'" Enter` |
 | 0.1 | `tmux send-keys -t "$SESSION_NAME:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter` |
-| 0.2-0.7 | Skip if `TEAM_FOR_0X` empty. Otherwise: `tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model opus --name \"T${TEAM_W} Watchdog\" --agent \"t${TEAM_W}-watchdog\"" Enter` — wait 12s, then brief with session/window info. |
+| 0.2-0.7 | Skip if `TEAM_FOR_0X` empty. Otherwise launch watchdog, wait 12s, brief with session/window info. |
 
 ### Step 4: Verify
 
