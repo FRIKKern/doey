@@ -1,10 +1,6 @@
 # Linode Setup Guide
 
-> Deploy Doey on a Linode VPS — start a task, detach, come back to find the work done.
-
-All steps are CLI-only (no web UI required).
-
----
+> Deploy Doey on a Linode VPS — start a task, detach, come back to find work done. CLI-only.
 
 ## Prerequisites
 
@@ -16,13 +12,11 @@ pip install linode-cli
 linode-cli configure   # requires API token from cloud.linode.com/profile/tokens
 ```
 
-You also need an **Anthropic API key** (`sk-ant-...`) or **Claude Max subscription** (OAuth, interactive auth on first run).
+Also need: **Anthropic API key** (`sk-ant-...`) or **Claude Max** (OAuth).
 
----
+## 1. Provision
 
-## Step 1 — Provision the Linode
-
-Doey is network-bound, not CPU/RAM-intensive. A Nanode ($5/mo) handles most workloads.
+Doey is network-bound — a Nanode ($5/mo) handles most workloads.
 
 | Plan | Type ID | RAM | $/mo |
 |------|---------|-----|------|
@@ -48,11 +42,7 @@ while [ "$(linode-cli linodes list --label doey-server --json | jq -r '.[0].stat
 ssh -o StrictHostKeyChecking=accept-new root@$LINODE_IP echo "Connected"
 ```
 
----
-
-## Step 2 — Configure the Server
-
-Handles: system updates, non-root user, SSH hardening, firewall, swap, dependencies.
+## 2. Configure Server
 
 ```bash
 ssh root@$LINODE_IP 'bash -s' << 'SETUP'
@@ -81,13 +71,9 @@ locale-gen en_US.UTF-8
 SETUP
 ```
 
-Verify: `ssh -o StrictHostKeyChecking=accept-new doey@$LINODE_IP echo "OK"`
+Verify: `ssh -o StrictHostKeyChecking=accept-new doey@$LINODE_IP echo "OK"` — root login is now disabled, use `doey@` from here.
 
-> Root login is now disabled. Use `doey@$LINODE_IP` for all subsequent commands.
-
----
-
-## Step 3 — Install Node.js, Claude Code, and Doey
+## 3. Install Node.js, Claude Code, Doey
 
 ```bash
 ssh doey@$LINODE_IP 'bash -s' << 'INSTALL'
@@ -106,9 +92,7 @@ doey doctor
 INSTALL
 ```
 
----
-
-## Step 4 — Set Up Authentication
+## 4. Authentication
 
 **API Key (recommended):**
 
@@ -121,9 +105,7 @@ ssh doey@$LINODE_IP "echo 'export ANTHROPIC_API_KEY=\"$ANTHROPIC_KEY\"' >> ~/.ba
 
 **Verify:** `ssh doey@$LINODE_IP 'source ~/.bashrc && claude -p "say hello" --max-turns 1'`
 
----
-
-## Step 5 — Launch Doey
+## 5. Launch
 
 ```bash
 ssh doey@$LINODE_IP 'bash -s' << 'LAUNCH'
@@ -133,14 +115,10 @@ cd YOUR_PROJECT && doey init && doey
 LAUNCH
 ```
 
-- **Attach/reattach:** `ssh -t doey@$LINODE_IP "cd ~/YOUR_PROJECT && doey"`
-- **Detach:** `Ctrl+B`, then `D` — the team keeps running
+- **Reattach:** `ssh -t doey@$LINODE_IP "cd ~/YOUR_PROJECT && doey"`
+- **Detach:** `Ctrl+B, D` — team keeps running
 
----
-
-## Step 6 — Persistent Sessions (systemd)
-
-Auto-start on boot, restart on failure:
+## 6. Persistent Sessions (systemd)
 
 ```bash
 ssh doey@$LINODE_IP 'bash -s' << 'SYSTEMD'
@@ -177,11 +155,9 @@ systemctl --user start doey
 SYSTEMD
 ```
 
----
-
 ## Full Automation Script
 
-Single script that runs steps 1-5. Usage: `ANTHROPIC_KEY="sk-ant-..." ./doey-linode-setup.sh`
+Runs steps 1–5. Usage: `ANTHROPIC_KEY="sk-ant-..." ./doey-linode-setup.sh`
 
 ```bash
 #!/usr/bin/env bash
@@ -234,8 +210,6 @@ echo "Done! IP: $LINODE_IP"
 echo "Launch: ssh -t doey@$LINODE_IP 'cd ~/your-project && doey'"
 ```
 
----
-
 ## Monitoring & Maintenance
 
 ```bash
@@ -246,8 +220,6 @@ ssh doey@$LINODE_IP "source ~/.bashrc && npm update -g @anthropic-ai/claude-code
 ssh doey@$LINODE_IP "sudo apt update && sudo apt upgrade -y"                # System updates
 ssh doey@$LINODE_IP "source ~/.bashrc && doey purge"                        # Clean runtime
 ```
-
----
 
 ## Managing the Linode
 
@@ -260,11 +232,9 @@ linode-cli linodes backups-enable "$ID"          # Enable backups ($2/mo)
 linode-cli linodes delete "$ID"                  # Delete (irreversible!)
 ```
 
----
-
 ## Exposing Services
 
-When workers build web apps/APIs, access remote ports from your browser:
+Access remote ports from your browser:
 
 | Approach | Domain? | Public? | Best for |
 |----------|---------|---------|----------|
@@ -273,7 +243,7 @@ When workers build web apps/APIs, access remote ports from your browser:
 | Tailscale | No | Optional | Teams, private access |
 | ttyd | Optional | Optional | Browser terminal |
 
-### SSH Tunnel (quickest)
+### SSH Tunnel
 
 ```bash
 ssh -L 3000:localhost:3000 doey@$LINODE_IP                              # Single port
@@ -282,9 +252,7 @@ ssh -fNL 3000:localhost:3000 doey@$LINODE_IP                            # Backgr
 autossh -M 0 -fNL 3000:localhost:3000 doey@$LINODE_IP                  # Auto-reconnect
 ```
 
-Then open `http://localhost:3000` locally.
-
-### Caddy Reverse Proxy (production HTTPS)
+### Caddy (HTTPS)
 
 Point your domain's A record to `$LINODE_IP`, then:
 
@@ -307,33 +275,28 @@ CADDY
 ssh doey@$LINODE_IP 'sudo ufw allow 80 && sudo ufw allow 443'
 ```
 
-### Tailscale (private mesh VPN)
+### Tailscale
 
 ```bash
 ssh doey@$LINODE_IP "curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up"
-# Install locally too: brew install tailscale && tailscale up
-# Access via Tailscale IP: http://100.x.y.z:3000
-# Public access: ssh doey@$LINODE_IP "sudo tailscale funnel 3000"
+# Local: brew install tailscale && tailscale up
+# Access: http://100.x.y.z:3000
+# Public: ssh doey@$LINODE_IP "sudo tailscale funnel 3000"
 ```
 
 ### Web Terminal (ttyd)
 
 ```bash
 ssh doey@$LINODE_IP "sudo apt install -y ttyd && sudo ttyd --port 7681 --credential doey:CHANGE_PASSWORD --writable tmux attach"
-# Access via SSH tunnel: ssh -L 7681:localhost:7681 doey@$LINODE_IP → http://localhost:7681
-# Or put behind Caddy for HTTPS
+# Via SSH tunnel: ssh -L 7681:localhost:7681 doey@$LINODE_IP → http://localhost:7681
 ```
 
----
-
-## Security Notes
+## Security
 
 - API keys in `~/.bashrc` — for production, use a secrets manager or `chmod 600` env file
-- Firewall allows only SSH (22) and mosh (60000-61000/udp)
-- Root login and password auth disabled — SSH keys only
+- Firewall: SSH (22) + mosh (60000–61000/udp) only
+- Root login and password auth disabled
 - Never commit API keys to git
-
----
 
 ## Troubleshooting
 
@@ -350,18 +313,12 @@ ssh doey@$LINODE_IP "sudo apt install -y ttyd && sudo ttyd --port 7681 --credent
 | Out of memory | Verify swap: `free -h`. Consider upgrading to 2 GB plan |
 | Disk full | `doey purge` + `du -sh /tmp/doey/ ~/` |
 | SSH disconnects | Use mosh: `mosh doey@$LINODE_IP` |
-| systemd service fails | `journalctl --user -u doey -f` for logs |
+| systemd service fails | `journalctl --user -u doey -f` |
 | Locale/UTF-8 errors | `sudo locale-gen en_US.UTF-8` |
 
----
+## Golden Image (Rapid Cloning)
 
-## Rapid Cloning — Golden Image
-
-Snapshot a configured server, then spin up new instances in minutes.
-
-### Create the Image
-
-Clean the server first (remove keys, projects, history), then snapshot:
+### Create Image
 
 ```bash
 # Clean for snapshotting
@@ -403,8 +360,6 @@ ssh -t doey@"$NEW_IP" "source ~/.bashrc && cd ~ && git clone YOUR_REPO && cd YOU
 linode-cli linodes list --json | jq -r '.[] | select(.label | startswith("doey-fleet")) | .id' \
   | while read id; do linode-cli linodes delete "$id"; done
 ```
-
----
 
 ## Quick Reference
 
