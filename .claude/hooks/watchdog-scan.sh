@@ -4,10 +4,9 @@
 
 set -euo pipefail
 
-is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
-
-NL='
-'
+# shellcheck source=common.sh
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${HOOK_DIR}/common.sh"
 
 # Parse ps cputime (M:SS.cc or H:MM:SS) into whole seconds
 _parse_cpu_seconds() {
@@ -49,8 +48,6 @@ _update_duration() {
     printf -v "PANE_DURATION_${idx}" '%s' "$(($SCAN_TIME - $since))"
   fi
 }
-
-_atomic_write() { echo "$2" > "$1.tmp" && mv "$1.tmp" "$1"; }
 
 _format_duration() {
   local h=$(($1 / 3600)) m=$((($1 % 3600) / 60)) s=$(($1 % 60))
