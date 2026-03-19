@@ -10,6 +10,8 @@ Dispatch a research task with guaranteed report-back.
 
 ### Preamble
 
+Every bash block starts with:
+
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
@@ -18,7 +20,7 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-Exit copy-mode before `paste-buffer`/`send-keys`: `tmux copy-mode -q -t "$PANE" 2>/dev/null`
+Always exit copy-mode before `paste-buffer`/`send-keys`: `tmux copy-mode -q -t "$PANE" 2>/dev/null`
 
 ### Step 1: Pick idle, unreserved worker
 
@@ -30,11 +32,12 @@ tmux copy-mode -q -t "${SESSION_NAME}:${WINDOW_INDEX}.X" 2>/dev/null
 tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 ```
 
-### Step 2: Task marker + clear old report
+### Step 2: Create task marker + clear old report
 
 ```bash
 # (preamble)
-PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
+PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports"
 cat > "${RUNTIME_DIR}/research/${PANE_SAFE}.task" << 'MARKER'
 <research question or goal>
@@ -50,7 +53,8 @@ Same as `/doey-dispatch` readiness sequence. Rename: `/rename research-topic_$(d
 
 ```bash
 # (preamble)
-PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
+PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
@@ -79,16 +83,15 @@ Stop hook blocks until report exists.
 TASK
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 tmux load-buffer "$TASKFILE" && tmux paste-buffer -t "$PANE"
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
-if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then SETTLE_S=2
-elif [ "$TASK_LINES" -gt 100 ] 2>/dev/null; then SETTLE_S=1.5
-else SETTLE_S=0.5; fi
-sleep $SETTLE_S && tmux send-keys -t "$PANE" Enter
+TASK_LINES=$(wc -l < "$TASKFILE" | tr -d ' ')
+if [ "$TASK_LINES" -gt 200 ]; then sleep 2
+elif [ "$TASK_LINES" -gt 100 ]; then sleep 1.5
+else sleep 0.5; fi
+tmux send-keys -t "$PANE" Enter
 rm "$TASKFILE"
 ```
 
-### Step 5: Verify + Read Reports
+### Step 5: Verify + read reports
 
 Verify: same as `/doey-dispatch` step 15. Sleep 5s, grep for tool activity. Idle → retry Enter+3s → unstick per `/doey-dispatch`.
 
@@ -102,6 +105,6 @@ Present summary, ask which option, dispatch via `/doey-dispatch`.
 
 ### Rules
 
-1. **Task marker BEFORE dispatch** | **Clear old report first** — Stop hook needs marker; stale reports cause false bypass
-2. **PANE_SAFE:** replace `:` and `.` with `_` | **Include report path in prompt**
-3. **Verify after dispatch and after worker finishes**
+1. **Task marker BEFORE dispatch** — stop hook needs it. **Clear old report first** — prevents false bypass.
+2. **PANE_SAFE:** replace `:` and `.` with `_`. **Include report path in prompt.**
+3. **Verify after dispatch and after worker finishes.**

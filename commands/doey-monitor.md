@@ -10,7 +10,7 @@ Monitor Claude Code worker instances in tmux.
 
 ### Preamble
 
-Every Bash call must start with:
+Every bash block starts with:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -32,9 +32,10 @@ for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
   PANE_SAFE=$(echo "${PANE_ID}" | tr ':.' '_')
   SF="${STATUS_DIR}/${PANE_SAFE}.status"
   [ -f "$SF" ] && STATUS=$(grep '^STATUS: ' "$SF" | head -1 | cut -d' ' -f2-) || STATUS="UNKNOWN"
+  # Enrich FINISHED with result status
   RF="${RUNTIME_DIR}/results/pane_${WINDOW_INDEX}_${i}.json"
   if [ "$STATUS" = "FINISHED" ] && [ -f "$RF" ]; then
-    RS=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$RF" | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"//')
+    RS=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$RF" | head -1 | sed 's/.*"//;s/"//')
     [ -n "$RS" ] && STATUS="FINISHED (${RS})"
   fi
   [ -f "${STATUS_DIR}/${PANE_SAFE}.reserved" ] && RESERVED="RESERVED" && STATUS="RESERVED" || RESERVED="-"
@@ -64,8 +65,8 @@ $CRASH_FOUND || echo "No crash alerts."
 HB_FILE="${RUNTIME_DIR}/status/watchdog_W${WINDOW_INDEX}.heartbeat"
 if [ -f "$HB_FILE" ]; then
   HB_AGO=$(( NOW - $(cat "$HB_FILE") ))
-  [ "$HB_AGO" -gt 120 ] && echo "Watchdog heartbeat stale: ${HB_AGO}s ago" || echo "Watchdog heartbeat: ${HB_AGO}s ago (healthy)"
-else echo "No Watchdog heartbeat file found"; fi
+  [ "$HB_AGO" -gt 120 ] && echo "Watchdog stale: ${HB_AGO}s" || echo "Watchdog healthy: ${HB_AGO}s ago"
+else echo "No watchdog heartbeat file"; fi
 ```
 
 ### Deep Inspect (replace X with pane index)
