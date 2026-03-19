@@ -1,30 +1,18 @@
 # Skill: doey-reinstall
 
-Reinstall the Doey system from the source repo.
+Reinstall Doey from source repo.
 
 ## Usage
 `/doey-reinstall`
 
 ## Prompt
-Reinstall Doey by pulling latest changes and re-running the installer.
 
-### Steps
+```bash
+REPO_DIR=$(cat ~/.claude/doey/repo-path 2>/dev/null)
+if [ -z "$REPO_DIR" ]; then echo "ERROR: Run ./install.sh from repo first"; exit 1; fi
+cd "$REPO_DIR" && git pull; bash "$REPO_DIR/install.sh"
+```
 
-1. **Find repo:**
-   ```bash
-   REPO_DIR=$(cat ~/.claude/doey/repo-path 2>/dev/null)
-   ```
-   If missing: tell user to run `./install.sh` from repo first. Stop.
+If git pull fails (uncommitted changes), warn but continue with install.
 
-2. **Pull latest:**
-   ```bash
-   cd "$REPO_DIR" && git pull
-   ```
-   If git pull fails (uncommitted changes), warn but continue.
-
-3. **Run installer:**
-   ```bash
-   bash "$REPO_DIR/install.sh"
-   ```
-
-4. **Report:** "Reinstall complete. New sessions use updated files. Running sessions need: `doey stop && doey`"
+Report: "Reinstall complete. Running sessions need: `doey stop && doey`"
