@@ -1215,7 +1215,6 @@ launch_session() {
   step_start 1 "Creating session for ${name}..."
   _cleanup_old_session "$session" "$runtime_dir"
 
-  # Write session manifest — readable by Window Manager, Watchdog, and all skills/commands
   cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
 PROJECT_NAME="$name"
@@ -1234,19 +1233,14 @@ SM_PANE="0.1"
 WDG_SLOT_1="0.2"
 MANIFEST
 
-  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
   write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0" "" ""
-
-  # Generate shared worker system prompt
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
 
   tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
-  # Dashboard window (window 0) — info panel + watchdog slots + session manager
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
 
-  # Team grid window (window 1)
   local team_window=1
   tmux new-window -t "$session" -c "$dir"
 
@@ -1272,13 +1266,10 @@ MANIFEST
 
   sleep 2
 
-  # Verify pane count
   local actual
   actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
-  if [[ "$actual" -ne "$total" ]]; then
-    printf "\n"
-    printf "   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
-  fi
+  [[ "$actual" -eq "$total" ]] || \
+    printf "\n   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
 
   step_done
 
@@ -1316,42 +1307,21 @@ MANIFEST
   printf '\n'
 
   local booted=0
-  local bar_width=30
   for (( i=1; i<total; i++ )); do
     booted=$((booted + 1))
-
-    local filled=$(( booted * bar_width / worker_count ))
-    local empty=$(( bar_width - filled ))
-    local bar=""
-    for (( b=0; b<filled; b++ )); do bar+="█"; done
-    for (( b=0; b<empty; b++ )); do bar+="░"; done
-    printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BRAND}${bar}${RESET}  ${BOLD}${booted}${RESET}${DIM}/${worker_count}${RESET}  "
-
+    printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${booted}${RESET}${DIM}/${worker_count}${RESET}  "
     _boot_worker "$session" "$runtime_dir" "$team_window" "$i" "$booted" "$booted"
   done
   printf "${SUCCESS}done${RESET}\n"
 
-  # ── Final summary ──────────────────────────────────────────────
   printf '\n'
-  printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}                           ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel + Session Manager  ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Win Manager${RESET} ${DIM}${team_window}.0${RESET}   Online                      ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Watchdog${RESET}   ${DIM}${WDG_SLOT_1}${RESET}   Online (Dashboard)              ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}%-4s${RESET}  Booting...                   ${DIM}│${RESET}\n" "$worker_count"
-  printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"
-  printf "   ${DIM}│${RESET}  ${DIM}Grid${RESET}      ${BOLD}%-5s${RESET}  ${DIM}Directory${RESET}  ${BOLD}%-18s${RESET} ${DIM}│${RESET}\n" "$grid" "$short_dir"
-  printf "   ${DIM}│${RESET}  ${DIM}Session${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$session"
-  printf "   ${DIM}│${RESET}  ${DIM}Manifest${RESET}  ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "${runtime_dir}/session.env"
-  printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${DIM}Tip: Workers will be ready in ~15s${RESET}              ${DIM}│${RESET}\n"
-  printf "   ${DIM}└─────────────────────────────────────────────────┘${RESET}\n"
+  printf "   ${SUCCESS}Doey is ready${RESET}\n"
+  printf "   ${DIM}Project${RESET} ${BOLD}%s${RESET}  ${DIM}Grid${RESET} ${BOLD}%s${RESET}  ${DIM}Workers${RESET} ${BOLD}%s${RESET}\n" "$name" "$grid" "$worker_count"
+  printf "   ${DIM}Session${RESET} ${BOLD}%s${RESET}  ${DIM}Dir${RESET} ${BOLD}%s${RESET}\n" "$session" "$short_dir"
+  printf "   ${DIM}Manager${RESET} ${team_window}.0  ${DIM}Watchdog${RESET} ${WDG_SLOT_1}  ${DIM}Dashboard${RESET} win 0\n"
+  printf "   ${DIM}Tip: Workers ready in ~15s${RESET}\n"
   printf '\n'
 
-  # ── Focus on Dashboard window, attach ──────────────────────────────
-  # Clear the trap — background briefing jobs should complete normally after attach
   trap - EXIT INT TERM
   tmux select-window -t "$session:0"
   attach_or_switch "$session"
@@ -1360,12 +1330,14 @@ MANIFEST
 # ── Shared helpers (used by update, reload, etc.) ─────────────────────
 _print_doey_banner() {
   printf "${BRAND}"
-  printf '   ██████╗  ██████╗ ███████╗██╗   ██╗\n'
-  printf '   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝\n'
-  printf '   ██║  ██║██║   ██║█████╗   ╚████╔╝ \n'
-  printf '   ██║  ██║██║   ██║██╔══╝    ╚██╔╝  \n'
-  printf '   ██████╔╝╚██████╔╝███████╗   ██║   \n'
-  printf '   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝   \n'
+  cat << 'BANNER'
+   ██████╗  ██████╗ ███████╗██╗   ██╗
+   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
+   ██║  ██║██║   ██║█████╗   ╚████╔╝
+   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
+   ██████╔╝╚██████╔╝███████╗   ██║
+   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
+BANNER
   printf "${RESET}"
 }
 
@@ -1788,57 +1760,34 @@ remove_project() {
     return 1
   fi
 
-  # Validate name format (only allow sanitized project names)
-  if [[ ! "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-    printf "  ${ERROR}Invalid project name: %s${RESET}\n" "$name"
-    return 1
-  fi
+  [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { printf "  ${ERROR}Invalid project name: %s${RESET}\n" "$name"; return 1; }
+  grep -q "^${name}:" "$PROJECTS_FILE" 2>/dev/null || { printf "  ${ERROR}No project '%s' in registry${RESET}\n" "$name"; return 1; }
 
-  # Check if project exists in registry
-  if ! grep -q "^${name}:" "$PROJECTS_FILE" 2>/dev/null; then
-    printf "  ${ERROR}No project named '%s' in registry${RESET}\n" "$name"
-    return 1
-  fi
-
-  # Remove matching line
   grep -v "^${name}:" "$PROJECTS_FILE" > "${PROJECTS_FILE}.tmp" && mv "${PROJECTS_FILE}.tmp" "$PROJECTS_FILE"
-  printf "  ${SUCCESS}Removed '%s' from project registry${RESET}\n" "$name"
-
-  # Hint about running session
-  if session_exists "doey-${name}"; then
-    printf "  ${WARN}Session doey-%s is still running. Use 'doey stop' in that directory to stop it.${RESET}\n" "$name"
-  fi
+  printf "  ${SUCCESS}Removed '%s' from registry${RESET}\n" "$name"
+  session_exists "doey-${name}" && \
+    printf "  ${WARN}Session doey-%s still running — use 'doey stop' to stop it${RESET}\n" "$name"
 }
 
 # ── Version — show installation info ─────────────────────────────────
 show_version() {
-  printf '\n'
-  printf "  ${BRAND}Doey${RESET}\n"
-  printf '\n'
+  printf '\n  %bDoey%b\n\n' "$BRAND" "$RESET"
 
   local version_file="$HOME/.claude/doey/version"
   local repo_dir=""
 
   if [[ -f "$version_file" ]]; then
-    local ver installed_date
-    ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
-    installed_date="$(grep "^date=" "$version_file" | cut -d= -f2)"
-    repo_dir="$(grep "^repo=" "$version_file" | cut -d= -f2)"
-    printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(installed %s)${RESET}\n" "$ver" "$installed_date"
+    repo_dir="$(_env_val "$version_file" repo)"
+    printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(installed %s)${RESET}\n" \
+      "$(_env_val "$version_file" version)" "$(_env_val "$version_file" date)"
   else
-    # Fallback to git if no version file (pre-version-tracking install)
-    local repo_path_file="$HOME/.claude/doey/repo-path"
-    if [[ -f "$repo_path_file" ]]; then
-      repo_dir="$(cat "$repo_path_file")"
-      if [[ -d "$repo_dir" ]]; then
-        local version_info
-        version_info="$(git -C "$repo_dir" log -1 --format="%h (%ci)" 2>/dev/null || echo 'unknown')"
-        printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(no version file — reinstall to track)${RESET}\n" "$version_info"
-      fi
+    repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
+    if [[ -d "${repo_dir:-}" ]]; then
+      printf "  ${DIM}Version${RESET}    ${BOLD}%s${RESET}  ${DIM}(no version file — reinstall to track)${RESET}\n" \
+        "$(git -C "$repo_dir" log -1 --format="%h (%ci)" 2>/dev/null || echo 'unknown')"
     fi
   fi
 
-  # Check against remote for up-to-date status
   if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
     printf "  ${DIM}Status${RESET}     "
     if ! git -C "$repo_dir" fetch origin main --quiet 2>/dev/null; then
@@ -1870,57 +1819,50 @@ show_version() {
 # ── Auto-update check ─────────────────────────────────────────────
 check_for_updates() {
   local state_dir="$HOME/.claude/doey"
-  local last_check_file="$state_dir/last-update-check"
   local cache_file="$state_dir/last-update-check.available"
-  local repo_path_file="$state_dir/repo-path"
-  local check_interval=86400  # 24 hours
 
-  # Skip if no repo registered
-  [[ ! -f "$repo_path_file" ]] && return 0
+  [[ -f "$state_dir/repo-path" ]] || return 0
   local repo_dir
-  repo_dir="$(cat "$repo_path_file")"
-  [[ ! -d "$repo_dir/.git" ]] && return 0
+  repo_dir="$(cat "$state_dir/repo-path")"
+  [[ -d "$repo_dir/.git" ]] || return 0
 
   local now
   now=$(date +%s)
 
-  # Show cached result if available
+  # Show cached result
   if [[ -f "$cache_file" ]]; then
     local behind
     behind=$(cat "$cache_file")
-    if [[ "$behind" -gt 0 ]] 2>/dev/null; then
+    [[ "$behind" -gt 0 ]] 2>/dev/null && \
       printf "  ${WARN}⚠ Update available${RESET} ${DIM}(%s commit(s) behind — run: doey update)${RESET}\n" "$behind"
-    fi
   fi
 
-  # Skip fetch if checked recently
+  # Skip if checked within 24h
+  local last_check_file="$state_dir/last-update-check"
   if [[ -f "$last_check_file" ]]; then
     local last_ts
     last_ts=$(cat "$last_check_file")
-    (( now - last_ts < check_interval )) && return 0
+    (( now - last_ts < 86400 )) && return 0
   fi
 
-  # Background fetch + cache result (non-blocking)
+  # Background fetch (non-blocking)
   (
     echo "$now" > "$last_check_file"
     if git -C "$repo_dir" fetch origin main --quiet 2>/dev/null; then
-      local behind_count
-      behind_count=$(git -C "$repo_dir" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
-      echo "$behind_count" > "$cache_file"
+      git -C "$repo_dir" rev-list --count HEAD..origin/main 2>/dev/null > "$cache_file" || echo 0 > "$cache_file"
     fi
   ) &
   disown 2>/dev/null
 }
 
-# Shared session bootstrap: cleanup, worker prompt, tmux session, dashboard, team window
+# Shared session bootstrap: cleanup, worker prompt, tmux session, team window
+# NOTE: Does NOT call setup_dashboard — caller must write session.env first, then call setup_dashboard
 _init_doey_session() {
-  local session="$1" runtime_dir="$2" dir="$3" name="$4" initial_teams="${5:-1}"
+  local session="$1" runtime_dir="$2" dir="$3" name="$4"
   _cleanup_old_session "$session" "$runtime_dir"
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
   tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
-  setup_dashboard "$session" "$dir" "$runtime_dir" "$initial_teams"
-  tmux new-window -t "$session" -c "$dir"
 }
 
 launch_session_headless() {
@@ -1934,7 +1876,7 @@ launch_session_headless() {
   install_doey_hooks "$dir" "  "
 
   printf "  ${DIM}Creating session ${session}...${RESET}\n"
-  _init_doey_session "$session" "$runtime_dir" "$dir" "$name" 1
+  _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
 
   local worker_panes_csv
   worker_panes_csv="$(_build_worker_csv "$total")"
@@ -1958,6 +1900,10 @@ WDG_SLOT_1="0.2"
 MANIFEST
 
   write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0" "" ""
+
+  # Dashboard launches after session.env exists (info-panel + Session Manager need it)
+  setup_dashboard "$session" "$dir" "$runtime_dir" 1
+  tmux new-window -t "$session" -c "$dir"
 
   printf "  ${DIM}Applying theme...${RESET}\n"
   local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
@@ -2031,7 +1977,7 @@ launch_session_dynamic() {
 
   STEP_TOTAL=7
   step_start 1 "Creating session for ${name}..."
-  _init_doey_session "$session" "$runtime_dir" "$dir" "$name" "$INITIAL_TEAMS"
+  _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
 
   step_done
 
@@ -2041,9 +1987,6 @@ launch_session_dynamic() {
   step_done
 
   step_start 3 "Setting up grid..."
-
-  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
-  tmux rename-window -t "$session:${team_window}" "Local Team"
 
   cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
@@ -2069,6 +2012,12 @@ MANIFEST
     echo "WDG_SLOT_${_si}=\"0.$((_si + 1))\"" >> "${runtime_dir}/session.env"
   done
   write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
+
+  # Dashboard launches after session.env exists (info-panel + Session Manager need it)
+  setup_dashboard "$session" "$dir" "$runtime_dir" "$INITIAL_TEAMS"
+  tmux new-window -t "$session" -c "$dir"
+  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
+  tmux rename-window -t "$session:${team_window}" "Local Team"
 
   step_done
 

@@ -4,8 +4,10 @@ set -euo pipefail
 
 INPUT=$(cat)
 
+_HAS_JQ=false; command -v jq >/dev/null 2>&1 && _HAS_JQ=true
+
 _parse() {
-  if command -v jq >/dev/null 2>&1; then
+  if "$_HAS_JQ"; then
     echo "$INPUT" | jq -r ".$1 // empty" 2>/dev/null || echo ""
   else
     echo "$INPUT" | grep -o "\"${1##*.}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed "s/.*\"${1##*.}\"[[:space:]]*:[[:space:]]*\"//;s/\"$//" 2>/dev/null || echo ""

@@ -36,10 +36,16 @@ parse_field() {
 load_team_env() {
   local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   [ -f "$team_file" ] || return 1
-  _TEAM_WD_PANE=$(_read_team_key "$team_file" WATCHDOG_PANE)
-  _TEAM_MGR_PANE=$(_read_team_key "$team_file" MANAGER_PANE)
-  _TEAM_WORKER_PANES=$(_read_team_key "$team_file" WORKER_PANES)
-  _TEAM_WORKER_COUNT=$(_read_team_key "$team_file" WORKER_COUNT)
+  _TEAM_WD_PANE="" _TEAM_MGR_PANE="" _TEAM_WORKER_PANES="" _TEAM_WORKER_COUNT=""
+  while IFS='=' read -r key value; do
+    value="${value%\"}" && value="${value#\"}"
+    case "$key" in
+      WATCHDOG_PANE)  _TEAM_WD_PANE="$value" ;;
+      MANAGER_PANE)   _TEAM_MGR_PANE="$value" ;;
+      WORKER_PANES)   _TEAM_WORKER_PANES="$value" ;;
+      WORKER_COUNT)   _TEAM_WORKER_COUNT="$value" ;;
+    esac
+  done < "$team_file"
 }
 
 _read_team_key() {
