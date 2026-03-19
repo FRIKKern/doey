@@ -55,9 +55,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
 | `stop-status.sh` | Stop | FINISHED/RESERVED/READY; blocks research without reports |
 | `stop-results.sh` | Stop | Result JSON and completion events |
-| `stop-notify.sh` | Stop | Session Manager notifications |
-| `stop-notify-manager.sh` | Stop | Notifies Manager on worker finish |
-| `stop-notify-session-manager.sh` | Stop | Notifies Session Mgr on Manager finish |
+| `stop-notify.sh` | Stop | Role-based stop notifications (worker->mgr, mgr->session-mgr, session-mgr->desktop) |
 | `session-manager-wait.sh` | — | Session Manager sleep/wake between cycles (trigger, message, result, crash) |
 | `watchdog-scan.sh` | — | Pane scanning (called directly, not registered) |
 | `watchdog-wait.sh` | — | Event-driven sleep between scans |
