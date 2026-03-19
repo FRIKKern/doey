@@ -19,7 +19,7 @@ TEAM_ENV="${RUNTIME_DIR}/team_${DOEY_TEAM_WINDOW}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `WORKER_COUNT`, `WORKER_PANES`. Hooks set `DOEY_TEAM_WINDOW`, `DOEY_WINDOW_INDEX`. **Use `SESSION_NAME` for tmux, `PROJECT_DIR` for file paths.**
+Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `WORKER_COUNT`, `WORKER_PANES`. Hooks inject all `DOEY_*` env vars (ROLE, PANE_INDEX, WINDOW_INDEX, TEAM_WINDOW, TEAM_DIR, RUNTIME). **Use `SESSION_NAME` for tmux, `PROJECT_DIR` for file paths.**
 
 ## Sending Tasks
 
@@ -34,7 +34,7 @@ PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 # Short (< ~200 chars):
 tmux send-keys -t "$PANE" "Your task here" Enter
-# Long — load-buffer:
+# Long — use load-buffer:
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task description here.
@@ -43,7 +43,7 @@ tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
 sleep 0.5; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
 ```
 
-Never `send-keys "" Enter` — empty string swallows Enter. **Verify:** Wait 5s, `tmux capture-pane -t "$PANE" -p -S -5`. If not started: exit copy-mode, re-send Enter. **Stuck worker:** `C-c` → `sleep 0.5` → `C-u` → `sleep 0.5` → `Enter`. Wait for `❯` before re-dispatching.
+Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$PANE" -p -S -5`. Not started → exit copy-mode, re-send Enter. **Stuck:** `C-c` → `C-u` → `Enter` (0.5s between each). Wait for `❯` before re-dispatching.
 
 ## Monitoring
 

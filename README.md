@@ -60,6 +60,7 @@ Tell the Window Manager your task — it plans, Workers execute in parallel, Wat
 | `doey update` | Pull latest and reinstall |
 | `doey test` | Run test suite |
 | `doey 4x3` | Static grid layout |
+| `doey dynamic` | Dynamic grid (add workers on demand) |
 | `doey uninstall` | Remove doey completely |
 
 ## Architecture
@@ -82,7 +83,7 @@ See [Context Reference](docs/context-reference.md) for details.
 **Tasks:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
 **Monitor:** `/doey-monitor`, `/doey-team`, `/doey-status`, `/doey-watchdog-compact`
 **Infra:** `/doey-add-window`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
-**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`
+**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-simplify-everything`
 **Session:** `/doey-kill-session`, `/doey-kill-all-sessions`
 
 </details>

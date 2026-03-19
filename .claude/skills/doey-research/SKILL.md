@@ -8,9 +8,9 @@ description: Dispatch a research task to a worker. Stop hook blocks until report
 
 ## Context
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
-- Team environment: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-).env 2>/dev/null`
-- Worker status: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status/*.status; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done 2>/dev/null`
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- Team environment: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-).env 2>/dev/null || true`
+- Worker status: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status/*.status; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done 2>/dev/null || true`
 
 ## Prompt
 
@@ -46,7 +46,7 @@ rm -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 
 ### Step 3: Ensure worker ready
 
-Same as `/doey-dispatch` readiness sequence. Rename: `/rename research-topic_$(date +%m%d)`.
+Same as `/doey-dispatch` Pre-flight + Dispatch Sequence steps 1-2 (check idle, kill+restart if needed). Rename: `/rename research-topic_$(date +%m%d)`.
 
 ### Step 4: Dispatch task prompt
 
@@ -87,7 +87,7 @@ rm "$TASKFILE"
 
 ### Step 5: Verify + read reports
 
-Verify: same as `/doey-dispatch` step 15. Sleep 5s, grep for tool activity. Idle -> retry Enter+3s -> unstick per `/doey-dispatch`.
+Verify: same as `/doey-dispatch` step 6. Sleep 5s, grep for tool activity. Idle -> retry Enter+3s -> unstick per `/doey-dispatch`.
 
 After worker finishes:
 ```bash

@@ -6,16 +6,16 @@ description: Delegate a task to an idle Claude instance (no kill/restart).
 ## Context
 
 Session config:
-!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
+!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
 Team environment:
-!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-).env 2>/dev/null`
+!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-).env 2>/dev/null || true`
 
 All panes:
-!`tmux list-panes -s -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}' 2>/dev/null`
+!`tmux list-panes -s -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}' 2>/dev/null|| true`
 
 My pane:
-!`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'`
+!`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
 
 ## Prompt
 
@@ -40,11 +40,11 @@ echo "$OUTPUT" | grep -q '❯' && echo "Idle — OK" || echo "May be busy"
 
 ### Step 4: Send task
 
-Follow `/doey-dispatch` **Reliable Dispatch Sequence** (steps 8-15) using `TARGET_PANE` as `$PANE`. Skips steps 1-7 since worker is already idle.
+Follow `/doey-dispatch` **Dispatch Sequence** steps 3-6 using `TARGET_PANE` as `$PANE`. Skip steps 1-2 (readiness check / kill+restart) since worker is already idle.
 
 ### Rules
 1. **Never `send-keys "" Enter`** — empty string swallows Enter
 2. **Always tmpfile/load-buffer** for task text
 3. **Sleep between paste-buffer and send-keys Enter** (auto-scales by line count)
-4. **Verify after dispatch** (per /doey-dispatch step 15)
+4. **Verify after dispatch** (per /doey-dispatch step 6)
 5. **Never delegate to your own pane**

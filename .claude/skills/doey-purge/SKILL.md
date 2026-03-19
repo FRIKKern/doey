@@ -5,9 +5,9 @@ description: Two-wave purge — audit every project file for context rot and cod
 
 ## Context
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
-- Window index: !`tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-`
-- Team environment: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-).env 2>/dev/null`
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- Window index: !`tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-|| true`
+- Team environment: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-).env 2>/dev/null || true`
 
 ## Usage
 
@@ -68,7 +68,7 @@ Dispatch via `/doey-dispatch`. **All workers: Do NOT use the Agent tool.** Each 
 
 - **A — Agents + CLAUDE.md:** Env var accuracy, hook redundancy, stale refs
 - **B — Hooks + Shell + Settings:** Bash 3.2 violations (HIGH), race conditions, exit codes, dead code
-- **C — Commands:** Dead refs, overlap, repeated boilerplate, bash 3.2 in code blocks
+- **C — Skills:** Dead refs, overlap, repeated boilerplate, bash 3.2 in code blocks
 - **D — Docs + README + Memory:** Context-reference claims, command table accuracy, stale memory
 
 **Report format:**
@@ -104,7 +104,7 @@ Read all `${RUNTIME_DIR}/reports/purge_*.md`. Present consolidated summary (file
 
 #### Wave 2: Fix (4 parallel workers)
 
-Assign by file ownership (avoid edit conflicts): A=agents+CLAUDE.md, B=hooks+shell, C=commands, D=docs+README+memory.
+Assign by file ownership (avoid edit conflicts): A=agents+CLAUDE.md, B=hooks+shell, C=skills, D=docs+README+memory.
 
 All fix workers: `Edit` not `Write`. Read before editing. Condense aggressively — **fewer words, not lost information**. `.sh` files: `bash -n` after every edit. Bash 3.2 compatible.
 

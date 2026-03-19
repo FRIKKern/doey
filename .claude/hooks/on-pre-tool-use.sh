@@ -57,12 +57,19 @@ if is_watchdog; then
             exit 2 ;;
         esac
       fi
-      # Allow: /login, /compact, bare Enter, copy-mode. Block everything else.
       CLEAN_CMD=$(echo "$TOOL_COMMAND" | sed 's/[[:space:]]*2>\/dev\/null[[:space:]]*$//')
+      # Always allow: copy-mode (read-only)
+      echo "$CLEAN_CMD" | grep -qE '^[[:space:]]*tmux copy-mode[[:space:]]' && exit 0
+      # Allow: send-keys / paste-buffer to own Manager pane (W.0)
+      if [ -n "$TEAM_WINDOW" ]; then
+        case "$TOOL_COMMAND" in
+          *":${TEAM_WINDOW}.0"*) exit 0 ;;
+        esac
+      fi
+      # Allow: /login, /compact, bare Enter to any pane (worker recovery)
       _TP='(\"[^\"]*\"|[^[:space:]]+)'
       echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+\"?(/login|/compact)\"?[[:space:]]+Enter[[:space:]]*$" && exit 0
       echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Enter[[:space:]]*$" && exit 0
-      echo "$CLEAN_CMD" | grep -qE '^[[:space:]]*tmux copy-mode[[:space:]]' && exit 0
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
       echo "Report stuck workers to the Window Manager instead." >&2
       exit 2 ;;

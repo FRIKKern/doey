@@ -8,9 +8,9 @@ description: Full codebase simplification across all teams. Session Manager inve
 
 ## Context
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
-- Team environments: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done`
-- Git status: !`git -C "$(grep PROJECT_DIR $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | head -1 | cut -d= -f2)" status --porcelain 2>/dev/null | head -5`
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- Team environments: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done || true`
+- Git status: !`git -C "$(grep PROJECT_DIR $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | head -1 | cut -d= -f2)" status --porcelain 2>/dev/null | head -5|| true`
 
 ## Prompt
 
@@ -26,7 +26,7 @@ DIRTY=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)
 [ -n "$DIRTY" ] && echo "ERROR: Uncommitted changes in $PROJECT_DIR. Commit or stash first." && exit 1
 
 # Line-count snapshot helper (reused in Consolidate)
-LINE_COUNT_CMD='wc -l "$PROJECT_DIR"/{agents,commands,docs}/*.md "$PROJECT_DIR"/CLAUDE.md "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn'
+LINE_COUNT_CMD='wc -l "$PROJECT_DIR"/agents/*.md "$PROJECT_DIR"/CLAUDE.md "$PROJECT_DIR"/.claude/skills/*/SKILL.md "$PROJECT_DIR"/docs/*.md "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn'
 
 echo "Session: $SESSION_NAME | Project: $PROJECT_NAME"
 echo ""
@@ -125,7 +125,7 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 # Reuse LINE_COUNT_CMD from Inventory
-LINE_COUNT_CMD='wc -l "$PROJECT_DIR"/{agents,commands,docs}/*.md "$PROJECT_DIR"/CLAUDE.md "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn'
+LINE_COUNT_CMD='wc -l "$PROJECT_DIR"/agents/*.md "$PROJECT_DIR"/CLAUDE.md "$PROJECT_DIR"/.claude/skills/*/SKILL.md "$PROJECT_DIR"/docs/*.md "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn'
 eval "$LINE_COUNT_CMD" | tee "${RUNTIME_DIR}/reports/simplify_after.txt"
 
 echo "=== Before/After ==="

@@ -30,10 +30,10 @@ _get_pane_title() {
 
 _set_pane_info() {
   local idx="$1" state="$2" title="$3" tool="$4" prev="$5"
-  eval "PANE_STATE_${idx}='${state}'"
-  eval "PANE_TITLE_${idx}='${title}'"
-  eval "PANE_TOOL_${idx}='${tool}'"
-  eval "PANE_PREV_DISPLAY_${idx}='${prev}'"
+  printf -v "PANE_STATE_${idx}" '%s' "$state"
+  printf -v "PANE_TITLE_${idx}" '%s' "$title"
+  printf -v "PANE_TOOL_${idx}" '%s' "$tool"
+  printf -v "PANE_PREV_DISPLAY_${idx}" '%s' "$prev"
 }
 
 _update_duration() {
@@ -41,12 +41,12 @@ _update_duration() {
   local since_file="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${idx}"
   if [ "$prev" != "$cur" ]; then
     echo "$SCAN_TIME" > "$since_file"
-    eval "PANE_DURATION_${idx}=0"
+    printf -v "PANE_DURATION_${idx}" '%s' "0"
     SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${idx} ${prev}->${cur}${NL}"
   else
     local since
     read -r since < "$since_file" 2>/dev/null || { echo "$SCAN_TIME" > "$since_file"; since="$SCAN_TIME"; }
-    eval "PANE_DURATION_${idx}=$(($SCAN_TIME - $since))"
+    printf -v "PANE_DURATION_${idx}" '%s' "$(($SCAN_TIME - $since))"
   fi
 }
 
@@ -65,6 +65,7 @@ _display_state() {
   case "$1" in
     WORKING|CHANGED|UNCHANGED|STUCK) echo "WORKING" ;;
     IDLE|FINISHED) echo "IDLE" ;;
+    LOGGED_OUT) echo "LOGGED_OUT" ;;
     *) echo "$1" ;;
   esac
 }
@@ -120,10 +121,10 @@ if [ -f "$PREV_STATES_FILE" ]; then
     pidx="${pidx// /}" pstate="${pstate// /}"
     is_numeric "$pidx" || continue
     case "$pstate" in
-      IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|UNKNOWN) ;;
+      IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|LOGGED_OUT|UNKNOWN) ;;
       *) continue ;;
     esac
-    eval "PREV_STATE_${pidx}=\"${pstate}\""
+    printf -v "PREV_STATE_${pidx}" '%s' "$pstate"
   done <<EOF
 $PREV_PAIRS
 EOF
@@ -160,6 +161,10 @@ esac
 
 MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
 case "$MGR_CAPTURE" in
+  *"Not logged in"*)
+    PANE_STATE_0="LOGGED_OUT"
+    echo "MANAGER_LOGGED_OUT"
+    ;;
   *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
   *) PANE_STATE_0="WORKING" ;;
 esac
@@ -182,7 +187,7 @@ for i in $PANES_LIST; do
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
     echo "PANE ${i} RESERVED"
     _set_pane_info "$i" "RESERVED" "" "" ""
-    eval "PANE_DURATION_${i}=0"
+    printf -v "PANE_DURATION_${i}" '%s' "0"
     continue
   fi
 
@@ -215,6 +220,18 @@ CRASH_EOF
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "$_crash_state"
       _set_pane_info "$i" "$_crash_state" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
+      continue
+      ;;
+  esac
+
+  # Logged-out detection
+  _worker_capture=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || _worker_capture=""
+  case "$_worker_capture" in
+    *"Not logged in"*)
+      echo "PANE ${i} LOGGED_OUT"
+      eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
+      _update_duration "$i" "$_prev" "LOGGED_OUT"
+      _set_pane_info "$i" "LOGGED_OUT" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
       continue
       ;;
   esac
@@ -321,7 +338,7 @@ case "$MGR_CMD" in
 esac
 MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
 
-_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_other=0
+_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_logged_out=0 _n_other=0
 _active_titles=""
 _longest_pane="" _longest_dur=0
 for i in $PANES_LIST; do
@@ -340,6 +357,7 @@ for i in $PANES_LIST; do
     STUCK) _n_stuck=$((_n_stuck + 1)) ;;
     CRASHED) _n_crashed=$((_n_crashed + 1)) ;;
     RESERVED) _n_reserved=$((_n_reserved + 1)) ;;
+    LOGGED_OUT) _n_logged_out=$((_n_logged_out + 1)) ;;
     *) _n_other=$((_n_other + 1)) ;;
   esac
 done
@@ -367,6 +385,7 @@ fi
 printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_working" "$_n_idle"
 [ "$_n_stuck" -gt 0 ] && printf ' %dS' "$_n_stuck"
 [ "$_n_crashed" -gt 0 ] && printf ' %dC' "$_n_crashed"
+[ "$_n_logged_out" -gt 0 ] && printf ' %dL' "$_n_logged_out"
 [ -n "$_active_titles" ] && printf ' | %s' "$_active_titles"
 [ -n "$_longest_label" ] && printf ' | longest:%s' "$_longest_label"
 printf '\n'
@@ -398,8 +417,8 @@ SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
   _total=0
   for _ci in $PANES_LIST; do is_numeric "$_ci" && _total=$((_total + 1)); done
   printf 'TOTAL_WORKERS=%s\n' "$_total"
-  printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\n' \
-    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved"
+  printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\nLOGGED_OUT=%s\n' \
+    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved" "$_n_logged_out"
   printf -- '---\n'
   printf 'PANE|STATE|TITLE|DURATION_SECS|LAST_TOOL|PREV_STATE\n'
   for i in $PANES_LIST; do

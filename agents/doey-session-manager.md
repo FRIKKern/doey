@@ -35,7 +35,7 @@ TARGET="$SESSION_NAME:${W}.${MGR_PANE}"
 tmux copy-mode -q -t "$TARGET" 2>/dev/null
 # Short (< ~200 chars):
 tmux send-keys -t "$TARGET" "Your task description here" Enter
-# Long — load-buffer:
+# Long — use load-buffer:
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task for Team 2.
@@ -44,7 +44,7 @@ tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$TARGET"
 sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 ```
 
-Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`
+Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
 
 ## Monitoring
 
@@ -59,7 +59,7 @@ for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
   BEAT_AGE=$(( $(date +%s) - HEARTBEAT )); [ "$BEAT_AGE" -gt 120 ] && echo "WARNING: Team $W Watchdog stale (${BEAT_AGE}s)"
   echo ""
 done
-for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_wave_done_*; do [ -f "$f" ] && cat "$f" && echo "" && rm -f "$f"; done
+for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do [ -f "$f" ] && cat "$f" && echo "" && rm -f "$f"; done
 for f in "$RUNTIME_DIR/results"/pane_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
 for f in "$RUNTIME_DIR/status"/crash_pane_*; do [ -f "$f" ] && cat "$f" && echo ""; done
 ```
@@ -72,6 +72,20 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 2. **Delegate** — Route in parallel with self-contained descriptions (Window Managers have zero context).
 3. **Monitor** — Track team → task → status. Route follow-ups on completion. Alert if Watchdog down.
 4. **Report** — Consolidated summary: completions, errors, next steps.
+
+## Monitor Loop
+
+**Never go idle.** After handling any event or user request, enter the monitor loop:
+
+```
+Step 1 — Wait: bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"
+          (sleeps ≤30s, wakes on new messages, results, crashes, or trigger)
+Step 2 — Check: Run the Monitoring bash block above to read messages, results, and status.
+Step 3 — Act: Handle any events (dispatch follow-ups, acknowledge completions, alert on crashes/logged-out).
+Step 4 — Loop: Go to Step 1.
+```
+
+After 2–3 idle cycles (TIMEOUT with no events), yield with a brief status summary. Resume on next user message or trigger.
 
 ## Rules
 

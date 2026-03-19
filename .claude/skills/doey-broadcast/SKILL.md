@@ -6,10 +6,10 @@ description: Broadcast a message to all other Claude instances.
 ## Context
 
 Session config:
-!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
+!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
 My pane:
-!`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'`
+!`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
 
 ## Prompt
 
@@ -18,7 +18,7 @@ Ask user for the message if not provided. Replace `YOUR_MESSAGE_HERE` below, the
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-TIMESTAMP=$(gdate +%s%N 2>/dev/null || echo "$(date +%s)$$")
+TIMESTAMP="$(date +%s)$$"
 mkdir -p "${RUNTIME_DIR}/broadcasts" "${RUNTIME_DIR}/messages"
 
 MESSAGE="YOUR_MESSAGE_HERE"

@@ -62,7 +62,7 @@ Events: `STATE_CHANGE`→`↗ W{pane} {old}→{new}`, `COMPLETION`→`✅ W{pane
 | `MANAGER_CRASHED` | Alert Session Manager only |
 | `MANAGER_COMPLETED` | Notify Session Manager |
 
-Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pane.
+Workers run `--dangerously-skip-permissions` (launch-time flag, not watchdog-controlled). NEVER send y/Y/yes/Enter to any pane.
 
 **Step 4 — Loop:** Run `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` (sleeps ≤30s, wakes on worker finish). Go to Step 1. After 2 cycles, yield.
 
@@ -85,10 +85,12 @@ EOF
 | `WAVE_COMPLETE` | `wave_done` | "Team W wave complete" / "All workers idle. Check results." | Also send-keys to Manager if idle: "All workers idle — wave complete. Check results in $RUNTIME_DIR/results/ and dispatch next wave." |
 | `MANAGER_COMPLETED` | `mgr_done` | "Team W Manager completed" / "Manager finished. Route follow-up." | — |
 | Worker `COMPLETION`/`CRASHED`/`STUCK` | — | Details + "Check results and take next action." | Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`. |
+| `LOGGED_OUT` (worker or manager) | `logged_out` | "N panes LOGGED_OUT in Team W" / "Panes [list] show 'Not logged in'. Send `/login` then select login method." | Send-keys `/login` + `Enter` to each logged-out pane. If login menu appears, send `Escape` then retry or alert Session Manager. |
+| `MANAGER_LOGGED_OUT` | `mgr_logged_out` | "Manager LOGGED_OUT in Team W" / "Manager shows 'Not logged in'." | Send `/login` + `Enter` to Manager pane. Alert Session Manager. |
 
 ## Rules
 
 - Always use `-t "$SESSION_NAME"` — never `-a`
 - Never send input to editors, REPLs, or password prompts
-- Auto-login workers showing "Not logged in"
+- Handle LOGGED_OUT: send `/login` Enter to affected panes, monitor for completion
 - One bash call per cycle; display dashboard every cycle
