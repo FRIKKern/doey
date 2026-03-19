@@ -19,16 +19,13 @@ fi
 
 SESSION_ENV="${RUNTIME_DIR}/session.env"
 
-# ── ANSI Color Helpers ──────────────────────────────────────────────
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
 C_DIM='\033[2m'
 C_CYAN='\033[36m'
 C_GREEN='\033[32m'
 C_YELLOW='\033[33m'
-C_RED='\033[31m'
 C_MAGENTA='\033[35m'
-C_WHITE='\033[97m'
 C_GRAY='\033[90m'
 C_BOLD_CYAN='\033[1;36m'
 C_BOLD_WHITE='\033[1;97m'
@@ -36,10 +33,6 @@ C_BOLD_GREEN='\033[1;32m'
 C_BOLD_YELLOW='\033[1;33m'
 C_BOLD_RED='\033[1;31m'
 C_BOLD_MAGENTA='\033[1;35m'
-C_BG_CYAN='\033[46m'
-C_BG_GRAY='\033[100m'
-
-# ── Existing Data-Gathering Functions (unchanged) ───────────────────
 
 # Single-pass env file reader: reads all needed keys in one loop (0 forks).
 # Sets variables named _ENV_<KEY> for each requested key.
@@ -79,6 +72,43 @@ format_uptime() {
   fi
 }
 
+# Build a repeated-character string of given length
+repeat_char() {
+  local ch="$1" len="$2" out="" i=0
+  while [ "$i" -lt "$len" ]; do
+    out="${out}${ch}"
+    i=$((i + 1))
+  done
+  printf '%s' "$out"
+}
+
+# Read STATUS field from a .status file (0 forks)
+read_pane_status() {
+  local file="$1" status="?"
+  if [ -f "$file" ]; then
+    while IFS= read -r _rps_line; do
+      case "$_rps_line" in STATUS:*) status="${_rps_line#STATUS: }"; break ;; esac
+    done < "$file"
+  fi
+  printf '%s' "$status"
+}
+
+# Read watchdog heartbeat and return OK/STALE/?
+read_watchdog_status() {
+  local hb_file="$1" now="$2" beat
+  if [ ! -f "$hb_file" ]; then
+    printf '?'; return
+  fi
+  beat=$(cat "$hb_file" 2>/dev/null || echo "0")
+  case "$beat" in *[!0-9]*) beat=0 ;; esac
+  [ -z "$beat" ] && beat=0
+  if [ $((now - beat)) -lt 120 ]; then
+    printf 'OK'
+  else
+    printf 'STALE'
+  fi
+}
+
 # Count workers in a given state for a team (0 forks — pure shell)
 # Uses cached SESSION_NAME from outer scope
 count_team_workers() {
@@ -113,35 +143,23 @@ count_team_workers() {
   printf '%d' "$count"
 }
 
-# ── Column Rendering Helpers ────────────────────────────────────────
-
 # Strip ANSI escape codes for visible-length counting
 strip_ansi() {
   # Use sed to remove ANSI escape sequences
   printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'
 }
 
-# Get visible length of a string (excluding ANSI codes)
 visible_len() {
   local stripped
   stripped=$(strip_ansi "$1")
   printf '%d' "${#stripped}"
 }
 
-# Add a line to the left column
 add_left() {
   eval "L_${LC}=\"\$1\""
   LC=$((LC + 1))
 }
 
-# Add a line to the right column
-add_right() {
-  eval "R_${RC}=\"\$1\""
-  RC=$((RC + 1))
-}
-
-# Generate dotted leader between name and description, fitting within width
-# Usage: dotted_leader "name" "description" max_width [color]
 dotted_leader() {
   local name="$1" desc="$2" max_w="$3" color="${4:-}"
   local name_vis desc_vis
@@ -164,7 +182,6 @@ dotted_leader() {
   fi
 }
 
-# ── Cache ───────────────────────────────────────────────────────────
 _CACHED_SESSION_NAME=""
 _CACHED_PROJECT_NAME=""
 
@@ -205,149 +222,67 @@ while true; do
   PROJECT_NAME="$_CACHED_PROJECT_NAME"
   SESSION_NAME="$_CACHED_SESSION_NAME"
 
-  # Calculate uptime from session.env mtime
   NOW=$(date +%s)
-  if [ -f "$SESSION_ENV" ]; then
-    # macOS stat vs Linux stat
-    if stat -f '%m' "$SESSION_ENV" >/dev/null 2>&1; then
-      START_TIME=$(stat -f '%m' "$SESSION_ENV")
-    else
-      START_TIME=$(stat -c '%Y' "$SESSION_ENV" 2>/dev/null || echo "$NOW")
-    fi
+  # macOS stat vs Linux stat for uptime calculation
+  if stat -f '%m' "$SESSION_ENV" >/dev/null 2>&1; then
+    START_TIME=$(stat -f '%m' "$SESSION_ENV")
   else
-    START_TIME="$NOW"
+    START_TIME=$(stat -c '%Y' "$SESSION_ENV" 2>/dev/null || echo "$NOW")
   fi
   UPTIME_SECS=$((NOW - START_TIME))
   UPTIME_STR=$(format_uptime "$UPTIME_SECS")
 
   # ── Gather Team Data ──────────────────────────────────────────────
-  TEAM_COUNT=0
-  TOTAL_WORKERS=0
-  TOTAL_IDLE=0
-  TOTAL_BUSY=0
-  TOTAL_RESERVED=0
-  TEAM_LINE_COUNT=0
+  TOTAL_WORKERS=0; TOTAL_IDLE=0; TOTAL_BUSY=0; TOTAL_RESERVED=0
+  TEAM_COUNT=0; TEAM_LINE_COUNT=0
 
-  if [ -n "$TEAM_WINDOWS" ]; then
-    for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-      TEAM_COUNT=$((TEAM_COUNT + 1))
+  # Normalize: single-window mode uses window "0" with SESSION_ENV as team file
+  [ -z "$TEAM_WINDOWS" ] && TEAM_WINDOWS="0"
+
+  for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
+    TEAM_COUNT=$((TEAM_COUNT + 1))
+
+    if [ "$W" = "0" ] && [ ! -f "${RUNTIME_DIR}/team_0.env" ]; then
+      TEAM_FILE="$SESSION_ENV"
+    else
       TEAM_FILE="${RUNTIME_DIR}/team_${W}.env"
+    fi
 
-      read_env_file "$TEAM_FILE" WATCHDOG_PANE WORKER_PANES WORKER_COUNT GRID WORKTREE_DIR WORKTREE_BRANCH
-      WD_PANE="$_ENV_WATCHDOG_PANE"
-      WORKER_PANES="$_ENV_WORKER_PANES"
-      WORKER_COUNT="$_ENV_WORKER_COUNT"
-      GRID_MODE="$_ENV_GRID"
-      WT_DIR="$_ENV_WORKTREE_DIR"
-      WT_BRANCH="$_ENV_WORKTREE_BRANCH"
-      [ -z "$WORKER_COUNT" ] && WORKER_COUNT=0
-      [ -z "$GRID_MODE" ] && GRID_MODE="dynamic"
-      TOTAL_WORKERS=$((TOTAL_WORKERS + WORKER_COUNT))
-
-      # Window Manager status
-      MGR_STATUS_FILE="${RUNTIME_DIR}/status/${SESSION_NAME}_${W}_0.status"
-      MGR_ST="?"
-      if [ -f "$MGR_STATUS_FILE" ]; then
-        while IFS= read -r _ms_line; do
-          case "$_ms_line" in STATUS:*) MGR_ST="${_ms_line#STATUS: }"; break ;; esac
-        done < "$MGR_STATUS_FILE"
-      fi
-
-      # Watchdog heartbeat
-      WDG_ST="?"
-      HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog_W${W}.heartbeat"
-      [ ! -f "$HEARTBEAT_FILE" ] && HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
-      if [ -f "$HEARTBEAT_FILE" ]; then
-        BEAT=$(cat "$HEARTBEAT_FILE" 2>/dev/null || echo "0")
-        case "$BEAT" in *[!0-9]*) BEAT=0 ;; esac
-        [ -z "$BEAT" ] && BEAT=0
-        BEAT_AGE=$((NOW - BEAT))
-        if [ "$BEAT_AGE" -lt 120 ]; then
-          WDG_ST="OK"
-        else
-          WDG_ST="STALE"
-        fi
-      fi
-
-      # Worker counts by state
-      IDLE_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "idle")
-      BUSY_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "busy")
-      RESV_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "reserved")
-      TOTAL_IDLE=$((TOTAL_IDLE + IDLE_COUNT))
-      TOTAL_BUSY=$((TOTAL_BUSY + BUSY_COUNT))
-      TOTAL_RESERVED=$((TOTAL_RESERVED + RESV_COUNT))
-
-      # Store team data in indexed variables
-      eval "TEAM_WIN_${TEAM_LINE_COUNT}=\"${W}\""
-      eval "TEAM_MGR_${TEAM_LINE_COUNT}=\"${MGR_ST}\""
-      eval "TEAM_WDG_${TEAM_LINE_COUNT}=\"${WDG_ST}\""
-      eval "TEAM_IDLE_${TEAM_LINE_COUNT}=\"${IDLE_COUNT}\""
-      eval "TEAM_BUSY_${TEAM_LINE_COUNT}=\"${BUSY_COUNT}\""
-      eval "TEAM_RESV_${TEAM_LINE_COUNT}=\"${RESV_COUNT}\""
-      eval "TEAM_WCNT_${TEAM_LINE_COUNT}=\"${WORKER_COUNT}\""
-      eval "TEAM_GRID_${TEAM_LINE_COUNT}=\"${GRID_MODE}\""
-      eval "TEAM_WT_DIR_${TEAM_LINE_COUNT}=\"${WT_DIR}\""
-      eval "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}=\"${WT_BRANCH}\""
-      TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
-    done
-  else
-    # Single-window fallback
-    TEAM_COUNT=1
-    read_env_file "$SESSION_ENV" WORKER_COUNT WORKER_PANES GRID
-    WORKER_COUNT="$_ENV_WORKER_COUNT"
+    read_env_file "$TEAM_FILE" WORKER_PANES WORKER_COUNT GRID WORKTREE_DIR WORKTREE_BRANCH
     WORKER_PANES="$_ENV_WORKER_PANES"
-    GRID_MODE="$_ENV_GRID"
-    [ -z "$WORKER_COUNT" ] && WORKER_COUNT=0
-    [ -z "$GRID_MODE" ] && GRID_MODE="dynamic"
-    TOTAL_WORKERS=$WORKER_COUNT
+    WORKER_COUNT="${_ENV_WORKER_COUNT:-0}"
+    GRID_MODE="${_ENV_GRID:-dynamic}"
+    WT_DIR="$_ENV_WORKTREE_DIR"
+    WT_BRANCH="$_ENV_WORKTREE_BRANCH"
+    TOTAL_WORKERS=$((TOTAL_WORKERS + WORKER_COUNT))
 
-    MGR_STATUS_FILE="${RUNTIME_DIR}/status/${SESSION_NAME}_0_0.status"
-    MGR_ST="?"
-    if [ -f "$MGR_STATUS_FILE" ]; then
-      while IFS= read -r _ms_line; do
-        case "$_ms_line" in STATUS:*) MGR_ST="${_ms_line#STATUS: }"; break ;; esac
-      done < "$MGR_STATUS_FILE"
-    fi
+    MGR_ST=$(read_pane_status "${RUNTIME_DIR}/status/${SESSION_NAME}_${W}_0.status")
 
-    WDG_ST="?"
-    HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
-    if [ -f "$HEARTBEAT_FILE" ]; then
-      BEAT=$(cat "$HEARTBEAT_FILE" 2>/dev/null || echo "0")
-      case "$BEAT" in *[!0-9]*) BEAT=0 ;; esac
-      [ -z "$BEAT" ] && BEAT=0
-      BEAT_AGE=$((NOW - BEAT))
-      if [ "$BEAT_AGE" -lt 120 ]; then
-        WDG_ST="OK"
-      else
-        WDG_ST="STALE"
-      fi
-    fi
+    HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog_W${W}.heartbeat"
+    [ ! -f "$HEARTBEAT_FILE" ] && HEARTBEAT_FILE="${RUNTIME_DIR}/status/watchdog.heartbeat"
+    WDG_ST=$(read_watchdog_status "$HEARTBEAT_FILE" "$NOW")
 
-    IDLE_COUNT=$(count_team_workers "0" "$WORKER_PANES" "idle")
-    BUSY_COUNT=$(count_team_workers "0" "$WORKER_PANES" "busy")
-    RESV_COUNT=$(count_team_workers "0" "$WORKER_PANES" "reserved")
-    TOTAL_IDLE=$IDLE_COUNT
-    TOTAL_BUSY=$BUSY_COUNT
-    TOTAL_RESERVED=$RESV_COUNT
+    IDLE_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "idle")
+    BUSY_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "busy")
+    RESV_COUNT=$(count_team_workers "$W" "$WORKER_PANES" "reserved")
+    TOTAL_IDLE=$((TOTAL_IDLE + IDLE_COUNT))
+    TOTAL_BUSY=$((TOTAL_BUSY + BUSY_COUNT))
+    TOTAL_RESERVED=$((TOTAL_RESERVED + RESV_COUNT))
 
-    eval "TEAM_WIN_0=\"0\""
-    eval "TEAM_MGR_0=\"${MGR_ST}\""
-    eval "TEAM_WDG_0=\"${WDG_ST}\""
-    eval "TEAM_IDLE_0=\"${IDLE_COUNT}\""
-    eval "TEAM_BUSY_0=\"${BUSY_COUNT}\""
-    eval "TEAM_RESV_0=\"${RESV_COUNT}\""
-    eval "TEAM_WCNT_0=\"${WORKER_COUNT}\""
-    eval "TEAM_GRID_0=\"${GRID_MODE}\""
-    TEAM_LINE_COUNT=1
-  fi
+    eval "TEAM_WIN_${TEAM_LINE_COUNT}=\"${W}\""
+    eval "TEAM_MGR_${TEAM_LINE_COUNT}=\"${MGR_ST}\""
+    eval "TEAM_WDG_${TEAM_LINE_COUNT}=\"${WDG_ST}\""
+    eval "TEAM_IDLE_${TEAM_LINE_COUNT}=\"${IDLE_COUNT}\""
+    eval "TEAM_BUSY_${TEAM_LINE_COUNT}=\"${BUSY_COUNT}\""
+    eval "TEAM_RESV_${TEAM_LINE_COUNT}=\"${RESV_COUNT}\""
+    eval "TEAM_WCNT_${TEAM_LINE_COUNT}=\"${WORKER_COUNT}\""
+    eval "TEAM_GRID_${TEAM_LINE_COUNT}=\"${GRID_MODE}\""
+    eval "TEAM_WT_DIR_${TEAM_LINE_COUNT}=\"${WT_DIR}\""
+    eval "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}=\"${WT_BRANCH}\""
+    TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
+  done
 
-  # (Events collection removed per user preference)
-
-  # ══════════════════════════════════════════════════════════════════
-  # ██  RENDER  ██
-  # ══════════════════════════════════════════════════════════════════
-
-  # Initialize line array
+  # ── RENDER ─────────────────────────────────────────────────────────
   LC=0
 
   # ── LEFT COLUMN ───────────────────────────────────────────────────
@@ -410,28 +345,9 @@ while true; do
   add_left "  $(dotted_leader "$(printf '%bdoey test%b' "${C_YELLOW}" "${C_RESET}")" "Run E2E tests" "$CMD_W")"
   add_left "  $(dotted_leader "$(printf '%bdoey version%b' "${C_YELLOW}" "${C_RESET}")" "Show version info" "$CMD_W")"
 
-  # (Right column removed per user preference)
-
-  # ══════════════════════════════════════════════════════════════════
-  # ██  OUTPUT  ██
-  # ══════════════════════════════════════════════════════════════════
-
-  # ── Header: ASCII Art ─────────────────────────────────────────────
-  # Build a full-width horizontal rule
-  HR=""
-  hr_i=0
-  while [ "$hr_i" -lt "$TERM_W" ]; do
-    HR="${HR}─"
-    hr_i=$((hr_i + 1))
-  done
-
-  # Thicker horizontal rule with ═
-  HR_THICK=""
-  hr_i=0
-  while [ "$hr_i" -lt "$TERM_W" ]; do
-    HR_THICK="${HR_THICK}═"
-    hr_i=$((hr_i + 1))
-  done
+  # ── OUTPUT ──────────────────────────────────────────────────────────
+  HR=$(repeat_char "─" "$TERM_W")
+  HR_THICK=$(repeat_char "═" "$TERM_W")
 
   # ── Dynamic ASCII Art Title from PROJECT_NAME ─────────────────────
   # Block-letter font: each char is 6 rows, variable width
@@ -506,16 +422,11 @@ while true; do
     5) TITLE_COLOR="${C_BOLD_WHITE}" ;;
   esac
 
-  printf '\n'
-  printf '%b' "$TITLE_COLOR"
-  printf '    %s\n' "$TITLE_R0"
-  printf '    %s\n' "$TITLE_R1"
-  printf '    %s\n' "$TITLE_R2"
-  printf '    %s\n' "$TITLE_R3"
-  printf '    %s\n' "$TITLE_R4"
-  printf '    %s\n' "$TITLE_R5"
-  printf '%b' "${C_RESET}"
-  printf '\n'
+  printf '\n%b' "$TITLE_COLOR"
+  for _tr in "$TITLE_R0" "$TITLE_R1" "$TITLE_R2" "$TITLE_R3" "$TITLE_R4" "$TITLE_R5"; do
+    printf '    %s\n' "$_tr"
+  done
+  printf '%b\n' "${C_RESET}"
 
   # ── Status Bar ────────────────────────────────────────────────────
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"

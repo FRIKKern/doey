@@ -2,7 +2,7 @@
 
 > Part of [Doey](../README.md)
 
-Running Doey on a Linux server is ideal — your team keeps working after you disconnect. Start a task, detach, close your laptop, come back to find the work done.
+Run Doey on a Linux server — start a task, detach, close your laptop, come back to find work done.
 
 ### Prerequisites
 
@@ -22,9 +22,9 @@ fnm install --lts
 
 **Claude Code CLI:** `npm install -g @anthropic-ai/claude-code` then `claude auth`
 
-### Quick Setup (< 5 Minutes)
+### Quick Setup
 
-Copy-paste on a fresh Ubuntu/Debian server:
+Fresh Ubuntu/Debian — copy-paste:
 
 ```bash
 sudo apt update && sudo apt install -y tmux git curl
@@ -84,24 +84,19 @@ systemctl --user enable doey && systemctl --user start doey
 
 ### Cloud Providers
 
-Doey is network-bound (API calls), not CPU/RAM-intensive. Any Linux VPS with tmux and Node.js works.
+Doey is network-bound (API calls), not CPU/RAM-intensive. Any Linux VPS with tmux and Node.js works. Smallest Ubuntu 24.04 instance on any provider, then run the Quick Setup above.
 
-<details>
-<summary><strong>Hetzner (~€3.29/mo), DigitalOcean ($6/mo), AWS EC2 (free tier)</strong></summary>
-
-All providers: create smallest Ubuntu 24.04 instance, SSH in, run the Quick Setup block above.
-
-- **Hetzner:** CX22, EU/US datacenters, no egress fees
-- **DigitalOcean:** Basic Droplet, simple UI
-- **AWS:** t3.micro, free tier eligible (12 months)
-
-</details>
+| Provider | Instance | Notes |
+|----------|----------|-------|
+| **Hetzner** | CX22 (~€3.29/mo) | EU/US, no egress fees |
+| **DigitalOcean** | Basic Droplet ($6/mo) | Simple UI |
+| **AWS** | t3.micro (free tier) | 12 months free |
 
 **Security:** Never commit API keys. Use env vars or `claude auth`. Use SSH key auth.
 
 ### Platform Notes
 
-- macOS notifications (`osascript`) are silently skipped on Linux. All other functionality works identically.
+- macOS notifications (`osascript`) silently skipped on Linux. Everything else works identically.
 
 ### Troubleshooting
 
