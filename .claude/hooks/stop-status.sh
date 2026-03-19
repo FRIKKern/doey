@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Stop hook: write pane status. Synchronous.
+# Stop hook: write pane status (synchronous)
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
 
-# Block unreserved workers that have a research task but no report
+# Block workers with unfinished research reports
 if is_worker && ! is_reserved; then
   REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
   if [ -f "${RUNTIME_DIR}/research/${PANE_SAFE}.task" ] && [ ! -f "$REPORT_FILE" ]; then
@@ -17,7 +17,6 @@ STOP_STATUS="READY"
 is_worker && STOP_STATUS="FINISHED"
 is_reserved && STOP_STATUS="RESERVED"
 
-# Atomic write: tmp + mv
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 TMP=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMP="$STATUS_FILE"
 cat > "$TMP" <<EOF

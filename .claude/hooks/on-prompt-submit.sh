@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# PromptSubmit hook: update pane status, expand collapsed columns
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
@@ -26,13 +25,12 @@ esac
 
 write_status "BUSY" "${PROMPT:0:80}"
 
-# Expand collapsed column so worker is visible
+# Expand collapsed column so worker becomes visible
 if is_worker && [ "$PANE_INDEX" -gt 0 ]; then
-  COL_IDX=$(( (PANE_INDEX - 1) / 2 ))
-  COLLAPSED="${RUNTIME_DIR}/status/col_${COL_IDX}.collapsed"
-  if [ -f "$COLLAPSED" ]; then
+  collapsed="${RUNTIME_DIR}/status/col_$(( (PANE_INDEX - 1) / 2 )).collapsed"
+  if [ -f "$collapsed" ]; then
     tmux resize-pane -t "${PANE}" -x 80 2>/dev/null || true
-    rm -f "$COLLAPSED"
+    rm -f "$collapsed"
   fi
 fi
 

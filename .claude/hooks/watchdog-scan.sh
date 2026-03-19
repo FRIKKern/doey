@@ -28,7 +28,6 @@ _get_pane_title() {
   echo "${t//\'/}"
 }
 
-# Set per-pane tracking vars: state, title, tool, prev_display
 _set_pane_info() {
   local idx="$1" state="$2" title="$3" tool="$4" prev="$5"
   eval "PANE_STATE_${idx}='${state}'"
@@ -37,7 +36,6 @@ _set_pane_info() {
   eval "PANE_PREV_DISPLAY_${idx}='${prev}'"
 }
 
-# Track state duration; record transitions as snapshot events
 _update_duration() {
   local idx="$1" prev="$2" cur="$3"
   local since_file="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${idx}"
@@ -52,10 +50,8 @@ _update_duration() {
   fi
 }
 
-# Atomic file write via tmp+mv
 _atomic_write() { echo "$2" > "$1.tmp" && mv "$1.tmp" "$1"; }
 
-# Format seconds as compact duration (e.g. 2h5m30s, 5m30s, 30s)
 _format_duration() {
   local h=$(($1 / 3600)) m=$((($1 % 3600) / 60)) s=$(($1 % 60))
   if [ "$h" -gt 0 ]; then echo "${h}h${m}m${s}s"
@@ -64,7 +60,7 @@ _format_duration() {
   fi
 }
 
-# Map raw/internal states to display states
+# Map internal states to display states
 _display_state() {
   case "$1" in
     WORKING|CHANGED|UNCHANGED|STUCK) echo "WORKING" ;;
@@ -115,7 +111,7 @@ else
   hash_fn() { printf '%s' "$1" | md5sum | cut -d' ' -f1; }
 fi
 
-# Load previous pane states for stuck detection
+# Load previous pane states
 PREV_STATES_FILE="${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json"
 if [ -f "$PREV_STATES_FILE" ]; then
   PREV_JSON=$(cat "$PREV_STATES_FILE" 2>/dev/null) || PREV_JSON="{}"
@@ -134,7 +130,6 @@ EOF
 fi
 
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
-SCAN_HAD_OUTPUT=false
 SCAN_TIME=$(date +%s)
 SNAPSHOT_EVENTS=""
 
@@ -150,7 +145,7 @@ fi
 MGR_CMD=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
 case "$MGR_CMD" in
   bash|zsh|sh|fish)
-    echo "MANAGER_CRASHED"; SCAN_HAD_OUTPUT=true
+    echo "MANAGER_CRASHED"
     CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
     if [ ! -f "$CRASH_ALERT" ]; then
       _tmp="${CRASH_ALERT}.tmp"
@@ -163,7 +158,6 @@ case "$MGR_CMD" in
     ;;
 esac
 
-# Manager idle detection + completion transition
 MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
 case "$MGR_CAPTURE" in
   *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
@@ -174,7 +168,7 @@ MGR_PREV_FILE="${RUNTIME_DIR}/status/manager_prev_state_W${TARGET_WINDOW}"
 read -r MGR_PREV_STATE < "$MGR_PREV_FILE" 2>/dev/null || MGR_PREV_STATE="UNKNOWN"
 echo "$PANE_STATE_0" > "$MGR_PREV_FILE"
 if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
-  echo "MANAGER_COMPLETED"; SCAN_HAD_OUTPUT=true
+  echo "MANAGER_COMPLETED"
 fi
 
 # --- Scan worker panes ---
@@ -186,7 +180,7 @@ for i in $PANES_LIST; do
 
   # Reserved
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
-    echo "PANE ${i} RESERVED"; SCAN_HAD_OUTPUT=true
+    echo "PANE ${i} RESERVED"
     _set_pane_info "$i" "RESERVED" "" "" ""
     eval "PANE_DURATION_${i}=0"
     continue
@@ -194,11 +188,9 @@ for i in $PANES_LIST; do
 
   # Exit copy-mode if active
   PANE_MODE=$(tmux display-message -t "$PANE_REF" -p '#{pane_mode}' 2>/dev/null) || PANE_MODE=""
-  if [ "$PANE_MODE" = "copy-mode" ]; then
-    tmux copy-mode -q -t "$PANE_REF" 2>/dev/null || true
-  fi
+  [ "$PANE_MODE" = "copy-mode" ] && { tmux copy-mode -q -t "$PANE_REF" 2>/dev/null || true; }
 
-  # Crash detection (shell running without claude/node)
+  # Crash detection
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
   case "$CURRENT_CMD" in
     bash|zsh|sh|fish)
@@ -219,7 +211,7 @@ CRASH_EOF
           fi
           ;;
       esac
-      echo "PANE ${i} ${_crash_state}"; SCAN_HAD_OUTPUT=true
+      echo "PANE ${i} ${_crash_state}"
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "$_crash_state"
       _set_pane_info "$i" "$_crash_state" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
@@ -227,7 +219,7 @@ CRASH_EOF
       ;;
   esac
 
-  # CPU time detection — active work consumes CPU; idle waiting does not
+  # CPU time detection
   _pane_ppid=$(tmux display-message -t "$PANE_REF" -p '#{pane_pid}' 2>/dev/null) || _pane_ppid=""
   _cpu_secs=0
   if [ -n "$_pane_ppid" ]; then
@@ -250,7 +242,7 @@ CRASH_EOF
   _cpu_active=""
   [ "$_cpu_delta" -gt 1 ] && _cpu_active="yes"
 
-  # Hook-written status (BUSY/FINISHED/READY from on-prompt-submit/stop-status)
+  # Hook-written status
   _hook_status=""
   STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
   if [ -f "$STATUS_FILE" ]; then
@@ -264,24 +256,23 @@ CRASH_EOF
   read -r OLD_HASH < "$HASH_FILE" 2>/dev/null || OLD_HASH=""
 
   if [ "$HASH" = "$OLD_HASH" ]; then
-    # Content unchanged — use CPU time to distinguish IDLE vs WORKING
+    # Content unchanged — use CPU to distinguish IDLE vs WORKING
     eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
 
     if [ -n "$_cpu_active" ] || [ "$_hook_status" = "BUSY" ]; then
-      # CPU active or hook says BUSY
       COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
       read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
       NEW_COUNT=$((OLD_COUNT + 1))
       echo "$NEW_COUNT" > "$COUNTER_FILE"
 
       if [ "$NEW_COUNT" -ge 6 ]; then
-        echo "PANE ${i} STUCK (CPU active but no output for ${NEW_COUNT} cycles)"; SCAN_HAD_OUTPUT=true
+        echo "PANE ${i} STUCK (CPU active but no output for ${NEW_COUNT} cycles)"
         _unch_state="STUCK"
       else
         _unch_state="WORKING"
         case "$PREV" in
           WORKING|CHANGED|UNCHANGED) ;;
-          *) echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true ;;
+          *) echo "PANE ${i} WORKING" ;;
         esac
       fi
       _update_duration "$i" "WORKING" "WORKING"
@@ -289,19 +280,8 @@ CRASH_EOF
     else
       # No CPU activity + hash unchanged = truly IDLE
       rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
-      case "$PREV" in
-        IDLE|UNCHANGED)
-          _display_prev="IDLE" ;;
-        FINISHED)
-          echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
-          _display_prev="IDLE" ;;
-        WORKING|CHANGED|STUCK)
-          echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
-          _display_prev="WORKING" ;;
-        *)
-          echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
-          _display_prev="$PREV" ;;
-      esac
+      _display_prev=$(_display_state "$PREV")
+      case "$PREV" in IDLE|UNCHANGED) ;; *) echo "PANE ${i} IDLE" ;; esac
       _update_duration "$i" "$_display_prev" "IDLE"
       _set_pane_info "$i" "IDLE" "$(_get_pane_title "$PANE_REF")" "" "$_display_prev"
     fi
@@ -312,7 +292,7 @@ CRASH_EOF
   rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
   _atomic_write "$HASH_FILE" "$HASH"
 
-  echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
+  echo "PANE ${i} WORKING"
 
   # Extract last tool name from capture
   _last_tool=""
@@ -329,11 +309,7 @@ $CAPTURE
 EOF
 
   eval "_prev_raw=\${PREV_STATE_${i}:-UNKNOWN}"
-  case "$_prev_raw" in
-    WORKING|CHANGED|UNCHANGED|STUCK) _display_prev="WORKING" ;;
-    IDLE|FINISHED) _display_prev="IDLE" ;;
-    *) _display_prev="$_prev_raw" ;;
-  esac
+  _display_prev=$(_display_state "$_prev_raw")
   _update_duration "$i" "$_display_prev" "WORKING"
   _set_pane_info "$i" "WORKING" "$(_get_pane_title "$PANE_REF")" "$_last_tool" "$_display_prev"
 done
@@ -373,7 +349,7 @@ if [ -n "$_longest_pane" ] && [ "$_longest_dur" -gt 0 ]; then
   _longest_label="${_longest_pane}@$(_format_duration "$_longest_dur")"
 fi
 
-# Wave completion: HAS_WORKING → ALL_IDLE transition
+# Wave completion: HAS_WORKING -> ALL_IDLE transition
 _all_available=$((_n_working + _n_idle + _n_stuck + _n_crashed))
 WAVE_STATE_FILE="${RUNTIME_DIR}/status/wave_state_W${TARGET_WINDOW}"
 read -r _prev_wave_state < "$WAVE_STATE_FILE" 2>/dev/null || _prev_wave_state="UNKNOWN"
@@ -384,7 +360,7 @@ else
 fi
 echo "$_cur_wave_state" > "$WAVE_STATE_FILE"
 if [ "$_prev_wave_state" = "HAS_WORKING" ] && [ "$_cur_wave_state" = "ALL_IDLE" ]; then
-  echo "WAVE_COMPLETE"; SCAN_HAD_OUTPUT=true
+  echo "WAVE_COMPLETE"
   SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}WAVE_COMPLETE all_workers_idle${NL}"
 fi
 

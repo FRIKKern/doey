@@ -11,19 +11,12 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || 
 SESSION_ENV="${RUNTIME_DIR}/session.env"
 [ -f "$SESSION_ENV" ] || exit 0
 
-# Strip surrounding quotes from a value
-strip_quotes() { local v="${1%\"}"; echo "${v#\"}"; }
+# Read unquoted value from env file: _env_val file key
+_env_val() { local v; v=$(grep "^$2=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true; v="${v%\"}"; echo "${v#\"}"; }
 
-# Parse session.env (no eval — /tmp is world-writable)
-SESSION_NAME="" PROJECT_DIR="" PROJECT_NAME=""
-while IFS='=' read -r key value; do
-  value=$(strip_quotes "$value")
-  case "$key" in
-    SESSION_NAME) SESSION_NAME="$value" ;;
-    PROJECT_DIR)  PROJECT_DIR="$value" ;;
-    PROJECT_NAME) PROJECT_NAME="$value" ;;
-  esac
-done < "$SESSION_ENV"
+SESSION_NAME=$(_env_val "$SESSION_ENV" SESSION_NAME)
+PROJECT_DIR=$(_env_val "$SESSION_ENV" PROJECT_DIR)
+PROJECT_NAME=$(_env_val "$SESSION_ENV" PROJECT_NAME)
 
 # Pane identity
 PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
@@ -36,7 +29,7 @@ ROLE="worker"
 TEAM_WINDOW="$WINDOW_INDEX"
 
 if [ "$WINDOW_INDEX" = "0" ]; then
-  sm_val=$(strip_quotes "$(grep '^SM_PANE=' "$SESSION_ENV" | cut -d= -f2- || true)")
+  sm_val=$(_env_val "$SESSION_ENV" SM_PANE)
   if [ "0.${PANE_INDEX}" = "${sm_val:-0.1}" ]; then
     ROLE="session_manager"
   elif [ "$PANE_INDEX" = "0" ]; then
@@ -44,7 +37,7 @@ if [ "$WINDOW_INDEX" = "0" ]; then
   else
     for tf in "${RUNTIME_DIR}"/team_*.env; do
       [ -f "$tf" ] || continue
-      wd_pane=$(strip_quotes "$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2-)")
+      wd_pane=$(_env_val "$tf" WATCHDOG_PANE)
       if [ "$wd_pane" = "0.${PANE_INDEX}" ]; then
         ROLE="watchdog"
         fn="${tf##*/}"
@@ -55,21 +48,11 @@ if [ "$WINDOW_INDEX" = "0" ]; then
     done
   fi
 else
-  mgr_pane="0"
-  team_env="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-  if [ -f "$team_env" ]; then
-    mgr_val=$(strip_quotes "$(grep '^MANAGER_PANE=' "$team_env" | cut -d= -f2-)")
-    [ -n "$mgr_val" ] && mgr_pane="$mgr_val"
-  fi
-  [ "$PANE_INDEX" = "$mgr_pane" ] && ROLE="manager"
+  mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
+  [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
 fi
 
-# Worktree directory
-wt_dir=""
-wt_env="${RUNTIME_DIR}/team_${TEAM_WINDOW}.env"
-if [ -f "$wt_env" ]; then
-  wt_dir=$(strip_quotes "$(grep '^WORKTREE_DIR=' "$wt_env" 2>/dev/null | head -1 | cut -d= -f2-)")
-fi
+wt_dir=$(_env_val "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 
 cat >> "$CLAUDE_ENV_FILE" << EOF
 export DOEY_RUNTIME="$RUNTIME_DIR"
