@@ -28,8 +28,11 @@ TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WIN}.env"
 [ ! -f "$TEAM_ENV" ] && { echo "ERROR: No team env for window ${TARGET_WIN}"; exit 1; }
 tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null | grep -qx "$TARGET_WIN" || { echo "ERROR: Window ${TARGET_WIN} not found"; exit 1; }
 
-# Load team env
-eval "$(grep -E '^(WORKER_PANES|WORKTREE_DIR|WORKTREE_BRANCH)=' "$TEAM_ENV" | sed 's/^/export /')"
+# Load team env (no eval — /tmp is world-writable)
+_tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
+WORKER_PANES=$(_tv WORKER_PANES)
+WORKTREE_DIR=$(_tv WORKTREE_DIR)
+WORKTREE_BRANCH=$(_tv WORKTREE_BRANCH)
 WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
 SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
 

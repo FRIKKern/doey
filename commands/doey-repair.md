@@ -29,7 +29,11 @@ for tf in "${RUNTIME_DIR}"/team_*.env; do
   WD_VAL="${WD_VAL%\"}" && WD_VAL="${WD_VAL#\"}"
   TW=$(basename "$tf" | sed 's/team_//;s/\.env//')
   SLOT=$(echo "$WD_VAL" | tr '.' '')  # "0.3" → "03"
-  eval "TEAM_FOR_${SLOT}=\$TW"
+  # Safe dynamic assignment without eval (bash 3.2 compatible)
+  case "$SLOT" in
+    02) TEAM_FOR_02="$TW" ;; 03) TEAM_FOR_03="$TW" ;; 04) TEAM_FOR_04="$TW" ;;
+    05) TEAM_FOR_05="$TW" ;; 06) TEAM_FOR_06="$TW" ;; 07) TEAM_FOR_07="$TW" ;;
+  esac
 done
 echo "Watchdog map: 0.2→T${TEAM_FOR_02:-?} 0.3→T${TEAM_FOR_03:-?} 0.4→T${TEAM_FOR_04:-?} 0.5→T${TEAM_FOR_05:-?} 0.6→T${TEAM_FOR_06:-?} 0.7→T${TEAM_FOR_07:-?}"
 ```

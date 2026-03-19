@@ -14,9 +14,16 @@ SESSION_ENV="${RUNTIME_DIR}/session.env"
 # Read unquoted value from env file: _env_val file key
 _env_val() { local v; v=$(grep "^$2=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true; v="${v%\"}"; echo "${v#\"}"; }
 
-SESSION_NAME=$(_env_val "$SESSION_ENV" SESSION_NAME)
-PROJECT_DIR=$(_env_val "$SESSION_ENV" PROJECT_DIR)
-PROJECT_NAME=$(_env_val "$SESSION_ENV" PROJECT_NAME)
+# Single-pass read of session.env (avoid repeated grep subshells)
+SESSION_NAME="" PROJECT_DIR="" PROJECT_NAME=""
+while IFS='=' read -r key value; do
+  value="${value%\"}" && value="${value#\"}"
+  case "$key" in
+    SESSION_NAME) SESSION_NAME="$value" ;;
+    PROJECT_DIR)  PROJECT_DIR="$value" ;;
+    PROJECT_NAME) PROJECT_NAME="$value" ;;
+  esac
+done < "$SESSION_ENV"
 
 # Pane identity
 PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0

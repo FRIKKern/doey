@@ -48,7 +48,9 @@ Accept "1", "this team", "all", "team 2", etc.
 for W in $TARGET_WINDOWS; do
   TEAM_ENV="${RUNTIME_DIR}/team_${W}.env"
   [ ! -f "$TEAM_ENV" ] && echo "WARNING: Team $W env not found — skipping" && continue
-  source "$TEAM_ENV"
+  # Safe reads (no source — /tmp is world-writable)
+  _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
+  WATCHDOG_PANE=$(_tv WATCHDOG_PANE); WORKER_PANES=$(_tv WORKER_PANES); WORKER_COUNT=$(_tv WORKER_COUNT)
   echo "Team $W: manager=0, watchdog=${WATCHDOG_PANE}, workers=${WORKER_PANES} (${WORKER_COUNT})"
 done
 ```
