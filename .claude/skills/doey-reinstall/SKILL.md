@@ -10,5 +10,4 @@ cd "$REPO_DIR" && git pull; bash "$REPO_DIR/install.sh"
 ```
 
 If git pull fails (uncommitted changes), warn but continue with install.
-
 Report: "Reinstall complete. Running sessions need: `doey stop && doey`"
