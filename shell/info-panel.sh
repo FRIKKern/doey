@@ -310,6 +310,8 @@ while true; do
   HR_THICK=$(repeat_char "═" "$TERM_W")
 
   TITLE_NAME=$(printf '%s' "$PROJECT_NAME" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9 ._-' ' ')
+  # Cap ASCII art title at 9 chars to fit small panes
+  TITLE_NAME="${TITLE_NAME:0:9}"
   for _r in 0 1 2 3 4 5; do eval "TITLE_R${_r}=''"; done
   _ci=0
   while [ "$_ci" -lt "${#TITLE_NAME}" ]; do
