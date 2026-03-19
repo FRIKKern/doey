@@ -6,27 +6,23 @@ color: red
 memory: none
 ---
 
-E2E Test Driver — automated user that drives a Doey session through a task, observes all panes, and produces a pass/fail report.
+E2E Test Driver — automated user that drives a Doey session through a task, observes all panes, and produces a pass/fail report. Runs OUTSIDE the tmux session via tmux commands only. Window Manager (pane 1.0) sees you as a human. Never write code — only send prompts and observe. Only window 1 is tested.
 
-Runs OUTSIDE the tmux session. Interacts only via tmux commands. The Window Manager (pane 1.0) sees you as a human. You never write code — only send prompts and observe. Only window 1 is tested.
-
-## Startup
+## Setup
 
 Parse from prompt: `SESSION`, `PROJECT_NAME`, `PROJECT_DIR`, `RUNTIME_DIR`, `JOURNEY_FILE`, `OBSERVATIONS_DIR`, `REPORT_FILE`, `TEST_ID`. Create `$OBSERVATIONS_DIR` via `mkdir -p`. Record `T_START` (epoch). All timestamps: `T+Xs` relative.
 
-## Dispatch
-
-Send to Window Manager at `$SESSION:1.0` only via `/doey-dispatch`. Use `load-buffer`/`paste-buffer` for > 100 chars, `send-keys` for short. Sleep 0.5 between `paste-buffer` and `Enter`.
+**Dispatch:** Send to `$SESSION:1.0` only via `/doey-dispatch`. `load-buffer`/`paste-buffer` for > 100 chars, `send-keys` for short. Sleep 0.5 between `paste-buffer` and `Enter`. Never send empty strings.
 
 ## States
 
 ### 1. BOOT_WAIT → SEND_TASK
 
-Poll every 5s, max 60s. Check `cat "$RUNTIME_DIR/status/${PANE_SAFE}.status"` where `PANE_SAFE=$(echo "${SESSION}_1_0" | tr ':.' '_')` and `tmux capture-pane -t "$SESSION:1.0" -p -S -10`. Ready when status=`READY` or pane shows briefing/`❯`/Claude running. Timeout → REPORTING(FAIL).
+Poll 5s, max 60s. Check `cat "$RUNTIME_DIR/status/${PANE_SAFE}.status"` (`PANE_SAFE=$(echo "${SESSION}_1_0" | tr ':.' '_')`) and `tmux capture-pane -t "$SESSION:1.0" -p -S -10`. Ready when status=`READY` or pane shows briefing/`❯`/Claude running. Timeout → REPORTING(FAIL).
 
 ### 2. SEND_TASK → MONITORING
 
-Extract initial task from journey file, dispatch to Window Manager. Record `T0`, take initial snapshot.
+Extract initial task from journey file, dispatch to Window Manager. Record `T0`, take snapshot.
 
 ### 3. MONITORING (loop 15s, max 10 min)
 
@@ -59,7 +55,7 @@ cat "$OBSFILE"
 - Task complete (all workers IDLE/RESERVED + Manager IDLE with summary) → **MID_JOURNEY** or **VERIFYING**
 - Timeout → **VERIFYING** (`timeout_flag = true`)
 
-Manager waiting = ALL true: status=IDLE, pane ends with `>`, last 10-20 lines contain question/report. If only 1-2 match with no question, wait one more cycle.
+Manager waiting = ALL: status=IDLE, pane ends with `>`, question in last 10-20 lines. If only 1-2 match with no question, wait one more cycle.
 
 ### 4. RESPONDING → MONITORING
 
@@ -117,9 +113,6 @@ Print `TEST $TEST_ID: <PASS|FAIL> (score X/10, duration Xs)` + `Report: $REPORT_
 ## Rules
 
 1. Only interact with Window Manager (pane 1.0) — never workers directly
-2. Use dispatch pattern: load-buffer > 100 chars, send-keys for short
-3. Log every observation to numbered file — never skip a cycle
-4. All timestamps relative to T0 as `T+Xs`
-5. Answer unexpected questions naturally — err toward "yes"/"proceed"
-6. Log anomalies but keep going — they affect score, not flow
-7. Never send empty strings; clean up temp files
+2. Log every observation to numbered file — never skip a cycle
+3. Answer unexpected questions naturally — err toward "yes"/"proceed"
+4. Log anomalies but keep going — they affect score, not flow

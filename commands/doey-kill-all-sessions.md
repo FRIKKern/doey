@@ -7,8 +7,7 @@ Kill ALL Doey tmux sessions, processes, and runtime files.
 
 ## Prompt
 
-**Confirm first:** "This will kill ALL Doey sessions, processes, and remove `/tmp/doey/*/`. Proceed?"
-Do NOT proceed without explicit yes.
+**Confirm first** — destructive and irreversible: "This will kill ALL Doey sessions, processes, and remove `/tmp/doey/*/`. Proceed?"
 
 ```bash
 SESSIONS=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^doey-' || true)
@@ -16,7 +15,6 @@ if [ -z "$SESSIONS" ]; then echo "No Doey sessions found."; exit 0; fi
 
 echo "Found:"; for s in $SESSIONS; do echo "  - $s"; done; echo ""
 
-# Kill all child processes in all panes (SIGTERM, then SIGKILL stragglers)
 kill_all_children() {
   local sig="${1:-}"
   for SESSION in $SESSIONS; do
@@ -37,7 +35,3 @@ for SESSION in $SESSIONS; do tmux kill-session -t "$SESSION" 2>/dev/null; echo "
 rm -rf /tmp/doey/*/
 echo "Runtime removed: /tmp/doey/*/"
 ```
-
-### Rules
-- **Always confirm** — destructive and irreversible
-- Kill processes before sessions (prevents orphans)

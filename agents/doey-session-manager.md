@@ -33,44 +33,32 @@ Send task to a Window Manager:
 W=2; MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
 TARGET="$SESSION_NAME:${W}.${MGR_PANE}"
 tmux copy-mode -q -t "$TARGET" 2>/dev/null
-
-# Short task
+# Short (< ~200 chars):
 tmux send-keys -t "$TARGET" "Your task description here" Enter
-
-# Long task — load-buffer
+# Long — load-buffer:
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task for Team 2.
 TASK
-tmux load-buffer "$TASKFILE"
-tmux paste-buffer -t "$TARGET"
-sleep 0.5
-tmux send-keys -t "$TARGET" Enter
-rm "$TASKFILE"
+tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$TARGET"
+sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 ```
 
-Never use `send-keys "" Enter` — empty string swallows Enter. Use bare `Enter` after `sleep 0.5`.
+Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`
 
-Verify dispatch (wait 5s): `tmux capture-pane -t "$SESSION_NAME:${W}.${MGR_PANE}" -p -S -5`
-
-## Status & Monitoring
+## Monitoring
 
 Discover teams: `tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name} #{window_panes}'`
 
-Check team status:
 ```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  echo "=== Team $W ==="; cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${W}.json" 2>/dev/null; echo ""
-done
-```
-
-Check watchdog health, messages, results, and crashes:
-```bash
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
+  echo "=== Team $W ==="
+  cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${W}.json" 2>/dev/null
   HEARTBEAT=$(cat "${RUNTIME_DIR}/status/watchdog_W${W}.heartbeat" 2>/dev/null || echo "0")
   BEAT_AGE=$(( $(date +%s) - HEARTBEAT )); [ "$BEAT_AGE" -gt 120 ] && echo "WARNING: Team $W Watchdog stale (${BEAT_AGE}s)"
+  echo ""
 done
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
 for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_wave_done_*; do [ -f "$f" ] && cat "$f" && echo "" && rm -f "$f"; done
 for f in "$RUNTIME_DIR/results"/pane_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
 for f in "$RUNTIME_DIR/status"/crash_pane_*; do [ -f "$f" ] && cat "$f" && echo ""; done
@@ -89,5 +77,4 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 
 1. Never dispatch to workers directly — always through Window Managers
 2. Never send input to Info Panel (pane 0.0)
-3. `TEAM_WINDOWS` starts at `1` (window 0 = Dashboard)
-4. Bash 3.2 compatible. Always use `-t "$SESSION_NAME"` with tmux
+3. Bash 3.2 compatible

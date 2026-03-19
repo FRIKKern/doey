@@ -1,6 +1,6 @@
 # Skill: doey-clear
 
-Kill and relaunch Claude instances in a team. Resets process, context, name, agent, status. Skips reserved workers unless `--force`.
+Kill and relaunch Claude instances. Resets process, context, name, agent, status. Skips reserved workers unless `--force`.
 
 ## Usage
 `/doey-clear` — interactive
@@ -21,18 +21,18 @@ source "${RUNTIME_DIR}/session.env"
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 ```
 
-### Interactive prompt (no arguments only)
+### Interactive prompt (no arguments)
 
-If arguments were provided, skip to Parse arguments.
+Skip if arguments provided.
 
-**From Window Manager (WINDOW_INDEX > 0):**
-> 1. **This team** (Team {W}) — manager, watchdog, all workers ← suggested
-> 2. **All teams** — all {N} teams
-> 3. **Workers only** (Team {W}) — keep manager and watchdog
+**Window Manager (WINDOW_INDEX > 0):**
+> 1. **This team** (Team {W}) ← suggested
+> 2. **All teams**
+> 3. **Workers only** (Team {W})
 
-**From Session Manager (WINDOW_INDEX = 0):**
-> 1. **All teams** — all {N} teams ← suggested
-> 2. **A specific team** — e.g., Team 1, Team 2
+**Session Manager (WINDOW_INDEX = 0):**
+> 1. **All teams** ← suggested
+> 2. **A specific team**
 
 Accept "1", "this team", "all", "team 2", etc.
 
@@ -48,16 +48,14 @@ Accept "1", "this team", "all", "team 2", etc.
 for W in $TARGET_WINDOWS; do
   TEAM_ENV="${RUNTIME_DIR}/team_${W}.env"
   [ ! -f "$TEAM_ENV" ] && echo "WARNING: Team $W env not found — skipping" && continue
-  WP=$(grep '^WORKER_PANES=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
-  WC=$(grep '^WORKER_COUNT=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
-  WD=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
-  echo "Team $W: manager=pane 0, watchdog=${WD}, workers=${WP} (${WC} workers)"
+  source "$TEAM_ENV"
+  echo "Team $W: manager=0, watchdog=${WATCHDOG_PANE}, workers=${WORKER_PANES} (${WORKER_COUNT})"
 done
 ```
 
-### Helper: kill_pane_process
+### kill_pane_process
 
-SIGTERM → wait → SIGKILL if needed → clear terminal. Returns 1 if pane missing.
+SIGTERM → wait 1s → SIGKILL if needed → clear terminal. Returns 1 if pane missing.
 
 ```bash
 kill_pane_process() {
@@ -77,32 +75,30 @@ kill_pane_process() {
 
 ### Clear each target team
 
-For each team window W. **If WORKERS_ONLY, skip Manager and Watchdog.**
+For each window W. **If WORKERS_ONLY, skip Manager and Watchdog.**
 
-#### Manager (pane W.0)
+#### Manager (W.0)
 
 ```bash
 MGR_PANE="${SESSION_NAME}:${W}.0"
-echo "  ${W}.0 Window Manager..."
 kill_pane_process "$MGR_PANE"
 tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --name \"T${W} Window Manager\" --agent \"t${W}-manager\"" Enter
-echo "  ${W}.0 Window Manager ✓"; sleep 0.5
+echo "  ${W}.0 Manager ✓"; sleep 0.5
 ```
 
-#### Watchdog (in Dashboard window 0)
+#### Watchdog (Dashboard window 0)
 
-**CRITICAL**: After relaunch, send briefing + scan loop or the Watchdog sits idle.
+**CRITICAL**: After relaunch, send briefing + scan loop or Watchdog sits idle.
 
 ```bash
 WATCHDOG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2 | tr -d '"')
 WDG_PANE="${SESSION_NAME}:${WATCHDOG_PANE}"
-echo "  ${WATCHDOG_PANE} Watchdog..."
 kill_pane_process "$WDG_PANE"
 tmux send-keys -t "$WDG_PANE" "claude --dangerously-skip-permissions --model opus --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\"" Enter
 echo "  ${WATCHDOG_PANE} Watchdog ✓"; sleep 0.5
 ```
 
-After all panes relaunched, schedule briefing + scan loop:
+Schedule briefing + scan loop after all panes relaunched:
 
 ```bash
 WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' ',')
@@ -117,7 +113,7 @@ WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' '
 echo "  ${WATCHDOG_PANE} Watchdog briefing scheduled (~35s)"
 ```
 
-#### Workers (panes W.1+)
+#### Workers (W.1+)
 
 ```bash
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
@@ -126,19 +122,15 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
   STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
   if [ "$FORCE" != "true" ] && [ -f "$STATUS_FILE" ] && grep -q "STATUS: RESERVED" "$STATUS_FILE"; then
-    echo "  ${W}.${wp} — reserved, skipping (use --force)"; continue
+    echo "  ${W}.${wp} — reserved (use --force)"; continue
   fi
-
-  kill_pane_process "$PANE" || { echo "  ${W}.${wp} — not found, skipping"; continue; }
+  kill_pane_process "$PANE" || { echo "  ${W}.${wp} — not found"; continue; }
 
   W_NAME=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null || echo "T${W} W${wp}")
   WORKER_PROMPT=$(grep -rl "pane ${W}\.${wp} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1 || true)
-
-  if [ -n "$WORKER_PROMPT" ]; then
-    tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\" --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter
-  else
-    tmux send-keys -t "$PANE" "claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\"" Enter
-  fi
+  CMD="claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\""
+  [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
+  tmux send-keys -t "$PANE" "$CMD" Enter
 
   mkdir -p "${RUNTIME_DIR}/status"
   cat > "$STATUS_FILE" << EOF
@@ -151,20 +143,19 @@ EOF
 done
 ```
 
-### Report results
+### Report
 
 ```
 Clear complete:
-  Team 1: Manager ✓, Watchdog ✓, 6 workers cleared ✓
-  Team 2: Manager ✓, Watchdog ✓, 5 workers cleared, 1 reserved (skipped) ✓
+  Team 1: Manager ✓, Watchdog ✓, 6 cleared ✓
+  Team 2: Manager ✓, Watchdog ✓, 5 cleared, 1 reserved (skipped) ✓
 ```
 
 ### Rules
 - Order: Manager → Watchdog → Workers
 - Never clear Session Manager (0.1) or Info Panel (0.0)
-- If caller IS a Window Manager being cleared: warn, then proceed
+- If caller IS the Window Manager being cleared: warn, then proceed
 - Skip reserved workers unless `--force`
 - Kill by PID (SIGTERM → SIGKILL), never via send-keys
-- Clear terminal before relaunching
 - Agents: `t${W}-manager`, `t${W}-watchdog`; workers use `--append-system-prompt-file`
 - `sleep 0.5` between panes; bash 3.2 compatible

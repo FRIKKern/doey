@@ -18,11 +18,11 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 
 TARGET="$PANE_NUMBER"  # from user argument
-if [ "$TARGET" = "0" ]; then echo "ERROR: Cannot stop pane ${WINDOW_INDEX}.0 (Window Manager)"; exit 1; fi
+[ "$TARGET" = "0" ] && { echo "ERROR: Cannot stop pane ${WINDOW_INDEX}.0 (Window Manager)"; exit 1; }
 
 VALID=false
 for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ "$i" = "$TARGET" ] && VALID=true; done
-if [ "$VALID" = "false" ]; then echo "ERROR: Pane ${WINDOW_INDEX}.${TARGET} not a worker. Valid: ${WORKER_PANES}"; exit 1; fi
+[ "$VALID" = "false" ] && { echo "ERROR: Pane ${WINDOW_INDEX}.${TARGET} not a worker. Valid: ${WORKER_PANES}"; exit 1; }
 
 PANE="${SESSION_NAME}:${WINDOW_INDEX}.${TARGET}"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
@@ -32,6 +32,7 @@ CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
 if [ -z "$CHILD_PID" ]; then
   echo "No Claude process in pane ${WINDOW_INDEX}.${TARGET} — already stopped"
 else
+  # Graceful TERM, then KILL if needed
   kill "$CHILD_PID" 2>/dev/null; sleep 3
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && { kill -9 "$CHILD_PID" 2>/dev/null; sleep 1; }
@@ -39,7 +40,6 @@ else
   [ -n "$CHILD_PID" ] && { echo "ERROR: Failed to stop — manual intervention needed"; exit 1; }
 fi
 
-# Update status
 PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/status"
 cat > "${RUNTIME_DIR}/status/${PANE_SAFE}.status" << EOF

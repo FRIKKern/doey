@@ -35,4 +35,4 @@ done
 echo "Broadcast delivered to ${DELIVERED} panes"
 ```
 
-Report delivery count. Watchdog delivers messages to idle panes via `send-keys`.
+Report delivery count.
