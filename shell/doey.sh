@@ -1,29 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# ──────────────────────────────────────────────────────────────────────
-# doey — Project-aware TMUX Doey launcher
-#
-# Usage:
-#   doey              # Smart launch (auto-attach or project picker)
-#   doey init         # Register current directory as a project
-#   doey list         # Show all registered projects + status
-#   doey stop         # Stop session for current project
-#   doey purge        # Scan and clean stale runtime files
-#   doey update       # Pull latest + reinstall (alias: reinstall)
-#   doey reload       # Hot-reload running session (Manager + Watchdog)
-#   doey doctor       # Check installation health & prerequisites
-#   doey remove NAME  # Unregister a project from the registry
-#   doey uninstall    # Remove all Doey files
-#   doey test         # Run E2E integration test
-#   doey version      # Show version and install info
-#   doey 4x3          # Launch/reattach with specific grid
-#   doey dynamic      # Launch with dynamic grid (add workers on demand)
-#   doey add          # Add a worker column (2 workers) to dynamic session
-#   doey remove 2     # Remove worker column 2 from dynamic session
-#   doey --help       # Show usage
-#
-# CLI command: "doey" is installed to ~/.local/bin/doey.
-# ──────────────────────────────────────────────────────────────────────
+# doey — Project-aware TMUX multi-agent launcher. Run "doey --help" for usage.
 
 # ── Color palette ─────────────────────────────────────────────────────
 BRAND='\033[1;36m'    # Bold cyan
@@ -779,20 +756,14 @@ _purge_file_mtime() {
   stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
 }
 
-_purge_collect() {
-  local file="$1" list_file="$2"
-  local size
-  size=$(wc -c < "$file" 2>/dev/null | tr -d ' ')
-  echo "${size}:${file}" >> "$list_file"
-}
-
 _purge_collect_stale() {
   local glob="$1" max_age="$2" now="$3" list_file="$4" label="${5:-}"
-  local count=0
+  local count=0 size
   for f in $glob; do
     [[ -f "$f" ]] || continue
     if [[ "$max_age" -eq 0 ]] || [[ $((now - $(_purge_file_mtime "$f"))) -gt "$max_age" ]]; then
-      _purge_collect "$f" "$list_file"
+      size=$(wc -c < "$f" 2>/dev/null | tr -d ' ')
+      echo "${size}:${f}" >> "$list_file"
       count=$((count + 1))
     fi
   done
@@ -814,7 +785,8 @@ _purge_scan_runtime() {
       pane_id="$(head -1 "$f" | sed 's/^PANE: //')"
       echo "$live_panes" | grep -qF "$pane_id" && continue
     fi
-    _purge_collect "$f" "$list_file"
+    local sz; sz=$(wc -c < "$f" 2>/dev/null | tr -d ' ')
+    echo "${sz}:${f}" >> "$list_file"
     status_count=$((status_count + 1))
   done
   [[ $status_count -gt 0 ]] && printf "         Found %d stale status files\n" "$status_count"
@@ -829,7 +801,8 @@ _purge_scan_runtime() {
              "$rt"/status/pane_hash_* "$rt"/status/watchdog_W*.heartbeat \
              "$rt"/status/watchdog_pane_states_W*.json; do
       [[ -f "$f" ]] || continue
-      _purge_collect "$f" "$list_file"
+      local sz; sz=$(wc -c < "$f" 2>/dev/null | tr -d ' ')
+      echo "${sz}:${f}" >> "$list_file"
     done
   fi
 
@@ -840,82 +813,46 @@ _purge_scan_runtime() {
 }
 
 _purge_scan_research() {
-  local rt="$1" list_file="$2" now="$3"
-  local before=0
+  local rt="$1" list_file="$2" now="$3" before=0
   [[ -s "$list_file" ]] && before="$(wc -l < "$list_file" | tr -d ' ')"
   _purge_collect_stale "$rt/research/*" 172800 "$now" "$list_file" ""
   _purge_collect_stale "$rt/reports/*"  172800 "$now" "$list_file" ""
   local after=0
   [[ -s "$list_file" ]] && after="$(wc -l < "$list_file" | tr -d ' ')"
   local count=$((after - before))
-  if [[ $count -gt 0 ]]; then
-    printf "         Found %d research/report files older than 48h\n" "$count"
-  else
-    printf "         ${DIM}No expired research artifacts${RESET}\n"
-  fi
+  [[ $count -gt 0 ]] && printf "         Found %d research/report files older than 48h\n" "$count" \
+    || printf "         ${DIM}No expired research artifacts${RESET}\n"
 }
 
 _purge_audit_context() {
-  local total_bytes=0
-  local recommendations=""
-  local rec_count=0
-
+  local total_bytes=0 recommendations="" rec_count=0 size lines
   printf '\n'
-
-  # Check installed agents
   for f in "$HOME"/.claude/agents/doey-*.md; do
     [[ -f "$f" ]] || continue
-    local size lines short_name
-    size=$(wc -c < "$f" | tr -d ' ')
-    lines=$(wc -l < "$f" | tr -d ' ')
-    short_name="~/.claude/agents/$(basename "$f")"
-    printf "         %-45s %s  (%d lines)\n" "$short_name" "$(_purge_format_bytes "$size")" "$lines"
+    size=$(wc -c < "$f" | tr -d ' '); lines=$(wc -l < "$f" | tr -d ' ')
+    printf "         %-45s %s  (%d lines)\n" "~/.claude/agents/$(basename "$f")" "$(_purge_format_bytes "$size")" "$lines"
     total_bytes=$((total_bytes + size))
-    if [[ $size -gt 8192 ]]; then
-      recommendations="${recommendations}         - $(basename "$f") is >8KB — consider splitting rules into memory\n"
-      rec_count=$((rec_count + 1))
-    fi
+    [[ $size -gt 8192 ]] && { recommendations="${recommendations}         - $(basename "$f") is >8KB — consider splitting rules into memory\n"; rec_count=$((rec_count + 1)); }
   done
-
-  # Check installed commands/skills
   local skill_count=0 skill_bytes=0
   for f in "$PROJECT_DIR"/.claude/skills/doey-*/SKILL.md; do
     [[ -f "$f" ]] || continue
-    local size
-    size=$(wc -c < "$f" | tr -d ' ')
-    skill_bytes=$((skill_bytes + size))
-    skill_count=$((skill_count + 1))
-    if [[ $size -gt 3072 ]]; then
-      recommendations="${recommendations}         - $(basename "$f") is >3KB — consider compressing\n"
-      rec_count=$((rec_count + 1))
-    fi
+    size=$(wc -c < "$f" | tr -d ' '); skill_bytes=$((skill_bytes + size)); skill_count=$((skill_count + 1))
+    [[ $size -gt 3072 ]] && { recommendations="${recommendations}         - $(basename "$f") is >3KB — consider compressing\n"; rec_count=$((rec_count + 1)); }
   done
   if [[ $skill_count -gt 0 ]]; then
     printf "         %-45s %s total\n" "${skill_count} skills" "$(_purge_format_bytes "$skill_bytes")"
     total_bytes=$((total_bytes + skill_bytes))
   fi
-  if [[ $skill_bytes -gt 30720 ]]; then
-    recommendations="${recommendations}         - ${skill_count} skills total >30KB — consider per-role skill sets\n"
-    rec_count=$((rec_count + 1))
-  fi
-
-  # Check project CLAUDE.md
-  local project_dir
-  project_dir="$(pwd)"
-  if [[ -f "$project_dir/CLAUDE.md" ]]; then
-    local size lines
-    size=$(wc -c < "$project_dir/CLAUDE.md" | tr -d ' ')
-    lines=$(wc -l < "$project_dir/CLAUDE.md" | tr -d ' ')
+  [[ $skill_bytes -gt 30720 ]] && { recommendations="${recommendations}         - ${skill_count} skills total >30KB — consider per-role skill sets\n"; rec_count=$((rec_count + 1)); }
+  local cwd; cwd="$(pwd)"
+  if [[ -f "$cwd/CLAUDE.md" ]]; then
+    size=$(wc -c < "$cwd/CLAUDE.md" | tr -d ' '); lines=$(wc -l < "$cwd/CLAUDE.md" | tr -d ' ')
     printf "         %-45s %s  (%d lines)\n" "CLAUDE.md" "$(_purge_format_bytes "$size")" "$lines"
     total_bytes=$((total_bytes + size))
-    if [[ $size -gt 5120 ]]; then
-      recommendations="${recommendations}         - CLAUDE.md is >5KB — consider moving stable info to memory\n"
-      rec_count=$((rec_count + 1))
-    fi
+    [[ $size -gt 5120 ]] && { recommendations="${recommendations}         - CLAUDE.md is >5KB — consider moving stable info to memory\n"; rec_count=$((rec_count + 1)); }
   fi
-
   printf "         %-45s ~%s\n" "Total loaded context:" "$(_purge_format_bytes "$total_bytes")"
-
   if [[ $rec_count -gt 0 ]]; then
     printf '\n'
     printf "         ${WARN}Recommendations:${RESET}\n"
@@ -948,20 +885,11 @@ _purge_summary() {
   local rt_files="$1" rt_bytes="$2" res_files="$3" res_bytes="$4" dry_run="$5"
   local total_files=$((rt_files + res_files))
   local total_bytes=$((rt_bytes + res_bytes))
-
   printf '\n'
-  printf "         ${DIM}┌─────────────┬────────┬──────────────┐${RESET}\n"
-  printf "         ${DIM}│${RESET} ${BOLD}Category${RESET}    ${DIM}│${RESET} ${BOLD}Files${RESET}  ${DIM}│${RESET} ${BOLD}Size${RESET}         ${DIM}│${RESET}\n"
-  printf "         ${DIM}├─────────────┼────────┼──────────────┤${RESET}\n"
-  printf "         ${DIM}│${RESET} Runtime     ${DIM}│${RESET} %5d  ${DIM}│${RESET} %-12s ${DIM}│${RESET}\n" "$rt_files" "$(_purge_format_bytes "$rt_bytes")"
-  printf "         ${DIM}│${RESET} Research    ${DIM}│${RESET} %5d  ${DIM}│${RESET} %-12s ${DIM}│${RESET}\n" "$res_files" "$(_purge_format_bytes "$res_bytes")"
-  printf "         ${DIM}├─────────────┼────────┼──────────────┤${RESET}\n"
-  printf "         ${DIM}│${RESET} ${BOLD}Total${RESET}       ${DIM}│${RESET} ${BOLD}%5d${RESET}  ${DIM}│${RESET} ${BOLD}%-12s${RESET} ${DIM}│${RESET}\n" "$total_files" "$(_purge_format_bytes "$total_bytes")"
-  printf "         ${DIM}└─────────────┴────────┴──────────────┘${RESET}\n"
-
-  if $dry_run; then
-    printf "         ${DIM}(dry run — no files were deleted)${RESET}\n"
-  fi
+  printf "         Runtime: %d files, %s\n" "$rt_files" "$(_purge_format_bytes "$rt_bytes")"
+  printf "         Research: %d files, %s\n" "$res_files" "$(_purge_format_bytes "$res_bytes")"
+  printf "         ${BOLD}Total: %d files, %s${RESET}\n" "$total_files" "$(_purge_format_bytes "$total_bytes")"
+  $dry_run && printf "         ${DIM}(dry run — no files were deleted)${RESET}\n"
   printf '\n'
 }
 
@@ -983,9 +911,7 @@ _purge_execute() {
 _purge_write_report() {
   local rt="$1" project="$2" active="$3" dry_run="$4" scope="$5"
   local rt_files="$6" rt_bytes="$7" res_files="$8" res_bytes="$9"
-  local ts
-  ts="$(date '+%Y-%m-%dT%H:%M:%S%z')"
-
+  local ts; ts="$(date '+%Y-%m-%dT%H:%M:%S%z')"
   mkdir -p "$rt/results"
   cat > "$rt/results/purge_report_$(date '+%Y%m%d_%H%M%S').json" << REPORT_EOF
 {
@@ -1001,17 +927,6 @@ _purge_write_report() {
 }
 REPORT_EOF
   printf "   Report: ${DIM}%s/results/purge_report_*.json${RESET}\n" "$rt"
-}
-
-_purge_tally() {
-  local list_file="$1"
-  _COUNT=0; _BYTES=0
-  [[ -s "$list_file" ]] || return 0
-  while IFS=: read -r size path; do
-    [[ -z "$path" ]] && continue
-    _COUNT=$((_COUNT + 1))
-    _BYTES=$((_BYTES + size))
-  done < "$list_file"
 }
 
 purge_usage() {
@@ -1104,27 +1019,28 @@ doey_purge() {
 
   local rt_files=0 rt_bytes=0 res_files=0 res_bytes=0
 
+  # Tally size:path entries in list_file, setting _TALLY_N and _TALLY_B
+  _tally() { _TALLY_N=0; _TALLY_B=0; [[ -s "$1" ]] || return 0; while IFS=: read -r _s _p; do [[ -z "$_p" ]] && continue; _TALLY_N=$((_TALLY_N+1)); _TALLY_B=$((_TALLY_B+_s)); done < "$1"; }
+
   # Step: Scan runtime files
   if [[ "$scope" == "runtime" || "$scope" == "all" ]]; then
     step=$((step + 1))
     step_start "$step" "Scanning stale runtime files..."
     step_done
     _purge_scan_runtime "$runtime_dir" "$session_active" "$session" "$list_file" "$now"
-    _purge_tally "$list_file"
-    rt_files=$_COUNT
-    rt_bytes=$_BYTES
+    _tally "$list_file"; rt_files=$_TALLY_N; rt_bytes=$_TALLY_B
   fi
 
   # Step: Scan research artifacts (only for --scope all)
   if [[ "$scope" == "all" ]]; then
     step=$((step + 1))
-    local rt_count_before=$_COUNT
+    local rt_count_before=$rt_files
     step_start "$step" "Scanning expired research artifacts..."
     step_done
     _purge_scan_research "$runtime_dir" "$list_file" "$now"
-    _purge_tally "$list_file"
-    res_files=$((_COUNT - rt_count_before))
-    res_bytes=$((_BYTES - rt_bytes))
+    _tally "$list_file"
+    res_files=$((_TALLY_N - rt_count_before))
+    res_bytes=$((_TALLY_B - rt_bytes))
   fi
 
   # Step: Audit context
@@ -1227,16 +1143,13 @@ _launch_session_core() {
   [[ "$headless" -eq 1 ]] && hook_indent="  "
   install_doey_hooks "$dir" "$hook_indent"
 
-  local worker_panes_csv
+  local worker_panes_csv _step=0
   worker_panes_csv="$(_build_worker_csv "$total")"
 
-  # -- Session creation --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 1 "Creating session for ${name}..."
-  else
-    printf "  ${DIM}Creating session ${session}...${RESET}\n"
-  fi
+  _lstep() { _step=$((_step + 1)); if [[ "$headless" -eq 0 ]]; then step_start "$_step" "$1"; else printf "  ${DIM}%s${RESET}\n" "$1"; fi; }
+  _ldone() { [[ "$headless" -eq 0 ]] && step_done; }
 
+  _lstep "Creating session for ${name}..."
   _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
 
   cat > "${runtime_dir}/session.env" << MANIFEST
@@ -1261,95 +1174,57 @@ MANIFEST
 
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
   tmux new-window -t "$session" -c "$dir"
+  _ldone
 
-  [[ "$headless" -eq 0 ]] && step_done
-
-  # -- Theme --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 2 "Applying theme..."
-  else
-    printf "  ${DIM}Applying theme...${RESET}\n"
-  fi
+  _lstep "Applying theme..."
   local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   apply_doey_theme "$session" "$name" "$border_fmt" 2
-  [[ "$headless" -eq 0 ]] && step_done
+  _ldone
 
-  # -- Grid --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 3 "Building ${cols}x${rows} grid (${total} panes)..."
-  else
-    printf "  ${DIM}Building ${cols}x${rows} grid (${total} panes)...${RESET}\n"
-  fi
-
+  _lstep "Building ${cols}x${rows} grid (${total} panes)..."
   for (( r=1; r<rows; r++ )); do
     tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
   done
   tmux select-layout -t "$session:${team_window}" even-vertical
-
   for (( r=0; r<rows; r++ )); do
     for (( c=1; c<cols; c++ )); do
       tmux split-window -h -t "$session:${team_window}.$((r * cols))" -c "$dir"
     done
   done
-
   sleep 2
   local actual
   actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
   [[ "$actual" -ne "$total" ]] && \
     printf "\n   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
+  _ldone
 
-  [[ "$headless" -eq 0 ]] && step_done
-
-  # -- Name panes --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 4 "Naming panes..."
-  else
-    printf "  ${DIM}Naming panes...${RESET}\n"
-  fi
-
+  _lstep "Naming panes..."
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   for (( i=1; i<total; i++ )); do
     tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${i}"
   done
   tmux rename-window -t "$session:${team_window}" "Local Team"
+  _ldone
 
-  [[ "$headless" -eq 0 ]] && step_done
-
-  # -- Manager & Watchdog --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 5 "Launching Window Manager & Watchdog..."
-  else
-    printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
-  fi
-
+  _lstep "Launching Window Manager & Watchdog..."
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
   _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
-
   _build_worker_pane_list "$session" "$team_window"
   _brief_team "$session" "$team_window" "${WDG_SLOT_1}" "$_WPL_RESULT" "$worker_count" "Grid ${grid}"
-
   (
     sleep 15
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
-
   trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
+  _ldone
 
-  [[ "$headless" -eq 0 ]] && step_done
-
-  # -- Boot workers --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 6 "Booting ${worker_count} workers..."
-    printf '\n'
-  else
-    printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
-  fi
-
+  _lstep "Booting ${worker_count} workers..."
+  [[ "$headless" -eq 0 ]] && printf '\n'
   local booted=0
   for (( i=1; i<total; i++ )); do
     booted=$((booted + 1))
-    [[ "$headless" -eq 0 ]] && printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${booted}${RESET}${DIM}/${worker_count}${RESET}  "
+    [[ "$headless" -eq 0 ]] && printf "\r   ${DIM}[${_step}/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${booted}${RESET}${DIM}/${worker_count}${RESET}  "
     _boot_worker "$session" "$runtime_dir" "$team_window" "$i" "$booted" "$booted"
   done
   [[ "$headless" -eq 0 ]] && printf "${SUCCESS}done${RESET}\n"
@@ -1401,8 +1276,7 @@ BANNER
 
 _print_full_banner() {
   local tagline="${1:-Let me Doey for you}"
-  printf '\n'
-  printf "${BRAND}"
+  printf "\n${BRAND}"
   cat << 'DOG'
             .
            ...      :-=++++==--:
@@ -1429,10 +1303,8 @@ _print_full_banner() {
                                    -#*@@@@@@@@@.
                                      .=#@@@@%+.
 DOG
-  printf '\n'
   _print_doey_banner
-  printf "   ${DIM}${tagline}${RESET}\n"
-  printf '\n'
+  printf "   ${DIM}${tagline}${RESET}\n\n"
 }
 
 # Clean up old session, runtime dir, and stale worktree branches
