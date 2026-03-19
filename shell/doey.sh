@@ -1516,7 +1516,7 @@ reload_session() {
     [ -f "$_te" ] || continue
     local _wt_dir
     _wt_dir=$(_env_val "$_te" WORKTREE_DIR)
-    [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ] && install_doey_hooks "$_wt_dir" "  "
+    { [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ] && install_doey_hooks "$_wt_dir" "  "; } || true
   done
 
   safe_source_session_env "${runtime_dir}/session.env"
@@ -2196,6 +2196,7 @@ _read_team_state() {
   [ "$_ts_cols" -lt 1 ] && _ts_cols=1
 
   [ -n "$_ts_wt_dir" ] && [ -d "$_ts_wt_dir" ] && _ts_dir="$_ts_wt_dir"
+  return 0
 }
 
 _boot_worker() {
