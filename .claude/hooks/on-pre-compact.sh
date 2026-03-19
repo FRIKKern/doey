@@ -6,29 +6,22 @@ source "$(dirname "$0")/common.sh"
 init_hook
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-CURRENT_TASK=$([ -f "$STATUS_FILE" ] && grep '^TASK:' "$STATUS_FILE" | cut -d: -f2- | sed 's/^ //' || true)
+CURRENT_TASK=$(grep '^TASK:' "$STATUS_FILE" 2>/dev/null | cut -d: -f2- | sed 's/^ //' || true)
 RESEARCH_TOPIC=$(cat "${RUNTIME_DIR}/research/${PANE_SAFE}.task" 2>/dev/null || true)
 REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
-
-PROJECT_DIR=""
-[ -f "${RUNTIME_DIR}/session.env" ] && PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" | cut -d= -f2- | tr -d '"') || true
+PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
 SEARCH_DIR="${DOEY_TEAM_DIR:-$PROJECT_DIR}"
 
-# Recently modified project files (last 10 min) — skip for Watchdog
 RECENT_FILES=""
 if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
   FIND_CMD="find $SEARCH_DIR -maxdepth 4 \
     \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
     -not -path '*/node_modules/*' -not -path '*/.git/*' -print0"
   CUTOFF_AWK='$1 >= cutoff {$1=""; print substr($0,2)}'
-  if stat -f '%m' /dev/null 2>/dev/null; then
-    RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null | \
-      awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
-  else
-    RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 stat -c '%Y %n' 2>/dev/null | \
-      awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
-  fi
+  STAT_ARGS="-c %Y %n"; stat -f '%m' /dev/null 2>/dev/null && STAT_ARGS="-f %m %N"
+  RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 stat $STAT_ARGS 2>/dev/null | \
+    awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
 if is_manager; then       ROLE_LABEL="the Doey Window Manager"
@@ -36,7 +29,6 @@ elif is_watchdog; then    ROLE_LABEL="the Doey Watchdog"
 else                      ROLE_LABEL="a Doey worker"
 fi
 
-# Output context preservation message to stdout
 cat <<CONTEXT
 ## Context Preservation (Pre-Compaction)
 **Pane:** ${PANE}
@@ -49,7 +41,6 @@ ${RECENT_FILES:-None detected}
 **Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. Restore any tracked state from the sections below. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
-# Collect basenames of matching files into a newline-separated string
 _collect_basenames() {
   local result=""
   for f in "$@"; do

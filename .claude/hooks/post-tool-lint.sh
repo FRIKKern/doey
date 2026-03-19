@@ -4,9 +4,8 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-_HAS_JQ=false; command -v jq >/dev/null 2>&1 && _HAS_JQ=true
 _parse() {
-  if "$_HAS_JQ"; then
+  if command -v jq >/dev/null 2>&1; then
     echo "$INPUT" | jq -r ".$1 // empty" 2>/dev/null || echo ""
   else
     echo "$INPUT" | grep -o "\"${1##*.}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed "s/.*\"${1##*.}\"[[:space:]]*:[[:space:]]*\"//;s/\"$//" 2>/dev/null || echo ""
@@ -19,9 +18,8 @@ FILE_PATH=$(_parse tool_input.file_path)
 case "$FILE_PATH" in *.sh) ;; *) exit 0 ;; esac
 [ -f "$FILE_PATH" ] || exit 0
 
-# Skip self and test harness (contain check patterns as literals)
-SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-case "$FILE_PATH" in "$SELF"|*/tests/test-bash-compat.sh) exit 0 ;; esac
+# Skip files containing check patterns as literals
+case "$(basename "$FILE_PATH")" in post-tool-lint.sh|test-bash-compat.sh) exit 0 ;; esac
 
 NL='
 '

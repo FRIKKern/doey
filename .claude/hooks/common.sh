@@ -5,23 +5,20 @@ set -euo pipefail
 
 init_hook() {
   INPUT=$(cat)
-
   [ -z "${TMUX_PANE:-}" ] && exit 0
 
   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   [ -z "$RUNTIME_DIR" ] && exit 0
 
-  # IMPORTANT: -t "$TMUX_PANE" resolves THIS pane, not the focused pane.
-  # Without -t, all workers misidentify as Window Manager.
+  # -t "$TMUX_PANE" resolves THIS pane (without -t, workers misidentify as Manager)
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
   PANE_SAFE=${PANE//[:.]/_}
   SESSION_NAME="${PANE%%:*}"
   PANE_INDEX="${PANE##*.}"
-  local _wp="${PANE#*:}"
-  WINDOW_INDEX="${_wp%.*}"
+  local wp="${PANE#*:}"
+  WINDOW_INDEX="${wp%.*}"
   NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
-  # Ensure runtime dirs exist (fast-path: skip if all present)
   if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/messages" ] || [ ! -d "${RUNTIME_DIR}/research" ] || [ ! -d "${RUNTIME_DIR}/reports" ]; then
     mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/messages"
   fi
@@ -37,22 +34,14 @@ parse_field() {
 }
 
 load_team_env() {
-  # Populates _TEAM_WD_PANE, _TEAM_MGR_PANE, _TEAM_WORKER_PANES, _TEAM_WORKER_COUNT.
   local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   [ -f "$team_file" ] || return 1
-  _TEAM_WD_PANE="" _TEAM_MGR_PANE="" _TEAM_WORKER_PANES="" _TEAM_WORKER_COUNT=""
-  while IFS='=' read -r key value; do
-    value="${value%\"}" && value="${value#\"}"
-    case "$key" in
-      WATCHDOG_PANE)  _TEAM_WD_PANE="$value" ;;
-      WORKER_PANES)   _TEAM_WORKER_PANES="$value" ;;
-      MANAGER_PANE)   _TEAM_MGR_PANE="$value" ;;
-      WORKER_COUNT)   _TEAM_WORKER_COUNT="$value" ;;
-    esac
-  done < "$team_file"
+  _TEAM_WD_PANE=$(_read_team_key "$team_file" WATCHDOG_PANE)
+  _TEAM_MGR_PANE=$(_read_team_key "$team_file" MANAGER_PANE)
+  _TEAM_WORKER_PANES=$(_read_team_key "$team_file" WORKER_PANES)
+  _TEAM_WORKER_COUNT=$(_read_team_key "$team_file" WORKER_COUNT)
 }
 
-# Read a key from a team env file. Usage: _read_team_key <file> <KEY>
 _read_team_key() {
   local val
   val=$(grep "^$2=" "$1" | cut -d= -f2)
@@ -93,14 +82,12 @@ is_worker() {
 }
 
 get_sm_pane() {
-  local sm_pane="0.1"
   if [ -f "${RUNTIME_DIR}/session.env" ]; then
     local val
-    val=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
-    val="${val//\"/}"
-    [ -n "$val" ] && sm_pane="$val"
+    val=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
+    [ -n "$val" ] && { echo "$val"; return; }
   fi
-  echo "$sm_pane"
+  echo "0.1"
 }
 
 send_to_pane() {
@@ -129,7 +116,6 @@ is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"
-
   is_session_manager || return 0
 
   # 60-second cooldown per title
@@ -143,7 +129,6 @@ send_notification() {
     echo "$now" > "$cooldown_file" 2>/dev/null || true
   fi
 
-  # Escape for string safety
   title="${title//\\/\\\\}"; title="${title//\"/\\\"}"
   body="${body//\\/\\\\}"; body="${body//\"/\\\"}"
 

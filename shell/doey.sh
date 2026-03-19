@@ -983,14 +983,11 @@ _purge_execute() {
 _purge_write_report() {
   local rt="$1" project="$2" active="$3" dry_run="$4" scope="$5"
   local rt_files="$6" rt_bytes="$7" res_files="$8" res_bytes="$9"
-  local total_files=$((rt_files + res_files))
-  local total_bytes=$((rt_bytes + res_bytes))
   local ts
   ts="$(date '+%Y-%m-%dT%H:%M:%S%z')"
-  local report_name="purge_report_$(date '+%Y%m%d_%H%M%S').json"
 
   mkdir -p "$rt/results"
-  cat > "$rt/results/$report_name" << REPORT_EOF
+  cat > "$rt/results/purge_report_$(date '+%Y%m%d_%H%M%S').json" << REPORT_EOF
 {
   "timestamp": "$ts",
   "project": "$project",
@@ -999,24 +996,22 @@ _purge_write_report() {
   "scope": "$scope",
   "runtime": { "files_found": $rt_files, "bytes_freed": $rt_bytes },
   "research": { "files_found": $res_files, "bytes_freed": $res_bytes },
-  "total_files_purged": $total_files,
-  "total_bytes_freed": $total_bytes
+  "total_files_purged": $((rt_files + res_files)),
+  "total_bytes_freed": $((rt_bytes + res_bytes))
 }
 REPORT_EOF
-  printf "   Report: ${DIM}%s${RESET}\n" "$rt/results/$report_name"
+  printf "   Report: ${DIM}%s/results/purge_report_*.json${RESET}\n" "$rt"
 }
 
 _purge_tally() {
   local list_file="$1"
-  _COUNT=0
-  _BYTES=0
-  if [[ -s "$list_file" ]]; then
-    while IFS=: read -r size path; do
-      [[ -z "$path" ]] && continue
-      _COUNT=$((_COUNT + 1))
-      _BYTES=$((_BYTES + size))
-    done < "$list_file"
-  fi
+  _COUNT=0; _BYTES=0
+  [[ -s "$list_file" ]] || return 0
+  while IFS=: read -r size path; do
+    [[ -z "$path" ]] && continue
+    _COUNT=$((_COUNT + 1))
+    _BYTES=$((_BYTES + size))
+  done < "$list_file"
 }
 
 purge_usage() {
@@ -1468,87 +1463,50 @@ _doc_check() {
 
 # ── Update / Reinstall ───────────────────────────────────────────────
 update_system() {
-  local repo_path_file="$HOME/.claude/doey/repo-path"
-  local repo_dir
+  local repo_dir install_dir=""
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
 
-  if [[ -f "$repo_path_file" ]]; then
-    repo_dir="$(cat "$repo_path_file")"
-  fi
+  printf "  ${BRAND}Updating doey...${RESET}\n\n"
 
-  if [[ -n "${repo_dir:-}" ]] && [[ -d "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
-    # Local repo update path
-    printf "  ${BRAND}Updating doey...${RESET}\n"
-    printf '\n'
-
-    local old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
-
-    # Warn about local changes
-    if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
-      printf "  ${WARN}⚠ Repo has local changes — git pull may fail or require merge${RESET}\n"
-    fi
-
-    printf "  ${DIM}Pulling latest changes...${RESET}\n"
-    if ! git -C "$repo_dir" pull; then
-      printf "  ${WARN}git pull failed — continuing with reinstall${RESET}\n"
-    fi
-
-    local new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
+  if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
+    local old_hash new_hash
+    old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
+    [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]] && \
+      printf "  ${WARN}⚠ Repo has local changes — git pull may fail${RESET}\n"
+    git -C "$repo_dir" pull || printf "  ${WARN}git pull failed — continuing with reinstall${RESET}\n"
+    new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
     if [[ "$old_hash" == "$new_hash" ]]; then
       printf "  ${SUCCESS}Already up to date${RESET} ${DIM}($old_hash)${RESET}\n"
     else
       printf "  ${SUCCESS}Updated${RESET} ${DIM}$old_hash → $new_hash${RESET}\n"
     fi
-    printf '\n'
-
-    printf "  ${DIM}Running install.sh...${RESET}\n"
-    if ! bash "$repo_dir/install.sh"; then
-      printf "\n  ${ERROR}✗ Install failed during update.${RESET}\n"
-      printf "  ${DIM}Repo is at $new_hash. Run install.sh manually to retry.${RESET}\n"
-      exit 1
-    fi
+    install_dir="$repo_dir"
   else
-    # Web update fallback — no local repo available
-    local web_repo_url="https://github.com/FRIKKern/doey.git"
-    local clone_dir
-    clone_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
-
-    printf "  ${BRAND}Updating doey...${RESET}\n"
-    printf '\n'
-    printf "  ${DIM}No local repo found — updating from remote...${RESET}\n"
-
-    printf "  ${DIM}Cloning latest version...${RESET}\n"
-    if ! git clone --depth 1 "$web_repo_url" "$clone_dir"; then
-      printf "\n  ${ERROR}✗ Failed to clone repository.${RESET}\n"
-      printf "  ${DIM}Make sure git is installed and you have network access.${RESET}\n"
-      rm -rf "$clone_dir"
+    install_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
+    printf "  ${DIM}No local repo — cloning from remote...${RESET}\n"
+    if ! git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir"; then
+      printf "  ${ERROR}✗ Clone failed${RESET}\n"
+      rm -rf "$install_dir"
       exit 1
     fi
-    printf "  ${SUCCESS}✓ Repository cloned${RESET}\n"
-    printf '\n'
-
-    printf "  ${DIM}Running install.sh...${RESET}\n"
-    if ! bash "$clone_dir/install.sh"; then
-      printf "\n  ${ERROR}✗ Install failed during update.${RESET}\n"
-      rm -rf "$clone_dir"
-      exit 1
-    fi
-
-    rm -rf "$clone_dir"
   fi
-  printf '\n'
+
+  printf "\n  ${DIM}Running install.sh...${RESET}\n"
+  if ! bash "$install_dir/install.sh"; then
+    printf "  ${ERROR}✗ Install failed${RESET}\n"
+    [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
+    exit 1
+  fi
+  [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
 
   rm -f "$HOME/.claude/doey/last-update-check.available"
-
+  printf '\n'
   _print_doey_banner
   printf "   ${DIM}Let me Doey for you${RESET}\n\n"
-
-  printf "  ${SUCCESS}Update complete.${RESET}\n"
-  printf "  Running sessions need a restart: ${BOLD}doey stop && doey${RESET} or ${BOLD}doey reload${RESET}\n"
+  printf "  ${SUCCESS}Update complete.${RESET} Restart sessions: ${BOLD}doey reload${RESET}\n"
 }
 
-# ── Reload (hot-reload a running session) ─────────────────────────
-# Updates files on disk, then kills + relaunches Manager and Watchdog
-# so they pick up new agent definitions. Workers are optionally restarted.
+# ── Reload ────────────────────────────────────────────────────────
 reload_session() {
   local restart_workers=false
   while [ $# -gt 0 ]; do
@@ -1558,85 +1516,59 @@ reload_session() {
     esac
   done
 
-  # 1. Find running session
   local dir name session runtime_dir
   dir="$(pwd)"
   name="$(find_project "$dir")"
-  if [ -z "$name" ]; then
-    printf "  ${ERROR}✗ No doey project found for %s${RESET}\n" "$dir"
-    exit 1
-  fi
+  [ -z "$name" ] && { printf "  ${ERROR}✗ No doey project for %s${RESET}\n" "$dir"; exit 1; }
   session="doey-${name}"
   runtime_dir="/tmp/doey/${name}"
-
-  if ! session_exists "$session"; then
-    printf "  ${ERROR}✗ No running session: ${session}${RESET}\n"
-    exit 1
-  fi
+  session_exists "$session" || { printf "  ${ERROR}✗ No running session: ${session}${RESET}\n"; exit 1; }
+  [ -f "${runtime_dir}/session.env" ] || { printf "  ${ERROR}✗ session.env not found${RESET}\n"; exit 1; }
 
   printf "  ${BRAND}Reloading ${session}...${RESET}\n\n"
 
-  # 2. Run install.sh (updates agents, commands, shell scripts on disk)
+  # Install latest files from repo
   local repo_dir
-  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || echo "")"
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
   if [ -n "$repo_dir" ] && [ -d "$repo_dir" ]; then
     printf "  ${DIM}Installing latest files...${RESET}\n"
     bash "$repo_dir/install.sh" 2>&1 | sed 's/^/    /'
     printf "\n  ${SUCCESS}✓ Files installed${RESET}\n\n"
   else
-    printf "  ${WARN}⚠ No repo path found — skipping install${RESET}\n\n"
+    printf "  ${WARN}⚠ No repo path — skipping install${RESET}\n\n"
   fi
 
-  # 3. Copy hooks to project dir (if not the doey repo itself)
+  # Refresh hooks in project + worktree dirs
   install_doey_hooks "$dir" "  "
-
-  # 3b. Also refresh hooks in worktree directories
   for _te in "${runtime_dir}"/team_*.env; do
     [ -f "$_te" ] || continue
     local _wt_dir
     _wt_dir=$(_env_val "$_te" WORKTREE_DIR)
-    if [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ]; then
-      install_doey_hooks "$_wt_dir" "  "
-    fi
+    [ -n "$_wt_dir" ] && [ -d "$_wt_dir" ] && install_doey_hooks "$_wt_dir" "  "
   done
 
-  # 4. Source current session.env to know the layout
-  if [ ! -f "${runtime_dir}/session.env" ]; then
-    printf "  ${ERROR}✗ session.env not found${RESET}\n"
-    exit 1
-  fi
   safe_source_session_env "${runtime_dir}/session.env"
 
-  # 4b. Fix stale session.env WATCHDOG_PANE if needed
+  # Fix stale session.env WATCHDOG_PANE if not in Dashboard (0.X)
   local cur_ses_wdg
   cur_ses_wdg=$(_env_val "${runtime_dir}/session.env" WATCHDOG_PANE)
   case "$cur_ses_wdg" in
-    0.*) ;; # already correct
+    0.*) ;;
     *)
-      # Rewrite WATCHDOG_PANE to "0.2" (default Dashboard slot for team 1)
       sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.2"/' "${runtime_dir}/session.env"
-      # Add WDG_SLOT_1 entry if missing (minimal — additional slots added by add-team)
-      if ! grep -q '^WDG_SLOT_1=' "${runtime_dir}/session.env"; then
-        printf 'WDG_SLOT_1="0.2"\n' >> "${runtime_dir}/session.env"
-      fi
-      # Remove stale MGR_SLOT entries
+      grep -q '^WDG_SLOT_1=' "${runtime_dir}/session.env" || printf 'WDG_SLOT_1="0.2"\n' >> "${runtime_dir}/session.env"
       sed -i '' '/^MGR_SLOT_/d' "${runtime_dir}/session.env"
-      printf "  ${DIM}Fixed stale session.env: WATCHDOG_PANE=%s → 0.2${RESET}\n" "$cur_ses_wdg"
-      # Re-source with fixed values
+      printf "  ${DIM}Fixed stale WATCHDOG_PANE=%s → 0.2${RESET}\n" "$cur_ses_wdg"
       safe_source_session_env "${runtime_dir}/session.env"
       ;;
   esac
 
-  # 5. Regenerate worker system prompts
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
   printf "  ${SUCCESS}✓ Worker system prompts updated${RESET}\n"
 
-  # 6. Reload Manager(s) and Watchdog(s) — kill + relaunch
   printf "\n  ${DIM}Reloading Manager and Watchdog...${RESET}\n"
 
-  # Find all team windows from team_*.env files
-  local team_windows=""
-  local tf tw
+  local team_windows="" tf tw
   for tf in "${runtime_dir}"/team_*.env; do
     [ -f "$tf" ] || continue
     tw=$(_env_val "$tf" WINDOW_INDEX)
@@ -1647,22 +1579,17 @@ reload_session() {
     local team_env="${runtime_dir}/team_${tw}.env"
     [ -f "$team_env" ] || continue
 
-    # Fix stale WATCHDOG_PANE if needed (should be "0.X" for Dashboard slot)
+    # Fix stale WATCHDOG_PANE (should be "0.X" for Dashboard slot)
     local cur_wdg
     cur_wdg=$(_env_val "$team_env" WATCHDOG_PANE)
-    case "$cur_wdg" in
-      0.*) ;;
-      *)
-        local slot_val
-        slot_val=$(_env_val "${runtime_dir}/session.env" "WDG_SLOT_${tw}")
-        [ -z "$slot_val" ] && slot_val="0.${tw}"
-        local cur_wpanes cur_wcount
-        cur_wpanes=$(_env_val "$team_env" WORKER_PANES)
-        cur_wcount=$(_env_val "$team_env" WORKER_COUNT)
-        write_team_env "$runtime_dir" "$tw" "dynamic" "$slot_val" "$cur_wpanes" "$cur_wcount" "0" "" ""
-        printf "    ${DIM}Fixed stale team_${tw}.env: WATCHDOG_PANE=%s → %s${RESET}\n" "$cur_wdg" "$slot_val"
-        ;;
-    esac
+    case "$cur_wdg" in 0.*) ;; *)
+      local slot_val
+      slot_val=$(_env_val "${runtime_dir}/session.env" "WDG_SLOT_${tw}")
+      [ -z "$slot_val" ] && slot_val="0.${tw}"
+      write_team_env "$runtime_dir" "$tw" "dynamic" "$slot_val" \
+        "$(_env_val "$team_env" WORKER_PANES)" "$(_env_val "$team_env" WORKER_COUNT)" "0" "" ""
+      printf "    ${DIM}Fixed team_${tw} WATCHDOG_PANE=%s → %s${RESET}\n" "$cur_wdg" "$slot_val"
+      ;; esac
 
     local mgr_pane wdg_pane
     mgr_pane=$(_env_val "$team_env" MANAGER_PANE)
@@ -1758,135 +1685,86 @@ reload_session() {
     printf "\n  ${SUCCESS}✓ Workers restarted${RESET}\n"
   fi
 
-  printf "\n  ${SUCCESS}✓ Reload complete!${RESET}\n"
-  printf "  ${DIM}Hooks + commands take effect immediately (no restart needed).${RESET}\n"
-  printf "  ${DIM}Manager + Watchdog relaunched with latest agent definitions.${RESET}\n"
-  if ! $restart_workers; then
-    printf "  ${DIM}Workers kept running. Use 'doey reload --workers' to restart them too.${RESET}\n"
-  fi
+  printf "\n  ${SUCCESS}✓ Reload complete${RESET}\n"
+  $restart_workers || printf "  ${DIM}Workers kept running. Use 'doey reload --workers' to restart them too.${RESET}\n"
 }
 
 # ── Uninstall ──────────────────────────────────────────────────────
 uninstall_system() {
-  printf '\n'
-  printf "  ${BRAND}Doey — Uninstall${RESET}\n"
-  printf '\n'
-
+  printf '\n  %bDoey — Uninstall%b\n\n' "$BRAND" "$RESET"
   printf "  This will remove:\n"
-  printf "    ${DIM}• ~/.local/bin/doey${RESET}\n"
-  printf "    ${DIM}• ~/.claude/agents/doey-*.md${RESET}\n"
-  printf "    ${DIM}• ~/.claude/commands/doey-*.md${RESET}\n"
+  printf "    ${DIM}• ~/.local/bin/doey, tmux-statusbar.sh, pane-border-status.sh${RESET}\n"
+  printf "    ${DIM}• ~/.claude/agents/doey-*.md, ~/.claude/commands/doey-*.md${RESET}\n"
   printf "    ${DIM}• ~/.claude/doey/ (config & state)${RESET}\n"
-  printf '\n'
-  printf "  ${DIM}Will NOT remove: git repo, /tmp/doey, or agent-memory${RESET}\n"
-  printf '\n'
+  printf "\n  ${DIM}Will NOT remove: git repo, /tmp/doey, or agent-memory${RESET}\n\n"
 
   read -rp "  Continue? [y/N] " confirm
-  if [[ "$confirm" != [yY] ]]; then
-    printf "  ${DIM}Cancelled.${RESET}\n\n"
-    return 0
-  fi
+  [[ "$confirm" == [yY] ]] || { printf "  ${DIM}Cancelled.${RESET}\n\n"; return 0; }
 
-  rm -f ~/.local/bin/doey
-  rm -f ~/.local/bin/tmux-statusbar.sh
-  rm -f ~/.local/bin/pane-border-status.sh
-  rm -f ~/.claude/agents/doey-*.md
-  rm -f ~/.claude/commands/doey-*.md
+  rm -f ~/.local/bin/doey ~/.local/bin/tmux-statusbar.sh ~/.local/bin/pane-border-status.sh
+  rm -f ~/.claude/agents/doey-*.md ~/.claude/commands/doey-*.md
   rm -rf ~/.claude/doey
 
-  printf '\n'
-  printf "  ${SUCCESS}✓ Uninstalled successfully.${RESET}\n"
-  printf "  ${DIM}To reinstall: cd <repo> && ./install.sh${RESET}\n"
-  printf '\n'
+  printf "\n  ${SUCCESS}✓ Uninstalled.${RESET} Reinstall: ${DIM}cd <repo> && ./install.sh${RESET}\n\n"
 }
 
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
-  printf '\n'
-  printf "  ${BRAND}Doey — System Check${RESET}\n"
-  printf '\n'
+  printf '\n  %bDoey — System Check%b\n\n' "$BRAND" "$RESET"
 
-  # Command checks
-  if command -v tmux &>/dev/null; then
-    _doc_check ok "tmux installed" "$(tmux -V)"
-  else
-    _doc_check fail "tmux not installed"
-  fi
+  # Required commands
+  if command -v tmux &>/dev/null; then _doc_check ok "tmux" "$(tmux -V)"
+  else _doc_check fail "tmux not installed"; fi
+  if command -v claude &>/dev/null; then _doc_check ok "claude CLI" "$(claude --version 2>/dev/null || echo 'unknown')"
+  else _doc_check warn "claude CLI not in PATH"; fi
 
-  if command -v claude &>/dev/null; then
-    _doc_check ok "claude CLI installed" "$(claude --version 2>/dev/null || echo 'unknown version')"
-  else
-    _doc_check warn "claude CLI not found in PATH"
-  fi
+  # PATH check
+  if echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then _doc_check ok "~/.local/bin in PATH"
+  else _doc_check warn "~/.local/bin not in PATH"; fi
 
-  if echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
-    _doc_check ok "~/.local/bin is in PATH"
-  else
-    _doc_check warn "~/.local/bin is not in PATH"
-  fi
-
-  # File checks
-  if [[ -f "$HOME/.claude/agents/doey-manager.md" ]]; then
-    _doc_check ok "Agents installed" "~/.claude/agents/doey-manager.md"
-  else
-    _doc_check fail "Agents not installed" "~/.claude/agents/doey-manager.md missing"
-  fi
-
-  if [[ -f "$HOME/.claude/commands/doey-dispatch.md" ]]; then
-    _doc_check ok "Commands installed" "~/.claude/commands/doey-dispatch.md"
-  else
-    _doc_check fail "Commands not installed" "~/.claude/commands/doey-dispatch.md missing"
-  fi
-
-  if [[ -f "$HOME/.local/bin/doey" ]]; then
-    _doc_check ok "CLI installed" "~/.local/bin/doey"
-  else
-    _doc_check fail "CLI not installed" "~/.local/bin/doey missing"
-  fi
+  # Installed files
+  local _f _label
+  for _f in "$HOME/.claude/agents/doey-manager.md:Agents" \
+            "$HOME/.claude/commands/doey-dispatch.md:Commands" \
+            "$HOME/.local/bin/doey:CLI"; do
+    _label="${_f##*:}"; _f="${_f%:*}"
+    if [[ -f "$_f" ]]; then _doc_check ok "$_label installed" "${_f/#$HOME/~}"
+    else _doc_check fail "$_label missing" "${_f/#$HOME/~}"; fi
+  done
 
   # Repo path
   local repo_dir=""
-  local repo_path_file="$HOME/.claude/doey/repo-path"
-  if [[ -f "$repo_path_file" ]]; then
-    repo_dir="$(cat "$repo_path_file")"
-    if [[ -d "$repo_dir" ]]; then
-      _doc_check ok "Repo registered" "$repo_dir"
-    else
-      _doc_check fail "Repo path registered but directory missing" "$repo_dir"
-    fi
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
+  if [[ -n "$repo_dir" ]]; then
+    if [[ -d "$repo_dir" ]]; then _doc_check ok "Repo registered" "$repo_dir"
+    else _doc_check fail "Repo dir missing" "$repo_dir"; fi
   else
-    _doc_check fail "Repo path not registered" "~/.claude/doey/repo-path missing"
+    _doc_check fail "Repo not registered" "~/.claude/doey/repo-path missing"
   fi
 
-  # Optional tools
-  if command -v jq &>/dev/null; then
-    _doc_check ok "jq installed" "$(jq --version 2>/dev/null || echo 'unknown version')"
-  else
-    _doc_check warn "jq not found — auto-trust during launch will be skipped"
-  fi
+  # Optional: jq
+  if command -v jq &>/dev/null; then _doc_check ok "jq" "$(jq --version 2>/dev/null || echo 'unknown')"
+  else _doc_check warn "jq not found — auto-trust skipped"; fi
 
-  # Version tracking
+  # Version
   local version_file="$HOME/.claude/doey/version"
   if [[ -f "$version_file" ]]; then
-    local ver vdate
-    ver="$(grep "^version=" "$version_file" | cut -d= -f2)"
-    vdate="$(grep "^date=" "$version_file" | cut -d= -f2)"
-    _doc_check ok "Version tracked" "$ver ($vdate)"
+    _doc_check ok "Version" "$(_env_val "$version_file" version) ($(_env_val "$version_file" date))"
   else
-    _doc_check warn "No version file" "Run 'doey update' to generate"
+    _doc_check warn "No version file" "Run 'doey update'"
   fi
 
   # Context audit
-  if [[ -n "${repo_dir:-}" ]] && [[ -f "$repo_dir/shell/context-audit.sh" ]]; then
+  if [[ -n "$repo_dir" ]] && [[ -f "$repo_dir/shell/context-audit.sh" ]]; then
     local audit_output
     if audit_output=$(bash "$repo_dir/shell/context-audit.sh" --installed --no-color 2>&1); then
       _doc_check ok "Context audit clean"
     else
-      _doc_check warn "Context audit found issues:"
+      _doc_check warn "Context audit issues:"
       printf '%s\n' "$audit_output"
     fi
   else
-    _doc_check skip "Context audit skipped" "(script not found)"
+    _doc_check skip "Context audit" "(script not found)"
   fi
 
   printf '\n'
@@ -1895,13 +1773,8 @@ check_doctor() {
 # ── Remove — unregister a project ────────────────────────────────────
 remove_project() {
   local name="${1:-}"
+  [[ -z "$name" ]] && name="$(find_project "$(pwd)")"
 
-  # If no argument, try current directory
-  if [[ -z "$name" ]]; then
-    name="$(find_project "$(pwd)")"
-  fi
-
-  # Still no name — error with hint
   if [[ -z "$name" ]]; then
     printf "  ${ERROR}No project specified and no project registered for %s${RESET}\n" "$(pwd)"
     printf '\n'
@@ -2039,26 +1912,32 @@ check_for_updates() {
   disown 2>/dev/null
 }
 
+# Shared session bootstrap: cleanup, worker prompt, tmux session, dashboard, team window
+_init_doey_session() {
+  local session="$1" runtime_dir="$2" dir="$3" name="$4" initial_teams="${5:-1}"
+  _cleanup_old_session "$session" "$runtime_dir"
+  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
+  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
+  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
+  setup_dashboard "$session" "$dir" "$runtime_dir" "$initial_teams"
+  tmux new-window -t "$session" -c "$dir"
+}
+
 launch_session_headless() {
-  local name="$1"
-  local dir="$2"
-  local grid="${3:-6x2}"
-  local cols="${grid%x*}"
-  local rows="${grid#*x}"
-  local total=$(( cols * rows ))
-  local worker_count=$(( total - 1 ))
-  local session="doey-${name}"
-  local runtime_dir="/tmp/doey/${name}"
+  local name="$1" dir="$2" grid="${3:-6x2}"
+  local cols="${grid%x*}" rows="${grid#*x}"
+  local total=$(( cols * rows )) worker_count=$(( total - 1 ))
+  local session="doey-${name}" runtime_dir="/tmp/doey/${name}"
+  local team_window=1
 
   cd "$dir"
-
-  local worker_panes_csv
-  worker_panes_csv="$(_build_worker_csv "$total")"
-
   install_doey_hooks "$dir" "  "
 
   printf "  ${DIM}Creating session ${session}...${RESET}\n"
-  _cleanup_old_session "$session" "$runtime_dir"
+  _init_doey_session "$session" "$runtime_dir" "$dir" "$name" 1
+
+  local worker_panes_csv
+  worker_panes_csv="$(_build_worker_csv "$total")"
 
   cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
@@ -2078,33 +1957,17 @@ SM_PANE="0.1"
 WDG_SLOT_1="0.2"
 MANIFEST
 
-  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
   write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0" "" ""
 
-  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
-
-  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
-  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
-
-  # Dashboard window (window 0) — info panel + watchdog slots + session manager
-  setup_dashboard "$session" "$dir" "$runtime_dir" 1
-
-  # Team grid window (window 1)
-  local team_window=1
-  tmux new-window -t "$session" -c "$dir"
-
-  # ── Apply theme ──
   printf "  ${DIM}Applying theme...${RESET}\n"
   local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   apply_doey_theme "$session" "$name" "$border_fmt" 2
 
-  # ── Build grid ──
   printf "  ${DIM}Building ${cols}x${rows} grid (${total} panes)...${RESET}\n"
   for (( r=1; r<rows; r++ )); do
     tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
   done
   tmux select-layout -t "$session:${team_window}" even-vertical
-
   for (( r=0; r<rows; r++ )); do
     for (( c=1; c<cols; c++ )); do
       tmux split-window -h -t "$session:${team_window}.$((r * cols))" -c "$dir"
@@ -2112,26 +1975,20 @@ MANIFEST
   done
 
   sleep 2
-
-  # Verify pane count
   local actual
   actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$actual" -ne "$total" ]]; then
     printf "  ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
   fi
 
-  # ── Name panes ──
   printf "  ${DIM}Naming panes...${RESET}\n"
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
-  local wnum=0
   for (( i=1; i<total; i++ )); do
-    wnum=$((wnum + 1))
-    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${wnum}"
+    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${i}"
   done
   tmux rename-window -t "$session:${team_window}" "Local Team"
 
   printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
-
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
   _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
 
@@ -2147,25 +2004,20 @@ MANIFEST
   trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
 
   printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
-  local booted=0
   for (( i=1; i<total; i++ )); do
-    booted=$((booted + 1))
-    _boot_worker "$session" "$runtime_dir" "$team_window" "$i" "$booted" "$booted"
+    _boot_worker "$session" "$runtime_dir" "$team_window" "$i" "$i" "$i"
   done
 
-  # Clear the trap — background briefing jobs should complete normally
   trap - EXIT INT TERM
   tmux select-window -t "$session:0"
   printf "  ${SUCCESS}Team launched${RESET} — session ${BOLD}%s${RESET} with %s workers\n" "$session" "$worker_count"
 }
 
 launch_session_dynamic() {
-  local name="$1"
-  local dir="$2"
-  local session="doey-${name}"
-  local runtime_dir="/tmp/doey/${name}"
-  local short_dir="${dir/#$HOME/~}"
-  local max_workers=20
+  local name="$1" dir="$2"
+  local session="doey-${name}" runtime_dir="/tmp/doey/${name}"
+  local short_dir="${dir/#$HOME/~}" max_workers=20
+  local team_window=1
 
   cd "$dir"
 
@@ -2177,21 +2029,9 @@ launch_session_dynamic() {
 
   ensure_project_trusted "$dir"
 
+  STEP_TOTAL=7
   step_start 1 "Creating session for ${name}..."
-  _cleanup_old_session "$session" "$runtime_dir"
-
-  # Generate shared worker system prompt
-  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
-
-  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
-  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
-
-  # Dashboard window (window 0) — info panel + watchdog slots + session manager
-  setup_dashboard "$session" "$dir" "$runtime_dir" "$INITIAL_TEAMS"
-
-  # Team grid window (window 1)
-  local team_window=1
-  tmux new-window -t "$session" -c "$dir"
+  _init_doey_session "$session" "$runtime_dir" "$dir" "$name" "$INITIAL_TEAMS"
 
   step_done
 
@@ -2200,24 +2040,10 @@ launch_session_dynamic() {
   apply_doey_theme "$session" "$name" "$border_fmt" 5
   step_done
 
-  # ── Step 3: Build initial grid (Manager only — Watchdog lives in Dashboard)
-  step_start 3 "Building grid..."
-
-  # Single pane: Manager (watchdog is in Dashboard slot)
-  # No split needed — pane 0 IS the manager
-  sleep 0.5
-
-  step_done
-
-  step_start 4 "Naming panes..."
+  step_start 3 "Setting up grid..."
 
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
   tmux rename-window -t "$session:${team_window}" "Local Team"
-
-  step_done
-
-  # ── Step 5: Write session.env ──────────────────────────────────
-  step_start 5 "Writing session manifest..."
 
   cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
@@ -2238,58 +2064,43 @@ TEAM_WINDOWS="1"
 SM_PANE="0.1"
 MANIFEST
 
-  # Write WDG_SLOT entries (only as many as initial teams)
   local _si
   for (( _si=1; _si<=INITIAL_TEAMS; _si++ )); do
     echo "WDG_SLOT_${_si}=\"0.$((_si + 1))\"" >> "${runtime_dir}/session.env"
   done
-
-  # Write per-window team env for window 1 (watchdog in Dashboard slot 0.2, manager in team pane 0)
   write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
 
   step_done
 
-  step_start 6 "Launching Window Manager & Watchdog..."
-
+  step_start 4 "Launching Window Manager & Watchdog..."
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
   _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
-
-  # Brief manager + watchdog (worker panes added in step 7)
   _brief_team "$session" "$team_window" "${WDG_SLOT_1}" "" "0" \
     "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
-
   step_done
 
-  STEP_TOTAL=9
-  step_start 7 "Adding ${INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
-
-  # Wait for Window Manager/Watchdog to settle before adding columns
+  step_start 5 "Adding ${INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
   sleep 3
-
   local _col_i
   for (( _col_i=0; _col_i<INITIAL_WORKER_COLS; _col_i++ )); do
     doey_add_column "$session" "$runtime_dir" "$dir"
     (( _col_i < INITIAL_WORKER_COLS - 1 )) && sleep 1
   done
-
   step_done
 
   local _extra_teams=$((INITIAL_TEAMS - 1))
   if [ "$_extra_teams" -gt 0 ]; then
-    step_start 8 "Adding ${_extra_teams} more team windows..."
-
+    step_start 6 "Adding ${_extra_teams} more team windows..."
     local _team_i
     for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
       add_dynamic_team_window "$session" "$runtime_dir" "$dir"
       (( _team_i < _extra_teams - 1 )) && sleep 2
     done
-
     step_done
   fi
 
-  STEP_TOTAL=9
   local INITIAL_WORKTREE_TEAMS=2
-  step_start 9 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
+  step_start 7 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
   local _wt_i _wt_ok=0
   for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
     if add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto"; then
@@ -2303,23 +2114,18 @@ MANIFEST
     printf "${WARN}skipped${RESET}\n"
   fi
 
-  # Read final team windows list for summary
-  local final_team_windows
+  local final_team_windows team_count=0 _tw
   final_team_windows=$(read_team_windows "$runtime_dir")
-  local team_count=0
-  local _tw
   for _tw in $(echo "$final_team_windows" | tr ',' ' '); do
     team_count=$((team_count + 1))
   done
 
-  # Re-brief Session Manager with all teams
   (
     sleep 20
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
 
-  # ── Final summary ──────────────────────────────────────────────
   printf '\n'
   printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
   printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}                ${DIM}│${RESET}\n"
@@ -2338,7 +2144,6 @@ MANIFEST
   printf "   ${DIM}└─────────────────────────────────────────────────┘${RESET}\n"
   printf '\n'
 
-  # ── Focus on Dashboard window, attach ──────────────────────────────
   tmux select-window -t "$session:0"
   attach_or_switch "$session"
 }
@@ -2353,83 +2158,64 @@ _layout_checksum() {
 }
 
 rebalance_grid_layout() {
-  local session="$1"
-  local team_window="${2:-1}"
-  local mgr_width=60  # Fixed width for Manager column
+  local session="$1" team_window="${2:-1}" mgr_width=60
 
   local win_w win_h
   win_w="$(tmux display-message -t "$session:${team_window}" -p '#{window_width}')"
   win_h="$(tmux display-message -t "$session:${team_window}" -p '#{window_height}')"
 
-  # Collect pane IDs in index order
   local pane_ids=()
   while IFS=$'\t' read -r _idx _pid; do
     pane_ids+=("${_pid#%}")
   done < <(tmux list-panes -t "$session:${team_window}" -F '#{pane_index}	#{pane_id}')
 
   local num_panes=${#pane_ids[@]}
-  # Need at least Manager + 2 workers to do anything useful
   if (( num_panes < 3 )); then return 0; fi
 
   local num_workers=$((num_panes - 1))
-  local worker_cols=$(( (num_workers + 1) / 2 ))  # ceiling division for odd counts
+  local worker_cols=$(( (num_workers + 1) / 2 ))
 
-  # Ensure Manager column doesn't eat too much space (cap at 25% of window)
+  # Cap manager width at 25% of window
   local max_mgr=$((win_w / 4))
-  if (( mgr_width > max_mgr )); then
-    mgr_width=$max_mgr
-  fi
+  (( mgr_width > max_mgr )) && mgr_width=$max_mgr
 
-  local worker_area=$((win_w - mgr_width - 1))  # -1 for border between mgr and workers
-  local top_h=$((win_h / 2))
-  local bot_h=$((win_h - top_h - 1))
+  local worker_area=$((win_w - mgr_width - 1))
+  local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
 
-  # Build layout string: Manager column first, then worker columns
+  # Manager column (full height), then worker columns (2 rows each)
   local body="" x=0
-
-  # Manager column: single pane, full height
-  local mgr_id="${pane_ids[0]}"
-  body="${mgr_width}x${win_h},${x},0,${mgr_id}"
+  body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
   x=$((mgr_width + 1))
 
-  # Worker columns: each has 2 rows (top + bottom worker)
   local c w wi
   for ((c=0; c<worker_cols; c++)); do
     if ((c == worker_cols - 1)); then
-      w=$((win_w - x))  # last column gets remaining width
+      w=$((win_w - x))
     else
       w=$((worker_area / worker_cols))
     fi
 
-    wi=$((c * 2 + 1))  # worker pane index (1-based, skipping Manager)
+    wi=$((c * 2 + 1))
     local tp="${pane_ids[$wi]}"
-
     body+=","
     if (( wi + 1 < num_panes )); then
-      # Normal column: 2 workers (top + bottom)
       local bp="${pane_ids[$((wi + 1))]}"
       body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
     else
-      # Odd worker count: last column has 1 worker at full height
       body+="${w}x${win_h},${x},0,${tp}"
     fi
     x=$((x + w + 1))
   done
 
   local layout_str="${win_w}x${win_h},0,0{${body}}"
-  local csum
-  csum="$(_layout_checksum "$layout_str")"
-  tmux select-layout -t "$session:${team_window}" "${csum},${layout_str}" 2>/dev/null || true
+  tmux select-layout -t "$session:${team_window}" "$(_layout_checksum "$layout_str"),${layout_str}" 2>/dev/null || true
 }
 
 rebuild_pane_state() {
   local session="$1"
-  _wdg_pane=""
   _worker_panes=""
-
   local pidx
   while IFS='' read -r pidx; do
-    # Skip pane 0 (Manager)
     [ "$pidx" = "0" ] && continue
     [ -n "$_worker_panes" ] && _worker_panes+=","
     _worker_panes+="$pidx"
@@ -2440,36 +2226,27 @@ _read_team_state() {
   local session="$1" runtime_dir="$2" dir="$3" team_window="$4"
   local team_env="${runtime_dir}/team_${team_window}.env"
 
-  _ts_worker_count=0
-  _ts_watchdog_pane="${WATCHDOG_PANE}"
-  _ts_grid="${GRID:-dynamic}"
-  _ts_cols=1
-  _ts_worker_panes=""
-  _ts_wt_dir=""
-  _ts_wt_branch=""
-  _ts_dir="$dir"
+  _ts_dir="$dir" _ts_wt_dir="" _ts_wt_branch=""
 
-  if [ -f "$team_env" ]; then
-    _ts_worker_count=$(_env_val "$team_env" WORKER_COUNT)
-    _ts_worker_count="${_ts_worker_count:-0}"
-    _ts_watchdog_pane=$(_env_val "$team_env" WATCHDOG_PANE)
-    _ts_grid=$(_env_val "$team_env" GRID)
-    _ts_grid="${_ts_grid:-dynamic}"
-    _ts_worker_panes=$(_env_val "$team_env" WORKER_PANES)
-    _ts_wt_dir=$(_env_val "$team_env" WORKTREE_DIR)
-    _ts_wt_branch=$(_env_val "$team_env" WORKTREE_BRANCH)
-
-    # Compute current columns from pane count
-    local _pane_count
-    _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')
-    _ts_cols=$(( (_pane_count - 1) / 2 ))
-    [ "$_ts_cols" -lt 1 ] && _ts_cols=1
-
-    # Use worktree dir if available
-    if [ -n "$_ts_wt_dir" ] && [ -d "$_ts_wt_dir" ]; then
-      _ts_dir="$_ts_wt_dir"
-    fi
+  if [ ! -f "$team_env" ]; then
+    _ts_worker_count=0 _ts_watchdog_pane="${WATCHDOG_PANE}"
+    _ts_grid="${GRID:-dynamic}" _ts_cols=1 _ts_worker_panes=""
+    return 0
   fi
+
+  _ts_worker_count=$(_env_val "$team_env" WORKER_COUNT); _ts_worker_count="${_ts_worker_count:-0}"
+  _ts_watchdog_pane=$(_env_val "$team_env" WATCHDOG_PANE)
+  _ts_grid=$(_env_val "$team_env" GRID); _ts_grid="${_ts_grid:-dynamic}"
+  _ts_worker_panes=$(_env_val "$team_env" WORKER_PANES)
+  _ts_wt_dir=$(_env_val "$team_env" WORKTREE_DIR)
+  _ts_wt_branch=$(_env_val "$team_env" WORKTREE_BRANCH)
+
+  local _pane_count
+  _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')
+  _ts_cols=$(( (_pane_count - 1) / 2 ))
+  [ "$_ts_cols" -lt 1 ] && _ts_cols=1
+
+  [ -n "$_ts_wt_dir" ] && [ -d "$_ts_wt_dir" ] && _ts_dir="$_ts_wt_dir"
 }
 
 _boot_worker() {
@@ -2489,10 +2266,7 @@ _boot_worker() {
 }
 
 doey_add_column() {
-  local session="$1"
-  local runtime_dir="$2"
-  local dir="$3"
-  local team_window="${4:-1}"
+  local session="$1" runtime_dir="$2" dir="$3" team_window="${4:-1}"
 
   safe_source_session_env "${runtime_dir}/session.env"
   _read_team_state "$session" "$runtime_dir" "$dir" "$team_window"
@@ -2503,53 +2277,39 @@ doey_add_column() {
     return 1
   fi
   if (( _ts_worker_count >= max_workers )); then
-    printf "  ${ERROR}Max workers reached (${max_workers})${RESET}\n"
+    printf "  ${ERROR}Max workers reached (%s)${RESET}\n" "$max_workers"
     return 1
   fi
 
   printf "  ${DIM}Adding worker column to team %s...${RESET}\n" "$team_window"
 
-  # Split last pane horizontally (new column), then vertically (2 rows)
-  local last_pane
+  local last_pane new_pane_top new_pane_bottom
   last_pane="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
   tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$_ts_dir"
   sleep 0.3
-
-  local new_pane_top
   new_pane_top="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
   tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$_ts_dir"
   sleep 0.3
-
-  local new_pane_bottom
   new_pane_bottom="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
 
-  local w1_num=$(( _ts_worker_count + 1 ))
-  local w2_num=$(( _ts_worker_count + 2 ))
-
+  local w1_num=$(( _ts_worker_count + 1 )) w2_num=$(( _ts_worker_count + 2 ))
   tmux select-pane -t "$session:$team_window.${new_pane_top}" -T "T${team_window} W${w1_num}"
   tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "T${team_window} W${w2_num}"
 
   rebuild_pane_state "$session:$team_window"
 
   local new_worker_count=$(( _ts_worker_count + 2 ))
-  local new_cols=$(( _ts_cols + 1 ))
-
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ts_watchdog_pane" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch"
 
   _boot_worker "$session" "$runtime_dir" "$team_window" "$new_pane_top" "$w1_num" "w${team_window}-${w1_num}"
   _boot_worker "$session" "$runtime_dir" "$team_window" "$new_pane_bottom" "$w2_num" "w${team_window}-${w2_num}"
-
   rebalance_grid_layout "$session" "$team_window"
 
-  printf "  ${SUCCESS}Added${RESET} workers ${BOLD}W${w1_num}${RESET} (${team_window}.${new_pane_top}) and ${BOLD}W${w2_num}${RESET} (${team_window}.${new_pane_bottom})\n"
-  printf "  ${DIM}Total workers: ${new_worker_count} in ${new_cols} columns${RESET}\n"
+  printf "  ${SUCCESS}Added${RESET} W${BOLD}${w1_num}${RESET} and W${BOLD}${w2_num}${RESET} — ${new_worker_count} workers in $((_ts_cols + 1)) columns\n"
 }
 
 doey_remove_column() {
-  local session="$1"
-  local runtime_dir="$2"
-  local col_index="${3:-}"
-  local team_window="${4:-1}"
+  local session="$1" runtime_dir="$2" col_index="${3:-}" team_window="${4:-1}"
 
   safe_source_session_env "${runtime_dir}/session.env"
   _read_team_state "$session" "$runtime_dir" "${PROJECT_DIR}" "$team_window"
@@ -2565,26 +2325,21 @@ doey_remove_column() {
 
   [[ -z "$col_index" ]] && col_index="last"
 
-  # Convert comma-separated WORKER_PANES to positional params (bash 3.2 safe)
-  local _old_ifs="$IFS"
-  IFS=','
-  set -- $_ts_worker_panes
-  IFS="$_old_ifs"
-  local wp_count=$#
-
-  if [ "$wp_count" -lt 2 ]; then
+  # Parse worker panes into positional params (bash 3.2 safe)
+  local _old_ifs="$IFS"; IFS=','; set -- $_ts_worker_panes; IFS="$_old_ifs"
+  if [ "$#" -lt 2 ]; then
     printf "  ${ERROR}Not enough worker panes to remove a column${RESET}\n"
     return 1
   fi
 
   local remove_top remove_bottom
   if [ "$col_index" = "last" ]; then
-    eval "remove_top=\${$(( wp_count - 1 ))}"
-    eval "remove_bottom=\${${wp_count}}"
+    eval "remove_top=\${$(( $# - 1 ))}"
+    eval "remove_bottom=\${$#}"
   else
     local ci=$(( col_index ))
     if [ "$ci" -lt 1 ] || [ "$ci" -gt $(( _ts_worker_count / 2 )) ]; then
-      printf "  ${ERROR}Invalid worker column: ${col_index} (valid: 1-$(( _ts_worker_count / 2 )))${RESET}\n"
+      printf "  ${ERROR}Invalid column: %s (valid: 1-%s)${RESET}\n" "$col_index" "$(( _ts_worker_count / 2 ))"
       return 1
     fi
     local pair_start=$(( (ci - 1) * 2 + 1 ))
@@ -2592,32 +2347,30 @@ doey_remove_column() {
     eval "remove_bottom=\${$(( pair_start + 1 ))}"
   fi
 
-  printf "  ${DIM}Removing worker panes ${team_window}.${remove_top} and ${team_window}.${remove_bottom}...${RESET}\n"
+  printf "  ${DIM}Removing panes ${team_window}.${remove_top} and ${team_window}.${remove_bottom}...${RESET}\n"
 
+  # Stop processes in both panes
+  local pane_idx pane_pid
   for pane_idx in "$remove_top" "$remove_bottom"; do
-    local pane_pid
     pane_pid=$(tmux display-message -t "$session:$team_window.${pane_idx}" -p '#{pane_pid}' 2>/dev/null || true)
-    [[ -n "$pane_pid" ]] && pkill -P "$pane_pid" 2>/dev/null || true
+    [ -n "$pane_pid" ] && pkill -P "$pane_pid" 2>/dev/null || true
   done
   sleep 1
 
-  # Kill higher index first to avoid index shift issues
-  local first_kill second_kill
+  # Kill higher index first to avoid index shift
   if (( remove_top > remove_bottom )); then
-    first_kill="$remove_top"; second_kill="$remove_bottom"
+    tmux kill-pane -t "$session:$team_window.${remove_top}" 2>/dev/null || true
+    tmux kill-pane -t "$session:$team_window.${remove_bottom}" 2>/dev/null || true
   else
-    first_kill="$remove_bottom"; second_kill="$remove_top"
+    tmux kill-pane -t "$session:$team_window.${remove_bottom}" 2>/dev/null || true
+    tmux kill-pane -t "$session:$team_window.${remove_top}" 2>/dev/null || true
   fi
-  tmux kill-pane -t "$session:$team_window.${first_kill}" 2>/dev/null || true
-  tmux kill-pane -t "$session:$team_window.${second_kill}" 2>/dev/null || true
   sleep 0.5
 
   rebuild_pane_state "$session:$team_window"
 
   local new_worker_count=$(( _ts_worker_count - 2 ))
-
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ts_watchdog_pane" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch"
-
   rebalance_grid_layout "$session" "$team_window"
 
   printf "  ${SUCCESS}Removed${RESET} worker column — ${BOLD}${new_worker_count}${RESET} workers remaining\n"
@@ -2626,13 +2379,9 @@ doey_remove_column() {
 add_dashboard_watchdog_slot() {
   local session="$1" runtime_dir="$2" dir="$3"
 
-  # Count existing WDG_SLOT entries (single-pass grep)
-  local slot_count=0
-  local last_slot=""
-  local _line _sv
+  local slot_count=0 last_slot="" _line _sv
   while IFS= read -r _line; do
-    _sv="${_line#*=}"
-    _sv="${_sv//\"/}"
+    _sv="${_line#*=}"; _sv="${_sv//\"/}"
     [ -n "$_sv" ] || continue
     slot_count=$((slot_count + 1))
     last_slot="$_sv"
@@ -2643,25 +2392,15 @@ add_dashboard_watchdog_slot() {
     return 1
   fi
 
-  # Split the last watchdog pane to create a new one
   tmux split-window -h -t "${session}:${last_slot}" -c "$dir"
   sleep 0.3
 
-  # The new pane gets the next index
   local new_slot_num=$((slot_count + 1))
-  local new_pane_idx=$((new_slot_num + 1))
-  local new_slot="0.${new_pane_idx}"
+  local new_slot="0.$((new_slot_num + 1))"
 
-  # Name it
   tmux select-pane -t "${session}:${new_slot}" -T "T${new_slot_num} Watchdog"
-
-  # Balance all watchdog panes
   _balance_watchdog_panes "$session" "$new_slot_num"
-
-  # Add WDG_SLOT to session.env
   echo "WDG_SLOT_${new_slot_num}=\"${new_slot}\"" >> "${runtime_dir}/session.env"
-
-  # Show placeholder
   tmux send-keys -t "${session}:${new_slot}" "echo 'Watchdog slot — awaiting team assignment...'" Enter
 
   WDG_NEW_SLOT="$new_slot"
@@ -2679,28 +2418,30 @@ _apply_team_border_theme() {
   tmux set-window-option -t "$target" pane-border-lines heavy
 }
 
+# Atomically update a field in session.env
+_set_session_env() {
+  local runtime_dir="$1" field="$2" value="$3"
+  sed "s/^${field}=.*/${field}=\"${value}\"/" "${runtime_dir}/session.env" > "${runtime_dir}/session.env.tmp"
+  mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
+}
+
 _register_team_window() {
   local runtime_dir="$1" window_index="$2"
-  local new_windows
-  new_windows="$(read_team_windows "$runtime_dir"),${window_index}"
-  sed "s/^TEAM_WINDOWS=.*/TEAM_WINDOWS=\"${new_windows}\"/" "${runtime_dir}/session.env" > "${runtime_dir}/session.env.tmp"
-  mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
+  _set_session_env "$runtime_dir" TEAM_WINDOWS "$(read_team_windows "$runtime_dir"),${window_index}"
 }
 
 _unregister_team_window() {
   local runtime_dir="$1" window="$2"
-  local current_windows new_windows="" w
-  current_windows=$(read_team_windows "$runtime_dir")
-  local IFS_SAVE="$IFS"
-  IFS=','
-  for w in $current_windows; do
+  local current new_windows="" w
+  current=$(read_team_windows "$runtime_dir")
+  local _old_ifs="$IFS"; IFS=','
+  for w in $current; do
     [ "$w" = "$window" ] && continue
     [ -n "$new_windows" ] && new_windows="${new_windows},"
     new_windows="${new_windows}${w}"
   done
-  IFS="$IFS_SAVE"
-  sed "s/^TEAM_WINDOWS=.*/TEAM_WINDOWS=\"${new_windows}\"/" "${runtime_dir}/session.env" > "${runtime_dir}/session.env.tmp"
-  mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
+  IFS="$_old_ifs"
+  _set_session_env "$runtime_dir" TEAM_WINDOWS "$new_windows"
 }
 
 _ensure_worker_prompt() {
@@ -2738,8 +2479,8 @@ _launch_team_watchdog() {
 _brief_team() {
   local session="$1" window_index="$2" wdg_slot="$3" wp_list="$4"
   local worker_count="$5" grid_desc="$6" wt_brief="${7:-}"
-  local wdg_brief="Watchdog is in Dashboard pane ${wdg_slot}."
-  [ -n "$wdg_slot" ] || wdg_brief="No Watchdog assigned (all Dashboard slots occupied)."
+  local wdg_brief="No Watchdog assigned (all Dashboard slots occupied)."
+  [ -z "$wdg_slot" ] || wdg_brief="Watchdog is in Dashboard pane ${wdg_slot}."
   (
     sleep 8
     tmux send-keys -t "${session}:${window_index}.0" \
@@ -2780,6 +2521,30 @@ _acquire_watchdog_slot() {
   return 0
 }
 
+_name_team_window() {
+  local session="$1" window_index="$2" wt_dir="$3"
+  _apply_team_border_theme "$session" "$window_index"
+  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
+  local label="Local Team"
+  [ -z "$wt_dir" ] || label="Worktree Team"
+  tmux rename-window -t "${session}:${window_index}" "$label"
+}
+
+_worktree_brief() {
+  [ -n "$1" ] || return 0
+  echo " ISOLATED WORKTREE: branch ${2}, dir ${1}. Workers operate on this isolated copy — changes do NOT affect the main repo until merged."
+}
+
+_print_team_created() {
+  local window_index="$1" grid_desc="$2" worker_count="$3" wdg_slot="$4"
+  local wt_dir="${5:-}" wt_branch="${6:-}"
+  if [ -n "$wt_dir" ]; then
+    printf "  ${SUCCESS}Team window %s created${RESET} — %s, %s workers, ${BOLD}worktree${RESET} (%s)\n" "$window_index" "$grid_desc" "$worker_count" "$wt_branch"
+  else
+    printf "  ${SUCCESS}Team window %s created${RESET} — %s, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$grid_desc" "$worker_count" "$wdg_slot"
+  fi
+}
+
 add_dynamic_team_window() {
   local session="$1" runtime_dir="$2" dir="$3" initial_cols="${4:-$INITIAL_WORKER_COLS}"
   local worktree_spec="${5:-}"
@@ -2790,14 +2555,12 @@ add_dynamic_team_window() {
   local window_index
   window_index=$(tmux display-message -t "$session" -p '#{window_index}')
 
-  # Worktree setup (fallback to shared repo on failure)
   if [ -n "$worktree_spec" ]; then
     local _wt_branch_arg=""
     [ "$worktree_spec" = "auto" ] || _wt_branch_arg="$worktree_spec"
     team_dir=$(create_team_worktree "$dir" "$window_index" "$_wt_branch_arg") || {
       printf "  ${WARN}Worktree creation failed for team %s — falling back to shared repo${RESET}\n" "$window_index"
-      team_dir="$dir"
-      worktree_spec=""
+      team_dir="$dir"; worktree_spec=""
     }
     if [ -n "$worktree_spec" ]; then
       worktree_branch=$(git -C "$team_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "doey/team-${window_index}")
@@ -2805,23 +2568,12 @@ add_dynamic_team_window() {
     fi
   fi
 
-  if [ -n "$wt_dir_for_env" ]; then
-    printf "  ${DIM}Creating dynamic team window %s [worktree: %s]...${RESET}\n" "$window_index" "$worktree_branch"
-  else
-    printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
-  fi
-
-  _apply_team_border_theme "$session" "$window_index"
-  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
-  if [ -n "$wt_dir_for_env" ]; then
-    tmux rename-window -t "${session}:${window_index}" "Worktree Team"
-  else
-    tmux rename-window -t "${session}:${window_index}" "Local Team"
-  fi
+  printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
+  _name_team_window "$session" "$window_index" "$wt_dir_for_env"
 
   _acquire_watchdog_slot "$session" "$runtime_dir" "$team_dir" "false"
   local wdg_slot="$_AWS_SLOT"
-  [ -n "$wdg_slot" ] || printf "  ${WARN}All %s Dashboard watchdog slots are occupied — team %s will run without a Watchdog${RESET}\n" "$MAX_WATCHDOG_SLOTS" "$window_index"
+  [ -n "$wdg_slot" ] || printf "  ${WARN}All %s Dashboard watchdog slots occupied — team %s has no Watchdog${RESET}\n" "$MAX_WATCHDOG_SLOTS" "$window_index"
 
   write_team_env "$runtime_dir" "$window_index" "dynamic" "${wdg_slot:-}" "" "0" "0" "$wt_dir_for_env" "$worktree_branch"
   _register_team_window "$runtime_dir" "$window_index"
@@ -2829,7 +2581,6 @@ add_dynamic_team_window() {
   _launch_team_manager "$session" "$runtime_dir" "$window_index"
   _launch_team_watchdog "$session" "$wdg_slot" "$window_index"
 
-  # Add initial worker columns
   local _col_i
   for (( _col_i=0; _col_i<initial_cols; _col_i++ )); do
     doey_add_column "$session" "$runtime_dir" "$team_dir" "$window_index"
@@ -2837,31 +2588,21 @@ add_dynamic_team_window() {
   done
 
   _build_worker_pane_list "$session" "$window_index"
-  local worker_count
+  local worker_count wt_brief
   worker_count=$(_env_val "${runtime_dir}/team_${window_index}.env" WORKER_COUNT)
-
-  local wt_brief=""
-  [ -z "$wt_dir_for_env" ] || wt_brief=" ISOLATED WORKTREE: branch ${worktree_branch}, dir ${wt_dir_for_env}. Workers operate on this isolated copy — changes do NOT affect the main repo until merged."
+  wt_brief=$(_worktree_brief "$wt_dir_for_env" "$worktree_branch")
   _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief"
-
-  if [ -n "$wt_dir_for_env" ]; then
-    printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, ${BOLD}worktree${RESET} (%s)\n" "$window_index" "$worker_count" "$worktree_branch"
-  else
-    printf "  ${SUCCESS}Team window %s created${RESET} — dynamic grid, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$worker_count" "$wdg_slot"
-  fi
+  _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wdg_slot" "$wt_dir_for_env" "$worktree_branch"
 }
 
 add_team_window() {
   local session="$1" runtime_dir="$2" dir="$3" grid="${4:-4x2}"
   local worktree_spec="${5:-}"
   local cols rows total_panes
-
-  cols="${grid%x*}"
-  rows="${grid#*x}"
-  total_panes=$((cols * rows))
+  cols="${grid%x*}"; rows="${grid#*x}"; total_panes=$((cols * rows))
 
   if [ "$total_panes" -lt 3 ]; then
-    printf "  ${ERROR}Grid %s too small — need at least 3 panes (Window Manager + Watchdog + 1 Worker)${RESET}\n" "$grid"
+    printf "  ${ERROR}Grid %s too small — need at least 3 panes${RESET}\n" "$grid"
     return 1
   fi
 
@@ -2870,11 +2611,10 @@ add_team_window() {
   local window_index
   window_index=$(tmux display-message -t "$session" -p '#{window_index}')
 
-  # Worktree setup (abort on failure for fixed grid)
   local team_dir="$dir" worktree_branch="" wt_dir_for_env=""
   if [ -n "$worktree_spec" ]; then
     team_dir=$(create_team_worktree "$dir" "$window_index" "$worktree_spec") || {
-      echo "Error: Failed to create worktree for team window $window_index" >&2
+      printf "  ${ERROR}Failed to create worktree for team %s${RESET}\n" "$window_index" >&2
       tmux kill-window -t "${session}:${window_index}" 2>/dev/null
       return 1
     }
@@ -2883,9 +2623,8 @@ add_team_window() {
   fi
 
   printf "  ${DIM}Creating team window %s (%s grid, %s panes)...${RESET}\n" "$window_index" "$grid" "$total_panes"
-  _apply_team_border_theme "$session" "$window_index"
+  _name_team_window "$session" "$window_index" "$wt_dir_for_env"
 
-  # Build grid: pane 0 already exists from new-window
   local r c
   for (( r=1; r<rows; r++ )); do
     tmux split-window -v -t "${session}:${window_index}.0" -c "$team_dir"
@@ -2902,7 +2641,6 @@ add_team_window() {
   actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l | tr -d ' ')
   [ "$actual" -eq "$total_panes" ] || printf "  ${WARN}Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total_panes" "$actual"
 
-  # Build worker pane list: 0=Manager, 1+=Workers
   local worker_panes="" worker_count=0 i
   for (( i=1; i<total_panes; i++ )); do
     [ -n "$worker_panes" ] && worker_panes="${worker_panes},"
@@ -2911,24 +2649,17 @@ add_team_window() {
   done
 
   if ! _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "true"; then
-    printf "  ${ERROR}All %s Dashboard watchdog slots are occupied — cannot add more teams${RESET}\n" "$MAX_WATCHDOG_SLOTS"
+    printf "  ${ERROR}All %s Dashboard watchdog slots occupied — cannot add more teams${RESET}\n" "$MAX_WATCHDOG_SLOTS"
     tmux kill-window -t "${session}:${window_index}" 2>/dev/null
     return 1
   fi
   local wdg_slot="$_AWS_SLOT"
 
-  # Name panes
-  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   local wnum=0
   for (( i=1; i<total_panes; i++ )); do
     wnum=$((wnum + 1))
-    tmux select-pane -t "${session}:${window_index}.${i}" -T "T${team_window} W${wnum}"
+    tmux select-pane -t "${session}:${window_index}.${i}" -T "T${window_index} W${wnum}"
   done
-  if [ -n "$worktree_spec" ]; then
-    tmux rename-window -t "${session}:${window_index}" "Worktree Team"
-  else
-    tmux rename-window -t "${session}:${window_index}" "Local Team"
-  fi
 
   write_team_env "$runtime_dir" "$window_index" "$grid" "$wdg_slot" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch"
   _register_team_window "$runtime_dir" "$window_index"
@@ -2942,40 +2673,23 @@ add_team_window() {
     _boot_worker "$session" "$runtime_dir" "$window_index" "$i" "$wnum" "w${window_index}-${wnum}"
   done
 
-  # Build worker pane list and brief
-  local wp_list=""
-  for (( i=1; i<total_panes; i++ )); do
-    [ -n "$wp_list" ] && wp_list="${wp_list}, "
-    wp_list="${wp_list}${window_index}.${i}"
-  done
-  _brief_team "$session" "$window_index" "$wdg_slot" "$wp_list" "$worker_count" "Grid ${grid}"
-
-  printf "  ${SUCCESS}Team window %s created${RESET} — grid %s, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$grid" "$worker_count" "$wdg_slot"
+  _build_worker_pane_list "$session" "$window_index"
+  _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Grid ${grid}"
+  _print_team_created "$window_index" "grid ${grid}" "$worker_count" "$wdg_slot" "$wt_dir_for_env" "$worktree_branch"
 }
 
 kill_team_window() {
   local session="$1" runtime_dir="$2" window="$3"
   local team_env="${runtime_dir}/team_${window}.env"
 
-  if [ ! -f "$team_env" ]; then
-    printf "  ${ERROR}No team env for window %s${RESET}\n" "$window"
-    return 1
-  fi
-  if [ "$window" = "0" ]; then
-    printf "  ${ERROR}Cannot kill window 0 — use 'doey stop' to stop the entire session${RESET}\n"
-    return 1
-  fi
+  [ -f "$team_env" ] || { printf "  ${ERROR}No team env for window %s${RESET}\n" "$window"; return 1; }
+  [ "$window" != "0" ] || { printf "  ${ERROR}Cannot kill window 0 — use 'doey stop'${RESET}\n"; return 1; }
 
-  local watchdog_pane=""
-  while IFS='=' read -r key value; do
-    value="${value%\"}"
-    value="${value#\"}"
-    case "$key" in WATCHDOG_PANE) watchdog_pane="$value" ;; esac
-  done < "$team_env"
+  local watchdog_pane
+  watchdog_pane=$(_env_val "$team_env" WATCHDOG_PANE)
 
   printf "  ${DIM}Killing team window %s...${RESET}\n" "$window"
 
-  # Kill all Claude processes in this window's panes
   local pane_id pane_pid
   for pane_id in $(tmux list-panes -t "${session}:${window}" -F '#{pane_id}' 2>/dev/null); do
     pane_pid=$(tmux display-message -t "$pane_id" -p '#{pane_pid}' 2>/dev/null) || continue
@@ -2986,7 +2700,6 @@ kill_team_window() {
   sleep 1
   tmux kill-window -t "${session}:${window}" 2>/dev/null || true
 
-  # Kill and clean up Dashboard watchdog pane
   if [ -n "$watchdog_pane" ]; then
     local _wdg_pid
     _wdg_pid=$(tmux display-message -t "${session}:${watchdog_pane}" -p '#{pane_pid}' 2>/dev/null) || true
@@ -3016,7 +2729,6 @@ kill_team_window() {
     done < <(tmux list-panes -t "${session}:0" -F '#{pane_index} #{pane_title}' 2>/dev/null)
   fi
 
-  # Clean up worktree if this team had one
   local _wt_dir
   _wt_dir=$(_env_val "$team_env" WORKTREE_DIR)
   if [ -n "$_wt_dir" ]; then
@@ -3025,13 +2737,11 @@ kill_team_window() {
     [ -z "$_proj_dir" ] || _worktree_safe_remove "$_proj_dir" "$_wt_dir"
   fi
 
-  # Clean up files
   rm -f "$team_env"
   rm -f "$HOME/.claude/agents/t${window}-watchdog.md" "$HOME/.claude/agents/t${window}-manager.md" 2>/dev/null || true
   local safe_prefix="${session//[:.]/_}_${window}_"
   rm -f "${runtime_dir}/status/${safe_prefix}"* 2>/dev/null || true
   rm -f "${runtime_dir}/results/"*"_${window}_"* 2>/dev/null || true
-
   _unregister_team_window "$runtime_dir" "$window"
 
   printf "  ${SUCCESS}Team window %s killed and cleaned up${RESET}\n" "$window"
@@ -3040,41 +2750,34 @@ kill_team_window() {
 list_team_windows() {
   local session="$1" runtime_dir="$2"
 
-  printf '\n'
-  printf "  ${BRAND}Doey — Team Windows${RESET}\n"
-  printf '\n'
+  printf '\n  %sDoey — Team Windows%s\n\n' "$BRAND" "$RESET"
 
   local team_windows
   team_windows=$(read_team_windows "$runtime_dir")
 
   if [ "$team_windows" = "0" ] && [ ! -f "${runtime_dir}/team_0.env" ]; then
-    printf "  ${DIM}(no team windows — single-window mode)${RESET}\n"
-    printf '\n'
+    printf "  ${DIM}(no team windows — single-window mode)${RESET}\n\n"
     return 0
   fi
 
   printf "  ${BOLD}%-8s %-8s %-10s %-8s %-20s${RESET}\n" "Window" "Grid" "Workers" "Status" "Team Env"
   printf "  ${DIM}%-8s %-8s %-10s %-8s %-20s${RESET}\n" "------" "----" "-------" "------" "--------"
 
-  local IFS_SAVE="$IFS"
+  local _saved_ifs="$IFS" w
   IFS=','
-  local w
   for w in $team_windows; do
     local team_env="${runtime_dir}/team_${w}.env"
     if [ -f "$team_env" ]; then
-      local t_grid t_workers
+      local t_grid t_workers status="active"
       t_grid=$(_env_val "$team_env" GRID)
       t_workers=$(_env_val "$team_env" WORKER_COUNT)
-      local status="active"
-      if ! tmux list-panes -t "${session}:${w}" >/dev/null 2>&1; then
-        status="dead"
-      fi
+      tmux list-panes -t "${session}:${w}" >/dev/null 2>&1 || status="dead"
       printf "  %-8s %-8s %-10s %-8s %-20s\n" "$w" "$t_grid" "$t_workers" "$status" "team_${w}.env"
     else
       printf "  %-8s ${DIM}(no env file)${RESET}\n" "$w"
     fi
   done
-  IFS="$IFS_SAVE"
+  IFS="$_saved_ifs"
 
   printf '\n'
 }
@@ -3083,7 +2786,6 @@ list_team_windows() {
 
 run_test() {
   local keep=false open=false grid="3x2"
-
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --keep) keep=true; shift ;;
@@ -3098,17 +2800,16 @@ run_test() {
   local test_root="/tmp/doey-test/${test_id}"
   local project_dir="${test_root}/project"
   local report_file="${test_root}/report.md"
+  local last8="${test_id: -8}"
+  local test_project_name="e2e-test-${last8}"
+  local session="doey-${test_project_name}"
 
-  printf '\n'
-  printf "  ${BRAND}Doey — E2E Test${RESET}\n"
-  printf '\n'
+  printf '\n  %sDoey — E2E Test%s\n\n' "$BRAND" "$RESET"
   printf "  ${DIM}Test ID${RESET}    ${BOLD}${test_id}${RESET}\n"
   printf "  ${DIM}Grid${RESET}       ${BOLD}${grid}${RESET}\n"
   printf "  ${DIM}Sandbox${RESET}    ${BOLD}${project_dir}${RESET}\n"
-  printf "  ${DIM}Report${RESET}     ${BOLD}${report_file}${RESET}\n"
-  printf '\n'
+  printf "  ${DIM}Report${RESET}     ${BOLD}${report_file}${RESET}\n\n"
 
-  # Step 1: Create sandbox project
   printf "  ${DIM}[1/6]${RESET} Creating sandbox project...\n"
   mkdir -p "${project_dir}/.claude/hooks"
   cd "$project_dir"
@@ -3116,26 +2817,19 @@ run_test() {
   printf '# E2E Test Sandbox\n\nThis project was created by `doey test` for automated testing.\n' > README.md
   printf 'E2E Test Sandbox - build whatever is requested\n' > CLAUDE.md
   install_doey_hooks "$project_dir" "  "
-  git add -A
-  git commit -q -m "Initial sandbox commit"
+  git add -A && git commit -q -m "Initial sandbox commit"
   printf "  ${SUCCESS}Sandbox created${RESET}\n"
 
-  # Step 2: Register sandbox
   printf "  ${DIM}[2/6]${RESET} Registering sandbox...\n"
-  local last8="${test_id: -8}"
-  local test_project_name="e2e-test-${last8}"
   echo "${test_project_name}:${project_dir}" >> "$PROJECTS_FILE"
-  local session="doey-${test_project_name}"
   printf "  ${SUCCESS}Registered${RESET} ${BOLD}${test_project_name}${RESET}\n"
 
-  # Step 3-4: Launch and wait
   printf "  ${DIM}[3/6]${RESET} Launching team...\n"
   launch_session_headless "$test_project_name" "$project_dir" "$grid"
   printf "  ${DIM}[4/6]${RESET} Waiting for boot (30s)...\n"
   sleep 30
   printf "  ${SUCCESS}Boot complete${RESET}\n"
 
-  # Step 5: Launch test driver
   printf "  ${DIM}[5/6]${RESET} Launching test driver...\n"
   local repo_dir
   repo_dir="$(resolve_repo_dir)"
@@ -3150,7 +2844,6 @@ run_test() {
   claude --dangerously-skip-permissions --agent test-driver --model opus \
     "Run the E2E test. Session: ${session}. Project name: ${test_project_name}. Project dir: ${project_dir}. Runtime dir: /tmp/doey/${test_project_name}. Journey file: ${journey_file}. Observations dir: ${test_root}/observations. Report file: ${report_file}. Test ID: ${test_id}"
 
-  # Step 6: Display results
   printf '\n  %s[6/6]%s Results\n' "${DIM}" "${RESET}"
   if [[ -f "$report_file" ]]; then
     local result_color="$ERROR" result_text="TEST FAILED"
@@ -3178,26 +2871,30 @@ run_test() {
   fi
 }
 
-# ── Resolve current project's running session, or exit with error ─────
 # Sets: dir, name, session, runtime_dir
 require_running_session() {
   dir="$(pwd)"
   name="$(find_project "$dir")"
-  [[ -z "$name" ]] && { printf "  ${ERROR}No project registered for $(pwd)${RESET}\n"; exit 1; }
+  [[ -z "$name" ]] && { printf "  ${ERROR}No project registered for %s${RESET}\n" "$dir"; exit 1; }
   session="doey-${name}"
-  session_exists "$session" || { printf "  ${ERROR}Session ${session} not running${RESET}\n"; exit 1; }
+  session_exists "$session" || { printf "  ${ERROR}Session %s not running${RESET}\n" "$session"; exit 1; }
   runtime_dir="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 }
 
 # ── Main Dispatch ─────────────────────────────────────────────────────
 
+_attach_session() {
+  local session="$1"
+  printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}%s${RESET}...\n" "$session"
+  tmux select-window -t "$session:0"
+  attach_or_switch "$session"
+}
+
 grid="dynamic"
 
 case "${1:-}" in
   --help|-h)
-    printf '\n'
-    printf "  ${BRAND}Doey${RESET}\n"
-    printf '\n'
+    printf '\n  %sDoey%s\n\n' "$BRAND" "$RESET"
     cat << 'HELP'
   Usage: doey [command] [grid]
 
@@ -3251,63 +2948,26 @@ HELP
     ;;
   init)
     register_project "$(pwd)"
-    dir="$(pwd)"
-    name="$(find_project "$dir")"
-    if [[ -n "$name" ]]; then
-      launch_with_grid "$name" "$dir" "$grid"
-    fi
+    dir="$(pwd)"; name="$(find_project "$dir")"
+    [[ -n "$name" ]] && launch_with_grid "$name" "$dir" "$grid"
     exit 0
     ;;
-  list)
-    list_projects
-    exit 0
-    ;;
-  purge)
-    shift
-    doey_purge "$@"
-    exit $?
-    ;;
-  stop)
-    stop_project
-    exit $?
-    ;;
-  update|reinstall)
-    update_system
-    exit 0
-    ;;
-  reload)
-    shift
-    reload_session "$@"
-    exit 0
-    ;;
-  doctor)
-    check_doctor
-    exit 0
-    ;;
-  uninstall)
-    uninstall_system
-    exit 0
-    ;;
-  test)
-    shift
-    run_test "$@"
-    exit $?
-    ;;
-  version|--version|-v)
-    show_version
-    exit 0
-    ;;
+  list)         list_projects; exit 0 ;;
+  purge)        shift; doey_purge "$@"; exit $? ;;
+  stop)         stop_project; exit $? ;;
+  update|reinstall) update_system; exit 0 ;;
+  reload)       shift; reload_session "$@"; exit 0 ;;
+  doctor)       check_doctor; exit 0 ;;
+  uninstall)    uninstall_system; exit 0 ;;
+  test)         shift; run_test "$@"; exit $? ;;
+  version|--version|-v) show_version; exit 0 ;;
   dynamic|d)
-    # Launch with dynamic grid mode
     register_project "$(pwd)"
-    dir="$(pwd)"
-    name="$(find_project "$dir")"
+    dir="$(pwd)"; name="$(find_project "$dir")"
     if [[ -n "$name" ]]; then
       session="doey-${name}"
       if session_exists "$session"; then
-        printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}${session}${RESET}...\n"
-        tmux select-window -t "$session:0"
-        attach_or_switch "$session"
+        _attach_session "$session"
       else
         launch_session_dynamic "$name" "$dir"
       fi
@@ -3320,7 +2980,6 @@ HELP
     exit 0
     ;;
   remove)
-    # Number arg → column removal; no arg + dynamic session → column removal; else project removal
     if [[ "${2:-}" =~ ^[0-9]+$ ]]; then
       require_running_session
       doey_remove_column "$session" "$runtime_dir" "$2"
@@ -3343,27 +3002,23 @@ HELP
     ;;
   add-window|add-team)
     require_running_session
-    _wt_spec=""
-    _grid_arg="4x2"
+    local wt_spec="" grid_arg="4x2"
     shift
     for _arg in "$@"; do
       case "$_arg" in
-        --worktree) _wt_spec="auto" ;;
-        *x*) _grid_arg="$_arg" ;;
+        --worktree) wt_spec="auto" ;;
+        *x*) grid_arg="$_arg" ;;
       esac
     done
-    if [ -n "$_wt_spec" ]; then
-      add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "$_wt_spec"
+    if [ -n "$wt_spec" ]; then
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "$wt_spec"
     else
-      add_team_window "$session" "$runtime_dir" "$dir" "$_grid_arg"
+      add_team_window "$session" "$runtime_dir" "$dir" "$grid_arg"
     fi
     exit 0
     ;;
   kill-window|kill-team)
-    if [ -z "${2:-}" ]; then
-      printf "  ${ERROR}Usage: doey kill-team <window-index>${RESET}\n"
-      exit 1
-    fi
+    [ -n "${2:-}" ] || { printf "  ${ERROR}Usage: doey kill-team <window-index>${RESET}\n"; exit 1; }
     require_running_session
     kill_team_window "$session" "$runtime_dir" "$2"
     exit 0
@@ -3376,10 +3031,7 @@ HELP
   [0-9]*x[0-9]*)
     grid="$1"
     ;;
-  "")
-    # No args — fall through to smart launch
-    ;;
-  # Note: 'dynamic' and 'd' are handled explicitly above, not here
+  "") ;;
   *)
     printf "  ${ERROR}Unknown command: %s${RESET}\n" "$1"
     printf "  Run ${BOLD}doey --help${RESET} for usage\n"
@@ -3395,18 +3047,12 @@ dir="$(pwd)"
 name="$(find_project "$dir")"
 
 if [[ -n "$name" ]]; then
-  # Known project
   session="doey-${name}"
   if session_exists "$session"; then
-    # Already running — just attach (land on dashboard window 0)
-    printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}%s${RESET}...\n" "$session"
-    tmux select-window -t "$session:0"
-    attach_or_switch "$session"
+    _attach_session "$session"
   else
-    # Known but not running — launch with premium UI
     launch_with_grid "$name" "$dir" "$grid"
   fi
 else
-  # Unknown directory — show interactive menu
   show_menu "${grid}"
 fi
