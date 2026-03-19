@@ -5,15 +5,13 @@ description: Dispatch a research task to a worker. Stop hook blocks until report
 
 ## Context
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-- Team environment: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-).env 2>/dev/null || true`
-- Worker status: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status/*.status; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done 2>/dev/null || true`
+!`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); cat "$RD/session.env" 2>/dev/null; W=$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-); cat "$RD/team_${W}.env" 2>/dev/null || true`
+
+!`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); for f in "$RD"/status/*.status; do [ -f "$f" ] && echo "$(basename $f): $(cat $f)"; done 2>/dev/null || true`
 
 ## Prompt
 
-Dispatch a research task with guaranteed report-back. Session/team config is injected above.
-
-`PANE_SAFE` = pane ID with `:` and `.` replaced by `_`. Always exit copy-mode before `paste-buffer`/`send-keys`.
+Dispatch a research task with guaranteed report-back. `PANE_SAFE` = pane ID with `:` and `.` replaced by `_`. Always exit copy-mode before `paste-buffer`/`send-keys`.
 
 ### Step 1: Pick idle worker + create task marker
 
@@ -52,7 +50,7 @@ Project directory: ${PROJECT_DIR}  |  Use absolute paths.
 <QUESTION_OR_GOAL>
 
 ## Instructions
-**Phase 1 — Research:** Spawn subagents in parallel (Explore/Plan/general-purpose). Identify key questions, one agent each. Second wave if gaps remain.
+**Phase 1 — Research:** Spawn subagents in parallel. Identify key questions, one agent each. Second wave if gaps remain.
 **Phase 2 — Plan:** Option A (recommended) + Option B (alternative). Include dispatch-ready task prompts.
 **Phase 3 — Write Report** to ${REPORT_PATH}:
 \`\`\`
@@ -74,20 +72,10 @@ rm "$TASKFILE"
 
 ### Step 4: Verify + read reports
 
-Verify dispatch took: sleep 5s, capture-pane, grep for tool activity (`Read|Edit|Bash|thinking`). If idle, retry Enter+3s. Still idle → unstick per `/doey-dispatch` Unstick section.
+Verify dispatch took: sleep 5s, capture-pane, grep for tool activity. If idle, retry Enter+3s. Still idle -> unstick per `/doey-dispatch`.
 
-After worker finishes:
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
-[ -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" ] && cat "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" || echo "No report"
-```
-
-Present summary, ask which option, dispatch via `/doey-dispatch`.
+After worker finishes, read `${RUNTIME_DIR}/reports/${PANE_SAFE}.report`. Present summary, ask which option, dispatch via `/doey-dispatch`.
 
 ### Rules
-
 1. **Task marker BEFORE dispatch** — stop hook needs it. Clear old report first.
 2. **Include report path in prompt** — worker writes there, stop hook checks it.

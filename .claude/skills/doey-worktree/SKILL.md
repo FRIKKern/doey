@@ -9,46 +9,38 @@ description: Isolate a team window in a git worktree, or return it.
 
 ## Context
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-- Team environments: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done || true`
-- Current windows: !`tmux list-windows -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{window_index} #{window_name}' 2>/dev/null|| true`
-- Worker statuses: !`W=$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-); for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status/*_${W}_*.status; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done 2>/dev/null || true`
+!`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); cat "$RD/session.env" 2>/dev/null; for f in "$RD"/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done; SN=$(grep SESSION_NAME "$RD/session.env" 2>/dev/null | cut -d= -f2); tmux list-windows -t "$SN" -F '#{window_index} #{window_name}' 2>/dev/null || true`
+
+!`W=$(tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-); RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); for f in "$RD"/status/*_${W}_*.status; do [ -f "$f" ] && echo "$(basename $f): $(cat $f)"; done 2>/dev/null || true`
 
 ## Prompt
 
 Transform a team window to/from an isolated git worktree. **Do NOT ask for confirmation — just do it.**
 
-### Step 1: Parse, validate, and check state
+### Step 1: Parse, validate, check state
 
-Parse user args: number → `TARGET_WIN`, `--back`/`back` → `BACK_MODE=true`, no args → current window.
+Parse user args: number = `TARGET_WIN`, `--back` = `BACK_MODE=true`, no args = current window.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-
 TARGET_WIN="${DOEY_WINDOW_INDEX:-1}"
 BACK_MODE=false
-# Parse from user message: number → TARGET_WIN, --back → BACK_MODE
+# Parse from user message: number -> TARGET_WIN, --back -> BACK_MODE
 
 [ "$TARGET_WIN" = "0" ] && { echo "ERROR: Cannot transform Dashboard (window 0)"; exit 1; }
-
 TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WIN}.env"
 [ ! -f "$TEAM_ENV" ] && { echo "ERROR: No team env for window ${TARGET_WIN}"; exit 1; }
 
 SESSION_NAME=$(grep '^SESSION_NAME=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null | grep -qx "$TARGET_WIN" || { echo "ERROR: Window ${TARGET_WIN} not found"; exit 1; }
-
 PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 PROJECT_NAME=$(grep '^PROJECT_NAME=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 
-# Load team env (no eval — /tmp is world-writable)
 _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
-WORKER_PANES=$(_tv WORKER_PANES)
-WORKTREE_DIR=$(_tv WORKTREE_DIR)
-WORKTREE_BRANCH=$(_tv WORKTREE_BRANCH)
+WORKER_PANES=$(_tv WORKER_PANES); WORKTREE_DIR=$(_tv WORKTREE_DIR); WORKTREE_BRANCH=$(_tv WORKTREE_BRANCH)
 WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
 SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
 
-# Reject if any worker is busy
 BUSY_WORKERS=""
 for i in $WORKER_PANES_LIST; do
   STATUS_FILE="${RUNTIME_DIR}/status/${SESSION_SAFE}_${TARGET_WIN}_${i}.status"
@@ -58,7 +50,6 @@ for i in $WORKER_PANES_LIST; do
 done
 [ -n "$BUSY_WORKERS" ] && { echo "ERROR: Busy workers:${BUSY_WORKERS} — wait or stop them first"; exit 1; }
 
-# Validate mode vs current state
 if [ "$BACK_MODE" = "true" ]; then
   [ -z "$WORKTREE_DIR" ] && { echo "ERROR: Team ${TARGET_WIN} not in a worktree"; exit 1; }
 else
@@ -68,21 +59,15 @@ fi
 
 ### Step 2: Create or remove worktree
 
-Run **forward** or **back** block based on `$BACK_MODE`.
-
 **Forward (isolate):**
 
 ```bash
 BRANCH="doey/team-${TARGET_WIN}-$(date +%m%d-%H%M)"
 WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${TARGET_WIN}"
-
 [ -d "$WT_DIR" ] && git -C "$PROJECT_DIR" worktree remove "$WT_DIR" --force 2>/dev/null || true
 mkdir -p "/tmp/doey/${PROJECT_NAME}/worktrees"
 WT_OUTPUT=$(git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$BRANCH" 2>&1) || { echo "ERROR: $WT_OUTPUT"; exit 1; }
-
 [ -f "${PROJECT_DIR}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${PROJECT_DIR}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"
-
-# Record worktree in team env (atomic)
 TMPENV=$(mktemp "${RUNTIME_DIR}/team_${TARGET_WIN}.env.tmp_XXXXXX")
 cat "$TEAM_ENV" > "$TMPENV"
 printf 'WORKTREE_DIR=%s\nWORKTREE_BRANCH=%s\n' "$WT_DIR" "$BRANCH" >> "$TMPENV"
@@ -95,14 +80,10 @@ TARGET_DIR="$WT_DIR"
 ```bash
 DIRTY=$(git -C "$WORKTREE_DIR" status --porcelain 2>/dev/null)
 [ -n "$DIRTY" ] && git -C "$WORKTREE_DIR" add -A && git -C "$WORKTREE_DIR" commit -m "doey: WIP from team ${TARGET_WIN} worktree"
-
 MAIN_HEAD=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null)
 echo "Commits on branch ${WORKTREE_BRANCH}:"
 git -C "$WORKTREE_DIR" log --oneline "${MAIN_HEAD}..HEAD" 2>/dev/null || echo "  (none)"
-
 git -C "$PROJECT_DIR" worktree remove "$WORKTREE_DIR" --force 2>&1 || echo "WARNING: Manual removal needed: git worktree remove '$WORKTREE_DIR' --force"
-
-# Strip worktree vars from team env (atomic)
 TMPENV=$(mktemp "${RUNTIME_DIR}/team_${TARGET_WIN}.env.tmp_XXXXXX")
 grep -v '^WORKTREE_DIR=' "$TEAM_ENV" | grep -v '^WORKTREE_BRANCH=' > "$TMPENV"
 mv "$TMPENV" "$TEAM_ENV"
@@ -114,22 +95,17 @@ TARGET_DIR="$PROJECT_DIR"
 Kill by PID only — never `/exit` or `C-c`.
 
 ```bash
-# Send TERM to all worker children
 for i in $WORKER_PANES_LIST; do
   PANE_PID=$(tmux display-message -t "${SESSION_NAME}:${TARGET_WIN}.${i}" -p '#{pane_pid}' 2>/dev/null)
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
 done
 sleep 3
-
-# Force-kill stragglers
 for i in $WORKER_PANES_LIST; do
   CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${TARGET_WIN}.${i}" -p '#{pane_pid}' 2>/dev/null)" 2>/dev/null)
   [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null
 done
 sleep 1
-
-# Clear panes and relaunch
 for i in $WORKER_PANES_LIST; do
   tmux copy-mode -q -t "${SESSION_NAME}:${TARGET_WIN}.${i}" 2>/dev/null
   tmux send-keys -t "${SESSION_NAME}:${TARGET_WIN}.${i}" "clear" Enter 2>/dev/null
@@ -144,12 +120,10 @@ for i in $WORKER_PANES_LIST; do
 done
 ```
 
-### Step 4: Rename window, verify boot, report
+### Step 4: Rename, verify, report
 
 ```bash
 [ "$BACK_MODE" = "true" ] && tmux rename-window -t "${SESSION_NAME}:${TARGET_WIN}" "T${TARGET_WIN}" || tmux rename-window -t "${SESSION_NAME}:${TARGET_WIN}" "T${TARGET_WIN} [worktree]"
-
-# Wait up to 25s for workers to boot
 for attempt in 1 2 3 4 5; do
   NOT_READY=0; DOWN_PANES=""
   for i in $WORKER_PANES_LIST; do
@@ -161,14 +135,10 @@ for attempt in 1 2 3 4 5; do
 done
 ```
 
-Output summary: mode (isolate/return), window, branch, directory, booted count. List any failed workers.
+Output summary: mode (isolate/return), window, branch, directory, booted count.
 
 ### Rules
-- Bash 3.2 compatible (no `declare -A`, `mapfile`, `|&`, `&>>`, `[[ =~ ]]` captures, `printf '%(%s)T'`)
-- Kill by PID only — never `/exit` or `send-keys C-c`
-- `tmux show-environment` for DOEY_RUNTIME — never hardcode paths
-- Status files: `${RUNTIME_DIR}/status/${SESSION_SAFE}_${WIN}_${PANE}.status`
-- Atomic writes: temp file then `mv`
-- Never transform window 0
-- Worktree branch preserved on `--back` — user merges manually
-- Always copy `.claude/settings.local.json` to new worktrees (gitignored)
+- Bash 3.2 compatible. Kill by PID only — never `/exit` or `send-keys C-c`.
+- Atomic writes: temp file then `mv`. Never transform window 0.
+- Always copy `.claude/settings.local.json` to new worktrees.
+- Worktree branch preserved on `--back` — user merges manually.
