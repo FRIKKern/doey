@@ -2159,10 +2159,6 @@ MANIFEST
   printf "  ${SUCCESS}Team launched${RESET} — session ${BOLD}%s${RESET} with %s workers\n" "$session" "$worker_count"
 }
 
-# ── Dynamic Grid — 2-row × N-column mode ─────────────────────────────
-# Creates a Manager-only pane, then adds 3 worker columns (6 workers default).
-# Columns added/removed on demand via `doey add` / `doey remove <col>`.
-
 launch_session_dynamic() {
   local name="$1"
   local dir="$2"
