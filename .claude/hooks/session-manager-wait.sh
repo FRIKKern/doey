@@ -19,29 +19,14 @@ while [ "$i" -lt 30 ]; do
     exit 0
   fi
   # Wake on new messages addressed to Session Manager
-  for f in "$MSG_DIR"/${SM_SAFE}_*.msg; do
-    if [ -f "$f" ]; then
-      echo "NEW_MESSAGES"
-      exit 0
-    fi
-    break
-  done
+  set -- "$MSG_DIR"/${SM_SAFE}_*.msg
+  [ -f "${1:-}" ] && { echo "NEW_MESSAGES"; exit 0; }
   # Wake on new results
-  for f in "$RUNTIME_DIR/results"/pane_*.json; do
-    if [ -f "$f" ]; then
-      echo "NEW_RESULTS"
-      exit 0
-    fi
-    break
-  done
+  set -- "$RUNTIME_DIR/results"/pane_*.json
+  [ -f "${1:-}" ] && { echo "NEW_RESULTS"; exit 0; }
   # Wake on crash alerts
-  for f in "$RUNTIME_DIR/status"/crash_pane_*; do
-    if [ -f "$f" ]; then
-      echo "CRASH_ALERT"
-      exit 0
-    fi
-    break
-  done
+  set -- "$RUNTIME_DIR/status"/crash_pane_*
+  [ -f "${1:-}" ] && { echo "CRASH_ALERT"; exit 0; }
   sleep 1
   i=$((i + 1))
 done
