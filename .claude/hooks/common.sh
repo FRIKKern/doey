@@ -133,3 +133,6 @@ send_notification() {
   fi
   return 0
 }
+
+_atomic_write() { local f="$1"; shift; printf '%s
+' "$@" > "${f}.tmp" && mv "${f}.tmp" "$f"; }
