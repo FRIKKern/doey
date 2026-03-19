@@ -73,7 +73,12 @@ install_doey_hooks() {
   # Always write Doey hooks to settings.local.json (Doey owns this file).
   # User hooks belong in their project's settings.json — Claude Code merges both.
   cp "${repo_dir}/.claude/settings.json" "$target_dir/.claude/settings.local.json"
-  printf "${indent}${DIM}Doey hooks installed${RESET}\n"
+  # Copy skills so Claude Code auto-discovers /doey-* slash commands
+  if [ -d "${repo_dir}/.claude/skills" ]; then
+    mkdir -p "$target_dir/.claude/skills"
+    cp -R "${repo_dir}"/.claude/skills/doey-* "$target_dir/.claude/skills/" 2>/dev/null || true
+  fi
+  printf "${indent}${DIM}Doey hooks + skills installed${RESET}\n"
 }
 
 write_pane_status() {
