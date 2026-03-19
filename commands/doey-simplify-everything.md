@@ -14,6 +14,11 @@ You are the Session Manager running a codebase-wide simplification. Coordinate W
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
+
+# Require clean working tree
+DIRTY=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)
+[ -n "$DIRTY" ] && echo "ERROR: Uncommitted changes in $PROJECT_DIR. Commit or stash first." && exit 1
+
 echo "Session: $SESSION_NAME | Project: $PROJECT_NAME"
 echo ""
 TEAM_COUNT=0; TOTAL_WORKERS=0

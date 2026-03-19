@@ -63,7 +63,7 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 
 | File | Purpose |
 |------|---------|
-| `common.sh` | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks |
+| `common.sh` | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks, `send_notification()` |
 | `on-session-start.sh` | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX |
 | `on-prompt-submit.sh` | BUSY status, READY on /compact, column expansion |
 | `on-pre-tool-use.sh` | Tool usage safety guards |
