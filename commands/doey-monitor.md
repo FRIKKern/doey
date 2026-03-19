@@ -10,7 +10,7 @@ Monitor Claude Code worker instances in tmux.
 
 ### Preamble
 
-Every bash block starts with:
+Every bash block starts with this, shown as `# (preamble)`:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -24,13 +24,16 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 
 ```bash
 # (preamble)
-STATUS_DIR="${RUNTIME_DIR}/status"; NOW=$(date +%s)
+SD="${RUNTIME_DIR}/status"; NOW=$(date +%s)
+# Helper: format seconds as human-readable age
+fmt_age() { [ "$1" -lt 60 ] && echo "${1}s ago" && return; [ "$1" -lt 3600 ] && echo "$(($1/60))m ago" && return; echo "$(($1/3600))h ago"; }
+
 printf "%-6s | %-12s | %-10s | %-30s | %s\n" "PANE" "STATUS" "RESERVED" "TASK" "UPDATED"
 printf -- "-------+--------------+------------+--------------------------------+--------\n"
 for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
   PANE_ID="${SESSION_NAME}:${WINDOW_INDEX}.${i}"
   PANE_SAFE=$(echo "${PANE_ID}" | tr ':.' '_')
-  SF="${STATUS_DIR}/${PANE_SAFE}.status"
+  SF="${SD}/${PANE_SAFE}.status"
   [ -f "$SF" ] && STATUS=$(grep '^STATUS: ' "$SF" | head -1 | cut -d' ' -f2-) || STATUS="UNKNOWN"
   # Enrich FINISHED with result status
   RF="${RUNTIME_DIR}/results/pane_${WINDOW_INDEX}_${i}.json"
@@ -38,15 +41,12 @@ for i in $(echo "${WORKER_PANES}" | tr ',' ' '); do
     RS=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$RF" | head -1 | sed 's/.*"//;s/"//')
     [ -n "$RS" ] && STATUS="FINISHED (${RS})"
   fi
-  [ -f "${STATUS_DIR}/${PANE_SAFE}.reserved" ] && RESERVED="RESERVED" && STATUS="RESERVED" || RESERVED="-"
+  [ -f "${SD}/${PANE_SAFE}.reserved" ] && RESERVED="RESERVED" && STATUS="RESERVED" || RESERVED="-"
   TASK=$(tmux display-message -t "$PANE_ID" -p '#{pane_title}' 2>/dev/null || echo "-")
   [ -z "$TASK" ] && TASK="-"
   if [ -f "$SF" ]; then
     MTIME=$(stat -f %m "$SF" 2>/dev/null || stat -c %Y "$SF" 2>/dev/null || echo "$NOW")
-    AGO=$(( NOW - MTIME ))
-    if [ "$AGO" -lt 60 ]; then UPDATED="${AGO}s ago"
-    elif [ "$AGO" -lt 3600 ]; then UPDATED="$(( AGO / 60 ))m ago"
-    else UPDATED="$(( AGO / 3600 ))h ago"; fi
+    UPDATED=$(fmt_age $(( NOW - MTIME )))
   else UPDATED="-"; fi
   printf "%-6s | %-12s | %-10s | %-30s | %s\n" "W${i}" "$STATUS" "$RESERVED" "$TASK" "$UPDATED"
 done
@@ -73,8 +73,7 @@ else echo "No watchdog heartbeat file"; fi
 
 ```bash
 # (preamble)
-PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
-PANE_SAFE=$(echo "${PANE}" | tr ':.' '_')
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 cat "${RUNTIME_DIR}/status/${PANE_SAFE}.status" 2>/dev/null || echo "(no status file)"
 echo "--- Last 20 lines ---"
 tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || echo "(pane not found)"

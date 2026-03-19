@@ -10,7 +10,7 @@ Dispatch a research task with guaranteed report-back.
 
 ### Preamble
 
-Every bash block starts with:
+Every bash block starts with this, shown as `# (preamble)`:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -22,22 +22,17 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 
 Always exit copy-mode before `paste-buffer`/`send-keys`: `tmux copy-mode -q -t "$PANE" 2>/dev/null`
 
+`PANE_SAFE` = pane ID with `:` and `.` replaced by `_`: `PANE_SAFE=$(echo "$PANE" | tr ':.' '_')`
+
 ### Step 1: Pick idle, unreserved worker
 
-```bash
-# (preamble)
-PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
-[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && echo "Reserved — skip"
-tmux copy-mode -q -t "${SESSION_NAME}:${WINDOW_INDEX}.X" 2>/dev/null
-tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
-```
+For each worker pane X: skip if `${RUNTIME_DIR}/status/${PANE_SAFE}.reserved` exists. Exit copy-mode, then `tmux capture-pane -t "$PANE" -p -S -3` to check for `❯` prompt.
 
 ### Step 2: Create task marker + clear old report
 
 ```bash
 # (preamble)
-PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
-PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports"
 cat > "${RUNTIME_DIR}/research/${PANE_SAFE}.task" << 'MARKER'
 <research question or goal>
@@ -53,8 +48,7 @@ Same as `/doey-dispatch` readiness sequence. Rename: `/rename research-topic_$(d
 
 ```bash
 # (preamble)
-PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
-PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
@@ -71,13 +65,7 @@ Project directory: ${PROJECT_DIR}  |  Use absolute paths.
 \`\`\`
 ## Research Report
 **Topic:** ...  |  **Pane:** ${PANE}  |  **Time:** ...
-### Summary (2-3 sentences)
-### Findings (snippets, paths, dependencies)
-### Key Files
-### Proposed Plan
-#### Option A: <name> — Why, Workers, Waves, per-worker prompts, verification
-#### Option B: <name> — tradeoffs
-### Risks + mitigations
+### Summary | Findings | Key Files | Proposed Plan (Option A + B) | Risks
 \`\`\`
 Stop hook blocks until report exists.
 TASK
@@ -97,6 +85,7 @@ Verify: same as `/doey-dispatch` step 15. Sleep 5s, grep for tool activity. Idle
 
 After worker finishes:
 ```bash
+# (preamble)
 PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
 [ -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" ] && cat "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" || echo "No report"
 ```
@@ -105,6 +94,6 @@ Present summary, ask which option, dispatch via `/doey-dispatch`.
 
 ### Rules
 
-1. **Task marker BEFORE dispatch** — stop hook needs it. **Clear old report first** — prevents false bypass.
-2. **PANE_SAFE:** replace `:` and `.` with `_`. **Include report path in prompt.**
+1. **Task marker BEFORE dispatch** — stop hook needs it. **Clear old report first.**
+2. **Include report path in prompt** — worker writes there, stop hook checks it.
 3. **Verify after dispatch and after worker finishes.**

@@ -7,7 +7,7 @@ Send `/compact` to the Watchdog to reduce its context window.
 
 ## Prompt
 
-### Step 1: Send compact
+Send `/compact`, then verify the Watchdog is active (retry once if no response after 15s).
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -20,8 +20,6 @@ tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
 tmux send-keys -t "$WATCHDOG" "/compact" Enter
 echo "Sent /compact to ${WATCHDOG}"
 ```
-
-### Step 2: Verify (retry once if no activity)
 
 ```bash
 ACTIVE_RE='compact|summariz|monitor|check|pane|worker'

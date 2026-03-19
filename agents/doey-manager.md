@@ -19,62 +19,52 @@ TEAM_ENV="${RUNTIME_DIR}/team_${DOEY_TEAM_WINDOW}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-Variables: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `WORKER_COUNT`, `WORKER_PANES`. Hooks set `DOEY_ROLE`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`. **Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` for all file paths.**
+Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `WORKER_COUNT`, `WORKER_PANES`. Hooks set `DOEY_TEAM_WINDOW`, `DOEY_WINDOW_INDEX`. **Use `SESSION_NAME` for tmux, `PROJECT_DIR` for file paths.**
 
 ## Sending Tasks
 
 **Before every send:** `tmux copy-mode -q -t "$PANE" 2>/dev/null`
 **Before every task:** `/rename task-name_$(date +%m%d)`
+**Never send to reserved panes** (`${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved`).
 
-Reserved panes (`${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved`) must NEVER receive tasks.
-
-**Prefer `/doey-dispatch`** for fresh-context tasks. Use send-keys/load-buffer only for follow-ups:
+**Prefer `/doey-dispatch`** for fresh-context tasks. Send-keys/load-buffer only for follow-ups:
 
 ```bash
 PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
-
-# Short task (< ~200 chars)
+# Short (< ~200 chars):
 tmux send-keys -t "$PANE" "Your task here" Enter
-
-# Long task — load-buffer
+# Long — load-buffer:
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task description here.
 TASK
-tmux load-buffer "$TASKFILE"
-tmux paste-buffer -t "$PANE"
-sleep 0.5; tmux send-keys -t "$PANE" Enter
-rm "$TASKFILE"
+tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
+sleep 0.5; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
 ```
 
-Never use `send-keys "" Enter` — empty string swallows Enter. Use bare `Enter` after `sleep 0.5`.
-
-**Verify:** Wait 5s, check `tmux capture-pane -t "$PANE" -p -S -5`. If not started: exit copy-mode, re-send Enter.
-
-**Recover stuck worker:** `C-c` → `sleep 0.5` → `C-u` → `sleep 0.5` → `Enter`. Wait for `❯` before re-dispatching.
+Never `send-keys "" Enter` — empty string swallows Enter. **Verify:** Wait 5s, `tmux capture-pane -t "$PANE" -p -S -5`. If not started: exit copy-mode, re-send Enter. **Stuck worker:** `C-c` → `sleep 0.5` → `C-u` → `sleep 0.5` → `Enter`. Wait for `❯` before re-dispatching.
 
 ## Monitoring
 
-Check every **10–15 seconds** (`/doey-monitor`). Exclude RESERVED panes — "all done" = all non-reserved idle.
+Check every **10–15 seconds** (`/doey-monitor`). "All done" = all non-reserved workers idle.
 
 ```bash
-# Results
-for f in "$RUNTIME_DIR/results"/pane_${DOEY_WINDOW_INDEX}_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
-# Pane states
-cat "$RUNTIME_DIR/status/watchdog_pane_states_W${DOEY_WINDOW_INDEX}.json" 2>/dev/null
-# Capture-pane fallback (if states unavailable)
+W="$DOEY_WINDOW_INDEX"
+# Results + pane states + events + watchdog health
+for f in "$RUNTIME_DIR/results"/pane_${W}_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
+cat "$RUNTIME_DIR/status/watchdog_pane_states_W${W}.json" 2>/dev/null
+for f in "$RUNTIME_DIR/status"/crash_pane_${W}_* "$RUNTIME_DIR/status"/completion_pane_${W}_*; do [ -f "$f" ] && cat "$f" && echo ""; done
+HEARTBEAT=$(cat "$RUNTIME_DIR/status/watchdog_W${W}.heartbeat" 2>/dev/null || echo "0")
+[ $(( $(date +%s) - HEARTBEAT )) -gt 120 ] && echo "WARNING: Watchdog heartbeat stale"
+# Fallback if states unavailable
 for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
   echo "=== Worker $DOEY_TEAM_WINDOW.$i ==="; tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.$i" -p -S -5 2>/dev/null; echo ""
 done
-# Crash/completion events + watchdog heartbeat
-for f in "$RUNTIME_DIR/status"/crash_pane_${DOEY_WINDOW_INDEX}_* "$RUNTIME_DIR/status"/completion_pane_${DOEY_WINDOW_INDEX}_*; do [ -f "$f" ] && cat "$f" && echo ""; done
-HEARTBEAT=$(cat "$RUNTIME_DIR/status/watchdog_W${DOEY_WINDOW_INDEX}.heartbeat" 2>/dev/null || echo "0")
-[ $(( $(date +%s) - HEARTBEAT )) -gt 120 ] && echo "WARNING: Watchdog heartbeat stale"
 ```
 
 Discover team: `tmux list-panes -t "$SESSION_NAME:$DOEY_TEAM_WINDOW" -F '#{pane_index} #{pane_title} #{pane_pid}'`
-Check if idle (look for `❯`): `tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3`
+Check if idle: `tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3` (look for `❯`)
 
 ## Workflow
 

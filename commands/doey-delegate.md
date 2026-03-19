@@ -17,21 +17,20 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}'
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-echo "I am: $MY_PANE"
 ```
 
 ### Step 2: Ask user for target pane and task if not provided
 
-### Step 3: Check reservation + idle
+### Step 3: Validate target
 
 ```bash
 TARGET_PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')
-if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then echo "RESERVED — pick another"; exit 1; fi
+[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { echo "RESERVED — pick another"; exit 1; }
 tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
 OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5)
 echo "$OUTPUT"
-if echo "$OUTPUT" | grep -q '❯'; then echo "Idle — OK"; else echo "May be busy"; fi
+echo "$OUTPUT" | grep -q '❯' && echo "Idle — OK" || echo "May be busy"
 ```
 
 ### Step 4: Send task

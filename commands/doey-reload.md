@@ -14,9 +14,4 @@ cd "$PROJECT_DIR"
 doey reload $ARGUMENTS
 ```
 
-**Warning:** Kills YOUR Claude instance — Manager starts with fresh context. ~15s watchdog gap.
-
-### Rules
-- Always `cd "$PROJECT_DIR"` before running
-- Pass through arguments (--workers, --all)
-- Warn user that Manager context resets
+**Warning:** Kills YOUR Claude instance — Manager starts with fresh context. ~15s watchdog gap. Pass through any arguments (`--workers`, `--all`).
