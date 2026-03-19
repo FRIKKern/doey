@@ -1,15 +1,14 @@
 # Skill: doey-purge
 
-Audits and fixes everything: context quality (bloat, redundancy, staleness, contradictions) and code quality (bash 3.2 violations, bugs, dead code). Two-wave worker dispatch: audit, then fix.
+Two-wave purge: audit every project file for context rot and code issues, then fix.
 
 ## Usage
 `/doey-purge` — full audit + fix (2-wave dispatch)
 `/doey-purge runtime` — clean stale runtime files only (no workers)
 
 ## Prompt
-Two-wave purge: audit every project file, then fix.
 
-### Preamble
+### Load Environment
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -21,7 +20,7 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 
 ### Quick mode: `/doey-purge runtime`
 
-Run `doey purge --force`, report results, stop. No workers needed.
+Run `doey purge --force`, report results, stop.
 
 ### Full mode (default)
 
@@ -48,7 +47,7 @@ Present as table, save for diffing after fixes.
 
 Dispatch via `/doey-dispatch`. **All workers: Do NOT use the Agent tool.** Each writes to `${RUNTIME_DIR}/reports/purge_<domain>.md`.
 
-##### Issue Categories
+**Issue categories** — severity HIGH (breaks behavior), MED (confusing/outdated), LOW (nitpick):
 
 | Category | Description |
 |----------|-------------|
@@ -57,20 +56,18 @@ Dispatch via `/doey-dispatch`. **All workers: Do NOT use the Agent tool.** Each 
 | STALENESS | References to nonexistent files/commands/features |
 | CONTRADICTION | Conflicting info between files |
 | DEAD WEIGHT | Sections no agent reads |
-| BASH 3.2 | `declare -A/-n/-l/-u`, `mapfile`, `|&`, `&>>`, `coproc`, etc. |
+| BASH 3.2 | `declare -A/-n/-l/-u`, `mapfile`, `\|&`, `&>>`, `coproc`, etc. |
 | BUG | Race conditions, wrong exit codes, logic errors |
 | DEAD CODE | Unreachable branches, unused functions/variables |
 
-Severity: **HIGH** (breaks behavior), **MED** (confusing/outdated), **LOW** (nitpick).
+**Worker assignments:**
 
-##### Worker Assignments
+- **A — Agents + CLAUDE.md:** Check env var accuracy, hook redundancy, stale refs. Cross-ref against commands/hooks/agents.
+- **B — Hooks + Shell + Settings:** Bash 3.2 violations (HIGH), race conditions, exit codes, dead code, setting/hook consistency.
+- **C — Commands:** Dead refs, overlap, repeated boilerplate, bash 3.2 in code blocks. Cross-ref agents/docs/hooks.
+- **D — Docs + README + Memory:** Verify context-reference claims, command table accuracy, stale memory.
 
-- **A — Agents + CLAUDE.md:** Read `agents/*.md`, `CLAUDE.md`. Check env var accuracy, hook redundancy, stale refs. Cross-ref against `commands/`, `.claude/hooks/`, `agents/`.
-- **B — Hooks + Shell + Settings:** Read `.claude/hooks/*.sh`, `shell/*.sh`, `.claude/settings.local.json`, `install.sh`. Bash 3.2 violations (HIGH), race conditions, exit codes, dead code, setting/hook consistency.
-- **C — Commands:** Read `commands/*.md`. Check for dead refs, overlap, repeated boilerplate, bash 3.2 in code blocks. Cross-ref in agents/docs/hooks.
-- **D — Docs + README + Memory:** Read `docs/*.md`, `README.md`, memory dirs. Verify context-reference claims, command table accuracy, stale memory.
-
-##### Report Format (per file)
+**Report format (per file):**
 
 ```
 ## File: path/file.md (N lines)
@@ -81,7 +78,7 @@ Severity: **HIGH** (breaks behavior), **MED** (confusing/outdated), **LOW** (nit
 - Total: N (HIGH: N, MED: N, LOW: N)
 ```
 
-##### Worker Task Template
+**Worker task template:**
 
 ```
 You are Worker N auditing [DOMAIN] for Doey Purge.
@@ -99,7 +96,7 @@ Every .sh file must pass bash 3.2 — flag violations as HIGH.
 
 #### Between Waves
 
-Read all `${RUNTIME_DIR}/reports/purge_*.md`. Present consolidated summary (files scanned, issue counts by category/severity, top savings, critical must-fix items). Propose Wave 2 assignments. **Ask user for confirmation before dispatching fixes.**
+Read all `${RUNTIME_DIR}/reports/purge_*.md`. Present consolidated summary (files scanned, issue counts by category/severity, top savings, critical must-fix). Propose Wave 2 assignments. **Ask user for confirmation before dispatching fixes.**
 
 #### Wave 2: Fix (4 parallel workers)
 
@@ -127,10 +124,10 @@ Highlight files that shrank. If issues remain, offer another fix round.
 
 ### Rules
 
-1. **Dispatch with "Do NOT use the Agent tool"** — prevents context overflow
-2. **Rename panes** — `/rename purge-<domain>_$(date +%m%d)` (Wave 1), `/rename fix-<domain>_$(date +%m%d)` (Wave 2)
-3. **Verify dispatch** — sleep 5s, check for tool activity
-4. **Read reports before presenting** — don't summarize from memory
-5. **Ask user before Wave 2** — never auto-fix without confirmation
-6. **Condense, don't delete** — fewer tokens, same information
-7. **Bash 3.2 violations are always HIGH** — they break on macOS
+1. Dispatch with "Do NOT use the Agent tool" — prevents context overflow
+2. Rename panes: `/rename purge-<domain>_$(date +%m%d)` (Wave 1), `/rename fix-<domain>_$(date +%m%d)` (Wave 2)
+3. Verify dispatch — sleep 5s, check for tool activity
+4. Read reports before presenting — don't summarize from memory
+5. Ask user before Wave 2 — never auto-fix without confirmation
+6. Condense, don't delete — fewer tokens, same information
+7. Bash 3.2 violations are always HIGH — they break on macOS

@@ -21,26 +21,23 @@ tmux send-keys -t "$WATCHDOG" "/compact" Enter
 echo "Sent /compact to ${WATCHDOG}"
 ```
 
-### Step 2: Verify (wait 15s, retry once if no activity)
+### Step 2: Verify (retry once if no activity)
 
 ```bash
-sleep 15
-OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)
-echo "$OUTPUT"
-if echo "$OUTPUT" | grep -qiE '(compact|summariz|monitor|check|pane|worker)'; then
-  echo "SUCCESS: Watchdog active after compact"
-else
-  tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
-  tmux send-keys -t "$WATCHDOG" "/compact" Enter
+ACTIVE_RE='compact|summariz|monitor|check|pane|worker'
+for attempt in 1 2; do
   sleep 15
   OUTPUT=$(tmux capture-pane -t "$WATCHDOG" -p -S -20)
   echo "$OUTPUT"
-  if echo "$OUTPUT" | grep -qiE '(compact|summariz|monitor|check|pane|worker)'; then
-    echo "SUCCESS: Watchdog resumed after retry"
-  else
+  if echo "$OUTPUT" | grep -qiE "$ACTIVE_RE"; then
+    echo "SUCCESS: Watchdog active after compact"; break
+  elif [ "$attempt" -eq 2 ]; then
     echo "FAILED: Watchdog not responding — manual intervention needed"
+  else
+    tmux copy-mode -q -t "$WATCHDOG" 2>/dev/null
+    tmux send-keys -t "$WATCHDOG" "/compact" Enter
   fi
-fi
+done
 ```
 
 Report result.

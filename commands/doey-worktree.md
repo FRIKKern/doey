@@ -1,16 +1,16 @@
 # Skill: doey-worktree
 
-Transform a team window to work in an isolated git worktree, or transform back.
+Isolate a team window in a git worktree, or return it.
 
 ## Usage
-`/doey-worktree [W]` — isolate team W in a new worktree (default: current window)
-`/doey-worktree [W] --back` — return team W to the main project directory
+`/doey-worktree [W]` — isolate team W (default: current window)
+`/doey-worktree [W] --back` — return team W to main project
 
 ## Prompt
 
 Transform a team window to/from an isolated git worktree. **Do NOT ask for confirmation — just do it.**
 
-### Step 1: Parse arguments, load context, validate
+### Step 1: Parse arguments and validate
 
 Parse user args: number → `TARGET_WIN`, `--back`/`back` → `BACK_MODE=true`, no args → current window.
 
@@ -20,7 +20,7 @@ source "${RUNTIME_DIR}/session.env"
 
 TARGET_WIN="${DOEY_WINDOW_INDEX:-1}"
 BACK_MODE=false
-# Parse args from user message: number → TARGET_WIN, --back → BACK_MODE
+# Parse from user message: number → TARGET_WIN, --back → BACK_MODE
 
 [ "$TARGET_WIN" = "0" ] && { echo "ERROR: Cannot transform Dashboard (window 0)"; exit 1; }
 
@@ -32,7 +32,6 @@ tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null | grep -qx
 ### Step 2: Check worker status and current state
 
 ```bash
-# (vars from step 1)
 WORKER_PANES="" WORKTREE_DIR="" WORKTREE_BRANCH=""
 while IFS='=' read -r key value; do
   value="${value%\"}" && value="${value#\"}"
@@ -44,10 +43,10 @@ while IFS='=' read -r key value; do
 done < "$TEAM_ENV"
 
 WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
+SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/status"
 
 BUSY_WORKERS=""
-SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
 for i in $WORKER_PANES_LIST; do
   STATUS_FILE="${RUNTIME_DIR}/status/${SESSION_SAFE}_${TARGET_WIN}_${i}.status"
   if [ -f "$STATUS_FILE" ]; then
@@ -57,7 +56,6 @@ for i in $WORKER_PANES_LIST; do
 done
 [ -n "$BUSY_WORKERS" ] && { echo "ERROR: Busy workers:${BUSY_WORKERS} — wait or stop them first"; exit 1; }
 
-# Validate isolation state
 if [ "$BACK_MODE" = "true" ]; then
   [ -z "$WORKTREE_DIR" ] && { echo "ERROR: Team ${TARGET_WIN} not in a worktree"; exit 1; }
 else
@@ -67,12 +65,11 @@ fi
 
 ### Step 3: Create or remove worktree
 
-Run the **forward** or **back** block based on `$BACK_MODE`.
+Run **forward** or **back** block based on `$BACK_MODE`.
 
-**Forward mode (no --back):**
+**Forward (isolate):**
 
 ```bash
-# (vars from step 1)
 BRANCH="doey/team-${TARGET_WIN}-$(date +%m%d-%H%M)"
 WT_DIR="${PROJECT_DIR}/.doey-worktrees/team-${TARGET_WIN}"
 
@@ -93,10 +90,9 @@ mv "$TMPENV" "$TEAM_ENV"
 TARGET_DIR="$WT_DIR"
 ```
 
-**Back mode (--back):**
+**Back (return):**
 
 ```bash
-# (vars from step 1, step 2)
 DIRTY=$(git -C "$WORKTREE_DIR" status --porcelain 2>/dev/null)
 if [ -n "$DIRTY" ]; then
   git -C "$WORKTREE_DIR" add -A
@@ -120,8 +116,6 @@ TARGET_DIR="$PROJECT_DIR"
 Kill all workers by PID (never `/exit` or `C-c`), then relaunch in `TARGET_DIR`.
 
 ```bash
-# (vars from step 1) — TARGET_DIR set in step 3
-
 for i in $WORKER_PANES_LIST; do
   PANE_PID=$(tmux display-message -t "${SESSION_NAME}:${TARGET_WIN}.${i}" -p '#{pane_pid}' 2>/dev/null)
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
@@ -154,11 +148,9 @@ sleep 1
 
 for i in $WORKER_PANES_LIST; do
   WORKER_PROMPT=$(grep -l "pane ${TARGET_WIN}\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
-  if [ -n "$WORKER_PROMPT" ]; then
-    tmux send-keys -t "${SESSION_NAME}:${TARGET_WIN}.${i}" "cd \"${TARGET_DIR}\" && claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter
-  else
-    tmux send-keys -t "${SESSION_NAME}:${TARGET_WIN}.${i}" "cd \"${TARGET_DIR}\" && claude --dangerously-skip-permissions --model opus" Enter
-  fi
+  CMD="cd \"${TARGET_DIR}\" && claude --dangerously-skip-permissions --model opus"
+  [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
+  tmux send-keys -t "${SESSION_NAME}:${TARGET_WIN}.${i}" "$CMD" Enter
   sleep 0.5
 done
 ```
@@ -166,7 +158,6 @@ done
 ### Step 5: Rename window and verify boot
 
 ```bash
-# (vars from step 1)
 if [ "$BACK_MODE" = "true" ]; then
   tmux rename-window -t "${SESSION_NAME}:${TARGET_WIN}" "T${TARGET_WIN}"
 else
@@ -190,11 +181,10 @@ done
 
 ### Step 6: Report
 
-Output summary with mode (isolate/return), window, branch, directory, booted count. If any workers failed, list them.
+Output summary: mode (isolate/return), window, branch, directory, booted count. List any failed workers.
 
 ### Rules
 - Bash 3.2 compatible (no `declare -A`, `mapfile`, `|&`, `&>>`, `[[ =~ ]]` captures, `printf '%(%s)T'`)
-- Variables cascade via `# (vars from step 1)` comments
 - Kill by PID only — never `/exit` or `send-keys C-c`
 - `tmux show-environment` for DOEY_RUNTIME — never hardcode paths
 - Status files: `${RUNTIME_DIR}/status/${SESSION_SAFE}_${WIN}_${PANE}.status`
