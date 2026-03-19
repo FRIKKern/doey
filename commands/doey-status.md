@@ -1,27 +1,30 @@
 # Skill: doey-status
 
-Share your status or check the status of other Claude instances.
+View or set pane status.
 
 ## Usage
 `/doey-status`
 
 ## Prompt
-You are managing status updates across Claude Code instances in TMUX.
 
-### Steps
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/session.env"
+MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
+MY_PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
+```
 
-1. **Discover runtime and identity:**
-   ```bash
-   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-   source "${RUNTIME_DIR}/session.env"
-   MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-   MY_PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
-   ```
+**Default: view all statuses.** Only set status if user explicitly asks.
 
-2. **Default action: view all statuses** (run the "Viewing statuses" block below). Only use "Setting status" if the user explicitly asked to set/update their status.
+### Viewing
+```bash
+for f in "${RUNTIME_DIR}/status/"*.status; do echo "---"; cat "$f"; done
+for f in "${RUNTIME_DIR}/status/"*.reserved; do [ -f "$f" ] || continue; echo "RESERVED: $(basename "$f" .reserved)"; done
+```
 
-### Setting status
-Valid values: READY, BUSY, FINISHED, RESERVED.
+Display a summary table: pane, status, task, reservations.
+
+### Setting (READY|BUSY|FINISHED|RESERVED)
 ```bash
 cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" <<EOF
 PANE: $MY_PANE
@@ -30,14 +33,3 @@ STATUS: $STATUS_TEXT
 TASK: $CURRENT_TASK
 EOF
 ```
-
-### Viewing statuses
-```bash
-for f in "${RUNTIME_DIR}/status/"*.status; do echo "---"; cat "$f"; done
-for f in "${RUNTIME_DIR}/status/"*.reserved; do
-  [ -f "$f" ] || continue
-  echo "RESERVED: $(basename "$f" .reserved)"
-done
-```
-
-Display a summary table: pane, status, task, RESERVED for panes with active `.reserved` files.
