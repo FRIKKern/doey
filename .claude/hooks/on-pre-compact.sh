@@ -23,12 +23,12 @@ if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
     -not -path '*/node_modules/*' -not -path '*/.git/*' -print0"
   CUTOFF_AWK='$1 >= cutoff {$1=""; print substr($0,2)}'
   if stat -f '%m' /dev/null 2>/dev/null; then
-    STAT_FMT="stat -f '%m %N'"
+    RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 stat -f '%m %N' 2>/dev/null | \
+      awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
   else
-    STAT_FMT="stat -c '%Y %n'"
+    RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 stat -c '%Y %n' 2>/dev/null | \
+      awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
   fi
-  RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 $STAT_FMT 2>/dev/null | \
-    awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
 if is_manager; then       ROLE_LABEL="the Doey Window Manager"
@@ -46,7 +46,7 @@ cat <<CONTEXT
 **Recently Modified Files:**
 ${RECENT_FILES:-None detected}
 
-**Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
+**Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. Restore any tracked state from the sections below. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
 # Collect basenames of matching files into a newline-separated string

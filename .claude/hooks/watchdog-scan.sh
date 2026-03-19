@@ -315,10 +315,25 @@ CRASH_EOF
   echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
 
   # Extract last tool name from capture
-  _last_tool=$(echo "$CAPTURE" | grep -oE '(Agent|Bash|Read|Edit|Write|Grep|Glob)' | tail -1) || _last_tool=""
+  _last_tool=""
+  _scan_line=""
+  while IFS= read -r _scan_line; do
+    case "$_scan_line" in
+      *Agent*) _last_tool="Agent" ;; *Bash*) _last_tool="Bash" ;;
+      *Read*) _last_tool="Read" ;; *Edit*) _last_tool="Edit" ;;
+      *Write*) _last_tool="Write" ;; *Grep*) _last_tool="Grep" ;;
+      *Glob*) _last_tool="Glob" ;;
+    esac
+  done <<EOF
+$CAPTURE
+EOF
 
   eval "_prev_raw=\${PREV_STATE_${i}:-UNKNOWN}"
-  _display_prev=$(_display_state "$_prev_raw")
+  case "$_prev_raw" in
+    WORKING|CHANGED|UNCHANGED|STUCK) _display_prev="WORKING" ;;
+    IDLE|FINISHED) _display_prev="IDLE" ;;
+    *) _display_prev="$_prev_raw" ;;
+  esac
   _update_duration "$i" "$_display_prev" "WORKING"
   _set_pane_info "$i" "WORKING" "$(_get_pane_title "$PANE_REF")" "$_last_tool" "$_display_prev"
 done
