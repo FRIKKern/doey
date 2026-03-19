@@ -34,32 +34,15 @@ Manager plans and delegates. Workers execute in parallel. Dynamic grid — scale
 # Install
 curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash
 
-# Launch
-cd ~/your-project
-doey              # first time: project picker → choose "init"
-doey              # after that: auto-launches your team
+# Launch (first time: project picker → "init"; after that: auto-launches)
+cd ~/your-project && doey
 ```
 
 Or: `git clone https://github.com/FRIKKern/doey.git && cd doey && ./install.sh`
 
 > **Other platforms:** [Linux server](docs/linux-server.md) · [Windows WSL2](docs/windows-wsl2.md) · [Linode VPS](docs/linode-setup.md)
 
-## How It Works
-
-1. `doey init` — register your project (once)
-2. `doey` — launch or reattach
-3. Tell the Window Manager your task
-4. Manager plans, Workers execute in parallel, Watchdog monitors
-5. Consolidated results when done
-
-## Worktree Isolation
-
-Teams can run in isolated git worktrees — each gets its own branch at `<project>/.doey-worktrees/team-N/`. No merge conflicts between teams.
-
-```bash
-doey add-team --worktree     # add isolated team
-doey kill-team N             # auto-saves, removes worktree, preserves branch
-```
+Tell the Window Manager your task — it plans, Workers execute in parallel, Watchdog monitors, results are consolidated.
 
 ## CLI Commands
 
@@ -70,7 +53,7 @@ doey kill-team N             # auto-saves, removes worktree, preserves branch
 | `doey add` / `remove` | Add/remove worker columns |
 | `doey stop` | Stop the team |
 | `doey reload` | Hot-reload (Manager+Watchdog; `--workers` for all) |
-| `doey add-team` / `kill-team <N>` | Add/kill team windows |
+| `doey add-team [--worktree]` / `kill-team <N>` | Add/kill team windows (worktree = isolated branch) |
 | `doey list` / `list-teams` | List projects / team windows |
 | `doey purge` | Clean runtime files, audit context |
 | `doey doctor` | Check installation health |
@@ -81,25 +64,26 @@ doey kill-team N             # auto-saves, removes worktree, preserves branch
 
 ## Architecture
 
+Window 0 is the dashboard; team windows (1+) each have a Manager + Workers.
+
 | Role | Pane | Description |
 |------|------|-------------|
-| Info Panel | `0.0` | Live dashboard with team status and events |
-| Session Manager | `0.1` | Coordinates across team windows |
-| Watchdog | `0.2-0.7` | One per team — monitors workers, catches crashes |
-| Window Manager | `W.0` | Per-window orchestrator. Plans and delegates. |
-| Workers | `W.1+` | Execute tasks autonomously |
+| Info Panel | `0.0` | Live dashboard |
+| Session Manager | `0.1` | Cross-team coordination |
+| Watchdog | `0.2+` | One per team — monitors workers |
+| Window Manager | `W.0` | Plans and delegates |
+| Workers | `W.1+` | Execute tasks in parallel |
 
-Dashboard (window 0) + team windows (1+). See [Context Reference](docs/context-reference.md).
+See [Context Reference](docs/context-reference.md) for details.
 
 <details>
 <summary><strong>Slash Commands</strong></summary>
 
-**Task management:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
-**Monitoring:** `/doey-monitor`, `/doey-team`, `/doey-status`, `/doey-watchdog-compact`
-**Infrastructure:** `/doey-add-window`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
-**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`
+**Tasks:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
+**Monitor:** `/doey-monitor`, `/doey-team`, `/doey-status`, `/doey-watchdog-compact`
+**Infra:** `/doey-add-window`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
+**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`
 **Session:** `/doey-kill-session`, `/doey-kill-all-sessions`
-**Maintenance:** `/doey-purge`, `/doey-repair`
 
 </details>
 

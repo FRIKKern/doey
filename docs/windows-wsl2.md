@@ -1,8 +1,6 @@
 # Windows (WSL2)
 
-> Doey runs on Windows via WSL2 — real Linux kernel, full tmux support.
-
-**Requires:** Windows 10 (2004+) or Windows 11 with admin access.
+> Requires Windows 10 (2004+) or Windows 11 with admin access.
 
 ### Setup
 
@@ -23,11 +21,11 @@ curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh |
 cd /path/to/your/project && doey init && doey
 ```
 
-Usage is identical to macOS/Linux from here. See [Quick Start](../README.md#quick-start).
+From here, usage is identical to macOS/Linux. See [Quick Start](../README.md#quick-start).
 
 ### Tips
 
-- Work inside `~/` for best performance — `/mnt/c/...` is slower
+- Work inside `~/` — `/mnt/c/...` is significantly slower
 - **Windows Terminal** renders the tmux grid best
 - `code .` opens VS Code with WSL remote extension
 - Limit WSL2 RAM in `%UserProfile%\.wslconfig`:
