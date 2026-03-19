@@ -18,13 +18,11 @@ fi
 SESSION_ENV="${RUNTIME_DIR}/session.env"
 
 C_RESET='\033[0m'
-C_BOLD='\033[1m'
 C_DIM='\033[2m'
 C_CYAN='\033[36m'
 C_GREEN='\033[32m'
 C_YELLOW='\033[33m'
 C_MAGENTA='\033[35m'
-C_GRAY='\033[90m'
 C_BOLD_CYAN='\033[1;36m'
 C_BOLD_WHITE='\033[1;97m'
 C_BOLD_GREEN='\033[1;32m'
@@ -73,12 +71,11 @@ repeat_char() {
   printf '%s' "$out"
 }
 
-# Read STATUS field from a .status file (0 forks). Returns "?" if missing.
 read_pane_status() {
   local file="$1" status="?"
   if [ -f "$file" ]; then
-    while IFS= read -r _rps_line; do
-      case "$_rps_line" in STATUS:*) status="${_rps_line#STATUS: }"; break ;; esac
+    while IFS= read -r line; do
+      case "$line" in STATUS:*) status="${line#STATUS: }"; break ;; esac
     done < "$file"
   fi
   printf '%s' "$status"
@@ -100,9 +97,7 @@ count_team_workers() {
   printf '%d' "$count"
 }
 
-strip_ansi() { printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'; }
-
-visible_len() { local s; s=$(strip_ansi "$1"); printf '%d' "${#s}"; }
+visible_len() { local s; s=$(printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'); printf '%d' "${#s}"; }
 
 add_left() {
   eval "L_${LC}=\"\$1\""
@@ -115,25 +110,13 @@ add_cmd() {
 }
 
 dotted_leader() {
-  local name="$1" desc="$2" max_w="$3" color="${4:-}"
-  local name_vis desc_vis
+  local name="$1" desc="$2" max_w="$3"
+  local name_vis desc_vis dots_needed
   name_vis=$(visible_len "$name")
   desc_vis=$(visible_len "$desc")
-  local dots_needed=$((max_w - name_vis - desc_vis - 2))
-  if [ "$dots_needed" -lt 2 ]; then
-    dots_needed=2
-  fi
-  local dots=""
-  local d=0
-  while [ "$d" -lt "$dots_needed" ]; do
-    dots="${dots}."
-    d=$((d + 1))
-  done
-  if [ -n "$color" ]; then
-    printf '%b%s %b%s%b %s' "$color" "$name" "${C_DIM}" "$dots" "${C_RESET}" "$desc"
-  else
-    printf '%s %b%s%b %s' "$name" "${C_DIM}" "$dots" "${C_RESET}" "$desc"
-  fi
+  dots_needed=$((max_w - name_vis - desc_vis - 2))
+  [ "$dots_needed" -lt 2 ] && dots_needed=2
+  printf '%s %b%s%b %s' "$name" "${C_DIM}" "$(repeat_char '.' "$dots_needed")" "${C_RESET}" "$desc"
 }
 
 _CACHED_SESSION_NAME=""
@@ -319,14 +302,11 @@ while true; do
   }
 
   TITLE_NAME=$(printf '%s' "$PROJECT_NAME" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9 ._-' ' ')
-  TITLE_R0=""; TITLE_R1=""; TITLE_R2=""; TITLE_R3=""; TITLE_R4=""; TITLE_R5=""
+  for _r in 0 1 2 3 4 5; do eval "TITLE_R${_r}=''"; done
   _ci=0
   while [ "$_ci" -lt "${#TITLE_NAME}" ]; do
-    _ch="${TITLE_NAME:${_ci}:1}"
-    get_block_char "$_ch"
-    TITLE_R0="${TITLE_R0}${CHAR_R0} "; TITLE_R1="${TITLE_R1}${CHAR_R1} "
-    TITLE_R2="${TITLE_R2}${CHAR_R2} "; TITLE_R3="${TITLE_R3}${CHAR_R3} "
-    TITLE_R4="${TITLE_R4}${CHAR_R4} "; TITLE_R5="${TITLE_R5}${CHAR_R5} "
+    get_block_char "${TITLE_NAME:${_ci}:1}"
+    for _r in 0 1 2 3 4 5; do eval "TITLE_R${_r}=\"\${TITLE_R${_r}}\${CHAR_R${_r}} \""; done
     _ci=$((_ci + 1))
   done
 

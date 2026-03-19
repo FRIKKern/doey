@@ -3,35 +3,25 @@
 # Exit: 0=clean, 1=issues found, 2=usage error
 set -euo pipefail
 
-WARN='\033[0;33m'; ERROR='\033[0;31m'; DIM='\033[0;90m'
-BOLD='\033[1m'; SUCCESS='\033[0;32m'; RESET='\033[0m'
-
 MODE=""
-NO_COLOR=false
+USE_COLOR=true
 
 for arg in "$@"; do
   case "$arg" in
     --installed) MODE="installed" ;;
     --repo)      MODE="repo" ;;
-    --no-color)  NO_COLOR=true ;;
-    -h|--help)
-      echo "Usage: context-audit.sh [--installed|--repo] [--no-color]"
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $arg" >&2
-      exit 2
-      ;;
+    --no-color)  USE_COLOR=false ;;
+    -h|--help)   echo "Usage: context-audit.sh [--installed|--repo] [--no-color]"; exit 0 ;;
+    *)           echo "Unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
 
-if [[ -z "$MODE" ]]; then
-  echo "Error: must specify --installed or --repo" >&2
-  exit 2
-fi
+[[ -z "$MODE" ]] && { echo "Error: must specify --installed or --repo" >&2; exit 2; }
 
-if $NO_COLOR || [[ ! -t 1 ]]; then
-  WARN=""; ERROR=""; DIM=""; BOLD=""; SUCCESS=""; RESET=""
+WARN=""; ERROR=""; DIM=""; BOLD=""; SUCCESS=""; RESET=""
+if $USE_COLOR && [[ -t 1 ]]; then
+  WARN='\033[0;33m'; ERROR='\033[0;31m'; DIM='\033[0;90m'
+  BOLD='\033[1m'; SUCCESS='\033[0;32m'; RESET='\033[0m'
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,13 +49,9 @@ STALE_RE='auto-accepts prompts|auto-accepting prompts|automatically accepts|auto
 ALLOWLIST_RE='NEVER.*send.*[yY]|never.*need.*auto.accept|no.*prompts.*to.*accept|causes.*y.spam|DO NOT.*auto.accept|do not.*send.*yes|block.*send-keys|prohibited.*send-keys|safety.*net|y-spam|y.spam.*risk|context-audit'
 
 ISSUES=()
-ISSUE_COUNT=0
 DELIM=$'\x1f'
 
-add_issue() {
-  ISSUE_COUNT=$((ISSUE_COUNT + 1))
-  ISSUES+=("${1}${DELIM}${2}${DELIM}${3}${DELIM}${4}${DELIM}${5}")
-}
+add_issue() { ISSUES+=("${1}${DELIM}${2}${DELIM}${3}${DELIM}${4}${DELIM}${5}"); }
 
 display_path() {
   if [[ "$MODE" == "installed" ]]; then
@@ -105,12 +91,12 @@ for file in "${SCAN_FILES[@]}"; do
     "References removed or contradictory behavior pattern" "$file" "$display"
 done
 
-if [[ $ISSUE_COUNT -eq 0 ]]; then
+if [[ ${#ISSUES[@]} -eq 0 ]]; then
   printf "${SUCCESS}  CONTEXT AUDIT: clean — no issues found${RESET}\n"
   exit 0
 fi
 
-printf "\n${ERROR}${BOLD}  CONTEXT AUDIT: %d issue(s) found${RESET}\n\n" "$ISSUE_COUNT"
+printf "\n${ERROR}${BOLD}  CONTEXT AUDIT: %d issue(s) found${RESET}\n\n" "${#ISSUES[@]}"
 
 for issue in "${ISSUES[@]}"; do
   IFS="$DELIM" read -r category file lnum pattern_desc risk_desc <<< "$issue"

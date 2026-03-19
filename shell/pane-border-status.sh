@@ -7,43 +7,39 @@ PANE_REF="${1:-}"
 
 TITLE=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || TITLE=""
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+[ -z "$RUNTIME_DIR" ] && { echo "$TITLE"; exit 0; }
 
 WIN_PANE="${PANE_REF##*:}"
 WINDOW_IDX="${WIN_PANE%%.*}"
 PANE_IDX="${WIN_PANE#*.}"
+PANE_SAFE="${PANE_REF//[:.]/_}"
 
-env_val() { # env_val <file> <key>
+env_val() {
   while IFS='=' read -r k v; do
     [ "$k" = "$2" ] && { v="${v#\"}"; echo "${v%\"}"; return; }
   done < "$1"
 }
 
-if [ "$WINDOW_IDX" = "0" ] && [ -n "$RUNTIME_DIR" ]; then
+# Window 0: identify Session Manager or Watchdog panes
+if [ "$WINDOW_IDX" = "0" ]; then
   SESSION_ENV="${RUNTIME_DIR}/session.env"
   if [ -f "$SESSION_ENV" ]; then
     SM_PANE=$(env_val "$SESSION_ENV" SM_PANE)
-    if [ -n "$SM_PANE" ] && [ "0.${PANE_IDX}" = "$SM_PANE" ]; then
-      echo "Session Manager"; exit 0
-    fi
+    [ -n "$SM_PANE" ] && [ "0.${PANE_IDX}" = "$SM_PANE" ] && { echo "Session Manager"; exit 0; }
   fi
 
   for team_file in "${RUNTIME_DIR}"/team_*.env; do
     [ -f "$team_file" ] || continue
     WDG_PANE=$(env_val "$team_file" WATCHDOG_PANE)
     if [ -n "$WDG_PANE" ] && [ "0.${PANE_IDX}" = "$WDG_PANE" ]; then
-      TEAM_WIN=$(env_val "$team_file" WINDOW_INDEX)
-      echo "Watchdog Team ${TEAM_WIN:-?}"; exit 0
+      echo "Watchdog Team $(env_val "$team_file" WINDOW_INDEX)"; exit 0
     fi
   done
 
   echo "$TITLE"; exit 0
 fi
 
-if [ -n "$RUNTIME_DIR" ]; then
-  PANE_SAFE="${PANE_REF//[:.]/_}"
-  if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
-    echo "${TITLE} 🔒"; exit 0
-  fi
-fi
+# Worker panes: show lock icon if reserved
+[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { echo "${TITLE} 🔒"; exit 0; }
 
 echo "$TITLE"
