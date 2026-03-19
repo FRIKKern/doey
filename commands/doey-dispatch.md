@@ -1,6 +1,6 @@
 # Skill: doey-dispatch
 
-Primary dispatch primitive — send tasks to idle worker panes.
+Send tasks to idle worker panes.
 
 ## Usage
 `/doey-dispatch`
@@ -9,9 +9,9 @@ Primary dispatch primitive — send tasks to idle worker panes.
 
 Dispatch tasks to Claude Code workers in tmux panes.
 
-### Load Context
+### Load Environment
 
-Start every Bash call with this. Provides `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`, `WORKER_PANES`, `WATCHDOG_PANE`, `WINDOW_INDEX`. Always `copy-mode -q` before `paste-buffer`/`send-keys` (copy-mode swallows input).
+Run at the start of every Bash call. Always `copy-mode -q` before `paste-buffer`/`send-keys`.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -21,7 +21,9 @@ TEAM_ENV="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
 [ -f "$TEAM_ENV" ] && source "$TEAM_ENV"
 ```
 
-### Auto-scale (dynamic grid, run BEFORE scanning)
+### Auto-scale (run BEFORE scanning)
+
+If grid is dynamic and no idle workers exist, add a column.
 
 ```bash
 if [ "$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)" = "dynamic" ]; then
@@ -41,7 +43,7 @@ fi
 
 ### Pre-flight
 
-❯ = idle. **Never dispatch to RESERVED panes.**
+❯ = idle. **Never dispatch to reserved panes.**
 
 ```bash
 PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
@@ -52,12 +54,12 @@ tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 
 ### Dispatch Sequence
 
-Never `send-keys "" Enter` — empty string swallows Enter. Load env first (see Load Context).
+Never `send-keys "" Enter` — empty string swallows Enter.
 
 ```bash
 PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 
-# 1. Check if Claude is already at prompt
+# 1. Check if Claude is at prompt
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
 CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
@@ -65,7 +67,7 @@ OUTPUT=$(tmux capture-pane -t "$PANE" -p 2>/dev/null)
 ALREADY_READY=false
 [ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯' && ALREADY_READY=true
 
-# 2. If not ready: kill → restart
+# 2. Not ready → kill + restart
 if [ "$ALREADY_READY" = "false" ]; then
   [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null; sleep 3
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
@@ -105,7 +107,7 @@ else SETTLE_S=0.5; fi
 sleep $SETTLE_S; tmux send-keys -t "$PANE" Enter
 rm "$TASKFILE"
 
-# 6. MANDATORY VERIFICATION
+# 6. Verify (mandatory)
 sleep 5; OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
 if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
   echo "✓ Worker ${WINDOW_INDEX}.X started"
@@ -122,8 +124,8 @@ fi
 
 ### Variants
 
-**Batch:** Parallel Bash calls per worker (not `&&`). Skip reserved panes.
-**Short tasks (< 200 chars):** Steps 1–3, then `send-keys` directly (skip file write). Steps 5–6 still mandatory.
+- **Batch:** Parallel Bash calls per worker (not `&&`). Skip reserved panes.
+- **Short tasks (< 200 chars):** Steps 1–3, then `send-keys` directly (skip file write). Steps 5–6 still mandatory.
 
 ### File Conflicts
 

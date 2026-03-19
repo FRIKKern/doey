@@ -6,9 +6,8 @@ Kill a team window — stop processes, remove tmux window, clean runtime files.
 `/doey-kill-window [window_index]` — kill specific or current team window
 
 ## Prompt
-Kill a team window and clean up.
 
-### Step 1: Parse and validate
+### Step 1: Load environment and validate
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -23,7 +22,6 @@ echo "Target: window ${TARGET_WIN}"
 ### Step 2: Kill all processes
 
 ```bash
-# (vars from step 1)
 KILLED=0
 for pane_pid in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do
   CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
@@ -43,7 +41,6 @@ sleep 1
 Must run BEFORE deleting team env files.
 
 ```bash
-# (vars from step 1)
 _wt_dir="" _wt_branch=""
 if [ -f "${RUNTIME_DIR}/team_${TARGET_WIN}.env" ]; then
   _wt_dir=$(grep '^WORKTREE_DIR=' "${RUNTIME_DIR}/team_${TARGET_WIN}.env" 2>/dev/null | head -1 | cut -d= -f2-)
@@ -72,7 +69,6 @@ fi
 ### Step 4: Kill window + clean runtime
 
 ```bash
-# (vars from step 1)
 tmux kill-window -t "${SESSION_NAME}:${TARGET_WIN}"
 echo "Window ${TARGET_WIN} killed"
 
@@ -103,7 +99,8 @@ Window ${TARGET_WIN} killed. Processes stopped: ${KILLED}. TEAM_WINDOWS: ${NEW_W
 ```
 
 ### Rules
-- **NEVER kill window 0** — use `/doey-kill-session` for full teardown
+
+- **Never kill window 0** — use `/doey-kill-session` for full teardown
 - **Kill processes before window** — prevents orphans
 - **Clean runtime files + update TEAM_WINDOWS** (atomic write)
 - **Kill by PID** — never `/exit` or `send-keys`
