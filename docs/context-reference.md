@@ -7,7 +7,7 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 | Lowest | Agent definitions (`agents/`) | Manager, Session Mgr, Watchdog |
 | | Settings (4-file merge) | All |
 | | Hooks (`.claude/hooks/`) | All |
-| | Skills (`commands/`) | Manager (+ 2 for Workers) |
+| | Skills (`.claude/skills/`) | Manager (+ 2 for Workers) |
 | | Persistent memory | Manager, Session Mgr |
 | | Environment vars (`session.env`) | All |
 | | CLI launch flags | Per-instance |
@@ -66,7 +66,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
 ## Skills
 
-Installed to `~/.claude/commands/`, invoked via `/skill-name`, loaded on-demand.
+Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
 **Manager skills:**
 `/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-team` (layout overview), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager)

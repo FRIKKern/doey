@@ -30,7 +30,7 @@ Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
 | Dir | Purpose | Installs to |
 |-----|---------|-------------|
 | `agents/` | Agent definitions | `~/.claude/agents/` |
-| `commands/` | Slash commands | `~/.claude/commands/` |
+| `.claude/skills/` | Slash commands (skills) | (in-repo) |
 | `.claude/hooks/` | Event hooks | (in-repo) |
 | `shell/` | Launcher & utils | `~/.local/bin/` |
 | `docs/` | Guides & context ref | — |
@@ -38,7 +38,7 @@ Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
 ## Conventions
 
 - Agents: YAML frontmatter (name, model, color, memory, description)
-- Commands: `# Skill: name` + `## Usage` + `## Prompt`
+- Skills: YAML frontmatter (name, description) in `.claude/skills/<name>/SKILL.md`
 - Hook exits: 0=allow, 1=block+error, 2=block+feedback
 - Shell: `set -euo pipefail`, bash 3.2 compatible. Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `[[ =~` capture groups.
 - Naming: sessions `doey-<project>`, runtime `/tmp/doey/<project>/`
@@ -49,7 +49,7 @@ Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
 |---------|--------|
 | Agents | Restart Manager or Watchdog |
 | Hooks | Restart ALL workers (loaded at startup) |
-| Commands | No restart (on-demand) |
+| Skills | No restart (on-demand) |
 | Launcher/shell | `doey reload` or `doey stop && doey` |
 | Shell scripts | Run `tests/test-bash-compat.sh` |
 

@@ -30,10 +30,10 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 shopt -s nullglob
 SCAN_FILES=()
 if [[ "$MODE" == "installed" ]]; then
-  SCAN_FILES+=(~/.claude/agents/doey-*.md ~/.claude/commands/doey-*.md)
+  SCAN_FILES+=(~/.claude/agents/doey-*.md "$REPO_DIR"/.claude/skills/doey-*/SKILL.md)
   [[ -f "$HOME/.claude/CLAUDE.md" ]] && SCAN_FILES+=("$HOME/.claude/CLAUDE.md")
 else
-  SCAN_FILES+=("$REPO_DIR"/agents/*.md "$REPO_DIR"/commands/*.md)
+  SCAN_FILES+=("$REPO_DIR"/agents/*.md "$REPO_DIR"/.claude/skills/*/SKILL.md)
   [[ -f "$REPO_DIR/CLAUDE.md" ]] && SCAN_FILES+=("$REPO_DIR/CLAUDE.md")
 fi
 shopt -u nullglob

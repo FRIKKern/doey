@@ -879,7 +879,7 @@ _purge_audit_context() {
 
   # Check installed commands/skills
   local skill_count=0 skill_bytes=0
-  for f in "$HOME"/.claude/commands/doey-*.md; do
+  for f in "$PROJECT_DIR"/.claude/skills/doey-*/SKILL.md; do
     [[ -f "$f" ]] || continue
     local size
     size=$(wc -c < "$f" | tr -d ' ')
@@ -1666,7 +1666,7 @@ uninstall_system() {
   printf '\n  %bDoey — Uninstall%b\n\n' "$BRAND" "$RESET"
   printf "  This will remove:\n"
   printf "    ${DIM}• ~/.local/bin/doey, tmux-statusbar.sh, pane-border-status.sh${RESET}\n"
-  printf "    ${DIM}• ~/.claude/agents/doey-*.md, ~/.claude/commands/doey-*.md${RESET}\n"
+  printf "    ${DIM}• ~/.claude/agents/doey-*.md${RESET}\n"
   printf "    ${DIM}• ~/.claude/doey/ (config & state)${RESET}\n"
   printf "\n  ${DIM}Will NOT remove: git repo, /tmp/doey, or agent-memory${RESET}\n\n"
 
@@ -1674,7 +1674,7 @@ uninstall_system() {
   [[ "$confirm" == [yY] ]] || { printf "  ${DIM}Cancelled.${RESET}\n\n"; return 0; }
 
   rm -f ~/.local/bin/doey ~/.local/bin/tmux-statusbar.sh ~/.local/bin/pane-border-status.sh
-  rm -f ~/.claude/agents/doey-*.md ~/.claude/commands/doey-*.md
+  rm -f ~/.claude/agents/doey-*.md
   rm -rf ~/.claude/doey
 
   printf "\n  ${SUCCESS}✓ Uninstalled.${RESET} Reinstall: ${DIM}cd <repo> && ./install.sh${RESET}\n\n"
@@ -1697,7 +1697,7 @@ check_doctor() {
   # Installed files
   local _f _label
   for _f in "$HOME/.claude/agents/doey-manager.md:Agents" \
-            "$HOME/.claude/commands/doey-dispatch.md:Commands" \
+            "$PROJECT_DIR/.claude/skills/doey-dispatch/SKILL.md:Skills" \
             "$HOME/.local/bin/doey:CLI"; do
     _label="${_f##*:}"; _f="${_f%:*}"
     if [[ -f "$_f" ]]; then _doc_check ok "$_label installed" "${_f/#$HOME/~}"
@@ -1807,7 +1807,7 @@ show_version() {
   fi
 
   printf "  ${DIM}Agents${RESET}     ${BOLD}~/.claude/agents/${RESET}\n"
-  printf "  ${DIM}Commands${RESET}   ${BOLD}~/.claude/commands/${RESET}\n"
+  printf "  ${DIM}Skills${RESET}     ${BOLD}.claude/skills/${RESET}\n"
   printf "  ${DIM}CLI${RESET}        ${BOLD}~/.local/bin/doey${RESET}\n"
   local project_count=0
   [[ -f "$PROJECTS_FILE" ]] && project_count="$(grep -c '.' "$PROJECTS_FILE" 2>/dev/null || echo 0)"

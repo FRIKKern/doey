@@ -172,8 +172,13 @@ echo ""
 
 printf "  ${BRAND}[1/5]${RESET} Creating directories..."
 {
-  mkdir -p ~/.claude/{agents,commands,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin
+  mkdir -p ~/.claude/{agents,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin
 } && step_ok || { step_fail; die "Failed to create directories."; }
+
+# Clean up old commands that are now project-level skills
+for f in ~/.claude/commands/doey-*.md; do
+  [ -f "$f" ] && rm -f "$f"
+done
 
 echo "$SCRIPT_DIR" > ~/.claude/doey/repo-path
 
@@ -185,18 +190,24 @@ date=$INSTALLED_DATE
 repo=$SCRIPT_DIR
 VEOF
 
-rm -f ~/.claude/skills/doey-*.md 2>/dev/null
-rmdir ~/.claude/skills 2>/dev/null || true
-
 install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/5" "agent definitions"
 AGENT_COUNT=$_COUNT
 for f in "${_files[@]}"; do detail "$(basename "$f" .md)"; done
 
-install_md_files "$SCRIPT_DIR/commands" ~/.claude/commands "3/5" "slash commands"
-CMD_COUNT=$_COUNT
-CMD_NAMES=""
-for f in "${_files[@]}"; do CMD_NAMES="${CMD_NAMES:+$CMD_NAMES, }/$(basename "$f" .md)"; done
-detail "$CMD_NAMES"
+printf "  ${BRAND}[3/5]${RESET} Installing skills..."
+# Skills live in .claude/skills/ (project-level, auto-discovered)
+# Count them for the summary
+shopt -s nullglob
+_skill_dirs=("$SCRIPT_DIR/.claude/skills"/doey-*/)
+shopt -u nullglob
+SKILL_COUNT=${#_skill_dirs[@]}
+if [ "$SKILL_COUNT" -gt 0 ]; then
+  step_ok
+  detail "$SKILL_COUNT skills (project-level, auto-discovered)"
+else
+  step_fail
+  die "No skills found in .claude/skills/"
+fi
 
 install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 
@@ -278,7 +289,7 @@ fi
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}  ${BOLD}Installed:${RESET}                                ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s agent definitions                 ${SUCCESS}│${RESET}\n" "$AGENT_COUNT"
-printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s slash commands                    ${SUCCESS}│${RESET}\n" "$CMD_COUNT"
+printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s skills (project-level)              ${SUCCESS}│${RESET}\n" "$SKILL_COUNT"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} doey CLI                               ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}  ${BOLD}Quick start:${RESET}                              ${SUCCESS}│${RESET}\n"
