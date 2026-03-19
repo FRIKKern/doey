@@ -25,6 +25,17 @@ case "$(basename "$FILE_PATH")" in post-tool-lint.sh|test-bash-compat.sh) exit 0
 
 NL='
 '
+# Regex matches bash 4+ features (one alternative per feature):
+#   declare -[Anlu]       associative arrays, namerefs, lower/uppercase attrs
+#   printf %()T           time format
+#   mapfile / readarray   array builtins
+#   |& / &>>              pipe/append stderr shorthands
+#   coproc                coprocess
+#   BASH_REMATCH          regex capture groups (unreliable in 3.2)
+#   ${var,,} / ${var^^}   case conversion
+#   ${!prefix@}           indirect expansion
+#   shopt globstar/lastpipe
+#   read -t <decimal>     fractional timeout (rounds to 0 in 3.2)
 COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)|read[[:space:]]+-t[[:space:]]+[0-9]+\.[0-9]'
 ALL_MATCHES=$(grep -nE "$COMBINED_PATTERN" "$FILE_PATH" 2>/dev/null || true)
 [ -z "$ALL_MATCHES" ] && exit 0

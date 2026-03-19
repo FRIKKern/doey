@@ -15,6 +15,7 @@ OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 FILTERED=""
 STATUS="done"
 while IFS= read -r line; do
+  # UI chrome filters — update if Claude Code output format changes
   case "$line" in
     *"❯"*|*"───"*|*"Ctx █"*|*"bypass permissions"*|*"shift+tab"*|*"MCP server"*|*/doctor*) continue ;;
   esac

@@ -152,10 +152,12 @@ SYSTEMD
 
 ## Full Automation Script (Steps 1–5)
 
-Usage: `ANTHROPIC_KEY="sk-ant-..." ./doey-linode-setup.sh`
+Combines the manual steps above into a single script. Usage: `ANTHROPIC_KEY="sk-ant-..." ./doey-linode-setup.sh`
 
 ```bash
 #!/usr/bin/env bash
+# Automates Steps 1–5: provision, configure, install, auth, and print launch instructions.
+# See the individual sections above for detailed explanations of each step.
 set -euo pipefail
 ANTHROPIC_KEY="${ANTHROPIC_KEY:?Set ANTHROPIC_KEY env var}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519.pub}"
@@ -163,16 +165,17 @@ LINODE_TYPE="${LINODE_TYPE:-g6-nanode-1}"
 LINODE_REGION="${LINODE_REGION:-us-east}"
 LINODE_LABEL="${LINODE_LABEL:-doey-server}"
 
+# Step 1: Provision
 ROOT_PASS="$(openssl rand -base64 24)"
 linode-cli linodes create \
   --type "$LINODE_TYPE" --region "$LINODE_REGION" --image linode/ubuntu24.04 \
   --label "$LINODE_LABEL" --root_pass "$ROOT_PASS" \
   --authorized_keys "$(cat "$SSH_KEY")" --json > /dev/null
-
 LINODE_IP=$(linode-cli linodes list --label "$LINODE_LABEL" --json | jq -r '.[0].ipv4[0]')
 while [ "$(linode-cli linodes list --label "$LINODE_LABEL" --json | jq -r '.[0].status')" != "running" ]; do sleep 5; done
 sleep 10
 
+# Step 2: Configure server (user, SSH hardening, firewall, swap, deps)
 ssh -o StrictHostKeyChecking=accept-new root@"$LINODE_IP" 'bash -s' << 'SERVER'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -180,8 +183,7 @@ apt-get update -qq && apt-get upgrade -y -qq
 useradd -m -s /bin/bash -G sudo doey
 echo "doey ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/doey
 mkdir -p /home/doey/.ssh && cp /root/.ssh/authorized_keys /home/doey/.ssh/
-chown -R doey:doey /home/doey/.ssh
-chmod 700 /home/doey/.ssh && chmod 600 /home/doey/.ssh/authorized_keys
+chown -R doey:doey /home/doey/.ssh && chmod 700 /home/doey/.ssh && chmod 600 /home/doey/.ssh/authorized_keys
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 systemctl restart sshd
@@ -191,6 +193,7 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 apt-get install -y -qq tmux git curl jq htop mosh locales && locale-gen en_US.UTF-8
 SERVER
 
+# Steps 3–4: Install Node.js, Claude Code, Doey, and set API key
 ssh doey@"$LINODE_IP" 'bash -s' << TOOLS
 set -euo pipefail
 curl -fsSL https://fnm.vercel.app/install | bash

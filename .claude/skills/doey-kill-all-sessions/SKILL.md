@@ -19,14 +19,14 @@ kill_all_children() {
     for w in $(tmux list-windows -t "$SESSION" -F '#{window_index}' 2>/dev/null); do
       for pane_pid in $(tmux list-panes -t "${SESSION}:${w}" -F '#{pane_pid}' 2>/dev/null); do
         CHILD_PID=$(pgrep -P "$pane_pid" 2>/dev/null)
-        [ -n "$CHILD_PID" ] && kill $sig "$CHILD_PID" 2>/dev/null
+        [ -n "$CHILD_PID" ] && kill -"$sig" "$CHILD_PID" 2>/dev/null
       done
     done
   done
 }
 
-kill_all_children; sleep 2
-kill_all_children -9; sleep 1
+kill_all_children TERM; sleep 2
+kill_all_children 9; sleep 1
 
 for SESSION in $SESSIONS; do tmux kill-session -t "$SESSION" 2>/dev/null; echo "  ${SESSION} killed"; done
 

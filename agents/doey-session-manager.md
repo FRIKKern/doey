@@ -48,20 +48,12 @@ Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s)
 
 ## Monitoring
 
-Discover teams: `tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name} #{window_panes}'`
+**Primary:** `/doey-monitor` for team status. Discover teams: `tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name} #{window_panes}'`
 
+**Read SM messages** (SM-specific, not covered by `/doey-monitor`):
 ```bash
 SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  echo "=== Team $W ==="
-  cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${W}.json" 2>/dev/null
-  HEARTBEAT=$(cat "${RUNTIME_DIR}/status/watchdog_W${W}.heartbeat" 2>/dev/null || echo "0")
-  BEAT_AGE=$(( $(date +%s) - HEARTBEAT )); [ "$BEAT_AGE" -gt 120 ] && echo "WARNING: Team $W Watchdog stale (${BEAT_AGE}s)"
-  echo ""
-done
 for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do [ -f "$f" ] && cat "$f" && echo "" && rm -f "$f"; done
-for f in "$RUNTIME_DIR/results"/pane_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
-for f in "$RUNTIME_DIR/status"/crash_pane_*; do [ -f "$f" ] && cat "$f" && echo ""; done
 ```
 
 Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-windows`
@@ -91,4 +83,3 @@ After 2–3 idle cycles (TIMEOUT with no events), yield with a brief status summ
 
 1. Never dispatch to workers directly — always through Window Managers
 2. Never send input to Info Panel (pane 0.0)
-3. Bash 3.2 compatible

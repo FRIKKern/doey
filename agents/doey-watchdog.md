@@ -62,7 +62,7 @@ Events: `STATE_CHANGE`→`↗ W{pane} {old}→{new}`, `COMPLETION`→`✅ W{pane
 | `MANAGER_CRASHED` | Alert Session Manager only |
 | `MANAGER_COMPLETED` | Notify Session Manager |
 
-Workers run `--dangerously-skip-permissions` (launch-time flag, not watchdog-controlled). NEVER send y/Y/yes/Enter to any pane.
+NEVER send y/Y/yes to permission prompts. Only send `/login`, `/compact`, or bare Enter for recovery.
 
 **Step 4 — Loop:** Run `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` (sleeps ≤30s, wakes on worker finish). Go to Step 1. After 2 cycles, yield.
 
@@ -79,14 +79,13 @@ BODY_TEXT
 EOF
 ```
 
-| Event | SLUG | Subject / Body | Extra |
-|-------|------|----------------|-------|
-| `MANAGER_CRASHED` | `mgr_crash` | "MANAGER_CRASHED in Team W" / "Manager down. Needs restart." | Never send keys to crashed Manager. Write once per crash. Skip worker notifications while crashed. Show 🔥. |
-| `WAVE_COMPLETE` | `wave_done` | "Team W wave complete" / "All workers idle. Check results." | Also send-keys to Manager if idle: "All workers idle — wave complete. Check results in $RUNTIME_DIR/results/ and dispatch next wave." |
-| `MANAGER_COMPLETED` | `mgr_done` | "Team W Manager completed" / "Manager finished. Route follow-up." | — |
-| Worker `COMPLETION`/`CRASHED`/`STUCK` | — | Details + "Check results and take next action." | Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`. |
-| `LOGGED_OUT` (worker or manager) | `logged_out` | "N panes LOGGED_OUT in Team W" / "Panes [list] show 'Not logged in'. Send `/login` then select login method." | Send-keys `/login` + `Enter` to each logged-out pane. If login menu appears, send `Escape` then retry or alert Session Manager. |
-| `MANAGER_LOGGED_OUT` | `mgr_logged_out` | "Manager LOGGED_OUT in Team W" / "Manager shows 'Not logged in'." | Send `/login` + `Enter` to Manager pane. Alert Session Manager. |
+| Event | Action |
+|-------|--------|
+| `MANAGER_CRASHED` (slug: `mgr_crash`) | `.msg` to SM. Never send keys to crashed Manager. Write once per crash. Skip worker notifications while crashed. Show 🔥. |
+| `WAVE_COMPLETE` (slug: `wave_done`) | `.msg` to SM. Also send-keys to Manager if idle: "All workers idle — wave complete. Check results and dispatch next wave." |
+| `MANAGER_COMPLETED` (slug: `mgr_done`) | `.msg` to SM: "Manager finished. Route follow-up." |
+| Worker `COMPLETION`/`CRASHED`/`STUCK` | Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`. |
+| `LOGGED_OUT` (slug: `logged_out`) | Send `/login` + `Enter` to each affected pane. If login menu appears, send `Escape` then retry or alert SM. |
 
 ## Rules
 

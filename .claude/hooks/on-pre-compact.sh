@@ -15,12 +15,11 @@ SEARCH_DIR="${DOEY_TEAM_DIR:-$PROJECT_DIR}"
 
 RECENT_FILES=""
 if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
-  FIND_CMD="find $SEARCH_DIR -maxdepth 4 \
-    \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
-    -not -path '*/node_modules/*' -not -path '*/.git/*' -print0"
   CUTOFF_AWK='$1 >= cutoff {$1=""; print substr($0,2)}'
   STAT_ARGS="-c %Y %n"; stat -f '%m' /dev/null 2>/dev/null && STAT_ARGS="-f %m %N"
-  RECENT_FILES=$(eval "$FIND_CMD" 2>/dev/null | xargs -0 stat $STAT_ARGS 2>/dev/null | \
+  RECENT_FILES=$(find "$SEARCH_DIR" -maxdepth 4 \
+    \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
+    -not -path '*/node_modules/*' -not -path '*/.git/*' -print0 2>/dev/null | xargs -0 stat $STAT_ARGS 2>/dev/null | \
     awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
@@ -54,6 +53,7 @@ if is_manager; then
   _TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
   WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
 
+  # jq-with-grep-fallback intentionally inlined (avoids common.sh parse_field dependency)
   PENDING_RESULTS=""
   HAS_JQ=false; command -v jq >/dev/null 2>&1 && HAS_JQ=true
   for rf in "$RUNTIME_DIR"/results/pane_${_TEAM_W}_*.json; do

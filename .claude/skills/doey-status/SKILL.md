@@ -1,31 +1,24 @@
 ---
 name: doey-status
-description: View or set pane status for Doey workers
+description: View or set pane status for Doey workers. Team-wide view with `/doey-status team`.
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Current pane: !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null|| true`
+- All panes: !`SESSION=$(grep '^SESSION_NAME=' $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2- | tr -d '"'); tmux list-panes -s -t "$SESSION" -F '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null|| true`
 - All statuses: !`SD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status"; for f in "$SD"/*.status; do [ -f "$f" ] && echo "---" && cat "$f"; done 2>/dev/null || true`
 - Reservations: !`SD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status"; for f in "$SD"/*.reserved; do [ -f "$f" ] && echo "RESERVED: $(basename "$f" .reserved)"; done 2>/dev/null || true`
 
-**Default: view all statuses.** Only set status if user explicitly asks.
+**Default: view current window statuses.** Only set if user explicitly asks.
 
-### Viewing
+### Viewing (default)
 
-Display a summary table from the injected status data: pane, status, task, reservations.
+Display summary table from injected data: pane, status, task, reservations. Mark current pane with `<-- you`.
 
-### Setting (READY|BUSY|FINISHED|RESERVED)
+### Team-wide view (`/doey-status team` or `/doey-status all`)
 
-Derive `RUNTIME_DIR`, `MY_PANE`, and `PANE_SAFE` from the injected context, then:
+Show ALL panes across ALL windows. Build table: `PANE | STATUS | RESERVED | LAST_UPDATE`. For each pane: convert ID to safe name (`tr ':.' '_'`), extract STATUS (or "UNKNOWN"), check `.reserved` file, show status file age. Note any UNKNOWN panes.
 
-```bash
-RUNTIME_DIR="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
-MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
-cat > "${RUNTIME_DIR}/status/${PANE_SAFE}.status" <<EOF
-PANE: $MY_PANE
-UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
-STATUS: $STATUS_TEXT
-TASK: $CURRENT_TASK
-EOF
-```
+### Setting (`/doey-status set <STATE>`)
+
+Valid states: READY, BUSY, FINISHED, RESERVED. Write to `${RUNTIME_DIR}/status/${PANE_SAFE}.status` with fields: PANE, UPDATED (ISO 8601), STATUS, TASK. Derive PANE_SAFE from current pane ID (`tr ':.' '_'`).

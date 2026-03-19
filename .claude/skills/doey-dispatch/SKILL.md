@@ -11,7 +11,7 @@ description: Send tasks to idle worker panes.
 
 ## Prompt
 
-Dispatch tasks to Claude Code workers in tmux panes. Always `copy-mode -q` before `paste-buffer`/`send-keys`. Use the variables from the injected session/team config above (SESSION_NAME, PROJECT_NAME, PROJECT_DIR, WINDOW_INDEX, WORKER_PANES, WORKER_COUNT, etc.).
+Dispatch tasks to Claude Code workers in tmux panes. Always `copy-mode -q` before `paste-buffer`/`send-keys`. Use injected config variables (SESSION_NAME, PROJECT_NAME, PROJECT_DIR, WINDOW_INDEX, WORKER_PANES, WORKER_COUNT, etc.).
 
 ### Auto-scale (before scanning)
 
@@ -54,6 +54,10 @@ tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
+PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+
+# 0. Re-check reservation (may have changed since pre-flight)
+[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { echo "Reserved — skip"; exit 0; }
 
 # 1. Check if Claude is at prompt
 tmux copy-mode -q -t "$PANE" 2>/dev/null
@@ -92,12 +96,10 @@ TASK
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
 
-# 5. Settle + submit (delay scales with task size)
+# 5. Settle + submit (delay: >200 lines=2s, >100=1.5s, else 0.5s)
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
-if [ "$TASK_LINES" -gt 200 ] 2>/dev/null; then SETTLE_S=2
-elif [ "$TASK_LINES" -gt 100 ] 2>/dev/null; then SETTLE_S=1.5
-else SETTLE_S=0.5; fi
+SETTLE_S=0.5; [ "$TASK_LINES" -gt 100 ] && SETTLE_S=1.5; [ "$TASK_LINES" -gt 200 ] && SETTLE_S=2
 sleep $SETTLE_S; tmux send-keys -t "$PANE" Enter
 rm "$TASKFILE"
 
@@ -118,19 +120,17 @@ fi
 
 ### Variants
 
-- **Batch:** Parallel Bash calls per worker (not `&&`). Skip reserved panes.
-- **Short tasks (< 200 chars):** Steps 1-3, then `send-keys` directly (skip file write). Steps 5-6 still mandatory.
+- **Batch:** Parallel Bash calls per worker. **Short tasks (< 200 chars):** `send-keys` directly (skip tmpfile), but settle + verify still mandatory.
 
 ### File Conflicts
 
-Assign file ownership per worker. Shared files: non-overlapping sections, Edit only. Overlapping: dispatch sequentially.
+Assign file ownership per worker. Shared files: non-overlapping sections, Edit only. Overlapping: sequential dispatch.
 
 ### Rules
 
 1. Never `send-keys "" Enter` — settle before Enter after paste
-2. Check idle + reservation before dispatch
-3. Verify after dispatch (step 6) — mandatory
-4. Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task
+2. Re-check reservation before dispatch (`.reserved` file); verify after (step 6) — both mandatory
+3. Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task
 
 ### Unstick
 

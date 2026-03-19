@@ -38,6 +38,7 @@ SESSION_NAME=$(grep '^SESSION_NAME=' "${RUNTIME_DIR}/session.env" 2>/dev/null | 
 tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null | grep -qx "$TARGET_WIN" || { echo "ERROR: Window ${TARGET_WIN} not found"; exit 1; }
 
 PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
+PROJECT_NAME=$(grep '^PROJECT_NAME=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 
 # Load team env (no eval — /tmp is world-writable)
 _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
@@ -73,10 +74,10 @@ Run **forward** or **back** block based on `$BACK_MODE`.
 
 ```bash
 BRANCH="doey/team-${TARGET_WIN}-$(date +%m%d-%H%M)"
-WT_DIR="${PROJECT_DIR}/.doey-worktrees/team-${TARGET_WIN}"
+WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${TARGET_WIN}"
 
 [ -d "$WT_DIR" ] && git -C "$PROJECT_DIR" worktree remove "$WT_DIR" --force 2>/dev/null || true
-mkdir -p "$(dirname "$WT_DIR")"
+mkdir -p "/tmp/doey/${PROJECT_NAME}/worktrees"
 WT_OUTPUT=$(git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$BRANCH" 2>&1) || { echo "ERROR: $WT_OUTPUT"; exit 1; }
 
 [ -f "${PROJECT_DIR}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${PROJECT_DIR}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"
@@ -121,18 +122,12 @@ for i in $WORKER_PANES_LIST; do
 done
 sleep 3
 
-# Force-kill stragglers (up to 5 attempts, 2s apart)
-STILL_RUNNING=0; STUCK_PANES=""
-for attempt in 1 2 3 4 5; do
-  STILL_RUNNING=0; STUCK_PANES=""
-  for i in $WORKER_PANES_LIST; do
-    CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${TARGET_WIN}.${i}" -p '#{pane_pid}' 2>/dev/null)" 2>/dev/null)
-    [ -n "$CHILD_PID" ] && { STILL_RUNNING=$((STILL_RUNNING + 1)); STUCK_PANES="$STUCK_PANES ${TARGET_WIN}.$i"; kill -9 "$CHILD_PID" 2>/dev/null; }
-  done
-  [ "$STILL_RUNNING" -eq 0 ] && break
-  sleep 2
+# Force-kill stragglers
+for i in $WORKER_PANES_LIST; do
+  CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${TARGET_WIN}.${i}" -p '#{pane_pid}' 2>/dev/null)" 2>/dev/null)
+  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null
 done
-[ "$STILL_RUNNING" -ne 0 ] && { echo "FAILED: Panes${STUCK_PANES} still running. Manual intervention needed."; exit 1; }
+sleep 1
 
 # Clear panes and relaunch
 for i in $WORKER_PANES_LIST; do
@@ -141,8 +136,8 @@ for i in $WORKER_PANES_LIST; do
 done
 sleep 1
 for i in $WORKER_PANES_LIST; do
-  WORKER_PROMPT=$(grep -l "pane ${TARGET_WIN}\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
-  CMD="cd \"${TARGET_DIR}\" && claude --dangerously-skip-permissions --model opus"
+  WORKER_PROMPT=$(grep -l "pane ${TARGET_WIN}\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1 || true)
+  CMD="cd \"${TARGET_DIR}\" && claude --dangerously-skip-permissions --model opus --name \"T${TARGET_WIN} W${i}\""
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
   tmux send-keys -t "${SESSION_NAME}:${TARGET_WIN}.${i}" "$CMD" Enter
   sleep 0.5
@@ -154,15 +149,12 @@ done
 ```bash
 [ "$BACK_MODE" = "true" ] && tmux rename-window -t "${SESSION_NAME}:${TARGET_WIN}" "T${TARGET_WIN}" || tmux rename-window -t "${SESSION_NAME}:${TARGET_WIN}" "T${TARGET_WIN} [worktree]"
 
-# Wait up to 50s for all workers to boot
-for attempt in 1 2 3 4 5 6 7 8 9 10; do
+# Wait up to 25s for workers to boot
+for attempt in 1 2 3 4 5; do
   NOT_READY=0; DOWN_PANES=""
   for i in $WORKER_PANES_LIST; do
-    CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${TARGET_WIN}.${i}" -p '#{pane_pid}' 2>/dev/null)" 2>/dev/null)
     OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${TARGET_WIN}.${i}" -p 2>/dev/null)
-    if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then
-      NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${TARGET_WIN}.$i"
-    fi
+    echo "$OUTPUT" | grep -q "bypass permissions" || { NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${TARGET_WIN}.$i"; }
   done
   [ "$NOT_READY" -eq 0 ] && break
   sleep 5
