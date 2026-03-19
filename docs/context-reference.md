@@ -2,188 +2,142 @@
 
 ## Context Layer Model
 
-```
-Load Order (bottom = first, top = last / highest precedence)
+Load order (bottom = first loaded, top = highest precedence):
 
-  +----------------------------------------------------------+
-  | 10. CLAUDE.md           (project root — loaded by all)   |
-  +----------------------------------------------------------+
-  |  9. Runtime State       (status files, messages, tasks)  |
-  +----------------------------------------------------------+
-  |  8. tmux Integration    (session, panes, send-keys)      |
-  +----------------------------------------------------------+
-  |  7. CLI Launch Flags    (--agent, --model, --dangerously) |
-  +----------------------------------------------------------+
-  |  6. Environment Vars    (session.env, TMUX_PANE)         |
-  +----------------------------------------------------------+
-  |  5. Persistent Memory   (~/.claude/agent-memory/)        |
-  +----------------------------------------------------------+
-  |  4. Skills/Commands     (~/.claude/commands/doey-*.md)   |
-  +----------------------------------------------------------+
-  |  3. Hook System         (.claude/hooks/ modular scripts) |
-  +----------------------------------------------------------+
-  |  2. Claude Code Settings (4-file merge chain)            |
-  +----------------------------------------------------------+
-  |  1. Agent Definitions   (agents/doey-manager.md, etc.)   |
-  +----------------------------------------------------------+
-```
-
-| Layer | Source Files | Applies To | Load Time |
-|-------|-------------|------------|-----------|
-| 1. Agent Definitions | `agents/doey-manager.md`, `agents/doey-session-manager.md`, `agents/doey-watchdog.md` | Window Manager, Session Manager, Watchdog | Startup (via `--agent`) |
-| 2. Settings | 4-file merge chain | All | Startup |
-| 3. Hooks | `.claude/hooks/` modular scripts | All | Runtime (on events) |
-| 4. Skills | `commands/doey-*.md` | Window Manager primarily | On-demand |
-| 5. Memory | `~/.claude/agent-memory/<agent>/MEMORY.md` | Window Manager | Startup |
-| 6. Env Vars | `session.env`, tmux env | All | Startup + Runtime |
-| 7. CLI Flags | `--agent`, `--model`, `--dangerously-skip-permissions` | Per-instance | Startup |
-| 8. tmux | Session config, pane structure | All | Startup |
-| 9. Runtime | `/tmp/doey/<name>/` tree | All | Runtime |
-| 10. CLAUDE.md | Project root | All | Startup |
+| # | Layer | Source | Applies To | Load Time |
+|---|-------|--------|------------|-----------|
+| 10 | CLAUDE.md | Project root | All | Startup |
+| 9 | Runtime State | `/tmp/doey/<name>/` tree | All | Runtime |
+| 8 | tmux Integration | Session config, pane structure | All | Startup |
+| 7 | CLI Launch Flags | `--agent`, `--model`, `--dangerously-skip-permissions` | Per-instance | Startup |
+| 6 | Environment Vars | `session.env`, tmux env | All | Startup + Runtime |
+| 5 | Persistent Memory | `~/.claude/agent-memory/<agent>/MEMORY.md` | Window Manager | Startup |
+| 4 | Skills/Commands | `commands/doey-*.md` | Window Manager primarily | On-demand |
+| 3 | Hook System | `.claude/hooks/` modular scripts | All | Runtime (on events) |
+| 2 | Settings | 4-file merge chain | All | Startup |
+| 1 | Agent Definitions | `agents/doey-*.md` | Manager, Session Mgr, Watchdog | Startup (`--agent`) |
 
 
 ## Layer 1: Agent Definitions
 
-**Files:** `agents/doey-manager.md`, `agents/doey-session-manager.md`, `agents/doey-watchdog.md`, `agents/test-driver.md` (installed to `~/.claude/agents/`)
+Files in `agents/` (installed to `~/.claude/agents/`). Body text = system prompt.
 
-| Field | Window Manager | Session Manager | Watchdog | Effect |
-|-------|----------------|-----------------|----------|--------|
-| `model` | `opus` | `opus` | `opus` | Default model; CLI `--model` overrides |
+| Field | Manager | Session Mgr | Watchdog | Effect |
+|-------|---------|-------------|----------|--------|
+| `model` | `opus` | `opus` | `opus` | CLI `--model` overrides |
 | `color` | `green` | `#FF6B35` | `yellow` | Status line color |
-| `memory` | `user` | `user` | `none` | Window Manager/Session Manager store to `~/.claude/agent-memory/<name>/`; Watchdog has no memory |
-
-Body text below frontmatter becomes the system prompt. Window Manager: identity, workflow, delegation rules. Session Manager: multi-window orchestration, cross-team coordination. Watchdog: monitoring loop, prompt detection, monitoring rules. See `agents/*.md` for current content.
+| `memory` | `user` | `user` | `none` | Stored in `~/.claude/agent-memory/<name>/` |
 
 Precedence: CLI `--model` > frontmatter `model` > settings `model`.
 
 
 ## Layer 2: Claude Code Settings
 
-Merge order (later wins for scalars; arrays are additive):
+Merge order (later wins for scalars; arrays additive; objects deep-merged):
 
-| File | Key Settings |
-|------|-------------|
-| `~/.claude/settings.json` | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`, `skipDangerousModePermissionPrompt: true`, `model: "opus"`, `notifications: false` |
-| `~/.claude/settings.local.json` | User-level local overrides (permissions, etc.) |
-| `<project>/.claude/settings.json` | Project-level settings (if present) |
-| `<project>/.claude/settings.local.json` | Bash permission allow-list and hook registration — stored in the doey repo at `.claude/settings.local.json`, copied to target projects during `doey init`. Hooks are explicitly registered in `hooks` array entries keyed by event name (e.g., `PreToolUse`, `Stop`, `PostToolUse`). |
+| # | File | Notes |
+|---|------|-------|
+| 1 | `~/.claude/settings.json` | Agent teams, model, notifications |
+| 2 | `~/.claude/settings.local.json` | User-level overrides |
+| 3 | `<project>/.claude/settings.json` | Project-level (if present) |
+| 4 | `<project>/.claude/settings.local.json` | Permission allow-list + hook registration (copied by `doey init`) |
 
-*Note: User-level settings vary per machine. The doey repo contains a base `settings.local.json` with permission rules and hook registrations. During `doey init`, hooks and settings are copied to the target project directory. Hooks require explicit registration in `settings.local.json` — they are NOT auto-discovered from the `.claude/hooks/` directory.*
-
-Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
+Hooks require explicit registration in `settings.local.json` — NOT auto-discovered from `.claude/hooks/`.
 
 
 ## Layer 3: Hook System
 
-| File | Purpose |
-|------|---------|
-| `common.sh` | Shared: `init_hook()` (stdin JSON, pane identity, runtime dirs, WINDOW_INDEX), `parse_field()` (JSON extraction with jq fallback), `load_team_env()` (per-window team config), role checks (`is_manager()`, `is_session_manager()`, `is_worker()`, `is_watchdog()`, `is_reserved()`), `send_notification()` (cross-platform, Session Manager-only, 60s cooldown), `NL` (portable newline var), `is_numeric()` (numeric validation) |
-| `on-session-start.sh` | SessionStart: initial setup |
-| `on-prompt-submit.sh` | UserPromptSubmit: sets BUSY status, sets READY on `/compact`, expands collapsed tmux columns |
-| `on-pre-tool-use.sh` | PreToolUse: safety guards |
-| `on-pre-compact.sh` | PreCompact: context preservation — preserves Window Manager orchestration state (worker assignments, pending results, completion files) and Watchdog-specific state from `watchdog_pane_states_W<N>.json` |
-| `post-tool-lint.sh` | PostToolUse: linting after tool use. Returns JSON decision format (`{"decision": "block", "reason": "..."}`) |
-| `stop-status.sh` | Stop: sets FINISHED (workers), RESERVED (if reserved), or READY (Window Manager/Watchdog); blocks research workers without reports (exit 2) |
-| `stop-results.sh` | Stop: collects and writes results |
-| `stop-notify.sh` | Stop: Session Manager notifications |
-| `stop-notify-manager.sh` | Stop: notifies Window Manager when a worker finishes |
-| `stop-notify-session-manager.sh` | Stop: notifies Session Manager when Window Manager finishes |
-| `watchdog-scan.sh` | Utility: called directly by Watchdog for pane scanning (not a registered hook) |
-| `watchdog-wait.sh` | Utility: event-driven sleep between Watchdog scan cycles |
+All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
-**TMUX_PANE identity:** Hooks use `tmux display-message -t "$TMUX_PANE"` (with `-t`) to resolve the correct pane. Without `-t`, tmux returns the focused pane (usually 0.0), causing all workers to misidentify as Window Manager.
+| File | Event | Purpose |
+|------|-------|---------|
+| `common.sh` | — | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks, `send_notification()`, `NL`, `is_numeric()` |
+| `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX |
+| `on-prompt-submit.sh` | UserPromptSubmit | Sets BUSY; READY on `/compact`; expands collapsed columns |
+| `on-pre-tool-use.sh` | PreToolUse | Safety guards (role-based tool blocking) |
+| `on-pre-compact.sh` | PreCompact | Preserves orchestration state before compaction |
+| `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
+| `stop-status.sh` | Stop | Sets FINISHED/RESERVED/READY; blocks research without reports |
+| `stop-results.sh` | Stop | Writes result JSON and completion events |
+| `stop-notify.sh` | Stop | Session Manager notifications |
+| `stop-notify-manager.sh` | Stop | Notifies Window Manager when worker finishes |
+| `stop-notify-session-manager.sh` | Stop | Notifies Session Manager when Window Manager finishes |
+| `watchdog-scan.sh` | — | Utility: pane scanning (called directly, not a registered hook) |
+| `watchdog-wait.sh` | — | Utility: event-driven sleep between scan cycles |
+
+**TMUX_PANE identity:** Hooks must use `tmux display-message -t "$TMUX_PANE"` (with `-t`). Without `-t`, tmux returns the focused pane, causing misidentification.
 
 
 ## Layer 4: Skills/Commands
 
-Skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-demand as additional user-turn instructions.
+Installed to `~/.claude/commands/`, invoked via `/skill-name`, loaded on-demand.
 
-| Skill | Primary Agent | Purpose |
-|-------|---------------|---------|
-| `/doey-dispatch` | Window Manager | Send task to idle workers |
-| `/doey-delegate` | Window Manager | Delegate to specific worker |
-| `/doey-research` | Window Manager | Research task with report enforcement |
-| `/doey-monitor` | Window Manager | Detect FINISHED/BUSY/ERROR/READY |
-| `/doey-status` | Window Manager/Workers | Share or check status |
-| `/doey-broadcast` | Window Manager | Message all instances |
-| `/doey-team` | Window Manager | Team layout overview |
-| `/doey-add-window` | Session Manager | Add a new team window |
-| `/doey-kill-window` | Session Manager | Kill a team window and all its processes |
-| `/doey-kill-session` | Session Manager | Kill entire Doey session |
-| `/doey-kill-all-sessions` | Session Manager | Kill all running Doey sessions across all projects |
-| `/doey-list-windows` | Session Manager | List all team windows with status |
-| `/doey-reload` | Window Manager | Hot-reload session (install files, restart Manager + Watchdog) |
-| `/doey-reinstall` | Window Manager | Pull + re-install |
-| `/doey-repair` | Window Manager | Dashboard diagnostic and repair |
-| `/doey-reserve` | Window Manager/Workers | Reserve/unreserve panes |
-| `/doey-watchdog-compact` | Window Manager | Compact Watchdog context |
-| `/doey-purge` | Window Manager | Full audit & fix — context rot + code quality (bloat, staleness, bash 3.2, bugs) |
-| `/doey-stop` | Window Manager | Stop a specific worker |
-| `/doey-worktree` | Session Manager/Window Manager | Transform team to/from worktree isolation |
-| `/doey-clear` | Window Manager | Clear and restart workers, Watchdog, or Window Manager |
+| Skill | Agent | Purpose |
+|-------|-------|---------|
+| `/doey-dispatch` | Manager | Send task to idle workers |
+| `/doey-delegate` | Manager | Delegate to specific worker |
+| `/doey-research` | Manager | Research task with report enforcement |
+| `/doey-monitor` | Manager | Detect FINISHED/BUSY/ERROR/READY |
+| `/doey-status` | Manager/Workers | Share or check status |
+| `/doey-broadcast` | Manager | Message all instances |
+| `/doey-team` | Manager | Team layout overview |
+| `/doey-reload` | Manager | Hot-reload session |
+| `/doey-reinstall` | Manager | Pull + re-install |
+| `/doey-repair` | Manager | Dashboard diagnostic and repair |
+| `/doey-reserve` | Manager/Workers | Reserve/unreserve panes |
+| `/doey-watchdog-compact` | Manager | Compact Watchdog context |
+| `/doey-purge` | Manager | Audit & fix context rot + code quality |
+| `/doey-stop` | Manager | Stop a specific worker |
+| `/doey-clear` | Manager | Clear and restart workers/Watchdog/Manager |
+| `/doey-worktree` | Session Mgr/Manager | Transform team to/from worktree isolation |
+| `/doey-add-window` | Session Mgr | Add a new team window |
+| `/doey-kill-window` | Session Mgr | Kill a team window |
+| `/doey-kill-session` | Session Mgr | Kill entire Doey session |
+| `/doey-kill-all-sessions` | Session Mgr | Kill all Doey sessions |
+| `/doey-list-windows` | Session Mgr | List team windows with status |
 
-Agent usage: Window Manager uses all except window-management commands. Session Manager uses `/doey-list-windows`, `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`. Watchdog uses none. Workers use `/doey-status`, `/doey-reserve`.
+Watchdog uses none. Workers use only `/doey-status`, `/doey-reserve`.
 
 
 ## Layer 5: Persistent Memory
 
+Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
+
 | Agent | Path | Notes |
 |-------|------|-------|
-| Window Manager | `~/.claude/agent-memory/doey-manager/MEMORY.md` | Stores dispatch patterns, delegation rules, hook behavior |
-| Session Manager | `~/.claude/agent-memory/doey-session-manager/MEMORY.md` | Routing patterns, team coordination |
-
-Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
+| Manager | `~/.claude/agent-memory/doey-manager/MEMORY.md` | Dispatch patterns, delegation rules |
+| Session Mgr | `~/.claude/agent-memory/doey-session-manager/MEMORY.md` | Routing, team coordination |
+| Watchdog | — | Disabled (`memory: none`) |
 
 
 ## Layer 6: Environment Variables
 
 Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session.env`.
-Agents read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source session.env`.
+Read: `tmux show-environment DOEY_RUNTIME | cut -d= -f2-` → `source session.env`.
 
-| Variable | Description | Source | Mode |
-|----------|-------------|--------|------|
-| `PROJECT_DIR` | Absolute path to project root | doey.sh | both |
-| `PROJECT_NAME` | Sanitized project name | doey.sh | both |
-| `SESSION_NAME` | tmux session name (`doey-<name>`) | doey.sh | both |
-| `GRID` | Grid layout (e.g., `6x2`) or `dynamic` | doey.sh | both |
-| `ROWS` | Number of rows in grid (always `2`) | doey.sh | dynamic only |
-| `MAX_WORKERS` | Maximum worker count | doey.sh | dynamic only |
-| `CURRENT_COLS` | Current column count (updated as grid expands) | doey.sh | dynamic only |
-| `TOTAL_PANES` | Total pane count | doey.sh | static only |
-| `WORKER_COUNT` | Number of workers | doey.sh | both |
-| `WATCHDOG_PANE` | Watchdog Dashboard slot ref (e.g., `0.2`) | doey.sh | both |
-| `WORKER_PANES` | Comma-separated worker indices | doey.sh | both |
-| `RUNTIME_DIR` | Runtime state directory | doey.sh | both |
-| `PASTE_SETTLE_MS` | Paste buffer settle time in ms | doey.sh | both |
-| `IDLE_COLLAPSE_AFTER` | Seconds before idle column collapse | doey.sh | both |
-| `IDLE_REMOVE_AFTER` | Seconds before idle column removal | doey.sh | both |
-| `TMUX_PANE` | tmux auto-set pane ID (e.g., `%0`) | tmux | both |
-| `CLAUDE_PROJECT_DIR` | Claude Code project dir | Claude Code | both |
-| `CLAUDECODE` | Set when inside Claude Code | Claude Code | both |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `1` — enables Agent Teams | Claude Code | both |
-| `TEAM_WINDOWS` | Comma-separated list of active team window indices (e.g., `"0,1,2"`) | doey.sh | both |
-| `WDG_SLOT_1` | Dashboard Watchdog pane ref for team 1 (e.g., `0.2`) | doey.sh | both |
-| `WDG_SLOT_2` | Dashboard Watchdog pane ref for team 2 (e.g., `0.3`) | doey.sh | both |
-| `WDG_SLOT_3` | Dashboard Watchdog pane ref for team 3 (e.g., `0.4`) | doey.sh | both |
-| `SM_PANE` | Session Manager pane ref (e.g., `0.1`) | doey.sh | both |
-| `DOEY_ROLE` | Pane role (manager/watchdog/worker) | hooks | both |
-| `DOEY_PANE_INDEX` | Pane index within session | hooks | both |
-| `DOEY_WINDOW_INDEX` | Window index for this pane | hooks | both |
-| `DOEY_TEAM_WINDOW` | Team window index this pane monitors/belongs to | on-session-start.sh | both |
-
-**Per-window team config:** Each team window has a `team_<W>.env` file in the runtime directory:
+**Session-level (`session.env`):**
 
 | Variable | Description |
 |----------|-------------|
-| `WINDOW_INDEX` | Window index (matches `<W>` in filename) |
-| `GRID` | Grid layout for this window |
-| `MANAGER_PANE` | Window Manager pane index (always `0`) |
-| `WATCHDOG_PANE` | Watchdog Dashboard pane index (0.2-0.7) |
-| `WORKER_PANES` | Comma-separated worker pane indices (W.1+) |
-| `WORKER_COUNT` | Number of workers in this window |
-| `SESSION_NAME` | tmux session name (same as session.env) |
+| `PROJECT_DIR`, `PROJECT_NAME` | Project root path and sanitized name |
+| `SESSION_NAME` | tmux session name (`doey-<name>`) |
+| `GRID` | Layout (e.g., `6x2` or `dynamic`) |
+| `ROWS`, `MAX_WORKERS`, `CURRENT_COLS` | Dynamic grid params (dynamic mode only) |
+| `TOTAL_PANES` | Total pane count (static mode only) |
+| `WORKER_COUNT`, `WORKER_PANES` | Worker count and comma-separated indices |
+| `WATCHDOG_PANE` | Watchdog Dashboard slot (e.g., `0.2`) |
+| `RUNTIME_DIR` | Runtime state directory |
+| `PASTE_SETTLE_MS` | Paste buffer settle time (ms) |
+| `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER` | Idle column timers (seconds) |
+| `TEAM_WINDOWS` | Active team window indices (e.g., `"0,1,2"`) |
+| `WDG_SLOT_1`..`WDG_SLOT_3` | Dashboard Watchdog pane refs per team |
+| `SM_PANE` | Session Manager pane ref (e.g., `0.1`) |
 
-Loaded by hooks via `load_team_env()` and by commands via manual sourcing. Team env values override session.env for per-window fields (`WATCHDOG_PANE`, `WORKER_PANES`, etc.).
+**Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`, `CLAUDECODE`, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
+
+**Set by hooks:** `DOEY_ROLE` (manager/watchdog/worker), `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`.
+
+**Per-window team config (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WATCHDOG_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`. Loaded via `load_team_env()`. Team env overrides session.env for per-window fields.
 
 
 ## Layer 7: CLI Launch Flags
@@ -201,32 +155,15 @@ Workers use `--append-system-prompt-file` (not `--agent`) to inject per-worker r
 
 ## Layer 8: tmux Integration
 
-Window 0 is always the Dashboard. Layout: pane 0.0 = Info Panel (left column, full height), pane 0.1 = Session Manager (top-right), panes 0.2-0.7 = Watchdog slots (bottom-right, side-by-side). Team grids start at window 1+.
-
-Default grid: **dynamic** (launches 2 local teams + 2 worktree teams, each with 3 worker columns (6 workers per team), auto-adds more when all workers are busy). In team windows: pane W.0 = Window Manager, W.1+ = Workers. Watchdog for each team runs in Dashboard (panes 0.2-0.7).
+**Dashboard (window 0):** 0.0=Info Panel, 0.1=Session Manager, 0.2-0.7=Watchdog slots (one per team).
+**Team windows (1+):** W.0=Window Manager, W.1+=Workers. Dynamic grid auto-expands when all busy.
 
 ```
-Dashboard (window 0):
-+----------+------------------------------------------------------+
-|          |              0.1  Session Manager                     |
-|   0.0    +--------+--------+--------+--------+--------+---------+
-|   INFO   |  0.2   |  0.3   |  0.4   |  0.5   |  0.6   |  0.7   |
-|  PANEL   | T1 WDG | T2 WDG | T3 WDG | T4 WDG | T5 WDG | T6 WDG |
-+----------+--------+--------+--------+--------+--------+---------+
-
-Dynamic grid (default) — team window layout, then after `doey add`:
-
- Initial (6 workers, window W)                                    After `doey add` (8 workers)
-+--------+--------+--------+--------+                         +--------+--------+--------+--------+--------+
-|  W.0   |  W.1   |  W.3   |  W.5   |                         |  W.0   |  W.1   |  W.3   |  W.5   |  W.7   |
-|  Mgr   |  W1    |  W3    |  W5    |                         |  Mgr   |  W1    |  W3    |  W5    |  W7    |
-+--------+--------+--------+--------+                         +--------+--------+--------+--------+--------+
-|        |  W.2   |  W.4   |  W.6   |                         |        |  W.2   |  W.4   |  W.6   |  W.8   |
-|        |  W2    |  W4    |  W6    |                         |        |  W2    |  W4    |  W6    |  W8    |
-+--------+--------+--------+--------+                         +--------+--------+--------+--------+--------+
+Dashboard: [0.0 Info] [0.1 Session Mgr] [0.2-0.7 Watchdog slots]
+Team W:    [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] [W.5 W5 | W.6 W6] ...
 ```
 
-Static grid (legacy, via `doey 6x2`): W.0 = Manager, all others = Workers. Same 2-row layout but without dynamic expansion.
+Static grid (legacy, `doey 6x2`): W.0=Manager, all others=Workers.
 
 | Method | Use Case |
 |--------|----------|
@@ -234,78 +171,64 @@ Static grid (legacy, via `doey 6x2`): W.0 = Manager, all others = Workers. Same 
 | `load-buffer` + `paste-buffer` | Long/multi-line tasks |
 | `capture-pane` | Read pane output |
 
-Bell suppression: `bell-action none`, `visual-bell off`. Notifications via `osascript` in hooks.
-Display: `pane-border-status top`, heavy borders, role-aware colors, mouse enabled, status bar shows NB/NR/NF/NRsv counts (Busy/Ready/Finished/Reserved).
-
-**Info Panel:** `shell/info-panel.sh` runs full-screen in window 0 (Dashboard) as a live dashboard. It displays team count, worker totals, per-window status, recent events (completions/crashes), and watchdog heartbeat ages. Refreshes every 5 minutes.
-
-**PANE_SAFE escaping:** `${PANE//[:.]/_}` — e.g., `doey-project:0.5` becomes `doey-project_0_5`. Used in all runtime file names.
-
-**Pane title format:** `"T<N> Window Manager"`, `"T<N> Watchdog"`, `"Session Manager"`, `"T<N> W<P>"` (e.g., `"T1 Window Manager"`, `"T1 W2"`). Used by `rebuild_pane_state()` to recover after pane index shifts.
-
-**Startup timing:** Window Manager briefing sent after 8s delay. Workers ready in ~15s.
+**Key details:**
+- **PANE_SAFE escaping:** `${PANE//[:.]/_}` — e.g., `doey-project:0.5` → `doey-project_0_5`
+- **Pane titles:** `"T<N> Window Manager"`, `"T<N> Watchdog"`, `"Session Manager"`, `"T<N> W<P>"`
+- **Info Panel:** `shell/info-panel.sh` — live dashboard, refreshes every 5 minutes
+- **Display:** pane-border-status top, role-aware colors, mouse enabled, NB/NR/NF/NRsv status counts
+- **Startup timing:** Manager briefing after 8s; workers ready in ~15s
+- **Bell suppression:** `bell-action none`, `visual-bell off`; notifications via `osascript`
 
 
 ## Layer 9: Runtime State
 
-```
-/tmp/doey/<project>/
-  session.env                        # Session manifest (includes TEAM_WINDOWS)
-  team_<W>.env                       # Per-window team config (W = window index)
-  worker-system-prompt.md            # Shared base worker prompt template
-  worker-system-prompt-w<W>-<N>.md   # Per-worker prompt (base + identity, W=window, N=worker)
-  mgr<W>_*.log                       # Manager launch debug logs (debug, launch, script, stderr)
-  status/                            # [init-time]
-    <pane_safe>.status               # 4-line: PANE, UPDATED, STATUS, TASK
-    <pane_safe>.reserved             # contains "permanent"
-    pane_hash_<pane_safe>            # Watchdog output hashes for change detection
-    unchanged_count_<W>_<index>      # Watchdog stuck-detection counter (per window + pane)
-    watchdog_W<W>.heartbeat          # Watchdog liveness marker (per window)
-    watchdog_pane_states_W<W>.json   # Watchdog state snapshot (per window)
-    pane_map                         # Pane ID-to-index mapping cache
-    notif_cooldown_*                 # Notification rate-limiting markers
-    col_*.collapsed                  # Collapsed column markers
-    completion_pane_<W>_<index>      # Worker completion events (consumed by Watchdog)
-    crash_pane_<W>_<index>           # Crash alerts (written by Watchdog)
-    manager_crashed_W<N>             # Manager crash detection marker (per window)
-  research/                          # [hook-init] Created by common.sh init_hook()
-    <pane_safe>.task                  # Research task marker
-  reports/                           # [hook-init] Created by common.sh init_hook()
-    <pane_safe>.report               # Research report
-  results/                           # [hook-init] Structured result JSON files
-  broadcasts/                        # [init-time] Broadcast messages
-```
+Root: `/tmp/doey/<project>/`
 
-*Init-time directories (`broadcasts/`, `status/`) are created during `doey init`. On the first hook invocation in any pane, `common.sh init_hook()` eagerly ensures `status/`, `research/`, `reports/`, and `results/` all exist (fast-path skip if already present).*
+| Path | Purpose |
+|------|---------|
+| `session.env` | Session manifest |
+| `team_<W>.env` | Per-window team config |
+| `worker-system-prompt-w<W>-<N>.md` | Per-worker prompt (base + identity) |
+| `status/<pane_safe>.status` | 4-line: PANE, UPDATED, STATUS, TASK |
+| `status/<pane_safe>.reserved` | Permanent reservation marker |
+| `status/pane_hash_<pane_safe>` | Watchdog output hash (change detection) |
+| `status/unchanged_count_<W>_<index>` | Stuck-detection counter |
+| `status/watchdog_W<W>.heartbeat` | Watchdog liveness marker |
+| `status/watchdog_pane_states_W<W>.json` | Watchdog state snapshot |
+| `status/completion_pane_<W>_<index>` | Worker completion event |
+| `status/crash_pane_<W>_<index>` | Crash alert |
+| `status/manager_crashed_W<N>` | Manager crash marker |
+| `status/pane_map` | Pane ID-to-index mapping cache |
+| `status/col_*.collapsed` | Collapsed column markers |
+| `research/<pane_safe>.task` | Research task marker |
+| `reports/<pane_safe>.report` | Research report |
+| `results/` | Structured result JSON |
+| `broadcasts/` | Broadcast messages |
+
+Directories created by `doey init` and eagerly ensured by `init_hook()`.
 
 **Status values:** READY, BUSY, FINISHED, RESERVED.
 
-**Reservation:** Created by `/doey-reserve` (permanent only). Consumed by `is_reserved()`, statusbar, and Window Manager dispatch.
-
-**Research lifecycle:** Window Manager dispatches → `.task` created → worker investigates → Stop hook blocks until `.report` written → Window Manager reads report.
+**Research lifecycle:** dispatch → `.task` created → worker investigates → Stop hook blocks until `.report` written → Manager reads report.
 
 
 ## Layer 10: CLAUDE.md
 
-Loaded by all instances. Contains: project overview, architecture, key directories, conventions, testing guidance, file reference.
+Loaded by all instances. Project overview, architecture, conventions, file reference.
 
 
 ## Debugging
 
 | Symptom | Check |
 |---------|-------|
-| Window Manager writes code itself | Memory lacks delegation-first rules |
-| Window Manager uses wrong session | `tmux show-environment DOEY_RUNTIME` invalid |
-| Window Manager dispatches to Watchdog | `WATCHDOG_PANE` in session.env wrong |
-| Window Manager sends empty tasks | Task text empty before Enter |
-| Session Manager gets no stop notifications | `stop-notify.sh` not registered; pane not resolving to 0.1 in Dashboard window |
-| Watchdog stops monitoring | Stop hook keep-alive failing; check `WATCHDOG_PANE` |
+| Manager writes code itself | Memory lacks delegation-first rules |
+| Manager dispatches to Watchdog | `WATCHDOG_PANE` in session.env wrong |
+| Manager sends empty tasks | Task text empty before Enter |
+| All panes think they're Manager | Hook missing `-t "$TMUX_PANE"` in `tmux display-message` |
+| Hooks not firing | `.claude/settings.local.json` missing (`doey init`) |
+| Watchdog stops monitoring | Stop hook keep-alive failing |
 | Watchdog spams notifications | State tracking lost after compaction |
-| All panes think they're Window Manager | Hook using bare `tmux display-message` without `-t "$TMUX_PANE"` |
-| Hooks not firing | Project `.claude/settings.local.json` missing (should be created by `doey init`) |
-| Research worker stops without report | Check exit 2 path in `stop-status.sh`; verify `.task` created |
-| Workers don't pick up hook changes | Restart workers (`/doey-clear workers`) |
-| Dispatch to reserved pane | Check `.reserved` file exists; verify `is_reserved()` |
-| Runtime file not found | Verify PANE_SAFE escaping: `${PANE//[:.]/_}`. Directories are created eagerly by `init_hook()` — check that hooks have fired at least once |
-
-**Trace order:** 1. Agent definition → 2. Memory → 3. Settings (4-file merge) → 4. Hook scripts → 5. Skill files → 6. session.env / tmux env → 7. Runtime state → 8. CLI flags in doey.sh.
+| Research stops without report | Check exit 2 in `stop-status.sh`; verify `.task` exists |
+| Workers ignore hook changes | Restart workers (`/doey-clear workers`) |
+| Dispatch to reserved pane | Check `.reserved` file; verify `is_reserved()` |
+| Runtime file not found | Verify PANE_SAFE escaping; check `init_hook()` ran |
