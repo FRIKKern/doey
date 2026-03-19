@@ -21,6 +21,7 @@ Diagnose and repair the Doey Dashboard (window 0). Layout:
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
+# Build TEAM_FOR[pane_index] mapping from team env files
 TEAM_FOR_02="" TEAM_FOR_03="" TEAM_FOR_04="" TEAM_FOR_05="" TEAM_FOR_06="" TEAM_FOR_07=""
 for tf in "${RUNTIME_DIR}"/team_*.env; do
   [ -f "$tf" ] || continue
@@ -33,7 +34,7 @@ for tf in "${RUNTIME_DIR}"/team_*.env; do
     0.6) TEAM_FOR_06="$TW" ;; 0.7) TEAM_FOR_07="$TW" ;;
   esac
 done
-echo "Watchdog mapping: 0.2→T${TEAM_FOR_02:-none} 0.3→T${TEAM_FOR_03:-none} 0.4→T${TEAM_FOR_04:-none} 0.5→T${TEAM_FOR_05:-none} 0.6→T${TEAM_FOR_06:-none} 0.7→T${TEAM_FOR_07:-none}"
+echo "Watchdog map: 0.2→T${TEAM_FOR_02:-?} 0.3→T${TEAM_FOR_03:-?} 0.4→T${TEAM_FOR_04:-?} 0.5→T${TEAM_FOR_05:-?} 0.6→T${TEAM_FOR_06:-?} 0.7→T${TEAM_FOR_07:-?}"
 ```
 
 ### Step 2: Diagnose all Dashboard panes

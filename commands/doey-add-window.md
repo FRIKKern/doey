@@ -1,6 +1,6 @@
 # Skill: doey-add-window
 
-Add a new team window (Window Manager + Watchdog + Workers), optionally in a git worktree.
+Add a new team window (Manager + Workers + Watchdog), optionally in a git worktree.
 
 ## Usage
 `/doey-add-window [grid] [--worktree]` — default grid: 4x2
@@ -11,7 +11,7 @@ Add a new team window to the running Doey session.
 
 ### Step 1: Parse grid and load context
 
-Parse grid from user arg (default `4x2`), validate NxM, minimum 2 panes. `--worktree` enables isolation.
+Parse grid from user arg (default `4x2`), validate NxM (min 2 panes). `--worktree` enables isolation.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -33,7 +33,6 @@ for _aw_arg in "$@"; do [ "$_aw_arg" = "--worktree" ] && WORKTREE_MODE="true"; d
 ### Step 2: Create window and build grid
 
 ```bash
-# (vars from step 1)
 tmux new-window -t "$SESSION_NAME" -c "$PROJECT_DIR"
 sleep 0.5
 NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
@@ -48,7 +47,6 @@ sleep 0.5
 ### Step 3: Name panes and build worker list
 
 ```bash
-# (vars from step 1)
 tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "MGR Window Manager"
 
 WORKER_PANES_LIST=""
@@ -58,10 +56,9 @@ for i in $(seq 1 $((TOTAL - 1))); do
 done
 ```
 
-### Step 4: Write team env file
+### Step 4: Write team env and update session
 
 ```bash
-# (vars from step 1)
 TEAM_FILE="${RUNTIME_DIR}/team_${NEW_WIN}.env"
 cat > "${TEAM_FILE}.tmp" << TEAM_EOF
 SESSION_NAME=${SESSION_NAME}
@@ -77,7 +74,7 @@ WATCHDOG_PANE=
 TEAM_EOF
 mv "${TEAM_FILE}.tmp" "$TEAM_FILE"
 
-# Update TEAM_WINDOWS in session.env atomically
+# Append window to TEAM_WINDOWS atomically
 CURRENT_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
 [ -n "$CURRENT_WINDOWS" ] && NEW_WINDOWS="${CURRENT_WINDOWS},${NEW_WIN}" || NEW_WINDOWS="${NEW_WIN}"
 TMPENV=$(mktemp "${RUNTIME_DIR}/session.env.tmp_XXXXXX")
@@ -93,21 +90,20 @@ mv "$TMPENV" "${RUNTIME_DIR}/session.env"
 ### Step 5: Launch Claude in all panes
 
 ```bash
-# (vars from step 1)
+# Manager
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --agent doey-manager" Enter
 sleep 1
 
+# Workers
 for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
   WORKER_PROMPT=$(grep -l "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
-  if [ -n "$WORKER_PROMPT" ]; then
-    tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "claude --dangerously-skip-permissions --model opus --append-system-prompt-file \"${WORKER_PROMPT}\"" Enter
-  else
-    tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "claude --dangerously-skip-permissions --model opus" Enter
-  fi
+  CMD="claude --dangerously-skip-permissions --model opus"
+  [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
+  tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter
   sleep 0.5
 done
 
-# Find next available Dashboard slot (0.2-0.7) for Watchdog
+# Watchdog — find next available Dashboard slot (0.2-0.7)
 WDG_SLOT=""
 for slot in 2 3 4 5 6 7; do
   SLOT_PID=$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || true)
@@ -124,12 +120,11 @@ else
 fi
 ```
 
-### Step 5b: Create worktree (if --worktree)
+### Step 6: Create worktree (if --worktree)
 
 Best-effort — team is still created if worktree fails.
 
 ```bash
-# (vars from previous steps)
 WT_DIR="" WT_BRANCH=""
 if [ "$WORKTREE_MODE" = "true" ]; then
   WT_BRANCH="doey/team-${NEW_WIN}-$(date +%m%d-%H%M)"
@@ -142,19 +137,17 @@ if [ "$WORKTREE_MODE" = "true" ]; then
   else
     [ -f "${PROJECT_DIR}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${PROJECT_DIR}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"
 
-    TEAM_ENV="${RUNTIME_DIR}/team_${NEW_WIN}.env"
     _tmp_env=$(mktemp "${RUNTIME_DIR}/team_env_XXXXXX")
-    cat "$TEAM_ENV" > "$_tmp_env"
+    cat "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "$_tmp_env"
     printf 'WORKTREE_DIR="%s"\nWORKTREE_BRANCH="%s"\n' "$WT_DIR" "$WT_BRANCH" >> "$_tmp_env"
-    mv "$_tmp_env" "$TEAM_ENV"
+    mv "$_tmp_env" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
   fi
 fi
 ```
 
-### Step 6: Verify boot
+### Step 7: Verify boot and report
 
 ```bash
-# (vars from step 1)
 sleep 8
 
 NOT_READY=0; DOWN_PANES=""
@@ -178,8 +171,6 @@ fi
 
 [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 ```
-
-### Step 7: Report
 
 Rename window if worktree succeeded, then output summary: grid, manager pane, worker range, watchdog slot, worktree info if applicable.
 

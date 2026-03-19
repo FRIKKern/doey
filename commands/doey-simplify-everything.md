@@ -1,173 +1,173 @@
 # Skill: doey-simplify-everything
 
-Whole-codebase simplification across all teams. Session Manager scans the project, assigns each team a domain, Window Managers dispatch to workers. Generic — works on any project.
+Full codebase simplification across all teams. Session Manager inventories capacity, assigns domains, dispatches to Window Managers.
 
 ## Usage
 `/doey-simplify-everything`
 
 ## Prompt
 
-You are the Doey **Session Manager** running a full codebase simplification. You coordinate Window Managers — never dispatch to workers directly.
+You are the Session Manager running a codebase-wide simplification. Coordinate Window Managers — never dispatch to workers directly.
 
-### Step 0: Pre-flight
+### Inventory
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
-```
-
-**Require clean working tree:**
-```bash
-DIRTY=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)
-[ -n "$DIRTY" ] && echo "ERROR: Uncommitted changes. Commit or stash first." && exit 1
-```
-
-**Inventory teams:**
-```bash
+echo "Session: $SESSION_NAME | Project: $PROJECT_NAME"
+echo ""
+TEAM_COUNT=0; TOTAL_WORKERS=0
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
   TEAM_ENV="${RUNTIME_DIR}/team_${W}.env"
   [ -f "$TEAM_ENV" ] || continue
   WC=$(grep '^WORKER_COUNT=' "$TEAM_ENV" | cut -d= -f2- | tr -d '"')
   WT=$(grep '^WORKTREE_DIR=' "$TEAM_ENV" | cut -d= -f2- | tr -d '"')
-  echo "Team $W: ${WC} workers ($([ -n "$WT" ] && echo "worktree" || echo "local"))"
+  TYPE="local"; [ -n "$WT" ] && TYPE="worktree"
+  echo "Team $W: ${WC} workers ($TYPE)"
+  TEAM_COUNT=$((TEAM_COUNT + 1))
+  TOTAL_WORKERS=$((TOTAL_WORKERS + WC))
 done
+echo ""; echo "Total: $TEAM_COUNT teams, $TOTAL_WORKERS workers"
 ```
 
-**Save before-state** (line counts of all source files):
+Save line counts before starting:
 ```bash
+BEFORE="${RUNTIME_DIR}/reports/simplify_before.txt"
 mkdir -p "${RUNTIME_DIR}/reports"
-find "$PROJECT_DIR" -maxdepth 3 \( -name '*.sh' -o -name '*.md' -o -name '*.json' \) \
-  -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/worktrees/*' \
-  -exec wc -l {} + 2>/dev/null | sort -rn > "${RUNTIME_DIR}/reports/simplify_before.txt"
-cat "${RUNTIME_DIR}/reports/simplify_before.txt"
+wc -l "$PROJECT_DIR"/{agents,commands,docs}/*.md "$PROJECT_DIR"/CLAUDE.md \
+      "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh \
+      "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn | tee "$BEFORE"
 ```
 
-### Step 1: Scan and assign domains
+### Assign domains
 
-**Do NOT hardcode domains.** Scan the project to understand its structure:
+Six domains, assigned by team count:
 
-1. Read `CLAUDE.md` and any project documentation to understand the codebase
-2. List all directories and file types, count lines per directory
-3. Group files into 4-6 **logical domains** based on what you find (e.g., "core logic", "API layer", "tests", "config/docs")
-4. Size domains so each has roughly equal work for a team
+| Domain | Files |
+|--------|-------|
+| **D1: Shell core** | `shell/doey.sh`, `install.sh` |
+| **D2: Hooks** | `.claude/hooks/*.sh` |
+| **D3: Commands** | `commands/*.md` |
+| **D4: Agents + CLAUDE.md** | `agents/*.md`, `CLAUDE.md` |
+| **D5: Docs + README** | `docs/*.md`, `README.md` |
+| **D6: Shell support** | `shell/{info-panel,context-audit,pane-border-status,tmux-statusbar}.sh`, `tests/` |
 
-**Assignment principles:**
-- **Local teams → high-churn files** (core logic, config, anything that cross-references heavily)
-- **Worktree teams → leaf files** (docs, tests, standalone modules — low merge-conflict risk)
-- **One large file ≠ one domain** — don't split a single file across workers by line ranges. Instead, pair it with related smaller files. Workers simplify whole files.
-- **No file in two domains** — verify zero overlap
+**Assignment by team count:**
+- **4+:** D1, D2, D3+D4, D5+D6
+- **3:** D1+D6, D2+D4, D3+D5
+- **2:** D1+D2+D6, D3+D4+D5
+- **1:** All domains
 
-Present the plan with file lists and line counts per team. **Ask user to confirm.**
+Prefer worktree teams for low-conflict domains (docs, agents). Local teams for hooks/shell core.
 
-### Step 2: Dispatch to Window Managers
+Present the plan and **ask user for confirmation** before dispatching.
 
-Send each Window Manager a self-contained task via `load-buffer`/`paste-buffer`:
+### Dispatch to Window Managers
+
+Send each Window Manager a self-contained task via `tmux load-buffer`/`paste-buffer`.
 
 **Task template:**
+
 ```
-Simplify [DOMAIN]. You have N workers — use /doey-dispatch.
+Run a full simplification of [DOMAIN]. You have N workers — use /doey-dispatch to assign files.
 
 Project directory: PROJECT_DIR
 
 ## Goal
-Genuinely simplify every file — not just condensing, but improving:
-- Reduce cognitive load: clearer structure, fewer concepts per section
+Genuinely simplify every file:
+- Reduce cognitive load: fewer concepts per section, clearer structure
 - Improve naming: self-documenting variables, functions, sections
-- Cut ceremony: boilerplate, over-commented obvious code, filler prose
+- Cut ceremony: boilerplate, over-commented obvious code
 - Align patterns: similar things should look similar across files
 - DRY: extract repeated logic when the abstraction is obvious
 
-## Files (your exclusive domain — no other team touches these)
-[FULL LIST with line counts]
+## Your files
+[LIST EVERY FILE with line count]
 
 ## Constraints
-- Workers: Do NOT use the Agent tool
-- .sh files: bash 3.2 compatible, run `bash -n` after edits
-- .md code blocks: bash 3.2 compatible
-- Use Edit tool, read before editing
-- Simplify, don't break — preserve all behavior
-- Rename panes: `/rename simplify-<file>_MMDD`
-- 1 worker per file (or 2-3 small files per worker). Never split one file across workers.
+- Tell all workers: Do NOT use the Agent tool
+- Shell (.sh): bash 3.2 compatible. Run `bash -n` after edits
+- Use Edit tool, not Write. Read before editing
+- Preserve all behavior — simplify, don't break
+- Commands (.md): bash code blocks must be 3.2 compatible
+- Rename worker panes: `/rename simplify-<file>_MMDD`
+
+## Worker assignment
+1-3 files per worker based on complexity. Largest files get dedicated workers.
+Share full file list for cross-reference, but specify which files each worker EDITs.
 
 ## When done
-1. Verify: `bash -n` on all .sh files
-2. Write summary to: RUNTIME_DIR/reports/simplify_team_W.md
+1. Run `bash -n` on all .sh files
+2. Write summary to: RUNTIME_DIR/reports/simplify_team_W.md (per-file before/after + key changes)
 3. Report completion
 ```
 
-**Verify each dispatch** — capture-pane after 5s.
+**Dispatch:**
+```bash
+W=<team_window>
+MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
+TARGET="$SESSION_NAME:${W}.${MGR_PANE}"
+tmux copy-mode -q -t "$TARGET" 2>/dev/null
+TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
+cat > "$TASKFILE" << 'TASK'
+[Full task text here]
+TASK
+tmux load-buffer "$TASKFILE"
+tmux paste-buffer -t "$TARGET"
+sleep 0.5
+tmux send-keys -t "$TARGET" Enter
+rm "$TASKFILE"
+```
 
-### Step 3: Monitor
+**Verify each dispatch** (mandatory):
+```bash
+sleep 5
+tmux capture-pane -t "$TARGET" -p -S -5
+```
 
-Wait for completion. Check periodically:
+### Monitor
+
+Poll every 60s for team reports:
 ```bash
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  [ -f "${RUNTIME_DIR}/reports/simplify_team_${W}.md" ] && echo "Team $W: DONE" || echo "Team $W: working..."
+  REPORT="${RUNTIME_DIR}/reports/simplify_team_${W}.md"
+  [ -f "$REPORT" ] && echo "Team $W: DONE" || echo "Team $W: working..."
 done
 ```
 
-Also check Watchdog heartbeats. Report status when user asks.
+Also check Watchdog heartbeats and Window Manager output.
 
-### Step 4: Merge worktree branches
+### Consolidate
 
-**Local teams:** Changes are already on main branch — nothing to merge.
-
-**Worktree teams:** Commit and merge each branch:
-```bash
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  WT_DIR=$(grep '^WORKTREE_DIR=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  [ -z "$WT_DIR" ] || [ ! -d "$WT_DIR" ] && continue
-  WT_BRANCH=$(grep '^WORKTREE_BRANCH=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
-  DIRTY=$(git -C "$WT_DIR" status --porcelain 2>/dev/null)
-  if [ -n "$DIRTY" ]; then
-    git -C "$WT_DIR" add -A
-    git -C "$WT_DIR" commit -m "simplify: Team $W changes"
-  fi
-  echo "Merging $WT_BRANCH..."
-  git -C "$PROJECT_DIR" merge "$WT_BRANCH" --no-edit || echo "CONFLICT in $WT_BRANCH — resolve manually"
-done
-```
-
-If conflicts occur, resolve by taking the worktree version (`git checkout --theirs`) for files in that team's domain, then re-apply any critical fixes (operator precedence, etc.).
-
-**Commit local team changes first** (before merging worktrees) to minimize conflicts.
-
-### Step 5: Review (3 parallel agents)
-
-Run `/simplify` on the combined diff to catch issues the teams missed:
-- Reuse: duplicated patterns across domains
-- Quality: operator precedence bugs, broken references, information loss
-- Efficiency: hot-path regressions
-
-Fix any real issues found. Skip false positives.
-
-### Step 6: Final verification
+Once all teams finish:
 
 ```bash
-# Syntax
-for f in $(find "$PROJECT_DIR" -name '*.sh' -not -path '*/worktrees/*'); do
+AFTER="${RUNTIME_DIR}/reports/simplify_after.txt"
+wc -l "$PROJECT_DIR"/{agents,commands,docs}/*.md "$PROJECT_DIR"/CLAUDE.md \
+      "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh \
+      "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn | tee "$AFTER"
+
+echo "=== Before/After ==="
+diff "${RUNTIME_DIR}/reports/simplify_before.txt" "$AFTER" || true
+
+echo "=== Syntax check ==="
+for f in "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh; do
   bash -n "$f" && echo "OK: $(basename "$f")" || echo "FAIL: $(basename "$f")"
 done
 
-# Context audit (if available)
-[ -x "$PROJECT_DIR/shell/context-audit.sh" ] && bash "$PROJECT_DIR/shell/context-audit.sh" --repo
-
-# Before/after
-find "$PROJECT_DIR" -maxdepth 3 \( -name '*.sh' -o -name '*.md' -o -name '*.json' \) \
-  -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/worktrees/*' \
-  -exec wc -l {} + 2>/dev/null | sort -rn > "${RUNTIME_DIR}/reports/simplify_after.txt"
-diff "${RUNTIME_DIR}/reports/simplify_before.txt" "${RUNTIME_DIR}/reports/simplify_after.txt" || true
+echo "=== Context audit ==="
+bash "$PROJECT_DIR/shell/context-audit.sh" --repo
 ```
 
-Present consolidated summary with per-domain before/after.
+Read all `${RUNTIME_DIR}/reports/simplify_team_*.md` and present consolidated results: total before/after line counts, per-domain breakdown, syntax/audit status, key improvements per team.
+
+If syntax or audit issues found, offer to dispatch a fix round.
 
 ### Rules
-
-1. **Never dispatch to workers** — route through Window Managers
-2. **Self-contained tasks** — Managers have zero context
-3. **No file overlap** — each file belongs to exactly one team
-4. **Clean tree required** — commit/stash before starting
-5. **1 worker per file** — never split a file across workers
-6. **Commit locals before merging worktrees** — reduces conflicts
-7. **Run /simplify after** — cross-domain review catches what teams miss
-8. **Simplify, don't break** — preserve all behavior
+1. **Route through Window Managers** — never dispatch to workers directly
+2. **Self-contained tasks** — Managers have zero context; include everything
+3. **No file conflicts** — each team owns distinct files
+4. **Confirm before dispatching** — present the plan first
+5. **Verify every dispatch** — capture-pane after 5s
+6. **Preserve behavior** — simplify, don't break
+7. **Bash 3.2** — all .sh files must work on macOS `/bin/bash`

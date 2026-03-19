@@ -1,9 +1,9 @@
 # Skill: doey-clear
 
-Kill and relaunch all Claude instances in a team. Resets process, context, name, agent, and status. Skips reserved workers unless `--force`.
+Kill and relaunch Claude instances in a team. Resets process, context, name, agent, status. Skips reserved workers unless `--force`.
 
 ## Usage
-`/doey-clear` — interactive (asks what to clear)
+`/doey-clear` — interactive
 `/doey-clear all` — all teams
 `/doey-clear team N` — specific team
 `/doey-clear workers` — workers only (keep manager + watchdog)
@@ -11,9 +11,9 @@ Kill and relaunch all Claude instances in a team. Resets process, context, name,
 
 ## Prompt
 
-Reset teams in a Doey tmux session: kill each Claude process, clear terminal, relaunch with correct names/agents/prompts.
+Kill each Claude process, clear terminal, relaunch with correct names/agents/prompts.
 
-### Step 0: Load context (always)
+### Load context
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -21,31 +21,28 @@ source "${RUNTIME_DIR}/session.env"
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 ```
 
-### Step 1: Interactive prompt (no arguments only)
+### Interactive prompt (no arguments only)
 
-If no arguments, ask what to clear. If arguments were provided, skip to Step 2.
+If arguments were provided, skip to Parse arguments.
 
-**From a Window Manager (WINDOW_INDEX > 0):**
-> What would you like to clear?
-> 1. **This team** (Team {W}) — manager, watchdog, and all workers ← suggested
-> 2. **All teams** — clear everything across all {N} teams
-> 3. **Workers only** (Team {W}) — just the workers, keep manager and watchdog
+**From Window Manager (WINDOW_INDEX > 0):**
+> 1. **This team** (Team {W}) — manager, watchdog, all workers ← suggested
+> 2. **All teams** — all {N} teams
+> 3. **Workers only** (Team {W}) — keep manager and watchdog
 
-**From the Session Manager (WINDOW_INDEX = 0):**
-> What would you like to clear? You have {N} teams ({TEAM_WINDOWS}).
-> 1. **All teams** — clear everything across all {N} teams ← suggested
-> 2. **A specific team** — e.g., Team 1, Team 2, etc.
+**From Session Manager (WINDOW_INDEX = 0):**
+> 1. **All teams** — all {N} teams ← suggested
+> 2. **A specific team** — e.g., Team 1, Team 2
 
-Wait for response. Accept "1", "this team", "all", "team 2", etc.
+Accept "1", "this team", "all", "team 2", etc.
 
-### Step 2: Parse arguments
+### Parse arguments
 
-From command args or interactive response, build:
 - **TARGET_WINDOWS**: `all` → `$TEAM_WINDOWS`; `team N` → window N; `workers` → current team
 - **FORCE**: `--force` anywhere in args
 - **WORKERS_ONLY**: `workers` target
 
-### Step 3: Validate targets
+### Validate targets
 
 ```bash
 for W in $TARGET_WINDOWS; do
@@ -58,9 +55,9 @@ for W in $TARGET_WINDOWS; do
 done
 ```
 
-### Step 4: Helper — kill pane process
+### Helper: kill_pane_process
 
-SIGTERM → wait → SIGKILL if needed → clear terminal. Returns 1 if pane not found.
+SIGTERM → wait → SIGKILL if needed → clear terminal. Returns 1 if pane missing.
 
 ```bash
 kill_pane_process() {
@@ -78,11 +75,11 @@ kill_pane_process() {
 }
 ```
 
-### Step 5: Clear each target team
+### Clear each target team
 
-For each team window W. **If WORKERS_ONLY, skip 5a and 5b.**
+For each team window W. **If WORKERS_ONLY, skip Manager and Watchdog.**
 
-#### 5a. Clear Window Manager (pane W.0)
+#### Manager (pane W.0)
 
 ```bash
 MGR_PANE="${SESSION_NAME}:${W}.0"
@@ -92,9 +89,9 @@ tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --name \"T$
 echo "  ${W}.0 Window Manager ✓"; sleep 0.5
 ```
 
-#### 5b. Clear Watchdog (in Dashboard window 0)
+#### Watchdog (in Dashboard window 0)
 
-**CRITICAL**: After relaunch, you MUST send briefing + scan loop or the Watchdog sits idle.
+**CRITICAL**: After relaunch, send briefing + scan loop or the Watchdog sits idle.
 
 ```bash
 WATCHDOG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2 | tr -d '"')
@@ -105,7 +102,7 @@ tmux send-keys -t "$WDG_PANE" "claude --dangerously-skip-permissions --model opu
 echo "  ${WATCHDOG_PANE} Watchdog ✓"; sleep 0.5
 ```
 
-**After all panes relaunched**, send briefing + scan loop in background:
+After all panes relaunched, schedule briefing + scan loop:
 
 ```bash
 WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' ',')
@@ -120,7 +117,7 @@ WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' '
 echo "  ${WATCHDOG_PANE} Watchdog briefing scheduled (~35s)"
 ```
 
-#### 5c. Clear Workers (panes W.1+)
+#### Workers (panes W.1+)
 
 ```bash
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
@@ -128,12 +125,10 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
   PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
   STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
-  # Skip reserved unless --force
   if [ "$FORCE" != "true" ] && [ -f "$STATUS_FILE" ] && grep -q "STATUS: RESERVED" "$STATUS_FILE"; then
     echo "  ${W}.${wp} — reserved, skipping (use --force)"; continue
   fi
 
-  # Skip missing panes
   kill_pane_process "$PANE" || { echo "  ${W}.${wp} — not found, skipping"; continue; }
 
   W_NAME=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null || echo "T${W} W${wp}")
@@ -156,7 +151,7 @@ EOF
 done
 ```
 
-### Step 6: Report results
+### Report results
 
 ```
 Clear complete:
@@ -165,9 +160,9 @@ Clear complete:
 ```
 
 ### Rules
-- Clear order: Manager → Watchdog → Workers
+- Order: Manager → Watchdog → Workers
 - Never clear Session Manager (0.1) or Info Panel (0.0)
-- If caller IS a Window Manager being cleared: warn, then proceed (relaunch handles it)
+- If caller IS a Window Manager being cleared: warn, then proceed
 - Skip reserved workers unless `--force`
 - Kill by PID (SIGTERM → SIGKILL), never via send-keys
 - Clear terminal before relaunching

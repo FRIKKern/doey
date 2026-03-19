@@ -9,7 +9,7 @@ Reserve/unreserve the current pane to prevent Window Manager dispatch.
 
 ## Prompt
 
-Reserve or unreserve this pane. **Do NOT ask for confirmation — just do it.**
+**Do NOT ask for confirmation — just do it.** Parse: no arg → reserve, `off`/`unreserve` → unreserve, `list` → list.
 
 ### Preamble (all actions)
 
@@ -17,38 +17,36 @@ Reserve or unreserve this pane. **Do NOT ask for confirmation — just do it.**
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-MY_PANE_SAFE=$(echo "$MY_PANE" | tr ':.' '_')
+SAFE=$(echo "$MY_PANE" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/status"
 ```
-
-Parse the argument: no arg → **reserve**, `off`/`unreserve` → **unreserve**, `list` → **list**.
 
 ### Reserve
 
 ```bash
 # (preamble)
-echo "permanent" > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.reserved"
-cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" << EOF
+echo "permanent" > "${RUNTIME_DIR}/status/${SAFE}.reserved"
+cat > "${RUNTIME_DIR}/status/${SAFE}.status" << EOF
 PANE: ${MY_PANE}
 UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: RESERVED
 TASK:
 EOF
-echo "✓ Pane ${MY_PANE} reserved permanently"
+echo "Pane ${MY_PANE} reserved"
 ```
 
 ### Unreserve
 
 ```bash
 # (preamble)
-rm -f "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.reserved"
-cat > "${RUNTIME_DIR}/status/${MY_PANE_SAFE}.status" << EOF
+rm -f "${RUNTIME_DIR}/status/${SAFE}.reserved"
+cat > "${RUNTIME_DIR}/status/${SAFE}.status" << EOF
 PANE: ${MY_PANE}
 UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: READY
 TASK:
 EOF
-echo "✓ Pane ${MY_PANE} unreserved"
+echo "Pane ${MY_PANE} unreserved"
 ```
 
 ### List
@@ -65,5 +63,4 @@ done
 
 ### Rules
 - Always target THIS pane (`$MY_PANE`) — never ask which pane
-- Pane safe names: replace `:` and `.` with `_`
 - Do NOT ask for confirmation

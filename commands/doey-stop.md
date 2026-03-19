@@ -8,9 +8,7 @@ Stop a worker by pane number. Kills the Claude process, updates status, leaves p
 
 ## Prompt
 
-### Step 1: Validate target
-
-If no pane number given, list workers and ask. Load context:
+If no pane number given, list workers and ask. Then validate, kill, and update status:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -25,13 +23,7 @@ if [ "$TARGET" = "0" ]; then echo "ERROR: Cannot stop pane ${WINDOW_INDEX}.0 (Wi
 VALID=false
 for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ "$i" = "$TARGET" ] && VALID=true; done
 if [ "$VALID" = "false" ]; then echo "ERROR: Pane ${WINDOW_INDEX}.${TARGET} not a worker. Valid: ${WORKER_PANES}"; exit 1; fi
-echo "Target: pane ${WINDOW_INDEX}.${TARGET}"
-```
 
-### Step 2: Kill Claude process
-
-```bash
-# (vars from step 1)
 PANE="${SESSION_NAME}:${WINDOW_INDEX}.${TARGET}"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
@@ -46,14 +38,8 @@ else
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && { echo "ERROR: Failed to stop — manual intervention needed"; exit 1; }
 fi
-echo "Stopped pane ${WINDOW_INDEX}.${TARGET}"
-```
 
-### Step 3: Update status
-
-```bash
-# (vars from step 1)
-PANE="${SESSION_NAME}:${WINDOW_INDEX}.${TARGET}"
+# Update status
 PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 mkdir -p "${RUNTIME_DIR}/status"
 cat > "${RUNTIME_DIR}/status/${PANE_SAFE}.status" << EOF
@@ -62,11 +48,11 @@ UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: FINISHED
 TASK: manually stopped
 EOF
-echo "Status updated to FINISHED"
+echo "Stopped pane ${WINDOW_INDEX}.${TARGET} — status set to FINISHED"
 ```
 
 ### Rules
 - Never stop Window Manager (pane 0) or Watchdog
-- Always kill by PID, never via `/exit` or `send-keys`
+- Kill by PID, never via `/exit` or `send-keys`
 - Always update status after stopping
 - Pane shell stays alive for restart via `/doey-dispatch` or `/doey-clear`
