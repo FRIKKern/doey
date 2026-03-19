@@ -91,8 +91,6 @@ Merge: scalars=last-wins, arrays=additive, objects=deep-merged.
 | `watchdog-scan.sh` | Utility: called directly by Watchdog for pane scanning (not a registered hook) |
 | `watchdog-wait.sh` | Utility: event-driven sleep between Watchdog scan cycles |
 
-Exit codes: 0=allow, 1=block+error, 2=block+feedback.
-
 **TMUX_PANE identity:** Hooks use `tmux display-message -t "$TMUX_PANE"` (with `-t`) to resolve the correct pane. Without `-t`, tmux returns the focused pane (usually 0.0), causing all workers to misidentify as Window Manager.
 
 
@@ -122,7 +120,7 @@ Skills installed to `~/.claude/commands/`, invoked via `/skill-name`. Loaded on-
 | `/doey-purge` | Window Manager | Full audit & fix — context rot + code quality (bloat, staleness, bash 3.2, bugs) |
 | `/doey-stop` | Window Manager | Stop a specific worker |
 | `/doey-worktree` | Session Manager/Window Manager | Transform team to/from worktree isolation |
-| `/doey-restart-window` | Window Manager | Restart workers + Watchdog in a window |
+| `/doey-clear` | Window Manager | Clear and restart workers, Watchdog, or Window Manager |
 
 Agent usage: Window Manager uses all except window-management commands. Session Manager uses `/doey-list-windows`, `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`. Watchdog uses none. Workers use `/doey-status`, `/doey-reserve`.
 
@@ -133,7 +131,6 @@ Agent usage: Window Manager uses all except window-management commands. Session 
 |-------|------|-------|
 | Window Manager | `~/.claude/agent-memory/doey-manager/MEMORY.md` | Stores dispatch patterns, delegation rules, hook behavior |
 | Session Manager | `~/.claude/agent-memory/doey-session-manager/MEMORY.md` | Routing patterns, team coordination |
-| Watchdog | `~/.claude/agent-memory/doey-watchdog/MEMORY.md` | Disabled (agent definition has `memory: none`) |
 
 Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
 
@@ -229,17 +226,7 @@ Dynamic grid (default) — team window layout, then after `doey add`:
 +--------+--------+--------+--------+                         +--------+--------+--------+--------+--------+
 ```
 
-Static grid (legacy, via `doey 6x2`): all panes are Workers except W.0 (Manager).
-
-```
-+--------+--------+--------+--------+--------+--------+
-|  W.0   |  W.1   |  W.2   |  W.3   |  W.4   |  W.5   |
-|  Mgr   |  W1    |  W2    |  W3    |  W4    |  W5    |
-+--------+--------+--------+--------+--------+--------+
-|  W.6   |  W.7   |  W.8   |  W.9   |  W.10  |  W.11  |
-|  W6    |  W7    |  W8    |  W9    |  W10   |  W11   |
-+--------+--------+--------+--------+--------+--------+
-```
+Static grid (legacy, via `doey 6x2`): W.0 = Manager, all others = Workers. Same 2-row layout but without dynamic expansion.
 
 | Method | Use Case |
 |--------|----------|

@@ -43,11 +43,7 @@ done
 echo "Watchdog mapping: 0.2→T${TEAM_FOR_02:-none} 0.3→T${TEAM_FOR_03:-none} 0.4→T${TEAM_FOR_04:-none} 0.5→T${TEAM_FOR_05:-none} 0.6→T${TEAM_FOR_06:-none} 0.7→T${TEAM_FOR_07:-none}"
 ```
 
-This gives you `SESSION_NAME`, `PROJECT_DIR`, `SM_PANE` (default "0.1"), `WDG_SLOT_1`..`WDG_SLOT_6`, and the team mapping.
-
 ### Step 2: Diagnose all Dashboard panes
-
-Use a single `tmux list-panes` call to get all pane info at once, then check child processes:
 
 ```bash
 # Get all pane info in one call

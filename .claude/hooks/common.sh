@@ -63,57 +63,44 @@ load_team_env() {
 
 is_watchdog() {
   # Cache result — this is called on every tool hook invocation
-  if [ -n "${_DOEY_IS_WD+x}" ]; then
-    return "$_DOEY_IS_WD"
-  fi
+  [ -n "${_DOEY_IS_WD+x}" ] && return "$_DOEY_IS_WD"
   _DOEY_IS_WD=1  # default: not a watchdog
-  # Watchdogs live in Dashboard (window 0), panes 0.2-0.7.
-  # Each team_W.env has WATCHDOG_PANE="0.X" referencing the Dashboard pane.
-  if [ "$WINDOW_INDEX" = "0" ]; then
-    for _wd_tf in "${RUNTIME_DIR}"/team_*.env; do
-      [ -f "$_wd_tf" ] || continue
-      local _wd_val
-      _wd_val=$(grep '^WATCHDOG_PANE=' "$_wd_tf" | cut -d= -f2)
-      _wd_val="${_wd_val//\"/}"
-      if [ "$_wd_val" = "0.${PANE_INDEX}" ]; then
-        _DOEY_IS_WD=0
-        break
-      fi
-    done
-  fi
+  # Watchdogs live in Dashboard (window 0), panes 0.2-0.7
+  [ "$WINDOW_INDEX" != "0" ] && return 1
+  for _wd_tf in "${RUNTIME_DIR}"/team_*.env; do
+    [ -f "$_wd_tf" ] || continue
+    local _wd_val
+    _wd_val=$(grep '^WATCHDOG_PANE=' "$_wd_tf" | cut -d= -f2)
+    _wd_val="${_wd_val//\"/}"
+    if [ "$_wd_val" = "0.${PANE_INDEX}" ]; then
+      _DOEY_IS_WD=0
+      break
+    fi
+  done
   return "$_DOEY_IS_WD"
 }
 
 is_manager() {
   # Cache result — this is called on every tool hook invocation
-  if [ -n "${_DOEY_IS_MGR+x}" ]; then
-    return "$_DOEY_IS_MGR"
-  fi
+  [ -n "${_DOEY_IS_MGR+x}" ] && return "$_DOEY_IS_MGR"
   _DOEY_IS_MGR=1  # default: not a manager
-  # Managers live in team windows (W≥1), pane 0.
-  # Each team_W.env has MANAGER_PANE="0" (pane index within the team window).
-  if [ "$WINDOW_INDEX" != "0" ]; then
-    local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-    if [ -f "$team_file" ]; then
-      local _mgr_val
-      _mgr_val=$(grep '^MANAGER_PANE=' "$team_file" | cut -d= -f2)
-      _mgr_val="${_mgr_val//\"/}"
-      if [ "$PANE_INDEX" = "$_mgr_val" ]; then
-        _DOEY_IS_MGR=0
-      fi
-    fi
-  fi
+  # Managers live in team windows (W≥1), pane 0
+  [ "$WINDOW_INDEX" = "0" ] && return 1
+  local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  [ -f "$team_file" ] || return 1
+  local _mgr_val
+  _mgr_val=$(grep '^MANAGER_PANE=' "$team_file" | cut -d= -f2)
+  _mgr_val="${_mgr_val//\"/}"
+  [ "$PANE_INDEX" = "$_mgr_val" ] && _DOEY_IS_MGR=0
   return "$_DOEY_IS_MGR"
 }
 
 is_session_manager() {
-  # True only for the Session Manager — Dashboard pane 0.1.
-  if [ "$WINDOW_INDEX" != "0" ]; then
-    return 1
-  fi
-  local sm_pane
+  # True only for the Session Manager — Dashboard pane 0.1
+  [ "$WINDOW_INDEX" != "0" ] && return 1
+  local sm_pane wp
   sm_pane=$(get_sm_pane)
-  local wp="${PANE#*:}"
+  wp="${PANE#*:}"
   [ "$wp" = "$sm_pane" ]
 }
 
@@ -183,15 +170,11 @@ send_notification() {
   if [ -n "${RUNTIME_DIR:-}" ]; then
     local title_safe="${title//[^a-zA-Z0-9]/_}"
     local cooldown_file="${RUNTIME_DIR}/status/notif_cooldown_${title_safe}"
-    if [ -f "$cooldown_file" ]; then
-      local last_sent now
-      last_sent=$(cat "$cooldown_file" 2>/dev/null) || last_sent=0
-      now=$(date +%s)
-      if [ "$((now - last_sent))" -lt 60 ]; then
-        return 0  # Cooldown active — skip
-      fi
-    fi
-    date +%s > "$cooldown_file" 2>/dev/null || true
+    local last_sent now
+    last_sent=$(cat "$cooldown_file" 2>/dev/null) || last_sent=0
+    now=$(date +%s)
+    [ "$((now - last_sent))" -lt 60 ] && return 0
+    echo "$now" > "$cooldown_file" 2>/dev/null || true
   fi
 
   # Sanitize for AppleScript string safety

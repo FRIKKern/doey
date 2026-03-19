@@ -97,54 +97,29 @@ Workers run `--dangerously-skip-permissions`. NEVER send y/Y/yes/Enter to any pa
 2. Go back to Step 1. No output between cycles.
 3. After 2 cycles, yield. The `/loop` safety net will re-trigger you.
 
-## Manager Crashed Handling
+## Event Handling Details
 
-When scan reports `MANAGER_CRASHED`: **NEVER send any keys to the crashed Manager pane.** Write a `.msg` to the Session Manager's inbox:
+### Session Manager messages (`.msg` template)
+
+For `MANAGER_CRASHED`, `WAVE_COMPLETE`, and `MANAGER_COMPLETED` events, write a `.msg` file:
 ```bash
 SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_mgr_crash_W${TEAM_WINDOW}_$(date +%s).msg"
+# TAG = mgr_crash / wave_done / mgr_done
+MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_${TAG}_W${TEAM_WINDOW}_$(date +%s).msg"
 cat > "$MSG_FILE" << EOF
 FROM: watchdog-W${TEAM_WINDOW}
-SUBJECT: MANAGER_CRASHED in Team ${TEAM_WINDOW}
-Window Manager in pane ${TEAM_WINDOW}.0 is down (bare shell). Needs restart.
-EOF
-```
-Write once per crash (check if alert file exists). While Manager is crashed, skip worker notifications. Show 🔥 in dashboard.
-
-## Wave Complete (notify Manager + Session Manager)
-
-When scan reports `WAVE_COMPLETE` (all workers transitioned from working to idle):
-1. **Notify Manager** (if not crashed and idle): send-keys "All workers idle — wave complete. Check results in $RUNTIME_DIR/results/ and dispatch next wave or report completion to Session Manager."
-2. **Write `.msg` to Session Manager:**
-```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_wave_done_W${TEAM_WINDOW}_$(date +%s).msg"
-cat > "$MSG_FILE" << EOF
-FROM: watchdog-W${TEAM_WINDOW}
-SUBJECT: Team ${TEAM_WINDOW} wave complete
-All workers are now idle. Wave finished. Manager should check results and dispatch next wave.
+SUBJECT: ${SUBJECT}
+${BODY}
 EOF
 ```
 
-## Manager Completed (notify Session Manager)
+- **MANAGER_CRASHED**: TAG=`mgr_crash`, SUBJECT=`MANAGER_CRASHED in Team ${TEAM_WINDOW}`, BODY=`Window Manager pane ${TEAM_WINDOW}.0 is down. Needs restart.` Write once per crash. While crashed, skip worker notifications. Show 🔥 in dashboard. **NEVER send keys to a crashed Manager pane.**
+- **WAVE_COMPLETE**: TAG=`wave_done`, SUBJECT=`Team ${TEAM_WINDOW} wave complete`, BODY=`All workers idle.` Also notify Manager if idle: send-keys "All workers idle — wave complete. Check results and dispatch next wave."
+- **MANAGER_COMPLETED**: TAG=`mgr_done`, SUBJECT=`Team ${TEAM_WINDOW} Manager completed`, BODY=`Manager idle. Route follow-up.`
 
-When scan reports `MANAGER_COMPLETED`, write a `.msg` to Session Manager:
-```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_mgr_done_W${TEAM_WINDOW}_$(date +%s).msg"
-cat > "$MSG_FILE" << EOF
-FROM: watchdog-W${TEAM_WINDOW}
-SUBJECT: Team ${TEAM_WINDOW} Manager completed
-Manager finished work and is now idle. Check results and route follow-up.
-EOF
-```
+### Window Manager notifications
 
-## Window Manager Notifications
-
-When scan contains COMPLETION, CRASHED, or STUCK lines **and Manager is NOT crashed**, notify the Manager (pane ${TEAM_WINDOW}.0).
-
-**If Manager idle** (shows `❯`): send-keys with details and "Check results and take next action."
-**If Manager busy:** write a `.msg` file to `$RUNTIME_DIR/messages/` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`, FROM: watchdog.
+For COMPLETION, CRASHED, or STUCK events **when Manager is NOT crashed**: **If idle** (shows `❯`): send-keys with details + "Check results and take next action." **If busy:** write `.msg` to `$RUNTIME_DIR/messages/` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`, FROM: watchdog.
 
 ## Rules
 

@@ -7,34 +7,14 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
 
-# Read current task from status file
+# Read current task, research topic, and project directory
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-CURRENT_TASK=""
-if [ -f "$STATUS_FILE" ]; then
-  CURRENT_TASK=$(grep '^TASK:' "$STATUS_FILE" | cut -d: -f2- | sed 's/^ //')
-fi
-
-# Check for research task
-TASK_FILE="${RUNTIME_DIR}/research/${PANE_SAFE}.task"
-RESEARCH_TOPIC=""
-if [ -f "$TASK_FILE" ]; then
-  RESEARCH_TOPIC=$(cat "$TASK_FILE" 2>/dev/null)
-fi
-
-# Check if research report has been written
+CURRENT_TASK=$([ -f "$STATUS_FILE" ] && grep '^TASK:' "$STATUS_FILE" | cut -d: -f2- | sed 's/^ //' || true)
+RESEARCH_TOPIC=$(cat "${RUNTIME_DIR}/research/${PANE_SAFE}.task" 2>/dev/null || true)
 REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
-REPORT_EXISTS="no"
-if [ -f "$REPORT_PATH" ]; then
-  REPORT_EXISTS="yes"
-fi
 
-# Get project directory
 PROJECT_DIR=""
-if [ -f "${RUNTIME_DIR}/session.env" ]; then
-  PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" | cut -d= -f2-)
-  PROJECT_DIR="${PROJECT_DIR%\"}"
-  PROJECT_DIR="${PROJECT_DIR#\"}"
-fi
+[ -f "${RUNTIME_DIR}/session.env" ] && PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" | cut -d= -f2- | tr -d '"') || true
 
 # Prefer team-specific directory (worktree) if available
 SEARCH_DIR="${DOEY_TEAM_DIR:-$PROJECT_DIR}"
@@ -76,7 +56,7 @@ cat <<CONTEXT
 **Pane:** ${PANE}
 **Current Task:** ${CURRENT_TASK:-No active task}
 **Research Topic:** ${RESEARCH_TOPIC:-None}
-**Research Report Written:** ${REPORT_EXISTS}
+**Research Report Written:** $([ -f "$REPORT_PATH" ] && echo yes || echo no)
 **Recently Modified Files:**
 ${RECENT_FILES:-None detected}
 
@@ -88,33 +68,30 @@ CONTEXT
 if is_manager; then
   _TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
   WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
+  # Collect result files with status
   PENDING_RESULTS=""
-  HAS_JQ=false
-  command -v jq >/dev/null 2>&1 && HAS_JQ=true
-  for rf in "$RUNTIME_DIR"/results/pane_${_TEAM_W:-$WINDOW_INDEX}_*.json; do
+  HAS_JQ=false; command -v jq >/dev/null 2>&1 && HAS_JQ=true
+  for rf in "$RUNTIME_DIR"/results/pane_${_TEAM_W}_*.json; do
     [ -f "$rf" ] || continue
-    rf_name=$(basename "$rf")
-    rf_status=""
     if $HAS_JQ; then
       rf_status=$(jq -r '.status // "unknown"' "$rf" 2>/dev/null || echo "unknown")
     else
       rf_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$rf" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"$//' || echo "unknown")
     fi
-    PENDING_RESULTS="${PENDING_RESULTS}  ${rf_name} (status: ${rf_status})
+    PENDING_RESULTS="${PENDING_RESULTS}  $(basename "$rf") (status: ${rf_status})
 "
   done
-  COMPLETION_FILES=""
-  for cf in "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W:-$WINDOW_INDEX}_*; do
-    [ -f "$cf" ] || continue
-    COMPLETION_FILES="${COMPLETION_FILES}  $(basename "$cf")
-"
-  done
-  CRASH_FILES=""
-  for crf in "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W:-$WINDOW_INDEX}_*; do
-    [ -f "$crf" ] || continue
-    CRASH_FILES="${CRASH_FILES}  $(basename "$crf")
-"
-  done
+  # Collect completion and crash alert files
+  _list_basenames() {
+    local result=""
+    for f in "$@"; do
+      [ -f "$f" ] || continue
+      result="${result}  $(basename "$f")${NL}"
+    done
+    printf '%s' "$result"
+  }
+  COMPLETION_FILES=$(_list_basenames "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W}_*)
+  CRASH_FILES=$(_list_basenames "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W}_*)
   cat <<MGRSTATE
 
 ## WINDOW MANAGER ORCHESTRATION STATE (restore after compaction)

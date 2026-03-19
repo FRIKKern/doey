@@ -302,7 +302,8 @@ SYSTEMD
 
 ---
 
-## Step 7 — Full Automation Script
+<details>
+<summary><strong>Step 7 — Full Automation Script</strong></summary>
 
 Here's a single script that does everything from steps 1-5. Save it locally and run it, or have Claude Code execute it:
 
@@ -387,6 +388,8 @@ echo "Launch:   ssh -t doey@$LINODE_IP 'cd ~/your-project && doey'"
 echo "Mosh:     mosh doey@$LINODE_IP"
 ```
 
+</details>
+
 ---
 
 ## Monitoring & Maintenance
@@ -441,7 +444,8 @@ linode-cli linodes backups-enable $(linode-cli linodes list --label doey-server 
 
 ---
 
-## Exposing Services & Web Access
+<details>
+<summary><strong>Exposing Services & Web Access</strong></summary>
 
 When Doey workers build web apps, APIs, or anything with a local server, you need a way to access `localhost:3000` (or whatever port) on the Linode from your browser. There are three approaches, from simplest to most production-ready.
 
@@ -673,6 +677,8 @@ ssh -L 7681:localhost:7681 doey@$LINODE_IP
 
 These can be combined — e.g., Tailscale for private access + Caddy for public-facing endpoints + ttyd behind Caddy for browser-based terminal access.
 
+</details>
+
 ---
 
 ## Security Notes
@@ -704,7 +710,8 @@ These can be combined — e.g., Tailscale for private access + Caddy for public-
 
 ---
 
-## Rapid Cloning — Snapshot a Golden Image
+<details>
+<summary><strong>Rapid Cloning — Snapshot a Golden Image</strong></summary>
 
 Once you have a fully configured Doey server (steps 1-4 complete, everything works), snapshot it as a **golden image**. Then spin up new Doey instances in minutes — no setup, just clone, add API key, launch.
 
@@ -945,6 +952,8 @@ linode-cli linodes list --json \
       linode-cli linodes delete "$id"
     done
 ```
+
+</details>
 
 ---
 

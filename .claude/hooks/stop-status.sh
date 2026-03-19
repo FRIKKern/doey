@@ -20,13 +20,9 @@ if is_worker && ! is_reserved; then
 fi
 
 # --- Determine status ---
-if is_reserved; then
-  STOP_STATUS="RESERVED"
-elif is_worker; then
-  STOP_STATUS="FINISHED"
-else
-  STOP_STATUS="READY"
-fi
+STOP_STATUS="READY"
+is_worker && STOP_STATUS="FINISHED"
+is_reserved && STOP_STATUS="RESERVED"
 
 # --- Write status file (atomic: tmp + mv) ---
 TMPFILE_STATUS=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_STATUS="$STATUS_FILE"
@@ -36,9 +32,6 @@ UPDATED: $NOW
 STATUS: ${STOP_STATUS}
 TASK:
 EOF
-case "$TMPFILE_STATUS" in
-  "$STATUS_FILE") ;;
-  *) mv "$TMPFILE_STATUS" "$STATUS_FILE" ;;
-esac
+[ "$TMPFILE_STATUS" != "$STATUS_FILE" ] && mv "$TMPFILE_STATUS" "$STATUS_FILE"
 
 exit 0

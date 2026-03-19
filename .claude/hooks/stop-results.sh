@@ -8,10 +8,12 @@ init_hook
 # Only workers produce results
 is_worker || exit 0
 
+PANE_ADDR="$SESSION_NAME:$WINDOW_INDEX.$PANE_INDEX"
+RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
 TMPFILE_RESULT=""
 trap '[ -n "${TMPFILE_RESULT:-}" ] && rm -f "$TMPFILE_RESULT" 2>/dev/null' EXIT
 
-OUTPUT=$(tmux capture-pane -t "$SESSION_NAME:$WINDOW_INDEX.$PANE_INDEX" -p -S -80 2>/dev/null) || OUTPUT=""
+OUTPUT=$(tmux capture-pane -t "$PANE_ADDR" -p -S -80 2>/dev/null) || OUTPUT=""
 
 # Filter UI noise and detect errors in a single pass
 FILTERED_OUTPUT=""
@@ -28,8 +30,7 @@ while IFS= read -r line; do
   fi
 done <<< "$OUTPUT"
 
-# Get pane title for identification
-PANE_TITLE=$(tmux display-message -t "$SESSION_NAME:$WINDOW_INDEX.$PANE_INDEX" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
+PANE_TITLE=$(tmux display-message -t "$PANE_ADDR" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
 
 LAST_OUTPUT=$(jq -Rs '.' <<< "$FILTERED_OUTPUT" 2>/dev/null) || \
   LAST_OUTPUT=$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' <<< "$FILTERED_OUTPUT" 2>/dev/null) || \
@@ -37,12 +38,8 @@ LAST_OUTPUT=$(jq -Rs '.' <<< "$FILTERED_OUTPUT" 2>/dev/null) || \
 
 TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='"worker-'"$PANE_INDEX"'"'
 
-# --- Write result JSON ---
-TMPFILE_RESULT=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_RESULT=""
-if [ -z "$TMPFILE_RESULT" ]; then
-  # Fallback: direct write if mktemp fails (full disk, missing dir, etc.)
-  TMPFILE_RESULT="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
-fi
+# --- Write result JSON (atomic: tmp + mv) ---
+TMPFILE_RESULT=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null) || TMPFILE_RESULT="$RESULT_FILE"
 cat > "$TMPFILE_RESULT" <<EOF
 {
   "pane": "$WINDOW_INDEX.$PANE_INDEX",
@@ -52,13 +49,10 @@ cat > "$TMPFILE_RESULT" <<EOF
   "last_output": $LAST_OUTPUT
 }
 EOF
-case "$TMPFILE_RESULT" in
-  *"pane_${WINDOW_INDEX}_${PANE_INDEX}.json") ;;
-  *) mv "$TMPFILE_RESULT" "$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json" ;;
-esac
+[ "$TMPFILE_RESULT" != "$RESULT_FILE" ] && mv "$TMPFILE_RESULT" "$RESULT_FILE"
 TMPFILE_RESULT=""
 
-# --- Write completion event for watchdog to pick up ---
+# --- Write completion event for watchdog ---
 COMPLETION_FILE="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"
 cat > "${COMPLETION_FILE}.tmp" <<COMPLETE
 PANE_INDEX="$PANE_INDEX"
@@ -68,7 +62,7 @@ TIMESTAMP=$(date +%s)
 COMPLETE
 mv "${COMPLETION_FILE}.tmp" "$COMPLETION_FILE"
 
-# --- Wake the Watchdog immediately (event-driven instead of 30s poll) ---
+# --- Wake watchdog immediately (event-driven instead of 30s poll) ---
 touch "${RUNTIME_DIR}/status/watchdog_trigger_W${WINDOW_INDEX}" 2>/dev/null || true
 
 exit 0

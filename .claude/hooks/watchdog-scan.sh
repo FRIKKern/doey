@@ -31,6 +31,30 @@ _parse_cpu_seconds() {
   esac
 }
 
+# Get pane title, sanitized for eval safety (strips single quotes)
+_get_pane_title() {
+  local t
+  t=$(tmux display-message -t "$1" -p '#{pane_title}' 2>/dev/null) || t=""
+  echo "${t//\'/}"
+}
+
+# Update duration tracking for a pane. Sets PANE_DURATION_<idx> via eval.
+# Records STATE_CHANGE snapshot event on transitions.
+# Args: <pane_idx> <prev_display_state> <cur_display_state>
+_update_duration() {
+  local idx="$1" prev="$2" cur="$3"
+  local since_file="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${idx}"
+  if [ "$prev" != "$cur" ]; then
+    echo "$SCAN_TIME" > "$since_file"
+    eval "PANE_DURATION_${idx}=0"
+    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${idx} ${prev}->${cur}${NL}"
+  else
+    local _since
+    read -r _since < "$since_file" 2>/dev/null || { echo "$SCAN_TIME" > "$since_file"; _since="$SCAN_TIME"; }
+    eval "PANE_DURATION_${idx}=$(($SCAN_TIME - $_since))"
+  fi
+}
+
 # --- Load session environment ---
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { echo "ERROR: not in doey session"; exit 1; }
 
@@ -55,7 +79,10 @@ for _wds_tf in "${RUNTIME_DIR}"/team_*.env; do
   fi
 done
 # Fallback: use pane index as team window (0.1 → team 1, 0.2 → team 2)
-[ -z "$TARGET_WINDOW" ] && TARGET_WINDOW="$PANE_INDEX"
+if [ -z "$TARGET_WINDOW" ]; then
+  echo "WARNING: No team found for watchdog pane 0.${PANE_INDEX}" >&2
+  TARGET_WINDOW="$PANE_INDEX"
+fi
 
 # Safe key-value parse — load target team's env file
 TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WINDOW}.env"
@@ -112,7 +139,6 @@ SNAPSHOT_EVENTS=""
 
 # --- Window Manager health check (Manager is pane 0 in the target team window) ---
 MGR_PANE_REF=""
-TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WINDOW}.env"
 if [ -f "$TEAM_ENV" ]; then
   _wds_mgr=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
   _wds_mgr="${_wds_mgr%\"}" && _wds_mgr="${_wds_mgr#\"}"
@@ -187,46 +213,32 @@ for i in $PANES_LIST; do
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
   case "$CURRENT_CMD" in
     bash|zsh|sh|fish)
-      STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-      _crash_state=""
-      if [ -f "$STATUS_FILE" ] && grep -q '^STATUS: FINISHED' "$STATUS_FILE"; then
-        echo "PANE ${i} FINISHED"; SCAN_HAD_OUTPUT=true
-        _crash_state="FINISHED"
-      elif [ -f "$STATUS_FILE" ] && grep -q '^STATUS: RESERVED' "$STATUS_FILE"; then
-        echo "PANE ${i} RESERVED"; SCAN_HAD_OUTPUT=true
-        _crash_state="RESERVED"
-      else
-        echo "PANE ${i} CRASHED"; SCAN_HAD_OUTPUT=true
-        _crash_state="CRASHED"
-        # Write crash alert file for Window Manager consumption
-        CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${TARGET_WINDOW}_${i}"
-        if [ ! -f "$CRASH_FILE" ]; then
-          CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
-          cat > "$CRASH_FILE" << CRASH_EOF
+      # Determine state from hook-written status file (single grep instead of two)
+      _hook_line=$(grep '^STATUS:' "${RUNTIME_DIR}/status/${PANE_SAFE}.status" 2>/dev/null | head -1) || _hook_line=""
+      case "$_hook_line" in
+        *FINISHED*) _crash_state="FINISHED" ;;
+        *RESERVED*) _crash_state="RESERVED" ;;
+        *)
+          _crash_state="CRASHED"
+          # Write crash alert file for Window Manager consumption
+          CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${TARGET_WINDOW}_${i}"
+          if [ ! -f "$CRASH_FILE" ]; then
+            CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
+            cat > "$CRASH_FILE" << CRASH_EOF
 PANE_INDEX=${i}
 TIMESTAMP=$(date +%s)
 LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
 CRASH_EOF
-        fi
-      fi
+          fi
+          ;;
+      esac
+      echo "PANE ${i} ${_crash_state}"; SCAN_HAD_OUTPUT=true
       eval "PANE_STATE_${i}='${_crash_state}'"
-      # Duration tracking for crashed/finished/reserved panes
-      _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
-      _pt="${_pt//\'/}"
-      eval "PANE_TITLE_${i}='${_pt}'"
+      eval "PANE_TITLE_${i}='$(_get_pane_title "$PANE_REF")'"
       eval "PANE_TOOL_${i}=''"
-      # State-since tracking
-      eval "_prev_for_dur=\${PREV_STATE_${i}:-UNKNOWN}"
-      STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
-      if [ "$_prev_for_dur" != "$_crash_state" ]; then
-        echo "$SCAN_TIME" > "$STATE_SINCE_FILE"
-        eval "PANE_DURATION_${i}=0"
-        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${i} ${_prev_for_dur}->${_crash_state}${NL}"
-      else
-        read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || _since="$SCAN_TIME"
-        eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
-      fi
-      eval "PANE_PREV_DISPLAY_${i}='${_prev_for_dur}'"
+      eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
+      _update_duration "$i" "$_prev" "$_crash_state"
+      eval "PANE_PREV_DISPLAY_${i}='${_prev}'"
       continue
       ;;
   esac
@@ -276,15 +288,12 @@ CRASH_EOF
 
   if [ "$HASH" = "$OLD_HASH" ]; then
     # Content unchanged — use CPU time to distinguish IDLE vs WORKING
-    _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
-    eval "PANE_TITLE_${i}='${_pt}'"
+    eval "PANE_TITLE_${i}='$(_get_pane_title "$PANE_REF")'"
     eval "PANE_TOOL_${i}=''"
-
     eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
-    STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
 
     if [ -n "$_cpu_active" ] || [ "$_hook_status" = "BUSY" ]; then
-      # CPU active OR hook says BUSY = working (thinking/processing, no visible output yet)
+      # CPU active OR hook says BUSY → working (thinking/processing, no visible output)
       COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
       read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
       NEW_COUNT=$((OLD_COUNT + 1))
@@ -301,52 +310,40 @@ CRASH_EOF
           *) echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true ;;
         esac
       fi
-      _display_prev="WORKING"
-      read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
-      eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
-      eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
+      _update_duration "$i" "WORKING" "WORKING"
+      eval "PANE_PREV_DISPLAY_${i}='WORKING'"
     else
       # No CPU activity + hash unchanged = truly IDLE
       rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
       _unch_state="IDLE"
+      # Merge output emission and display-prev computation into one case
       case "$PREV" in
-        IDLE|UNCHANGED) ;;
-        *) echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true ;;
+        IDLE|UNCHANGED)
+          _display_prev="IDLE" ;;
+        FINISHED)
+          echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
+          _display_prev="IDLE" ;;
+        WORKING|CHANGED|STUCK)
+          echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
+          _display_prev="WORKING" ;;
+        *)
+          echo "PANE ${i} IDLE"; SCAN_HAD_OUTPUT=true
+          _display_prev="$PREV" ;;
       esac
-      _display_prev="IDLE"
-      case "$PREV" in
-        WORKING|CHANGED|STUCK) _display_prev="WORKING" ;;
-        IDLE|UNCHANGED|FINISHED) _display_prev="IDLE" ;;
-        *) _display_prev="$PREV" ;;
-      esac
-      if [ "$_display_prev" != "IDLE" ]; then
-        echo "$SCAN_TIME" > "$STATE_SINCE_FILE"
-        eval "PANE_DURATION_${i}=0"
-        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${i} ${_display_prev}->IDLE${NL}"
-      else
-        read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
-        eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
-      fi
+      _update_duration "$i" "$_display_prev" "IDLE"
       eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
     fi
     eval "PANE_STATE_${i}='${_unch_state}'"
     continue
   fi
 
-  # Hash changed — content is updating, pane is actively producing output
+  # Hash changed — content is actively updating = WORKING
   rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
-
-  # Update stored hash (atomic write)
   echo "$HASH" > "${HASH_FILE}.tmp" && mv "${HASH_FILE}.tmp" "$HASH_FILE"
 
-  # Hash changed = WORKING (content is actively updating)
-  _classified_state="WORKING"
   echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
-  eval "PANE_STATE_${i}='${_classified_state}'"
-
-  # Capture pane title
-  _pt=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || _pt=""
-  eval "PANE_TITLE_${i}='${_pt}'"
+  eval "PANE_STATE_${i}='WORKING'"
+  eval "PANE_TITLE_${i}='$(_get_pane_title "$PANE_REF")'"
 
   # Extract last tool name from capture (for display)
   _last_tool=""
@@ -367,23 +364,14 @@ CRASH_EOF
   done
   eval "PANE_TOOL_${i}='${_last_tool}'"
 
-  # Duration tracking — detect state changes
-  eval "_prev_for_dur=\${PREV_STATE_${i}:-UNKNOWN}"
-  _display_now="WORKING"
-  case "$_prev_for_dur" in
+  # Duration tracking — map prev state to display state
+  eval "_prev_raw=\${PREV_STATE_${i}:-UNKNOWN}"
+  case "$_prev_raw" in
     WORKING|CHANGED|UNCHANGED|STUCK) _display_prev="WORKING" ;;
     IDLE|FINISHED) _display_prev="IDLE" ;;
-    *) _display_prev="$_prev_for_dur" ;;
+    *) _display_prev="$_prev_raw" ;;
   esac
-  STATE_SINCE_FILE="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${i}"
-  if [ "$_display_prev" != "$_display_now" ]; then
-    echo "$SCAN_TIME" > "$STATE_SINCE_FILE"
-    eval "PANE_DURATION_${i}=0"
-    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${i} ${_display_prev}->${_display_now}${NL}"
-  else
-    read -r _since < "$STATE_SINCE_FILE" 2>/dev/null || { echo "$SCAN_TIME" > "$STATE_SINCE_FILE"; _since="$SCAN_TIME"; }
-    eval "PANE_DURATION_${i}=$(($SCAN_TIME - $_since))"
-  fi
+  _update_duration "$i" "$_display_prev" "WORKING"
   eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
 done
 
@@ -522,17 +510,12 @@ echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat.
 
 # --- Write pane states JSON (atomic) ---
 JSON="{"
-FIRST=true
+_sep=""
 for i in $PANES_LIST; do
-  # Validate pane index before eval to prevent injection
   is_numeric "$i" || continue
   eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"
-  if [ "$FIRST" = true ]; then
-    JSON+="\"${i}\":\"${STATE}\""
-    FIRST=false
-  else
-    JSON+=",\"${i}\":\"${STATE}\""
-  fi
+  JSON+="${_sep}\"${i}\":\"${STATE}\""
+  _sep=","
 done
 JSON+="}"
 echo "$JSON" > "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json.tmp" && \
@@ -546,15 +529,9 @@ if [ -f "$SNAPSHOT_FILE" ]; then
 fi
 
 # --- Context check: detect watchdog's own context % from pane status line ---
-# Parse "Ctx ████░░░░░░ 42%" from the watchdog's pane (TMUX_PANE = self)
 _ctx_line=$(tmux capture-pane -t "${TMUX_PANE}" -p -S -5 2>/dev/null | grep 'Ctx ' | tail -1) || _ctx_line=""
-_ctx_pct=""
-if [ -n "$_ctx_line" ]; then
-  # Extract percentage number from "Ctx ████░░░░░░ 42%"
-  _ctx_pct=$(echo "$_ctx_line" | sed 's/.*Ctx [^ ]* //;s/%.*//')
-  # Strip whitespace
-  _ctx_pct="${_ctx_pct// /}"
-fi
+_ctx_pct=$(echo "$_ctx_line" | sed 's/.*Ctx [^ ]* //;s/%.*//')
+_ctx_pct="${_ctx_pct// /}"
 is_numeric "$_ctx_pct" || _ctx_pct="0"
 if [ "$_ctx_pct" -ge 60 ]; then
   echo ""

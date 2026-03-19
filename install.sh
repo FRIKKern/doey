@@ -1,21 +1,12 @@
 #!/usr/bin/env bash
-# ──────────────────────────────────────────────────────────────────────
 # Install the Doey system
-# ──────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── Colors ────────────────────────────────────────────────────────────
-BRAND='\033[1;36m'    # Bold cyan
-SUCCESS='\033[0;32m'  # Green
-DIM='\033[0;90m'      # Gray
-WARN='\033[0;33m'     # Yellow
-ERROR='\033[0;31m'    # Red
-BOLD='\033[1m'        # Bold
-RESET='\033[0m'       # Reset
+BRAND='\033[1;36m'  SUCCESS='\033[0;32m'  DIM='\033[0;90m'
+WARN='\033[0;33m'   ERROR='\033[0;31m'   BOLD='\033[1m'   RESET='\033[0m'
 
-# ── Helpers ───────────────────────────────────────────────────────────
 step_ok()   { printf "   ${SUCCESS}✓${RESET}\n"; }
 step_fail() { printf "   ${ERROR}✗${RESET}\n"; }
 detail()    { printf "         ${DIM}→ %s${RESET}\n" "$1"; }
@@ -30,7 +21,19 @@ die() {
   exit 1
 }
 
-# ── Header ────────────────────────────────────────────────────────────
+# Remove doey-* files in $1 that no longer exist in $2 (source dir)
+clean_orphans() {
+  local dest_dir="$1" src_dir="$2"
+  for installed in "$dest_dir"/doey-*.md; do
+    [ -f "$installed" ] || continue
+    local_name="$(basename "$installed")"
+    if [ ! -f "$src_dir/$local_name" ]; then
+      rm -f "$installed"
+      detail "removed orphan: $local_name"
+    fi
+  done
+}
+
 echo ""
 printf "${BRAND}┌────────────────────────────────────────────┐${RESET}\n"
 printf "${BRAND}│${RESET}  ${BOLD}Doey Installer${RESET}                             ${BRAND}│${RESET}\n"
@@ -38,7 +41,6 @@ printf "${BRAND}│${RESET}  ${DIM}Multi-agent orchestration for Claude Code${RE
 printf "${BRAND}└────────────────────────────────────────────┘${RESET}\n"
 echo ""
 
-# ── Platform detection ──────────────────────────────────────────────
 detect_platform() {
   case "$(uname -s)" in
     Darwin) echo "macos" ;;
@@ -77,7 +79,27 @@ run_install() {
   fi
 }
 
-# ── Prerequisite checks ──────────────────────────────────────────────
+# Install a required tool via brew (macOS) or apt (Linux), or die
+require_tool() {
+  local name="$1" pkg="${2:-$1}"
+  if ask_install "$name"; then
+    case "$PLATFORM" in
+      macos)
+        [ "$HAS_BREW" = true ] || die "$name is not installed and Homebrew is not available." \
+            "Install Homebrew first: https://brew.sh  — then re-run this installer."
+        run_install "$name" "brew install $pkg" || die "Failed to install $name."
+        ;;
+      linux)
+        run_install "$name" "sudo apt-get update && sudo apt-get install -y $pkg" || die "Failed to install $name."
+        ;;
+      *) die "$name is not installed." "Please install $name manually and re-run this installer." ;;
+    esac
+  else
+    die "$name is required." \
+        "Install: brew install $pkg (macOS) | apt install $pkg (Linux)"
+  fi
+}
+
 printf "${BOLD}  Checking prerequisites...${RESET}\n"
 echo ""
 HAS_NODE=false
@@ -86,89 +108,22 @@ if command -v brew &>/dev/null; then
   HAS_BREW=true
 fi
 
-# ── git (required) ──
 if command -v git &>/dev/null; then
   printf "  ${SUCCESS}✓${RESET} git\n"
 else
-  if ask_install "git"; then
-    case "$PLATFORM" in
-      macos)
-        if [ "$HAS_BREW" = true ]; then
-          run_install "git" "brew install git" || die "Failed to install git."
-        else
-          die "git is not installed and Homebrew is not available." \
-              "Install Homebrew first: https://brew.sh  — then re-run this installer."
-        fi
-        ;;
-      linux)
-        run_install "git" "sudo apt-get update && sudo apt-get install -y git" || die "Failed to install git."
-        ;;
-      *)
-        die "git is not installed." "Please install git manually and re-run this installer."
-        ;;
-    esac
-  else
-    die "git is required." \
-        "Install: brew install git (macOS) | apt install git (Linux)"
-  fi
+  require_tool "git"
 fi
 
-# ── tmux (required) ──
 if command -v tmux &>/dev/null; then
   TMUX_VER=$(tmux -V 2>/dev/null | head -1)
   printf "  ${SUCCESS}✓${RESET} tmux ${DIM}(%s)${RESET}\n" "$TMUX_VER"
-  # Check version — warn if < 3.0
   TMUX_MAJOR=$(echo "$TMUX_VER" | sed 's/[^0-9.]//g' | cut -d. -f1)
   if [ -n "$TMUX_MAJOR" ] && [ "$TMUX_MAJOR" -lt 3 ] 2>/dev/null; then
     warn_msg "tmux 3.0+ recommended (you have $TMUX_VER)"
   fi
 else
-  if ask_install "tmux"; then
-    case "$PLATFORM" in
-      macos)
-        if [ "$HAS_BREW" = true ]; then
-          run_install "tmux" "brew install tmux" || die "Failed to install tmux."
-        else
-          die "tmux is not installed and Homebrew is not available." \
-              "Install Homebrew first: https://brew.sh  — then re-run this installer."
-        fi
-        ;;
-      linux)
-        run_install "tmux" "sudo apt-get update && sudo apt-get install -y tmux" || die "Failed to install tmux."
-        ;;
-      *)
-        die "tmux is not installed." "Please install tmux manually and re-run this installer."
-        ;;
-    esac
-  else
-    die "tmux is required." \
-        "Install: brew install tmux (macOS) | apt install tmux (Linux)"
-  fi
+  require_tool "tmux"
 fi
-
-# ── Node.js 18+ (required for Claude Code) ──
-offer_node_install() {
-  # Shared logic for installing Node.js — called when missing or too old
-  case "$PLATFORM" in
-    macos)
-      if [ "$HAS_BREW" = true ]; then
-        run_install "Node.js" "brew install node" && HAS_NODE=true
-      else
-        warn_msg "Install Homebrew (https://brew.sh) then: brew install node"
-      fi
-      ;;
-    linux)
-      echo ""
-      printf "     ${BOLD}To install Node.js on Linux, run:${RESET}\n"
-      printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash${RESET}\n"
-      printf "     ${BRAND}fnm install 22${RESET}\n"
-      printf "     ${DIM}Then re-run this installer.${RESET}\n"
-      ;;
-    *)
-      warn_msg "Install Node.js 18+ from https://nodejs.org"
-      ;;
-  esac
-}
 
 if command -v node &>/dev/null; then
   NODE_VER=$(node -v 2>/dev/null | sed 's/^v//')
@@ -178,44 +133,36 @@ if command -v node &>/dev/null; then
     HAS_NODE=true
   else
     warn_msg "Node.js 18+ required (you have v${NODE_VER})"
-    if ask_install "Node.js 18+"; then
-      offer_node_install
-    else
-      warn_msg "Node.js 18+ is needed for Claude Code — install later from https://nodejs.org"
-    fi
-  fi
-else
-  if ask_install "Node.js"; then
-    offer_node_install
-  else
-    warn_msg "Node.js is needed for Claude Code — install later from https://nodejs.org"
   fi
 fi
 
-# ── Claude Code CLI (recommended) ──
+if [ "$HAS_NODE" = false ] && ask_install "Node.js"; then
+  case "$PLATFORM" in
+    macos) [ "$HAS_BREW" = true ] && run_install "Node.js" "brew install node" && HAS_NODE=true \
+           || warn_msg "Install Homebrew (https://brew.sh) then: brew install node" ;;
+    linux) printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash && fnm install 22${RESET}\n"
+           printf "     ${DIM}Then re-run this installer.${RESET}\n" ;;
+    *)     warn_msg "Install Node.js 18+ from https://nodejs.org" ;;
+  esac
+elif [ "$HAS_NODE" = false ]; then
+  warn_msg "Node.js is needed for Claude Code — install later from https://nodejs.org"
+fi
+
 if command -v claude &>/dev/null; then
   printf "  ${SUCCESS}✓${RESET} claude CLI\n"
+elif [ "$HAS_NODE" = true ] && ask_install "Claude Code CLI"; then
+  run_install "Claude Code" "npm install -g @anthropic-ai/claude-code" || \
+    warn_msg "Failed — try manually: npm i -g @anthropic-ai/claude-code"
 else
-  if [ "$HAS_NODE" = true ]; then
-    if ask_install "Claude Code CLI"; then
-      run_install "Claude Code" "npm install -g @anthropic-ai/claude-code" || \
-        warn_msg "Failed to install Claude Code — try manually: npm i -g @anthropic-ai/claude-code"
-    else
-      warn_msg "claude CLI not found (install later: npm i -g @anthropic-ai/claude-code)"
-    fi
-  else
-    warn_msg "claude CLI not found — install Node.js first, then: npm i -g @anthropic-ai/claude-code"
-  fi
+  warn_msg "claude CLI not found (npm i -g @anthropic-ai/claude-code)"
 fi
 
-# ── jq (optional) ──
 if command -v jq &>/dev/null; then
   printf "  ${SUCCESS}✓${RESET} jq\n"
 else
   warn_msg "jq not found (optional — hooks will use python3 fallback)"
 fi
 
-# Already installed?
 if [ -f ~/.claude/agents/doey-manager.md ] && [ -f ~/.local/bin/doey ]; then
   echo ""
   warn_msg "Doey appears to already be installed."
@@ -224,21 +171,13 @@ fi
 
 echo ""
 
-# ── Step 1: Directories ──────────────────────────────────────────────
 printf "  ${BRAND}[1/5]${RESET} Creating directories..."
 {
-  mkdir -p ~/.claude/agents
-  mkdir -p ~/.claude/commands
-  mkdir -p ~/.claude/doey
-  mkdir -p ~/.claude/agent-memory/doey-manager
-  mkdir -p ~/.claude/agent-memory/doey-watchdog
-  mkdir -p ~/.local/bin
+  mkdir -p ~/.claude/{agents,commands,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin
 } && step_ok || { step_fail; die "Failed to create directories."; }
 
-# Save repo location so /doey-reinstall can find it later
 echo "$SCRIPT_DIR" > ~/.claude/doey/repo-path
 
-# Write version info
 INSTALLED_VERSION=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 INSTALLED_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 cat > ~/.claude/doey/version << VEOF
@@ -247,13 +186,10 @@ date=$INSTALLED_DATE
 repo=$SCRIPT_DIR
 VEOF
 
-# ── Clean up stale files from previous installs ───────────────────────
-# Skills were moved from ~/.claude/skills/ to ~/.claude/commands/ in v0.2
+# Clean up stale files from previous installs (skills → commands rename)
 rm -f ~/.claude/skills/doey-*.md 2>/dev/null
-# Remove any orphaned skills directory if empty
 rmdir ~/.claude/skills 2>/dev/null || true
 
-# ── Step 2: Agent definitions ─────────────────────────────────────────
 shopt -s nullglob
 agent_files=("$SCRIPT_DIR/agents/"*.md)
 shopt -u nullglob
@@ -270,17 +206,8 @@ for f in "${agent_files[@]}"; do
   detail "$(basename "$f" .md)"
 done
 
-# Remove orphaned doey-* agents no longer in the repo
-for installed in ~/.claude/agents/doey-*.md; do
-  [[ -f "$installed" ]] || continue
-  local_name="$(basename "$installed")"
-  if [[ ! -f "$SCRIPT_DIR/agents/$local_name" ]]; then
-    rm -f "$installed"
-    detail "removed orphan: $local_name"
-  fi
-done
+clean_orphans ~/.claude/agents "$SCRIPT_DIR/agents"
 
-# ── Step 3: Slash commands ───────────────────────────────────────────
 shopt -s nullglob
 cmd_files=("$SCRIPT_DIR/commands/"*.md)
 shopt -u nullglob
@@ -293,47 +220,26 @@ printf "  ${BRAND}[3/5]${RESET} Installing slash commands (${BOLD}%s${RESET})...
   cp "${cmd_files[@]}" ~/.claude/commands/
 } && step_ok || { step_fail; die "Failed to copy commands."; }
 
-# Show command names in a compact line
 CMD_NAMES=""
-for f in "${cmd_files[@]}"; do
-  NAME=$(basename "$f" .md)
-  if [ -z "$CMD_NAMES" ]; then
-    CMD_NAMES="/$NAME"
-  else
-    CMD_NAMES="$CMD_NAMES, /$NAME"
-  fi
-done
+for f in "${cmd_files[@]}"; do CMD_NAMES="${CMD_NAMES:+$CMD_NAMES, }/$(basename "$f" .md)"; done
 detail "$CMD_NAMES"
 
-# Remove orphaned doey-* commands no longer in the repo
-for installed in ~/.claude/commands/doey-*.md; do
-  [[ -f "$installed" ]] || continue
-  local_name="$(basename "$installed")"
-  if [[ ! -f "$SCRIPT_DIR/commands/$local_name" ]]; then
-    rm -f "$installed"
-    detail "removed orphan: $local_name"
-  fi
-done
-
-# ── Step 4: CLI script ───────────────────────────────────────────────
+clean_orphans ~/.claude/commands "$SCRIPT_DIR/commands"
 
 printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
 {
-  # Remove stale files/symlinks first (broken symlinks block cp)
+  # doey.sh installs as "doey"; others keep their names
   rm -f ~/.local/bin/doey
-  rm -f "$HOME/.local/bin/tmux-statusbar.sh"
   cp "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
   chmod +x ~/.local/bin/doey
-  cp "$SCRIPT_DIR/shell/tmux-statusbar.sh" "$HOME/.local/bin/tmux-statusbar.sh"
-  chmod +x "$HOME/.local/bin/tmux-statusbar.sh"
-  cp "$SCRIPT_DIR/shell/pane-border-status.sh" "$HOME/.local/bin/pane-border-status.sh"
-  chmod +x "$HOME/.local/bin/pane-border-status.sh"
-  cp "$SCRIPT_DIR/shell/info-panel.sh" "$HOME/.local/bin/info-panel.sh"
-  chmod +x "$HOME/.local/bin/info-panel.sh"
+  for script in tmux-statusbar.sh pane-border-status.sh info-panel.sh; do
+    rm -f "$HOME/.local/bin/$script"
+    cp "$SCRIPT_DIR/shell/$script" "$HOME/.local/bin/$script"
+    chmod +x "$HOME/.local/bin/$script"
+  done
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
 detail "~/.local/bin/doey"
 
-# Check if ~/.local/bin is on PATH
 PATH_OK=true
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
   PATH_OK=false
@@ -343,7 +249,6 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
   printf "     ${BRAND}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}\n"
 fi
 
-# ── Step 5: Context audit ───────────────────────────────────────────
 printf "  ${BRAND}[5/5]${RESET} Running context audit..."
 AUDIT_OUTPUT=""
 AUDIT_FAILED=false
@@ -356,7 +261,6 @@ else
   warn_msg "Context audit found issues — review above before launching sessions"
 fi
 
-# ── Summary ───────────────────────────────────────────────────────────
 echo ""
 printf "${BRAND}"
 cat << 'DOG'
