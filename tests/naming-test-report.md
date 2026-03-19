@@ -1,6 +1,6 @@
-# Tmux Pane Naming Convention Report
+# Pane Naming Convention
 
-## Raw Pane Listing
+## Pane Listing
 
 ```
 0 ⠂ doey-manager
@@ -12,16 +12,9 @@
 6 W6 T1
 ```
 
-## Window Manager Pane Verification
+## Naming Patterns
 
-Pane 0 has the title `⠂ doey-manager`. This does **not** match the expected pattern of "T1 Window Manager". Instead, it uses the format `doey-manager` prefixed with a Braille dot spinner character (`⠂`), which appears to be a status/activity indicator. The title identifies the role but does not include the team number prefix.
-
-## Naming Convention Description
-
-The panes follow two distinct naming patterns:
-
-- **Window Manager (pane 0):** Uses the format `<spinner> doey-manager`, where the spinner is a Braille pattern character indicating activity state.
-- **Workers (panes 1–6):** Use the format `W<N> T<W>`, where `W<N>` is the worker number (sequential across the pane index) and `T<W>` is the team/window number. For example, `W2 T1` means Worker 2 in Team 1.
-- **Exception — pane 1 (this worker):** Currently titled `naming-report_0317` due to the `/rename` command being run at the start of this task. Its default title would follow the `W1 T1` pattern.
-
-The spinner prefixes (`⠂`, `⠐`) on panes 0 and 1 appear to be activity/status indicators (idle vs. busy).
+- **Manager (pane 0):** `<spinner> doey-manager` — Braille spinner indicates activity state.
+- **Workers (panes 1–6):** `W<N> T<W>` — worker number + team number (e.g. `W2 T1` = Worker 2, Team 1).
+- Spinner prefixes (`⠂`/`⠐`) are idle/busy indicators.
+- Pane 1 shows `naming-report_0317` due to `/rename` — default would be `W1 T1`.

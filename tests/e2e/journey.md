@@ -1,12 +1,8 @@
 # E2E Journey: Build a Doey Marketing Website
 
-## Overview
-
-The test driver sends a realistic website-building task to the Window Manager and monitors the full team (Window Manager, Watchdog, Workers) as they collaborate to build a multi-page marketing website about Doey. This exercises delegation, parallel work, file creation, mid-journey interaction, and end-to-end coordination.
+Test driver sends a website-building task to the Window Manager and monitors the full team. Exercises delegation, parallel work, file creation, mid-journey interaction, and coordination.
 
 ## Initial Task Prompt
-
-The exact text to send to the Window Manager:
 
 ```
 Build a marketing website for "Doey" — the tmux-based multi-agent orchestration system for Claude Code.
@@ -31,7 +27,7 @@ Make it look polished — this is a real marketing site.
 
 ## Mid-Journey Interaction
 
-After the Window Manager reports initial pages are complete (or asks if anything else is needed), send:
+After initial pages are complete, send:
 
 ```
 Great work! Two additions:
@@ -41,41 +37,34 @@ Great work! Two additions:
 
 ## Expected Outcomes
 
-### File Checks
-
-- index.html exists and is valid HTML5
-- features.html exists
-- how-it-works.html exists (or equivalent like docs.html, getting-started.html)
-- styles.css exists with actual CSS rules (at least 50 lines)
-- script.js exists
+### Files
+- index.html (valid HTML5), features.html, how-it-works.html (or equivalent)
+- styles.css (50+ lines), script.js
 - At least 3 HTML files total
 
-### Content Checks
+### Content
+- index.html mentions "Claude" (case-insensitive)
+- At least one page mentions "worker", "dispatch", or "Window Manager"
+- CSS has color definitions (#00d2ff or similar)
+- HTML files have `<nav>` and link to styles.css
 
-- index.html contains "Claude" (case-insensitive)
-- At least one page mentions "worker" or "dispatch" or "Window Manager"
-- CSS contains color definitions (#00d2ff or similar)
-- HTML files contain `<nav>` element
-- HTML files link to styles.css
-
-### Behavioral Checks
-
-- Window Manager delegated to workers (did NOT create files itself)
-- At least 2 workers were dispatched in parallel
-- Watchdog pane showed scan activity
+### Behavior
+- Manager delegated to workers (did NOT create files itself)
+- At least 2 workers dispatched in parallel
+- Watchdog showed scan activity
 - No worker stuck on same error 3+ times
-- Window Manager didn't crash
 - Completed within 10 minutes
 
 ### After Mid-Journey
-
-- Footer text "Built with Doey" appears in at least one HTML file
-- Dark mode toggle: a button element in nav/header
-- CSS contains .dark-mode rules
+- "Built with Doey" footer in at least one HTML file
+- Dark mode toggle button in nav/header
+- CSS contains `.dark-mode` rules
 
 ## Anomaly Criteria
 
-- Window Manager pane shows Write/Edit tool calls -> Window Manager is coding directly (SHOULD delegate)
-- Worker shows "Permission denied" or "SIGTERM" -> crash
-- Window Manager pane unchanged for 2+ minutes -> possible hang
-- Watchdog pane shows no timestamps for 60s+ -> watchdog stopped
+| Signal | Meaning |
+|--------|---------|
+| Manager pane shows Write/Edit calls | Manager coding directly (should delegate) |
+| Worker shows "Permission denied" / "SIGTERM" | Crash |
+| Manager pane unchanged 2+ min | Possible hang |
+| Watchdog no timestamps for 60s+ | Watchdog stopped |

@@ -1,8 +1,6 @@
 # Linux Server Deployment
 
-> Part of [Doey](../README.md)
-
-Run Doey on a Linux server — start a task, detach, close your laptop, come back to find work done.
+> Start a task, detach, close your laptop, come back to find work done.
 
 ### Prerequisites
 
@@ -16,15 +14,12 @@ Run Doey on a Linux server — start a task, detach, close your laptop, come bac
 
 ```bash
 curl -fsSL https://fnm.vercel.app/install | bash
-source ~/.bashrc
-fnm install --lts
+source ~/.bashrc && fnm install --lts
 ```
 
-**Claude Code CLI:** `npm install -g @anthropic-ai/claude-code` then `claude auth`
+**Claude Code:** `npm install -g @anthropic-ai/claude-code && claude auth`
 
-### Quick Setup
-
-Fresh Ubuntu/Debian — copy-paste:
+### Quick Setup (Ubuntu/Debian)
 
 ```bash
 sudo apt update && sudo apt install -y tmux git curl
@@ -36,20 +31,19 @@ cd doey && ./install.sh
 cd ~/your-project && doey init && doey
 ```
 
-### Headless / SSH Usage
+### SSH Usage
 
 ```bash
 ssh user@your-server
 cd ~/your-project
 doey                     # starts or reattaches
-# Give Window Manager a task, then: Ctrl+B, D (detach)
-exit                     # team keeps running
+# Ctrl+B, D to detach — team keeps running
 ```
 
 Reconnect: `ssh user@server && cd ~/your-project && doey`
 
 <details>
-<summary><strong>Background Service (systemd)</strong></summary>
+<summary><strong>systemd Service</strong></summary>
 
 Create `~/.config/systemd/user/doey.service`:
 
@@ -64,7 +58,6 @@ Type=forking
 Environment=HOME=%h
 Environment=PATH=%h/.local/bin:%h/.fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/your-project
-# Replace "myproject" below with your actual project name from `doey list`
 ExecStart=%h/.local/bin/doey
 ExecStop=/usr/bin/tmux kill-session -t doey-myproject
 Restart=on-failure
@@ -84,7 +77,7 @@ systemctl --user enable doey && systemctl --user start doey
 
 ### Cloud Providers
 
-Doey is network-bound (API calls), not CPU/RAM-intensive. Any Linux VPS with tmux and Node.js works. Smallest Ubuntu 24.04 instance on any provider, then run the Quick Setup above.
+Doey is network-bound — any Linux VPS with tmux and Node.js works.
 
 | Provider | Instance | Notes |
 |----------|----------|-------|
@@ -92,18 +85,18 @@ Doey is network-bound (API calls), not CPU/RAM-intensive. Any Linux VPS with tmu
 | **DigitalOcean** | Basic Droplet ($6/mo) | Simple UI |
 | **AWS** | t3.micro (free tier) | 12 months free |
 
-**Security:** Never commit API keys. Use env vars or `claude auth`. Use SSH key auth.
+For Linode, see [linode-setup.md](linode-setup.md). Never commit API keys — use env vars or `claude auth`.
 
-### Platform Notes
+### Notes
 
-- macOS notifications (`osascript`) silently skipped on Linux. Everything else works identically.
+- macOS notifications (`osascript`) silently skipped on Linux
 
 ### Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
 | tmux too old (< 2.4) | Install from source or backports |
-| `node` not found | `source ~/.bashrc` or new shell (fnm PATH) |
+| `node` not found | `source ~/.bashrc` (fnm PATH) |
 | Locale/UTF-8 errors | `sudo apt install -y locales && sudo locale-gen en_US.UTF-8` |
 | `doey` not found | `export PATH="$HOME/.local/bin:$PATH"` |
-| Workers fail to start | Verify `claude --version` works standalone |
+| Workers fail to start | Verify `claude --version` works |
