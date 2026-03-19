@@ -121,6 +121,54 @@ dotted_leader() {
 
 _CACHED_SESSION_NAME=""
 _CACHED_PROJECT_NAME=""
+_CACHED_PROJECT_DIR=""
+
+# Block-letter font: each char is 6 rows. Sets CHAR_R0..CHAR_R5.
+get_block_char() {
+  case "$1" in
+    A) CHAR_R0=' █████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='███████║'; CHAR_R3='██╔══██║'; CHAR_R4='██║  ██║'; CHAR_R5='╚═╝  ╚═╝' ;;
+    B) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██████╔╝'; CHAR_R3='██╔══██╗'; CHAR_R4='██████╔╝'; CHAR_R5='╚═════╝ ' ;;
+    C) CHAR_R0=' ██████╗'; CHAR_R1='██╔════╝'; CHAR_R2='██║     '; CHAR_R3='██║     '; CHAR_R4='╚██████╗'; CHAR_R5=' ╚═════╝' ;;
+    D) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██║  ██║'; CHAR_R3='██║  ██║'; CHAR_R4='██████╔╝'; CHAR_R5='╚═════╝ ' ;;
+    E) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='█████╗  '; CHAR_R3='██╔══╝  '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
+    F) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='█████╗  '; CHAR_R3='██╔══╝  '; CHAR_R4='██║     '; CHAR_R5='╚═╝     ' ;;
+    G) CHAR_R0=' ██████╗ '; CHAR_R1='██╔════╝ '; CHAR_R2='██║  ███╗'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
+    H) CHAR_R0='██╗  ██╗'; CHAR_R1='██║  ██║'; CHAR_R2='███████║'; CHAR_R3='██╔══██║'; CHAR_R4='██║  ██║'; CHAR_R5='╚═╝  ╚═╝' ;;
+    I) CHAR_R0='██╗'; CHAR_R1='██║'; CHAR_R2='██║'; CHAR_R3='██║'; CHAR_R4='██║'; CHAR_R5='╚═╝' ;;
+    J) CHAR_R0='     ██╗'; CHAR_R1='     ██║'; CHAR_R2='     ██║'; CHAR_R3='██   ██║'; CHAR_R4='╚█████╔╝'; CHAR_R5=' ╚════╝ ' ;;
+    K) CHAR_R0='██╗  ██╗'; CHAR_R1='██║ ██╔╝'; CHAR_R2='█████╔╝ '; CHAR_R3='██╔═██╗ '; CHAR_R4='██║  ██╗'; CHAR_R5='╚═╝  ╚═╝' ;;
+    L) CHAR_R0='██╗     '; CHAR_R1='██║     '; CHAR_R2='██║     '; CHAR_R3='██║     '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
+    M) CHAR_R0='███╗   ███╗'; CHAR_R1='████╗ ████║'; CHAR_R2='██╔████╔██║'; CHAR_R3='██║╚██╔╝██║'; CHAR_R4='██║ ╚═╝ ██║'; CHAR_R5='╚═╝     ╚═╝' ;;
+    N) CHAR_R0='███╗   ██╗'; CHAR_R1='████╗  ██║'; CHAR_R2='██╔██╗ ██║'; CHAR_R3='██║╚██╗██║'; CHAR_R4='██║ ╚████║'; CHAR_R5='╚═╝  ╚═══╝' ;;
+    O) CHAR_R0=' ██████╗ '; CHAR_R1='██╔═══██╗'; CHAR_R2='██║   ██║'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
+    P) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██████╔╝'; CHAR_R3='██╔═══╝ '; CHAR_R4='██║     '; CHAR_R5='╚═╝     ' ;;
+    Q) CHAR_R0=' ██████╗  '; CHAR_R1='██╔═══██╗ '; CHAR_R2='██║   ██║ '; CHAR_R3='██║▄▄ ██║ '; CHAR_R4='╚██████╔╝ '; CHAR_R5=' ╚══▀▀═╝  ' ;;
+    R) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██████╔╝'; CHAR_R3='██╔══██╗'; CHAR_R4='██║  ██║'; CHAR_R5='╚═╝  ╚═╝' ;;
+    S) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='███████╗'; CHAR_R3='╚════██║'; CHAR_R4='███████║'; CHAR_R5='╚══════╝' ;;
+    T) CHAR_R0='████████╗'; CHAR_R1='╚══██╔══╝'; CHAR_R2='   ██║   '; CHAR_R3='   ██║   '; CHAR_R4='   ██║   '; CHAR_R5='   ╚═╝   ' ;;
+    U) CHAR_R0='██╗   ██╗'; CHAR_R1='██║   ██║'; CHAR_R2='██║   ██║'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
+    V) CHAR_R0='██╗   ██╗'; CHAR_R1='██║   ██║'; CHAR_R2='██║   ██║'; CHAR_R3='╚██╗ ██╔╝'; CHAR_R4=' ╚████╔╝ '; CHAR_R5='  ╚═══╝  ' ;;
+    W) CHAR_R0='██╗    ██╗'; CHAR_R1='██║    ██║'; CHAR_R2='██║ █╗ ██║'; CHAR_R3='██║███╗██║'; CHAR_R4='╚███╔███╔╝'; CHAR_R5=' ╚══╝╚══╝ ' ;;
+    X) CHAR_R0='██╗  ██╗'; CHAR_R1='╚██╗██╔╝'; CHAR_R2=' ╚███╔╝ '; CHAR_R3=' ██╔██╗ '; CHAR_R4='██╔╝ ██╗'; CHAR_R5='╚═╝  ╚═╝' ;;
+    Y) CHAR_R0='██╗   ██╗'; CHAR_R1='╚██╗ ██╔╝'; CHAR_R2=' ╚████╔╝ '; CHAR_R3='  ╚██╔╝  '; CHAR_R4='   ██║   '; CHAR_R5='   ╚═╝   ' ;;
+    Z) CHAR_R0='███████╗'; CHAR_R1='╚════██║'; CHAR_R2='  ███╔╝ '; CHAR_R3=' ███╔╝  '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
+    0) CHAR_R0=' ██████╗ '; CHAR_R1='██╔═══██╗'; CHAR_R2='██║   ██║'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
+    1) CHAR_R0=' ██╗'; CHAR_R1='███║'; CHAR_R2='╚██║'; CHAR_R3=' ██║'; CHAR_R4=' ██║'; CHAR_R5=' ╚═╝' ;;
+    2) CHAR_R0='██████╗ '; CHAR_R1='╚════██╗'; CHAR_R2=' █████╔╝'; CHAR_R3='██╔═══╝ '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
+    3) CHAR_R0='██████╗ '; CHAR_R1='╚════██╗'; CHAR_R2=' █████╔╝'; CHAR_R3=' ╚═══██╗'; CHAR_R4='██████╔╝'; CHAR_R5='╚═════╝ ' ;;
+    4) CHAR_R0='██╗  ██╗'; CHAR_R1='██║  ██║'; CHAR_R2='███████║'; CHAR_R3='╚════██║'; CHAR_R4='     ██║'; CHAR_R5='     ╚═╝' ;;
+    5) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='███████╗'; CHAR_R3='╚════██║'; CHAR_R4='███████║'; CHAR_R5='╚══════╝' ;;
+    6) CHAR_R0=' ██████╗ '; CHAR_R1='██╔════╝ '; CHAR_R2='███████╗ '; CHAR_R3='██╔═══██╗'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
+    7) CHAR_R0='███████╗'; CHAR_R1='╚════██║'; CHAR_R2='    ██╔╝'; CHAR_R3='   ██╔╝ '; CHAR_R4='   ██║  '; CHAR_R5='   ╚═╝  ' ;;
+    8) CHAR_R0=' █████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='╚█████╔╝'; CHAR_R3='██╔══██╗'; CHAR_R4='╚█████╔╝'; CHAR_R5=' ╚════╝ ' ;;
+    9) CHAR_R0=' █████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='╚██████║'; CHAR_R3=' ╚═══██║'; CHAR_R4=' █████╔╝'; CHAR_R5=' ╚════╝ ' ;;
+    -) CHAR_R0='        '; CHAR_R1='        '; CHAR_R2='███████╗'; CHAR_R3='╚══════╝'; CHAR_R4='        '; CHAR_R5='        ' ;;
+    .) CHAR_R0='   '; CHAR_R1='   '; CHAR_R2='   '; CHAR_R3='   '; CHAR_R4='██╗'; CHAR_R5='╚═╝' ;;
+    _) CHAR_R0='        '; CHAR_R1='        '; CHAR_R2='        '; CHAR_R3='        '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
+    ' ') CHAR_R0='   '; CHAR_R1='   '; CHAR_R2='   '; CHAR_R3='   '; CHAR_R4='   '; CHAR_R5='   ' ;;
+    *) CHAR_R0='  '; CHAR_R1='  '; CHAR_R2='  '; CHAR_R3='  '; CHAR_R4='  '; CHAR_R5='  ' ;;
+  esac
+}
 
 while true; do
   printf '\033[2J\033[H'
@@ -136,9 +184,10 @@ while true; do
   LEFT_W=$((TERM_W * 55 / 100))
 
   if [ -z "$_CACHED_SESSION_NAME" ]; then
-    read_env_file "$SESSION_ENV" SESSION_NAME PROJECT_NAME TEAM_WINDOWS
+    read_env_file "$SESSION_ENV" SESSION_NAME PROJECT_NAME PROJECT_DIR TEAM_WINDOWS
     _CACHED_SESSION_NAME="$_ENV_SESSION_NAME"
     _CACHED_PROJECT_NAME="$_ENV_PROJECT_NAME"
+    _CACHED_PROJECT_DIR="$_ENV_PROJECT_DIR"
     TEAM_WINDOWS="$_ENV_TEAM_WINDOWS"
   else
     read_env_file "$SESSION_ENV" TEAM_WINDOWS
@@ -212,33 +261,24 @@ while true; do
 
   CMD_W=$((LEFT_W - 4))
 
-  add_left "$(printf '  %b Tasks%b' "${C_BOLD_GREEN}" "${C_RESET}")"
-  add_cmd "${C_GREEN}" "/doey-dispatch"  "Send task to a worker"
-  add_cmd "${C_GREEN}" "/doey-delegate"  "Delegate task to a team"
-  add_cmd "${C_GREEN}" "/doey-broadcast" "Send to all workers"
-  add_cmd "${C_GREEN}" "/doey-research"  "Deep research with report"
-  add_cmd "${C_GREEN}" "/doey-reserve"   "Claim a worker pane"
-  add_left ""
-  add_left "$(printf '  %b Monitoring%b' "${C_BOLD_CYAN}" "${C_RESET}")"
-  add_cmd "${C_CYAN}" "/doey-status"       "Detailed status"
-  add_cmd "${C_CYAN}" "/doey-monitor"      "Live worker monitor"
-  add_cmd "${C_CYAN}" "/doey-purge"        "Audit & fix context rot"
-  add_cmd "${C_CYAN}" "/doey-list-windows" "Show all team windows"
-  add_left ""
-  add_left "$(printf '  %b Team Management%b' "${C_BOLD_YELLOW}" "${C_RESET}")"
-  add_cmd "${C_YELLOW}" "/doey-add-window"  "Add a new team"
-  add_cmd "${C_YELLOW}" "/doey-kill-window" "Remove a team"
-  add_cmd "${C_YELLOW}" "/doey-worktree"    "Worktree isolation"
-  add_cmd "${C_YELLOW}" "/doey-clear"       "Clear & restart workers"
-  add_cmd "${C_YELLOW}" "/doey-team"        "Team info & actions"
-  add_left ""
-  add_left "$(printf '  %b Control%b' "${C_BOLD_MAGENTA}" "${C_RESET}")"
-  add_cmd "${C_MAGENTA}" "/doey-stop"             "Stop a worker"
-  add_cmd "${C_MAGENTA}" "/doey-kill-session"      "Kill entire session"
-  add_cmd "${C_MAGENTA}" "/doey-reload"            "Hot-reload session"
-  add_cmd "${C_MAGENTA}" "/doey-repair"            "Fix dashboard panes"
-  add_cmd "${C_MAGENTA}" "/doey-reinstall"         "Reinstall Doey"
-  add_cmd "${C_MAGENTA}" "/doey-watchdog-compact"  "Compact watchdog context"
+  _skills_dir="${_CACHED_PROJECT_DIR}/.claude/skills"
+  _skill_count=0
+  if [ -d "$_skills_dir" ]; then
+    for _sf in "$_skills_dir"/doey-*/SKILL.md; do
+      [ -f "$_sf" ] || continue
+      _sname="${_sf%/SKILL.md}"; _sname="/${_sname##*/}"
+      _sdesc=$(grep '^description:' "$_sf" | head -1 | sed 's/^description:[[:space:]]*//' | sed 's/^"//;s/"$//')
+      [ -z "$_sdesc" ] && _sdesc="(no description)"
+      case "$((_skill_count % 4))" in
+        0) _cc="${C_GREEN}" ;; 1) _cc="${C_CYAN}" ;; 2) _cc="${C_YELLOW}" ;; *) _cc="${C_MAGENTA}" ;;
+      esac
+      add_cmd "$_cc" "$_sname" "$_sdesc"
+      _skill_count=$((_skill_count + 1))
+    done
+  fi
+  if [ "$_skill_count" -eq 0 ]; then
+    add_left "$(printf '  %bNo skills found%b' "${C_DIM}" "${C_RESET}")"
+  fi
   add_left ""
   add_left "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
@@ -253,53 +293,6 @@ while true; do
 
   HR=$(repeat_char "─" "$TERM_W")
   HR_THICK=$(repeat_char "═" "$TERM_W")
-
-  # Block-letter font: each char is 6 rows. Sets CHAR_R0..CHAR_R5.
-  get_block_char() {
-    case "$1" in
-      A) CHAR_R0=' █████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='███████║'; CHAR_R3='██╔══██║'; CHAR_R4='██║  ██║'; CHAR_R5='╚═╝  ╚═╝' ;;
-      B) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██████╔╝'; CHAR_R3='██╔══██╗'; CHAR_R4='██████╔╝'; CHAR_R5='╚═════╝ ' ;;
-      C) CHAR_R0=' ██████╗'; CHAR_R1='██╔════╝'; CHAR_R2='██║     '; CHAR_R3='██║     '; CHAR_R4='╚██████╗'; CHAR_R5=' ╚═════╝' ;;
-      D) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██║  ██║'; CHAR_R3='██║  ██║'; CHAR_R4='██████╔╝'; CHAR_R5='╚═════╝ ' ;;
-      E) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='█████╗  '; CHAR_R3='██╔══╝  '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
-      F) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='█████╗  '; CHAR_R3='██╔══╝  '; CHAR_R4='██║     '; CHAR_R5='╚═╝     ' ;;
-      G) CHAR_R0=' ██████╗ '; CHAR_R1='██╔════╝ '; CHAR_R2='██║  ███╗'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
-      H) CHAR_R0='██╗  ██╗'; CHAR_R1='██║  ██║'; CHAR_R2='███████║'; CHAR_R3='██╔══██║'; CHAR_R4='██║  ██║'; CHAR_R5='╚═╝  ╚═╝' ;;
-      I) CHAR_R0='██╗'; CHAR_R1='██║'; CHAR_R2='██║'; CHAR_R3='██║'; CHAR_R4='██║'; CHAR_R5='╚═╝' ;;
-      J) CHAR_R0='     ██╗'; CHAR_R1='     ██║'; CHAR_R2='     ██║'; CHAR_R3='██   ██║'; CHAR_R4='╚█████╔╝'; CHAR_R5=' ╚════╝ ' ;;
-      K) CHAR_R0='██╗  ██╗'; CHAR_R1='██║ ██╔╝'; CHAR_R2='█████╔╝ '; CHAR_R3='██╔═██╗ '; CHAR_R4='██║  ██╗'; CHAR_R5='╚═╝  ╚═╝' ;;
-      L) CHAR_R0='██╗     '; CHAR_R1='██║     '; CHAR_R2='██║     '; CHAR_R3='██║     '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
-      M) CHAR_R0='███╗   ███╗'; CHAR_R1='████╗ ████║'; CHAR_R2='██╔████╔██║'; CHAR_R3='██║╚██╔╝██║'; CHAR_R4='██║ ╚═╝ ██║'; CHAR_R5='╚═╝     ╚═╝' ;;
-      N) CHAR_R0='███╗   ██╗'; CHAR_R1='████╗  ██║'; CHAR_R2='██╔██╗ ██║'; CHAR_R3='██║╚██╗██║'; CHAR_R4='██║ ╚████║'; CHAR_R5='╚═╝  ╚═══╝' ;;
-      O) CHAR_R0=' ██████╗ '; CHAR_R1='██╔═══██╗'; CHAR_R2='██║   ██║'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
-      P) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██████╔╝'; CHAR_R3='██╔═══╝ '; CHAR_R4='██║     '; CHAR_R5='╚═╝     ' ;;
-      Q) CHAR_R0=' ██████╗  '; CHAR_R1='██╔═══██╗ '; CHAR_R2='██║   ██║ '; CHAR_R3='██║▄▄ ██║ '; CHAR_R4='╚██████╔╝ '; CHAR_R5=' ╚══▀▀═╝  ' ;;
-      R) CHAR_R0='██████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='██████╔╝'; CHAR_R3='██╔══██╗'; CHAR_R4='██║  ██║'; CHAR_R5='╚═╝  ╚═╝' ;;
-      S) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='███████╗'; CHAR_R3='╚════██║'; CHAR_R4='███████║'; CHAR_R5='╚══════╝' ;;
-      T) CHAR_R0='████████╗'; CHAR_R1='╚══██╔══╝'; CHAR_R2='   ██║   '; CHAR_R3='   ██║   '; CHAR_R4='   ██║   '; CHAR_R5='   ╚═╝   ' ;;
-      U) CHAR_R0='██╗   ██╗'; CHAR_R1='██║   ██║'; CHAR_R2='██║   ██║'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
-      V) CHAR_R0='██╗   ██╗'; CHAR_R1='██║   ██║'; CHAR_R2='██║   ██║'; CHAR_R3='╚██╗ ██╔╝'; CHAR_R4=' ╚████╔╝ '; CHAR_R5='  ╚═══╝  ' ;;
-      W) CHAR_R0='██╗    ██╗'; CHAR_R1='██║    ██║'; CHAR_R2='██║ █╗ ██║'; CHAR_R3='██║███╗██║'; CHAR_R4='╚███╔███╔╝'; CHAR_R5=' ╚══╝╚══╝ ' ;;
-      X) CHAR_R0='██╗  ██╗'; CHAR_R1='╚██╗██╔╝'; CHAR_R2=' ╚███╔╝ '; CHAR_R3=' ██╔██╗ '; CHAR_R4='██╔╝ ██╗'; CHAR_R5='╚═╝  ╚═╝' ;;
-      Y) CHAR_R0='██╗   ██╗'; CHAR_R1='╚██╗ ██╔╝'; CHAR_R2=' ╚████╔╝ '; CHAR_R3='  ╚██╔╝  '; CHAR_R4='   ██║   '; CHAR_R5='   ╚═╝   ' ;;
-      Z) CHAR_R0='███████╗'; CHAR_R1='╚════██║'; CHAR_R2='  ███╔╝ '; CHAR_R3=' ███╔╝  '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
-      0) CHAR_R0=' ██████╗ '; CHAR_R1='██╔═══██╗'; CHAR_R2='██║   ██║'; CHAR_R3='██║   ██║'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
-      1) CHAR_R0=' ██╗'; CHAR_R1='███║'; CHAR_R2='╚██║'; CHAR_R3=' ██║'; CHAR_R4=' ██║'; CHAR_R5=' ╚═╝' ;;
-      2) CHAR_R0='██████╗ '; CHAR_R1='╚════██╗'; CHAR_R2=' █████╔╝'; CHAR_R3='██╔═══╝ '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
-      3) CHAR_R0='██████╗ '; CHAR_R1='╚════██╗'; CHAR_R2=' █████╔╝'; CHAR_R3=' ╚═══██╗'; CHAR_R4='██████╔╝'; CHAR_R5='╚═════╝ ' ;;
-      4) CHAR_R0='██╗  ██╗'; CHAR_R1='██║  ██║'; CHAR_R2='███████║'; CHAR_R3='╚════██║'; CHAR_R4='     ██║'; CHAR_R5='     ╚═╝' ;;
-      5) CHAR_R0='███████╗'; CHAR_R1='██╔════╝'; CHAR_R2='███████╗'; CHAR_R3='╚════██║'; CHAR_R4='███████║'; CHAR_R5='╚══════╝' ;;
-      6) CHAR_R0=' ██████╗ '; CHAR_R1='██╔════╝ '; CHAR_R2='███████╗ '; CHAR_R3='██╔═══██╗'; CHAR_R4='╚██████╔╝'; CHAR_R5=' ╚═════╝ ' ;;
-      7) CHAR_R0='███████╗'; CHAR_R1='╚════██║'; CHAR_R2='    ██╔╝'; CHAR_R3='   ██╔╝ '; CHAR_R4='   ██║  '; CHAR_R5='   ╚═╝  ' ;;
-      8) CHAR_R0=' █████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='╚█████╔╝'; CHAR_R3='██╔══██╗'; CHAR_R4='╚█████╔╝'; CHAR_R5=' ╚════╝ ' ;;
-      9) CHAR_R0=' █████╗ '; CHAR_R1='██╔══██╗'; CHAR_R2='╚██████║'; CHAR_R3=' ╚═══██║'; CHAR_R4=' █████╔╝'; CHAR_R5=' ╚════╝ ' ;;
-      -) CHAR_R0='        '; CHAR_R1='        '; CHAR_R2='███████╗'; CHAR_R3='╚══════╝'; CHAR_R4='        '; CHAR_R5='        ' ;;
-      .) CHAR_R0='   '; CHAR_R1='   '; CHAR_R2='   '; CHAR_R3='   '; CHAR_R4='██╗'; CHAR_R5='╚═╝' ;;
-      _) CHAR_R0='        '; CHAR_R1='        '; CHAR_R2='        '; CHAR_R3='        '; CHAR_R4='███████╗'; CHAR_R5='╚══════╝' ;;
-      ' ') CHAR_R0='   '; CHAR_R1='   '; CHAR_R2='   '; CHAR_R3='   '; CHAR_R4='   '; CHAR_R5='   ' ;;
-      *) CHAR_R0='  '; CHAR_R1='  '; CHAR_R2='  '; CHAR_R3='  '; CHAR_R4='  '; CHAR_R5='  ' ;;
-    esac
-  }
 
   TITLE_NAME=$(printf '%s' "$PROJECT_NAME" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9 ._-' ' ')
   for _r in 0 1 2 3 4 5; do eval "TITLE_R${_r}=''"; done

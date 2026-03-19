@@ -393,18 +393,18 @@ printf '\n'
 # --- Completion events ---
 for cf in "${RUNTIME_DIR}/status"/completion_pane_${TARGET_WINDOW}_*; do
   [ -f "$cf" ] || continue
-  PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
+  _ce_pane_idx="" _ce_title="" _ce_status="" _ce_ts=""
   while IFS='=' read -r _cf_key _cf_val; do
     _cf_val="${_cf_val%\"}" && _cf_val="${_cf_val#\"}"
     case "$_cf_key" in
-      PANE_INDEX) PANE_INDEX="$_cf_val" ;;
-      PANE_TITLE) PANE_TITLE="$_cf_val" ;;
-      STATUS) STATUS="$_cf_val" ;;
-      TIMESTAMP) TIMESTAMP="$_cf_val" ;;
+      PANE_INDEX) _ce_pane_idx="$_cf_val" ;;
+      PANE_TITLE) _ce_title="$_cf_val" ;;
+      STATUS) _ce_status="$_cf_val" ;;
+      TIMESTAMP) _ce_ts="$_cf_val" ;;
     esac
   done < "$cf"
-  echo "COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}"
-  SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}COMPLETION ${PANE_INDEX} ${STATUS} ${PANE_TITLE}${NL}"
+  echo "COMPLETION ${_ce_pane_idx} ${_ce_status} ${_ce_title}"
+  SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}COMPLETION ${_ce_pane_idx} ${_ce_status} ${_ce_title}${NL}"
   rm -f "$cf"
 done
 
@@ -428,7 +428,7 @@ SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
     eval "_sn_dur=\${PANE_DURATION_${i}:-0}"
     eval "_sn_tool=\${PANE_TOOL_${i}:-}"
     eval "_sn_prev=\${PANE_PREV_DISPLAY_${i}:-}"
-    case "$_sn_st" in CHANGED|UNCHANGED) _sn_st="WORKING" ;; esac
+    case "$_sn_st" in (CHANGED|UNCHANGED) _sn_st="WORKING" ;; esac
     printf '%s|%s|%s|%s|%s|%s\n' "$i" "$_sn_st" "$_sn_title" "$_sn_dur" "$_sn_tool" "$_sn_prev"
   done
   printf -- '---\n'

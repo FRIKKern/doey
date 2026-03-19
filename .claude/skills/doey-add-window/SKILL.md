@@ -16,25 +16,21 @@ Current windows:
 
 ## Prompt
 
-Add a new team window to the running Doey session.
+Add a new team window to the running Doey session. **Do NOT ask for confirmation — just do it.**
 
-### Step 1: Parse grid and validate
-
-Parse grid from user arg (default `4x2`), validate NxM (min 2 panes). `--worktree` enables isolation.
+### Step 1: Parse and validate
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 GRID="${USER_GRID:-4x2}"  # Set USER_GRID from argument
-COLS=$(echo "$GRID" | cut -dx -f1)
-ROWS=$(echo "$GRID" | cut -dx -f2)
+COLS=$(echo "$GRID" | cut -dx -f1); ROWS=$(echo "$GRID" | cut -dx -f2)
 case "$COLS" in [1-9]|[1-9][0-9]) ;; *) echo "ERROR: Invalid cols: $COLS"; exit 1 ;; esac
 case "$ROWS" in [1-9]|[1-9][0-9]) ;; *) echo "ERROR: Invalid rows: $ROWS"; exit 1 ;; esac
 TOTAL=$((COLS * ROWS))
-[ "$TOTAL" -lt 2 ] && { echo "ERROR: Need at least 2 panes (MGR + 1 worker)"; exit 1; }
+[ "$TOTAL" -lt 2 ] && { echo "ERROR: Need at least 2 panes"; exit 1; }
 WORKER_COUNT=$((TOTAL - 1))
-
 WORKTREE_MODE="false"
 for _aw_arg in "$@"; do [ "$_aw_arg" = "--worktree" ] && WORKTREE_MODE="true"; done
 ```
@@ -52,10 +48,10 @@ done
 tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" tiled
 sleep 0.5
 
-tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "MGR Window Manager"
+tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "T${NEW_WIN} Window Manager"
 WORKER_PANES_LIST=""
-for i in $(seq 1 $((TOTAL - 1))); do
-  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -T "W${i} Worker ${i}"
+for i in $(seq 1 $WORKER_COUNT); do
+  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -T "T${NEW_WIN} W${i}"
   [ -n "$WORKER_PANES_LIST" ] && WORKER_PANES_LIST="${WORKER_PANES_LIST},${i}" || WORKER_PANES_LIST="${i}"
 done
 ```
@@ -94,14 +90,14 @@ mv "$TMPENV" "${RUNTIME_DIR}/session.env"
 ### Step 4: Launch Claude in all panes
 
 ```bash
-# Manager
-tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --agent doey-manager" Enter
+# Manager — uses team-specific agent name (matches doey.sh generate_team_agent)
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} Window Manager\" --agent \"t${NEW_WIN}-manager\"" Enter
 sleep 1
 
 # Workers
 for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
-  WORKER_PROMPT=$(grep -l "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
-  CMD="claude --dangerously-skip-permissions --model opus"
+  WORKER_PROMPT=$(grep -rl "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1)
+  CMD="claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} W${i}\""
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
   tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter
   sleep 0.5
@@ -114,8 +110,8 @@ for slot in 2 3 4 5 6 7; do
   [ -z "$SLOT_CHILD" ] && { WDG_SLOT="$slot"; break; }
 done
 if [ -n "$WDG_SLOT" ]; then
-  tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "Watchdog — Team ${NEW_WIN}"
-  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model opus --agent \"t${NEW_WIN}-watchdog\"" Enter
+  tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "T${NEW_WIN} Watchdog"
+  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} Watchdog\" --agent \"t${NEW_WIN}-watchdog\"" Enter
   sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=0.${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
 else
   echo "WARNING: No available Dashboard slot for Watchdog"
@@ -130,8 +126,8 @@ Best-effort — team is still created if worktree fails.
 WT_DIR="" WT_BRANCH=""
 if [ "$WORKTREE_MODE" = "true" ]; then
   WT_BRANCH="doey/team-${NEW_WIN}-$(date +%m%d-%H%M)"
-  WT_DIR="${PROJECT_DIR}/.doey-worktrees/team-${NEW_WIN}"
-  mkdir -p "${PROJECT_DIR}/.doey-worktrees"
+  WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${NEW_WIN}"
+  mkdir -p "$(dirname "$WT_DIR")"
 
   if ! git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$WT_BRANCH" 2>&1; then
     echo "WARNING: Worktree failed. Team created without isolation."
@@ -151,7 +147,6 @@ fi
 
 ```bash
 sleep 8
-
 NOT_READY=0; DOWN_PANES=""
 for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
   CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null)
@@ -160,7 +155,6 @@ for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
     NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"
   fi
 done
-
 if [ -n "$WDG_SLOT" ]; then
   WDG_CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:0.${WDG_SLOT}" -p '#{pane_pid}')" 2>/dev/null)
   WDG_OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -p 2>/dev/null)
@@ -168,7 +162,6 @@ if [ -n "$WDG_SLOT" ]; then
     NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES 0.$WDG_SLOT"
   fi
 fi
-
 [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 ```
 
@@ -179,3 +172,5 @@ Rename window if worktree succeeded, then output summary: grid, manager pane, wo
 - Write team_W.env before launching; update TEAM_WINDOWS atomically
 - Never hardcode window indices. Bash 3.2 compatible.
 - Copy `.claude/settings.local.json` into worktrees (gitignored)
+- Agent names: `t${WIN}-manager`, `t${WIN}-watchdog` (matches doey.sh `generate_team_agent`)
+- Worktree path: `/tmp/doey/${PROJECT_NAME}/worktrees/team-${WIN}` (matches doey.sh canonical path)

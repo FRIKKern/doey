@@ -3,27 +3,21 @@ name: doey-broadcast
 description: Broadcast a message to all other Claude instances.
 ---
 
-## Context
-
-Session config:
-!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-
-My pane:
-!`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
-
-## Prompt
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- My pane: !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
 
 Ask user for the message if not provided. Replace `YOUR_MESSAGE_HERE` below, then run:
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "$RD/session.env"
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 TIMESTAMP="$(date +%s)$$"
-mkdir -p "${RUNTIME_DIR}/broadcasts" "${RUNTIME_DIR}/messages"
+mkdir -p "${RD}/broadcasts" "${RD}/messages"
 
 MESSAGE="YOUR_MESSAGE_HERE"
 
-cat > "${RUNTIME_DIR}/broadcasts/${TIMESTAMP}.broadcast" <<EOF
+cat > "${RD}/broadcasts/${TIMESTAMP}.broadcast" <<EOF
 FROM: $MY_PANE
 TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
 ---
@@ -34,7 +28,7 @@ DELIVERED=0
 for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
   [ "$pane" = "$MY_PANE" ] && continue
   PANE_SAFE=$(echo "$pane" | tr ':.' '_')
-  cp "${RUNTIME_DIR}/broadcasts/${TIMESTAMP}.broadcast" "${RUNTIME_DIR}/messages/${PANE_SAFE}_${TIMESTAMP}.msg"
+  cp "${RD}/broadcasts/${TIMESTAMP}.broadcast" "${RD}/messages/${PANE_SAFE}_${TIMESTAMP}.msg"
   DELIVERED=$((DELIVERED + 1))
 done
 echo "Broadcast delivered to ${DELIVERED} panes"

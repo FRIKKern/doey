@@ -27,9 +27,11 @@ Review the context above to see all available panes and your own pane.
 
 ### Step 3: Validate target
 
+Use the user-supplied `W.P` pane address (e.g., `3.2`), not hardcoded `WINDOW_INDEX`:
+
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-TARGET_PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
+TARGET_PANE="${SESSION_NAME}:<W>.<P>"  # from user input
 PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')
 [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { echo "RESERVED — pick another"; exit 1; }
 tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
@@ -40,11 +42,9 @@ echo "$OUTPUT" | grep -q '❯' && echo "Idle — OK" || echo "May be busy"
 
 ### Step 4: Send task
 
-Follow `/doey-dispatch` **Dispatch Sequence** steps 3-6 using `TARGET_PANE` as `$PANE`. Skip steps 1-2 (readiness check / kill+restart) since worker is already idle.
+Follow `/doey-dispatch` Dispatch Sequence using `TARGET_PANE` as `$PANE`: rename pane (step 3), write+paste task via tmpfile (step 4), settle+submit (step 5), verify (step 6). Skip readiness check/kill+restart (steps 1-2) since worker is already idle.
 
 ### Rules
-1. **Never `send-keys "" Enter`** — empty string swallows Enter
-2. **Always tmpfile/load-buffer** for task text
-3. **Sleep between paste-buffer and send-keys Enter** (auto-scales by line count)
-4. **Verify after dispatch** (per /doey-dispatch step 6)
-5. **Never delegate to your own pane**
+1. **Always tmpfile/load-buffer** for task text — never `send-keys "" Enter`
+2. **Sleep between paste-buffer and Enter** (scales by line count); **verify after dispatch**
+3. **Never delegate to your own pane**

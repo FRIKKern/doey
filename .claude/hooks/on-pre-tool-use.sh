@@ -17,7 +17,7 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
   if [ "$WINDOW_INDEX" = "0" ]; then
-    case "$CURRENT_PANE" in 2|3|4|5|6|7)
+    case "$CURRENT_PANE" in [2-9]|[1-9][0-9]*)
       for _pt_tf in "${RUNTIME_DIR}"/team_*.env; do
         [ -f "$_pt_tf" ] || continue
         _pt_wd=$(grep '^WATCHDOG_PANE=' "$_pt_tf" | cut -d= -f2)
@@ -86,6 +86,7 @@ case "$TOOL_COMMAND" in
     MSG="destructive rm" ;;
   *"shutdown"*|*"reboot"*)
     MSG="system commands" ;;
+  # Workers only — watchdog send-keys handled above
   *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
     MSG="tmux commands" ;;
   *) exit 0 ;;

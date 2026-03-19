@@ -5,7 +5,8 @@ set -euo pipefail
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { sleep 30; exit 0; }
 source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+SM_PANE="${SM_PANE:-0.1}"
+SM_SAFE="${SESSION_NAME//[:.]/_}_${SM_PANE//[:.]/_}"
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/session_manager_trigger"
 

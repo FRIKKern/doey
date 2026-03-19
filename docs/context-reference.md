@@ -47,8 +47,8 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
 | File | Event | Purpose |
 |------|-------|---------|
-| `common.sh` | — | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks |
-| `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX |
+| `common.sh` | — | Shared utils: `init_hook()`, `parse_field()`, `_read_team_key()`, role checks, `send_notification()` |
+| `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX, DOEY_TEAM_WINDOW, DOEY_TEAM_DIR, DOEY_RUNTIME |
 | `on-prompt-submit.sh` | UserPromptSubmit | BUSY status; READY on `/compact`; column expansion |
 | `on-pre-tool-use.sh` | PreToolUse | Role-based tool blocking |
 | `on-pre-compact.sh` | PreCompact | Preserves orchestration state before compaction |
@@ -75,7 +75,7 @@ Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, lo
 **Session Manager skills:**
 `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
 
-**Worker skills:** `/doey-status`, `/doey-reserve` only. Watchdog uses none.
+**Worker skills:** `/doey-status`, `/doey-reserve`, `/doey-stop`. Watchdog uses none.
 
 
 ## Persistent Memory
@@ -94,20 +94,20 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 **Session-level (`session.env`):**
 `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS`, `MAX_WORKERS`, `CURRENT_COLS`, `TOTAL_PANES`, `WORKER_COUNT`, `WORKER_PANES`, `WATCHDOG_PANE`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `WDG_SLOT_1`..`WDG_SLOT_3`, `SM_PANE`
 
-**Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`, `CLAUDECODE`, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
+**Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
-**Set by hooks:** `DOEY_ROLE`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`
+**Set by hooks:** `DOEY_ROLE`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`, `DOEY_TEAM_DIR`, `DOEY_RUNTIME`
 
-**Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WATCHDOG_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`. Loaded via `load_team_env()`, overrides session.env for per-window fields.
+**Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WATCHDOG_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`. Loaded via `_read_team_key()`, overrides session.env for per-window fields.
 
 
 ## CLI Launch Flags
 
 | Instance | Command |
 |----------|---------|
-| Manager | `claude --dangerously-skip-permissions --agent doey-manager` |
-| Watchdog | `claude --dangerously-skip-permissions --model opus --agent doey-watchdog` |
-| Workers | `claude --dangerously-skip-permissions --model opus --append-system-prompt-file <prompt>.md` |
+| Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
+| Watchdog | `claude --dangerously-skip-permissions --model opus --name "T<N> Watchdog" --agent doey-watchdog` |
+| Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
 

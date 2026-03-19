@@ -23,7 +23,7 @@ Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
 |------|---------|
 | Window Manager | None (full access) |
 | Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, gh pr create/merge, destructive rm, shutdown, tmux kill |
-| Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill, rm -rf ~/$HOME, shutdown |
+| Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 
 ## Key Directories
 
@@ -63,7 +63,7 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 
 | File | Purpose |
 |------|---------|
-| `common.sh` | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks, `send_notification()` |
+| `common.sh` | Shared utils: `init_hook()`, `parse_field()`, `_read_team_key()`, role checks, `send_notification()` |
 | `on-session-start.sh` | Sets DOEY_* env vars (ROLE, PANE_INDEX, WINDOW_INDEX, TEAM_WINDOW, TEAM_DIR, RUNTIME) plus SESSION_NAME, PROJECT_DIR, PROJECT_NAME |
 | `on-prompt-submit.sh` | BUSY status, READY on /compact, column expansion |
 | `on-pre-tool-use.sh` | Tool usage safety guards |
@@ -71,9 +71,9 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 | `post-tool-lint.sh` | Bash 3.2 compatibility lint |
 | `stop-status.sh` | FINISHED/RESERVED status, research enforcement |
 | `stop-results.sh` | Result JSON and completion events |
-| `stop-notify.sh` | Session Manager notifications |
+| `stop-notify.sh` | Desktop notification when Session Manager stops |
 | `watchdog-scan.sh` | Pane state detection, heartbeat |
 | `watchdog-wait.sh` | Watchdog sleep/wake between scan cycles |
 | `session-manager-wait.sh` | Session Manager sleep/wake between cycles |
-| `stop-notify-manager.sh` | Manager completion notifications |
-| `stop-notify-session-manager.sh` | Session Manager completion notifications |
+| `stop-notify-manager.sh` | Notifies Manager when a worker finishes |
+| `stop-notify-session-manager.sh` | Notifies Session Manager when a Manager finishes |

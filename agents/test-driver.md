@@ -74,13 +74,7 @@ Optional, at most once. If journey has mid-journey prompt, dispatch it. Log: `T+
 
 ### 6. VERIFYING → REPORTING
 
-Run journey `expectations` checks:
-1. **Files:** `ls -la "$PROJECT_DIR/index.html"`, count HTML/CSS/JS
-2. **Content:** grep expected keywords, nav, CSS links
-3. **Links:** extract `href="*.html"`, verify targets exist
-4. **HTTP:** `python3 -m http.server 8765`, curl returns 200 + non-empty, kill server
-
-Record each as PASS/FAIL. Optional: Chrome DevTools MCP visual check (bonus, not required for PASS).
+Parse the journey file's `Expected Outcomes` section. For each check (files, content, behavior), run the appropriate verification (ls, grep, curl, etc.) and record PASS/FAIL.
 
 ### 7. REPORTING → DONE
 
@@ -89,23 +83,11 @@ Write to `$REPORT_FILE`:
 # E2E Test Report: $TEST_ID
 Date: <ISO>  Duration: <T+Xs>  Result: PASS|FAIL  Score: X/10
 
-## Expectations
-| # | Check | Result | Details |
-
-## Pass Criteria
-ALL required: index.html exists, ≥2 HTML files, CSS exists, expected content present, Manager delegated (not coded), ≥2 workers used, no reserved-pane dispatch, no HIGH anomalies, within 10 min.
-
-## Timeline
-| Time | Event |
-
-## Pane Captures at Key Moments
-<2-3 pivotal captures>
-
-## Anomalies
-| Time | Pane | Severity | Description |
-
-## Raw Observations
-Files: $OBSERVATIONS_DIR/ — Total: N
+## Expectations — | # | Check | Result | Details |
+## Pass Criteria — ALL journey expectations met, Manager delegated (not coded), ≥2 workers used, no reserved-pane dispatch, no HIGH anomalies, within 10 min.
+## Timeline — | Time | Event |
+## Anomalies — | Time | Pane | Severity | Description |
+## Raw Observations — Files: $OBSERVATIONS_DIR/ — Total: N
 ```
 
 Print `TEST $TEST_ID: <PASS|FAIL> (score X/10, duration Xs)` + `Report: $REPORT_FILE`. Exit.

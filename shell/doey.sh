@@ -1061,6 +1061,7 @@ doey_purge() {
   # Resolve project
   local dir name session runtime_dir session_active
   dir="$(pwd)"
+  PROJECT_DIR="$dir"
   name="$(find_project "$dir")"
   if [[ -z "$name" ]]; then
     printf "  ${DIM}No project registered for %s — nothing to purge${RESET}\n" "$dir"
@@ -1210,33 +1211,33 @@ launch_with_grid() {
   fi
 }
 
-launch_session() {
-  local name="$1"
-  local dir="$2"
-  local grid="${3:-6x2}"
-  local cols="${grid%x*}"
-  local rows="${grid#*x}"
+# ── Core session launch logic (shared by launch_session & launch_session_headless) ──
+_launch_session_core() {
+  local name="$1" dir="$2" grid="$3" headless="$4"
+  local cols="${grid%x*}" rows="${grid#*x}"
   local total=$(( cols * rows ))
   local worker_count=$(( total - 1 ))
   local session="doey-${name}"
   local runtime_dir="/tmp/doey/${name}"
-  local short_dir="${dir/#$HOME/~}"
+  local team_window=1
 
   cd "$dir"
 
-  _print_full_banner
-  printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}${grid}${RESET}  ${DIM}Workers${RESET} ${BOLD}${worker_count}${RESET}\n"
-  printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
-  printf '\n'
-
-  ensure_project_trusted "$dir"
-  install_doey_hooks "$dir" "   "
+  local hook_indent="   "
+  [[ "$headless" -eq 1 ]] && hook_indent="  "
+  install_doey_hooks "$dir" "$hook_indent"
 
   local worker_panes_csv
   worker_panes_csv="$(_build_worker_csv "$total")"
 
-  step_start 1 "Creating session for ${name}..."
-  _cleanup_old_session "$session" "$runtime_dir"
+  # -- Session creation --
+  if [[ "$headless" -eq 0 ]]; then
+    step_start 1 "Creating session for ${name}..."
+  else
+    printf "  ${DIM}Creating session ${session}...${RESET}\n"
+  fi
+
+  _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
 
   cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
@@ -1257,24 +1258,28 @@ WDG_SLOT_1="0.2"
 MANIFEST
 
   write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0" "" ""
-  write_worker_system_prompt "$runtime_dir" "$name" "$dir"
-
-  tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
-  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
 
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
-
-  local team_window=1
   tmux new-window -t "$session" -c "$dir"
 
-  step_done
+  [[ "$headless" -eq 0 ]] && step_done
 
-  step_start 2 "Applying theme..."
+  # -- Theme --
+  if [[ "$headless" -eq 0 ]]; then
+    step_start 2 "Applying theme..."
+  else
+    printf "  ${DIM}Applying theme...${RESET}\n"
+  fi
   local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   apply_doey_theme "$session" "$name" "$border_fmt" 2
-  step_done
+  [[ "$headless" -eq 0 ]] && step_done
 
-  step_start 3 "Building ${cols}x${rows} grid (${total} panes)..."
+  # -- Grid --
+  if [[ "$headless" -eq 0 ]]; then
+    step_start 3 "Building ${cols}x${rows} grid (${total} panes)..."
+  else
+    printf "  ${DIM}Building ${cols}x${rows} grid (${total} panes)...${RESET}\n"
+  fi
 
   for (( r=1; r<rows; r++ )); do
     tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
@@ -1288,27 +1293,34 @@ MANIFEST
   done
 
   sleep 2
-
   local actual
   actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
-  [[ "$actual" -eq "$total" ]] || \
+  [[ "$actual" -ne "$total" ]] && \
     printf "\n   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
 
-  step_done
+  [[ "$headless" -eq 0 ]] && step_done
 
-  step_start 4 "Naming panes..."
+  # -- Name panes --
+  if [[ "$headless" -eq 0 ]]; then
+    step_start 4 "Naming panes..."
+  else
+    printf "  ${DIM}Naming panes...${RESET}\n"
+  fi
 
   tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
-  local wnum=0
   for (( i=1; i<total; i++ )); do
-    wnum=$((wnum + 1))
-    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${wnum}"
+    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${i}"
   done
   tmux rename-window -t "$session:${team_window}" "Local Team"
 
-  step_done
+  [[ "$headless" -eq 0 ]] && step_done
 
-  step_start 5 "Launching Window Manager & Watchdog..."
+  # -- Manager & Watchdog --
+  if [[ "$headless" -eq 0 ]]; then
+    step_start 5 "Launching Window Manager & Watchdog..."
+  else
+    printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
+  fi
 
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
   _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
@@ -1324,29 +1336,52 @@ MANIFEST
 
   trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
 
-  step_done
+  [[ "$headless" -eq 0 ]] && step_done
 
-  step_start 6 "Booting ${worker_count} workers..."
-  printf '\n'
+  # -- Boot workers --
+  if [[ "$headless" -eq 0 ]]; then
+    step_start 6 "Booting ${worker_count} workers..."
+    printf '\n'
+  else
+    printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
+  fi
 
   local booted=0
   for (( i=1; i<total; i++ )); do
     booted=$((booted + 1))
-    printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${booted}${RESET}${DIM}/${worker_count}${RESET}  "
+    [[ "$headless" -eq 0 ]] && printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${booted}${RESET}${DIM}/${worker_count}${RESET}  "
     _boot_worker "$session" "$runtime_dir" "$team_window" "$i" "$booted" "$booted"
   done
-  printf "${SUCCESS}done${RESET}\n"
+  [[ "$headless" -eq 0 ]] && printf "${SUCCESS}done${RESET}\n"
+
+  trap - EXIT INT TERM
+  tmux select-window -t "$session:0"
+}
+
+launch_session() {
+  local name="$1" dir="$2" grid="${3:-6x2}"
+  local cols="${grid%x*}" rows="${grid#*x}"
+  local worker_count=$(( cols * rows - 1 ))
+  local session="doey-${name}"
+  local short_dir="${dir/#$HOME/~}"
+
+  _print_full_banner
+  printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}${grid}${RESET}  ${DIM}Workers${RESET} ${BOLD}${worker_count}${RESET}\n"
+  printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
+  printf '\n'
+
+  ensure_project_trusted "$dir"
+
+  _launch_session_core "$name" "$dir" "$grid" 0
 
   printf '\n'
   printf "   ${SUCCESS}Doey is ready${RESET}\n"
   printf "   ${DIM}Project${RESET} ${BOLD}%s${RESET}  ${DIM}Grid${RESET} ${BOLD}%s${RESET}  ${DIM}Workers${RESET} ${BOLD}%s${RESET}\n" "$name" "$grid" "$worker_count"
   printf "   ${DIM}Session${RESET} ${BOLD}%s${RESET}  ${DIM}Dir${RESET} ${BOLD}%s${RESET}\n" "$session" "$short_dir"
-  printf "   ${DIM}Manager${RESET} ${team_window}.0  ${DIM}Watchdog${RESET} ${WDG_SLOT_1}  ${DIM}Dashboard${RESET} win 0\n"
+  printf "   ${DIM}Manager${RESET} 1.0  ${DIM}Watchdog${RESET} ${WDG_SLOT_1}  ${DIM}Dashboard${RESET} win 0\n"
   printf "   ${DIM}Tip: Workers ready in ~15s${RESET}\n"
   printf '\n'
 
-  trap - EXIT INT TERM
-  tmux select-window -t "$session:0"
   attach_or_switch "$session"
 }
 
@@ -1705,6 +1740,7 @@ uninstall_system() {
 
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
+  PROJECT_DIR="$(pwd)"
   printf '\n  %bDoey — System Check%b\n\n' "$BRAND" "$RESET"
 
   # Required commands
@@ -1903,95 +1939,11 @@ _init_doey_session() {
 
 launch_session_headless() {
   local name="$1" dir="$2" grid="${3:-6x2}"
-  local cols="${grid%x*}" rows="${grid#*x}"
-  local total=$(( cols * rows )) worker_count=$(( total - 1 ))
-  local session="doey-${name}" runtime_dir="/tmp/doey/${name}"
-  local team_window=1
+  local session="doey-${name}"
+  local worker_count=$(( ${grid%x*} * ${grid#*x} - 1 ))
 
-  cd "$dir"
-  install_doey_hooks "$dir" "  "
+  _launch_session_core "$name" "$dir" "$grid" 1
 
-  printf "  ${DIM}Creating session ${session}...${RESET}\n"
-  _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
-
-  local worker_panes_csv
-  worker_panes_csv="$(_build_worker_csv "$total")"
-
-  cat > "${runtime_dir}/session.env" << MANIFEST
-PROJECT_DIR="$dir"
-PROJECT_NAME="$name"
-SESSION_NAME="$session"
-GRID="$grid"
-TOTAL_PANES="$total"
-WORKER_COUNT="$worker_count"
-WATCHDOG_PANE="0.2"
-WORKER_PANES="$worker_panes_csv"
-RUNTIME_DIR="${runtime_dir}"
-PASTE_SETTLE_MS="500"
-IDLE_COLLAPSE_AFTER="60"
-IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="1"
-SM_PANE="0.1"
-WDG_SLOT_1="0.2"
-MANIFEST
-
-  write_team_env "$runtime_dir" "1" "$grid" "0.2" "$worker_panes_csv" "$worker_count" "0" "" ""
-
-  # Dashboard launches after session.env exists (info-panel + Session Manager need it)
-  setup_dashboard "$session" "$dir" "$runtime_dir" 1
-  tmux new-window -t "$session" -c "$dir"
-
-  printf "  ${DIM}Applying theme...${RESET}\n"
-  local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
-  apply_doey_theme "$session" "$name" "$border_fmt" 2
-
-  printf "  ${DIM}Building ${cols}x${rows} grid (${total} panes)...${RESET}\n"
-  for (( r=1; r<rows; r++ )); do
-    tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
-  done
-  tmux select-layout -t "$session:${team_window}" even-vertical
-  for (( r=0; r<rows; r++ )); do
-    for (( c=1; c<cols; c++ )); do
-      tmux split-window -h -t "$session:${team_window}.$((r * cols))" -c "$dir"
-    done
-  done
-
-  sleep 2
-  local actual
-  actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
-  if [[ "$actual" -ne "$total" ]]; then
-    printf "  ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
-  fi
-
-  printf "  ${DIM}Naming panes...${RESET}\n"
-  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
-  for (( i=1; i<total; i++ )); do
-    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${i}"
-  done
-  tmux rename-window -t "$session:${team_window}" "Local Team"
-
-  printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
-  _launch_team_manager "$session" "$runtime_dir" "$team_window"
-  _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
-
-  _build_worker_pane_list "$session" "$team_window"
-  _brief_team "$session" "$team_window" "${WDG_SLOT_1}" "$_WPL_RESULT" "$worker_count" "Grid ${grid}"
-
-  (
-    sleep 15
-    tmux send-keys -t "$session:${SM_PANE}" \
-      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
-  ) &
-
-  trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
-
-  printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
-  for (( i=1; i<total; i++ )); do
-    _boot_worker "$session" "$runtime_dir" "$team_window" "$i" "$i" "$i"
-  done
-
-  trap - EXIT INT TERM
-  tmux select-window -t "$session:0"
   printf "  ${SUCCESS}Team launched${RESET} — session ${BOLD}%s${RESET} with %s workers\n" "$session" "$worker_count"
 }
 
@@ -2988,7 +2940,7 @@ HELP
     ;;
   add-window|add-team)
     require_running_session
-    local wt_spec="" grid_arg="4x2"
+    wt_spec="" grid_arg="4x2"
     shift
     for _arg in "$@"; do
       case "$_arg" in

@@ -3,9 +3,6 @@ name: doey-research
 description: Dispatch a research task to a worker. Stop hook blocks until report is written.
 ---
 
-## Usage
-`/doey-research`
-
 ## Context
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
@@ -14,23 +11,13 @@ description: Dispatch a research task to a worker. Stop hook blocks until report
 
 ## Prompt
 
-Dispatch a research task with guaranteed report-back.
+Dispatch a research task with guaranteed report-back. Session/team config is injected above.
 
-The session config and team environment are already injected above. Remaining bash blocks should use:
+`PANE_SAFE` = pane ID with `:` and `.` replaced by `_`. Always exit copy-mode before `paste-buffer`/`send-keys`.
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-```
+### Step 1: Pick idle worker + create task marker
 
-Always exit copy-mode before `paste-buffer`/`send-keys`: `tmux copy-mode -q -t "$PANE" 2>/dev/null`
-
-`PANE_SAFE` = pane ID with `:` and `.` replaced by `_`: `PANE_SAFE=$(echo "$PANE" | tr ':.' '_')`
-
-### Step 1: Pick idle, unreserved worker
-
-For each worker pane X: skip if `${RUNTIME_DIR}/status/${PANE_SAFE}.reserved` exists. Exit copy-mode, then `tmux capture-pane -t "$PANE" -p -S -3` to check for `>` prompt.
-
-### Step 2: Create task marker + clear old report
+Find an idle, unreserved worker: skip if `.reserved` exists, capture-pane to check for `>` prompt.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -44,11 +31,11 @@ MARKER
 rm -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 ```
 
-### Step 3: Ensure worker ready
+### Step 2: Ensure worker ready
 
-Same as `/doey-dispatch` Pre-flight + Dispatch Sequence steps 1-2 (check idle, kill+restart if needed). Rename: `/rename research-topic_$(date +%m%d)`.
+Check idle via capture-pane. If crashed (bare shell, no claude), kill and restart per `/doey-dispatch` pre-flight. Rename: `/rename research-topic_$(date +%m%d)`.
 
-### Step 4: Dispatch task prompt
+### Step 3: Dispatch task prompt
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -65,7 +52,7 @@ Project directory: ${PROJECT_DIR}  |  Use absolute paths.
 <QUESTION_OR_GOAL>
 
 ## Instructions
-**Phase 1 — Research:** Spawn subagents in parallel (Explore/Plan/general-purpose). 3-5 questions, one agent each. Second wave if gaps remain.
+**Phase 1 — Research:** Spawn subagents in parallel (Explore/Plan/general-purpose). Identify key questions, one agent each. Second wave if gaps remain.
 **Phase 2 — Plan:** Option A (recommended) + Option B (alternative). Include dispatch-ready task prompts.
 **Phase 3 — Write Report** to ${REPORT_PATH}:
 \`\`\`
@@ -85,9 +72,9 @@ tmux send-keys -t "$PANE" Enter
 rm "$TASKFILE"
 ```
 
-### Step 5: Verify + read reports
+### Step 4: Verify + read reports
 
-Verify: same as `/doey-dispatch` step 6. Sleep 5s, grep for tool activity. Idle -> retry Enter+3s -> unstick per `/doey-dispatch`.
+Verify dispatch took: sleep 5s, capture-pane, grep for tool activity (`Read|Edit|Bash|thinking`). If idle, retry Enter+3s. Still idle → unstick per `/doey-dispatch` Unstick section.
 
 After worker finishes:
 ```bash
@@ -102,6 +89,5 @@ Present summary, ask which option, dispatch via `/doey-dispatch`.
 
 ### Rules
 
-1. **Task marker BEFORE dispatch** — stop hook needs it. **Clear old report first.**
+1. **Task marker BEFORE dispatch** — stop hook needs it. Clear old report first.
 2. **Include report path in prompt** — worker writes there, stop hook checks it.
-3. **Verify after dispatch and after worker finishes.**

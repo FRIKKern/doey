@@ -47,20 +47,16 @@ Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s)
 
 ## Monitoring
 
-Check every **10–15 seconds** (`/doey-monitor`). "All done" = all non-reserved workers idle.
+**Primary:** `/doey-monitor` every 10–15 seconds. "All done" = all non-reserved workers idle.
 
+**Manual fallback** (if `/doey-monitor` unavailable):
 ```bash
-W="$DOEY_WINDOW_INDEX"
-# Results + pane states + events + watchdog health
+W="$DOEY_TEAM_WINDOW"
 for f in "$RUNTIME_DIR/results"/pane_${W}_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
 cat "$RUNTIME_DIR/status/watchdog_pane_states_W${W}.json" 2>/dev/null
 for f in "$RUNTIME_DIR/status"/crash_pane_${W}_* "$RUNTIME_DIR/status"/completion_pane_${W}_*; do [ -f "$f" ] && cat "$f" && echo ""; done
 HEARTBEAT=$(cat "$RUNTIME_DIR/status/watchdog_W${W}.heartbeat" 2>/dev/null || echo "0")
 [ $(( $(date +%s) - HEARTBEAT )) -gt 120 ] && echo "WARNING: Watchdog heartbeat stale"
-# Fallback if states unavailable
-for i in $(echo "$WORKER_PANES" | tr ',' ' '); do
-  echo "=== Worker $DOEY_TEAM_WINDOW.$i ==="; tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.$i" -p -S -5 2>/dev/null; echo ""
-done
 ```
 
 Discover team: `tmux list-panes -t "$SESSION_NAME:$DOEY_TEAM_WINDOW" -F '#{pane_index} #{pane_title} #{pane_pid}'`

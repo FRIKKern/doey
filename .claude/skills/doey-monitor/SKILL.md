@@ -14,43 +14,28 @@ description: Monitor worker panes — reads status files (FINISHED, BUSY, ERROR,
 
 ### Status Table
 
-Build a table from the injected data:
-
-```
-PANE   | STATUS       | RESERVED   | TASK                           | UPDATED
--------+--------------+------------+--------------------------------+--------
-```
-
-For each worker pane (from WORKER_PANES in team config):
-- Status from `.status` file. If FINISHED, enrich with result status from `.json`.
-- If `.reserved` file exists, show RESERVED.
-- Task from pane title.
-- Updated = age of status file modification time.
+Build from injected data: `PANE | STATUS | RESERVED | TASK | UPDATED`. For each worker pane (WORKER_PANES): status from `.status` file (enrich FINISHED with `.json` result), `.reserved` flag, task from pane title, age of status file.
 
 ### Deep Inspect (replace X with pane index)
 
 ```bash
-RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
-source "$RD/session.env"
-W="${DOEY_WINDOW_INDEX:-0}"
-PANE="${SESSION_NAME}:${W}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
-cat "${RD}/status/${PANE_SAFE}.status" 2>/dev/null || echo "(no status file)"
+PANE="${SESSION_NAME}:${DOEY_WINDOW_INDEX:-0}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+cat "${DOEY_RUNTIME}/status/${PANE_SAFE}.status" 2>/dev/null || echo "(no status file)"
 echo "--- Last 20 lines ---"
 tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || echo "(pane not found)"
 ```
 
 ### Watching Mode
 
-Wrap Status Table check in `while true; do ... sleep 15; done`. Print `"[%H:%M:%S] Worker Status"` header. Track `ALL_DONE=true`; set false if any non-reserved worker is not FINISHED/READY. Break when all done.
+Poll every 15s with `[%H:%M:%S]` header. Track ALL_DONE; break when all non-reserved workers are FINISHED/READY.
 
 ### Error Recovery
 
-**Unstick:** exit copy-mode → `C-c` (0.5s) → `C-u` (0.5s) → `Enter` (3s) → check for `❯`. After 2 failures, see `/doey-dispatch` Troubleshooting.
+**Unstick:** exit copy-mode → `C-c` (0.5s) → `C-u` (0.5s) → `Enter` (3s) → check for `❯`. After 2 failures, see `/doey-dispatch` Unstick section.
 
 **Nudge idle:** exit copy-mode → `Enter` (5s) → grep for `thinking|working|Read|Edit|Bash`. Still idle → unstick or re-dispatch.
 
 ### Rules
-
 1. **Never interrupt BUSY** — only recover ERROR/unresponsive
-2. **Status from files** (`${RUNTIME_DIR}/status/`) — never parse pane output
-3. **Min 15s poll interval** | **Always exit copy-mode before send-keys**
+2. **Status from files** — never parse pane output
+3. **Min 15s poll** | **Always exit copy-mode before send-keys**
