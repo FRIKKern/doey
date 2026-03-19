@@ -13,8 +13,6 @@
 
 </div>
 
----
-
 ```
 ┌──────────┬──────────────┬──────────────┐
 │ MANAGER  │ Worker 1     │ Worker 3     │
@@ -28,7 +26,7 @@
  WATCHDOG monitors from Dashboard (window 0)
 ```
 
-Manager breaks tasks into subtasks, dispatches to workers, monitors progress. Dynamic grid (4 teams, 24 workers default). Scale with `doey add`.
+Manager plans and delegates. Workers execute in parallel. Dynamic grid — scale with `doey add`.
 
 ## Quick Start
 
@@ -46,8 +44,6 @@ Or: `git clone https://github.com/FRIKKern/doey.git && cd doey && ./install.sh`
 
 > **Other platforms:** [Linux server](docs/linux-server.md) · [Windows WSL2](docs/windows-wsl2.md) · [Linode VPS](docs/linode-setup.md)
 
----
-
 ## How It Works
 
 1. `doey init` — register your project (once)
@@ -55,8 +51,6 @@ Or: `git clone https://github.com/FRIKKern/doey.git && cd doey && ./install.sh`
 3. Tell the Window Manager your task
 4. Manager plans, Workers execute in parallel, Watchdog monitors
 5. Consolidated results when done
-
----
 
 ## Worktree Isolation
 
@@ -66,8 +60,6 @@ Teams can run in isolated git worktrees — each gets its own branch at `<projec
 doey add-team --worktree     # add isolated team
 doey kill-team N             # auto-saves, removes worktree, preserves branch
 ```
-
----
 
 ## CLI Commands
 
@@ -87,8 +79,6 @@ doey kill-team N             # auto-saves, removes worktree, preserves branch
 | `doey 4x3` | Static grid layout |
 | `doey uninstall` | Remove doey completely |
 
----
-
 ## Architecture
 
 | Role | Pane | Description |
@@ -101,31 +91,15 @@ doey kill-team N             # auto-saves, removes worktree, preserves branch
 
 Dashboard (window 0) + team windows (1+). See [Context Reference](docs/context-reference.md).
 
----
-
 <details>
-<summary><strong>Slash Commands (21)</strong></summary>
+<summary><strong>Slash Commands</strong></summary>
 
-| Command | Description |
-|---------|-------------|
-| `/doey-dispatch` | Dispatch tasks to workers |
-| `/doey-delegate` | Send task to specific pane |
-| `/doey-monitor` | Check worker statuses |
-| `/doey-team` | Full team overview |
-| `/doey-research` | Research with guaranteed report |
-| `/doey-broadcast` | Message all panes |
-| `/doey-status` | View/set pane status |
-| `/doey-purge` | Audit & fix context rot |
-| `/doey-reserve` | Reserve pane for human use |
-| `/doey-add-window` / `-kill-window` | Add/kill team windows |
-| `/doey-kill-session` / `-kill-all-sessions` | Kill session(s) |
-| `/doey-list-windows` | List team windows |
-| `/doey-reload` / `-reinstall` | Reload/reinstall |
-| `/doey-stop` | Stop a worker |
-| `/doey-repair` | Dashboard diagnostic |
-| `/doey-clear` | Clear and restart panes |
-| `/doey-worktree` | Toggle worktree isolation |
-| `/doey-watchdog-compact` | Compact Watchdog context |
+**Task management:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
+**Monitoring:** `/doey-monitor`, `/doey-team`, `/doey-status`, `/doey-watchdog-compact`
+**Infrastructure:** `/doey-add-window`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
+**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`
+**Session:** `/doey-kill-session`, `/doey-kill-all-sessions`
+**Maintenance:** `/doey-purge`, `/doey-repair`
 
 </details>
 
@@ -140,18 +114,10 @@ Dashboard (window 0) + team windows (1+). See [Context Reference](docs/context-r
 | `doey update` fails | Clone manually: `git clone ... && ./install.sh` |
 | Other | Run `doey doctor` |
 
----
-
 ## Requirements
 
 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (authenticated) · [Node.js](https://nodejs.org/) v18+ · [tmux](https://github.com/tmux/tmux) · macOS or Linux
 
 ---
 
-Contributions welcome — open an issue or submit a PR.
-
-<div align="center">
-
-**Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code)** · [Star it](https://github.com/FRIKKern/doey) if useful
-
-</div>
+Contributions welcome — [open an issue](https://github.com/FRIKKern/doey/issues) or submit a PR. Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code).

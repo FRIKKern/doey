@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Lint script: detect bash 4+ features that break on macOS /bin/bash 3.2
-# This script itself is bash 3.2 compatible.
+# Detect bash 4+ features that break on macOS /bin/bash 3.2
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
@@ -10,17 +9,13 @@ violations=0
 files_scanned=0
 
 check_pattern() {
-  local file="$1"
-  local pattern="$2"
-  local description="$3"
+  local file="$1" pattern="$2" description="$3"
   local matches
   matches=$(grep -nE "$pattern" "$file" 2>/dev/null || true)
   if [ -n "$matches" ]; then
     while IFS= read -r match; do
-      line_num="${match%%:*}"
-      line_content="${match#*:}"
-      echo "VIOLATION: $file:$line_num — $description"
-      echo "  $line_content"
+      echo "VIOLATION: $file:${match%%:*} — $description"
+      echo "  ${match#*:}"
       violations=$((violations + 1))
     done <<< "$matches"
   fi
@@ -53,14 +48,9 @@ done < <(find "$PROJECT_ROOT" -name '*.sh' \
   -type f)
 
 echo ""
-echo "=== Bash 3.2 Compatibility Check ==="
-echo "Files scanned: $files_scanned"
-echo "Violations found: $violations"
-
+echo "=== Bash 3.2 Compat: $files_scanned files, $violations violations ==="
 if [ "$violations" -gt 0 ]; then
-  echo "FAIL: Fix the above violations for macOS /bin/bash 3.2 compatibility."
+  echo "FAIL: Fix violations for macOS /bin/bash 3.2 compatibility."
   exit 1
-else
-  echo "PASS: All shell scripts are bash 3.2 compatible."
-  exit 0
 fi
+echo "PASS"

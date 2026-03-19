@@ -35,8 +35,6 @@ Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
 | `shell/` | Launcher & utils | `~/.local/bin/` |
 | `docs/` | Guides & context ref | — |
 
-Grid management: `doey add`/`doey remove` scale columns at runtime.
-
 ## Conventions
 
 - Agents: YAML frontmatter (name, model, color, memory, description)
@@ -59,18 +57,19 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 
 ## Important Files
 
+**Shell:** `shell/doey.sh` (CLI launcher), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor)
+
+**Hooks** (`.claude/hooks/`):
+
 | File | Purpose |
 |------|---------|
-| `shell/doey.sh` | Main CLI launcher |
-| `shell/info-panel.sh` | Window 0 dashboard |
-| `shell/context-audit.sh` | Context pattern auditor |
-| `.claude/hooks/common.sh` | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks, `send_notification()` |
-| `.claude/hooks/on-session-start.sh` | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX |
-| `.claude/hooks/on-prompt-submit.sh` | BUSY status, READY on /compact, column expansion |
-| `.claude/hooks/on-pre-tool-use.sh` | Tool usage safety guards |
-| `.claude/hooks/on-pre-compact.sh` | Context preservation before compaction |
-| `.claude/hooks/post-tool-lint.sh` | Bash 3.2 compatibility lint |
-| `.claude/hooks/stop-status.sh` | FINISHED/RESERVED status, research enforcement |
-| `.claude/hooks/stop-results.sh` | Result JSON and completion events |
-| `.claude/hooks/stop-notify.sh` | Session Manager notifications |
-| `.claude/hooks/watchdog-scan.sh` | Pane state detection, heartbeat |
+| `common.sh` | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks |
+| `on-session-start.sh` | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX |
+| `on-prompt-submit.sh` | BUSY status, READY on /compact, column expansion |
+| `on-pre-tool-use.sh` | Tool usage safety guards |
+| `on-pre-compact.sh` | Context preservation before compaction |
+| `post-tool-lint.sh` | Bash 3.2 compatibility lint |
+| `stop-status.sh` | FINISHED/RESERVED status, research enforcement |
+| `stop-results.sh` | Result JSON and completion events |
+| `stop-notify.sh` | Session Manager notifications |
+| `watchdog-scan.sh` | Pane state detection, heartbeat |
