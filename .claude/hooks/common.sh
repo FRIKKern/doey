@@ -1,31 +1,24 @@
 #!/usr/bin/env bash
-# Common utilities for Doey hooks
-# Sourced by individual hook scripts — do not run directly.
+# Common utilities for Doey hooks — sourced by hook scripts, do not run directly.
 
 set -euo pipefail
 
 init_hook() {
-  # Read stdin JSON
   INPUT=$(cat)
 
-  # Bail silently if not in tmux
   [ -z "${TMUX_PANE:-}" ] && exit 0
 
-  # Get runtime dir — bail if not set
   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   [ -z "$RUNTIME_DIR" ] && exit 0
 
-  # Get pane identity
-  # IMPORTANT: Use -t "$TMUX_PANE" to resolve THIS pane's identity, not the client's focused pane.
-  # Without -t, tmux display-message returns info for whichever pane the user is viewing (usually 0.0),
-  # which caused ALL workers to think they were the Window Manager and spam notifications.
+  # IMPORTANT: -t "$TMUX_PANE" resolves THIS pane, not the focused pane.
+  # Without -t, all workers misidentify as Window Manager.
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
   PANE_SAFE=${PANE//[:.]/_}
   SESSION_NAME="${PANE%%:*}"
   PANE_INDEX="${PANE##*.}"
-  # Extract window index for multi-window support
-  local _wp="${PANE#*:}"          # "1.5"
-  WINDOW_INDEX="${_wp%.*}"        # "1"
+  local _wp="${PANE#*:}"
+  WINDOW_INDEX="${_wp%.*}"
   NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
   # Ensure runtime dirs exist (fast-path: skip if all present)
@@ -44,9 +37,7 @@ parse_field() {
 }
 
 load_team_env() {
-  # Load per-window team env file (multi-window support).
   # Populates _TEAM_WD_PANE, _TEAM_MGR_PANE, _TEAM_WORKER_PANES, _TEAM_WORKER_COUNT.
-  # Returns 1 if no team file exists for this window.
   local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   [ -f "$team_file" ] || return 1
   _TEAM_WD_PANE="" _TEAM_MGR_PANE="" _TEAM_WORKER_PANES="" _TEAM_WORKER_COUNT=""
@@ -61,86 +52,68 @@ load_team_env() {
   done < "$team_file"
 }
 
+# Read a key from a team env file. Usage: _read_team_key <file> <KEY>
+_read_team_key() {
+  local val
+  val=$(grep "^$2=" "$1" | cut -d= -f2)
+  echo "${val//\"/}"
+}
+
 is_watchdog() {
-  # Cache result — this is called on every tool hook invocation
   [ -n "${_DOEY_IS_WD+x}" ] && return "$_DOEY_IS_WD"
-  _DOEY_IS_WD=1  # default: not a watchdog
-  # Watchdogs live in Dashboard (window 0), panes 0.2-0.7
+  _DOEY_IS_WD=1
   [ "$WINDOW_INDEX" != "0" ] && return 1
   for _wd_tf in "${RUNTIME_DIR}"/team_*.env; do
     [ -f "$_wd_tf" ] || continue
-    local _wd_val
-    _wd_val=$(grep '^WATCHDOG_PANE=' "$_wd_tf" | cut -d= -f2)
-    _wd_val="${_wd_val//\"/}"
-    if [ "$_wd_val" = "0.${PANE_INDEX}" ]; then
-      _DOEY_IS_WD=0
-      break
+    if [ "$(_read_team_key "$_wd_tf" WATCHDOG_PANE)" = "0.${PANE_INDEX}" ]; then
+      _DOEY_IS_WD=0; break
     fi
   done
   return "$_DOEY_IS_WD"
 }
 
 is_manager() {
-  # Cache result — this is called on every tool hook invocation
   [ -n "${_DOEY_IS_MGR+x}" ] && return "$_DOEY_IS_MGR"
-  _DOEY_IS_MGR=1  # default: not a manager
-  # Managers live in team windows (W≥1), pane 0
+  _DOEY_IS_MGR=1
   [ "$WINDOW_INDEX" = "0" ] && return 1
   local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   [ -f "$team_file" ] || return 1
-  local _mgr_val
-  _mgr_val=$(grep '^MANAGER_PANE=' "$team_file" | cut -d= -f2)
-  _mgr_val="${_mgr_val//\"/}"
-  [ "$PANE_INDEX" = "$_mgr_val" ] && _DOEY_IS_MGR=0
+  [ "$PANE_INDEX" = "$(_read_team_key "$team_file" MANAGER_PANE)" ] && _DOEY_IS_MGR=0
   return "$_DOEY_IS_MGR"
 }
 
 is_session_manager() {
-  # True only for the Session Manager — Dashboard pane 0.1
   [ "$WINDOW_INDEX" != "0" ] && return 1
-  local sm_pane wp
-  sm_pane=$(get_sm_pane)
-  wp="${PANE#*:}"
-  [ "$wp" = "$sm_pane" ]
+  [ "${PANE#*:}" = "$(get_sm_pane)" ]
 }
 
 is_worker() {
-  # Workers live in team windows (1+), not in Dashboard (0), and are not the Manager (pane 0)
   [ "$WINDOW_INDEX" = "0" ] && return 1
   ! is_manager
 }
 
-# Get Session Manager pane address (e.g. "0.1"). Reads SM_PANE from session.env, defaults to "0.1".
 get_sm_pane() {
   local sm_pane="0.1"
   if [ -f "${RUNTIME_DIR}/session.env" ]; then
-    local _sm_val
-    _sm_val=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
-    _sm_val="${_sm_val//\"/}"
-    [ -n "$_sm_val" ] && sm_pane="$_sm_val"
+    local val
+    val=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" | cut -d= -f2)
+    val="${val//\"/}"
+    [ -n "$val" ] && sm_pane="$val"
   fi
   echo "$sm_pane"
 }
 
-# Send a message to another pane via tmux send-keys.
-# Exits copy-mode first, suppresses errors silently.
-# Usage: send_to_pane <target> <message>
 send_to_pane() {
   local target="$1" msg="$2"
   tmux copy-mode -q -t "$target" 2>/dev/null
   tmux send-keys -t "$target" "$msg" Enter 2>/dev/null
 }
 
-# Sanitize and truncate a message for tmux delivery.
-# Collapses newlines/whitespace, truncates to max_len chars.
-# Usage: sanitize_message <text> [max_len]
 sanitize_message() {
   local text="$1" max_len="${2:-100}"
-  # Collapse newlines and multiple spaces
   text=$(printf '%s' "$text" | tr '\n' ' ' | sed 's/  */ /g')
   if [ "${#text}" -gt "$max_len" ]; then
-    local cut_len=$((max_len - 3))
-    text="${text:0:$cut_len}..."
+    text="${text:0:$((max_len - 3))}..."
   fi
   echo "$text"
 }
@@ -149,24 +122,17 @@ is_reserved() {
   [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]
 }
 
-# Portable newline for bash 3.2 string building
 NL='
 '
 
-# Numeric-only validation (bash 3.2 safe)
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
-# Cross-platform desktop notification
 send_notification() {
-  local title="${1:-Claude Code}"
-  local body="${2:-Task completed}"
+  local title="${1:-Claude Code}" body="${2:-Task completed}"
 
-  # Defense-in-depth: only Session Manager (0.1) sends notifications
-  if ! is_session_manager; then
-    return 0
-  fi
+  is_session_manager || return 0
 
-  # Enforce 60-second cooldown per title
+  # 60-second cooldown per title
   if [ -n "${RUNTIME_DIR:-}" ]; then
     local title_safe="${title//[^a-zA-Z0-9]/_}"
     local cooldown_file="${RUNTIME_DIR}/status/notif_cooldown_${title_safe}"
@@ -177,24 +143,17 @@ send_notification() {
     echo "$now" > "$cooldown_file" 2>/dev/null || true
   fi
 
-  # Sanitize for AppleScript string safety
-  title="${title//\\/\\\\}"
-  title="${title//\"/\\\"}"
-  body="${body//\\/\\\\}"
-  body="${body//\"/\\\"}"
+  # Escape for string safety
+  title="${title//\\/\\\\}"; title="${title//\"/\\\"}"
+  body="${body//\\/\\\\}"; body="${body//\"/\\\"}"
 
   if command -v osascript >/dev/null 2>&1; then
-    # macOS
     osascript -e "display notification \"${body}\" with title \"${title}\" sound name \"Ping\"" 2>/dev/null &
   elif command -v notify-send >/dev/null 2>&1; then
-    # Linux (libnotify)
     notify-send "$title" "$body" 2>/dev/null &
   elif command -v powershell.exe >/dev/null 2>&1; then
-    # WSL2 — escape single quotes for PowerShell string safety
-    local ps_title="${title//\'/\'\'}"
-    local ps_body="${body//\'/\'\'}"
+    local ps_title="${title//\'/\'\'}" ps_body="${body//\'/\'\'}"
     powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${ps_body}', '${ps_title}')" 2>/dev/null &
   fi
-  # Silent fallback if none available
   return 0
 }

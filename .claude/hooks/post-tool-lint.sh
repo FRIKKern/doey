@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# PostToolUse hook: lint .sh files for bash 3.2 compatibility after Write/Edit
-# This script itself is bash 3.2 compatible.
+# PostToolUse: lint .sh files for bash 3.2 compatibility after Write/Edit
 set -euo pipefail
 
 INPUT=$(cat)
 
-# Fast-path JSON parsing: check jq once, use for all calls
 _HAS_JQ=false; command -v jq >/dev/null 2>&1 && _HAS_JQ=true
 _parse() {
   if "$_HAS_JQ"; then
@@ -15,18 +13,16 @@ _parse() {
   fi
 }
 
-# Guard: only lint .sh files touched by Write/Edit
+# Only lint .sh files touched by Write/Edit
 case "$(_parse tool_name)" in Write|Edit) ;; *) exit 0 ;; esac
 FILE_PATH=$(_parse tool_input.file_path)
 case "$FILE_PATH" in *.sh) ;; *) exit 0 ;; esac
 [ -f "$FILE_PATH" ] || exit 0
 
-# Skip self and test harness (patterns would false-positive)
+# Skip self and test harness (contain check patterns as literals)
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-[ "$FILE_PATH" = "$SELF" ] && exit 0
-case "$FILE_PATH" in */tests/test-bash-compat.sh) exit 0 ;; esac
+case "$FILE_PATH" in "$SELF"|*/tests/test-bash-compat.sh) exit 0 ;; esac
 
-# --- Bash 3.2 compatibility lint (single grep pass) ---
 NL='
 '
 COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)|read[[:space:]]+-t[[:space:]]+[0-9]+\.[0-9]'

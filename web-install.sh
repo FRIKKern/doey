@@ -47,24 +47,19 @@ cat << 'DOG'
 
 DOG
 
-# Check for git before attempting clone
 if ! command -v git &>/dev/null; then
   echo "  ✗ git is required but not installed."
   echo "    Install: brew install git (macOS) | apt install git (Linux)"
   exit 1
 fi
 
-# Clone the repo
 echo "  Cloning repository..."
 if git clone --depth 1 "$REPO_URL" "$CLONE_DIR"; then
   echo "  ✓ Repository cloned"
 else
-  echo "  ✗ Failed to clone repository"
-  echo "    Make sure git is installed and you have network access."
+  echo "  ✗ Failed to clone repository — check git and network access."
   exit 1
 fi
 
 echo ""
-
-# Run the real installer
 bash "$CLONE_DIR/install.sh"

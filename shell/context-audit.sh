@@ -90,26 +90,19 @@ scan_matches() {
 for file in "${SCAN_FILES[@]}"; do
   [[ -f "$file" ]] || continue
   display="$(display_path "$file")"
-  bname="$(basename "$file" .md)"
   is_watchdog=false
-  [[ "$bname" == *doey-watchdog* ]] && is_watchdog=true
+  [[ "$(basename "$file" .md)" == *doey-watchdog* ]] && is_watchdog=true
 
   if $is_watchdog; then
-    scan_matches "y-spam-risk" "$YSPAM_RE" \
-      "CRITICAL: In watchdog context — Haiku will likely act on this literally" \
-      "$file" "$display"
+    yspam_risk="CRITICAL: In watchdog context — Haiku will likely act on this literally"
     scan_matches "identity-confusion" "$IDENTITY_RE" \
-      "Watchdog should never send keystrokes to confirm prompts" \
-      "$file" "$display"
+      "Watchdog should never send keystrokes to confirm prompts" "$file" "$display"
   else
-    scan_matches "y-spam-risk" "$YSPAM_RE" \
-      "May cause Haiku to interpret as instruction to send y/Y to panes" \
-      "$file" "$display"
+    yspam_risk="May cause Haiku to interpret as instruction to send y/Y to panes"
   fi
-
+  scan_matches "y-spam-risk" "$YSPAM_RE" "$yspam_risk" "$file" "$display"
   scan_matches "stale-ref" "$STALE_RE" \
-    "References removed or contradictory behavior pattern" \
-    "$file" "$display"
+    "References removed or contradictory behavior pattern" "$file" "$display"
 done
 
 if [[ $ISSUE_COUNT -eq 0 ]]; then

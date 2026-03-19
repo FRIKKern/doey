@@ -12,17 +12,12 @@ WIN_PANE="${PANE_REF##*:}"
 WINDOW_IDX="${WIN_PANE%%.*}"
 PANE_IDX="${WIN_PANE#*.}"
 
-# Strip surrounding quotes from a value
-unquote() { local v="${1#\"}"; echo "${v%\"}"; }
-
-# Read a key's value from an env file
 env_val() { # env_val <file> <key>
   while IFS='=' read -r k v; do
-    [ "$k" = "$2" ] && { unquote "$v"; return; }
+    [ "$k" = "$2" ] && { v="${v#\"}"; echo "${v%\"}"; return; }
   done < "$1"
 }
 
-# Dashboard panes (window 0): show role-based labels
 if [ "$WINDOW_IDX" = "0" ] && [ -n "$RUNTIME_DIR" ]; then
   SESSION_ENV="${RUNTIME_DIR}/session.env"
   if [ -f "$SESSION_ENV" ]; then
@@ -44,7 +39,6 @@ if [ "$WINDOW_IDX" = "0" ] && [ -n "$RUNTIME_DIR" ]; then
   echo "$TITLE"; exit 0
 fi
 
-# Non-Dashboard panes: show title with reserved indicator
 if [ -n "$RUNTIME_DIR" ]; then
   PANE_SAFE="${PANE_REF//[:.]/_}"
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then

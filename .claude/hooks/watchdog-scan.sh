@@ -1,46 +1,43 @@
 #!/usr/bin/env bash
-# Watchdog pre-filter scan — captures pane state with minimal output.
-# Called by the watchdog as a single Bash tool call each cycle.
-# Reduces LLM token usage by hashing pane content and only reporting changes.
+# Watchdog pre-filter scan — captures pane state, reports only changes.
+# Hashes pane content to reduce LLM token usage.
 
 set -euo pipefail
 
-# Numeric-only validation (bash 3.2 safe)
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
-# Newline variable for string building (bash 3.2 safe)
 NL='
 '
 
-# Parse ps cputime output (M:SS.cc or H:MM:SS) into whole seconds (bash 3.2 safe)
+# Parse ps cputime (M:SS.cc or H:MM:SS) into whole seconds
 _parse_cpu_seconds() {
   local t="$1"
   [ -z "$t" ] && echo "0" && return
-  local _colons="${t//[^:]/}"
-  case "${#_colons}" in
-    1) # M:SS or M:SS.cc
-      local _min="${t%%:*}" _rest="${t#*:}"
-      echo "$((10#$_min * 60 + 10#${_rest%%.*}))"
-      ;;
-    2) # H:MM:SS
-      local _h="${t%%:*}" _rest="${t#*:}"
-      local _min="${_rest%%:*}" _sec="${_rest#*:}"
-      echo "$((10#$_h * 3600 + 10#$_min * 60 + 10#${_sec%%.*}))"
-      ;;
+  local colons="${t//[^:]/}"
+  case "${#colons}" in
+    1) local m="${t%%:*}" r="${t#*:}"; echo "$((10#$m * 60 + 10#${r%%.*}))" ;;
+    2) local h="${t%%:*}" r="${t#*:}"; local m="${r%%:*}" s="${r#*:}"
+       echo "$((10#$h * 3600 + 10#$m * 60 + 10#${s%%.*}))" ;;
     *) echo "0" ;;
   esac
 }
 
-# Get pane title, sanitized for eval safety (strips single quotes)
 _get_pane_title() {
   local t
   t=$(tmux display-message -t "$1" -p '#{pane_title}' 2>/dev/null) || t=""
   echo "${t//\'/}"
 }
 
-# Update duration tracking for a pane. Sets PANE_DURATION_<idx> via eval.
-# Records STATE_CHANGE snapshot event on transitions.
-# Args: <pane_idx> <prev_display_state> <cur_display_state>
+# Set per-pane tracking vars: state, title, tool, prev_display
+_set_pane_info() {
+  local idx="$1" state="$2" title="$3" tool="$4" prev="$5"
+  eval "PANE_STATE_${idx}='${state}'"
+  eval "PANE_TITLE_${idx}='${title}'"
+  eval "PANE_TOOL_${idx}='${tool}'"
+  eval "PANE_PREV_DISPLAY_${idx}='${prev}'"
+}
+
+# Track state duration; record transitions as snapshot events
 _update_duration() {
   local idx="$1" prev="$2" cur="$3"
   local since_file="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${idx}"
@@ -49,48 +46,61 @@ _update_duration() {
     eval "PANE_DURATION_${idx}=0"
     SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${idx} ${prev}->${cur}${NL}"
   else
-    local _since
-    read -r _since < "$since_file" 2>/dev/null || { echo "$SCAN_TIME" > "$since_file"; _since="$SCAN_TIME"; }
-    eval "PANE_DURATION_${idx}=$(($SCAN_TIME - $_since))"
+    local since
+    read -r since < "$since_file" 2>/dev/null || { echo "$SCAN_TIME" > "$since_file"; since="$SCAN_TIME"; }
+    eval "PANE_DURATION_${idx}=$(($SCAN_TIME - $since))"
   fi
 }
 
-# --- Load session environment ---
+# Atomic file write via tmp+mv
+_atomic_write() { echo "$2" > "$1.tmp" && mv "$1.tmp" "$1"; }
+
+# Format seconds as compact duration (e.g. 2h5m30s, 5m30s, 30s)
+_format_duration() {
+  local h=$(($1 / 3600)) m=$((($1 % 3600) / 60)) s=$(($1 % 60))
+  if [ "$h" -gt 0 ]; then echo "${h}h${m}m${s}s"
+  elif [ "$m" -gt 0 ]; then echo "${m}m${s}s"
+  else echo "${s}s"
+  fi
+}
+
+# Map raw/internal states to display states
+_display_state() {
+  case "$1" in
+    WORKING|CHANGED|UNCHANGED|STUCK) echo "WORKING" ;;
+    IDLE|FINISHED) echo "IDLE" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# --- Load environment ---
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { echo "ERROR: not in doey session"; exit 1; }
 
-# --- Detect pane identity ---
 PANE_INFO=$(tmux display-message -t "${TMUX_PANE}" -p '#{window_index}.#{pane_index}' 2>/dev/null) || PANE_INFO="0.0"
 WINDOW_INDEX="${PANE_INFO%.*}"
 PANE_INDEX="${PANE_INFO#*.}"
 
-# --- Resolve target team window ---
-# Watchdog lives in Dashboard (window 0) but monitors a team window.
-# Find which team has WATCHDOG_PANE="0.<our pane index>".
+# Find which team has WATCHDOG_PANE matching our pane
 TARGET_WINDOW=""
-for _wds_tf in "${RUNTIME_DIR}"/team_*.env; do
-  [ -f "$_wds_tf" ] || continue
-  _wds_wd=$(grep '^WATCHDOG_PANE=' "$_wds_tf" | cut -d= -f2-)
-  _wds_wd="${_wds_wd%\"}" && _wds_wd="${_wds_wd#\"}"
-  if [ "$_wds_wd" = "0.${PANE_INDEX}" ]; then
-    _wds_fn="${_wds_tf##*/}"   # team_N.env
-    _wds_fn="${_wds_fn#team_}" # N.env
-    TARGET_WINDOW="${_wds_fn%.env}"
+for tf in "${RUNTIME_DIR}"/team_*.env; do
+  [ -f "$tf" ] || continue
+  wp=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2-)
+  wp="${wp%\"}" && wp="${wp#\"}"
+  if [ "$wp" = "0.${PANE_INDEX}" ]; then
+    fn="${tf##*/}"
+    fn="${fn#team_}"
+    TARGET_WINDOW="${fn%.env}"
     break
   fi
 done
-# Fallback: use pane index as team window (0.1 → team 1, 0.2 → team 2)
 if [ -z "$TARGET_WINDOW" ]; then
   echo "WARNING: No team found for watchdog pane 0.${PANE_INDEX}" >&2
   TARGET_WINDOW="$PANE_INDEX"
 fi
 
-# Safe key-value parse — load target team's env file
 TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WINDOW}.env"
-if [ -f "$TEAM_ENV" ]; then
-  _ENV_SRC="$TEAM_ENV"
-else
-  _ENV_SRC="${RUNTIME_DIR}/session.env"
-fi
+_ENV_SRC="$TEAM_ENV"
+[ -f "$TEAM_ENV" ] || _ENV_SRC="${RUNTIME_DIR}/session.env"
 while IFS='=' read -r key value; do
   value="${value%\"}" && value="${value#\"}"
   case "$key" in
@@ -99,27 +109,20 @@ while IFS='=' read -r key value; do
   esac
 done < "$_ENV_SRC"
 
-# --- Resolve hash command once (avoid per-pane fork) ---
 if command -v md5 >/dev/null 2>&1; then
   hash_fn() { md5 -qs "$1"; }
 else
   hash_fn() { printf '%s' "$1" | md5sum | cut -d' ' -f1; }
 fi
 
-# --- Collect pane states (bash 3 compatible, no associative arrays) ---
-# States stored as PANE_STATE_<index>=value
-
-# --- Load previous pane states from JSON (for stuck detection & suppression) ---
+# Load previous pane states for stuck detection
 PREV_STATES_FILE="${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json"
 if [ -f "$PREV_STATES_FILE" ]; then
   PREV_JSON=$(cat "$PREV_STATES_FILE" 2>/dev/null) || PREV_JSON="{}"
-  # Parse "index":"STATE" pairs — bash 3.2 compatible
   PREV_PAIRS=$(echo "$PREV_JSON" | sed 's/[{}"]//g' | tr ',' '\n')
   while IFS=: read -r pidx pstate; do
-    pidx="${pidx// /}"
-    pstate="${pstate// /}"
+    pidx="${pidx// /}" pstate="${pstate// /}"
     is_numeric "$pidx" || continue
-    # Validate state value before eval to prevent injection from corrupted JSON
     case "$pstate" in
       IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|UNKNOWN) ;;
       *) continue ;;
@@ -133,94 +136,78 @@ fi
 SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 SCAN_HAD_OUTPUT=false
 SCAN_TIME=$(date +%s)
-
-# --- Snapshot tracking variables ---
 SNAPSHOT_EVENTS=""
 
-# --- Window Manager health check (Manager is pane 0 in the target team window) ---
+# --- Manager health check ---
 MGR_PANE_REF=""
 if [ -f "$TEAM_ENV" ]; then
-  _wds_mgr=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
-  _wds_mgr="${_wds_mgr%\"}" && _wds_mgr="${_wds_mgr#\"}"
-  [ -n "$_wds_mgr" ] && MGR_PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.${_wds_mgr}"
+  mgr_idx=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
+  mgr_idx="${mgr_idx%\"}" && mgr_idx="${mgr_idx#\"}"
+  [ -n "$mgr_idx" ] && MGR_PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.${mgr_idx}"
 fi
-# Fallback: Manager is pane 0 in the target team window
 [ -z "$MGR_PANE_REF" ] && MGR_PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.0"
 
 MGR_CMD=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
 case "$MGR_CMD" in
   bash|zsh|sh|fish)
     echo "MANAGER_CRASHED"; SCAN_HAD_OUTPUT=true
-    # Write alert file so on-pre-tool-use.sh can block send-keys to the dead Manager
     CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
     if [ ! -f "$CRASH_ALERT" ]; then
-      # Atomic write via temp+mv (consistent with heartbeat pattern)
-      _crash_tmp="${CRASH_ALERT}.tmp"
-      printf 'TEAM_WINDOW=%s\nTIMESTAMP=%s\n' "${TARGET_WINDOW}" "$(date +%s)" > "$_crash_tmp"
-      mv "$_crash_tmp" "$CRASH_ALERT"
+      _tmp="${CRASH_ALERT}.tmp"
+      printf 'TEAM_WINDOW=%s\nTIMESTAMP=%s\n' "${TARGET_WINDOW}" "$(date +%s)" > "$_tmp"
+      mv "$_tmp" "$CRASH_ALERT"
     fi
     ;;
   *)
-    # Manager is alive — clean up any stale crash alert
     rm -f "${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}" 2>/dev/null
     ;;
 esac
 
-# --- Manager idle detection (for completion notification) ---
+# Manager idle detection + completion transition
 MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
 case "$MGR_CAPTURE" in
   *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
   *) PANE_STATE_0="WORKING" ;;
 esac
 
-# Detect Manager WORKING→IDLE transition (completion event for Session Manager)
 MGR_PREV_FILE="${RUNTIME_DIR}/status/manager_prev_state_W${TARGET_WINDOW}"
 read -r MGR_PREV_STATE < "$MGR_PREV_FILE" 2>/dev/null || MGR_PREV_STATE="UNKNOWN"
 echo "$PANE_STATE_0" > "$MGR_PREV_FILE"
 if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
-  echo "MANAGER_COMPLETED"
-  SCAN_HAD_OUTPUT=true
+  echo "MANAGER_COMPLETED"; SCAN_HAD_OUTPUT=true
 fi
 
-# --- Scan each worker pane ---
+# --- Scan worker panes ---
 PANES_LIST="${WORKER_PANES//,/ }"
-# Note: SCAN_HAD_OUTPUT may already be true from MANAGER_CRASHED above — don't reset
 for i in $PANES_LIST; do
-  # Validate pane index before use in eval/variable expansion
   is_numeric "$i" || continue
   PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.${i}"
   PANE_SAFE="${SESSION_SAFE}_${TARGET_WINDOW}_${i}"
 
-  # Check reservation
+  # Reserved
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
     echo "PANE ${i} RESERVED"; SCAN_HAD_OUTPUT=true
-    eval "PANE_STATE_${i}=RESERVED"
-    eval "PANE_TITLE_${i}=''"
-    eval "PANE_TOOL_${i}=''"
+    _set_pane_info "$i" "RESERVED" "" "" ""
     eval "PANE_DURATION_${i}=0"
-    eval "PANE_PREV_DISPLAY_${i}=''"
     continue
   fi
 
-  # Exit copy-mode only if pane is actually in copy-mode
+  # Exit copy-mode if active
   PANE_MODE=$(tmux display-message -t "$PANE_REF" -p '#{pane_mode}' 2>/dev/null) || PANE_MODE=""
   if [ "$PANE_MODE" = "copy-mode" ]; then
     tmux copy-mode -q -t "$PANE_REF" 2>/dev/null || true
   fi
 
-  # Check for crash (shell prompt without claude/node running)
-  # Cross-check with status file to avoid false-positives on normally finished workers
+  # Crash detection (shell running without claude/node)
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
   case "$CURRENT_CMD" in
     bash|zsh|sh|fish)
-      # Determine state from hook-written status file (single grep instead of two)
       _hook_line=$(grep '^STATUS:' "${RUNTIME_DIR}/status/${PANE_SAFE}.status" 2>/dev/null | head -1) || _hook_line=""
       case "$_hook_line" in
         *FINISHED*) _crash_state="FINISHED" ;;
         *RESERVED*) _crash_state="RESERVED" ;;
         *)
           _crash_state="CRASHED"
-          # Write crash alert file for Window Manager consumption
           CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${TARGET_WINDOW}_${i}"
           if [ ! -f "$CRASH_FILE" ]; then
             CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
@@ -233,19 +220,14 @@ CRASH_EOF
           ;;
       esac
       echo "PANE ${i} ${_crash_state}"; SCAN_HAD_OUTPUT=true
-      eval "PANE_STATE_${i}='${_crash_state}'"
-      eval "PANE_TITLE_${i}='$(_get_pane_title "$PANE_REF")'"
-      eval "PANE_TOOL_${i}=''"
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "$_crash_state"
-      eval "PANE_PREV_DISPLAY_${i}='${_prev}'"
+      _set_pane_info "$i" "$_crash_state" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
       continue
       ;;
   esac
 
-  # --- CPU time detection (reliable IDLE vs WORKING signal) ---
-  # When Claude Code is running (node), compare CPU time between scans.
-  # Active work (thinking, tool execution) consumes CPU; idle waiting does not.
+  # CPU time detection — active work consumes CPU; idle waiting does not
   _pane_ppid=$(tmux display-message -t "$PANE_REF" -p '#{pane_pid}' 2>/dev/null) || _pane_ppid=""
   _cpu_secs=0
   if [ -n "$_pane_ppid" ]; then
@@ -260,16 +242,15 @@ CRASH_EOF
   [ -f "$CPU_FILE" ] && read -r _prev_cpu_secs < "$CPU_FILE" 2>/dev/null
   echo "$_cpu_secs" > "$CPU_FILE"
   if [ "$_prev_cpu_secs" -lt 0 ]; then
-    _cpu_delta=-1  # First scan — no comparison possible
+    _cpu_delta=-1
   else
     _cpu_delta=$((_cpu_secs - _prev_cpu_secs))
-    [ "$_cpu_delta" -lt 0 ] && _cpu_delta=0  # Process restarted
+    [ "$_cpu_delta" -lt 0 ] && _cpu_delta=0
   fi
   _cpu_active=""
   [ "$_cpu_delta" -gt 1 ] && _cpu_active="yes"
 
-  # --- Hook-written status file (secondary signal) ---
-  # on-prompt-submit.sh writes BUSY, stop-status.sh writes FINISHED/READY
+  # Hook-written status (BUSY/FINISHED/READY from on-prompt-submit/stop-status)
   _hook_status=""
   STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
   if [ -f "$STATUS_FILE" ]; then
@@ -277,29 +258,22 @@ CRASH_EOF
     _hook_status="${_hook_status#STATUS: }"
   fi
 
-  # Capture last 5 lines
   CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || CAPTURE=""
-
-  # Hash the capture
   HASH=$(hash_fn "$CAPTURE")
-
   HASH_FILE="${RUNTIME_DIR}/status/pane_hash_${PANE_SAFE}"
   read -r OLD_HASH < "$HASH_FILE" 2>/dev/null || OLD_HASH=""
 
   if [ "$HASH" = "$OLD_HASH" ]; then
     # Content unchanged — use CPU time to distinguish IDLE vs WORKING
-    eval "PANE_TITLE_${i}='$(_get_pane_title "$PANE_REF")'"
-    eval "PANE_TOOL_${i}=''"
     eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
 
     if [ -n "$_cpu_active" ] || [ "$_hook_status" = "BUSY" ]; then
-      # CPU active OR hook says BUSY → working (thinking/processing, no visible output)
+      # CPU active or hook says BUSY
       COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
       read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
       NEW_COUNT=$((OLD_COUNT + 1))
       echo "$NEW_COUNT" > "$COUNTER_FILE"
 
-      # After 6 consecutive CPU-active-but-no-output cycles, escalate to STUCK
       if [ "$NEW_COUNT" -ge 6 ]; then
         echo "PANE ${i} STUCK (CPU active but no output for ${NEW_COUNT} cycles)"; SCAN_HAD_OUTPUT=true
         _unch_state="STUCK"
@@ -311,12 +285,10 @@ CRASH_EOF
         esac
       fi
       _update_duration "$i" "WORKING" "WORKING"
-      eval "PANE_PREV_DISPLAY_${i}='WORKING'"
+      _set_pane_info "$i" "$_unch_state" "$(_get_pane_title "$PANE_REF")" "" "WORKING"
     else
       # No CPU activity + hash unchanged = truly IDLE
       rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
-      _unch_state="IDLE"
-      # Merge output emission and display-prev computation into one case
       case "$PREV" in
         IDLE|UNCHANGED)
           _display_prev="IDLE" ;;
@@ -331,59 +303,33 @@ CRASH_EOF
           _display_prev="$PREV" ;;
       esac
       _update_duration "$i" "$_display_prev" "IDLE"
-      eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
+      _set_pane_info "$i" "IDLE" "$(_get_pane_title "$PANE_REF")" "" "$_display_prev"
     fi
-    eval "PANE_STATE_${i}='${_unch_state}'"
     continue
   fi
 
-  # Hash changed — content is actively updating = WORKING
+  # Hash changed — content actively updating
   rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
-  echo "$HASH" > "${HASH_FILE}.tmp" && mv "${HASH_FILE}.tmp" "$HASH_FILE"
+  _atomic_write "$HASH_FILE" "$HASH"
 
   echo "PANE ${i} WORKING"; SCAN_HAD_OUTPUT=true
-  eval "PANE_STATE_${i}='WORKING'"
-  eval "PANE_TITLE_${i}='$(_get_pane_title "$PANE_REF")'"
 
-  # Extract last tool name from capture (for display)
-  _last_tool=""
-  _remaining="$CAPTURE"
-  while [ -n "$_remaining" ]; do
-    _line="${_remaining%%${NL}*}"
-    case "$_line" in
-      *Agent*) _last_tool="Agent" ;;
-      *Bash*)  _last_tool="Bash" ;;
-      *Read*)  _last_tool="Read" ;;
-      *Edit*)  _last_tool="Edit" ;;
-      *Write*) _last_tool="Write" ;;
-      *Grep*)  _last_tool="Grep" ;;
-      *Glob*)  _last_tool="Glob" ;;
-    esac
-    if [ "$_remaining" = "$_line" ]; then break; fi
-    _remaining="${_remaining#*${NL}}"
-  done
-  eval "PANE_TOOL_${i}='${_last_tool}'"
+  # Extract last tool name from capture
+  _last_tool=$(echo "$CAPTURE" | grep -oE '(Agent|Bash|Read|Edit|Write|Grep|Glob)' | tail -1) || _last_tool=""
 
-  # Duration tracking — map prev state to display state
   eval "_prev_raw=\${PREV_STATE_${i}:-UNKNOWN}"
-  case "$_prev_raw" in
-    WORKING|CHANGED|UNCHANGED|STUCK) _display_prev="WORKING" ;;
-    IDLE|FINISHED) _display_prev="IDLE" ;;
-    *) _display_prev="$_prev_raw" ;;
-  esac
+  _display_prev=$(_display_state "$_prev_raw")
   _update_duration "$i" "$_display_prev" "WORKING"
-  eval "PANE_PREV_DISPLAY_${i}='${_display_prev}'"
+  _set_pane_info "$i" "WORKING" "$(_get_pane_title "$PANE_REF")" "$_last_tool" "$_display_prev"
 done
 
-# --- Status summary (always printed for Watchdog display) ---
-# Manager status
+# --- Status summary ---
 case "$MGR_CMD" in
   bash|zsh|sh|fish) _mgr_label="CRASHED" ;;
   *) _mgr_label="$PANE_STATE_0" ;;
 esac
 MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
 
-# Build compact worker summary: count by state + list active titles
 _n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_other=0
 _active_titles=""
 _longest_pane="" _longest_dur=0
@@ -395,10 +341,8 @@ for i in $PANES_LIST; do
     WORKING|CHANGED|UNCHANGED) _n_working=$((_n_working + 1))
       eval "_pt=\${PANE_TITLE_${i}:-}"
       [ -n "$_pt" ] && _active_titles="${_active_titles:+${_active_titles}, }${i}:${_pt}"
-      # Track longest-running worker
       if [ "$_dur" -gt "$_longest_dur" ]; then
-        _longest_dur="$_dur"
-        _longest_pane="$i"
+        _longest_dur="$_dur"; _longest_pane="$i"
       fi
       ;;
     IDLE|FINISHED) _n_idle=$((_n_idle + 1)) ;;
@@ -409,22 +353,12 @@ for i in $PANES_LIST; do
   esac
 done
 
-# Format longest duration as HhMmSs
 _longest_label=""
 if [ -n "$_longest_pane" ] && [ "$_longest_dur" -gt 0 ]; then
-  _lh=$((_longest_dur / 3600))
-  _lm=$(((_longest_dur % 3600) / 60))
-  _ls=$((_longest_dur % 60))
-  if [ "$_lh" -gt 0 ]; then
-    _longest_label="${_longest_pane}@${_lh}h${_lm}m${_ls}s"
-  elif [ "$_lm" -gt 0 ]; then
-    _longest_label="${_longest_pane}@${_lm}m${_ls}s"
-  else
-    _longest_label="${_longest_pane}@${_ls}s"
-  fi
+  _longest_label="${_longest_pane}@$(_format_duration "$_longest_dur")"
 fi
 
-# --- Wave completion detection (HAS_WORKING → ALL_IDLE transition) ---
+# Wave completion: HAS_WORKING → ALL_IDLE transition
 _all_available=$((_n_working + _n_idle + _n_stuck + _n_crashed))
 WAVE_STATE_FILE="${RUNTIME_DIR}/status/wave_state_W${TARGET_WINDOW}"
 read -r _prev_wave_state < "$WAVE_STATE_FILE" 2>/dev/null || _prev_wave_state="UNKNOWN"
@@ -435,12 +369,10 @@ else
 fi
 echo "$_cur_wave_state" > "$WAVE_STATE_FILE"
 if [ "$_prev_wave_state" = "HAS_WORKING" ] && [ "$_cur_wave_state" = "ALL_IDLE" ]; then
-  echo "WAVE_COMPLETE"
-  SCAN_HAD_OUTPUT=true
+  echo "WAVE_COMPLETE"; SCAN_HAD_OUTPUT=true
   SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}WAVE_COMPLETE all_workers_idle${NL}"
 fi
 
-# Print summary line
 printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_working" "$_n_idle"
 [ "$_n_stuck" -gt 0 ] && printf ' %dS' "$_n_stuck"
 [ "$_n_crashed" -gt 0 ] && printf ' %dC' "$_n_crashed"
@@ -448,10 +380,9 @@ printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_worki
 [ -n "$_longest_label" ] && printf ' | longest:%s' "$_longest_label"
 printf '\n'
 
-# --- Check for worker completion events ---
+# --- Completion events ---
 for cf in "${RUNTIME_DIR}/status"/completion_pane_${TARGET_WINDOW}_*; do
   [ -f "$cf" ] || continue
-  # Safe key-value parse (completion files live in /tmp, avoid sourcing)
   PANE_INDEX="" PANE_TITLE="" STATUS="" TIMESTAMP=""
   while IFS='=' read -r _cf_key _cf_val; do
     _cf_val="${_cf_val%\"}" && _cf_val="${_cf_val#\"}"
@@ -467,9 +398,8 @@ for cf in "${RUNTIME_DIR}/status"/completion_pane_${TARGET_WINDOW}_*; do
   rm -f "$cf"
 done
 
-# --- Write team snapshot file ---
+# --- Write team snapshot ---
 SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
-SNAPSHOT_TMP="${SNAPSHOT_FILE}.tmp"
 {
   printf 'SNAPSHOT_TIME=%s\n' "$SCAN_TIME"
   printf 'MANAGER=%s\n' "$_mgr_label"
@@ -477,11 +407,8 @@ SNAPSHOT_TMP="${SNAPSHOT_FILE}.tmp"
   _total=0
   for _ci in $PANES_LIST; do is_numeric "$_ci" && _total=$((_total + 1)); done
   printf 'TOTAL_WORKERS=%s\n' "$_total"
-  printf 'WORKING=%s\n' "$_n_working"
-  printf 'IDLE=%s\n' "$_n_idle"
-  printf 'STUCK=%s\n' "$_n_stuck"
-  printf 'CRASHED=%s\n' "$_n_crashed"
-  printf 'RESERVED=%s\n' "$_n_reserved"
+  printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\n' \
+    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved"
   printf -- '---\n'
   printf 'PANE|STATE|TITLE|DURATION_SECS|LAST_TOOL|PREV_STATE\n'
   for i in $PANES_LIST; do
@@ -491,24 +418,18 @@ SNAPSHOT_TMP="${SNAPSHOT_FILE}.tmp"
     eval "_sn_dur=\${PANE_DURATION_${i}:-0}"
     eval "_sn_tool=\${PANE_TOOL_${i}:-}"
     eval "_sn_prev=\${PANE_PREV_DISPLAY_${i}:-}"
-    # Normalize display state for snapshot
-    case "$_sn_st" in
-      CHANGED) _sn_st="WORKING" ;;
-      UNCHANGED) _sn_st="WORKING" ;;  # Brief transitional state before IDLE or STUCK
-    esac
+    case "$_sn_st" in CHANGED|UNCHANGED) _sn_st="WORKING" ;; esac
     printf '%s|%s|%s|%s|%s|%s\n' "$i" "$_sn_st" "$_sn_title" "$_sn_dur" "$_sn_tool" "$_sn_prev"
   done
   printf -- '---\n'
   printf 'EVENTS\n'
-  # Print collected events (trailing newline already in each entry)
   printf '%s' "$SNAPSHOT_EVENTS"
-} > "$SNAPSHOT_TMP" && mv "$SNAPSHOT_TMP" "$SNAPSHOT_FILE"
+} > "${SNAPSHOT_FILE}.tmp" && mv "${SNAPSHOT_FILE}.tmp" "$SNAPSHOT_FILE"
 
-# --- Write heartbeat ---
-echo "$SCAN_TIME" > "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat.tmp" && \
-  mv "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat.tmp" "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat"
+# --- Heartbeat ---
+_atomic_write "${RUNTIME_DIR}/status/watchdog_W${TARGET_WINDOW}.heartbeat" "$SCAN_TIME"
 
-# --- Write pane states JSON (atomic) ---
+# --- Pane states JSON ---
 JSON="{"
 _sep=""
 for i in $PANES_LIST; do
@@ -518,17 +439,16 @@ for i in $PANES_LIST; do
   _sep=","
 done
 JSON+="}"
-echo "$JSON" > "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json.tmp" && \
-  mv "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json.tmp" "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json"
+_atomic_write "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json" "$JSON"
 
-# --- Append snapshot inline (so watchdog doesn't need a second tool call) ---
+# --- Inline snapshot for watchdog ---
 if [ -f "$SNAPSHOT_FILE" ]; then
   echo "--- SNAPSHOT ---"
   cat "$SNAPSHOT_FILE"
   echo "--- END SNAPSHOT ---"
 fi
 
-# --- Context check: detect watchdog's own context % from pane status line ---
+# --- Context pressure check ---
 _ctx_line=$(tmux capture-pane -t "${TMUX_PANE}" -p -S -5 2>/dev/null | grep 'Ctx ' | tail -1) || _ctx_line=""
 _ctx_pct=$(echo "$_ctx_line" | sed 's/.*Ctx [^ ]* //;s/%.*//')
 _ctx_pct="${_ctx_pct// /}"
@@ -539,5 +459,4 @@ if [ "$_ctx_pct" -ge 60 ]; then
   echo "You MUST run /compact immediately. Do NOT run another scan cycle first."
 fi
 
-# --- Summary footer ---
 echo "SCAN_TIME=${SCAN_TIME}"

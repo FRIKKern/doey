@@ -21,17 +21,25 @@ die() {
   exit 1
 }
 
-# Remove doey-* files in $1 that no longer exist in $2 (source dir)
 clean_orphans() {
-  local dest_dir="$1" src_dir="$2"
-  for installed in "$dest_dir"/doey-*.md; do
-    [ -f "$installed" ] || continue
-    local_name="$(basename "$installed")"
-    if [ ! -f "$src_dir/$local_name" ]; then
-      rm -f "$installed"
-      detail "removed orphan: $local_name"
-    fi
+  local dest="$1" src="$2"
+  for f in "$dest"/doey-*.md; do
+    [ -f "$f" ] || continue
+    [ -f "$src/$(basename "$f")" ] || { rm -f "$f"; detail "removed orphan: $(basename "$f")"; }
   done
+}
+
+# Glob .md files from src, copy to dest, clean orphans. Sets _COUNT.
+install_md_files() {
+  local src="$1" dest="$2" step="$3" label="$4"
+  shopt -s nullglob
+  _files=("$src/"*.md)
+  shopt -u nullglob
+  [ ${#_files[@]} -gt 0 ] || die "No files found in $src/"
+  _COUNT=${#_files[@]}
+  printf "  ${BRAND}[%s]${RESET} Installing %s (${BOLD}%s${RESET})..." "$step" "$label" "$_COUNT"
+  cp "${_files[@]}" "$dest/" && step_ok || { step_fail; die "Failed to copy $label."; }
+  clean_orphans "$dest" "$src"
 }
 
 echo ""
@@ -41,14 +49,11 @@ printf "${BRAND}│${RESET}  ${DIM}Multi-agent orchestration for Claude Code${RE
 printf "${BRAND}└────────────────────────────────────────────┘${RESET}\n"
 echo ""
 
-detect_platform() {
-  case "$(uname -s)" in
-    Darwin) echo "macos" ;;
-    Linux)  echo "linux" ;;
-    *)      echo "unknown" ;;
-  esac
-}
-PLATFORM=$(detect_platform)
+case "$(uname -s)" in
+  Darwin) PLATFORM="macos" ;;
+  Linux)  PLATFORM="linux" ;;
+  *)      PLATFORM="unknown" ;;
+esac
 IS_INTERACTIVE=false
 [ -t 0 ] && IS_INTERACTIVE=true
 
@@ -79,7 +84,6 @@ run_install() {
   fi
 }
 
-# Install a required tool via brew (macOS) or apt (Linux), or die
 require_tool() {
   local name="$1" pkg="${2:-$1}"
   if ask_install "$name"; then
@@ -104,32 +108,27 @@ printf "${BOLD}  Checking prerequisites...${RESET}\n"
 echo ""
 HAS_NODE=false
 HAS_BREW=false
-if command -v brew &>/dev/null; then
-  HAS_BREW=true
-fi
+command -v brew &>/dev/null && HAS_BREW=true
 
-if command -v git &>/dev/null; then
-  printf "  ${SUCCESS}✓${RESET} git\n"
-else
-  require_tool "git"
-fi
+has() { command -v "$1" &>/dev/null; }
+check_ok() { printf "  ${SUCCESS}✓${RESET} %s\n" "$*"; }
 
-if command -v tmux &>/dev/null; then
+has git   && check_ok "git"   || require_tool "git"
+
+if has tmux; then
   TMUX_VER=$(tmux -V 2>/dev/null | head -1)
-  printf "  ${SUCCESS}✓${RESET} tmux ${DIM}(%s)${RESET}\n" "$TMUX_VER"
+  check_ok "tmux ${DIM}($TMUX_VER)${RESET}"
   TMUX_MAJOR=$(echo "$TMUX_VER" | sed 's/[^0-9.]//g' | cut -d. -f1)
-  if [ -n "$TMUX_MAJOR" ] && [ "$TMUX_MAJOR" -lt 3 ] 2>/dev/null; then
-    warn_msg "tmux 3.0+ recommended (you have $TMUX_VER)"
-  fi
+  [ -n "$TMUX_MAJOR" ] && [ "$TMUX_MAJOR" -lt 3 ] 2>/dev/null && warn_msg "tmux 3.0+ recommended (you have $TMUX_VER)"
 else
   require_tool "tmux"
 fi
 
-if command -v node &>/dev/null; then
+if has node; then
   NODE_VER=$(node -v 2>/dev/null | sed 's/^v//')
   NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
   if [ -n "$NODE_MAJOR" ] && [ "$NODE_MAJOR" -ge 18 ] 2>/dev/null; then
-    printf "  ${SUCCESS}✓${RESET} Node.js ${DIM}(v%s)${RESET}\n" "$NODE_VER"
+    check_ok "Node.js ${DIM}(v$NODE_VER)${RESET}"
     HAS_NODE=true
   else
     warn_msg "Node.js 18+ required (you have v${NODE_VER})"
@@ -148,8 +147,8 @@ elif [ "$HAS_NODE" = false ]; then
   warn_msg "Node.js is needed for Claude Code — install later from https://nodejs.org"
 fi
 
-if command -v claude &>/dev/null; then
-  printf "  ${SUCCESS}✓${RESET} claude CLI\n"
+if has claude; then
+  check_ok "claude CLI"
 elif [ "$HAS_NODE" = true ] && ask_install "Claude Code CLI"; then
   run_install "Claude Code" "npm install -g @anthropic-ai/claude-code" || \
     warn_msg "Failed — try manually: npm i -g @anthropic-ai/claude-code"
@@ -157,8 +156,8 @@ else
   warn_msg "claude CLI not found (npm i -g @anthropic-ai/claude-code)"
 fi
 
-if command -v jq &>/dev/null; then
-  printf "  ${SUCCESS}✓${RESET} jq\n"
+if has jq; then
+  check_ok "jq"
 else
   warn_msg "jq not found (optional — hooks will use python3 fallback)"
 fi
@@ -186,56 +185,26 @@ date=$INSTALLED_DATE
 repo=$SCRIPT_DIR
 VEOF
 
-# Clean up stale files from previous installs (skills → commands rename)
 rm -f ~/.claude/skills/doey-*.md 2>/dev/null
 rmdir ~/.claude/skills 2>/dev/null || true
 
-shopt -s nullglob
-agent_files=("$SCRIPT_DIR/agents/"*.md)
-shopt -u nullglob
-if [[ ${#agent_files[@]} -eq 0 ]]; then
-  die "No agent files found in $SCRIPT_DIR/agents/"
-fi
-AGENT_COUNT=${#agent_files[@]}
-printf "  ${BRAND}[2/5]${RESET} Installing agent definitions (${BOLD}%s${RESET})..." "$AGENT_COUNT"
-{
-  cp "${agent_files[@]}" ~/.claude/agents/
-} && step_ok || { step_fail; die "Failed to copy agent definitions."; }
+install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/5" "agent definitions"
+AGENT_COUNT=$_COUNT
+for f in "${_files[@]}"; do detail "$(basename "$f" .md)"; done
 
-for f in "${agent_files[@]}"; do
-  detail "$(basename "$f" .md)"
-done
-
-clean_orphans ~/.claude/agents "$SCRIPT_DIR/agents"
-
-shopt -s nullglob
-cmd_files=("$SCRIPT_DIR/commands/"*.md)
-shopt -u nullglob
-if [[ ${#cmd_files[@]} -eq 0 ]]; then
-  die "No command files found in $SCRIPT_DIR/commands/"
-fi
-CMD_COUNT=${#cmd_files[@]}
-printf "  ${BRAND}[3/5]${RESET} Installing slash commands (${BOLD}%s${RESET})..." "$CMD_COUNT"
-{
-  cp "${cmd_files[@]}" ~/.claude/commands/
-} && step_ok || { step_fail; die "Failed to copy commands."; }
-
+install_md_files "$SCRIPT_DIR/commands" ~/.claude/commands "3/5" "slash commands"
+CMD_COUNT=$_COUNT
 CMD_NAMES=""
-for f in "${cmd_files[@]}"; do CMD_NAMES="${CMD_NAMES:+$CMD_NAMES, }/$(basename "$f" .md)"; done
+for f in "${_files[@]}"; do CMD_NAMES="${CMD_NAMES:+$CMD_NAMES, }/$(basename "$f" .md)"; done
 detail "$CMD_NAMES"
 
-clean_orphans ~/.claude/commands "$SCRIPT_DIR/commands"
+install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 
 printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
 {
-  # doey.sh installs as "doey"; others keep their names
-  rm -f ~/.local/bin/doey
-  cp "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
-  chmod +x ~/.local/bin/doey
-  for script in tmux-statusbar.sh pane-border-status.sh info-panel.sh; do
-    rm -f "$HOME/.local/bin/$script"
-    cp "$SCRIPT_DIR/shell/$script" "$HOME/.local/bin/$script"
-    chmod +x "$HOME/.local/bin/$script"
+  install_script "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
+  for s in tmux-statusbar.sh pane-border-status.sh info-panel.sh; do
+    install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
 detail "~/.local/bin/doey"
