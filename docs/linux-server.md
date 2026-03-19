@@ -14,63 +14,28 @@ cd doey && ./install.sh
 cd ~/your-project && doey init && doey
 ```
 
-**Other distros:** Replace the first line with your package manager (`yum install -y` / `pacman -S`).
+Other distros: replace the first line with your package manager (`yum install -y` / `pacman -S`).
 
 ### SSH Usage
 
 ```bash
 ssh user@your-server
-cd ~/your-project
-doey                     # starts or reattaches
+cd ~/your-project && doey   # starts or reattaches
 # Ctrl+B, D to detach — team keeps running
 ```
 
-Reconnect: `ssh user@server && cd ~/your-project && doey`
-
-<details>
-<summary><strong>systemd Service</strong></summary>
-
-Create `~/.config/systemd/user/doey.service`:
-
-```ini
-[Unit]
-Description=Doey
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=forking
-Environment=HOME=%h
-Environment=PATH=%h/.local/bin:%h/.fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=%h/your-project
-ExecStart=%h/.local/bin/doey
-ExecStop=/usr/bin/tmux kill-session -t doey-myproject
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=default.target
-```
-
-```bash
-sudo loginctl enable-linger $USER
-systemctl --user daemon-reload
-systemctl --user enable doey && systemctl --user start doey
-```
-
-</details>
+For persistent sessions via systemd, see the [Linode guide](linode-setup.md#6-persistent-sessions-systemd) -- the unit file works on any Linux server.
 
 ### Cloud Providers
 
-Any Linux VPS with tmux and Node.js works. Never commit API keys — use env vars or `claude auth`.
+Any Linux VPS with tmux and Node.js works. Never commit API keys -- use env vars or `claude auth`.
 
 | Provider | Instance | Notes |
 |----------|----------|-------|
 | **Hetzner** | CX22 (~€3.29/mo) | EU/US, no egress fees |
 | **DigitalOcean** | Basic Droplet ($6/mo) | Simple UI |
 | **AWS** | t3.micro (free tier) | 12 months free |
-
-For Linode, see [linode-setup.md](linode-setup.md).
+| **Linode** | Nanode ($5/mo) | [Full guide](linode-setup.md) |
 
 ### Troubleshooting
 
@@ -78,7 +43,6 @@ For Linode, see [linode-setup.md](linode-setup.md).
 |-------|-----|
 | tmux too old (< 2.4) | Install from source or backports |
 | `node` not found | `source ~/.bashrc` (fnm PATH) |
-| Locale/UTF-8 errors | `sudo apt install -y locales && sudo locale-gen en_US.UTF-8` |
+| Locale/UTF-8 errors | `sudo locale-gen en_US.UTF-8` |
 | `doey` not found | `export PATH="$HOME/.local/bin:$PATH"` |
 | Workers fail to start | Verify `claude --version` works |
-| macOS notifications | `osascript` calls silently skipped on Linux |
