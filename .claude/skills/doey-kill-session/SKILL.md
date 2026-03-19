@@ -3,7 +3,7 @@ name: doey-kill-session
 description: Kill the entire Doey session — all windows, processes, and runtime files.
 ---
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
 **Confirm first:** "This will kill session `${SESSION_NAME}`, all processes, and remove `${RUNTIME_DIR}`. Proceed?"
 Do NOT proceed without explicit yes.

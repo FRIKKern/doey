@@ -3,7 +3,7 @@ name: doey-reload
 description: Hot-reload Manager + Watchdog without stopping workers
 ---
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
 Hot-reload: update files, restart Manager + Watchdog. Workers keep running unless `--workers`.
 

@@ -5,9 +5,9 @@ description: Kill and relaunch Claude instances. Resets process, context, name, 
 
 ## Context
 
-- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null`
-- Window index: !`tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-`
-- Team windows: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done`
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- Window index: !`tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-|| true`
+- Team windows: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
 
 ## Usage
 

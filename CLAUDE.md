@@ -64,7 +64,7 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 | File | Purpose |
 |------|---------|
 | `common.sh` | Shared utils: `init_hook()`, `parse_field()`, `load_team_env()`, role checks, `send_notification()` |
-| `on-session-start.sh` | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX |
+| `on-session-start.sh` | Sets DOEY_* env vars (ROLE, PANE_INDEX, WINDOW_INDEX, TEAM_WINDOW, TEAM_DIR, RUNTIME) plus SESSION_NAME, PROJECT_DIR, PROJECT_NAME |
 | `on-prompt-submit.sh` | BUSY status, READY on /compact, column expansion |
 | `on-pre-tool-use.sh` | Tool usage safety guards |
 | `on-pre-compact.sh` | Context preservation before compaction |
@@ -73,3 +73,7 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 | `stop-results.sh` | Result JSON and completion events |
 | `stop-notify.sh` | Session Manager notifications |
 | `watchdog-scan.sh` | Pane state detection, heartbeat |
+| `watchdog-wait.sh` | Watchdog sleep/wake between scan cycles |
+| `session-manager-wait.sh` | Session Manager sleep/wake between cycles |
+| `stop-notify-manager.sh` | Manager completion notifications |
+| `stop-notify-session-manager.sh` | Session Manager completion notifications |

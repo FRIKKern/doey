@@ -1178,8 +1178,31 @@ INITIAL_WORKER_COLS=3
 INITIAL_TEAMS=2
 MAX_WATCHDOG_SLOTS=6
 
+check_claude_auth() {
+  if ! command -v claude &>/dev/null; then
+    printf "  ${ERROR}✗ claude CLI not found${RESET}\n"
+    return 1
+  fi
+  local auth_json
+  auth_json=$(claude auth status 2>&1) || auth_json=""
+  if echo "$auth_json" | grep -q '"loggedIn": true'; then
+    local method email sub
+    method=$(echo "$auth_json" | grep '"authMethod"' | sed 's/.*: *"//;s/".*//')
+    email=$(echo "$auth_json" | grep '"email"' | sed 's/.*: *"//;s/".*//')
+    sub=$(echo "$auth_json" | grep '"subscriptionType"' | sed 's/.*: *"//;s/".*//')
+    printf "  ${SUCCESS}✓ Authenticated${RESET} ${DIM}(%s · %s · %s)${RESET}\n" "$method" "$email" "$sub"
+    return 0
+  else
+    printf "\n  ${ERROR}✗ Not logged in${RESET}\n"
+    printf "  ${DIM}All Claude instances share one auth session.${RESET}\n"
+    printf "  ${DIM}Run ${RESET}${BOLD}claude${RESET}${DIM} and authenticate, then retry.${RESET}\n\n"
+    return 1
+  fi
+}
+
 launch_with_grid() {
   local name="$1" dir="$2" grid="$3"
+  check_claude_auth || return 1
   if [[ "$grid" == "dynamic" || "$grid" == "d" ]]; then
     launch_session_dynamic "$name" "$dir"
   else
@@ -1689,6 +1712,19 @@ check_doctor() {
   else _doc_check fail "tmux not installed"; fi
   if command -v claude &>/dev/null; then _doc_check ok "claude CLI" "$(claude --version 2>/dev/null || echo 'unknown')"
   else _doc_check warn "claude CLI not in PATH"; fi
+
+  # Auth check
+  local auth_json
+  auth_json=$(claude auth status 2>&1) || auth_json=""
+  if echo "$auth_json" | grep -q '"loggedIn": true'; then
+    local _auth_method _auth_email _auth_sub
+    _auth_method=$(echo "$auth_json" | grep '"authMethod"' | sed 's/.*: *"//;s/".*//')
+    _auth_email=$(echo "$auth_json" | grep '"email"' | sed 's/.*: *"//;s/".*//')
+    _auth_sub=$(echo "$auth_json" | grep '"subscriptionType"' | sed 's/.*: *"//;s/".*//')
+    _doc_check ok "Claude auth" "${_auth_method} · ${_auth_email} · ${_auth_sub}"
+  else
+    _doc_check fail "Claude auth" "Not logged in — run 'claude' to authenticate"
+  fi
 
   # PATH check
   if echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then _doc_check ok "~/.local/bin in PATH"
