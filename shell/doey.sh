@@ -1709,7 +1709,7 @@ reload_session() {
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
         tmux send-keys -t "$pane_ref" "$worker_cmd" Enter
         printf "    %s.%s ${SUCCESS}✓${RESET}\n" "$tw" "$wp"
-        sleep 0.5
+        sleep 3
       done
     done
     printf "\n  ${SUCCESS}✓ Workers restarted${RESET}\n"
@@ -2198,7 +2198,7 @@ _boot_worker() {
   local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
   cmd+=" --append-system-prompt-file \"${prompt_file}\""
   tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
-  sleep 0.3
+  sleep 3
 
   write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
 }
