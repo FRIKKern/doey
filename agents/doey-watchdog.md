@@ -1,7 +1,7 @@
 ---
 name: doey-watchdog
 description: "Live team monitor — displays status, escalates events."
-model: opus
+model: haiku
 color: yellow
 memory: none
 ---
