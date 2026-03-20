@@ -120,7 +120,7 @@ session_exists() {
 
 read_team_windows() {
   local tw
-  tw=$(_env_val "$1" TEAM_WINDOWS)
+  tw=$(_env_val "$1/session.env" TEAM_WINDOWS)
   echo "${tw:-0}"
 }
 
