@@ -16,10 +16,13 @@ SEARCH_DIR="${DOEY_TEAM_DIR:-$PROJECT_DIR}"
 RECENT_FILES=""
 if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
   CUTOFF_AWK='$1 >= cutoff {$1=""; print substr($0,2)}'
-  STAT_ARGS="-c %Y %n"; stat -f '%m' /dev/null 2>/dev/null && STAT_ARGS="-f %m %N"
+  STAT_FLAG="-c"; STAT_FMT='%Y %n'
+  if stat -f '%m' /dev/null 2>/dev/null; then
+    STAT_FLAG="-f"; STAT_FMT='%m %N'
+  fi
   RECENT_FILES=$(find "$SEARCH_DIR" -maxdepth 4 \
     \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.sh' -o -name '*.md' -o -name '*.json' -o -name '*.py' \) \
-    -not -path '*/node_modules/*' -not -path '*/.git/*' -print0 2>/dev/null | xargs -0 stat $STAT_ARGS 2>/dev/null | \
+    -not -path '*/node_modules/*' -not -path '*/.git/*' -print0 2>/dev/null | xargs -0 stat $STAT_FLAG "$STAT_FMT" 2>/dev/null | \
     awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
