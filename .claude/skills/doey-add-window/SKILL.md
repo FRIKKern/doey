@@ -91,7 +91,7 @@ mv "$TMPENV" "${RUNTIME_DIR}/session.env"
 
 ```bash
 # Manager — uses team-specific agent name (matches doey.sh generate_team_agent)
-tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} Window Manager\" --agent \"t${NEW_WIN}-manager\"" Enter
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --name \"T${NEW_WIN} Window Manager\" --agent \"t${NEW_WIN}-manager\"" Enter
 sleep 1
 
 # Workers
@@ -111,7 +111,7 @@ for slot in 2 3 4 5 6 7; do
 done
 if [ -n "$WDG_SLOT" ]; then
   tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "T${NEW_WIN} Watchdog"
-  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} Watchdog\" --agent \"t${NEW_WIN}-watchdog\"" Enter
+  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model haiku --name \"T${NEW_WIN} Watchdog\" --agent \"t${NEW_WIN}-watchdog\"" Enter
   sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=0.${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
 else
   echo "WARNING: No available Dashboard slot for Watchdog"

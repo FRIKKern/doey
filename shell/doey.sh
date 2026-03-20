@@ -1664,7 +1664,7 @@ reload_session() {
         tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
         wdg_agent=$(generate_team_agent "doey-watchdog" "$tw")
-        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model opus --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
+        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
         printf " ${SUCCESS}✓${RESET}\n"
         (
           sleep 12
@@ -2414,7 +2414,7 @@ _launch_team_watchdog() {
   local wdg_agent
   wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model opus --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
+    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.5
 }

@@ -6,7 +6,7 @@ description: Kill and relaunch Claude instances. Resets process, context, name, 
 ## Context
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-- Window index: !`tmux show-environment DOEY_WINDOW_INDEX 2>/dev/null | cut -d= -f2-|| true`
+- Window index: !`echo "${DOEY_WINDOW_INDEX:-}"|| true`
 - Team windows: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
 
 ## Usage
@@ -84,7 +84,7 @@ echo "  ${W}.0 Manager ✓"; sleep 0.5
 WATCHDOG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2 | tr -d '"')
 WDG_PANE="${SESSION_NAME}:${WATCHDOG_PANE}"
 kill_pane_process "$WDG_PANE"
-tmux send-keys -t "$WDG_PANE" "claude --dangerously-skip-permissions --model opus --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\"" Enter
+tmux send-keys -t "$WDG_PANE" "claude --dangerously-skip-permissions --model haiku --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\"" Enter
 echo "  ${WATCHDOG_PANE} Watchdog ✓"; sleep 0.5
 # Schedule briefing after all panes relaunched
 WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' ',')
