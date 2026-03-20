@@ -61,6 +61,23 @@ fi
 
 wt_dir=$(_env_val "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 
+# Sync doey skills from source repo into the working directory
+_repo_path=""
+[ -f "$HOME/.claude/doey/repo-path" ] && _repo_path=$(cat "$HOME/.claude/doey/repo-path")
+if [ -n "$_repo_path" ] && [ -d "$_repo_path/.claude/skills" ]; then
+  _skill_target="${wt_dir:-$PROJECT_DIR}"
+  mkdir -p "$_skill_target/.claude/skills"
+  for _sd in "$_repo_path"/.claude/skills/doey-*/; do
+    [ -d "$_sd" ] || continue
+    cp -R "$_sd" "$_skill_target/.claude/skills/"
+  done
+  for _sd in "$_skill_target"/.claude/skills/doey-*/; do
+    [ -d "$_sd" ] || continue
+    _sn="$(basename "$_sd")"
+    [ ! -d "$_repo_path/.claude/skills/$_sn" ] && rm -rf "$_sd"
+  done
+fi
+
 cat >> "$CLAUDE_ENV_FILE" << EOF
 export DOEY_RUNTIME="$RUNTIME_DIR"
 export SESSION_NAME="$SESSION_NAME"
