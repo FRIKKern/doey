@@ -65,6 +65,7 @@ _display_state() {
   case "$1" in
     WORKING|CHANGED|UNCHANGED|STUCK) echo "WORKING" ;;
     IDLE|FINISHED) echo "IDLE" ;;
+    BOOTING) echo "BOOTING" ;;
     LOGGED_OUT) echo "LOGGED_OUT" ;;
     *) echo "$1" ;;
   esac
@@ -121,7 +122,7 @@ if [ -f "$PREV_STATES_FILE" ]; then
     pidx="${pidx// /}" pstate="${pstate// /}"
     is_numeric "$pidx" || continue
     case "$pstate" in
-      IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|LOGGED_OUT|UNKNOWN) ;;
+      IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|LOGGED_OUT|BOOTING|UNKNOWN) ;;
       *) continue ;;
     esac
     printf -v "PREV_STATE_${pidx}" '%s' "$pstate"
@@ -224,8 +225,26 @@ CRASH_EOF
       ;;
   esac
 
+  # Booting detection — Claude process running but not yet ready
+  _boot_capture=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || _boot_capture=""
+  case "$_boot_capture" in
+    *'❯'*|*'bypass permissions'*) ;;  # Ready — proceed to normal scan
+    *)
+      case "$CURRENT_CMD" in
+        node)
+          echo "PANE ${i} BOOTING"
+          SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}BOOTING ${i}${NL}"
+          eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
+          _update_duration "$i" "$_prev" "BOOTING"
+          _set_pane_info "$i" "BOOTING" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
+          continue
+          ;;
+      esac
+      ;;
+  esac
+
   # Logged-out detection
-  _worker_capture=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || _worker_capture=""
+  _worker_capture="$_boot_capture"
   case "$_worker_capture" in
     *"Not logged in"*)
       echo "PANE ${i} LOGGED_OUT"
@@ -338,7 +357,7 @@ case "$MGR_CMD" in
 esac
 MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
 
-_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_logged_out=0 _n_other=0
+_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_logged_out=0 _n_booting=0 _n_other=0
 _active_titles=""
 _longest_pane="" _longest_dur=0
 for i in $PANES_LIST; do
@@ -358,6 +377,7 @@ for i in $PANES_LIST; do
     CRASHED) _n_crashed=$((_n_crashed + 1)) ;;
     RESERVED) _n_reserved=$((_n_reserved + 1)) ;;
     LOGGED_OUT) _n_logged_out=$((_n_logged_out + 1)) ;;
+    BOOTING) _n_booting=$((_n_booting + 1)) ;;
     *) _n_other=$((_n_other + 1)) ;;
   esac
 done
@@ -386,6 +406,7 @@ printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_worki
 [ "$_n_stuck" -gt 0 ] && printf ' %dS' "$_n_stuck"
 [ "$_n_crashed" -gt 0 ] && printf ' %dC' "$_n_crashed"
 [ "$_n_logged_out" -gt 0 ] && printf ' %dL' "$_n_logged_out"
+[ "$_n_booting" -gt 0 ] && printf ' %dB' "$_n_booting"
 [ -n "$_active_titles" ] && printf ' | %s' "$_active_titles"
 [ -n "$_longest_label" ] && printf ' | longest:%s' "$_longest_label"
 printf '\n'
@@ -417,8 +438,8 @@ SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
   _total=0
   for _ci in $PANES_LIST; do is_numeric "$_ci" && _total=$((_total + 1)); done
   printf 'TOTAL_WORKERS=%s\n' "$_total"
-  printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\nLOGGED_OUT=%s\n' \
-    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved" "$_n_logged_out"
+  printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\nLOGGED_OUT=%s\nBOOTING=%s\n' \
+    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved" "$_n_logged_out" "$_n_booting"
   printf -- '---\n'
   printf 'PANE|STATE|TITLE|DURATION_SECS|LAST_TOOL|PREV_STATE\n'
   for i in $PANES_LIST; do
@@ -450,6 +471,61 @@ for i in $PANES_LIST; do
 done
 JSON+="}"
 _atomic_write "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json" "$JSON"
+
+# --- Anomaly event persistence ---
+# Write anomaly events from SNAPSHOT_EVENTS to individual files for Manager consumption
+_anomaly_lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ')
+if [ -n "$_anomaly_lines" ]; then
+  while IFS= read -r _aline; do
+    [ -z "$_aline" ] && continue
+    _a_pane=$(echo "$_aline" | awk '{print $2}')
+    _a_type=$(echo "$_aline" | awk '{print $3}')
+    _a_file="${RUNTIME_DIR}/status/anomaly_${TARGET_WINDOW}_${_a_pane}.event"
+    _a_capture_snippet=$(tmux capture-pane -t "${SESSION_NAME}:${TARGET_WINDOW}.${_a_pane}" -p -S -3 2>/dev/null | tail -3 | tr '\n' '|')
+    {
+      printf 'TYPE=%s\n' "$_a_type"
+      printf 'PANE=%s\n' "$_a_pane"
+      printf 'WINDOW=%s\n' "$TARGET_WINDOW"
+      printf 'TIMESTAMP=%s\n' "$SCAN_TIME"
+      printf 'SNIPPET=%s\n' "$_a_capture_snippet"
+    } > "${_a_file}.tmp" && mv "${_a_file}.tmp" "$_a_file"
+  done <<ANOMALY_EOF
+$_anomaly_lines
+ANOMALY_EOF
+fi
+
+# Clean up anomaly events older than 5 minutes
+for _old_event in "${RUNTIME_DIR}/status"/anomaly_${TARGET_WINDOW}_*.event; do
+  [ -f "$_old_event" ] || continue
+  _evt_ts=$(grep '^TIMESTAMP=' "$_old_event" 2>/dev/null | cut -d= -f2)
+  _evt_ts="${_evt_ts:-0}"
+  is_numeric "$_evt_ts" || _evt_ts="0"
+  [ "$(($SCAN_TIME - _evt_ts))" -gt 300 ] && rm -f "$_old_event"
+done
+
+# Track consecutive anomaly counts for escalation
+for _esc_event in "${RUNTIME_DIR}/status"/anomaly_${TARGET_WINDOW}_*.event; do
+  [ -f "$_esc_event" ] || continue
+  _esc_pane=$(grep '^PANE=' "$_esc_event" 2>/dev/null | cut -d= -f2)
+  _esc_type=$(grep '^TYPE=' "$_esc_event" 2>/dev/null | cut -d= -f2)
+  _esc_count_file="${RUNTIME_DIR}/status/anomaly_count_${TARGET_WINDOW}_${_esc_pane}"
+  _esc_prev_count=0
+  [ -f "$_esc_count_file" ] && read -r _esc_prev_count < "$_esc_count_file" 2>/dev/null
+  is_numeric "$_esc_prev_count" || _esc_prev_count=0
+  _esc_new_count=$((_esc_prev_count + 1))
+  echo "$_esc_new_count" > "$_esc_count_file"
+  if [ "$_esc_new_count" -ge 3 ]; then
+    echo "ESCALATE ANOMALY ${_esc_pane} ${_esc_type} (${_esc_new_count} consecutive)"
+    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ESCALATE ${_esc_pane} ${_esc_type} persistent_${_esc_new_count}${NL}"
+  fi
+done
+
+# Clear anomaly counts for panes without active anomalies
+for _clr_count in "${RUNTIME_DIR}/status"/anomaly_count_${TARGET_WINDOW}_*; do
+  [ -f "$_clr_count" ] || continue
+  _clr_pane="${_clr_count##*_}"
+  [ -f "${RUNTIME_DIR}/status/anomaly_${TARGET_WINDOW}_${_clr_pane}.event" ] || rm -f "$_clr_count"
+done
 
 # --- Inline snapshot for watchdog ---
 if [ -f "$SNAPSHOT_FILE" ]; then

@@ -49,7 +49,7 @@ Outputs scan results AND snapshot. Do NOT read snapshot file separately.
 ╰────────────────────────────╯
 ```
 
-Emojis: 🔨WORKING 💤IDLE ✅FINISHED ⚠️STUCK 💥CRASHED 🔒RESERVED ⚡Mgr-WORKING 😴Mgr-IDLE 🔥Mgr-CRASHED
+Emojis: 🔨WORKING 💤IDLE ✅FINISHED ⚠️STUCK 💥CRASHED 🔒RESERVED 🔄BOOTING ❓PROMPT_STUCK ⚡Mgr-WORKING 😴Mgr-IDLE 🔥Mgr-CRASHED
 Duration: <60s→`Xs`, <3600→`XmYs`, else `XhYm`. WORKING shows `[TOOL]` if available.
 Events: `STATE_CHANGE`→`↗ W{pane} {old}→{new}`, `COMPLETION`→`✅ W{pane} FINISHED`, `WAVE_COMPLETE`→`🏁 Wave complete`. No events → `No events`.
 
@@ -86,6 +86,19 @@ EOF
 | `MANAGER_COMPLETED` (slug: `mgr_done`) | `.msg` to SM: "Manager finished. Route follow-up." |
 | Worker `COMPLETION`/`CRASHED`/`STUCK` | Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`. |
 | `LOGGED_OUT` (slug: `logged_out`) | Send `/login` + `Enter` to each affected pane. If login menu appears, send `Escape` then retry or alert SM. |
+
+## Anomaly Detection
+
+The scan hook detects these anomalies in addition to standard pane states:
+
+| Anomaly | Meaning | Auto-action |
+|---------|---------|-------------|
+| `PROMPT_STUCK` | Permission/confirmation dialog blocking the pane | Auto-accepted with `1` Enter (30s cooldown). State persists until the dialog clears. Show ❓ |
+| `WRONG_MODE` | Instance running "accept edits on" instead of "bypass permissions on" | None — requires manual restart. Alert Manager immediately |
+| `QUEUED_INPUT` | Unsent messages queued ("Press up to edit queued messages") | None — may need manual intervention. Alert Manager |
+| `BOOTING` | Claude process running but hasn't shown `❯` prompt yet | None — not an error, just not ready for tasks. Show 🔄 |
+
+**Escalation:** Anomaly events are written to `${RUNTIME_DIR}/status/anomaly_${W}_${i}.event`. If the same anomaly persists for 3+ consecutive scans, an `ESCALATE` event is emitted in the scan output. Report escalated anomalies prominently in the dashboard and notify the Manager.
 
 ## Rules
 
