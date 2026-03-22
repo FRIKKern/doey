@@ -71,7 +71,7 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 | `post-tool-lint.sh` | Bash 3.2 compatibility lint |
 | `stop-status.sh` | FINISHED/RESERVED status, research enforcement |
 | `stop-results.sh` | Result JSON and completion events |
-| `stop-notify.sh` | Desktop notification when Session Manager stops |
+| `stop-notify.sh` | Unified stop notifications: Worker→Manager, Manager→Session Manager, Session Manager→desktop |
 | `watchdog-scan.sh` | Pane state detection, heartbeat |
 | `watchdog-wait.sh` | Watchdog sleep/wake between scan cycles |
 | `session-manager-wait.sh` | Session Manager sleep/wake between cycles |
