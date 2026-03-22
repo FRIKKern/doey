@@ -122,7 +122,7 @@ if [ -f "$PREV_STATES_FILE" ]; then
     pidx="${pidx// /}" pstate="${pstate// /}"
     is_numeric "$pidx" || continue
     case "$pstate" in
-      IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|LOGGED_OUT|BOOTING|UNKNOWN) ;;
+      IDLE|WORKING|CHANGED|UNCHANGED|CRASHED|STUCK|FINISHED|RESERVED|LOGGED_OUT|BOOTING|PROMPT_STUCK|UNKNOWN) ;;
       *) continue ;;
     esac
     printf -v "PREV_STATE_${pidx}" '%s' "$pstate"
@@ -255,6 +255,44 @@ CRASH_EOF
       ;;
   esac
 
+  # --- Anomaly detection ---
+  case "$_worker_capture" in
+    *"Esc to cancel"*|*"Do you want to"*|*"1. Yes"*)
+      echo "PANE ${i} PROMPT_STUCK"
+      SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ANOMALY ${i} PROMPT_STUCK${NL}"
+      # Auto-accept with cooldown
+      _autofix="${RUNTIME_DIR}/status/autofix_${TARGET_WINDOW}_${i}"
+      _last_fix=0
+      [ -f "$_autofix" ] && read -r _last_fix < "$_autofix" 2>/dev/null
+      if [ "$(($SCAN_TIME - _last_fix))" -gt 30 ]; then
+        tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null || true
+        echo "$SCAN_TIME" > "$_autofix"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}AUTOFIX ${i} sent_accept${NL}"
+      fi
+      eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
+      _update_duration "$i" "$_prev" "PROMPT_STUCK"
+      _set_pane_info "$i" "PROMPT_STUCK" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
+      continue
+      ;;
+  esac
+  case "$_worker_capture" in
+    *"accept edits on"*)
+      case "$_worker_capture" in
+        *"bypass permissions"*) ;;
+        *)
+          echo "PANE ${i} WRONG_MODE"
+          SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ANOMALY ${i} WRONG_MODE${NL}"
+          ;;
+      esac
+      ;;
+  esac
+  case "$_worker_capture" in
+    *"queued messages"*|*"Press up to edit"*)
+      echo "PANE ${i} QUEUED_INPUT"
+      SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ANOMALY ${i} QUEUED_INPUT${NL}"
+      ;;
+  esac
+
   # CPU time detection
   _pane_ppid=$(tmux display-message -t "$PANE_REF" -p '#{pane_pid}' 2>/dev/null) || _pane_ppid=""
   _cpu_secs=0
@@ -357,7 +395,7 @@ case "$MGR_CMD" in
 esac
 MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
 
-_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_logged_out=0 _n_booting=0 _n_other=0
+_n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_logged_out=0 _n_booting=0 _n_prompt_stuck=0 _n_other=0
 _active_titles=""
 _longest_pane="" _longest_dur=0
 for i in $PANES_LIST; do
@@ -378,6 +416,7 @@ for i in $PANES_LIST; do
     RESERVED) _n_reserved=$((_n_reserved + 1)) ;;
     LOGGED_OUT) _n_logged_out=$((_n_logged_out + 1)) ;;
     BOOTING) _n_booting=$((_n_booting + 1)) ;;
+    PROMPT_STUCK) _n_prompt_stuck=$((_n_prompt_stuck + 1)) ;;
     *) _n_other=$((_n_other + 1)) ;;
   esac
 done
@@ -407,6 +446,7 @@ printf 'STATUS W%s | Mgr:%s | %dW %dI' "$TARGET_WINDOW" "$_mgr_label" "$_n_worki
 [ "$_n_crashed" -gt 0 ] && printf ' %dC' "$_n_crashed"
 [ "$_n_logged_out" -gt 0 ] && printf ' %dL' "$_n_logged_out"
 [ "$_n_booting" -gt 0 ] && printf ' %dB' "$_n_booting"
+[ "$_n_prompt_stuck" -gt 0 ] && printf ' %dP!' "$_n_prompt_stuck"
 [ -n "$_active_titles" ] && printf ' | %s' "$_active_titles"
 [ -n "$_longest_label" ] && printf ' | longest:%s' "$_longest_label"
 printf '\n'
@@ -438,8 +478,8 @@ SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
   _total=0
   for _ci in $PANES_LIST; do is_numeric "$_ci" && _total=$((_total + 1)); done
   printf 'TOTAL_WORKERS=%s\n' "$_total"
-  printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\nLOGGED_OUT=%s\nBOOTING=%s\n' \
-    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved" "$_n_logged_out" "$_n_booting"
+  printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\nLOGGED_OUT=%s\nBOOTING=%s\nPROMPT_STUCK=%s\n' \
+    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved" "$_n_logged_out" "$_n_booting" "$_n_prompt_stuck"
   printf -- '---\n'
   printf 'PANE|STATE|TITLE|DURATION_SECS|LAST_TOOL|PREV_STATE\n'
   for i in $PANES_LIST; do
