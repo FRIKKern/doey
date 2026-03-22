@@ -6,11 +6,33 @@ init_hook
 
 is_worker || exit 0
 
+# Ensure tasks directory exists for crash-recovery prompt storage
+mkdir -p "$RUNTIME_DIR/tasks" 2>/dev/null || true
+
 RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
 TMPFILE=""
 trap '[ -n "${TMPFILE:-}" ] && rm -f "$TMPFILE" 2>/dev/null' EXIT
 
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
+
+# Count tool calls from captured output
+TOOL_COUNT=0
+while IFS= read -r line; do
+  case "$line" in
+    *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
+  esac
+done <<< "$OUTPUT"
+
+# Get files changed by this worker via git
+PROJECT_DIR=$(tmux show-environment DOEY_TEAM_DIR 2>/dev/null | cut -d= -f2-) || PROJECT_DIR=""
+FILES_LIST=""
+if [ -n "$PROJECT_DIR" ]; then
+  FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
+fi
+FILES_JSON="[]"
+if [ -n "$FILES_LIST" ]; then
+  FILES_JSON=$(echo "$FILES_LIST" | jq -R '.' | jq -s '.' 2>/dev/null) || FILES_JSON="[]"
+fi
 
 FILTERED=""
 STATUS="done"
@@ -40,6 +62,8 @@ cat > "$TMPFILE" <<EOF
   "title": $TITLE_JSON,
   "status": "$STATUS",
   "timestamp": $(date +%s),
+  "files_changed": $FILES_JSON,
+  "tool_calls": $TOOL_COUNT,
   "last_output": $LAST_JSON
 }
 EOF
