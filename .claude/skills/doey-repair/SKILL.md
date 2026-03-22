@@ -49,7 +49,7 @@ Use team mapping from Step 1. Send commands to idle shells only:
 |------|---------|
 | 0.0 | `tmux send-keys -t "$SESSION_NAME:0.0" "clear && info-panel.sh '${RUNTIME_DIR}'" Enter` |
 | 0.1 | `tmux send-keys -t "$SESSION_NAME:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter` |
-| 0.2-0.7 | Skip if `TEAM_FOR_0X` empty. Otherwise: `tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model opus --name \"T${TEAM_W} Watchdog\" --agent \"t${TEAM_W}-watchdog\"" Enter` — wait 12s, then brief with session/window info. |
+| 0.2-0.7 | Skip if `TEAM_FOR_0X` empty. Otherwise: `tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model haiku --name \"T${TEAM_W} Watchdog\" --agent \"t${TEAM_W}-watchdog\"" Enter` — wait 12s, then brief with session/window info. |
 
 ### Step 4: Verify
 
