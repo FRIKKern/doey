@@ -1,6 +1,6 @@
 ---
 name: doey-clear
-description: Kill and relaunch Claude instances. Resets process, context, name, agent, status. Skips reserved workers unless --force.
+description: Kill and relaunch Claude instances. Use when you need to "restart workers", "reset the team", "clear and relaunch", or "fresh start". Resets process, context, name, agent, status. Skips reserved workers unless --force.
 ---
 
 ## Context
@@ -8,6 +8,8 @@ description: Kill and relaunch Claude instances. Resets process, context, name, 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Window index: !`echo "${DOEY_WINDOW_INDEX:-}"|| true`
 - Team windows: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
+
+**Expected:** 3-4 bash commands per pane (kill, clear, relaunch, verify), ~30 seconds per team.
 
 ## Usage
 
@@ -17,21 +19,18 @@ description: Kill and relaunch Claude instances. Resets process, context, name, 
 `/doey-clear workers` — workers only (keep manager + watchdog)
 `/doey-clear all --force` — include reserved workers
 
-## Prompt
+## Step 1: Parse Arguments
 
-Kill each Claude process, clear terminal, relaunch with correct names/agents/prompts. Use injected config variables (SESSION_NAME, TEAM_WINDOWS, WORKER_PANES, etc.).
+If no arguments provided, prompt interactively. Window Manager: suggest "this team", offer "all teams" / "workers only". Session Manager: suggest "all teams", offer "specific team". Accept "1", "this team", "all", "team 2", etc.
 
-### Interactive prompt (no arguments)
-
-Skip if arguments provided. Window Manager: suggest "this team", offer "all teams" / "workers only". Session Manager: suggest "all teams", offer "specific team". Accept "1", "this team", "all", "team 2", etc.
-
-### Parse arguments
-
+Set these variables from arguments:
 - **TARGET_WINDOWS**: `all` -> `$TEAM_WINDOWS`; `team N` -> window N; `workers` -> current team
 - **FORCE**: `--force` anywhere in args
 - **WORKERS_ONLY**: `workers` target
 
-### Validate targets
+## Step 2: Validate Targets
+
+Check that each target team's env file exists. Read pane config safely (no `source` — /tmp is world-writable).
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -45,9 +44,12 @@ for W in $TARGET_WINDOWS; do
 done
 ```
 
-### kill_pane_process
+Expected: one line per team with pane layout.
+**If error:** team env file missing — skip that team and warn.
 
-SIGTERM -> 1s -> SIGKILL if needed -> clear terminal. Returns 1 if pane missing.
+## Step 3: Kill Pane Process
+
+Helper function used by Steps 4-6. SIGTERM -> 1s -> SIGKILL if needed -> clear terminal. Returns 1 if pane missing.
 
 ```bash
 kill_pane_process() {
@@ -63,11 +65,12 @@ kill_pane_process() {
 }
 ```
 
-### Clear each target team
+Expected: process killed, terminal cleared.
+**If error:** pane missing — function returns 1, caller skips.
 
-For each window W. **If WORKERS_ONLY, skip Manager and Watchdog.**
+## Step 4: Clear Manager (W.0)
 
-#### Manager (W.0)
+**Skip this step if WORKERS_ONLY.** Order: Manager first, then Watchdog, then Workers.
 
 ```bash
 MGR_PANE="${SESSION_NAME}:${W}.0"
@@ -76,9 +79,12 @@ tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --model opu
 echo "  ${W}.0 Manager ✓"; sleep 0.5
 ```
 
-#### Watchdog (Dashboard window 0)
+Expected: Manager relaunched with correct name and agent.
+**If error:** pane not found — warn and continue to next step.
 
-**CRITICAL**: After relaunch, schedule briefing + scan loop or Watchdog sits idle.
+## Step 5: Clear Watchdog
+
+**Skip this step if WORKERS_ONLY.** After relaunch, schedule briefing + scan loop or Watchdog sits idle.
 
 ```bash
 WATCHDOG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2 | tr -d '"')
@@ -99,7 +105,12 @@ WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' '
 echo "  ${WATCHDOG_PANE} Watchdog briefing scheduled (~35s)"
 ```
 
-#### Workers (W.1+)
+Expected: Watchdog relaunched, briefing scheduled in background (~35s).
+**If error:** pane not found — warn and continue.
+
+## Step 6: Clear Workers (W.1+)
+
+Loop over WORKER_PANES. Skip reserved panes unless --force. Kill process, relaunch with correct name and system prompt, write READY status.
 
 ```bash
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
@@ -129,11 +140,21 @@ EOF
 done
 ```
 
-### Report
+Expected: each non-reserved worker relaunched, status file written as READY.
+**If error:** pane not found — skip with warning. Reserved pane — skip with note.
 
-Print per-team summary: Manager/Watchdog status, workers cleared/reserved counts.
+## Step 7: Report
 
-### Rules
-- Order: Manager -> Watchdog -> Workers. Never clear Session Manager (0.1) or Info Panel (0.0).
-- If caller IS the Window Manager being cleared: warn, then proceed.
-- Kill by PID (SIGTERM -> SIGKILL), never via send-keys. `sleep 0.5` between panes; bash 3.2 compatible.
+Print per-team summary: Manager/Watchdog status, workers cleared/reserved counts. If caller IS the Window Manager being cleared: warn, then proceed.
+
+Total: 5-7 bash commands per team (validate, kill+relaunch manager, kill+relaunch watchdog, kill+relaunch each worker), 0 errors expected.
+
+## Gotchas
+
+- Do NOT clear reserved panes unless `--force` is specified
+- Do NOT kill the Manager pane (pane 0) when WORKERS_ONLY
+- Do NOT restart while another clear is in progress
+- Do NOT forget to schedule Watchdog briefing after relaunch — without it, Watchdog sits idle
+- Do NOT clear Session Manager (0.1) or Info Panel (0.0) — ever
+- Kill by PID (SIGTERM -> SIGKILL), never via send-keys
+- `sleep 0.5` between panes; all bash must be 3.2 compatible
