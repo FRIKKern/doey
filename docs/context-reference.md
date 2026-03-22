@@ -55,7 +55,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
 | `stop-status.sh` | Stop | FINISHED/RESERVED/READY; blocks research without reports |
 | `stop-results.sh` | Stop | Result JSON and completion events |
-| `stop-notify.sh` | Stop | Session Manager notifications |
+| `stop-notify.sh` | Stop | Unified stop notifications: Worker→Manager, Manager→Session Mgr, Session Mgr→desktop |
 | `session-manager-wait.sh` | — | Session Manager sleep/wake between cycles (trigger, message, result, crash) |
 | `watchdog-scan.sh` | — | Pane scanning (called directly, not registered) |
 | `watchdog-wait.sh` | — | Event-driven sleep between scans |
@@ -108,6 +108,8 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
+
+**Note:** `_launch_team_manager()` in `doey.sh` should pass `--model opus` explicitly to ensure the Manager always uses opus regardless of settings defaults.
 
 
 ## tmux Layout
