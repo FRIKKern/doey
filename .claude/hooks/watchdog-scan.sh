@@ -196,6 +196,9 @@ for i in $PANES_LIST; do
   PANE_MODE=$(tmux display-message -t "$PANE_REF" -p '#{pane_mode}' 2>/dev/null) || PANE_MODE=""
   [ "$PANE_MODE" = "copy-mode" ] && { tmux copy-mode -q -t "$PANE_REF" 2>/dev/null || true; }
 
+  # Single capture per pane per cycle — reused for all checks below
+  pane_output=$(tmux capture-pane -t "$PANE_REF" -p -S -30 2>/dev/null) || pane_output=""
+
   # Crash detection
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
   case "$CURRENT_CMD" in
@@ -267,7 +270,6 @@ CRASH_EOF
       is_numeric "$_cooldown_ts" || _cooldown_ts=0
       if [ "$(($SCAN_TIME - _cooldown_ts))" -gt 15 ]; then
         tmux send-keys -t "$PANE_REF" Escape 2>/dev/null
-        sleep 0.3
         tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null
         echo "$SCAN_TIME" > "$_cooldown"
       fi
