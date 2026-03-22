@@ -133,7 +133,8 @@ write_team_env() {
   local worktree_branch="${9:-}"
   local session_name
   session_name=$(_env_val "${runtime_dir}/session.env" SESSION_NAME)
-  cat > "${runtime_dir}/team_${window_index}.env.tmp" << TEAMEOF
+  local _tmp="${runtime_dir}/team_${window_index}.env.tmp.$$"
+  cat > "$_tmp" << TEAMEOF
 WINDOW_INDEX="${window_index}"
 GRID="${grid}"
 MANAGER_PANE="${manager_pane}"
@@ -144,7 +145,7 @@ SESSION_NAME="${session_name}"
 WORKTREE_DIR="${worktree_dir}"
 WORKTREE_BRANCH="${worktree_branch}"
 TEAMEOF
-  mv "${runtime_dir}/team_${window_index}.env.tmp" "${runtime_dir}/team_${window_index}.env"
+  mv "$_tmp" "${runtime_dir}/team_${window_index}.env"
 }
 
 generate_team_agent() {
@@ -1457,7 +1458,17 @@ _cleanup_old_session() {
   tmux kill-session -t "$session" 2>/dev/null || true
   rm -rf "$runtime_dir"
   git worktree prune 2>/dev/null || true
+  # Only delete doey/team-* branches whose worktrees were under this runtime dir.
+  # After worktree prune, orphaned branches have no worktree entry — but we must
+  # avoid deleting branches belonging to other doey sessions sharing this repo.
+  local _project_name="${runtime_dir##*/}"
   git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' | while read -r b; do
+    # Check if any other session still has a worktree for this branch
+    if git worktree list --porcelain 2>/dev/null | grep -q "branch refs/heads/${b}$"; then
+      continue
+    fi
+    # Only delete if the branch name could belong to this project's worktree pattern
+    # (worktrees are created under /tmp/doey/<project>/worktrees/team-<N>)
     git branch -D "$b" 2>/dev/null || true
   done
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
@@ -2376,8 +2387,9 @@ _apply_team_border_theme() {
 # Atomically update a field in session.env
 _set_session_env() {
   local runtime_dir="$1" field="$2" value="$3"
-  sed "s/^${field}=.*/${field}=\"${value}\"/" "${runtime_dir}/session.env" > "${runtime_dir}/session.env.tmp"
-  mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
+  local _tmp="${runtime_dir}/session.env.tmp.$$"
+  sed "s/^${field}=.*/${field}=\"${value}\"/" "${runtime_dir}/session.env" > "$_tmp"
+  mv "$_tmp" "${runtime_dir}/session.env"
 }
 
 _register_team_window() {
@@ -2412,7 +2424,7 @@ _launch_team_manager() {
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
+    "claude --dangerously-skip-permissions --model opus --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   sleep 0.5
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
@@ -2670,8 +2682,9 @@ kill_team_window() {
     tmux kill-pane -t "${session}:${watchdog_pane}" 2>/dev/null || true
 
     # Rebuild WDG_SLOT entries (pane indices shift after kill)
-    sed '/^WDG_SLOT_[0-9]*=/d' "${runtime_dir}/session.env" > "${runtime_dir}/session.env.tmp"
-    mv "${runtime_dir}/session.env.tmp" "${runtime_dir}/session.env"
+    local _ktw_tmp="${runtime_dir}/session.env.tmp.$$"
+    sed '/^WDG_SLOT_[0-9]*=/d' "${runtime_dir}/session.env" > "$_ktw_tmp"
+    mv "$_ktw_tmp" "${runtime_dir}/session.env"
 
     local _new_idx=1 _pane_idx _pane_title
     while IFS=' ' read -r _pane_idx _pane_title; do
@@ -2682,8 +2695,9 @@ kill_team_window() {
       local _team_num
       _team_num=$(echo "$_pane_title" | sed -n 's/^T\([0-9]*\) Watchdog$/\1/p')
       if [ -n "$_team_num" ] && [ -f "${runtime_dir}/team_${_team_num}.env" ]; then
-        sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=\"${_new_wdg}\"/" "${runtime_dir}/team_${_team_num}.env" > "${runtime_dir}/team_${_team_num}.env.tmp"
-        mv "${runtime_dir}/team_${_team_num}.env.tmp" "${runtime_dir}/team_${_team_num}.env"
+        local _te_tmp="${runtime_dir}/team_${_team_num}.env.tmp.$$"
+        sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=\"${_new_wdg}\"/" "${runtime_dir}/team_${_team_num}.env" > "$_te_tmp"
+        mv "$_te_tmp" "${runtime_dir}/team_${_team_num}.env"
       fi
     done < <(tmux list-panes -t "${session}:0" -F '#{pane_index} #{pane_title}' 2>/dev/null)
   fi

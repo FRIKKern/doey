@@ -22,7 +22,7 @@ Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
 | Field | Manager | Session Mgr | Watchdog |
 |-------|---------|-------------|----------|
-| `model` | `opus` | `opus` | `opus` |
+| `model` | `opus` | `opus` | `haiku` |
 | `color` | `green` | `#FF6B35` | `yellow` |
 | `memory` | `user` | `user` | `none` |
 
@@ -55,9 +55,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
 | `stop-status.sh` | Stop | FINISHED/RESERVED/READY; blocks research without reports |
 | `stop-results.sh` | Stop | Result JSON and completion events |
-| `stop-notify.sh` | Stop | Session Manager notifications |
-| `stop-notify-manager.sh` | Stop | Notifies Manager on worker finish |
-| `stop-notify-session-manager.sh` | Stop | Notifies Session Mgr on Manager finish |
+| `stop-notify.sh` | Stop | Unified stop notifications: Worker→Manager, Manager→Session Mgr, Session Mgr→desktop |
 | `session-manager-wait.sh` | — | Session Manager sleep/wake between cycles (trigger, message, result, crash) |
 | `watchdog-scan.sh` | — | Pane scanning (called directly, not registered) |
 | `watchdog-wait.sh` | — | Event-driven sleep between scans |
@@ -70,7 +68,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
 **Manager skills:**
-`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-team` (layout overview), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager)
+`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager)
 
 **Session Manager skills:**
 `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
@@ -106,10 +104,12 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 | Instance | Command |
 |----------|---------|
 | Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
-| Watchdog | `claude --dangerously-skip-permissions --model opus --name "T<N> Watchdog" --agent doey-watchdog` |
+| Watchdog | `claude --dangerously-skip-permissions --model haiku --name "T<N> Watchdog" --agent doey-watchdog` |
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
+
+**Note:** `_launch_team_manager()` in `doey.sh` should pass `--model opus` explicitly to ensure the Manager always uses opus regardless of settings defaults.
 
 
 ## tmux Layout

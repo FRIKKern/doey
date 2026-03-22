@@ -75,7 +75,10 @@ fi
 # Blocked patterns for Workers and Watchdog
 ROLE="Workers"; is_watchdog && ROLE="Watchdog"
 
-case "$TOOL_COMMAND" in
+# Normalize whitespace to prevent bypass via extra spaces (e.g. "git  push")
+_cmd=$(echo "$TOOL_COMMAND" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
+
+case "$_cmd" in
   *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
     MSG="git/gh commands" ;;
   *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*)
