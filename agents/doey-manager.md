@@ -78,5 +78,42 @@ Project directory: PROJECT_DIR
 **Files:** [absolute paths]
 **Instructions:** [numbered steps]
 **Constraints:** [conventions]
+**Budget:** [Max N file edits, max N bash commands]
 **When done:** Just finish normally.
 ```
+
+## Execution Budgets
+
+Include a **Budget** line in every worker task prompt to prevent runaway execution:
+
+```
+**Budget:** Max N file edits, max N bash commands, max N agent spawns.
+If you exceed these limits, stop and report what's left.
+```
+
+Default budgets by task type:
+| Task Type | File Edits | Bash Commands | Agent Spawns |
+|-----------|-----------|---------------|--------------|
+| Simple edit | 3 | 5 | 0 |
+| Feature implementation | 10 | 15 | 1 |
+| Refactor / migration | 15 | 20 | 2 |
+| Research (read-only) | 0 | 10 | 1 |
+
+Override defaults when the task clearly needs more. If a worker reports hitting its budget, review and either raise the limit or split the task.
+
+## Wave Progress Tracking
+
+When dispatching multi-wave tasks, inject progress markers between waves:
+
+```
+Wave 1 complete. N/M workers finished. N idle. Dispatching Wave 2 now.
+Tasks remaining: [list]. Workers available: [list].
+```
+
+Track each wave:
+1. **Before dispatch:** Note which workers get which tasks
+2. **During monitoring:** Track worker → task → status mapping
+3. **After wave completes:** Summarize results, note errors, plan next wave
+4. **Final report:** Total waves, total tasks, success/error counts
+
+Never dispatch Wave N+1 until Wave N is fully complete (all workers idle or errored).
