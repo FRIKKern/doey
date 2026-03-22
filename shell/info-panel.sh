@@ -34,13 +34,13 @@ C_BOLD_MAGENTA='\033[1;35m'
 read_env_file() {
   local _ref_file="$1"; shift
   # Clear output vars
-  for _ref_k in "$@"; do eval "_ENV_${_ref_k}=''"; done
+  for _ref_k in "$@"; do printf -v "_ENV_${_ref_k}" '%s' ""; done
   [ -f "$_ref_file" ] || return 0
   while IFS='=' read -r _ref_key _ref_val; do
     _ref_val="${_ref_val%\"}" && _ref_val="${_ref_val#\"}"
     for _ref_k in "$@"; do
       if [ "$_ref_key" = "$_ref_k" ]; then
-        eval "_ENV_${_ref_k}=\"\$_ref_val\""
+        printf -v "_ENV_${_ref_k}" '%s' "$_ref_val"
         break
       fi
     done
@@ -100,7 +100,7 @@ count_team_workers() {
 visible_len() { local s; s=$(printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g'); printf '%d' "${#s}"; }
 
 add_left() {
-  eval "L_${LC}=\"\$1\""
+  printf -v "L_${LC}" '%s' "$1"
   LC=$((LC + 1))
 }
 
@@ -244,13 +244,13 @@ while true; do
     TOTAL_BUSY=$((TOTAL_BUSY + BUSY_COUNT))
     TOTAL_RESERVED=$((TOTAL_RESERVED + RESV_COUNT))
 
-    eval "TEAM_WIN_${TEAM_LINE_COUNT}=\"${W}\""
-    eval "TEAM_IDLE_${TEAM_LINE_COUNT}=\"${IDLE_COUNT}\""
-    eval "TEAM_BUSY_${TEAM_LINE_COUNT}=\"${BUSY_COUNT}\""
-    eval "TEAM_RESV_${TEAM_LINE_COUNT}=\"${RESV_COUNT}\""
-    eval "TEAM_WCNT_${TEAM_LINE_COUNT}=\"${WORKER_COUNT}\""
-    eval "TEAM_WT_DIR_${TEAM_LINE_COUNT}=\"${_ENV_WORKTREE_DIR}\""
-    eval "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}=\"${_ENV_WORKTREE_BRANCH}\""
+    printf -v "TEAM_WIN_${TEAM_LINE_COUNT}" '%s' "$W"
+    printf -v "TEAM_IDLE_${TEAM_LINE_COUNT}" '%s' "$IDLE_COUNT"
+    printf -v "TEAM_BUSY_${TEAM_LINE_COUNT}" '%s' "$BUSY_COUNT"
+    printf -v "TEAM_RESV_${TEAM_LINE_COUNT}" '%s' "$RESV_COUNT"
+    printf -v "TEAM_WCNT_${TEAM_LINE_COUNT}" '%s' "$WORKER_COUNT"
+    printf -v "TEAM_WT_DIR_${TEAM_LINE_COUNT}" '%s' "$_ENV_WORKTREE_DIR"
+    printf -v "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}" '%s' "$_ENV_WORKTREE_BRANCH"
     TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
   done
 
@@ -312,7 +312,7 @@ while true; do
   TITLE_NAME=$(printf '%s' "$PROJECT_NAME" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9 ._-' ' ')
   # Cap ASCII art title at 9 chars to fit small panes
   TITLE_NAME="${TITLE_NAME:0:9}"
-  for _r in 0 1 2 3 4 5; do eval "TITLE_R${_r}=''"; done
+  for _r in 0 1 2 3 4 5; do printf -v "TITLE_R${_r}" '%s' ""; done
   _ci=0
   while [ "$_ci" -lt "${#TITLE_NAME}" ]; do
     get_block_char "${TITLE_NAME:${_ci}:1}"

@@ -67,7 +67,11 @@ LAST_JSON=$(jq -Rs '.' <<< "$FILTERED" 2>/dev/null) || \
   LAST_JSON='""'
 TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='"worker-'"$PANE_INDEX"'"'
 
-TMPFILE=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null) || TMPFILE="$RESULT_FILE"
+TMPFILE=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null)
+if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
+  echo "[WARN] mktemp failed in $(basename "$0") — writing non-atomically" >> "${RUNTIME_DIR}/doey-warnings.log" 2>/dev/null
+  TMPFILE="$RESULT_FILE"
+fi
 cat > "$TMPFILE" <<EOF
 {
   "pane": "$WINDOW_INDEX.$PANE_INDEX",
