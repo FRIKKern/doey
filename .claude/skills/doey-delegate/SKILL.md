@@ -21,32 +21,68 @@ My pane:
 
 ## Prompt
 
-### Step 1: Identify panes
+Delegate a task to an idle Claude instance without killing or restarting it. Session/team config is injected above. Use the user-supplied `W.P` pane address (e.g., `3.2`), not hardcoded `WINDOW_INDEX`.
 
-Review the context above to see all available panes and your own pane.
+## Step 1: Identify panes
 
-### Step 2: Ask user for target pane and task if not provided
+Review the context above to see all available panes and your own pane. Note which panes show idle workers.
 
-### Step 3: Validate target
+Expected: A list of panes with their titles and PIDs. Identify candidate idle workers.
 
-Use the user-supplied `W.P` pane address (e.g., `3.2`), not hardcoded `WINDOW_INDEX`:
+## Step 2: Get target pane and task from user
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-TARGET_PANE="${SESSION_NAME}:<W>.<P>"  # from user input
-PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_')
-[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { echo "RESERVED — pick another"; exit 1; }
-tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
-OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5)
-echo "$OUTPUT"
-echo "$OUTPUT" | grep -q '❯' && echo "Idle — OK" || echo "May be busy"
-```
+Ask the user for the target pane (`W.P` format) and the task to delegate, if not already provided.
 
-### Step 4: Send task
+Expected: User provides target pane address and task description.
 
-Follow `/doey-dispatch` Dispatch Sequence using `TARGET_PANE` as `$PANE`: rename pane (step 3), write+paste task via tmpfile (step 4), settle+submit (step 5), verify (step 6). Skip readiness check/kill+restart (steps 1-2) since worker is already idle.
+## Step 3: Validate target is idle and unreserved
+
+bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && TARGET_PANE="${SESSION_NAME}:<W>.<P>" && PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_') && [ ! -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null; OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5) && echo "$OUTPUT" && echo "$OUTPUT" | grep -q '❯' && echo "Idle — OK" || echo "May be busy"
+Expected: "Idle — OK" printed, confirming target pane is at the `>` prompt and not reserved.
+
+**If this fails with "RESERVED — pick another":** The pane has a `.reserved` file. Choose a different worker pane.
+**If this fails with "May be busy":** Worker is currently processing. Wait or pick another pane.
+**If this fails with "can't find pane":** Verify the pane address matches the format `session:window.pane`.
+
+## Step 4: Rename target pane
+
+bash: tmux select-pane -t "$TARGET_PANE" -T "<short-task-label>_$(date +%m%d)"
+Expected: Pane title updated to reflect the delegated task.
+
+**If this fails with "can't find pane":** Re-check pane address from Step 3.
+
+## Step 5: Write and paste task prompt
+
+Write task to tmpfile, load into tmux buffer, paste into target pane, settle, then submit. Follow `/doey-dispatch` dispatch sequence (steps 3-6).
+
+bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt") && cat > "$TASKFILE" << 'TASK'
+<task prompt here>
+TASK
+tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null; tmux load-buffer "$TASKFILE" && tmux paste-buffer -t "$TARGET_PANE" && TASK_LINES=$(wc -l < "$TASKFILE" | tr -d ' ') && if [ "$TASK_LINES" -gt 200 ]; then sleep 2; elif [ "$TASK_LINES" -gt 100 ]; then sleep 1.5; else sleep 0.5; fi && tmux send-keys -t "$TARGET_PANE" Enter && rm "$TASKFILE"
+Expected: Task prompt pasted and submitted to target pane. Tmpfile cleaned up.
+
+**If this fails with "no buffer":** Ensure `load-buffer` succeeded — check that TASKFILE was written and is non-empty.
+**If this fails with "can't find pane":** Worker may have been killed. Re-check pane list.
+
+## Step 6: Verify dispatch
+
+bash: sleep 5 && tmux capture-pane -t "$TARGET_PANE" -p -S -10 | grep -qE 'Read|Edit|Bash|thinking' && echo "Working" || echo "Idle — may need retry"
+Expected: "Working" — target pane is actively processing the task.
+
+**If this fails with "Idle — may need retry":** Send Enter again: `tmux send-keys -t "$TARGET_PANE" Enter`, wait 3s, re-check. Still idle → unstick per `/doey-dispatch` Unstick section.
+
+## Gotchas
+
+- Do NOT delegate to your own pane — check "My pane" in Context above.
+- Do NOT use `send-keys` for task text — always use tmpfile + `load-buffer` + `paste-buffer`.
+- Do NOT skip the sleep between `paste-buffer` and Enter — scales by line count.
+- Do NOT skip verification after dispatch — always confirm the worker started processing.
+- Do NOT kill/restart the worker — this skill assumes the Claude instance is already running and idle.
 
 ### Rules
+
 1. **Always tmpfile/load-buffer** for task text — never `send-keys "" Enter`
 2. **Sleep between paste-buffer and Enter** (scales by line count); **verify after dispatch**
 3. **Never delegate to your own pane**
+
+Total: 4 commands, 0 errors expected.
