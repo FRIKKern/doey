@@ -171,7 +171,7 @@ esac
 
 MGR_PREV_FILE="${RUNTIME_DIR}/status/manager_prev_state_W${TARGET_WINDOW}"
 read -r MGR_PREV_STATE < "$MGR_PREV_FILE" 2>/dev/null || MGR_PREV_STATE="UNKNOWN"
-echo "$PANE_STATE_0" > "$MGR_PREV_FILE"
+_atomic_write "$MGR_PREV_FILE" "$PANE_STATE_0"
 if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
   echo "MANAGER_COMPLETED"
 fi
