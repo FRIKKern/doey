@@ -244,13 +244,13 @@ while true; do
     TOTAL_BUSY=$((TOTAL_BUSY + BUSY_COUNT))
     TOTAL_RESERVED=$((TOTAL_RESERVED + RESV_COUNT))
 
-    eval "TEAM_WIN_${TEAM_LINE_COUNT}=\"${W}\""
-    eval "TEAM_IDLE_${TEAM_LINE_COUNT}=\"${IDLE_COUNT}\""
-    eval "TEAM_BUSY_${TEAM_LINE_COUNT}=\"${BUSY_COUNT}\""
-    eval "TEAM_RESV_${TEAM_LINE_COUNT}=\"${RESV_COUNT}\""
-    eval "TEAM_WCNT_${TEAM_LINE_COUNT}=\"${WORKER_COUNT}\""
-    eval "TEAM_WT_DIR_${TEAM_LINE_COUNT}=\"${_ENV_WORKTREE_DIR}\""
-    eval "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}=\"${_ENV_WORKTREE_BRANCH}\""
+    printf -v "TEAM_WIN_${TEAM_LINE_COUNT}" '%s' "$W"
+    printf -v "TEAM_IDLE_${TEAM_LINE_COUNT}" '%s' "$IDLE_COUNT"
+    printf -v "TEAM_BUSY_${TEAM_LINE_COUNT}" '%s' "$BUSY_COUNT"
+    printf -v "TEAM_RESV_${TEAM_LINE_COUNT}" '%s' "$RESV_COUNT"
+    printf -v "TEAM_WCNT_${TEAM_LINE_COUNT}" '%s' "$WORKER_COUNT"
+    printf -v "TEAM_WT_DIR_${TEAM_LINE_COUNT}" '%s' "$_ENV_WORKTREE_DIR"
+    printf -v "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}" '%s' "$_ENV_WORKTREE_BRANCH"
     TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
   done
 
