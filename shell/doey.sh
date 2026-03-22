@@ -935,7 +935,7 @@ _purge_audit_context() {
   if [[ $rec_count -gt 0 ]]; then
     printf '\n'
     printf "         ${WARN}Recommendations:${RESET}\n"
-    printf "$recommendations"
+    printf '%b' "$recommendations"
   fi
   printf '\n'
 }
