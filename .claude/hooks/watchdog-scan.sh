@@ -255,6 +255,35 @@ CRASH_EOF
       ;;
   esac
 
+  # Anomaly detection — permission prompts, wrong mode, queued messages
+  _anomaly_type=""
+  case "$_worker_capture" in
+    *"Esc to cancel"*|*"Tab to amend"*)
+      _anomaly_type="PROMPT_STUCK"
+      # Auto-fix: send Escape then "1" Enter with cooldown
+      _cooldown="${RUNTIME_DIR}/status/anomaly_fix_${TARGET_WINDOW}_${i}"
+      _cooldown_ts=0
+      [ -f "$_cooldown" ] && read -r _cooldown_ts < "$_cooldown" 2>/dev/null
+      is_numeric "$_cooldown_ts" || _cooldown_ts=0
+      if [ "$(($SCAN_TIME - _cooldown_ts))" -gt 15 ]; then
+        tmux send-keys -t "$PANE_REF" Escape 2>/dev/null
+        sleep 0.3
+        tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null
+        echo "$SCAN_TIME" > "$_cooldown"
+      fi
+      ;;
+    *"accept edits on"*)
+      _anomaly_type="WRONG_MODE"
+      ;;
+    *"queued messages"*|*"Press up to edit"*)
+      _anomaly_type="QUEUED_INPUT"
+      ;;
+  esac
+  if [ -n "$_anomaly_type" ]; then
+    echo "PANE ${i} ${_anomaly_type}"
+    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ANOMALY ${i} ${_anomaly_type}${NL}"
+  fi
+
   # CPU time detection
   _pane_ppid=$(tmux display-message -t "$PANE_REF" -p '#{pane_pid}' 2>/dev/null) || _pane_ppid=""
   _cpu_secs=0
