@@ -87,7 +87,7 @@ kill_pane_process "$WDG_PANE"
 tmux send-keys -t "$WDG_PANE" "claude --dangerously-skip-permissions --model haiku --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\"" Enter
 echo "  ${WATCHDOG_PANE} Watchdog ✓"; sleep 0.5
 # Schedule briefing after all panes relaunched
-WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9]*/${W}.&/g" | tr ' ' ',')
+WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9][0-9]*/${W}.&/g" | tr ' ' ',')
 (
   sleep 15
   tmux send-keys -t "$WDG_PANE" \
