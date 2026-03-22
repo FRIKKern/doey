@@ -1,6 +1,6 @@
 ---
 name: doey-rd-team
-description: Spawn a Doey R&D team — audits, develops, and tests Doey itself in a worktree-isolated window.
+description: Spawn a Doey R&D team — audits, develops, and tests Doey itself in a worktree-isolated window. Use when you need to "start a doey development team", "audit and improve doey", or "spawn an R&D team".
 ---
 
 ## Usage
@@ -13,6 +13,8 @@ description: Spawn a Doey R&D team — audits, develops, and tests Doey itself i
 - Current windows: !`tmux list-windows -F '#{window_index} #{window_name}' 2>/dev/null || true`
 
 ## Prompt
+
+**Expected:** 7 bash commands, ~8 tmux send-keys, 3 file writes (team env, prompt, task), ~30s.
 
 Spawn a Doey R&D team window for safely improving Doey itself. **Do NOT ask for confirmation — just do it.**
 

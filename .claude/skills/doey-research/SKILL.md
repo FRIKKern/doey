@@ -1,6 +1,6 @@
 ---
 name: doey-research
-description: Dispatch a research task to a worker. Stop hook blocks until report is written.
+description: Dispatch a research task to a worker. Stop hook blocks until report is written. Use when you need to "research a topic before implementing", "investigate an approach", or "spawn a research agent".
 ---
 
 ## Context
@@ -10,6 +10,8 @@ description: Dispatch a research task to a worker. Stop hook blocks until report
 - Worker status: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status/*.status; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done 2>/dev/null || true`
 
 ## Prompt
+
+**Expected:** 4 tmux commands (capture-pane, copy-mode, load-buffer/paste-buffer, send-keys), 3 file writes (task marker, tmpfile, report check), ~15s dispatch + variable research time.
 
 Dispatch a research task with guaranteed report-back. Session/team config is injected above.
 

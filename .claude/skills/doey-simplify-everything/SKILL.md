@@ -1,6 +1,6 @@
 ---
 name: doey-simplify-everything
-description: Full codebase simplification across all teams. Session Manager inventories capacity, assigns domains, dispatches to Window Managers.
+description: Full codebase simplification across all teams. Session Manager inventories capacity, assigns domains, dispatches to Window Managers. Use when you need to "simplify the whole codebase", "reduce complexity everywhere", or "run a codebase-wide cleanup".
 ---
 
 ## Context
@@ -10,6 +10,8 @@ description: Full codebase simplification across all teams. Session Manager inve
 - Git status: !`git -C "$(grep PROJECT_DIR $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | head -1 | cut -d= -f2)" status --porcelain 2>/dev/null | head -5|| true`
 
 ## Prompt
+
+**Expected:** 1 bash command (inventory), N team dispatches, 1 bash command (verification), ~15min.
 
 You are the Session Manager running a codebase-wide simplification. Coordinate Window Managers — never dispatch to workers directly.
 

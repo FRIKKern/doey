@@ -1,6 +1,6 @@
 ---
 name: doey-list-windows
-description: List all team windows with their status
+description: List all team windows with their status. Use when you need to "show team windows", "list teams", or "what teams are running".
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
@@ -9,6 +9,8 @@ description: List all team windows with their status
 - Pane commands: !`SESSION=$(grep '^SESSION_NAME=' $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2- | tr -d '"'); for w in $(tmux list-windows -t "$SESSION" -F '#{window_index}' 2>/dev/null); do for p in $(tmux list-panes -t "$SESSION:$w" -F '#{pane_index}' 2>/dev/null); do CMD=$(tmux display-message -t "$SESSION:$w.$p" -p '#{pane_current_command}' 2>/dev/null); echo "$w.$p: $CMD"; done; done || true`
 - Watchdog heartbeats: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; for f in "$RD"/status/watchdog_W*.heartbeat; do [ -f "$f" ] && echo "$(basename $f): $(cat $f)"; done 2>/dev/null || true`
 - Worker statuses: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; for f in "$RD"/status/*.status; do [ -f "$f" ] && grep -H '^STATUS: ' "$f"; done 2>/dev/null || true`
+
+**Expected:** 0 bash commands, read-only analysis of context data, ~5s.
 
 **Read-only.** Build table: `WINDOW | GRID | MGR | WDG | WORKERS`.
 

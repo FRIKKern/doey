@@ -1,12 +1,14 @@
 ---
 name: doey-watchdog-compact
-description: Send /compact to Watchdog to reduce context window
+description: Send /compact to Watchdog to reduce context window. Use when you need to "compact the watchdog", "reduce watchdog context", or "watchdog is running out of context".
 ---
 
 **Only Window Manager or Session Manager can invoke this** (send-keys blocked for other roles).
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Team config: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; [ -f "$RD/team_${W}.env" ] && cat "$RD/team_${W}.env" 2>/dev/null|| true`
+
+**Expected:** 2 bash commands, 1 tmux send-keys, 1 verification loop, ~35s.
 
 Send `/compact` to the Watchdog, then verify it responds (retry once after 15s).
 

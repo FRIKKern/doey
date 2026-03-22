@@ -1,7 +1,9 @@
 ---
 name: doey-dispatch
-description: Send tasks to idle worker panes.
+description: Send tasks to idle worker panes. Use when you need to "send a task", "assign work", "delegate to workers", "dispatch to idle panes", or "give a worker something to do".
 ---
+
+**Expected:** 4-6 tmux commands per worker, 1 status write, ~15-20s per worker.
 
 ## Context
 
@@ -67,6 +69,10 @@ OUTPUT=$(tmux capture-pane -t "$PANE" -p 2>/dev/null)
 ALREADY_READY=false
 [ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯' && ALREADY_READY=true
 
+# **If display-message fails with "no such pane":** The pane was killed or the window layout changed.
+# Run: tmux list-panes -t "${SESSION_NAME}:${WINDOW_INDEX}" -F '#{pane_index}' to find valid panes.
+# **If pgrep returns nothing:** The shell is idle with no Claude process — treat as not ready (step 2 will relaunch).
+
 # 2. Not ready → kill + restart
 if [ "$ALREADY_READY" = "false" ]; then
   [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null; sleep 3
@@ -80,6 +86,10 @@ if [ "$ALREADY_READY" = "false" ]; then
   tmux send-keys -t "$PANE" "$CMD" Enter
   sleep 8; tmux copy-mode -q -t "$PANE" 2>/dev/null
 fi
+
+# **If send-keys fails with "no such pane":** Window layout changed. Re-read team env and re-scan panes.
+# **If worker shows "logged out" or "session expired":** Run /doey-clear on that pane index first, then retry dispatch.
+# **If Claude fails to start (no "bypass permissions" after 8s):** Check that `claude` is on PATH in the pane's shell. Try: tmux send-keys -t "$PANE" "which claude" Enter
 
 # 3. Rename pane
 tmux send-keys -t "$PANE" "/rename task-name_$(date +%m%d)" Enter; sleep 1
@@ -116,6 +126,9 @@ else
     echo "✗ FAILED — run unstick sequence"
   fi
 fi
+
+# **If verify fails after retry:** Run the unstick sequence (below). If unstick also fails after 2 attempts, kill -9 the pane process, relaunch Claude, wait 8s, and re-dispatch from step 3.
+# **If worker is working but on the wrong task:** Do NOT interrupt — mark pane as busy and dispatch to another worker instead.
 ```
 
 ### Variants
@@ -135,3 +148,11 @@ Assign file ownership per worker. Shared files: non-overlapping sections, Edit o
 ### Unstick
 
 `copy-mode -q` -> `C-c` -> `C-u` -> `Enter`, wait 3s. After 2 fails: `kill -9`, relaunch, wait 8s, re-dispatch.
+
+## Gotchas
+
+- Do NOT send empty string via `send-keys "" Enter` — the empty string swallows the Enter keystroke and nothing happens
+- Do NOT dispatch to reserved panes — always check for `.reserved` file both during pre-flight AND immediately before send-keys (race condition)
+- Do NOT use relative paths in task prompts — workers have no shared CWD context; always use absolute paths with `${PROJECT_DIR}` prefix
+- Do NOT dispatch multiple tasks to the same worker — one task per worker per dispatch cycle; if you need the same worker again, wait for FINISHED status
+- Do NOT skip the settle delay before Enter after paste-buffer — large task prompts need time to render in the pane; skipping causes partial paste submission

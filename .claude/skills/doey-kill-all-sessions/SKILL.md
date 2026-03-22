@@ -1,9 +1,11 @@
 ---
 name: doey-kill-all-sessions
-description: Kill ALL Doey tmux sessions, processes, and runtime files.
+description: Kill ALL Doey tmux sessions, processes, and runtime files. Use when you need to "kill all doey sessions", "shut down everything", or "nuke all doey instances".
 ---
 
 - Active Doey sessions: !`tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^doey-' || echo "No Doey sessions found"`
+
+**Expected:** 1 bash command, 1 confirmation prompt, N tmux kill-sessions, 1 rm, ~15s.
 
 **Confirm first** — destructive and irreversible: "This will kill ALL Doey sessions, processes, and remove `/tmp/doey/*/`. Proceed?"
 
