@@ -126,11 +126,12 @@ send_notification() {
     echo "$now" > "$cooldown_file" 2>/dev/null || true
   fi
 
-  title="${title//\\/\\\\}"; title="${title//\"/\\\"}"
-  body="${body//\\/\\\\}"; body="${body//\"/\\\"}"
-
   if command -v osascript >/dev/null 2>&1; then
-    osascript -e "display notification \"${body}\" with title \"${title}\" sound name \"Ping\"" 2>/dev/null &
+    osascript - "$title" "$body" <<'APPLESCRIPT' 2>/dev/null &
+on run argv
+  display notification (item 2 of argv) with title (item 1 of argv) sound name "Ping"
+end run
+APPLESCRIPT
   elif command -v notify-send >/dev/null 2>&1; then
     notify-send "$title" "$body" 2>/dev/null &
   elif command -v powershell.exe >/dev/null 2>&1; then

@@ -272,7 +272,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       is_numeric "$_cooldown_ts" || _cooldown_ts=0
       if [ "$(($SCAN_TIME - _cooldown_ts))" -gt 15 ]; then
         tmux send-keys -t "$PANE_REF" Escape 2>/dev/null
-        tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null
+        tmux send-keys -t "$PANE_REF" Enter 2>/dev/null
         _atomic_write "$_cooldown" "$SCAN_TIME"
       fi
       ;;

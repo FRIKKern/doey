@@ -2,7 +2,7 @@
 
 ## Overview
 
-Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (default 3 cols = 6 workers, auto-expands). CLI entry: `doey`. Human reservation via `/doey-reserve`.
+Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (default) starts 1 col, auto-expands. Static grid default: 3x2 (6 workers). CLI entry: `doey`. Human reservation via `/doey-reserve`.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach. |
 | Session Manager | `0.1` | Routes tasks between team windows. Present when multiple teams exist. |
-| Watchdog | `0.2-0.7` | One per team. Monitors workers, catches crashes. |
+| Watchdog | `0.2+` | One per team (up to 0.7). Monitors workers, catches crashes. |
 | Window Manager | `W.0` | Per-window orchestrator. Plans/delegates, never writes code. |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved. |
 | Test Driver | external | E2E test runner via `doey test`. |
@@ -40,7 +40,7 @@ Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
 - Agents: YAML frontmatter (name, model, color, memory, description)
 - Skills: YAML frontmatter (name, description) in `.claude/skills/<name>/SKILL.md`
 - Hook exits: 0=allow, 1=block+error, 2=block+feedback
-- Shell: `set -euo pipefail`, bash 3.2 compatible. Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `[[ =~` capture groups.
+- Shell: `set -euo pipefail`, bash 3.2 compatible. Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `BASH_REMATCH` capture groups (`[[ =~` itself is allowed).
 - Naming: sessions `doey-<project>`, runtime `/tmp/doey/<project>/`
 
 ## Testing Changes
@@ -57,7 +57,7 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 
 ## Important Files
 
-**Shell:** `shell/doey.sh` (CLI launcher), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor)
+**Shell:** `shell/doey.sh` (CLI launcher), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor), `shell/pane-border-status.sh` (pane borders), `shell/tmux-statusbar.sh` (status bar)
 
 **Hooks** (`.claude/hooks/`):
 
@@ -65,7 +65,7 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 |------|---------|
 | `common.sh` | Shared utils: `init_hook()`, `parse_field()`, `_read_team_key()`, role checks, `send_notification()` |
 | `on-session-start.sh` | Sets DOEY_* env vars (ROLE, PANE_INDEX, WINDOW_INDEX, TEAM_WINDOW, TEAM_DIR, RUNTIME) plus SESSION_NAME, PROJECT_DIR, PROJECT_NAME |
-| `on-prompt-submit.sh` | BUSY status, READY on /compact, column expansion |
+| `on-prompt-submit.sh` | BUSY status, READY on /compact, collapsed column restore |
 | `on-pre-tool-use.sh` | Tool usage safety guards |
 | `on-pre-compact.sh` | Context preservation before compaction |
 | `post-tool-lint.sh` | Bash 3.2 compatibility lint |
