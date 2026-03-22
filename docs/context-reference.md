@@ -49,7 +49,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 |------|-------|---------|
 | `common.sh` | — | Shared utils: `init_hook()`, `parse_field()`, `_read_team_key()`, role checks, `send_notification()` |
 | `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX, DOEY_TEAM_WINDOW, DOEY_TEAM_DIR, DOEY_RUNTIME |
-| `on-prompt-submit.sh` | UserPromptSubmit | BUSY status; READY on `/compact`; column expansion |
+| `on-prompt-submit.sh` | UserPromptSubmit | BUSY status; READY on `/compact`; collapsed column restore |
 | `on-pre-tool-use.sh` | PreToolUse | Role-based tool blocking |
 | `on-pre-compact.sh` | PreCompact | Preserves orchestration state before compaction |
 | `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
@@ -90,7 +90,7 @@ Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not se
 Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session.env`.
 
 **Session-level (`session.env`):**
-`PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS`, `MAX_WORKERS`, `CURRENT_COLS`, `TOTAL_PANES`, `WORKER_COUNT`, `WORKER_PANES`, `WATCHDOG_PANE`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `WDG_SLOT_1`..`WDG_SLOT_3`, `SM_PANE`
+`PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS` (dynamic only), `MAX_WORKERS` (dynamic only), `CURRENT_COLS` (dynamic only), `TOTAL_PANES` (static only), `WORKER_COUNT`, `WORKER_PANES`, `WATCHDOG_PANE`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `WDG_SLOT_1`..`WDG_SLOT_6`, `SM_PANE`
 
 **Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
@@ -159,7 +159,9 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `broadcasts/` | Broadcast messages (created on-demand by `/doey-broadcast`) |
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
 
-**Status values:** READY, BUSY, FINISHED, RESERVED.
+**Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED.
+
+**Watchdog anomaly types:** PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT.
 
 **Research lifecycle:** dispatch → `.task` created → worker investigates → Stop hook blocks until `.report` written → Manager reads report.
 

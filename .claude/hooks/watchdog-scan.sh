@@ -209,11 +209,12 @@ for i in $PANES_LIST; do
           CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${TARGET_WINDOW}_${i}"
           if [ ! -f "$CRASH_FILE" ]; then
             CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
-            cat > "$CRASH_FILE" << CRASH_EOF
+            cat > "${CRASH_FILE}.tmp" << CRASH_EOF
 PANE_INDEX=${i}
 TIMESTAMP=$(date +%s)
 LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
 CRASH_EOF
+            mv "${CRASH_FILE}.tmp" "$CRASH_FILE"
           fi
           ;;
       esac
@@ -266,9 +267,7 @@ CRASH_EOF
       [ -f "$_cooldown" ] && read -r _cooldown_ts < "$_cooldown" 2>/dev/null
       is_numeric "$_cooldown_ts" || _cooldown_ts=0
       if [ "$(($SCAN_TIME - _cooldown_ts))" -gt 15 ]; then
-        tmux send-keys -t "$PANE_REF" Escape 2>/dev/null
-        sleep 0.3
-        tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null
+        tmux send-keys -t "$PANE_REF" Escape "1" Enter 2>/dev/null
         echo "$SCAN_TIME" > "$_cooldown"
       fi
       ;;

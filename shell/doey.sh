@@ -734,9 +734,9 @@ apply_doey_theme() {
   $_s mouse on
   $_s set-clipboard on
   local _clip_cmd=""
-  if command -v pbcopy &>/dev/null; then _clip_cmd="pbcopy"
-  elif command -v xclip &>/dev/null; then _clip_cmd="xclip -selection clipboard"
-  elif command -v xsel &>/dev/null; then _clip_cmd="xsel --clipboard"
+  if command -v pbcopy >/dev/null 2>&1; then _clip_cmd="pbcopy"
+  elif command -v xclip >/dev/null 2>&1; then _clip_cmd="xclip -selection clipboard"
+  elif command -v xsel >/dev/null 2>&1; then _clip_cmd="xsel --clipboard"
   fi
   if [ -n "$_clip_cmd" ]; then
     tmux bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "$_clip_cmd"
@@ -753,7 +753,7 @@ apply_doey_theme() {
 ensure_project_trusted() {
   local dir="$1" indent="${2:-   }"
   local claude_settings="$HOME/.claude/settings.json"
-  if command -v jq &>/dev/null; then
+  if command -v jq >/dev/null 2>&1; then
     if [ -f "$claude_settings" ]; then
       if ! jq --arg dir "$dir" -e '.trustedDirectories // [] | index($dir)' "$claude_settings" > /dev/null 2>&1; then
         jq --arg dir "$dir" '(.trustedDirectories // []) |= . + [$dir]' "$claude_settings" 2>/dev/null > "${claude_settings}.tmp" \
@@ -1197,7 +1197,7 @@ INITIAL_TEAMS=2
 MAX_WATCHDOG_SLOTS=6
 
 check_claude_auth() {
-  if ! command -v claude &>/dev/null; then
+  if ! command -v claude >/dev/null 2>&1; then
     printf "  ${ERROR}✗ claude CLI not found${RESET}\n"
     return 1
   fi
@@ -1771,9 +1771,9 @@ check_doctor() {
   printf '\n  %bDoey — System Check%b\n\n' "$BRAND" "$RESET"
 
   # Required commands
-  if command -v tmux &>/dev/null; then _doc_check ok "tmux" "$(tmux -V)"
+  if command -v tmux >/dev/null 2>&1; then _doc_check ok "tmux" "$(tmux -V)"
   else _doc_check fail "tmux not installed"; fi
-  if command -v claude &>/dev/null; then _doc_check ok "claude CLI" "$(claude --version 2>/dev/null || echo 'unknown')"
+  if command -v claude >/dev/null 2>&1; then _doc_check ok "claude CLI" "$(claude --version 2>/dev/null || echo 'unknown')"
   else _doc_check warn "claude CLI not in PATH"; fi
 
   # Auth check
@@ -1814,7 +1814,7 @@ check_doctor() {
   fi
 
   # Optional: jq
-  if command -v jq &>/dev/null; then _doc_check ok "jq" "$(jq --version 2>/dev/null || echo 'unknown')"
+  if command -v jq >/dev/null 2>&1; then _doc_check ok "jq" "$(jq --version 2>/dev/null || echo 'unknown')"
   else _doc_check warn "jq not found — auto-trust skipped"; fi
 
   # Version
