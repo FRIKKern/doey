@@ -9,7 +9,9 @@ init_hook
 
 # --- Worker: notify its Window Manager ---
 if is_worker; then
-  MGR_PANE="$SESSION_NAME:$WINDOW_INDEX.0"
+  _team_env="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  _mgr_idx=$(_read_team_key "$_team_env" MANAGER_PANE)
+  MGR_PANE="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
   tmux display-message -t "$MGR_PANE" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
 
   PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="W${PANE_INDEX}"
