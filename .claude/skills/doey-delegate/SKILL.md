@@ -1,6 +1,6 @@
 ---
 name: doey-delegate
-description: Delegate a task to an idle Claude instance (no kill/restart).
+description: Delegate a task to an idle Claude instance (no kill/restart). Use when you need to "send a task to an idle worker", "delegate work without restarting", or "assign a task to a specific pane".
 ---
 
 ## Context
@@ -16,6 +16,8 @@ All panes:
 
 My pane:
 !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
+
+**Expected:** 4 tmux commands (capture-pane, copy-mode, load-buffer/paste-buffer, send-keys), 2 file reads (status + reserved), ~10s.
 
 ## Prompt
 

@@ -1,6 +1,6 @@
 ---
 name: doey-purge
-description: Two-wave purge — audit every project file for context rot and code issues, then fix.
+description: Two-wave purge — audit every project file for context rot and code issues, then fix. Use when you need to "audit the codebase", "clean up context rot", or "purge stale content".
 ---
 
 ## Context
@@ -15,6 +15,8 @@ description: Two-wave purge — audit every project file for context rot and cod
 `/doey-purge runtime` — clean stale runtime files only (no workers)
 
 ## Prompt
+
+**Expected:** 2 bash commands (inventory + verification), 2 dispatch waves (8 workers total), ~10min.
 
 Session/team config injected above. Quick mode: run `doey purge --force`, report, stop.
 

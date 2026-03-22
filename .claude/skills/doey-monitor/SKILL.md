@@ -1,6 +1,6 @@
 ---
 name: doey-monitor
-description: Monitor worker panes — reads status files (FINISHED, BUSY, ERROR, READY, RESERVED)
+description: Monitor worker panes — reads status files (FINISHED, BUSY, ERROR, READY, RESERVED). Use when you need to "watch worker progress", "check for crashed panes", or "poll until workers finish".
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
@@ -11,6 +11,8 @@ description: Monitor worker panes — reads status files (FINISHED, BUSY, ERROR,
 - Crash alerts: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; for f in "$RD"/status/crash_pane_*; do [ -f "$f" ] && echo "CRASH:" && cat "$f"; done 2>/dev/null || true`
 - Watchdog heartbeat: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; HB="$RD/status/watchdog_W${W}.heartbeat"; [ -f "$HB" ] && echo "heartbeat: $(cat $HB) age: $(( $(date +%s) - $(cat $HB) ))s" || echo "No watchdog heartbeat"`
 - Pane titles: !`SESSION=$(grep '^SESSION_NAME=' $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2- | tr -d '"'); W="${DOEY_WINDOW_INDEX:-0}"; for p in $(tmux list-panes -t "$SESSION:$W" -F '#{pane_index}' 2>/dev/null); do TITLE=$(tmux display-message -t "$SESSION:$W.$p" -p '#{pane_title}' 2>/dev/null); echo "$W.$p: $TITLE"; done || true`
+
+**Expected:** 1-2 tmux commands (capture-pane for deep inspect), 5-6 file reads (status + results + heartbeat), ~5s per poll cycle.
 
 ### Status Table
 

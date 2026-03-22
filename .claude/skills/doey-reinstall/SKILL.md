@@ -1,7 +1,9 @@
 ---
 name: doey-reinstall
-description: Reinstall Doey from source repo
+description: Reinstall Doey from source repo. Use when you need to "reinstall doey", "update doey from source", or "refresh doey installation".
 ---
+
+**Expected:** 1 bash command (git pull + install.sh), ~10s.
 
 ```bash
 REPO_DIR=$(cat ~/.claude/doey/repo-path 2>/dev/null)

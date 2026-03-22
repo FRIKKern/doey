@@ -1,10 +1,12 @@
 ---
 name: doey-repair
-description: Diagnose and repair Doey Dashboard (window 0).
+description: Diagnose and repair Doey Dashboard (window 0). Use when you need to "fix the dashboard", "repair window 0", or "dashboard panes are broken".
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Team files: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
+
+**Expected:** 4 bash commands, 0-8 tmux send-keys, ~30s.
 
 Diagnose and repair Dashboard (window 0). Layout: 0.0=InfoPanel, 0.1=SessionMgr, 0.2-0.7=Watchdogs (one per team).
 
