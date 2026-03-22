@@ -77,7 +77,8 @@ install_doey_hooks() {
   mkdir -p "$target_dir/.claude/skills"
   for d in "${repo_dir}"/.claude/skills/doey-*/; do
     [ -d "$d" ] || continue
-    cp -R "$d" "$target_dir/.claude/skills/"
+    # Strip trailing slash — cp -R with trailing slash copies contents, not the directory
+    cp -R "${d%/}" "$target_dir/.claude/skills/"
   done
   # Remove orphan doey-* skill dirs no longer in the source repo
   for d in "$target_dir"/.claude/skills/doey-*/; do
@@ -1977,6 +1978,7 @@ launch_session_dynamic() {
   printf '\n'
 
   ensure_project_trusted "$dir"
+  install_doey_hooks "$dir" "   "
 
   STEP_TOTAL=7
   step_start 1 "Creating session for ${name}..."
@@ -2521,6 +2523,9 @@ add_dynamic_team_window() {
     fi
   fi
 
+  # Install hooks + skills in worktree dir (main project already has them from session launch)
+  [ -n "$wt_dir_for_env" ] && [ -d "$wt_dir_for_env" ] && install_doey_hooks "$wt_dir_for_env" "  "
+
   printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
   _name_team_window "$session" "$window_index" "$wt_dir_for_env"
 
@@ -2573,6 +2578,7 @@ add_team_window() {
     }
     worktree_branch=$(git -C "$team_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$worktree_spec")
     wt_dir_for_env="$team_dir"
+    install_doey_hooks "$team_dir" "  "
   fi
 
   printf "  ${DIM}Creating team window %s (%s grid, %s panes)...${RESET}\n" "$window_index" "$grid" "$total_panes"
