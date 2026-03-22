@@ -7,6 +7,43 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
 
+# File-based message delivery with send-keys fallback.
+# Writes an atomic message file and touches a trigger to wake the recipient.
+_send_message_file() {
+  local target_pane="$1" subject="$2" body="$3" sender="${PANE_SAFE:-unknown}"
+  # Derive a safe target identifier from the pane spec (e.g. "doey-doey:3.0" -> "doey-doey_3_0")
+  local target_safe
+  target_safe=$(printf '%s' "$target_pane" | tr ':.' '_')
+
+  local msg_dir="${RUNTIME_DIR}/messages"
+  local trig_dir="${RUNTIME_DIR}/triggers"
+  mkdir -p "$msg_dir" "$trig_dir" 2>/dev/null || true
+
+  local timestamp
+  timestamp="$(date +%s)_$$"
+  local msg_file="${msg_dir}/${target_safe}_${timestamp}.msg"
+  local tmp_file="${msg_file}.tmp"
+
+  # Atomic write: tmp + mv
+  if printf 'FROM: %s\nSUBJECT: %s\n%s\n' "$sender" "$subject" "$body" > "$tmp_file" 2>/dev/null \
+     && mv "$tmp_file" "$msg_file" 2>/dev/null; then
+    # Touch trigger to wake recipient
+    touch "${trig_dir}/${target_safe}.trigger" 2>/dev/null || true
+    return 0
+  fi
+
+  # Cleanup failed tmp
+  rm -f "$tmp_file" 2>/dev/null || true
+  return 1
+}
+
+# Deliver message via file queue, fall back to send-keys
+_notify_pane() {
+  local target_pane="$1" subject="$2" body="$3"
+  _send_message_file "$target_pane" "$subject" "$body" 2>/dev/null \
+    || send_to_pane "$target_pane" "$body"
+}
+
 # --- Worker: notify its Window Manager ---
 if is_worker; then
   _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
@@ -27,7 +64,7 @@ if is_worker; then
   LAST_MSG=$(parse_field "last_assistant_message")
   [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
 
-  send_to_pane "$MGR_PANE" "$MSG"
+  _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
   exit 0
 fi
 
@@ -44,7 +81,7 @@ if is_manager; then
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
-  send_to_pane "$SESSION_NAME:${SM_PANE}" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
+  _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
   exit 0
 fi
 

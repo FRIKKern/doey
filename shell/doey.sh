@@ -2387,9 +2387,20 @@ _apply_team_border_theme() {
 # Atomically update a field in session.env
 _set_session_env() {
   local runtime_dir="$1" field="$2" value="$3"
+  local _lock="${runtime_dir}/.session_env_lock"
+  local _retries=0
+  while ! mkdir "$_lock" 2>/dev/null; do
+    _retries=$((_retries + 1))
+    if [ "$_retries" -gt 20 ]; then
+      rmdir "$_lock" 2>/dev/null
+      break
+    fi
+    sleep 0.1
+  done
   local _tmp="${runtime_dir}/session.env.tmp.$$"
   sed "s/^${field}=.*/${field}=\"${value}\"/" "${runtime_dir}/session.env" > "$_tmp"
   mv "$_tmp" "${runtime_dir}/session.env"
+  rmdir "$_lock" 2>/dev/null || true
 }
 
 _register_team_window() {

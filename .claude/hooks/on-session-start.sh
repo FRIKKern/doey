@@ -67,15 +67,24 @@ _repo_path=""
 if [ -n "$_repo_path" ] && [ -d "$_repo_path/.claude/skills" ]; then
   _skill_target="${wt_dir:-$PROJECT_DIR}"
   mkdir -p "$_skill_target/.claude/skills"
-  for _sd in "$_repo_path"/.claude/skills/doey-*/; do
-    [ -d "$_sd" ] || continue
-    cp -R "$_sd" "$_skill_target/.claude/skills/"
-  done
-  for _sd in "$_skill_target"/.claude/skills/doey-*/; do
-    [ -d "$_sd" ] || continue
-    _sn="$(basename "$_sd")"
-    [ ! -d "$_repo_path/.claude/skills/$_sn" ] && rm -rf "$_sd"
-  done
+  LOCK_DIR="${RUNTIME_DIR}/.skill_sync_lock"
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    _skill_lock_cleanup() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
+    trap '_skill_lock_cleanup' EXIT
+    for _sd in "$_repo_path"/.claude/skills/doey-*/; do
+      [ -d "$_sd" ] || continue
+      cp -R "$_sd" "$_skill_target/.claude/skills/"
+    done
+    for _sd in "$_skill_target"/.claude/skills/doey-*/; do
+      [ -d "$_sd" ] || continue
+      _sn="$(basename "$_sd")"
+      [ ! -d "$_repo_path/.claude/skills/$_sn" ] && rm -rf "$_sd"
+    done
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    trap - EXIT
+  else
+    sleep 1
+  fi
 fi
 
 cat >> "$CLAUDE_ENV_FILE" << EOF
