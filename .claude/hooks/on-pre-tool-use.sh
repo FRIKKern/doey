@@ -14,6 +14,13 @@ fi
 # Non-Bash: block write tools for Watchdog
 if [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in Edit|Write|Agent|NotebookEdit) ;; *) exit 0 ;; esac
+  # Fast path: use cached role from on-session-start.sh
+  if [ -n "${DOEY_ROLE:-}" ]; then
+    [ "$DOEY_ROLE" = "watchdog" ] || exit 0
+    echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
+    exit 2
+  fi
+  # Fallback: detect role from tmux (first tool call before env is loaded)
   RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
   if [ "$WINDOW_INDEX" = "0" ]; then
@@ -26,6 +33,9 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   fi
   exit 0
 fi
+
+# Fast path: unrestricted roles skip all detection
+case "${DOEY_ROLE:-}" in manager|session_manager) exit 0 ;; esac
 
 source "$(dirname "$0")/common.sh"
 init_hook <<< "$INPUT"

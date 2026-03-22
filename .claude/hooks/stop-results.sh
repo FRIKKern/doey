@@ -27,7 +27,19 @@ done <<< "$OUTPUT"
 PROJECT_DIR=$(tmux show-environment DOEY_TEAM_DIR 2>/dev/null | cut -d= -f2-) || PROJECT_DIR=""
 FILES_LIST=""
 if [ -n "$PROJECT_DIR" ]; then
-  FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
+  if command -v timeout >/dev/null 2>&1; then
+    FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && timeout 2 git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
+  else
+    _tmpfile=$(mktemp)
+    ( cd "$PROJECT_DIR" 2>/dev/null && git diff --name-only HEAD > "$_tmpfile" 2>/dev/null ) &
+    _git_pid=$!
+    ( sleep 2; kill "$_git_pid" 2>/dev/null ) &
+    _killer=$!
+    wait "$_git_pid" 2>/dev/null || true
+    kill "$_killer" 2>/dev/null; wait "$_killer" 2>/dev/null || true
+    FILES_LIST=$(head -20 "$_tmpfile" 2>/dev/null) || FILES_LIST=""
+    rm -f "$_tmpfile"
+  fi
 fi
 FILES_JSON="[]"
 if [ -n "$FILES_LIST" ]; then

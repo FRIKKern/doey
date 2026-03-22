@@ -59,6 +59,9 @@ else
   [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
 fi
 
+# Cache role in tmux environment for fast lookup by subsequent hooks
+tmux set-environment -t "$SESSION_NAME" DOEY_ROLE "$ROLE" 2>/dev/null || true
+
 wt_dir=$(_env_val "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 
 # Sync doey skills from source repo into the working directory

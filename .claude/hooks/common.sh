@@ -19,9 +19,15 @@ init_hook() {
   WINDOW_INDEX="${wp%.*}"
   NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
+  _ensure_dirs
+}
+
+_ensure_dirs() {
+  [ -f "${RUNTIME_DIR}/.dirs_created" ] && return 0
   if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/messages" ] || [ ! -d "${RUNTIME_DIR}/research" ] || [ ! -d "${RUNTIME_DIR}/reports" ]; then
     mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/messages"
   fi
+  touch "${RUNTIME_DIR}/.dirs_created"
 }
 
 parse_field() {
