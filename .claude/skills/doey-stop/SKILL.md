@@ -1,12 +1,16 @@
 ---
 name: doey-stop
-description: Stop a worker by pane number — kills Claude process, updates status
+description: Stop a worker by pane number. Use when you need to "stop a worker", "kill a pane", or "halt a task". Kills Claude process, updates status.
 ---
 
 - Team config: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; [ -f "$RD/team_${W}.env" ] && cat "$RD/team_${W}.env" 2>/dev/null|| true`
 - Worker statuses: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; for f in "$RD"/status/*_${W}_*.status; do [ -f "$f" ] && echo "=== $(basename $f) ===" && cat "$f" && echo ""; done 2>/dev/null || true`
 
-If no pane number given, list workers from injected data and ask which to stop. Set `PANE_NUMBER` from user argument, then run:
+**Expected:** 3 bash commands (validate, kill, update status), ~5 seconds.
+
+If no pane number given, list workers from injected data and ask which to stop. Set `PANE_NUMBER` from user argument.
+
+## Step 1: Parse & Validate
 
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
@@ -18,6 +22,15 @@ TARGET="$PANE_NUMBER"
 VALID=false
 for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ "$i" = "$TARGET" ] && VALID=true; done
 [ "$VALID" = "false" ] && { echo "ERROR: Pane ${W}.${TARGET} not a worker. Valid: ${WORKER_PANES}"; exit 1; }
+echo "Validated: pane ${W}.${TARGET} is a worker"
+```
+
+Expected: "Validated: pane W.N is a worker"
+**If error:** Check WORKER_PANES from injected team config.
+
+## Step 2: Kill Claude Process
+
+```bash
 PANE="${SESSION_NAME}:${W}.${TARGET}"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
@@ -30,7 +43,16 @@ else
   [ -n "$CHILD_PID" ] && { kill -9 "$CHILD_PID" 2>/dev/null; sleep 1; }
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && { echo "ERROR: Failed to stop — manual intervention needed"; exit 1; }
+  echo "Claude process killed in pane ${W}.${TARGET}"
 fi
+```
+
+Expected: "Claude process killed" or "already stopped"
+**If error:** SIGTERM failed and SIGKILL failed — manual intervention needed.
+
+## Step 3: Update Status File
+
+```bash
 PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 mkdir -p "${RD}/status"
 cat > "${RD}/status/${PANE_SAFE}.status" << EOF
@@ -39,9 +61,22 @@ UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: FINISHED
 TASK: manually stopped
 EOF
+echo "Status file updated: FINISHED"
+```
+
+Expected: "Status file updated: FINISHED"
+**If error:** Check RD path and permissions.
+
+## Step 4: Confirm
+
+```bash
 echo "Stopped pane ${W}.${TARGET} — status set to FINISHED"
 ```
 
-### Rules
-- Never stop Window Manager (pane 0) or Watchdog — kill by PID, never `/exit` or `send-keys`
+Expected: "Stopped pane W.N — status set to FINISHED"
+
+## Gotchas
+- Never stop Manager (pane 0) or Watchdog — kill by PID, never `/exit` or `send-keys`
 - Pane shell stays alive for restart via `/doey-dispatch` or `/doey-clear`
+
+Total: 4 steps, 0 errors expected.
