@@ -8,7 +8,11 @@ STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
 write_status() {
   local status="$1" task="$2" tmp
-  tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || tmp="$STATUS_FILE"
+  tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null)
+  if [ -z "$tmp" ] || [ ! -f "$tmp" ]; then
+    echo "[WARN] mktemp failed in $(basename "$0") — writing non-atomically" >> "${RUNTIME_DIR}/doey-warnings.log" 2>/dev/null
+    tmp="$STATUS_FILE"
+  fi
   cat > "$tmp" <<EOF
 PANE: $PANE
 UPDATED: $NOW

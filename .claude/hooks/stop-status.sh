@@ -18,7 +18,11 @@ is_worker && STOP_STATUS="FINISHED"
 is_reserved && STOP_STATUS="RESERVED"
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-TMP=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMP="$STATUS_FILE"
+TMP=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null)
+if [ -z "$TMP" ] || [ ! -f "$TMP" ]; then
+  echo "[WARN] mktemp failed in $(basename "$0") — writing non-atomically" >> "${RUNTIME_DIR}/doey-warnings.log" 2>/dev/null
+  TMP="$STATUS_FILE"
+fi
 cat > "$TMP" <<EOF
 PANE: $PANE
 UPDATED: $NOW
