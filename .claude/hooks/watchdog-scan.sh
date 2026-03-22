@@ -40,12 +40,12 @@ _update_duration() {
   local idx="$1" prev="$2" cur="$3"
   local since_file="${RUNTIME_DIR}/status/state_since_${TARGET_WINDOW}_${idx}"
   if [ "$prev" != "$cur" ]; then
-    echo "$SCAN_TIME" > "$since_file"
+    _atomic_write "$since_file" "$SCAN_TIME"
     printf -v "PANE_DURATION_${idx}" '%s' "0"
     SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}STATE_CHANGE ${idx} ${prev}->${cur}${NL}"
   else
     local since
-    read -r since < "$since_file" 2>/dev/null || { echo "$SCAN_TIME" > "$since_file"; since="$SCAN_TIME"; }
+    read -r since < "$since_file" 2>/dev/null || { _atomic_write "$since_file" "$SCAN_TIME"; since="$SCAN_TIME"; }
     printf -v "PANE_DURATION_${idx}" '%s' "$(($SCAN_TIME - $since))"
   fi
 }
@@ -212,15 +212,15 @@ for i in $PANES_LIST; do
           CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${TARGET_WINDOW}_${i}"
           if [ ! -f "$CRASH_FILE" ]; then
             CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
-            cat > "$CRASH_FILE" << CRASH_EOF
-PANE_INDEX=${i}
+            _crash_body="PANE_INDEX=${i}
 TIMESTAMP=$(date +%s)
-LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
-CRASH_EOF
+LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
+            _atomic_write "$CRASH_FILE" "$_crash_body"
           fi
           ;;
       esac
       echo "PANE ${i} ${_crash_state}"
+      case "$i" in *[!0-9]*) continue ;; esac
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "$_crash_state"
       _set_pane_info "$i" "$_crash_state" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
@@ -237,6 +237,7 @@ CRASH_EOF
         node)
           echo "PANE ${i} BOOTING"
           SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}BOOTING ${i}${NL}"
+          case "$i" in *[!0-9]*) continue ;; esac
           eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
           _update_duration "$i" "$_prev" "BOOTING"
           _set_pane_info "$i" "BOOTING" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
@@ -251,6 +252,7 @@ CRASH_EOF
   case "$_worker_capture" in
     *"Not logged in"*)
       echo "PANE ${i} LOGGED_OUT"
+      case "$i" in *[!0-9]*) continue ;; esac
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "LOGGED_OUT"
       _set_pane_info "$i" "LOGGED_OUT" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
@@ -271,7 +273,7 @@ CRASH_EOF
       if [ "$(($SCAN_TIME - _cooldown_ts))" -gt 15 ]; then
         tmux send-keys -t "$PANE_REF" Escape 2>/dev/null
         tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null
-        echo "$SCAN_TIME" > "$_cooldown"
+        _atomic_write "$_cooldown" "$SCAN_TIME"
       fi
       ;;
     *"accept edits on"*)
@@ -299,7 +301,7 @@ CRASH_EOF
   CPU_FILE="${RUNTIME_DIR}/status/cpu_${TARGET_WINDOW}_${i}"
   _prev_cpu_secs=-1
   [ -f "$CPU_FILE" ] && read -r _prev_cpu_secs < "$CPU_FILE" 2>/dev/null
-  echo "$_cpu_secs" > "$CPU_FILE"
+  _atomic_write "$CPU_FILE" "$_cpu_secs"
   if [ "$_prev_cpu_secs" -lt 0 ]; then
     _cpu_delta=-1
   else
@@ -324,13 +326,14 @@ CRASH_EOF
 
   if [ "$HASH" = "$OLD_HASH" ]; then
     # Content unchanged — use CPU to distinguish IDLE vs WORKING
+    case "$i" in *[!0-9]*) continue ;; esac
     eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
 
     if [ -n "$_cpu_active" ] || [ "$_hook_status" = "BUSY" ]; then
       COUNTER_FILE="${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}"
       read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
       NEW_COUNT=$((OLD_COUNT + 1))
-      echo "$NEW_COUNT" > "$COUNTER_FILE"
+      _atomic_write "$COUNTER_FILE" "$NEW_COUNT"
 
       if [ "$NEW_COUNT" -ge 6 ]; then
         echo "PANE ${i} STUCK (CPU active but no output for ${NEW_COUNT} cycles)"
@@ -375,6 +378,7 @@ CRASH_EOF
 $CAPTURE
 EOF
 
+  case "$i" in *[!0-9]*) continue ;; esac
   eval "_prev_raw=\${PREV_STATE_${i}:-UNKNOWN}"
   _display_prev=$(_display_state "$_prev_raw")
   _update_duration "$i" "$_display_prev" "WORKING"
@@ -393,10 +397,13 @@ _active_titles=""
 _longest_pane="" _longest_dur=0
 for i in $PANES_LIST; do
   is_numeric "$i" || continue
+  case "$i" in *[!0-9]*) continue ;; esac
   eval "_st=\${PANE_STATE_${i}:-UNKNOWN}"
+  case "$i" in *[!0-9]*) continue ;; esac
   eval "_dur=\${PANE_DURATION_${i}:-0}"
   case "$_st" in
     WORKING|CHANGED|UNCHANGED) _n_working=$((_n_working + 1))
+      case "$i" in *[!0-9]*) continue ;; esac
       eval "_pt=\${PANE_TITLE_${i}:-}"
       [ -n "$_pt" ] && _active_titles="${_active_titles:+${_active_titles}, }${i}:${_pt}"
       if [ "$_dur" -gt "$_longest_dur" ]; then
@@ -427,7 +434,7 @@ if [ "$_n_working" -eq 0 ] && [ "$_n_stuck" -eq 0 ] && [ "$_n_crashed" -eq 0 ] &
 else
   _cur_wave_state="HAS_WORKING"
 fi
-echo "$_cur_wave_state" > "$WAVE_STATE_FILE"
+_atomic_write "$WAVE_STATE_FILE" "$_cur_wave_state"
 if [ "$_prev_wave_state" = "HAS_WORKING" ] && [ "$_cur_wave_state" = "ALL_IDLE" ]; then
   echo "WAVE_COMPLETE"
   SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}WAVE_COMPLETE all_workers_idle${NL}"
@@ -475,10 +482,15 @@ SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
   printf 'PANE|STATE|TITLE|DURATION_SECS|LAST_TOOL|PREV_STATE\n'
   for i in $PANES_LIST; do
     is_numeric "$i" || continue
+    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_st=\${PANE_STATE_${i}:-UNKNOWN}"
+    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_title=\${PANE_TITLE_${i}:-}"
+    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_dur=\${PANE_DURATION_${i}:-0}"
+    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_tool=\${PANE_TOOL_${i}:-}"
+    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_prev=\${PANE_PREV_DISPLAY_${i}:-}"
     case "$_sn_st" in (CHANGED|UNCHANGED) _sn_st="WORKING" ;; esac
     printf '%s|%s|%s|%s|%s|%s\n' "$i" "$_sn_st" "$_sn_title" "$_sn_dur" "$_sn_tool" "$_sn_prev"
@@ -496,6 +508,7 @@ JSON="{"
 _sep=""
 for i in $PANES_LIST; do
   is_numeric "$i" || continue
+  case "$i" in *[!0-9]*) continue ;; esac
   eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"
   JSON+="${_sep}\"${i}\":\"${STATE}\""
   _sep=","
@@ -544,7 +557,7 @@ for _esc_event in "${RUNTIME_DIR}/status"/anomaly_${TARGET_WINDOW}_*.event; do
   [ -f "$_esc_count_file" ] && read -r _esc_prev_count < "$_esc_count_file" 2>/dev/null
   is_numeric "$_esc_prev_count" || _esc_prev_count=0
   _esc_new_count=$((_esc_prev_count + 1))
-  echo "$_esc_new_count" > "$_esc_count_file"
+  _atomic_write "$_esc_count_file" "$_esc_new_count"
   if [ "$_esc_new_count" -ge 3 ]; then
     echo "ESCALATE ANOMALY ${_esc_pane} ${_esc_type} (${_esc_new_count} consecutive)"
     SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ESCALATE ${_esc_pane} ${_esc_type} persistent_${_esc_new_count}${NL}"
