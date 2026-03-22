@@ -75,5 +75,3 @@ Live reload: `doey reload` (Manager+Watchdog), `doey reload --workers` (all).
 | `watchdog-scan.sh` | Pane state detection, heartbeat |
 | `watchdog-wait.sh` | Watchdog sleep/wake between scan cycles |
 | `session-manager-wait.sh` | Session Manager sleep/wake between cycles |
-| `stop-notify-manager.sh` | Notifies Manager when a worker finishes |
-| `stop-notify-session-manager.sh` | Notifies Session Manager when a Manager finishes |
