@@ -14,7 +14,7 @@ description: Spawn a Doey R&D team — audits, develops, and tests Doey itself i
 
 ## Prompt
 
-**Expected:** 7 bash commands, ~8 tmux send-keys, 3 file writes (team env, prompt, task), ~30s.
+**Expected:** 8 bash commands, ~8 tmux send-keys, 3 file writes (team env, prompt, task), ~30s.
 
 Spawn a Doey R&D team window for safely improving Doey itself. **Do NOT ask for confirmation — just do it.**
 
@@ -44,22 +44,27 @@ echo "Worktree created: $WT_DIR (branch: $WT_BRANCH)"
 [ -f "${DOEY_REPO}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${DOEY_REPO}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"
 ```
 
-### Step 2: Create new tmux window with grid
+### Step 2: Create new tmux window with dynamic grid
 
-Use a 4x2 grid (7 workers + 1 manager = 8 panes).
+Use a dynamic grid: 3 columns × 2 rows = 6 workers + 1 manager = 7 panes.
 
 ```bash
-GRID="4x2"; COLS=4; ROWS=2; TOTAL=8; WORKER_COUNT=7
+GRID="dynamic"; TOTAL=7; WORKER_COUNT=6
 
 tmux new-window -t "$SESSION_NAME" -n "RD" -c "$WT_DIR"
 sleep 0.5
 NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
 
-for _s in $(seq 1 $((TOTAL - 1))); do
-  tmux split-window -t "${SESSION_NAME}:${NEW_WIN}" -c "$WT_DIR"
+# Add 3 columns (each: split-h from last pane, then split-v the new pane)
+for _col in 1 2 3; do
+  last_pane="$(tmux list-panes -t "$SESSION_NAME:$NEW_WIN" -F '#{pane_index}' | tail -1)"
+  tmux split-window -h -t "$SESSION_NAME:$NEW_WIN.${last_pane}" -c "$WT_DIR"
+  sleep 0.1
+  new_pane_top="$(tmux list-panes -t "$SESSION_NAME:$NEW_WIN" -F '#{pane_index}' | tail -1)"
+  tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.${new_pane_top}" -c "$WT_DIR"
+  sleep 0.1
 done
-tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" tiled
-sleep 0.5
+sleep 0.3
 
 # Name panes
 tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "RD Manager"
@@ -84,7 +89,7 @@ TOTAL_PANES=${TOTAL}
 MANAGER_PANE=0
 WORKER_PANES=${WORKER_PANES_LIST}
 WORKER_COUNT=${WORKER_COUNT}
-WATCHDOG_PANE=
+WATCHDOG_PANE=""
 WORKTREE_DIR="${WT_DIR}"
 WORKTREE_BRANCH="${WT_BRANCH}"
 DOEY_REPO="${DOEY_REPO}"
@@ -174,23 +179,46 @@ tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" \
 sleep 1
 
 # Workers — all get the R&D prompt extension
-for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
+for i in $(seq 1 $WORKER_COUNT); do
   tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" \
     "claude --dangerously-skip-permissions --model opus --name \"RD W${i}\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
   sleep 0.5
 done
 
-# Watchdog — find Dashboard slot
+# Watchdog — find free slot via session.env WDG_SLOT entries
 WDG_SLOT=""
-for slot in 2 3 4 5 6 7; do
-  SLOT_CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || echo 0)" 2>/dev/null || true)
-  [ -z "$SLOT_CHILD" ] && { WDG_SLOT="$slot"; break; }
+for _sn in 1 2 3 4 5 6; do
+  _slot_val=$(grep "^WDG_SLOT_${_sn}=" "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+  [ -n "$_slot_val" ] || continue
+  _in_use=false
+  for _tf in "${RUNTIME_DIR}"/team_*.env; do
+    [ -f "$_tf" ] || continue
+    _tf_wdg=$(grep '^WATCHDOG_PANE=' "$_tf" 2>/dev/null | cut -d= -f2 | tr -d '"')
+    [ "$_tf_wdg" = "$_slot_val" ] && { _in_use=true; break; }
+  done
+  [ "$_in_use" = "false" ] && { WDG_SLOT="$_slot_val"; break; }
 done
+
+# If no free slot, create new one
+if [ -z "$WDG_SLOT" ]; then
+  _slot_count=$(grep -c '^WDG_SLOT_[0-9]*=' "${RUNTIME_DIR}/session.env" 2>/dev/null || echo 0)
+  if [ "$_slot_count" -lt 6 ]; then
+    _last_wdg_slot=$(grep '^WDG_SLOT_[0-9]*=' "${RUNTIME_DIR}/session.env" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '"')
+    tmux split-window -h -t "${SESSION_NAME}:${_last_wdg_slot}" -c "$WT_DIR"
+    sleep 0.3
+    _new_slot_num=$((_slot_count + 1))
+    WDG_SLOT="0.$((_new_slot_num + 1))"
+    echo "WDG_SLOT_${_new_slot_num}=\"${WDG_SLOT}\"" >> "${RUNTIME_DIR}/session.env"
+  fi
+fi
+
+# Launch watchdog and update team env
 if [ -n "$WDG_SLOT" ]; then
-  tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "RD Watchdog"
-  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" \
+  tmux select-pane -t "${SESSION_NAME}:${WDG_SLOT}" -T "RD Watchdog"
+  tmux send-keys -t "${SESSION_NAME}:${WDG_SLOT}" \
     "claude --dangerously-skip-permissions --model haiku --name \"RD Watchdog\" --agent \"t${NEW_WIN}-watchdog\"" Enter
-  sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=0.${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
+  sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp"
+  mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
 fi
 ```
 
@@ -199,7 +227,7 @@ fi
 ```bash
 sleep 8
 NOT_READY=0; DOWN_PANES=""
-for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do
+for i in 0 $(seq 1 $WORKER_COUNT); do
   CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null)
   OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null)
   if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then
@@ -262,7 +290,7 @@ Output summary:
 - Always creates a worktree of the DOEY REPO, not the current project
 - Workers get R&D-specific system prompt with safety rules
 - Manager auto-dispatches Phase 1 audit on boot
-- Pane 0 = Manager, 1-7 = Workers, Watchdog in Dashboard
+- Pane 0 = Manager, 1-6 = Workers, Watchdog in Dashboard
 - Window named "RD" for easy identification
 - Team env includes `RD_TEAM=true` and `DOEY_REPO` path
 - Never hardcode window indices. Bash 3.2 compatible.

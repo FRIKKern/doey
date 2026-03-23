@@ -2402,6 +2402,15 @@ add_dashboard_watchdog_slot() {
   tmux split-window -h -t "${session}:${last_slot}" -c "$dir"
   sleep 0.3
 
+  # Defensive re-count: re-read session.env for true slot count after split
+  local _recount=0 _rl
+  while IFS= read -r _rl; do
+    _recount=$((_recount + 1))
+  done < <(grep '^WDG_SLOT_[0-9]*=' "${runtime_dir}/session.env" 2>/dev/null)
+  if [ "$_recount" -gt "$slot_count" ]; then
+    slot_count="$_recount"
+  fi
+
   local new_slot_num=$((slot_count + 1))
   local new_slot="0.$((new_slot_num + 1))"
 
@@ -2533,14 +2542,33 @@ _build_worker_pane_list() {
 _acquire_watchdog_slot() {
   local session="$1" runtime_dir="$2" dir="$3" required="${4:-false}"
   _AWS_SLOT=""
+
+  # mkdir-based lock to prevent parallel slot allocation races
+  local _lock="${runtime_dir}/.watchdog_slot_lock"
+  local _retries=0
+  while ! mkdir "$_lock" 2>/dev/null; do
+    _retries=$((_retries + 1))
+    if [ "$_retries" -gt 40 ]; then
+      rmdir "$_lock" 2>/dev/null
+      break
+    fi
+    sleep 0.2
+  done
+  # Ensure lock cleanup on unexpected exit
+  trap 'rmdir "$_lock" 2>/dev/null || true' EXIT
+
+  local _aws_rc=0
   if _find_free_watchdog_slot "$runtime_dir"; then
     _AWS_SLOT="$_FWS_SLOT"
   elif add_dashboard_watchdog_slot "$session" "$runtime_dir" "$dir"; then
     _AWS_SLOT="$WDG_NEW_SLOT"
   elif [ "$required" = "true" ]; then
-    return 1
+    _aws_rc=1
   fi
-  return 0
+
+  trap - EXIT
+  rmdir "$_lock" 2>/dev/null || true
+  return "$_aws_rc"
 }
 
 _name_team_window() {
