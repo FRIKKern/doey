@@ -197,7 +197,7 @@ for i in $PANES_LIST; do
   [ "$PANE_MODE" = "copy-mode" ] && { tmux copy-mode -q -t "$PANE_REF" 2>/dev/null || true; }
 
   # Single capture per pane per cycle — reused for all checks below
-  pane_output=$(tmux capture-pane -t "$PANE_REF" -p -S -30 2>/dev/null) || pane_output=""
+  PANE_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || PANE_CAPTURE=""
 
   # Crash detection
   CURRENT_CMD=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || CURRENT_CMD=""
@@ -229,8 +229,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   esac
 
   # Booting detection — Claude process running but not yet ready
-  _boot_capture=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || _boot_capture=""
-  case "$_boot_capture" in
+  case "$PANE_CAPTURE" in
     *'❯'*|*'bypass permissions'*) ;;  # Ready — proceed to normal scan
     *)
       case "$CURRENT_CMD" in
@@ -248,7 +247,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   esac
 
   # Logged-out detection
-  _worker_capture="$_boot_capture"
+  _worker_capture="$PANE_CAPTURE"
   case "$_worker_capture" in
     *"Not logged in"*)
       echo "PANE ${i} LOGGED_OUT"
@@ -319,7 +318,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
     _hook_status="${_hook_status#STATUS: }"
   fi
 
-  CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || CAPTURE=""
+  CAPTURE="$PANE_CAPTURE"
   HASH=$(hash_fn "$CAPTURE")
   HASH_FILE="${RUNTIME_DIR}/status/pane_hash_${PANE_SAFE}"
   read -r OLD_HASH < "$HASH_FILE" 2>/dev/null || OLD_HASH=""
