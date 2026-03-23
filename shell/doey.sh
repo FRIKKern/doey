@@ -203,7 +203,7 @@ remove_team_worktree() {
 
 _worktree_safe_remove() {
   local project_dir="$1" worktree_dir="$2" force="${3:-false}"
-  [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ] && return 0
+  { [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ]; } && return 0
 
   local branch_name
   branch_name=$(git -C "$worktree_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")

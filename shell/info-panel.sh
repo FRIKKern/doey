@@ -316,7 +316,10 @@ while true; do
   _ci=0
   while [ "$_ci" -lt "${#TITLE_NAME}" ]; do
     get_block_char "${TITLE_NAME:${_ci}:1}"
-    for _r in 0 1 2 3 4 5; do eval "TITLE_R${_r}=\"\${TITLE_R${_r}}\${CHAR_R${_r}} \""; done
+    for _r in 0 1 2 3 4 5; do
+      _tr_var="TITLE_R${_r}"; _cr_var="CHAR_R${_r}"
+      printf -v "TITLE_R${_r}" '%s' "${!_tr_var}${!_cr_var} "
+    done
     _ci=$((_ci + 1))
   done
 
@@ -355,13 +358,13 @@ while true; do
     printf '  %b TEAM STATUS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
     _ti=0
     while [ "$_ti" -lt "$TEAM_LINE_COUNT" ]; do
-      eval "_tw=\$TEAM_WIN_${_ti}"
-      eval "_twc=\$TEAM_WCNT_${_ti}"
-      eval "_tb=\$TEAM_BUSY_${_ti}"
-      eval "_tidle=\$TEAM_IDLE_${_ti}"
-      eval "_tr=\$TEAM_RESV_${_ti}"
-      eval "_twtd=\${TEAM_WT_DIR_${_ti}:-}"
-      eval "_twtb=\${TEAM_WT_BRANCH_${_ti}:-}"
+      _v="TEAM_WIN_${_ti}"; _tw="${!_v}"
+      _v="TEAM_WCNT_${_ti}"; _twc="${!_v}"
+      _v="TEAM_BUSY_${_ti}"; _tb="${!_v}"
+      _v="TEAM_IDLE_${_ti}"; _tidle="${!_v}"
+      _v="TEAM_RESV_${_ti}"; _tr="${!_v}"
+      _v="TEAM_WT_DIR_${_ti}"; _twtd="${!_v}"
+      _v="TEAM_WT_BRANCH_${_ti}"; _twtb="${!_v}"
 
       if [ -n "$_twtd" ]; then
         _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
@@ -389,7 +392,7 @@ while true; do
 
   row=0
   while [ "$row" -lt "$LC" ]; do
-    eval "left_line=\${L_${row}}"
+    _v="L_${row}"; left_line="${!_v}"
     printf '%b\n' "$left_line"
     row=$((row + 1))
   done

@@ -21,7 +21,8 @@ if [ "$TOOL_NAME" != "Bash" ]; then
     exit 2
   fi
   # Fallback: detect role from tmux (first tool call before env is loaded)
-  RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+  RUNTIME_DIR="${DOEY_RUNTIME:-}"
+  [ -z "$RUNTIME_DIR" ] && RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
   if [ "$WINDOW_INDEX" = "0" ]; then
     case "$CURRENT_PANE" in [2-9]|[1-9][0-9]*)
