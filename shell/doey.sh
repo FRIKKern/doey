@@ -171,8 +171,15 @@ create_team_worktree() {
   project_name="$(basename "$project_dir")"
   local wt_path="/tmp/doey/${project_name}/worktrees/team-${team_window}"
 
-  # Belt-and-suspenders: prune stale worktree state
+  # Clean up stale worktree state from prior runs
   git -C "$project_dir" worktree prune 2>/dev/null || true
+  # If a stale worktree dir exists at the target path, remove it properly
+  if [ -d "$wt_path" ]; then
+    git -C "$project_dir" worktree remove "$wt_path" --force 2>/dev/null || true
+    git -C "$project_dir" worktree prune 2>/dev/null || true
+    # Last resort: nuke the directory if git couldn't clean it
+    [ -d "$wt_path" ] && rm -rf "$wt_path"
+  fi
   # Remove stale branch if it exists from a prior run
   git -C "$project_dir" branch -D "$branch_name" 2>/dev/null || true
 
