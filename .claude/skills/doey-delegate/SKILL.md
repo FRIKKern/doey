@@ -37,7 +37,7 @@ Expected: User provides target pane address and task description.
 
 ## Step 3: Validate target is idle and unreserved
 
-bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && TARGET_PANE="${SESSION_NAME}:<W>.<P>" && PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_') && if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then echo "RESERVED — pick another"; exit 1; fi && tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null; OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5) && echo "$OUTPUT" && echo "$OUTPUT" | grep -q '❯' && echo "Idle — OK" || echo "May be busy"
+bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && SESSION_NAME=$(grep '^SESSION_NAME=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"') && TARGET_PANE="${SESSION_NAME}:<W>.<P>" && PANE_SAFE=$(echo "$TARGET_PANE" | tr ':.' '_') && if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then echo "RESERVED — pick another"; exit 1; fi && tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null; OUTPUT=$(tmux capture-pane -t "$TARGET_PANE" -p -S -5) && echo "$OUTPUT" && echo "$OUTPUT" | grep -q '❯' && echo "Idle — OK" || echo "May be busy"
 Expected: "Idle — OK" printed, confirming target pane is at the `>` prompt and not reserved.
 
 **If this fails with "RESERVED — pick another":** The pane has a `.reserved` file. Choose a different worker pane.

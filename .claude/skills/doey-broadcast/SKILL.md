@@ -12,7 +12,7 @@ Ask user for the message if not provided. Replace `YOUR_MESSAGE_HERE` below, the
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "$RD/session.env"
+SESSION_NAME=$(grep '^SESSION_NAME=' "$RD/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 TIMESTAMP="$(date +%s)$$"
 mkdir -p "${RD}/broadcasts" "${RD}/messages"
