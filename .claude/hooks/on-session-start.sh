@@ -59,8 +59,12 @@ else
   [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
 fi
 
-# Cache role in tmux environment for fast lookup by subsequent hooks
-tmux set-environment -t "$SESSION_NAME" DOEY_ROLE "$ROLE" 2>/dev/null || true
+# Cache role per-pane for fast lookup by subsequent hooks
+# NOTE: tmux set-environment is session-wide, so the last pane to start would
+# overwrite everyone's role. Use per-pane files instead.
+PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.' '_')
+mkdir -p "${RUNTIME_DIR}/status"
+echo "$ROLE" > "${RUNTIME_DIR}/status/${PANE_SAFE}.role"
 
 wt_dir=$(_env_val "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 

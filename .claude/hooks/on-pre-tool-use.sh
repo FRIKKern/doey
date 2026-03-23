@@ -11,35 +11,37 @@ if command -v jq >/dev/null 2>&1; then
 fi
 [ -z "$TOOL_NAME" ] && TOOL_NAME=$(echo "$INPUT" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"tool_name"[[:space:]]*:[[:space:]]*"//;s/"$//')
 
+# Resolve role: per-pane role file is authoritative (tmux session env is shared,
+# so DOEY_ROLE from env may be stale/wrong — last pane to start wins).
+_DOEY_ROLE="${DOEY_ROLE:-}"
+if [ -n "${TMUX_PANE:-}" ]; then
+  _RD="${DOEY_RUNTIME:-}"
+  [ -z "$_RD" ] && _RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  if [ -n "$_RD" ]; then
+    _WP=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null) || true
+    if [ -n "$_WP" ]; then
+      _PS=$(echo "$_WP" | tr ':.' '_')
+      [ -f "${_RD}/status/${_PS}.role" ] && _DOEY_ROLE=$(cat "${_RD}/status/${_PS}.role" 2>/dev/null) || true
+    fi
+  fi
+fi
+
 # Non-Bash: block write tools for Watchdog
 if [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in Edit|Write|Agent|NotebookEdit) ;; *) exit 0 ;; esac
-  # Fast path: use cached role from on-session-start.sh
-  if [ -n "${DOEY_ROLE:-}" ]; then
-    [ "$DOEY_ROLE" = "watchdog" ] || exit 0
+  case "$_DOEY_ROLE" in watchdog)
     echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
-    exit 2
-  fi
-  # Fallback: detect role from tmux (first tool call before env is loaded)
-  RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
-  read WINDOW_INDEX CURRENT_PANE <<< "$(tmux display-message -t "$TMUX_PANE" -p '#{window_index} #{pane_index}' 2>/dev/null)" || exit 0
-  if [ "$WINDOW_INDEX" = "0" ]; then
-    case "$CURRENT_PANE" in [2-9]|[1-9][0-9]*)
-      if grep -lq "^WATCHDOG_PANE=[\"]*0\.${CURRENT_PANE}[\"]*$" "${RUNTIME_DIR}"/team_*.env 2>/dev/null; then
-        echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
-        exit 2
-      fi ;;
-    esac
-  fi
+    exit 2 ;;
+  esac
   exit 0
 fi
 
 # Fast path: unrestricted roles skip all detection
-case "${DOEY_ROLE:-}" in manager|session_manager) exit 0 ;; esac
+case "$_DOEY_ROLE" in manager|session_manager) exit 0 ;; esac
 
 # Worker fast path: skip init_hook entirely (saves 4+ tmux/subprocess calls)
 # Workers only need command extraction + blocked pattern check
-if [ "${DOEY_ROLE:-}" = "worker" ]; then
+if [ "$_DOEY_ROLE" = "worker" ]; then
   if command -v jq >/dev/null 2>&1; then
     TOOL_COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || TOOL_COMMAND=""
   else
