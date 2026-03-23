@@ -69,7 +69,7 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   case "$_cmd" in
     *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
       MSG="git/gh commands" ;;
-    *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*)
+    *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*|*"rm -rf /Users/"*|*"rm -rf /home/"*)
       MSG="destructive rm" ;;
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
@@ -136,7 +136,7 @@ _cmd=$(echo "$TOOL_COMMAND" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s 
 case "$_cmd" in
   *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
     MSG="git/gh commands" ;;
-  *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*)
+  *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*|*"rm -rf /Users/"*|*"rm -rf /home/"*)
     MSG="destructive rm" ;;
   *"shutdown"*|*"reboot"*)
     MSG="system commands" ;;
