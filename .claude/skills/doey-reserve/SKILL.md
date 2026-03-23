@@ -14,14 +14,15 @@ description: Reserve/unreserve the current pane to prevent Window Manager dispat
 
 ### Reserve / Unreserve
 
-Set `ACTION=reserve` or `ACTION=unreserve` based on user argument, then run:
+Pass the user's argument as `$1` to the script below. No arg or any arg other than `off`/`unreserve` → reserve. `off` or `unreserve` → unreserve. Then run:
 
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 SAFE=$(echo "$MY_PANE" | tr ':.' '_')
 mkdir -p "${RD}/status"
-ACTION="reserve"
+ACTION="${1:-reserve}"  # "reserve" (default) or "unreserve"/"off"
+case "$ACTION" in off|unreserve) ACTION="unreserve" ;; *) ACTION="reserve" ;; esac
 if [ "$ACTION" = "reserve" ]; then
   echo "permanent" > "${RD}/status/${SAFE}.reserved"
   STATUS="RESERVED"
