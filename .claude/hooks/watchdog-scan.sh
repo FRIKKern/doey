@@ -135,6 +135,15 @@ SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 SCAN_TIME=$(date +%s)
 SNAPSHOT_EVENTS=""
 
+# Per-pane logging helper — writes to the scanned pane's log, not the watchdog's
+_pane_log() {
+  local pane_id="$1" msg="$2"
+  [ -n "${RUNTIME_DIR:-}" ] && mkdir -p "${RUNTIME_DIR}/logs" && \
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] watchdog-scan: ${msg}" >> "${RUNTIME_DIR}/logs/${pane_id:-unknown}.log"
+}
+
+_log "watchdog-scan: start cycle W${TARGET_WINDOW} panes=${WORKER_PANES}"
+
 # --- Manager health check ---
 MGR_PANE_REF=""
 if [ -f "$TEAM_ENV" ]; then
@@ -187,6 +196,7 @@ for i in $PANES_LIST; do
   # Reserved
   if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
     echo "PANE ${i} RESERVED"
+    _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=RESERVED"
     _set_pane_info "$i" "RESERVED" "" "" ""
     printf -v "PANE_DURATION_${i}" '%s' "0"
     continue
@@ -220,6 +230,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
           ;;
       esac
       echo "PANE ${i} ${_crash_state}"
+      _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=${_crash_state}"
       case "$i" in *[!0-9]*) continue ;; esac
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "$_crash_state"
@@ -235,6 +246,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       case "$CURRENT_CMD" in
         node)
           echo "PANE ${i} BOOTING"
+          _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=BOOTING"
           SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}BOOTING ${i}${NL}"
           case "$i" in *[!0-9]*) continue ;; esac
           eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
@@ -251,6 +263,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   case "$_worker_capture" in
     *"Not logged in"*)
       echo "PANE ${i} LOGGED_OUT"
+      _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=LOGGED_OUT"
       case "$i" in *[!0-9]*) continue ;; esac
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "LOGGED_OUT"
@@ -336,12 +349,14 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
 
       if [ "$NEW_COUNT" -ge 6 ]; then
         echo "PANE ${i} STUCK (CPU active but no output for ${NEW_COUNT} cycles)"
+        _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=STUCK unchanged_cycles=${NEW_COUNT}"
         _unch_state="STUCK"
       else
         _unch_state="WORKING"
         case "$PREV" in
           WORKING|CHANGED|UNCHANGED) ;;
-          *) echo "PANE ${i} WORKING" ;;
+          *) echo "PANE ${i} WORKING"
+             _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=WORKING (unchanged hash, CPU active)" ;;
         esac
       fi
       _update_duration "$i" "WORKING" "WORKING"
@@ -350,7 +365,10 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       # No CPU activity + hash unchanged = truly IDLE
       rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
       _display_prev=$(_display_state "$PREV")
-      case "$PREV" in IDLE|UNCHANGED) ;; *) echo "PANE ${i} IDLE" ;; esac
+      case "$PREV" in IDLE|UNCHANGED) ;; *)
+        echo "PANE ${i} IDLE"
+        _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=IDLE"
+        ;; esac
       _update_duration "$i" "$_display_prev" "IDLE"
       _set_pane_info "$i" "IDLE" "$(_get_pane_title "$PANE_REF")" "" "$_display_prev"
     fi
@@ -362,6 +380,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   _atomic_write "$HASH_FILE" "$HASH"
 
   echo "PANE ${i} WORKING"
+  _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=WORKING (hash changed)"
 
   # Extract last tool name from capture
   _last_tool=""
@@ -587,5 +606,7 @@ if [ "$_ctx_pct" -ge 60 ]; then
   echo "⚠️  COMPACT_NOW — context at ${_ctx_pct}% (threshold: 60%)"
   echo "You MUST run /compact immediately. Do NOT run another scan cycle first."
 fi
+
+_log "watchdog-scan: end cycle W${TARGET_WINDOW} working=${_n_working} idle=${_n_idle} stuck=${_n_stuck} crashed=${_n_crashed}"
 
 echo "SCAN_TIME=${SCAN_TIME}"

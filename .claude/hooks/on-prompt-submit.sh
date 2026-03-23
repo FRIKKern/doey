@@ -28,6 +28,8 @@ case "$PROMPT" in
 esac
 
 write_status "BUSY" "${PROMPT:0:80}"
+[ -n "${DOEY_PANE_ID:-}" ] && echo "BUSY" > "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status"
+_log "task started: $(echo "$PROMPT" | head -c 80)"
 
 # Expand collapsed column so worker becomes visible
 if is_worker && [ "$PANE_INDEX" -gt 0 ]; then
