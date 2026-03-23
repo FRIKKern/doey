@@ -49,8 +49,22 @@ DOG
 
 if ! command -v git &>/dev/null; then
   echo "  ✗ git is required but not installed."
-  echo "    Install: brew install git (macOS) | apt install git (Linux)"
+  case "$(uname -s)" in
+    Darwin) echo "    Install: brew install git" ;;
+    Linux)  echo "    Install: sudo apt-get install -y git" ;;
+    *)      echo "    Install git for your platform and re-run" ;;
+  esac
   exit 1
+fi
+
+# Pre-flight: check for tmux so the user gets feedback early
+if ! command -v tmux &>/dev/null; then
+  echo "  ⚠ tmux is not installed (required by Doey)"
+  case "$(uname -s)" in
+    Darwin) echo "    The installer will offer to install it via Homebrew." ;;
+    Linux)  echo "    The installer will offer to install it via apt." ;;
+  esac
+  echo ""
 fi
 
 echo "  Cloning repository..."

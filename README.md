@@ -110,6 +110,8 @@ See [Context Reference](docs/context-reference.md) for details.
 
 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (authenticated) · [Node.js](https://nodejs.org/) v18+ · [tmux](https://github.com/tmux/tmux) · macOS or Linux
 
+> **Don't have tmux or Claude Code?** Doey will detect what's missing and offer to install it for you — just run `doey` or `./install.sh`.
+
 ---
 
 Contributions welcome — [open an issue](https://github.com/FRIKKern/doey/issues) or submit a PR. Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
