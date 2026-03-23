@@ -41,8 +41,9 @@ parse_field() {
 
 _read_team_key() {
   local val
-  val=$(grep "^$2=" "$1" | cut -d= -f2)
-  echo "${val//\"/}"
+  val=$(grep "^$2=" "$1" | cut -d= -f2-)
+  val="${val%\"}"; val="${val#\"}"
+  echo "$val"
 }
 
 is_watchdog() {
