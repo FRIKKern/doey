@@ -59,6 +59,20 @@ else
   [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
 fi
 
+# Compute pane identifiers
+PROJECT_ACRONYM=$(_env_val "$SESSION_ENV" PROJECT_ACRONYM)
+[ -z "$PROJECT_ACRONYM" ] && PROJECT_ACRONYM=$(echo "$PROJECT_NAME" | awk -F- '{for(i=1;i<=NF;i++) printf substr($i,1,1)}' | cut -c1-4)
+
+case "$ROLE" in
+  session_manager) PANE_ID="sm" ;;
+  info_panel)      PANE_ID="info" ;;
+  manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
+  watchdog)        PANE_ID="t${TEAM_WINDOW}-wd" ;;
+  worker)          PANE_ID="t${WINDOW_INDEX}-w${PANE_INDEX}" ;;
+  *)               PANE_ID="t${WINDOW_INDEX}-p${PANE_INDEX}" ;;
+esac
+FULL_PANE_ID="${PROJECT_ACRONYM}-${PANE_ID}"
+
 # Cache role per-pane for fast lookup by subsequent hooks
 # NOTE: tmux set-environment is session-wide, so the last pane to start would
 # overwrite everyone's role. Use per-pane files instead.
@@ -104,12 +118,15 @@ export DOEY_PANE_INDEX="$PANE_INDEX"
 export DOEY_WINDOW_INDEX="$WINDOW_INDEX"
 export DOEY_TEAM_WINDOW="$TEAM_WINDOW"
 export DOEY_TEAM_DIR="${wt_dir:-$PROJECT_DIR}"
+export DOEY_PROJECT_ACRONYM="$PROJECT_ACRONYM"
+export DOEY_PANE_ID="$PANE_ID"
+export DOEY_FULL_PANE_ID="$FULL_PANE_ID"
 EOF
 
 # Pane title
 case "$ROLE" in
-  watchdog)        tmux select-pane -t "${TMUX_PANE}" -T "T${TEAM_WINDOW} Watchdog" ;;
-  manager)         tmux select-pane -t "${TMUX_PANE}" -T "T${TEAM_WINDOW} Window Manager" ;;
-  session_manager) tmux select-pane -t "${TMUX_PANE}" -T "Session Manager" ;;
-  worker)          tmux select-pane -t "${TMUX_PANE}" -T "T${TEAM_WINDOW} W${PANE_INDEX}" ;;
+  watchdog)        tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Watchdog" ;;
+  manager)         tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Window Manager" ;;
+  session_manager) tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Session Manager" ;;
+  worker)          tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Worker" ;;
 esac

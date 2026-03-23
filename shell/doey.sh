@@ -109,6 +109,18 @@ project_name_from_dir() {
   echo "$raw" | tr '[:upper:] .' '[:lower:]--' | sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//;s/-$//'
 }
 
+# Generate a short project acronym from a hyphenated name (max 4 chars).
+# e.g. "claude-code-tmux-team" → "cctm", "gyldendal-no" → "gn", "my-app" → "ma"
+project_acronym() {
+  local name="$1" acr="" seg
+  local old_ifs="$IFS"; IFS='-'
+  for seg in $name; do
+    [ -n "$seg" ] && acr="${acr}$(printf '%s' "$seg" | cut -c1)"
+  done
+  IFS="$old_ifs"
+  printf '%s' "$acr" | cut -c1-4
+}
+
 find_project() {
   local dir="$1"
   grep -m1 ":${dir}$" "$PROJECTS_FILE" 2>/dev/null | cut -d: -f1 || true
@@ -1263,9 +1275,13 @@ _launch_session_core() {
 
   _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
 
+  local acronym
+  acronym=$(project_acronym "$name")
+
   cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
 PROJECT_NAME="$name"
+PROJECT_ACRONYM="$acronym"
 SESSION_NAME="$session"
 GRID="$grid"
 TOTAL_PANES="$total"
@@ -2014,9 +2030,13 @@ launch_session_dynamic() {
 
   step_start 3 "Setting up grid..."
 
+  local acronym
+  acronym=$(project_acronym "$name")
+
   cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
 PROJECT_NAME="$name"
+PROJECT_ACRONYM="$acronym"
 SESSION_NAME="$session"
 GRID="dynamic"
 ROWS="2"
@@ -2237,8 +2257,12 @@ _boot_worker() {
 
   local prompt_file="${runtime_dir}/worker-system-prompt-${prompt_suffix}.md"
   cp "${runtime_dir}/worker-system-prompt.md" "$prompt_file"
-  printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
-    "$worker_num" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
+  local _bw_acronym=""
+  [ -f "${runtime_dir}/session.env" ] && _bw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
+  local _bw_pane_id="t${team_window}-w${worker_num}"
+  [ -n "$_bw_acronym" ] && _bw_pane_id="${_bw_acronym}-${_bw_pane_id}"
+  printf '\n\n## Identity\nYou are Worker %s (%s) in pane %s.%s of session %s.\n' \
+    "$worker_num" "$_bw_pane_id" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
 
   local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
   cmd+=" --append-system-prompt-file \"${prompt_file}\""
@@ -2255,6 +2279,9 @@ _batch_boot_workers() {
   local session="$1" runtime_dir="$2" team_window="$3"
   shift 3
 
+  local _bbw_acronym=""
+  [ -f "${runtime_dir}/session.env" ] && _bbw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
+
   local pair pane_idx worker_num
   for pair in "$@"; do
     pane_idx="${pair%%:*}"
@@ -2262,8 +2289,10 @@ _batch_boot_workers() {
     local prompt_suffix="w${team_window}-${worker_num}"
     local prompt_file="${runtime_dir}/worker-system-prompt-${prompt_suffix}.md"
     cp "${runtime_dir}/worker-system-prompt.md" "$prompt_file"
-    printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
-      "$worker_num" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
+    local _bbw_pane_id="t${team_window}-w${worker_num}"
+    [ -n "$_bbw_acronym" ] && _bbw_pane_id="${_bbw_acronym}-${_bbw_pane_id}"
+    printf '\n\n## Identity\nYou are Worker %s (%s) in pane %s.%s of session %s.\n' \
+      "$worker_num" "$_bbw_pane_id" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
 
     local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
