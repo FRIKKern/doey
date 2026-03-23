@@ -24,7 +24,7 @@ Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `WORKER_
 ## Sending Tasks
 
 **Before every send:** `tmux copy-mode -q -t "$PANE" 2>/dev/null`
-**Before every task:** `/rename task-name_$(date +%m%d)`
+**Before every task:** `tmux select-pane -t "$PANE" -T "task-name_$(date +%m%d)"` (tmux-native rename, never /rename via send-keys)
 **Never send to reserved panes** (`${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved`).
 
 **Prefer `/doey-dispatch`** for fresh-context tasks. Send-keys/load-buffer only for follow-ups:
