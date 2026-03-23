@@ -15,6 +15,10 @@ C_GREEN='\033[32m'
 C_BOLD_CYAN='\033[1;36m'
 C_BOLD_WHITE='\033[1;97m'
 C_BOLD_GREEN='\033[1;32m'
+C_RED='\033[31m'
+C_RED_DIM='\033[2;31m'
+C_CYAN_DIM='\033[2;36m'
+C_YELLOW='\033[33m'
 
 repeat_char() {
   local ch="$1" len="$2" out="" i=0
@@ -75,75 +79,298 @@ _doey_load_config() {
   fi
 }
 
-_render_teams() {
-  local _tw _wc _wt _mm _wm _tn _tr _line _detail _type _team_file
-  printf '  %b Teams%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  if [ -z "${RUNTIME_DIR:-}" ] || [ ! -d "${RUNTIME_DIR:-}" ]; then
-    printf '    %b(no runtime data)%b\n' "${C_DIM}" "${C_RESET}"
-    return
-  fi
-  _tw=""
-  [ -f "${RUNTIME_DIR}/session.env" ] && \
-    _tw=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" | cut -d= -f2- | tr -d '"')
-  if [ -z "$_tw" ]; then
-    printf '    %b(no active session)%b\n' "${C_DIM}" "${C_RESET}"
-    return
-  fi
-  for _w in $(echo "$_tw" | tr ',' ' '); do
-    _team_file="${RUNTIME_DIR}/team_${_w}.env"
-    [ -f "$_team_file" ] || continue
-    _wc=$(grep '^WORKER_COUNT=' "$_team_file" | cut -d= -f2- | tr -d '"')
-    _wt=$(grep '^WORKTREE_DIR=' "$_team_file" | cut -d= -f2- | tr -d '"')
-    _mm=$(grep '^MANAGER_MODEL=' "$_team_file" | cut -d= -f2- | tr -d '"')
-    _wm=$(grep '^WORKER_MODEL=' "$_team_file" | cut -d= -f2- | tr -d '"')
-    _tn=$(grep '^TEAM_NAME=' "$_team_file" | cut -d= -f2- | tr -d '"')
-    _tr=$(grep '^TEAM_ROLE=' "$_team_file" | cut -d= -f2- | tr -d '"')
-    _type="local"
-    [ -n "$_wt" ] && _type="worktree"
-    _line="Team ${_w}"
-    [ -n "$_tn" ] && _line="${_tn}"
-    _detail="${_wc:-0} workers (${_type})"
-    [ -n "$_mm" ] && _detail="${_detail} — mgr:${_mm}"
-    [ -n "$_wm" ] && _detail="${_detail} wkr:${_wm}"
-    [ -n "$_tr" ] && _detail="${_detail} [${_tr}]"
-    printf '    %b●%b %s %b..%b %s\n' "${C_GREEN}" "${C_RESET}" "$_line" "${C_DIM}" "${C_RESET}" "$_detail"
-  done
+_parse_agent_frontmatter() {
+  local agent_file="$1" field="$2"
+  [ -f "$agent_file" ] || return 1
+  local in_front=false val=""
+  while IFS= read -r line; do
+    case "$line" in
+      ---) if [ "$in_front" = false ]; then in_front=true; continue; else break; fi ;;
+    esac
+    if [ "$in_front" = true ]; then
+      case "$line" in
+        "${field}:"*) val=$(echo "$line" | sed "s/^${field}:[[:space:]]*//" | sed 's/^"//' | sed 's/"$//'); break ;;
+      esac
+    fi
+  done < "$agent_file"
+  [ -n "$val" ] && printf '%s' "$val"
 }
 
-while true; do
-  _doey_load_config
-  DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
+_truncate() {
+  local str="$1" max="$2"
+  if [ ${#str} -gt "$max" ]; then
+    printf '%s...' "$(printf '%.'"$((max - 3))"'s' "$str")"
+  else
+    printf '%s' "$str"
+  fi
+}
 
-  DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-3}"
-  DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
-  DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-2}"
-  DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
-  DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
-  DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
-  DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
-  DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
-  DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-3}"
-  DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-15}"
-  DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-20}"
-  DOEY_WATCHDOG_LOOP_DELAY="${DOEY_WATCHDOG_LOOP_DELAY:-25}"
-  DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
-  DOEY_IDLE_REMOVE_AFTER="${DOEY_IDLE_REMOVE_AFTER:-300}"
-  DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
-  DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
-  DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-sonnet}"
-  DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-haiku}"
-  DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
 
-  printf '\033[2J\033[H'
+_render_team_blueprint() {
+  local _proj_dir="" _agents_dir="" _team_count _i _type _workers _wm _mm _role _name _desc
+  local _cw
 
-  TERM_W=$(tput cols 2>/dev/null || echo 80)
-  HR=$(repeat_char "=" "$TERM_W")
+  if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+    _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  fi
+  [ -z "$_proj_dir" ] && _proj_dir="."
+  _agents_dir="${_proj_dir}/agents"
 
+  _cw=$(( TERM_W - 6 ))
+  [ "$_cw" -lt 40 ] && _cw=40
+
+  _team_count="${DOEY_TEAM_COUNT:-}"
+  if [ -z "$_team_count" ]; then
+    _team_count=$(( ${DOEY_INITIAL_TEAMS:-2} + ${DOEY_INITIAL_WORKTREE_TEAMS:-2} ))
+  fi
+
+  local _total_workers=0
+
+  _i=1
+  while [ "$_i" -le "$_team_count" ]; do
+    eval "_type=\${DOEY_TEAM_${_i}_TYPE:-}"
+    eval "_workers=\${DOEY_TEAM_${_i}_WORKERS:-}"
+    eval "_wm=\${DOEY_TEAM_${_i}_WORKER_MODEL:-}"
+    eval "_role=\${DOEY_TEAM_${_i}_ROLE:-}"
+    eval "_name=\${DOEY_TEAM_${_i}_NAME:-}"
+
+    if [ -z "$_type" ]; then
+      if [ "$_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _type="local"; else _type="worktree"; fi
+    fi
+    [ -z "$_workers" ] && _workers=$(( ${DOEY_INITIAL_WORKER_COLS:-3} * 2 ))
+    [ -z "$_wm" ] && _wm="${DOEY_WORKER_MODEL:-opus}"
+    _mm="${DOEY_MANAGER_MODEL:-opus}"
+    _total_workers=$(( _total_workers + _workers ))
+
+    # Team header
+    local _tlabel="Team ${_i}"
+    [ -n "$_name" ] && _tlabel="$_name"
+    local _tbadge="${_type}"
+    [ -n "$_role" ] && _tbadge="${_type} · ${_role}"
+
+    printf '\n  %b%s%b  %b%s%b\n' "${C_BOLD_WHITE}" "$_tlabel" "${C_RESET}" "${C_DIM}" "$_tbadge" "${C_RESET}"
+    printf '  %b%s%b\n' "${C_DIM}" "$(repeat_char '─' "$_cw")" "${C_RESET}"
+
+    # Manager
+    _desc=""
+    [ -f "${_agents_dir}/doey-manager.md" ] && _desc=$(_parse_agent_frontmatter "${_agents_dir}/doey-manager.md" "description")
+    [ -z "$_desc" ] && _desc="Window Manager — orchestrates team tasks"
+
+    printf '    %b🎯 Manager%b  %bdoey-manager%b  %b%s%b\n' \
+      "${C_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "$_mm" "${C_RESET}"
+    printf '       %b%s%b\n' "${C_DIM}" "$(_truncate "$_desc" $(( _cw - 7 )))" "${C_RESET}"
+    printf '\n'
+
+    # Workers
+    printf '    %b⚡ Workers%b  %b×%s%b  %b%s%b\n' \
+      "${C_GREEN}" "${C_RESET}" "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" "${C_DIM}" "$_wm" "${C_RESET}"
+
+    # Worker grid — simple labeled layout
+    local _grid_cols="${DOEY_INITIAL_WORKER_COLS:-3}"
+    # Each label = "W1" padded to 6 chars + 2 space gap = 8 per slot
+    while [ $(( _grid_cols * 8 )) -gt "$(( _cw - 7 ))" ] && [ "$_grid_cols" -gt 1 ]; do
+      _grid_cols=$(( _grid_cols - 1 ))
+    done
+
+    local _w_num=1
+    while [ "$_w_num" -le "$_workers" ]; do
+      local _row=""
+      local _c=0
+      while [ "$_c" -lt "$_grid_cols" ] && [ "$_w_num" -le "$_workers" ]; do
+        _row="${_row}$(printf '  W%-2s ◑' "$_w_num")"
+        _w_num=$(( _w_num + 1 ))
+        _c=$(( _c + 1 ))
+      done
+      printf '     %b%s%b\n' "${C_GREEN}" "$_row" "${C_RESET}"
+    done
+    printf '\n'
+
+    # Watchdog
+    _desc=""
+    [ -f "${_agents_dir}/doey-watchdog.md" ] && _desc=$(_parse_agent_frontmatter "${_agents_dir}/doey-watchdog.md" "description")
+    [ -z "$_desc" ] && _desc="Live team monitor — status, escalation"
+
+    printf '    %b👁 Watchdog%b  %bdoey-watchdog%b  %b%s%b\n' \
+      "${C_YELLOW}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "${DOEY_WATCHDOG_MODEL:-sonnet}" "${C_RESET}"
+    printf '       %b%s%b\n' "${C_DIM}" "$(_truncate "$_desc" $(( _cw - 7 )))" "${C_RESET}"
+
+    printf '\n'
+
+    _i=$(( _i + 1 ))
+  done
+
+  # Dashboard
+  printf '  %bDashboard%b  %bWindow 0%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
+  printf '  %b%s%b\n' "${C_DIM}" "$(repeat_char '─' "$_cw")" "${C_RESET}"
+
+  _desc=""
+  [ -f "${_agents_dir}/doey-session-manager.md" ] && _desc=$(_parse_agent_frontmatter "${_agents_dir}/doey-session-manager.md" "description")
+  [ -z "$_desc" ] && _desc="Routes tasks between team windows"
+
+  local _sm_model="${DOEY_SESSION_MANAGER_MODEL:-opus}"
+  printf '    %b📡 Session Manager%b  %bdoey-session-manager%b  %b%s%b\n' \
+    "${C_BOLD_WHITE}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "$_sm_model" "${C_RESET}"
+  printf '       %b%s%b\n' "${C_DIM}" "$(_truncate "$_desc" $(( _cw - 7 )))" "${C_RESET}"
+
+  local _wdg_slots="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
+  printf '    %bℹ  Info Panel%b  ·  %b👁 Watchdog slots: %s of %s%b\n' \
+    "${C_DIM}" "${C_RESET}" "${C_DIM}" "$_team_count" "$_wdg_slots" "${C_RESET}"
+
+  # Summary
+  printf '\n  %b%s%b\n' "${C_DIM}" "$(repeat_char '─' "$_cw")" "${C_RESET}"
+  printf '  %b%s teams · %s workers · %s watchdogs · 1 SM%b\n' \
+    "${C_DIM}" "$_team_count" "$_total_workers" "$_team_count" "${C_RESET}"
+}
+
+_render_available_agents() {
+  local _proj_dir="" _agents_dir="" _f _name _model _desc _color _memory _idx
+  if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+    _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  fi
+  [ -z "$_proj_dir" ] && _proj_dir="."
+  _agents_dir="${_proj_dir}/agents"
+
+  printf '\n  %bAvailable Agents%b  %b(press a-z to inspect)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
+  printf '  %b────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
+
+  if [ ! -d "$_agents_dir" ]; then
+    printf '    %b(no agents directory)%b\n' "${C_DIM}" "${C_RESET}"
+    return
+  fi
+
+  _idx=0
+  local _letter
+  for _f in "$_agents_dir"/*.md; do
+    [ -f "$_f" ] || continue
+    _name=$(_parse_agent_frontmatter "$_f" "name")
+    _model=$(_parse_agent_frontmatter "$_f" "model")
+    _desc=$(_parse_agent_frontmatter "$_f" "description")
+    _color=$(_parse_agent_frontmatter "$_f" "color")
+    _memory=$(_parse_agent_frontmatter "$_f" "memory")
+    [ -z "$_name" ] && _name=$(basename "$_f" .md)
+    [ -z "$_model" ] && _model="?"
+    [ -z "$_desc" ] && _desc="(no description)"
+    _letter=$(printf "\\$(printf '%03o' $((97 + _idx)))")
+    printf '    %b%s)%b %b%-20s%b %b%-8s%b %b%s%b\n' \
+      "${C_BOLD_CYAN}" "$_letter" "${C_RESET}" \
+      "${C_CYAN}" "$_name" "${C_RESET}" \
+      "${C_GREEN}" "$_model" "${C_RESET}" \
+      "${C_DIM}" "$(_truncate "$_desc" $((TERM_W - 40)))" "${C_RESET}"
+    [ -n "$_color" ] && printf '      %bcolor: %s%b' "${C_DIM}" "$_color" "${C_RESET}"
+    [ -n "$_memory" ] && printf '  %bmemory: %s%b' "${C_DIM}" "$_memory" "${C_RESET}"
+    if [ -n "$_color" ] || [ -n "$_memory" ]; then printf '\n'; fi
+    _idx=$((_idx + 1))
+  done
+  [ "$_idx" -eq 0 ] && printf '    %b(no agent files found)%b\n' "${C_DIM}" "${C_RESET}"
+}
+
+_render_agent_detail() {
+  local _agent_name="$1"
+  local _proj_dir="" _agents_dir="" _f="" _found=""
+  if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+    _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  fi
+  [ -z "$_proj_dir" ] && _proj_dir="."
+  _agents_dir="${_proj_dir}/agents"
+
+  # Find the agent file by name or filename
+  for _f in "$_agents_dir"/*.md; do
+    [ -f "$_f" ] || continue
+    local _n
+    _n=$(_parse_agent_frontmatter "$_f" "name")
+    [ -z "$_n" ] && _n=$(basename "$_f" .md)
+    if [ "$_n" = "$_agent_name" ] || [ "$(basename "$_f" .md)" = "$_agent_name" ]; then
+      _found="$_f"
+      break
+    fi
+  done
+
+  if [ -z "$_found" ]; then
+    printf '\n  %bAgent not found: %s%b\n' "${C_RED}" "$_agent_name" "${C_RESET}"
+    printf '  %bPress 3 to return to agent list%b\n' "${C_DIM}" "${C_RESET}"
+    return
+  fi
+
+  # Read frontmatter fields
+  local _name _model _desc _color _memory
+  _name=$(_parse_agent_frontmatter "$_found" "name")
+  _model=$(_parse_agent_frontmatter "$_found" "model")
+  _desc=$(_parse_agent_frontmatter "$_found" "description")
+  _color=$(_parse_agent_frontmatter "$_found" "color")
+  _memory=$(_parse_agent_frontmatter "$_found" "memory")
+  [ -z "$_name" ] && _name=$(basename "$_found" .md)
+
+  printf '\n  %b● %s%b\n' "${C_BOLD_CYAN}" "$_name" "${C_RESET}"
+  printf '  %b──────────────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
+  printf '  %bModel:%b      %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "${_model:-?}"
+  printf '  %bColor:%b      %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "${_color:---}"
+  printf '  %bMemory:%b     %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "${_memory:---}"
+  printf '  %bFile:%b       %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_found"
+  printf '  %bDescription:%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
+  printf '    %s\n\n' "${_desc:-(no description)}"
+
+  # Read full body (everything after second ---)
+  printf '  %bAgent Instructions%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
+  printf '  %b──────────────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
+
+  local _in_front=false _past_front=false _line_count=0
+  local _max_lines=$(($(tput lines 2>/dev/null || echo 40) - 20))
+  [ "$_max_lines" -lt 10 ] && _max_lines=30
+  while IFS= read -r _line; do
+    case "$_line" in
+      ---)
+        if [ "$_in_front" = false ]; then
+          _in_front=true; continue
+        else
+          _past_front=true; continue
+        fi
+        ;;
+    esac
+    if [ "$_past_front" = true ]; then
+      # Render markdown-ish: headers bold, rest normal
+      case "$_line" in
+        "## "*)  printf '  %b%s%b\n' "${C_BOLD_WHITE}" "$_line" "${C_RESET}" ;;
+        "### "*) printf '  %b%s%b\n' "${C_BOLD_WHITE}" "$_line" "${C_RESET}" ;;
+        "| "*)   printf '  %b%s%b\n' "${C_DIM}" "$_line" "${C_RESET}" ;;
+        "- "*)   printf '  %b%s%b\n' "${C_RESET}" "$_line" "${C_RESET}" ;;
+        "")      printf '\n' ;;
+        *)       printf '  %s\n' "$_line" ;;
+      esac
+      _line_count=$((_line_count + 1))
+      if [ "$_line_count" -ge "$_max_lines" ]; then
+        printf '\n  %b... (truncated — %d lines shown, use Read tool for full file)%b\n' "${C_DIM}" "$_line_count" "${C_RESET}"
+        break
+      fi
+    fi
+  done < "$_found"
+
+  printf '\n  %bPress 3 to return to agent list%b\n' "${C_DIM}" "${C_RESET}"
+}
+
+_render_nav_bar() {
+  local _active="${1:-settings}"
+  local _views="settings teams agents"
+  local _v _label _i
+  _i=1
+  printf '  '
+  for _v in $_views; do
+    case "$_i" in
+      1) _label="1:Settings" ;;
+      2) _label="2:Teams" ;;
+      3) _label="3:Agents" ;;
+    esac
+    if [ "$_v" = "$_active" ]; then
+      printf '%b[%s]%b  ' "${C_BOLD_CYAN}" "$_label" "${C_RESET}"
+    else
+      printf '%b[%s]%b  ' "${C_DIM}" "$_label" "${C_RESET}"
+    fi
+    _i=$((_i + 1))
+  done
   printf '\n'
-  printf '  %b⚙  DOEY SETTINGS%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
-  printf '  %b%s%b\n\n' "${C_DIM}" "$HR" "${C_RESET}"
+}
 
-  # Config hierarchy display
+_render_settings_view() {
+  local _GLOBAL_CONFIG _PROJECT_CONFIG _PROJ_DIR
   _GLOBAL_CONFIG="${HOME}/.config/doey/config.sh"
   _PROJECT_CONFIG=""
   if [ -n "$RUNTIME_DIR" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
@@ -171,8 +398,8 @@ while true; do
 
   printf '  %b Models%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
   _settings_row "DOEY_MANAGER_MODEL"          "opus"    "$DOEY_MANAGER_MODEL"
-  _settings_row "DOEY_WORKER_MODEL"           "sonnet"  "$DOEY_WORKER_MODEL"
-  _settings_row "DOEY_WATCHDOG_MODEL"         "haiku"   "$DOEY_WATCHDOG_MODEL"
+  _settings_row "DOEY_WORKER_MODEL"           "opus"    "$DOEY_WORKER_MODEL"
+  _settings_row "DOEY_WATCHDOG_MODEL"         "sonnet"  "$DOEY_WATCHDOG_MODEL"
   _settings_row "DOEY_SESSION_MANAGER_MODEL"  "opus"    "$DOEY_SESSION_MANAGER_MODEL"
   printf '\n'
 
@@ -191,16 +418,129 @@ while true; do
   _settings_row "DOEY_IDLE_REMOVE_AFTER"      "300" "$DOEY_IDLE_REMOVE_AFTER"
   _settings_row "DOEY_PASTE_SETTLE_MS"        "500" "$DOEY_PASTE_SETTLE_MS"
   printf '\n'
+}
 
-  _render_teams
+while true; do
+  _doey_load_config
+  DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
+
+  # Fast refresh for live settings window
+  if [ "${DOEY_SETTINGS_LIVE:-0}" = "1" ]; then
+    _refresh_interval=2
+  else
+    _refresh_interval="$DOEY_INFO_PANEL_REFRESH"
+  fi
+
+  DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-3}"
+  DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
+  DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-2}"
+  DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
+  DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
+  DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
+  DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
+  DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
+  DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-3}"
+  DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-15}"
+  DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-20}"
+  DOEY_WATCHDOG_LOOP_DELAY="${DOEY_WATCHDOG_LOOP_DELAY:-25}"
+  DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
+  DOEY_IDLE_REMOVE_AFTER="${DOEY_IDLE_REMOVE_AFTER:-300}"
+  DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
+  DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
+  DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-opus}"
+  DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-sonnet}"
+  DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
+
+  _view_file="${RUNTIME_DIR}/status/settings_view"
+  _CURRENT_VIEW="settings"
+  _AGENT_DETAIL=""
+  if [ -f "$_view_file" ]; then
+    _CURRENT_VIEW=$(cat "$_view_file" 2>/dev/null)
+    # Support agents:<name> for drill-down
+    case "$_CURRENT_VIEW" in
+      agents:*) _AGENT_DETAIL="${_CURRENT_VIEW#agents:}"; _CURRENT_VIEW="agent_detail" ;;
+      settings|teams|agents) ;;
+      *) _CURRENT_VIEW="settings" ;;
+    esac
+  fi
+
+  printf '\033[2J\033[H'
+
+  TERM_W=$(tput cols 2>/dev/null || echo 80)
+  HR=$(repeat_char "=" "$TERM_W")
+
+  printf '\n'
+  printf '  %b⚙  DOEY SETTINGS%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
+  [ "${DOEY_SETTINGS_LIVE:-0}" = "1" ] && printf '  %b⚡ Live refresh (2s)%b\n' "${C_GREEN}" "${C_RESET}"
+  printf '  %b%s%b\n\n' "${C_DIM}" "$HR" "${C_RESET}"
+
+  case "$_CURRENT_VIEW" in agent_detail) _render_nav_bar "agents" ;; *) _render_nav_bar "$_CURRENT_VIEW" ;; esac
+
+  case "$_CURRENT_VIEW" in
+    settings)     _render_settings_view ;;
+    teams)        _render_team_blueprint ;;
+    agents)       _render_available_agents ;;
+    agent_detail) _render_agent_detail "$_AGENT_DETAIL" ;;
+    *)            _render_settings_view ;;
+  esac
   printf '\n'
 
   printf '  %b%s%b\n' "${C_DIM}" "$HR" "${C_RESET}"
-  printf '  %bdoey config%b to edit  %b│%b  %bdoey config --reset%b to reset  %b│%b  %bdoey reload%b to apply\n' \
-    "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}" \
+  printf '  %bPress 1-3%b to switch views  %b·%b  %bdoey config%b to edit  %b·%b  %bdoey reload%b to apply\n' \
+    "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "${C_RESET}" \
     "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}" \
     "${C_BOLD_WHITE}" "${C_RESET}"
-  printf '\n  %bPrefix + S%b to toggle back to Dashboard\n' "${C_BOLD_CYAN}" "${C_RESET}"
 
-  sleep "$DOEY_INFO_PANEL_REFRESH"
+  # Wait for trigger or timeout
+  # Settings editor touches TRIGGER to force instant refresh
+  _trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
+  if [ "${DOEY_SETTINGS_LIVE:-0}" = "1" ]; then
+    # In live mode: poll trigger file every 1s, re-render on trigger or after 5s
+    _waited=0
+    while [ "$_waited" -lt 5 ]; do
+      if [ -f "$_trigger" ]; then
+        rm -f "$_trigger" 2>/dev/null
+        break
+      fi
+      _key=""
+      read -t 1 -n1 _key 2>/dev/null || true
+      case "$_key" in
+        1) echo "settings" > "$_view_file"; break ;;
+        2) echo "teams" > "$_view_file"; break ;;
+        3) echo "agents" > "$_view_file"; break ;;
+        [a-z])
+          # Letter key: select agent by index when on agents view
+          if [ "$_CURRENT_VIEW" = "agents" ] || [ "$_CURRENT_VIEW" = "agent_detail" ]; then
+            _ai=$(printf '%d' "'$_key" 2>/dev/null)
+            _ai=$((_ai - 97))
+            _proj_dir=""
+            [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ] && \
+              _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+            [ -z "$_proj_dir" ] && _proj_dir="."
+            _ac=0
+            for _af in "$_proj_dir/agents"/*.md; do
+              [ -f "$_af" ] || continue
+              if [ "$_ac" -eq "$_ai" ]; then
+                _an=$(_parse_agent_frontmatter "$_af" "name")
+                [ -z "$_an" ] && _an=$(basename "$_af" .md)
+                echo "agents:$_an" > "$_view_file"
+                break
+              fi
+              _ac=$((_ac + 1))
+            done
+            break
+          fi
+          ;;
+      esac
+      _waited=$((_waited + 1))
+    done
+  else
+    _key=""
+    read -t "$_refresh_interval" -n1 _key 2>/dev/null || true
+    case "$_key" in
+      1) echo "settings" > "$_view_file" ;;
+      2) echo "teams" > "$_view_file" ;;
+      3) echo "agents" > "$_view_file" ;;
+    esac
+  fi
 done
