@@ -1814,11 +1814,26 @@ check_doctor() {
   PROJECT_DIR="$(pwd)"
   printf '\n  %bDoey — System Check%b\n\n' "$BRAND" "$RESET"
 
-  # Required commands
-  if command -v tmux >/dev/null 2>&1; then _doc_check ok "tmux" "$(tmux -V)"
-  else _doc_check fail "tmux not installed"; fi
-  if command -v claude >/dev/null 2>&1; then _doc_check ok "claude CLI" "$(claude --version 2>/dev/null || echo 'unknown')"
-  else _doc_check warn "claude CLI not in PATH"; fi
+  # Required commands — offer install if missing
+  if command -v tmux >/dev/null 2>&1; then
+    _doc_check ok "tmux" "$(tmux -V)"
+  else
+    _doc_check fail "tmux not installed"
+    case "$(uname -s)" in
+      Darwin) printf "\n         ${DIM}Fix: ${RESET}${BRAND}brew install tmux${RESET}\n" ;;
+      Linux)  printf "\n         ${DIM}Fix: ${RESET}${BRAND}sudo apt-get install -y tmux${RESET}\n" ;;
+    esac
+  fi
+  if command -v claude >/dev/null 2>&1; then
+    _doc_check ok "claude CLI" "$(claude --version 2>/dev/null || echo 'unknown')"
+  else
+    _doc_check fail "claude CLI not found"
+    if command -v node >/dev/null 2>&1; then
+      printf "\n         ${DIM}Fix: ${RESET}${BRAND}npm install -g @anthropic-ai/claude-code${RESET}\n"
+    else
+      printf "\n         ${DIM}Fix: Install Node.js 18+ first, then: ${RESET}${BRAND}npm install -g @anthropic-ai/claude-code${RESET}\n"
+    fi
+  fi
 
   # Auth check
   local auth_json
@@ -3165,6 +3180,131 @@ _attach_session() {
 [[ "${1:-}" == "__doey_source_only" ]] && return 0 2>/dev/null || true
 [[ "${1:-}" == "__doey_source_only" ]] && exit 0
 
+# ── Prerequisite gate ─────────────────────────────────────────────────
+# Catch missing tmux/claude early with helpful install guidance.
+# Runs before any command except --help, doctor, version, uninstall.
+_check_prereqs() {
+  local missing=false
+
+  if ! command -v tmux >/dev/null 2>&1; then
+    missing=true
+    echo ""
+    printf "  ${ERROR}✗ tmux is not installed${RESET}\n"
+    printf "  ${DIM}Doey needs tmux to run parallel Claude Code agents.${RESET}\n\n"
+    case "$(uname -s)" in
+      Darwin)
+        if command -v brew >/dev/null 2>&1; then
+          printf "  ${BOLD}Install now:${RESET}\n"
+          printf "    ${BRAND}brew install tmux${RESET}\n\n"
+          if [ -t 0 ]; then
+            printf "  Run this command? ${DIM}[Y/n]${RESET} "
+            read -r reply
+            case "$reply" in
+              [Nn]*) ;;
+              *)
+                printf "\n  ${DIM}Installing tmux...${RESET}\n"
+                if brew install tmux; then
+                  printf "  ${SUCCESS}✓ tmux installed${RESET}\n\n"
+                  missing=false
+                else
+                  printf "  ${ERROR}✗ Install failed${RESET} — try manually: brew install tmux\n\n"
+                fi
+                ;;
+            esac
+          fi
+        else
+          printf "  ${BOLD}Option 1 — Install Homebrew first (recommended):${RESET}\n"
+          printf "    ${BRAND}/bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${RESET}\n"
+          printf "    ${BRAND}brew install tmux${RESET}\n\n"
+          printf "  ${BOLD}Option 2 — MacPorts:${RESET}\n"
+          printf "    ${BRAND}sudo port install tmux${RESET}\n\n"
+        fi
+        ;;
+      Linux)
+        printf "  ${BOLD}Install now:${RESET}\n"
+        if command -v apt-get >/dev/null 2>&1; then
+          printf "    ${BRAND}sudo apt-get install -y tmux${RESET}\n\n"
+          if [ -t 0 ]; then
+            printf "  Run this command? ${DIM}[Y/n]${RESET} "
+            read -r reply
+            case "$reply" in
+              [Nn]*) ;;
+              *)
+                printf "\n  ${DIM}Installing tmux...${RESET}\n"
+                if sudo apt-get update -qq && sudo apt-get install -y tmux; then
+                  printf "  ${SUCCESS}✓ tmux installed${RESET}\n\n"
+                  missing=false
+                else
+                  printf "  ${ERROR}✗ Install failed${RESET}\n\n"
+                fi
+                ;;
+            esac
+          fi
+        elif command -v dnf >/dev/null 2>&1; then
+          printf "    ${BRAND}sudo dnf install -y tmux${RESET}\n\n"
+        elif command -v pacman >/dev/null 2>&1; then
+          printf "    ${BRAND}sudo pacman -S tmux${RESET}\n\n"
+        else
+          printf "    ${BRAND}sudo apt-get install tmux${RESET}  ${DIM}(Debian/Ubuntu)${RESET}\n"
+          printf "    ${BRAND}sudo dnf install tmux${RESET}      ${DIM}(Fedora/RHEL)${RESET}\n"
+          printf "    ${BRAND}sudo pacman -S tmux${RESET}        ${DIM}(Arch)${RESET}\n\n"
+        fi
+        ;;
+      *)
+        printf "  ${DIM}Install tmux for your platform: https://github.com/tmux/tmux/wiki/Installing${RESET}\n\n"
+        ;;
+    esac
+  fi
+
+  if ! command -v claude >/dev/null 2>&1; then
+    missing=true
+    printf "  ${ERROR}✗ Claude Code CLI is not installed${RESET}\n"
+    printf "  ${DIM}Doey orchestrates Claude Code instances — the CLI is required.${RESET}\n\n"
+    if command -v node >/dev/null 2>&1; then
+      printf "  ${BOLD}Install now:${RESET}\n"
+      printf "    ${BRAND}npm install -g @anthropic-ai/claude-code${RESET}\n\n"
+      if [ -t 0 ]; then
+        printf "  Run this command? ${DIM}[Y/n]${RESET} "
+        read -r reply
+        case "$reply" in
+          [Nn]*) ;;
+          *)
+            printf "\n  ${DIM}Installing Claude Code...${RESET}\n"
+            if npm install -g @anthropic-ai/claude-code; then
+              printf "  ${SUCCESS}✓ Claude Code installed${RESET}\n"
+              printf "  ${DIM}Run ${RESET}${BOLD}claude${RESET}${DIM} once to authenticate, then re-run ${RESET}${BOLD}doey${RESET}\n\n"
+              missing=false
+            else
+              printf "  ${ERROR}✗ Install failed${RESET} — try: sudo npm install -g @anthropic-ai/claude-code\n\n"
+            fi
+            ;;
+        esac
+      fi
+    else
+      printf "  ${BOLD}Step 1 — Install Node.js 18+:${RESET}\n"
+      case "$(uname -s)" in
+        Darwin)
+          if command -v brew >/dev/null 2>&1; then
+            printf "    ${BRAND}brew install node${RESET}\n"
+          else
+            printf "    ${BRAND}https://nodejs.org${RESET}  ${DIM}(or: brew install node)${RESET}\n"
+          fi
+          ;;
+        *) printf "    ${BRAND}https://nodejs.org${RESET}  ${DIM}(or: curl -fsSL https://fnm.vercel.app/install | bash && fnm install 22)${RESET}\n" ;;
+      esac
+      printf "\n  ${BOLD}Step 2 — Install Claude Code:${RESET}\n"
+      printf "    ${BRAND}npm install -g @anthropic-ai/claude-code${RESET}\n\n"
+      printf "  ${BOLD}Step 3 — Authenticate:${RESET}\n"
+      printf "    ${BRAND}claude${RESET}  ${DIM}(follow the prompts)${RESET}\n\n"
+    fi
+  fi
+
+  if [ "$missing" = true ]; then
+    printf "  ${DIM}After installing, re-run: ${RESET}${BOLD}doey${RESET}\n"
+    exit 1
+  fi
+}
+
 grid="dynamic"
 
 case "${1:-}" in
@@ -3226,24 +3366,28 @@ HELP
     printf '\n'
     exit 0
     ;;
+  # Commands that don't need tmux/claude running:
+  list)         list_projects; exit 0 ;;
+  doctor)       check_doctor; exit 0 ;;
+  version|--version|-v) show_version; exit 0 ;;
+  uninstall)    uninstall_system; exit 0 ;;
+  update|reinstall) update_system; exit 0 ;;
+  config)       shift; doey_config "$@"; exit 0 ;;
+  # Everything below requires tmux + claude — check prerequisites:
   init)
+    _check_prereqs
     register_project "$(pwd)"
     dir="$(pwd)"; name="$(find_project "$dir")"
     [[ -n "$name" ]] && launch_with_grid "$name" "$dir" "$grid"
     exit 0
     ;;
-  list)         list_projects; exit 0 ;;
   purge)        shift; doey_purge "$@"; exit $? ;;
   stop)         stop_project; exit $? ;;
-  update|reinstall) update_system; exit 0 ;;
   reload)       shift; reload_session "$@"; exit 0 ;;
-  doctor)       check_doctor; exit 0 ;;
-  uninstall)    uninstall_system; exit 0 ;;
   test)         shift; run_test "$@"; exit $? ;;
-  version|--version|-v) show_version; exit 0 ;;
-  config)       shift; doey_config "$@"; exit 0 ;;
   settings)     doey_settings; exit 0 ;;
   dynamic|d)
+    _check_prereqs
     register_project "$(pwd)"
     dir="$(pwd)"; name="$(find_project "$dir")"
     if [[ -n "$name" ]]; then
@@ -3311,6 +3455,7 @@ HELP
     exit 0
     ;;
   [0-9]*x[0-9]*)
+    _check_prereqs
     grid="$1"
     ;;
   "") ;;
@@ -3323,6 +3468,7 @@ esac
 
 # ── Smart Launch ──────────────────────────────────────────────────────
 
+_check_prereqs
 check_for_updates
 
 dir="$(pwd)"

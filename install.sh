@@ -61,11 +61,11 @@ ask_install() {
   local name="$1"
   printf "  ${WARN}⚠${RESET}  ${BOLD}%s${RESET} is not installed.\n" "$name"
   if [ "$IS_INTERACTIVE" = true ]; then
-    printf "     Install it now? ${DIM}[y/N]${RESET} "
+    printf "     Install it now? ${DIM}[Y/n]${RESET} "
     read -r reply
     case "$reply" in
-      [Yy]*) return 0 ;;
-      *)     return 1 ;;
+      [Nn]*) return 1 ;;
+      *)     return 0 ;;
     esac
   else
     return 1
@@ -137,23 +137,44 @@ fi
 
 if [ "$HAS_NODE" = false ] && ask_install "Node.js"; then
   case "$PLATFORM" in
-    macos) [ "$HAS_BREW" = true ] && run_install "Node.js" "brew install node" && HAS_NODE=true \
-           || warn_msg "Install Homebrew (https://brew.sh) then: brew install node" ;;
-    linux) printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash && fnm install 22${RESET}\n"
-           printf "     ${DIM}Then re-run this installer.${RESET}\n" ;;
-    *)     warn_msg "Install Node.js 18+ from https://nodejs.org" ;;
+    macos)
+      if [ "$HAS_BREW" = true ]; then
+        run_install "Node.js" "brew install node" && HAS_NODE=true
+      else
+        warn_msg "Install Homebrew first: https://brew.sh — then: brew install node"
+      fi
+      ;;
+    linux)
+      if command -v apt-get >/dev/null 2>&1; then
+        run_install "Node.js" "sudo apt-get update -qq && sudo apt-get install -y nodejs npm" && HAS_NODE=true
+      else
+        printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash && fnm install 22${RESET}\n"
+        printf "     ${DIM}Then re-run this installer.${RESET}\n"
+      fi
+      ;;
+    *) warn_msg "Install Node.js 18+ from https://nodejs.org" ;;
   esac
 elif [ "$HAS_NODE" = false ]; then
   warn_msg "Node.js is needed for Claude Code — install later from https://nodejs.org"
 fi
 
 if has claude; then
-  check_ok "claude CLI"
-elif [ "$HAS_NODE" = true ] && ask_install "Claude Code CLI"; then
-  run_install "Claude Code" "npm install -g @anthropic-ai/claude-code" || \
-    warn_msg "Failed — try manually: npm i -g @anthropic-ai/claude-code"
+  CLAUDE_VER=$(claude --version 2>/dev/null || echo "unknown")
+  check_ok "claude CLI ${DIM}($CLAUDE_VER)${RESET}"
+elif [ "$HAS_NODE" = true ]; then
+  if ask_install "Claude Code CLI"; then
+    run_install "Claude Code" "npm install -g @anthropic-ai/claude-code" || \
+      warn_msg "Failed — try: sudo npm i -g @anthropic-ai/claude-code"
+    if has claude; then
+      echo ""
+      printf "  ${BRAND}→${RESET} Run ${BOLD}claude${RESET} once to authenticate before using Doey\n"
+    fi
+  else
+    warn_msg "claude CLI is required — install later: npm i -g @anthropic-ai/claude-code"
+  fi
 else
-  warn_msg "claude CLI not found (npm i -g @anthropic-ai/claude-code)"
+  printf "  ${ERROR}✗${RESET}  ${BOLD}Claude Code CLI${RESET} requires Node.js\n"
+  printf "     ${DIM}Install Node.js 18+ first, then: ${RESET}${BRAND}npm i -g @anthropic-ai/claude-code${RESET}\n"
 fi
 
 if has jq; then
