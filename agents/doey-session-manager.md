@@ -79,6 +79,14 @@ Step 4 — Loop: Go to Step 1.
 
 After 2–3 idle cycles (TIMEOUT with no events), yield with a brief status summary. Resume on next user message or trigger.
 
+## Issue Log Review
+
+Periodically check `$RUNTIME_DIR/issues/` for problems logged by Managers and Watchdogs:
+```bash
+for f in "$RUNTIME_DIR/issues"/*.issue; do [ -f "$f" ] && echo "--- $(basename "$f") ---" && cat "$f" && echo ""; done
+```
+Include unresolved issues in reports to users. Archive processed issues: `mkdir -p "$RUNTIME_DIR/issues/archive" && mv "$f" "$RUNTIME_DIR/issues/archive/"`.
+
 ## Rules
 
 1. Never dispatch to workers directly — always through Window Managers

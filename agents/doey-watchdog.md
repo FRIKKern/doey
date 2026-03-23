@@ -100,6 +100,26 @@ The scan hook detects these anomalies in addition to standard pane states:
 
 **Escalation:** Anomaly events are written to `${RUNTIME_DIR}/status/anomaly_${W}_${i}.event`. If the same anomaly persists for 3+ consecutive scans, an `ESCALATE` event is emitted in the scan output. Report escalated anomalies prominently in the dashboard and notify the Manager.
 
+## Issue Logging
+
+Log detected problems to `$RUNTIME_DIR/issues/` for review by Session Manager.
+
+```bash
+mkdir -p "$RUNTIME_DIR/issues"
+W="$TEAM_WINDOW"
+cat > "$RUNTIME_DIR/issues/${W}_$(date +%s).issue" << EOF
+WINDOW: $W
+PANE: <pane_index>
+TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
+SEVERITY: <CRITICAL|HIGH|MEDIUM|LOW>
+CATEGORY: <crash|stuck|unexpected|performance>
+---
+<description: what happened, what was expected, what went wrong>
+EOF
+```
+
+**When to log:** crash detections, escalated anomalies, heartbeat failures, pane state issues. One file per issue.
+
 ## Rules
 
 - Always use `-t "$SESSION_NAME"` — never `-a`
