@@ -88,8 +88,8 @@ DOEY_WATCHDOG_SCAN_INTERVAL="${DOEY_WATCHDOG_SCAN_INTERVAL:-30}"
 
 # Models
 DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
-DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-sonnet}"
-DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-haiku}"
+DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-opus}"
+DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-sonnet}"
 DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -101,6 +101,13 @@ _env_val() {
   v=$(grep "^${2}=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true
   v="${v//\"/}"
   echo "$v"
+}
+
+# Read per-team config: _read_team_config <team_num> <property> <default>
+# Reads DOEY_TEAM_<N>_<PROPERTY>, falls back to <default>
+_read_team_config() {
+  local n="$1" prop="$2" default="$3"
+  eval "echo \"\${DOEY_TEAM_${n}_${prop}:-${default}}\""
 }
 
 resolve_repo_dir() {
@@ -195,6 +202,10 @@ write_team_env() {
   local manager_pane="${7:-0}"
   local worktree_dir="${8:-}"
   local worktree_branch="${9:-}"
+  local team_name="${10:-}"
+  local team_role="${11:-}"
+  local worker_model="${12:-}"
+  local manager_model="${13:-}"
   local session_name
   session_name=$(_env_val "${runtime_dir}/session.env" SESSION_NAME)
   local _tmp="${runtime_dir}/team_${window_index}.env.tmp.$$"
@@ -208,6 +219,10 @@ WORKER_COUNT="${worker_count}"
 SESSION_NAME="${session_name}"
 WORKTREE_DIR="${worktree_dir}"
 WORKTREE_BRANCH="${worktree_branch}"
+TEAM_NAME="${team_name}"
+TEAM_ROLE="${team_role}"
+WORKER_MODEL="${worker_model}"
+MANAGER_MODEL="${manager_model}"
 TEAMEOF
   mv "$_tmp" "${runtime_dir}/team_${window_index}.env"
 }
@@ -1048,14 +1063,12 @@ _purge_summary() {
   local total_bytes=$((rt_bytes + res_bytes))
 
   printf '\n'
-  printf "         ${DIM}┌─────────────┬────────┬──────────────┐${RESET}\n"
-  printf "         ${DIM}│${RESET} ${BOLD}Category${RESET}    ${DIM}│${RESET} ${BOLD}Files${RESET}  ${DIM}│${RESET} ${BOLD}Size${RESET}         ${DIM}│${RESET}\n"
-  printf "         ${DIM}├─────────────┼────────┼──────────────┤${RESET}\n"
-  printf "         ${DIM}│${RESET} Runtime     ${DIM}│${RESET} %5d  ${DIM}│${RESET} %-12s ${DIM}│${RESET}\n" "$rt_files" "$(_purge_format_bytes "$rt_bytes")"
-  printf "         ${DIM}│${RESET} Research    ${DIM}│${RESET} %5d  ${DIM}│${RESET} %-12s ${DIM}│${RESET}\n" "$res_files" "$(_purge_format_bytes "$res_bytes")"
-  printf "         ${DIM}├─────────────┼────────┼──────────────┤${RESET}\n"
-  printf "         ${DIM}│${RESET} ${BOLD}Total${RESET}       ${DIM}│${RESET} ${BOLD}%5d${RESET}  ${DIM}│${RESET} ${BOLD}%-12s${RESET} ${DIM}│${RESET}\n" "$total_files" "$(_purge_format_bytes "$total_bytes")"
-  printf "         ${DIM}└─────────────┴────────┴──────────────┘${RESET}\n"
+  printf "         ${DIM}%-14s %7s  %-12s${RESET}\n" "Category" "Files" "Size"
+  printf "         ${DIM}──────────────────────────────────────${RESET}\n"
+  printf "         %-14s %5d  %-12s\n" "Runtime" "$rt_files" "$(_purge_format_bytes "$rt_bytes")"
+  printf "         %-14s %5d  %-12s\n" "Research" "$res_files" "$(_purge_format_bytes "$res_bytes")"
+  printf "         ${DIM}──────────────────────────────────────${RESET}\n"
+  printf "         ${BOLD}%-14s %5d  %-12s${RESET}\n" "Total" "$total_files" "$(_purge_format_bytes "$total_bytes")"
 
   if $dry_run; then
     printf "         ${DIM}(dry run — no files were deleted)${RESET}\n"
@@ -2149,38 +2162,91 @@ MANIFEST
   done
   step_done
 
-  local _extra_teams=$((INITIAL_TEAMS - 1))
-  if [ "$_extra_teams" -gt 0 ]; then
-    step_start 6 "Adding ${_extra_teams} more team windows..."
-    # Serialize team launches to prevent concurrent OAuth token requests
-    local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
-    local _team_i _team_fail=0
-    for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
-      if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ); then
-        _team_fail=$((_team_fail + 1))
-      fi
-      (( _team_i < _extra_teams - 1 )) && sleep $TEAM_LAUNCH_DELAY
-    done
-    [ "$_team_fail" -gt 0 ] && printf "${WARN}${_team_fail} team(s) failed${RESET}\n"
-    step_done
-  fi
+  # Per-team config mode: when DOEY_TEAM_COUNT is set, use DOEY_TEAM_<N>_* variables
+  if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
+    local _ptc_total="${DOEY_TEAM_COUNT}"
+    local _ptc_remaining=$((_ptc_total - 1))  # Team 1 already created above
+    if [ "$_ptc_remaining" -gt 0 ]; then
+      step_start 6 "Adding ${_ptc_remaining} configured teams..."
+      local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
+      local _ptc_i _ptc_fail=0
+      for (( _ptc_i=2; _ptc_i<=_ptc_total; _ptc_i++ )); do
+        local _ptc_type _ptc_workers _ptc_name _ptc_role _ptc_wm _ptc_mm _ptc_cols _ptc_wt_spec
+        _ptc_type=$(_read_team_config "$_ptc_i" "TYPE" "")
+        _ptc_workers=$(_read_team_config "$_ptc_i" "WORKERS" "")
+        _ptc_name=$(_read_team_config "$_ptc_i" "NAME" "")
+        _ptc_role=$(_read_team_config "$_ptc_i" "ROLE" "")
+        _ptc_wm=$(_read_team_config "$_ptc_i" "WORKER_MODEL" "")
+        _ptc_mm=$(_read_team_config "$_ptc_i" "MANAGER_MODEL" "")
 
-  local INITIAL_WORKTREE_TEAMS=$DOEY_INITIAL_WORKTREE_TEAMS
-  step_start 7 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
-  # Serialize worktree team launches to prevent concurrent OAuth token requests
-  local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
-  local _wt_i _wt_ok=0
-  for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
-    if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto" ); then
-      _wt_ok=$((_wt_ok + 1))
+        # Default type based on position
+        if [ -z "$_ptc_type" ]; then
+          if [ "$_ptc_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _ptc_type="local"; else _ptc_type="worktree"; fi
+        fi
+        # Default worker count from grid
+        [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-3} * 2 ))
+        # Convert workers to cols: cols = ceil(workers/2) — dynamic grid uses 2 rows
+        _ptc_cols=$(( (_ptc_workers + 1) / 2 ))
+        [ "$_ptc_cols" -lt 1 ] && _ptc_cols=1
+
+        _ptc_wt_spec=""
+        [ "$_ptc_type" = "worktree" ] && _ptc_wt_spec="auto"
+
+        if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$_ptc_cols" "$_ptc_wt_spec" "$_ptc_name" "$_ptc_role" "$_ptc_wm" "$_ptc_mm" ); then
+          _ptc_fail=$((_ptc_fail + 1))
+        fi
+        (( _ptc_i < _ptc_total )) && sleep $TEAM_LAUNCH_DELAY
+      done
+      [ "$_ptc_fail" -gt 0 ] && printf "${WARN}${_ptc_fail} team(s) failed${RESET}\n"
+      step_done
     fi
-    (( _wt_i < INITIAL_WORKTREE_TEAMS - 1 )) && sleep $TEAM_LAUNCH_DELAY
-  done
-  if [ "$_wt_ok" -gt 0 ]; then
-    step_done
+    # Update team 1's env with per-team config if specified
+    local _ptc1_name _ptc1_role _ptc1_wm _ptc1_mm
+    _ptc1_name=$(_read_team_config "1" "NAME" "")
+    _ptc1_role=$(_read_team_config "1" "ROLE" "")
+    _ptc1_wm=$(_read_team_config "1" "WORKER_MODEL" "")
+    _ptc1_mm=$(_read_team_config "1" "MANAGER_MODEL" "")
+    if [ -n "$_ptc1_name" ] || [ -n "$_ptc1_role" ] || [ -n "$_ptc1_wm" ] || [ -n "$_ptc1_mm" ]; then
+      local _ptc1_wp _ptc1_wc
+      _ptc1_wp=$(_env_val "${runtime_dir}/team_1.env" WORKER_PANES)
+      _ptc1_wc=$(_env_val "${runtime_dir}/team_1.env" WORKER_COUNT)
+      write_team_env "$runtime_dir" "1" "dynamic" "0.2" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
+      [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:1" "$_ptc1_name"
+    fi
   else
-    printf "${WARN}skipped${RESET}\n"
-  fi
+    local _extra_teams=$((INITIAL_TEAMS - 1))
+    if [ "$_extra_teams" -gt 0 ]; then
+      step_start 6 "Adding ${_extra_teams} more team windows..."
+      # Serialize team launches to prevent concurrent OAuth token requests
+      local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
+      local _team_i _team_fail=0
+      for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
+        if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ); then
+          _team_fail=$((_team_fail + 1))
+        fi
+        (( _team_i < _extra_teams - 1 )) && sleep $TEAM_LAUNCH_DELAY
+      done
+      [ "$_team_fail" -gt 0 ] && printf "${WARN}${_team_fail} team(s) failed${RESET}\n"
+      step_done
+    fi
+
+    local INITIAL_WORKTREE_TEAMS=$DOEY_INITIAL_WORKTREE_TEAMS
+    step_start 7 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
+    # Serialize worktree team launches to prevent concurrent OAuth token requests
+    local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
+    local _wt_i _wt_ok=0
+    for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
+      if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto" ); then
+        _wt_ok=$((_wt_ok + 1))
+      fi
+      (( _wt_i < INITIAL_WORKTREE_TEAMS - 1 )) && sleep $TEAM_LAUNCH_DELAY
+    done
+    if [ "$_wt_ok" -gt 0 ]; then
+      step_done
+    else
+      printf "${WARN}skipped${RESET}\n"
+    fi
+  fi  # end of DOEY_TEAM_COUNT check
 
   local final_team_windows team_count=0 _tw
   final_team_windows=$(read_team_windows "$runtime_dir")
@@ -2195,21 +2261,21 @@ MANIFEST
   ) &
 
   printf '\n'
-  printf "   ${DIM}┌─────────────────────────────────────────────────┐${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}                ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Dashboard${RESET}  ${DIM}win 0${RESET} Info panel + Session Manager  ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Teams${RESET}      ${DIM}%-4s${RESET} ${DIM}windows (${final_team_windows})${RESET}              ${DIM}│${RESET}\n" "$team_count"
-  printf "   ${DIM}│${RESET}  ${BOLD}Watchdogs${RESET}  ${DIM}0.2-0.7${RESET} ${DIM}Online (Dashboard)${RESET}          ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${BOLD}Workers${RESET}    ${DIM}T1: %-4s${RESET} ${DIM}(auto-expands, doey add)${RESET}  ${DIM}│${RESET}\n" "$initial_workers"
-  printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${DIM}Project${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$name"
-  printf "   ${DIM}│${RESET}  ${DIM}Grid${RESET}      ${BOLD}dynamic${RESET}  ${DIM}Max workers${RESET}  ${BOLD}%-13s${RESET} ${DIM}│${RESET}\n" "$max_workers"
-  printf "   ${DIM}│${RESET}  ${DIM}Session${RESET}   ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "$session"
-  printf "   ${DIM}│${RESET}  ${DIM}Manifest${RESET}  ${BOLD}%-38s${RESET} ${DIM}│${RESET}\n" "${runtime_dir}/session.env"
-  printf "   ${DIM}│${RESET}                                                 ${DIM}│${RESET}\n"
-  printf "   ${DIM}│${RESET}  ${DIM}Tip: doey add — adds 2 more workers${RESET}            ${DIM}│${RESET}\n"
-  printf "   ${DIM}└─────────────────────────────────────────────────┘${RESET}\n"
+  printf "   ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}\n"
+  printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
+  printf "\n"
+  printf "   ${BOLD}Dashboard${RESET}  ${DIM}win 0  Info panel + Session Manager${RESET}\n"
+  printf "   ${BOLD}Teams${RESET}      ${DIM}%-4s windows (${final_team_windows})${RESET}\n" "$team_count"
+  printf "   ${BOLD}Watchdogs${RESET}  ${DIM}0.2-0.7  Online (Dashboard)${RESET}\n"
+  printf "   ${BOLD}Workers${RESET}    ${DIM}T1: %-4s (auto-expands, doey add)${RESET}\n" "$initial_workers"
+  printf "\n"
+  printf "   ${DIM}Project${RESET}   ${BOLD}%s${RESET}\n" "$name"
+  printf "   ${DIM}Grid${RESET}      ${BOLD}dynamic${RESET}  ${DIM}Max workers${RESET}  ${BOLD}%s${RESET}\n" "$max_workers"
+  printf "   ${DIM}Session${RESET}   ${BOLD}%s${RESET}\n" "$session"
+  printf "   ${DIM}Manifest${RESET}  ${BOLD}%s${RESET}\n" "${runtime_dir}/session.env"
+  printf "\n"
+  printf "   ${DIM}Tip: doey add — adds 2 more workers${RESET}\n"
+  printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
   printf '\n'
 
   tmux select-window -t "$session:0"
@@ -2330,7 +2396,10 @@ _boot_worker() {
   printf '\n\n## Identity\nYou are Worker %s (%s) in pane %s.%s of session %s.\n' \
     "$worker_num" "$_bw_pane_id" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
 
-  local cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"T${team_window} W${worker_num}\""
+  local _bw_worker_model
+  _bw_worker_model=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_MODEL)
+  [ -z "$_bw_worker_model" ] && _bw_worker_model="$DOEY_WORKER_MODEL"
+  local cmd="claude --dangerously-skip-permissions --model $_bw_worker_model --name \"T${team_window} W${worker_num}\""
   cmd+=" --append-system-prompt-file \"${prompt_file}\""
   tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
   sleep 2  # Auth stagger: prevent concurrent OAuth token requests
@@ -2351,6 +2420,10 @@ _batch_boot_workers() {
   local _bbw_acronym=""
   [ -f "${runtime_dir}/session.env" ] && _bbw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
 
+  local _bbw_worker_model
+  _bbw_worker_model=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_MODEL)
+  [ -z "$_bbw_worker_model" ] && _bbw_worker_model="$DOEY_WORKER_MODEL"
+
   local pair pane_idx worker_num
   for pair in "$@"; do
     pane_idx="${pair%%:*}"
@@ -2363,7 +2436,7 @@ _batch_boot_workers() {
     printf '\n\n## Identity\nYou are Worker %s (%s) in pane %s.%s of session %s.\n' \
       "$worker_num" "$_bbw_pane_id" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
 
-    local cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"T${team_window} W${worker_num}\""
+    local cmd="claude --dangerously-skip-permissions --model $_bbw_worker_model --name \"T${team_window} W${worker_num}\""
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
     tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
     sleep $WORKER_LAUNCH_DELAY  # Auth stagger between worker launches
@@ -2586,10 +2659,13 @@ _ensure_worker_prompt() {
 
 _launch_team_manager() {
   local session="$1" runtime_dir="$2" window_index="$3"
+  local mgr_model="${4:-}"
+  [ -z "$mgr_model" ] && mgr_model=$(_env_val "${runtime_dir}/team_${window_index}.env" MANAGER_MODEL)
+  [ -z "$mgr_model" ] && mgr_model="$DOEY_MANAGER_MODEL"
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
+    "claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   sleep 0.2  # reduced from 0.5s — tmux is fast
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
@@ -2597,13 +2673,14 @@ _launch_team_manager() {
 
 _launch_team_watchdog() {
   local session="$1" wdg_slot="$2" window_index="$3"
+  local wdg_model="${4:-$DOEY_WATCHDOG_MODEL}"
   [ -n "$wdg_slot" ] || return 0
   tmux send-keys -t "${session}:${wdg_slot}" C-c
   sleep 0.3
   local wdg_agent
   wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model $DOEY_WATCHDOG_MODEL --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
+    "claude --dangerously-skip-permissions --model $wdg_model --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.2  # reduced from 0.5s — tmux is fast
 }
@@ -2611,12 +2688,15 @@ _launch_team_watchdog() {
 _brief_team() {
   local session="$1" window_index="$2" wdg_slot="$3" wp_list="$4"
   local worker_count="$5" grid_desc="$6" wt_brief="${7:-}"
+  local team_name="${8:-}" team_role="${9:-}"
+  local _role_brief=""
+  [ -n "$team_role" ] && _role_brief=" Team role: ${team_role}."
   local wdg_brief="No Watchdog assigned (all Dashboard slots occupied)."
   [ -z "$wdg_slot" ] || wdg_brief="Watchdog is in Dashboard pane ${wdg_slot}."
   (
     sleep 8
     tmux send-keys -t "${session}:${window_index}.0" \
-      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${wdg_brief} Session: ${session}.${wt_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${wdg_brief} Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
   [ -n "$wdg_slot" ] || return 0
   (
@@ -2674,10 +2754,17 @@ _acquire_watchdog_slot() {
 
 _name_team_window() {
   local session="$1" window_index="$2" wt_dir="$3"
+  local runtime_dir="${4:-}"
   _apply_team_border_theme "$session" "$window_index"
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
-  local label="Local Team"
-  [ -z "$wt_dir" ] || label="Worktree Team"
+  local label=""
+  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${window_index}.env" ]; then
+    label=$(_env_val "${runtime_dir}/team_${window_index}.env" TEAM_NAME)
+  fi
+  if [ -z "$label" ]; then
+    label="Local Team"
+    [ -z "$wt_dir" ] || label="Worktree Team"
+  fi
   tmux rename-window -t "${session}:${window_index}" "$label"
 }
 
@@ -2699,6 +2786,7 @@ _print_team_created() {
 add_dynamic_team_window() {
   local session="$1" runtime_dir="$2" dir="$3" initial_cols="${4:-$INITIAL_WORKER_COLS}"
   local worktree_spec="${5:-}"
+  local team_name="${6:-}" team_role="${7:-}" worker_model="${8:-}" manager_model="${9:-}"
   local team_dir="$dir" worktree_branch="" wt_dir_for_env=""
 
   local window_index
@@ -2721,13 +2809,13 @@ add_dynamic_team_window() {
   [ -n "$wt_dir_for_env" ] && [ -d "$wt_dir_for_env" ] && install_doey_hooks "$wt_dir_for_env" "  "
 
   printf "  ${DIM}Creating dynamic team window %s...${RESET}\n" "$window_index"
-  _name_team_window "$session" "$window_index" "$wt_dir_for_env"
+  _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
 
   _acquire_watchdog_slot "$session" "$runtime_dir" "$team_dir" "false"
   local wdg_slot="$_AWS_SLOT"
   [ -n "$wdg_slot" ] || printf "  ${WARN}All %s Dashboard watchdog slots occupied — team %s has no Watchdog${RESET}\n" "$MAX_WATCHDOG_SLOTS" "$window_index"
 
-  write_team_env "$runtime_dir" "$window_index" "dynamic" "${wdg_slot:-}" "" "0" "0" "$wt_dir_for_env" "$worktree_branch"
+  write_team_env "$runtime_dir" "$window_index" "dynamic" "${wdg_slot:-}" "" "0" "0" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
   _launch_team_manager "$session" "$runtime_dir" "$window_index"
@@ -2743,13 +2831,14 @@ add_dynamic_team_window() {
   local worker_count wt_brief
   worker_count=$(_env_val "${runtime_dir}/team_${window_index}.env" WORKER_COUNT)
   wt_brief=$(_worktree_brief "$wt_dir_for_env" "$worktree_branch")
-  _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief"
+  _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role"
   _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wdg_slot" "$wt_dir_for_env" "$worktree_branch"
 }
 
 add_team_window() {
   local session="$1" runtime_dir="$2" dir="$3" grid="${4:-4x2}"
   local worktree_spec="${5:-}"
+  local team_name="${6:-}" team_role="${7:-}" worker_model="${8:-}" manager_model="${9:-}"
   local cols rows total_panes
   cols="${grid%x*}"; rows="${grid#*x}"; total_panes=$((cols * rows))
 
@@ -2774,7 +2863,7 @@ add_team_window() {
   fi
 
   printf "  ${DIM}Creating team window %s (%s grid, %s panes)...${RESET}\n" "$window_index" "$grid" "$total_panes"
-  _name_team_window "$session" "$window_index" "$wt_dir_for_env"
+  _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
 
   local r c
   for (( r=1; r<rows; r++ )); do
@@ -2812,7 +2901,7 @@ add_team_window() {
     tmux select-pane -t "${session}:${window_index}.${i}" -T "T${window_index} W${wnum}"
   done
 
-  write_team_env "$runtime_dir" "$window_index" "$grid" "$wdg_slot" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch"
+  write_team_env "$runtime_dir" "$window_index" "$grid" "$wdg_slot" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
   _launch_team_manager "$session" "$runtime_dir" "$window_index"
@@ -2827,7 +2916,7 @@ add_team_window() {
   _batch_boot_workers "$session" "$runtime_dir" "$window_index" "${_aw_pairs[@]}"
 
   _build_worker_pane_list "$session" "$window_index"
-  _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Grid ${grid}"
+  _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Grid ${grid}" "" "$team_name" "$team_role"
   _print_team_created "$window_index" "grid ${grid}" "$worker_count" "$wdg_slot" "$wt_dir_for_env" "$worktree_branch"
 }
 
@@ -3114,6 +3203,41 @@ doey_config() {
   esac
 }
 
+# ── Settings Window ───────────────────────────────────────────────────
+
+doey_settings() {
+  require_running_session
+  local project_dir
+  project_dir=$(grep '^PROJECT_DIR=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  [[ -z "$project_dir" ]] && { printf "  ${ERROR}Could not determine PROJECT_DIR from %s${RESET}\n" "${runtime_dir}/session.env"; exit 1; }
+
+  # Check if Settings window already exists
+  local settings_win
+  settings_win=$(tmux list-windows -t "$session" -F '#{window_index} #{window_name}' 2>/dev/null | grep ' Settings$' | head -1 | awk '{print $1}')
+  if [ -n "$settings_win" ]; then
+    tmux select-window -t "$session:$settings_win"
+    attach_or_switch "$session"
+    return 0
+  fi
+
+  # Create new window named "Settings"
+  tmux new-window -t "$session" -n "Settings"
+  settings_win=$(tmux display-message -t "$session" -p '#{window_index}')
+
+  # Split into left (editor) and right (panel) — 50/50 vertical split
+  tmux split-window -h -t "$session:$settings_win"
+
+  # Right pane (pane 1): run settings panel with live refresh
+  tmux send-keys -t "$session:${settings_win}.1" "DOEY_SETTINGS_LIVE=1 bash \"${project_dir}/shell/settings-panel.sh\"" Enter
+
+  # Left pane (pane 0): launch Claude with settings-editor agent
+  tmux send-keys -t "$session:${settings_win}.0" "claude --agent settings-editor" Enter
+
+  # Focus the left pane (editor)
+  tmux select-pane -t "$session:${settings_win}.0"
+  attach_or_switch "$session"
+}
+
 # ── Main Dispatch ─────────────────────────────────────────────────────
 
 _attach_session() {
@@ -3152,6 +3276,7 @@ case "${1:-}" in
     add-team   Add a team window with its own Window Manager+Watchdog+Workers
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
+    settings   Open interactive settings editor window
     version    Show version and installation info
     --help     Show this help
 
@@ -3203,6 +3328,7 @@ HELP
   test)         shift; run_test "$@"; exit $? ;;
   version|--version|-v) show_version; exit 0 ;;
   config)       shift; doey_config "$@"; exit 0 ;;
+  settings)     doey_settings; exit 0 ;;
   dynamic|d)
     register_project "$(pwd)"
     dir="$(pwd)"; name="$(find_project "$dir")"

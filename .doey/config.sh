@@ -92,7 +92,7 @@
 # DOEY_WORKER_MODEL=opus
 
 # Model for Watchdog instances (monitoring — lightweight is fine)
-# DOEY_WATCHDOG_MODEL=sonnet
+DOEY_WATCHDOG_MODEL=sonnet
 
 # Model for Session Manager (cross-team orchestration)
 # DOEY_SESSION_MANAGER_MODEL=opus
@@ -101,50 +101,26 @@
 # Team Definitions (Advanced)
 # =============================================================================
 #
-# Define custom teams with specific configurations. When DOEY_TEAM_COUNT is
-# set, it overrides DOEY_INITIAL_TEAMS and DOEY_INITIAL_WORKTREE_TEAMS.
-# If no DOEY_TEAM_* vars are set, default behavior applies.
+# Define custom teams with specific configurations.
+# If no DOEY_TEAM_* vars are set, default behavior applies
+# (DOEY_INITIAL_TEAMS local + DOEY_INITIAL_WORKTREE_TEAMS worktree).
 #
 # Format: DOEY_TEAM_<N>_<PROPERTY>=value
 #
-# Available properties:
-#
-#   TYPE ............. "local" or "worktree" (default: local)
-#                      Worktree teams get an isolated git branch.
-#
-#   WORKERS .......... Number of worker panes (default: from grid calculation)
-#                      Each worker runs one Claude instance.
-#
-#   NAME ............. Human-readable team name (default: "Team <N>")
-#                      Shown in settings panel and pane borders.
-#
-#   ROLE ............. Team specialization hint (default: none)
-#                      Injected into worker system prompts. Examples:
-#                      "backend", "frontend", "testing", "docs"
-#
-#   WORKER_MODEL ..... Model for workers in this team (default: DOEY_WORKER_MODEL)
-#                      Overrides the global worker model for this team only.
-#
-#   MANAGER_MODEL .... Model for the manager (default: DOEY_MANAGER_MODEL)
-#                      Overrides the global manager model for this team only.
-#
-# Example — two specialized teams:
-#
+# Example:
 # DOEY_TEAM_COUNT=2
 #
 # DOEY_TEAM_1_TYPE=local
 # DOEY_TEAM_1_WORKERS=6
-# DOEY_TEAM_1_NAME="Backend"
-# DOEY_TEAM_1_ROLE=backend
 # DOEY_TEAM_1_WORKER_MODEL=opus
-# DOEY_TEAM_1_MANAGER_MODEL=opus
+# DOEY_TEAM_1_NAME="Core Team"
+# DOEY_TEAM_1_ROLE=backend
 #
 # DOEY_TEAM_2_TYPE=worktree
 # DOEY_TEAM_2_WORKERS=4
+# DOEY_TEAM_2_WORKER_MODEL=sonnet
 # DOEY_TEAM_2_NAME="Frontend"
 # DOEY_TEAM_2_ROLE=frontend
-# DOEY_TEAM_2_WORKER_MODEL=sonnet
-# DOEY_TEAM_2_MANAGER_MODEL=opus
 
 # =============================================================================
 # Project-Specific Overrides

@@ -356,7 +356,7 @@ while true; do
   stat_uptime="$(printf '%b UPTIME %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$UPTIME_STR")"
   stat_teams="$(printf '%b TEAMS %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$TEAM_COUNT")"
 
-  printf '  %b  %b│%b  %b  %b│%b  %b  %b│%b  %b\n' \
+  printf '  %b  %b·%b  %b  %b·%b  %b  %b·%b  %b\n' \
     "$stat_project" "${C_DIM}" "${C_RESET}" \
     "$stat_session" "${C_DIM}" "${C_RESET}" \
     "$stat_uptime" "${C_DIM}" "${C_RESET}" \
