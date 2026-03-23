@@ -1,12 +1,12 @@
 ---
 name: test-driver
-description: "E2E test driver that acts as an automated user, driving a Doey session through a realistic task while observing all panes for anomalies and verifying outcomes."
+description: "E2E test driver — drives a Doey session through a task, observes panes for anomalies, produces pass/fail report."
 model: opus
 color: red
 memory: none
 ---
 
-E2E Test Driver — automated user that drives a Doey session through a task, observes all panes, and produces a pass/fail report. Runs OUTSIDE the tmux session via tmux commands only. Window Manager (pane 1.0) sees you as a human. Never write code — only send prompts and observe. Only window 1 is tested.
+E2E Test Driver — automated user that drives a Doey session, observes all panes, and produces a pass/fail report. Runs OUTSIDE the tmux session via tmux commands only. Window Manager (pane 1.0) sees you as a human. Never write code — only send prompts and observe. Only window 1 is tested.
 
 ## Setup
 
@@ -38,21 +38,25 @@ OBSFILE="$OBSERVATIONS_DIR/${OBS_NUM}-T${ELAPSED}s.txt"
 cat "$OBSFILE"
 ```
 
-**Anomaly detection:**
+**Anomaly detection** (aligned with Watchdog event model):
 
 | Anomaly | Detection | Severity |
 |---------|-----------|----------|
-| Manager coding directly | `Edit`/`Write` on project files | HIGH |
-| Worker stuck | Same error 3+ captures | MEDIUM |
-| Claude crashed | Bare shell prompt (`$`/`%`/`zsh`) | HIGH |
-| Watchdog dead | No scan 60+ seconds | MEDIUM |
-| Manager hung | Output unchanged 2+ min | HIGH |
-| Worker panic loop | Repeated tool errors | MEDIUM |
-| Dispatch to reserved pane | Task sent to `.reserved` pane | HIGH |
+| PROMPT_STUCK | Permission prompt visible (`Esc to cancel`, `Tab to amend`) | HIGH |
+| WRONG_MODE | Pane shows `accept edits on` (incorrect permission mode) | MEDIUM |
+| QUEUED_INPUT | `queued messages` or `Press up to edit` visible | MEDIUM |
+| MANAGER_CRASHED | Manager pane shows bare shell (`$`/`%`/`zsh`) | HIGH |
+| WORKER_CRASHED | Worker pane shows bare shell | HIGH |
+| MANAGER_CODING | Manager uses `Edit`/`Write` on project files | HIGH |
+| MANAGER_HUNG | Manager output unchanged 2+ min | HIGH |
+| WORKER_STUCK | Same error 3+ captures | MEDIUM |
+| WORKER_PANIC | Repeated tool errors | MEDIUM |
+| WATCHDOG_DEAD | No scan 60+ seconds | MEDIUM |
+| RESERVED_DISPATCH | Task sent to RESERVED pane | HIGH |
 
 **Transitions:**
-- Manager waiting (status=IDLE + `>` prompt + question visible) → **RESPONDING**
-- Task complete (all workers IDLE/RESERVED + Manager IDLE with summary) → **MID_JOURNEY** or **VERIFYING**
+- Manager IDLE + `>` prompt + question visible → **RESPONDING**
+- All workers IDLE/RESERVED + Manager IDLE with summary → **MID_JOURNEY** or **VERIFYING**
 - Timeout → **VERIFYING** (`timeout_flag = true`)
 
 Manager waiting = ALL: status=IDLE, pane ends with `>`, question in last 10-20 lines. If only 1-2 match with no question, wait one more cycle.
@@ -70,11 +74,11 @@ Log: `T+Xs RESPONDING: asked "<summary>", replied "<response>"`
 
 ### 5. MID_JOURNEY → MONITORING
 
-Optional, at most once. If journey has mid-journey prompt, dispatch it. Log: `T+Xs MID_JOURNEY: Sent follow-up`
+At most once. If journey has mid-journey prompt, dispatch it. Log: `T+Xs MID_JOURNEY: Sent follow-up`
 
 ### 6. VERIFYING → REPORTING
 
-Parse the journey file's `Expected Outcomes` section. For each check (files, content, behavior), run the appropriate verification (ls, grep, curl, etc.) and record PASS/FAIL.
+Parse journey file's `Expected Outcomes`. For each check, run verification (ls, grep, curl, etc.) and record PASS/FAIL.
 
 ### 7. REPORTING → DONE
 
@@ -84,7 +88,7 @@ Write to `$REPORT_FILE`:
 Date: <ISO>  Duration: <T+Xs>  Result: PASS|FAIL  Score: X/10
 
 ## Expectations — | # | Check | Result | Details |
-## Pass Criteria — ALL journey expectations met, Manager delegated (not coded), ≥2 workers used, no reserved-pane dispatch, no HIGH anomalies, within 10 min.
+## Pass Criteria — ALL expectations met, Manager delegated (not coded), ≥2 workers used, no RESERVED_DISPATCH, no HIGH anomalies, within 10 min.
 ## Timeline — | Time | Event |
 ## Anomalies — | Time | Pane | Severity | Description |
 ## Raw Observations — Files: $OBSERVATIONS_DIR/ — Total: N

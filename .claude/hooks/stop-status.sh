@@ -19,34 +19,24 @@ is_reserved && STOP_STATUS="RESERVED"
 
 _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
-STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-TMP=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null)
-if [ -z "$TMP" ] || [ ! -f "$TMP" ]; then
-  echo "[WARN] mktemp failed in $(basename "$0") — writing non-atomically" >> "${RUNTIME_DIR}/doey-warnings.log" 2>/dev/null
-  TMP="$STATUS_FILE"
-fi
-cat > "$TMP" <<EOF
+_write_status() {
+  local target="$1" tmp
+  tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null)
+  if [ -z "$tmp" ] || [ ! -f "$tmp" ]; then tmp="$target"; fi
+  cat > "$tmp" <<EOF
 PANE: $PANE
 UPDATED: $NOW
 STATUS: ${STOP_STATUS}
 TASK:
 EOF
-[ "$TMP" != "$STATUS_FILE" ] && mv "$TMP" "$STATUS_FILE"
+  [ "$tmp" != "$target" ] && mv "$tmp" "$target"
+}
+
+_write_status "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
 # Dual-write using short DOEY_PANE_ID for new-style lookups
 if [ -n "${DOEY_PANE_ID:-}" ]; then
-  ID_STATUS_FILE="${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status"
-  TMP2=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null)
-  if [ -z "$TMP2" ] || [ ! -f "$TMP2" ]; then
-    TMP2="$ID_STATUS_FILE"
-  fi
-  cat > "$TMP2" <<EOF
-PANE: $PANE
-UPDATED: $NOW
-STATUS: ${STOP_STATUS}
-TASK:
-EOF
-  [ "$TMP2" != "$ID_STATUS_FILE" ] && mv "$TMP2" "$ID_STATUS_FILE"
+  _write_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status"
   _log "stop-status: ${DOEY_PANE_ID} -> $STOP_STATUS (dual-write)"
 fi
 

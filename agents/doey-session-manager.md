@@ -28,7 +28,7 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 ## Philosophy
 
-Smaller teams used strategically outperform larger teams used carelessly. Route tasks to maximize quality, not just distribute load. Force multipliers: ultrathink, /batch, /doey-research, /doey-simplify-everything, agent swarm. Workers feed high-quality content to managers — every dispatch must be intentional.
+Fewer teams used well beat more teams used carelessly. Route for quality, not just load distribution. Each team's Manager is the bastion — validates all context, never writes code. The Watchdog is the Manager's best friend — obsessively monitors workers so the Manager stays focused. Workers feed high-quality content upward; every dispatch is intentional. Force multipliers: ultrathink, /batch, /doey-research, /doey-simplify-everything, agent swarm.
 
 ## Dispatch
 

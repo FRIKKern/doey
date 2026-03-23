@@ -90,16 +90,13 @@ if [ -n "$_repo_path" ] && [ -d "$_repo_path/.claude/skills" ]; then
   mkdir -p "$_skill_target/.claude/skills"
   LOCK_DIR="${RUNTIME_DIR}/.skill_sync_lock"
   if mkdir "$LOCK_DIR" 2>/dev/null; then
-    _skill_lock_cleanup() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
-    trap '_skill_lock_cleanup' EXIT
+    trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
     for _sd in "$_repo_path"/.claude/skills/doey-*/; do
-      [ -d "$_sd" ] || continue
-      cp -R "$_sd" "$_skill_target/.claude/skills/"
+      [ -d "$_sd" ] && cp -R "$_sd" "$_skill_target/.claude/skills/"
     done
     for _sd in "$_skill_target"/.claude/skills/doey-*/; do
       [ -d "$_sd" ] || continue
-      _sn="$(basename "$_sd")"
-      [ ! -d "$_repo_path/.claude/skills/$_sn" ] && rm -rf "$_sd"
+      [ ! -d "$_repo_path/.claude/skills/$(basename "$_sd")" ] && rm -rf "$_sd"
     done
     rmdir "$LOCK_DIR" 2>/dev/null || true
     trap - EXIT
@@ -124,9 +121,11 @@ export DOEY_FULL_PANE_ID="$FULL_PANE_ID"
 EOF
 
 # Pane title
+_TITLE=""
 case "$ROLE" in
-  watchdog)        tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Watchdog" ;;
-  manager)         tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Window Manager" ;;
-  session_manager) tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Session Manager" ;;
-  worker)          tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} Worker" ;;
+  watchdog)        _TITLE="Watchdog" ;;
+  manager)         _TITLE="Window Manager" ;;
+  session_manager) _TITLE="Session Manager" ;;
+  worker)          _TITLE="Worker" ;;
 esac
+[ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} ${_TITLE}"

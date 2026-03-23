@@ -174,24 +174,11 @@ Expected: All workers show "bypass permissions" in their pane output within 25 s
 Output summary: mode (isolate/return), window, branch, directory, booted count. List any failed workers.
 Expected: Clear summary of what was done and current state.
 
-## Gotchas
-
-- Do NOT transform window 0 (Dashboard) — always reject TARGET_WIN=0
-- Do NOT use `eval` or `source` on team env files — /tmp is world-writable, parse with grep only
-- Do NOT use `/exit` or `send-keys C-c` to kill workers — always kill by PID (SIGTERM then SIGKILL)
-- Do NOT hardcode RUNTIME_DIR — always read from `tmux show-environment DOEY_RUNTIME`
-- Do NOT forget to copy `.claude/settings.local.json` to new worktrees (it's gitignored)
-- Do NOT delete the worktree branch on `--back` — user merges manually
-- Do NOT skip atomic writes (temp file + mv) for team env updates
+### Rules
+- Never transform window 0; never hardcode RUNTIME_DIR
+- Kill by PID only (SIGTERM → SIGKILL); no `eval`/`source` on team env files
+- Atomic writes (temp file + mv); copy `.claude/settings.local.json` to worktrees
+- Worktree branch preserved on `--back` — user merges manually
+- Bash 3.2 compatible
 
 Total: 10 commands, 0 errors expected.
-
-### Rules
-- Bash 3.2 compatible (no `declare -A`, `mapfile`, `|&`, `&>>`, `[[ =~ ]]` captures, `printf '%(%s)T'`)
-- Kill by PID only — never `/exit` or `send-keys C-c`
-- `tmux show-environment` for DOEY_RUNTIME — never hardcode paths
-- Status files: `${RUNTIME_DIR}/status/${SESSION_SAFE}_${WIN}_${PANE}.status`
-- Atomic writes: temp file then `mv`
-- Never transform window 0
-- Worktree branch preserved on `--back` — user merges manually
-- Always copy `.claude/settings.local.json` to new worktrees (gitignored)

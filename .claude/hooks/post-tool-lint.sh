@@ -75,6 +75,10 @@ HEREDOC_EOF
 [ "$count" -eq 0 ] && exit 0
 
 reason=$(printf "Bash 3.2 compatibility violations in %s (%d found):\n%s" "$FILE_PATH" "$count" "$violations")
-reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')
-echo "{\"decision\": \"block\", \"reason\": \"${reason_escaped}\"}"
+if "$_HAS_JQ"; then
+  jq -n --arg r "$reason" '{"decision":"block","reason":$r}'
+else
+  reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')
+  echo "{\"decision\": \"block\", \"reason\": \"${reason_escaped}\"}"
+fi
 exit 0
