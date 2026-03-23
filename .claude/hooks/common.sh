@@ -88,8 +88,40 @@ get_sm_pane() {
 
 send_to_pane() {
   local target="$1" msg="$2"
-  tmux copy-mode -q -t "$target" 2>/dev/null
-  tmux send-keys -t "$target" "$msg" Enter 2>/dev/null
+  # Check if pane is at a prompt before injecting text via send-keys.
+  # If actively processing, write to file-based message queue instead.
+  local last_line
+  last_line=$(tmux capture-pane -t "$target" -p 2>/dev/null | grep -v '^$' | tail -1) || last_line=""
+  case "$last_line" in
+    *'❯'*|*'> '*|*'$'*|*'%'*)
+      # Pane appears to be at a prompt — safe to send-keys
+      tmux copy-mode -q -t "$target" 2>/dev/null
+      tmux send-keys -t "$target" "$msg" Enter 2>/dev/null
+      ;;
+    *)
+      # Pane is actively processing — use file queue if possible
+      if [ -n "${RUNTIME_DIR:-}" ]; then
+        local target_safe msg_dir timestamp msg_file tmp_file
+        target_safe=$(printf '%s' "$target" | tr ':.' '_')
+        msg_dir="${RUNTIME_DIR}/messages"
+        mkdir -p "$msg_dir" 2>/dev/null || true
+        timestamp="$(date +%s)_$$"
+        msg_file="${msg_dir}/${target_safe}_${timestamp}.msg"
+        tmp_file="${msg_file}.tmp"
+        if printf 'FROM: %s\nSUBJECT: send_to_pane_fallback\n%s\n' "${PANE_SAFE:-unknown}" "$msg" > "$tmp_file" 2>/dev/null \
+           && mv "$tmp_file" "$msg_file" 2>/dev/null; then
+          local trig_dir="${RUNTIME_DIR}/triggers"
+          mkdir -p "$trig_dir" 2>/dev/null || true
+          touch "${trig_dir}/${target_safe}.trigger" 2>/dev/null || true
+          return 0
+        fi
+        rm -f "$tmp_file" 2>/dev/null || true
+      fi
+      # Last resort: send-keys anyway (better than silent drop)
+      tmux copy-mode -q -t "$target" 2>/dev/null
+      tmux send-keys -t "$target" "$msg" Enter 2>/dev/null
+      ;;
+  esac
 }
 
 sanitize_message() {
@@ -134,8 +166,19 @@ APPLESCRIPT
   elif command -v notify-send >/dev/null 2>&1; then
     notify-send "$title" "$body" 2>/dev/null &
   elif command -v powershell.exe >/dev/null 2>&1; then
-    local ps_title="${title//\'/\'\'}" ps_body="${body//\'/\'\'}"
-    powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${ps_body}', '${ps_title}')" 2>/dev/null &
+    # Use -EncodedCommand to avoid injection via single-quote escaping bypass
+    local ps_script
+    ps_script=$(printf '[void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms");[System.Windows.Forms.MessageBox]::Show($args[0],$args[1])' )
+    local encoded
+    encoded=$(printf '%s' "$ps_script" | iconv -t UTF-16LE 2>/dev/null | base64 2>/dev/null) || {
+      # Fallback: sanitize to alphanumeric + spaces only
+      local safe_title safe_body
+      safe_title=$(printf '%s' "$title" | tr -cd 'a-zA-Z0-9 ._-')
+      safe_body=$(printf '%s' "$body" | tr -cd 'a-zA-Z0-9 ._-')
+      powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');[System.Windows.Forms.MessageBox]::Show('${safe_body}','${safe_title}')" 2>/dev/null &
+      return 0
+    }
+    powershell.exe -EncodedCommand "$encoded" -args "$body" "$title" 2>/dev/null &
   fi
   return 0
 }

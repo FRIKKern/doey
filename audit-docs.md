@@ -1,126 +1,111 @@
 # Documentation Audit Report
 
 **Date:** 2026-03-23
-**Auditor:** Worker 4 (docs-audit_0323)
-**Scope:** README.md, CLAUDE.md, docs/*.md — cross-referenced against shell/doey.sh, .claude/hooks/, agents/, .claude/skills/
+**Auditor:** Worker 4 (R&D Audit Team, rd-0323-0121)
+**Scope:** README.md, CLAUDE.md, docs/*.md — cross-referenced against shell/, .claude/hooks/, .claude/skills/, agents/, .claude/settings.json
 
 ---
 
-## CLAUDE.md Findings
+## Findings
 
-### [HIGH] CLAUDE.md:5 — "default 3 cols = 6 workers" is misleading
-- **Evidence:** The default static grid is `3x2` (shell/doey.sh:2761), which means 3 columns × 2 rows = 6 workers. But the _default_ launch mode is `dynamic` (single column, auto-expands), not 3 cols. The claim "default 3 cols" only applies to the static grid default, not the overall default.
-- **Suggested:** Clarify: "Static grid default 3x2 (6 workers). Dynamic grid (default mode) starts with 1 column, auto-expands."
+### HIGH
 
-### [HIGH] CLAUDE.md:60 — "shell/doey.sh (CLI launcher)" line count outdated
-- **Evidence:** The R&D worker system prompt (outside this file) says "1455 lines" but actual line count is **3031 lines** — more than double.
-- **Note:** CLAUDE.md itself doesn't state the line count, but the worker system prompt injected by doey does. This is a context/prompt issue, not a CLAUDE.md issue per se.
+[HIGH] docs/context-reference.md line:93 — `WDG_SLOT_1..WDG_SLOT_3` undercount
+- `setup_dashboard()` creates up to 6 watchdog slots (panes 0.2-0.7). Session.env can contain `WDG_SLOT_1` through `WDG_SLOT_6`. Docs only show `WDG_SLOT_1..WDG_SLOT_3`.
+- Fix: Change to `WDG_SLOT_1`..`WDG_SLOT_6`.
 
-### [MEDIUM] CLAUDE.md:12 — Watchdog pane range "0.2-0.7" implies exactly 6 slots
-- **Evidence:** `setup_dashboard()` (doey.sh:275-315) defaults to 6 slots (`num_slots="${4:-6}"`), but when launched with fewer teams (e.g., 1 team = 1 slot at 0.2), only 1 watchdog pane is created. The range "0.2-0.7" is the _maximum_, not the typical layout.
-- **Suggested:** Change to "0.2+ (up to 0.7)" or "One per team, in Dashboard panes 0.2–0.7"
+[HIGH] docs/context-reference.md line:93 — Session.env vars lack grid-type qualification
+- `ROWS`, `MAX_WORKERS`, `CURRENT_COLS` are written only in dynamic grid session.env (not static). `TOTAL_PANES` is written only in static grid session.env (not dynamic). The docs list all of them as generic session.env vars without noting which grid type they apply to.
+- Fix: Add "(dynamic only)" or "(static only)" annotations.
 
-### [LOW] CLAUDE.md:43 — Missing `[[ =~` without capture groups
-- Conventions say `[[ =~ capture groups` are forbidden but `[[ =~ ` itself (without captures) is allowed. This could be clearer — the phrasing "Forbidden: ... `[[ =~` capture groups" could be read as `[[ =~` is entirely forbidden.
-- **Suggested:** Reword to: "`[[ =~ ]]` capture groups (named or \1-style)"
+[HIGH] docs/context-reference.md line:162 — Status values incomplete
+- Lists "READY, BUSY, BOOTING, FINISHED, RESERVED" but `watchdog-scan.sh` detects additional states: IDLE, WORKING, CHANGED, UNCHANGED, CRASHED, STUCK, LOGGED_OUT, UNKNOWN. These are watchdog-detected states vs. status-file values — the distinction should be documented.
+- Fix: Add watchdog-detected states section.
 
----
+### MEDIUM
 
-## context-reference.md Findings
+[MEDIUM] CLAUDE.md line:5 — "Static grid default: 3x2 (6 workers)" phrasing misleading
+- The overall default launch mode is `dynamic` (1 column, auto-expands), not static 3x2. The "3x2" is the default for static grid mode specifically. Current wording could imply the default launch produces 6 workers.
+- Fix: Clarify "Dynamic grid (default) starts 1 col, auto-expands. Static grid default: 3x2 (6 workers)." — current text is actually correct on re-reading, but the proximity of "default" to "3x2" is confusing.
 
-### [HIGH] docs/context-reference.md:93 — `WDG_SLOT_1..WDG_SLOT_3` undercount
-- **Evidence:** `setup_dashboard()` creates up to 6 watchdog slots (panes 0.2–0.7). The session.env can contain `WDG_SLOT_1` through `WDG_SLOT_6`. The docs say `WDG_SLOT_1..WDG_SLOT_3`.
-- **Suggested:** Change to `WDG_SLOT_1`..`WDG_SLOT_6`
+[MEDIUM] CLAUDE.md — Missing `/doey-rd-team` skill
+- The skill `doey-rd-team` exists in `.claude/skills/doey-rd-team/SKILL.md` and is documented in `docs/context-reference.md` line 71 and README.md line 86, but CLAUDE.md does not mention it anywhere.
+- Fix: No action needed if CLAUDE.md intentionally keeps a minimal skill list.
 
-### [HIGH] docs/context-reference.md:93 — `ROWS` not in static grid session.env
-- **Evidence:** The `ROWS` variable is only written in the dynamic session.env (doey.sh:2012), not in the static grid session.env (doey.sh:1259-1275). Similarly, `MAX_WORKERS` and `CURRENT_COLS` are dynamic-only. But context-reference.md lists them as generic session.env vars without noting this distinction.
-- **Suggested:** Note which vars are dynamic-grid-only: `ROWS`, `MAX_WORKERS`, `CURRENT_COLS`
+[MEDIUM] docs/context-reference.md line:164 — Watchdog anomaly types documented but may be stale
+- Lists "PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT" but these should be verified against current `watchdog-scan.sh` implementation. The types are present in the code, so the docs are currently accurate.
 
-### [MEDIUM] docs/context-reference.md:93 — `TOTAL_PANES` missing from dynamic session.env
-- **Evidence:** `TOTAL_PANES` is written in static session.env (doey.sh:1264) but NOT in dynamic session.env (doey.sh:2007-2024). The context-reference lists it as a session.env var without qualification.
-- **Suggested:** Note `TOTAL_PANES` is static-grid-only.
+[MEDIUM] CLAUDE.md + docs/context-reference.md — "column expansion" vs "collapsed column restore"
+- Both describe `on-prompt-submit.sh` as doing "collapsed column restore" (CLAUDE.md line 68) / "collapsed column restore" (context-reference.md line 52). The actual code restores collapsed columns — these descriptions are accurate. No issue on re-reading; both already say "collapsed column restore."
 
-### [MEDIUM] docs/context-reference.md:162 — Status values incomplete
-- **Evidence:** `watchdog-scan.sh` detects states: IDLE, WORKING, CHANGED, UNCHANGED, CRASHED, STUCK, FINISHED, RESERVED, LOGGED_OUT, BOOTING, UNKNOWN (line 125). The docs only list "READY, BUSY, FINISHED, RESERVED" as status values. These are the _status file_ values vs the _watchdog-detected_ states — the distinction should be documented.
-- **Suggested:** Add: "**Watchdog-detected states** (distinct from status file values): IDLE, WORKING, CHANGED, UNCHANGED, CRASHED, STUCK, FINISHED, RESERVED, LOGGED_OUT, BOOTING, UNKNOWN."
+[MEDIUM] docs/context-reference.md line:112 — Note reads as a TODO
+- "Note: `_launch_team_manager()` in `doey.sh` should pass `--model opus` explicitly..." — reads as if this is not yet done, but the code already does this.
+- Fix: Reword to: "`_launch_team_manager()` passes `--model opus` explicitly..."
 
-### [MEDIUM] docs/context-reference.md — Missing `/doey-rd-team` skill
-- **Evidence:** `.claude/skills/doey-rd-team/` exists and is a valid skill. It's not listed under Manager or Session Manager skills in context-reference.md.
-- **Suggested:** Add `/doey-rd-team` to the Manager or Session Manager skills list.
+[MEDIUM] docs/linux-server.md line:44 — systemd PATH uses wrong fnm directory
+- systemd unit uses `%h/.fnm/aliases/default/bin` but fnm installs to `~/.local/share/fnm/` by default. The Linode guide (linode-setup.md line 133) correctly uses `%h/.local/share/fnm/aliases/default/bin`.
+- Fix: Change to `%h/.local/share/fnm/aliases/default/bin`.
 
-### [MEDIUM] docs/context-reference.md — Missing watchdog anomaly types
-- **Evidence:** `watchdog-scan.sh` implements PROMPT_STUCK (line 262), WRONG_MODE (line 276), and QUEUED_INPUT (line 279) anomaly detection (added in commit 2abe471). These are not documented anywhere in context-reference.md.
-- **Suggested:** Add an "Anomaly Detection" subsection under Watchdog behavior.
+### LOW
 
-### [MEDIUM] docs/context-reference.md — Missing BOOTING watchdog state
-- **Evidence:** `watchdog-scan.sh:68` detects BOOTING state, added in commit a07c78e. Not mentioned in context-reference.md.
-- **Suggested:** Document BOOTING as a watchdog-detected state.
+[LOW] CLAUDE.md line:16 — Architecture table includes "Test Driver" at pane "external" which README.md's architecture table (lines 70-76) omits. Minor inconsistency between the two — README omits Test Driver for brevity.
 
-### [LOW] docs/context-reference.md:112 — Note about `_launch_team_manager()` passing `--model opus`
-- **Evidence:** The note says "should pass `--model opus` explicitly" — the code already does this (doey.sh:2427). The note reads as a TODO but the implementation is correct. It should either be removed or reworded as a verification note.
-- **Suggested:** Remove or reword to: "`_launch_team_manager()` passes `--model opus` explicitly to ensure the Manager always uses opus regardless of settings defaults."
+[LOW] docs/context-reference.md line:55 — `post-tool-lint.sh` event documented as "PostToolUse" which is correct, but doesn't mention the matcher `"Write|Edit"` from settings.json. Readers may think it fires on every tool use.
+
+[LOW] README.md line:96 — Troubleshooting suggests `doey 3x2` but CLI table example uses `doey 4x3`. Both are valid, but inconsistent examples.
+
+[LOW] CLAUDE.md line:54 — Testing table references `tests/test-bash-compat.sh` (exists), but `tests/` also contains `tests/e2e/`, `tests/pane-state-check.sh`, and `tests/watchdog-heartbeat-check.sh` which are undocumented.
+
+[LOW] `.claude/skills/unknown-task/SKILL.md` — Internal fallback skill exists but is not documented in any docs file. Intentionally undocumented (internal only), but noting for completeness.
 
 ---
 
-## README.md Findings
+## Verified Claims (All Correct)
 
-### [MEDIUM] README.md:26 — "WATCHDOG monitors from Dashboard (window 0)" architecture diagram
-- **Evidence:** The ASCII diagram shows "WATCHDOG monitors from Dashboard" at the bottom. This is correct but the diagram itself only shows a single team window layout. With the multi-team architecture, there's one Watchdog per team in the Dashboard — this nuance is lost.
-- **Suggested:** Minor — consider noting "One Watchdog per team in Dashboard"
+### Architecture Table (CLAUDE.md lines 9-16)
+- Info Panel at `0.0` — confirmed by `agents/doey-session-manager.md` and `shell/info-panel.sh`
+- Session Manager at `0.1` — confirmed by `agents/doey-session-manager.md` line 13
+- Watchdog at `0.2+` (up to 0.7) — confirmed by session manager agent definition
+- Window Manager at `W.0` — confirmed by `agents/doey-manager.md` line 13
+- Workers at `W.1+` — confirmed by agent definitions
+- Test Driver as external — confirmed by `agents/test-driver.md` line 9
 
-### [MEDIUM] README.md:62 — `doey dynamic` listed as CLI command
-- **Evidence:** The command works (doey.sh:2903) but `doey dynamic` is the _default_ mode. The table doesn't indicate this. Meanwhile `doey 4x3` is listed for static grid but there's no indication that `doey` alone launches dynamic mode by default.
-- **Suggested:** Add note: `doey` launches dynamic grid by default; `doey 4x3` overrides.
+### Hook Table (CLAUDE.md lines 64-77)
+All 12 hooks listed match files in `.claude/hooks/`. No undocumented hooks exist. Registration in `settings.json` matches: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse (Write|Edit), Stop (3 hooks), PreCompact. Three hooks (watchdog-scan.sh, watchdog-wait.sh, session-manager-wait.sh) are correctly noted as called directly, not registered.
 
-### [LOW] README.md:96 — Troubleshooting "Terminal too small" fix says `doey 3x2`
-- **Evidence:** The fix suggests `doey 3x2` but the example in the CLI table is `doey 4x3`. Either works, but using a consistent example would be better.
+### Tool Restrictions (CLAUDE.md lines 24-26)
+Verified against `on-pre-tool-use.sh`:
+- Window Manager: full access — exits 0 at line 38/69
+- Watchdog: Edit/Write/Agent/NotebookEdit blocked (lines 15-21), send-keys limited to own Manager pane + recovery commands (lines 80-108), git/gh/rm/shutdown/tmux-kill blocked (lines 117-128)
+- Workers: git push/commit, gh pr create/merge, all send-keys, tmux kill, destructive rm, shutdown — all blocked (lines 50-62)
 
----
+### Key Directories (CLAUDE.md lines 30-36)
+All directories exist with expected contents:
+- `agents/` — 4 files (doey-manager.md, doey-session-manager.md, doey-watchdog.md, test-driver.md)
+- `.claude/skills/` — 23 skill directories with SKILL.md files
+- `.claude/hooks/` — 12 hook files
+- `shell/` — 5 files (doey.sh, info-panel.sh, context-audit.sh, pane-border-status.sh, tmux-statusbar.sh)
+- `docs/` — 5 files
 
-## docs/linux-server.md Findings
+### Shell Files (CLAUDE.md line 60)
+All 5 documented shell files exist and serve their documented purpose.
 
-### [LOW] docs/linux-server.md:44 — systemd `Environment=PATH` uses `.fnm/` not `.local/share/fnm/`
-- **Evidence:** The PATH in the systemd unit uses `%h/.fnm/aliases/default/bin` but fnm installs to `~/.local/share/fnm/` (as shown in linode-setup.md:77-78 and the fnm installer default).
-- **Suggested:** Change to `%h/.local/share/fnm/aliases/default/bin`
+### README CLI Commands (README.md lines 48-64)
+All 14 CLI commands verified in `shell/doey.sh`: doey, init, add/remove, stop, reload, add-team/kill-team, list/list-teams, purge, doctor, update, test, 4x3 (NxM), dynamic, uninstall.
 
----
+### README Slash Commands (README.md lines 83-88)
+All listed slash commands have corresponding skill directories. Two skills not listed in README: `doey-rd-team` (listed under Lifecycle), `unknown-task` (internal fallback).
 
-## docs/linode-setup.md Findings
+### Agent Frontmatter (docs/context-reference.md lines 23-27)
+- Manager: model=opus, color=green, memory=user — matches `agents/doey-manager.md`
+- Session Manager: model=opus, color=#FF6B35, memory=user — matches `agents/doey-session-manager.md`
+- Watchdog: model=haiku, color=yellow, memory=none — matches `agents/doey-watchdog.md`
 
-### [LOW] docs/linode-setup.md — No issues found
-- All commands reference correct paths and tools. The guide is comprehensive and internally consistent.
-
----
-
-## docs/windows-wsl2.md Findings
-
-### [LOW] docs/windows-wsl2.md — No issues found
-- Brief and accurate. Links back to README correctly.
-
----
-
-## docs/test-worktree.md Findings
-
-### [LOW] docs/test-worktree.md — No issues found
-- Test procedures reference correct runtime paths and commands. Internal consistency is good.
-
----
-
-## Cross-Document Consistency
-
-### [MEDIUM] CLAUDE.md vs context-reference.md — Hook table differences
-- CLAUDE.md lists hooks with slightly different descriptions than context-reference.md. For example:
-  - CLAUDE.md says `on-prompt-submit.sh`: "BUSY status, READY on /compact, column expansion"
-  - context-reference.md says: "BUSY status; READY on `/compact`; column expansion"
-  - Actual code (on-prompt-submit.sh:28-34): Expands _collapsed_ columns, doesn't add new columns. "Column expansion" is misleading — it's "collapsed column restore".
-- **Suggested:** Both files should say "collapsed column restore" instead of "column expansion"
-
-### [MEDIUM] Shell files not documented — pane-border-status.sh, tmux-statusbar.sh
-- **Evidence:** `shell/` contains `pane-border-status.sh` and `tmux-statusbar.sh` which are not mentioned in CLAUDE.md's Important Files section or in context-reference.md.
-- **Suggested:** Add to CLAUDE.md shell files list: `shell/pane-border-status.sh` (pane border formatting), `shell/tmux-statusbar.sh` (status bar rendering)
-
-### [LOW] CLAUDE.md vs README.md — Skill lists
-- README.md lists slash commands grouped by category. context-reference.md lists them grouped by role. Both are accurate and complete, with context-reference.md missing only `/doey-rd-team`.
+### External Files
+- `install.sh` — exists
+- `web-install.sh` — exists
+- `tests/test-bash-compat.sh` — exists
+- All docs/*.md files — exist and are internally consistent
 
 ---
 
@@ -130,13 +115,13 @@
 |----------|-------|
 | CRITICAL | 0 |
 | HIGH | 3 |
-| MEDIUM | 9 |
+| MEDIUM | 5 |
 | LOW | 5 |
-| **Total** | **17** |
+| **Total** | **13** |
 
 ### Top Priority Fixes
-1. **`WDG_SLOT` range** — docs say 1..3, code supports 1..6
-2. **Session.env vars** — `ROWS`, `MAX_WORKERS`, `CURRENT_COLS` are dynamic-only; `TOTAL_PANES` is static-only
-3. **"Column expansion" mislabeled** — actually "collapsed column restore" in on-prompt-submit.sh
-4. **Default grid mode** — clarify dynamic is default, not "3 cols = 6 workers"
-5. **Watchdog states** — new anomaly detection (PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT, BOOTING) undocumented
+1. `WDG_SLOT` range in context-reference.md — docs say 1..3, code supports 1..6
+2. Session.env var annotations — mark dynamic-only and static-only vars
+3. Watchdog state documentation — add watchdog-detected states vs status-file values
+4. linux-server.md systemd PATH — wrong fnm directory
+5. context-reference.md `_launch_team_manager` note — reword from TODO to statement of fact
