@@ -66,7 +66,7 @@ fi
 
 # Slow path: watchdog or unknown role — needs full init_hook for role detection
 source "$(dirname "$0")/common.sh"
-init_hook <<< "$INPUT"
+echo "$INPUT" | init_hook
 
 is_manager && exit 0
 is_session_manager && exit 0
