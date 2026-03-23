@@ -7,7 +7,7 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 | Lowest | Agent definitions (`agents/`) | Manager, Session Mgr, Watchdog |
 | | Settings (4-file merge) | All |
 | | Hooks (`.claude/hooks/`) | All |
-| | Skills (`.claude/skills/`) | Manager (+ 2 for Workers) |
+| | Skills (`.claude/skills/`) | Manager (+ 3 for Workers) |
 | | Persistent memory | Manager, Session Mgr |
 | | Environment vars (`session.env`) | All |
 | | CLI launch flags | Per-instance |
@@ -48,7 +48,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | File | Event | Purpose |
 |------|-------|---------|
 | `common.sh` | — | Shared utils: `init_hook()`, `parse_field()`, `_read_team_key()`, role checks, `send_notification()` |
-| `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX, DOEY_TEAM_WINDOW, DOEY_TEAM_DIR, DOEY_RUNTIME |
+| `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX, DOEY_TEAM_WINDOW, DOEY_TEAM_DIR, DOEY_RUNTIME, SESSION_NAME, PROJECT_DIR, PROJECT_NAME |
 | `on-prompt-submit.sh` | UserPromptSubmit | BUSY status; READY on `/compact`; collapsed column restore |
 | `on-pre-tool-use.sh` | PreToolUse | Role-based tool blocking |
 | `on-pre-compact.sh` | PreCompact | Preserves orchestration state before compaction |
@@ -68,7 +68,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
 **Manager skills:**
-`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager)
+`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager), `/doey-rd-team` (spawn R&D worktree team), `/unknown-task` (fallback for unrecognized tasks)
 
 **Session Manager skills:**
 `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
@@ -94,7 +94,7 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 
 **Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
-**Set by hooks:** `DOEY_ROLE`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`, `DOEY_TEAM_DIR`, `DOEY_RUNTIME`
+**Set by hooks:** `DOEY_ROLE`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`, `DOEY_TEAM_DIR`, `DOEY_RUNTIME`, `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`
 
 **Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WATCHDOG_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`. Loaded via `_read_team_key()`, overrides session.env for per-window fields.
 
@@ -103,13 +103,14 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 
 | Instance | Command |
 |----------|---------|
+| Session Manager | `claude --dangerously-skip-permissions --agent doey-session-manager` |
 | Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
 | Watchdog | `claude --dangerously-skip-permissions --model haiku --name "T<N> Watchdog" --agent doey-watchdog` |
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
 
-**Note:** `_launch_team_manager()` in `doey.sh` should pass `--model opus` explicitly to ensure the Manager always uses opus regardless of settings defaults.
+**Note:** Session Manager does not pass `--model` explicitly — it relies on the `model: opus` frontmatter in `agents/doey-session-manager.md`.
 
 
 ## tmux Layout

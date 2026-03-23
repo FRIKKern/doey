@@ -2572,10 +2572,8 @@ add_dynamic_team_window() {
   local worktree_spec="${5:-}"
   local team_dir="$dir" worktree_branch="" wt_dir_for_env=""
 
-  tmux new-window -t "$session" -c "$dir"
-  sleep 0.3
   local window_index
-  window_index=$(tmux display-message -t "$session" -p '#{window_index}')
+  window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
 
   if [ -n "$worktree_spec" ]; then
     local _wt_branch_arg=""
@@ -2631,10 +2629,8 @@ add_team_window() {
     return 1
   fi
 
-  tmux new-window -t "$session" -c "$dir"
-  sleep 0.3
   local window_index
-  window_index=$(tmux display-message -t "$session" -p '#{window_index}')
+  window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
 
   local team_dir="$dir" worktree_branch="" wt_dir_for_env=""
   if [ -n "$worktree_spec" ]; then
@@ -2884,7 +2880,7 @@ run_test() {
     printf "  ${WARN}No report generated${RESET}\n"
   fi
 
-  [[ "$open" == true ]] && open "${project_dir}/index.html" 2>/dev/null || true
+  if [[ "$open" == true ]]; then open "${project_dir}/index.html" 2>/dev/null || true; fi
 
   if [[ "$keep" == false ]]; then
     printf "  ${DIM}Cleaning up...${RESET}\n"
