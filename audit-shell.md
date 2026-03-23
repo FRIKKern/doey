@@ -1,172 +1,8 @@
-# Shell Script Audit — 2026-03-23
+# Shell Scripts Audit Report
 
-Audited: `shell/doey.sh`, `shell/info-panel.sh`, `shell/context-audit.sh`, `shell/pane-border-status.sh`, `shell/tmux-statusbar.sh`
-
----
-
-## doey.sh (3031 lines)
-
-### Bash 3.2 Compatibility
-
-[MEDIUM] doey.sh:307 — `printf -v` with dynamic variable name
-  Current: `printf -v "WDG_SLOT_${_wd_i}" '%s' "$_pane"`
-  Note: `printf -v` itself is bash 3.1+, but dynamic variable names in printf -v (`printf -v "$varname"`) work in bash 3.2. This is safe but worth noting — some minimal shells don't support it. Low practical risk on macOS.
-
-[LOW] doey.sh:425,522 — `local -a` array declaration
-  Current: `local -a running_sessions=()` and `local -a names=() paths=() statuses=()`
-  Note: `local -a` works in bash 3.2. Not a violation, just flagging for awareness.
-
-[MEDIUM] doey.sh:737-739 — `&>/dev/null` used in 8 places
-  Current: `if command -v pbcopy &>/dev/null; then ...`
-  Note: `&>` is technically bash 4.0+ syntax. In practice, bash 3.2 on macOS supports it as an extension, but it's not POSIX and could fail on strict shells. Safer: `>/dev/null 2>&1`
-  Suggested: Replace all `&>/dev/null` with `>/dev/null 2>&1`
-
-### Security / Injection Risks
-
-[HIGH] info-panel.sh:247-253 — eval with env file data susceptible to injection
-  Current: `eval "TEAM_WIN_${TEAM_LINE_COUNT}=\"${W}\""` (and similar for _ENV_WORKTREE_DIR, etc.)
-  Risk: If a team env file contains a maliciously crafted value (e.g., `WORKTREE_DIR="$(rm -rf /)"`) the eval will execute it. The env files are written by doey itself, so the risk is low in practice, but defense-in-depth says sanitize before eval.
-  Suggested: Validate/sanitize values before eval, or use `printf -v` instead of eval where possible.
-
-[MEDIUM] doey.sh:2391 — sed-based _set_session_env vulnerable to value injection
-  Current: `sed "s/^${field}=.*/${field}=\"${value}\"/" ...`
-  Risk: If `$value` contains sed metacharacters (`/`, `&`, `\`), the sed command will break or inject. Values like worktree paths could contain these characters.
-  Suggested: Escape sed special chars in `$value`, or use awk, or write a proper key=value update function.
-
-[MEDIUM] doey.sh:765 — JSON injection in ensure_project_trusted
-  Current: `printf '{"trustedDirectories": ["%s"]}\n' "$dir" > "$claude_settings"`
-  Risk: If `$dir` contains `"` or `\`, the JSON output is malformed. Unlikely for real paths but not impossible (e.g., user creates a dir with special chars).
-  Suggested: Escape JSON special characters in `$dir`, or only use the jq path.
-
-### Error Handling
-
-[HIGH] doey.sh:1354 — EXIT trap set mid-function, never properly cleaned up
-  Current: `trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM`
-  Then at line 1374: `trap - EXIT INT TERM`
-  Risk: If the script errors between these lines (due to `set -e`), the trap will fire and `git worktree prune` runs in whatever directory happens to be current. Also, `jobs -p | xargs kill` may kill unrelated background jobs if the script is sourced.
-
-[MEDIUM] doey.sh:1241 — `cd "$dir"` changes global working directory
-  Current: `cd "$dir"` inside `_launch_session_core`
-  Risk: This changes the cwd for the rest of the script. If any subsequent function assumes the original cwd, it will break silently. Should use a subshell or pushd/popd.
-
-[MEDIUM] doey.sh:1983 — Same `cd "$dir"` issue in `launch_session_dynamic`
-
-[LOW] doey.sh:1081 — Global variable `PROJECT_DIR` set inside `doey_purge`
-  Current: `PROJECT_DIR="$dir"`
-  Risk: Leaks state to `_purge_audit_context` (line 899 uses it). Works, but fragile coupling through a global.
-
-### Race Conditions
-
-[MEDIUM] doey.sh:2389-2392 — Non-atomic session.env updates in _set_session_env
-  Current: `sed ... > "$_tmp" && mv "$_tmp" ...`
-  Risk: Uses PID in temp filename (`$$`) which is unique per-process, but if two concurrent `_set_session_env` calls run (e.g., from parallel team additions), they read the same original file and the second `mv` overwrites the first's changes. The `mv` itself is atomic, but the read-modify-write cycle is not.
-  Suggested: Use a lock file or flock.
-
-[MEDIUM] doey.sh:2028-2029 — Appending to session.env without locking
-  Current: `echo "WDG_SLOT_${_si}=..." >> "${runtime_dir}/session.env"`
-  Risk: Multiple concurrent appends could interleave. Low risk during initial setup (single-threaded), but the function is also called from `add_dashboard_watchdog_slot` which could race.
-
-[LOW] doey.sh:367 — Appending to PROJECTS_FILE without locking
-  Current: `echo "${name}:${dir}" >> "$PROJECTS_FILE"`
-  Risk: Two concurrent `doey init` calls could both pass the duplicate check and append.
-
-### Dead Code / Unused Functions
-
-[LOW] doey.sh:2125-2177 — `rebalance_grid_layout` + `_layout_checksum` are complex (50+ lines) but only called from `doey_add_column` and `doey_remove_column`. Not dead, but the custom layout checksum function duplicates what `tmux select-layout tiled` could approximate.
-
-[LOW] doey.sh:1967-1975 — `launch_session_headless` is only called from `run_test`. If E2E testing is removed, this becomes dead code.
-
-### Logic Issues
-
-[HIGH] doey.sh:206 — `_worktree_safe_remove` short-circuit logic bug
-  Current: `[ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ] && return 0`
-  Risk: Due to operator precedence, this is parsed as `[ -z "$worktree_dir" ] || ([ ! -d "$worktree_dir" ] && return 0)`. If `$worktree_dir` is non-empty but the directory doesn't exist, only the `return 0` is conditional on the second test — but if `$worktree_dir` is empty, it returns 0 correctly. The OR grouping means: if worktree_dir is empty, the first test is true so the whole line short-circuits to `&& return 0`. Actually this works because `||` and `&&` have equal precedence in shell and associate left-to-right: `A || B && C` = `(A || B) && C`. So if A is true, `(A || B)` is true, then `C` runs. If A is false and B is true, same. If both false, C doesn't run. This is **correct but confusing** — the intent is "if either condition, return 0" and it works, but it's fragile and non-obvious.
-  Suggested: Use `{ [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ]; } && return 0` for clarity.
-
-[MEDIUM] doey.sh:2691 — Pane index filtering logic may skip valid panes
-  Current: `[ "$_pane_idx" = "0" ] || [ "$_pane_idx" = "1" ] && continue`
-  Same precedence issue as above: `A || B && C` = `(A || B) && C`. This means pane 0 AND pane 1 are both skipped (which is the intent — skip info panel and session manager). Works correctly but is confusing.
-
-[MEDIUM] doey.sh:2830 — Incorrect `|| true` grouping
-  Current: `[[ "$open" == true ]] && open "${project_dir}/index.html" 2>/dev/null || true`
-  Risk: The `|| true` applies to the entire `[[ ]] && open ...` chain, not just the `open` command. If `$open` is false, the `&&` short-circuits, and `|| true` runs (harmless). If `$open` is true and `open` fails, `|| true` prevents error exit. Works correctly for the intended purpose but the grouping is misleading.
-
-[MEDIUM] doey.sh:2322 — Missing quotes around `||` in pkill line
-  Current: `[ -n "$pane_pid" ] && pkill -P "$pane_pid" 2>/dev/null || true`
-  Risk: Same precedence issue. If `$pane_pid` is non-empty and pkill fails, `|| true` catches it. If `$pane_pid` is empty, `|| true` runs (harmless). Works but reads as "either pkill or true" rather than "try pkill, ignore failure".
-
-### Missing Error Handling
-
-[MEDIUM] doey.sh:1533 — `git pull` failure doesn't abort update
-  Current: `git -C "$repo_dir" pull || printf "  ${WARN}git pull failed...${RESET}\n"`
-  Risk: If pull fails (e.g., merge conflict), the script continues with reinstall from stale code. The warning is printed but easy to miss.
-
-[LOW] doey.sh:2521 — `tmux new-window` failure not checked
-  Current: `tmux new-window -t "$session" -c "$dir"` (in `add_dynamic_team_window`)
-  Risk: If tmux new-window fails (e.g., session killed), the function continues and `tmux display-message` on next line will fail with a confusing error.
-
-[LOW] doey.sh:491 — `sleep 1` in _kill_doey_session is a heuristic
-  Current: After sending kills, `sleep 1` before killing the tmux session.
-  Risk: On slow systems or with many panes, processes may not have exited yet. Not a bug but can cause "pane still running" warnings.
-
-### Style / Maintainability
-
-[LOW] doey.sh:1636,1711 — Variable `team_env` declared with `local` inside a for loop
-  Current: `local team_env=...` inside `for tw in $team_windows`
-  Note: In bash, `local` inside a loop still scopes to the function, not the loop iteration. Works but is misleading — the `local` declaration only needs to happen once.
-
-[LOW] doey.sh:899 — `_purge_audit_context` uses `PROJECT_DIR` global set by caller
-  Current: References `$PROJECT_DIR` which is set in `doey_purge` at line 1081.
-  Suggested: Pass as a parameter for clarity.
-
----
-
-## info-panel.sh (398 lines)
-
-[LOW] info-panel.sh:1 — Uses `#!/bin/bash` instead of `#!/usr/bin/env bash`
-  Note: Minor inconsistency. All other scripts use `#!/usr/bin/env bash`. Not a bug — `/bin/bash` is always available on macOS.
-
-[LOW] info-panel.sh:3 — Missing `set -e` (only `set -uo pipefail`)
-  Note: Intentional per comment "No -e: tmux callbacks must not crash on transient failures" — but this is the info-panel, not a tmux callback. It's a long-running dashboard loop. Omitting `-e` is arguably fine here since the loop should be resilient.
-
-[MEDIUM] info-panel.sh:247-253 — eval injection risk with env file values (described above)
-  Current: Values from env files are interpolated into eval strings without sanitization.
-  Suggested: Sanitize or use indirect references.
-
-[LOW] info-panel.sh:100 — sed ANSI strip regex may miss some sequences
-  Current: `sed $'s/\033\\[[0-9;]*m//g'`
-  Note: Doesn't handle `\033[38;2;R;G;Bm` (24-bit color) or `\033[K` (clear line). Fine for current usage since doey only uses basic ANSI codes.
-
-[LOW] info-panel.sh:397 — `sleep 300` (5 minutes) between refreshes
-  Note: Documented behavior. Could miss status changes for several minutes. Consider making configurable.
-
----
-
-## context-audit.sh (109 lines)
-
-[LOW] context-audit.sh:69 — `[[ =~ ]]` regex match used
-  Current: `[[ "$content" =~ $ALLOWLIST_RE ]] && continue`
-  Note: Uses `=~` but does NOT use capture groups (`BASH_REMATCH`), so this is bash 3.2 compatible. The regex variable is unquoted on the right side of `=~` which is correct (quoted would match literally).
-
-No significant issues found. Clean, well-structured script.
-
----
-
-## pane-border-status.sh (45 lines)
-
-[LOW] pane-border-status.sh:3 — Missing `set -e` (only `set -uo pipefail`)
-  Note: Intentional — tmux callbacks must not crash.
-
-No other issues. Clean script.
-
----
-
-## tmux-statusbar.sh (29 lines)
-
-[LOW] tmux-statusbar.sh:11 — Uses `shopt -s nullglob`
-  Note: This is a bashism, not available in pure POSIX sh. Fine since the shebang is `#!/usr/bin/env bash`.
-
-No other issues. Clean script.
+**Date:** 2026-03-23
+**Scope:** All files in `shell/` — doey.sh, info-panel.sh, pane-border-status.sh, tmux-statusbar.sh, context-audit.sh
+**Auditor:** Worker 1 (shell-audit_0323)
 
 ---
 
@@ -174,17 +10,324 @@ No other issues. Clean script.
 
 | Severity | Count |
 |----------|-------|
-| CRITICAL | 0     |
-| HIGH     | 3     |
-| MEDIUM   | 13    |
-| LOW      | 14    |
-| **Total**| **30**|
+| CRITICAL | 1 |
+| HIGH | 6 |
+| MEDIUM | 14 |
+| LOW | 8 |
+| INFO | 5 |
 
-### Top Priority Fixes
+---
 
-1. **[HIGH] eval injection in info-panel.sh** — Sanitize env file values before eval, or switch to `printf -v`.
-2. **[HIGH] EXIT trap in _launch_session_core** — Scope the trap more tightly or use a subshell.
-3. **[HIGH] _worktree_safe_remove precedence confusion** — Add braces for clarity: `{ A || B; } && C`.
-4. **[MEDIUM] &>/dev/null bash 3.2 compat** — Replace with `>/dev/null 2>&1` (8 occurrences).
-5. **[MEDIUM] sed injection in _set_session_env** — Escape special chars in sed replacement strings.
-6. **[MEDIUM] Race conditions in session.env updates** — Consider flock or atomic write patterns.
+## Findings
+
+### CRITICAL
+
+**[CRITICAL] line:206 file:doey.sh — Short-circuit logic bug in `_worktree_safe_remove`**
+```
+Current:  [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ] && return 0
+```
+Due to shell operator precedence, `A || B && C` is parsed as `(A || B) && C`. This means: if `worktree_dir` is non-empty AND the directory doesn't exist, it returns 0 — correct. But if `worktree_dir` IS empty, `[ -z "$worktree_dir" ]` is true, then `|| [ ! -d ... ]` is skipped, and `&& return 0` executes — also correct. However, the dangerous case: if `worktree_dir` is non-empty AND the directory exists, then `[ -z ]` is false, `[ ! -d ]` is false, and `&& return 0` does NOT execute — this is correct. BUT the more subtle issue: if `worktree_dir` is empty, `[ ! -d "" ]` would be true on some systems. The intent was clearly `{ [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ]; } && return 0`. Without braces, the behavior depends on evaluation order and can vary across shells.
+```
+Suggested: { [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ]; } && return 0
+```
+
+### HIGH
+
+**[HIGH] line:319 file:info-panel.sh — `eval` with user-derived data in block-letter title rendering**
+```
+Current:  eval "TITLE_R${_r}=\"\${TITLE_R${_r}}\${CHAR_R${_r}} \""
+```
+While `_r` is controlled (0-5), this pattern is fragile and could break if the CHAR_R variables contain characters like backticks, `$()`, or double quotes (they contain Unicode box-drawing characters which are safe now, but the pattern is risky). Multiple `eval` calls also appear at lines 358-364 for team status display.
+```
+Suggested: Use printf -v instead:
+  printf -v "TITLE_R${_r}" '%s' "${prev_val}${char_val} "
+```
+
+**[HIGH] line:358-364 file:info-panel.sh — Multiple `eval` with dynamically constructed variable names**
+```
+Current:  eval "_tw=\$TEAM_WIN_${_ti}" (and similar for 6 other vars)
+```
+If team data were ever to contain shell metacharacters, these evals could execute arbitrary code. The `printf -v` pattern used elsewhere in the same file (lines 247-253) is the safer approach.
+```
+Suggested: Use indirect variable references:
+  local _var="TEAM_WIN_${_ti}"; _tw="${!_var}"
+```
+
+**[HIGH] line:1354 file:doey.sh — Trap overwrites previous handlers; `git worktree prune` runs in wrong dir**
+```
+Current:  trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
+```
+`git worktree prune` runs in whatever the current directory is (set by `cd "$dir"` at line 1241), which may not be the project dir if `cd` failed. Also, the trap at line 1374 (`trap - EXIT INT TERM`) clears ALL traps, including any the user may have set.
+```
+Suggested: trap 'jobs -p | xargs kill 2>/dev/null; git -C "$dir" worktree prune 2>/dev/null' EXIT INT TERM
+```
+
+**[HIGH] line:1119 file:doey.sh — `trap` with single-quoted variable won't expand on cleanup**
+```
+Current:  trap "rm -f '$list_file'" RETURN
+```
+This is double-quoted with single quotes inside, so `$list_file` IS expanded at definition time (correct). However, if `list_file` path contains single quotes, the `rm` command breaks. `mktemp` paths won't contain quotes in practice, but the quoting is still wrong.
+```
+Suggested: trap "rm -f \"$list_file\"" RETURN
+```
+
+**[HIGH] line:2401 file:doey.sh — `sed` substitution in `_set_session_env` is vulnerable to special chars in value**
+```
+Current:  sed "s/^${field}=.*/${field}=\"${value}\"/" "${runtime_dir}/session.env" > "$_tmp"
+```
+If `value` contains `/`, `&`, or `\`, the sed command will break or produce unexpected results. File paths with `/` are the common case here.
+```
+Suggested: Use a different sed delimiter:
+  sed "s|^${field}=.*|${field}=\"${value}\"|" "${runtime_dir}/session.env" > "$_tmp"
+```
+
+**[HIGH] line:3 file:info-panel.sh — `set -u` without consistent null-checks on variables set by `read_env_file`**
+```
+Current:  set -uo pipefail
+```
+With `set -u`, referencing unset variables will cause an unbound variable error. The `read_env_file` function initializes vars, but if the file is missing/malformed, downstream code using `$TEAM_WINDOWS` (line 224) or `$_ENV_*` vars could hit an unbound variable before reaching the null-check.
+```
+Suggested: Initialize TEAM_WINDOWS="" before the conditional block or use ${TEAM_WINDOWS:-}
+```
+
+### MEDIUM
+
+**[MEDIUM] line:92 file:doey.sh — Unquoted color variables as printf format string**
+```
+Current:  printf "${indent}${DIM}Doey hooks + skills installed${RESET}\n"
+```
+If `$indent` or color vars contain `%`, printf will interpret them as format specifiers. This pattern repeats extensively throughout doey.sh (lines 218, 227, 324, 356, 368, 382, 402, 416, etc.).
+```
+Suggested: printf '%b' "${indent}${DIM}Doey hooks + skills installed${RESET}\n"
+```
+
+**[MEDIUM] line:37 file:info-panel.sh — `printf -v` with unsanitized key names**
+```
+Current:  for _ref_k in "$@"; do printf -v "_ENV_${_ref_k}" '%s' ""; done
+```
+If any key in `$@` contains shell metacharacters, the variable name could be malformed. Internal-only usage makes this low-risk but defense-in-depth suggests validation.
+```
+Suggested: Validate: [[ "$_ref_k" =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
+```
+
+**[MEDIUM] line:100 file:info-panel.sh — Subshell fork in `visible_len` called in hot loop**
+```
+Current:  visible_len() { local s; s=$(printf '%s' "$1" | sed ...); printf '%d' "${#s}"; }
+```
+Forks subshell + sed for every call. Called via `dotted_leader`/`add_cmd_pair` ~20 times per refresh. Acceptable at 5min intervals but inefficient.
+
+**[MEDIUM] line:226 file:doey.sh — Arithmetic comparison of potentially non-numeric value**
+```
+Current:  if [ "$commits_ahead" -gt 0 ] 2>/dev/null; then
+```
+`$commits_ahead` could be non-numeric if `git rev-list` fails unexpectedly. The `2>/dev/null` suppresses the error and `[ ]` returns false (safe behavior). Same pattern at lines 1898, 1935.
+```
+Suggested: [[ "$commits_ahead" =~ ^[0-9]+$ ]] && [ "$commits_ahead" -gt 0 ]
+```
+
+**[MEDIUM] line:809 file:doey.sh — Unquoted glob in `_purge_collect_stale`**
+```
+Current:  for f in $glob; do
+```
+Intentionally unquoted to expand the glob, but if the glob contains spaces, it will word-split incorrectly. Safe for current call sites but fragile.
+
+**[MEDIUM] line:1241 file:doey.sh — `cd "$dir"` without error check in `_launch_session_core`**
+```
+Current:  cd "$dir"
+```
+With `set -e`, a failed `cd` exits the script with a cryptic error. Should check and provide useful error message.
+```
+Suggested: cd "$dir" || { printf "  ${ERROR}Cannot cd to %s${RESET}\n" "$dir"; return 1; }
+```
+
+**[MEDIUM] line:1312 file:doey.sh — Hard-coded `sleep 2` as race condition mitigation**
+```
+Current:  sleep 2
+```
+Arbitrary duration after grid creation. If tmux is slow, 2 seconds may not be enough; if fast, wastes time.
+
+**[MEDIUM] line:1615-1617 file:doey.sh — macOS-only `sed -i ''` in `reload_session`**
+```
+Current:  sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.2"/' "${runtime_dir}/session.env"
+```
+`sed -i ''` is macOS-specific. On GNU/Linux, `sed -i` is the equivalent. Since Doey targets macOS bash 3.2, this is acceptable but limits portability. The tmp-file+mv pattern used elsewhere is more portable.
+```
+Suggested: Use tmp-file+mv pattern consistently (already used in _set_session_env, write_team_env)
+```
+
+**[MEDIUM] line:2295 file:doey.sh — `set --` with unquoted variable and no empty-check**
+```
+Current:  local _old_ifs="$IFS"; IFS=','; set -- $_ts_worker_panes; IFS="$_old_ifs"
+```
+If `_ts_worker_panes` is empty, `$#` becomes 0 and subsequent `eval` at lines 2303-2304 (accessing `${$#}`, `${$(($# - 1))}`) will fail or reference wrong positional params.
+```
+Suggested: Add early guard: [ -z "$_ts_worker_panes" ] && { printf "..."; return 1; }
+```
+
+**[MEDIUM] line:2700-2702 file:doey.sh — Misleading compound condition in kill_team_window**
+```
+Current:  [ "$_pane_idx" = "0" ] || [ "$_pane_idx" = "1" ] && continue
+```
+Same operator precedence pattern as the CRITICAL finding. `A || B && C` parses as `(A || B) && C`. The behavior is actually correct by coincidence for all cases, but the code is misleading and fragile.
+```
+Suggested: { [ "$_pane_idx" = "0" ] || [ "$_pane_idx" = "1" ]; } && continue
+```
+
+**[MEDIUM] line:2841 file:doey.sh — `||` short-circuit masks open failure**
+```
+Current:  [[ "$open" == true ]] && open "${project_dir}/index.html" 2>/dev/null || true
+```
+The `|| true` applies to the entire `&&` chain. If `$open` is false, `|| true` makes the line succeed (fine). But if `$open` is true and `open` fails, the error is masked.
+```
+Suggested: [[ "$open" == true ]] && { open "${project_dir}/index.html" 2>/dev/null || true; }
+```
+
+**[MEDIUM] line:11 file:tmux-statusbar.sh — `shopt -s nullglob` not restored**
+```
+Current:  shopt -s nullglob
+```
+Script exits after use, so no practical impact. But good practice to restore with `shopt -u nullglob` or use a subshell.
+
+**[MEDIUM] line:10 file:pane-border-status.sh — `tmux show-environment` unset marker not handled**
+```
+Current:  RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+```
+If `DOEY_RUNTIME` is explicitly unset in tmux, `show-environment` outputs `-DOEY_RUNTIME`. After `cut -d= -f2-`, the result is `-DOEY_RUNTIME` (no `=` found, so entire line). The subsequent `[ -z "$RUNTIME_DIR" ]` would be false. Same pattern at info-panel.sh:7, tmux-statusbar.sh:5.
+```
+Suggested: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | grep '=' | cut -d= -f2-) || true
+```
+
+### LOW
+
+**[LOW] line:159 file:doey.sh — `sed` pattern in `generate_team_agent` doesn't escape regex specials**
+```
+Current:  sed "s/name: ${base_name}/name: ${new_name}/" "$dst" > "${dst}.tmp"
+```
+`base_name` like `doey-manager` contains a literal `-` which is safe in regex. But `.` in future agent names would match any character.
+```
+Suggested: Use fixed-string replacement or escape special chars
+```
+
+**[LOW] line:765 file:doey.sh — JSON construction without proper escaping**
+```
+Current:  printf '{"trustedDirectories": ["%s"]}\n' "$dir" > "$claude_settings"
+```
+If `$dir` contains `"`, `\`, or newlines, the JSON will be malformed. Very unlikely for directory paths.
+```
+Suggested: jq -n --arg dir "$dir" '{"trustedDirectories": [$dir]}' > "$claude_settings"
+```
+
+**[LOW] line:109 file:doey.sh — `project_name_from_dir` uses two-fork pipeline**
+```
+Current:  echo "$raw" | tr '[:upper:] .' '[:lower:]--' | sed -e 's/[^a-z0-9-]/-/g' ...
+```
+Two forks for a simple string transformation. Low impact since called rarely.
+
+**[LOW] line:697-698 file:doey.sh — Unquoted `$_s` variable used as command**
+```
+Current:  local _s="tmux set-option -t $session"
+            $_s pane-border-status top
+```
+Storing a command in a variable and executing it unquoted. Works but is fragile if `$session` contains spaces. Session names are sanitized so this is safe in practice.
+
+**[LOW] line:95-103 file:doey.sh — `write_pane_status` is not atomic**
+```
+Current:  cat > "${rt_dir}/status/${safe}.status" <<EOF
+```
+Direct write, not atomic (tmp+mv). If read during write, the file could be partially written. Low risk since reads tolerate partial data.
+
+**[LOW] line:1944 file:doey.sh — Arithmetic in `(( ))` — compatible with bash 3.2**
+No issue. Just noting the pattern for completeness.
+
+**[LOW] line:487 file:doey.sh — `pkill -P` followed by `kill -- -` is redundant for some cases**
+```
+Current:  pkill -P "$pane_pid" 2>/dev/null || true
+         kill -- -"$pane_pid" 2>/dev/null || true
+```
+`pkill -P` kills children by PPID. `kill -- -PID` kills the process group. If the process is both PPID and group leader, both work. If not group leader, the second call fails silently. Not a bug — defense in depth.
+
+**[LOW] line:1465 file:doey.sh — `git for-each-ref` piped to `while read` loses exit status**
+```
+Current:  git for-each-ref ... | while read -r b; do ... done
+```
+The `while` loop runs in a subshell (pipe), so any `return` or variable assignments inside are lost. Not an issue here since there are no such assignments, but worth noting.
+
+### INFO
+
+**[INFO] line:1-3043 file:doey.sh — File is 3043 lines**
+Very large single file. Functions are well-organized but the file would benefit from being split into modules (e.g., `doey-purge.sh`, `doey-grid.sh`, `doey-team.sh`).
+
+**[INFO] line:397 file:info-panel.sh — Dashboard refreshes every 300 seconds (5 minutes)**
+```
+Current:  sleep 300
+```
+Design choice. Dashboard shows mostly static info so 5min is reasonable.
+
+**[INFO] line:488 file:doey.sh — `kill -- -"$pane_pid"` sends signal to process group**
+Process group kill only works if the pane_pid is a process group leader. If it isn't, this silently fails. The `pkill -P` on the previous line handles child processes as a fallback.
+
+**[INFO] line:2116-2123 file:doey.sh — Custom layout checksum implementation**
+The `_layout_checksum` function implements a simple 16-bit hash for tmux layout strings. Appears correct.
+
+**[INFO] line:46 file:context-audit.sh — Regex patterns for y-spam detection**
+Well-constructed allowlist/blocklist approach. Comprehensive coverage.
+
+---
+
+## Bash 3.2 Compatibility Check
+
+All scripts were reviewed for bash 3.2 compatibility violations per CLAUDE.md conventions:
+
+| Check | Result |
+|-------|--------|
+| No `declare -A/-n/-l/-u` | PASS |
+| No `printf '%(%s)T'` | PASS |
+| No `mapfile`/`readarray` | PASS |
+| No `\|&` or `&>>` | PASS |
+| No `coproc` | PASS |
+| `[[ =~ ]]` usage | Used in several places — compatible with bash 3.2 |
+| `local -a` | Used at lines 425, 522 of doey.sh — compatible |
+| `printf -v` | Used extensively in info-panel.sh — compatible |
+| `shopt -s nullglob` | Used in tmux-statusbar.sh, context-audit.sh — compatible |
+
+**All scripts pass bash 3.2 compatibility checks.**
+
+---
+
+## `set -euo pipefail` Coverage
+
+| File | `-e` | `-u` | `-o pipefail` | Notes |
+|------|------|------|----------------|-------|
+| doey.sh | Yes | Yes | Yes | Full coverage |
+| info-panel.sh | No | Yes | Yes | Intentional: "must not crash on transient failures" |
+| pane-border-status.sh | No | Yes | Yes | Same rationale |
+| tmux-statusbar.sh | No | Yes | Yes | Same rationale |
+| context-audit.sh | Yes | Yes | Yes | Full coverage |
+
+The omission of `-e` in tmux callback scripts is a deliberate and correct design decision.
+
+---
+
+## Dead Code
+
+No significant dead code found. All functions are reachable from the main dispatch or helper scripts.
+
+---
+
+## Race Conditions
+
+1. **`_set_session_env` (line 2388)** — mkdir-based locking with retry (20 x 0.1s). Acceptable.
+2. **`write_team_env` (line 128)** — Atomic write (tmp+mv). Correct.
+3. **`write_pane_status` (line 95)** — Non-atomic write. Low risk since single-writer.
+4. **`_register_team_window` / `_unregister_team_window`** — Both use `_set_session_env` which has locking. Correct.
+
+---
+
+## Top Priority Fixes
+
+1. **CRITICAL** — Fix operator precedence bug in `_worktree_safe_remove` (line 206)
+2. **HIGH** — Fix sed delimiter in `_set_session_env` (line 2401) — paths with `/` will break
+3. **HIGH** — Replace `eval` with `${!var}` or `printf -v` in info-panel.sh (lines 319, 358-364)
+4. **HIGH** — Fix trap in `_launch_session_core` to use `git -C "$dir"` (line 1354)
+5. **MEDIUM** — Fix operator precedence in `kill_team_window` (line 2700-2702)
+6. **MEDIUM** — Handle tmux unset env marker (`-VARNAME`) in all 3 callback scripts

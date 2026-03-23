@@ -1,47 +1,27 @@
-# Validation Report — 2026-03-23
+# Validation Audit Report
+
+**Date:** 2026-03-23
+**Worker:** 5 (validation_0323)
+**Branch:** doey/rd-0323-0050
+
+---
 
 ## 1. Syntax Checks (`bash -n`)
 
-### Main Script
-| File | Result |
-|------|--------|
-| `shell/doey.sh` | PASS |
+All 17 scripts pass syntax validation with no errors.
 
-### Shell Scripts (`shell/`)
-| File | Result |
-|------|--------|
-| `shell/context-audit.sh` | PASS |
-| `shell/info-panel.sh` | PASS |
-| `shell/pane-border-status.sh` | PASS |
-| `shell/tmux-statusbar.sh` | PASS |
+| Category | Files | Result |
+|----------|-------|--------|
+| Shell scripts (`shell/*.sh`) | 5 | ALL PASS |
+| Hook scripts (`.claude/hooks/*.sh`) | 12 | ALL PASS |
 
-### Hooks (`.claude/hooks/`)
-| File | Result |
-|------|--------|
-| `common.sh` | PASS |
-| `on-pre-compact.sh` | PASS |
-| `on-pre-tool-use.sh` | PASS |
-| `on-prompt-submit.sh` | PASS |
-| `on-session-start.sh` | PASS |
-| `post-tool-lint.sh` | PASS |
-| `session-manager-wait.sh` | PASS |
-| `stop-notify.sh` | PASS |
-| `stop-results.sh` | PASS |
-| `stop-status.sh` | PASS |
-| `watchdog-scan.sh` | PASS |
-| `watchdog-wait.sh` | PASS |
+**Syntax check total: 17/17 PASS**
 
-### Test Scripts (`tests/`)
-| File | Result |
-|------|--------|
-| `tests/pane-state-check.sh` | PASS |
-| `tests/watchdog-heartbeat-check.sh` | PASS |
+---
 
-**Syntax check total: 19/19 PASS**
+## 2. Agent Frontmatter Validation
 
-## 2. Agent YAML Frontmatter
-
-Required fields: `name`, `model`, `description`
+All 4 agent files have valid frontmatter with required fields (name, model, description).
 
 | Agent | name | model | description | Result |
 |-------|------|-------|-------------|--------|
@@ -52,9 +32,11 @@ Required fields: `name`, `model`, `description`
 
 **Agent frontmatter total: 4/4 PASS**
 
-## 3. Skill YAML Frontmatter
+---
 
-Required fields: `name`, `description`
+## 3. Skill Frontmatter Validation
+
+All 23 skill directories have valid SKILL.md files with required fields (name, description).
 
 | Skill | name | description | Result |
 |-------|------|-------------|--------|
@@ -84,55 +66,91 @@ Required fields: `name`, `description`
 
 **Skill frontmatter total: 23/23 PASS**
 
-## 4. Test Suite Results
+[INFO] file:.claude/skills/SKILL.md — Stray untracked SKILL.md at skills root (duplicate of doey-worktree). Should be deleted or gitignored.
+
+---
+
+## 4. Test Results
 
 | Test | Result | Notes |
 |------|--------|-------|
-| `tests/test-bash-compat.sh` | PASS | 20 files, 0 violations |
-| `tests/pane-state-check.sh` | PASS (N/A) | No pane state files found (expected — running in worktree, not live session) |
-| `tests/watchdog-heartbeat-check.sh` | FAIL (expected) | No heartbeat files (expected — no live session running in worktree) |
+| `tests/test-bash-compat.sh` | **PASS** | 20 files, 0 violations |
+| `tests/pane-state-check.sh` | SKIP | No pane state files (expected in worktree) |
+| `tests/watchdog-heartbeat-check.sh` | SKIP | No heartbeat files (expected in worktree) |
 
-**Test total: 3/3 PASS** (failures are expected in worktree context)
+---
 
-## 5. Shebang Check
+## 5. Shellcheck Analysis
 
-| File | Shebang | Result |
-|------|---------|--------|
-| `shell/doey.sh` | `#!/usr/bin/env bash` | PASS |
-| `shell/context-audit.sh` | `#!/usr/bin/env bash` | PASS |
-| `shell/info-panel.sh` | `#!/bin/bash` | PASS |
-| `shell/pane-border-status.sh` | `#!/usr/bin/env bash` | PASS |
-| `shell/tmux-statusbar.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/common.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-pre-compact.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-pre-tool-use.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-prompt-submit.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-session-start.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/post-tool-lint.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/session-manager-wait.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/stop-notify.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/stop-results.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/stop-status.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/watchdog-scan.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/watchdog-wait.sh` | `#!/usr/bin/env bash` | PASS |
+Ran with `shellcheck -s bash -S warning`.
 
-**Shebang total: 17/17 PASS**
+### shell/doey.sh (6 warnings)
 
-Note: `shell/info-panel.sh` uses `#!/bin/bash` while all others use `#!/usr/bin/env bash`. This is functional but inconsistent.
+[LOW] shell/doey.sh:31 — SC2034: `INFO` color variable appears unused. Used via string interpolation patterns. False positive.
 
-## Summary
+[LOW] shell/doey.sh:323 — SC1090: Can't follow non-constant source. Expected — dynamic `session.env` path.
+
+[LOW] shell/doey.sh:888 — SC2088: Tilde in quotes won't expand. Intentional display string, not path. Not a bug.
+
+[LOW] shell/doey.sh:1119 — SC2064: Trap uses double quotes causing early expansion of `$list_file`. Variable is assigned before trap, so early expansion is actually correct. False positive.
+
+[LOW] shell/doey.sh:1793-1813 — SC2088: Tilde in quotes (3 instances). Display strings only. Not bugs.
+
+[LOW] shell/doey.sh:2783 — SC2155: Declare and assign separately. Minor — `date +%s` won't fail in practice.
+
+### shell/info-panel.sh (4 warnings — all false positives)
+
+[INFO] shell/info-panel.sh:182 — SC2034: CHAR_R0-R5 appear unused. Set in case branches, used in rendering loop.
+
+[INFO] shell/info-panel.sh:309 — SC2034: HR appears unused. Set for later rendering use.
+
+[INFO] shell/info-panel.sh:367-393 — SC2154: Variables `_tw`, `_twc`, `_tb`, `_tidle`, `left_line` referenced but not assigned. **All assigned via `eval`**. False positives.
+
+### .claude/hooks/common.sh (3 warnings — all false positives)
+
+[INFO] .claude/hooks/common.sh:16,20,109 — SC2034: `SESSION_NAME`, `NOW`, `NL` appear unused. These are sourced by other hooks. False positives.
+
+### .claude/hooks/watchdog-scan.sh (8 warnings — all false positives)
+
+[INFO] .claude/hooks/watchdog-scan.sh:200 — SC2034: `pane_output` reassigned in fallback. Used in subsequent code.
+
+[INFO] .claude/hooks/watchdog-scan.sh:225,382-383 — SC2154: `_prev`, `_prev_raw` referenced but not assigned. **Assigned via `eval`**. False positives.
+
+[INFO] .claude/hooks/watchdog-scan.sh:404,409 — SC2154: `_st`, `_dur` referenced but not assigned. **Assigned via `eval`**. False positives.
+
+[INFO] .claude/hooks/watchdog-scan.sh:496 — SC2154: `_sn_title`, `_sn_dur`, `_sn_tool`, `_sn_prev` referenced but not assigned. **All assigned via `eval`**. False positives.
+
+### Shebang Inconsistency
+
+[LOW] shell/info-panel.sh — Uses `#!/bin/bash` while all 16 other scripts use `#!/usr/bin/env bash`. Functional but inconsistent.
+
+---
+
+## 6. Summary
 
 | Category | Checks | Pass | Fail |
 |----------|--------|------|------|
-| Syntax (`bash -n`) | 19 | 19 | 0 |
+| Syntax (`bash -n`) | 17 | 17 | 0 |
 | Agent frontmatter | 4 | 4 | 0 |
 | Skill frontmatter | 23 | 23 | 0 |
-| Test suite | 3 | 3 | 0 |
-| Shebang lines | 17 | 17 | 0 |
-| **Total** | **66** | **66** | **0** |
+| Bash 3.2 compat test | 1 | 1 | 0 |
+| **Total** | **45** | **45** | **0** |
 
-**Result: ALL 66 CHECKS PASSED**
+### Findings by Severity
 
-### Minor Observations (not failures)
-- `shell/info-panel.sh` uses `#!/bin/bash` instead of `#!/usr/bin/env bash` (inconsistent but functional)
-- `watchdog-heartbeat-check.sh` exits non-zero when no heartbeat files exist (expected in worktree)
+| Severity | Count | Details |
+|----------|-------|---------|
+| CRITICAL | 0 | — |
+| HIGH | 0 | — |
+| MEDIUM | 0 | — |
+| LOW | 7 | Shellcheck style warnings (all non-functional) + shebang inconsistency |
+| INFO | 16 | Shellcheck false positives from eval-based dynamic variables + 1 stray file |
+
+### Overall Assessment
+
+**The codebase is clean.** No syntax errors, no missing frontmatter fields, bash 3.2 compatibility tests pass (0 violations across 20 files), and all shellcheck findings are either false positives (dynamic `eval` variables, sourced constants) or cosmetic style preferences. No functional issues found.
+
+### Actionable Items (optional cleanup)
+
+1. [LOW] Delete stray `.claude/skills/SKILL.md` (untracked, duplicate of doey-worktree)
+2. [LOW] Consider standardizing `shell/info-panel.sh` shebang to `#!/usr/bin/env bash`

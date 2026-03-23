@@ -1,8 +1,8 @@
-# Doey Hooks Audit Report
+# Hook Scripts Audit Report
 
-**Date:** 2026-03-23
-**Scope:** All 12 files in `.claude/hooks/`
-**Auditor:** Worker 3 (R&D Team)
+**Date:** 2026-03-23 (updated)
+**Scope:** All 12 `.sh` files in `.claude/hooks/`
+**Auditor:** Worker 3 (hook-audit_0323)
 
 ---
 
@@ -10,344 +10,302 @@
 
 | Severity | Count |
 |----------|-------|
-| CRITICAL | 2     |
-| HIGH     | 8     |
-| MEDIUM   | 11    |
-| LOW      | 8     |
+| CRITICAL | 1     |
+| HIGH     | 5     |
+| MEDIUM   | 9     |
+| LOW      | 7     |
+| INFO     | 4     |
 
 ---
 
 ## CRITICAL
 
-### [CRITICAL] watchdog-scan.sh line:210-216 — Non-atomic crash file write
+### [CRITICAL] watchdog-scan.sh line:521 — `set -e` kills script when grep finds no ANOMALY events
 
-Crash files are written directly without tmp+mv pattern. The watchdog or manager could read a partially-written file.
-
-```bash
-# Current:
-cat > "$CRASH_FILE" << CRASH_EOF
-PANE_INDEX=${i}
-TIMESTAMP=$(date +%s)
-LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
-CRASH_EOF
-```
+The command `_anomaly_lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ')` returns exit code 1 when no anomaly events exist. With `set -euo pipefail`, this terminates the script **before** writing the heartbeat (line 504), pane states JSON (line 517), running anomaly cleanup (lines 541-572), and the context pressure check (lines 582-590). The author is aware of this pattern — line 582 has `|| _ctx_line=""` as a guard, but line 521 is missing it. This means on any scan cycle without anomalies, the watchdog loses its heartbeat and state persistence.
 
 ```bash
+# Current (line 521):
+_anomaly_lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ')
+
 # Suggested:
-cat > "${CRASH_FILE}.tmp" << CRASH_EOF
-PANE_INDEX=${i}
-TIMESTAMP=$(date +%s)
-LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')
-CRASH_EOF
-mv "${CRASH_FILE}.tmp" "$CRASH_FILE"
+_anomaly_lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ' || true)
 ```
 
-### [CRITICAL] watchdog-scan.sh line:269-271 — Blocking sleep in hot-path scan loop
-
-`sleep 0.3` blocks the entire scan loop per anomalous pane. With 6 workers stuck in PROMPT_STUCK, the scan blocks for 1.8 seconds. This delays state detection for all other panes and can cause the watchdog to appear unresponsive.
-
-```bash
-# Current:
-tmux send-keys -t "$PANE_REF" Escape 2>/dev/null
-sleep 0.3
-tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null
-```
-
-```bash
-# Suggested: Remove sleep and send as a single sequence, or move auto-fix to a post-scan phase
-tmux send-keys -t "$PANE_REF" Escape 2>/dev/null
-tmux send-keys -t "$PANE_REF" "1" Enter 2>/dev/null
-```
+**Impact:** Watchdog heartbeat, pane states JSON, and anomaly cleanup are silently skipped on every non-anomaly scan cycle. Manager may detect watchdog as unresponsive.
 
 ---
 
 ## HIGH
 
-### [HIGH] on-pre-tool-use.sh line:1-95 — Hot path performance: multiple subshells per tool call
+### [HIGH] on-session-start.sh line:63 — Race condition: session-wide DOEY_ROLE overwritten by last pane to start
 
-This hook runs before EVERY tool call. For Bash tools, it spawns 5+ subshells: `cat` (stdin), `jq`/`grep+sed` (parse), `tmux show-environment`, `tmux display-message`, `date`, plus sourcing `common.sh` which spawns more. Each tool call pays this cost.
-
-```
-Suggested: Cache role detection in an env var (set once in on-session-start.sh)
-so hot-path checks can skip tmux calls entirely. The role doesn't change mid-session.
-```
-
-### [HIGH] on-pre-tool-use.sh line:17 — tmux show-environment uses pane target incorrectly
-
-`tmux show-environment -t "$TMUX_PANE"` passes a pane target, but `show-environment` operates at session/global level. Tmux resolves this to the session, but the intent is unclear and may break if tmux changes target resolution behavior.
+`tmux set-environment -t "$SESSION_NAME" DOEY_ROLE "$ROLE"` sets a **session-level** variable. When multiple panes start concurrently during session launch, the last one wins. A worker starting after the manager overwrites DOEY_ROLE with "worker" for the entire session. This affects the fallback role-detection path in on-pre-tool-use.sh (line 24) that reads `tmux show-environment`.
 
 ```bash
-# Current:
-RUNTIME_DIR=$(tmux show-environment -t "$TMUX_PANE" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+# Current (line 63):
+tmux set-environment -t "$SESSION_NAME" DOEY_ROLE "$ROLE" 2>/dev/null || true
+
+# Suggested: Remove this line entirely.
+# Per-pane DOEY_ROLE is already exported via CLAUDE_ENV_FILE (line 98).
+# The fallback in on-pre-tool-use.sh detects role from team env files when DOEY_ROLE is unset.
 ```
+
+### [HIGH] watchdog-scan.sh line:200 — Unused `pane_output` wastes tmux capture-pane call per worker per cycle
+
+`pane_output=$(tmux capture-pane -t "$PANE_REF" -p -S -30 2>/dev/null)` is set but **never referenced anywhere**. The scan later re-captures at lines 232 and 322 (both `-S -5`). This is a wasted subprocess + tmux IPC call per worker per scan cycle. For a 6-worker team with 5-second scan cycles, that's ~72 unnecessary tmux calls per minute.
 
 ```bash
-# Suggested: Use show-environment without -t (uses current session) or extract session name first
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+# Current (line 200):
+pane_output=$(tmux capture-pane -t "$PANE_REF" -p -S -30 2>/dev/null) || pane_output=""
+
+# Suggested: Delete this line entirely.
 ```
 
-### [HIGH] stop-notify.sh line:30 — send-keys message injection into active pane
+### [HIGH] on-session-start.sh line:58 — Misidentifies pane 0 as manager when team env file is missing
 
-`send_to_pane` injects text via `tmux send-keys` into a pane that may be actively processing input. If the manager is mid-prompt composition, the injected text corrupts its input buffer. There is no guard against this.
-
-```
-Suggested: Use a file-based message queue (write to messages/ dir) instead of
-raw send-keys, or check pane idle state before injecting.
-```
-
-### [HIGH] on-session-start.sh line:70-78 — Concurrent skill directory sync without locking
-
-Multiple panes starting simultaneously run `cp -R` and `rm -rf` on the same `.claude/skills/doey-*/` directories. Two concurrent `cp -R` operations to the same target can produce corrupted files.
+When `team_${WINDOW_INDEX}.env` doesn't exist, `_env_val` returns empty, and `[ "$PANE_INDEX" = "${mgr_pane:-0}" ]` defaults to checking if PANE_INDEX is 0. This means pane 0 in any window without a team file gets ROLE="manager", gaining unrestricted tool access via on-pre-tool-use.sh.
 
 ```bash
-# Current (no locking):
-cp -R "$_sd" "$_skill_target/.claude/skills/"
-```
+# Current (lines 58-59):
+mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
+[ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
 
-```
-Suggested: Use a lockfile or check if the pane is the first to start (e.g., pane 0 only).
-```
-
-### [HIGH] watchdog-scan.sh line:120-131 — Fragile JSON parsing with sed
-
-Parsing the previous states JSON by stripping `{}",` chars is brittle. Any state value containing these characters would corrupt the parse. Currently safe because state values are simple strings, but any future change could break this silently.
-
-```bash
-# Current:
-PREV_PAIRS=$(echo "$PREV_JSON" | sed 's/[{}"]//g' | tr ',' '\n')
-```
-
-```bash
-# Suggested: Use jq when available, with the sed fallback clearly documented as limited
-if command -v jq >/dev/null 2>&1; then
-  # Use jq for reliable parsing
-else
-  # Fallback: only works with simple string values
+# Suggested:
+if [ -f "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" ]; then
+  mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
+  [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
 fi
 ```
 
-### [HIGH] watchdog-scan.sh line:511-513 — Repeated tmux capture-pane per anomaly pane
+### [HIGH] common.sh line:130-134 — Notification dispatch: osascript heredoc + PowerShell command injection
 
-For each anomaly event, `tmux capture-pane` is called again despite the pane already being captured at lines 229 and 318. This is wasted I/O in the scan loop.
+The `send_notification` function uses an AppleScript heredoc (lines 130-134) which correctly avoids shell interpolation. However, the PowerShell branch (lines 138-139) embeds `$ps_body` with only single-quote escaping into a PowerShell `-Command` string. Characters like `$(...)` or backticks in the notification body could execute arbitrary PowerShell commands.
+
+```bash
+# Current (lines 138-139):
+local ps_title="${title//\'/\'\'}" ps_body="${body//\'/\'\'}"
+powershell.exe -Command "... '${ps_body}' ..."
+
+# Suggested: Use -EncodedCommand with base64, or sanitize more thoroughly.
+# Low practical risk on macOS, but a real injection vector on WSL/Windows.
+```
+
+### [HIGH] watchdog-scan.sh lines:232,322 — Redundant tmux capture-pane calls with identical parameters
+
+Line 232 captures `-S -5` into `_boot_capture`. Line 322 captures `-S -5` into `CAPTURE`. These are identical captures done ~100 lines apart. Reusing one variable halves the per-worker tmux IPC cost.
 
 ```bash
 # Current:
-_a_capture_snippet=$(tmux capture-pane -t "${SESSION_NAME}:${TARGET_WINDOW}.${_a_pane}" -p -S -3 2>/dev/null | tail -3 | tr '\n' '|')
-```
+_boot_capture=$(tmux capture-pane -t "$PANE_REF" -p -S -5 ...)  # line 232
+...
+CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -5 ...)        # line 322
 
-```
-Suggested: Reuse the capture already stored in $_boot_capture or $CAPTURE from the scan loop.
-Store captures in indexed variables during the scan phase.
-```
-
-### [HIGH] common.sh line:108-134 — Notification command injection via title/body
-
-`send_notification` escapes `\` and `"` but not other shell metacharacters. The `osascript -e` call embeds title/body in a double-quoted string. Characters like `$()` or backticks in the body could execute arbitrary commands.
-
-```bash
-# Current:
-osascript -e "display notification \"${body}\" with title \"${title}\" sound name \"Ping\"" 2>/dev/null &
-```
-
-```bash
-# Suggested: Use osascript with stdin to avoid shell interpolation
-osascript <<APPLESCRIPT 2>/dev/null &
-display notification "$body" with title "$title" sound name "Ping"
-APPLESCRIPT
-```
-
-### [HIGH] post-tool-lint.sh line:75-77 — JSON output with incomplete escaping
-
-The violation text is escaped with sed for `\` and `"`, then joined with awk, but doesn't handle other JSON-special characters (e.g., tab, control characters). Malformed JSON causes Claude Code to misinterpret the block response.
-
-```bash
-# Current:
-reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')
-echo "{\"decision\": \"block\", \"reason\": \"${reason_escaped}\"}"
-```
-
-```bash
-# Suggested: Use jq for JSON encoding when available
-if command -v jq >/dev/null 2>&1; then
-  echo "{\"decision\": \"block\", \"reason\": $(echo "$reason" | jq -Rs '.')}"
-else
-  # existing fallback
-fi
+# Suggested: Capture once, reuse:
+CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -5 2>/dev/null) || CAPTURE=""
+_boot_capture="$CAPTURE"
+_worker_capture="$CAPTURE"
 ```
 
 ---
 
 ## MEDIUM
 
-### [MEDIUM] common.sh line:117-120 — TOCTOU on notification cooldown file
+### [MEDIUM] on-pre-tool-use.sh lines:40-51 — Worker Bash commands always pay init_hook overhead
 
-Read-then-write to cooldown file without locking. Two concurrent hook invocations could both read the old timestamp and both send notifications. Low practical impact due to Session Manager being single-instance.
+Every Bash tool call from a worker sources `common.sh` and runs `init_hook` (4+ tmux/subprocess calls). Managers and session managers get a fast exit at line 38 via cached `DOEY_ROLE`, but workers fall through to the expensive path every time. For fast commands like `ls`, the hook overhead may exceed the command itself.
+
+```bash
+# Current (line 38):
+case "${DOEY_ROLE:-}" in manager|session_manager) exit 0 ;; esac
+
+# Suggested: Add worker fast-path before sourcing common.sh:
+case "${DOEY_ROLE:-}" in manager|session_manager) exit 0 ;; esac
+# Workers: extract command directly without full init_hook
+if [ "${DOEY_ROLE:-}" = "worker" ]; then
+  # ... inline command extraction and pattern matching ...
+fi
+```
+
+### [MEDIUM] on-pre-tool-use.sh line:94 — Literal `$HOME` in pattern doesn't match expanded path
+
+The pattern `*'rm -rf $HOME'*` matches the literal string `$HOME`, not its expansion. A command like `rm -rf /Users/pelle` bypasses this check. Similarly, `rm -rf ~/` is not caught since tilde expansion happens before the hook sees the command.
+
+```bash
+# Current (line 94):
+*'rm -rf $HOME'*)
+
+# Suggested: Also match expanded paths
+*'rm -rf $HOME'*|*"rm -rf $HOME"*|*'rm -rf ~/'*)
+# Note: Double-quoted $HOME expands to the actual path at pattern-match time.
+```
+
+### [MEDIUM] common.sh line:44 — `_read_team_key` truncates values containing `=` signs
+
+`cut -d= -f2` returns only field 2 (between first and second `=`). Should be `-f2-` for field 2 onwards. Current callers use keys whose values don't contain `=`, but this is a latent bug.
 
 ```bash
 # Current:
-last_sent=$(cat "$cooldown_file" 2>/dev/null) || last_sent=0
-now=$(date +%s)
-[ "$((now - last_sent))" -lt 60 ] && return 0
-echo "$now" > "$cooldown_file" 2>/dev/null || true
+val=$(grep "^$2=" "$1" | cut -d= -f2)
+
+# Suggested:
+val=$(grep "^$2=" "$1" | cut -d= -f2-)
 ```
 
-### [MEDIUM] on-prompt-submit.sh line:11 — mktemp fallback bypasses atomic write
+### [MEDIUM] common.sh line:38 — Non-jq JSON fallback fails on escaped quotes in field values
 
-When `mktemp` fails, the status file is written directly (non-atomic). The watchdog could read a partially-written status file.
+The grep/sed fallback `grep -o "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\""` cannot parse values containing escaped quotes (`\"`), nested objects, or array values. Systems without jq installed get silently incorrect parsing.
 
 ```bash
 # Current:
-tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || tmp="$STATUS_FILE"
+echo "$INPUT" | grep -o "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed ...
+
+# Suggested: Add python3 fallback before grep:
+echo "$INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('$field',''))" 2>/dev/null
 ```
 
-```
-Suggested: If mktemp fails, the runtime dir may have permissions issues.
-Log a warning rather than silently degrading to non-atomic writes.
-```
+### [MEDIUM] session-manager-wait.sh line:6 — Sourcing session.env executes arbitrary code
 
-### [MEDIUM] stop-results.sh line:58 — Same mktemp fallback issue as on-prompt-submit.sh
-
-```bash
-TMPFILE=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null) || TMPFILE="$RESULT_FILE"
-```
-
-### [MEDIUM] stop-status.sh line:21 — Same mktemp fallback issue
-
-```bash
-TMP=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || TMP="$STATUS_FILE"
-```
-
-### [MEDIUM] watchdog-scan.sh line:329-331 — Read-modify-write counter without locking
-
-The unchanged_count counter is read, incremented, and written without any file locking. Concurrent watchdog restarts could produce incorrect counts.
-
-```bash
-read -r OLD_COUNT < "$COUNTER_FILE" 2>/dev/null || OLD_COUNT=0
-NEW_COUNT=$((OLD_COUNT + 1))
-echo "$NEW_COUNT" > "$COUNTER_FILE"
-```
-
-### [MEDIUM] session-manager-wait.sh line:6 — Sourcing session.env as shell code
-
-`source "${RUNTIME_DIR}/session.env"` executes the file as shell code. If session.env is corrupted or tampered with, it could execute arbitrary commands. The file is generated by doey, so this is low-risk but violates principle of least privilege.
-
-```bash
-# Suggested: Use read-based parsing (like on-session-start.sh does) instead of source
-while IFS='=' read -r key value; do ...
-```
-
-### [MEDIUM] watchdog-scan.sh line:221,237,325,376,394-398,476-480,497 — Extensive use of eval for dynamic variables
-
-11 `eval` statements for dynamic variable access. All variables are internally constructed (not user-controlled), but `eval` makes reasoning about correctness harder and any future change introducing external data would create injection risk.
-
-```bash
-# Current (multiple locations):
-eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
-```
-
-```
-Suggested: Document eval safety invariant: all index variables ($i, $idx)
-must be validated as numeric before eval. Currently enforced by is_numeric checks.
-```
-
-### [MEDIUM] on-pre-tool-use.sh line:84 — rm pattern could match unintended commands
-
-The pattern `*"rm -rf ~"*` checks for tilde, but `~` in a double-quoted string is literal, not expanded. A command like `rm -rf ~/Documents` would NOT match this pattern because the shell expands `~` before passing to the hook, while the pattern matches the literal `~` character.
+`source "${RUNTIME_DIR}/session.env"` executes the file as bash. The runtime dir is under `/tmp/doey/` which is user-writable but could be tampered with by another process. The `on-session-start.sh` hook correctly uses a `while IFS='=' read` loop instead.
 
 ```bash
 # Current:
-*"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*)
+source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
+
+# Suggested: Parse with read loop:
+while IFS='=' read -r key value; do
+  value="${value%\"}" && value="${value#\"}"
+  case "$key" in
+    SESSION_NAME) SESSION_NAME="$value" ;; SM_PANE) SM_PANE="$value" ;;
+  esac
+done < "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 ```
 
-```
-Suggested: Also match expanded home directory path:
-*"rm -rf /"*|*"rm -rf ~"*|*"rm -rf $HOME"*|*"rm -rf /Users/"*|*"rm -rf /home/"*)
-```
+### [MEDIUM] watchdog-scan.sh line:528 — Extra tmux capture-pane per anomaly event
 
-### [MEDIUM] watchdog-scan.sh line:567-570 — Self-capture for context pressure is fragile
-
-Parsing own pane output with `grep 'Ctx '` and `sed` to extract context percentage relies on Claude Code's exact output format. Any format change breaks silent detection.
+For each anomaly in `SNAPSHOT_EVENTS`, another `tmux capture-pane` call is made (line 528) despite the pane already being captured at lines 232/322 during the scan loop. This is avoidable IPC overhead.
 
 ```bash
-_ctx_line=$(tmux capture-pane -t "${TMUX_PANE}" -p -S -5 2>/dev/null | grep 'Ctx ' | tail -1) || _ctx_line=""
-_ctx_pct=$(echo "$_ctx_line" | sed 's/.*Ctx [^ ]* //;s/%.*//')
+# Current (line 528):
+_a_capture_snippet=$(tmux capture-pane -t "${SESSION_NAME}:${TARGET_WINDOW}.${_a_pane}" -p -S -3 ...)
+
+# Suggested: Store captures in indexed variables during scan loop and reuse them.
 ```
 
-### [MEDIUM] common.sh line:22-24 — Multiple stat calls on every hook init
+### [MEDIUM] post-tool-lint.sh line:76-77 — JSON escaping incomplete for control characters
 
-`init_hook` checks 5 directories and potentially creates them on every invocation. For hot-path hooks (on-pre-tool-use.sh), this adds latency.
+The violation text is escaped for `\` and `"` but not tab, newline (beyond the awk join), or other JSON control characters. Malformed JSON could cause Claude Code to misinterpret the block response.
 
 ```bash
 # Current:
-if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || ...
+reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk ...)
+
+# Suggested: Use jq when available:
+if command -v jq >/dev/null 2>&1; then
+  echo "{\"decision\": \"block\", \"reason\": $(echo "$reason" | jq -Rs '.')}"
+fi
 ```
 
-```
-Suggested: Cache a sentinel file (e.g., .dirs_created) after first mkdir -p,
-and skip the check on subsequent calls.
-```
+### [MEDIUM] on-session-start.sh line:93 — Appending to CLAUDE_ENV_FILE may duplicate exports
 
-### [MEDIUM] stop-results.sh line:30 — git diff in stop hook could be slow
-
-`git diff --name-only HEAD` in a large repo could take significant time, blocking the stop hook pipeline.
+`cat >> "$CLAUDE_ENV_FILE"` appends. If the session-start hook runs multiple times for the same pane, duplicate `export` lines accumulate. Not harmful (last export wins in shell) but could confuse debugging.
 
 ```bash
-FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
+# Current:
+cat >> "$CLAUDE_ENV_FILE" << EOF
+
+# Suggested: Use > instead of >> to overwrite, or guard with a sentinel.
 ```
+
+### [MEDIUM] common.sh line:139 — PowerShell notification injection risk
+
+See HIGH finding above (combined as the AppleScript path is now safe via heredoc). The PowerShell branch remains vulnerable to injection through single-quote escaping alone.
 
 ---
 
 ## LOW
 
-### [LOW] watchdog-wait.sh line:9-10 — TOCTOU on trigger file
+### [LOW] stop-results.sh line:33 — Temp file `_tmpfile` not cleaned up on early exit
 
-Check-then-delete pattern on trigger file. If another process deletes between check and rm, rm fails silently (handled by `2>/dev/null`). No practical impact.
+The `mktemp` at line 33 creates a temp file cleaned up at line 41, but the EXIT trap (line 14) only cleans `TMPFILE`, not `_tmpfile`. If the script exits between these lines, the temp file leaks.
 
-### [LOW] session-manager-wait.sh line:16-17 — Same TOCTOU on trigger file
+```
+Suggested: Add _tmpfile to the EXIT trap, or use TMPFILE for both purposes.
+```
 
-Same check-then-delete pattern. Handled gracefully.
+### [LOW] on-session-start.sh lines:74-86 — Lock not cleaned if script killed between mkdir and trap
 
-### [LOW] common.sh line:127 — Background notification process never reaped
+If killed between `mkdir "$LOCK_DIR"` (line 74) and `trap '_skill_lock_cleanup' EXIT` (line 76), the lock directory persists. Subsequent sessions sleep 1s and skip skill sync forever until manual cleanup.
 
-`osascript ... &` creates orphaned background processes. On macOS, they're reaped by init, but in long-running sessions this could accumulate zombie entries briefly.
+```
+Suggested: Add a staleness check: if lock dir is older than 60s, remove and retry.
+```
 
-### [LOW] on-pre-compact.sh line:23-26 — find + xargs + stat on every pre-compact
+### [LOW] common.sh line:44 — `grep "^$2="` doesn't escape regex metacharacters in key name
 
-Runs filesystem scan with `find | xargs stat | awk` on every compaction. Acceptable because compaction is infrequent, but could be slow in large project trees.
+If `$2` contains regex special chars (`.`, `*`, `[`), the grep pattern matches unintended lines. Current callers pass safe strings (`WATCHDOG_PANE`, `MANAGER_PANE`, etc.).
 
-### [LOW] stop-results.sh line:20-24 — Tool count from screen scraping is unreliable
+```
+Suggested: Use grep -F for fixed-string matching.
+```
 
-Counting tool calls by pattern-matching `tmux capture-pane` output (looking for `Read(`, `Edit(`, etc.) is fragile and undercounts if output scrolls beyond the 80-line capture window.
+### [LOW] stop-results.sh lines:75-85 — JSON values not escaped for special characters
 
-### [LOW] watchdog-scan.sh line:362-374 — Tool detection from screen scraping
+The heredoc JSON embeds `$WINDOW_INDEX`, `$PANE_INDEX`, `$STATUS` without JSON escaping. If any contained double quotes or backslashes, the JSON would be malformed. Currently safe (values are constrained).
 
-Same screen-scraping approach for detecting last active tool. Only captures tools whose names appear in the last 5 lines of pane output.
+### [LOW] on-prompt-submit.sh line:30 — `${PROMPT:0:80}` may split multi-byte UTF-8 characters
 
-### [LOW] on-pre-tool-use.sh line:89 — Workers blocked from all tmux send-keys
+Substring extraction by byte position can split multi-byte characters, producing invalid UTF-8 in the status file. Informational only.
 
-Workers cannot use `tmux send-keys` at all. While correct for security, the error message says "Only the Window Manager can do this" — but Watchdog can also use limited send-keys. Misleading error text.
+### [LOW] on-pre-tool-use.sh line:28 — `grep -lq` has redundant flags
 
-### [LOW] common.sh line:94 — Substring expansion style
+`-l` (list filenames) is redundant with `-q` (quiet). `-q` alone suffices.
 
-`${text:0:$((max_len - 3))}` works in bash 3.2 but is a less portable POSIX syntax. Not a violation, but worth noting for portability awareness.
+### [LOW] common.sh line:130 — Background notification processes never waited on
 
----
-
-## Exit Code Convention Compliance
-
-All hooks correctly follow the convention:
-- `exit 0` — allow/continue
-- `exit 1` — not used (correct: no hooks need block+error without feedback)
-- `exit 2` — block+feedback (used in on-pre-tool-use.sh, stop-status.sh)
-- post-tool-lint.sh uses JSON `{"decision": "block", "reason": "..."}` output with `exit 0` (correct for post-tool hooks)
+`osascript ... &` and `notify-send ... &` create background processes that are never `wait`ed. They become zombies briefly until reaped by init. No practical impact but not clean.
 
 ---
 
-## Positive Patterns Observed
+## INFO
 
-1. **Atomic writes** via tmp+mv pattern used consistently in stop-results.sh, stop-status.sh, on-prompt-submit.sh, watchdog-scan.sh (`_atomic_write` helper)
-2. **Graceful degradation**: jq-with-grep-fallback pattern used throughout
-3. **Role caching**: `is_watchdog()`/`is_manager()` cache results in `_DOEY_IS_WD`/`_DOEY_IS_MGR`
-4. **Trap cleanup**: stop-results.sh properly cleans up temp files on exit
-5. **Early exits**: Non-Doey sessions exit immediately (`[ -z "${TMUX_PANE:-}" ] && exit 0`)
-6. **Bash 3.2 compliance**: No violations found (no `declare -A/-n`, no `mapfile`, no `|&`, no `&>>`)
+### [INFO] watchdog-scan.sh lines:329-402 — Redundant `case "$i" in *[!0-9]*) continue;;` guards
+
+The `is_numeric "$i"` check at the loop top already validates `$i`. The `case "$i" in *[!0-9]*)` pattern appears **15+ times** in the loop body. Defensive but heavily duplicated.
+
+### [INFO] watchdog-scan.sh — Overall complexity (593 lines, single file)
+
+This file handles pane scanning, crash detection, boot detection, anomaly detection, CPU monitoring, hash comparison, state transitions, wave completion, snapshot writing, heartbeat, JSON state, anomaly escalation, and context pressure. Consider extracting helper functions to improve maintainability.
+
+### [INFO] post-tool-lint.sh line:78 — Exit code 0 with `{"decision": "block"}` is correct
+
+PostToolUse hooks use JSON output for blocking decisions, not exit codes. This differs from pre-tool-use convention (exit 2 = block) and should be documented for clarity.
+
+### [INFO] on-pre-compact.sh — Well-structured context preservation
+
+Good separation of worker/manager/watchdog state output. The stat-format detection (GNU vs BSD) on lines 19-22 is correctly handled for cross-platform support.
+
+---
+
+## Cross-Cutting Observations
+
+### Atomic Writes
+Hooks consistently use `mktemp + mv` for atomic writes, with fallback logging when mktemp fails (on-prompt-submit.sh, stop-status.sh, stop-results.sh). The `_atomic_write` helper in watchdog-scan.sh is a good pattern.
+
+### Error Handling
+Most hooks guard against missing files and failed tmux commands with `|| true` or `|| exit 0`. The grep-without-`|| true` bug in watchdog-scan.sh (line 521) is the critical exception.
+
+### Bash 3.2 Compatibility
+No violations detected. `printf -v`, `+=`, `<<<`, `${var//pat/rep}` are all bash 3.2 compatible. The post-tool-lint.sh hook correctly enforces this for future edits.
+
+### Performance Hot Paths
+- **on-pre-tool-use.sh** (runs before every tool call): Has a good fast path for managers/session_managers but workers still pay full init_hook cost.
+- **watchdog-scan.sh** (runs every cycle): Has 2-3 redundant tmux captures per worker per cycle, plus the unused `pane_output` variable.
+
+### Positive Patterns
+1. Atomic writes via tmp+mv used consistently
+2. jq-with-fallback pattern for JSON parsing
+3. Role caching in `is_watchdog()`/`is_manager()`
+4. Proper trap cleanup in stop-results.sh
+5. Early exits for non-Doey sessions
+6. Full bash 3.2 compliance maintained

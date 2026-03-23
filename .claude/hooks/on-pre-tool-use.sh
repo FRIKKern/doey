@@ -37,6 +37,19 @@ fi
 # Fast path: unrestricted roles skip all detection
 case "${DOEY_ROLE:-}" in manager|session_manager) exit 0 ;; esac
 
+# Manager fallback: DOEY_ROLE may not be in hook env — detect from tmux pane
+if [ -z "${DOEY_ROLE:-}" ] && [ -n "${TMUX_PANE:-}" ]; then
+  _rt=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  if [ -n "$_rt" ]; then
+    _wp=$(tmux display-message -t "$TMUX_PANE" -p '#{window_index}.#{pane_index}' 2>/dev/null) || true
+    _wi="${_wp%.*}"; _pi="${_wp#*.}"
+    if [ "$_wi" != "0" ] && [ -f "${_rt}/team_${_wi}.env" ]; then
+      _mp=$(grep '^MANAGER_PANE=' "${_rt}/team_${_wi}.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+      [ "$_pi" = "$_mp" ] && exit 0
+    fi
+  fi
+fi
+
 # Worker fast path: skip init_hook entirely (saves 4+ tmux/subprocess calls)
 # Workers only need command extraction + blocked pattern check
 if [ "${DOEY_ROLE:-}" = "worker" ]; then
