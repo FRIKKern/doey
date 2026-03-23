@@ -152,7 +152,6 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `status/completion_pane_<W>_<index>` | Worker completion event |
 | `status/crash_pane_<W>_<index>` | Crash alert |
 | `status/manager_crashed_W<N>` | Manager crash marker |
-| `status/pane_map` | Pane ID-to-index cache |
 | `status/col_*.collapsed` | Collapsed column markers |
 | `research/<pane_safe>.task` | Research task marker |
 | `reports/<pane_safe>.report` | Research report |

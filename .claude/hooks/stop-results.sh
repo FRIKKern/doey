@@ -26,7 +26,7 @@ $OUTPUT
 HEREDOC_EOF
 
 # Get files changed by this worker via git
-PROJECT_DIR=$(tmux show-environment DOEY_TEAM_DIR 2>/dev/null | cut -d= -f2-) || PROJECT_DIR=""
+PROJECT_DIR="${DOEY_TEAM_DIR:-}"
 FILES_LIST=""
 if [ -n "$PROJECT_DIR" ]; then
   if command -v timeout >/dev/null 2>&1; then

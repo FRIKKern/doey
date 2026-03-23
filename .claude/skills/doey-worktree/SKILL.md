@@ -75,7 +75,7 @@ Expected: Forward mode requires no existing worktree; back mode requires an exis
 **If this fails with "not in a worktree":** The team is already on the main project directory. Nothing to return from.
 
 ## Step 6a: Create worktree (forward mode only)
-bash: BRANCH="doey/team-${TARGET_WIN}-$(date +%m%d-%H%M)" && WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${TARGET_WIN}" && [ -d "$WT_DIR" ] && git -C "$PROJECT_DIR" worktree remove "$WT_DIR" --force 2>/dev/null || true && mkdir -p "/tmp/doey/${PROJECT_NAME}/worktrees" && WT_OUTPUT=$(git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$BRANCH" 2>&1) || { echo "ERROR: $WT_OUTPUT"; exit 1; }
+bash: BRANCH="doey/team-${TARGET_WIN}-$(date +%m%d-%H%M)" && WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${TARGET_WIN}" && if [ -d "$WT_DIR" ]; then git -C "$PROJECT_DIR" worktree remove "$WT_DIR" --force 2>/dev/null || true; fi && mkdir -p "/tmp/doey/${PROJECT_NAME}/worktrees" && WT_OUTPUT=$(git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$BRANCH" 2>&1) || { echo "ERROR: $WT_OUTPUT"; exit 1; }
 Expected: New worktree created at `/tmp/doey/<project>/worktrees/team-<N>` on branch `doey/team-<N>-MMDD-HHMM`.
 
 Then copy settings and update team env:
