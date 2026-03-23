@@ -17,6 +17,17 @@ fi
 
 SESSION_ENV="${RUNTIME_DIR}/session.env"
 
+# Load config for customizable values
+_cfg="${HOME}/.config/doey/config.sh"
+# shellcheck source=/dev/null
+[ -f "$_cfg" ] && source "$_cfg"
+# Project config overlay
+if [ -n "$RUNTIME_DIR" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+  _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  [ -n "$_proj_dir" ] && [ -f "${_proj_dir}/.doey/config.sh" ] && source "${_proj_dir}/.doey/config.sh"
+fi
+DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
+
 C_RESET='\033[0m'
 C_DIM='\033[2m'
 C_CYAN='\033[36m'
@@ -397,5 +408,5 @@ while true; do
     row=$((row + 1))
   done
 
-  sleep 300
+  sleep "$DOEY_INFO_PANEL_REFRESH"
 done

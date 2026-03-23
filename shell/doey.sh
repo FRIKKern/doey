@@ -40,6 +40,58 @@ PROJECTS_FILE="$HOME/.claude/doey/projects"
 mkdir -p "$(dirname "$PROJECTS_FILE")"
 touch "$PROJECTS_FILE"
 
+# ── Configuration ───────────────────────────────────────────────────
+# Load user config (optional), then apply defaults for any unset variables.
+# Hierarchy: project .doey/config.sh > global ~/.config/doey/config.sh > defaults
+_doey_load_config() {
+  local global_config="${DOEY_CONFIG:-${HOME}/.config/doey/config.sh}"
+  # shellcheck source=/dev/null
+  [ -f "$global_config" ] && source "$global_config"
+  # Project config — walk up from cwd to find .doey/config.sh
+  local search_dir
+  search_dir="$(pwd)"
+  while [ "$search_dir" != "/" ]; do
+    if [ -f "${search_dir}/.doey/config.sh" ]; then
+      # shellcheck source=/dev/null
+      source "${search_dir}/.doey/config.sh"
+      break
+    fi
+    search_dir="$(dirname "$search_dir")"
+  done
+}
+_doey_load_config
+
+# Grid & Teams
+DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-3}"
+DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
+DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-2}"
+DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
+DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
+
+# Auth & Launch Timing
+DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
+DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
+DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
+DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-3}"
+DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-15}"
+DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-20}"
+DOEY_WATCHDOG_LOOP_DELAY="${DOEY_WATCHDOG_LOOP_DELAY:-25}"
+
+# Dynamic Grid Behavior
+DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
+DOEY_IDLE_REMOVE_AFTER="${DOEY_IDLE_REMOVE_AFTER:-300}"
+DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
+
+# Panel & Monitoring
+DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
+DOEY_WATCHDOG_SCAN_INTERVAL="${DOEY_WATCHDOG_SCAN_INTERVAL:-30}"
+
+# Models
+DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
+DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-sonnet}"
+DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-haiku}"
+DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
+
 # ── Helpers ───────────────────────────────────────────────────────────
 
 # Read a key=value from an env file, stripping quotes.
@@ -328,7 +380,7 @@ setup_dashboard() {
   SM_PANE="0.1"
 
   tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
-  tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter
+  tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-session-manager" Enter
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 }
@@ -385,6 +437,16 @@ register_project() {
 
   echo "${name}:${dir}" >> "$PROJECTS_FILE"
   printf "  ${SUCCESS}Registered${RESET} ${BOLD}%s${RESET} ${DIM}→${RESET} %s\n" "$name" "$dir"
+
+  # Create .doey/ project config directory with template
+  if [ ! -d "${dir}/.doey" ]; then
+    mkdir -p "${dir}/.doey"
+    local template="${SCRIPT_DIR}/doey-config-default.sh"
+    if [ -f "$template" ]; then
+      cp "$template" "${dir}/.doey/config.sh"
+    fi
+    printf "  ${SUCCESS}Created${RESET} .doey/config.sh\n"
+  fi
 }
 
 # List all projects with running status
@@ -1211,9 +1273,9 @@ doey_purge() {
     "$rt_files" "$rt_bytes" "$res_files" "$res_bytes"
 }
 
-INITIAL_WORKER_COLS=3
-INITIAL_TEAMS=2
-MAX_WATCHDOG_SLOTS=6
+INITIAL_WORKER_COLS=$DOEY_INITIAL_WORKER_COLS
+INITIAL_TEAMS=$DOEY_INITIAL_TEAMS
+MAX_WATCHDOG_SLOTS=$DOEY_MAX_WATCHDOG_SLOTS
 
 check_claude_auth() {
   if ! command -v claude >/dev/null 2>&1; then
@@ -1693,7 +1755,7 @@ reload_session() {
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
-      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model opus --name \"T${tw} Window Manager\" --agent \"$mgr_agent\"" Enter
+      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Window Manager\" --agent \"$mgr_agent\"" Enter
       printf " ${SUCCESS}✓${RESET}\n"
       (
         sleep 8
@@ -1712,7 +1774,7 @@ reload_session() {
         tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
         wdg_agent=$(generate_team_agent "doey-watchdog" "$tw")
-        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model haiku --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
+        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model $DOEY_WATCHDOG_MODEL --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
         printf " ${SUCCESS}✓${RESET}\n"
         (
           sleep 12
@@ -1756,7 +1818,7 @@ reload_session() {
 
         local w_name
         w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "T${tw} W${wp}")
-        local worker_cmd="claude --dangerously-skip-permissions --model opus --name \"${w_name}\""
+        local worker_cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"${w_name}\""
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
@@ -1988,6 +2050,10 @@ _init_doey_session() {
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
   tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
+  # Export config values so hooks (running in subshells) can read them
+  tmux set-environment -t "$session" DOEY_WATCHDOG_SCAN_INTERVAL "$DOEY_WATCHDOG_SCAN_INTERVAL"
+  tmux set-environment -t "$session" DOEY_WATCHDOG_LOOP_DELAY "$DOEY_WATCHDOG_LOOP_DELAY"
+  tmux set-environment -t "$session" DOEY_INFO_PANEL_REFRESH "$DOEY_INFO_PANEL_REFRESH"
 }
 
 launch_session_headless() {
@@ -2087,7 +2153,7 @@ MANIFEST
   if [ "$_extra_teams" -gt 0 ]; then
     step_start 6 "Adding ${_extra_teams} more team windows..."
     # Serialize team launches to prevent concurrent OAuth token requests
-    local TEAM_LAUNCH_DELAY=8
+    local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
     local _team_i _team_fail=0
     for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
       if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ); then
@@ -2099,10 +2165,10 @@ MANIFEST
     step_done
   fi
 
-  local INITIAL_WORKTREE_TEAMS=2
+  local INITIAL_WORKTREE_TEAMS=$DOEY_INITIAL_WORKTREE_TEAMS
   step_start 7 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
   # Serialize worktree team launches to prevent concurrent OAuth token requests
-  local TEAM_LAUNCH_DELAY=8
+  local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
   local _wt_i _wt_ok=0
   for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
     if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto" ); then
@@ -2264,7 +2330,7 @@ _boot_worker() {
   printf '\n\n## Identity\nYou are Worker %s (%s) in pane %s.%s of session %s.\n' \
     "$worker_num" "$_bw_pane_id" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
 
-  local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
+  local cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"T${team_window} W${worker_num}\""
   cmd+=" --append-system-prompt-file \"${prompt_file}\""
   tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
   sleep 2  # Auth stagger: prevent concurrent OAuth token requests
@@ -2280,7 +2346,7 @@ _batch_boot_workers() {
   shift 3
 
   # Stagger launches to prevent concurrent OAuth token requests that exhaust auth sessions
-  local WORKER_LAUNCH_DELAY=2
+  local WORKER_LAUNCH_DELAY=$DOEY_WORKER_LAUNCH_DELAY
 
   local _bbw_acronym=""
   [ -f "${runtime_dir}/session.env" ] && _bbw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
@@ -2297,7 +2363,7 @@ _batch_boot_workers() {
     printf '\n\n## Identity\nYou are Worker %s (%s) in pane %s.%s of session %s.\n' \
       "$worker_num" "$_bbw_pane_id" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
 
-    local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
+    local cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"T${team_window} W${worker_num}\""
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
     tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
     sleep $WORKER_LAUNCH_DELAY  # Auth stagger between worker launches
@@ -2523,7 +2589,7 @@ _launch_team_manager() {
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --model opus --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
+    "claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
   sleep 0.2  # reduced from 0.5s — tmux is fast
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
@@ -2537,7 +2603,7 @@ _launch_team_watchdog() {
   local wdg_agent
   wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
   tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
+    "claude --dangerously-skip-permissions --model $DOEY_WATCHDOG_MODEL --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
   sleep 0.2  # reduced from 0.5s — tmux is fast
 }
@@ -2970,6 +3036,84 @@ require_running_session() {
   runtime_dir="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 }
 
+# ── Config Management ────────────────────────────────────────────────
+doey_config() {
+  local global_dir="${HOME}/.config/doey"
+  local global_config="${DOEY_CONFIG:-${global_dir}/config.sh}"
+  local template="${SCRIPT_DIR}/doey-config-default.sh"
+
+  # Find project config by walking up from cwd
+  local project_config="" search_dir
+  search_dir="$(pwd)"
+  while [ "$search_dir" != "/" ]; do
+    if [ -f "${search_dir}/.doey/config.sh" ]; then
+      project_config="${search_dir}/.doey/config.sh"
+      break
+    fi
+    search_dir="$(dirname "$search_dir")"
+  done
+
+  case "${1:-}" in
+    --show)
+      printf "  ${BRAND}Doey Configuration${RESET}\n\n"
+      printf "  ${DIM}Global:${RESET}  %s" "$global_config"
+      [ -f "$global_config" ] && printf " ${SUCCESS}(loaded)${RESET}\n" || printf " ${DIM}(not found)${RESET}\n"
+      printf "  ${DIM}Project:${RESET} "
+      if [ -n "$project_config" ]; then
+        printf "%s ${SUCCESS}(loaded — overrides global)${RESET}\n" "$project_config"
+      else
+        printf "${DIM}(no .doey/config.sh found)${RESET}\n"
+      fi
+      printf "\n  ${BOLD}Current values:${RESET}\n"
+      printf "    DOEY_INITIAL_WORKER_COLS  = %s\n" "${DOEY_INITIAL_WORKER_COLS}"
+      printf "    DOEY_INITIAL_TEAMS        = %s\n" "${DOEY_INITIAL_TEAMS}"
+      printf "    DOEY_INITIAL_WORKTREE_TEAMS = %s\n" "${DOEY_INITIAL_WORKTREE_TEAMS}"
+      printf "    DOEY_MAX_WORKERS          = %s\n" "${DOEY_MAX_WORKERS}"
+      printf "    DOEY_MANAGER_MODEL        = %s\n" "${DOEY_MANAGER_MODEL}"
+      printf "    DOEY_WORKER_MODEL         = %s\n" "${DOEY_WORKER_MODEL}"
+      printf "    DOEY_WATCHDOG_MODEL       = %s\n" "${DOEY_WATCHDOG_MODEL}"
+      printf "    DOEY_WORKER_LAUNCH_DELAY  = %s\n" "${DOEY_WORKER_LAUNCH_DELAY}"
+      printf "    DOEY_TEAM_LAUNCH_DELAY    = %s\n" "${DOEY_TEAM_LAUNCH_DELAY}"
+      printf "\n"
+      ;;
+    --global)
+      mkdir -p "$global_dir"
+      if [ ! -f "$global_config" ] && [ -f "$template" ]; then
+        cp "$template" "$global_config"
+        printf "  ${SUCCESS}Created${RESET} %s from template\n" "$global_config"
+      fi
+      "${EDITOR:-vim}" "$global_config"
+      ;;
+    --reset)
+      if [ ! -f "$template" ]; then
+        printf "  ${ERROR}Template not found: %s${RESET}\n" "$template"
+        return 1
+      fi
+      if [ -n "$project_config" ]; then
+        cp "$template" "$project_config"
+        printf "  ${SUCCESS}Reset${RESET} %s to defaults\n" "$project_config"
+      else
+        mkdir -p "$global_dir"
+        cp "$template" "$global_config"
+        printf "  ${SUCCESS}Reset${RESET} %s to defaults\n" "$global_config"
+      fi
+      ;;
+    *)
+      # Default: edit project config if available, else global
+      if [ -n "$project_config" ]; then
+        "${EDITOR:-vim}" "$project_config"
+      else
+        mkdir -p "$global_dir"
+        if [ ! -f "$global_config" ] && [ -f "$template" ]; then
+          cp "$template" "$global_config"
+          printf "  ${SUCCESS}Created${RESET} %s from template\n" "$global_config"
+        fi
+        "${EDITOR:-vim}" "$global_config"
+      fi
+      ;;
+  esac
+}
+
 # ── Main Dispatch ─────────────────────────────────────────────────────
 
 _attach_session() {
@@ -2978,6 +3122,10 @@ _attach_session() {
   tmux select-window -t "$session:0"
   attach_or_switch "$session"
 }
+
+# Allow sourcing for tests: `source doey.sh __doey_source_only` loads functions only
+[[ "${1:-}" == "__doey_source_only" ]] && return 0 2>/dev/null || true
+[[ "${1:-}" == "__doey_source_only" ]] && exit 0
 
 grid="dynamic"
 
@@ -3028,6 +3176,10 @@ case "${1:-}" in
     doey remove myapp # unregister a project
     doey uninstall    # remove all installed files
     doey version      # show install info
+    doey config       # edit config (project if .doey/ exists, else global)
+    doey config --show   # show current config values
+    doey config --global # edit global config
+    doey config --reset  # reset config to defaults
     doey add-team 3x2 # add a team window (3x2 grid)
     doey kill-team 1  # kill team window 1
     doey list-teams   # show all team windows
@@ -3050,6 +3202,7 @@ HELP
   uninstall)    uninstall_system; exit 0 ;;
   test)         shift; run_test "$@"; exit $? ;;
   version|--version|-v) show_version; exit 0 ;;
+  config)       shift; doey_config "$@"; exit 0 ;;
   dynamic|d)
     register_project "$(pwd)"
     dir="$(pwd)"; name="$(find_project "$dir")"

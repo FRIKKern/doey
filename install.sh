@@ -172,7 +172,7 @@ echo ""
 
 printf "  ${BRAND}[1/5]${RESET} Creating directories..."
 {
-  mkdir -p ~/.claude/{agents,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin
+  mkdir -p ~/.claude/{agents,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin ~/.config/doey
 } && step_ok || { step_fail; die "Failed to create directories."; }
 
 # Clean up old commands that are now project-level skills
@@ -214,11 +214,20 @@ install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
 {
   install_script "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
-  for s in tmux-statusbar.sh pane-border-status.sh info-panel.sh; do
+  for s in tmux-statusbar.sh pane-border-status.sh info-panel.sh settings-panel.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
 detail "~/.local/bin/doey"
+
+# Install default config template if user has no config yet
+if [ ! -f "${HOME}/.config/doey/config.sh" ]; then
+  mkdir -p "${HOME}/.config/doey"
+  if [ -f "$SCRIPT_DIR/shell/doey-config-default.sh" ]; then
+    cp "$SCRIPT_DIR/shell/doey-config-default.sh" "${HOME}/.config/doey/config.sh"
+    detail "installed default config"
+  fi
+fi
 
 PATH_OK=true
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
