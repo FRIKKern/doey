@@ -25,9 +25,24 @@ init_hook() {
 _ensure_dirs() {
   [ -f "${RUNTIME_DIR}/.dirs_created" ] && return 0
   if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/messages" ] || [ ! -d "${RUNTIME_DIR}/research" ] || [ ! -d "${RUNTIME_DIR}/reports" ]; then
-    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/messages"
+    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/messages" "${RUNTIME_DIR}/logs"
   fi
   touch "${RUNTIME_DIR}/.dirs_created"
+}
+
+_log() {
+  local msg="$1"
+  local pane_id="${DOEY_PANE_ID:-unknown}"
+  local log_file="${RUNTIME_DIR}/logs/${pane_id}.log"
+  # Rotate if > 500KB
+  if [ -f "$log_file" ]; then
+    local size
+    size=$(wc -c < "$log_file" 2>/dev/null | tr -d ' ') || size=0
+    if [ "$size" -gt 512000 ]; then
+      tail -200 "$log_file" > "${log_file}.tmp" 2>/dev/null && mv "${log_file}.tmp" "$log_file" 2>/dev/null
+    fi
+  fi
+  printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$msg" >> "$log_file" 2>/dev/null
 }
 
 parse_field() {
