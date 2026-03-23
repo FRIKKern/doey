@@ -2,7 +2,7 @@
 
 ## Overview
 
-Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (default) starts 1 col, auto-expands. Static grid default: 3x2 (6 workers). CLI entry: `doey`. Human reservation via `/doey-reserve`.
+Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (default) starts 1 col, auto-expands. Static grid default: 3x2 (5 workers + manager). CLI entry: `doey`. Human reservation via `/doey-reserve`.
 
 ## Architecture
 

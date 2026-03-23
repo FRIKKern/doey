@@ -42,7 +42,7 @@ cat "$OBSFILE"
 
 | Anomaly | Detection | Severity |
 |---------|-----------|----------|
-| Manager coding directly | `Edit`/`Write`/`Read` on project files | HIGH |
+| Manager coding directly | `Edit`/`Write` on project files | HIGH |
 | Worker stuck | Same error 3+ captures | MEDIUM |
 | Claude crashed | Bare shell prompt (`$`/`%`/`zsh`) | HIGH |
 | Watchdog dead | No scan 60+ seconds | MEDIUM |
