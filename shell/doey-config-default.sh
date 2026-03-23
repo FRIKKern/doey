@@ -18,14 +18,14 @@
 # Grid & Teams
 # =============================================================================
 
-# Number of worker columns in the initial grid layout
-# DOEY_INITIAL_WORKER_COLS=3
+# Number of worker columns in the initial grid layout (workers = cols × 2)
+# DOEY_INITIAL_WORKER_COLS=2
 
 # Number of team windows to create at startup
 # DOEY_INITIAL_TEAMS=2
 
 # Number of teams that start in isolated git worktrees
-# DOEY_INITIAL_WORKTREE_TEAMS=2
+# DOEY_INITIAL_WORKTREE_TEAMS=0
 
 # Maximum number of worker panes across all teams
 # DOEY_MAX_WORKERS=20
@@ -154,11 +154,12 @@
 # your global defaults.
 #
 # Examples:
-#   # Smaller team for a simple project
-#   DOEY_INITIAL_WORKER_COLS=2
+#   # Minimal team for a simple project
+#   DOEY_INITIAL_WORKER_COLS=1
 #   DOEY_INITIAL_TEAMS=1
 #
 #   # Larger team for a monorepo
-#   DOEY_INITIAL_WORKER_COLS=4
+#   DOEY_INITIAL_WORKER_COLS=3
 #   DOEY_INITIAL_TEAMS=4
+#   DOEY_INITIAL_WORKTREE_TEAMS=2
 #   DOEY_MAX_WORKERS=30
