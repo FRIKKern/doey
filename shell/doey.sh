@@ -2086,14 +2086,14 @@ MANIFEST
   local _extra_teams=$((INITIAL_TEAMS - 1))
   if [ "$_extra_teams" -gt 0 ]; then
     step_start 6 "Adding ${_extra_teams} more team windows..."
-    local _team_i _team_pids=""
+    # Serialize team launches to prevent concurrent OAuth token requests
+    local TEAM_LAUNCH_DELAY=8
+    local _team_i _team_fail=0
     for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
-      ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ) &
-      _team_pids="${_team_pids} $!"
-    done
-    local _team_fail=0 _tp
-    for _tp in $_team_pids; do
-      wait "$_tp" 2>/dev/null || _team_fail=$((_team_fail + 1))
+      if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ); then
+        _team_fail=$((_team_fail + 1))
+      fi
+      (( _team_i < _extra_teams - 1 )) && sleep $TEAM_LAUNCH_DELAY
     done
     [ "$_team_fail" -gt 0 ] && printf "${WARN}${_team_fail} team(s) failed${RESET}\n"
     step_done
@@ -2101,14 +2101,14 @@ MANIFEST
 
   local INITIAL_WORKTREE_TEAMS=2
   step_start 7 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
-  local _wt_i _wt_pids="" _wt_ok=0
+  # Serialize worktree team launches to prevent concurrent OAuth token requests
+  local TEAM_LAUNCH_DELAY=8
+  local _wt_i _wt_ok=0
   for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
-    ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto" ) &
-    _wt_pids="${_wt_pids} $!"
-  done
-  local _wp
-  for _wp in $_wt_pids; do
-    wait "$_wp" 2>/dev/null && _wt_ok=$((_wt_ok + 1))
+    if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto" ); then
+      _wt_ok=$((_wt_ok + 1))
+    fi
+    (( _wt_i < INITIAL_WORKTREE_TEAMS - 1 )) && sleep $TEAM_LAUNCH_DELAY
   done
   if [ "$_wt_ok" -gt 0 ]; then
     step_done
@@ -2267,7 +2267,7 @@ _boot_worker() {
   local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
   cmd+=" --append-system-prompt-file \"${prompt_file}\""
   tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
-  sleep 0.3
+  sleep 2  # Auth stagger: prevent concurrent OAuth token requests
 
   write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
 }
@@ -2278,6 +2278,9 @@ _boot_worker() {
 _batch_boot_workers() {
   local session="$1" runtime_dir="$2" team_window="$3"
   shift 3
+
+  # Stagger launches to prevent concurrent OAuth token requests that exhaust auth sessions
+  local WORKER_LAUNCH_DELAY=2
 
   local _bbw_acronym=""
   [ -f "${runtime_dir}/session.env" ] && _bbw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
@@ -2297,6 +2300,7 @@ _batch_boot_workers() {
     local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
     tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
+    sleep $WORKER_LAUNCH_DELAY  # Auth stagger between worker launches
 
     write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
   done
