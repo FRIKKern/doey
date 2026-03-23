@@ -33,28 +33,31 @@ bash "$PROJECT_DIR/.claude/hooks/watchdog-scan.sh"
 ```
 Outputs scan results AND snapshot. Do NOT read snapshot file separately.
 
-**Step 2 — Dashboard.** Parse snapshot, print:
+**Step 2 — Dashboard.** Parse snapshot, print plain-text dashboard. **No box-drawing characters** (`│╭╰├` etc.) — use horizontal rules only. This avoids alignment bugs with double-width emojis.
+
 ```
-╭─ T2 ───────────── 14:32 ─╮
-│ Mgr: ⚡ WORKING [task_received: fix-auth] │
-│ 3🔨 2💤 1✅                 │
-├────────────────────────────┤
-│ 1 🔨 fix-hooks    5m [Edit]│
-│ 2 💤               14m     │
-│ 3 🔨 refactor     2m [Bash]│
-│ 4 ✅ tests         0m      │
-│ 5 🔒 reserved              │
-│ 6 💤               20m     │
-├────────────────────────────┤
-│ ↗ W1 IDLE→WORKING          │
-│ ✅ W4 FINISHED              │
-╰────────────────────────────╯
+─── T2 ──────────── 14:32 ───
+Mgr: ⚡ WORKING [fix-auth]
+3🔨 2💤 1✅
+──────────────────────────────
+ 1 🔨 fix-hooks    5m [Edit]
+ 2 💤              14m
+ 3 🔨 refactor     2m [Bash]
+ 4 ✅ tests         0m
+ 5 🔒 reserved
+ 6 💤              20m
+──────────────────────────────
+ ↗ W1 IDLE→WORKING
+ ✅ W4 FINISHED
+──────────────────────────────
 ```
+
+**Format rules:** Header rule has team name + time. Worker lines: space-prefixed, one per line. Event lines: space-prefixed. Sections separated by `──────────────────────────────` (30 chars). No trailing spaces, no right-edge alignment needed.
 
 Emojis: 🔨WORKING 💤IDLE ✅FINISHED ⚠️STUCK 💥CRASHED 🔒RESERVED 🔄BOOTING ❓PROMPT_STUCK ⚡Mgr-WORKING 😴Mgr-IDLE 🔥Mgr-CRASHED
 Duration: <60s→`Xs`, <3600→`XmYs`, else `XhYm`. WORKING shows `[TOOL]` if available.
 Events: `STATE_CHANGE`→`↗ W{pane} {old}→{new}`, `COMPLETION`→`✅ W{pane} FINISHED`, `WAVE_COMPLETE`→`🏁 Wave complete`, `MANAGER_ACTIVITY`→`📋 Mgr: {task_description}`. No events → `No events`.
-Mgr line: When `manager_activity` is present in snapshot, append activity detail — e.g. `Mgr: ⚡ WORKING [task_received: fix-auth]`. When no activity data, show status only: `Mgr: ⚡ WORKING`.
+Mgr line: When `manager_activity` is present in snapshot, append activity detail — e.g. `Mgr: ⚡ WORKING [fix-auth]`. When no activity data, show status only: `Mgr: ⚡ WORKING`.
 
 **Step 3 — Act on events:**
 
