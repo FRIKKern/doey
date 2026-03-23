@@ -86,8 +86,10 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
 fi
 
 # Slow path: watchdog or unknown role — needs full init_hook for role detection
+# INPUT is already set from line 6; call init_hook directly (not in a pipe)
+# so variables it sets remain in the parent shell.
 source "$(dirname "$0")/common.sh"
-echo "$INPUT" | init_hook
+init_hook
 
 is_manager && exit 0
 is_session_manager && exit 0

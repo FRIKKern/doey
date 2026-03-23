@@ -789,59 +789,8 @@ WORKER_CONTEXT
 apply_doey_theme() {
   local session="$1" name="$2" pane_border_fmt="$3" status_interval="$4"
 
-  # Pane borders
-  local _s="tmux set-option -t $session"
-  $_s pane-border-status top
-  $_s pane-border-format "$pane_border_fmt"
-  $_s pane-border-style 'fg=colour238'
-  $_s pane-active-border-style 'fg=cyan'
-  $_s pane-border-lines heavy
-
-  # Status bar
-  $_s status-position bottom
-  $_s status-style 'bg=default,fg=colour240'
-  $_s status-left-length 10
-  $_s status-right-length 60
-  $_s status-left "#[fg=cyan,dim] DOEY #[default] "
-  $_s status-right "#[fg=colour240]%H:%M  #[fg=colour245]#('${SCRIPT_DIR}/tmux-statusbar.sh') "
-  $_s status-interval "$status_interval"
-
-  # Window status — colored segments with Dashboard distinction
-  # Apply window options to ALL existing windows (tmux 3.6+ requires per-window targeting)
-  local _wsfmt='#[fg=colour245,bg=default] #I #W '
-  local _wscfmt='#[fg=cyan,bg=default,bold] #I #W #[nobold]'
-
-  for _win in $(tmux list-windows -t "$session" -F '#I'); do
-    tmux set-window-option -t "$session:$_win" window-status-separator ''
-    tmux set-window-option -t "$session:$_win" window-status-format "$_wsfmt"
-    tmux set-window-option -t "$session:$_win" window-status-current-format "$_wscfmt"
-    tmux set-window-option -t "$session:$_win" window-status-activity-style 'fg=colour214,bg=colour236,bold'
-    tmux set-window-option -t "$session:$_win" monitor-activity on
-    tmux set-window-option -t "$session:$_win" allow-rename off
-  done
-
-  # Ensure new windows also get the theme
-  tmux set-hook -t "$session" after-new-window "set-window-option window-status-separator ''; set-window-option window-status-format \"$_wsfmt\"; set-window-option window-status-current-format \"$_wscfmt\"; set-window-option window-status-activity-style 'fg=colour214,bg=colour236,bold'; set-window-option monitor-activity on; set-window-option allow-rename off"
-
-  $_s message-style 'bg=colour233,fg=cyan'
-  $_s visual-activity off
-  $_s set-titles on
-  $_s set-titles-string "🤖 #{session_name} — #{pane_title}"
-  $_s mouse on
-  $_s set-clipboard on
-  local _clip_cmd=""
-  if command -v pbcopy >/dev/null 2>&1; then _clip_cmd="pbcopy"
-  elif command -v xclip >/dev/null 2>&1; then _clip_cmd="xclip -selection clipboard"
-  elif command -v xsel >/dev/null 2>&1; then _clip_cmd="xsel --clipboard"
-  fi
-  if [ -n "$_clip_cmd" ]; then
-    tmux bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "$_clip_cmd"
-    tmux bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "$_clip_cmd"
-  fi
-
-  $_s allow-passthrough on
-  $_s bell-action none
-  $_s visual-bell off
+  # Theme — pane borders, status bar, window tabs, keybindings
+  source "${SCRIPT_DIR}/tmux-theme.sh"
 }
 
 # Pre-accept trust for the project directory in Claude settings
@@ -1462,10 +1411,9 @@ MANIFEST
   fi
 
   local _bw_pairs=()
-  local _bw_i _bw_wnum=0
+  local _bw_i
   for (( _bw_i=1; _bw_i<total; _bw_i++ )); do
-    _bw_wnum=$((_bw_wnum + 1))
-    _bw_pairs+=("${_bw_i}:${_bw_wnum}")
+    _bw_pairs+=("${_bw_i}:${_bw_i}")
   done
   _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${_bw_pairs[@]}"
   [[ "$headless" -eq 0 ]] && printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${worker_count}${RESET}${DIM}/${worker_count}${RESET}  ${SUCCESS}done${RESET}\n"
@@ -1557,17 +1505,12 @@ _cleanup_old_session() {
   tmux kill-session -t "$session" 2>/dev/null || true
   rm -rf "$runtime_dir"
   git worktree prune 2>/dev/null || true
-  # Only delete doey/team-* branches whose worktrees were under this runtime dir.
-  # After worktree prune, orphaned branches have no worktree entry — but we must
-  # avoid deleting branches belonging to other doey sessions sharing this repo.
-  local _project_name="${runtime_dir##*/}"
+  # Delete doey/team-* branches whose worktrees no longer exist
   git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' | while read -r b; do
-    # Check if any other session still has a worktree for this branch
+    # Keep branches that still have an active worktree
     if git worktree list --porcelain 2>/dev/null | grep -q "branch refs/heads/${b}$"; then
       continue
     fi
-    # Only delete if the branch name could belong to this project's worktree pattern
-    # (worktrees are created under /tmp/doey/<project>/worktrees/team-<N>)
     git branch -D "$b" 2>/dev/null || true
   done
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
@@ -2384,29 +2327,6 @@ _read_team_state() {
   return 0
 }
 
-_boot_worker() {
-  local session="$1" runtime_dir="$2" team_window="$3" pane_idx="$4" worker_num="$5" prompt_suffix="$6"
-
-  local prompt_file="${runtime_dir}/worker-system-prompt-${prompt_suffix}.md"
-  cp "${runtime_dir}/worker-system-prompt.md" "$prompt_file"
-  local _bw_acronym=""
-  [ -f "${runtime_dir}/session.env" ] && _bw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
-  local _bw_pane_id="t${team_window}-w${worker_num}"
-  [ -n "$_bw_acronym" ] && _bw_pane_id="${_bw_acronym}-${_bw_pane_id}"
-  printf '\n\n## Identity\nYou are Worker %s (%s) in pane %s.%s of session %s.\n' \
-    "$worker_num" "$_bw_pane_id" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
-
-  local _bw_worker_model
-  _bw_worker_model=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_MODEL)
-  [ -z "$_bw_worker_model" ] && _bw_worker_model="$DOEY_WORKER_MODEL"
-  local cmd="claude --dangerously-skip-permissions --model $_bw_worker_model --name \"T${team_window} W${worker_num}\""
-  cmd+=" --append-system-prompt-file \"${prompt_file}\""
-  tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
-  sleep 2  # Auth stagger: prevent concurrent OAuth token requests
-
-  write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
-}
-
 # Boot multiple workers in parallel: send all launch commands, then wait once.
 # Usage: _batch_boot_workers <session> <runtime_dir> <team_window> <pane_idx:worker_num> ...
 # Each trailing arg is a pane_idx:worker_num pair (e.g. "1:1" "2:2" "5:3").
@@ -2881,12 +2801,9 @@ add_team_window() {
   actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l | tr -d ' ')
   [ "$actual" -eq "$total_panes" ] || printf "  ${WARN}Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total_panes" "$actual"
 
-  local worker_panes="" worker_count=0 i
-  for (( i=1; i<total_panes; i++ )); do
-    [ -n "$worker_panes" ] && worker_panes="${worker_panes},"
-    worker_panes="${worker_panes}${i}"
-    worker_count=$((worker_count + 1))
-  done
+  local worker_panes worker_count
+  worker_panes=$(_build_worker_csv "$total_panes")
+  worker_count=$((total_panes - 1))
 
   if ! _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "true"; then
     printf "  ${ERROR}All %s Dashboard watchdog slots occupied — cannot add more teams${RESET}\n" "$MAX_WATCHDOG_SLOTS"
@@ -2895,10 +2812,9 @@ add_team_window() {
   fi
   local wdg_slot="$_AWS_SLOT"
 
-  local wnum=0
+  local i
   for (( i=1; i<total_panes; i++ )); do
-    wnum=$((wnum + 1))
-    tmux select-pane -t "${session}:${window_index}.${i}" -T "T${window_index} W${wnum}"
+    tmux select-pane -t "${session}:${window_index}.${i}" -T "T${window_index} W${i}"
   done
 
   write_team_env "$runtime_dir" "$window_index" "$grid" "$wdg_slot" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model"
@@ -2908,10 +2824,8 @@ add_team_window() {
   _launch_team_watchdog "$session" "$wdg_slot" "$window_index"
 
   local _aw_pairs=()
-  wnum=0
   for (( i=1; i<total_panes; i++ )); do
-    wnum=$((wnum + 1))
-    _aw_pairs+=("${i}:${wnum}")
+    _aw_pairs+=("${i}:${i}")
   done
   _batch_boot_workers "$session" "$runtime_dir" "$window_index" "${_aw_pairs[@]}"
 

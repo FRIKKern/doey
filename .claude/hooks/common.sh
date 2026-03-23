@@ -4,7 +4,7 @@
 set -euo pipefail
 
 init_hook() {
-  INPUT=$(cat)
+  if [ -z "${INPUT:-}" ]; then INPUT=$(cat); fi
   [ -z "${TMUX_PANE:-}" ] && exit 0
 
   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
@@ -56,7 +56,7 @@ parse_field() {
 
 _read_team_key() {
   local val
-  val=$(grep "^$2=" "$1" | cut -d= -f2-)
+  val=$(grep "^$2=" "$1" | cut -d= -f2-) || true
   val="${val%\"}"; val="${val#\"}"
   echo "$val"
 }

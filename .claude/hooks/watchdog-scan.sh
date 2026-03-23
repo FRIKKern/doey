@@ -239,7 +239,6 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       esac
       echo "PANE ${i} ${_crash_state}"
       _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=${_crash_state}"
-      case "$i" in *[!0-9]*) continue ;; esac
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "$_crash_state"
       _set_pane_info "$i" "$_crash_state" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
@@ -256,7 +255,6 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
           echo "PANE ${i} BOOTING"
           _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=BOOTING"
           SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}BOOTING ${i}${NL}"
-          case "$i" in *[!0-9]*) continue ;; esac
           eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
           _update_duration "$i" "$_prev" "BOOTING"
           _set_pane_info "$i" "BOOTING" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
@@ -267,12 +265,10 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   esac
 
   # Logged-out detection
-  _worker_capture="$PANE_CAPTURE"
-  case "$_worker_capture" in
+  case "$PANE_CAPTURE" in
     *"Not logged in"*)
       echo "PANE ${i} LOGGED_OUT"
       _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=LOGGED_OUT"
-      case "$i" in *[!0-9]*) continue ;; esac
       eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
       _update_duration "$i" "$_prev" "LOGGED_OUT"
       _set_pane_info "$i" "LOGGED_OUT" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
@@ -282,7 +278,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
 
   # Anomaly detection — permission prompts, wrong mode, queued messages
   _anomaly_type=""
-  case "$_worker_capture" in
+  case "$PANE_CAPTURE" in
     *"Esc to cancel"*|*"Tab to amend"*)
       _anomaly_type="PROMPT_STUCK"
       # Auto-fix: send Escape then "1" Enter with cooldown
@@ -312,9 +308,9 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   _pane_ppid=$(tmux display-message -t "$PANE_REF" -p '#{pane_pid}' 2>/dev/null) || _pane_ppid=""
   _cpu_secs=0
   if [ -n "$_pane_ppid" ]; then
-    _node_pid=$(pgrep -P "$_pane_ppid" 2>/dev/null | head -1)
+    _node_pid=$(pgrep -P "$_pane_ppid" 2>/dev/null | head -1) || _node_pid=""
     if [ -n "$_node_pid" ]; then
-      _cputime_raw=$(ps -o cputime= -p "$_node_pid" 2>/dev/null | tr -d ' ')
+      _cputime_raw=$(ps -o cputime= -p "$_node_pid" 2>/dev/null | tr -d ' ') || _cputime_raw=""
       [ -n "$_cputime_raw" ] && _cpu_secs=$(_parse_cpu_seconds "$_cputime_raw")
     fi
   fi
@@ -339,14 +335,12 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
     _hook_status="${_hook_status#STATUS: }"
   fi
 
-  CAPTURE="$PANE_CAPTURE"
-  HASH=$(hash_fn "$CAPTURE")
+  HASH=$(hash_fn "$PANE_CAPTURE")
   HASH_FILE="${RUNTIME_DIR}/status/pane_hash_${PANE_SAFE}"
   read -r OLD_HASH < "$HASH_FILE" 2>/dev/null || OLD_HASH=""
 
   if [ "$HASH" = "$OLD_HASH" ]; then
     # Content unchanged — use CPU to distinguish IDLE vs WORKING
-    case "$i" in *[!0-9]*) continue ;; esac
     eval "PREV=\${PREV_STATE_${i}:-UNKNOWN}"
 
     if [ -n "$_cpu_active" ] || [ "$_hook_status" = "BUSY" ]; then
@@ -401,10 +395,9 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       *Glob*) _last_tool="Glob" ;;
     esac
   done <<EOF
-$CAPTURE
+$PANE_CAPTURE
 EOF
 
-  case "$i" in *[!0-9]*) continue ;; esac
   eval "_prev_raw=\${PREV_STATE_${i}:-UNKNOWN}"
   _display_prev=$(_display_state "$_prev_raw")
   _update_duration "$i" "$_display_prev" "WORKING"
@@ -423,13 +416,10 @@ _active_titles=""
 _longest_pane="" _longest_dur=0
 for i in $PANES_LIST; do
   is_numeric "$i" || continue
-  case "$i" in *[!0-9]*) continue ;; esac
   eval "_st=\${PANE_STATE_${i}:-UNKNOWN}"
-  case "$i" in *[!0-9]*) continue ;; esac
   eval "_dur=\${PANE_DURATION_${i}:-0}"
   case "$_st" in
     WORKING|CHANGED|UNCHANGED) _n_working=$((_n_working + 1))
-      case "$i" in *[!0-9]*) continue ;; esac
       eval "_pt=\${PANE_TITLE_${i}:-}"
       [ -n "$_pt" ] && _active_titles="${_active_titles:+${_active_titles}, }${i}:${_pt}"
       if [ "$_dur" -gt "$_longest_dur" ]; then
@@ -508,15 +498,10 @@ SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
   printf 'PANE|STATE|TITLE|DURATION_SECS|LAST_TOOL|PREV_STATE\n'
   for i in $PANES_LIST; do
     is_numeric "$i" || continue
-    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_st=\${PANE_STATE_${i}:-UNKNOWN}"
-    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_title=\${PANE_TITLE_${i}:-}"
-    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_dur=\${PANE_DURATION_${i}:-0}"
-    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_tool=\${PANE_TOOL_${i}:-}"
-    case "$i" in *[!0-9]*) continue ;; esac
     eval "_sn_prev=\${PANE_PREV_DISPLAY_${i}:-}"
     case "$_sn_st" in (CHANGED|UNCHANGED) _sn_st="WORKING" ;; esac
     printf '%s|%s|%s|%s|%s|%s\n' "$i" "$_sn_st" "$_sn_title" "$_sn_dur" "$_sn_tool" "$_sn_prev"
@@ -534,7 +519,6 @@ JSON="{"
 _sep=""
 for i in $PANES_LIST; do
   is_numeric "$i" || continue
-  case "$i" in *[!0-9]*) continue ;; esac
   eval "STATE=\${PANE_STATE_${i}:-UNKNOWN}"
   JSON+="${_sep}\"${i}\":\"${STATE}\""
   _sep=","
@@ -544,7 +528,7 @@ _atomic_write "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json
 
 # --- Anomaly event persistence ---
 # Write anomaly events from SNAPSHOT_EVENTS to individual files for Manager consumption
-_anomaly_lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ')
+_anomaly_lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ') || _anomaly_lines=""
 if [ -n "$_anomaly_lines" ]; then
   while IFS= read -r _aline; do
     [ -z "$_aline" ] && continue
