@@ -1,4 +1,34 @@
 #!/usr/bin/env bash
 set -uo pipefail
-# Settings button for tmux status bar — shows clickable ⚙ when Settings window exists
-printf '⚙ Settings  '
+# Click handler for the ⚙ Settings button in the tmux status bar.
+# Opens (or focuses) the Settings window for the current session.
+# Called from a tmux mouse binding — receives session name as $1.
+
+session="${1:-}"
+[ -z "$session" ] && exit 0
+
+RUNTIME_DIR=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+[ -z "$RUNTIME_DIR" ] && exit 0
+
+PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+[ -z "$PROJECT_DIR" ] && exit 0
+
+# If Settings window already exists, just focus it
+settings_win=$(tmux list-windows -t "$session" -F '#{window_index} #{window_name}' 2>/dev/null \
+  | grep ' Settings$' | head -1 | awk '{print $1}')
+if [ -n "$settings_win" ]; then
+  tmux select-window -t "$session:$settings_win"
+  exit 0
+fi
+
+# Create new Settings window
+tmux new-window -t "$session" -n "Settings"
+settings_win=$(tmux display-message -t "$session" -p '#{window_index}')
+
+# Split: left = config editor, right = live settings panel
+tmux split-window -h -t "$session:$settings_win"
+tmux send-keys -t "$session:${settings_win}.1" \
+  "DOEY_SETTINGS_LIVE=1 bash \"${PROJECT_DIR}/shell/settings-panel.sh\"" Enter
+tmux send-keys -t "$session:${settings_win}.0" \
+  "claude --agent settings-editor" Enter
+tmux select-pane -t "$session:${settings_win}.0"
