@@ -1309,7 +1309,7 @@ MANIFEST
     done
   done
 
-  sleep 2
+  sleep 0.5
   local actual
   actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
   [[ "$actual" -ne "$total" ]] && \
@@ -1363,13 +1363,14 @@ MANIFEST
     printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
   fi
 
-  local booted=0
-  for (( i=1; i<total; i++ )); do
-    booted=$((booted + 1))
-    [[ "$headless" -eq 0 ]] && printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${booted}${RESET}${DIM}/${worker_count}${RESET}  "
-    _boot_worker "$session" "$runtime_dir" "$team_window" "$i" "$booted" "$booted"
+  local _bw_pairs=()
+  local _bw_i _bw_wnum=0
+  for (( _bw_i=1; _bw_i<total; _bw_i++ )); do
+    _bw_wnum=$((_bw_wnum + 1))
+    _bw_pairs+=("${_bw_i}:${_bw_wnum}")
   done
-  [[ "$headless" -eq 0 ]] && printf "${SUCCESS}done${RESET}\n"
+  _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${_bw_pairs[@]}"
+  [[ "$headless" -eq 0 ]] && printf "\r   ${DIM}[6/${STEP_TOTAL}]${RESET} Booting workers  ${BOLD}${worker_count}${RESET}${DIM}/${worker_count}${RESET}  ${SUCCESS}done${RESET}\n"
 
   trap - EXIT INT TERM
   tmux select-window -t "$session:0"
@@ -2045,33 +2046,40 @@ MANIFEST
   step_done
 
   step_start 5 "Adding ${INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
-  sleep 3
+  sleep 0.2  # reduced from 0.5s — tmux is fast
   local _col_i
   for (( _col_i=0; _col_i<INITIAL_WORKER_COLS; _col_i++ )); do
     doey_add_column "$session" "$runtime_dir" "$dir"
-    (( _col_i < INITIAL_WORKER_COLS - 1 )) && sleep 1
+    (( _col_i < INITIAL_WORKER_COLS - 1 )) && sleep 0.3
   done
   step_done
 
   local _extra_teams=$((INITIAL_TEAMS - 1))
   if [ "$_extra_teams" -gt 0 ]; then
     step_start 6 "Adding ${_extra_teams} more team windows..."
-    local _team_i
+    local _team_i _team_pids=""
     for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
-      add_dynamic_team_window "$session" "$runtime_dir" "$dir"
-      (( _team_i < _extra_teams - 1 )) && sleep 2
+      ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ) &
+      _team_pids="${_team_pids} $!"
     done
+    local _team_fail=0 _tp
+    for _tp in $_team_pids; do
+      wait "$_tp" 2>/dev/null || _team_fail=$((_team_fail + 1))
+    done
+    [ "$_team_fail" -gt 0 ] && printf "${WARN}${_team_fail} team(s) failed${RESET}\n"
     step_done
   fi
 
   local INITIAL_WORKTREE_TEAMS=2
   step_start 7 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
-  local _wt_i _wt_ok=0
+  local _wt_i _wt_pids="" _wt_ok=0
   for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
-    if add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto"; then
-      _wt_ok=$((_wt_ok + 1))
-    fi
-    (( _wt_i < INITIAL_WORKTREE_TEAMS - 1 )) && sleep 2
+    ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto" ) &
+    _wt_pids="${_wt_pids} $!"
+  done
+  local _wp
+  for _wp in $_wt_pids; do
+    wait "$_wp" 2>/dev/null && _wt_ok=$((_wt_ok + 1))
   done
   if [ "$_wt_ok" -gt 0 ]; then
     step_done
@@ -2226,9 +2234,36 @@ _boot_worker() {
   local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
   cmd+=" --append-system-prompt-file \"${prompt_file}\""
   tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
-  sleep 3
+  sleep 0.3
 
   write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
+}
+
+# Boot multiple workers in parallel: send all launch commands, then wait once.
+# Usage: _batch_boot_workers <session> <runtime_dir> <team_window> <pane_idx:worker_num> ...
+# Each trailing arg is a pane_idx:worker_num pair (e.g. "1:1" "2:2" "5:3").
+_batch_boot_workers() {
+  local session="$1" runtime_dir="$2" team_window="$3"
+  shift 3
+
+  local pair pane_idx worker_num
+  for pair in "$@"; do
+    pane_idx="${pair%%:*}"
+    worker_num="${pair##*:}"
+    local prompt_suffix="w${team_window}-${worker_num}"
+    local prompt_file="${runtime_dir}/worker-system-prompt-${prompt_suffix}.md"
+    cp "${runtime_dir}/worker-system-prompt.md" "$prompt_file"
+    printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
+      "$worker_num" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
+
+    local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
+    cmd+=" --append-system-prompt-file \"${prompt_file}\""
+    tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
+
+    write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
+  done
+
+  sleep 3
 }
 
 doey_add_column() {
@@ -2252,10 +2287,10 @@ doey_add_column() {
   local last_pane new_pane_top new_pane_bottom
   last_pane="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
   tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$_ts_dir"
-  sleep 0.3
+  sleep 0.1
   new_pane_top="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
   tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$_ts_dir"
-  sleep 0.3
+  sleep 0.1
   new_pane_bottom="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
 
   local w1_num=$(( _ts_worker_count + 1 )) w2_num=$(( _ts_worker_count + 2 ))
@@ -2267,8 +2302,7 @@ doey_add_column() {
   local new_worker_count=$(( _ts_worker_count + 2 ))
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ts_watchdog_pane" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch"
 
-  _boot_worker "$session" "$runtime_dir" "$team_window" "$new_pane_top" "$w1_num" "w${team_window}-${w1_num}"
-  _boot_worker "$session" "$runtime_dir" "$team_window" "$new_pane_bottom" "$w2_num" "w${team_window}-${w2_num}"
+  _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${new_pane_bottom}:${w2_num}"
   rebalance_grid_layout "$session" "$team_window"
 
   printf "  ${SUCCESS}Added${RESET} W${BOLD}${w1_num}${RESET} and W${BOLD}${w2_num}${RESET} — ${new_worker_count} workers in $((_ts_cols + 1)) columns\n"
@@ -2321,7 +2355,7 @@ doey_remove_column() {
     pane_pid=$(tmux display-message -t "$session:$team_window.${pane_idx}" -p '#{pane_pid}' 2>/dev/null || true)
     [ -n "$pane_pid" ] && pkill -P "$pane_pid" 2>/dev/null || true
   done
-  sleep 1
+  sleep 0.5  # reduced from 1s — tmux is fast
 
   # Kill higher index first to avoid index shift
   if (( remove_top > remove_bottom )); then
@@ -2440,7 +2474,7 @@ _launch_team_manager() {
   tmux send-keys -t "${session}:${window_index}.0" \
     "claude --dangerously-skip-permissions --model opus --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
-  sleep 0.5
+  sleep 0.2  # reduced from 0.5s — tmux is fast
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 }
 
@@ -2454,7 +2488,7 @@ _launch_team_watchdog() {
   tmux send-keys -t "${session}:${wdg_slot}" \
     "claude --dangerously-skip-permissions --model haiku --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
-  sleep 0.5
+  sleep 0.2  # reduced from 0.5s — tmux is fast
 }
 
 _brief_team() {
@@ -2532,7 +2566,7 @@ add_dynamic_team_window() {
   local team_dir="$dir" worktree_branch="" wt_dir_for_env=""
 
   tmux new-window -t "$session" -c "$dir"
-  sleep 0.5
+  sleep 0.3
   local window_index
   window_index=$(tmux display-message -t "$session" -p '#{window_index}')
 
@@ -2568,7 +2602,7 @@ add_dynamic_team_window() {
   local _col_i
   for (( _col_i=0; _col_i<initial_cols; _col_i++ )); do
     doey_add_column "$session" "$runtime_dir" "$team_dir" "$window_index"
-    (( _col_i < initial_cols - 1 )) && sleep 1
+    (( _col_i < initial_cols - 1 )) && sleep 0.3
   done
 
   _build_worker_pane_list "$session" "$window_index"
@@ -2591,7 +2625,7 @@ add_team_window() {
   fi
 
   tmux new-window -t "$session" -c "$dir"
-  sleep 0.5
+  sleep 0.3
   local window_index
   window_index=$(tmux display-message -t "$session" -p '#{window_index}')
 
@@ -2620,7 +2654,7 @@ add_team_window() {
       tmux split-window -h -t "${session}:${window_index}.$((r * cols))" -c "$team_dir"
     done
   done
-  sleep 1
+  sleep 0.3
 
   local actual
   actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l | tr -d ' ')
@@ -2652,11 +2686,13 @@ add_team_window() {
   _launch_team_manager "$session" "$runtime_dir" "$window_index"
   _launch_team_watchdog "$session" "$wdg_slot" "$window_index"
 
+  local _aw_pairs=()
   wnum=0
   for (( i=1; i<total_panes; i++ )); do
     wnum=$((wnum + 1))
-    _boot_worker "$session" "$runtime_dir" "$window_index" "$i" "$wnum" "w${window_index}-${wnum}"
+    _aw_pairs+=("${i}:${wnum}")
   done
+  _batch_boot_workers "$session" "$runtime_dir" "$window_index" "${_aw_pairs[@]}"
 
   _build_worker_pane_list "$session" "$window_index"
   _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Grid ${grid}"
