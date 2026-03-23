@@ -15,16 +15,6 @@ trap '[ -n "${TMPFILE:-}" ] && rm -f "$TMPFILE" 2>/dev/null' EXIT
 
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 
-# Count tool calls from captured output
-TOOL_COUNT=0
-while IFS= read -r line; do
-  case "$line" in
-    *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
-  esac
-done <<HEREDOC_EOF
-$OUTPUT
-HEREDOC_EOF
-
 # Get files changed by this worker via git
 PROJECT_DIR="${DOEY_TEAM_DIR:-}"
 FILES_LIST=""
@@ -50,7 +40,12 @@ fi
 
 FILTERED=""
 STATUS="done"
+TOOL_COUNT=0
 while IFS= read -r line; do
+  # Count tool calls
+  case "$line" in
+    *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
+  esac
   # UI chrome filters — update if Claude Code output format changes
   case "$line" in
     *"❯"*|*"───"*|*"Ctx █"*|*"bypass permissions"*|*"shift+tab"*|*"MCP server"*|*/doctor*) continue ;;

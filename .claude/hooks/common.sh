@@ -24,9 +24,7 @@ init_hook() {
 
 _ensure_dirs() {
   [ -f "${RUNTIME_DIR}/.dirs_created" ] && return 0
-  if [ ! -d "${RUNTIME_DIR}/status" ] || [ ! -d "${RUNTIME_DIR}/results" ] || [ ! -d "${RUNTIME_DIR}/messages" ] || [ ! -d "${RUNTIME_DIR}/research" ] || [ ! -d "${RUNTIME_DIR}/reports" ]; then
-    mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" "${RUNTIME_DIR}/results" "${RUNTIME_DIR}/messages" "${RUNTIME_DIR}/logs"
-  fi
+  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs}
   touch "${RUNTIME_DIR}/.dirs_created"
 }
 

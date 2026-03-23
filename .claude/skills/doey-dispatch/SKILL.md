@@ -139,20 +139,14 @@ fi
 
 Assign file ownership per worker. Shared files: non-overlapping sections, Edit only. Overlapping: sequential dispatch.
 
-### Rules
-
-1. Never `send-keys "" Enter` — settle before Enter after paste
-2. Re-check reservation before dispatch (`.reserved` file); verify after (step 6) — both mandatory
-3. Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task
-
 ### Unstick
 
 `copy-mode -q` -> `C-c` -> `C-u` -> `Enter`, wait 3s. After 2 fails: `kill -9`, relaunch, wait 8s, re-dispatch.
 
-## Gotchas
+## Rules
 
-- Do NOT send empty string via `send-keys "" Enter` — the empty string swallows the Enter keystroke and nothing happens
-- Do NOT dispatch to reserved panes — always check for `.reserved` file both during pre-flight AND immediately before send-keys (race condition)
-- Do NOT use relative paths in task prompts — workers have no shared CWD context; always use absolute paths with `${PROJECT_DIR}` prefix
-- Do NOT dispatch multiple tasks to the same worker — one task per worker per dispatch cycle; if you need the same worker again, wait for FINISHED status
-- Do NOT skip the settle delay before Enter after paste-buffer — large task prompts need time to render in the pane; skipping causes partial paste submission
+- Never `send-keys "" Enter` — settle before Enter after paste
+- Re-check `.reserved` before dispatch (race condition); verify after (step 6) — both mandatory
+- Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task
+- One task per worker per dispatch cycle
+- Never skip settle delay before Enter after paste-buffer

@@ -43,7 +43,7 @@ ${RECENT_FILES:-None detected}
 **Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. Restore any tracked state from the sections below. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
 CONTEXT
 
-_collect_basenames() {
+_list_files() {
   local result=""
   for f in "$@"; do
     [ -f "$f" ] || continue
@@ -56,12 +56,11 @@ if is_manager; then
   _TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
   WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
 
-  # jq-with-grep-fallback intentionally inlined (avoids common.sh parse_field dependency)
   PENDING_RESULTS=""
-  HAS_JQ=false; command -v jq >/dev/null 2>&1 && HAS_JQ=true
+  _HAS_JQ=false; command -v jq >/dev/null 2>&1 && _HAS_JQ=true
   for rf in "$RUNTIME_DIR"/results/pane_${_TEAM_W}_*.json; do
     [ -f "$rf" ] || continue
-    if $HAS_JQ; then
+    if $_HAS_JQ; then
       rf_status=$(jq -r '.status // "unknown"' "$rf" 2>/dev/null || echo "unknown")
     else
       rf_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$rf" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"$//' || echo "unknown")
@@ -69,8 +68,8 @@ if is_manager; then
     PENDING_RESULTS="${PENDING_RESULTS}  $(basename "$rf") (status: ${rf_status})${NL}"
   done
 
-  COMPLETION_FILES=$(_collect_basenames "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W}_*)
-  CRASH_FILES=$(_collect_basenames "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W}_*)
+  COMPLETION_FILES=$(_list_files "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W}_*)
+  CRASH_FILES=$(_list_files "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W}_*)
   cat <<MGRSTATE
 
 ## WINDOW MANAGER ORCHESTRATION STATE (restore after compaction)

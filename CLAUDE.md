@@ -6,20 +6,13 @@ Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (
 
 ## Philosophy
 
-Doey optimizes for **strategic utilization of Claude**, not brute-force parallelism. Smaller teams used well outperform larger teams used carelessly.
+**Strategic utilization over brute-force parallelism.** Fewer workers, used well, beat many workers used carelessly.
 
-**The Manager is the bastion between agents and bad context.** Workers produce raw output — the Manager validates, distills, and decides what becomes knowledge. Nothing enters the golden context log unchallenged. If a finding doesn't smell right, another worker verifies it.
+**The Manager is the bastion.** Nothing enters the golden context log unchallenged. Workers produce raw output — the Manager validates, distills, and decides what becomes knowledge.
 
-**Workers feed managers.** Workers are the most shapeable, most disposable-context role. They are never dispatched without intent — every worker task is crafted to produce HIGH QUALITY content that flows back to the Manager. The manager-worker hierarchy exists so managers can orchestrate deep, focused work.
+**Workers are disposable context.** Every dispatch is intentional. Every result flows back to the Manager as high-quality content. No task without purpose.
 
-**Force multipliers over headcount:**
-- **ultrathink** — Deep reasoning for complex problems
-- **`/batch`** — Efficient bulk operations across files
-- **`/doey-simplify-everything`** — Quality sweeps after multi-team edits
-- **`/doey-research`** — Investigation before implementation
-- **Agent swarm** — Workers spawning their own agents for complex exploration
-
-Default to fewer, well-utilized workers. Scale up only when parallelism genuinely helps.
+**Force multipliers over headcount:** ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms. Scale up only when parallelism genuinely helps.
 
 ## Architecture
 
@@ -27,7 +20,7 @@ Default to fewer, well-utilized workers. Scale up only when parallelism genuinel
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach. |
 | Session Manager | `0.1` | Routes tasks between team windows. Present when multiple teams exist. |
-| Watchdog | `0.2+` | Manager's best friend. Obsessively monitors every hook event, filters noise, escalates signal. |
+| Watchdog | `0.2+` | Manager's best friend. Monitors hook events, filters noise, escalates signal. |
 | Window Manager | `W.0` | The bastion. Plans/delegates, validates all context, never writes code. |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved. |
 | Test Driver | external | E2E test runner via `doey test`. |

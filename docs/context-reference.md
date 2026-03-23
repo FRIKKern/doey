@@ -1,6 +1,6 @@
 # Context Reference
 
-> **Core principle:** Doey optimizes for strategic utilization of Claude, not parallelism. Workers are disposable-context by design — they feed high-quality content to managers. Force multipliers: ultrathink, /batch, /doey-research, /doey-simplify-everything, agent swarm. See CLAUDE.md § Philosophy.
+> **Core principle:** Strategic utilization over brute-force parallelism. Workers are disposable context — they feed high-quality content to the Manager, who validates everything. Force multipliers: ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms. See CLAUDE.md § Philosophy.
 
 How Claude Code instances in a Doey session receive their configuration, from lowest to highest precedence.
 

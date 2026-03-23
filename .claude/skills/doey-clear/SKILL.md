@@ -149,12 +149,10 @@ Print per-team summary: Manager/Watchdog status, workers cleared/reserved counts
 
 Total: 5-7 bash commands per team (validate, kill+relaunch manager, kill+relaunch watchdog, kill+relaunch each worker), 0 errors expected.
 
-## Gotchas
+## Rules
 
-- Do NOT clear reserved panes unless `--force` is specified
-- Do NOT kill the Manager pane (pane 0) when WORKERS_ONLY
-- Do NOT restart while another clear is in progress
-- Do NOT forget to schedule Watchdog briefing after relaunch — without it, Watchdog sits idle
-- Do NOT clear Session Manager (0.1) or Info Panel (0.0) — ever
-- Kill by PID (SIGTERM -> SIGKILL), never via send-keys
-- `sleep 0.5` between panes; all bash must be 3.2 compatible
+- Skip reserved panes unless `--force`; skip Manager/Watchdog if WORKERS_ONLY
+- Never clear Session Manager (0.1) or Info Panel (0.0)
+- Kill by PID (SIGTERM → SIGKILL), never via send-keys; `sleep 0.5` between panes
+- Always schedule Watchdog briefing after relaunch
+- Bash 3.2 compatible
