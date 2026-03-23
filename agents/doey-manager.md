@@ -101,6 +101,26 @@ Default budgets by task type:
 
 Override defaults when the task clearly needs more. If a worker reports hitting its budget, review and either raise the limit or split the task.
 
+## Issue Logging
+
+Log problems to `$RUNTIME_DIR/issues/` so they can be reviewed by the Session Manager.
+
+```bash
+mkdir -p "$RUNTIME_DIR/issues"
+W="$DOEY_TEAM_WINDOW"
+cat > "$RUNTIME_DIR/issues/${W}_$(date +%s).issue" << EOF
+WINDOW: $W
+PANE: <pane_index>
+TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
+SEVERITY: <CRITICAL|HIGH|MEDIUM|LOW>
+CATEGORY: <dispatch|crash|permission|stuck|unexpected|performance>
+---
+<description: what happened, what was expected, what went wrong>
+EOF
+```
+
+**When to log:** dispatch failures, worker crashes, permission errors, stuck panes, unexpected behavior. One file per issue.
+
 ## Wave Progress Tracking
 
 When dispatching multi-wave tasks, inject progress markers between waves:

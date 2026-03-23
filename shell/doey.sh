@@ -2398,7 +2398,10 @@ _set_session_env() {
     sleep 0.1
   done
   local _tmp="${runtime_dir}/session.env.tmp.$$"
-  sed "s/^${field}=.*/${field}=\"${value}\"/" "${runtime_dir}/session.env" > "$_tmp"
+  # Escape sed metacharacters in value to prevent injection (/, &, \)
+  local _escaped_value
+  _escaped_value=$(printf '%s' "$value" | sed 's/[&/\]/\\&/g')
+  sed "s/^${field}=.*/${field}=\"${_escaped_value}\"/" "${runtime_dir}/session.env" > "$_tmp"
   mv "$_tmp" "${runtime_dir}/session.env"
   rmdir "$_lock" 2>/dev/null || true
 }

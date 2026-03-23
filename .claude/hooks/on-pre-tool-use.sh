@@ -37,6 +37,32 @@ fi
 # Fast path: unrestricted roles skip all detection
 case "${DOEY_ROLE:-}" in manager|session_manager) exit 0 ;; esac
 
+# Worker fast path: skip init_hook entirely (saves 4+ tmux/subprocess calls)
+# Workers only need command extraction + blocked pattern check
+if [ "${DOEY_ROLE:-}" = "worker" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    TOOL_COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || TOOL_COMMAND=""
+  else
+    TOOL_COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"command"[[:space:]]*:[[:space:]]*"//;s/"$//')
+  fi
+  [ -z "$TOOL_COMMAND" ] && exit 0
+  _cmd=$(echo "$TOOL_COMMAND" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
+  case "$_cmd" in
+    *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
+      MSG="git/gh commands" ;;
+    *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*)
+      MSG="destructive rm" ;;
+    *"shutdown"*|*"reboot"*)
+      MSG="system commands" ;;
+    *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
+      MSG="tmux commands" ;;
+    *) exit 0 ;;
+  esac
+  echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this." >&2
+  exit 2
+fi
+
+# Slow path: watchdog or unknown role — needs full init_hook for role detection
 source "$(dirname "$0")/common.sh"
 init_hook <<< "$INPUT"
 
