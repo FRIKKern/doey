@@ -3,7 +3,8 @@
 set -euo pipefail
 
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { sleep 30; exit 0; }
-source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
+SESSION_NAME=$(grep '^SESSION_NAME=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"') || true
+SM_PANE=$(grep '^SM_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"') || true
 
 SM_PANE="${SM_PANE:-0.1}"
 SM_SAFE="${SESSION_NAME//[:.]/_}_${SM_PANE//[:.]/_}"

@@ -109,7 +109,7 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
 
-**Note:** `_launch_team_manager()` in `doey.sh` should pass `--model opus` explicitly to ensure the Manager always uses opus regardless of settings defaults.
+**Note:** `_launch_team_manager()` passes `--model opus` explicitly to ensure the Manager always uses opus regardless of settings defaults.
 
 
 ## tmux Layout
@@ -159,7 +159,9 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `broadcasts/` | Broadcast messages (created on-demand by `/doey-broadcast`) |
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
 
-**Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED.
+**Status-file values** (written by hooks): READY, BUSY, BOOTING, FINISHED, RESERVED.
+
+**Watchdog-detected states** (from pane scanning): IDLE, WORKING, CHANGED, UNCHANGED, CRASHED, STUCK, LOGGED_OUT, UNKNOWN.
 
 **Watchdog anomaly types:** PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT.
 

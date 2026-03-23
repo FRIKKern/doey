@@ -26,7 +26,8 @@ The team always operates in a **git worktree** of the Doey repo (`~/Documents/gi
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
-DOEY_REPO="$HOME/Documents/github/doey"
+DOEY_REPO="$(cat ~/.claude/doey/repo-path 2>/dev/null)"
+[ -z "$DOEY_REPO" ] && DOEY_REPO="$HOME/Documents/github/doey"
 [ ! -d "$DOEY_REPO/.git" ] && { echo "ERROR: Doey repo not found at $DOEY_REPO"; exit 1; }
 
 # Create worktree for isolated development

@@ -41,7 +41,7 @@ Wants=network-online.target
 [Service]
 Type=forking
 Environment=HOME=%h
-Environment=PATH=%h/.local/bin:%h/.fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=%h/.local/bin:%h/.local/share/fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/your-project
 ExecStart=%h/.local/bin/doey
 ExecStop=/usr/bin/tmux kill-session -t doey-myproject

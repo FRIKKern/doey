@@ -7,9 +7,8 @@ init_hook() {
   INPUT=$(cat)
   [ -z "${TMUX_PANE:-}" ] && exit 0
 
-  RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
+  RUNTIME_DIR="${DOEY_RUNTIME:-$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)}"
   [ -z "$RUNTIME_DIR" ] && exit 0
-
   # -t "$TMUX_PANE" resolves THIS pane (without -t, workers misidentify as Manager)
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
   PANE_SAFE=${PANE//[:.]/_}

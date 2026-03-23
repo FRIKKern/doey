@@ -203,7 +203,7 @@ remove_team_worktree() {
 
 _worktree_safe_remove() {
   local project_dir="$1" worktree_dir="$2" force="${3:-false}"
-  [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ] && return 0
+  { [ -z "$worktree_dir" ] || [ ! -d "$worktree_dir" ]; } && return 0
 
   local branch_name
   branch_name=$(git -C "$worktree_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
@@ -1941,7 +1941,8 @@ check_for_updates() {
   local last_check_file="$state_dir/last-update-check"
   if [[ -f "$last_check_file" ]]; then
     local last_ts
-    last_ts=$(cat "$last_check_file")
+    last_ts=$(cat "$last_check_file" 2>/dev/null)
+    [[ "$last_ts" =~ ^[0-9]+$ ]] || last_ts=0
     (( now - last_ts < 86400 )) && return 0
   fi
 
@@ -2223,22 +2224,6 @@ _read_team_state() {
   return 0
 }
 
-_boot_worker() {
-  local session="$1" runtime_dir="$2" team_window="$3" pane_idx="$4" worker_num="$5" prompt_suffix="$6"
-
-  local prompt_file="${runtime_dir}/worker-system-prompt-${prompt_suffix}.md"
-  cp "${runtime_dir}/worker-system-prompt.md" "$prompt_file"
-  printf '\n\n## Identity\nYou are Worker %s in pane %s.%s of session %s.\n' \
-    "$worker_num" "$team_window" "$pane_idx" "$session" >> "$prompt_file"
-
-  local cmd="claude --dangerously-skip-permissions --model opus --name \"T${team_window} W${worker_num}\""
-  cmd+=" --append-system-prompt-file \"${prompt_file}\""
-  tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
-  sleep 0.3
-
-  write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
-}
-
 # Boot multiple workers in parallel: send all launch commands, then wait once.
 # Usage: _batch_boot_workers <session> <runtime_dir> <team_window> <pane_idx:worker_num> ...
 # Each trailing arg is a pane_idx:worker_num pair (e.g. "1:1" "2:2" "5:3").
@@ -2326,6 +2311,7 @@ doey_remove_column() {
   [[ -z "$col_index" ]] && col_index="last"
 
   # Parse worker panes into positional params (bash 3.2 safe)
+  case "$_ts_worker_panes" in *[!0-9,]*) return 1 ;; esac
   local _old_ifs="$IFS"; IFS=','; set -- $_ts_worker_panes; IFS="$_old_ifs"
   if [ "$#" -lt 2 ]; then
     printf "  ${ERROR}Not enough worker panes to remove a column${RESET}\n"
@@ -2434,7 +2420,7 @@ _set_session_env() {
   local _tmp="${runtime_dir}/session.env.tmp.$$"
   # Escape sed metacharacters in value to prevent injection (/, &, \)
   local _escaped_value
-  _escaped_value=$(printf '%s' "$value" | sed 's/[&/\]/\\&/g')
+  _escaped_value=$(printf '%s' "$value" | sed -e 's/\\/\\\\/g' -e 's/[&/]/\\&/g')
   sed "s/^${field}=.*/${field}=\"${_escaped_value}\"/" "${runtime_dir}/session.env" > "$_tmp"
   mv "$_tmp" "${runtime_dir}/session.env"
   rmdir "$_lock" 2>/dev/null || true
@@ -2738,7 +2724,7 @@ kill_team_window() {
 
     local _new_idx=1 _pane_idx _pane_title
     while IFS=' ' read -r _pane_idx _pane_title; do
-      [ "$_pane_idx" = "0" ] || [ "$_pane_idx" = "1" ] && continue
+      { [ "$_pane_idx" = "0" ] || [ "$_pane_idx" = "1" ]; } && continue
       local _new_wdg="0.${_pane_idx}"
       echo "WDG_SLOT_${_new_idx}=\"${_new_wdg}\"" >> "${runtime_dir}/session.env"
       _new_idx=$((_new_idx + 1))
@@ -2877,7 +2863,7 @@ run_test() {
     printf "  ${WARN}No report generated${RESET}\n"
   fi
 
-  [[ "$open" == true ]] && open "${project_dir}/index.html" 2>/dev/null || true
+  [[ "$open" == true ]] && { open "${project_dir}/index.html" 2>/dev/null || true; }
 
   if [[ "$keep" == false ]]; then
     printf "  ${DIM}Cleaning up...${RESET}\n"
