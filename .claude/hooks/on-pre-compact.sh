@@ -86,6 +86,30 @@ ${COMPLETION_FILES:-None}
 **Crash Alerts:**
 ${CRASH_FILES:-None}
 MGRSTATE
+
+  # Golden Context Log — accumulated knowledge that must survive compaction
+  CONTEXT_LOG="${RUNTIME_DIR}/context_log_W${_TEAM_W}.md"
+  if [ -f "$CONTEXT_LOG" ] && [ -s "$CONTEXT_LOG" ]; then
+    cat <<CTXLOG
+
+## GOLDEN CONTEXT LOG (your accumulated knowledge — read this first after compaction)
+
+**CRITICAL:** Read this log carefully. It contains your distilled findings, decisions, and session history. After compaction, run \`cat "$CONTEXT_LOG"\` to see the full log, then continue where you left off.
+
+**Log location:** ${CONTEXT_LOG}
+**Last updated:** $(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$CONTEXT_LOG" 2>/dev/null || stat -c '%y' "$CONTEXT_LOG" 2>/dev/null | cut -d. -f1 || echo "unknown")
+
+$(head -100 "$CONTEXT_LOG")
+CTXLOG
+    LINES=$(wc -l < "$CONTEXT_LOG" 2>/dev/null || echo "0")
+    LINES=$(echo "$LINES" | tr -d ' ')
+    if [ "$LINES" -gt 100 ]; then
+      cat <<CTXTRUNC
+
+*[Log truncated at 100 lines — full log has ${LINES} lines. Run \`cat "${CONTEXT_LOG}"\` to see everything.]*
+CTXTRUNC
+    fi
+  fi
 fi
 
 if is_watchdog; then

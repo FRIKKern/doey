@@ -194,6 +194,58 @@ if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
   echo "MANAGER_COMPLETED"
 fi
 
+# --- Manager hook-reported status (more authoritative than screen-scrape) ---
+_mgr_pane_idx="${mgr_idx:-0}"
+MGR_PANE_SAFE="${SESSION_SAFE}_${TARGET_WINDOW}_${_mgr_pane_idx}"
+MGR_STATUS_FILE="${RUNTIME_DIR}/status/${MGR_PANE_SAFE}.status"
+_mgr_hook_status=""
+if [ -f "$MGR_STATUS_FILE" ]; then
+  _mgr_hook_line=$(grep '^STATUS:' "$MGR_STATUS_FILE" 2>/dev/null | head -1) || _mgr_hook_line=""
+  _mgr_hook_status="${_mgr_hook_line#STATUS: }"
+fi
+
+# Reconcile hook state vs screen-scrape state
+if [ -n "$_mgr_hook_status" ]; then
+  case "$_mgr_hook_status" in
+    BUSY)
+      # Hook says BUSY — trust it even if screen-scrape shows IDLE (between tool calls)
+      if [ "$PANE_STATE_0" = "IDLE" ]; then
+        PANE_STATE_0="WORKING"
+        _log "watchdog-scan: manager hook=BUSY overrides scrape=IDLE"
+      fi
+      ;;
+    READY|FINISHED)
+      # Hook says READY but screen shows no prompt — manager may be stuck
+      if [ "$PANE_STATE_0" = "WORKING" ]; then
+        echo "MANAGER_POSSIBLY_STUCK (hook=${_mgr_hook_status} scrape=WORKING)"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_POSSIBLY_STUCK hook=${_mgr_hook_status} scrape=WORKING${NL}"
+        _log "watchdog-scan: manager possibly stuck — hook=${_mgr_hook_status} but scrape=WORKING"
+      fi
+      ;;
+  esac
+fi
+
+# --- Manager activity events (written by hooks, consumed here) ---
+MGR_ACTIVITY_FILE="${RUNTIME_DIR}/status/manager_activity_W${TARGET_WINDOW}"
+_mgr_activity_event=""
+_mgr_activity_task=""
+if [ -f "$MGR_ACTIVITY_FILE" ]; then
+  while IFS='=' read -r _ma_key _ma_val; do
+    _ma_val="${_ma_val%\"}" && _ma_val="${_ma_val#\"}"
+    case "$_ma_key" in
+      EVENT) _mgr_activity_event="$_ma_val" ;;
+      TASK) _mgr_activity_task="$_ma_val" ;;
+    esac
+  done < "$MGR_ACTIVITY_FILE"
+  # Consume the event file
+  rm -f "$MGR_ACTIVITY_FILE"
+  if [ -n "$_mgr_activity_event" ]; then
+    echo "MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}"
+    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}${NL}"
+    _log "watchdog-scan: manager activity=${_mgr_activity_event} task=${_mgr_activity_task}"
+  fi
+fi
+
 # --- Scan worker panes ---
 PANES_LIST="${WORKER_PANES//,/ }"
 for i in $PANES_LIST; do
