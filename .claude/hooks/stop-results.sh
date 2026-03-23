@@ -79,6 +79,8 @@ fi
 cat > "$TMPFILE" <<EOF
 {
   "pane": "$WINDOW_INDEX.$PANE_INDEX",
+  "pane_id": "${DOEY_PANE_ID:-unknown}",
+  "full_pane_id": "${DOEY_FULL_PANE_ID:-unknown}",
   "title": $TITLE_JSON,
   "status": "$STATUS",
   "timestamp": $(date +%s),
@@ -89,6 +91,7 @@ cat > "$TMPFILE" <<EOF
 EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"
 TMPFILE=""
+_log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_COUNT)"
 
 # Completion event for watchdog
 COMPLETION="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"

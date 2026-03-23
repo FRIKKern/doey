@@ -10,7 +10,7 @@ init_hook
 # File-based message delivery with send-keys fallback.
 # Writes an atomic message file and touches a trigger to wake the recipient.
 _send_message_file() {
-  local target_pane="$1" subject="$2" body="$3" sender="${PANE_SAFE:-unknown}"
+  local target_pane="$1" subject="$2" body="$3" sender="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
   # Derive a safe target identifier from the pane spec (e.g. "doey-doey:3.0" -> "doey-doey_3_0")
   local target_safe
   target_safe=$(printf '%s' "$target_pane" | tr ':.' '_')
@@ -60,11 +60,13 @@ if is_worker; then
       || STATUS="done"
   fi
 
-  MSG="Worker ${PANE_TITLE} finished (${STATUS})"
+  PANE_DISPLAY="${DOEY_PANE_ID:-${PANE_TITLE}}"
+  MSG="Worker ${PANE_DISPLAY} finished (${STATUS})"
   LAST_MSG=$(parse_field "last_assistant_message")
   [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
 
   _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
+  _log "stop-notify: sent worker_finished to manager at $MGR_PANE"
   exit 0
 fi
 
@@ -82,6 +84,7 @@ if is_manager; then
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
   _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
+  _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
   exit 0
 fi
 
@@ -92,6 +95,7 @@ if is_session_manager; then
   echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯" && exit 0
 
   send_notification "Doey — Session Manager" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
+  _log "stop-notify: sent desktop notification"
   exit 0
 fi
 
