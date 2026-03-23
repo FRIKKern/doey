@@ -135,6 +135,14 @@ SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 SCAN_TIME=$(date +%s)
 SNAPSHOT_EVENTS=""
 
+# Watchdog-local _log — writes to watchdog's own log file
+_log() {
+  local msg="$1"
+  local pane_id="${DOEY_PANE_ID:-watchdog}"
+  [ -n "${RUNTIME_DIR:-}" ] && mkdir -p "${RUNTIME_DIR}/logs" && \
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}" >> "${RUNTIME_DIR}/logs/${pane_id}.log"
+}
+
 # Per-pane logging helper — writes to the scanned pane's log, not the watchdog's
 _pane_log() {
   local pane_id="$1" msg="$2"
