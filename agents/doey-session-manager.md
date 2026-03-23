@@ -26,6 +26,10 @@ for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do cat "${RUNTIME_DIR}/team_${W}.
 
 Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
 
+## Philosophy
+
+Smaller teams used strategically outperform larger teams used carelessly. Route tasks to maximize quality, not just distribute load. Force multipliers: ultrathink, /batch, /doey-research, /doey-simplify-everything, agent swarm. Workers feed high-quality content to managers — every dispatch must be intentional.
+
 ## Dispatch
 
 Send task to a Window Manager:

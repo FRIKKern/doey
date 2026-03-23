@@ -1,5 +1,7 @@
 # Context Reference
 
+> **Core principle:** Doey optimizes for strategic utilization of Claude, not parallelism. Workers are disposable-context by design — they feed high-quality content to managers. Force multipliers: ultrathink, /batch, /doey-research, /doey-simplify-everything, agent swarm. See CLAUDE.md § Philosophy.
+
 How Claude Code instances in a Doey session receive their configuration, from lowest to highest precedence.
 
 | Precedence | Source | Applies To |
@@ -158,6 +160,7 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `results/` | Structured result JSON |
 | `broadcasts/` | Broadcast messages (created on-demand by `/doey-broadcast`) |
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
+| `context_log_W<N>.md` | **Golden Context Log** — Manager's accumulated knowledge (survives compaction) |
 
 **Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED.
 

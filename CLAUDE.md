@@ -4,14 +4,31 @@
 
 Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (default) starts 1 col, auto-expands. Static grid default: 3x2 (5 workers + manager). CLI entry: `doey`. Human reservation via `/doey-reserve`.
 
+## Philosophy
+
+Doey optimizes for **strategic utilization of Claude**, not brute-force parallelism. Smaller teams used well outperform larger teams used carelessly.
+
+**The Manager is the bastion between agents and bad context.** Workers produce raw output — the Manager validates, distills, and decides what becomes knowledge. Nothing enters the golden context log unchallenged. If a finding doesn't smell right, another worker verifies it.
+
+**Workers feed managers.** Workers are the most shapeable, most disposable-context role. They are never dispatched without intent — every worker task is crafted to produce HIGH QUALITY content that flows back to the Manager. The manager-worker hierarchy exists so managers can orchestrate deep, focused work.
+
+**Force multipliers over headcount:**
+- **ultrathink** — Deep reasoning for complex problems
+- **`/batch`** — Efficient bulk operations across files
+- **`/doey-simplify-everything`** — Quality sweeps after multi-team edits
+- **`/doey-research`** — Investigation before implementation
+- **Agent swarm** — Workers spawning their own agents for complex exploration
+
+Default to fewer, well-utilized workers. Scale up only when parallelism genuinely helps.
+
 ## Architecture
 
 | Role | Pane | Description |
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach. |
 | Session Manager | `0.1` | Routes tasks between team windows. Present when multiple teams exist. |
-| Watchdog | `0.2+` | One per team (up to 0.7). Monitors workers, catches crashes. |
-| Window Manager | `W.0` | Per-window orchestrator. Plans/delegates, never writes code. |
+| Watchdog | `0.2+` | Manager's best friend. Obsessively monitors every hook event, filters noise, escalates signal. |
+| Window Manager | `W.0` | The bastion. Plans/delegates, validates all context, never writes code. |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved. |
 | Test Driver | external | E2E test runner via `doey test`. |
 

@@ -28,6 +28,12 @@
 
 Manager plans and delegates. Workers execute in parallel. Dynamic grid — scale with `doey add`.
 
+## Philosophy
+
+Doey isn't about throwing more agents at a problem — it's about **strategic utilization of Claude**. A small team using ultrathink, `/batch`, agent swarms, and `/doey-research` outperforms a large team spraying tasks.
+
+Workers are disposable context by design — they exist to feed **high-quality content** back to the Manager. The Manager is the bastion: it validates, distills, and gatekeeps what becomes knowledge. Every dispatch is intentional. Every result is challenged before it's trusted.
+
 ## Quick Start
 
 ```bash
@@ -71,8 +77,8 @@ Window 0 is the dashboard; team windows (1+) each have a Manager + Workers.
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard |
 | Session Manager | `0.1` | Cross-team coordination |
-| Watchdog | `0.2+` | One per team — monitors workers |
-| Window Manager | `W.0` | Plans and delegates |
+| Watchdog | `0.2+` | Manager's best friend — monitors every hook event, filters noise, escalates signal |
+| Window Manager | `W.0` | The bastion — plans, delegates, validates all context |
 | Workers | `W.1+` | Execute tasks in parallel |
 
 See [Context Reference](docs/context-reference.md) for details.
