@@ -62,9 +62,9 @@ _doey_load_config() {
 _doey_load_config
 
 # Grid & Teams
-DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-3}"
+DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-2}"
 DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
-DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-2}"
+DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
 DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
 DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
 
@@ -2127,7 +2127,7 @@ MANIFEST
           if [ "$_ptc_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _ptc_type="local"; else _ptc_type="worktree"; fi
         fi
         # Default worker count from grid
-        [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-3} * 2 ))
+        [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
         # Convert workers to cols: cols = ceil(workers/2) — dynamic grid uses 2 rows
         _ptc_cols=$(( (_ptc_workers + 1) / 2 ))
         [ "$_ptc_cols" -lt 1 ] && _ptc_cols=1

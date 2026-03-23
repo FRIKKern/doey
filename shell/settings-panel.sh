@@ -121,7 +121,7 @@ _render_team_blueprint() {
 
   _team_count="${DOEY_TEAM_COUNT:-}"
   if [ -z "$_team_count" ]; then
-    _team_count=$(( ${DOEY_INITIAL_TEAMS:-2} + ${DOEY_INITIAL_WORKTREE_TEAMS:-2} ))
+    _team_count=$(( ${DOEY_INITIAL_TEAMS:-2} + ${DOEY_INITIAL_WORKTREE_TEAMS:-0} ))
   fi
 
   local _total_workers=0
@@ -137,7 +137,7 @@ _render_team_blueprint() {
     if [ -z "$_type" ]; then
       if [ "$_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _type="local"; else _type="worktree"; fi
     fi
-    [ -z "$_workers" ] && _workers=$(( ${DOEY_INITIAL_WORKER_COLS:-3} * 2 ))
+    [ -z "$_workers" ] && _workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
     [ -z "$_wm" ] && _wm="${DOEY_WORKER_MODEL:-opus}"
     _mm="${DOEY_MANAGER_MODEL:-opus}"
     _total_workers=$(( _total_workers + _workers ))
@@ -389,9 +389,9 @@ _render_settings_view() {
   printf '\n'
 
   printf '  %b Grid & Teams%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_INITIAL_WORKER_COLS"    "3"   "$DOEY_INITIAL_WORKER_COLS"
+  _settings_row "DOEY_INITIAL_WORKER_COLS"    "2"   "$DOEY_INITIAL_WORKER_COLS"
   _settings_row "DOEY_INITIAL_TEAMS"          "2"   "$DOEY_INITIAL_TEAMS"
-  _settings_row "DOEY_INITIAL_WORKTREE_TEAMS" "2"   "$DOEY_INITIAL_WORKTREE_TEAMS"
+  _settings_row "DOEY_INITIAL_WORKTREE_TEAMS" "0"   "$DOEY_INITIAL_WORKTREE_TEAMS"
   _settings_row "DOEY_MAX_WORKERS"            "20"  "$DOEY_MAX_WORKERS"
   _settings_row "DOEY_MAX_WATCHDOG_SLOTS"     "6"   "$DOEY_MAX_WATCHDOG_SLOTS"
   printf '\n'
@@ -431,9 +431,9 @@ while true; do
     _refresh_interval="$DOEY_INFO_PANEL_REFRESH"
   fi
 
-  DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-3}"
+  DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-2}"
   DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
-  DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-2}"
+  DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
   DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
   DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
   DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
