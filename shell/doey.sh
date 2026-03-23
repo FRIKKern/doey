@@ -1620,9 +1620,11 @@ reload_session() {
   case "$cur_ses_wdg" in
     0.*) ;;
     *)
-      sed -i '' 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.2"/' "${runtime_dir}/session.env"
+      _tmp=$(mktemp "${runtime_dir}/session.env.XXXXXX")
+      sed 's/^WATCHDOG_PANE=.*/WATCHDOG_PANE="0.2"/' "${runtime_dir}/session.env" > "$_tmp" && mv "$_tmp" "${runtime_dir}/session.env"
       grep -q '^WDG_SLOT_1=' "${runtime_dir}/session.env" || printf 'WDG_SLOT_1="0.2"\n' >> "${runtime_dir}/session.env"
-      sed -i '' '/^MGR_SLOT_/d' "${runtime_dir}/session.env"
+      _tmp=$(mktemp "${runtime_dir}/session.env.XXXXXX")
+      sed '/^MGR_SLOT_/d' "${runtime_dir}/session.env" > "$_tmp" && mv "$_tmp" "${runtime_dir}/session.env"
       printf "  ${DIM}Fixed stale WATCHDOG_PANE=%s → 0.2${RESET}\n" "$cur_ses_wdg"
       safe_source_session_env "${runtime_dir}/session.env"
       ;;
@@ -2543,7 +2545,10 @@ _acquire_watchdog_slot() {
   local session="$1" runtime_dir="$2" dir="$3" required="${4:-false}"
   _AWS_SLOT=""
 
-  # mkdir-based lock to prevent parallel slot allocation races
+  # mkdir-based lock to prevent parallel slot allocation races.
+  # Lock acquisition and the critical section run inside a lockfile guard
+  # with explicit cleanup — no EXIT trap needed (avoids overwriting the
+  # caller's EXIT trap, which caused a CRITICAL bug).
   local _lock="${runtime_dir}/.watchdog_slot_lock"
   local _retries=0
   while ! mkdir "$_lock" 2>/dev/null; do
@@ -2554,8 +2559,6 @@ _acquire_watchdog_slot() {
     fi
     sleep 0.2
   done
-  # Ensure lock cleanup on unexpected exit
-  trap 'rmdir "$_lock" 2>/dev/null || true' EXIT
 
   local _aws_rc=0
   if _find_free_watchdog_slot "$runtime_dir"; then
@@ -2566,7 +2569,6 @@ _acquire_watchdog_slot() {
     _aws_rc=1
   fi
 
-  trap - EXIT
   rmdir "$_lock" 2>/dev/null || true
   return "$_aws_rc"
 }
