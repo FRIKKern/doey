@@ -1599,10 +1599,72 @@ update_system() {
   [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
 
   rm -f "$HOME/.claude/doey/last-update-check.available"
+
+  # Check for Claude Code updates
+  _check_claude_update
+
   printf '\n'
   _print_doey_banner
   printf "   ${DIM}Let me Doey for you${RESET}\n\n"
   printf "  ${SUCCESS}Update complete.${RESET} Restart sessions: ${BOLD}doey reload${RESET}\n"
+}
+
+# Check if Claude Code CLI has an update available, offer to install it.
+_check_claude_update() {
+  if ! command -v claude >/dev/null 2>&1; then
+    printf "\n  ${WARN}⚠${RESET} Claude Code CLI not installed\n"
+    if command -v node >/dev/null 2>&1 && [ -t 0 ]; then
+      printf "  Install now? ${DIM}[Y/n]${RESET} "
+      read -r reply
+      case "$reply" in
+        [Nn]*) ;;
+        *)
+          printf "  ${DIM}Installing Claude Code...${RESET}\n"
+          npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
+          command -v claude >/dev/null 2>&1 && printf "  ${SUCCESS}✓ Claude Code installed${RESET}\n"
+          ;;
+      esac
+    else
+      printf "  ${DIM}Install: npm install -g @anthropic-ai/claude-code${RESET}\n"
+    fi
+    return
+  fi
+
+  local current_ver latest_ver
+  current_ver=$(claude --version 2>/dev/null || echo "unknown")
+  printf "\n  ${DIM}Checking Claude Code version...${RESET}"
+
+  # npm outdated exits 1 if outdated, 0 if current
+  latest_ver=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "")
+  if [ -z "$latest_ver" ]; then
+    printf "\r  ${DIM}Claude Code: ${RESET}${BOLD}%s${RESET} ${DIM}(couldn't check for updates)${RESET}\n" "$current_ver"
+    return
+  fi
+
+  if [ "$current_ver" = "$latest_ver" ]; then
+    printf "\r  ${SUCCESS}✓${RESET} Claude Code ${BOLD}%s${RESET} ${DIM}(latest)${RESET}                    \n" "$current_ver"
+  else
+    printf "\r  ${WARN}⚠${RESET} Claude Code ${BOLD}%s${RESET} → ${SUCCESS}%s${RESET} available              \n" "$current_ver" "$latest_ver"
+    if [ -t 0 ]; then
+      printf "  Update Claude Code? ${DIM}[Y/n]${RESET} "
+      read -r reply
+      case "$reply" in
+        [Nn]*) ;;
+        *)
+          printf "  ${DIM}Updating Claude Code...${RESET}\n"
+          if npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -3; then
+            local new_ver
+            new_ver=$(claude --version 2>/dev/null || echo "unknown")
+            printf "  ${SUCCESS}✓ Claude Code updated to %s${RESET}\n" "$new_ver"
+          else
+            printf "  ${ERROR}✗ Update failed${RESET} — try: sudo npm install -g @anthropic-ai/claude-code@latest\n"
+          fi
+          ;;
+      esac
+    else
+      printf "  ${DIM}Update: npm install -g @anthropic-ai/claude-code@latest${RESET}\n"
+    fi
+  fi
 }
 
 # ── Reload ────────────────────────────────────────────────────────
@@ -1825,7 +1887,15 @@ check_doctor() {
     esac
   fi
   if command -v claude >/dev/null 2>&1; then
-    _doc_check ok "claude CLI" "$(claude --version 2>/dev/null || echo 'unknown')"
+    local _claude_ver _claude_latest
+    _claude_ver=$(claude --version 2>/dev/null || echo "unknown")
+    _claude_latest=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "")
+    if [ -n "$_claude_latest" ] && [ "$_claude_ver" != "$_claude_latest" ]; then
+      _doc_check warn "claude CLI" "$_claude_ver → $_claude_latest available"
+      printf "\n         ${DIM}Update: ${RESET}${BRAND}npm install -g @anthropic-ai/claude-code@latest${RESET}\n"
+    else
+      _doc_check ok "claude CLI" "$_claude_ver${_claude_latest:+ (latest)}"
+    fi
   else
     _doc_check fail "claude CLI not found"
     if command -v node >/dev/null 2>&1; then
