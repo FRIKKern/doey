@@ -36,8 +36,25 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
-# Fast path: unrestricted roles skip all detection
-case "$_DOEY_ROLE" in manager|session_manager) exit 0 ;; esac
+# Universal guard: block /rename via send-keys (any role).
+# /rename opens an interactive UI prompt — task text pastes INTO the rename dialog,
+# corrupting the dispatch. Use tmux select-pane -T instead.
+if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    _CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || _CMD=""
+  else
+    _CMD=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"command"[[:space:]]*:[[:space:]]*"//;s/"$//')
+  fi
+  # Only match actual tmux send-keys commands, not strings mentioning them (e.g. commit msgs)
+  _CMD_STRIPPED=$(echo "$_CMD" | sed 's/^[[:space:]]*//')
+  case "$_CMD_STRIPPED" in
+    "tmux send-keys"*"/rename"*|*"&& tmux send-keys"*"/rename"*|*"; tmux send-keys"*"/rename"*)
+      echo "BLOCKED: Never send /rename via send-keys — it opens an interactive prompt that eats the next paste." >&2
+      echo "Use: tmux select-pane -t \"\$PANE\" -T \"task-name\"" >&2
+      exit 2 ;;
+  esac
+  exit 0
+fi
 
 # Worker fast path: skip init_hook entirely (saves 4+ tmux/subprocess calls)
 # Workers only need command extraction + blocked pattern check
