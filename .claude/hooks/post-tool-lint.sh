@@ -73,6 +73,10 @@ done <<< "$ALL_MATCHES"
 [ "$count" -eq 0 ] && exit 0
 
 reason=$(printf "Bash 3.2 compatibility violations in %s (%d found):\n%s" "$FILE_PATH" "$count" "$violations")
-reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')
-echo "{\"decision\": \"block\", \"reason\": \"${reason_escaped}\"}"
+if command -v jq >/dev/null 2>&1; then
+  echo "{\"decision\": \"block\", \"reason\": $(printf '%s' "$reason" | jq -Rs '.')}"
+else
+  reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')
+  echo "{\"decision\": \"block\", \"reason\": \"${reason_escaped}\"}"
+fi
 exit 0
