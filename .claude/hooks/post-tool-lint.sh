@@ -68,7 +68,9 @@ while IFS= read -r match; do
     violations="${violations}${FILE_PATH}:${line_num} — ${desc}${NL}"
     count=$((count + 1))
   fi
-done <<< "$ALL_MATCHES"
+done <<HEREDOC_EOF
+$ALL_MATCHES
+HEREDOC_EOF
 
 [ "$count" -eq 0 ] && exit 0
 

@@ -21,7 +21,9 @@ while IFS= read -r line; do
   case "$line" in
     *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
   esac
-done <<< "$OUTPUT"
+done <<HEREDOC_EOF
+$OUTPUT
+HEREDOC_EOF
 
 # Get files changed by this worker via git
 PROJECT_DIR=$(tmux show-environment DOEY_TEAM_DIR 2>/dev/null | cut -d= -f2-) || PROJECT_DIR=""
@@ -59,11 +61,13 @@ while IFS= read -r line; do
       *[Ee]rror*|*ERROR*|*[Ff]ailed*|*FAILED*|*[Ee]xception*|*EXCEPTION*) STATUS="error" ;;
     esac
   fi
-done <<< "$OUTPUT"
+done <<HEREDOC_EOF
+$OUTPUT
+HEREDOC_EOF
 
 PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
-LAST_JSON=$(jq -Rs '.' <<< "$FILTERED" 2>/dev/null) || \
-  LAST_JSON=$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' <<< "$FILTERED" 2>/dev/null) || \
+LAST_JSON=$(printf '%s' "$FILTERED" | jq -Rs '.' 2>/dev/null) || \
+  LAST_JSON=$(printf '%s' "$FILTERED" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
   LAST_JSON='""'
 TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='"worker-'"$PANE_INDEX"'"'
 

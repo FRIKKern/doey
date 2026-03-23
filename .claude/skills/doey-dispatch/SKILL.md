@@ -91,8 +91,8 @@ fi
 # **If worker shows "logged out" or "session expired":** Run /doey-clear on that pane index first, then retry dispatch.
 # **If Claude fails to start (no "bypass permissions" after 8s):** Check that `claude` is on PATH in the pane's shell. Try: tmux send-keys -t "$PANE" "which claude" Enter
 
-# 3. Rename pane
-tmux send-keys -t "$PANE" "/rename task-name_$(date +%m%d)" Enter; sleep 1
+# 3. Rename pane (tmux-native, no UI interaction)
+tmux select-pane -t "$PANE" -T "task-name_$(date +%m%d)"
 
 # 4. Write + paste task (never send-keys "" Enter — empty string swallows Enter)
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")

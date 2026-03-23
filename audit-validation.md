@@ -1,138 +1,95 @@
-# Validation Report — 2026-03-23
+# Codebase Validation Report
 
-## 1. Syntax Checks (`bash -n`)
+**Date:** 2026-03-23
+**Branch:** doey/rd-0323-0857
 
-### Main Script
+## 1. Shell Syntax Checks (`bash -n`)
+
 | File | Result |
 |------|--------|
 | `shell/doey.sh` | PASS |
-
-### Shell Scripts (`shell/`)
-| File | Result |
-|------|--------|
 | `shell/context-audit.sh` | PASS |
 | `shell/info-panel.sh` | PASS |
 | `shell/pane-border-status.sh` | PASS |
 | `shell/tmux-statusbar.sh` | PASS |
+| `.claude/hooks/common.sh` | PASS |
+| `.claude/hooks/on-pre-compact.sh` | PASS |
+| `.claude/hooks/on-pre-tool-use.sh` | PASS |
+| `.claude/hooks/on-prompt-submit.sh` | PASS |
+| `.claude/hooks/on-session-start.sh` | PASS |
+| `.claude/hooks/post-tool-lint.sh` | PASS |
+| `.claude/hooks/session-manager-wait.sh` | PASS |
+| `.claude/hooks/stop-notify.sh` | PASS |
+| `.claude/hooks/stop-results.sh` | PASS |
+| `.claude/hooks/stop-status.sh` | PASS |
+| `.claude/hooks/watchdog-scan.sh` | PASS |
+| `.claude/hooks/watchdog-wait.sh` | PASS |
 
-### Hooks (`.claude/hooks/`)
-| File | Result |
+**Result: 17/17 files pass syntax check. No errors.**
+
+## 2. Skill Frontmatter Validation
+
+All 23 skills checked. Every SKILL.md has valid YAML frontmatter with required `name` and `description` fields.
+
+**Result: 23/23 skills valid.**
+
+## 3. Agent Frontmatter Validation
+
+All 4 agents checked. Every agent definition has valid YAML frontmatter with required `name`, `model`, and `description` fields.
+
+| Agent | name | model | description |
+|-------|------|-------|-------------|
+| doey-manager | doey-manager | opus | present |
+| doey-session-manager | doey-session-manager | opus | present |
+| doey-watchdog | doey-watchdog | haiku | present |
+| test-driver | test-driver | opus | present |
+
+**Result: 4/4 agents valid.**
+
+## 4. Test Results
+
+| Test | Result |
 |------|--------|
-| `common.sh` | PASS |
-| `on-pre-compact.sh` | PASS |
-| `on-pre-tool-use.sh` | PASS |
-| `on-prompt-submit.sh` | PASS |
-| `on-session-start.sh` | PASS |
-| `post-tool-lint.sh` | PASS |
-| `session-manager-wait.sh` | PASS |
-| `stop-notify.sh` | PASS |
-| `stop-results.sh` | PASS |
-| `stop-status.sh` | PASS |
-| `watchdog-scan.sh` | PASS |
-| `watchdog-wait.sh` | PASS |
+| `tests/test-bash-compat.sh` | **PASS** — 20 files scanned, 0 violations |
+| `tests/pane-state-check.sh` | SKIP — no runtime state files (expected outside live session) |
+| `tests/watchdog-heartbeat-check.sh` | SKIP — no heartbeat files (expected outside live session) |
+| `tests/e2e/journey.md` | N/A — test plan document, not executable |
 
-### Test Scripts (`tests/`)
-| File | Result |
-|------|--------|
-| `tests/pane-state-check.sh` | PASS |
-| `tests/watchdog-heartbeat-check.sh` | PASS |
+**Result: 1/1 executable tests pass. 2 tests skipped (require live session).**
 
-**Syntax check total: 19/19 PASS**
+## 5. Common Issues Check
 
-## 2. Agent YAML Frontmatter
+### CRLF Line Endings
+None found. All files use Unix line endings.
 
-Required fields: `name`, `model`, `description`
+### Missing Shebang Lines
+None found. All `.sh` files have proper shebang lines.
 
-| Agent | name | model | description | Result |
-|-------|------|-------|-------------|--------|
-| `agents/doey-manager.md` | doey-manager | opus | present | PASS |
-| `agents/doey-session-manager.md` | doey-session-manager | opus | present | PASS |
-| `agents/doey-watchdog.md` | doey-watchdog | haiku | present | PASS |
-| `agents/test-driver.md` | test-driver | opus | present | PASS |
+### Missing Executable Permissions
+[LOW] `.claude/hooks/watchdog-scan.sh` — missing executable permission (`-rw-r--r--`)
+- All other shell scripts have correct permissions
+- Impact: Low — hooks are invoked via `bash script.sh`, not directly executed
 
-**Agent frontmatter total: 4/4 PASS**
+### Broken Symlinks
+None found.
 
-## 3. Skill YAML Frontmatter
-
-Required fields: `name`, `description`
-
-| Skill | name | description | Result |
-|-------|------|-------------|--------|
-| `doey-add-window` | present | present | PASS |
-| `doey-broadcast` | present | present | PASS |
-| `doey-clear` | present | present | PASS |
-| `doey-delegate` | present | present | PASS |
-| `doey-dispatch` | present | present | PASS |
-| `doey-kill-all-sessions` | present | present | PASS |
-| `doey-kill-session` | present | present | PASS |
-| `doey-kill-window` | present | present | PASS |
-| `doey-list-windows` | present | present | PASS |
-| `doey-monitor` | present | present | PASS |
-| `doey-purge` | present | present | PASS |
-| `doey-rd-team` | present | present | PASS |
-| `doey-reinstall` | present | present | PASS |
-| `doey-reload` | present | present | PASS |
-| `doey-repair` | present | present | PASS |
-| `doey-research` | present | present | PASS |
-| `doey-reserve` | present | present | PASS |
-| `doey-simplify-everything` | present | present | PASS |
-| `doey-status` | present | present | PASS |
-| `doey-stop` | present | present | PASS |
-| `doey-watchdog-compact` | present | present | PASS |
-| `doey-worktree` | present | present | PASS |
-| `unknown-task` | present | present | PASS |
-
-**Skill frontmatter total: 23/23 PASS**
-
-## 4. Test Suite Results
-
-| Test | Result | Notes |
-|------|--------|-------|
-| `tests/test-bash-compat.sh` | PASS | 20 files, 0 violations |
-| `tests/pane-state-check.sh` | PASS (N/A) | No pane state files found (expected — running in worktree, not live session) |
-| `tests/watchdog-heartbeat-check.sh` | FAIL (expected) | No heartbeat files (expected — no live session running in worktree) |
-
-**Test total: 3/3 PASS** (failures are expected in worktree context)
-
-## 5. Shebang Check
-
-| File | Shebang | Result |
-|------|---------|--------|
-| `shell/doey.sh` | `#!/usr/bin/env bash` | PASS |
-| `shell/context-audit.sh` | `#!/usr/bin/env bash` | PASS |
-| `shell/info-panel.sh` | `#!/bin/bash` | PASS |
-| `shell/pane-border-status.sh` | `#!/usr/bin/env bash` | PASS |
-| `shell/tmux-statusbar.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/common.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-pre-compact.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-pre-tool-use.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-prompt-submit.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/on-session-start.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/post-tool-lint.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/session-manager-wait.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/stop-notify.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/stop-results.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/stop-status.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/watchdog-scan.sh` | `#!/usr/bin/env bash` | PASS |
-| `.claude/hooks/watchdog-wait.sh` | `#!/usr/bin/env bash` | PASS |
-
-**Shebang total: 17/17 PASS**
-
-Note: `shell/info-panel.sh` uses `#!/bin/bash` while all others use `#!/usr/bin/env bash`. This is functional but inconsistent.
+### Stray Files
+[LOW] `.claude/skills/SKILL.md` — untracked SKILL.md at top level of skills directory
+- Appears to be a stray copy of `doey-worktree/SKILL.md` placed in the wrong location
+- Not affecting functionality but should be cleaned up
 
 ## Summary
 
-| Category | Checks | Pass | Fail |
-|----------|--------|------|------|
-| Syntax (`bash -n`) | 19 | 19 | 0 |
-| Agent frontmatter | 4 | 4 | 0 |
-| Skill frontmatter | 23 | 23 | 0 |
-| Test suite | 3 | 3 | 0 |
-| Shebang lines | 17 | 17 | 0 |
-| **Total** | **66** | **66** | **0** |
+| Category | Status |
+|----------|--------|
+| Shell syntax | **PASS** (17/17) |
+| Skill frontmatter | **PASS** (23/23) |
+| Agent frontmatter | **PASS** (4/4) |
+| Bash 3.2 compat | **PASS** (20 files, 0 violations) |
+| CRLF check | **PASS** |
+| Shebang check | **PASS** |
+| Permissions check | 1 LOW finding |
+| Broken symlinks | **PASS** |
+| Stray files | 1 LOW finding |
 
-**Result: ALL 66 CHECKS PASSED**
-
-### Minor Observations (not failures)
-- `shell/info-panel.sh` uses `#!/bin/bash` instead of `#!/usr/bin/env bash` (inconsistent but functional)
-- `watchdog-heartbeat-check.sh` exits non-zero when no heartbeat files exist (expected in worktree)
+**Overall: CLEAN — 2 low-severity findings, no errors or blockers.**
