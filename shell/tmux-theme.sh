@@ -23,8 +23,17 @@ $_s status-style 'bg=default,fg=colour240'
 $_s status-left-length 10
 $_s status-right-length 80
 $_s status-left "#[fg=cyan,dim] DOEY #[default] "
-$_s status-right "#[fg=colour240]#('${SCRIPT_DIR}/tmux-settings-btn.sh') #[fg=colour245]#('${SCRIPT_DIR}/tmux-statusbar.sh')  #[fg=colour240]%H:%M "
+$_s status-right "#[range=user|settings,fg=colour240]⚙ Settings #[norange] #[fg=colour245]#('${SCRIPT_DIR}/tmux-statusbar.sh')  #[fg=colour240]%H:%M "
 $_s status-interval "$status_interval"
+
+# ── Click: ⚙ Settings button ─────────────────────────────────────────
+# tmux routes the settings button area to MouseDown1Status (center), not
+# MouseDown1StatusRight.  When the click lands on the "settings" range,
+# open the Settings window; otherwise fall through to the default behavior.
+tmux bind-key -n MouseDown1Status \
+  if-shell -F '#{==:#{mouse_status_range},settings}' \
+  "run-shell -b '${SCRIPT_DIR}/tmux-settings-btn.sh #{session_name}'" \
+  "switch-client -t ="
 
 # ── Window tabs ───────────────────────────────────────────────────────
 local _wsfmt='#[fg=colour245,bg=default] #I #W '
