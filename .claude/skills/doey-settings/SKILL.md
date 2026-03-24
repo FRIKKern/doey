@@ -21,7 +21,7 @@ tmux new-window -t "$SESSION_NAME" -n "Settings"
 SETTINGS_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
 
 # Left pane (pane 0): run settings panel with live refresh
-tmux send-keys -t "$SESSION_NAME:$SETTINGS_WIN.0" "DOEY_SETTINGS_LIVE=1 bash \"${PROJECT_DIR}/shell/settings-panel.sh\"" Enter
+tmux send-keys -t "$SESSION_NAME:$SETTINGS_WIN.0" "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\"" Enter
 
 # Split right for Claude editor (pane 1)
 tmux split-window -h -t "$SESSION_NAME:$SETTINGS_WIN.0"

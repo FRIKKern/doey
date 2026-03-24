@@ -28,7 +28,7 @@ settings_win=$(tmux display-message -t "$session" -p '#{window_index}')
 # Split: left = live settings panel, right = config editor (Claude)
 # Pane 0 starts the settings panel, then split-right creates pane 1 for Claude
 tmux send-keys -t "$session:${settings_win}.0" \
-  "DOEY_SETTINGS_LIVE=1 bash \"${PROJECT_DIR}/shell/settings-panel.sh\"" Enter
+  "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\"" Enter
 tmux split-window -h -t "$session:${settings_win}.0"
 tmux send-keys -t "$session:${settings_win}.1" \
   "claude --agent settings-editor" Enter
