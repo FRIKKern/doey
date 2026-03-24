@@ -3737,7 +3737,7 @@ doey_settings() {
   settings_win=$(tmux display-message -t "$session" -p '#{window_index}')
 
   # Left pane (pane 0): run settings panel with live refresh
-  tmux send-keys -t "$session:${settings_win}.0" "DOEY_SETTINGS_LIVE=1 bash \"${project_dir}/shell/settings-panel.sh\"" Enter
+  tmux send-keys -t "$session:${settings_win}.0" "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\"" Enter
 
   # Split right — pane 1 becomes the Claude config editor
   tmux split-window -h -t "$session:${settings_win}.0"
