@@ -57,8 +57,13 @@ if [ "$WINDOW_INDEX" = "0" ]; then
 else
   _team_type=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
   if [ "$_team_type" = "freelancer" ]; then
-    # Freelancer teams have no manager — all panes are workers
-    ROLE="worker"
+    # Freelancer: check for role override (e.g., git_agent dispatched here)
+    _ro_key=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.' '_')
+    if [ -f "${RUNTIME_DIR}/status/${_ro_key}.role_override" ]; then
+      ROLE=$(cat "${RUNTIME_DIR}/status/${_ro_key}.role_override")
+    else
+      ROLE="worker"
+    fi
   else
     mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
     [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
@@ -77,6 +82,7 @@ case "$ROLE" in
   info_panel)      PANE_ID="info" ;;
   manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
   watchdog)        PANE_ID="t${TEAM_WINDOW}-wd" ;;
+  git_agent) PANE_ID="t${WINDOW_INDEX}-git" ;;
   worker)
     if [ "$_is_freelancer_team" = "true" ]; then
       PANE_ID="t${WINDOW_INDEX}-f${PANE_INDEX}"
@@ -141,6 +147,7 @@ case "$ROLE" in
   watchdog)        _TITLE="Watchdog" ;;
   manager)         _TITLE="Window Manager" ;;
   session_manager) _TITLE="Session Manager" ;;
+  git_agent)       _TITLE="Git Agent" ;;
   worker)
     if [ "$_is_freelancer_team" = "true" ]; then
       _TITLE="Freelancer"

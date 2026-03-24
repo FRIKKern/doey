@@ -24,6 +24,7 @@ Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (
 | Window Manager | `W.0` | The bastion. Plans/delegates, validates all context, never writes code. |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved. |
 | Freelancers | `F.0+` | Independent workers in managerless teams. Available to any team. |
+| Git Agent | `F.x` | Dedicated git specialist freelancer. Crafts commits, has git permissions. |
 | Test Driver | external | E2E test runner via `doey test`. |
 
 Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
@@ -33,6 +34,7 @@ Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
 | Role | Blocked |
 |------|---------|
 | Window Manager | None (full access) |
+| Git Agent | destructive rm, shutdown, tmux commands. **Allowed:** git commit/push (dedicated git specialist) |
 | Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, gh pr create/merge, destructive rm, shutdown, tmux kill |
 | Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 

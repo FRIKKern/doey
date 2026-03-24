@@ -92,6 +92,44 @@ done
 
 Dispatch to freelancers like any other pane — `send-keys` or `load-buffer`. They have zero context of your team's work, so prompts must be fully self-contained.
 
+## Git Agent
+
+**Workers cannot run git commit/push.** When you need to commit changes, use the **Git Agent** — a specialized freelancer with git permissions.
+
+**Find or set up the Git Agent:**
+```bash
+# Check if a git_agent is already running in the freelancer pool
+for W in $(echo "$(grep TEAM_WINDOWS "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')" | tr ',' ' '); do
+  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  [ "$TT" = "freelancer" ] || continue
+  WP=$(grep '^WORKER_PANES=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
+  for P in $(echo "$WP" | tr ',' ' '); do
+    PKEY=$(echo "${SESSION_NAME}:${W}.${P}" | tr ':.' '_')
+    [ -f "${RUNTIME_DIR}/status/${PKEY}.role_override" ] && \
+      [ "$(cat "${RUNTIME_DIR}/status/${PKEY}.role_override")" = "git_agent" ] && \
+      echo "Git Agent found: ${SESSION_NAME}:${W}.${P}"
+  done
+done
+```
+
+**Set up a Git Agent** (pick an idle freelancer pane):
+```bash
+W=3; P=0  # target freelancer pane
+PKEY=$(echo "${SESSION_NAME}:${W}.${P}" | tr ':.' '_')
+echo "git_agent" > "${RUNTIME_DIR}/status/${PKEY}.role_override"
+# Then restart that pane with the git agent:
+# /doey-clear or /doey-dispatch with agent doey-git-agent
+```
+
+**Dispatch a commit task:**
+```bash
+PANE="${SESSION_NAME}:${W}.${P}"
+tmux copy-mode -q -t "$PANE" 2>/dev/null
+tmux send-keys -t "$PANE" "Review and commit all staged changes in ${PROJECT_DIR}. Focus on shell/ changes." Enter
+```
+
+The Git Agent crafts clean commit messages (conventional prefixes, imperative mood, explains *why*). It never adds Co-Authored-By lines or AI attribution.
+
 ## Sending Tasks
 
 **Before every send:** `tmux copy-mode -q -t "$PANE" 2>/dev/null`
