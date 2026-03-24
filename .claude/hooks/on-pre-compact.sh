@@ -86,6 +86,26 @@ ${COMPLETION_FILES:-None}
 ${CRASH_FILES:-None}
 MGRSTATE
 
+  # Pending messages — must be processed after compaction
+  _MGR_SAFE="${SESSION_NAME//[:.]/_}_${_TEAM_W}_0"
+  PENDING_MSGS=""
+  for _mf in "$RUNTIME_DIR/messages"/${_MGR_SAFE}_*.msg; do
+    [ -f "$_mf" ] || continue
+    PENDING_MSGS="${PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
+  done
+  if [ -n "$PENDING_MSGS" ]; then
+    cat <<MSGSTATE
+
+**⚠ UNREAD MESSAGES (process these after compaction!):**
+${PENDING_MSGS}
+Read with:
+\`\`\`bash
+MGR_SAFE="${_MGR_SAFE}"
+for f in "\$RUNTIME_DIR/messages"/\${MGR_SAFE}_*.msg; do [ -f "\$f" ] && cat "\$f" && echo "---" && rm -f "\$f"; done
+\`\`\`
+MSGSTATE
+  fi
+
   # Golden Context Log — accumulated knowledge that must survive compaction
   CONTEXT_LOG="${RUNTIME_DIR}/context_log_W${_TEAM_W}.md"
   if [ -f "$CONTEXT_LOG" ] && [ -s "$CONTEXT_LOG" ]; then

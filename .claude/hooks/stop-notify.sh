@@ -77,6 +77,8 @@ if is_worker; then
     MSG="Freelancer ${PANE_DISPLAY} finished (${STATUS})"
     [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
     _notify_pane "$SM_TARGET" "freelancer_finished" "$MSG"
+    # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
+    touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
     _log "stop-notify: sent freelancer_finished to SM at $SM_TARGET"
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
@@ -110,6 +112,8 @@ if is_manager; then
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
   _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
+  # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
+  touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
   _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
   exit 0
 fi

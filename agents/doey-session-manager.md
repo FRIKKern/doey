@@ -56,15 +56,32 @@ sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 
 **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
 
+## Messages — How Managers Report Back
+
+Managers and freelancers notify you via the **message queue**. This is the primary way you learn about task completions. **If you don't read messages, you won't know teams are done.**
+
+### Read messages (run this EVERY cycle)
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do
+  [ -f "$f" ] || continue
+  cat "$f"; echo "---"
+  rm -f "$f"
+done
+```
+
+### What messages tell you
+- `task_complete` from a Manager → Team finished its task. Read message for summary, route follow-ups
+- `freelancer_finished` → Research/verification done. Read report file if applicable
+- No messages + all teams idle → all dispatched work is complete
+
+### Critical: Always drain messages before acting
+Every monitor cycle must: **1) read messages, 2) check statuses, 3) act on what you found**. Never skip step 1.
+
 ## Monitoring
 
 **Primary:** `/doey-monitor` for team status. Discover teams: `tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name} #{window_panes}'`
-
-**Read SM messages** (SM-specific, not covered by `/doey-monitor`):
-```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do [ -f "$f" ] && cat "$f" && echo "" && rm -f "$f"; done
-```
 
 Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-windows`
 
