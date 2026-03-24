@@ -73,6 +73,21 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   exit 0
 fi
 
+# Git Agent: allow git commands, block everything else dangerous
+if [ "$_DOEY_ROLE" = "git_agent" ]; then
+  TOOL_COMMAND=$(_json_str tool_input.command)
+  [ -z "$TOOL_COMMAND" ] && exit 0
+  case "$TOOL_COMMAND" in
+    *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*|*"rm -rf /Users/"*|*"rm -rf /home/"*)
+      echo "BLOCKED: Git Agent cannot run destructive rm." >&2; exit 2 ;;
+    *"shutdown"*|*"reboot"*)
+      echo "BLOCKED: Git Agent cannot run system commands." >&2; exit 2 ;;
+    *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
+      echo "BLOCKED: Git Agent cannot run tmux commands." >&2; exit 2 ;;
+  esac
+  exit 0
+fi
+
 # Worker fast path: skip init_hook entirely (saves 4+ tmux/subprocess calls)
 if [ "$_DOEY_ROLE" = "worker" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
