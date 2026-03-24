@@ -72,14 +72,15 @@ _display_state() {
 # Get previous state for pane $1
 _get_prev() { eval "echo \${PREV_STATE_${1}:-UNKNOWN}"; }
 
-# Report pane state: _report_pane <idx> <state> [tool]
+# Report pane state: _report_pane <idx> <state> [tool] [snapshot_event]
 # Emits output line, logs, updates duration+info
 _report_pane() {
-  local idx="$1" state="$2" tool="${3:-}"
+  local idx="$1" state="$2" tool="${3:-}" event="${4:-}"
   local prev=$(_get_prev "$idx")
   local dprev=$(_display_state "$prev")
   echo "PANE ${idx} ${state}"
   _pane_log "${TARGET_WINDOW}.${idx}" "pane ${idx} state=${state}"
+  [ -n "$event" ] && SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}${event}${NL}"
   _update_duration "$idx" "$dprev" "$state"
   _set_pane_info "$idx" "$state" "$(_get_pane_title "${SESSION_NAME}:${TARGET_WINDOW}.${idx}")" "$tool" "$dprev"
 }
@@ -91,30 +92,6 @@ _read_hook_status() {
   local line
   line=$(grep '^STATUS:' "$1" 2>/dev/null | head -1) || return 0
   _hook_status="${line#STATUS: }"
-}
-
-# Get CPU delta for pane; sets _cpu_active
-_check_cpu() {
-  local pane_ref="$1" idx="$2"
-  local ppid cpu_secs=0 node_pid raw
-  ppid=$(tmux display-message -t "$pane_ref" -p '#{pane_pid}' 2>/dev/null) || ppid=""
-  if [ -n "$ppid" ]; then
-    node_pid=$(pgrep -P "$ppid" 2>/dev/null | head -1) || node_pid=""
-    if [ -n "$node_pid" ]; then
-      raw=$(ps -o cputime= -p "$node_pid" 2>/dev/null | tr -d ' ') || raw=""
-      [ -n "$raw" ] && cpu_secs=$(_parse_cpu_seconds "$raw")
-    fi
-  fi
-  local cpu_file="${RUNTIME_DIR}/status/cpu_${TARGET_WINDOW}_${idx}"
-  local prev_cpu=-1
-  [ -f "$cpu_file" ] && read -r prev_cpu < "$cpu_file" 2>/dev/null
-  _atomic_write "$cpu_file" "$cpu_secs"
-  _cpu_active=""
-  if [ "$prev_cpu" -ge 0 ]; then
-    local delta=$((cpu_secs - prev_cpu))
-    [ "$delta" -lt 0 ] && delta=0
-    [ "$delta" -gt 1 ] && _cpu_active="yes"
-  fi
 }
 
 # --- Load environment ---
@@ -249,13 +226,8 @@ if [ "$_team_type" != "freelancer" ]; then
 
   # --- Manager hook-reported status (more authoritative than screen-scrape) ---
   _mgr_pane_idx="${mgr_idx:-0}"
-  MGR_PANE_SAFE="${SESSION_SAFE}_${TARGET_WINDOW}_${_mgr_pane_idx}"
-  MGR_STATUS_FILE="${RUNTIME_DIR}/status/${MGR_PANE_SAFE}.status"
-  _mgr_hook_status=""
-  if [ -f "$MGR_STATUS_FILE" ]; then
-    _mgr_hook_line=$(grep '^STATUS:' "$MGR_STATUS_FILE" 2>/dev/null | head -1) || _mgr_hook_line=""
-    _mgr_hook_status="${_mgr_hook_line#STATUS: }"
-  fi
+  _read_hook_status "${RUNTIME_DIR}/status/${SESSION_SAFE}_${TARGET_WINDOW}_${_mgr_pane_idx}.status"
+  _mgr_hook_status="$_hook_status"
 
   # Reconcile hook state vs screen-scrape state
   if [ -n "$_mgr_hook_status" ]; then
@@ -350,29 +322,14 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
     *'❯'*|*'bypass permissions'*) ;;  # Ready — proceed to normal scan
     *)
       case "$CURRENT_CMD" in
-        node)
-          echo "PANE ${i} BOOTING"
-          _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=BOOTING"
-          SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}BOOTING ${i}${NL}"
-          eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
-          _update_duration "$i" "$_prev" "BOOTING"
-          _set_pane_info "$i" "BOOTING" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
-          continue
-          ;;
+        node) _report_pane "$i" "BOOTING" "" "BOOTING ${i}"; continue ;;
       esac
       ;;
   esac
 
   # Logged-out detection
   case "$PANE_CAPTURE" in
-    *"Not logged in"*)
-      echo "PANE ${i} LOGGED_OUT"
-      _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=LOGGED_OUT"
-      eval "_prev=\${PREV_STATE_${i}:-UNKNOWN}"
-      _update_duration "$i" "$_prev" "LOGGED_OUT"
-      _set_pane_info "$i" "LOGGED_OUT" "$(_get_pane_title "$PANE_REF")" "" "$_prev"
-      continue
-      ;;
+    *"Not logged in"*) _report_pane "$i" "LOGGED_OUT"; continue ;;
   esac
 
   # Anomaly detection — permission prompts, wrong mode, queued messages
@@ -421,12 +378,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   [ "$_cpu_delta" -gt 1 ] && _cpu_active="yes"
 
   # Hook-written status
-  _hook_status=""
-  STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-  if [ -f "$STATUS_FILE" ]; then
-    _hook_status=$(grep '^STATUS:' "$STATUS_FILE" 2>/dev/null | head -1)
-    _hook_status="${_hook_status#STATUS: }"
-  fi
+  _read_hook_status "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
   HASH=$(hash_fn "$PANE_CAPTURE")
   HASH_FILE="${RUNTIME_DIR}/status/pane_hash_${PANE_SAFE}"
@@ -582,9 +534,7 @@ SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
   printf 'SNAPSHOT_TIME=%s\n' "$SCAN_TIME"
   printf 'MANAGER=%s\n' "$_mgr_label"
   printf 'MANAGER_TITLE=%s\n' "$MGR_TITLE"
-  _total=0
-  for _ci in $PANES_LIST; do is_numeric "$_ci" && _total=$((_total + 1)); done
-  printf 'TOTAL_WORKERS=%s\n' "$_total"
+  printf 'TOTAL_WORKERS=%s\n' "$((_n_working + _n_idle + _n_stuck + _n_crashed + _n_reserved + _n_logged_out + _n_booting + _n_other))"
   printf 'WORKING=%s\nIDLE=%s\nSTUCK=%s\nCRASHED=%s\nRESERVED=%s\nLOGGED_OUT=%s\nBOOTING=%s\n' \
     "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" "$_n_reserved" "$_n_logged_out" "$_n_booting"
   printf -- '---\n'
@@ -619,60 +569,51 @@ done
 JSON+="}"
 _atomic_write "${RUNTIME_DIR}/status/watchdog_pane_states_W${TARGET_WINDOW}.json" "$JSON"
 
-# --- Anomaly event persistence ---
-# Write anomaly events from SNAPSHOT_EVENTS to individual files for Manager consumption
-_anomaly_lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ') || _anomaly_lines=""
-if [ -n "$_anomaly_lines" ]; then
-  while IFS= read -r _aline; do
-    [ -z "$_aline" ] && continue
-    _a_pane=$(echo "$_aline" | awk '{print $2}')
-    _a_type=$(echo "$_aline" | awk '{print $3}')
-    _a_file="${RUNTIME_DIR}/status/anomaly_${TARGET_WINDOW}_${_a_pane}.event"
-    _a_capture_snippet=$(tmux capture-pane -t "${SESSION_NAME}:${TARGET_WINDOW}.${_a_pane}" -p -S -3 2>/dev/null | tail -3 | tr '\n' '|')
-    {
-      printf 'TYPE=%s\n' "$_a_type"
-      printf 'PANE=%s\n' "$_a_pane"
-      printf 'WINDOW=%s\n' "$TARGET_WINDOW"
-      printf 'TIMESTAMP=%s\n' "$SCAN_TIME"
-      printf 'SNIPPET=%s\n' "$_a_capture_snippet"
-    } > "${_a_file}.tmp" && mv "${_a_file}.tmp" "$_a_file"
-  done <<ANOMALY_EOF
-$_anomaly_lines
+# --- Anomaly processing: persist, expire, escalate ---
+_process_anomalies() {
+  # Write new anomaly events to files
+  local lines pane type af snippet
+  lines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ') || lines=""
+  if [ -n "$lines" ]; then
+    while IFS= read -r _aline; do
+      [ -z "$_aline" ] && continue
+      pane=$(echo "$_aline" | awk '{print $2}')
+      type=$(echo "$_aline" | awk '{print $3}')
+      af="${RUNTIME_DIR}/status/anomaly_${TARGET_WINDOW}_${pane}.event"
+      snippet=$(tmux capture-pane -t "${SESSION_NAME}:${TARGET_WINDOW}.${pane}" -p -S -3 2>/dev/null | tail -3 | tr '\n' '|')
+      printf 'TYPE=%s\nPANE=%s\nWINDOW=%s\nTIMESTAMP=%s\nSNIPPET=%s\n' \
+        "$type" "$pane" "$TARGET_WINDOW" "$SCAN_TIME" "$snippet" > "${af}.tmp" && mv "${af}.tmp" "$af"
+    done <<ANOMALY_EOF
+$lines
 ANOMALY_EOF
-fi
-
-# Clean up anomaly events older than 5 minutes
-for _old_event in "${RUNTIME_DIR}/status"/anomaly_${TARGET_WINDOW}_*.event; do
-  [ -f "$_old_event" ] || continue
-  _evt_ts=$(grep '^TIMESTAMP=' "$_old_event" 2>/dev/null | cut -d= -f2)
-  _evt_ts="${_evt_ts:-0}"
-  is_numeric "$_evt_ts" || _evt_ts="0"
-  [ "$(($SCAN_TIME - _evt_ts))" -gt 300 ] && rm -f "$_old_event"
-done
-
-# Track consecutive anomaly counts for escalation
-for _esc_event in "${RUNTIME_DIR}/status"/anomaly_${TARGET_WINDOW}_*.event; do
-  [ -f "$_esc_event" ] || continue
-  _esc_pane=$(grep '^PANE=' "$_esc_event" 2>/dev/null | cut -d= -f2)
-  _esc_type=$(grep '^TYPE=' "$_esc_event" 2>/dev/null | cut -d= -f2)
-  _esc_count_file="${RUNTIME_DIR}/status/anomaly_count_${TARGET_WINDOW}_${_esc_pane}"
-  _esc_prev_count=0
-  [ -f "$_esc_count_file" ] && read -r _esc_prev_count < "$_esc_count_file" 2>/dev/null
-  is_numeric "$_esc_prev_count" || _esc_prev_count=0
-  _esc_new_count=$((_esc_prev_count + 1))
-  _atomic_write "$_esc_count_file" "$_esc_new_count"
-  if [ "$_esc_new_count" -ge 3 ]; then
-    echo "ESCALATE ANOMALY ${_esc_pane} ${_esc_type} (${_esc_new_count} consecutive)"
-    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ESCALATE ${_esc_pane} ${_esc_type} persistent_${_esc_new_count}${NL}"
   fi
-done
 
-# Clear anomaly counts for panes without active anomalies
-for _clr_count in "${RUNTIME_DIR}/status"/anomaly_count_${TARGET_WINDOW}_*; do
-  [ -f "$_clr_count" ] || continue
-  _clr_pane="${_clr_count##*_}"
-  [ -f "${RUNTIME_DIR}/status/anomaly_${TARGET_WINDOW}_${_clr_pane}.event" ] || rm -f "$_clr_count"
-done
+  # Expire events >5 min old; escalate persistent ones
+  local ts count_file prev_count new_count ep et
+  for af in "${RUNTIME_DIR}/status"/anomaly_${TARGET_WINDOW}_*.event; do
+    [ -f "$af" ] || continue
+    ts=$(grep '^TIMESTAMP=' "$af" 2>/dev/null | cut -d= -f2)
+    is_numeric "${ts:-x}" || ts=0
+    if [ "$(($SCAN_TIME - ts))" -gt 300 ]; then rm -f "$af"; continue; fi
+    ep=$(grep '^PANE=' "$af" 2>/dev/null | cut -d= -f2)
+    et=$(grep '^TYPE=' "$af" 2>/dev/null | cut -d= -f2)
+    count_file="${RUNTIME_DIR}/status/anomaly_count_${TARGET_WINDOW}_${ep}"
+    prev_count=0
+    [ -f "$count_file" ] && read -r prev_count < "$count_file" 2>/dev/null
+    is_numeric "$prev_count" || prev_count=0
+    new_count=$((prev_count + 1))
+    _atomic_write "$count_file" "$new_count"
+    [ "$new_count" -ge 3 ] && echo "ESCALATE ANOMALY ${ep} ${et} (${new_count} consecutive)"
+  done
+
+  # Clear counts for resolved anomalies
+  for cf in "${RUNTIME_DIR}/status"/anomaly_count_${TARGET_WINDOW}_*; do
+    [ -f "$cf" ] || continue
+    pane="${cf##*_}"
+    [ -f "${RUNTIME_DIR}/status/anomaly_${TARGET_WINDOW}_${pane}.event" ] || rm -f "$cf"
+  done
+}
+_process_anomalies
 
 # --- Inline snapshot for watchdog ---
 if [ -f "$SNAPSHOT_FILE" ]; then

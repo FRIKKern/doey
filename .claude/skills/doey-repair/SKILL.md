@@ -6,13 +6,11 @@ description: Diagnose and repair Doey Dashboard (window 0). Use when you need to
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Team files: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
 
-**Expected:** 4 bash commands, 0-8 tmux send-keys, ~30s.
-
-Diagnose and repair Dashboard (window 0). Layout: 0.0=InfoPanel, 0.1=SessionMgr, 0.2-0.7=Watchdogs (one per team).
+Diagnose and repair Dashboard (window 0). Layout: 0.0=InfoPanel, 0.1=SessionMgr, 0.2-0.7=Watchdogs.
 
 ### Step 1: Build watchdog-team mapping
 
-Parse WATCHDOG_PANE from each `team_*.env` to map slot 0.X → team N. Use case statement for bash 3.2 safe assignment (no `declare -A`):
+Parse WATCHDOG_PANE from each `team_*.env` → map slot 0.X to team N (case statement, bash 3.2 safe):
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -41,21 +39,19 @@ done
 
 If any pane MISSING → report "Dashboard damaged. Run `doey reload`." and **STOP**.
 
-Classify: **HEALTHY** = has child process | **IDLE** = no child | **UNUSED** = watchdog slot with no team assigned. Print diagnosis, then repair IDLE panes.
+Classify: **HEALTHY** (has child) | **IDLE** (no child) | **UNUSED** (watchdog slot, no team). Repair IDLE panes only.
 
 ### Step 3: Repair IDLE panes
 
-Use team mapping from Step 1. Send commands to idle shells only:
+Send commands to idle shells only:
 
 | Pane | Command |
 |------|---------|
 | 0.0 | `tmux send-keys -t "$SESSION_NAME:0.0" "clear && info-panel.sh '${RUNTIME_DIR}'" Enter` |
 | 0.1 | `tmux send-keys -t "$SESSION_NAME:0.1" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter` |
-| 0.2-0.7 | Skip if `TEAM_FOR_0X` empty. Otherwise: `tmux send-keys -t "$SESSION_NAME:0.X" "claude --dangerously-skip-permissions --model haiku --name \"T${TEAM_W} Watchdog\" --agent \"t${TEAM_W}-watchdog\"" Enter` — wait 12s, then brief with session/window info. |
+| 0.2-0.7 | Skip if `TEAM_FOR_0X` empty. Otherwise launch watchdog agent, wait 12s, brief. |
 
-### Step 4: Verify
-
-Re-check child processes on repaired panes. Report results.
+### Step 4: Verify — re-check child processes, report results.
 
 ### Rules
 - **NEVER kill panes/processes** — only send commands to idle shells

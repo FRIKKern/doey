@@ -11,9 +11,7 @@ description: Full codebase simplification across all teams. Session Manager inve
 
 ## Prompt
 
-**Expected:** 1 bash command (inventory), N team dispatches, 1 bash command (verification), ~15min.
-
-You are the Session Manager running a codebase-wide simplification. Coordinate Window Managers — never dispatch to workers directly.
+Session Manager coordinating codebase-wide simplification. Route through Window Managers — never dispatch to workers directly.
 
 ### Inventory
 
@@ -63,32 +61,28 @@ Prefer worktree teams for low-conflict domains (docs, agents). Local teams for h
 
 ### Dispatch to Window Managers
 
-Send each Window Manager a self-contained task via `tmux load-buffer`/`paste-buffer`. Exit copy-mode first, sleep 0.5s after paste, send Enter, verify with capture-pane after 5s.
+Send each a self-contained task via `load-buffer`/`paste-buffer` (exit copy-mode first, sleep 0.5s after paste, Enter, verify after 5s).
 
-**Task template** (fill in DOMAIN, N workers, PROJECT_DIR, file list with line counts, RUNTIME_DIR):
+**Task template** (fill in DOMAIN, N, PROJECT_DIR, file list with line counts, RUNTIME_DIR):
 
 ```
-Run a full simplification of [DOMAIN]. You have N workers — use /doey-dispatch to assign files.
+Run a full simplification of [DOMAIN]. You have N workers — use /doey-dispatch.
 Project directory: PROJECT_DIR
 
-**Goal:** Reduce cognitive load, improve naming, cut ceremony, align patterns, DRY repeated logic.
-
+**Goal:** Reduce cognitive load, cut ceremony, DRY repeated logic, align patterns.
 **Files:** [LIST EVERY FILE with line count]
-
-**Constraints:** No Agent tool. Shell: bash 3.2, run `bash -n` after. Use Edit not Write. Read before editing. Preserve behavior. Commands (.md): bash blocks 3.2 compatible. Rename workers: `/rename simplify-<file>_MMDD`
-
+**Constraints:** No Agent tool. bash 3.2 (`bash -n` after). Edit not Write. Read before editing. Preserve behavior.
 **Assignment:** 1-3 files/worker by complexity. Largest files = dedicated workers. Share full list for cross-reference.
-
-**When done:** `bash -n` all .sh, write summary to RUNTIME_DIR/reports/simplify_team_W.md (per-file before/after + key changes), report completion.
+**When done:** `bash -n` all .sh, write RUNTIME_DIR/reports/simplify_team_W.md (per-file before/after), report completion.
 ```
 
 ### Monitor
 
-Poll every 60s. Check for `${RUNTIME_DIR}/reports/simplify_team_${W}.md` per team. Also check Watchdog heartbeats and Window Manager output.
+Poll every 60s for `${RUNTIME_DIR}/reports/simplify_team_${W}.md`. Check Watchdog heartbeats.
 
 ### Consolidate
 
-Once all teams finish, re-run the inventory `wc -l` command, diff against `simplify_before.txt`, then:
+Re-run `wc -l`, diff against `simplify_before.txt`, then:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -100,12 +94,11 @@ done
 echo "=== Context audit ===" && bash "$PROJECT_DIR/shell/context-audit.sh" --repo
 ```
 
-Read all `${RUNTIME_DIR}/reports/simplify_team_*.md` and present consolidated results: total before/after, per-domain breakdown, syntax/audit status, key improvements. If issues found, offer a fix round.
+Read all `simplify_team_*.md` reports. Present consolidated results: total before/after, per-domain breakdown, syntax/audit status. Offer fix round if issues found.
 
 ### Rules
-1. **Route through Window Managers** — never dispatch to workers directly
-2. **Self-contained tasks** — Managers have zero context; include everything
-3. **No file conflicts** — each team owns distinct files
-4. **Confirm before dispatching** — present the plan first
-5. **Verify every dispatch** — capture-pane after 5s
-6. **Bash 3.2** — all .sh files must work on macOS `/bin/bash`
+1. Route through Window Managers — never dispatch to workers directly
+2. Self-contained tasks — Managers have zero context; include everything
+3. No file conflicts — each team owns distinct files
+4. Confirm before dispatching. Verify every dispatch (capture-pane after 5s).
+5. Bash 3.2 — all .sh files must work on macOS `/bin/bash`

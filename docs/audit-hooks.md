@@ -4,41 +4,18 @@
 **Scope:** All 12 hook scripts + common.sh
 **Method:** Static analysis — race conditions, file locking, performance, error handling, bash 3.2 compat, inter-hook interactions
 
----
-
-## CRITICAL
-
-### on-pre-tool-use.sh
-
-**[CRITICAL] on-pre-tool-use.sh line:69 — `init_hook` runs in pipe subshell; all variable assignments lost**
-
-```
-Current:  echo "$INPUT" | init_hook
-```
-
-`init_hook` is on the right side of a pipe. In bash (including 3.2, without `lastpipe`), the right side of a pipe always executes in a subshell. All assignments made inside `init_hook` — `RUNTIME_DIR`, `PANE`, `WINDOW_INDEX`, `PANE_INDEX`, `PANE_SAFE`, `SESSION_NAME`, `NOW` — are discarded when the subshell exits. The subsequent calls to `is_manager` (line 71), `is_session_manager` (line 72), and `is_watchdog` (line 82) operate on **unset variables**, producing undefined behavior.
-
-Impact: `is_watchdog` checks `[ "$WINDOW_INDEX" != "0" ]`; with `WINDOW_INDEX` unset, `"" != "0"` is true, so `is_watchdog` always returns 1 (not a watchdog). The Watchdog pane's special send-keys allowances (send to Manager pane, /compact, bare Enter) are **never applied**. The Watchdog is silently treated as a Worker, meaning its legitimate tmux send-keys operations are blocked by the Worker restriction at line 127.
+> **PARTIALLY STALE** — The CRITICAL and two HIGH findings for `on-pre-tool-use.sh` have been **fixed** since this audit. The script was rewritten to use per-pane `.role` files instead of `init_hook`, and watchdog now has explicit role handling (line 56). Remaining findings (HIGH and below) should be re-verified against current line numbers.
 
 ---
 
-## HIGH
+## ~~CRITICAL~~ (FIXED)
 
-### on-pre-tool-use.sh
+~~on-pre-tool-use.sh `init_hook` pipe-subshell bug~~ — Fixed. Script no longer uses `init_hook`; resolves roles via per-pane `.role` files.
 
-**[HIGH] on-pre-tool-use.sh line:82 — Watchdog's send-keys allowances are never reached**
+## ~~HIGH~~ (FIXED — on-pre-tool-use.sh)
 
-Consequence of the CRITICAL finding above. The block at lines 82–110 (`if is_watchdog; then`) is dead code for any pane that reaches the slow path. A Watchdog pane in the slow path hits the Worker-level `tmux send-keys` block (line 127) instead of the watchdog-specific logic. Legitimate watchdog actions such as sending `/compact` to a worker or `Enter` for recovery are incorrectly blocked.
-
----
-
-**[HIGH] on-pre-tool-use.sh line:40 — Watchdog role excluded from early-exit fast paths**
-
-```
-Current:  case "$_DOEY_ROLE" in manager|session_manager) exit 0 ;; esac
-```
-
-`watchdog` is not included in the early-exit list. When `_DOEY_ROLE="watchdog"`, the script falls through to the slow path (lines 67–133), triggering the broken pipe-subshell init_hook. Managers and Session Managers exit immediately and safely; watchdogs do not.
+~~Watchdog send-keys dead code~~ — Fixed (consequence of above).
+~~Watchdog excluded from fast-path exits~~ — Fixed. Watchdog now has explicit `case` handling at line 56.
 
 ---
 
@@ -367,17 +344,17 @@ See session-manager-wait.sh [MEDIUM] finding above. The SM wait loop never sleep
 
 ## Summary Table
 
-| Severity | Count | Files |
-|----------|-------|-------|
-| CRITICAL | 1 | on-pre-tool-use.sh |
-| HIGH | 4 | on-pre-tool-use.sh (×2), stop-notify.sh, on-session-start.sh |
-| MEDIUM | 10 | common.sh (×2), on-pre-tool-use.sh, stop-notify.sh (×2), stop-results.sh, session-manager-wait.sh, watchdog-wait.sh, watchdog-scan.sh (×3), post-tool-lint.sh |
-| LOW | 14 | common.sh (×2), on-session-start.sh (×2), on-prompt-submit.sh, stop-status.sh, stop-results.sh (×2), watchdog-scan.sh (×5), post-tool-lint.sh |
+| Severity | Count | Status |
+|----------|-------|--------|
+| CRITICAL | 1 | **FIXED** (on-pre-tool-use.sh rewritten) |
+| HIGH | 4 | 2 FIXED (on-pre-tool-use.sh), 2 open (stop-notify.sh, on-session-start.sh) |
+| MEDIUM | 10 | Open — verify line numbers against current code |
+| LOW | 14 | Open |
 
-**Priority fixes:**
-1. `on-pre-tool-use.sh:69` — pipe-subshell init_hook (CRITICAL)
-2. `on-pre-tool-use.sh:40` — add `watchdog` to fast-path exits (HIGH, depends on #1)
-3. `on-session-start.sh:77` — add lock staleness check (HIGH)
-4. `stop-notify.sh:75` — remove dependency on stop hook execution order (HIGH)
-5. `post-tool-lint.sh:78` — fix JSON escaping via jq or printf (MEDIUM)
-6. `session-manager-wait.sh:25` — add result file consumption/age check (MEDIUM)
+**Remaining priority fixes:**
+1. `on-session-start.sh` — add lock staleness check (HIGH)
+2. `stop-notify.sh` — remove dependency on stop hook execution order (HIGH)
+3. `post-tool-lint.sh` — fix JSON escaping via jq or printf (MEDIUM)
+4. `session-manager-wait.sh` — add result file consumption/age check (MEDIUM)
+
+> **Note:** All line numbers in this audit predate subsequent code changes. Re-verify against current source before applying fixes.

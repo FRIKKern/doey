@@ -8,13 +8,7 @@ description: Reserve/unreserve the current pane to prevent Window Manager dispat
 - Current pane: !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null|| true`
 - Reservations: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; for f in "$RD"/status/*.reserved; do [ -f "$f" ] && echo "RESERVED: $(basename $f .reserved)"; done 2>/dev/null || true`
 
-**Expected:** 1 tmux command (display-message), 2 file writes (status + reserved), ~3s.
-
-**Do NOT ask for confirmation.** Parse args: no arg → reserve, `off`/`unreserve` → unreserve, `list` → display injected data.
-
-### Reserve / Unreserve
-
-Pass the user's argument as `$1` to the script below. No arg or any arg other than `off`/`unreserve` → reserve. `off` or `unreserve` → unreserve. Then run:
+**Do NOT ask for confirmation.** No arg → reserve, `off`/`unreserve` → unreserve, `list` → display injected data.
 
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"

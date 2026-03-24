@@ -6,29 +6,13 @@ init_hook
 PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
-write_status() {
-  local status="$1" task="$2" tmp
-  tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null)
-  if [ -z "$tmp" ] || [ ! -f "$tmp" ]; then
-    echo "[WARN] mktemp failed in $(basename "$0") — writing non-atomically" >> "${RUNTIME_DIR}/doey-warnings.log" 2>/dev/null
-    tmp="$STATUS_FILE"
-  fi
-  cat > "$tmp" <<EOF
-PANE: $PANE
-UPDATED: $NOW
-STATUS: $status
-TASK: $task
-EOF
-  case "$tmp" in "$STATUS_FILE") ;; *) mv "$tmp" "$STATUS_FILE" ;; esac
-}
-
 case "$PROMPT" in
-  /compact*)        write_status "READY" ""; exit 0 ;;
+  /compact*)        write_pane_status "$STATUS_FILE" "READY"; exit 0 ;;
   /simplify*|/loop*|/rename*|/exit*|/help*|/status*|/doey*) exit 0 ;;
 esac
 
-write_status "BUSY" "${PROMPT:0:80}"
-[ -n "${DOEY_PANE_ID:-}" ] && echo "BUSY" > "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status"
+write_pane_status "$STATUS_FILE" "BUSY" "${PROMPT:0:80}"
+[ -n "${DOEY_PANE_ID:-}" ] && write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "BUSY" "${PROMPT:0:80}"
 _log "task started: $(echo "$PROMPT" | head -c 80)"
 
 # Expand collapsed column so worker becomes visible

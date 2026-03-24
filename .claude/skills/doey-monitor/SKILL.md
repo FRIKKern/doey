@@ -12,11 +12,9 @@ description: Monitor worker panes — reads status files (FINISHED, BUSY, ERROR,
 - Watchdog heartbeat: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; HB="$RD/status/watchdog_W${W}.heartbeat"; [ -f "$HB" ] && echo "heartbeat: $(cat $HB) age: $(( $(date +%s) - $(cat $HB) ))s" || echo "No watchdog heartbeat"`
 - Pane titles: !`SESSION=$(grep '^SESSION_NAME=' $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2- | tr -d '"'); W="${DOEY_WINDOW_INDEX:-0}"; for p in $(tmux list-panes -t "$SESSION:$W" -F '#{pane_index}' 2>/dev/null); do TITLE=$(tmux display-message -t "$SESSION:$W.$p" -p '#{pane_title}' 2>/dev/null); echo "$W.$p: $TITLE"; done || true`
 
-**Expected:** 1-2 tmux commands (capture-pane for deep inspect), 5-6 file reads (status + results + heartbeat), ~5s per poll cycle.
-
 ### Status Table
 
-Build from injected data: `PANE | STATUS | RESERVED | TASK | UPDATED`. For each worker pane (WORKER_PANES): status from `.status` file (enrich FINISHED with `.json` result), `.reserved` flag, task from pane title, age of status file.
+Build from injected data: `PANE | STATUS | RESERVED | TASK | UPDATED`. Enrich FINISHED with `.json` result. Task from pane title. Show status age.
 
 ### Deep Inspect (replace X with pane index)
 
@@ -29,15 +27,15 @@ tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || echo "(pane not found)"
 
 ### Watching Mode
 
-Poll every 15s with `[%H:%M:%S]` header. Track ALL_DONE; break when all non-reserved workers are FINISHED/READY.
+Poll every 15s with `[%H:%M:%S]` header. Break when all non-reserved workers are FINISHED/READY.
 
 ### Error Recovery
 
-**Unstick:** exit copy-mode → `C-c` (0.5s) → `C-u` (0.5s) → `Enter` (3s) → check for `❯`. After 2 failures, see `/doey-dispatch` Unstick section.
+**Unstick:** exit copy-mode → `C-c` (0.5s) → `C-u` (0.5s) → `Enter` (3s) → check for `❯`. After 2 failures → `/doey-dispatch` Unstick.
 
-**Nudge idle:** exit copy-mode → `Enter` (5s) → grep for `thinking|working|Read|Edit|Bash`. Still idle → unstick or re-dispatch.
+**Nudge idle:** exit copy-mode → `Enter` (5s) → grep `thinking|working|Read|Edit|Bash`. Still idle → unstick or re-dispatch.
 
 ### Rules
-1. **Never interrupt BUSY** — only recover ERROR/unresponsive
-2. **Status from files** — never parse pane output
-3. **Min 15s poll** | **Always exit copy-mode before send-keys**
+1. Never interrupt BUSY — only recover ERROR/unresponsive
+2. Status from files — never parse pane output
+3. Min 15s poll; always exit copy-mode before send-keys

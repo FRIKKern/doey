@@ -753,6 +753,25 @@ step_done() {
   printf "${SUCCESS}done${RESET}\n"
 }
 
+# Print step header — uses step_start in interactive mode, dim printf in headless.
+# Usage: _step_msg <n> <label> <headless>
+_step_msg() {
+  if [[ "$3" -eq 0 ]]; then step_start "$1" "$2"
+  else printf "  ${DIM}%s${RESET}\n" "$2"; fi
+}
+
+# Parse claude auth status into _AUTH_OK, _AUTH_METHOD, _AUTH_EMAIL, _AUTH_SUB.
+_parse_auth_status() {
+  _AUTH_JSON=$(claude auth status 2>&1) || _AUTH_JSON=""
+  _AUTH_OK=false
+  if echo "$_AUTH_JSON" | grep -q '"loggedIn": true'; then
+    _AUTH_OK=true
+    _AUTH_METHOD=$(echo "$_AUTH_JSON" | grep '"authMethod"' | sed 's/.*: *"//;s/".*//')
+    _AUTH_EMAIL=$(echo "$_AUTH_JSON" | grep '"email"' | sed 's/.*: *"//;s/".*//')
+    _AUTH_SUB=$(echo "$_AUTH_JSON" | grep '"subscriptionType"' | sed 's/.*: *"//;s/".*//')
+  fi
+}
+
 # ── Shared launch helpers ────────────────────────────────────────────
 
 # Write the shared worker system prompt to <runtime_dir>/worker-system-prompt.md
@@ -1216,22 +1235,21 @@ doey_purge() {
 
   if [[ $total_files -eq 0 ]]; then
     printf "         ${SUCCESS}Nothing to purge — runtime is clean.${RESET}\n\n"
-  elif $dry_run; then
-    _purge_summary "$rt_files" "$rt_bytes" "$res_files" "$res_bytes" "$dry_run"
   else
     _purge_summary "$rt_files" "$rt_bytes" "$res_files" "$res_bytes" "$dry_run"
-    # Confirmation prompt (unless --force)
-    local do_purge=true
-    if ! $force; then
-      local confirm
-      printf "   Found %d stale files (%s). Purge? (y/N) " "$total_files" "$(_purge_format_bytes "$((rt_bytes + res_bytes))")"
-      read -r confirm
-      [[ "$confirm" =~ ^[Yy]$ ]] || do_purge=false
-    fi
-    if $do_purge; then
-      _purge_execute "$list_file"
-    else
-      printf "  ${DIM}Cancelled${RESET}\n"
+    if ! $dry_run; then
+      local do_purge=true
+      if ! $force; then
+        local confirm
+        printf "   Found %d stale files (%s). Purge? (y/N) " "$total_files" "$(_purge_format_bytes "$((rt_bytes + res_bytes))")"
+        read -r confirm
+        [[ "$confirm" =~ ^[Yy]$ ]] || do_purge=false
+      fi
+      if $do_purge; then
+        _purge_execute "$list_file"
+      else
+        printf "  ${DIM}Cancelled${RESET}\n"
+      fi
     fi
   fi
 
@@ -1239,23 +1257,15 @@ doey_purge() {
     "$rt_files" "$rt_bytes" "$res_files" "$res_bytes"
 }
 
-INITIAL_WORKER_COLS=$DOEY_INITIAL_WORKER_COLS
-INITIAL_TEAMS=$DOEY_INITIAL_TEAMS
-MAX_WATCHDOG_SLOTS=$DOEY_MAX_WATCHDOG_SLOTS
 
 check_claude_auth() {
   if ! command -v claude >/dev/null 2>&1; then
     printf "  ${ERROR}✗ claude CLI not found${RESET}\n"
     return 1
   fi
-  local auth_json
-  auth_json=$(claude auth status 2>&1) || auth_json=""
-  if echo "$auth_json" | grep -q '"loggedIn": true'; then
-    local method email sub
-    method=$(echo "$auth_json" | grep '"authMethod"' | sed 's/.*: *"//;s/".*//')
-    email=$(echo "$auth_json" | grep '"email"' | sed 's/.*: *"//;s/".*//')
-    sub=$(echo "$auth_json" | grep '"subscriptionType"' | sed 's/.*: *"//;s/".*//')
-    printf "  ${SUCCESS}✓ Authenticated${RESET} ${DIM}(%s · %s · %s)${RESET}\n" "$method" "$email" "$sub"
+  _parse_auth_status
+  if [ "$_AUTH_OK" = true ]; then
+    printf "  ${SUCCESS}✓ Authenticated${RESET} ${DIM}(%s · %s · %s)${RESET}\n" "$_AUTH_METHOD" "$_AUTH_EMAIL" "$_AUTH_SUB"
     return 0
   else
     printf "\n  ${ERROR}✗ Not logged in${RESET}\n"
@@ -1295,11 +1305,7 @@ _launch_session_core() {
   worker_panes_csv="$(_build_worker_csv "$total")"
 
   # -- Session creation --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 1 "Creating session for ${name}..."
-  else
-    printf "  ${DIM}Creating session ${session}...${RESET}\n"
-  fi
+  _step_msg 1 "Creating session for ${name}..." "$headless"
 
   _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
 
@@ -1333,21 +1339,13 @@ MANIFEST
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Theme --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 2 "Applying theme..."
-  else
-    printf "  ${DIM}Applying theme...${RESET}\n"
-  fi
+  _step_msg 2 "Applying theme..." "$headless"
   local border_fmt=" #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   apply_doey_theme "$session" "$name" "$border_fmt" 2
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Grid --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 3 "Building ${cols}x${rows} grid (${total} panes)..."
-  else
-    printf "  ${DIM}Building ${cols}x${rows} grid (${total} panes)...${RESET}\n"
-  fi
+  _step_msg 3 "Building ${cols}x${rows} grid (${total} panes)..." "$headless"
 
   for (( r=1; r<rows; r++ )); do
     tmux split-window -v -t "$session:${team_window}.0" -c "$dir"
@@ -1369,11 +1367,7 @@ MANIFEST
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Name panes --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 4 "Naming panes..."
-  else
-    printf "  ${DIM}Naming panes...${RESET}\n"
-  fi
+  _step_msg 4 "Naming panes..." "$headless"
 
   tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
   for (( i=1; i<total; i++ )); do
@@ -1384,11 +1378,7 @@ MANIFEST
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Manager & Watchdog --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 5 "Launching Window Manager & Watchdog..."
-  else
-    printf "  ${DIM}Launching Window Manager & Watchdog...${RESET}\n"
-  fi
+  _step_msg 5 "Launching Window Manager & Watchdog..." "$headless"
 
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
   _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
@@ -1407,12 +1397,8 @@ MANIFEST
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Boot workers --
-  if [[ "$headless" -eq 0 ]]; then
-    step_start 6 "Booting ${worker_count} workers..."
-    printf '\n'
-  else
-    printf "  ${DIM}Booting ${worker_count} workers...${RESET}\n"
-  fi
+  _step_msg 6 "Booting ${worker_count} workers..." "$headless"
+  [[ "$headless" -eq 0 ]] && printf '\n'
 
   local _bw_pairs=()
   local _bw_i
@@ -1910,14 +1896,9 @@ check_doctor() {
   fi
 
   # Auth check
-  local auth_json
-  auth_json=$(claude auth status 2>&1) || auth_json=""
-  if echo "$auth_json" | grep -q '"loggedIn": true'; then
-    local _auth_method _auth_email _auth_sub
-    _auth_method=$(echo "$auth_json" | grep '"authMethod"' | sed 's/.*: *"//;s/".*//')
-    _auth_email=$(echo "$auth_json" | grep '"email"' | sed 's/.*: *"//;s/".*//')
-    _auth_sub=$(echo "$auth_json" | grep '"subscriptionType"' | sed 's/.*: *"//;s/".*//')
-    _doc_check ok "Claude auth" "${_auth_method} · ${_auth_email} · ${_auth_sub}"
+  _parse_auth_status
+  if [ "$_AUTH_OK" = true ]; then
+    _doc_check ok "Claude auth" "${_AUTH_METHOD} · ${_AUTH_EMAIL} · ${_AUTH_SUB}"
   else
     _doc_check fail "Claude auth" "Not logged in — run 'claude' to authenticate"
   fi
@@ -2114,7 +2095,7 @@ launch_session_headless() {
 launch_session_dynamic() {
   local name="$1" dir="$2"
   local session="doey-${name}" runtime_dir="/tmp/doey/${name}"
-  local short_dir="${dir/#$HOME/~}" max_workers=20
+  local short_dir="${dir/#$HOME/~}"
   local team_window=1
 
   cd "$dir"
@@ -2151,7 +2132,7 @@ PROJECT_ACRONYM="$acronym"
 SESSION_NAME="$session"
 GRID="dynamic"
 ROWS="2"
-MAX_WORKERS="$max_workers"
+MAX_WORKERS="$DOEY_MAX_WORKERS"
 WORKER_PANES=""
 WORKER_COUNT="0"
 WATCHDOG_PANE="0.2"
@@ -2165,13 +2146,13 @@ SM_PANE="0.1"
 MANIFEST
 
   local _si
-  for (( _si=1; _si<=INITIAL_TEAMS; _si++ )); do
+  for (( _si=1; _si<=DOEY_INITIAL_TEAMS; _si++ )); do
     echo "WDG_SLOT_${_si}=\"0.$((_si + 1))\"" >> "${runtime_dir}/session.env"
   done
   write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
 
   # Dashboard launches after session.env exists (info-panel + Session Manager need it)
-  setup_dashboard "$session" "$dir" "$runtime_dir" "$INITIAL_TEAMS"
+  setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
   tmux new-window -t "$session" -c "$dir"
   tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
   tmux rename-window -t "$session:${team_window}" "Local Team"
@@ -2188,9 +2169,9 @@ MANIFEST
   step_start 5 "Adding ${INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
   sleep 0.2  # reduced from 0.5s — tmux is fast
   local _col_i
-  for (( _col_i=0; _col_i<INITIAL_WORKER_COLS; _col_i++ )); do
+  for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
     doey_add_column "$session" "$runtime_dir" "$dir"
-    (( _col_i < INITIAL_WORKER_COLS - 1 )) && sleep 0.3
+    (( _col_i < DOEY_INITIAL_WORKER_COLS - 1 )) && sleep 0.3
   done
   step_done
 
@@ -2200,7 +2181,6 @@ MANIFEST
     local _ptc_remaining=$((_ptc_total - 1))  # Team 1 already created above
     if [ "$_ptc_remaining" -gt 0 ]; then
       step_start 6 "Adding ${_ptc_remaining} configured teams..."
-      local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
       local _ptc_i _ptc_fail=0
       for (( _ptc_i=2; _ptc_i<=_ptc_total; _ptc_i++ )); do
         local _ptc_type _ptc_workers _ptc_name _ptc_role _ptc_wm _ptc_mm _ptc_cols _ptc_wt_spec
@@ -2229,7 +2209,7 @@ MANIFEST
         if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$_ptc_cols" "$_ptc_wt_spec" "$_ptc_name" "$_ptc_role" "$_ptc_wm" "$_ptc_mm" "$_ptc_team_type" ); then
           _ptc_fail=$((_ptc_fail + 1))
         fi
-        (( _ptc_i < _ptc_total )) && sleep $TEAM_LAUNCH_DELAY
+        (( _ptc_i < _ptc_total )) && sleep $DOEY_TEAM_LAUNCH_DELAY
       done
       [ "$_ptc_fail" -gt 0 ] && printf "${WARN}${_ptc_fail} team(s) failed${RESET}\n"
       step_done
@@ -2248,32 +2228,30 @@ MANIFEST
       [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:1" "$_ptc1_name"
     fi
   else
-    local _extra_teams=$((INITIAL_TEAMS - 1))
+    local _extra_teams=$((DOEY_INITIAL_TEAMS - 1))
     if [ "$_extra_teams" -gt 0 ]; then
       step_start 6 "Adding ${_extra_teams} more team windows..."
       # Serialize team launches to prevent concurrent OAuth token requests
-      local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
       local _team_i _team_fail=0
       for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
         if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ); then
           _team_fail=$((_team_fail + 1))
         fi
-        (( _team_i < _extra_teams - 1 )) && sleep $TEAM_LAUNCH_DELAY
+        (( _team_i < _extra_teams - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
       done
       [ "$_team_fail" -gt 0 ] && printf "${WARN}${_team_fail} team(s) failed${RESET}\n"
       step_done
     fi
 
-    local INITIAL_WORKTREE_TEAMS=$DOEY_INITIAL_WORKTREE_TEAMS
-    step_start 7 "Adding ${INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
+    step_start 7 "Adding ${DOEY_INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
     # Serialize worktree team launches to prevent concurrent OAuth token requests
     local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
     local _wt_i _wt_ok=0
-    for (( _wt_i=0; _wt_i<INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
-      if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "auto" ); then
+    for (( _wt_i=0; _wt_i<DOEY_INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
+      if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "auto" ); then
         _wt_ok=$((_wt_ok + 1))
       fi
-      (( _wt_i < INITIAL_WORKTREE_TEAMS - 1 )) && sleep $TEAM_LAUNCH_DELAY
+      (( _wt_i < DOEY_INITIAL_WORKTREE_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
     done
     if [ "$_wt_ok" -gt 0 ]; then
       step_done
@@ -2281,15 +2259,14 @@ MANIFEST
       printf "${WARN}skipped${RESET}\n"
     fi
 
-    local INITIAL_FREELANCER_TEAMS=${DOEY_INITIAL_FREELANCER_TEAMS:-1}
-    if [ "$INITIAL_FREELANCER_TEAMS" -gt 0 ]; then
-      step_start 8 "Adding ${INITIAL_FREELANCER_TEAMS} freelancer team(s)..."
+    if [ "$DOEY_INITIAL_FREELANCER_TEAMS" -gt 0 ]; then
+      step_start 8 "Adding ${DOEY_INITIAL_FREELANCER_TEAMS} freelancer team(s)..."
       local _fl_i _fl_ok=0
-      for (( _fl_i=0; _fl_i<INITIAL_FREELANCER_TEAMS; _fl_i++ )); do
-        if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "" "Freelancers" "" "" "" "freelancer" ); then
+      for (( _fl_i=0; _fl_i<DOEY_INITIAL_FREELANCER_TEAMS; _fl_i++ )); do
+        if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "" "Freelancers" "" "" "" "freelancer" ); then
           _fl_ok=$((_fl_ok + 1))
         fi
-        (( _fl_i < INITIAL_FREELANCER_TEAMS - 1 )) && sleep $TEAM_LAUNCH_DELAY
+        (( _fl_i < DOEY_INITIAL_FREELANCER_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
       done
       if [ "$_fl_ok" -gt 0 ]; then
         step_done
@@ -2321,7 +2298,7 @@ MANIFEST
   printf "   ${BOLD}Workers${RESET}    ${DIM}T1: %-4s (auto-expands, doey add)${RESET}\n" "$initial_workers"
   printf "\n"
   printf "   ${DIM}Project${RESET}   ${BOLD}%s${RESET}\n" "$name"
-  printf "   ${DIM}Grid${RESET}      ${BOLD}dynamic${RESET}  ${DIM}Max workers${RESET}  ${BOLD}%s${RESET}\n" "$max_workers"
+  printf "   ${DIM}Grid${RESET}      ${BOLD}dynamic${RESET}  ${DIM}Max workers${RESET}  ${BOLD}%s${RESET}\n" "$DOEY_MAX_WORKERS"
   printf "   ${DIM}Session${RESET}   ${BOLD}%s${RESET}\n" "$session"
   printf "   ${DIM}Manifest${RESET}  ${BOLD}%s${RESET}\n" "${runtime_dir}/session.env"
   printf "\n"
@@ -2481,9 +2458,6 @@ _batch_boot_workers() {
   local session="$1" runtime_dir="$2" team_window="$3"
   shift 3
 
-  # Stagger launches to prevent concurrent OAuth token requests that exhaust auth sessions
-  local WORKER_LAUNCH_DELAY=$DOEY_WORKER_LAUNCH_DELAY
-
   local _bbw_acronym=""
   [ -f "${runtime_dir}/session.env" ] && _bbw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
 
@@ -2520,12 +2494,10 @@ _batch_boot_workers() {
     local cmd="claude --dangerously-skip-permissions --model $_bbw_worker_model --name \"T${team_window} ${_bbw_name_prefix}${worker_num}\""
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
     tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
-    sleep $WORKER_LAUNCH_DELAY  # Auth stagger between worker launches
+    sleep $DOEY_WORKER_LAUNCH_DELAY  # Auth stagger
 
     write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
   done
-
-  sleep "$DOEY_WORKER_LAUNCH_DELAY"
 }
 
 doey_add_column() {
@@ -2534,13 +2506,12 @@ doey_add_column() {
   safe_source_session_env "${runtime_dir}/session.env"
   _read_team_state "$session" "$runtime_dir" "$dir" "$team_window"
 
-  local max_workers="${MAX_WORKERS:-20}"
   if [[ "$_ts_grid" != "dynamic" ]]; then
     printf "  ${ERROR}Team window %s is not using dynamic grid mode${RESET}\n" "$team_window"
     return 1
   fi
-  if (( _ts_worker_count >= max_workers )); then
-    printf "  ${ERROR}Max workers reached (%s)${RESET}\n" "$max_workers"
+  if (( _ts_worker_count >= DOEY_MAX_WORKERS )); then
+    printf "  ${ERROR}Max workers reached (%s)${RESET}\n" "$DOEY_MAX_WORKERS"
     return 1
   fi
 
@@ -2655,7 +2626,7 @@ add_dashboard_watchdog_slot() {
     last_slot="$_sv"
   done < <(grep '^WDG_SLOT_[0-9]*=' "${runtime_dir}/session.env" 2>/dev/null)
 
-  if [ "$slot_count" -ge "$MAX_WATCHDOG_SLOTS" ]; then
+  if [ "$slot_count" -ge "$DOEY_MAX_WATCHDOG_SLOTS" ]; then
     WDG_NEW_SLOT=""
     return 1
   fi
@@ -2907,7 +2878,7 @@ _print_team_created() {
 }
 
 add_dynamic_team_window() {
-  local session="$1" runtime_dir="$2" dir="$3" initial_cols="${4:-$INITIAL_WORKER_COLS}"
+  local session="$1" runtime_dir="$2" dir="$3" initial_cols="${4:-$DOEY_INITIAL_WORKER_COLS}"
   local worktree_spec="${5:-}"
   local team_name="${6:-}" team_role="${7:-}" worker_model="${8:-}" manager_model="${9:-}"
   local team_type="${10:-}"
@@ -2940,7 +2911,7 @@ add_dynamic_team_window() {
 
   _acquire_watchdog_slot "$session" "$runtime_dir" "$team_dir" "false"
   local wdg_slot="$_AWS_SLOT"
-  [ -n "$wdg_slot" ] || printf "  ${WARN}All %s Dashboard watchdog slots occupied — team %s has no Watchdog${RESET}\n" "$MAX_WATCHDOG_SLOTS" "$window_index"
+  [ -n "$wdg_slot" ] || printf "  ${WARN}All %s Dashboard watchdog slots occupied — team %s has no Watchdog${RESET}\n" "$DOEY_MAX_WATCHDOG_SLOTS" "$window_index"
 
   # Freelancer teams: no manager, all panes are workers. MANAGER_PANE is empty.
   local mgr_pane="0"
@@ -2957,7 +2928,6 @@ add_dynamic_team_window() {
     local _fl_wm="${worker_model:-$DOEY_WORKER_MODEL}"
     local _fl_acronym=""
     [ -f "${runtime_dir}/session.env" ] && _fl_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
-    _ensure_worker_prompt "$runtime_dir" "$team_dir"
 
     # Launch F0 in pane 0 (top of first column)
     local _fl_pane_id="t${window_index}-f0"
@@ -3085,7 +3055,7 @@ add_team_window() {
   worker_count=$((total_panes - 1))
 
   if ! _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "true"; then
-    printf "  ${ERROR}All %s Dashboard watchdog slots occupied — cannot add more teams${RESET}\n" "$MAX_WATCHDOG_SLOTS"
+    printf "  ${ERROR}All %s Dashboard watchdog slots occupied — cannot add more teams${RESET}\n" "$DOEY_MAX_WATCHDOG_SLOTS"
     tmux kill-window -t "${session}:${window_index}" 2>/dev/null
     return 1
   fi
@@ -3358,31 +3328,9 @@ doey_config() {
       printf "    DOEY_TEAM_LAUNCH_DELAY    = %s\n" "${DOEY_TEAM_LAUNCH_DELAY}"
       printf "\n"
       ;;
-    --global)
-      mkdir -p "$global_dir"
-      if [ ! -f "$global_config" ] && [ -f "$template" ]; then
-        cp "$template" "$global_config"
-        printf "  ${SUCCESS}Created${RESET} %s from template\n" "$global_config"
-      fi
-      "${EDITOR:-vim}" "$global_config"
-      ;;
-    --reset)
-      if [ ! -f "$template" ]; then
-        printf "  ${ERROR}Template not found: %s${RESET}\n" "$template"
-        return 1
-      fi
-      if [ -n "$project_config" ]; then
-        cp "$template" "$project_config"
-        printf "  ${SUCCESS}Reset${RESET} %s to defaults\n" "$project_config"
-      else
-        mkdir -p "$global_dir"
-        cp "$template" "$global_config"
-        printf "  ${SUCCESS}Reset${RESET} %s to defaults\n" "$global_config"
-      fi
-      ;;
-    *)
-      # Default: edit project config if available, else global
-      if [ -n "$project_config" ]; then
+    --global|"")
+      # Edit project config if available (and no --global flag), else global
+      if [ "${1:-}" != "--global" ] && [ -n "$project_config" ]; then
         "${EDITOR:-vim}" "$project_config"
       else
         mkdir -p "$global_dir"
@@ -3392,6 +3340,16 @@ doey_config() {
         fi
         "${EDITOR:-vim}" "$global_config"
       fi
+      ;;
+    --reset)
+      if [ ! -f "$template" ]; then
+        printf "  ${ERROR}Template not found: %s${RESET}\n" "$template"
+        return 1
+      fi
+      local target="$global_config"
+      [ -n "$project_config" ] && target="$project_config" || mkdir -p "$global_dir"
+      cp "$template" "$target"
+      printf "  ${SUCCESS}Reset${RESET} %s to defaults\n" "$target"
       ;;
   esac
 }
@@ -3699,7 +3657,7 @@ HELP
       esac
     done
     if [ -n "$wt_spec" ]; then
-      add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$INITIAL_WORKER_COLS" "$wt_spec"
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "$wt_spec"
     else
       add_team_window "$session" "$runtime_dir" "$dir" "$grid_arg"
     fi

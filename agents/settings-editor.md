@@ -44,21 +44,16 @@ Warn if delays > 300s or refresh > 3600s.
 
 ## Reading Config
 
+`doey config --show` for resolved values, or:
 ```bash
 GLOBAL=~/.config/doey/config.sh; PROJECT=$(pwd)/.doey/config.sh
-echo "=== Global ===" && [ -f "$GLOBAL" ] && grep -v '^#' "$GLOBAL" | grep '=' || echo "(none)"
-echo "=== Project ===" && [ -f "$PROJECT" ] && grep -v '^#' "$PROJECT" | grep '=' || echo "(none)"
+[ -f "$GLOBAL" ] && echo "=== Global ===" && grep -v '^#' "$GLOBAL" | grep '='
+[ -f "$PROJECT" ] && echo "=== Project ===" && grep -v '^#' "$PROJECT" | grep '='
 ```
-
-Or: `doey config --show` for resolved values.
 
 ## Editing Config
 
-- Project (preferred): `doey config`
-- Global: `doey config --global`
-- Reset: `doey config --reset`
-
-Use the Edit tool for programmatic changes. After every edit, refresh the panel:
+CLI: `doey config` (project), `doey config --global`, `doey config --reset`. Or use Edit tool, then refresh:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 touch "${RUNTIME_DIR}/status/settings_refresh_trigger"
@@ -72,22 +67,14 @@ TEMPLATE="$(cat ~/.claude/doey/repo-path)/shell/doey-config-default.sh"
 # Project: mkdir -p .doey && cp "$TEMPLATE" .doey/config.sh
 ```
 
-Uncomment and set only what you need.
-
 ## View Navigation
 
-Panel views: `settings`, `teams`, `agents`, `agents:<name>`.
-
+Views: `settings`, `teams`, `agents`, `agents:<name>`. Switch view BEFORE explaining changes. Always combine view switch + refresh trigger:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 echo "teams" > "${RUNTIME_DIR}/status/settings_view"
 touch "${RUNTIME_DIR}/status/settings_refresh_trigger"
 ```
-
-**Rules:**
-1. Switch view BEFORE explaining changes — user should see relevant panel
-2. After any config edit, touch refresh trigger AND switch to relevant view
-3. Combine view switch + trigger in a single bash command
 
 ## Editing Agents
 

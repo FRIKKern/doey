@@ -1,8 +1,8 @@
 # Worktree Test Guide
 
-**Prerequisites:** Clean git repo (no uncommitted changes on main), no running Doey session, macOS with bash 3.2.
+**Prerequisites:** Clean git repo, no running Doey session, macOS with bash 3.2.
 
-**Setup** — get runtime vars for all tests:
+**Setup:**
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION=$(grep SESSION_NAME= "$RUNTIME_DIR/session.env" | cut -d= -f2)

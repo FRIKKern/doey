@@ -43,108 +43,31 @@ status-right: "⚙ Settings  <worker-counts>  HH:MM"
 
 The Settings button uses `#[range=user|settings]` to create a named clickable region. The mouse binding on `MouseDown1Status` checks `#{mouse_status_range}` to route clicks.
 
-## Tmux Concepts You Must Know
+## Tmux Patterns
 
-### Clickable Status Bar Buttons
-
-Tmux 3.2+ supports named ranges in status bar format strings. This is how you make clickable buttons:
+### Clickable Status Bar Buttons (tmux 3.2+)
 
 ```bash
-# 1. Define the button in status-right with a named range
+# Define button with named range in status-right
 tmux set-option -t "$session" status-right \
-  "#[range=user|mybutton,fg=colour240]🔧 My Button #[norange] ..."
+  "#[range=user|mybutton,fg=colour240]🔧 Button #[norange] ..."
 
-# 2. Bind mouse click — check which range was clicked
+# Bind click — chain if-shell for multiple buttons
 tmux bind-key -n MouseDown1Status \
   if-shell -F '#{==:#{mouse_status_range},mybutton}' \
   "run-shell -b '/path/to/handler.sh #{session_name}'" \
-  ""
-
-# 3. For multiple buttons, chain if-shell:
-tmux bind-key -n MouseDown1Status \
-  if-shell -F '#{==:#{mouse_status_range},settings}' \
-  "run-shell -b '/path/to/settings-btn.sh #{session_name}'" \
-  "if-shell -F '#{==:#{mouse_status_range},mybutton}' \
-    'run-shell -b \"/path/to/my-btn.sh #{session_name}\"' \
-    'switch-client -t ='"
+  "switch-client -t ="
 ```
 
-**Critical details:**
-- Range names are the part after `user|` — e.g., `range=user|settings` creates range named `settings`
-- `#{mouse_status_range}` only works inside `if-shell -F` in a mouse binding
-- The handler script receives args from the binding (e.g., `#{session_name}`)
-- Use `run-shell -b` (background) so the click doesn't block tmux
-- The last fallback should be the default behavior (`switch-client -t =` or empty `""`)
+**Key details:** `range=user|name` creates range `name`. Use `run-shell -b` (background). `#{mouse_status_range}` only works in `if-shell -F` mouse bindings. Chain `if-shell` for multiple buttons with a default fallback.
 
-### Button Handler Script Pattern
+### Button Handler Pattern
 
-Every click handler follows this pattern:
+Every handler: receive `$1=session`, resolve `RUNTIME_DIR` via `tmux show-environment`, check if window exists (focus it), else create new window. Use `set -uo pipefail` (NOT `set -e`).
 
-```bash
-#!/usr/bin/env bash
-set -uo pipefail
+### Status Bar Content Generators (`#()` scripts)
 
-session="${1:-}"
-[ -z "$session" ] && exit 0
-
-# Get runtime directory
-RUNTIME_DIR=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
-[ -z "$RUNTIME_DIR" ] && exit 0
-
-# Get project directory
-PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-[ -z "$PROJECT_DIR" ] && exit 0
-
-# If window already exists, just focus it
-target_win=$(tmux list-windows -t "$session" -F '#{window_index} #{window_name}' 2>/dev/null \
-  | grep ' MyWindow$' | head -1 | awk '{print $1}')
-if [ -n "$target_win" ]; then
-  tmux select-window -t "$session:$target_win"
-  exit 0
-fi
-
-# Create new window and set it up
-tmux new-window -t "$session" -n "MyWindow"
-# ... configure panes, launch processes ...
-```
-
-### Pane Border Format
-
-Pane borders use a format string with `#()` shell command expansion:
-
-```bash
-pane_border_fmt="#(${SCRIPT_DIR}/pane-border-status.sh '#{session_name}:#{window_index}.#{pane_index}')"
-```
-
-The script receives the full pane reference and can look up role, status, title.
-
-### Status Bar Content Generators
-
-Scripts called from `#()` in status format strings:
-- Must be fast (< 100ms) — called every `status-interval` seconds
-- Must never crash — use `set -uo pipefail` but NOT `set -e`
-- Output a single line of tmux-formatted text
-- Can use `#[fg=colour240]`, `#[bold]`, etc. in output
-
-### Window Hooks
-
-```bash
-# Run command when a new window is created
-tmux set-hook -t "$session" after-new-window "command1; command2"
-```
-
-### Key Tables and Bindings
-
-```bash
-# Root table (no prefix needed):
-tmux bind-key -n <key> <command>
-
-# Prefix table (Ctrl-b + key):
-tmux bind-key <key> <command>
-
-# Custom key table:
-tmux bind-key -T mytable <key> <command>
-```
+Must be fast (< 100ms), never crash, output single line of tmux-formatted text. Use `set -uo pipefail` but NOT `set -e`.
 
 ## Installation Checklist
 

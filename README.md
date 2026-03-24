@@ -89,7 +89,8 @@ See [Context Reference](docs/context-reference.md) for details.
 **Tasks:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
 **Monitor:** `/doey-monitor`, `/doey-status`, `/doey-watchdog-compact`
 **Infra:** `/doey-add-window`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
-**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-simplify-everything`
+**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-login`, `/doey-simplify-everything`
+**Config:** `/doey-settings`
 **Session:** `/doey-kill-session`, `/doey-kill-all-sessions`
 **R&D:** `/doey-rd-team`
 

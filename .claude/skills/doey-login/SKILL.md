@@ -16,16 +16,9 @@ description: Fix auth across Doey sessions. Checks Keychain token — if valid, 
 `/doey-login all` — all doey sessions
 `/doey-login team N` — specific team window only
 
-## Step 1: Parse arguments and select scope
+## Step 1: Parse arguments
 
-If no arguments, ask the user what to restart. Default suggestion: **this session**.
-
-Options to present:
-1. **This session** — restart all teams in current session (default)
-2. **All sessions** — restart across all doey sessions
-3. **Team N** — restart only one team window
-
-Set **TARGET_SCOPE** to `session`, `all`, or a window number.
+No args → ask (default: this session). Set **TARGET_SCOPE** to `session`, `all`, or a window number.
 
 ## Step 2: Check token validity
 
@@ -53,20 +46,14 @@ else:
 " 2>/dev/null
 ```
 
-**If `restart_only`:** Token is valid. Proceed directly to Step 3.
-**If `needs_login`:** Tell the user:
-
-> Your auth token is expired. Run `/login` here, then tell me when it's done.
-
-Wait for confirmation, re-check, then proceed.
+**If `restart_only`:** proceed to Step 3.
+**If `needs_login`:** tell user to run `/login`, wait for confirmation, re-check, then proceed.
 
 ## Step 3: Restart instances
 
-Restart Claude instances based on TARGET_SCOPE. Kill by PID (SIGTERM → SIGKILL), clear, relaunch.
+Restart based on TARGET_SCOPE. Never restart Info Panel (0.0) or the current pane.
 
-**Never restart:** Info Panel (0.0), the current pane.
-
-### Helper function
+### Helper
 
 ```bash
 kill_and_relaunch() {
@@ -84,7 +71,7 @@ kill_and_relaunch() {
 }
 ```
 
-### Restart a team window
+### restart_team function
 
 ```bash
 restart_team() {
@@ -93,41 +80,26 @@ restart_team() {
   [ ! -f "$TEAM_ENV" ] && { echo "WARNING: team_${W}.env not found"; return; }
   local WDG_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
   local WORKER_PANES=$(grep '^WORKER_PANES=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
-
   echo "=== Team $W ==="
 
-  # Manager
   [ "${SESS}:${W}.0" != "$SKIP_PANE" ] && {
-    kill_and_relaunch "${SESS}:${W}.0" \
-      "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\""
-    echo "  ${W}.0 Manager ✓"
-  }
-
-  # Watchdog
+    kill_and_relaunch "${SESS}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\""
+    echo "  ${W}.0 Manager ✓"; }
   [ -n "$WDG_PANE" ] && [ "${SESS}:${WDG_PANE}" != "$SKIP_PANE" ] && {
-    kill_and_relaunch "${SESS}:${WDG_PANE}" \
-      "claude --dangerously-skip-permissions --model haiku --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\""
-    echo "  ${WDG_PANE} Watchdog ✓"
-  }
+    kill_and_relaunch "${SESS}:${WDG_PANE}" "claude --dangerously-skip-permissions --model haiku --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\""
+    echo "  ${WDG_PANE} Watchdog ✓"; }
 
-  # Workers
   for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
-    local PANE="${SESS}:${W}.${wp}"
+    local PANE="${SESS}:${W}.${wp}" PANE_SAFE=$(echo "${SESS}:${W}.${wp}" | tr ':.' '_')
     [ "$PANE" = "$SKIP_PANE" ] && continue
-    local PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
-    [ -f "${RT}/status/${PANE_SAFE}.reserved" ] && { echo "  ${W}.${wp} — reserved (skipped)"; continue; }
+    [ -f "${RT}/status/${PANE_SAFE}.reserved" ] && { echo "  ${W}.${wp} — reserved"; continue; }
     local W_NAME=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null || echo "T${W} W${wp}")
     local WORKER_PROMPT=$(grep -rl "pane ${W}\.${wp} " "${RT}"/worker-system-prompt-*.md 2>/dev/null | head -1 || true)
     local CMD="claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\""
     [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
     kill_and_relaunch "$PANE" "$CMD"
     mkdir -p "${RT}/status"
-    cat > "${RT}/status/${PANE_SAFE}.status" << EOF
-PANE: ${PANE}
-UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
-STATUS: READY
-TASK: login-restart
-EOF
+    printf 'PANE: %s\nUPDATED: %s\nSTATUS: READY\nTASK: login-restart\n' "$PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" > "${RT}/status/${PANE_SAFE}.status"
     echo "  ${W}.${wp} ✓"
   done
 }
@@ -169,21 +141,10 @@ fi
 
 ## Step 4: Report
 
-```
-## Login Refresh Complete
-- Token: valid (N hours remaining)
-- Scope: [this session | all sessions | team N]
-- Restarted: N managers, N watchdogs, N workers
-- Skipped: N reserved, 1 current pane
-- All restarted instances using fresh Keychain token
-```
+Print: token status, scope, counts (restarted/skipped).
 
 ## Rules
 
-- NEVER restart the pane the user is in
-- NEVER restart Info Panel (0.0)
-- Sleep 0.5s between pane restarts
-- Skip reserved panes
-- Bash 3.2 compatible — no declare -A, no mapfile
-- If token is valid, do NOT ask user to /login — just restart
-- Default scope is current session when no arguments given
+- Never restart current pane or Info Panel (0.0). Skip reserved panes.
+- Sleep 0.5s between restarts. If token valid, skip /login — just restart.
+- Default scope: current session. Bash 3.2 compatible.

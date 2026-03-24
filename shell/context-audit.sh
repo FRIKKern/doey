@@ -18,10 +18,11 @@ done
 
 [[ -z "$MODE" ]] && { echo "Error: must specify --installed or --repo" >&2; exit 2; }
 
-WARN=""; ERROR=""; DIM=""; BOLD=""; SUCCESS=""; RESET=""
 if $USE_COLOR && [[ -t 1 ]]; then
-  WARN='\033[0;33m'; ERROR='\033[0;31m'; DIM='\033[0;90m'
-  BOLD='\033[1m'; SUCCESS='\033[0;32m'; RESET='\033[0m'
+  WARN='\033[0;33m' ERROR='\033[0;31m' DIM='\033[0;90m'
+  BOLD='\033[1m' SUCCESS='\033[0;32m' RESET='\033[0m'
+else
+  WARN="" ERROR="" DIM="" BOLD="" SUCCESS="" RESET=""
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
