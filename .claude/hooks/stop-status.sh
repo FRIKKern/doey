@@ -30,4 +30,6 @@ if [ -n "${DOEY_PANE_ID:-}" ]; then
   _log "stop-status: ${DOEY_PANE_ID} -> $STOP_STATUS (dual-write)"
 fi
 
+notify_watchdog "$STOP_STATUS"
+
 exit 0

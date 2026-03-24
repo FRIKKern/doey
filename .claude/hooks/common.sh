@@ -24,7 +24,7 @@ init_hook() {
 
 _ensure_dirs() {
   [ -f "${RUNTIME_DIR}/.dirs_created" ] && return 0
-  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs,errors}
+  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs,errors,lifecycle}
   touch "${RUNTIME_DIR}/.dirs_created"
 }
 
@@ -192,6 +192,23 @@ NL='
 '
 
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
+
+# Notify this pane's team watchdog of a lifecycle event.
+# Writes event to lifecycle dir and triggers watchdog wake.
+# Usage: notify_watchdog <status> [detail]
+notify_watchdog() {
+  local status="${1:-}" detail="${2:-}"
+  local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
+  [ -z "$team_w" ] && return 0
+  local pane_id="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
+  mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0
+  # Filename uses W<team>_ prefix so watchdog-scan can filter by team
+  local evt_file="${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt"
+  printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" > "$evt_file" 2>/dev/null
+  # Wake the team watchdog
+  touch "${RUNTIME_DIR}/status/watchdog_trigger_W${team_w}" 2>/dev/null
+  return 0
+}
 
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"

@@ -1,7 +1,7 @@
 ---
 name: doey-git-agent
 description: "Git specialist — crafts clean, meaningful commits. Runs as a freelancer with git permissions."
-model: sonnet
+model: opus
 color: "#F05033"
 memory: none
 ---
