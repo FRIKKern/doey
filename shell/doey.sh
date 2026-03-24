@@ -70,10 +70,12 @@ DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
 DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
 
 # Auth & Launch Timing
-DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-1}"
-DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-8}"
-DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-1}"
-DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-1}"
+# Defaults are conservative to avoid Claude API rate-limit errors on session start.
+# Lower only if your account has high rate limits and you need faster boots.
+DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
+DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
+DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
+DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-2}"
 DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-8}"
 DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-10}"
 DOEY_WATCHDOG_LOOP_DELAY="${DOEY_WATCHDOG_LOOP_DELAY:-25}"
@@ -1552,6 +1554,184 @@ _doc_check() {
   printf '\n'
 }
 
+# ── Task Management ───────────────────────────────────────────────────
+# Tasks are session-level goals tracked in ${RUNTIME_DIR}/tasks/.
+# Only the user can mark a task as done — agents signal pending_user_confirmation.
+# Task file format (N.task): TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED
+
+_task_read() {
+  # Read a task file; sets TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED
+  local _file="$1"
+  TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
+  while IFS= read -r _line; do
+    case "${_line%%=*}" in
+      TASK_ID)      TASK_ID="${_line#*=}" ;;
+      TASK_TITLE)   TASK_TITLE="${_line#*=}" ;;
+      TASK_STATUS)  TASK_STATUS="${_line#*=}" ;;
+      TASK_CREATED) TASK_CREATED="${_line#*=}" ;;
+    esac
+  done < "$_file"
+}
+
+_task_age() {
+  local _created="$1" _now _elapsed
+  _now=$(date +%s)
+  _elapsed=$((_now - _created))
+  if [ "$_elapsed" -lt 60 ]; then printf '%ss' "$_elapsed"
+  elif [ "$_elapsed" -lt 3600 ]; then printf '%sm' "$((_elapsed / 60))"
+  elif [ "$_elapsed" -lt 86400 ]; then printf '%sh' "$((_elapsed / 3600))"
+  else printf '%sd' "$((_elapsed / 86400))"; fi
+}
+
+_task_next_id() {
+  local _dir="$1" _counter_file _id=1
+  _counter_file="${_dir}/.next_id"
+  [ -f "$_counter_file" ] && _id=$(cat "$_counter_file")
+  echo $((_id + 1)) > "$_counter_file"
+  echo "$_id"
+}
+
+_task_create() {
+  local _runtime_dir="$1" _title="$2"
+  local _tasks_dir="${_runtime_dir}/tasks"
+  mkdir -p "$_tasks_dir"
+  local _id _now
+  _id="$(_task_next_id "$_tasks_dir")"
+  _now=$(date +%s)
+  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
+    "$_id" "$_title" "$_now" > "${_tasks_dir}/${_id}.task"
+  echo "$_id"
+}
+
+_task_set_status() {
+  local _tasks_dir="$1" _id="$2" _status="$3"
+  local _file="${_tasks_dir}/${_id}.task"
+  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
+  local _tmp="${_file}.tmp"
+  while IFS= read -r _line; do
+    case "${_line%%=*}" in
+      TASK_STATUS) printf 'TASK_STATUS=%s\n' "$_status" ;;
+      *)           printf '%s\n' "$_line" ;;
+    esac
+  done < "$_file" > "$_tmp"
+  mv "$_tmp" "$_file"
+}
+
+_task_runtime() {
+  local _dir _name _session _runtime
+  _dir="$(pwd)"
+  _name="$(find_project "$_dir" 2>/dev/null)"
+  [ -z "$_name" ] && { printf '  %s✗ No doey project for %s%s\n' "$ERROR" "$_dir" "$RESET" >&2; return 1; }
+  _session="doey-${_name}"
+  _runtime=$(tmux show-environment -t "$_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  [ -z "$_runtime" ] && { printf '  %s✗ Session not running: %s%s\n' "$ERROR" "$_session" "$RESET" >&2; return 1; }
+  echo "$_runtime"
+}
+
+task_command() {
+  local _runtime _tasks_dir _subcmd="${1:-list}"
+  shift 2>/dev/null || true
+
+  _runtime="$(_task_runtime)" || exit 1
+  _tasks_dir="${_runtime}/tasks"
+  mkdir -p "$_tasks_dir"
+
+  case "$_subcmd" in
+    list|ls|"")
+      printf '\n  %bDoey Tasks%b\n\n' "$BRAND" "$RESET"
+      local _count=0
+      for _f in "${_tasks_dir}"/*.task; do
+        [ -f "$_f" ] || continue
+        local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
+        _task_read "$_f"
+        [ "$TASK_STATUS" = "done" ] && continue
+        [ "$TASK_STATUS" = "cancelled" ] && continue
+        local _col _age
+        case "$TASK_STATUS" in
+          pending_user_confirmation) _col="$WARN" ;;
+          active)                    _col="$SUCCESS" ;;
+          *)                         _col="$DIM" ;;
+        esac
+        _age="$(_task_age "$TASK_CREATED")"
+        printf '  %b[%s]%b  %b%-30s%b  %b%s%b  %s ago\n' \
+          "$BOLD" "$TASK_ID" "$RESET" \
+          "$_col" "$TASK_STATUS" "$RESET" \
+          "$BOLD" "$TASK_TITLE" "$RESET" \
+          "$_age"
+        _count=$((_count + 1))
+      done
+      if [ "$_count" -eq 0 ]; then
+        printf '  %bNo active tasks.%b\n' "$DIM" "$RESET"
+        printf '  %bAdd: doey task add "your goal"%b\n' "$DIM" "$RESET"
+      else
+        printf '\n  %bMark done (user only): doey task done <id>%b\n' "$DIM" "$RESET"
+      fi
+      printf '\n'
+      ;;
+
+    add)
+      local _title="${*:-}"
+      [ -z "$_title" ] && { printf '  Usage: doey task add "Your task title"\n'; exit 1; }
+      local _id
+      _id="$(_task_create "$_runtime" "$_title")"
+      printf '\n  %s[%s]%s Task created: %s%s%s\n\n' \
+        "$SUCCESS" "$_id" "$RESET" "$BOLD" "$_title" "$RESET"
+      ;;
+
+    done|complete)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task done <id>\n'; exit 1; }
+      local _file="${_tasks_dir}/${_id}.task"
+      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
+      local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
+      _task_read "$_file"
+      printf '\n  %bTask [%s]:%b %s\n' "$BOLD" "$_id" "$RESET" "$TASK_TITLE"
+      printf '  Mark as done? %b[Y/n]%b ' "$DIM" "$RESET"
+      local _reply=""
+      read -r _reply
+      case "$_reply" in
+        [Nn]*) printf '  Cancelled.\n\n'; exit 0 ;;
+        *)
+          _task_set_status "$_tasks_dir" "$_id" "done"
+          printf '  %s✓ Task [%s] marked done.%s\n\n' "$SUCCESS" "$_id" "$RESET"
+          ;;
+      esac
+      ;;
+
+    pending)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task pending <id>\n'; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "pending_user_confirmation"
+      printf '  %s⬤ Task [%s] awaiting user confirmation.%s\n' "$WARN" "$_id" "$RESET"
+      printf '  %bRun: doey task done %s%b\n' "$DIM" "$_id" "$RESET"
+      ;;
+
+    cancel)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task cancel <id>\n'; exit 1; }
+      local _file="${_tasks_dir}/${_id}.task"
+      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
+      local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
+      _task_read "$_file"
+      printf '\n  %bTask [%s]:%b %s\n' "$BOLD" "$_id" "$RESET" "$TASK_TITLE"
+      printf '  Cancel this task? %b[Y/n]%b ' "$DIM" "$RESET"
+      local _reply=""
+      read -r _reply
+      case "$_reply" in
+        [Nn]*) printf '  Aborted.\n\n'; exit 0 ;;
+        *)
+          _task_set_status "$_tasks_dir" "$_id" "cancelled"
+          printf '  %s✓ Task [%s] cancelled.%s\n\n' "$SUCCESS" "$_id" "$RESET"
+          ;;
+      esac
+      ;;
+
+    *)
+      printf '  Usage: doey task [list|add <title>|done <id>|pending <id>|cancel <id>]\n'
+      ;;
+  esac
+}
+
 # ── Update / Reinstall ───────────────────────────────────────────────
 update_system() {
   local repo_dir install_dir=""
@@ -1601,33 +1781,176 @@ update_system() {
   printf "  ${SUCCESS}Update complete.${RESET} Restart sessions: ${BOLD}doey reload${RESET}\n"
 }
 
-# Check if Claude Code CLI has an update available, offer to install it.
+# Detect how Claude Code was installed and return the package manager name.
+# Returns: brew, apt, snap, npm, or "unknown"
+_claude_install_method() {
+  # macOS: check Homebrew first
+  if command -v brew >/dev/null 2>&1; then
+    if brew list --formula 2>/dev/null | grep -q '^claude$' || \
+       brew list --cask 2>/dev/null | grep -q '^claude$'; then
+      echo "brew"; return 0
+    fi
+  fi
+  # Linux: check snap
+  if command -v snap >/dev/null 2>&1; then
+    if snap list claude 2>/dev/null | grep -q 'claude'; then
+      echo "snap"; return 0
+    fi
+  fi
+  # Linux: check apt/dpkg
+  if command -v dpkg >/dev/null 2>&1; then
+    if dpkg -l claude 2>/dev/null | grep -q '^ii'; then
+      echo "apt"; return 0
+    fi
+  fi
+  # Fallback: npm (check if installed globally via npm)
+  if command -v npm >/dev/null 2>&1; then
+    if npm list -g @anthropic-ai/claude-code 2>/dev/null | grep -q 'claude-code'; then
+      echo "npm"; return 0
+    fi
+  fi
+  echo "unknown"
+}
+
+# Install Claude Code using the best available method for this platform.
+_claude_install() {
+  local method="$1"
+  case "$method" in
+    brew)
+      printf "  ${DIM}brew install claude${RESET}\n"
+      brew install claude 2>&1 | tail -3
+      ;;
+    snap)
+      printf "  ${DIM}snap install claude${RESET}\n"
+      sudo snap install claude 2>&1 | tail -3
+      ;;
+    apt)
+      printf "  ${DIM}apt install claude${RESET}\n"
+      sudo apt-get install -y claude 2>&1 | tail -3
+      ;;
+    npm)
+      printf "  ${DIM}npm install -g @anthropic-ai/claude-code${RESET}\n"
+      npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
+      ;;
+    *)
+      # Pick best native option for the platform
+      case "$(uname -s)" in
+        Darwin)
+          if command -v brew >/dev/null 2>&1; then
+            printf "  ${DIM}brew install claude${RESET}\n"
+            brew install claude 2>&1 | tail -3
+          elif command -v npm >/dev/null 2>&1; then
+            printf "  ${DIM}npm install -g @anthropic-ai/claude-code${RESET}\n"
+            npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
+          else
+            return 1
+          fi
+          ;;
+        Linux)
+          if command -v snap >/dev/null 2>&1; then
+            printf "  ${DIM}snap install claude${RESET}\n"
+            sudo snap install claude 2>&1 | tail -3
+          elif command -v apt-get >/dev/null 2>&1; then
+            printf "  ${DIM}apt install claude${RESET}\n"
+            sudo apt-get install -y claude 2>&1 | tail -3
+          elif command -v npm >/dev/null 2>&1; then
+            printf "  ${DIM}npm install -g @anthropic-ai/claude-code${RESET}\n"
+            npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
+          else
+            return 1
+          fi
+          ;;
+        *)
+          if command -v npm >/dev/null 2>&1; then
+            npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
+          else
+            return 1
+          fi
+          ;;
+      esac
+      ;;
+  esac
+}
+
+# Upgrade Claude Code using the same method it was installed with.
+_claude_upgrade() {
+  local method="$1"
+  case "$method" in
+    brew)
+      printf "  ${DIM}brew upgrade claude${RESET}\n"
+      brew upgrade claude 2>&1 | tail -3
+      ;;
+    snap)
+      printf "  ${DIM}snap refresh claude${RESET}\n"
+      sudo snap refresh claude 2>&1 | tail -3
+      ;;
+    apt)
+      printf "  ${DIM}apt upgrade claude${RESET}\n"
+      sudo apt-get install --only-upgrade -y claude 2>&1 | tail -3
+      ;;
+    npm)
+      printf "  ${DIM}npm install -g @anthropic-ai/claude-code@latest${RESET}\n"
+      npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -3
+      ;;
+    *)
+      # Unknown method — try native install as upgrade
+      _claude_install "$method"
+      ;;
+  esac
+}
+
+# Extract semver from claude --version output (e.g. "2.1.81 (Claude Code)" → "2.1.81")
+_claude_semver() {
+  claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
+}
+
+# Fetch latest available version from npm registry (lightweight, no install needed).
+_claude_latest_ver() {
+  if command -v npm >/dev/null 2>&1; then
+    npm view @anthropic-ai/claude-code version 2>/dev/null
+  elif command -v curl >/dev/null 2>&1; then
+    curl -fsSL --max-time 5 "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" 2>/dev/null \
+      | grep -oE '"version":"[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | cut -d'"' -f4
+  fi
+}
+
+# Check if Claude Code CLI has an update available, offer to install/upgrade it.
 _check_claude_update() {
   if ! command -v claude >/dev/null 2>&1; then
     printf "\n  ${WARN}⚠${RESET} Claude Code CLI not installed\n"
-    if command -v node >/dev/null 2>&1 && [ -t 0 ]; then
+    if [ -t 0 ]; then
       printf "  Install now? ${DIM}[Y/n]${RESET} "
-      read -r reply
+      local reply=""
+      read -r reply </dev/tty 2>/dev/null || reply="y"
       case "$reply" in
         [Nn]*) ;;
         *)
           printf "  ${DIM}Installing Claude Code...${RESET}\n"
-          npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
-          command -v claude >/dev/null 2>&1 && printf "  ${SUCCESS}✓ Claude Code installed${RESET}\n"
+          if _claude_install "unknown"; then
+            command -v claude >/dev/null 2>&1 && printf "  ${SUCCESS}✓ Claude Code installed${RESET}\n"
+          else
+            printf "  ${ERROR}✗ Install failed${RESET} — visit https://docs.anthropic.com/en/docs/claude-code\n"
+          fi
           ;;
       esac
     else
-      printf "  ${DIM}Install: npm install -g @anthropic-ai/claude-code${RESET}\n"
+      printf "  ${DIM}Install: https://docs.anthropic.com/en/docs/claude-code${RESET}\n"
     fi
     return
   fi
 
-  local current_ver latest_ver
-  current_ver=$(claude --version 2>/dev/null || echo "unknown")
-  printf "\n  ${DIM}Checking Claude Code version...${RESET}"
+  local current_ver latest_ver method
+  current_ver="$(_claude_semver)"
+  if [ -z "$current_ver" ]; then
+    current_ver=$(claude --version 2>/dev/null || echo "unknown")
+    printf "\n  ${DIM}Claude Code: ${RESET}${BOLD}%s${RESET}\n" "$current_ver"
+    return
+  fi
 
-  # npm outdated exits 1 if outdated, 0 if current
-  latest_ver=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "")
+  printf "\n  ${DIM}Checking Claude Code version...${RESET}"
+  method="$(_claude_install_method)"
+
+  latest_ver="$(_claude_latest_ver)"
   if [ -z "$latest_ver" ]; then
     printf "\r  ${DIM}Claude Code: ${RESET}${BOLD}%s${RESET} ${DIM}(couldn't check for updates)${RESET}\n" "$current_ver"
     return
@@ -1635,26 +1958,41 @@ _check_claude_update() {
 
   if [ "$current_ver" = "$latest_ver" ]; then
     printf "\r  ${SUCCESS}✓${RESET} Claude Code ${BOLD}%s${RESET} ${DIM}(latest)${RESET}                    \n" "$current_ver"
+    [[ "$method" != "unknown" ]] && printf "    ${DIM}installed via %s${RESET}\n" "$method"
   else
     printf "\r  ${WARN}⚠${RESET} Claude Code ${BOLD}%s${RESET} → ${SUCCESS}%s${RESET} available              \n" "$current_ver" "$latest_ver"
+    [[ "$method" != "unknown" ]] && printf "    ${DIM}installed via %s${RESET}\n" "$method"
     if [ -t 0 ]; then
       printf "  Update Claude Code? ${DIM}[Y/n]${RESET} "
-      read -r reply
+      local reply=""
+      read -r reply </dev/tty 2>/dev/null || reply="y"
       case "$reply" in
         [Nn]*) ;;
         *)
           printf "  ${DIM}Updating Claude Code...${RESET}\n"
-          if npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -3; then
+          if _claude_upgrade "$method"; then
             local new_ver
-            new_ver=$(claude --version 2>/dev/null || echo "unknown")
-            printf "  ${SUCCESS}✓ Claude Code updated to %s${RESET}\n" "$new_ver"
+            new_ver="$(_claude_semver)"
+            printf "  ${SUCCESS}✓ Claude Code updated to %s${RESET}\n" "${new_ver:-$latest_ver}"
           else
-            printf "  ${ERROR}✗ Update failed${RESET} — try: sudo npm install -g @anthropic-ai/claude-code@latest\n"
+            printf "  ${ERROR}✗ Update failed${RESET}\n"
+            case "$method" in
+              brew) printf "  ${DIM}Try: brew upgrade claude${RESET}\n" ;;
+              snap) printf "  ${DIM}Try: sudo snap refresh claude${RESET}\n" ;;
+              apt)  printf "  ${DIM}Try: sudo apt-get install --only-upgrade claude${RESET}\n" ;;
+              *)    printf "  ${DIM}Visit: https://docs.anthropic.com/en/docs/claude-code${RESET}\n" ;;
+            esac
           fi
           ;;
       esac
     else
-      printf "  ${DIM}Update: npm install -g @anthropic-ai/claude-code@latest${RESET}\n"
+      case "$method" in
+        brew) printf "  ${DIM}Update: brew upgrade claude${RESET}\n" ;;
+        snap) printf "  ${DIM}Update: sudo snap refresh claude${RESET}\n" ;;
+        apt)  printf "  ${DIM}Update: sudo apt-get install --only-upgrade claude${RESET}\n" ;;
+        npm)  printf "  ${DIM}Update: npm install -g @anthropic-ai/claude-code@latest${RESET}\n" ;;
+        *)    printf "  ${DIM}Update: https://docs.anthropic.com/en/docs/claude-code${RESET}\n" ;;
+      esac
     fi
   fi
 }
@@ -3616,6 +3954,7 @@ HELP
   uninstall)    uninstall_system; exit 0 ;;
   update|reinstall) update_system; exit 0 ;;
   config)       shift; doey_config "$@"; exit 0 ;;
+  task|tasks)   shift; task_command "$@"; exit 0 ;;
   # Everything below requires tmux + claude — check prerequisites:
   init)
     _check_prereqs

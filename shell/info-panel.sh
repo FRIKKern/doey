@@ -292,7 +292,7 @@ while true; do
   add_left "$(printf '  %b Tasks%b' "${C_BOLD_GREEN}" "${C_RESET}")"
   add_cmd_pair "${C_GREEN}" "/doey-dispatch" "Send tasks" "${C_GREEN}" "/doey-delegate" "Delegate task"
   add_cmd_pair "${C_GREEN}" "/doey-broadcast" "Broadcast" "${C_GREEN}" "/doey-research" "Research task"
-  add_cmd_pair "${C_GREEN}" "/doey-reserve" "Reserve pane"
+  add_cmd_pair "${C_GREEN}" "/doey-task" "Manage tasks" "${C_GREEN}" "/doey-reserve" "Reserve pane"
   add_left ""
   add_left "$(printf '  %b Monitoring%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_cmd_pair "${C_CYAN}" "/doey-status" "Pane status" "${C_CYAN}" "/doey-monitor" "Monitor workers"
@@ -311,14 +311,15 @@ while true; do
   add_left ""
   add_left "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
   add_left ""
-  add_cmd "${C_YELLOW}" "doey"         "Launch (dynamic grid)"
-  add_cmd "${C_YELLOW}" "doey add"     "Add worker column"
-  add_cmd "${C_YELLOW}" "doey stop"    "Stop session"
-  add_cmd "${C_YELLOW}" "doey reload"  "Hot-reload (--workers)"
-  add_cmd "${C_YELLOW}" "doey list"    "List all projects"
-  add_cmd "${C_YELLOW}" "doey doctor"  "Check installation"
-  add_cmd "${C_YELLOW}" "doey test"    "Run E2E tests"
-  add_cmd "${C_YELLOW}" "doey version" "Show version info"
+  add_cmd "${C_YELLOW}" "doey"          "Launch (dynamic grid)"
+  add_cmd "${C_YELLOW}" "doey add"      "Add worker column"
+  add_cmd "${C_YELLOW}" "doey task"     "List/manage tasks"
+  add_cmd "${C_YELLOW}" "doey stop"     "Stop session"
+  add_cmd "${C_YELLOW}" "doey reload"   "Hot-reload (--workers)"
+  add_cmd "${C_YELLOW}" "doey list"     "List all projects"
+  add_cmd "${C_YELLOW}" "doey doctor"   "Check installation"
+  add_cmd "${C_YELLOW}" "doey test"     "Run E2E tests"
+  add_cmd "${C_YELLOW}" "doey version"  "Show version info"
 
   HR=$(repeat_char "─" "$TERM_W")
   HR_THICK=$(repeat_char "═" "$TERM_W")
@@ -406,6 +407,61 @@ while true; do
       _ti=$((_ti + 1))
     done
     printf '\n'
+  fi
+
+  # ── Tasks ─────────────────────────────────────────────────────
+  _tasks_dir="${RUNTIME_DIR}/tasks"
+  if [ -d "$_tasks_dir" ]; then
+    _task_visible=0
+    for _tf in "${_tasks_dir}"/*.task; do
+      [ -f "$_tf" ] || continue
+      _ts_status=""
+      while IFS= read -r _tl; do
+        case "${_tl%%=*}" in TASK_STATUS) _ts_status="${_tl#*=}" ;; esac
+      done < "$_tf"
+      [ "$_ts_status" = "done" ] && continue
+      [ "$_ts_status" = "cancelled" ] && continue
+      _task_visible=$((_task_visible + 1))
+    done
+
+    if [ "$_task_visible" -gt 0 ]; then
+      printf '  %bTASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+      for _tf in "${_tasks_dir}"/*.task; do
+        [ -f "$_tf" ] || continue
+        _tid=""; _ttitle=""; _tstatus=""; _tcreated=""
+        while IFS= read -r _tl; do
+          case "${_tl%%=*}" in
+            TASK_ID)      _tid="${_tl#*=}" ;;
+            TASK_TITLE)   _ttitle="${_tl#*=}" ;;
+            TASK_STATUS)  _tstatus="${_tl#*=}" ;;
+            TASK_CREATED) _tcreated="${_tl#*=}" ;;
+          esac
+        done < "$_tf"
+        [ "$_tstatus" = "done" ] && continue
+        [ "$_tstatus" = "cancelled" ] && continue
+        _tage=""
+        if [ -n "$_tcreated" ]; then
+          _tnow=$(date +%s)
+          _telapsed=$((_tnow - _tcreated))
+          if [ "$_telapsed" -lt 60 ]; then _tage="${_telapsed}s"
+          elif [ "$_telapsed" -lt 3600 ]; then _tage="$((_telapsed/60))m"
+          elif [ "$_telapsed" -lt 86400 ]; then _tage="$((_telapsed/3600))h"
+          else _tage="$((_telapsed/86400))d"; fi
+        fi
+        case "$_tstatus" in
+          pending_user_confirmation) _tcol="${C_BOLD_YELLOW}" ; _ticon="⬤" ;;
+          active)                    _tcol="${C_BOLD_GREEN}"  ; _ticon="●" ;;
+          *)                         _tcol="${C_DIM}"         ; _ticon="○" ;;
+        esac
+        printf '  %b%s%b %b[%s]%b  %s  %b%s%b\n' \
+          "$_tcol" "$_ticon" "${C_RESET}" \
+          "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
+          "$_ttitle" \
+          "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
+      done
+      printf '\n  %bdoey task done <id>%b  to confirm complete\n\n' "${C_DIM}" "${C_RESET}"
+      printf '%b%s%b\n\n' "${C_DIM}" "$HR" "${C_RESET}"
+    fi
   fi
 
   row=0
