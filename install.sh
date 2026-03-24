@@ -235,7 +235,7 @@ install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
 {
   install_script "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
-  for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh; do
+  for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
