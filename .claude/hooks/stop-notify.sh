@@ -7,6 +7,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
 _DOEY_HOOK_NAME="stop-notify"
+type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 # File-based message delivery with send-keys fallback.
 # Writes an atomic message file and touches a trigger to wake the recipient.
@@ -77,6 +78,7 @@ if is_worker; then
     MSG="Freelancer ${PANE_DISPLAY} finished (${STATUS})"
     [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
     _notify_pane "$SM_TARGET" "freelancer_finished" "$MSG"
+    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${SM_TARGET}" "type=freelancer_finished" "delivery=file" "success=true"
     # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
     touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
     _log "stop-notify: sent freelancer_finished to SM at $SM_TARGET"
@@ -90,6 +92,7 @@ if is_worker; then
     MSG="Worker ${PANE_DISPLAY} finished (${STATUS})"
     [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
     _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
+    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${MGR_PANE}" "type=worker_finished" "delivery=file" "success=true"
     _log "stop-notify: sent worker_finished to manager at $MGR_PANE"
   fi
   exit 0
@@ -112,6 +115,7 @@ if is_manager; then
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
   _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
+  type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${SESSION_NAME}:${SM_PANE}" "type=task_complete" "delivery=file" "success=true"
   # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
   touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
   _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
@@ -125,6 +129,7 @@ if is_session_manager; then
   echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯" && exit 0
 
   send_notification "Doey — Session Manager" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
+  type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=desktop" "type=desktop_notification" "delivery=osascript" "success=true"
   _log "stop-notify: sent desktop notification"
   exit 0
 fi

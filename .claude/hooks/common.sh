@@ -20,6 +20,7 @@ init_hook() {
   NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
   _ensure_dirs
+  _init_debug
 }
 
 _ensure_dirs() {
@@ -38,6 +39,88 @@ _rotate_log() {
   if [ "${sz:-0}" -gt 512000 ]; then
     tail -200 "$f" > "${f}.tmp" 2>/dev/null && mv "${f}.tmp" "$f" 2>/dev/null
   fi
+}
+
+# --- Debug mode infrastructure ---
+
+# Parse debug.conf as flat key=value. NEVER source it.
+_init_debug() {
+  _DOEY_DEBUG=""
+  _DOEY_DEBUG_HOOKS=""
+  _DOEY_DEBUG_LIFECYCLE=""
+  _DOEY_DEBUG_STATE=""
+  _DOEY_DEBUG_MESSAGES=""
+  _DOEY_DEBUG_WATCHDOG=""
+  _DOEY_DEBUG_DISPLAY=""
+  [ -f "${RUNTIME_DIR}/debug.conf" ] || return 0
+  while IFS='=' read -r _dk _dv; do
+    case "$_dk" in
+      DOEY_DEBUG)           _DOEY_DEBUG="$_dv" ;;
+      DOEY_DEBUG_HOOKS)     _DOEY_DEBUG_HOOKS="$_dv" ;;
+      DOEY_DEBUG_LIFECYCLE) _DOEY_DEBUG_LIFECYCLE="$_dv" ;;
+      DOEY_DEBUG_STATE)     _DOEY_DEBUG_STATE="$_dv" ;;
+      DOEY_DEBUG_MESSAGES)  _DOEY_DEBUG_MESSAGES="$_dv" ;;
+      DOEY_DEBUG_WATCHDOG)  _DOEY_DEBUG_WATCHDOG="$_dv" ;;
+      DOEY_DEBUG_DISPLAY)   _DOEY_DEBUG_DISPLAY="$_dv" ;;
+    esac
+  done < "${RUNTIME_DIR}/debug.conf"
+  return 0
+}
+
+# Millisecond timestamp (macOS bash 3.2 compatible)
+_ms_now() {
+  /usr/bin/perl -MTime::HiRes -e 'printf "%d\n", Time::HiRes::time()*1000' 2>/dev/null \
+    || echo "$(date +%s)000"
+}
+
+# Write JSONL to per-pane category file. No-op when debug off.
+# Usage: _debug_log <category> <msg> [key=value ...]
+_debug_log() {
+  [ "${_DOEY_DEBUG:-}" = "true" ] || return 0
+  local cat="$1" msg="$2"; shift 2
+  local pane_dir="${RUNTIME_DIR}/debug/${PANE_SAFE:-unknown}"
+  [ -d "$pane_dir" ] || mkdir -p "$pane_dir" 2>/dev/null
+  local ts
+  ts=$(_ms_now)
+  local extras=""
+  local kv k v
+  for kv in "$@"; do
+    k="${kv%%=*}"; v="${kv#*=}"
+    v="${v//\\/\\\\}"; v="${v//\"/\\\"}"
+    extras="${extras},\"${k}\":\"${v}\""
+  done
+  printf '{"ts":%s,"pane":"%s","role":"%s","cat":"%s","msg":"%s"%s}\n' \
+    "$ts" "${PANE:-unknown}" "${DOEY_ROLE:-unknown}" "$cat" "$msg" "$extras" \
+    >> "${pane_dir}/${cat}.jsonl" 2>/dev/null
+  if [ "${_DOEY_DEBUG_DISPLAY:-}" = "true" ]; then
+    printf '[DOEY-DEBUG] %s %s %s\n' "$cat" "$msg" "$*" >&2
+  fi
+  # Rotate every ~100 writes via modulo on timestamp
+  case "$ts" in *00)
+    _rotate_log "${pane_dir}/${cat}.jsonl"
+  ;; esac
+  return 0
+}
+
+# Log hook entry, set EXIT trap for hook exit timing.
+# Only active when _DOEY_DEBUG_HOOKS=true.
+_debug_hook_entry() {
+  [ "${_DOEY_DEBUG_HOOKS:-}" = "true" ] || return 0
+  _HOOK_START_MS=$(_ms_now)
+  _debug_log hooks "entry" "hook=${_DOEY_HOOK_NAME:-unknown}"
+  trap '_debug_hook_exit $?' EXIT
+  return 0
+}
+
+# Log hook exit with duration and exit code.
+_debug_hook_exit() {
+  [ "${_DOEY_DEBUG_HOOKS:-}" = "true" ] || return 0
+  local exit_code="${1:-0}" end_ms dur_ms
+  end_ms=$(_ms_now)
+  dur_ms=$(( end_ms - ${_HOOK_START_MS:-$end_ms} ))
+  [ "$dur_ms" -lt 0 ] && dur_ms=0
+  _debug_log hooks "exit" "hook=${_DOEY_HOOK_NAME:-unknown}" "dur_ms=$dur_ms" "exit=$exit_code"
+  return 0
 }
 
 _log() {

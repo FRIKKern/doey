@@ -158,6 +158,18 @@ SESSION_SAFE="${SESSION_NAME//[:.]/_}"
 SCAN_TIME=$(date +%s)
 SNAPSHOT_EVENTS=""
 
+# Debug mode check (watchdog has own logging, doesn't use common.sh)
+_WDG_DBG=false
+[ -f "${RUNTIME_DIR}/debug.conf" ] && _WDG_DBG=true
+_WDG_DBG_FILE="${RUNTIME_DIR}/debug/watchdog_W${TARGET_WINDOW}.jsonl"
+
+# Read scan cycle number from file, increment
+_WDG_CYCLE_FILE="${RUNTIME_DIR}/status/watchdog_cycle_W${TARGET_WINDOW}"
+_WDG_CYCLE=0
+[ -f "$_WDG_CYCLE_FILE" ] && read -r _WDG_CYCLE < "$_WDG_CYCLE_FILE" 2>/dev/null
+_WDG_CYCLE=$((_WDG_CYCLE + 1))
+_atomic_write "$_WDG_CYCLE_FILE" "$_WDG_CYCLE"
+
 # Watchdog-local _log — writes to watchdog's own log file
 _log() {
   local msg="$1"
@@ -738,6 +750,35 @@ if [ "$_ctx_pct" -ge 60 ]; then
   echo "⚠️  COMPACT_NOW — context at ${_ctx_pct}% (threshold: 60%)"
   echo "You MUST run /compact immediately. Do NOT run another scan cycle first."
   _log_error_wd "ANOMALY" "Context pressure - compact needed" "context_pct=${_ctx_pct}%"
+fi
+
+# Debug: write scan cycle summary
+if [ "$_WDG_DBG" = "true" ]; then
+  _wdg_end=$(date +%s)
+  _wdg_dur=$((_wdg_end - SCAN_TIME))
+  # Build per-pane states JSON fragment
+  _wdg_pstates=""
+  _wdg_sep=""
+  for _wi in $PANES_LIST; do
+    is_numeric "$_wi" || continue
+    eval "_wdg_st=\${PANE_STATE_${_wi}:-UNKNOWN}"
+    _wdg_pstates="${_wdg_pstates}${_wdg_sep}\"${_wi}\":\"${_wdg_st}\""
+    _wdg_sep=","
+  done
+  # Build anomaly list
+  _wdg_anomalies=""
+  _wdg_alines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ' 2>/dev/null) || _wdg_alines=""
+  if [ -n "$_wdg_alines" ]; then
+    _wdg_anomalies=$(printf '%s' "$_wdg_alines" | tr '\n' ',' | sed 's/,$//')
+  fi
+  _wdg_wave=""
+  case "$SNAPSHOT_EVENTS" in *WAVE_COMPLETE*) _wdg_wave=',"wave_complete":true' ;; esac
+  [ -d "$(dirname "$_WDG_DBG_FILE")" ] || mkdir -p "$(dirname "$_WDG_DBG_FILE")" 2>/dev/null
+  printf '{"ts":%s,"window":%s,"cycle":%s,"dur_s":%s,"mgr":"%s","working":%s,"idle":%s,"stuck":%s,"crashed":%s,"panes":{%s},"anomalies":"%s"%s}\n' \
+    "$SCAN_TIME" "$TARGET_WINDOW" "$_WDG_CYCLE" "$_wdg_dur" "$_mgr_label" \
+    "$_n_working" "$_n_idle" "$_n_stuck" "$_n_crashed" \
+    "$_wdg_pstates" "$_wdg_anomalies" "$_wdg_wave" \
+    >> "$_WDG_DBG_FILE" 2>/dev/null
 fi
 
 _log "watchdog-scan: end cycle W${TARGET_WINDOW} working=${_n_working} idle=${_n_idle} stuck=${_n_stuck} crashed=${_n_crashed}"

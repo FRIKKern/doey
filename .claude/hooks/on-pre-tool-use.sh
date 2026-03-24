@@ -93,14 +93,32 @@ if [ -n "${TMUX_PANE:-}" ]; then
   fi
 fi
 
+# Debug: one stat() when off, date+printf when on
+_DBG=false
+[ -n "${_RD:-}" ] && [ -f "${_RD}/debug.conf" ] && _DBG=true
+
+# Helper: write inline debug entry (no subprocesses beyond date)
+_dbg_write() {
+  [ "$_DBG" = "true" ] || return 0
+  local _action="$1"
+  local _pdir="${_RD}/debug/${_PS:-unknown}"
+  [ -d "$_pdir" ] || mkdir -p "$_pdir" 2>/dev/null
+  printf '{"ts":"%s","pane":"%s","role":"%s","cat":"hooks","msg":"%s","hook":"on-pre-tool-use","tool":"%s"}\n' \
+    "$(date +%s)000" "${_WP:-unknown}" "${_DOEY_ROLE:-unknown}" "$_action" "$TOOL_NAME" \
+    >> "$_pdir/hooks.jsonl" 2>/dev/null
+  return 0
+}
+
 # Non-Bash: block write tools for Watchdog
 if [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in Edit|Write|Agent|NotebookEdit) ;; *) exit 0 ;; esac
   case "$_DOEY_ROLE" in watchdog)
     _log_block "TOOL_BLOCKED" "Watchdog cannot use $TOOL_NAME" "monitoring role only"
     echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
+    _dbg_write "block_watchdog_write_tool"
     exit 2 ;;
   esac
+  _dbg_write "allow_non_bash"
   exit 0
 fi
 
@@ -113,8 +131,10 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
       _log_block "TOOL_BLOCKED" "send /rename via send-keys blocked" "opens interactive prompt"
       echo "BLOCKED: Never send /rename via send-keys — it opens an interactive prompt that eats the next paste." >&2
       echo "Use: tmux select-pane -t \"\$PANE\" -T \"task-name\"" >&2
+      _dbg_write "block_rename_sendkeys"
       exit 2 ;;
   esac
+  _dbg_write "allow_manager"
   exit 0
 fi
 
@@ -123,11 +143,15 @@ if [ "$_DOEY_ROLE" = "git_agent" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
   # _check_blocked catches git/gh too — skip that match for git_agent
-  case "$TOOL_COMMAND" in *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*) exit 0 ;; esac
+  case "$TOOL_COMMAND" in *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
+    _dbg_write "allow_git_agent_git"
+    exit 0 ;; esac
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "Git Agent $MSG blocked" "$TOOL_COMMAND"
+    _dbg_write "block_git_agent"
     echo "BLOCKED: Git Agent cannot run ${MSG}." >&2; exit 2
   fi
+  _dbg_write "allow_git_agent"
   exit 0
 fi
 
@@ -137,9 +161,11 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   [ -z "$TOOL_COMMAND" ] && exit 0
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "Worker $MSG blocked" "$TOOL_COMMAND"
+    _dbg_write "block_worker"
     echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this." >&2
     exit 2
   fi
+  _dbg_write "allow_worker"
   exit 0
 fi
 
@@ -147,8 +173,8 @@ fi
 source "$(dirname "$0")/common.sh"
 init_hook
 
-is_manager && exit 0
-is_session_manager && exit 0
+is_manager && { _dbg_write "allow_manager_slow"; exit 0; }
+is_session_manager && { _dbg_write "allow_sm_slow"; exit 0; }
 
 TOOL_COMMAND=$(_json_str tool_input.command)
 [ -z "$TOOL_COMMAND" ] && exit 0
@@ -188,6 +214,7 @@ if is_watchdog; then
       echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Enter[[:space:]]*$" && exit 0
       echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Escape[[:space:]]*$" && exit 0
       _log_block "TOOL_BLOCKED" "Watchdog unauthorized keystroke blocked" "$TOOL_COMMAND"
+      _dbg_write "block_watchdog_sendkeys"
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
       echo "Report stuck workers to the Window Manager instead." >&2
       exit 2 ;;
@@ -198,7 +225,9 @@ fi
 ROLE="worker"; is_watchdog && ROLE="watchdog"
 if _check_blocked "$TOOL_COMMAND"; then
   _log_block "TOOL_BLOCKED" "$ROLE $MSG blocked" "$TOOL_COMMAND"
+  _dbg_write "block_${ROLE}"
   echo "BLOCKED: ${ROLE} cannot run ${MSG}. Only the Window Manager can do this." >&2
   exit 2
 fi
+_dbg_write "allow_slow"
 exit 0

@@ -4,6 +4,8 @@ set -euo pipefail
 
 source "$(dirname "$0")/common.sh"
 init_hook
+_DOEY_HOOK_NAME="on-pre-compact"
+type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 CURRENT_TASK=$(grep '^TASK:' "$STATUS_FILE" 2>/dev/null | cut -d: -f2- | sed 's/^ //' || true)

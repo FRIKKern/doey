@@ -4,6 +4,18 @@ set -euo pipefail
 
 INPUT=$(cat)
 
+# Debug hook timing (common.sh functions, minimal init — no init_hook call)
+RUNTIME_DIR="${DOEY_RUNTIME:-}"
+[ -z "$RUNTIME_DIR" ] && RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) 2>/dev/null || true
+PANE="${DOEY_PANE_ID:-unknown}"; PANE_SAFE="${PANE//[:.]/_}"
+DOEY_ROLE="${DOEY_ROLE:-unknown}"
+source "$(dirname "$0")/common.sh"
+if type _init_debug >/dev/null 2>&1; then
+  _init_debug
+  _DOEY_HOOK_NAME="post-tool-lint"
+  _debug_hook_entry
+fi
+
 # Lightweight error logger (common.sh not loaded in this hook)
 _log_lint_error() {
   local msg="$1" detail="${2:-}"
