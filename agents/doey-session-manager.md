@@ -181,7 +181,7 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ### Check active tasks on startup
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-for f in "${RUNTIME_DIR}/tasks"/*.task 2>/dev/null; do
+for f in "${RUNTIME_DIR}/tasks"/*.task; do
   [ -f "$f" ] || continue
   grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue
   cat "$f"; echo "---"
