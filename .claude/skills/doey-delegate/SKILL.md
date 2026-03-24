@@ -71,18 +71,10 @@ Expected: "Working" — target pane is actively processing the task.
 
 **If this fails with "Idle — may need retry":** Send Enter again: `tmux send-keys -t "$TARGET_PANE" Enter`, wait 3s, re-check. Still idle → unstick per `/doey-dispatch` Unstick section.
 
-## Gotchas
-
-- Do NOT delegate to your own pane — check "My pane" in Context above.
-- Do NOT use `send-keys` for task text — always use tmpfile + `load-buffer` + `paste-buffer`.
-- Do NOT skip the sleep between `paste-buffer` and Enter — scales by line count.
-- Do NOT skip verification after dispatch — always confirm the worker started processing.
-- Do NOT kill/restart the worker — this skill assumes the Claude instance is already running and idle.
-
 ### Rules
 
-1. **Always tmpfile/load-buffer** for task text — never `send-keys "" Enter`
-2. **Sleep between paste-buffer and Enter** (scales by line count); **verify after dispatch**
-3. **Never delegate to your own pane**
+- Always tmpfile/load-buffer for task text — never `send-keys "" Enter`
+- Sleep between paste-buffer and Enter (scales by line count); verify after dispatch
+- Never delegate to your own pane; never kill/restart the worker
 
 Total: 4 commands, 0 errors expected.

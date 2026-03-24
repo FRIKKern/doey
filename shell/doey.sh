@@ -2342,7 +2342,7 @@ _layout_checksum() {
 }
 
 rebalance_grid_layout() {
-  local session="$1" team_window="${2:-1}" mgr_width=60
+  local session="$1" team_window="${2:-1}" runtime_dir="${3:-}" mgr_width=60
 
   local win_w win_h
   win_w="$(tmux display-message -t "$session:${team_window}" -p '#{window_width}')"
@@ -2356,40 +2356,74 @@ rebalance_grid_layout() {
   local num_panes=${#pane_ids[@]}
   if (( num_panes < 3 )); then return 0; fi
 
-  local num_workers=$((num_panes - 1))
-  local worker_cols=$(( (num_workers + 1) / 2 ))
+  # Check if freelancer team (no manager — all panes are equal-width worker columns)
+  local _rgl_is_freelancer="false"
+  if [ -z "$runtime_dir" ]; then
+    runtime_dir=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  fi
+  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${team_window}.env" ]; then
+    local _rgl_tt
+    _rgl_tt=$(_env_val "${runtime_dir}/team_${team_window}.env" TEAM_TYPE)
+    [ "$_rgl_tt" = "freelancer" ] && _rgl_is_freelancer="true"
+  fi
 
-  # Cap manager width at 25% of window
-  local max_mgr=$((win_w / 4))
-  (( mgr_width > max_mgr )) && mgr_width=$max_mgr
-
-  local worker_area=$((win_w - mgr_width - 1))
   local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
 
-  # Manager column (full height), then worker columns (2 rows each)
-  local body="" x=0
-  body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
-  x=$((mgr_width + 1))
+  if [ "$_rgl_is_freelancer" = "true" ]; then
+    # Freelancer: all columns are equal-width, 2 rows each (no manager column)
+    local total_cols=$(( (num_panes + 1) / 2 ))
+    local body="" x=0 c w pi
+    for ((c=0; c<total_cols; c++)); do
+      if ((c == total_cols - 1)); then
+        w=$((win_w - x))
+      else
+        w=$((win_w / total_cols))
+      fi
+      pi=$((c * 2))
+      local tp="${pane_ids[$pi]}"
+      [ -n "$body" ] && body+=","
+      if (( pi + 1 < num_panes )); then
+        local bp="${pane_ids[$((pi + 1))]}"
+        body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
+      else
+        body+="${w}x${win_h},${x},0,${tp}"
+      fi
+      x=$((x + w + 1))
+    done
+  else
+    # Regular team: manager column (full height), then worker columns (2 rows each)
+    local num_workers=$((num_panes - 1))
+    local worker_cols=$(( (num_workers + 1) / 2 ))
 
-  local c w wi
-  for ((c=0; c<worker_cols; c++)); do
-    if ((c == worker_cols - 1)); then
-      w=$((win_w - x))
-    else
-      w=$((worker_area / worker_cols))
-    fi
+    # Cap manager width at 25% of window
+    local max_mgr=$((win_w / 4))
+    (( mgr_width > max_mgr )) && mgr_width=$max_mgr
 
-    wi=$((c * 2 + 1))
-    local tp="${pane_ids[$wi]}"
-    body+=","
-    if (( wi + 1 < num_panes )); then
-      local bp="${pane_ids[$((wi + 1))]}"
-      body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
-    else
-      body+="${w}x${win_h},${x},0,${tp}"
-    fi
-    x=$((x + w + 1))
-  done
+    local worker_area=$((win_w - mgr_width - 1))
+    local body="" x=0
+    body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
+    x=$((mgr_width + 1))
+
+    local c w wi
+    for ((c=0; c<worker_cols; c++)); do
+      if ((c == worker_cols - 1)); then
+        w=$((win_w - x))
+      else
+        w=$((worker_area / worker_cols))
+      fi
+
+      wi=$((c * 2 + 1))
+      local tp="${pane_ids[$wi]}"
+      body+=","
+      if (( wi + 1 < num_panes )); then
+        local bp="${pane_ids[$((wi + 1))]}"
+        body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
+      else
+        body+="${w}x${win_h},${x},0,${tp}"
+      fi
+      x=$((x + w + 1))
+    done
+  fi
 
   local layout_str="${win_w}x${win_h},0,0{${body}}"
   tmux select-layout -t "$session:${team_window}" "$(_layout_checksum "$layout_str"),${layout_str}" 2>/dev/null || true
@@ -2534,7 +2568,7 @@ doey_add_column() {
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ts_watchdog_pane" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
 
   _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${new_pane_bottom}:${w2_num}"
-  rebalance_grid_layout "$session" "$team_window"
+  rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
   printf "  ${SUCCESS}Added${RESET} W${BOLD}${w1_num}${RESET} and W${BOLD}${w2_num}${RESET} — ${new_worker_count} workers in $((_ts_cols + 1)) columns\n"
 }
@@ -2604,7 +2638,7 @@ doey_remove_column() {
 
   local new_worker_count=$(( _ts_worker_count - 2 ))
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ts_watchdog_pane" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
-  rebalance_grid_layout "$session" "$team_window"
+  rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
   printf "  ${SUCCESS}Removed${RESET} worker column — ${BOLD}${new_worker_count}${RESET} workers remaining\n"
 }
@@ -2838,8 +2872,16 @@ _name_team_window() {
     label=$(_env_val "${runtime_dir}/team_${window_index}.env" TEAM_NAME)
   fi
   if [ -z "$label" ]; then
-    label="Local Team"
-    [ -z "$wt_dir" ] || label="Worktree Team"
+    local _ntw_tt=""
+    [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${window_index}.env" ] && \
+      _ntw_tt=$(_env_val "${runtime_dir}/team_${window_index}.env" TEAM_TYPE)
+    if [ "$_ntw_tt" = "freelancer" ]; then
+      label="Freelancers"
+    elif [ -z "$wt_dir" ]; then
+      label="Local Team"
+    else
+      label="Worktree Team"
+    fi
   fi
   tmux rename-window -t "${session}:${window_index}" "$label"
 }
@@ -2890,7 +2932,6 @@ add_dynamic_team_window() {
   local _team_label="team"
   [ "$is_freelancer" = "true" ] && _team_label="freelancer team"
   printf "  ${DIM}Creating dynamic %s window %s...${RESET}\n" "$_team_label" "$window_index"
-  _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
 
   _acquire_watchdog_slot "$session" "$runtime_dir" "$team_dir" "false"
   local wdg_slot="$_AWS_SLOT"
@@ -2901,18 +2942,21 @@ add_dynamic_team_window() {
   [ "$is_freelancer" = "true" ] && mgr_pane=""
 
   write_team_env "$runtime_dir" "$window_index" "dynamic" "${wdg_slot:-}" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
+  _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
 
   # Only launch manager for non-freelancer teams
   if [ "$is_freelancer" = "true" ]; then
-    # Freelancer: pane 0 becomes a worker — launch Claude there as a worker
+    # Freelancer: pane 0 becomes a worker, split vertically for pane 1 — two rows in first column
     local _fl_wm="${worker_model:-$DOEY_WORKER_MODEL}"
     local _fl_acronym=""
     [ -f "${runtime_dir}/session.env" ] && _fl_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
-    local _fl_pane_id="t${window_index}-w0"
-    [ -n "$_fl_acronym" ] && _fl_pane_id="${_fl_acronym}-${_fl_pane_id}"
     _ensure_worker_prompt "$runtime_dir" "$team_dir"
+
+    # Launch F0 in pane 0 (top of first column)
+    local _fl_pane_id="t${window_index}-f0"
+    [ -n "$_fl_acronym" ] && _fl_pane_id="${_fl_acronym}-${_fl_pane_id}"
     local _fl_prompt="${runtime_dir}/worker-system-prompt-w${window_index}-0.md"
     cp "${runtime_dir}/worker-system-prompt.md" "$_fl_prompt"
     printf '\n\n## Identity\nYou are Freelancer 0 (%s) in pane %s.0 of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
@@ -2923,6 +2967,28 @@ add_dynamic_team_window() {
     tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
     write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
     sleep "$DOEY_WORKER_LAUNCH_DELAY"
+
+    # Split pane 0 vertically to create pane 1 (bottom of first column)
+    tmux split-window -v -t "$session:${window_index}.0" -c "$team_dir"
+    sleep 0.1
+    local _fl_p1
+    _fl_p1="$(tmux list-panes -t "$session:$window_index" -F '#{pane_index}' | tail -1)"
+    local _fl_pane_id1="t${window_index}-f1"
+    [ -n "$_fl_acronym" ] && _fl_pane_id1="${_fl_acronym}-${_fl_pane_id1}"
+    local _fl_prompt1="${runtime_dir}/worker-system-prompt-w${window_index}-1.md"
+    cp "${runtime_dir}/worker-system-prompt.md" "$_fl_prompt1"
+    printf '\n\n## Identity\nYou are Freelancer 1 (%s) in pane %s.%s of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
+      "$_fl_pane_id1" "$window_index" "$_fl_p1" "$session" >> "$_fl_prompt1"
+    local _fl_cmd1="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F1\""
+    _fl_cmd1+=" --append-system-prompt-file \"${_fl_prompt1}\""
+    tmux send-keys -t "$session:${window_index}.${_fl_p1}" "$_fl_cmd1" Enter
+    tmux select-pane -t "$session:${window_index}.${_fl_p1}" -T "T${window_index} F1"
+    write_pane_status "$runtime_dir" "${session}:${window_index}.${_fl_p1}" "READY"
+    sleep "$DOEY_WORKER_LAUNCH_DELAY"
+
+    # Update worker count: F0 is uncounted (like manager pane), F1 adds 1
+    # so doey_add_column numbering continues sequentially (F2, F3, ...)
+    write_team_env "$runtime_dir" "$window_index" "dynamic" "${wdg_slot:-}" "" "1" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
   else
     _launch_team_manager "$session" "$runtime_dir" "$window_index"
   fi

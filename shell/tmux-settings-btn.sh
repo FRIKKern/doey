@@ -25,10 +25,11 @@ fi
 tmux new-window -t "$session" -n "Settings"
 settings_win=$(tmux display-message -t "$session" -p '#{window_index}')
 
-# Split: left = config editor, right = live settings panel
-tmux split-window -h -t "$session:$settings_win"
-tmux send-keys -t "$session:${settings_win}.1" \
-  "DOEY_SETTINGS_LIVE=1 bash \"${PROJECT_DIR}/shell/settings-panel.sh\"" Enter
+# Split: left = live settings panel, right = config editor (Claude)
+# Pane 0 starts the settings panel, then split-right creates pane 1 for Claude
 tmux send-keys -t "$session:${settings_win}.0" \
+  "DOEY_SETTINGS_LIVE=1 bash \"${PROJECT_DIR}/shell/settings-panel.sh\"" Enter
+tmux split-window -h -t "$session:${settings_win}.0"
+tmux send-keys -t "$session:${settings_win}.1" \
   "claude --agent settings-editor" Enter
-tmux select-pane -t "$session:${settings_win}.0"
+tmux select-pane -t "$session:${settings_win}.1"
