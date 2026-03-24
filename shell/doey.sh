@@ -2101,7 +2101,7 @@ launch_session_dynamic() {
   cd "$dir"
 
   _print_full_banner "Let Doey do it for you"
-  local initial_workers=$(( INITIAL_WORKER_COLS * 2 ))
+  local initial_workers=$(( DOEY_INITIAL_WORKER_COLS * 2 ))
   printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}dynamic${RESET}  ${DIM}Workers${RESET} ${BOLD}${initial_workers} (auto-expands)${RESET}\n"
   printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
   printf '\n'
@@ -2166,7 +2166,7 @@ MANIFEST
     "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
   step_done
 
-  step_start 5 "Adding ${INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
+  step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
   sleep 0.2  # reduced from 0.5s — tmux is fast
   local _col_i
   for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
