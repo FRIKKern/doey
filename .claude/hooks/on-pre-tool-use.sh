@@ -134,19 +134,30 @@ if is_watchdog; then
   case "$TOOL_COMMAND" in
     *"send-keys"*|*"send-key"*|*"paste-buffer"*|*"load-buffer"*)
       TEAM_WINDOW="${DOEY_TEAM_WINDOW:-}"
+      # _targets_manager: true if command targets pane .0 (Manager) via expanded
+      # value, unexpanded ${TEAM_WINDOW}, or $TEAM_WINDOW literal references
+      _targets_manager() {
+        case "$1" in
+          *":${TEAM_WINDOW}.0"*) return 0 ;;
+          *'${TEAM_WINDOW}.0'*) return 0 ;;
+          *'$TEAM_WINDOW.0'*) return 0 ;;
+          *'${DOEY_TEAM_WINDOW}.0'*) return 0 ;;
+          *'$DOEY_TEAM_WINDOW.0'*) return 0 ;;
+        esac
+        return 1
+      }
       if [ -n "$TEAM_WINDOW" ] && [ -f "${RUNTIME_DIR}/status/manager_crashed_W${TEAM_WINDOW}" ]; then
-        case "$TOOL_COMMAND" in
-          *":${TEAM_WINDOW}.0"*)
+        if _targets_manager "$TOOL_COMMAND"; then
             _log_block "TOOL_BLOCKED" "Watchdog send-keys to crashed manager blocked" "pane ${TEAM_WINDOW}.0"
             echo "BLOCKED: Watchdog cannot send keys to crashed Manager pane ${TEAM_WINDOW}.0." >&2
             echo "Write an alert file for the Session Manager instead." >&2
-            exit 2 ;;
-        esac
+            exit 2
+        fi
       fi
       CLEAN_CMD=$(echo "$TOOL_COMMAND" | sed 's/[[:space:]]*2>\/dev\/null[[:space:]]*$//')
       echo "$CLEAN_CMD" | grep -qE '^[[:space:]]*tmux copy-mode[[:space:]]' && exit 0
       if [ -n "$TEAM_WINDOW" ]; then
-        case "$TOOL_COMMAND" in *":${TEAM_WINDOW}.0"*) exit 0 ;; esac
+        _targets_manager "$TOOL_COMMAND" && exit 0
       fi
       _TP='(\"[^\"]*\"|[^[:space:]]+)'
       echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+\"?(/login|/compact)\"?[[:space:]]+Enter[[:space:]]*$" && exit 0

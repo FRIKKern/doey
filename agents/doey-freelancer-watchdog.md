@@ -107,6 +107,7 @@ Log to `$RUNTIME_DIR/issues/` (one file per issue, same format as team watchdog)
 
 ## Rules
 
+- **Never use tmux send-keys to notify Managers.** Always use message files: write to `$RUNTIME_DIR/messages/`. send-keys is blocked by the pre-tool-use hook and will waste tool calls.
 - Always use `-t "$SESSION_NAME"` — never `-a`
 - Never send input to editors, REPLs, or password prompts
 - One bash call per cycle; display dashboard every cycle

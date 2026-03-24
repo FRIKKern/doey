@@ -190,6 +190,8 @@ _log "watchdog-scan: start cycle W${TARGET_WINDOW} panes=${WORKER_PANES}"
 _team_type=""
 [ -f "$TEAM_ENV" ] && _team_type=$(grep '^TEAM_TYPE=' "$TEAM_ENV" | cut -d= -f2-) && _team_type="${_team_type%\"}" && _team_type="${_team_type#\"}"
 MGR_PANE_REF=""
+MGR_CMD=""
+MGR_TITLE=""
 if [ "$_team_type" != "freelancer" ]; then
   if [ -f "$TEAM_ENV" ]; then
     mgr_idx=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
@@ -235,7 +237,7 @@ if [ "$_team_type" != "freelancer" ]; then
   _atomic_write "$MGR_PREV_FILE" "$PANE_STATE_0"
   if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
     echo "MANAGER_COMPLETED"
-    _log_error_wd "ANOMALY" "Manager completed in window $TARGET_WINDOW" "prev=WORKING cur=IDLE"
+    _log "watchdog-scan: manager completed W${TARGET_WINDOW}"
   fi
 
   # --- Manager hook-reported status (more authoritative than screen-scrape) ---
@@ -471,11 +473,15 @@ EOF
 done
 
 # --- Status summary ---
-case "$MGR_CMD" in
-  bash|zsh|sh|fish) _mgr_label="CRASHED" ;;
-  *) _mgr_label="$PANE_STATE_0" ;;
-esac
-MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
+if [ -n "$MGR_CMD" ]; then
+  case "$MGR_CMD" in
+    bash|zsh|sh|fish) _mgr_label="CRASHED" ;;
+    *) _mgr_label="$PANE_STATE_0" ;;
+  esac
+  MGR_TITLE=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_title}' 2>/dev/null) || MGR_TITLE=""
+else
+  _mgr_label="$PANE_STATE_0"
+fi
 
 _n_working=0 _n_idle=0 _n_stuck=0 _n_crashed=0 _n_reserved=0 _n_logged_out=0 _n_booting=0 _n_other=0
 _active_titles=""
