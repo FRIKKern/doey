@@ -89,21 +89,16 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   exit 0
 fi
 
-# Git Agent: allow git commands, block everything else dangerous
+# Git Agent: allow git/gh commands, block other dangerous patterns via _check_blocked
 if [ "$_DOEY_ROLE" = "git_agent" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
-  case "$TOOL_COMMAND" in
-    *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*|*"rm -rf /Users/"*|*"rm -rf /home/"*)
-      _log_block "TOOL_BLOCKED" "Git Agent destructive rm blocked" "$TOOL_COMMAND"
-      echo "BLOCKED: Git Agent cannot run destructive rm." >&2; exit 2 ;;
-    *"shutdown"*|*"reboot"*)
-      _log_block "TOOL_BLOCKED" "Git Agent system command blocked" "$TOOL_COMMAND"
-      echo "BLOCKED: Git Agent cannot run system commands." >&2; exit 2 ;;
-    *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
-      _log_block "TOOL_BLOCKED" "Git Agent tmux command blocked" "$TOOL_COMMAND"
-      echo "BLOCKED: Git Agent cannot run tmux commands." >&2; exit 2 ;;
-  esac
+  # _check_blocked catches git/gh too — skip that match for git_agent
+  case "$TOOL_COMMAND" in *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*) exit 0 ;; esac
+  if _check_blocked "$TOOL_COMMAND"; then
+    _log_block "TOOL_BLOCKED" "Git Agent $MSG blocked" "$TOOL_COMMAND"
+    echo "BLOCKED: Git Agent cannot run ${MSG}." >&2; exit 2
+  fi
   exit 0
 fi
 
@@ -170,7 +165,7 @@ if is_watchdog; then
 fi
 
 # Blocked patterns for Workers and Watchdog
-ROLE="Workers"; is_watchdog && ROLE="Watchdog"
+ROLE="worker"; is_watchdog && ROLE="watchdog"
 if _check_blocked "$TOOL_COMMAND"; then
   _log_block "TOOL_BLOCKED" "$ROLE $MSG blocked" "$TOOL_COMMAND"
   echo "BLOCKED: ${ROLE} cannot run ${MSG}. Only the Window Manager can do this." >&2

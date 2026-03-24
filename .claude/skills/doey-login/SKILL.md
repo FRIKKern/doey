@@ -86,7 +86,7 @@ restart_team() {
     kill_and_relaunch "${SESS}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\""
     echo "  ${W}.0 Manager ✓"; }
   [ -n "$WDG_PANE" ] && [ "${SESS}:${WDG_PANE}" != "$SKIP_PANE" ] && {
-    kill_and_relaunch "${SESS}:${WDG_PANE}" "claude --dangerously-skip-permissions --model haiku --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\""
+    kill_and_relaunch "${SESS}:${WDG_PANE}" "claude --dangerously-skip-permissions --model sonnet --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\""
     echo "  ${WDG_PANE} Watchdog ✓"; }
 
   for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
@@ -114,17 +114,20 @@ MY_PANE="${SESSION_NAME}:0.1"  # adjust if not Session Manager
 TEAM_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
 
 # Scope: team N — single team in current session
-if [ "$TARGET_SCOPE" is a number ]; then
+case "$TARGET_SCOPE" in
+[0-9]|[0-9][0-9])
   restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$TARGET_SCOPE" "$MY_PANE"
+  ;;
 
 # Scope: session — all teams in current session
-elif [ "$TARGET_SCOPE" = "session" ]; then
+session)
   for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
     restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$W" "$MY_PANE"
   done
+  ;;
 
 # Scope: all — all doey sessions
-elif [ "$TARGET_SCOPE" = "all" ]; then
+all)
   for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
     restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$W" "$MY_PANE"
   done
@@ -136,7 +139,8 @@ elif [ "$TARGET_SCOPE" = "all" ]; then
       restart_team "$OTHER" "$OTHER_RT" "$W" ""
     done
   done
-fi
+  ;;
+esac
 ```
 
 ## Step 4: Report

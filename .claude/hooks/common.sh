@@ -28,18 +28,23 @@ _ensure_dirs() {
   touch "${RUNTIME_DIR}/.dirs_created"
 }
 
+# Rotate a log file if it exceeds 500KB, keeping last 200 lines.
+# Usage: _rotate_log <file>
+_rotate_log() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  local sz
+  sz=$(wc -c < "$f" 2>/dev/null | tr -d ' ') || sz=0
+  if [ "${sz:-0}" -gt 512000 ]; then
+    tail -200 "$f" > "${f}.tmp" 2>/dev/null && mv "${f}.tmp" "$f" 2>/dev/null
+  fi
+}
+
 _log() {
   local msg="$1"
   local pane_id="${DOEY_PANE_ID:-unknown}"
   local log_file="${RUNTIME_DIR}/logs/${pane_id}.log"
-  # Rotate if > 500KB
-  if [ -f "$log_file" ]; then
-    local size
-    size=$(wc -c < "$log_file" 2>/dev/null | tr -d ' ') || size=0
-    if [ "$size" -gt 512000 ]; then
-      tail -200 "$log_file" > "${log_file}.tmp" 2>/dev/null && mv "${log_file}.tmp" "$log_file" 2>/dev/null
-    fi
-  fi
+  _rotate_log "$log_file"
   printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$msg" >> "$log_file" 2>/dev/null
 }
 
@@ -79,11 +84,7 @@ MESSAGE=$msg
 ERR_EOF
 
   # 4. Rotation: if errors.log > 500KB, keep last 200 lines
-  local log_size
-  log_size=$(wc -c < "$err_log" 2>/dev/null | tr -d ' ') || log_size=0
-  if [ "${log_size:-0}" -gt 512000 ]; then
-    tail -200 "$err_log" > "${err_log}.tmp" 2>/dev/null && mv "${err_log}.tmp" "$err_log" 2>/dev/null
-  fi
+  _rotate_log "$err_log"
 
   # 5. Cleanup: remove .err files older than 1 hour, keep max 200
   local count
