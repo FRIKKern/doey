@@ -555,6 +555,22 @@ for cf in "${RUNTIME_DIR}/status"/completion_pane_${TARGET_WINDOW}_*; do
   rm -f "$cf"
 done
 
+# --- Lifecycle events (pushed by hooks via notify_watchdog) ---
+# Events are named W<team>_<pane_id>_<timestamp>.evt
+for _lf in "${RUNTIME_DIR}/lifecycle"/W${TARGET_WINDOW}_*.evt; do
+  [ -f "$_lf" ] || continue
+  # Format: pane_id|status|time|detail
+  _lf_line=$(head -1 "$_lf" 2>/dev/null) || _lf_line=""
+  if [ -n "$_lf_line" ]; then
+    _lf_pane="${_lf_line%%|*}" _lf_rest="${_lf_line#*|}"
+    _lf_status="${_lf_rest%%|*}" _lf_rest2="${_lf_rest#*|}"
+    _lf_time="${_lf_rest2%%|*}" _lf_detail="${_lf_rest2#*|}"
+    echo "LIFECYCLE ${_lf_pane} ${_lf_status} ${_lf_time} ${_lf_detail}"
+    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE ${_lf_pane} ${_lf_status} ${_lf_time} ${_lf_detail}${NL}"
+  fi
+  rm -f "$_lf"
+done
+
 # --- Write team snapshot ---
 SNAPSHOT_FILE="${RUNTIME_DIR}/status/team_snapshot_W${TARGET_WINDOW}.txt"
 {

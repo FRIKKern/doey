@@ -399,7 +399,9 @@ setup_dashboard() {
   SM_PANE="0.1"
 
   tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
-  tmux send-keys -t "$session:0.1" "claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-session-manager" Enter
+  local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-session-manager"
+  [ -f "${runtime_dir}/doey-settings.json" ] && _sm_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  tmux send-keys -t "$session:0.1" "$_sm_cmd" Enter
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 }
@@ -1763,7 +1765,9 @@ reload_session() {
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
-      tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Window Manager\" --agent \"$mgr_agent\"" Enter
+      local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Window Manager\" --agent \"$mgr_agent\""
+      [ -f "${runtime_dir}/doey-settings.json" ] && _rl_mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+      tmux send-keys -t "$mgr_ref" "$_rl_mgr_cmd" Enter
       printf " ${SUCCESS}✓${RESET}\n"
       (
         sleep "$DOEY_MANAGER_BRIEF_DELAY"
@@ -1782,7 +1786,9 @@ reload_session() {
         tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
         wdg_agent=$(generate_team_agent "doey-watchdog" "$tw")
-        tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model $DOEY_WATCHDOG_MODEL --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
+        local _rl_wdg_cmd="claude --dangerously-skip-permissions --model $DOEY_WATCHDOG_MODEL --name \"T${tw} Watchdog\" --agent \"$wdg_agent\""
+        [ -f "${runtime_dir}/doey-settings.json" ] && _rl_wdg_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+        tmux send-keys -t "$wdg_ref" "$_rl_wdg_cmd" Enter
         printf " ${SUCCESS}✓${RESET}\n"
         (
           sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
@@ -1827,6 +1833,7 @@ reload_session() {
         local w_name
         w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "T${tw} W${wp}")
         local worker_cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"${w_name}\""
+        [ -f "${runtime_dir}/doey-settings.json" ] && worker_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
@@ -2080,6 +2087,15 @@ _init_doey_session() {
   tmux set-environment -t "$session" DOEY_WATCHDOG_SCAN_INTERVAL "$DOEY_WATCHDOG_SCAN_INTERVAL"
   tmux set-environment -t "$session" DOEY_WATCHDOG_LOOP_DELAY "$DOEY_WATCHDOG_LOOP_DELAY"
   tmux set-environment -t "$session" DOEY_INFO_PANEL_REFRESH "$DOEY_INFO_PANEL_REFRESH"
+
+  # Generate settings overlay with Doey statusline (ships with Doey, not user config)
+  local _statusline_cmd="$HOME/.local/bin/doey-statusline.sh"
+  if [ -f "$_statusline_cmd" ]; then
+    cat > "${runtime_dir}/doey-settings.json" << SJSON
+{"statusLine":{"type":"command","command":"bash ${_statusline_cmd}"}}
+SJSON
+    tmux set-environment -t "$session" DOEY_SETTINGS "${runtime_dir}/doey-settings.json"
+  fi
 }
 
 launch_session_headless() {
@@ -2492,6 +2508,7 @@ _batch_boot_workers() {
     local _bbw_name_prefix="W"
     [ "$_bbw_is_freelancer" = "true" ] && _bbw_name_prefix="F"
     local cmd="claude --dangerously-skip-permissions --model $_bbw_worker_model --name \"T${team_window} ${_bbw_name_prefix}${worker_num}\""
+    [ -f "${runtime_dir}/doey-settings.json" ] && cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
     tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
     sleep $DOEY_WORKER_LAUNCH_DELAY  # Auth stagger
@@ -2724,8 +2741,9 @@ _launch_team_manager() {
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   local _proj="${session#doey-}"
-  tmux send-keys -t "${session}:${window_index}.0" \
-    "claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
+  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\""
+  [ -f "${runtime_dir}/doey-settings.json" ] && _mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
   sleep 0.2  # reduced from 0.5s — tmux is fast
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
@@ -2740,8 +2758,10 @@ _launch_team_watchdog() {
   local wdg_agent
   wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
   local _proj="${session#doey-}"
-  tmux send-keys -t "${session}:${wdg_slot}" \
-    "claude --dangerously-skip-permissions --model $wdg_model --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
+  local _wdg_rt="/tmp/doey/${_proj}"
+  local _wdg_cmd="claude --dangerously-skip-permissions --model $wdg_model --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\""
+  [ -f "${_wdg_rt}/doey-settings.json" ] && _wdg_cmd+=" --settings \"${_wdg_rt}/doey-settings.json\""
+  tmux send-keys -t "${session}:${wdg_slot}" "$_wdg_cmd" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "${_proj} T${window_index} WD"
   sleep 0.2  # reduced from 0.5s — tmux is fast
 }
@@ -2937,6 +2957,7 @@ add_dynamic_team_window() {
     printf '\n\n## Identity\nYou are Freelancer 0 (%s) in pane %s.0 of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
       "$_fl_pane_id" "$window_index" "$session" >> "$_fl_prompt"
     local _fl_cmd="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F0\""
+    [ -f "${runtime_dir}/doey-settings.json" ] && _fl_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
     _fl_cmd+=" --append-system-prompt-file \"${_fl_prompt}\""
     tmux send-keys -t "$session:${window_index}.0" "$_fl_cmd" Enter
     tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
@@ -2955,6 +2976,7 @@ add_dynamic_team_window() {
     printf '\n\n## Identity\nYou are Freelancer 1 (%s) in pane %s.%s of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
       "$_fl_pane_id1" "$window_index" "$_fl_p1" "$session" >> "$_fl_prompt1"
     local _fl_cmd1="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F1\""
+    [ -f "${runtime_dir}/doey-settings.json" ] && _fl_cmd1+=" --settings \"${runtime_dir}/doey-settings.json\""
     _fl_cmd1+=" --append-system-prompt-file \"${_fl_prompt1}\""
     tmux send-keys -t "$session:${window_index}.${_fl_p1}" "$_fl_cmd1" Enter
     tmux select-pane -t "$session:${window_index}.${_fl_p1}" -T "T${window_index} F1"
@@ -2975,8 +2997,9 @@ add_dynamic_team_window() {
     sleep 0.3
     local wdg_agent
     wdg_agent=$(generate_team_agent "doey-freelancer-watchdog" "$window_index")
-    tmux send-keys -t "${session}:${wdg_slot}" \
-      "claude --dangerously-skip-permissions --model $wdg_model --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
+    local _fl_wdg_cmd="claude --dangerously-skip-permissions --model $wdg_model --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\""
+    [ -f "${runtime_dir}/doey-settings.json" ] && _fl_wdg_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+    tmux send-keys -t "${session}:${wdg_slot}" "$_fl_wdg_cmd" Enter
     local _proj="${session#doey-}"
     tmux select-pane -t "${session}:${wdg_slot}" -T "${_proj} T${window_index} WD [F]"
     sleep 0.2
