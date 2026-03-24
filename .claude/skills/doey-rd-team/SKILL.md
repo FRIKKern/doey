@@ -42,31 +42,30 @@ echo "Worktree created: $WT_DIR (branch: $WT_BRANCH)"
 
 ### Step 2: Create new tmux window with dynamic grid
 
-Use a dynamic grid: 3 columns × 2 rows = 6 workers + 1 manager = 7 panes.
+Use a 2×2 grid: Brain + 3 specialists = 4 panes.
 
 ```bash
-GRID="dynamic"; TOTAL=7; WORKER_COUNT=6
+GRID="dynamic"; TOTAL=4; WORKER_COUNT=3
 
 tmux new-window -t "$SESSION_NAME" -n "RD" -c "$WT_DIR"
 sleep 0.5
 NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
 
-# Add 3 columns (each: split-h from last pane, then split-v the new pane)
-for _col in 1 2 3; do
-  last_pane="$(tmux list-panes -t "$SESSION_NAME:$NEW_WIN" -F '#{pane_index}' | tail -1)"
-  tmux split-window -h -t "$SESSION_NAME:$NEW_WIN.${last_pane}" -c "$WT_DIR"
-  sleep 0.1
-  new_pane_top="$(tmux list-panes -t "$SESSION_NAME:$NEW_WIN" -F '#{pane_index}' | tail -1)"
-  tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.${new_pane_top}" -c "$WT_DIR"
-  sleep 0.1
-done
+# 2×2 grid: split horizontally, then split each half vertically
+tmux split-window -h -t "$SESSION_NAME:$NEW_WIN.0" -c "$WT_DIR"
+sleep 0.1
+tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.0" -c "$WT_DIR"
+sleep 0.1
+tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.1" -c "$WT_DIR"
 sleep 0.3
 
 # Name panes
-tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "RD Manager"
+tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "Brain"
+tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.1" -T "Platform"
+tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.2" -T "Claude"
+tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.3" -T "Critic"
 WORKER_PANES_LIST=""
 for i in $(seq 1 $WORKER_COUNT); do
-  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -T "RD W${i}"
   [ -n "$WORKER_PANES_LIST" ] && WORKER_PANES_LIST="${WORKER_PANES_LIST},${i}" || WORKER_PANES_LIST="${i}"
 done
 ```
@@ -120,8 +119,8 @@ You are in a **git worktree** — an isolated copy of the Doey codebase.
 2. Commit frequently: `fix(shell): <desc>`, `feat(skill): <desc>`, `test: <desc>`.
 3. Stay inside the worktree directory. No remote push without approval.
 
-## Audit format
-`[SEVERITY] file:line — description` (CRITICAL > HIGH > MEDIUM > LOW)
+## Specialists
+Each worker has a specialized agent loaded that defines its domain expertise and output format.
 
 ## Dev workflow
 Read → understand context → minimal fix → descriptive commit → verify (`bash -n doey.sh`)
@@ -136,17 +135,25 @@ RDPROMPT
 ### Step 5: Launch Claude instances
 
 ```bash
-# Manager
+# Brain (pane 0)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" \
-  "claude --dangerously-skip-permissions --model opus --name \"RD Manager\" --agent \"t${NEW_WIN}-manager\"" Enter
+  "claude --dangerously-skip-permissions --model opus --name \"Brain\" --agent \"doey-product-brain\"" Enter
 sleep 1
 
-# Workers — all get the R&D prompt extension
-for i in $(seq 1 $WORKER_COUNT); do
-  tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" \
-    "claude --dangerously-skip-permissions --model opus --name \"RD W${i}\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
-  sleep 0.5
-done
+# Platform Expert (pane 1)
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.1" \
+  "claude --dangerously-skip-permissions --model opus --name \"Platform\" --agent \"doey-platform-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
+sleep 0.5
+
+# Claude Expert (pane 2)
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.2" \
+  "claude --dangerously-skip-permissions --model opus --name \"Claude\" --agent \"doey-claude-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
+sleep 0.5
+
+# Critic (pane 3)
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.3" \
+  "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
+sleep 0.5
 
 # Watchdog — find free slot via session.env WDG_SLOT entries
 WDG_SLOT=""
@@ -214,20 +221,22 @@ TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'AUDIT_TASK'
 Run a full Doey R&D audit. You are in a worktree — safe to read and edit.
 
-Phase 1 — dispatch 6 workers in parallel:
-- W1: shell/doey.sh — bugs, dead code, portability. Format: [SEVERITY] line:N — description
-- W2: agents/*.md — frontmatter, setup blocks, model choices
-- W3: .claude/skills/doey-*/ — bash correctness, variable sourcing, macOS compat
-- W4: .claude/hooks/* — race conditions, file locking, error handling
-- W5: README.md, CLAUDE.md, docs/ — cross-reference claims vs code
-- W6: Validation — bash -n doey.sh, frontmatter checks, tests/
+You have 3 specialist workers:
+- Pane 1 (Platform Expert): tmux internals, bash 3.2 portability, shell scripts, race conditions
+- Pane 2 (Claude Expert): hooks (lifecycle, exit codes, ordering), agents, skills, settings overlays
+- Pane 3 (Critic): regression checks, output quality validation, before/after comparison
 
-If errors-snapshot.log exists in the worktree root, W4 (hooks) should also analyze it:
-group errors by category, identify recurring patterns and root causes, propose product fixes
-(CLAUDE.md rules, hook changes, agent prompt improvements).
+Phase 1 — dispatch specialists in parallel:
+- Platform Expert (pane 1): audit shell/doey.sh, shell/*.sh, .claude/hooks/* for tmux races, bash 3.2 violations, portability issues
+- Claude Expert (pane 2): audit .claude/hooks/* (hook semantics, exit codes), agents/*.md, .claude/skills/doey-*/ for correctness
+- Critic (pane 3): run bash -n on all .sh files, validate agent frontmatter, run tests/, check docs/ vs code accuracy
 
-Phase 2: Consolidate, prioritize, assign fixes (one per worker, separate commits).
-Phase 3: Verify bash -n, no regressions, report to Session Manager.
+If errors-snapshot.log exists in the worktree root, Platform Expert and Claude Expert should both analyze it:
+Platform Expert focuses on tmux/bash errors, Claude Expert on hook/agent errors.
+Critic validates the error categorization and proposes product fixes.
+
+Phase 2: Consolidate findings. Each specialist proposes fixes in their domain. Critic reviews all proposals.
+Phase 3: Implement fixes (one specialist per file, separate commits). Critic runs regression checks. Report to Session Manager.
 AUDIT_TASK
 
 tmux copy-mode -q -t "$MGR_PANE" 2>/dev/null
@@ -245,6 +254,6 @@ Output: window number, worktree path + branch, pane layout, boot status. Include
 ### Rules
 
 - Always worktree the DOEY REPO, not the current project
-- Pane 0 = Manager, 1-6 = Workers, Watchdog in Dashboard. Window named "RD"
+- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic, Watchdog in Dashboard. Window named "RD"
 - Team env includes `RD_TEAM=true` and `DOEY_REPO`
 - Never hardcode window indices. Bash 3.2 compatible.
