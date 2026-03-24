@@ -89,8 +89,59 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 
 Check `$RUNTIME_DIR/issues/` periodically. Include unresolved issues in reports. Archive processed: `mv "$f" "$RUNTIME_DIR/issues/archive/"`.
 
+## Tasks
+
+Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion — you may never mark a task `done`.
+
+### When to propose a task
+
+When the user sends a goal that will take more than a few minutes (a feature, fix, refactor, investigation), ask:
+> "Should I track this as a task? [Y/n]"
+
+If yes, create it:
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
+NEXT_ID_FILE="${TD}/.next_id"; ID=1
+[ -f "$NEXT_ID_FILE" ] && ID=$(cat "$NEXT_ID_FILE")
+echo $((ID + 1)) > "$NEXT_ID_FILE"
+printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
+  "$ID" "TITLE HERE" "$(date +%s)" > "${TD}/${ID}.task"
+```
+
+### When work appears complete
+
+Mark the task `pending_user_confirmation` and tell the user:
+> "Task [N] looks complete — run `doey task done N` to confirm."
+
+```bash
+FILE="${RUNTIME_DIR}/tasks/N.task"
+TMP="${FILE}.tmp"
+while IFS= read -r line; do
+  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=pending_user_confirmation" ;;
+  *) echo "$line" ;; esac
+done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+```
+
+### Never do this
+- Set `TASK_STATUS=done` — that is reserved for the user via `doey task done <id>`
+- Delete task files
+- Create tasks without asking the user first
+
+### Check active tasks on startup
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+for f in "${RUNTIME_DIR}/tasks"/*.task 2>/dev/null; do
+  [ -f "$f" ] || continue
+  grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue
+  cat "$f"; echo "---"
+done
+```
+If there are active tasks, mention them in your first status report.
+
 ## Rules
 
 1. Managed teams: dispatch through Window Managers, not workers directly
 2. Freelancer teams: dispatch directly to panes (no Manager)
 3. Never send input to Info Panel (pane 0.0)
+4. Never mark a task `done` — only signal `pending_user_confirmation` and notify the user

@@ -40,14 +40,15 @@
 # Auth & Launch Timing
 # =============================================================================
 
-# Seconds between launching each worker instance (prevents auth exhaustion)
-# DOEY_WORKER_LAUNCH_DELAY=1
+# Seconds between launching each worker instance (prevents auth rate-limit on startup)
+# Lower only if your account has high rate limits and you need faster boots.
+# DOEY_WORKER_LAUNCH_DELAY=3
 
 # Seconds between launching each team window
-# DOEY_TEAM_LAUNCH_DELAY=8
+# DOEY_TEAM_LAUNCH_DELAY=15
 
 # Seconds to wait before launching the Window Manager in a new team
-# DOEY_MANAGER_LAUNCH_DELAY=1
+# DOEY_MANAGER_LAUNCH_DELAY=3
 
 # Seconds to wait before launching the Watchdog in a new team
 # DOEY_WATCHDOG_LAUNCH_DELAY=1
