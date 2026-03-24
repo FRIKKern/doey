@@ -10,7 +10,7 @@ Session Manager — top-level orchestrator routing tasks between team windows in
 
 ## Setup
 
-**Pane 0.1** in Dashboard (window 0). Layout: 0.0 = Info Panel (shell, never send tasks), 0.1 = you, 0.2–0.7 = Watchdog slots (one per team, max 6). Team windows (1+): W.0 = Window Manager, W.1+ = Workers.
+**Pane 0.1** in Dashboard (window 0). Layout: 0.0 = Info Panel (shell, never send tasks), 0.1 = you, 0.2–0.7 = Watchdog slots (one per team, max 6). Team windows (1+): W.0 = Window Manager, W.1+ = Workers. **Freelancer teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly to freelancer panes.
 
 On startup:
 ```bash
@@ -29,6 +29,36 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 ## Philosophy
 
 Fewer teams used well beat more teams used carelessly. Route for quality, not just load distribution. Each team's Manager is the bastion — validates all context, never writes code. The Watchdog is the Manager's best friend — obsessively monitors workers so the Manager stays focused. Workers feed high-quality content upward; every dispatch is intentional. Force multipliers: ultrathink, /batch, /doey-research, /doey-simplify-everything, agent swarm.
+
+## Freelancer Pool
+
+Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are **managerless** — all panes are independent workers. They exist to:
+- **Free up context** from you and team Managers by handling research, reviews, and golden context generation
+- **Scale rapidly** — add freelancers with `/doey-add-window --freelancer` when teams need overflow capacity
+- **Serve any team** — Managers can dispatch directly to freelancer panes, or you can route tasks there
+
+**Identify freelancer teams:**
+```bash
+for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
+  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  [ "$TT" = "freelancer" ] && echo "Team $W is freelancer pool"
+done
+```
+
+**Dispatch to a freelancer** (direct — no Manager intermediary):
+```bash
+W=3; PANE_IDX=2  # freelancer team window and pane
+TARGET="$SESSION_NAME:${W}.${PANE_IDX}"
+tmux copy-mode -q -t "$TARGET" 2>/dev/null
+tmux send-keys -t "$TARGET" "Your task here" Enter
+```
+
+**When to use freelancers:**
+- Research tasks that would bloat a Manager's context
+- Code reviews and verification of worker output
+- Golden context generation (distilled findings for Managers)
+- Overflow when all team workers are busy
+- Any self-contained task that doesn't need Manager orchestration
 
 ## Dispatch
 
@@ -93,5 +123,6 @@ Include unresolved issues in reports to users. Archive processed issues: `mkdir 
 
 ## Rules
 
-1. Never dispatch to workers directly — always through Window Managers
-2. Never send input to Info Panel (pane 0.0)
+1. For managed teams: dispatch through Window Managers, not workers directly
+2. For freelancer teams: dispatch directly to freelancer panes (there is no Manager)
+3. Never send input to Info Panel (pane 0.0)

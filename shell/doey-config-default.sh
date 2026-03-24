@@ -27,6 +27,9 @@
 # Number of teams that start in isolated git worktrees
 # DOEY_INITIAL_WORKTREE_TEAMS=0
 
+# Number of freelancer teams (no manager, independent workers available to all teams)
+# DOEY_INITIAL_FREELANCER_TEAMS=1
+
 # Maximum number of worker panes across all teams
 # DOEY_MAX_WORKERS=20
 
@@ -109,8 +112,10 @@
 #
 # Available properties:
 #
-#   TYPE ............. "local" or "worktree" (default: local)
+#   TYPE ............. "local", "worktree", or "freelancer" (default: local)
 #                      Worktree teams get an isolated git branch.
+#                      Freelancer teams have no manager — all panes are
+#                      independent workers available to any team.
 #
 #   WORKERS .......... Number of worker panes (default: from grid calculation)
 #                      Each worker runs one Claude instance.

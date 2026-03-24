@@ -44,11 +44,9 @@ _notify_pane() {
     || send_to_pane "$target_pane" "$body"
 }
 
-# --- Worker: notify its Window Manager ---
+# --- Worker: notify its Window Manager (or Session Manager for freelancers) ---
 if is_worker; then
-  _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
-  MGR_PANE="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
-  tmux display-message -t "$MGR_PANE" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
+  _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
 
   PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="W${PANE_INDEX}"
 
@@ -61,12 +59,26 @@ if is_worker; then
   fi
 
   PANE_DISPLAY="${DOEY_PANE_ID:-${PANE_TITLE}}"
-  MSG="Worker ${PANE_DISPLAY} finished (${STATUS})"
   LAST_MSG=$(parse_field "last_assistant_message")
-  [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
 
-  _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
-  _log "stop-notify: sent worker_finished to manager at $MGR_PANE"
+  if [ "$_team_type" = "freelancer" ]; then
+    # Freelancer workers notify Session Manager directly (no manager in this team)
+    _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
+    SM_TARGET="$SESSION_NAME:${_sm_pane:-0.1}"
+    tmux display-message -t "$SM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
+    MSG="Freelancer ${PANE_DISPLAY} finished (${STATUS})"
+    [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
+    _notify_pane "$SM_TARGET" "freelancer_finished" "$MSG"
+    _log "stop-notify: sent freelancer_finished to SM at $SM_TARGET"
+  else
+    _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
+    MGR_PANE="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
+    tmux display-message -t "$MGR_PANE" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
+    MSG="Worker ${PANE_DISPLAY} finished (${STATUS})"
+    [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
+    _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
+    _log "stop-notify: sent worker_finished to manager at $MGR_PANE"
+  fi
   exit 0
 fi
 

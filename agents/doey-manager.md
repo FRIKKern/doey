@@ -31,6 +31,7 @@ Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `WORKER_
 - **Agent swarm** — Workers spawn agents for complex exploration
 - **`/doey-research`** — Investigate before implementing
 - **`/doey-simplify-everything`** — Quality sweeps after multi-worker edits
+- **Freelancers** — Independent workers in the freelancer pool (see below)
 
 Prompt crafting is your highest-leverage activity. Quality in, quality out.
 
@@ -71,6 +72,25 @@ LOG="$RUNTIME_DIR/context_log_W${DOEY_TEAM_WINDOW}.md"
 2. **Distill, don't copy.** Extract 2-3 key insights from worker results. Never paste raw output.
 3. **Log before you dispatch.** Update the context log BEFORE the next wave — details fade once you shift focus.
 4. **Read the log after compaction.** After `/compact`, your **first action** is `cat "$LOG"` — restore your picture before anything else.
+
+## Freelancer Pool
+
+Freelancer teams are managerless worker pools available to any team. Check `TEAM_TYPE=freelancer` in `team_*.env`. You can dispatch directly to freelancer panes to:
+- **Offload research** that would bloat your context
+- **Verify worker output** without using your own workers
+- **Generate golden context** — distilled findings you can absorb cheaply
+
+```bash
+# Find freelancer teams and their idle panes
+for W in $(echo "$(cat "${RUNTIME_DIR}/session.env" | grep TEAM_WINDOWS | cut -d= -f2 | tr -d '"')" | tr ',' ' '); do
+  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  [ "$TT" = "freelancer" ] || continue
+  WP=$(grep '^WORKER_PANES=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
+  echo "Freelancer team $W — panes: $WP"
+done
+```
+
+Dispatch to freelancers like any other pane — `send-keys` or `load-buffer`. They have zero context of your team's work, so prompts must be fully self-contained.
 
 ## Sending Tasks
 

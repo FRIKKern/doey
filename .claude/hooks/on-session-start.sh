@@ -55,20 +55,35 @@ if [ "$WINDOW_INDEX" = "0" ]; then
     done
   fi
 else
-  mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
-  [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
+  _team_type=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
+  if [ "$_team_type" = "freelancer" ]; then
+    # Freelancer teams have no manager — all panes are workers
+    ROLE="worker"
+  else
+    mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
+    [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
+  fi
 fi
 
 # Compute pane identifiers
 PROJECT_ACRONYM=$(_env_val "$SESSION_ENV" PROJECT_ACRONYM)
 [ -z "$PROJECT_ACRONYM" ] && PROJECT_ACRONYM=$(echo "$PROJECT_NAME" | awk -F- '{for(i=1;i<=NF;i++) printf substr($i,1,1)}' | cut -c1-4)
 
+_is_freelancer_team="false"
+[ "${_team_type:-}" = "freelancer" ] && _is_freelancer_team="true"
+
 case "$ROLE" in
   session_manager) PANE_ID="sm" ;;
   info_panel)      PANE_ID="info" ;;
   manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
   watchdog)        PANE_ID="t${TEAM_WINDOW}-wd" ;;
-  worker)          PANE_ID="t${WINDOW_INDEX}-w${PANE_INDEX}" ;;
+  worker)
+    if [ "$_is_freelancer_team" = "true" ]; then
+      PANE_ID="t${WINDOW_INDEX}-f${PANE_INDEX}"
+    else
+      PANE_ID="t${WINDOW_INDEX}-w${PANE_INDEX}"
+    fi
+    ;;
   *)               PANE_ID="t${WINDOW_INDEX}-p${PANE_INDEX}" ;;
 esac
 FULL_PANE_ID="${PROJECT_ACRONYM}-${PANE_ID}"
@@ -126,6 +141,12 @@ case "$ROLE" in
   watchdog)        _TITLE="Watchdog" ;;
   manager)         _TITLE="Window Manager" ;;
   session_manager) _TITLE="Session Manager" ;;
-  worker)          _TITLE="Worker" ;;
+  worker)
+    if [ "$_is_freelancer_team" = "true" ]; then
+      _TITLE="Freelancer"
+    else
+      _TITLE="Worker"
+    fi
+    ;;
 esac
 [ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} ${_TITLE}"

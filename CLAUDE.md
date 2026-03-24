@@ -23,6 +23,7 @@ Doey: CLI tool creating tmux-based multi-agent Claude Code teams. Dynamic grid (
 | Watchdog | `0.2+` | Manager's best friend. Monitors hook events, filters noise, escalates signal. |
 | Window Manager | `W.0` | The bastion. Plans/delegates, validates all context, never writes code. |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved. |
+| Freelancers | `F.0+` | Independent workers in managerless teams. Available to any team. |
 | Test Driver | external | E2E test runner via `doey test`. |
 
 Runtime: `/tmp/doey/<project>/`. Context layers: `docs/context-reference.md`.
