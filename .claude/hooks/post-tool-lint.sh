@@ -16,7 +16,7 @@ if type _init_debug >/dev/null 2>&1; then
   _debug_hook_entry
 fi
 
-# Lightweight error logger (common.sh not loaded in this hook)
+# Lightweight error logger (init_hook not called — common.sh sourced for debug only)
 _log_lint_error() {
   local msg="$1" detail="${2:-}"
   local _rt="${DOEY_RUNTIME:-}"

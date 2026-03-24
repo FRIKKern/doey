@@ -5,7 +5,7 @@ description: Toggle debug flight-recorder mode for Doey hooks. Use `/doey-debug 
 
 - Runtime dir: !`tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2- || true`
 - Debug config: !`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); [ -f "$RD/debug.conf" ] && cat "$RD/debug.conf" || echo "OFF (no debug.conf)"`
-- Debug log sizes: !`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); if [ -d "$RD/debug" ]; then find "$RD/debug" -name '*.jsonl' -exec ls -lh {} \; 2>/dev/null | awk '{print $5, $NF}'; else echo "No debug/ directory"; fi`
+- Debug log sizes: !`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); if [ -d "$RD/debug" ]; then find "$RD/debug" -name '*.jsonl' -exec ls -lh {} \; 2>/dev/null | awk '{print \$5, \$NF}'; else echo "No debug/ directory"; fi`
 - Last entries: !`RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); if [ -d "$RD/debug" ]; then for f in $(find "$RD/debug" -name '*.jsonl' 2>/dev/null | head -8); do echo "=== $(basename "$f") ==="; tail -1 "$f" 2>/dev/null; done; else echo "No debug logs"; fi`
 
 Default operation is `on`. Parse the user's argument to determine: `on`, `off`, or `status`.

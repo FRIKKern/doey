@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Doey Settings Panel — shows configuration values, swappable with Info Panel via Prefix+S
 set -uo pipefail
 

@@ -36,7 +36,7 @@ if [ -n "$PROJECT_DIR" ]; then
     rm -f "$_tmpfile"
   fi
 fi
-[ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log_error "HOOK_ERROR" "git diff returned empty" "project=$PROJECT_DIR"
+[ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty (no file changes)" || true
 FILES_JSON="[]"
 if [ -n "$FILES_LIST" ]; then
   FILES_JSON=$(echo "$FILES_LIST" | jq -R '.' | jq -s '.' 2>/dev/null) || FILES_JSON="[]"

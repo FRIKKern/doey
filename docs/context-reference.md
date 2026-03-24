@@ -22,11 +22,11 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 
 Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
-| Field | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Git Agent | Tmux UI | Settings Editor | Test Driver |
-|-------|---------|-------------|----------|---------------------|-----------|---------|-----------------|-------------|
-| `model` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` |
-| `color` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#F05033` | `#E5C07B` | `#4A90D9` | `red` |
-| `memory` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `none` |
+| Field | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Git Agent | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
+|-------|---------|-------------|----------|---------------------|-----------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
+| `model` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
+| `color` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#F05033` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
+| `memory` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
 
 Precedence: CLI `--model` > frontmatter > settings.
 
@@ -70,7 +70,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
 **Manager skills:**
-`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager), `/doey-rd-team` (spawn R&D worktree team), `/doey-login` (fix auth), `/doey-settings` (interactive settings), `/unknown-task` (fallback for unrecognized tasks)
+`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager), `/doey-rd-team` (spawn R&D product team on live codebase), `/doey-login` (fix auth), `/doey-settings` (interactive settings), `/unknown-task` (fallback for unrecognized tasks)
 
 **Session Manager skills:**
 `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
@@ -131,7 +131,7 @@ Dynamic grid auto-expands when all workers are busy.
 
 **Key details:**
 - **PANE_SAFE escaping:** `${PANE//[:.]/_}` — e.g. `doey-project:0.5` → `doey-project_0_5`
-- **Pane titles:** `"T<N> Window Manager"`, `"T<N> Watchdog"`, `"Session Manager"`, `"T<N> W<P>"`
+- **Pane titles:** Format is `"<pane_id> | <role>"` — e.g. `"d-t1-mgr | doey T1 Mgr"`, `"d-t1-wd | doey T1 WD"`, `"d-sm | doey SM"`, `"d-t1-w1 | Worker"`
 - **Startup timing:** Manager briefing 8s; workers ready ~15s
 - **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript` instead
 
@@ -147,6 +147,7 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `worker-system-prompt-w<W>-<N>.md` | Per-worker prompt |
 | `status/<pane_safe>.status` | 4-line: PANE, UPDATED, STATUS, TASK |
 | `status/<pane_safe>.reserved` | Permanent reservation marker |
+| `status/<pane_safe>.role` | Per-pane role cache (authoritative for hook role detection) |
 | `status/pane_hash_<pane_safe>` | Output hash (change detection) |
 | `status/unchanged_count_<W>_<index>` | Stuck-detection counter |
 | `status/watchdog_W<W>.heartbeat` | Watchdog liveness |

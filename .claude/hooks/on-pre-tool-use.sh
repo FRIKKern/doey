@@ -19,13 +19,25 @@ _log_block() {
     >> "${_rt}/errors/errors.log" 2>/dev/null
 }
 
-# Parse a JSON field via jq (with grep fallback)
+# Parse a JSON field via jq (with python3 fallback, then grep for top-level only)
 _json_str() {
   local f="$1"
   if [ "${_HAS_JQ:-}" = "1" ]; then
     echo "$INPUT" | jq -r ".${f} // empty" 2>/dev/null || echo ""
+  elif command -v python3 >/dev/null 2>&1; then
+    echo "$INPUT" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for k in '${f}'.split('.'):
+  d=d.get(k,'') if isinstance(d,dict) else ''
+print(d if isinstance(d,str) else '')" 2>/dev/null || echo ""
   else
-    echo "$INPUT" | grep -o "\"${f}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed "s/.*\"${f}\"[[:space:]]*:[[:space:]]*\"//;s/\"$//" || echo ""
+    # grep only handles top-level keys; nested fields (e.g. tool_input.command) fail
+    case "$f" in
+      *.*) _log_block "TOOL_RISK" "No jq or python3: cannot parse nested field '$f'" "Bash commands will be blocked for safety"
+           echo "__PARSE_FAILED__" ;;
+      *)   echo "$INPUT" | grep -o "\"${f}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed "s/.*\"${f}\"[[:space:]]*:[[:space:]]*\"//;s/\"$//" || echo "" ;;
+    esac
   fi
 }
 
@@ -142,6 +154,7 @@ fi
 if [ "$_DOEY_ROLE" = "git_agent" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
+  [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
   # _check_blocked catches git/gh too — skip that match for git_agent
   case "$TOOL_COMMAND" in *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
     _dbg_write "allow_git_agent_git"
@@ -159,6 +172,7 @@ fi
 if [ "$_DOEY_ROLE" = "worker" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
+  [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "Worker $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
@@ -178,6 +192,7 @@ is_session_manager && { _dbg_write "allow_sm_slow"; exit 0; }
 
 TOOL_COMMAND=$(_json_str tool_input.command)
 [ -z "$TOOL_COMMAND" ] && exit 0
+[ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
 
 # Watchdog: allow bash except sending keystrokes
 if is_watchdog; then
