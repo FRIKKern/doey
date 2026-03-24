@@ -4,6 +4,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
 _DOEY_HOOK_NAME="stop-results"
+type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 is_worker || exit 0
 
@@ -91,6 +92,10 @@ EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"
 TMPFILE=""
 _log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_COUNT)"
+
+_FILES_COUNT=0
+[ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
+type _debug_log >/dev/null 2>&1 && _debug_log lifecycle "result_captured" "files_changed=${_FILES_COUNT}" "tool_calls=${TOOL_COUNT}"
 
 # Completion event for watchdog
 COMPLETION="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"

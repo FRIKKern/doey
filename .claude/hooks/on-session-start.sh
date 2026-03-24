@@ -8,6 +8,15 @@ set -euo pipefail
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
 [ -z "$RUNTIME_DIR" ] && exit 0
 
+# Debug: source common.sh functions for _init_debug/_debug_hook_entry/_debug_log
+# (common.sh guards itself — safe to source even though this hook has its own init)
+source "$(dirname "$0")/common.sh"
+if type _init_debug >/dev/null 2>&1; then
+  _init_debug
+  _DOEY_HOOK_NAME="on-session-start"
+  _debug_hook_entry
+fi
+
 SESSION_ENV="${RUNTIME_DIR}/session.env"
 [ -f "$SESSION_ENV" ] || exit 0
 
@@ -157,3 +166,6 @@ case "$ROLE" in
     ;;
 esac
 [ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} | ${_TITLE}"
+
+type _debug_log >/dev/null 2>&1 && \
+  _debug_log lifecycle "session_start" "role=${ROLE:-unknown}" "team_window=${WINDOW_INDEX:-0}" "project=${PROJECT_NAME:-unknown}"

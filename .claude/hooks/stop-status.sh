@@ -4,6 +4,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
 _DOEY_HOOK_NAME="stop-status"
+type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 # Block workers with unfinished research reports
 if is_worker && ! is_reserved; then
@@ -29,6 +30,8 @@ if [ -n "${DOEY_PANE_ID:-}" ]; then
   [ ! -f "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$DOEY_PANE_ID status=$STOP_STATUS"
   _log "stop-status: ${DOEY_PANE_ID} -> $STOP_STATUS (dual-write)"
 fi
+
+type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
 
 notify_watchdog "$STOP_STATUS"
 

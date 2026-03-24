@@ -9,14 +9,32 @@ fi
 DOEY_WATCHDOG_SCAN_INTERVAL="${DOEY_WATCHDOG_SCAN_INTERVAL:-30}"
 TRIGGER="${RUNTIME_DIR}/status/watchdog_trigger_W${1:-${DOEY_TEAM_WINDOW:-1}}"
 
+# Debug mode check
+_WW_DBG=false
+[ -f "${RUNTIME_DIR}/debug.conf" ] && _WW_DBG=true
+_WW_TW="${1:-${DOEY_TEAM_WINDOW:-1}}"
+_WW_DBG_FILE="${RUNTIME_DIR}/debug/watchdog_W${_WW_TW}.jsonl"
+
+_ww_dbg_wake() {
+  [ "$_WW_DBG" = "true" ] || return 0
+  local reason="$1" elapsed="$2"
+  [ -d "$(dirname "$_WW_DBG_FILE")" ] || mkdir -p "$(dirname "$_WW_DBG_FILE")" 2>/dev/null
+  printf '{"ts":%s,"window":%s,"cat":"watchdog","msg":"wake","reason":"%s","wait_s":%s}\n' \
+    "$(date +%s)" "$_WW_TW" "$reason" "$elapsed" \
+    >> "$_WW_DBG_FILE" 2>/dev/null
+  return 0
+}
+
 i=0
 while [ "$i" -lt "$DOEY_WATCHDOG_SCAN_INTERVAL" ]; do
   if [ -f "$TRIGGER" ]; then
     rm -f "$TRIGGER" 2>/dev/null
+    _ww_dbg_wake "trigger" "$i"
     echo "TRIGGERED"
     exit 0
   fi
   sleep 1
   i=$((i + 1))
 done
+_ww_dbg_wake "timeout" "$DOEY_WATCHDOG_SCAN_INTERVAL"
 echo "TIMEOUT"
