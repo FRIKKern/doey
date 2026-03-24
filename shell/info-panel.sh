@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Doey Info Panel — dashboard for window 0, refreshes every 5 minutes.
 set -uo pipefail
 

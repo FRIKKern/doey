@@ -2100,6 +2100,7 @@ reload_session() {
     local mgr_ref="${session}:${tw}.${mgr_pane:-0}"
     printf "    Manager %s..." "$mgr_ref"
     if _kill_pane_child "$mgr_ref"; then
+      tmux copy-mode -q -t "$mgr_ref" 2>/dev/null || true
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
@@ -2121,6 +2122,7 @@ reload_session() {
       local wdg_ref="${session}:${wdg_pane}"
       printf "    Watchdog %s..." "$wdg_ref"
       if _kill_pane_child "$wdg_ref"; then
+        tmux copy-mode -q -t "$wdg_ref" 2>/dev/null || true
         tmux send-keys -t "$wdg_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
         wdg_agent=$(generate_team_agent "doey-watchdog" "$tw")
@@ -2165,6 +2167,7 @@ reload_session() {
         fi
 
         _kill_pane_child "$pane_ref" 1 || true
+        tmux copy-mode -q -t "$pane_ref" 2>/dev/null || true
         tmux send-keys -t "$pane_ref" "clear" Enter 2>/dev/null || true
         sleep 0.5
 

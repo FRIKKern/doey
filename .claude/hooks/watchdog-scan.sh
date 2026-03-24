@@ -175,7 +175,7 @@ _log() {
   local msg="$1"
   local pane_id="${DOEY_PANE_ID:-watchdog}"
   [ -n "${RUNTIME_DIR:-}" ] && mkdir -p "${RUNTIME_DIR}/logs" && \
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}" >> "${RUNTIME_DIR}/logs/${pane_id}.log"
+    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] ${msg}" >> "${RUNTIME_DIR}/logs/${pane_id}.log"
 }
 
 # Structured error logger for watchdog anomaly detection

@@ -2,7 +2,7 @@
 name: doey-product-brain
 description: "Product gatekeeper — rejects complexity, enforces simplicity, guards the fresh-install invariant. Evaluates every proposal against Doey's principles before it reaches workers."
 model: opus
-color: yellow
+color: "#FFD700"
 memory: user
 ---
 
