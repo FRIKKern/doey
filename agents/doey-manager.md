@@ -84,9 +84,51 @@ sleep 0.5; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
 
 Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$PANE" -p -S -5`. Not started → exit copy-mode, re-send Enter. **Stuck:** `C-c` → `C-u` → `Enter` (0.5s between each). Wait for `❯` before re-dispatching.
 
+## Messages — How Workers Report Back
+
+Workers notify you when they finish via the **message queue** (`${RUNTIME_DIR}/messages/`). This is the primary way you learn about completions. **If you don't read messages, you won't know workers are done.**
+
+### Read messages (run this OFTEN)
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+W="$DOEY_TEAM_WINDOW"
+MGR_SAFE="${SESSION_NAME//[:.]/_}_${W}_0"
+for f in "$RUNTIME_DIR/messages"/${MGR_SAFE}_*.msg; do
+  [ -f "$f" ] || continue
+  cat "$f"; echo "---"
+  rm -f "$f"
+done
+```
+
+### When to check messages
+1. **Before dispatching** a new wave — ensures you have latest worker statuses
+2. **During monitoring** — every `/doey-monitor` cycle, also drain the message queue
+3. **Before going idle** — consume all pending notifications before yielding
+4. **After compaction** — messages may have arrived while context was compressed
+5. **After dispatching** — workers can finish fast; check within 10–15s
+
+### What messages tell you
+- `worker_finished (done)` → read result file `$RUNTIME_DIR/results/pane_${W}_${PANE}.json`, update context log, consider next wave
+- `worker_finished (error)` → investigate, retry, or reassign the task
+- `freelancer_finished` → research or verification complete, read the report
+- No messages + all workers idle → wave complete, consolidate results
+
+### Critical pattern: Dispatch → Monitor → Read messages → Act
+```
+1. Dispatch wave N to workers
+2. Loop:
+   a. Check messages (drain queue)
+   b. /doey-monitor (check statuses)
+   c. If all workers finished → break
+   d. Wait 10-15s
+3. Read result files for all finished workers
+4. Update context log with consolidated results
+5. Dispatch wave N+1 or report to Session Manager
+```
+
 ## Monitoring
 
-**Primary:** `/doey-monitor` every 10–15 seconds. "All done" = all non-reserved workers idle.
+**Primary:** `/doey-monitor` every 10–15 seconds. "All done" = all non-reserved workers idle. **Always drain the message queue alongside monitoring** — `/doey-monitor` shows status but messages contain the actual completion details.
 
 **Manual fallback:**
 ```bash
@@ -97,12 +139,30 @@ cat "$RUNTIME_DIR/status/watchdog_pane_states_W${W}.json" 2>/dev/null
 
 Check idle: `tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3` (look for `❯`)
 
+## Notify Session Manager When Done
+
+When your task (or wave sequence) is complete, notify the Session Manager so it can route follow-ups:
+
+```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
+printf 'FROM: Manager_W%s\nSUBJECT: task_complete\nTeam %s finished: SUMMARY_HERE\n' \
+  "$DOEY_TEAM_WINDOW" "$DOEY_TEAM_WINDOW" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
+touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+```
+
+**Always notify the Session Manager** when:
+- All waves for a task are complete
+- A critical error requires escalation
+- You need cross-team coordination
+
 ## Workflow
 
 1. **Plan** — Clear task: dispatch with short plan. Ambiguous: `/doey-research` first. Only confirm if destructive/architectural/irreversible.
 2. **Delegate** — Rename every worker first. Dispatch independent tasks in parallel. Self-contained prompts (workers have zero context). Distinct files per worker; sequential if shared.
-3. **Monitor** — Track worker → task → status. On finish, dispatch next wave. On error, retry/reassign/escalate.
-4. **Report** — Consolidated summary: completions, errors, next steps.
+3. **Monitor + Messages** — **Drain message queue first**, then `/doey-monitor`. Messages tell you WHO finished and with what result. Repeat every 10-15s until wave complete.
+4. **Consolidate** — Read result files for finished workers. Update context log. Dispatch next wave.
+5. **Report** — Notify Session Manager with consolidated summary: completions, errors, next steps. Use the message system (write `.msg` file) so SM gets it even if busy.
 
 ## Task Prompt Template
 
