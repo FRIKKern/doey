@@ -213,78 +213,10 @@ echo "Launch: ssh -t doey@$LINODE_IP 'cd ~/your-project && doey'"
 ## Operations
 
 ```bash
-# Server maintenance
-ssh doey@$LINODE_IP "tmux list-sessions"                                    # Check session
-ssh doey@$LINODE_IP "free -h && df -h / && du -sh /tmp/doey/ 2>/dev/null"   # Resources
 ssh doey@$LINODE_IP "cd ~/doey && git pull && ./install.sh"                 # Update Doey
 ssh doey@$LINODE_IP "source ~/.bashrc && npm update -g @anthropic-ai/claude-code"  # Update Claude
-ssh doey@$LINODE_IP "sudo apt update && sudo apt upgrade -y"                # System updates
 ssh doey@$LINODE_IP "source ~/.bashrc && doey purge"                        # Clean runtime
-
-# Linode management
-ID=$(linode-cli linodes list --label doey-server --json | jq -r '.[0].id')
-linode-cli linodes list                          # List all
-linode-cli linodes reboot "$ID"                  # Reboot
-linode-cli linodes resize "$ID" --type g6-standard-1   # Upgrade to 2 GB
-linode-cli linodes backups-enable "$ID"          # Enable backups ($2/mo)
-linode-cli linodes delete "$ID"                  # Delete (irreversible!)
-```
-
-## Exposing Services
-
-| Approach | Best for | Domain needed? |
-|----------|----------|----------------|
-| SSH tunnel | Dev/testing | No |
-| Caddy + domain | Production, demos | Yes |
-| Tailscale | Teams, private access | No |
-| ttyd | Browser terminal | No |
-
-### SSH Tunnel
-
-```bash
-ssh -L 3000:localhost:3000 doey@$LINODE_IP                              # Single port
-ssh -L 3000:localhost:3000 -L 5173:localhost:5173 doey@$LINODE_IP       # Multiple
-ssh -fNL 3000:localhost:3000 doey@$LINODE_IP                            # Background
-autossh -M 0 -fNL 3000:localhost:3000 doey@$LINODE_IP                  # Auto-reconnect
-```
-
-### Caddy (HTTPS)
-
-Point your domain's A record to `$LINODE_IP`, then:
-
-```bash
-ssh doey@$LINODE_IP 'bash -s' << 'CADDY'
-set -euo pipefail
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update && sudo apt install -y caddy
-
-sudo tee /etc/caddy/Caddyfile << 'CADDYFILE'
-app.yourdomain.com { reverse_proxy localhost:3000 }
-api.yourdomain.com { reverse_proxy localhost:8080 }
-CADDYFILE
-
-sudo systemctl enable caddy && sudo systemctl restart caddy
-CADDY
-
-ssh doey@$LINODE_IP 'sudo ufw allow 80 && sudo ufw allow 443'
-```
-
-### Tailscale
-
-```bash
-ssh doey@$LINODE_IP "curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up"
-# Local: brew install tailscale && tailscale up
-# Access: http://100.x.y.z:3000
-# Public: ssh doey@$LINODE_IP "sudo tailscale funnel 3000"
-```
-
-### Web Terminal (ttyd)
-
-```bash
-ssh doey@$LINODE_IP "sudo apt install -y ttyd && sudo ttyd --port 7681 --credential doey:CHANGE_PASSWORD --writable tmux attach"
-# Via SSH tunnel: ssh -L 7681:localhost:7681 doey@$LINODE_IP → http://localhost:7681
+ssh doey@$LINODE_IP "free -h && df -h / && du -sh /tmp/doey/ 2>/dev/null"   # Check resources
 ```
 
 ## Security Notes
@@ -313,8 +245,10 @@ ssh doey@$LINODE_IP "sudo apt install -y ttyd && sudo ttyd --port 7681 --credent
 
 ## Golden Image
 
-### Create
+<details>
+<summary><strong>Create, spawn, and tear down golden images</strong></summary>
 
+**Create:**
 ```bash
 # Clean for snapshotting
 ssh doey@$LINODE_IP 'bash -s' << 'CLEAN'
@@ -324,7 +258,6 @@ rm -rf /tmp/doey/* ~/.claude/.credentials 2>/dev/null || true
 > ~/.claude/doey/projects && > ~/.bash_history
 CLEAN
 
-# Snapshot
 ID=$(linode-cli linodes list --label doey-server --json | jq -r '.[0].id')
 linode-cli linodes shutdown "$ID"
 while [ "$(linode-cli linodes list --label doey-server --json | jq -r '.[0].status')" != "offline" ]; do sleep 3; done
@@ -334,24 +267,19 @@ linode-cli images create \
 linode-cli linodes boot "$ID"
 ```
 
-### Spawn
-
+**Spawn from image:**
 ```bash
 IMAGE_ID="private/12345678"   # from: linode-cli images list --is_public false
 linode-cli linodes create \
   --type g6-nanode-1 --region us-east --image "$IMAGE_ID" \
   --label "doey-team-2" --root_pass "$(openssl rand -base64 24)" \
   --authorized_keys "$(cat ~/.ssh/id_ed25519.pub)" --json
-
-# After boot: add API key, clone project, launch
-NEW_IP=$(linode-cli linodes list --label doey-team-2 --json | jq -r '.[0].ipv4[0]')
-ssh doey@"$NEW_IP" "echo 'export ANTHROPIC_API_KEY=\"sk-ant-YOUR_KEY\"' >> ~/.bashrc"
-ssh -t doey@"$NEW_IP" "source ~/.bashrc && cd ~ && git clone YOUR_REPO && cd YOUR_PROJECT && doey init && doey"
 ```
 
-### Tear Down
-
+**Tear down fleet:**
 ```bash
 linode-cli linodes list --json | jq -r '.[] | select(.label | startswith("doey-fleet")) | .id' \
   | while read id; do linode-cli linodes delete "$id"; done
 ```
+
+</details>

@@ -26,20 +26,12 @@ for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do cat "${RUNTIME_DIR}/team_${W}.
 
 Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
 
-## Philosophy
-
-Fewer teams used well beat more teams used carelessly. Route for quality, not load distribution. Force multipliers: ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms, freelancers.
-
 ## Freelancer Pool
 
 Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless — all panes are independent workers. Use for: research, reviews, golden context generation, overflow. Add with `/doey-add-window --freelancer`.
 
 ```bash
-# Identify freelancer teams
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  [ "$TT" = "freelancer" ] && echo "Freelancer team: $W"
-done
+# Find freelancers: check TEAM_TYPE in ${RUNTIME_DIR}/team_${W}.env
 ```
 
 Dispatch directly to freelancer panes (no Manager intermediary). Prompts must be self-contained.
@@ -62,7 +54,7 @@ tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$TARGET"
 sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 ```
 
-Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
+**Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
 
 ## Monitoring
 
@@ -91,17 +83,7 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 
 ## Monitor Loop
 
-**Never go idle.** After handling any event or user request, enter the monitor loop:
-
-```
-Step 1 — Wait: bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"
-          (sleeps ≤30s, wakes on new messages, results, crashes, or trigger)
-Step 2 — Check: Run the Monitoring bash block above to read messages, results, and status.
-Step 3 — Act: Handle any events (dispatch follow-ups, acknowledge completions, alert on crashes/logged-out).
-Step 4 — Loop: Go to Step 1.
-```
-
-After 2–3 idle cycles (TIMEOUT with no events), yield with a brief status summary. Resume on next user message or trigger.
+**Never go idle.** Loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (sleeps ≤30s, wakes on triggers) → check messages/results/status → act on events → repeat. After 2–3 idle cycles (TIMEOUT), yield with brief status summary.
 
 ## Issue Log Review
 

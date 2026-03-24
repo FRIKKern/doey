@@ -40,7 +40,7 @@ cat <<CONTEXT
 **Recently Modified Files:**
 ${RECENT_FILES:-None detected}
 
-**Important:** You are ${ROLE_LABEL}. Your task context above was preserved before context compaction. Continue your work based on this information. Restore any tracked state from the sections below. If you have a research task, you MUST write your report to ${REPORT_PATH} before stopping.
+You are ${ROLE_LABEL}. Continue from this preserved state.${RESEARCH_TOPIC:+ Research report required: ${REPORT_PATH}}
 CONTEXT
 
 _list_files() {
@@ -89,25 +89,13 @@ MGRSTATE
   # Golden Context Log — accumulated knowledge that must survive compaction
   CONTEXT_LOG="${RUNTIME_DIR}/context_log_W${_TEAM_W}.md"
   if [ -f "$CONTEXT_LOG" ] && [ -s "$CONTEXT_LOG" ]; then
+    LINES=$(wc -l < "$CONTEXT_LOG" 2>/dev/null | tr -d ' ') || LINES=0
     cat <<CTXLOG
 
-## GOLDEN CONTEXT LOG (your accumulated knowledge — read this first after compaction)
-
-**CRITICAL:** Read this log carefully. It contains your distilled findings, decisions, and session history. After compaction, run \`cat "$CONTEXT_LOG"\` to see the full log, then continue where you left off.
-
-**Log location:** ${CONTEXT_LOG}
-**Last updated:** $(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$CONTEXT_LOG" 2>/dev/null || stat -c '%y' "$CONTEXT_LOG" 2>/dev/null | cut -d. -f1 || echo "unknown")
-
+## GOLDEN CONTEXT LOG — run \`cat ${CONTEXT_LOG}\` after compaction for full log
 $(head -100 "$CONTEXT_LOG")
 CTXLOG
-    LINES=$(wc -l < "$CONTEXT_LOG" 2>/dev/null || echo "0")
-    LINES=$(echo "$LINES" | tr -d ' ')
-    if [ "$LINES" -gt 100 ]; then
-      cat <<CTXTRUNC
-
-*[Log truncated at 100 lines — full log has ${LINES} lines. Run \`cat "${CONTEXT_LOG}"\` to see everything.]*
-CTXTRUNC
-    fi
+    [ "$LINES" -gt 100 ] && echo "*[Truncated at 100/${LINES} lines]*"
   fi
 fi
 

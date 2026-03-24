@@ -22,11 +22,11 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 
 Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
-| Field | Manager | Session Mgr | Watchdog |
-|-------|---------|-------------|----------|
-| `model` | `opus` | `opus` | `sonnet` |
-| `color` | `green` | `#FF6B35` | `yellow` |
-| `memory` | `user` | `user` | `none` |
+| Field | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Git Agent | Tmux UI | Settings Editor | Test Driver |
+|-------|---------|-------------|----------|---------------------|-----------|---------|-----------------|-------------|
+| `model` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` |
+| `color` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#F05033` | `#E5C07B` | `#4A90D9` | `red` |
+| `memory` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `none` |
 
 Precedence: CLI `--model` > frontmatter > settings.
 

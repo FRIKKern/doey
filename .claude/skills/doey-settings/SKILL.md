@@ -25,7 +25,7 @@ tmux send-keys -t "$SESSION_NAME:$SETTINGS_WIN.0" "DOEY_SETTINGS_LIVE=1 bash \"$
 
 # Split right for Claude editor (pane 1)
 tmux split-window -h -t "$SESSION_NAME:$SETTINGS_WIN.0"
-tmux send-keys -t "$SESSION_NAME:$SETTINGS_WIN.1" "claude --agent settings-editor" Enter
+tmux send-keys -t "$SESSION_NAME:$SETTINGS_WIN.1" "claude --dangerously-skip-permissions --agent settings-editor" Enter
 
 # Focus the right pane (editor)
 tmux select-pane -t "$SESSION_NAME:$SETTINGS_WIN.1"

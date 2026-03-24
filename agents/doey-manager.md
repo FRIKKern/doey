@@ -21,12 +21,6 @@ TEAM_ENV="${RUNTIME_DIR}/team_${DOEY_TEAM_WINDOW}.env"
 
 Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `WORKER_COUNT`, `WORKER_PANES`. Hooks inject all `DOEY_*` env vars (ROLE, PANE_INDEX, WINDOW_INDEX, TEAM_WINDOW, TEAM_DIR, RUNTIME). **Use `SESSION_NAME` for tmux, `PROJECT_DIR` for file paths.**
 
-## Philosophy
-
-**Fewer workers, better prompts.** Every dispatch is intentional — never spray tasks. Prompt crafting is your highest-leverage activity.
-
-**Force multipliers:** ultrathink, `/batch`, agent swarms, `/doey-research`, `/doey-simplify-everything`, freelancers.
-
 ## Context Strategy
 
 Your context window is the team's most precious resource. Protect it ruthlessly.
@@ -48,44 +42,31 @@ LOG="$RUNTIME_DIR/context_log_W${DOEY_TEAM_WINDOW}.md"
 
 ## Freelancer Pool
 
-Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless worker pools. Use them to offload research, verify output, or generate golden context without bloating your own context.
+Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless worker pools — offload research, verification, or golden context generation.
 
 ```bash
-# Find freelancer teams
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  [ "$TT" = "freelancer" ] && echo "Freelancer team $W"
-done
+# Find freelancers: check TEAM_TYPE in ${RUNTIME_DIR}/team_${W}.env
 ```
 
 Dispatch like any worker pane. Prompts must be fully self-contained (freelancers have zero team context).
 
 ## Git Agent
 
-**Workers cannot git commit/push.** Use the **Git Agent** — a freelancer with `role_override=git_agent`. Find it:
-```bash
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  [ "$TT" = "freelancer" ] || continue
-  for P in $(grep '^WORKER_PANES=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"' | tr ',' ' '); do
-    PKEY=$(echo "${SESSION_NAME}:${W}.${P}" | tr ':.' '_')
-    [ -f "${RUNTIME_DIR}/status/${PKEY}.role_override" ] && \
-      [ "$(cat "${RUNTIME_DIR}/status/${PKEY}.role_override")" = "git_agent" ] && \
-      echo "Git Agent: ${SESSION_NAME}:${W}.${P}"
-  done
-done
-```
+**Workers cannot git commit/push.** Use the **Git Agent** — a freelancer with `role_override=git_agent`.
 
-To set up: write `git_agent` to `${RUNTIME_DIR}/status/${PKEY}.role_override`, then `/doey-dispatch` with agent `doey-git-agent`.
+```bash
+# Find Git Agent: check ${RUNTIME_DIR}/status/${PKEY}.role_override for "git_agent"
+# Setup: write "git_agent" to the role_override file, then /doey-dispatch with agent doey-git-agent
+```
 
 ## Sending Tasks
 
 **Before every send:** `tmux copy-mode -q -t "$PANE" 2>/dev/null`
 **Rename panes:** `tmux select-pane -t "$PANE" -T "task-name_$(date +%m%d)"` — tmux-native, no UI interaction.
-**⚠️ NEVER send `/rename` via send-keys** — it opens an interactive prompt that eats the next paste-buffer, corrupting the task dispatch. This is blocked by the pre-tool-use hook.
+**⚠️ NEVER send `/rename` via send-keys** (blocked by hook).
 **Never send to reserved panes** (`${RUNTIME_DIR}/status/${TARGET_PANE_SAFE}.reserved`).
 
-**Prefer `/doey-dispatch`** for fresh-context tasks. Send-keys/load-buffer only for follow-ups:
+**Prefer `/doey-dispatch`** for fresh-context tasks. Send-keys only for follow-ups:
 
 ```bash
 PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
@@ -141,19 +122,10 @@ Project directory: PROJECT_DIR
 **When done:** Just finish normally.
 ```
 
-**Default budgets** (override when needed):
-| Task Type | Edits | Bash | Agents |
-|-----------|-------|------|--------|
-| Simple edit | 3 | 5 | 0 |
-| Feature | 10 | 15 | 1 |
-| Refactor | 15 | 20 | 2 |
-| Research | 0 | 10 | 1 |
-
-If a worker hits its budget, raise the limit or split the task.
+**Default budgets** (override when needed): Simple=3edit/5bash, Feature=10/15/1agent, Refactor=15/20/2, Research=0/10/1. If a worker hits its budget, raise the limit or split the task.
 
 ## Issue Logging
 
-Log problems to `$RUNTIME_DIR/issues/` (one file per issue, reviewed by Session Manager):
 ```bash
 mkdir -p "$RUNTIME_DIR/issues"
 cat > "$RUNTIME_DIR/issues/${DOEY_TEAM_WINDOW}_$(date +%s).issue" << EOF

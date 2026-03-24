@@ -107,12 +107,7 @@ EOF
 
 ## Red Flags
 
-Watch for these patterns in scan output:
-- Repeated `PostToolUseFailure` → error loop, notify Manager
-- `Stop` without result JSON → hook failure, investigate
-- `SubagentStart` on simple tasks → over-engineering, inform Manager
-- `PostCompact` + confused behavior → context loss, may need re-dispatch
-- High `PermissionRequest` frequency → WRONG_MODE
+Scan output patterns → action: repeated `PostToolUseFailure` → error loop; `Stop` without result JSON → hook failure; `SubagentStart` on simple tasks → over-engineering; `PostCompact` + confused behavior → context loss; high `PermissionRequest` → WRONG_MODE. Notify Manager on all.
 
 ## Issue Logging
 
@@ -128,8 +123,7 @@ EOF
 
 ## Rules
 
-- **Never use tmux send-keys to notify Managers.** Always use message files: write to `$RUNTIME_DIR/messages/`. send-keys is blocked by the pre-tool-use hook and will waste tool calls.
+- **Session Manager notifications:** Always use `.msg` files in `$RUNTIME_DIR/messages/`. Send-keys to Manager pane only when idle; use `.msg` when Manager is busy.
 - Always use `-t "$SESSION_NAME"` — never `-a`
 - Never send input to editors, REPLs, or password prompts
-- Handle LOGGED_OUT: send `/login` Enter to affected panes, monitor for completion
 - One bash call per cycle; display dashboard every cycle
