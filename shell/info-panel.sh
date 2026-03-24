@@ -243,7 +243,7 @@ while true; do
       TEAM_FILE="${RUNTIME_DIR}/team_${W}.env"
     fi
 
-    read_env_file "$TEAM_FILE" WORKER_PANES WORKER_COUNT WORKTREE_DIR WORKTREE_BRANCH
+    read_env_file "$TEAM_FILE" WORKER_PANES WORKER_COUNT WORKTREE_DIR WORKTREE_BRANCH TEAM_TYPE TEAM_NAME
     WORKER_PANES="$_ENV_WORKER_PANES"
     WORKER_COUNT="${_ENV_WORKER_COUNT:-0}"
     TOTAL_WORKERS=$((TOTAL_WORKERS + WORKER_COUNT))
@@ -262,6 +262,8 @@ while true; do
     printf -v "TEAM_WCNT_${TEAM_LINE_COUNT}" '%s' "$WORKER_COUNT"
     printf -v "TEAM_WT_DIR_${TEAM_LINE_COUNT}" '%s' "$_ENV_WORKTREE_DIR"
     printf -v "TEAM_WT_BRANCH_${TEAM_LINE_COUNT}" '%s' "$_ENV_WORKTREE_BRANCH"
+    printf -v "TEAM_TYPE_${TEAM_LINE_COUNT}" '%s' "$_ENV_TEAM_TYPE"
+    printf -v "TEAM_NAME_V_${TEAM_LINE_COUNT}" '%s' "$_ENV_TEAM_NAME"
     TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
   done
 
@@ -376,8 +378,12 @@ while true; do
       _ref="TEAM_RESV_${_ti}"; _tr="${!_ref}"
       _ref="TEAM_WT_DIR_${_ti}"; _twtd="${!_ref:-}"
       _ref="TEAM_WT_BRANCH_${_ti}"; _twtb="${!_ref:-}"
+      _ref="TEAM_TYPE_${_ti}"; _ttype="${!_ref:-}"
+      _ref="TEAM_NAME_V_${_ti}"; _tnm="${!_ref:-}"
 
-      if [ -n "$_twtd" ]; then
+      if [ "$_ttype" = "freelancer" ]; then
+        _tname="$(printf '  %b%s%b %b[F]%b ' "${C_BOLD_WHITE}" "${_tnm:-Freelancers}" "${C_RESET}" "${C_BOLD_YELLOW}" "${C_RESET}")"
+      elif [ -n "$_twtd" ]; then
         _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
       else
         _tname="$(printf '  Team %s     ' "$_tw")"

@@ -198,97 +198,105 @@ _pane_log() {
 
 _log "watchdog-scan: start cycle W${TARGET_WINDOW} panes=${WORKER_PANES}"
 
-# --- Manager health check ---
+# --- Manager health check (skip for freelancer teams) ---
+_team_type=""
+[ -f "$TEAM_ENV" ] && _team_type=$(grep '^TEAM_TYPE=' "$TEAM_ENV" | cut -d= -f2-) && _team_type="${_team_type%\"}" && _team_type="${_team_type#\"}"
 MGR_PANE_REF=""
-if [ -f "$TEAM_ENV" ]; then
-  mgr_idx=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
-  mgr_idx="${mgr_idx%\"}" && mgr_idx="${mgr_idx#\"}"
-  [ -n "$mgr_idx" ] && MGR_PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.${mgr_idx}"
-fi
-[ -z "$MGR_PANE_REF" ] && MGR_PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.0"
+if [ "$_team_type" != "freelancer" ]; then
+  if [ -f "$TEAM_ENV" ]; then
+    mgr_idx=$(grep '^MANAGER_PANE=' "$TEAM_ENV" | cut -d= -f2-)
+    mgr_idx="${mgr_idx%\"}" && mgr_idx="${mgr_idx#\"}"
+    [ -n "$mgr_idx" ] && MGR_PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.${mgr_idx}"
+  fi
+  [ -z "$MGR_PANE_REF" ] && MGR_PANE_REF="${SESSION_NAME}:${TARGET_WINDOW}.0"
 
-MGR_CMD=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
-case "$MGR_CMD" in
-  bash|zsh|sh|fish)
-    echo "MANAGER_CRASHED"
-    CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
-    if [ ! -f "$CRASH_ALERT" ]; then
-      _tmp="${CRASH_ALERT}.tmp"
-      printf 'TEAM_WINDOW=%s\nTIMESTAMP=%s\n' "${TARGET_WINDOW}" "$(date +%s)" > "$_tmp"
-      mv "$_tmp" "$CRASH_ALERT"
-    fi
-    ;;
-  *)
-    rm -f "${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}" 2>/dev/null
-    ;;
-esac
-
-MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
-case "$MGR_CAPTURE" in
-  *"Not logged in"*)
-    PANE_STATE_0="LOGGED_OUT"
-    echo "MANAGER_LOGGED_OUT"
-    ;;
-  *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
-  *) PANE_STATE_0="WORKING" ;;
-esac
-
-MGR_PREV_FILE="${RUNTIME_DIR}/status/manager_prev_state_W${TARGET_WINDOW}"
-read -r MGR_PREV_STATE < "$MGR_PREV_FILE" 2>/dev/null || MGR_PREV_STATE="UNKNOWN"
-_atomic_write "$MGR_PREV_FILE" "$PANE_STATE_0"
-if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
-  echo "MANAGER_COMPLETED"
-fi
-
-# --- Manager hook-reported status (more authoritative than screen-scrape) ---
-_mgr_pane_idx="${mgr_idx:-0}"
-MGR_PANE_SAFE="${SESSION_SAFE}_${TARGET_WINDOW}_${_mgr_pane_idx}"
-MGR_STATUS_FILE="${RUNTIME_DIR}/status/${MGR_PANE_SAFE}.status"
-_mgr_hook_status=""
-if [ -f "$MGR_STATUS_FILE" ]; then
-  _mgr_hook_line=$(grep '^STATUS:' "$MGR_STATUS_FILE" 2>/dev/null | head -1) || _mgr_hook_line=""
-  _mgr_hook_status="${_mgr_hook_line#STATUS: }"
-fi
-
-# Reconcile hook state vs screen-scrape state
-if [ -n "$_mgr_hook_status" ]; then
-  case "$_mgr_hook_status" in
-    BUSY)
-      # Hook says BUSY — trust it even if screen-scrape shows IDLE (between tool calls)
-      if [ "$PANE_STATE_0" = "IDLE" ]; then
-        PANE_STATE_0="WORKING"
-        _log "watchdog-scan: manager hook=BUSY overrides scrape=IDLE"
+  MGR_CMD=$(tmux display-message -t "$MGR_PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || MGR_CMD=""
+  case "$MGR_CMD" in
+    bash|zsh|sh|fish)
+      echo "MANAGER_CRASHED"
+      CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
+      if [ ! -f "$CRASH_ALERT" ]; then
+        _tmp="${CRASH_ALERT}.tmp"
+        printf 'TEAM_WINDOW=%s\nTIMESTAMP=%s\n' "${TARGET_WINDOW}" "$(date +%s)" > "$_tmp"
+        mv "$_tmp" "$CRASH_ALERT"
       fi
       ;;
-    READY|FINISHED)
-      # Hook says READY but screen shows no prompt — manager may be stuck
-      if [ "$PANE_STATE_0" = "WORKING" ]; then
-        echo "MANAGER_POSSIBLY_STUCK (hook=${_mgr_hook_status} scrape=WORKING)"
-        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_POSSIBLY_STUCK hook=${_mgr_hook_status} scrape=WORKING${NL}"
-        _log "watchdog-scan: manager possibly stuck — hook=${_mgr_hook_status} but scrape=WORKING"
-      fi
+    *)
+      rm -f "${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}" 2>/dev/null
       ;;
   esac
 fi
 
-# --- Manager activity events (written by hooks, consumed here) ---
-MGR_ACTIVITY_FILE="${RUNTIME_DIR}/status/manager_activity_W${TARGET_WINDOW}"
-_mgr_activity_event=""
-_mgr_activity_task=""
-if [ -f "$MGR_ACTIVITY_FILE" ]; then
-  while IFS='=' read -r _ma_key _ma_val; do
-    _ma_val="${_ma_val%\"}" && _ma_val="${_ma_val#\"}"
-    case "$_ma_key" in
-      EVENT) _mgr_activity_event="$_ma_val" ;;
-      TASK) _mgr_activity_task="$_ma_val" ;;
+# Manager monitoring — skip entirely for freelancer teams (no manager)
+PANE_STATE_0="N/A"
+if [ "$_team_type" != "freelancer" ]; then
+  MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
+  case "$MGR_CAPTURE" in
+    *"Not logged in"*)
+      PANE_STATE_0="LOGGED_OUT"
+      echo "MANAGER_LOGGED_OUT"
+      ;;
+    *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
+    *) PANE_STATE_0="WORKING" ;;
+  esac
+
+  MGR_PREV_FILE="${RUNTIME_DIR}/status/manager_prev_state_W${TARGET_WINDOW}"
+  read -r MGR_PREV_STATE < "$MGR_PREV_FILE" 2>/dev/null || MGR_PREV_STATE="UNKNOWN"
+  _atomic_write "$MGR_PREV_FILE" "$PANE_STATE_0"
+  if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
+    echo "MANAGER_COMPLETED"
+  fi
+
+  # --- Manager hook-reported status (more authoritative than screen-scrape) ---
+  _mgr_pane_idx="${mgr_idx:-0}"
+  MGR_PANE_SAFE="${SESSION_SAFE}_${TARGET_WINDOW}_${_mgr_pane_idx}"
+  MGR_STATUS_FILE="${RUNTIME_DIR}/status/${MGR_PANE_SAFE}.status"
+  _mgr_hook_status=""
+  if [ -f "$MGR_STATUS_FILE" ]; then
+    _mgr_hook_line=$(grep '^STATUS:' "$MGR_STATUS_FILE" 2>/dev/null | head -1) || _mgr_hook_line=""
+    _mgr_hook_status="${_mgr_hook_line#STATUS: }"
+  fi
+
+  # Reconcile hook state vs screen-scrape state
+  if [ -n "$_mgr_hook_status" ]; then
+    case "$_mgr_hook_status" in
+      BUSY)
+        # Hook says BUSY — trust it even if screen-scrape shows IDLE (between tool calls)
+        if [ "$PANE_STATE_0" = "IDLE" ]; then
+          PANE_STATE_0="WORKING"
+          _log "watchdog-scan: manager hook=BUSY overrides scrape=IDLE"
+        fi
+        ;;
+      READY|FINISHED)
+        # Hook says READY but screen shows no prompt — manager may be stuck
+        if [ "$PANE_STATE_0" = "WORKING" ]; then
+          echo "MANAGER_POSSIBLY_STUCK (hook=${_mgr_hook_status} scrape=WORKING)"
+          SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_POSSIBLY_STUCK hook=${_mgr_hook_status} scrape=WORKING${NL}"
+          _log "watchdog-scan: manager possibly stuck — hook=${_mgr_hook_status} but scrape=WORKING"
+        fi
+        ;;
     esac
-  done < "$MGR_ACTIVITY_FILE"
-  # Consume the event file
-  rm -f "$MGR_ACTIVITY_FILE"
-  if [ -n "$_mgr_activity_event" ]; then
-    echo "MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}"
-    SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}${NL}"
-    _log "watchdog-scan: manager activity=${_mgr_activity_event} task=${_mgr_activity_task}"
+  fi
+
+  # --- Manager activity events (written by hooks, consumed here) ---
+  MGR_ACTIVITY_FILE="${RUNTIME_DIR}/status/manager_activity_W${TARGET_WINDOW}"
+  _mgr_activity_event=""
+  _mgr_activity_task=""
+  if [ -f "$MGR_ACTIVITY_FILE" ]; then
+    while IFS='=' read -r _ma_key _ma_val; do
+      _ma_val="${_ma_val%\"}" && _ma_val="${_ma_val#\"}"
+      case "$_ma_key" in
+        EVENT) _mgr_activity_event="$_ma_val" ;;
+        TASK) _mgr_activity_task="$_ma_val" ;;
+      esac
+    done < "$MGR_ACTIVITY_FILE"
+    # Consume the event file
+    rm -f "$MGR_ACTIVITY_FILE"
+    if [ -n "$_mgr_activity_event" ]; then
+      echo "MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}"
+      SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}${NL}"
+      _log "watchdog-scan: manager activity=${_mgr_activity_event} task=${_mgr_activity_task}"
+    fi
   fi
 fi
 

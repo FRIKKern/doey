@@ -15,8 +15,9 @@ description: List all team windows with their status. Use when you need to "show
 **Read-only.** Build table: `WINDOW | GRID | MGR | WDG | WORKERS`.
 
 - Window 0 = Dashboard. Check Session Manager (0.1) process.
-- Windows 1+ = Teams. Extract GRID, WORKER_PANES, WATCHDOG_PANE, WORKER_COUNT from team env.
+- Windows 1+ = Teams. Extract GRID, WORKER_PANES, WATCHDOG_PANE, WORKER_COUNT, TEAM_TYPE from team env.
 - Worktree badge: if WORKTREE_DIR set, show `[worktree]` with branch.
-- Manager: running command (not bash/zsh/sh) = OK. Watchdog: heartbeat age >120s = STALE, missing = DOWN.
-- Count BUSY workers. Format: `WINDOW GRID MGR WDG TOTAL (N busy, M idle) [worktree] branch: X`
+- Freelancer badge: if TEAM_TYPE=freelancer, show `[F]` — these teams have no Manager (all panes are independent workers).
+- Manager: running command (not bash/zsh/sh) = OK. For freelancer teams, show "N/A" (no manager). Watchdog: heartbeat age >120s = STALE, missing = DOWN.
+- Count BUSY workers. Format: `WINDOW GRID MGR WDG TOTAL (N busy, M idle) [worktree] branch: X [F]`
 - Graceful fallback if team env missing.
