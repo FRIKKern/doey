@@ -24,7 +24,7 @@ init_hook() {
 
 _ensure_dirs() {
   [ -f "${RUNTIME_DIR}/.dirs_created" ] && return 0
-  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs}
+  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs,errors}
   touch "${RUNTIME_DIR}/.dirs_created"
 }
 
@@ -41,6 +41,61 @@ _log() {
     fi
   fi
   printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$msg" >> "$log_file" 2>/dev/null
+}
+
+# Structured error logger — writes to per-pane log AND shared errors.log + individual .err files.
+# Usage: _log_error CATEGORY "message" [detail]
+# Categories: TOOL_BLOCKED, LINT_ERROR, ANOMALY, HOOK_ERROR, DELIVERY_FAILED
+_log_error() {
+  local category="${1:-UNKNOWN}" msg="${2:-}" detail="${3:-}"
+  local pane_id="${DOEY_PANE_ID:-unknown}"
+  local role="${DOEY_ROLE:-unknown}"
+  local hook_name="${_DOEY_HOOK_NAME:-unknown}"
+  local tool="${_DOEY_TOOL_NAME:-}"
+  local err_dir="${RUNTIME_DIR}/errors"
+  local err_log="${err_dir}/errors.log"
+  local now
+  now=$(date '+%Y-%m-%dT%H:%M:%S')
+
+  # 1. Log to per-pane log via existing _log()
+  _log "ERROR [$category] ${msg}${detail:+ | $detail}"
+
+  # 2. Append to shared errors.log (pipe-delimited for grep/awk)
+  printf '[%s] %s | %s | %s | %s | %s | %s | %s\n' \
+    "$now" "$category" "$pane_id" "$role" "$hook_name" "${tool:-n/a}" "${detail:-n/a}" "$msg" \
+    >> "$err_log" 2>/dev/null
+
+  # 3. Individual .err file for programmatic access
+  local err_file="${err_dir}/${pane_id}_$(date +%s)_$$.err"
+  cat > "$err_file" 2>/dev/null <<ERR_EOF
+TIMESTAMP=$now
+CATEGORY=$category
+PANE_ID=$pane_id
+ROLE=$role
+HOOK=$hook_name
+TOOL=${tool:-}
+DETAIL=${detail:-}
+MESSAGE=$msg
+ERR_EOF
+
+  # 4. Rotation: if errors.log > 500KB, keep last 200 lines
+  local log_size
+  log_size=$(wc -c < "$err_log" 2>/dev/null | tr -d ' ') || log_size=0
+  if [ "${log_size:-0}" -gt 512000 ]; then
+    tail -200 "$err_log" > "${err_log}.tmp" 2>/dev/null && mv "${err_log}.tmp" "$err_log" 2>/dev/null
+  fi
+
+  # 5. Cleanup: remove .err files older than 1 hour, keep max 200
+  local count
+  count=$(find "$err_dir" -name '*.err' 2>/dev/null | wc -l | tr -d ' ') || count=0
+  if [ "${count:-0}" -gt 200 ]; then
+    find "$err_dir" -name '*.err' -mmin +60 -delete 2>/dev/null || true
+    # If still over 200, remove oldest
+    count=$(find "$err_dir" -name '*.err' 2>/dev/null | wc -l | tr -d ' ') || count=0
+    if [ "${count:-0}" -gt 200 ]; then
+      find "$err_dir" -name '*.err' -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | tail -n +201 | xargs rm -f 2>/dev/null || true
+    fi
+  fi
 }
 
 parse_field() {
