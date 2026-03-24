@@ -67,7 +67,7 @@ FILES: shell/doey.sh (freelancer spawn section)
 Single commit. Push to origin.
 ```
 
-**Never micromanage the message or staging** — the Git Agent knows conventional commits and the repo's style.
+**Never micromanage the message or staging** — the Git Agent knows conventional commits and the repo's style. **Never include `Co-Authored-By` or AI attribution** — the Git Agent is configured to omit these.
 
 ## Dispatch
 

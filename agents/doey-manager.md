@@ -87,7 +87,7 @@ FILES:
 Single commit. Push to origin.
 ```
 
-**Never tell it HOW to write the commit message** — it knows conventional commits and the repo's style. Just give it the context to write a good one.
+**Never tell it HOW to write the commit message** — it knows conventional commits and the repo's style. Just give it the context to write a good one. **Never include `Co-Authored-By` or AI attribution in your dispatch** — the Git Agent is configured to omit these.
 
 ## Sending Tasks
 
