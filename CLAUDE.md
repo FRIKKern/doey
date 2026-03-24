@@ -11,6 +11,7 @@ Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. A user
 - **Test the install path** — After changing install.sh, doey.sh, or any `shell/` script: does `./install.sh` still produce a working install? Does `doey doctor` pass?
 - **Don't assume your environment** — Our dev session has DOEY_* env vars, tmux, multiple teams. A user's first launch has none of that. Guard every assumption
 - **Bash 3.2 compatible** — macOS ships `/bin/bash` 3.2. Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `BASH_REMATCH` capture groups. Run `tests/test-bash-compat.sh` after any `.sh` change
+- **Bash tool commands must be zsh-safe** — The Bash tool runs in the user's login shell, which is zsh on macOS. Patterns that break: `for f in *.ext 2>/dev/null` (zsh parse error on glob redirect), unquoted globs that fail with `nomatch`. Fix: wrap bash-specific logic in `bash -c '...'`, or use `ls dir/ 2>/dev/null` instead of glob loops. Parallel Bash tool calls must not depend on glob success — one failure cancels siblings
 - **One worker per file** — Never split a file across workers. Concurrent edits to the same file cause conflicts
 - **Validate before writing** — Read state before mutating it. GET calls are cheap, broken writes cause cascading failures
 - **Use `set -euo pipefail`** — Every shell script. No exceptions
@@ -26,6 +27,7 @@ Things that have tricked us before:
 - Adding agent features that need settings.json entries the install doesn't create
 - Assuming tmux pane titles exist before `on-session-start.sh` runs
 - Testing in our session and assuming the user's first session behaves the same
+- Using bash-only glob patterns in Bash tool commands (user's shell is zsh — `for f in *.task 2>/dev/null` is a parse error)
 
 **The shippable pattern:** Need a Claude Code setting? Don't edit `~/.claude/settings.json`. Instead: ship the script in `shell/`, install it via `install.sh`, generate a settings overlay in `_init_doey_session()` → `${runtime_dir}/doey-settings.json`, and pass `--settings` on every `claude` launch command. See `doey-statusline.sh` as the reference implementation.
 

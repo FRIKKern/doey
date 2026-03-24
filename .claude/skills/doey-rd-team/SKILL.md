@@ -125,6 +125,11 @@ You are in a **git worktree** — an isolated copy of the Doey codebase.
 
 ## Dev workflow
 Read → understand context → minimal fix → descriptive commit → verify (`bash -n doey.sh`)
+
+## Error logs
+If `errors-snapshot.log` exists in the worktree root, it contains runtime errors from the live session.
+Format: `[timestamp] CATEGORY | pane_id | role | hook | tool | detail | message`
+Categories: TOOL_BLOCKED, LINT_ERROR, ANOMALY, HOOK_ERROR, DELIVERY_FAILED
 RDPROMPT
 ```
 
@@ -195,6 +200,12 @@ done
 [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 ```
 
+Copy runtime error log into worktree for analysis:
+
+```bash
+[ -f "${RUNTIME_DIR}/errors/errors.log" ] && cp "${RUNTIME_DIR}/errors/errors.log" "${WT_DIR}/errors-snapshot.log" 2>/dev/null && echo "Copied error log ($(wc -l < "${WT_DIR}/errors-snapshot.log") lines)" || echo "No error log to copy"
+```
+
 Dispatch audit task to Manager via load-buffer:
 
 ```bash
@@ -210,6 +221,10 @@ Phase 1 — dispatch 6 workers in parallel:
 - W4: .claude/hooks/* — race conditions, file locking, error handling
 - W5: README.md, CLAUDE.md, docs/ — cross-reference claims vs code
 - W6: Validation — bash -n doey.sh, frontmatter checks, tests/
+
+If errors-snapshot.log exists in the worktree root, W4 (hooks) should also analyze it:
+group errors by category, identify recurring patterns and root causes, propose product fixes
+(CLAUDE.md rules, hook changes, agent prompt improvements).
 
 Phase 2: Consolidate, prioritize, assign fixes (one per worker, separate commits).
 Phase 3: Verify bash -n, no regressions, report to Session Manager.
