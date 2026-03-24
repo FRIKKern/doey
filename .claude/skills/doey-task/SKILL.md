@@ -6,7 +6,7 @@ description: Manage session tasks — list, add, mark pending/done, cancel. Task
 ## Context
 
 - Tasks dir: !`ls $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/tasks/*.task 2>/dev/null || echo "(no tasks)"`
-- Active tasks: !`TD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/tasks"; for f in "$TD"/*.task 2>/dev/null; do [ -f "$f" ] && grep -v "^TASK_STATUS=done" "$f" | grep -q "TASK_" && cat "$f" && echo "---"; done 2>/dev/null || echo "(none)"`
+- Active tasks: !`TD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/tasks"; for f in "$TD"/*.task; do [ -f "$f" ] && grep -v "^TASK_STATUS=done" "$f" | grep -q "TASK_" && cat "$f" && echo "---"; done 2>/dev/null || echo "(none)"`
 
 ## Prompt
 

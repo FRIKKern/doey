@@ -138,41 +138,10 @@ tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.3" \
   "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
 sleep 1
 
-# Watchdog — find free slot
-WDG_SLOT=""
-for _sn in 1 2 3 4 5 6; do
-  _slot_val=$(grep "^WDG_SLOT_${_sn}=" "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
-  [ -n "$_slot_val" ] || continue
-  _in_use=false
-  for _tf in "${RUNTIME_DIR}"/team_*.env; do
-    [ -f "$_tf" ] || continue
-    _tf_wdg=$(grep '^WATCHDOG_PANE=' "$_tf" 2>/dev/null | cut -d= -f2 | tr -d '"')
-    [ "$_tf_wdg" = "$_slot_val" ] && { _in_use=true; break; }
-  done
-  [ "$_in_use" = "false" ] && { WDG_SLOT="$_slot_val"; break; }
-done
-
-# If no free slot, create new one
-if [ -z "$WDG_SLOT" ]; then
-  _slot_count=$(grep -c '^WDG_SLOT_[0-9]*=' "${RUNTIME_DIR}/session.env" 2>/dev/null || echo 0)
-  if [ "$_slot_count" -lt 6 ]; then
-    _last_wdg_slot=$(grep '^WDG_SLOT_[0-9]*=' "${RUNTIME_DIR}/session.env" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '"')
-    tmux split-window -h -t "${SESSION_NAME}:${_last_wdg_slot}" -c "$PROJECT_DIR"
-    sleep 0.3
-    _new_slot_num=$((_slot_count + 1))
-    WDG_SLOT="0.$((_new_slot_num + 1))"
-    echo "WDG_SLOT_${_new_slot_num}=\"${WDG_SLOT}\"" >> "${RUNTIME_DIR}/session.env"
-  fi
-fi
-
-# Launch watchdog and update team env
-if [ -n "$WDG_SLOT" ]; then
-  tmux select-pane -t "${SESSION_NAME}:${WDG_SLOT}" -T "RD Watchdog"
-  tmux send-keys -t "${SESSION_NAME}:${WDG_SLOT}" \
-    "claude --dangerously-skip-permissions --model haiku --name \"RD Watchdog\" --agent \"t${NEW_WIN}-watchdog\"" Enter
-  sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp"
-  mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
-fi
+# No watchdog for RD teams — they are short-lived and human-directed.
+# The Brain coordinates specialists directly. Standard watchdog agents
+# (t*-watchdog) expect Manager+Worker layout and status files that
+# RD teams don't produce.
 ```
 
 ### Step 6: Verify boot and dispatch audit
@@ -232,7 +201,7 @@ Output: window number, project dir, pane layout, boot status. Include teardown c
 ### Rules
 
 - Work on the LIVE project directory, not a worktree — the team needs to see real-time changes
-- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic, Watchdog in Dashboard. Window named "RD"
+- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic. No watchdog (RD teams are short-lived). Window named "RD"
 - Team env includes `RD_TEAM=true`
 - 3s stagger between Claude launches to prevent auth exhaustion
 - Never hardcode window indices. Bash 3.2 compatible.

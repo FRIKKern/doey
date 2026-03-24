@@ -163,7 +163,7 @@ done
 **Manual fallback:**
 ```bash
 W="$DOEY_TEAM_WINDOW"
-for f in "$RUNTIME_DIR/results"/pane_${W}_*.json; do [ -f "$f" ] && cat "$f" && echo ""; done
+for f in "$RUNTIME_DIR/results"/pane_${W}_*.json; do [ -f "$f" ] || continue; cat "$f" && echo ""; done
 cat "$RUNTIME_DIR/status/watchdog_pane_states_W${W}.json" 2>/dev/null
 ```
 
