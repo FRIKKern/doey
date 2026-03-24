@@ -3,6 +3,7 @@
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
+_DOEY_HOOK_NAME="stop-results"
 
 is_worker || exit 0
 
@@ -14,6 +15,7 @@ TMPFILE=""
 trap '[ -n "${TMPFILE:-}" ] && rm -f "$TMPFILE" 2>/dev/null' EXIT
 
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
+[ -z "$OUTPUT" ] && _log_error "HOOK_ERROR" "tmux capture-pane returned empty" "pane=$PANE"
 
 # Get files changed by this worker via git
 PROJECT_DIR="${DOEY_TEAM_DIR:-}"
@@ -33,6 +35,7 @@ if [ -n "$PROJECT_DIR" ]; then
     rm -f "$_tmpfile"
   fi
 fi
+[ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log_error "HOOK_ERROR" "git diff returned empty" "project=$PROJECT_DIR"
 FILES_JSON="[]"
 if [ -n "$FILES_LIST" ]; then
   FILES_JSON=$(echo "$FILES_LIST" | jq -R '.' | jq -s '.' 2>/dev/null) || FILES_JSON="[]"
@@ -69,6 +72,7 @@ TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='
 TMPFILE=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null)
 if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
   echo "[WARN] mktemp failed in $(basename "$0") — writing non-atomically" >> "${RUNTIME_DIR}/doey-warnings.log" 2>/dev/null
+  _log_error "HOOK_ERROR" "mktemp failed, using non-atomic write" "result_file=$RESULT_FILE"
   TMPFILE="$RESULT_FILE"
 fi
 cat > "$TMPFILE" <<EOF
@@ -97,6 +101,7 @@ STATUS="$STATUS"
 TIMESTAMP=$(date +%s)
 COMPLETE
 mv "${COMPLETION}.tmp" "$COMPLETION"
+[ ! -f "$COMPLETION" ] && _log_error "HOOK_ERROR" "Completion event file not written" "path=$COMPLETION"
 
 # Wake watchdog
 touch "${RUNTIME_DIR}/status/watchdog_trigger_W${WINDOW_INDEX}" 2>/dev/null || true

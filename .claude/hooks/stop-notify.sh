@@ -6,6 +6,7 @@
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
+_DOEY_HOOK_NAME="stop-notify"
 
 # File-based message delivery with send-keys fallback.
 # Writes an atomic message file and touches a trigger to wake the recipient.
@@ -40,8 +41,12 @@ _send_message_file() {
 # Deliver message via file queue, fall back to send-keys
 _notify_pane() {
   local target_pane="$1" subject="$2" body="$3"
-  _send_message_file "$target_pane" "$subject" "$body" 2>/dev/null \
-    || send_to_pane "$target_pane" "$body"
+  if ! _send_message_file "$target_pane" "$subject" "$body" 2>/dev/null; then
+    if ! send_to_pane "$target_pane" "$body" 2>/dev/null; then
+      _log_error "DELIVERY_FAILED" "Both file and send-keys delivery failed" "target=$target_pane subject=$subject"
+      return 1
+    fi
+  fi
 }
 
 # --- Worker: notify its Window Manager (or Session Manager for freelancers) ---
@@ -65,7 +70,10 @@ if is_worker; then
     # Freelancer workers notify Session Manager directly (no manager in this team)
     _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
     SM_TARGET="$SESSION_NAME:${_sm_pane:-0.1}"
-    tmux display-message -t "$SM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
+    if ! tmux display-message -t "$SM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
+      _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$SM_TARGET"
+      exit 0
+    fi
     MSG="Freelancer ${PANE_DISPLAY} finished (${STATUS})"
     [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
     _notify_pane "$SM_TARGET" "freelancer_finished" "$MSG"
@@ -73,7 +81,10 @@ if is_worker; then
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
     MGR_PANE="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
-    tmux display-message -t "$MGR_PANE" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
+    if ! tmux display-message -t "$MGR_PANE" -p '#{pane_pid}' >/dev/null 2>&1; then
+      _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$MGR_PANE"
+      exit 0
+    fi
     MSG="Worker ${PANE_DISPLAY} finished (${STATUS})"
     [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
     _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
@@ -90,7 +101,10 @@ if is_manager; then
   [ "${_cur#STATUS: }" = "BUSY" ] || exit 0
 
   SM_PANE=$(get_sm_pane)
-  tmux display-message -t "$SESSION_NAME:${SM_PANE}" -p '#{pane_pid}' >/dev/null 2>&1 || exit 0
+  if ! tmux display-message -t "$SESSION_NAME:${SM_PANE}" -p '#{pane_pid}' >/dev/null 2>&1; then
+    _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$SESSION_NAME:${SM_PANE}"
+    exit 0
+  fi
 
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
