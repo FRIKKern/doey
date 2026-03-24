@@ -387,11 +387,12 @@ setup_dashboard() {
   fi
   _balance_watchdog_panes "$session" "$num_slots"
 
+  local _proj="${session#doey-}"
   tmux select-pane -t "$session:0.0" -T ""
-  tmux select-pane -t "$session:0.1" -T "Session Manager"
+  tmux select-pane -t "$session:0.1" -T "${_proj} SM"
   for (( _wd_i=1; _wd_i<=num_slots; _wd_i++ )); do
     local _pane="0.$((_wd_i + 1))"
-    tmux select-pane -t "$session:${_pane}" -T "T${_wd_i} Watchdog"
+    tmux select-pane -t "$session:${_pane}" -T "${_proj} T${_wd_i} WD"
     tmux send-keys -t "$session:${_pane}" "echo 'Watchdog slot — awaiting team assignment...'" Enter
     printf -v "WDG_SLOT_${_wd_i}" '%s' "$_pane"
   done
@@ -1374,7 +1375,7 @@ MANIFEST
     printf "  ${DIM}Naming panes...${RESET}\n"
   fi
 
-  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
+  tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
   for (( i=1; i<total; i++ )); do
     tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${i}"
   done
@@ -2172,7 +2173,7 @@ MANIFEST
   # Dashboard launches after session.env exists (info-panel + Session Manager need it)
   setup_dashboard "$session" "$dir" "$runtime_dir" "$INITIAL_TEAMS"
   tmux new-window -t "$session" -c "$dir"
-  tmux select-pane -t "$session:${team_window}.0" -T "T${team_window} Window Manager"
+  tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
   tmux rename-window -t "$session:${team_window}" "Local Team"
 
   step_done
@@ -2674,7 +2675,8 @@ add_dashboard_watchdog_slot() {
   local new_slot_num=$((slot_count + 1))
   local new_slot="0.$((new_slot_num + 1))"
 
-  tmux select-pane -t "${session}:${new_slot}" -T "T${new_slot_num} Watchdog"
+  local _proj="${session#doey-}"
+  tmux select-pane -t "${session}:${new_slot}" -T "${_proj} T${new_slot_num} WD"
   _balance_watchdog_panes "$session" "$new_slot_num"
   echo "WDG_SLOT_${new_slot_num}=\"${new_slot}\"" >> "${runtime_dir}/session.env"
   tmux send-keys -t "${session}:${new_slot}" "echo 'Watchdog slot — awaiting team assignment...'" Enter
@@ -2750,9 +2752,10 @@ _launch_team_manager() {
   [ -z "$mgr_model" ] && mgr_model="$DOEY_MANAGER_MODEL"
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
+  local _proj="${session#doey-}"
   tmux send-keys -t "${session}:${window_index}.0" \
     "claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\"" Enter
-  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
+  tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
   sleep 0.2  # reduced from 0.5s — tmux is fast
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 }
@@ -2765,9 +2768,10 @@ _launch_team_watchdog() {
   sleep 0.3
   local wdg_agent
   wdg_agent=$(generate_team_agent "doey-watchdog" "$window_index")
+  local _proj="${session#doey-}"
   tmux send-keys -t "${session}:${wdg_slot}" \
     "claude --dangerously-skip-permissions --model $wdg_model --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
-  tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog"
+  tmux select-pane -t "${session}:${wdg_slot}" -T "${_proj} T${window_index} WD"
   sleep 0.2  # reduced from 0.5s — tmux is fast
 }
 
@@ -2865,8 +2869,9 @@ _acquire_watchdog_slot() {
 _name_team_window() {
   local session="$1" window_index="$2" wt_dir="$3"
   local runtime_dir="${4:-}"
+  local _proj="${session#doey-}"
   _apply_team_border_theme "$session" "$window_index"
-  tmux select-pane -t "${session}:${window_index}.0" -T "T${window_index} Window Manager"
+  tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
   local label=""
   if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${window_index}.env" ]; then
     label=$(_env_val "${runtime_dir}/team_${window_index}.env" TEAM_NAME)
@@ -3002,7 +3007,8 @@ add_dynamic_team_window() {
     wdg_agent=$(generate_team_agent "doey-freelancer-watchdog" "$window_index")
     tmux send-keys -t "${session}:${wdg_slot}" \
       "claude --dangerously-skip-permissions --model $wdg_model --name \"T${window_index} Watchdog\" --agent \"$wdg_agent\"" Enter
-    tmux select-pane -t "${session}:${wdg_slot}" -T "T${window_index} Watchdog [F]"
+    local _proj="${session#doey-}"
+    tmux select-pane -t "${session}:${wdg_slot}" -T "${_proj} T${window_index} WD [F]"
     sleep 0.2
   else
     _launch_team_watchdog "$session" "$wdg_slot" "$window_index"
@@ -3151,7 +3157,7 @@ kill_team_window() {
       echo "WDG_SLOT_${_new_idx}=\"${_new_wdg}\"" >> "${runtime_dir}/session.env"
       _new_idx=$((_new_idx + 1))
       local _team_num
-      _team_num=$(echo "$_pane_title" | sed -n 's/^T\([0-9]*\) Watchdog$/\1/p')
+      _team_num=$(echo "$_pane_title" | sed -n 's/.*T\([0-9]*\) WD.*/\1/p')
       if [ -n "$_team_num" ] && [ -f "${runtime_dir}/team_${_team_num}.env" ]; then
         local _te_tmp="${runtime_dir}/team_${_team_num}.env.tmp.$$"
         sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=\"${_new_wdg}\"/" "${runtime_dir}/team_${_team_num}.env" > "$_te_tmp"
