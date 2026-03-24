@@ -4,6 +4,19 @@ set -euo pipefail
 
 INPUT=$(cat)
 
+# Lightweight error logger (common.sh not loaded in this hook)
+_log_lint_error() {
+  local msg="$1" detail="${2:-}"
+  local _rt="${DOEY_RUNTIME:-}"
+  [ -z "$_rt" ] && _rt=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) 2>/dev/null
+  [ -z "$_rt" ] && return 0
+  local _now; _now=$(date '+%Y-%m-%dT%H:%M:%S')
+  mkdir -p "${_rt}/errors" 2>/dev/null || return 0
+  printf '[%s] LINT_ERROR | %s | %s | post-tool-lint | %s | %s | %s\n' \
+    "$_now" "${DOEY_PANE_ID:-unknown}" "${DOEY_ROLE:-unknown}" "${TOOL_NAME:-n/a}" "${detail:-n/a}" "$msg" \
+    >> "${_rt}/errors/errors.log" 2>/dev/null
+}
+
 _HAS_JQ=false; command -v jq >/dev/null 2>&1 && _HAS_JQ=true
 
 _parse() {
@@ -75,6 +88,7 @@ HEREDOC_EOF
 [ "$count" -eq 0 ] && exit 0
 
 reason=$(printf "Bash 3.2 compatibility violations in %s (%d found):\n%s" "$FILE_PATH" "$count" "$violations")
+_log_lint_error "Bash 3.2 violations found in $FILE_PATH ($count found)" "$violations"
 if "$_HAS_JQ"; then
   jq -n --arg r "$reason" '{"decision":"block","reason":$r}'
 else
