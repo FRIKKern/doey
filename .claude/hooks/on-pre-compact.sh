@@ -26,9 +26,10 @@ if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
     awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
-if is_manager; then       ROLE_LABEL="the Doey Window Manager"
-elif is_watchdog; then    ROLE_LABEL="the Doey Watchdog"
-else                      ROLE_LABEL="a Doey worker"
+if is_manager; then            ROLE_LABEL="the Doey Window Manager"
+elif is_session_manager; then  ROLE_LABEL="the Doey Session Manager"
+elif is_watchdog; then         ROLE_LABEL="the Doey Watchdog"
+else                           ROLE_LABEL="a Doey worker"
 fi
 
 cat <<CONTEXT
@@ -116,6 +117,46 @@ MSGSTATE
 $(head -100 "$CONTEXT_LOG")
 CTXLOG
     [ "$LINES" -gt 100 ] && echo "*[Truncated at 100/${LINES} lines]*"
+  fi
+fi
+
+if is_session_manager; then
+  SM_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+
+  SM_SAFE="${SESSION_NAME//[:.]/_}_0_${PANE_INDEX}"
+  SM_PENDING_MSGS=""
+  for _mf in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do
+    [ -f "$_mf" ] || continue
+    SM_PENDING_MSGS="${SM_PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
+  done
+
+  SM_ACTIVE_TASKS=""
+  for _tf in "${RUNTIME_DIR}/tasks"/*.task; do
+    [ -f "$_tf" ] || continue
+    grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$_tf" && continue
+    SM_ACTIVE_TASKS="${SM_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"
+  done
+
+  cat <<SMSTATE
+
+## SESSION MANAGER ORCHESTRATION STATE (restore after compaction)
+**Team Windows:** ${SM_TEAMS:-None}
+
+**Active Tasks:**
+${SM_ACTIVE_TASKS:-None}
+SMSTATE
+
+  if [ -n "$SM_PENDING_MSGS" ]; then
+    cat <<SMMSG
+
+**⚠ UNREAD MESSAGES (process these after compaction!):**
+${SM_PENDING_MSGS}
+Read with:
+\`\`\`bash
+SM_SAFE="${SM_SAFE}"
+for f in "\$RUNTIME_DIR/messages"/\${SM_SAFE}_*.msg; do [ -f "\$f" ] && cat "\$f" && echo "---" && rm -f "\$f"; done
+\`\`\`
+SMMSG
   fi
 fi
 

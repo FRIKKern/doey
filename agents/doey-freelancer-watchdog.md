@@ -62,7 +62,7 @@ Events: `STATE_CHANGE`→`↗ F{pane} {old}→{new}`, `COMPLETION`→`✅ F{pane
 | Event | Action |
 |-------|--------|
 | `COMPLETION` / `CRASHED` / `STUCK` | Notify Session Manager |
-| `LOGGED_OUT` | Send `/login` + `Enter` to each affected pane |
+| `LOGGED_OUT` | Follow the LOGGED_OUT Recovery procedure below |
 
 All notifications go to the Session Manager — there is no Manager to notify.
 
@@ -88,7 +88,36 @@ EOF
 | Worker `COMPLETION` | `fl_done` | `.msg` to SM: "Freelancer W{window}.{pane} finished. Available for next task." |
 | Worker `CRASHED` | `fl_crash` | `.msg` to SM: "Freelancer W{window}.{pane} crashed. Needs attention." |
 | Worker `STUCK` | `fl_stuck` | `.msg` to SM: "Freelancer W{window}.{pane} stuck." |
-| `LOGGED_OUT` | `logged_out` | Send `/login` Enter to affected panes. If fails, alert SM. |
+| `LOGGED_OUT` | `logged_out` | Follow LOGGED_OUT Recovery below. If unresolved, alert SM. |
+
+## LOGGED_OUT Recovery
+
+When scan reports `LOGGED_OUT` for any pane, follow this exact sequence. **Do not improvise.**
+
+**Step 1 — Dismiss any login menu.** Capture the pane. If you see "Select login method" or "Esc to cancel", the pane has a stuck login menu:
+```bash
+tmux send-keys -t "$SESSION_NAME:${TEAM_WINDOW}.${PANE_IDX}" Escape
+```
+Do this for EVERY logged-out pane before proceeding. Sleep 2s after all Escapes.
+
+**Step 2 — Re-scan.** Run one scan cycle. Check if panes recovered (Keychain token may be valid — dismissing the menu is often enough).
+
+**Step 3 — If still LOGGED_OUT:** The Keychain token is likely expired. Do NOT send `/login` (it opens an interactive menu you can't complete). Instead, alert Session Manager:
+```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+cat > "${RUNTIME_DIR}/messages/${SM_SAFE}_logged_out_W${TEAM_WINDOW}_$(date +%s).msg" << EOF
+FROM: freelancer-watchdog-W${TEAM_WINDOW}
+SUBJECT: Freelancers logged out — token expired
+PANES: $(echo "$LOGGED_OUT_PANES" | tr '\n' ',')
+ACTION_NEEDED: User must run /login in any pane, then /doey-login to restart all instances.
+EOF
+```
+Show 🔓 for affected panes. Do NOT retry `/login` — one stuck menu per pane is the limit.
+
+**Key rules:**
+- Escape first, always. Never send `/login` while a login menu is visible.
+- Never send `/login` more than once per pane per scan cycle.
+- If Escape + re-scan doesn't fix it, escalate to SM — don't loop.
 
 ## Anomaly Detection
 

@@ -75,7 +75,7 @@ if [ "$ALREADY_READY" = "false" ]; then
   tmux copy-mode -q -t "$PANE" 2>/dev/null
   PANE_IDX="${PANE##*.}"
   WORKER_PROMPT=$(grep -l "pane ${WINDOW_INDEX}\.${PANE_IDX} " "${RUNTIME_DIR}/worker-system-prompt-"*.md 2>/dev/null | head -1)
-  CMD="claude --dangerously-skip-permissions --model opus"
+  CMD="claude --dangerously-skip-permissions --model ${DOEY_WORKER_MODEL:-opus}"
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
   tmux send-keys -t "$PANE" "$CMD" Enter
   sleep 8; tmux copy-mode -q -t "$PANE" 2>/dev/null

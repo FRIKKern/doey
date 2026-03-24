@@ -88,7 +88,7 @@ Agent files: `$PROJECT_DIR/agents/*.md` — Markdown with YAML frontmatter.
 | `description` | Yes | quoted string, 1-2 sentences |
 | `model` | Yes | `opus`, `sonnet`, `haiku` |
 | `color` | No | hex string (e.g. `"#4A90D9"`) |
-| `memory` | No | `none`, `session`, `persistent` |
+| `memory` | No | `none`, `user` |
 
 ### After Any Agent Edit
 
