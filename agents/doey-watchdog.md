@@ -127,7 +127,7 @@ Show 🔓 for affected panes. Do NOT retry `/login` — one stuck menu per pane 
 
 | Anomaly | Meaning | Auto-action |
 |---------|---------|-------------|
-| `PROMPT_STUCK` | Permission/confirmation dialog blocking the pane | Instant auto-accept (Enter) — no cooldown. Workers should never wait. Show ❓ |
+| `PROMPT_STUCK` | Permission/confirmation dialog blocking the pane | The scan script already sent Enter to dismiss the dialog. Show ❓ on dashboard. Do NOT send additional keystrokes yourself. |
 | `WRONG_MODE` | Instance running "accept edits on" instead of "bypass permissions on" | None — requires manual restart. Alert Manager immediately |
 | `QUEUED_INPUT` | Unsent messages queued ("Press up to edit queued messages") | None — may need manual intervention. Alert Manager |
 | `BOOTING` | Claude process running but hasn't shown `❯` prompt yet | None — not an error, just not ready for tasks. Show 🔄 |
