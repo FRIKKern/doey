@@ -92,10 +92,39 @@ for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do [ -f "$f" ] && cat "$f" &&
 
 Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-windows`
 
+## Delegate First — You Are a Router, Not a Doer
+
+**Your context is the most expensive resource in the session.** Every file read, code search, or edit you do yourself costs context that could be spent on routing and decision-making. Use freelancers aggressively:
+
+**Always delegate to a freelancer when you need to:**
+- Read files or explore code to understand something before routing a task
+- Research an approach, API, or pattern before deciding how to split work
+- Verify worker output or review completed work
+- Generate golden context (distilled findings) for a Manager's briefing
+- Do anything that requires reading more than ~50 lines of code
+
+**How to delegate research:**
+```bash
+# Find an idle freelancer
+W=<freelancer_team>; PANE_IDX=<idle_pane>
+TARGET="$SESSION_NAME:${W}.${PANE_IDX}"
+tmux copy-mode -q -t "$TARGET" 2>/dev/null
+TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
+cat > "$TASKFILE" << 'TASK'
+RESEARCH: <what you need to know>
+Write your findings to: $RUNTIME_DIR/research/<topic>.md
+Keep it concise — this will be read by a Manager as context for a task.
+TASK
+tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$TARGET"
+sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
+```
+
+**The pattern:** Need info → dispatch freelancer → wait for result file → read result → route task with context. Never: need info → read 10 files yourself → bloat your context → route task.
+
 ## Workflow
 
-1. **Route** — Single-team: send to any Window Manager. Multi-team: split across teams. Research: `/doey-research`.
-2. **Delegate** — Route in parallel with self-contained descriptions (Window Managers have zero context).
+1. **Route** — Single-team: send to any Window Manager. Multi-team: split across teams. Research: freelancer or `/doey-research`.
+2. **Delegate** — Route in parallel with self-contained descriptions (Window Managers have zero context). Use freelancers for any prep work.
 3. **Monitor** — Track team → task → status. Route follow-ups on completion. Alert if Watchdog down.
 4. **Report** — Consolidated summary: completions, errors, next steps.
 

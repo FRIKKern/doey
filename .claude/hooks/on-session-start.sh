@@ -144,9 +144,9 @@ EOF
 # Pane title
 _TITLE=""
 case "$ROLE" in
-  watchdog)        _TITLE="Watchdog" ;;
-  manager)         _TITLE="Window Manager" ;;
-  session_manager) _TITLE="Session Manager" ;;
+  watchdog)        _TITLE="${PROJECT_NAME} T${TEAM_WINDOW} WD" ;;
+  manager)         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} Mgr" ;;
+  session_manager) _TITLE="${PROJECT_NAME} SM" ;;
   git_agent)       _TITLE="Git Agent" ;;
   worker)
     if [ "$_is_freelancer_team" = "true" ]; then
@@ -156,4 +156,4 @@ case "$ROLE" in
     fi
     ;;
 esac
-[ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} ${_TITLE}"
+[ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} | ${_TITLE}"
