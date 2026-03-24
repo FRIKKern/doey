@@ -3,11 +3,7 @@ name: doey-settings
 description: Open an interactive Settings window with a config editor and live settings panel. Use when you need to "open settings", "configure doey", or "change doey settings".
 ---
 
-Open the Doey settings window: a split tmux window with a live config panel on the right and a Claude settings-editor agent on the left.
-
-## Instructions
-
-Run the following commands via the Bash tool:
+Split tmux window: live config panel (left) + Claude settings-editor agent (right).
 
 ```bash
 SESSION_NAME=$(tmux display-message -p '#{session_name}')

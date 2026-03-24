@@ -38,21 +38,9 @@ OBSFILE="$OBSERVATIONS_DIR/${OBS_NUM}-T${ELAPSED}s.txt"
 cat "$OBSFILE"
 ```
 
-**Anomaly detection** (aligned with Watchdog event model):
-
-| Anomaly | Detection | Severity |
-|---------|-----------|----------|
-| PROMPT_STUCK | Permission prompt visible (`Esc to cancel`, `Tab to amend`) | HIGH |
-| WRONG_MODE | Pane shows `accept edits on` (incorrect permission mode) | MEDIUM |
-| QUEUED_INPUT | `queued messages` or `Press up to edit` visible | MEDIUM |
-| MANAGER_CRASHED | Manager pane shows bare shell (`$`/`%`/`zsh`) | HIGH |
-| WORKER_CRASHED | Worker pane shows bare shell | HIGH |
-| MANAGER_CODING | Manager uses `Edit`/`Write` on project files | HIGH |
-| MANAGER_HUNG | Manager output unchanged 2+ min | HIGH |
-| WORKER_STUCK | Same error 3+ captures | MEDIUM |
-| WORKER_PANIC | Repeated tool errors | MEDIUM |
-| WATCHDOG_DEAD | No scan 60+ seconds | MEDIUM |
-| RESERVED_DISPATCH | Task sent to RESERVED pane | HIGH |
+**Anomaly detection:**
+HIGH: `PROMPT_STUCK` (permission prompt), `MANAGER_CRASHED`/`WORKER_CRASHED` (bare shell), `MANAGER_CODING` (Edit/Write on project files), `MANAGER_HUNG` (unchanged 2+ min), `RESERVED_DISPATCH`.
+MEDIUM: `WRONG_MODE`, `QUEUED_INPUT`, `WORKER_STUCK` (same error 3+ captures), `WORKER_PANIC` (repeated tool errors), `WATCHDOG_DEAD` (no scan 60+s).
 
 **Transitions:**
 - Manager IDLE + `>` prompt + question visible → **RESPONDING**
@@ -63,36 +51,19 @@ Manager waiting = ALL: status=IDLE, pane ends with `>`, question in last 10-20 l
 
 ### 4. RESPONDING → MONITORING
 
-| Question Type | Response |
-|---------------|----------|
-| Confirmation / plan approval | `yes, go ahead` / `Looks good, go ahead` |
-| Choice | Pick first/simpler option |
-| Completion report | Check mid-journey, else acknowledge |
-| Unexpected / error | `yes` / `Try again` / `Skip that and continue` |
-
-Log: `T+Xs RESPONDING: asked "<summary>", replied "<response>"`
+Confirmations → `yes, go ahead`. Choices → pick simpler option. Errors → `Try again` / `Skip that and continue`. Log: `T+Xs RESPONDING: asked "<summary>", replied "<response>"`.
 
 ### 5. MID_JOURNEY → MONITORING
 
-At most once. If journey has mid-journey prompt, dispatch it. Log: `T+Xs MID_JOURNEY: Sent follow-up`
+At most once. Dispatch mid-journey prompt if present. Log: `T+Xs MID_JOURNEY: Sent follow-up`.
 
 ### 6. VERIFYING → REPORTING
 
-Parse journey file's `Expected Outcomes`. For each check, run verification (ls, grep, curl, etc.) and record PASS/FAIL.
+Parse journey `Expected Outcomes`. Run verification (ls, grep, curl) per check. Record PASS/FAIL.
 
 ### 7. REPORTING → DONE
 
-Write to `$REPORT_FILE`:
-```
-# E2E Test Report: $TEST_ID
-Date: <ISO>  Duration: <T+Xs>  Result: PASS|FAIL  Score: X/10
-
-## Expectations — | # | Check | Result | Details |
-## Pass Criteria — ALL expectations met, Manager delegated (not coded), ≥2 workers used, no RESERVED_DISPATCH, no HIGH anomalies, within 10 min.
-## Timeline — | Time | Event |
-## Anomalies — | Time | Pane | Severity | Description |
-## Raw Observations — Files: $OBSERVATIONS_DIR/ — Total: N
-```
+Write `$REPORT_FILE`: test ID, date, duration, result, score (X/10), expectations table, pass criteria (all met, Manager delegated, ≥2 workers, no HIGH anomalies, within 10 min), timeline, anomalies, raw observation file count.
 
 Print `TEST $TEST_ID: <PASS|FAIL> (score X/10, duration Xs)` + `Report: $REPORT_FILE`. Exit.
 

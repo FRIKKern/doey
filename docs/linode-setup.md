@@ -150,14 +150,14 @@ systemctl --user start doey
 SYSTEMD
 ```
 
-## Full Automation Script (Steps 1–5)
+<details>
+<summary><strong>Full Automation Script (Steps 1–5)</strong></summary>
 
-Combines the manual steps above into a single script. Usage: `ANTHROPIC_KEY="sk-ant-..." ./doey-linode-setup.sh`
+Usage: `ANTHROPIC_KEY="sk-ant-..." ./doey-linode-setup.sh`
 
 ```bash
 #!/usr/bin/env bash
-# Automates Steps 1–5: provision, configure, install, auth, and print launch instructions.
-# See the individual sections above for detailed explanations of each step.
+# Automates Steps 1–5: provision, configure, install, auth, print launch instructions.
 set -euo pipefail
 ANTHROPIC_KEY="${ANTHROPIC_KEY:?Set ANTHROPIC_KEY env var}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519.pub}"
@@ -207,6 +207,8 @@ TOOLS
 echo "Done! IP: $LINODE_IP"
 echo "Launch: ssh -t doey@$LINODE_IP 'cd ~/your-project && doey'"
 ```
+
+</details>
 
 ## Operations
 

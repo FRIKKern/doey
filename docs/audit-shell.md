@@ -5,6 +5,8 @@
 **Scope:** shell/doey.sh, shell/info-panel.sh, shell/context-audit.sh, shell/pane-border-status.sh, shell/tmux-statusbar.sh
 **Method:** Full read + static analysis. No fixes applied.
 
+> **STALE line numbers** — `doey.sh` has grown from ~2800 to 3748 lines since this audit. All line references are approximate. Re-verify before applying fixes.
+
 ---
 
 ## shell/doey.sh

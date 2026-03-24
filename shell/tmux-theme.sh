@@ -35,21 +35,14 @@ tmux bind-key -n MouseDown1Status \
   "run-shell -b '${SCRIPT_DIR}/tmux-settings-btn.sh #{session_name}'" \
   "switch-client -t ="
 
-# ── Window tabs ───────────────────────────────────────────────────────
-local _wsfmt='#[fg=colour245,bg=default] #I #W '
-local _wscfmt='#[fg=cyan,bg=default,bold] #I #W #[nobold]'
-
-for _win in $(tmux list-windows -t "$session" -F '#I'); do
-  tmux set-window-option -t "$session:$_win" window-status-separator ''
-  tmux set-window-option -t "$session:$_win" window-status-format "$_wsfmt"
-  tmux set-window-option -t "$session:$_win" window-status-current-format "$_wscfmt"
-  tmux set-window-option -t "$session:$_win" window-status-activity-style 'fg=colour214,bg=colour236,bold'
-  tmux set-window-option -t "$session:$_win" monitor-activity on
-  tmux set-window-option -t "$session:$_win" allow-rename off
-done
-
-# Ensure new windows also get the theme
-tmux set-hook -t "$session" after-new-window "set-window-option window-status-separator ''; set-window-option window-status-format \"$_wsfmt\"; set-window-option window-status-current-format \"$_wscfmt\"; set-window-option window-status-activity-style 'fg=colour214,bg=colour236,bold'; set-window-option monitor-activity on; set-window-option allow-rename off"
+# ── Window tabs (global — applies to all existing + future windows) ───
+local _sw="tmux set-window-option -g -t $session"
+$_sw window-status-separator ''
+$_sw window-status-format '#[fg=colour245,bg=default] #I #W '
+$_sw window-status-current-format '#[fg=cyan,bg=default,bold] #I #W #[nobold]'
+$_sw window-status-activity-style 'fg=colour214,bg=colour236,bold'
+$_sw monitor-activity on
+$_sw allow-rename off
 
 # ── Misc ──────────────────────────────────────────────────────────────
 $_s message-style 'bg=colour233,fg=cyan'
@@ -60,10 +53,9 @@ $_s mouse on
 $_s set-clipboard on
 
 local _clip_cmd=""
-if command -v pbcopy >/dev/null 2>&1; then _clip_cmd="pbcopy"
-elif command -v xclip >/dev/null 2>&1; then _clip_cmd="xclip -selection clipboard"
-elif command -v xsel >/dev/null 2>&1; then _clip_cmd="xsel --clipboard"
-fi
+local _try; for _try in "pbcopy" "xclip -selection clipboard" "xsel --clipboard"; do
+  command -v "${_try%% *}" >/dev/null 2>&1 && { _clip_cmd="$_try"; break; }
+done
 if [ -n "$_clip_cmd" ]; then
   tmux bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "$_clip_cmd"
   tmux bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "$_clip_cmd"

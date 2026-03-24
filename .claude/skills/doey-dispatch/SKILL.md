@@ -3,8 +3,6 @@ name: doey-dispatch
 description: Send tasks to idle worker panes. Use when you need to "send a task", "assign work", "delegate to workers", "dispatch to idle panes", or "give a worker something to do".
 ---
 
-**Expected:** 4-6 tmux commands per worker, 1 status write, ~15-20s per worker.
-
 ## Context
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
@@ -13,7 +11,7 @@ description: Send tasks to idle worker panes. Use when you need to "send a task"
 
 ## Prompt
 
-Dispatch tasks to Claude Code workers in tmux panes. Always `copy-mode -q` before `paste-buffer`/`send-keys`. Use injected config variables (SESSION_NAME, PROJECT_NAME, PROJECT_DIR, WINDOW_INDEX, WORKER_PANES, WORKER_COUNT, etc.).
+Dispatch tasks to workers. Always `copy-mode -q` before `paste-buffer`/`send-keys`.
 
 ### Auto-scale (before scanning)
 
@@ -58,20 +56,16 @@ WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
 PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
 
-# 0. Re-check reservation (may have changed since pre-flight)
+# 0. Re-check reservation
 [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { echo "Reserved — skip"; exit 0; }
 
-# 1. Check if Claude is at prompt
+# 1. Check if Claude is at prompt (has child process + "bypass permissions" + ❯)
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
 CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
 OUTPUT=$(tmux capture-pane -t "$PANE" -p 2>/dev/null)
 ALREADY_READY=false
 [ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯' && ALREADY_READY=true
-
-# **If display-message fails with "no such pane":** The pane was killed or the window layout changed.
-# Run: tmux list-panes -t "${SESSION_NAME}:${WINDOW_INDEX}" -F '#{pane_index}' to find valid panes.
-# **If pgrep returns nothing:** The shell is idle with no Claude process — treat as not ready (step 2 will relaunch).
 
 # 2. Not ready → kill + restart
 if [ "$ALREADY_READY" = "false" ]; then
@@ -87,14 +81,10 @@ if [ "$ALREADY_READY" = "false" ]; then
   sleep 8; tmux copy-mode -q -t "$PANE" 2>/dev/null
 fi
 
-# **If send-keys fails with "no such pane":** Window layout changed. Re-read team env and re-scan panes.
-# **If worker shows "logged out" or "session expired":** Run /doey-clear on that pane index first, then retry dispatch.
-# **If Claude fails to start (no "bypass permissions" after 8s):** Check that `claude` is on PATH in the pane's shell. Try: tmux send-keys -t "$PANE" "which claude" Enter
-
-# 3. Rename pane (tmux-native, no UI interaction)
+# 3. Rename pane
 tmux select-pane -t "$PANE" -T "task-name_$(date +%m%d)"
 
-# 4. Write + paste task (never send-keys "" Enter — empty string swallows Enter)
+# 4. Write + paste task
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
 You are a worker on the Doey for project: ${PROJECT_NAME}
@@ -106,14 +96,14 @@ TASK
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
 
-# 5. Settle + submit (delay: >200 lines=2s, >100=1.5s, else 0.5s)
+# 5. Settle + submit (delay: >200L=2s, >100L=1.5s, else 0.5s)
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
 SETTLE_S=0.5; [ "$TASK_LINES" -gt 100 ] && SETTLE_S=1.5; [ "$TASK_LINES" -gt 200 ] && SETTLE_S=2
 sleep $SETTLE_S; tmux send-keys -t "$PANE" Enter
 rm "$TASKFILE"
 
-# 6. Verify (mandatory)
+# 6. Verify (mandatory — retry once if no activity detected)
 sleep 5; OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
 if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
   echo "✓ Worker ${WINDOW_INDEX}.X started"
@@ -126,27 +116,23 @@ else
     echo "✗ FAILED — run unstick sequence"
   fi
 fi
-
-# **If verify fails after retry:** Run the unstick sequence (below). If unstick also fails after 2 attempts, kill -9 the pane process, relaunch Claude, wait 8s, and re-dispatch from step 3.
-# **If worker is working but on the wrong task:** Do NOT interrupt — mark pane as busy and dispatch to another worker instead.
 ```
 
 ### Variants
 
-- **Batch:** Parallel Bash calls per worker. **Short tasks (< 200 chars):** `send-keys` directly (skip tmpfile), but settle + verify still mandatory.
+**Batch:** Parallel Bash calls per worker. **Short tasks (< 200 chars):** `send-keys` directly (skip tmpfile), settle + verify still mandatory.
 
 ### File Conflicts
 
-Assign file ownership per worker. Shared files: non-overlapping sections, Edit only. Overlapping: sequential dispatch.
+Assign file ownership per worker. Shared files: non-overlapping sections, Edit only.
 
 ### Unstick
 
-`copy-mode -q` -> `C-c` -> `C-u` -> `Enter`, wait 3s. After 2 fails: `kill -9`, relaunch, wait 8s, re-dispatch.
+`copy-mode -q` → `C-c` → `C-u` → `Enter`, wait 3s. After 2 fails: `kill -9`, relaunch, wait 8s, re-dispatch.
 
 ## Rules
 
-- Never `send-keys "" Enter` — settle before Enter after paste
-- Re-check `.reserved` before dispatch (race condition); verify after (step 6) — both mandatory
+- Re-check `.reserved` before dispatch; verify after (step 6) — both mandatory
 - Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task
-- One task per worker per dispatch cycle
 - Never skip settle delay before Enter after paste-buffer
+- One task per worker per dispatch cycle

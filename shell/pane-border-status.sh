@@ -6,20 +6,18 @@ PANE_REF="${1:-}"
 [ -z "$PANE_REF" ] && exit 0
 
 TITLE=$(tmux display-message -t "$PANE_REF" -p '#{pane_title}' 2>/dev/null) || TITLE=""
-FULL_PANE_ID=$(tmux display-message -t "$PANE_REF" -p '#{DOEY_FULL_PANE_ID}' 2>/dev/null) || FULL_PANE_ID=""
+FULL_PANE_ID=$(tmux display-message -t "$PANE_REF" -p '#{DOEY_FULL_PANE_ID}' 2>/dev/null) || true
 # Fallback: try pane environment variable directly
-[ -z "$FULL_PANE_ID" ] && FULL_PANE_ID=$(tmux show-environment -t "$PANE_REF" DOEY_FULL_PANE_ID 2>/dev/null | cut -d= -f2-) || true
+if [ -z "$FULL_PANE_ID" ]; then
+  FULL_PANE_ID=$(tmux show-environment -t "$PANE_REF" DOEY_FULL_PANE_ID 2>/dev/null | cut -d= -f2-) || true
+fi
 
 # Prefix output with FULL_PANE_ID if available
 _prefix_id() {
-  local label="$1"
-  if [ -n "$FULL_PANE_ID" ] && [ -n "$label" ]; then
-    echo "${FULL_PANE_ID} | ${label}"
-  elif [ -n "$FULL_PANE_ID" ]; then
-    echo "$FULL_PANE_ID"
-  else
-    echo "$label"
-  fi
+  local parts=""
+  [ -n "$FULL_PANE_ID" ] && parts="$FULL_PANE_ID"
+  [ -n "$1" ] && parts="${parts:+$parts | }$1"
+  echo "${parts:-}"
 }
 
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
@@ -31,9 +29,9 @@ PANE_IDX="${WIN_PANE#*.}"
 PANE_SAFE="${PANE_REF//[:.]/_}"
 
 env_val() {
-  while IFS='=' read -r k v; do
-    [ "$k" = "$2" ] && { v="${v#\"}"; echo "${v%\"}"; return; }
-  done < "$1"
+  local v
+  v=$(grep "^${2}=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true
+  v="${v#\"}"; echo "${v%\"}"
 }
 
 # Window 0: identify Session Manager or Watchdog panes

@@ -16,9 +16,7 @@ description: Two-wave purge — audit every project file for context rot and cod
 
 ## Prompt
 
-**Expected:** 2 bash commands (inventory + verification), 2 dispatch waves (8 workers total), ~10min.
-
-Session/team config injected above. Quick mode: run `doey purge --force`, report, stop.
+Quick mode: run `doey purge --force`, report, stop.
 
 ### Inventory
 
@@ -34,42 +32,33 @@ wc -l "$PROJECT_DIR"/agents/*.md "$PROJECT_DIR"/CLAUDE.md \
       "$PROJECT_DIR"/.claude/settings.local.json 2>/dev/null | sort -rn | tee "${RUNTIME_DIR}/reports/purge_before.txt"
 ```
 
-Present as table, save for diffing after fixes.
+Present as table, save for diffing.
 
 ### Wave 1: Audit (4 parallel workers)
 
-Dispatch via `/doey-dispatch`. **All workers: Do NOT use the Agent tool.** Each writes to `${RUNTIME_DIR}/reports/purge_<domain>.md`. Rename panes: `/rename purge-<domain>_$(date +%m%d)`.
+Dispatch via `/doey-dispatch`. **No Agent tool in worker prompts.** Each writes `${RUNTIME_DIR}/reports/purge_<domain>.md`. Rename panes: `purge-<domain>_$(date +%m%d)`.
 
-**Issue categories** (HIGH = breaks behavior, MED = confusing/outdated, LOW = nitpick): BLOAT, REDUNDANCY, STALENESS, CONTRADICTION, DEAD WEIGHT, BASH 3.2, BUG, DEAD CODE.
+**Categories** (HIGH/MED/LOW): BLOAT, REDUNDANCY, STALENESS, CONTRADICTION, DEAD WEIGHT, BASH 3.2, BUG, DEAD CODE.
 
-**Worker assignments:** A=Agents+CLAUDE.md, B=Hooks+Shell+Settings, C=Skills, D=Docs+README+Memory.
+**Assignments:** A=Agents+CLAUDE.md, B=Hooks+Shell+Settings, C=Skills, D=Docs+README+Memory.
 
-**Report format per file:** `## File: path (N lines)` → Issues with `CATEGORY [severity] [lines]: description + fix` → `Condensation Estimate: N → ~M (-X%)` → Summary totals.
+**Report format:** `## File: path (N lines)` → `CATEGORY [severity] [lines]: description + fix` → `Condensation Estimate: N → ~M (-X%)` → Summary.
 
-**Worker task template:**
-```
-You are Worker N auditing [DOMAIN] for Doey Purge.
-Project directory: PROJECT_DIR | **No Agent tool — read files directly.**
-Goal: context rot + code quality. Read all files in domain: [LIST].
-Cross-ref against filesystem. Issues with line numbers + severity.
-Condensation estimate per file. Write report to REPORT_PATH.
-If a hook enforces a rule, agents don't need to repeat it.
-Every .sh file: bash 3.2 — violations are HIGH.
-```
+**Worker template:** `You are Worker N auditing [DOMAIN]. Project: PROJECT_DIR. No Agent tool. Read all files in [LIST]. Cross-ref filesystem. Issues with line numbers + severity. Condensation estimate. Write to REPORT_PATH. Hooks enforce rules → agents needn't repeat. .sh files: bash 3.2 violations = HIGH.`
 
 ### Between Waves
 
-Read all `${RUNTIME_DIR}/reports/purge_*.md`. Present consolidated summary (files scanned, issue counts by category/severity, top savings, critical must-fix). Propose Wave 2 assignments. **Ask user before dispatching fixes.**
+Read all `purge_*.md` reports. Present consolidated summary (files, issue counts, top savings, must-fix). Propose Wave 2 assignments. **Ask user before dispatching fixes.**
 
 ### Wave 2: Fix (4 parallel workers)
 
-Assign by file ownership (avoid edit conflicts): A=agents+CLAUDE.md, B=hooks+shell, C=skills, D=docs+README+memory. Rename: `/rename fix-<domain>_$(date +%m%d)`.
+Assign by file ownership (avoid conflicts): A=agents+CLAUDE.md, B=hooks+shell, C=skills, D=docs+README+memory.
 
-All fix workers: `Edit` not `Write`. Read before editing. Condense — **fewer words, not lost information**. `.sh` files: `bash -n` after every edit. Bash 3.2 compatible.
+All workers: `Edit` not `Write`. Read before editing. Condense — **fewer words, not lost info**. `.sh`: `bash -n` after every edit. Bash 3.2 compatible.
 
 ### Verification
 
-Re-run inventory `wc -l` command, diff against `purge_before.txt`, then:
+Re-run `wc -l`, diff against `purge_before.txt`, then:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -81,11 +70,8 @@ done
 echo "=== Context audit ===" && bash "$PROJECT_DIR/shell/context-audit.sh" --repo
 ```
 
-Highlight files that shrank. If issues remain, offer another fix round.
-
 ### Rules
 
 1. **No Agent tool** in worker prompts — prevents context overflow
 2. **Ask user before Wave 2** — never auto-fix without confirmation
-3. **Read reports before presenting** — don't summarize from memory
-4. **Bash 3.2 violations are HIGH** — they break on macOS
+3. **Bash 3.2 violations are HIGH** — they break on macOS

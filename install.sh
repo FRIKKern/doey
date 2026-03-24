@@ -16,7 +16,7 @@ err_msg()   { printf "  ${ERROR}✗  %s${RESET}\n" "$1"; }
 die() {
   echo ""
   err_msg "$1"
-  [ "${2:-}" ] && printf "     ${DIM}%s${RESET}\n" "$2"
+  [ -n "${2:-}" ] && printf "     ${DIM}%s${RESET}\n" "$2"
   echo ""
   exit 1
 }
@@ -197,9 +197,9 @@ printf "  ${BRAND}[1/5]${RESET} Creating directories..."
 } && step_ok || { step_fail; die "Failed to create directories."; }
 
 # Clean up old commands that are now project-level skills
-for f in ~/.claude/commands/doey-*.md; do
-  [ -f "$f" ] && rm -f "$f"
-done
+shopt -s nullglob
+for f in ~/.claude/commands/doey-*.md; do rm -f "$f"; done
+shopt -u nullglob
 
 echo "$SCRIPT_DIR" > ~/.claude/doey/repo-path
 
@@ -242,12 +242,9 @@ printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
 detail "~/.local/bin/doey"
 
 # Install default config template if user has no config yet
-if [ ! -f "${HOME}/.config/doey/config.sh" ]; then
-  mkdir -p "${HOME}/.config/doey"
-  if [ -f "$SCRIPT_DIR/shell/doey-config-default.sh" ]; then
-    cp "$SCRIPT_DIR/shell/doey-config-default.sh" "${HOME}/.config/doey/config.sh"
-    detail "installed default config"
-  fi
+if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-config-default.sh" ]; then
+  cp "$SCRIPT_DIR/shell/doey-config-default.sh" "${HOME}/.config/doey/config.sh"
+  detail "installed default config"
 fi
 
 PATH_OK=true

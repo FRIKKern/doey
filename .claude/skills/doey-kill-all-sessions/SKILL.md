@@ -5,9 +5,7 @@ description: Kill ALL Doey tmux sessions, processes, and runtime files. Use when
 
 - Active Doey sessions: !`tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^doey-' || echo "No Doey sessions found"`
 
-**Expected:** 1 bash command, 1 confirmation prompt, N tmux kill-sessions, 1 rm, ~15s.
-
-**Confirm first** — destructive and irreversible: "This will kill ALL Doey sessions, processes, and remove `/tmp/doey/*/`. Proceed?"
+**Confirm first:** "This will kill ALL Doey sessions, processes, and remove `/tmp/doey/*/`. Proceed?"
 
 ```bash
 SESSIONS=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^doey-' || true)

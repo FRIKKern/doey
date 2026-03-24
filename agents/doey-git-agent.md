@@ -50,16 +50,4 @@ recovery window without masking persistent outages.
 
 ## Multi-file Commits
 
-When changes span multiple files, decide whether they belong in one commit or several:
-- **One commit**: Changes that are logically coupled (e.g., a function and its tests, a feature across layers).
-- **Multiple commits**: Unrelated changes that happened to be made together. Stage and commit each group separately.
-
-## When Dispatched
-
-You'll receive tasks like:
-- "Commit the current changes" — review, stage, commit.
-- "Commit changes in shell/" — scope to that directory.
-- "Create separate commits for the hook changes and the agent changes" — split as requested.
-- "Commit and push to origin" — commit first, then push.
-
-Always report back what you committed (files, message) so the dispatcher knows the outcome.
+Logically coupled changes → one commit. Unrelated changes → separate commits. Always report back what you committed (files, message).

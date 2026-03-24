@@ -6,11 +6,9 @@ description: Stop a worker by pane number. Use when you need to "stop a worker",
 - Team config: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; [ -f "$RD/team_${W}.env" ] && cat "$RD/team_${W}.env" 2>/dev/null|| true`
 - Worker statuses: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; for f in "$RD"/status/*_${W}_*.status; do [ -f "$f" ] && echo "=== $(basename $f) ===" && cat "$f" && echo ""; done 2>/dev/null || true`
 
-**Expected:** 3 bash commands (validate, kill, update status), ~5 seconds.
+If no pane number given, list workers and ask. Set `PANE_NUMBER` from user argument.
 
-If no pane number given, list workers from injected data and ask which to stop. Set `PANE_NUMBER` from user argument.
-
-## Step 1: Parse & Validate
+## Step 1: Validate
 
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
@@ -25,10 +23,7 @@ for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ "$i" = "$TARGET" ] && VALID=
 echo "Validated: pane ${W}.${TARGET} is a worker"
 ```
 
-Expected: "Validated: pane W.N is a worker"
-**If error:** Check WORKER_PANES from injected team config.
-
-## Step 2: Kill Claude Process
+## Step 2: Kill Claude process (SIGTERM → SIGKILL)
 
 ```bash
 PANE="${SESSION_NAME}:${W}.${TARGET}"
@@ -47,10 +42,7 @@ else
 fi
 ```
 
-Expected: "Claude process killed" or "already stopped"
-**If error:** SIGTERM failed and SIGKILL failed — manual intervention needed.
-
-## Step 3: Update Status File
+## Step 3: Update status
 
 ```bash
 PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
@@ -61,22 +53,9 @@ UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: FINISHED
 TASK: manually stopped
 EOF
-echo "Status file updated: FINISHED"
-```
-
-Expected: "Status file updated: FINISHED"
-**If error:** Check RD path and permissions.
-
-## Step 4: Confirm
-
-```bash
 echo "Stopped pane ${W}.${TARGET} — status set to FINISHED"
 ```
 
-Expected: "Stopped pane W.N — status set to FINISHED"
-
-## Gotchas
-- Never stop Manager (pane 0) or Watchdog — kill by PID, never `/exit` or `send-keys`
+### Rules
+- Never stop Manager (pane 0) or Watchdog
 - Pane shell stays alive for restart via `/doey-dispatch` or `/doey-clear`
-
-Total: 4 steps, 0 errors expected.

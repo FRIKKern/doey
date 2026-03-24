@@ -14,11 +14,7 @@ description: Spawn a Doey R&D team — audits, develops, and tests Doey itself i
 
 ## Prompt
 
-**Expected:** 8 bash commands, ~8 tmux send-keys, 3 file writes (team env, prompt, task), ~30s.
-
-Spawn a Doey R&D team window for safely improving Doey itself. **Do NOT ask for confirmation — just do it.**
-
-The team always operates in a **git worktree** of the Doey repo (`~/Documents/github/doey`), never editing live files. The running session's doey.sh, agents, hooks, and skills are READ-ONLY.
+Spawn a Doey R&D team in a git worktree of `~/Documents/github/doey`. **Do NOT ask for confirmation.** Live session files are READ-ONLY.
 
 ### Step 1: Resolve Doey repo and create worktree
 
@@ -112,61 +108,23 @@ mv "$TMPENV" "${RUNTIME_DIR}/session.env"
 
 ### Step 4: Write R&D worker system prompt
 
-Create a system prompt extension for R&D workers with safety rules:
-
 ```bash
 RD_PROMPT="${RUNTIME_DIR}/rd-worker-prompt.md"
 cat > "$RD_PROMPT" << 'RDPROMPT'
 # Doey R&D Worker
 
-You are developing on the Doey codebase. You are working in a **git worktree** — an isolated copy.
+You are in a **git worktree** — an isolated copy of the Doey codebase.
 
-## Safety Rules (MANDATORY)
+## Rules
+1. Changes do NOT affect the running session. Never run `doey` commands here.
+2. Commit frequently: `fix(shell): <desc>`, `feat(skill): <desc>`, `test: <desc>`.
+3. Stay inside the worktree directory. No remote push without approval.
 
-1. **You are in a worktree.** Your changes do NOT affect the running Doey session.
-2. **Never run `doey` commands** from within the worktree — they could affect the live session.
-3. **Commit frequently.** Small, focused commits: `fix(shell): <desc>`, `feat(skill): <desc>`, `test: <desc>`.
-4. **Do NOT modify files outside the worktree directory.**
-5. **Do NOT push to remote** without explicit approval.
+## Audit format
+`[SEVERITY] file:line — description` (CRITICAL > HIGH > MEDIUM > LOW)
 
-## Doey Architecture
-
-```
-shell/doey.sh          — Main script (1455 lines). All shell functions.
-agents/                — Agent definitions (manager, session-manager, watchdog, test-driver)
-.claude/skills/        — 20 Doey skills (slash commands)
-.claude/hooks/         — 13 hooks (pre-tool-use, stop-notify, watchdog-scan, etc.)
-install.sh             — Installer script
-CLAUDE.md              — Project instructions
-```
-
-## Key Functions in doey.sh
-
-- `launch_session()` / `launch_with_grid()` — Session startup
-- `setup_dashboard()` — Dashboard window creation
-- `install_doey_hooks()` — Copy hooks/skills to project
-- `write_team_env()` / `write_worker_system_prompt()` — Runtime config
-- `show_menu()` — Interactive project menu
-- `check_claude_auth()` — Auth verification
-
-## When Auditing
-
-Report findings as:
-```
-[SEVERITY] file:line — description
-  Current: <problematic code>
-  Suggested: <fix>
-```
-
-Severity: CRITICAL > HIGH > MEDIUM > LOW
-
-## When Developing
-
-1. Read the issue/finding first
-2. Understand the surrounding code
-3. Make the minimal fix
-4. Commit with descriptive message
-5. Verify no regressions (bash -n doey.sh, check related functions)
+## Dev workflow
+Read → understand context → minimal fix → descriptive commit → verify (`bash -n doey.sh`)
 RDPROMPT
 ```
 
@@ -222,7 +180,7 @@ if [ -n "$WDG_SLOT" ]; then
 fi
 ```
 
-### Step 6: Verify boot and dispatch audit tasks
+### Step 6: Verify boot and dispatch audit
 
 ```bash
 sleep 8
@@ -237,25 +195,24 @@ done
 [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 ```
 
-After verification, send the audit task to the Manager. Use the dispatch pattern (load-buffer for long prompts):
+Dispatch audit task to Manager via load-buffer:
 
 ```bash
 MGR_PANE="${SESSION_NAME}:${NEW_WIN}.0"
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'AUDIT_TASK'
-Run a full Doey R&D audit. You are in a worktree of the Doey repo — safe to read and edit.
+Run a full Doey R&D audit. You are in a worktree — safe to read and edit.
 
-Dispatch 6 workers in parallel for Phase 1 (audit):
-- W1: Shell script audit — read shell/doey.sh fully. Report bugs, dead code, portability issues, missing error handling. Format: [SEVERITY] line:N — description.
-- W2: Agent definition audit — read agents/*.md. Check frontmatter, setup blocks, coordination rules, model choices.
-- W3: Skill audit — read .claude/skills/doey-*/ (all 20). Check bash correctness, variable sourcing, tmux commands, macOS compat.
-- W4: Hook audit — read .claude/hooks/* (all 13). Check race conditions, file locking, performance, error handling.
-- W5: Documentation audit — read README.md, CLAUDE.md, docs/. Cross-reference claims vs code.
-- W6: Validation — run bash -n shell/doey.sh, check skill frontmatter, check agent frontmatter, run any tests in tests/.
+Phase 1 — dispatch 6 workers in parallel:
+- W1: shell/doey.sh — bugs, dead code, portability. Format: [SEVERITY] line:N — description
+- W2: agents/*.md — frontmatter, setup blocks, model choices
+- W3: .claude/skills/doey-*/ — bash correctness, variable sourcing, macOS compat
+- W4: .claude/hooks/* — race conditions, file locking, error handling
+- W5: README.md, CLAUDE.md, docs/ — cross-reference claims vs code
+- W6: Validation — bash -n doey.sh, frontmatter checks, tests/
 
-Phase 2 (after audit): Consolidate findings, prioritize by severity, assign fixes to workers. One fix per worker. Commit each fix separately.
-
-Phase 3 (after fixes): Verify bash -n still passes, no regressions. Report back to Session Manager.
+Phase 2: Consolidate, prioritize, assign fixes (one per worker, separate commits).
+Phase 3: Verify bash -n, no regressions, report to Session Manager.
 AUDIT_TASK
 
 tmux copy-mode -q -t "$MGR_PANE" 2>/dev/null
@@ -267,30 +224,12 @@ rm "$TASKFILE"
 
 ### Step 7: Report
 
-Output summary:
-```
-## Doey R&D Team Spawned
-- **Window:** ${NEW_WIN} (RD)
-- **Worktree:** ${WT_DIR} (branch: ${WT_BRANCH})
-- **Doey repo:** ${DOEY_REPO}
-- **Manager:** ${NEW_WIN}.0
-- **Workers:** ${NEW_WIN}.1-${NEW_WIN}.${WORKER_COUNT}
-- **Watchdog:** 0.${WDG_SLOT} (if available)
-- **Phase 1:** Full codebase audit dispatched to Manager
-
-### Merge Protocol (after fixes are validated)
-1. Commit all local changes on main
-2. cd ~/Documents/github/doey && git merge ${WT_BRANCH}
-3. /doey-reinstall to apply changes
-4. /doey-kill-window ${NEW_WIN} to clean up
-```
+Output: window number, worktree path + branch, pane layout, boot status. Include merge protocol:
+`cd ~/Documents/github/doey && git merge ${WT_BRANCH}` → `/doey-reinstall` → `/doey-kill-window ${NEW_WIN}`
 
 ### Rules
 
-- Always creates a worktree of the DOEY REPO, not the current project
-- Workers get R&D-specific system prompt with safety rules
-- Manager auto-dispatches Phase 1 audit on boot
-- Pane 0 = Manager, 1-6 = Workers, Watchdog in Dashboard
-- Window named "RD" for easy identification
-- Team env includes `RD_TEAM=true` and `DOEY_REPO` path
+- Always worktree the DOEY REPO, not the current project
+- Pane 0 = Manager, 1-6 = Workers, Watchdog in Dashboard. Window named "RD"
+- Team env includes `RD_TEAM=true` and `DOEY_REPO`
 - Never hardcode window indices. Bash 3.2 compatible.

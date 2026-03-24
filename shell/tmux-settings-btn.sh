@@ -15,7 +15,7 @@ PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cu
 
 # If Settings window already exists, just focus it
 settings_win=$(tmux list-windows -t "$session" -F '#{window_index} #{window_name}' 2>/dev/null \
-  | grep ' Settings$' | head -1 | awk '{print $1}')
+  | awk '/ Settings$/{print $1; exit}')
 if [ -n "$settings_win" ]; then
   tmux select-window -t "$session:$settings_win"
   exit 0

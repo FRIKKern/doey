@@ -2,6 +2,8 @@
 Date: 2026-03-23
 Branch: doey/rd-0323-0932
 
+> **PARTIALLY STALE** — Agent count has grown from 4 to 8. Stray `.claude/skills/SKILL.md` has been deleted. Re-run validations for current state.
+
 ## Summary
 
 | Category | Checks | Pass | Fail | Warn |
@@ -53,7 +55,7 @@ Required fields: `name`, `model`, `description`
 [PASS] frontmatter:agents/doey-watchdog.md — name=doey-watchdog, model=haiku, description=present
 [PASS] frontmatter:agents/test-driver.md — name=test-driver, model=opus, description=present
 
-All agent model values are valid (opus/sonnet/haiku).
+> **Note:** 4 agents added since this audit (doey-freelancer-watchdog, doey-git-agent, doey-tmux, settings-editor) — not yet validated.
 
 ---
 
@@ -126,14 +128,10 @@ This is a design issue: `watchdog-heartbeat-check.sh` cannot distinguish between
 
 ## Stray File
 
-[WARN] stray:.claude/skills/SKILL.md — untracked file at skills root (not inside a skill subdirectory)
-
-This file is an exact duplicate of `.claude/skills/doey-worktree/SKILL.md`. It is untracked in git (shown in `git status` as `?? .claude/skills/SKILL.md`). It has valid frontmatter (`name: doey-worktree`, `description: Isolate a team window in a git worktree, or return it.`) but is misplaced.
-
-Recommendation: Delete `.claude/skills/SKILL.md` — the canonical copy is at `.claude/skills/doey-worktree/SKILL.md`.
+~~[WARN] stray:.claude/skills/SKILL.md~~ — **FIXED** (file deleted).
 
 ---
 
 ## Overall Result
 
-**All mandatory checks PASS.** One test failure is environmental (requires live session), one stray file is an untracked duplicate.
+**All mandatory checks PASS.** One test failure is environmental (requires live session). Stray file has been fixed.

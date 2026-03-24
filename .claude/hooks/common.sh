@@ -120,6 +120,19 @@ is_reserved() {
   [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]
 }
 
+# Atomic file write: content -> tmp -> mv
+atomic_write() { printf '%s\n' "$2" > "$1.tmp" && mv "$1.tmp" "$1"; }
+
+# Write structured pane status file atomically
+# Usage: write_pane_status <target_file> <status> [task]
+write_pane_status() {
+  local target="$1" status="$2" task="${3:-}" tmp
+  tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || tmp=""
+  [ -z "$tmp" ] || [ ! -f "$tmp" ] && tmp="$target"
+  printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$NOW" "$status" "$task" > "$tmp"
+  [ "$tmp" != "$target" ] && mv "$tmp" "$target"
+}
+
 NL='
 '
 

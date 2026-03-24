@@ -28,37 +28,21 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 ## Philosophy
 
-Fewer teams used well beat more teams used carelessly. Route for quality, not just load distribution. Each team's Manager is the bastion — validates all context, never writes code. The Watchdog is the Manager's best friend — obsessively monitors workers so the Manager stays focused. Workers feed high-quality content upward; every dispatch is intentional. Force multipliers: ultrathink, /batch, /doey-research, /doey-simplify-everything, agent swarm.
+Fewer teams used well beat more teams used carelessly. Route for quality, not load distribution. Force multipliers: ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms, freelancers.
 
 ## Freelancer Pool
 
-Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are **managerless** — all panes are independent workers. They exist to:
-- **Free up context** from you and team Managers by handling research, reviews, and golden context generation
-- **Scale rapidly** — add freelancers with `/doey-add-window --freelancer` when teams need overflow capacity
-- **Serve any team** — Managers can dispatch directly to freelancer panes, or you can route tasks there
+Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless — all panes are independent workers. Use for: research, reviews, golden context generation, overflow. Add with `/doey-add-window --freelancer`.
 
-**Identify freelancer teams:**
 ```bash
+# Identify freelancer teams
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
   TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  [ "$TT" = "freelancer" ] && echo "Team $W is freelancer pool"
+  [ "$TT" = "freelancer" ] && echo "Freelancer team: $W"
 done
 ```
 
-**Dispatch to a freelancer** (direct — no Manager intermediary):
-```bash
-W=3; PANE_IDX=2  # freelancer team window and pane
-TARGET="$SESSION_NAME:${W}.${PANE_IDX}"
-tmux copy-mode -q -t "$TARGET" 2>/dev/null
-tmux send-keys -t "$TARGET" "Your task here" Enter
-```
-
-**When to use freelancers:**
-- Research tasks that would bloat a Manager's context
-- Code reviews and verification of worker output
-- Golden context generation (distilled findings for Managers)
-- Overflow when all team workers are busy
-- Any self-contained task that doesn't need Manager orchestration
+Dispatch directly to freelancer panes (no Manager intermediary). Prompts must be self-contained.
 
 ## Dispatch
 
@@ -94,32 +78,9 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 
 ## Delegate First — You Are a Router, Not a Doer
 
-**Your context is the most expensive resource in the session.** Every file read, code search, or edit you do yourself costs context that could be spent on routing and decision-making. Use freelancers aggressively:
+**Your context is the most expensive resource in the session.** Delegate to freelancers for any file reading, code exploration, research, or verification. Never read >50 lines yourself.
 
-**Always delegate to a freelancer when you need to:**
-- Read files or explore code to understand something before routing a task
-- Research an approach, API, or pattern before deciding how to split work
-- Verify worker output or review completed work
-- Generate golden context (distilled findings) for a Manager's briefing
-- Do anything that requires reading more than ~50 lines of code
-
-**How to delegate research:**
-```bash
-# Find an idle freelancer
-W=<freelancer_team>; PANE_IDX=<idle_pane>
-TARGET="$SESSION_NAME:${W}.${PANE_IDX}"
-tmux copy-mode -q -t "$TARGET" 2>/dev/null
-TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
-cat > "$TASKFILE" << 'TASK'
-RESEARCH: <what you need to know>
-Write your findings to: $RUNTIME_DIR/research/<topic>.md
-Keep it concise — this will be read by a Manager as context for a task.
-TASK
-tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$TARGET"
-sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
-```
-
-**The pattern:** Need info → dispatch freelancer → wait for result file → read result → route task with context. Never: need info → read 10 files yourself → bloat your context → route task.
+**Pattern:** Need info → dispatch freelancer → wait for result file → read result → route task with context.
 
 ## Workflow
 
@@ -144,14 +105,10 @@ After 2–3 idle cycles (TIMEOUT with no events), yield with a brief status summ
 
 ## Issue Log Review
 
-Periodically check `$RUNTIME_DIR/issues/` for problems logged by Managers and Watchdogs:
-```bash
-for f in "$RUNTIME_DIR/issues"/*.issue; do [ -f "$f" ] && echo "--- $(basename "$f") ---" && cat "$f" && echo ""; done
-```
-Include unresolved issues in reports to users. Archive processed issues: `mkdir -p "$RUNTIME_DIR/issues/archive" && mv "$f" "$RUNTIME_DIR/issues/archive/"`.
+Check `$RUNTIME_DIR/issues/` periodically. Include unresolved issues in reports. Archive processed: `mv "$f" "$RUNTIME_DIR/issues/archive/"`.
 
 ## Rules
 
-1. For managed teams: dispatch through Window Managers, not workers directly
-2. For freelancer teams: dispatch directly to freelancer panes (there is no Manager)
+1. Managed teams: dispatch through Window Managers, not workers directly
+2. Freelancer teams: dispatch directly to panes (no Manager)
 3. Never send input to Info Panel (pane 0.0)

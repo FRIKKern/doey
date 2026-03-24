@@ -26,26 +26,27 @@ repeat_char() {
   printf '%s' "$out"
 }
 
+# Resolve project directory from session.env. Prints path or "." if unavailable.
+_get_proj_dir() {
+  local _d=""
+  if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+    _d=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+  fi
+  printf '%s' "${_d:-.}"
+}
+
 _config_val() {
-  local var="$1"
+  local var="$1" val=""
   local global_config="${HOME}/.config/doey/config.sh"
-  local project_config=""
-  # Find project config via RUNTIME_DIR -> PROJECT_DIR
-  if [ -n "$RUNTIME_DIR" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
-    local proj_dir
-    proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-    [ -n "$proj_dir" ] && [ -f "${proj_dir}/.doey/config.sh" ] && project_config="${proj_dir}/.doey/config.sh"
-  fi
-  # Check project config first (highest priority), then global
-  local val=""
-  if [ -n "$project_config" ] && [ -f "$project_config" ]; then
-    val=$(bash -c "source '$project_config' 2>/dev/null; echo \"\${$var:-}\"")
+  local proj_dir project_config=""
+  proj_dir=$(_get_proj_dir)
+  [ -f "${proj_dir}/.doey/config.sh" ] && project_config="${proj_dir}/.doey/config.sh"
+  # Project config (highest priority), then global
+  for cfg in "$project_config" "$global_config"; do
+    [ -n "$cfg" ] && [ -f "$cfg" ] || continue
+    val=$(bash -c "source '$cfg' 2>/dev/null; echo \"\${$var:-}\"")
     [ -n "$val" ] && printf '%s' "$val" && return 0
-  fi
-  if [ -f "$global_config" ]; then
-    val=$(bash -c "source '$global_config' 2>/dev/null; echo \"\${$var:-}\"")
-    [ -n "$val" ] && printf '%s' "$val" && return 0
-  fi
+  done
   return 1
 }
 
@@ -67,16 +68,10 @@ _settings_row() {
 }
 
 _doey_load_config() {
-  local config_file="${DOEY_CONFIG:-${HOME}/.config/doey/config.sh}"
+  local config_file="${DOEY_CONFIG:-${HOME}/.config/doey/config.sh}" proj_dir
   [ -f "$config_file" ] && source "$config_file"
-  # Overlay project config if available
-  if [ -n "$RUNTIME_DIR" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
-    local proj_dir
-    proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-    if [ -n "$proj_dir" ] && [ -f "${proj_dir}/.doey/config.sh" ]; then
-      source "${proj_dir}/.doey/config.sh"
-    fi
-  fi
+  proj_dir=$(_get_proj_dir)
+  [ -f "${proj_dir}/.doey/config.sh" ] && source "${proj_dir}/.doey/config.sh"
 }
 
 _parse_agent_frontmatter() {
@@ -107,13 +102,9 @@ _truncate() {
 
 
 _render_team_blueprint() {
-  local _proj_dir="" _agents_dir="" _team_count _i _type _workers _wm _mm _role _name _desc
+  local _proj_dir _agents_dir _team_count _i _type _workers _wm _mm _role _name _desc
   local _cw
-
-  if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
-    _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  fi
-  [ -z "$_proj_dir" ] && _proj_dir="."
+  _proj_dir=$(_get_proj_dir)
   _agents_dir="${_proj_dir}/agents"
 
   _cw=$(( TERM_W - 6 ))
@@ -223,11 +214,8 @@ _render_team_blueprint() {
 }
 
 _render_available_agents() {
-  local _proj_dir="" _agents_dir="" _f _name _model _desc _color _memory _idx
-  if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
-    _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  fi
-  [ -z "$_proj_dir" ] && _proj_dir="."
+  local _proj_dir _agents_dir _f _name _model _desc _color _memory _idx
+  _proj_dir=$(_get_proj_dir)
   _agents_dir="${_proj_dir}/agents"
 
   printf '\n  %bAvailable Agents%b  %b(press a-z to inspect)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
@@ -266,11 +254,8 @@ _render_available_agents() {
 
 _render_agent_detail() {
   local _agent_name="$1"
-  local _proj_dir="" _agents_dir="" _f="" _found=""
-  if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
-    _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  fi
-  [ -z "$_proj_dir" ] && _proj_dir="."
+  local _proj_dir _agents_dir _f="" _found=""
+  _proj_dir=$(_get_proj_dir)
   _agents_dir="${_proj_dir}/agents"
 
   # Find the agent file by name or filename
@@ -372,11 +357,9 @@ _render_nav_bar() {
 _render_settings_view() {
   local _GLOBAL_CONFIG _PROJECT_CONFIG _PROJ_DIR
   _GLOBAL_CONFIG="${HOME}/.config/doey/config.sh"
+  _PROJ_DIR=$(_get_proj_dir)
   _PROJECT_CONFIG=""
-  if [ -n "$RUNTIME_DIR" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
-    _PROJ_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" | cut -d= -f2- | tr -d '"')
-    [ -n "$_PROJ_DIR" ] && [ -f "${_PROJ_DIR}/.doey/config.sh" ] && _PROJECT_CONFIG="${_PROJ_DIR}/.doey/config.sh"
-  fi
+  [ -f "${_PROJ_DIR}/.doey/config.sh" ] && _PROJECT_CONFIG="${_PROJ_DIR}/.doey/config.sh"
 
   if [ -f "$_GLOBAL_CONFIG" ]; then
     printf '  %bConfig (global):%b  %s %b(loaded)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_GLOBAL_CONFIG" "${C_GREEN}" "${C_RESET}"
@@ -477,7 +460,6 @@ while true; do
   case "$_CURRENT_VIEW" in agent_detail) _render_nav_bar "agents" ;; *) _render_nav_bar "$_CURRENT_VIEW" ;; esac
 
   case "$_CURRENT_VIEW" in
-    settings)     _render_settings_view ;;
     teams)        _render_team_blueprint ;;
     agents)       _render_available_agents ;;
     agent_detail) _render_agent_detail "$_AGENT_DETAIL" ;;
@@ -491,56 +473,48 @@ while true; do
     "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}" \
     "${C_BOLD_WHITE}" "${C_RESET}"
 
+  # Handle a keypress: view switching (1-3) and agent selection (a-z)
+  _handle_key() {
+    local _key="$1"
+    case "$_key" in
+      1) echo "settings" > "$_view_file" ;;
+      2) echo "teams" > "$_view_file" ;;
+      3) echo "agents" > "$_view_file" ;;
+      [a-z])
+        if [ "$_CURRENT_VIEW" = "agents" ] || [ "$_CURRENT_VIEW" = "agent_detail" ]; then
+          local _ai _ac=0 _proj_dir _af _an
+          _ai=$(printf '%d' "'$_key" 2>/dev/null)
+          _ai=$((_ai - 97))
+          _proj_dir=$(_get_proj_dir)
+          for _af in "$_proj_dir/agents"/*.md; do
+            [ -f "$_af" ] || continue
+            if [ "$_ac" -eq "$_ai" ]; then
+              _an=$(_parse_agent_frontmatter "$_af" "name")
+              [ -z "$_an" ] && _an=$(basename "$_af" .md)
+              echo "agents:$_an" > "$_view_file"
+              break
+            fi
+            _ac=$((_ac + 1))
+          done
+        fi
+        ;;
+    esac
+  }
+
   # Wait for trigger or timeout
-  # Settings editor touches TRIGGER to force instant refresh
   _trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
   if [ "${DOEY_SETTINGS_LIVE:-0}" = "1" ]; then
-    # In live mode: poll trigger file every 1s, re-render on trigger or after 5s
     _waited=0
     while [ "$_waited" -lt 5 ]; do
-      if [ -f "$_trigger" ]; then
-        rm -f "$_trigger" 2>/dev/null
-        break
-      fi
+      if [ -f "$_trigger" ]; then rm -f "$_trigger" 2>/dev/null; break; fi
       _key=""
       read -t 1 -n1 _key 2>/dev/null || true
-      case "$_key" in
-        1) echo "settings" > "$_view_file"; break ;;
-        2) echo "teams" > "$_view_file"; break ;;
-        3) echo "agents" > "$_view_file"; break ;;
-        [a-z])
-          # Letter key: select agent by index when on agents view
-          if [ "$_CURRENT_VIEW" = "agents" ] || [ "$_CURRENT_VIEW" = "agent_detail" ]; then
-            _ai=$(printf '%d' "'$_key" 2>/dev/null)
-            _ai=$((_ai - 97))
-            _proj_dir=""
-            [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ] && \
-              _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-            [ -z "$_proj_dir" ] && _proj_dir="."
-            _ac=0
-            for _af in "$_proj_dir/agents"/*.md; do
-              [ -f "$_af" ] || continue
-              if [ "$_ac" -eq "$_ai" ]; then
-                _an=$(_parse_agent_frontmatter "$_af" "name")
-                [ -z "$_an" ] && _an=$(basename "$_af" .md)
-                echo "agents:$_an" > "$_view_file"
-                break
-              fi
-              _ac=$((_ac + 1))
-            done
-            break
-          fi
-          ;;
-      esac
+      if [ -n "$_key" ]; then _handle_key "$_key"; break; fi
       _waited=$((_waited + 1))
     done
   else
     _key=""
     read -t "$_refresh_interval" -n1 _key 2>/dev/null || true
-    case "$_key" in
-      1) echo "settings" > "$_view_file" ;;
-      2) echo "teams" > "$_view_file" ;;
-      3) echo "agents" > "$_view_file" ;;
-    esac
+    [ -n "$_key" ] && _handle_key "$_key"
   fi
 done

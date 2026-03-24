@@ -19,24 +19,11 @@ is_reserved && STOP_STATUS="RESERVED"
 
 _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
-_write_status() {
-  local target="$1" tmp
-  tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null)
-  if [ -z "$tmp" ] || [ ! -f "$tmp" ]; then tmp="$target"; fi
-  cat > "$tmp" <<EOF
-PANE: $PANE
-UPDATED: $NOW
-STATUS: ${STOP_STATUS}
-TASK:
-EOF
-  [ "$tmp" != "$target" ] && mv "$tmp" "$target"
-}
-
-_write_status "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+write_pane_status "${RUNTIME_DIR}/status/${PANE_SAFE}.status" "$STOP_STATUS"
 
 # Dual-write using short DOEY_PANE_ID for new-style lookups
 if [ -n "${DOEY_PANE_ID:-}" ]; then
-  _write_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status"
+  write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "$STOP_STATUS"
   _log "stop-status: ${DOEY_PANE_ID} -> $STOP_STATUS (dual-write)"
 fi
 

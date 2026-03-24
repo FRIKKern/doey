@@ -1,6 +1,8 @@
 # Audit: Agent Definitions & Skill Definitions
 Date: 2026-03-23 | Auditor: Worker 2 (agent-audit_0323)
 
+> **PARTIALLY STALE** — Agent count has grown from 4 to 8 (added: doey-freelancer-watchdog, doey-git-agent, doey-tmux, settings-editor). Stray `.claude/skills/SKILL.md` has been deleted. Remaining findings should be re-verified.
+
 ---
 
 ## AGENTS
@@ -94,11 +96,7 @@ Date: 2026-03-23 | Auditor: Worker 2 (agent-audit_0323)
 
 ### LOW
 
-**[LOW] .claude/skills/SKILL.md — Stray duplicate file in wrong location**
-- `/.claude/skills/SKILL.md` is an untracked duplicate of `.claude/skills/doey-worktree/SKILL.md`.
-- `name: doey-worktree` — this skill file is placed in the skills root rather than its proper subdirectory.
-- Impact: May be picked up by skill loaders incorrectly, or cause confusion about which file is canonical.
-- Suggested: Delete `.claude/skills/SKILL.md`; the canonical copy is `.claude/skills/doey-worktree/SKILL.md`.
+~~**[LOW] .claude/skills/SKILL.md — Stray duplicate file**~~ — **FIXED** (file deleted).
 
 **[LOW] .claude/skills/doey-status/SKILL.md — RESERVED state inconsistency**
 - Setting mode allows `STATUS: RESERVED` written to the `.status` file.
@@ -139,8 +137,8 @@ Date: 2026-03-23 | Auditor: Worker 2 (agent-audit_0323)
 
 ### Priority Fixes
 
-1. **doey-clear sed bug** — will silently produce broken WP_LIST on macOS, breaking watchdog briefing pane list
+1. **doey-clear sed bug** — broken WP_LIST on macOS, breaking watchdog briefing pane list
 2. **doey-rd-team stale counts** — misleads R&D workers about codebase size/scope
-3. **doey-repair missing SESSION_NAME + missing --model opus** — two distinct bugs in the same skill
+3. **doey-repair missing SESSION_NAME + missing --model opus** — two bugs in the same skill
 4. **source on /tmp files** — widespread, should be standardized to safe-read pattern
-5. **stray .claude/skills/SKILL.md** — should be deleted to avoid confusion
+5. ~~**stray .claude/skills/SKILL.md**~~ — **FIXED**

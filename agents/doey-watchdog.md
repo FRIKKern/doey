@@ -105,52 +105,10 @@ EOF
 
 **Escalation:** Anomaly events are written to `${RUNTIME_DIR}/status/anomaly_${W}_${i}.event`. If the same anomaly persists for 3+ consecutive scans, an `ESCALATE` event is emitted in the scan output. Report escalated anomalies prominently in the dashboard and notify the Manager.
 
-## Hook Event Awareness
+## Red Flags
 
-You observe the **effects** of these hook events through the scan. Know the event model to interpret what you see and catch problems early.
-
-**Lifecycle (once per session):**
-| Event | What it does | What you observe |
-|-------|-------------|-----------------|
-| `SessionStart` | Sets DOEY_* env vars, creates status files | Pane transitions BOOTING → ready (shows `❯`) |
-| `InstructionsLoaded` | Loads CLAUDE.md into context | Invisible — but if a worker behaves oddly, bad instructions may be why |
-| `SessionEnd` | Session terminates | Process exits → CRASHED detection (unless FINISHED first) |
-
-**Per-turn (every prompt cycle):**
-| Event | What it does | What you observe |
-|-------|-------------|-----------------|
-| `UserPromptSubmit` | Status → BUSY, task logged | Status file changes, hash changing |
-| `PreToolUse` | Safety gate — can block tools | Blocked: pane stalls. Permission needed: PROMPT_STUCK |
-| `PermissionRequest` | Permission dialog appears | **PROMPT_STUCK** — auto-fix with Enter (cooldown) |
-| `PostToolUse` | Tool completed | Hash changes, tool name in capture |
-| `PostToolUseFailure` | Tool failed | Error markers, worker may retry or stop |
-| `Stop` | Worker finishes — result JSON, notifications | **COMPLETION** event, IDLE state, result file |
-| `StopFailure` | API error killed the turn | Crash-like — process alive but unresponsive |
-
-**Context management:**
-| Event | What you observe |
-|-------|-----------------|
-| `PreCompact` | Context % was high, now drops |
-| `PostCompact` | Worker resumes with less context — watch for confusion |
-
-**Subagents:**
-| Event | What you observe |
-|-------|-----------------|
-| `SubagentStart` | "Agent" tool in capture — complex work |
-| `SubagentStop` | Agent completes, worker continues |
-| `TeammateIdle` | Rarely visible — internal to agent teams |
-
-**Infrastructure:**
-| Event | What you observe |
-|-------|-----------------|
-| `ConfigChange` | Workers may restart or behave differently |
-| `WorktreeCreate/Remove` | Team-level — Session Manager handles |
-| `Elicitation` | PROMPT_STUCK-like — pane blocks |
-| `Notification` | Invisible (outside tmux) |
-
-**Red flags:**
-- `PreToolUse` blocking unexpectedly → stuck, burning time
-- `PostToolUseFailure` repeated → error loop, notify Manager
+Watch for these patterns in scan output:
+- Repeated `PostToolUseFailure` → error loop, notify Manager
 - `Stop` without result JSON → hook failure, investigate
 - `SubagentStart` on simple tasks → over-engineering, inform Manager
 - `PostCompact` + confused behavior → context loss, may need re-dispatch
@@ -158,23 +116,15 @@ You observe the **effects** of these hook events through the scan. Know the even
 
 ## Issue Logging
 
-Log detected problems to `$RUNTIME_DIR/issues/` for review by Session Manager.
-
+Log problems to `$RUNTIME_DIR/issues/` (one file per issue):
 ```bash
 mkdir -p "$RUNTIME_DIR/issues"
-W="$TEAM_WINDOW"
-cat > "$RUNTIME_DIR/issues/${W}_$(date +%s).issue" << EOF
-WINDOW: $W
-PANE: <pane_index>
-TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
-SEVERITY: <CRITICAL|HIGH|MEDIUM|LOW>
+cat > "$RUNTIME_DIR/issues/${TEAM_WINDOW}_$(date +%s).issue" << EOF
+WINDOW: $TEAM_WINDOW | PANE: <index> | SEVERITY: <CRITICAL|HIGH|MEDIUM|LOW>
 CATEGORY: <crash|stuck|unexpected|performance>
----
-<description: what happened, what was expected, what went wrong>
+<description>
 EOF
 ```
-
-**Log:** crashes, escalated anomalies, heartbeat failures, pane state issues. One file per issue.
 
 ## Rules
 

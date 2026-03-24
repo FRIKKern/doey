@@ -17,15 +17,17 @@ fi
 
 SESSION_ENV="${RUNTIME_DIR}/session.env"
 
-# Load config for customizable values
-_cfg="${HOME}/.config/doey/config.sh"
-# shellcheck source=/dev/null
-[ -f "$_cfg" ] && source "$_cfg"
-# Project config overlay
-if [ -n "$RUNTIME_DIR" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
-  _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-  [ -n "$_proj_dir" ] && [ -f "${_proj_dir}/.doey/config.sh" ] && source "${_proj_dir}/.doey/config.sh"
-fi
+# Load config: global, then project overlay
+_load_config() {
+  local _cfg="${HOME}/.config/doey/config.sh" _proj_dir=""
+  # shellcheck source=/dev/null
+  [ -f "$_cfg" ] && source "$_cfg"
+  if [ -f "${RUNTIME_DIR}/session.env" ]; then
+    _proj_dir=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    [ -n "$_proj_dir" ] && [ -f "${_proj_dir}/.doey/config.sh" ] && source "${_proj_dir}/.doey/config.sh"
+  fi
+}
+_load_config
 DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
 
 C_RESET='\033[0m'
@@ -91,7 +93,6 @@ read_pane_status() {
   fi
   printf '%s' "$status"
 }
-
 
 # Count workers in a given state for a team. Uses _CACHED_SESSION_NAME from outer scope.
 count_team_workers() {
