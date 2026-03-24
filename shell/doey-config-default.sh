@@ -41,22 +41,22 @@
 # =============================================================================
 
 # Seconds between launching each worker instance (prevents auth exhaustion)
-# DOEY_WORKER_LAUNCH_DELAY=3
+# DOEY_WORKER_LAUNCH_DELAY=1
 
 # Seconds between launching each team window
-# DOEY_TEAM_LAUNCH_DELAY=15
+# DOEY_TEAM_LAUNCH_DELAY=8
 
 # Seconds to wait before launching the Window Manager in a new team
-# DOEY_MANAGER_LAUNCH_DELAY=3
+# DOEY_MANAGER_LAUNCH_DELAY=1
 
 # Seconds to wait before launching the Watchdog in a new team
-# DOEY_WATCHDOG_LAUNCH_DELAY=3
+# DOEY_WATCHDOG_LAUNCH_DELAY=1
 
-# Seconds the Window Manager waits after launch before accepting tasks
-# DOEY_MANAGER_BRIEF_DELAY=15
+# Seconds the Window Manager waits after launch before briefing
+# DOEY_MANAGER_BRIEF_DELAY=8
 
 # Seconds the Watchdog waits after launch before its first scan cycle
-# DOEY_WATCHDOG_BRIEF_DELAY=20
+# DOEY_WATCHDOG_BRIEF_DELAY=10
 
 # Seconds between each Watchdog scan cycle
 # DOEY_WATCHDOG_LOOP_DELAY=25

@@ -70,12 +70,12 @@ DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
 DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
 
 # Auth & Launch Timing
-DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
-DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
-DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
-DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-3}"
-DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-15}"
-DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-20}"
+DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-1}"
+DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-8}"
+DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-1}"
+DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-1}"
+DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-8}"
+DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-10}"
 DOEY_WATCHDOG_LOOP_DELAY="${DOEY_WATCHDOG_LOOP_DELAY:-25}"
 
 # Dynamic Grid Behavior
@@ -1396,7 +1396,7 @@ MANIFEST
   _brief_team "$session" "$team_window" "${WDG_SLOT_1}" "$_WPL_RESULT" "$worker_count" "Grid ${grid}"
 
   (
-    sleep 15
+    sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
@@ -1779,7 +1779,7 @@ reload_session() {
       tmux send-keys -t "$mgr_ref" "claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Window Manager\" --agent \"$mgr_agent\"" Enter
       printf " ${SUCCESS}✓${RESET}\n"
       (
-        sleep 8
+        sleep "$DOEY_MANAGER_BRIEF_DELAY"
         tmux send-keys -t "$mgr_ref" \
           "Team is online (project: ${name}, dir: $dir). You have ${worker_count_tw:-0} workers in panes ${wp_list}. Your workers are in window ${tw}. Watchdog is in Dashboard pane ${wdg_pane:-0.1}. Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
       ) &
@@ -1798,10 +1798,10 @@ reload_session() {
         tmux send-keys -t "$wdg_ref" "claude --dangerously-skip-permissions --model $DOEY_WATCHDOG_MODEL --name \"T${tw} Watchdog\" --agent \"$wdg_agent\"" Enter
         printf " ${SUCCESS}✓${RESET}\n"
         (
-          sleep 12
+          sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
           tmux send-keys -t "$wdg_ref" \
             "Start monitoring session ${session} window ${tw}. Skip pane ${wdg_pane} (yourself, in Dashboard). Manager is in team window pane ${tw}.0. Monitor panes ${wp_list}." Enter
-          sleep 20
+          sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
           tmux send-keys -t "$wdg_ref" \
             '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
         ) &
@@ -1845,7 +1845,7 @@ reload_session() {
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
         tmux send-keys -t "$pane_ref" "$worker_cmd" Enter
         printf "    %s.%s ${SUCCESS}✓${RESET}\n" "$tw" "$wp"
-        sleep 3
+        sleep "$DOEY_WORKER_LAUNCH_DELAY"
       done
     done
     printf "\n  ${SUCCESS}✓ Workers restarted${RESET}\n"
@@ -2305,7 +2305,7 @@ MANIFEST
   done
 
   (
-    sleep 20
+    sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
   ) &
@@ -2490,7 +2490,7 @@ _batch_boot_workers() {
     write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
   done
 
-  sleep 3
+  sleep "$DOEY_WORKER_LAUNCH_DELAY"
 }
 
 doey_add_column() {
@@ -2743,10 +2743,10 @@ _brief_freelancer_team() {
   # Freelancer teams have no manager — watchdog reports directly to Session Manager
   [ -n "$wdg_slot" ] || return 0
   (
-    sleep 12
+    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
     tmux send-keys -t "${session}:${wdg_slot}" \
       "Start monitoring session ${session} window ${window_index}. This is a FREELANCER team — no Manager. All panes are independent workers (${worker_count} total in panes ${wp_list}). Skip pane ${wdg_slot} (yourself). Report all events directly to the Session Manager. Workers are dispatched by the Session Manager or by Managers from other teams." Enter
-    sleep 20
+    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
     tmux send-keys -t "${session}:${wdg_slot}" \
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
@@ -2761,16 +2761,16 @@ _brief_team() {
   local wdg_brief="No Watchdog assigned (all Dashboard slots occupied)."
   [ -z "$wdg_slot" ] || wdg_brief="Watchdog is in Dashboard pane ${wdg_slot}."
   (
-    sleep 8
+    sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "${session}:${window_index}.0" \
       "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${wdg_brief} Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
   [ -n "$wdg_slot" ] || return 0
   (
-    sleep 12
+    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
     tmux send-keys -t "${session}:${wdg_slot}" \
       "Start monitoring session ${session} window ${window_index}. ${grid_desc}. Skip pane ${wdg_slot} (yourself, in Dashboard). Manager is in team window pane ${window_index}.0. Monitor panes ${wp_list}." Enter
-    sleep 20
+    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
     tmux send-keys -t "${session}:${wdg_slot}" \
       '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
   ) &
