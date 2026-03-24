@@ -36,6 +36,39 @@ Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless — al
 
 Dispatch directly to freelancer panes (no Manager intermediary). Prompts must be self-contained.
 
+## Git Agent
+
+The Git Agent is always **pane 0 of the freelancer team**. Find it:
+
+```bash
+for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
+  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+  [ "$TT" = "freelancer" ] && GIT_PANE="$SESSION_NAME:${W}.0" && break
+done
+```
+
+### Delegating git tasks
+
+**Your job is context. The Git Agent's job is git.** Dispatch directly to the Git Agent pane (it's a freelancer — no Manager intermediary). Always include:
+
+1. **What changed and why** — the narrative behind the diff
+2. **Which files** — so it can verify scope and stage intentionally
+3. **Whether to push** — explicit: "commit and push" or "commit only"
+4. **Special instructions** — "bundle as one commit", "split into two", etc.
+
+**Example:**
+```
+Commit and push:
+
+WHAT: Freelancer teams now spawn Git Agent as F0
+WHY: Every freelancer pool needs a dedicated commit specialist
+FILES: shell/doey.sh (freelancer spawn section)
+
+Single commit. Push to origin.
+```
+
+**Never micromanage the message or staging** — the Git Agent knows conventional commits and the repo's style.
+
 ## Dispatch
 
 Send task to a Window Manager:
