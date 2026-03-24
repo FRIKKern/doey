@@ -94,7 +94,7 @@ EOF
 
 | Anomaly | Auto-action |
 |---------|-------------|
-| `PROMPT_STUCK` | Instant auto-accept (Enter). Show ❓ |
+| `PROMPT_STUCK` | The scan script already sent Enter to dismiss the dialog. Show ❓ on dashboard. Do NOT send additional keystrokes yourself. |
 | `WRONG_MODE` | Alert Session Manager |
 | `QUEUED_INPUT` | Alert Session Manager |
 | `BOOTING` | Show 🔄 (not an error) |
