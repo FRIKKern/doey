@@ -52,12 +52,42 @@ Dispatch like any worker pane. Prompts must be fully self-contained (freelancers
 
 ## Git Agent
 
-**Workers cannot git commit/push.** Use the **Git Agent** — a freelancer with `role_override=git_agent`.
+**Workers cannot git commit/push.** The Git Agent is always pane 0 of the freelancer team. Find it:
 
 ```bash
-# Find Git Agent: check ${RUNTIME_DIR}/status/${PKEY}.role_override for "git_agent"
-# Setup: write "git_agent" to the role_override file, then /doey-dispatch with agent doey-git-agent
+# Find freelancer team window
+for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
+  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+  [ "$TT" = "freelancer" ] && echo "Git Agent: $SESSION_NAME:${W}.0" && break
+done
 ```
+
+### How to delegate to the Git Agent
+
+**Your job is context. The Git Agent's job is git.** Provide everything it needs to craft a good commit — then let it handle staging, message, and execution.
+
+Always include in your dispatch:
+
+1. **What changed and why** — "Fixed settings button resolving to project dir instead of install path because it broke in non-Doey projects"
+2. **Which files** — List the changed files so it can verify scope
+3. **Whether to push** — Say explicitly: "commit and push" or "commit only"
+4. **Any special instructions** — "Bundle as one commit" or "Split into two: one for the hook, one for the agent"
+
+**Example dispatch:**
+```
+Commit and push the following changes:
+
+WHAT: Watchdog LOGGED_OUT recovery — detect login menus, allow Escape dismissal
+WHY: Login menus were misdetected as PROMPT_STUCK, causing auto-Enter which started uncompletable OAuth flows
+FILES:
+- .claude/hooks/on-pre-tool-use.sh (allow Escape in watchdog keystroke whitelist)
+- .claude/hooks/watchdog-scan.sh (detect "Select login method" before anomaly detection)
+- agents/doey-watchdog.md (3-step LOGGED_OUT recovery procedure)
+
+Single commit. Push to origin.
+```
+
+**Never tell it HOW to write the commit message** — it knows conventional commits and the repo's style. Just give it the context to write a good one.
 
 ## Sending Tasks
 
