@@ -92,7 +92,36 @@ EOF
 | `WAVE_COMPLETE` (slug: `wave_done`) | `.msg` to SM. Also send-keys to Manager if idle: "All workers idle — wave complete. Check results and dispatch next wave." |
 | `MANAGER_COMPLETED` (slug: `mgr_done`) | `.msg` to SM: "Manager finished. Route follow-up." |
 | Worker `COMPLETION`/`CRASHED`/`STUCK` | Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`. |
-| `LOGGED_OUT` (slug: `logged_out`) | Send `/login` + `Enter` to each affected pane. If login menu appears, send `Escape` then retry or alert SM. |
+| `LOGGED_OUT` (slug: `logged_out`) | Follow the LOGGED_OUT Recovery procedure below. |
+
+## LOGGED_OUT Recovery
+
+When scan reports `LOGGED_OUT` for any pane, follow this exact sequence. **Do not improvise.**
+
+**Step 1 — Dismiss any login menu.** Capture the pane. If you see "Select login method" or "Esc to cancel", the pane has a stuck login menu:
+```bash
+tmux send-keys -t "$SESSION_NAME:${TEAM_WINDOW}.${PANE_IDX}" Escape
+```
+Do this for EVERY logged-out pane before proceeding. Sleep 2s after all Escapes.
+
+**Step 2 — Re-scan.** Run one scan cycle. Check if panes recovered (Keychain token may be valid — dismissing the menu is often enough).
+
+**Step 3 — If still LOGGED_OUT:** The Keychain token is likely expired. Do NOT send `/login` (it opens an interactive menu you can't complete). Instead, alert Session Manager:
+```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+cat > "${RUNTIME_DIR}/messages/${SM_SAFE}_logged_out_W${TEAM_WINDOW}_$(date +%s).msg" << EOF
+FROM: watchdog-W${TEAM_WINDOW}
+SUBJECT: Workers logged out — token expired
+PANES: $(echo "$LOGGED_OUT_PANES" | tr '\n' ',')
+ACTION_NEEDED: User must run /login in any pane, then /doey-login to restart all instances.
+EOF
+```
+Show 🔓 for affected panes. Do NOT retry `/login` — one stuck menu per pane is the limit.
+
+**Key rules:**
+- Escape first, always. Never send `/login` while a login menu is visible.
+- Never send `/login` more than once per pane per scan cycle.
+- If Escape + re-scan doesn't fix it, escalate to SM — don't loop.
 
 ## Anomaly Detection
 

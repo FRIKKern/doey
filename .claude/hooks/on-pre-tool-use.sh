@@ -157,6 +157,7 @@ if is_watchdog; then
       _TP='(\"[^\"]*\"|[^[:space:]]+)'
       echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+\"?(/login|/compact)\"?[[:space:]]+Enter[[:space:]]*$" && exit 0
       echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Enter[[:space:]]*$" && exit 0
+      echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Escape[[:space:]]*$" && exit 0
       _log_block "TOOL_BLOCKED" "Watchdog unauthorized keystroke blocked" "$TOOL_COMMAND"
       echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
       echo "Report stuck workers to the Window Manager instead." >&2
