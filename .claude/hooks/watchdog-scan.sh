@@ -223,6 +223,12 @@ PANE_STATE_0="N/A"
 if [ "$_team_type" != "freelancer" ]; then
   MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
   case "$MGR_CAPTURE" in
+    *"Select login method"*)
+      PANE_STATE_0="LOGGED_OUT"
+      echo "MANAGER_LOGGED_OUT"
+      echo "LOGIN_MENU_STUCK:0"
+      _log_error_wd "ANOMALY" "Manager has stuck login menu in window $TARGET_WINDOW"
+      ;;
     *"Not logged in"*)
       PANE_STATE_0="LOGGED_OUT"
       echo "MANAGER_LOGGED_OUT"
@@ -344,8 +350,14 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       ;;
   esac
 
-  # Logged-out detection
+  # Logged-out detection — must run BEFORE anomaly detection to prevent
+  # "Esc to cancel" in login menus from being treated as PROMPT_STUCK
   case "$PANE_CAPTURE" in
+    *"Select login method"*)
+      _report_pane "$i" "LOGGED_OUT"
+      echo "LOGIN_MENU_STUCK:$i"
+      _log_error_wd "ANOMALY" "Worker $i has stuck login menu" "window=$TARGET_WINDOW"
+      continue ;;
     *"Not logged in"*)
       _report_pane "$i" "LOGGED_OUT"
       _log_error_wd "ANOMALY" "Worker $i logged out" "window=$TARGET_WINDOW"
