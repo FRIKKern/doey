@@ -166,6 +166,17 @@ _log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}" >> "${RUNTIME_DIR}/logs/${pane_id}.log"
 }
 
+# Structured error logger for watchdog anomaly detection
+_log_error_wd() {
+  local cat="$1" msg="$2" detail="${3:-}"
+  local err_dir="${RUNTIME_DIR}/errors"
+  mkdir -p "$err_dir" 2>/dev/null || return 0
+  local _now; _now=$(date '+%Y-%m-%dT%H:%M:%S')
+  printf '[%s] %s | %s | watchdog | watchdog-scan | n/a | %s | %s\n' \
+    "$_now" "$cat" "${DOEY_PANE_ID:-watchdog}" "${detail:-n/a}" "$msg" \
+    >> "${err_dir}/errors.log" 2>/dev/null
+}
+
 # Per-pane logging helper — writes to the scanned pane's log, not the watchdog's
 _pane_log() {
   local pane_id="$1" msg="$2"
@@ -191,6 +202,7 @@ if [ "$_team_type" != "freelancer" ]; then
   case "$MGR_CMD" in
     bash|zsh|sh|fish)
       echo "MANAGER_CRASHED"
+      _log_error_wd "ANOMALY" "Manager crashed in window $TARGET_WINDOW" "pane_cmd=bare_shell"
       CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
       if [ ! -f "$CRASH_ALERT" ]; then
         _tmp="${CRASH_ALERT}.tmp"
@@ -212,6 +224,7 @@ if [ "$_team_type" != "freelancer" ]; then
     *"Not logged in"*)
       PANE_STATE_0="LOGGED_OUT"
       echo "MANAGER_LOGGED_OUT"
+      _log_error_wd "ANOMALY" "Manager logged out in window $TARGET_WINDOW"
       ;;
     *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
     *) PANE_STATE_0="WORKING" ;;
@@ -222,6 +235,7 @@ if [ "$_team_type" != "freelancer" ]; then
   _atomic_write "$MGR_PREV_FILE" "$PANE_STATE_0"
   if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
     echo "MANAGER_COMPLETED"
+    _log_error_wd "ANOMALY" "Manager completed in window $TARGET_WINDOW" "prev=WORKING cur=IDLE"
   fi
 
   # --- Manager hook-reported status (more authoritative than screen-scrape) ---
@@ -303,6 +317,7 @@ for i in $PANES_LIST; do
         RESERVED) _crash_state="RESERVED" ;;
         *)
           _crash_state="CRASHED"
+          _log_error_wd "ANOMALY" "Worker $i crashed" "window=$TARGET_WINDOW"
           CRASH_FILE="${RUNTIME_DIR}/status/crash_pane_${TARGET_WINDOW}_${i}"
           if [ ! -f "$CRASH_FILE" ]; then
             CRASH_CAPTURE=$(tmux capture-pane -t "$PANE_REF" -p -S -10 2>/dev/null) || CRASH_CAPTURE=""
@@ -329,7 +344,10 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
 
   # Logged-out detection
   case "$PANE_CAPTURE" in
-    *"Not logged in"*) _report_pane "$i" "LOGGED_OUT"; continue ;;
+    *"Not logged in"*)
+      _report_pane "$i" "LOGGED_OUT"
+      _log_error_wd "ANOMALY" "Worker $i logged out" "window=$TARGET_WINDOW"
+      continue ;;
   esac
 
   # Anomaly detection — permission prompts, wrong mode, queued messages
@@ -341,6 +359,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       # workers should never wait. Permission prompts in bypass mode are
       # hook-generated (pre-tool-use) or edge cases, not security gates.
       tmux send-keys -t "$PANE_REF" Enter 2>/dev/null
+      _log_error_wd "ANOMALY" "Auto-sent Enter to stuck worker $i" "window=$TARGET_WINDOW remediation=auto_enter"
       ;;
     *"accept edits on"*)
       _anomaly_type="WRONG_MODE"
@@ -352,6 +371,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   if [ -n "$_anomaly_type" ]; then
     echo "PANE ${i} ${_anomaly_type}"
     SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ANOMALY ${i} ${_anomaly_type}${NL}"
+    _log_error_wd "ANOMALY" "Worker $i ${_anomaly_type}" "window=$TARGET_WINDOW"
   fi
 
   # CPU time detection
@@ -397,6 +417,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       if [ "$NEW_COUNT" -ge 6 ]; then
         echo "PANE ${i} STUCK (CPU active but no output for ${NEW_COUNT} cycles)"
         _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=STUCK unchanged_cycles=${NEW_COUNT}"
+        _log_error_wd "ANOMALY" "Worker $i stuck for ${NEW_COUNT} cycles" "window=$TARGET_WINDOW cpu_active=true"
         _unch_state="STUCK"
       else
         _unch_state="WORKING"
@@ -603,7 +624,10 @@ ANOMALY_EOF
     is_numeric "$prev_count" || prev_count=0
     new_count=$((prev_count + 1))
     _atomic_write "$count_file" "$new_count"
-    [ "$new_count" -ge 3 ] && echo "ESCALATE ANOMALY ${ep} ${et} (${new_count} consecutive)"
+    if [ "$new_count" -ge 3 ]; then
+      echo "ESCALATE ANOMALY ${ep} ${et} (${new_count} consecutive)"
+      _log_error_wd "ANOMALY" "Escalating anomaly for pane $ep" "type=${et:-unknown} count=${new_count:-?}"
+    fi
   done
 
   # Clear counts for resolved anomalies
@@ -631,6 +655,7 @@ if [ "$_ctx_pct" -ge 60 ]; then
   echo ""
   echo "⚠️  COMPACT_NOW — context at ${_ctx_pct}% (threshold: 60%)"
   echo "You MUST run /compact immediately. Do NOT run another scan cycle first."
+  _log_error_wd "ANOMALY" "Context pressure - compact needed" "context_pct=${_ctx_pct}%"
 fi
 
 _log "watchdog-scan: end cycle W${TARGET_WINDOW} working=${_n_working} idle=${_n_idle} stuck=${_n_stuck} crashed=${_n_crashed}"
