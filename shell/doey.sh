@@ -1337,7 +1337,7 @@ MANIFEST
   else
     printf "  ${DIM}Applying theme...${RESET}\n"
   fi
-  local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  local border_fmt=" #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   apply_doey_theme "$session" "$name" "$border_fmt" 2
   [[ "$headless" -eq 0 ]] && step_done
 
@@ -2134,7 +2134,7 @@ launch_session_dynamic() {
   step_done
 
   step_start 2 "Applying theme..."
-  local border_fmt=' #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#{pane_title} #[default]'
+  local border_fmt=' #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#{pane_title} #[default]'
   apply_doey_theme "$session" "$name" "$border_fmt" 5
   step_done
 
@@ -2686,7 +2686,7 @@ add_dashboard_watchdog_slot() {
 _apply_team_border_theme() {
   local session="$1" window_index="$2"
   local target="${session}:${window_index}"
-  local border_fmt=" #{?pane_active,#[fg=cyan,bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
+  local border_fmt=" #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#('${SCRIPT_DIR}/pane-border-status.sh' #{session_name}:#{window_index}.#{pane_index}) #[default]"
   tmux set-window-option -t "$target" pane-border-status top
   tmux set-window-option -t "$target" pane-border-format "$border_fmt"
   tmux set-window-option -t "$target" pane-border-style 'fg=colour238'
