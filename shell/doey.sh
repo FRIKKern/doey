@@ -526,7 +526,7 @@ stop_project() {
   fi
 
   # 3) Otherwise, find all running doey sessions and show picker
-  local -a running_sessions=()
+  local running_sessions; running_sessions=()
   while IFS= read -r sess; do
     [[ "$sess" == doey-* ]] && running_sessions+=("$sess")
   done < <(tmux list-sessions -F '#S' 2>/dev/null || true)
@@ -623,7 +623,7 @@ show_menu() {
   printf '\n'
 
   # Read projects into arrays
-  local -a names=() paths=() statuses=()
+  local names paths statuses; names=() paths=() statuses=()
   while IFS=: read -r name path; do
     [[ -z "$name" ]] && continue
     names+=("$name")
@@ -2874,12 +2874,9 @@ doey_add_column() {
 
   local last_pane new_pane_top new_pane_bottom
   last_pane="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
-  tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$_ts_dir"
-  sleep 0.1
-  new_pane_top="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
-  tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$_ts_dir"
-  sleep 0.1
-  new_pane_bottom="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
+  # Use -P -F to atomically capture new pane index (avoids sleep + list-panes race)
+  new_pane_top="$(tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$_ts_dir" -P -F '#{pane_index}')"
+  new_pane_bottom="$(tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$_ts_dir" -P -F '#{pane_index}')"
 
   local w1_num=$(( _ts_worker_count + 1 )) w2_num=$(( _ts_worker_count + 2 ))
   local _pane_prefix="W"

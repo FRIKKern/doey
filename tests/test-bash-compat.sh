@@ -45,6 +45,7 @@ while IFS= read -r file; do
 done < <(find "$PROJECT_ROOT" -name '*.sh' \
   -not -path '*/node_modules/*' \
   -not -path '*/.git/*' \
+  -not -path '*/.claude/worktrees/*' \
   -type f)
 
 echo ""

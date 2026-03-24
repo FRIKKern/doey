@@ -369,11 +369,49 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   case "$PANE_CAPTURE" in
     *"Esc to cancel"*|*"Tab to amend"*)
       _anomaly_type="PROMPT_STUCK"
-      # Auto-accept: send Enter to accept default "1. Yes" — no cooldown,
-      # workers should never wait. Permission prompts in bypass mode are
-      # hook-generated (pre-tool-use) or edge cases, not security gates.
-      tmux send-keys -t "$PANE_REF" Enter 2>/dev/null
-      _log_error_wd "ANOMALY" "Auto-sent Enter to stuck worker $i" "window=$TARGET_WINDOW remediation=auto_enter"
+      # Auto-Enter with per-pane cooldown to prevent escalation loops.
+      # Max 3 attempts per 300s window, then escalate to Manager.
+      _ae_dir="${RUNTIME_DIR}/watchdog"
+      mkdir -p "$_ae_dir" 2>/dev/null || true
+      _ae_ts_file="${_ae_dir}/auto_enter_${TARGET_WINDOW}_${i}.ts"
+      _ae_count_file="${_ae_dir}/auto_enter_${TARGET_WINDOW}_${i}.count"
+      _ae_last=0; _ae_count=0
+      [ -f "$_ae_ts_file" ] && read -r _ae_last < "$_ae_ts_file" 2>/dev/null
+      [ -f "$_ae_count_file" ] && read -r _ae_count < "$_ae_count_file" 2>/dev/null
+      _ae_elapsed=$(( SCAN_TIME - _ae_last ))
+      # Reset counter if cooldown window (300s) expired
+      if [ "$_ae_elapsed" -gt 300 ]; then
+        _ae_count=0
+      fi
+      if [ "$_ae_count" -lt 3 ]; then
+        # Validate Claude is actually running (not a bare shell)
+        _ae_cmd=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || _ae_cmd=""
+        case "$_ae_cmd" in node)
+          tmux send-keys -t "$PANE_REF" Enter 2>/dev/null
+          _ae_count=$((_ae_count + 1))
+          _atomic_write "$_ae_ts_file" "$SCAN_TIME"
+          _atomic_write "$_ae_count_file" "$_ae_count"
+          _log_error_wd "ANOMALY" "Auto-sent Enter to stuck worker $i (attempt $_ae_count/3)" "window=$TARGET_WINDOW remediation=auto_enter"
+          ;;
+        *)
+          _log_error_wd "ANOMALY" "Worker $i PROMPT_STUCK but process is $_ae_cmd, not node — skipping auto-Enter" "window=$TARGET_WINDOW"
+          ;;
+        esac
+      else
+        # Cooldown active — escalate to Manager instead of retrying
+        _ae_suppress_file="${_ae_dir}/suppress_stuck_${TARGET_WINDOW}_${i}"
+        if [ ! -f "$_ae_suppress_file" ]; then
+          _atomic_write "$_ae_suppress_file" "$SCAN_TIME"
+          _log_error_wd "ANOMALY" "Worker $i PROMPT_STUCK — cooldown hit (3 attempts in 300s), escalating to Manager" "window=$TARGET_WINDOW"
+          # Escalate via message file to Manager
+          _ae_msg_dir="${RUNTIME_DIR}/messages"
+          mkdir -p "$_ae_msg_dir" 2>/dev/null || true
+          _ae_mgr_safe="${SESSION_SAFE}_${TARGET_WINDOW}_0"
+          _ae_msg_file="${_ae_msg_dir}/${_ae_mgr_safe}_$(date +%s)_$$.msg"
+          printf 'FROM: watchdog\nSUBJECT: prompt_stuck_escalation\nWorker pane %s.%s is stuck at a prompt. Auto-Enter failed after 3 attempts. Manual intervention needed — check the pane and resolve the stuck prompt.\n' \
+            "$TARGET_WINDOW" "$i" > "${_ae_msg_file}.tmp" 2>/dev/null && mv "${_ae_msg_file}.tmp" "$_ae_msg_file" 2>/dev/null
+        fi
+      fi
       ;;
     *"accept edits on"*)
       _anomaly_type="WRONG_MODE"
@@ -382,10 +420,20 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
       _anomaly_type="QUEUED_INPUT"
       ;;
   esac
+  # Clear suppression when state changes away from PROMPT_STUCK
+  if [ "$_anomaly_type" != "PROMPT_STUCK" ]; then
+    rm -f "${RUNTIME_DIR}/watchdog/suppress_stuck_${TARGET_WINDOW}_${i}" 2>/dev/null
+    rm -f "${RUNTIME_DIR}/watchdog/auto_enter_${TARGET_WINDOW}_${i}.count" 2>/dev/null
+  fi
   if [ -n "$_anomaly_type" ]; then
+    # Suppress repeated PROMPT_STUCK logging after escalation
+    _ae_do_log="true"
+    if [ "$_anomaly_type" = "PROMPT_STUCK" ] && [ -f "${RUNTIME_DIR}/watchdog/suppress_stuck_${TARGET_WINDOW}_${i}" ]; then
+      _ae_do_log="false"
+    fi
     echo "PANE ${i} ${_anomaly_type}"
     SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}ANOMALY ${i} ${_anomaly_type}${NL}"
-    _log_error_wd "ANOMALY" "Worker $i ${_anomaly_type}" "window=$TARGET_WINDOW"
+    [ "$_ae_do_log" = "true" ] && _log_error_wd "ANOMALY" "Worker $i ${_anomaly_type}" "window=$TARGET_WINDOW"
   fi
 
   # CPU time detection

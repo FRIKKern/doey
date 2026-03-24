@@ -29,6 +29,31 @@ _json_str() {
   fi
 }
 
+# Check if an rm command targets a dangerous path with recursive+force flags.
+# Handles any flag ordering: rm -rf, rm -fr, rm -r -f, rm --recursive --force, etc.
+_is_destructive_rm() {
+  local cmd="$1"
+  case "$cmd" in *"rm "*) ;; *) return 1 ;; esac
+  local rm_part
+  rm_part=$(printf '%s' "$cmd" | sed 's/.*rm[[:space:]]/rm /;s/[;&|].*//')
+  local has_r=false has_f=false
+  for token in $rm_part; do
+    case "$token" in
+      --recursive) has_r=true ;;
+      --force) has_f=true ;;
+      -*)
+        case "$token" in -*r*|-*R*) has_r=true ;; esac
+        case "$token" in -*f*) has_f=true ;; esac
+        ;;
+    esac
+  done
+  "$has_r" && "$has_f" || return 1
+  case "$rm_part" in
+    *" /"*|*" ~"*|*' $HOME'*|*" /Users/"*|*" /home/"*) return 0 ;;
+  esac
+  return 1
+}
+
 # Check command against blocked patterns; sets MSG or returns 1
 _check_blocked() {
   local cmd="$1"
@@ -36,13 +61,17 @@ _check_blocked() {
   case "$cmd" in
     *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
       MSG="git/gh commands" ;;
-    *"rm -rf /"*|*"rm -rf ~"*|*'rm -rf $HOME'*|*"rm -rf /Users/"*|*"rm -rf /home/"*)
-      MSG="destructive rm" ;;
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
     *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
       MSG="tmux commands" ;;
-    *) return 1 ;;
+    *)
+      if _is_destructive_rm "$cmd"; then
+        MSG="destructive rm"
+      else
+        return 1
+      fi
+      ;;
   esac
 }
 
