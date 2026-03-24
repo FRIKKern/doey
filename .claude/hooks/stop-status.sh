@@ -3,6 +3,7 @@
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
+_DOEY_HOOK_NAME="stop-status"
 
 # Block workers with unfinished research reports
 if is_worker && ! is_reserved; then
@@ -20,10 +21,12 @@ is_reserved && STOP_STATUS="RESERVED"
 _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
 write_pane_status "${RUNTIME_DIR}/status/${PANE_SAFE}.status" "$STOP_STATUS"
+[ ! -f "${RUNTIME_DIR}/status/${PANE_SAFE}.status" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$PANE_SAFE status=$STOP_STATUS"
 
 # Dual-write using short DOEY_PANE_ID for new-style lookups
 if [ -n "${DOEY_PANE_ID:-}" ]; then
   write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "$STOP_STATUS"
+  [ ! -f "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$DOEY_PANE_ID status=$STOP_STATUS"
   _log "stop-status: ${DOEY_PANE_ID} -> $STOP_STATUS (dual-write)"
 fi
 
