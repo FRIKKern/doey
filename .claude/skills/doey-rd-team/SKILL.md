@@ -1,11 +1,11 @@
 ---
 name: doey-rd-team
-description: Spawn a Doey R&D team — audits, develops, and tests Doey itself in a worktree-isolated window. Use when you need to "start a doey development team", "audit and improve doey", or "spawn an R&D team".
+description: Spawn a Doey R&D product team — Brain, Platform Expert, Claude Expert, Critic. Works on the live codebase so it sees all changes in real time.
 ---
 
 ## Usage
-`/doey-rd-team` — spawn full R&D team (audit + dev workers)
-`/doey-rd-team audit` — audit only (no dev workers, just scanning)
+`/doey-rd-team` — spawn full R&D product team (audit + improve)
+`/doey-rd-team audit` — audit only (read, don't fix)
 
 ## Context
 
@@ -14,49 +14,33 @@ description: Spawn a Doey R&D team — audits, develops, and tests Doey itself i
 
 ## Prompt
 
-Spawn a Doey R&D team in a git worktree of `~/Documents/github/doey`. **Do NOT ask for confirmation.** Live session files are READ-ONLY.
+Spawn the Doey R&D Product Team on the **live project directory**. No worktree — the team sees all changes in real time. **Do NOT ask for confirmation.**
 
-### Step 1: Resolve Doey repo and create worktree
+### Step 1: Load session
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
-
-DOEY_REPO="$HOME/Documents/github/doey"
-[ ! -d "$DOEY_REPO/.git" ] && { echo "ERROR: Doey repo not found at $DOEY_REPO"; exit 1; }
-
-# Create worktree for isolated development
-WT_BRANCH="doey/rd-$(date +%m%d-%H%M)"
-WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/rd-$(date +%m%d-%H%M)"
-mkdir -p "$(dirname "$WT_DIR")"
-
-if ! git -C "$DOEY_REPO" worktree add "$WT_DIR" -b "$WT_BRANCH" 2>&1; then
-  echo "ERROR: Failed to create worktree"
-  exit 1
-fi
-echo "Worktree created: $WT_DIR (branch: $WT_BRANCH)"
-
-# Copy gitignored config if present
-[ -f "${DOEY_REPO}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${DOEY_REPO}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"
+echo "Project: $PROJECT_DIR (branch: $(git -C "$PROJECT_DIR" branch --show-current 2>/dev/null))"
 ```
 
-### Step 2: Create new tmux window with dynamic grid
+### Step 2: Create new tmux window with 2×2 grid
 
-Use a 2×2 grid: Brain + 3 specialists = 4 panes.
+Brain + 3 specialists = 4 panes.
 
 ```bash
 GRID="dynamic"; TOTAL=4; WORKER_COUNT=3
 
-tmux new-window -t "$SESSION_NAME" -n "RD" -c "$WT_DIR"
+tmux new-window -t "$SESSION_NAME" -n "RD" -c "$PROJECT_DIR"
 sleep 0.5
 NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
 
 # 2×2 grid: split horizontally, then split each half vertically
-tmux split-window -h -t "$SESSION_NAME:$NEW_WIN.0" -c "$WT_DIR"
+tmux split-window -h -t "$SESSION_NAME:$NEW_WIN.0" -c "$PROJECT_DIR"
 sleep 0.1
-tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.0" -c "$WT_DIR"
+tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.0" -c "$PROJECT_DIR"
 sleep 0.1
-tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.1" -c "$WT_DIR"
+tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.1" -c "$PROJECT_DIR"
 sleep 0.3
 
 # Name panes
@@ -64,10 +48,7 @@ tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.0" -T "Brain"
 tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.1" -T "Platform"
 tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.2" -T "Claude"
 tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.3" -T "Critic"
-WORKER_PANES_LIST=""
-for i in $(seq 1 $WORKER_COUNT); do
-  [ -n "$WORKER_PANES_LIST" ] && WORKER_PANES_LIST="${WORKER_PANES_LIST},${i}" || WORKER_PANES_LIST="${i}"
-done
+WORKER_PANES_LIST="1,2,3"
 ```
 
 ### Step 3: Write team env
@@ -76,7 +57,7 @@ done
 TEAM_FILE="${RUNTIME_DIR}/team_${NEW_WIN}.env"
 cat > "${TEAM_FILE}.tmp" << TEAM_EOF
 SESSION_NAME=${SESSION_NAME}
-PROJECT_DIR=${WT_DIR}
+PROJECT_DIR=${PROJECT_DIR}
 PROJECT_NAME=${PROJECT_NAME}
 WINDOW_INDEX=${NEW_WIN}
 GRID=${GRID}
@@ -85,9 +66,8 @@ MANAGER_PANE=0
 WORKER_PANES=${WORKER_PANES_LIST}
 WORKER_COUNT=${WORKER_COUNT}
 WATCHDOG_PANE=""
-WORKTREE_DIR="${WT_DIR}"
-WORKTREE_BRANCH="${WT_BRANCH}"
-DOEY_REPO="${DOEY_REPO}"
+WORKTREE_DIR=""
+WORKTREE_BRANCH=""
 RD_TEAM=true
 TEAM_EOF
 mv "${TEAM_FILE}.tmp" "$TEAM_FILE"
@@ -110,23 +90,24 @@ mv "$TMPENV" "${RUNTIME_DIR}/session.env"
 ```bash
 RD_PROMPT="${RUNTIME_DIR}/rd-worker-prompt.md"
 cat > "$RD_PROMPT" << 'RDPROMPT'
-# Doey R&D Worker
+# Doey R&D Product Team Member
 
-You are in a **git worktree** — an isolated copy of the Doey codebase.
+You are working on the **live project directory** — the same codebase other teams are editing.
 
 ## Rules
-1. Changes do NOT affect the running session. Never run `doey` commands here.
-2. Commit frequently: `fix(shell): <desc>`, `feat(skill): <desc>`, `test: <desc>`.
-3. Stay inside the worktree directory. No remote push without approval.
+1. Coordinate edits carefully — other workers may be editing files concurrently.
+2. Read the error log at $RUNTIME_DIR/errors/errors.log for live runtime issues.
+3. Check `git diff` and `git log` to see what other teams have changed recently.
+4. No remote push without approval from the Brain.
 
 ## Specialists
-Each worker has a specialized agent loaded that defines its domain expertise and output format.
+Each team member has a specialized agent defining their domain expertise and review criteria.
 
 ## Dev workflow
-Read → understand context → minimal fix → descriptive commit → verify (`bash -n doey.sh`)
+Read current state → check recent changes → analyze in your domain → propose or fix → verify (`bash -n` for .sh files)
 
 ## Error logs
-If `errors-snapshot.log` exists in the worktree root, it contains runtime errors from the live session.
+The live error log at `$RUNTIME_DIR/errors/errors.log` contains runtime errors from the current session.
 Format: `[timestamp] CATEGORY | pane_id | role | hook | tool | detail | message`
 Categories: TOOL_BLOCKED, LINT_ERROR, ANOMALY, HOOK_ERROR, DELIVERY_FAILED
 RDPROMPT
@@ -134,28 +115,30 @@ RDPROMPT
 
 ### Step 5: Launch Claude instances
 
+Use 3s stagger to prevent auth session exhaustion.
+
 ```bash
 # Brain (pane 0)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" \
   "claude --dangerously-skip-permissions --model opus --name \"Brain\" --agent \"doey-product-brain\"" Enter
-sleep 1
+sleep 3
 
 # Platform Expert (pane 1)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.1" \
   "claude --dangerously-skip-permissions --model opus --name \"Platform\" --agent \"doey-platform-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
-sleep 0.5
+sleep 3
 
 # Claude Expert (pane 2)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.2" \
   "claude --dangerously-skip-permissions --model opus --name \"Claude\" --agent \"doey-claude-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
-sleep 0.5
+sleep 3
 
 # Critic (pane 3)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.3" \
   "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
-sleep 0.5
+sleep 1
 
-# Watchdog — find free slot via session.env WDG_SLOT entries
+# Watchdog — find free slot
 WDG_SLOT=""
 for _sn in 1 2 3 4 5 6; do
   _slot_val=$(grep "^WDG_SLOT_${_sn}=" "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
@@ -174,7 +157,7 @@ if [ -z "$WDG_SLOT" ]; then
   _slot_count=$(grep -c '^WDG_SLOT_[0-9]*=' "${RUNTIME_DIR}/session.env" 2>/dev/null || echo 0)
   if [ "$_slot_count" -lt 6 ]; then
     _last_wdg_slot=$(grep '^WDG_SLOT_[0-9]*=' "${RUNTIME_DIR}/session.env" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '"')
-    tmux split-window -h -t "${SESSION_NAME}:${_last_wdg_slot}" -c "$WT_DIR"
+    tmux split-window -h -t "${SESSION_NAME}:${_last_wdg_slot}" -c "$PROJECT_DIR"
     sleep 0.3
     _new_slot_num=$((_slot_count + 1))
     WDG_SLOT="0.$((_new_slot_num + 1))"
@@ -197,7 +180,7 @@ fi
 ```bash
 sleep 8
 NOT_READY=0; DOWN_PANES=""
-for i in 0 $(seq 1 $WORKER_COUNT); do
+for i in 0 1 2 3; do
   CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null)
   OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null)
   if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then
@@ -207,19 +190,13 @@ done
 [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 ```
 
-Copy runtime error log into worktree for analysis:
-
-```bash
-[ -f "${RUNTIME_DIR}/errors/errors.log" ] && cp "${RUNTIME_DIR}/errors/errors.log" "${WT_DIR}/errors-snapshot.log" 2>/dev/null && echo "Copied error log ($(wc -l < "${WT_DIR}/errors-snapshot.log") lines)" || echo "No error log to copy"
-```
-
-Dispatch audit task to Manager via load-buffer:
+Dispatch audit task to Brain via load-buffer:
 
 ```bash
 MGR_PANE="${SESSION_NAME}:${NEW_WIN}.0"
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'AUDIT_TASK'
-Run a full Doey R&D audit. You are in a worktree — safe to read and edit.
+Run a Doey R&D audit on the live codebase. You can read everything, and see real-time changes from other teams.
 
 You have 3 specialist workers:
 - Pane 1 (Platform Expert): tmux internals, bash 3.2 portability, shell scripts, race conditions
@@ -231,9 +208,11 @@ Phase 1 — dispatch specialists in parallel:
 - Claude Expert (pane 2): audit .claude/hooks/* (hook semantics, exit codes), agents/*.md, .claude/skills/doey-*/ for correctness
 - Critic (pane 3): run bash -n on all .sh files, validate agent frontmatter, run tests/, check docs/ vs code accuracy
 
-If errors-snapshot.log exists in the worktree root, Platform Expert and Claude Expert should both analyze it:
+Check the live error log at /tmp/doey/*/errors/errors.log for runtime issues:
 Platform Expert focuses on tmux/bash errors, Claude Expert on hook/agent errors.
 Critic validates the error categorization and proposes product fixes.
+
+Also check `git log --oneline -10` and `git diff` to see what other teams are working on right now.
 
 Phase 2: Consolidate findings. Each specialist proposes fixes in their domain. Critic reviews all proposals.
 Phase 3: Implement fixes (one specialist per file, separate commits). Critic runs regression checks. Report to Session Manager.
@@ -248,12 +227,12 @@ rm "$TASKFILE"
 
 ### Step 7: Report
 
-Output: window number, worktree path + branch, pane layout, boot status. Include merge protocol:
-`cd ~/Documents/github/doey && git merge ${WT_BRANCH}` → `/doey-reinstall` → `/doey-kill-window ${NEW_WIN}`
+Output: window number, project dir, pane layout, boot status. Include teardown command: `/doey-kill-window ${NEW_WIN}`
 
 ### Rules
 
-- Always worktree the DOEY REPO, not the current project
+- Work on the LIVE project directory, not a worktree — the team needs to see real-time changes
 - Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic, Watchdog in Dashboard. Window named "RD"
-- Team env includes `RD_TEAM=true` and `DOEY_REPO`
+- Team env includes `RD_TEAM=true`
+- 3s stagger between Claude launches to prevent auth exhaustion
 - Never hardcode window indices. Bash 3.2 compatible.
