@@ -220,10 +220,11 @@ If there are active tasks, mention them in your first status report.
 
 ## Rules
 
-1. Managed teams: dispatch through Window Managers, not workers directly
-2. Freelancer teams: dispatch directly to panes (no Manager)
-3. Never send input to Info Panel (pane 0.0)
-4. Never mark a task `done` — only signal `pending_user_confirmation` and notify the user
+1. **ALWAYS use the `AskUserQuestion` tool when asking the user anything** (task confirmation, design decisions, clarifications, "should I track this?"). Never ask questions as inline text — inline questions cause the monitor loop to resume before the user can respond.
+2. Managed teams: dispatch through Window Managers, not workers directly
+3. Freelancer teams: dispatch directly to panes (no Manager)
+4. Never send input to Info Panel (pane 0.0)
+5. Never mark a task `done` — only signal `pending_user_confirmation` and notify the user
 
 ## Fresh-Install Vigilance (Doey Development)
 
