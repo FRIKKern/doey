@@ -198,6 +198,19 @@ _read_team_key() {
   echo "$val"
 }
 
+team_role() {
+  if [ -n "${DOEY_TEAM_ROLE:-}" ]; then
+    echo "$DOEY_TEAM_ROLE"
+  else
+    echo "${DOEY_ROLE:-unknown}"
+  fi
+}
+
+_read_teamdef_key() {
+  local envfile="$1" key="$2"
+  grep "^${key}=" "$envfile" 2>/dev/null | cut -d= -f2-
+}
+
 is_watchdog() {
   [ -n "${_DOEY_IS_WD+x}" ] && return "$_DOEY_IS_WD"
   _DOEY_IS_WD=1

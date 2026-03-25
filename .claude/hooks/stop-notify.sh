@@ -50,6 +50,103 @@ _notify_pane() {
   fi
 }
 
+# Dispatch workflow hooks for team-definition-based teams.
+# Routes messages to the next pane in the workflow chain.
+_dispatch_workflow_hooks() {
+  local runtime_dir="$1" win_idx="$2" pane_idx="$3"
+  local team_env="${runtime_dir}/team_${win_idx}.env"
+
+  # Fast exit: no team def → nothing to do
+  local team_def
+  team_def=$(_read_team_key "$team_env" TEAM_DEF 2>/dev/null) || return 0
+  [ -n "$team_def" ] || return 0
+
+  local teamdef_env="${runtime_dir}/teamdef_${team_def}.env"
+  [ -f "$teamdef_env" ] || return 0
+
+  # Get this pane's role
+  local my_role
+  my_role=$(grep "^PANE_${pane_idx}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-)
+  [ -n "$my_role" ] || return 0
+
+  # Check if team has a manager
+  local mgr_pane
+  mgr_pane=$(_read_team_key "$team_env" MANAGER_PANE 2>/dev/null) || mgr_pane=""
+
+  # Loop through WORKFLOW_N rules (format: trigger|from|to|subject)
+  local i=0
+  while true; do
+    local rule
+    rule=$(grep "^WORKFLOW_${i}=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-)
+    [ -n "$rule" ] || break
+    i=$((i + 1))
+
+    local trigger from_role to_role subject
+    trigger=$(printf '%s' "$rule" | cut -d'|' -f1)
+    from_role=$(printf '%s' "$rule" | cut -d'|' -f2)
+    to_role=$(printf '%s' "$rule" | cut -d'|' -f3)
+    subject=$(printf '%s' "$rule" | cut -d'|' -f4)
+
+    # Only match stop trigger from our role
+    [ "$trigger" = "stop" ] && [ "$from_role" = "$my_role" ] || continue
+
+    # Find target pane
+    local target=""
+    if [ -n "$mgr_pane" ]; then
+      # Managed team: route through manager
+      target="${SESSION_NAME}:${win_idx}.${mgr_pane}"
+    else
+      # Freelancer team: find target pane by scanning roles
+      local p=0
+      while true; do
+        local p_role
+        p_role=$(grep "^PANE_${p}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-)
+        [ -n "$p_role" ] || break
+        if [ "$p_role" = "$to_role" ]; then
+          target="${SESSION_NAME}:${win_idx}.${p}"
+          break
+        fi
+        p=$((p + 1))
+      done
+    fi
+
+    [ -n "$target" ] || continue
+
+    # Build message body
+    local result_file="${runtime_dir}/results/pane_${win_idx}_${pane_idx}.json"
+    local body="Workflow rule matched: ${from_role} → ${to_role}"
+    if [ -f "$result_file" ]; then
+      local summary
+      summary=$(head -20 "$result_file" 2>/dev/null) || summary=""
+      [ -n "$summary" ] && body="${body}
+${summary}"
+    fi
+
+    # Atomic write message file
+    local target_safe
+    target_safe=$(printf '%s' "$target" | tr ':.' '_')
+    local msg_dir="${runtime_dir}/messages"
+    local trig_dir="${runtime_dir}/triggers"
+    mkdir -p "$msg_dir" "$trig_dir" 2>/dev/null || true
+
+    local timestamp
+    timestamp="$(date +%s)_$$_wf${i}"
+    local msg_file="${msg_dir}/${target_safe}_${timestamp}.msg"
+    local tmp_file="${msg_file}.tmp"
+
+    if printf 'FROM: %s\nSUBJECT: workflow:%s\nWORKFLOW_TARGET: %s\nWORKFLOW_SOURCE: %s\n%s\n' \
+         "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "$subject" "$to_role" "$my_role" "$body" \
+         > "$tmp_file" 2>/dev/null \
+       && mv "$tmp_file" "$msg_file" 2>/dev/null; then
+      # Touch trigger to wake recipient
+      touch "${trig_dir}/${target_safe}.trigger" 2>/dev/null || true
+      type _debug_log >/dev/null 2>&1 && _debug_log workflow "dispatched" "rule=${from_role}->${to_role}" "subject=${subject}" "target=${target}"
+    else
+      rm -f "$tmp_file" 2>/dev/null || true
+    fi
+  done
+}
+
 # --- Worker: notify its Window Manager (or Session Manager for freelancers) ---
 if is_worker; then
   _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
@@ -95,6 +192,9 @@ if is_worker; then
     type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${MGR_PANE}" "type=worker_finished" "delivery=file" "success=true"
     _log "stop-notify: sent worker_finished to manager at $MGR_PANE"
   fi
+
+  # Dispatch workflow hooks if this team has a team definition
+  _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
   exit 0
 fi
 
