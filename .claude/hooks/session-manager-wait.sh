@@ -16,6 +16,7 @@ SM_PANE="${SM_PANE:-0.1}"
 SM_SAFE="${SESSION_NAME//[:.]/_}_${SM_PANE//[:.]/_}"
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/session_manager_trigger"
+TRIGGER2="${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger"
 
 # Debug mode check
 _SM_DBG=false
@@ -60,8 +61,8 @@ _mark_results_seen() {
 }
 
 # Pre-sleep check: catch messages/triggers that arrived before entering the loop
-if [ -f "$TRIGGER" ]; then
-  rm -f "$TRIGGER" 2>/dev/null
+if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
+  rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
   _sm_dbg_wake "trigger_presleep" "0"
   echo "TRIGGERED"
   exit 0
@@ -88,9 +89,9 @@ fi
 
 i=0
 while [ "$i" -lt 30 ]; do
-  # Wake on explicit trigger
-  if [ -f "$TRIGGER" ]; then
-    rm -f "$TRIGGER" 2>/dev/null
+  # Wake on explicit trigger (check both legacy and per-pane paths)
+  if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
+    rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
     _sm_dbg_wake "trigger" "$i"
     echo "TRIGGERED"
     exit 0
