@@ -1,6 +1,6 @@
 ---
 name: visual-a11y
-model: sonnet
+model: opus
 color: "#2ECC71"
 description: "UX and accessibility reviewer — keyboard flow, semantics, contrast, user impact from artifacts"
 ---

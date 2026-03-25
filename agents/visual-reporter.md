@@ -1,6 +1,6 @@
 ---
 name: visual-reporter
-model: sonnet
+model: opus
 color: "#F39C12"
 description: "Defect reporter — groups findings, deduplicates root causes, produces ticket-ready output"
 ---

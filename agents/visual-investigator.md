@@ -1,6 +1,6 @@
 ---
 name: visual-investigator
-model: sonnet
+model: opus
 color: "#E74C3C"
 description: "DevTools browser operator — navigates, captures evidence, reproduces issues via Chrome DevTools MCP"
 ---
