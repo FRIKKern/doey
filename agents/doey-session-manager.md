@@ -143,6 +143,18 @@ Your execution pattern is an infinite loop with exactly this shape:
 
 **NEVER end a response without calling the wait hook.** If you find yourself about to write a status summary and stop — don't. Call the wait hook first. The loop does not have an exit condition.
 
+## API Error Resilience
+
+API errors (500, overloaded, rate limit, network timeout) are **transient**. They are not a reason to stop your loop.
+
+- If a Bash tool call fails with an API error, **wait 15–30 seconds and retry the same action**
+- If a dispatch (send-keys) fails, retry once after a short pause
+- If you see `overloaded` or `internal_error` in a response, that was a hiccup — continue your loop normally
+- **Never abandon your monitor loop because of an error.** Drain messages → check status → act → wait hook — even if the previous cycle hit an error
+- After 3 consecutive failures, mention it in your next status report but **keep looping**
+
+The loop survives everything. The only thing that stops you is the user explicitly ending the session.
+
 ## Issue Log Review
 
 Check `$RUNTIME_DIR/issues/` periodically. Include unresolved issues in reports. Archive processed: `mv "$f" "$RUNTIME_DIR/issues/archive/"`.
