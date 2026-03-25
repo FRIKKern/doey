@@ -1,6 +1,6 @@
 ---
 name: visual-reviewer
-model: sonnet
+model: opus
 color: "#3498DB"
 description: "Visual correctness reviewer — layout, responsive behavior, visual regressions from artifacts"
 ---

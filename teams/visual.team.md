@@ -6,7 +6,7 @@ workers: 4
 type: local
 watchdog: default
 manager_model: opus
-worker_model: sonnet
+worker_model: opus
 
 panes:
   0: { role: manager, agent: visual-manager, name: "Visual Manager" }
