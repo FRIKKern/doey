@@ -502,6 +502,120 @@ _render_team_blueprint() {
   _TEAM_ITEM_COUNT=0
   local _ri=0
 
+  # --- Section 0: Running Teams (live) ---
+  printf '\n  %b─── Running Teams %b%s%b\n' \
+    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 19 )))" "${C_RESET}"
+
+  local _rt_session _rt_runtime _rt_windows
+  _rt_session=$(tmux show-environment -t "${SESSION_NAME:-}" DOEY_RUNTIME 2>/dev/null | cut -d= -f2- || true)
+  if [ -n "$_rt_session" ] && [ -n "${SESSION_NAME:-}" ]; then
+    _rt_windows=$(grep '^TEAM_WINDOWS=' "${_rt_session}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+    if [ -n "$_rt_windows" ]; then
+      local _rt_w _rt_tname _rt_ttype _rt_wcount _rt_tdef
+      for _rt_w in $(echo "$_rt_windows" | tr ',' ' ' | sort -u -n); do
+        local _rt_env="${_rt_session}/team_${_rt_w}.env"
+        [ -f "$_rt_env" ] || continue
+        _rt_tname=$(grep '^TEAM_NAME=' "$_rt_env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+        _rt_ttype=$(grep '^TEAM_TYPE=' "$_rt_env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+        _rt_wcount=$(grep '^WORKER_COUNT=' "$_rt_env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+        _rt_tdef=$(grep '^TEAM_DEF=' "$_rt_env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+        [ -z "$_rt_tname" ] && _rt_tname="${_rt_tdef:-team}"
+        [ -z "$_rt_ttype" ] && _rt_ttype="managed"
+        [ -z "$_rt_wcount" ] && _rt_wcount="?"
+
+        local _rt_label _rt_color
+        if [ "$_rt_ttype" = "freelancer" ]; then
+          _rt_label="freelancer"
+          _rt_color="${C_GREEN}"
+        else
+          _rt_label="${_rt_ttype:-managed}"
+          _rt_color="${C_CYAN}"
+        fi
+
+        local _is_sel=false
+        [ "$_ri" -eq "$_CURSOR_POS" ] && _is_sel=true
+        if [ "$_is_sel" = true ]; then
+          printf '  %b▸ W%-2s %-12s %-12s %s workers%b\n' \
+            "${C_REVERSE}" "$_rt_w" "$_rt_tname" "$_rt_label" "$_rt_wcount" "${C_RESET}"
+        else
+          printf '  %b W%-2s%b %b%-12s%b %b%-12s%b %b%s workers%b\n' \
+            "${C_BOLD_WHITE}" "$_rt_w" "${C_RESET}" \
+            "${C_BOLD_WHITE}" "$_rt_tname" "${C_RESET}" \
+            "$_rt_color" "$_rt_label" "${C_RESET}" \
+            "${C_DIM}" "$_rt_wcount" "${C_RESET}"
+        fi
+        _TEAM_ITEMS="${_TEAM_ITEMS}running:${_rt_w} "
+        _ri=$((_ri + 1))
+      done
+    else
+      printf '  %b(no teams running)%b\n' "${C_DIM}" "${C_RESET}"
+    fi
+  else
+    printf '  %b(no active session)%b\n' "${C_DIM}" "${C_RESET}"
+  fi
+
+  # --- Section 0b: Launch on Demand ---
+  printf '\n  %b─── Launch Team %b%s%b  %b[l] to launch now%b\n' \
+    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 34 )))" "${C_RESET}" \
+    "${C_BOLD_GREEN}" "${C_RESET}"
+
+  # Premade teams available to launch
+  local _launch_found=false
+  local _launch_seen=" "
+  local _lt_dir _lt_f _lt_name _lt_desc
+  for _lt_dir in "${HOME}/.local/share/doey/teams" "${_proj_dir}/teams" "${_proj_dir}/.doey/teams"; do
+    [ -d "$_lt_dir" ] || continue
+    for _lt_f in "$_lt_dir"/*.team.md; do
+      [ -f "$_lt_f" ] || continue
+      _lt_name=$(grep '^name:' "$_lt_f" | head -1 | sed 's/name:[[:space:]]*//;s/"//g')
+      [ -z "$_lt_name" ] && _lt_name=$(basename "$_lt_f" .team.md)
+      case "$_launch_seen" in
+        *" ${_lt_name} "*) continue ;;
+      esac
+      _launch_seen="${_launch_seen}${_lt_name} "
+
+      _lt_desc=$(grep '^description:' "$_lt_f" | head -1 | sed 's/description:[[:space:]]*//;s/"//g')
+      [ -z "$_lt_desc" ] && _lt_desc="(no description)"
+
+      local _is_sel=false
+      [ "$_ri" -eq "$_CURSOR_POS" ] && _is_sel=true
+      if [ "$_is_sel" = true ]; then
+        printf '  %b▸ ⚡ %-18s %s%b\n' \
+          "${C_REVERSE}" "$_lt_name" "$(_truncate "$_lt_desc" $(( _cw - 28 )))" "${C_RESET}"
+      else
+        printf '  %b⚡%b %b%-18s%b %b%s%b\n' \
+          "${C_BOLD_YELLOW}" "${C_RESET}" \
+          "${C_BOLD_CYAN}" "$_lt_name" "${C_RESET}" \
+          "${C_DIM}" "$(_truncate "$_lt_desc" $(( _cw - 28 )))" "${C_RESET}"
+      fi
+      _TEAM_ITEMS="${_TEAM_ITEMS}launch:${_lt_name} "
+      _ri=$((_ri + 1))
+      _launch_found=true
+    done
+  done
+  # Built-in launch types
+  local _lt_builtins="local freelancer worktree"
+  local _lt_blabel _lt_bdesc
+  for _lt_b in $_lt_builtins; do
+    case "$_lt_b" in
+      local)      _lt_blabel="local team";      _lt_bdesc="Standard managed team" ;;
+      freelancer) _lt_blabel="freelancer pool";  _lt_bdesc="Independent worker pool" ;;
+      worktree)   _lt_blabel="worktree team";    _lt_bdesc="Isolated git worktree" ;;
+    esac
+    local _is_sel=false
+    [ "$_ri" -eq "$_CURSOR_POS" ] && _is_sel=true
+    if [ "$_is_sel" = true ]; then
+      printf '  %b▸ ⚡ %-18s %s%b\n' "${C_REVERSE}" "$_lt_blabel" "$_lt_bdesc" "${C_RESET}"
+    else
+      printf '  %b⚡%b %b%-18s%b %b%s%b\n' \
+        "${C_BOLD_YELLOW}" "${C_RESET}" \
+        "${C_BOLD_WHITE}" "$_lt_blabel" "${C_RESET}" \
+        "${C_DIM}" "$_lt_bdesc" "${C_RESET}"
+    fi
+    _TEAM_ITEMS="${_TEAM_ITEMS}launch_builtin:${_lt_b} "
+    _ri=$((_ri + 1))
+  done
+
   # Derive lineup
   _derive_effective_lineup
 
@@ -1031,15 +1145,24 @@ _render_footer() {
       _foot_item=$(_team_item_at "$_CURSOR_POS" 2>/dev/null) || true
       case "$_foot_item" in
         startup:*)
-          printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b details  %b[d]%b remove  %b[r]%b reload  %b[1-3]%b views\n' \
+          printf '  %b[↑↓/jk]%b navigate  %b[d]%b remove  %b[r]%b reload  %b[1-3]%b views\n' \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
+          ;;
+        running:*)
+          printf '  %b[↑↓/jk]%b navigate  %b[r]%b reload  %b[1-3]%b views\n' \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
             "${C_BOLD_CYAN}" "${C_RESET}"
           ;;
-        *)
-          printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b add to lineup  %b[r]%b reload  %b[1-3]%b views\n' \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+        launch:*|launch_builtin:*)
+          printf '  %b[↑↓/jk]%b navigate  %b[l/Enter]%b launch now  %b[r]%b reload  %b[1-3]%b views\n' \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_GREEN}" "${C_RESET}" \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
+          ;;
+        *)
+          printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b add to lineup  %b[l]%b launch now  %b[1-3]%b views\n' \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+            "${C_BOLD_GREEN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
           ;;
       esac
       ;;
@@ -1190,6 +1313,32 @@ _handle_key() {
               _STATUS_MSG="Use [d] to remove startup teams"
               _STATUS_EXPIRE=$(($(date +%s) + 2))
               ;;
+            launch:*)
+              local _ltname
+              _ltname=$(echo "$_item" | cut -d: -f2)
+              _STATUS_MSG="⚡ Launching ${_ltname}..."
+              _STATUS_EXPIRE=$(($(date +%s) + 5))
+              bash -c "doey add-team \"$_ltname\"" >/dev/null 2>&1 &
+              ;;
+            launch_builtin:local)
+              _STATUS_MSG="⚡ Launching local team..."
+              _STATUS_EXPIRE=$(($(date +%s) + 5))
+              bash -c "doey add-window" >/dev/null 2>&1 &
+              ;;
+            launch_builtin:freelancer)
+              _STATUS_MSG="⚡ Launching freelancer pool..."
+              _STATUS_EXPIRE=$(($(date +%s) + 5))
+              bash -c "doey add-window --freelancer" >/dev/null 2>&1 &
+              ;;
+            launch_builtin:worktree)
+              _STATUS_MSG="⚡ Launching worktree team..."
+              _STATUS_EXPIRE=$(($(date +%s) + 5))
+              bash -c "doey add-window --worktree main" >/dev/null 2>&1 &
+              ;;
+            running:*)
+              _STATUS_MSG="Team already running — use [d] to kill"
+              _STATUS_EXPIRE=$(($(date +%s) + 2))
+              ;;
           esac
           ;;
         agents)
@@ -1234,6 +1383,48 @@ _handle_key() {
           fi
           ;;
       esac
+      ;;
+
+    # Launch team now
+    l)
+      if [ "$_CURRENT_VIEW" = "teams" ]; then
+        local _item
+        _item=$(_team_item_at "$_CURSOR_POS") || return
+        case "$_item" in
+          launch:*)
+            local _ltname
+            _ltname=$(echo "$_item" | cut -d: -f2)
+            _STATUS_MSG="⚡ Launching ${_ltname}..."
+            _STATUS_EXPIRE=$(($(date +%s) + 5))
+            bash -c "doey add-team \"$_ltname\"" >/dev/null 2>&1 &
+            ;;
+          launch_builtin:local)
+            _STATUS_MSG="⚡ Launching local team..."
+            _STATUS_EXPIRE=$(($(date +%s) + 5))
+            bash -c "doey add-window" >/dev/null 2>&1 &
+            ;;
+          launch_builtin:freelancer)
+            _STATUS_MSG="⚡ Launching freelancer pool..."
+            _STATUS_EXPIRE=$(($(date +%s) + 5))
+            bash -c "doey add-window --freelancer" >/dev/null 2>&1 &
+            ;;
+          launch_builtin:worktree)
+            _STATUS_MSG="⚡ Launching worktree team..."
+            _STATUS_EXPIRE=$(($(date +%s) + 5))
+            bash -c "doey add-window --worktree main" >/dev/null 2>&1 &
+            ;;
+          running:*)
+            local _rtw
+            _rtw=$(echo "$_item" | cut -d: -f2)
+            _STATUS_MSG="Team W${_rtw} is already running"
+            _STATUS_EXPIRE=$(($(date +%s) + 2))
+            ;;
+          *)
+            _STATUS_MSG="Select a team from Launch section to launch"
+            _STATUS_EXPIRE=$(($(date +%s) + 2))
+            ;;
+        esac
+      fi
       ;;
 
     # Delete team
