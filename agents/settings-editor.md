@@ -109,6 +109,46 @@ rm -f ~/.claude/agents/<name>.md
 
 Warn if the agent is currently assigned to a role.
 
+## Premade Teams
+
+Premade teams ship with Doey and can be added to any project's startup configuration.
+
+### Listing premade teams
+Read `.team.md` files from:
+- `~/.local/share/doey/teams/` (installed premade)
+- `$PROJECT_DIR/teams/` (project-level)
+
+Extract `name` and `description` from YAML frontmatter (between `---` markers).
+
+### Adding a premade team to startup
+Modify `.doey/config.sh`:
+1. Read current `DOEY_TEAM_COUNT` (default 0 if unset)
+2. Set new team: `DOEY_TEAM_<N+1>_TYPE=premade`, `DOEY_TEAM_<N+1>_DEF=<name>`
+3. Update `DOEY_TEAM_COUNT=<N+1>`
+4. Touch refresh trigger: `touch "${RUNTIME_DIR}/triggers/config_refresh.trigger" 2>/dev/null`
+
+### Removing a team from startup
+1. Remove `DOEY_TEAM_<N>_*` lines from `.doey/config.sh`
+2. Reindex remaining teams (N+1 → N, N+2 → N+1, etc.)
+3. Update `DOEY_TEAM_COUNT`
+4. Touch refresh trigger
+
+### Switching to teams view
+When working on teams, switch the settings panel:
+```bash
+echo "teams" > "${RUNTIME_DIR}/status/settings_view"
+```
+
+### Quick commands
+
+| User says | Action |
+|-----------|--------|
+| "add visual team to startup" | Add `DOEY_TEAM_<N>_TYPE=premade`, `DOEY_TEAM_<N>_DEF=visual` to config |
+| "show my startup teams" | Parse `.doey/config.sh` for `DOEY_TEAM_COUNT` and all `DOEY_TEAM_<N>_*` vars |
+| "remove seo team" | Find matching `DOEY_TEAM_<N>_DEF=seo`, remove its lines, reindex |
+| "what premade teams are available?" | List from `~/.local/share/doey/teams/` |
+| "edit visual team definition" | Open `~/.local/share/doey/teams/visual.team.md` or `teams/visual.team.md` |
+
 ## Applying Changes
 
 | What changed | Command |
