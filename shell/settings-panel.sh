@@ -103,7 +103,7 @@ _truncate() {
 
 _render_team_blueprint() {
   local _proj_dir _agents_dir _team_count _i _type _workers _wm _mm _role _name _desc
-  local _cw
+  local _cw _def
   _proj_dir=$(_get_proj_dir)
   _agents_dir="${_proj_dir}/agents"
 
@@ -111,106 +111,121 @@ _render_team_blueprint() {
   [ "$_cw" -lt 40 ] && _cw=40
 
   _team_count="${DOEY_TEAM_COUNT:-}"
-  if [ -z "$_team_count" ]; then
-    _team_count=$(( ${DOEY_INITIAL_TEAMS:-2} + ${DOEY_INITIAL_WORKTREE_TEAMS:-0} ))
+
+  # --- Section 1: Current Startup Teams ---
+  printf '\n  %b─── Current Startup Teams %b%s%b\n' \
+    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 27 )))" "${C_RESET}"
+
+  if [ -n "$_team_count" ] && [ "$_team_count" -gt 0 ] 2>/dev/null; then
+    # Detailed per-team view when DOEY_TEAM_COUNT is set
+    local _total_workers=0 _active_defs=""
+    _i=1
+    while [ "$_i" -le "$_team_count" ]; do
+      eval "_type=\${DOEY_TEAM_${_i}_TYPE:-local}"
+      eval "_workers=\${DOEY_TEAM_${_i}_WORKERS:-}"
+      eval "_def=\${DOEY_TEAM_${_i}_DEF:-}"
+      eval "_name=\${DOEY_TEAM_${_i}_NAME:-}"
+
+      [ -z "$_workers" ] && _workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
+      _total_workers=$(( _total_workers + _workers ))
+
+      local _line_detail=""
+      case "$_type" in
+        premade)
+          # Track active defs for section 2
+          [ -n "$_def" ] && _active_defs="${_active_defs} ${_def}"
+          # Read description from the .team.md file
+          local _def_desc=""
+          local _def_file=""
+          for _dd in "${HOME}/.local/share/doey/teams/${_def}.team.md" \
+                     "${_proj_dir}/teams/${_def}.team.md" \
+                     "${_proj_dir}/.doey/teams/${_def}.team.md"; do
+            if [ -f "$_dd" ]; then _def_file="$_dd"; break; fi
+          done
+          if [ -n "$_def_file" ]; then
+            _def_desc=$(grep '^description:' "$_def_file" | head -1 | sed 's/description:[[:space:]]*"//;s/"$//')
+          fi
+          [ -z "$_def_desc" ] && _def_desc="(no description)"
+          _line_detail=$(printf '%b%-10s%b %b%-12s%b %b%s%b' \
+            "${C_CYAN}" "premade" "${C_RESET}" \
+            "${C_BOLD_CYAN}" "${_def:-?}" "${C_RESET}" \
+            "${C_DIM}" "$(_truncate "$_def_desc" $(( _cw - 34 )))" "${C_RESET}")
+          ;;
+        freelancer)
+          _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b(pool)%b' \
+            "${C_GREEN}" "freelancer" "${C_RESET}" \
+            "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" \
+            "${C_DIM}" "${C_RESET}")
+          ;;
+        *)
+          _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b(default)%b' \
+            "${C_CYAN}" "$_type" "${C_RESET}" \
+            "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" \
+            "${C_DIM}" "${C_RESET}")
+          ;;
+      esac
+
+      printf '  %b%2d.%b %b\n' "${C_BOLD_WHITE}" "$_i" "${C_RESET}" "$_line_detail"
+      _i=$(( _i + 1 ))
+    done
+
+    printf '\n  %b%s teams · %s workers%b\n' \
+      "${C_DIM}" "$_team_count" "$_total_workers" "${C_RESET}"
+  else
+    # Fallback: simple count display when DOEY_TEAM_COUNT is not set
+    local _active_defs=""
+    local _lt="${DOEY_INITIAL_TEAMS:-2}"
+    local _wt="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
+    local _wc=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
+    _team_count=$(( _lt + _wt ))
+
+    printf '  %bLocal teams:%b    %b%s%b (%s workers each)\n' \
+      "${C_BOLD_WHITE}" "${C_RESET}" "${C_BOLD_GREEN}" "$_lt" "${C_RESET}" "$_wc"
+    if [ "$_wt" -gt 0 ]; then
+      printf '  %bWorktree teams:%b %b%s%b\n' \
+        "${C_BOLD_WHITE}" "${C_RESET}" "${C_BOLD_GREEN}" "$_wt" "${C_RESET}"
+    fi
   fi
 
-  local _total_workers=0
+  # --- Section 2: Available Premade Teams ---
+  printf '\n  %b─── Available Premade Teams %b%s%b\n' \
+    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 28 )))" "${C_RESET}"
 
-  _i=1
-  while [ "$_i" -le "$_team_count" ]; do
-    eval "_type=\${DOEY_TEAM_${_i}_TYPE:-}"
-    eval "_workers=\${DOEY_TEAM_${_i}_WORKERS:-}"
-    eval "_wm=\${DOEY_TEAM_${_i}_WORKER_MODEL:-}"
-    eval "_role=\${DOEY_TEAM_${_i}_ROLE:-}"
-    eval "_name=\${DOEY_TEAM_${_i}_NAME:-}"
+  local _found_any=false
+  local _tdir _tf _tname _tdesc _marker _marker_label
+  for _tdir in "${HOME}/.local/share/doey/teams" "${_proj_dir}/teams" "${_proj_dir}/.doey/teams"; do
+    [ -d "$_tdir" ] || continue
+    for _tf in "$_tdir"/*.team.md; do
+      [ -f "$_tf" ] || continue
+      _tname=$(grep '^name:' "$_tf" | head -1 | sed 's/name:[[:space:]]*//;s/"//g')
+      _tdesc=$(grep '^description:' "$_tf" | head -1 | sed 's/description:[[:space:]]*//;s/"//g')
+      [ -z "$_tname" ] && _tname=$(basename "$_tf" .team.md)
+      [ -z "$_tdesc" ] && _tdesc="(no description)"
 
-    if [ -z "$_type" ]; then
-      if [ "$_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _type="local"; else _type="worktree"; fi
-    fi
-    [ -z "$_workers" ] && _workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
-    [ -z "$_wm" ] && _wm="${DOEY_WORKER_MODEL:-opus}"
-    _mm="${DOEY_MANAGER_MODEL:-opus}"
-    _total_workers=$(( _total_workers + _workers ))
+      # Check if active — name appears in _active_defs
+      _marker="${C_DIM}○${C_RESET}"
+      _marker_label=""
+      case " ${_active_defs:-} " in
+        *" ${_tname} "*)
+          _marker="${C_BOLD_GREEN}●${C_RESET}"
+          _marker_label="  ${C_GREEN}(active)${C_RESET}"
+          ;;
+      esac
 
-    # Team header
-    local _tlabel="Team ${_i}"
-    [ -n "$_name" ] && _tlabel="$_name"
-    local _tbadge="${_type}"
-    [ -n "$_role" ] && _tbadge="${_type} · ${_role}"
-
-    printf '\n  %b%s%b  %b%s%b\n' "${C_BOLD_WHITE}" "$_tlabel" "${C_RESET}" "${C_DIM}" "$_tbadge" "${C_RESET}"
-    printf '  %b%s%b\n' "${C_DIM}" "$(repeat_char '─' "$_cw")" "${C_RESET}"
-
-    # Manager
-    _desc=""
-    [ -f "${_agents_dir}/doey-manager.md" ] && _desc=$(_parse_agent_frontmatter "${_agents_dir}/doey-manager.md" "description")
-    [ -z "$_desc" ] && _desc="Window Manager — orchestrates team tasks"
-
-    printf '    %b🎯 Manager%b  %bdoey-manager%b  %b%s%b\n' \
-      "${C_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "$_mm" "${C_RESET}"
-    printf '       %b%s%b\n' "${C_DIM}" "$(_truncate "$_desc" $(( _cw - 7 )))" "${C_RESET}"
-    printf '\n'
-
-    # Workers
-    printf '    %b⚡ Workers%b  %b×%s%b  %b%s%b\n' \
-      "${C_GREEN}" "${C_RESET}" "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" "${C_DIM}" "$_wm" "${C_RESET}"
-
-    # Worker grid — simple labeled layout
-    local _grid_cols="${DOEY_INITIAL_WORKER_COLS:-3}"
-    # Each label = "W1" padded to 6 chars + 2 space gap = 8 per slot
-    while [ $(( _grid_cols * 8 )) -gt "$(( _cw - 7 ))" ] && [ "$_grid_cols" -gt 1 ]; do
-      _grid_cols=$(( _grid_cols - 1 ))
+      printf '  %b %b%-12s%b %b%s%b%b\n' \
+        "$_marker" \
+        "${C_BOLD_CYAN}" "$_tname" "${C_RESET}" \
+        "${C_DIM}" "$(_truncate "$_tdesc" $(( _cw - 22 )))" "${C_RESET}" \
+        "$_marker_label"
+      _found_any=true
     done
-
-    local _w_num=1
-    while [ "$_w_num" -le "$_workers" ]; do
-      local _row=""
-      local _c=0
-      while [ "$_c" -lt "$_grid_cols" ] && [ "$_w_num" -le "$_workers" ]; do
-        _row="${_row}$(printf '  W%-2s ◑' "$_w_num")"
-        _w_num=$(( _w_num + 1 ))
-        _c=$(( _c + 1 ))
-      done
-      printf '     %b%s%b\n' "${C_GREEN}" "$_row" "${C_RESET}"
-    done
-    printf '\n'
-
-    # Watchdog
-    _desc=""
-    [ -f "${_agents_dir}/doey-watchdog.md" ] && _desc=$(_parse_agent_frontmatter "${_agents_dir}/doey-watchdog.md" "description")
-    [ -z "$_desc" ] && _desc="Live team monitor — status, escalation"
-
-    printf '    %b👁 Watchdog%b  %bdoey-watchdog%b  %b%s%b\n' \
-      "${C_YELLOW}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "${DOEY_WATCHDOG_MODEL:-sonnet}" "${C_RESET}"
-    printf '       %b%s%b\n' "${C_DIM}" "$(_truncate "$_desc" $(( _cw - 7 )))" "${C_RESET}"
-
-    printf '\n'
-
-    _i=$(( _i + 1 ))
   done
 
-  # Dashboard
-  printf '  %bDashboard%b  %bWindow 0%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
-  printf '  %b%s%b\n' "${C_DIM}" "$(repeat_char '─' "$_cw")" "${C_RESET}"
+  if [ "$_found_any" = false ]; then
+    printf '  %b(none found — add .team.md files to ~/.local/share/doey/teams/)%b\n' "${C_DIM}" "${C_RESET}"
+  fi
 
-  _desc=""
-  [ -f "${_agents_dir}/doey-session-manager.md" ] && _desc=$(_parse_agent_frontmatter "${_agents_dir}/doey-session-manager.md" "description")
-  [ -z "$_desc" ] && _desc="Routes tasks between team windows"
-
-  local _sm_model="${DOEY_SESSION_MANAGER_MODEL:-opus}"
-  printf '    %b📡 Session Manager%b  %bdoey-session-manager%b  %b%s%b\n' \
-    "${C_BOLD_WHITE}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "$_sm_model" "${C_RESET}"
-  printf '       %b%s%b\n' "${C_DIM}" "$(_truncate "$_desc" $(( _cw - 7 )))" "${C_RESET}"
-
-  local _wdg_slots="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
-  printf '    %bℹ  Info Panel%b  ·  %b👁 Watchdog slots: %s of %s%b\n' \
-    "${C_DIM}" "${C_RESET}" "${C_DIM}" "$_team_count" "$_wdg_slots" "${C_RESET}"
-
-  # Summary
-  printf '\n  %b%s%b\n' "${C_DIM}" "$(repeat_char '─' "$_cw")" "${C_RESET}"
-  printf '  %b%s teams · %s workers · %s watchdogs · 1 SM%b\n' \
-    "${C_DIM}" "$_team_count" "$_total_workers" "$_team_count" "${C_RESET}"
+  printf '\n  %bAdd:%b DOEY_TEAM_<N>_TYPE=premade DOEY_TEAM_<N>_DEF=<name>\n' "${C_DIM}" "${C_RESET}"
 }
 
 _render_available_agents() {

@@ -255,19 +255,23 @@ _find_team_def() {
   _FTD_RESULT=""
   local fname="${name}.team.md"
 
-  # 1. Project-level .doey/teams/
-  if [ -f ".doey/teams/${fname}" ]; then
-    _FTD_RESULT=".doey/teams/${fname}"; return 0
-  fi
-  # 2. Project-level teams/ (repo-shipped definitions)
+  # 1. Project-level teams/ (repo-shipped definitions)
   if [ -f "teams/${fname}" ]; then
     _FTD_RESULT="teams/${fname}"; return 0
   fi
-  # 3. Global config
+  # 2. Project-level .doey/teams/
+  if [ -f ".doey/teams/${fname}" ]; then
+    _FTD_RESULT=".doey/teams/${fname}"; return 0
+  fi
+  # 3. Installed premade teams
+  if [ -f "$HOME/.local/share/doey/teams/${fname}" ]; then
+    _FTD_RESULT="$HOME/.local/share/doey/teams/${fname}"; return 0
+  fi
+  # 4. Legacy user config
   if [ -f "$HOME/.config/doey/teams/${fname}" ]; then
     _FTD_RESULT="$HOME/.config/doey/teams/${fname}"; return 0
   fi
-  # 4. Doey repo shipped defaults (for non-doey projects using doey)
+  # 5. Doey repo shipped defaults (for non-doey projects using doey)
   local repo_path=""
   [ -f "$HOME/.claude/doey/repo-path" ] && repo_path=$(cat "$HOME/.claude/doey/repo-path")
   if [ -n "$repo_path" ] && [ -f "${repo_path}/teams/${fname}" ]; then
@@ -320,6 +324,56 @@ _parse_team_def() {
 
     # Markdown body (after second ---)
     if [ "$body_started" -eq 1 ]; then
+      # Detect section headers in markdown body for table-format team defs
+      case "$line" in
+        "## Panes"*) in_panes=1; in_workflow=0; continue ;;
+        "## Workflows"*) in_workflow=1; in_panes=0; continue ;;
+        "## Team Briefing"*) in_panes=0; in_workflow=0; continue ;;
+        "## "*) in_panes=0; in_workflow=0 ;;
+      esac
+
+      # Parse markdown pane table: | Pane | Role | Agent | Name | Model |
+      if [ "$in_panes" -eq 1 ]; then
+        case "$line" in
+          "|"*)
+            echo "$line" | grep -q '^|[[:space:]]*Pane' && continue
+            echo "$line" | grep -q '^|[[:space:]]*-' && continue
+            local _tp_pane _tp_role _tp_agent _tp_name _tp_model
+            _tp_pane=$(echo "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            _tp_role=$(echo "$line" | cut -d'|' -f3 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            _tp_agent=$(echo "$line" | cut -d'|' -f4 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            _tp_name=$(echo "$line" | cut -d'|' -f5 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            _tp_model=$(echo "$line" | cut -d'|' -f6 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [ -z "$_tp_pane" ] && continue
+            [ -n "$_tp_role" ] && printf 'PANE_%s_ROLE=%s\n' "$_tp_pane" "$_tp_role" >> "$env_file"
+            [ -n "$_tp_agent" ] && printf 'PANE_%s_AGENT=%s\n' "$_tp_pane" "$_tp_agent" >> "$env_file"
+            [ -n "$_tp_name" ] && printf 'PANE_%s_NAME=%s\n' "$_tp_pane" "$_tp_name" >> "$env_file"
+            [ -n "$_tp_model" ] && printf 'PANE_%s_MODEL=%s\n' "$_tp_pane" "$_tp_model" >> "$env_file"
+            ;;
+        esac
+        continue
+      fi
+
+      # Parse markdown workflow table: | Trigger | From | To | Subject |
+      if [ "$in_workflow" -eq 1 ]; then
+        case "$line" in
+          "|"*)
+            echo "$line" | grep -q '^|[[:space:]]*Trigger' && continue
+            echo "$line" | grep -q '^|[[:space:]]*-' && continue
+            local _tw_trigger _tw_from _tw_to _tw_subject
+            _tw_trigger=$(echo "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            _tw_from=$(echo "$line" | cut -d'|' -f3 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            _tw_to=$(echo "$line" | cut -d'|' -f4 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            _tw_subject=$(echo "$line" | cut -d'|' -f5 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [ -z "$_tw_trigger" ] && continue
+            printf 'WORKFLOW_%s=%s|%s|%s|%s\n' "$workflow_idx" "$_tw_trigger" "$_tw_from" "$_tw_to" "$_tw_subject" >> "$env_file"
+            workflow_idx=$((workflow_idx + 1))
+            ;;
+        esac
+        continue
+      fi
+
+      # Everything else in body goes to briefing file
       printf '%s\n' "$line" >> "$briefing_file"
       continue
     fi
@@ -2702,7 +2756,13 @@ MANIFEST
 
         local _ptc_def
         _ptc_def=$(_read_team_config "$_ptc_i" "DEF" "")
-        if [ -n "$_ptc_def" ]; then
+        # Premade type requires DEF; any team with DEF set uses definition-based spawn
+        if [ "$_ptc_type" = "premade" ] || [ -n "$_ptc_def" ]; then
+          if [ -z "$_ptc_def" ]; then
+            printf "${WARN}Team %s has type=premade but no DEF — skipping${RESET}\n" "$_ptc_i"
+            _ptc_fail=$((_ptc_fail + 1))
+            continue
+          fi
           if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_ptc_def" ); then
             _ptc_fail=$((_ptc_fail + 1))
           fi

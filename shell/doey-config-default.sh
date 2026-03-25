@@ -113,10 +113,16 @@
 #
 # Available properties:
 #
-#   TYPE ............. "local", "worktree", or "freelancer" (default: local)
+#   TYPE ............. "local", "worktree", "freelancer", or "premade"
+#                      (default: local)
 #                      Worktree teams get an isolated git branch.
 #                      Freelancer teams have no manager — all panes are
 #                      independent workers available to any team.
+#                      Premade teams use a .team.md definition file.
+#
+#   DEF .............. Team definition name (required for premade teams)
+#                      Must match a file in ~/.local/share/doey/teams/.
+#                      Run `doey teams` to list available definitions.
 #
 #   WORKERS .......... Number of worker panes (default: from grid calculation)
 #                      Each worker runs one Claude instance.
@@ -151,6 +157,26 @@
 # DOEY_TEAM_2_ROLE=frontend
 # DOEY_TEAM_2_WORKER_MODEL=sonnet
 # DOEY_TEAM_2_MANAGER_MODEL=opus
+#
+# Example — local team + premade visual verification:
+#
+# DOEY_TEAM_COUNT=2
+#
+# DOEY_TEAM_1_TYPE=local
+# DOEY_TEAM_1_WORKERS=4
+#
+# DOEY_TEAM_2_TYPE=premade
+# DOEY_TEAM_2_DEF=visual
+#
+# Example — two premade specialist teams:
+#
+# DOEY_TEAM_COUNT=2
+#
+# DOEY_TEAM_1_TYPE=premade
+# DOEY_TEAM_1_DEF=visual
+#
+# DOEY_TEAM_2_TYPE=premade
+# DOEY_TEAM_2_DEF=seo
 
 # =============================================================================
 # Project-Specific Overrides
