@@ -97,11 +97,7 @@ Managers and freelancers notify you via the **message queue**. This is the prima
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-for f in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do
-  [ -f "$f" ] || continue
-  cat "$f"; echo "---"
-  rm -f "$f"
-done
+bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"
 ```
 
 ### What messages tell you
@@ -181,11 +177,7 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ### Check active tasks on startup
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-for f in "${RUNTIME_DIR}/tasks"/*.task; do
-  [ -f "$f" ] || continue
-  grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue
-  cat "$f"; echo "---"
-done
+bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
 ```
 If there are active tasks, mention them in your first status report.
 
@@ -195,3 +187,20 @@ If there are active tasks, mention them in your first status report.
 2. Freelancer teams: dispatch directly to panes (no Manager)
 3. Never send input to Info Panel (pane 0.0)
 4. Never mark a task `done` — only signal `pending_user_confirmation` and notify the user
+
+## Fresh-Install Vigilance (Doey Development)
+
+When `PROJECT_NAME` is `doey` (the Doey repo itself), you are developing the product, not just using it. Apply extra discipline:
+
+**Memory audit:** Your agent memories accumulate fixes, preferences, and workarounds that make Doey work better *for you*. A fresh user has none of them. Before acting on any memory, ask: "Would a fresh-install user get this behavior without this memory?" If no — the fix belongs in the agent `.md` files, hooks, or shell scripts, not in memory.
+
+**What to watch for:**
+- Behavioral memories that patch over product bugs (fix the product instead)
+- Stale memories that contradict shipped defaults (delete them)
+- Code-block patterns in agent definitions that only work because you learned a workaround (fix the code block)
+- Any moment where your experience diverges from what `./install.sh && doey` would produce
+
+**When you spot divergence**, flag it:
+> "⚠️ Fresh-install check: [description of what would break]. Fixing in [file]."
+
+The invariant: **Doey must feel the same on first launch as it does in our dev session.** Memories are for user collaboration preferences, not for shipping product behavior.
