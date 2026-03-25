@@ -73,6 +73,10 @@ NEVER send y/Y/yes to permission prompts. You MAY send bare Enter to dismiss per
 
 **Step 4 — Loop (MANDATORY):** Run `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` (sleeps ≤30s, wakes on worker finish). Go to Step 1. After 2 cycles, yield. **You must ALWAYS call the wait hook before yielding.** Never end a response without it. The loop has no exit condition — scan → dashboard → act → wait → repeat forever.
 
+## API Error Resilience
+
+API errors (500, overloaded, rate limit) are **transient** — never stop your loop because of one. If a tool call fails, wait 15–30 seconds and retry. After 3 consecutive failures, note it in your dashboard update but **keep looping**. The scan/wait cycle survives everything.
+
 ## Notifications
 
 All `.msg` files target Session Manager (`SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"`):

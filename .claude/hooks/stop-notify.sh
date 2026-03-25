@@ -231,7 +231,41 @@ if is_session_manager; then
   send_notification "Doey — Session Manager" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=desktop" "type=desktop_notification" "delivery=osascript" "success=true"
   _log "stop-notify: sent desktop notification"
-  exit 0
+fi
+
+# --- Auto-resume for loop-based roles (SM, Watchdog, Manager) ---
+# These roles run continuous loops and should never truly stop.
+# When they stop (API error, context issue), wait for the prompt to return
+# and send a resume message so the loop continues automatically.
+_auto_resume=""
+if is_session_manager; then
+  _auto_resume="An API error or interruption stopped your last response. Resume your monitor loop immediately: drain messages, check status, act, call the wait hook."
+elif is_watchdog; then
+  _auto_resume="An API error or interruption stopped your last response. Resume your scan loop immediately: scan panes, update dashboard, act on events, call the wait hook."
+elif is_manager; then
+  _auto_resume="An API error or interruption stopped your last response. Resume: drain messages, check worker status, dispatch or wait as needed."
+fi
+
+if [ -n "$_auto_resume" ]; then
+  _resume_pane="$PANE"
+  _resume_log="${RUNTIME_DIR}/lifecycle.log"
+  (
+    # Wait for Claude to return to prompt (up to 15s)
+    _r_i=0
+    while [ "$_r_i" -lt 15 ]; do
+      sleep 1
+      _r_i=$((_r_i + 1))
+      # Check if pane shows the ❯ prompt (ready for input)
+      _last_line=$(tmux capture-pane -t "$_resume_pane" -p -S -2 2>/dev/null | tail -1)
+      case "$_last_line" in
+        *"❯"*) break ;;
+      esac
+    done
+    # Send resume prompt
+    tmux send-keys -t "$_resume_pane" "$_auto_resume" Enter 2>/dev/null || true
+    printf '[%s] auto-resume sent to %s\n' "$(date '+%H:%M:%S')" "$_resume_pane" >> "$_resume_log" 2>/dev/null || true
+  ) &
+  _log "stop-notify: scheduled auto-resume for $PANE"
 fi
 
 exit 0
