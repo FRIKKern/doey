@@ -212,6 +212,7 @@ write_team_env() {
   local session_name
   session_name=$(_env_val "${runtime_dir}/session.env" SESSION_NAME)
   local team_type="${14:-}"
+  local team_def="${15:-}"
   local _tmp="${runtime_dir}/team_${window_index}.env.tmp.$$"
   cat > "$_tmp" << TEAMEOF
 WINDOW_INDEX="${window_index}"
@@ -228,6 +229,7 @@ TEAM_ROLE="${team_role}"
 WORKER_MODEL="${worker_model}"
 MANAGER_MODEL="${manager_model}"
 TEAM_TYPE="${team_type}"
+TEAM_DEF="${team_def}"
 TEAMEOF
   mv "$_tmp" "${runtime_dir}/team_${window_index}.env"
 }
@@ -244,6 +246,141 @@ generate_team_agent() {
     mv "${dst}.tmp" "$dst"
   fi
   echo "$new_name"
+}
+
+# Search hierarchy for team definition file
+# Returns path via _FTD_RESULT, empty if not found
+_find_team_def() {
+  local name="$1"
+  _FTD_RESULT=""
+  local fname="${name}.team.md"
+
+  # 1. Project-level .doey/teams/
+  if [ -f ".doey/teams/${fname}" ]; then
+    _FTD_RESULT=".doey/teams/${fname}"; return 0
+  fi
+  # 2. Project-level teams/ (repo-shipped definitions)
+  if [ -f "teams/${fname}" ]; then
+    _FTD_RESULT="teams/${fname}"; return 0
+  fi
+  # 3. Global config
+  if [ -f "$HOME/.config/doey/teams/${fname}" ]; then
+    _FTD_RESULT="$HOME/.config/doey/teams/${fname}"; return 0
+  fi
+  # 4. Doey repo shipped defaults (for non-doey projects using doey)
+  local repo_path=""
+  [ -f "$HOME/.claude/doey/repo-path" ] && repo_path=$(cat "$HOME/.claude/doey/repo-path")
+  if [ -n "$repo_path" ] && [ -f "${repo_path}/teams/${fname}" ]; then
+    _FTD_RESULT="${repo_path}/teams/${fname}"; return 0
+  fi
+  return 1
+}
+
+# Parse a .team.md file into a flat env file at ${runtime_dir}/teamdef_<name>.env
+# Also extracts markdown body to ${runtime_dir}/teamdef_<name>_briefing.md
+_parse_team_def() {
+  local file="$1" runtime_dir="$2"
+  local in_frontmatter=0 frontmatter_count=0 in_panes=0 in_workflow=0
+  local name="" line_num=0 body_started=0
+  local workflow_idx=0
+  local env_file="" briefing_file=""
+
+  # First pass: extract name from frontmatter
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$line" = "---" ]; then
+      frontmatter_count=$((frontmatter_count + 1))
+      [ "$frontmatter_count" -ge 2 ] && break
+      continue
+    fi
+    if [ "$frontmatter_count" -eq 1 ]; then
+      case "$line" in
+        name:*) name=$(echo "$line" | sed 's/^name:[[:space:]]*//' | tr -d '"') ;;
+      esac
+    fi
+  done < "$file"
+
+  [ -z "$name" ] && { echo "ERROR: no name in team def $file" >&2; return 1; }
+  env_file="${runtime_dir}/teamdef_${name}.env"
+  briefing_file="${runtime_dir}/teamdef_${name}_briefing.md"
+
+  # Reset for second pass
+  frontmatter_count=0; in_panes=0; in_workflow=0; body_started=0; workflow_idx=0
+  : > "$env_file"
+  : > "$briefing_file"
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$line" = "---" ]; then
+      frontmatter_count=$((frontmatter_count + 1))
+      if [ "$frontmatter_count" -ge 2 ]; then
+        body_started=1
+        continue
+      fi
+      continue
+    fi
+
+    # Markdown body (after second ---)
+    if [ "$body_started" -eq 1 ]; then
+      printf '%s\n' "$line" >> "$briefing_file"
+      continue
+    fi
+
+    # Inside frontmatter
+    if [ "$frontmatter_count" -eq 1 ]; then
+      # Detect section starts
+      case "$line" in
+        "panes:") in_panes=1; in_workflow=0; continue ;;
+        "workflow:") in_workflow=1; in_panes=0; continue ;;
+      esac
+
+      # Pane entries:  N: { role: X, agent: Y, name: "Z" }
+      if [ "$in_panes" -eq 1 ]; then
+        case "$line" in
+          *"{"*"}"*)
+            local pane_num role="" agent="" pane_name=""
+            pane_num=$(echo "$line" | sed 's/^[[:space:]]*//' | cut -d: -f1)
+            role=$(echo "$line" | sed -n 's/.*role:[[:space:]]*\([^,}]*\).*/\1/p' | tr -d ' ')
+            agent=$(echo "$line" | sed -n 's/.*agent:[[:space:]]*\([^,}]*\).*/\1/p' | tr -d ' ')
+            pane_name=$(echo "$line" | sed -n 's/.*name:[[:space:]]*"\([^"]*\)".*/\1/p')
+            [ -n "$role" ] && printf 'PANE_%s_ROLE=%s\n' "$pane_num" "$role" >> "$env_file"
+            [ -n "$agent" ] && printf 'PANE_%s_AGENT=%s\n' "$pane_num" "$agent" >> "$env_file"
+            [ -n "$pane_name" ] && printf 'PANE_%s_NAME=%s\n' "$pane_num" "$pane_name" >> "$env_file"
+            ;;
+          *) [ -z "$(echo "$line" | tr -d '[:space:]')" ] || { in_panes=0; } ;;
+        esac
+        [ "$in_panes" -eq 1 ] && continue
+      fi
+
+      # Workflow entries:  - on: X, from: Y, to: Z, subject: W
+      if [ "$in_workflow" -eq 1 ]; then
+        case "$line" in
+          *"- on:"*)
+            local wf_on="" wf_from="" wf_to="" wf_subject=""
+            wf_on=$(echo "$line" | sed -n 's/.*on:[[:space:]]*\([^,]*\).*/\1/p' | tr -d ' ')
+            wf_from=$(echo "$line" | sed -n 's/.*from:[[:space:]]*\([^,]*\).*/\1/p' | tr -d ' ')
+            wf_to=$(echo "$line" | sed -n 's/.*to:[[:space:]]*\([^,]*\).*/\1/p' | tr -d ' ')
+            wf_subject=$(echo "$line" | sed -n 's/.*subject:[[:space:]]*\([^,}[:space:]]*\).*/\1/p')
+            printf 'WORKFLOW_%s=%s|%s|%s|%s\n' "$workflow_idx" "$wf_on" "$wf_from" "$wf_to" "$wf_subject" >> "$env_file"
+            workflow_idx=$((workflow_idx + 1))
+            ;;
+          *) [ -z "$(echo "$line" | tr -d '[:space:]')" ] || { in_workflow=0; } ;;
+        esac
+        [ "$in_workflow" -eq 1 ] && continue
+      fi
+
+      # Simple key: value lines
+      case "$line" in
+        *:*)
+          local key val
+          key=$(echo "$line" | cut -d: -f1 | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')
+          val=$(echo "$line" | cut -d: -f2- | sed 's/^[[:space:]]*//' | tr -d '"')
+          [ -n "$key" ] && [ -n "$val" ] && printf '%s=%s\n' "$key" "$val" >> "$env_file"
+          ;;
+      esac
+    fi
+  done < "$file"
+
+  printf 'BRIEFING_FILE=%s\n' "$briefing_file" >> "$env_file"
+  echo "$env_file"
 }
 
 create_team_worktree() {
@@ -2563,6 +2700,16 @@ MANIFEST
         local _ptc_team_type=""
         [ "$_ptc_type" = "freelancer" ] && _ptc_team_type="freelancer"
 
+        local _ptc_def
+        _ptc_def=$(_read_team_config "$_ptc_i" "DEF" "")
+        if [ -n "$_ptc_def" ]; then
+          if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_ptc_def" ); then
+            _ptc_fail=$((_ptc_fail + 1))
+          fi
+          (( _ptc_i < _ptc_total )) && sleep $DOEY_TEAM_LAUNCH_DELAY
+          continue
+        fi
+
         if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$_ptc_cols" "$_ptc_wt_spec" "$_ptc_name" "$_ptc_role" "$_ptc_wm" "$_ptc_mm" "$_ptc_team_type" ); then
           _ptc_fail=$((_ptc_fail + 1))
         fi
@@ -3233,6 +3380,148 @@ _print_team_created() {
   else
     printf "  ${SUCCESS}Team window %s created${RESET} — %s, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$grid_desc" "$worker_count" "$wdg_slot"
   fi
+}
+
+# Spawn a team from a .team.md definition file
+add_team_from_def() {
+  local session="$1" runtime_dir="$2" dir="$3" team_name="$4"
+
+  # Find and parse definition
+  if ! _find_team_def "$team_name"; then
+    printf "  ${ERROR}Team definition '%s' not found${RESET}\n" "$team_name" >&2
+    printf "  Searched: .doey/teams/ → teams/ → ~/.config/doey/teams/ → repo teams/\n" >&2
+    return 1
+  fi
+  local def_file="$_FTD_RESULT"
+  printf "  ${DIM}Loading team definition: %s${RESET}\n" "$def_file"
+
+  local env_file
+  env_file=$(_parse_team_def "$def_file" "$runtime_dir") || return 1
+
+  # Read parsed values
+  local td_name td_grid td_workers td_type td_watchdog
+  local td_manager_model td_worker_model td_watchdog_model td_briefing
+  td_name=$(_env_val "$env_file" NAME)
+  td_grid=$(_env_val "$env_file" GRID "dynamic")
+  td_workers=$(_env_val "$env_file" WORKERS "3")
+  td_type=$(_env_val "$env_file" TYPE "local")
+  td_watchdog=$(_env_val "$env_file" WATCHDOG "default")
+  td_manager_model=$(_env_val "$env_file" MANAGER_MODEL "")
+  td_worker_model=$(_env_val "$env_file" WORKER_MODEL "")
+  td_watchdog_model=$(_env_val "$env_file" WATCHDOG_MODEL "")
+  td_briefing=$(_env_val "$env_file" BRIEFING_FILE "")
+
+  # Create tmux window
+  local window_index
+  window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
+  printf "  ${DIM}Creating team '%s' in window %s...${RESET}\n" "$td_name" "$window_index"
+
+  # Acquire watchdog slot
+  _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "false"
+  local wdg_slot="$_AWS_SLOT"
+  [ -n "$wdg_slot" ] || printf "  ${WARN}No watchdog slot available for team %s${RESET}\n" "$window_index"
+
+  # Determine pane count from definition (find highest PANE_N key)
+  local max_pane=0 _p_idx=0
+  while [ "$_p_idx" -le 20 ]; do
+    if grep -q "^PANE_${_p_idx}_ROLE=" "$env_file" 2>/dev/null; then
+      max_pane="$_p_idx"
+    fi
+    _p_idx=$((_p_idx + 1))
+  done
+
+  # Build worker panes (pane 0 = manager, rest are workers)
+  local worker_pane_list="" worker_count=0 _wp_i=1
+  while [ "$_wp_i" -le "$max_pane" ]; do
+    # Split window to create worker panes
+    tmux split-window -t "${session}:${window_index}" -c "$dir" -h 2>/dev/null || \
+      tmux split-window -t "${session}:${window_index}" -c "$dir" -v 2>/dev/null
+    [ -n "$worker_pane_list" ] && worker_pane_list="${worker_pane_list},"
+    worker_pane_list="${worker_pane_list}${_wp_i}"
+    worker_count=$(( worker_count + 1 ))
+    _wp_i=$((_wp_i + 1))
+  done
+  tmux select-layout -t "${session}:${window_index}" tiled 2>/dev/null || true
+
+  # Write team env with TEAM_DEF field
+  write_team_env "$runtime_dir" "$window_index" "$td_grid" "${wdg_slot:-}" \
+    "$worker_pane_list" "$worker_count" "0" "" "" "$td_name" "" \
+    "$td_worker_model" "$td_manager_model" "$td_type" "$td_name"
+  _register_team_window "$runtime_dir" "$window_index"
+  _ensure_worker_prompt "$runtime_dir" "$dir"
+
+  # Launch manager (pane 0)
+  local mgr_agent="" mgr_name=""
+  mgr_agent=$(_env_val "$env_file" PANE_0_AGENT "doey-manager")
+  mgr_name=$(_env_val "$env_file" PANE_0_NAME "Manager")
+  local mgr_agent_name
+  mgr_agent_name=$(generate_team_agent "$mgr_agent" "$window_index")
+  local mgr_model="${td_manager_model:-$DOEY_MANAGER_MODEL}"
+  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --agent \"$mgr_agent_name\" --name \"${mgr_name}\""
+  [ -f "${runtime_dir}/doey-settings.json" ] && _mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
+  tmux select-pane -t "${session}:${window_index}.0" -T "$mgr_name"
+
+  # Launch workers (panes 1+)
+  local _w_i=1
+  while [ "$_w_i" -le "$max_pane" ]; do
+    local w_agent w_name w_model w_agent_name
+    w_agent=$(_env_val "$env_file" "PANE_${_w_i}_AGENT" "")
+    w_name=$(_env_val "$env_file" "PANE_${_w_i}_NAME" "Worker ${_w_i}")
+    w_model="${td_worker_model:-$DOEY_WORKER_MODEL}"
+
+    local _w_cmd="claude --dangerously-skip-permissions --model $w_model --name \"${w_name}\""
+    if [ -n "$w_agent" ]; then
+      w_agent_name=$(generate_team_agent "$w_agent" "$window_index")
+      _w_cmd+=" --agent \"$w_agent_name\""
+    fi
+    local _w_prompt
+    _w_prompt=$(ls "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
+    [ -n "$_w_prompt" ] && _w_cmd+=" --append-system-prompt-file \"$_w_prompt\""
+    [ -f "${runtime_dir}/doey-settings.json" ] && _w_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+
+    sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
+    tmux send-keys -t "${session}:${window_index}.${_w_i}" "$_w_cmd" Enter
+    tmux select-pane -t "${session}:${window_index}.${_w_i}" -T "$w_name"
+    _w_i=$((_w_i + 1))
+  done
+
+  # Launch watchdog
+  local wdg_model="${td_watchdog_model:-$DOEY_WATCHDOG_MODEL}"
+  _launch_team_watchdog "$session" "$wdg_slot" "$window_index" "$wdg_model"
+
+  # Build worker pane list and name window
+  _build_worker_pane_list "$session" "$window_index"
+  _name_team_window "$session" "$window_index" "" "$runtime_dir"
+
+  # Brief manager with team layout + briefing content
+  if [ -n "$td_briefing" ] && [ -f "$td_briefing" ]; then
+    local _brief_text _layout=""
+    _layout="Team: ${td_name} | Window: ${window_index} | Workers: ${worker_count}\nPanes:"
+    local _b_i=0
+    while [ "$_b_i" -le "$max_pane" ]; do
+      local _b_role _b_name
+      _b_role=$(_env_val "$env_file" "PANE_${_b_i}_ROLE" "")
+      _b_name=$(_env_val "$env_file" "PANE_${_b_i}_NAME" "")
+      [ -n "$_b_role" ] && _layout="${_layout}\n  Pane ${_b_i}: ${_b_name} (${_b_role})"
+      _b_i=$((_b_i + 1))
+    done
+    _brief_text=$(printf '%b\n\n%s' "$_layout" "$(cat "$td_briefing")")
+
+    sleep 3
+    local _bf
+    _bf=$(mktemp "${runtime_dir}/brief_XXXXXX.txt")
+    printf '%s' "$_brief_text" > "$_bf"
+    tmux copy-mode -q -t "${session}:${window_index}.0" 2>/dev/null
+    tmux load-buffer "$_bf"
+    tmux paste-buffer -t "${session}:${window_index}.0"
+    sleep 1
+    tmux send-keys -t "${session}:${window_index}.0" Enter
+    rm -f "$_bf"
+  fi
+
+  printf "  \033[0;32mTeam '%s' created in window %s (%s workers + watchdog)\033[0m\n" \
+    "$td_name" "$window_index" "$worker_count"
 }
 
 add_dynamic_team_window() {
@@ -4010,7 +4299,19 @@ HELP
     fi
     exit 0
     ;;
-  add-window|add-team)
+  add-team)
+    require_running_session
+    shift
+    _at_name="${1:-}"
+    if [ -z "$_at_name" ]; then
+      printf "  ${ERROR}Usage: doey add-team <name>${RESET}\n"
+      printf "  Example: doey add-team rd\n"
+      exit 1
+    fi
+    add_team_from_def "$session" "$runtime_dir" "$dir" "$_at_name"
+    exit 0
+    ;;
+  add-window)
     require_running_session
     wt_spec="" grid_arg="4x2"
     shift
