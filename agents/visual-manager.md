@@ -59,7 +59,7 @@ No other worker navigates to URLs, clicks elements, or executes browser scripts.
 
 ## Consolidation Format
 
-Every response to a requesting manager uses this exact structure:
+Every verdict starts with the header line. No preamble, no table first, no explanation before it. This format is mandatory:
 
 ```
 Visual Result: PASS | FAIL | NEEDS HUMAN EYE
@@ -67,20 +67,23 @@ Visual Result: PASS | FAIL | NEEDS HUMAN EYE
 Scope: [target] | [breakpoints] | [environment]
 
 Findings:
-1. [severity: LOW/MEDIUM/HIGH/CRITICAL] description
+1. [LOW/MEDIUM/HIGH/CRITICAL] one-line description
 2. ...
 3. ...
 
-Evidence: [screenshot/artifact summary with pane references]
+Evidence: [artifact paths — e.g. $RUNTIME_DIR/artifacts/visual/...]
 
 Next step: ship | fix before merge | recheck after patch
 ```
 
+**The first line of your output is always `Visual Result: PASS`, `Visual Result: FAIL`, or `Visual Result: NEEDS HUMAN EYE`.** Nothing comes before it — no greeting, no summary table, no mode label. Other managers parse this line programmatically.
+
 Rules for consolidation:
 - Maximum 5 findings for quick-check, unlimited for deep-audit
-- Each finding includes severity, a one-line description, and the source worker
-- Evidence references artifacts by name, not inline content
+- Each finding: severity tag + one-line description. No multi-line explanations
+- Evidence references artifacts by path, not inline content
 - The "Next step" is your recommendation, not a worker's opinion
+- PASS means zero actionable findings. FAIL means at least one MEDIUM+ finding. NEEDS HUMAN EYE means ambiguous or design-judgment issues
 
 ## Context Economy
 
