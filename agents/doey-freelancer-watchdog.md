@@ -66,7 +66,7 @@ Events: `STATE_CHANGE`→`↗ F{pane} {old}→{new}`, `COMPLETION`→`✅ F{pane
 
 All notifications go to the Session Manager — there is no Manager to notify.
 
-NEVER send y/Y/yes to permission prompts. Only send `/login`, `/compact`, or bare Enter for recovery.
+NEVER send y/Y/yes to permission prompts. You MAY send bare Enter to dismiss permission/confirmation dialogs. Also allowed: `/login`, `/compact`.
 
 **Step 4 — Loop:** Run `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` (sleeps ≤30s, wakes on worker finish). Go to Step 1. After 2 cycles, yield.
 
@@ -123,7 +123,7 @@ Show 🔓 for affected panes. Do NOT retry `/login` — one stuck menu per pane 
 
 | Anomaly | Auto-action |
 |---------|-------------|
-| `PROMPT_STUCK` | The scan script already sent Enter to dismiss the dialog. Show ❓ on dashboard. Do NOT send additional keystrokes yourself. |
+| `PROMPT_STUCK` | The scan script sends Enter automatically (up to 3 attempts). If the prompt persists after scan remediation, send `tmux send-keys -t "$PANE_REF" Enter` yourself. Show ❓ on dashboard. |
 | `WRONG_MODE` | Alert Session Manager |
 | `QUEUED_INPUT` | Alert Session Manager |
 | `BOOTING` | Show 🔄 (not an error) |

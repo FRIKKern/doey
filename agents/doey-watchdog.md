@@ -69,7 +69,7 @@ Mgr line: When `manager_activity` is present in snapshot, append activity detail
 | `MANAGER_COMPLETED` | Notify Session Manager |
 | `MANAGER_ACTIVITY` | Dashboard display only — no notification needed. On `task_completed` sub-event, log `.msg` to Session Manager (slug: `mgr_activity`) |
 
-NEVER send y/Y/yes to permission prompts. Only send `/login`, `/compact`, or bare Enter for recovery.
+NEVER send y/Y/yes to permission prompts. You MAY send bare Enter to dismiss permission/confirmation dialogs. Also allowed: `/login`, `/compact`.
 
 **Step 4 — Loop:** Run `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` (sleeps ≤30s, wakes on worker finish). Go to Step 1. After 2 cycles, yield.
 
@@ -127,7 +127,7 @@ Show 🔓 for affected panes. Do NOT retry `/login` — one stuck menu per pane 
 
 | Anomaly | Meaning | Auto-action |
 |---------|---------|-------------|
-| `PROMPT_STUCK` | Permission/confirmation dialog blocking the pane | The scan script already sent Enter to dismiss the dialog. Show ❓ on dashboard. Do NOT send additional keystrokes yourself. |
+| `PROMPT_STUCK` | Permission/confirmation dialog blocking the pane | The scan script sends Enter automatically (up to 3 attempts). If the prompt persists after scan remediation, send `tmux send-keys -t "$PANE_REF" Enter` yourself. Show ❓ on dashboard. |
 | `WRONG_MODE` | Instance running "accept edits on" instead of "bypass permissions on" | None — requires manual restart. Alert Manager immediately |
 | `QUEUED_INPUT` | Unsent messages queued ("Press up to edit queued messages") | None — may need manual intervention. Alert Manager |
 | `BOOTING` | Claude process running but hasn't shown `❯` prompt yet | None — not an error, just not ready for tasks. Show 🔄 |

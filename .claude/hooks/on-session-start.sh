@@ -135,7 +135,9 @@ if [ -n "$_repo_path" ] && [ -d "$_repo_path/.claude/skills" ]; then
   fi
 fi
 
-cat >> "$CLAUDE_ENV_FILE" << EOF
+# Guard env file writes — during compact, CLAUDE_ENV_FILE may be stale
+if [ -n "${CLAUDE_ENV_FILE:-}" ] && touch "$CLAUDE_ENV_FILE" 2>/dev/null; then
+  cat >> "$CLAUDE_ENV_FILE" << EOF
 export DOEY_RUNTIME="$RUNTIME_DIR"
 export SESSION_NAME="$SESSION_NAME"
 export PROJECT_DIR="$PROJECT_DIR"
@@ -149,6 +151,7 @@ export DOEY_PROJECT_ACRONYM="$PROJECT_ACRONYM"
 export DOEY_PANE_ID="$PANE_ID"
 export DOEY_FULL_PANE_ID="$FULL_PANE_ID"
 EOF
+fi
 
 # Team definition role injection
 if [ -n "${RUNTIME_DIR:-}" ]; then
@@ -161,10 +164,10 @@ if [ -n "${RUNTIME_DIR:-}" ]; then
       _team_pane_name=""
       _team_role=$(grep "^PANE_${PANE_INDEX}_ROLE=" "$_teamdef_env" 2>/dev/null | cut -d= -f2-) || true
       _team_pane_name=$(grep "^PANE_${PANE_INDEX}_NAME=" "$_teamdef_env" 2>/dev/null | cut -d= -f2-) || true
-      if [ -n "$_team_role" ]; then
+      if [ -n "$_team_role" ] && [ -w "$CLAUDE_ENV_FILE" ]; then
         echo "DOEY_TEAM_ROLE=$_team_role" >> "$CLAUDE_ENV_FILE"
       fi
-      if [ -n "$_team_pane_name" ]; then
+      if [ -n "$_team_pane_name" ] && [ -w "$CLAUDE_ENV_FILE" ]; then
         echo "DOEY_TEAM_PANE_NAME=$_team_pane_name" >> "$CLAUDE_ENV_FILE"
       fi
       # Write team role to per-pane file so hooks can read without env vars
