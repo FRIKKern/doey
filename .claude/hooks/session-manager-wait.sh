@@ -39,6 +39,20 @@ if [ -f "${1:-}" ]; then _sm_dbg_wake "new_results_presleep" "0"; echo "NEW_RESU
 set -- "$RUNTIME_DIR/status"/crash_pane_*
 if [ -f "${1:-}" ]; then _sm_dbg_wake "crash_alert_presleep" "0"; echo "CRASH_ALERT"; exit 0; fi
 
+# Auto-compact trigger: check cycle count
+CYCLE_FILE="${RUNTIME_DIR}/status/sm_cycle_count"
+COMPACT_INTERVAL="${DOEY_SM_COMPACT_INTERVAL:-40}"
+_sm_cycle=0
+[ -f "$CYCLE_FILE" ] && _sm_cycle=$(cat "$CYCLE_FILE" 2>/dev/null || echo 0)
+_sm_cycle=$((_sm_cycle + 1))
+echo "$_sm_cycle" > "$CYCLE_FILE"
+if [ "$_sm_cycle" -ge "$COMPACT_INTERVAL" ]; then
+  echo "0" > "$CYCLE_FILE"
+  _sm_dbg_wake "compact_cycle" "0"
+  echo "COMPACT_CYCLE"
+  exit 0
+fi
+
 i=0
 while [ "$i" -lt 30 ]; do
   # Wake on explicit trigger
