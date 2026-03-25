@@ -32,6 +32,33 @@ _sm_dbg_wake() {
   return 0
 }
 
+# Track last-seen results to avoid re-triggering on stale files
+SEEN_FILE="${RUNTIME_DIR}/status/sm_seen_results"
+_seen_results=""
+[ -f "$SEEN_FILE" ] && _seen_results=$(cat "$SEEN_FILE" 2>/dev/null || true)
+
+_has_new_results() {
+  local _f _base _found=false
+  for _f in "$RUNTIME_DIR/results"/pane_*.json; do
+    [ -f "$_f" ] || continue
+    _base=$(basename "$_f")
+    case " $_seen_results " in
+      *" ${_base} "*) continue ;;
+    esac
+    _found=true; break
+  done
+  [ "$_found" = true ]
+}
+
+_mark_results_seen() {
+  local _list=""
+  for _f in "$RUNTIME_DIR/results"/pane_*.json; do
+    [ -f "$_f" ] || continue
+    _list="${_list} $(basename "$_f")"
+  done
+  echo "$_list" > "$SEEN_FILE"
+}
+
 # Pre-sleep check: catch messages/triggers that arrived before entering the loop
 if [ -f "$TRIGGER" ]; then
   rm -f "$TRIGGER" 2>/dev/null
@@ -41,8 +68,7 @@ if [ -f "$TRIGGER" ]; then
 fi
 set -- "$MSG_DIR"/${SM_SAFE}_*.msg
 if [ -f "${1:-}" ]; then _sm_dbg_wake "new_messages_presleep" "0"; echo "NEW_MESSAGES"; exit 0; fi
-set -- "$RUNTIME_DIR/results"/pane_*.json
-if [ -f "${1:-}" ]; then _sm_dbg_wake "new_results_presleep" "0"; echo "NEW_RESULTS"; exit 0; fi
+if _has_new_results; then _mark_results_seen; _sm_dbg_wake "new_results_presleep" "0"; echo "NEW_RESULTS"; exit 0; fi
 set -- "$RUNTIME_DIR/status"/crash_pane_*
 if [ -f "${1:-}" ]; then _sm_dbg_wake "crash_alert_presleep" "0"; echo "CRASH_ALERT"; exit 0; fi
 
@@ -72,9 +98,8 @@ while [ "$i" -lt 30 ]; do
   # Wake on new messages addressed to Session Manager
   set -- "$MSG_DIR"/${SM_SAFE}_*.msg
   if [ -f "${1:-}" ]; then _sm_dbg_wake "new_messages" "$i"; echo "NEW_MESSAGES"; exit 0; fi
-  # Wake on new results
-  set -- "$RUNTIME_DIR/results"/pane_*.json
-  if [ -f "${1:-}" ]; then _sm_dbg_wake "new_results" "$i"; echo "NEW_RESULTS"; exit 0; fi
+  # Wake on new results (skip already-seen)
+  if _has_new_results; then _mark_results_seen; _sm_dbg_wake "new_results" "$i"; echo "NEW_RESULTS"; exit 0; fi
   # Wake on crash alerts
   set -- "$RUNTIME_DIR/status"/crash_pane_*
   if [ -f "${1:-}" ]; then _sm_dbg_wake "crash_alert" "$i"; echo "CRASH_ALERT"; exit 0; fi
