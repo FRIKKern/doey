@@ -100,9 +100,10 @@ DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
 # Read a key=value from an env file, stripping quotes.
 # Usage: _env_val <file> <KEY>
 _env_val() {
-  local v
+  local v default="${3:-}"
   v=$(grep "^${2}=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true
   v="${v//\"/}"
+  [ -z "$v" ] && [ -n "$default" ] && v="$default"
   echo "$v"
 }
 
@@ -3546,6 +3547,7 @@ add_team_from_def() {
     worker_count=$(( worker_count + 1 ))
     _wp_i=$((_wp_i + 1))
   done
+  # Apply initial tiled layout, then rebalance after workers are launched
   tmux select-layout -t "${session}:${window_index}" tiled 2>/dev/null || true
 
   # Write team env with TEAM_DEF field
@@ -3595,8 +3597,9 @@ add_team_from_def() {
   local wdg_model="${td_watchdog_model:-$DOEY_WATCHDOG_MODEL}"
   _launch_team_watchdog "$session" "$wdg_slot" "$window_index" "$wdg_model"
 
-  # Build worker pane list and name window
+  # Build worker pane list, apply manager-left layout, and name window
   _build_worker_pane_list "$session" "$window_index"
+  rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
   _name_team_window "$session" "$window_index" "" "$runtime_dir"
 
   # Brief manager with team layout + briefing content
