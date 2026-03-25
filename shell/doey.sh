@@ -592,7 +592,11 @@ setup_dashboard() {
   done
   SM_PANE="0.1"
 
-  tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
+  if command -v doey-tui >/dev/null 2>&1; then
+    tmux send-keys -t "$session:0.0" "clear && doey-tui '${runtime_dir}'" Enter
+  else
+    tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
+  fi
   local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-session-manager"
   [ -f "${runtime_dir}/doey-settings.json" ] && _sm_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
   tmux send-keys -t "$session:0.1" "$_sm_cmd" Enter
@@ -2481,6 +2485,17 @@ check_doctor() {
     _doc_check ok "Version" "$(_env_val "$version_file" version) ($(_env_val "$version_file" date))"
   else
     _doc_check warn "No version file" "Run 'doey update'"
+  fi
+
+  # TUI dashboard
+  if command -v doey-tui >/dev/null 2>&1; then
+    _doc_check ok "doey-tui" "$(doey-tui --version 2>/dev/null || echo 'installed')"
+  else
+    if command -v go >/dev/null 2>&1 || [ -x /usr/local/go/bin/go ] || [ -x /opt/homebrew/bin/go ]; then
+      _doc_check warn "doey-tui not installed" "Go available — run install.sh to build"
+    else
+      _doc_check skip "doey-tui not installed" "using info-panel.sh fallback"
+    fi
   fi
 
   # Context audit

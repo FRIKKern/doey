@@ -66,7 +66,7 @@ _dispatch_workflow_hooks() {
 
   # Get this pane's role
   local my_role
-  my_role=$(grep "^PANE_${pane_idx}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-)
+  my_role=$(grep "^PANE_${pane_idx}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) || true
   [ -n "$my_role" ] || return 0
 
   # Check if team has a manager
@@ -77,7 +77,7 @@ _dispatch_workflow_hooks() {
   local i=0
   while true; do
     local rule
-    rule=$(grep "^WORKFLOW_${i}=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-)
+    rule=$(grep "^WORKFLOW_${i}=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) || true
     [ -n "$rule" ] || break
     i=$((i + 1))
 
@@ -100,7 +100,7 @@ _dispatch_workflow_hooks() {
       local p=0
       while true; do
         local p_role
-        p_role=$(grep "^PANE_${p}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-)
+        p_role=$(grep "^PANE_${p}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) || true
         [ -n "$p_role" ] || break
         if [ "$p_role" = "$to_role" ]; then
           target="${SESSION_NAME}:${win_idx}.${p}"

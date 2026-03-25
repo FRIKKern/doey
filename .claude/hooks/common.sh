@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# ERR trap: report failing command to stderr so Claude Code shows it instead of "No stderr output"
+trap '_doey_hook_err=$?; echo "[${_DOEY_HOOK_NAME:-hook}] failed at line ${LINENO:-?}: exit code $_doey_hook_err" >&2; exit 0' ERR
+
 init_hook() {
   if [ -z "${INPUT:-}" ]; then INPUT=$(cat); fi
   [ -z "${TMUX_PANE:-}" ] && exit 0

@@ -191,7 +191,7 @@ fi
 
 echo ""
 
-printf "  ${BRAND}[1/5]${RESET} Creating directories..."
+printf "  ${BRAND}[1/7]${RESET} Creating directories..."
 {
   mkdir -p ~/.claude/{agents,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin ~/.config/doey ~/.config/doey/teams ~/.local/share/doey/teams
 } && step_ok || { step_fail; die "Failed to create directories."; }
@@ -211,11 +211,11 @@ date=$INSTALLED_DATE
 repo=$SCRIPT_DIR
 VEOF
 
-install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/6" "agent definitions"
+install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/7" "agent definitions"
 AGENT_COUNT=$_COUNT
 for f in "${_files[@]}"; do detail "$(basename "$f" .md)"; done
 
-printf "  ${BRAND}[3/6]${RESET} Installing premade teams..."
+printf "  ${BRAND}[3/7]${RESET} Installing premade teams..."
 shopt -s nullglob
 _team_files=("$SCRIPT_DIR/teams/"*.team.md)
 shopt -u nullglob
@@ -229,7 +229,7 @@ else
   TEAM_COUNT=0
 fi
 
-printf "  ${BRAND}[4/6]${RESET} Installing skills..."
+printf "  ${BRAND}[4/7]${RESET} Installing skills..."
 # Skills live in .claude/skills/ (project-level, auto-discovered)
 # Count them for the summary
 shopt -s nullglob
@@ -246,7 +246,7 @@ fi
 
 install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 
-printf "  ${BRAND}[5/6]${RESET} Installing doey command..."
+printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
 {
   install_script "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh; do
@@ -261,6 +261,37 @@ if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-con
   detail "installed default config"
 fi
 
+printf "  ${BRAND}[6/7]${RESET} Building doey-tui..."
+if [ -d "$SCRIPT_DIR/tui" ]; then
+  GO_BIN=""
+  if command -v go &>/dev/null; then
+    GO_BIN="go"
+  elif [ -x /usr/local/go/bin/go ]; then
+    GO_BIN="/usr/local/go/bin/go"
+  elif [ -x /opt/homebrew/bin/go ]; then
+    GO_BIN="/opt/homebrew/bin/go"
+  fi
+  if [ -n "$GO_BIN" ]; then
+    set +e
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
+    TUI_RC=$?
+    set -e
+    if [ $TUI_RC -eq 0 ]; then
+      step_ok
+      detail "~/.local/bin/doey-tui"
+    else
+      step_fail
+      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+    fi
+  else
+    printf "   ${DIM}skipped${RESET}\n"
+    warn_msg "Go not installed — doey-tui not built (info-panel.sh will be used as fallback)"
+  fi
+else
+  printf "   ${DIM}skipped${RESET}\n"
+  detail "tui/ directory not found"
+fi
+
 PATH_OK=true
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
   PATH_OK=false
@@ -270,7 +301,7 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
   printf "     ${BRAND}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}\n"
 fi
 
-printf "  ${BRAND}[6/6]${RESET} Running context audit..."
+printf "  ${BRAND}[7/7]${RESET} Running context audit..."
 AUDIT_OUTPUT=""
 AUDIT_FAILED=false
 if AUDIT_OUTPUT=$(bash "$SCRIPT_DIR/shell/context-audit.sh" --repo --no-color 2>&1); then
