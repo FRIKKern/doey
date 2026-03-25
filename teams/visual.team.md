@@ -1,26 +1,26 @@
 ---
 name: visual
 description: "Visual verification service — UI checks, responsive review, accessibility, bug triage"
-grid: dynamic
-workers: 4
-type: local
-watchdog: default
-manager_model: opus
-worker_model: opus
-
-panes:
-  0: { role: manager, agent: visual-manager, name: "Visual Manager" }
-  1: { role: investigator, agent: visual-investigator, name: "DevTools Investigator" }
-  2: { role: reviewer, agent: visual-reviewer, name: "Visual Reviewer" }
-  3: { role: a11y, agent: visual-a11y, name: "UX + A11y Reviewer" }
-  4: { role: reporter, agent: visual-reporter, name: "Defect Reporter" }
-
-workflow:
-  - on: stop, from: investigator, to: manager, subject: evidence_captured
-  - on: stop, from: reviewer, to: manager, subject: visual_review_complete
-  - on: stop, from: a11y, to: manager, subject: a11y_review_complete
-  - on: stop, from: reporter, to: manager, subject: report_ready
 ---
+
+## Panes
+
+| Pane | Role | Agent | Name | Model |
+|------|------|-------|------|-------|
+| 0 | manager | visual-manager | Visual Manager | opus |
+| 1 | investigator | visual-investigator | DevTools Investigator | opus |
+| 2 | reviewer | visual-reviewer | Visual Reviewer | opus |
+| 3 | a11y | visual-a11y | UX + A11y Reviewer | opus |
+| 4 | reporter | visual-reporter | Defect Reporter | opus |
+
+## Workflows
+
+| Trigger | From | To | Subject |
+|---------|------|----|---------|
+| stop | investigator | manager | evidence_captured |
+| stop | reviewer | manager | visual_review_complete |
+| stop | a11y | manager | a11y_review_complete |
+| stop | reporter | manager | report_ready |
 
 ## Team Briefing
 
