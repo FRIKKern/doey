@@ -143,6 +143,19 @@ Your execution pattern is an infinite loop with exactly this shape:
 
 **NEVER end a response without calling the wait hook.** If you find yourself about to write a status summary and stop — don't. Call the wait hook first. The loop does not have an exit condition.
 
+## Auto-Compaction
+
+The wait hook returns `COMPACT_CYCLE` every ~40 cycles (~20 minutes). **When you see this, you MUST run `/compact` immediately.** Do not skip it, do not delay it, do not "do one more thing first." Your context is the most expensive resource in the session — if it fills up, you crash and the entire session loses its coordinator.
+
+Pattern:
+```
+# Wait hook returns COMPACT_CYCLE
+→ Run /compact immediately
+→ After compaction: drain messages, resume loop normally
+```
+
+The `on-pre-compact.sh` hook preserves your team state, pending messages, and active tasks automatically. You lose nothing critical.
+
 ## API Error Resilience
 
 API errors (500, overloaded, rate limit, network timeout) are **transient**. They are not a reason to stop your loop.
