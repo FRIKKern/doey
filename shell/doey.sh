@@ -4202,6 +4202,7 @@ case "${1:-}" in
     add-team   Add a team window with its own Window Manager+Watchdog+Workers
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
+    teams      List available premade and project team definitions
     settings   Open interactive settings editor window
     version    Show version and installation info
     --help     Show this help
@@ -4337,6 +4338,50 @@ HELP
   list-windows|list-teams)
     require_running_session
     list_team_windows "$session" "$runtime_dir"
+    exit 0
+    ;;
+  teams)
+    _found_any=false
+    # Premade teams
+    _premade_dir="$HOME/.local/share/doey/teams"
+    printf "\n  ${BOLD}Premade teams (shipped with Doey):${RESET}\n"
+    if [ -d "$_premade_dir" ]; then
+      _found_premade=false
+      for _f in "$_premade_dir"/*.team.md; do
+        [ -f "$_f" ] || continue
+        _found_premade=true
+        _found_any=true
+        _tname="$(grep '^name:' "$_f" | head -1 | sed 's/^name: *//' | tr -d '"')"
+        _tdesc="$(grep '^description:' "$_f" | head -1 | sed 's/^description: *//' | tr -d '"')"
+        [ -n "$_tname" ] || _tname="$(basename "$_f" .team.md)"
+        printf "    %-14s %s\n" "$_tname" "$_tdesc"
+      done
+      if [ "$_found_premade" = false ]; then
+        printf "    ${DIM}(none found)${RESET}\n"
+      fi
+    else
+      printf "    ${DIM}(none found)${RESET}\n"
+    fi
+    # Project teams
+    printf "\n  ${BOLD}Project teams (.doey/teams/ and teams/):${RESET}\n"
+    _found_project=false
+    _proj_dir="$(pwd)"
+    for _pdir in "$_proj_dir/.doey/teams" "$_proj_dir/teams"; do
+      [ -d "$_pdir" ] || continue
+      for _f in "$_pdir"/*.team.md; do
+        [ -f "$_f" ] || continue
+        _found_project=true
+        _found_any=true
+        _tname="$(grep '^name:' "$_f" | head -1 | sed 's/^name: *//' | tr -d '"')"
+        _tdesc="$(grep '^description:' "$_f" | head -1 | sed 's/^description: *//' | tr -d '"')"
+        [ -n "$_tname" ] || _tname="$(basename "$_f" .team.md)"
+        printf "    %-14s %s\n" "$_tname" "$_tdesc"
+      done
+    done
+    if [ "$_found_project" = false ]; then
+      printf "    ${DIM}(none found)${RESET}\n"
+    fi
+    printf "\n  Usage: ${BOLD}doey add-team <name>${RESET}\n\n"
     exit 0
     ;;
   [0-9]*x[0-9]*)

@@ -193,7 +193,7 @@ echo ""
 
 printf "  ${BRAND}[1/5]${RESET} Creating directories..."
 {
-  mkdir -p ~/.claude/{agents,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin ~/.config/doey ~/.config/doey/teams
+  mkdir -p ~/.claude/{agents,doey,agent-memory/doey-manager,agent-memory/doey-watchdog} ~/.local/bin ~/.config/doey ~/.config/doey/teams ~/.local/share/doey/teams
 } && step_ok || { step_fail; die "Failed to create directories."; }
 
 # Clean up old commands that are now project-level skills
@@ -211,11 +211,25 @@ date=$INSTALLED_DATE
 repo=$SCRIPT_DIR
 VEOF
 
-install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/5" "agent definitions"
+install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/6" "agent definitions"
 AGENT_COUNT=$_COUNT
 for f in "${_files[@]}"; do detail "$(basename "$f" .md)"; done
 
-printf "  ${BRAND}[3/5]${RESET} Installing skills..."
+printf "  ${BRAND}[3/6]${RESET} Installing premade teams..."
+shopt -s nullglob
+_team_files=("$SCRIPT_DIR/teams/"*.team.md)
+shopt -u nullglob
+TEAM_COUNT=${#_team_files[@]}
+if [ "$TEAM_COUNT" -gt 0 ]; then
+  cp "${_team_files[@]}" ~/.local/share/doey/teams/ && step_ok || { step_fail; die "Failed to copy team definitions."; }
+  for f in "${_team_files[@]}"; do detail "$(basename "$f" .team.md)"; done
+else
+  step_ok
+  detail "no team definitions found (skipped)"
+  TEAM_COUNT=0
+fi
+
+printf "  ${BRAND}[4/6]${RESET} Installing skills..."
 # Skills live in .claude/skills/ (project-level, auto-discovered)
 # Count them for the summary
 shopt -s nullglob
@@ -232,7 +246,7 @@ fi
 
 install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 
-printf "  ${BRAND}[4/5]${RESET} Installing doey command..."
+printf "  ${BRAND}[5/6]${RESET} Installing doey command..."
 {
   install_script "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh; do
@@ -256,7 +270,7 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
   printf "     ${BRAND}export PATH=\"\$HOME/.local/bin:\$PATH\"${RESET}\n"
 fi
 
-printf "  ${BRAND}[5/5]${RESET} Running context audit..."
+printf "  ${BRAND}[6/6]${RESET} Running context audit..."
 AUDIT_OUTPUT=""
 AUDIT_FAILED=false
 if AUDIT_OUTPUT=$(bash "$SCRIPT_DIR/shell/context-audit.sh" --repo --no-color 2>&1); then
@@ -316,6 +330,7 @@ fi
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}  ${BOLD}Installed:${RESET}                                ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s agent definitions                 ${SUCCESS}│${RESET}\n" "$AGENT_COUNT"
+printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s premade teams                      ${SUCCESS}│${RESET}\n" "$TEAM_COUNT"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} %-2s skills (project-level)              ${SUCCESS}│${RESET}\n" "$SKILL_COUNT"
 printf "${SUCCESS}│${RESET}    ${DIM}•${RESET} doey CLI                               ${SUCCESS}│${RESET}\n"
 printf "${SUCCESS}│${RESET}                                            ${SUCCESS}│${RESET}\n"
