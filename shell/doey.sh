@@ -3451,6 +3451,7 @@ _name_team_window() {
   local label=""
   if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${window_index}.env" ]; then
     label=$(_env_val "${runtime_dir}/team_${window_index}.env" TEAM_NAME)
+    [ "$label" = "generic" ] && label=""
   fi
   if [ -z "$label" ]; then
     local _ntw_tt=""
@@ -3459,7 +3460,7 @@ _name_team_window() {
     if [ "$_ntw_tt" = "freelancer" ]; then
       label="Freelancers"
     elif [ -z "$wt_dir" ]; then
-      label="Local Team"
+      label="Regular Team"
     else
       label="Worktree Team"
     fi
