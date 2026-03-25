@@ -64,3 +64,9 @@ fi
 $_s allow-passthrough on
 $_s bell-action none
 $_s visual-bell off
+
+# ── Paste reliability ────────────────────────────────────────────────
+# Default escape-time (500ms) causes paste from clipboard to garble —
+# tmux can't tell Escape keypresses from escape sequences fast enough.
+# 10ms is plenty for terminal escape sequences, eliminates paste issues.
+tmux set-option -s escape-time 10
