@@ -2706,6 +2706,8 @@ MANIFEST
   # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
   local _team1_def=""
   [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_def=$(_read_team_config "1" "DEF" "")
+  local _team1_type=""
+  [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_type=$(_read_team_config "1" "TYPE" "")
 
   if [ -n "$_team1_def" ]; then
     # Team 1 uses a .team.md definition — dashboard first, then spawn from def
@@ -2714,7 +2716,7 @@ MANIFEST
     step_done
 
     step_start 4 "Launching team 1 from definition '${_team1_def}'..."
-    if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_team1_def" ); then
+    if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_team1_def" "$_team1_type" ); then
       printf "  ${ERROR}Failed to launch team 1 from definition '${_team1_def}'${RESET}\n"
     fi
     step_done
@@ -2789,7 +2791,7 @@ MANIFEST
             _ptc_fail=$((_ptc_fail + 1))
             continue
           fi
-          if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_ptc_def" ); then
+          if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_ptc_def" "$_ptc_type" ); then
             _ptc_fail=$((_ptc_fail + 1))
           fi
           (( _ptc_i < _ptc_total )) && sleep $DOEY_TEAM_LAUNCH_DELAY
@@ -3482,7 +3484,7 @@ _print_team_created() {
 
 # Spawn a team from a .team.md definition file
 add_team_from_def() {
-  local session="$1" runtime_dir="$2" dir="$3" team_name="$4"
+  local session="$1" runtime_dir="$2" dir="$3" team_name="$4" type_override="${5:-}"
 
   # Find and parse definition
   if ! _find_team_def "$team_name"; then
@@ -3502,7 +3504,11 @@ add_team_from_def() {
   td_name=$(_env_val "$env_file" NAME)
   td_grid=$(_env_val "$env_file" GRID "dynamic")
   td_workers=$(_env_val "$env_file" WORKERS "3")
-  td_type=$(_env_val "$env_file" TYPE "local")
+  if [ -n "$type_override" ]; then
+    td_type="$type_override"
+  else
+    td_type=$(_env_val "$env_file" TYPE "local")
+  fi
   td_watchdog=$(_env_val "$env_file" WATCHDOG "default")
   td_manager_model=$(_env_val "$env_file" MANAGER_MODEL "")
   td_worker_model=$(_env_val "$env_file" WORKER_MODEL "")

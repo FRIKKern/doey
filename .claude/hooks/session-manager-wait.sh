@@ -2,7 +2,14 @@
 # Session Manager wait — sleeps up to 30s, wakes on new messages or triggers.
 set -euo pipefail
 
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { sleep 30; exit 0; }
+# Prefer env var (set by on-session-start), fall back to tmux query
+if [ -n "${DOEY_RUNTIME:-}" ]; then
+  RUNTIME_DIR="$DOEY_RUNTIME"
+elif [ -n "${1:-}" ] && [ -d "${1}" ]; then
+  RUNTIME_DIR="$1"
+else
+  RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { sleep 30; exit 0; }
+fi
 source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 
 SM_PANE="${SM_PANE:-0.1}"

@@ -182,9 +182,13 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 - A critical error requires escalation
 - You need cross-team coordination
 
+## Rules
+
+1. **ALWAYS use the `AskUserQuestion` tool when asking the user anything** (design confirmations, ambiguous requirements, destructive action approval). Never ask questions as inline text — inline questions cause the monitor loop to resume before the user can respond.
+
 ## Workflow
 
-1. **Plan** — Clear task: dispatch with short plan. Ambiguous: `/doey-research` first. Only confirm if destructive/architectural/irreversible.
+1. **Plan** — Clear task: dispatch with short plan. Ambiguous: `/doey-research` first. Only confirm if destructive/architectural/irreversible (use `AskUserQuestion`).
 2. **Delegate** — Rename every worker first. Dispatch independent tasks in parallel. Self-contained prompts (workers have zero context). Distinct files per worker; sequential if shared.
 3. **Monitor + Messages** — **Drain message queue first**, then `/doey-monitor`. Messages tell you WHO finished and with what result. Repeat every 10-15s until wave complete.
 4. **Consolidate** — Read result files for finished workers. Update context log. Dispatch next wave.
