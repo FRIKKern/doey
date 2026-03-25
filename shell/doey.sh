@@ -1560,6 +1560,9 @@ MANIFEST
   [[ "$actual" -ne "$total" ]] && \
     printf "\n   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
 
+  # Apply manager-left layout: pane 0 full-height left, workers in 2-row columns
+  rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
+
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Name panes --
@@ -2909,7 +2912,7 @@ _layout_checksum() {
 }
 
 rebalance_grid_layout() {
-  local session="$1" team_window="${2:-1}" runtime_dir="${3:-}" mgr_width=60
+  local session="$1" team_window="${2:-1}" runtime_dir="${3:-}" mgr_width=90
 
   local win_w win_h
   win_w="$(tmux display-message -t "$session:${team_window}" -p '#{window_width}')"
@@ -2937,20 +2940,30 @@ rebalance_grid_layout() {
   local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
 
   if [ "$_rgl_is_freelancer" = "true" ]; then
-    # Freelancer: all columns are equal-width, 2 rows each (no manager column)
-    local total_cols=$(( (num_panes + 1) / 2 ))
-    local body="" x=0 c w pi
-    for ((c=0; c<total_cols; c++)); do
-      if ((c == total_cols - 1)); then
+    # Freelancer: pane 0 (Git Agent) full-height left column, workers in 2-row columns on right
+    local fl_mgr_width=$mgr_width
+    local fl_max_mgr=$((win_w / 3))
+    (( fl_mgr_width > fl_max_mgr )) && fl_mgr_width=$fl_max_mgr
+
+    local num_workers=$((num_panes - 1))
+    local worker_cols=$(( (num_workers + 1) / 2 ))
+    local worker_area=$((win_w - fl_mgr_width - 1))
+    local body="" x=0
+    body="${fl_mgr_width}x${win_h},${x},0,${pane_ids[0]}"
+    x=$((fl_mgr_width + 1))
+
+    local c w wi
+    for ((c=0; c<worker_cols; c++)); do
+      if ((c == worker_cols - 1)); then
         w=$((win_w - x))
       else
-        w=$((win_w / total_cols))
+        w=$((worker_area / worker_cols))
       fi
-      pi=$((c * 2))
-      local tp="${pane_ids[$pi]}"
-      [ -n "$body" ] && body+=","
-      if (( pi + 1 < num_panes )); then
-        local bp="${pane_ids[$((pi + 1))]}"
+      wi=$((c * 2 + 1))
+      local tp="${pane_ids[$wi]}"
+      body+=","
+      if (( wi + 1 < num_panes )); then
+        local bp="${pane_ids[$((wi + 1))]}"
         body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
       else
         body+="${w}x${win_h},${x},0,${tp}"
@@ -2962,8 +2975,8 @@ rebalance_grid_layout() {
     local num_workers=$((num_panes - 1))
     local worker_cols=$(( (num_workers + 1) / 2 ))
 
-    # Cap manager width at 25% of window
-    local max_mgr=$((win_w / 4))
+    # Cap manager width at 33% of window
+    local max_mgr=$((win_w / 3))
     (( mgr_width > max_mgr )) && mgr_width=$max_mgr
 
     local worker_area=$((win_w - mgr_width - 1))
@@ -3791,6 +3804,9 @@ add_team_window() {
   local actual
   actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l | tr -d ' ')
   [ "$actual" -eq "$total_panes" ] || printf "  ${WARN}Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total_panes" "$actual"
+
+  # Apply manager-left layout: pane 0 full-height left, workers in 2-row columns
+  rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
 
   local worker_panes worker_count
   worker_panes=$(_build_worker_csv "$total_panes")
