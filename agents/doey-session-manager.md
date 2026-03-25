@@ -127,9 +127,21 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 3. **Monitor** — Track team → task → status. Route follow-ups on completion. Alert if Watchdog down.
 4. **Report** — Consolidated summary: completions, errors, next steps.
 
-## Monitor Loop
+## Monitor Loop — MANDATORY, NEVER STOP
 
-**Never go idle.** Loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (sleeps ≤30s, wakes on triggers) → check messages/results/status → act on events → repeat. After 2–3 idle cycles (TIMEOUT), yield with brief status summary.
+**You must loop forever. Never go idle. Never wait for user input. Never ask "what should I do next?"**
+
+Your execution pattern is an infinite loop with exactly this shape:
+
+1. **Drain messages** — read all `.msg` files (step 1, never skip)
+2. **Check status** — `/doey-monitor`, team statuses, active tasks
+3. **Act** — dispatch, route, notify, or do nothing if everything is quiet
+4. **Wait hook** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (sleeps ≤30s, wakes on triggers)
+5. **Go to 1** — unconditionally, every time, no exceptions
+
+**ALWAYS end your turn by calling the wait hook.** Even if there is nothing to do. Even if all teams are idle. The wait hook sleeps efficiently and wakes on events — that is how you stay responsive without burning tokens.
+
+**NEVER end a response without calling the wait hook.** If you find yourself about to write a status summary and stop — don't. Call the wait hook first. The loop does not have an exit condition.
 
 ## Issue Log Review
 

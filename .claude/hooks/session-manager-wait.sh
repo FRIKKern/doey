@@ -25,6 +25,20 @@ _sm_dbg_wake() {
   return 0
 }
 
+# Pre-sleep check: catch messages/triggers that arrived before entering the loop
+if [ -f "$TRIGGER" ]; then
+  rm -f "$TRIGGER" 2>/dev/null
+  _sm_dbg_wake "trigger_presleep" "0"
+  echo "TRIGGERED"
+  exit 0
+fi
+set -- "$MSG_DIR"/${SM_SAFE}_*.msg
+if [ -f "${1:-}" ]; then _sm_dbg_wake "new_messages_presleep" "0"; echo "NEW_MESSAGES"; exit 0; fi
+set -- "$RUNTIME_DIR/results"/pane_*.json
+if [ -f "${1:-}" ]; then _sm_dbg_wake "new_results_presleep" "0"; echo "NEW_RESULTS"; exit 0; fi
+set -- "$RUNTIME_DIR/status"/crash_pane_*
+if [ -f "${1:-}" ]; then _sm_dbg_wake "crash_alert_presleep" "0"; echo "CRASH_ALERT"; exit 0; fi
+
 i=0
 while [ "$i" -lt 30 ]; do
   # Wake on explicit trigger

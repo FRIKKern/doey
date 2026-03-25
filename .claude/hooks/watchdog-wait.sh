@@ -25,6 +25,24 @@ _ww_dbg_wake() {
   return 0
 }
 
+# Pre-sleep check: catch triggers/messages that arrived before entering the loop
+if [ -f "$TRIGGER" ]; then
+  rm -f "$TRIGGER" 2>/dev/null
+  _ww_dbg_wake "trigger_presleep" "0"
+  echo "TRIGGERED"
+  exit 0
+fi
+# Check for pending messages addressed to this watchdog pane
+_WW_SESSION="${DOEY_SESSION:-}"
+[ -z "$_WW_SESSION" ] && _WW_SESSION=$(tmux show-environment DOEY_SESSION 2>/dev/null | cut -d= -f2-) || true
+_WW_PANE="${DOEY_PANE_INDEX:-}"
+if [ -n "$_WW_SESSION" ] && [ -n "$_WW_PANE" ]; then
+  _WW_MSG_DIR="${RUNTIME_DIR}/messages"
+  _WW_SAFE="${_WW_SESSION//[:.]/_}_${_WW_PANE//[:.]/_}"
+  set -- "$_WW_MSG_DIR"/${_WW_SAFE}_*.msg
+  if [ -f "${1:-}" ]; then _ww_dbg_wake "new_messages_presleep" "0"; echo "NEW_MESSAGES"; exit 0; fi
+fi
+
 i=0
 while [ "$i" -lt "$DOEY_WATCHDOG_SCAN_INTERVAL" ]; do
   if [ -f "$TRIGGER" ]; then

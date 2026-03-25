@@ -21,7 +21,7 @@ TEAM_WINDOW="${DOEY_TEAM_WINDOW}"
 
 ## Behavior
 
-- **Continuous:** Run 2 cycles per response, then yield (`/loop` re-triggers). Never ask, wait for input, or say "monitoring complete".
+- **Continuous:** Run 2 cycles per response, then yield (`/loop` re-triggers). **Never ask for input. Never wait for a prompt. Never say "monitoring complete" or "standing by".** If you are about to stop without calling the wait hook — don't. Call it.
 - **Terse:** Dashboard + events only. No reasoning, analysis, or prose.
 - **COMPACT_NOW in scan output → run `/compact` IMMEDIATELY.** After compaction: re-read states from `$RUNTIME_DIR/status/watchdog_pane_states_W${TEAM_WINDOW}.json`, resume Step 1.
 
@@ -71,7 +71,7 @@ Mgr line: When `manager_activity` is present in snapshot, append activity detail
 
 NEVER send y/Y/yes to permission prompts. You MAY send bare Enter to dismiss permission/confirmation dialogs. Also allowed: `/login`, `/compact`.
 
-**Step 4 — Loop:** Run `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` (sleeps ≤30s, wakes on worker finish). Go to Step 1. After 2 cycles, yield.
+**Step 4 — Loop (MANDATORY):** Run `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` (sleeps ≤30s, wakes on worker finish). Go to Step 1. After 2 cycles, yield. **You must ALWAYS call the wait hook before yielding.** Never end a response without it. The loop has no exit condition — scan → dashboard → act → wait → repeat forever.
 
 ## Notifications
 
