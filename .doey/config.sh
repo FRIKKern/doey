@@ -22,10 +22,8 @@
 # DOEY_INITIAL_WORKER_COLS=3
 
 # Number of team windows to create at startup
-# DOEY_INITIAL_TEAMS=2
 
 # Number of teams that start in isolated git worktrees
-# DOEY_INITIAL_WORKTREE_TEAMS=2
 
 # Maximum number of worker panes across all teams
 # DOEY_MAX_WORKERS=20
@@ -132,9 +130,26 @@ DOEY_WATCHDOG_MODEL=sonnet
 # Examples:
 #   # Smaller team for a simple project
 #   DOEY_INITIAL_WORKER_COLS=2
-#   DOEY_INITIAL_TEAMS=1
 #
 #   # Larger team for a monorepo
 #   DOEY_INITIAL_WORKER_COLS=4
-#   DOEY_INITIAL_TEAMS=4
 #   DOEY_MAX_WORKERS=30
+
+
+
+
+
+DOEY_TEAM_COUNT=5
+DOEY_TEAM_1_TYPE=local
+DOEY_TEAM_1_DEF=visual
+DOEY_TEAM_1_WORKERS=4
+DOEY_TEAM_2_TYPE=local
+DOEY_TEAM_2_DEF=generic
+DOEY_TEAM_2_WORKERS=4
+DOEY_TEAM_3_TYPE=freelancer
+DOEY_TEAM_3_WORKERS=4
+DOEY_TEAM_4_TYPE=premade
+DOEY_TEAM_4_DEF=generic
+DOEY_TEAM_4_WORKERS=4
+DOEY_TEAM_5_TYPE=premade
+DOEY_TEAM_5_DEF=seo

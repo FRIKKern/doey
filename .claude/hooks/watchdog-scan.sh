@@ -589,7 +589,7 @@ fi
 _all_available=$((_n_working + _n_idle + _n_stuck + _n_crashed))
 WAVE_STATE_FILE="${RUNTIME_DIR}/status/wave_state_W${TARGET_WINDOW}"
 read -r _prev_wave_state < "$WAVE_STATE_FILE" 2>/dev/null || _prev_wave_state="UNKNOWN"
-if [ "$_n_working" -eq 0 ] && [ "$_n_stuck" -eq 0 ] && [ "$_n_crashed" -eq 0 ] && [ "$_all_available" -gt 0 ]; then
+if [ "$_n_working" -eq 0 ] && [ "$_n_stuck" -eq 0 ] && [ "$_n_crashed" -eq 0 ] && [ "$_n_booting" -eq 0 ] && [ "$_all_available" -gt 0 ]; then
   _cur_wave_state="ALL_IDLE"
 else
   _cur_wave_state="HAS_WORKING"

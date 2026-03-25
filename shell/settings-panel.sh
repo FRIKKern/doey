@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Doey Settings Panel — shows configuration values, swappable with Info Panel via Prefix+S
+# Doey Settings Panel — interactive TUI with cursor navigation, inline editing,
+# team management, and agent property editing.
 set -uo pipefail
 
 RUNTIME_DIR="${1:-${DOEY_RUNTIME:-}}"
@@ -19,6 +20,7 @@ C_RED='\033[31m'
 C_RED_DIM='\033[2;31m'
 C_CYAN_DIM='\033[2;36m'
 C_YELLOW='\033[33m'
+C_REVERSE='\033[7m'
 
 repeat_char() {
   local ch="$1" len="$2" out="" i=0
@@ -48,23 +50,6 @@ _config_val() {
     [ -n "$val" ] && printf '%s' "$val" && return 0
   done
   return 1
-}
-
-_settings_row() {
-  local var_name="$1" default_val="$2" current_val="$3"
-  local config_val indicator label dots_needed name_len val_len
-  if config_val=$(_config_val "$var_name") && [ "$config_val" != "$default_val" ]; then
-    indicator="$(printf '%b●%b' "${C_BOLD_GREEN}" "${C_RESET}")"
-    label="$(printf '%s  (custom)' "$current_val")"
-  else
-    indicator="$(printf '%b○%b' "${C_DIM}" "${C_RESET}")"
-    label="$current_val"
-  fi
-  name_len=${#var_name}
-  val_len=${#label}
-  dots_needed=$((50 - name_len - val_len))
-  [ "$dots_needed" -lt 2 ] && dots_needed=2
-  printf '    %s %s %b%s%b %s\n' "$indicator" "$var_name" "${C_DIM}" "$(repeat_char '.' "$dots_needed")" "${C_RESET}" "$label"
 }
 
 _doey_load_config() {
@@ -100,43 +85,446 @@ _truncate() {
   fi
 }
 
+# ── Cursor State Management ──────────────────────────────────────────────────
+
+_CURSOR_POS=0
+_CURSOR_MAX=0
+_EDIT_MODE=false
+_EDIT_VAR=""
+_STATUS_MSG=""
+_STATUS_EXPIRE=0
+
+_read_cursor() {
+  local view="$1"
+  local cursor_file="${RUNTIME_DIR}/status/settings_cursor_${view}"
+  if [ -f "$cursor_file" ]; then
+    _CURSOR_POS=$(cat "$cursor_file" 2>/dev/null)
+    # Ensure numeric
+    case "$_CURSOR_POS" in
+      *[!0-9]*) _CURSOR_POS=0 ;;
+    esac
+  else
+    _CURSOR_POS=0
+  fi
+}
+
+_write_cursor() {
+  local view="$1" pos="$2"
+  local cursor_file="${RUNTIME_DIR}/status/settings_cursor_${view}"
+  mkdir -p "${RUNTIME_DIR}/status" 2>/dev/null || true
+  echo "$pos" > "$cursor_file"
+}
+
+_cursor_move() {
+  local direction="$1" view="$2"
+  if [ "$direction" = "up" ]; then
+    _CURSOR_POS=$((_CURSOR_POS - 1))
+    [ "$_CURSOR_POS" -lt 0 ] && _CURSOR_POS=$((_CURSOR_MAX - 1))
+  else
+    _CURSOR_POS=$((_CURSOR_POS + 1))
+    [ "$_CURSOR_POS" -ge "$_CURSOR_MAX" ] && _CURSOR_POS=0
+  fi
+  _write_cursor "$view" "$_CURSOR_POS"
+}
+
+# ── Validation ───────────────────────────────────────────────────────────────
+
+# Validate a setting value. Returns 0 if valid, 1 if not.
+# Prints error message on failure.
+_validate_setting() {
+  local var="$1" val="$2"
+  case "$var" in
+    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_SESSION_MANAGER_MODEL)
+      case "$val" in
+        opus|sonnet|haiku) return 0 ;;
+        *) printf 'Must be: opus, sonnet, or haiku'; return 1 ;;
+      esac
+      ;;
+    DOEY_INITIAL_WORKER_COLS)
+      case "$val" in *[!0-9]*) printf 'Must be a number 1-6'; return 1 ;; esac
+      [ "$val" -ge 1 ] && [ "$val" -le 6 ] && return 0
+      printf 'Must be 1-6'; return 1
+      ;;
+    DOEY_INITIAL_TEAMS)
+      case "$val" in *[!0-9]*) printf 'Must be a number 1-10'; return 1 ;; esac
+      [ "$val" -ge 1 ] && [ "$val" -le 10 ] && return 0
+      printf 'Must be 1-10'; return 1
+      ;;
+    DOEY_INITIAL_WORKTREE_TEAMS|DOEY_INITIAL_FREELANCER_TEAMS)
+      case "$val" in *[!0-9]*) printf 'Must be a number 0-10'; return 1 ;; esac
+      [ "$val" -ge 0 ] && [ "$val" -le 10 ] && return 0
+      printf 'Must be 0-10'; return 1
+      ;;
+    DOEY_MAX_WORKERS)
+      case "$val" in *[!0-9]*) printf 'Must be a number 1-50'; return 1 ;; esac
+      [ "$val" -ge 1 ] && [ "$val" -le 50 ] && return 0
+      printf 'Must be 1-50'; return 1
+      ;;
+    DOEY_MAX_WATCHDOG_SLOTS)
+      case "$val" in *[!0-9]*) printf 'Must be a number 1-6'; return 1 ;; esac
+      [ "$val" -ge 1 ] && [ "$val" -le 6 ] && return 0
+      printf 'Must be 1-6'; return 1
+      ;;
+    DOEY_INFO_PANEL_REFRESH)
+      case "$val" in *[!0-9]*) printf 'Must be a number >= 1'; return 1 ;; esac
+      [ "$val" -ge 1 ] && return 0
+      printf 'Must be >= 1'; return 1
+      ;;
+    *)
+      # All timing/delay vars: number >= 1
+      case "$val" in *[!0-9]*) printf 'Must be a number >= 1'; return 1 ;; esac
+      [ "$val" -ge 1 ] && return 0
+      printf 'Must be >= 1'; return 1
+      ;;
+  esac
+}
+
+# Get validation hint for a setting (shown in edit prompt)
+_validation_hint() {
+  local var="$1"
+  case "$var" in
+    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_SESSION_MANAGER_MODEL)
+      printf '(opus/sonnet/haiku)' ;;
+    DOEY_INITIAL_WORKER_COLS) printf '(1-6)' ;;
+    DOEY_INITIAL_TEAMS) printf '(1-10)' ;;
+    DOEY_INITIAL_WORKTREE_TEAMS|DOEY_INITIAL_FREELANCER_TEAMS) printf '(0-10)' ;;
+    DOEY_MAX_WORKERS) printf '(1-50)' ;;
+    DOEY_MAX_WATCHDOG_SLOTS) printf '(1-6)' ;;
+    *) printf '(number >= 1)' ;;
+  esac
+}
+
+# ── Config Writing ───────────────────────────────────────────────────────────
+
+# Write a setting to the project config file. Atomic write via tmp+mv.
+_write_config_setting() {
+  local var="$1" val="$2"
+  local proj_dir config_file
+  proj_dir=$(_get_proj_dir)
+  config_file="${proj_dir}/.doey/config.sh"
+
+  if [ ! -f "$config_file" ]; then
+    mkdir -p "$(dirname "$config_file")"
+    cp "${proj_dir}/shell/doey-config-default.sh" "$config_file" 2>/dev/null || {
+      # Minimal config if default not found
+      printf '#!/usr/bin/env bash\n# Doey project config\n' > "$config_file"
+    }
+  fi
+
+  local tmp_file="${config_file}.tmp"
+  # Check if var already exists (commented or uncommented)
+  if grep -q "^${var}=" "$config_file" 2>/dev/null; then
+    # Update existing uncommented line
+    sed "s|^${var}=.*|${var}=${val}|" "$config_file" > "$tmp_file"
+    mv "$tmp_file" "$config_file"
+  elif grep -q "^# *${var}=" "$config_file" 2>/dev/null; then
+    # Uncomment and set value
+    sed "s|^# *${var}=.*|${var}=${val}|" "$config_file" > "$tmp_file"
+    mv "$tmp_file" "$config_file"
+  else
+    # Append
+    printf '%s=%s\n' "$var" "$val" >> "$config_file"
+  fi
+
+  # Touch refresh trigger
+  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
+  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
+  touch "$trigger"
+}
+
+# ── Agent Frontmatter Writing ────────────────────────────────────────────────
+
+_write_agent_frontmatter() {
+  local agent_file="$1" field="$2" new_val="$3"
+  [ -f "$agent_file" ] || return 1
+
+  local tmp_file="${agent_file}.tmp"
+  local in_front=false replaced=false
+  while IFS= read -r line; do
+    case "$line" in
+      ---)
+        if [ "$in_front" = false ]; then
+          in_front=true
+          printf '%s\n' "$line"
+          continue
+        else
+          # End of frontmatter — if field wasn't found, insert before closing ---
+          if [ "$replaced" = false ]; then
+            printf '%s: %s\n' "$field" "$new_val"
+          fi
+          in_front=false
+          printf '%s\n' "$line"
+          continue
+        fi
+        ;;
+    esac
+    if [ "$in_front" = true ]; then
+      case "$line" in
+        "${field}:"*)
+          printf '%s: %s\n' "$field" "$new_val"
+          replaced=true
+          continue
+          ;;
+      esac
+    fi
+    printf '%s\n' "$line"
+  done < "$agent_file" > "$tmp_file"
+  mv "$tmp_file" "$agent_file"
+
+  # Copy to ~/.claude/agents/ if it exists
+  local agents_dest="${HOME}/.claude/agents/$(basename "$agent_file")"
+  if [ -d "${HOME}/.claude/agents" ]; then
+    cp "$agent_file" "$agents_dest"
+  fi
+}
+
+# ── Settings Row (cursor-aware) ──────────────────────────────────────────────
+
+# Parallel arrays for settings items (populated during render)
+_SETTINGS_VARS=""    # newline-separated var names
+_SETTINGS_COUNT=0
+
+_settings_row() {
+  local var_name="$1" default_val="$2" current_val="$3"
+  local row_idx="$4"  # cursor index for this row
+  local config_val indicator label dots_needed name_len val_len
+  local is_selected=false
+
+  [ "$row_idx" -eq "$_CURSOR_POS" ] && is_selected=true
+
+  if config_val=$(_config_val "$var_name") && [ "$config_val" != "$default_val" ]; then
+    indicator="$(printf '%b●%b' "${C_BOLD_GREEN}" "${C_RESET}")"
+    label="$(printf '%s  (custom)' "$current_val")"
+  else
+    indicator="$(printf '%b○%b' "${C_DIM}" "${C_RESET}")"
+    label="$current_val"
+  fi
+
+  name_len=${#var_name}
+  val_len=${#label}
+  dots_needed=$((50 - name_len - val_len))
+  [ "$dots_needed" -lt 2 ] && dots_needed=2
+
+  if [ "$is_selected" = true ]; then
+    printf '  %b▸ %s %s %b%s%b %s%b\n' \
+      "${C_REVERSE}" "$indicator" "$var_name" \
+      "${C_DIM}" "$(repeat_char '.' "$dots_needed")" "${C_RESET}${C_REVERSE}" \
+      "$label" "${C_RESET}"
+  else
+    printf '    %s %s %b%s%b %s\n' \
+      "$indicator" "$var_name" \
+      "${C_DIM}" "$(repeat_char '.' "$dots_needed")" "${C_RESET}" \
+      "$label"
+  fi
+}
+
+# ── Render: Settings View ────────────────────────────────────────────────────
+
+# Settings vars list (order matches render, used for cursor→var lookup)
+_SETTINGS_VAR_LIST=""
+
+_render_settings_view() {
+  local _GLOBAL_CONFIG _PROJECT_CONFIG _PROJ_DIR
+  _GLOBAL_CONFIG="${HOME}/.config/doey/config.sh"
+  _PROJ_DIR=$(_get_proj_dir)
+  _PROJECT_CONFIG=""
+  [ -f "${_PROJ_DIR}/.doey/config.sh" ] && _PROJECT_CONFIG="${_PROJ_DIR}/.doey/config.sh"
+
+  if [ -f "$_GLOBAL_CONFIG" ]; then
+    printf '  %bConfig (global):%b  %s %b(loaded)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_GLOBAL_CONFIG" "${C_GREEN}" "${C_RESET}"
+  else
+    printf '  %bConfig (global):%b  %s %b(not found — using defaults)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_GLOBAL_CONFIG" "${C_DIM}" "${C_RESET}"
+  fi
+  if [ -n "$_PROJECT_CONFIG" ]; then
+    printf '  %bConfig (project):%b %s %b(loaded — overrides global)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_PROJECT_CONFIG" "${C_GREEN}" "${C_RESET}"
+  fi
+  printf '\n'
+
+  local _ri=0
+  _SETTINGS_VAR_LIST=""
+
+  printf '  %b Grid & Teams%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
+  _settings_row "DOEY_INITIAL_WORKER_COLS"    "2"   "$DOEY_INITIAL_WORKER_COLS"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_INITIAL_WORKER_COLS "; _ri=$((_ri+1))
+  _settings_row "DOEY_INITIAL_TEAMS"          "2"   "$DOEY_INITIAL_TEAMS"          "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_INITIAL_TEAMS "; _ri=$((_ri+1))
+  _settings_row "DOEY_INITIAL_WORKTREE_TEAMS" "0"   "$DOEY_INITIAL_WORKTREE_TEAMS" "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_INITIAL_WORKTREE_TEAMS "; _ri=$((_ri+1))
+  _settings_row "DOEY_MAX_WORKERS"            "20"  "$DOEY_MAX_WORKERS"            "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MAX_WORKERS "; _ri=$((_ri+1))
+  _settings_row "DOEY_MAX_WATCHDOG_SLOTS"     "6"   "$DOEY_MAX_WATCHDOG_SLOTS"     "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MAX_WATCHDOG_SLOTS "; _ri=$((_ri+1))
+  printf '\n'
+
+  printf '  %b Models%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
+  _settings_row "DOEY_MANAGER_MODEL"          "opus"    "$DOEY_MANAGER_MODEL"          "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MANAGER_MODEL "; _ri=$((_ri+1))
+  _settings_row "DOEY_WORKER_MODEL"           "opus"    "$DOEY_WORKER_MODEL"           "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WORKER_MODEL "; _ri=$((_ri+1))
+  _settings_row "DOEY_WATCHDOG_MODEL"         "sonnet"  "$DOEY_WATCHDOG_MODEL"         "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_MODEL "; _ri=$((_ri+1))
+  _settings_row "DOEY_SESSION_MANAGER_MODEL"  "opus"    "$DOEY_SESSION_MANAGER_MODEL"  "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_SESSION_MANAGER_MODEL "; _ri=$((_ri+1))
+  printf '\n'
+
+  printf '  %b Auth & Launch Timing%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
+  _settings_row "DOEY_WORKER_LAUNCH_DELAY"    "3"   "$DOEY_WORKER_LAUNCH_DELAY"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WORKER_LAUNCH_DELAY "; _ri=$((_ri+1))
+  _settings_row "DOEY_TEAM_LAUNCH_DELAY"      "15"  "$DOEY_TEAM_LAUNCH_DELAY"      "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_TEAM_LAUNCH_DELAY "; _ri=$((_ri+1))
+  _settings_row "DOEY_MANAGER_LAUNCH_DELAY"   "3"   "$DOEY_MANAGER_LAUNCH_DELAY"   "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MANAGER_LAUNCH_DELAY "; _ri=$((_ri+1))
+  _settings_row "DOEY_WATCHDOG_LAUNCH_DELAY"  "3"   "$DOEY_WATCHDOG_LAUNCH_DELAY"  "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_LAUNCH_DELAY "; _ri=$((_ri+1))
+  _settings_row "DOEY_MANAGER_BRIEF_DELAY"    "15"  "$DOEY_MANAGER_BRIEF_DELAY"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MANAGER_BRIEF_DELAY "; _ri=$((_ri+1))
+  _settings_row "DOEY_WATCHDOG_BRIEF_DELAY"   "20"  "$DOEY_WATCHDOG_BRIEF_DELAY"   "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_BRIEF_DELAY "; _ri=$((_ri+1))
+  _settings_row "DOEY_WATCHDOG_LOOP_DELAY"    "25"  "$DOEY_WATCHDOG_LOOP_DELAY"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_LOOP_DELAY "; _ri=$((_ri+1))
+  printf '\n'
+
+  printf '  %b Dynamic Grid Behavior%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
+  _settings_row "DOEY_IDLE_COLLAPSE_AFTER"    "60"  "$DOEY_IDLE_COLLAPSE_AFTER"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_IDLE_COLLAPSE_AFTER "; _ri=$((_ri+1))
+  _settings_row "DOEY_IDLE_REMOVE_AFTER"      "300" "$DOEY_IDLE_REMOVE_AFTER"      "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_IDLE_REMOVE_AFTER "; _ri=$((_ri+1))
+  _settings_row "DOEY_PASTE_SETTLE_MS"        "500" "$DOEY_PASTE_SETTLE_MS"        "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_PASTE_SETTLE_MS "; _ri=$((_ri+1))
+  printf '\n'
+
+  _CURSOR_MAX=$_ri
+}
+
+# Get the Nth var name from _SETTINGS_VAR_LIST (space-separated)
+_settings_var_at() {
+  local idx="$1" i=0
+  for v in $_SETTINGS_VAR_LIST; do
+    if [ "$i" -eq "$idx" ]; then
+      printf '%s' "$v"
+      return 0
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# ── Render: Teams View (cursor-aware) ────────────────────────────────────────
+
+# Team items list for cursor reference
+_TEAM_ITEMS=""       # "startup:N", "add:type", or "premade:name:file" space-separated
+_TEAM_ITEM_COUNT=0
+
+# Lineup state (indexed variables pattern for bash 3.2)
+_LINEUP_COUNT=0
+
+# Derive the effective team lineup from config (explicit or legacy mode).
+# Sets _LINEUP_COUNT and _LINEUP_<i>_TYPE, _LINEUP_<i>_DEF, _LINEUP_<i>_WORKERS,
+# _LINEUP_<i>_NAME, _LINEUP_<i>_LABEL as indexed variables.
+_derive_effective_lineup() {
+  local _proj_dir _cfg_team_count=""
+  _proj_dir=$(_get_proj_dir)
+
+  # Source config files to get current values
+  local _global_cfg="${HOME}/.config/doey/config.sh"
+  local _project_cfg="${_proj_dir}/.doey/config.sh"
+  # Reset relevant vars before sourcing
+  DOEY_TEAM_COUNT=""
+  [ -f "$_global_cfg" ] && source "$_global_cfg" 2>/dev/null
+  [ -f "$_project_cfg" ] && source "$_project_cfg" 2>/dev/null
+
+  _cfg_team_count="${DOEY_TEAM_COUNT:-}"
+  local _default_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * ${DOEY_ROWS:-2} ))
+
+  if [ -n "$_cfg_team_count" ] && [ "$_cfg_team_count" -gt 0 ] 2>/dev/null; then
+    # Explicit mode: read DOEY_TEAM_<N>_* vars
+    _LINEUP_COUNT="$_cfg_team_count"
+    local _li=1
+    while [ "$_li" -le "$_LINEUP_COUNT" ]; do
+      eval "local _t=\${DOEY_TEAM_${_li}_TYPE:-local}"
+      eval "local _d=\${DOEY_TEAM_${_li}_DEF:-}"
+      eval "local _w=\${DOEY_TEAM_${_li}_WORKERS:-}"
+      eval "local _n=\${DOEY_TEAM_${_li}_NAME:-}"
+      [ -z "$_w" ] && _w="$_default_workers"
+      local _lbl=""
+      case "$_t" in
+        premade)    _lbl="premade: ${_d:-?}" ;;
+        freelancer) _lbl="${_w} workers (pool)" ;;
+        worktree)   _lbl="${_w} workers (worktree)" ;;
+        *)          _lbl="${_w} workers (default)" ;;
+      esac
+      eval "_LINEUP_${_li}_TYPE=\$_t"
+      eval "_LINEUP_${_li}_DEF=\$_d"
+      eval "_LINEUP_${_li}_WORKERS=\$_w"
+      eval "_LINEUP_${_li}_NAME=\$_n"
+      eval "_LINEUP_${_li}_LABEL=\$_lbl"
+      _li=$((_li + 1))
+    done
+  else
+    # Legacy mode: derive from DOEY_INITIAL_TEAMS, etc.
+    local _lt="${DOEY_INITIAL_TEAMS:-2}"
+    local _wt="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
+    local _ft="${DOEY_INITIAL_FREELANCER_TEAMS:-1}"
+    _LINEUP_COUNT=0
+    local _li=1
+
+    # Local teams
+    local _c=0
+    while [ "$_c" -lt "$_lt" ]; do
+      eval "_LINEUP_${_li}_TYPE=local"
+      eval "_LINEUP_${_li}_DEF="
+      eval "_LINEUP_${_li}_WORKERS=$_default_workers"
+      eval "_LINEUP_${_li}_NAME="
+      eval "_LINEUP_${_li}_LABEL='$_default_workers workers (default)'"
+      _li=$((_li + 1))
+      _c=$((_c + 1))
+    done
+
+    # Worktree teams
+    _c=0
+    while [ "$_c" -lt "$_wt" ]; do
+      eval "_LINEUP_${_li}_TYPE=worktree"
+      eval "_LINEUP_${_li}_DEF="
+      eval "_LINEUP_${_li}_WORKERS=$_default_workers"
+      eval "_LINEUP_${_li}_NAME="
+      eval "_LINEUP_${_li}_LABEL='$_default_workers workers (worktree)'"
+      _li=$((_li + 1))
+      _c=$((_c + 1))
+    done
+
+    # Freelancer teams
+    _c=0
+    while [ "$_c" -lt "$_ft" ]; do
+      local _fw=$(( _default_workers + 2 ))
+      eval "_LINEUP_${_li}_TYPE=freelancer"
+      eval "_LINEUP_${_li}_DEF="
+      eval "_LINEUP_${_li}_WORKERS=$_fw"
+      eval "_LINEUP_${_li}_NAME="
+      eval "_LINEUP_${_li}_LABEL='$_fw workers (pool)'"
+      _li=$((_li + 1))
+      _c=$((_c + 1))
+    done
+
+    _LINEUP_COUNT=$((_li - 1))
+  fi
+}
 
 _render_team_blueprint() {
-  local _proj_dir _agents_dir _team_count _i _type _workers _wm _mm _role _name _desc
-  local _cw _def
+  local _proj_dir _i _type _workers _def _name
+  local _cw
   _proj_dir=$(_get_proj_dir)
-  _agents_dir="${_proj_dir}/agents"
 
   _cw=$(( TERM_W - 6 ))
   [ "$_cw" -lt 40 ] && _cw=40
 
-  _team_count="${DOEY_TEAM_COUNT:-}"
+  _TEAM_ITEMS=""
+  _TEAM_ITEM_COUNT=0
+  local _ri=0
 
-  # --- Section 1: Current Startup Teams ---
-  printf '\n  %b─── Current Startup Teams %b%s%b\n' \
-    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 27 )))" "${C_RESET}"
+  # Derive lineup
+  _derive_effective_lineup
 
-  if [ -n "$_team_count" ] && [ "$_team_count" -gt 0 ] 2>/dev/null; then
-    # Detailed per-team view when DOEY_TEAM_COUNT is set
-    local _total_workers=0 _active_defs=""
+  # --- Section 1: Startup Lineup ---
+  printf '\n  %b─── Startup Lineup %b%s%b\n' \
+    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 20 )))" "${C_RESET}"
+
+  if [ "$_LINEUP_COUNT" -gt 0 ]; then
+    local _total_workers=0
     _i=1
-    while [ "$_i" -le "$_team_count" ]; do
-      eval "_type=\${DOEY_TEAM_${_i}_TYPE:-local}"
-      eval "_workers=\${DOEY_TEAM_${_i}_WORKERS:-}"
-      eval "_def=\${DOEY_TEAM_${_i}_DEF:-}"
-      eval "_name=\${DOEY_TEAM_${_i}_NAME:-}"
-
-      [ -z "$_workers" ] && _workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
+    while [ "$_i" -le "$_LINEUP_COUNT" ]; do
+      eval "_type=\${_LINEUP_${_i}_TYPE:-local}"
+      eval "_workers=\${_LINEUP_${_i}_WORKERS:-4}"
+      eval "_def=\${_LINEUP_${_i}_DEF:-}"
+      eval "_name=\${_LINEUP_${_i}_NAME:-}"
       _total_workers=$(( _total_workers + _workers ))
 
-      local _line_detail=""
+      local _line_detail="" _is_sel=false
+      [ "$_ri" -eq "$_CURSOR_POS" ] && _is_sel=true
+
       case "$_type" in
         premade)
-          # Track active defs for section 2
-          [ -n "$_def" ] && _active_defs="${_active_defs} ${_def}"
-          # Read description from the .team.md file
-          local _def_desc=""
-          local _def_file=""
+          local _def_desc="" _def_file=""
           for _dd in "${HOME}/.local/share/doey/teams/${_def}.team.md" \
                      "${_proj_dir}/teams/${_def}.team.md" \
                      "${_proj_dir}/.doey/teams/${_def}.team.md"; do
@@ -157,6 +545,12 @@ _render_team_blueprint() {
             "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" \
             "${C_DIM}" "${C_RESET}")
           ;;
+        worktree)
+          _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b(worktree)%b' \
+            "${C_CYAN}" "worktree" "${C_RESET}" \
+            "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" \
+            "${C_DIM}" "${C_RESET}")
+          ;;
         *)
           _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b(default)%b' \
             "${C_CYAN}" "$_type" "${C_RESET}" \
@@ -165,84 +559,251 @@ _render_team_blueprint() {
           ;;
       esac
 
-      printf '  %b%2d.%b %b\n' "${C_BOLD_WHITE}" "$_i" "${C_RESET}" "$_line_detail"
+      if [ "$_is_sel" = true ]; then
+        printf '  %b▸%2d. %b%b\n' "${C_REVERSE}" "$_i" "$_line_detail" "${C_RESET}"
+      else
+        printf '  %b%2d.%b %b\n' "${C_BOLD_WHITE}" "$_i" "${C_RESET}" "$_line_detail"
+      fi
+      _TEAM_ITEMS="${_TEAM_ITEMS}startup:${_i} "
+      _ri=$((_ri + 1))
       _i=$(( _i + 1 ))
     done
 
     printf '\n  %b%s teams · %s workers%b\n' \
-      "${C_DIM}" "$_team_count" "$_total_workers" "${C_RESET}"
+      "${C_DIM}" "$_LINEUP_COUNT" "$_total_workers" "${C_RESET}"
   else
-    # Fallback: simple count display when DOEY_TEAM_COUNT is not set
-    local _active_defs=""
-    local _lt="${DOEY_INITIAL_TEAMS:-2}"
-    local _wt="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
-    local _wc=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
-    _team_count=$(( _lt + _wt ))
-
-    printf '  %bLocal teams:%b    %b%s%b (%s workers each)\n' \
-      "${C_BOLD_WHITE}" "${C_RESET}" "${C_BOLD_GREEN}" "$_lt" "${C_RESET}" "$_wc"
-    if [ "$_wt" -gt 0 ]; then
-      printf '  %bWorktree teams:%b %b%s%b\n' \
-        "${C_BOLD_WHITE}" "${C_RESET}" "${C_BOLD_GREEN}" "$_wt" "${C_RESET}"
-    fi
+    printf '  %b(no teams configured)%b\n' "${C_DIM}" "${C_RESET}"
   fi
 
-  # --- Section 2: Available Premade Teams ---
-  printf '\n  %b─── Available Premade Teams %b%s%b\n' \
-    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 28 )))" "${C_RESET}"
+  # --- Section 2: Add a Team ---
+  printf '\n  %b─── Add a Team %b%s%b\n' \
+    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 16 )))" "${C_RESET}"
 
-  local _found_any=false
-  local _tdir _tf _tname _tdesc _marker _marker_label
+  # Built-in team types
+  local _add_types="local freelancer worktree"
+  local _add_label _add_desc
+  for _at in $_add_types; do
+    case "$_at" in
+      local)      _add_label="local team";      _add_desc="Standard managed team" ;;
+      freelancer) _add_label="freelancer pool";  _add_desc="Independent worker pool" ;;
+      worktree)   _add_label="worktree team";    _add_desc="Isolated git worktree" ;;
+    esac
+    local _is_sel=false
+    [ "$_ri" -eq "$_CURSOR_POS" ] && _is_sel=true
+    if [ "$_is_sel" = true ]; then
+      printf '  %b▸ + %-20s %s%b\n' "${C_REVERSE}" "$_add_label" "$_add_desc" "${C_RESET}"
+    else
+      printf '  %b+%b %b%-20s%b %b%s%b\n' \
+        "${C_BOLD_GREEN}" "${C_RESET}" \
+        "${C_BOLD_WHITE}" "$_add_label" "${C_RESET}" \
+        "${C_DIM}" "$_add_desc" "${C_RESET}"
+    fi
+    _TEAM_ITEMS="${_TEAM_ITEMS}add:${_at} "
+    _ri=$((_ri + 1))
+  done
+
+  # Premade teams from .team.md files (deduplicated)
+  local _found_premade=false
+  local _seen_names=" "
+  local _tdir _tf _tname _tdesc
   for _tdir in "${HOME}/.local/share/doey/teams" "${_proj_dir}/teams" "${_proj_dir}/.doey/teams"; do
     [ -d "$_tdir" ] || continue
     for _tf in "$_tdir"/*.team.md; do
       [ -f "$_tf" ] || continue
       _tname=$(grep '^name:' "$_tf" | head -1 | sed 's/name:[[:space:]]*//;s/"//g')
-      _tdesc=$(grep '^description:' "$_tf" | head -1 | sed 's/description:[[:space:]]*//;s/"//g')
       [ -z "$_tname" ] && _tname=$(basename "$_tf" .team.md)
+      # Deduplicate by name
+      case "$_seen_names" in
+        *" ${_tname} "*) continue ;;
+      esac
+      _seen_names="${_seen_names}${_tname} "
+
+      _tdesc=$(grep '^description:' "$_tf" | head -1 | sed 's/description:[[:space:]]*//;s/"//g')
       [ -z "$_tdesc" ] && _tdesc="(no description)"
 
-      # Check if active — name appears in _active_defs
-      _marker="${C_DIM}○${C_RESET}"
-      _marker_label=""
-      case " ${_active_defs:-} " in
-        *" ${_tname} "*)
-          _marker="${C_BOLD_GREEN}●${C_RESET}"
-          _marker_label="  ${C_GREEN}(active)${C_RESET}"
-          ;;
-      esac
+      local _is_sel=false
+      [ "$_ri" -eq "$_CURSOR_POS" ] && _is_sel=true
 
-      printf '  %b %b%-12s%b %b%s%b%b\n' \
-        "$_marker" \
-        "${C_BOLD_CYAN}" "$_tname" "${C_RESET}" \
-        "${C_DIM}" "$(_truncate "$_tdesc" $(( _cw - 22 )))" "${C_RESET}" \
-        "$_marker_label"
-      _found_any=true
+      if [ "$_is_sel" = true ]; then
+        printf '  %b▸ + %-20s %s%b\n' \
+          "${C_REVERSE}" "$_tname" "$(_truncate "$_tdesc" $(( _cw - 28 )))" "${C_RESET}"
+      else
+        printf '  %b+%b %b%-20s%b %b%s%b\n' \
+          "${C_BOLD_GREEN}" "${C_RESET}" \
+          "${C_BOLD_CYAN}" "$_tname" "${C_RESET}" \
+          "${C_DIM}" "$(_truncate "$_tdesc" $(( _cw - 28 )))" "${C_RESET}"
+      fi
+      _TEAM_ITEMS="${_TEAM_ITEMS}premade:${_tname}:${_tf} "
+      _ri=$((_ri + 1))
+      _found_premade=true
     done
   done
 
-  if [ "$_found_any" = false ]; then
-    printf '  %b(none found — add .team.md files to ~/.local/share/doey/teams/)%b\n' "${C_DIM}" "${C_RESET}"
+  if [ "$_found_premade" = false ]; then
+    printf '  %b(no premade teams found — add .team.md files to ~/.local/share/doey/teams/)%b\n' "${C_DIM}" "${C_RESET}"
   fi
 
-  printf '\n  %bAdd:%b DOEY_TEAM_<N>_TYPE=premade DOEY_TEAM_<N>_DEF=<name>\n' "${C_DIM}" "${C_RESET}"
+  _CURSOR_MAX=$_ri
+  _TEAM_ITEM_COUNT=$_ri
 }
+
+# Get the Nth team item
+_team_item_at() {
+  local idx="$1" i=0
+  for v in $_TEAM_ITEMS; do
+    if [ "$i" -eq "$idx" ]; then
+      printf '%s' "$v"
+      return 0
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# Add a team to config (with automatic migration from legacy to explicit)
+# Usage: _add_team <type> [def_name]
+#   type: local, freelancer, worktree, premade
+#   def_name: only for premade type
+_add_team() {
+  local team_type="$1"
+  local def_name="${2:-}"
+  local proj_dir config_file
+  proj_dir=$(_get_proj_dir)
+  config_file="${proj_dir}/.doey/config.sh"
+
+  if [ ! -f "$config_file" ]; then
+    mkdir -p "$(dirname "$config_file")"
+    cp "${proj_dir}/shell/doey-config-default.sh" "$config_file" 2>/dev/null || {
+      printf '#!/usr/bin/env bash\n# Doey project config\n' > "$config_file"
+    }
+  fi
+
+  # Derive current lineup (handles both explicit and legacy)
+  _derive_effective_lineup
+
+  local old_count="$_LINEUP_COUNT"
+  local new_count=$(( old_count + 1 ))
+
+  # Remove legacy vars from config
+  local tmp_file="${config_file}.tmp"
+  sed '/^DOEY_INITIAL_TEAMS=/d;/^DOEY_INITIAL_WORKTREE_TEAMS=/d;/^DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
+  mv "$tmp_file" "$config_file"
+  sed '/^#.*DOEY_INITIAL_TEAMS=/d;/^#.*DOEY_INITIAL_WORKTREE_TEAMS=/d;/^#.*DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
+  mv "$tmp_file" "$config_file"
+
+  # Remove all existing DOEY_TEAM_* lines to rewrite cleanly
+  sed '/^DOEY_TEAM_[0-9]/d;/^DOEY_TEAM_COUNT=/d' "$config_file" > "$tmp_file"
+  mv "$tmp_file" "$config_file"
+
+  # Write full explicit config
+  printf '\nDOEY_TEAM_COUNT=%s\n' "$new_count" >> "$config_file"
+
+  # Write existing teams
+  local _wi=1
+  while [ "$_wi" -le "$old_count" ]; do
+    eval "local _et=\${_LINEUP_${_wi}_TYPE:-local}"
+    eval "local _ed=\${_LINEUP_${_wi}_DEF:-}"
+    eval "local _ew=\${_LINEUP_${_wi}_WORKERS:-}"
+    printf 'DOEY_TEAM_%s_TYPE=%s\n' "$_wi" "$_et" >> "$config_file"
+    [ -n "$_ed" ] && printf 'DOEY_TEAM_%s_DEF=%s\n' "$_wi" "$_ed" >> "$config_file"
+    [ -n "$_ew" ] && printf 'DOEY_TEAM_%s_WORKERS=%s\n' "$_wi" "$_ew" >> "$config_file"
+    _wi=$((_wi + 1))
+  done
+
+  # Write the new team
+  printf 'DOEY_TEAM_%s_TYPE=%s\n' "$new_count" "$team_type" >> "$config_file"
+  [ "$team_type" = "premade" ] && [ -n "$def_name" ] && \
+    printf 'DOEY_TEAM_%s_DEF=%s\n' "$new_count" "$def_name" >> "$config_file"
+
+  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
+  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
+  touch "$trigger"
+}
+
+# Remove a startup team by index (1-based), rewrite as explicit config
+_remove_startup_team() {
+  local remove_idx="$1"
+  local proj_dir config_file
+  proj_dir=$(_get_proj_dir)
+  config_file="${proj_dir}/.doey/config.sh"
+  [ -f "$config_file" ] || return 1
+
+  # Derive current lineup (handles both explicit and legacy)
+  _derive_effective_lineup
+  [ "$_LINEUP_COUNT" -le 0 ] && return 1
+  [ "$remove_idx" -gt "$_LINEUP_COUNT" ] && return 1
+
+  local new_count=$(( _LINEUP_COUNT - 1 ))
+  local tmp_file="${config_file}.tmp"
+
+  # Remove legacy vars
+  sed '/^DOEY_INITIAL_TEAMS=/d;/^DOEY_INITIAL_WORKTREE_TEAMS=/d;/^DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
+  mv "$tmp_file" "$config_file"
+  sed '/^#.*DOEY_INITIAL_TEAMS=/d;/^#.*DOEY_INITIAL_WORKTREE_TEAMS=/d;/^#.*DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
+  mv "$tmp_file" "$config_file"
+
+  # Remove all existing DOEY_TEAM_* lines
+  sed '/^DOEY_TEAM_[0-9]/d;/^DOEY_TEAM_COUNT=/d' "$config_file" > "$tmp_file"
+  mv "$tmp_file" "$config_file"
+
+  if [ "$new_count" -le 0 ]; then
+    # No teams left — don't write DOEY_TEAM_COUNT
+    :
+  else
+    printf '\nDOEY_TEAM_COUNT=%s\n' "$new_count" >> "$config_file"
+
+    # Rewrite all teams except the removed one
+    local _wi=1 _di=1
+    while [ "$_wi" -le "$_LINEUP_COUNT" ]; do
+      if [ "$_wi" -eq "$remove_idx" ]; then
+        _wi=$((_wi + 1))
+        continue
+      fi
+      eval "local _et=\${_LINEUP_${_wi}_TYPE:-local}"
+      eval "local _ed=\${_LINEUP_${_wi}_DEF:-}"
+      eval "local _ew=\${_LINEUP_${_wi}_WORKERS:-}"
+      printf 'DOEY_TEAM_%s_TYPE=%s\n' "$_di" "$_et" >> "$config_file"
+      [ -n "$_ed" ] && printf 'DOEY_TEAM_%s_DEF=%s\n' "$_di" "$_ed" >> "$config_file"
+      [ -n "$_ew" ] && printf 'DOEY_TEAM_%s_WORKERS=%s\n' "$_di" "$_ew" >> "$config_file"
+      _wi=$((_wi + 1))
+      _di=$((_di + 1))
+    done
+  fi
+
+  # Clamp cursor
+  if [ "$_CURSOR_POS" -ge "$new_count" ] && [ "$_CURSOR_POS" -gt 0 ]; then
+    _CURSOR_POS=$((_CURSOR_POS - 1))
+    _write_cursor "teams" "$_CURSOR_POS"
+  fi
+
+  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
+  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
+  touch "$trigger"
+}
+
+# ── Render: Agents View (cursor-aware) ───────────────────────────────────────
+
+_AGENT_FILES=""      # space-separated agent file paths
+_AGENT_NAMES=""      # space-separated agent names
+_AGENT_COUNT=0
 
 _render_available_agents() {
   local _proj_dir _agents_dir _f _name _model _desc _color _memory _idx
   _proj_dir=$(_get_proj_dir)
   _agents_dir="${_proj_dir}/agents"
 
-  printf '\n  %bAvailable Agents%b  %b(press a-z to inspect)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
+  printf '\n  %bAvailable Agents%b  %b(↑↓/jk to navigate, Enter to inspect)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
   printf '  %b────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
 
   if [ ! -d "$_agents_dir" ]; then
     printf '    %b(no agents directory)%b\n' "${C_DIM}" "${C_RESET}"
+    _CURSOR_MAX=0
     return
   fi
 
   _idx=0
-  local _letter
+  _AGENT_FILES=""
+  _AGENT_NAMES=""
   for _f in "$_agents_dir"/*.md; do
     [ -f "$_f" ] || continue
     _name=$(_parse_agent_frontmatter "$_f" "name")
@@ -253,19 +814,59 @@ _render_available_agents() {
     [ -z "$_name" ] && _name=$(basename "$_f" .md)
     [ -z "$_model" ] && _model="?"
     [ -z "$_desc" ] && _desc="(no description)"
-    _letter=$(printf "\\$(printf '%03o' $((97 + _idx)))")
-    printf '    %b%s)%b %b%-20s%b %b%-8s%b %b%s%b\n' \
-      "${C_BOLD_CYAN}" "$_letter" "${C_RESET}" \
-      "${C_CYAN}" "$_name" "${C_RESET}" \
-      "${C_GREEN}" "$_model" "${C_RESET}" \
-      "${C_DIM}" "$(_truncate "$_desc" $((TERM_W - 40)))" "${C_RESET}"
-    [ -n "$_color" ] && printf '      %bcolor: %s%b' "${C_DIM}" "$_color" "${C_RESET}"
-    [ -n "$_memory" ] && printf '  %bmemory: %s%b' "${C_DIM}" "$_memory" "${C_RESET}"
-    if [ -n "$_color" ] || [ -n "$_memory" ]; then printf '\n'; fi
+
+    _AGENT_FILES="${_AGENT_FILES}${_f} "
+    _AGENT_NAMES="${_AGENT_NAMES}${_name} "
+
+    local _is_sel=false
+    [ "$_idx" -eq "$_CURSOR_POS" ] && _is_sel=true
+
+    if [ "$_is_sel" = true ]; then
+      printf '  %b▸ %-20s  %-8s  %s%b\n' \
+        "${C_REVERSE}" "$_name" "$_model" \
+        "$(_truncate "$_desc" $((TERM_W - 40)))" "${C_RESET}"
+    else
+      printf '    %b%-20s%b %b%-8s%b %b%s%b\n' \
+        "${C_CYAN}" "$_name" "${C_RESET}" \
+        "${C_GREEN}" "$_model" "${C_RESET}" \
+        "${C_DIM}" "$(_truncate "$_desc" $((TERM_W - 40)))" "${C_RESET}"
+    fi
+    if [ "$_is_sel" = false ]; then
+      [ -n "$_color" ] && printf '      %bcolor: %s%b' "${C_DIM}" "$_color" "${C_RESET}"
+      [ -n "$_memory" ] && printf '  %bmemory: %s%b' "${C_DIM}" "$_memory" "${C_RESET}"
+      if [ -n "$_color" ] || [ -n "$_memory" ]; then printf '\n'; fi
+    fi
     _idx=$((_idx + 1))
   done
   [ "$_idx" -eq 0 ] && printf '    %b(no agent files found)%b\n' "${C_DIM}" "${C_RESET}"
+  _CURSOR_MAX=$_idx
+  _AGENT_COUNT=$_idx
 }
+
+# Get the Nth agent name/file
+_agent_name_at() {
+  local idx="$1" i=0
+  for v in $_AGENT_NAMES; do
+    if [ "$i" -eq "$idx" ]; then printf '%s' "$v"; return 0; fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+_agent_file_at() {
+  local idx="$1" i=0
+  for v in $_AGENT_FILES; do
+    if [ "$i" -eq "$idx" ]; then printf '%s' "$v"; return 0; fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# ── Render: Agent Detail (cursor-aware) ──────────────────────────────────────
+
+# Editable properties for agent detail cursor
+_AGENT_DETAIL_PROPS=""   # space-separated: model color memory description
+_AGENT_DETAIL_FILE=""
 
 _render_agent_detail() {
   local _agent_name="$1"
@@ -273,7 +874,6 @@ _render_agent_detail() {
   _proj_dir=$(_get_proj_dir)
   _agents_dir="${_proj_dir}/agents"
 
-  # Find the agent file by name or filename
   for _f in "$_agents_dir"/*.md; do
     [ -f "$_f" ] || continue
     local _n
@@ -287,11 +887,14 @@ _render_agent_detail() {
 
   if [ -z "$_found" ]; then
     printf '\n  %bAgent not found: %s%b\n' "${C_RED}" "$_agent_name" "${C_RESET}"
-    printf '  %bPress 3 to return to agent list%b\n' "${C_DIM}" "${C_RESET}"
+    printf '  %bPress b to return to agent list%b\n' "${C_DIM}" "${C_RESET}"
+    _CURSOR_MAX=0
     return
   fi
 
-  # Read frontmatter fields
+  _AGENT_DETAIL_FILE="$_found"
+  _AGENT_DETAIL_PROPS="model color memory description"
+
   local _name _model _desc _color _memory
   _name=$(_parse_agent_frontmatter "$_found" "name")
   _model=$(_parse_agent_frontmatter "$_found" "model")
@@ -302,12 +905,31 @@ _render_agent_detail() {
 
   printf '\n  %b● %s%b\n' "${C_BOLD_CYAN}" "$_name" "${C_RESET}"
   printf '  %b──────────────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
-  printf '  %bModel:%b      %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "${_model:-?}"
-  printf '  %bColor:%b      %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "${_color:---}"
-  printf '  %bMemory:%b     %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "${_memory:---}"
+
+  # Editable properties with cursor (use indexed approach to avoid word-split issues)
+  local _ri=0
+
+  # Render each property row individually
+  local _prop_names="model color memory description"
+  local _prop_label _prop_val
+  for _prop in $_prop_names; do
+    case "$_prop" in
+      model) _prop_label="Model"; _prop_val="${_model:-?}" ;;
+      color) _prop_label="Color"; _prop_val="${_color:---}" ;;
+      memory) _prop_label="Memory"; _prop_val="${_memory:---}" ;;
+      description) _prop_label="Description"; _prop_val="${_desc:-(no description)}" ;;
+    esac
+
+    if [ "$_ri" -eq "$_CURSOR_POS" ]; then
+      printf '  %b▸ %-12s %s%b\n' "${C_REVERSE}" "${_prop_label}:" "$_prop_val" "${C_RESET}"
+    else
+      printf '  %b%-12s%b %s\n' "${C_BOLD_WHITE}" "${_prop_label}:" "${C_RESET}" "$_prop_val"
+    fi
+    _ri=$((_ri + 1))
+  done
+
   printf '  %bFile:%b       %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_found"
-  printf '  %bDescription:%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  printf '    %s\n\n' "${_desc:-(no description)}"
+  printf '\n'
 
   # Read full body (everything after second ---)
   printf '  %bAgent Instructions%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
@@ -327,7 +949,6 @@ _render_agent_detail() {
         ;;
     esac
     if [ "$_past_front" = true ]; then
-      # Render markdown-ish: headers bold, rest normal
       case "$_line" in
         "## "*)  printf '  %b%s%b\n' "${C_BOLD_WHITE}" "$_line" "${C_RESET}" ;;
         "### "*) printf '  %b%s%b\n' "${C_BOLD_WHITE}" "$_line" "${C_RESET}" ;;
@@ -344,8 +965,20 @@ _render_agent_detail() {
     fi
   done < "$_found"
 
-  printf '\n  %bPress 3 to return to agent list%b\n' "${C_DIM}" "${C_RESET}"
+  _CURSOR_MAX=$_ri
 }
+
+# Get the Nth agent detail property name
+_agent_detail_prop_at() {
+  local idx="$1" i=0
+  for v in $_AGENT_DETAIL_PROPS; do
+    if [ "$i" -eq "$idx" ]; then printf '%s' "$v"; return 0; fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# ── Render: Nav Bar ──────────────────────────────────────────────────────────
 
 _render_nav_bar() {
   local _active="${1:-settings}"
@@ -369,60 +1002,277 @@ _render_nav_bar() {
   printf '\n'
 }
 
-_render_settings_view() {
-  local _GLOBAL_CONFIG _PROJECT_CONFIG _PROJ_DIR
-  _GLOBAL_CONFIG="${HOME}/.config/doey/config.sh"
-  _PROJ_DIR=$(_get_proj_dir)
-  _PROJECT_CONFIG=""
-  [ -f "${_PROJ_DIR}/.doey/config.sh" ] && _PROJECT_CONFIG="${_PROJ_DIR}/.doey/config.sh"
+# ── Context-Sensitive Footer ─────────────────────────────────────────────────
 
-  if [ -f "$_GLOBAL_CONFIG" ]; then
-    printf '  %bConfig (global):%b  %s %b(loaded)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_GLOBAL_CONFIG" "${C_GREEN}" "${C_RESET}"
-  else
-    printf '  %bConfig (global):%b  %s %b(not found — using defaults)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_GLOBAL_CONFIG" "${C_DIM}" "${C_RESET}"
+_render_footer() {
+  local view="$1"
+  printf '  %b%s%b\n' "${C_DIM}" "$HR" "${C_RESET}"
+
+  # Status message (temporary feedback like "Reloading..." or "✓ Applied")
+  if [ -n "${_STATUS_MSG:-}" ]; then
+    local _now
+    _now=$(date +%s)
+    if [ "$_now" -lt "$_STATUS_EXPIRE" ]; then
+      printf '  %b%s%b\n' "${C_GREEN}" "$_STATUS_MSG" "${C_RESET}"
+    else
+      _STATUS_MSG=""
+    fi
   fi
-  if [ -n "$_PROJECT_CONFIG" ]; then
-    printf '  %bConfig (project):%b %s %b(loaded — overrides global)%b\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_PROJECT_CONFIG" "${C_GREEN}" "${C_RESET}"
-  fi
-  printf '\n'
 
-  printf '  %b Grid & Teams%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_INITIAL_WORKER_COLS"    "2"   "$DOEY_INITIAL_WORKER_COLS"
-  _settings_row "DOEY_INITIAL_TEAMS"          "2"   "$DOEY_INITIAL_TEAMS"
-  _settings_row "DOEY_INITIAL_WORKTREE_TEAMS" "0"   "$DOEY_INITIAL_WORKTREE_TEAMS"
-  _settings_row "DOEY_MAX_WORKERS"            "20"  "$DOEY_MAX_WORKERS"
-  _settings_row "DOEY_MAX_WATCHDOG_SLOTS"     "6"   "$DOEY_MAX_WATCHDOG_SLOTS"
-  printf '\n'
-
-  printf '  %b Models%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_MANAGER_MODEL"          "opus"    "$DOEY_MANAGER_MODEL"
-  _settings_row "DOEY_WORKER_MODEL"           "opus"    "$DOEY_WORKER_MODEL"
-  _settings_row "DOEY_WATCHDOG_MODEL"         "sonnet"  "$DOEY_WATCHDOG_MODEL"
-  _settings_row "DOEY_SESSION_MANAGER_MODEL"  "opus"    "$DOEY_SESSION_MANAGER_MODEL"
-  printf '\n'
-
-  printf '  %b Auth & Launch Timing%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_WORKER_LAUNCH_DELAY"    "3"   "$DOEY_WORKER_LAUNCH_DELAY"
-  _settings_row "DOEY_TEAM_LAUNCH_DELAY"      "15"  "$DOEY_TEAM_LAUNCH_DELAY"
-  _settings_row "DOEY_MANAGER_LAUNCH_DELAY"   "3"   "$DOEY_MANAGER_LAUNCH_DELAY"
-  _settings_row "DOEY_WATCHDOG_LAUNCH_DELAY"  "3"   "$DOEY_WATCHDOG_LAUNCH_DELAY"
-  _settings_row "DOEY_MANAGER_BRIEF_DELAY"    "15"  "$DOEY_MANAGER_BRIEF_DELAY"
-  _settings_row "DOEY_WATCHDOG_BRIEF_DELAY"   "20"  "$DOEY_WATCHDOG_BRIEF_DELAY"
-  _settings_row "DOEY_WATCHDOG_LOOP_DELAY"    "25"  "$DOEY_WATCHDOG_LOOP_DELAY"
-  printf '\n'
-
-  printf '  %b Dynamic Grid Behavior%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_IDLE_COLLAPSE_AFTER"    "60"  "$DOEY_IDLE_COLLAPSE_AFTER"
-  _settings_row "DOEY_IDLE_REMOVE_AFTER"      "300" "$DOEY_IDLE_REMOVE_AFTER"
-  _settings_row "DOEY_PASTE_SETTLE_MS"        "500" "$DOEY_PASTE_SETTLE_MS"
-  printf '\n'
+  case "$view" in
+    settings)
+      printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b edit  %b[r]%b reload  %b[1-3]%b views\n' \
+        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
+      ;;
+    teams)
+      # Context-sensitive footer based on cursor position
+      local _foot_item=""
+      _foot_item=$(_team_item_at "$_CURSOR_POS" 2>/dev/null) || true
+      case "$_foot_item" in
+        startup:*)
+          printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b details  %b[d]%b remove  %b[r]%b reload  %b[1-3]%b views\n' \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+            "${C_BOLD_CYAN}" "${C_RESET}"
+          ;;
+        *)
+          printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b add to lineup  %b[r]%b reload  %b[1-3]%b views\n' \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
+          ;;
+      esac
+      ;;
+    agents)
+      printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b inspect  %b[1-3]%b views\n' \
+        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+        "${C_BOLD_CYAN}" "${C_RESET}"
+      ;;
+    agent_detail)
+      printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b edit  %b[b]%b back  %b[1-3]%b views\n' \
+        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
+      ;;
+  esac
 }
+
+# ── Edit Prompt ──────────────────────────────────────────────────────────────
+
+# Show an input prompt at the bottom of the screen, read user input.
+# Returns the new value via stdout, or empty string if cancelled.
+_edit_prompt() {
+  local prompt_label="$1" hint="${2:-}"
+  local input=""
+
+  # Move to bottom, show prompt
+  printf '\n  %b%s%b %s ' "${C_BOLD_CYAN}" "$prompt_label" "${C_RESET}" "$hint"
+
+  # Read full line (not single char)
+  read -r input 2>/dev/null || true
+  printf '%s' "$input"
+}
+
+# ── Key Reading (arrow key aware, bash 3.2 compatible) ───────────────────────
+
+_read_key() {
+  local _key="" _rest=""
+  # read -s -n 1: returns empty string for Enter key, sets exit code >0 on timeout
+  if ! read -s -n 1 -t 1 _key 2>/dev/null; then
+    # Timeout — no key pressed
+    printf ''
+    return
+  fi
+  # Enter key produces empty string
+  if [ -z "$_key" ]; then
+    printf 'ENTER'
+    return
+  fi
+  # Backspace (0x7f or 0x08)
+  if [ "$_key" = $'\177' ] || [ "$_key" = $'\010' ]; then
+    printf 'BACKSPACE'
+    return
+  fi
+  # Check for escape sequence (arrow keys)
+  if [ "$_key" = $'\033' ]; then
+    read -s -n 2 -t 1 _rest 2>/dev/null || true
+    case "$_rest" in
+      '[A') printf 'UP'; return ;;
+      '[B') printf 'DOWN'; return ;;
+      '[C') printf 'RIGHT'; return ;;
+      '[D') printf 'LEFT'; return ;;
+      *)    printf 'ESC'; return ;;
+    esac
+  fi
+  printf '%s' "$_key"
+}
+
+# ── Main Handle Key ─────────────────────────────────────────────────────────
+
+_handle_key() {
+  local _key="$1"
+  local _view_file="${RUNTIME_DIR}/status/settings_view"
+
+  case "$_key" in
+    # View switching
+    1) echo "settings" > "$_view_file"; _CURSOR_POS=0; _write_cursor "settings" 0 ;;
+    2) echo "teams" > "$_view_file"; _read_cursor "teams" ;;
+    3) echo "agents" > "$_view_file"; _read_cursor "agents" ;;
+
+    # Cursor movement
+    UP|k)
+      _cursor_move "up" "$_CURRENT_VIEW"
+      ;;
+    DOWN|j)
+      _cursor_move "down" "$_CURRENT_VIEW"
+      ;;
+
+    # Reload
+    r)
+      _STATUS_MSG="Reloading..."
+      _STATUS_EXPIRE=$(($(date +%s) + 3))
+      # Run doey reload in background
+      bash -c 'doey reload' >/dev/null 2>&1 &
+      sleep 1
+      _STATUS_MSG="✓ Applied"
+      _STATUS_EXPIRE=$(($(date +%s) + 2))
+      ;;
+
+    # Enter — context-dependent action
+    ENTER)
+      case "$_CURRENT_VIEW" in
+        settings)
+          local _var
+          _var=$(_settings_var_at "$_CURSOR_POS") || return
+          local _hint
+          _hint=$(_validation_hint "$_var")
+          local _new_val
+          _new_val=$(_edit_prompt "New value for ${_var}:" "$_hint")
+          if [ -n "$_new_val" ]; then
+            local _err=""
+            if _err=$(_validate_setting "$_var" "$_new_val"); then
+              _write_config_setting "$_var" "$_new_val"
+              _STATUS_MSG="✓ Set ${_var}=${_new_val}"
+              _STATUS_EXPIRE=$(($(date +%s) + 3))
+            else
+              _STATUS_MSG="✗ ${_err}"
+              _STATUS_EXPIRE=$(($(date +%s) + 3))
+            fi
+          fi
+          ;;
+        teams)
+          local _item
+          _item=$(_team_item_at "$_CURSOR_POS") || return
+          case "$_item" in
+            add:local)
+              _add_team local
+              _STATUS_MSG="✓ Added local team"
+              _STATUS_EXPIRE=$(($(date +%s) + 3))
+              ;;
+            add:freelancer)
+              _add_team freelancer
+              _STATUS_MSG="✓ Added freelancer pool"
+              _STATUS_EXPIRE=$(($(date +%s) + 3))
+              ;;
+            add:worktree)
+              _add_team worktree
+              _STATUS_MSG="✓ Added worktree team"
+              _STATUS_EXPIRE=$(($(date +%s) + 3))
+              ;;
+            premade:*)
+              # Extract team name (second field, colon-separated)
+              local _tname
+              _tname=$(echo "$_item" | cut -d: -f2)
+              _add_team premade "$_tname"
+              _STATUS_MSG="✓ Added team: ${_tname}"
+              _STATUS_EXPIRE=$(($(date +%s) + 3))
+              ;;
+            startup:*)
+              _STATUS_MSG="Use [d] to remove startup teams"
+              _STATUS_EXPIRE=$(($(date +%s) + 2))
+              ;;
+          esac
+          ;;
+        agents)
+          local _aname
+          _aname=$(_agent_name_at "$_CURSOR_POS") || return
+          echo "agents:${_aname}" > "$_view_file"
+          _CURSOR_POS=0
+          _write_cursor "agent_detail" 0
+          ;;
+        agent_detail)
+          local _prop
+          _prop=$(_agent_detail_prop_at "$_CURSOR_POS") || return
+          local _hint=""
+          case "$_prop" in
+            model) _hint="(opus/sonnet/haiku)" ;;
+            color) _hint="(e.g. red, green, blue, cyan, yellow)" ;;
+            memory) _hint="(e.g. user, project, none)" ;;
+            description) _hint="" ;;
+          esac
+          local _new_val
+          _new_val=$(_edit_prompt "New ${_prop}:" "$_hint")
+          if [ -n "$_new_val" ]; then
+            # Validate model if applicable
+            if [ "$_prop" = "model" ]; then
+              case "$_new_val" in
+                opus|sonnet|haiku) ;;
+                *)
+                  _STATUS_MSG="✗ Model must be: opus, sonnet, or haiku"
+                  _STATUS_EXPIRE=$(($(date +%s) + 3))
+                  return
+                  ;;
+              esac
+            fi
+            # Wrap description in quotes if it contains spaces
+            local _write_val="$_new_val"
+            case "$_new_val" in
+              *" "*) _write_val="\"${_new_val}\"" ;;
+            esac
+            _write_agent_frontmatter "$_AGENT_DETAIL_FILE" "$_prop" "$_write_val"
+            _STATUS_MSG="✓ Updated ${_prop} → ${_new_val}"
+            _STATUS_EXPIRE=$(($(date +%s) + 3))
+          fi
+          ;;
+      esac
+      ;;
+
+    # Delete team
+    d)
+      if [ "$_CURRENT_VIEW" = "teams" ]; then
+        local _item
+        _item=$(_team_item_at "$_CURSOR_POS") || return
+        case "$_item" in
+          startup:*)
+            local _tidx
+            _tidx=$(echo "$_item" | cut -d: -f2)
+            _remove_startup_team "$_tidx"
+            _STATUS_MSG="✓ Removed team ${_tidx}"
+            _STATUS_EXPIRE=$(($(date +%s) + 3))
+            ;;
+          *)
+            _STATUS_MSG="Can only remove startup teams"
+            _STATUS_EXPIRE=$(($(date +%s) + 2))
+            ;;
+        esac
+      fi
+      ;;
+
+    # Back from agent detail
+    b|BACKSPACE)
+      if [ "$_CURRENT_VIEW" = "agent_detail" ]; then
+        echo "agents" > "$_view_file"
+        _read_cursor "agents"
+      fi
+      ;;
+  esac
+}
+
+# ── Main Loop ────────────────────────────────────────────────────────────────
 
 while true; do
   _doey_load_config
   DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
 
-  # Fast refresh for live settings window
   if [ "${DOEY_SETTINGS_LIVE:-0}" = "1" ]; then
     _refresh_interval=2
   else
@@ -454,13 +1304,15 @@ while true; do
   _AGENT_DETAIL=""
   if [ -f "$_view_file" ]; then
     _CURRENT_VIEW=$(cat "$_view_file" 2>/dev/null)
-    # Support agents:<name> for drill-down
     case "$_CURRENT_VIEW" in
       agents:*) _AGENT_DETAIL="${_CURRENT_VIEW#agents:}"; _CURRENT_VIEW="agent_detail" ;;
       settings|teams|agents) ;;
       *) _CURRENT_VIEW="settings" ;;
     esac
   fi
+
+  # Restore cursor for current view
+  _read_cursor "$_CURRENT_VIEW"
 
   printf '\033[2J\033[H'
 
@@ -482,54 +1334,27 @@ while true; do
   esac
   printf '\n'
 
-  printf '  %b%s%b\n' "${C_DIM}" "$HR" "${C_RESET}"
-  printf '  %bPress 1-3%b to switch views  %b·%b  %bdoey config%b to edit  %b·%b  %bdoey reload%b to apply\n' \
-    "${C_BOLD_CYAN}" "${C_RESET}" "${C_DIM}" "${C_RESET}" \
-    "${C_BOLD_WHITE}" "${C_RESET}" "${C_DIM}" "${C_RESET}" \
-    "${C_BOLD_WHITE}" "${C_RESET}"
-
-  # Handle a keypress: view switching (1-3) and agent selection (a-z)
-  _handle_key() {
-    local _key="$1"
-    case "$_key" in
-      1) echo "settings" > "$_view_file" ;;
-      2) echo "teams" > "$_view_file" ;;
-      3) echo "agents" > "$_view_file" ;;
-      [a-z])
-        if [ "$_CURRENT_VIEW" = "agents" ] || [ "$_CURRENT_VIEW" = "agent_detail" ]; then
-          local _ai _ac=0 _proj_dir _af _an
-          _ai=$(printf '%d' "'$_key" 2>/dev/null)
-          _ai=$((_ai - 97))
-          _proj_dir=$(_get_proj_dir)
-          for _af in "$_proj_dir/agents"/*.md; do
-            [ -f "$_af" ] || continue
-            if [ "$_ac" -eq "$_ai" ]; then
-              _an=$(_parse_agent_frontmatter "$_af" "name")
-              [ -z "$_an" ] && _an=$(basename "$_af" .md)
-              echo "agents:$_an" > "$_view_file"
-              break
-            fi
-            _ac=$((_ac + 1))
-          done
-        fi
-        ;;
-    esac
-  }
-
-  # Wait for trigger or timeout
-  _trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
-  if [ "${DOEY_SETTINGS_LIVE:-0}" = "1" ]; then
-    _waited=0
-    while [ "$_waited" -lt 5 ]; do
-      if [ -f "$_trigger" ]; then rm -f "$_trigger" 2>/dev/null; break; fi
-      _key=""
-      read -t 1 -n1 _key 2>/dev/null || true
-      if [ -n "$_key" ]; then _handle_key "$_key"; break; fi
-      _waited=$((_waited + 1))
-    done
-  else
-    _key=""
-    read -t "$_refresh_interval" -n1 _key 2>/dev/null || true
-    [ -n "$_key" ] && _handle_key "$_key"
+  # Clamp cursor to bounds after render (which sets _CURSOR_MAX)
+  if [ "$_CURSOR_MAX" -gt 0 ] && [ "$_CURSOR_POS" -ge "$_CURSOR_MAX" ]; then
+    _CURSOR_POS=$((_CURSOR_MAX - 1))
+    _write_cursor "$_CURRENT_VIEW" "$_CURSOR_POS"
   fi
+
+  _render_footer "$_CURRENT_VIEW"
+
+  # Wait for trigger or keypress (poll with 1s reads up to refresh interval)
+  _trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
+  _waited=0
+  _max_wait="${_refresh_interval}"
+  # Live mode: shorter cycle
+  [ "${DOEY_SETTINGS_LIVE:-0}" = "1" ] && _max_wait=5
+  while [ "$_waited" -lt "$_max_wait" ]; do
+    if [ -f "$_trigger" ]; then rm -f "$_trigger" 2>/dev/null; break; fi
+    _key=$(_read_key)
+    if [ -n "$_key" ]; then
+      _handle_key "$_key"
+      break
+    fi
+    _waited=$((_waited + 1))
+  done
 done
