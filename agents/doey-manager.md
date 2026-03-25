@@ -123,11 +123,7 @@ Workers notify you when they finish via the **message queue** (`${RUNTIME_DIR}/m
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="$DOEY_TEAM_WINDOW"
 MGR_SAFE="${SESSION_NAME//[:.]/_}_${W}_0"
-for f in "$RUNTIME_DIR/messages"/${MGR_SAFE}_*.msg; do
-  [ -f "$f" ] || continue
-  cat "$f"; echo "---"
-  rm -f "$f"
-done
+bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$MGR_SAFE"
 ```
 
 ### When to check messages
@@ -163,7 +159,7 @@ done
 **Manual fallback:**
 ```bash
 W="$DOEY_TEAM_WINDOW"
-for f in "$RUNTIME_DIR/results"/pane_${W}_*.json; do [ -f "$f" ] || continue; cat "$f" && echo ""; done
+bash -c 'shopt -s nullglob; for f in "$1"/results/pane_"$2"_*.json; do cat "$f"; echo ""; done' _ "$RUNTIME_DIR" "$W"
 cat "$RUNTIME_DIR/status/watchdog_pane_states_W${W}.json" 2>/dev/null
 ```
 
