@@ -107,4 +107,12 @@ while [ "$i" -lt 30 ]; do
   i=$((i + 1))
 done
 _sm_dbg_wake "timeout" "30"
-echo "TIMEOUT"
+# Cycle through sleep phrases for personality
+case $(( _sm_cycle % 6 )) in
+  0) echo "IDLE Zzz..." ;;
+  1) echo "IDLE Zzzz..." ;;
+  2) echo "IDLE Zzzzz..." ;;
+  3) echo "IDLE *yawn*" ;;
+  4) echo "IDLE ...snore..." ;;
+  5) echo "IDLE *stretches*" ;;
+esac
