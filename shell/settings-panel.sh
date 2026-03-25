@@ -20,6 +20,7 @@ C_RED='\033[31m'
 C_RED_DIM='\033[2;31m'
 C_CYAN_DIM='\033[2;36m'
 C_YELLOW='\033[33m'
+C_BOLD_YELLOW='\033[1;33m'
 C_REVERSE='\033[7m'
 
 repeat_char() {
@@ -895,6 +896,39 @@ _remove_startup_team() {
   touch "$trigger"
 }
 
+_remove_launch_team() {
+  local team_name="$1"
+  local proj_dir
+  proj_dir=$(_get_proj_dir)
+  local _search_dirs="${HOME}/.local/share/doey/teams ${proj_dir}/teams ${proj_dir}/.doey/teams"
+  local _found=""
+  local _d _f _n
+  for _d in $_search_dirs; do
+    [ -d "$_d" ] || continue
+    for _f in "$_d"/*.team.md; do
+      [ -f "$_f" ] || continue
+      _n=$(grep '^name:' "$_f" | head -1 | sed 's/name:[[:space:]]*//;s/"//g')
+      [ -z "$_n" ] && _n=$(basename "$_f" .team.md)
+      if [ "$_n" = "$team_name" ]; then
+        _found="$_f"
+        break 2
+      fi
+    done
+  done
+  [ -z "$_found" ] && return 1
+
+  # Use trash if available, otherwise rm
+  if command -v trash >/dev/null 2>&1; then
+    trash "$_found"
+  else
+    rm -f "$_found"
+  fi
+
+  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
+  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
+  touch "$trigger"
+}
+
 # ── Render: Agents View (cursor-aware) ───────────────────────────────────────
 
 _AGENT_FILES=""      # space-separated agent file paths
@@ -1154,7 +1188,13 @@ _render_footer() {
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
             "${C_BOLD_CYAN}" "${C_RESET}"
           ;;
-        launch:*|launch_builtin:*)
+        launch:*)
+          printf '  %b[↑↓/jk]%b navigate  %b[l/Enter]%b launch now  %b[d]%b remove  %b[r]%b reload  %b[1-3]%b views\n' \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_GREEN}" "${C_RESET}" \
+            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
+            "${C_BOLD_CYAN}" "${C_RESET}"
+          ;;
+        launch_builtin:*)
           printf '  %b[↑↓/jk]%b navigate  %b[l/Enter]%b launch now  %b[r]%b reload  %b[1-3]%b views\n' \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_GREEN}" "${C_RESET}" \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
@@ -1440,8 +1480,22 @@ _handle_key() {
             _STATUS_MSG="✓ Removed team ${_tidx}"
             _STATUS_EXPIRE=$(($(date +%s) + 3))
             ;;
+          launch:*)
+            local _ltname
+            _ltname=$(echo "$_item" | cut -d: -f2)
+            if _remove_launch_team "$_ltname"; then
+              _STATUS_MSG="✓ Removed team definition: ${_ltname}"
+            else
+              _STATUS_MSG="✗ Could not find team file for: ${_ltname}"
+            fi
+            _STATUS_EXPIRE=$(($(date +%s) + 3))
+            ;;
+          launch_builtin:*)
+            _STATUS_MSG="Cannot remove built-in team types"
+            _STATUS_EXPIRE=$(($(date +%s) + 2))
+            ;;
           *)
-            _STATUS_MSG="Can only remove startup teams"
+            _STATUS_MSG="Can only remove startup or launch teams"
             _STATUS_EXPIRE=$(($(date +%s) + 2))
             ;;
         esac
