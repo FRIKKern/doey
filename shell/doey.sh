@@ -1491,6 +1491,7 @@ _launch_session_core() {
   local team_window=1
 
   cd "$dir"
+  _doey_load_config  # Reload config now that we're in the project dir
 
   local hook_indent="   "
   [[ "$headless" -eq 1 ]] && hook_indent="  "
@@ -2647,6 +2648,7 @@ launch_session_dynamic() {
   local team_window=1
 
   cd "$dir"
+  _doey_load_config  # Reload config now that we're in the project dir
 
   _print_full_banner "Let Doey do it for you"
   local initial_workers=$(( DOEY_INITIAL_WORKER_COLS * 2 ))
@@ -2697,31 +2699,52 @@ MANIFEST
   for (( _si=1; _si<=DOEY_INITIAL_TEAMS; _si++ )); do
     echo "WDG_SLOT_${_si}=\"0.$((_si + 1))\"" >> "${runtime_dir}/session.env"
   done
-  write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
 
-  # Dashboard launches after session.env exists (info-panel + Session Manager need it)
-  setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
-  tmux new-window -t "$session" -c "$dir"
-  tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
-  tmux rename-window -t "$session:${team_window}" "Local Team"
+  # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
+  local _team1_def=""
+  [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_def=$(_read_team_config "1" "DEF" "")
 
-  step_done
+  if [ -n "$_team1_def" ]; then
+    # Team 1 uses a .team.md definition — dashboard first, then spawn from def
+    write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
+    setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
+    step_done
 
-  step_start 4 "Launching Window Manager & Watchdog..."
-  _launch_team_manager "$session" "$runtime_dir" "$team_window"
-  _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
-  _brief_team "$session" "$team_window" "${WDG_SLOT_1}" "" "0" \
-    "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
-  step_done
+    step_start 4 "Launching team 1 from definition '${_team1_def}'..."
+    if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_team1_def" ); then
+      printf "  ${ERROR}Failed to launch team 1 from definition '${_team1_def}'${RESET}\n"
+    fi
+    step_done
 
-  step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
-  sleep 0.2  # reduced from 0.5s — tmux is fast
-  local _col_i
-  for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
-    doey_add_column "$session" "$runtime_dir" "$dir"
-    (( _col_i < DOEY_INITIAL_WORKER_COLS - 1 )) && sleep 0.3
-  done
-  step_done
+    STEP_TOTAL=6  # Skip step 5 (worker columns) — add_team_from_def handles workers
+  else
+    # Default dynamic grid path for team 1
+    write_team_env "$runtime_dir" "1" "dynamic" "0.2" "" "0" "0" "" ""
+
+    # Dashboard launches after session.env exists (info-panel + Session Manager need it)
+    setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
+    tmux new-window -t "$session" -c "$dir"
+    tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
+    tmux rename-window -t "$session:${team_window}" "Local Team"
+
+    step_done
+
+    step_start 4 "Launching Window Manager & Watchdog..."
+    _launch_team_manager "$session" "$runtime_dir" "$team_window"
+    _launch_team_watchdog "$session" "${WDG_SLOT_1}" "$team_window"
+    _brief_team "$session" "$team_window" "${WDG_SLOT_1}" "" "0" \
+      "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
+    step_done
+
+    step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
+    sleep 0.2  # reduced from 0.5s — tmux is fast
+    local _col_i
+    for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
+      doey_add_column "$session" "$runtime_dir" "$dir"
+      (( _col_i < DOEY_INITIAL_WORKER_COLS - 1 )) && sleep 0.3
+    done
+    step_done
+  fi
 
   # Per-team config mode: when DOEY_TEAM_COUNT is set, use DOEY_TEAM_<N>_* variables
   if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
@@ -2778,18 +2801,20 @@ MANIFEST
       [ "$_ptc_fail" -gt 0 ] && printf "${WARN}${_ptc_fail} team(s) failed${RESET}\n"
       step_done
     fi
-    # Update team 1's env with per-team config if specified
-    local _ptc1_name _ptc1_role _ptc1_wm _ptc1_mm
-    _ptc1_name=$(_read_team_config "1" "NAME" "")
-    _ptc1_role=$(_read_team_config "1" "ROLE" "")
-    _ptc1_wm=$(_read_team_config "1" "WORKER_MODEL" "")
-    _ptc1_mm=$(_read_team_config "1" "MANAGER_MODEL" "")
-    if [ -n "$_ptc1_name" ] || [ -n "$_ptc1_role" ] || [ -n "$_ptc1_wm" ] || [ -n "$_ptc1_mm" ]; then
-      local _ptc1_wp _ptc1_wc
-      _ptc1_wp=$(_env_val "${runtime_dir}/team_1.env" WORKER_PANES)
-      _ptc1_wc=$(_env_val "${runtime_dir}/team_1.env" WORKER_COUNT)
-      write_team_env "$runtime_dir" "1" "dynamic" "0.2" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
-      [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:1" "$_ptc1_name"
+    # Update team 1's env with per-team config if specified (skip if DEF-based — already configured)
+    if [ -z "$_team1_def" ]; then
+      local _ptc1_name _ptc1_role _ptc1_wm _ptc1_mm
+      _ptc1_name=$(_read_team_config "1" "NAME" "")
+      _ptc1_role=$(_read_team_config "1" "ROLE" "")
+      _ptc1_wm=$(_read_team_config "1" "WORKER_MODEL" "")
+      _ptc1_mm=$(_read_team_config "1" "MANAGER_MODEL" "")
+      if [ -n "$_ptc1_name" ] || [ -n "$_ptc1_role" ] || [ -n "$_ptc1_wm" ] || [ -n "$_ptc1_mm" ]; then
+        local _ptc1_wp _ptc1_wc
+        _ptc1_wp=$(_env_val "${runtime_dir}/team_1.env" WORKER_PANES)
+        _ptc1_wc=$(_env_val "${runtime_dir}/team_1.env" WORKER_COUNT)
+        write_team_env "$runtime_dir" "1" "dynamic" "0.2" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
+        [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:1" "$_ptc1_name"
+      fi
     fi
   else
     local _extra_teams=$((DOEY_INITIAL_TEAMS - 1))
