@@ -1,6 +1,6 @@
 ---
 name: doey-add-window
-description: Add a new team window (Manager + Workers + Watchdog), optionally in a git worktree or as a freelancer pool.
+description: Add a new team window (Manager + Workers), optionally in a git worktree or as a freelancer pool.
 ---
 
 ## Usage
@@ -37,16 +37,13 @@ TOTAL_PANES=${TOTAL}
 MANAGER_PANE=${MGR_PANE}
 WORKER_PANES=${WORKER_PANES_LIST}
 WORKER_COUNT=${WORKER_COUNT}
-WATCHDOG_PANE=
 TEAM_TYPE=${TEAM_TYPE_VAL}
 TEAM_NAME=${FREELANCER_MODE:+Freelancers}
 TEAM_EOF
 mv "${TEAM_FILE}.tmp" "$TEAM_FILE" && CURRENT_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"') && { [ -n "$CURRENT_WINDOWS" ] && NEW_WINDOWS="${CURRENT_WINDOWS},${NEW_WIN}" || NEW_WINDOWS="${NEW_WIN}"; } && TMPENV=$(mktemp "${RUNTIME_DIR}/session.env.tmp_XXXXXX") && if grep -q '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env"; then sed "s/^TEAM_WINDOWS=.*/TEAM_WINDOWS=${NEW_WINDOWS}/" "${RUNTIME_DIR}/session.env" > "$TMPENV"; else cat "${RUNTIME_DIR}/session.env" > "$TMPENV"; echo "TEAM_WINDOWS=${NEW_WINDOWS}" >> "$TMPENV"; fi && mv "$TMPENV" "${RUNTIME_DIR}/session.env" && echo "team_${NEW_WIN}.env written, TEAM_WINDOWS=${NEW_WINDOWS}"
 
 ## Step 4: Launch Claude in all panes
-bash: if [ "$FREELANCER_MODE" = "true" ]; then for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do WORKER_PROMPT=$(grep -rl "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1); CMD="claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} F${i}\""; [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""; tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter; sleep 0.5; done; else tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --name \"T${NEW_WIN} Window Manager\" --agent \"t${NEW_WIN}-manager\"" Enter && sleep 1; for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do WORKER_PROMPT=$(grep -rl "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1); CMD="claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} W${i}\""; [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""; tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter; sleep 0.5; done; fi && WDG_SLOT="" && for slot in 2 3 4 5 6 7; do SLOT_CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || echo 0)" 2>/dev/null || true); [ -z "$SLOT_CHILD" ] && { WDG_SLOT="$slot"; break; }; done && WDG_AGENT="t${NEW_WIN}-watchdog" && [ "$FREELANCER_MODE" = "true" ] && WDG_AGENT="t${NEW_WIN}-freelancer-watchdog" && if [ -n "$WDG_SLOT" ]; then WDG_TITLE="T${NEW_WIN} Watchdog"; [ "$FREELANCER_MODE" = "true" ] && WDG_TITLE="T${NEW_WIN} Watchdog [F]"; tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "$WDG_TITLE"; tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" "claude --dangerously-skip-permissions --model sonnet --name \"T${NEW_WIN} Watchdog\" --agent \"${WDG_AGENT}\"" Enter; sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=0.${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"; if [ "$FREELANCER_MODE" = "true" ]; then echo "Launched: ${WORKER_COUNT} freelancers + Watchdog at 0.${WDG_SLOT}"; else echo "Launched: Manager + ${WORKER_COUNT} workers + Watchdog at 0.${WDG_SLOT}"; fi; else if [ "$FREELANCER_MODE" = "true" ]; then echo "WARNING: No Dashboard slot — launched ${WORKER_COUNT} freelancers only"; else echo "WARNING: No Dashboard slot — launched Manager + ${WORKER_COUNT} workers only"; fi; fi
-
-No Dashboard slot available → team works without Watchdog.
+bash: if [ "$FREELANCER_MODE" = "true" ]; then for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do WORKER_PROMPT=$(grep -rl "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1); CMD="claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} F${i}\""; [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""; tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter; sleep 0.5; done; echo "Launched: ${WORKER_COUNT} freelancers"; else tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --name \"T${NEW_WIN} Window Manager\" --agent \"t${NEW_WIN}-manager\"" Enter && sleep 1; for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do WORKER_PROMPT=$(grep -rl "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1); CMD="claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} W${i}\""; [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""; tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter; sleep 0.5; done; echo "Launched: Manager + ${WORKER_COUNT} workers"; fi
 
 ## Step 5: Create worktree (if --worktree)
 Best-effort — team still created if worktree fails.
@@ -54,15 +51,15 @@ Best-effort — team still created if worktree fails.
 bash: WT_DIR="" && WT_BRANCH="" && if [ "$WORKTREE_MODE" = "true" ]; then WT_BRANCH="doey/team-${NEW_WIN}-$(date +%m%d-%H%M)"; WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${NEW_WIN}"; mkdir -p "$(dirname "$WT_DIR")"; if ! git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$WT_BRANCH" 2>&1; then echo "WARNING: Worktree failed. Team created without isolation."; WT_DIR=""; WT_BRANCH=""; else [ -f "${PROJECT_DIR}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${PROJECT_DIR}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"; _tmp_env=$(mktemp "${RUNTIME_DIR}/team_env_XXXXXX"); cat "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "$_tmp_env"; printf 'WORKTREE_DIR="%s"\nWORKTREE_BRANCH="%s"\n' "$WT_DIR" "$WT_BRANCH" >> "$_tmp_env"; mv "$_tmp_env" "${RUNTIME_DIR}/team_${NEW_WIN}.env"; echo "Worktree created: ${WT_DIR} on branch ${WT_BRANCH}"; fi; else echo "Skipped (--worktree not set)"; fi
 
 ## Step 6: Verify boot and report
-bash: sleep 8 && NOT_READY=0 && DOWN_PANES="" && for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null); OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null); if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"; fi; done && if [ -n "$WDG_SLOT" ]; then WDG_CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:0.${WDG_SLOT}" -p '#{pane_pid}')" 2>/dev/null); WDG_OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -p 2>/dev/null); if [ -z "$WDG_CHILD" ] || ! echo "$WDG_OUTPUT" | grep -q "bypass permissions"; then NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES 0.$WDG_SLOT"; fi; fi && [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
+bash: sleep 8 && NOT_READY=0 && DOWN_PANES="" && for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null); OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null); if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"; fi; done && [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 
 If not ready: check listed panes with `tmux capture-pane -t <pane> -p`, retry send-keys.
 
-Rename window if worktree succeeded. Output summary: grid, manager, worker range, watchdog slot, worktree info.
+Rename window if worktree succeeded. Output summary: grid, manager, worker range, worktree info.
 
 ### Rules
 - Standard team: pane 0 = Manager, 1+ = Workers. Freelancer: all panes = Workers.
-- Watchdog in Dashboard 0.2-0.7. Write team_W.env before launching.
+- Write team_W.env before launching.
 - Never hardcode window indices — derive from `tmux display-message`. Bash 3.2 compatible.
-- Agent names: `t${WIN}-manager`, `t${WIN}-watchdog`. Worktree path: `/tmp/doey/${PROJECT_NAME}/worktrees/team-${WIN}`
+- Agent names: `t${WIN}-manager`. Worktree path: `/tmp/doey/${PROJECT_NAME}/worktrees/team-${WIN}`
 - Copy `.claude/settings.local.json` into worktrees (gitignored)

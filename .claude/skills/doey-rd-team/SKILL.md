@@ -138,10 +138,8 @@ tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.3" \
   "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
 sleep 1
 
-# No watchdog for RD teams — they are short-lived and human-directed.
-# The Brain coordinates specialists directly. Standard watchdog agents
-# (t*-watchdog) expect Manager+Worker layout and status files that
-# RD teams don't produce.
+# RD teams are short-lived and human-directed.
+# The Brain coordinates specialists directly.
 ```
 
 ### Step 6: Verify boot and dispatch audit
@@ -201,7 +199,7 @@ Output: window number, project dir, pane layout, boot status. Include teardown c
 ### Rules
 
 - Work on the LIVE project directory, not a worktree — the team needs to see real-time changes
-- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic. No watchdog (RD teams are short-lived). Window named "RD"
+- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic. Reports to SM, SM reports to Boss. Window named "RD"
 - Team env includes `RD_TEAM=true`
 - 3s stagger between Claude launches to prevent auth exhaustion
 - Never hardcode window indices. Bash 3.2 compatible.

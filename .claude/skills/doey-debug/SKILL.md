@@ -26,7 +26,7 @@ mkdir -p "$RD/debug"
 cat > "$RD/debug.conf" <<'CONF'
 DOEY_DEBUG=true
 DOEY_DEBUG_HOOKS=true
-DOEY_DEBUG_WATCHDOG=true
+DOEY_DEBUG_SM=true
 DOEY_DEBUG_LIFECYCLE=true
 DOEY_DEBUG_MESSAGES=true
 DOEY_DEBUG_STATE=true
@@ -92,7 +92,7 @@ FIND_EOF
   echo "  Total: ${total} bytes"
   echo ""
   echo "--- Last Entry Per Category ---"
-  for cat_name in hooks lifecycle state messages watchdog; do
+  for cat_name in hooks lifecycle state messages sm; do
     latest=""
     while IFS= read -r f; do
       [ -f "$f" ] && latest="$f"

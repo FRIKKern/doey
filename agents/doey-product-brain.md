@@ -82,7 +82,7 @@ If the answer to #3 is "yes, easily" → **REJECT**.
 The top recurring bug categories (from 104+ fix commits):
 - **Pane addressing errors** (18+ bugs) — hardcoded indices, wrong targets after splits
 - **Install/shipping gaps** (12+ bugs) — works in dev, fails on fresh install
-- **Watchdog behavior loops** (10+ bugs) — infinite escalation, y-spam, unadapted retries
+- **SM scan loops** (10+ bugs) — infinite escalation, y-spam, unadapted retries
 - **Bash 3.2 violations** (8+ bugs) — `declare -A`, `mapfile`, `|&`, glob-redirect
 - **Race conditions** (8+ bugs) — startup ordering, auth exhaustion, stale state
 

@@ -86,4 +86,4 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 2. Workers and managers may only set status to `pending_user_confirmation`. The `done` transition belongs to the user.
 3. When listing tasks, show: ID, status (colored), title, age.
 4. When asked "what are we working on" or "task status" — list active + pending tasks and summarize progress.
-5. The Session Manager should propose creating a task for any high-level user goal that will take more than a few minutes.
+5. Boss should propose creating a task for any high-level user goal that will take more than a few minutes. Session Manager routes tasks to teams.

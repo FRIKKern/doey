@@ -16,7 +16,7 @@ PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cu
 SEARCH_DIR="${DOEY_TEAM_DIR:-$PROJECT_DIR}"
 
 RECENT_FILES=""
-if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
+if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
   CUTOFF_AWK='$1 >= cutoff {$1=""; print substr($0,2)}'
   STAT_FLAG="-c"; STAT_FMT='%Y %n'
   if stat -f '%m' /dev/null 2>/dev/null; then
@@ -28,9 +28,9 @@ if ! is_watchdog && [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
     awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
-if is_manager; then            ROLE_LABEL="the Doey Window Manager"
+if is_boss; then               ROLE_LABEL="the Doey Boss"
+elif is_manager; then          ROLE_LABEL="the Doey Window Manager"
 elif is_session_manager; then  ROLE_LABEL="the Doey Session Manager"
-elif is_watchdog; then         ROLE_LABEL="the Doey Watchdog"
 else                           ROLE_LABEL="a Doey worker"
 fi
 
@@ -162,17 +162,25 @@ SMMSG
   fi
 fi
 
-if is_watchdog; then
-  _WD_TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
-  WATCHDOG_STATE=$(cat "${RUNTIME_DIR}/status/watchdog_pane_states_W${_WD_TEAM_W}.json" 2>/dev/null || echo "{}")
-  if [ "$WATCHDOG_STATE" != "{}" ]; then
-    cat <<WDSTATE
+if is_boss; then
+  BOSS_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+  BOSS_PENDING_MSGS=""
+  for _mf in "$RUNTIME_DIR/messages"/${BOSS_SAFE}_*.msg; do
+    [ -f "$_mf" ] || continue
+    BOSS_PENDING_MSGS="${BOSS_PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
+  done
+  cat <<BOSSSTATE
 
-## WATCHDOG STATE (restore after compaction)
-\`\`\`json
-${WATCHDOG_STATE}
-\`\`\`
-WDSTATE
+## BOSS STATE (restore after compaction)
+**You are Boss** — user-facing commander at pane 0.1
+**SM is at:** pane 0.2
+BOSSSTATE
+  if [ -n "$BOSS_PENDING_MSGS" ]; then
+    cat <<BOSSMSG
+
+**UNREAD MESSAGES (process these after compaction!):**
+${BOSS_PENDING_MSGS}
+BOSSMSG
   fi
 fi
 

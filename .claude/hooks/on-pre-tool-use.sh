@@ -123,36 +123,29 @@ _dbg_write() {
 
 # Non-Bash tool checks
 if [ "$TOOL_NAME" != "Bash" ]; then
-  # AskUserQuestion: only Session Manager may ask the user directly
+  # AskUserQuestion: only Boss may ask the user directly
   if [ "$TOOL_NAME" = "AskUserQuestion" ]; then
     case "$_DOEY_ROLE" in
-      session_manager) _dbg_write "allow_sm_ask_user"; exit 0 ;;
-      "")              _dbg_write "allow_no_role_ask_user"; exit 0 ;;
+      boss) _dbg_write "allow_boss_ask_user"; exit 0 ;;
+      "")   _dbg_write "allow_no_role_ask_user"; exit 0 ;;
       *)
-        _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only Session Manager asks the user"
+        _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only Boss asks the user"
         _dbg_write "block_ask_user_${_DOEY_ROLE}"
-        echo "BLOCKED: Only Session Manager can ask the user questions directly." >&2
-        echo "Send a message to Session Manager with your question instead:" >&2
-        echo '  SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"' >&2
-        echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${SM_SAFE}_$(date +%s)_$$.msg"' >&2
+        echo "BLOCKED: Only Boss can ask the user questions directly." >&2
+        echo "Send a message to Boss with your question instead:" >&2
+        echo '  BOSS_SAFE="${SESSION_NAME//[:.]/_}_0_1"' >&2
+        echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_$(date +%s)_$$.msg"' >&2
         exit 2 ;;
     esac
   fi
-  # Block write tools for Watchdog
-  case "$TOOL_NAME" in Edit|Write|Agent|NotebookEdit) ;; *) exit 0 ;; esac
-  case "$_DOEY_ROLE" in watchdog)
-    _log_block "TOOL_BLOCKED" "Watchdog cannot use $TOOL_NAME" "monitoring role only"
-    echo "BLOCKED: Watchdog cannot use $TOOL_NAME — monitoring role only." >&2
-    _dbg_write "block_watchdog_write_tool"
-    exit 2 ;;
-  esac
+  # Non-Bash tools: allow for all remaining roles
   _dbg_write "allow_non_bash"
   exit 0
 fi
 
 # Git commit/push: blocked for all roles except session_manager and git_agent
 # Read-only git commands (status, diff, log, show, branch) are always allowed
-if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "git_agent" ]; then
+if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "git_agent" ] && [ "$_DOEY_ROLE" != "boss" ]; then
   _GIT_CMD=$(_json_str tool_input.command)
   if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
     case "$_GIT_CMD" in
@@ -165,8 +158,8 @@ if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "git_agent" ]; t
   fi
 fi
 
-# Manager/Session Manager: only block /rename via send-keys
-if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
+# Manager/Session Manager/Boss: only block /rename via send-keys
+if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ] || [ "$_DOEY_ROLE" = "boss" ]; then
   _CMD=$(_json_str tool_input.command)
   _CMD_STRIPPED=$(echo "$_CMD" | sed 's/^[[:space:]]*//')
   case "$_CMD_STRIPPED" in
@@ -204,22 +197,19 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
   [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
-  # Exception: workers may send-keys to their own team's Watchdog pane
+  # Exception: workers may send-keys to the Session Manager pane
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
-    _tw="${DOEY_TEAM_WINDOW:-}"
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
-    if [ -n "$_tw" ] && [ -n "$_rtd" ] && [ -f "${_rtd}/team_${_tw}.env" ]; then
-      _wdg_pane=$(grep '^WATCHDOG_PANE=' "${_rtd}/team_${_tw}.env" 2>/dev/null | head -1 | sed 's/^WATCHDOG_PANE=//;s/^"//;s/"$//')
-      if [ -n "$_wdg_pane" ]; then
-        _sn="${SESSION_NAME:-}"
-        [ -z "$_sn" ] && [ -f "${_rtd}/session.env" ] && _sn=$(grep '^SESSION_NAME=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SESSION_NAME=//;s/^"//;s/"$//')
-        # Allow if target is the Watchdog pane (session:window.pane or window.pane)
-        case "$TOOL_COMMAND" in
-          *"-t"*"${_sn}:${_wdg_pane}"*|*"-t"*"${_wdg_pane}"*)
-            _dbg_write "allow_worker_sendkeys_watchdog"
-            exit 0 ;;
-        esac
-      fi
+    if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
+      _sm_pane=$(grep '^SM_PANE=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SM_PANE=//;s/^"//;s/"$//')
+      [ -z "$_sm_pane" ] && _sm_pane="0.2"
+      _sn="${SESSION_NAME:-}"
+      [ -z "$_sn" ] && _sn=$(grep '^SESSION_NAME=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SESSION_NAME=//;s/^"//;s/"$//')
+      case "$TOOL_COMMAND" in
+        *"-t"*"${_sn}:${_sm_pane}"*|*"-t"*"${_sm_pane}"*)
+          _dbg_write "allow_worker_sendkeys_sm"
+          exit 0 ;;
+      esac
     fi
   ;; esac
   if _check_blocked "$TOOL_COMMAND"; then
@@ -232,65 +222,23 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   exit 0
 fi
 
-# Slow path: watchdog or unknown role — needs full init_hook for role detection
+# Slow path: unknown role — needs full init_hook for role detection
 source "$(dirname "$0")/common.sh"
 init_hook
 
 is_manager && { _dbg_write "allow_manager_slow"; exit 0; }
 is_session_manager && { _dbg_write "allow_sm_slow"; exit 0; }
+is_boss && { _dbg_write "allow_boss_slow"; exit 0; }
 
 TOOL_COMMAND=$(_json_str tool_input.command)
 [ -z "$TOOL_COMMAND" ] && exit 0
 [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
 
-# Watchdog: allow bash except sending keystrokes
-if is_watchdog; then
-  case "$TOOL_COMMAND" in
-    *"send-keys"*|*"send-key"*|*"paste-buffer"*|*"load-buffer"*)
-      TEAM_WINDOW="${DOEY_TEAM_WINDOW:-}"
-      # _targets_manager: true if command targets pane .0 (Manager) via expanded
-      # value, unexpanded ${TEAM_WINDOW}, or $TEAM_WINDOW literal references
-      _targets_manager() {
-        case "$1" in
-          *":${TEAM_WINDOW}.0"*) return 0 ;;
-          *'${TEAM_WINDOW}.0'*) return 0 ;;
-          *'$TEAM_WINDOW.0'*) return 0 ;;
-          *'${DOEY_TEAM_WINDOW}.0'*) return 0 ;;
-          *'$DOEY_TEAM_WINDOW.0'*) return 0 ;;
-        esac
-        return 1
-      }
-      if [ -n "$TEAM_WINDOW" ] && [ -f "${RUNTIME_DIR}/status/manager_crashed_W${TEAM_WINDOW}" ]; then
-        if _targets_manager "$TOOL_COMMAND"; then
-            _log_block "TOOL_BLOCKED" "Watchdog send-keys to crashed manager blocked" "pane ${TEAM_WINDOW}.0"
-            echo "BLOCKED: Watchdog cannot send keys to crashed Manager pane ${TEAM_WINDOW}.0." >&2
-            echo "Write an alert file for the Session Manager instead." >&2
-            exit 2
-        fi
-      fi
-      CLEAN_CMD=$(echo "$TOOL_COMMAND" | sed 's/[[:space:]]*2>\/dev\/null[[:space:]]*$//')
-      echo "$CLEAN_CMD" | grep -qE '^[[:space:]]*tmux copy-mode[[:space:]]' && exit 0
-      if [ -n "$TEAM_WINDOW" ]; then
-        _targets_manager "$TOOL_COMMAND" && exit 0
-      fi
-      _TP='(\"[^\"]*\"|[^[:space:]]+)'
-      echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+\"?(/login|/compact)\"?[[:space:]]+Enter[[:space:]]*$" && exit 0
-      echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Enter[[:space:]]*$" && exit 0
-      echo "$CLEAN_CMD" | grep -qE "^[[:space:]]*tmux send-keys[[:space:]]+-t[[:space:]]+${_TP}[[:space:]]+Escape[[:space:]]*$" && exit 0
-      _log_block "TOOL_BLOCKED" "Watchdog unauthorized keystroke blocked" "$TOOL_COMMAND"
-      _dbg_write "block_watchdog_sendkeys"
-      echo "BLOCKED: Watchdog cannot send keystrokes to worker panes." >&2
-      echo "Report stuck workers to the Window Manager instead." >&2
-      exit 2 ;;
-  esac
-fi
-
-# Blocked patterns for Workers and Watchdog
-ROLE="worker"; is_watchdog && ROLE="watchdog"
+# Blocked patterns for Workers
 if _check_blocked "$TOOL_COMMAND"; then
-  _log_block "TOOL_BLOCKED" "$ROLE $MSG blocked" "$TOOL_COMMAND"
-  _dbg_write "block_${ROLE}"
-  echo "BLOCKED: ${ROLE} cannot run ${MSG}. Only the Window Manager can do this." >&2
+  _log_block "TOOL_BLOCKED" "worker $MSG blocked" "$TOOL_COMMAND"
+  _dbg_write "block_worker"
+  echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this." >&2
   exit 2
 fi
 _dbg_write "allow_slow"

@@ -2,7 +2,8 @@
 # Stop hook: unified notification dispatch (async)
 #   Worker          → notify Window Manager pane
 #   Window Manager  → notify Session Manager pane
-#   Session Manager → desktop notification
+#   Session Manager → notify Boss pane
+#   Boss            → desktop notification
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_hook
@@ -10,7 +11,6 @@ _DOEY_HOOK_NAME="stop-notify"
 type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 # Early exit for roles that never send stop notifications
-is_watchdog && exit 0
 [ "$WINDOW_INDEX" = "0" ] && [ "$PANE_INDEX" = "0" ] && exit 0  # info panel
 
 # Debug: dump stop hook INPUT to discover available fields
@@ -139,19 +139,10 @@ ${summary}"
   done
 }
 
-# Belt-and-suspenders: send-keys wake to team Watchdog (supplements trigger file)
-_wake_team_watchdog() {
-  local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
-  [ -z "$team_w" ] && return 0
-  local team_env="${RUNTIME_DIR}/team_${team_w}.env"
-  [ -f "$team_env" ] || return 0
-  local wdg_pane
-  wdg_pane=$(grep '^WATCHDOG_PANE=' "$team_env" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"') || return 0
-  [ -n "$wdg_pane" ] || return 0
-  local wdg_target="${SESSION_NAME}:${wdg_pane}"
-  # Only wake if pane exists and has a running process
-  tmux display-message -t "$wdg_target" -p '#{pane_pid}' >/dev/null 2>&1 || return 0
-  tmux send-keys -t "$wdg_target" "" 2>/dev/null || true
+# Belt-and-suspenders: send-keys wake to Session Manager (supplements trigger file)
+_wake_sm() {
+  local sm_pane="${SM_PANE:-0.2}"
+  tmux send-keys -t "${SESSION_NAME}:${sm_pane}" "" 2>/dev/null || true
 }
 
 # --- Worker: notify its Window Manager (or Session Manager for freelancers) ---
@@ -174,7 +165,7 @@ if is_worker; then
   if [ "$_team_type" = "freelancer" ]; then
     # Freelancer workers notify Session Manager directly (no manager in this team)
     _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
-    SM_TARGET="$SESSION_NAME:${_sm_pane:-0.1}"
+    SM_TARGET="$SESSION_NAME:${_sm_pane:-0.2}"
     if ! tmux display-message -t "$SM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
       _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$SM_TARGET"
       exit 0
@@ -202,7 +193,7 @@ if is_worker; then
 
   # Dispatch workflow hooks if this team has a team definition
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
-  _wake_team_watchdog
+  _wake_sm
   exit 0
 fi
 
@@ -227,17 +218,32 @@ if is_manager; then
   # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
   touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
   _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
-  _wake_team_watchdog
+  _wake_sm
   exit 0
 fi
 
-# --- Session Manager: desktop notification ---
+# --- Session Manager: notify Boss ---
 if is_session_manager; then
   LAST_MSG=$(parse_field "last_assistant_message")
   [ -z "$LAST_MSG" ] && exit 0
   echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯" && exit 0
 
-  send_notification "Doey — Session Manager" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
+  BOSS_TARGET="$SESSION_NAME:0.1"
+  if tmux display-message -t "$BOSS_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
+    SUMMARY=$(sanitize_message "$LAST_MSG" 150)
+    _notify_pane "$BOSS_TARGET" "sm_update" "SM update: ${SUMMARY}"
+    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${BOSS_TARGET}" "type=sm_update" "delivery=file" "success=true"
+    _log "stop-notify: sent sm_update to Boss at $BOSS_TARGET"
+  fi
+fi
+
+# --- Boss: desktop notification ---
+if is_boss; then
+  LAST_MSG=$(parse_field "last_assistant_message")
+  [ -z "$LAST_MSG" ] && exit 0
+  echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯" && exit 0
+
+  send_notification "Doey — Boss" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=desktop" "type=desktop_notification" "delivery=osascript" "success=true"
   _log "stop-notify: sent desktop notification"
 fi

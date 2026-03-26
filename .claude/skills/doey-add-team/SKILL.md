@@ -204,7 +204,6 @@ TOTAL_PANES=${PANE_COUNT}
 MANAGER_PANE=${MANAGER_PANE_IDX}
 WORKER_PANES=${WORKER_PANES_LIST}
 WORKER_COUNT=${WORKER_COUNT}
-WATCHDOG_PANE=
 WORKTREE_DIR=
 WORKTREE_BRANCH=
 TEAM_DEF=${TEAM_NAME}
@@ -247,29 +246,7 @@ LAUNCH_INPUT
 echo "All ${PANE_COUNT} Claude instances launched"
 ```
 
-### Step 6: Acquire watchdog slot and start watchdog
-
-```bash
-WDG_SLOT=""
-for slot in 2 3 4 5 6 7; do
-  SLOT_CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:0.${slot}" -p '#{pane_pid}' 2>/dev/null || echo 0)" 2>/dev/null || true)
-  [ -z "$SLOT_CHILD" ] && { WDG_SLOT="$slot"; break; }
-done
-
-WDG_AGENT="t${NEW_WIN}-watchdog"
-if [ -n "$WDG_SLOT" ]; then
-  tmux select-pane -t "${SESSION_NAME}:0.${WDG_SLOT}" -T "T${NEW_WIN} Watchdog"
-  tmux send-keys -t "${SESSION_NAME}:0.${WDG_SLOT}" \
-    "claude --dangerously-skip-permissions --model sonnet --name \"T${NEW_WIN} Watchdog\" --agent \"${WDG_AGENT}\"" Enter
-  sed "s/^WATCHDOG_PANE=.*/WATCHDOG_PANE=0.${WDG_SLOT}/" "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" \
-    && mv "${RUNTIME_DIR}/team_${NEW_WIN}.env.tmp" "${RUNTIME_DIR}/team_${NEW_WIN}.env"
-  echo "Watchdog at 0.${WDG_SLOT}"
-else
-  echo "WARNING: No Dashboard slot available — team running without Watchdog"
-fi
-```
-
-### Step 7: Brief the manager with team context
+### Step 6: Brief the manager with team context
 
 ```bash
 if [ -n "$MANAGER_PANE_IDX" ]; then
@@ -297,7 +274,7 @@ BRIEF_EOF
 fi
 ```
 
-### Step 8: Verify boot and report
+### Step 7: Verify boot and report
 
 ```bash
 sleep 5
@@ -315,7 +292,7 @@ VERIFY_INPUT
 [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 ```
 
-Output summary: team name, window number, pane layout, watchdog slot, boot status. Include teardown: `/doey-kill-window ${NEW_WIN}`
+Output summary: team name, window number, pane layout, boot status. Include teardown: `/doey-kill-window ${NEW_WIN}`
 
 ### Rules
 
