@@ -122,7 +122,7 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 func (m *TasksModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.list.SetSize(w-2, h-2) // account for border padding
+	m.list.SetSize(w, h-3) // full width, reserve 3 lines for title + margins
 }
 
 // View renders the task list panel.
