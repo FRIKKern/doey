@@ -394,7 +394,7 @@ _settings_var_at() {
 # ── Render: Teams View (cursor-aware) ────────────────────────────────────────
 
 # Team items list for cursor reference
-_TEAM_ITEMS=""       # "running:W", "startup:N", "catalog:builtin:type", or "catalog:premade:name" space-separated
+_TEAM_ITEMS=""       # "running:W" or "startup:N" space-separated
 _TEAM_ITEM_COUNT=0
 
 # Lineup state (indexed variables pattern for bash 3.2)
@@ -489,39 +489,6 @@ _derive_effective_lineup() {
 
     _LINEUP_COUNT=$((_li - 1))
   fi
-}
-
-_is_favorite() {
-  local name="$1"
-  local favs
-  favs=$(_config_val DOEY_FAVORITE_TEAMS) || true
-  case ",$favs," in *",$name,"*) return 0 ;; esac
-  return 1
-}
-
-_toggle_favorite() {
-  local name="$1"
-  local favs new_favs
-  favs=$(_config_val DOEY_FAVORITE_TEAMS) || true
-  if _is_favorite "$name"; then
-    # Remove: rebuild without this name
-    new_favs=""
-    local IFS=','
-    for f in $favs; do
-      [ "$f" = "$name" ] && continue
-      [ -n "$new_favs" ] && new_favs="${new_favs},"
-      new_favs="${new_favs}${f}"
-    done
-    unset IFS
-  else
-    # Add
-    if [ -n "$favs" ]; then
-      new_favs="${favs},${name}"
-    else
-      new_favs="$name"
-    fi
-  fi
-  _write_config_setting DOEY_FAVORITE_TEAMS "$new_favs"
 }
 
 _render_team_blueprint() {
@@ -661,99 +628,6 @@ _render_team_blueprint() {
     printf '  %b(no teams configured)%b\n' "${C_DIM}" "${C_RESET}"
   fi
 
-  # --- Section 2: Team Catalog ---
-  printf '\n  %b─── Teams %b%s%b\n' \
-    "${C_BOLD_WHITE}" "${C_DIM}" "$(repeat_char '─' $(( _cw - 12 )))" "${C_RESET}"
-
-  # Collect all catalog items into indexed vars
-  local _cat_count=0
-
-  # Built-in types
-  local _cat_builtins="local freelancer worktree"
-  local _cb_label _cb_desc
-  for _cb in $_cat_builtins; do
-    case "$_cb" in
-      local)      _cb_label="local team";      _cb_desc="Standard managed team" ;;
-      freelancer) _cb_label="freelancer pool";  _cb_desc="Independent worker pool" ;;
-      worktree)   _cb_label="worktree team";    _cb_desc="Isolated git worktree" ;;
-    esac
-    local _cb_fav=0
-    _is_favorite "$_cb" && _cb_fav=1
-    eval "_cat_${_cat_count}_name=\$_cb_label"
-    eval "_cat_${_cat_count}_desc=\$_cb_desc"
-    eval "_cat_${_cat_count}_tag=catalog:builtin:${_cb}"
-    eval "_cat_${_cat_count}_fav=$_cb_fav"
-    eval "_cat_${_cat_count}_kind=builtin"
-    _cat_count=$((_cat_count + 1))
-  done
-
-  # Premade teams from .team.md files (deduplicated)
-  local _seen_cat=" "
-  local _cat_dir _cat_f _cat_fname _cat_fdesc
-  for _cat_dir in "${HOME}/.local/share/doey/teams" "${_proj_dir}/teams" "${_proj_dir}/.doey/teams"; do
-    [ -d "$_cat_dir" ] || continue
-    for _cat_f in "$_cat_dir"/*.team.md; do
-      [ -f "$_cat_f" ] || continue
-      _cat_fname=$(grep '^name:' "$_cat_f" | head -1 | sed 's/name:[[:space:]]*//;s/"//g')
-      [ -z "$_cat_fname" ] && _cat_fname=$(basename "$_cat_f" .team.md)
-      case "$_seen_cat" in
-        *" ${_cat_fname} "*) continue ;;
-      esac
-      _seen_cat="${_seen_cat}${_cat_fname} "
-      _cat_fdesc=$(grep '^description:' "$_cat_f" | head -1 | sed 's/description:[[:space:]]*//;s/"//g')
-      [ -z "$_cat_fdesc" ] && _cat_fdesc="(no description)"
-      local _cf_fav=0
-      _is_favorite "$_cat_fname" && _cf_fav=1
-      eval "_cat_${_cat_count}_name=\$_cat_fname"
-      eval "_cat_${_cat_count}_desc=\$_cat_fdesc"
-      eval "_cat_${_cat_count}_tag=catalog:premade:${_cat_fname}"
-      eval "_cat_${_cat_count}_fav=$_cf_fav"
-      eval "_cat_${_cat_count}_kind=premade"
-      _cat_count=$((_cat_count + 1))
-    done
-  done
-
-  # Render: favorites first, then non-favorites
-  local _cat_pass _cat_ci _cat_cn _cat_cd _cat_ct _cat_cf _cat_ck
-  for _cat_pass in fav nonfav; do
-    _cat_ci=0
-    while [ "$_cat_ci" -lt "$_cat_count" ]; do
-      eval "_cat_cf=\${_cat_${_cat_ci}_fav}"
-      if [ "$_cat_pass" = "fav" ] && [ "$_cat_cf" -ne 1 ]; then _cat_ci=$((_cat_ci + 1)); continue; fi
-      if [ "$_cat_pass" = "nonfav" ] && [ "$_cat_cf" -eq 1 ]; then _cat_ci=$((_cat_ci + 1)); continue; fi
-
-      eval "_cat_cn=\${_cat_${_cat_ci}_name}"
-      eval "_cat_cd=\${_cat_${_cat_ci}_desc}"
-      eval "_cat_ct=\${_cat_${_cat_ci}_tag}"
-      eval "_cat_ck=\${_cat_${_cat_ci}_kind}"
-
-      local _cat_star="☆"
-      [ "$_cat_cf" -eq 1 ] && _cat_star="★"
-      local _cat_name_color="${C_BOLD_CYAN}"
-      [ "$_cat_ck" = "builtin" ] && _cat_name_color="${C_BOLD_WHITE}"
-
-      local _is_sel=false
-      [ "$_ri" -eq "$_CURSOR_POS" ] && _is_sel=true
-      if [ "$_is_sel" = true ]; then
-        printf '  %b▸ %s ⚡ %-18s %s%b\n' \
-          "${C_REVERSE}" "$_cat_star" "$_cat_cn" "$(_truncate "$_cat_cd" $(( _cw - 30 )))" "${C_RESET}"
-      else
-        printf '  %s %b⚡%b %b%-18s%b %b%s%b\n' \
-          "$_cat_star" \
-          "${C_BOLD_YELLOW}" "${C_RESET}" \
-          "$_cat_name_color" "$_cat_cn" "${C_RESET}" \
-          "${C_DIM}" "$(_truncate "$_cat_cd" $(( _cw - 30 )))" "${C_RESET}"
-      fi
-      _TEAM_ITEMS="${_TEAM_ITEMS}${_cat_ct} "
-      _ri=$((_ri + 1))
-      _cat_ci=$((_cat_ci + 1))
-    done
-  done
-
-  if [ "$_cat_count" -eq 0 ]; then
-    printf '  %b(no teams available — add .team.md files to ~/.local/share/doey/teams/)%b\n' "${C_DIM}" "${C_RESET}"
-  fi
-
   _CURSOR_MAX=$_ri
   _TEAM_ITEM_COUNT=$_ri
 }
@@ -885,39 +759,6 @@ _remove_startup_team() {
   if [ "$_CURSOR_POS" -ge "$new_count" ] && [ "$_CURSOR_POS" -gt 0 ]; then
     _CURSOR_POS=$((_CURSOR_POS - 1))
     _write_cursor "teams" "$_CURSOR_POS"
-  fi
-
-  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
-  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
-  touch "$trigger"
-}
-
-_remove_launch_team() {
-  local team_name="$1"
-  local proj_dir
-  proj_dir=$(_get_proj_dir)
-  local _search_dirs="${HOME}/.local/share/doey/teams ${proj_dir}/teams ${proj_dir}/.doey/teams"
-  local _found=""
-  local _d _f _n
-  for _d in $_search_dirs; do
-    [ -d "$_d" ] || continue
-    for _f in "$_d"/*.team.md; do
-      [ -f "$_f" ] || continue
-      _n=$(grep '^name:' "$_f" | head -1 | sed 's/name:[[:space:]]*//;s/"//g')
-      [ -z "$_n" ] && _n=$(basename "$_f" .team.md)
-      if [ "$_n" = "$team_name" ]; then
-        _found="$_f"
-        break 2
-      fi
-    done
-  done
-  [ -z "$_found" ] && return 1
-
-  # Use trash if available, otherwise rm
-  if command -v trash >/dev/null 2>&1; then
-    trash "$_found"
-  else
-    rm -f "$_found"
   fi
 
   local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
@@ -1184,18 +1025,6 @@ _render_footer() {
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
             "${C_BOLD_CYAN}" "${C_RESET}"
           ;;
-        catalog:builtin:*)
-          printf '  %b[↑↓/jk]%b navigate  %b[l/Enter]%b launch  %b[a]%b add to lineup  %b[f]%b favorite  %b[1-3]%b views\n' \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_GREEN}" "${C_RESET}" \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-            "${C_BOLD_CYAN}" "${C_RESET}"
-          ;;
-        catalog:premade:*)
-          printf '  %b[↑↓/jk]%b navigate  %b[l/Enter]%b launch  %b[a]%b add to lineup  %b[f]%b favorite  %b[d]%b remove  %b[1-3]%b views\n' \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_GREEN}" "${C_RESET}" \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
-          ;;
         *)
           printf '  %b[↑↓/jk]%b navigate  %b[r]%b reload  %b[1-3]%b views\n' \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
@@ -1323,34 +1152,12 @@ _handle_key() {
           local _item
           _item=$(_team_item_at "$_CURSOR_POS") || return
           case "$_item" in
-            catalog:builtin:local)
-              _STATUS_MSG="⚡ Launching local team..."
-              _STATUS_EXPIRE=$(($(date +%s) + 5))
-              bash -c "doey add-window" >/dev/null 2>&1 &
-              ;;
-            catalog:builtin:freelancer)
-              _STATUS_MSG="⚡ Launching freelancer pool..."
-              _STATUS_EXPIRE=$(($(date +%s) + 5))
-              bash -c "doey add-window --freelancer" >/dev/null 2>&1 &
-              ;;
-            catalog:builtin:worktree)
-              _STATUS_MSG="⚡ Launching worktree team..."
-              _STATUS_EXPIRE=$(($(date +%s) + 5))
-              bash -c "doey add-window --worktree main" >/dev/null 2>&1 &
-              ;;
-            catalog:premade:*)
-              local _cpname
-              _cpname=$(echo "$_item" | cut -d: -f3)
-              _STATUS_MSG="⚡ Launching ${_cpname}..."
-              _STATUS_EXPIRE=$(($(date +%s) + 5))
-              bash -c "doey add-team \"$_cpname\"" >/dev/null 2>&1 &
-              ;;
             startup:*)
               _STATUS_MSG="Use [d] to remove startup teams"
               _STATUS_EXPIRE=$(($(date +%s) + 2))
               ;;
             running:*)
-              _STATUS_MSG="Team already running — use [d] to kill"
+              _STATUS_MSG="Team already running"
               _STATUS_EXPIRE=$(($(date +%s) + 2))
               ;;
           esac
@@ -1399,48 +1206,6 @@ _handle_key() {
       esac
       ;;
 
-    # Launch team now
-    l)
-      if [ "$_CURRENT_VIEW" = "teams" ]; then
-        local _item
-        _item=$(_team_item_at "$_CURSOR_POS") || return
-        case "$_item" in
-          catalog:builtin:local)
-            _STATUS_MSG="⚡ Launching local team..."
-            _STATUS_EXPIRE=$(($(date +%s) + 5))
-            bash -c "doey add-window" >/dev/null 2>&1 &
-            ;;
-          catalog:builtin:freelancer)
-            _STATUS_MSG="⚡ Launching freelancer pool..."
-            _STATUS_EXPIRE=$(($(date +%s) + 5))
-            bash -c "doey add-window --freelancer" >/dev/null 2>&1 &
-            ;;
-          catalog:builtin:worktree)
-            _STATUS_MSG="⚡ Launching worktree team..."
-            _STATUS_EXPIRE=$(($(date +%s) + 5))
-            bash -c "doey add-window --worktree main" >/dev/null 2>&1 &
-            ;;
-          catalog:premade:*)
-            local _ltname
-            _ltname=$(echo "$_item" | cut -d: -f3)
-            _STATUS_MSG="⚡ Launching ${_ltname}..."
-            _STATUS_EXPIRE=$(($(date +%s) + 5))
-            bash -c "doey add-team \"$_ltname\"" >/dev/null 2>&1 &
-            ;;
-          running:*)
-            local _rtw
-            _rtw=$(echo "$_item" | cut -d: -f2)
-            _STATUS_MSG="Team W${_rtw} is already running"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
-            ;;
-          *)
-            _STATUS_MSG="Select a catalog team to launch"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
-            ;;
-        esac
-      fi
-      ;;
-
     # Delete team
     d)
       if [ "$_CURRENT_VIEW" = "teams" ]; then
@@ -1454,78 +1219,8 @@ _handle_key() {
             _STATUS_MSG="✓ Removed team ${_tidx}"
             _STATUS_EXPIRE=$(($(date +%s) + 3))
             ;;
-          catalog:premade:*)
-            local _dpname
-            _dpname=$(echo "$_item" | cut -d: -f3)
-            if _remove_launch_team "$_dpname"; then
-              _STATUS_MSG="✓ Removed team definition: ${_dpname}"
-            else
-              _STATUS_MSG="✗ Could not find team file for: ${_dpname}"
-            fi
-            _STATUS_EXPIRE=$(($(date +%s) + 3))
-            ;;
-          catalog:builtin:*)
-            _STATUS_MSG="Cannot remove built-in team types"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
-            ;;
           *)
-            _STATUS_MSG="Can only remove startup or catalog teams"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
-            ;;
-        esac
-      fi
-      ;;
-
-    # Add to startup lineup
-    a)
-      if [ "$_CURRENT_VIEW" = "teams" ]; then
-        local _item
-        _item=$(_team_item_at "$_CURSOR_POS") || return
-        case "$_item" in
-          catalog:builtin:*)
-            local _atype
-            _atype=$(echo "$_item" | cut -d: -f3)
-            _add_team "$_atype"
-            _STATUS_MSG="✓ Added ${_atype} to startup lineup"
-            _STATUS_EXPIRE=$(($(date +%s) + 3))
-            ;;
-          catalog:premade:*)
-            local _apname
-            _apname=$(echo "$_item" | cut -d: -f3)
-            _add_team premade "$_apname"
-            _STATUS_MSG="✓ Added ${_apname} to startup lineup"
-            _STATUS_EXPIRE=$(($(date +%s) + 3))
-            ;;
-          *)
-            _STATUS_MSG="Select a catalog team to add"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
-            ;;
-        esac
-      fi
-      ;;
-
-    # Toggle favorite
-    f)
-      if [ "$_CURRENT_VIEW" = "teams" ]; then
-        local _item
-        _item=$(_team_item_at "$_CURSOR_POS") || return
-        case "$_item" in
-          catalog:builtin:*)
-            local _ftype
-            _ftype=$(echo "$_item" | cut -d: -f3)
-            _toggle_favorite "$_ftype"
-            _STATUS_MSG="✓ Toggled favorite: ${_ftype}"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
-            ;;
-          catalog:premade:*)
-            local _fpname
-            _fpname=$(echo "$_item" | cut -d: -f3)
-            _toggle_favorite "$_fpname"
-            _STATUS_MSG="✓ Toggled favorite: ${_fpname}"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
-            ;;
-          *)
-            _STATUS_MSG="Select a catalog team to favorite"
+            _STATUS_MSG="Can only remove startup teams"
             _STATUS_EXPIRE=$(($(date +%s) + 2))
             ;;
         esac

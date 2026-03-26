@@ -153,7 +153,7 @@ Dynamic grid auto-expands when all workers are busy.
 - `capture-pane` — read pane output
 
 **Key details:**
-- **PANE_SAFE escaping:** `${PANE//[:.]/_}` — e.g. `doey-project:0.5` → `doey-project_0_5`
+- **PANE_SAFE escaping:** `${PANE//[-:.]/_}` — e.g. `doey-project:0.5` → `doey_project_0_5`
 - **Pane titles:** Format is `"<pane_id> | <role>"` — e.g. `"d-t1-mgr | doey T1 Mgr"`, `"d-t1-wd | doey T1 WD"`, `"d-sm | doey SM"`, `"d-t1-w1 | Worker"`
 - **Startup timing:** Manager briefing 8s; workers ready ~15s
 - **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript` instead

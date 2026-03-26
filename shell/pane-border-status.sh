@@ -26,7 +26,7 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || 
 WIN_PANE="${PANE_REF##*:}"
 WINDOW_IDX="${WIN_PANE%%.*}"
 PANE_IDX="${WIN_PANE#*.}"
-PANE_SAFE="${PANE_REF//[:.]/_}"
+PANE_SAFE="${PANE_REF//[-:.]/_}"
 
 env_val() {
   local v

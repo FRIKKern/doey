@@ -28,9 +28,8 @@ type Model struct {
 	tasks      TasksModel
 	team       TeamModel
 	agents     AgentsModel
-	catalog    CatalogModel
 	footer     FooterModel
-	focusIndex int // 0=welcome, 1=teams, 2=tasks, 3=agents, 4=catalog
+	focusIndex int // 0=welcome, 1=teams, 2=tasks, 3=agents
 	width      int
 	height     int
 	ready      bool
@@ -46,7 +45,6 @@ func New(runtimeDir string) Model {
 		tasks:   NewTasksModel(),
 		team:    NewTeamModel(),
 		agents:  NewAgentsModel(theme),
-		catalog: NewCatalogModel(theme),
 		footer:  NewFooterModel(),
 	}
 }
@@ -78,7 +76,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks.SetSnapshot(m.snapshot)
 		m.team.SetSnapshot(m.snapshot)
 		m.agents.SetSnapshot(m.snapshot)
-		m.catalog.SetSnapshot(m.snapshot)
 
 	case tea.KeyMsg:
 		// Global keys
@@ -91,12 +88,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel, m.footer.keyMap.RightPanel) {
-			m.focusIndex = (m.focusIndex + 1) % 5
+			m.focusIndex = (m.focusIndex + 1) % 4
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel, m.footer.keyMap.LeftPanel) {
-			m.focusIndex = (m.focusIndex + 4) % 5 // +4 mod 5 == -1 with wrap
+			m.focusIndex = (m.focusIndex + 3) % 4 // +3 mod 4 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -120,11 +117,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateFocus()
 			return m, nil
 		}
-		if key.Matches(msg, m.footer.keyMap.PanelFive) {
-			m.focusIndex = 4
-			m.updateFocus()
-			return m, nil
-		}
 
 		// Route to focused sub-model
 		var cmd tea.Cmd
@@ -137,8 +129,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tasks, cmd = m.tasks.Update(msg)
 		case 3:
 			m.agents, cmd = m.agents.Update(msg)
-		case 4:
-			m.catalog, cmd = m.catalog.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -149,7 +139,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderMenuBar renders a navigable menu bar showing the active panel.
 func (m Model) renderMenuBar(width int) string {
 	t := styles.DefaultTheme()
-	items := []string{"Dashboard", "Teams", "Tasks", "Agents", "Catalog"}
+	items := []string{"Dashboard", "Teams", "Tasks", "Agents"}
 
 	activeStyle := lipgloss.NewStyle().
 		Foreground(t.Primary).
@@ -215,9 +205,6 @@ func (m Model) View() string {
 	case 3:
 		m.agents.SetSize(m.width, bodyH)
 		body = m.agents.View()
-	case 4:
-		m.catalog.SetSize(m.width, bodyH)
-		body = m.catalog.View()
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, banner, menuBar, body, footer)
@@ -240,7 +227,6 @@ func (m *Model) propagateSizes() {
 	m.tasks.SetSize(m.width, bodyH)
 	m.team.SetSize(m.width, bodyH)
 	m.agents.SetSize(m.width, bodyH)
-	m.catalog.SetSize(m.width, bodyH)
 	m.updateFocus()
 }
 
@@ -248,7 +234,6 @@ func (m *Model) propagateSizes() {
 func (m *Model) updateFocus() {
 	m.team.SetFocused(m.focusIndex == 1)
 	m.agents.SetFocused(m.focusIndex == 3)
-	m.catalog.SetFocused(m.focusIndex == 4)
 }
 
 // tickCmd returns a command that sends a TickMsg after the interval.

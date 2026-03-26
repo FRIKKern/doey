@@ -228,7 +228,7 @@ init_hook() {
   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   [ -z "$RUNTIME_DIR" ] && exit 0
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
-  PANE_SAFE=${PANE//[:.]/_}
+  PANE_SAFE=${PANE//[-:.]/_}
   SESSION_NAME="${PANE%%:*}"
   PANE_INDEX="${PANE##*.}"
   local wp="${PANE#*:}"

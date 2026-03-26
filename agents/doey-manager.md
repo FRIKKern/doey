@@ -89,7 +89,7 @@ Workers notify you when they finish via the **message queue** (`${RUNTIME_DIR}/m
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="$DOEY_TEAM_WINDOW"
-MGR_SAFE="${SESSION_NAME//[:.]/_}_${W}_0"
+MGR_SAFE="${SESSION_NAME//[-:.]/_}_${W}_0"
 bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$MGR_SAFE"
 ```
 
@@ -119,7 +119,7 @@ Check idle: `tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3` 
 When your task (or wave sequence) is complete, notify the Session Manager so it can route follow-ups:
 
 ```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_2"
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
 MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
 printf 'FROM: Manager_W%s\nSUBJECT: task_complete\nTeam %s finished: SUMMARY_HERE\n' \
   "$DOEY_TEAM_WINDOW" "$DOEY_TEAM_WINDOW" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
