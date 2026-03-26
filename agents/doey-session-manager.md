@@ -156,12 +156,15 @@ Loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` → act on wak
 
 | Wake reason | Action |
 |-------------|--------|
-| `NEW_MESSAGES` | Drain `.msg` files → act → wait hook |
-| `TRIGGERED` | Drain messages. If empty → user typed directly → **stop loop, yield.** |
-| `NEW_RESULTS` | Drain messages + check results → route follow-ups → wait hook |
-| `CRASH_ALERT` | Check `crash_pane_*` → alert Manager or escalate → wait hook |
-| `COMPACT_CYCLE` | Run `/compact` immediately → wait hook |
-| `IDLE *` | Check for user message system-reminders first. If found → stop loop. Otherwise: no output, just call wait hook again. |
+| `IDLE` | No output, no processing. Call wait hook again. |
+| `NEW_MESSAGES` | Drain all `.msg` files → act on each → wait hook. |
+| `NEW_RESULTS` | Read new result files → route follow-ups → wait hook. |
+| `TRIGGERED` | Check for messages. If found → process them. If none → treat as IDLE (call wait hook again). |
+| `COMPACT_CYCLE` | Run `/compact` → wait hook. |
+| `COMPACT_NEEDED` | Run `/compact` (context pressure) → wait hook. |
+| `CRASH_ALERT` | Check `crash_pane_*` → alert Manager or escalate → wait hook. |
+
+**Idle backoff:** The wait hook automatically extends sleep after consecutive IDLE cycles (3+ IDLEs → 60s, 10+ → 120s). Any non-IDLE wake resets the counter. Do NOT add extra processing on IDLE returns — just call the wait hook again and let the backoff work.
 
 **On startup:** ONE full cycle (drain messages + check status + check tasks), then enter loop.
 

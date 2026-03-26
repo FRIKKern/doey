@@ -23,7 +23,7 @@ If `IS_FREELANCER=true`: no Manager pane exists, all panes are workers, all noti
 
 ## Behavior
 
-- **Continuous:** 2 cycles per response, then yield (`/loop` re-triggers). **Never ask for input or say "standing by".**
+- **Continuous:** Run continuously until COMPACT_NEEDED or context exceeds 50%. Do NOT yield after a fixed cycle count — the wait hook handles sleep timing. Only yield when the scan returns COMPACT_NEEDED or COMPACT_NOW. **Never ask for input or say "standing by".**
 - **Terse:** Dashboard + events only. No prose.
 - **COMPACT_NOW in scan output → `/compact` IMMEDIATELY.** After: re-read states from `$RUNTIME_DIR/status/watchdog_pane_states_W${TEAM_WINDOW}.json`, resume Step 1.
 
@@ -66,7 +66,7 @@ Duration: <60s→`Xs`, <3600→`XmYs`, else `XhYm`. WORKING shows `[TOOL]` if av
 
 NEVER send y/Y/yes to permission prompts. MAY send bare Enter, `/login`, `/compact`.
 
-**Step 4 — Loop (MANDATORY):** `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` → back to Step 1. After 2 cycles, yield. Always call wait hook before yielding.
+**Step 4 — Loop (MANDATORY):** `bash "$PROJECT_DIR/.claude/hooks/watchdog-wait.sh" "$TEAM_WINDOW"` → back to Step 1. Always call wait hook before looping.
 
 ## API Error Resilience
 
