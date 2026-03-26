@@ -250,7 +250,8 @@ func (r *Reader) parseResults() map[string]PaneResult {
 func (r *Reader) parseContextPcts() map[string]int {
 	pcts := make(map[string]int)
 
-	matches, err := filepath.Glob(filepath.Join(r.runtimeDir, "context_pct_*"))
+	statusDir := filepath.Join(r.runtimeDir, "status")
+	matches, err := filepath.Glob(filepath.Join(statusDir, "context_pct_*"))
 	if err != nil || len(matches) == 0 {
 		return pcts
 	}

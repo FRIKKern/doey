@@ -15,13 +15,14 @@ import (
 
 // TeamModel displays a table of all team windows and their panes.
 type TeamModel struct {
-	table    table.Model
-	teams    map[int]runtime.TeamConfig
-	panes    map[string]runtime.PaneStatus
-	contexts map[string]int
-	theme    styles.Theme
-	width    int
-	height   int
+	table        table.Model
+	teams        map[int]runtime.TeamConfig
+	panes        map[string]runtime.PaneStatus
+	contexts     map[string]int
+	theme        styles.Theme
+	width        int
+	height       int
+	taskColWidth int
 }
 
 // NewTeamModel creates a team panel with an empty table.
@@ -94,18 +95,28 @@ func (m *TeamModel) SetSize(w, h int) {
 	m.height = h
 	m.table.SetHeight(h - 4) // account for header + border
 
-	// Adjust task column to fill remaining width
-	fixedWidth := 8 + 6 + 10 + 10 + 6 + 6 // other columns + gaps
+	// Fixed column widths: Window=12, Pane=5, Role=9, Status=12, Ctx%=6
+	// Table chrome overhead: ~20 chars for borders + cell padding (1 char each side × 6 cols + separators)
+	const (
+		colWindow = 12
+		colPane   = 5
+		colRole   = 9
+		colStatus = 12
+		colCtx    = 6
+		overhead  = 20
+	)
+	fixedWidth := colWindow + colPane + colRole + colStatus + colCtx + overhead
 	taskWidth := w - fixedWidth
 	if taskWidth < 10 {
 		taskWidth = 10
 	}
+	m.taskColWidth = taskWidth
 	m.table.SetColumns([]table.Column{
-		{Title: "Window", Width: 8},
-		{Title: "Pane", Width: 6},
-		{Title: "Role", Width: 10},
-		{Title: "Status", Width: 10},
-		{Title: "Ctx%", Width: 6},
+		{Title: "Window", Width: colWindow},
+		{Title: "Pane", Width: colPane},
+		{Title: "Role", Width: colRole},
+		{Title: "Status", Width: colStatus},
+		{Title: "Ctx%", Width: colCtx},
 		{Title: "Task", Width: taskWidth},
 	})
 }
@@ -160,7 +171,8 @@ func (m *TeamModel) buildRows() []table.Row {
 		}
 		summary := fmt.Sprintf("[%s] — %dW (%d busy, %d idle)", teamType, tc.WorkerCount, busy, idle)
 
-		rows = append(rows, table.Row{teamLabel, "", "", "", "", summary})
+		headerText := fmt.Sprintf("%s  %s", teamLabel, summary)
+		rows = append(rows, table.Row{headerText, "", "", "", "", ""})
 
 		// Manager pane
 		if tc.ManagerPane != "" {
@@ -193,7 +205,11 @@ func (m *TeamModel) paneRow(windowIdx int, paneIdx string, role string) table.Ro
 	task := ""
 	if ps, ok := m.panes[paneID]; ok {
 		status = statusBadge(ps.Status, m.theme)
-		task = truncate(ps.Task, 40)
+		taskMax := m.taskColWidth - 2
+		if taskMax < 5 {
+			taskMax = 5
+		}
+		task = truncate(ps.Task, taskMax)
 	}
 
 	ctxStr := "—"

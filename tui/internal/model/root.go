@@ -7,7 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/doey-cli/doey/tui/internal/runtime"
-	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
 // TickMsg triggers a periodic runtime re-read.
@@ -26,11 +25,10 @@ type Model struct {
 	tasks      TasksModel
 	team       TeamModel
 	footer     FooterModel
-	focusIndex int // 0=tasks, 1=team
+	focusIndex int // 0=teams, 1=tasks
 	width      int
 	height     int
 	ready      bool
-	theme      styles.Theme
 }
 
 // New creates a root model that reads from the given runtime directory.
@@ -41,7 +39,6 @@ func New(runtimeDir string) Model {
 		tasks:   NewTasksModel(),
 		team:    NewTeamModel(),
 		footer:  NewFooterModel(),
-		theme:   styles.DefaultTheme(),
 	}
 }
 
@@ -94,9 +91,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		switch m.focusIndex {
 		case 0:
-			m.tasks, cmd = m.tasks.Update(msg)
-		case 1:
 			m.team, cmd = m.team.Update(msg)
+		case 1:
+			m.tasks, cmd = m.tasks.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -126,40 +123,16 @@ func (m Model) View() string {
 		bodyH = 1
 	}
 
-	// Task panel ~40%, team panel ~60%
-	taskW := m.width * 2 / 5
-	teamW := m.width - taskW
-
-	m.tasks.SetSize(taskW, bodyH)
-	m.team.SetSize(teamW, bodyH)
-
-	tasksView := m.tasks.View()
-	teamView := m.team.View()
-
-	// Style focused panel with a highlight border
-	taskStyle := lipgloss.NewStyle().
-		Width(taskW).
-		Height(bodyH)
-	teamStyle := lipgloss.NewStyle().
-		Width(teamW).
-		Height(bodyH)
-
-	if m.focusIndex == 0 {
-		taskStyle = taskStyle.
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(m.theme.Primary).
-			BorderLeft(true)
-	} else {
-		teamStyle = teamStyle.
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(m.theme.Primary).
-			BorderLeft(true)
+	// Show active panel at full width
+	var body string
+	switch m.focusIndex {
+	case 0:
+		m.team.SetSize(m.width, bodyH)
+		body = m.team.View()
+	case 1:
+		m.tasks.SetSize(m.width, bodyH)
+		body = m.tasks.View()
 	}
-
-	body := lipgloss.JoinHorizontal(lipgloss.Top,
-		taskStyle.Render(tasksView),
-		teamStyle.Render(teamView),
-	)
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
@@ -176,17 +149,15 @@ func (m *Model) propagateSizes() {
 		bodyH = 1
 	}
 
-	taskW := m.width * 2 / 5
-	teamW := m.width - taskW
-
-	m.tasks.SetSize(taskW, bodyH)
-	m.team.SetSize(teamW, bodyH)
+	// Both panels get full width — only one shown at a time
+	m.tasks.SetSize(m.width, bodyH)
+	m.team.SetSize(m.width, bodyH)
 	m.updateFocus()
 }
 
 // updateFocus syncs focus state to sub-models.
 func (m *Model) updateFocus() {
-	m.team.SetFocused(m.focusIndex == 1)
+	m.team.SetFocused(m.focusIndex == 0)
 }
 
 // tickCmd returns a command that sends a TickMsg after the interval.
