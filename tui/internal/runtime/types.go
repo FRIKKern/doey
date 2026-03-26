@@ -52,6 +52,40 @@ type PaneResult struct {
 	LastOutput   string   `json:"last_output"`
 }
 
+// AgentDef represents a parsed agent definition from agents/*.md
+type AgentDef struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Model       string   `json:"model"`
+	Color       string   `json:"color"`
+	Memory      string   `json:"memory"`
+	Domain      string   `json:"domain"`        // computed: "Doey Infrastructure", "SEO", "Visual QA", "Utility"
+	FilePath    string   `json:"filepath"`
+	UsedByTeams []string `json:"used_by_teams"` // team names that reference this agent
+}
+
+// TeamPaneDef represents one pane slot in a team definition
+type TeamPaneDef struct {
+	Index int    `json:"index"`
+	Role  string `json:"role"`
+	Agent string `json:"agent"`
+	Name  string `json:"name"`
+	Model string `json:"model"`
+}
+
+// TeamDef represents a parsed team definition from teams/*.team.md
+type TeamDef struct {
+	Name         string        `json:"name"`
+	Description  string        `json:"description"`
+	Type         string        `json:"type"`          // local, premade, freelancer
+	Grid         string        `json:"grid"`          // dynamic, fixed
+	Workers      int           `json:"workers"`
+	ManagerModel string        `json:"manager_model"`
+	WorkerModel  string        `json:"worker_model"`
+	Panes        []TeamPaneDef `json:"panes"`
+	FilePath     string        `json:"filepath"`
+}
+
 // Snapshot is a complete point-in-time view of the runtime
 type Snapshot struct {
 	Session    SessionConfig
@@ -61,4 +95,6 @@ type Snapshot struct {
 	Results    map[string]PaneResult // pane ID -> result
 	ContextPct map[string]int        // pane ID -> context percentage
 	Uptime     time.Duration
+	AgentDefs  []AgentDef `json:"agent_defs"`
+	TeamDefs   []TeamDef  `json:"team_defs"`
 }
