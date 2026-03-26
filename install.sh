@@ -300,9 +300,12 @@ fi
 
 # Install pre-commit hook for Go binary rebuilds
 if [ -d "$SCRIPT_DIR/.git/hooks" ] && [ -f "$SCRIPT_DIR/shell/pre-commit-go.sh" ]; then
-  cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
-  chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
-  detail "installed pre-commit hook for Go builds"
+  # Guard: skip if source and destination are the same file (re-install with symlink/hardlink)
+  if [ ! "$SCRIPT_DIR/shell/pre-commit-go.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-commit" ]; then
+    cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
+    chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
+    detail "installed pre-commit hook for Go builds"
+  fi
 fi
 
 PATH_OK=true
