@@ -1984,7 +1984,18 @@ update_system() {
 # Detect how Claude Code was installed and return the package manager name.
 # Returns: brew, apt, snap, npm, or "unknown"
 _claude_install_method() {
-  # macOS: check Homebrew first
+  # Standalone install: symlink in ~/.local/bin pointing to ~/.local/share/claude/
+  # Must check first — other methods (npm) may also be present but not the active binary
+  local claude_bin
+  claude_bin="$(command -v claude 2>/dev/null)" || true
+  if [ -n "$claude_bin" ] && [ -L "$claude_bin" ]; then
+    local link_target
+    link_target="$(readlink "$claude_bin" 2>/dev/null)" || true
+    case "$link_target" in
+      */.local/share/claude/*) echo "standalone"; return 0 ;;
+    esac
+  fi
+  # macOS: check Homebrew
   if command -v brew >/dev/null 2>&1; then
     if brew list --formula 2>/dev/null | grep -q '^claude$' || \
        brew list --cask 2>/dev/null | grep -q '^claude$'; then
@@ -2077,6 +2088,10 @@ _claude_install() {
 _claude_upgrade() {
   local method="$1" target_ver="${2:-}"
   case "$method" in
+    standalone)
+      printf "  ${DIM}claude update${RESET}\n"
+      claude update 2>&1 | tail -5
+      ;;
     brew)
       printf "  ${DIM}brew upgrade claude${RESET}\n"
       brew upgrade claude 2>&1 | tail -3
@@ -2180,6 +2195,7 @@ _check_claude_update() {
           else
             printf "  ${ERROR}✗ Update failed${RESET}\n"
             case "$method" in
+              standalone) printf "  ${DIM}Try: claude update${RESET}\n" ;;
               brew) printf "  ${DIM}Try: brew upgrade claude${RESET}\n" ;;
               snap) printf "  ${DIM}Try: sudo snap refresh claude${RESET}\n" ;;
               apt)  printf "  ${DIM}Try: sudo apt-get install --only-upgrade claude${RESET}\n" ;;
@@ -2190,6 +2206,7 @@ _check_claude_update() {
       esac
     else
       case "$method" in
+        standalone) printf "  ${DIM}Update: claude update${RESET}\n" ;;
         brew) printf "  ${DIM}Update: brew upgrade claude${RESET}\n" ;;
         snap) printf "  ${DIM}Update: sudo snap refresh claude${RESET}\n" ;;
         apt)  printf "  ${DIM}Update: sudo apt-get install --only-upgrade claude${RESET}\n" ;;
