@@ -247,25 +247,38 @@ elif is_manager; then
 fi
 
 if [ -n "$_auto_resume" ]; then
-  _resume_pane="$PANE"
-  _resume_log="${RUNTIME_DIR}/lifecycle.log"
-  (
-    # Wait for Claude to return to prompt (up to 15s)
-    _r_i=0
-    while [ "$_r_i" -lt 15 ]; do
-      sleep 1
-      _r_i=$((_r_i + 1))
-      # Check if pane shows the ❯ prompt (ready for input)
-      _last_line=$(tmux capture-pane -t "$_resume_pane" -p -S -2 2>/dev/null | tail -1)
-      case "$_last_line" in
-        *"❯"*) break ;;
-      esac
-    done
-    # Send resume prompt
-    tmux send-keys -t "$_resume_pane" "$_auto_resume" Enter 2>/dev/null || true
-    printf '[%s] auto-resume sent to %s\n' "$(date '+%H:%M:%S')" "$_resume_pane" >> "$_resume_log" 2>/dev/null || true
-  ) &
-  _log "stop-notify: scheduled auto-resume for $PANE"
+  # Only auto-resume on API errors / interruptions.
+  # If the user sent a message (stop_reason contains "user" or "interrupt"),
+  # their message IS the resume — don't inject a stale auto-resume on top of it.
+  _stop_reason=$(parse_field "stop_reason" 2>/dev/null || echo "")
+  _should_resume=true
+  case "$_stop_reason" in
+    *user*|*interrupt*|*tool_input*) _should_resume=false ;;
+  esac
+
+  if [ "$_should_resume" = "true" ]; then
+    _resume_pane="$PANE"
+    _resume_log="${RUNTIME_DIR}/lifecycle.log"
+    (
+      # Wait for Claude to return to prompt (up to 15s)
+      _r_i=0
+      while [ "$_r_i" -lt 15 ]; do
+        sleep 1
+        _r_i=$((_r_i + 1))
+        # Check if pane shows the ❯ prompt (ready for input)
+        _last_line=$(tmux capture-pane -t "$_resume_pane" -p -S -2 2>/dev/null | tail -1)
+        case "$_last_line" in
+          *"❯"*) break ;;
+        esac
+      done
+      # Send resume prompt
+      tmux send-keys -t "$_resume_pane" "$_auto_resume" Enter 2>/dev/null || true
+      printf '[%s] auto-resume sent to %s (reason: %s)\n' "$(date '+%H:%M:%S')" "$_resume_pane" "${_stop_reason:-unknown}" >> "$_resume_log" 2>/dev/null || true
+    ) &
+    _log "stop-notify: scheduled auto-resume for $PANE (reason: ${_stop_reason:-unknown})"
+  else
+    _log "stop-notify: skipped auto-resume for $PANE (user-initiated stop: ${_stop_reason})"
+  fi
 fi
 
 exit 0
