@@ -121,8 +121,24 @@ _dbg_write() {
   return 0
 }
 
-# Non-Bash: block write tools for Watchdog
+# Non-Bash tool checks
 if [ "$TOOL_NAME" != "Bash" ]; then
+  # AskUserQuestion: only Session Manager may ask the user directly
+  if [ "$TOOL_NAME" = "AskUserQuestion" ]; then
+    case "$_DOEY_ROLE" in
+      session_manager) _dbg_write "allow_sm_ask_user"; exit 0 ;;
+      "")              _dbg_write "allow_no_role_ask_user"; exit 0 ;;
+      *)
+        _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only Session Manager asks the user"
+        _dbg_write "block_ask_user_${_DOEY_ROLE}"
+        echo "BLOCKED: Only Session Manager can ask the user questions directly." >&2
+        echo "Send a message to Session Manager with your question instead:" >&2
+        echo '  SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"' >&2
+        echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${SM_SAFE}_$(date +%s)_$$.msg"' >&2
+        exit 2 ;;
+    esac
+  fi
+  # Block write tools for Watchdog
   case "$TOOL_NAME" in Edit|Write|Agent|NotebookEdit) ;; *) exit 0 ;; esac
   case "$_DOEY_ROLE" in watchdog)
     _log_block "TOOL_BLOCKED" "Watchdog cannot use $TOOL_NAME" "monitoring role only"

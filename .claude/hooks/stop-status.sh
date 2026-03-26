@@ -35,4 +35,25 @@ type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to
 
 notify_watchdog "$STOP_STATUS"
 
+# Watchdog self-sustaining loop: after stop, re-trigger a new scan cycle
+# The hook IS the loop — no /loop command needed
+if is_watchdog; then
+  _wd_pane="${DOEY_PANE_ID:-${PANE}}"
+  _wd_session="${SESSION:-}"
+  [ -z "$_wd_session" ] && _wd_session=$(tmux show-environment DOEY_SESSION 2>/dev/null | cut -d= -f2-) || true
+  _wd_target="${_wd_session}:${_wd_pane}"
+  (
+    sleep 3
+    # Guard: only send if watchdog is READY (not already BUSY from another trigger)
+    _wd_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+    if [ -f "$_wd_status_file" ]; then
+      _wd_cur=$(head -1 "$_wd_status_file" 2>/dev/null || true)
+      case "$_wd_cur" in
+        *BUSY*) exit 0 ;;  # Already processing, skip re-trigger
+      esac
+    fi
+    tmux send-keys -t "$_wd_target" "Scan cycle — check workers, report anomalies." Enter 2>/dev/null
+  ) &
+fi
+
 exit 0

@@ -100,6 +100,12 @@ sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 
 **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
 
+**Notify team Watchdog after dispatch:** After sending a task to a Manager, nudge the team's Watchdog so it knows new work arrived and can begin monitoring immediately:
+```bash
+WDG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
+[ -n "$WDG_PANE" ] && tmux send-keys -t "$SESSION_NAME:${WDG_PANE}" "New work dispatched to Team ${W}. Run a scan cycle now." Enter
+```
+
 ## Messages — How Managers Report Back
 
 Managers and freelancers notify you via the **message queue**. This is the primary way you learn about task completions. **If you don't read messages, you won't know teams are done.**
