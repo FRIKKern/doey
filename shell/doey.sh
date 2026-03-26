@@ -2073,8 +2073,9 @@ _claude_install() {
 }
 
 # Upgrade Claude Code using the same method it was installed with.
+# Args: $1=method, $2=target_version (optional, used for npm to avoid cache)
 _claude_upgrade() {
-  local method="$1"
+  local method="$1" target_ver="${2:-}"
   case "$method" in
     brew)
       printf "  ${DIM}brew upgrade claude${RESET}\n"
@@ -2089,8 +2090,10 @@ _claude_upgrade() {
       sudo apt-get install --only-upgrade -y claude 2>&1 | tail -3
       ;;
     npm)
-      printf "  ${DIM}npm install -g @anthropic-ai/claude-code@latest${RESET}\n"
-      npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -3
+      # Pin exact version to bypass npm cache serving stale @latest
+      local npm_target="@anthropic-ai/claude-code@${target_ver:-latest}"
+      printf "  ${DIM}npm install -g %s${RESET}\n" "$npm_target"
+      npm install -g "$npm_target" 2>&1 | tail -3
       ;;
     *)
       # Unknown method — try native install as upgrade
@@ -2170,7 +2173,7 @@ _check_claude_update() {
         [Nn]*) ;;
         *)
           printf "  ${DIM}Updating Claude Code...${RESET}\n"
-          if _claude_upgrade "$method"; then
+          if _claude_upgrade "$method" "$latest_ver"; then
             local new_ver
             new_ver="$(_claude_semver)"
             printf "  ${SUCCESS}✓ Claude Code updated to %s${RESET}\n" "${new_ver:-$latest_ver}"
