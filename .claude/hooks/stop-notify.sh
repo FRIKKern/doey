@@ -9,6 +9,11 @@ init_hook
 _DOEY_HOOK_NAME="stop-notify"
 type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
+# Debug: dump stop hook INPUT to discover available fields
+if [ -f "${RUNTIME_DIR}/debug.conf" ] && [ -d "${RUNTIME_DIR}/debug" ]; then
+  echo "$INPUT" > "${RUNTIME_DIR}/debug/last_stop_input_${PANE_SAFE:-unknown}.json" 2>/dev/null || true
+fi
+
 # File-based message delivery with send-keys fallback.
 # Writes an atomic message file and touches a trigger to wake the recipient.
 _send_message_file() {
@@ -233,52 +238,9 @@ if is_session_manager; then
   _log "stop-notify: sent desktop notification"
 fi
 
-# --- Auto-resume for loop-based roles (SM, Watchdog, Manager) ---
-# These roles run continuous loops and should never truly stop.
-# When they stop (API error, context issue), wait for the prompt to return
-# and send a resume message so the loop continues automatically.
-_auto_resume=""
-if is_session_manager; then
-  _auto_resume="An API error or interruption stopped your last response. Resume your monitor loop immediately: drain messages, check status, act, call the wait hook."
-elif is_watchdog; then
-  _auto_resume="An API error or interruption stopped your last response. Resume your scan loop immediately: scan panes, update dashboard, act on events, call the wait hook."
-elif is_manager; then
-  _auto_resume="An API error or interruption stopped your last response. Resume: drain messages, check worker status, dispatch or wait as needed."
-fi
-
-if [ -n "$_auto_resume" ]; then
-  # Only auto-resume on API errors / interruptions.
-  # If the user sent a message (stop_reason contains "user" or "interrupt"),
-  # their message IS the resume — don't inject a stale auto-resume on top of it.
-  _stop_reason=$(parse_field "stop_reason" 2>/dev/null || echo "")
-  _should_resume=true
-  case "$_stop_reason" in
-    *user*|*interrupt*|*tool_input*) _should_resume=false ;;
-  esac
-
-  if [ "$_should_resume" = "true" ]; then
-    _resume_pane="$PANE"
-    _resume_log="${RUNTIME_DIR}/lifecycle.log"
-    (
-      # Wait for Claude to return to prompt (up to 15s)
-      _r_i=0
-      while [ "$_r_i" -lt 15 ]; do
-        sleep 1
-        _r_i=$((_r_i + 1))
-        # Check if pane shows the ❯ prompt (ready for input)
-        _last_line=$(tmux capture-pane -t "$_resume_pane" -p -S -2 2>/dev/null | tail -1)
-        case "$_last_line" in
-          *"❯"*) break ;;
-        esac
-      done
-      # Send resume prompt
-      tmux send-keys -t "$_resume_pane" "$_auto_resume" Enter 2>/dev/null || true
-      printf '[%s] auto-resume sent to %s (reason: %s)\n' "$(date '+%H:%M:%S')" "$_resume_pane" "${_stop_reason:-unknown}" >> "$_resume_log" 2>/dev/null || true
-    ) &
-    _log "stop-notify: scheduled auto-resume for $PANE (reason: ${_stop_reason:-unknown})"
-  else
-    _log "stop-notify: skipped auto-resume for $PANE (user-initiated stop: ${_stop_reason})"
-  fi
-fi
+# Auto-resume REMOVED. The event-driven model (wait hooks + triggers) handles
+# loop continuity. Auto-resume fired on every stop (including normal turn ends
+# and user interrupts) because Claude Code doesn't expose stop_reason to hooks,
+# causing false "API error" messages that distract the user.
 
 exit 0
