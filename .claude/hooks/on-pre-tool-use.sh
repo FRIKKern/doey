@@ -71,12 +71,12 @@ _check_blocked() {
   local cmd="$1"
   cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
   case "$cmd" in
-    *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
-      MSG="git/gh commands" ;;
+    *"git push"*|*"gh pr create"*|*"gh pr merge"*)
+      MSG="remote git/gh commands (git push, gh pr). Commit locally and let the Manager push" ;;
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
     *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
-      MSG="tmux commands" ;;
+      MSG="tmux commands. Use file-based IPC (write to \$DOEY_RUNTIME/messages/) instead of send-keys" ;;
     *)
       if _is_destructive_rm "$cmd"; then
         MSG="destructive rm"
