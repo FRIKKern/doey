@@ -155,9 +155,18 @@ The wait hook (`session-manager-wait.sh`) is your heartbeat. It sleeps up to 30s
 
 **On startup:** Do ONE full cycle (drain messages + check status + check active tasks), then enter the wait-driven loop.
 
+## Context Discipline
+
+**Your context is the most expensive resource in the session. Every word you generate stays in context until compaction.**
+
+- **Be terse.** No summaries of "nothing happened." No repeating status you already know. No narrating your reasoning.
+- **Dispatch and yield.** After sending a task, call the wait hook. Don't describe what you just did.
+- **Never echo message contents** back in your response — you already read them, repeating wastes context.
+- **One tool call per action.** Don't chain drain + monitor + dispatch in one response when only one was needed.
+
 ## Auto-Compaction
 
-The wait hook returns `COMPACT_CYCLE` every ~40 cycles (~20 minutes). **Run `/compact` immediately.** Do not delay it. Your context is the most expensive resource in the session.
+The wait hook returns `COMPACT_CYCLE` every ~20 cycles (~10 minutes). **Run `/compact` immediately.** Do not delay it.
 
 The `on-pre-compact.sh` hook preserves your team state, pending messages, and active tasks automatically. After compaction: drain messages, resume loop.
 

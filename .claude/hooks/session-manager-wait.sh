@@ -75,7 +75,7 @@ if [ -f "${1:-}" ]; then _sm_dbg_wake "crash_alert_presleep" "0"; echo "CRASH_AL
 
 # Auto-compact trigger: check cycle count
 CYCLE_FILE="${RUNTIME_DIR}/status/sm_cycle_count"
-COMPACT_INTERVAL="${DOEY_SM_COMPACT_INTERVAL:-40}"
+COMPACT_INTERVAL="${DOEY_SM_COMPACT_INTERVAL:-20}"
 _sm_cycle=0
 [ -f "$CYCLE_FILE" ] && _sm_cycle=$(cat "$CYCLE_FILE" 2>/dev/null || echo 0)
 _sm_cycle=$((_sm_cycle + 1))
