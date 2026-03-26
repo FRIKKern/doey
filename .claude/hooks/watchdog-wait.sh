@@ -34,7 +34,12 @@ if [ -f "$TRIGGER" ]; then
 fi
 # Check for pending messages addressed to this watchdog pane
 _WW_SESSION="${DOEY_SESSION:-}"
-[ -z "$_WW_SESSION" ] && _WW_SESSION=$(tmux show-environment DOEY_SESSION 2>/dev/null | cut -d= -f2-) || true
+if [ -z "$_WW_SESSION" ]; then
+  _WW_SESSION=$(tmux show-environment DOEY_SESSION 2>/dev/null | cut -d= -f2-) || true
+fi
+if [ -z "$_WW_SESSION" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+  _WW_SESSION=$(. "${RUNTIME_DIR}/session.env" && printf '%s' "${SESSION_NAME:-}") || true
+fi
 _WW_PANE="${DOEY_PANE_INDEX:-}"
 if [ -n "$_WW_SESSION" ] && [ -n "$_WW_PANE" ]; then
   _WW_MSG_DIR="${RUNTIME_DIR}/messages"
@@ -50,6 +55,10 @@ while [ "$i" -lt "$DOEY_WATCHDOG_SCAN_INTERVAL" ]; do
     _ww_dbg_wake "trigger" "$i"
     echo "TRIGGERED"
     exit 0
+  fi
+  if [ -n "$_WW_SESSION" ] && [ -n "$_WW_PANE" ]; then
+    set -- "$_WW_MSG_DIR"/${_WW_SAFE}_*.msg
+    if [ -f "${1:-}" ]; then _ww_dbg_wake "new_messages" "$i"; echo "NEW_MESSAGES"; exit 0; fi
   fi
   sleep 1
   i=$((i + 1))

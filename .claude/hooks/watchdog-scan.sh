@@ -791,11 +791,38 @@ ANOMALY_EOF
 }
 _process_anomalies
 
-# --- Inline snapshot for watchdog ---
+# --- Inline snapshot for watchdog (suppress if unchanged) ---
+_SNAP_HASH_FILE="${RUNTIME_DIR}/status/watchdog_last_snapshot_hash_W${TARGET_WINDOW}.txt"
+_SNAP_NOCHANGE_FILE="${RUNTIME_DIR}/status/watchdog_nochange_counter_W${TARGET_WINDOW}.txt"
+_SNAP_LASTCHANGE_FILE="${RUNTIME_DIR}/status/watchdog_lastchange_time_W${TARGET_WINDOW}.txt"
 if [ -f "$SNAPSHOT_FILE" ]; then
-  echo "--- SNAPSHOT ---"
-  cat "$SNAPSHOT_FILE"
-  echo "--- END SNAPSHOT ---"
+  # Hash current snapshot
+  if command -v md5 >/dev/null 2>&1; then
+    _snap_hash=$(md5 -q "$SNAPSHOT_FILE")
+  else
+    _snap_hash=$(md5sum "$SNAPSHOT_FILE" | cut -d' ' -f1)
+  fi
+  _snap_prev_hash=""
+  [ -f "$_SNAP_HASH_FILE" ] && read -r _snap_prev_hash < "$_SNAP_HASH_FILE" 2>/dev/null
+  if [ "$_snap_hash" = "$_snap_prev_hash" ]; then
+    # No change — increment counter, show compact line
+    _nc_count=0
+    [ -f "$_SNAP_NOCHANGE_FILE" ] && read -r _nc_count < "$_SNAP_NOCHANGE_FILE" 2>/dev/null
+    _nc_count=$((_nc_count + 1))
+    _atomic_write "$_SNAP_NOCHANGE_FILE" "$_nc_count"
+    _lc_time="$SCAN_TIME"
+    [ -f "$_SNAP_LASTCHANGE_FILE" ] && read -r _lc_time < "$_SNAP_LASTCHANGE_FILE" 2>/dev/null
+    _nc_elapsed=$((SCAN_TIME - _lc_time))
+    echo "NO_CHANGE cycle=${_nc_count} elapsed=${_nc_elapsed}s SCAN_TIME=${SCAN_TIME}"
+  else
+    # Changed — reset counter, echo full snapshot
+    _atomic_write "$_SNAP_HASH_FILE" "$_snap_hash"
+    _atomic_write "$_SNAP_NOCHANGE_FILE" "0"
+    _atomic_write "$_SNAP_LASTCHANGE_FILE" "$SCAN_TIME"
+    echo "--- SNAPSHOT ---"
+    cat "$SNAPSHOT_FILE"
+    echo "--- END SNAPSHOT ---"
+  fi
 fi
 
 # --- Context pressure check ---
