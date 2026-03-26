@@ -6,31 +6,45 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
-// TeamModel displays a table of all team windows and their panes.
+// TeamModel displays team status in summary or detail mode.
 type TeamModel struct {
-	table        table.Model
-	teams        map[int]runtime.TeamConfig
-	panes        map[string]runtime.PaneStatus
-	contexts     map[string]int
-	theme        styles.Theme
+	// Detail-mode table
+	table table.Model
+
+	// Data
+	teams    map[int]runtime.TeamConfig
+	panes    map[string]runtime.PaneStatus
+	contexts map[string]int
+	theme    styles.Theme
+
+	// Summary-mode state
+	summaryMode  bool // true = one-line-per-team, false = per-pane table
+	cursor       int  // selected row in summary mode
+	selectedTeam int  // window index of team shown in detail mode
+	sortedTeams  []int
+
+	// Layout
 	width        int
 	height       int
 	taskColWidth int
+	focused      bool
+	keyMap       keys.KeyMap
 }
 
-// NewTeamModel creates a team panel with an empty table.
+// NewTeamModel creates a team panel starting in summary mode.
 func NewTeamModel() TeamModel {
 	t := styles.DefaultTheme()
 
 	columns := []table.Column{
-		{Title: "Window", Width: 8},
 		{Title: "Pane", Width: 6},
 		{Title: "Role", Width: 10},
 		{Title: "Status", Width: 10},
@@ -59,11 +73,13 @@ func NewTeamModel() TeamModel {
 	tbl.SetStyles(s)
 
 	return TeamModel{
-		table:    tbl,
-		teams:    make(map[int]runtime.TeamConfig),
-		panes:    make(map[string]runtime.PaneStatus),
-		contexts: make(map[string]int),
-		theme:    t,
+		table:       tbl,
+		teams:       make(map[int]runtime.TeamConfig),
+		panes:       make(map[string]runtime.PaneStatus),
+		contexts:    make(map[string]int),
+		theme:       t,
+		summaryMode: true,
+		keyMap:      keys.DefaultKeyMap(),
 	}
 }
 
@@ -72,47 +88,105 @@ func (m TeamModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update forwards messages to the underlying table.
+// Update handles navigation in both modes.
 func (m TeamModel) Update(msg tea.Msg) (TeamModel, tea.Cmd) {
+	if !m.focused {
+		return m, nil
+	}
+
+	if msg, ok := msg.(tea.KeyMsg); ok {
+		if m.summaryMode {
+			return m.updateSummary(msg)
+		}
+		return m.updateDetail(msg)
+	}
+
+	return m, nil
+}
+
+func (m TeamModel) updateSummary(msg tea.KeyMsg) (TeamModel, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keyMap.Up):
+		if len(m.sortedTeams) > 0 {
+			m.cursor--
+			if m.cursor < 0 {
+				m.cursor = len(m.sortedTeams) - 1
+			}
+		}
+	case key.Matches(msg, m.keyMap.Down):
+		if len(m.sortedTeams) > 0 {
+			m.cursor++
+			if m.cursor >= len(m.sortedTeams) {
+				m.cursor = 0
+			}
+		}
+	case key.Matches(msg, m.keyMap.Select):
+		if len(m.sortedTeams) > 0 && m.cursor < len(m.sortedTeams) {
+			m.selectedTeam = m.sortedTeams[m.cursor]
+			m.summaryMode = false
+			m.rebuildDetailTable()
+			m.table.Focus()
+		}
+	}
+	return m, nil
+}
+
+func (m TeamModel) updateDetail(msg tea.KeyMsg) (TeamModel, tea.Cmd) {
+	if key.Matches(msg, m.keyMap.Back) {
+		m.summaryMode = true
+		m.table.Blur()
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
 	return m, cmd
 }
 
-// SetSnapshot rebuilds the table rows from fresh data.
+// SetSnapshot rebuilds data from fresh snapshot.
 func (m *TeamModel) SetSnapshot(snap runtime.Snapshot) {
 	m.teams = snap.Teams
 	m.panes = snap.Panes
 	m.contexts = snap.ContextPct
 
-	rows := m.buildRows()
-	m.table.SetRows(rows)
+	// Rebuild sorted team list
+	m.sortedTeams = make([]int, 0, len(m.teams))
+	for w := range m.teams {
+		m.sortedTeams = append(m.sortedTeams, w)
+	}
+	sort.Ints(m.sortedTeams)
+
+	// Clamp cursor
+	if m.cursor >= len(m.sortedTeams) {
+		m.cursor = max(0, len(m.sortedTeams)-1)
+	}
+
+	// Rebuild detail table if in detail mode
+	if !m.summaryMode {
+		m.rebuildDetailTable()
+	}
 }
 
-// SetSize updates the panel dimensions and recalculates column widths.
+// SetSize updates the panel dimensions.
 func (m *TeamModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.table.SetHeight(h - 4) // account for header + border
+	m.table.SetHeight(h - 6) // title + back hint + border
 
-	// Fixed column widths: Window=12, Pane=5, Role=9, Status=12, Ctx%=6
-	// Table chrome overhead: ~20 chars for borders + cell padding (1 char each side × 6 cols + separators)
+	// 5-column detail table: Pane=6, Role=10, Status=12, Ctx%=6
 	const (
-		colWindow = 12
-		colPane   = 5
-		colRole   = 9
+		colPane   = 6
+		colRole   = 10
 		colStatus = 12
 		colCtx    = 6
-		overhead  = 20
+		overhead  = 16
 	)
-	fixedWidth := colWindow + colPane + colRole + colStatus + colCtx + overhead
+	fixedWidth := colPane + colRole + colStatus + colCtx + overhead
 	taskWidth := w - fixedWidth
 	if taskWidth < 10 {
 		taskWidth = 10
 	}
 	m.taskColWidth = taskWidth
 	m.table.SetColumns([]table.Column{
-		{Title: "Window", Width: colWindow},
 		{Title: "Pane", Width: colPane},
 		{Title: "Role", Width: colRole},
 		{Title: "Status", Width: colStatus},
@@ -121,80 +195,202 @@ func (m *TeamModel) SetSize(w, h int) {
 	})
 }
 
-// SetFocused toggles table focus.
+// SetFocused toggles focus state.
 func (m *TeamModel) SetFocused(focused bool) {
-	m.table.SetCursor(0)
-	m.table.Focus()
-	if !focused {
-		m.table.Blur()
+	m.focused = focused
+	if !m.summaryMode {
+		if focused {
+			m.table.Focus()
+		} else {
+			m.table.Blur()
+		}
 	}
 }
 
-// buildRows creates table rows grouped by team window.
-func (m *TeamModel) buildRows() []table.Row {
-	var rows []table.Row
-
-	// Sort team windows by index
-	windows := make([]int, 0, len(m.teams))
-	for w := range m.teams {
-		windows = append(windows, w)
+// View renders summary or detail mode.
+func (m TeamModel) View() string {
+	if m.summaryMode {
+		return m.viewSummary()
 	}
-	sort.Ints(windows)
+	return m.viewDetail()
+}
 
-	for _, w := range windows {
+// viewSummary renders one line per team with status counts.
+func (m TeamModel) viewSummary() string {
+	t := m.theme
+
+	title := lipgloss.NewStyle().
+		Foreground(t.Primary).
+		Bold(true).
+		Padding(0, 1).
+		Render(fmt.Sprintf("Teams (%d)", len(m.teams)))
+
+	if len(m.sortedTeams) == 0 {
+		empty := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Padding(1, 3).
+			Render("No teams yet")
+		return title + "\n" + empty
+	}
+
+	selectedBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#374151"}
+
+	var lines []string
+	for i, w := range m.sortedTeams {
 		tc := m.teams[w]
+		line := m.renderTeamSummaryLine(w, tc)
 
-		// Count busy/idle for this team
-		busy, idle := 0, 0
-		for _, pi := range tc.WorkerPanes {
-			paneID := fmt.Sprintf("%d.%d", w, pi)
-			if ps, ok := m.panes[paneID]; ok {
-				switch ps.Status {
-				case "BUSY", "WORKING":
-					busy++
-				default:
-					idle++
-				}
-			} else {
+		if m.focused && i == m.cursor {
+			line = lipgloss.NewStyle().
+				Background(selectedBg).
+				Width(m.width - 2).
+				Render(line)
+		}
+
+		lines = append(lines, line)
+	}
+
+	body := lipgloss.NewStyle().
+		Padding(0, 2).
+		Render(strings.Join(lines, "\n"))
+
+	hint := ""
+	if m.focused && len(m.sortedTeams) > 0 {
+		hint = lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Faint(true).
+			Padding(1, 3).
+			Render("enter to view details")
+	}
+
+	return title + "\n\n" + body + "\n" + hint
+}
+
+// renderTeamSummaryLine renders a single team summary line.
+func (m TeamModel) renderTeamSummaryLine(windowIdx int, tc runtime.TeamConfig) string {
+	t := m.theme
+
+	// Team label
+	label := fmt.Sprintf("Team %d", windowIdx)
+	if tc.TeamName != "" {
+		label = tc.TeamName
+	}
+	labelStr := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(label)
+
+	// Count statuses
+	busy, idle, reserved := 0, 0, 0
+	for _, pi := range tc.WorkerPanes {
+		paneID := fmt.Sprintf("%d.%d", windowIdx, pi)
+		if ps, ok := m.panes[paneID]; ok {
+			switch ps.Status {
+			case "BUSY", "WORKING":
+				busy++
+			case "RESERVED":
+				reserved++
+			default:
 				idle++
 			}
+		} else {
+			idle++
 		}
+	}
 
-		// Team header row
-		teamLabel := fmt.Sprintf("W%d", w)
-		if tc.TeamName != "" {
-			teamLabel += " " + tc.TeamName
-		}
-		teamType := tc.TeamType
-		if teamType == "" {
-			teamType = "local"
-		}
-		summary := fmt.Sprintf("[%s] — %dW (%d busy, %d idle)", teamType, tc.WorkerCount, busy, idle)
+	// Worker count
+	countStr := lipgloss.NewStyle().Foreground(t.Text).Render(fmt.Sprintf("%dW", tc.WorkerCount))
 
-		headerText := fmt.Sprintf("%s  %s", teamLabel, summary)
-		rows = append(rows, table.Row{headerText, "", "", "", "", ""})
+	// Status parts
+	var parts []string
+	if busy > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("%d busy", busy)))
+	}
+	if idle > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d idle", idle)))
+	}
+	if reserved > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("%d reserved", reserved)))
+	}
 
-		// Manager pane
-		if tc.ManagerPane != "" {
-			rows = append(rows, m.paneRow(w, tc.ManagerPane, "Manager"))
-		}
+	statusStr := ""
+	if len(parts) > 0 {
+		sep := lipgloss.NewStyle().Foreground(t.Muted).Render(", ")
+		statusStr = " (" + strings.Join(parts, sep) + ")"
+	}
 
-		// Worker panes
-		for _, pi := range tc.WorkerPanes {
-			rows = append(rows, m.paneRow(w, strconv.Itoa(pi), "Worker"))
+	// Type badge
+	badge := ""
+	if tc.TeamType == "freelancer" {
+		badge = "  " + lipgloss.NewStyle().Foreground(t.Warning).Bold(true).Render("[F]")
+	} else if tc.WorktreeBranch != "" {
+		branchName := tc.WorktreeBranch
+		if len(branchName) > 20 {
+			branchName = branchName[:19] + "…"
 		}
+		badge = "  " + lipgloss.NewStyle().Foreground(t.Primary).Render("[wt: "+branchName+"]")
+	}
 
-		// Watchdog pane
-		if tc.WatchdogPane != "" {
-			rows = append(rows, m.paneRow(w, tc.WatchdogPane, "Watchdog"))
-		}
+	return labelStr + "  " + countStr + statusStr + badge
+}
+
+// viewDetail renders the per-pane table for the selected team.
+func (m TeamModel) viewDetail() string {
+	t := m.theme
+
+	tc, ok := m.teams[m.selectedTeam]
+	teamLabel := fmt.Sprintf("Team %d", m.selectedTeam)
+	if ok && tc.TeamName != "" {
+		teamLabel = tc.TeamName
+	}
+	workerCount := 0
+	if ok {
+		workerCount = tc.WorkerCount
+	}
+
+	title := lipgloss.NewStyle().
+		Foreground(t.Primary).
+		Bold(true).
+		Padding(0, 1).
+		Render(fmt.Sprintf("%s — %d Workers", teamLabel, workerCount))
+
+	back := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true).
+		Render("  esc to go back")
+
+	header := title + back
+
+	return header + "\n\n" + m.table.View()
+}
+
+// rebuildDetailTable populates the table with panes from the selected team.
+func (m *TeamModel) rebuildDetailTable() {
+	tc, ok := m.teams[m.selectedTeam]
+	if !ok {
+		m.table.SetRows([]table.Row{})
+		return
+	}
+
+	var rows []table.Row
+
+	// Manager pane
+	if tc.ManagerPane != "" {
+		rows = append(rows, m.paneRow(m.selectedTeam, tc.ManagerPane, "Manager"))
+	}
+
+	// Worker panes
+	for _, pi := range tc.WorkerPanes {
+		rows = append(rows, m.paneRow(m.selectedTeam, strconv.Itoa(pi), "Worker"))
+	}
+
+	// Watchdog pane
+	if tc.WatchdogPane != "" {
+		rows = append(rows, m.paneRow(m.selectedTeam, tc.WatchdogPane, "Watchdog"))
 	}
 
 	if len(rows) == 0 {
-		rows = append(rows, table.Row{"", "", "", "No data yet", "", ""})
+		rows = append(rows, table.Row{"", "", "No panes", "", ""})
 	}
 
-	return rows
+	m.table.SetRows(rows)
 }
 
 // paneRow creates a single row for a pane.
@@ -204,7 +400,7 @@ func (m *TeamModel) paneRow(windowIdx int, paneIdx string, role string) table.Ro
 	status := "—"
 	task := ""
 	if ps, ok := m.panes[paneID]; ok {
-		status = statusBadge(ps.Status, m.theme)
+		status = statusText(ps.Status, m.theme)
 		taskMax := m.taskColWidth - 2
 		if taskMax < 5 {
 			taskMax = 5
@@ -218,7 +414,6 @@ func (m *TeamModel) paneRow(windowIdx int, paneIdx string, role string) table.Ro
 	}
 
 	return table.Row{
-		"",
 		paneIdx,
 		role,
 		status,
@@ -227,22 +422,14 @@ func (m *TeamModel) paneRow(windowIdx int, paneIdx string, role string) table.Ro
 	}
 }
 
-// statusBadge returns a styled status string.
-func statusBadge(status string, t styles.Theme) string {
-	switch status {
-	case "BUSY", "WORKING":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render(status)
-	case "READY":
-		return lipgloss.NewStyle().Foreground(t.Success).Render(status)
-	case "FINISHED":
-		return lipgloss.NewStyle().Foreground(t.Primary).Render(status)
-	case "ERROR":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render(status)
-	case "RESERVED":
-		return lipgloss.NewStyle().Foreground(t.Accent).Render(status)
-	default:
-		return lipgloss.NewStyle().Foreground(t.Muted).Render(status)
+// statusText returns a foreground-colored status string.
+func statusText(status string, t styles.Theme) string {
+	color := styles.StatusColor(status)
+	label := status
+	if label == "WORKING" {
+		label = "BUSY"
 	}
+	return lipgloss.NewStyle().Foreground(color).Render(label)
 }
 
 // truncate shortens a string to maxLen, adding "…" if truncated.
@@ -256,13 +443,9 @@ func truncate(s string, maxLen int) string {
 	return strings.TrimSpace(s[:maxLen-1]) + "…"
 }
 
-// View renders the team table panel.
-func (m TeamModel) View() string {
-	title := lipgloss.NewStyle().
-		Foreground(m.theme.Primary).
-		Bold(true).
-		Padding(0, 1).
-		Render(fmt.Sprintf("Teams (%d)", len(m.teams)))
-
-	return title + "\n" + m.table.View()
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

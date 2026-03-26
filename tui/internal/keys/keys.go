@@ -22,11 +22,11 @@ func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		NextPanel: key.NewBinding(
 			key.WithKeys("tab"),
-			key.WithHelp("tab", "next panel"),
+			key.WithHelp("tab", "switch"),
 		),
 		PrevPanel: key.NewBinding(
 			key.WithKeys("shift+tab"),
-			key.WithHelp("shift+tab", "prev panel"),
+			key.WithHelp("shift+tab", "prev"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
@@ -38,7 +38,7 @@ func DefaultKeyMap() KeyMap {
 		),
 		Select: key.NewBinding(
 			key.WithKeys("enter"),
-			key.WithHelp("enter", "select"),
+			key.WithHelp("enter", "details"),
 		),
 		Back: key.NewBinding(
 			key.WithKeys("esc"),
@@ -67,9 +67,9 @@ func DefaultKeyMap() KeyMap {
 	}
 }
 
-// ShortHelp returns the key bindings for the short help view.
+// ShortHelp returns minimal keybindings for the compact footer.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit, k.NextPanel, k.Up, k.Down}
+	return []key.Binding{k.NextPanel, k.Help, k.Quit}
 }
 
 // FullHelp returns the key bindings for the expanded help view.
