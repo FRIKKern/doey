@@ -141,7 +141,7 @@ The wait hook (`session-manager-wait.sh`) is your heartbeat. It sleeps up to 30s
 | Wake reason | What to do |
 |-------------|------------|
 | `NEW_MESSAGES` | Drain `.msg` files → act on contents → wait hook |
-| `TRIGGERED` | User input or dispatch event. Drain messages + check status → act → wait hook |
+| `TRIGGERED` | Drain messages. **If messages found** → act on them → wait hook. **If no messages** → user sent you a direct message. **Stop your response immediately** (do NOT call the wait hook) so the user's message becomes your next turn. |
 | `NEW_RESULTS` | Worker finished. Drain messages + check results → route follow-ups → wait hook |
 | `CRASH_ALERT` | Check `crash_pane_*` files → alert affected Manager or escalate → wait hook |
 | `COMPACT_CYCLE` | Run `/compact` **immediately** (see below) → wait hook |
@@ -149,7 +149,7 @@ The wait hook (`session-manager-wait.sh`) is your heartbeat. It sleeps up to 30s
 
 **The IDLE rule is critical.** When the hook returns `IDLE Zzz...` (or any `IDLE` variant), it means nothing happened for 30 seconds. Do NOT drain messages (there are none), do NOT run `/doey-monitor` (nothing changed), do NOT produce output. Just call the wait hook and go back to sleep. This is how you avoid burning tokens on empty cycles.
 
-**Responding to user messages:** The `on-prompt-submit` hook touches your trigger file when you receive user input, so the wait hook returns `TRIGGERED` instantly — no 30s delay. Process the user's request, then resume your loop.
+**Responding to user messages:** The `on-prompt-submit` hook touches your trigger file when you receive user input, so the wait hook returns `TRIGGERED` instantly — no 30s delay. When you see `TRIGGERED` but the message drain is empty, **that means the user typed something directly to you.** End your response immediately — do NOT call the wait hook again. Your next conversation turn will contain the user's message. This is how you stay responsive: wake fast, yield fast.
 
 **After dispatching work:** Call the wait hook. Don't poll — the hook wakes you when results arrive.
 
