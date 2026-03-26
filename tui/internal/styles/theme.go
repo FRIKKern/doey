@@ -25,6 +25,8 @@ type Theme struct {
 	Faint         lipgloss.Style // structural elements: separators, dot leaders, timestamps
 	SectionHeader lipgloss.Style // bold + Primary, for section titles
 	StatLabel     lipgloss.Style // bold + Text, for "PROJECT", "SESSION", etc.
+	MenuActive    lipgloss.Style // highlighted menu tab
+	MenuInactive  lipgloss.Style // default menu tab
 }
 
 // DotSeparator returns " · " rendered in the theme's Faint style.
@@ -96,5 +98,13 @@ func DefaultTheme() Theme {
 		StatLabel: lipgloss.NewStyle().
 			Foreground(text).
 			Bold(true),
+
+		MenuActive: lipgloss.NewStyle().
+			Foreground(primary).
+			Bold(true).
+			Underline(true),
+
+		MenuInactive: lipgloss.NewStyle().
+			Foreground(muted),
 	}
 }

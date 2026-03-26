@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -13,11 +14,12 @@ import (
 
 // taskItem adapts runtime.Task for the bubbles/list component.
 type taskItem struct {
-	task runtime.Task
+	task  runtime.Task
+	theme styles.Theme
 }
 
 func (i taskItem) Title() string {
-	return statusIcon(i.task.Status) + " " + i.task.Title
+	return statusIcon(i.task.Status, i.theme) + " " + i.task.Title
 }
 
 func (i taskItem) Description() string {
@@ -31,18 +33,18 @@ func (i taskItem) Description() string {
 func (i taskItem) FilterValue() string { return i.task.Title }
 
 // statusIcon returns a colored icon for a task status.
-func statusIcon(status string) string {
+func statusIcon(status string, t styles.Theme) string {
 	switch status {
 	case "pending_user_confirmation":
-		return "⬤" // yellow — styled at render time
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("⬤")
 	case "active":
-		return "●" // green
+		return lipgloss.NewStyle().Foreground(t.Success).Render("●")
 	case "done":
-		return "○" // dim
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
 	case "cancelled":
-		return "✕" // red
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
 	default:
-		return "·"
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
 	}
 }
 
@@ -81,13 +83,9 @@ func NewTasksModel() TasksModel {
 		BorderLeftForeground(t.Primary)
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.Title = "Tasks"
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
-	l.Styles.Title = lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		Padding(0, 1)
 
 	return TasksModel{
 		list:  l,
@@ -112,30 +110,101 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	m.tasks = snap.Tasks
 	items := make([]list.Item, len(snap.Tasks))
 	for i, t := range snap.Tasks {
-		items[i] = taskItem{task: t}
+		items[i] = taskItem{task: t, theme: m.theme}
 	}
 	m.list.SetItems(items)
-	m.list.Title = fmt.Sprintf("Tasks (%d)", len(snap.Tasks))
 }
 
 // SetSize updates the panel dimensions.
 func (m *TasksModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.list.SetSize(w, h-3) // full width, reserve 3 lines for title + margins
+	// Reserve lines for: header + separator + summary + blank + bottom margin
+	listH := h - 5
+	if listH < 3 {
+		listH = 3
+	}
+	m.list.SetSize(w, listH)
+}
+
+// taskSummary returns a styled summary like "3 tasks (1 active, 1 pending, 1 done)".
+func (m TasksModel) taskSummary() string {
+	t := m.theme
+	active, pending, done, cancelled := 0, 0, 0, 0
+	for _, task := range m.tasks {
+		switch task.Status {
+		case "active":
+			active++
+		case "pending_user_confirmation":
+			pending++
+		case "done":
+			done++
+		case "cancelled":
+			cancelled++
+		}
+	}
+
+	total := lipgloss.NewStyle().Bold(true).Foreground(t.Text).
+		Render(fmt.Sprintf("%d tasks", len(m.tasks)))
+
+	var parts []string
+	if active > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).
+			Render(fmt.Sprintf("%d active", active)))
+	}
+	if pending > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).
+			Render(fmt.Sprintf("%d pending", pending)))
+	}
+	if done > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Muted).
+			Render(fmt.Sprintf("%d done", done)))
+	}
+	if cancelled > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Danger).
+			Render(fmt.Sprintf("%d cancelled", cancelled)))
+	}
+
+	if len(parts) == 0 {
+		return "  " + total
+	}
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(", ")
+	return "  " + total + " (" + strings.Join(parts, sep) + ")"
 }
 
 // View renders the task list panel.
 func (m TasksModel) View() string {
+	t := m.theme
+	w := m.width
+	if w < 20 {
+		w = 20
+	}
+
+	// Section header
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TASKS")
+
+	// Thin separator
+	rule := t.Faint.Render(strings.Repeat("─", w))
+
 	if len(m.tasks) == 0 {
 		empty := lipgloss.NewStyle().
-			Foreground(m.theme.Muted).
-			Padding(1, 2).
-			Render("No tasks yet")
+			Foreground(t.Muted).
+			PaddingLeft(3).
+			PaddingTop(1).
+			Render("No tasks yet. Tasks will appear as the team works.")
+
+		content := header + "\n" + rule + "\n" + empty
 		return lipgloss.NewStyle().
-			Width(m.width).
+			Width(w).
 			Height(m.height).
-			Render(m.list.View() + "\n" + empty)
+			Render(content)
 	}
-	return m.list.View()
+
+	summary := m.taskSummary()
+	content := header + "\n" + rule + "\n" + summary + "\n\n" + m.list.View()
+
+	return lipgloss.NewStyle().
+		Width(w).
+		Height(m.height).
+		Render(content)
 }

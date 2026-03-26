@@ -15,6 +15,53 @@ import (
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
+// teamSummaryLine returns a styled count like "3 teams (5 busy, 2 idle)".
+func teamSummaryLine(teams map[int]runtime.TeamConfig, panes map[string]runtime.PaneStatus, t styles.Theme) string {
+	totalWorkers := 0
+	busy, idle, reserved := 0, 0, 0
+	for w, tc := range teams {
+		totalWorkers += tc.WorkerCount
+		for _, pi := range tc.WorkerPanes {
+			paneID := fmt.Sprintf("%d.%d", w, pi)
+			if ps, ok := panes[paneID]; ok {
+				switch ps.Status {
+				case "BUSY", "WORKING":
+					busy++
+				case "RESERVED":
+					reserved++
+				default:
+					idle++
+				}
+			} else {
+				idle++
+			}
+		}
+	}
+
+	total := lipgloss.NewStyle().Bold(true).Foreground(t.Text).
+		Render(fmt.Sprintf("%d teams, %d workers", len(teams), totalWorkers))
+
+	var parts []string
+	if busy > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).
+			Render(fmt.Sprintf("%d busy", busy)))
+	}
+	if idle > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).
+			Render(fmt.Sprintf("%d idle", idle)))
+	}
+	if reserved > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Accent).
+			Render(fmt.Sprintf("%d reserved", reserved)))
+	}
+
+	if len(parts) == 0 {
+		return "  " + total
+	}
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(", ")
+	return "  " + total + " (" + strings.Join(parts, sep) + ")"
+}
+
 // TeamModel displays team status in summary or detail mode.
 type TeamModel struct {
 	// Detail-mode table
@@ -218,32 +265,40 @@ func (m TeamModel) View() string {
 // viewSummary renders one line per team with status counts.
 func (m TeamModel) viewSummary() string {
 	t := m.theme
+	w := m.width
+	if w < 20 {
+		w = 20
+	}
 
-	title := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		Padding(0, 1).
-		Render(fmt.Sprintf("Teams (%d)", len(m.teams)))
+	// Section header — matches welcome.go pattern
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TEAMS")
+
+	// Thin separator
+	rule := t.Faint.Render(strings.Repeat("─", w))
 
 	if len(m.sortedTeams) == 0 {
 		empty := lipgloss.NewStyle().
 			Foreground(t.Muted).
-			Padding(1, 3).
-			Render("No teams yet")
-		return title + "\n" + empty
+			PaddingLeft(3).
+			PaddingTop(1).
+			Render("No teams yet. Teams will appear when you launch workers.")
+		return header + "\n" + rule + "\n" + empty
 	}
+
+	// Summary line
+	summary := teamSummaryLine(m.teams, m.panes, t)
 
 	selectedBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#374151"}
 
 	var lines []string
-	for i, w := range m.sortedTeams {
-		tc := m.teams[w]
-		line := m.renderTeamSummaryLine(w, tc)
+	for i, wi := range m.sortedTeams {
+		tc := m.teams[wi]
+		line := m.renderTeamSummaryLine(wi, tc)
 
 		if m.focused && i == m.cursor {
 			line = lipgloss.NewStyle().
 				Background(selectedBg).
-				Width(m.width - 2).
+				Width(w - 2).
 				Render(line)
 		}
 
@@ -263,7 +318,7 @@ func (m TeamModel) viewSummary() string {
 			Render("enter to view details")
 	}
 
-	return title + "\n\n" + body + "\n" + hint
+	return header + "\n" + rule + "\n" + summary + "\n\n" + body + "\n" + hint
 }
 
 // renderTeamSummaryLine renders a single team summary line.
@@ -334,6 +389,10 @@ func (m TeamModel) renderTeamSummaryLine(windowIdx int, tc runtime.TeamConfig) s
 // viewDetail renders the per-pane table for the selected team.
 func (m TeamModel) viewDetail() string {
 	t := m.theme
+	w := m.width
+	if w < 20 {
+		w = 20
+	}
 
 	tc, ok := m.teams[m.selectedTeam]
 	teamLabel := fmt.Sprintf("Team %d", m.selectedTeam)
@@ -345,20 +404,19 @@ func (m TeamModel) viewDetail() string {
 		workerCount = tc.WorkerCount
 	}
 
-	title := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		Padding(0, 1).
-		Render(fmt.Sprintf("%s — %d Workers", teamLabel, workerCount))
+	// Section header with team name and worker count
+	header := t.SectionHeader.Copy().PaddingLeft(2).
+		Render(fmt.Sprintf("%s — %d WORKERS", teamLabel, workerCount))
+
+	rule := t.Faint.Render(strings.Repeat("─", w))
 
 	back := lipgloss.NewStyle().
 		Foreground(t.Muted).
 		Faint(true).
-		Render("  esc to go back")
+		PaddingLeft(3).
+		Render("esc to go back")
 
-	header := title + back
-
-	return header + "\n\n" + m.table.View()
+	return header + "\n" + rule + "\n" + back + "\n\n" + m.table.View()
 }
 
 // rebuildDetailTable populates the table with panes from the selected team.
