@@ -71,8 +71,8 @@ _check_blocked() {
   local cmd="$1"
   cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
   case "$cmd" in
-    *"git push"*|*"gh pr create"*|*"gh pr merge"*)
-      MSG="remote git/gh commands (git push, gh pr). Commit locally and let the Manager push" ;;
+    *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
+      MSG="git write operations (git commit/push, gh pr). Send a message to Session Manager with what you need committed" ;;
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
     *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
@@ -148,6 +148,21 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   esac
   _dbg_write "allow_non_bash"
   exit 0
+fi
+
+# Git commit/push: blocked for all roles except session_manager and git_agent
+# Read-only git commands (status, diff, log, show, branch) are always allowed
+if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "git_agent" ]; then
+  _GIT_CMD=$(_json_str tool_input.command)
+  if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
+    case "$_GIT_CMD" in
+      *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
+        _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_GIT_CMD"
+        _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
+        echo "BLOCKED: Git operations are handled by Session Manager. Send a message to SM with what you need committed." >&2
+        exit 2 ;;
+    esac
+  fi
 fi
 
 # Manager/Session Manager: only block /rename via send-keys

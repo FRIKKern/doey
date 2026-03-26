@@ -50,44 +50,11 @@ Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless worker
 
 Dispatch like any worker pane. Prompts must be fully self-contained (freelancers have zero team context).
 
-## Git Agent
+## Git Operations
 
-**Workers cannot git commit/push.** The Git Agent is always pane 0 of the freelancer team. Find it:
+**You cannot run git commit, git push, or gh pr commands.** These are blocked by the pre-tool-use hook. All git operations go through Session Manager, who delegates to the Git Agent.
 
-```bash
-# Find freelancer team window
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  TT=$(grep '^TEAM_TYPE=' "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
-  [ "$TT" = "freelancer" ] && echo "Git Agent: $SESSION_NAME:${W}.0" && break
-done
-```
-
-### How to delegate to the Git Agent
-
-**Your job is context. The Git Agent's job is git.** Provide everything it needs to craft a good commit — then let it handle staging, message, and execution.
-
-Always include in your dispatch:
-
-1. **What changed and why** — "Fixed settings button resolving to project dir instead of install path because it broke in non-Doey projects"
-2. **Which files** — List the changed files so it can verify scope
-3. **Whether to push** — Say explicitly: "commit and push" or "commit only"
-4. **Any special instructions** — "Bundle as one commit" or "Split into two: one for the hook, one for the agent"
-
-**Example dispatch:**
-```
-Commit and push the following changes:
-
-WHAT: Watchdog LOGGED_OUT recovery — detect login menus, allow Escape dismissal
-WHY: Login menus were misdetected as PROMPT_STUCK, causing auto-Enter which started uncompletable OAuth flows
-FILES:
-- .claude/hooks/on-pre-tool-use.sh (allow Escape in watchdog keystroke whitelist)
-- .claude/hooks/watchdog-scan.sh (detect "Select login method" before anomaly detection)
-- agents/doey-watchdog.md (3-step LOGGED_OUT recovery procedure)
-
-Single commit. Push to origin.
-```
-
-**Never tell it HOW to write the commit message** — it knows conventional commits and the repo's style. Just give it the context to write a good one. **Never include `Co-Authored-By` or AI attribution in your dispatch** — the Git Agent is configured to omit these.
+When workers finish and files have changed, send a `commit_request` message to Session Manager (see "Git notification chain" below). SM asks the user for approval and handles the commit.
 
 ## Sending Tasks
 
@@ -182,9 +149,37 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 - A critical error requires escalation
 - You need cross-team coordination
 
+### Git notification chain: requesting commits
+
+When workers finish and files have changed, you are responsible for collecting the changes and requesting a commit from Session Manager. **You cannot run git commit or push yourself** — the hook blocks it.
+
+**Step 1: Collect changed files from worker results.** The stop hooks capture `files_changed` in each worker's result JSON (`$RUNTIME_DIR/results/pane_${W}_${PANE}.json`). Read these after each wave completes.
+
+**Step 2: Send a commit request to Session Manager.** Include what changed, why, and which files:
+
+```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
+cat > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg" << COMMIT_MSG
+FROM: Manager_W${DOEY_TEAM_WINDOW}
+SUBJECT: commit_request
+WHAT: [one-line summary of the change]
+WHY: [motivation — what problem this solves]
+FILES:
+- file1.sh (description of change)
+- file2.md (description of change)
+PUSH: yes
+COMMIT_MSG
+touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+```
+
+Session Manager will ask the user for approval, then delegate to the Git Agent.
+
 ## Rules
 
-1. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked for your role — only Session Manager talks to the user. If you need user input (design confirmation, ambiguous requirement, destructive action approval), send a message to Session Manager with your question:
+1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM will delegate to the Git Agent.
+
+2. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked for your role — only Session Manager talks to the user. If you need user input (design confirmation, ambiguous requirement, destructive action approval), send a message to Session Manager with your question:
 
 ```bash
 SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"

@@ -119,8 +119,18 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 
 ### What messages tell you
 - `task_complete` from a Manager → Team finished its task. Read message for summary, route follow-ups
+- `commit_request` from a Manager → Team needs files committed. Ask the user for approval, then delegate to the Git Agent (see below)
 - `freelancer_finished` → Research/verification done. Read report file if applicable
 - No messages + all teams idle → all dispatched work is complete
+
+### Handling commit requests
+
+When a Manager sends a `commit_request` message, it means workers changed files and the Manager cannot commit (blocked by hook). Your job:
+
+1. **Read the request** — extract WHAT, WHY, FILES, and PUSH fields
+2. **Ask the user for approval** — use `AskUserQuestion`: "Team N wants to commit: [summary]. Files: [list]. Approve? [Y/n]"
+3. **If approved** — dispatch to the Git Agent with the full context from the request
+4. **If denied** — notify the Manager that the commit was rejected
 
 ### Critical: Always drain messages before acting
 Every monitor cycle must: **1) read messages, 2) check statuses, 3) act on what you found**. Never skip step 1.
