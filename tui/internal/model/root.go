@@ -1,12 +1,14 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/doey-cli/doey/tui/internal/runtime"
+	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
 // TickMsg triggers a periodic runtime re-read.
@@ -81,8 +83,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.propagateSizes() // help overlay changes available height
 			return m, nil
 		}
-		if key.Matches(msg, m.footer.keyMap.NextPanel) {
+		if key.Matches(msg, m.footer.keyMap.NextPanel, m.footer.keyMap.RightPanel) {
 			m.focusIndex = (m.focusIndex + 1) % 3
+			m.updateFocus()
+			return m, nil
+		}
+		if key.Matches(msg, m.footer.keyMap.PrevPanel, m.footer.keyMap.LeftPanel) {
+			m.focusIndex = (m.focusIndex + 2) % 3 // +2 mod 3 == -1 with wrap
+			m.updateFocus()
+			return m, nil
+		}
+		if key.Matches(msg, m.footer.keyMap.PanelOne) {
+			m.focusIndex = 0
+			m.updateFocus()
+			return m, nil
+		}
+		if key.Matches(msg, m.footer.keyMap.PanelTwo) {
+			m.focusIndex = 1
+			m.updateFocus()
+			return m, nil
+		}
+		if key.Matches(msg, m.footer.keyMap.PanelThree) {
+			m.focusIndex = 2
 			m.updateFocus()
 			return m, nil
 		}
@@ -103,19 +125,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// renderMenuBar renders a navigable menu bar showing the active panel.
+func (m Model) renderMenuBar(width int) string {
+	t := styles.DefaultTheme()
+	items := []string{"Dashboard", "Teams", "Tasks"}
+
+	activeStyle := lipgloss.NewStyle().
+		Foreground(t.Primary).
+		Bold(true).
+		Padding(0, 1)
+	inactiveStyle := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Padding(0, 1)
+	sepStyle := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true)
+
+	var parts []string
+	for i, item := range items {
+		if i == m.focusIndex {
+			parts = append(parts, activeStyle.Render("[ "+item+" ]"))
+		} else {
+			parts = append(parts, inactiveStyle.Render("  "+item+"  "))
+		}
+	}
+	menu := "  " + strings.Join(parts, sepStyle.Render("·"))
+
+	sep := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true).
+		Width(width).
+		Render(strings.Repeat("─", width))
+
+	return menu + "\n" + sep
+}
+
 // View composes the full dashboard layout.
 func (m Model) View() string {
 	if !m.ready {
 		return "\n  Loading…"
 	}
 
-	header := m.header.View()
+	banner := RenderBanner(m.snapshot.Session.ProjectName, m.width)
+	menuBar := m.renderMenuBar(m.width)
 	footer := m.footer.View()
 
 	// Calculate body height
-	headerH := lipgloss.Height(header)
+	bannerH := lipgloss.Height(banner)
+	menuH := lipgloss.Height(menuBar)
 	footerH := lipgloss.Height(footer)
-	bodyH := m.height - headerH - footerH
+	bodyH := m.height - bannerH - menuH - footerH
 	if bodyH < 1 {
 		bodyH = 1
 	}
@@ -134,17 +193,17 @@ func (m Model) View() string {
 		body = m.tasks.View()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, banner, menuBar, body, footer)
 }
 
 // propagateSizes distributes width/height to sub-models.
 func (m *Model) propagateSizes() {
-	m.header.SetWidth(m.width)
 	m.footer.SetWidth(m.width)
 
-	headerH := lipgloss.Height(m.header.View())
+	bannerH := lipgloss.Height(RenderBanner(m.snapshot.Session.ProjectName, m.width))
+	menuH := lipgloss.Height(m.renderMenuBar(m.width))
 	footerH := lipgloss.Height(m.footer.View())
-	bodyH := m.height - headerH - footerH
+	bodyH := m.height - bannerH - menuH - footerH
 	if bodyH < 1 {
 		bodyH = 1
 	}

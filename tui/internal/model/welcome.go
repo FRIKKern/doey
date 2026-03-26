@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"math/rand"
 	"sort"
 	"strings"
 
@@ -12,8 +11,8 @@ import (
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
-// WelcomeModel renders the home/welcome tab with ASCII art, onboarding, and
-// command reference — the soul of the bash dashboard.
+// WelcomeModel renders the home/welcome tab with onboarding, team status,
+// and command reference.
 type WelcomeModel struct {
 	snapshot runtime.Snapshot
 	theme    styles.Theme
@@ -47,7 +46,7 @@ func (m *WelcomeModel) SetSize(w, h int) {
 	m.height = h
 }
 
-// View renders the full welcome screen.
+// View renders the welcome content (no banner — root.go handles that).
 func (m WelcomeModel) View() string {
 	w := m.width
 	if w < 40 {
@@ -56,8 +55,6 @@ func (m WelcomeModel) View() string {
 
 	var sections []string
 
-	sections = append(sections, m.renderBanner(w))
-	sections = append(sections, m.renderStatsBar(w))
 	if ts := m.renderTeamStatus(w); ts != "" {
 		sections = append(sections, ts)
 	}
@@ -73,136 +70,6 @@ func (m WelcomeModel) View() string {
 		Render(content)
 }
 
-// ── ASCII Art Banner ────────────────────────────────────────────────
-
-// blockFont maps characters to 6-row block-letter representations.
-var blockFont = map[byte][6]string{
-	'A': {" █████╗ ", "██╔══██╗", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"},
-	'B': {"██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██████╔╝", "╚═════╝ "},
-	'C': {" ██████╗", "██╔════╝", "██║     ", "██║     ", "╚██████╗", " ╚═════╝"},
-	'D': {"██████╗ ", "██╔══██╗", "██║  ██║", "██║  ██║", "██████╔╝", "╚═════╝ "},
-	'E': {"███████╗", "██╔════╝", "█████╗  ", "██╔══╝  ", "███████╗", "╚══════╝"},
-	'F': {"███████╗", "██╔════╝", "█████╗  ", "██╔══╝  ", "██║     ", "╚═╝     "},
-	'G': {" ██████╗ ", "██╔════╝ ", "██║  ███╗", "██║   ██║", "╚██████╔╝", " ╚═════╝ "},
-	'H': {"██╗  ██╗", "██║  ██║", "███████║", "██╔══██║", "██║  ██║", "╚═╝  ╚═╝"},
-	'I': {"██╗", "██║", "██║", "██║", "██║", "╚═╝"},
-	'J': {"     ██╗", "     ██║", "     ██║", "██   ██║", "╚█████╔╝", " ╚════╝ "},
-	'K': {"██╗  ██╗", "██║ ██╔╝", "█████╔╝ ", "██╔═██╗ ", "██║  ██╗", "╚═╝  ╚═╝"},
-	'L': {"██╗     ", "██║     ", "██║     ", "██║     ", "███████╗", "╚══════╝"},
-	'M': {"███╗   ███╗", "████╗ ████║", "██╔████╔██║", "██║╚██╔╝██║", "██║ ╚═╝ ██║", "╚═╝     ╚═╝"},
-	'N': {"███╗   ██╗", "████╗  ██║", "██╔██╗ ██║", "██║╚██╗██║", "██║ ╚████║", "╚═╝  ╚═══╝"},
-	'O': {" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ "},
-	'P': {"██████╗ ", "██╔══██╗", "██████╔╝", "██╔═══╝ ", "██║     ", "╚═╝     "},
-	'Q': {" ██████╗  ", "██╔═══██╗ ", "██║   ██║ ", "██║▄▄ ██║ ", "╚██████╔╝ ", " ╚══▀▀═╝  "},
-	'R': {"██████╗ ", "██╔══██╗", "██████╔╝", "██╔══██╗", "██║  ██║", "╚═╝  ╚═╝"},
-	'S': {"███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝"},
-	'T': {"████████╗", "╚══██╔══╝", "   ██║   ", "   ██║   ", "   ██║   ", "   ╚═╝   "},
-	'U': {"██╗   ██╗", "██║   ██║", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ "},
-	'V': {"██╗   ██╗", "██║   ██║", "██║   ██║", "╚██╗ ██╔╝", " ╚████╔╝ ", "  ╚═══╝  "},
-	'W': {"██╗    ██╗", "██║    ██║", "██║ █╗ ██║", "██║███╗██║", "╚███╔███╔╝", " ╚══╝╚══╝ "},
-	'X': {"██╗  ██╗", "╚██╗██╔╝", " ╚███╔╝ ", " ██╔██╗ ", "██╔╝ ██╗", "╚═╝  ╚═╝"},
-	'Y': {"██╗   ██╗", "╚██╗ ██╔╝", " ╚████╔╝ ", "  ╚██╔╝  ", "   ██║   ", "   ╚═╝   "},
-	'Z': {"███████╗", "╚════██║", "  ███╔╝ ", " ███╔╝  ", "███████╗", "╚══════╝"},
-	'0': {" ██████╗ ", "██╔═══██╗", "██║   ██║", "██║   ██║", "╚██████╔╝", " ╚═════╝ "},
-	'1': {" ██╗", "███║", "╚██║", " ██║", " ██║", " ╚═╝"},
-	'2': {"██████╗ ", "╚════██╗", " █████╔╝", "██╔═══╝ ", "███████╗", "╚══════╝"},
-	'3': {"██████╗ ", "╚════██╗", " █████╔╝", " ╚═══██╗", "██████╔╝", "╚═════╝ "},
-	'4': {"██╗  ██╗", "██║  ██║", "███████║", "╚════██║", "     ██║", "     ╚═╝"},
-	'5': {"███████╗", "██╔════╝", "███████╗", "╚════██║", "███████║", "╚══════╝"},
-	'6': {" ██████╗ ", "██╔════╝ ", "███████╗ ", "██╔═══██╗", "╚██████╔╝", " ╚═════╝ "},
-	'7': {"███████╗", "╚════██║", "    ██╔╝", "   ██╔╝ ", "   ██║  ", "   ╚═╝  "},
-	'8': {" █████╗ ", "██╔══██╗", "╚█████╔╝", "██╔══██╗", "╚█████╔╝", " ╚════╝ "},
-	'9': {" █████╗ ", "██╔══██╗", "╚██████║", " ╚═══██║", " █████╔╝", " ╚════╝ "},
-	'-': {"        ", "        ", "███████╗", "╚══════╝", "        ", "        "},
-	'.': {"   ", "   ", "   ", "   ", "██╗", "╚═╝"},
-	'_': {"        ", "        ", "        ", "        ", "███████╗", "╚══════╝"},
-	' ': {"   ", "   ", "   ", "   ", "   ", "   "},
-}
-
-// bannerColors are the 6 colors the title randomly picks from.
-var bannerColors = []lipgloss.AdaptiveColor{
-	{Light: "#0891B2", Dark: "#06B6D4"}, // cyan (primary)
-	{Light: "#16A34A", Dark: "#22C55E"}, // green
-	{Light: "#D97706", Dark: "#F59E0B"}, // yellow/amber
-	{Light: "#9333EA", Dark: "#A855F7"}, // magenta/purple
-	{Light: "#DC2626", Dark: "#EF4444"}, // red
-	{Light: "#111827", Dark: "#F9FAFB"}, // white/text
-}
-
-func (m WelcomeModel) renderBanner(maxWidth int) string {
-	name := strings.ToUpper(m.snapshot.Session.ProjectName)
-	if name == "" {
-		name = "DOEY"
-	}
-	// Cap at 9 characters to fit small terminals
-	if len(name) > 9 {
-		name = name[:9]
-	}
-
-	// Build 6 rows of block text
-	var rows [6]string
-	for i := 0; i < len(name); i++ {
-		ch := name[i]
-		glyph, ok := blockFont[ch]
-		if !ok {
-			glyph = blockFont[' ']
-		}
-		for r := 0; r < 6; r++ {
-			rows[r] += glyph[r] + " "
-		}
-	}
-
-	// Pick a random color
-	color := bannerColors[rand.Intn(len(bannerColors))]
-	style := lipgloss.NewStyle().
-		Foreground(color).
-		Bold(true).
-		PaddingLeft(4)
-
-	var lines []string
-	lines = append(lines, "") // top margin
-	for _, row := range rows {
-		lines = append(lines, style.Render(row))
-	}
-	lines = append(lines, "") // bottom margin
-
-	return strings.Join(lines, "\n")
-}
-
-// ── Stats Bar ───────────────────────────────────────────────────────
-
-func (m WelcomeModel) renderStatsBar(w int) string {
-	t := m.theme
-
-	thickRule := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
-		Render(strings.Repeat("═", w))
-
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(" · ")
-	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Text)
-	valueStyle := lipgloss.NewStyle().Foreground(t.Muted)
-
-	projectName := m.snapshot.Session.ProjectName
-	if projectName == "" {
-		projectName = "—"
-	}
-	sessionName := m.snapshot.Session.SessionName
-	if sessionName == "" {
-		sessionName = "—"
-	}
-	teamCount := len(m.snapshot.Teams)
-	uptime := formatDuration(m.snapshot.Uptime)
-
-	line := "  " +
-		labelStyle.Render("PROJECT") + " " + valueStyle.Render(projectName) + sep +
-		labelStyle.Render("SESSION") + " " + valueStyle.Render(sessionName) + sep +
-		labelStyle.Render("UPTIME") + " " + valueStyle.Render(uptime) + sep +
-		labelStyle.Render("TEAMS") + " " + valueStyle.Render(fmt.Sprintf("%d", teamCount))
-
-	return thickRule + "\n" + line + "\n" + thickRule + "\n"
-}
-
 // ── Team Status ─────────────────────────────────────────────────────
 
 func (m WelcomeModel) renderTeamStatus(w int) string {
@@ -211,11 +78,7 @@ func (m WelcomeModel) renderTeamStatus(w int) string {
 	}
 
 	t := m.theme
-	header := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		PaddingLeft(2).
-		Render("TEAM STATUS")
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TEAM STATUS")
 
 	windows := make([]int, 0, len(m.snapshot.Teams))
 	for wi := range m.snapshot.Teams {
@@ -254,9 +117,9 @@ func (m WelcomeModel) renderTeamStatus(w int) string {
 
 		badge := ""
 		if tc.TeamType == "freelancer" {
-			badge = lipgloss.NewStyle().Foreground(t.Warning).Bold(true).Render(" [F]")
+			badge = " " + styles.TeamBadge("freelancer")
 		} else if tc.WorktreeDir != "" {
-			badge = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(" [wt]")
+			badge = " " + styles.TeamBadge("worktree")
 		}
 
 		busyStr := lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("%d busy", busy))
@@ -282,11 +145,7 @@ func (m WelcomeModel) renderTeamStatus(w int) string {
 func (m WelcomeModel) renderHowToUse() string {
 	t := m.theme
 
-	header := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		PaddingLeft(2).
-		Render("HOW TO USE DOEY")
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("HOW TO USE DOEY")
 
 	numStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Text)
 	cyanStyle := lipgloss.NewStyle().Foreground(t.Primary)
@@ -329,11 +188,7 @@ type cmdEntry struct {
 func (m WelcomeModel) renderSlashCommands(w int) string {
 	t := m.theme
 
-	header := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		PaddingLeft(2).
-		Render("SLASH COMMANDS")
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("SLASH COMMANDS")
 
 	greenStyle := lipgloss.NewStyle().Foreground(t.Success)
 	cyanStyle := lipgloss.NewStyle().Foreground(t.Primary)
@@ -393,7 +248,6 @@ func (m WelcomeModel) renderSlashCommands(w int) string {
 		},
 	}
 
-	// Column width for dotted leaders
 	colW := w - 6
 	twoCol := w > 100
 	if twoCol {
@@ -409,16 +263,16 @@ func (m WelcomeModel) renderSlashCommands(w int) string {
 		lines = append(lines, "  "+g.style.Render(g.label))
 		if twoCol {
 			for i := 0; i < len(g.cmds); i += 2 {
-				left := dottedLeader(g.cmds[i].name, g.cmds[i].desc, colW, t)
+				left := t.DottedLeader(g.cmds[i].name, g.cmds[i].desc, colW)
 				right := ""
 				if i+1 < len(g.cmds) {
-					right = "  " + dottedLeader(g.cmds[i+1].name, g.cmds[i+1].desc, colW, t)
+					right = "  " + t.DottedLeader(g.cmds[i+1].name, g.cmds[i+1].desc, colW)
 				}
 				lines = append(lines, "  "+left+right)
 			}
 		} else {
 			for _, c := range g.cmds {
-				lines = append(lines, "  "+dottedLeader(c.name, c.desc, colW, t))
+				lines = append(lines, "  "+t.DottedLeader(c.name, c.desc, colW))
 			}
 		}
 		lines = append(lines, "")
@@ -432,11 +286,7 @@ func (m WelcomeModel) renderSlashCommands(w int) string {
 func (m WelcomeModel) renderCLICommands(w int) string {
 	t := m.theme
 
-	header := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		PaddingLeft(2).
-		Render("CLI COMMANDS")
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("CLI COMMANDS")
 
 	cmdStyle := lipgloss.NewStyle().Foreground(t.Warning)
 
@@ -459,28 +309,9 @@ func (m WelcomeModel) renderCLICommands(w int) string {
 	lines = append(lines, header)
 	lines = append(lines, "")
 	for _, c := range cmds {
-		lines = append(lines, "  "+dottedLeader(c.name, c.desc, colW, t))
+		lines = append(lines, "  "+t.DottedLeader(c.name, c.desc, colW))
 	}
 	lines = append(lines, "")
 
 	return strings.Join(lines, "\n")
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────
-
-// visibleLen returns the printed width of a string, stripping ANSI escapes.
-func visibleLen(s string) int {
-	return lipgloss.Width(s)
-}
-
-// dottedLeader renders "name .... desc" with dots filling the gap.
-func dottedLeader(name, desc string, maxW int, t styles.Theme) string {
-	nameW := visibleLen(name)
-	descW := visibleLen(desc)
-	dotsNeeded := maxW - nameW - descW - 2
-	if dotsNeeded < 2 {
-		dotsNeeded = 2
-	}
-	dots := lipgloss.NewStyle().Faint(true).Foreground(t.Muted).Render(strings.Repeat(".", dotsNeeded))
-	return name + " " + dots + " " + desc
 }

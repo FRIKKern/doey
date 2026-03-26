@@ -4,17 +4,22 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap defines all keybindings for the Doey TUI.
 type KeyMap struct {
-	NextPanel key.Binding
-	PrevPanel key.Binding
-	Up        key.Binding
-	Down      key.Binding
-	Select    key.Binding
-	Back      key.Binding
-	Filter    key.Binding
-	Quit      key.Binding
-	ForceQuit key.Binding
-	Refresh   key.Binding
-	Help      key.Binding
+	NextPanel  key.Binding
+	PrevPanel  key.Binding
+	LeftPanel  key.Binding
+	RightPanel key.Binding
+	PanelOne   key.Binding
+	PanelTwo   key.Binding
+	PanelThree key.Binding
+	Up         key.Binding
+	Down       key.Binding
+	Select     key.Binding
+	Back       key.Binding
+	Filter     key.Binding
+	Quit       key.Binding
+	ForceQuit  key.Binding
+	Refresh    key.Binding
+	Help       key.Binding
 }
 
 // DefaultKeyMap returns the standard keybindings.
@@ -27,6 +32,26 @@ func DefaultKeyMap() KeyMap {
 		PrevPanel: key.NewBinding(
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "prev"),
+		),
+		LeftPanel: key.NewBinding(
+			key.WithKeys("left"),
+			key.WithHelp("←", "prev panel"),
+		),
+		RightPanel: key.NewBinding(
+			key.WithKeys("right"),
+			key.WithHelp("→", "next panel"),
+		),
+		PanelOne: key.NewBinding(
+			key.WithKeys("1"),
+			key.WithHelp("1", "dashboard"),
+		),
+		PanelTwo: key.NewBinding(
+			key.WithKeys("2"),
+			key.WithHelp("2", "teams"),
+		),
+		PanelThree: key.NewBinding(
+			key.WithKeys("3"),
+			key.WithHelp("3", "tasks"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
@@ -76,7 +101,8 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Select, k.Back},
-		{k.NextPanel, k.PrevPanel, k.Filter},
+		{k.NextPanel, k.PrevPanel, k.LeftPanel, k.RightPanel},
+		{k.PanelOne, k.PanelTwo, k.PanelThree, k.Filter},
 		{k.Refresh, k.Help, k.Quit, k.ForceQuit},
 	}
 }
