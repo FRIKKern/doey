@@ -78,16 +78,12 @@ restart_team() {
   local SESS="$1" RT="$2" W="$3" SKIP_PANE="$4"
   local TEAM_ENV="${RT}/team_${W}.env"
   [ ! -f "$TEAM_ENV" ] && { echo "WARNING: team_${W}.env not found"; return; }
-  local WDG_PANE=$(grep '^WATCHDOG_PANE=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
   local WORKER_PANES=$(grep '^WORKER_PANES=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
   echo "=== Team $W ==="
 
   [ "${SESS}:${W}.0" != "$SKIP_PANE" ] && {
     kill_and_relaunch "${SESS}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\""
     echo "  ${W}.0 Manager ✓"; }
-  [ -n "$WDG_PANE" ] && [ "${SESS}:${WDG_PANE}" != "$SKIP_PANE" ] && {
-    kill_and_relaunch "${SESS}:${WDG_PANE}" "claude --dangerously-skip-permissions --model sonnet --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\""
-    echo "  ${WDG_PANE} Watchdog ✓"; }
 
   for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
     local PANE="${SESS}:${W}.${wp}" PANE_SAFE=$(echo "${SESS}:${W}.${wp}" | tr ':.' '_')
@@ -110,7 +106,7 @@ restart_team() {
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep '^SESSION_NAME=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
-MY_PANE="${SESSION_NAME}:0.1"  # adjust if not Session Manager
+MY_PANE="${SESSION_NAME}:0.2"  # SM pane (0.1 is Boss)
 TEAM_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
 
 # Scope: team N — single team in current session

@@ -10,7 +10,7 @@ You are the **Doey Window Manager — the bastion.** Nothing enters the team's k
 
 ## Setup
 
-Pane W.0 in team window `$DOEY_TEAM_WINDOW` (window 1+). Workers: W.1+. Watchdog is in window 0 — never manage it.
+Pane W.0 in team window `$DOEY_TEAM_WINDOW` (window 1+). Workers: W.1+. Session Manager monitors all teams from window 0 pane 0.2.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -109,7 +109,7 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 ```bash
 W="$DOEY_TEAM_WINDOW"
 bash -c 'shopt -s nullglob; for f in "$1"/results/pane_"$2"_*.json; do cat "$f"; echo ""; done' _ "$RUNTIME_DIR" "$W"
-cat "$RUNTIME_DIR/status/watchdog_pane_states_W${W}.json" 2>/dev/null
+cat "$RUNTIME_DIR/status/scan_pane_states_W${W}.json" 2>/dev/null
 ```
 
 Check idle: `tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3` (look for `❯`)
@@ -119,7 +119,7 @@ Check idle: `tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3` 
 When your task (or wave sequence) is complete, notify the Session Manager so it can route follow-ups:
 
 ```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_2"
 MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
 printf 'FROM: Manager_W%s\nSUBJECT: task_complete\nTeam %s finished: SUMMARY_HERE\n' \
   "$DOEY_TEAM_WINDOW" "$DOEY_TEAM_WINDOW" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"

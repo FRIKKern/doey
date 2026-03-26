@@ -17,6 +17,11 @@ SM_SAFE="${SESSION_NAME//[:.]/_}_${SM_PANE//[:.]/_}"
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/session_manager_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger"
+TRIGGER3="${RUNTIME_DIR}/status/sm_trigger"
+
+# Scan interval: SM now handles monitoring (merged from watchdog-wait.sh)
+SCAN_INTERVAL="${DOEY_WATCHDOG_SCAN_INTERVAL:-30}"
+_scan_elapsed=0
 
 # Debug mode check
 _SM_DBG=false
@@ -94,8 +99,8 @@ if [ "$((_sm_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
 fi
 
 # Pre-sleep check: catch messages/triggers that arrived before entering the loop
-if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
-  rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
+if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
+  rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null
   _sm_non_idle_exit
   _sm_dbg_wake "trigger_presleep" "0"
   echo "TRIGGERED"
@@ -133,9 +138,9 @@ _cycle_num=0
 while [ "$_cycle_num" -lt "$_internal_cycles" ]; do
   i=0
   while [ "$i" -lt "$_sm_scan_interval" ]; do
-    # Wake on explicit trigger (check both legacy and per-pane paths)
-    if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
-      rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
+    # Wake on explicit trigger (check legacy, per-pane, and unified sm_trigger paths)
+    if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
+      rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null
       _sm_non_idle_exit
       _sm_dbg_wake "trigger" "$i"
       echo "TRIGGERED"
@@ -162,6 +167,14 @@ while [ "$_cycle_num" -lt "$_internal_cycles" ]; do
       _sm_non_idle_exit
       _sm_dbg_wake "crash_alert" "$i"
       echo "CRASH_ALERT"
+      exit 0
+    fi
+    # Scan timer: return SCAN_DUE when scan interval expires
+    _scan_elapsed=$((_scan_elapsed + 1))
+    if [ "$_scan_elapsed" -ge "$SCAN_INTERVAL" ]; then
+      _sm_non_idle_exit
+      _sm_dbg_wake "scan_due" "$i"
+      echo "SCAN_DUE"
       exit 0
     fi
     sleep 1

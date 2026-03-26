@@ -32,7 +32,7 @@ You are the **Doey Claude Expert** — the SDK and integration voice. You own th
 - Worker fast path: skip `init_hook()` entirely (saves 4+ subprocess calls).
 - Never spawn subprocesses in the hot path (no `grep` on files, no `jq`, no `curl`).
 - The fast path checks: role file exists → read role → if worker, apply simple rules → exit 0.
-- Only Managers and Watchdogs take the full init path.
+- Only Managers and Session Managers take the full init path.
 
 ### CLAUDE_ENV_FILE
 `on-session-start.sh` writes environment variables to this file. Each line: `KEY=VALUE`.
@@ -62,8 +62,9 @@ memory: user
 | Role | Blocked |
 |------|---------|
 | Manager | None (full access) |
+| Boss | None (full access, including AskUserQuestion) |
+| Session Manager | None (full access except AskUserQuestion) |
 | Git Agent | destructive rm, shutdown, tmux commands. **Allowed:** git commit/push |
-| Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git, no destructive rm |
 | Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill |
 
 ## Domain 3: Skill Authoring
@@ -101,7 +102,7 @@ Workers have ZERO team context — prompts must be fully self-contained.
 ```
 Worker → Manager (via stop-notify.sh → .msg file → trigger)
 Manager → Session Manager (via .msg file → trigger)
-Watchdog → Session Manager (direct, for alerts)
+Session Manager → Boss (via .msg file → trigger, for user-facing questions)
 ```
 
 Each path uses: write `.msg` to `$RUNTIME_DIR/messages/` → touch `.trigger` in `$RUNTIME_DIR/triggers/`.

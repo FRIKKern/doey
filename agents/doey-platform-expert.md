@@ -95,7 +95,7 @@ Always: write to `.tmp` → `mv .tmp final`. Never write directly — prevents p
 ### Common Races
 - Reading status file during write → garbage parse. Solution: atomic tmp+mv.
 - Message delivered but trigger not touched → recipient sleeps through it. Always touch trigger after writing .msg.
-- Completion event written by stop hook, consumed by watchdog — must handle double-read (idempotent consumption).
+- Completion event written by stop hook, consumed by SM scan — must handle double-read (idempotent consumption).
 
 ## Review Checklist
 

@@ -78,7 +78,7 @@ Project directory: PROJECT_DIR
 
 ### Monitor
 
-Poll every 60s for `${RUNTIME_DIR}/reports/simplify_team_${W}.md`. Check Watchdog heartbeats.
+Poll every 60s for `${RUNTIME_DIR}/reports/simplify_team_${W}.md`.
 
 ### Consolidate
 

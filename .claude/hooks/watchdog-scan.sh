@@ -101,22 +101,26 @@ PANE_INFO=$(tmux display-message -t "${TMUX_PANE}" -p '#{window_index}.#{pane_in
 WINDOW_INDEX="${PANE_INFO%.*}"
 PANE_INDEX="${PANE_INFO#*.}"
 
-# Find which team has WATCHDOG_PANE matching our pane
-TARGET_WINDOW=""
-for tf in "${RUNTIME_DIR}"/team_*.env; do
-  [ -f "$tf" ] || continue
-  wp=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2-)
-  wp="${wp%\"}" && wp="${wp#\"}"
-  if [ "$wp" = "0.${PANE_INDEX}" ]; then
-    fn="${tf##*/}"
-    fn="${fn#team_}"
-    TARGET_WINDOW="${fn%.env}"
-    break
-  fi
-done
+# Determine which team to scan.
+# If called with an argument, scan that specific team (used by SM scanning all teams).
+# Otherwise, fall back to legacy auto-detection from WATCHDOG_PANE matching.
+TARGET_WINDOW="${1:-}"
 if [ -z "$TARGET_WINDOW" ]; then
-  echo "WARNING: No team found for watchdog pane 0.${PANE_INDEX}" >&2
-  TARGET_WINDOW="$PANE_INDEX"
+  for tf in "${RUNTIME_DIR}"/team_*.env; do
+    [ -f "$tf" ] || continue
+    wp=$(grep '^WATCHDOG_PANE=' "$tf" | cut -d= -f2-)
+    wp="${wp%\"}" && wp="${wp#\"}"
+    if [ "$wp" = "0.${PANE_INDEX}" ]; then
+      fn="${tf##*/}"
+      fn="${fn#team_}"
+      TARGET_WINDOW="${fn%.env}"
+      break
+    fi
+  done
+  if [ -z "$TARGET_WINDOW" ]; then
+    echo "WARNING: No team found for pane 0.${PANE_INDEX}" >&2
+    TARGET_WINDOW="$PANE_INDEX"
+  fi
 fi
 
 TEAM_ENV="${RUNTIME_DIR}/team_${TARGET_WINDOW}.env"
@@ -173,7 +177,7 @@ _atomic_write "$_WDG_CYCLE_FILE" "$_WDG_CYCLE"
 # Watchdog-local _log — writes to watchdog's own log file
 _log() {
   local msg="$1"
-  local pane_id="${DOEY_PANE_ID:-watchdog}"
+  local pane_id="${DOEY_PANE_ID:-scan}"
   [ -n "${RUNTIME_DIR:-}" ] && mkdir -p "${RUNTIME_DIR}/logs" && \
     echo "[$(date '+%Y-%m-%dT%H:%M:%S')] ${msg}" >> "${RUNTIME_DIR}/logs/${pane_id}.log"
 }
@@ -306,9 +310,9 @@ if [ "$_team_type" != "freelancer" ]; then
   fi
 fi
 
-# --- Session Manager health check (window-0 watchdog only) ---
-if [ "$TARGET_WINDOW" = "0" ]; then
-  _sm_pane_ref="${SESSION_NAME}:0.1"
+# --- Session Manager health check (skip when SM is the caller) ---
+if [ "$TARGET_WINDOW" = "0" ] && [ "${DOEY_ROLE:-}" != "session_manager" ]; then
+  _sm_pane_ref="${SESSION_NAME}:0.2"
   _sm_cmd=$(tmux display-message -t "$_sm_pane_ref" -p '#{pane_current_command}' 2>/dev/null) || _sm_cmd=""
   # Only check if SM pane exists and has a running Claude process
   if [ -n "$_sm_cmd" ]; then
@@ -325,7 +329,7 @@ if [ "$TARGET_WINDOW" = "0" ]; then
         case "$_sm_capture" in
           *'❯'*)
             # Verify it's not actively working — bare prompt means idle
-            _sm_hook_file="${RUNTIME_DIR}/status/${SESSION_SAFE}_0_1.status"
+            _sm_hook_file="${RUNTIME_DIR}/status/${SESSION_SAFE}_0_2.status"
             _read_hook_status "$_sm_hook_file"
             case "$_hook_status" in
               BUSY) ;;  # Hook says busy, trust it
@@ -349,7 +353,7 @@ if [ "$TARGET_WINDOW" = "0" ]; then
         # Avoids send-keys which causes SM BUSY→IDLE cycle that resets the counter.
         _sm_trigger_dir="${RUNTIME_DIR}/triggers"
         mkdir -p "$_sm_trigger_dir" 2>/dev/null || true
-        _sm_pane_safe="${SESSION_SAFE}_0_1"
+        _sm_pane_safe="${SESSION_SAFE}_0_2"
         touch "${_sm_trigger_dir}/${_sm_pane_safe}.trigger"
         _sm_retry_count=$((_sm_retry_count + 1))
         _atomic_write "$_sm_retry_file" "$_sm_retry_count"
@@ -485,7 +489,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
           mkdir -p "$_ae_msg_dir" 2>/dev/null || true
           _ae_mgr_safe="${SESSION_SAFE}_${TARGET_WINDOW}_0"
           _ae_msg_file="${_ae_msg_dir}/${_ae_mgr_safe}_$(date +%s)_$$.msg"
-          printf 'FROM: watchdog\nSUBJECT: prompt_stuck_escalation\nWorker pane %s.%s is stuck at a prompt. Auto-Enter failed after 3 attempts. Manual intervention needed — check the pane and resolve the stuck prompt.\n' \
+          printf 'FROM: scan\nSUBJECT: prompt_stuck_escalation\nWorker pane %s.%s is stuck at a prompt. Auto-Enter failed after 3 attempts. Manual intervention needed — check the pane and resolve the stuck prompt.\n' \
             "$TARGET_WINDOW" "$i" > "${_ae_msg_file}.tmp" 2>/dev/null && mv "${_ae_msg_file}.tmp" "$_ae_msg_file" 2>/dev/null
         fi
       fi

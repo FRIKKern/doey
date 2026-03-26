@@ -46,22 +46,12 @@ TEAM_WINDOW="$WINDOW_INDEX"
 
 if [ "$WINDOW_INDEX" = "0" ]; then
   sm_val=$(_env_val "$SESSION_ENV" SM_PANE)
-  if [ "0.${PANE_INDEX}" = "${sm_val:-0.1}" ]; then
+  if [ "$PANE_INDEX" = "1" ]; then
+    ROLE="boss"
+  elif [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ]; then
     ROLE="session_manager"
   elif [ "$PANE_INDEX" = "0" ]; then
     ROLE="info_panel"
-  else
-    for tf in "${RUNTIME_DIR}"/team_*.env; do
-      [ -f "$tf" ] || continue
-      wd_pane=$(_env_val "$tf" WATCHDOG_PANE)
-      if [ "$wd_pane" = "0.${PANE_INDEX}" ]; then
-        ROLE="watchdog"
-        fn="${tf##*/}"
-        TEAM_WINDOW="${fn#team_}"
-        TEAM_WINDOW="${TEAM_WINDOW%.env}"
-        break
-      fi
-    done
   fi
 else
   _team_type=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
@@ -87,10 +77,10 @@ _is_freelancer_team="false"
 [ "${_team_type:-}" = "freelancer" ] && _is_freelancer_team="true"
 
 case "$ROLE" in
+  boss)            PANE_ID="boss" ;;
   session_manager) PANE_ID="sm" ;;
   info_panel)      PANE_ID="info" ;;
   manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
-  watchdog)        PANE_ID="t${TEAM_WINDOW}-wd" ;;
   git_agent) PANE_ID="t${WINDOW_INDEX}-git" ;;
   worker)
     if [ "$_is_freelancer_team" = "true" ]; then
@@ -181,7 +171,7 @@ fi
 # Pane title
 _TITLE=""
 case "$ROLE" in
-  watchdog)        _TITLE="${PROJECT_NAME} T${TEAM_WINDOW} WD" ;;
+  boss)            _TITLE="${PROJECT_NAME} Boss" ;;
   manager)         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} Mgr" ;;
   session_manager) _TITLE="${PROJECT_NAME} SM" ;;
   git_agent)       _TITLE="Git Agent" ;;

@@ -53,7 +53,7 @@ _init_debug() {
   _DOEY_DEBUG_LIFECYCLE=""
   _DOEY_DEBUG_STATE=""
   _DOEY_DEBUG_MESSAGES=""
-  _DOEY_DEBUG_WATCHDOG=""
+
   _DOEY_DEBUG_DISPLAY=""
   [ -f "${RUNTIME_DIR}/debug.conf" ] || return 0
   while IFS='=' read -r _dk _dv; do
@@ -63,7 +63,7 @@ _init_debug() {
       DOEY_DEBUG_LIFECYCLE) _DOEY_DEBUG_LIFECYCLE="$_dv" ;;
       DOEY_DEBUG_STATE)     _DOEY_DEBUG_STATE="$_dv" ;;
       DOEY_DEBUG_MESSAGES)  _DOEY_DEBUG_MESSAGES="$_dv" ;;
-      DOEY_DEBUG_WATCHDOG)  _DOEY_DEBUG_WATCHDOG="$_dv" ;;
+
       DOEY_DEBUG_DISPLAY)   _DOEY_DEBUG_DISPLAY="$_dv" ;;
     esac
   done < "${RUNTIME_DIR}/debug.conf"
@@ -214,18 +214,8 @@ _read_teamdef_key() {
   grep "^${key}=" "$envfile" 2>/dev/null | cut -d= -f2-
 }
 
-is_watchdog() {
-  [ -n "${_DOEY_IS_WD+x}" ] && return "$_DOEY_IS_WD"
-  _DOEY_IS_WD=1
-  [ "$WINDOW_INDEX" != "0" ] && return 1
-  for _wd_tf in "${RUNTIME_DIR}"/team_*.env; do
-    [ -f "$_wd_tf" ] || continue
-    if [ "$(_read_team_key "$_wd_tf" WATCHDOG_PANE)" = "0.${PANE_INDEX}" ]; then
-      _DOEY_IS_WD=0; break
-    fi
-  done
-  return "$_DOEY_IS_WD"
-}
+# Watchdog role eliminated — SM absorbs monitoring
+is_watchdog() { return 1; }
 
 is_manager() {
   [ -n "${_DOEY_IS_MGR+x}" ] && return "$_DOEY_IS_MGR"
@@ -242,6 +232,10 @@ is_session_manager() {
   [ "${PANE#*:}" = "$(get_sm_pane)" ]
 }
 
+is_boss() {
+  [ "$WINDOW_INDEX" = "0" ] && [ "$PANE_INDEX" = "1" ]
+}
+
 is_worker() {
   [ "$WINDOW_INDEX" = "0" ] && return 1
   ! is_manager
@@ -253,7 +247,7 @@ get_sm_pane() {
     val=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
     [ -n "$val" ] && { echo "$val"; return; }
   fi
-  echo "0.1"
+  echo "0.2"
 }
 
 send_to_pane() {
@@ -293,22 +287,23 @@ NL='
 
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
-# Notify this pane's team watchdog of a lifecycle event.
-# Writes event to lifecycle dir and triggers watchdog wake.
-# Usage: notify_watchdog <status> [detail]
-notify_watchdog() {
+# Notify Session Manager of a lifecycle event.
+# Writes event to lifecycle dir and triggers SM wake.
+# Usage: notify_sm <status> [detail]
+notify_sm() {
   local status="${1:-}" detail="${2:-}"
   local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
   [ -z "$team_w" ] && return 0
   local pane_id="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
   mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0
-  # Filename uses W<team>_ prefix so watchdog-scan can filter by team
   local evt_file="${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt"
   printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" > "$evt_file" 2>/dev/null
-  # Wake the team watchdog
-  touch "${RUNTIME_DIR}/status/watchdog_trigger_W${team_w}" 2>/dev/null
+  # Wake Session Manager
+  touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null
   return 0
 }
+# Backward compatibility alias
+notify_watchdog() { notify_sm "$@"; }
 
 # Low-level desktop notification — no role check, no cooldown.
 # Usage: _send_desktop_notification "Title" "Body"
@@ -331,7 +326,7 @@ APPLESCRIPT
 
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"
-  is_session_manager || return 0
+  is_boss || return 0
 
   # 60-second cooldown per title
   if [ -n "${RUNTIME_DIR:-}" ]; then

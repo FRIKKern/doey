@@ -57,5 +57,5 @@ echo "Stopped pane ${W}.${TARGET} — status set to FINISHED"
 ```
 
 ### Rules
-- Never stop Manager (pane 0) or Watchdog
+- Never stop Manager (pane 0), Boss (0.1), or Session Manager (0.2)
 - Pane shell stays alive for restart via `/doey-dispatch` or `/doey-clear`

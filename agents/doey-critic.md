@@ -60,7 +60,7 @@ Every change to Doey must not break these scenarios:
 | 2 | `doey` launch in new project | Session creation, pane layout, env injection, dashboard renders |
 | 3 | Dispatch a task to a worker | send-keys delivery, status transitions (READY→BUSY→FINISHED), result capture |
 | 4 | Worker edits a `.sh` file | `post-tool-lint.sh` fires, catches bash 3.2 violations |
-| 5 | Watchdog detects stuck pane | `watchdog-scan.sh` anomaly detection, notification to Manager |
+| 5 | SM scan detects stuck pane | `watchdog-scan.sh` anomaly detection (called by SM), notification to Manager |
 | 6 | `doey stop` and cleanup | Session teardown, runtime dir cleaned, no orphan processes |
 | 7 | `doey doctor` passes | All health checks green |
 
@@ -82,7 +82,7 @@ Every change to Doey must not break these scenarios:
 ### Top 5 Bug Patterns to Check
 1. **Pane addressing** (18+ historical bugs) — hardcoded indices, wrong targets after splits.
 2. **Install gaps** (12+ bugs, same bug fixed 3x) — works in dev, fails on fresh install.
-3. **Watchdog loops** (10+ bugs) — infinite escalation, y-spam, unadapted retries.
+3. **SM scan loops** (10+ bugs) — infinite escalation, y-spam, unadapted retries.
 4. **Bash 3.2** (8+ bugs) — `declare -A`, `mapfile`, `|&`, glob-redirect in zsh.
 5. **Race conditions** (8+ bugs) — startup ordering, auth exhaustion, stale state.
 
@@ -90,7 +90,7 @@ Every change to Doey must not break these scenarios:
 - `tmux send-keys "q"` in copy-mode is load-bearing (prevents pane freeze)
 - `declare -A` works in dev (Homebrew bash 5) but breaks on macOS default bash
 - Hook returning `1` vs `2` changes whether Claude sees an error or actionable feedback
-- Reading a status file without checking timestamp → watchdog false-positive
+- Reading a status file without checking timestamp → scan false-positive
 - `for f in *.task 2>/dev/null` is valid bash but zsh parse error via Bash tool
 - `--settings` overlays are ephemeral and regenerated — editing them directly is a no-op
 

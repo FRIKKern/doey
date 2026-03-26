@@ -14,7 +14,7 @@ description: Kill and relaunch Claude instances. Use when you need to "restart w
 `/doey-clear` — interactive
 `/doey-clear all` — all teams
 `/doey-clear team N` — specific team
-`/doey-clear workers` — workers only (keep manager + watchdog)
+`/doey-clear workers` — workers only (keep manager)
 `/doey-clear all --force` — include reserved workers
 
 ## Step 1: Parse Arguments
@@ -31,8 +31,8 @@ for W in $TARGET_WINDOWS; do
   TEAM_ENV="${RUNTIME_DIR}/team_${W}.env"
   [ ! -f "$TEAM_ENV" ] && echo "WARNING: Team $W env not found — skipping" && continue
   _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
-  WATCHDOG_PANE=$(_tv WATCHDOG_PANE); WORKER_PANES=$(_tv WORKER_PANES); WORKER_COUNT=$(_tv WORKER_COUNT)
-  echo "Team $W: manager=0, watchdog=${WATCHDOG_PANE}, workers=${WORKER_PANES} (${WORKER_COUNT})"
+  WORKER_PANES=$(_tv WORKER_PANES); WORKER_COUNT=$(_tv WORKER_COUNT)
+  echo "Team $W: manager=0, workers=${WORKER_PANES} (${WORKER_COUNT})"
 done
 ```
 
@@ -56,7 +56,7 @@ kill_pane_process() {
 
 ## Step 4: Clear Manager (skip if WORKERS_ONLY)
 
-Order: Manager → Watchdog → Workers.
+Order: Manager → Workers.
 
 ```bash
 MGR_PANE="${SESSION_NAME}:${W}.0"
@@ -65,26 +65,7 @@ tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --model opu
 echo "  ${W}.0 Manager ✓"; sleep 0.5
 ```
 
-## Step 5: Clear Watchdog (skip if WORKERS_ONLY)
-
-```bash
-WATCHDOG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2 | tr -d '"')
-WDG_PANE="${SESSION_NAME}:${WATCHDOG_PANE}"
-kill_pane_process "$WDG_PANE"
-tmux send-keys -t "$WDG_PANE" "claude --dangerously-skip-permissions --model haiku --name \"T${W} Watchdog\" --agent \"t${W}-watchdog\"" Enter
-echo "  ${WATCHDOG_PANE} Watchdog ✓"; sleep 0.5
-WP_LIST=$(echo "$WORKER_PANES" | tr ',' ' ' | sed "s/[0-9][0-9]*/${W}.&/g" | tr ' ' ',')
-(
-  sleep 15
-  tmux send-keys -t "$WDG_PANE" \
-    "Start monitoring session ${SESSION_NAME} window ${W}. Skip pane ${WATCHDOG_PANE} (yourself). Manager: ${W}.0. Monitor: ${WP_LIST}." Enter
-  sleep 20
-  tmux send-keys -t "$WDG_PANE" \
-    '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
-) &
-```
-
-## Step 6: Clear Workers (W.1+)
+## Step 5: Clear Workers (W.1+)
 
 Skip reserved unless --force. Kill, relaunch with name + system prompt, write READY status.
 
@@ -105,13 +86,13 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
 done
 ```
 
-## Step 7: Report
+## Step 6: Report
 
-Print per-team summary: Manager/Watchdog status, workers cleared/reserved counts.
+Print per-team summary: Manager status, workers cleared/reserved counts.
 
 ## Rules
 
-- Skip reserved unless `--force`; skip Manager/Watchdog if WORKERS_ONLY
-- Never clear Session Manager (0.1) or Info Panel (0.0)
+- Skip reserved unless `--force`; skip Manager if WORKERS_ONLY
+- Never clear Boss (0.1), Session Manager (0.2), or Info Panel (0.0)
 - Kill by PID (SIGTERM → SIGKILL); `sleep 0.5` between panes
-- Schedule Watchdog briefing after relaunch. Bash 3.2 compatible.
+- Bash 3.2 compatible.

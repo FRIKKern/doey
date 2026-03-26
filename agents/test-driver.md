@@ -40,7 +40,7 @@ cat "$OBSFILE"
 
 **Anomaly detection:**
 HIGH: `PROMPT_STUCK` (permission prompt), `MANAGER_CRASHED`/`WORKER_CRASHED` (bare shell), `MANAGER_CODING` (Edit/Write on project files), `MANAGER_HUNG` (unchanged 2+ min), `RESERVED_DISPATCH`.
-MEDIUM: `WRONG_MODE`, `QUEUED_INPUT`, `WORKER_STUCK` (same error 3+ captures), `WORKER_PANIC` (repeated tool errors), `WATCHDOG_DEAD` (no scan 60+s).
+MEDIUM: `WRONG_MODE`, `QUEUED_INPUT`, `WORKER_STUCK` (same error 3+ captures), `WORKER_PANIC` (repeated tool errors), `SM_SCAN_STALE` (no scan 60+s).
 
 **Transitions:**
 - Manager IDLE + `>` prompt + question visible → **RESPONDING**
