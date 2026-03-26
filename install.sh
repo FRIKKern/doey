@@ -261,8 +261,14 @@ if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-con
   detail "installed default config"
 fi
 
-printf "  ${BRAND}[6/7]${RESET} Building doey-tui..."
-if [ -d "$SCRIPT_DIR/tui" ]; then
+printf "  ${BRAND}[6/7]${RESET} Installing doey-tui..."
+if [ -f "$SCRIPT_DIR/bin/doey-tui" ]; then
+  # Pre-built binary committed to repo
+  cp "$SCRIPT_DIR/bin/doey-tui" "$HOME/.local/bin/doey-tui"
+  chmod +x "$HOME/.local/bin/doey-tui"
+  step_ok
+  detail "~/.local/bin/doey-tui (pre-built)"
+elif [ -d "$SCRIPT_DIR/tui" ]; then
   GO_BIN=""
   if command -v go &>/dev/null; then
     GO_BIN="go"
@@ -278,7 +284,7 @@ if [ -d "$SCRIPT_DIR/tui" ]; then
     set -e
     if [ $TUI_RC -eq 0 ]; then
       step_ok
-      detail "~/.local/bin/doey-tui"
+      detail "~/.local/bin/doey-tui (built from source)"
     else
       step_fail
       warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
@@ -290,6 +296,13 @@ if [ -d "$SCRIPT_DIR/tui" ]; then
 else
   printf "   ${DIM}skipped${RESET}\n"
   detail "tui/ directory not found"
+fi
+
+# Install pre-commit hook for Go binary rebuilds
+if [ -d "$SCRIPT_DIR/.git/hooks" ] && [ -f "$SCRIPT_DIR/shell/pre-commit-go.sh" ]; then
+  cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
+  chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
+  detail "installed pre-commit hook for Go builds"
 fi
 
 PATH_OK=true
