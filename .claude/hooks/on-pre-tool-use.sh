@@ -133,7 +133,7 @@ if [ "$TOOL_NAME" != "Bash" ]; then
         _dbg_write "block_ask_user_${_DOEY_ROLE}"
         echo "BLOCKED: Only Boss can ask the user questions directly." >&2
         echo "Send a message to Boss with your question instead:" >&2
-        echo '  BOSS_SAFE="${SESSION_NAME//[:.]/_}_0_1"' >&2
+        echo '  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"' >&2
         echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_$(date +%s)_$$.msg"' >&2
         exit 2 ;;
     esac

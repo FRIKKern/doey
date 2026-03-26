@@ -90,7 +90,7 @@ ${CRASH_FILES:-None}
 MGRSTATE
 
   # Pending messages — must be processed after compaction
-  _MGR_SAFE="${SESSION_NAME//[:.]/_}_${_TEAM_W}_0"
+  _MGR_SAFE="${SESSION_NAME//[-:.]/_}_${_TEAM_W}_0"
   PENDING_MSGS=""
   for _mf in "$RUNTIME_DIR/messages"/${_MGR_SAFE}_*.msg; do
     [ -f "$_mf" ] || continue
@@ -125,7 +125,7 @@ fi
 if is_session_manager; then
   SM_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
-  SM_SAFE="${SESSION_NAME//[:.]/_}_0_${PANE_INDEX}"
+  SM_SAFE="${SESSION_NAME//[-:.]/_}_0_${PANE_INDEX}"
   SM_PENDING_MSGS=""
   for _mf in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do
     [ -f "$_mf" ] || continue
@@ -163,7 +163,7 @@ SMMSG
 fi
 
 if is_boss; then
-  BOSS_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
   BOSS_PENDING_MSGS=""
   for _mf in "$RUNTIME_DIR/messages"/${BOSS_SAFE}_*.msg; do
     [ -f "$_mf" ] || continue

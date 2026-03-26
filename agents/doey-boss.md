@@ -37,7 +37,7 @@ Violation of this rule wastes your irreplaceable context on work any worker can 
 SM lives at **pane 0.2**. Send commands via message files + trigger:
 
 ```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_2"
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
 MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
 printf 'FROM: Boss\nSUBJECT: task\n%s\n' "YOUR_COMMAND" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
 touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
@@ -59,7 +59,7 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 On each turn, check for messages from SM:
 
 ```bash
-BOSS_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
 bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$BOSS_SAFE"
 ```
 

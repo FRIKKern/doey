@@ -15,7 +15,7 @@ init_hook() {
 
   # -t "$TMUX_PANE" resolves THIS pane (without -t, workers misidentify as Manager)
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
-  PANE_SAFE=${PANE//[:.]/_}
+  PANE_SAFE=${PANE//[-:.]/_}
   SESSION_NAME="${PANE%%:*}"
   PANE_INDEX="${PANE##*.}"
   local wp="${PANE#*:}"

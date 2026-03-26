@@ -74,9 +74,9 @@ Transient — never stop your loop. Retry after 15-30s. After 3 consecutive fail
 
 ## Notifications
 
-All `.msg` files to SM (`SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"`):
+All `.msg` files to SM (`SM_SAFE="${SESSION_NAME//[-:.]/_}_0_1"`):
 ```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
 MSG_FILE="${RUNTIME_DIR}/messages/${SM_SAFE}_SLUG_W${TEAM_WINDOW}_$(date +%s).msg"
 cat > "$MSG_FILE" << EOF
 FROM: watchdog-W${TEAM_WINDOW}
@@ -89,7 +89,7 @@ EOF
 - `MANAGER_CRASHED` (slug: `mgr_crash`) — `.msg` to SM. Never send-keys to crashed Manager. Write once per crash. Show 🔥.
 - `WAVE_COMPLETE` (slug: `wave_done`) — `.msg` to SM. Also send-keys to idle Manager: "All workers idle — wave complete."
 - `MANAGER_COMPLETED` (slug: `mgr_done`) — `.msg` to SM.
-- Worker events — Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[:.]/_}_${TEAM_WINDOW}_0`.
+- Worker events — Manager idle (`❯`): send-keys. Manager busy: `.msg` with prefix `${SESSION_NAME//[-:.]/_}_${TEAM_WINDOW}_0`.
 
 **Freelancer team:** All worker events go directly as `.msg` to SM. Slugs: `fl_done`, `fl_crash`, `fl_stuck`.
 

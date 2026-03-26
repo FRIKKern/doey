@@ -6,7 +6,7 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || 
 [ -z "$RUNTIME_DIR" ] && { echo " --/-- "; exit 0; }
 
 FOCUSED_PANE=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null)
-FOCUSED_SAFE=${FOCUSED_PANE//[:.]/_}
+FOCUSED_SAFE=${FOCUSED_PANE//[-:.]/_}
 
 shopt -s nullglob
 status_files=("$RUNTIME_DIR/status/"*.status)

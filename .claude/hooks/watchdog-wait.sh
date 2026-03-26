@@ -43,7 +43,7 @@ fi
 _WW_PANE="${DOEY_PANE_INDEX:-}"
 if [ -n "$_WW_SESSION" ] && [ -n "$_WW_PANE" ]; then
   _WW_MSG_DIR="${RUNTIME_DIR}/messages"
-  _WW_SAFE="${_WW_SESSION//[:.]/_}_${_WW_PANE//[:.]/_}"
+  _WW_SAFE="${_WW_SESSION//[-:.]/_}_${_WW_PANE//[-:.]/_}"
   set -- "$_WW_MSG_DIR"/${_WW_SAFE}_*.msg
   if [ -f "${1:-}" ]; then _ww_dbg_wake "new_messages_presleep" "0"; echo "NEW_MESSAGES"; exit 0; fi
 fi

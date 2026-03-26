@@ -157,7 +157,7 @@ install_doey_hooks() {
 
 write_pane_status() {
   local rt_dir="$1" pane_id="$2" status="$3" task="${4:-}"
-  local safe="${pane_id//[:.]/_}"
+  local safe="${pane_id//[-:.]/_}"
   cat > "${rt_dir}/status/${safe}.status" <<EOF
 PANE: ${pane_id}
 UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
@@ -3734,7 +3734,7 @@ kill_team_window() {
 
   rm -f "$team_env"
   rm -f "$HOME/.claude/agents/t${window}-watchdog.md" "$HOME/.claude/agents/t${window}-manager.md" 2>/dev/null || true
-  local safe_prefix="${session//[:.]/_}_${window}_"
+  local safe_prefix="${session//[-:.]/_}_${window}_"
   rm -f "${runtime_dir}/status/${safe_prefix}"* 2>/dev/null || true
   rm -f "${runtime_dir}/results/"*"_${window}_"* 2>/dev/null || true
   _unregister_team_window "$runtime_dir" "$window"
