@@ -1,6 +1,8 @@
 package model
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,14 +20,16 @@ type FooterModel struct {
 	width    int
 }
 
-// NewFooterModel creates a footer with short help visible.
+// NewFooterModel creates a footer with minimal short help visible.
 func NewFooterModel() FooterModel {
 	t := styles.DefaultTheme()
 	h := help.New()
-	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(t.Primary)
+	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(t.Text)
 	h.Styles.ShortDesc = lipgloss.NewStyle().Foreground(t.Muted)
-	h.Styles.FullKey = lipgloss.NewStyle().Foreground(t.Primary)
+	h.Styles.FullKey = lipgloss.NewStyle().Foreground(t.Text)
 	h.Styles.FullDesc = lipgloss.NewStyle().Foreground(t.Muted)
+	h.ShortSeparator = " · "
+	h.FullSeparator = "   "
 
 	return FooterModel{
 		help:   h,
@@ -67,5 +71,17 @@ func (m FooterModel) View() string {
 	if m.showFull {
 		return style.Render(m.help.FullHelpView(m.keyMap.FullHelp()))
 	}
-	return style.Render(m.help.ShortHelpView(m.keyMap.ShortHelp()))
+
+	// Render short help with " · " separators in faint style
+	bindings := m.keyMap.ShortHelp()
+	var parts []string
+	keyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Muted)
+	for _, b := range bindings {
+		k := keyStyle.Render(b.Help().Key)
+		d := descStyle.Render(b.Help().Desc)
+		parts = append(parts, k+" "+d)
+	}
+	sep := m.theme.Faint.Render(" · ")
+	return style.Render(strings.Join(parts, sep))
 }

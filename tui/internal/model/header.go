@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/doey-cli/doey/tui/internal/runtime"
@@ -19,33 +18,25 @@ type HeaderModel struct {
 	teamCount   int
 	workerCount int
 	busyCount   int
-	spinner     spinner.Model
 	theme       styles.Theme
 	width       int
 }
 
-// NewHeaderModel creates a header with a spinning refresh indicator.
+// NewHeaderModel creates a header with labeled stats.
 func NewHeaderModel() HeaderModel {
-	t := styles.DefaultTheme()
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(t.Primary)
 	return HeaderModel{
-		spinner: s,
-		theme:   t,
+		theme: styles.DefaultTheme(),
 	}
 }
 
-// Init starts the spinner.
+// Init is a no-op — no spinner to start.
 func (m HeaderModel) Init() tea.Cmd {
-	return m.spinner.Tick
+	return nil
 }
 
-// Update handles spinner ticks.
+// Update is a no-op — no spinner to tick.
 func (m HeaderModel) Update(msg tea.Msg) (HeaderModel, tea.Cmd) {
-	var cmd tea.Cmd
-	m.spinner, cmd = m.spinner.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 // SetSnapshot updates header data from a runtime snapshot.
@@ -74,41 +65,40 @@ func (m *HeaderModel) SetWidth(w int) {
 	m.width = w
 }
 
-// View renders the header bar.
+// View renders the header bar with labeled stats and dot separators.
 func (m HeaderModel) View() string {
 	t := m.theme
+	sep := t.DotSeparator()
 
-	project := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		Render(m.projectName)
+	projectLabel := t.StatLabel.Render("PROJECT")
+	projectVal := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(m.projectName)
 
-	session := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Render(m.sessionName)
+	sessionLabel := t.StatLabel.Render("SESSION")
+	sessionVal := lipgloss.NewStyle().Foreground(t.Text).Render(m.sessionName)
 
-	uptime := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Render("⏱ " + formatDuration(m.uptime))
+	uptimeLabel := t.StatLabel.Render("UPTIME")
+	uptimeVal := lipgloss.NewStyle().Foreground(t.Text).Render(formatDuration(m.uptime))
 
-	teams := lipgloss.NewStyle().
-		Foreground(t.Accent).
-		Render(fmt.Sprintf("%d teams", m.teamCount))
+	teamsLabel := t.StatLabel.Render("TEAMS")
+	teamsVal := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("%d", m.teamCount))
 
-	workers := lipgloss.NewStyle().
-		Foreground(t.Success).
-		Render(fmt.Sprintf("%dW (%d busy)", m.workerCount, m.busyCount))
+	workersLabel := t.StatLabel.Render("WORKERS")
+	workersVal := lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d", m.workerCount))
+	busyVal := ""
+	if m.busyCount > 0 {
+		busyVal = lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf(" (%d busy)", m.busyCount))
+	}
 
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(" · ")
-
-	line := m.spinner.View() + " " + project + sep + session + sep + uptime + sep + teams + sep + workers
+	line := "  " +
+		projectLabel + " " + projectVal + sep +
+		sessionLabel + " " + sessionVal + sep +
+		uptimeLabel + " " + uptimeVal + sep +
+		teamsLabel + " " + teamsVal + sep +
+		workersLabel + " " + workersVal + busyVal
 
 	style := lipgloss.NewStyle().
 		Width(m.width).
-		Padding(0, 1).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderForeground(t.Muted)
+		Padding(0, 0)
 
 	return style.Render(line)
 }

@@ -1,6 +1,10 @@
 package styles
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // PanelStyle returns a rounded-border panel style for inactive sections.
 func PanelStyle(t Theme) lipgloss.Style {
@@ -30,4 +34,20 @@ func HeaderStyle(t Theme) lipgloss.Style {
 		Bold(true).
 		PaddingBottom(0).
 		MarginBottom(1)
+}
+
+// ThickSeparator returns a "═" line of the given width, rendered in the Faint style.
+func ThickSeparator(t Theme, width int) string {
+	if width < 1 {
+		width = 1
+	}
+	return t.Faint.Render(strings.Repeat("═", width))
+}
+
+// ThinSeparator returns a "─" line of the given width, rendered in the Faint style.
+func ThinSeparator(t Theme, width int) string {
+	if width < 1 {
+		width = 1
+	}
+	return t.Faint.Render(strings.Repeat("─", width))
 }

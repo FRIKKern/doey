@@ -16,13 +16,31 @@ func StatusColor(status string) lipgloss.AdaptiveColor {
 	case "ERROR":
 		return defaultTheme.Danger
 	case "RESERVED":
-		return defaultTheme.Muted
+		return defaultTheme.Accent
 	default:
 		return defaultTheme.Muted
 	}
 }
 
+// StatusText returns status text colored by foreground only — calm, informational.
+func StatusText(status string) string {
+	color := StatusColor(status)
+
+	style := lipgloss.NewStyle().Foreground(color)
+	if status == "ERROR" {
+		style = style.Bold(true)
+	}
+
+	label := status
+	if status == "WORKING" {
+		label = "BUSY"
+	}
+
+	return style.Render(label)
+}
+
 // StatusBadge returns a styled, padded badge string for the given status.
+// Prefer StatusText for a calmer look; use StatusBadge only where emphasis is needed.
 func StatusBadge(status string) string {
 	color := StatusColor(status)
 	dark := defaultTheme.BgText
