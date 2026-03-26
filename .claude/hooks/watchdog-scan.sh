@@ -345,11 +345,15 @@ if [ "$TARGET_WINDOW" = "0" ]; then
       is_numeric "$_sm_retry_count" || _sm_retry_count=0
 
       if [ "$_sm_retry_count" -lt 3 ]; then
-        tmux copy-mode -q -t "$_sm_pane_ref" 2>/dev/null
-        tmux send-keys -t "$_sm_pane_ref" "Check for messages and results." Enter 2>/dev/null
+        # Wake SM via trigger file — session-manager-wait.sh watches for this.
+        # Avoids send-keys which causes SM BUSY→IDLE cycle that resets the counter.
+        _sm_trigger_dir="${RUNTIME_DIR}/triggers"
+        mkdir -p "$_sm_trigger_dir" 2>/dev/null || true
+        _sm_pane_safe="${SESSION_SAFE}_0_1"
+        touch "${_sm_trigger_dir}/${_sm_pane_safe}.trigger"
         _sm_retry_count=$((_sm_retry_count + 1))
         _atomic_write "$_sm_retry_file" "$_sm_retry_count"
-        _log "watchdog-scan: SM idle — re-triggered (attempt ${_sm_retry_count}/3)"
+        _log "watchdog-scan: SM idle — trigger file written (attempt ${_sm_retry_count}/3)"
         echo "SM_RETRIGGER (attempt ${_sm_retry_count}/3)"
         SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 SM_RETRIGGER $(date +%s) attempt=${_sm_retry_count}/3${NL}"
         # Write lifecycle event file for consumption
@@ -362,9 +366,6 @@ if [ "$TARGET_WINDOW" = "0" ]; then
         _log_error_wd "ANOMALY" "Session Manager stuck after 3 retrigger attempts" "pane=0.1"
         SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 SM_STUCK $(date +%s) retriggers_exhausted${NL}"
       fi
-    else
-      # SM is active — reset retry counter
-      rm -f "${RUNTIME_DIR}/watchdog/sm_retrigger_count" 2>/dev/null
     fi
   fi
 fi
