@@ -56,4 +56,24 @@ if is_watchdog; then
   ) &
 fi
 
+# Session Manager self-sustaining loop: after stop, re-trigger to check messages/results
+if is_session_manager; then
+  _sm_pane="0.1"
+  _sm_session="${SESSION:-}"
+  [ -z "$_sm_session" ] && _sm_session=$(tmux show-environment DOEY_SESSION 2>/dev/null | cut -d= -f2-) || true
+  _sm_target="${_sm_session}:${_sm_pane}"
+  (
+    sleep 3
+    # Guard: only send if SM is READY (not already BUSY from another trigger)
+    _sm_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+    if [ -f "$_sm_status_file" ]; then
+      _sm_cur=$(head -1 "$_sm_status_file" 2>/dev/null || true)
+      case "$_sm_cur" in
+        *BUSY*) exit 0 ;;  # Already processing, skip re-trigger
+      esac
+    fi
+    tmux send-keys -t "$_sm_target" "Check for messages and results." Enter 2>/dev/null
+  ) &
+fi
+
 exit 0

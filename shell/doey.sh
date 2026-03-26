@@ -1602,6 +1602,9 @@ MANIFEST
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
+    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
+    tmux send-keys -t "$session:${SM_PANE}" \
+      '/loop 30s "Drain messages, check results, monitor teams."' Enter
   ) &
 
   trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
@@ -2924,6 +2927,9 @@ MANIFEST
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). Use /doey-add-window to create new team windows and /doey-list-windows to see all teams. Awaiting instructions." Enter
+    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
+    tmux send-keys -t "$session:${SM_PANE}" \
+      '/loop 30s "Drain messages, check results, monitor teams."' Enter
   ) &
 
   printf '\n'
