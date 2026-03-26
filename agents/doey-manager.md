@@ -184,11 +184,21 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 
 ## Rules
 
-1. **ALWAYS use the `AskUserQuestion` tool when asking the user anything** (design confirmations, ambiguous requirements, destructive action approval). Never ask questions as inline text — inline questions cause the monitor loop to resume before the user can respond.
+1. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked for your role — only Session Manager talks to the user. If you need user input (design confirmation, ambiguous requirement, destructive action approval), send a message to Session Manager with your question:
+
+```bash
+SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
+MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
+printf 'FROM: Manager_W%s\nSUBJECT: question\nQUESTION: %s\n' \
+  "$DOEY_TEAM_WINDOW" "Your question here" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
+touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+```
+
+Session Manager will ask the user and relay the answer back via your message queue.
 
 ## Workflow
 
-1. **Plan** — Clear task: dispatch with short plan. Ambiguous: `/doey-research` first. Only confirm if destructive/architectural/irreversible (use `AskUserQuestion`).
+1. **Plan** — Clear task: dispatch with short plan. Ambiguous: `/doey-research` first. Only confirm if destructive/architectural/irreversible (escalate question to Session Manager).
 2. **Delegate** — Rename every worker first. Dispatch independent tasks in parallel. Self-contained prompts (workers have zero context). Distinct files per worker; sequential if shared.
 3. **Monitor + Messages** — **Drain message queue first**, then `/doey-monitor`. Messages tell you WHO finished and with what result. Repeat every 10-15s until wave complete.
 4. **Consolidate** — Read result files for finished workers. Update context log. Dispatch next wave.

@@ -592,6 +592,14 @@ setup_dashboard() {
   done
   SM_PANE="0.1"
 
+  # Dev mode: check Go install before TUI launch (advisory only)
+  if [ -f "${SCRIPT_DIR}/doey-go-check.sh" ]; then
+    source "${SCRIPT_DIR}/doey-go-check.sh"
+    if is_doey_repo "${SCRIPT_DIR}/.."; then
+      check_go_install "${SCRIPT_DIR}/.."
+    fi
+  fi
+
   if command -v doey-tui >/dev/null 2>&1; then
     tmux send-keys -t "$session:0.0" "clear && doey-tui '${runtime_dir}'" Enter
   else
@@ -3385,20 +3393,25 @@ _launch_team_watchdog() {
   tmux send-keys -t "${session}:${wdg_slot}" "$_wdg_cmd" Enter
   tmux select-pane -t "${session}:${wdg_slot}" -T "${_proj} T${window_index} WD"
   sleep 0.2  # reduced from 0.5s — tmux is fast
+  # Send initial prompt to kick off first scan — stop hook re-triggers subsequent cycles
+  (
+    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
+    tmux send-keys -t "${session}:${wdg_slot}" \
+      "Session started. Begin monitoring for Team ${window_index}. Session: ${session}. You are in Dashboard pane ${wdg_slot}. Manager is in pane ${window_index}.0. Run a scan cycle: check workers, report anomalies." Enter
+  ) &
 }
 
 _brief_freelancer_team() {
   local session="$1" window_index="$2" wdg_slot="$3" wp_list="$4"
   local worker_count="$5"
   # Freelancer teams have no manager — watchdog reports directly to Session Manager
+  # Note: watchdog initial prompt is sent by _launch_team_watchdog; stop hook re-triggers cycles
+  # This function only sends the freelancer-specific context update
   [ -n "$wdg_slot" ] || return 0
   (
     sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
     tmux send-keys -t "${session}:${wdg_slot}" \
-      "Start monitoring session ${session} window ${window_index}. This is a FREELANCER team — no Manager. All panes are independent workers (${worker_count} total in panes ${wp_list}). Skip pane ${wdg_slot} (yourself). Report all events directly to the Session Manager. Workers are dispatched by the Session Manager or by Managers from other teams." Enter
-    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
-    tmux send-keys -t "${session}:${wdg_slot}" \
-      '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
+      "Context update: This is a FREELANCER team — no Manager. All panes are independent workers (${worker_count} total in panes ${wp_list}). Report all events directly to the Session Manager." Enter
   ) &
 }
 
@@ -3415,14 +3428,13 @@ _brief_team() {
     tmux send-keys -t "${session}:${window_index}.0" \
       "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${wdg_brief} Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
+  # Note: watchdog initial prompt is sent by _launch_team_watchdog; stop hook re-triggers cycles
+  # Only send additional context with worker pane details
   [ -n "$wdg_slot" ] || return 0
   (
     sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
     tmux send-keys -t "${session}:${wdg_slot}" \
-      "Start monitoring session ${session} window ${window_index}. ${grid_desc}. Skip pane ${wdg_slot} (yourself, in Dashboard). Manager is in team window pane ${window_index}.0. Monitor panes ${wp_list}." Enter
-    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
-    tmux send-keys -t "${session}:${wdg_slot}" \
-      '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
+      "Context update: ${grid_desc}. Monitor panes ${wp_list} (${worker_count} workers)." Enter
   ) &
 }
 
@@ -3780,6 +3792,15 @@ add_dynamic_team_window() {
     local _proj="${session#doey-}"
     tmux select-pane -t "${session}:${wdg_slot}" -T "${_proj} T${window_index} WD [F]"
     sleep 0.2
+    # Send initial prompt after Claude initializes — runs in background to not block
+    (
+      sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
+      tmux send-keys -t "${session}:${wdg_slot}" \
+        "Session started. Begin monitoring loop for Team ${window_index}. Session: ${session}. You are in Dashboard pane ${wdg_slot}. This is a freelancer team — no Manager." Enter
+      sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
+      tmux send-keys -t "${session}:${wdg_slot}" \
+        '/loop 30s "Run a scan cycle: bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/watchdog-scan.sh\" — then act on results. Read watchdog_pane_states.json from RUNTIME_DIR/status/ if your pane state tracking is empty."' Enter
+    ) &
   else
     _launch_team_watchdog "$session" "$wdg_slot" "$window_index"
   fi
