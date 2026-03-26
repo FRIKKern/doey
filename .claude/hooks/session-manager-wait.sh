@@ -109,8 +109,10 @@ if [ -f "${1:-}" ]; then _sm_non_idle_exit; _sm_dbg_wake "crash_alert_presleep" 
 
 # Idle backoff: determine sleep duration
 _sm_scan_interval="${DOEY_SM_SCAN_INTERVAL:-30}"
-if [ "$_sm_idle_count" -ge 10 ]; then
-  _sm_scan_interval=120
+if [ "$_sm_idle_count" -ge 25 ]; then
+  _sm_scan_interval=300
+elif [ "$_sm_idle_count" -ge 10 ]; then
+  _sm_scan_interval=180
 elif [ "$_sm_idle_count" -ge 3 ]; then
   _sm_scan_interval=60
 fi
@@ -155,5 +157,14 @@ done
 # IDLE — increment idle backoff counter, do NOT bump compact cycle
 _sm_idle_count=$((_sm_idle_count + 1))
 echo "$_sm_idle_count" > "$IDLE_COUNT_FILE"
+
+# Preemptive compact: flush accumulated IDLE ceremony from context
+# Triggers every 15 IDLEs (at 180s/cycle = ~45 min intervals)
+if [ "$((_sm_idle_count % 15))" -eq 0 ]; then
+  _sm_dbg_wake "compact_needed_idle" "$_sm_scan_interval"
+  echo "COMPACT_NEEDED"
+  exit 0
+fi
+
 _sm_dbg_wake "timeout" "$_sm_scan_interval"
 echo "IDLE"
