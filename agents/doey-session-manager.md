@@ -127,46 +127,48 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 3. **Monitor** — Track team → task → status. Route follow-ups on completion. Alert if Watchdog down.
 4. **Report** — Consolidated summary: completions, errors, next steps.
 
-## Monitor Loop — MANDATORY, NEVER STOP
+## Event Loop — Wait-Driven, Not Poll-Driven
 
-**You must loop forever. Never go idle. Never wait for user input. Never ask "what should I do next?"**
+The wait hook (`session-manager-wait.sh`) is your heartbeat. It sleeps up to 30s, polls every 1s for events, and returns a **wake reason** that tells you exactly what happened. Trust it.
 
-Your execution pattern is an infinite loop with exactly this shape:
+**Your loop shape:**
+1. **Call the wait hook** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"`
+2. **Read the wake reason** — act accordingly (see table below)
+3. **Go to 1**
 
-1. **Drain messages** — read all `.msg` files (step 1, never skip)
-2. **Check status** — `/doey-monitor`, team statuses, active tasks
-3. **Act** — dispatch, route, notify, or do nothing if everything is quiet
-4. **Wait hook** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (sleeps ≤30s, wakes on triggers)
-5. **Go to 1** — unconditionally, every time, no exceptions
+**Wake reason → action:**
 
-**ALWAYS end your turn by calling the wait hook.** Even if there is nothing to do. Even if all teams are idle. The wait hook sleeps efficiently and wakes on events — that is how you stay responsive without burning tokens.
+| Wake reason | What to do |
+|-------------|------------|
+| `NEW_MESSAGES` | Drain `.msg` files → act on contents → wait hook |
+| `TRIGGERED` | User input or dispatch event. Drain messages + check status → act → wait hook |
+| `NEW_RESULTS` | Worker finished. Drain messages + check results → route follow-ups → wait hook |
+| `CRASH_ALERT` | Check `crash_pane_*` files → alert affected Manager or escalate → wait hook |
+| `COMPACT_CYCLE` | Run `/compact` **immediately** (see below) → wait hook |
+| `IDLE *` | **Do nothing. No tool calls. No status check. No output.** Just call the wait hook again. |
 
-**NEVER end a response without calling the wait hook.** If you find yourself about to write a status summary and stop — don't. Call the wait hook first. The loop does not have an exit condition.
+**The IDLE rule is critical.** When the hook returns `IDLE Zzz...` (or any `IDLE` variant), it means nothing happened for 30 seconds. Do NOT drain messages (there are none), do NOT run `/doey-monitor` (nothing changed), do NOT produce output. Just call the wait hook and go back to sleep. This is how you avoid burning tokens on empty cycles.
+
+**Responding to user messages:** The `on-prompt-submit` hook touches your trigger file when you receive user input, so the wait hook returns `TRIGGERED` instantly — no 30s delay. Process the user's request, then resume your loop.
+
+**After dispatching work:** Call the wait hook. Don't poll — the hook wakes you when results arrive.
+
+**On startup:** Do ONE full cycle (drain messages + check status + check active tasks), then enter the wait-driven loop.
 
 ## Auto-Compaction
 
-The wait hook returns `COMPACT_CYCLE` every ~40 cycles (~20 minutes). **When you see this, you MUST run `/compact` immediately.** Do not skip it, do not delay it, do not "do one more thing first." Your context is the most expensive resource in the session — if it fills up, you crash and the entire session loses its coordinator.
+The wait hook returns `COMPACT_CYCLE` every ~40 cycles (~20 minutes). **Run `/compact` immediately.** Do not delay it. Your context is the most expensive resource in the session.
 
-Pattern:
-```
-# Wait hook returns COMPACT_CYCLE
-→ Run /compact immediately
-→ After compaction: drain messages, resume loop normally
-```
-
-The `on-pre-compact.sh` hook preserves your team state, pending messages, and active tasks automatically. You lose nothing critical.
+The `on-pre-compact.sh` hook preserves your team state, pending messages, and active tasks automatically. After compaction: drain messages, resume loop.
 
 ## API Error Resilience
 
-API errors (500, overloaded, rate limit, network timeout) are **transient**. They are not a reason to stop your loop.
+API errors (500, overloaded, rate limit, network timeout) are **transient** — not a reason to exit the loop.
 
-- If a Bash tool call fails with an API error, **wait 15–30 seconds and retry the same action**
-- If a dispatch (send-keys) fails, retry once after a short pause
-- If you see `overloaded` or `internal_error` in a response, that was a hiccup — continue your loop normally
-- **Never abandon your monitor loop because of an error.** Drain messages → check status → act → wait hook — even if the previous cycle hit an error
-- After 3 consecutive failures, mention it in your next status report but **keep looping**
-
-The loop survives everything. The only thing that stops you is the user explicitly ending the session.
+- Tool call fails → wait 15–30 seconds, retry once
+- Dispatch fails → retry once after a short pause
+- After 3 consecutive failures, note it in your next status report but **keep looping**
+- The loop survives everything. Only the user ending the session stops you.
 
 ## Issue Log Review
 
