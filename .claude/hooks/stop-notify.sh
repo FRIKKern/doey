@@ -139,6 +139,21 @@ ${summary}"
   done
 }
 
+# Belt-and-suspenders: send-keys wake to team Watchdog (supplements trigger file)
+_wake_team_watchdog() {
+  local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
+  [ -z "$team_w" ] && return 0
+  local team_env="${RUNTIME_DIR}/team_${team_w}.env"
+  [ -f "$team_env" ] || return 0
+  local wdg_pane
+  wdg_pane=$(grep '^WATCHDOG_PANE=' "$team_env" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"') || return 0
+  [ -n "$wdg_pane" ] || return 0
+  local wdg_target="${SESSION_NAME}:${wdg_pane}"
+  # Only wake if pane exists and has a running process
+  tmux display-message -t "$wdg_target" -p '#{pane_pid}' >/dev/null 2>&1 || return 0
+  tmux send-keys -t "$wdg_target" "" 2>/dev/null || true
+}
+
 # --- Worker: notify its Window Manager (or Session Manager for freelancers) ---
 if is_worker; then
   _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
@@ -187,6 +202,7 @@ if is_worker; then
 
   # Dispatch workflow hooks if this team has a team definition
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
+  _wake_team_watchdog
   exit 0
 fi
 
@@ -211,6 +227,7 @@ if is_manager; then
   # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
   touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
   _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
+  _wake_team_watchdog
   exit 0
 fi
 

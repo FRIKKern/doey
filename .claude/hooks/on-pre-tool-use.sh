@@ -204,6 +204,24 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
   [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
+  # Exception: workers may send-keys to their own team's Watchdog pane
+  case "$TOOL_COMMAND" in *"tmux send-keys"*)
+    _tw="${DOEY_TEAM_WINDOW:-}"
+    _rtd="${_RD:-${DOEY_RUNTIME:-}}"
+    if [ -n "$_tw" ] && [ -n "$_rtd" ] && [ -f "${_rtd}/team_${_tw}.env" ]; then
+      _wdg_pane=$(grep '^WATCHDOG_PANE=' "${_rtd}/team_${_tw}.env" 2>/dev/null | head -1 | sed 's/^WATCHDOG_PANE=//;s/^"//;s/"$//')
+      if [ -n "$_wdg_pane" ]; then
+        _sn="${SESSION_NAME:-}"
+        [ -z "$_sn" ] && [ -f "${_rtd}/session.env" ] && _sn=$(grep '^SESSION_NAME=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SESSION_NAME=//;s/^"//;s/"$//')
+        # Allow if target is the Watchdog pane (session:window.pane or window.pane)
+        case "$TOOL_COMMAND" in
+          *"-t"*"${_sn}:${_wdg_pane}"*|*"-t"*"${_wdg_pane}"*)
+            _dbg_write "allow_worker_sendkeys_watchdog"
+            exit 0 ;;
+        esac
+      fi
+    fi
+  ;; esac
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "Worker $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
