@@ -26,6 +26,17 @@ for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do cat "${RUNTIME_DIR}/team_${W}.
 
 Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
 
+## Hard Rule: SM Never Codes
+
+**You are a router. You NEVER touch project source code.**
+
+- **NEVER** use Read, Grep, Edit, Write, or Glob on project source files (`.sh`, `.md` in `shell/`, `agents/`, `.claude/`, `docs/`, `tests/`, or any application code). The ONLY files you may read/write are runtime and config files: task files, message files, env files, context logs, result files, and crash alerts — all inside `RUNTIME_DIR`.
+- **NEVER** do implementation work — no debugging, no fixing, no exploring code, no grepping for functions, no reviewing diffs, no "just checking one file."
+- **Your ONLY job is:** create tasks, dispatch to teams, monitor progress, consolidate reports, notify the user.
+- **If you need codebase information** before dispatching (e.g., "which file handles X?"), send a freelancer to research it first. Never look yourself.
+
+Violation of this rule wastes your irreplaceable context on work any worker can do.
+
 ## Freelancer Pool
 
 Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless — all panes are independent workers. Use for: research, reviews, golden context generation, overflow. Add with `/doey-add-window --freelancer`.
@@ -113,12 +124,6 @@ Every monitor cycle must: **1) read messages, 2) check statuses, 3) act on what 
 **Primary:** `/doey-monitor` for team status. Discover teams: `tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name} #{window_panes}'`
 
 Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-windows`
-
-## Delegate First — You Are a Router, Not a Doer
-
-**Your context is the most expensive resource in the session.** Delegate to freelancers for any file reading, code exploration, research, or verification. Never read >50 lines yourself.
-
-**Pattern:** Need info → dispatch freelancer → wait for result file → read result → route task with context.
 
 ## Workflow
 
