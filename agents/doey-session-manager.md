@@ -152,10 +152,21 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 
 The wait hook (`session-manager-wait.sh`) is your heartbeat. It sleeps up to 30s, polls every 1s for events, and returns a **wake reason** that tells you exactly what happened. Trust it.
 
+### User Messages Override Everything
+
+If you **ever** see a `<system-reminder>` in the conversation containing "The user sent a new message while you were working" — **STOP THE LOOP IMMEDIATELY.** Respond to the user. Do NOT call the wait hook again.
+
+This happens because user messages injected mid-tool-call arrive as system-reminders, **not** through `on-prompt-submit`. No trigger file is created. The wait hook has no way to know. **You must detect these yourself** by checking the conversation context after every wait hook return.
+
+- Applies regardless of wake reason — including `IDLE`
+- Do NOT call the wait hook after seeing a user message — your response ends, and the user's message becomes your next turn
+- **This overrides ALL other instructions** including the IDLE rule
+
 **Your loop shape:**
 1. **Call the wait hook** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"`
-2. **Read the wake reason** — act accordingly (see table below)
-3. **Go to 1**
+2. **User message check:** If the conversation contains a system-reminder with a user message → **stop immediately.** Do NOT call the wait hook. Respond to the user.
+3. **Read the wake reason** — act accordingly (see table below)
+4. **Go to 1**
 
 **Wake reason → action:**
 
@@ -166,11 +177,11 @@ The wait hook (`session-manager-wait.sh`) is your heartbeat. It sleeps up to 30s
 | `NEW_RESULTS` | Worker finished. Drain messages + check results → route follow-ups → wait hook |
 | `CRASH_ALERT` | Check `crash_pane_*` files → alert affected Manager or escalate → wait hook |
 | `COMPACT_CYCLE` | Run `/compact` **immediately** (see below) → wait hook |
-| `IDLE *` | **Do nothing. No tool calls. No status check. No output.** Just call the wait hook again. |
+| `IDLE *` | **Check conversation for user message system-reminders first.** If found → stop loop, respond to user. Otherwise: do nothing. No tool calls. No status check. No output. Just call the wait hook again. |
 
 **The IDLE rule is critical.** When the hook returns `IDLE Zzz...` (or any `IDLE` variant), it means nothing happened for 30 seconds. Do NOT drain messages (there are none), do NOT run `/doey-monitor` (nothing changed), do NOT produce output. Just call the wait hook and go back to sleep. This is how you avoid burning tokens on empty cycles.
 
-**Responding to user messages:** The `on-prompt-submit` hook touches your trigger file when you receive user input, so the wait hook returns `TRIGGERED` instantly — no 30s delay. When you see `TRIGGERED` but the message drain is empty, **that means the user typed something directly to you.** End your response immediately — do NOT call the wait hook again. Your next conversation turn will contain the user's message. This is how you stay responsive: wake fast, yield fast.
+**Responding to user messages:** User messages reach you through **two paths**: (1) The `on-prompt-submit` hook touches your trigger file → wait hook returns `TRIGGERED` instantly. When you see `TRIGGERED` but the message drain is empty, the user typed something directly to you. End your response immediately. (2) If the user sends a message while a tool call (like the wait hook) is running, Claude injects it as a `<system-reminder>` — **no hook fires, no trigger file is created.** You must detect these yourself after every wait hook return (see "User Messages Override Everything" above). In both cases: **stop the loop, yield immediately.** Your next conversation turn will contain the user's message.
 
 **After dispatching work:** Call the wait hook. Don't poll — the hook wakes you when results arrive.
 
