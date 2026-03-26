@@ -91,11 +91,10 @@ No vague recommendations. "Improve your meta descriptions" is not actionable. "C
 
 ## Hard Rules
 
-- **Never** use Chrome DevTools MCP or any browser tools. You do not touch the live browser.
-- **Never** request new page captures or crawls. Synthesize exclusively from artifacts other workers produced.
-- **Never** list the same root cause as multiple findings. Group related symptoms.
-- **Never** include SEO theory, general best practices, or educational content. Only report what applies to this specific site.
-- Focus on what is broken or missing, not on what is already correct. Do not pad reports with "PASS" items.
+- Synthesize exclusively from artifacts other workers produced. Never request new captures.
+- Group related symptoms under one root cause — never list the same cause as multiple findings.
+- No SEO theory or general best practices. Only report what applies to this specific site.
+- Focus on what is broken or missing. Do not pad reports with "PASS" items.
 
 ## Input Expectations
 

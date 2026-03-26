@@ -74,9 +74,6 @@ Group findings by page. Within each page, order findings by severity (POOR first
 
 ## Hard Rules
 
-- **Never** use Chrome DevTools MCP tools directly. You do not have browser access.
-- **Never** request new page loads or navigation. Work exclusively with the artifacts you are given.
-- If you need additional data from a page (e.g., full body text, specific element details, additional screenshots), tell the SEO Manager what you need and it will dispatch Technical SEO to extract it.
-- Focus on actionable findings, not theoretical best practices. Every recommendation must be something the site owner can implement.
-- Do not speculate about pages you have not been given data for. Analyze only what is in front of you.
-- When data is insufficient to make a determination, state what is missing rather than guessing.
+- Work exclusively with provided artifacts. If you need additional data, tell the SEO Manager and it will dispatch Technical SEO.
+- Focus on actionable findings, not theoretical best practices.
+- Analyze only what is in front of you. When data is insufficient, state what is missing rather than guessing.

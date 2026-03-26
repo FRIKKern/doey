@@ -345,6 +345,7 @@ if [ "$TARGET_WINDOW" = "0" ]; then
       is_numeric "$_sm_retry_count" || _sm_retry_count=0
 
       if [ "$_sm_retry_count" -lt 3 ]; then
+        tmux copy-mode -q -t "$_sm_pane_ref" 2>/dev/null
         tmux send-keys -t "$_sm_pane_ref" "Check for messages and results." Enter 2>/dev/null
         _sm_retry_count=$((_sm_retry_count + 1))
         _atomic_write "$_sm_retry_file" "$_sm_retry_count"
@@ -461,6 +462,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
         # Validate Claude is actually running (not a bare shell)
         _ae_cmd=$(tmux display-message -t "$PANE_REF" -p '#{pane_current_command}' 2>/dev/null) || _ae_cmd=""
         case "$_ae_cmd" in node)
+          tmux copy-mode -q -t "$PANE_REF" 2>/dev/null
           tmux send-keys -t "$PANE_REF" Enter 2>/dev/null
           _ae_count=$((_ae_count + 1))
           _atomic_write "$_ae_ts_file" "$SCAN_TIME"
@@ -583,9 +585,6 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
   rm -f "${RUNTIME_DIR}/status/unchanged_count_${TARGET_WINDOW}_${i}" 2>/dev/null
   _atomic_write "$HASH_FILE" "$HASH"
 
-  echo "PANE ${i} WORKING"
-  _pane_log "${TARGET_WINDOW}.${i}" "pane ${i} state=WORKING (hash changed)"
-
   # Extract last tool name from capture
   _last_tool=""
   _scan_line=""
@@ -600,10 +599,7 @@ LAST_OUTPUT=$(echo "$CRASH_CAPTURE" | tail -5 | tr '\n' '|')"
 $PANE_CAPTURE
 EOF
 
-  eval "_prev_raw=\${PREV_STATE_${i}:-UNKNOWN}"
-  _display_prev=$(_display_state "$_prev_raw")
-  _update_duration "$i" "$_display_prev" "WORKING"
-  _set_pane_info "$i" "WORKING" "$(_get_pane_title "$PANE_REF")" "$_last_tool" "$_display_prev"
+  _report_pane "$i" "WORKING" "$_last_tool"
 done
 
 # --- Status summary ---
@@ -814,19 +810,13 @@ if [ "$_ctx_pct" -ge 60 ]; then
   _log_error_wd "ANOMALY" "Context pressure - compact needed" "context_pct=${_ctx_pct}%"
 fi
 
-# Debug: write scan cycle summary
+# Debug: write scan cycle summary (reuses $JSON from pane states block above)
 if [ "$_WDG_DBG" = "true" ]; then
   _wdg_end=$(date +%s)
   _wdg_dur=$((_wdg_end - SCAN_TIME))
-  # Build per-pane states JSON fragment
-  _wdg_pstates=""
-  _wdg_sep=""
-  for _wi in $PANES_LIST; do
-    is_numeric "$_wi" || continue
-    eval "_wdg_st=\${PANE_STATE_${_wi}:-UNKNOWN}"
-    _wdg_pstates="${_wdg_pstates}${_wdg_sep}\"${_wi}\":\"${_wdg_st}\""
-    _wdg_sep=","
-  done
+  # Reuse pane states from $JSON — strip outer braces to get the inner fragment
+  _wdg_pstates="${JSON#\{}"
+  _wdg_pstates="${_wdg_pstates%\}}"
   # Build anomaly list
   _wdg_anomalies=""
   _wdg_alines=$(printf '%s' "$SNAPSHOT_EVENTS" | grep '^ANOMALY ' 2>/dev/null) || _wdg_alines=""

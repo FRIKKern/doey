@@ -23,20 +23,9 @@ if [ -n "${RUNTIME_DIR:-}" ]; then
   echo "$now" > "$cooldown_file" 2>/dev/null || true
 fi
 
-# Send desktop notification (bypass send_notification's is_session_manager check
-# since we already verified that above, and bypass its 60s cooldown — we use our own)
 TITLE="Doey — Permission Required"
 BODY=$(printf '%s' "${MSG:0:150}" | tr '\n"' " '")
-
-if command -v osascript >/dev/null 2>&1; then
-  osascript - "$TITLE" "$BODY" <<'APPLESCRIPT' 2>/dev/null &
-on run argv
-  display notification (item 2 of argv) with title (item 1 of argv) sound name "Ping"
-end run
-APPLESCRIPT
-elif command -v notify-send >/dev/null 2>&1; then
-  notify-send "$TITLE" "$BODY" 2>/dev/null &
-fi
+_send_desktop_notification "$TITLE" "$BODY"
 
 _log "on-notification: sent desktop notification for permission request"
 exit 0
