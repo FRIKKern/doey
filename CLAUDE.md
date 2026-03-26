@@ -59,7 +59,7 @@ Things that have tricked us before:
 | Window Manager | None (full access) |
 | Git Agent | destructive rm, shutdown, tmux commands. **Allowed:** git commit/push |
 | Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, destructive rm, shutdown, tmux kill |
-| Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
+| Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 
 ## Philosophy
 
