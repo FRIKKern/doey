@@ -93,31 +93,13 @@ MGR_SAFE="${SESSION_NAME//[:.]/_}_${W}_0"
 bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$MGR_SAFE"
 ```
 
-### When to check messages
-1. **Before dispatching** a new wave — ensures you have latest worker statuses
-2. **During monitoring** — every `/doey-monitor` cycle, also drain the message queue
-3. **Before going idle** — consume all pending notifications before yielding
-4. **After compaction** — messages may have arrived while context was compressed
-5. **After dispatching** — workers can finish fast; check within 10–15s
+### Message types
+- `worker_finished (done)` → read result file, update context log, consider next wave
+- `worker_finished (error)` → investigate, retry, or reassign
+- `freelancer_finished` → research/verification complete
+- No messages + all workers idle → wave complete
 
-### What messages tell you
-- `worker_finished (done)` → read result file `$RUNTIME_DIR/results/pane_${W}_${PANE}.json`, update context log, consider next wave
-- `worker_finished (error)` → investigate, retry, or reassign the task
-- `freelancer_finished` → research or verification complete, read the report
-- No messages + all workers idle → wave complete, consolidate results
-
-### Critical pattern: Dispatch → Monitor → Read messages → Act
-```
-1. Dispatch wave N to workers
-2. Loop:
-   a. Check messages (drain queue)
-   b. /doey-monitor (check statuses)
-   c. If all workers finished → break
-   d. Wait 10-15s
-3. Read result files for all finished workers
-4. Update context log with consolidated results
-5. Dispatch wave N+1 or report to Session Manager
-```
+**Pattern:** Dispatch wave → drain messages + `/doey-monitor` every 10-15s → all finished → read results → update context log → next wave or report to SM.
 
 ## Monitoring
 
@@ -149,47 +131,15 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 - A critical error requires escalation
 - You need cross-team coordination
 
-### Git notification chain: requesting commits
+### Requesting commits
 
-When workers finish and files have changed, you are responsible for collecting the changes and requesting a commit from Session Manager. **You cannot run git commit or push yourself** — the hook blocks it.
-
-**Step 1: Collect changed files from worker results.** The stop hooks capture `files_changed` in each worker's result JSON (`$RUNTIME_DIR/results/pane_${W}_${PANE}.json`). Read these after each wave completes.
-
-**Step 2: Send a commit request to Session Manager.** Include what changed, why, and which files:
-
-```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-cat > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg" << COMMIT_MSG
-FROM: Manager_W${DOEY_TEAM_WINDOW}
-SUBJECT: commit_request
-WHAT: [one-line summary of the change]
-WHY: [motivation — what problem this solves]
-FILES:
-- file1.sh (description of change)
-- file2.md (description of change)
-PUSH: yes
-COMMIT_MSG
-touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
-```
-
-Session Manager will ask the user for approval, then delegate to the Git Agent.
+Collect `files_changed` from worker result JSONs, then send a `commit_request` `.msg` to SM with WHAT, WHY, FILES, and PUSH fields. SM asks the user for approval and delegates to the Git Agent.
 
 ## Rules
 
 1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM will delegate to the Git Agent.
 
-2. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked for your role — only Session Manager talks to the user. If you need user input (design confirmation, ambiguous requirement, destructive action approval), send a message to Session Manager with your question:
-
-```bash
-SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: Manager_W%s\nSUBJECT: question\nQUESTION: %s\n' \
-  "$DOEY_TEAM_WINDOW" "Your question here" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
-```
-
-Session Manager will ask the user and relay the answer back via your message queue.
+2. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked — only SM talks to the user. Send a `.msg` to SM with `SUBJECT: question` and your question. SM relays the answer via your message queue.
 
 ## Workflow
 

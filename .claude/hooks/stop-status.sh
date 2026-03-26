@@ -52,6 +52,7 @@ if is_watchdog; then
         *BUSY*) exit 0 ;;  # Already processing, skip re-trigger
       esac
     fi
+    tmux copy-mode -q -t "$_wd_target" 2>/dev/null
     tmux send-keys -t "$_wd_target" "Scan cycle — check workers, report anomalies." Enter 2>/dev/null
   ) &
 fi
@@ -72,6 +73,7 @@ if is_session_manager; then
         *BUSY*) exit 0 ;;  # Already processing, skip re-trigger
       esac
     fi
+    tmux copy-mode -q -t "$_sm_target" 2>/dev/null
     tmux send-keys -t "$_sm_target" "Check for messages and results." Enter 2>/dev/null
   ) &
 fi

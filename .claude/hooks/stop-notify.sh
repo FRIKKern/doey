@@ -9,6 +9,10 @@ init_hook
 _DOEY_HOOK_NAME="stop-notify"
 type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
+# Early exit for roles that never send stop notifications
+is_watchdog && exit 0
+[ "$WINDOW_INDEX" = "0" ] && [ "$PANE_INDEX" = "0" ] && exit 0  # info panel
+
 # Debug: dump stop hook INPUT to discover available fields
 if [ -f "${RUNTIME_DIR}/debug.conf" ] && [ -d "${RUNTIME_DIR}/debug" ]; then
   echo "$INPUT" > "${RUNTIME_DIR}/debug/last_stop_input_${PANE_SAFE:-unknown}.json" 2>/dev/null || true
@@ -117,9 +121,11 @@ _dispatch_workflow_hooks() {
 
     [ -n "$target" ] || continue
 
-    # Build message body
+    # Build message body with workflow metadata
     local result_file="${runtime_dir}/results/pane_${win_idx}_${pane_idx}.json"
-    local body="Workflow rule matched: ${from_role} → ${to_role}"
+    local body="WORKFLOW_TARGET: ${to_role}
+WORKFLOW_SOURCE: ${my_role}
+Workflow rule matched: ${from_role} → ${to_role}"
     if [ -f "$result_file" ]; then
       local summary
       summary=$(head -20 "$result_file" 2>/dev/null) || summary=""
@@ -127,27 +133,8 @@ _dispatch_workflow_hooks() {
 ${summary}"
     fi
 
-    # Atomic write message file
-    local target_safe
-    target_safe=$(printf '%s' "$target" | tr ':.' '_')
-    local msg_dir="${runtime_dir}/messages"
-    local trig_dir="${runtime_dir}/triggers"
-    mkdir -p "$msg_dir" "$trig_dir" 2>/dev/null || true
-
-    local timestamp
-    timestamp="$(date +%s)_$$_wf${i}"
-    local msg_file="${msg_dir}/${target_safe}_${timestamp}.msg"
-    local tmp_file="${msg_file}.tmp"
-
-    if printf 'FROM: %s\nSUBJECT: workflow:%s\nWORKFLOW_TARGET: %s\nWORKFLOW_SOURCE: %s\n%s\n' \
-         "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "$subject" "$to_role" "$my_role" "$body" \
-         > "$tmp_file" 2>/dev/null \
-       && mv "$tmp_file" "$msg_file" 2>/dev/null; then
-      # Touch trigger to wake recipient
-      touch "${trig_dir}/${target_safe}.trigger" 2>/dev/null || true
+    if _send_message_file "$target" "workflow:${subject}" "$body" 2>/dev/null; then
       type _debug_log >/dev/null 2>&1 && _debug_log workflow "dispatched" "rule=${from_role}->${to_role}" "subject=${subject}" "target=${target}"
-    else
-      rm -f "$tmp_file" 2>/dev/null || true
     fi
   done
 }

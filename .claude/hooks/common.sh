@@ -310,6 +310,25 @@ notify_watchdog() {
   return 0
 }
 
+# Low-level desktop notification — no role check, no cooldown.
+# Usage: _send_desktop_notification "Title" "Body"
+_send_desktop_notification() {
+  local title="$1" body="$2"
+  if command -v osascript >/dev/null 2>&1; then
+    osascript - "$title" "$body" <<'APPLESCRIPT' 2>/dev/null &
+on run argv
+  display notification (item 2 of argv) with title (item 1 of argv) sound name "Ping"
+end run
+APPLESCRIPT
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send "$title" "$body" 2>/dev/null &
+  elif command -v powershell.exe >/dev/null 2>&1; then
+    local ps_title="${title//\'/\'\'}" ps_body="${body//\'/\'\'}"
+    powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${ps_body}', '${ps_title}')" 2>/dev/null &
+  fi
+  return 0
+}
+
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"
   is_session_manager || return 0
@@ -325,17 +344,5 @@ send_notification() {
     echo "$now" > "$cooldown_file" 2>/dev/null || true
   fi
 
-  if command -v osascript >/dev/null 2>&1; then
-    osascript - "$title" "$body" <<'APPLESCRIPT' 2>/dev/null &
-on run argv
-  display notification (item 2 of argv) with title (item 1 of argv) sound name "Ping"
-end run
-APPLESCRIPT
-  elif command -v notify-send >/dev/null 2>&1; then
-    notify-send "$title" "$body" 2>/dev/null &
-  elif command -v powershell.exe >/dev/null 2>&1; then
-    local ps_title="${title//\'/\'\'}" ps_body="${body//\'/\'\'}"
-    powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${ps_body}', '${ps_title}')" 2>/dev/null &
-  fi
-  return 0
+  _send_desktop_notification "$title" "$body"
 }

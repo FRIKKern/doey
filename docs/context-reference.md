@@ -30,6 +30,8 @@ Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
 Precedence: CLI `--model` > frontmatter > settings.
 
+**Specialist team agents** (SEO, Visual) are also in `agents/` but only loaded when those teams are spawned: `seo-manager`, `seo-technical`, `seo-content`, `seo-sitemap`, `seo-reporter`, `visual-manager`, `visual-investigator`, `visual-reviewer`, `visual-a11y`, `visual-reporter`.
+
 
 ## Settings
 
@@ -58,6 +60,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `stop-status.sh` | Stop | FINISHED/RESERVED/READY; blocks research without reports |
 | `stop-results.sh` | Stop | Result JSON and completion events |
 | `stop-notify.sh` | Stop | Unified stop notifications: Worker→Manager, Manager→Session Mgr, Session Mgr→desktop |
+| `on-notification.sh` | Notification | Desktop notification for SM permission requests (30s cooldown) |
 | `session-manager-wait.sh` | — | Session Manager sleep/wake between cycles (trigger, message, result, crash) |
 | `watchdog-scan.sh` | — | Pane scanning (called directly, not registered) |
 | `watchdog-wait.sh` | — | Event-driven sleep between scans |
@@ -96,9 +99,9 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 
 **Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
-**Set by hooks:** `DOEY_ROLE`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`, `DOEY_TEAM_DIR`, `DOEY_RUNTIME`, `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`
+**Set by hooks:** `DOEY_ROLE`, `DOEY_PANE_ID`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`, `DOEY_TEAM_DIR`, `DOEY_RUNTIME`, `DOEY_TEAM_ROLE`, `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`
 
-**Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WATCHDOG_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`. Loaded via `_read_team_key()`, overrides session.env for per-window fields.
+**Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WATCHDOG_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`, `TEAM_TYPE` (`managed` or `freelancer`), `TEAM_DEF` (team definition name, if any). Loaded via `_read_team_key()`, overrides session.env for per-window fields.
 
 
 ## CLI Launch Flags
@@ -113,6 +116,26 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
 
 **Note:** Session Manager does not pass `--model` explicitly — it relies on the `model: opus` frontmatter in `agents/doey-session-manager.md`.
+
+
+## Shell Scripts
+
+All in `shell/`, installed to `~/.local/bin/` by `install.sh`.
+
+| File | Purpose |
+|------|---------|
+| `doey.sh` | CLI entry point — session lifecycle, grid management, all subcommands |
+| `info-panel.sh` | Live dashboard (pane 0.0) |
+| `settings-panel.sh` | Interactive settings TUI |
+| `doey-statusline.sh` | Claude Code statusline integration |
+| `doey-config-default.sh` | Default config template |
+| `doey-go-check.sh` | Go TUI availability check |
+| `pane-border-status.sh` | tmux pane border formatting |
+| `tmux-statusbar.sh` | tmux status bar content |
+| `tmux-theme.sh` | tmux color theme |
+| `tmux-settings-btn.sh` | Settings button for tmux status bar |
+| `context-audit.sh` | Context rot auditor |
+| `pre-commit-go.sh` | Go pre-commit hook |
 
 
 ## tmux Layout
@@ -161,11 +184,24 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `results/` | Structured result JSON |
 | `broadcasts/` | Broadcast messages (created on-demand by `/doey-broadcast`) |
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
+| `triggers/` | Wake triggers (`.trigger` files touched to wake wait hooks) |
+| `lifecycle/` | Lifecycle events from `notify_watchdog()` (`.evt` files) |
+| `tasks/` | Session-level task tracking (`.task` files, managed by SM) |
+| `issues/` | Issue reports from Manager/Watchdog (`.issue` files) |
+| `logs/` | Per-pane runtime logs |
+| `errors/` | Structured error log (`errors.log`) and individual `.err` files |
+| `debug/` | Debug flight-recorder JSONL (created by `/doey-debug on`) |
 | `context_log_W<N>.md` | **Golden Context Log** — Manager's accumulated knowledge (survives compaction) |
+| `status/state_since_<W>_<idx>` | Duration tracking (epoch when pane entered current state) |
+| `status/anomaly_<W>_<pane>.event` | Active anomaly marker (expires after 5 min) |
+| `status/anomaly_count_<W>_<pane>` | Consecutive anomaly count (escalates at ≥3) |
+| `status/team_snapshot_W<N>.txt` | Watchdog team snapshot (pipe-delimited, includes events) |
+| `status/session_manager_trigger` | SM-specific fast-wake trigger |
+| `status/notif_cooldown_*` | Desktop notification cooldown timestamps |
 
-**Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED.
+**Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED, LOGGED_OUT.
 
-**Watchdog anomaly types:** PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT.
+**Watchdog anomaly types:** PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT, LOGGED_OUT.
 
 **Research lifecycle:** dispatch → `.task` created → worker investigates → Stop hook blocks until `.report` written → Manager reads report.
 
@@ -179,7 +215,7 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | Manager sends empty tasks | Task text empty before Enter |
 | All panes think they're Manager | Hook missing `-t "$TMUX_PANE"` |
 | Hooks not firing | `.claude/settings.local.json` missing (`doey init`) |
-| Watchdog stops monitoring | Stop hook keep-alive failing |
+| Watchdog stops monitoring | Wait hook not returning; check `watchdog-wait.sh` trigger path |
 | Watchdog spams notifications | State tracking lost after compaction |
 | Research stops without report | Check exit 2 in `stop-status.sh`; verify `.task` exists |
 | Workers ignore hook changes | Restart workers (`/doey-clear workers`) |

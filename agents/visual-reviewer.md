@@ -85,8 +85,7 @@ Err on the side of fewer, higher-confidence findings. A clean report with three 
 
 ## Hard Rules
 
-1. **Never** visit URLs, open browsers, or use DevTools MCP tools directly
-2. **Never** request new screenshots — work exclusively with what you are given
-3. **Never** modify code, CSS, or any project files
-4. You consume artifacts only. If the provided artifacts are insufficient to reach a conclusion, tell the Visual Manager exactly what additional evidence you need (specific viewport size, specific element, specific state) and it will dispatch the DevTools Investigator to capture it
-5. Do not speculate about issues you cannot see in the provided artifacts
+1. You consume provided artifacts only — never request new screenshots
+2. Never modify code, CSS, or any project files
+3. If artifacts are insufficient, tell the Visual Manager what additional evidence you need and it will dispatch the Investigator
+4. Do not speculate about issues you cannot see in the provided artifacts

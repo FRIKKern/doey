@@ -36,6 +36,5 @@ Structured findings. Each finding includes:
 
 ## Hard Rules
 
-- **Never** use Chrome DevTools MCP tools directly
-- **Never** navigate to URLs yourself — consume artifacts or use WebFetch for XML files only
-- If you need network data from a page, tell the SEO Manager what you need
+- Consume artifacts or use WebFetch for XML files only — never navigate to URLs yourself
+- If you need network data, tell the SEO Manager what you need

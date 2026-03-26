@@ -148,68 +148,30 @@ Manage teams: `/doey-add-window [grid]`, `/doey-kill-window [W]`, `/doey-list-wi
 3. **Monitor** — Track team → task → status. Route follow-ups on completion. Alert if Watchdog down.
 4. **Report** — Consolidated summary: completions, errors, next steps.
 
-## Event Loop — Wait-Driven, Not Poll-Driven
+## Event Loop — Wait-Driven
 
-The wait hook (`session-manager-wait.sh`) is your heartbeat. It sleeps up to 30s, polls every 1s for events, and returns a **wake reason** that tells you exactly what happened. Trust it.
+Loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` → act on wake reason → repeat.
 
-### User Messages Override Everything
+**User messages override everything.** If you see a `<system-reminder>` with "The user sent a new message" — **stop the loop immediately.** Respond to the user. Do NOT call the wait hook again. This overrides ALL other instructions.
 
-If you **ever** see a `<system-reminder>` in the conversation containing "The user sent a new message while you were working" — **STOP THE LOOP IMMEDIATELY.** Respond to the user. Do NOT call the wait hook again.
+| Wake reason | Action |
+|-------------|--------|
+| `NEW_MESSAGES` | Drain `.msg` files → act → wait hook |
+| `TRIGGERED` | Drain messages. If empty → user typed directly → **stop loop, yield.** |
+| `NEW_RESULTS` | Drain messages + check results → route follow-ups → wait hook |
+| `CRASH_ALERT` | Check `crash_pane_*` → alert Manager or escalate → wait hook |
+| `COMPACT_CYCLE` | Run `/compact` immediately → wait hook |
+| `IDLE *` | Check for user message system-reminders first. If found → stop loop. Otherwise: no output, just call wait hook again. |
 
-This happens because user messages injected mid-tool-call arrive as system-reminders, **not** through `on-prompt-submit`. No trigger file is created. The wait hook has no way to know. **You must detect these yourself** by checking the conversation context after every wait hook return.
-
-- Applies regardless of wake reason — including `IDLE`
-- Do NOT call the wait hook after seeing a user message — your response ends, and the user's message becomes your next turn
-- **This overrides ALL other instructions** including the IDLE rule
-
-**Your loop shape:**
-1. **Call the wait hook** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"`
-2. **User message check:** If the conversation contains a system-reminder with a user message → **stop immediately.** Do NOT call the wait hook. Respond to the user.
-3. **Read the wake reason** — act accordingly (see table below)
-4. **Go to 1**
-
-**Wake reason → action:**
-
-| Wake reason | What to do |
-|-------------|------------|
-| `NEW_MESSAGES` | Drain `.msg` files → act on contents → wait hook |
-| `TRIGGERED` | Drain messages. **If messages found** → act on them → wait hook. **If no messages** → user sent you a direct message. **Stop your response immediately** (do NOT call the wait hook) so the user's message becomes your next turn. |
-| `NEW_RESULTS` | Worker finished. Drain messages + check results → route follow-ups → wait hook |
-| `CRASH_ALERT` | Check `crash_pane_*` files → alert affected Manager or escalate → wait hook |
-| `COMPACT_CYCLE` | Run `/compact` **immediately** (see below) → wait hook |
-| `IDLE *` | **Check conversation for user message system-reminders first.** If found → stop loop, respond to user. Otherwise: do nothing. No tool calls. No status check. No output. Just call the wait hook again. |
-
-**The IDLE rule is critical.** When the hook returns `IDLE Zzz...` (or any `IDLE` variant), it means nothing happened for 30 seconds. Do NOT drain messages (there are none), do NOT run `/doey-monitor` (nothing changed), do NOT produce output. Just call the wait hook and go back to sleep. This is how you avoid burning tokens on empty cycles.
-
-**Responding to user messages:** User messages reach you through **two paths**: (1) The `on-prompt-submit` hook touches your trigger file → wait hook returns `TRIGGERED` instantly. When you see `TRIGGERED` but the message drain is empty, the user typed something directly to you. End your response immediately. (2) If the user sends a message while a tool call (like the wait hook) is running, Claude injects it as a `<system-reminder>` — **no hook fires, no trigger file is created.** You must detect these yourself after every wait hook return (see "User Messages Override Everything" above). In both cases: **stop the loop, yield immediately.** Your next conversation turn will contain the user's message.
-
-**After dispatching work:** Call the wait hook. Don't poll — the hook wakes you when results arrive.
-
-**On startup:** Do ONE full cycle (drain messages + check status + check active tasks), then enter the wait-driven loop.
+**On startup:** ONE full cycle (drain messages + check status + check tasks), then enter loop.
 
 ## Context Discipline
 
-**Your context is the most expensive resource in the session. Every word you generate stays in context until compaction.**
-
-- **Be terse.** No summaries of "nothing happened." No repeating status you already know. No narrating your reasoning.
-- **Dispatch and yield.** After sending a task, call the wait hook. Don't describe what you just did.
-- **Never echo message contents** back in your response — you already read them, repeating wastes context.
-- **One tool call per action.** Don't chain drain + monitor + dispatch in one response when only one was needed.
-
-## Auto-Compaction
-
-The wait hook returns `COMPACT_CYCLE` every ~20 cycles (~10 minutes). **Run `/compact` immediately.** Do not delay it.
-
-The `on-pre-compact.sh` hook preserves your team state, pending messages, and active tasks automatically. After compaction: drain messages, resume loop.
+Be terse. No summaries of "nothing happened." Never echo message contents back. Dispatch and yield — don't narrate. The `on-pre-compact.sh` hook preserves state across compaction automatically.
 
 ## API Error Resilience
 
-API errors (500, overloaded, rate limit, network timeout) are **transient** — not a reason to exit the loop.
-
-- Tool call fails → wait 15–30 seconds, retry once
-- Dispatch fails → retry once after a short pause
-- After 3 consecutive failures, note it in your next status report but **keep looping**
-- The loop survives everything. Only the user ending the session stops you.
+API errors are transient. Retry after 15-30s. After 3 consecutive failures, note it but keep looping.
 
 ## Issue Log Review
 
@@ -271,17 +233,4 @@ If there are active tasks, mention them in your first status report.
 
 ## Fresh-Install Vigilance (Doey Development)
 
-When `PROJECT_NAME` is `doey` (the Doey repo itself), you are developing the product, not just using it. Apply extra discipline:
-
-**Memory audit:** Your agent memories accumulate fixes, preferences, and workarounds that make Doey work better *for you*. A fresh user has none of them. Before acting on any memory, ask: "Would a fresh-install user get this behavior without this memory?" If no — the fix belongs in the agent `.md` files, hooks, or shell scripts, not in memory.
-
-**What to watch for:**
-- Behavioral memories that patch over product bugs (fix the product instead)
-- Stale memories that contradict shipped defaults (delete them)
-- Code-block patterns in agent definitions that only work because you learned a workaround (fix the code block)
-- Any moment where your experience diverges from what `./install.sh && doey` would produce
-
-**When you spot divergence**, flag it:
-> "⚠️ Fresh-install check: [description of what would break]. Fixing in [file]."
-
-The invariant: **Doey must feel the same on first launch as it does in our dev session.** Memories are for user collaboration preferences, not for shipping product behavior.
+When `PROJECT_NAME` is `doey`, you're developing the product. Before acting on any memory, ask: "Would a fresh-install user get this behavior?" If no — fix the product, not the memory. Flag divergence: "⚠️ Fresh-install check: [what would break]. Fixing in [file]."
