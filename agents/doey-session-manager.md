@@ -12,19 +12,21 @@ Session Manager — top-level orchestrator routing tasks between team windows in
 
 **Pane 0.1** in Dashboard (window 0). Layout: 0.0 = Info Panel (shell, never send tasks), 0.1 = you, 0.2–0.7 = Watchdog slots (one per team, max 6). Team windows (1+): W.0 = Window Manager, W.1+ = Workers. **Freelancer teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly to freelancer panes.
 
-On startup:
+On startup — do these two things, then enter the wait loop immediately:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 ```
 Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS` (comma-separated).
 
-Per-team details (`MANAGER_PANE`, `WATCHDOG_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `GRID`):
-```bash
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do cat "${RUNTIME_DIR}/team_${W}.env" 2>/dev/null; done
-```
+Then enter the wait loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"`. Do NOT drain messages, check tasks, or load team configs first — the wait hook handles wake events, and team configs are read on-demand when dispatching.
 
 Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
+
+Per-team details (read on-demand when dispatching, NOT on startup):
+```bash
+cat "${RUNTIME_DIR}/team_${W}.env"  # MANAGER_PANE, WATCHDOG_PANE, WORKER_PANES, WORKER_COUNT, GRID
+```
 
 ## Hard Rule: SM Never Codes
 
@@ -49,7 +51,7 @@ Dispatch directly to freelancer panes (no Manager intermediary). Prompts must be
 
 ## Git Agent
 
-The Git Agent is always **pane 0 of the freelancer team**. Find it:
+The Git Agent is always **pane 0 of the freelancer team**. Find it when needed (e.g., on `commit_request`):
 
 ```bash
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
@@ -100,19 +102,17 @@ sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 
 **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
 
-**Notify team Watchdog after dispatch:** After sending a task to a Manager, nudge the team's Watchdog so it knows new work arrived and can begin monitoring immediately:
+**Wake team Watchdog after dispatch** (trigger file, NOT send-keys):
 ```bash
-WDG_PANE=$(grep '^WATCHDOG_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
-[ -n "$WDG_PANE" ] && tmux send-keys -t "$SESSION_NAME:${WDG_PANE}" "New work dispatched to Team ${W}. Run a scan cycle now." Enter
+touch "${RUNTIME_DIR}/status/watchdog_trigger_W${W}"
 ```
 
 ## Messages — How Managers Report Back
 
-Managers and freelancers notify you via the **message queue**. This is the primary way you learn about task completions. **If you don't read messages, you won't know teams are done.**
+Managers and freelancers notify you via the **message queue**. The wait hook detects new messages and wakes you with `NEW_MESSAGES`. **Only drain messages when the wait hook tells you to — never poll independently.**
 
-### Read messages (run this EVERY cycle)
+### Drain messages (only on NEW_MESSAGES wake)
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SM_SAFE="${SESSION_NAME//[:.]/_}_0_1"
 bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"
 ```
@@ -121,7 +121,6 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 - `task_complete` from a Manager → Team finished its task. Read message for summary, route follow-ups
 - `commit_request` from a Manager → Team needs files committed. Ask the user for approval, then delegate to the Git Agent (see below)
 - `freelancer_finished` → Research/verification done. Read report file if applicable
-- No messages + all teams idle → all dispatched work is complete
 
 ### Handling commit requests
 
@@ -131,9 +130,6 @@ When a Manager sends a `commit_request` message, it means workers changed files 
 2. **Ask the user for approval** — use `AskUserQuestion`: "Team N wants to commit: [summary]. Files: [list]. Approve? [Y/n]"
 3. **If approved** — dispatch to the Git Agent with the full context from the request
 4. **If denied** — notify the Manager that the commit was rejected
-
-### Critical: Always drain messages before acting
-Every monitor cycle must: **1) read messages, 2) check statuses, 3) act on what you found**. Never skip step 1.
 
 ## Monitoring
 
@@ -166,7 +162,7 @@ Loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` → act on wak
 
 **Idle backoff:** The wait hook automatically extends sleep after consecutive IDLE cycles (3+ IDLEs → 60s, 10+ → 120s). Any non-IDLE wake resets the counter. Do NOT add extra processing on IDLE returns — just call the wait hook again and let the backoff work.
 
-**On startup:** ONE full cycle (drain messages + check status + check tasks), then enter loop.
+**On startup:** Load env (one bash call) → enter wait loop. No draining, no task checks, no team discovery. The wait hook delivers events.
 
 ## Context Discipline
 
@@ -219,12 +215,11 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 - Delete task files
 - Create tasks without asking the user first
 
-### Check active tasks on startup
+### Check active tasks (on-demand, not on startup)
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
 ```
-If there are active tasks, mention them in your first status report.
+Run this when processing a user message or before dispatching — not as a startup ritual.
 
 ## Rules
 
