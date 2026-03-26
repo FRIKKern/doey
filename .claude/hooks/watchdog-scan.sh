@@ -306,6 +306,68 @@ if [ "$_team_type" != "freelancer" ]; then
   fi
 fi
 
+# --- Session Manager health check (window-0 watchdog only) ---
+if [ "$TARGET_WINDOW" = "0" ]; then
+  _sm_pane_ref="${SESSION_NAME}:0.1"
+  _sm_cmd=$(tmux display-message -t "$_sm_pane_ref" -p '#{pane_current_command}' 2>/dev/null) || _sm_cmd=""
+  # Only check if SM pane exists and has a running Claude process
+  if [ -n "$_sm_cmd" ]; then
+    _sm_capture=$(tmux capture-pane -t "$_sm_pane_ref" -p -S -3 2>/dev/null) || _sm_capture=""
+    _sm_is_idle="false"
+    # Check for bare prompt with no activity (Claude has stopped)
+    case "$_sm_cmd" in
+      bash|zsh|sh|fish)
+        # SM process has exited to a bare shell — definitely idle/crashed
+        _sm_is_idle="true"
+        ;;
+      *)
+        # Check if the SM pane shows only a bare prompt (❯) indicating it stopped
+        case "$_sm_capture" in
+          *'❯'*)
+            # Verify it's not actively working — bare prompt means idle
+            _sm_hook_file="${RUNTIME_DIR}/status/${SESSION_SAFE}_0_1.status"
+            _read_hook_status "$_sm_hook_file"
+            case "$_hook_status" in
+              BUSY) ;;  # Hook says busy, trust it
+              *) _sm_is_idle="true" ;;
+            esac
+            ;;
+        esac
+        ;;
+    esac
+
+    if [ "$_sm_is_idle" = "true" ]; then
+      _sm_retry_dir="${RUNTIME_DIR}/watchdog"
+      mkdir -p "$_sm_retry_dir" 2>/dev/null || true
+      _sm_retry_file="${_sm_retry_dir}/sm_retrigger_count"
+      _sm_retry_count=0
+      [ -f "$_sm_retry_file" ] && read -r _sm_retry_count < "$_sm_retry_file" 2>/dev/null
+      is_numeric "$_sm_retry_count" || _sm_retry_count=0
+
+      if [ "$_sm_retry_count" -lt 3 ]; then
+        tmux send-keys -t "$_sm_pane_ref" "Check for messages and results." Enter 2>/dev/null
+        _sm_retry_count=$((_sm_retry_count + 1))
+        _atomic_write "$_sm_retry_file" "$_sm_retry_count"
+        _log "watchdog-scan: SM idle — re-triggered (attempt ${_sm_retry_count}/3)"
+        echo "SM_RETRIGGER (attempt ${_sm_retry_count}/3)"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 SM_RETRIGGER $(date +%s) attempt=${_sm_retry_count}/3${NL}"
+        # Write lifecycle event file for consumption
+        _sm_lf_dir="${RUNTIME_DIR}/lifecycle"
+        mkdir -p "$_sm_lf_dir" 2>/dev/null || true
+        _sm_lf="${_sm_lf_dir}/W0_0.1_$(date +%s).evt"
+        echo "0.1|SM_RETRIGGER|$(date +%s)|attempt=${_sm_retry_count}/3" > "${_sm_lf}.tmp" && mv "${_sm_lf}.tmp" "$_sm_lf"
+      else
+        echo "SM_STUCK (3 retrigger attempts exhausted)"
+        _log_error_wd "ANOMALY" "Session Manager stuck after 3 retrigger attempts" "pane=0.1"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 SM_STUCK $(date +%s) retriggers_exhausted${NL}"
+      fi
+    else
+      # SM is active — reset retry counter
+      rm -f "${RUNTIME_DIR}/watchdog/sm_retrigger_count" 2>/dev/null
+    fi
+  fi
+fi
+
 # --- Scan worker panes ---
 PANES_LIST="${WORKER_PANES//,/ }"
 for i in $PANES_LIST; do
