@@ -73,8 +73,9 @@ if is_session_manager; then
         *BUSY*) exit 0 ;;  # Already processing, skip re-trigger
       esac
     fi
-    tmux copy-mode -q -t "$_sm_target" 2>/dev/null
-    tmux send-keys -t "$_sm_target" "Check for messages and results." Enter 2>/dev/null
+    # Touch trigger file to wake SM wait hook (no send-keys — avoids corrupting user input)
+    touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+    touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
   ) &
 fi
 

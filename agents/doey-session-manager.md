@@ -152,7 +152,7 @@ Loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` → act on wak
 
 | Wake reason | Action |
 |-------------|--------|
-| `IDLE` | No output, no processing. Call wait hook again. |
+| `IDLE` | Call wait hook immediately. No reasoning, no output, no status checks. |
 | `NEW_MESSAGES` | Drain all `.msg` files → act on each → wait hook. |
 | `NEW_RESULTS` | Read new result files → route follow-ups → wait hook. |
 | `TRIGGERED` | Check for messages. If found → process them. If none → treat as IDLE (call wait hook again). |
@@ -160,13 +160,13 @@ Loop: `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` → act on wak
 | `COMPACT_NEEDED` | Run `/compact` (context pressure) → wait hook. |
 | `CRASH_ALERT` | Check `crash_pane_*` → alert Manager or escalate → wait hook. |
 
-**Idle backoff:** The wait hook automatically extends sleep after consecutive IDLE cycles (3+ IDLEs → 60s, 10+ → 120s). Any non-IDLE wake resets the counter. Do NOT add extra processing on IDLE returns — just call the wait hook again and let the backoff work.
+**Idle backoff:** The wait hook handles all idle timing internally — it sleeps longer and batches multiple idle cycles before returning (3+ IDLEs → 60s, 10+ → 180s, 25+ → 600s, 50+ → 900s). An IDLE return means "nothing happened for a long time." Your only action: call the wait hook again. Do NOT check tasks, drain messages, review teams, or produce any output. Every token you generate on IDLE is wasted context.
 
 **On startup:** Load env (one bash call) → enter wait loop. No draining, no task checks, no team discovery. The wait hook delivers events.
 
 ## Context Discipline
 
-Be terse. No summaries of "nothing happened." Never echo message contents back. Dispatch and yield — don't narrate. The `on-pre-compact.sh` hook preserves state across compaction automatically.
+Be terse. On IDLE returns, produce zero output — just call the wait hook. On non-IDLE wakes, act and yield. Never summarize "nothing happened." Never echo message contents back. Dispatch and yield — don't narrate. The `on-pre-compact.sh` hook preserves state across compaction automatically.
 
 ## API Error Resilience
 
@@ -228,6 +228,7 @@ Run this when processing a user message or before dispatching — not as a start
 3. Freelancer teams: dispatch directly to panes (no Manager)
 4. Never send input to Info Panel (pane 0.0)
 5. Never mark a task `done` — only signal `pending_user_confirmation` and notify the user
+6. **Never use `/loop` for monitoring** — the wait hook is the ONLY monitoring mechanism. `/loop` collides with user messages and wastes context on redundant checks
 
 ## Fresh-Install Vigilance (Doey Development)
 

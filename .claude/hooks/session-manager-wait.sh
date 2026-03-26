@@ -107,64 +107,81 @@ if _has_new_results; then _mark_results_seen; _sm_non_idle_exit; _sm_dbg_wake "n
 set -- "$RUNTIME_DIR/status"/crash_pane_*
 if [ -f "${1:-}" ]; then _sm_non_idle_exit; _sm_dbg_wake "crash_alert_presleep" "0"; echo "CRASH_ALERT"; exit 0; fi
 
-# Idle backoff: determine sleep duration
+# Idle backoff: determine sleep duration per cycle
 _sm_scan_interval="${DOEY_SM_SCAN_INTERVAL:-30}"
-if [ "$_sm_idle_count" -ge 25 ]; then
-  _sm_scan_interval=300
+if [ "$_sm_idle_count" -ge 50 ]; then
+  _sm_scan_interval=900
+elif [ "$_sm_idle_count" -ge 25 ]; then
+  _sm_scan_interval=600
 elif [ "$_sm_idle_count" -ge 10 ]; then
   _sm_scan_interval=180
 elif [ "$_sm_idle_count" -ge 3 ]; then
   _sm_scan_interval=60
 fi
 
-i=0
-while [ "$i" -lt "$_sm_scan_interval" ]; do
-  # Wake on explicit trigger (check both legacy and per-pane paths)
-  if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
-    rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
-    _sm_non_idle_exit
-    _sm_dbg_wake "trigger" "$i"
-    echo "TRIGGERED"
-    exit 0
-  fi
-  # Wake on new messages addressed to Session Manager
-  set -- "$MSG_DIR"/${SM_SAFE}_*.msg
-  if [ -f "${1:-}" ]; then
-    _sm_non_idle_exit
-    _sm_dbg_wake "new_messages" "$i"
-    echo "NEW_MESSAGES"
-    exit 0
-  fi
-  # Wake on new results (skip already-seen)
-  if _has_new_results; then
-    _mark_results_seen; _sm_non_idle_exit
-    _sm_dbg_wake "new_results" "$i"
-    echo "NEW_RESULTS"
-    exit 0
-  fi
-  # Wake on crash alerts
-  set -- "$RUNTIME_DIR/status"/crash_pane_*
-  if [ -f "${1:-}" ]; then
-    _sm_non_idle_exit
-    _sm_dbg_wake "crash_alert" "$i"
-    echo "CRASH_ALERT"
-    exit 0
-  fi
-  sleep 1
-  i=$((i + 1))
-done
-
-# IDLE — increment idle backoff counter, do NOT bump compact cycle
-_sm_idle_count=$((_sm_idle_count + 1))
-echo "$_sm_idle_count" > "$IDLE_COUNT_FILE"
-
-# Preemptive compact: flush accumulated IDLE ceremony from context
-# Triggers every 15 IDLEs (at 180s/cycle = ~45 min intervals)
-if [ "$((_sm_idle_count % 15))" -eq 0 ]; then
-  _sm_dbg_wake "compact_needed_idle" "$_sm_scan_interval"
-  echo "COMPACT_NEEDED"
-  exit 0
+# Internal multi-cycle batching: loop through multiple sleep cycles before
+# returning IDLE to the SM. This is the key optimization — instead of returning
+# IDLE every cycle (each costing context), batch them internally.
+_internal_cycles=1
+if [ "$_sm_idle_count" -ge 50 ]; then
+  _internal_cycles=4   # 4 x 900s = return every ~60min
+elif [ "$_sm_idle_count" -ge 25 ]; then
+  _internal_cycles=3   # 3 x 600s = return every ~30min
 fi
+
+_cycle_num=0
+while [ "$_cycle_num" -lt "$_internal_cycles" ]; do
+  i=0
+  while [ "$i" -lt "$_sm_scan_interval" ]; do
+    # Wake on explicit trigger (check both legacy and per-pane paths)
+    if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
+      rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
+      _sm_non_idle_exit
+      _sm_dbg_wake "trigger" "$i"
+      echo "TRIGGERED"
+      exit 0
+    fi
+    # Wake on new messages addressed to Session Manager
+    set -- "$MSG_DIR"/${SM_SAFE}_*.msg
+    if [ -f "${1:-}" ]; then
+      _sm_non_idle_exit
+      _sm_dbg_wake "new_messages" "$i"
+      echo "NEW_MESSAGES"
+      exit 0
+    fi
+    # Wake on new results (skip already-seen)
+    if _has_new_results; then
+      _mark_results_seen; _sm_non_idle_exit
+      _sm_dbg_wake "new_results" "$i"
+      echo "NEW_RESULTS"
+      exit 0
+    fi
+    # Wake on crash alerts
+    set -- "$RUNTIME_DIR/status"/crash_pane_*
+    if [ -f "${1:-}" ]; then
+      _sm_non_idle_exit
+      _sm_dbg_wake "crash_alert" "$i"
+      echo "CRASH_ALERT"
+      exit 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+
+  # End of internal cycle — increment idle count and check compact
+  _sm_idle_count=$((_sm_idle_count + 1))
+  echo "$_sm_idle_count" > "$IDLE_COUNT_FILE"
+
+  # Preemptive compact: flush accumulated IDLE ceremony from context
+  # Check at end of EACH internal cycle so batching never skips it
+  if [ "$((_sm_idle_count % 15))" -eq 0 ]; then
+    _sm_dbg_wake "compact_needed_idle" "$_sm_scan_interval"
+    echo "COMPACT_NEEDED"
+    exit 0
+  fi
+
+  _cycle_num=$((_cycle_num + 1))
+done
 
 _sm_dbg_wake "timeout" "$_sm_scan_interval"
 echo "IDLE"
