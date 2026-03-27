@@ -419,8 +419,7 @@ while true; do
       while IFS= read -r _tl; do
         case "${_tl%%=*}" in TASK_STATUS) _ts_status="${_tl#*=}" ;; esac
       done < "$_tf"
-      [ "$_ts_status" = "done" ] && continue
-      [ "$_ts_status" = "cancelled" ] && continue
+      case "$_ts_status" in done|cancelled|pushed) continue ;; esac
       _task_visible=$((_task_visible + 1))
     done
 
@@ -437,8 +436,7 @@ while true; do
             TASK_CREATED) _tcreated="${_tl#*=}" ;;
           esac
         done < "$_tf"
-        [ "$_tstatus" = "done" ] && continue
-        [ "$_tstatus" = "cancelled" ] && continue
+        case "$_tstatus" in done|cancelled|pushed) continue ;; esac
         _tage=""
         if [ -n "$_tcreated" ]; then
           _tnow=$(date +%s)
@@ -449,9 +447,13 @@ while true; do
           else _tage="$((_telapsed/86400))d"; fi
         fi
         case "$_tstatus" in
-          pending_user_confirmation) _tcol="${C_BOLD_YELLOW}" ; _ticon="⬤" ;;
-          active)                    _tcol="${C_BOLD_GREEN}"  ; _ticon="●" ;;
-          *)                         _tcol="${C_DIM}"         ; _ticon="○" ;;
+          in_progress|active)                    _tcol="${C_BOLD_GREEN}"  ; _ticon="●" ;;
+          committed|pending_user_confirmation)   _tcol="${C_BOLD_YELLOW}" ; _ticon="⬤" ;;
+          pushed|done)                           _tcol="${C_BOLD_GREEN}"  ; _ticon="✓" ;;
+          cancelled)                             _tcol="${C_DIM}"         ; _ticon="✗" ;;
+          todo)                                  _tcol="${C_RESET}"       ; _ticon="○" ;;
+          backlog)                               _tcol="${C_DIM}"         ; _ticon="○" ;;
+          *)                                     _tcol="${C_DIM}"         ; _ticon="○" ;;
         esac
         printf '  %b%s%b %b[%s]%b  %s  %b%s%b\n' \
           "$_tcol" "$_ticon" "${C_RESET}" \

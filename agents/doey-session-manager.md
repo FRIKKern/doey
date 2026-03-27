@@ -16,7 +16,7 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 Per-team details (read on-demand when dispatching, NOT on startup):
 ```bash
-cat "${RUNTIME_DIR}/team_${W}.env"  # MANAGER_PANE, WORKER_PANES, WORKER_COUNT, GRID, TEAM_TYPE
+doey-status-util team-env "$W"  # MANAGER_PANE, WORKER_PANES, WORKER_COUNT, GRID, TEAM_TYPE
 ```
 
 ## CRITICAL: Startup and Main Loop
@@ -40,25 +40,25 @@ Every cycle does ALL of these, in order:
 **2a. Drain inbox**
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"
+doey-msg drain "$SM_SAFE"
 ```
 Process any messages found (see Message Processing below).
 
 **2b. Read pane status files**
 ```bash
-bash -c 'shopt -s nullglob; for f in "$1"/status/*.status; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+doey-status-util list
 ```
 Look for: FINISHED workers (results to collect), ERROR states, LOGGED_OUT panes, BOOTING panes that should be READY by now.
 
 **2c. Check results**
 ```bash
-bash -c 'shopt -s nullglob; for f in "$1"/results/*.json; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+doey-status-util results
 ```
 New result files from completed workers. Route follow-ups, commit if files changed, report to Boss.
 
 **2d. Check crash alerts**
 ```bash
-bash -c 'shopt -s nullglob; for f in "$1"/status/crash_pane_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+doey-status-util crashes
 ```
 Escalate any crashes to Boss.
 
@@ -98,15 +98,13 @@ SM can **NOT** ask the user directly (no AskUserQuestion). Send **status reports
 Send reports to Boss:
 ```bash
 BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: SessionManager\nSUBJECT: status_report\n%s\n' "REPORT_CONTENT" > "${MSG_DIR}/${BOSS_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
+doey-msg send "$BOSS_SAFE" "SessionManager" "status_report" "REPORT_CONTENT"
 ```
 
 Read Boss messages:
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"
+doey-msg drain "$SM_SAFE"
 ```
 
 ## Freelancer Pool
@@ -180,7 +178,7 @@ Managers, freelancers, and the Watchdog notify you via the **message queue**. Me
 ### Drain inbox (every cycle — first thing)
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"
+doey-msg drain "$SM_SAFE"
 ```
 The drain command reads, prints, and deletes all messages in one shot. If output is empty, no messages were pending.
 
@@ -245,9 +243,7 @@ When ALL worker panes for a team show FINISHED or READY (none BUSY), the wave is
 3. If still logged out, escalate to Boss:
 ```bash
 BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-printf 'FROM: SessionManager\nSUBJECT: Workers logged out — token expired\nPANES: %s\nACTION_NEEDED: User must run /login in any pane, then /doey-login to restart all instances.\n' \
-  "$LOGGED_OUT_PANES" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_logged_out_$(date +%s).msg"
-touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
+doey-msg send "$BOSS_SAFE" "SessionManager" "Workers logged out — token expired" "PANES: $LOGGED_OUT_PANES\nACTION_NEEDED: User must run /login in any pane, then /doey-login to restart all instances."
 ```
 Rules: Escape first always. Never `/login` while menu visible. Never `/login` more than once per pane per cycle.
 
@@ -295,67 +291,50 @@ Check `$RUNTIME_DIR/issues/` periodically. Include unresolved issues in reports 
 
 ## Tasks
 
-Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion — you may never mark a task `done`.
+Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion — you may never mark a task `pushed`.
+
+**Status lifecycle:** `backlog → todo → in_progress → committed → pushed`
 
 ### When to propose a task
 
 When Boss forwards a user goal that will take more than a few minutes, send a message to Boss asking if it should be tracked as a task. If Boss confirms, create it:
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
-NEXT_ID_FILE="${TD}/.next_id"; ID=1
-[ -f "$NEXT_ID_FILE" ] && ID=$(cat "$NEXT_ID_FILE")
-echo $((ID + 1)) > "$NEXT_ID_FILE"
-printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
-  "$ID" "TITLE HERE" "$(date +%s)" > "${TD}/${ID}.task"
+TASK_ID=$(doey-task-util create "TITLE HERE")
+doey-task-util set-status "$TASK_ID" in_progress
 ```
 
 ### When work appears complete
 
-Mark the task `pending_user_confirmation` and tell Boss:
+Mark the task `committed` and tell Boss:
 ```bash
+doey-task-util set-status "$TASK_ID" committed
 BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-printf 'FROM: SessionManager\nSUBJECT: task_complete\nTask %s looks complete. Ask user to confirm: doey task done %s\n' \
-  "$TASK_ID" "$TASK_ID" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_task_done_$(date +%s).msg"
-touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
+doey-msg send "$BOSS_SAFE" "SessionManager" "task_complete" "Task $TASK_ID looks complete. Ask user to confirm: doey task done $TASK_ID"
 ```
-
-```bash
-FILE="${RUNTIME_DIR}/tasks/N.task"
-TMP="${FILE}.tmp"
-while IFS= read -r line; do
-  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=pending_user_confirmation" ;;
-  *) echo "$line" ;; esac
-done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
-```
-
-### Never do this
-- Set `TASK_STATUS=done` — that is reserved for the user via `doey task done <id>`
-- Delete task files
-- Create tasks without Boss confirming the user wants it
 
 ### Task Discipline — No Task ID, No Dispatch
 
-**Every dispatch to a team MUST include a task ID.** This is non-negotiable.
+**Refuse to dispatch work without a task ID.** Every `SUBJECT: task` message from Boss MUST contain a `TASK_ID=<N>` line. If missing, escalate back to Boss:
+```bash
+BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
+doey-msg send "$BOSS_SAFE" "SessionManager" "error" "Missing TASK_ID in task message. Cannot dispatch without a task ID. Please create a task first and resend with TASK_ID=<N>."
+```
 
-1. **Refuse taskless dispatches.** If a Boss message has `SUBJECT: task` but no `TASK_ID=` line, do NOT dispatch. Escalate back to Boss:
-   ```bash
-   BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-   printf 'FROM: SessionManager\nSUBJECT: error\nCannot dispatch: no TASK_ID in message. Create a task first, then re-send with TASK_ID=N.\n' \
-     > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_notask_$(date +%s).msg"
-   touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
-   ```
+**Include task ID in all dispatches.** When sending work to a Window Manager or freelancer, prefix the prompt with the task ID so workers can reference it in results: `[Task 3] Your detailed task description...`
 
-2. **Pass task ID downstream.** When dispatching to a Window Manager or freelancer, include the task ID in the prompt so results can be traced back:
-   > `[Task N] Your task description here...`
+**Notify Boss promptly on completion.** When all dispatched work for a task ID returns FINISHED with no errors or follow-ups, mark `committed` and notify Boss immediately (see "When work appears complete" above).
 
-3. **Notify Boss on completion.** When all work for a task ID is done (all dispatched teams report back, no follow-ups remain), mark `pending_user_confirmation` and notify Boss as described in "When work appears complete" above.
+**Tasks evolve.** Boss may send updated scope for an existing task ID. Treat it as a scope update — not a duplicate. Dispatch the updated work to the same or a different team as appropriate.
 
-4. **Tasks evolve.** Boss may send updated scope for an existing task ID. When a `task` message references an existing `TASK_ID`, treat it as a continuation — dispatch the new work under the same ID. Do not create a new task.
+### Never do this
+- Set `TASK_STATUS=pushed` — that is reserved for the user via `doey task done <id>`
+- Delete task files
+- Create tasks without Boss confirming the user wants it
+- Dispatch work to any team without a task ID from Boss
 
 ### Check active tasks (on-demand, not on startup)
 ```bash
-bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+doey-task-util list --active
 ```
 
 ## Rules
@@ -364,7 +343,7 @@ bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=
 2. Managed teams: dispatch through Window Managers, not workers directly
 3. Freelancer teams: dispatch directly to panes (no Manager)
 4. Never send input to Info Panel (pane 0.0) or Boss (pane 0.1) via send-keys — use `.msg` files for Boss
-5. Never mark a task `done` — only signal `pending_user_confirmation` and notify Boss
+5. Never mark a task `pushed` — only signal `committed` and notify Boss
 6. **Never use `/loop` for monitoring** — you drive your own active loop; the wait hook is just a throttle
 7. Always `-t "$SESSION_NAME"` — never `-a`
 8. Never send input to editors, REPLs, or password prompts
