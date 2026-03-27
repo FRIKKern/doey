@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -54,6 +55,11 @@ type TeamModel struct {
 	// Editor sub-component
 	editor EditorModel
 
+	// Dispatch mode
+	dispatching    bool
+	dispatchInput  string
+	dispatchTarget int
+
 	// Layout
 	width   int
 	height  int
@@ -81,6 +87,39 @@ func (m TeamModel) Init() tea.Cmd {
 func (m TeamModel) Update(msg tea.Msg) (TeamModel, tea.Cmd) {
 	if !m.focused {
 		return m, nil
+	}
+
+	// Handle dispatch text input mode
+	if m.dispatching {
+		if kmsg, ok := msg.(tea.KeyMsg); ok {
+			switch kmsg.Type {
+			case tea.KeyEnter:
+				if m.dispatchInput != "" {
+					m.dispatching = false
+					input := m.dispatchInput
+					target := m.dispatchTarget
+					m.dispatchInput = ""
+					return m, func() tea.Msg {
+						return DispatchTeamMsg{WindowIdx: target, Task: input}
+					}
+				}
+			case tea.KeyEsc:
+				m.dispatching = false
+				m.dispatchInput = ""
+				return m, nil
+			case tea.KeyBackspace:
+				if len(m.dispatchInput) > 0 {
+					m.dispatchInput = m.dispatchInput[:len(m.dispatchInput)-1]
+				}
+			default:
+				if kmsg.Type == tea.KeyRunes {
+					m.dispatchInput += string(kmsg.Runes)
+				} else if kmsg.Type == tea.KeySpace {
+					m.dispatchInput += " "
+				}
+			}
+			return m, nil
+		}
 	}
 
 	// Handle editor messages
@@ -160,6 +199,13 @@ func (m TeamModel) handleAction(msg tea.KeyMsg) (TeamModel, tea.Cmd) {
 		return m, func() tea.Msg { return EditTeamMsg{Name: entry.Def.Name} }
 	case "n":
 		return m, func() tea.Msg { return NewTeamMsg{} }
+	case "d":
+		if entry.Running {
+			m.dispatching = true
+			m.dispatchInput = ""
+			m.dispatchTarget = entry.WindowIdx
+			return m, nil
+		}
 	case "x":
 		if entry.Running {
 			return m, func() tea.Msg {
@@ -197,6 +243,13 @@ func (m TeamModel) updateDetail(msg tea.KeyMsg) (TeamModel, tea.Cmd) {
 		return m, func() tea.Msg { return ToggleStarMsg{Name: entry.Def.Name} }
 	case "a":
 		return m, func() tea.Msg { return ToggleStartupMsg{Name: entry.Def.Name} }
+	case "d":
+		if entry.Running {
+			m.dispatching = true
+			m.dispatchInput = ""
+			m.dispatchTarget = entry.WindowIdx
+			return m, nil
+		}
 	case "x":
 		if entry.Running {
 			return m, func() tea.Msg {
@@ -234,8 +287,16 @@ func (m *TeamModel) sortEntries() {
 		if a.Running != b.Running {
 			return a.Running
 		}
-		// Alphabetical
-		return a.Def.Name < b.Def.Name
+		// Alphabetical (prefer Label for multi-instance teams)
+		nameA := a.Def.Name
+		if a.Label != "" {
+			nameA = a.Label
+		}
+		nameB := b.Def.Name
+		if b.Label != "" {
+			nameB = b.Label
+		}
+		return nameA < nameB
 	})
 }
 
@@ -349,10 +410,13 @@ func (m TeamModel) viewList() string {
 	if m.focused {
 		hint = lipgloss.NewStyle().
 			Foreground(t.Muted).Faint(true).Padding(1, 3).
-			Render("enter = details  s = star  a = startup  n = new  x = stop")
+			Render("enter = details  s = star  a = startup  d = dispatch  n = new  x = stop")
 	}
 
 	content := header + "\n" + rule + "\n" + summary + "\n\n" + body + "\n" + hint
+	if m.dispatching {
+		content += "\n" + m.renderDispatchBar()
+	}
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
 
@@ -386,8 +450,12 @@ func (m TeamModel) renderListRow(e runtime.TeamEntry, maxW int) string {
 		statusDot = lipgloss.NewStyle().Foreground(t.Muted).Render("○ ")
 	}
 
-	// Name
-	name := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(d.Name)
+	// Name (prefer Label for multi-instance teams)
+	displayName := d.Name
+	if e.Label != "" {
+		displayName = e.Label
+	}
+	name := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(displayName)
 
 	// Status label
 	statusLabel := ""
@@ -477,17 +545,27 @@ func (m TeamModel) viewDetail() string {
 	d := entry.Def
 
 	// Layout: side-by-side if wide enough, stacked otherwise
+	var content string
 	if w >= 100 {
-		return m.viewDetailSideBySide(entry, d, w)
+		content = m.viewDetailSideBySide(entry, d, w)
+	} else {
+		content = m.viewDetailStacked(entry, d, w)
 	}
-	return m.viewDetailStacked(entry, d, w)
+	if m.dispatching {
+		content += "\n" + m.renderDispatchBar()
+	}
+	return content
 }
 
 func (m TeamModel) viewDetailSideBySide(entry runtime.TeamEntry, d runtime.TeamDef, totalW int) string {
 	t := m.theme
 
+	displayName := d.Name
+	if entry.Label != "" {
+		displayName = entry.Label
+	}
 	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(strings.ToUpper(d.Name))
+		Render(strings.ToUpper(displayName))
 	rule := t.Faint.Render(strings.Repeat("─", totalW))
 
 	leftW := totalW * 60 / 100
@@ -511,8 +589,12 @@ func (m TeamModel) viewDetailSideBySide(entry runtime.TeamEntry, d runtime.TeamD
 func (m TeamModel) viewDetailStacked(entry runtime.TeamEntry, d runtime.TeamDef, w int) string {
 	t := m.theme
 
+	displayName := d.Name
+	if entry.Label != "" {
+		displayName = entry.Label
+	}
 	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(strings.ToUpper(d.Name))
+		Render(strings.ToUpper(displayName))
 	rule := t.Faint.Render(strings.Repeat("─", w))
 
 	fields := m.renderDetailFields(entry, d, w)
@@ -527,7 +609,7 @@ func (m TeamModel) renderBackHint(entry runtime.TeamEntry) string {
 	t := m.theme
 	action := "enter = launch"
 	if entry.Running {
-		action = "enter = focus"
+		action = "enter = focus  d = dispatch"
 	}
 	return lipgloss.NewStyle().
 		Foreground(t.Muted).Faint(true).PaddingLeft(3).
@@ -538,7 +620,7 @@ func (m TeamModel) renderActionHint(entry runtime.TeamEntry) string {
 	t := m.theme
 	parts := []string{"s = star", "a = startup"}
 	if entry.Running {
-		parts = append(parts, "x = stop")
+		parts = append(parts, "d = dispatch", "x = stop")
 	}
 	return lipgloss.NewStyle().
 		Foreground(t.Muted).Faint(true).Padding(1, 3).
@@ -732,6 +814,16 @@ func (m TeamModel) renderPaneStatus(windowIdx int, paneIdx string, role string, 
 	}
 
 	return fmt.Sprintf("  %s %s %s %s", dot, roleStr, statusStr, taskStr)
+}
+
+// renderDispatchBar renders the inline text input for dispatching a task.
+func (m TeamModel) renderDispatchBar() string {
+	t := m.theme
+	prompt := lipgloss.NewStyle().Bold(true).Foreground(t.Primary).
+		Render("Dispatch to W" + strconv.Itoa(m.dispatchTarget) + ": ")
+	input := lipgloss.NewStyle().Foreground(t.Text).
+		Render(m.dispatchInput + "█")
+	return lipgloss.NewStyle().Padding(1, 3).Render(prompt + input)
 }
 
 // --- Helpers ---

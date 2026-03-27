@@ -2,8 +2,12 @@ package model
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/doey-cli/doey/tui/internal/runtime"
@@ -101,6 +105,43 @@ func ToggleStartupCmd(name string) tea.Cmd {
 			return ToggleStartupResultMsg{Name: name, Err: err}
 		}
 		return ToggleStartupResultMsg{Name: name, Startup: cfg.IsStartup(name), Err: nil}
+	}
+}
+
+// DispatchTeamMsg is emitted when the user wants to dispatch a task to a running team.
+type DispatchTeamMsg struct {
+	WindowIdx int
+	Task      string
+}
+
+// DispatchTeamResultMsg is returned after writing the dispatch message.
+type DispatchTeamResultMsg struct {
+	WindowIdx int
+	Err       error
+}
+
+// DispatchTeamCmd writes a .msg file to the Session Manager's message inbox.
+func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task string) tea.Cmd {
+	return func() tea.Msg {
+		// Target: Session Manager at pane 0.2
+		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_0_2"
+		msgDir := filepath.Join(runtimeDir, "messages")
+		os.MkdirAll(msgDir, 0755)
+
+		content := fmt.Sprintf("FROM: TUI\nSUBJECT: task\nTARGET_TEAM: %d\n%s\n", windowIdx, task)
+		filename := fmt.Sprintf("%s_%d_%d.msg", smSafe, time.Now().Unix(), os.Getpid())
+		path := filepath.Join(msgDir, filename)
+
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			return DispatchTeamResultMsg{WindowIdx: windowIdx, Err: err}
+		}
+
+		// Touch trigger file to wake the Session Manager
+		triggerDir := filepath.Join(runtimeDir, "triggers")
+		os.MkdirAll(triggerDir, 0755)
+		os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644)
+
+		return DispatchTeamResultMsg{WindowIdx: windowIdx, Err: nil}
 	}
 }
 
