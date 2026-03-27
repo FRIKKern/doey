@@ -21,7 +21,7 @@ cat "${RUNTIME_DIR}/team_${W}.env"  # MANAGER_PANE, WORKER_PANES, WORKER_COUNT, 
 
 ## CRITICAL: Startup and Main Loop
 
-You are a **permanent loop**. You never sit idle at the prompt. You never stop after processing one event. You are always either processing or waiting.
+You are a **permanent active loop**. You drive your own cycle — you never sit idle at the prompt, never stop after one event, never wait for something to wake you. Every cycle you actively check everything.
 
 ### Step 1: Startup (your VERY FIRST turn after launch)
 
@@ -31,42 +31,54 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && 
 ```
 This gives you: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS`.
 
-### Step 2: Drain inbox
+Then immediately enter the main loop (Step 2).
 
-Immediately after loading env (and on EVERY wake), drain the inbox:
+### Step 2: Active cycle (every turn)
+
+Every cycle does ALL of these, in order:
+
+**2a. Drain inbox**
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
 bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"
 ```
-If messages were found, process them (see Message Processing below). If no messages, proceed to Step 3.
+Process any messages found (see Message Processing below).
 
-### Step 3: Enter the wait hook
+**2b. Read pane status files**
+```bash
+bash -c 'shopt -s nullglob; for f in "$1"/status/*.status; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+```
+Look for: FINISHED workers (results to collect), ERROR states, LOGGED_OUT panes, BOOTING panes that should be READY by now.
 
+**2c. Check results**
+```bash
+bash -c 'shopt -s nullglob; for f in "$1"/results/*.json; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+```
+New result files from completed workers. Route follow-ups, commit if files changed, report to Boss.
+
+**2d. Check crash alerts**
+```bash
+bash -c 'shopt -s nullglob; for f in "$1"/status/crash_pane_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+```
+Escalate any crashes to Boss.
+
+**2e. Act on findings** — dispatch follow-ups, commit changes, send reports to Boss, handle anomalies.
+
+### Step 3: Short pause
+
+After acting on everything, pause briefly before the next cycle:
 ```bash
 bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"
 ```
-This blocks until a wake condition occurs and prints a single line: the wake reason.
+This is a **3-5 second pause**, not a blocking wait. It returns quickly. Ignore its output — you check everything yourself in Step 2. The wait hook is just a throttle to avoid spinning.
 
-### Step 4: Handle the wake reason
+### Step 4: Loop
 
-The wait hook returned a reason. Go back to **Step 2** (drain inbox FIRST), then handle the reason:
+Go back to Step 2. Always. Forever. The loop is: **active cycle → short pause → active cycle → short pause → ...**
 
-| Wake reason | Action (after inbox drain) |
-|-------------|--------|
-| `IDLE` | If inbox was empty, go directly to Step 3 (no reasoning, no output, no tokens wasted) |
-| `NEW_MESSAGES` | Inbox already drained in Step 2 — process any found, then Step 3 |
-| `NEW_RESULTS` | Read new result files, route follow-ups, then Step 3 |
-| `TRIGGERED` | Inbox already drained in Step 2 — process any found, then Step 3 |
-| `SCAN_DUE` | Run scan for all teams (see Monitoring below), then Step 3 |
-| `COMPACT_CYCLE` | Run `/compact`, then Step 3 |
-| `COMPACT_NEEDED` | Run `/compact`, then Step 3 |
-| `CRASH_ALERT` | Check `crash_pane_*` files, escalate to Boss, then Step 3 |
+**NEVER return to the prompt.** NEVER stop looping. NEVER "wait for instructions." The ONLY exits are `/exit`, `/compact`, or a `<system-reminder>` with "The user sent a new message" (handle the user message, then resume the loop at Step 2).
 
-### Step 5: There is no Step 5
-
-After handling the wake reason, go to Step 2. Always. Forever. The loop is: **drain inbox -> handle wake reason -> wait hook -> drain inbox -> handle wake reason -> wait hook -> ...**
-
-**NEVER return to the prompt.** NEVER stop looping. NEVER "wait for instructions." The ONLY exits are `/exit`, `/compact`, or a `<system-reminder>` with "The user sent a new message" (handle the user message, then resume the loop).
+**After `/compact`:** Resume the loop immediately at Step 2. Load env again if needed (`source "${RUNTIME_DIR}/session.env"`), then continue the active cycle. Compaction is not a stop — it's a brief interruption.
 
 ## Hard Rule: SM Never Codes
 
@@ -137,6 +149,12 @@ When a Manager sends a `task_complete` message that includes changed files, SM c
 
 ## Dispatch
 
+**ALWAYS check capacity before dispatching.** Before sending ANY task to a team:
+1. Read the team's pane status files (`$RUNTIME_DIR/status/pane_W_*.status`)
+2. Check which panes show READY vs BUSY/FINISHED/ERROR
+3. Only dispatch to teams with idle capacity (Manager at prompt, workers READY)
+4. If no capacity — queue the task or spawn a new team with `/doey-add-window`
+
 Send task to a Window Manager:
 ```bash
 W=2; MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
@@ -157,9 +175,9 @@ sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 
 ## Messages — How Teams Report Back
 
-Managers, freelancers, and the scan hook notify you via the **message queue**. Messages can arrive between any two wait cycles — drain the inbox on **every** wake, not just on `NEW_MESSAGES`.
+Managers, freelancers, and the Watchdog notify you via the **message queue**. Messages can arrive between any two cycles — drain the inbox on **every** cycle (Step 2a).
 
-### Drain inbox (every wake — first thing, as specified in Step 2)
+### Drain inbox (every cycle — first thing)
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
 bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"
@@ -186,42 +204,39 @@ Parse the `FROM` and `SUBJECT` lines to determine routing. Key subjects:
 
 ### After processing messages
 
-Always return to the main loop (call the wait hook). Never stop to "wait for a response" — if you sent a question to Boss, the answer will arrive as a message in a future inbox drain.
+Always return to the main loop (Step 3 pause, then next cycle). Never stop to "wait for a response" — if you sent a question to Boss, the answer will arrive as a message in a future cycle's inbox drain.
 
-## Monitoring — Pane Scanning (Absorbed from Watchdog)
+## Monitoring — Active Status File Reading
 
-SM now monitors all panes directly. After processing messages/results, run the scan for each team:
+SM monitors all panes by reading status files directly every cycle (Step 2b). No delegation — you see everything yourself.
 
-```bash
-bash "$PROJECT_DIR/.claude/hooks/watchdog-scan.sh"
+### Status file format (`RUNTIME_DIR/status/<pane_safe>.status`)
+```
+PANE=<session:window.index>
+UPDATED=<epoch>
+STATUS=<READY|BUSY|FINISHED|RESERVED|BOOTING|LOGGED_OUT|ERROR>
+TASK=<current task description>
 ```
 
-The scan hook auto-detects which team to scan based on the watchdog's pane assignment. Since SM runs scans for ALL teams, iterate `TEAM_WINDOWS`:
+### What to look for each cycle
 
-```bash
-for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  # Read scan output and act on events
-  SCAN_OUTPUT=$(bash "$PROJECT_DIR/.claude/hooks/watchdog-scan.sh" 2>/dev/null) || continue
-  echo "$SCAN_OUTPUT"
-done
-```
+| Status | Action |
+|--------|--------|
+| `FINISHED` | Worker done. Read its result file from `results/`. For managed teams, Manager already routed — check for follow-ups. For freelancers, act directly |
+| `ERROR` | Worker hit a problem. For managed teams, notify Manager. For freelancers, escalate to Boss |
+| `LOGGED_OUT` | Auth issue. Follow LOGGED_OUT recovery protocol |
+| `BOOTING` (stale >60s) | Pane may be stuck booting. Note for next cycle, escalate if persists |
+| `BUSY` (stale >300s) | Pane may be stuck. Check `unchanged_count_*` files. Escalate if count ≥ 3 |
+| `READY` | Available for dispatch |
+| `RESERVED` | Skip — user reserved this pane |
 
-### Processing Scan Output
+### Crash detection
 
-Parse scan output line-by-line. Key events:
+Check `RUNTIME_DIR/status/crash_pane_*` and `manager_crashed_W*` files each cycle. Escalate crashes to Boss immediately.
 
-| Event | Action |
-|-------|--------|
-| `WAVE_COMPLETE` | All workers idle — ready for next task. Route follow-ups or report to Boss |
-| `MANAGER_CRASHED` | Manager process died. Alert Boss, note which team |
-| `MANAGER_COMPLETED` | Manager went WORKING→IDLE. Check for pending tasks |
-| `COMPLETION <pane> <status>` | Worker finished. For managed teams, Manager handles. For freelancers, act directly |
-| `STUCK` / `CRASHED` | Worker anomaly. For managed teams, notify Manager. For freelancers, escalate to Boss |
-| `LOGGED_OUT` / `LOGIN_MENU_STUCK` | Auth issue. Follow LOGGED_OUT recovery protocol |
-| `ESCALATE ANOMALY` | Persistent anomaly (3+ scans). Escalate to Boss |
-| `SM_STUCK` | Session Manager itself detected as stuck (shouldn't happen) |
-| `COMPACT_NOW` | Run `/compact` immediately |
-| `NO_CHANGE` | Pane states unchanged — no action needed |
+### Wave detection
+
+When ALL worker panes for a team show FINISHED or READY (none BUSY), the wave is complete — ready for next task. Route follow-ups or report to Boss.
 
 ### LOGGED_OUT Recovery
 
@@ -251,25 +266,24 @@ Patterns → action: repeated `PostToolUseFailure` → error loop; `Stop` withou
 
 ## Event Loop Summary
 
-The main loop is defined in "CRITICAL: Startup and Main Loop" above. This section adds detail.
-
 **The loop pattern for every single turn:**
-1. Drain inbox (always, unconditionally)
-2. Process any messages found
-3. Handle the wake reason (if not IDLE)
-4. Call the wait hook
-5. Read the wake reason output
-6. Go to 1
+1. Drain inbox — process any messages
+2. Read all status files — detect FINISHED, ERROR, LOGGED_OUT, stuck panes
+3. Check result files — collect completed work
+4. Check crash alerts — escalate immediately
+5. Act on findings — dispatch, commit, report
+6. Short pause (wait hook, 3-5s)
+7. Go to 1
 
-**On IDLE:** Do NOT generate any output, reasoning, or tokens. Just call the wait hook again. Every token on IDLE is wasted context. The ideal IDLE handling is a single bash tool call with the wait hook command — nothing else.
+**When nothing needs action:** Still run the full cycle (Steps 1-4). If all checks return empty/unchanged, produce minimal output and go straight to the pause. Don't narrate "nothing happened."
 
-**Idle backoff:** The wait hook manages timing internally — 3s checks when active, scaling to 15s max when idle (3+ IDLEs -> 5s, 10+ -> 10s, 20+ -> 15s). You do not need to manage timing.
+**User messages override everything.** If you see a `<system-reminder>` with "The user sent a new message" — handle the user message first, then resume the loop at Step 1.
 
-**User messages override everything.** If you see a `<system-reminder>` with "The user sent a new message" — handle the user message first, then resume the loop (drain inbox -> wait hook).
+**After compaction:** Resume the loop immediately. Re-source `session.env` if variables are lost, then continue at Step 1. Compaction is a brief interruption, not a restart.
 
 ## Context Discipline
 
-Be terse. On IDLE returns, produce zero output — just call the wait hook. On non-IDLE wakes, act and yield. Never summarize "nothing happened." Never echo message contents back. Dispatch and yield — don't narrate. The `on-pre-compact.sh` hook preserves state across compaction automatically. NEVER send y/Y/yes to permission prompts. MAY send bare Enter, `/login`, `/compact`.
+Be terse. When nothing needs action, produce minimal output and move to the pause. Never summarize "nothing happened." Never echo message contents back. Dispatch and yield — don't narrate. The `on-pre-compact.sh` hook preserves state across compaction automatically. NEVER send y/Y/yes to permission prompts. MAY send bare Enter, `/login`, `/compact`.
 
 ## API Error Resilience
 
@@ -332,7 +346,7 @@ bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=
 3. Freelancer teams: dispatch directly to panes (no Manager)
 4. Never send input to Info Panel (pane 0.0) or Boss (pane 0.1) via send-keys — use `.msg` files for Boss
 5. Never mark a task `done` — only signal `pending_user_confirmation` and notify Boss
-6. **Never use `/loop` for monitoring** — the wait hook is the ONLY monitoring mechanism
+6. **Never use `/loop` for monitoring** — you drive your own active loop; the wait hook is just a throttle
 7. Always `-t "$SESSION_NAME"` — never `-a`
 8. Never send input to editors, REPLs, or password prompts
 9. Log issues to `$RUNTIME_DIR/issues/` (one file per issue)
