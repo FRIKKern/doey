@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Notification hook: send desktop notification when Session Manager needs user attention.
+# Notification hook: send desktop notification when Taskmaster needs user attention.
 # Fires on Notification events (including PermissionRequest).
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
@@ -7,12 +7,12 @@ init_hook
 _DOEY_HOOK_NAME="on-notification"
 type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
-# Only notify for Session Manager — that's the pane the user interacts with
+# Only notify for Taskmaster — that's the pane the user interacts with
 is_session_manager || exit 0
 
 # Extract notification message
 MSG=$(parse_field "message")
-[ -z "$MSG" ] && MSG="Session Manager needs your attention"
+[ -z "$MSG" ] && MSG="Taskmaster needs your attention"
 
 # 30-second cooldown to avoid notification spam
 if [ -n "${RUNTIME_DIR:-}" ]; then

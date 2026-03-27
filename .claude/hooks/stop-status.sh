@@ -35,7 +35,7 @@ type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to
 
 notify_watchdog "$STOP_STATUS"
 
-# Session Manager self-sustaining loop: after stop, re-trigger to check messages/results
+# Taskmaster self-sustaining loop: after stop, re-trigger to check messages/results
 if is_session_manager; then
   _sm_pane="0.2"
   _sm_session="${SESSION:-}"

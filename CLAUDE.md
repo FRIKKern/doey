@@ -40,15 +40,15 @@ Things that have tricked us before:
 | Role | Pane | Description |
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
-| Boss | `0.1` | User-facing relay. Receives user intent, forwards to SM, reports results |
-| Session Manager | `0.2` | Sole executor. Routes tasks, spawns teams, manages git, dispatches work |
+| Boss | `0.1` | User-facing relay. Receives user intent, forwards to TM, reports results |
+| Taskmaster | `0.2` | Sole executor. Routes tasks, spawns teams, manages git, dispatches work |
 | Watchdog | `0.3+` | Monitors hook events, filters noise, escalates signal |
-| Window Manager | `W.0` | Plans, delegates, validates all context. Never writes code |
+| Team Lead | `W.0` | Plans, delegates, validates all context. Never writes code |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
 | Test Driver | external | E2E test runner via `doey test` |
 
-**Communication:** User → Boss → Session Manager (relay) | SM → Window Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Watchdog → Manager (alerts) | Manager → Session Manager (cross-team)
+**Communication:** User → Boss → Taskmaster (relay) | TM → Team Lead → Workers (dispatch) | Workers → Manager (stop hooks) | Watchdog → Manager (alerts) | Manager → Taskmaster (cross-team)
 
 **Runtime:** `/tmp/doey/<project>/` — ephemeral, clears on reboot
 
@@ -56,7 +56,7 @@ Things that have tricked us before:
 
 | Role | Blocked |
 |------|---------|
-| Window Manager | None (full access) |
+| Team Lead | None (full access) |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
 | Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, destructive rm, shutdown, tmux kill |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
@@ -94,10 +94,10 @@ Things that have tricked us before:
 | `post-tool-lint.sh` | After Write/Edit on .sh | Bash 3.2 compatibility lint (catches violations automatically) |
 | `stop-status.sh` | On stop (sync) | Sets FINISHED/RESERVED status, blocks incomplete research |
 | `stop-results.sh` | On stop (async) | Captures output, files changed, tool counts → JSON result |
-| `stop-notify.sh` | On stop (async) | Notification chain: Worker → Manager → Session Manager → desktop |
+| `stop-notify.sh` | On stop (async) | Notification chain: Worker → Manager → Taskmaster → desktop |
 | `watchdog-scan.sh` | Watchdog cycle | Pane state detection, anomaly reporting, heartbeat |
 | `watchdog-wait.sh` | Watchdog idle | Sleep/wake (30s default, wakes on trigger) |
-| `session-manager-wait.sh` | SM idle | Multi-trigger sleep: messages, results, crash alerts |
+| `session-manager-wait.sh` | TM idle | Multi-trigger sleep: messages, results, crash alerts |
 
 Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 

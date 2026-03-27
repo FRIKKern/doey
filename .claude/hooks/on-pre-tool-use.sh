@@ -72,7 +72,7 @@ _check_blocked() {
   cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
   case "$cmd" in
     *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
-      MSG="git write operations (git commit/push, gh pr). Send a message to Session Manager with what you need committed" ;;
+      MSG="git write operations (git commit/push, gh pr). Send a message to Taskmaster with what you need committed" ;;
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
     *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
@@ -176,13 +176,13 @@ if [ "$_DOEY_ROLE" != "session_manager" ]; then
       *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
         _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_GIT_CMD"
         _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
-        echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager." >&2
+        echo "BLOCKED: Git operations are handled by Taskmaster. Send a task_complete message to your Manager." >&2
         exit 2 ;;
     esac
   fi
 fi
 
-# Manager/Session Manager: only block /rename via send-keys
+# Manager/Taskmaster: only block /rename via send-keys
 # Boss has send-keys access to SM pane (0.2) only — guarded above
 if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   _CMD=$(_json_str tool_input.command)
@@ -204,7 +204,7 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
   [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
-  # Exception: workers may send-keys to the Session Manager pane
+  # Exception: workers may send-keys to the Taskmaster pane
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
     if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
@@ -222,7 +222,7 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "Worker $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
-    echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this." >&2
+    echo "BLOCKED: Workers cannot run ${MSG}. Only the Team Lead can do this." >&2
     exit 2
   fi
   _dbg_write "allow_worker"
@@ -234,7 +234,7 @@ source "$(dirname "$0")/common.sh"
 init_hook
 
 is_manager && { _dbg_write "allow_manager_slow"; exit 0; }
-is_session_manager && { _dbg_write "allow_sm_slow"; exit 0; }
+is_taskmaster && { _dbg_write "allow_sm_slow"; exit 0; }
 is_boss && { _dbg_write "allow_boss_slow"; exit 0; }
 
 TOOL_COMMAND=$(_json_str tool_input.command)
@@ -245,7 +245,7 @@ TOOL_COMMAND=$(_json_str tool_input.command)
 if _check_blocked "$TOOL_COMMAND"; then
   _log_block "TOOL_BLOCKED" "worker $MSG blocked" "$TOOL_COMMAND"
   _dbg_write "block_worker"
-  echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this." >&2
+  echo "BLOCKED: Workers cannot run ${MSG}. Only the Team Lead can do this." >&2
   exit 2
 fi
 _dbg_write "allow_slow"

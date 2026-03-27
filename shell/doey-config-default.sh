@@ -47,13 +47,13 @@
 # Seconds between launching each team window
 # DOEY_TEAM_LAUNCH_DELAY=15
 
-# Seconds to wait before launching the Window Manager in a new team
+# Seconds to wait before launching the Team Lead in a new team
 # DOEY_MANAGER_LAUNCH_DELAY=3
 
 # Seconds to wait before launching the Watchdog in a new team
 # DOEY_WATCHDOG_LAUNCH_DELAY=1
 
-# Seconds the Window Manager waits after launch before briefing
+# Seconds the Team Lead waits after launch before briefing
 # DOEY_MANAGER_BRIEF_DELAY=8
 
 # Seconds the Watchdog waits after launch before its first scan cycle
@@ -89,7 +89,7 @@
 # Models
 # =============================================================================
 
-# Model for Window Manager instances (orchestrator — needs strong reasoning)
+# Model for Team Lead instances (orchestrator — needs strong reasoning)
 # DOEY_MANAGER_MODEL=opus
 
 # Model for Worker instances (task execution)
@@ -98,7 +98,7 @@
 # Model for Watchdog instances (monitoring — lightweight is fine)
 # DOEY_WATCHDOG_MODEL=sonnet
 
-# Model for Session Manager (cross-team orchestration)
+# Model for Taskmaster (cross-team orchestration)
 # DOEY_SESSION_MANAGER_MODEL=opus
 
 # =============================================================================

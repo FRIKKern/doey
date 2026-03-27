@@ -49,7 +49,7 @@ if [ "$WINDOW_INDEX" = "0" ]; then
   if [ "$PANE_INDEX" = "1" ]; then
     ROLE="boss"
   elif [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ]; then
-    ROLE="session_manager"
+    ROLE="taskmaster"
   elif [ "$PANE_INDEX" = "0" ]; then
     ROLE="info_panel"
   fi
@@ -76,7 +76,7 @@ _is_freelancer_team="false"
 
 case "$ROLE" in
   boss)            PANE_ID="boss" ;;
-  session_manager) PANE_ID="sm" ;;
+  taskmaster) PANE_ID="tm" ;;
   info_panel)      PANE_ID="info" ;;
   manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
   worker)
@@ -170,7 +170,7 @@ _TITLE=""
 case "$ROLE" in
   boss)            _TITLE="${PROJECT_NAME} Boss" ;;
   manager)         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} Mgr" ;;
-  session_manager) _TITLE="${PROJECT_NAME} SM" ;;
+  taskmaster) _TITLE="${PROJECT_NAME} TM" ;;
   worker)
     if [ "$_is_freelancer_team" = "true" ]; then
       _TITLE="Freelancer"

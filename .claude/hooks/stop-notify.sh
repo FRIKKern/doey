@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Stop hook: unified notification dispatch (async)
-#   Worker          → notify Window Manager pane
-#   Window Manager  → notify Session Manager pane
-#   Session Manager → notify Boss pane
+#   Worker          → notify Team Lead pane
+#   Team Lead  → notify Taskmaster pane
+#   Taskmaster → notify Boss pane
 #   Boss            → desktop notification
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
@@ -139,13 +139,13 @@ ${summary}"
   done
 }
 
-# Belt-and-suspenders: send-keys wake to Session Manager (supplements trigger file)
+# Belt-and-suspenders: send-keys wake to Taskmaster (supplements trigger file)
 _wake_sm() {
   local sm_pane="${SM_PANE:-0.2}"
   tmux send-keys -t "${SESSION_NAME}:${sm_pane}" "" 2>/dev/null || true
 }
 
-# --- Worker: notify its Window Manager (or Session Manager for freelancers) ---
+# --- Worker: notify its Team Lead (or Taskmaster for freelancers) ---
 if is_worker; then
   _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
 
@@ -163,7 +163,7 @@ if is_worker; then
   LAST_MSG=$(parse_field "last_assistant_message")
 
   if [ "$_team_type" = "freelancer" ]; then
-    # Freelancer workers notify Session Manager directly (no manager in this team)
+    # Freelancer workers notify Taskmaster directly (no manager in this team)
     _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
     SM_TARGET="$SESSION_NAME:${_sm_pane:-0.2}"
     if ! tmux display-message -t "$SM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
@@ -197,7 +197,7 @@ if is_worker; then
   exit 0
 fi
 
-# --- Window Manager: notify Session Manager ---
+# --- Team Lead: notify Taskmaster ---
 if is_manager; then
   STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
   [ -f "$STATUS_FILE" ] || exit 0
@@ -222,8 +222,8 @@ if is_manager; then
   exit 0
 fi
 
-# --- Session Manager: notify Boss ---
-if is_session_manager; then
+# --- Taskmaster: notify Boss ---
+if is_taskmaster; then
   LAST_MSG=$(parse_field "last_assistant_message")
   [ -z "$LAST_MSG" ] && exit 0
   echo "$LAST_MSG" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯" && exit 0

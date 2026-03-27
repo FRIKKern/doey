@@ -30,10 +30,10 @@ Doey Settings Editor — read, explain, and modify config files and agent defini
 | DOEY_IDLE_REMOVE_AFTER | 300 | ≥1 (s) | Idle → pane removal |
 | DOEY_PASTE_SETTLE_MS | 500 | ≥1 (ms) | Post-paste settle |
 | DOEY_INFO_PANEL_REFRESH | 300 | ≥1 (s) | Panel refresh interval |
-| DOEY_SM_SCAN_INTERVAL | 30 | ≥1 (s) | SM scan trigger-file poll interval |
+| DOEY_SM_SCAN_INTERVAL | 30 | ≥1 (s) | TM scan trigger-file poll interval |
 | DOEY_MANAGER_MODEL | opus | opus/sonnet/haiku | Manager model |
 | DOEY_WORKER_MODEL | opus | opus/sonnet/haiku | Worker model |
-| DOEY_SESSION_MANAGER_MODEL | opus | opus/sonnet/haiku | Session Manager model |
+| DOEY_SESSION_MANAGER_MODEL | opus | opus/sonnet/haiku | Taskmaster model |
 
 Warn if delays > 300s or refresh > 3600s.
 
@@ -92,7 +92,7 @@ Agent files: `$PROJECT_DIR/agents/*.md` — Markdown with YAML frontmatter.
 3. **Tell user to reload:**
    - Manager agent → `doey reload`
    - Worker agent → `doey reload --workers`
-   - Session Manager agent → `doey stop && doey`
+   - Taskmaster agent → `doey stop && doey`
    - New unassigned agent → no reload needed
 
 ### Deleting Agents

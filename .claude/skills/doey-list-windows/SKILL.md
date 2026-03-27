@@ -11,7 +11,7 @@ description: List all team windows with their status. Use when you need to "show
 
 **Read-only.** Build table: `WINDOW | GRID | MGR | WORKERS`.
 
-- Window 0 = Dashboard (Boss 0.1, Session Manager 0.2). Windows 1+ = Teams.
+- Window 0 = Dashboard (Boss 0.1, Taskmaster 0.2). Windows 1+ = Teams.
 - Extract GRID, WORKER_PANES, WORKER_COUNT, TEAM_TYPE from team env.
 - Badges: `[worktree]` + branch if WORKTREE_DIR set. `[F]` if TEAM_TYPE=freelancer (no Manager).
 - Manager: running command (not bash/zsh/sh) = OK; freelancer = "N/A".

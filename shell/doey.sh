@@ -517,16 +517,16 @@ _worktree_safe_remove() {
 }
 
 _balance_watchdog_panes() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
+  : # Deprecated: watchdog slots removed in Boss+TM merge
 }
 
 _find_free_watchdog_slot() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
+  : # Deprecated: watchdog slots removed in Boss+TM merge
   _FWS_SLOT=""
   return 1
 }
 
-# Dashboard layout: Info Panel (left) | Boss (top-right) | Session Manager (bottom-right)
+# Dashboard layout: Info Panel (left) | Boss (top-right) | Taskmaster (bottom-right)
 # Sets: SM_PANE, BOSS_PANE
 setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
@@ -536,14 +536,14 @@ setup_dashboard() {
   tmux split-window -h -t "$session:0.0" -l 150 -c "$dir"
   # Indices: 0.0=info(left), 0.1=right
 
-  # Split right column: Boss (top ~65%) + SM (bottom ~35%)
+  # Split right column: Boss (top ~65%) + TM (bottom ~35%)
   tmux split-window -v -t "$session:0.1" -l 28 -c "$dir"
-  # Indices: 0.0=info, 0.1=Boss, 0.2=SM
+  # Indices: 0.0=info, 0.1=Boss, 0.2=TM
 
   local _proj="${session#doey-}"
   tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "${_proj} Boss"
-  tmux select-pane -t "$session:0.2" -T "${_proj} SM"
+  tmux select-pane -t "$session:0.2" -T "${_proj} TM"
   BOSS_PANE="0.1"
   SM_PANE="0.2"
 
@@ -570,10 +570,10 @@ setup_dashboard() {
   [ -f "${runtime_dir}/doey-settings.json" ] && _boss_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
   tmux send-keys -t "$session:0.1" "$_boss_cmd" Enter
 
-  # Session Manager (pane 0.2)
-  local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-session-manager"
-  [ -f "${runtime_dir}/doey-settings.json" ] && _sm_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
-  tmux send-keys -t "$session:0.2" "$_sm_cmd" Enter
+  # Taskmaster (pane 0.2)
+  local _tm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-taskmaster"
+  [ -f "${runtime_dir}/doey-settings.json" ] && _tm_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  tmux send-keys -t "$session:0.2" "$_tm_cmd" Enter
 
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
@@ -957,15 +957,15 @@ write_worker_system_prompt() {
   cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
 # Doey Worker
 
-You are a **Worker** on the Doey team, coordinated by a Window Manager in pane 0 of your team window. You receive tasks via this chat and execute them independently.
+You are a **Worker** on the Doey team, coordinated by a Team Lead in pane 0 of your team window. You receive tasks via this chat and execute them independently.
 
 ## Rules
 1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
 2. **Stay in scope** — Only make changes within the scope of your assigned task. Do not refactor, clean up, or "improve" code outside your task.
 3. **Concurrent awareness** — Other workers are editing other files in this codebase simultaneously. Avoid broad sweeping changes (global renames, config modifications, formatter runs) unless your task explicitly requires it.
-4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Window Manager will check your output.
+4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Team Lead will check your output.
 5. **If blocked, describe and stop** — If you encounter an unrecoverable error, describe it clearly and stop.
-6. **No git commits** — Do not create git commits unless your task explicitly says to. The Window Manager coordinates commits.
+6. **No git commits** — Do not create git commits unless your task explicitly says to. The Team Lead coordinates commits.
 7. **No tmux interaction** — Do not try to communicate with other panes. Just do your work.
 WORKER_PROMPT
 
@@ -1557,7 +1557,7 @@ MANIFEST
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Manager --
-  _step_msg 5 "Launching Window Manager..." "$headless"
+  _step_msg 5 "Launching Team Lead..." "$headless"
 
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
 
@@ -1568,8 +1568,8 @@ MANIFEST
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     # Boss briefing (pane 0.1)
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. SM is at pane 0.2. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
-    # SM briefing (pane 0.2)
+      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. TM is at pane 0.2. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
+    # TM briefing (pane 0.2)
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
   ) &
@@ -2342,7 +2342,7 @@ reload_session() {
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
-      local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Window Manager\" --agent \"$mgr_agent\""
+      local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Team Lead\" --agent \"$mgr_agent\""
       [ -f "${runtime_dir}/doey-settings.json" ] && _rl_mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
       tmux send-keys -t "$mgr_ref" "$_rl_mgr_cmd" Enter
       printf " ${SUCCESS}✓${RESET}\n"
@@ -2750,7 +2750,7 @@ MANIFEST
     # Default dynamic grid path for team 1
     write_team_env "$runtime_dir" "1" "dynamic" "" "" "0" "0" "" ""
 
-    # Dashboard launches after session.env exists (info-panel + Session Manager need it)
+    # Dashboard launches after session.env exists (info-panel + Taskmaster need it)
     setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
     tmux new-window -t "$session" -c "$dir"
     tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
@@ -2758,7 +2758,7 @@ MANIFEST
 
     step_done
 
-    step_start 4 "Launching Window Manager..."
+    step_start 4 "Launching Team Lead..."
     _launch_team_manager "$session" "$runtime_dir" "$team_window"
     _brief_team "$session" "$team_window" "" "" "0" \
       "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
@@ -2903,8 +2903,8 @@ MANIFEST
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     # Boss briefing (pane 0.1)
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. SM is at pane 0.2. ${team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
-    # SM briefing (pane 0.2)
+      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. TM is at pane 0.2. ${team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
+    # TM briefing (pane 0.2)
     tmux send-keys -t "$session:${SM_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
   ) &
@@ -2913,7 +2913,7 @@ MANIFEST
   printf "   ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}\n"
   printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
   printf "\n"
-  printf "   ${BOLD}Dashboard${RESET}  ${DIM}win 0  Info panel + Boss + Session Manager${RESET}\n"
+  printf "   ${BOLD}Dashboard${RESET}  ${DIM}win 0  Info panel + Boss + Taskmaster${RESET}\n"
   printf "   ${BOLD}Teams${RESET}      ${DIM}%-4s windows (${final_team_windows})${RESET}\n" "$team_count"
   printf "   ${BOLD}Workers${RESET}    ${DIM}T1: %-4s (auto-expands, doey add)${RESET}\n" "$initial_workers"
   printf "\n"
@@ -3247,7 +3247,7 @@ doey_remove_column() {
 }
 
 add_dashboard_watchdog_slot() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
+  : # Deprecated: watchdog slots removed in Boss+TM merge
   WDG_NEW_SLOT=""
   return 1
 }
@@ -3324,7 +3324,7 @@ _launch_team_manager() {
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   local _proj="${session#doey-}"
-  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\""
+  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Team Lead\" --agent \"$mgr_agent\""
   [ -f "${runtime_dir}/doey-settings.json" ] && _mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
@@ -3333,20 +3333,20 @@ _launch_team_manager() {
 }
 
 _launch_team_watchdog() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge — SM handles monitoring
+  : # Deprecated: watchdog slots removed in Boss+TM merge — TM handles monitoring
 }
 
 _brief_freelancer_team() {
   local session="$1" window_index="$2" wdg_slot="$3" wp_list="$4"
   local worker_count="$5"
-  # Freelancer teams have no manager — watchdog reports directly to Session Manager
+  # Freelancer teams have no manager — watchdog reports directly to Taskmaster
   # Note: watchdog initial prompt is sent by _launch_team_watchdog; stop hook re-triggers cycles
   # This function only sends the freelancer-specific context update
   [ -n "$wdg_slot" ] || return 0
   (
     sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
     tmux send-keys -t "${session}:${wdg_slot}" \
-      "Context update: This is a FREELANCER team — no Manager. All panes are independent workers (${worker_count} total in panes ${wp_list}). Report all events directly to the Session Manager." Enter
+      "Context update: This is a FREELANCER team — no Manager. All panes are independent workers (${worker_count} total in panes ${wp_list}). Report all events directly to the Taskmaster." Enter
   ) &
 }
 
@@ -3359,7 +3359,7 @@ _brief_team() {
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "${session}:${window_index}.0" \
-      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. SM monitors all teams from pane 0.2. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. TM monitors all teams from pane 0.2. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 }
 
@@ -3384,7 +3384,7 @@ _build_worker_pane_list() {
 }
 
 _acquire_watchdog_slot() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
+  : # Deprecated: watchdog slots removed in Boss+TM merge
   _AWS_SLOT=""
   return 1
 }
@@ -3468,7 +3468,7 @@ add_team_from_def() {
   window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
   printf "  ${DIM}Creating team '%s' in window %s...${RESET}\n" "$td_name" "$window_index"
 
-  # Watchdog eliminated — SM absorbs monitoring
+  # Watchdog eliminated — TM absorbs monitoring
   # _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "false"
   local wdg_slot=""
 
@@ -3541,7 +3541,7 @@ add_team_from_def() {
     _w_i=$((_w_i + 1))
   done
 
-  # Watchdog eliminated — SM absorbs monitoring
+  # Watchdog eliminated — TM absorbs monitoring
   # local wdg_model="${td_watchdog_model:-$DOEY_WATCHDOG_MODEL}"
   # _launch_team_watchdog "$session" "$wdg_slot" "$window_index" "$wdg_model"
 
@@ -3612,7 +3612,7 @@ add_dynamic_team_window() {
   [ "$is_freelancer" = "true" ] && _team_label="freelancer team"
   printf "  ${DIM}Creating dynamic %s window %s...${RESET}\n" "$_team_label" "$window_index"
 
-  # Watchdog eliminated — SM absorbs monitoring
+  # Watchdog eliminated — TM absorbs monitoring
   # _acquire_watchdog_slot "$session" "$runtime_dir" "$team_dir" "false"
   local wdg_slot=""
 
@@ -3676,7 +3676,7 @@ add_dynamic_team_window() {
     _launch_team_manager "$session" "$runtime_dir" "$window_index"
   fi
 
-  # Watchdog eliminated — SM absorbs monitoring for all teams
+  # Watchdog eliminated — TM absorbs monitoring for all teams
   # (Previously launched per-team watchdog in Dashboard slots)
 
   local _col_i
@@ -3752,7 +3752,7 @@ add_team_window() {
   worker_panes=$(_build_worker_csv "$total_panes")
   worker_count=$((total_panes - 1))
 
-  # Watchdog eliminated — SM absorbs monitoring
+  # Watchdog eliminated — TM absorbs monitoring
   # if ! _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "true"; then
   #   printf "  ${ERROR}All %s Dashboard watchdog slots occupied — cannot add more teams${RESET}\n" "$DOEY_MAX_WATCHDOG_SLOTS"
   #   tmux kill-window -t "${session}:${window_index}" 2>/dev/null
@@ -3769,7 +3769,7 @@ add_team_window() {
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
   _launch_team_manager "$session" "$runtime_dir" "$window_index"
-  # Watchdog eliminated — SM absorbs monitoring
+  # Watchdog eliminated — TM absorbs monitoring
   # _launch_team_watchdog "$session" "$wdg_slot" "$window_index"
 
   local _aw_pairs=()
@@ -4213,7 +4213,7 @@ case "${1:-}" in
     test       Run E2E integration test (--keep, --open, --grid NxM)
     dynamic    Launch with dynamic grid (add workers on demand)
     add        Add a worker column (2 workers) to a dynamic grid session
-    add-team   Add a team window with its own Window Manager+Watchdog+Workers
+    add-team   Add a team window with its own Team Lead+Watchdog+Workers
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions

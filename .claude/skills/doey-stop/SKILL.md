@@ -16,7 +16,7 @@ source "$RD/session.env"
 W="${DOEY_WINDOW_INDEX:-0}"
 [ -f "$RD/team_${W}.env" ] && source "$RD/team_${W}.env"
 TARGET="$PANE_NUMBER"
-[ "$TARGET" = "0" ] && { echo "ERROR: Cannot stop pane ${W}.0 (Window Manager)"; exit 1; }
+[ "$TARGET" = "0" ] && { echo "ERROR: Cannot stop pane ${W}.0 (Team Lead)"; exit 1; }
 VALID=false
 for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ "$i" = "$TARGET" ] && VALID=true; done
 [ "$VALID" = "false" ] && { echo "ERROR: Pane ${W}.${TARGET} not a worker. Valid: ${WORKER_PANES}"; exit 1; }
@@ -57,5 +57,5 @@ echo "Stopped pane ${W}.${TARGET} — status set to FINISHED"
 ```
 
 ### Rules
-- Never stop Manager (pane 0), Boss (0.1), or Session Manager (0.2)
+- Never stop Manager (pane 0), Boss (0.1), or Taskmaster (0.2)
 - Pane shell stays alive for restart via `/doey-dispatch` or `/doey-clear`

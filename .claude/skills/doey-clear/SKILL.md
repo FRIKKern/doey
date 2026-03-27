@@ -61,7 +61,7 @@ Order: Manager → Workers.
 ```bash
 MGR_PANE="${SESSION_NAME}:${W}.0"
 kill_pane_process "$MGR_PANE"
-tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\"" Enter
+tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --model opus --name \"T${W} Team Lead\" --agent \"t${W}-manager\"" Enter
 echo "  ${W}.0 Manager ✓"; sleep 0.5
 ```
 
@@ -93,6 +93,6 @@ Print per-team summary: Manager status, workers cleared/reserved counts.
 ## Rules
 
 - Skip reserved unless `--force`; skip Manager if WORKERS_ONLY
-- Never clear Boss (0.1), Session Manager (0.2), or Info Panel (0.0)
+- Never clear Boss (0.1), Taskmaster (0.2), or Info Panel (0.0)
 - Kill by PID (SIGTERM → SIGKILL); `sleep 0.5` between panes
 - Bash 3.2 compatible.

@@ -227,7 +227,7 @@ is_manager() {
   return "$_DOEY_IS_MGR"
 }
 
-is_session_manager() {
+is_taskmaster() {
   [ "$WINDOW_INDEX" != "0" ] && return 1
   [ "${PANE#*:}" = "$(get_sm_pane)" ]
 }
@@ -287,7 +287,7 @@ NL='
 
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
-# Notify Session Manager of a lifecycle event.
+# Notify Taskmaster of a lifecycle event.
 # Writes event to lifecycle dir and triggers SM wake.
 # Usage: notify_sm <status> [detail]
 notify_sm() {
@@ -298,7 +298,7 @@ notify_sm() {
   mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0
   local evt_file="${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt"
   printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" > "$evt_file" 2>/dev/null
-  # Wake Session Manager
+  # Wake Taskmaster
   touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null
   return 0
 }
