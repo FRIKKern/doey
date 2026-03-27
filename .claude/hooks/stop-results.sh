@@ -109,6 +109,6 @@ mv "${COMPLETION}.tmp" "$COMPLETION"
 [ ! -f "$COMPLETION" ] && _log_error "HOOK_ERROR" "Completion event file not written" "path=$COMPLETION"
 
 # Wake Taskmaster
-touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true
+touch "${RUNTIME_DIR}/status/tm_trigger" 2>/dev/null || true
 
 exit 0

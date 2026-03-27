@@ -214,7 +214,7 @@ _read_teamdef_key() {
   grep "^${key}=" "$envfile" 2>/dev/null | cut -d= -f2-
 }
 
-# Watchdog role eliminated — SM absorbs monitoring
+# Watchdog role eliminated — TM absorbs monitoring
 is_watchdog() { return 1; }
 
 is_manager() {
@@ -229,7 +229,7 @@ is_manager() {
 
 is_taskmaster() {
   [ "$WINDOW_INDEX" != "0" ] && return 1
-  [ "${PANE#*:}" = "$(get_sm_pane)" ]
+  [ "${PANE#*:}" = "$(get_tm_pane)" ]
 }
 
 is_boss() {
@@ -241,7 +241,7 @@ is_worker() {
   ! is_manager
 }
 
-get_sm_pane() {
+get_tm_pane() {
   if [ -f "${RUNTIME_DIR}/session.env" ]; then
     local val
     val=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
@@ -288,9 +288,9 @@ NL='
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
 # Notify Taskmaster of a lifecycle event.
-# Writes event to lifecycle dir and triggers SM wake.
-# Usage: notify_sm <status> [detail]
-notify_sm() {
+# Writes event to lifecycle dir and triggers TM wake.
+# Usage: notify_tm <status> [detail]
+notify_tm() {
   local status="${1:-}" detail="${2:-}"
   local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
   [ -z "$team_w" ] && return 0
@@ -303,7 +303,11 @@ notify_sm() {
   return 0
 }
 # Backward compatibility alias
-notify_watchdog() { notify_sm "$@"; }
+notify_watchdog() { notify_tm "$@"; }
+# Backward compatibility aliases
+is_session_manager() { is_taskmaster; }
+get_sm_pane() { get_tm_pane; }
+notify_sm() { notify_tm "$@"; }
 
 # Low-level desktop notification — no role check, no cooldown.
 # Usage: _send_desktop_notification "Title" "Body"

@@ -73,9 +73,9 @@ if is_manager; then
 
   COMPLETION_FILES=$(_list_files "$RUNTIME_DIR"/status/completion_pane_${_TEAM_W}_*)
   CRASH_FILES=$(_list_files "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W}_*)
-  cat <<MGRSTATE
+  cat <<TLSTATE
 
-## WINDOW MANAGER ORCHESTRATION STATE (restore after compaction)
+## TEAM LEAD ORCHESTRATION STATE (restore after compaction)
 **Worker Assignments (pane_index title):**
 ${WORKER_ASSIGNMENTS:-No panes found}
 
@@ -96,9 +96,9 @@ After compaction, resume your active monitoring loop IMMEDIATELY:
 3. Collect and validate result files for finished workers
 4. Update context log with consolidated outcomes
 5. If workers still BUSY → brief pause (10-15s) → go to step 1
-6. If all workers FINISHED/ERROR → consolidate, report to SM, dispatch next wave
-Do NOT go idle. Do NOT wait for SM instructions. You drive the loop.
-MGRSTATE
+6. If all workers FINISHED/ERROR → consolidate, report to TM, dispatch next wave
+Do NOT go idle. Do NOT wait for TM instructions. You drive the loop.
+TLSTATE
 
   # Pending messages — must be processed after compaction
   _MGR_SAFE="${SESSION_NAME//[-:.]/_}_${_TEAM_W}_0"
@@ -134,29 +134,29 @@ CTXLOG
 fi
 
 if is_taskmaster; then
-  SM_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+  TM_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
   SM_SAFE="${SESSION_NAME//[-:.]/_}_0_${PANE_INDEX}"
-  SM_PENDING_MSGS=""
+  TM_PENDING_MSGS=""
   for _mf in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do
     [ -f "$_mf" ] || continue
-    SM_PENDING_MSGS="${SM_PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
+    TM_PENDING_MSGS="${TM_PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
   done
 
-  SM_ACTIVE_TASKS=""
+  TM_ACTIVE_TASKS=""
   for _tf in "${RUNTIME_DIR}/tasks"/*.task; do
     [ -f "$_tf" ] || continue
     grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$_tf" && continue
-    SM_ACTIVE_TASKS="${SM_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"
+    TM_ACTIVE_TASKS="${TM_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"
   done
 
-  cat <<SMSTATE
+  cat <<TMSTATE
 
-## SESSION MANAGER ORCHESTRATION STATE (restore after compaction)
-**Team Windows:** ${SM_TEAMS:-None}
+## TASKMASTER ORCHESTRATION STATE (restore after compaction)
+**Team Windows:** ${TM_TEAMS:-None}
 
 **Active Tasks:**
-${SM_ACTIVE_TASKS:-None}
+${TM_ACTIVE_TASKS:-None}
 
 ## ⚠ CORE LOOP — RESUME IMMEDIATELY AFTER COMPACTION
 You are the Taskmaster. Your job is an autonomous, permanent ACTIVE loop.
@@ -171,19 +171,19 @@ YOU drive the loop — the wait hook is just a brief pause.
 
 You are the ONLY role that commits/pushes — do it directly, no delegation needed.
 Do NOT wait for instructions. Do NOT escalate to Boss for approval. Resume this loop NOW.
-SMSTATE
+TMSTATE
 
-  if [ -n "$SM_PENDING_MSGS" ]; then
-    cat <<SMMSG
+  if [ -n "$TM_PENDING_MSGS" ]; then
+    cat <<TMMSG
 
 **⚠ UNREAD MESSAGES (process these after compaction!):**
-${SM_PENDING_MSGS}
+${TM_PENDING_MSGS}
 Read with:
 \`\`\`bash
 SM_SAFE="${SM_SAFE}"
 for f in "\$RUNTIME_DIR/messages"/\${SM_SAFE}_*.msg; do [ -f "\$f" ] && cat "\$f" && echo "---" && rm -f "\$f"; done
 \`\`\`
-SMMSG
+TMMSG
   fi
 fi
 
@@ -198,7 +198,7 @@ if is_boss; then
 
 ## BOSS STATE (restore after compaction)
 **You are Boss** — user-facing commander at pane 0.1
-**SM is at:** pane 0.2
+**TM is at:** pane 0.2
 BOSSSTATE
   if [ -n "$BOSS_PENDING_MSGS" ]; then
     cat <<BOSSMSG

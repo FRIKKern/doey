@@ -43,7 +43,7 @@ if is_session_manager; then
   _sm_target="${_sm_session}:${_sm_pane}"
   (
     sleep 3
-    # Guard: only send if SM is READY (not already BUSY from another trigger)
+    # Guard: only send if TM is READY (not already BUSY from another trigger)
     _sm_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
     if [ -f "$_sm_status_file" ]; then
       _sm_cur=$(head -1 "$_sm_status_file" 2>/dev/null || true)
@@ -51,8 +51,8 @@ if is_session_manager; then
         *BUSY*) exit 0 ;;  # Already processing, skip re-trigger
       esac
     fi
-    # Touch trigger file to wake SM wait hook (no send-keys — avoids corrupting user input)
-    touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+    # Touch trigger file to wake TM wait hook (no send-keys — avoids corrupting user input)
+    touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
     touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
   ) &
 fi

@@ -102,7 +102,7 @@ WINDOW_INDEX="${PANE_INFO%.*}"
 PANE_INDEX="${PANE_INFO#*.}"
 
 # Determine which team to scan.
-# If called with an argument, scan that specific team (used by SM scanning all teams).
+# If called with an argument, scan that specific team (used by TM scanning all teams).
 # Otherwise, fall back to legacy auto-detection from WATCHDOG_PANE matching.
 TARGET_WINDOW="${1:-}"
 if [ -z "$TARGET_WINDOW" ]; then
@@ -202,7 +202,7 @@ _pane_log() {
 
 _log "watchdog-scan: start cycle W${TARGET_WINDOW} panes=${WORKER_PANES}"
 
-# --- Manager health check (skip for freelancer teams) ---
+# --- Team Lead health check (skip for freelancer teams) ---
 _team_type=""
 [ -f "$TEAM_ENV" ] && _team_type=$(grep '^TEAM_TYPE=' "$TEAM_ENV" | cut -d= -f2-) && _team_type="${_team_type%\"}" && _team_type="${_team_type#\"}"
 MGR_PANE_REF=""
@@ -220,7 +220,7 @@ if [ "$_team_type" != "freelancer" ]; then
   case "$MGR_CMD" in
     bash|zsh|sh|fish)
       echo "MANAGER_CRASHED"
-      _log_error_wd "ANOMALY" "Manager crashed in window $TARGET_WINDOW" "pane_cmd=bare_shell"
+      _log_error_wd "ANOMALY" "Team Lead crashed in window $TARGET_WINDOW" "pane_cmd=bare_shell"
       CRASH_ALERT="${RUNTIME_DIR}/status/manager_crashed_W${TARGET_WINDOW}"
       if [ ! -f "$CRASH_ALERT" ]; then
         _tmp="${CRASH_ALERT}.tmp"
@@ -234,7 +234,7 @@ if [ "$_team_type" != "freelancer" ]; then
   esac
 fi
 
-# Manager monitoring — skip entirely for freelancer teams (no manager)
+# Team Lead monitoring — skip entirely for freelancer teams (no manager)
 PANE_STATE_0="N/A"
 if [ "$_team_type" != "freelancer" ]; then
   MGR_CAPTURE=$(tmux capture-pane -t "$MGR_PANE_REF" -p -S -3 2>/dev/null) || MGR_CAPTURE=""
@@ -243,12 +243,12 @@ if [ "$_team_type" != "freelancer" ]; then
       PANE_STATE_0="LOGGED_OUT"
       echo "MANAGER_LOGGED_OUT"
       echo "LOGIN_MENU_STUCK:0"
-      _log_error_wd "ANOMALY" "Manager has stuck login menu in window $TARGET_WINDOW"
+      _log_error_wd "ANOMALY" "Team Lead has stuck login menu in window $TARGET_WINDOW"
       ;;
     *"Not logged in"*)
       PANE_STATE_0="LOGGED_OUT"
       echo "MANAGER_LOGGED_OUT"
-      _log_error_wd "ANOMALY" "Manager logged out in window $TARGET_WINDOW"
+      _log_error_wd "ANOMALY" "Team Lead logged out in window $TARGET_WINDOW"
       ;;
     *'❯'*|*'> '*) PANE_STATE_0="IDLE" ;;
     *) PANE_STATE_0="WORKING" ;;
@@ -259,10 +259,10 @@ if [ "$_team_type" != "freelancer" ]; then
   _atomic_write "$MGR_PREV_FILE" "$PANE_STATE_0"
   if [ "$MGR_PREV_STATE" = "WORKING" ] && [ "$PANE_STATE_0" = "IDLE" ]; then
     echo "MANAGER_COMPLETED"
-    _log "watchdog-scan: manager completed W${TARGET_WINDOW}"
+    _log "watchdog-scan: team lead completed W${TARGET_WINDOW}"
   fi
 
-  # --- Manager hook-reported status (more authoritative than screen-scrape) ---
+  # --- Team Lead hook-reported status (more authoritative than screen-scrape) ---
   _mgr_pane_idx="${mgr_idx:-0}"
   _read_hook_status "${RUNTIME_DIR}/status/${SESSION_SAFE}_${TARGET_WINDOW}_${_mgr_pane_idx}.status"
   _mgr_hook_status="$_hook_status"
@@ -274,7 +274,7 @@ if [ "$_team_type" != "freelancer" ]; then
         # Hook says BUSY — trust it even if screen-scrape shows IDLE (between tool calls)
         if [ "$PANE_STATE_0" = "IDLE" ]; then
           PANE_STATE_0="WORKING"
-          _log "watchdog-scan: manager hook=BUSY overrides scrape=IDLE"
+          _log "watchdog-scan: team lead hook=BUSY overrides scrape=IDLE"
         fi
         ;;
       READY|FINISHED)
@@ -282,13 +282,13 @@ if [ "$_team_type" != "freelancer" ]; then
         if [ "$PANE_STATE_0" = "WORKING" ]; then
           echo "MANAGER_POSSIBLY_STUCK (hook=${_mgr_hook_status} scrape=WORKING)"
           SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_POSSIBLY_STUCK hook=${_mgr_hook_status} scrape=WORKING${NL}"
-          _log "watchdog-scan: manager possibly stuck — hook=${_mgr_hook_status} but scrape=WORKING"
+          _log "watchdog-scan: team lead possibly stuck — hook=${_mgr_hook_status} but scrape=WORKING"
         fi
         ;;
     esac
   fi
 
-  # --- Manager activity events (written by hooks, consumed here) ---
+  # --- Team Lead activity events (written by hooks, consumed here) ---
   MGR_ACTIVITY_FILE="${RUNTIME_DIR}/status/manager_activity_W${TARGET_WINDOW}"
   _mgr_activity_event=""
   _mgr_activity_task=""
@@ -305,70 +305,70 @@ if [ "$_team_type" != "freelancer" ]; then
     if [ -n "$_mgr_activity_event" ]; then
       echo "MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}"
       SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}MANAGER_ACTIVITY ${_mgr_activity_event} ${_mgr_activity_task}${NL}"
-      _log "watchdog-scan: manager activity=${_mgr_activity_event} task=${_mgr_activity_task}"
+      _log "watchdog-scan: team lead activity=${_mgr_activity_event} task=${_mgr_activity_task}"
     fi
   fi
 fi
 
-# --- Taskmaster health check (skip when SM is the caller) ---
-if [ "$TARGET_WINDOW" = "0" ] && [ "${DOEY_ROLE:-}" != "session_manager" ]; then
-  _sm_pane_ref="${SESSION_NAME}:0.2"
-  _sm_cmd=$(tmux display-message -t "$_sm_pane_ref" -p '#{pane_current_command}' 2>/dev/null) || _sm_cmd=""
-  # Only check if SM pane exists and has a running Claude process
-  if [ -n "$_sm_cmd" ]; then
-    _sm_capture=$(tmux capture-pane -t "$_sm_pane_ref" -p -S -3 2>/dev/null) || _sm_capture=""
-    _sm_is_idle="false"
+# --- Taskmaster health check (skip when TM is the caller) ---
+if [ "$TARGET_WINDOW" = "0" ] && [ "${DOEY_ROLE:-}" != "taskmaster" ]; then
+  _tm_pane_ref="${SESSION_NAME}:0.2"
+  _tm_cmd=$(tmux display-message -t "$_tm_pane_ref" -p '#{pane_current_command}' 2>/dev/null) || _tm_cmd=""
+  # Only check if TM pane exists and has a running Claude process
+  if [ -n "$_tm_cmd" ]; then
+    _tm_capture=$(tmux capture-pane -t "$_tm_pane_ref" -p -S -3 2>/dev/null) || _tm_capture=""
+    _tm_is_idle="false"
     # Check for bare prompt with no activity (Claude has stopped)
-    case "$_sm_cmd" in
+    case "$_tm_cmd" in
       bash|zsh|sh|fish)
-        # SM process has exited to a bare shell — definitely idle/crashed
-        _sm_is_idle="true"
+        # TM process has exited to a bare shell — definitely idle/crashed
+        _tm_is_idle="true"
         ;;
       *)
-        # Check if the SM pane shows only a bare prompt (❯) indicating it stopped
-        case "$_sm_capture" in
+        # Check if the TM pane shows only a bare prompt (❯) indicating it stopped
+        case "$_tm_capture" in
           *'❯'*)
             # Verify it's not actively working — bare prompt means idle
-            _sm_hook_file="${RUNTIME_DIR}/status/${SESSION_SAFE}_0_2.status"
-            _read_hook_status "$_sm_hook_file"
+            _tm_hook_file="${RUNTIME_DIR}/status/${SESSION_SAFE}_0_2.status"
+            _read_hook_status "$_tm_hook_file"
             case "$_hook_status" in
               BUSY) ;;  # Hook says busy, trust it
-              *) _sm_is_idle="true" ;;
+              *) _tm_is_idle="true" ;;
             esac
             ;;
         esac
         ;;
     esac
 
-    if [ "$_sm_is_idle" = "true" ]; then
-      _sm_retry_dir="${RUNTIME_DIR}/watchdog"
-      mkdir -p "$_sm_retry_dir" 2>/dev/null || true
-      _sm_retry_file="${_sm_retry_dir}/sm_retrigger_count"
-      _sm_retry_count=0
-      [ -f "$_sm_retry_file" ] && read -r _sm_retry_count < "$_sm_retry_file" 2>/dev/null
-      is_numeric "$_sm_retry_count" || _sm_retry_count=0
+    if [ "$_tm_is_idle" = "true" ]; then
+      _tm_retry_dir="${RUNTIME_DIR}/watchdog"
+      mkdir -p "$_tm_retry_dir" 2>/dev/null || true
+      _tm_retry_file="${_tm_retry_dir}/sm_retrigger_count"
+      _tm_retry_count=0
+      [ -f "$_tm_retry_file" ] && read -r _tm_retry_count < "$_tm_retry_file" 2>/dev/null
+      is_numeric "$_tm_retry_count" || _tm_retry_count=0
 
-      if [ "$_sm_retry_count" -lt 3 ]; then
-        # Wake SM via trigger file — session-manager-wait.sh watches for this.
-        # Avoids send-keys which causes SM BUSY→IDLE cycle that resets the counter.
-        _sm_trigger_dir="${RUNTIME_DIR}/triggers"
-        mkdir -p "$_sm_trigger_dir" 2>/dev/null || true
-        _sm_pane_safe="${SESSION_SAFE}_0_2"
-        touch "${_sm_trigger_dir}/${_sm_pane_safe}.trigger"
-        _sm_retry_count=$((_sm_retry_count + 1))
-        _atomic_write "$_sm_retry_file" "$_sm_retry_count"
-        _log "watchdog-scan: SM idle — trigger file written (attempt ${_sm_retry_count}/3)"
-        echo "SM_RETRIGGER (attempt ${_sm_retry_count}/3)"
-        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 SM_RETRIGGER $(date +%s) attempt=${_sm_retry_count}/3${NL}"
+      if [ "$_tm_retry_count" -lt 3 ]; then
+        # Wake TM via trigger file — taskmaster-wait.sh watches for this.
+        # Avoids send-keys which causes TM BUSY→IDLE cycle that resets the counter.
+        _tm_trigger_dir="${RUNTIME_DIR}/triggers"
+        mkdir -p "$_tm_trigger_dir" 2>/dev/null || true
+        _tm_pane_safe="${SESSION_SAFE}_0_2"
+        touch "${_tm_trigger_dir}/${_tm_pane_safe}.trigger"
+        _tm_retry_count=$((_tm_retry_count + 1))
+        _atomic_write "$_tm_retry_file" "$_tm_retry_count"
+        _log "watchdog-scan: TM idle — trigger file written (attempt ${_tm_retry_count}/3)"
+        echo "TM_RETRIGGER (attempt ${_tm_retry_count}/3)"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 TM_RETRIGGER $(date +%s) attempt=${_tm_retry_count}/3${NL}"
         # Write lifecycle event file for consumption
-        _sm_lf_dir="${RUNTIME_DIR}/lifecycle"
-        mkdir -p "$_sm_lf_dir" 2>/dev/null || true
-        _sm_lf="${_sm_lf_dir}/W0_0.1_$(date +%s).evt"
-        echo "0.1|SM_RETRIGGER|$(date +%s)|attempt=${_sm_retry_count}/3" > "${_sm_lf}.tmp" && mv "${_sm_lf}.tmp" "$_sm_lf"
+        _tm_lf_dir="${RUNTIME_DIR}/lifecycle"
+        mkdir -p "$_tm_lf_dir" 2>/dev/null || true
+        _tm_lf="${_tm_lf_dir}/W0_0.1_$(date +%s).evt"
+        echo "0.1|TM_RETRIGGER|$(date +%s)|attempt=${_tm_retry_count}/3" > "${_tm_lf}.tmp" && mv "${_tm_lf}.tmp" "$_tm_lf"
       else
-        echo "SM_STUCK (3 retrigger attempts exhausted)"
+        echo "TM_STUCK (3 retrigger attempts exhausted)"
         _log_error_wd "ANOMALY" "Taskmaster stuck after 3 retrigger attempts" "pane=0.1"
-        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 SM_STUCK $(date +%s) retriggers_exhausted${NL}"
+        SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 TM_STUCK $(date +%s) retriggers_exhausted${NL}"
       fi
     fi
   fi

@@ -140,9 +140,9 @@ ${summary}"
 }
 
 # Belt-and-suspenders: send-keys wake to Taskmaster (supplements trigger file)
-_wake_sm() {
-  local sm_pane="${SM_PANE:-0.2}"
-  tmux send-keys -t "${SESSION_NAME}:${sm_pane}" "" 2>/dev/null || true
+_wake_tm() {
+  local tm_pane="${SM_PANE:-0.2}"
+  tmux send-keys -t "${SESSION_NAME}:${tm_pane}" "" 2>/dev/null || true
 }
 
 # --- Worker: notify its Team Lead (or Taskmaster for freelancers) ---
@@ -164,19 +164,19 @@ if is_worker; then
 
   if [ "$_team_type" = "freelancer" ]; then
     # Freelancer workers notify Taskmaster directly (no manager in this team)
-    _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
-    SM_TARGET="$SESSION_NAME:${_sm_pane:-0.2}"
-    if ! tmux display-message -t "$SM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
-      _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$SM_TARGET"
+    _tm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
+    TM_TARGET="$SESSION_NAME:${_tm_pane:-0.2}"
+    if ! tmux display-message -t "$TM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
+      _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$TM_TARGET"
       exit 0
     fi
     MSG="Freelancer ${PANE_DISPLAY} finished (${STATUS})"
     [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
-    _notify_pane "$SM_TARGET" "freelancer_finished" "$MSG"
-    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${SM_TARGET}" "type=freelancer_finished" "delivery=file" "success=true"
-    # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
+    _notify_pane "$TM_TARGET" "freelancer_finished" "$MSG"
+    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${TM_TARGET}" "type=freelancer_finished" "delivery=file" "success=true"
+    # Also touch TM-specific trigger for taskmaster-wait.sh fast wakeup
     touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
-    _log "stop-notify: sent freelancer_finished to SM at $SM_TARGET"
+    _log "stop-notify: sent freelancer_finished to TM at $TM_TARGET"
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
     MGR_PANE="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
@@ -188,12 +188,12 @@ if is_worker; then
     [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
     _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
     type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${MGR_PANE}" "type=worker_finished" "delivery=file" "success=true"
-    _log "stop-notify: sent worker_finished to manager at $MGR_PANE"
+    _log "stop-notify: sent worker_finished to team lead at $MGR_PANE"
   fi
 
   # Dispatch workflow hooks if this team has a team definition
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
-  _wake_sm
+  _wake_tm
   exit 0
 fi
 
@@ -204,7 +204,7 @@ if is_manager; then
   _cur=$(grep '^STATUS:' "$STATUS_FILE" 2>/dev/null | head -1)
   [ "${_cur#STATUS: }" = "BUSY" ] || exit 0
 
-  SM_PANE=$(get_sm_pane)
+  SM_PANE=$(get_tm_pane)
   if ! tmux display-message -t "$SESSION_NAME:${SM_PANE}" -p '#{pane_pid}' >/dev/null 2>&1; then
     _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$SESSION_NAME:${SM_PANE}"
     exit 0
@@ -213,12 +213,12 @@ if is_manager; then
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
-  _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
+  _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Lead finished: ${SUMMARY}"
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${SESSION_NAME}:${SM_PANE}" "type=task_complete" "delivery=file" "success=true"
-  # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
+  # Also touch TM-specific trigger for taskmaster-wait.sh fast wakeup
   touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
   _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
-  _wake_sm
+  _wake_tm
   exit 0
 fi
 
@@ -231,9 +231,9 @@ if is_taskmaster; then
   BOSS_TARGET="$SESSION_NAME:0.1"
   if tmux display-message -t "$BOSS_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
     SUMMARY=$(sanitize_message "$LAST_MSG" 150)
-    _notify_pane "$BOSS_TARGET" "sm_update" "SM update: ${SUMMARY}"
-    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${BOSS_TARGET}" "type=sm_update" "delivery=file" "success=true"
-    _log "stop-notify: sent sm_update to Boss at $BOSS_TARGET"
+    _notify_pane "$BOSS_TARGET" "tm_update" "TM update: ${SUMMARY}"
+    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${BOSS_TARGET}" "type=tm_update" "delivery=file" "success=true"
+    _log "stop-notify: sent tm_update to Boss at $BOSS_TARGET"
   fi
 fi
 
