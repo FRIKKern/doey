@@ -145,14 +145,14 @@ fi
 
 # Git commit/push: blocked for all roles except session_manager and git_agent
 # Read-only git commands (status, diff, log, show, branch) are always allowed
-if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "git_agent" ] && [ "$_DOEY_ROLE" != "boss" ]; then
+if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "boss" ]; then
   _GIT_CMD=$(_json_str tool_input.command)
   if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
     case "$_GIT_CMD" in
       *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
         _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_GIT_CMD"
         _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
-        echo "BLOCKED: Git operations are handled by Session Manager. Send a message to SM with what you need committed." >&2
+        echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager." >&2
         exit 2 ;;
     esac
   fi
@@ -171,24 +171,6 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ] || [ "
       exit 2 ;;
   esac
   _dbg_write "allow_manager"
-  exit 0
-fi
-
-# Git Agent: allow git/gh commands, block other dangerous patterns via _check_blocked
-if [ "$_DOEY_ROLE" = "git_agent" ]; then
-  TOOL_COMMAND=$(_json_str tool_input.command)
-  [ -z "$TOOL_COMMAND" ] && exit 0
-  [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
-  # _check_blocked catches git/gh too — skip that match for git_agent
-  case "$TOOL_COMMAND" in *"git push"*|*"git commit"*|*"gh pr create"*|*"gh pr merge"*)
-    _dbg_write "allow_git_agent_git"
-    exit 0 ;; esac
-  if _check_blocked "$TOOL_COMMAND"; then
-    _log_block "TOOL_BLOCKED" "Git Agent $MSG blocked" "$TOOL_COMMAND"
-    _dbg_write "block_git_agent"
-    echo "BLOCKED: Git Agent cannot run ${MSG}." >&2; exit 2
-  fi
-  _dbg_write "allow_git_agent"
   exit 0
 fi
 

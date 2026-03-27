@@ -22,11 +22,11 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 
 Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
-| Field | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Git Agent | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
-|-------|---------|-------------|----------|---------------------|-----------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
-| `model` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
-| `color` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#F05033` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
-| `memory` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
+| Field | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
+|-------|---------|-------------|----------|---------------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
+| `model` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
+| `color` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
+| `memory` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
 
 Precedence: CLI `--model` > frontmatter > settings.
 

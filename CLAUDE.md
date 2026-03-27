@@ -45,7 +45,6 @@ Things that have tricked us before:
 | Window Manager | `W.0` | Plans, delegates, validates all context. Never writes code |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
-| Git Agent | `F.x` | Dedicated git specialist. Has commit/push permissions |
 | Test Driver | external | E2E test runner via `doey test` |
 
 **Communication:** User → Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Watchdog → Manager (alerts) | Manager → Session Manager (cross-team)
@@ -57,7 +56,6 @@ Things that have tricked us before:
 | Role | Blocked |
 |------|---------|
 | Window Manager | None (full access) |
-| Git Agent | destructive rm, shutdown, tmux commands. **Allowed:** git commit/push |
 | Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, destructive rm, shutdown, tmux kill |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 

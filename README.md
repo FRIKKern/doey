@@ -81,7 +81,6 @@ Window 0 is the dashboard; team windows (1+) each have a Manager + Workers.
 | Window Manager | `W.0` | The bastion — plans, delegates, validates all context |
 | Workers | `W.1+` | Execute tasks in parallel |
 | Freelancers | `F.0+` | Independent workers — no manager, available to any team |
-| Git Agent | `F.0` | Dedicated git specialist with commit/push permissions |
 
 ### Default Setup
 
@@ -102,8 +101,7 @@ Window 2 — Team 2 (local)
   └── 4 Workers (2x2 dynamic grid)
 
 Window 3 — Freelancers
-  ├── Git Agent (pane 0)
-  └── 5 independent workers
+  └── 6 independent workers
 ```
 
 2 managed teams + 1 freelancer pool + dashboard. Scale with `doey add` (worker columns) or `doey add-team` (entire teams). Customize via [config](#configuration).

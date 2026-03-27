@@ -2896,7 +2896,7 @@ rebalance_grid_layout() {
   local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
 
   if [ "$_rgl_is_freelancer" = "true" ]; then
-    # Freelancer: pane 0 (Git Agent) full-height left column, workers in 2-row columns on right
+    # Freelancer: pane 0 full-height left column, workers in 2-row columns on right
     local fl_mgr_width=$mgr_width
     local fl_max_mgr=$((win_w / 3))
     (( fl_mgr_width > fl_max_mgr )) && fl_mgr_width=$fl_max_mgr
@@ -3550,25 +3550,18 @@ add_dynamic_team_window() {
     local _fl_acronym=""
     [ -f "${runtime_dir}/session.env" ] && _fl_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
 
-    # Launch F0 as Git Agent in pane 0 (top of first column)
-    local _fl_pane_id="t${window_index}-git"
+    # Launch F0 as a regular freelancer worker in pane 0 (top of first column)
+    local _fl_pane_id="t${window_index}-f0"
     [ -n "$_fl_acronym" ] && _fl_pane_id="${_fl_acronym}-${_fl_pane_id}"
     local _fl_prompt="${runtime_dir}/worker-system-prompt-w${window_index}-0.md"
     cp "${runtime_dir}/worker-system-prompt.md" "$_fl_prompt"
-    printf '\n\n## Identity\nYou are the Git Agent (%s) in pane %s.0 of session %s.\nYou are the dedicated git specialist for the Freelancer pool.\n' \
+    printf '\n\n## Identity\nYou are Freelancer 0 (%s) in pane %s.0 of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
       "$_fl_pane_id" "$window_index" "$session" >> "$_fl_prompt"
-    local _git_agent
-    _git_agent=$(generate_team_agent "doey-git-agent" "$window_index")
-    local _fl_cmd="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} Git\" --agent \"$_git_agent\""
+    local _fl_cmd="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F0\""
     [ -f "${runtime_dir}/doey-settings.json" ] && _fl_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
     _fl_cmd+=" --append-system-prompt-file \"${_fl_prompt}\""
-    # Pre-seed role override so on-session-start.sh detects git_agent (not worker)
-    local _ro_key
-    _ro_key=$(echo "${session}:${window_index}.0" | tr ':.' '_')
-    mkdir -p "${runtime_dir}/status"
-    printf '%s' "git_agent" > "${runtime_dir}/status/${_ro_key}.role_override"
     tmux send-keys -t "$session:${window_index}.0" "$_fl_cmd" Enter
-    tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} Git"
+    tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
     write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
     sleep "$DOEY_WORKER_LAUNCH_DELAY"
 
