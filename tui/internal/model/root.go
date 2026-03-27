@@ -113,6 +113,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ToggleStartupResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
+	case DispatchTeamMsg:
+		runtimeDir := m.runtime.RuntimeDir()
+		sessionName := m.snapshot.Session.SessionName
+		return m, DispatchTeamCmd(runtimeDir, sessionName, msg.WindowIdx, msg.Task)
+
+	case DispatchTeamResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
 	case EditTeamMsg:
 		// Find the team def and open editor
 		for _, td := range m.snapshot.TeamDefs {

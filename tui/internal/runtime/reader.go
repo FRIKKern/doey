@@ -52,6 +52,17 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 
 	snap.Panes = r.parsePaneStatuses()
 	snap.Tasks = r.parseTasks()
+	snap.Subtasks = r.parseSubtasks()
+
+	// Attach subtasks to their parent tasks
+	subtasksByTask := make(map[string][]Subtask)
+	for _, st := range snap.Subtasks {
+		subtasksByTask[st.TaskID] = append(subtasksByTask[st.TaskID], st)
+	}
+	for i := range snap.Tasks {
+		snap.Tasks[i].Subtasks = subtasksByTask[snap.Tasks[i].ID]
+	}
+
 	snap.Results = r.parseResults()
 	snap.ContextPct = r.parseContextPcts()
 	snap.Uptime = r.calculateUptime()
@@ -139,6 +150,7 @@ func (r *Reader) parseTeamConfig(windowIndex int) (TeamConfig, error) {
 		WatchdogPane:   env["WATCHDOG_PANE"],
 		TeamName:       env["TEAM_NAME"],
 		TeamType:       env["TEAM_TYPE"],
+		TeamDef:        env["TEAM_DEF"],
 		WorktreeDir:    env["WORKTREE_DIR"],
 		WorktreeBranch: env["WORKTREE_BRANCH"],
 	}
@@ -225,6 +237,34 @@ func (r *Reader) parseTasks() []Task {
 	}
 
 	return tasks
+}
+
+func (r *Reader) parseSubtasks() []Subtask {
+	var subtasks []Subtask
+
+	matches, err := filepath.Glob(filepath.Join(r.runtimeDir, "tasks", "*", "subtasks", "*.subtask"))
+	if err != nil || len(matches) == 0 {
+		return subtasks
+	}
+
+	for _, path := range matches {
+		env, err := parseEnvFile(path)
+		if err != nil {
+			continue
+		}
+		created, _ := strconv.ParseInt(env["CREATED"], 10, 64)
+		updated, _ := strconv.ParseInt(env["UPDATED"], 10, 64)
+		subtasks = append(subtasks, Subtask{
+			TaskID:  env["TASK_ID"],
+			Pane:    env["PANE"],
+			Title:   env["TITLE"],
+			Status:  env["STATUS"],
+			Created: created,
+			Updated: updated,
+		})
+	}
+
+	return subtasks
 }
 
 func (r *Reader) parseResults() map[string]PaneResult {
@@ -551,32 +591,79 @@ func parseFrontmatter(path string) map[string]string {
 }
 
 // buildTeamEntries merges team definitions with running state and user preferences.
+// Handles multiple running instances of the same team definition correctly.
 func buildTeamEntries(defs []TeamDef, teams map[int]TeamConfig, cfg TeamUserConfig) []TeamEntry {
-	entries := make([]TeamEntry, 0, len(defs))
+	entries := make([]TeamEntry, 0, len(defs)+len(teams))
 
-	// Build lookup: team name -> running TeamConfig
-	running := make(map[string]TeamConfig)
+	// Build lookup: team def name -> list of running TeamConfigs
+	// Use TeamDef field if set, fall back to TeamName
+	runningByDef := make(map[string][]TeamConfig)
 	for _, tc := range teams {
-		if tc.TeamName != "" {
-			running[tc.TeamName] = tc
+		defName := tc.TeamDef
+		if defName == "" {
+			defName = tc.TeamName
+		}
+		if defName != "" {
+			runningByDef[defName] = append(runningByDef[defName], tc)
 		}
 	}
 
+	// Track which def names we've handled
+	handled := make(map[string]bool)
+
+	// For each catalog def, create entries for running instances or one available entry
 	for _, def := range defs {
-		entry := TeamEntry{
-			Def:       def,
-			WindowIdx: -1,
-			Starred:   cfg.IsStarred(def.Name),
-			Startup:   cfg.IsStartup(def.Name),
+		handled[def.Name] = true
+		instances := runningByDef[def.Name]
+
+		if len(instances) == 0 {
+			// Not running — single available entry
+			entries = append(entries, TeamEntry{
+				Def:       def,
+				WindowIdx: -1,
+				Label:     def.Name,
+				Starred:   cfg.IsStarred(def.Name),
+				Startup:   cfg.IsStartup(def.Name),
+			})
+			continue
 		}
-		if tc, ok := running[def.Name]; ok {
-			entry.Running = true
-			entry.WindowIdx = tc.WindowIndex
+
+		// One entry per running instance
+		for _, tc := range instances {
+			label := fmt.Sprintf("%s (W%d %s)", def.Name, tc.WindowIndex, tc.TeamType)
+			entries = append(entries, TeamEntry{
+				Def:       def,
+				Running:   true,
+				WindowIdx: tc.WindowIndex,
+				Label:     label,
+				Starred:   cfg.IsStarred(def.Name),
+				Startup:   cfg.IsStartup(def.Name),
+			})
 		}
-		entries = append(entries, entry)
 	}
 
+	// Running teams that don't match any catalog def
+	for defName, instances := range runningByDef {
+		if handled[defName] {
+			continue
+		}
+		for _, tc := range instances {
+			syntheticDef := TeamDef{Name: defName}
+			label := fmt.Sprintf("%s (W%d %s)", defName, tc.WindowIndex, tc.TeamType)
+			entries = append(entries, TeamEntry{
+				Def:       syntheticDef,
+				Running:   true,
+				WindowIdx: tc.WindowIndex,
+				Label:     label,
+			})
+		}
+	}
+
+	// Sort: running first, then available; alpha within each group
 	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].Running != entries[j].Running {
+			return entries[i].Running
+		}
 		if entries[i].Starred != entries[j].Starred {
 			return entries[i].Starred
 		}

@@ -21,6 +21,7 @@ type TeamConfig struct {
 	WorkerCount    int
 	TeamName       string
 	TeamType       string // "local", "premade", "freelancer"
+	TeamDef        string // which .team.md definition this instance uses
 	WorktreeDir    string
 	WorktreeBranch string
 }
@@ -35,10 +36,22 @@ type PaneStatus struct {
 
 // Task from tasks/*.task
 type Task struct {
-	ID      string
-	Title   string
-	Status  string // active, pending_user_confirmation, done, cancelled
+	ID       string
+	Title    string
+	Status   string    // active, pending_user_confirmation, done, cancelled
+	Created  int64     // unix epoch
+	Subtasks []Subtask // worker assignments
+}
+
+// Subtask represents a worker assignment under a parent task.
+// Stored in $RUNTIME_DIR/tasks/<task_id>/subtasks/<pane>.subtask
+type Subtask struct {
+	TaskID  string // parent task ID
+	Pane    string // e.g. "2.3" — which worker pane
+	Title   string // what was dispatched
+	Status  string // active, done, failed
 	Created int64  // unix epoch
+	Updated int64  // unix epoch
 }
 
 // PaneResult from results/pane_<W>_<P>.json
@@ -101,6 +114,7 @@ type TeamEntry struct {
 	Def       TeamDef // the .team.md definition
 	Running   bool    // is this team currently active as a tmux window?
 	WindowIdx int     // tmux window index if running, -1 if not
+	Label     string  // display name, e.g. "generic (W1 freelancer)"
 	Starred   bool    // user favorite
 	Startup   bool    // auto-launch on session start
 }
@@ -117,6 +131,7 @@ type Snapshot struct {
 	Teams      map[int]TeamConfig    // window index -> team config
 	Panes      map[string]PaneStatus // pane ID -> status
 	Tasks      []Task
+	Subtasks   []Subtask // all subtasks across all tasks (for dashboard counts)
 	Results    map[string]PaneResult // pane ID -> result
 	ContextPct map[string]int        // pane ID -> context percentage
 	Uptime     time.Duration
