@@ -12,6 +12,7 @@ type KeyMap struct {
 	PanelTwo   key.Binding
 	PanelThree key.Binding
 	PanelFour  key.Binding
+	PanelFive  key.Binding
 	Up         key.Binding
 	Down       key.Binding
 	Select     key.Binding
@@ -57,6 +58,10 @@ func DefaultKeyMap() KeyMap {
 		PanelFour: key.NewBinding(
 			key.WithKeys("4"),
 			key.WithHelp("4", "agents"),
+		),
+		PanelFive: key.NewBinding(
+			key.WithKeys("5"),
+			key.WithHelp("5", "debug"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
@@ -107,7 +112,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Select, k.Back},
 		{k.NextPanel, k.PrevPanel, k.LeftPanel, k.RightPanel},
-		{k.PanelOne, k.PanelTwo, k.PanelThree, k.PanelFour, k.Filter},
+		{k.PanelOne, k.PanelTwo, k.PanelThree, k.PanelFour, k.PanelFive, k.Filter},
 		{k.Refresh, k.Help, k.Quit, k.ForceQuit},
 	}
 }

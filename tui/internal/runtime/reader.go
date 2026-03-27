@@ -74,6 +74,7 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 
 	snap.TeamUserCfg, _ = ReadTeamUserConfig()
 	snap.TeamEntries = buildTeamEntries(snap.TeamDefs, snap.Teams, snap.TeamUserCfg)
+	snap.DebugEntries = r.parseDebugEntries()
 
 	return snap, nil
 }
@@ -671,6 +672,189 @@ func buildTeamEntries(defs []TeamDef, teams map[int]TeamConfig, cfg TeamUserConf
 	})
 
 	return entries
+}
+
+// parseDebugEntries collects debug events from all runtime sources.
+// Returns entries sorted by timestamp descending (newest first), capped at 200.
+func (r *Reader) parseDebugEntries() []DebugEntry {
+	var entries []DebugEntry
+
+	// 1. IPC messages — read .msg files WITHOUT deleting them
+	matches, _ := filepath.Glob(filepath.Join(r.runtimeDir, "messages", "*.msg"))
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		content := string(data)
+
+		from := parseHeaderLine(content, "FROM:")
+		subject := parseHeaderLine(content, "SUBJECT:")
+		summary := fmt.Sprintf("[%s] %s → %s", subject, from, filepath.Base(path))
+
+		entries = append(entries, DebugEntry{
+			Time:     info.ModTime(),
+			Type:     "IPC_MESSAGE",
+			Severity: "INFO",
+			Source:   from,
+			Summary:  summary,
+			Detail:   content,
+		})
+	}
+
+	// 2. Crash alerts — runtimeDir/status/crash_pane_*
+	matches, _ = filepath.Glob(filepath.Join(r.runtimeDir, "status", "crash_pane_*"))
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		data, _ := os.ReadFile(path)
+
+		pane := strings.TrimPrefix(filepath.Base(path), "crash_pane_")
+		entries = append(entries, DebugEntry{
+			Time:     info.ModTime(),
+			Type:     "CRASH",
+			Severity: "ERROR",
+			Source:   pane,
+			Summary:  fmt.Sprintf("Crash detected: pane %s", pane),
+			Detail:   string(data),
+		})
+	}
+
+	// 3. Issues — runtimeDir/issues/*.issue
+	matches, _ = filepath.Glob(filepath.Join(r.runtimeDir, "issues", "*.issue"))
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		data, _ := os.ReadFile(path)
+		content := string(data)
+
+		severity := parseHeaderLine(content, "SEVERITY:")
+		if severity == "" {
+			severity = "WARN"
+		}
+		category := parseHeaderLine(content, "CATEGORY:")
+		pane := parseHeaderLine(content, "PANE:")
+
+		entries = append(entries, DebugEntry{
+			Time:     info.ModTime(),
+			Type:     "ISSUE",
+			Severity: mapIssueSeverity(severity),
+			Source:   pane,
+			Summary:  fmt.Sprintf("[%s] %s", category, firstLine(content)),
+			Detail:   content,
+		})
+	}
+
+	// 4. Hook debug events — runtimeDir/debug/* (only if /doey-debug on)
+	matches, _ = filepath.Glob(filepath.Join(r.runtimeDir, "debug", "*"))
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		data, _ := os.ReadFile(path)
+
+		entries = append(entries, DebugEntry{
+			Time:     info.ModTime(),
+			Type:     "HOOK_EVENT",
+			Severity: "DEBUG",
+			Source:   filepath.Base(path),
+			Summary:  firstLine(string(data)),
+			Detail:   string(data),
+		})
+	}
+
+	// 5. Status changes — derive from status files (latest change per pane)
+	matches, _ = filepath.Glob(filepath.Join(r.runtimeDir, "status", "*.status"))
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		data, _ := os.ReadFile(path)
+		content := string(data)
+
+		status := parseHeaderLine(content, "STATUS:")
+		pane := parseHeaderLine(content, "PANE:")
+		task := parseHeaderLine(content, "TASK:")
+
+		sev := "INFO"
+		if status == "ERROR" {
+			sev = "ERROR"
+		}
+
+		summary := fmt.Sprintf("%s → %s", pane, status)
+		if task != "" {
+			maxTask := 60
+			if len(task) > maxTask {
+				task = task[:maxTask] + "…"
+			}
+			summary += ": " + task
+		}
+
+		entries = append(entries, DebugEntry{
+			Time:     info.ModTime(),
+			Type:     "STATUS_CHANGE",
+			Severity: sev,
+			Source:   pane,
+			Summary:  summary,
+			Detail:   content,
+		})
+	}
+
+	// Sort by time descending (newest first)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Time.After(entries[j].Time)
+	})
+
+	// Cap at 200 entries
+	if len(entries) > 200 {
+		entries = entries[:200]
+	}
+
+	return entries
+}
+
+// parseHeaderLine extracts the value after a "KEY: value" line from content.
+func parseHeaderLine(content, prefix string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return ""
+}
+
+// firstLine returns the first non-empty line of text.
+func firstLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+// mapIssueSeverity normalizes issue severity to our standard levels.
+func mapIssueSeverity(s string) string {
+	switch strings.ToUpper(s) {
+	case "CRITICAL", "HIGH":
+		return "ERROR"
+	case "MEDIUM":
+		return "WARN"
+	default:
+		return "INFO"
+	}
 }
 
 // underscoreToPaneID converts "doey-proj_W_P" or "W_P" to a pane-style ID "W.P"

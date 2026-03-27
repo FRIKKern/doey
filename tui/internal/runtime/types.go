@@ -54,6 +54,16 @@ type Subtask struct {
 	Updated int64  // unix epoch
 }
 
+// DebugEntry represents a single debug event from any source.
+type DebugEntry struct {
+	Time     time.Time // when this event occurred
+	Type     string    // STATUS_CHANGE, IPC_MESSAGE, HOOK_EVENT, CRASH, ISSUE, LOG
+	Severity string    // ERROR, WARN, INFO, DEBUG
+	Source   string    // pane ID, hook name, or file that generated this
+	Summary  string    // one-line description
+	Detail   string    // full content (shown in detail view)
+}
+
 // PaneResult from results/pane_<W>_<P>.json
 type PaneResult struct {
 	Pane         string   `json:"pane"`
@@ -137,6 +147,7 @@ type Snapshot struct {
 	Uptime     time.Duration
 	AgentDefs   []AgentDef     `json:"agent_defs"`
 	TeamDefs    []TeamDef      `json:"team_defs"`
+	DebugEntries []DebugEntry  // chronological debug events
 	TeamEntries []TeamEntry    // merged view: defs + running state + user prefs
 	TeamUserCfg TeamUserConfig // persisted preferences
 }
