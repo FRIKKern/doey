@@ -6,11 +6,11 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 
 | Precedence | Source | Applies To |
 |------------|--------|------------|
-| Lowest | Agent definitions (`agents/`) | Manager, Session Mgr, Watchdog |
+| Lowest | Agent definitions (`agents/`) | Boss, Manager, Session Mgr, Watchdog |
 | | Settings (4-file merge) | All |
 | | Hooks (`.claude/hooks/`) | All |
 | | Skills (`.claude/skills/`) | Manager (+ 3 for Workers) |
-| | Persistent memory | Manager, Session Mgr |
+| | Persistent memory | Boss, Manager, Session Mgr |
 | | Environment vars (`session.env`) | All |
 | | CLI launch flags | Per-instance |
 | | tmux layout | All |
@@ -22,11 +22,11 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 
 Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
-| Field | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
-|-------|---------|-------------|----------|---------------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
-| `model` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
-| `color` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
-| `memory` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
+| Field | Boss | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
+|-------|------|---------|-------------|----------|---------------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
+| `model` | `opus` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
+| `color` | `#E74C3C` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
+| `memory` | `user` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
 
 Precedence: CLI `--model` > frontmatter > settings.
 
@@ -85,6 +85,7 @@ Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, lo
 
 Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
 
+- Boss: `~/.claude/agent-memory/doey-boss/MEMORY.md`
 - Manager: `~/.claude/agent-memory/doey-manager/MEMORY.md`
 - Session Mgr: `~/.claude/agent-memory/doey-session-manager/MEMORY.md`
 - Watchdog: disabled (`memory: none`)
@@ -108,6 +109,7 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 
 | Instance | Command |
 |----------|---------|
+| Boss | `claude --dangerously-skip-permissions --agent doey-boss` |
 | Session Manager | `claude --dangerously-skip-permissions --agent doey-session-manager` |
 | Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
 | Watchdog | `claude --dangerously-skip-permissions --model sonnet --name "T<N> Watchdog" --agent doey-watchdog` |
@@ -141,7 +143,7 @@ All in `shell/`, installed to `~/.local/bin/` by `install.sh`.
 ## tmux Layout
 
 ```
-Dashboard: [0.0 Info] [0.1 Session Mgr] [0.2-0.7 Watchdog slots]
+Dashboard: [0.0 Info] [0.1 Boss] [0.2 Session Mgr] [0.3-0.7 Watchdog slots]
 Team W:    [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
 ```
 

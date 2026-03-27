@@ -143,9 +143,9 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
-# Git commit/push: blocked for all roles except session_manager and git_agent
+# Git commit/push: blocked for all roles except session_manager
 # Read-only git commands (status, diff, log, show, branch) are always allowed
-if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "boss" ]; then
+if [ "$_DOEY_ROLE" != "session_manager" ]; then
   _GIT_CMD=$(_json_str tool_input.command)
   if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
     case "$_GIT_CMD" in
@@ -158,8 +158,9 @@ if [ "$_DOEY_ROLE" != "session_manager" ] && [ "$_DOEY_ROLE" != "boss" ]; then
   fi
 fi
 
-# Manager/Session Manager/Boss: only block /rename via send-keys
-if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ] || [ "$_DOEY_ROLE" = "boss" ]; then
+# Manager/Session Manager: only block /rename via send-keys
+# Boss does NOT get send-keys access — it communicates via .msg files only
+if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   _CMD=$(_json_str tool_input.command)
   _CMD_STRIPPED=$(echo "$_CMD" | sed 's/^[[:space:]]*//')
   case "$_CMD_STRIPPED" in

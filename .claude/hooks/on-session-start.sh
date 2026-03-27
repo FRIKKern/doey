@@ -79,7 +79,6 @@ case "$ROLE" in
   session_manager) PANE_ID="sm" ;;
   info_panel)      PANE_ID="info" ;;
   manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
-  git_agent) PANE_ID="t${WINDOW_INDEX}-git" ;;
   worker)
     if [ "$_is_freelancer_team" = "true" ]; then
       PANE_ID="t${WINDOW_INDEX}-f${PANE_INDEX}"
@@ -172,7 +171,6 @@ case "$ROLE" in
   boss)            _TITLE="${PROJECT_NAME} Boss" ;;
   manager)         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} Mgr" ;;
   session_manager) _TITLE="${PROJECT_NAME} SM" ;;
-  git_agent)       _TITLE="Git Agent" ;;
   worker)
     if [ "$_is_freelancer_team" = "true" ]; then
       _TITLE="Freelancer"
