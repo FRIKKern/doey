@@ -86,7 +86,7 @@ restart_team() {
     echo "  ${W}.0 Manager ✓"; }
 
   for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
-    local PANE="${SESS}:${W}.${wp}" PANE_SAFE=$(echo "${SESS}:${W}.${wp}" | tr ':.' '_')
+    local PANE="${SESS}:${W}.${wp}" PANE_SAFE=$(echo "${SESS}:${W}.${wp}" | tr ':-.' '_')
     [ "$PANE" = "$SKIP_PANE" ] && continue
     [ -f "${RT}/status/${PANE_SAFE}.reserved" ] && { echo "  ${W}.${wp} — reserved"; continue; }
     local W_NAME=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null || echo "T${W} W${wp}")

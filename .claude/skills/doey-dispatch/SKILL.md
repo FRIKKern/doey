@@ -23,7 +23,7 @@ WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 if [ "$(grep '^GRID=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2)" = "dynamic" ]; then
   HAS_IDLE=false
   for WIDX in $(echo "$WORKER_PANES" | tr ',' ' '); do
-    W_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${WIDX}" | tr ':.' '_')
+    W_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${WIDX}" | tr ':-.' '_')
     [ -f "${RUNTIME_DIR}/status/${W_SAFE}.reserved" ] && continue
     case "$(tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.${WIDX}" -p -S -3 2>/dev/null)" in *'❯'*) HAS_IDLE=true; break ;; esac
   done
@@ -42,7 +42,7 @@ fi
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_')
+PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':-.' '_')
 [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && echo "Reserved — skip"
 tmux copy-mode -q -t "${SESSION_NAME}:${WINDOW_INDEX}.X" 2>/dev/null
 tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
@@ -54,7 +54,7 @@ tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 PANE="${SESSION_NAME}:${WINDOW_INDEX}.X"
-PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
 
 # 0. Re-check reservation
 [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { echo "Reserved — skip"; exit 0; }

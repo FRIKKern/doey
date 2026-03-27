@@ -17,13 +17,13 @@ Dispatch a research task with guaranteed report-back. `PANE_SAFE` = pane ID with
 
 Find unreserved worker at `❯` prompt. Skip if `.reserved` exists.
 
-bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE="${SESSION_NAME}:${WINDOW_INDEX}.X" && PANE_SAFE=$(echo "$PANE" | tr ':.' '_') && [ ! -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && tmux capture-pane -t "$PANE" -p -S -5 | grep -q '❯' && echo "Idle — OK"
+bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE="${SESSION_NAME}:${WINDOW_INDEX}.X" && PANE_SAFE=$(echo "$PANE" | tr ':-.' '_') && [ ! -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && tmux capture-pane -t "$PANE" -p -S -5 | grep -q '❯' && echo "Idle — OK"
 
 If reserved or no `❯` prompt: pick a different worker.
 
 ## Step 2: Create task marker + clear old report
 
-bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE="${SESSION_NAME}:${WINDOW_INDEX}.X" && PANE_SAFE=$(echo "$PANE" | tr ':.' '_') && mkdir -p "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" && cat > "${RUNTIME_DIR}/research/${PANE_SAFE}.task" << 'MARKER'
+bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE="${SESSION_NAME}:${WINDOW_INDEX}.X" && PANE_SAFE=$(echo "$PANE" | tr ':-.' '_') && mkdir -p "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports" && cat > "${RUNTIME_DIR}/research/${PANE_SAFE}.task" << 'MARKER'
 <research question or goal>
 MARKER
 rm -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
@@ -38,7 +38,7 @@ bash: tmux select-pane -t "$PANE" -T "research-topic_$(date +%m%d)"
 
 Write prompt to tmpfile, paste via load-buffer, submit.
 
-bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE="${SESSION_NAME}:${WINDOW_INDEX}.X" && PANE_SAFE=$(echo "$PANE" | tr ':.' '_') && REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report" && TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt") && cat > "$TASKFILE" << TASK
+bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE="${SESSION_NAME}:${WINDOW_INDEX}.X" && PANE_SAFE=$(echo "$PANE" | tr ':-.' '_') && REPORT_PATH="${RUNTIME_DIR}/reports/${PANE_SAFE}.report" && TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt") && cat > "$TASKFILE" << TASK
 Research & Planning Agent — project: ${PROJECT_NAME}
 Project directory: ${PROJECT_DIR}  |  Use absolute paths.
 
@@ -66,7 +66,7 @@ If idle: send Enter again, wait 3s, re-check. Still idle → unstick per `/doey-
 
 ## Step 6: Read report when worker finishes
 
-bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':.' '_') && [ -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" ] && cat "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" || echo "No report yet"
+bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env" && WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}" && PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':-.' '_') && [ -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" ] && cat "${RUNTIME_DIR}/reports/${PANE_SAFE}.report" || echo "No report yet"
 
 Present summary, ask which option (A or B), dispatch via `/doey-dispatch`. If no report yet, wait for FINISHED status.
 

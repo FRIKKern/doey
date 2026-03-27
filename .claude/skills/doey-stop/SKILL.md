@@ -45,7 +45,7 @@ fi
 ## Step 3: Update status
 
 ```bash
-PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
 mkdir -p "${RD}/status"
 cat > "${RD}/status/${PANE_SAFE}.status" << EOF
 PANE: ${PANE}

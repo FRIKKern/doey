@@ -37,7 +37,7 @@ PROJECT_NAME=$(grep '^PROJECT_NAME=' "${RUNTIME_DIR}/session.env" 2>/dev/null | 
 _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
 WORKER_PANES=$(_tv WORKER_PANES); WORKTREE_DIR=$(_tv WORKTREE_DIR); WORKTREE_BRANCH=$(_tv WORKTREE_BRANCH)
 WORKER_PANES_LIST=$(echo "$WORKER_PANES" | tr ',' ' ')
-SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.' '_')
+SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':-.' '_')
 
 BUSY_WORKERS=""
 for i in $WORKER_PANES_LIST; do
