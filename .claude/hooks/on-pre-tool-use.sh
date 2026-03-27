@@ -121,7 +121,25 @@ _dbg_write() {
   return 0
 }
 
-# Boss: full unrestricted access — Boss is the user's relay and must never be blocked
+# Boss: send-keys restricted to SM pane (0.2) only
+if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
+  _BOSS_CMD=$(_json_str tool_input.command)
+  case "$_BOSS_CMD" in *"send-keys"*"-t"*)
+    _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*-t[[:space:]]*//' | sed 's/[[:space:]].*//' | sed 's/^"//;s/"$//')
+    case "$_boss_target" in
+      *:0.2|*_0_2*|0.2)
+        _dbg_write "allow_boss_sendkeys_sm"
+        ;; # fall through to boss exit 0
+      *)
+        _log_block "TOOL_BLOCKED" "Boss send-keys to non-SM pane blocked" "$_BOSS_CMD"
+        _dbg_write "block_boss_sendkeys_${_boss_target}"
+        echo "BLOCKED: Boss may only send-keys to SM pane (0.2)" >&2
+        exit 2 ;;
+    esac
+  ;; esac
+fi
+
+# Boss: full access for everything else — Boss is the user's relay
 if [ "$_DOEY_ROLE" = "boss" ]; then
   _dbg_write "allow_boss_unrestricted"
   exit 0
@@ -165,7 +183,7 @@ if [ "$_DOEY_ROLE" != "session_manager" ]; then
 fi
 
 # Manager/Session Manager: only block /rename via send-keys
-# Boss does NOT get send-keys access — it communicates via .msg files only
+# Boss has send-keys access to SM pane (0.2) only — guarded above
 if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   _CMD=$(_json_str tool_input.command)
   _CMD_STRIPPED=$(echo "$_CMD" | sed 's/^[[:space:]]*//')

@@ -120,12 +120,59 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
 ```
 
-## SM Health Check
+## SM Health Monitoring
 
-If you send a message to SM and get no response after ~60 seconds, alert the user:
-> "Session Manager isn't responding. Run `doey repair` to diagnose."
+### How to check SM status
 
-**Boss never runs tmux commands** (no `send-keys`, `display-message`, `capture-pane`, etc.). Communication with SM is exclusively via `.msg` files and triggers.
+```bash
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+SM_STATUS_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
+cat "$SM_STATUS_FILE"
+```
+
+The file has: `PANE`, `UPDATED` (ISO timestamp), `STATUS`, `TASK` fields. SM writes a heartbeat every ~3 seconds when alive.
+
+### When to restart SM
+
+- If `STATUS` shows `FINISHED` or `ERROR`
+- If `UPDATED` timestamp is stale (more than 60 seconds old)
+- If the status file doesn't exist
+
+### How to check staleness
+
+```bash
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+SM_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
+if [ ! -f "$SM_FILE" ]; then echo "SM status file missing"; fi
+UPDATED=$(grep '^UPDATED:' "$SM_FILE" | cut -d' ' -f2-)
+UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S%z" "$UPDATED" +%s 2>/dev/null || echo 0)
+NOW_EPOCH=$(date +%s)
+AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
+if [ "$AGE" -gt 60 ]; then echo "SM stale: ${AGE}s old"; fi
+```
+
+### How to restart SM
+
+Boss has permission to `send-keys` to SM pane (0.2) **ONLY**. Use this to restart:
+
+```bash
+SM_PANE="${SESSION_NAME}:0.2"
+tmux send-keys -t "$SM_PANE" "Check your messages — you have pending .msg files in the messages directory. Process all messages and resume normal operations." Enter
+```
+
+### When Boss should check SM health
+
+- After sending a message to SM and getting no response within 60 seconds
+- When user reports SM seems unresponsive
+- After detecting SM status is `FINISHED`/`ERROR`/stale
+
+### Alternative: SM context issues
+
+If SM is running but unresponsive due to context exhaustion, use `/doey-watchdog-compact` to send `/compact` to SM and reduce its context window.
+
+### tmux restriction
+
+**Boss never runs tmux commands** (no `display-message`, `capture-pane`, etc.). Communication with SM is exclusively via `.msg` files and triggers. **EXCEPTION:** Boss may `send-keys` to SM pane (0.2) for restart only.
 
 ## Desktop Notifications
 

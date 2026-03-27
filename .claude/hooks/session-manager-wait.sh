@@ -13,9 +13,23 @@ else
 fi
 source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 
+# Source common.sh for write_pane_status (skip init_hook — we set our own vars)
+source "$(dirname "$0")/common.sh" 2>/dev/null || true
+
 # SM identity
 SM_PANE="${SM_PANE:-0.2}"
 SM_SAFE="${SESSION_NAME//[-:.]/_}_${SM_PANE//[-:.]/_}"
+
+# Heartbeat: update SM status file on every cycle (including idle) via EXIT trap.
+# Sets PANE/PANE_SAFE for write_pane_status, which expects these globals.
+PANE="${SESSION_NAME}:${SM_PANE}"
+PANE_SAFE="$SM_SAFE"
+_SM_STATUS_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
+_sm_heartbeat() {
+  NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
+  write_pane_status "$_SM_STATUS_FILE" "BUSY" "Session Manager idle — listening" 2>/dev/null || true
+}
+trap _sm_heartbeat EXIT
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/session_manager_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger"
