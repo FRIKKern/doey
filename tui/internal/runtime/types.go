@@ -64,6 +64,18 @@ type DebugEntry struct {
 	Detail   string    // full content (shown in detail view)
 }
 
+// Message represents a single IPC message from the runtime message queue.
+type Message struct {
+	ID        string // derived from filename (unique)
+	From      string // sender identity (FROM: field)
+	To        string // target pane identity (decoded from filename)
+	ToRaw     string // raw target pane safe name from filename
+	Subject   string // message type (SUBJECT: field)
+	Body      string // free-form body text (everything after SUBJECT line)
+	Timestamp int64  // unix epoch (from filename)
+	Filename  string // original filename for dedup
+}
+
 // PaneResult from results/pane_<W>_<P>.json
 type PaneResult struct {
 	Pane         string   `json:"pane"`
@@ -147,6 +159,7 @@ type Snapshot struct {
 	Uptime     time.Duration
 	AgentDefs   []AgentDef     `json:"agent_defs"`
 	TeamDefs    []TeamDef      `json:"team_defs"`
+	Messages     []Message     // IPC messages from messages/ directory
 	DebugEntries []DebugEntry  // chronological debug events
 	TeamEntries []TeamEntry    // merged view: defs + running state + user prefs
 	TeamUserCfg TeamUserConfig // persisted preferences

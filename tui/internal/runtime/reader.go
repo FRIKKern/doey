@@ -75,6 +75,7 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	snap.TeamUserCfg, _ = ReadTeamUserConfig()
 	snap.TeamEntries = buildTeamEntries(snap.TeamDefs, snap.Teams, snap.TeamUserCfg)
 	snap.DebugEntries = r.parseDebugEntries()
+	snap.Messages = r.parseMessages()
 
 	return snap, nil
 }
@@ -672,6 +673,138 @@ func buildTeamEntries(defs []TeamDef, teams map[int]TeamConfig, cfg TeamUserConf
 	})
 
 	return entries
+}
+
+// parseMessages reads all IPC .msg files from the messages directory.
+// Files are read-only — the TUI never deletes them (recipients handle consumption).
+// Returns messages sorted by timestamp descending (newest first).
+func (r *Reader) parseMessages() []Message {
+	var msgs []Message
+
+	matches, _ := filepath.Glob(filepath.Join(r.runtimeDir, "messages", "*.msg"))
+	for _, path := range matches {
+		base := filepath.Base(path)
+		if strings.HasSuffix(base, ".msg.tmp") {
+			continue
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue // file may have been consumed between glob and read
+		}
+
+		// Parse filename: <target_safe>_<unix_timestamp>_<pid>.msg
+		// e.g. "doey_doey_0_1_1774609239_10826.msg"
+		nameNoExt := strings.TrimSuffix(base, ".msg")
+		parts := strings.Split(nameNoExt, "_")
+
+		var targetSafe string
+		var ts int64
+
+		// Walk backwards to find timestamp (first all-digit segment from the end)
+		// Format: <safe_name>_<timestamp>_<pid>
+		if len(parts) >= 3 {
+			// PID is last, timestamp is second-to-last
+			pidIdx := len(parts) - 1
+			tsIdx := len(parts) - 2
+			ts, _ = strconv.ParseInt(parts[tsIdx], 10, 64)
+			if ts == 0 {
+				// Fallback: try last segment as timestamp
+				ts, _ = strconv.ParseInt(parts[pidIdx], 10, 64)
+				targetSafe = strings.Join(parts[:pidIdx], "_")
+			} else {
+				targetSafe = strings.Join(parts[:tsIdx], "_")
+			}
+		}
+
+		content := string(data)
+		from, subject, body := parseMessageContent(content)
+
+		msgs = append(msgs, Message{
+			ID:        nameNoExt,
+			From:      from,
+			To:        decodePaneSafe(targetSafe),
+			ToRaw:     targetSafe,
+			Subject:   subject,
+			Body:      body,
+			Timestamp: ts,
+			Filename:  base,
+		})
+	}
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(msgs, func(i, j int) bool {
+		return msgs[i].Timestamp > msgs[j].Timestamp
+	})
+
+	return msgs
+}
+
+// parseMessageContent extracts FROM, SUBJECT, and body from message content.
+// Format: first line "FROM: ...", second line "SUBJECT: ...", rest is body.
+func parseMessageContent(content string) (from, subject, body string) {
+	lines := strings.SplitN(content, "\n", 3)
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "FROM:") {
+			from = strings.TrimSpace(strings.TrimPrefix(trimmed, "FROM:"))
+		} else if strings.HasPrefix(trimmed, "SUBJECT:") {
+			subject = strings.TrimSpace(strings.TrimPrefix(trimmed, "SUBJECT:"))
+		} else {
+			// Everything from this line onward is body
+			body = strings.TrimSpace(strings.Join(lines[i:], "\n"))
+			break
+		}
+	}
+
+	if body == "" && len(lines) > 2 {
+		body = strings.TrimSpace(lines[2])
+	}
+
+	return
+}
+
+// decodePaneSafe converts a pane safe name to a human-readable label.
+// e.g. "doey_doey_0_1" → "Boss (0.1)", "doey_doey_0_2" → "SM (0.2)",
+// "doey_doey_2_0" → "WM (2.0)", "doey_doey_2_3" → "W3 (2.3)"
+func decodePaneSafe(safe string) string {
+	parts := strings.Split(safe, "_")
+	if len(parts) < 2 {
+		return safe
+	}
+
+	// Extract last two parts as window.pane
+	w := parts[len(parts)-2]
+	p := parts[len(parts)-1]
+
+	wInt, err1 := strconv.Atoi(w)
+	pInt, err2 := strconv.Atoi(p)
+	if err1 != nil || err2 != nil {
+		return safe
+	}
+
+	paneID := fmt.Sprintf("%d.%d", wInt, pInt)
+
+	// Map well-known panes to roles
+	if wInt == 0 {
+		switch pInt {
+		case 0:
+			return "Dashboard (" + paneID + ")"
+		case 1:
+			return "Boss (" + paneID + ")"
+		case 2:
+			return "SM (" + paneID + ")"
+		default:
+			return fmt.Sprintf("WD (%s)", paneID)
+		}
+	}
+
+	// Team windows: pane 0 = manager, others = workers
+	if pInt == 0 {
+		return fmt.Sprintf("WM (%s)", paneID)
+	}
+	return fmt.Sprintf("W%d (%s)", pInt, paneID)
 }
 
 // parseDebugEntries collects debug events from all runtime sources.

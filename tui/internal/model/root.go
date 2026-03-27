@@ -38,8 +38,9 @@ type Model struct {
 	team       TeamModel
 	agents     AgentsModel
 	debug      DebugModel
+	messages   MessagesModel
 	footer     FooterModel
-	focusIndex int // 0=welcome, 1=teams, 2=tasks, 3=agents, 4=debug
+	focusIndex int // 0=welcome, 1=teams, 2=tasks, 3=agents, 4=debug, 5=messages
 	width      int
 	height     int
 	ready      bool
@@ -55,8 +56,9 @@ func New(runtimeDir string) Model {
 		tasks:   NewTasksModel(),
 		team:   NewTeamModel(theme),
 		agents: NewAgentsModel(theme),
-		debug:  NewDebugModel(theme),
-		footer: NewFooterModel(),
+		debug:    NewDebugModel(theme),
+		messages: NewMessagesModel(theme),
+		footer:   NewFooterModel(),
 	}
 }
 
@@ -88,6 +90,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.team.SetSnapshot(m.snapshot)
 		m.agents.SetSnapshot(m.snapshot)
 		m.debug.SetSnapshot(m.snapshot)
+		m.messages.SetSnapshot(m.snapshot)
 
 	case SnapshotRefreshMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
@@ -156,12 +159,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel, m.footer.keyMap.RightPanel) {
-			m.focusIndex = (m.focusIndex + 1) % 5
+			m.focusIndex = (m.focusIndex + 1) % 6
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel, m.footer.keyMap.LeftPanel) {
-			m.focusIndex = (m.focusIndex + 4) % 5 // +4 mod 5 == -1 with wrap
+			m.focusIndex = (m.focusIndex + 5) % 6 // +5 mod 6 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -190,6 +193,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateFocus()
 			return m, nil
 		}
+		if key.Matches(msg, m.footer.keyMap.PanelSix) {
+			m.focusIndex = 5
+			m.updateFocus()
+			return m, nil
+		}
 
 		// Route to focused sub-model
 		var cmd tea.Cmd
@@ -204,6 +212,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agents, cmd = m.agents.Update(msg)
 		case 4:
 			m.debug, cmd = m.debug.Update(msg)
+		case 5:
+			m.messages, cmd = m.messages.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -214,7 +224,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderMenuBar renders a navigable menu bar showing the active panel.
 func (m Model) renderMenuBar(width int) string {
 	t := styles.DefaultTheme()
-	items := []string{"Dashboard", "Teams", "Tasks", "Agents", "Debug"}
+	items := []string{"Dashboard", "Teams", "Tasks", "Agents", "Debug", "Messages"}
 
 	activeStyle := lipgloss.NewStyle().
 		Foreground(t.Primary).
@@ -283,6 +293,9 @@ func (m Model) View() string {
 	case 4:
 		m.debug.SetSize(m.width, bodyH)
 		body = m.debug.View()
+	case 5:
+		m.messages.SetSize(m.width, bodyH)
+		body = m.messages.View()
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, banner, menuBar, body, footer)
@@ -306,6 +319,7 @@ func (m *Model) propagateSizes() {
 	m.team.SetSize(m.width, bodyH)
 	m.agents.SetSize(m.width, bodyH)
 	m.debug.SetSize(m.width, bodyH)
+	m.messages.SetSize(m.width, bodyH)
 	m.updateFocus()
 }
 
@@ -314,6 +328,7 @@ func (m *Model) updateFocus() {
 	m.team.SetFocused(m.focusIndex == 1)
 	m.agents.SetFocused(m.focusIndex == 3)
 	m.debug.SetFocused(m.focusIndex == 4)
+	m.messages.SetFocused(m.focusIndex == 5)
 }
 
 // tickCmd returns a command that sends a TickMsg after the interval.
