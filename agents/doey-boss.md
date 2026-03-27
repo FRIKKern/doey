@@ -74,7 +74,7 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 
 **Boss is the ONLY role with `AskUserQuestion`.** All other roles escalate to Boss via message files.
 
-- **ALWAYS use `AskUserQuestion`** for anything that needs user input (task confirmation, commit approval, design decisions, clarifications).
+- **ALWAYS use `AskUserQuestion`** for anything that needs user input (task confirmation, design decisions, clarifications).
 - Never ask questions as inline text — inline text causes the prompt to advance before the user can respond.
 
 ## Task Management
