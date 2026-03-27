@@ -149,3 +149,124 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 func RefreshSnapshotCmd() tea.Msg {
 	return SnapshotRefreshMsg{}
 }
+
+// --- Task management messages ---
+
+// CreateTaskMsg is emitted when the user creates a new task.
+type CreateTaskMsg struct {
+	Title string
+}
+
+// CreateTaskResultMsg is returned after creating a task.
+type CreateTaskResultMsg struct {
+	ID  string
+	Err error
+}
+
+// MoveTaskMsg is emitted when the user moves a task to a different section.
+type MoveTaskMsg struct {
+	ID      string
+	Section string // "active", "upcoming", "done"
+}
+
+// MoveTaskResultMsg is returned after moving a task.
+type MoveTaskResultMsg struct {
+	Err error
+}
+
+// CancelTaskMsg is emitted when the user cancels a task.
+type CancelTaskMsg struct {
+	ID string
+}
+
+// CancelTaskResultMsg is returned after cancelling a task.
+type CancelTaskResultMsg struct {
+	Err error
+}
+
+// DispatchTaskMsg is emitted when the user dispatches a task to SM.
+type DispatchTaskMsg struct {
+	ID    string
+	Title string
+}
+
+// DispatchTaskResultMsg is returned after dispatching a task.
+type DispatchTaskResultMsg struct {
+	Err error
+}
+
+// --- Task command functions ---
+
+// CreateTaskCmd creates a new persistent task.
+func CreateTaskCmd(title string) tea.Cmd {
+	return func() tea.Msg {
+		store, err := runtime.ReadTaskStore()
+		if err != nil {
+			return CreateTaskResultMsg{Err: err}
+		}
+		id := store.AddTask(title, "active")
+		if err := runtime.WriteTaskStore(store); err != nil {
+			return CreateTaskResultMsg{Err: err}
+		}
+		return CreateTaskResultMsg{ID: id}
+	}
+}
+
+// MoveTaskCmd moves a task to a new section.
+func MoveTaskCmd(id, section string) tea.Cmd {
+	return func() tea.Msg {
+		store, err := runtime.ReadTaskStore()
+		if err != nil {
+			return MoveTaskResultMsg{Err: err}
+		}
+		store.MoveTask(id, section)
+		if err := runtime.WriteTaskStore(store); err != nil {
+			return MoveTaskResultMsg{Err: err}
+		}
+		return MoveTaskResultMsg{}
+	}
+}
+
+// CancelTaskCmd cancels a task.
+func CancelTaskCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		store, err := runtime.ReadTaskStore()
+		if err != nil {
+			return CancelTaskResultMsg{Err: err}
+		}
+		store.CancelTask(id)
+		if err := runtime.WriteTaskStore(store); err != nil {
+			return CancelTaskResultMsg{Err: err}
+		}
+		return CancelTaskResultMsg{}
+	}
+}
+
+// DispatchTaskCmd dispatches a task to Session Manager via .msg file.
+func DispatchTaskCmd(runtimeDir, sessionName, id, title string) tea.Cmd {
+	return func() tea.Msg {
+		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_0_2"
+		msgDir := filepath.Join(runtimeDir, "messages")
+		os.MkdirAll(msgDir, 0755)
+
+		content := fmt.Sprintf("FROM: TUI\nSUBJECT: task\nTASK_ID: %s\n%s\n", id, title)
+		filename := fmt.Sprintf("%s_%d_%d.msg", smSafe, time.Now().Unix(), os.Getpid())
+		path := filepath.Join(msgDir, filename)
+
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			return DispatchTaskResultMsg{Err: err}
+		}
+
+		// Touch trigger
+		triggerDir := filepath.Join(runtimeDir, "triggers")
+		os.MkdirAll(triggerDir, 0755)
+		os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644)
+
+		// Mark task as active
+		store, _ := runtime.ReadTaskStore()
+		store.MoveTask(id, "active")
+		runtime.WriteTaskStore(store)
+
+		return DispatchTaskResultMsg{}
+	}
+}

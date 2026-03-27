@@ -127,6 +127,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case DispatchTeamResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
+	case CreateTaskMsg:
+		return m, CreateTaskCmd(msg.Title)
+
+	case CreateTaskResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case MoveTaskMsg:
+		return m, MoveTaskCmd(msg.ID, msg.Section)
+
+	case MoveTaskResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case CancelTaskMsg:
+		return m, CancelTaskCmd(msg.ID)
+
+	case CancelTaskResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case DispatchTaskMsg:
+		runtimeDir := m.runtime.RuntimeDir()
+		sessionName := m.snapshot.Session.SessionName
+		return m, DispatchTaskCmd(runtimeDir, sessionName, msg.ID, msg.Title)
+
+	case DispatchTaskResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
 	case EditTeamMsg:
 		// Find the team def and open editor
 		for _, td := range m.snapshot.TeamDefs {
@@ -326,6 +352,7 @@ func (m *Model) propagateSizes() {
 // updateFocus syncs focus state to sub-models.
 func (m *Model) updateFocus() {
 	m.team.SetFocused(m.focusIndex == 1)
+	m.tasks.SetFocused(m.focusIndex == 2)
 	m.agents.SetFocused(m.focusIndex == 3)
 	m.debug.SetFocused(m.focusIndex == 4)
 	m.messages.SetFocused(m.focusIndex == 5)
