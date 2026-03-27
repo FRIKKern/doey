@@ -1732,18 +1732,23 @@ _doc_check() {
 # ── Task Management ───────────────────────────────────────────────────
 # Tasks are session-level goals tracked in ${RUNTIME_DIR}/tasks/.
 # Only the user can mark a task as done — agents signal pending_user_confirmation.
-# Task file format (N.task): TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED
+# Task file format (N.task): TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED,
+#   TASK_DESCRIPTION (newlines encoded as literal \n), TASK_ATTACHMENTS (pipe-delimited)
 
 _task_read() {
-  # Read a task file; sets TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED
+  # Read a task file; sets TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED,
+  #   TASK_DESCRIPTION, TASK_ATTACHMENTS
   local _file="$1"
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
+  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""
   while IFS= read -r _line; do
     case "${_line%%=*}" in
-      TASK_ID)      TASK_ID="${_line#*=}" ;;
-      TASK_TITLE)   TASK_TITLE="${_line#*=}" ;;
-      TASK_STATUS)  TASK_STATUS="${_line#*=}" ;;
-      TASK_CREATED) TASK_CREATED="${_line#*=}" ;;
+      TASK_ID)          TASK_ID="${_line#*=}" ;;
+      TASK_TITLE)       TASK_TITLE="${_line#*=}" ;;
+      TASK_STATUS)      TASK_STATUS="${_line#*=}" ;;
+      TASK_CREATED)     TASK_CREATED="${_line#*=}" ;;
+      TASK_DESCRIPTION) TASK_DESCRIPTION="${_line#*=}" ;;
+      TASK_ATTACHMENTS) TASK_ATTACHMENTS="${_line#*=}" ;;
     esac
   done < "$_file"
 }
@@ -1768,14 +1773,50 @@ _task_next_id() {
 
 _task_create() {
   local _runtime_dir="$1" _title="$2"
+  local _description="${3:-}" _attachments="${4:-}"
   local _tasks_dir="${_runtime_dir}/tasks"
   mkdir -p "$_tasks_dir"
   local _id _now
   _id="$(_task_next_id "$_tasks_dir")"
   _now=$(date +%s)
-  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
-    "$_id" "$_title" "$_now" > "${_tasks_dir}/${_id}.task"
+  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\n' \
+    "$_id" "$_title" "$_now" "$_description" "$_attachments" > "${_tasks_dir}/${_id}.task"
   echo "$_id"
+}
+
+_task_set_description() {
+  local _tasks_dir="$1" _id="$2" _description="$3"
+  local _file="${_tasks_dir}/${_id}.task"
+  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
+  local _tmp="${_file}.tmp"
+  while IFS= read -r _line; do
+    case "${_line%%=*}" in
+      TASK_DESCRIPTION) printf 'TASK_DESCRIPTION=%s\n' "$_description" ;;
+      *)                printf '%s\n' "$_line" ;;
+    esac
+  done < "$_file" > "$_tmp"
+  mv "$_tmp" "$_file"
+}
+
+_task_add_attachment() {
+  local _tasks_dir="$1" _id="$2" _attachment="$3"
+  local _file="${_tasks_dir}/${_id}.task"
+  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
+  local _tmp="${_file}.tmp" _existing=""
+  while IFS= read -r _line; do
+    case "${_line%%=*}" in
+      TASK_ATTACHMENTS)
+        _existing="${_line#*=}"
+        if [ -n "$_existing" ]; then
+          printf 'TASK_ATTACHMENTS=%s|%s\n' "$_existing" "$_attachment"
+        else
+          printf 'TASK_ATTACHMENTS=%s\n' "$_attachment"
+        fi
+        ;;
+      *) printf '%s\n' "$_line" ;;
+    esac
+  done < "$_file" > "$_tmp"
+  mv "$_tmp" "$_file"
 }
 
 _task_set_status() {
@@ -1845,10 +1886,17 @@ task_command() {
       ;;
 
     add)
-      local _title="${*:-}"
-      [ -z "$_title" ] && { printf '  Usage: doey task add "Your task title"\n'; exit 1; }
+      local _title="" _desc="" _attach=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --description) shift; _desc="${1:-}"; shift ;;
+          --attach)      shift; _attach="${1:-}"; shift ;;
+          *)             if [ -n "$_title" ]; then _title="$_title $1"; else _title="$1"; fi; shift ;;
+        esac
+      done
+      [ -z "$_title" ] && { printf '  Usage: doey task add "Your task title" [--description "text"] [--attach "url"]\n'; exit 1; }
       local _id
-      _id="$(_task_create "$_runtime" "$_title")"
+      _id="$(_task_create "$_runtime" "$_title" "$_desc" "$_attach")"
       printf '\n  %s[%s]%s Task created: %s%s%s\n\n' \
         "$SUCCESS" "$_id" "$RESET" "$BOLD" "$_title" "$RESET"
       ;;
@@ -1901,8 +1949,22 @@ task_command() {
       esac
       ;;
 
+    describe)
+      local _id="${1:-}" _desc="${2:-}"
+      [ -z "$_id" ] || [ -z "$_desc" ] && { printf '  Usage: doey task describe <id> "description text"\n'; exit 1; }
+      _task_set_description "$_tasks_dir" "$_id" "$_desc"
+      printf '  %s✓ Task [%s] description updated.%s\n' "$SUCCESS" "$_id" "$RESET"
+      ;;
+
+    attach)
+      local _id="${1:-}" _attachment="${2:-}"
+      [ -z "$_id" ] || [ -z "$_attachment" ] && { printf '  Usage: doey task attach <id> "url_or_path"\n'; exit 1; }
+      _task_add_attachment "$_tasks_dir" "$_id" "$_attachment"
+      printf '  %s✓ Attachment added to task [%s].%s\n' "$SUCCESS" "$_id" "$RESET"
+      ;;
+
     *)
-      printf '  Usage: doey task [list|add <title>|done <id>|pending <id>|cancel <id>]\n'
+      printf '  Usage: doey task [list|add|done|pending|cancel|describe|attach]\n'
       ;;
   esac
 }

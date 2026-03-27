@@ -23,6 +23,8 @@ func statusIcon(status string, t styles.Theme) string {
 		return lipgloss.NewStyle().Foreground(t.Success).Render("●")
 	case "done":
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+	case "blocked":
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("⊘")
 	case "cancelled":
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
 	default:
@@ -105,7 +107,7 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 }
 
 func (m *TasksModel) sortEntries() {
-	sectionOrder := map[string]int{"active": 0, "upcoming": 1, "done": 2}
+	sectionOrder := map[string]int{"active": 0, "upcoming": 1, "blocked": 2, "done": 3}
 	sort.SliceStable(m.entries, func(i, j int) bool {
 		a, b := m.entries[i], m.entries[j]
 		sa := sectionOrder[a.Section]
@@ -218,6 +220,15 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 					return DispatchTaskMsg{ID: task.ID, Title: task.Title}
 				}
 			}
+		case "s":
+			// Cycle through all statuses
+			if m.cursor >= 0 && m.cursor < total {
+				task := m.entries[m.cursor]
+				next := nextStatus(task.Status)
+				return m, func() tea.Msg {
+					return SetStatusTaskMsg{ID: task.ID, Status: next}
+				}
+			}
 		case "x":
 			if m.cursor >= 0 && m.cursor < total {
 				task := m.entries[m.cursor]
@@ -251,6 +262,14 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 					return MoveTaskMsg{ID: task.ID, Section: next}
 				}
 			}
+		case "s":
+			if m.cursor >= 0 && m.cursor < total {
+				task := m.entries[m.cursor]
+				next := nextStatus(task.Status)
+				return m, func() tea.Msg {
+					return SetStatusTaskMsg{ID: task.ID, Status: next}
+				}
+			}
 		case "d":
 			if m.cursor >= 0 && m.cursor < total {
 				task := m.entries[m.cursor]
@@ -271,16 +290,31 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	return m, nil
 }
 
-// nextSection cycles: active → upcoming → done → active.
+// nextSection cycles: active → upcoming → blocked → done → active.
 func nextSection(s string) string {
 	switch s {
 	case "active":
 		return "upcoming"
 	case "upcoming":
+		return "blocked"
+	case "blocked":
 		return "done"
 	default:
 		return "active"
 	}
+}
+
+// allStatuses is the full list of task statuses for cycling.
+var allStatuses = []string{"active", "blocked", "pending_user_confirmation", "done", "cancelled"}
+
+// nextStatus cycles through all statuses.
+func nextStatus(s string) string {
+	for i, st := range allStatuses {
+		if st == s {
+			return allStatuses[(i+1)%len(allStatuses)]
+		}
+	}
+	return allStatuses[0]
 }
 
 // View renders list or detail mode.
@@ -357,7 +391,7 @@ func (m TasksModel) viewList() string {
 			Foreground(t.Muted).
 			Faint(true).
 			Padding(1, 3).
-			Render("enter = detail  n = new  m = move  d = dispatch  x = cancel")
+			Render("enter = detail  n = new  m = move  s = status  d = dispatch  x = cancel")
 	}
 
 	content := header + "\n" + rule + "\n" + summary + "\n" + body + "\n" + hint
@@ -370,13 +404,15 @@ func (m TasksModel) viewList() string {
 // taskSummary returns section counts.
 func (m TasksModel) taskSummary() string {
 	t := m.theme
-	active, upcoming, done := 0, 0, 0
+	active, upcoming, blocked, done := 0, 0, 0, 0
 	for _, task := range m.entries {
 		switch task.Section {
 		case "active":
 			active++
 		case "upcoming":
 			upcoming++
+		case "blocked":
+			blocked++
 		default:
 			done++
 		}
@@ -393,6 +429,10 @@ func (m TasksModel) taskSummary() string {
 	if upcoming > 0 {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).
 			Render(fmt.Sprintf("%d upcoming", upcoming)))
+	}
+	if blocked > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Danger).
+			Render(fmt.Sprintf("%d blocked", blocked)))
 	}
 	if done > 0 {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Muted).
@@ -412,6 +452,8 @@ func sectionLabel(section string) string {
 		return "ACTIVE"
 	case "upcoming":
 		return "UPCOMING"
+	case "blocked":
+		return "BLOCKED"
 	default:
 		return "DONE"
 	}
@@ -484,7 +526,7 @@ func (m TasksModel) viewDetail() string {
 		Foreground(t.Muted).
 		Faint(true).
 		PaddingLeft(3).
-		Render("esc = back  m = move  d = dispatch  x = cancel")
+		Render("esc = back  m = move  s = status  d = dispatch  x = cancel")
 
 	labelStyle := t.StatLabel.Copy().Width(14)
 	valueStyle := t.Body
@@ -494,6 +536,8 @@ func (m TasksModel) viewDetail() string {
 	switch task.Status {
 	case "active":
 		statusColor = t.Success
+	case "blocked":
+		statusColor = t.Danger
 	case "pending_user_confirmation":
 		statusColor = t.Warning
 	case "cancelled":
@@ -518,16 +562,40 @@ func (m TasksModel) viewDetail() string {
 		fields = append(fields, labelStyle.Render("Updated")+
 			valueStyle.Render(time.Unix(task.Updated, 0).Format("2006-01-02 15:04:05")))
 	}
+	fieldBlock := lipgloss.NewStyle().Padding(1, 3).Render(strings.Join(fields, "\n"))
+
+	// Description
+	descBlock := ""
 	if task.Description != "" {
-		descWidth := w - 20
-		if descWidth < 20 {
-			descWidth = 20
+		descWidth := w - 10
+		if descWidth < 30 {
+			descWidth = 30
 		}
-		fields = append(fields, labelStyle.Render("Description")+
-			lipgloss.NewStyle().Foreground(t.Text).Width(descWidth).Render(task.Description))
+		descHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("DESCRIPTION")
+		descRule := lipgloss.NewStyle().PaddingLeft(3).
+			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
+		descBody := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Width(descWidth).
+			Padding(0, 3).
+			Render(task.Description)
+		descBlock = "\n" + descHeader + "\n" + descRule + "\n" + descBody
 	}
 
-	fieldBlock := lipgloss.NewStyle().Padding(1, 3).Render(strings.Join(fields, "\n"))
+	// Attachments
+	attachBlock := ""
+	if len(task.Attachments) > 0 {
+		attHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("LINKS & ATTACHMENTS")
+		attRule := lipgloss.NewStyle().PaddingLeft(3).
+			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
+		var attLines []string
+		for _, att := range task.Attachments {
+			link := lipgloss.NewStyle().Foreground(t.Accent).Render(att)
+			attLines = append(attLines, "  \U0001F517 "+link)
+		}
+		attachBlock = "\n" + attHeader + "\n" + attRule + "\n" +
+			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(attLines, "\n"))
+	}
 
 	// Subtasks
 	subtaskBlock := ""
@@ -555,6 +623,6 @@ func (m TasksModel) viewDetail() string {
 			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(subLines, "\n"))
 	}
 
-	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + subtaskBlock
+	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + descBlock + attachBlock + subtaskBlock
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }

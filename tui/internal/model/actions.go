@@ -184,6 +184,17 @@ type CancelTaskResultMsg struct {
 	Err error
 }
 
+// SetStatusTaskMsg is emitted when the user sets a task's status directly.
+type SetStatusTaskMsg struct {
+	ID     string
+	Status string
+}
+
+// SetStatusTaskResultMsg is returned after setting a task status.
+type SetStatusTaskResultMsg struct {
+	Err error
+}
+
 // DispatchTaskMsg is emitted when the user dispatches a task to SM.
 type DispatchTaskMsg struct {
 	ID    string

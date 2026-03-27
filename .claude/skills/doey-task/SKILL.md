@@ -1,6 +1,6 @@
 ---
 name: doey-task
-description: Manage session tasks — list, add, mark pending/done, cancel. Tasks are user-confirmed goals tracked on the dashboard. Use when you need to "show tasks", "add a task", "mark a task done", "what are we working on", or "create a task".
+description: Manage session tasks — list, add, mark pending/done, cancel, describe, attach. Tasks are user-confirmed goals tracked on the dashboard. Use when you need to "show tasks", "add a task", "mark a task done", "what are we working on", or "create a task".
 ---
 
 ## Context
@@ -20,6 +20,8 @@ TASK_ID=1
 TASK_TITLE=Implement the auth system
 TASK_STATUS=active
 TASK_CREATED=1711234567
+TASK_DESCRIPTION=Multi-line text with literal \n encoding for newlines
+TASK_ATTACHMENTS=https://example.com/spec.pdf|/path/to/mockup.png
 ```
 
 ### Status values
@@ -27,6 +29,7 @@ TASK_CREATED=1711234567
 | Status | Meaning |
 |--------|---------|
 | `active` | In progress |
+| `blocked` | Waiting on external dependency or prerequisite |
 | `pending_user_confirmation` | Work done — awaiting user sign-off |
 | `done` | **User confirmed.** Cannot be undone |
 | `cancelled` | Dropped |
@@ -48,9 +51,36 @@ NEXT_ID_FILE="${TD}/.next_id"; ID=1
 [ -f "$NEXT_ID_FILE" ] && ID=$(cat "$NEXT_ID_FILE")
 echo $((ID + 1)) > "$NEXT_ID_FILE"
 NOW=$(date +%s)
-printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
-  "$ID" "YOUR TITLE HERE" "$NOW" > "${TD}/${ID}.task"
+printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\n' \
+  "$ID" "YOUR TITLE HERE" "$NOW" "" "" > "${TD}/${ID}.task"
 echo "Created task $ID"
+```
+
+Optional flags for add: `--description "text"` and `--attach "url_or_path"`.
+
+**Set description** on an existing task
+```bash
+TD="${RUNTIME_DIR}/tasks"
+FILE="${TD}/ID_HERE.task"
+TMP="${FILE}.tmp"
+while IFS= read -r line; do
+  case "${line%%=*}" in TASK_DESCRIPTION) echo "TASK_DESCRIPTION=Your description here" ;;
+  *) echo "$line" ;; esac
+done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+```
+
+**Add attachment** to an existing task
+```bash
+TD="${RUNTIME_DIR}/tasks"
+FILE="${TD}/ID_HERE.task"
+TMP="${FILE}.tmp"
+while IFS= read -r line; do
+  case "${line%%=*}" in TASK_ATTACHMENTS)
+    existing="${line#*=}"
+    if [ -n "$existing" ]; then echo "TASK_ATTACHMENTS=${existing}|NEW_ATTACHMENT"
+    else echo "TASK_ATTACHMENTS=NEW_ATTACHMENT"; fi ;;
+  *) echo "$line" ;; esac
+done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ```
 
 **Mark pending** (agent signals completion — user must still confirm)
@@ -87,3 +117,4 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 3. When listing tasks, show: ID, status (colored), title, age.
 4. When asked "what are we working on" or "task status" — list active + pending tasks and summarize progress.
 5. Boss should propose creating a task for any high-level user goal that will take more than a few minutes. Session Manager routes tasks to teams.
+6. Description supports multi-line text with `\n` literal encoding. Attachments are pipe-delimited (`|`) URLs or file paths.

@@ -16,8 +16,9 @@ type PersistentTask struct {
 	Title       string `json:"title"`
 	Status      string `json:"status"`      // active, upcoming, done, cancelled
 	Section     string `json:"section"`      // "active", "upcoming", "done"
-	Description string `json:"description"`  // optional detail text
-	Team        string `json:"team"`         // assigned team name (optional)
+	Description string   `json:"description"`            // optional detail text
+	Attachments []string `json:"attachments,omitempty"`  // list of URLs/file paths
+	Team        string   `json:"team"`                   // assigned team name (optional)
 	Created     int64  `json:"created"`      // unix epoch
 	Updated     int64  `json:"updated"`      // unix epoch
 	Priority    int    `json:"priority"`     // sort order within section (lower = higher priority)
@@ -106,6 +107,8 @@ func (s *TaskStore) MoveTask(id, section string) bool {
 				s.Tasks[i].Status = "active"
 			case "upcoming":
 				s.Tasks[i].Status = "upcoming"
+			case "blocked":
+				s.Tasks[i].Status = "blocked"
 			case "done":
 				s.Tasks[i].Status = "done"
 			}
@@ -177,12 +180,14 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 		}
 
 		s.Tasks = append(s.Tasks, PersistentTask{
-			ID:      rt.ID,
-			Title:   rt.Title,
-			Status:  rt.Status,
-			Section: section,
-			Created: rt.Created,
-			Updated: rt.Created,
+			ID:          rt.ID,
+			Title:       rt.Title,
+			Status:      rt.Status,
+			Section:     section,
+			Description: rt.Description,
+			Attachments: rt.Attachments,
+			Created:     rt.Created,
+			Updated:     rt.Created,
 		})
 	}
 }

@@ -18,8 +18,9 @@ type KeyMap struct {
 	Down       key.Binding
 	Select     key.Binding
 	Back       key.Binding
-	Filter     key.Binding
-	Quit       key.Binding
+	StatusCycle key.Binding
+	Filter      key.Binding
+	Quit        key.Binding
 	ForceQuit  key.Binding
 	Refresh    key.Binding
 	Help       key.Binding
@@ -83,6 +84,10 @@ func DefaultKeyMap() KeyMap {
 		Back: key.NewBinding(
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "back"),
+		),
+		StatusCycle: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "cycle status"),
 		),
 		Filter: key.NewBinding(
 			key.WithKeys("/"),

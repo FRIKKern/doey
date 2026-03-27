@@ -235,6 +235,12 @@ func (r *Reader) parseTasks() []Task {
 		if c := env["TASK_CREATED"]; c != "" {
 			t.Created, _ = strconv.ParseInt(c, 10, 64)
 		}
+		if desc := env["TASK_DESCRIPTION"]; desc != "" {
+			t.Description = strings.ReplaceAll(desc, "\\n", "\n")
+		}
+		if att := env["TASK_ATTACHMENTS"]; att != "" {
+			t.Attachments = strings.Split(att, "|")
+		}
 		tasks = append(tasks, t)
 	}
 
