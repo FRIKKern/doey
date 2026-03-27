@@ -562,6 +562,9 @@ setup_dashboard() {
     tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
   fi
 
+  # Hard gate: runtime must be fully ready before launching any Claude process
+  _assert_runtime_ready "$session" "$runtime_dir"
+
   # Boss (pane 0.1)
   local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_SESSION_MANAGER_MODEL} --agent doey-boss"
   [ -f "${runtime_dir}/doey-settings.json" ] && _boss_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
@@ -1682,7 +1685,28 @@ _cleanup_old_session() {
     fi
     git branch -D "$b" 2>/dev/null || true
   done
-  mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
+  mkdir -p "${runtime_dir}"/{messages,broadcasts,status,research,reports,results,logs,errors,lifecycle,tasks}
+}
+
+# Hard gate: verify runtime is fully ready before launching any Claude process.
+# Dies with an error if DOEY_RUNTIME is not set in tmux or runtime dir is missing.
+# Usage: _assert_runtime_ready <session> <runtime_dir>
+_assert_runtime_ready() {
+  local session="$1" runtime_dir="$2"
+  if [ ! -d "$runtime_dir" ]; then
+    printf "FATAL: runtime dir %s does not exist — cannot launch Claude\n" "$runtime_dir" >&2
+    return 1
+  fi
+  if [ ! -f "${runtime_dir}/session.env" ]; then
+    printf "FATAL: session.env not found in %s — cannot launch Claude\n" "$runtime_dir" >&2
+    return 1
+  fi
+  local _tmux_rt
+  _tmux_rt=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  if [ -z "$_tmux_rt" ]; then
+    printf "FATAL: DOEY_RUNTIME not set in tmux session %s — cannot launch Claude\n" "$session" >&2
+    return 1
+  fi
 }
 
 # Build comma-separated worker pane indices "1,2,3,...,N"
@@ -3064,6 +3088,9 @@ _batch_boot_workers() {
   local session="$1" runtime_dir="$2" team_window="$3"
   shift 3
 
+  # Hard gate: runtime must be fully ready before launching any Claude process
+  _assert_runtime_ready "$session" "$runtime_dir"
+
   local _bbw_acronym=""
   [ -f "${runtime_dir}/session.env" ] && _bbw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
 
@@ -3288,6 +3315,10 @@ _ensure_worker_prompt() {
 _launch_team_manager() {
   local session="$1" runtime_dir="$2" window_index="$3"
   local mgr_model="${4:-}"
+
+  # Hard gate: runtime must be fully ready before launching any Claude process
+  _assert_runtime_ready "$session" "$runtime_dir"
+
   [ -z "$mgr_model" ] && mgr_model=$(_env_val "${runtime_dir}/team_${window_index}.env" MANAGER_MODEL)
   [ -z "$mgr_model" ] && mgr_model="$DOEY_MANAGER_MODEL"
   local mgr_agent
@@ -3471,6 +3502,9 @@ add_team_from_def() {
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$dir"
 
+  # Hard gate: runtime must be fully ready before launching any Claude process
+  _assert_runtime_ready "$session" "$runtime_dir"
+
   # Launch manager (pane 0)
   local mgr_agent="" mgr_name=""
   mgr_agent=$(_env_val "$env_file" PANE_0_AGENT "doey-manager")
@@ -3593,6 +3627,9 @@ add_dynamic_team_window() {
 
   # Only launch manager for non-freelancer teams
   if [ "$is_freelancer" = "true" ]; then
+    # Hard gate: runtime must be fully ready before launching any Claude process
+    _assert_runtime_ready "$session" "$runtime_dir"
+
     # Freelancer: pane 0 becomes a worker, split vertically for pane 1 — two rows in first column
     local _fl_wm="${worker_model:-$DOEY_WORKER_MODEL}"
     local _fl_acronym=""
