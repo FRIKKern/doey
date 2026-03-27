@@ -182,7 +182,7 @@ Critic validates the error categorization and proposes product fixes.
 Also check `git log --oneline -10` and `git diff` to see what other teams are working on right now.
 
 Phase 2: Consolidate findings. Each specialist proposes fixes in their domain. Critic reviews all proposals.
-Phase 3: Implement fixes (one specialist per file, separate commits). Critic runs regression checks. Report to Session Manager.
+Phase 3: Implement fixes (one specialist per file, separate commits). Critic runs regression checks. Report to Taskmaster.
 AUDIT_TASK
 
 tmux copy-mode -q -t "$MGR_PANE" 2>/dev/null

@@ -310,7 +310,7 @@ if [ "$_team_type" != "freelancer" ]; then
   fi
 fi
 
-# --- Session Manager health check (skip when SM is the caller) ---
+# --- Taskmaster health check (skip when SM is the caller) ---
 if [ "$TARGET_WINDOW" = "0" ] && [ "${DOEY_ROLE:-}" != "session_manager" ]; then
   _sm_pane_ref="${SESSION_NAME}:0.2"
   _sm_cmd=$(tmux display-message -t "$_sm_pane_ref" -p '#{pane_current_command}' 2>/dev/null) || _sm_cmd=""
@@ -367,7 +367,7 @@ if [ "$TARGET_WINDOW" = "0" ] && [ "${DOEY_ROLE:-}" != "session_manager" ]; then
         echo "0.1|SM_RETRIGGER|$(date +%s)|attempt=${_sm_retry_count}/3" > "${_sm_lf}.tmp" && mv "${_sm_lf}.tmp" "$_sm_lf"
       else
         echo "SM_STUCK (3 retrigger attempts exhausted)"
-        _log_error_wd "ANOMALY" "Session Manager stuck after 3 retrigger attempts" "pane=0.1"
+        _log_error_wd "ANOMALY" "Taskmaster stuck after 3 retrigger attempts" "pane=0.1"
         SNAPSHOT_EVENTS="${SNAPSHOT_EVENTS}LIFECYCLE 0.1 SM_STUCK $(date +%s) retriggers_exhausted${NL}"
       fi
     fi

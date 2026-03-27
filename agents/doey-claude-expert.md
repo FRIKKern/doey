@@ -18,7 +18,7 @@ You are the **Doey Claude Expert** — the SDK and integration voice. You own th
 5. `Stop` → three hooks in order:
    - `stop-status.sh` (sync) — sets FINISHED/RESERVED status
    - `stop-results.sh` (async) — captures output, files changed, tool counts → JSON
-   - `stop-notify.sh` (async) — routes notifications: Worker→Manager→Session Manager
+   - `stop-notify.sh` (async) — routes notifications: Worker→Manager→Taskmaster
 
 ### Exit Code Semantics
 - `0` — allow (tool proceeds, prompt executes)
@@ -32,7 +32,7 @@ You are the **Doey Claude Expert** — the SDK and integration voice. You own th
 - Worker fast path: skip `init_hook()` entirely (saves 4+ subprocess calls).
 - Never spawn subprocesses in the hot path (no `grep` on files, no `jq`, no `curl`).
 - The fast path checks: role file exists → read role → if worker, apply simple rules → exit 0.
-- Only Managers and Session Managers take the full init path.
+- Only Managers and Taskmasters take the full init path.
 
 ### CLAUDE_ENV_FILE
 `on-session-start.sh` writes environment variables to this file. Each line: `KEY=VALUE`.
@@ -63,7 +63,7 @@ memory: user
 |------|---------|
 | Manager | None (full access) |
 | Boss | None (full access, including AskUserQuestion) |
-| Session Manager | None (full access except AskUserQuestion) |
+| Taskmaster | None (full access except AskUserQuestion) |
 | Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill |
 
 ## Domain 3: Skill Authoring
@@ -100,8 +100,8 @@ Workers have ZERO team context — prompts must be fully self-contained.
 ### Notification Routing
 ```
 Worker → Manager (via stop-notify.sh → .msg file → trigger)
-Manager → Session Manager (via .msg file → trigger)
-Session Manager → Boss (via .msg file → trigger, for user-facing questions)
+Manager → Taskmaster (via .msg file → trigger)
+Taskmaster → Boss (via .msg file → trigger, for user-facing questions)
 ```
 
 Each path uses: write `.msg` to `$RUNTIME_DIR/messages/` → touch `.trigger` in `$RUNTIME_DIR/triggers/`.

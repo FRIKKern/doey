@@ -1,13 +1,13 @@
 ---
 name: doey-watchdog-compact
-description: Send /compact to Session Manager to reduce context window. Use when you need to "compact the SM", "reduce SM context", or "SM is running out of context".
+description: Send /compact to Taskmaster to reduce context window. Use when you need to "compact the SM", "reduce SM context", or "SM is running out of context".
 ---
 
-**Only Window Manager or Boss** (send-keys blocked for other roles).
+**Only Team Lead or Boss** (send-keys blocked for other roles).
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
-Send `/compact` to Session Manager (pane 0.2), verify response (retry once after 15s).
+Send `/compact` to Taskmaster (pane 0.2), verify response (retry once after 15s).
 
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
@@ -24,9 +24,9 @@ for attempt in 1 2; do
   OUTPUT=$(tmux capture-pane -t "$SM_PANE" -p -S -20)
   echo "$OUTPUT"
   if echo "$OUTPUT" | grep -qiE 'compact|summariz|monitor|wait'; then
-    echo "SUCCESS: Session Manager active after compact"; break
+    echo "SUCCESS: Taskmaster active after compact"; break
   elif [ "$attempt" -eq 2 ]; then
-    echo "FAILED: Session Manager not responding — manual intervention needed"
+    echo "FAILED: Taskmaster not responding — manual intervention needed"
   else
     tmux copy-mode -q -t "$SM_PANE" 2>/dev/null
     tmux send-keys -t "$SM_PANE" "/compact" Enter

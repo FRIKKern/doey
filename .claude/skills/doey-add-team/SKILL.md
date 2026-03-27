@@ -14,7 +14,7 @@ description: Spawn a team from a .team.md definition file. Usage: /doey-add-team
 
 ## Prompt
 
-Spawn a team from a `.team.md` definition file. **Do NOT ask for confirmation — just do it.** This skill is for **Session Manager or Window Manager** only — workers must not run it.
+Spawn a team from a `.team.md` definition file. **Do NOT ask for confirmation — just do it.** This skill is for **Taskmaster or Team Lead** only — workers must not run it.
 
 ### .team.md Format
 
@@ -296,7 +296,7 @@ Output summary: team name, window number, pane layout, boot status. Include tear
 
 ### Rules
 
-- **Session Manager or Window Manager only** — workers must not run this skill
+- **Taskmaster or Team Lead only** — workers must not run this skill
 - Pane layout is defined by the `.team.md` file, not hardcoded
 - Never hardcode window indices — derive from `tmux display-message`. Bash 3.2 compatible
 - 3s stagger between Claude launches to prevent auth exhaustion

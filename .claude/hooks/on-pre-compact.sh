@@ -29,8 +29,8 @@ if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
 fi
 
 if is_boss; then               ROLE_LABEL="the Doey Boss"
-elif is_manager; then          ROLE_LABEL="the Doey Window Manager"
-elif is_session_manager; then  ROLE_LABEL="the Doey Session Manager"
+elif is_manager; then          ROLE_LABEL="the Doey Team Lead"
+elif is_taskmaster; then  ROLE_LABEL="the Doey Taskmaster"
 else                           ROLE_LABEL="a Doey worker"
 fi
 
@@ -89,7 +89,7 @@ ${COMPLETION_FILES:-None}
 ${CRASH_FILES:-None}
 
 ## ⚠ CORE LOOP — RESUME ACTIVE MONITORING AFTER COMPACTION
-You are a Window Manager. You MUST stay active while ANY worker is BUSY.
+You are a Team Lead. You MUST stay active while ANY worker is BUSY.
 After compaction, resume your active monitoring loop IMMEDIATELY:
 1. Drain message queue — read all .msg files for completion reports
 2. Check worker status files — who is BUSY, FINISHED, ERROR, or crashed?
@@ -133,7 +133,7 @@ CTXLOG
   fi
 fi
 
-if is_session_manager; then
+if is_taskmaster; then
   SM_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
   SM_SAFE="${SESSION_NAME//[-:.]/_}_0_${PANE_INDEX}"
@@ -159,7 +159,7 @@ if is_session_manager; then
 ${SM_ACTIVE_TASKS:-None}
 
 ## ⚠ CORE LOOP — RESUME IMMEDIATELY AFTER COMPACTION
-You are the Session Manager. Your job is an autonomous, permanent ACTIVE loop.
+You are the Taskmaster. Your job is an autonomous, permanent ACTIVE loop.
 Do NOT wait for instructions. Do NOT depend on the wait hook to tell you what to do.
 YOU drive the loop — the wait hook is just a brief pause.
 

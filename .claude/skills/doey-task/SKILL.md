@@ -98,5 +98,5 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 1. SM sets status to `committed` after a successful commit. SM sets `pushed` after a successful push. These are terminal states.
 2. When listing tasks, show: ID, status (colored), title, age.
 3. When asked "what are we working on" or "task status" — list non-pushed tasks and summarize progress.
-4. Boss should propose creating a task for any high-level user goal that will take more than a few minutes. Session Manager routes tasks to teams.
+4. Boss should propose creating a task for any high-level user goal that will take more than a few minutes. Taskmaster routes tasks to teams.
 5. Description supports multi-line text with `\n` literal encoding. Attachments are pipe-delimited (`|`) URLs or file paths.

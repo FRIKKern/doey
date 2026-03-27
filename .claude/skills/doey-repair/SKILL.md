@@ -31,7 +31,7 @@ Send commands to idle shells only:
 |------|------|---------|
 | 0.0 | Info Panel | `tmux send-keys -t "$SESSION_NAME:0.0" "clear && info-panel.sh '${RUNTIME_DIR}'" Enter` |
 | 0.1 | Boss | `tmux send-keys -t "$SESSION_NAME:0.1" "claude --dangerously-skip-permissions --agent doey-boss" Enter` |
-| 0.2 | Session Manager | `tmux send-keys -t "$SESSION_NAME:0.2" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter` |
+| 0.2 | Taskmaster | `tmux send-keys -t "$SESSION_NAME:0.2" "claude --dangerously-skip-permissions --agent doey-session-manager" Enter` |
 
 ### Step 3: Verify — re-check child processes, report results.
 

@@ -1,6 +1,6 @@
 ---
 name: doey-simplify-everything
-description: Full codebase simplification across all teams. Session Manager inventories capacity, assigns domains, dispatches to Window Managers. Use when you need to "simplify the whole codebase", "reduce complexity everywhere", or "run a codebase-wide cleanup".
+description: Full codebase simplification across all teams. Taskmaster inventories capacity, assigns domains, dispatches to Team Leads. Use when you need to "simplify the whole codebase", "reduce complexity everywhere", or "run a codebase-wide cleanup".
 ---
 
 ## Context
@@ -11,7 +11,7 @@ description: Full codebase simplification across all teams. Session Manager inve
 
 ## Prompt
 
-Session Manager coordinating codebase-wide simplification. Route through Window Managers — never dispatch to workers directly.
+Taskmaster coordinating codebase-wide simplification. Route through Team Leads — never dispatch to workers directly.
 
 ### Inventory
 
@@ -59,7 +59,7 @@ wc -l "$PROJECT_DIR"/agents/*.md "$PROJECT_DIR"/CLAUDE.md \
 
 Prefer worktree teams for low-conflict domains (docs, agents). Local teams for hooks/shell core. **Ask user for confirmation** before dispatching.
 
-### Dispatch to Window Managers
+### Dispatch to Team Leads
 
 Send each a self-contained task via `load-buffer`/`paste-buffer` (exit copy-mode first, sleep 0.5s after paste, Enter, verify after 5s).
 
@@ -97,7 +97,7 @@ echo "=== Context audit ===" && bash "$PROJECT_DIR/shell/context-audit.sh" --rep
 Read all `simplify_team_*.md` reports. Present consolidated results: total before/after, per-domain breakdown, syntax/audit status. Offer fix round if issues found.
 
 ### Rules
-1. Route through Window Managers — never dispatch to workers directly
+1. Route through Team Leads — never dispatch to workers directly
 2. Self-contained tasks — Managers have zero context; include everything
 3. No file conflicts — each team owns distinct files
 4. Confirm before dispatching. Verify every dispatch (capture-pane after 5s).

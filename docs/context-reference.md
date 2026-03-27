@@ -1,16 +1,16 @@
 # Context Reference
 
-> **Core principle:** Strategic utilization over brute-force parallelism. Workers are disposable context — they feed high-quality content to the Manager, who validates everything. Force multipliers: ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms. See CLAUDE.md § Philosophy.
+> **Core principle:** Strategic utilization over brute-force parallelism. Workers are disposable context — they feed high-quality content to the Team Lead, who validates everything. Force multipliers: ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms. See CLAUDE.md § Philosophy.
 
 How Claude Code instances in a Doey session receive their configuration, from lowest to highest precedence.
 
 | Precedence | Source | Applies To |
 |------------|--------|------------|
-| Lowest | Agent definitions (`agents/`) | Boss, Manager, Session Mgr, Watchdog |
+| Lowest | Agent definitions (`agents/`) | Boss, Team Lead, Taskmaster, Watchdog |
 | | Settings (4-file merge) | All |
 | | Hooks (`.claude/hooks/`) | All |
-| | Skills (`.claude/skills/`) | Manager (+ 3 for Workers) |
-| | Persistent memory | Boss, Manager, Session Mgr |
+| | Skills (`.claude/skills/`) | Team Lead (+ 3 for Workers) |
+| | Persistent memory | Boss, Team Lead, Taskmaster |
 | | Environment vars (`session.env`) | All |
 | | CLI launch flags | Per-instance |
 | | tmux layout | All |
@@ -22,8 +22,8 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 
 Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
-| Field | Boss | Manager | Session Mgr | Watchdog | Freelancer Watchdog | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
-|-------|------|---------|-------------|----------|---------------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
+| Field | Boss | Team Lead | Taskmaster | Watchdog | Freelancer Watchdog | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
+|-------|------|-----------|------------|----------|---------------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
 | `model` | `opus` | `opus` | `opus` | `sonnet` | `sonnet` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
 | `color` | `#E74C3C` | `green` | `#FF6B35` | `yellow` | `#FFA500` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
 | `memory` | `user` | `user` | `user` | `none` | `none` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
@@ -59,9 +59,9 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
 | `stop-status.sh` | Stop | FINISHED/RESERVED/READY; blocks research without reports |
 | `stop-results.sh` | Stop | Result JSON and completion events |
-| `stop-notify.sh` | Stop | Unified stop notifications: Worker→Manager, Manager→Session Mgr, Session Mgr→desktop |
-| `on-notification.sh` | Notification | Desktop notification for SM permission requests (30s cooldown) |
-| `session-manager-wait.sh` | — | Session Manager sleep/wake between cycles (trigger, message, result, crash) |
+| `stop-notify.sh` | Stop | Unified stop notifications: Worker→Team Lead, Team Lead→Taskmaster, Taskmaster→desktop |
+| `on-notification.sh` | Notification | Desktop notification for TM permission requests (30s cooldown) |
+| `session-manager-wait.sh` | — | Taskmaster sleep/wake between cycles (trigger, message, result, crash) |
 | `watchdog-scan.sh` | — | Pane scanning (called directly, not registered) |
 | `watchdog-wait.sh` | — | Event-driven sleep between scans |
 
@@ -72,11 +72,11 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 
 Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
-**Manager skills:**
-`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager), `/doey-rd-team` (spawn R&D product team on live codebase), `/doey-login` (fix auth), `/doey-settings` (interactive settings), `/unknown-task` (fallback for unrecognized tasks)
+**Team Lead skills:**
+`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Team Lead), `/doey-rd-team` (spawn R&D product team on live codebase), `/doey-login` (fix auth), `/doey-settings` (interactive settings), `/unknown-task` (fallback for unrecognized tasks)
 
-**Session Manager skills:**
-`/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
+**Taskmaster skills:**
+`/doey-worktree` (also Team Lead), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
 
 **Worker skills:** `/doey-status`, `/doey-reserve`, `/doey-stop`. Watchdog uses none.
 
@@ -86,8 +86,8 @@ Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, lo
 Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
 
 - Boss: `~/.claude/agent-memory/doey-boss/MEMORY.md`
-- Manager: `~/.claude/agent-memory/doey-manager/MEMORY.md`
-- Session Mgr: `~/.claude/agent-memory/doey-session-manager/MEMORY.md`
+- Team Lead: `~/.claude/agent-memory/doey-manager/MEMORY.md`
+- Taskmaster: `~/.claude/agent-memory/doey-session-manager/MEMORY.md`
 - Watchdog: disabled (`memory: none`)
 
 
@@ -96,7 +96,7 @@ Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not se
 Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session.env`.
 
 **Session-level (`session.env`):**
-`PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS` (dynamic only), `MAX_WORKERS` (dynamic only), `CURRENT_COLS` (dynamic only), `TOTAL_PANES` (static only), `WORKER_COUNT`, `WORKER_PANES`, `WATCHDOG_PANE`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `WDG_SLOT_1`..`WDG_SLOT_6`, `SM_PANE`
+`PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS` (dynamic only), `MAX_WORKERS` (dynamic only), `CURRENT_COLS` (dynamic only), `TOTAL_PANES` (static only), `WORKER_COUNT`, `WORKER_PANES`, `WATCHDOG_PANE`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `WDG_SLOT_1`..`WDG_SLOT_6`, `TM_PANE`
 
 **Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
@@ -110,14 +110,14 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 | Instance | Command |
 |----------|---------|
 | Boss | `claude --dangerously-skip-permissions --agent doey-boss` |
-| Session Manager | `claude --dangerously-skip-permissions --agent doey-session-manager` |
-| Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
+| Taskmaster | `claude --dangerously-skip-permissions --agent doey-session-manager` |
+| Team Lead | `claude --dangerously-skip-permissions --model opus --name "T<N> Team Lead" --agent doey-manager` |
 | Watchdog | `claude --dangerously-skip-permissions --model sonnet --name "T<N> Watchdog" --agent doey-watchdog` |
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
 
-**Note:** Session Manager does not pass `--model` explicitly — it relies on the `model: opus` frontmatter in `agents/doey-session-manager.md`.
+**Note:** Taskmaster does not pass `--model` explicitly — it relies on the `model: opus` frontmatter in `agents/doey-session-manager.md`.
 
 
 ## Shell Scripts
@@ -143,8 +143,8 @@ All in `shell/`, installed to `~/.local/bin/` by `install.sh`.
 ## tmux Layout
 
 ```
-Dashboard: [0.0 Info] [0.1 Boss] [0.2 Session Mgr] [0.3-0.7 Watchdog slots]
-Team W:    [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
+Dashboard: [0.0 Info] [0.1 Boss] [0.2 Taskmaster] [0.3-0.7 Watchdog slots]
+Team W:    [W.0 TL] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
 ```
 
 Dynamic grid auto-expands when all workers are busy.
@@ -156,8 +156,8 @@ Dynamic grid auto-expands when all workers are busy.
 
 **Key details:**
 - **PANE_SAFE escaping:** `${PANE//[-:.]/_}` — e.g. `doey-project:0.5` → `doey_project_0_5`
-- **Pane titles:** Format is `"<pane_id> | <role>"` — e.g. `"d-t1-mgr | doey T1 Mgr"`, `"d-t1-wd | doey T1 WD"`, `"d-sm | doey SM"`, `"d-t1-w1 | Worker"`
-- **Startup timing:** Manager briefing 8s; workers ready ~15s
+- **Pane titles:** Format is `"<pane_id> | <role>"` — e.g. `"d-t1-tl | doey T1 TL"`, `"d-t1-wd | doey T1 WD"`, `"d-tm | doey TM"`, `"d-t1-w1 | Worker"`
+- **Startup timing:** Team Lead briefing 8s; workers ready ~15s
 - **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript` instead
 
 
@@ -179,7 +179,7 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `status/watchdog_pane_states_W<W>.json` | Watchdog state snapshot |
 | `status/completion_pane_<W>_<index>` | Worker completion event |
 | `status/crash_pane_<W>_<index>` | Crash alert |
-| `status/manager_crashed_W<N>` | Manager crash marker |
+| `status/manager_crashed_W<N>` | Team Lead crash marker |
 | `status/col_*.collapsed` | Collapsed column markers |
 | `research/<pane_safe>.task` | Research task marker |
 | `reports/<pane_safe>.report` | Research report |
@@ -188,34 +188,34 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
 | `triggers/` | Wake triggers (`.trigger` files touched to wake wait hooks) |
 | `lifecycle/` | Lifecycle events from `notify_watchdog()` (`.evt` files) |
-| `tasks/` | Session-level task tracking (`.task` files, managed by SM) |
-| `issues/` | Issue reports from Manager/Watchdog (`.issue` files) |
+| `tasks/` | Session-level task tracking (`.task` files, managed by TM) |
+| `issues/` | Issue reports from Team Lead/Watchdog (`.issue` files) |
 | `logs/` | Per-pane runtime logs |
 | `errors/` | Structured error log (`errors.log`) and individual `.err` files |
 | `debug/` | Debug flight-recorder JSONL (created by `/doey-debug on`) |
-| `context_log_W<N>.md` | **Golden Context Log** — Manager's accumulated knowledge (survives compaction) |
+| `context_log_W<N>.md` | **Golden Context Log** — Team Lead's accumulated knowledge (survives compaction) |
 | `status/state_since_<W>_<idx>` | Duration tracking (epoch when pane entered current state) |
 | `status/anomaly_<W>_<pane>.event` | Active anomaly marker (expires after 5 min) |
 | `status/anomaly_count_<W>_<pane>` | Consecutive anomaly count (escalates at ≥3) |
 | `status/team_snapshot_W<N>.txt` | Watchdog team snapshot (pipe-delimited, includes events) |
-| `status/session_manager_trigger` | SM-specific fast-wake trigger |
+| `status/session_manager_trigger` | TM-specific fast-wake trigger |
 | `status/notif_cooldown_*` | Desktop notification cooldown timestamps |
 
 **Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED, LOGGED_OUT.
 
 **Watchdog anomaly types:** PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT, LOGGED_OUT.
 
-**Research lifecycle:** dispatch → `.task` created → worker investigates → Stop hook blocks until `.report` written → Manager reads report.
+**Research lifecycle:** dispatch → `.task` created → worker investigates → Stop hook blocks until `.report` written → Team Lead reads report.
 
 
 ## Debugging
 
 | Symptom | Check |
 |---------|-------|
-| Manager writes code itself | Memory lacks delegation-first rules |
-| Manager dispatches to Watchdog | `WATCHDOG_PANE` wrong in session.env |
-| Manager sends empty tasks | Task text empty before Enter |
-| All panes think they're Manager | Hook missing `-t "$TMUX_PANE"` |
+| Team Lead writes code itself | Memory lacks delegation-first rules |
+| Team Lead dispatches to Watchdog | `WATCHDOG_PANE` wrong in session.env |
+| Team Lead sends empty tasks | Task text empty before Enter |
+| All panes think they're Team Lead | Hook missing `-t "$TMUX_PANE"` |
 | Hooks not firing | `.claude/settings.local.json` missing (`doey init`) |
 | Watchdog stops monitoring | Wait hook not returning; check `watchdog-wait.sh` trigger path |
 | Watchdog spams notifications | State tracking lost after compaction |

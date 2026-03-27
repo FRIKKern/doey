@@ -97,7 +97,7 @@ _FILES_COUNT=0
 [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
 type _debug_log >/dev/null 2>&1 && _debug_log lifecycle "result_captured" "files_changed=${_FILES_COUNT}" "tool_calls=${TOOL_COUNT}"
 
-# Completion event for Session Manager
+# Completion event for Taskmaster
 COMPLETION="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"
 cat > "${COMPLETION}.tmp" <<COMPLETE
 PANE_INDEX="$PANE_INDEX"
@@ -108,7 +108,7 @@ COMPLETE
 mv "${COMPLETION}.tmp" "$COMPLETION"
 [ ! -f "$COMPLETION" ] && _log_error "HOOK_ERROR" "Completion event file not written" "path=$COMPLETION"
 
-# Wake Session Manager
+# Wake Taskmaster
 touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true
 
 exit 0
