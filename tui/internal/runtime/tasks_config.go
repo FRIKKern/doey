@@ -18,6 +18,7 @@ type PersistentTask struct {
 	Section     string `json:"section"`      // "active", "upcoming", "done"
 	Description string   `json:"description"`            // optional detail text
 	Attachments []string `json:"attachments,omitempty"`  // list of URLs/file paths
+	GitStatus   string   `json:"git_status,omitempty"`   // unstaged, staged, committed, pushed
 	Team        string   `json:"team"`                   // assigned team name (optional)
 	Created     int64  `json:"created"`      // unix epoch
 	Updated     int64  `json:"updated"`      // unix epoch
@@ -186,6 +187,7 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 			Section:     section,
 			Description: rt.Description,
 			Attachments: rt.Attachments,
+			GitStatus:   rt.GitStatus,
 			Created:     rt.Created,
 			Updated:     rt.Created,
 		})

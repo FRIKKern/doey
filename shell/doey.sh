@@ -1737,10 +1737,10 @@ _doc_check() {
 
 _task_read() {
   # Read a task file; sets TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED,
-  #   TASK_DESCRIPTION, TASK_ATTACHMENTS
+  #   TASK_DESCRIPTION, TASK_ATTACHMENTS, TASK_GIT_STATUS
   local _file="$1"
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
-  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""
+  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""; TASK_GIT_STATUS=""
   while IFS= read -r _line; do
     case "${_line%%=*}" in
       TASK_ID)          TASK_ID="${_line#*=}" ;;
@@ -1749,6 +1749,7 @@ _task_read() {
       TASK_CREATED)     TASK_CREATED="${_line#*=}" ;;
       TASK_DESCRIPTION) TASK_DESCRIPTION="${_line#*=}" ;;
       TASK_ATTACHMENTS) TASK_ATTACHMENTS="${_line#*=}" ;;
+      TASK_GIT_STATUS)  TASK_GIT_STATUS="${_line#*=}" ;;
     esac
   done < "$_file"
 }
@@ -1779,7 +1780,7 @@ _task_create() {
   local _id _now
   _id="$(_task_next_id "$_tasks_dir")"
   _now=$(date +%s)
-  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\n' \
+  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\nTASK_GIT_STATUS=\n' \
     "$_id" "$_title" "$_now" "$_description" "$_attachments" > "${_tasks_dir}/${_id}.task"
   echo "$_id"
 }
@@ -1814,6 +1815,24 @@ _task_add_attachment() {
         fi
         ;;
       *) printf '%s\n' "$_line" ;;
+    esac
+  done < "$_file" > "$_tmp"
+  mv "$_tmp" "$_file"
+}
+
+_task_set_git_status() {
+  local _tasks_dir="$1" _id="$2" _git_status="$3"
+  local _file="${_tasks_dir}/${_id}.task"
+  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
+  case "$_git_status" in
+    unstaged|staged|committed|pushed|"") ;;
+    *) printf '  %s✗ Invalid git status: %s (valid: unstaged, staged, committed, pushed, or empty)%s\n' "$ERROR" "$_git_status" "$RESET"; return 1 ;;
+  esac
+  local _tmp="${_file}.tmp"
+  while IFS= read -r _line; do
+    case "${_line%%=*}" in
+      TASK_GIT_STATUS) printf 'TASK_GIT_STATUS=%s\n' "$_git_status" ;;
+      *)               printf '%s\n' "$_line" ;;
     esac
   done < "$_file" > "$_tmp"
   mv "$_tmp" "$_file"
@@ -1963,8 +1982,19 @@ task_command() {
       printf '  %s✓ Attachment added to task [%s].%s\n' "$SUCCESS" "$_id" "$RESET"
       ;;
 
+    vcs)
+      local _id="${1:-}" _git_status="${2:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task vcs <id> <unstaged|staged|committed|pushed|"">\n'; exit 1; }
+      _task_set_git_status "$_tasks_dir" "$_id" "$_git_status"
+      if [ -n "$_git_status" ]; then
+        printf '  %s✓ Task [%s] git status set to: %s%s\n' "$SUCCESS" "$_id" "$_git_status" "$RESET"
+      else
+        printf '  %s✓ Task [%s] git status cleared.%s\n' "$SUCCESS" "$_id" "$RESET"
+      fi
+      ;;
+
     *)
-      printf '  Usage: doey task [list|add|done|pending|cancel|describe|attach]\n'
+      printf '  Usage: doey task [list|add|done|pending|cancel|describe|attach|vcs]\n'
       ;;
   esac
 }

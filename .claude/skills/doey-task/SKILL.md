@@ -22,7 +22,18 @@ TASK_STATUS=active
 TASK_CREATED=1711234567
 TASK_DESCRIPTION=Multi-line text with literal \n encoding for newlines
 TASK_ATTACHMENTS=https://example.com/spec.pdf|/path/to/mockup.png
+TASK_GIT_STATUS=committed
 ```
+
+### VCS tracking values
+
+| Value | Meaning | Set by |
+|-------|---------|--------|
+| *(empty)* | No VCS tracking yet | Default on creation |
+| `unstaged` | Changes exist but not staged | SM after detecting changes |
+| `staged` | Changes staged for commit | SM after staging |
+| `committed` | Changes committed locally | SM after running commit |
+| `pushed` | Changes pushed to remote | SM after pushing |
 
 ### Status values
 
@@ -110,6 +121,18 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 # Same pattern as mark done, but TASK_STATUS=cancelled
 ```
 
+**Set VCS tracking status** — `doey task vcs <id> <value>`
+```bash
+TD="${RUNTIME_DIR}/tasks"
+FILE="${TD}/ID_HERE.task"
+TMP="${FILE}.tmp"
+while IFS= read -r line; do
+  case "${line%%=*}" in TASK_GIT_STATUS) echo "TASK_GIT_STATUS=VALUE_HERE" ;;
+  *) echo "$line" ;; esac
+done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+```
+Valid values: `unstaged`, `staged`, `committed`, `pushed`, or empty string to clear.
+
 ## Rules
 
 1. **Never mark a task `done` without explicit user confirmation.** Say "This looks complete — run `doey task done <id>` to confirm" instead.
@@ -118,3 +141,4 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 4. When asked "what are we working on" or "task status" — list active + pending tasks and summarize progress.
 5. Boss should propose creating a task for any high-level user goal that will take more than a few minutes. Session Manager routes tasks to teams.
 6. Description supports multi-line text with `\n` literal encoding. Attachments are pipe-delimited (`|`) URLs or file paths.
+7. When SM completes a commit or push that includes task-related files, it should update the task's VCS tracking status accordingly.
