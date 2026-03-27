@@ -19,7 +19,7 @@ description: Kill and relaunch Claude instances. Use when you need to "restart w
 
 ## Step 1: Parse Arguments
 
-No args → prompt interactively (suggest "this team" for Manager, "all teams" for SM).
+No args → prompt interactively (suggest "this team" for Manager, "all teams" for TM).
 
 Set: **TARGET_WINDOWS** (list), **FORCE** (bool), **WORKERS_ONLY** (bool).
 

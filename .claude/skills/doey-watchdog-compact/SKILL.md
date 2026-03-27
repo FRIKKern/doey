@@ -1,6 +1,6 @@
 ---
 name: doey-watchdog-compact
-description: Send /compact to Taskmaster to reduce context window. Use when you need to "compact the SM", "reduce SM context", or "SM is running out of context".
+description: Send /compact to Taskmaster to reduce context window. Use when you need to "compact the TM", "reduce TM context", or "TM is running out of context".
 ---
 
 **Only Team Lead or Boss** (send-keys blocked for other roles).
@@ -15,7 +15,7 @@ source "$RD/session.env"
 SM_PANE="${SESSION_NAME}:0.2"
 tmux copy-mode -q -t "$SM_PANE" 2>/dev/null
 tmux send-keys -t "$SM_PANE" "/compact" Enter
-echo "Sent /compact to SM at ${SM_PANE}"
+echo "Sent /compact to TM at ${SM_PANE}"
 ```
 
 ```bash

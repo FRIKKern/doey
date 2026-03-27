@@ -217,7 +217,7 @@ if is_manager; then
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${SESSION_NAME}:${SM_PANE}" "type=task_complete" "delivery=file" "success=true"
   # Also touch TM-specific trigger for taskmaster-wait.sh fast wakeup
   touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
-  _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
+  _log "stop-notify: sent task_complete to taskmaster at $SESSION_NAME:${SM_PANE}"
   _wake_tm
   exit 0
 fi
