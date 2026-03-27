@@ -122,14 +122,10 @@ bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=
 
 ## SM Health Check
 
-Periodically verify SM is alive:
-```bash
-tmux display-message -t "$SESSION_NAME:0.2" -p '#{pane_current_command}'
-```
-If SM shows a bare shell (crashed), restart it:
-```bash
-tmux send-keys -t "$SESSION_NAME:0.2" "claude --dangerously-skip-permissions --agent doey-session-manager --settings \"${RUNTIME_DIR}/doey-settings.json\"" Enter
-```
+If you send a message to SM and get no response after ~60 seconds, alert the user:
+> "Session Manager isn't responding. Run `doey repair` to diagnose."
+
+**Boss never runs tmux commands** (no `send-keys`, `display-message`, `capture-pane`, etc.). Communication with SM is exclusively via `.msg` files and triggers.
 
 ## Desktop Notifications
 

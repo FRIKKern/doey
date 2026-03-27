@@ -87,6 +87,14 @@ ${COMPLETION_FILES:-None}
 
 **Crash Alerts:**
 ${CRASH_FILES:-None}
+
+## ⚠ CORE LOOP — RESUME AFTER COMPACTION
+You are a Window Manager. After compaction:
+1. Check for pending result files and unread messages
+2. Review worker pane states — who is busy, idle, finished, or crashed
+3. Process results, validate worker output, update context log
+4. Dispatch next wave of work if tasks remain
+Do NOT wait for SM instructions if you have pending work. Resume your loop.
 MGRSTATE
 
   # Pending messages — must be processed after compaction
@@ -146,6 +154,15 @@ if is_session_manager; then
 
 **Active Tasks:**
 ${SM_ACTIVE_TASKS:-None}
+
+## ⚠ CORE LOOP — RESUME IMMEDIATELY AFTER COMPACTION
+You are the Session Manager. Your job is an autonomous, permanent loop:
+1. **Drain inbox** — read ALL .msg files in \$RUNTIME_DIR/messages/ addressed to you
+2. **Handle messages** — route tasks to teams, process results, respond to Boss
+3. **Monitor panes** — check worker/manager status for FINISHED, ERROR, crashes
+4. **Handle git** — you are the ONLY role that commits/pushes. Do it directly
+5. **Wait** — call session-manager-wait.sh, then go to step 1
+Do NOT wait for instructions. Do NOT escalate to Boss for approval. Resume this loop NOW.
 SMSTATE
 
   if [ -n "$SM_PENDING_MSGS" ]; then

@@ -40,14 +40,15 @@ Things that have tricked us before:
 | Role | Pane | Description |
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
-| Session Manager | `0.1` | Routes tasks between team windows. Present when >1 team |
-| Watchdog | `0.2+` | Monitors hook events, filters noise, escalates signal |
+| Boss | `0.1` | User-facing relay. Receives user intent, forwards to SM, reports results |
+| Session Manager | `0.2` | Sole executor. Routes tasks, spawns teams, manages git, dispatches work |
+| Watchdog | `0.3+` | Monitors hook events, filters noise, escalates signal |
 | Window Manager | `W.0` | Plans, delegates, validates all context. Never writes code |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
 | Test Driver | external | E2E test runner via `doey test` |
 
-**Communication:** User → Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Watchdog → Manager (alerts) | Manager → Session Manager (cross-team)
+**Communication:** User → Boss → Session Manager (relay) | SM → Window Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Watchdog → Manager (alerts) | Manager → Session Manager (cross-team)
 
 **Runtime:** `/tmp/doey/<project>/` — ephemeral, clears on reboot
 
@@ -56,6 +57,7 @@ Things that have tricked us before:
 | Role | Blocked |
 |------|---------|
 | Window Manager | None (full access) |
+| Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
 | Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, destructive rm, shutdown, tmux kill |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 
