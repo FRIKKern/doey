@@ -17,44 +17,19 @@ import (
 // statusIcon returns a colored icon for a task status.
 func statusIcon(status string, t styles.Theme) string {
 	switch status {
-	case "pending_user_confirmation":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("⬤")
-	case "active":
-		return lipgloss.NewStyle().Foreground(t.Success).Render("●")
-	case "done":
+	case "backlog":
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
-	case "blocked":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("⊘")
-	case "cancelled":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
-	default:
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
-	}
-}
-
-// gitStatusIcon returns a colored icon for a task's git status.
-func gitStatusIcon(gs string, t styles.Theme) string {
-	switch gs {
-	case "unstaged":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("○")
-	case "staged":
-		return lipgloss.NewStyle().Foreground(t.Primary).Render("◉")
+	case "todo":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
+	case "in_progress":
+		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
 	case "committed":
 		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
 	case "pushed":
 		return lipgloss.NewStyle().Foreground(t.Accent).Render("↑")
 	default:
-		return ""
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
 	}
-}
-
-// gitStatusLabel returns "icon label" for detail view, or empty string.
-func gitStatusLabel(gs string, t styles.Theme) string {
-	icon := gitStatusIcon(gs, t)
-	if icon == "" {
-		return ""
-	}
-	return icon + " " + gs
 }
 
 // formatAge returns a human-readable age string.
@@ -132,7 +107,7 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 }
 
 func (m *TasksModel) sortEntries() {
-	sectionOrder := map[string]int{"active": 0, "upcoming": 1, "blocked": 2, "done": 3}
+	sectionOrder := map[string]int{"active": 0, "backlog": 1, "complete": 2}
 	sort.SliceStable(m.entries, func(i, j int) bool {
 		a, b := m.entries[i], m.entries[j]
 		sa := sectionOrder[a.Section]
@@ -315,22 +290,20 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	return m, nil
 }
 
-// nextSection cycles: active → upcoming → blocked → done → active.
+// nextSection cycles: active → backlog → complete → active.
 func nextSection(s string) string {
 	switch s {
 	case "active":
-		return "upcoming"
-	case "upcoming":
-		return "blocked"
-	case "blocked":
-		return "done"
+		return "backlog"
+	case "backlog":
+		return "complete"
 	default:
 		return "active"
 	}
 }
 
 // allStatuses is the full list of task statuses for cycling.
-var allStatuses = []string{"active", "blocked", "pending_user_confirmation", "done", "cancelled"}
+var allStatuses = []string{"backlog", "todo", "in_progress", "committed", "pushed"}
 
 // nextStatus cycles through all statuses.
 func nextStatus(s string) string {
@@ -429,20 +402,15 @@ func (m TasksModel) viewList() string {
 // taskSummary returns section counts.
 func (m TasksModel) taskSummary() string {
 	t := m.theme
-	active, upcoming, blocked, done, uncommitted := 0, 0, 0, 0, 0
+	active, backlog, complete := 0, 0, 0
 	for _, task := range m.entries {
 		switch task.Section {
 		case "active":
 			active++
-		case "upcoming":
-			upcoming++
-		case "blocked":
-			blocked++
+		case "backlog":
+			backlog++
 		default:
-			done++
-		}
-		if task.GitStatus == "unstaged" || task.GitStatus == "staged" {
-			uncommitted++
+			complete++
 		}
 	}
 
@@ -451,25 +419,16 @@ func (m TasksModel) taskSummary() string {
 
 	var parts []string
 	if active > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Primary).
 			Render(fmt.Sprintf("%d active", active)))
 	}
-	if upcoming > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).
-			Render(fmt.Sprintf("%d upcoming", upcoming)))
-	}
-	if blocked > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Danger).
-			Render(fmt.Sprintf("%d blocked", blocked)))
-	}
-	if done > 0 {
+	if backlog > 0 {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Muted).
-			Render(fmt.Sprintf("%d done", done)))
+			Render(fmt.Sprintf("%d backlog", backlog)))
 	}
-
-	if uncommitted > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).
-			Render(fmt.Sprintf("%d uncommitted", uncommitted)))
+	if complete > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).
+			Render(fmt.Sprintf("%d complete", complete)))
 	}
 
 	if len(parts) > 0 {
@@ -483,12 +442,10 @@ func sectionLabel(section string) string {
 	switch section {
 	case "active":
 		return "ACTIVE"
-	case "upcoming":
-		return "UPCOMING"
-	case "blocked":
-		return "BLOCKED"
+	case "backlog":
+		return "BACKLOG"
 	default:
-		return "DONE"
+		return "COMPLETE"
 	}
 }
 
@@ -523,13 +480,7 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		teamBadge = " " + lipgloss.NewStyle().Foreground(t.Accent).Render("["+task.Team+"]")
 	}
 
-	// Git status indicator
-	gitBadge := ""
-	if gi := gitStatusIcon(task.GitStatus, t); gi != "" {
-		gitBadge = " " + gi
-	}
-
-	return "  " + icon + " " + id + " " + title + subtaskBadge + teamBadge + gitBadge + " " + age
+	return "  " + icon + " " + id + " " + title + subtaskBadge + teamBadge + " " + age
 }
 
 // renderInputBar renders the inline text input for creating a task.
@@ -573,25 +524,21 @@ func (m TasksModel) viewDetail() string {
 	// Status with color
 	statusColor := t.Muted
 	switch task.Status {
-	case "active":
-		statusColor = t.Success
-	case "blocked":
-		statusColor = t.Danger
-	case "pending_user_confirmation":
+	case "todo":
 		statusColor = t.Warning
-	case "cancelled":
-		statusColor = t.Danger
+	case "in_progress":
+		statusColor = t.Primary
+	case "committed":
+		statusColor = t.Success
+	case "pushed":
+		statusColor = t.Accent
 	}
 
 	var fields []string
 	fields = append(fields, labelStyle.Render("Title")+valueStyle.Render(task.Title))
 	fields = append(fields, labelStyle.Render("Status")+
-		lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
+		statusIcon(task.Status, t)+" "+lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
 	fields = append(fields, labelStyle.Render("Section")+valueStyle.Render(sectionLabel(task.Section)))
-
-	if gl := gitStatusLabel(task.GitStatus, t); gl != "" {
-		fields = append(fields, labelStyle.Render("Git Status")+gl)
-	}
 
 	if task.Team != "" {
 		fields = append(fields, labelStyle.Render("Team")+

@@ -1737,10 +1737,10 @@ _doc_check() {
 
 _task_read() {
   # Read a task file; sets TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED,
-  #   TASK_DESCRIPTION, TASK_ATTACHMENTS, TASK_GIT_STATUS
+  #   TASK_DESCRIPTION, TASK_ATTACHMENTS
   local _file="$1"
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
-  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""; TASK_GIT_STATUS=""
+  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""
   while IFS= read -r _line; do
     case "${_line%%=*}" in
       TASK_ID)          TASK_ID="${_line#*=}" ;;
@@ -1749,7 +1749,6 @@ _task_read() {
       TASK_CREATED)     TASK_CREATED="${_line#*=}" ;;
       TASK_DESCRIPTION) TASK_DESCRIPTION="${_line#*=}" ;;
       TASK_ATTACHMENTS) TASK_ATTACHMENTS="${_line#*=}" ;;
-      TASK_GIT_STATUS)  TASK_GIT_STATUS="${_line#*=}" ;;
     esac
   done < "$_file"
 }
@@ -1780,7 +1779,7 @@ _task_create() {
   local _id _now
   _id="$(_task_next_id "$_tasks_dir")"
   _now=$(date +%s)
-  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\nTASK_GIT_STATUS=\n' \
+  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=backlog\nTASK_CREATED=%s\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\n' \
     "$_id" "$_title" "$_now" "$_description" "$_attachments" > "${_tasks_dir}/${_id}.task"
   echo "$_id"
 }
@@ -1820,28 +1819,14 @@ _task_add_attachment() {
   mv "$_tmp" "$_file"
 }
 
-_task_set_git_status() {
-  local _tasks_dir="$1" _id="$2" _git_status="$3"
-  local _file="${_tasks_dir}/${_id}.task"
-  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
-  case "$_git_status" in
-    unstaged|staged|committed|pushed|"") ;;
-    *) printf '  %s✗ Invalid git status: %s (valid: unstaged, staged, committed, pushed, or empty)%s\n' "$ERROR" "$_git_status" "$RESET"; return 1 ;;
-  esac
-  local _tmp="${_file}.tmp"
-  while IFS= read -r _line; do
-    case "${_line%%=*}" in
-      TASK_GIT_STATUS) printf 'TASK_GIT_STATUS=%s\n' "$_git_status" ;;
-      *)               printf '%s\n' "$_line" ;;
-    esac
-  done < "$_file" > "$_tmp"
-  mv "$_tmp" "$_file"
-}
-
 _task_set_status() {
   local _tasks_dir="$1" _id="$2" _status="$3"
   local _file="${_tasks_dir}/${_id}.task"
   [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
+  case "$_status" in
+    backlog|todo|in_progress|committed|pushed) ;;
+    *) printf '  %s✗ Invalid status: %s (valid: backlog, todo, in_progress, committed, pushed)%s\n' "$ERROR" "$_status" "$RESET"; return 1 ;;
+  esac
   local _tmp="${_file}.tmp"
   while IFS= read -r _line; do
     case "${_line%%=*}" in
@@ -1879,13 +1864,13 @@ task_command() {
         [ -f "$_f" ] || continue
         local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
         _task_read "$_f"
-        [ "$TASK_STATUS" = "done" ] && continue
-        [ "$TASK_STATUS" = "cancelled" ] && continue
+        [ "$TASK_STATUS" = "pushed" ] && continue
         local _col _age
         case "$TASK_STATUS" in
-          pending_user_confirmation) _col="$WARN" ;;
-          active)                    _col="$SUCCESS" ;;
-          *)                         _col="$DIM" ;;
+          in_progress) _col="$SUCCESS" ;;
+          committed)   _col="$WARN" ;;
+          todo)        _col="$BOLD" ;;
+          *)           _col="$DIM" ;;
         esac
         _age="$(_task_age "$TASK_CREATED")"
         printf '  %b[%s]%b  %b%-30s%b  %b%s%b  %s ago\n' \
@@ -1899,7 +1884,7 @@ task_command() {
         printf '  %bNo active tasks.%b\n' "$DIM" "$RESET"
         printf '  %bAdd: doey task add "your goal"%b\n' "$DIM" "$RESET"
       else
-        printf '\n  %bMark done (user only): doey task done <id>%b\n' "$DIM" "$RESET"
+        printf '\n  %bLifecycle: backlog → todo → in_progress → committed → pushed%b\n' "$DIM" "$RESET"
       fi
       printf '\n'
       ;;
@@ -1920,52 +1905,34 @@ task_command() {
         "$SUCCESS" "$_id" "$RESET" "$BOLD" "$_title" "$RESET"
       ;;
 
-    done|complete)
+    ready|todo)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task ready <id>\n'; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "todo"
+      printf '  %s✓ Task [%s] marked todo.%s\n' "$SUCCESS" "$_id" "$RESET"
+      ;;
+
+    start)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task start <id>\n'; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "in_progress"
+      printf '  %s● Task [%s] in progress.%s\n' "$SUCCESS" "$_id" "$RESET"
+      ;;
+
+    committed)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task committed <id>\n'; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "committed"
+      printf '  %s✓ Task [%s] committed.%s\n' "$WARN" "$_id" "$RESET"
+      ;;
+
+    done|pushed)
       local _id="${1:-}"
       [ -z "$_id" ] && { printf '  Usage: doey task done <id>\n'; exit 1; }
       local _file="${_tasks_dir}/${_id}.task"
       [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
-      local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
-      _task_read "$_file"
-      printf '\n  %bTask [%s]:%b %s\n' "$BOLD" "$_id" "$RESET" "$TASK_TITLE"
-      printf '  Mark as done? %b[Y/n]%b ' "$DIM" "$RESET"
-      local _reply=""
-      read -r _reply
-      case "$_reply" in
-        [Nn]*) printf '  Cancelled.\n\n'; exit 0 ;;
-        *)
-          _task_set_status "$_tasks_dir" "$_id" "done"
-          printf '  %s✓ Task [%s] marked done.%s\n\n' "$SUCCESS" "$_id" "$RESET"
-          ;;
-      esac
-      ;;
-
-    pending)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task pending <id>\n'; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "pending_user_confirmation"
-      printf '  %s⬤ Task [%s] awaiting user confirmation.%s\n' "$WARN" "$_id" "$RESET"
-      printf '  %bRun: doey task done %s%b\n' "$DIM" "$_id" "$RESET"
-      ;;
-
-    cancel)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task cancel <id>\n'; exit 1; }
-      local _file="${_tasks_dir}/${_id}.task"
-      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
-      local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
-      _task_read "$_file"
-      printf '\n  %bTask [%s]:%b %s\n' "$BOLD" "$_id" "$RESET" "$TASK_TITLE"
-      printf '  Cancel this task? %b[Y/n]%b ' "$DIM" "$RESET"
-      local _reply=""
-      read -r _reply
-      case "$_reply" in
-        [Nn]*) printf '  Aborted.\n\n'; exit 0 ;;
-        *)
-          _task_set_status "$_tasks_dir" "$_id" "cancelled"
-          printf '  %s✓ Task [%s] cancelled.%s\n\n' "$SUCCESS" "$_id" "$RESET"
-          ;;
-      esac
+      _task_set_status "$_tasks_dir" "$_id" "pushed"
+      printf '  %s✓ Task [%s] pushed (done).%s\n' "$SUCCESS" "$_id" "$RESET"
       ;;
 
     describe)
@@ -1982,19 +1949,8 @@ task_command() {
       printf '  %s✓ Attachment added to task [%s].%s\n' "$SUCCESS" "$_id" "$RESET"
       ;;
 
-    vcs)
-      local _id="${1:-}" _git_status="${2:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task vcs <id> <unstaged|staged|committed|pushed|"">\n'; exit 1; }
-      _task_set_git_status "$_tasks_dir" "$_id" "$_git_status"
-      if [ -n "$_git_status" ]; then
-        printf '  %s✓ Task [%s] git status set to: %s%s\n' "$SUCCESS" "$_id" "$_git_status" "$RESET"
-      else
-        printf '  %s✓ Task [%s] git status cleared.%s\n' "$SUCCESS" "$_id" "$RESET"
-      fi
-      ;;
-
     *)
-      printf '  Usage: doey task [list|add|done|pending|cancel|describe|attach|vcs]\n'
+      printf '  Usage: doey task [list|add|ready|start|committed|done|describe|attach]\n'
       ;;
   esac
 }
