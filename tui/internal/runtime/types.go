@@ -36,11 +36,13 @@ type PaneStatus struct {
 
 // Task from tasks/*.task
 type Task struct {
-	ID       string
-	Title    string
-	Status   string    // active, pending_user_confirmation, done, cancelled
-	Created  int64     // unix epoch
-	Subtasks []Subtask // worker assignments
+	ID          string
+	Title       string
+	Status      string    // active, pending_user_confirmation, done, cancelled
+	Description string    // multi-line task description
+	Attachments []string  // list of URLs/file paths
+	Created     int64     // unix epoch
+	Subtasks    []Subtask // worker assignments
 }
 
 // Subtask represents a worker assignment under a parent task.
