@@ -1,7 +1,9 @@
 package model
 
 import (
-	"os/exec"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,8 +20,8 @@ type TickMsg time.Time
 // SnapshotMsg carries a fresh runtime snapshot.
 type SnapshotMsg runtime.Snapshot
 
-// launchTeamDoneMsg is returned after a "doey add-team" command finishes.
-type launchTeamDoneMsg struct {
+// saveTeamDoneMsg is returned after writing a .team.md file.
+type saveTeamDoneMsg struct {
 	name string
 	err  error
 }
@@ -35,9 +37,8 @@ type Model struct {
 	tasks      TasksModel
 	team       TeamModel
 	agents     AgentsModel
-	catalog    CatalogModel
 	footer     FooterModel
-	focusIndex int // 0=welcome, 1=teams, 2=tasks, 3=agents, 4=catalog
+	focusIndex int // 0=welcome, 1=teams, 2=tasks, 3=agents
 	width      int
 	height     int
 	ready      bool
@@ -51,10 +52,9 @@ func New(runtimeDir string) Model {
 		header:  NewHeaderModel(),
 		welcome: NewWelcomeModel(),
 		tasks:   NewTasksModel(),
-		team:    NewTeamModel(),
-		agents:  NewAgentsModel(theme),
-		catalog: NewCatalogModel(theme),
-		footer:  NewFooterModel(),
+		team:   NewTeamModel(theme),
+		agents: NewAgentsModel(theme),
+		footer: NewFooterModel(),
 	}
 }
 
@@ -85,14 +85,54 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks.SetSnapshot(m.snapshot)
 		m.team.SetSnapshot(m.snapshot)
 		m.agents.SetSnapshot(m.snapshot)
-		m.catalog.SetSnapshot(m.snapshot)
+
+	case SnapshotRefreshMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
 
 	case LaunchTeamMsg:
-		return m, launchTeamCmd(msg.Name)
+		return m, LaunchTeamCmd(msg.Name)
 
-	case launchTeamDoneMsg:
-		// Trigger a snapshot refresh to pick up the new team
+	case LaunchTeamResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
+
+	case StopTeamMsg:
+		return m, StopTeamCmd(msg.Name, msg.WindowIdx)
+
+	case StopTeamResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case ToggleStarMsg:
+		return m, ToggleStarCmd(msg.Name)
+
+	case ToggleStarResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case ToggleStartupMsg:
+		return m, ToggleStartupCmd(msg.Name)
+
+	case ToggleStartupResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case EditTeamMsg:
+		// Find the team def and open editor
+		for _, td := range m.snapshot.TeamDefs {
+			if td.Name == msg.Name {
+				m.team.Update(OpenEditorMsg{Def: td, IsNew: false})
+				break
+			}
+		}
+
+	case NewTeamMsg:
+		m.team.Update(OpenEditorMsg{IsNew: true})
+
+	case SaveTeamMsg:
+		return m, m.saveTeamCmd(msg)
+
+	case saveTeamDoneMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case CloseEditorMsg:
+		m.team.Update(msg)
 
 	case tea.KeyMsg:
 		// Global keys
@@ -105,12 +145,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel, m.footer.keyMap.RightPanel) {
-			m.focusIndex = (m.focusIndex + 1) % 5
+			m.focusIndex = (m.focusIndex + 1) % 4
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel, m.footer.keyMap.LeftPanel) {
-			m.focusIndex = (m.focusIndex + 4) % 5 // +4 mod 5 == -1 with wrap
+			m.focusIndex = (m.focusIndex + 3) % 4 // +3 mod 4 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -134,11 +174,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateFocus()
 			return m, nil
 		}
-		if key.Matches(msg, m.footer.keyMap.PanelFive) {
-			m.focusIndex = 4
-			m.updateFocus()
-			return m, nil
-		}
 
 		// Route to focused sub-model
 		var cmd tea.Cmd
@@ -151,8 +186,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tasks, cmd = m.tasks.Update(msg)
 		case 3:
 			m.agents, cmd = m.agents.Update(msg)
-		case 4:
-			m.catalog, cmd = m.catalog.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -163,7 +196,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderMenuBar renders a navigable menu bar showing the active panel.
 func (m Model) renderMenuBar(width int) string {
 	t := styles.DefaultTheme()
-	items := []string{"Dashboard", "Teams", "Tasks", "Agents", "Catalog"}
+	items := []string{"Dashboard", "Teams", "Tasks", "Agents"}
 
 	activeStyle := lipgloss.NewStyle().
 		Foreground(t.Primary).
@@ -229,9 +262,6 @@ func (m Model) View() string {
 	case 3:
 		m.agents.SetSize(m.width, bodyH)
 		body = m.agents.View()
-	case 4:
-		m.catalog.SetSize(m.width, bodyH)
-		body = m.catalog.View()
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, banner, menuBar, body, footer)
@@ -254,7 +284,6 @@ func (m *Model) propagateSizes() {
 	m.tasks.SetSize(m.width, bodyH)
 	m.team.SetSize(m.width, bodyH)
 	m.agents.SetSize(m.width, bodyH)
-	m.catalog.SetSize(m.width, bodyH)
 	m.updateFocus()
 }
 
@@ -262,7 +291,6 @@ func (m *Model) propagateSizes() {
 func (m *Model) updateFocus() {
 	m.team.SetFocused(m.focusIndex == 1)
 	m.agents.SetFocused(m.focusIndex == 3)
-	m.catalog.SetFocused(m.focusIndex == 4)
 }
 
 // tickCmd returns a command that sends a TickMsg after the interval.
@@ -272,12 +300,21 @@ func tickCmd() tea.Cmd {
 	})
 }
 
-// launchTeamCmd runs "doey add-team <name>" in the background.
-func launchTeamCmd(name string) tea.Cmd {
+// saveTeamCmd writes a team definition to a .team.md file.
+func (m Model) saveTeamCmd(msg SaveTeamMsg) tea.Cmd {
+	projectDir := m.snapshot.Session.ProjectDir
+	def := msg.Def
 	return func() tea.Msg {
-		cmd := exec.Command("doey", "add-team", name)
-		err := cmd.Run()
-		return launchTeamDoneMsg{name: name, err: err}
+		teamsDir := filepath.Join(projectDir, "teams")
+		if err := os.MkdirAll(teamsDir, 0o755); err != nil {
+			return saveTeamDoneMsg{name: def.Name, err: fmt.Errorf("create teams dir: %w", err)}
+		}
+		path := filepath.Join(teamsDir, def.Name+".team.md")
+		content := SerializeTeamDef(def)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			return saveTeamDoneMsg{name: def.Name, err: err}
+		}
+		return saveTeamDoneMsg{name: def.Name}
 	}
 }
 

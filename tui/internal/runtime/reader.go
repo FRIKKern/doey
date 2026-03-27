@@ -61,6 +61,9 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 		snap.TeamDefs = r.readTeamDefs(session.ProjectDir)
 	}
 
+	snap.TeamUserCfg, _ = ReadTeamUserConfig()
+	snap.TeamEntries = buildTeamEntries(snap.TeamDefs, snap.Teams, snap.TeamUserCfg)
+
 	return snap, nil
 }
 
@@ -545,6 +548,42 @@ func parseFrontmatter(path string) map[string]string {
 	}
 
 	return nil // never found closing ---
+}
+
+// buildTeamEntries merges team definitions with running state and user preferences.
+func buildTeamEntries(defs []TeamDef, teams map[int]TeamConfig, cfg TeamUserConfig) []TeamEntry {
+	entries := make([]TeamEntry, 0, len(defs))
+
+	// Build lookup: team name -> running TeamConfig
+	running := make(map[string]TeamConfig)
+	for _, tc := range teams {
+		if tc.TeamName != "" {
+			running[tc.TeamName] = tc
+		}
+	}
+
+	for _, def := range defs {
+		entry := TeamEntry{
+			Def:       def,
+			WindowIdx: -1,
+			Starred:   cfg.IsStarred(def.Name),
+			Startup:   cfg.IsStartup(def.Name),
+		}
+		if tc, ok := running[def.Name]; ok {
+			entry.Running = true
+			entry.WindowIdx = tc.WindowIndex
+		}
+		entries = append(entries, entry)
+	}
+
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].Starred != entries[j].Starred {
+			return entries[i].Starred
+		}
+		return entries[i].Def.Name < entries[j].Def.Name
+	})
+
+	return entries
 }
 
 // underscoreToPaneID converts "doey-proj_W_P" or "W_P" to a pane-style ID "W.P"
