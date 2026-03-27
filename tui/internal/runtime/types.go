@@ -41,6 +41,7 @@ type Task struct {
 	Status      string    // active, pending_user_confirmation, done, cancelled
 	Description string    // multi-line task description
 	Attachments []string  // list of URLs/file paths
+	GitStatus   string    // unstaged, staged, committed, pushed, or empty
 	Created     int64     // unix epoch
 	Subtasks    []Subtask // worker assignments
 }

@@ -32,6 +32,31 @@ func statusIcon(status string, t styles.Theme) string {
 	}
 }
 
+// gitStatusIcon returns a colored icon for a task's git status.
+func gitStatusIcon(gs string, t styles.Theme) string {
+	switch gs {
+	case "unstaged":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("○")
+	case "staged":
+		return lipgloss.NewStyle().Foreground(t.Primary).Render("◉")
+	case "committed":
+		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
+	case "pushed":
+		return lipgloss.NewStyle().Foreground(t.Accent).Render("↑")
+	default:
+		return ""
+	}
+}
+
+// gitStatusLabel returns "icon label" for detail view, or empty string.
+func gitStatusLabel(gs string, t styles.Theme) string {
+	icon := gitStatusIcon(gs, t)
+	if icon == "" {
+		return ""
+	}
+	return icon + " " + gs
+}
+
 // formatAge returns a human-readable age string.
 func formatAge(d time.Duration) string {
 	d = d.Round(time.Second)
@@ -404,7 +429,7 @@ func (m TasksModel) viewList() string {
 // taskSummary returns section counts.
 func (m TasksModel) taskSummary() string {
 	t := m.theme
-	active, upcoming, blocked, done := 0, 0, 0, 0
+	active, upcoming, blocked, done, uncommitted := 0, 0, 0, 0, 0
 	for _, task := range m.entries {
 		switch task.Section {
 		case "active":
@@ -415,6 +440,9 @@ func (m TasksModel) taskSummary() string {
 			blocked++
 		default:
 			done++
+		}
+		if task.GitStatus == "unstaged" || task.GitStatus == "staged" {
+			uncommitted++
 		}
 	}
 
@@ -437,6 +465,11 @@ func (m TasksModel) taskSummary() string {
 	if done > 0 {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Muted).
 			Render(fmt.Sprintf("%d done", done)))
+	}
+
+	if uncommitted > 0 {
+		parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).
+			Render(fmt.Sprintf("%d uncommitted", uncommitted)))
 	}
 
 	if len(parts) > 0 {
@@ -490,7 +523,13 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		teamBadge = " " + lipgloss.NewStyle().Foreground(t.Accent).Render("["+task.Team+"]")
 	}
 
-	return "  " + icon + " " + id + " " + title + subtaskBadge + teamBadge + " " + age
+	// Git status indicator
+	gitBadge := ""
+	if gi := gitStatusIcon(task.GitStatus, t); gi != "" {
+		gitBadge = " " + gi
+	}
+
+	return "  " + icon + " " + id + " " + title + subtaskBadge + teamBadge + gitBadge + " " + age
 }
 
 // renderInputBar renders the inline text input for creating a task.
@@ -549,6 +588,10 @@ func (m TasksModel) viewDetail() string {
 	fields = append(fields, labelStyle.Render("Status")+
 		lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
 	fields = append(fields, labelStyle.Render("Section")+valueStyle.Render(sectionLabel(task.Section)))
+
+	if gl := gitStatusLabel(task.GitStatus, t); gl != "" {
+		fields = append(fields, labelStyle.Render("Git Status")+gl)
+	}
 
 	if task.Team != "" {
 		fields = append(fields, labelStyle.Render("Team")+
