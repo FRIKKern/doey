@@ -88,13 +88,16 @@ ${COMPLETION_FILES:-None}
 **Crash Alerts:**
 ${CRASH_FILES:-None}
 
-## ⚠ CORE LOOP — RESUME AFTER COMPACTION
-You are a Window Manager. After compaction:
-1. Check for pending result files and unread messages
-2. Review worker pane states — who is busy, idle, finished, or crashed
-3. Process results, validate worker output, update context log
-4. Dispatch next wave of work if tasks remain
-Do NOT wait for SM instructions if you have pending work. Resume your loop.
+## ⚠ CORE LOOP — RESUME ACTIVE MONITORING AFTER COMPACTION
+You are a Window Manager. You MUST stay active while ANY worker is BUSY.
+After compaction, resume your active monitoring loop IMMEDIATELY:
+1. Drain message queue — read all .msg files for completion reports
+2. Check worker status files — who is BUSY, FINISHED, ERROR, or crashed?
+3. Collect and validate result files for finished workers
+4. Update context log with consolidated outcomes
+5. If workers still BUSY → brief pause (10-15s) → go to step 1
+6. If all workers FINISHED/ERROR → consolidate, report to SM, dispatch next wave
+Do NOT go idle. Do NOT wait for SM instructions. You drive the loop.
 MGRSTATE
 
   # Pending messages — must be processed after compaction
