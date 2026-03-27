@@ -175,7 +175,7 @@ if is_worker; then
     _notify_pane "$TM_TARGET" "freelancer_finished" "$MSG"
     type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${TM_TARGET}" "type=freelancer_finished" "delivery=file" "success=true"
     # Also touch TM-specific trigger for taskmaster-wait.sh fast wakeup
-    touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+    touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
     _log "stop-notify: sent freelancer_finished to TM at $TM_TARGET"
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
@@ -216,7 +216,7 @@ if is_manager; then
   _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Lead finished: ${SUMMARY}"
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${SESSION_NAME}:${SM_PANE}" "type=task_complete" "delivery=file" "success=true"
   # Also touch TM-specific trigger for taskmaster-wait.sh fast wakeup
-  touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
   _log "stop-notify: sent task_complete to taskmaster at $SESSION_NAME:${SM_PANE}"
   _wake_tm
   exit 0

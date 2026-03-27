@@ -199,7 +199,7 @@ Output: window number, project dir, pane layout, boot status. Include teardown c
 ### Rules
 
 - Work on the LIVE project directory, not a worktree — the team needs to see real-time changes
-- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic. Reports to SM, SM reports to Boss. Window named "RD"
+- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic. Reports to TM, TM reports to Boss. Window named "RD"
 - Team env includes `RD_TEAM=true`
 - 3s stagger between Claude launches to prevent auth exhaustion
 - Never hardcode window indices. Bash 3.2 compatible.

@@ -305,7 +305,6 @@ notify_tm() {
 # Backward compatibility alias
 notify_watchdog() { notify_tm "$@"; }
 # Backward compatibility aliases
-is_session_manager() { is_taskmaster; }
 get_sm_pane() { get_tm_pane; }
 notify_sm() { notify_tm "$@"; }
 
