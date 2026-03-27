@@ -22,7 +22,7 @@ _log "task started: $(echo "$PROMPT" | head -c 80)"
 # If this is the Taskmaster, touch trigger to break its own wait hook
 # (user message arrived — the bash wait subprocess should exit early)
 if is_session_manager; then
-  touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
   touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
 fi
 

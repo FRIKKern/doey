@@ -121,19 +121,19 @@ _dbg_write() {
   return 0
 }
 
-# Boss: send-keys restricted to SM pane (0.2) only
+# Boss: send-keys restricted to TM pane (0.2) only
 if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD=$(_json_str tool_input.command)
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
     _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*-t[[:space:]]*//' | sed 's/[[:space:]].*//' | sed 's/^"//;s/"$//')
     case "$_boss_target" in
       *:0.2|*_0_2*|0.2)
-        _dbg_write "allow_boss_sendkeys_sm"
+        _dbg_write "allow_boss_sendkeys_tm"
         ;; # fall through to boss exit 0
       *)
-        _log_block "TOOL_BLOCKED" "Boss send-keys to non-SM pane blocked" "$_BOSS_CMD"
+        _log_block "TOOL_BLOCKED" "Boss send-keys to non-TM pane blocked" "$_BOSS_CMD"
         _dbg_write "block_boss_sendkeys_${_boss_target}"
-        echo "BLOCKED: Boss may only send-keys to SM pane (0.2)" >&2
+        echo "BLOCKED: Boss may only send-keys to TM pane (0.2)" >&2
         exit 2 ;;
     esac
   ;; esac
@@ -167,9 +167,9 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
-# Git commit/push: blocked for all roles except session_manager
+# Git commit/push: blocked for all roles except taskmaster
 # Read-only git commands (status, diff, log, show, branch) are always allowed
-if [ "$_DOEY_ROLE" != "session_manager" ]; then
+if [ "$_DOEY_ROLE" != "taskmaster" ]; then
   _GIT_CMD=$(_json_str tool_input.command)
   if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
     case "$_GIT_CMD" in
@@ -182,9 +182,9 @@ if [ "$_DOEY_ROLE" != "session_manager" ]; then
   fi
 fi
 
-# Manager/Taskmaster: only block /rename via send-keys
-# Boss has send-keys access to SM pane (0.2) only — guarded above
-if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
+# Team Lead/Taskmaster: only block /rename via send-keys
+# Boss has send-keys access to TM pane (0.2) only — guarded above
+if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; then
   _CMD=$(_json_str tool_input.command)
   _CMD_STRIPPED=$(echo "$_CMD" | sed 's/^[[:space:]]*//')
   case "$_CMD_STRIPPED" in
@@ -208,13 +208,13 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
     if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
-      _sm_pane=$(grep '^SM_PANE=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SM_PANE=//;s/^"//;s/"$//')
-      [ -z "$_sm_pane" ] && _sm_pane="0.2"
+      _tm_pane=$(grep '^SM_PANE=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SM_PANE=//;s/^"//;s/"$//')
+      [ -z "$_tm_pane" ] && _tm_pane="0.2"
       _sn="${SESSION_NAME:-}"
       [ -z "$_sn" ] && _sn=$(grep '^SESSION_NAME=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SESSION_NAME=//;s/^"//;s/"$//')
       case "$TOOL_COMMAND" in
-        *"-t"*"${_sn}:${_sm_pane}"*|*"-t"*"${_sm_pane}"*)
-          _dbg_write "allow_worker_sendkeys_sm"
+        *"-t"*"${_sn}:${_tm_pane}"*|*"-t"*"${_tm_pane}"*)
+          _dbg_write "allow_worker_sendkeys_tm"
           exit 0 ;;
       esac
     fi
@@ -234,7 +234,7 @@ source "$(dirname "$0")/common.sh"
 init_hook
 
 is_manager && { _dbg_write "allow_manager_slow"; exit 0; }
-is_taskmaster && { _dbg_write "allow_sm_slow"; exit 0; }
+is_taskmaster && { _dbg_write "allow_tm_slow"; exit 0; }
 is_boss && { _dbg_write "allow_boss_slow"; exit 0; }
 
 TOOL_COMMAND=$(_json_str tool_input.command)
