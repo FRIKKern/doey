@@ -56,16 +56,14 @@ if [ "$WINDOW_INDEX" = "0" ]; then
 else
   _team_type=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
   if [ "$_team_type" = "freelancer" ]; then
-    # Freelancer: check for role override (e.g., git_agent dispatched here)
-    _ro_key=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.' '_')
-    if [ -f "${RUNTIME_DIR}/status/${_ro_key}.role_override" ]; then
-      ROLE=$(cat "${RUNTIME_DIR}/status/${_ro_key}.role_override")
-    else
-      ROLE="worker"
-    fi
+    ROLE="worker"
   else
     mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
-    [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
+    if [ -z "$mgr_pane" ] && [ "$PANE_INDEX" = "0" ]; then
+      ROLE="manager"
+    elif [ "$PANE_INDEX" = "${mgr_pane:-0}" ]; then
+      ROLE="manager"
+    fi
   fi
 fi
 

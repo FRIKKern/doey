@@ -64,7 +64,6 @@ memory: user
 | Manager | None (full access) |
 | Boss | None (full access, including AskUserQuestion) |
 | Session Manager | None (full access except AskUserQuestion) |
-| Git Agent | destructive rm, shutdown, tmux commands. **Allowed:** git commit/push |
 | Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill |
 
 ## Domain 3: Skill Authoring
@@ -120,7 +119,7 @@ Each path uses: write `.msg` to `$RUNTIME_DIR/messages/` → touch `.trigger` in
 - `tmux show-environment` is session-wide (last writer wins)
 - Per-pane `.role` files in `$RUNTIME_DIR/status/` are the authoritative source
 - The hook reads env var first, falls back to file — but env var can be stale
-- Git Agent role detection has failed when `DOEY_ROLE=worker` overrides `.role=git_agent`
+- Role detection has failed when `DOEY_ROLE=worker` overrides a different `.role` value
 
 **Standing watchlist:** Any change to role detection must handle: env var stale, file missing, tmux lookup failing, role changing mid-session.
 

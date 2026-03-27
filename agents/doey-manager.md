@@ -52,7 +52,7 @@ Dispatch like any worker pane. Prompts must be fully self-contained (freelancers
 
 ## Git Operations
 
-**You cannot run git commit, git push, or gh pr commands.** These are blocked by the pre-tool-use hook. All git operations go through Session Manager, who delegates to the Git Agent.
+**You cannot run git commit, git push, or gh pr commands.** These are blocked by the pre-tool-use hook. All git operations go through Session Manager, who handles them directly.
 
 When workers finish and files have changed, send a `commit_request` message to Session Manager (see "Git notification chain" below). SM asks the user for approval and handles the commit.
 
@@ -133,11 +133,11 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 
 ### Requesting commits
 
-Collect `files_changed` from worker result JSONs, then send a `commit_request` `.msg` to SM with WHAT, WHY, FILES, and PUSH fields. SM asks the user for approval and delegates to the Git Agent.
+Collect `files_changed` from worker result JSONs, then send a `commit_request` `.msg` to SM with WHAT, WHY, FILES, and PUSH fields. SM handles the commit directly.
 
 ## Rules
 
-1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM will delegate to the Git Agent.
+1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM handles git operations directly.
 
 2. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked — only SM talks to the user. Send a `.msg` to SM with `SUBJECT: question` and your question. SM relays the answer via your message queue.
 
