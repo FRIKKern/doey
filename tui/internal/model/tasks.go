@@ -21,12 +21,16 @@ func statusIcon(status string, t styles.Theme) string {
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
 	case "todo":
 		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
-	case "in_progress":
+	case "in_progress", "active":
 		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
+	case "pending_user_confirmation":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("⚠")
 	case "committed":
 		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
-	case "pushed":
+	case "pushed", "done":
 		return lipgloss.NewStyle().Foreground(t.Accent).Render("↑")
+	case "cancelled":
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("⊘")
 	default:
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
 	}
@@ -526,12 +530,16 @@ func (m TasksModel) viewDetail() string {
 	switch task.Status {
 	case "todo":
 		statusColor = t.Warning
-	case "in_progress":
+	case "in_progress", "active":
 		statusColor = t.Primary
+	case "pending_user_confirmation":
+		statusColor = t.Warning
 	case "committed":
 		statusColor = t.Success
-	case "pushed":
+	case "pushed", "done":
 		statusColor = t.Accent
+	case "cancelled":
+		statusColor = t.Muted
 	}
 
 	var fields []string

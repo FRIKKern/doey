@@ -38,9 +38,7 @@ SM lives at **pane 0.2**. Send commands via message files + trigger:
 
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: Boss\nSUBJECT: task\n%s\n' "YOUR_COMMAND" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+doey-msg send "$SM_SAFE" "Boss" "task" "TASK_ID=$TASK_ID\nYOUR_COMMAND"
 ```
 
 ### Command types to send SM
@@ -58,7 +56,7 @@ On each turn, check for messages from SM:
 
 ```bash
 BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$BOSS_SAFE"
+doey-msg drain "$BOSS_SAFE"
 ```
 
 ### Message types from SM
@@ -81,6 +79,8 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 
 Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion.
 
+**Status lifecycle:** `backlog → todo → in_progress → committed → pushed`
+
 ### Proposing a task
 
 When the user sends a goal that will take more than a few minutes, ask via `AskUserQuestion`:
@@ -88,63 +88,48 @@ When the user sends a goal that will take more than a few minutes, ask via `AskU
 
 If yes:
 ```bash
-TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
-NEXT_ID_FILE="${TD}/.next_id"; ID=1
-[ -f "$NEXT_ID_FILE" ] && ID=$(cat "$NEXT_ID_FILE")
-echo $((ID + 1)) > "$NEXT_ID_FILE"
-printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
-  "$ID" "TITLE HERE" "$(date +%s)" > "${TD}/${ID}.task"
+TASK_ID=$(doey-task-util create "TITLE HERE")
 ```
 
 ### When work appears complete
 
-Mark `pending_user_confirmation` and tell the user:
+Mark `committed` and tell the user:
 > "Task [N] looks complete — run `doey task done N` to confirm."
 
 ```bash
-FILE="${RUNTIME_DIR}/tasks/N.task"
-TMP="${FILE}.tmp"
-while IFS= read -r line; do
-  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=pending_user_confirmation" ;;
-  *) echo "$line" ;; esac
-done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+doey-task-util set-status "$TASK_ID" committed
 ```
-
-### Never do this
-- Set `TASK_STATUS=done` — reserved for the user via `doey task done <id>`
-- Delete task files
-- Create tasks without asking the user first
 
 ### Task Discipline — Every Dispatch Needs a Task
 
-**No task ID → no dispatch.** Before sending any `task` message to SM, ensure a task exists for that work.
+**Every dispatch needs a task ID.** When the user gives a goal, propose it as a task via `AskUserQuestion`. Once confirmed, create the task and dispatch.
 
-1. **Search before creating.** Check active tasks first — the user's request may already be covered by an existing task:
-   ```bash
-   bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
-   ```
-   If a matching task exists, reuse its ID. Do not create duplicates.
+**Search before creating.** Before creating a new task, check active tasks:
+```bash
+doey-task-util list --active
+```
+If an existing task covers the same goal, reuse it (update title/scope if needed) instead of creating a duplicate.
 
-2. **Auto-create when none exists.** If the user sends a goal and no matching task exists, create the task (after user confirmation per "Proposing a task" above) **before** dispatching to SM.
+**Never dispatch without a task ID.** Every message to SM with `SUBJECT: task` MUST include `TASK_ID=<N>` in the body. SM will refuse to dispatch work without one. Format:
+```bash
+doey-msg send "$SM_SAFE" "Boss" "task" "TASK_ID=$TASK_ID\nTask description here"
+```
 
-3. **Include task ID in every dispatch.** Every `task` message to SM must include `TASK_ID=<N>` on its own line:
-   ```bash
-   printf 'FROM: Boss\nSUBJECT: task\nTASK_ID=%s\n%s\n' "$TASK_ID" "YOUR_COMMAND" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
-   ```
+**Tasks evolve.** A task's title and scope can change as work progresses. When the user refines a goal or work reveals the real problem, update the task file:
+```bash
+doey-task-util set-field "$TASK_ID" TASK_TITLE "Updated title here"
+```
+This keeps the Dashboard accurate and gives SM current context.
 
-4. **Tasks evolve.** A task's title and scope can change as work progresses. If the user refines the goal, update the task file — don't create a new one:
-   ```bash
-   FILE="${RUNTIME_DIR}/tasks/${TASK_ID}.task"
-   TMP="${FILE}.tmp"
-   while IFS= read -r line; do
-     case "${line%%=*}" in TASK_TITLE) echo "TASK_TITLE=Updated title here" ;;
-     *) echo "$line" ;; esac
-   done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
-   ```
+### Never do this
+- Set `TASK_STATUS=pushed` — reserved for the user via `doey task done <id>`
+- Delete task files
+- Create tasks without asking the user first
+- Dispatch work to SM without a `TASK_ID` in the message body
 
 ### Check active tasks (on-demand)
 ```bash
-bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+doey-task-util list --active
 ```
 
 ## SM Health Monitoring
@@ -153,8 +138,7 @@ bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=
 
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-SM_STATUS_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-cat "$SM_STATUS_FILE"
+doey-status-util read "$SM_SAFE"
 ```
 
 The file has: `PANE`, `UPDATED` (ISO timestamp), `STATUS`, `TASK` fields. SM writes a heartbeat every ~3 seconds when alive.
@@ -169,14 +153,9 @@ The file has: `PANE`, `UPDATED` (ISO timestamp), `STATUS`, `TASK` fields. SM wri
 
 ```bash
 SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-SM_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-if [ ! -f "$SM_FILE" ]; then echo "SM status file missing"; fi
-UPDATED=$(grep '^UPDATED:' "$SM_FILE" | cut -d' ' -f2-)
-UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S%z" "$UPDATED" +%s 2>/dev/null || echo 0)
-NOW_EPOCH=$(date +%s)
-AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
-if [ "$AGE" -gt 60 ]; then echo "SM stale: ${AGE}s old"; fi
+doey-status-util health "$SM_SAFE"
 ```
+Prints `STATUS=X AGE=Ns`. Exits 1 if stale (>60s) or status file missing.
 
 ### How to restart SM
 
@@ -223,7 +202,7 @@ Be terse. Report results. Dispatch and yield. Never narrate what you're doing �
 1. **ALWAYS use `AskUserQuestion`** for user-facing questions — never inline text
 2. **Never enter monitoring loops** — you are reactive, not polling
 3. **Never send input to Info Panel** (pane 0.0)
-4. **Never mark a task `done`** — only `pending_user_confirmation`
+4. **Never mark a task `pushed`** — only `committed`
 5. **Never use `/loop`** — Boss doesn't monitor, SM does
 6. **Never read project source files** — command SM to dispatch research instead
 7. **Route ALL work through SM** — never dispatch to teams or workers directly

@@ -169,9 +169,9 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 		}
 		var section string
 		switch rt.Status {
-		case "todo", "in_progress":
+		case "todo", "in_progress", "active", "pending_user_confirmation":
 			section = "active"
-		case "committed", "pushed":
+		case "committed", "pushed", "done", "cancelled":
 			section = "complete"
 		default:
 			section = "backlog"
