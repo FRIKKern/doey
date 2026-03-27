@@ -36,7 +36,7 @@ type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to
 notify_watchdog "$STOP_STATUS"
 
 # Taskmaster self-sustaining loop: after stop, re-trigger to check messages/results
-if is_session_manager; then
+if is_taskmaster; then
   _sm_pane="0.2"
   _sm_session="${SESSION:-}"
   [ -z "$_sm_session" ] && _sm_session=$(tmux show-environment DOEY_SESSION 2>/dev/null | cut -d= -f2-) || true

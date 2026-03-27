@@ -8,7 +8,7 @@ _DOEY_HOOK_NAME="on-notification"
 type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 # Only notify for Taskmaster — that's the pane the user interacts with
-is_session_manager || exit 0
+is_taskmaster || exit 0
 
 # Extract notification message
 MSG=$(parse_field "message")

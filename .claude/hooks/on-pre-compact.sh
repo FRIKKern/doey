@@ -167,7 +167,7 @@ YOU drive the loop — the wait hook is just a brief pause.
 2. **Check pane status** — read \$RUNTIME_DIR/status/*.status for FINISHED, ERROR, crashes
 3. **Check results** — read \$RUNTIME_DIR/results/ for new result files
 4. **Act** — route tasks, process completions, escalate errors, handle git
-5. **Brief pause** — call session-manager-wait.sh (3s max), then go to step 1
+5. **Brief pause** — call taskmaster-wait.sh (3s max), then go to step 1
 
 You are the ONLY role that commits/pushes — do it directly, no delegation needed.
 Do NOT wait for instructions. Do NOT escalate to Boss for approval. Resume this loop NOW.
