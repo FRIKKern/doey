@@ -71,7 +71,7 @@ Skip reserved unless --force. Kill, relaunch with name + system prompt, write RE
 
 ```bash
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
-  PANE="${SESSION_NAME}:${W}.${wp}"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+  PANE="${SESSION_NAME}:${W}.${wp}"; PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
   if [ "$FORCE" != "true" ] && [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
     echo "  ${W}.${wp} — reserved"; continue; fi
   kill_pane_process "$PANE" || { echo "  ${W}.${wp} — not found"; continue; }

@@ -27,7 +27,7 @@ EOF
 DELIVERED=0
 for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
   [ "$pane" = "$MY_PANE" ] && continue
-  PANE_SAFE=$(echo "$pane" | tr ':.' '_')
+  PANE_SAFE=$(echo "$pane" | tr ':-.' '_')
   cp "${RD}/broadcasts/${TIMESTAMP}.broadcast" "${RD}/messages/${PANE_SAFE}_${TIMESTAMP}.msg"
   DELIVERED=$((DELIVERED + 1))
 done

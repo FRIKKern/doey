@@ -18,4 +18,4 @@ Table from injected data: pane, status, task, reservations. Mark current pane wi
 All panes across all windows: `PANE | STATUS | RESERVED | LAST_UPDATE`. Note UNKNOWN panes.
 
 ### Set (`/doey-status set <STATE>`)
-Valid: READY, BUSY, FINISHED, RESERVED. Write `${RUNTIME_DIR}/status/${PANE_SAFE}.status` (PANE, UPDATED, STATUS, TASK). PANE_SAFE = pane ID with `tr ':.' '_'`.
+Valid: READY, BUSY, FINISHED, RESERVED. Write `${RUNTIME_DIR}/status/${PANE_SAFE}.status` (PANE, UPDATED, STATUS, TASK). PANE_SAFE = pane ID with `tr ':-.' '_'`.

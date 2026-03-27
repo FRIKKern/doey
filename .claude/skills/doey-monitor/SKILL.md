@@ -18,7 +18,7 @@ Build from injected data: `PANE | STATUS | RESERVED | TASK | UPDATED`. Enrich FI
 ### Deep Inspect (replace X with pane index)
 
 ```bash
-PANE="${SESSION_NAME}:${DOEY_WINDOW_INDEX:-0}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.' '_')
+PANE="${SESSION_NAME}:${DOEY_WINDOW_INDEX:-0}.X"; PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
 cat "${DOEY_RUNTIME}/status/${PANE_SAFE}.status" 2>/dev/null || echo "(no status file)"
 echo "--- Last 20 lines ---"
 tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || echo "(pane not found)"
