@@ -96,6 +96,21 @@ type TeamDef struct {
 	FilePath     string            `json:"filepath"`
 }
 
+// TeamEntry combines a team definition with its runtime state
+type TeamEntry struct {
+	Def       TeamDef // the .team.md definition
+	Running   bool    // is this team currently active as a tmux window?
+	WindowIdx int     // tmux window index if running, -1 if not
+	Starred   bool    // user favorite
+	Startup   bool    // auto-launch on session start
+}
+
+// TeamUserConfig holds persisted user preferences for teams
+type TeamUserConfig struct {
+	Starred []string `json:"starred"` // team names that are starred
+	Startup []string `json:"startup"` // team names to auto-launch
+}
+
 // Snapshot is a complete point-in-time view of the runtime
 type Snapshot struct {
 	Session    SessionConfig
@@ -105,6 +120,8 @@ type Snapshot struct {
 	Results    map[string]PaneResult // pane ID -> result
 	ContextPct map[string]int        // pane ID -> context percentage
 	Uptime     time.Duration
-	AgentDefs  []AgentDef `json:"agent_defs"`
-	TeamDefs   []TeamDef `json:"team_defs"`
+	AgentDefs   []AgentDef     `json:"agent_defs"`
+	TeamDefs    []TeamDef      `json:"team_defs"`
+	TeamEntries []TeamEntry    // merged view: defs + running state + user prefs
+	TeamUserCfg TeamUserConfig // persisted preferences
 }
