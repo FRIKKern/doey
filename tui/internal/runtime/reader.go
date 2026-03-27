@@ -241,7 +241,6 @@ func (r *Reader) parseTasks() []Task {
 		if att := env["TASK_ATTACHMENTS"]; att != "" {
 			t.Attachments = strings.Split(att, "|")
 		}
-		t.GitStatus = env["TASK_GIT_STATUS"]
 		tasks = append(tasks, t)
 	}
 

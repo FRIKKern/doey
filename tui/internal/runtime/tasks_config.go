@@ -14,11 +14,10 @@ const taskConfigFile = "tasks.json"
 type PersistentTask struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
-	Status      string `json:"status"`      // active, upcoming, done, cancelled
-	Section     string `json:"section"`      // "active", "upcoming", "done"
+	Status      string `json:"status"`      // backlog, todo, in_progress, committed, pushed
+	Section     string `json:"section"`      // "backlog", "active", "complete"
 	Description string   `json:"description"`            // optional detail text
 	Attachments []string `json:"attachments,omitempty"`  // list of URLs/file paths
-	GitStatus   string   `json:"git_status,omitempty"`   // unstaged, staged, committed, pushed
 	Team        string   `json:"team"`                   // assigned team name (optional)
 	Created     int64  `json:"created"`      // unix epoch
 	Updated     int64  `json:"updated"`      // unix epoch
@@ -104,14 +103,12 @@ func (s *TaskStore) MoveTask(id, section string) bool {
 		if s.Tasks[i].ID == id {
 			s.Tasks[i].Section = section
 			switch section {
+			case "backlog":
+				s.Tasks[i].Status = "backlog"
 			case "active":
-				s.Tasks[i].Status = "active"
-			case "upcoming":
-				s.Tasks[i].Status = "upcoming"
-			case "blocked":
-				s.Tasks[i].Status = "blocked"
-			case "done":
-				s.Tasks[i].Status = "done"
+				s.Tasks[i].Status = "todo"
+			case "complete":
+				s.Tasks[i].Status = "committed"
 			}
 			s.Tasks[i].Updated = time.Now().Unix()
 			return true
@@ -120,12 +117,12 @@ func (s *TaskStore) MoveTask(id, section string) bool {
 	return false
 }
 
-// CancelTask marks a task as cancelled.
+// CancelTask marks a task as cancelled by moving it to backlog.
 func (s *TaskStore) CancelTask(id string) bool {
 	for i := range s.Tasks {
 		if s.Tasks[i].ID == id {
-			s.Tasks[i].Status = "cancelled"
-			s.Tasks[i].Section = "done"
+			s.Tasks[i].Status = "backlog"
+			s.Tasks[i].Section = "backlog"
 			s.Tasks[i].Updated = time.Now().Unix()
 			return true
 		}
@@ -170,9 +167,14 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 		if existing[rt.ID] {
 			continue
 		}
-		section := "active"
-		if rt.Status == "done" || rt.Status == "cancelled" {
-			section = "done"
+		var section string
+		switch rt.Status {
+		case "todo", "in_progress":
+			section = "active"
+		case "committed", "pushed":
+			section = "complete"
+		default:
+			section = "backlog"
 		}
 
 		id, _ := strconv.Atoi(rt.ID)
@@ -187,7 +189,6 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 			Section:     section,
 			Description: rt.Description,
 			Attachments: rt.Attachments,
-			GitStatus:   rt.GitStatus,
 			Created:     rt.Created,
 			Updated:     rt.Created,
 		})

@@ -166,7 +166,7 @@ type CreateTaskResultMsg struct {
 // MoveTaskMsg is emitted when the user moves a task to a different section.
 type MoveTaskMsg struct {
 	ID      string
-	Section string // "active", "upcoming", "done"
+	Section string // "active", "backlog", "complete"
 }
 
 // MoveTaskResultMsg is returned after moving a task.
@@ -195,6 +195,40 @@ type SetStatusTaskResultMsg struct {
 	Err error
 }
 
+// statusToSection maps a status to its section.
+func statusToSection(status string) string {
+	switch status {
+	case "backlog":
+		return "backlog"
+	case "todo", "in_progress":
+		return "active"
+	case "committed", "pushed":
+		return "complete"
+	default:
+		return "active"
+	}
+}
+
+// SetStatusTaskCmd sets a task's status and updates its section accordingly.
+func SetStatusTaskCmd(id, status string) tea.Cmd {
+	return func() tea.Msg {
+		store, err := runtime.ReadTaskStore()
+		if err != nil {
+			return SetStatusTaskResultMsg{Err: err}
+		}
+		t := store.FindTask(id)
+		if t != nil {
+			t.Status = status
+			t.Section = statusToSection(status)
+			t.Updated = time.Now().Unix()
+		}
+		if err := runtime.WriteTaskStore(store); err != nil {
+			return SetStatusTaskResultMsg{Err: err}
+		}
+		return SetStatusTaskResultMsg{}
+	}
+}
+
 // DispatchTaskMsg is emitted when the user dispatches a task to SM.
 type DispatchTaskMsg struct {
 	ID    string
@@ -215,7 +249,11 @@ func CreateTaskCmd(title string) tea.Cmd {
 		if err != nil {
 			return CreateTaskResultMsg{Err: err}
 		}
-		id := store.AddTask(title, "active")
+		id := store.AddTask(title, "todo")
+		// AddTask sets Section=Status; fix Section to the correct group
+		if t := store.FindTask(id); t != nil {
+			t.Section = "active"
+		}
 		if err := runtime.WriteTaskStore(store); err != nil {
 			return CreateTaskResultMsg{Err: err}
 		}
@@ -273,9 +311,13 @@ func DispatchTaskCmd(runtimeDir, sessionName, id, title string) tea.Cmd {
 		os.MkdirAll(triggerDir, 0755)
 		os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644)
 
-		// Mark task as active
+		// Mark task as in_progress
 		store, _ := runtime.ReadTaskStore()
-		store.MoveTask(id, "active")
+		if t := store.FindTask(id); t != nil {
+			t.Status = "in_progress"
+			t.Section = "active"
+			t.Updated = time.Now().Unix()
+		}
 		runtime.WriteTaskStore(store)
 
 		return DispatchTaskResultMsg{}
