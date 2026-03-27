@@ -99,20 +99,46 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 - `freelancer_finished` → research/verification complete
 - No messages + all workers idle → wave complete
 
-**Pattern:** Dispatch wave → drain messages + `/doey-monitor` every 10-15s → all finished → read results → update context log → next wave or report to SM.
+**Pattern:** Dispatch wave → enter active monitoring loop (drain messages + check status every 10-15s) → stay active until ALL workers FINISHED/ERROR → read results → validate → update context log → next wave or report to SM.
 
-## Monitoring
+## Active Monitoring Loop
 
-**Primary:** `/doey-monitor` every 10–15 seconds. "All done" = all non-reserved workers idle. **Always drain the message queue alongside monitoring** — `/doey-monitor` shows status but messages contain the actual completion details.
+**You MUST stay active while ANY dispatched worker is BUSY.** Do not go idle, do not wait for the next prompt, do not stop monitoring until the task is verified complete. This is an active loop — you drive it, not the user.
 
-**Manual fallback:**
+### The Loop
+
+After dispatching work, enter this cycle and repeat until all workers are done:
+
+1. **Drain messages** — read all `.msg` files from your message queue (workers report here on finish)
+2. **Check status files** — read `${RUNTIME_DIR}/status/` for each dispatched worker:
+   ```bash
+   W="$DOEY_TEAM_WINDOW"
+   bash -c 'shopt -s nullglob; for f in "$1"/status/*_"$2"_*.status; do echo "=== $(basename "$f") ==="; cat "$f"; done' _ "$RUNTIME_DIR" "$W"
+   ```
+3. **Collect results** — read result JSONs for FINISHED workers:
+   ```bash
+   bash -c 'shopt -s nullglob; for f in "$1"/results/pane_"$2"_*.json; do cat "$f"; echo ""; done' _ "$RUNTIME_DIR" "$W"
+   ```
+4. **Detect problems** — check for STUCK (unchanged output > 3 min), ERROR, or crashed workers (bare shell). Check crash alerts:
+   ```bash
+   bash -c 'shopt -s nullglob; for f in "$1"/status/crash_pane_"$2"_*; do cat "$f"; done' _ "$RUNTIME_DIR" "$W"
+   ```
+5. **Brief pause** — wait ~10-15 seconds, then go to step 1
+
+### Completion Criteria — ALL must be true before reporting to SM
+
+- **Every** dispatched worker has reached FINISHED or ERROR status
+- All result files have been read and validated
+- Context log is updated with consolidated outcomes
+- Pass/fail summary is prepared for SM
+
+**Do NOT report to SM while any worker is still BUSY.** If a worker is stuck, unstick it (C-c → C-u → Enter, or redispatch). If crashed, log an issue and reassign the work.
+
+### Manual idle check (fallback)
 ```bash
-W="$DOEY_TEAM_WINDOW"
-bash -c 'shopt -s nullglob; for f in "$1"/results/pane_"$2"_*.json; do cat "$f"; echo ""; done' _ "$RUNTIME_DIR" "$W"
-cat "$RUNTIME_DIR/status/scan_pane_states_W${W}.json" 2>/dev/null
+tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3
 ```
-
-Check idle: `tmux capture-pane -t "$SESSION_NAME:$DOEY_TEAM_WINDOW.N" -p -S -3` (look for `❯`)
+Look for `❯` = idle at prompt.
 
 ## Notify Session Manager When Done
 
@@ -145,9 +171,9 @@ Collect `files_changed` from worker result JSONs, then send a `commit_request` `
 
 1. **Plan** — Clear task: dispatch with short plan. Ambiguous: `/doey-research` first. Only confirm if destructive/architectural/irreversible (escalate question to Session Manager).
 2. **Delegate** — Rename every worker first. Dispatch independent tasks in parallel. Self-contained prompts (workers have zero context). Distinct files per worker; sequential if shared.
-3. **Monitor + Messages** — **Drain message queue first**, then `/doey-monitor`. Messages tell you WHO finished and with what result. Repeat every 10-15s until wave complete.
-4. **Consolidate** — Read result files for finished workers. Update context log. Dispatch next wave.
-5. **Report** — Notify Session Manager with consolidated summary: completions, errors, next steps. Use the message system (write `.msg` file) so SM gets it even if busy.
+3. **Active Monitor** — Enter the active monitoring loop (see above). **Stay in the loop until ALL workers reach FINISHED/ERROR.** Do not go idle. Do not wait for user input. You drive the loop.
+4. **Consolidate** — Read result files for finished workers. Validate output. Update context log. Dispatch next wave if needed.
+5. **Report** — Only after ALL workers are done: notify SM with consolidated pass/fail summary. Use the message system (write `.msg` file) so SM gets it even if busy.
 
 ## Task Prompt Template
 
