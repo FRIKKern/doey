@@ -64,6 +64,38 @@ type AgentDef struct {
 	UsedByTeams []string `json:"used_by_teams"` // team names that reference this agent
 }
 
+// TeamDefPane represents a pane entry in a team definition
+type TeamDefPane struct {
+	Index int
+	Role  string
+	Agent string
+	Name  string
+	Model string
+}
+
+// TeamDefWorkflow represents a workflow entry in a team definition
+type TeamDefWorkflow struct {
+	Trigger string
+	From    string
+	To      string
+	Subject string
+}
+
+// TeamDef represents a parsed team definition from teams/*.team.md
+type TeamDef struct {
+	Name         string            `json:"name"`
+	Description  string            `json:"description"`
+	Grid         string            `json:"grid"`
+	Workers      int               `json:"workers"`
+	Type         string            `json:"type"`
+	ManagerModel string            `json:"manager_model"`
+	WorkerModel  string            `json:"worker_model"`
+	Panes        []TeamDefPane     `json:"panes"`
+	Workflows    []TeamDefWorkflow `json:"workflows"`
+	Briefing     string            `json:"briefing"`
+	FilePath     string            `json:"filepath"`
+}
+
 // Snapshot is a complete point-in-time view of the runtime
 type Snapshot struct {
 	Session    SessionConfig
@@ -74,4 +106,5 @@ type Snapshot struct {
 	ContextPct map[string]int        // pane ID -> context percentage
 	Uptime     time.Duration
 	AgentDefs  []AgentDef `json:"agent_defs"`
+	TeamDefs   []TeamDef `json:"team_defs"`
 }

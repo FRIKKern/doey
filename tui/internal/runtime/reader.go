@@ -58,6 +58,7 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 
 	if session.ProjectDir != "" {
 		snap.AgentDefs = r.readAgentDefs(session.ProjectDir)
+		snap.TeamDefs = r.readTeamDefs(session.ProjectDir)
 	}
 
 	return snap, nil
@@ -330,6 +331,167 @@ func (r *Reader) readAgentDefs(projectDir string) []AgentDef {
 	return agents
 }
 
+
+// readTeamDefs reads all team definitions from <projectDir>/teams/*.team.md
+func (r *Reader) readTeamDefs(projectDir string) []TeamDef {
+	var teams []TeamDef
+
+	matches, err := filepath.Glob(filepath.Join(projectDir, "teams", "*.team.md"))
+	if err != nil || len(matches) == 0 {
+		return teams
+	}
+
+	for _, path := range matches {
+		td, ok := parseTeamDef(path)
+		if !ok {
+			continue
+		}
+		teams = append(teams, td)
+	}
+
+	sort.Slice(teams, func(i, j int) bool {
+		return teams[i].Name < teams[j].Name
+	})
+
+	return teams
+}
+
+// parseTeamDef parses a single .team.md file into a TeamDef
+func parseTeamDef(path string) (TeamDef, bool) {
+	fm := parseFrontmatter(path)
+	if fm == nil {
+		return TeamDef{}, false
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return TeamDef{}, false
+	}
+	content := string(data)
+
+	name := fm["name"]
+	if name == "" {
+		base := filepath.Base(path)
+		name = strings.TrimSuffix(base, ".team.md")
+	}
+
+	workers, _ := strconv.Atoi(fm["workers"])
+
+	td := TeamDef{
+		Name:         name,
+		Description:  fm["description"],
+		Grid:         fm["grid"],
+		Workers:      workers,
+		Type:         fm["type"],
+		ManagerModel: fm["manager_model"],
+		WorkerModel:  fm["worker_model"],
+		Panes:        parseMarkdownTable(content, "## Panes", parseTeamDefPane),
+		Workflows:    parseMarkdownTable(content, "## Workflows", parseTeamDefWorkflow),
+		Briefing:     parseSection(content, "## Team Briefing"),
+		FilePath:     path,
+	}
+
+	return td, true
+}
+
+// parseSection extracts text after a heading until EOF or the next ## heading
+func parseSection(content, heading string) string {
+	idx := strings.Index(content, heading)
+	if idx < 0 {
+		return ""
+	}
+	body := content[idx+len(heading):]
+	// Trim to next ## heading or EOF
+	if next := strings.Index(body, "\n## "); next >= 0 {
+		body = body[:next]
+	}
+	return strings.TrimSpace(body)
+}
+
+// parseMarkdownTable extracts rows from a markdown table under a heading.
+// It calls rowParser for each data row (after header + separator).
+func parseMarkdownTable[T any](content, heading string, rowParser func([]string) (T, bool)) []T {
+	section := parseSection(content, heading)
+	if section == "" {
+		return nil
+	}
+
+	lines := strings.Split(section, "\n")
+	var results []T
+	dataStart := 0
+
+	// Find the table: skip until we see a header row (starts with |), then skip separator
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "|") {
+			// Next line should be separator (|---|...)
+			if i+1 < len(lines) && strings.Contains(lines[i+1], "---") {
+				dataStart = i + 2
+				break
+			}
+		}
+	}
+
+	if dataStart == 0 {
+		return nil
+	}
+
+	for i := dataStart; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if !strings.HasPrefix(trimmed, "|") {
+			break
+		}
+		cols := splitTableRow(trimmed)
+		if item, ok := rowParser(cols); ok {
+			results = append(results, item)
+		}
+	}
+
+	return results
+}
+
+// splitTableRow splits "| a | b | c |" into ["a", "b", "c"]
+func splitTableRow(line string) []string {
+	line = strings.Trim(line, "|")
+	parts := strings.Split(line, "|")
+	cols := make([]string, len(parts))
+	for i, p := range parts {
+		cols[i] = strings.TrimSpace(p)
+	}
+	return cols
+}
+
+func parseTeamDefPane(cols []string) (TeamDefPane, bool) {
+	if len(cols) < 2 {
+		return TeamDefPane{}, false
+	}
+	idx, _ := strconv.Atoi(cols[0])
+	p := TeamDefPane{Index: idx, Role: cols[1]}
+	if len(cols) > 2 {
+		p.Agent = cols[2]
+	}
+	if len(cols) > 3 {
+		p.Name = cols[3]
+	}
+	if len(cols) > 4 {
+		p.Model = cols[4]
+	}
+	return p, true
+}
+
+func parseTeamDefWorkflow(cols []string) (TeamDefWorkflow, bool) {
+	if len(cols) < 2 {
+		return TeamDefWorkflow{}, false
+	}
+	w := TeamDefWorkflow{Trigger: cols[0], From: cols[1]}
+	if len(cols) > 2 {
+		w.To = cols[2]
+	}
+	if len(cols) > 3 {
+		w.Subject = cols[3]
+	}
+	return w, true
+}
 
 // agentDomain computes the domain category from agent name prefix
 func agentDomain(name string) string {
