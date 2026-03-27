@@ -115,6 +115,33 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 - Delete task files
 - Create tasks without asking the user first
 
+### Task Discipline — Every Dispatch Needs a Task
+
+**No task ID → no dispatch.** Before sending any `task` message to SM, ensure a task exists for that work.
+
+1. **Search before creating.** Check active tasks first — the user's request may already be covered by an existing task:
+   ```bash
+   bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+   ```
+   If a matching task exists, reuse its ID. Do not create duplicates.
+
+2. **Auto-create when none exists.** If the user sends a goal and no matching task exists, create the task (after user confirmation per "Proposing a task" above) **before** dispatching to SM.
+
+3. **Include task ID in every dispatch.** Every `task` message to SM must include `TASK_ID=<N>` on its own line:
+   ```bash
+   printf 'FROM: Boss\nSUBJECT: task\nTASK_ID=%s\n%s\n' "$TASK_ID" "YOUR_COMMAND" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
+   ```
+
+4. **Tasks evolve.** A task's title and scope can change as work progresses. If the user refines the goal, update the task file — don't create a new one:
+   ```bash
+   FILE="${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+   TMP="${FILE}.tmp"
+   while IFS= read -r line; do
+     case "${line%%=*}" in TASK_TITLE) echo "TASK_TITLE=Updated title here" ;;
+     *) echo "$line" ;; esac
+   done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+   ```
+
 ### Check active tasks (on-demand)
 ```bash
 bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
