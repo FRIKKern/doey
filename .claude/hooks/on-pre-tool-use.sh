@@ -121,6 +121,12 @@ _dbg_write() {
   return 0
 }
 
+# Boss: full unrestricted access — Boss is the user's relay and must never be blocked
+if [ "$_DOEY_ROLE" = "boss" ]; then
+  _dbg_write "allow_boss_unrestricted"
+  exit 0
+fi
+
 # Non-Bash tool checks
 if [ "$TOOL_NAME" != "Bash" ]; then
   # AskUserQuestion: only Boss may ask the user directly
