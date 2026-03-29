@@ -76,6 +76,16 @@ if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
   _log_error "HOOK_ERROR" "mktemp failed, using non-atomic write" "result_file=$RESULT_FILE"
   TMPFILE="$RESULT_FILE"
 fi
+
+# Optional structured fields from worker env
+local_task_id="${DOEY_TASK_ID:-}"
+local_hypothesis_updates="${DOEY_HYPOTHESIS_UPDATES:-[]}"
+local_evidence="${DOEY_EVIDENCE:-[]}"
+local_needs_follow_up="${DOEY_NEEDS_FOLLOW_UP:-false}"
+local_summary="${DOEY_SUMMARY:-}"
+# Escape summary for JSON: backslashes, double quotes, newlines, tabs
+local_summary_escaped=$(printf '%s' "$local_summary" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g' -e 's/	/\\t/g')
+
 cat > "$TMPFILE" <<EOF
 {
   "pane": "$WINDOW_INDEX.$PANE_INDEX",
@@ -86,7 +96,12 @@ cat > "$TMPFILE" <<EOF
   "timestamp": $(date +%s),
   "files_changed": $FILES_JSON,
   "tool_calls": $TOOL_COUNT,
-  "last_output": $LAST_JSON
+  "last_output": $LAST_JSON,
+  "task_id": "$local_task_id",
+  "hypothesis_updates": $local_hypothesis_updates,
+  "evidence": $local_evidence,
+  "needs_follow_up": $local_needs_follow_up,
+  "summary": "$local_summary_escaped"
 }
 EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"
