@@ -49,7 +49,7 @@ Past traps: editing user files that don't ship, relying on session-only env vars
 
 | Role | Blocked |
 |------|---------|
-| Window Manager | None (full access) |
+| Window Manager | Read/Edit/Write/Glob/Grep on project source; Agent; implementation work (send-keys allowed) |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 

@@ -176,6 +176,33 @@ if [ "$_DOEY_ROLE" = "boss" ]; then
   exit 0
 fi
 
+# Manager restrictions on non-Bash tools (coordinator only — no project source access)
+if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" != "Bash" ]; then
+  case "$TOOL_NAME" in
+    Agent)
+      _log_block "TOOL_BLOCKED" "Manager cannot use Agent tool" "delegate to workers instead"
+      _dbg_write "block_manager_agent"
+      echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2
+      exit 2 ;;
+    Read|Edit|Write|Glob|Grep)
+      _MGR_PATH=$(_json_str tool_input.file_path)
+      [ -z "$_MGR_PATH" ] && _MGR_PATH=$(_json_str tool_input.path)
+      _mgr_allowed=false
+      case "${_MGR_PATH:-}" in
+        */.doey/tasks/*|*/.doey/tasks) _mgr_allowed=true ;;
+        "${_RD:-__none__}"/*|*/tmp/doey/*) _mgr_allowed=true ;;
+      esac
+      if [ "$_mgr_allowed" = "false" ]; then
+        _log_block "TOOL_BLOCKED" "Manager $TOOL_NAME on project source blocked" "${_MGR_PATH:-project root}"
+        _dbg_write "block_manager_source_${TOOL_NAME}"
+        echo "BLOCKED: Managers cannot $TOOL_NAME project source files. Delegate file operations to workers." >&2
+        exit 2
+      fi
+      _dbg_write "allow_manager_taskfile_${TOOL_NAME}"
+      exit 0 ;;
+  esac
+fi
+
 if [ "$TOOL_NAME" != "Bash" ]; then
   if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ -n "$_DOEY_ROLE" ]; then
     _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only Boss asks the user"
