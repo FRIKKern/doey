@@ -369,6 +369,69 @@ while true; do
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
   printf '\n'
 
+  # ── Tasks ─────────────────────────────────────────────────────
+  _tasks_dir="${RUNTIME_DIR}/tasks"
+  if [ -d "$_tasks_dir" ]; then
+    _task_visible=0
+    for _tf in "${_tasks_dir}"/*.task; do
+      [ -f "$_tf" ] || continue
+      _ts_status=""; _ts_merged=""
+      while IFS= read -r _tl; do
+        case "${_tl%%=*}" in
+          TASK_STATUS) _ts_status="${_tl#*=}" ;;
+          TASK_MERGED_INTO) _ts_merged="${_tl#*=}" ;;
+        esac
+      done < "$_tf"
+      [ -n "$_ts_merged" ] && continue
+      [ "$_ts_status" = "done" ] && continue
+      [ "$_ts_status" = "cancelled" ] && continue
+      _task_visible=$((_task_visible + 1))
+    done
+
+    if [ "$_task_visible" -gt 0 ]; then
+      printf '  %b TASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+      for _tf in "${_tasks_dir}"/*.task; do
+        [ -f "$_tf" ] || continue
+        _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""
+        while IFS= read -r _tl; do
+          case "${_tl%%=*}" in
+            TASK_ID)          _tid="${_tl#*=}" ;;
+            TASK_TITLE)       _ttitle="${_tl#*=}" ;;
+            TASK_STATUS)      _tstatus="${_tl#*=}" ;;
+            TASK_CREATED)     _tcreated="${_tl#*=}" ;;
+            TASK_MERGED_INTO) _tmerged="${_tl#*=}" ;;
+          esac
+        done < "$_tf"
+        [ -n "$_tmerged" ] && continue
+        [ "$_tstatus" = "done" ] && continue
+        [ "$_tstatus" = "cancelled" ] && continue
+        _tage=""
+        if [ -n "$_tcreated" ]; then
+          _tnow=$(date +%s)
+          _telapsed=$((_tnow - _tcreated))
+          if [ "$_telapsed" -lt 60 ]; then _tage="${_telapsed}s"
+          elif [ "$_telapsed" -lt 3600 ]; then _tage="$((_telapsed/60))m"
+          elif [ "$_telapsed" -lt 86400 ]; then _tage="$((_telapsed/3600))h"
+          else _tage="$((_telapsed/86400))d"; fi
+        fi
+        case "$_tstatus" in
+          active)                    _tcol="${C_YELLOW}"      ; _ticon="●" ;;
+          in_progress)               _tcol="${C_YELLOW}"      ; _ticon="●" ;;
+          pending_user_confirmation) _tcol="${C_CYAN}"         ; _ticon="⬤" ;;
+          done)                      _tcol="${C_GREEN}"        ; _ticon="✓" ;;
+          cancelled)                 _tcol="${C_DIM}"          ; _ticon="○" ;;
+          *)                         _tcol="${C_DIM}"          ; _ticon="○" ;;
+        esac
+        printf '  %b%s%b %b#%s%b  %s  %b%s%b\n' \
+          "$_tcol" "$_ticon" "${C_RESET}" \
+          "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
+          "$_ttitle" \
+          "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
+      done
+      printf '\n'
+    fi
+  fi
+
   if [ "$TEAM_LINE_COUNT" -gt 0 ]; then
     printf '  %b TEAM STATUS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
     _ti=0
@@ -407,62 +470,6 @@ while true; do
       _ti=$((_ti + 1))
     done
     printf '\n'
-  fi
-
-  # ── Tasks ─────────────────────────────────────────────────────
-  _tasks_dir="${RUNTIME_DIR}/tasks"
-  if [ -d "$_tasks_dir" ]; then
-    _task_visible=0
-    for _tf in "${_tasks_dir}"/*.task; do
-      [ -f "$_tf" ] || continue
-      _ts_status=""
-      while IFS= read -r _tl; do
-        case "${_tl%%=*}" in TASK_STATUS) _ts_status="${_tl#*=}" ;; esac
-      done < "$_tf"
-      [ "$_ts_status" = "done" ] && continue
-      [ "$_ts_status" = "cancelled" ] && continue
-      _task_visible=$((_task_visible + 1))
-    done
-
-    if [ "$_task_visible" -gt 0 ]; then
-      printf '  %bTASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
-      for _tf in "${_tasks_dir}"/*.task; do
-        [ -f "$_tf" ] || continue
-        _tid=""; _ttitle=""; _tstatus=""; _tcreated=""
-        while IFS= read -r _tl; do
-          case "${_tl%%=*}" in
-            TASK_ID)      _tid="${_tl#*=}" ;;
-            TASK_TITLE)   _ttitle="${_tl#*=}" ;;
-            TASK_STATUS)  _tstatus="${_tl#*=}" ;;
-            TASK_CREATED) _tcreated="${_tl#*=}" ;;
-          esac
-        done < "$_tf"
-        [ "$_tstatus" = "done" ] && continue
-        [ "$_tstatus" = "cancelled" ] && continue
-        _tage=""
-        if [ -n "$_tcreated" ]; then
-          _tnow=$(date +%s)
-          _telapsed=$((_tnow - _tcreated))
-          if [ "$_telapsed" -lt 60 ]; then _tage="${_telapsed}s"
-          elif [ "$_telapsed" -lt 3600 ]; then _tage="$((_telapsed/60))m"
-          elif [ "$_telapsed" -lt 86400 ]; then _tage="$((_telapsed/3600))h"
-          else _tage="$((_telapsed/86400))d"; fi
-        fi
-        case "$_tstatus" in
-          pending_user_confirmation) _tcol="${C_BOLD_YELLOW}" ; _ticon="⬤" ;;
-          in_progress)               _tcol="${C_BOLD_GREEN}"  ; _ticon="●" ;;
-          active)                    _tcol="${C_BOLD_GREEN}"  ; _ticon="●" ;;
-          *)                         _tcol="${C_DIM}"         ; _ticon="○" ;;
-        esac
-        printf '  %b%s%b %b[%s]%b  %s  %b%s%b\n' \
-          "$_tcol" "$_ticon" "${C_RESET}" \
-          "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
-          "$_ttitle" \
-          "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
-      done
-      printf '\n  %bdoey task done <id>%b  to confirm complete\n\n' "${C_DIM}" "${C_RESET}"
-      printf '%b%s%b\n\n' "${C_DIM}" "$HR" "${C_RESET}"
-    fi
   fi
 
   row=0
