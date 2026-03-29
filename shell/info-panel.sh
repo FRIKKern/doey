@@ -387,6 +387,8 @@ while true; do
     done
 
     if [ "$_task_visible" -gt 0 ]; then
+      _has_render=false
+      [ -x "${SCRIPT_DIR}/doey-render-task.sh" ] && _has_render=true
       printf '  %b TASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
       for _tf in "${_tasks_dir}"/*.task; do
         [ -f "$_tf" ] || continue
@@ -425,6 +427,24 @@ while true; do
           "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
           "$_ttitle" \
           "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
+        # Structured task info from .json companion
+        if [ "$_has_render" = true ]; then
+          _tjson="${_tf%.task}.json"
+          if [ -f "$_tjson" ]; then
+            _trendered=""
+            _trendered=$(DOEY_VISUALIZATION_DENSITY=compact DOEY_ASCII_ONLY="${DOEY_ASCII_ONLY:-}" "${SCRIPT_DIR}/doey-render-task.sh" "$_tf" "$_tjson" 2>/dev/null) || _trendered=""
+            if [ -n "$_trendered" ]; then
+              while IFS= read -r _trline; do
+                printf '  %s\n' "$_trline"
+              done <<< "$_trendered"
+            fi
+            _tintent=""
+            _tintent=$(python3 -c "import json; d=json.load(open('$_tjson')); print(d.get('intent','')[:60])" 2>/dev/null) || _tintent=""
+            if [ -n "$_tintent" ]; then
+              printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
+            fi
+          fi
+        fi
       done
       printf '\n'
     fi
