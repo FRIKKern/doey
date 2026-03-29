@@ -180,10 +180,19 @@ func (m *TasksModel) sortEntries() {
 		if sa != sb {
 			return sa < sb
 		}
-		if a.Priority != b.Priority {
-			return a.Priority < b.Priority
+		// Within active section, sort by heartbeat activity
+		ha := m.heartbeats[a.ID]
+		hb := m.heartbeats[b.ID]
+		// Tasks with busy workers sort highest
+		if ha.ActiveWorkers != hb.ActiveWorkers {
+			return ha.ActiveWorkers > hb.ActiveWorkers
 		}
-		return a.Created > b.Created
+		// Then by most recent heartbeat activity
+		if !ha.LastActivity.Equal(hb.LastActivity) {
+			return ha.LastActivity.After(hb.LastActivity)
+		}
+		// Fall back to task ID for stability
+		return a.ID < b.ID
 	})
 }
 
