@@ -474,7 +474,14 @@ func (m TeamModel) viewList() string {
 	summary := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
 		Render(strings.Join(summaryParts, "  "))
 
-	selectedBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#374151"}
+	// Card dimensions
+	cardW := w - 10
+	if cardW > styles.MaxCardWidth {
+		cardW = styles.MaxCardWidth
+	}
+	if cardW < 20 {
+		cardW = 20
+	}
 
 	// Build rows with section headers
 	var lines []string
@@ -491,17 +498,29 @@ func (m TeamModel) viewList() string {
 			lastSection = section
 		}
 
-		line := m.renderListRow(entry, w)
+		cardContent := m.renderListRow(entry, w)
+		selected := m.focused && i == m.cursor
 
-		if m.focused && i == m.cursor {
-			line = lipgloss.NewStyle().
-				Background(selectedBg).
-				Width(w - 4).
-				Render(line)
+		// Determine border color based on state
+		borderColor := t.Separator
+		if selected {
+			borderColor = t.Primary
+		}
+		bgColor := lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F172A"}
+		if selected {
+			bgColor = lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"}
 		}
 
-		line = zone.Mark(fmt.Sprintf("team-%d", i), line)
-		lines = append(lines, line)
+		card := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
+			Background(bgColor).
+			Width(cardW).
+			Padding(1, 2).
+			Render(cardContent)
+
+		card = zone.Mark(fmt.Sprintf("team-%d", i), card)
+		lines = append(lines, card)
 	}
 
 	body := lipgloss.NewStyle().
@@ -539,23 +558,24 @@ func (m TeamModel) sectionOf(e runtime.TeamEntry) string {
 	return "AVAILABLE"
 }
 
-// renderListRow renders a single team entry as a list line.
+// renderListRow renders a single team entry as a card.
 func (m TeamModel) renderListRow(e runtime.TeamEntry, maxW int) string {
 	t := m.theme
 	d := e.Def
 
-	// Star indicator
-	star := "  "
-	if e.Starred {
-		star = lipgloss.NewStyle().Foreground(t.Warning).Render("★ ")
+	// Card content width (minus border + padding)
+	cardW := maxW - 10
+	if cardW > styles.MaxCardWidth {
+		cardW = styles.MaxCardWidth
+	}
+	if cardW < 20 {
+		cardW = 20
 	}
 
-	// Status indicator
-	var statusDot string
-	if e.Running {
-		statusDot = lipgloss.NewStyle().Foreground(t.Success).Render("● ")
-	} else {
-		statusDot = lipgloss.NewStyle().Foreground(t.Muted).Render("○ ")
+	// Star indicator
+	star := ""
+	if e.Starred {
+		star = lipgloss.NewStyle().Foreground(t.Warning).Render("★") + " "
 	}
 
 	// Name (prefer Label for multi-instance teams)
@@ -563,59 +583,74 @@ func (m TeamModel) renderListRow(e runtime.TeamEntry, maxW int) string {
 	if e.Label != "" {
 		displayName = e.Label
 	}
-	name := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(displayName)
+	name := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(star + displayName)
 
-	// Status label
-	statusLabel := ""
+	// Status badge
+	var statusBadge string
 	if e.Running {
-		statusLabel = lipgloss.NewStyle().Foreground(t.Success).Render(" Running")
-		// Count workers
+		statusBadge = lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(t.Success).
+			Padding(0, 1).
+			Render("Running")
+	} else {
+		statusBadge = lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(t.Muted).
+			Padding(0, 1).
+			Render("Stopped")
+	}
+
+	// Title line: name + status badge right-aligned
+	nameW := lipgloss.Width(name)
+	badgeW := lipgloss.Width(statusBadge)
+	gap := cardW - nameW - badgeW
+	if gap < 1 {
+		gap = 1
+	}
+	titleLine := name + strings.Repeat(" ", gap) + statusBadge
+
+	// Meta line: workers, type, startup, worker status
+	var metaParts []string
+	metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("%d workers", d.Workers)))
+	if d.Type != "" {
+		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Muted).Render("["+d.Type+"]"))
+	}
+	if e.Startup {
+		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Primary).Render("[auto]"))
+	}
+	if e.Running {
 		if tc, ok := m.teams[e.WindowIdx]; ok {
 			busy, idle := m.countWorkerStatuses(e.WindowIdx, tc)
-			var parts []string
 			if busy > 0 {
-				parts = append(parts, lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("%d busy", busy)))
+				metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("%d busy", busy)))
 			}
 			if idle > 0 {
-				parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d idle", idle)))
-			}
-			if len(parts) > 0 {
-				statusLabel += " (" + strings.Join(parts, ", ") + ")"
+				metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d idle", idle)))
 			}
 		}
 	}
+	metaLine := strings.Join(metaParts, "  ")
 
-	// Workers count
-	workers := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf(" %dW", d.Workers))
-
-	// Type badge
-	typeBadge := ""
-	if d.Type != "" {
-		typeBadge = " " + t.Dim.Render("["+d.Type+"]")
-	}
-
-	// Startup indicator
-	startupBadge := ""
-	if e.Startup {
-		startupBadge = " " + lipgloss.NewStyle().Foreground(t.Primary).Render("[auto]")
-	}
-
-	// Description (fill remaining space)
-	prefix := star + statusDot + name + workers + statusLabel + typeBadge + startupBadge
-	prefixW := lipgloss.Width(prefix)
-	desc := ""
+	// Description (truncated)
+	descLine := ""
 	if d.Description != "" {
-		maxDesc := maxW - prefixW - 8
-		if maxDesc > 10 {
-			dd := d.Description
-			if len(dd) > maxDesc {
-				dd = dd[:maxDesc-1] + "…"
-			}
-			desc = t.Dim.Render(" — " + dd)
+		dd := d.Description
+		if len(dd) > cardW-2 {
+			dd = dd[:cardW-3] + "…"
 		}
+		descLine = lipgloss.NewStyle().Foreground(t.Muted).Render(dd)
 	}
 
-	return star + statusDot + name + workers + statusLabel + typeBadge + startupBadge + desc
+	// Assemble card content
+	var content string
+	if descLine != "" {
+		content = titleLine + "\n" + metaLine + "\n" + descLine
+	} else {
+		content = titleLine + "\n" + metaLine
+	}
+
+	return content
 }
 
 // countWorkerStatuses counts busy and idle workers for a team.
@@ -821,15 +856,23 @@ func (m TeamModel) viewDetailSideBySide(entry runtime.TeamEntry, d runtime.TeamD
 	leftW := totalW * 60 / 100
 	rightW := totalW - leftW - 3 // 3 for separator
 
-	leftContent := m.renderDetailFields(entry, d, leftW)
-	rightContent := m.renderWorkerPanel(entry, rightW)
+	leftContent := m.renderDetailFields(entry, d, leftW-6)
+	rightContent := m.renderWorkerPanel(entry, rightW-6)
 
-	left := lipgloss.NewStyle().Width(leftW).Render(leftContent)
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
-		Render(strings.Repeat("│\n", m.height/2))
-	right := lipgloss.NewStyle().Width(rightW).Render(rightContent)
+	left := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Separator).
+		Width(leftW).
+		Padding(1, 2).
+		Render(leftContent)
+	right := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Separator).
+		Width(rightW).
+		Padding(1, 2).
+		Render(rightContent)
 
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, left, "  "+sep, right)
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right)
 
 	actionHint := m.renderActionHint(entry)
 
@@ -847,12 +890,32 @@ func (m TeamModel) viewDetailStacked(entry runtime.TeamEntry, d runtime.TeamDef,
 		Render(strings.ToUpper(displayName))
 	rule := t.Faint.Render(strings.Repeat("─", w))
 
-	fields := m.renderDetailFields(entry, d, w)
-	workers := m.renderWorkerPanel(entry, w)
+	detailCardW := w - 8
+	if detailCardW > styles.MaxCardWidth+10 {
+		detailCardW = styles.MaxCardWidth + 10
+	}
+
+	fields := m.renderDetailFields(entry, d, detailCardW-6)
+	fieldsCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Separator).
+		Width(detailCardW).
+		Padding(1, 2).
+		MarginLeft(2).
+		Render(fields)
+
+	workers := m.renderWorkerPanel(entry, detailCardW-6)
+	workersCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Separator).
+		Width(detailCardW).
+		Padding(1, 2).
+		MarginLeft(2).
+		Render(workers)
 
 	actionHint := m.renderActionHint(entry)
 
-	return header + "\n" + rule + "\n" + m.renderBackHint(entry) + "\n" + fields + "\n" + workers + "\n" + actionHint
+	return header + "\n" + rule + "\n" + m.renderBackHint(entry) + "\n" + fieldsCard + "\n" + workersCard + "\n" + actionHint
 }
 
 func (m TeamModel) renderBackHint(entry runtime.TeamEntry) string {

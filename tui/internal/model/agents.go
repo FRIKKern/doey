@@ -299,19 +299,32 @@ func (m AgentsModel) viewSummary() string {
 	summary := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
 		Render(fmt.Sprintf("%d agents across %d domains", len(m.agents), len(m.groups)))
 
-	selectedBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#374151"}
+	// Card dimensions
+	cardW := w - 10
+	if cardW > styles.MaxCardWidth {
+		cardW = styles.MaxCardWidth
+	}
+	if cardW < 20 {
+		cardW = 20
+	}
 
 	var lines []string
 	flatIdx := 0
 	for gi, g := range m.groups {
-		// Domain header — clickable to collapse/expand
+		// Domain header — clickable to collapse/expand, visually prominent
 		collapsed := m.collapsedDomains[g.domain]
 		arrow := "▾"
 		if collapsed {
 			arrow = "▸"
 		}
-		domainHeader := t.SectionHeader.Copy().PaddingLeft(1).
-			Render(fmt.Sprintf("%s %s (%d)", arrow, strings.ToUpper(g.domain), len(g.agents)))
+		domainLabel := fmt.Sprintf("%s %s (%d)", arrow, strings.ToUpper(g.domain), len(g.agents))
+		domainHeader := lipgloss.NewStyle().
+			Foreground(t.Text).
+			Background(lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#1E293B"}).
+			Bold(true).
+			Padding(0, 2).
+			Width(cardW + 4).
+			Render(domainLabel)
 		lines = append(lines, "", zone.Mark(fmt.Sprintf("agent-domain-%d", gi), domainHeader))
 
 		if collapsed {
@@ -320,36 +333,70 @@ func (m AgentsModel) viewSummary() string {
 		}
 
 		for _, a := range g.agents {
-			// Colored dot
-			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("●")
+			selected := m.focused && flatIdx == m.cursor
 
-			// Agent name
-			name := t.Body.Render(a.Name)
+			// Card content
+			// Title line: colored dot + name
+			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("●")
+			name := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(a.Name)
+			titleLine := dot + " " + name
+
+			// Model badge
+			if a.Model != "" {
+				modelBadge := lipgloss.NewStyle().
+					Foreground(t.BgText).
+					Background(t.Accent).
+					Padding(0, 1).
+					Render(a.Model)
+				nameW := lipgloss.Width(titleLine)
+				badgeW := lipgloss.Width(modelBadge)
+				gap := cardW - 6 - nameW - badgeW
+				if gap < 1 {
+					gap = 1
+				}
+				titleLine = titleLine + strings.Repeat(" ", gap) + modelBadge
+			}
 
 			// Description (truncated)
-			desc := ""
+			descLine := ""
 			if a.Description != "" {
-				maxDesc := w - lipgloss.Width(dot) - lipgloss.Width(name) - 8
+				dd := a.Description
+				maxDesc := cardW - 8
 				if maxDesc < 10 {
 					maxDesc = 10
 				}
-				d := a.Description
-				if len(d) > maxDesc {
-					d = d[:maxDesc-1] + "…"
+				if len(dd) > maxDesc {
+					dd = dd[:maxDesc-1] + "…"
 				}
-				desc = t.Dim.Render(" — " + d)
+				descLine = lipgloss.NewStyle().Foreground(t.Muted).Render(dd)
 			}
 
-			line := "  " + dot + " " + name + desc
-
-			if m.focused && flatIdx == m.cursor {
-				line = lipgloss.NewStyle().
-					Background(selectedBg).
-					Width(w - 4).
-					Render(line)
+			var cardContent string
+			if descLine != "" {
+				cardContent = titleLine + "\n" + descLine
+			} else {
+				cardContent = titleLine
 			}
 
-			lines = append(lines, zone.Mark(fmt.Sprintf("agent-%d", flatIdx), line))
+			// Card border
+			borderColor := t.Separator
+			if selected {
+				borderColor = t.Primary
+			}
+			bgColor := lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F172A"}
+			if selected {
+				bgColor = lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"}
+			}
+
+			card := lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(borderColor).
+				Background(bgColor).
+				Width(cardW).
+				Padding(1, 2).
+				Render(cardContent)
+
+			lines = append(lines, zone.Mark(fmt.Sprintf("agent-%d", flatIdx), card))
 			flatIdx++
 		}
 	}
@@ -397,6 +444,12 @@ func (m AgentsModel) viewDetail() string {
 		PaddingLeft(3).
 		Render("esc to go back"))
 
+	// Card dimensions
+	detailCardW := w - 8
+	if detailCardW > styles.MaxCardWidth+10 {
+		detailCardW = styles.MaxCardWidth + 10
+	}
+
 	// Detail fields
 	labelStyle := t.StatLabel.Copy().Width(14)
 	valueStyle := t.Body
@@ -417,8 +470,7 @@ func (m AgentsModel) viewDetail() string {
 	}
 
 	if agent.Description != "" {
-		// Wrap description to available width
-		descWidth := w - 20
+		descWidth := detailCardW - 24
 		if descWidth < 20 {
 			descWidth = 20
 		}
@@ -437,8 +489,12 @@ func (m AgentsModel) viewDetail() string {
 	}
 
 	body := lipgloss.NewStyle().
-		Padding(1, 3).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Separator).
+		Width(detailCardW).
+		Padding(1, 2).
+		MarginLeft(2).
 		Render(strings.Join(fields, "\n"))
 
-	return header + "\n" + rule + "\n" + back + "\n" + body
+	return header + "\n" + rule + "\n" + back + "\n\n" + body
 }

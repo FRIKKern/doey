@@ -408,3 +408,94 @@ func NoteBlock(theme Theme, text string, width int) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// InfoCard renders a bordered card with title and body content.
+// zoneID wraps the card in a click zone. w = desired width.
+func InfoCard(title, body, zoneID string, w int, theme Theme) string {
+	titleRendered := lipgloss.NewStyle().
+		Foreground(theme.Text).
+		Bold(true).
+		Render(title)
+
+	bodyRendered := lipgloss.NewStyle().
+		Foreground(theme.Text).
+		Render(body)
+
+	content := titleRendered + "\n" + bodyRendered
+
+	card := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Primary).
+		Width(w).
+		Padding(1, 2).
+		Render(content)
+
+	if zoneID != "" {
+		return zone.Mark(zoneID, card)
+	}
+	return card
+}
+
+// ActionCard renders a large clickable action button card.
+// zoneID wraps in click zone. w = desired width.
+func ActionCard(label, zoneID string, w int, theme Theme) string {
+	labelRendered := lipgloss.NewStyle().
+		Foreground(theme.BgText).
+		Bold(true).
+		Width(w - 10). // account for padding + border
+		Align(lipgloss.Center).
+		Render(label)
+
+	card := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Accent).
+		Background(theme.Accent).
+		Width(w).
+		Padding(2, 4).
+		Render(labelRendered)
+
+	if zoneID != "" {
+		return zone.Mark(zoneID, card)
+	}
+	return card
+}
+
+// StatusBadgePill renders a colored inline pill badge for task status.
+// Background uses status accent color, foreground uses inverse text.
+func StatusBadgePill(status string, theme Theme) string {
+	bg := StatusAccentColor(theme, status)
+	return lipgloss.NewStyle().
+		Background(bg).
+		Foreground(theme.BgText).
+		Padding(0, 1).
+		Bold(true).
+		Render(strings.ToUpper(status))
+}
+
+// CardGrid arranges cards into a grid layout with cols columns.
+// totalWidth is the available width for the grid.
+func CardGrid(cards []string, cols, totalWidth int) string {
+	if len(cards) == 0 || cols < 1 {
+		return ""
+	}
+	colWidth := totalWidth/cols - 2
+	if colWidth < 4 {
+		colWidth = 4
+	}
+
+	var rows []string
+	for i := 0; i < len(cards); i += cols {
+		end := i + cols
+		if end > len(cards) {
+			end = len(cards)
+		}
+		row := cards[i:end]
+		// Pad each card to consistent width
+		var sized []string
+		for _, c := range row {
+			sized = append(sized, lipgloss.NewStyle().Width(colWidth).Render(c))
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, sized...))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
