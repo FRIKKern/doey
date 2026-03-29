@@ -190,6 +190,68 @@ func NotesBlock(theme Theme, text string, width int) string {
 		Render(text)
 }
 
+// MaxCardWidth is the maximum card width for readability.
+const MaxCardWidth = 80
+
+// HelpOverlayStyle returns a centered floating panel for the keyboard help overlay.
+func HelpOverlayStyle(t Theme, width int) lipgloss.Style {
+	if width > MaxCardWidth {
+		width = MaxCardWidth
+	}
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
+		Background(lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#1E293B"}).
+		Width(width).
+		Padding(1, 2)
+}
+
+// HelpKeyStyle returns a bold Primary style for keybinding labels in the help overlay.
+func HelpKeyStyle(t Theme) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(t.Primary).
+		Bold(true).
+		Width(12)
+}
+
+// HelpDescStyle returns a Text style for keybinding descriptions.
+func HelpDescStyle(t Theme) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(t.Text)
+}
+
+// FooterHintBarStyle returns the style for the bottom hint bar.
+func FooterHintBarStyle(t Theme) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true).
+		Padding(0, 2)
+}
+
+// EmptyStateIcon returns a large dimmed icon for the empty task state.
+func EmptyStateIcon(t Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true).
+		Render("📋")
+}
+
+// EmptyStateTitle returns styled "No tasks yet" title text.
+func EmptyStateTitle(t Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(t.Text).
+		Bold(true).
+		Render("No tasks yet")
+}
+
+// EmptyStateHint returns styled hint text for the empty state.
+func EmptyStateHint(t Theme) string {
+	key := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("n")
+	return lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Render("Press " + key + " to create your first task")
+}
+
 // ExpandedProgressBar renders a progress bar with "done/total" label.
 // Uses Primary for filled segments and Faint for empty.
 func ExpandedProgressBar(theme Theme, done int, total int, width int) string {

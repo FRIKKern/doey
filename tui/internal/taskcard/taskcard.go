@@ -63,6 +63,9 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if cardWidth < 20 {
 		cardWidth = 20
 	}
+	if cardWidth > styles.MaxCardWidth {
+		cardWidth = styles.MaxCardWidth
+	}
 
 	task := ti.Task
 	status := task.Status
@@ -288,6 +291,9 @@ func (e *ExpandedCard) Render() string {
 	if contentWidth < 20 {
 		contentWidth = 20
 	}
+	if contentWidth > styles.MaxCardWidth-6 {
+		contentWidth = styles.MaxCardWidth - 6
+	}
 
 	var sections []string
 
@@ -360,13 +366,42 @@ func (e *ExpandedCard) Render() string {
 	sections = append(sections, hint)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
-	return styles.ExpandedCardStyle(e.Theme, task.Status, e.Width).Render(content)
+	expandedWidth := e.Width
+	if expandedWidth > styles.MaxCardWidth {
+		expandedWidth = styles.MaxCardWidth
+	}
+	return styles.ExpandedCardStyle(e.Theme, task.Status, expandedWidth).Render(content)
 }
 
-// ContentHeight returns the total number of rendered lines (for scroll bounds).
+// ContentHeight estimates the total content lines for scroll bounds.
 func (e *ExpandedCard) ContentHeight() int {
-	rendered := e.Render()
-	return strings.Count(rendered, "\n") + 1
+	// Count sections: header(1) + sep(1) + desc + subtasks + decisions + notes + hint(2)
+	lines := 4 // header + sep + empty + hint
+	if e.Item.Task.Description != "" {
+		// Section header + wrapped text (rough estimate: chars / width)
+		contentWidth := e.Width - 6
+		if contentWidth < 20 {
+			contentWidth = 20
+		}
+		words := len(strings.Fields(e.Item.Task.Description))
+		descLines := (words * 6) / contentWidth // ~6 chars per word avg
+		if descLines < 1 {
+			descLines = 1
+		}
+		lines += descLines + 1 // +1 for section header
+	}
+	if len(e.Item.Subtasks) > 0 {
+		lines += len(e.Item.Subtasks) + 3 // header + progress bar + items + spacing
+	}
+	if e.Item.Task.DecisionLog != "" {
+		decLines := strings.Count(e.Item.Task.DecisionLog, "\n") + 1
+		lines += decLines + 2
+	}
+	if e.Item.Task.Notes != "" {
+		noteLines := strings.Count(e.Item.Task.Notes, "\n") + 1
+		lines += noteLines + 2
+	}
+	return lines
 }
 
 // ViewportSlice returns the visible portion of the rendered card based on
