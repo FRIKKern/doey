@@ -450,6 +450,7 @@ while true; do
         fi
         case "$_tstatus" in
           pending_user_confirmation) _tcol="${C_BOLD_YELLOW}" ; _ticon="⬤" ;;
+          in_progress)               _tcol="${C_BOLD_GREEN}"  ; _ticon="●" ;;
           active)                    _tcol="${C_BOLD_GREEN}"  ; _ticon="●" ;;
           *)                         _tcol="${C_DIM}"         ; _ticon="○" ;;
         esac

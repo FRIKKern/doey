@@ -163,10 +163,10 @@ type CreateTaskResultMsg struct {
 	Err error
 }
 
-// MoveTaskMsg is emitted when the user moves a task to a different section.
+// MoveTaskMsg is emitted when the user moves a task to a new status.
 type MoveTaskMsg struct {
-	ID      string
-	Section string // "active", "backlog", "complete"
+	ID     string
+	Status string // canonical task status
 }
 
 // MoveTaskResultMsg is returned after moving a task.
@@ -195,21 +195,7 @@ type SetStatusTaskResultMsg struct {
 	Err error
 }
 
-// statusToSection maps a status to its section.
-func statusToSection(status string) string {
-	switch status {
-	case "backlog":
-		return "backlog"
-	case "todo", "in_progress":
-		return "active"
-	case "committed", "pushed":
-		return "complete"
-	default:
-		return "active"
-	}
-}
-
-// SetStatusTaskCmd sets a task's status and updates its section accordingly.
+// SetStatusTaskCmd sets a task's status directly.
 func SetStatusTaskCmd(id, status string) tea.Cmd {
 	return func() tea.Msg {
 		store, err := runtime.ReadTaskStore()
@@ -219,7 +205,6 @@ func SetStatusTaskCmd(id, status string) tea.Cmd {
 		t := store.FindTask(id)
 		if t != nil {
 			t.Status = status
-			t.Section = statusToSection(status)
 			t.Updated = time.Now().Unix()
 		}
 		if err := runtime.WriteTaskStore(store); err != nil {
@@ -249,11 +234,7 @@ func CreateTaskCmd(title string) tea.Cmd {
 		if err != nil {
 			return CreateTaskResultMsg{Err: err}
 		}
-		id := store.AddTask(title, "todo")
-		// AddTask sets Section=Status; fix Section to the correct group
-		if t := store.FindTask(id); t != nil {
-			t.Section = "active"
-		}
+		id := store.AddTask(title)
 		if err := runtime.WriteTaskStore(store); err != nil {
 			return CreateTaskResultMsg{Err: err}
 		}
@@ -261,14 +242,14 @@ func CreateTaskCmd(title string) tea.Cmd {
 	}
 }
 
-// MoveTaskCmd moves a task to a new section.
-func MoveTaskCmd(id, section string) tea.Cmd {
+// MoveTaskCmd moves a task to a new status.
+func MoveTaskCmd(id, status string) tea.Cmd {
 	return func() tea.Msg {
 		store, err := runtime.ReadTaskStore()
 		if err != nil {
 			return MoveTaskResultMsg{Err: err}
 		}
-		store.MoveTask(id, section)
+		store.MoveTask(id, status)
 		if err := runtime.WriteTaskStore(store); err != nil {
 			return MoveTaskResultMsg{Err: err}
 		}
@@ -315,7 +296,6 @@ func DispatchTaskCmd(runtimeDir, sessionName, id, title string) tea.Cmd {
 		store, _ := runtime.ReadTaskStore()
 		if t := store.FindTask(id); t != nil {
 			t.Status = "in_progress"
-			t.Section = "active"
 			t.Updated = time.Now().Unix()
 		}
 		runtime.WriteTaskStore(store)

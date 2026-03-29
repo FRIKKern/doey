@@ -14,19 +14,33 @@ import (
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
+// sectionOfStatus derives a display section from a canonical task status.
+func sectionOfStatus(status string) string {
+	switch status {
+	case "active", "in_progress", "pending_user_confirmation":
+		return "active"
+	case "done", "cancelled", "failed":
+		return "complete"
+	default:
+		return "active"
+	}
+}
+
 // statusIcon returns a colored icon for a task status.
 func statusIcon(status string, t styles.Theme) string {
 	switch status {
-	case "backlog":
+	case "active":
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
-	case "todo":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
 	case "in_progress":
 		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
-	case "committed":
+	case "pending_user_confirmation":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
+	case "done":
 		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
-	case "pushed":
-		return lipgloss.NewStyle().Foreground(t.Accent).Render("↑")
+	case "cancelled":
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("—")
+	case "failed":
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
 	default:
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
 	}
@@ -107,11 +121,11 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 }
 
 func (m *TasksModel) sortEntries() {
-	sectionOrder := map[string]int{"active": 0, "backlog": 1, "complete": 2}
+	sectionOrder := map[string]int{"active": 0, "complete": 1}
 	sort.SliceStable(m.entries, func(i, j int) bool {
 		a, b := m.entries[i], m.entries[j]
-		sa := sectionOrder[a.Section]
-		sb := sectionOrder[b.Section]
+		sa := sectionOrder[sectionOfStatus(a.Status)]
+		sb := sectionOrder[sectionOfStatus(b.Status)]
 		if sa != sb {
 			return sa < sb
 		}
@@ -205,12 +219,12 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 			m.creating = true
 			m.inputText = ""
 		case "m":
-			// Move to next section
+			// Move to next status
 			if m.cursor >= 0 && m.cursor < total {
 				task := m.entries[m.cursor]
-				next := nextSection(task.Section)
+				next := nextMoveStatus(task.Status)
 				return m, func() tea.Msg {
-					return MoveTaskMsg{ID: task.ID, Section: next}
+					return MoveTaskMsg{ID: task.ID, Status: next}
 				}
 			}
 		case "d":
@@ -257,9 +271,9 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		case "m":
 			if m.cursor >= 0 && m.cursor < total {
 				task := m.entries[m.cursor]
-				next := nextSection(task.Section)
+				next := nextMoveStatus(task.Status)
 				return m, func() tea.Msg {
-					return MoveTaskMsg{ID: task.ID, Section: next}
+					return MoveTaskMsg{ID: task.ID, Status: next}
 				}
 			}
 		case "s":
@@ -290,20 +304,22 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	return m, nil
 }
 
-// nextSection cycles: active → backlog → complete → active.
-func nextSection(s string) string {
+// nextMoveStatus cycles through the main statuses: active → in_progress → done → active.
+func nextMoveStatus(s string) string {
 	switch s {
 	case "active":
-		return "backlog"
-	case "backlog":
-		return "complete"
+		return "in_progress"
+	case "in_progress":
+		return "done"
+	case "done":
+		return "active"
 	default:
 		return "active"
 	}
 }
 
 // allStatuses is the full list of task statuses for cycling.
-var allStatuses = []string{"backlog", "todo", "in_progress", "committed", "pushed"}
+var allStatuses = []string{"active", "in_progress", "pending_user_confirmation", "done", "cancelled", "failed"}
 
 // nextStatus cycles through all statuses.
 func nextStatus(s string) string {
@@ -359,7 +375,7 @@ func (m TasksModel) viewList() string {
 	var lines []string
 	lastSection := ""
 	for i, entry := range m.entries {
-		section := sectionLabel(entry.Section)
+		section := sectionLabel(sectionOfStatus(entry.Status))
 		if section != lastSection {
 			if lastSection != "" {
 				lines = append(lines, "")
@@ -402,13 +418,11 @@ func (m TasksModel) viewList() string {
 // taskSummary returns section counts.
 func (m TasksModel) taskSummary() string {
 	t := m.theme
-	active, backlog, complete := 0, 0, 0
+	active, complete := 0, 0
 	for _, task := range m.entries {
-		switch task.Section {
+		switch sectionOfStatus(task.Status) {
 		case "active":
 			active++
-		case "backlog":
-			backlog++
 		default:
 			complete++
 		}
@@ -422,10 +436,6 @@ func (m TasksModel) taskSummary() string {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Primary).
 			Render(fmt.Sprintf("%d active", active)))
 	}
-	if backlog > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Muted).
-			Render(fmt.Sprintf("%d backlog", backlog)))
-	}
 	if complete > 0 {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).
 			Render(fmt.Sprintf("%d complete", complete)))
@@ -437,13 +447,11 @@ func (m TasksModel) taskSummary() string {
 	return total
 }
 
-// sectionLabel returns the display name for a section.
+// sectionLabel returns the display name for a derived section.
 func sectionLabel(section string) string {
 	switch section {
 	case "active":
 		return "ACTIVE"
-	case "backlog":
-		return "BACKLOG"
 	default:
 		return "COMPLETE"
 	}
@@ -524,21 +532,24 @@ func (m TasksModel) viewDetail() string {
 	// Status with color
 	statusColor := t.Muted
 	switch task.Status {
-	case "todo":
-		statusColor = t.Warning
+	case "active":
+		statusColor = t.Muted
 	case "in_progress":
 		statusColor = t.Primary
-	case "committed":
+	case "pending_user_confirmation":
+		statusColor = t.Warning
+	case "done":
 		statusColor = t.Success
-	case "pushed":
-		statusColor = t.Accent
+	case "cancelled":
+		statusColor = t.Muted
+	case "failed":
+		statusColor = t.Danger
 	}
 
 	var fields []string
 	fields = append(fields, labelStyle.Render("Title")+valueStyle.Render(task.Title))
 	fields = append(fields, labelStyle.Render("Status")+
 		statusIcon(task.Status, t)+" "+lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
-	fields = append(fields, labelStyle.Render("Section")+valueStyle.Render(sectionLabel(task.Section)))
 
 	if task.Team != "" {
 		fields = append(fields, labelStyle.Render("Team")+

@@ -38,7 +38,7 @@ type PaneStatus struct {
 type Task struct {
 	ID          string
 	Title       string
-	Status      string    // backlog, todo, in_progress, committed, pushed
+	Status      string    // active, in_progress, pending_user_confirmation, done, cancelled, failed
 	Description string    // multi-line task description
 	Attachments []string  // list of URLs/file paths
 	Created     int64     // unix epoch
