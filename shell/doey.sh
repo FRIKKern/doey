@@ -2006,7 +2006,42 @@ update_system() {
     fi
   fi
 
+  # Re-exec from the NEW code to avoid stale in-memory logic.
+  # The new doey binary handles --post-update to finish the install.
+  local new_doey="$install_dir/shell/doey.sh"
+  if [[ -x "$new_doey" ]] || [[ -f "$new_doey" ]]; then
+    printf "  ${DIM}Re-executing from updated code...${RESET}\n"
+    exec bash "$new_doey" --post-update "$install_dir"
+  fi
+
+  # Fallback: if re-exec fails (e.g., new code doesn't have --post-update yet),
+  # run install.sh directly from old code
   printf "\n  ${DIM}Running install.sh...${RESET}\n"
+  if ! bash "$install_dir/install.sh"; then
+    printf "  ${ERROR}✗ Install failed${RESET}\n"
+    [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
+    exit 1
+  fi
+  [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
+
+  rm -f "$HOME/.claude/doey/last-update-check.available"
+  _check_claude_update
+
+  printf '\n'
+  _print_doey_banner
+  printf "   ${DIM}Let me Doey for you${RESET}\n\n"
+  printf "  ${SUCCESS}Update complete.${RESET} Restart sessions: ${BOLD}doey reload${RESET}\n"
+}
+
+# Called via re-exec after git pull — runs from the NEW code on disk.
+_post_update() {
+  local install_dir="${1:-}"
+  if [[ -z "$install_dir" ]] || [[ ! -d "$install_dir" ]]; then
+    printf "  ${ERROR}✗ --post-update: missing or invalid install dir${RESET}\n"
+    exit 1
+  fi
+
+  printf "\n  ${DIM}Running install.sh (from updated code)...${RESET}\n"
   if ! bash "$install_dir/install.sh"; then
     printf "  ${ERROR}✗ Install failed${RESET}\n"
     [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
@@ -4614,6 +4649,7 @@ HELP
   doctor)       check_doctor; exit 0 ;;
   version|--version|-v) show_version; exit 0 ;;
   uninstall)    uninstall_system; exit 0 ;;
+  --post-update) _post_update "$2"; exit 0 ;;
   update|reinstall) update_system; exit 0 ;;
   config)       shift; doey_config "$@"; exit 0 ;;
   task|tasks)   shift; task_command "$@"; exit 0 ;;
