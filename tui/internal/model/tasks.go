@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
@@ -206,34 +208,131 @@ func (m TasksModel) Update(msg tea.Msg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
-	kmsg, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
+	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m.updateMouse(msg)
+
+	case tea.KeyMsg:
+		// Help overlay toggle (works in any mode)
+		if msg.String() == "?" {
+			m.showHelp = !m.showHelp
+			return m, nil
+		}
+		// Dismiss help with any key when showing
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+
+		// Input mode (creating)
+		if m.creating {
+			return m.updateInput(msg)
+		}
+
+		// Detail mode
+		if !m.summaryMode {
+			return m.updateDetail(msg)
+		}
+
+		// List mode
+		return m.updateList(msg)
 	}
 
-	// Help overlay toggle (works in any mode)
-	if kmsg.String() == "?" {
-		m.showHelp = !m.showHelp
-		return m, nil
-	}
-	// Dismiss help with any key when showing
-	if m.showHelp {
+	return m, nil
+}
+
+// updateMouse handles all mouse interactions for the tasks panel.
+func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
+	// Dismiss help overlay on any click
+	if m.showHelp && msg.Action == tea.MouseActionRelease {
 		m.showHelp = false
 		return m, nil
 	}
 
-	// Input mode (creating)
-	if m.creating {
-		return m.updateInput(kmsg)
+	// Expanded card mode
+	if !m.summaryMode && m.expanded != nil {
+		return m.updateMouseExpanded(msg)
 	}
 
-	// Detail mode
-	if !m.summaryMode {
-		return m.updateDetail(kmsg)
+	// List mode — only handle click release to prevent double-fire
+	if m.summaryMode && msg.Action == tea.MouseActionRelease {
+		for i := range m.entries {
+			if zone.Get(fmt.Sprintf("task-card-%d", i)).InBounds(msg) {
+				m.list.Select(i)
+				// Open expanded card (same as Enter)
+				item := m.list.SelectedItem()
+				if item == nil {
+					return m, nil
+				}
+				ti := item.(taskcard.TaskItem)
+				card := taskcard.ExpandedCard{
+					Item:          ti,
+					Theme:         m.theme,
+					Width:         m.width,
+					Height:        m.height - 4,
+					SubtaskCursor: -1,
+					ScrollOffset:  0,
+					Messages:      filterMessagesForTask(m.messages, ti.Task.ID, ti.Task.Team),
+				}
+				m.expanded = &card
+				m.summaryMode = false
+				return m, nil
+			}
+		}
 	}
 
-	// List mode
-	return m.updateList(kmsg)
+	// Mouse wheel in list mode — forward to list model for scrolling
+	if m.summaryMode && msg.Action == tea.MouseActionPress {
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+			var cmd tea.Cmd
+			m.list, cmd = m.list.Update(msg)
+			return m, cmd
+		}
+	}
+
+	return m, nil
+}
+
+// updateMouseExpanded handles mouse in expanded card view.
+func (m TasksModel) updateMouseExpanded(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
+	// Click release — check zones
+	if msg.Action == tea.MouseActionRelease {
+		// Close button
+		if zone.Get("detail-close").InBounds(msg) {
+			m.expanded = nil
+			m.summaryMode = true
+			return m, nil
+		}
+		// Subtask clicks
+		for i := range m.expanded.Item.Subtasks {
+			if zone.Get(fmt.Sprintf("subtask-%d", i)).InBounds(msg) {
+				m.expanded.SubtaskCursor = i
+				return m, nil
+			}
+		}
+	}
+
+	// Mouse wheel — scroll expanded card
+	if msg.Action == tea.MouseActionPress {
+		if msg.Button == tea.MouseButtonWheelUp {
+			if m.expanded.ScrollOffset > 0 {
+				m.expanded.ScrollOffset--
+			}
+			return m, nil
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			maxOff := m.expanded.ContentHeight() - m.expanded.Height
+			if maxOff < 0 {
+				maxOff = 0
+			}
+			if m.expanded.ScrollOffset < maxOff {
+				m.expanded.ScrollOffset++
+			}
+			return m, nil
+		}
+	}
+
+	return m, nil
 }
 
 func (m TasksModel) updateInput(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
@@ -560,8 +659,9 @@ func (m TasksModel) viewExpanded() string {
 		Render(fmt.Sprintf("TASK — #%s", task.ID))
 	rule := t.Faint.Render(strings.Repeat("─", w))
 	body := m.expanded.ViewportSlice()
+	closeHint := zone.Mark("detail-close", "enter/esc close")
 	hint := styles.FooterHintBarStyle(t).
-		Render("↑/↓ scroll  enter/esc close  tab subtask  m move  s status  ? help")
+		Render("↑/↓ scroll  " + closeHint + "  tab subtask  m move  s status  ? help")
 	content := header + "\n" + rule + "\n" + body + "\n" + hint
 	return lipgloss.NewStyle().
 		Width(w).Height(m.height).Render(content)

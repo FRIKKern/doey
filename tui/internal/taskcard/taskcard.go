@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/doey-cli/doey/tui/internal/grammar"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
@@ -170,7 +172,8 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	} else {
 		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2, renderedDesc)
 	}
-	fmt.Fprint(w, cardStyle.Render(content))
+	marked := zone.Mark(fmt.Sprintf("task-card-%d", index), cardStyle.Render(content))
+	fmt.Fprint(w, marked)
 }
 
 // taskStatusColor returns the accent color for a given task status.
@@ -360,7 +363,7 @@ func (e *ExpandedCard) Render() string {
 			done := st.Status == "done"
 			selected := i == e.SubtaskCursor
 			row := styles.SubtaskRow(e.Theme, st.Title, st.Status, done, selected, 0)
-			sections = append(sections, row)
+			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), row))
 		}
 	}
 
@@ -496,8 +499,11 @@ func (e *ExpandedCard) Render() string {
 
 	// --- Footer hint ---
 	sections = append(sections, "")
-	hint := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
-		Render("[Enter] collapse  [Tab] next subtask  [↑↓] scroll")
+	closeBtn := zone.Mark("detail-close",
+		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("[Enter] collapse"))
+	hint := closeBtn + "  " +
+		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
+			Render("[Tab] next subtask  [↑↓] scroll")
 	sections = append(sections, hint)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)

@@ -12,6 +12,7 @@ import (
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 const maxLogLines = 500
@@ -93,22 +94,24 @@ func (m *LogViewModel) SetSnapshot(snap runtime.Snapshot) {
 	}
 }
 
-// Update handles navigation keys.
+// Update handles navigation keys and mouse events.
 func (m LogViewModel) Update(msg tea.Msg) (LogViewModel, tea.Cmd) {
 	if !m.focused {
 		return m, nil
 	}
-	kmsg, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	if m.detailMode {
-		if key.Matches(kmsg, m.keyMap.Back) {
-			m.detailMode = false
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if m.detailMode {
+			if key.Matches(msg, m.keyMap.Back) {
+				m.detailMode = false
+			}
+			return m, nil
 		}
-		return m, nil
+		return m.updateList(msg), nil
+	case tea.MouseMsg:
+		return m.updateMouse(msg), nil
 	}
-	return m.updateList(kmsg), nil
+	return m, nil
 }
 
 func (m LogViewModel) updateList(msg tea.KeyMsg) LogViewModel {
@@ -146,6 +149,74 @@ func (m LogViewModel) updateList(msg tea.KeyMsg) LogViewModel {
 			}
 		}
 	}
+	return m
+}
+
+func (m LogViewModel) updateMouse(msg tea.MouseMsg) LogViewModel {
+	total := len(m.entries)
+
+	// Wheel events fire on press, not release
+	if msg.Button == tea.MouseButtonWheelUp {
+		m.autoScroll = false
+		if m.cursor > 0 {
+			m.cursor--
+		}
+		m.ensureVisible()
+		return m
+	}
+	if msg.Button == tea.MouseButtonWheelDown {
+		if m.cursor < total-1 {
+			m.cursor++
+		}
+		if m.cursor == 0 {
+			m.autoScroll = true
+		}
+		m.ensureVisible()
+		return m
+	}
+
+	// All other mouse interactions on release only to prevent double-fire
+	if msg.Action != tea.MouseActionRelease {
+		return m
+	}
+
+	if m.detailMode {
+		// Back button in detail view
+		if zone.Get("log-back").InBounds(msg) {
+			m.detailMode = false
+		}
+		return m
+	}
+
+	// Follow toggle
+	if zone.Get("log-follow-toggle").InBounds(msg) {
+		m.autoScroll = !m.autoScroll
+		if m.autoScroll {
+			m.cursor = 0
+			m.offset = 0
+		}
+		return m
+	}
+
+	// Click on log entries
+	viewH := m.viewportHeight()
+	end := m.offset + viewH
+	if end > total {
+		end = total
+	}
+	for i := m.offset; i < end; i++ {
+		if zone.Get(fmt.Sprintf("log-%d", i)).InBounds(msg) {
+			if m.cursor == i {
+				// Click on already-selected entry opens detail
+				m.detailMode = true
+			} else {
+				m.cursor = i
+				m.autoScroll = false
+			}
+			return m
+		}
+	}
+
 	return m
 }
 
@@ -231,6 +302,7 @@ func (m LogViewModel) viewList() string {
 	} else {
 		scrollInd = lipgloss.NewStyle().Foreground(t.Warning).Render(" \u25CB PAUSED")
 	}
+	scrollInd = zone.Mark("log-follow-toggle", scrollInd)
 
 	summaryRule := styles.ThinSeparator(t, w)
 
@@ -257,6 +329,7 @@ func (m LogViewModel) viewList() string {
 		} else {
 			line = normalIndent + line
 		}
+		line = zone.Mark(fmt.Sprintf("log-%d", i), line)
 		lines = append(lines, line)
 	}
 
@@ -340,8 +413,8 @@ func (m LogViewModel) viewDetail() string {
 		t.Faint.Render(" \u2014 ") +
 		styles.LogPaneLabel(t, e.Pane)
 	rule := styles.ThinSeparator(t, w)
-	backHint := t.Faint.Copy().PaddingLeft(3).
-		Render("\u2190 esc to go back")
+	backHint := zone.Mark("log-back", t.Faint.Copy().PaddingLeft(3).
+		Render("\u2190 esc to go back"))
 
 	// Detail fields with section header styling
 	labelStyle := t.SectionHeader.Copy().Width(12)

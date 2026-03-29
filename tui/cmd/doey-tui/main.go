@@ -5,6 +5,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/doey-cli/doey/tui/internal/model"
 )
 
@@ -22,9 +24,10 @@ func main() {
 	}
 
 	runtimeDir := os.Args[1]
+	zone.NewGlobal()
 	m := model.New(runtimeDir)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

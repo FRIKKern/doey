@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -201,6 +203,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CloseEditorMsg:
 		m.team.Update(msg)
 
+	case tea.MouseMsg:
+		// Tab bar clicks — check on release to avoid double-fire
+		if msg.Action == tea.MouseActionRelease {
+			for i := range m.tabBar.tabs {
+				if zone.Get(fmt.Sprintf("tab-%d", i)).InBounds(msg) {
+					m.focusIndex = i
+					m.updateFocus()
+					return m, nil
+				}
+			}
+		}
+
+		// Pass mouse events to focused sub-model
+		var cmd tea.Cmd
+		switch m.focusIndex {
+		case 0:
+			m.welcome, cmd = m.welcome.Update(msg)
+		case 1:
+			m.team, cmd = m.team.Update(msg)
+		case 2:
+			m.tasks, cmd = m.tasks.Update(msg)
+		case 3:
+			m.agents, cmd = m.agents.Update(msg)
+		case 4:
+			m.debug, cmd = m.debug.Update(msg)
+		case 5:
+			m.messages, cmd = m.messages.Update(msg)
+		case 6:
+			m.logView, cmd = m.logView.Update(msg)
+		}
+		cmds = append(cmds, cmd)
+
 	case tea.KeyMsg:
 		// Global keys
 		if key.Matches(msg, m.footer.keyMap.Quit, m.footer.keyMap.ForceQuit) {
@@ -326,7 +360,7 @@ func (m Model) View() string {
 		body = m.logView.View()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, body, footer)
+	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, body, footer))
 }
 
 // propagateSizes distributes width/height to sub-models.
