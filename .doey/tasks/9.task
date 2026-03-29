@@ -1,6 +1,6 @@
 TASK_ID=9
-TASK_TITLE=Fix on-pre-tool-use.sh — workers must be able to write to .doey/tasks/ files
-TASK_STATUS=active
+TASK_TITLE=Fix role detection + hook guards — Managers blocked from dispatch, Workers blocked from task writes
+TASK_STATUS=in_progress
 TASK_CREATED=1774819000
 TASK_TYPE=bugfix
 TASK_DESCRIPTION=Workers are blocked from writing TASK_LOG entries to .doey/tasks/*.task files. Two false-positive blocks observed:
@@ -30,3 +30,5 @@ SUCCESS CRITERIA:
 - bash -n passes on the modified hook
 TASK_TAGS=bugfix,hooks,critical,task-system,ipc
 TASK_LOG_1774818992=REPORT_W1: Added early-exit whitelist in on-pre-tool-use.sh (lines 172-177) — Bash commands redirecting to .doey/tasks/*.task or /reports/ paths now exit 0 before git-write and tmux block patterns can false-positive on command content. bash -n passes. Edit/Write tools already unblocked for workers (exit 0 at line 169).
+TASK_LOG_1774819248=COMPLETE: Whitelist added in on-pre-tool-use.sh, committed as part of 86a8b9d.
+TASK_LOG_1774819327=REOPENED P0: Role detection broken for Managers. Dispatched to W2.1 for fix in on-session-start.sh and on-pre-tool-use.sh.
