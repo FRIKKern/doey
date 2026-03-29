@@ -142,47 +142,25 @@ _cursor_move() {
 
 # Validate a setting value. Returns 0 if valid, 1 if not.
 # Prints error message on failure.
+_validate_int_range() {
+  local val="$1" min="$2" max="$3"
+  case "$val" in *[!0-9]*) printf 'Must be a number %s-%s' "$min" "$max"; return 1 ;; esac
+  [ "$val" -ge "$min" ] && [ "$val" -le "$max" ] && return 0
+  printf 'Must be %s-%s' "$min" "$max"; return 1
+}
+
 _validate_setting() {
   local var="$1" val="$2"
   case "$var" in
     DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_SESSION_MANAGER_MODEL)
-      case "$val" in
-        opus|sonnet|haiku) return 0 ;;
-        *) printf 'Must be: opus, sonnet, or haiku'; return 1 ;;
-      esac
+      case "$val" in opus|sonnet|haiku) return 0 ;; esac
+      printf 'Must be: opus, sonnet, or haiku'; return 1
       ;;
-    DOEY_INITIAL_WORKER_COLS)
-      case "$val" in *[!0-9]*) printf 'Must be a number 1-6'; return 1 ;; esac
-      [ "$val" -ge 1 ] && [ "$val" -le 6 ] && return 0
-      printf 'Must be 1-6'; return 1
-      ;;
-    DOEY_INITIAL_TEAMS)
-      case "$val" in *[!0-9]*) printf 'Must be a number 1-10'; return 1 ;; esac
-      [ "$val" -ge 1 ] && [ "$val" -le 10 ] && return 0
-      printf 'Must be 1-10'; return 1
-      ;;
-    DOEY_INITIAL_WORKTREE_TEAMS|DOEY_INITIAL_FREELANCER_TEAMS)
-      case "$val" in *[!0-9]*) printf 'Must be a number 0-10'; return 1 ;; esac
-      [ "$val" -ge 0 ] && [ "$val" -le 10 ] && return 0
-      printf 'Must be 0-10'; return 1
-      ;;
-    DOEY_MAX_WORKERS)
-      case "$val" in *[!0-9]*) printf 'Must be a number 1-50'; return 1 ;; esac
-      [ "$val" -ge 1 ] && [ "$val" -le 50 ] && return 0
-      printf 'Must be 1-50'; return 1
-      ;;
-    DOEY_MAX_WATCHDOG_SLOTS)
-      case "$val" in *[!0-9]*) printf 'Must be a number 1-6'; return 1 ;; esac
-      [ "$val" -ge 1 ] && [ "$val" -le 6 ] && return 0
-      printf 'Must be 1-6'; return 1
-      ;;
-    DOEY_INFO_PANEL_REFRESH)
-      case "$val" in *[!0-9]*) printf 'Must be a number >= 1'; return 1 ;; esac
-      [ "$val" -ge 1 ] && return 0
-      printf 'Must be >= 1'; return 1
-      ;;
+    DOEY_INITIAL_WORKER_COLS|DOEY_MAX_WATCHDOG_SLOTS) _validate_int_range "$val" 1 6 ;;
+    DOEY_INITIAL_TEAMS) _validate_int_range "$val" 1 10 ;;
+    DOEY_INITIAL_WORKTREE_TEAMS|DOEY_INITIAL_FREELANCER_TEAMS) _validate_int_range "$val" 0 10 ;;
+    DOEY_MAX_WORKERS) _validate_int_range "$val" 1 50 ;;
     *)
-      # All timing/delay vars: number >= 1
       case "$val" in *[!0-9]*) printf 'Must be a number >= 1'; return 1 ;; esac
       [ "$val" -ge 1 ] && return 0
       printf 'Must be >= 1'; return 1
@@ -352,6 +330,16 @@ _settings_row() {
 # Settings vars list (order matches render, used for cursor→var lookup)
 _SETTINGS_VAR_LIST=""
 
+# Helper: register and render a setting row. Uses _ri and _SETTINGS_VAR_LIST
+# from the calling scope (bash dynamic scoping).
+_add_setting() {
+  local _asn="$1" _asd="$2" _asv
+  _asv="${!_asn}"
+  _settings_row "$_asn" "$_asd" "$_asv" "$_ri"
+  _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}${_asn} "
+  _ri=$((_ri+1))
+}
+
 _render_settings_view() {
   local _GLOBAL_CONFIG _PROJECT_CONFIG _PROJ_DIR
   _GLOBAL_CONFIG="${HOME}/.config/doey/config.sh"
@@ -373,34 +361,34 @@ _render_settings_view() {
   _SETTINGS_VAR_LIST=""
 
   printf '  %b Grid & Teams%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_INITIAL_WORKER_COLS"    "2"   "$DOEY_INITIAL_WORKER_COLS"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_INITIAL_WORKER_COLS "; _ri=$((_ri+1))
-  _settings_row "DOEY_INITIAL_TEAMS"          "2"   "$DOEY_INITIAL_TEAMS"          "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_INITIAL_TEAMS "; _ri=$((_ri+1))
-  _settings_row "DOEY_INITIAL_WORKTREE_TEAMS" "0"   "$DOEY_INITIAL_WORKTREE_TEAMS" "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_INITIAL_WORKTREE_TEAMS "; _ri=$((_ri+1))
-  _settings_row "DOEY_MAX_WORKERS"            "20"  "$DOEY_MAX_WORKERS"            "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MAX_WORKERS "; _ri=$((_ri+1))
-  _settings_row "DOEY_MAX_WATCHDOG_SLOTS"     "6"   "$DOEY_MAX_WATCHDOG_SLOTS"     "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MAX_WATCHDOG_SLOTS "; _ri=$((_ri+1))
+  _add_setting "DOEY_INITIAL_WORKER_COLS"    "2"
+  _add_setting "DOEY_INITIAL_TEAMS"          "2"
+  _add_setting "DOEY_INITIAL_WORKTREE_TEAMS" "0"
+  _add_setting "DOEY_MAX_WORKERS"            "20"
+  _add_setting "DOEY_MAX_WATCHDOG_SLOTS"     "6"
   printf '\n'
 
   printf '  %b Models%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_MANAGER_MODEL"          "opus"    "$DOEY_MANAGER_MODEL"          "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MANAGER_MODEL "; _ri=$((_ri+1))
-  _settings_row "DOEY_WORKER_MODEL"           "opus"    "$DOEY_WORKER_MODEL"           "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WORKER_MODEL "; _ri=$((_ri+1))
-  _settings_row "DOEY_WATCHDOG_MODEL"         "sonnet"  "$DOEY_WATCHDOG_MODEL"         "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_MODEL "; _ri=$((_ri+1))
-  _settings_row "DOEY_SESSION_MANAGER_MODEL"  "opus"    "$DOEY_SESSION_MANAGER_MODEL"  "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_SESSION_MANAGER_MODEL "; _ri=$((_ri+1))
+  _add_setting "DOEY_MANAGER_MODEL"          "opus"
+  _add_setting "DOEY_WORKER_MODEL"           "opus"
+  _add_setting "DOEY_WATCHDOG_MODEL"         "sonnet"
+  _add_setting "DOEY_SESSION_MANAGER_MODEL"  "opus"
   printf '\n'
 
   printf '  %b Auth & Launch Timing%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_WORKER_LAUNCH_DELAY"    "3"   "$DOEY_WORKER_LAUNCH_DELAY"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WORKER_LAUNCH_DELAY "; _ri=$((_ri+1))
-  _settings_row "DOEY_TEAM_LAUNCH_DELAY"      "15"  "$DOEY_TEAM_LAUNCH_DELAY"      "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_TEAM_LAUNCH_DELAY "; _ri=$((_ri+1))
-  _settings_row "DOEY_MANAGER_LAUNCH_DELAY"   "3"   "$DOEY_MANAGER_LAUNCH_DELAY"   "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MANAGER_LAUNCH_DELAY "; _ri=$((_ri+1))
-  _settings_row "DOEY_WATCHDOG_LAUNCH_DELAY"  "3"   "$DOEY_WATCHDOG_LAUNCH_DELAY"  "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_LAUNCH_DELAY "; _ri=$((_ri+1))
-  _settings_row "DOEY_MANAGER_BRIEF_DELAY"    "15"  "$DOEY_MANAGER_BRIEF_DELAY"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_MANAGER_BRIEF_DELAY "; _ri=$((_ri+1))
-  _settings_row "DOEY_WATCHDOG_BRIEF_DELAY"   "20"  "$DOEY_WATCHDOG_BRIEF_DELAY"   "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_BRIEF_DELAY "; _ri=$((_ri+1))
-  _settings_row "DOEY_WATCHDOG_LOOP_DELAY"    "25"  "$DOEY_WATCHDOG_LOOP_DELAY"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_WATCHDOG_LOOP_DELAY "; _ri=$((_ri+1))
+  _add_setting "DOEY_WORKER_LAUNCH_DELAY"    "3"
+  _add_setting "DOEY_TEAM_LAUNCH_DELAY"      "15"
+  _add_setting "DOEY_MANAGER_LAUNCH_DELAY"   "3"
+  _add_setting "DOEY_WATCHDOG_LAUNCH_DELAY"  "3"
+  _add_setting "DOEY_MANAGER_BRIEF_DELAY"    "15"
+  _add_setting "DOEY_WATCHDOG_BRIEF_DELAY"   "20"
+  _add_setting "DOEY_WATCHDOG_LOOP_DELAY"    "25"
   printf '\n'
 
   printf '  %b Dynamic Grid Behavior%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
-  _settings_row "DOEY_IDLE_COLLAPSE_AFTER"    "60"  "$DOEY_IDLE_COLLAPSE_AFTER"    "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_IDLE_COLLAPSE_AFTER "; _ri=$((_ri+1))
-  _settings_row "DOEY_IDLE_REMOVE_AFTER"      "300" "$DOEY_IDLE_REMOVE_AFTER"      "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_IDLE_REMOVE_AFTER "; _ri=$((_ri+1))
-  _settings_row "DOEY_PASTE_SETTLE_MS"        "500" "$DOEY_PASTE_SETTLE_MS"        "$_ri"; _SETTINGS_VAR_LIST="${_SETTINGS_VAR_LIST}DOEY_PASTE_SETTLE_MS "; _ri=$((_ri+1))
+  _add_setting "DOEY_IDLE_COLLAPSE_AFTER"    "60"
+  _add_setting "DOEY_IDLE_REMOVE_AFTER"      "300"
+  _add_setting "DOEY_PASTE_SETTLE_MS"        "500"
   printf '\n'
 
   _CURSOR_MAX=$_ri

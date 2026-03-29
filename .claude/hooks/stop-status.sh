@@ -6,7 +6,6 @@ init_hook
 _DOEY_HOOK_NAME="stop-status"
 type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
-# Block workers with unfinished research reports
 if is_worker && ! is_reserved; then
   REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
   if [ -f "${RUNTIME_DIR}/research/${PANE_SAFE}.task" ] && [ ! -f "$REPORT_FILE" ]; then
@@ -23,13 +22,11 @@ _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
 task_id="${DOEY_TASK_ID:-}"
 
-# Resolve project directory for persistent task storage
 PROJECT_DIR="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
 if [ -z "$PROJECT_DIR" ]; then
   PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR=""
 fi
 
-# Write status to both PANE_SAFE and DOEY_PANE_ID files
 for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   [ -z "$_sf" ] && continue
   _status_file="${RUNTIME_DIR}/status/${_sf}.status"
@@ -38,7 +35,6 @@ for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   [ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "$_status_file"
 done
 
-# Mirror task status to persistent storage if task_id and .doey/tasks/ exist
 if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
   _persistent_status="${PROJECT_DIR}/.doey/tasks/${task_id}.status"
   printf '%s\n' "$STOP_STATUS" > "$_persistent_status" 2>/dev/null || true
@@ -48,23 +44,16 @@ type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to
 
 notify_sm "$STOP_STATUS"
 
-# Session Manager self-sustaining loop: after stop, re-trigger to check messages/results
+# SM self-sustaining loop: re-trigger after stop to check messages/results
 if is_session_manager; then
-  _sm_pane="0.2"
-  _sm_session="${SESSION:-}"
-  [ -z "$_sm_session" ] && _sm_session=$(tmux show-environment DOEY_SESSION 2>/dev/null | cut -d= -f2-) || true
-  _sm_target="${_sm_session}:${_sm_pane}"
   (
     sleep 3
-    # Guard: only send if SM is READY (not already BUSY from another trigger)
     _sm_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
     if [ -f "$_sm_status_file" ]; then
-      _sm_cur=$(head -1 "$_sm_status_file" 2>/dev/null || true)
-      case "$_sm_cur" in
-        *BUSY*) exit 0 ;;  # Already processing, skip re-trigger
+      case "$(head -1 "$_sm_status_file" 2>/dev/null || true)" in
+        *BUSY*) exit 0 ;;
       esac
     fi
-    # Touch trigger file to wake SM wait hook (no send-keys — avoids corrupting user input)
     touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
     touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
   ) &

@@ -5,7 +5,6 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-# Lightweight error logger for fast path (common.sh not loaded)
 _log_block() {
   local cat="$1" msg="$2" detail="${3:-}"
   local _rt="${DOEY_RUNTIME:-}"
@@ -19,7 +18,6 @@ _log_block() {
     >> "${_rt}/errors/errors.log" 2>/dev/null
 }
 
-# Parse a JSON field via jq (with python3 fallback, then grep for top-level only)
 _json_str() {
   local f="$1"
   if [ "${_HAS_JQ:-}" = "1" ]; then
@@ -41,8 +39,6 @@ print(d if isinstance(d,str) else '')" 2>/dev/null || echo ""
   fi
 }
 
-# Check if an rm command targets a dangerous path with recursive+force flags.
-# Handles any flag ordering: rm -rf, rm -fr, rm -r -f, rm --recursive --force, etc.
 _is_destructive_rm() {
   local cmd="$1"
   case "$cmd" in *"rm "*) ;; *) return 1 ;; esac
@@ -66,8 +62,6 @@ _is_destructive_rm() {
   return 1
 }
 
-# Escalate a blocked tool call to the Window Manager via message file.
-# Args: $1=tool_name $2=command(truncated) $3=reason
 _escalate_permission() {
   local _tool="$1" _cmd="$2" _reason="$3"
   local _rtd="${_RD:-${DOEY_RUNTIME:-}}"
@@ -90,7 +84,6 @@ _escalate_permission() {
   touch "${_rtd}/triggers/${_mgr_safe}.trigger" 2>/dev/null || true
 }
 
-# Check command against blocked patterns; sets MSG or returns 1
 _check_blocked() {
   local cmd="$1"
   cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
@@ -114,8 +107,7 @@ _check_blocked() {
 _HAS_JQ=0; command -v jq >/dev/null 2>&1 && _HAS_JQ=1
 TOOL_NAME=$(_json_str tool_name)
 
-# Resolve role: per-pane role file is authoritative (tmux session env is shared,
-# so DOEY_ROLE from env may be stale/wrong — last pane to start wins).
+# Per-pane role file is authoritative (tmux env may be stale)
 _DOEY_ROLE="${DOEY_ROLE:-}"
 if [ -n "${TMUX_PANE:-}" ]; then
   _RD="${DOEY_RUNTIME:-}"
@@ -129,23 +121,18 @@ if [ -n "${TMUX_PANE:-}" ]; then
   fi
 fi
 
-# Debug: one stat() when off, date+printf when on
 _DBG=false
 [ -n "${_RD:-}" ] && [ -f "${_RD}/debug.conf" ] && _DBG=true
 
-# Helper: write inline debug entry (no subprocesses beyond date)
 _dbg_write() {
   [ "$_DBG" = "true" ] || return 0
-  local _action="$1"
-  local _pdir="${_RD}/debug/${_PS:-unknown}"
+  local _action="$1" _pdir="${_RD}/debug/${_PS:-unknown}"
   [ -d "$_pdir" ] || mkdir -p "$_pdir" 2>/dev/null
   printf '{"ts":"%s","pane":"%s","role":"%s","cat":"hooks","msg":"%s","hook":"on-pre-tool-use","tool":"%s"}\n' \
     "$(date +%s)000" "${_WP:-unknown}" "${_DOEY_ROLE:-unknown}" "$_action" "$TOOL_NAME" \
     >> "$_pdir/hooks.jsonl" 2>/dev/null
-  return 0
 }
 
-# Boss: send-keys restricted to SM pane (0.2) only
 if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD=$(_json_str tool_input.command)
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
@@ -163,36 +150,25 @@ if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   ;; esac
 fi
 
-# Boss: full access for everything else — Boss is the user's relay
 if [ "$_DOEY_ROLE" = "boss" ]; then
   _dbg_write "allow_boss_unrestricted"
   exit 0
 fi
 
-# Non-Bash tool checks
 if [ "$TOOL_NAME" != "Bash" ]; then
-  # AskUserQuestion: only Boss may ask the user directly
-  if [ "$TOOL_NAME" = "AskUserQuestion" ]; then
-    case "$_DOEY_ROLE" in
-      boss) _dbg_write "allow_boss_ask_user"; exit 0 ;;
-      "")   _dbg_write "allow_no_role_ask_user"; exit 0 ;;
-      *)
-        _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only Boss asks the user"
-        _dbg_write "block_ask_user_${_DOEY_ROLE}"
-        echo "BLOCKED: Only Boss can ask the user questions directly." >&2
-        echo "Send a message to Boss with your question instead:" >&2
-        echo '  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"' >&2
-        echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_$(date +%s)_$$.msg"' >&2
-        exit 2 ;;
-    esac
+  if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ -n "$_DOEY_ROLE" ]; then
+    _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only Boss asks the user"
+    _dbg_write "block_ask_user_${_DOEY_ROLE}"
+    echo "BLOCKED: Only Boss can ask the user questions directly." >&2
+    echo "Send a message to Boss with your question instead:" >&2
+    echo '  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"' >&2
+    echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_$(date +%s)_$$.msg"' >&2
+    exit 2
   fi
-  # Non-Bash tools: allow for all remaining roles
   _dbg_write "allow_non_bash"
   exit 0
 fi
 
-# Git commit/push: blocked for all roles except session_manager
-# Read-only git commands (status, diff, log, show, branch) are always allowed
 if [ "$_DOEY_ROLE" != "session_manager" ]; then
   _GIT_CMD=$(_json_str tool_input.command)
   if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
@@ -211,12 +187,10 @@ if [ "$_DOEY_ROLE" != "session_manager" ]; then
   fi
 fi
 
-# Manager/Session Manager: only block /rename via send-keys
-# Boss has send-keys access to SM pane (0.2) only — guarded above
 if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   _CMD=$(_json_str tool_input.command)
-  _CMD_STRIPPED=$(echo "$_CMD" | sed 's/^[[:space:]]*//')
-  case "$_CMD_STRIPPED" in
+  _CMD=$(echo "$_CMD" | sed 's/^[[:space:]]*//')
+  case "$_CMD" in
     "tmux send-keys"*"/rename"*|*"&& tmux send-keys"*"/rename"*|*"; tmux send-keys"*"/rename"*)
       _log_block "TOOL_BLOCKED" "send /rename via send-keys blocked" "opens interactive prompt"
       echo "BLOCKED: Never send /rename via send-keys — it opens an interactive prompt that eats the next paste." >&2
@@ -225,7 +199,7 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
       exit 2 ;;
   esac
   # Go build gate: block commits if staged tui/ Go files don't compile
-  case "$_CMD_STRIPPED" in *"git commit"*)
+  case "$_CMD" in *"git commit"*)
     _staged_go=$(git diff --cached --name-only 2>/dev/null | grep -c '^tui/' 2>/dev/null) || _staged_go=0
     if [ "$_staged_go" -gt 0 ] 2>/dev/null; then
       _GO_BIN=""
@@ -252,7 +226,6 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   exit 0
 fi
 
-# Worker fast path: skip init_hook entirely (saves 4+ tmux/subprocess calls)
 if [ "$_DOEY_ROLE" = "worker" ]; then
   TOOL_COMMAND=$(_json_str tool_input.command)
   [ -z "$TOOL_COMMAND" ] && exit 0
@@ -283,7 +256,6 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   exit 0
 fi
 
-# Slow path: unknown role — needs full init_hook for role detection
 source "$(dirname "$0")/common.sh"
 init_hook
 
@@ -295,7 +267,6 @@ TOOL_COMMAND=$(_json_str tool_input.command)
 [ -z "$TOOL_COMMAND" ] && exit 0
 [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
 
-# Blocked patterns for Workers
 if _check_blocked "$TOOL_COMMAND"; then
   _log_block "TOOL_BLOCKED" "worker $MSG blocked" "$TOOL_COMMAND"
   _dbg_write "block_worker"

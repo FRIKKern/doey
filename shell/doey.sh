@@ -29,7 +29,6 @@ set -euo pipefail
 # ── Color palette ─────────────────────────────────────────────────────
 BRAND='\033[1;36m'    # Bold cyan
 SUCCESS='\033[0;32m'  # Green
-INFO='\033[0;34m'     # Blue
 DIM='\033[0;90m'      # Gray
 WARN='\033[0;33m'     # Yellow
 ERROR='\033[0;31m'    # Red
@@ -1717,24 +1716,9 @@ _doc_check() {
   printf '\n'
 }
 
-# ── Task Management ───────────────────────────────────────────────────
-# Tasks are persistent goals tracked in .doey/tasks/ (project directory).
-# A runtime cache in ${RUNTIME_DIR}/tasks/ is kept in sync for the TUI.
-# Only the user can mark a task as done — agents signal pending_user_confirmation.
-# Task file format — schema v3 (N.task):
-#   TASK_ID, TASK_TITLE, TASK_STATUS, TASK_TYPE, TASK_TAGS (comma-delimited),
-#   TASK_CREATED_BY, TASK_ASSIGNED_TO, TASK_DESCRIPTION (newlines as literal \n),
-#   TASK_ATTACHMENTS (pipe-delimited), TASK_ACCEPTANCE_CRITERIA (pipe-delimited),
-#   TASK_HYPOTHESES (pipe-delimited), TASK_DECISION_LOG (pipe-delimited),
-#   TASK_SUBTASKS (pipe-delimited), TASK_RELATED_FILES (pipe-delimited),
-#   TASK_BLOCKERS (pipe-delimited), TASK_TIMESTAMPS (comma-delimited key=epoch pairs),
-#   TASK_NOTES (newlines as literal \n), TASK_SCHEMA_VERSION=3
-# Canonical statuses: draft, active, in_progress, paused, blocked,
-#   pending_user_confirmation, done, cancelled, failed
-# Legacy compat: TASK_CREATED still read (mapped from TASK_TIMESTAMPS created=)
+# ── Task Management (schema v3, .doey/tasks/) ────────────────────────
 
 _task_read() {
-  # Read a task file; sets all schema v3 fields plus legacy TASK_CREATED
   local _file="$1"
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
   TASK_TYPE=""; TASK_TAGS=""; TASK_CREATED_BY=""; TASK_ASSIGNED_TO=""
@@ -1873,7 +1857,6 @@ _task_set_status() {
     *) printf '  %s✗ Invalid status: %s%s\n' "$ERROR" "$3" "$RESET"; return 1 ;;
   esac
   _task_set_field "$_file" "TASK_STATUS" "$3"
-  # Append status-change timestamp
   local _ts_key
   case "$3" in
     active)                     _ts_key="activated" ;;
@@ -2027,8 +2010,6 @@ task_command() {
           pending_user_confirmation)  _col="$WARN" ;;
           active)                     _col="$BOLD" ;;
           blocked)                    _col="$ERROR" ;;
-          paused)                     _col="$DIM" ;;
-          draft)                      _col="$DIM" ;;
           *)                          _col="$DIM" ;;
         esac
         _age="$(_task_age "$TASK_CREATED")"
@@ -2076,56 +2057,19 @@ task_command() {
       _task_show "$_file"
       ;;
 
-    ready|activate)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task ready <id>\n'; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "active"
-      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
-      printf '  %s✓ Task [%s] active.%s\n' "$SUCCESS" "$_id" "$RESET"
-      ;;
-
-    start)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task start <id>\n'; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "in_progress"
-      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
-      printf '  %s● Task [%s] in progress.%s\n' "$SUCCESS" "$_id" "$RESET"
-      ;;
-
-    pause)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task pause <id>\n'; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "paused"
-      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
-      printf '  %s⏸ Task [%s] paused.%s\n' "$WARN" "$_id" "$RESET"
-      ;;
-
-    block)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task block <id>\n'; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "blocked"
-      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
-      printf '  %s⊘ Task [%s] blocked.%s\n' "$ERROR" "$_id" "$RESET"
-      ;;
-
-    confirm|pending)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task confirm <id>\n'; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "pending_user_confirmation"
-      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
-      printf '  %s✓ Task [%s] pending confirmation.%s\n' "$WARN" "$_id" "$RESET"
-      ;;
-
-    done|failed|cancel)
+    ready|activate|start|pause|block|confirm|pending|done|failed|cancel)
       local _id="${1:-}"
       [ -z "$_id" ] && { printf '  Usage: doey task %s <id>\n' "$_subcmd"; exit 1; }
-      local _file="${_tasks_dir}/${_id}.task"
-      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
       local _ts_status _ts_icon _ts_color
       case "$_subcmd" in
-        done)   _ts_status="done";      _ts_icon="✓"; _ts_color="$SUCCESS" ;;
-        failed) _ts_status="failed";    _ts_icon="✗"; _ts_color="$ERROR" ;;
-        cancel) _ts_status="cancelled"; _ts_icon="—"; _ts_color="$DIM" ;;
+        ready|activate)  _ts_status="active";                     _ts_icon="✓"; _ts_color="$SUCCESS" ;;
+        start)           _ts_status="in_progress";                _ts_icon="●"; _ts_color="$SUCCESS" ;;
+        pause)           _ts_status="paused";                     _ts_icon="⏸"; _ts_color="$WARN" ;;
+        block)           _ts_status="blocked";                    _ts_icon="⊘"; _ts_color="$ERROR" ;;
+        confirm|pending) _ts_status="pending_user_confirmation";  _ts_icon="✓"; _ts_color="$WARN" ;;
+        done)            _ts_status="done";                       _ts_icon="✓"; _ts_color="$SUCCESS" ;;
+        failed)          _ts_status="failed";                     _ts_icon="✗"; _ts_color="$ERROR" ;;
+        cancel)          _ts_status="cancelled";                  _ts_icon="—"; _ts_color="$DIM" ;;
       esac
       _task_set_status "$_tasks_dir" "$_id" "$_ts_status"
       [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"

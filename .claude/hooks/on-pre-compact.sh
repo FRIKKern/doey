@@ -55,6 +55,30 @@ _list_files() {
   printf '%s' "$result"
 }
 
+_gather_msgs() {
+  local prefix="$1" result=""
+  for _mf in "$RUNTIME_DIR/messages"/${prefix}_*.msg; do
+    [ -f "$_mf" ] || continue
+    result="${result}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
+  done
+  printf '%s' "$result"
+}
+
+_print_pending_msgs() {
+  local safe="$1" msgs="$2"
+  [ -z "$msgs" ] && return
+  cat <<PMSG
+
+**⚠ UNREAD MESSAGES (process these after compaction!):**
+${msgs}
+Read with:
+\`\`\`bash
+SAFE="${safe}"
+for f in "\$RUNTIME_DIR/messages"/\${SAFE}_*.msg; do [ -f "\$f" ] && cat "\$f" && echo "---" && rm -f "\$f"; done
+\`\`\`
+PMSG
+}
+
 if is_manager; then
   _TEAM_W="${DOEY_TEAM_WINDOW:-$WINDOW_INDEX}"
   WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
@@ -100,25 +124,8 @@ After compaction, resume your active monitoring loop IMMEDIATELY:
 Do NOT go idle. Do NOT wait for SM instructions. You drive the loop.
 MGRSTATE
 
-  # Pending messages — must be processed after compaction
   _MGR_SAFE="${SESSION_NAME//[-:.]/_}_${_TEAM_W}_0"
-  PENDING_MSGS=""
-  for _mf in "$RUNTIME_DIR/messages"/${_MGR_SAFE}_*.msg; do
-    [ -f "$_mf" ] || continue
-    PENDING_MSGS="${PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
-  done
-  if [ -n "$PENDING_MSGS" ]; then
-    cat <<MSGSTATE
-
-**⚠ UNREAD MESSAGES (process these after compaction!):**
-${PENDING_MSGS}
-Read with:
-\`\`\`bash
-MGR_SAFE="${_MGR_SAFE}"
-for f in "\$RUNTIME_DIR/messages"/\${MGR_SAFE}_*.msg; do [ -f "\$f" ] && cat "\$f" && echo "---" && rm -f "\$f"; done
-\`\`\`
-MSGSTATE
-  fi
+  _print_pending_msgs "$_MGR_SAFE" "$(_gather_msgs "$_MGR_SAFE")"
 
   # Golden Context Log — accumulated knowledge that must survive compaction
   CONTEXT_LOG="${RUNTIME_DIR}/context_log_W${_TEAM_W}.md"
@@ -137,13 +144,8 @@ if is_session_manager; then
   SM_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
   SM_SAFE="${SESSION_NAME//[-:.]/_}_0_${PANE_INDEX}"
-  SM_PENDING_MSGS=""
-  for _mf in "$RUNTIME_DIR/messages"/${SM_SAFE}_*.msg; do
-    [ -f "$_mf" ] || continue
-    SM_PENDING_MSGS="${SM_PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
-  done
+  SM_PENDING_MSGS=$(_gather_msgs "$SM_SAFE")
 
-  # Persistent tasks (source of truth); fall back to runtime cache
   _TASK_PROJECT="${DOEY_PROJECT_DIR:-${PROJECT_DIR:-}}"
   [ -z "$_TASK_PROJECT" ] && _TASK_PROJECT=$(git rev-parse --show-toplevel 2>/dev/null || true)
   _TASK_SRC="${RUNTIME_DIR}/tasks"
@@ -181,40 +183,23 @@ You are the ONLY role that commits/pushes — do it directly, no delegation need
 Do NOT wait for instructions. Do NOT escalate to Boss for approval. Resume this loop NOW.
 SMSTATE
 
-  if [ -n "$SM_PENDING_MSGS" ]; then
-    cat <<SMMSG
-
-**⚠ UNREAD MESSAGES (process these after compaction!):**
-${SM_PENDING_MSGS}
-Read with:
-\`\`\`bash
-SM_SAFE="${SM_SAFE}"
-for f in "\$RUNTIME_DIR/messages"/\${SM_SAFE}_*.msg; do [ -f "\$f" ] && cat "\$f" && echo "---" && rm -f "\$f"; done
-\`\`\`
-SMMSG
-  fi
+  _print_pending_msgs "$SM_SAFE" "$SM_PENDING_MSGS"
 fi
 
 if is_boss; then
-  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-  BOSS_PENDING_MSGS=""
-  for _mf in "$RUNTIME_DIR/messages"/${BOSS_SAFE}_*.msg; do
-    [ -f "$_mf" ] || continue
-    BOSS_PENDING_MSGS="${BOSS_PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
-  done
   cat <<BOSSSTATE
 
 ## BOSS STATE (restore after compaction)
 **You are Boss** — user-facing Project Manager at pane 0.1
 **SM is at:** pane 0.2
 BOSSSTATE
-  if [ -n "$BOSS_PENDING_MSGS" ]; then
+  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
+  BOSS_MSGS=$(_gather_msgs "$BOSS_SAFE")
+  if [ -n "$BOSS_MSGS" ]; then
     cat <<BOSSMSG
 
 **UNREAD MESSAGES (process these after compaction!):**
-${BOSS_PENDING_MSGS}
+${BOSS_MSGS}
 BOSSMSG
   fi
 fi
-
-exit 0

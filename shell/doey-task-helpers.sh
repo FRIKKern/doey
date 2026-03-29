@@ -201,6 +201,32 @@ task_update_field() {
   mv "$tmp" "$task_file"
 }
 
+# ── _task_read_field ─────────────────────────────────────────────────
+# Read a single field value from a .task file.
+# Args: task_file field_name. Returns (echo): field value or empty.
+_task_read_field() {
+  local _trf_result="" _trf_line
+  while IFS= read -r _trf_line || [ -n "$_trf_line" ]; do
+    case "${_trf_line%%=*}" in
+      "$2") _trf_result="${_trf_line#*=}" ;;
+    esac
+  done < "$1" || true
+  printf '%s' "$_trf_result"
+}
+
+# ── _task_append_to_field ────────────────────────────────────────────
+# Append value to a delimited field. Reads current, appends, writes back.
+# Args: task_file field new_value [separator] (default separator: \\n)
+_task_append_to_field() {
+  local current
+  current="$(_task_read_field "$1" "$2")"
+  if [ -n "$current" ]; then
+    task_update_field "$1" "$2" "${current}${4:-\\n}${3}"
+  else
+    task_update_field "$1" "$2" "$3"
+  fi
+}
+
 # ── _task_validate_status ─────────────────────────────────────────────
 # Validate a status string. Returns 0 if valid, 1 if not.
 # Args: status
@@ -236,25 +262,7 @@ _task_status_timestamp_key() {
 # Append a key=epoch entry to TASK_TIMESTAMPS field.
 # Args: task_file key epoch
 _task_append_timestamp() {
-  local task_file="$1" key="$2" epoch="$3"
-
-  # Read current timestamps
-  local current_ts=""
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "${line%%=*}" in
-      TASK_TIMESTAMPS) current_ts="${line#*=}" ;;
-    esac
-  done < "$task_file" || true
-
-  local new_entry="${key}=${epoch}"
-  if [ -n "$current_ts" ]; then
-    current_ts="${current_ts}|${new_entry}"
-  else
-    current_ts="$new_entry"
-  fi
-
-  task_update_field "$task_file" "TASK_TIMESTAMPS" "$current_ts"
+  _task_append_to_field "$1" "TASK_TIMESTAMPS" "${2}=${3}" "|"
 }
 
 # ── task_update_status ────────────────────────────────────────────────
@@ -413,52 +421,15 @@ task_sync_runtime() {
 # Append timestamped entry to TASK_DECISION_LOG.
 # Args: task_file entry_text
 task_add_decision() {
-  local task_file="$1" entry_text="$2"
-
   local now
   now=$(date +%s)
-  local new_entry="${now}:${entry_text}"
-
-  # Read current log
-  local current_log=""
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "${line%%=*}" in
-      TASK_DECISION_LOG) current_log="${line#*=}" ;;
-    esac
-  done < "$task_file" || true
-
-  if [ -n "$current_log" ]; then
-    current_log="${current_log}\\n${new_entry}"
-  else
-    current_log="$new_entry"
-  fi
-
-  task_update_field "$task_file" "TASK_DECISION_LOG" "$current_log"
+  _task_append_to_field "$1" "TASK_DECISION_LOG" "${now}:${2}"
 }
 
 # ── task_add_note ─────────────────────────────────────────────────────
-# Append to TASK_NOTES.
-# Args: task_file note_text
+# Append to TASK_NOTES. Args: task_file note_text
 task_add_note() {
-  local task_file="$1" note_text="$2"
-
-  # Read current notes
-  local current_notes=""
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "${line%%=*}" in
-      TASK_NOTES) current_notes="${line#*=}" ;;
-    esac
-  done < "$task_file" || true
-
-  if [ -n "$current_notes" ]; then
-    current_notes="${current_notes}\\n${note_text}"
-  else
-    current_notes="$note_text"
-  fi
-
-  task_update_field "$task_file" "TASK_NOTES" "$current_notes"
+  _task_append_to_field "$1" "TASK_NOTES" "$2"
 }
 
 # ── task_update_subtask ───────────────────────────────────────────────
@@ -478,14 +449,8 @@ task_update_subtask() {
     return 1
   fi
 
-  # Read current subtasks
-  local current_subtasks=""
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "${line%%=*}" in
-      TASK_SUBTASKS) current_subtasks="${line#*=}" ;;
-    esac
-  done < "$task_file" || true
+  local current_subtasks
+  current_subtasks="$(_task_read_field "$task_file" "TASK_SUBTASKS")"
 
   if [ -z "$current_subtasks" ]; then
     printf 'Error: no subtasks found in task\n' >&2
@@ -544,14 +509,8 @@ task_update_subtask() {
 task_add_subtask() {
   local task_file="$1" title="$2"
 
-  # Read current subtasks to find max ID
-  local current_subtasks=""
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "${line%%=*}" in
-      TASK_SUBTASKS) current_subtasks="${line#*=}" ;;
-    esac
-  done < "$task_file" || true
+  local current_subtasks
+  current_subtasks="$(_task_read_field "$task_file" "TASK_SUBTASKS")"
 
   local max_id=0
   if [ -n "$current_subtasks" ]; then
@@ -594,14 +553,8 @@ task_add_subtask() {
 task_add_related_file() {
   local task_file="$1" filepath="$2"
 
-  # Read current related files
-  local current_files=""
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "${line%%=*}" in
-      TASK_RELATED_FILES) current_files="${line#*=}" ;;
-    esac
-  done < "$task_file" || true
+  local current_files
+  current_files="$(_task_read_field "$task_file" "TASK_RELATED_FILES")"
 
   # Check for duplicate
   if [ -n "$current_files" ]; then
@@ -750,13 +703,9 @@ task_dispatch_msg() {
     return 1
   fi
 
-  local title="" summary="" line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "${line%%=*}" in
-      TASK_TITLE)       title="${line#*=}" ;;
-      TASK_DESCRIPTION) summary="${line#*=}" ;;
-    esac
-  done < "$task_file" || true
+  local title summary
+  title="$(_task_read_field "$task_file" "TASK_TITLE")"
+  summary="$(_task_read_field "$task_file" "TASK_DESCRIPTION")"
 
   printf 'FROM: Boss\nSUBJECT: dispatch_task\nTASK_ID=%s\nTASK_FILE=%s\nTASK_JSON=%s\nDISPATCH_MODE=%s\nPRIORITY=%s\nSUMMARY=%s\n' \
     "$task_id" "$task_file" "$json_file" "$mode" "$priority" "${summary:-$title}"
