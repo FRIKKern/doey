@@ -65,3 +65,5 @@ while [ "$i" -lt "$DOEY_WATCHDOG_SCAN_INTERVAL" ]; do
 done
 _ww_dbg_wake "timeout" "$DOEY_WATCHDOG_SCAN_INTERVAL"
 echo "TIMEOUT"
+
+exit 0

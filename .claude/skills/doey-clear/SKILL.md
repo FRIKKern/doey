@@ -29,7 +29,7 @@ Set: **TARGET_WINDOWS** (list), **FORCE** (bool), **WORKERS_ONLY** (bool).
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 for W in $TARGET_WINDOWS; do
   TEAM_ENV="${RUNTIME_DIR}/team_${W}.env"
-  [ ! -f "$TEAM_ENV" ] && echo "WARNING: Team $W env not found — skipping" && continue
+  if [ ! -f "$TEAM_ENV" ]; then echo "WARNING: Team $W env not found — skipping"; continue; fi
   _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
   WORKER_PANES=$(_tv WORKER_PANES); WORKER_COUNT=$(_tv WORKER_COUNT)
   echo "Team $W: manager=0, workers=${WORKER_PANES} (${WORKER_COUNT})"

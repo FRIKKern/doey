@@ -183,3 +183,5 @@ esac
 
 type _debug_log >/dev/null 2>&1 && \
   _debug_log lifecycle "session_start" "role=${ROLE:-unknown}" "team_window=${WINDOW_INDEX:-0}" "project=${PROJECT_NAME:-unknown}"
+
+exit 0
