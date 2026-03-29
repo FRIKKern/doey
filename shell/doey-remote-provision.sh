@@ -26,6 +26,11 @@ fail() {
 # Must run as root
 [ "$(id -u)" -eq 0 ] || fail "This script must be run as root"
 
+# Must be Debian/Ubuntu (script uses apt-get, systemctl, etc.)
+if [ ! -f /etc/debian_version ]; then
+    fail "This script requires Debian or Ubuntu"
+fi
+
 # =============================================================================
 # 1. System Setup
 # =============================================================================
