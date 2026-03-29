@@ -20,6 +20,7 @@ set -euo pipefail
 #   doey dynamic      # Launch with dynamic grid (add workers on demand)
 #   doey add          # Add a worker column (2 workers) to dynamic session
 #   doey remove 2     # Remove worker column 2 from dynamic session
+#   doey remote       # Manage remote Hetzner servers
 #   doey --help       # Show usage
 #
 # CLI command: "doey" is installed to ~/.local/bin/doey.
@@ -4036,6 +4037,253 @@ doey_settings() {
   attach_or_switch "$session"
 }
 
+# ── Remote Server Management ──────────────────────────────────────────
+
+doey_remote() {
+  local remotes_dir="$HOME/.config/doey/remotes"
+  mkdir -p "$remotes_dir"
+
+  local subcmd="${1:-list}"
+
+  case "$subcmd" in
+    list)
+      # List all remotes
+      local found=false
+      local remote_files
+      remote_files=$(ls "$remotes_dir"/*.remote 2>/dev/null || true)
+      if [ -z "$remote_files" ]; then
+        printf "\n  ${DIM}No remote servers configured.${RESET}\n\n"
+        printf "  Usage: ${BOLD}doey remote <project>${RESET}  — provision & attach to a remote server\n"
+        printf "         ${BOLD}doey remote stop <project>${RESET} — destroy a remote server\n"
+        printf "         ${BOLD}doey remote status <project>${RESET} — show server status\n\n"
+        return 0
+      fi
+      printf "\n  ${BOLD}%-20s %-16s %-10s %-10s %s${RESET}\n" "PROJECT" "SERVER_IP" "STATUS" "PROVIDER" "CREATED"
+      printf "  ${DIM}%-20s %-16s %-10s %-10s %s${RESET}\n" "───────" "─────────" "──────" "────────" "───────"
+      local f
+      for f in $remote_files; do
+        [ -f "$f" ] || continue
+        local r_project r_ip r_status r_provider r_created
+        r_project="$(basename "$f" .remote)"
+        r_ip="$(grep '^SERVER_IP=' "$f" 2>/dev/null | cut -d= -f2- || echo "—")"
+        r_status="$(grep '^STATUS=' "$f" 2>/dev/null | cut -d= -f2- || echo "unknown")"
+        r_provider="$(grep '^PROVIDER=' "$f" 2>/dev/null | cut -d= -f2- || echo "—")"
+        r_created="$(grep '^CREATED=' "$f" 2>/dev/null | cut -d= -f2- || echo "—")"
+        printf "  %-20s %-16s %-10s %-10s %s\n" "$r_project" "$r_ip" "$r_status" "$r_provider" "$r_created"
+      done
+      printf "\n"
+      ;;
+
+    stop)
+      local project="${2:-}"
+      [ -z "$project" ] && { printf "  ${ERROR}Usage: doey remote stop <project>${RESET}\n"; return 1; }
+      local remote_file="$remotes_dir/${project}.remote"
+      [ -f "$remote_file" ] || { printf "  ${ERROR}No remote config found for '%s'${RESET}\n" "$project"; return 1; }
+
+      if ! command -v hcloud >/dev/null 2>&1; then
+        printf "  ${ERROR}hcloud CLI not found.${RESET} Install: ${BOLD}brew install hcloud${RESET} or see https://github.com/hetznercloud/cli\n"
+        return 1
+      fi
+
+      local server_name
+      server_name="$(grep '^SERVER_NAME=' "$remote_file" | cut -d= -f2-)"
+      [ -z "$server_name" ] && { printf "  ${ERROR}No SERVER_NAME in %s${RESET}\n" "$remote_file"; return 1; }
+
+      printf "  ${DIM}Deleting server %s...${RESET}\n" "$server_name"
+      if hcloud server delete "$server_name" 2>/dev/null; then
+        printf "  ${SUCCESS}Server deleted.${RESET}\n"
+      else
+        printf "  ${WARNING}Server may already be deleted.${RESET}\n"
+      fi
+
+      printf "  ${DIM}Removing SSH key...${RESET}\n"
+      hcloud ssh-key delete "doey-${project}" 2>/dev/null || true
+
+      rm -f "$remote_file"
+      printf "  ${SUCCESS}Remote '%s' removed.${RESET}\n\n" "$project"
+      ;;
+
+    status)
+      local project="${2:-}"
+      [ -z "$project" ] && { printf "  ${ERROR}Usage: doey remote status <project>${RESET}\n"; return 1; }
+      local remote_file="$remotes_dir/${project}.remote"
+      [ -f "$remote_file" ] || { printf "  ${ERROR}No remote config found for '%s'${RESET}\n" "$project"; return 1; }
+
+      if ! command -v hcloud >/dev/null 2>&1; then
+        printf "  ${ERROR}hcloud CLI not found.${RESET} Install: ${BOLD}brew install hcloud${RESET} or see https://github.com/hetznercloud/cli\n"
+        return 1
+      fi
+
+      printf "\n  ${BOLD}Remote: %s${RESET}\n\n" "$project"
+      local key val
+      while IFS='=' read -r key val; do
+        [ -z "$key" ] && continue
+        [[ "$key" == \#* ]] && continue
+        printf "  %-15s %s\n" "$key" "$val"
+      done < "$remote_file"
+
+      local server_name
+      server_name="$(grep '^SERVER_NAME=' "$remote_file" | cut -d= -f2-)"
+      if [ -n "$server_name" ]; then
+        printf "\n  ${DIM}Live status from Hetzner:${RESET}\n"
+        hcloud server describe "$server_name" 2>/dev/null | head -20 | sed 's/^/  /' || printf "  ${WARNING}Could not query server (may be deleted)${RESET}\n"
+      fi
+      printf "\n"
+      ;;
+
+    *)
+      # Positional arg = project name → provision or attach
+      local project="$subcmd"
+      _doey_remote_provision "$project"
+      ;;
+  esac
+}
+
+_doey_remote_provision() {
+  local project="$1"
+  local remotes_dir="$HOME/.config/doey/remotes"
+  local remote_file="$remotes_dir/${project}.remote"
+  local ssh_key="$remotes_dir/doey_ed25519"
+  local server_name="doey-${project}"
+
+  # Check prerequisites
+  if ! command -v hcloud >/dev/null 2>&1; then
+    printf "  ${ERROR}hcloud CLI not found.${RESET}\n"
+    printf "  Install: ${BOLD}brew install hcloud${RESET} (macOS) or see https://github.com/hetznercloud/cli\n"
+    printf "  Then run: ${BOLD}hcloud context create doey${RESET} to configure your API token\n"
+    return 1
+  fi
+
+  if ! command -v ssh >/dev/null 2>&1; then
+    printf "  ${ERROR}ssh not found.${RESET}\n"
+    return 1
+  fi
+
+  # Check for Hetzner token (hcloud context must be active)
+  if ! hcloud server list >/dev/null 2>&1; then
+    printf "  ${ERROR}hcloud not authenticated.${RESET}\n"
+    printf "  Run: ${BOLD}hcloud context create doey${RESET}\n"
+    printf "  You'll need a Hetzner Cloud API token from https://console.hetzner.cloud\n"
+    return 1
+  fi
+
+  # If .remote file exists, check if server is still running
+  if [ -f "$remote_file" ]; then
+    local existing_ip existing_name
+    existing_ip="$(grep '^SERVER_IP=' "$remote_file" | cut -d= -f2-)"
+    existing_name="$(grep '^SERVER_NAME=' "$remote_file" | cut -d= -f2-)"
+
+    if [ -n "$existing_name" ] && hcloud server describe "$existing_name" >/dev/null 2>&1; then
+      printf "  ${SUCCESS}Server '%s' is running at %s${RESET}\n" "$existing_name" "$existing_ip"
+      printf "  ${DIM}Attaching...${RESET}\n"
+      _doey_remote_attach "$project" "$existing_ip"
+      return $?
+    else
+      printf "  ${WARNING}Server from config is gone. Re-provisioning...${RESET}\n"
+      rm -f "$remote_file"
+    fi
+  fi
+
+  # Generate SSH key if needed
+  if [ ! -f "$ssh_key" ]; then
+    printf "  ${DIM}Generating SSH key...${RESET}\n"
+    ssh-keygen -t ed25519 -f "$ssh_key" -N "" -C "doey-remote" >/dev/null 2>&1
+  fi
+
+  # Upload SSH key to Hetzner (delete old one first if exists)
+  hcloud ssh-key delete "doey-${project}" 2>/dev/null || true
+  printf "  ${DIM}Uploading SSH key to Hetzner...${RESET}\n"
+  if ! hcloud ssh-key create --name "doey-${project}" --public-key-from-file "${ssh_key}.pub" >/dev/null 2>&1; then
+    printf "  ${ERROR}Failed to upload SSH key to Hetzner${RESET}\n"
+    return 1
+  fi
+
+  # Create server
+  printf "  ${DIM}Creating server '%s' (cx22, Ubuntu 24.04, nbg1)...${RESET}\n" "$server_name"
+  if ! hcloud server create \
+    --name "$server_name" \
+    --type cx22 \
+    --image ubuntu-24.04 \
+    --location nbg1 \
+    --ssh-key "doey-${project}" >/dev/null 2>&1; then
+    printf "  ${ERROR}Failed to create server.${RESET} Check hcloud output:\n"
+    hcloud server create --name "$server_name" --type cx22 --image ubuntu-24.04 --location nbg1 --ssh-key "doey-${project}" 2>&1 | sed 's/^/  /'
+    return 1
+  fi
+
+  # Wait for IP
+  printf "  ${DIM}Waiting for server IP...${RESET}\n"
+  local server_ip=""
+  local attempts=0
+  while [ -z "$server_ip" ] || [ "$server_ip" = "-" ]; do
+    if [ "$attempts" -ge 30 ]; then
+      printf "  ${ERROR}Timed out waiting for server IP${RESET}\n"
+      return 1
+    fi
+    sleep 2
+    server_ip="$(hcloud server ip "$server_name" 2>/dev/null || echo "")"
+    attempts=$((attempts + 1))
+  done
+  printf "  ${SUCCESS}Server ready at %s${RESET}\n" "$server_ip"
+
+  # Wait for SSH to become available
+  printf "  ${DIM}Waiting for SSH...${RESET}\n"
+  attempts=0
+  while ! ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i "$ssh_key" root@"$server_ip" "echo ok" >/dev/null 2>&1; do
+    if [ "$attempts" -ge 30 ]; then
+      printf "  ${ERROR}Timed out waiting for SSH${RESET}\n"
+      return 1
+    fi
+    sleep 3
+    attempts=$((attempts + 1))
+  done
+
+  # Copy and run provisioning script
+  local provision_script="$HOME/.local/bin/doey-remote-provision.sh"
+  if [ ! -f "$provision_script" ]; then
+    printf "  ${ERROR}Provisioning script not found at %s${RESET}\n" "$provision_script"
+    printf "  Run ${BOLD}doey update${RESET} to install it.\n"
+    return 1
+  fi
+
+  printf "  ${DIM}Uploading provisioning script...${RESET}\n"
+  scp -o StrictHostKeyChecking=accept-new -i "$ssh_key" "$provision_script" root@"$server_ip":/tmp/doey-remote-provision.sh >/dev/null 2>&1
+
+  printf "  ${DIM}Provisioning server (this may take a few minutes)...${RESET}\n"
+  if ! ssh -o StrictHostKeyChecking=accept-new -i "$ssh_key" root@"$server_ip" "bash /tmp/doey-remote-provision.sh '$project'" 2>&1 | sed 's/^/  /'; then
+    printf "  ${ERROR}Provisioning failed.${RESET}\n"
+    return 1
+  fi
+
+  # Save state
+  local server_id
+  server_id="$(hcloud server describe "$server_name" -o format='{{.ID}}' 2>/dev/null || echo "unknown")"
+  cat > "$remote_file" << REMOTE_EOF
+SERVER_ID=$server_id
+SERVER_IP=$server_ip
+SERVER_NAME=$server_name
+PROVIDER=hetzner
+STATUS=running
+CREATED=$(date +%Y-%m-%dT%H:%M:%S)
+REMOTE_EOF
+
+  printf "  ${SUCCESS}Server provisioned and ready!${RESET}\n"
+  _doey_remote_attach "$project" "$server_ip"
+}
+
+_doey_remote_attach() {
+  local project="$1"
+  local ip="$2"
+  local ssh_key="$HOME/.config/doey/remotes/doey_ed25519"
+
+  printf "  ${DIM}Connecting to doey@%s...${RESET}\n\n" "$ip"
+  ssh -t \
+    -o StrictHostKeyChecking=accept-new \
+    -i "$ssh_key" \
+    doey@"$ip" \
+    "cd /home/doey/${project} && doey"
+}
+
 # ── Main Dispatch ─────────────────────────────────────────────────────
 
 _attach_session() {
@@ -4200,6 +4448,7 @@ case "${1:-}" in
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions
+    remote     Manage remote Hetzner servers (list/provision/stop/status)
     settings   Open interactive settings editor window
     version    Show version and installation info
     --help     Show this help
@@ -4232,6 +4481,10 @@ case "${1:-}" in
     doey add-team 3x2 # add a team window (3x2 grid)
     doey kill-team 1  # kill team window 1
     doey list-teams   # show all team windows
+    doey remote       # list remote servers
+    doey remote myapp # provision + attach to remote
+    doey remote stop myapp  # destroy remote server
+    doey remote status myapp # show server status
 HELP
     printf '\n'
     exit 0
@@ -4244,6 +4497,7 @@ HELP
   update|reinstall) update_system; exit 0 ;;
   config)       shift; doey_config "$@"; exit 0 ;;
   task|tasks)   shift; task_command "$@"; exit 0 ;;
+  remote)       shift; doey_remote "$@"; exit 0 ;;
   # Everything below requires tmux + claude — check prerequisites:
   init)
     _check_prereqs
