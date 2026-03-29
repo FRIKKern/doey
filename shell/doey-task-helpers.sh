@@ -71,6 +71,8 @@ task_create() {
   printf 'TASK_RELATED_FILES=\n' >> "$tmp"
   printf 'TASK_BLOCKERS=\n' >> "$tmp"
   printf 'TASK_TIMESTAMPS=created=%s\n' "$now" >> "$tmp"
+  printf 'TASK_CURRENT_PHASE=0\n' >> "$tmp"
+  printf 'TASK_TOTAL_PHASES=0\n' >> "$tmp"
   printf 'TASK_NOTES=\n' >> "$tmp"
 
   mv "$tmp" "$task_file"
@@ -84,7 +86,8 @@ task_create() {
 #   TASK_TAGS, TASK_CREATED_BY, TASK_ASSIGNED_TO, TASK_DESCRIPTION,
 #   TASK_ACCEPTANCE_CRITERIA, TASK_HYPOTHESES, TASK_DECISION_LOG,
 #   TASK_SUBTASKS, TASK_RELATED_FILES, TASK_BLOCKERS, TASK_TIMESTAMPS,
-#   TASK_NOTES, TASK_CREATED (extracted from TASK_TIMESTAMPS for compat)
+#   TASK_NOTES, TASK_CURRENT_PHASE, TASK_TOTAL_PHASES,
+#   TASK_CREATED (extracted from TASK_TIMESTAMPS for compat)
 task_read() {
   local file="$1"
 
@@ -104,6 +107,8 @@ task_read() {
   TASK_RELATED_FILES=""
   TASK_BLOCKERS=""
   TASK_TIMESTAMPS=""
+  TASK_CURRENT_PHASE=""
+  TASK_TOTAL_PHASES=""
   TASK_NOTES=""
   TASK_CREATED=""
 
@@ -126,6 +131,8 @@ task_read() {
       TASK_RELATED_FILES)       TASK_RELATED_FILES="${line#*=}" ;;
       TASK_BLOCKERS)            TASK_BLOCKERS="${line#*=}" ;;
       TASK_TIMESTAMPS)          TASK_TIMESTAMPS="${line#*=}" ;;
+      TASK_CURRENT_PHASE)       TASK_CURRENT_PHASE="${line#*=}" ;;
+      TASK_TOTAL_PHASES)        TASK_TOTAL_PHASES="${line#*=}" ;;
       TASK_NOTES)               TASK_NOTES="${line#*=}" ;;
     esac
   done < "$file" || true
@@ -158,6 +165,9 @@ task_read() {
   if [ -z "$TASK_SCHEMA_VERSION" ]; then TASK_SCHEMA_VERSION="1"; fi
   if [ -z "$TASK_TYPE" ]; then TASK_TYPE="feature"; fi
   if [ -z "$TASK_CREATED_BY" ]; then TASK_CREATED_BY="Boss"; fi
+  # Default phase fields for older tasks that lack them
+  if [ -z "$TASK_CURRENT_PHASE" ]; then TASK_CURRENT_PHASE="0"; fi
+  if [ -z "$TASK_TOTAL_PHASES" ]; then TASK_TOTAL_PHASES="0"; fi
 }
 
 # ── task_update_field ─────────────────────────────────────────────────
@@ -706,6 +716,8 @@ task_upgrade_schema() {
   printf 'TASK_RELATED_FILES=%s\n' "${TASK_RELATED_FILES:-}" >> "$tmp"
   printf 'TASK_BLOCKERS=%s\n' "${TASK_BLOCKERS:-}" >> "$tmp"
   printf 'TASK_TIMESTAMPS=%s\n' "$TASK_TIMESTAMPS" >> "$tmp"
+  printf 'TASK_CURRENT_PHASE=%s\n' "${TASK_CURRENT_PHASE:-0}" >> "$tmp"
+  printf 'TASK_TOTAL_PHASES=%s\n' "${TASK_TOTAL_PHASES:-0}" >> "$tmp"
   printf 'TASK_NOTES=%s\n' "${TASK_NOTES:-}" >> "$tmp"
   mv "$tmp" "$file"
 
@@ -748,4 +760,35 @@ task_dispatch_msg() {
 
   printf 'FROM: Boss\nSUBJECT: dispatch_task\nTASK_ID=%s\nTASK_FILE=%s\nTASK_JSON=%s\nDISPATCH_MODE=%s\nPRIORITY=%s\nSUMMARY=%s\n' \
     "$task_id" "$task_file" "$json_file" "$mode" "$priority" "${summary:-$title}"
+}
+
+# ── task_update_phase ────────────────────────────────────────────────
+# Update phase tracking fields on a task.
+# Args: project_dir task_id current_phase total_phases
+#   current_phase: 0 = not phased, 1+ = current phase number
+#   total_phases:  0 = not phased, 1+ = total phase count
+task_update_phase() {
+  local project_dir="$1" task_id="$2" current="$3" total="$4"
+  local task_file="${project_dir}/.doey/tasks/${task_id}.task"
+
+  if [ ! -f "$task_file" ]; then
+    printf 'Error: task %s not found\n' "$task_id" >&2
+    return 1
+  fi
+
+  # Validate integers
+  case "$current" in
+    *[!0-9]*) printf 'Error: current_phase must be integer, got "%s"\n' "$current" >&2; return 1 ;;
+  esac
+  case "$total" in
+    *[!0-9]*) printf 'Error: total_phases must be integer, got "%s"\n' "$total" >&2; return 1 ;;
+  esac
+
+  task_update_field "$task_file" "TASK_CURRENT_PHASE" "$current"
+  task_update_field "$task_file" "TASK_TOTAL_PHASES" "$total"
+
+  # Log phase change
+  if [ "$total" -gt 0 ]; then
+    task_add_decision "$task_file" "Phase ${current}/${total}"
+  fi
 }

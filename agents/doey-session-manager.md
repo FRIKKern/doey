@@ -154,7 +154,7 @@ When SM receives a `dispatch_task` message from Boss:
    |---------------|---------|
    | `parallel` | Send independent subtasks to available teams simultaneously |
    | `sequential` | Queue tasks, send next after previous completes |
-   | `phased` | Send wave 1, validate, then send wave 2, etc. |
+   | `phased` | Send wave 1, validate, then send wave 2, etc. (see Phased Dispatch below) |
 
 4. **Generate scoped briefs** for target team Manager — include: task title, intent, relevant hypotheses, constraints, success criteria, deliverables for that team, and file paths from dispatch_plan if specified.
 
@@ -162,6 +162,32 @@ When SM receives a `dispatch_task` message from Boss:
    - Update .task file: set `TASK_STATUS=in_progress`, add `TASK_TEAM=<assigned team>`
    - On completion: set `TASK_STATUS=pending_user_confirmation`
    - On failure: set `TASK_STATUS=failed`, notify Boss
+
+#### Phased Dispatch
+
+For `phased` DISPATCH_MODE, SM manages a multi-phase pipeline where each phase dispatches only after the previous completes:
+
+1. Read `phases` array from the task .json `dispatch_plan`
+2. Create phase tracking file:
+   ```bash
+   mkdir -p "$RUNTIME_DIR/phases"
+   ```
+   Write `$RUNTIME_DIR/phases/task_<TASK_ID>.json` with structure:
+   ```json
+   {
+     "task_id": "<TASK_ID>",
+     "total_phases": 3,
+     "current_phase": 1,
+     "phases": [
+       {"phase": 1, "title": "Phase title", "status": "active", "team": "W2", "brief": "..."},
+       {"phase": 2, "title": "Phase title", "status": "pending", "brief": "..."},
+       {"phase": 3, "title": "Phase title", "status": "pending", "brief": "..."}
+     ]
+   }
+   ```
+3. Mark phase 1 as `"active"`, assign it a team, all others `"pending"`
+4. Dispatch phase 1 brief to the chosen team using normal dispatch logic
+5. Remaining phases auto-forward as teams complete — see "On task_complete" handling below
 
 **Note:** The existing `task` subject (prose-based dispatch from Boss) still works for simple goals. `dispatch_task` is the structured alternative for compiled task packages with .task/.json files.
 
@@ -241,9 +267,34 @@ Record results: `echo "TASK_RESULT=summary" >> ...` and `echo "TASK_FILES=file1,
 
 ### On task_complete from team
 
-1. Update status to `pending_user_confirmation`
-2. Log completion summary
-3. Notify Boss via `.msg` so Boss tells the user
+1. Extract TASK_ID from the task_complete message
+2. Check for phase file: `$RUNTIME_DIR/phases/task_<TASK_ID>.json`
+   - **Not found** → single-phase task, handle as before:
+     a. Update status to `pending_user_confirmation`
+     b. Log completion summary
+     c. Notify Boss via `.msg` so Boss tells the user
+   - **Found** → phased task:
+     a. Read phase file
+     b. Mark current phase `"status": "complete"`, record `"completed_by": "<team>"`
+     c. Check if any phases remain with `"status": "pending"`
+     d. **More phases remain:**
+        - Increment `current_phase`
+        - Mark next pending phase as `"active"`, assign available team
+        - Dispatch next phase brief to that team (normal dispatch logic)
+        - Log phase transition: `TASK_LOG_<epoch>=PHASE <N> complete, dispatching phase <N+1>`
+        - Write updated phase file back: `cat > "$RUNTIME_DIR/phases/task_<TASK_ID>.json" << 'EOF' ... EOF`
+        - Do NOT notify Boss — intermediate phases are silent
+     e. **All phases complete:**
+        - Update task status to `pending_user_confirmation`
+        - Notify Boss with summary of all phases (title, team, outcome for each)
+        - Phase file remains for reference until runtime clears
+
+### Phase File Management
+
+- SM creates phase files in `$RUNTIME_DIR/phases/` on initial phased dispatch (`mkdir -p "$RUNTIME_DIR/phases"` before writing)
+- SM updates phase files on each `task_complete` for phased tasks
+- Phase files are ephemeral (`$RUNTIME_DIR` clears on reboot) — this is fine, phased state doesn't need to survive reboots
+- One phase file per task: `task_<TASK_ID>.json`
 
 ### Task intelligence
 
