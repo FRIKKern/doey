@@ -1,0 +1,32 @@
+TASK_ID=9
+TASK_TITLE=Fix on-pre-tool-use.sh — workers must be able to write to .doey/tasks/ files
+TASK_STATUS=active
+TASK_CREATED=1774819000
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Workers are blocked from writing TASK_LOG entries to .doey/tasks/*.task files. Two false-positive blocks observed:
+
+BUG 1: "Git operations are handled by Session Manager" — the hook sees a write to a path containing .doey/tasks/ and incorrectly classifies it as a git operation. Writing to task files is NOT a git operation — it is file-based IPC that all roles must be allowed to do.
+
+BUG 2: "Workers cannot run tmux commands" — triggered on a Bash echo/append to a .task file. The hook is likely matching on something in the echo content (maybe a pipe or redirect pattern) rather than an actual tmux command.
+
+BOTH blocks must be fixed so that ANY role (Worker, Manager, SM, Boss) can append TASK_LOG entries to .doey/tasks/*.task files.
+
+FIX REQUIREMENTS:
+1. Whitelist writes to .doey/tasks/*.task for ALL roles — these are shared IPC files, not project source
+2. Whitelist Bash commands that echo/append to .doey/tasks/ paths
+3. Do NOT weaken other guards — git push, tmux send-keys, rm -rf protections must remain intact
+4. Test: a Worker role must be able to run: echo "TASK_LOG_123=PLAN: test" >> .doey/tasks/6.task without any block
+
+CONSTRAINTS:
+- Bash 3.2 compatible
+- Fresh-install safe
+- Must not weaken existing safety guards for project source files
+- The fix must also allow writing to RUNTIME_DIR/reports/ (for simplification reports)
+
+SUCCESS CRITERIA:
+- Workers can append TASK_LOG entries to any .task file
+- Workers can write report files to RUNTIME_DIR
+- All existing guards for git, tmux, rm still work
+- bash -n passes on the modified hook
+TASK_TAGS=bugfix,hooks,critical,task-system,ipc
+TASK_LOG_1774818992=REPORT_W1: Added early-exit whitelist in on-pre-tool-use.sh (lines 172-177) — Bash commands redirecting to .doey/tasks/*.task or /reports/ paths now exit 0 before git-write and tmux block patterns can false-positive on command content. bash -n passes. Edit/Write tools already unblocked for workers (exit 0 at line 169).
