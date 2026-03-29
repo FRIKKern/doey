@@ -1,6 +1,6 @@
 TASK_ID=7
 TASK_TITLE=Beautiful plan visualization in Go TUI — render task plans, research, and reports
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774818300
 TASK_TYPE=feature
 TASK_DESCRIPTION=Build a complete visualization grammar and rendering system for Doey. Workers and Managers write structured markup blocks into .task files. The Go TUI renders them with full Lip Gloss styling. Plain terminal output gets a simpler Unicode renderer. Same grammar, two renderers.
