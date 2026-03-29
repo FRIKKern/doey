@@ -297,7 +297,7 @@ while IFS='|' read -r _pane _role _agent _name _model; do
 done << VERIFY_INPUT
 $(echo "$PANE_DEFS")
 VERIFY_INPUT
-[ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
+if [ "$NOT_READY" -eq 0 ]; then echo "All panes booted"; else echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"; fi
 ```
 
 Output summary: team name, window number, pane layout, boot status. Include teardown: `/doey-kill-window ${NEW_WIN}`

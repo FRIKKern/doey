@@ -169,3 +169,5 @@ fi
 # Nothing happened
 _sm_dbg_wake "idle" "3"
 echo "IDLE"
+
+exit 0

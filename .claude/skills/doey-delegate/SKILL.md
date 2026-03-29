@@ -37,7 +37,7 @@ tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null; tmux load-buffer "$TASKFILE" &&
 
 ## Step 6: Verify dispatch
 
-bash: sleep 5 && tmux capture-pane -t "$TARGET_PANE" -p -S -10 | grep -qE 'Read|Edit|Bash|thinking' && echo "Working" || echo "Idle — may need retry"
+bash: sleep 5; if tmux capture-pane -t "$TARGET_PANE" -p -S -10 | grep -qE 'Read|Edit|Bash|thinking'; then echo "Working"; else echo "Idle — may need retry"; fi
 
 If idle: send Enter, wait 3s, re-check. Still idle → unstick per `/doey-dispatch`.
 

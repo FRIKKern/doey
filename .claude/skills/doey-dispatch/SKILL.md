@@ -43,7 +43,7 @@ fi
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
 PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.X" | tr ':-.' '_')
-[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && echo "Reserved — skip"
+if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then echo "Reserved — skip"; fi
 tmux copy-mode -q -t "${SESSION_NAME}:${WINDOW_INDEX}.X" 2>/dev/null
 tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 ```
@@ -65,7 +65,7 @@ PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
 CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
 OUTPUT=$(tmux capture-pane -t "$PANE" -p 2>/dev/null)
 ALREADY_READY=false
-[ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯' && ALREADY_READY=true
+[ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯' && ALREADY_READY=true || true
 
 # 2. Not ready → kill + restart
 if [ "$ALREADY_READY" = "false" ]; then

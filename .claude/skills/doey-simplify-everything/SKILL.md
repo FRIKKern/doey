@@ -20,7 +20,7 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 
 DIRTY=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)
-[ -n "$DIRTY" ] && echo "ERROR: Uncommitted changes in $PROJECT_DIR. Commit or stash first." && exit 1
+if [ -n "$DIRTY" ]; then echo "ERROR: Uncommitted changes in $PROJECT_DIR. Commit or stash first."; exit 1; fi
 
 echo "Session: $SESSION_NAME | Project: $PROJECT_NAME"
 echo ""

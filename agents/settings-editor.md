@@ -42,8 +42,8 @@ Warn if delays > 300s or refresh > 3600s.
 `doey config --show` for resolved values, or:
 ```bash
 GLOBAL=~/.config/doey/config.sh; PROJECT=$(pwd)/.doey/config.sh
-[ -f "$GLOBAL" ] && echo "=== Global ===" && grep -v '^#' "$GLOBAL" | grep '='
-[ -f "$PROJECT" ] && echo "=== Project ===" && grep -v '^#' "$PROJECT" | grep '='
+if [ -f "$GLOBAL" ]; then echo "=== Global ===" && grep -v '^#' "$GLOBAL" | grep '='; fi
+if [ -f "$PROJECT" ]; then echo "=== Project ===" && grep -v '^#' "$PROJECT" | grep '='; fi
 ```
 
 ## Editing Config

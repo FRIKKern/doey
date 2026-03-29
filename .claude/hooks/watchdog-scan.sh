@@ -868,3 +868,5 @@ fi
 _log "watchdog-scan: end cycle W${TARGET_WINDOW} working=${_n_working} idle=${_n_idle} stuck=${_n_stuck} crashed=${_n_crashed}"
 
 echo "SCAN_TIME=${SCAN_TIME}"
+
+exit 0
