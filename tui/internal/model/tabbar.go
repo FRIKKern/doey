@@ -1,9 +1,12 @@
 package model
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
@@ -108,10 +111,11 @@ func (m TabBarModel) View() string {
 			label = activityDot + " " + label
 		}
 
+		zoneID := fmt.Sprintf("tab-%d", i)
 		if i == m.activeIndex {
-			parts = append(parts, t.MenuActive.Padding(0, 1).Render(label))
+			parts = append(parts, zone.Mark(zoneID, t.MenuActive.Padding(0, 1).Render(label)))
 		} else {
-			parts = append(parts, t.MenuInactive.Padding(0, 1).Render(label))
+			parts = append(parts, zone.Mark(zoneID, t.MenuInactive.Padding(0, 1).Render(label)))
 		}
 	}
 
