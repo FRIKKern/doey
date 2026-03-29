@@ -203,10 +203,19 @@ main() {
     esac
   done
 
-  # Resolve from ID if needed
+  # Resolve from ID if needed — prefer persistent .doey/tasks/, fall back to runtime
   if [ -n "$task_id" ] && [ -n "$runtime_dir" ]; then
-    task_file="${runtime_dir}/tasks/${task_id}.task"
-    json_file="${runtime_dir}/tasks/${task_id}.json"
+    local _proj_dir=""
+    if [ -f "${runtime_dir}/session.env" ]; then
+      _proj_dir=$(grep '^PROJECT_DIR=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"') || true
+    fi
+    if [ -n "$_proj_dir" ] && [ -f "${_proj_dir}/.doey/tasks/${task_id}.task" ]; then
+      task_file="${_proj_dir}/.doey/tasks/${task_id}.task"
+      json_file="${_proj_dir}/.doey/tasks/${task_id}.json"
+    else
+      task_file="${runtime_dir}/tasks/${task_id}.task"
+      json_file="${runtime_dir}/tasks/${task_id}.json"
+    fi
   fi
 
   [ -z "$task_file" ] && { echo "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>"; exit 1; }

@@ -39,23 +39,33 @@ type TaskLog struct {
 	Entry     string
 }
 
-// Task from tasks/*.task
+// Task from tasks/*.task (v3 schema)
 type Task struct {
-	ID           string
-	Title        string
-	Status       string    // active, in_progress, pending_user_confirmation, done, cancelled, failed
-	Description  string    // multi-line task description
-	Attachments  []string  // list of URLs/file paths
-	Created      int64     // unix epoch
-	Subtasks     []Subtask // worker assignments
-	Category     string    // bug, feature, refactor, docs, infrastructure
-	Tags         []string  // cross-cutting concerns
-	MergedInto   string    // task ID this was merged into (audit trail)
-	ParentTaskID string    // parent task for subtask hierarchy
-	Team         string    // which team owns this task
-	Priority     string    // high, medium, low
-	Result       string    // outcome summary
-	Logs         []TaskLog // activity log entries (sorted by timestamp)
+	ID                 string
+	Title              string
+	Status             string    // draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled
+	Description        string    // multi-line task description
+	Attachments        []string  // list of URLs/file paths
+	Created            int64     // unix epoch
+	Subtasks           []Subtask // worker assignments
+	Category           string    // bug, feature, refactor, docs, infrastructure
+	Tags               []string  // cross-cutting concerns
+	MergedInto         string    // task ID this was merged into (audit trail)
+	ParentTaskID       string    // parent task for subtask hierarchy
+	Team               string    // which team owns this task
+	Priority           string    // high, medium, low
+	Result             string    // outcome summary
+	Logs               []TaskLog // activity log entries (sorted by timestamp)
+	AcceptanceCriteria string    // v3: bulleted criteria
+	Hypotheses         string    // v3: numbered hypotheses with confidence
+	DecisionLog        string    // v3: timestamped decisions
+	RelatedFiles       []string  // v3: pipe-delimited file paths
+	Blockers           string    // v3: blocking issues
+	Timestamps         string    // v3: pipe-delimited event=epoch pairs
+	Notes              string    // v3: free-form journal
+	CreatedBy          string    // v3: who created it
+	AssignedTo         string    // v3: who/what team
+	SchemaVersion      int       // v3: schema version number
 }
 
 // Subtask represents a worker assignment under a parent task.

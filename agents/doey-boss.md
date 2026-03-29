@@ -25,7 +25,7 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 **You are a commander. You NEVER touch project source code.**
 
-- **NEVER** use Read, Grep, Edit, Write, or Glob on project source files (`.sh`, `.md` in `shell/`, `agents/`, `.claude/`, `docs/`, `tests/`, or any application code). The ONLY files you may read/write are runtime files: task files, message files, env files, result files — all inside `RUNTIME_DIR`.
+- **NEVER** use Read, Grep, Edit, Write, or Glob on project source files (`.sh`, `.md` in `shell/`, `agents/`, `.claude/`, `docs/`, `tests/`, or any application code). The ONLY files you may read/write are: task files in `${PROJECT_DIR}/.doey/tasks/`, and runtime files (messages, env, results, status) in `RUNTIME_DIR`.
 - **NEVER** do implementation work — no debugging, no fixing, no exploring code, no reviewing diffs.
 - **Your ONLY job is:** talk to the user, relay tasks to SM, manage tasks, report results.
 - **If you need codebase information**, tell SM to dispatch a research task. Never look yourself.
@@ -103,7 +103,7 @@ Not every request needs all three clarified — use judgment. A simple, obvious 
 Once the request is clear enough to act on, create the task and dispatch to SM. For multi-step or ambiguous goals, use the Task Compilation Protocol below instead of this simple path. Every dispatch gets tracked:
 
 ```bash
-TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
+TD="${PROJECT_DIR}/.doey/tasks"; mkdir -p "$TD" "${RUNTIME_DIR}/tasks"
 NEXT_ID_FILE="${TD}/.next_id"; ID=1
 [ -f "$NEXT_ID_FILE" ] && ID=$(cat "$NEXT_ID_FILE")
 echo $((ID + 1)) > "$NEXT_ID_FILE"
@@ -134,7 +134,7 @@ Mark `pending_user_confirmation` and tell the user:
 > "Task [N] looks complete — run `doey task done N` to confirm."
 
 ```bash
-FILE="${RUNTIME_DIR}/tasks/N.task"
+FILE="${PROJECT_DIR}/.doey/tasks/N.task"
 TMP="${FILE}.tmp"
 while IFS= read -r line; do
   case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=pending_user_confirmation" ;;
@@ -149,7 +149,7 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 
 ### Check active tasks (on-demand)
 ```bash
-bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
+bash -c 'shopt -s nullglob; TD="${1}/.doey/tasks"; [ -d "$TD" ] || TD="${2}/tasks"; for f in "$TD"/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$PROJECT_DIR" "$RUNTIME_DIR"
 ```
 
 ## Task Compilation Protocol

@@ -103,6 +103,7 @@ func (m *TasksModel) SetFocused(focused bool) { m.focused = focused }
 
 // SetSnapshot merges persistent + runtime tasks and rebuilds the view.
 func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
+	runtime.SetProjectDir(snap.Session.ProjectDir)
 	store, _ := runtime.ReadTaskStore()
 	store.MergeRuntimeTasks(snap.Tasks)
 
@@ -520,7 +521,19 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		tagStr = " " + strings.Join(tagParts, " ")
 	}
 
-	row := "  " + icon + " " + id + catBadge + " " + title + priBadge + subtaskBadge + teamBadge + tagStr + " " + age
+	// Blocker indicator
+	blockerBadge := ""
+	if task.Blockers != "" {
+		blockerBadge = " " + lipgloss.NewStyle().Bold(true).Foreground(t.Danger).Render("⚠")
+	}
+
+	// Type badge (compact)
+	typeBadge := ""
+	if task.Type != "" {
+		typeBadge = " " + t.Dim.Render("["+task.Type+"]")
+	}
+
+	row := "  " + icon + " " + id + catBadge + typeBadge + " " + title + priBadge + blockerBadge + subtaskBadge + teamBadge + tagStr + " " + age
 
 	// Merged tasks are dimmed with a merge indicator
 	if task.MergedInto != "" {
@@ -591,10 +604,23 @@ func (m TasksModel) viewDetail() string {
 	fields = append(fields, labelStyle.Render("Status")+
 		statusIcon(task.Status, t)+" "+lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
 
+	// Type
+	if task.Type != "" {
+		fields = append(fields, labelStyle.Render("Type")+valueStyle.Render(task.Type))
+	}
+
 	// Team — prominent, right after status
 	if task.Team != "" {
 		fields = append(fields, labelStyle.Render("Team")+
 			lipgloss.NewStyle().Bold(true).Foreground(t.Accent).Render(task.Team))
+	}
+	// Owner info
+	if task.CreatedBy != "" {
+		fields = append(fields, labelStyle.Render("Created by")+valueStyle.Render(task.CreatedBy))
+	}
+	if task.AssignedTo != "" {
+		fields = append(fields, labelStyle.Render("Assigned to")+
+			lipgloss.NewStyle().Bold(true).Foreground(t.Accent).Render(task.AssignedTo))
 	}
 	// Priority
 	{
@@ -773,6 +799,97 @@ func (m TasksModel) viewDetail() string {
 			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(logLines, "\n"))
 	}
 
-	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + descBlock + attachBlock + subtaskBlock + logBlock
+	// Blockers — highlighted red
+	blockerBlock := ""
+	if task.Blockers != "" {
+		bHeader := lipgloss.NewStyle().Bold(true).Foreground(t.Danger).PaddingLeft(3).
+			Render("⚠ BLOCKERS")
+		bRule := lipgloss.NewStyle().PaddingLeft(3).
+			Render(lipgloss.NewStyle().Foreground(t.Danger).Render(strings.Repeat("\u2500", w-6)))
+		bBody := lipgloss.NewStyle().
+			Foreground(t.Danger).
+			Width(w - 10).
+			Padding(0, 3).
+			Render(task.Blockers)
+		blockerBlock = "\n" + bHeader + "\n" + bRule + "\n" + bBody
+	}
+
+	// Acceptance Criteria
+	criteriaBlock := ""
+	if task.AcceptanceCriteria != "" {
+		acHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("ACCEPTANCE CRITERIA")
+		acRule := lipgloss.NewStyle().PaddingLeft(3).
+			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
+		// Render each line as a checklist item
+		var acLines []string
+		for _, line := range strings.Split(task.AcceptanceCriteria, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			acLines = append(acLines, "  "+lipgloss.NewStyle().Foreground(t.Muted).Render("□")+" "+valueStyle.Render(line))
+		}
+		if len(acLines) > 0 {
+			criteriaBlock = "\n" + acHeader + "\n" + acRule + "\n" +
+				lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(acLines, "\n"))
+		}
+	}
+
+	// Decision Log (last 3 entries)
+	decisionBlock := ""
+	if task.DecisionLog != "" {
+		dlHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("DECISIONS")
+		dlRule := lipgloss.NewStyle().PaddingLeft(3).
+			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
+		lines := strings.Split(strings.TrimSpace(task.DecisionLog), "\n")
+		// Show last 3
+		start := 0
+		if len(lines) > 3 {
+			start = len(lines) - 3
+		}
+		var dlLines []string
+		for _, line := range lines[start:] {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			dlLines = append(dlLines, "  "+lipgloss.NewStyle().Foreground(t.Accent).Render("→")+" "+
+				lipgloss.NewStyle().Foreground(t.Muted).Render(line))
+		}
+		if start > 0 {
+			dlLines = append(dlLines, t.Faint.Render(fmt.Sprintf("  (%d more)", start)))
+		}
+		if len(dlLines) > 0 {
+			decisionBlock = "\n" + dlHeader + "\n" + dlRule + "\n" +
+				lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(dlLines, "\n"))
+		}
+	}
+
+	// Notes (truncated to 5 lines)
+	notesBlock := ""
+	if task.Notes != "" {
+		nHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("NOTES")
+		nRule := lipgloss.NewStyle().PaddingLeft(3).
+			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
+		lines := strings.Split(strings.TrimSpace(task.Notes), "\n")
+		truncated := false
+		if len(lines) > 5 {
+			lines = lines[:5]
+			truncated = true
+		}
+		body := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Width(w - 10).
+			Padding(0, 3).
+			Render(strings.Join(lines, "\n"))
+		if truncated {
+			body += "\n" + lipgloss.NewStyle().PaddingLeft(3).Render(t.Faint.Render("  (truncated)"))
+		}
+		notesBlock = "\n" + nHeader + "\n" + nRule + "\n" + body
+	}
+
+	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock +
+		blockerBlock + descBlock + criteriaBlock + attachBlock + subtaskBlock +
+		decisionBlock + notesBlock + logBlock
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }

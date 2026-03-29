@@ -368,7 +368,11 @@ while true; do
   printf '\n'
 
   # ── Tasks (single-pass: header printed on first visible task) ──
+  # Prefer persistent .doey/tasks/ (survives reboots), fall back to runtime
   _tasks_dir="${RUNTIME_DIR}/tasks"
+  if [ -n "$_CACHED_PROJECT_DIR" ] && [ -d "${_CACHED_PROJECT_DIR}/.doey/tasks" ]; then
+    _tasks_dir="${_CACHED_PROJECT_DIR}/.doey/tasks"
+  fi
   if [ -d "$_tasks_dir" ]; then
     _has_render=false
     [ -x "${SCRIPT_DIR}/doey-render-task.sh" ] && _has_render=true
