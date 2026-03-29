@@ -6,11 +6,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// PanelStyle returns a rounded-border panel style for inactive sections.
+// PanelStyle returns a hidden-border panel style for inactive sections.
+// HiddenBorder preserves the same spacing as RoundedBorder, preventing
+// layout jitter when focus switches between panels (Kancli pattern).
 func PanelStyle(t Theme) lipgloss.Style {
 	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Muted).
+		Border(lipgloss.HiddenBorder()).
 		Padding(0, 1)
 }
 
