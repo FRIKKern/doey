@@ -128,6 +128,96 @@ sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 
 **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
 
+### Capacity Check
+
+Before dispatching, assess team availability:
+
+```bash
+BUSY_COUNT=0; IDLE_TEAMS=""
+for W in $TEAM_WINDOWS; do
+  TEAM_BUSY=0
+  for sf in "${RUNTIME_DIR}/status/pane_${W}_"*.status; do
+    [ -f "$sf" ] || continue
+    STATUS=$(grep '^STATUS=' "$sf" | cut -d= -f2-)
+    [ "$STATUS" = "BUSY" ] && TEAM_BUSY=1 && break
+  done
+  if [ "$TEAM_BUSY" -eq 1 ]; then
+    BUSY_COUNT=$((BUSY_COUNT + 1))
+  else
+    IDLE_TEAMS="${IDLE_TEAMS} ${W}"
+  fi
+done
+```
+
+| Condition | Action |
+|-----------|--------|
+| Idle team exists (`IDLE_TEAMS` non-empty) | Dispatch to first idle team |
+| All busy, under `DOEY_MAX_TEAMS` (default 5) | Auto-spawn new team, then dispatch |
+| All busy, at max teams | Implicit queue — leave `TASK_STATUS=active` with no `TASK_TEAM` |
+
+**Auto-spawn procedure:**
+
+1. Invoke `/doey-add-window` to create a new team window
+2. Wait 15s for the Manager to boot and workers to reach READY
+3. Re-source `session.env` to pick up the new `TEAM_WINDOWS` list: `source "${RUNTIME_DIR}/session.env"`
+4. Dispatch the queued task to the new team
+5. Log the spawn event: `echo "SPAWN_$(date +%s)=auto-spawned W${W} for task ${TASK_ID}" >> "${RUNTIME_DIR}/spawn.log"`
+
+### Queue Drain
+
+Scan for tasks that are active but unassigned (no `TASK_TEAM`):
+
+```bash
+TD="${PROJECT_DIR}/.doey/tasks"; [ -d "$TD" ] || TD="${RUNTIME_DIR}/tasks"
+QUEUED=""
+for tf in "$TD"/*.task; do
+  [ -f "$tf" ] || continue
+  STATUS=$(grep '^TASK_STATUS=' "$tf" | cut -d= -f2-)
+  TEAM=$(grep '^TASK_TEAM=' "$tf" | cut -d= -f2-)
+  if [ "$STATUS" = "active" ] && [ -z "$TEAM" ]; then
+    PRIO=$(grep '^TASK_PRIORITY=' "$tf" | cut -d= -f2-)
+    QUEUED="${QUEUED} ${PRIO:-P2}:$(basename "$tf" .task)"
+  fi
+done
+# Sort by priority: P0 first, then P1, P2, P3
+QUEUED=$(echo "$QUEUED" | tr ' ' '\n' | sort | tr '\n' ' ')
+```
+
+Priority ordering: P0 (critical) dispatches first, through P3 (low). Default priority is P2 when unset.
+
+**Wake trigger:** `session-manager-wait.sh` wakes SM with a `QUEUED_TASKS` trigger when new tasks are queued, ensuring the drain loop runs promptly.
+
+### Crash Recovery
+
+A team is considered **stale** when its Manager has been BUSY for >300s and the `unchanged_count` file shows ≥3 consecutive unchanged cycles.
+
+**Recovery procedure:**
+
+1. Log the issue to `$RUNTIME_DIR/issues/`
+2. Find the task assigned to the stale team (`TASK_TEAM=W<N>` in the .task file)
+3. Remove `TASK_TEAM` from the task file to re-queue it
+4. Reset `TASK_STATUS=active` so Queue Drain picks it up
+5. Queue Drain assigns the task to the next available team on the next cycle
+6. Report the crash and re-queue to Boss via `.msg` file
+
+```bash
+for W in $TEAM_WINDOWS; do
+  MGR_STATUS_FILE="${RUNTIME_DIR}/status/pane_${W}_0.status"
+  [ -f "$MGR_STATUS_FILE" ] || continue
+  STATUS=$(grep '^STATUS=' "$MGR_STATUS_FILE" | cut -d= -f2-)
+  UPDATED=$(grep '^UPDATED=' "$MGR_STATUS_FILE" | cut -d= -f2-)
+  NOW=$(date +%s)
+  AGE=$((NOW - ${UPDATED:-0}))
+  UNCHANGED_FILE="${RUNTIME_DIR}/status/unchanged_count_${W}_0"
+  UNCHANGED=$(cat "$UNCHANGED_FILE" 2>/dev/null || echo "0")
+  if [ "$STATUS" = "BUSY" ] && [ "$AGE" -gt 300 ] && [ "$UNCHANGED" -ge 3 ]; then
+    echo "STALE_$(date +%s)=W${W} manager stale (${AGE}s, unchanged=${UNCHANGED})" \
+      >> "${RUNTIME_DIR}/issues/crash_W${W}_$(date +%s).log"
+    # Recovery: find and re-queue the assigned task (handled in main loop)
+  fi
+done
+```
+
 ## Message Processing
 
 Messages arrive as `.msg` files (drained in step 1 of the main loop). Format: `FROM: <sender>`, `SUBJECT: <type>`, then body. Key subjects:
@@ -247,6 +337,8 @@ SM is the **proactive task lifecycle manager**. User is sole authority on comple
 ### Status flow: `active` → `in_progress` → `pending_user_confirmation`
 
 Boss creates tasks. SM manages lifecycle. Task files live in `${PROJECT_DIR}/.doey/tasks/` (persistent, source of truth). Fall back to `${RUNTIME_DIR}/tasks/` if `.doey/tasks/` doesn't exist.
+
+**TASK_TEAM is mandatory on dispatch.** Every dispatch MUST write `TASK_TEAM=W<N>`. On phased re-dispatch, update it to the new team. On crash recovery, remove it to re-queue the task.
 
 Update status at every transition:
 ```bash
