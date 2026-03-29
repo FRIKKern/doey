@@ -272,9 +272,134 @@ func ExpandedProgressBar(theme Theme, done int, total int, width int) string {
 	filledStyle := lipgloss.NewStyle().Foreground(theme.Primary)
 	emptyStyle := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true)
 
-	bar := filledStyle.Render(strings.Repeat("█", filled)) +
-		emptyStyle.Render(strings.Repeat("░", empty))
+	bar := filledStyle.Render(strings.Repeat("━", filled)) +
+		emptyStyle.Render(strings.Repeat("╌", empty))
+
+	pctText := ""
+	if total > 0 {
+		pct := 100 * done / total
+		pctText = lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render(fmt.Sprintf(" %d%%", pct))
+	}
 
 	labelStyled := lipgloss.NewStyle().Foreground(theme.Text).Render(label)
-	return fmt.Sprintf("%s %s", labelStyled, bar)
+	return fmt.Sprintf("%s %s%s", labelStyled, bar, pctText)
+}
+
+// DescriptionBlock renders task description text as a styled blockquote with
+// a subtle left border accent, slight indent, and word-wrapping.
+func DescriptionBlock(theme Theme, text string, width int) string {
+	if text == "" {
+		return ""
+	}
+	accent := lipgloss.NewStyle().Foreground(theme.Primary).Render("▎")
+	contentWidth := width - 3 // accent + space + margin
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
+	wrapped := lipgloss.NewStyle().
+		Foreground(theme.Text).
+		Width(contentWidth).
+		Render(text)
+
+	var lines []string
+	for _, line := range strings.Split(wrapped, "\n") {
+		lines = append(lines, accent+" "+line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// SectionTitle renders a section header (e.g. "Subtasks", "Decision Log")
+// with Primary+Bold styling and a thin decorative underline.
+func SectionTitle(theme Theme, label string) string {
+	title := lipgloss.NewStyle().
+		Foreground(theme.Primary).
+		Bold(true).
+		Render(label)
+
+	underline := lipgloss.NewStyle().
+		Foreground(theme.Muted).
+		Faint(true).
+		Render(strings.Repeat("─", lipgloss.Width(label)))
+
+	return title + "\n" + underline + "\n"
+}
+
+// ActivityEntry renders a single activity log entry within a card: fixed-width
+// timestamp, colored type badge, and wrapped text body.
+func ActivityEntry(theme Theme, timestamp, entryType, text string, width int) string {
+	ts := lipgloss.NewStyle().
+		Foreground(theme.Subtle).
+		Faint(true).
+		Width(12).
+		Render(timestamp)
+
+	badgeColor := theme.Muted
+	switch entryType {
+	case "decision":
+		badgeColor = theme.Primary
+	case "note":
+		badgeColor = theme.Accent
+	case "status":
+		badgeColor = theme.Warning
+	case "error":
+		badgeColor = theme.Danger
+	case "done":
+		badgeColor = theme.Success
+	}
+	badge := lipgloss.NewStyle().
+		Foreground(theme.BgText).
+		Background(badgeColor).
+		Padding(0, 1).
+		Bold(true).
+		Render(entryType)
+
+	bodyWidth := width - 12 - lipgloss.Width(entryType) - 6 // ts + badge + padding
+	if bodyWidth < 10 {
+		bodyWidth = 10
+	}
+	body := lipgloss.NewStyle().
+		Foreground(theme.Text).
+		Width(bodyWidth).
+		Render(text)
+
+	return fmt.Sprintf("%s %s %s", ts, badge, body)
+}
+
+// MetaLine renders a label: value pair for metadata display. Label is
+// bold+muted and value is normal text color.
+func MetaLine(theme Theme, label, value string) string {
+	l := lipgloss.NewStyle().
+		Foreground(theme.Muted).
+		Bold(true).
+		Render(label + ":")
+	v := lipgloss.NewStyle().
+		Foreground(theme.Text).
+		Render(" " + value)
+	return l + v
+}
+
+// NoteBlock renders notes text in a softer style with a muted left border
+// and slightly dimmed text, giving an italic/aside feel.
+func NoteBlock(theme Theme, text string, width int) string {
+	if text == "" {
+		return ""
+	}
+	accent := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render("│")
+	contentWidth := width - 3
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
+	wrapped := lipgloss.NewStyle().
+		Foreground(theme.Muted).
+		Width(contentWidth).
+		Italic(true).
+		Render(text)
+
+	var lines []string
+	for _, line := range strings.Split(wrapped, "\n") {
+		lines = append(lines, accent+" "+line)
+	}
+	return strings.Join(lines, "\n")
 }

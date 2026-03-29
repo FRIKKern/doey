@@ -2,6 +2,7 @@ package styles
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -52,11 +53,8 @@ func StatusBadge(status string) string {
 	style := lipgloss.NewStyle().
 		Foreground(dark).
 		Background(color).
+		Bold(true).
 		Padding(0, 1)
-
-	if status == "ERROR" {
-		style = style.Bold(true)
-	}
 
 	label := status
 	if status == "WORKING" {
@@ -183,4 +181,58 @@ func SubtaskProgress(done, total int) string {
 		color = defaultTheme.Warning
 	}
 	return lipgloss.NewStyle().Foreground(color).Render(label)
+}
+
+// LogEventBadge returns a styled pill badge for a log event type.
+func LogEventBadge(theme Theme, eventType string) string {
+	var bg lipgloss.AdaptiveColor
+	switch eventType {
+	case "info":
+		bg = theme.Info
+		if bg == (lipgloss.AdaptiveColor{}) {
+			bg = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#3B82F6"}
+		}
+	case "warn", "warning":
+		bg = theme.Warning
+	case "error":
+		bg = theme.Danger
+	case "task":
+		bg = theme.Primary
+	case "dispatch":
+		bg = theme.Accent
+	case "research":
+		bg = theme.Success
+	case "commit", "git":
+		bg = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#6B7280"}
+	default:
+		bg = theme.Muted
+	}
+
+	label := strings.ToUpper(eventType)
+	return lipgloss.NewStyle().
+		Foreground(theme.BgText).
+		Background(bg).
+		Bold(true).
+		Padding(0, 1).
+		Render(label)
+}
+
+// LogTimestamp renders a timestamp in a subtle, non-distracting style.
+func LogTimestamp(theme Theme, ts string) string {
+	color := theme.Subtle
+	if color == (lipgloss.AdaptiveColor{}) {
+		color = theme.Muted
+	}
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Faint(true).
+		Render(ts)
+}
+
+// LogPaneLabel renders a pane identifier with subtle styling.
+func LogPaneLabel(theme Theme, pane string) string {
+	return lipgloss.NewStyle().
+		Foreground(theme.Muted).
+		Padding(0, 1).
+		Render(pane)
 }

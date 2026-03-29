@@ -71,50 +71,20 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 	task := ti.Task
 	status := task.Status
-	statusClr := d.taskStatusColor(status)
 
-	// Border colors
-	borderColor := d.Theme.Muted
-	if selected {
-		borderColor = d.Theme.Primary
-	}
-
-	// Build a rounded border with a left accent character.
-	accentBorder := lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "▎",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "╰",
-		BottomRight: "╯",
-	}
-
-	cardStyle := lipgloss.NewStyle().
-		Border(accentBorder).
-		BorderForeground(borderColor).
-		BorderLeft(true).
-		BorderRight(true).
-		BorderTop(true).
-		BorderBottom(true).
-		Width(cardWidth).
-		BorderLeftForeground(statusClr)
+	// Use shared card style from styles package.
+	cardStyle := styles.CardStyle(d.Theme, status, selected, cardWidth)
 
 	// --- Line 1: icon + #ID + [type] + title ---
 	icon := statusIcon(status, d.Theme)
-	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("#" + task.ID)
+	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(true).Render("#" + task.ID)
 
 	typeBadge := ""
 	if task.Type != "" {
-		typeClr := styles.CategoryColor(task.Type)
-		typeBadge = lipgloss.NewStyle().Foreground(typeClr).Bold(true).Render("["+task.Type+"]") + " "
+		typeBadge = styles.TypeTagCard(task.Type, d.Theme) + " "
 	}
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(d.Theme.Text)
-	if selected {
-		titleStyle = titleStyle.Foreground(d.Theme.Primary)
-	}
+	titleStyle := styles.CardTitleStyle(d.Theme, selected)
 
 	// Calculate how much space the title can occupy.
 	// Content width = cardWidth minus horizontal border chars (2).
@@ -136,7 +106,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	line1 := prefix + titleStyle.Render(titleText)
 
 	// --- Line 2: status badge + subtask progress + age ---
-	badge := lipgloss.NewStyle().Foreground(statusClr).Render(status)
+	badge := styles.StatusBadgeCard(status, d.Theme)
 	progress := ""
 	if ti.SubtaskTotal > 0 {
 		progress = "  " + styles.SubtaskProgress(ti.SubtaskDone, ti.SubtaskTotal)
@@ -144,7 +114,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	age := ""
 	if task.Created > 0 {
 		elapsed := time.Since(time.Unix(task.Created, 0))
-		age = "  " + lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(formatAge(elapsed))
+		age = "  " + styles.CardMetaStyle(d.Theme).Render(formatAge(elapsed))
 	}
 	line2 := badge + progress + age
 
@@ -167,22 +137,22 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		if hs.ActiveWorkers != 1 {
 			workers += "s"
 		}
-		activity := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(workers + " active")
+		activity := styles.CardMetaStyle(d.Theme).Render(workers + " active")
 
 		parts := healthDot + " " + activity
 		if hs.ActivityText != "" {
-			parts += lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(" · " + hs.ActivityText)
+			parts += d.Theme.DotSeparator() + styles.CardMetaStyle(d.Theme).Render(hs.ActivityText)
 		}
 		if !hs.LastActivity.IsZero() {
 			elapsed := time.Since(hs.LastActivity)
 			if elapsed < 5*time.Second {
 				parts += lipgloss.NewStyle().Foreground(d.Theme.Success).Render("  now")
 			} else {
-				parts += lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("  " + formatAge(elapsed) + " ago")
+				parts += styles.CardMetaStyle(d.Theme).Render("  " + formatAge(elapsed) + " ago")
 			}
 		}
 		if hs.ProgressText != "" {
-			parts += lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("  " + hs.ProgressText)
+			parts += styles.CardMetaStyle(d.Theme).Render("  " + hs.ProgressText)
 		}
 		heartbeatLine = parts
 	}
@@ -190,8 +160,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	// --- Lines 3-4: description preview ---
 	descLines := truncateDesc(task.Description, 2, contentWidth)
 
-	descStyle := lipgloss.NewStyle().Foreground(d.Theme.Muted)
-	renderedDesc := descStyle.Render(descLines)
+	renderedDesc := styles.CardDescStyle(d.Theme).Render(descLines)
 
 	var content string
 	if heartbeatLine != "" {
@@ -356,20 +325,25 @@ func (e *ExpandedCard) Render() string {
 	sections = append(sections, header)
 
 	// --- Separator ---
-	sep := lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(strings.Repeat("─", contentWidth))
-	sections = append(sections, sep)
+	sections = append(sections, styles.ThinSeparator(e.Theme, contentWidth))
+
+	// --- Meta ---
+	if task.Created > 0 {
+		created := time.Unix(task.Created, 0).Format("2006-01-02 15:04")
+		sections = append(sections, styles.MetaLine(e.Theme, "Created", created))
+	}
 
 	// --- Description ---
 	if task.Description != "" {
-		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "DESCRIPTION"))
-		wrapped := wordWrap(task.Description, contentWidth)
-		sections = append(sections, wrapped)
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, "Description"))
+		sections = append(sections, styles.DescriptionBlock(e.Theme, task.Description, contentWidth))
 	}
 
 	// --- Subtasks ---
 	if len(e.Item.Subtasks) > 0 {
 		sections = append(sections, "")
-		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "SUBTASKS"))
+		sections = append(sections, styles.SectionTitle(e.Theme, "Subtasks"))
 		sections = append(sections, styles.ExpandedProgressBar(e.Theme, e.Item.SubtaskDone, e.Item.SubtaskTotal, contentWidth))
 		for i, st := range e.Item.Subtasks {
 			done := st.Status == "done"
@@ -382,7 +356,7 @@ func (e *ExpandedCard) Render() string {
 	// --- Decision Log ---
 	if task.DecisionLog != "" {
 		sections = append(sections, "")
-		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "DECISIONS"))
+		sections = append(sections, styles.SectionTitle(e.Theme, "Decisions"))
 		for _, line := range strings.Split(strings.TrimSpace(task.DecisionLog), "\n") {
 			line = strings.TrimSpace(line)
 			if line == "" {
@@ -394,51 +368,55 @@ func (e *ExpandedCard) Render() string {
 				ts = line[:idx]
 				text = line[idx+2:]
 			}
-			sections = append(sections, styles.DecisionLogEntry(e.Theme, text, ts))
+			sections = append(sections, styles.ActivityEntry(e.Theme, ts, "decision", text, contentWidth))
 		}
 	}
 
 	// --- Notes ---
 	if task.Notes != "" {
 		sections = append(sections, "")
-		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "NOTES"))
-		sections = append(sections, styles.NotesBlock(e.Theme, task.Notes, contentWidth))
+		sections = append(sections, styles.SectionTitle(e.Theme, "Notes"))
+		sections = append(sections, styles.NoteBlock(e.Theme, task.Notes, contentWidth))
 	}
 
 	// --- Activity Log ---
 	if len(task.Logs) > 0 {
 		sections = append(sections, "")
-		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "ACTIVITY LOG"))
+		sections = append(sections, styles.SectionTitle(e.Theme, "Activity Log"))
 		for _, log := range task.Logs {
 			ts := ""
 			if log.Timestamp > 0 {
 				ts = time.Unix(log.Timestamp, 0).Format("15:04")
 			}
 			prefix, body := splitLogPrefix(log.Entry)
-			prefixStyle := logPrefixStyle(prefix, e.Theme)
 
 			// Parse visualization blocks from the entry.
 			blocks := grammar.Parse(body)
 			if len(blocks) > 0 {
 				rendered := grammar.RenderTerminal(blocks)
-				// Show prefix header, then rendered blocks.
-				header := prefixStyle
+				// Show prefix header with event badge, then rendered blocks.
+				eventType := strings.ToLower(prefix)
+				if eventType == "" {
+					eventType = "info"
+				}
+				header := styles.LogEventBadge(e.Theme, eventType)
 				if ts != "" {
-					header = lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(ts) + " " + header
+					header = styles.LogTimestamp(e.Theme, ts) + " " + header
 				}
 				sections = append(sections, header)
 				sections = append(sections, rendered)
 			} else {
-				// Plain text entry — render inline with timestamp.
-				line := prefixStyle
-				if line != "" {
-					line += " "
+				// Plain text entry — render with styled timestamp and event badge.
+				eventType := strings.ToLower(prefix)
+				if eventType != "" {
+					sections = append(sections, styles.ActivityEntry(e.Theme, ts, eventType, body, contentWidth))
+				} else {
+					line := wordWrap(body, contentWidth-8)
+					if ts != "" {
+						line = styles.LogTimestamp(e.Theme, ts) + " " + line
+					}
+					sections = append(sections, line)
 				}
-				line += wordWrap(body, contentWidth-8)
-				if ts != "" {
-					line = lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(ts) + " " + line
-				}
-				sections = append(sections, line)
 			}
 		}
 	}

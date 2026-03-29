@@ -14,8 +14,12 @@ type Theme struct {
 	Danger  lipgloss.AdaptiveColor
 	Muted   lipgloss.AdaptiveColor
 	Accent  lipgloss.AdaptiveColor
-	Text    lipgloss.AdaptiveColor
-	BgText  lipgloss.AdaptiveColor // inverse text for badges
+	Text      lipgloss.AdaptiveColor
+	BgText    lipgloss.AdaptiveColor // inverse text for badges
+	Info      lipgloss.AdaptiveColor // soft blue for informational log events
+	Debug     lipgloss.AdaptiveColor // soft gray-blue for debug log events
+	Highlight lipgloss.AdaptiveColor // warm gold for notable log events
+	Subtle    lipgloss.AdaptiveColor // very faint text for timestamps/metadata
 
 	Title         lipgloss.Style
 	Subtitle      lipgloss.Style
@@ -27,6 +31,12 @@ type Theme struct {
 	StatLabel     lipgloss.Style // bold + Text, for "PROJECT", "SESSION", etc.
 	MenuActive    lipgloss.Style // highlighted menu tab
 	MenuInactive  lipgloss.Style // default menu tab
+	Timestamp    lipgloss.Style // faint timestamp for log entries
+	LogEntry     lipgloss.Style // normal-weight log entry text
+	LogHighlight lipgloss.Style // bold highlighted log entry
+	Tag          lipgloss.Style // small styled tag label
+	CardTitle    lipgloss.Style // bold card title with padding
+	CardMeta     lipgloss.Style // muted metadata on cards
 }
 
 // DotSeparator returns " · " rendered in the theme's Faint style.
@@ -57,16 +67,24 @@ func DefaultTheme() Theme {
 	accent := lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#C084FC"}
 	text := lipgloss.AdaptiveColor{Light: "#1F2937", Dark: "#E5E7EB"}
 	bgText := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#1F2937"}
+	info := lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"}
+	debug := lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9CA3AF"}
+	highlight := lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FCD34D"}
+	subtle := lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#4B5563"}
 
 	return Theme{
-		Primary: primary,
-		Success: success,
-		Warning: warning,
-		Danger:  danger,
-		Muted:   muted,
-		Accent:  accent,
-		Text:    text,
-		BgText:  bgText,
+		Primary:   primary,
+		Success:   success,
+		Warning:   warning,
+		Danger:    danger,
+		Muted:     muted,
+		Accent:    accent,
+		Text:      text,
+		BgText:    bgText,
+		Info:      info,
+		Debug:     debug,
+		Highlight: highlight,
+		Subtle:    subtle,
 
 		Title: lipgloss.NewStyle().
 			Foreground(primary).
@@ -105,6 +123,29 @@ func DefaultTheme() Theme {
 			Underline(true),
 
 		MenuInactive: lipgloss.NewStyle().
+			Foreground(muted),
+
+		Timestamp: lipgloss.NewStyle().
+			Foreground(subtle).
+			Faint(true),
+
+		LogEntry: lipgloss.NewStyle().
+			Foreground(text),
+
+		LogHighlight: lipgloss.NewStyle().
+			Foreground(highlight).
+			Bold(true),
+
+		Tag: lipgloss.NewStyle().
+			Foreground(accent).
+			Bold(true),
+
+		CardTitle: lipgloss.NewStyle().
+			Foreground(primary).
+			Bold(true).
+			PaddingLeft(1),
+
+		CardMeta: lipgloss.NewStyle().
 			Foreground(muted),
 	}
 }
