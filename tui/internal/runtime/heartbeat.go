@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+// Health state constants for HeartbeatState.Health.
+const (
+	HealthHealthy  = "healthy"  // green — last update <30s ago
+	HealthDegraded = "degraded" // yellow — 30-120s ago
+	HealthStale    = "stale"    // red — >120s ago
+	HealthIdle     = "idle"     // gray — no activity at all
+)
+
 // AggregateHeartbeats produces per-task live state from an existing Snapshot.
 // It does not re-read any files — all data comes from the snapshot's Panes,
 // Tasks, Subtasks, and Results maps.
@@ -35,6 +43,9 @@ func AggregateHeartbeats(snap Snapshot) map[string]HeartbeatState {
 		subtaskCounts[st.TaskID] = s
 	}
 
+	// Index: pane → result (for tool call / file progress)
+	// (snap.Results is already keyed by pane ID)
+
 	for _, task := range snap.Tasks {
 		if task.Status == "done" || task.Status == "cancelled" {
 			continue
@@ -42,9 +53,16 @@ func AggregateHeartbeats(snap Snapshot) map[string]HeartbeatState {
 
 		hs := HeartbeatState{}
 
-		// Active workers
+		// Active workers and their names
 		panes := taskPanes[task.ID]
 		hs.ActiveWorkers = len(panes)
+		hs.SpinnerActive = len(panes) > 0
+
+		var workerNames []string
+		for _, ps := range panes {
+			workerNames = append(workerNames, shortenPane(ps.Pane))
+		}
+		hs.ActiveWorkerNames = workerNames
 
 		// Last activity from pane timestamps
 		var latestPaneTime time.Time
@@ -73,6 +91,10 @@ func AggregateHeartbeats(snap Snapshot) map[string]HeartbeatState {
 			hs.LastActivity = latestLogTime
 		}
 
+		// Health state based on staleness
+		hs.Health = healthFromAge(now.Sub(hs.LastActivity), hs.ActiveWorkers, hs.LastActivity.IsZero())
+		hs.HealthSince = hs.LastActivity // approximate: health started when last activity occurred
+
 		// Activity text: describe what the most active worker is doing
 		if latestPane.Pane != "" {
 			hs.ActivityText = buildActivityText(latestPane, snap.Results)
@@ -80,12 +102,14 @@ func AggregateHeartbeats(snap Snapshot) map[string]HeartbeatState {
 			hs.ActivityText = truncate(latestLogEntry, 60)
 		}
 
-		// Health based on staleness
-		hs.Health = computeHealth(now, hs.LastActivity, hs.ActiveWorkers)
+		// Extract last tool call and progress from result files for active panes
+		hs.LastToolCall, hs.ProgressPercent = extractResultProgress(panes, snap.Results)
 
-		// Progress from subtasks
+		// Progress text from subtasks
 		if ss, ok := subtaskCounts[task.ID]; ok && ss.total > 0 {
 			hs.ProgressText = fmt.Sprintf("%d/%d subtasks done", ss.done, ss.total)
+			// Use subtask ratio for progress percent if we have subtasks
+			hs.ProgressPercent = float64(ss.done) / float64(ss.total)
 		}
 
 		// Latest finding from task log
@@ -97,6 +121,85 @@ func AggregateHeartbeats(snap Snapshot) map[string]HeartbeatState {
 	}
 
 	return out
+}
+
+// healthFromAge returns a health state string based on time since last activity.
+func healthFromAge(age time.Duration, activeWorkers int, noActivity bool) string {
+	if noActivity {
+		if activeWorkers > 0 {
+			return HealthDegraded
+		}
+		return HealthIdle
+	}
+	switch {
+	case age < 30*time.Second:
+		return HealthHealthy
+	case age < 120*time.Second:
+		return HealthDegraded
+	default:
+		return HealthStale
+	}
+}
+
+// parseActivityFromStatus extracts a readable activity description from a PaneStatus.
+func parseActivityFromStatus(ps PaneStatus) string {
+	short := shortenPane(ps.Pane)
+	if ps.Task != "" {
+		return fmt.Sprintf("%s on %s", short, truncate(ps.Task, 40))
+	}
+	if ps.Status == "BUSY" || ps.Status == "WORKING" {
+		return fmt.Sprintf("%s busy", short)
+	}
+	return short + " " + strings.ToLower(ps.Status)
+}
+
+// formatTimeSince returns a human-readable relative time string.
+func formatTimeSince(t time.Time) string {
+	if t.IsZero() {
+		return "no activity"
+	}
+	elapsed := time.Since(t)
+	if elapsed < 5*time.Second {
+		return "active now"
+	}
+	if elapsed < time.Minute {
+		return fmt.Sprintf("%ds ago", int(elapsed.Seconds()))
+	}
+	if elapsed < time.Hour {
+		return fmt.Sprintf("%dm ago", int(elapsed.Minutes()))
+	}
+	return fmt.Sprintf("%dh ago", int(elapsed.Hours()))
+}
+
+// extractResultProgress scans result files for active panes to find the latest
+// tool call name and an estimated progress percentage from files changed.
+func extractResultProgress(panes []PaneStatus, results map[string]PaneResult) (lastTool string, progress float64) {
+	var latestTS int64
+	var totalTools int
+	var totalFiles int
+
+	for _, ps := range panes {
+		res, ok := results[ps.Pane]
+		if !ok {
+			continue
+		}
+		totalTools += res.ToolCalls
+		totalFiles += len(res.FilesChanged)
+
+		if res.Timestamp > latestTS {
+			latestTS = res.Timestamp
+			// Derive last tool hint from files changed or status
+			if len(res.FilesChanged) > 0 {
+				lastTool = "editing " + filepath.Base(res.FilesChanged[len(res.FilesChanged)-1])
+			} else if res.ToolCalls > 0 {
+				lastTool = fmt.Sprintf("%d tool calls", res.ToolCalls)
+			}
+		}
+	}
+
+	// No reliable total to compute percentage from result files alone;
+	// callers should prefer subtask-based progress when available.
+	return lastTool, 0
 }
 
 // buildActivityText creates a human-readable description of what a pane is doing.
@@ -114,27 +217,23 @@ func buildActivityText(ps PaneStatus, results map[string]PaneResult) string {
 		}
 	}
 
-	if ps.Task != "" {
-		return fmt.Sprintf("%s on %s", short, truncate(ps.Task, 40))
-	}
-	return fmt.Sprintf("%s busy", short)
+	return parseActivityFromStatus(ps)
 }
 
 // computeHealth returns green/amber/red based on time since last activity.
-// Tasks with no active workers get "red" if stale, "amber" if idle but recent.
+// Retained for backward compatibility; new code should use healthFromAge.
 func computeHealth(now, lastActivity time.Time, activeWorkers int) string {
-	if lastActivity.IsZero() {
-		if activeWorkers > 0 {
-			return "amber"
-		}
-		return "red"
-	}
-	elapsed := now.Sub(lastActivity)
-	switch {
-	case elapsed < 30*time.Second:
+	h := healthFromAge(now.Sub(lastActivity), activeWorkers, lastActivity.IsZero())
+	// Map new states to legacy color names for any callers using old API
+	switch h {
+	case HealthHealthy:
 		return "green"
-	case elapsed < 60*time.Second:
+	case HealthDegraded:
 		return "amber"
+	case HealthStale:
+		return "red"
+	case HealthIdle:
+		return "red"
 	default:
 		return "red"
 	}

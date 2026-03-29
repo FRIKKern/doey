@@ -153,10 +153,12 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if hs, ok := d.Heartbeats[task.ID]; ok && hs.ActiveWorkers > 0 {
 		var healthDot string
 		switch hs.Health {
-		case "green":
+		case "green", "healthy":
 			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Success).Render("●")
-		case "amber":
+		case "amber", "degraded":
 			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Warning).Render("●")
+		case "idle":
+			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("●")
 		default:
 			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Danger).Render("●")
 		}

@@ -174,12 +174,17 @@ type TeamUserConfig struct {
 
 // HeartbeatState is per-task live state for the TUI task list.
 type HeartbeatState struct {
-	ActiveWorkers int       // count of BUSY panes working on this task
-	LastActivity  time.Time // most recent activity timestamp
-	ActivityText  string    // human-readable, e.g. "W2.1 editing common.sh"
-	Health        string    // "green" (<30s), "amber" (<60s), "red" (>60s)
-	ProgressText  string    // e.g. "2/5 subtasks done"
-	LatestFinding string    // last TASK_LOG entry summary
+	ActiveWorkers    int       // count of BUSY panes working on this task
+	LastActivity     time.Time // most recent activity timestamp
+	ActivityText     string    // human-readable, e.g. "W2.1 editing common.sh"
+	Health           string    // "healthy" (<30s), "degraded" (30-120s), "stale" (>120s), "idle" (no activity)
+	ProgressText     string    // e.g. "2/5 subtasks done"
+	LatestFinding    string    // last TASK_LOG entry summary
+	HealthSince      time.Time // when the current health state started
+	ActiveWorkerNames []string // specific pane IDs that are working, e.g. ["W2.1", "W2.3"]
+	ProgressPercent  float64   // 0.0-1.0, derived from subtasks or result files
+	LastToolCall     string    // latest tool/file hint from result file
+	SpinnerActive    bool      // true when any worker is BUSY
 }
 
 // Snapshot is a complete point-in-time view of the runtime

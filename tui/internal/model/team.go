@@ -413,7 +413,13 @@ func (m TeamModel) viewList() string {
 			Render("enter = details  s = star  a = startup  d = dispatch  n = new  x = stop")
 	}
 
-	content := header + "\n" + rule + "\n" + summary + "\n\n" + body + "\n" + hint
+	healthGrid := m.renderHealthGrid(w)
+	var content string
+	if healthGrid != "" {
+		content = header + "\n" + rule + "\n" + summary + "\n\n" + healthGrid + "\n" + body + "\n" + hint
+	} else {
+		content = header + "\n" + rule + "\n" + summary + "\n\n" + body + "\n" + hint
+	}
 	if m.dispatching {
 		content += "\n" + m.renderDispatchBar()
 	}
@@ -526,6 +532,147 @@ func (m TeamModel) countWorkerStatuses(windowIdx int, tc runtime.TeamConfig) (bu
 		}
 	}
 	return
+}
+
+// --- Health grid ---
+
+// renderHealthGrid renders a compact overview of all running teams with pane
+// status dots and utilization percentage.
+func (m TeamModel) renderHealthGrid(w int) string {
+	t := m.theme
+
+	// Aggregate across all running teams
+	totalTeams, activeTeams := 0, 0
+	totalWorkers, busyWorkers := 0, 0
+	for _, e := range m.entries {
+		totalTeams++
+		if !e.Running {
+			continue
+		}
+		activeTeams++
+		tc, ok := m.teams[e.WindowIdx]
+		if !ok {
+			continue
+		}
+		for _, pi := range tc.WorkerPanes {
+			totalWorkers++
+			paneID := fmt.Sprintf("%d.%d", e.WindowIdx, pi)
+			if ps, ok := m.panes[paneID]; ok {
+				if ps.Status == "BUSY" || ps.Status == "WORKING" {
+					busyWorkers++
+				}
+			}
+		}
+	}
+
+	if activeTeams == 0 {
+		return ""
+	}
+
+	// Summary line
+	summaryStyle := lipgloss.NewStyle().Foreground(t.Text).PaddingLeft(2)
+	teamsPart := lipgloss.NewStyle().Foreground(t.Success).Bold(true).
+		Render(fmt.Sprintf("%d/%d", activeTeams, totalTeams))
+	workersPart := lipgloss.NewStyle().Foreground(t.Warning).Bold(true).
+		Render(fmt.Sprintf("%d/%d", busyWorkers, totalWorkers))
+	summaryLine := summaryStyle.Render(
+		teamsPart + " teams active" + t.DotSeparator() + workersPart + " workers busy")
+
+	// Per-team rows: name + dots + utilization
+	nameW := 20
+	var rows []string
+	for _, e := range m.entries {
+		if !e.Running {
+			continue
+		}
+		tc, ok := m.teams[e.WindowIdx]
+		if !ok {
+			continue
+		}
+
+		// Team name (truncated)
+		name := e.Def.Name
+		if e.Label != "" {
+			name = e.Label
+		}
+		if len(name) > nameW-2 {
+			name = name[:nameW-3] + "…"
+		}
+		nameStr := lipgloss.NewStyle().Bold(true).Foreground(t.Text).
+			Width(nameW).Render("  " + name)
+
+		// Pane dots
+		var dots []string
+		teamBusy, teamTotal := 0, 0
+		reserved := 0
+
+		// Manager dot
+		if tc.ManagerPane != "" {
+			mgrID := fmt.Sprintf("%d.%s", e.WindowIdx, tc.ManagerPane)
+			dots = append(dots, m.paneDot(mgrID))
+		}
+
+		// Worker dots
+		for _, pi := range tc.WorkerPanes {
+			paneID := fmt.Sprintf("%d.%d", e.WindowIdx, pi)
+			dots = append(dots, m.paneDot(paneID))
+			if ps, ok := m.panes[paneID]; ok {
+				if ps.Status == "RESERVED" {
+					reserved++
+				} else {
+					teamTotal++
+					if ps.Status == "BUSY" || ps.Status == "WORKING" {
+						teamBusy++
+					}
+				}
+			} else {
+				teamTotal++
+			}
+		}
+
+		dotStr := strings.Join(dots, "")
+
+		// Utilization
+		util := 0
+		if teamTotal > 0 {
+			util = teamBusy * 100 / teamTotal
+		}
+		utilColor := t.Muted
+		if util >= 80 {
+			utilColor = t.Success
+		} else if util > 0 {
+			utilColor = t.Warning
+		}
+		utilStr := lipgloss.NewStyle().Foreground(utilColor).Width(12).
+			Render(fmt.Sprintf("%d%% util", util))
+		_ = reserved // reserved counted for exclusion but not displayed separately
+
+		rows = append(rows, nameStr+" "+dotStr+"  "+utilStr)
+	}
+
+	gridRule := t.Faint.Render(strings.Repeat("─", w))
+	gridHeader := t.SectionHeader.Copy().PaddingLeft(2).Render("HEALTH")
+
+	return gridHeader + "\n" + summaryLine + "\n" +
+		strings.Join(rows, "\n") + "\n" + gridRule
+}
+
+// paneDot returns a colored dot for a pane based on its status.
+func (m TeamModel) paneDot(paneID string) string {
+	ps, ok := m.panes[paneID]
+	if !ok {
+		return lipgloss.NewStyle().Foreground(m.theme.Muted).Faint(true).Render("○")
+	}
+
+	color := styles.StatusColor(ps.Status)
+	switch ps.Status {
+	case "RESERVED":
+		return lipgloss.NewStyle().Foreground(color).Faint(true).Render("⊘")
+	case "ERROR":
+		return lipgloss.NewStyle().Foreground(color).Bold(true).Render("●")
+	default:
+		return lipgloss.NewStyle().Foreground(color).Render("●")
+	}
 }
 
 // --- Detail view ---
