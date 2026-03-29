@@ -209,3 +209,74 @@ EOF
 ## Wave Progress
 
 Never dispatch Wave N+1 until Wave N is fully complete. Track worker→task mapping per wave. Final report: total waves, tasks, success/error counts.
+
+## Subtask Management
+
+Break every task into explicit subtask files before dispatching workers. Subtask files use the `.subtask` extension (not `.task`) to avoid confusion with parent task files.
+
+### Creating subtask files
+
+Before dispatching any wave, write a `.subtask` file per worker assignment:
+
+**Filename pattern:** `<parent_id>_<subtask_num>.subtask` in `${RUNTIME_DIR}/tasks/`
+
+**Required fields:** `SUBTASK_ID`, `PARENT_TASK_ID`, `SUBTASK_TITLE`, `SUBTASK_STATUS`, `SUBTASK_WORKER`, `SUBTASK_CREATED`
+
+```bash
+TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
+PARENT_ID=1; SUB_NUM=1
+printf 'SUBTASK_ID=%s_%s\nPARENT_TASK_ID=%s\nSUBTASK_TITLE=%s\nSUBTASK_STATUS=dispatched\nSUBTASK_WORKER=%s.%s\nSUBTASK_CREATED=%s\n' \
+  "$PARENT_ID" "$SUB_NUM" "$PARENT_ID" "TITLE HERE" "$DOEY_TEAM_WINDOW" "PANE_NUM" "$(date +%s)" \
+  > "${TD}/${PARENT_ID}_${SUB_NUM}.subtask"
+```
+
+### Updating subtask status
+
+When workers report back (via messages or status files), update the subtask file in place.
+
+**Valid statuses:** `dispatched`, `in_progress`, `done`, `failed`
+
+```bash
+FILE="${RUNTIME_DIR}/tasks/${PARENT_ID}_${SUB_NUM}.subtask"
+TMP="${FILE}.tmp"
+while IFS= read -r line; do
+  case "${line%%=*}" in SUBTASK_STATUS) echo "SUBTASK_STATUS=done" ;; *) echo "$line" ;; esac
+done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+```
+
+### Rolling up completion to parent task
+
+After updating subtasks, compute progress and log it to the parent task. Wrapped in `bash -c` for zsh safety:
+
+```bash
+bash -c '
+PARENT_ID="$1"; TD="$2"
+TOTAL=0; DONE=0
+for f in "${TD}/${PARENT_ID}_"*.subtask; do
+  [ -f "$f" ] || continue
+  TOTAL=$((TOTAL + 1))
+  grep -q "SUBTASK_STATUS=done" "$f" && DONE=$((DONE + 1))
+done
+echo "TASK_LOG_$(date +%s)=PROGRESS: ${DONE}/${TOTAL} subtasks done" >> "${TD}/${PARENT_ID}.task"
+' _ "$PARENT_ID" "$RUNTIME_DIR/tasks"
+```
+
+### Notifying SM of progress
+
+After rolling up, notify Session Manager with the progress summary:
+
+```bash
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+printf 'FROM: Manager_W%s\nSUBJECT: task_progress\nTask %s: %s/%s subtasks done\n' \
+  "$DOEY_TEAM_WINDOW" "$PARENT_ID" "$DONE" "$TOTAL" \
+  > "${RUNTIME_DIR}/messages/${SM_SAFE}_$(date +%s)_$$.msg"
+touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+```
+
+### Subtask rules
+
+- Always create subtask files **BEFORE** dispatching workers
+- One subtask per worker per wave (mirrors "one worker per file" principle)
+- Update subtask status immediately when a worker reports — don't batch updates
+- Failed subtasks: log the failure, decide whether to retry or escalate to SM
+- When **ALL** subtasks are done or failed, roll up to parent and notify SM
