@@ -271,6 +271,150 @@ func truncateDesc(s string, maxLines int, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
+// ExpandedCard renders the expanded detail view for a single task card.
+type ExpandedCard struct {
+	Item          TaskItem     // the task being expanded
+	Theme         styles.Theme
+	Width         int // available width
+	Height        int // available height
+	SubtaskCursor int // which subtask is highlighted (-1 = none)
+	ScrollOffset  int // viewport scroll position
+}
+
+// Render draws the full expanded card content as a styled string.
+func (e *ExpandedCard) Render() string {
+	task := e.Item.Task
+	contentWidth := e.Width - 6
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	var sections []string
+
+	// --- Header: icon + title + status badge + type tag ---
+	icon := statusIcon(task.Status, e.Theme)
+	title := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text).Render(task.Title)
+	badge := styles.StatusBadgeCard(task.Status, e.Theme)
+	typeTag := styles.TypeTagCard(task.Type, e.Theme)
+
+	header := icon + " " + title + "  " + badge
+	if typeTag != "" {
+		header += " " + typeTag
+	}
+	sections = append(sections, header)
+
+	// --- Separator ---
+	sep := lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(strings.Repeat("─", contentWidth))
+	sections = append(sections, sep)
+
+	// --- Description ---
+	if task.Description != "" {
+		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "DESCRIPTION"))
+		wrapped := wordWrap(task.Description, contentWidth)
+		sections = append(sections, wrapped)
+	}
+
+	// --- Subtasks ---
+	if len(e.Item.Subtasks) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "SUBTASKS"))
+		sections = append(sections, styles.ExpandedProgressBar(e.Theme, e.Item.SubtaskDone, e.Item.SubtaskTotal, contentWidth))
+		for i, st := range e.Item.Subtasks {
+			done := st.Status == "done"
+			selected := i == e.SubtaskCursor
+			row := styles.SubtaskRow(e.Theme, st.Title, st.Status, done, selected, 0)
+			sections = append(sections, row)
+		}
+	}
+
+	// --- Decision Log ---
+	if task.DecisionLog != "" {
+		sections = append(sections, "")
+		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "DECISIONS"))
+		for _, line := range strings.Split(strings.TrimSpace(task.DecisionLog), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			// Try to split "timestamp: text" format
+			ts, text := "", line
+			if idx := strings.Index(line, ": "); idx > 0 && idx < 24 {
+				ts = line[:idx]
+				text = line[idx+2:]
+			}
+			sections = append(sections, styles.DecisionLogEntry(e.Theme, text, ts))
+		}
+	}
+
+	// --- Notes ---
+	if task.Notes != "" {
+		sections = append(sections, "")
+		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "NOTES"))
+		sections = append(sections, styles.NotesBlock(e.Theme, task.Notes, contentWidth))
+	}
+
+	// --- Footer hint ---
+	sections = append(sections, "")
+	hint := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
+		Render("[Enter] collapse  [Tab] next subtask  [↑↓] scroll")
+	sections = append(sections, hint)
+
+	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return styles.ExpandedCardStyle(e.Theme, task.Status, e.Width).Render(content)
+}
+
+// ContentHeight returns the total number of rendered lines (for scroll bounds).
+func (e *ExpandedCard) ContentHeight() int {
+	rendered := e.Render()
+	return strings.Count(rendered, "\n") + 1
+}
+
+// ViewportSlice returns the visible portion of the rendered card based on
+// ScrollOffset and Height, providing viewport scrolling.
+func (e *ExpandedCard) ViewportSlice() string {
+	lines := strings.Split(e.Render(), "\n")
+	start := e.ScrollOffset
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(lines) {
+		return ""
+	}
+	end := start + e.Height
+	if end > len(lines) {
+		end = len(lines)
+	}
+	return strings.Join(lines[start:end], "\n")
+}
+
+// wordWrap wraps text to the given width, breaking on word boundaries.
+func wordWrap(s string, width int) string {
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return ""
+	}
+	var lines []string
+	var current strings.Builder
+	for _, word := range words {
+		if current.Len() == 0 {
+			current.WriteString(word)
+			continue
+		}
+		if current.Len()+1+len(word) > width {
+			lines = append(lines, current.String())
+			current.Reset()
+			current.WriteString(word)
+		} else {
+			current.WriteString(" ")
+			current.WriteString(word)
+		}
+	}
+	if current.Len() > 0 {
+		lines = append(lines, current.String())
+	}
+	return strings.Join(lines, "\n")
+}
+
 // formatAge formats a duration into a human-readable short string.
 func formatAge(d time.Duration) string {
 	switch {
