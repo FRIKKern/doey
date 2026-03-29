@@ -42,7 +42,11 @@ type Task struct {
 	Description string    // multi-line task description
 	Attachments []string  // list of URLs/file paths
 	Created     int64     // unix epoch
-	Subtasks    []Subtask // worker assignments
+	Subtasks     []Subtask // worker assignments
+	Category     string   // bug, feature, refactor, docs, infrastructure
+	Tags         []string // cross-cutting concerns
+	MergedInto   string   // task ID this was merged into (audit trail)
+	ParentTaskID string   // parent task for subtask hierarchy
 }
 
 // Subtask represents a worker assignment under a parent task.

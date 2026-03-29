@@ -20,7 +20,11 @@ type PersistentTask struct {
 	Team        string   `json:"team"`                   // assigned team name (optional)
 	Created     int64  `json:"created"`      // unix epoch
 	Updated     int64  `json:"updated"`      // unix epoch
-	Priority    int    `json:"priority"`     // sort order (lower = higher priority)
+	Priority     int      `json:"priority"`                  // sort order (lower = higher priority)
+	Category     string   `json:"category,omitempty"`        // bug, feature, refactor, docs, infrastructure
+	Tags         []string `json:"tags,omitempty"`            // cross-cutting concerns
+	MergedInto   string   `json:"merged_into,omitempty"`     // task ID this was merged into
+	ParentTaskID string   `json:"parent_task_id,omitempty"`  // parent task for subtask hierarchy
 }
 
 // TaskStore holds all persistent tasks.
@@ -163,13 +167,17 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 		}
 
 		s.Tasks = append(s.Tasks, PersistentTask{
-			ID:          rt.ID,
-			Title:       rt.Title,
-			Status:      rt.Status,
-			Description: rt.Description,
-			Attachments: rt.Attachments,
-			Created:     rt.Created,
-			Updated:     rt.Created,
+			ID:           rt.ID,
+			Title:        rt.Title,
+			Status:       rt.Status,
+			Description:  rt.Description,
+			Attachments:  rt.Attachments,
+			Created:      rt.Created,
+			Updated:      rt.Created,
+			Category:     rt.Category,
+			Tags:         rt.Tags,
+			MergedInto:   rt.MergedInto,
+			ParentTaskID: rt.ParentTaskID,
 		})
 	}
 }
