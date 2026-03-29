@@ -45,12 +45,15 @@ mv "${TEAM_FILE}.tmp" "$TEAM_FILE" && CURRENT_WINDOWS=$(grep '^TEAM_WINDOWS=' "$
 ## Step 4: Launch Claude in all panes
 bash: if [ "$FREELANCER_MODE" = "true" ]; then for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do WORKER_PROMPT=$(grep -rl "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1); CMD="claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} F${i}\""; [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""; tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter; sleep 0.5; done; echo "Launched: ${WORKER_COUNT} freelancers"; else tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" "claude --dangerously-skip-permissions --name \"T${NEW_WIN} Window Manager\" --agent \"t${NEW_WIN}-manager\"" Enter && sleep 1; for i in $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do WORKER_PROMPT=$(grep -rl "pane ${NEW_WIN}\.${i} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1); CMD="claude --dangerously-skip-permissions --model opus --name \"T${NEW_WIN} W${i}\""; [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""; tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${i}" "$CMD" Enter; sleep 0.5; done; echo "Launched: Manager + ${WORKER_COUNT} workers"; fi
 
-## Step 5: Create worktree (if --worktree)
+## Step 5: Apply standard manager-left layout
+bash: bash -c "eval \"\$(sed -n '/^_env_val()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\" && eval \"\$(sed -n '/^_layout_checksum()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\" && eval \"\$(sed -n '/^rebalance_grid_layout()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\" && rebalance_grid_layout '${SESSION_NAME}' '${NEW_WIN}' '${RUNTIME_DIR}'"
+
+## Step 6: Create worktree (if --worktree)
 Best-effort — team still created if worktree fails.
 
 bash: WT_DIR="" && WT_BRANCH="" && if [ "$WORKTREE_MODE" = "true" ]; then WT_BRANCH="doey/team-${NEW_WIN}-$(date +%m%d-%H%M)"; WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${NEW_WIN}"; mkdir -p "$(dirname "$WT_DIR")"; if ! git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$WT_BRANCH" 2>&1; then echo "WARNING: Worktree failed. Team created without isolation."; WT_DIR=""; WT_BRANCH=""; else [ -f "${PROJECT_DIR}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${PROJECT_DIR}/.claude/settings.local.json" "${WT_DIR}/.claude/settings.local.json"; _tmp_env=$(mktemp "${RUNTIME_DIR}/team_env_XXXXXX"); cat "${RUNTIME_DIR}/team_${NEW_WIN}.env" > "$_tmp_env"; printf 'WORKTREE_DIR="%s"\nWORKTREE_BRANCH="%s"\n' "$WT_DIR" "$WT_BRANCH" >> "$_tmp_env"; mv "$_tmp_env" "${RUNTIME_DIR}/team_${NEW_WIN}.env"; echo "Worktree created: ${WT_DIR} on branch ${WT_BRANCH}"; fi; else echo "Skipped (--worktree not set)"; fi
 
-## Step 6: Verify boot and report
+## Step 7: Verify boot and report
 bash: sleep 8 && NOT_READY=0 && DOWN_PANES="" && for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null); OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null); if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"; fi; done && [ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
 
 If not ready: check listed panes with `tmux capture-pane -t <pane> -p`, retry send-keys.
