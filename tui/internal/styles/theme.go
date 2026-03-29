@@ -20,6 +20,7 @@ type Theme struct {
 	Debug     lipgloss.AdaptiveColor // soft gray-blue for debug log events
 	Highlight lipgloss.AdaptiveColor // warm gold for notable log events
 	Subtle    lipgloss.AdaptiveColor // very faint text for timestamps/metadata
+	Separator lipgloss.AdaptiveColor // very dim line/border color
 
 	Title         lipgloss.Style
 	Subtitle      lipgloss.Style
@@ -59,18 +60,19 @@ func (t Theme) DottedLeader(name, desc string, maxWidth int) string {
 // DefaultTheme returns the standard Doey color theme with warmer, more
 // saturated terminal-inspired colors that work in both light and dark terminals.
 func DefaultTheme() Theme {
-	primary := lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#22D3EE"}
-	success := lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#4ADE80"}
-	warning := lipgloss.AdaptiveColor{Light: "#B45309", Dark: "#FBBF24"}
-	danger := lipgloss.AdaptiveColor{Light: "#B91C1C", Dark: "#F87171"}
+	primary := lipgloss.AdaptiveColor{Light: "#475569", Dark: "#94A3B8"}
+	success := lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#6EE7B7"}
+	warning := lipgloss.AdaptiveColor{Light: "#92400E", Dark: "#FCD34D"}
+	danger := lipgloss.AdaptiveColor{Light: "#991B1B", Dark: "#FCA5A5"}
 	muted := lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#9CA3AF"}
-	accent := lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#C084FC"}
+	accent := lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#A78BFA"}
 	text := lipgloss.AdaptiveColor{Light: "#1F2937", Dark: "#E5E7EB"}
 	bgText := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#1F2937"}
-	info := lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"}
+	info := lipgloss.AdaptiveColor{Light: "#3B82F6", Dark: "#93C5FD"}
 	debug := lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9CA3AF"}
-	highlight := lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FCD34D"}
+	highlight := lipgloss.AdaptiveColor{Light: "#B45309", Dark: "#FDE68A"}
 	subtle := lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#4B5563"}
+	separator := lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#334155"}
 
 	return Theme{
 		Primary:   primary,
@@ -85,6 +87,7 @@ func DefaultTheme() Theme {
 		Debug:     debug,
 		Highlight: highlight,
 		Subtle:    subtle,
+		Separator: separator,
 
 		Title: lipgloss.NewStyle().
 			Foreground(primary).
@@ -110,7 +113,7 @@ func DefaultTheme() Theme {
 			Faint(true),
 
 		SectionHeader: lipgloss.NewStyle().
-			Foreground(primary).
+			Foreground(text).
 			Bold(true),
 
 		StatLabel: lipgloss.NewStyle().
