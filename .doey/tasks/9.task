@@ -32,3 +32,7 @@ TASK_TAGS=bugfix,hooks,critical,task-system,ipc
 TASK_LOG_1774818992=REPORT_W1: Added early-exit whitelist in on-pre-tool-use.sh (lines 172-177) — Bash commands redirecting to .doey/tasks/*.task or /reports/ paths now exit 0 before git-write and tmux block patterns can false-positive on command content. bash -n passes. Edit/Write tools already unblocked for workers (exit 0 at line 169).
 TASK_LOG_1774819248=COMPLETE: Whitelist added in on-pre-tool-use.sh, committed as part of 86a8b9d.
 TASK_LOG_1774819327=REOPENED P0: Role detection broken for Managers. Dispatched to W2.1 for fix in on-session-start.sh and on-pre-tool-use.sh.
+TASK_LOG_1774819516=REPORT_W1: P0 role detection + hook guard fix complete. Changes:
+  on-session-start.sh: Added explicit team_file var and -f guards before _env_val calls. Pane 0 of non-freelancer team windows defaults to manager even without team_W.env.
+  on-pre-tool-use.sh: (a) Defense-in-depth role inference (lines 124-143) — if .role file missing, infers role from pane position using team_W.env/session.env. Manager at W.0 always detected. (b) Managers already have full tmux access at line 198 exit path — defense-in-depth prevents them from falling through to worker path. (c-e) Extended whitelist (lines 189-195): .doey/tasks/*.task, /tmp/doey/* runtime writes, /reports/*, /tmp/*.sh and /tmp/*.md dispatch helpers.
+  bash -n passes on both files.
