@@ -47,6 +47,7 @@ $_sw allow-rename off
 # ── Misc ──────────────────────────────────────────────────────────────
 $_s message-style 'bg=colour233,fg=cyan'
 $_s visual-activity off
+$_s activity-action none
 $_s set-titles on
 $_s set-titles-string "🤖 #{session_name} — #{pane_title}"
 $_s mouse on
