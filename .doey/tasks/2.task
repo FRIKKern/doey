@@ -1,6 +1,6 @@
 TASK_ID=2
 TASK_TITLE=Elevate task TUI — Kancli/omm/Zachkp-todo inspired redesign
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=in_progress
 TASK_CREATED=1743275100
 TASK_TYPE=feature
 TASK_DESCRIPTION=Redesign Doey's task system TUI (the Go dashboard task view) with inspiration from three Charmbracelet exemplars. Goal: simple, elegant, glamorous — subtract rather than add. Better layout distribution, elevated UX, polished feel. NOT a feature dump — a refinement pass.
@@ -27,3 +27,5 @@ SUCCESS CRITERIA:
 - Existing task functionality preserved (list, add, transition, subtasks)
 - Clean at 80x24 and 120x40 terminal sizes
 TASK_TAGS=tui,task-system,dashboard,design
+TASK_TEAM=W2
+TASK_LOG_1774814776=PROGRESS: Dispatched to W2 — Go build gate enforcement

@@ -224,6 +224,30 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
       _dbg_write "block_rename_sendkeys"
       exit 2 ;;
   esac
+  # Go build gate: block commits if staged tui/ Go files don't compile
+  case "$_CMD_STRIPPED" in *"git commit"*)
+    _staged_go=$(git diff --cached --name-only 2>/dev/null | grep -c '^tui/' 2>/dev/null) || _staged_go=0
+    if [ "$_staged_go" -gt 0 ] 2>/dev/null; then
+      _GO_BIN=""
+      for _d in /snap/go/current/bin /usr/local/go/bin "$HOME/go/bin"; do
+        if [ -x "$_d/go" ]; then _GO_BIN="$_d/go"; break; fi
+      done
+      if [ -z "$_GO_BIN" ]; then command -v go >/dev/null 2>&1 && _GO_BIN="go"; fi
+      if [ -n "$_GO_BIN" ]; then
+        _proj_dir="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+        if [ -d "${_proj_dir}/tui" ] && ! (cd "${_proj_dir}/tui" && "$_GO_BIN" build ./...) >/dev/null 2>&1; then
+          _build_err=$(cd "${_proj_dir}/tui" && "$_GO_BIN" build ./... 2>&1) || true
+          _log_block "TOOL_BLOCKED" "Go build failed — blocking commit" "$_build_err"
+          _dbg_write "block_go_build_failed"
+          echo "BLOCKED: Go build failed — fix compilation errors before committing:" >&2
+          echo "$_build_err" >&2
+          exit 2
+        fi
+      else
+        _dbg_write "warn_no_go_binary"
+      fi
+    fi
+  ;; esac
   _dbg_write "allow_manager"
   exit 0
 fi
