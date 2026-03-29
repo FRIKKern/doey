@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/doey-cli/doey/tui/internal/grammar"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -34,7 +35,8 @@ func (t TaskItem) FilterValue() string { return t.Task.Title }
 // CardDelegate renders task cards with status-colored borders.
 // It implements list.ItemDelegate.
 type CardDelegate struct {
-	Theme styles.Theme
+	Theme      styles.Theme
+	Heartbeats map[string]runtime.HeartbeatState
 }
 
 // NewCardDelegate creates a CardDelegate with the given theme.
@@ -42,8 +44,8 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 	return CardDelegate{Theme: t}
 }
 
-// Height returns the fixed card height (title + status line + 2 desc lines + bottom padding).
-func (d CardDelegate) Height() int { return 5 }
+// Height returns the fixed card height (title + status + heartbeat + 2 desc lines + bottom padding).
+func (d CardDelegate) Height() int { return 6 }
 
 // Spacing returns the gap between cards.
 func (d CardDelegate) Spacing() int { return 1 }
@@ -146,13 +148,55 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	line2 := badge + progress + age
 
+	// --- Line 3: heartbeat (if available) ---
+	heartbeatLine := ""
+	if hs, ok := d.Heartbeats[task.ID]; ok && hs.ActiveWorkers > 0 {
+		var healthDot string
+		switch hs.Health {
+		case "green":
+			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Success).Render("●")
+		case "amber":
+			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Warning).Render("●")
+		default:
+			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Danger).Render("●")
+		}
+
+		workers := fmt.Sprintf("%d worker", hs.ActiveWorkers)
+		if hs.ActiveWorkers != 1 {
+			workers += "s"
+		}
+		activity := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(workers + " active")
+
+		parts := healthDot + " " + activity
+		if hs.ActivityText != "" {
+			parts += lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(" · " + hs.ActivityText)
+		}
+		if !hs.LastActivity.IsZero() {
+			elapsed := time.Since(hs.LastActivity)
+			if elapsed < 5*time.Second {
+				parts += lipgloss.NewStyle().Foreground(d.Theme.Success).Render("  now")
+			} else {
+				parts += lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("  " + formatAge(elapsed) + " ago")
+			}
+		}
+		if hs.ProgressText != "" {
+			parts += lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("  " + hs.ProgressText)
+		}
+		heartbeatLine = parts
+	}
+
 	// --- Lines 3-4: description preview ---
 	descLines := truncateDesc(task.Description, 2, contentWidth)
 
 	descStyle := lipgloss.NewStyle().Foreground(d.Theme.Muted)
 	renderedDesc := descStyle.Render(descLines)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, line1, line2, renderedDesc)
+	var content string
+	if heartbeatLine != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2, heartbeatLine, renderedDesc)
+	} else {
+		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2, renderedDesc)
+	}
 	fmt.Fprint(w, cardStyle.Render(content))
 }
 
@@ -359,6 +403,44 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, styles.NotesBlock(e.Theme, task.Notes, contentWidth))
 	}
 
+	// --- Activity Log ---
+	if len(task.Logs) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.ExpandedSectionHeader(e.Theme, "ACTIVITY LOG"))
+		for _, log := range task.Logs {
+			ts := ""
+			if log.Timestamp > 0 {
+				ts = time.Unix(log.Timestamp, 0).Format("15:04")
+			}
+			prefix, body := splitLogPrefix(log.Entry)
+			prefixStyle := logPrefixStyle(prefix, e.Theme)
+
+			// Parse visualization blocks from the entry.
+			blocks := grammar.Parse(body)
+			if len(blocks) > 0 {
+				rendered := grammar.RenderTerminal(blocks)
+				// Show prefix header, then rendered blocks.
+				header := prefixStyle
+				if ts != "" {
+					header = lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(ts) + " " + header
+				}
+				sections = append(sections, header)
+				sections = append(sections, rendered)
+			} else {
+				// Plain text entry — render inline with timestamp.
+				line := prefixStyle
+				if line != "" {
+					line += " "
+				}
+				line += wordWrap(body, contentWidth-8)
+				if ts != "" {
+					line = lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(ts) + " " + line
+				}
+				sections = append(sections, line)
+			}
+		}
+	}
+
 	// --- Footer hint ---
 	sections = append(sections, "")
 	hint := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
@@ -400,6 +482,13 @@ func (e *ExpandedCard) ContentHeight() int {
 	if e.Item.Task.Notes != "" {
 		noteLines := strings.Count(e.Item.Task.Notes, "\n") + 1
 		lines += noteLines + 2
+	}
+	if len(e.Item.Task.Logs) > 0 {
+		lines += 2 // section header + spacing
+		for _, log := range e.Item.Task.Logs {
+			logLines := strings.Count(log.Entry, "\n") + 2 // entry + rendered blocks estimate
+			lines += logLines
+		}
 	}
 	return lines
 }
@@ -448,6 +537,42 @@ func wordWrap(s string, width int) string {
 		lines = append(lines, current.String())
 	}
 	return strings.Join(lines, "\n")
+}
+
+// splitLogPrefix extracts a type prefix like "PLAN:" or "RESEARCH:" from a log entry.
+// Returns (prefix, remainder). If no recognized prefix, returns ("", entry).
+func splitLogPrefix(entry string) (string, string) {
+	prefixes := []string{"PLAN:", "RESEARCH:", "REPORT:", "DISPATCH:", "DECISION:", "NOTE:"}
+	trimmed := strings.TrimSpace(entry)
+	for _, p := range prefixes {
+		if strings.HasPrefix(strings.ToUpper(trimmed), p) {
+			return strings.TrimSuffix(p, ":"), strings.TrimSpace(trimmed[len(p):])
+		}
+	}
+	return "", trimmed
+}
+
+// logPrefixStyle returns a styled prefix badge for log entries.
+func logPrefixStyle(prefix string, theme styles.Theme) string {
+	if prefix == "" {
+		return ""
+	}
+	var clr lipgloss.AdaptiveColor
+	switch prefix {
+	case "PLAN":
+		clr = theme.Primary // blue
+	case "RESEARCH":
+		clr = theme.Success // green
+	case "REPORT":
+		clr = theme.Warning // gold/amber
+	case "DISPATCH":
+		clr = theme.Accent
+	case "DECISION":
+		clr = theme.Text
+	default:
+		clr = theme.Muted
+	}
+	return lipgloss.NewStyle().Foreground(clr).Bold(true).Render("[" + prefix + "]")
 }
 
 // formatAge formats a duration into a human-readable short string.

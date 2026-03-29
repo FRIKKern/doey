@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -14,8 +13,12 @@ import (
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
-// TickMsg triggers a periodic runtime re-read.
+// TickMsg triggers a full runtime snapshot re-read (every 5s).
 type TickMsg time.Time
+
+// HeartbeatTickMsg triggers a lightweight heartbeat recompute (every 2s).
+// No file I/O — recomputes health/staleness from the existing snapshot.
+type HeartbeatTickMsg time.Time
 
 // SnapshotMsg carries a fresh runtime snapshot.
 type SnapshotMsg runtime.Snapshot
@@ -26,7 +29,10 @@ type saveTeamDoneMsg struct {
 	err  error
 }
 
-const tickInterval = 5 * time.Second
+const (
+	snapshotInterval  = 5 * time.Second
+	heartbeatInterval = 2 * time.Second
+)
 
 // Model is the root dashboard model composing all sub-models.
 type Model struct {
@@ -39,7 +45,9 @@ type Model struct {
 	agents     AgentsModel
 	debug      DebugModel
 	messages   MessagesModel
+	tabBar     TabBarModel
 	footer     FooterModel
+	heartbeats map[string]runtime.HeartbeatState
 	focusIndex int // 0=welcome, 1=teams, 2=tasks, 3=agents, 4=debug, 5=messages
 	width      int
 	height     int
@@ -49,22 +57,31 @@ type Model struct {
 // New creates a root model that reads from the given runtime directory.
 func New(runtimeDir string) Model {
 	theme := styles.DefaultTheme()
+	tabs := []TabItem{
+		{Name: "Dashboard", Icon: "◆"},
+		{Name: "Teams", Icon: "◈"},
+		{Name: "Tasks", Icon: "▣"},
+		{Name: "Agents", Icon: "◉"},
+		{Name: "Debug", Icon: "⚙"},
+		{Name: "Messages", Icon: "✉"},
+	}
 	return Model{
-		runtime: runtime.NewReader(runtimeDir),
-		header:  NewHeaderModel(),
-		welcome: NewWelcomeModel(),
-		tasks:   NewTasksModel(),
-		team:   NewTeamModel(theme),
-		agents: NewAgentsModel(theme),
+		runtime:  runtime.NewReader(runtimeDir),
+		header:   NewHeaderModel(),
+		welcome:  NewWelcomeModel(),
+		tasks:    NewTasksModel(),
+		team:     NewTeamModel(theme),
+		agents:   NewAgentsModel(theme),
 		debug:    NewDebugModel(theme),
 		messages: NewMessagesModel(theme),
+		tabBar:   NewTabBarModel(tabs),
 		footer:   NewFooterModel(),
 	}
 }
 
-// Init starts the tick timer.
+// Init starts the snapshot and heartbeat timers.
 func (m Model) Init() tea.Cmd {
-	return tickCmd()
+	return tea.Batch(snapshotTickCmd(), heartbeatTickCmd())
 }
 
 // Update handles all messages and routes to sub-models.
@@ -79,11 +96,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.propagateSizes()
 
 	case TickMsg:
-		cmds = append(cmds, tickCmd())
+		cmds = append(cmds, snapshotTickCmd())
 		cmds = append(cmds, m.readSnapshotCmd())
+
+	case HeartbeatTickMsg:
+		// Lightweight: recompute health/staleness from existing snapshot (no I/O)
+		m.heartbeats = runtime.AggregateHeartbeats(m.snapshot)
+		cmds = append(cmds, heartbeatTickCmd())
 
 	case SnapshotMsg:
 		m.snapshot = runtime.Snapshot(msg)
+		m.heartbeats = runtime.AggregateHeartbeats(m.snapshot)
 		m.header.SetSnapshot(m.snapshot)
 		m.welcome.SetSnapshot(m.snapshot)
 		m.tasks.SetSnapshot(m.snapshot)
@@ -247,39 +270,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// renderMenuBar renders a navigable menu bar showing the active panel.
-func (m Model) renderMenuBar(width int) string {
-	t := styles.DefaultTheme()
-	items := []string{"Dashboard", "Teams", "Tasks", "Agents", "Debug", "Messages"}
-
-	activeStyle := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		Padding(0, 1)
-	inactiveStyle := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Padding(0, 1)
-	sepStyle := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true)
-
-	var parts []string
-	for i, item := range items {
-		if i == m.focusIndex {
-			parts = append(parts, activeStyle.Render("[ "+item+" ]"))
-		} else {
-			parts = append(parts, inactiveStyle.Render("  "+item+"  "))
-		}
-	}
-	menu := "  " + strings.Join(parts, sepStyle.Render("·"))
-
-	sep := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
-		Width(width).
-		Render(strings.Repeat("─", width))
-
-	return menu + "\n" + sep
+// renderTabBar returns the tab bar view, synced to focusIndex.
+func (m Model) renderTabBar() string {
+	return m.tabBar.View()
 }
 
 // View composes the full dashboard layout.
@@ -289,12 +282,12 @@ func (m Model) View() string {
 	}
 
 	banner := RenderBanner(m.snapshot.Session.ProjectName, m.width)
-	menuBar := m.renderMenuBar(m.width)
+	tabBar := m.renderTabBar()
 	footer := m.footer.View()
 
 	// Calculate body height
 	bannerH := lipgloss.Height(banner)
-	menuH := lipgloss.Height(menuBar)
+	menuH := lipgloss.Height(tabBar)
 	footerH := lipgloss.Height(footer)
 	bodyH := m.height - bannerH - menuH - footerH
 	if bodyH < 1 {
@@ -324,15 +317,16 @@ func (m Model) View() string {
 		body = m.messages.View()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, banner, menuBar, body, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, body, footer)
 }
 
 // propagateSizes distributes width/height to sub-models.
 func (m *Model) propagateSizes() {
 	m.footer.SetWidth(m.width)
 
+	m.tabBar.SetWidth(m.width)
 	bannerH := lipgloss.Height(RenderBanner(m.snapshot.Session.ProjectName, m.width))
-	menuH := lipgloss.Height(m.renderMenuBar(m.width))
+	menuH := lipgloss.Height(m.renderTabBar())
 	footerH := lipgloss.Height(m.footer.View())
 	bodyH := m.height - bannerH - menuH - footerH
 	if bodyH < 1 {
@@ -349,8 +343,9 @@ func (m *Model) propagateSizes() {
 	m.updateFocus()
 }
 
-// updateFocus syncs focus state to sub-models.
+// updateFocus syncs focus state to sub-models and tab bar.
 func (m *Model) updateFocus() {
+	m.tabBar.SetActive(m.focusIndex)
 	m.team.SetFocused(m.focusIndex == 1)
 	m.tasks.SetFocused(m.focusIndex == 2)
 	m.agents.SetFocused(m.focusIndex == 3)
@@ -358,10 +353,17 @@ func (m *Model) updateFocus() {
 	m.messages.SetFocused(m.focusIndex == 5)
 }
 
-// tickCmd returns a command that sends a TickMsg after the interval.
-func tickCmd() tea.Cmd {
-	return tea.Tick(tickInterval, func(t time.Time) tea.Msg {
+// snapshotTickCmd triggers a full snapshot re-read every 5s.
+func snapshotTickCmd() tea.Cmd {
+	return tea.Tick(snapshotInterval, func(t time.Time) tea.Msg {
 		return TickMsg(t)
+	})
+}
+
+// heartbeatTickCmd triggers a lightweight heartbeat recompute every 2s.
+func heartbeatTickCmd() tea.Cmd {
+	return tea.Tick(heartbeatInterval, func(t time.Time) tea.Msg {
+		return HeartbeatTickMsg(t)
 	})
 }
 
