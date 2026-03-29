@@ -228,8 +228,6 @@ TEAMEOF
 
 generate_team_agent() {
   local base_name="$1" team_num="$2"
-  # Skip deprecated watchdog agents
-  case "$base_name" in doey-watchdog|doey-freelancer-watchdog) return 0 ;; esac
   local role="${base_name#doey-}"
   local new_name="t${team_num}-${role}"
   local src="$HOME/.claude/agents/${base_name}.md"
@@ -1071,8 +1069,7 @@ _purge_scan_runtime() {
   # --- Session-stopped-only files ---
   if ! $active; then
     for f in "$rt"/status/pane_map "$rt"/status/col_*.collapsed \
-             "$rt"/status/pane_hash_* "$rt"/status/watchdog_W*.heartbeat \
-             "$rt"/status/watchdog_pane_states_W*.json; do
+             "$rt"/status/pane_hash_*; do
       [[ -f "$f" ]] || continue
       _purge_collect "$f" "$list_file"
     done
@@ -3818,7 +3815,7 @@ kill_team_window() {
   fi
 
   rm -f "$team_env"
-  rm -f "$HOME/.claude/agents/t${window}-watchdog.md" "$HOME/.claude/agents/t${window}-manager.md" 2>/dev/null || true
+  rm -f "$HOME/.claude/agents/t${window}-manager.md" 2>/dev/null || true
   local safe_prefix="${session//[-:.]/_}_${window}_"
   rm -f "${runtime_dir}/status/${safe_prefix}"* 2>/dev/null || true
   rm -f "${runtime_dir}/results/"*"_${window}_"* 2>/dev/null || true

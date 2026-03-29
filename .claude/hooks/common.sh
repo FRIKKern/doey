@@ -162,8 +162,6 @@ team_role() {
   fi
 }
 
-is_watchdog() { return 1; }
-
 is_manager() {
   [ -n "${_DOEY_IS_MGR+x}" ] && return "$_DOEY_IS_MGR"
   _DOEY_IS_MGR=1

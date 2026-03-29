@@ -1,5 +1,5 @@
 ---
-name: doey-watchdog-compact
+name: doey-sm-compact
 description: Send /compact to Session Manager to reduce context window. Use when you need to "compact the SM", "reduce SM context", or "SM is running out of context".
 ---
 
