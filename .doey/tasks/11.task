@@ -1,0 +1,68 @@
+TASK_ID=11
+TASK_TITLE=Redesign Window Manager — coordinator only, never does work itself
+TASK_STATUS=done
+TASK_CREATED=1774819500
+TASK_TYPE=refactor
+TASK_DESCRIPTION=Window Managers currently try to do research and implementation themselves. This is wrong. They must operate like Session Manager — pure coordination, zero execution.
+
+=== NEW WINDOW MANAGER RESPONSIBILITIES ===
+1. HEARTBEATING — Monitor all workers continuously. Check status files every 10-15s. Know which workers are busy, idle, stuck, finished, errored
+2. DELEGATING — Break tasks into worker-sized pieces. Dispatch to workers. Never do the work yourself
+3. TASK MANAGEMENT — Update .doey/tasks/*.task files with plans, progress, subtask status. Keep the task file as the living record of all work
+4. UNSTICKING — Detect stuck workers (no status update for >60s, ERROR status, permission blocks). Send them guidance, restart them, or reassign their work
+5. RESEARCH DELEGATION — When research is needed, dispatch it to a worker. Wait for the result. Never research yourself
+
+=== WHAT MANAGERS MUST NOT DO ===
+- Read project source files for implementation purposes
+- Write or Edit any project files
+- Run tests or build commands
+- Use the Agent tool
+- Do research directly (dispatch to workers instead)
+
+=== MANAGER LOOP (like SM) ===
+1. Receive task from SM (or Boss)
+2. Plan: break into subtasks, assign to workers
+3. Write plan to task file
+4. Dispatch to workers
+5. HEARTBEAT LOOP:
+   - Poll worker status files every 10-15s
+   - Update task file with progress
+   - Detect stuck or errored workers and intervene
+   - When worker finishes: validate result, update subtask status, dispatch next piece
+6. When all subtasks done: write report to task file, notify SM
+
+=== FILES TO CHANGE ===
+- agents/doey-manager.md — rewrite agent definition to enforce coordinator-only behavior
+- .claude/hooks/on-pre-tool-use.sh — add Manager tool restrictions (block Read/Edit/Write/Grep/Glob on project source, allow only on .doey/tasks/ and runtime dir)
+- CLAUDE.md — update Manager description in architecture table
+
+=== CONSTRAINTS ===
+- Bash 3.2 compatible for hook changes
+- Fresh-install safe
+- Must not break SM coordination
+- Task #9 (role detection fix) must land first — Managers need dispatch permission
+
+SUCCESS CRITERIA:
+- Manager agent definition explicitly forbids doing work
+- Hook enforces tool restrictions for Manager role
+- Manager heartbeats workers and updates task files
+- Manager detects and unsticks blocked workers
+- No Manager ever reads or edits project source files
+TASK_TAGS=agents,hooks,architecture,manager,critical
+TASK_DISPATCH_MODE=sequential
+TASK_TOTAL_PHASES=1
+TASK_CURRENT_PHASE=1
+TASK_TEAM=W1
+TASK_LOG_1774819702=DISPATCHED: To W1.2 freelancer. Dependency Task #9 already complete (7fae04e).
+
+TASK_LOG=2026-03-29T00:00:00 Worker2 — Phase 1 implementation complete
+TASK_LOG_ENTRY_1=FILE1: agents/doey-manager.md — rewrote intro to enforce coordinator-only rules (6 NEVER rules), updated Permission Requests table to remove "do it directly" for file ops
+TASK_LOG_ENTRY_2=FILE2: .claude/hooks/on-pre-tool-use.sh — added manager non-Bash tool block before blanket allow. Blocks: Agent (fully), Read/Edit/Write/Glob/Grep on project source. Allows: .doey/tasks/*, runtime dir, /tmp/doey/*. bash -n PASS
+TASK_LOG_ENTRY_3=FILE3: CLAUDE.md — updated Tool Restrictions table: Manager row now shows Read/Edit/Write/Glob/Grep on project source; Agent; implementation work (send-keys allowed)
+TASK_LOG_VALIDATION_1=bash -n on-pre-tool-use.sh: PASS
+TASK_LOG_VALIDATION_2=Manager send-keys: NOT blocked — Bash tool path goes to manager/SM block (line 247+) which only blocks /rename, then exit 0
+TASK_LOG_VALIDATION_3=Manager Read on .sh files: BLOCKED — new block at line 179+ catches Read tool, path fails .doey/tasks and runtime allowlist, exits 2
+TASK_LOG_VALIDATION_4=Manager Read on .doey/tasks/*.task: ALLOWED — path matches */.doey/tasks/* allowlist
+TASK_LOG_VALIDATION_5=Manager Agent: BLOCKED — explicit Agent case in new block exits 2
+TASK_LOG_VALIDATION_6=Manager Bash: UNAFFECTED — new block only fires when TOOL_NAME != Bash
+TASK_LOG_1774819853=COMPLETE: Committed 5c1e684. 3 files, +39/-3 lines. All 5 validation scenarios pass.

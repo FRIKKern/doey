@@ -1,6 +1,6 @@
 TASK_ID=8
 TASK_TITLE=Live heartbeat task list — real-time activity feed in Go TUI
-TASK_STATUS=active
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1774819128
 TASK_TYPE=feature
 TASK_DESCRIPTION=The task list in the Go TUI must be a live dashboard — not a static table. Every task should pulse with real-time information about what is happening RIGHT NOW. A user glancing at the list should instantly understand the state of all work without clicking into anything.
@@ -91,3 +91,8 @@ TASK_TAGS=tui,dashboard,real-time,research,charmbracelet,feature
 TASK_DISPATCH_MODE=phased
 TASK_TOTAL_PHASES=2
 TASK_CURRENT_PHASE=1
+TASK_TEAM=W2
+TASK_LOG_1774819619=DISPATCHED: Bundled to W2 Manager with Task #7
+TASK_LOG_1774819650=PLAN_W2: Wave1 - W3 builds tab navigation framework in root model. Wave2 - integrate with existing views.
+TASK_LOG_1774820308=REPORT_W2: Task #8 COMPLETE. Tab nav built: tabbar.go(127 lines). Root model updated with 2-tier polling (2s heartbeat, 5s snapshot). Heartbeat aggregator: heartbeat.go(179 lines). Live task rows show health/activity/progress. Go build clean.
+TASK_LOG_1774820387=COMPLETE: Tab bar + heartbeat aggregator + 2-tier polling. 306 lines. Committed debaa20.
