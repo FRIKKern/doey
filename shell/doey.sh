@@ -4130,6 +4130,15 @@ doey_remote() {
       printf "\n"
       ;;
 
+    setup)
+      if command -v doey-remote-setup >/dev/null 2>&1; then
+        doey-remote-setup
+      else
+        printf "  ${ERROR}doey-remote-setup not found.${RESET}\n"
+        printf "  Run: cd %s/tui && go build -o ~/.local/bin/doey-remote-setup ./cmd/doey-remote-setup/\n" "$DOEY_SOURCE_DIR"
+      fi
+      ;;
+
     *)
       # Positional arg = project name → provision or attach
       local project="$subcmd"
