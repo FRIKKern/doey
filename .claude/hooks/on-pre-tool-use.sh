@@ -227,6 +227,25 @@ case "${_WL_CMD:-}" in
   *">"*"/tmp/"*".sh"*|*">"*"/tmp/"*".md"*)              _dbg_write "allow_tmp_script"; exit 0 ;;
 esac
 
+# Manager tmux dispatch: allow safe tmux commands, block destructive ones.
+# Must run BEFORE git check — tmux payloads may contain git-related strings.
+if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" = "Bash" ]; then
+  _TMUX_CMD=$(_json_str tool_input.command)
+  _tmux_stripped=$(echo "$_TMUX_CMD" | sed 's/^[[:space:]]*//')
+  case "$_tmux_stripped" in
+    "tmux kill-session"*|"tmux kill-server"*|"tmux kill-window"*)
+      _log_block "TOOL_BLOCKED" "Manager destructive tmux command blocked" "$_tmux_stripped"
+      _dbg_write "block_manager_tmux_destructive"
+      echo "BLOCKED: Managers cannot run destructive tmux commands (kill-session/server/window)." >&2
+      exit 2 ;;
+    "tmux send-keys"*|"tmux load-buffer"*|"tmux paste-buffer"*|\
+    "tmux select-pane"*|"tmux list-panes"*|"tmux capture-pane"*|\
+    "tmux display-message"*|"tmux copy-mode"*)
+      _dbg_write "allow_manager_tmux_dispatch"
+      exit 0 ;;
+  esac
+fi
+
 if [ "$_DOEY_ROLE" != "session_manager" ]; then
   _GIT_CMD=$(_json_str tool_input.command)
   if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
