@@ -33,7 +33,7 @@ fi
 
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
 
-notify_watchdog "$STOP_STATUS"
+notify_sm "$STOP_STATUS"
 
 # Session Manager self-sustaining loop: after stop, re-trigger to check messages/results
 if is_session_manager; then

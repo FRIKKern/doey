@@ -44,7 +44,7 @@ _sm_dbg_wake() {
   [ "$_SM_DBG" = "true" ] || return 0
   local reason="$1" elapsed="$2"
   [ -d "$(dirname "$_SM_DBG_FILE")" ] || mkdir -p "$(dirname "$_SM_DBG_FILE")" 2>/dev/null
-  printf '{"ts":%s,"cat":"watchdog","msg":"sm_wake","reason":"%s","wait_s":%s}\n' \
+  printf '{"ts":%s,"cat":"sm","msg":"sm_wake","reason":"%s","wait_s":%s}\n' \
     "$(date +%s)" "$reason" "$elapsed" \
     >> "$_SM_DBG_FILE" 2>/dev/null
   return 0

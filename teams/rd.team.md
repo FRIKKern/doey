@@ -4,10 +4,8 @@ description: "R&D product team — Brain coordinates Platform Expert, Claude Exp
 grid: dynamic
 workers: 3
 type: local
-watchdog: default
 manager_model: opus
 worker_model: opus
-watchdog_model: sonnet
 
 panes:
   0: { role: brain, agent: doey-product-brain, name: "Brain" }

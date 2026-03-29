@@ -4,7 +4,6 @@ description: "Code review pipeline — reviewer reads, critic validates, impleme
 grid: dynamic
 workers: 3
 type: local
-watchdog: default
 manager_model: opus
 worker_model: opus
 

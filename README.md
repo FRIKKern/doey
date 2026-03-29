@@ -143,7 +143,6 @@ EOF
 | `DOEY_MAX_WORKERS` | `20` | Max worker panes across all teams |
 | `DOEY_MANAGER_MODEL` | `opus` | Model for Window Managers |
 | `DOEY_WORKER_MODEL` | `opus` | Model for Workers |
-| `DOEY_WATCHDOG_MODEL` | `sonnet` | Model for Watchdogs (deprecated) |
 | `DOEY_WORKER_LAUNCH_DELAY` | `3` | Seconds between worker launches (auth stagger) |
 | `DOEY_TEAM_LAUNCH_DELAY` | `15` | Seconds between team launches |
 

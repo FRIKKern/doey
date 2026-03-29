@@ -10,7 +10,7 @@ set -euo pipefail
 #   doey stop         # Stop session for current project
 #   doey purge        # Scan and clean stale runtime files
 #   doey update       # Pull latest + reinstall (alias: reinstall)
-#   doey reload       # Hot-reload running session (Manager + Watchdog)
+#   doey reload       # Hot-reload running session (Manager)
 #   doey doctor       # Check installation health & prerequisites
 #   doey remove NAME  # Unregister a project from the registry
 #   doey uninstall    # Remove all Doey files
@@ -68,18 +68,13 @@ DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
 DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
 DOEY_INITIAL_FREELANCER_TEAMS="${DOEY_INITIAL_FREELANCER_TEAMS:-1}"
 DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
-DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
-
 # Auth & Launch Timing
 # Defaults are conservative to avoid Claude API rate-limit errors on session start.
 # Lower only if your account has high rate limits and you need faster boots.
 DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
 DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
 DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
-DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-2}"
 DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-8}"
-DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-10}"
-DOEY_WATCHDOG_LOOP_DELAY="${DOEY_WATCHDOG_LOOP_DELAY:-25}"
 
 # Dynamic Grid Behavior
 DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
@@ -88,12 +83,9 @@ DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
 
 # Panel & Monitoring
 DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
-DOEY_WATCHDOG_SCAN_INTERVAL="${DOEY_WATCHDOG_SCAN_INTERVAL:-30}"
-
 # Models
 DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
 DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-opus}"
-DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-sonnet}"
 DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -203,24 +195,23 @@ read_team_windows() {
 
 write_team_env() {
   local runtime_dir="$1" window_index="$2" grid="$3"
-  local watchdog_pane="$4" worker_panes="$5" worker_count="$6"
-  local manager_pane="${7:-0}"
-  local worktree_dir="${8:-}"
-  local worktree_branch="${9:-}"
-  local team_name="${10:-}"
-  local team_role="${11:-}"
-  local worker_model="${12:-}"
-  local manager_model="${13:-}"
+  local worker_panes="$4" worker_count="$5"
+  local manager_pane="${6:-0}"
+  local worktree_dir="${7:-}"
+  local worktree_branch="${8:-}"
+  local team_name="${9:-}"
+  local team_role="${10:-}"
+  local worker_model="${11:-}"
+  local manager_model="${12:-}"
   local session_name
   session_name=$(_env_val "${runtime_dir}/session.env" SESSION_NAME)
-  local team_type="${14:-}"
-  local team_def="${15:-}"
+  local team_type="${13:-}"
+  local team_def="${14:-}"
   local _tmp="${runtime_dir}/team_${window_index}.env.tmp.$$"
   cat > "$_tmp" << TEAMEOF
 WINDOW_INDEX="${window_index}"
 GRID="${grid}"
 MANAGER_PANE="${manager_pane}"
-WATCHDOG_PANE="${watchdog_pane}"
 WORKER_PANES="${worker_panes}"
 WORKER_COUNT="${worker_count}"
 SESSION_NAME="${session_name}"
@@ -515,16 +506,6 @@ _worktree_safe_remove() {
   fi
 
   remove_team_worktree "$project_dir" "$worktree_dir"
-}
-
-_balance_watchdog_panes() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
-}
-
-_find_free_watchdog_slot() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
-  _FWS_SLOT=""
-  return 1
 }
 
 # Dashboard layout: Info Panel (left) | Boss (top-right) | Session Manager (bottom-right)
@@ -1505,7 +1486,7 @@ BOSS_PANE="0.1"
 SM_PANE="0.2"
 MANIFEST
 
-  write_team_env "$runtime_dir" "1" "$grid" "" "$worker_panes_csv" "$worker_count" "0" "" ""
+  write_team_env "$runtime_dir" "1" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
 
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
   tmux new-window -t "$session" -c "$dir"
@@ -2681,8 +2662,6 @@ _init_doey_session() {
   tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
   # Export config values so hooks (running in subshells) can read them
-  tmux set-environment -t "$session" DOEY_WATCHDOG_SCAN_INTERVAL "$DOEY_WATCHDOG_SCAN_INTERVAL"
-  tmux set-environment -t "$session" DOEY_WATCHDOG_LOOP_DELAY "$DOEY_WATCHDOG_LOOP_DELAY"
   tmux set-environment -t "$session" DOEY_INFO_PANEL_REFRESH "$DOEY_INFO_PANEL_REFRESH"
 
   # Generate settings overlay with Doey statusline (ships with Doey, not user config)
@@ -2767,7 +2746,7 @@ MANIFEST
 
   if [ -n "$_team1_def" ]; then
     # Team 1 uses a .team.md definition — dashboard first, then spawn from def
-    write_team_env "$runtime_dir" "1" "dynamic" "" "" "0" "0" "" ""
+    write_team_env "$runtime_dir" "1" "dynamic" "" "0" "0" "" ""
     setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
     step_done
 
@@ -2780,7 +2759,7 @@ MANIFEST
     STEP_TOTAL=6  # Skip step 5 (worker columns) — add_team_from_def handles workers
   else
     # Default dynamic grid path for team 1
-    write_team_env "$runtime_dir" "1" "dynamic" "" "" "0" "0" "" ""
+    write_team_env "$runtime_dir" "1" "dynamic" "" "0" "0" "" ""
 
     # Dashboard launches after session.env exists (info-panel + Session Manager need it)
     setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
@@ -2872,7 +2851,7 @@ MANIFEST
         local _ptc1_wp _ptc1_wc
         _ptc1_wp=$(_env_val "${runtime_dir}/team_1.env" WORKER_PANES)
         _ptc1_wc=$(_env_val "${runtime_dir}/team_1.env" WORKER_COUNT)
-        write_team_env "$runtime_dir" "1" "dynamic" "0.2" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
+        write_team_env "$runtime_dir" "1" "dynamic" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
         [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:1" "$_ptc1_name"
       fi
     fi
@@ -3087,13 +3066,12 @@ _read_team_state() {
   _ts_dir="$dir" _ts_wt_dir="" _ts_wt_branch=""
 
   if [ ! -f "$team_env" ]; then
-    _ts_worker_count=0 _ts_watchdog_pane="${WATCHDOG_PANE}"
+    _ts_worker_count=0
     _ts_grid="${GRID:-dynamic}" _ts_cols=1 _ts_worker_panes=""
     return 0
   fi
 
   _ts_worker_count=$(_env_val "$team_env" WORKER_COUNT); _ts_worker_count="${_ts_worker_count:-0}"
-  _ts_watchdog_pane=$(_env_val "$team_env" WATCHDOG_PANE)
   _ts_grid=$(_env_val "$team_env" GRID); _ts_grid="${_ts_grid:-dynamic}"
   _ts_worker_panes=$(_env_val "$team_env" WORKER_PANES)
   _ts_wt_dir=$(_env_val "$team_env" WORKTREE_DIR)
@@ -3197,7 +3175,7 @@ doey_add_column() {
   rebuild_pane_state "$session:$team_window" "$_rps_include_p0"
 
   local new_worker_count=$(( _ts_worker_count + 2 ))
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ts_watchdog_pane" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
 
   _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${new_pane_bottom}:${w2_num}"
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
@@ -3269,16 +3247,10 @@ doey_remove_column() {
   rebuild_pane_state "$session:$team_window" "$_rps_include_p0"
 
   local new_worker_count=$(( _ts_worker_count - 2 ))
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ts_watchdog_pane" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
   printf "  ${SUCCESS}Removed${RESET} worker column — ${BOLD}${new_worker_count}${RESET} workers remaining\n"
-}
-
-add_dashboard_watchdog_slot() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
-  WDG_NEW_SLOT=""
-  return 1
 }
 
 _apply_team_border_theme() {
@@ -3357,28 +3329,10 @@ _launch_team_manager() {
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 }
 
-_launch_team_watchdog() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge — SM handles monitoring
-}
-
-_brief_freelancer_team() {
-  local session="$1" window_index="$2" wdg_slot="$3" wp_list="$4"
-  local worker_count="$5"
-  # Freelancer teams have no manager — watchdog reports directly to Session Manager
-  # Note: watchdog initial prompt is sent by _launch_team_watchdog; stop hook re-triggers cycles
-  # This function only sends the freelancer-specific context update
-  [ -n "$wdg_slot" ] || return 0
-  (
-    sleep "$DOEY_WATCHDOG_BRIEF_DELAY"
-    tmux send-keys -t "${session}:${wdg_slot}" \
-      "Context update: This is a FREELANCER team — no Manager. All panes are independent workers (${worker_count} total in panes ${wp_list}). Report all events directly to the Session Manager." Enter
-  ) &
-}
-
 _brief_team() {
-  local session="$1" window_index="$2" wdg_slot="$3" wp_list="$4"
-  local worker_count="$5" grid_desc="$6" wt_brief="${7:-}"
-  local team_name="${8:-}" team_role="${9:-}"
+  local session="$1" window_index="$2" wp_list="$3"
+  local worker_count="$4" grid_desc="$5" wt_brief="${6:-}"
+  local team_name="${7:-}" team_role="${8:-}"
   local _role_brief=""
   [ -n "$team_role" ] && _role_brief=" Team role: ${team_role}."
   (
@@ -3406,12 +3360,6 @@ _build_worker_pane_list() {
     [ -n "$_WPL_RESULT" ] && _WPL_RESULT="${_WPL_RESULT}, "
     _WPL_RESULT="${_WPL_RESULT}${window_index}.${_pi}"
   done
-}
-
-_acquire_watchdog_slot() {
-  : # Deprecated: watchdog slots removed in Boss+SM merge
-  _AWS_SLOT=""
-  return 1
 }
 
 _name_team_window() {
@@ -3446,12 +3394,12 @@ _worktree_brief() {
 }
 
 _print_team_created() {
-  local window_index="$1" grid_desc="$2" worker_count="$3" wdg_slot="$4"
-  local wt_dir="${5:-}" wt_branch="${6:-}"
+  local window_index="$1" grid_desc="$2" worker_count="$3"
+  local wt_dir="${4:-}" wt_branch="${5:-}"
   if [ -n "$wt_dir" ]; then
     printf "  ${SUCCESS}Team window %s created${RESET} — %s, %s workers, ${BOLD}worktree${RESET} (%s)\n" "$window_index" "$grid_desc" "$worker_count" "$wt_branch"
   else
-    printf "  ${SUCCESS}Team window %s created${RESET} — %s, %s workers, watchdog in Dashboard slot %s\n" "$window_index" "$grid_desc" "$worker_count" "$wdg_slot"
+    printf "  ${SUCCESS}Team window %s created${RESET} — %s, %s workers\n" "$window_index" "$grid_desc" "$worker_count"
   fi
 }
 
@@ -3472,8 +3420,8 @@ add_team_from_def() {
   env_file=$(_parse_team_def "$def_file" "$runtime_dir") || return 1
 
   # Read parsed values
-  local td_name td_grid td_workers td_type td_watchdog
-  local td_manager_model td_worker_model td_watchdog_model td_briefing
+  local td_name td_grid td_workers td_type
+  local td_manager_model td_worker_model td_briefing
   td_name=$(_env_val "$env_file" NAME)
   td_grid=$(_env_val "$env_file" GRID "dynamic")
   td_workers=$(_env_val "$env_file" WORKERS "3")
@@ -3482,20 +3430,14 @@ add_team_from_def() {
   else
     td_type=$(_env_val "$env_file" TYPE "local")
   fi
-  td_watchdog=$(_env_val "$env_file" WATCHDOG "default")
   td_manager_model=$(_env_val "$env_file" MANAGER_MODEL "")
   td_worker_model=$(_env_val "$env_file" WORKER_MODEL "")
-  td_watchdog_model=$(_env_val "$env_file" WATCHDOG_MODEL "")
   td_briefing=$(_env_val "$env_file" BRIEFING_FILE "")
 
   # Create tmux window
   local window_index
   window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
   printf "  ${DIM}Creating team '%s' in window %s...${RESET}\n" "$td_name" "$window_index"
-
-  # Watchdog eliminated — SM absorbs monitoring
-  # _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "false"
-  local wdg_slot=""
 
   # Determine pane count from definition (find highest PANE_N key)
   local max_pane=0 _p_idx=0
@@ -3563,10 +3505,6 @@ add_team_from_def() {
     _w_i=$((_w_i + 1))
   done
 
-  # Watchdog eliminated — SM absorbs monitoring
-  # local wdg_model="${td_watchdog_model:-$DOEY_WATCHDOG_MODEL}"
-  # _launch_team_watchdog "$session" "$wdg_slot" "$window_index" "$wdg_model"
-
   # Build worker pane list, apply manager-left layout, and name window
   _build_worker_pane_list "$session" "$window_index"
   rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
@@ -3598,7 +3536,7 @@ add_team_from_def() {
     rm -f "$_bf"
   fi
 
-  printf "  \033[0;32mTeam '%s' created in window %s (%s workers + watchdog)\033[0m\n" \
+  printf "  \033[0;32mTeam '%s' created in window %s (%s workers)\033[0m\n" \
     "$td_name" "$window_index" "$worker_count"
 }
 
@@ -3634,15 +3572,11 @@ add_dynamic_team_window() {
   [ "$is_freelancer" = "true" ] && _team_label="freelancer team"
   printf "  ${DIM}Creating dynamic %s window %s...${RESET}\n" "$_team_label" "$window_index"
 
-  # Watchdog eliminated — SM absorbs monitoring
-  # _acquire_watchdog_slot "$session" "$runtime_dir" "$team_dir" "false"
-  local wdg_slot=""
-
   # Freelancer teams: no manager, all panes are workers. MANAGER_PANE is empty.
   local mgr_pane="0"
   [ "$is_freelancer" = "true" ] && mgr_pane=""
 
-  write_team_env "$runtime_dir" "$window_index" "dynamic" "${wdg_slot:-}" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
+  write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
   _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
@@ -3690,13 +3624,10 @@ add_dynamic_team_window() {
 
     # Update worker count: F0 is uncounted (like manager pane), F1 adds 1
     # so doey_add_column numbering continues sequentially (F2, F3, ...)
-    write_team_env "$runtime_dir" "$window_index" "dynamic" "${wdg_slot:-}" "" "1" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
+    write_team_env "$runtime_dir" "$window_index" "dynamic" "" "1" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
   else
     _launch_team_manager "$session" "$runtime_dir" "$window_index"
   fi
-
-  # Watchdog eliminated — SM absorbs monitoring for all teams
-  # (Previously launched per-team watchdog in Dashboard slots)
 
   local _col_i
   for (( _col_i=0; _col_i<initial_cols; _col_i++ )); do
@@ -3710,11 +3641,10 @@ add_dynamic_team_window() {
   wt_brief=$(_worktree_brief "$wt_dir_for_env" "$worktree_branch")
 
   if [ "$is_freelancer" = "true" ]; then
-    _brief_freelancer_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count"
-    _print_team_created "$window_index" "freelancer pool" "$worker_count" "$wdg_slot" "$wt_dir_for_env" "$worktree_branch"
+    _print_team_created "$window_index" "freelancer pool" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
   else
-    _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role"
-    _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wdg_slot" "$wt_dir_for_env" "$worktree_branch"
+    _brief_team "$session" "$window_index" "$_WPL_RESULT" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role"
+    _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
   fi
 }
 
@@ -3771,25 +3701,15 @@ add_team_window() {
   worker_panes=$(_build_worker_csv "$total_panes")
   worker_count=$((total_panes - 1))
 
-  # Watchdog eliminated — SM absorbs monitoring
-  # if ! _acquire_watchdog_slot "$session" "$runtime_dir" "$dir" "true"; then
-  #   printf "  ${ERROR}All %s Dashboard watchdog slots occupied — cannot add more teams${RESET}\n" "$DOEY_MAX_WATCHDOG_SLOTS"
-  #   tmux kill-window -t "${session}:${window_index}" 2>/dev/null
-  #   return 1
-  # fi
-  local wdg_slot=""
-
   local i
   for (( i=1; i<total_panes; i++ )); do
     tmux select-pane -t "${session}:${window_index}.${i}" -T "T${window_index} W${i}"
   done
 
-  write_team_env "$runtime_dir" "$window_index" "$grid" "$wdg_slot" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model"
+  write_team_env "$runtime_dir" "$window_index" "$grid" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
   _launch_team_manager "$session" "$runtime_dir" "$window_index"
-  # Watchdog eliminated — SM absorbs monitoring
-  # _launch_team_watchdog "$session" "$wdg_slot" "$window_index"
 
   local _aw_pairs=()
   for (( i=1; i<total_panes; i++ )); do
@@ -3798,8 +3718,8 @@ add_team_window() {
   _batch_boot_workers "$session" "$runtime_dir" "$window_index" "${_aw_pairs[@]}"
 
   _build_worker_pane_list "$session" "$window_index"
-  _brief_team "$session" "$window_index" "$wdg_slot" "$_WPL_RESULT" "$worker_count" "Grid ${grid}" "" "$team_name" "$team_role"
-  _print_team_created "$window_index" "grid ${grid}" "$worker_count" "$wdg_slot" "$wt_dir_for_env" "$worktree_branch"
+  _brief_team "$session" "$window_index" "$_WPL_RESULT" "$worker_count" "Grid ${grid}" "" "$team_name" "$team_role"
+  _print_team_created "$window_index" "grid ${grid}" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
 }
 
 kill_team_window() {
@@ -4008,7 +3928,6 @@ doey_config() {
       printf "    DOEY_MAX_WORKERS          = %s\n" "${DOEY_MAX_WORKERS}"
       printf "    DOEY_MANAGER_MODEL        = %s\n" "${DOEY_MANAGER_MODEL}"
       printf "    DOEY_WORKER_MODEL         = %s\n" "${DOEY_WORKER_MODEL}"
-      printf "    DOEY_WATCHDOG_MODEL       = %s\n" "${DOEY_WATCHDOG_MODEL}"
       printf "    DOEY_WORKER_LAUNCH_DELAY  = %s\n" "${DOEY_WORKER_LAUNCH_DELAY}"
       printf "    DOEY_TEAM_LAUNCH_DELAY    = %s\n" "${DOEY_TEAM_LAUNCH_DELAY}"
       printf "\n"
@@ -4599,7 +4518,7 @@ case "${1:-}" in
     test       Run E2E integration test (--keep, --open, --grid NxM)
     dynamic    Launch with dynamic grid (add workers on demand)
     add        Add a worker column (2 workers) to a dynamic grid session
-    add-team   Add a team window with its own Window Manager+Watchdog+Workers
+    add-team   Add a team window with its own Window Manager+Workers
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions
@@ -4623,7 +4542,7 @@ case "${1:-}" in
     doey list         # show all projects
     doey stop         # stop current project session
     doey update       # pull latest + reinstall
-    doey reload       # hot-reload Manager + Watchdog
+    doey reload       # hot-reload Manager
     doey reload --workers  # also restart workers
     doey doctor       # check system health
     doey remove myapp # unregister a project
