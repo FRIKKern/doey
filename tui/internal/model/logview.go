@@ -183,7 +183,7 @@ func (m LogViewModel) viewList() string {
 	}
 
 	header := t.SectionHeader.Copy().PaddingLeft(2).Render("WORKER LOGS")
-	rule := t.Faint.Render(strings.Repeat("\u2500", w))
+	rule := styles.ThinSeparator(t, w)
 
 	if len(m.entries) == 0 {
 		empty := lipgloss.NewStyle().
@@ -194,7 +194,7 @@ func (m LogViewModel) viewList() string {
 		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 	}
 
-	// Summary bar
+	// Summary bar — colored counts per status
 	busy, finished, errored := 0, 0, 0
 	for _, e := range m.entries {
 		switch e.Status {
@@ -210,28 +210,37 @@ func (m LogViewModel) viewList() string {
 		Render(fmt.Sprintf("%d results", len(m.entries)))
 	var counts []string
 	if finished > 0 {
-		counts = append(counts, lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d done", finished)))
+		counts = append(counts, lipgloss.NewStyle().Foreground(t.Success).Bold(true).
+			Render(fmt.Sprintf("\u2714 %d done", finished)))
 	}
 	if busy > 0 {
-		counts = append(counts, lipgloss.NewStyle().Foreground(t.Primary).Render(fmt.Sprintf("%d busy", busy)))
+		counts = append(counts, lipgloss.NewStyle().Foreground(t.Warning).Bold(true).
+			Render(fmt.Sprintf("\u25CF %d busy", busy)))
 	}
 	if errored > 0 {
-		counts = append(counts, lipgloss.NewStyle().Foreground(t.Danger).Render(fmt.Sprintf("%d error", errored)))
+		counts = append(counts, lipgloss.NewStyle().Foreground(t.Danger).Bold(true).
+			Render(fmt.Sprintf("\u2717 %d error", errored)))
 	}
 	if len(counts) > 0 {
-		summary += "  " + strings.Join(counts, "  ")
+		summary += "  " + strings.Join(counts, t.Faint.Render(" \u00b7 "))
 	}
 
 	scrollInd := ""
 	if m.autoScroll {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE")
+		scrollInd = lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render(" \u25CF LIVE")
 	} else {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED")
+		scrollInd = lipgloss.NewStyle().Foreground(t.Warning).Render(" \u25CB PAUSED")
 	}
+
+	summaryRule := styles.ThinSeparator(t, w)
 
 	// Render visible entries
 	viewH := m.viewportHeight()
-	selectedBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#374151"}
+	selectedBg := lipgloss.AdaptiveColor{Light: "#EFF6FF", Dark: "#1E3A5F"}
+	selectedBorder := lipgloss.NewStyle().
+		Foreground(t.Primary).
+		Render("\u25B6 ")
+	normalIndent := "  "
 
 	var lines []string
 	end := m.offset + viewH
@@ -239,52 +248,53 @@ func (m LogViewModel) viewList() string {
 		end = len(m.entries)
 	}
 	for i := m.offset; i < end; i++ {
-		line := m.renderLine(m.entries[i], w)
+		line := m.renderLine(m.entries[i], w-4)
 		if m.focused && i == m.cursor {
-			line = lipgloss.NewStyle().
+			line = selectedBorder + lipgloss.NewStyle().
 				Background(selectedBg).
-				Width(w - 4).
+				Width(w - 6).
 				Render(line)
+		} else {
+			line = normalIndent + line
 		}
 		lines = append(lines, line)
 	}
 
-	body := lipgloss.NewStyle().
-		Padding(0, 2).
-		Render(strings.Join(lines, "\n"))
+	body := strings.Join(lines, "\n")
 
 	hint := ""
 	if m.focused {
-		hint = lipgloss.NewStyle().
-			Foreground(t.Muted).Faint(true).Padding(1, 3).
+		hint = t.Faint.Copy().Padding(1, 3).
 			Render("enter = detail  f = follow  G = go to top")
 	}
 
-	content := header + "\n" + rule + "\n" + summary + scrollInd + "\n" + body + "\n" + hint
+	content := header + "\n" + rule + "\n" + summary + scrollInd + "\n" + summaryRule + "\n" + body + "\n" + hint
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
 
 func (m LogViewModel) renderLine(e logEntry, maxW int) string {
 	t := m.theme
 
-	// Timestamp
-	ts := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
-		Render(time.Unix(e.Timestamp, 0).Format("15:04:05"))
+	// Timestamp — subtle, non-distracting
+	ts := styles.LogTimestamp(t, time.Unix(e.Timestamp, 0).Format("15:04:05"))
 
-	// Status badge
-	statusClr := m.statusColor(e.Status)
-	badge := lipgloss.NewStyle().Foreground(statusClr).Width(9).Render(e.Status)
+	// Status — colored text badge
+	badge := lipgloss.NewStyle().
+		Foreground(m.statusColor(e.Status)).
+		Bold(true).
+		Width(9).
+		Render(e.Status)
 
-	// Pane ID
-	pane := lipgloss.NewStyle().Foreground(t.Text).Render(e.Pane)
+	// Pane ID — muted label with padding
+	pane := styles.LogPaneLabel(t, e.Pane)
 
-	// Tool calls
-	tools := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("%dt", e.ToolCalls))
+	// Tool calls — faint metadata
+	tools := t.Faint.Render(fmt.Sprintf("%dt", e.ToolCalls))
 
-	prefix := ts + " " + badge + " " + pane + " " + tools + "  "
+	prefix := ts + " " + badge + " " + pane + " " + tools + " "
 	prefixW := lipgloss.Width(prefix)
 
-	// Output snippet (first line)
+	// Body text — title or first output line
 	maxBody := maxW - prefixW - 6
 	body := firstLogLine(e.Output)
 	if e.Title != "" {
@@ -294,7 +304,7 @@ func (m LogViewModel) renderLine(e logEntry, maxW int) string {
 		body = body[:maxBody-1] + "\u2026"
 	}
 
-	return prefix + lipgloss.NewStyle().Foreground(t.Text).Render(body)
+	return prefix + t.LogEntry.Render(body)
 }
 
 func (m LogViewModel) statusColor(status string) lipgloss.AdaptiveColor {
@@ -324,38 +334,50 @@ func (m LogViewModel) viewDetail() string {
 
 	e := m.entries[m.cursor]
 
+	// Header with pane label
 	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(fmt.Sprintf("WORKER LOGS \u2014 %s", e.Pane))
-	rule := t.Faint.Render(strings.Repeat("\u2500", w))
-	backHint := lipgloss.NewStyle().
-		Foreground(t.Muted).Faint(true).PaddingLeft(3).
-		Render("esc to go back")
+		Render("WORKER LOGS") +
+		t.Faint.Render(" \u2014 ") +
+		styles.LogPaneLabel(t, e.Pane)
+	rule := styles.ThinSeparator(t, w)
+	backHint := t.Faint.Copy().PaddingLeft(3).
+		Render("\u2190 esc to go back")
 
-	labelStyle := t.StatLabel.Copy().Width(12)
+	// Detail fields with section header styling
+	labelStyle := t.SectionHeader.Copy().Width(12)
 	valueStyle := t.Body
 
 	var fields []string
-	fields = append(fields, labelStyle.Render("Time")+valueStyle.Render(
-		time.Unix(e.Timestamp, 0).Format("2006-01-02 15:04:05")))
+	fields = append(fields, labelStyle.Render("Time")+
+		styles.LogTimestamp(t, time.Unix(e.Timestamp, 0).Format("2006-01-02 15:04:05")))
 	fields = append(fields, labelStyle.Render("Pane")+valueStyle.Render(e.Pane))
-	fields = append(fields, labelStyle.Render("Title")+valueStyle.Render(e.Title))
+	fields = append(fields, labelStyle.Render("Title")+t.LogEntry.Render(e.Title))
 	fields = append(fields, labelStyle.Render("Status")+
-		lipgloss.NewStyle().Foreground(m.statusColor(e.Status)).Render(e.Status))
-	fields = append(fields, labelStyle.Render("Tool Calls")+valueStyle.Render(
+		styles.StatusText(e.Status))
+	fields = append(fields, labelStyle.Render("Tool Calls")+t.Dim.Render(
 		fmt.Sprintf("%d", e.ToolCalls)))
+
+	// Files as bullet list
 	if e.Files != "" {
-		fields = append(fields, labelStyle.Render("Files")+valueStyle.Render(e.Files))
+		fields = append(fields, "")
+		fields = append(fields, labelStyle.Render("Files"))
+		for _, f := range strings.Split(e.Files, ", ") {
+			f = strings.TrimSpace(f)
+			if f != "" {
+				fields = append(fields, "   "+t.Faint.Render("\u2022")+" "+t.Dim.Render(f))
+			}
+		}
 	}
 	fieldBlock := lipgloss.NewStyle().Padding(1, 3).Render(strings.Join(fields, "\n"))
 
-	// Output content
+	// Output section
 	outputHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("OUTPUT")
 	outputRule := lipgloss.NewStyle().PaddingLeft(3).
-		Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
+		Render(styles.ThinSeparator(t, w-6))
 
 	output := e.Output
 	if output == "" {
-		output = "(no output captured)"
+		output = t.Faint.Render("(no output captured)")
 	}
 	maxBodyH := m.height - 14
 	if maxBodyH < 3 {
@@ -368,8 +390,17 @@ func (m LogViewModel) viewDetail() string {
 		outputLines = append(outputLines,
 			t.Faint.Render(fmt.Sprintf("\u2026 (%d more lines)", totalLines-maxBodyH)))
 	}
-	outputBlock := lipgloss.NewStyle().Padding(0, 3).Foreground(t.Text).
-		Render(strings.Join(outputLines, "\n"))
+
+	// Render output with left border accent
+	outputContent := strings.Join(outputLines, "\n")
+	outputBlock := lipgloss.NewStyle().
+		Padding(0, 3).
+		Foreground(t.Text).
+		BorderLeft(true).
+		BorderStyle(lipgloss.Border{Left: "\u2502"}).
+		BorderForeground(t.Muted).
+		MarginLeft(3).
+		Render(outputContent)
 
 	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + "\n" +
 		outputHeader + "\n" + outputRule + "\n" + outputBlock
