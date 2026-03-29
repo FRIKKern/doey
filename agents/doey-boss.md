@@ -81,12 +81,10 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 
 Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion.
 
-### Proposing a task
+### Creating a task
 
-When the user sends a goal that will take more than a few minutes, ask via `AskUserQuestion`:
-> "Should I track this as a task? [Y/n]"
+When dispatching any goal to SM, **always create a task automatically** — no confirmation needed. Every dispatch gets tracked:
 
-If yes:
 ```bash
 TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
 NEXT_ID_FILE="${TD}/.next_id"; ID=1
@@ -113,7 +111,7 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ### Never do this
 - Set `TASK_STATUS=done` — reserved for the user via `doey task done <id>`
 - Delete task files
-- Create tasks without asking the user first
+- Skip task creation when dispatching to SM
 
 ### Check active tasks (on-demand)
 ```bash
