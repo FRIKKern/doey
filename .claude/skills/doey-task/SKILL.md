@@ -63,7 +63,7 @@ Optional flags for add: `--description "text"` and `--attach "url_or_path"`.
 
 **Start work** — `doey task start <id>` — moves to `in_progress`
 
-**Mark pending** — `doey task pending <id>` — moves to `pending_user_confirmation`
+**Mark pending** — `doey task confirm <id>` (or `doey task pending <id>`) — moves to `pending_user_confirmation`
 
 **Mark done** — `doey task done <id>` — moves to `done` (terminal)
 
