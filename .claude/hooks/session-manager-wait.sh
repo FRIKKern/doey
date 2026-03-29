@@ -3,7 +3,6 @@
 # sleeps briefly if idle, returns a reason string for compatibility.
 set -euo pipefail
 
-# Resolve runtime directory
 if [ -n "${DOEY_RUNTIME:-}" ]; then
   RUNTIME_DIR="$DOEY_RUNTIME"
 elif [ -n "${1:-}" ] && [ -d "${1}" ]; then
@@ -13,16 +12,11 @@ else
 fi
 source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 
-# Source common.sh for write_pane_status (skip init_hook — we set our own vars)
-source "$(dirname "$0")/common.sh" 2>/dev/null || true
+source "$(dirname "$0")/common.sh" 2>/dev/null || true  # write_pane_status; skip init_hook
 
-# SM identity
 SM_PANE="${SM_PANE:-0.2}"
 SM_SAFE="${SESSION_NAME//[-:.]/_}_${SM_PANE//[-:.]/_}"
-
-# Heartbeat: update SM status file on every cycle (including idle) via EXIT trap.
-# Sets PANE/PANE_SAFE for write_pane_status, which expects these globals.
-PANE="${SESSION_NAME}:${SM_PANE}"
+PANE="${SESSION_NAME}:${SM_PANE}"  # write_pane_status expects PANE/PANE_SAFE globals
 PANE_SAFE="$SM_SAFE"
 _SM_STATUS_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
 _sm_heartbeat() {
@@ -35,22 +29,20 @@ TRIGGER="${RUNTIME_DIR}/status/session_manager_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger"
 TRIGGER3="${RUNTIME_DIR}/status/sm_trigger"
 
-# Debug logging
 _SM_DBG=false
 [ -f "${RUNTIME_DIR}/debug.conf" ] && _SM_DBG=true
-_SM_DBG_FILE="${RUNTIME_DIR}/debug/session_manager.jsonl"
+_SM_DBG_DIR="${RUNTIME_DIR}/debug"
+_SM_DBG_FILE="${_SM_DBG_DIR}/session_manager.jsonl"
 
 _sm_dbg_wake() {
   [ "$_SM_DBG" = "true" ] || return 0
   local reason="$1" elapsed="$2"
-  [ -d "$(dirname "$_SM_DBG_FILE")" ] || mkdir -p "$(dirname "$_SM_DBG_FILE")" 2>/dev/null
+  [ -d "$_SM_DBG_DIR" ] || mkdir -p "$_SM_DBG_DIR" 2>/dev/null
   printf '{"ts":%s,"cat":"sm","msg":"sm_wake","reason":"%s","wait_s":%s}\n' \
     "$(date +%s)" "$reason" "$elapsed" \
     >> "$_SM_DBG_FILE" 2>/dev/null
-  return 0
 }
 
-# Track last-seen results to avoid re-triggering on stale files
 SEEN_FILE="${RUNTIME_DIR}/status/sm_seen_results"
 _seen_results=""
 [ -f "$SEEN_FILE" ] && _seen_results=$(cat "$SEEN_FILE" 2>/dev/null || true)
@@ -75,7 +67,6 @@ _mark_results_seen() {
   echo "$_seen_results" > "$SEEN_FILE"
 }
 
-# Compact cycle counter
 CYCLE_FILE="${RUNTIME_DIR}/status/sm_cycle_count"
 COMPACT_INTERVAL="${DOEY_SM_COMPACT_INTERVAL:-20}"
 _sm_cycle=0
@@ -86,9 +77,7 @@ _sm_bump_cycle() {
   echo "$_sm_cycle" > "$CYCLE_FILE"
 }
 
-# Check for pending work. Args: $1=elapsed_label
-# Returns (exits script) if work found, otherwise returns 1.
-_check_work() {
+_check_work() {  # Exits script if work found, returns 1 otherwise
   local elapsed="$1"
   if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
     rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null
@@ -109,9 +98,6 @@ _check_work() {
   return 1
 }
 
-# --- Check for work (before sleeping) ---
-
-# Compact cycle check
 if [ "$((_sm_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
   echo "0" > "$CYCLE_FILE"
   _sm_dbg_wake "compact_cycle" "0"
@@ -125,8 +111,5 @@ sleep 3
 
 _check_work "3" || true
 
-# Nothing happened
 _sm_dbg_wake "idle" "3"
 echo "IDLE"
-
-exit 0

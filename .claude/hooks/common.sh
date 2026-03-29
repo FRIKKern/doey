@@ -32,9 +32,7 @@ _ensure_dirs() {
   touch "${RUNTIME_DIR}/.dirs_created"
 }
 
-# Rotate a log file if it exceeds 500KB, keeping last 200 lines.
-# Usage: _rotate_log <file>
-_rotate_log() {
+_rotate_log() {  # Rotate log if >500KB, keep last 200 lines
   local f="$1"
   [ -f "$f" ] || return 0
   local sz
@@ -43,8 +41,6 @@ _rotate_log() {
     tail -200 "$f" > "${f}.tmp" 2>/dev/null && mv "${f}.tmp" "$f" 2>/dev/null
   fi
 }
-
-# --- Debug mode infrastructure ---
 
 # Parse debug.conf as flat key=value. NEVER source it.
 _init_debug() {
@@ -61,18 +57,14 @@ _init_debug() {
       DOEY_DEBUG_DISPLAY)   _DOEY_DEBUG_DISPLAY="$_dv" ;;
     esac
   done < "${RUNTIME_DIR}/debug.conf"
-  return 0
 }
 
-# Millisecond timestamp (macOS bash 3.2 compatible)
-_ms_now() {
+_ms_now() {  # Millisecond timestamp (bash 3.2 safe)
   /usr/bin/perl -MTime::HiRes -e 'printf "%d\n", Time::HiRes::time()*1000' 2>/dev/null \
     || echo "$(date +%s)000"
 }
 
-# Write JSONL to per-pane category file. No-op when debug off.
-# Usage: _debug_log <category> <msg> [key=value ...]
-_debug_log() {
+_debug_log() {  # JSONL to per-pane category file; no-op when debug off
   [ "${_DOEY_DEBUG:-}" = "true" ] || return 0
   local cat="$1" msg="$2"; shift 2
   local pane_dir="${RUNTIME_DIR}/debug/${PANE_SAFE:-unknown}"
@@ -92,24 +84,16 @@ _debug_log() {
   if [ "${_DOEY_DEBUG_DISPLAY:-}" = "true" ]; then
     printf '[DOEY-DEBUG] %s %s %s\n' "$cat" "$msg" "$*" >&2
   fi
-  # Rotate every ~100 writes via modulo on timestamp
-  case "$ts" in *00)
-    _rotate_log "${pane_dir}/${cat}.jsonl"
-  ;; esac
-  return 0
+  case "$ts" in *00) _rotate_log "${pane_dir}/${cat}.jsonl" ;; esac
 }
 
-# Log hook entry, set EXIT trap for hook exit timing.
-# Only active when _DOEY_DEBUG_HOOKS=true.
-_debug_hook_entry() {
+_debug_hook_entry() {  # Log hook entry + set EXIT trap for timing
   [ "${_DOEY_DEBUG_HOOKS:-}" = "true" ] || return 0
   _HOOK_START_MS=$(_ms_now)
   _debug_log hooks "entry" "hook=${_DOEY_HOOK_NAME:-unknown}"
   trap '_debug_hook_exit $?' EXIT
-  return 0
 }
 
-# Log hook exit with duration and exit code.
 _debug_hook_exit() {
   [ "${_DOEY_DEBUG_HOOKS:-}" = "true" ] || return 0
   local exit_code="${1:-0}" end_ms dur_ms
@@ -117,42 +101,29 @@ _debug_hook_exit() {
   dur_ms=$(( end_ms - ${_HOOK_START_MS:-$end_ms} ))
   [ "$dur_ms" -lt 0 ] && dur_ms=0
   _debug_log hooks "exit" "hook=${_DOEY_HOOK_NAME:-unknown}" "dur_ms=$dur_ms" "exit=$exit_code"
-  return 0
 }
 
 _log() {
-  local msg="$1"
-  local pane_id="${DOEY_PANE_ID:-unknown}"
-  local log_file="${RUNTIME_DIR}/logs/${pane_id}.log"
+  local log_file="${RUNTIME_DIR}/logs/${DOEY_PANE_ID:-unknown}.log"
   _rotate_log "$log_file"
-  printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$msg" >> "$log_file" 2>/dev/null
+  printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1" >> "$log_file" 2>/dev/null
 }
 
-# Structured error logger — writes to per-pane log AND shared errors.log + individual .err files.
-# Usage: _log_error CATEGORY "message" [detail]
-# Categories: TOOL_BLOCKED, LINT_ERROR, ANOMALY, HOOK_ERROR, DELIVERY_FAILED
+# Structured error logger — per-pane log + shared errors.log + individual .err files.
 _log_error() {
   local category="${1:-UNKNOWN}" msg="${2:-}" detail="${3:-}"
-  local pane_id="${DOEY_PANE_ID:-unknown}"
-  local role="${DOEY_ROLE:-unknown}"
-  local hook_name="${_DOEY_HOOK_NAME:-unknown}"
-  local tool="${_DOEY_TOOL_NAME:-}"
-  local err_dir="${RUNTIME_DIR}/errors"
-  local err_log="${err_dir}/errors.log"
-  local now
+  local pane_id="${DOEY_PANE_ID:-unknown}" role="${DOEY_ROLE:-unknown}"
+  local hook_name="${_DOEY_HOOK_NAME:-unknown}" tool="${_DOEY_TOOL_NAME:-}"
+  local err_dir="${RUNTIME_DIR}/errors" now
   now=$(date '+%Y-%m-%dT%H:%M:%S')
 
-  # 1. Log to per-pane log via existing _log()
   _log "ERROR [$category] ${msg}${detail:+ | $detail}"
 
-  # 2. Append to shared errors.log (pipe-delimited for grep/awk)
   printf '[%s] %s | %s | %s | %s | %s | %s | %s\n' \
     "$now" "$category" "$pane_id" "$role" "$hook_name" "${tool:-n/a}" "${detail:-n/a}" "$msg" \
-    >> "$err_log" 2>/dev/null
+    >> "${err_dir}/errors.log" 2>/dev/null
 
-  # 3. Individual .err file for programmatic access
-  local err_file="${err_dir}/${pane_id}_$(date +%s)_$$.err"
-  cat > "$err_file" 2>/dev/null <<ERR_EOF
+  cat > "${err_dir}/${pane_id}_$(date +%s)_$$.err" 2>/dev/null <<ERR_EOF
 TIMESTAMP=$now
 CATEGORY=$category
 PANE_ID=$pane_id
@@ -163,13 +134,8 @@ DETAIL=${detail:-}
 MESSAGE=$msg
 ERR_EOF
 
-  # 4. Rotation: if errors.log > 500KB, keep last 200 lines
-  _rotate_log "$err_log"
-
-  # 5. Cleanup: remove .err files older than 1 hour (runs every ~100th call via timestamp modulo)
-  case "$(date +%s)" in *00)
-    find "$err_dir" -name '*.err' -mmin +60 -delete 2>/dev/null || true
-  ;; esac
+  _rotate_log "${err_dir}/errors.log"
+  case "$(date +%s)" in *00) find "$err_dir" -name '*.err' -mmin +60 -delete 2>/dev/null || true ;; esac
 }
 
 parse_field() {
@@ -250,11 +216,8 @@ is_reserved() {
   [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]
 }
 
-# Atomic file write: content -> tmp -> mv
 atomic_write() { printf '%s\n' "$2" > "$1.tmp" && mv "$1.tmp" "$1"; }
 
-# Write structured pane status file atomically
-# Usage: write_pane_status <target_file> <status> [task]
 write_pane_status() {
   local target="$1" status="$2" task="${3:-}" tmp
   tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || tmp=""
@@ -268,25 +231,18 @@ NL='
 
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
-# Notify Session Manager of a lifecycle event.
-# Writes event to lifecycle dir and triggers SM wake.
-# Usage: notify_sm <status> [detail]
-notify_sm() {
+notify_sm() {  # Lifecycle event -> SM wake trigger
   local status="${1:-}" detail="${2:-}"
   local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
   [ -z "$team_w" ] && return 0
   local pane_id="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
   mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0
-  local evt_file="${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt"
-  printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" > "$evt_file" 2>/dev/null
-  # Wake Session Manager
+  printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" \
+    > "${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt" 2>/dev/null
   touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null
-  return 0
 }
 
-# Low-level desktop notification — no role check, no cooldown.
-# Usage: _send_desktop_notification "Title" "Body"
-_send_desktop_notification() {
+_send_desktop_notification() {  # Low-level, no role check, no cooldown
   local title="$1" body="$2"
   if command -v osascript >/dev/null 2>&1; then
     osascript - "$title" "$body" <<'APPLESCRIPT' 2>/dev/null &
@@ -300,15 +256,12 @@ APPLESCRIPT
     local ps_title="${title//\'/\'\'}" ps_body="${body//\'/\'\'}"
     powershell.exe -Command "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${ps_body}', '${ps_title}')" 2>/dev/null &
   fi
-  return 0
 }
 
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"
   is_boss || return 0
-
-  # 60-second cooldown per title
-  if [ -n "${RUNTIME_DIR:-}" ]; then
+  if [ -n "${RUNTIME_DIR:-}" ]; then  # 60s cooldown per title
     local title_safe="${title//[^a-zA-Z0-9]/_}"
     local cooldown_file="${RUNTIME_DIR}/status/notif_cooldown_${title_safe}"
     local last_sent now
