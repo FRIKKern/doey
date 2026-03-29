@@ -156,7 +156,7 @@ func (m WelcomeModel) renderHowToUse() string {
 	steps := []string{
 		fmt.Sprintf("  %s Talk to the %s (right pane\n     in this window) %s describe your task and\n     it routes work to the right team.",
 			numStyle.Render("1."),
-			cyanStyle.Render("Session Manager"),
+			cyanStyle.Render("Boss"),
 			dimStyle.Render("—")),
 		fmt.Sprintf("  %s Switch to a team window (%s) and\n     talk to the Window Manager directly.",
 			numStyle.Render("2."),
