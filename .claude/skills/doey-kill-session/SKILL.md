@@ -11,7 +11,6 @@ description: Kill the entire Doey session — all windows, processes, and runtim
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep "^SESSION_NAME=" "${RD}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
-# SIGTERM → wait → SIGKILL
 for sig in TERM 9; do
   for w in $(tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null); do
     for ppid in $(tmux list-panes -t "${SESSION_NAME}:${w}" -F '#{pane_pid}' 2>/dev/null); do

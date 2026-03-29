@@ -3,21 +3,11 @@ name: doey-kill-window
 description: Kill a team window — stop processes, remove tmux window, clean runtime files.
 ---
 
-## Usage
 `/doey-kill-window [window_index]` — kill specific or current team window
 
-## Context
-
-Session config:
-!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-
-Current windows:
-!`tmux list-windows -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{window_index} #{window_name}' 2>/dev/null|| true`
-
-Team environments:
-!`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done || true`
-
-## Prompt
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- Windows: !`tmux list-windows -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{window_index} #{window_name}' 2>/dev/null|| true`
+- Teams: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done || true`
 
 ## Step 1: Validate target window
 bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); _sv() { grep "^$1=" "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }; SESSION_NAME=$(_sv SESSION_NAME); PROJECT_DIR=$(_sv PROJECT_DIR); WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"; TARGET_WIN="${1:-$WINDOW_INDEX}"; [ "$TARGET_WIN" = "0" ] && echo "ERROR: Cannot kill window 0 (Dashboard). Use /doey-kill-session." && exit 1; tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' | grep -qx "$TARGET_WIN" || { echo "ERROR: Window ${TARGET_WIN} not found"; exit 1; }; echo "Target: window ${TARGET_WIN}"
@@ -39,5 +29,3 @@ Report: `Window ${TARGET_WIN} killed. Processes: ${KILLED}. TEAM_WINDOWS: ${NEW_
 ### Rules
 - Never kill window 0 — use `/doey-kill-session`
 - Kill processes before window (prevents orphans)
-- Don't skip worktree cleanup — uncommitted changes will be lost
-- Don't `source` runtime env files — use safe reads only

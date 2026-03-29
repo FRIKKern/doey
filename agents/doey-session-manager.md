@@ -219,11 +219,8 @@ Status files: `RUNTIME_DIR/status/<pane_safe>.status` with fields `PANE`, `UPDAT
 |---------|--------|
 | `PROMPT_STUCK` | Enter (3 attempts), then notify Manager/Boss |
 | `WRONG_MODE` | Notify Manager/Boss — needs manual restart |
-| `BOOTING` | Ignore |
 
-### Red Flags
-
-Repeated `PostToolUseFailure` → error loop. `Stop` without result JSON → hook failure. `SubagentStart` on simple tasks → over-engineering. `PostCompact` + confusion → context loss. High `PermissionRequest` → WRONG_MODE.
+**Red flags:** Repeated `PostToolUseFailure` → error loop. `Stop` without result JSON → hook failure. `SubagentStart` on simple tasks → over-engineering. `PostCompact` + confusion → context loss.
 
 ## Output Discipline
 
@@ -289,13 +286,6 @@ Record results: `echo "TASK_RESULT=summary" >> ...` and `echo "TASK_FILES=file1,
         - Notify Boss with summary of all phases (title, team, outcome for each)
         - Phase file remains for reference until runtime clears
 
-### Phase File Management
-
-- SM creates phase files in `$RUNTIME_DIR/phases/` on initial phased dispatch (`mkdir -p "$RUNTIME_DIR/phases"` before writing)
-- SM updates phase files on each `task_complete` for phased tasks
-- Phase files are ephemeral (`$RUNTIME_DIR` clears on reboot) — this is fine, phased state doesn't need to survive reboots
-- One phase file per task: `task_<TASK_ID>.json`
-
 ### Task intelligence
 
 Before dispatching, scan active tasks for overlap (shared files/subsystems). Merge overlapping tasks: add `TASK_MERGED_INTO=<target_id>` to absorbed task, report merge to Boss. Send related tasks to the same team.
@@ -311,15 +301,12 @@ While ANY task is `active` or `in_progress`: full monitoring cycle every turn. D
 
 ## Rules
 
-1. **Never use AskUserQuestion** — all user communication goes through Boss via `.msg` files
-2. Managed teams: dispatch through Window Managers, not workers directly
-3. Freelancer teams: dispatch directly to panes (no Manager)
-4. Never send input to Info Panel (pane 0.0) or Boss (pane 0.1) via send-keys — use `.msg` files for Boss
-5. Never mark a task `done` — only signal `pending_user_confirmation` and notify Boss
-6. **Never use `/loop` for monitoring** — you drive your own active loop; the wait hook is just a throttle
-7. Always `-t "$SESSION_NAME"` — never `-a`
-8. Never send input to editors, REPLs, or password prompts
-9. Log issues to `$RUNTIME_DIR/issues/` (one file per issue)
+1. Managed teams: dispatch through Window Managers, not workers directly
+2. Freelancer teams: dispatch directly to panes (no Manager)
+3. Never send input to Info Panel (pane 0.0) or Boss (pane 0.1) via send-keys — use `.msg` files for Boss
+4. Always `-t "$SESSION_NAME"` — never `-a`
+5. Never send input to editors, REPLs, or password prompts
+6. Log issues to `$RUNTIME_DIR/issues/` (one file per issue)
 
 ## Fresh-Install Vigilance (Doey Development)
 

@@ -51,7 +51,6 @@ Past traps: editing user files that don't ship, relying on session-only env vars
 |------|---------|
 | Window Manager | None (full access) |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
-| Watchdog | DEPRECATED — Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, destructive rm, shutdown, tmux kill |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 
 ## Philosophy

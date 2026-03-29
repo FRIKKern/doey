@@ -58,22 +58,9 @@ Run this `evaluate_script` on every page to extract SEO-relevant data in a singl
 
 ## Artifact Storage
 
-Save all evidence to `$RUNTIME_DIR/artifacts/seo/<target-slug>/`. Derive RUNTIME_DIR from tmux environment:
+Save all evidence to `$RUNTIME_DIR/artifacts/seo/<target-slug>/` (derive slug from URL path: `/about` → `about`, `/` → `index`). Derive RUNTIME_DIR: `tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-`. Create directory before writing.
 
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-```
-
-Create the storage directory before writing artifacts. For each audited page, store:
-
-- `screenshot.png` — full-page or viewport capture
-- `meta.json` — output of the standard extraction script
-- `network.json` — summary of network requests (status codes, redirects, errors)
-- `console.json` — console messages, filtered for errors and warnings
-- `lighthouse.json` — Lighthouse audit results (deep-audit mode only)
-- `performance.json` — performance trace analysis (deep-audit mode only)
-
-Use a slug derived from the URL path for subdirectory naming (e.g., `/about` becomes `about`, `/` becomes `index`).
+Per page: `screenshot.png`, `meta.json` (extraction script output), `network.json` (status codes, redirects, errors), `console.json` (errors/warnings). Deep-audit adds: `lighthouse.json`, `performance.json`.
 
 ## Evidence Capture Protocol
 

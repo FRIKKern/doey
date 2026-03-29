@@ -8,8 +8,7 @@ type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 is_worker || exit 0
 
-# Ensure tasks directory exists for crash-recovery prompt storage
-mkdir -p "$RUNTIME_DIR/tasks" 2>/dev/null || true
+mkdir -p "$RUNTIME_DIR/tasks" 2>/dev/null || true  # crash-recovery prompt storage
 
 RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
 TMPFILE=""
@@ -18,17 +17,15 @@ trap '[ -n "${TMPFILE:-}" ] && rm -f "$TMPFILE" 2>/dev/null' EXIT
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 [ -z "$OUTPUT" ] && _log_error "HOOK_ERROR" "tmux capture-pane returned empty" "pane=$PANE"
 
-# Resolve project directory: prefer DOEY_PROJECT_DIR, then DOEY_TEAM_DIR, then git
 PROJECT_DIR="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
 if [ -z "$PROJECT_DIR" ]; then
   PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR=""
 fi
 FILES_LIST=""
 if [ -n "$PROJECT_DIR" ]; then
-  # timeout available on Linux; macOS has gtimeout or we fall back to no timeout
   _timeout_cmd=""
   command -v timeout >/dev/null 2>&1 && _timeout_cmd="timeout 2"
-  command -v gtimeout >/dev/null 2>&1 && _timeout_cmd="gtimeout 2"
+  command -v gtimeout >/dev/null 2>&1 && _timeout_cmd="gtimeout 2"  # macOS fallback
   FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && $_timeout_cmd git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
 fi
 [ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty" || true
@@ -72,13 +69,8 @@ if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
   TMPFILE="$RESULT_FILE"
 fi
 
-# Optional structured fields from worker env
 local_task_id="${DOEY_TASK_ID:-}"
-local_hypothesis_updates="${DOEY_HYPOTHESIS_UPDATES:-[]}"
-local_evidence="${DOEY_EVIDENCE:-[]}"
-local_needs_follow_up="${DOEY_NEEDS_FOLLOW_UP:-false}"
 local_summary="${DOEY_SUMMARY:-}"
-# Escape summary for JSON: backslashes, double quotes, newlines, tabs
 local_summary_escaped=$(printf '%s' "$local_summary" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g' -e 's/	/\\t/g')
 
 cat > "$TMPFILE" <<EOF
@@ -93,9 +85,9 @@ cat > "$TMPFILE" <<EOF
   "tool_calls": $TOOL_COUNT,
   "last_output": $LAST_JSON,
   "task_id": "$local_task_id",
-  "hypothesis_updates": $local_hypothesis_updates,
-  "evidence": $local_evidence,
-  "needs_follow_up": $local_needs_follow_up,
+  "hypothesis_updates": ${DOEY_HYPOTHESIS_UPDATES:-[]},
+  "evidence": ${DOEY_EVIDENCE:-[]},
+  "needs_follow_up": ${DOEY_NEEDS_FOLLOW_UP:-false},
   "summary": "$local_summary_escaped"
 }
 EOF
@@ -103,17 +95,14 @@ EOF
 TMPFILE=""
 _log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_COUNT)"
 
-# Mirror result to persistent task storage if task_id and .doey/tasks/ exist
 if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
-  _persistent_result="${PROJECT_DIR}/.doey/tasks/${local_task_id}.result.json"
-  cp "$RESULT_FILE" "$_persistent_result" 2>/dev/null || true
+  cp "$RESULT_FILE" "${PROJECT_DIR}/.doey/tasks/${local_task_id}.result.json" 2>/dev/null || true
 fi
 
 _FILES_COUNT=0
 [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
 type _debug_log >/dev/null 2>&1 && _debug_log lifecycle "result_captured" "files_changed=${_FILES_COUNT}" "tool_calls=${TOOL_COUNT}"
 
-# Completion event for Session Manager
 COMPLETION="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"
 cat > "${COMPLETION}.tmp" <<COMPLETE
 PANE_INDEX="$PANE_INDEX"
@@ -124,7 +113,4 @@ COMPLETE
 mv "${COMPLETION}.tmp" "$COMPLETION"
 [ ! -f "$COMPLETION" ] && _log_error "HOOK_ERROR" "Completion event file not written" "path=$COMPLETION"
 
-# Wake Session Manager
-touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true
-
-exit 0
+touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true  # wake SM

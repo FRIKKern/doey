@@ -128,12 +128,6 @@ Modify `.doey/config.sh`:
 3. Update `DOEY_TEAM_COUNT`
 4. Touch refresh trigger
 
-### Switching to teams view
-When working on teams, switch the settings panel:
-```bash
-echo "teams" > "${RUNTIME_DIR}/status/settings_view"
-```
-
 ### Quick commands
 
 | User says | Action |

@@ -48,6 +48,5 @@ echo "=== Context audit ===" && bash "$PROJECT_DIR/shell/context-audit.sh" --rep
 ```
 
 ### Rules
-1. No Agent tool in worker prompts — prevents context overflow
-2. Ask user before Wave 2 — never auto-fix without confirmation
-3. Bash 3.2 violations are HIGH — they break on macOS
+1. Ask user before Wave 2 — never auto-fix without confirmation
+2. No Agent tool in worker prompts

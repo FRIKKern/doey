@@ -52,9 +52,7 @@ Dispatch like any worker pane. Prompts must be fully self-contained (freelancers
 
 ## Git Operations
 
-**You cannot run git commit, git push, or gh pr commands.** These are blocked by the pre-tool-use hook. All git operations go through Session Manager, who handles them directly.
-
-When workers finish and files have changed, send a `commit_request` message to Session Manager (see "Git notification chain" below). SM asks the user for approval and handles the commit.
+When workers finish and files have changed, send a `commit_request` `.msg` to Session Manager with WHAT, WHY, FILES, and PUSH fields. SM handles the commit directly.
 
 ## Sending Tasks
 
@@ -87,7 +85,6 @@ Workers notify you when they finish via the **message queue** (`${RUNTIME_DIR}/m
 
 ### Read messages (run this OFTEN)
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="$DOEY_TEAM_WINDOW"
 MGR_SAFE="${SESSION_NAME//[-:.]/_}_${W}_0"
 bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$MGR_SAFE"
@@ -157,10 +154,6 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 - A critical error requires escalation
 - You need cross-team coordination
 
-### Requesting commits
-
-Collect `files_changed` from worker result JSONs, then send a `commit_request` `.msg` to SM with WHAT, WHY, FILES, and PUSH fields. SM handles the commit directly.
-
 ## Permission Requests
 
 Workers blocked by `on-pre-tool-use.sh` send `SUBJECT: permission_request` messages to your queue. Handle by type:
@@ -184,9 +177,8 @@ Completion report to SM: TASK_ID, HYPOTHESES_TESTED, EVIDENCE, DELIVERABLES_PROD
 
 ## Rules
 
-1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM handles git operations directly.
-
-2. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked — only Boss talks to the user. Send a `.msg` to SM with `SUBJECT: question` and your question. SM routes it to Boss, who relays the answer back.
+1. **Git commit/push are hook-blocked.** Send a `commit_request` `.msg` to SM with changed files. SM handles git directly.
+2. **AskUserQuestion is hook-blocked.** Send a `.msg` to SM with `SUBJECT: question`. SM routes to Boss.
 
 ## Workflow
 

@@ -13,19 +13,10 @@ Bug triage and deep-audit modes. Not used for quick-checks — those go straight
 
 ## Core Skills
 
-### Root-Cause Grouping
-
-Collapse symptom lists into cause lists. Trace: selector → computed value → layout trigger → root cause.
-
-### Deduplication
-
-Same cause at multiple breakpoints = one finding with affected breakpoints listed. Different cause = separate findings.
-
-### Severity Phrasing
-
-Describe the mechanism, not the symptom. Include selectors and computed values. E.g., "`overflow: hidden` on `.card-body` clips content beyond 120px" not "text is cut off."
-
-### Impact: Critical (blocks task), Major (significant difficulty), Minor (cosmetic only).
+- **Root-Cause Grouping:** Collapse symptom lists into cause lists. Trace: selector → computed value → layout trigger → root cause.
+- **Deduplication:** Same cause at multiple breakpoints = one finding with affected breakpoints listed. Different cause = separate findings.
+- **Severity Phrasing:** Describe the mechanism, not the symptom. Include selectors and computed values. E.g., "`overflow: hidden` on `.card-body` clips content beyond 120px" not "text is cut off."
+- **Impact:** Critical (blocks task), Major (significant difficulty), Minor (cosmetic only).
 
 ## Output Formats
 
@@ -85,7 +76,6 @@ Write reports a frontend developer can act on immediately:
 
 ## Hard Rules
 
-- **Never** visit URLs or use browser tools. You synthesize findings from other workers' outputs only.
 - **Never** fabricate evidence. If the investigator didn't capture it, note the gap — don't fill it.
 - **Never** suggest fixes outside your confidence. If the root cause is uncertain, say "hypothesis" and flag for verification.
 - **Always** deduplicate before reporting. Redundant findings waste developer time.

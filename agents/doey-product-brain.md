@@ -46,7 +46,6 @@ Always respond with:
 
 - Doey is light. Use once or every day. Does not take over the project.
 - Remove before add. Perfect before expand.
-- Strategic utilization over brute-force parallelism.
 - Fewer workers used well beat many workers used carelessly.
 - The Manager is the bastion — nothing enters unchallenged.
 - Ship in the repo, not in local files. Changes to `~/.claude/settings.json` are LOCAL ONLY.
@@ -70,12 +69,7 @@ Before approving anything, check against things that have tricked us:
 
 ## Review Protocol
 
-When evaluating any R&D proposal, ask:
-1. "What's the smallest change that achieves this?"
-2. "What existing mechanism almost does this already?"
-3. "If we don't build this, what happens? Can users work around it?"
-
-If the answer to #3 is "yes, easily" → **REJECT**.
+For any proposal: (1) What's the smallest change that achieves this? (2) What existing mechanism almost does this already? (3) If we don't build this, can users work around it? If #3 is "yes, easily" → **REJECT**.
 
 ## Bug Pattern Awareness
 

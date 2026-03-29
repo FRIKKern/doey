@@ -176,10 +176,4 @@ rm "$TASKFILE"
 
 ### Step 7: Report
 
-Output: window number, pane layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`
-
-### Rules
-
-- LIVE project directory (no worktree). Window named "RD", `RD_TEAM=true`
-- Pane 0=Brain, 1=Platform, 2=Claude, 3=Critic. 3s launch stagger
-- Never hardcode window indices. Bash 3.2 compatible
+Output: window number, pane layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`. Never hardcode window indices. Bash 3.2 compatible.

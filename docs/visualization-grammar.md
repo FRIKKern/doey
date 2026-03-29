@@ -44,42 +44,16 @@ Stable visual language for terminal-safe task rendering. All Doey components (Bo
   → Desired state: encrypted token storage with rotation
 ```
 
-### 2. Representation Layer
-
-```
-◆ Solution Structure
-  • shell/auth.sh — token encryption/decryption
-  • shell/session.sh — rotation logic
-  → Shared interface: get_token() / set_token()
-```
-
-### 3. Hypothesis Space
+### 2. Hypothesis Space & Confidence
 
 ```
 ◆ Hypotheses
   • H1: AES-256 encryption with key rotation — confidence: HIGH
   • H2: JWT with short-lived tokens — confidence: MEDIUM
-  • H3: Server-side session store — confidence: LOW
+  H1 [████████░░] 80%    H2 [█████░░░░░] 50%
 ```
 
-### 4. Confidence Bars
-
-```
-  H1 [████████░░] 80%  AES-256 encryption
-  H2 [█████░░░░░] 50%  JWT tokens
-  H3 [██░░░░░░░░] 20%  Server-side sessions
-```
-
-### 5. Relationship Matrix
-
-```
-           auth.sh  session.sh  config.sh
-  auth.sh     —       WRITES      READS
-  session.sh  READS     —         READS
-  config.sh   —         —           —
-```
-
-### 6. Task Flow
+### 3. Task Flow
 
 ```
 ◆ Task Flow

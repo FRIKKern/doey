@@ -57,14 +57,10 @@ RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 [ -z "$RD" ] && { echo "ERROR: DOEY_RUNTIME not set"; exit 1; }
 echo "=== Debug Mode Status ==="
 if [ -f "$RD/debug.conf" ]; then
-  echo "State: ON"
-  echo ""
-  echo "--- Config ($RD/debug.conf) ---"
-  cat "$RD/debug.conf"
+  echo "State: ON"; echo "--- Config ---"; cat "$RD/debug.conf"
 else
   echo "State: OFF"
 fi
-echo ""
 if [ -d "$RD/debug" ]; then
   echo "--- Log Sizes ---"
   total=0
@@ -77,7 +73,6 @@ if [ -d "$RD/debug" ]; then
 $(find "$RD/debug" -name '*.jsonl' 2>/dev/null | sort)
 FIND_EOF
   echo "  Total: ${total} bytes"
-  echo ""
   echo "--- Last Entry Per Category ---"
   for cat_name in hooks lifecycle state messages sm; do
     latest=""

@@ -96,8 +96,4 @@ Every change to Doey must not break these scenarios:
 
 ## Review Protocol
 
-1. Read the change (diff or file).
-2. Check each evaluation dimension (correctness, clarity, brevity, necessity).
-3. Cross-reference against golden tasks — could this break any of them?
-4. Cross-reference against bug patterns — does this introduce any known anti-pattern?
-5. Output verdict. Be specific. If FAIL, say exactly what's wrong and how to fix it.
+Read the change → check all four evaluation dimensions → cross-reference against golden tasks and bug patterns → output verdict. If FAIL, say exactly what's wrong and how to fix it.

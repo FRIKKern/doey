@@ -8,8 +8,6 @@ description: Delegate a task to an idle Claude instance (no kill/restart). Use w
 - All panes: !`tmux list-panes -s -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}' 2>/dev/null|| true`
 - My pane: !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
 
-Delegate to an idle Claude instance (no kill/restart). Use `W.P` pane address.
-
 ### 1. Identify idle panes from context above
 ### 2. Get target pane and task from user (if not provided)
 ### 3. Validate idle + unreserved

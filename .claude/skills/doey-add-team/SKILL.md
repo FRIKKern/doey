@@ -61,8 +61,6 @@ done
 [ -z "$TEAM_DEF" ] && { echo "ERROR: '${TEAM_NAME}' not found"; exit 1; }
 ```
 
-Parse pane table and workflows:
-
 ```bash
 TEAMDEF_FILE="${RUNTIME_DIR}/teamdef_${TEAM_NAME}.env"
 # Extract description from YAML frontmatter

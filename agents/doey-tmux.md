@@ -63,11 +63,11 @@ tmux bind-key -n MouseDown1Status \
 
 ### Button Handler Pattern
 
-Every handler: receive `$1=session`, resolve `RUNTIME_DIR` via `tmux show-environment`, check if window exists (focus it), else create new window. Use `set -uo pipefail` (NOT `set -e`).
+Every handler: receive `$1=session`, resolve `RUNTIME_DIR` via `tmux show-environment`, check if window exists (focus it), else create new window.
 
 ### Status Bar Content Generators (`#()` scripts)
 
-Must be fast (< 100ms), never crash, output single line of tmux-formatted text. Use `set -uo pipefail` but NOT `set -e`.
+Must be fast (< 100ms), never crash, output single line of tmux-formatted text.
 
 ## Installation Checklist
 
@@ -88,14 +88,9 @@ If you skip step 2, the button will work in dev but break after install. This is
 
 ## Shell Constraints
 
-All scripts must be **bash 3.2 compatible** (macOS `/bin/bash`). Forbidden:
-- `declare -A` (associative arrays), `declare -n/-l/-u`
-- `printf '%(%s)T'` (time format)
-- `mapfile` / `readarray`
-- `|&`, `&>>`, `coproc`
-- `BASH_REMATCH` capture groups (basic `[[ =~ ]]` is OK)
+All scripts must be **bash 3.2 compatible** (macOS `/bin/bash`). Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `BASH_REMATCH` capture groups (basic `[[ =~ ]]` is OK).
 
-Use `set -uo pipefail`. Tmux callback scripts (status generators, pane borders) must NOT use `set -e` — transient failures must not crash the UI.
+Use `set -uo pipefail`. Tmux callback scripts (status generators, pane borders, button handlers) must NOT use `set -e` — transient failures must not crash the UI.
 
 ## Workflow
 
@@ -117,8 +112,5 @@ Use `set -uo pipefail`. Tmux callback scripts (status generators, pane borders) 
 
 1. Never break existing buttons when adding new ones — chain `if-shell` for multiple mouse ranges
 2. Status bar real estate is precious — keep it minimal
-3. Every `#()` call must complete in < 100ms
-4. New scripts → install.sh. Always. No exceptions.
-5. Test with both `tmux -V` 3.2+ and 3.0 if possible (ranges require 3.2+)
-6. Info panel is for display only — never put interactive elements in pane 0.0
-7. Use `run-shell -b` for click handlers so tmux doesn't freeze
+3. Test with both `tmux -V` 3.2+ and 3.0 if possible (ranges require 3.2+)
+4. Info panel is for display only — never put interactive elements in pane 0.0

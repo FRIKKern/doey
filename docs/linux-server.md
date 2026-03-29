@@ -70,7 +70,7 @@ Any Linux VPS with tmux and Node.js works. Never commit API keys — use env var
 | **DigitalOcean** | Basic Droplet ($6/mo) | Simple UI |
 | **AWS** | t3.micro (free tier) | 12 months free |
 
-For Linode, see [linode-setup.md](linode-setup.md).
+Step-by-step guides: [Hetzner](hetzner-setup.md) · [Linode](linode-setup.md).
 
 ### Troubleshooting
 
