@@ -297,6 +297,8 @@ Check `$RUNTIME_DIR/issues/` periodically. Include unresolved issues in reports 
 
 Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion — you may never mark a task `done`.
 
+SM is the **proactive task lifecycle manager**. Every task must have an accurate status at every stage — you drive transitions, log progress, and ensure nothing falls through the cracks.
+
 ### When to propose a task
 
 When Boss forwards a user goal that will take more than a few minutes, send a message to Boss asking if it should be tracked as a task. If Boss confirms, create it:
@@ -310,29 +312,79 @@ printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
   "$ID" "TITLE HERE" "$(date +%s)" > "${TD}/${ID}.task"
 ```
 
-### When work appears complete
+### Status transitions
 
-Mark the task `pending_user_confirmation` and tell Boss:
-```bash
-BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-printf 'FROM: SessionManager\nSUBJECT: task_complete\nTask %s looks complete. Ask user to confirm: doey task done %s\n' \
-  "$TASK_ID" "$TASK_ID" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_task_done_$(date +%s).msg"
-touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
-```
+Update `TASK_STATUS` at every lifecycle point. The valid progression:
 
+| Status | When |
+|--------|------|
+| `active` | Boss creates the task (initial state) |
+| `dispatched` | SM sends work to a team/Window Manager |
+| `in_progress` | Team reports it's actively working |
+| `blocked` | Team reports a blocker or dependency issue |
+| `pending_user_confirmation` | All work complete and verified |
+
+To update status in a task file:
 ```bash
-FILE="${RUNTIME_DIR}/tasks/N.task"
+FILE="${RUNTIME_DIR}/tasks/${TASK_ID}.task"
 TMP="${FILE}.tmp"
 while IFS= read -r line; do
-  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=pending_user_confirmation" ;;
-  *) echo "$line" ;; esac
+  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=dispatched" ;; *) echo "$line" ;; esac
 done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ```
+
+### Progress logging
+
+Append timestamped progress notes to task files so the Dashboard and Boss always have full context:
+```bash
+echo "TASK_LOG_$(date +%s)=STATUS_CHANGE: Dispatched to Team W2" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+```
+
+Log at every meaningful event:
+- `"STATUS_CHANGE: Dispatched to Team W2"`
+- `"PROGRESS: Team W2 reports 3/5 subtasks complete"`
+- `"BLOCKED: Needs API key — waiting on user"`
+- `"COMPLETE: All work done, pending user confirmation"`
+
+### Team assignment tracking
+
+When dispatching to a team, record which team owns the work:
+```bash
+echo "TASK_TEAM=W${WINDOW_INDEX}" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+```
+
+This lets any part of the system (Dashboard, Boss, Watchdog) see who is working on what.
+
+### Result recording
+
+When a team reports back (`task_complete` message), update the task with outcome details:
+```bash
+echo "TASK_RESULT=Brief summary of what was done" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+echo "TASK_FILES=file1.ext,file2.ext" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+```
+
+### Proactive completion flow
+
+When a team reports success (`task_complete` message), SM must do all three steps:
+
+1. **Update status** to `pending_user_confirmation` (using the status update pattern above)
+2. **Log completion** with result summary:
+   ```bash
+   echo "TASK_LOG_$(date +%s)=COMPLETE: All work done — $(cat summary)" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+   ```
+3. **Notify Boss** so Boss can tell the user:
+   ```bash
+   BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
+   printf 'FROM: SessionManager\nSUBJECT: task_complete\nTask %s looks complete. Ask user to confirm: doey task done %s\n' \
+     "$TASK_ID" "$TASK_ID" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_task_done_$(date +%s).msg"
+   touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
+   ```
 
 ### Never do this
 - Set `TASK_STATUS=done` — that is reserved for the user via `doey task done <id>`
 - Delete task files
 - Create tasks without Boss confirming the user wants it
+- Skip status transitions (e.g., jumping from `active` straight to `pending_user_confirmation` without `dispatched`/`in_progress`)
 
 ### Check active tasks (on-demand, not on startup)
 ```bash
