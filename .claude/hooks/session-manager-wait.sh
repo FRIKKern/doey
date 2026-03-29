@@ -95,6 +95,16 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   if [ -f "${1:-}" ]; then
     _sm_bump_cycle; _sm_dbg_wake "crash_alert" "$elapsed"; echo "CRASH_ALERT"; exit 0
   fi
+  # Check for queued tasks (active status, no team assigned yet)
+  if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+    local _tf
+    for _tf in "${PROJECT_DIR:-.}/.doey/tasks"/*.task; do
+      [ -f "$_tf" ] || continue
+      grep -q 'TASK_STATUS=active' "$_tf" 2>/dev/null || continue
+      grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null && continue
+      _sm_bump_cycle; _sm_dbg_wake "queued_tasks" "$elapsed"; echo "QUEUED_TASKS"; exit 0
+    done
+  fi
   return 1
 }
 

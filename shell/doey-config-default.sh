@@ -33,6 +33,10 @@
 # Maximum number of worker panes across all teams
 # DOEY_MAX_WORKERS=20
 
+# Maximum number of team windows SM can auto-spawn
+# Prevents runaway team creation under load.
+# DOEY_MAX_TEAMS=5
+
 # =============================================================================
 # Auth & Launch Timing
 # =============================================================================
