@@ -283,6 +283,10 @@ if [ -d "$SCRIPT_DIR/tui" ]; then
       step_fail
       warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
     fi
+    # Build remote setup wizard (optional — non-fatal)
+    set +e
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
+    set -e
   elif [ -f "$SCRIPT_DIR/tui/go.mod" ]; then
     # We're in the Doey source repo — developer needs Go to build the TUI
     GO_VERSION=$(sed -n 's/^go[[:space:]][[:space:]]*//p' "$SCRIPT_DIR/tui/go.mod" | head -1)
