@@ -1,6 +1,10 @@
 package styles
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 var defaultTheme = DefaultTheme()
 
@@ -152,4 +156,31 @@ func TagBadge(tag string) string {
 	return lipgloss.NewStyle().
 		Foreground(defaultTheme.Muted).
 		Render("#" + tag)
+}
+
+// SectionPill renders an inverted-color pill badge for section headers.
+// Inspired by omm's title pill pattern: foreground=dark, background=color.
+func SectionPill(label string, bg lipgloss.AdaptiveColor) string {
+	return lipgloss.NewStyle().
+		Foreground(defaultTheme.BgText).
+		Background(bg).
+		Bold(true).
+		Padding(0, 1).
+		Render(label)
+}
+
+// SubtaskProgress renders a colored subtask progress indicator.
+// Shows "(done/total done)" with green when fully complete.
+func SubtaskProgress(done, total int) string {
+	if total == 0 {
+		return ""
+	}
+	label := fmt.Sprintf("(%d/%d done)", done, total)
+	color := defaultTheme.Muted
+	if done == total {
+		color = defaultTheme.Success
+	} else if done > 0 {
+		color = defaultTheme.Warning
+	}
+	return lipgloss.NewStyle().Foreground(color).Render(label)
 }

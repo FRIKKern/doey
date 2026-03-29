@@ -370,29 +370,29 @@ func (m TasksModel) viewList() string {
 	}
 
 	summary := m.taskSummary()
-	selectedBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#374151"}
 
-	// Build rows with section headers
+	// Build rows with section headers (inverted pill badges)
 	var lines []string
 	lastSection := ""
 	for i, entry := range m.entries {
-		section := sectionLabel(sectionOfStatus(entry.Status))
+		sec := sectionOfStatus(entry.Status)
+		section := sectionLabel(sec)
 		if section != lastSection {
 			if lastSection != "" {
 				lines = append(lines, "")
 			}
-			sectionHeader := t.SectionHeader.Copy().PaddingLeft(1).Render(section)
+			// Inverted-color pill for section headers (omm pattern)
+			pillColor := t.Primary
+			if sec == "complete" {
+				pillColor = t.Success
+			}
+			sectionHeader := " " + styles.SectionPill(section, pillColor)
 			lines = append(lines, sectionHeader)
 			lastSection = section
 		}
 
-		line := m.renderTaskRow(entry, w)
-		if m.focused && i == m.cursor {
-			line = lipgloss.NewStyle().
-				Background(selectedBg).
-				Width(w - 4).
-				Render(line)
-		}
+		selected := m.focused && i == m.cursor
+		line := m.renderTaskRow(entry, w, selected)
 		lines = append(lines, line)
 	}
 
@@ -434,16 +434,14 @@ func (m TasksModel) taskSummary() string {
 
 	var parts []string
 	if active > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Primary).
-			Render(fmt.Sprintf("%d active", active)))
+		parts = append(parts, styles.SectionPill(fmt.Sprintf("%d active", active), t.Primary))
 	}
 	if complete > 0 {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Success).
-			Render(fmt.Sprintf("%d complete", complete)))
+		parts = append(parts, styles.SectionPill(fmt.Sprintf("%d complete", complete), t.Success))
 	}
 
 	if len(parts) > 0 {
-		return total + "  " + strings.Join(parts, "  ")
+		return total + "  " + strings.Join(parts, " ")
 	}
 	return total
 }
@@ -459,7 +457,8 @@ func sectionLabel(section string) string {
 }
 
 // renderTaskRow renders a single task as a one-liner.
-func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string {
+// When selected, uses ▎ (left 1/8 block) indicator instead of background highlight (omm pattern).
+func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int, selected bool) string {
 	t := m.theme
 
 	icon := statusIcon(task.Status, t)
@@ -478,7 +477,7 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		age = t.Faint.Render(formatAge(time.Since(time.Unix(task.Created, 0))))
 	}
 
-	// Subtask count
+	// Subtask progress — colored "(done/total done)" indicator
 	subtaskBadge := ""
 	if subs, ok := m.subtaskMap[task.ID]; ok && len(subs) > 0 {
 		done := 0
@@ -487,7 +486,7 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 				done++
 			}
 		}
-		subtaskBadge = t.Dim.Render(fmt.Sprintf(" [%d/%d]", done, len(subs)))
+		subtaskBadge = " " + styles.SubtaskProgress(done, len(subs))
 	}
 
 	// Priority badge (show for P0 and P1 only)
@@ -533,7 +532,18 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		typeBadge = " " + t.Dim.Render("["+task.Type+"]")
 	}
 
-	row := "  " + icon + " " + id + catBadge + typeBadge + " " + title + priBadge + blockerBadge + subtaskBadge + teamBadge + tagStr + " " + age
+	// Selection indicator: ▎ (left 1/8 block) when selected, space when not (omm pattern)
+	indicator := "  "
+	if selected {
+		indicator = lipgloss.NewStyle().Foreground(t.Primary).Render("▎") + " "
+	}
+
+	row := indicator + icon + " " + id + catBadge + typeBadge + " " + title + priBadge + blockerBadge + subtaskBadge + teamBadge + tagStr + " " + age
+
+	// Selected rows get primary-colored text for the entire line
+	if selected {
+		row = lipgloss.NewStyle().Foreground(t.Primary).Render(row)
+	}
 
 	// Merged tasks are dimmed with a merge indicator
 	if task.MergedInto != "" {
