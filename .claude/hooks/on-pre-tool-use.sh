@@ -66,6 +66,30 @@ _is_destructive_rm() {
   return 1
 }
 
+# Escalate a blocked tool call to the Window Manager via message file.
+# Args: $1=tool_name $2=command(truncated) $3=reason
+_escalate_permission() {
+  local _tool="$1" _cmd="$2" _reason="$3"
+  local _rtd="${_RD:-${DOEY_RUNTIME:-}}"
+  [ -z "$_rtd" ] && return 0
+  local _sn="${SESSION_NAME:-}"
+  [ -z "$_sn" ] && _sn=$(grep '^SESSION_NAME=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SESSION_NAME=//;s/^"//;s/"$//') || true
+  [ -z "$_sn" ] && return 0
+  local _wi="${DOEY_WINDOW_INDEX:-}"
+  [ -z "$_wi" ] && _wi=$(grep '^DOEY_WINDOW_INDEX=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^DOEY_WINDOW_INDEX=//') || true
+  [ -z "$_wi" ] && return 0
+  local _mgr_safe; _mgr_safe=$(printf '%s_%s_0' "$_sn" "$_wi" | tr ':.-' '_')
+  local _pane_id="${_WP:-unknown}"
+  local _pane_safe="${_PS:-unknown}"
+  local _cmd_short; _cmd_short=$(printf '%.200s' "$_cmd")
+  local _msg_dir="${_rtd}/messages"
+  mkdir -p "$_msg_dir" 2>/dev/null || return 0
+  printf 'FROM: %s\nSUBJECT: permission_request\nTOOL: %s\nCOMMAND: %s\nREASON: %s\nPANE: %s\n' \
+    "$_pane_safe" "$_tool" "$_cmd_short" "$_reason" "$_pane_id" \
+    > "${_msg_dir}/${_mgr_safe}_$(date +%s)_$$.msg" 2>/dev/null || true
+  touch "${_rtd}/triggers/${_mgr_safe}.trigger" 2>/dev/null || true
+}
+
 # Check command against blocked patterns; sets MSG or returns 1
 _check_blocked() {
   local cmd="$1"
@@ -176,7 +200,12 @@ if [ "$_DOEY_ROLE" != "session_manager" ]; then
       *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
         _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_GIT_CMD"
         _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
-        echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager." >&2
+        if [ "$_DOEY_ROLE" = "worker" ]; then
+          _escalate_permission "Bash" "$_GIT_CMD" "git write operations blocked for workers"
+          echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager. Manager notified — it may approve this for you." >&2
+        else
+          echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager." >&2
+        fi
         exit 2 ;;
     esac
   fi
@@ -222,7 +251,8 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "Worker $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
-    echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this." >&2
+    _escalate_permission "Bash" "$TOOL_COMMAND" "Worker blocked: $MSG"
+    echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this. Manager notified — it may approve this for you." >&2
     exit 2
   fi
   _dbg_write "allow_worker"
@@ -245,7 +275,8 @@ TOOL_COMMAND=$(_json_str tool_input.command)
 if _check_blocked "$TOOL_COMMAND"; then
   _log_block "TOOL_BLOCKED" "worker $MSG blocked" "$TOOL_COMMAND"
   _dbg_write "block_worker"
-  echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this." >&2
+  _escalate_permission "Bash" "$TOOL_COMMAND" "Worker blocked: $MSG"
+  echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this. Manager notified — it may approve this for you." >&2
   exit 2
 fi
 _dbg_write "allow_slow"

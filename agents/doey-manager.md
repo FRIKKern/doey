@@ -161,6 +161,51 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 
 Collect `files_changed` from worker result JSONs, then send a `commit_request` `.msg` to SM with WHAT, WHY, FILES, and PUSH fields. SM handles the commit directly.
 
+## Permission Requests
+
+Workers cannot run certain operations — version-control writes (`git commit`, `git push`), cross-pane `send-keys`, destructive `rm`. The `on-pre-tool-use.sh` hook blocks these with exit code 2 and writes a `permission_request` message to your message queue.
+
+### Message format
+
+Permission requests appear alongside other messages in your inbox drain with `SUBJECT: permission_request`:
+
+```
+FROM: Worker_W2.3
+SUBJECT: permission_request
+TOOL: Bash
+COMMAND: git commit -m "fix typo"
+REASON: Workers cannot run git commit — VCS operations require SM
+PANE: doey-myproject:2.3
+```
+
+Fields: `FROM` (worker pane), `TOOL` (what was called), `COMMAND` (what they tried), `REASON` (why the hook blocked it), `PANE` (full tmux pane spec).
+
+### Handling requests
+
+When you receive a `permission_request`, evaluate it before acting:
+
+1. **Read the request** — understand WHAT the worker wants and WHY it was blocked
+2. **Evaluate legitimacy** — Is the worker trying to do something reasonable that the hook blocked broadly? (e.g., checking version history blocked because the pattern matched `git` commands too broadly — a false positive the Manager should handle)
+3. **Act based on what is needed:**
+
+| Need | Action |
+|------|--------|
+| Version-control operation (commit, push) | Collect the details and send a `commit_request` message to Session Manager — SM handles all VCS |
+| Send-keys to another pane | Manager has send-keys access — do it on the worker's behalf |
+| File operation in a restricted area | Manager has full file access — do it directly |
+| Operation you cannot fulfill | Escalate to Session Manager via message with full context |
+
+4. **Always respond to the worker** — send-keys to their pane explaining what was done or why the request was denied:
+   ```bash
+   PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.3"
+   tmux copy-mode -q -t "$PANE" 2>/dev/null
+   tmux send-keys -t "$PANE" "Your git commit was forwarded to Session Manager for processing. Continue with your next task." Enter
+   ```
+
+### Integration with monitoring loop
+
+Check for `permission_request` messages as part of your regular message drain (Step 1 of the active monitoring loop). No separate polling needed — they arrive in the same `${RUNTIME_DIR}/messages/` queue as `worker_finished` and other messages.
+
 ## Rules
 
 1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM handles git operations directly.
@@ -225,7 +270,7 @@ Before dispatching any wave, write a `.subtask` file per worker assignment:
 ```bash
 TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
 PARENT_ID=1; SUB_NUM=1
-printf 'SUBTASK_ID=%s_%s\nPARENT_TASK_ID=%s\nSUBTASK_TITLE=%s\nSUBTASK_STATUS=dispatched\nSUBTASK_WORKER=%s.%s\nSUBTASK_CREATED=%s\n' \
+printf 'SUBTASK_ID=%s_%s\nPARENT_TASK_ID=%s\nSUBTASK_TITLE=%s\nSUBTASK_STATUS=active\nSUBTASK_WORKER=%s.%s\nSUBTASK_CREATED=%s\n' \
   "$PARENT_ID" "$SUB_NUM" "$PARENT_ID" "TITLE HERE" "$DOEY_TEAM_WINDOW" "PANE_NUM" "$(date +%s)" \
   > "${TD}/${PARENT_ID}_${SUB_NUM}.subtask"
 ```
@@ -234,7 +279,7 @@ printf 'SUBTASK_ID=%s_%s\nPARENT_TASK_ID=%s\nSUBTASK_TITLE=%s\nSUBTASK_STATUS=di
 
 When workers report back (via messages or status files), update the subtask file in place.
 
-**Valid statuses:** `dispatched`, `in_progress`, `done`, `failed`
+**Valid statuses:** `active`, `in_progress`, `done`, `failed`
 
 ```bash
 FILE="${RUNTIME_DIR}/tasks/${PARENT_ID}_${SUB_NUM}.subtask"
