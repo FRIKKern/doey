@@ -24,7 +24,7 @@ _send_message_file() {
   local target_pane="$1" subject="$2" body="$3" sender="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
   # Derive a safe target identifier from the pane spec (e.g. "doey-doey:3.0" -> "doey-doey_3_0")
   local target_safe
-  target_safe=$(printf '%s' "$target_pane" | tr ':-.' '_')
+  target_safe=$(printf '%s' "$target_pane" | tr ':.-' '_')
 
   local msg_dir="${RUNTIME_DIR}/messages"
   local trig_dir="${RUNTIME_DIR}/triggers"

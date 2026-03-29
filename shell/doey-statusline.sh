@@ -32,7 +32,7 @@ if [ -n "$TMUX_PANE" ] && [ -n "$DOEY_RUNTIME" ] && [ -d "$DOEY_RUNTIME/status" 
   if [ -n "$_session_name" ] && [ -n "$_pane_id" ]; then
     _safe="${_session_name}_${_pane_id}"
     # Replace : and . with _ to match PANE_SAFE convention
-    _safe=$(echo "$_safe" | tr ':-.' '_')
+    _safe=$(echo "$_safe" | tr ':.-' '_')
     _status_file="$DOEY_RUNTIME/status/${_safe}.status"
     if [ -f "$_status_file" ]; then
       status=$(grep '^STATUS:' "$_status_file" 2>/dev/null | head -1 | cut -d' ' -f2-)

@@ -99,7 +99,7 @@ if [ -n "${TMUX_PANE:-}" ]; then
   if [ -n "$_RD" ]; then
     _WP=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null) || true
     if [ -n "$_WP" ]; then
-      _PS=$(echo "$_WP" | tr ':-.' '_')
+      _PS=$(echo "$_WP" | tr ':.-' '_')
       [ -f "${_RD}/status/${_PS}.role" ] && _DOEY_ROLE=$(cat "${_RD}/status/${_PS}.role" 2>/dev/null) || true
     fi
   fi

@@ -93,7 +93,7 @@ FULL_PANE_ID="${PROJECT_ACRONYM}-${PANE_ID}"
 # Cache role per-pane for fast lookup by subsequent hooks
 # NOTE: tmux set-environment is session-wide, so the last pane to start would
 # overwrite everyone's role. Use per-pane files instead.
-PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':-.' '_')
+PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.-' '_')
 mkdir -p "${RUNTIME_DIR}/status"
 atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
 
