@@ -172,6 +172,16 @@ type TeamUserConfig struct {
 	Startup []string `json:"startup"` // team names to auto-launch
 }
 
+// HeartbeatState is per-task live state for the TUI task list.
+type HeartbeatState struct {
+	ActiveWorkers int       // count of BUSY panes working on this task
+	LastActivity  time.Time // most recent activity timestamp
+	ActivityText  string    // human-readable, e.g. "W2.1 editing common.sh"
+	Health        string    // "green" (<30s), "amber" (<60s), "red" (>60s)
+	ProgressText  string    // e.g. "2/5 subtasks done"
+	LatestFinding string    // last TASK_LOG entry summary
+}
+
 // Snapshot is a complete point-in-time view of the runtime
 type Snapshot struct {
 	Session    SessionConfig

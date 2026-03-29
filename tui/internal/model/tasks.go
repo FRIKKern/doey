@@ -65,8 +65,9 @@ func formatAge(d time.Duration) string {
 // TasksModel displays a kanban-style task board with sections, CRUD, and subtask nesting.
 type TasksModel struct {
 	// Data
-	entries    []runtime.PersistentTask     // from persistent store + merged runtime
-	subtaskMap map[string][]runtime.Subtask // task ID -> subtasks
+	entries    []runtime.PersistentTask              // from persistent store + merged runtime
+	subtaskMap map[string][]runtime.Subtask          // task ID -> subtasks
+	heartbeats map[string]runtime.HeartbeatState     // task ID -> live heartbeat
 	theme      styles.Theme
 
 	// Card-based list
@@ -144,6 +145,9 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 		m.subtaskMap[st.TaskID] = append(m.subtaskMap[st.TaskID], st)
 	}
 
+	// Aggregate heartbeat state for live activity display
+	m.heartbeats = runtime.AggregateHeartbeats(snap)
+
 	// Convert entries to list items
 	items := make([]list.Item, len(m.entries))
 	for i, entry := range m.entries {
@@ -160,6 +164,11 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 		items[i] = ti
 	}
 	m.list.SetItems(items)
+
+	// Update delegate with current heartbeat data
+	delegate := taskcard.NewCardDelegate(m.theme)
+	delegate.Heartbeats = m.heartbeats
+	m.list.SetDelegate(delegate)
 }
 
 func (m *TasksModel) sortEntries() {
