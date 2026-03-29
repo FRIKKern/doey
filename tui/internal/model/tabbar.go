@@ -87,7 +87,7 @@ func (m TabBarModel) View() string {
 	truncate := false
 	totalWidth := 2 // leading padding
 	for i, tab := range m.tabs {
-		w := len(tab.Icon) + 1 + len(tab.Name) + 4 // icon + space + name + padding
+		w := len(tab.Icon) + 1 + len(tab.Name) + 8 // icon + space + name + padding (3 each side)
 		if tab.HasActivity {
 			w += 2 // dot + space
 		}
@@ -113,9 +113,9 @@ func (m TabBarModel) View() string {
 
 		zoneID := fmt.Sprintf("tab-%d", i)
 		if i == m.activeIndex {
-			parts = append(parts, zone.Mark(zoneID, t.MenuActive.Padding(0, 1).Render(label)))
+			parts = append(parts, zone.Mark(zoneID, t.MenuActive.Padding(0, 3).Render(label)))
 		} else {
-			parts = append(parts, zone.Mark(zoneID, t.MenuInactive.Padding(0, 1).Render(label)))
+			parts = append(parts, zone.Mark(zoneID, t.MenuInactive.Padding(0, 3).Render(label)))
 		}
 	}
 

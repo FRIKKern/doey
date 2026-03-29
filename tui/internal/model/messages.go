@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
@@ -88,29 +89,111 @@ func (m *MessagesModel) applyMsgFilters() {
 	}
 }
 
-// Update handles navigation, filter cycling, and search input.
+// Update handles navigation, filter cycling, search input, and mouse events.
 func (m MessagesModel) Update(msg tea.Msg) (MessagesModel, tea.Cmd) {
 	if !m.focused {
 		return m, nil
 	}
 
-	kmsg, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
+	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m.updateMsgMouse(msg)
+
+	case tea.KeyMsg:
+		if m.searchActive {
+			return m.updateMsgSearch(msg), nil
+		}
+
+		if m.detailMode {
+			if key.Matches(msg, m.keyMap.Back) {
+				m.detailMode = false
+			}
+			return m, nil
+		}
+
+		return m.updateMsgList(msg), nil
 	}
 
-	if m.searchActive {
-		return m.updateMsgSearch(kmsg), nil
-	}
+	return m, nil
+}
 
+// updateMsgMouse handles all mouse interactions for the messages panel.
+func (m MessagesModel) updateMsgMouse(msg tea.MouseMsg) (MessagesModel, tea.Cmd) {
+	// Detail mode — click back
 	if m.detailMode {
-		if key.Matches(kmsg, m.keyMap.Back) {
-			m.detailMode = false
+		if msg.Action == tea.MouseActionRelease {
+			if zone.Get("msg-back").InBounds(msg) {
+				m.detailMode = false
+				return m, nil
+			}
 		}
 		return m, nil
 	}
 
-	return m.updateMsgList(kmsg), nil
+	// List mode — click release for entries and controls
+	if msg.Action == tea.MouseActionRelease {
+		// Click follow toggle
+		if zone.Get("msg-follow").InBounds(msg) {
+			m.autoScroll = !m.autoScroll
+			if m.autoScroll {
+				m.cursor = 0
+				m.offset = 0
+			}
+			return m, nil
+		}
+
+		// Click subject filter chips
+		for _, subj := range []string{"status_report", "worker_finished", "task_complete", "question", "commit_request", "error"} {
+			if zone.Get("msg-filter-"+subj).InBounds(msg) {
+				if m.subjectFilter == subj {
+					m.subjectFilter = ""
+				} else {
+					m.subjectFilter = subj
+				}
+				m.applyMsgFilters()
+				return m, nil
+			}
+		}
+
+		// Click search toggle
+		if zone.Get("msg-search").InBounds(msg) {
+			m.searchActive = !m.searchActive
+			return m, nil
+		}
+
+		// Click entries to open detail
+		for i := m.offset; i < len(m.filtered); i++ {
+			if zone.Get(fmt.Sprintf("msg-entry-%d", i)).InBounds(msg) {
+				m.cursor = i
+				m.detailMode = true
+				return m, nil
+			}
+		}
+	}
+
+	// Mouse wheel in list mode
+	if msg.Action == tea.MouseActionPress {
+		if msg.Button == tea.MouseButtonWheelUp {
+			m.autoScroll = false
+			if m.cursor > 0 {
+				m.cursor--
+			}
+			m.ensureMsgVisible()
+			return m, nil
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if m.cursor < len(m.filtered)-1 {
+				m.cursor++
+			}
+			if m.cursor == 0 {
+				m.autoScroll = true
+			}
+			m.ensureMsgVisible()
+			return m, nil
+		}
+	}
+
+	return m, nil
 }
 
 func (m MessagesModel) updateMsgSearch(msg tea.KeyMsg) MessagesModel {
@@ -257,12 +340,12 @@ func (m MessagesModel) viewMsgList() string {
 	// Summary bar with subject counts
 	summaryBar := m.renderSummaryBar()
 
-	// Auto-scroll indicator
+	// Auto-scroll indicator (clickable)
 	scrollInd := ""
 	if m.autoScroll {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE")
+		scrollInd = zone.Mark("msg-follow", lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
 	} else {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED")
+		scrollInd = zone.Mark("msg-follow", lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
 	}
 
 	// Render visible entries
@@ -283,7 +366,7 @@ func (m MessagesModel) viewMsgList() string {
 				Width(w - 4).
 				Render(line)
 		}
-		lines = append(lines, line)
+		lines = append(lines, zone.Mark(fmt.Sprintf("msg-entry-%d", i), line))
 	}
 
 	body := lipgloss.NewStyle().
@@ -292,11 +375,13 @@ func (m MessagesModel) viewMsgList() string {
 
 	hint := ""
 	if m.focused {
+		searchBtn := zone.Mark("msg-search", "/ = search")
+		followBtn := zone.Mark("msg-follow", "f = follow")
 		hint = lipgloss.NewStyle().
 			Foreground(t.Muted).
 			Faint(true).
 			Padding(1, 3).
-			Render("enter = detail  s = subject  / = search  f = follow  c = clear")
+			Render("enter = detail  s = subject  " + searchBtn + "  " + followBtn + "  c = clear")
 	}
 
 	content := header + "\n" + rule + "\n" + summaryBar + scrollInd + "\n" + filterBar + "\n" + body + "\n" + hint
@@ -318,8 +403,12 @@ func (m MessagesModel) renderSummaryBar() string {
 	for _, subj := range []string{"status_report", "worker_finished", "task_complete", "question", "commit_request", "error"} {
 		if c, ok := counts[subj]; ok && c > 0 {
 			color := m.subjectColor(subj)
-			parts = append(parts, lipgloss.NewStyle().Foreground(color).
-				Render(fmt.Sprintf("%d %s", c, subjectShort(subj))))
+			style := lipgloss.NewStyle().Foreground(color)
+			if m.subjectFilter == subj {
+				style = style.Bold(true).Underline(true)
+			}
+			parts = append(parts, zone.Mark("msg-filter-"+subj,
+				style.Render(fmt.Sprintf("%d %s", c, subjectShort(subj)))))
 		}
 	}
 
@@ -473,11 +562,11 @@ func (m MessagesModel) viewMsgDetail() string {
 	header := t.SectionHeader.Copy().PaddingLeft(2).
 		Render(fmt.Sprintf("MESSAGES \u2014 %s", msg.Subject))
 	rule := t.Faint.Render(strings.Repeat("\u2500", w))
-	backHint := lipgloss.NewStyle().
+	backHint := zone.Mark("msg-back", lipgloss.NewStyle().
 		Foreground(t.Muted).
 		Faint(true).
 		PaddingLeft(3).
-		Render("esc to go back")
+		Render("esc to go back"))
 
 	labelStyle := t.StatLabel.Copy().Width(12)
 	valueStyle := t.Body

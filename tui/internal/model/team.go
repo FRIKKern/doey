@@ -12,6 +12,7 @@ import (
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // --- Message types ---
@@ -145,11 +146,111 @@ func (m TeamModel) Update(msg tea.Msg) (TeamModel, tea.Cmd) {
 		return m, cmd
 	}
 
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m.updateMouse(msg)
+	case tea.KeyMsg:
 		if m.summaryMode {
 			return m.updateList(msg)
 		}
 		return m.updateDetail(msg)
+	}
+
+	return m, nil
+}
+
+// updateMouse handles all mouse interactions for the team panel.
+func (m TeamModel) updateMouse(msg tea.MouseMsg) (TeamModel, tea.Cmd) {
+	// List mode clicks
+	if m.summaryMode && msg.Action == tea.MouseActionRelease {
+		for i := range m.entries {
+			if zone.Get(fmt.Sprintf("team-%d", i)).InBounds(msg) {
+				m.cursor = i
+				m.summaryMode = false
+				return m, nil
+			}
+		}
+		// Health grid cell clicks
+		for ri, e := range m.entries {
+			if !e.Running {
+				continue
+			}
+			tc, ok := m.teams[e.WindowIdx]
+			if !ok {
+				continue
+			}
+			for ci := range tc.WorkerPanes {
+				if zone.Get(fmt.Sprintf("health-%d-%d", ri, ci)).InBounds(msg) {
+					m.cursor = ri
+					m.summaryMode = false
+					return m, nil
+				}
+			}
+		}
+	}
+
+	// Detail mode clicks
+	if !m.summaryMode && msg.Action == tea.MouseActionRelease {
+		if zone.Get("team-launch").InBounds(msg) {
+			if m.cursor >= 0 && m.cursor < len(m.entries) {
+				entry := m.entries[m.cursor]
+				if !entry.Running {
+					return m, func() tea.Msg { return LaunchTeamMsg{Name: entry.Def.Name} }
+				}
+			}
+		}
+		if zone.Get("team-stop").InBounds(msg) {
+			if m.cursor >= 0 && m.cursor < len(m.entries) {
+				entry := m.entries[m.cursor]
+				if entry.Running {
+					return m, func() tea.Msg {
+						return StopTeamMsg{Name: entry.Def.Name, WindowIdx: entry.WindowIdx}
+					}
+				}
+			}
+		}
+		if zone.Get("team-star").InBounds(msg) {
+			if m.cursor >= 0 && m.cursor < len(m.entries) {
+				entry := m.entries[m.cursor]
+				return m, func() tea.Msg { return ToggleStarMsg{Name: entry.Def.Name} }
+			}
+		}
+		// Worker entry clicks in detail view
+		if m.cursor >= 0 && m.cursor < len(m.entries) {
+			entry := m.entries[m.cursor]
+			if entry.Running {
+				if tc, ok := m.teams[entry.WindowIdx]; ok {
+					for i := range tc.WorkerPanes {
+						if zone.Get(fmt.Sprintf("team-worker-%d", i)).InBounds(msg) {
+							// Worker selected — could trigger focus in future
+							return m, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Mouse wheel scrolling
+	if msg.Action == tea.MouseActionPress {
+		if msg.Button == tea.MouseButtonWheelUp {
+			if m.summaryMode {
+				m.cursor--
+				if m.cursor < 0 {
+					m.cursor = max(0, len(m.entries)-1)
+				}
+			}
+			return m, nil
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if m.summaryMode {
+				m.cursor++
+				if m.cursor >= len(m.entries) {
+					m.cursor = 0
+				}
+			}
+			return m, nil
+		}
 	}
 
 	return m, nil
@@ -399,6 +500,7 @@ func (m TeamModel) viewList() string {
 				Render(line)
 		}
 
+		line = zone.Mark(fmt.Sprintf("team-%d", i), line)
 		lines = append(lines, line)
 	}
 
@@ -581,7 +683,7 @@ func (m TeamModel) renderHealthGrid(w int) string {
 	// Per-team rows: name + dots + utilization
 	nameW := 20
 	var rows []string
-	for _, e := range m.entries {
+	for ri, e := range m.entries {
 		if !e.Running {
 			continue
 		}
@@ -613,9 +715,10 @@ func (m TeamModel) renderHealthGrid(w int) string {
 		}
 
 		// Worker dots
-		for _, pi := range tc.WorkerPanes {
+		for ci, pi := range tc.WorkerPanes {
 			paneID := fmt.Sprintf("%d.%d", e.WindowIdx, pi)
-			dots = append(dots, m.paneDot(paneID))
+			dot := zone.Mark(fmt.Sprintf("health-%d-%d", ri, ci), m.paneDot(paneID))
+			dots = append(dots, dot)
 			if ps, ok := m.panes[paneID]; ok {
 				if ps.Status == "RESERVED" {
 					reserved++
@@ -765,9 +868,14 @@ func (m TeamModel) renderBackHint(entry runtime.TeamEntry) string {
 
 func (m TeamModel) renderActionHint(entry runtime.TeamEntry) string {
 	t := m.theme
-	parts := []string{"s = star", "a = startup"}
+	starBtn := zone.Mark("team-star", "s = star")
+	parts := []string{starBtn, "a = startup"}
 	if entry.Running {
-		parts = append(parts, "d = dispatch", "x = stop")
+		stopBtn := zone.Mark("team-stop", "x = stop")
+		parts = append(parts, "d = dispatch", stopBtn)
+	} else {
+		launchBtn := zone.Mark("team-launch", "enter = launch")
+		parts = append(parts, launchBtn)
 	}
 	return lipgloss.NewStyle().
 		Foreground(t.Muted).Faint(true).Padding(1, 3).
@@ -914,8 +1022,9 @@ func (m TeamModel) renderWorkerPanel(entry runtime.TeamEntry, w int) string {
 	}
 
 	// Workers
-	for _, pi := range tc.WorkerPanes {
-		lines = append(lines, m.renderPaneStatus(entry.WindowIdx, fmt.Sprintf("%d", pi), "Worker", w))
+	for i, pi := range tc.WorkerPanes {
+		workerLine := m.renderPaneStatus(entry.WindowIdx, fmt.Sprintf("%d", pi), "Worker", w)
+		lines = append(lines, zone.Mark(fmt.Sprintf("team-worker-%d", i), workerLine))
 	}
 
 	return lipgloss.NewStyle().Padding(1, 2).Render(strings.Join(lines, "\n"))

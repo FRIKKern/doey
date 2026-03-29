@@ -5,7 +5,34 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
+
+// RenderButton renders a clickable button with zone marking.
+// Minimum 3-char horizontal padding on each side, min-width 12 chars.
+// Active buttons use Primary background; inactive use Muted.
+func RenderButton(label string, zoneID string, active bool, t Theme) string {
+	padded := "   " + label + "   "
+	// Enforce min-width of 12
+	for len(padded) < 12 {
+		padded = " " + padded + " "
+	}
+
+	var styled string
+	if active {
+		styled = lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(t.Primary).
+			Bold(true).
+			Render(padded)
+	} else {
+		styled = lipgloss.NewStyle().
+			Foreground(t.Text).
+			Background(lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#334155"}).
+			Render(padded)
+	}
+	return zone.Mark(zoneID, styled)
+}
 
 // StatusAccentColor maps a task status string to an accent color from the theme.
 func StatusAccentColor(t Theme, status string) lipgloss.AdaptiveColor {
