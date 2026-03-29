@@ -3,6 +3,7 @@ package taskcard
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -297,6 +298,7 @@ type ExpandedCard struct {
 	Height        int // available height
 	SubtaskCursor int // which subtask is highlighted (-1 = none)
 	ScrollOffset  int // viewport scroll position
+	Messages      []runtime.Message // IPC messages related to this task
 }
 
 // Render draws the full expanded card content as a styled string.
@@ -421,6 +423,68 @@ func (e *ExpandedCard) Render() string {
 		}
 	}
 
+	// --- Messages ---
+	if len(e.Messages) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, "Messages"))
+
+		// Sort by timestamp descending (most recent first), limit to 20.
+		msgs := make([]runtime.Message, len(e.Messages))
+		copy(msgs, e.Messages)
+		sort.Slice(msgs, func(i, j int) bool {
+			return msgs[i].Timestamp > msgs[j].Timestamp
+		})
+		if len(msgs) > 20 {
+			msgs = msgs[:20]
+		}
+
+		for i, msg := range msgs {
+			ts := time.Unix(msg.Timestamp, 0).Format("Jan 02 15:04")
+			styledTs := styles.LogTimestamp(e.Theme, ts)
+
+			// Map subject to event type for badge.
+			eventType := msg.Subject
+			switch msg.Subject {
+			case "worker_finished":
+				eventType = "done"
+			case "task_complete":
+				eventType = "task"
+			case "commit_request":
+				eventType = "commit"
+			case "status_report":
+				eventType = "info"
+			case "question":
+				eventType = "warn"
+			case "error":
+				eventType = "error"
+			}
+			badge := styles.LogEventBadge(e.Theme, eventType)
+
+			from := e.Theme.Dim.Render("From: " + msg.From)
+			sections = append(sections, styledTs+" "+badge+" "+from)
+
+			// Body preview: first non-empty line, truncated.
+			bodyPreview := ""
+			for _, line := range strings.Split(msg.Body, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if trimmed != "" {
+					bodyPreview = trimmed
+					break
+				}
+			}
+			maxBody := contentWidth - 4
+			if maxBody > 0 && len(bodyPreview) > maxBody {
+				bodyPreview = bodyPreview[:maxBody-1] + "\u2026"
+			}
+			sections = append(sections, "  "+e.Theme.LogEntry.Render(bodyPreview))
+
+			// Blank line between messages (but not after last).
+			if i < len(msgs)-1 {
+				sections = append(sections, "")
+			}
+		}
+	}
+
 	// --- Footer hint ---
 	sections = append(sections, "")
 	hint := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
@@ -469,6 +533,13 @@ func (e *ExpandedCard) ContentHeight() int {
 			logLines := strings.Count(log.Entry, "\n") + 2 // entry + rendered blocks estimate
 			lines += logLines
 		}
+	}
+	if len(e.Messages) > 0 {
+		msgCount := len(e.Messages)
+		if msgCount > 20 {
+			msgCount = 20
+		}
+		lines += 2 + msgCount*3 // section header + spacing + 3 lines per message (ts+badge, body, blank)
 	}
 	return lines
 }

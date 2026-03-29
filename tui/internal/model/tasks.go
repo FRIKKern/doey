@@ -68,6 +68,7 @@ type TasksModel struct {
 	entries    []runtime.PersistentTask              // from persistent store + merged runtime
 	subtaskMap map[string][]runtime.Subtask          // task ID -> subtasks
 	heartbeats map[string]runtime.HeartbeatState     // task ID -> live heartbeat
+	messages   []runtime.Message                     // IPC messages from snapshot
 	theme      styles.Theme
 
 	// Card-based list
@@ -147,6 +148,9 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 
 	// Aggregate heartbeat state for live activity display
 	m.heartbeats = runtime.AggregateHeartbeats(snap)
+
+	// Store IPC messages for expanded card filtering
+	m.messages = snap.Messages
 
 	// Convert entries to list items
 	items := make([]list.Item, len(m.entries))
@@ -289,6 +293,7 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 			Height:        m.height - 4,
 			SubtaskCursor: -1,
 			ScrollOffset:  0,
+			Messages:      filterMessagesForTask(m.messages, ti.Task.ID, ti.Task.Team),
 		}
 		m.expanded = &card
 		m.summaryMode = false
@@ -494,6 +499,39 @@ func nextStatus(s string) string {
 		}
 	}
 	return allStatuses[0]
+}
+
+// filterMessagesForTask returns IPC messages relevant to the given task,
+// sorted chronologically (oldest first).
+func filterMessagesForTask(messages []runtime.Message, taskID string, taskTeam string) []runtime.Message {
+	var filtered []runtime.Message
+	idPattern := fmt.Sprintf("Task #%s", taskID)
+	idPattern2 := fmt.Sprintf("task_%s", taskID)
+	idPattern3 := fmt.Sprintf("#%s", taskID)
+	for _, msg := range messages {
+		bodyLower := strings.ToLower(msg.Body)
+		subjectLower := strings.ToLower(msg.Subject)
+
+		// Check if message mentions this task by ID
+		if strings.Contains(msg.Body, idPattern) ||
+			strings.Contains(bodyLower, strings.ToLower(idPattern2)) ||
+			strings.Contains(msg.Body, idPattern3) {
+			filtered = append(filtered, msg)
+			continue
+		}
+
+		// Check if message is from/to the task's team with a task-related subject
+		if taskTeam != "" && (strings.Contains(msg.From, taskTeam) || strings.Contains(msg.To, taskTeam)) {
+			if subjectLower == "task_complete" || subjectLower == "worker_finished" ||
+				subjectLower == "commit_request" {
+				filtered = append(filtered, msg)
+			}
+		}
+	}
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp < filtered[j].Timestamp
+	})
+	return filtered
 }
 
 // View renders list, expanded card, or detail mode.
