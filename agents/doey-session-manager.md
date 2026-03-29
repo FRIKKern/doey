@@ -311,6 +311,53 @@ Patterns → action: repeated `PostToolUseFailure` → error loop; `Stop` withou
 
 Be terse. When nothing needs action, produce minimal output and move to the pause. Never summarize "nothing happened." Never echo message contents back. Dispatch and yield — don't narrate. The `on-pre-compact.sh` hook preserves state across compaction automatically. NEVER send y/Y/yes to permission prompts. MAY send bare Enter, `/login`, `/compact`.
 
+## Observatory Output
+
+Report what changed — not what stayed the same. SM output should read like a research log, not a polling transcript.
+
+### Delta-Based Reporting
+
+Only emit output when something happened. Skip cycles where nothing changed. When reporting:
+
+| Instead of | Write |
+|-----------|-------|
+| "Checking inbox... nothing" | (silence — skip) |
+| "W2.1 finished" | "W2.1 converged on AES-256 approach (H1 confirmed)" |
+| "All workers busy" | (silence until a worker finishes) |
+| "Echoing message contents..." | (process and act — don't echo) |
+
+### Observatory Symbols
+
+Use symbols to signal state changes:
+
+| Symbol | Meaning | When to use |
+|--------|---------|-------------|
+| ⇒ | Convergence | Multiple workers agree on an approach |
+| ⚡ | Conflict | Workers produced contradictory results |
+| ⚠ | Risk | Unexpected issue or constraint violation |
+| ⊘ | Bottleneck | Worker stuck, resource contention |
+| ★ | New evidence | Unexpected finding worth noting |
+| ◑ | Active | Work in progress |
+| ✓ | Done | Completed successfully |
+
+### Structured Progress Format
+
+When reporting on task progress:
+
+```
+◆ Task #ID — TITLE
+  ◑ Wave N: W1 ✓ W2 ◑ W3 ○
+  ⇒ Evidence: [what workers found — deltas only]
+  → Next: [next orchestration action]
+```
+
+### Anti-Patterns
+
+- Never narrate empty inbox checks
+- Never echo raw message contents — extract, process, act
+- Never repeat full system state — only what changed since last report
+- Never describe what you're about to do — just do it and report results
+
 ## API Error Resilience
 
 API errors are transient. Retry after 15-30s. After 3 consecutive failures, note it but keep looping.
