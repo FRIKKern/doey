@@ -1921,7 +1921,7 @@ task_command() {
       printf '  %s● Task [%s] in progress.%s\n' "$SUCCESS" "$_id" "$RESET"
       ;;
 
-    confirm)
+    confirm|pending)
       local _id="${1:-}"
       [ -z "$_id" ] && { printf '  Usage: doey task confirm <id>\n'; exit 1; }
       _task_set_status "$_tasks_dir" "$_id" "pending_user_confirmation"
@@ -1935,6 +1935,24 @@ task_command() {
       [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
       _task_set_status "$_tasks_dir" "$_id" "done"
       printf '  %s✓ Task [%s] done.%s\n' "$SUCCESS" "$_id" "$RESET"
+      ;;
+
+    failed)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task failed <id>\n'; exit 1; }
+      local _file="${_tasks_dir}/${_id}.task"
+      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "failed"
+      printf '  %s✗ Task [%s] failed.%s\n' "$ERROR" "$_id" "$RESET"
+      ;;
+
+    cancel)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task cancel <id>\n'; exit 1; }
+      local _file="${_tasks_dir}/${_id}.task"
+      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "cancelled"
+      printf '  %s— Task [%s] cancelled.%s\n' "$DIM" "$_id" "$RESET"
       ;;
 
     describe)
@@ -1952,7 +1970,7 @@ task_command() {
       ;;
 
     *)
-      printf '  Usage: doey task [list|add|ready|start|confirm|done|describe|attach]\n'
+      printf '  Usage: doey task [list|add|ready|start|confirm|pending|done|failed|cancel|describe|attach]\n'
       ;;
   esac
 }
