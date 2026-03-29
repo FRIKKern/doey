@@ -1,0 +1,93 @@
+TASK_ID=8
+TASK_TITLE=Live heartbeat task list — real-time activity feed in Go TUI
+TASK_STATUS=active
+TASK_CREATED=1774819128
+TASK_TYPE=feature
+TASK_DESCRIPTION=The task list in the Go TUI must be a live dashboard — not a static table. Every task should pulse with real-time information about what is happening RIGHT NOW. A user glancing at the list should instantly understand the state of all work without clicking into anything.
+
+=== WHAT "LIVE HEARTBEAT" MEANS ===
+Each task row shows:
+- Current activity: "W2.1 editing common.sh" / "W1 running bash -n" / "3 workers active"
+- Time since last activity: "12s ago" / "active now" with a pulsing indicator
+- Progress: phase 2/3, files 7/16 done, lines removed so far
+- Health: green=active, amber=slow (>30s no update), red=stuck (>60s)
+- Mini sparkline or activity graph showing work cadence
+- Latest finding or action: "found 3 dead functions in doey.sh" / "committed 10fd8b8"
+
+The list should feel ALIVE — like watching a team work in real time.
+
+=== DATA SOURCES ===
+Heartbeat data comes from files that already exist:
+1. Status files: RUNTIME_DIR/status/<pane>.status — UPDATED timestamp, STATUS, TASK fields
+2. Task files: .doey/tasks/*.task — TASK_LOG entries with timestamps
+3. Result files: RUNTIME_DIR/results/<pane>.json — tool counts, files changed
+4. Message files: RUNTIME_DIR/messages/ — IPC traffic volume
+
+The TUI must poll these files (every 1-2s) and aggregate into per-task heartbeat state.
+
+=== RESEARCH REQUIRED (Phase 1) ===
+Deep-dive into Charmbracelet ecosystem for best practices:
+
+1. BUBBLE TEA REAL-TIME PATTERNS:
+   - How do official Charm apps handle live-updating lists? (Study: gum, soft-serve, wishlist, charm-freeze)
+   - tea.Tick vs tea.Every vs custom subscription for polling
+   - Batching file reads to avoid UI jank
+   - How to animate status transitions (idle->active->done) smoothly
+
+2. LIP GLOSS DYNAMIC STYLING:
+   - Conditional coloring based on data (green/amber/red health)
+   - Inline sparklines or mini-charts in table cells
+   - Animated spinners integrated into list items (study: spinner bubble)
+   - Gradient progress bars that update in-place
+
+3. BUBBLES COMPONENTS TO STUDY:
+   - github.com/charmbracelet/bubbles/list — custom item renderers, filtering
+   - github.com/charmbracelet/bubbles/spinner — integration in list rows
+   - github.com/charmbracelet/bubbles/progress — inline progress bars
+   - github.com/charmbracelet/bubbles/table — live-updating cells
+   - github.com/charmbracelet/bubbles/viewport — scrolling for overflow
+
+4. COMMUNITY EXEMPLARS:
+   - How does lazygit show live git status? (UI update patterns)
+   - How does btop/bottom show live system metrics? (polling + rendering)
+   - Any Charm-based dashboards with real-time data? (search GitHub)
+   - Study: github.com/muesli/termenv for raw terminal capabilities
+
+5. PERFORMANCE PATTERNS:
+   - File polling frequency vs render cycle — what is the sweet spot?
+   - Debouncing updates to avoid flicker
+   - Diffing previous state to only re-render changed rows
+   - Memory management for long-running TUI sessions
+
+RESEARCH DELIVERABLES:
+- Specific code patterns (with Go snippets) for each technique
+- Recommended architecture: which Bubble Tea messages, models, commands
+- Component composition strategy: how spinners, progress, text combine in one list row
+- Performance budget: max file reads per second, max render cycles
+
+=== IMPLEMENTATION (Phase 2) ===
+Build the live task list using research findings:
+1. Heartbeat aggregator — reads status/task/result files, produces per-task state
+2. Custom list item renderer — shows activity, health, progress, latest action
+3. Polling subscription — tea.Tick at optimal frequency
+4. Health indicator — color transitions with animation
+5. Activity text — parses latest TASK_LOG and status file for human-readable summary
+6. Responsive layout — adapts columns to terminal width
+
+CONSTRAINTS:
+- Go build must pass
+- Must integrate with existing tui/ architecture
+- File polling must be efficient — no reading entire directory every tick
+- Must work at 80x24 minimum
+- Charm-quality aesthetics — this is the main view users see
+
+SUCCESS CRITERIA:
+- Task list updates in real-time as workers do things
+- Health colors transition smoothly (green -> amber -> red)
+- Activity descriptions are specific and useful, not generic
+- Zero flicker, zero jank at 1-2s poll interval
+- A user watching the list can tell exactly what every team is doing
+TASK_TAGS=tui,dashboard,real-time,research,charmbracelet,feature
+TASK_DISPATCH_MODE=phased
+TASK_TOTAL_PHASES=2
+TASK_CURRENT_PHASE=1
