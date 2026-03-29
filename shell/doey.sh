@@ -2945,7 +2945,7 @@ MANIFEST
   printf "   ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}\n"
   printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
   printf "\n"
-  printf "   ${BOLD}Dashboard${RESET}  ${DIM}win 0  Info panel + Boss + Session Manager${RESET}\n"
+  printf "   ${BOLD}Dashboard${RESET}  ${DIM}win 0  Info panel + Boss${RESET}\n"
   printf "   ${BOLD}Teams${RESET}      ${DIM}%-4s windows (${final_team_windows})${RESET}\n" "$team_count"
   printf "   ${BOLD}Workers${RESET}    ${DIM}T1: %-4s (auto-expands, doey add)${RESET}\n" "$initial_workers"
   printf "\n"
