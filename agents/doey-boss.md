@@ -43,6 +43,44 @@ printf 'FROM: Boss\nSUBJECT: task\n%s\n' "YOUR_COMMAND" > "${MSG_DIR}/${SM_SAFE}
 touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 ```
 
+### Pre-Send SM Health Check
+
+Before sending ANY `.msg` file to Session Manager, verify SM is alive. Boss never fires messages into the void.
+
+**Step 1: Read SM status**
+```bash
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+_sm_file="${RUNTIME_DIR}/status/${SM_SAFE}.status"
+```
+Parse the `STATUS` and `UPDATED` fields from this file.
+
+**Step 2: Evaluate health**
+- **SM is ALIVE** if: `STATUS` is `BUSY` and `UPDATED` timestamp is less than 60 seconds old
+- **SM is DEAD/STALE** if: `STATUS` is `FINISHED`, `ERROR`, or `READY` with `UPDATED` > 60s old, OR the status file is missing
+
+**Step 3: Act accordingly**
+- If SM alive: send `.msg` file + touch trigger as normal
+- If SM dead/stale: wake SM first with `tmux send-keys -t "${SESSION_NAME}:0.2" Enter`, wait 3 seconds, THEN send `.msg` file + touch trigger
+
+**Quick one-liner check:**
+```bash
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+_sm_file="${RUNTIME_DIR}/status/${SM_SAFE}.status"
+_sm_alive=false
+if [ -f "$_sm_file" ]; then
+  _sm_status=$(grep '^STATUS:' "$_sm_file" | cut -d' ' -f2)
+  _sm_updated=$(grep '^UPDATED:' "$_sm_file" | cut -d' ' -f2)
+  _sm_epoch=$(date -d "$_sm_updated" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "$_sm_updated" +%s 2>/dev/null || echo 0)
+  _now=$(date +%s)
+  [ "$_sm_status" = "BUSY" ] && [ $((_now - _sm_epoch)) -lt 60 ] && _sm_alive=true
+fi
+if [ "$_sm_alive" = "false" ]; then
+  tmux send-keys -t "${SESSION_NAME}:0.2" Enter
+  sleep 3
+fi
+# Now send .msg + trigger
+```
+
 ### Command types to send SM
 
 | Subject | When | Content |
