@@ -120,19 +120,12 @@ fi
 
 ### Variants
 
-**Batch:** Parallel Bash calls per worker. **Short tasks (< 200 chars):** `send-keys` directly (skip tmpfile), settle + verify still mandatory.
-
-### File Conflicts
-
-Assign file ownership per worker. Shared files: non-overlapping sections, Edit only.
-
-### Unstick
-
-`copy-mode -q` → `C-c` → `C-u` → `Enter`, wait 3s. After 2 fails: `kill -9`, relaunch, wait 8s, re-dispatch.
+**Batch:** Parallel Bash calls per worker. **Short tasks (< 200 chars):** `send-keys` directly (skip tmpfile), settle + verify mandatory.
+**File conflicts:** One file owner per worker. Shared files: non-overlapping sections, Edit only.
+**Unstick:** `copy-mode -q` → `C-c` → `C-u` → `Enter`, wait 3s. After 2 fails: `kill -9`, relaunch, re-dispatch.
 
 ## Rules
 
 - Re-check `.reserved` before dispatch; verify after (step 6) — both mandatory
 - Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task
-- Never skip settle delay before Enter after paste-buffer
-- One task per worker per dispatch cycle
+- Never skip settle delay. One task per worker per cycle

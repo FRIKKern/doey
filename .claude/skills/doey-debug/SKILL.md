@@ -12,16 +12,13 @@ Default operation is `on`. Parse the user's argument to determine: `on`, `off`, 
 
 ## Operations
 
-### `on` (default)
+All operations start with: `RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); [ -z "$RD" ] && { echo "ERROR: DOEY_RUNTIME not set"; exit 1; }`
 
-Enable debug mode. Run this bash:
+### `on` (default)
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-if [ -z "$RD" ]; then
-  echo "ERROR: Not in a Doey session (DOEY_RUNTIME not set)"
-  exit 1
-fi
+[ -z "$RD" ] && { echo "ERROR: DOEY_RUNTIME not set"; exit 1; }
 mkdir -p "$RD/debug"
 cat > "$RD/debug.conf" <<'CONF'
 DOEY_DEBUG=true
@@ -39,20 +36,15 @@ echo "To view: cat $RD/debug/*/hooks.jsonl | sort -t'\"' -k4"
 
 ### `off`
 
-Disable debug mode (preserves logs for post-mortem). Run this bash:
+Preserves logs, removes config only.
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-if [ -z "$RD" ]; then
-  echo "ERROR: Not in a Doey session (DOEY_RUNTIME not set)"
-  exit 1
-fi
+[ -z "$RD" ] && { echo "ERROR: DOEY_RUNTIME not set"; exit 1; }
 if [ -f "$RD/debug.conf" ]; then
   rm -f "$RD/debug.conf"
   echo "Debug mode OFF. Config removed."
-  if [ -d "$RD/debug" ]; then
-    echo "Logs preserved in: $RD/debug/"
-  fi
+  [ -d "$RD/debug" ] && echo "Logs preserved in: $RD/debug/"
 else
   echo "Debug mode was already off."
 fi
@@ -60,14 +52,9 @@ fi
 
 ### `status`
 
-Show current debug state, config, log sizes, and last entry per category. Run this bash:
-
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-if [ -z "$RD" ]; then
-  echo "ERROR: Not in a Doey session (DOEY_RUNTIME not set)"
-  exit 1
-fi
+[ -z "$RD" ] && { echo "ERROR: DOEY_RUNTIME not set"; exit 1; }
 echo "=== Debug Mode Status ==="
 if [ -f "$RD/debug.conf" ]; then
   echo "State: ON"

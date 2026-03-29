@@ -8,16 +8,15 @@
 
 Grounded in real commit history, not speculation:
 
-| Bug Pattern (commit count) | What would help debug it | Log Category |
+| Bug Pattern | What would help | Log Category |
 |---|---|---|
-| Pane addressing (18+) | Which pane was targeted, resolved address, role applied | `hooks` |
-| ~~Watchdog loops (10+)~~ | ~~Full scan results, state detected, action taken, cooldown~~ | ~~`watchdog`~~ (deprecated) |
-| Role resolution (8+) | Role source (env var vs file vs fallback), stale detection | `hooks` |
-| Auth exhaustion (5+) | Instance start times, launch stagger, rate limit hits | `lifecycle` |
-| Notification chain (5+) | Message from→to, delivery method, success/failure | `messages` |
-| Race conditions (8+) | Timing of concurrent ops, lock contention, state transitions | `state` |
-| Bash/zsh compat (8+) | N/A — syntax issues, not runtime | (not logged) |
-| Install/shipping (12+) | N/A — build-time issues, not runtime | (not logged) |
+| Pane addressing (18+) | Pane targeted, resolved address, role applied | `hooks` |
+| Role resolution (8+) | Role source (env/file/fallback), stale detection | `hooks` |
+| Auth exhaustion (5+) | Start times, launch stagger, rate limit hits | `lifecycle` |
+| Notification chain (5+) | Message from→to, delivery, success/failure | `messages` |
+| Race conditions (8+) | Timing of concurrent ops, state transitions | `state` |
+| Bash/zsh compat (8+) | N/A — syntax issues, not runtime | — |
+| Install/shipping (12+) | N/A — build-time issues, not runtime | — |
 
 ## Toggle Mechanism (WordPress-style)
 
@@ -28,7 +27,6 @@ Flat key=value format. **Never sourced** — parsed with `grep`/`case` to preven
 ```bash
 DOEY_DEBUG=true
 DOEY_DEBUG_HOOKS=true
-DOEY_DEBUG_WATCHDOG=true    # deprecated — watchdog no longer active
 DOEY_DEBUG_LIFECYCLE=true
 DOEY_DEBUG_MESSAGES=true
 DOEY_DEBUG_STATE=true
@@ -120,18 +118,6 @@ Covers notification chain bugs (Manager↔SM, Worker→Manager delivery failures
 ```json
 {"ts":1711300260100,"from":"1.2","to":"1.0","type":"stop_notify","subject":"Worker done","delivery":"file","success":true}
 {"ts":1711300260200,"from":"1.0","to":"0.1","type":"mgr_to_sm","subject":"Team 1 wave complete","delivery":"file","success":true}
-```
-
-### watchdog_W{N}.jsonl — Scan details per team (DEPRECATED)
-
-> **Deprecated:** Watchdog functionality is no longer active. This log schema is retained for reference only.
-
-Single-writer (one watchdog per team). Covers watchdog behavior loops.
-
-```json
-{"ts":1711300230000,"window":1,"cycle":42,"dur_ms":450,"panes":{"1":{"state":"WORKING","hash_changed":true,"cpu_delta":12},"2":{"state":"IDLE","hash_changed":false},"3":{"state":"IDLE","hash_changed":false}},"anomalies":[]}
-{"ts":1711300260000,"window":1,"cycle":43,"dur_ms":380,"panes":{"1":{"state":"IDLE","hash_changed":true},"2":{"state":"IDLE","hash_changed":false},"3":{"state":"IDLE","hash_changed":false}},"anomalies":[],"wave_complete":true}
-{"ts":1711300290000,"window":1,"cycle":44,"dur_ms":520,"panes":{"1":{"state":"IDLE"},"2":{"state":"STUCK","hash_changed":false,"stuck_count":3}},"anomalies":["PROMPT_STUCK:2"]}
 ```
 
 ## Implementation in common.sh
@@ -284,14 +270,12 @@ Cost when off: one `[ -f ]` stat. Cost when on: one `date` + one `printf >>`. No
 | `stop-status.sh` | `_debug_hook_entry` + state transition | ~3 | hooks, state |
 | `stop-results.sh` | `_debug_hook_entry` + lifecycle event | ~3 | hooks, lifecycle |
 | `stop-notify.sh` | `_debug_hook_entry` + message event | ~5 | hooks, messages |
-| `watchdog-scan.sh` | ~~Cycle logging (inline, own file)~~ | ~~~15~~ | ~~watchdog~~ (deprecated) |
-| `watchdog-wait.sh` | ~~Wake event~~ | ~~~3~~ | ~~watchdog~~ (deprecated) |
-| `session-manager-wait.sh` | Wake event | ~3 | watchdog |
+| `session-manager-wait.sh` | Wake event | ~3 | lifecycle |
 | `.claude/skills/doey-debug/SKILL.md` | New skill | ~50 | — |
 
 **Total: ~160 lines of new code. Zero behavioral change when debug is off.**
 
-## Risk Mitigations (from Critic)
+## Risk Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
@@ -299,16 +283,4 @@ Cost when off: one `[ -f ]` stat. Cost when on: one `date` + one `printf >>`. No
 | Concurrent writes corrupt JSONL | Per-pane files (each pane writes to own directory) |
 | debug/ dir missing on first write | Lazy `mkdir -p` in `_debug_log`, skill creates dir on `on` |
 | Hot-path overhead (on-pre-tool-use) | Inline check, no common.sh, no perl. One `stat()` when off |
-| Watchdog scan drift | Own log file, non-blocking writes, cap line size |
-| Log growth | `_rotate_log` on debug files (existing pattern). `/tmp/` clears on reboot |
-
-## Log Rotation
-
-Apply existing `_rotate_log()` (500KB threshold, keep last 200 lines) to debug JSONL files. Call from `_debug_log` every N writes (e.g., every 100th call, checked via a counter variable) to avoid stat-on-every-write overhead.
-
-## What This Does NOT Cover (Intentionally)
-
-- **Bash/shell command logging**: Every Bash tool call's full output. Too noisy, too large. The hook timing + tool name + exit code is sufficient.
-- **Context window tracking**: Claude's internal context consumption. Not observable from hooks.
-- **Agent reload/settings**: One-time events, visible in session start logs.
-- **Performance profiling**: Millisecond-level timing per hook IS included. System-level CPU/memory is watchdog's domain (already in watchdog scans).
+| Log growth | `_rotate_log` on debug files (500KB threshold, keep last 200 lines). `/tmp/` clears on reboot |

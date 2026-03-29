@@ -19,21 +19,14 @@ Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. A user
 
 ## The End-User Test
 
-Before any change, ask: **"Would this work if I deleted `~/.config/doey/`, `~/.local/bin/doey`, and `~/.claude/agents/doey-*`, then ran `./install.sh` fresh?"**
+Before any change: **"Would this work after deleting `~/.config/doey/`, `~/.local/bin/doey`, `~/.claude/agents/doey-*` and running `./install.sh` fresh?"**
 
-Things that have tricked us before:
-- Editing `~/.claude/statusline-command.sh` (user file, not shipped — fixed: now ships as `shell/doey-statusline.sh`, injected via `--settings` at launch)
-- Relying on env vars set only inside a running Doey session (statusline subprocess doesn't inherit Claude's hook exports)
-- Adding agent features that need settings.json entries the install doesn't create
-- Assuming tmux pane titles exist before `on-session-start.sh` runs
-- Testing in our session and assuming the user's first session behaves the same
-- Using bash-only glob patterns in Bash tool commands (user's shell is zsh — `for f in *.task 2>/dev/null` is a parse error)
+Past traps: editing user files that don't ship, relying on session-only env vars, agent features needing uninstalled settings.json entries, assuming pane titles before `on-session-start.sh`, bash-only globs in zsh Bash tool commands.
 
-**The shippable pattern:** Need a Claude Code setting? Don't edit `~/.claude/settings.json`. Instead: ship the script in `shell/`, install it via `install.sh`, generate a settings overlay in `_init_doey_session()` → `${runtime_dir}/doey-settings.json`, and pass `--settings` on every `claude` launch command. See `doey-statusline.sh` as the reference implementation.
+**Shippable pattern:** Ship script in `shell/` → install via `install.sh` → generate overlay in `_init_doey_session()` → pass `--settings` on launch. Never edit `~/.claude/settings.json`.
 
-**What ships with Doey (safe to change):** `shell/`, `agents/`, `.claude/hooks/`, `.claude/skills/`, `docs/`, `install.sh`, `web-install.sh`
-
-**What does NOT ship (local only):** `~/.claude/settings.json`, `~/.config/doey/config.sh` (only default created by install), anything in `/tmp/doey/` (generated at runtime)
+**Ships:** `shell/`, `agents/`, `.claude/hooks/`, `.claude/skills/`, `docs/`, `install.sh`, `web-install.sh`
+**Local only:** `~/.claude/settings.json`, `~/.config/doey/config.sh`, `/tmp/doey/`
 
 ## Architecture
 

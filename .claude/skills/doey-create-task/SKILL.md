@@ -85,31 +85,11 @@ Replace all placeholder values above with actual compiled content from Step 2.
 
 ### Step 4: Output Summary
 
-Display the compiled task in open-layout format:
-
-```
-◆ Task #ID — TITLE
-  Type: TYPE | Priority: PRIORITY | Owner: Boss
-
-◆ Intent
-  INTENT_TEXT
-
-◆ Hypotheses
-  • H1: ... — confidence: HIGH
-  • H2: ... — confidence: MEDIUM
-
-◆ Dispatch Plan
-  ↳ TEAM_ASSIGNMENT
-
-→ Task package created at: $RUNTIME_DIR/tasks/ID.task + ID.json
-→ Ready for dispatch to Session Manager
-```
+Display in open-layout format (◆ sections, • items, → implications, ↳ sub-steps). Include: task ID, title, type, intent, hypotheses, dispatch plan, file paths.
 
 ## Rules
 
-1. NEVER duplicate task creation logic — always use `task_create` from `doey-task-helpers.sh`
-2. `/doey-task add` still works for simple tasks — this skill is for structured compilation only
-3. Output uses open-layout: ◆ for sections, • for items, → for implications, ↳ for sub-steps
-4. No left/right border characters (no │, ║, ┃)
-5. If the goal is ambiguous, ask ONE clarifying question before compiling
-6. Always show the triviality classification before proceeding
+- Always use `task_create` from `doey-task-helpers.sh` — never duplicate logic
+- `/doey-task add` for simple tasks; this skill for structured compilation only
+- No border characters (│, ║, ┃). One clarifying question max if ambiguous
+- Always show triviality classification before proceeding

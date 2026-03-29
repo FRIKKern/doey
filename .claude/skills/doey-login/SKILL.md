@@ -145,6 +145,5 @@ Print: token status, scope, counts (restarted/skipped).
 
 ## Rules
 
-- Never restart current pane or Info Panel (0.0). Skip reserved panes.
-- Sleep 0.5s between restarts. If token valid, skip /login — just restart.
-- Default scope: current session. Bash 3.2 compatible.
+- Never restart current pane or Info Panel (0.0). Skip reserved panes
+- 0.5s between restarts. Valid token = skip /login. Default scope: session. Bash 3.2

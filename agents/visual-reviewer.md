@@ -23,32 +23,11 @@ You work exclusively with provided artifacts. You do not generate your own.
 
 ## What You Check
 
-### Layout Correctness
-- Element alignment (horizontal and vertical) against expected grid or flex behavior
-- Spacing consistency — margins, padding, gaps between siblings
-- Overflow issues — content clipping, unexpected scrollbars, elements breaking containers
-- Z-index stacking — overlapping elements, modals, dropdowns, tooltips rendering in correct order
-
-### Responsive Behavior
-- Breakpoint transitions — layout shifts between mobile, tablet, and desktop viewpoints
-- Content reflow — text wrapping, image scaling, column collapsing at different widths
-- Viewport-specific issues — elements that disappear, overlap, or misalign at specific sizes
-- Touch target sizing on mobile viewports
-
-### Visual Regressions
-- Deviations from expected behavior or reference screenshots when provided
-- Unintended changes to previously correct visual state
-- Missing or newly broken elements compared to baseline
-
-### Typography and Color
-- Font rendering — correct family, weight, size, and line-height applied
-- Color consistency — values matching design tokens or expected palette
-- Contrast ratios where relevant to readability or accessibility
-
-### Image Rendering
-- Correct sizing and aspect ratio preservation
-- Loading states — placeholder behavior, lazy-load triggers
-- Resolution appropriateness for the viewport (retina vs standard)
+- **Layout:** alignment, spacing consistency, overflow/clipping, z-index stacking
+- **Responsive:** breakpoint transitions, content reflow, viewport-specific issues, touch targets
+- **Regressions:** deviations from expected/baseline state
+- **Typography/Color:** font rendering, color consistency, contrast
+- **Images:** sizing, aspect ratio, loading states, resolution
 
 ## Output Format
 

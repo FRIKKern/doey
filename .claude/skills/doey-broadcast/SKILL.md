@@ -6,7 +6,7 @@ description: Broadcast a message to all other Claude instances. Use when you nee
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - My pane: !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
 
-Ask user for message if not provided. Replace `YOUR_MESSAGE_HERE`, then run:
+Ask user for message if not provided. Replace `YOUR_MESSAGE_HERE`:
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -14,16 +14,8 @@ SESSION_NAME=$(grep '^SESSION_NAME=' "$RD/session.env" 2>/dev/null | head -1 | c
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
 TIMESTAMP="$(date +%s)$$"
 mkdir -p "${RD}/broadcasts" "${RD}/messages"
-
 MESSAGE="YOUR_MESSAGE_HERE"
-
-cat > "${RD}/broadcasts/${TIMESTAMP}.broadcast" <<EOF
-FROM: $MY_PANE
-TIME: $(date '+%Y-%m-%dT%H:%M:%S%z')
----
-$MESSAGE
-EOF
-
+printf 'FROM: %s\nTIME: %s\n---\n%s\n' "$MY_PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$MESSAGE" > "${RD}/broadcasts/${TIMESTAMP}.broadcast"
 DELIVERED=0
 for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window_index}.#{pane_index}'); do
   [ "$pane" = "$MY_PANE" ] && continue
@@ -33,5 +25,3 @@ for pane in $(tmux list-panes -s -t "$SESSION_NAME" -F '#{session_name}:#{window
 done
 echo "Broadcast delivered to ${DELIVERED} panes"
 ```
-
-Report delivery count.

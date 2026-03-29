@@ -163,95 +163,24 @@ Collect `files_changed` from worker result JSONs, then send a `commit_request` `
 
 ## Permission Requests
 
-Workers cannot run certain operations — version-control writes (`git commit`, `git push`), cross-pane `send-keys`, destructive `rm`. The `on-pre-tool-use.sh` hook blocks these with exit code 2 and writes a `permission_request` message to your message queue.
-
-### Message format
-
-Permission requests appear alongside other messages in your inbox drain with `SUBJECT: permission_request`:
-
-```
-FROM: Worker_W2.3
-SUBJECT: permission_request
-TOOL: Bash
-COMMAND: git commit -m "fix typo"
-REASON: Workers cannot run git commit — VCS operations require SM
-PANE: doey-myproject:2.3
-```
-
-Fields: `FROM` (worker pane), `TOOL` (what was called), `COMMAND` (what they tried), `REASON` (why the hook blocked it), `PANE` (full tmux pane spec).
-
-### Handling requests
-
-When you receive a `permission_request`, evaluate it before acting:
-
-1. **Read the request** — understand WHAT the worker wants and WHY it was blocked
-2. **Evaluate legitimacy** — Is the worker trying to do something reasonable that the hook blocked broadly? (e.g., checking version history blocked because the pattern matched `git` commands too broadly — a false positive the Manager should handle)
-3. **Act based on what is needed:**
+Workers blocked by `on-pre-tool-use.sh` send `SUBJECT: permission_request` messages to your queue. Handle by type:
 
 | Need | Action |
 |------|--------|
-| Version-control operation (commit, push) | Collect the details and send a `commit_request` message to Session Manager — SM handles all VCS |
-| Send-keys to another pane | Manager has send-keys access — do it on the worker's behalf |
-| File operation in a restricted area | Manager has full file access — do it directly |
-| Operation you cannot fulfill | Escalate to Session Manager via message with full context |
+| VCS (commit, push) | Forward as `commit_request` to SM |
+| Send-keys to another pane | Do it on worker's behalf |
+| Restricted file operation | Do it directly |
+| Cannot fulfill | Escalate to SM |
 
-4. **Always respond to the worker** — send-keys to their pane explaining what was done or why the request was denied:
-   ```bash
-   PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.3"
-   tmux copy-mode -q -t "$PANE" 2>/dev/null
-   tmux send-keys -t "$PANE" "Your git commit was forwarded to Session Manager for processing. Continue with your next task." Enter
-   ```
-
-### Integration with monitoring loop
-
-Check for `permission_request` messages as part of your regular message drain (Step 1 of the active monitoring loop). No separate polling needed — they arrive in the same `${RUNTIME_DIR}/messages/` queue as `worker_finished` and other messages.
+Always respond to the worker via send-keys explaining what was done.
 
 ## Structured Execution Briefs
 
-When SM dispatches work from a structured task package (.task + .json), you receive an execution brief instead of prose. Both formats are valid — prose tasks still work as before.
+SM may send structured briefs (from `.task` + `.json` packages) with fields: TASK_ID, TITLE, TEAM_SCOPE, INTENT, HYPOTHESES, CONSTRAINTS, SUCCESS_CRITERIA, DELIVERABLES, EVIDENCE_REQUESTED. Prose tasks still work.
 
-### Brief Format
+Decompose DELIVERABLES into per-worker assignments. Include TASK_ID, constraints, success criteria, and evidence requests in each worker prompt. Track which worker tests which hypothesis.
 
-```
-TASK_ID: <stable reference — use in subtask tracking and result reports>
-TITLE: <task title>
-TEAM_SCOPE: <what THIS team is responsible for — a subset of the full task>
-INTENT: <what the user wants and why>
-HYPOTHESES:
-  • H1: <approach> — confidence: HIGH/MEDIUM/LOW
-  • H2: <alternative> — confidence: HIGH/MEDIUM/LOW
-CONSTRAINTS: <technical/scope limitations>
-SUCCESS_CRITERIA: <measurable outcomes that define "done">
-DELIVERABLES: <concrete file outputs expected from this team>
-EVIDENCE_REQUESTED: <what validation/proof to include in results>
-```
-
-### Translating Briefs to Worker Subtasks
-
-When you receive a structured brief:
-
-1. **Decompose DELIVERABLES** into per-worker assignments (one file per worker)
-2. **Include in each worker prompt:**
-   - `TASK_ID` — for subtask tracking (use in subtask files)
-   - Their specific deliverable(s) from the brief
-   - Relevant CONSTRAINTS that apply to their piece
-   - SUCCESS_CRITERIA for their assignment
-   - EVIDENCE_REQUESTED — what proof to capture
-3. **Track hypotheses** — if the brief assigns multiple hypotheses, note which worker tests which approach
-4. **Collect evidence** — when workers report back, gather their evidence outputs and include in your completion report to SM
-5. **Reference TASK_ID** in subtask files: `PARENT_TASK_ID=<TASK_ID from brief>`
-
-### Completion Report for Structured Tasks
-
-When all workers finish a structured brief, your task_complete message to SM should include:
-
-```
-TASK_ID: <from the brief>
-HYPOTHESES_TESTED: <which were tried, which succeeded>
-EVIDENCE: <summary of validation results>
-DELIVERABLES_PRODUCED: <files created/modified>
-SUCCESS_CRITERIA_MET: <yes/no per criterion>
-```
+Completion report to SM: TASK_ID, HYPOTHESES_TESTED, EVIDENCE, DELIVERABLES_PRODUCED, SUCCESS_CRITERIA_MET.
 
 ## Rules
 
@@ -304,71 +233,6 @@ Never dispatch Wave N+1 until Wave N is fully complete. Track worker→task mapp
 
 ## Subtask Management
 
-Break every task into explicit subtask files before dispatching workers. Subtask files use the `.subtask` extension (not `.task`) to avoid confusion with parent task files.
+Create `.subtask` files (not `.task`) in `${RUNTIME_DIR}/tasks/` **before** dispatching. Pattern: `<parent_id>_<subtask_num>.subtask`. Fields: `SUBTASK_ID`, `PARENT_TASK_ID`, `SUBTASK_TITLE`, `SUBTASK_STATUS` (active|in_progress|done|failed), `SUBTASK_WORKER`, `SUBTASK_CREATED`.
 
-### Creating subtask files
-
-Before dispatching any wave, write a `.subtask` file per worker assignment:
-
-**Filename pattern:** `<parent_id>_<subtask_num>.subtask` in `${RUNTIME_DIR}/tasks/`
-
-**Required fields:** `SUBTASK_ID`, `PARENT_TASK_ID`, `SUBTASK_TITLE`, `SUBTASK_STATUS`, `SUBTASK_WORKER`, `SUBTASK_CREATED`
-
-```bash
-TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
-PARENT_ID=1; SUB_NUM=1
-printf 'SUBTASK_ID=%s_%s\nPARENT_TASK_ID=%s\nSUBTASK_TITLE=%s\nSUBTASK_STATUS=active\nSUBTASK_WORKER=%s.%s\nSUBTASK_CREATED=%s\n' \
-  "$PARENT_ID" "$SUB_NUM" "$PARENT_ID" "TITLE HERE" "$DOEY_TEAM_WINDOW" "PANE_NUM" "$(date +%s)" \
-  > "${TD}/${PARENT_ID}_${SUB_NUM}.subtask"
-```
-
-### Updating subtask status
-
-When workers report back (via messages or status files), update the subtask file in place.
-
-**Valid statuses:** `active`, `in_progress`, `done`, `failed`
-
-```bash
-FILE="${RUNTIME_DIR}/tasks/${PARENT_ID}_${SUB_NUM}.subtask"
-TMP="${FILE}.tmp"
-while IFS= read -r line; do
-  case "${line%%=*}" in SUBTASK_STATUS) echo "SUBTASK_STATUS=done" ;; *) echo "$line" ;; esac
-done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
-```
-
-### Rolling up completion to parent task
-
-After updating subtasks, compute progress and log it to the parent task. Wrapped in `bash -c` for zsh safety:
-
-```bash
-bash -c '
-PARENT_ID="$1"; TD="$2"
-TOTAL=0; DONE=0
-for f in "${TD}/${PARENT_ID}_"*.subtask; do
-  [ -f "$f" ] || continue
-  TOTAL=$((TOTAL + 1))
-  grep -q "SUBTASK_STATUS=done" "$f" && DONE=$((DONE + 1))
-done
-echo "TASK_LOG_$(date +%s)=PROGRESS: ${DONE}/${TOTAL} subtasks done" >> "${TD}/${PARENT_ID}.task"
-' _ "$PARENT_ID" "$RUNTIME_DIR/tasks"
-```
-
-### Notifying SM of progress
-
-After rolling up, notify Session Manager with the progress summary:
-
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-printf 'FROM: Manager_W%s\nSUBJECT: task_progress\nTask %s: %s/%s subtasks done\n' \
-  "$DOEY_TEAM_WINDOW" "$PARENT_ID" "$DONE" "$TOTAL" \
-  > "${RUNTIME_DIR}/messages/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
-```
-
-### Subtask rules
-
-- Always create subtask files **BEFORE** dispatching workers
-- One subtask per worker per wave (mirrors "one worker per file" principle)
-- Update subtask status immediately when a worker reports — don't batch updates
-- Failed subtasks: log the failure, decide whether to retry or escalate to SM
-- When **ALL** subtasks are done or failed, roll up to parent and notify SM
+One subtask per worker per wave. Update status immediately on worker report. Roll up progress to parent task and notify SM when all subtasks complete or fail.

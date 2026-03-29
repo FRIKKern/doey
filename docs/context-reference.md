@@ -22,13 +22,11 @@ How Claude Code instances in a Doey session receive their configuration, from lo
 
 Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
-| Field | Boss | Manager | Session Mgr | ~~Watchdog~~ | ~~Freelancer Watchdog~~ | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
-|-------|------|---------|-------------|----------|---------------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
-| `model` | `opus` | `opus` | `opus` | ~~`sonnet`~~ | ~~`sonnet`~~ | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
-| `color` | `#E74C3C` | `green` | `#FF6B35` | ~~`yellow`~~ | ~~`#FFA500`~~ | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
-| `memory` | `user` | `user` | `user` | ~~`none`~~ | ~~`none`~~ | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
-
-> **Note:** Watchdog and Freelancer Watchdog agents are **deprecated**. Their definitions remain in `agents/` for reference but are no longer launched in new sessions.
+| Field | Boss | Manager | Session Mgr | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
+|-------|------|---------|-------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
+| `model` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
+| `color` | `#E74C3C` | `green` | `#FF6B35` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
+| `memory` | `user` | `user` | `user` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
 
 Precedence: CLI `--model` > frontmatter > settings.
 
@@ -64,9 +62,6 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `stop-notify.sh` | Stop | Unified stop notifications: Worker→Manager, Manager→Session Mgr, Session Mgr→desktop |
 | `on-notification.sh` | Notification | Desktop notification for SM permission requests (30s cooldown) |
 | `session-manager-wait.sh` | — | Session Manager sleep/wake between cycles (trigger, message, result, crash) |
-| `watchdog-scan.sh` | — | ~~DEPRECATED~~ — Pane scanning (called directly, not registered) |
-| `watchdog-wait.sh` | — | ~~DEPRECATED~~ — Event-driven sleep between scans |
-
 **Identity:** Hooks must use `tmux display-message -t "$TMUX_PANE"` — without `-t`, tmux returns the focused pane.
 
 
@@ -75,7 +70,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
 **Manager skills:**
-`/doey-dispatch` (send to idle workers), `/doey-delegate` (to specific worker), `/doey-research` (with report enforcement), `/doey-monitor` (detect pane states), `/doey-status` (share/check status), `/doey-broadcast` (message all), `/doey-reload` (hot-reload), `/doey-reinstall` (pull + install), `/doey-repair` (dashboard diagnostic), `/doey-reserve` (reserve/unreserve panes), `/doey-watchdog-compact`, `/doey-purge` (audit context rot), `/doey-simplify-everything` (full codebase simplification), `/doey-stop` (stop worker), `/doey-clear` (restart workers/Watchdog/Manager), `/doey-rd-team` (spawn R&D product team on live codebase), `/doey-login` (fix auth), `/doey-settings` (interactive settings), `/unknown-task` (fallback for unrecognized tasks)
+`/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-watchdog-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
 
 **Session Manager skills:**
 `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
@@ -90,7 +85,6 @@ Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not se
 - Boss: `~/.claude/agent-memory/doey-boss/MEMORY.md`
 - Manager: `~/.claude/agent-memory/doey-manager/MEMORY.md`
 - Session Mgr: `~/.claude/agent-memory/doey-session-manager/MEMORY.md`
-- ~~Watchdog~~: disabled (`memory: none`) — **deprecated**
 
 
 ## Environment Variables
@@ -98,7 +92,7 @@ Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not se
 Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session.env`.
 
 **Session-level (`session.env`):**
-`PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS` (dynamic only), `MAX_WORKERS` (dynamic only), `CURRENT_COLS` (dynamic only), `TOTAL_PANES` (static only), `WORKER_COUNT`, `WORKER_PANES`, `WATCHDOG_PANE` (deprecated), `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `WDG_SLOT_1`..`WDG_SLOT_6` (deprecated), `SM_PANE`
+`PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS` (dynamic only), `MAX_WORKERS` (dynamic only), `CURRENT_COLS` (dynamic only), `TOTAL_PANES` (static only), `WORKER_COUNT`, `WORKER_PANES`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `SM_PANE`
 
 **Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
@@ -177,8 +171,6 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `status/<pane_safe>.role` | Per-pane role cache (authoritative for hook role detection) |
 | `status/pane_hash_<pane_safe>` | Output hash (change detection) |
 | `status/unchanged_count_<W>_<index>` | Stuck-detection counter |
-| `status/watchdog_W<W>.heartbeat` | ~~Watchdog liveness~~ (deprecated) |
-| `status/watchdog_pane_states_W<W>.json` | ~~Watchdog state snapshot~~ (deprecated) |
 | `status/completion_pane_<W>_<index>` | Worker completion event |
 | `status/crash_pane_<W>_<index>` | Crash alert |
 | `status/manager_crashed_W<N>` | Manager crash marker |
@@ -197,15 +189,10 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `debug/` | Debug flight-recorder JSONL (created by `/doey-debug on`) |
 | `context_log_W<N>.md` | **Golden Context Log** — Manager's accumulated knowledge (survives compaction) |
 | `status/state_since_<W>_<idx>` | Duration tracking (epoch when pane entered current state) |
-| `status/anomaly_<W>_<pane>.event` | ~~Active anomaly marker~~ (deprecated — watchdog) |
-| `status/anomaly_count_<W>_<pane>` | ~~Consecutive anomaly count~~ (deprecated — watchdog) |
-| `status/team_snapshot_W<N>.txt` | ~~Watchdog team snapshot~~ (deprecated) |
 | `status/session_manager_trigger` | SM-specific fast-wake trigger |
 | `status/notif_cooldown_*` | Desktop notification cooldown timestamps |
 
 **Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED, LOGGED_OUT.
-
-**Watchdog anomaly types (deprecated):** PROMPT_STUCK, WRONG_MODE, QUEUED_INPUT, LOGGED_OUT.
 
 **Research lifecycle:** dispatch → `.task` created → worker investigates → Stop hook blocks until `.report` written → Manager reads report.
 
@@ -219,8 +206,6 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | Manager sends empty tasks | Task text empty before Enter |
 | All panes think they're Manager | Hook missing `-t "$TMUX_PANE"` |
 | Hooks not firing | `.claude/settings.local.json` missing (`doey init`) |
-| ~~Watchdog stops monitoring~~ | ~~Wait hook not returning; check `watchdog-wait.sh` trigger path~~ (deprecated) |
-| ~~Watchdog spams notifications~~ | ~~State tracking lost after compaction~~ (deprecated) |
 | Research stops without report | Check exit 2 in `stop-status.sh`; verify `.task` exists |
 | Workers ignore hook changes | Restart workers (`/doey-clear workers`) |
 | Dispatch to reserved pane | Check `.reserved` file; verify `is_reserved()` |

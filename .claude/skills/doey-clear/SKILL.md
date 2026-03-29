@@ -3,28 +3,16 @@ name: doey-clear
 description: Kill and relaunch Claude instances. Use when you need to "restart workers", "reset the team", "clear and relaunch", or "fresh start". Resets process, context, name, agent, status. Skips reserved workers unless --force.
 ---
 
-## Context
-
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Window index: !`echo "${DOEY_WINDOW_INDEX:-}"|| true`
-- Team windows: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
+- Teams: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
 
-## Usage
+**Usage:** `/doey-clear` (interactive) | `all` | `team N` | `workers` (keep manager) | `all --force` (include reserved)
 
-`/doey-clear` — interactive
-`/doey-clear all` — all teams
-`/doey-clear team N` — specific team
-`/doey-clear workers` — workers only (keep manager)
-`/doey-clear all --force` — include reserved workers
+### Parse Arguments
+No args → prompt (suggest "this team" for Manager, "all teams" for SM). Set: TARGET_WINDOWS, FORCE, WORKERS_ONLY.
 
-## Step 1: Parse Arguments
-
-No args → prompt interactively (suggest "this team" for Manager, "all teams" for SM).
-
-Set: **TARGET_WINDOWS** (list), **FORCE** (bool), **WORKERS_ONLY** (bool).
-
-## Step 2: Validate Targets
-
+### Validate
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 for W in $TARGET_WINDOWS; do
@@ -36,10 +24,8 @@ for W in $TARGET_WINDOWS; do
 done
 ```
 
-## Step 3: kill_pane_process helper
-
+### kill_pane_process
 SIGTERM → 1s → SIGKILL → clear terminal. Returns 1 if pane missing.
-
 ```bash
 kill_pane_process() {
   local PANE="$1" SHELL_PID CHILD_PID
@@ -54,10 +40,7 @@ kill_pane_process() {
 }
 ```
 
-## Step 4: Clear Manager (skip if WORKERS_ONLY)
-
-Order: Manager → Workers.
-
+### Clear Manager (skip if WORKERS_ONLY)
 ```bash
 MGR_PANE="${SESSION_NAME}:${W}.0"
 kill_pane_process "$MGR_PANE"
@@ -65,10 +48,8 @@ tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --model opu
 echo "  ${W}.0 Manager ✓"; sleep 0.5
 ```
 
-## Step 5: Clear Workers (W.1+)
-
+### Clear Workers (W.1+)
 Skip reserved unless --force. Kill, relaunch with name + system prompt, write READY status.
-
 ```bash
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
   PANE="${SESSION_NAME}:${W}.${wp}"; PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
@@ -86,13 +67,9 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
 done
 ```
 
-## Step 6: Report
-
 Print per-team summary: Manager status, workers cleared/reserved counts.
 
-## Rules
-
+### Rules
 - Skip reserved unless `--force`; skip Manager if WORKERS_ONLY
-- Never clear Boss (0.1), Session Manager (0.2), or Info Panel (0.0)
+- Never clear Boss (0.1), SM (0.2), or Info Panel (0.0)
 - Kill by PID (SIGTERM → SIGKILL); `sleep 0.5` between panes
-- Bash 3.2 compatible.

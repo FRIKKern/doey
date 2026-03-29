@@ -2,18 +2,6 @@
 
 > Deploy Doey on Hetzner Cloud — 16 GB for ~€9/mo. Start a task, detach, come back to find work done.
 
-## Why Hetzner?
-
-Hetzner's shared `cx` plans offer the best price/performance for Doey workloads. A 16 GB server costs ~€9/mo vs ~$96/mo on Linode or DigitalOcean — roughly 10x cheaper for the same specs.
-
-| Provider | 16 GB plan | Price |
-|----------|------------|-------|
-| **Hetzner** (cx43) | 16 GB, 8 vCPU | **~€9/mo** |
-| Linode (g6-standard-6) | 16 GB, 6 vCPU | $96/mo |
-| DigitalOcean | 16 GB, 8 vCPU | $96/mo |
-
-> **Note:** The shared `cx` plans are only available in EU datacenters (Helsinki, Nuremberg, Falkenstein). US locations (Ashburn, Hillsboro) only offer `cpx` shared plans (~€30/mo for 16 GB). Since Doey is SSH-based and sessions are detached, EU latency is a non-issue.
-
 ## Prerequisites
 
 **SSH key:**
@@ -398,22 +386,6 @@ google-chrome --headless --no-sandbox --disable-gpu \
   http://localhost:3000 &
 ```
 
-**What this gives Claude (via DevTools MCP):**
-
-| Capability | Works headless? |
-|------------|----------------|
-| Screenshots (full page / element) | Yes |
-| DOM inspection | Yes |
-| CSS inspection / modification | Yes |
-| Console logs / errors | Yes |
-| Network requests / responses | Yes |
-| Performance profiling | Yes |
-| JavaScript execution | Yes |
-| Mobile device emulation | Yes |
-| Accessibility audits | Yes |
-
-Screenshots are rendered pixel-perfect — headless Chrome uses the same rendering engine as desktop Chrome.
-
 **Configure Chrome DevTools MCP:**
 
 Add to your Claude Code MCP settings (`.claude/settings.json` or project settings):
@@ -457,19 +429,13 @@ systemctl --user daemon-reload
 systemctl --user enable --now chrome-headless
 ```
 
-**Firewall note:** Port 9222 is only exposed on `localhost` — it's not accessible from the internet. This is intentional and secure. Claude connects via MCP on the same machine.
+Port 9222 is localhost-only — not exposed to the internet.
 
-> **Why not Browserbase?** You could use Browserbase or similar cloud browser services, but running headless Chrome directly on the server is free, has zero latency (same machine), and gives you full control. Cloud browsers add value for captcha solving, session recording, or when you can't install Chrome — but on a Hetzner VPS you can.
+## SSH Tunneling
 
-## Working on a Headless Server
+Forward remote ports to your local browser for OAuth, dev servers, and DevTools.
 
-No GUI, no desktop, no browser window — just a terminal. One trick makes it feel like a local machine: **SSH tunneling**. It forwards remote ports to your local browser so OAuth flows, dev servers, and DevTools all just work.
-
-### Set Up SSH Config (Do This Once)
-
-Add to your SSH config so every connection automatically forwards the ports you need:
-
-**Windows** (`C:\Users\YOU\.ssh\config`):
+Add to `~/.ssh/config` (or `C:\Users\YOU\.ssh\config` on Windows):
 
 ```
 Host doey
@@ -480,97 +446,8 @@ Host doey
     LocalForward 9222 localhost:9222
 ```
 
-**macOS / Linux** (`~/.ssh/config`):
+Now `ssh doey` auto-forwards ports. Dev server on `:3000` → visit `localhost:3000` locally. Chrome DevTools on `:9222` → `chrome://inspect` > Configure > `localhost:9222`.
 
-```
-Host doey
-    HostName YOUR_HETZNER_IP
-    User doey
-    LocalForward 3000 localhost:3000
-    LocalForward 8080 localhost:8080
-    LocalForward 9222 localhost:9222
-```
+**File transfer:** `scp local-file.txt doey:~/` (upload) · `scp doey:~/output.png ./` (download) · `rsync -avz ./src/ doey:~/project/src/`
 
-Now just `ssh doey` — ports are always forwarded. No flags to remember.
-
-### What This Unlocks
-
-Everything that "needs a browser" now works through `localhost` on your local machine:
-
-| Task | On the server | In your local browser |
-|------|--------------|----------------------|
-| **View dev server** | `npx next dev -p 3000` | `http://localhost:3000` |
-| **OAuth login** (GitHub, Claude) | `gh auth login` / `claude auth` | Complete the flow at `localhost` |
-| **Chrome DevTools** | Headless Chrome on `:9222` | `chrome://inspect` > Configure > `localhost:9222` |
-| **Any web UI** | Run it on any forwarded port | `http://localhost:<port>` |
-
-No firewall changes needed — tunneled ports never touch the public internet.
-
-### The Smooth Flow
-
-**Tab 1** — SSH in, start Claude/Doey:
-
-```powershell
-ssh doey
-cd ~/my-project && doey
-```
-
-**Tab 2** — SSH in (ports auto-forward), run your dev server:
-
-```powershell
-ssh doey
-cd ~/my-project && npx next dev -p 3000
-```
-
-**Your local browser** — visit `http://localhost:3000` to see it live.
-
-**Claude** — uses headless Chrome on `:9222` via DevTools MCP to inspect the same page, take screenshots, check the DOM. All on the same machine, zero latency.
-
-```
-[ Your PC ]                        [ Hetzner Server ]
-  Browser ──tunnel:3000──────────▶ Next.js (:3000)
-  chrome://inspect ──tunnel:9222─▶ Headless Chrome (:9222) ──▶ Next.js
-  Terminal (Claude Code) ────SSH─▶ Claude ──DevTools MCP──▶ Headless Chrome
-```
-
-### Quick Reference
-
-**Multiple terminals** — open new PowerShell/Terminal tabs and `ssh doey` again, or use tmux:
-
-```bash
-tmux new -s dev          # new session
-Ctrl+B, %               # vertical split
-Ctrl+B, "               # horizontal split
-Ctrl+B, D               # detach (keeps running)
-tmux attach -t dev       # reattach later
-```
-
-**Running web servers:**
-
-```bash
-npx next dev -p 3000                        # Next.js
-npx vite --host 0.0.0.0 --port 3000         # Vite
-python3 -m http.server 3000 --bind 0.0.0.0  # Static files
-```
-
-With SSH tunneling: visit `localhost:3000` locally. Without: visit `http://YOUR_HETZNER_IP:3000` (requires `sudo ufw allow 3000`).
-
-**File transfer:**
-
-```bash
-scp local-file.txt doey:~/                           # upload
-scp doey:~/output.png ./                             # download
-rsync -avz ./my-project/ doey:~/my-project/          # sync directory
-```
-
-> With the SSH config above, `doey:` works as a shorthand everywhere — scp, rsync, VS Code Remote SSH.
-
-**Survive disconnects:**
-
-```bash
-mosh doey                # roaming-proof SSH alternative (uses UDP)
-```
-
-Or just use tmux — detach with `Ctrl+B, D`, reattach with `tmux attach` next time you connect.
-
-> **Production tip:** For sharing your site publicly, don't expose dev server ports. Use Nginx/Caddy as a reverse proxy, point a domain at your IP, and add HTTPS via Let's Encrypt.
+**Survive disconnects:** `mosh doey` or tmux detach (`Ctrl+B, D`).
