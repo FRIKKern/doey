@@ -299,9 +299,9 @@ Tasks are session-level goals displayed on the Dashboard. The user is the **sole
 
 SM is the **proactive task lifecycle manager**. Every task must have an accurate status at every stage — you drive transitions, log progress, and ensure nothing falls through the cracks.
 
-### When to propose a task
+### Task creation
 
-When Boss forwards a user goal that will take more than a few minutes, send a message to Boss asking if it should be tracked as a task. If Boss confirms, create it:
+Boss auto-creates a task for every goal it dispatches to SM. When SM receives work from Boss, check for the associated task file in `${RUNTIME_DIR}/tasks/` and begin managing its lifecycle immediately. If Boss's message includes a task ID, use it. If no task file exists yet (race condition or edge case), create one:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
@@ -319,17 +319,17 @@ Update `TASK_STATUS` at every lifecycle point. The valid progression:
 | Status | When |
 |--------|------|
 | `active` | Boss creates the task (initial state) |
-| `dispatched` | SM sends work to a team/Window Manager |
-| `in_progress` | Team reports it's actively working |
-| `blocked` | Team reports a blocker or dependency issue |
+| `in_progress` | SM dispatches work to a team |
 | `pending_user_confirmation` | All work complete and verified |
+
+Note: `done` is reserved for the user. `cancelled` and `failed` are valid but rare.
 
 To update status in a task file:
 ```bash
 FILE="${RUNTIME_DIR}/tasks/${TASK_ID}.task"
 TMP="${FILE}.tmp"
 while IFS= read -r line; do
-  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=dispatched" ;; *) echo "$line" ;; esac
+  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=in_progress" ;; *) echo "$line" ;; esac
 done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ```
 
@@ -337,13 +337,12 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 
 Append timestamped progress notes to task files so the Dashboard and Boss always have full context:
 ```bash
-echo "TASK_LOG_$(date +%s)=STATUS_CHANGE: Dispatched to Team W2" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+echo "TASK_LOG_$(date +%s)=STATUS_CHANGE: In progress — assigned to Team W2" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
 ```
 
 Log at every meaningful event:
-- `"STATUS_CHANGE: Dispatched to Team W2"`
+- `"STATUS_CHANGE: In progress — assigned to Team W2"`
 - `"PROGRESS: Team W2 reports 3/5 subtasks complete"`
-- `"BLOCKED: Needs API key — waiting on user"`
 - `"COMPLETE: All work done, pending user confirmation"`
 
 ### Team assignment tracking
@@ -383,13 +382,59 @@ When a team reports success (`task_complete` message), SM must do all three step
 ### Never do this
 - Set `TASK_STATUS=done` — that is reserved for the user via `doey task done <id>`
 - Delete task files
-- Create tasks without Boss confirming the user wants it
-- Skip status transitions (e.g., jumping from `active` straight to `pending_user_confirmation` without `dispatched`/`in_progress`)
+- Create tasks independently — Boss owns task creation, SM owns lifecycle management
+- Skip status transitions (e.g., jumping from `active` straight to `pending_user_confirmation` without `in_progress`)
 
 ### Check active tasks (on-demand, not on startup)
 ```bash
 bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
 ```
+
+### Task Intelligence
+
+On receiving a new task from Boss, scan existing active tasks for overlap before dispatching. Overlap means tasks touch the same files, same systems, or same subsystems.
+
+**Overlap detection and merging:**
+
+1. Read all non-terminal task files (`active`, `in_progress`)
+2. Compare the new task's scope against each existing task — look for shared files, shared directories, or shared subsystems (e.g., hooks, agents, shell scripts, tests)
+3. If overlap found: merge into one task — combine titles, descriptions, and acceptance criteria into the existing task
+4. Add `TASK_MERGED_INTO=<target_task_id>` to the absorbed task file so the audit trail is preserved
+5. Update the merged task's title and description to reflect the combined scope:
+   ```bash
+   # In the absorbed task file:
+   echo "TASK_MERGED_INTO=${TARGET_ID}" >> "${RUNTIME_DIR}/tasks/${ABSORBED_ID}.task"
+   # Update the target task's title to reflect combined work
+   ```
+6. Report merges back to Boss via message:
+   ```bash
+   BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
+   printf 'FROM: SessionManager\nSUBJECT: task_merged\nMerged task %s into task %s — both touch %s\n' \
+     "$ABSORBED_ID" "$TARGET_ID" "$SHARED_SYSTEM" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_merge_$(date +%s).msg"
+   touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
+   ```
+
+**Dispatch grouping:** When dispatching related tasks, send them to the same team window. Related work in one team avoids cross-team coordination overhead and file conflicts.
+
+**Example:** If task 3 says "fix hook errors" and task 5 says "update hook permissions", merge them — both touch the hooks subsystem. The merged task gets a combined title like "fix hook errors and update permissions" and goes to a single team.
+
+### Task-Driven Loop
+
+SM stays active while work exists. The main loop (Step 2) must not idle or relax while any task needs attention.
+
+**Rules:**
+
+- While ANY task has status `active` or `in_progress`: SM must stay in its active monitoring loop — full cycle every turn
+- SM must NOT idle or wait for user input until ALL tasks are in a terminal or waiting state (`pending_user_confirmation`, `done`, or `cancelled`)
+- Before relaxing (producing minimal output in the pause phase), scan the FULL task list to confirm nothing needs attention
+- If a task is `active` but no team is working on it: dispatch it immediately
+- If a task is `in_progress` but the assigned team's workers all show FINISHED or READY: advance the task status — collect results, update progress, transition to `pending_user_confirmation` if complete
+
+**Integration with main loop:** Add a task scan to Step 2e (Act on findings). After processing messages, status files, results, and crashes, also check:
+```bash
+bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=active" "$f" && echo "UNDISPATCHED: $f"; done' _ "$RUNTIME_DIR"
+```
+Any undispatched `active` tasks must be assigned to a team before the pause step.
 
 ## Rules
 
