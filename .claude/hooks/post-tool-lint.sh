@@ -16,16 +16,11 @@ if type _init_debug >/dev/null 2>&1; then
   _debug_hook_entry
 fi
 
-# Lightweight error logger (init_hook not called — common.sh sourced for debug only)
 _log_lint_error() {
-  local msg="$1" detail="${2:-}"
-  local _rt="${DOEY_RUNTIME:-}"
-  [ -z "$_rt" ] && _rt=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) 2>/dev/null
+  local msg="$1" detail="${2:-}" _rt="${RUNTIME_DIR:-}"
   [ -z "$_rt" ] && return 0
-  local _now; _now=$(date '+%Y-%m-%dT%H:%M:%S')
-  mkdir -p "${_rt}/errors" 2>/dev/null || return 0
   printf '[%s] LINT_ERROR | %s | %s | post-tool-lint | %s | %s | %s\n' \
-    "$_now" "${DOEY_PANE_ID:-unknown}" "${DOEY_ROLE:-unknown}" "${TOOL_NAME:-n/a}" "${detail:-n/a}" "$msg" \
+    "$(date '+%Y-%m-%dT%H:%M:%S')" "${DOEY_PANE_ID:-unknown}" "${DOEY_ROLE:-unknown}" "${TOOL_NAME:-n/a}" "${detail:-n/a}" "$msg" \
     >> "${_rt}/errors/errors.log" 2>/dev/null
 }
 
@@ -48,8 +43,6 @@ case "$FILE_PATH" in *.sh) ;; *) exit 0 ;; esac
 # Skip files containing check patterns as literals
 case "$(basename "$FILE_PATH")" in post-tool-lint.sh|test-bash-compat.sh) exit 0 ;; esac
 
-NL='
-'
 # Regex matches bash 4+ features (one alternative per feature):
 #   declare -[Anlu]       associative arrays, namerefs, lower/uppercase attrs
 #   printf %()T           time format

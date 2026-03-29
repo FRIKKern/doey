@@ -367,87 +367,66 @@ while true; do
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
   printf '\n'
 
-  # ── Tasks ─────────────────────────────────────────────────────
+  # ── Tasks (single-pass: header printed on first visible task) ──
   _tasks_dir="${RUNTIME_DIR}/tasks"
   if [ -d "$_tasks_dir" ]; then
-    _task_visible=0
+    _has_render=false
+    [ -x "${SCRIPT_DIR}/doey-render-task.sh" ] && _has_render=true
+    _task_header_printed=false
     for _tf in "${_tasks_dir}"/*.task; do
       [ -f "$_tf" ] || continue
-      _ts_status=""; _ts_merged=""
+      _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""
       while IFS= read -r _tl; do
         case "${_tl%%=*}" in
-          TASK_STATUS) _ts_status="${_tl#*=}" ;;
-          TASK_MERGED_INTO) _ts_merged="${_tl#*=}" ;;
+          TASK_ID)          _tid="${_tl#*=}" ;;
+          TASK_TITLE)       _ttitle="${_tl#*=}" ;;
+          TASK_STATUS)      _tstatus="${_tl#*=}" ;;
+          TASK_CREATED)     _tcreated="${_tl#*=}" ;;
+          TASK_MERGED_INTO) _tmerged="${_tl#*=}" ;;
         esac
       done < "$_tf"
-      [ -n "$_ts_merged" ] && continue
-      [ "$_ts_status" = "done" ] && continue
-      [ "$_ts_status" = "cancelled" ] && continue
-      _task_visible=$((_task_visible + 1))
-    done
+      [ -n "$_tmerged" ] && continue
+      [ "$_tstatus" = "done" ] && continue
+      [ "$_tstatus" = "cancelled" ] && continue
 
-    if [ "$_task_visible" -gt 0 ]; then
-      _has_render=false
-      [ -x "${SCRIPT_DIR}/doey-render-task.sh" ] && _has_render=true
-      printf '  %b TASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
-      for _tf in "${_tasks_dir}"/*.task; do
-        [ -f "$_tf" ] || continue
-        _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""
-        while IFS= read -r _tl; do
-          case "${_tl%%=*}" in
-            TASK_ID)          _tid="${_tl#*=}" ;;
-            TASK_TITLE)       _ttitle="${_tl#*=}" ;;
-            TASK_STATUS)      _tstatus="${_tl#*=}" ;;
-            TASK_CREATED)     _tcreated="${_tl#*=}" ;;
-            TASK_MERGED_INTO) _tmerged="${_tl#*=}" ;;
-          esac
-        done < "$_tf"
-        [ -n "$_tmerged" ] && continue
-        [ "$_tstatus" = "done" ] && continue
-        [ "$_tstatus" = "cancelled" ] && continue
-        _tage=""
-        if [ -n "$_tcreated" ]; then
-          _tnow=$(date +%s)
-          _telapsed=$((_tnow - _tcreated))
-          if [ "$_telapsed" -lt 60 ]; then _tage="${_telapsed}s"
-          elif [ "$_telapsed" -lt 3600 ]; then _tage="$((_telapsed/60))m"
-          elif [ "$_telapsed" -lt 86400 ]; then _tage="$((_telapsed/3600))h"
-          else _tage="$((_telapsed/86400))d"; fi
-        fi
-        case "$_tstatus" in
-          active)                    _tcol="${C_YELLOW}"      ; _ticon="●" ;;
-          in_progress)               _tcol="${C_YELLOW}"      ; _ticon="●" ;;
-          pending_user_confirmation) _tcol="${C_CYAN}"         ; _ticon="⬤" ;;
-          done)                      _tcol="${C_GREEN}"        ; _ticon="✓" ;;
-          cancelled)                 _tcol="${C_DIM}"          ; _ticon="○" ;;
-          *)                         _tcol="${C_DIM}"          ; _ticon="○" ;;
-        esac
-        printf '  %b%s%b %b#%s%b  %s  %b%s%b\n' \
-          "$_tcol" "$_ticon" "${C_RESET}" \
-          "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
-          "$_ttitle" \
-          "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
-        # Structured task info from .json companion
-        if [ "$_has_render" = true ]; then
-          _tjson="${_tf%.task}.json"
-          if [ -f "$_tjson" ]; then
-            _trendered=""
-            _trendered=$(DOEY_VISUALIZATION_DENSITY=compact DOEY_ASCII_ONLY="${DOEY_ASCII_ONLY:-}" "${SCRIPT_DIR}/doey-render-task.sh" "$_tf" "$_tjson" 2>/dev/null) || _trendered=""
-            if [ -n "$_trendered" ]; then
-              while IFS= read -r _trline; do
-                printf '  %s\n' "$_trline"
-              done <<< "$_trendered"
-            fi
-            _tintent=""
-            _tintent=$(python3 -c "import json; d=json.load(open('$_tjson')); print(d.get('intent','')[:60])" 2>/dev/null) || _tintent=""
-            if [ -n "$_tintent" ]; then
-              printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
-            fi
+      if [ "$_task_header_printed" = false ]; then
+        printf '  %b TASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+        _task_header_printed=true
+      fi
+
+      _tage=""
+      if [ -n "$_tcreated" ]; then
+        _tage=$(format_uptime $((NOW - _tcreated)))
+      fi
+      case "$_tstatus" in
+        active|in_progress)        _tcol="${C_YELLOW}"; _ticon="●" ;;
+        pending_user_confirmation) _tcol="${C_CYAN}";   _ticon="⬤" ;;
+        *)                         _tcol="${C_DIM}";    _ticon="○" ;;
+      esac
+      printf '  %b%s%b %b#%s%b  %s  %b%s%b\n' \
+        "$_tcol" "$_ticon" "${C_RESET}" \
+        "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
+        "$_ttitle" \
+        "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
+      if [ "$_has_render" = true ]; then
+        _tjson="${_tf%.task}.json"
+        if [ -f "$_tjson" ]; then
+          _trendered=""
+          _trendered=$(DOEY_VISUALIZATION_DENSITY=compact DOEY_ASCII_ONLY="${DOEY_ASCII_ONLY:-}" "${SCRIPT_DIR}/doey-render-task.sh" "$_tf" "$_tjson" 2>/dev/null) || _trendered=""
+          if [ -n "$_trendered" ]; then
+            while IFS= read -r _trline; do
+              printf '  %s\n' "$_trline"
+            done <<< "$_trendered"
+          fi
+          _tintent=""
+          _tintent=$(python3 -c "import json; d=json.load(open('$_tjson')); print(d.get('intent','')[:60])" 2>/dev/null) || _tintent=""
+          if [ -n "$_tintent" ]; then
+            printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
           fi
         fi
-      done
-      printf '\n'
-    fi
+      fi
+    done
+    [ "$_task_header_printed" = true ] && printf '\n'
   fi
 
   if [ "$TEAM_LINE_COUNT" -gt 0 ]; then

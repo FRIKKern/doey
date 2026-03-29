@@ -10,18 +10,12 @@ SWAP_SIZE="2G"
 
 # --- Helpers ---
 
-section() {
-    echo ""
-    echo "========================================"
-    echo "  $1"
-    echo "========================================"
-    echo ""
-}
+section() { printf '\n========================================\n  %s\n========================================\n\n' "$1"; }
 
-fail() {
-    echo "ERROR: $1" >&2
-    exit 1
-}
+fail() { echo "ERROR: $1" >&2; exit 1; }
+
+# Run a command as doey user with fnm on PATH
+as_doey() { sudo -u "${DOEY_USER}" bash -c 'set -euo pipefail; export PATH="$HOME/.local/share/fnm:$PATH"; eval "$(fnm env)"; '"$1"; }
 
 # Must run as root
 [ "$(id -u)" -eq 0 ] || fail "This script must be run as root"
@@ -131,8 +125,7 @@ sudo -u "${DOEY_USER}" bash -c '
     export PATH="$HOME/.local/share/fnm:$PATH"
     eval "$(fnm env)"
     fnm install 22 || fnm install --lts
-    node --version
-    npm --version
+    node --version; npm --version
 ' || fail "Node.js installation failed"
 
 echo "  Node.js installed."
@@ -142,13 +135,8 @@ echo "  Node.js installed."
 # =============================================================================
 section "5/7 — Claude Code"
 
-sudo -u "${DOEY_USER}" bash -c '
-    set -euo pipefail
-    export PATH="$HOME/.local/share/fnm:$PATH"
-    eval "$(fnm env)"
-    npm install -g @anthropic-ai/claude-code
-    claude --version
-' || fail "Claude Code installation failed"
+as_doey 'npm install -g @anthropic-ai/claude-code; claude --version' \
+  || fail "Claude Code installation failed"
 
 echo "  Claude Code installed."
 
@@ -209,7 +197,7 @@ SERVER_IP=$(hostname -I | awk '{print $1}')
 
 echo "  User:    ${DOEY_USER}"
 echo "  Project: ${PROJECT_DIR}"
-echo "  Node:    $(sudo -u "${DOEY_USER}" bash -c 'export PATH="$HOME/.local/share/fnm:$PATH"; eval "$(fnm env)"; node --version' 2>/dev/null || echo 'check manually')"
+echo "  Node:    $(as_doey 'node --version' 2>/dev/null || echo 'check manually')"
 echo ""
 echo "  Next steps:"
 echo "    1. SSH in:   ssh ${DOEY_USER}@${SERVER_IP}"
@@ -217,6 +205,3 @@ echo "    2. Auth:     claude auth   (or set ANTHROPIC_API_KEY)"
 echo "    3. Launch:   cd ~/${PROJECT} && doey"
 echo ""
 echo "  Root login is now DISABLED. Use: ssh ${DOEY_USER}@${SERVER_IP}"
-echo ""
-
-exit 0

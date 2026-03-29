@@ -3,6 +3,17 @@
 # Sourceable library, not standalone. Extends the basic task system in doey.sh.
 set -euo pipefail
 
+# ── _write_task_json ─────────────────────────────────────────────────
+# Write companion .json file (schema v2). Used by task_create and task_upgrade_schema.
+# Args: json_file task_id title task_type
+_write_task_json() {
+  local json_file="$1" task_id="$2" title="$3" task_type="$4"
+  local tmp="${json_file}.tmp"
+  printf '{\n  "schema_version": 2,\n  "task_id": %s,\n  "title": "%s",\n  "task_type": "%s",\n  "intent": "",\n  "hypotheses": [],\n  "constraints": [],\n  "success_criteria": [],\n  "deliverables": [],\n  "dispatch_plan": {}\n}\n' \
+    "$task_id" "$title" "$task_type" > "$tmp"
+  mv "$tmp" "$json_file"
+}
+
 # ── task_create ──────────────────────────────────────────────────────
 # Creates a .task file (schema v2) and companion .json file.
 # Args: runtime_dir title [type] [owner] [priority] [summary] [description]
@@ -32,10 +43,7 @@ task_create() {
   mv "$tmp" "$task_file"
 
   # Write companion .json
-  tmp="${json_file}.tmp"
-  printf '{\n  "schema_version": 2,\n  "task_id": %s,\n  "title": "%s",\n  "task_type": "%s",\n  "intent": "",\n  "hypotheses": [],\n  "constraints": [],\n  "success_criteria": [],\n  "deliverables": [],\n  "dispatch_plan": {}\n}\n' \
-    "$id" "$title" "$task_type" > "$tmp"
-  mv "$tmp" "$json_file"
+  _write_task_json "$json_file" "$id" "$title" "$task_type"
 
   echo "$id"
 }
@@ -64,9 +72,9 @@ task_list() {
   for f in "${tasks_dir}"/*.task; do
     [ -f "$f" ] || continue
 
-    local TASK_ID="" TASK_TITLE="" TASK_STATUS="" TASK_CREATED=""
-    local TASK_TYPE="" TASK_OWNER="" TASK_PRIORITY="" TASK_SUMMARY=""
-    local TASK_SCHEMA_VERSION="" TASK_DESCRIPTION="" TASK_ATTACHMENTS=""
+    local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
+    local TASK_TYPE TASK_OWNER TASK_PRIORITY TASK_SUMMARY
+    local TASK_SCHEMA_VERSION TASK_DESCRIPTION TASK_ATTACHMENTS
     task_read "$f"
 
     # Skip terminal unless --all
@@ -229,10 +237,7 @@ task_upgrade_schema() {
   # Create companion .json if missing
   local json_file="${file%.task}.json"
   if [ ! -f "$json_file" ]; then
-    tmp="${json_file}.tmp"
-    printf '{\n  "schema_version": 2,\n  "task_id": %s,\n  "title": "%s",\n  "task_type": "%s",\n  "intent": "",\n  "hypotheses": [],\n  "constraints": [],\n  "success_criteria": [],\n  "deliverables": [],\n  "dispatch_plan": {}\n}\n' \
-      "$TASK_ID" "$TASK_TITLE" "$TASK_TYPE" > "$tmp"
-    mv "$tmp" "$json_file"
+    _write_task_json "$json_file" "$TASK_ID" "$TASK_TITLE" "$TASK_TYPE"
   fi
 
   return 0

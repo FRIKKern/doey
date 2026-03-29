@@ -141,27 +141,20 @@ EOF
 fi
 
 # Team definition role injection
-if [ -n "${RUNTIME_DIR:-}" ]; then
-  _team_def=""
-  _team_def=$(grep '^TEAM_DEF=' "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" 2>/dev/null | cut -d= -f2- | tr -d '"') || true
-  if [ -n "$_team_def" ]; then
-    _teamdef_env="${RUNTIME_DIR}/teamdef_${_team_def}.env"
-    if [ -f "$_teamdef_env" ]; then
-      _team_role=""
-      _team_pane_name=""
-      _team_role=$(grep "^PANE_${PANE_INDEX}_ROLE=" "$_teamdef_env" 2>/dev/null | cut -d= -f2-) || true
-      _team_pane_name=$(grep "^PANE_${PANE_INDEX}_NAME=" "$_teamdef_env" 2>/dev/null | cut -d= -f2-) || true
-      if [ -n "$_team_role" ] && [ -w "$CLAUDE_ENV_FILE" ]; then
-        echo "DOEY_TEAM_ROLE=$_team_role" >> "$CLAUDE_ENV_FILE"
-      fi
-      if [ -n "$_team_pane_name" ] && [ -w "$CLAUDE_ENV_FILE" ]; then
-        echo "DOEY_TEAM_PANE_NAME=$_team_pane_name" >> "$CLAUDE_ENV_FILE"
-      fi
-      # Write team role to per-pane file so hooks can read without env vars
-      if [ -n "$_team_role" ] && [ -n "${PANE_SAFE:-}" ]; then
-        echo "$_team_role" > "${RUNTIME_DIR}/status/${PANE_SAFE}.team_role"
-      fi
+_team_def=$(grep '^TEAM_DEF=' "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" 2>/dev/null | cut -d= -f2- | tr -d '"') || true
+if [ -n "$_team_def" ]; then
+  _teamdef_env="${RUNTIME_DIR}/teamdef_${_team_def}.env"
+  if [ -f "$_teamdef_env" ]; then
+    _team_role=$(grep "^PANE_${PANE_INDEX}_ROLE=" "$_teamdef_env" 2>/dev/null | cut -d= -f2-) || true
+    _team_pane_name=$(grep "^PANE_${PANE_INDEX}_NAME=" "$_teamdef_env" 2>/dev/null | cut -d= -f2-) || true
+    if [ -n "$_team_role" ] && [ -w "$CLAUDE_ENV_FILE" ]; then
+      echo "DOEY_TEAM_ROLE=$_team_role" >> "$CLAUDE_ENV_FILE"
     fi
+    if [ -n "$_team_pane_name" ] && [ -w "$CLAUDE_ENV_FILE" ]; then
+      echo "DOEY_TEAM_PANE_NAME=$_team_pane_name" >> "$CLAUDE_ENV_FILE"
+    fi
+    [ -n "$_team_role" ] && [ -n "${PANE_SAFE:-}" ] && \
+      echo "$_team_role" > "${RUNTIME_DIR}/status/${PANE_SAFE}.team_role"
   fi
 fi
 

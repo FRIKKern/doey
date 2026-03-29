@@ -22,21 +22,13 @@ OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 PROJECT_DIR="${DOEY_TEAM_DIR:-}"
 FILES_LIST=""
 if [ -n "$PROJECT_DIR" ]; then
-  if command -v timeout >/dev/null 2>&1; then
-    FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && timeout 2 git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
-  else
-    _tmpfile=$(mktemp)
-    ( cd "$PROJECT_DIR" 2>/dev/null && git diff --name-only HEAD > "$_tmpfile" 2>/dev/null ) &
-    _git_pid=$!
-    ( sleep 2; kill "$_git_pid" 2>/dev/null ) &
-    _killer=$!
-    wait "$_git_pid" 2>/dev/null || true
-    kill "$_killer" 2>/dev/null; wait "$_killer" 2>/dev/null || true
-    FILES_LIST=$(head -20 "$_tmpfile" 2>/dev/null) || FILES_LIST=""
-    rm -f "$_tmpfile"
-  fi
+  # timeout available on Linux; macOS has gtimeout or we fall back to no timeout
+  _timeout_cmd=""
+  command -v timeout >/dev/null 2>&1 && _timeout_cmd="timeout 2"
+  command -v gtimeout >/dev/null 2>&1 && _timeout_cmd="gtimeout 2"
+  FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && $_timeout_cmd git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
 fi
-[ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty (no file changes)" || true
+[ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty" || true
 FILES_JSON="[]"
 if [ -n "$FILES_LIST" ]; then
   FILES_JSON=$(echo "$FILES_LIST" | jq -R '.' | jq -s '.' 2>/dev/null) || FILES_JSON="[]"
