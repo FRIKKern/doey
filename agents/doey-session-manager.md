@@ -175,7 +175,7 @@ sleep 0.5; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 
 ## Messages — How Teams Report Back
 
-Managers, freelancers, and the Watchdog notify you via the **message queue**. Messages can arrive between any two cycles — drain the inbox on **every** cycle (Step 2a).
+Managers and freelancers notify you via the **message queue**. Messages can arrive between any two cycles — drain the inbox on **every** cycle (Step 2a).
 
 ### Drain inbox (every cycle — first thing)
 ```bash
@@ -352,7 +352,7 @@ When dispatching to a team, record which team owns the work:
 echo "TASK_TEAM=W${WINDOW_INDEX}" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"
 ```
 
-This lets any part of the system (Dashboard, Boss, Watchdog) see who is working on what.
+This lets any part of the system (Dashboard, Boss) see who is working on what.
 
 ### Result recording
 

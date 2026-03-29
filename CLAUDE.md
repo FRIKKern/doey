@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. A user runs `doey` in any project directory and gets a coordinated grid of Claude instances — a Manager that plans, Workers that execute, and a Watchdog that monitors. Dynamic grid by default: starts small, grows on demand. Entry point: `shell/doey.sh`, installed to `~/.local/bin/doey`.
+Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. A user runs `doey` in any project directory and gets a coordinated grid of Claude instances — a Boss that relays user intent, a Session Manager that coordinates, Managers that plan, and Workers that execute. Dynamic grid by default: starts small, grows on demand. Entry point: `shell/doey.sh`, installed to `~/.local/bin/doey`.
 
 ## ALWAYS DO THESE THINGS
 
@@ -41,14 +41,14 @@ Things that have tricked us before:
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
 | Boss | `0.1` | User-facing relay. Receives user intent, forwards to SM, reports results |
-| Session Manager | `0.2` | Sole executor. Routes tasks, spawns teams, manages git, dispatches work |
-| Watchdog | `0.3+` | Monitors hook events, filters noise, escalates signal |
+| Session Manager | `0.2` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work. Not user-facing — users interact via Boss |
+| Watchdog | `0.3+` | DEPRECATED — Watchdog functionality is no longer active. Hook files retained for reference |
 | Window Manager | `W.0` | Plans, delegates, validates all context. Never writes code |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
 | Test Driver | external | E2E test runner via `doey test` |
 
-**Communication:** User → Boss → Session Manager (relay) | SM → Window Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Watchdog → Manager (alerts) | Manager → Session Manager (cross-team)
+**Communication:** User → Boss → Session Manager (relay) | SM → Window Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Manager → Session Manager (cross-team)
 
 **Runtime:** `/tmp/doey/<project>/` — ephemeral, clears on reboot
 
@@ -58,7 +58,7 @@ Things that have tricked us before:
 |------|---------|
 | Window Manager | None (full access) |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
-| Watchdog | Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, destructive rm, shutdown, tmux kill |
+| Watchdog | DEPRECATED — Edit, Write, Agent, NotebookEdit; send-keys limited; no git push/commit, destructive rm, shutdown, tmux kill |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 
 ## Philosophy
@@ -95,8 +95,8 @@ Things that have tricked us before:
 | `stop-status.sh` | On stop (sync) | Sets FINISHED/RESERVED status, blocks incomplete research |
 | `stop-results.sh` | On stop (async) | Captures output, files changed, tool counts → JSON result |
 | `stop-notify.sh` | On stop (async) | Notification chain: Worker → Manager → Session Manager → desktop |
-| `watchdog-scan.sh` | Watchdog cycle | Pane state detection, anomaly reporting, heartbeat |
-| `watchdog-wait.sh` | Watchdog idle | Sleep/wake (30s default, wakes on trigger) |
+| `watchdog-scan.sh` | Watchdog cycle | DEPRECATED — Pane state detection, anomaly reporting, heartbeat |
+| `watchdog-wait.sh` | Watchdog idle | DEPRECATED — Sleep/wake (30s default, wakes on trigger) |
 | `session-manager-wait.sh` | SM idle | Multi-trigger sleep: messages, results, crash alerts |
 
 Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
@@ -112,7 +112,7 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 
 | Changed | Action |
 |---------|--------|
-| Agents | Restart Manager or Watchdog |
+| Agents | Restart Manager |
 | Hooks | Restart ALL workers (`doey reload --workers`) — hooks load at startup |
 | Skills | No restart needed (loaded on-demand) |
 | Shell scripts | Run `tests/test-bash-compat.sh` |

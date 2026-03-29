@@ -210,7 +210,7 @@ Check for `permission_request` messages as part of your regular message drain (S
 
 1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM handles git operations directly.
 
-2. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked — only SM talks to the user. Send a `.msg` to SM with `SUBJECT: question` and your question. SM relays the answer via your message queue.
+2. **You cannot ask the user questions directly.** `AskUserQuestion` is blocked — only Boss talks to the user. Send a `.msg` to SM with `SUBJECT: question` and your question. SM routes it to Boss, who relays the answer back.
 
 ## Workflow
 
