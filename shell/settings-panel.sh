@@ -29,6 +29,16 @@ repeat_char() {
   printf '%s' "$out"
 }
 
+# Get the Nth word (0-indexed) from a space-separated string.
+_nth_word() {
+  local idx="$1" i=0; shift
+  for v in $*; do
+    if [ "$i" -eq "$idx" ]; then printf '%s' "$v"; return 0; fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
 # Resolve project directory from session.env. Prints path or "." if unavailable.
 _get_proj_dir() {
   local _d=""
@@ -197,20 +207,41 @@ _validation_hint() {
 
 # ── Config Writing ───────────────────────────────────────────────────────────
 
-# Write a setting to the project config file. Atomic write via tmp+mv.
-_write_config_setting() {
-  local var="$1" val="$2"
+# Ensure project config file exists (creates from default template or minimal stub).
+# Prints the config file path.
+_ensure_config_file() {
   local proj_dir config_file
   proj_dir=$(_get_proj_dir)
   config_file="${proj_dir}/.doey/config.sh"
-
   if [ ! -f "$config_file" ]; then
     mkdir -p "$(dirname "$config_file")"
     cp "${proj_dir}/shell/doey-config-default.sh" "$config_file" 2>/dev/null || {
-      # Minimal config if default not found
       printf '#!/usr/bin/env bash\n# Doey project config\n' > "$config_file"
     }
   fi
+  printf '%s' "$config_file"
+}
+
+# Touch the settings refresh trigger file.
+_touch_refresh_trigger() {
+  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
+  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
+  touch "$trigger"
+}
+
+# Strip legacy team vars + explicit DOEY_TEAM_* lines from config (for rewrite).
+_strip_team_config_vars() {
+  local cf="$1" tmp="${1}.tmp"
+  sed '/^DOEY_INITIAL_TEAMS=/d;/^DOEY_INITIAL_WORKTREE_TEAMS=/d;/^DOEY_INITIAL_FREELANCER_TEAMS=/d' "$cf" > "$tmp"; mv "$tmp" "$cf"
+  sed '/^#.*DOEY_INITIAL_TEAMS=/d;/^#.*DOEY_INITIAL_WORKTREE_TEAMS=/d;/^#.*DOEY_INITIAL_FREELANCER_TEAMS=/d' "$cf" > "$tmp"; mv "$tmp" "$cf"
+  sed '/^DOEY_TEAM_[0-9]/d;/^DOEY_TEAM_COUNT=/d' "$cf" > "$tmp"; mv "$tmp" "$cf"
+}
+
+# Write a setting to the project config file. Atomic write via tmp+mv.
+_write_config_setting() {
+  local var="$1" val="$2"
+  local config_file
+  config_file=$(_ensure_config_file)
 
   local tmp_file="${config_file}.tmp"
   # Check if var already exists (commented or uncommented)
@@ -227,10 +258,7 @@ _write_config_setting() {
     printf '%s=%s\n' "$var" "$val" >> "$config_file"
   fi
 
-  # Touch refresh trigger
-  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
-  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
-  touch "$trigger"
+  _touch_refresh_trigger
 }
 
 # ── Agent Frontmatter Writing ────────────────────────────────────────────────
@@ -378,18 +406,7 @@ _render_settings_view() {
   _CURSOR_MAX=$_ri
 }
 
-# Get the Nth var name from _SETTINGS_VAR_LIST (space-separated)
-_settings_var_at() {
-  local idx="$1" i=0
-  for v in $_SETTINGS_VAR_LIST; do
-    if [ "$i" -eq "$idx" ]; then
-      printf '%s' "$v"
-      return 0
-    fi
-    i=$((i + 1))
-  done
-  return 1
-}
+_settings_var_at() { _nth_word "$1" $_SETTINGS_VAR_LIST; }
 
 # ── Render: Teams View (cursor-aware) ────────────────────────────────────────
 
@@ -632,18 +649,7 @@ _render_team_blueprint() {
   _TEAM_ITEM_COUNT=$_ri
 }
 
-# Get the Nth team item
-_team_item_at() {
-  local idx="$1" i=0
-  for v in $_TEAM_ITEMS; do
-    if [ "$i" -eq "$idx" ]; then
-      printf '%s' "$v"
-      return 0
-    fi
-    i=$((i + 1))
-  done
-  return 1
-}
+_team_item_at() { _nth_word "$1" $_TEAM_ITEMS; }
 
 # Add a team to config (with automatic migration from legacy to explicit)
 # Usage: _add_team <type> [def_name]
@@ -652,16 +658,8 @@ _team_item_at() {
 _add_team() {
   local team_type="$1"
   local def_name="${2:-}"
-  local proj_dir config_file
-  proj_dir=$(_get_proj_dir)
-  config_file="${proj_dir}/.doey/config.sh"
-
-  if [ ! -f "$config_file" ]; then
-    mkdir -p "$(dirname "$config_file")"
-    cp "${proj_dir}/shell/doey-config-default.sh" "$config_file" 2>/dev/null || {
-      printf '#!/usr/bin/env bash\n# Doey project config\n' > "$config_file"
-    }
-  fi
+  local config_file
+  config_file=$(_ensure_config_file)
 
   # Derive current lineup (handles both explicit and legacy)
   _derive_effective_lineup
@@ -669,16 +667,7 @@ _add_team() {
   local old_count="$_LINEUP_COUNT"
   local new_count=$(( old_count + 1 ))
 
-  # Remove legacy vars from config
-  local tmp_file="${config_file}.tmp"
-  sed '/^DOEY_INITIAL_TEAMS=/d;/^DOEY_INITIAL_WORKTREE_TEAMS=/d;/^DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
-  mv "$tmp_file" "$config_file"
-  sed '/^#.*DOEY_INITIAL_TEAMS=/d;/^#.*DOEY_INITIAL_WORKTREE_TEAMS=/d;/^#.*DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
-  mv "$tmp_file" "$config_file"
-
-  # Remove all existing DOEY_TEAM_* lines to rewrite cleanly
-  sed '/^DOEY_TEAM_[0-9]/d;/^DOEY_TEAM_COUNT=/d' "$config_file" > "$tmp_file"
-  mv "$tmp_file" "$config_file"
+  _strip_team_config_vars "$config_file"
 
   # Write full explicit config
   printf '\nDOEY_TEAM_COUNT=%s\n' "$new_count" >> "$config_file"
@@ -700,17 +689,14 @@ _add_team() {
   [ "$team_type" = "premade" ] && [ -n "$def_name" ] && \
     printf 'DOEY_TEAM_%s_DEF=%s\n' "$new_count" "$def_name" >> "$config_file"
 
-  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
-  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
-  touch "$trigger"
+  _touch_refresh_trigger
 }
 
 # Remove a startup team by index (1-based), rewrite as explicit config
 _remove_startup_team() {
   local remove_idx="$1"
-  local proj_dir config_file
-  proj_dir=$(_get_proj_dir)
-  config_file="${proj_dir}/.doey/config.sh"
+  local config_file
+  config_file=$(_ensure_config_file)
   [ -f "$config_file" ] || return 1
 
   # Derive current lineup (handles both explicit and legacy)
@@ -719,17 +705,8 @@ _remove_startup_team() {
   [ "$remove_idx" -gt "$_LINEUP_COUNT" ] && return 1
 
   local new_count=$(( _LINEUP_COUNT - 1 ))
-  local tmp_file="${config_file}.tmp"
 
-  # Remove legacy vars
-  sed '/^DOEY_INITIAL_TEAMS=/d;/^DOEY_INITIAL_WORKTREE_TEAMS=/d;/^DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
-  mv "$tmp_file" "$config_file"
-  sed '/^#.*DOEY_INITIAL_TEAMS=/d;/^#.*DOEY_INITIAL_WORKTREE_TEAMS=/d;/^#.*DOEY_INITIAL_FREELANCER_TEAMS=/d' "$config_file" > "$tmp_file"
-  mv "$tmp_file" "$config_file"
-
-  # Remove all existing DOEY_TEAM_* lines
-  sed '/^DOEY_TEAM_[0-9]/d;/^DOEY_TEAM_COUNT=/d' "$config_file" > "$tmp_file"
-  mv "$tmp_file" "$config_file"
+  _strip_team_config_vars "$config_file"
 
   if [ "$new_count" -le 0 ]; then
     # No teams left — don't write DOEY_TEAM_COUNT
@@ -761,9 +738,7 @@ _remove_startup_team() {
     _write_cursor "teams" "$_CURSOR_POS"
   fi
 
-  local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
-  mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
-  touch "$trigger"
+  _touch_refresh_trigger
 }
 
 # ── Render: Agents View (cursor-aware) ───────────────────────────────────────
@@ -828,24 +803,8 @@ _render_available_agents() {
   _AGENT_COUNT=$_idx
 }
 
-# Get the Nth agent name/file
-_agent_name_at() {
-  local idx="$1" i=0
-  for v in $_AGENT_NAMES; do
-    if [ "$i" -eq "$idx" ]; then printf '%s' "$v"; return 0; fi
-    i=$((i + 1))
-  done
-  return 1
-}
-
-_agent_file_at() {
-  local idx="$1" i=0
-  for v in $_AGENT_FILES; do
-    if [ "$i" -eq "$idx" ]; then printf '%s' "$v"; return 0; fi
-    i=$((i + 1))
-  done
-  return 1
-}
+_agent_name_at() { _nth_word "$1" $_AGENT_NAMES; }
+_agent_file_at() { _nth_word "$1" $_AGENT_FILES; }
 
 # ── Render: Agent Detail (cursor-aware) ──────────────────────────────────────
 
@@ -953,15 +912,7 @@ _render_agent_detail() {
   _CURSOR_MAX=$_ri
 }
 
-# Get the Nth agent detail property name
-_agent_detail_prop_at() {
-  local idx="$1" i=0
-  for v in $_AGENT_DETAIL_PROPS; do
-    if [ "$i" -eq "$idx" ]; then printf '%s' "$v"; return 0; fi
-    i=$((i + 1))
-  done
-  return 1
-}
+_agent_detail_prop_at() { _nth_word "$1" $_AGENT_DETAIL_PROPS; }
 
 # ── Render: Nav Bar ──────────────────────────────────────────────────────────
 
@@ -1019,11 +970,6 @@ _render_footer() {
           printf '  %b[↑↓/jk]%b navigate  %b[d]%b remove  %b[r]%b reload  %b[1-3]%b views\n' \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
             "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
-          ;;
-        running:*)
-          printf '  %b[↑↓/jk]%b navigate  %b[r]%b reload  %b[1-3]%b views\n' \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-            "${C_BOLD_CYAN}" "${C_RESET}"
           ;;
         *)
           printf '  %b[↑↓/jk]%b navigate  %b[r]%b reload  %b[1-3]%b views\n' \

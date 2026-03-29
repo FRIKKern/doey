@@ -261,67 +261,54 @@ if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-con
   detail "installed default config"
 fi
 
-printf "  ${BRAND}[6/7]${RESET} Installing doey-tui..."
-if [ -d "$SCRIPT_DIR/tui" ]; then
+# Detect Go binary — sets GO_BIN or leaves it empty.
+_find_go() {
   GO_BIN=""
-  if command -v go &>/dev/null; then
-    GO_BIN="go"
-  elif [ -x /usr/local/go/bin/go ]; then
-    GO_BIN="/usr/local/go/bin/go"
-  elif [ -x /opt/homebrew/bin/go ]; then
-    GO_BIN="/opt/homebrew/bin/go"
+  if command -v go &>/dev/null; then GO_BIN="go"
+  elif [ -x /usr/local/go/bin/go ]; then GO_BIN="/usr/local/go/bin/go"
+  elif [ -x /opt/homebrew/bin/go ]; then GO_BIN="/opt/homebrew/bin/go"
   fi
-  if [ -n "$GO_BIN" ]; then
-    set +e
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
-    TUI_RC=$?
-    set -e
-    if [ $TUI_RC -eq 0 ]; then
-      step_ok
-      detail "~/.local/bin/doey-tui (built from source)"
-    else
-      step_fail
-      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
-    fi
+}
+
+# Build doey-tui (and optional doey-remote-setup). Returns 0 on success.
+_build_tui() {
+  set +e
+  (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
+  local rc=$?
+  set -e
+  if [ $rc -eq 0 ]; then
+    step_ok
+    detail "~/.local/bin/doey-tui (built from source)"
     # Build remote setup wizard (optional — non-fatal)
     set +e
     (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
     set -e
+  else
+    step_fail
+    warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+  fi
+  return $rc
+}
+
+printf "  ${BRAND}[6/7]${RESET} Installing doey-tui..."
+if [ -d "$SCRIPT_DIR/tui" ]; then
+  _find_go
+  if [ -n "$GO_BIN" ]; then
+    _build_tui
   elif [ -f "$SCRIPT_DIR/tui/go.mod" ]; then
-    # We're in the Doey source repo — developer needs Go to build the TUI
+    # Developer needs Go to build the TUI
     GO_VERSION=$(sed -n 's/^go[[:space:]][[:space:]]*//p' "$SCRIPT_DIR/tui/go.mod" | head -1)
     GO_VERSION="${GO_VERSION:-1.24}"
     printf "\n"
     warn_msg "Go not installed — required to build doey-tui (version ${GO_VERSION}+)"
     if command -v brew >/dev/null 2>&1; then
       printf "         ${DIM}→ Installing Go via Homebrew...${RESET}\n"
-      set +e
-      brew install go 2>&1 | sed 's/^/         /'
-      BREW_RC=$?
-      set -e
+      set +e; brew install go 2>&1 | sed 's/^/         /'; BREW_RC=$?; set -e
       if [ $BREW_RC -eq 0 ]; then
-        # Re-detect go after brew install
-        GO_BIN=""
-        if command -v go >/dev/null 2>&1; then
-          GO_BIN="go"
-        elif [ -x /opt/homebrew/bin/go ]; then
-          GO_BIN="/opt/homebrew/bin/go"
-        elif [ -x /usr/local/go/bin/go ]; then
-          GO_BIN="/usr/local/go/bin/go"
-        fi
+        _find_go
         if [ -n "$GO_BIN" ]; then
           detail "Go installed — building doey-tui..."
-          set +e
-          (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
-          TUI_RC=$?
-          set -e
-          if [ $TUI_RC -eq 0 ]; then
-            step_ok
-            detail "~/.local/bin/doey-tui (built from source)"
-          else
-            step_fail
-            warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
-          fi
+          _build_tui
         else
           step_fail
           warn_msg "Go installed but not found in PATH — re-run install.sh after opening a new terminal"

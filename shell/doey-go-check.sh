@@ -30,21 +30,20 @@ _doey_go_required_version() {
     printf '%s' "$_DOEY_GO_MIN_VERSION"
 }
 
+# Split "major.minor.patch" into _VER_MAJOR _VER_MINOR _VER_PATCH (bash 3.2 safe)
+_doey_split_ver() {
+    local v="$1"
+    _VER_MAJOR="${v%%.*}"; v="${v#*.}"
+    _VER_MINOR="${v%%.*}"; _VER_PATCH="${v#*.}"
+    [ "$_VER_PATCH" = "$_VER_MINOR" ] && _VER_PATCH=0
+}
+
 # Compare two version strings (major.minor.patch)
 # Returns 0 if $1 >= $2, 1 otherwise
 _doey_version_gte() {
-    local a="$1" b="$2"
     local a_major a_minor a_patch b_major b_minor b_patch
-
-    # Split on dots using parameter expansion (bash 3.2 safe)
-    a_major="${a%%.*}"; a="${a#*.}"
-    a_minor="${a%%.*}"; a_patch="${a#*.}"
-    # Handle missing patch (e.g. "1.24")
-    if [ "$a_patch" = "$a_minor" ]; then a_patch=0; fi
-
-    b_major="${b%%.*}"; b="${b#*.}"
-    b_minor="${b%%.*}"; b_patch="${b#*.}"
-    if [ "$b_patch" = "$b_minor" ]; then b_patch=0; fi
+    _doey_split_ver "$1"; a_major=$_VER_MAJOR; a_minor=$_VER_MINOR; a_patch=$_VER_PATCH
+    _doey_split_ver "$2"; b_major=$_VER_MAJOR; b_minor=$_VER_MINOR; b_patch=$_VER_PATCH
 
     if [ "$a_major" -gt "$b_major" ] 2>/dev/null; then return 0; fi
     if [ "$a_major" -lt "$b_major" ] 2>/dev/null; then return 1; fi

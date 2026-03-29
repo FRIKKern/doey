@@ -546,12 +546,12 @@ setup_dashboard() {
 
   # Boss (pane 0.1)
   local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_SESSION_MANAGER_MODEL} --agent doey-boss"
-  [ -f "${runtime_dir}/doey-settings.json" ] && _boss_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  _append_settings _boss_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.1" "$_boss_cmd" Enter
 
   # Session Manager (pane 0.2)
   local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-session-manager"
-  [ -f "${runtime_dir}/doey-settings.json" ] && _sm_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  _append_settings _sm_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.2" "$_sm_cmd" Enter
 
   tmux rename-window -t "$session:0" "Dashboard"
@@ -1002,6 +1002,12 @@ attach_or_switch() {
   else
     tmux attach -t "$session"
   fi
+}
+
+# Append --settings flag to a command variable if doey-settings.json exists.
+# Usage: _append_settings <var_name> <runtime_dir>
+_append_settings() {
+  [ -f "${2}/doey-settings.json" ] && eval "${1}+=' --settings \"${2}/doey-settings.json\"'"
 }
 
 _purge_format_bytes() {
@@ -1767,18 +1773,22 @@ _task_create() {
   echo "$_id"
 }
 
-_task_set_description() {
-  local _tasks_dir="$1" _id="$2" _description="$3"
-  local _file="${_tasks_dir}/${_id}.task"
-  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
-  local _tmp="${_file}.tmp"
+# Replace a single field in a .task file.  Usage: _task_set_field <file> <FIELD> <value>
+_task_set_field() {
+  local _file="$1" _field="$2" _value="$3" _tmp="${1}.tmp"
   while IFS= read -r _line; do
     case "${_line%%=*}" in
-      TASK_DESCRIPTION) printf 'TASK_DESCRIPTION=%s\n' "$_description" ;;
-      *)                printf '%s\n' "$_line" ;;
+      "$_field") printf '%s=%s\n' "$_field" "$_value" ;;
+      *)         printf '%s\n' "$_line" ;;
     esac
   done < "$_file" > "$_tmp"
   mv "$_tmp" "$_file"
+}
+
+_task_set_description() {
+  local _file="${1}/${2}.task"
+  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$2" "$RESET"; return 1; }
+  _task_set_field "$_file" "TASK_DESCRIPTION" "$3"
 }
 
 _task_add_attachment() {
@@ -1803,21 +1813,13 @@ _task_add_attachment() {
 }
 
 _task_set_status() {
-  local _tasks_dir="$1" _id="$2" _status="$3"
-  local _file="${_tasks_dir}/${_id}.task"
-  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
-  case "$_status" in
+  local _file="${1}/${2}.task"
+  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$2" "$RESET"; return 1; }
+  case "$3" in
     active|in_progress|pending_user_confirmation|done|cancelled|failed) ;;
-    *) printf '  %s✗ Invalid status: %s (valid: active, in_progress, pending_user_confirmation, done, cancelled, failed)%s\n' "$ERROR" "$_status" "$RESET"; return 1 ;;
+    *) printf '  %s✗ Invalid status: %s%s\n' "$ERROR" "$3" "$RESET"; return 1 ;;
   esac
-  local _tmp="${_file}.tmp"
-  while IFS= read -r _line; do
-    case "${_line%%=*}" in
-      TASK_STATUS) printf 'TASK_STATUS=%s\n' "$_status" ;;
-      *)           printf '%s\n' "$_line" ;;
-    esac
-  done < "$_file" > "$_tmp"
-  mv "$_tmp" "$_file"
+  _task_set_field "$_file" "TASK_STATUS" "$3"
 }
 
 _task_runtime() {
@@ -1910,31 +1912,19 @@ task_command() {
       printf '  %s✓ Task [%s] pending confirmation.%s\n' "$WARN" "$_id" "$RESET"
       ;;
 
-    done)
+    done|failed|cancel)
       local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task done <id>\n'; exit 1; }
+      [ -z "$_id" ] && { printf '  Usage: doey task %s <id>\n' "$_subcmd"; exit 1; }
       local _file="${_tasks_dir}/${_id}.task"
       [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "done"
-      printf '  %s✓ Task [%s] done.%s\n' "$SUCCESS" "$_id" "$RESET"
-      ;;
-
-    failed)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task failed <id>\n'; exit 1; }
-      local _file="${_tasks_dir}/${_id}.task"
-      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "failed"
-      printf '  %s✗ Task [%s] failed.%s\n' "$ERROR" "$_id" "$RESET"
-      ;;
-
-    cancel)
-      local _id="${1:-}"
-      [ -z "$_id" ] && { printf '  Usage: doey task cancel <id>\n'; exit 1; }
-      local _file="${_tasks_dir}/${_id}.task"
-      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
-      _task_set_status "$_tasks_dir" "$_id" "cancelled"
-      printf '  %s— Task [%s] cancelled.%s\n' "$DIM" "$_id" "$RESET"
+      local _ts_status _ts_icon _ts_color
+      case "$_subcmd" in
+        done)   _ts_status="done";      _ts_icon="✓"; _ts_color="$SUCCESS" ;;
+        failed) _ts_status="failed";    _ts_icon="✗"; _ts_color="$ERROR" ;;
+        cancel) _ts_status="cancelled"; _ts_icon="—"; _ts_color="$DIM" ;;
+      esac
+      _task_set_status "$_tasks_dir" "$_id" "$_ts_status"
+      printf '  %s%s Task [%s] %s.%s\n' "$_ts_color" "$_ts_icon" "$_id" "$_ts_status" "$RESET"
       ;;
 
     describe)
@@ -2005,9 +1995,12 @@ update_system() {
   fi
   [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
 
+  _update_finish
+}
+
+_update_finish() {
   rm -f "$HOME/.claude/doey/last-update-check.available"
   _check_claude_update
-
   printf '\n'
   _print_doey_banner
   printf "   ${DIM}Let me Doey for you${RESET}\n\n"
@@ -2030,15 +2023,7 @@ _post_update() {
   fi
   [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
 
-  rm -f "$HOME/.claude/doey/last-update-check.available"
-
-  # Check for Claude Code updates
-  _check_claude_update
-
-  printf '\n'
-  _print_doey_banner
-  printf "   ${DIM}Let me Doey for you${RESET}\n\n"
-  printf "  ${SUCCESS}Update complete.${RESET} Restart sessions: ${BOLD}doey reload${RESET}\n"
+  _update_finish
 }
 
 # Detect how Claude Code was installed and return the package manager name.
@@ -2104,41 +2089,16 @@ _claude_install() {
       npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
       ;;
     *)
-      # Pick best native option for the platform
+      # Pick best native option and recurse
+      local _best=""
       case "$(uname -s)" in
-        Darwin)
-          if command -v brew >/dev/null 2>&1; then
-            printf "  ${DIM}brew install claude${RESET}\n"
-            brew install claude 2>&1 | tail -3
-          elif command -v npm >/dev/null 2>&1; then
-            printf "  ${DIM}npm install -g @anthropic-ai/claude-code${RESET}\n"
-            npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
-          else
-            return 1
-          fi
-          ;;
-        Linux)
-          if command -v snap >/dev/null 2>&1; then
-            printf "  ${DIM}snap install claude${RESET}\n"
-            sudo snap install claude 2>&1 | tail -3
-          elif command -v apt-get >/dev/null 2>&1; then
-            printf "  ${DIM}apt install claude${RESET}\n"
-            sudo apt-get install -y claude 2>&1 | tail -3
-          elif command -v npm >/dev/null 2>&1; then
-            printf "  ${DIM}npm install -g @anthropic-ai/claude-code${RESET}\n"
-            npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
-          else
-            return 1
-          fi
-          ;;
-        *)
-          if command -v npm >/dev/null 2>&1; then
-            npm install -g @anthropic-ai/claude-code 2>&1 | tail -3
-          else
-            return 1
-          fi
-          ;;
+        Darwin) command -v brew >/dev/null 2>&1 && _best="brew" ;;
+        Linux)  command -v snap >/dev/null 2>&1 && _best="snap" || \
+                { command -v apt-get >/dev/null 2>&1 && _best="apt"; } ;;
       esac
+      [ -z "$_best" ] && command -v npm >/dev/null 2>&1 && _best="npm"
+      [ -z "$_best" ] && return 1
+      _claude_install "$_best"
       ;;
   esac
 }
@@ -2174,6 +2134,19 @@ _claude_upgrade() {
       # Unknown method — try native install as upgrade
       _claude_install "$method"
       ;;
+  esac
+}
+
+# Print a method-specific upgrade hint.  Usage: _claude_update_hint <method> <prefix>
+_claude_update_hint() {
+  local m="$1" p="$2"
+  case "$m" in
+    standalone) printf "  ${DIM}%s: claude update${RESET}\n" "$p" ;;
+    brew)       printf "  ${DIM}%s: brew upgrade claude${RESET}\n" "$p" ;;
+    snap)       printf "  ${DIM}%s: sudo snap refresh claude${RESET}\n" "$p" ;;
+    apt)        printf "  ${DIM}%s: sudo apt-get install --only-upgrade claude${RESET}\n" "$p" ;;
+    npm)        printf "  ${DIM}%s: npm install -g @anthropic-ai/claude-code@latest${RESET}\n" "$p" ;;
+    *)          printf "  ${DIM}%s: https://docs.anthropic.com/en/docs/claude-code${RESET}\n" "$p" ;;
   esac
 }
 
@@ -2254,25 +2227,12 @@ _check_claude_update() {
             printf "  ${SUCCESS}✓ Claude Code updated to %s${RESET}\n" "${new_ver:-$latest_ver}"
           else
             printf "  ${ERROR}✗ Update failed${RESET}\n"
-            case "$method" in
-              standalone) printf "  ${DIM}Try: claude update${RESET}\n" ;;
-              brew) printf "  ${DIM}Try: brew upgrade claude${RESET}\n" ;;
-              snap) printf "  ${DIM}Try: sudo snap refresh claude${RESET}\n" ;;
-              apt)  printf "  ${DIM}Try: sudo apt-get install --only-upgrade claude${RESET}\n" ;;
-              *)    printf "  ${DIM}Visit: https://docs.anthropic.com/en/docs/claude-code${RESET}\n" ;;
-            esac
+            _claude_update_hint "$method" "Try"
           fi
           ;;
       esac
     else
-      case "$method" in
-        standalone) printf "  ${DIM}Update: claude update${RESET}\n" ;;
-        brew) printf "  ${DIM}Update: brew upgrade claude${RESET}\n" ;;
-        snap) printf "  ${DIM}Update: sudo snap refresh claude${RESET}\n" ;;
-        apt)  printf "  ${DIM}Update: sudo apt-get install --only-upgrade claude${RESET}\n" ;;
-        npm)  printf "  ${DIM}Update: npm install -g @anthropic-ai/claude-code@latest${RESET}\n" ;;
-        *)    printf "  ${DIM}Update: https://docs.anthropic.com/en/docs/claude-code${RESET}\n" ;;
-      esac
+      _claude_update_hint "$method" "Update"
     fi
   fi
 }
@@ -2356,7 +2316,7 @@ reload_session() {
       sleep 0.5
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
       local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Window Manager\" --agent \"$mgr_agent\""
-      [ -f "${runtime_dir}/doey-settings.json" ] && _rl_mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+      _append_settings _rl_mgr_cmd "$runtime_dir"
       tmux send-keys -t "$mgr_ref" "$_rl_mgr_cmd" Enter
       printf " ${SUCCESS}✓${RESET}\n"
       (
@@ -2400,7 +2360,7 @@ reload_session() {
         local w_name
         w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "T${tw} W${wp}")
         local worker_cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"${w_name}\""
-        [ -f "${runtime_dir}/doey-settings.json" ] && worker_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+        _append_settings worker_cmd "$runtime_dir"
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
@@ -2965,84 +2925,41 @@ rebalance_grid_layout() {
   local num_panes=${#pane_ids[@]}
   if (( num_panes < 3 )); then return 0; fi
 
-  # Check if freelancer team (no manager — all panes are equal-width worker columns)
-  local _rgl_is_freelancer="false"
   if [ -z "$runtime_dir" ]; then
     runtime_dir=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
-  fi
-  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${team_window}.env" ]; then
-    local _rgl_tt
-    _rgl_tt=$(_env_val "${runtime_dir}/team_${team_window}.env" TEAM_TYPE)
-    [ "$_rgl_tt" = "freelancer" ] && _rgl_is_freelancer="true"
   fi
 
   local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
 
-  if [ "$_rgl_is_freelancer" = "true" ]; then
-    # Freelancer: pane 0 full-height left column, workers in 2-row columns on right
-    local fl_mgr_width=$mgr_width
-    local fl_max_mgr=$((win_w / 3))
-    (( fl_mgr_width > fl_max_mgr )) && fl_mgr_width=$fl_max_mgr
+  # Both freelancer and regular teams use the same layout: pane 0 full-height left, workers in 2-row columns
+  local max_mgr=$((win_w / 3))
+  (( mgr_width > max_mgr )) && mgr_width=$max_mgr
 
-    local num_workers=$((num_panes - 1))
-    local worker_cols=$(( (num_workers + 1) / 2 ))
-    local worker_area=$((win_w - fl_mgr_width - 1))
-    local body="" x=0
-    body="${fl_mgr_width}x${win_h},${x},0,${pane_ids[0]}"
-    x=$((fl_mgr_width + 1))
+  local num_workers=$((num_panes - 1))
+  local worker_cols=$(( (num_workers + 1) / 2 ))
+  local worker_area=$((win_w - mgr_width - 1))
+  local body="" x=0
+  body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
+  x=$((mgr_width + 1))
 
-    local c w wi
-    for ((c=0; c<worker_cols; c++)); do
-      if ((c == worker_cols - 1)); then
-        w=$((win_w - x))
-      else
-        w=$((worker_area / worker_cols))
-      fi
-      wi=$((c * 2 + 1))
-      local tp="${pane_ids[$wi]}"
-      body+=","
-      if (( wi + 1 < num_panes )); then
-        local bp="${pane_ids[$((wi + 1))]}"
-        body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
-      else
-        body+="${w}x${win_h},${x},0,${tp}"
-      fi
-      x=$((x + w + 1))
-    done
-  else
-    # Regular team: manager column (full height), then worker columns (2 rows each)
-    local num_workers=$((num_panes - 1))
-    local worker_cols=$(( (num_workers + 1) / 2 ))
-
-    # Cap manager width at 33% of window
-    local max_mgr=$((win_w / 3))
-    (( mgr_width > max_mgr )) && mgr_width=$max_mgr
-
-    local worker_area=$((win_w - mgr_width - 1))
-    local body="" x=0
-    body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
-    x=$((mgr_width + 1))
-
-    local c w wi
-    for ((c=0; c<worker_cols; c++)); do
-      if ((c == worker_cols - 1)); then
-        w=$((win_w - x))
-      else
-        w=$((worker_area / worker_cols))
-      fi
-
-      wi=$((c * 2 + 1))
-      local tp="${pane_ids[$wi]}"
-      body+=","
-      if (( wi + 1 < num_panes )); then
-        local bp="${pane_ids[$((wi + 1))]}"
-        body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
-      else
-        body+="${w}x${win_h},${x},0,${tp}"
-      fi
-      x=$((x + w + 1))
-    done
-  fi
+  local c w wi
+  for ((c=0; c<worker_cols; c++)); do
+    if ((c == worker_cols - 1)); then
+      w=$((win_w - x))
+    else
+      w=$((worker_area / worker_cols))
+    fi
+    wi=$((c * 2 + 1))
+    local tp="${pane_ids[$wi]}"
+    body+=","
+    if (( wi + 1 < num_panes )); then
+      local bp="${pane_ids[$((wi + 1))]}"
+      body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
+    else
+      body+="${w}x${win_h},${x},0,${tp}"
+    fi
+    x=$((x + w + 1))
+  done
 
   local layout_str="${win_w}x${win_h},0,0{${body}}"
   tmux select-layout -t "$session:${team_window}" "$(_layout_checksum "$layout_str"),${layout_str}" 2>/dev/null || true
@@ -3132,7 +3049,7 @@ _batch_boot_workers() {
     local _bbw_name_prefix="W"
     [ "$_bbw_is_freelancer" = "true" ] && _bbw_name_prefix="F"
     local cmd="claude --dangerously-skip-permissions --model $_bbw_worker_model --name \"T${team_window} ${_bbw_name_prefix}${worker_num}\""
-    [ -f "${runtime_dir}/doey-settings.json" ] && cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+    _append_settings cmd "$runtime_dir"
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
     tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
     sleep $DOEY_WORKER_LAUNCH_DELAY  # Auth stagger
@@ -3322,7 +3239,7 @@ _launch_team_manager() {
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   local _proj="${session#doey-}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\""
-  [ -f "${runtime_dir}/doey-settings.json" ] && _mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  _append_settings _mgr_cmd "$runtime_dir"
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
   sleep 0.2  # reduced from 0.5s — tmux is fast
@@ -3363,28 +3280,23 @@ _build_worker_pane_list() {
 }
 
 _name_team_window() {
-  local session="$1" window_index="$2" wt_dir="$3"
-  local runtime_dir="${4:-}"
-  local _proj="${session#doey-}"
+  local session="$1" window_index="$2" wt_dir="$3" runtime_dir="${4:-}"
+  local _proj="${session#doey-}" _te="${runtime_dir:+${runtime_dir}/team_${window_index}.env}"
   _apply_team_border_theme "$session" "$window_index"
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
   local label=""
-  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${window_index}.env" ]; then
-    label=$(_env_val "${runtime_dir}/team_${window_index}.env" TEAM_NAME)
+  if [ -n "$_te" ] && [ -f "$_te" ]; then
+    label=$(_env_val "$_te" TEAM_NAME)
     [ "$label" = "generic" ] && label=""
-  fi
-  if [ -z "$label" ]; then
-    local _ntw_tt=""
-    [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${window_index}.env" ] && \
-      _ntw_tt=$(_env_val "${runtime_dir}/team_${window_index}.env" TEAM_TYPE)
-    if [ "$_ntw_tt" = "freelancer" ]; then
-      label="Freelancers"
-    elif [ -z "$wt_dir" ]; then
-      label="Regular Team"
-    else
-      label="Worktree Team"
+    if [ -z "$label" ]; then
+      local _ntw_tt
+      _ntw_tt=$(_env_val "$_te" TEAM_TYPE)
+      if [ "$_ntw_tt" = "freelancer" ]; then label="Freelancers"
+      elif [ -z "$wt_dir" ]; then label="Regular Team"
+      else label="Worktree Team"; fi
     fi
   fi
+  [ -z "$label" ] && label="Regular Team"
   tmux rename-window -t "${session}:${window_index}" "$label"
 }
 
@@ -3477,7 +3389,7 @@ add_team_from_def() {
   mgr_agent_name=$(generate_team_agent "$mgr_agent" "$window_index")
   local mgr_model="${td_manager_model:-$DOEY_MANAGER_MODEL}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --agent \"$mgr_agent_name\" --name \"${mgr_name}\""
-  [ -f "${runtime_dir}/doey-settings.json" ] && _mgr_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+  _append_settings _mgr_cmd "$runtime_dir"
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "$mgr_name"
 
@@ -3497,7 +3409,7 @@ add_team_from_def() {
     local _w_prompt
     _w_prompt=$(ls "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
     [ -n "$_w_prompt" ] && _w_cmd+=" --append-system-prompt-file \"$_w_prompt\""
-    [ -f "${runtime_dir}/doey-settings.json" ] && _w_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+    _append_settings _w_cmd "$runtime_dir"
 
     sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
     tmux send-keys -t "${session}:${window_index}.${_w_i}" "$_w_cmd" Enter
@@ -3596,7 +3508,7 @@ add_dynamic_team_window() {
     printf '\n\n## Identity\nYou are Freelancer 0 (%s) in pane %s.0 of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
       "$_fl_pane_id" "$window_index" "$session" >> "$_fl_prompt"
     local _fl_cmd="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F0\""
-    [ -f "${runtime_dir}/doey-settings.json" ] && _fl_cmd+=" --settings \"${runtime_dir}/doey-settings.json\""
+    _append_settings _fl_cmd "$runtime_dir"
     _fl_cmd+=" --append-system-prompt-file \"${_fl_prompt}\""
     tmux send-keys -t "$session:${window_index}.0" "$_fl_cmd" Enter
     tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
@@ -3615,7 +3527,7 @@ add_dynamic_team_window() {
     printf '\n\n## Identity\nYou are Freelancer 1 (%s) in pane %s.%s of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
       "$_fl_pane_id1" "$window_index" "$_fl_p1" "$session" >> "$_fl_prompt1"
     local _fl_cmd1="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F1\""
-    [ -f "${runtime_dir}/doey-settings.json" ] && _fl_cmd1+=" --settings \"${runtime_dir}/doey-settings.json\""
+    _append_settings _fl_cmd1 "$runtime_dir"
     _fl_cmd1+=" --append-system-prompt-file \"${_fl_prompt1}\""
     tmux send-keys -t "$session:${window_index}.${_fl_p1}" "$_fl_cmd1" Enter
     tmux select-pane -t "$session:${window_index}.${_fl_p1}" -T "T${window_index} F1"
@@ -4667,46 +4579,26 @@ HELP
     exit 0
     ;;
   teams)
-    _found_any=false
-    # Premade teams
-    _premade_dir="$HOME/.local/share/doey/teams"
+    # List team defs from a set of directories; prints names+descriptions
+    _list_team_defs() {
+      local _ltd_found=false _f _tname _tdesc
+      for _ltd_dir in "$@"; do
+        [ -d "$_ltd_dir" ] || continue
+        for _f in "$_ltd_dir"/*.team.md; do
+          [ -f "$_f" ] || continue
+          _ltd_found=true
+          _tname="$(grep '^name:' "$_f" | head -1 | sed 's/^name: *//' | tr -d '"')"
+          _tdesc="$(grep '^description:' "$_f" | head -1 | sed 's/^description: *//' | tr -d '"')"
+          [ -n "$_tname" ] || _tname="$(basename "$_f" .team.md)"
+          printf "    %-14s %s\n" "$_tname" "$_tdesc"
+        done
+      done
+      [ "$_ltd_found" = false ] && printf "    ${DIM}(none found)${RESET}\n"
+    }
     printf "\n  ${BOLD}Premade teams (shipped with Doey):${RESET}\n"
-    if [ -d "$_premade_dir" ]; then
-      _found_premade=false
-      for _f in "$_premade_dir"/*.team.md; do
-        [ -f "$_f" ] || continue
-        _found_premade=true
-        _found_any=true
-        _tname="$(grep '^name:' "$_f" | head -1 | sed 's/^name: *//' | tr -d '"')"
-        _tdesc="$(grep '^description:' "$_f" | head -1 | sed 's/^description: *//' | tr -d '"')"
-        [ -n "$_tname" ] || _tname="$(basename "$_f" .team.md)"
-        printf "    %-14s %s\n" "$_tname" "$_tdesc"
-      done
-      if [ "$_found_premade" = false ]; then
-        printf "    ${DIM}(none found)${RESET}\n"
-      fi
-    else
-      printf "    ${DIM}(none found)${RESET}\n"
-    fi
-    # Project teams
+    _list_team_defs "$HOME/.local/share/doey/teams"
     printf "\n  ${BOLD}Project teams (.doey/teams/ and teams/):${RESET}\n"
-    _found_project=false
-    _proj_dir="$(pwd)"
-    for _pdir in "$_proj_dir/.doey/teams" "$_proj_dir/teams"; do
-      [ -d "$_pdir" ] || continue
-      for _f in "$_pdir"/*.team.md; do
-        [ -f "$_f" ] || continue
-        _found_project=true
-        _found_any=true
-        _tname="$(grep '^name:' "$_f" | head -1 | sed 's/^name: *//' | tr -d '"')"
-        _tdesc="$(grep '^description:' "$_f" | head -1 | sed 's/^description: *//' | tr -d '"')"
-        [ -n "$_tname" ] || _tname="$(basename "$_f" .team.md)"
-        printf "    %-14s %s\n" "$_tname" "$_tdesc"
-      done
-    done
-    if [ "$_found_project" = false ]; then
-      printf "    ${DIM}(none found)${RESET}\n"
-    fi
+    _list_team_defs "$(pwd)/.doey/teams" "$(pwd)/teams"
     printf "\n  Usage: ${BOLD}doey add-team <name>${RESET}\n\n"
     exit 0
     ;;

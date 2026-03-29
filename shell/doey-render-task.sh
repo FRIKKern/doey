@@ -55,10 +55,6 @@ for item in arr:
 }
 
 # ── Parse .task file ───────────────────────────────────────────────────
-TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
-TASK_TYPE=""; TASK_OWNER=""; TASK_PRIORITY=""; TASK_SUMMARY=""
-TASK_DESCRIPTION=""; TASK_SCHEMA_VERSION=""
-
 parse_task() {
   local file="$1" line
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
@@ -124,6 +120,22 @@ render_basic() {
   fi
 }
 
+# ── Render: list section (shared by deliverables, constraints, criteria) ──
+_render_list_section() {
+  local json_file="$1" field="$2" title="$3" symbol="$4"
+  local line has=0
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    if [ "$has" -eq 0 ]; then
+      printf '\n%s %s\n' "$S_SECTION" "$title"
+      has=1
+    fi
+    printf '  %s %s\n' "$symbol" "$line"
+  done <<EOF
+$(read_json_array "$json_file" "$field")
+EOF
+}
+
 # ── Render: structured (.task + .json) ─────────────────────────────────
 render_structured() {
   local json_file="$1"
@@ -162,46 +174,13 @@ $(read_json_array "$json_file" "hypotheses")
 EOF
 
   # Deliverables (normal + verbose)
-  local del_line has_del=0
-  while IFS= read -r del_line; do
-    [ -z "$del_line" ] && continue
-    if [ "$has_del" -eq 0 ]; then
-      printf '\n%s Deliverables\n' "$S_SECTION"
-      has_del=1
-    fi
-    printf '  %s %s\n' "$S_BULLET" "$del_line"
-  done <<EOF
-$(read_json_array "$json_file" "deliverables")
-EOF
+  _render_list_section "$json_file" "deliverables" "Deliverables" "$S_BULLET"
 
   # Verbose-only sections
   [ "$density" != "verbose" ] && return 0
 
-  # Constraints
-  local con_line has_con=0
-  while IFS= read -r con_line; do
-    [ -z "$con_line" ] && continue
-    if [ "$has_con" -eq 0 ]; then
-      printf '\n%s Constraints\n' "$S_SECTION"
-      has_con=1
-    fi
-    printf '  %s %s\n' "$S_RISK" "$con_line"
-  done <<EOF
-$(read_json_array "$json_file" "constraints")
-EOF
-
-  # Success criteria
-  local crit_line has_crit=0
-  while IFS= read -r crit_line; do
-    [ -z "$crit_line" ] && continue
-    if [ "$has_crit" -eq 0 ]; then
-      printf '\n%s Success Criteria\n' "$S_SECTION"
-      has_crit=1
-    fi
-    printf '  %s %s\n' "$S_DONE" "$crit_line"
-  done <<EOF
-$(read_json_array "$json_file" "success_criteria")
-EOF
+  _render_list_section "$json_file" "constraints" "Constraints" "$S_RISK"
+  _render_list_section "$json_file" "success_criteria" "Success Criteria" "$S_DONE"
 
   # Dispatch plan summary
   local dp

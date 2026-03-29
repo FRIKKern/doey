@@ -48,13 +48,8 @@ _rotate_log() {
 
 # Parse debug.conf as flat key=value. NEVER source it.
 _init_debug() {
-  _DOEY_DEBUG=""
-  _DOEY_DEBUG_HOOKS=""
-  _DOEY_DEBUG_LIFECYCLE=""
-  _DOEY_DEBUG_STATE=""
-  _DOEY_DEBUG_MESSAGES=""
-
-  _DOEY_DEBUG_DISPLAY=""
+  _DOEY_DEBUG="" _DOEY_DEBUG_HOOKS="" _DOEY_DEBUG_LIFECYCLE=""
+  _DOEY_DEBUG_STATE="" _DOEY_DEBUG_MESSAGES="" _DOEY_DEBUG_DISPLAY=""
   [ -f "${RUNTIME_DIR}/debug.conf" ] || return 0
   while IFS='=' read -r _dk _dv; do
     case "$_dk" in
@@ -63,7 +58,6 @@ _init_debug() {
       DOEY_DEBUG_LIFECYCLE) _DOEY_DEBUG_LIFECYCLE="$_dv" ;;
       DOEY_DEBUG_STATE)     _DOEY_DEBUG_STATE="$_dv" ;;
       DOEY_DEBUG_MESSAGES)  _DOEY_DEBUG_MESSAGES="$_dv" ;;
-
       DOEY_DEBUG_DISPLAY)   _DOEY_DEBUG_DISPLAY="$_dv" ;;
     esac
   done < "${RUNTIME_DIR}/debug.conf"
@@ -172,17 +166,10 @@ ERR_EOF
   # 4. Rotation: if errors.log > 500KB, keep last 200 lines
   _rotate_log "$err_log"
 
-  # 5. Cleanup: remove .err files older than 1 hour, keep max 200
-  local count
-  count=$(find "$err_dir" -name '*.err' 2>/dev/null | wc -l | tr -d ' ') || count=0
-  if [ "${count:-0}" -gt 200 ]; then
+  # 5. Cleanup: remove .err files older than 1 hour (runs every ~100th call via timestamp modulo)
+  case "$(date +%s)" in *00)
     find "$err_dir" -name '*.err' -mmin +60 -delete 2>/dev/null || true
-    # If still over 200, remove oldest
-    count=$(find "$err_dir" -name '*.err' 2>/dev/null | wc -l | tr -d ' ') || count=0
-    if [ "${count:-0}" -gt 200 ]; then
-      find "$err_dir" -name '*.err' -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | tail -n +201 | xargs rm -f 2>/dev/null || true
-    fi
-  fi
+  ;; esac
 }
 
 parse_field() {
@@ -209,12 +196,6 @@ team_role() {
   fi
 }
 
-_read_teamdef_key() {
-  local envfile="$1" key="$2"
-  grep "^${key}=" "$envfile" 2>/dev/null | cut -d= -f2-
-}
-
-# Watchdog role eliminated — SM absorbs monitoring
 is_watchdog() { return 1; }
 
 is_manager() {

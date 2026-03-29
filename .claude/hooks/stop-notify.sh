@@ -162,36 +162,28 @@ if is_worker; then
   PANE_DISPLAY="${DOEY_PANE_ID:-${PANE_TITLE}}"
   LAST_MSG=$(parse_field "last_assistant_message")
 
+  # Determine target pane, label, and subject
   if [ "$_team_type" = "freelancer" ]; then
-    # Freelancer workers notify Session Manager directly (no manager in this team)
     _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
-    SM_TARGET="$SESSION_NAME:${_sm_pane:-0.2}"
-    if ! tmux display-message -t "$SM_TARGET" -p '#{pane_pid}' >/dev/null 2>&1; then
-      _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$SM_TARGET"
-      exit 0
-    fi
-    MSG="Freelancer ${PANE_DISPLAY} finished (${STATUS})"
-    [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
-    _notify_pane "$SM_TARGET" "freelancer_finished" "$MSG"
-    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${SM_TARGET}" "type=freelancer_finished" "delivery=file" "success=true"
-    # Also touch SM-specific trigger for session-manager-wait.sh fast wakeup
-    touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
-    _log "stop-notify: sent freelancer_finished to SM at $SM_TARGET"
+    _target="$SESSION_NAME:${_sm_pane:-0.2}"
+    _label="Freelancer"; _subject="freelancer_finished"
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
-    MGR_PANE="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
-    if ! tmux display-message -t "$MGR_PANE" -p '#{pane_pid}' >/dev/null 2>&1; then
-      _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$MGR_PANE"
-      exit 0
-    fi
-    MSG="Worker ${PANE_DISPLAY} finished (${STATUS})"
-    [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
-    _notify_pane "$MGR_PANE" "worker_finished" "$MSG"
-    type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${MGR_PANE}" "type=worker_finished" "delivery=file" "success=true"
-    _log "stop-notify: sent worker_finished to manager at $MGR_PANE"
+    _target="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
+    _label="Worker"; _subject="worker_finished"
   fi
 
-  # Dispatch workflow hooks if this team has a team definition
+  if ! tmux display-message -t "$_target" -p '#{pane_pid}' >/dev/null 2>&1; then
+    _log_error "DELIVERY_FAILED" "Target pane not found, notification dropped" "target=$_target"
+    exit 0
+  fi
+  MSG="${_label} ${PANE_DISPLAY} finished (${STATUS})"
+  [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
+  _notify_pane "$_target" "$_subject" "$MSG"
+  type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=${_target}" "type=${_subject}" "delivery=file" "success=true"
+  [ "$_team_type" = "freelancer" ] && touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+  _log "stop-notify: sent ${_subject} to ${_target}"
+
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
   _wake_sm
   exit 0
@@ -247,10 +239,5 @@ if is_boss; then
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=desktop" "type=desktop_notification" "delivery=osascript" "success=true"
   _log "stop-notify: sent desktop notification"
 fi
-
-# Auto-resume REMOVED. The event-driven model (wait hooks + triggers) handles
-# loop continuity. Auto-resume fired on every stop (including normal turn ends
-# and user interrupts) because Claude Code doesn't expose stop_reason to hooks,
-# causing false "API error" messages that distract the user.
 
 exit 0

@@ -86,6 +86,29 @@ _sm_bump_cycle() {
   echo "$_sm_cycle" > "$CYCLE_FILE"
 }
 
+# Check for pending work. Args: $1=elapsed_label
+# Returns (exits script) if work found, otherwise returns 1.
+_check_work() {
+  local elapsed="$1"
+  if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
+    rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null
+    _sm_bump_cycle; _sm_dbg_wake "trigger" "$elapsed"; echo "TRIGGERED"; exit 0
+  fi
+  set -- "$MSG_DIR"/${SM_SAFE}_*.msg
+  if [ -f "${1:-}" ]; then
+    _sm_bump_cycle; _sm_dbg_wake "new_messages" "$elapsed"; echo "NEW_MESSAGES"; exit 0
+  fi
+  if _has_new_results; then
+    _mark_results_seen
+    _sm_bump_cycle; _sm_dbg_wake "new_results" "$elapsed"; echo "NEW_RESULTS"; exit 0
+  fi
+  set -- "$RUNTIME_DIR/status"/crash_pane_*
+  if [ -f "${1:-}" ]; then
+    _sm_bump_cycle; _sm_dbg_wake "crash_alert" "$elapsed"; echo "CRASH_ALERT"; exit 0
+  fi
+  return 1
+}
+
 # --- Check for work (before sleeping) ---
 
 # Compact cycle check
@@ -96,75 +119,11 @@ if [ "$((_sm_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
   exit 0
 fi
 
-# Trigger files
-if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
-  rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null
-  _sm_bump_cycle
-  _sm_dbg_wake "trigger" "0"
-  echo "TRIGGERED"
-  exit 0
-fi
-
-# Messages for SM
-set -- "$MSG_DIR"/${SM_SAFE}_*.msg
-if [ -f "${1:-}" ]; then
-  _sm_bump_cycle
-  _sm_dbg_wake "new_messages" "0"
-  echo "NEW_MESSAGES"
-  exit 0
-fi
-
-# New result files
-if _has_new_results; then
-  _mark_results_seen
-  _sm_bump_cycle
-  _sm_dbg_wake "new_results" "0"
-  echo "NEW_RESULTS"
-  exit 0
-fi
-
-# Crash alerts
-set -- "$RUNTIME_DIR/status"/crash_pane_*
-if [ -f "${1:-}" ]; then
-  _sm_bump_cycle
-  _sm_dbg_wake "crash_alert" "0"
-  echo "CRASH_ALERT"
-  exit 0
-fi
-
-# --- No immediate work: short pause, then re-check ---
+_check_work "0" || true
 
 sleep 3
 
-# Re-check after sleep
-if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
-  rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null
-  _sm_bump_cycle
-  _sm_dbg_wake "trigger" "3"
-  echo "TRIGGERED"
-  exit 0
-fi
-set -- "$MSG_DIR"/${SM_SAFE}_*.msg
-if [ -f "${1:-}" ]; then
-  _sm_bump_cycle
-  _sm_dbg_wake "new_messages" "3"
-  echo "NEW_MESSAGES"
-  exit 0
-fi
-if _has_new_results; then
-  _mark_results_seen
-  _sm_bump_cycle
-  _sm_dbg_wake "new_results" "3"
-  echo "NEW_RESULTS"
-  exit 0
-fi
-set -- "$RUNTIME_DIR/status"/crash_pane_*
-if [ -f "${1:-}" ]; then
-  _sm_bump_cycle
-  _sm_dbg_wake "crash_alert" "3"
-  echo "CRASH_ALERT"
-  exit 0
-fi
+_check_work "3" || true
 
 # Nothing happened
 _sm_dbg_wake "idle" "3"

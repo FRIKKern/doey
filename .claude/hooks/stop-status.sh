@@ -23,17 +23,14 @@ _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
 task_id="${DOEY_TASK_ID:-}"
 
-write_pane_status "${RUNTIME_DIR}/status/${PANE_SAFE}.status" "$STOP_STATUS"
-[ ! -f "${RUNTIME_DIR}/status/${PANE_SAFE}.status" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$PANE_SAFE status=$STOP_STATUS"
-[ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-
-# Dual-write using short DOEY_PANE_ID for new-style lookups
-if [ -n "${DOEY_PANE_ID:-}" ]; then
-  write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "$STOP_STATUS"
-  [ ! -f "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$DOEY_PANE_ID status=$STOP_STATUS"
-  [ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status"
-  _log "stop-status: ${DOEY_PANE_ID} -> $STOP_STATUS (dual-write)"
-fi
+# Write status to both PANE_SAFE and DOEY_PANE_ID files
+for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
+  [ -z "$_sf" ] && continue
+  _status_file="${RUNTIME_DIR}/status/${_sf}.status"
+  write_pane_status "$_status_file" "$STOP_STATUS"
+  [ ! -f "$_status_file" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$_sf status=$STOP_STATUS"
+  [ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "$_status_file"
+done
 
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
 
