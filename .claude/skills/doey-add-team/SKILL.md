@@ -151,14 +151,7 @@ NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
 for _s in $(seq 1 $((PANE_COUNT - 1))); do
   tmux split-window -t "${SESSION_NAME}:${NEW_WIN}" -c "$PROJECT_DIR"
 done
-# Apply standard manager-left, workers-right layout via rebalance_grid_layout
-DOEY_SH="$(command -v doey 2>/dev/null || echo "$HOME/.local/bin/doey")"
-if [ -f "$DOEY_SH" ]; then
-  (source "$DOEY_SH" __doey_source_only 2>/dev/null && rebalance_grid_layout "$SESSION_NAME" "$NEW_WIN" "$RUNTIME_DIR") || \
-    tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" main-vertical
-else
-  tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" main-vertical
-fi
+tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" tiled
 sleep 0.5
 
 # Name each pane from definition
@@ -251,6 +244,14 @@ done << LAUNCH_INPUT
 $(echo "$PANE_DEFS")
 LAUNCH_INPUT
 echo "All ${PANE_COUNT} Claude instances launched"
+
+# Apply standard manager-left/workers-right layout
+bash -c "
+  eval \"\$(sed -n '/^_env_val()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\"
+  eval \"\$(sed -n '/^_layout_checksum()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\"
+  eval \"\$(sed -n '/^rebalance_grid_layout()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\"
+  rebalance_grid_layout '${SESSION_NAME}' '${NEW_WIN}' '${RUNTIME_DIR}'
+"
 ```
 
 ### Step 6: Brief the manager with team context
