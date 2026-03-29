@@ -151,7 +151,14 @@ NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
 for _s in $(seq 1 $((PANE_COUNT - 1))); do
   tmux split-window -t "${SESSION_NAME}:${NEW_WIN}" -c "$PROJECT_DIR"
 done
-tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" tiled
+# Apply standard manager-left, workers-right layout via rebalance_grid_layout
+DOEY_SH="$(command -v doey 2>/dev/null || echo "$HOME/.local/bin/doey")"
+if [ -f "$DOEY_SH" ]; then
+  (source "$DOEY_SH" __doey_source_only 2>/dev/null && rebalance_grid_layout "$SESSION_NAME" "$NEW_WIN" "$RUNTIME_DIR") || \
+    tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" main-vertical
+else
+  tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" main-vertical
+fi
 sleep 0.5
 
 # Name each pane from definition
