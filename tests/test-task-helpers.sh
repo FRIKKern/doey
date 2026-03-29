@@ -244,21 +244,21 @@ mkdir -p "${TEST_DIR}/.doey/tasks"
 
 CM_ID=$(task_create "$TEST_DIR" "Add search feature" "feature")
 CM_OUT=$(task_commit_msg "$TEST_DIR" "$CM_ID")
-_test "feature -> feat prefix" _contains "$CM_OUT" "^feat:"
-_test "contains title" _contains "$CM_OUT" "Add search feature"
-_test "contains task ref" _contains "$CM_OUT" "(Task #${CM_ID})"
+_test "feature -> feat prefix" _contains "$CM_OUT" "^feat(task-"
+_test "contains title" _contains "$CM_OUT" "add search feature"
+_test "contains task scope" _contains "$CM_OUT" "(task-${CM_ID}):"
 
 CM_ID2=$(task_create "$TEST_DIR" "Fix login crash" "bugfix")
 CM_OUT2=$(task_commit_msg "$TEST_DIR" "$CM_ID2")
-_test "bugfix -> fix prefix" _contains "$CM_OUT2" "^fix:"
+_test "bugfix -> fix prefix" _contains "$CM_OUT2" "^fix(task-"
 
 CM_ID3=$(task_create "$TEST_DIR" "Research caching" "research")
 CM_OUT3=$(task_commit_msg "$TEST_DIR" "$CM_ID3")
-_test "research -> chore prefix" _contains "$CM_OUT3" "^chore:"
+_test "research -> docs prefix" _contains "$CM_OUT3" "^docs(task-"
 
 CM_ID4=$(task_create "$TEST_DIR" "Update readme" "docs")
 CM_OUT4=$(task_commit_msg "$TEST_DIR" "$CM_ID4")
-_test "docs -> docs prefix" _contains "$CM_OUT4" "^docs:"
+_test "docs -> docs prefix" _contains "$CM_OUT4" "^docs(task-"
 
 # ── Results ─────────────────────────────────────────────────────────
 echo ""
