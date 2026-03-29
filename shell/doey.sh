@@ -4039,6 +4039,127 @@ doey_settings() {
 
 # ── Remote Server Management ──────────────────────────────────────────
 
+_doey_ensure_hcloud() {
+  # Already installed? Done.
+  command -v hcloud >/dev/null 2>&1 && return 0
+
+  printf "\n  ${WARN}hcloud CLI not found.${RESET}\n"
+  printf "  The Hetzner Cloud CLI is required for remote server management.\n\n"
+
+  # Detect OS
+  local os_type=""
+  case "$(uname -s)" in
+    Darwin*) os_type="macos" ;;
+    Linux*)  os_type="linux" ;;
+    *)       os_type="unknown" ;;
+  esac
+
+  # Ask user
+  local install_method=""
+  if [ "$os_type" = "macos" ]; then
+    if command -v brew >/dev/null 2>&1; then
+      install_method="brew"
+      printf "  Install hcloud via Homebrew? [Y/n] "
+    else
+      printf "  ${ERROR}Homebrew not found.${RESET} Install hcloud manually:\n"
+      printf "  ${BOLD}brew install hcloud${RESET} (after installing Homebrew) or\n"
+      printf "  See https://github.com/hetznercloud/cli/releases\n"
+      return 1
+    fi
+  elif [ "$os_type" = "linux" ]; then
+    install_method="script"
+    printf "  Install hcloud via official install script? [Y/n] "
+  else
+    printf "  ${ERROR}Unsupported OS.${RESET} Install hcloud manually from:\n"
+    printf "  https://github.com/hetznercloud/cli/releases\n"
+    return 1
+  fi
+
+  local reply=""
+  read -r reply
+  case "$reply" in
+    [Nn]*)
+      printf "\n  To install hcloud manually:\n"
+      if [ "$os_type" = "macos" ]; then
+        printf "    ${BOLD}brew install hcloud${RESET}\n"
+      else
+        printf "    ${BOLD}curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xz -C /usr/local/bin/${RESET}\n"
+      fi
+      printf "  Then re-run: ${BOLD}doey remote setup <project>${RESET}\n\n"
+      return 1
+      ;;
+  esac
+
+  # Install
+  printf "\n"
+  if [ "$install_method" = "brew" ]; then
+    printf "  ${DIM}Running: brew install hcloud ...${RESET}\n"
+    if ! brew install hcloud 2>&1 | sed 's/^/  /'; then
+      printf "  ${ERROR}brew install failed.${RESET}\n"
+      return 1
+    fi
+  elif [ "$install_method" = "script" ]; then
+    printf "  ${DIM}Downloading hcloud from GitHub releases...${RESET}\n"
+    local arch=""
+    case "$(uname -m)" in
+      x86_64|amd64)  arch="amd64" ;;
+      aarch64|arm64) arch="arm64" ;;
+      *)
+        printf "  ${ERROR}Unsupported architecture: $(uname -m)${RESET}\n"
+        return 1
+        ;;
+    esac
+    local tmp_dir=""
+    tmp_dir="$(mktemp -d)"
+    local url="https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-${arch}.tar.gz"
+    if ! curl -sSL "$url" -o "${tmp_dir}/hcloud.tar.gz" 2>&1; then
+      printf "  ${ERROR}Download failed.${RESET}\n"
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+    if ! tar xzf "${tmp_dir}/hcloud.tar.gz" -C "$tmp_dir" 2>&1; then
+      printf "  ${ERROR}Extract failed.${RESET}\n"
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+    # Try /usr/local/bin first, fall back to ~/.local/bin
+    local install_dir="/usr/local/bin"
+    if [ ! -w "$install_dir" ]; then
+      install_dir="$HOME/.local/bin"
+      mkdir -p "$install_dir"
+    fi
+    if ! mv "${tmp_dir}/hcloud" "${install_dir}/hcloud" 2>/dev/null; then
+      printf "  ${DIM}Trying with sudo...${RESET}\n"
+      if ! sudo mv "${tmp_dir}/hcloud" "/usr/local/bin/hcloud"; then
+        printf "  ${ERROR}Install failed. Move hcloud to your PATH manually.${RESET}\n"
+        printf "  Binary is at: ${tmp_dir}/hcloud\n"
+        return 1
+      fi
+      install_dir="/usr/local/bin"
+    fi
+    chmod +x "${install_dir}/hcloud"
+    rm -rf "$tmp_dir"
+    # Ensure install_dir is in PATH for this session
+    case ":$PATH:" in
+      *":${install_dir}:"*) ;;
+      *) export PATH="${install_dir}:${PATH}" ;;
+    esac
+    printf "  ${DIM}Installed to ${install_dir}/hcloud${RESET}\n"
+  fi
+
+  # Verify
+  if ! command -v hcloud >/dev/null 2>&1; then
+    printf "  ${ERROR}hcloud still not found on PATH after install.${RESET}\n"
+    printf "  You may need to restart your shell or add it to your PATH.\n"
+    return 1
+  fi
+
+  local hcloud_ver=""
+  hcloud_ver="$(hcloud version 2>/dev/null | head -1 || echo "unknown")"
+  printf "  ${SUCCESS}hcloud installed: %s${RESET}\n\n" "$hcloud_ver"
+  return 0
+}
+
 doey_remote() {
   local remotes_dir="$HOME/.config/doey/remotes"
   mkdir -p "$remotes_dir"
@@ -4079,8 +4200,7 @@ doey_remote() {
       local remote_file="$remotes_dir/${project}.remote"
       [ -f "$remote_file" ] || { printf "  ${ERROR}No remote config found for '%s'${RESET}\n" "$project"; return 1; }
 
-      if ! command -v hcloud >/dev/null 2>&1; then
-        printf "  ${ERROR}hcloud CLI not found.${RESET} Install: ${BOLD}brew install hcloud${RESET} or see https://github.com/hetznercloud/cli\n"
+      if ! _doey_ensure_hcloud; then
         return 1
       fi
 
@@ -4108,8 +4228,7 @@ doey_remote() {
       local remote_file="$remotes_dir/${project}.remote"
       [ -f "$remote_file" ] || { printf "  ${ERROR}No remote config found for '%s'${RESET}\n" "$project"; return 1; }
 
-      if ! command -v hcloud >/dev/null 2>&1; then
-        printf "  ${ERROR}hcloud CLI not found.${RESET} Install: ${BOLD}brew install hcloud${RESET} or see https://github.com/hetznercloud/cli\n"
+      if ! _doey_ensure_hcloud; then
         return 1
       fi
 
@@ -4150,10 +4269,7 @@ _doey_remote_provision() {
   local server_name="doey-${project}"
 
   # Check prerequisites
-  if ! command -v hcloud >/dev/null 2>&1; then
-    printf "  ${ERROR}hcloud CLI not found.${RESET}\n"
-    printf "  Install: ${BOLD}brew install hcloud${RESET} (macOS) or see https://github.com/hetznercloud/cli\n"
-    printf "  Then run: ${BOLD}hcloud context create doey${RESET} to configure your API token\n"
+  if ! _doey_ensure_hcloud; then
     return 1
   fi
 
