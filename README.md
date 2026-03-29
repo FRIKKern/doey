@@ -23,7 +23,7 @@
 │          │  ┌─agent─┐   │  ┌─agent─┐   │  their own agents
 │          │  │ ↓ ↓ ↓ │   │  │ ↓ ↓ ↓ │   │
 └──────────┴──────────────┴──────────────┘
- WATCHDOG monitors from Dashboard (window 0)
+ Boss relays user intent from Dashboard (window 0)
 ```
 
 Manager plans and delegates. Workers execute in parallel. Dynamic grid — scale with `doey add`.
@@ -48,7 +48,7 @@ Or: `git clone https://github.com/FRIKKern/doey.git && cd doey && ./install.sh`
 
 > **Other platforms:** [Linux server](docs/linux-server.md) · [Windows WSL2](docs/windows-wsl2.md) · [Linode VPS](docs/linode-setup.md)
 
-Tell the Window Manager your task — it plans, Workers execute in parallel, Watchdog monitors, results are consolidated.
+Tell the Boss your task — it relays to the Session Manager, teams plan and execute in parallel, results are consolidated.
 
 ## CLI Commands
 
@@ -58,7 +58,7 @@ Tell the Window Manager your task — it plans, Workers execute in parallel, Wat
 | `doey init` | Register current directory as a project |
 | `doey add` / `remove` | Add/remove worker columns |
 | `doey stop` | Stop the team |
-| `doey reload` | Hot-reload (Manager+Watchdog; `--workers` for all) |
+| `doey reload` | Hot-reload (Manager; `--workers` for all) |
 | `doey add-team [--worktree]` / `kill-team <N>` | Add/kill team windows (worktree = isolated branch) |
 | `doey list` / `list-teams` | List projects / team windows |
 | `doey purge` | Clean runtime files, audit context |
@@ -76,8 +76,8 @@ Window 0 is the dashboard; team windows (1+) each have a Manager + Workers.
 | Role | Pane | Description |
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard with task list and team stats |
-| Session Manager | `0.1` | Cross-team coordination |
-| Watchdog | `0.2+` | Manager's best friend — monitors events, filters noise, escalates signal |
+| Boss | `0.1` | User-facing relay — receives user intent, forwards to Session Manager |
+| Session Manager | `0.2` | Internal coordinator — routes tasks, monitors panes, handles git |
 | Window Manager | `W.0` | The bastion — plans, delegates, validates all context |
 | Workers | `W.1+` | Execute tasks in parallel |
 | Freelancers | `F.0+` | Independent workers — no manager, available to any team |
@@ -89,8 +89,8 @@ Out of the box, `doey` launches:
 ```
 Window 0 — Dashboard
   ├── Info Panel (live stats, tasks)
-  ├── Session Manager
-  └── Watchdog x2 (one per team)
+  ├── Boss (user-facing relay)
+  └── Session Manager (internal coordinator)
 
 Window 1 — Team 1 (local)
   ├── Window Manager
@@ -143,7 +143,7 @@ EOF
 | `DOEY_MAX_WORKERS` | `20` | Max worker panes across all teams |
 | `DOEY_MANAGER_MODEL` | `opus` | Model for Window Managers |
 | `DOEY_WORKER_MODEL` | `opus` | Model for Workers |
-| `DOEY_WATCHDOG_MODEL` | `sonnet` | Model for Watchdogs |
+| `DOEY_WATCHDOG_MODEL` | `sonnet` | Model for Watchdogs (deprecated) |
 | `DOEY_WORKER_LAUNCH_DELAY` | `3` | Seconds between worker launches (auth stagger) |
 | `DOEY_TEAM_LAUNCH_DELAY` | `15` | Seconds between team launches |
 

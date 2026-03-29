@@ -11,7 +11,7 @@ Grounded in real commit history, not speculation:
 | Bug Pattern (commit count) | What would help debug it | Log Category |
 |---|---|---|
 | Pane addressing (18+) | Which pane was targeted, resolved address, role applied | `hooks` |
-| Watchdog loops (10+) | Full scan results, state detected, action taken, cooldown | `watchdog` |
+| ~~Watchdog loops (10+)~~ | ~~Full scan results, state detected, action taken, cooldown~~ | ~~`watchdog`~~ (deprecated) |
 | Role resolution (8+) | Role source (env var vs file vs fallback), stale detection | `hooks` |
 | Auth exhaustion (5+) | Instance start times, launch stagger, rate limit hits | `lifecycle` |
 | Notification chain (5+) | Message from→to, delivery method, success/failure | `messages` |
@@ -28,7 +28,7 @@ Flat key=value format. **Never sourced** — parsed with `grep`/`case` to preven
 ```bash
 DOEY_DEBUG=true
 DOEY_DEBUG_HOOKS=true
-DOEY_DEBUG_WATCHDOG=true
+DOEY_DEBUG_WATCHDOG=true    # deprecated — watchdog no longer active
 DOEY_DEBUG_LIFECYCLE=true
 DOEY_DEBUG_MESSAGES=true
 DOEY_DEBUG_STATE=true
@@ -122,7 +122,9 @@ Covers notification chain bugs (Manager↔SM, Worker→Manager delivery failures
 {"ts":1711300260200,"from":"1.0","to":"0.1","type":"mgr_to_sm","subject":"Team 1 wave complete","delivery":"file","success":true}
 ```
 
-### watchdog_W{N}.jsonl — Scan details per team
+### watchdog_W{N}.jsonl — Scan details per team (DEPRECATED)
+
+> **Deprecated:** Watchdog functionality is no longer active. This log schema is retained for reference only.
 
 Single-writer (one watchdog per team). Covers watchdog behavior loops.
 
@@ -282,8 +284,8 @@ Cost when off: one `[ -f ]` stat. Cost when on: one `date` + one `printf >>`. No
 | `stop-status.sh` | `_debug_hook_entry` + state transition | ~3 | hooks, state |
 | `stop-results.sh` | `_debug_hook_entry` + lifecycle event | ~3 | hooks, lifecycle |
 | `stop-notify.sh` | `_debug_hook_entry` + message event | ~5 | hooks, messages |
-| `watchdog-scan.sh` | Cycle logging (inline, own file) | ~15 | watchdog |
-| `watchdog-wait.sh` | Wake event | ~3 | watchdog |
+| `watchdog-scan.sh` | ~~Cycle logging (inline, own file)~~ | ~~~15~~ | ~~watchdog~~ (deprecated) |
+| `watchdog-wait.sh` | ~~Wake event~~ | ~~~3~~ | ~~watchdog~~ (deprecated) |
 | `session-manager-wait.sh` | Wake event | ~3 | watchdog |
 | `.claude/skills/doey-debug/SKILL.md` | New skill | ~50 | — |
 
