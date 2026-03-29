@@ -1,0 +1,7 @@
+TASK_ID=1
+TASK_TITLE=Research Charmbracelet Todo examples
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1774809760
+TASK_TYPE=research
+TASK_DESCRIPTION=Research Charmbracelet's GitHub repos and examples for the most interesting Todo-list / task-management examples built with their TUI libraries (Bubble Tea, Lip Gloss, Bubbles, etc.). Look at their official examples, community showcases, and any standout todo/task apps. Collect: repo URLs, screenshots/descriptions, what makes each one interesting (UI patterns, architecture, features). Summarize the top 3-5 most compelling examples with links.
+TASK_TAGS=research,tui,reference
