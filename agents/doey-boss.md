@@ -146,7 +146,7 @@ TASK_ID=${ID}
 TASK_TITLE=TITLE HERE
 TASK_STATUS=active
 TASK_CREATED=$(date +%s)
-TASK_CATEGORY=bug|feature|refactor|docs|infrastructure
+TASK_TYPE=bug|feature|bugfix|refactor|research|audit|docs|infrastructure
 TASK_DESCRIPTION=Full context paragraph — what the user wants and why. Include relevant details from the intake conversation so SM and workers have everything they need without asking follow-ups.
 TASK_TAGS=comma,separated,concerns
 TASKEOF
@@ -156,7 +156,7 @@ TASKEOF
 
 | Field | Required | Values |
 |-------|----------|--------|
-| `TASK_CATEGORY` | Yes | One of: `bug`, `feature`, `refactor`, `docs`, `infrastructure` |
+| `TASK_TYPE` | Yes | One of: `bug`, `feature`, `bugfix`, `refactor`, `research`, `audit`, `docs`, `infrastructure` |
 | `TASK_DESCRIPTION` | Yes | Full context paragraph — the what and the why |
 | `TASK_TAGS` | Yes | Cross-cutting concerns: `hooks`, `tui`, `agent-defs`, `task-system`, `shell`, `skills`, `install`, `statusline`, `config`, `testing`, `dashboard` |
 
