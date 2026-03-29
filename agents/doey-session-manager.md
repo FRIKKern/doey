@@ -201,6 +201,32 @@ Parse the `FROM` and `SUBJECT` lines to determine routing. Key subjects:
 | `task_complete` | Manager | Team finished. Read summary, commit changes if files listed, route follow-ups, report to Boss |
 | `freelancer_finished` | Freelancer | Read report, act on findings |
 | `question` | Manager | Decide autonomously (research if needed via freelancer). Never escalate to Boss |
+| `dispatch_task` | Boss | TASK_ID, TASK_FILE, TASK_JSON, DISPATCH_MODE, PRIORITY, SUMMARY — read task package, route to team, track by TASK_ID |
+
+### Processing dispatch_task
+
+When SM receives a `dispatch_task` message from Boss:
+
+1. **Read task metadata** from the .task file (TASK_FILE field). Fields: TASK_ID, TASK_TITLE, TASK_STATUS, TASK_TYPE, TASK_OWNER, TASK_PRIORITY, TASK_SUMMARY.
+
+2. **Read structured fields** from the .json file (TASK_JSON field). Fields: intent, hypotheses, constraints, success_criteria, deliverables, dispatch_plan.
+
+3. **Choose routing** based on DISPATCH_MODE:
+
+   | DISPATCH_MODE | Routing |
+   |---------------|---------|
+   | `parallel` | Send independent subtasks to available teams simultaneously |
+   | `sequential` | Queue tasks, send next after previous completes |
+   | `phased` | Send wave 1, validate, then send wave 2, etc. |
+
+4. **Generate scoped briefs** for target team Manager — include: task title, intent, relevant hypotheses, constraints, success criteria, deliverables for that team, and file paths from dispatch_plan if specified.
+
+5. **Track progress** by TASK_ID:
+   - Update .task file: set `TASK_STATUS=in_progress`, add `TASK_TEAM=<assigned team>`
+   - On completion: set `TASK_STATUS=pending_user_confirmation`
+   - On failure: set `TASK_STATUS=failed`, notify Boss
+
+**Note:** The existing `task` subject (prose-based dispatch from Boss) still works for simple goals. `dispatch_task` is the structured alternative for compiled task packages with .task/.json files.
 
 ### After processing messages
 

@@ -88,6 +88,7 @@ fi
 | `task` | User gives a goal | Full task description for SM to plan and dispatch |
 | `question_answer` | Answering SM's question | The user's response to an escalated question |
 | `cancel` | User wants to stop work | Which task/team to cancel |
+| `dispatch_task` | Structured task with .task + .json package | Task ID, file refs, dispatch mode, priority |
 | `add_team` | User requests more capacity | Team specs (grid, type, worktree) |
 
 ## Reading SM Messages
@@ -250,6 +251,53 @@ TASK_ID=$(task_create "$RUNTIME_DIR" "Task title" "feature" "Boss" "P1" "One-lin
 ```
 
 After creating the task package, send a structured dispatch message to SM that includes the task ID, the compilation summary, and dispatch plan.
+
+## Structured Dispatch
+
+When dispatching a STRUCTURED task to SM, use the `dispatch_task` subject instead of `task`. This gives SM file references to the full task package instead of prose.
+
+**dispatch_task message format:**
+
+```
+FROM: Boss
+SUBJECT: dispatch_task
+TASK_ID=<id>
+TASK_FILE=<runtime>/tasks/<id>.task
+TASK_JSON=<runtime>/tasks/<id>.json
+DISPATCH_MODE=parallel|sequential|phased
+PRIORITY=P0|P1|P2|P3
+SUMMARY=<one-line summary>
+```
+
+**Generate the message using the helper:**
+
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source /home/doey/doey/shell/doey-task-helpers.sh
+
+# Generate message body
+MSG_BODY=$(task_dispatch_msg "$RUNTIME_DIR" "$TASK_ID" "parallel" "P1")
+
+# Write to SM inbox
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+MSG_DIR="${RUNTIME_DIR}/messages"
+echo "$MSG_BODY" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
+touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+```
+
+**DISPATCH_MODE values:**
+| Mode | When to use |
+|------|-------------|
+| `parallel` | Independent subtasks, no shared files |
+| `sequential` | Tasks depend on each other's output |
+| `phased` | Multi-wave execution with validation gates |
+
+**When to use which subject:**
+| Goal type | Subject | Content |
+|-----------|---------|---------|
+| TRIVIAL | (none) | Answer directly |
+| SIMPLE | `task` | Prose description (existing behavior) |
+| STRUCTURED | `dispatch_task` | File references to .task + .json |
 
 ## SM Health Monitoring
 
