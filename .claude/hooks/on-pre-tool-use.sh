@@ -121,6 +121,27 @@ if [ -n "${TMUX_PANE:-}" ]; then
   fi
 fi
 
+# Defense-in-depth: infer role from pane position if .role file was missing
+if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
+  _di_wi="${_WP#*:}"; _di_wi="${_di_wi%.*}"
+  _di_pi="${_WP##*.}"
+  if [ "$_di_wi" = "0" ]; then
+    case "$_di_pi" in
+      1) _DOEY_ROLE="boss" ;;
+      0) _DOEY_ROLE="info_panel" ;;
+      *) _sm_p=""; [ -f "${_RD}/session.env" ] && _sm_p=$(grep '^SM_PANE=' "${_RD}/session.env" 2>/dev/null | head -1 | sed 's/^SM_PANE=//;s/^"//;s/"$//')
+         [ "0.${_di_pi}" = "${_sm_p:-0.2}" ] && _DOEY_ROLE="session_manager" ;;
+    esac
+  else
+    _di_tt=""; [ -f "${_RD}/team_${_di_wi}.env" ] && _di_tt=$(grep '^TEAM_TYPE=' "${_RD}/team_${_di_wi}.env" 2>/dev/null | head -1 | sed 's/^TEAM_TYPE=//;s/^"//;s/"$//')
+    if [ "$_di_tt" != "freelancer" ]; then
+      _di_mp=""; [ -f "${_RD}/team_${_di_wi}.env" ] && _di_mp=$(grep '^MANAGER_PANE=' "${_RD}/team_${_di_wi}.env" 2>/dev/null | head -1 | sed 's/^MANAGER_PANE=//;s/^"//;s/"$//')
+      [ "$_di_pi" = "${_di_mp:-0}" ] && _DOEY_ROLE="manager"
+    fi
+    [ -z "$_DOEY_ROLE" ] && _DOEY_ROLE="worker"
+  fi
+fi
+
 _DBG=false
 [ -n "${_RD:-}" ] && [ -f "${_RD}/debug.conf" ] && _DBG=true
 
@@ -169,12 +190,14 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
-# Whitelist: task file and report writes are allowed for all roles (content may
-# contain strings like "git commit" that would false-positive on block patterns)
+# Whitelist: file writes whose CONTENT may contain blocked substrings (e.g. "git commit").
+# Redirects to task files, runtime dirs, reports, and /tmp/ dispatch helpers are safe.
 _WL_CMD=$(_json_str tool_input.command)
 case "${_WL_CMD:-}" in
-  *">>"*".doey/tasks/"*.task|*">"*".doey/tasks/"*.task|*">>"*"/reports/"*|*">"*"/reports/"*)
-    _dbg_write "allow_task_report_write"; exit 0 ;;
+  *">>"*".doey/tasks/"*.task|*">"*".doey/tasks/"*.task) _dbg_write "allow_task_write"; exit 0 ;;
+  *">>"*"/tmp/doey/"*|*">"*"/tmp/doey/"*)              _dbg_write "allow_runtime_write"; exit 0 ;;
+  *">>"*"/reports/"*|*">"*"/reports/"*)                 _dbg_write "allow_report_write"; exit 0 ;;
+  *">"*"/tmp/"*".sh"*|*">"*"/tmp/"*".md"*)              _dbg_write "allow_tmp_script"; exit 0 ;;
 esac
 
 if [ "$_DOEY_ROLE" != "session_manager" ]; then
