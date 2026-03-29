@@ -9,14 +9,14 @@ PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
 case "$PROMPT" in
-  /compact*)        write_pane_status "$STATUS_FILE" "READY"; notify_watchdog "READY" "compact"; exit 0 ;;
+  /compact*)        write_pane_status "$STATUS_FILE" "READY"; notify_sm "READY" "compact"; exit 0 ;;
   /simplify*|/loop*|/rename*|/exit*|/help*|/status*|/doey*) exit 0 ;;
 esac
 
 write_pane_status "$STATUS_FILE" "BUSY" "${PROMPT:0:80}"
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=READY" "to=BUSY" "trigger=prompt-submit"
 [ -n "${DOEY_PANE_ID:-}" ] && write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "BUSY" "${PROMPT:0:80}"
-notify_watchdog "BUSY" "${PROMPT:0:60}"
+notify_sm "BUSY" "${PROMPT:0:60}"
 _log "task started: $(echo "$PROMPT" | head -c 80)"
 
 # If this is the Session Manager, touch trigger to break its own wait hook

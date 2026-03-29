@@ -60,7 +60,7 @@ Every change to Doey must not break these scenarios:
 | 2 | `doey` launch in new project | Session creation, pane layout, env injection, dashboard renders |
 | 3 | Dispatch a task to a worker | send-keys delivery, status transitions (READY→BUSY→FINISHED), result capture |
 | 4 | Worker edits a `.sh` file | `post-tool-lint.sh` fires, catches bash 3.2 violations |
-| 5 | SM scan detects stuck pane | `watchdog-scan.sh` anomaly detection (called by SM), notification to Manager |
+| 5 | SM scan detects stuck pane | Anomaly detection (handled by SM hooks), notification to Manager |
 | 6 | `doey stop` and cleanup | Session teardown, runtime dir cleaned, no orphan processes |
 | 7 | `doey doctor` passes | All health checks green |
 

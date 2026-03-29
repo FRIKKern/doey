@@ -180,11 +180,6 @@ printf '\n\033[1mTest 9: Info panel configurable refresh\033[0m\n'
 grep -q 'DOEY_INFO_PANEL_REFRESH' "$REPO_DIR/shell/info-panel.sh" && _ok "info-panel.sh uses DOEY_INFO_PANEL_REFRESH" || _fail "info-panel.sh missing DOEY_INFO_PANEL_REFRESH"
 ! grep -q 'sleep 300' "$REPO_DIR/shell/info-panel.sh" && _ok "info-panel.sh no hardcoded sleep 300" || _fail "info-panel.sh still has hardcoded sleep 300"
 
-# ── Test 10: Watchdog wait uses configurable interval ────────────────
-
-printf '\n\033[1mTest 10: Watchdog wait configurable interval\033[0m\n'
-grep -q 'DOEY_WATCHDOG_SCAN_INTERVAL' "$REPO_DIR/.claude/hooks/watchdog-wait.sh" && _ok "watchdog-wait.sh uses DOEY_WATCHDOG_SCAN_INTERVAL" || _fail "watchdog-wait.sh missing config var"
-
 # ── Test 11: register_project creates .doey/ ─────────────────────────
 
 printf '\n\033[1mTest 11: register_project creates .doey/ directory\033[0m\n'

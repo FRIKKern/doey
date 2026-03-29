@@ -34,7 +34,7 @@ env_val() {
   v="${v#\"}"; echo "${v%\"}"
 }
 
-# Window 0: identify Session Manager or Watchdog panes
+# Window 0: identify Session Manager panes
 if [ "$WINDOW_IDX" = "0" ]; then
   SESSION_ENV="${RUNTIME_DIR}/session.env"
   PROJ_NAME=""

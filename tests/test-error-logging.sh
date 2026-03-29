@@ -102,18 +102,6 @@ _test "_log_lint_error wrote to errors.log" grep -q "LINT_ERROR" "$RUNTIME_DIR/e
 _test "_log_lint_error includes post-tool-lint" grep -q "post-tool-lint" "$RUNTIME_DIR/errors/errors.log"
 
 echo ""
-echo "=== Test: _log_error_wd() in watchdog-scan.sh ==="
-
-: > "$RUNTIME_DIR/errors/errors.log"
-eval "$(sed -n '/_log_error_wd()/,/^}/p' "$HOOKS_DIR/watchdog-scan.sh")"
-_test "function _log_error_wd exists" type _log_error_wd >/dev/null 2>&1
-
-_log_error_wd "ANOMALY" "test worker crashed" "window=1"
-_test "_log_error_wd wrote to errors.log" grep -q "ANOMALY" "$RUNTIME_DIR/errors/errors.log"
-_test "_log_error_wd includes watchdog-scan" grep -q "watchdog-scan" "$RUNTIME_DIR/errors/errors.log"
-_test "_log_error_wd includes watchdog role" grep -q "watchdog" "$RUNTIME_DIR/errors/errors.log"
-
-echo ""
 echo "=== Test: Error log format ==="
 
 : > "$RUNTIME_DIR/errors/errors.log"

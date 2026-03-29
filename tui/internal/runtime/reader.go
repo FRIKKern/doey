@@ -149,7 +149,6 @@ func (r *Reader) parseTeamConfig(windowIndex int) (TeamConfig, error) {
 		WindowIndex:    windowIndex,
 		Grid:           env["GRID"],
 		ManagerPane:    env["MANAGER_PANE"],
-		WatchdogPane:   env["WATCHDOG_PANE"],
 		TeamName:       env["TEAM_NAME"],
 		TeamType:       env["TEAM_TYPE"],
 		TeamDef:        env["TEAM_DEF"],

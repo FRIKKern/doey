@@ -16,7 +16,6 @@ type TeamConfig struct {
 	WindowIndex    int
 	Grid           string
 	ManagerPane    string
-	WatchdogPane   string
 	WorkerPanes    []int
 	WorkerCount    int
 	TeamName       string

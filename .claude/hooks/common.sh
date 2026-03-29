@@ -302,8 +302,6 @@ notify_sm() {
   touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null
   return 0
 }
-# Backward compatibility alias
-notify_watchdog() { notify_sm "$@"; }
 
 # Low-level desktop notification — no role check, no cooldown.
 # Usage: _send_desktop_notification "Title" "Body"

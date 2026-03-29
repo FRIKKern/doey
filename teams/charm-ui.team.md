@@ -6,7 +6,6 @@ workers: 3
 type: local
 manager_model: opus
 worker_model: opus
-watchdog_model: sonnet
 ---
 
 ## Panes

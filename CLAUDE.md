@@ -40,7 +40,7 @@ Things that have tricked us before:
 | Role | Pane | Description |
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
-| Boss | `0.1` | User-facing relay. Receives user intent, forwards to SM, reports results |
+| Boss | `0.1` | User-facing Project Manager. Receives user intent, manages tasks, reports results |
 | Session Manager | `0.2` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work. Not user-facing — users interact via Boss |
 | Watchdog | `0.3+` | DEPRECATED — Watchdog functionality is no longer active. Hook files retained for reference |
 | Window Manager | `W.0` | Plans, delegates, validates all context. Never writes code |

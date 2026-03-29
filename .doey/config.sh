@@ -28,9 +28,6 @@
 # Maximum number of worker panes across all teams
 # DOEY_MAX_WORKERS=20
 
-# Maximum watchdog slots in window 0 (panes 0.2 through 0.7)
-# DOEY_MAX_WATCHDOG_SLOTS=6
-
 # =============================================================================
 # Auth & Launch Timing
 # =============================================================================
@@ -44,17 +41,8 @@
 # Seconds to wait before launching the Window Manager in a new team
 # DOEY_MANAGER_LAUNCH_DELAY=3
 
-# Seconds to wait before launching the Watchdog in a new team
-# DOEY_WATCHDOG_LAUNCH_DELAY=3
-
 # Seconds the Window Manager waits after launch before accepting tasks
 # DOEY_MANAGER_BRIEF_DELAY=15
-
-# Seconds the Watchdog waits after launch before its first scan cycle
-# DOEY_WATCHDOG_BRIEF_DELAY=20
-
-# Seconds between each Watchdog scan cycle
-# DOEY_WATCHDOG_LOOP_DELAY=25
 
 # =============================================================================
 # Dynamic Grid Behavior
@@ -76,9 +64,6 @@
 # Seconds between info panel / settings panel refresh cycles
 # DOEY_INFO_PANEL_REFRESH=300
 
-# Seconds between watchdog scan cycles (poll interval for trigger file)
-# DOEY_WATCHDOG_SCAN_INTERVAL=30
-
 # =============================================================================
 # Models
 # =============================================================================
@@ -88,9 +73,6 @@
 
 # Model for Worker instances (task execution)
 # DOEY_WORKER_MODEL=opus
-
-# Model for Watchdog instances (monitoring — lightweight is fine)
-DOEY_WATCHDOG_MODEL=sonnet
 
 # Model for Session Manager (cross-team orchestration)
 # DOEY_SESSION_MANAGER_MODEL=opus

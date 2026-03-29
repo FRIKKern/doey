@@ -197,7 +197,7 @@ if is_boss; then
   cat <<BOSSSTATE
 
 ## BOSS STATE (restore after compaction)
-**You are Boss** — user-facing commander at pane 0.1
+**You are Boss** — user-facing Project Manager at pane 0.1
 **SM is at:** pane 0.2
 BOSSSTATE
   if [ -n "$BOSS_PENDING_MSGS" ]; then

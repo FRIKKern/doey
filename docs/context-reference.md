@@ -215,7 +215,7 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | Symptom | Check |
 |---------|-------|
 | Manager writes code itself | Memory lacks delegation-first rules |
-| Manager dispatches to Watchdog | `WATCHDOG_PANE` wrong in session.env (deprecated — watchdog no longer active) |
+| Manager dispatches to invalid pane | Check `WORKER_PANES` in session.env |
 | Manager sends empty tasks | Task text empty before Enter |
 | All panes think they're Manager | Hook missing `-t "$TMUX_PANE"` |
 | Hooks not firing | `.claude/settings.local.json` missing (`doey init`) |

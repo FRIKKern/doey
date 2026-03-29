@@ -771,11 +771,6 @@ func (m TeamModel) renderWorkerPanel(entry runtime.TeamEntry, w int) string {
 		lines = append(lines, m.renderPaneStatus(entry.WindowIdx, fmt.Sprintf("%d", pi), "Worker", w))
 	}
 
-	// Watchdog
-	if tc.WatchdogPane != "" {
-		lines = append(lines, m.renderPaneStatus(entry.WindowIdx, tc.WatchdogPane, "Watchdog", w))
-	}
-
 	return lipgloss.NewStyle().Padding(1, 2).Render(strings.Join(lines, "\n"))
 }
 
