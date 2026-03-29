@@ -83,18 +83,30 @@ func TeamBadge(kind string) string {
 // TaskIcon returns a styled icon for task status.
 func TaskIcon(status string) string {
 	switch status {
-	case "pending":
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Warning).
-			Render("⬤")
 	case "active":
+		return lipgloss.NewStyle().
+			Foreground(defaultTheme.Muted).
+			Render("○")
+	case "in_progress":
 		return lipgloss.NewStyle().
 			Foreground(defaultTheme.Success).
 			Render("●")
+	case "pending_user_confirmation":
+		return lipgloss.NewStyle().
+			Foreground(defaultTheme.Warning).
+			Render("⬤")
 	case "done":
 		return lipgloss.NewStyle().
 			Foreground(defaultTheme.Muted).
 			Render("○")
+	case "cancelled":
+		return lipgloss.NewStyle().
+			Foreground(defaultTheme.Muted).
+			Render("○")
+	case "failed":
+		return lipgloss.NewStyle().
+			Foreground(defaultTheme.Danger).
+			Render("✕")
 	default:
 		return lipgloss.NewStyle().
 			Foreground(defaultTheme.Muted).

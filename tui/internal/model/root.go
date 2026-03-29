@@ -134,7 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case MoveTaskMsg:
-		return m, MoveTaskCmd(msg.ID, msg.Section)
+		return m, MoveTaskCmd(msg.ID, msg.Status)
 
 	case MoveTaskResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
