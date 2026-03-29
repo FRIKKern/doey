@@ -3587,7 +3587,7 @@ add_team_from_def() {
   tmux select-layout -t "${session}:${window_index}" tiled 2>/dev/null || true
 
   # Write team env with TEAM_DEF field
-  write_team_env "$runtime_dir" "$window_index" "$td_grid" "${wdg_slot:-}" \
+  write_team_env "$runtime_dir" "$window_index" "$td_grid" \
     "$worker_pane_list" "$worker_count" "0" "" "" "$td_name" "" \
     "$td_worker_model" "$td_manager_model" "$td_type" "$td_name"
   _register_team_window "$runtime_dir" "$window_index"
