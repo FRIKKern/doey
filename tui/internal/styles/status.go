@@ -113,3 +113,43 @@ func TaskIcon(status string) string {
 			Render("○")
 	}
 }
+
+// CategoryColor returns the adaptive color for a given task category.
+func CategoryColor(category string) lipgloss.AdaptiveColor {
+	switch category {
+	case "bug":
+		return defaultTheme.Danger
+	case "feature":
+		return defaultTheme.Primary
+	case "refactor":
+		return defaultTheme.Accent
+	case "docs":
+		return defaultTheme.Success
+	case "infrastructure":
+		return defaultTheme.Warning
+	default:
+		return defaultTheme.Muted
+	}
+}
+
+// CategoryBadge renders a colored category label.
+func CategoryBadge(category string) string {
+	if category == "" {
+		return ""
+	}
+	color := CategoryColor(category)
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Bold(true).
+		Render("[" + category + "]")
+}
+
+// TagBadge renders a single tag with muted styling.
+func TagBadge(tag string) string {
+	if tag == "" {
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Foreground(defaultTheme.Muted).
+		Render("#" + tag)
+}

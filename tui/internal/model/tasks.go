@@ -463,6 +463,13 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 
 	icon := statusIcon(task.Status, t)
 	id := t.Dim.Render(fmt.Sprintf("#%s", task.ID))
+
+	// Category badge
+	catBadge := ""
+	if task.Category != "" {
+		catBadge = " " + styles.CategoryBadge(task.Category)
+	}
+
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(task.Title)
 
 	age := ""
@@ -488,7 +495,29 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		teamBadge = " " + lipgloss.NewStyle().Foreground(t.Accent).Render("["+task.Team+"]")
 	}
 
-	return "  " + icon + " " + id + " " + title + subtaskBadge + teamBadge + " " + age
+	// Tags (max 3 in list view)
+	tagStr := ""
+	if len(task.Tags) > 0 {
+		limit := len(task.Tags)
+		if limit > 3 {
+			limit = 3
+		}
+		var tagParts []string
+		for _, tag := range task.Tags[:limit] {
+			tagParts = append(tagParts, styles.TagBadge(tag))
+		}
+		tagStr = " " + strings.Join(tagParts, " ")
+	}
+
+	row := "  " + icon + " " + id + catBadge + " " + title + subtaskBadge + teamBadge + tagStr + " " + age
+
+	// Merged tasks are dimmed with a merge indicator
+	if task.MergedInto != "" {
+		row = lipgloss.NewStyle().Faint(true).Render(row) +
+			t.Dim.Render(" -> #"+task.MergedInto)
+	}
+
+	return row
 }
 
 // renderInputBar renders the inline text input for creating a task.
@@ -554,6 +583,24 @@ func (m TasksModel) viewDetail() string {
 	if task.Team != "" {
 		fields = append(fields, labelStyle.Render("Team")+
 			lipgloss.NewStyle().Foreground(t.Accent).Render(task.Team))
+	}
+	if task.Category != "" {
+		fields = append(fields, labelStyle.Render("Category")+styles.CategoryBadge(task.Category))
+	}
+	if len(task.Tags) > 0 {
+		var tagParts []string
+		for _, tag := range task.Tags {
+			tagParts = append(tagParts, styles.TagBadge(tag))
+		}
+		fields = append(fields, labelStyle.Render("Tags")+strings.Join(tagParts, " "))
+	}
+	if task.MergedInto != "" {
+		fields = append(fields, labelStyle.Render("Merged into")+
+			lipgloss.NewStyle().Foreground(t.Accent).Render("#"+task.MergedInto))
+	}
+	if task.ParentTaskID != "" {
+		fields = append(fields, labelStyle.Render("Parent")+
+			t.Dim.Render("#"+task.ParentTaskID))
 	}
 	if task.Created > 0 {
 		fields = append(fields, labelStyle.Render("Created")+
