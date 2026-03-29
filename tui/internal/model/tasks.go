@@ -86,7 +86,8 @@ type TasksModel struct {
 	// Layout
 	width   int
 	height  int
-	focused bool
+	focused  bool
+	showHelp bool // ? key toggles keyboard help overlay
 }
 
 // NewTasksModel creates a tasks panel starting in list mode.
@@ -185,6 +186,17 @@ func (m TasksModel) Update(msg tea.Msg) (TasksModel, tea.Cmd) {
 
 	kmsg, ok := msg.(tea.KeyMsg)
 	if !ok {
+		return m, nil
+	}
+
+	// Help overlay toggle (works in any mode)
+	if kmsg.String() == "?" {
+		m.showHelp = !m.showHelp
+		return m, nil
+	}
+	// Dismiss help with any key when showing
+	if m.showHelp {
+		m.showHelp = false
 		return m, nil
 	}
 
@@ -468,6 +480,9 @@ func nextStatus(s string) string {
 
 // View renders list, expanded card, or detail mode.
 func (m TasksModel) View() string {
+	if m.showHelp {
+		return m.viewHelp()
+	}
 	if m.summaryMode {
 		return m.viewList()
 	}
@@ -489,9 +504,66 @@ func (m TasksModel) viewExpanded() string {
 		Render(fmt.Sprintf("TASK — #%s", task.ID))
 	rule := t.Faint.Render(strings.Repeat("─", w))
 	body := m.expanded.ViewportSlice()
-	content := header + "\n" + rule + "\n" + body
+	hint := styles.FooterHintBarStyle(t).
+		Render("↑/↓ scroll  enter/esc close  tab subtask  m move  s status  ? help")
+	content := header + "\n" + rule + "\n" + body + "\n" + hint
 	return lipgloss.NewStyle().
 		Width(w).Height(m.height).Render(content)
+}
+
+// viewHelp renders a floating keyboard help overlay.
+func (m TasksModel) viewHelp() string {
+	t := m.theme
+	w := m.width
+	if w > styles.MaxCardWidth {
+		w = styles.MaxCardWidth
+	}
+
+	title := lipgloss.NewStyle().Bold(true).Foreground(t.Primary).
+		Render("⌨  Keyboard Shortcuts")
+	sep := t.Faint.Render(strings.Repeat("─", w-6))
+
+	keyStyle := styles.HelpKeyStyle(t)
+	descStyle := styles.HelpDescStyle(t)
+
+	bindings := []struct{ key, desc string }{
+		{"j / k", "Navigate cards up/down"},
+		{"Enter", "Expand selected card"},
+		{"Esc", "Collapse / go back"},
+		{"n", "Create new task"},
+		{"m", "Move task (active → in_progress → done)"},
+		{"s", "Cycle through all statuses"},
+		{"d", "Dispatch task to a team"},
+		{"x", "Cancel task"},
+		{"Tab", "Next subtask (expanded view)"},
+		{"Shift+Tab", "Previous subtask (expanded view)"},
+		{"↑ / ↓", "Scroll expanded card"},
+		{"?", "Toggle this help"},
+	}
+
+	var rows []string
+	for _, b := range bindings {
+		rows = append(rows, keyStyle.Render(b.key)+descStyle.Render(b.desc))
+	}
+
+	hint := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
+		Render("Press any key to dismiss")
+
+	content := title + "\n" + sep + "\n\n" + strings.Join(rows, "\n") + "\n\n" + hint
+
+	overlay := styles.HelpOverlayStyle(t, w).Render(content)
+
+	// Center vertically
+	topPad := (m.height - lipgloss.Height(overlay)) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		PaddingTop(topPad).
+		Render(overlay)
 }
 
 func (m TasksModel) viewList() string {
@@ -501,22 +573,27 @@ func (m TasksModel) viewList() string {
 		w = 30
 	}
 
+	// Cap card content area for readability
+	listWidth := w
+	if listWidth > styles.MaxCardWidth {
+		listWidth = styles.MaxCardWidth
+	}
+
 	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TASKS")
-	rule := t.Faint.Render(strings.Repeat("\u2500", w))
+	rule := t.Faint.Render(strings.Repeat("\u2500", listWidth))
 
 	if len(m.entries) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No tasks yet. Press n to create one.")
-		hint := ""
-		if m.focused {
-			hint = "\n" + lipgloss.NewStyle().
-				Foreground(t.Muted).Faint(true).PaddingLeft(3).PaddingTop(1).
-				Render("n = new task")
-		}
-		content := header + "\n" + rule + "\n" + empty + hint
+		icon := styles.EmptyStateIcon(t)
+		title := styles.EmptyStateTitle(t)
+		hint := styles.EmptyStateHint(t)
+
+		emptyBox := lipgloss.NewStyle().
+			Align(lipgloss.Center).
+			Width(w).
+			PaddingTop(2).
+			Render(icon + "\n\n" + title + "\n" + hint)
+
+		content := header + "\n" + rule + "\n" + emptyBox
 		if m.creating {
 			content += "\n" + m.renderInputBar()
 		}
@@ -530,11 +607,8 @@ func (m TasksModel) viewList() string {
 
 	hint := ""
 	if m.focused && !m.creating {
-		hint = lipgloss.NewStyle().
-			Foreground(t.Muted).
-			Faint(true).
-			Padding(1, 3).
-			Render("enter = detail  n = new  m = move  s = status  d = dispatch  x = cancel")
+		hint = styles.FooterHintBarStyle(t).
+			Render("j/k navigate  enter detail  n new  m move  s status  d dispatch  x cancel  ? help")
 	}
 
 	content := header + "\n" + rule + "\n" + summary + "\n" + listView + "\n" + hint
