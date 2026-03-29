@@ -201,7 +201,7 @@ cat /tmp/doey/*/debug/*/hooks.jsonl | sort -t'"' -k4
 <summary><strong>Slash Commands</strong></summary>
 
 **Tasks:** `/doey-task`, `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
-**Monitor:** `/doey-monitor`, `/doey-status`, `/doey-watchdog-compact`, `/doey-debug`
+**Monitor:** `/doey-monitor`, `/doey-status`, `/doey-sm-compact`, `/doey-debug`
 **Infra:** `/doey-add-window`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
 **Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-login`, `/doey-simplify-everything`
 **Config:** `/doey-settings`
