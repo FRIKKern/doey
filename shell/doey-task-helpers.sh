@@ -237,3 +237,33 @@ task_upgrade_schema() {
 
   return 0
 }
+
+# ── task_dispatch_msg ─────────────────────────────────────────────────
+# Generate a dispatch_task message body for sending to Session Manager.
+# Usage: task_dispatch_msg <runtime_dir> <task_id> [mode] [priority]
+#   mode: parallel|sequential|phased (default: sequential)
+#   priority: P0|P1|P2|P3 (default: P1)
+# Output: message body string (pipe to .msg file)
+task_dispatch_msg() {
+  local runtime_dir="$1" task_id="$2"
+  local mode="${3:-sequential}" priority="${4:-P1}"
+  local td="${runtime_dir}/tasks"
+  local task_file="${td}/${task_id}.task"
+  local json_file="${td}/${task_id}.json"
+
+  if [ ! -f "$task_file" ]; then
+    echo "Error: task file not found: ${task_file}" >&2
+    return 1
+  fi
+
+  local title="" summary=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "${line%%=*}" in
+      TASK_TITLE) title="${line#*=}" ;;
+      TASK_SUMMARY) summary="${line#*=}" ;;
+    esac
+  done < "$task_file"
+
+  printf 'FROM: Boss\nSUBJECT: dispatch_task\nTASK_ID=%s\nTASK_FILE=%s\nTASK_JSON=%s\nDISPATCH_MODE=%s\nPRIORITY=%s\nSUMMARY=%s\n' \
+    "$task_id" "$task_file" "$json_file" "$mode" "$priority" "${summary:-$title}"
+}
