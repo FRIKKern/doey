@@ -67,11 +67,13 @@ func formatAge(d time.Duration) string {
 // TasksModel displays a kanban-style task board with sections, CRUD, and subtask nesting.
 type TasksModel struct {
 	// Data
-	entries    []runtime.PersistentTask              // from persistent store + merged runtime
-	subtaskMap map[string][]runtime.Subtask          // task ID -> subtasks
-	heartbeats map[string]runtime.HeartbeatState     // task ID -> live heartbeat
-	messages   []runtime.Message                     // IPC messages from snapshot
-	theme      styles.Theme
+	entries       []runtime.PersistentTask              // from persistent store + merged runtime
+	subtaskMap    map[string][]runtime.Subtask          // task ID -> subtasks
+	heartbeats    map[string]runtime.HeartbeatState     // task ID -> live heartbeat
+	messages      []runtime.Message                     // IPC messages from snapshot
+	paneStatuses  map[string]runtime.PaneStatus         // pane ID -> live status
+	paneResults   map[string]runtime.PaneResult         // pane ID -> results
+	theme         styles.Theme
 
 	// Card-based list
 	list list.Model
@@ -153,6 +155,10 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 
 	// Store IPC messages for expanded card filtering
 	m.messages = snap.Messages
+
+	// Cache live pane data for worker assignment indicators
+	m.paneStatuses = snap.Panes
+	m.paneResults = snap.Results
 
 	// Convert entries to list items
 	items := make([]list.Item, len(m.entries))
@@ -655,8 +661,11 @@ func (m TasksModel) viewExpanded() string {
 		w = 30
 	}
 	task := m.expanded.Item.Task
-	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(fmt.Sprintf("TASK — #%s", task.ID))
+	headerText := fmt.Sprintf("TASK — #%s", task.ID)
+	if ws := m.workerSummaryForTask(task.ID); ws != "" {
+		headerText += "  " + ws
+	}
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render(headerText)
 	rule := t.Faint.Render(strings.Repeat("─", w))
 	body := m.expanded.ViewportSlice()
 	closeHint := zone.Mark("detail-close", "enter/esc close")
@@ -774,7 +783,7 @@ func (m TasksModel) viewList() string {
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
 
-// taskSummary returns section counts.
+// taskSummary returns section counts with live worker assignment info.
 func (m TasksModel) taskSummary() string {
 	t := m.theme
 	active, complete := 0, 0
@@ -798,10 +807,47 @@ func (m TasksModel) taskSummary() string {
 		parts = append(parts, styles.SectionPill(fmt.Sprintf("%d complete", complete), t.Success))
 	}
 
+	// Count total busy workers across all tasks
+	busyWorkers := 0
+	for _, hs := range m.heartbeats {
+		busyWorkers += hs.ActiveWorkers
+	}
+	if busyWorkers > 0 {
+		label := fmt.Sprintf("%d worker", busyWorkers)
+		if busyWorkers != 1 {
+			label += "s"
+		}
+		parts = append(parts, styles.SectionPill(label+" active", t.Warning))
+	}
+
 	if len(parts) > 0 {
 		return total + "  " + strings.Join(parts, " ")
 	}
 	return total
+}
+
+// workerSummaryForTask returns a compact live status string for a task.
+// Checks heartbeat data and pane statuses for workers assigned to this task.
+func (m TasksModel) workerSummaryForTask(taskID string) string {
+	t := m.theme
+	hs, ok := m.heartbeats[taskID]
+	if !ok || hs.ActiveWorkers == 0 {
+		// Check pane statuses as fallback — match task title
+		return ""
+	}
+
+	dot := lipgloss.NewStyle().Foreground(t.Success).Render("●")
+	if hs.Health == "degraded" || hs.Health == "amber" {
+		dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+	} else if hs.Health == "stale" || hs.Health == "red" {
+		dot = lipgloss.NewStyle().Foreground(t.Danger).Render("●")
+	}
+
+	label := fmt.Sprintf("%d worker", hs.ActiveWorkers)
+	if hs.ActiveWorkers != 1 {
+		label += "s"
+	}
+	return dot + " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(label+" active")
 }
 
 // sectionLabel returns the display name for a derived section.
@@ -874,6 +920,11 @@ func (m TasksModel) viewDetail() string {
 	fields = append(fields, labelStyle.Render("Title")+valueStyle.Render(task.Title))
 	fields = append(fields, labelStyle.Render("Status")+
 		statusIcon(task.Status, t)+" "+lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
+
+	// Live worker assignment
+	if ws := m.workerSummaryForTask(task.ID); ws != "" {
+		fields = append(fields, labelStyle.Render("Workers")+ws)
+	}
 
 	// Type
 	if task.Type != "" {
