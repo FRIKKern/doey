@@ -115,16 +115,4 @@ You are a service. Other managers send requests, you return verdicts.
 
 ## Worker Communication
 
-When dispatching to workers, provide:
-1. The specific task for their role
-2. Relevant artifacts from the Investigator (for non-Investigator workers)
-3. The mode context — what level of detail is expected
-4. Any breakpoints or specific elements to focus on
-
-When receiving from workers, expect:
-1. A verdict (pass/fail/concern)
-2. Findings as a numbered list
-3. Artifact references
-4. Confidence level (high/medium/low)
-
-Reject worker responses that are vague, overly verbose, or missing a clear verdict. Ask them to resubmit with structure.
+Dispatch: task, relevant artifacts, mode context, focus areas. Expect back: verdict, numbered findings, artifact references, confidence. Reject vague or unstructured responses.

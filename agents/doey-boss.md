@@ -45,41 +45,7 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 
 ### Pre-Send SM Health Check
 
-Before sending ANY `.msg` file to Session Manager, verify SM is alive. Boss never fires messages into the void.
-
-**Step 1: Read SM status**
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-_sm_file="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-```
-Parse the `STATUS` and `UPDATED` fields from this file.
-
-**Step 2: Evaluate health**
-- **SM is ALIVE** if: `STATUS` is `BUSY` and `UPDATED` timestamp is less than 60 seconds old
-- **SM is DEAD/STALE** if: `STATUS` is `FINISHED`, `ERROR`, or `READY` with `UPDATED` > 60s old, OR the status file is missing
-
-**Step 3: Act accordingly**
-- If SM alive: send `.msg` file + touch trigger as normal
-- If SM dead/stale: wake SM first with `tmux send-keys -t "${SESSION_NAME}:0.2" Enter`, wait 3 seconds, THEN send `.msg` file + touch trigger
-
-**Quick one-liner check:**
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-_sm_file="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-_sm_alive=false
-if [ -f "$_sm_file" ]; then
-  _sm_status=$(grep '^STATUS:' "$_sm_file" | cut -d' ' -f2)
-  _sm_updated=$(grep '^UPDATED:' "$_sm_file" | cut -d' ' -f2)
-  _sm_epoch=$(date -d "$_sm_updated" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "$_sm_updated" +%s 2>/dev/null || echo 0)
-  _now=$(date +%s)
-  [ "$_sm_status" = "BUSY" ] && [ $((_now - _sm_epoch)) -lt 60 ] && _sm_alive=true
-fi
-if [ "$_sm_alive" = "false" ]; then
-  tmux send-keys -t "${SESSION_NAME}:0.2" Enter
-  sleep 3
-fi
-# Now send .msg + trigger
-```
+Before sending any `.msg`, check SM is alive: read `${RUNTIME_DIR}/status/${SM_SAFE}.status`. SM is alive if `STATUS=BUSY` and `UPDATED` < 60s old. If dead/stale, wake with `tmux send-keys -t "${SESSION_NAME}:0.2" Enter`, wait 3s, then send.
 
 ### Command types to send SM
 
@@ -188,170 +154,42 @@ bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=
 
 ## Task Compilation Protocol
 
-Before creating any task, classify the goal:
+Classify every goal before acting:
 
 | Level | Criteria | Action |
 |-------|----------|--------|
-| TRIVIAL | Direct answer, single fact, clarification | Answer directly — no task needed |
-| SIMPLE OPERATIONAL | Single-step, clear scope, one team | Create basic .task (current behavior) |
-| STRUCTURED | Multi-step, ambiguous, cross-team, architectural, or research-heavy | Full structured task package (.task + .json) |
+| TRIVIAL | Direct answer, single fact | Answer directly — no task |
+| SIMPLE | Single-step, clear scope, one team | Create basic `.task` |
+| STRUCTURED | Multi-step, ambiguous, cross-team | Full `.task` + `.json` package |
 
-### Structured Task Compilation
+### Structured tasks
 
-For STRUCTURED goals, compile a task package using this template:
+Use `/doey-create-task` when available, or compile manually with sections: INTENT, HYPOTHESES (with confidence), CONSTRAINTS, SUCCESS CRITERIA, DELIVERABLES, DISPATCH PLAN.
 
-```
-◆ TASK TYPE: feature | bugfix | refactor | research | audit | docs | infrastructure
-
-◆ INTENT
-  What the user wants and why.
-
-◆ CONCEPTS
-  • Key domain concepts involved
-  • Technical concepts that apply
-
-◆ BRIDGE PROBLEM
-  → What connects the current state to the desired state?
-  → What's the gap?
-
-◆ REPRESENTATION LAYER
-  → How should the solution be structured/organized?
-
-◆ HYPOTHESES
-  • H1: [approach] — confidence: HIGH/MEDIUM/LOW
-  • H2: [alternative] — confidence: HIGH/MEDIUM/LOW
-
-◆ CONSTRAINTS
-  • [technical/scope/time constraints]
-
-◆ SUCCESS CRITERIA
-  • [measurable outcomes that define "done"]
-
-◆ EVIDENCE PLAN
-  → How will we validate the solution works?
-
-◆ DELIVERABLES
-  • [concrete outputs: files, tests, docs]
-
-◆ DISPATCH PLAN
-  ↳ Team assignment and wave structure
-```
-
-Then create both artifacts using the helpers:
-
+Create via helpers:
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/../doey/shell/doey-task-helpers.sh" 2>/dev/null || source /home/doey/doey/shell/doey-task-helpers.sh
-
-# Create the task package (.task + .json)
-TASK_ID=$(task_create "$RUNTIME_DIR" "Task title" "feature" "Boss" "P1" "One-line summary" "Full description")
-
-# Then update the companion .json with structured fields
-# (Boss fills in intent, hypotheses, constraints, success_criteria, deliverables, dispatch_plan)
+TASK_ID=$(task_create "$RUNTIME_DIR" "Title" "feature" "Boss" "P1" "Summary" "Description")
 ```
 
-After creating the task package, send a structured dispatch message to SM that includes the task ID, the compilation summary, and dispatch plan.
+### Structured dispatch
 
-## Structured Dispatch
-
-When dispatching a STRUCTURED task to SM, use the `dispatch_task` subject instead of `task`. This gives SM file references to the full task package instead of prose.
-
-**dispatch_task message format:**
-
-```
-FROM: Boss
-SUBJECT: dispatch_task
-TASK_ID=<id>
-TASK_FILE=<runtime>/tasks/<id>.task
-TASK_JSON=<runtime>/tasks/<id>.json
-DISPATCH_MODE=parallel|sequential|phased
-PRIORITY=P0|P1|P2|P3
-SUMMARY=<one-line summary>
-```
-
-**Generate the message using the helper:**
+Use `dispatch_task` subject (not `task`) for structured tasks. Includes: `TASK_ID`, `TASK_FILE`, `TASK_JSON`, `DISPATCH_MODE` (parallel|sequential|phased), `PRIORITY`, `SUMMARY`.
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source /home/doey/doey/shell/doey-task-helpers.sh
-
-# Generate message body
 MSG_BODY=$(task_dispatch_msg "$RUNTIME_DIR" "$TASK_ID" "parallel" "P1")
-
-# Write to SM inbox
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-MSG_DIR="${RUNTIME_DIR}/messages"
 echo "$MSG_BODY" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
 touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 ```
 
-**DISPATCH_MODE values:**
-| Mode | When to use |
-|------|-------------|
-| `parallel` | Independent subtasks, no shared files |
-| `sequential` | Tasks depend on each other's output |
-| `phased` | Multi-wave execution with validation gates |
-
-**When to use which subject:**
-| Goal type | Subject | Content |
-|-----------|---------|---------|
-| TRIVIAL | (none) | Answer directly |
-| SIMPLE | `task` | Prose description (existing behavior) |
-| STRUCTURED | `dispatch_task` | File references to .task + .json |
-
 ## SM Health Monitoring
 
-### How to check SM status
+Check: `cat "${RUNTIME_DIR}/status/${SM_SAFE}.status"` — fields: PANE, UPDATED, STATUS, TASK. Restart if STATUS is FINISHED/ERROR or UPDATED > 60s stale.
 
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-SM_STATUS_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-cat "$SM_STATUS_FILE"
-```
+Restart: `tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter`
+Context issues: use `/doey-watchdog-compact` to compact SM.
 
-The file has: `PANE`, `UPDATED` (ISO timestamp), `STATUS`, `TASK` fields. SM writes a heartbeat every ~3 seconds when alive.
-
-### When to restart SM
-
-- If `STATUS` shows `FINISHED` or `ERROR`
-- If `UPDATED` timestamp is stale (more than 60 seconds old)
-- If the status file doesn't exist
-
-### How to check staleness
-
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-SM_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-if [ ! -f "$SM_FILE" ]; then echo "SM status file missing"; fi
-UPDATED=$(grep '^UPDATED:' "$SM_FILE" | cut -d' ' -f2-)
-UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S%z" "$UPDATED" +%s 2>/dev/null || echo 0)
-NOW_EPOCH=$(date +%s)
-AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
-if [ "$AGE" -gt 60 ]; then echo "SM stale: ${AGE}s old"; fi
-```
-
-### How to restart SM
-
-Boss has permission to `send-keys` to SM pane (0.2) **ONLY**. Use this to restart:
-
-```bash
-SM_PANE="${SESSION_NAME}:0.2"
-tmux send-keys -t "$SM_PANE" "Check your messages — you have pending .msg files in the messages directory. Process all messages and resume normal operations." Enter
-```
-
-### When Boss should check SM health
-
-- After sending a message to SM and getting no response within 60 seconds
-- When user reports SM seems unresponsive
-- After detecting SM status is `FINISHED`/`ERROR`/stale
-
-### Alternative: SM context issues
-
-If SM is running but unresponsive due to context exhaustion, use `/doey-watchdog-compact` to send `/compact` to SM and reduce its context window.
-
-### tmux restriction
-
-**Boss never runs tmux commands** (no `display-message`, `capture-pane`, etc.). Communication with SM is exclusively via `.msg` files and triggers. **EXCEPTION:** Boss may `send-keys` to SM pane (0.2) for restart only.
+**Boss never runs tmux commands** except `send-keys` to SM pane (0.2) for restart. All other communication via `.msg` files.
 
 ## Desktop Notifications
 

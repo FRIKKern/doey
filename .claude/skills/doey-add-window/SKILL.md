@@ -3,20 +3,12 @@ name: doey-add-window
 description: Add a new team window (Manager + Workers), optionally in a git worktree or as a freelancer pool.
 ---
 
-## Usage
 `/doey-add-window [grid] [--worktree] [--freelancer]` — default grid: 4x2
 
-## Context
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- Windows: !`tmux list-windows -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{window_index} #{window_name}' 2>/dev/null|| true`
 
-Session config:
-!`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-
-Current windows:
-!`tmux list-windows -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{window_index} #{window_name}' 2>/dev/null|| true`
-
-## Prompt
-
-Add a new team window. **Do NOT ask for confirmation — just do it.**
+**Do NOT ask for confirmation — just do it.**
 
 ## Step 1: Parse and validate
 bash: RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && _sv() { grep "^$1=" "${RUNTIME_DIR}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; } && SESSION_NAME=$(_sv SESSION_NAME) && PROJECT_DIR=$(_sv PROJECT_DIR) && PROJECT_NAME=$(_sv PROJECT_NAME) && GRID="${USER_GRID:-4x2}" && COLS=$(echo "$GRID" | cut -dx -f1) && ROWS=$(echo "$GRID" | cut -dx -f2) && case "$COLS" in [1-9]|[1-9][0-9]) ;; *) echo "ERROR: Invalid cols: $COLS"; exit 1 ;; esac && case "$ROWS" in [1-9]|[1-9][0-9]) ;; *) echo "ERROR: Invalid rows: $ROWS"; exit 1 ;; esac && TOTAL=$((COLS * ROWS)) && WORKTREE_MODE="false" && FREELANCER_MODE="false" && for _aw_arg in "$@"; do [ "$_aw_arg" = "--worktree" ] && WORKTREE_MODE="true"; [ "$_aw_arg" = "--freelancer" ] && FREELANCER_MODE="true"; done && if [ "$FREELANCER_MODE" = "true" ]; then WORKER_COUNT=$TOTAL; else [ "$TOTAL" -lt 2 ] && { echo "ERROR: Need at least 2 panes"; exit 1; } || true; WORKER_COUNT=$((TOTAL - 1)); fi && echo "Grid=${GRID} Total=${TOTAL} Workers=${WORKER_COUNT} Worktree=${WORKTREE_MODE} Freelancer=${FREELANCER_MODE}"
@@ -56,13 +48,10 @@ bash: WT_DIR="" && WT_BRANCH="" && if [ "$WORKTREE_MODE" = "true" ]; then WT_BRA
 ## Step 7: Verify boot and report
 bash: sleep 8 && NOT_READY=0 && DOWN_PANES="" && for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null); OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null); if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"; fi; done ; if [ "$NOT_READY" -eq 0 ]; then echo "All panes booted"; else echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"; fi
 
-If not ready: check listed panes with `tmux capture-pane -t <pane> -p`, retry send-keys.
-
-Rename window if worktree succeeded. Output summary: grid, manager, worker range, worktree info.
+If not ready: `tmux capture-pane -t <pane> -p`, retry send-keys. Output summary: grid, manager, worker range, worktree info.
 
 ### Rules
-- Standard team: pane 0 = Manager, 1+ = Workers. Freelancer: all panes = Workers.
-- Write team_W.env before launching.
-- Never hardcode window indices — derive from `tmux display-message`. Bash 3.2 compatible.
-- Agent names: `t${WIN}-manager`. Worktree path: `/tmp/doey/${PROJECT_NAME}/worktrees/team-${WIN}`
-- Copy `.claude/settings.local.json` into worktrees (gitignored)
+- Standard: pane 0 = Manager, 1+ = Workers. Freelancer: all = Workers
+- Write team_W.env before launching; never hardcode window indices
+- Agent names: `t${WIN}-manager`. Worktree: `/tmp/doey/${PROJECT_NAME}/worktrees/team-${WIN}`
+- Copy `.claude/settings.local.json` into worktrees

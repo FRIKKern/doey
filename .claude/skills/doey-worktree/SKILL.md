@@ -126,6 +126,5 @@ done
 Output: mode (isolate/return), window, branch, directory, booted/failed count.
 
 ### Rules
-- Never transform window 0. Kill by PID only (SIGTERM → SIGKILL). No `eval`/`source` on team env.
-- Atomic writes (temp file + mv). Copy `.claude/settings.local.json` to worktrees.
-- Branch preserved on `--back` — user merges manually. Bash 3.2 compatible.
+- Never transform window 0. Kill by PID (SIGTERM → SIGKILL). Atomic writes (tmp + mv)
+- Copy `.claude/settings.local.json` to worktrees. Branch preserved on `--back`. Bash 3.2

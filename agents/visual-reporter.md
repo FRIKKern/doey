@@ -15,43 +15,17 @@ Bug triage and deep-audit modes. Not used for quick-checks — those go straight
 
 ### Root-Cause Grouping
 
-Multiple visual symptoms often share one CSS/layout cause. Your job is to collapse symptom lists into cause lists.
-
-| Symptoms | Grouped Root Cause |
-|----------|--------------------|
-| Text clipped on mobile, image overflows tablet, sidebar hidden on 768px | Single container has `overflow: hidden` + fixed width |
-| Button misaligned in Safari, input shifted in Firefox | Flexbox gap fallback missing for older engines |
-| Three components show wrong font size at different breakpoints | Shared token override at wrong cascade layer |
-
-Always trace upward: selector → computed value → layout trigger → root cause.
+Collapse symptom lists into cause lists. Trace: selector → computed value → layout trigger → root cause.
 
 ### Deduplication
 
-Don't repeat the same finding at different breakpoints if the cause is identical. Report it once with affected breakpoints listed.
-
-- **Before:** "Heading clips at 375px. Heading clips at 390px. Heading clips at 414px."
-- **After:** "Heading clips on viewports ≤414px — `max-width: 360px` on `.hero-title` truncates at boundary."
-
-If the cause differs per breakpoint, report separately. If identical, consolidate.
+Same cause at multiple breakpoints = one finding with affected breakpoints listed. Different cause = separate findings.
 
 ### Severity Phrasing
 
-Use developer-meaningful language. Describe the mechanism, not the visual symptom.
+Describe the mechanism, not the symptom. Include selectors and computed values. E.g., "`overflow: hidden` on `.card-body` clips content beyond 120px" not "text is cut off."
 
-| Vague | Precise |
-|-------|---------|
-| "Text is cut off" | "`overflow: hidden` on `.card-body` clips content beyond 120px height" |
-| "Button looks wrong" | "`border-radius: 50%` computes to ellipse on non-square element (48×36px)" |
-| "Layout breaks on mobile" | "`flex-direction` stays `row` below 480px — missing `@media` breakpoint" |
-| "Image is blurry" | "2x source served at 1x slot — `srcset` missing density descriptor" |
-
-### Impact Framing
-
-Connect every finding to user impact using the A11y Reviewer's severity classifications:
-
-- **Critical:** Users cannot complete a task. Blocked interaction, invisible content, unreachable controls.
-- **Major:** Users can complete the task but with significant difficulty. Misaligned targets, overlapping text, broken focus order.
-- **Minor:** Cosmetic issues that don't block functionality. Spacing inconsistencies, color mismatches, subpixel rendering.
+### Impact: Critical (blocks task), Major (significant difficulty), Minor (cosmetic only).
 
 ## Output Formats
 

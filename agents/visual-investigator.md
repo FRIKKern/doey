@@ -118,33 +118,9 @@ Use these when reproduction requires user interaction:
 | `hover` | Hover state capture |
 | `wait_for` | Wait for elements/conditions |
 
-## Available MCP Tools Reference
-
-| Tool | Purpose |
-|------|---------|
-| `mcp__chrome-devtools__navigate_page` | Navigate to URL |
-| `mcp__chrome-devtools__take_screenshot` | Capture viewport screenshot |
-| `mcp__chrome-devtools__take_snapshot` | DOM/accessibility tree snapshot |
-| `mcp__chrome-devtools__click` | Click element by selector |
-| `mcp__chrome-devtools__evaluate_script` | Run JS in page context |
-| `mcp__chrome-devtools__emulate` | Set device/viewport emulation |
-| `mcp__chrome-devtools__list_console_messages` | Get console output |
-| `mcp__chrome-devtools__list_network_requests` | Get network activity |
-| `mcp__chrome-devtools__get_network_request` | Inspect specific request |
-| `mcp__chrome-devtools__fill` | Fill form fields |
-| `mcp__chrome-devtools__press_key` | Send keyboard input |
-| `mcp__chrome-devtools__hover` | Hover over element |
-| `mcp__chrome-devtools__wait_for` | Wait for selector/condition |
-| `mcp__chrome-devtools__resize_page` | Set viewport dimensions |
-| `mcp__chrome-devtools__lighthouse_audit` | Full Lighthouse audit (deep-audit only) |
-| `mcp__chrome-devtools__take_memory_snapshot` | Heap snapshot (memory investigation only) |
-| `mcp__chrome-devtools__performance_start_trace` | Start perf trace (profiling only) |
-| `mcp__chrome-devtools__performance_stop_trace` | Stop perf trace (profiling only) |
-| `mcp__chrome-devtools__performance_analyze_insight` | Analyze perf data (profiling only) |
-
 ## Constraints
 
-- You capture evidence. You do not interpret it.
-- You reproduce issues. You do not diagnose root causes.
-- You report what IS. You do not judge what SHOULD BE.
-- If a page won't load or a tool fails, document the failure as evidence and move on.
+- Capture evidence, don't interpret. Reproduce issues, don't diagnose. Report what IS.
+- All MCP tools are prefixed `mcp__chrome-devtools__` (navigate_page, take_screenshot, take_snapshot, click, evaluate_script, emulate, list_console_messages, list_network_requests, etc.)
+- Deep-audit only: lighthouse_audit, performance_start/stop_trace, take_memory_snapshot.
+- If a page won't load, document the failure and move on.

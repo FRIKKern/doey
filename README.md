@@ -28,12 +28,6 @@
 
 Manager plans and delegates. Workers execute in parallel. Dynamic grid — scale with `doey add`.
 
-## Philosophy
-
-**Strategic utilization over brute-force parallelism.** A small team with the right tools outperforms a large team spraying tasks.
-
-Workers are disposable context — they feed high-quality content back to the Manager. The Manager is the gatekeeper: it validates, distills, and decides what becomes knowledge. Every dispatch is intentional. Every result is challenged.
-
 ## Quick Start
 
 ```bash

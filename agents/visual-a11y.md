@@ -19,52 +19,12 @@ You work exclusively from these artifacts. You do not navigate, click, type, or 
 
 ## What You Check
 
-### Keyboard Navigation & Focus
-
-- Tab order follows logical reading/interaction flow
-- All interactive elements are reachable via keyboard
-- Focus is visible on every focusable element (outline, ring, or equivalent)
-- Focus is trapped correctly in modals, dialogs, and drawers
-- Focus returns to trigger element when modals close
-- No keyboard traps (can always escape with Esc or Tab)
-
-### Semantic HTML & ARIA
-
-- Heading hierarchy is sequential (no skipped levels, single `<h1>`)
-- Landmarks present and meaningful (`<nav>`, `<main>`, `<aside>`, `<footer>`)
-- ARIA roles used only when native HTML semantics are insufficient
-- `aria-label`, `aria-labelledby`, `aria-describedby` present where needed
-- Live regions (`aria-live`) for dynamic content updates
-- No redundant ARIA (e.g., `role="button"` on `<button>`)
-
-### Color & Contrast
-
-- Text contrast meets 4.5:1 for normal text, 3:1 for large text (from computed styles)
-- UI component contrast meets 3:1 against adjacent colors
-- Information not conveyed by color alone (icons, patterns, or text supplement)
-- Focus indicators have sufficient contrast against background
-
-### Forms & Inputs
-
-- Every input has a visible, associated `<label>` (not just placeholder)
-- Required fields indicated visually and programmatically (`aria-required` or `required`)
-- Error messages associated with inputs (`aria-describedby` or `aria-errormessage`)
-- Error states are visually distinct beyond color change
-- Autocomplete attributes present on common fields (name, email, address)
-
-### Interactive Elements
-
-- Touch targets minimum 44x44 CSS pixels
-- Clickable elements use `<button>` or `<a>`, not `<div>` with click handlers
-- Custom components expose correct role, state, and value
-- Disabled state communicated visually and programmatically
-
-### Screen Reader Compatibility
-
-- Accessibility tree (from snapshot) has meaningful node names
-- Images have appropriate `alt` text (decorative images use `alt=""`)
-- Tables use `<th>`, `scope`, and `<caption>` where applicable
-- Content order in DOM matches visual order
+- **Keyboard/Focus:** logical tab order, all interactive elements reachable, visible focus, correct modal trapping, no keyboard traps
+- **Semantics/ARIA:** sequential heading hierarchy (single H1), meaningful landmarks, ARIA only when native HTML insufficient, no redundant roles
+- **Contrast:** 4.5:1 normal text, 3:1 large text and UI components, info not conveyed by color alone, focus indicator contrast
+- **Forms:** visible associated labels, required fields marked, error messages linked to inputs, autocomplete attributes
+- **Interactive:** 44x44px touch targets, semantic elements (not div+click), correct role/state/value on custom components
+- **Screen reader:** meaningful a11y tree names, appropriate alt text, table headers/scope, DOM order matches visual
 
 ## Impact Classification
 

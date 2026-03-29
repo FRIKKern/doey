@@ -37,26 +37,19 @@ description: What this team does
 | stop | reviewer | manager | review_complete |
 ```
 
-### Step 1: Load session and resolve team definition
+### Step 1: Load session, try CLI first
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 source "${RUNTIME_DIR}/session.env"
 TEAM_NAME="${1:?Usage: /doey-add-team <name>}"
-echo "Project: $PROJECT_DIR | Looking for team: $TEAM_NAME"
-```
 
-First try the CLI subcommand:
-
-```bash
 if command -v doey >/dev/null 2>&1 && doey add-team "$TEAM_NAME" 2>/dev/null; then
-  echo "Team spawned via doey CLI"
-  exit 0
+  echo "Team spawned via doey CLI"; exit 0
 fi
-echo "CLI subcommand not available — falling back to inline spawn"
 ```
 
-### Step 2: Find and parse the .team.md file
+### Step 2: Find and parse .team.md
 
 ```bash
 TEAM_DEF=""
@@ -65,11 +58,10 @@ for _search_dir in "$PROJECT_DIR" "$PROJECT_DIR/.doey" "${HOME}/.config/doey/tea
     [ -f "$_candidate" ] && { TEAM_DEF="$_candidate"; break 2; }
   done
 done
-[ -z "$TEAM_DEF" ] && { echo "ERROR: Team definition '${TEAM_NAME}' not found"; echo "Searched: PROJECT_DIR, PROJECT_DIR/.doey, ~/.config/doey/teams/, doey share/"; exit 1; }
-echo "Found: $TEAM_DEF"
+[ -z "$TEAM_DEF" ] && { echo "ERROR: '${TEAM_NAME}' not found"; exit 1; }
 ```
 
-Parse pane definitions from the `## Panes` table:
+Parse pane table and workflows:
 
 ```bash
 TEAMDEF_FILE="${RUNTIME_DIR}/teamdef_${TEAM_NAME}.env"
@@ -147,47 +139,26 @@ tmux new-window -t "$SESSION_NAME" -n "$TEAM_NAME" -c "$PROJECT_DIR"
 sleep 0.5
 NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
 
-# Split to get PANE_COUNT panes (first pane already exists)
 for _s in $(seq 1 $((PANE_COUNT - 1))); do
   tmux split-window -t "${SESSION_NAME}:${NEW_WIN}" -c "$PROJECT_DIR"
 done
 tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" tiled
 sleep 0.5
 
-# Name each pane from definition
-WORKER_PANES_LIST=""
-MANAGER_PANE_IDX=""
-echo "$PANE_DEFS" | while IFS='|' read -r _pane _role _agent _name _model; do
-  [ -z "$_pane" ] && continue
-  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${_pane}" -T "T${NEW_WIN} ${_name}"
-done
-
-# Identify manager and worker panes
-echo "$PANE_DEFS" | while IFS='|' read -r _pane _role _agent _name _model; do
-  [ -z "$_pane" ] && continue
-  if [ "$_role" = "manager" ]; then
-    MANAGER_PANE_IDX="$_pane"
-  else
-    [ -n "$WORKER_PANES_LIST" ] && WORKER_PANES_LIST="${WORKER_PANES_LIST},${_pane}" || WORKER_PANES_LIST="${_pane}"
-  fi
-done
-
-# Re-derive outside subshell (pipe creates subshell in bash 3.2)
+# Heredoc to avoid pipe-subshell (bash 3.2)
 MANAGER_PANE_IDX=""
 WORKER_PANES_LIST=""
 while IFS='|' read -r _pane _role _agent _name _model; do
   [ -z "$_pane" ] && continue
-  if [ "$_role" = "manager" ]; then
-    MANAGER_PANE_IDX="$_pane"
-  else
-    [ -n "$WORKER_PANES_LIST" ] && WORKER_PANES_LIST="${WORKER_PANES_LIST},${_pane}" || WORKER_PANES_LIST="${_pane}"
-  fi
+  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${_pane}" -T "T${NEW_WIN} ${_name}"
+  case "$_role" in
+    manager) MANAGER_PANE_IDX="$_pane" ;;
+    *) [ -n "$WORKER_PANES_LIST" ] && WORKER_PANES_LIST="${WORKER_PANES_LIST},${_pane}" || WORKER_PANES_LIST="${_pane}" ;;
+  esac
 done << PANE_INPUT
 $(echo "$PANE_DEFS")
 PANE_INPUT
 WORKER_COUNT=$(echo "$WORKER_PANES_LIST" | tr ',' '\n' | grep -c .)
-
-echo "Window ${NEW_WIN}: Manager=${MANAGER_PANE_IDX} Workers=${WORKER_PANES_LIST} (${WORKER_COUNT})"
 ```
 
 ### Step 4: Write team env and update session
@@ -304,11 +275,8 @@ Output summary: team name, window number, pane layout, boot status. Include tear
 
 ### Rules
 
-- **Session Manager or Window Manager only** — workers must not run this skill
-- Pane layout is defined by the `.team.md` file, not hardcoded
-- Never hardcode window indices — derive from `tmux display-message`. Bash 3.2 compatible
-- 3s stagger between Claude launches to prevent auth exhaustion
-- Team env includes `TEAM_DEF=<name>` to track which definition spawned it
-- Search order for `.team.md`: project root, `.doey/`, `~/.config/doey/teams/`, doey share dir
-- If the team def has no `## Workflows` section, skip workflow parsing (not an error)
-- Agent value of `-` means no agent flag (use default)
+- **SM or Window Manager only** — workers must not run this
+- Never hardcode window indices. Bash 3.2 compatible. 3s launch stagger
+- Search order: project root → `.doey/` → `~/.config/doey/teams/` → doey share dir
+- No `## Workflows` section = skip workflow parsing (not an error)
+- Agent `-` = no agent flag

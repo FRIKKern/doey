@@ -65,7 +65,6 @@ TOTAL_PANES=${TOTAL}
 MANAGER_PANE=0
 WORKER_PANES=${WORKER_PANES_LIST}
 WORKER_COUNT=${WORKER_COUNT}
-WATCHDOG_PANE=""
 WORKTREE_DIR=""
 WORKTREE_BRANCH=""
 RD_TEAM=true
@@ -92,54 +91,37 @@ RD_PROMPT="${RUNTIME_DIR}/rd-worker-prompt.md"
 cat > "$RD_PROMPT" << 'RDPROMPT'
 # Doey R&D Product Team Member
 
-You are working on the **live project directory** — the same codebase other teams are editing.
+Working on the **live project directory** — same codebase other teams are editing.
 
 ## Rules
-1. Coordinate edits carefully — other workers may be editing files concurrently.
-2. Read the error log at $RUNTIME_DIR/errors/errors.log for live runtime issues.
-3. Check `git diff` and `git log` to see what other teams have changed recently.
-4. No remote push without approval from the Brain.
+1. Coordinate edits — other workers may edit files concurrently
+2. Check `$RUNTIME_DIR/errors/errors.log` for runtime issues
+3. Check `git diff`/`git log` for recent changes
+4. No remote push without Brain approval
 
-## Specialists
-Each team member has a specialized agent defining their domain expertise and review criteria.
+## Workflow
+Read current state → check recent changes → analyze in your domain → propose or fix → verify (`bash -n` for .sh)
 
-## Dev workflow
-Read current state → check recent changes → analyze in your domain → propose or fix → verify (`bash -n` for .sh files)
-
-## Error logs
-The live error log at `$RUNTIME_DIR/errors/errors.log` contains runtime errors from the current session.
-Format: `[timestamp] CATEGORY | pane_id | role | hook | tool | detail | message`
-Categories: TOOL_BLOCKED, LINT_ERROR, ANOMALY, HOOK_ERROR, DELIVERY_FAILED
+## Error log format
+`[timestamp] CATEGORY | pane_id | role | hook | tool | detail | message`
 RDPROMPT
 ```
 
-### Step 5: Launch Claude instances
-
-Use 3s stagger to prevent auth session exhaustion.
+### Step 5: Launch Claude instances (3s stagger)
 
 ```bash
-# Brain (pane 0)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" \
   "claude --dangerously-skip-permissions --model opus --name \"Brain\" --agent \"doey-product-brain\"" Enter
 sleep 3
-
-# Platform Expert (pane 1)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.1" \
   "claude --dangerously-skip-permissions --model opus --name \"Platform\" --agent \"doey-platform-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
 sleep 3
-
-# Claude Expert (pane 2)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.2" \
   "claude --dangerously-skip-permissions --model opus --name \"Claude\" --agent \"doey-claude-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
 sleep 3
-
-# Critic (pane 3)
 tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.3" \
   "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
 sleep 1
-
-# RD teams are short-lived and human-directed.
-# The Brain coordinates specialists directly.
 ```
 
 ### Step 6: Verify boot and dispatch audit
@@ -194,12 +176,10 @@ rm "$TASKFILE"
 
 ### Step 7: Report
 
-Output: window number, project dir, pane layout, boot status. Include teardown command: `/doey-kill-window ${NEW_WIN}`
+Output: window number, pane layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`
 
 ### Rules
 
-- Work on the LIVE project directory, not a worktree — the team needs to see real-time changes
-- Pane 0 = Brain, 1 = Platform Expert, 2 = Claude Expert, 3 = Critic. Reports to SM, SM reports to Boss. Window named "RD"
-- Team env includes `RD_TEAM=true`
-- 3s stagger between Claude launches to prevent auth exhaustion
-- Never hardcode window indices. Bash 3.2 compatible.
+- LIVE project directory (no worktree). Window named "RD", `RD_TEAM=true`
+- Pane 0=Brain, 1=Platform, 2=Claude, 3=Critic. 3s launch stagger
+- Never hardcode window indices. Bash 3.2 compatible
