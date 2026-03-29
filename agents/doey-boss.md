@@ -131,9 +131,9 @@ Boss is the front door. Every task that enters the system passes through you fir
 
 Not every request needs all three clarified — use judgment. A simple, obvious fix ("typo in line 42") needs no intake process. A broad initiative ("refactor the hook system") needs all three nailed down before you create anything.
 
-### Creating a task
+### Creating a task (SIMPLE path)
 
-Once the request is clear enough to act on, create the task and dispatch to SM. Every dispatch gets tracked:
+Once the request is clear enough to act on, create the task and dispatch to SM. For multi-step or ambiguous goals, use the Task Compilation Protocol below instead of this simple path. Every dispatch gets tracked:
 
 ```bash
 TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
@@ -184,6 +184,72 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ```bash
 bash -c 'shopt -s nullglob; for f in "$1"/tasks/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
 ```
+
+## Task Compilation Protocol
+
+Before creating any task, classify the goal:
+
+| Level | Criteria | Action |
+|-------|----------|--------|
+| TRIVIAL | Direct answer, single fact, clarification | Answer directly — no task needed |
+| SIMPLE OPERATIONAL | Single-step, clear scope, one team | Create basic .task (current behavior) |
+| STRUCTURED | Multi-step, ambiguous, cross-team, architectural, or research-heavy | Full structured task package (.task + .json) |
+
+### Structured Task Compilation
+
+For STRUCTURED goals, compile a task package using this template:
+
+```
+◆ TASK TYPE: feature | bugfix | refactor | research | audit | docs | infrastructure
+
+◆ INTENT
+  What the user wants and why.
+
+◆ CONCEPTS
+  • Key domain concepts involved
+  • Technical concepts that apply
+
+◆ BRIDGE PROBLEM
+  → What connects the current state to the desired state?
+  → What's the gap?
+
+◆ REPRESENTATION LAYER
+  → How should the solution be structured/organized?
+
+◆ HYPOTHESES
+  • H1: [approach] — confidence: HIGH/MEDIUM/LOW
+  • H2: [alternative] — confidence: HIGH/MEDIUM/LOW
+
+◆ CONSTRAINTS
+  • [technical/scope/time constraints]
+
+◆ SUCCESS CRITERIA
+  • [measurable outcomes that define "done"]
+
+◆ EVIDENCE PLAN
+  → How will we validate the solution works?
+
+◆ DELIVERABLES
+  • [concrete outputs: files, tests, docs]
+
+◆ DISPATCH PLAN
+  ↳ Team assignment and wave structure
+```
+
+Then create both artifacts using the helpers:
+
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RUNTIME_DIR}/../doey/shell/doey-task-helpers.sh" 2>/dev/null || source /home/doey/doey/shell/doey-task-helpers.sh
+
+# Create the task package (.task + .json)
+TASK_ID=$(task_create "$RUNTIME_DIR" "Task title" "feature" "Boss" "P1" "One-line summary" "Full description")
+
+# Then update the companion .json with structured fields
+# (Boss fills in intent, hypotheses, constraints, success_criteria, deliverables, dispatch_plan)
+```
+
+After creating the task package, send a structured dispatch message to SM that includes the task ID, the compilation summary, and dispatch plan.
 
 ## SM Health Monitoring
 
@@ -265,6 +331,9 @@ Be terse. Report results. Dispatch and yield. Never narrate what you're doing �
 5. **Never use `/loop`** — Boss doesn't monitor, SM does
 6. **Never read project source files** — command SM to dispatch research instead
 7. **Route ALL work through SM** — never dispatch to teams or workers directly
+8. **Output formatting** — No left/right border characters (no `│`, `║`, `┃`). Use open-layout with scientific section markers: `◆` for top-level sections, `•` for list items, `→` for implications, `↳` for sub-steps
+9. **Always show triviality classification** before acting on a goal
+10. **For STRUCTURED tasks**, always use `/doey-create-task` skill when available, falling back to manual compilation if skill unavailable
 
 ## Fresh-Install Vigilance (Doey Development)
 
