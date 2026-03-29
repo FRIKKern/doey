@@ -260,6 +260,74 @@ CM_ID4=$(task_create "$TEST_DIR" "Update readme" "docs")
 CM_OUT4=$(task_commit_msg "$TEST_DIR" "$CM_ID4")
 _test "docs -> docs prefix" _contains "$CM_OUT4" "^docs(task-"
 
+# ── 14. task_context_overlap ────────────────────────────────────────
+echo ""
+echo "=== Test: task_context_overlap ==="
+
+# Full overlap: same tags, same type, same file dirs
+SCORE1=$(task_context_overlap "hooks,shell,testing" "bugfix" "shell/doey.sh|tests/test.sh" \
+                              "hooks,shell,testing" "bugfix" "shell/other.sh|tests/foo.sh")
+_test "full overlap -> 100" test "$SCORE1" -eq 100
+
+# No overlap: different tags, different type, different dirs
+SCORE2=$(task_context_overlap "hooks,shell" "bugfix" "shell/doey.sh" \
+                              "tui,config" "feature" "tui/main.go")
+_test "no overlap -> 0" test "$SCORE2" -eq 0
+
+# Type match only: different tags, same type, different dirs
+SCORE3=$(task_context_overlap "hooks,shell" "feature" "shell/doey.sh" \
+                              "tui,config" "feature" "tui/main.go")
+_test "type match only -> 20" test "$SCORE3" -eq 20
+
+# Tag overlap only: 1 of 2 tags match, different type, different dirs
+SCORE4=$(task_context_overlap "hooks,shell" "bugfix" "shell/doey.sh" \
+                              "shell,tui" "feature" "tui/main.go")
+_test "partial tag overlap -> 20" test "$SCORE4" -eq 20
+
+# File overlap only: different tags, different type, same dirs
+SCORE5=$(task_context_overlap "hooks" "bugfix" "shell/doey.sh|shell/utils.sh" \
+                              "tui" "feature" "shell/other.sh")
+_test "file dir overlap -> score > 0" test "$SCORE5" -gt 0
+
+# Empty inputs: all empty
+SCORE6=$(task_context_overlap "" "" "" "" "" "")
+_test "all empty -> 0" test "$SCORE6" -eq 0
+
+# One side empty
+SCORE7=$(task_context_overlap "hooks,shell" "bugfix" "shell/doey.sh" "" "" "")
+_test "new side empty -> 0" test "$SCORE7" -eq 0
+
+# Single tag full match
+SCORE8=$(task_context_overlap "shell" "bugfix" "" "shell" "bugfix" "")
+_test "single tag + type match -> 60" test "$SCORE8" -eq 60
+
+# ── 15. task_should_restart ────────────────────────────────────────
+echo ""
+echo "=== Test: task_should_restart ==="
+
+# High overlap (100) -> should NOT restart (delegate) -> exit 1
+_test_fails "high overlap -> should delegate (exit 1)" \
+  task_should_restart "hooks,shell,testing" "bugfix" "shell/a.sh|tests/b.sh" \
+                      "hooks,shell,testing" "bugfix" "shell/c.sh|tests/d.sh"
+
+# No overlap (0) -> should restart -> exit 0
+_test "no overlap -> should restart (exit 0)" \
+  task_should_restart "hooks,shell" "bugfix" "shell/doey.sh" \
+                      "tui,config" "feature" "tui/main.go"
+
+# Borderline: exactly 20 (type match only) -> below 30 -> restart
+_test "score 20 -> should restart (exit 0)" \
+  task_should_restart "hooks" "feature" "shell/doey.sh" \
+                      "tui" "feature" "tui/main.go"
+
+# Score 60 (tag + type) -> above 30 -> delegate
+_test_fails "score 60 -> should delegate (exit 1)" \
+  task_should_restart "shell" "bugfix" "" "shell" "bugfix" ""
+
+# All empty -> 0 -> restart
+_test "all empty -> should restart (exit 0)" \
+  task_should_restart "" "" "" "" "" ""
+
 # ── Results ─────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
