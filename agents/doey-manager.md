@@ -217,7 +217,6 @@ TASK_ID: <stable reference — use in subtask tracking and result reports>
 TITLE: <task title>
 TEAM_SCOPE: <what THIS team is responsible for — a subset of the full task>
 INTENT: <what the user wants and why>
-REPRESENTATION_LAYER: <how the solution should be structured/organized>
 HYPOTHESES:
   • H1: <approach> — confidence: HIGH/MEDIUM/LOW
   • H2: <alternative> — confidence: HIGH/MEDIUM/LOW

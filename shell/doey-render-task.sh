@@ -16,17 +16,6 @@ else
   S_BAR_FILL="█"; S_BAR_EMPTY="░"; S_BLOCKED="⊘"
 fi
 
-# ── Width detection ────────────────────────────────────────────────────
-detect_width() {
-  local w=80
-  if [ -n "${TMUX:-}" ]; then
-    w=$(tmux display-message -p '#{pane_width}' 2>/dev/null) || w=80
-  elif command -v tput >/dev/null 2>&1; then
-    w=$(tput cols 2>/dev/null) || w=80
-  fi
-  echo "$w"
-}
-
 # ── Confidence bar ─────────────────────────────────────────────────────
 render_bar() {
   local pct="$1" width="${2:-10}" filled empty
