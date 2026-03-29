@@ -251,6 +251,15 @@ func (r *Reader) parseTasks() []Task {
 			continue
 		}
 
+		if len(env) == 0 {
+			continue // skip empty files
+		}
+
+		// Skip files that don't look like valid task files
+		if env["TASK_ID"] == "" && env["TASK_TITLE"] == "" && env["TASK_STATUS"] == "" {
+			continue
+		}
+
 		t := Task{
 			ID:         env["TASK_ID"],
 			Title:      env["TASK_TITLE"],

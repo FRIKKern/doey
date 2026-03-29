@@ -57,6 +57,7 @@ for item in arr:
 # ── Parse .task file ───────────────────────────────────────────────────
 parse_task() {
   local file="$1" line
+  [ -s "$file" ] || return 1
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
   TASK_TYPE=""; TASK_OWNER=""; TASK_PRIORITY=""; TASK_SUMMARY=""
   TASK_DESCRIPTION=""; TASK_SCHEMA_VERSION=""
@@ -75,6 +76,9 @@ parse_task() {
       TASK_SCHEMA_VERSION) TASK_SCHEMA_VERSION="${line#*=}" ;;
     esac
   done < "$file" || true
+
+  # Bail if no TASK_ID was parsed (malformed file)
+  [ -n "${TASK_ID:-}" ] || return 1
 
   # Defaults
   if [ -z "$TASK_TYPE" ]; then TASK_TYPE="feature"; fi
@@ -220,6 +224,7 @@ main() {
 
   [ -z "$task_file" ] && { echo "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>"; exit 1; }
   [ ! -f "$task_file" ] && { echo "Error: task file not found: $task_file"; exit 1; }
+  [ -s "$task_file" ] || { echo "Empty task file: $task_file"; exit 1; }
 
   # Auto-detect json companion
   if [ -z "$json_file" ]; then
