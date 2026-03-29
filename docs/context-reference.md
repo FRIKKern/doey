@@ -182,7 +182,7 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
 | `triggers/` | Wake triggers (`.trigger` files touched to wake wait hooks) |
 | `lifecycle/` | Lifecycle events from `notify_watchdog()` (`.evt` files) |
-| `tasks/` | Session-level task tracking (`.task` files, managed by SM) |
+| `tasks/` | Runtime task cache (synced from `${PROJECT_DIR}/.doey/tasks/` on session start) |
 | `issues/` | Issue reports from Manager/Watchdog (`.issue` files) |
 | `logs/` | Per-pane runtime logs |
 | `errors/` | Structured error log (`errors.log`) and individual `.err` files |
@@ -191,6 +191,8 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `status/state_since_<W>_<idx>` | Duration tracking (epoch when pane entered current state) |
 | `status/session_manager_trigger` | SM-specific fast-wake trigger |
 | `status/notif_cooldown_*` | Desktop notification cooldown timestamps |
+
+**Persistent task storage:** `${PROJECT_DIR}/.doey/tasks/` is the source of truth for session tasks (`.task`, `.json`, `.result.json` files). Survives reboots. Runtime `tasks/` above is a cache synced on session start. Hooks and agents read from `.doey/tasks/` first, falling back to `${RUNTIME_DIR}/tasks/` for backwards compatibility.
 
 **Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED, LOGGED_OUT.
 

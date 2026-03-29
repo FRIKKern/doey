@@ -15,6 +15,7 @@ import (
 // Reader polls Doey runtime files
 type Reader struct {
 	runtimeDir string
+	projectDir string // resolved lazily from session.env
 }
 
 // NewReader creates a Reader for the given runtime directory
@@ -25,6 +26,17 @@ func NewReader(runtimeDir string) *Reader {
 // RuntimeDir returns the configured runtime directory
 func (r *Reader) RuntimeDir() string {
 	return r.runtimeDir
+}
+
+// taskDir returns the primary task directory (.doey/tasks/ if it exists, else runtimeDir/tasks/)
+func (r *Reader) taskDir() string {
+	if r.projectDir != "" {
+		doeyTasks := filepath.Join(r.projectDir, ".doey", "tasks")
+		if info, err := os.Stat(doeyTasks); err == nil && info.IsDir() {
+			return doeyTasks
+		}
+	}
+	return filepath.Join(r.runtimeDir, "tasks")
 }
 
 // ReadSnapshot reads all runtime files and returns a complete Snapshot
@@ -41,6 +53,7 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 		return snap, fmt.Errorf("session config: %w", err)
 	}
 	snap.Session = session
+	r.projectDir = session.ProjectDir
 
 	for _, w := range session.TeamWindows {
 		tc, err := r.parseTeamConfig(w)
@@ -210,14 +223,29 @@ func (r *Reader) parsePaneStatuses() map[string]PaneStatus {
 
 func (r *Reader) parseTasks() []Task {
 	var tasks []Task
-	taskDir := filepath.Join(r.runtimeDir, "tasks")
+	primaryDir := r.taskDir()
+	fallbackDir := filepath.Join(r.runtimeDir, "tasks")
 
-	matches, err := filepath.Glob(filepath.Join(taskDir, "*.task"))
-	if err != nil || len(matches) == 0 {
-		return tasks
+	// Collect task files from primary, then merge any from fallback not already seen
+	seen := make(map[string]bool)
+	var allPaths []string
+
+	for _, dir := range []string{primaryDir, fallbackDir} {
+		matches, err := filepath.Glob(filepath.Join(dir, "*.task"))
+		if err != nil || len(matches) == 0 {
+			continue
+		}
+		for _, path := range matches {
+			base := filepath.Base(path)
+			if seen[base] {
+				continue
+			}
+			seen[base] = true
+			allPaths = append(allPaths, path)
+		}
 	}
 
-	for _, path := range matches {
+	for _, path := range allPaths {
 		env, err := parseEnvFile(path)
 		if err != nil {
 			continue
@@ -232,6 +260,18 @@ func (r *Reader) parseTasks() []Task {
 			MergedInto: env["TASK_MERGED_INTO"],
 			Result:     env["TASK_RESULT"],
 			Category:   env["TASK_TYPE"],
+			// v3 fields
+			AcceptanceCriteria: strings.ReplaceAll(env["TASK_ACCEPTANCE_CRITERIA"], "\\n", "\n"),
+			Hypotheses:         strings.ReplaceAll(env["TASK_HYPOTHESES"], "\\n", "\n"),
+			DecisionLog:        strings.ReplaceAll(env["TASK_DECISION_LOG"], "\\n", "\n"),
+			Blockers:           env["TASK_BLOCKERS"],
+			Timestamps:         env["TASK_TIMESTAMPS"],
+			Notes:              strings.ReplaceAll(env["TASK_NOTES"], "\\n", "\n"),
+			CreatedBy:          env["TASK_CREATED_BY"],
+			AssignedTo:         env["TASK_ASSIGNED_TO"],
+		}
+		if v := env["TASK_SCHEMA_VERSION"]; v != "" {
+			t.SchemaVersion, _ = strconv.Atoi(v)
 		}
 		if t.ID == "" {
 			t.ID = strings.TrimSuffix(filepath.Base(path), ".task")
@@ -239,11 +279,22 @@ func (r *Reader) parseTasks() []Task {
 		if c := env["TASK_CREATED"]; c != "" {
 			t.Created, _ = strconv.ParseInt(c, 10, 64)
 		}
+		// Fall back to TASK_TIMESTAMPS created= field
+		if t.Created == 0 && t.Timestamps != "" {
+			for _, pair := range strings.Split(t.Timestamps, "|") {
+				if strings.HasPrefix(pair, "created=") {
+					t.Created, _ = strconv.ParseInt(strings.TrimPrefix(pair, "created="), 10, 64)
+				}
+			}
+		}
 		if desc := env["TASK_DESCRIPTION"]; desc != "" {
 			t.Description = strings.ReplaceAll(desc, "\\n", "\n")
 		}
 		if att := env["TASK_ATTACHMENTS"]; att != "" {
 			t.Attachments = strings.Split(att, "|")
+		}
+		if rf := env["TASK_RELATED_FILES"]; rf != "" {
+			t.RelatedFiles = strings.Split(rf, "|")
 		}
 		if tags := env["TASK_TAGS"]; tags != "" {
 			for _, tag := range strings.Split(tags, ",") {
@@ -251,6 +302,26 @@ func (r *Reader) parseTasks() []Task {
 				if tag != "" {
 					t.Tags = append(t.Tags, tag)
 				}
+			}
+		}
+
+		// Parse inline TASK_SUBTASKS field (v3: "index:title:status\nindex:title:status")
+		if stRaw := env["TASK_SUBTASKS"]; stRaw != "" {
+			for _, entry := range strings.Split(strings.ReplaceAll(stRaw, "\\n", "\n"), "\n") {
+				entry = strings.TrimSpace(entry)
+				if entry == "" {
+					continue
+				}
+				parts := strings.SplitN(entry, ":", 3)
+				if len(parts) < 3 {
+					continue
+				}
+				t.Subtasks = append(t.Subtasks, Subtask{
+					TaskID: t.ID,
+					Pane:   parts[0], // index used as identifier
+					Title:  parts[1],
+					Status: parts[2],
+				})
 			}
 		}
 
@@ -278,11 +349,17 @@ func (r *Reader) parseTasks() []Task {
 func (r *Reader) parseSubtasks() []Subtask {
 	var subtasks []Subtask
 
-	// Nested layout: tasks/<task_id>/subtasks/*.subtask
-	nestedMatches, _ := filepath.Glob(filepath.Join(r.runtimeDir, "tasks", "*", "subtasks", "*.subtask"))
+	primaryDir := r.taskDir()
+	fallbackDir := filepath.Join(r.runtimeDir, "tasks")
 
-	// Flat layout: tasks/*.subtask (written by shell scripts)
-	flatMatches, _ := filepath.Glob(filepath.Join(r.runtimeDir, "tasks", "*.subtask"))
+	// Collect from both primary and fallback dirs
+	var nestedMatches, flatMatches []string
+	for _, dir := range []string{primaryDir, fallbackDir} {
+		nm, _ := filepath.Glob(filepath.Join(dir, "*", "subtasks", "*.subtask"))
+		nestedMatches = append(nestedMatches, nm...)
+		fm, _ := filepath.Glob(filepath.Join(dir, "*.subtask"))
+		flatMatches = append(flatMatches, fm...)
+	}
 
 	seen := make(map[string]bool)
 	allMatches := append(nestedMatches, flatMatches...)

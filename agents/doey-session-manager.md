@@ -158,7 +158,7 @@ When SM receives a `dispatch_task` message from Boss:
 
 4. **Generate scoped briefs** for target team Manager — include: task title, intent, relevant hypotheses, constraints, success criteria, deliverables for that team, and file paths from dispatch_plan if specified.
 
-5. **Track progress** by TASK_ID:
+5. **Track progress** by TASK_ID (task files in `${PROJECT_DIR}/.doey/tasks/`, fallback `${RUNTIME_DIR}/tasks/`):
    - Update .task file: set `TASK_STATUS=in_progress`, add `TASK_TEAM=<assigned team>`
    - On completion: set `TASK_STATUS=pending_user_confirmation`
    - On failure: set `TASK_STATUS=failed`, notify Boss
@@ -223,16 +223,19 @@ SM is the **proactive task lifecycle manager**. User is sole authority on comple
 
 ### Status flow: `active` → `in_progress` → `pending_user_confirmation`
 
-Boss creates tasks. SM manages lifecycle. Update status at every transition:
+Boss creates tasks. SM manages lifecycle. Task files live in `${PROJECT_DIR}/.doey/tasks/` (persistent, source of truth). Fall back to `${RUNTIME_DIR}/tasks/` if `.doey/tasks/` doesn't exist.
+
+Update status at every transition:
 ```bash
-FILE="${RUNTIME_DIR}/tasks/${TASK_ID}.task"
+TD="${PROJECT_DIR}/.doey/tasks"; [ -d "$TD" ] || TD="${RUNTIME_DIR}/tasks"
+FILE="${TD}/${TASK_ID}.task"
 TMP="${FILE}.tmp"
 while IFS= read -r line; do
   case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=in_progress" ;; *) echo "$line" ;; esac
 done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ```
 
-Log progress: `echo "TASK_LOG_$(date +%s)=PROGRESS: description" >> "${RUNTIME_DIR}/tasks/${TASK_ID}.task"`
+Log progress: `echo "TASK_LOG_$(date +%s)=PROGRESS: description" >> "${TD}/${TASK_ID}.task"`
 Track team: `echo "TASK_TEAM=W${WINDOW_INDEX}" >> ...`
 Record results: `echo "TASK_RESULT=summary" >> ...` and `echo "TASK_FILES=file1,file2" >> ...`
 

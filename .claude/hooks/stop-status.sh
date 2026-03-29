@@ -23,6 +23,12 @@ _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
 task_id="${DOEY_TASK_ID:-}"
 
+# Resolve project directory for persistent task storage
+PROJECT_DIR="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
+if [ -z "$PROJECT_DIR" ]; then
+  PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR=""
+fi
+
 # Write status to both PANE_SAFE and DOEY_PANE_ID files
 for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   [ -z "$_sf" ] && continue
@@ -31,6 +37,12 @@ for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   [ ! -f "$_status_file" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$_sf status=$STOP_STATUS"
   [ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "$_status_file"
 done
+
+# Mirror task status to persistent storage if task_id and .doey/tasks/ exist
+if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
+  _persistent_status="${PROJECT_DIR}/.doey/tasks/${task_id}.status"
+  printf '%s\n' "$STOP_STATUS" > "$_persistent_status" 2>/dev/null || true
+fi
 
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
 

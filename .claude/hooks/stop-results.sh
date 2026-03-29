@@ -18,8 +18,11 @@ trap '[ -n "${TMPFILE:-}" ] && rm -f "$TMPFILE" 2>/dev/null' EXIT
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 [ -z "$OUTPUT" ] && _log_error "HOOK_ERROR" "tmux capture-pane returned empty" "pane=$PANE"
 
-# Get files changed by this worker via git
-PROJECT_DIR="${DOEY_TEAM_DIR:-}"
+# Resolve project directory: prefer DOEY_PROJECT_DIR, then DOEY_TEAM_DIR, then git
+PROJECT_DIR="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
+if [ -z "$PROJECT_DIR" ]; then
+  PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR=""
+fi
 FILES_LIST=""
 if [ -n "$PROJECT_DIR" ]; then
   # timeout available on Linux; macOS has gtimeout or we fall back to no timeout
@@ -99,6 +102,12 @@ EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"
 TMPFILE=""
 _log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_COUNT)"
+
+# Mirror result to persistent task storage if task_id and .doey/tasks/ exist
+if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
+  _persistent_result="${PROJECT_DIR}/.doey/tasks/${local_task_id}.result.json"
+  cp "$RESULT_FILE" "$_persistent_result" 2>/dev/null || true
+fi
 
 _FILES_COUNT=0
 [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')

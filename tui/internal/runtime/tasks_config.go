@@ -10,6 +10,18 @@ import (
 
 const taskConfigFile = "tasks.json"
 
+// configProjectDir holds the project directory for locating .doey/tasks/tasks.json.
+// Set via SetProjectDir when the TUI resolves the session config.
+var configProjectDir string
+
+// SetProjectDir sets the project directory used by the persistent task store.
+// When set, tasks.json lives in <projectDir>/.doey/tasks/ instead of ~/.config/doey/.
+func SetProjectDir(dir string) {
+	if dir != "" {
+		configProjectDir = dir
+	}
+}
+
 // PersistentTaskLog is a timestamped activity log entry stored in the persistent task store.
 type PersistentTaskLog struct {
 	Timestamp int64  `json:"ts"`
@@ -20,7 +32,7 @@ type PersistentTaskLog struct {
 type PersistentTask struct {
 	ID           string              `json:"id"`
 	Title        string              `json:"title"`
-	Status       string              `json:"status"`                  // active, in_progress, pending_user_confirmation, done, cancelled, failed
+	Status       string              `json:"status"`                  // draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled
 	Description  string              `json:"description"`             // optional detail text
 	Attachments  []string            `json:"attachments,omitempty"`   // list of URLs/file paths
 	Team         string              `json:"team"`                    // assigned team name (optional)
@@ -33,6 +45,14 @@ type PersistentTask struct {
 	ParentTaskID string              `json:"parent_task_id,omitempty"` // parent task for subtask hierarchy
 	Result       string              `json:"result,omitempty"`        // outcome summary
 	Logs         []PersistentTaskLog `json:"logs,omitempty"`          // activity log entries
+	// v3 schema fields
+	Type               string `json:"type,omitempty"`                // bug, feature, refactor, docs, infrastructure
+	Blockers           string `json:"blockers,omitempty"`            // blocking issues
+	CreatedBy          string `json:"created_by,omitempty"`          // who created it
+	AssignedTo         string `json:"assigned_to,omitempty"`         // who/what team
+	AcceptanceCriteria string `json:"acceptance_criteria,omitempty"` // bulleted criteria
+	DecisionLog        string `json:"decision_log,omitempty"`        // timestamped decisions
+	Notes              string `json:"notes,omitempty"`               // free-form journal
 }
 
 // TaskStore holds all persistent tasks.
@@ -41,8 +61,21 @@ type TaskStore struct {
 	NextID int              `json:"next_id"` // auto-increment counter
 }
 
-// taskConfigPath returns ~/.config/doey/tasks.json
+// taskConfigPath returns the path to tasks.json.
+// Priority: configProjectDir (set by TUI) > DOEY_PROJECT_DIR env > ~/.config/doey/.
 func taskConfigPath() string {
+	// 1. Package-level project dir (set by TUI via SetProjectDir)
+	if configProjectDir != "" {
+		return filepath.Join(configProjectDir, ".doey", "tasks", taskConfigFile)
+	}
+	// 2. Environment variable (set by session hooks)
+	if pd := os.Getenv("DOEY_PROJECT_DIR"); pd != "" {
+		candidate := filepath.Join(pd, ".doey", "tasks", taskConfigFile)
+		if _, err := os.Stat(filepath.Dir(candidate)); err == nil {
+			return candidate
+		}
+	}
+	// 3. Fallback: ~/.config/doey/tasks.json
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		dir = filepath.Join(os.Getenv("HOME"), ".config")
@@ -50,7 +83,7 @@ func taskConfigPath() string {
 	return filepath.Join(dir, "doey", taskConfigFile)
 }
 
-// ReadTaskStore reads the task store from ~/.config/doey/tasks.json.
+// ReadTaskStore reads the persistent task store (project .doey/tasks/ or ~/.config/doey/ fallback).
 // Returns empty store if file does not exist.
 func ReadTaskStore() (TaskStore, error) {
 	var store TaskStore
@@ -70,7 +103,7 @@ func ReadTaskStore() (TaskStore, error) {
 	return store, nil
 }
 
-// WriteTaskStore writes the task store to ~/.config/doey/tasks.json.
+// WriteTaskStore writes the persistent task store (project .doey/tasks/ or ~/.config/doey/ fallback).
 // Creates the directory if it does not exist. Uses atomic write via .tmp + rename.
 func WriteTaskStore(store TaskStore) error {
 	path := taskConfigPath()
@@ -231,6 +264,27 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 	if rt.Result != "" {
 		pt.Result = rt.Result
 	}
+	if rt.Category != "" {
+		pt.Type = rt.Category
+	}
+	if rt.Blockers != "" {
+		pt.Blockers = rt.Blockers
+	}
+	if rt.CreatedBy != "" {
+		pt.CreatedBy = rt.CreatedBy
+	}
+	if rt.AssignedTo != "" {
+		pt.AssignedTo = rt.AssignedTo
+	}
+	if rt.AcceptanceCriteria != "" {
+		pt.AcceptanceCriteria = rt.AcceptanceCriteria
+	}
+	if rt.DecisionLog != "" {
+		pt.DecisionLog = rt.DecisionLog
+	}
+	if rt.Notes != "" {
+		pt.Notes = rt.Notes
+	}
 	pt.Logs = mergeLogs(pt.Logs, rt.Logs)
 	pt.Updated = time.Now().Unix()
 }
@@ -268,6 +322,13 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 			MergedInto:   rt.MergedInto,
 			ParentTaskID: rt.ParentTaskID,
 			Result:       rt.Result,
+			Type:               rt.Category,
+			Blockers:           rt.Blockers,
+			CreatedBy:          rt.CreatedBy,
+			AssignedTo:         rt.AssignedTo,
+			AcceptanceCriteria: rt.AcceptanceCriteria,
+			DecisionLog:        rt.DecisionLog,
+			Notes:              rt.Notes,
 		}
 		pt.Logs = mergeLogs(nil, rt.Logs)
 		index[rt.ID] = len(s.Tasks)

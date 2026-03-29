@@ -176,7 +176,7 @@ Always respond to the worker via send-keys explaining what was done.
 
 ## Structured Execution Briefs
 
-SM may send structured briefs (from `.task` + `.json` packages) with fields: TASK_ID, TITLE, TEAM_SCOPE, INTENT, HYPOTHESES, CONSTRAINTS, SUCCESS_CRITERIA, DELIVERABLES, EVIDENCE_REQUESTED. Prose tasks still work.
+SM may send structured briefs (from `.task` + `.json` packages in `${PROJECT_DIR}/.doey/tasks/` or `${RUNTIME_DIR}/tasks/`) with fields: TASK_ID, TITLE, TEAM_SCOPE, INTENT, HYPOTHESES, CONSTRAINTS, SUCCESS_CRITERIA, DELIVERABLES, EVIDENCE_REQUESTED. Prose tasks still work.
 
 Decompose DELIVERABLES into per-worker assignments. Include TASK_ID, constraints, success criteria, and evidence requests in each worker prompt. Track which worker tests which hypothesis.
 
@@ -233,6 +233,12 @@ Never dispatch Wave N+1 until Wave N is fully complete. Track worker→task mapp
 
 ## Subtask Management
 
-Create `.subtask` files (not `.task`) in `${RUNTIME_DIR}/tasks/` **before** dispatching. Pattern: `<parent_id>_<subtask_num>.subtask`. Fields: `SUBTASK_ID`, `PARENT_TASK_ID`, `SUBTASK_TITLE`, `SUBTASK_STATUS` (active|in_progress|done|failed), `SUBTASK_WORKER`, `SUBTASK_CREATED`.
+Create `.subtask` files (not `.task`) in `${PROJECT_DIR}/.doey/tasks/` **before** dispatching (falls back to `${RUNTIME_DIR}/tasks/` if `.doey/tasks/` doesn't exist). Pattern: `<parent_id>_<subtask_num>.subtask`. Fields: `SUBTASK_ID`, `PARENT_TASK_ID`, `SUBTASK_TITLE`, `SUBTASK_STATUS` (active|in_progress|done|failed), `SUBTASK_WORKER`, `SUBTASK_CREATED`.
+
+```bash
+TD="${PROJECT_DIR}/.doey/tasks"
+[ ! -d "$TD" ] && TD="${RUNTIME_DIR}/tasks"
+mkdir -p "$TD"
+```
 
 One subtask per worker per wave. Update status immediately on worker report. Roll up progress to parent task and notify SM when all subtasks complete or fail.

@@ -7,6 +7,7 @@ description: Compile a natural-language goal into a structured task package (.ta
 
 - Current tasks: !`bash -c 'RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); source "$RUNTIME_DIR/../doey/shell/doey-task-helpers.sh" 2>/dev/null && task_list "$RUNTIME_DIR" 2>/dev/null || echo "No tasks"'`
 - Helpers path: !`echo "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/../doey/shell/doey-task-helpers.sh"`
+- Tasks dir: !`bash -c 'RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); PD=$(grep "^PROJECT_DIR=" "$RUNTIME_DIR/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); if [ -n "$PD" ] && [ -d "$PD/.doey/tasks" ]; then echo "$PD/.doey/tasks"; else echo "$RUNTIME_DIR/tasks"; fi'`
 
 ## Prompt
 
@@ -63,7 +64,13 @@ Then update the companion .json with the compiled structured fields:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-TD="${RUNTIME_DIR}/tasks"
+PD=$(grep '^PROJECT_DIR=' "$RUNTIME_DIR/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+# Prefer persistent .doey/tasks/, fall back to runtime
+if [ -n "$PD" ] && [ -d "$PD/.doey/tasks" ]; then
+  TD="$PD/.doey/tasks"
+else
+  TD="${RUNTIME_DIR}/tasks"
+fi
 python3 -c "
 import json
 with open('${TD}/${TASK_ID}.json', 'r') as f:

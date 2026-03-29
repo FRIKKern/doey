@@ -143,8 +143,16 @@ if is_session_manager; then
     SM_PENDING_MSGS="${SM_PENDING_MSGS}  $(basename "$_mf"): $(head -3 "$_mf" 2>/dev/null | tr '\n' ' ')${NL}"
   done
 
+  # Persistent tasks (source of truth); fall back to runtime cache
+  _TASK_PROJECT="${DOEY_PROJECT_DIR:-${PROJECT_DIR:-}}"
+  [ -z "$_TASK_PROJECT" ] && _TASK_PROJECT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  _TASK_SRC="${RUNTIME_DIR}/tasks"
+  if [ -n "$_TASK_PROJECT" ] && [ -d "${_TASK_PROJECT}/.doey/tasks" ]; then
+    _TASK_SRC="${_TASK_PROJECT}/.doey/tasks"
+  fi
+
   SM_ACTIVE_TASKS=""
-  for _tf in "${RUNTIME_DIR}/tasks"/*.task; do
+  for _tf in "${_TASK_SRC}"/*.task; do
     [ -f "$_tf" ] || continue
     grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$_tf" && continue
     SM_ACTIVE_TASKS="${SM_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"

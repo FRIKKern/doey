@@ -1718,32 +1718,67 @@ _doc_check() {
 }
 
 # ── Task Management ───────────────────────────────────────────────────
-# Tasks are session-level goals tracked in ${RUNTIME_DIR}/tasks/.
+# Tasks are persistent goals tracked in .doey/tasks/ (project directory).
+# A runtime cache in ${RUNTIME_DIR}/tasks/ is kept in sync for the TUI.
 # Only the user can mark a task as done — agents signal pending_user_confirmation.
-# Task file format (N.task): TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED,
-#   TASK_DESCRIPTION (newlines encoded as literal \n), TASK_ATTACHMENTS (pipe-delimited)
-# Canonical statuses: active, in_progress, pending_user_confirmation, done, cancelled, failed
+# Task file format — schema v3 (N.task):
+#   TASK_ID, TASK_TITLE, TASK_STATUS, TASK_TYPE, TASK_TAGS (comma-delimited),
+#   TASK_CREATED_BY, TASK_ASSIGNED_TO, TASK_DESCRIPTION (newlines as literal \n),
+#   TASK_ATTACHMENTS (pipe-delimited), TASK_ACCEPTANCE_CRITERIA (pipe-delimited),
+#   TASK_HYPOTHESES (pipe-delimited), TASK_DECISION_LOG (pipe-delimited),
+#   TASK_SUBTASKS (pipe-delimited), TASK_RELATED_FILES (pipe-delimited),
+#   TASK_BLOCKERS (pipe-delimited), TASK_TIMESTAMPS (comma-delimited key=epoch pairs),
+#   TASK_NOTES (newlines as literal \n), TASK_SCHEMA_VERSION=3
+# Canonical statuses: draft, active, in_progress, paused, blocked,
+#   pending_user_confirmation, done, cancelled, failed
+# Legacy compat: TASK_CREATED still read (mapped from TASK_TIMESTAMPS created=)
 
 _task_read() {
-  # Read a task file; sets TASK_ID, TASK_TITLE, TASK_STATUS, TASK_CREATED,
-  #   TASK_DESCRIPTION, TASK_ATTACHMENTS
+  # Read a task file; sets all schema v3 fields plus legacy TASK_CREATED
   local _file="$1"
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
-  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""
-  while IFS= read -r _line; do
+  TASK_TYPE=""; TASK_TAGS=""; TASK_CREATED_BY=""; TASK_ASSIGNED_TO=""
+  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""; TASK_ACCEPTANCE_CRITERIA=""
+  TASK_HYPOTHESES=""; TASK_DECISION_LOG=""; TASK_SUBTASKS=""
+  TASK_RELATED_FILES=""; TASK_BLOCKERS=""; TASK_TIMESTAMPS=""
+  TASK_NOTES=""; TASK_SCHEMA_VERSION=""
+  while IFS= read -r _line || [ -n "$_line" ]; do
     case "${_line%%=*}" in
-      TASK_ID)          TASK_ID="${_line#*=}" ;;
-      TASK_TITLE)       TASK_TITLE="${_line#*=}" ;;
-      TASK_STATUS)      TASK_STATUS="${_line#*=}" ;;
-      TASK_CREATED)     TASK_CREATED="${_line#*=}" ;;
-      TASK_DESCRIPTION) TASK_DESCRIPTION="${_line#*=}" ;;
-      TASK_ATTACHMENTS) TASK_ATTACHMENTS="${_line#*=}" ;;
+      TASK_ID)                  TASK_ID="${_line#*=}" ;;
+      TASK_TITLE)               TASK_TITLE="${_line#*=}" ;;
+      TASK_STATUS)              TASK_STATUS="${_line#*=}" ;;
+      TASK_CREATED)             TASK_CREATED="${_line#*=}" ;;
+      TASK_TYPE)                TASK_TYPE="${_line#*=}" ;;
+      TASK_TAGS)                TASK_TAGS="${_line#*=}" ;;
+      TASK_CREATED_BY)          TASK_CREATED_BY="${_line#*=}" ;;
+      TASK_ASSIGNED_TO)         TASK_ASSIGNED_TO="${_line#*=}" ;;
+      TASK_DESCRIPTION)         TASK_DESCRIPTION="${_line#*=}" ;;
+      TASK_ATTACHMENTS)         TASK_ATTACHMENTS="${_line#*=}" ;;
+      TASK_ACCEPTANCE_CRITERIA) TASK_ACCEPTANCE_CRITERIA="${_line#*=}" ;;
+      TASK_HYPOTHESES)          TASK_HYPOTHESES="${_line#*=}" ;;
+      TASK_DECISION_LOG)        TASK_DECISION_LOG="${_line#*=}" ;;
+      TASK_SUBTASKS)            TASK_SUBTASKS="${_line#*=}" ;;
+      TASK_RELATED_FILES)       TASK_RELATED_FILES="${_line#*=}" ;;
+      TASK_BLOCKERS)            TASK_BLOCKERS="${_line#*=}" ;;
+      TASK_TIMESTAMPS)          TASK_TIMESTAMPS="${_line#*=}" ;;
+      TASK_NOTES)               TASK_NOTES="${_line#*=}" ;;
+      TASK_SCHEMA_VERSION)      TASK_SCHEMA_VERSION="${_line#*=}" ;;
     esac
   done < "$_file"
+  # Legacy compat: extract created timestamp from TASK_TIMESTAMPS if TASK_CREATED is empty
+  if [ -z "$TASK_CREATED" ] && [ -n "$TASK_TIMESTAMPS" ]; then
+    local _ts_entry
+    # TASK_TIMESTAMPS is comma-delimited: created=EPOCH,started=EPOCH,...
+    _ts_entry="${TASK_TIMESTAMPS%%,*}"
+    case "$_ts_entry" in
+      created=*) TASK_CREATED="${_ts_entry#created=}" ;;
+    esac
+  fi
 }
 
 _task_age() {
   local _created="$1" _now _elapsed
+  [ -z "$_created" ] && { printf '?'; return; }
   _now=$(date +%s)
   _elapsed=$((_now - _created))
   if [ "$_elapsed" -lt 60 ]; then printf '%ss' "$_elapsed"
@@ -1761,28 +1796,46 @@ _task_next_id() {
 }
 
 _task_create() {
-  local _runtime_dir="$1" _title="$2"
+  local _tasks_dir="$1" _title="$2"
   local _description="${3:-}" _attachments="${4:-}"
-  local _tasks_dir="${_runtime_dir}/tasks"
   mkdir -p "$_tasks_dir"
   local _id _now
   _id="$(_task_next_id "$_tasks_dir")"
   _now=$(date +%s)
-  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\n' \
-    "$_id" "$_title" "$_now" "$_description" "$_attachments" > "${_tasks_dir}/${_id}.task"
+  local _tmp="${_tasks_dir}/${_id}.task.tmp"
+  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_TYPE=feature\nTASK_TAGS=\nTASK_CREATED_BY=user\nTASK_ASSIGNED_TO=\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\nTASK_ACCEPTANCE_CRITERIA=\nTASK_HYPOTHESES=\nTASK_DECISION_LOG=\nTASK_SUBTASKS=\nTASK_RELATED_FILES=\nTASK_BLOCKERS=\nTASK_TIMESTAMPS=created=%s\nTASK_NOTES=\nTASK_SCHEMA_VERSION=3\n' \
+    "$_id" "$_title" "$_description" "$_attachments" "$_now" > "$_tmp"
+  mv "$_tmp" "${_tasks_dir}/${_id}.task"
   echo "$_id"
 }
 
 # Replace a single field in a .task file.  Usage: _task_set_field <file> <FIELD> <value>
 _task_set_field() {
   local _file="$1" _field="$2" _value="$3" _tmp="${1}.tmp"
-  while IFS= read -r _line; do
+  while IFS= read -r _line || [ -n "$_line" ]; do
     case "${_line%%=*}" in
       "$_field") printf '%s=%s\n' "$_field" "$_value" ;;
       *)         printf '%s\n' "$_line" ;;
     esac
   done < "$_file" > "$_tmp"
   mv "$_tmp" "$_file"
+}
+
+# Append a key=epoch pair to TASK_TIMESTAMPS in a .task file
+_task_append_timestamp() {
+  local _file="$1" _key="$2"
+  local _now _existing=""
+  _now=$(date +%s)
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    case "${_line%%=*}" in
+      TASK_TIMESTAMPS) _existing="${_line#*=}" ;;
+    esac
+  done < "$_file"
+  if [ -n "$_existing" ]; then
+    _task_set_field "$_file" "TASK_TIMESTAMPS" "${_existing},${_key}=${_now}"
+  else
+    _task_set_field "$_file" "TASK_TIMESTAMPS" "${_key}=${_now}"
+  fi
 }
 
 _task_set_description() {
@@ -1796,7 +1849,7 @@ _task_add_attachment() {
   local _file="${_tasks_dir}/${_id}.task"
   [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
   local _tmp="${_file}.tmp" _existing=""
-  while IFS= read -r _line; do
+  while IFS= read -r _line || [ -n "$_line" ]; do
     case "${_line%%=*}" in
       TASK_ATTACHMENTS)
         _existing="${_line#*=}"
@@ -1816,13 +1869,50 @@ _task_set_status() {
   local _file="${1}/${2}.task"
   [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$2" "$RESET"; return 1; }
   case "$3" in
-    active|in_progress|pending_user_confirmation|done|cancelled|failed) ;;
+    draft|active|in_progress|paused|blocked|pending_user_confirmation|done|cancelled|failed) ;;
     *) printf '  %s✗ Invalid status: %s%s\n' "$ERROR" "$3" "$RESET"; return 1 ;;
   esac
   _task_set_field "$_file" "TASK_STATUS" "$3"
+  # Append status-change timestamp
+  local _ts_key
+  case "$3" in
+    active)                     _ts_key="activated" ;;
+    in_progress)                _ts_key="started" ;;
+    paused)                     _ts_key="paused" ;;
+    blocked)                    _ts_key="blocked" ;;
+    pending_user_confirmation)  _ts_key="pending" ;;
+    done)                       _ts_key="completed" ;;
+    cancelled)                  _ts_key="cancelled" ;;
+    failed)                     _ts_key="failed" ;;
+    *)                          _ts_key="" ;;
+  esac
+  [ -n "$_ts_key" ] && _task_append_timestamp "$_file" "$_ts_key"
 }
 
-_task_runtime() {
+# Walk up from cwd to find the project directory (contains .doey/)
+_task_find_project_dir() {
+  local _search_dir
+  _search_dir="$(pwd)"
+  while [ "$_search_dir" != "/" ]; do
+    if [ -d "${_search_dir}/.doey" ]; then
+      echo "$_search_dir"
+      return 0
+    fi
+    _search_dir="$(dirname "$_search_dir")"
+  done
+  return 1
+}
+
+# Return the persistent task directory (.doey/tasks/), auto-creating it
+_task_persistent_dir() {
+  local _proj_dir
+  _proj_dir="$(_task_find_project_dir 2>/dev/null)" || true
+  if [ -n "$_proj_dir" ]; then
+    mkdir -p "${_proj_dir}/.doey/tasks"
+    echo "${_proj_dir}/.doey/tasks"
+    return 0
+  fi
+  # Fallback: use RUNTIME_DIR if no .doey/ found (e.g. unregistered project)
   local _dir _name _session _runtime
   _dir="$(pwd)"
   _name="$(find_project "$_dir" 2>/dev/null)"
@@ -1830,16 +1920,92 @@ _task_runtime() {
   _session="doey-${_name}"
   _runtime=$(tmux show-environment -t "$_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
   [ -z "$_runtime" ] && { printf '  %s✗ Session not running: %s%s\n' "$ERROR" "$_session" "$RESET" >&2; return 1; }
+  mkdir -p "${_runtime}/tasks"
+  echo "${_runtime}/tasks"
+}
+
+# Get runtime dir for syncing (may fail silently if no session running)
+_task_runtime_dir() {
+  local _dir _name _session _runtime
+  _dir="$(pwd)"
+  _name="$(find_project "$_dir" 2>/dev/null)" || true
+  [ -z "$_name" ] && return 1
+  _session="doey-${_name}"
+  _runtime=$(tmux show-environment -t "$_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  [ -z "$_runtime" ] && return 1
   echo "$_runtime"
 }
 
+# Sync .task files and .next_id from persistent dir to runtime cache
+_task_sync_to_runtime() {
+  local _src="$1" _dst="$2"
+  [ -d "$_src" ] || return 0
+  mkdir -p "$_dst"
+  # Copy .next_id
+  [ -f "$_src/.next_id" ] && cp "$_src/.next_id" "$_dst/.next_id"
+  # Copy all .task files (including terminal — TUI may want history)
+  local _f
+  for _f in "$_src"/*.task; do
+    [ -f "$_f" ] || continue
+    cp "$_f" "$_dst/$(basename "$_f")"
+  done
+}
+
+# Show all fields of a single task
+_task_show() {
+  local _file="$1"
+  [ -f "$_file" ] || { printf '  %s✗ Task file not found%s\n' "$ERROR" "$RESET"; return 1; }
+  _task_read "$_file"
+  local _age=""
+  [ -n "$TASK_CREATED" ] && _age="$(_task_age "$TASK_CREATED")"
+  printf '\n'
+  printf '  %b━━━ Task #%s ━━━%b\n' "$BRAND" "$TASK_ID" "$RESET"
+  printf '  %bTitle:%b          %s\n' "$BOLD" "$RESET" "$TASK_TITLE"
+  printf '  %bStatus:%b         %s\n' "$BOLD" "$RESET" "$TASK_STATUS"
+  [ -n "$TASK_TYPE" ] && \
+  printf '  %bType:%b           %s\n' "$BOLD" "$RESET" "$TASK_TYPE"
+  [ -n "$TASK_TAGS" ] && \
+  printf '  %bTags:%b           %s\n' "$BOLD" "$RESET" "$TASK_TAGS"
+  [ -n "$TASK_CREATED_BY" ] && \
+  printf '  %bCreated by:%b     %s\n' "$BOLD" "$RESET" "$TASK_CREATED_BY"
+  [ -n "$TASK_ASSIGNED_TO" ] && \
+  printf '  %bAssigned to:%b    %s\n' "$BOLD" "$RESET" "$TASK_ASSIGNED_TO"
+  [ -n "$_age" ] && \
+  printf '  %bAge:%b            %s ago\n' "$BOLD" "$RESET" "$_age"
+  [ -n "$TASK_DESCRIPTION" ] && \
+  printf '  %bDescription:%b    %s\n' "$BOLD" "$RESET" "$TASK_DESCRIPTION"
+  [ -n "$TASK_ACCEPTANCE_CRITERIA" ] && \
+  printf '  %bAcceptance:%b     %s\n' "$BOLD" "$RESET" "$TASK_ACCEPTANCE_CRITERIA"
+  [ -n "$TASK_HYPOTHESES" ] && \
+  printf '  %bHypotheses:%b     %s\n' "$BOLD" "$RESET" "$TASK_HYPOTHESES"
+  [ -n "$TASK_DECISION_LOG" ] && \
+  printf '  %bDecisions:%b      %s\n' "$BOLD" "$RESET" "$TASK_DECISION_LOG"
+  [ -n "$TASK_SUBTASKS" ] && \
+  printf '  %bSubtasks:%b       %s\n' "$BOLD" "$RESET" "$TASK_SUBTASKS"
+  [ -n "$TASK_RELATED_FILES" ] && \
+  printf '  %bRelated files:%b  %s\n' "$BOLD" "$RESET" "$TASK_RELATED_FILES"
+  [ -n "$TASK_BLOCKERS" ] && \
+  printf '  %bBlockers:%b       %s\n' "$BOLD" "$RESET" "$TASK_BLOCKERS"
+  [ -n "$TASK_ATTACHMENTS" ] && \
+  printf '  %bAttachments:%b    %s\n' "$BOLD" "$RESET" "$TASK_ATTACHMENTS"
+  [ -n "$TASK_TIMESTAMPS" ] && \
+  printf '  %bTimestamps:%b     %s\n' "$BOLD" "$RESET" "$TASK_TIMESTAMPS"
+  [ -n "$TASK_NOTES" ] && \
+  printf '  %bNotes:%b          %s\n' "$BOLD" "$RESET" "$TASK_NOTES"
+  printf '  %bSchema:%b         v%s\n' "$DIM" "$RESET" "${TASK_SCHEMA_VERSION:-1}"
+  printf '\n'
+}
+
 task_command() {
-  local _runtime _tasks_dir _subcmd="${1:-list}"
+  local _tasks_dir _runtime_cache _subcmd="${1:-list}"
   shift 2>/dev/null || true
 
-  _runtime="$(_task_runtime)" || exit 1
-  _tasks_dir="${_runtime}/tasks"
+  _tasks_dir="$(_task_persistent_dir)" || exit 1
   mkdir -p "$_tasks_dir"
+  # Runtime cache for TUI sync (best-effort, may not exist if session is down)
+  _runtime_cache=""
+  local _rt
+  _rt="$(_task_runtime_dir 2>/dev/null)" && _runtime_cache="${_rt}/tasks"
 
   case "$_subcmd" in
     list|ls|"")
@@ -1847,7 +2013,11 @@ task_command() {
       local _count=0
       for _f in "${_tasks_dir}"/*.task; do
         [ -f "$_f" ] || continue
-        local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED
+        local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED TASK_TYPE
+        local TASK_TAGS TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION
+        local TASK_ATTACHMENTS TASK_ACCEPTANCE_CRITERIA TASK_HYPOTHESES
+        local TASK_DECISION_LOG TASK_SUBTASKS TASK_RELATED_FILES
+        local TASK_BLOCKERS TASK_TIMESTAMPS TASK_NOTES TASK_SCHEMA_VERSION
         _task_read "$_f"
         [ "$TASK_STATUS" = "done" ] && continue
         [ "$TASK_STATUS" = "cancelled" ] && continue
@@ -1856,13 +2026,19 @@ task_command() {
           in_progress)                _col="$SUCCESS" ;;
           pending_user_confirmation)  _col="$WARN" ;;
           active)                     _col="$BOLD" ;;
+          blocked)                    _col="$ERROR" ;;
+          paused)                     _col="$DIM" ;;
+          draft)                      _col="$DIM" ;;
           *)                          _col="$DIM" ;;
         esac
         _age="$(_task_age "$TASK_CREATED")"
-        printf '  %b[%s]%b  %b%-30s%b  %b%s%b  %s ago\n' \
+        local _type_tag=""
+        [ -n "$TASK_TYPE" ] && [ "$TASK_TYPE" != "feature" ] && _type_tag=" [${TASK_TYPE}]"
+        printf '  %b[%s]%b  %b%-30s%b  %b%s%b%s  %s ago\n' \
           "$BOLD" "$TASK_ID" "$RESET" \
           "$_col" "$TASK_STATUS" "$RESET" \
           "$BOLD" "$TASK_TITLE" "$RESET" \
+          "$_type_tag" \
           "$_age"
         _count=$((_count + 1))
       done
@@ -1870,7 +2046,7 @@ task_command() {
         printf '  %bNo active tasks.%b\n' "$DIM" "$RESET"
         printf '  %bAdd: doey task add "your goal"%b\n' "$DIM" "$RESET"
       else
-        printf '\n  %bLifecycle: active → in_progress → pending_user_confirmation → done%b\n' "$DIM" "$RESET"
+        printf '\n  %bLifecycle: draft → active → in_progress → pending_user_confirmation → done%b\n' "$DIM" "$RESET"
       fi
       printf '\n'
       ;;
@@ -1886,15 +2062,25 @@ task_command() {
       done
       [ -z "$_title" ] && { printf '  Usage: doey task add "Your task title" [--description "text"] [--attach "url"]\n'; exit 1; }
       local _id
-      _id="$(_task_create "$_runtime" "$_title" "$_desc" "$_attach")"
+      _id="$(_task_create "$_tasks_dir" "$_title" "$_desc" "$_attach")"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
       printf '\n  %s[%s]%s Task created: %s%s%s\n\n' \
         "$SUCCESS" "$_id" "$RESET" "$BOLD" "$_title" "$RESET"
+      ;;
+
+    show)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task show <id>\n'; exit 1; }
+      local _file="${_tasks_dir}/${_id}.task"
+      [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
+      _task_show "$_file"
       ;;
 
     ready|activate)
       local _id="${1:-}"
       [ -z "$_id" ] && { printf '  Usage: doey task ready <id>\n'; exit 1; }
       _task_set_status "$_tasks_dir" "$_id" "active"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
       printf '  %s✓ Task [%s] active.%s\n' "$SUCCESS" "$_id" "$RESET"
       ;;
 
@@ -1902,13 +2088,31 @@ task_command() {
       local _id="${1:-}"
       [ -z "$_id" ] && { printf '  Usage: doey task start <id>\n'; exit 1; }
       _task_set_status "$_tasks_dir" "$_id" "in_progress"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
       printf '  %s● Task [%s] in progress.%s\n' "$SUCCESS" "$_id" "$RESET"
+      ;;
+
+    pause)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task pause <id>\n'; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "paused"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
+      printf '  %s⏸ Task [%s] paused.%s\n' "$WARN" "$_id" "$RESET"
+      ;;
+
+    block)
+      local _id="${1:-}"
+      [ -z "$_id" ] && { printf '  Usage: doey task block <id>\n'; exit 1; }
+      _task_set_status "$_tasks_dir" "$_id" "blocked"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
+      printf '  %s⊘ Task [%s] blocked.%s\n' "$ERROR" "$_id" "$RESET"
       ;;
 
     confirm|pending)
       local _id="${1:-}"
       [ -z "$_id" ] && { printf '  Usage: doey task confirm <id>\n'; exit 1; }
       _task_set_status "$_tasks_dir" "$_id" "pending_user_confirmation"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
       printf '  %s✓ Task [%s] pending confirmation.%s\n' "$WARN" "$_id" "$RESET"
       ;;
 
@@ -1924,6 +2128,7 @@ task_command() {
         cancel) _ts_status="cancelled"; _ts_icon="—"; _ts_color="$DIM" ;;
       esac
       _task_set_status "$_tasks_dir" "$_id" "$_ts_status"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
       printf '  %s%s Task [%s] %s.%s\n' "$_ts_color" "$_ts_icon" "$_id" "$_ts_status" "$RESET"
       ;;
 
@@ -1931,6 +2136,7 @@ task_command() {
       local _id="${1:-}" _desc="${2:-}"
       [ -z "$_id" ] || [ -z "$_desc" ] && { printf '  Usage: doey task describe <id> "description text"\n'; exit 1; }
       _task_set_description "$_tasks_dir" "$_id" "$_desc"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
       printf '  %s✓ Task [%s] description updated.%s\n' "$SUCCESS" "$_id" "$RESET"
       ;;
 
@@ -1938,11 +2144,12 @@ task_command() {
       local _id="${1:-}" _attachment="${2:-}"
       [ -z "$_id" ] || [ -z "$_attachment" ] && { printf '  Usage: doey task attach <id> "url_or_path"\n'; exit 1; }
       _task_add_attachment "$_tasks_dir" "$_id" "$_attachment"
+      [ -n "$_runtime_cache" ] && _task_sync_to_runtime "$_tasks_dir" "$_runtime_cache"
       printf '  %s✓ Attachment added to task [%s].%s\n' "$SUCCESS" "$_id" "$RESET"
       ;;
 
     *)
-      printf '  Usage: doey task [list|add|ready|start|confirm|pending|done|failed|cancel|describe|attach]\n'
+      printf '  Usage: doey task [list|add|show|ready|start|pause|block|confirm|pending|done|failed|cancel|describe|attach]\n'
       ;;
   esac
 }
@@ -2623,6 +2830,11 @@ _init_doey_session() {
   tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
   # Export config values so hooks (running in subshells) can read them
   tmux set-environment -t "$session" DOEY_INFO_PANEL_REFRESH "$DOEY_INFO_PANEL_REFRESH"
+
+  # Sync persistent tasks (.doey/tasks/) → runtime cache for hooks/TUI
+  if [ -d "${dir}/.doey/tasks" ]; then
+    _task_sync_to_runtime "${dir}/.doey/tasks" "${runtime_dir}/tasks"
+  fi
 
   # Generate settings overlay with Doey statusline (ships with Doey, not user config)
   local _statusline_cmd="$HOME/.local/bin/doey-statusline.sh"
