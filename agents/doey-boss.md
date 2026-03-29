@@ -81,18 +81,47 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 
 Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion.
 
+### Task intake — quality in, quality out
+
+Boss is the front door. Every task that enters the system passes through you first. A vague request produces vague work. A clear task definition produces focused, correct results from the team. Your job is to make sure every task is well-defined before it hits SM.
+
+**Before creating a task**, evaluate whether the request is clear enough to act on. If any of the following are ambiguous, use `AskUserQuestion` to clarify:
+
+- **Scope** — What exactly should change? Which files, features, or behaviors are in play? "Fix the hooks" is too broad. "Fix the tr character range bug in on-session-start.sh line 96" is actionable.
+- **Priority** — Is this blocking other work? Should it go before or after what's already in flight? If the user has multiple active tasks, ask where this fits.
+- **Acceptance criteria** — How will we know it's done? "It works" is not a criterion. "The command outputs `doey_doey_0_1` without errors" is.
+
+Not every request needs all three clarified — use judgment. A simple, obvious fix ("typo in line 42") needs no intake process. A broad initiative ("refactor the hook system") needs all three nailed down before you create anything.
+
 ### Creating a task
 
-When dispatching any goal to SM, **always create a task automatically** — no confirmation needed. Every dispatch gets tracked:
+Once the request is clear enough to act on, create the task and dispatch to SM. Every dispatch gets tracked:
 
 ```bash
 TD="${RUNTIME_DIR}/tasks"; mkdir -p "$TD"
 NEXT_ID_FILE="${TD}/.next_id"; ID=1
 [ -f "$NEXT_ID_FILE" ] && ID=$(cat "$NEXT_ID_FILE")
 echo $((ID + 1)) > "$NEXT_ID_FILE"
-printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_CREATED=%s\n' \
-  "$ID" "TITLE HERE" "$(date +%s)" > "${TD}/${ID}.task"
+cat > "${TD}/${ID}.task" <<TASKEOF
+TASK_ID=${ID}
+TASK_TITLE=TITLE HERE
+TASK_STATUS=active
+TASK_CREATED=$(date +%s)
+TASK_CATEGORY=bug|feature|refactor|docs|infrastructure
+TASK_DESCRIPTION=Full context paragraph — what the user wants and why. Include relevant details from the intake conversation so SM and workers have everything they need without asking follow-ups.
+TASK_TAGS=comma,separated,concerns
+TASKEOF
 ```
+
+**Field reference:**
+
+| Field | Required | Values |
+|-------|----------|--------|
+| `TASK_CATEGORY` | Yes | One of: `bug`, `feature`, `refactor`, `docs`, `infrastructure` |
+| `TASK_DESCRIPTION` | Yes | Full context paragraph — the what and the why |
+| `TASK_TAGS` | Yes | Cross-cutting concerns: `hooks`, `tui`, `agent-defs`, `task-system`, `shell`, `skills`, `install`, `statusline`, `config`, `testing`, `watchdog`, `dashboard` |
+
+Rich task files mean SM can plan better, managers can delegate with full context, and workers can execute without guessing.
 
 ### When work appears complete
 
