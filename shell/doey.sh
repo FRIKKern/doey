@@ -4048,7 +4048,6 @@ doey_remote() {
   case "$subcmd" in
     list)
       # List all remotes
-      local found=false
       local remote_files
       remote_files=$(ls "$remotes_dir"/*.remote 2>/dev/null || true)
       if [ -z "$remote_files" ]; then
@@ -4099,7 +4098,7 @@ doey_remote() {
       printf "  ${DIM}Removing SSH key...${RESET}\n"
       hcloud ssh-key delete "doey-${project}" 2>/dev/null || true
 
-      rm -f "$remote_file"
+      command -v trash >/dev/null 2>&1 && trash "$remote_file" || rm -f "$remote_file"
       printf "  ${SUCCESS}Remote '%s' removed.${RESET}\n\n" "$project"
       ;;
 
@@ -4141,6 +4140,10 @@ doey_remote() {
 
 _doey_remote_provision() {
   local project="$1"
+  if [ -z "$project" ] || ! echo "$project" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9_-]*$'; then
+    printf "  ${ERROR}Invalid project name.${RESET} Use only letters, numbers, hyphens, and underscores.\n"
+    return 1
+  fi
   local remotes_dir="$HOME/.config/doey/remotes"
   local remote_file="$remotes_dir/${project}.remote"
   local ssh_key="$remotes_dir/doey_ed25519"
@@ -4180,7 +4183,7 @@ _doey_remote_provision() {
       return $?
     else
       printf "  ${WARNING}Server from config is gone. Re-provisioning...${RESET}\n"
-      rm -f "$remote_file"
+      command -v trash >/dev/null 2>&1 && trash "$remote_file" || rm -f "$remote_file"
     fi
   fi
 
@@ -4200,14 +4203,15 @@ _doey_remote_provision() {
 
   # Create server
   printf "  ${DIM}Creating server '%s' (cx22, Ubuntu 24.04, nbg1)...${RESET}\n" "$server_name"
-  if ! hcloud server create \
+  local create_output
+  if ! create_output=$(hcloud server create \
     --name "$server_name" \
     --type cx22 \
     --image ubuntu-24.04 \
     --location nbg1 \
-    --ssh-key "doey-${project}" >/dev/null 2>&1; then
+    --ssh-key "doey-${project}" 2>&1); then
     printf "  ${ERROR}Failed to create server.${RESET} Check hcloud output:\n"
-    hcloud server create --name "$server_name" --type cx22 --image ubuntu-24.04 --location nbg1 --ssh-key "doey-${project}" 2>&1 | sed 's/^/  /'
+    echo "$create_output" | sed 's/^/  /'
     return 1
   fi
 
