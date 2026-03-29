@@ -27,10 +27,22 @@ type TeamConfig struct {
 
 // PaneStatus from status/<session>_<W>_<P>.status
 type PaneStatus struct {
-	Pane    string // e.g. "doey-doey:3.1"
-	Status  string // BUSY, READY, FINISHED, RESERVED, WORKING, ERROR
-	Task    string
-	Updated string
+	Pane      string // e.g. "doey-doey:3.1"
+	Status    string // BUSY, READY, FINISHED, RESERVED, WORKING, ERROR
+	Task      string
+	Updated   string
+	WindowIdx int
+	PaneIdx   int
+}
+
+// WorkerResult is an alias for PaneResult used by the dashboard.
+type WorkerResult = PaneResult
+
+// LogEntry represents a parsed task log entry with action and detail.
+type LogEntry struct {
+	Timestamp string
+	Action    string
+	Detail    string
 }
 
 // TaskLog represents a timestamped activity log entry within a task.
@@ -106,6 +118,7 @@ type PaneResult struct {
 	Pane         string   `json:"pane"`
 	Title        string   `json:"title"`
 	Status       string   `json:"status"`
+	Summary      string   `json:"summary"`
 	Timestamp    int64    `json:"timestamp"`
 	FilesChanged []string `json:"files_changed"`
 	ToolCalls    int      `json:"tool_calls"`

@@ -306,6 +306,12 @@ type ExpandedCard struct {
 	SubtaskCursor int // which subtask is highlighted (-1 = none)
 	ScrollOffset  int // viewport scroll position
 	Messages      []runtime.Message // IPC messages related to this task
+
+	// Live activity feed data (populated by parent from snapshot)
+	RuntimeDir   string                       // path to runtime directory
+	ProjectDir   string                       // path to project directory
+	PaneStatuses []runtime.PaneStatus         // all pane statuses from snapshot
+	Results      map[string]runtime.PaneResult // pane ID -> result from snapshot
 }
 
 // Render draws the full expanded card content as a styled string.
@@ -497,6 +503,20 @@ func (e *ExpandedCard) Render() string {
 		}
 	}
 
+	// --- Worker Status ---
+	if workerRows := e.renderWorkerStatus(); len(workerRows) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, "Worker Status"))
+		sections = append(sections, workerRows...)
+	}
+
+	// --- Files Changed ---
+	if fileRows := e.renderFilesChanged(); len(fileRows) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, "Files Changed"))
+		sections = append(sections, fileRows...)
+	}
+
 	// --- Footer hint ---
 	sections = append(sections, "")
 	closeBtn := zone.Mark("detail-close",
@@ -555,6 +575,12 @@ func (e *ExpandedCard) ContentHeight() int {
 			msgCount = 20
 		}
 		lines += 2 + msgCount*3 // section header + spacing + 3 lines per message (ts+badge, body, blank)
+	}
+	if workerRows := e.renderWorkerStatus(); len(workerRows) > 0 {
+		lines += 2 + len(workerRows)
+	}
+	if fileRows := e.renderFilesChanged(); len(fileRows) > 0 {
+		lines += 2 + len(fileRows)
 	}
 	return lines
 }
@@ -654,4 +680,114 @@ func formatAge(d time.Duration) string {
 		days := int(d.Hours() / 24)
 		return fmt.Sprintf("%dd", days)
 	}
+}
+
+// renderWorkerStatus returns styled rows for panes assigned to this task.
+func (e *ExpandedCard) renderWorkerStatus() []string {
+	if len(e.PaneStatuses) == 0 {
+		return nil
+	}
+	task := e.Item.Task
+	taskID := task.ID
+	taskTitle := strings.ToLower(task.Title)
+
+	var rows []string
+	for _, ps := range e.PaneStatuses {
+		// Match pane to this task by ID or title substring in the Task field.
+		paneTask := strings.ToLower(ps.Task)
+		if paneTask == "" {
+			continue
+		}
+		if !strings.Contains(paneTask, taskID) && !strings.Contains(paneTask, taskTitle) {
+			continue
+		}
+
+		// Status badge with color coding.
+		var statusColor lipgloss.AdaptiveColor
+		switch ps.Status {
+		case "BUSY", "WORKING":
+			statusColor = e.Theme.Primary
+		case "FINISHED":
+			statusColor = e.Theme.Success
+		case "ERROR":
+			statusColor = e.Theme.Danger
+		case "READY":
+			statusColor = e.Theme.Muted
+		case "RESERVED":
+			statusColor = e.Theme.Accent
+		default:
+			statusColor = e.Theme.Muted
+		}
+
+		badge := lipgloss.NewStyle().
+			Background(statusColor).
+			Foreground(e.Theme.BgText).
+			Padding(0, 1).
+			Bold(true).
+			Render(ps.Status)
+
+		paneLabel := lipgloss.NewStyle().
+			Foreground(e.Theme.Text).
+			Render(ps.Pane)
+
+		updated := ""
+		if ps.Updated != "" {
+			updated = lipgloss.NewStyle().
+				Foreground(e.Theme.Muted).
+				Faint(true).
+				Render("  " + ps.Updated)
+		}
+
+		rows = append(rows, "  "+paneLabel+" "+badge+updated)
+	}
+	return rows
+}
+
+// renderFilesChanged returns styled rows for files changed by workers on this task.
+func (e *ExpandedCard) renderFilesChanged() []string {
+	if len(e.Results) == 0 {
+		return nil
+	}
+	task := e.Item.Task
+	taskID := task.ID
+	taskTitle := strings.ToLower(task.Title)
+
+	// Collect unique files from matching results.
+	seen := make(map[string]bool)
+	var files []string
+
+	for _, result := range e.Results {
+		// Match result to this task by title or pane task field.
+		resultTitle := strings.ToLower(result.Title)
+		if resultTitle != "" &&
+			!strings.Contains(resultTitle, taskID) &&
+			!strings.Contains(resultTitle, taskTitle) {
+			continue
+		}
+		for _, f := range result.FilesChanged {
+			if !seen[f] {
+				seen[f] = true
+				files = append(files, f)
+			}
+		}
+	}
+
+	if len(files) == 0 {
+		return nil
+	}
+
+	sort.Strings(files)
+	maxFiles := 15
+	if len(files) > maxFiles {
+		files = files[:maxFiles]
+		files = append(files, fmt.Sprintf("… and %d more", len(seen)-maxFiles))
+	}
+
+	var rows []string
+	for _, f := range files {
+		bullet := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("  •")
+		file := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + f)
+		rows = append(rows, bullet+file)
+	}
+	return rows
 }

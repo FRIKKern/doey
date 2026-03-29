@@ -197,6 +197,11 @@ func (r *Reader) parsePaneStatuses() map[string]PaneStatus {
 	for _, path := range matches {
 		base := strings.TrimSuffix(filepath.Base(path), ".status")
 		ps := PaneStatus{Pane: underscoreToPaneID(base)}
+		// Extract WindowIdx and PaneIdx from the pane ID (e.g. "2.1")
+		if dotIdx := strings.IndexByte(ps.Pane, '.'); dotIdx >= 0 {
+			ps.WindowIdx, _ = strconv.Atoi(ps.Pane[:dotIdx])
+			ps.PaneIdx, _ = strconv.Atoi(ps.Pane[dotIdx+1:])
+		}
 
 		f, err := os.Open(path)
 		if err != nil {
