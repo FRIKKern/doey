@@ -206,6 +206,54 @@ When you receive a `permission_request`, evaluate it before acting:
 
 Check for `permission_request` messages as part of your regular message drain (Step 1 of the active monitoring loop). No separate polling needed — they arrive in the same `${RUNTIME_DIR}/messages/` queue as `worker_finished` and other messages.
 
+## Structured Execution Briefs
+
+When SM dispatches work from a structured task package (.task + .json), you receive an execution brief instead of prose. Both formats are valid — prose tasks still work as before.
+
+### Brief Format
+
+```
+TASK_ID: <stable reference — use in subtask tracking and result reports>
+TITLE: <task title>
+TEAM_SCOPE: <what THIS team is responsible for — a subset of the full task>
+INTENT: <what the user wants and why>
+REPRESENTATION_LAYER: <how the solution should be structured/organized>
+HYPOTHESES:
+  • H1: <approach> — confidence: HIGH/MEDIUM/LOW
+  • H2: <alternative> — confidence: HIGH/MEDIUM/LOW
+CONSTRAINTS: <technical/scope limitations>
+SUCCESS_CRITERIA: <measurable outcomes that define "done">
+DELIVERABLES: <concrete file outputs expected from this team>
+EVIDENCE_REQUESTED: <what validation/proof to include in results>
+```
+
+### Translating Briefs to Worker Subtasks
+
+When you receive a structured brief:
+
+1. **Decompose DELIVERABLES** into per-worker assignments (one file per worker)
+2. **Include in each worker prompt:**
+   - `TASK_ID` — for subtask tracking (use in subtask files)
+   - Their specific deliverable(s) from the brief
+   - Relevant CONSTRAINTS that apply to their piece
+   - SUCCESS_CRITERIA for their assignment
+   - EVIDENCE_REQUESTED — what proof to capture
+3. **Track hypotheses** — if the brief assigns multiple hypotheses, note which worker tests which approach
+4. **Collect evidence** — when workers report back, gather their evidence outputs and include in your completion report to SM
+5. **Reference TASK_ID** in subtask files: `PARENT_TASK_ID=<TASK_ID from brief>`
+
+### Completion Report for Structured Tasks
+
+When all workers finish a structured brief, your task_complete message to SM should include:
+
+```
+TASK_ID: <from the brief>
+HYPOTHESES_TESTED: <which were tried, which succeeded>
+EVIDENCE: <summary of validation results>
+DELIVERABLES_PRODUCED: <files created/modified>
+SUCCESS_CRITERIA_MET: <yes/no per criterion>
+```
+
 ## Rules
 
 1. **You cannot run git commit or git push.** These are blocked by the pre-tool-use hook. If work needs to be committed, send a message to Session Manager describing what changed and why. SM handles git operations directly.
