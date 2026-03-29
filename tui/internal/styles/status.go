@@ -27,41 +27,33 @@ func StatusColor(status string) lipgloss.AdaptiveColor {
 	}
 }
 
-// StatusText returns status text colored by foreground only — calm, informational.
+// StatusText returns status text colored by foreground only — subtle, informational.
 func StatusText(status string) string {
 	color := StatusColor(status)
 
-	style := lipgloss.NewStyle().Foreground(color)
-	if status == "ERROR" {
-		style = style.Bold(true)
-	}
-
 	label := status
 	if status == "WORKING" {
 		label = "BUSY"
 	}
 
-	return style.Render(label)
+	return lipgloss.NewStyle().Foreground(color).Render(label)
 }
 
-// StatusBadge returns a styled, padded badge string for the given status.
-// Prefer StatusText for a calmer look; use StatusBadge only where emphasis is needed.
+// StatusBadge returns a styled badge string for the given status.
+// Colored text with bold — no background, no solid blocks.
 func StatusBadge(status string) string {
 	color := StatusColor(status)
-	dark := defaultTheme.BgText
-
-	style := lipgloss.NewStyle().
-		Foreground(dark).
-		Background(color).
-		Bold(true).
-		Padding(0, 1)
 
 	label := status
 	if status == "WORKING" {
 		label = "BUSY"
 	}
 
-	return style.Render(label)
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Bold(true).
+		Padding(0, 1).
+		Render(label)
 }
 
 // TeamBadge returns a styled badge for team type indicators.
@@ -82,37 +74,26 @@ func TeamBadge(kind string) string {
 	}
 }
 
-// TaskIcon returns a styled icon for task status.
+// TaskIcon returns a styled icon for task status — subtle, muted indicators.
 func TaskIcon(status string) string {
+	dim := func(c lipgloss.AdaptiveColor) lipgloss.Style {
+		return lipgloss.NewStyle().Foreground(c).Faint(true)
+	}
 	switch status {
 	case "active":
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Muted).
-			Render("○")
+		return dim(defaultTheme.Muted).Render("○")
 	case "in_progress":
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Success).
-			Render("●")
+		return lipgloss.NewStyle().Foreground(defaultTheme.Warning).Render("●")
 	case "pending_user_confirmation":
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Warning).
-			Render("⬤")
+		return lipgloss.NewStyle().Foreground(defaultTheme.Warning).Render("◉")
 	case "done":
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Muted).
-			Render("○")
+		return dim(defaultTheme.Success).Render("✓")
 	case "cancelled":
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Muted).
-			Render("○")
+		return dim(defaultTheme.Muted).Render("○")
 	case "failed":
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Danger).
-			Render("✕")
+		return lipgloss.NewStyle().Foreground(defaultTheme.Danger).Render("✕")
 	default:
-		return lipgloss.NewStyle().
-			Foreground(defaultTheme.Muted).
-			Render("○")
+		return dim(defaultTheme.Muted).Render("○")
 	}
 }
 
@@ -156,68 +137,61 @@ func TagBadge(tag string) string {
 		Render("#" + tag)
 }
 
-// SectionPill renders an inverted-color pill badge for section headers.
-// Inspired by omm's title pill pattern: foreground=dark, background=color.
+// SectionPill renders a subtle section header with a diamond prefix.
+// No background — just colored marker + dim label text.
 func SectionPill(label string, bg lipgloss.AdaptiveColor) string {
-	return lipgloss.NewStyle().
-		Foreground(defaultTheme.BgText).
-		Background(bg).
-		Bold(true).
-		Padding(0, 1).
-		Render(label)
+	marker := lipgloss.NewStyle().Foreground(bg).Render("◆")
+	text := lipgloss.NewStyle().Foreground(defaultTheme.Text).Faint(true).Render(" " + label)
+	return marker + text
 }
 
-// SubtaskProgress renders a colored subtask progress indicator.
-// Shows "(done/total done)" with green when fully complete.
+// SubtaskProgress renders a subtask progress indicator in muted style.
+// Shows "(done/total)" — dim unless fully complete.
 func SubtaskProgress(done, total int) string {
 	if total == 0 {
 		return ""
 	}
-	label := fmt.Sprintf("(%d/%d done)", done, total)
-	color := defaultTheme.Muted
+	label := fmt.Sprintf("(%d/%d)", done, total)
 	if done == total {
-		color = defaultTheme.Success
-	} else if done > 0 {
-		color = defaultTheme.Warning
+		return lipgloss.NewStyle().Foreground(defaultTheme.Success).Faint(true).Render(label)
 	}
-	return lipgloss.NewStyle().Foreground(color).Render(label)
+	return lipgloss.NewStyle().Foreground(defaultTheme.Muted).Render(label)
 }
 
-// LogEventBadge returns a styled pill badge for a log event type.
+// LogEventBadge returns a subtle colored label for a log event type.
+// Lowercase text with event color — no background, no solid blocks.
 func LogEventBadge(theme Theme, eventType string) string {
-	var bg lipgloss.AdaptiveColor
+	var clr lipgloss.AdaptiveColor
 	switch eventType {
 	case "info":
-		bg = theme.Info
-		if bg == (lipgloss.AdaptiveColor{}) {
-			bg = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#3B82F6"}
+		clr = theme.Info
+		if clr == (lipgloss.AdaptiveColor{}) {
+			clr = theme.Primary
 		}
 	case "warn", "warning":
-		bg = theme.Warning
+		clr = theme.Warning
 	case "error":
-		bg = theme.Danger
+		clr = theme.Danger
 	case "task":
-		bg = theme.Primary
+		clr = theme.Primary
 	case "dispatch":
-		bg = theme.Accent
+		clr = theme.Accent
 	case "research":
-		bg = theme.Success
+		clr = theme.Success
 	case "commit", "git":
-		bg = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#6B7280"}
+		clr = theme.Muted
 	default:
-		bg = theme.Muted
+		clr = theme.Muted
 	}
 
-	label := strings.ToUpper(eventType)
+	label := strings.ToLower(eventType)
 	return lipgloss.NewStyle().
-		Foreground(theme.BgText).
-		Background(bg).
-		Bold(true).
+		Foreground(clr).
 		Padding(0, 1).
 		Render(label)
 }
 
-// LogTimestamp renders a timestamp in a subtle, non-distracting style.
+// LogTimestamp renders a timestamp in a very dim, barely-visible style.
 func LogTimestamp(theme Theme, ts string) string {
 	color := theme.Subtle
 	if color == (lipgloss.AdaptiveColor{}) {
@@ -229,10 +203,10 @@ func LogTimestamp(theme Theme, ts string) string {
 		Render(ts)
 }
 
-// LogPaneLabel renders a pane identifier with subtle styling.
+// LogPaneLabel renders a pane identifier with subtle, quiet styling.
 func LogPaneLabel(theme Theme, pane string) string {
 	return lipgloss.NewStyle().
 		Foreground(theme.Muted).
-		Padding(0, 1).
+		Faint(true).
 		Render(pane)
 }

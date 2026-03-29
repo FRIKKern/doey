@@ -27,13 +27,13 @@ func StatusAccentColor(t Theme, status string) lipgloss.AdaptiveColor {
 	}
 }
 
-// accentBorder returns a rounded border with a left-side block accent.
-// The left edge uses "▎" (left 1/8 block) for a subtle colored stripe.
+// accentBorder returns a rounded border with a thin left-side line.
+// Uses "│" for a barely-visible structural edge.
 func accentBorder() lipgloss.Border {
 	r := lipgloss.RoundedBorder()
-	r.Left = "▎"
-	r.TopLeft = "▎"
-	r.BottomLeft = "▎"
+	r.Left = "│"
+	r.TopLeft = "│"
+	r.BottomLeft = "│"
 	return r
 }
 
@@ -41,22 +41,22 @@ func accentBorder() lipgloss.Border {
 // The left border uses the status accent color; when selected the entire
 // border switches to Primary and the background gets a subtle highlight.
 func CardStyle(t Theme, status string, selected bool, width int) lipgloss.Style {
+	border := accentBorder()
+
 	if selected {
 		return lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(t.Primary).
-			Background(lipgloss.AdaptiveColor{Light: "#F0F9FF", Dark: "#1E293B"}).
+			Border(border).
+			BorderForeground(t.Separator).
+			BorderLeftForeground(t.Muted).
+			Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"}).
 			Width(width).
 			Padding(0, 1)
 	}
 
-	accent := StatusAccentColor(t, status)
-	border := accentBorder()
-
 	return lipgloss.NewStyle().
 		Border(border).
-		BorderForeground(t.Muted).
-		BorderLeftForeground(accent).
+		BorderForeground(t.Separator).
+		BorderLeftForeground(t.Separator).
 		Width(width).
 		Padding(0, 1)
 }
@@ -113,68 +113,56 @@ func TypeTagCard(taskType string, t Theme) string {
 // ExpandedCardStyle returns a full-width card frame for the expanded task view.
 // Uses a rounded border with status-colored left accent and subtle background.
 func ExpandedCardStyle(theme Theme, status string, width int) lipgloss.Style {
-	accent := StatusAccentColor(theme, status)
 	border := accentBorder()
 
 	return lipgloss.NewStyle().
 		Border(border).
-		BorderForeground(theme.Muted).
-		BorderLeftForeground(accent).
-		Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#0F172A"}).
+		BorderForeground(theme.Separator).
+		BorderLeftForeground(theme.Separator).
 		Width(width).
 		Padding(1, 1)
 }
 
-// SubtaskCheckbox returns a styled checkbox: "☑" (Success) or "☐" (Muted).
+// SubtaskCheckbox returns a styled checkbox: "✓" (dim Success) or "○" (Muted).
 func SubtaskCheckbox(theme Theme, done bool) string {
 	if done {
-		return lipgloss.NewStyle().Foreground(theme.Success).Render("☑")
+		return lipgloss.NewStyle().Foreground(theme.Success).Faint(true).Render("✓")
 	}
-	return lipgloss.NewStyle().Foreground(theme.Muted).Render("☐")
+	return lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render("○")
 }
 
-// SubtaskRow renders a full subtask row with indent, checkbox, title, and
-// status badge. Selected rows get a Primary-colored ▎ indicator.
+// SubtaskRow renders a subtask row with indent, checkbox, and title.
+// Selected rows get a subtle background tint. Done items are dimmed.
 func SubtaskRow(theme Theme, title string, status string, done bool, selected bool, indent int) string {
 	prefix := strings.Repeat("  ", indent)
-
-	indicator := " "
-	if selected {
-		indicator = lipgloss.NewStyle().
-			Foreground(theme.Primary).
-			Render("▎")
-	}
 
 	checkbox := SubtaskCheckbox(theme, done)
 
 	titleStyle := lipgloss.NewStyle().Foreground(theme.Text)
 	if done {
-		titleStyle = titleStyle.Faint(true)
+		titleStyle = titleStyle.Foreground(theme.Muted).Faint(true)
 	}
 
-	badge := ""
-	if status != "" {
-		bg := StatusAccentColor(theme, status)
-		badge = " " + lipgloss.NewStyle().
-			Foreground(theme.BgText).
-			Background(bg).
-			Padding(0, 1).
-			Render(status)
+	row := fmt.Sprintf("%s  %s %s", prefix, checkbox, titleStyle.Render(title))
+
+	if selected {
+		row = lipgloss.NewStyle().
+			Background(lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#1E293B"}).
+			Render(row)
 	}
 
-	return fmt.Sprintf("%s%s %s %s%s",
-		prefix, indicator, checkbox, titleStyle.Render(title), badge)
+	return row
 }
 
-// ExpandedSectionHeader renders a section header pill for expanded card
-// sections (Description, Subtasks, Decisions, Notes).
+// ExpandedSectionHeader renders a section header for expanded card sections
+// (Description, Subtasks, Decisions, Notes). Diamond prefix, no background.
 func ExpandedSectionHeader(theme Theme, title string) string {
-	return SectionPill(title, theme.Primary)
+	return SectionTitle(theme, title)
 }
 
 // DecisionLogEntry renders a single decision log line with dim timestamp.
 func DecisionLogEntry(theme Theme, text string, timestamp string) string {
-	ts := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render(timestamp)
+	ts := lipgloss.NewStyle().Foreground(theme.Subtle).Faint(true).Render(timestamp)
 	body := lipgloss.NewStyle().Foreground(theme.Text).Render(text)
 	return fmt.Sprintf("%s  %s", ts, body)
 }
@@ -269,36 +257,30 @@ func ExpandedProgressBar(theme Theme, done int, total int, width int) string {
 	filled := barWidth * done / total
 	empty := barWidth - filled
 
-	filledStyle := lipgloss.NewStyle().Foreground(theme.Primary)
-	emptyStyle := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true)
+	filledStyle := lipgloss.NewStyle().Foreground(theme.Success).Faint(true)
+	emptyStyle := lipgloss.NewStyle().Foreground(theme.Subtle)
 
 	bar := filledStyle.Render(strings.Repeat("━", filled)) +
-		emptyStyle.Render(strings.Repeat("╌", empty))
+		emptyStyle.Render(strings.Repeat("─", empty))
 
-	pctText := ""
-	if total > 0 {
-		pct := 100 * done / total
-		pctText = lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render(fmt.Sprintf(" %d%%", pct))
-	}
-
-	labelStyled := lipgloss.NewStyle().Foreground(theme.Text).Render(label)
-	return fmt.Sprintf("%s %s%s", labelStyled, bar, pctText)
+	labelStyled := lipgloss.NewStyle().Foreground(theme.Muted).Render(label)
+	return fmt.Sprintf("%s %s", labelStyled, bar)
 }
 
-// DescriptionBlock renders task description text as a styled blockquote with
-// a subtle left border accent, slight indent, and word-wrapping.
+// DescriptionBlock renders task description text as calm body text with a
+// thin dim left border and slightly muted text color.
 func DescriptionBlock(theme Theme, text string, width int) string {
 	if text == "" {
 		return ""
 	}
-	accent := lipgloss.NewStyle().Foreground(theme.Primary).Render("▎")
+	accent := lipgloss.NewStyle().Foreground(theme.Separator).Render("│")
 	contentWidth := width - 3 // accent + space + margin
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
 
 	wrapped := lipgloss.NewStyle().
-		Foreground(theme.Text).
+		Foreground(theme.Muted).
 		Width(contentWidth).
 		Render(text)
 
@@ -306,27 +288,26 @@ func DescriptionBlock(theme Theme, text string, width int) string {
 	for _, line := range strings.Split(wrapped, "\n") {
 		lines = append(lines, accent+" "+line)
 	}
-	return strings.Join(lines, "\n")
+	return "\n" + strings.Join(lines, "\n")
 }
 
-// SectionTitle renders a section header (e.g. "Subtasks", "Decision Log")
-// with Primary+Bold styling and a thin decorative underline.
+// SectionTitle renders a section header with a diamond prefix and bold label.
+// Clean typographic style — no background, no box.
 func SectionTitle(theme Theme, label string) string {
+	diamond := lipgloss.NewStyle().
+		Foreground(theme.Muted).
+		Render("◆")
+
 	title := lipgloss.NewStyle().
-		Foreground(theme.Primary).
+		Foreground(theme.Text).
 		Bold(true).
 		Render(label)
 
-	underline := lipgloss.NewStyle().
-		Foreground(theme.Muted).
-		Faint(true).
-		Render(strings.Repeat("─", lipgloss.Width(label)))
-
-	return title + "\n" + underline + "\n"
+	return diamond + " " + title + "\n"
 }
 
-// ActivityEntry renders a single activity log entry within a card: fixed-width
-// timestamp, colored type badge, and wrapped text body.
+// ActivityEntry renders a single activity log entry: dim timestamp,
+// muted colored type text, and normal body text.
 func ActivityEntry(theme Theme, timestamp, entryType, text string, width int) string {
 	ts := lipgloss.NewStyle().
 		Foreground(theme.Subtle).
@@ -334,27 +315,24 @@ func ActivityEntry(theme Theme, timestamp, entryType, text string, width int) st
 		Width(12).
 		Render(timestamp)
 
-	badgeColor := theme.Muted
+	typeColor := theme.Muted
 	switch entryType {
 	case "decision":
-		badgeColor = theme.Primary
+		typeColor = theme.Primary
 	case "note":
-		badgeColor = theme.Accent
+		typeColor = theme.Accent
 	case "status":
-		badgeColor = theme.Warning
+		typeColor = theme.Warning
 	case "error":
-		badgeColor = theme.Danger
+		typeColor = theme.Danger
 	case "done":
-		badgeColor = theme.Success
+		typeColor = theme.Success
 	}
-	badge := lipgloss.NewStyle().
-		Foreground(theme.BgText).
-		Background(badgeColor).
-		Padding(0, 1).
-		Bold(true).
+	typeLabel := lipgloss.NewStyle().
+		Foreground(typeColor).
 		Render(entryType)
 
-	bodyWidth := width - 12 - lipgloss.Width(entryType) - 6 // ts + badge + padding
+	bodyWidth := width - 12 - lipgloss.Width(entryType) - 3 // ts + type + spaces
 	if bodyWidth < 10 {
 		bodyWidth = 10
 	}
@@ -363,14 +341,14 @@ func ActivityEntry(theme Theme, timestamp, entryType, text string, width int) st
 		Width(bodyWidth).
 		Render(text)
 
-	return fmt.Sprintf("%s %s %s", ts, badge, body)
+	return fmt.Sprintf("%s %s %s", ts, typeLabel, body)
 }
 
 // MetaLine renders a label: value pair for metadata display. Label is
-// bold+muted and value is normal text color.
+// dim+bold and value is normal text color.
 func MetaLine(theme Theme, label, value string) string {
 	l := lipgloss.NewStyle().
-		Foreground(theme.Muted).
+		Foreground(theme.Subtle).
 		Bold(true).
 		Render(label + ":")
 	v := lipgloss.NewStyle().
@@ -379,13 +357,13 @@ func MetaLine(theme Theme, label, value string) string {
 	return l + v
 }
 
-// NoteBlock renders notes text in a softer style with a muted left border
-// and slightly dimmed text, giving an italic/aside feel.
+// NoteBlock renders notes text in a very subtle style with a dim left border
+// and muted italic text — clearly secondary information.
 func NoteBlock(theme Theme, text string, width int) string {
 	if text == "" {
 		return ""
 	}
-	accent := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render("│")
+	accent := lipgloss.NewStyle().Foreground(theme.Separator).Render("│")
 	contentWidth := width - 3
 	if contentWidth < 10 {
 		contentWidth = 10

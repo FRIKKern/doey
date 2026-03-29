@@ -106,8 +106,9 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	line1 := prefix + titleStyle.Render(titleText)
 
-	// --- Line 2: status badge + subtask progress + age ---
-	badge := styles.StatusBadgeCard(status, d.Theme)
+	// --- Line 2: status text + subtask progress + age ---
+	statusClr := styles.StatusAccentColor(d.Theme, status)
+	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(status)
 	progress := ""
 	if ti.SubtaskTotal > 0 {
 		progress = "  " + styles.SubtaskProgress(ti.SubtaskDone, ti.SubtaskTotal)
@@ -117,7 +118,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		elapsed := time.Since(time.Unix(task.Created, 0))
 		age = "  " + styles.CardMetaStyle(d.Theme).Render(formatAge(elapsed))
 	}
-	line2 := badge + progress + age
+	line2 := statusLabel + progress + age
 
 	// --- Line 3: heartbeat (if available) ---
 	heartbeatLine := ""
@@ -194,25 +195,28 @@ func (d CardDelegate) taskStatusColor(status string) lipgloss.AdaptiveColor {
 	}
 }
 
-// statusIcon returns a colored status icon for the given task status.
+// statusIcon returns a subtle colored status icon for the given task status.
 func statusIcon(status string, t styles.Theme) string {
+	dim := func(c lipgloss.AdaptiveColor) lipgloss.Style {
+		return lipgloss.NewStyle().Foreground(c).Faint(true)
+	}
 	switch status {
 	case "done":
-		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
+		return dim(t.Success).Render("✓")
 	case "in_progress":
 		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
 	case "active":
-		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
+		return dim(t.Muted).Render("○")
 	case "failed":
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
 	case "blocked":
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("○")
 	case "pending_user_confirmation":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("⬤")
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
 	case "cancelled":
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+		return dim(t.Muted).Render("○")
 	default:
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+		return dim(t.Muted).Render("○")
 	}
 }
 
@@ -314,13 +318,17 @@ func (e *ExpandedCard) Render() string {
 
 	var sections []string
 
-	// --- Header: icon + title + status badge + type tag ---
+	// --- Header: icon + title + status text + type tag ---
 	icon := statusIcon(task.Status, e.Theme)
 	title := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text).Render(task.Title)
-	badge := styles.StatusBadgeCard(task.Status, e.Theme)
-	typeTag := styles.TypeTagCard(task.Type, e.Theme)
+	statusClr := styles.StatusAccentColor(e.Theme, task.Status)
+	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(task.Status)
+	typeTag := ""
+	if task.Type != "" {
+		typeTag = lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("[" + task.Type + "]")
+	}
 
-	header := icon + " " + title + "  " + badge
+	header := icon + " " + title + "  " + statusLabel
 	if typeTag != "" {
 		header += " " + typeTag
 	}
@@ -328,6 +336,7 @@ func (e *ExpandedCard) Render() string {
 
 	// --- Separator ---
 	sections = append(sections, styles.ThinSeparator(e.Theme, contentWidth))
+	sections = append(sections, "")
 
 	// --- Meta ---
 	if task.Created > 0 {
