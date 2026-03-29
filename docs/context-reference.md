@@ -181,9 +181,9 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `broadcasts/` | Broadcast messages (created on-demand by `/doey-broadcast`) |
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
 | `triggers/` | Wake triggers (`.trigger` files touched to wake wait hooks) |
-| `lifecycle/` | Lifecycle events from `notify_watchdog()` (`.evt` files) |
+| `lifecycle/` | Lifecycle events from `notify_sm()` (`.evt` files) |
 | `tasks/` | Runtime task cache (synced from `${PROJECT_DIR}/.doey/tasks/` on session start) |
-| `issues/` | Issue reports from Manager/Watchdog (`.issue` files) |
+| `issues/` | Issue reports from Manager (`.issue` files) |
 | `logs/` | Per-pane runtime logs |
 | `errors/` | Structured error log (`errors.log`) and individual `.err` files |
 | `debug/` | Debug flight-recorder JSONL (created by `/doey-debug on`) |

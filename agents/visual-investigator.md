@@ -120,7 +120,5 @@ Use these when reproduction requires user interaction:
 
 ## Constraints
 
-- Capture evidence, don't interpret. Reproduce issues, don't diagnose. Report what IS.
 - All MCP tools are prefixed `mcp__chrome-devtools__` (navigate_page, take_screenshot, take_snapshot, click, evaluate_script, emulate, list_console_messages, list_network_requests, etc.)
-- Deep-audit only: lighthouse_audit, performance_start/stop_trace, take_memory_snapshot.
 - If a page won't load, document the failure and move on.

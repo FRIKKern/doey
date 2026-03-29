@@ -72,4 +72,3 @@ Print per-team summary: Manager status, workers cleared/reserved counts.
 ### Rules
 - Skip reserved unless `--force`; skip Manager if WORKERS_ONLY
 - Never clear Boss (0.1), SM (0.2), or Info Panel (0.0)
-- Kill by PID (SIGTERM → SIGKILL); `sleep 0.5` between panes

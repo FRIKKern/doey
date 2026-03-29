@@ -39,5 +39,4 @@ echo "Stopped pane ${W}.${TARGET}"
 ```
 
 ### Rules
-- Never stop Manager (pane 0), Boss (0.1), or SM (0.2)
 - Shell stays alive for restart via `/doey-dispatch` or `/doey-clear`

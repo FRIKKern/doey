@@ -76,4 +76,3 @@ Present consolidated results: total before/after, per-domain breakdown, syntax/a
 1. Route through Window Managers only — Managers have zero context, include everything
 2. No file conflicts — each team owns distinct files
 3. Confirm before dispatching; verify every dispatch (capture-pane after 5s)
-4. Bash 3.2 — all .sh files must work on macOS `/bin/bash`

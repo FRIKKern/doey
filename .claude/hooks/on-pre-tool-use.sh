@@ -169,6 +169,14 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
+# Whitelist: task file and report writes are allowed for all roles (content may
+# contain strings like "git commit" that would false-positive on block patterns)
+_WL_CMD=$(_json_str tool_input.command)
+case "${_WL_CMD:-}" in
+  *">>"*".doey/tasks/"*.task|*">"*".doey/tasks/"*.task|*">>"*"/reports/"*|*">"*"/reports/"*)
+    _dbg_write "allow_task_report_write"; exit 0 ;;
+esac
+
 if [ "$_DOEY_ROLE" != "session_manager" ]; then
   _GIT_CMD=$(_json_str tool_input.command)
   if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then

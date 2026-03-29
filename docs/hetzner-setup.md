@@ -53,7 +53,7 @@ Each Claude Code agent uses 200–400 MB RAM. Choose your plan based on team siz
 | `cx43` | 16 GB | 8 | ~20 | ~€9/mo |
 | `cx53` | 32 GB | 16 | ~40+ | ~€18/mo |
 
-> A Nanode/small plan (1–2 GB) **will crash** when launching even a basic Doey team. Don't try it.
+> Plans with 1–2 GB RAM **will crash** when launching even a basic Doey team. Use `cx23` minimum.
 
 ## 1. Provision
 
@@ -175,13 +175,6 @@ LAUNCH
 
 - **Reattach:** `ssh -t doey@$HETZNER_IP "cd ~/YOUR_PROJECT && doey"`
 - **Detach:** `Ctrl+B, D` — team keeps running
-- **Quick connect** — save on your desktop as `doey-server.bat` (Windows) or `doey-server.sh` (Mac/Linux):
-
-```bat
-@echo off
-title Doey Server
-ssh -t doey@YOUR_HETZNER_IP
-```
 
 ## 6. Persistent Sessions (systemd)
 
@@ -362,10 +355,7 @@ Run a headless browser on the server so Claude can inspect, screenshot, and debu
 **Install Chrome and dependencies:**
 
 ```bash
-# System libraries for Chrome's rendering engine
 sudo apt-get install -y fonts-liberation libgbm-dev libnss3 libatk-bridge2.0-0 libxkbcommon0
-
-# Chrome (stable)
 curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o /tmp/chrome.deb
 sudo dpkg -i /tmp/chrome.deb || sudo apt-get install -f -y
 rm /tmp/chrome.deb
@@ -374,16 +364,10 @@ rm /tmp/chrome.deb
 **Launch headless Chrome with remote debugging:**
 
 ```bash
-# Basic — opens about:blank, ready for navigation
 google-chrome --headless --no-sandbox --disable-gpu \
   --remote-debugging-port=9222 \
   --window-size=1920,1080 &
-
-# Or point it at your dev server
-google-chrome --headless --no-sandbox --disable-gpu \
-  --remote-debugging-port=9222 \
-  --window-size=1920,1080 \
-  http://localhost:3000 &
+# Optionally append a URL (e.g. http://localhost:3000) to open it directly
 ```
 
 **Configure Chrome DevTools MCP:**
@@ -401,12 +385,7 @@ Add to your Claude Code MCP settings (`.claude/settings.json` or project setting
 }
 ```
 
-**Verify it works:**
-
-```bash
-# Check Chrome is running and accepting connections
-curl -s http://localhost:9222/json/version | jq .
-```
+**Verify:** `curl -s http://localhost:9222/json/version | jq .`
 
 **Run Chrome as a background service (optional):**
 
@@ -432,8 +411,6 @@ systemctl --user enable --now chrome-headless
 Port 9222 is localhost-only — not exposed to the internet.
 
 ## SSH Tunneling
-
-Forward remote ports to your local browser for OAuth, dev servers, and DevTools.
 
 Add to `~/.ssh/config` (or `C:\Users\YOU\.ssh\config` on Windows):
 

@@ -74,13 +74,6 @@ You are the **Doey Platform Expert** — the systems voice. You own tmux interna
 - Worktree state may be stale from prior runs — always clean up before creating.
 - `set -e` in functions: exit codes from subshells propagate and can kill the parent. Guard with `|| true` where failure is expected.
 
-### Liveness Detection
-```
-has_child_pid + shows_prompt    → IDLE (ready for dispatch)
-has_child_pid + no_prompt       → WORKING (do not disturb)
-no_child_pid                    → CRASHED (needs restart)
-```
-
 ## Domain 4: File-Based IPC
 
 ### Atomic Write Pattern
@@ -91,11 +84,6 @@ Always: write to `.tmp` → `mv .tmp final`. Never write directly — prevents p
 - Results: `$RUNTIME_DIR/results/pane_W_P.json` (structured JSON)
 - Messages: `$RUNTIME_DIR/messages/<target_safe>_<ts>.msg` (atomic write + trigger)
 - Triggers: `$RUNTIME_DIR/triggers/<target_safe>.trigger` (touch to wake sleeping hooks)
-
-### Common Races
-- Reading status file during write → garbage parse. Solution: atomic tmp+mv.
-- Message delivered but trigger not touched → recipient sleeps through it. Always touch trigger after writing .msg.
-- Completion event written by stop hook, consumed by SM scan — must handle double-read (idempotent consumption).
 
 ## Review Checklist
 

@@ -155,11 +155,8 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 ```
 
 ### Rules
-- Tasks persist in `.doey/tasks/` — project-local, survives reboot (not ephemeral /tmp)
-- SM sets `in_progress` on dispatch, `pending_user_confirmation` on completion
+- Tasks persist in `.doey/tasks/` — project-local, survives reboot
 - Every status transition appends `status=epoch` to TASK_TIMESTAMPS
-- Display: ID, status (colored), title, type, age. Boss auto-creates tasks for SM goals
-- Description, acceptance criteria, hypotheses, notes use `\n` literal encoding
-- Related files are pipe-delimited; tags are comma-separated
-- Subtask format: `index:title:status` separated by `\n`; decision log: `epoch:text`
+- Multiline fields use `\n` literal encoding; related files are pipe-delimited; tags comma-separated
+- Subtask format: `index:title:status`; decision log: `epoch:text`
 - All writes use atomic tmp+mv pattern

@@ -62,7 +62,7 @@ memory: user
 | Role | Blocked |
 |------|---------|
 | Manager | None (full access) |
-| Boss | None (full access, including AskUserQuestion) |
+| Boss | Read/Edit/Write/Glob/Grep on project source, send-keys, Agent |
 | Session Manager | None (full access except AskUserQuestion) |
 | Workers | git push/commit, gh pr create/merge, ALL send-keys, tmux kill |
 
@@ -107,9 +107,7 @@ Session Manager → Boss (via .msg file → trigger, for user-facing questions)
 Each path uses: write `.msg` to `$RUNTIME_DIR/messages/` → touch `.trigger` in `$RUNTIME_DIR/triggers/`.
 
 ### Context Conservation
-- Manager never reads source files — workers read and distill.
 - Golden context log (`context_log_WN.md`) survives compaction.
-- Pre-compact hook preserves: task context, role identity, recent file list.
 - Workers get distilled 2-3 key insights, not raw output.
 
 ## Domain 5: Role Detection
@@ -125,12 +123,9 @@ Each path uses: write `.msg` to `$RUNTIME_DIR/messages/` → touch `.trigger` in
 
 ## Review Checklist
 
-When reviewing any hook, agent, or skill change:
-- [ ] Exit codes correct (0=allow, 1=block+error, 2=block+feedback)
-- [ ] No subprocess spawning in `on-pre-tool-use.sh` hot path
-- [ ] Worker task prompts are fully self-contained
-- [ ] Notification chain complete (msg file + trigger file)
-- [ ] Settings changes use overlay pattern, not user file edits
-- [ ] Agent frontmatter valid (name, description, model, color)
-- [ ] Role detection uses file, not just env var
-- [ ] Stop hook trio ordering preserved (status → results → notify)
+- [ ] Exit codes correct (0/1/2)
+- [ ] No subprocesses in `on-pre-tool-use.sh` hot path
+- [ ] Worker prompts fully self-contained
+- [ ] Notification chain complete (msg + trigger files)
+- [ ] Settings use overlay pattern, not user file edits
+- [ ] Role detection uses `.role` file, not just env var

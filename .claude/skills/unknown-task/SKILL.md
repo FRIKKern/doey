@@ -3,8 +3,6 @@ name: unknown-task
 description: Fallback skill for tasks that don't match any specific skill. Provides conservative execution guidelines with strict tool-call budgets.
 ---
 
-## Prompt
-
 No specialized skill matched. Follow conservative execution with a **max 15 tool calls**.
 
 1. **Understand** — State your understanding in 1-2 sentences before acting.

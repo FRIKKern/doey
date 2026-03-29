@@ -155,6 +155,4 @@ doey stop                          # 6. Full stop
 git worktree list | grep -c "worktrees" | xargs -I{} test {} -eq 0 && echo "PASS" || echo "FAIL"
 ```
 
-## Bash 3.2 Compatibility
-
-Run after any shell script edits: `bash tests/test-bash-compat.sh`
+After shell edits: `bash tests/test-bash-compat.sh`

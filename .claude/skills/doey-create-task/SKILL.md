@@ -95,22 +95,12 @@ data['constraints'] = ['constraint1', 'constraint2']
 data['success_criteria'] = ['criterion1', 'criterion2']
 data['deliverables'] = ['deliverable1', 'deliverable2']
 data['dispatch_plan'] = {'mode': 'standard', 'teams': [], 'waves': []}
-# For phased tasks, use this structure instead:
-# data['dispatch_plan'] = {
-#   'mode': 'phased',
-#   'phases': [
-#     {'phase': 1, 'title': 'TITLE', 'brief': 'BRIEF', 'team_scope': 'any'},
-#     {'phase': 2, 'title': 'TITLE', 'brief': 'BRIEF', 'team_scope': 'any'}
-#   ]
-# }
 with open('${TD}/${TASK_ID}.json', 'w') as f:
     json.dump(data, f, indent=2)
 " 2>/dev/null
 ```
 
-If python3 is not available, use printf to write the JSON directly.
-
-Replace all placeholder values above with actual compiled content from Step 2.
+Replace all placeholder values with actual compiled content from Step 2. If python3 is unavailable, use printf.
 
 ### Step 3b: Phased Task Runtime Setup (only if DISPATCH MODE is phased)
 
@@ -119,28 +109,15 @@ If the task is phased, perform two additional steps:
 **1. Update the .task file with phase tracking fields:**
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-PD=$(grep '^PROJECT_DIR=' "$RUNTIME_DIR/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-if [ -n "$PD" ] && [ -d "$PD/.doey/tasks" ]; then
-  TD="$PD/.doey/tasks"
-else
-  TD="${RUNTIME_DIR}/tasks"
-fi
 printf 'TASK_DISPATCH_MODE="phased"\n' >> "${TD}/${TASK_ID}.task"
 printf 'TASK_CURRENT_PHASE=0\n' >> "${TD}/${TASK_ID}.task"
 printf 'TASK_TOTAL_PHASES=%d\n' "$TOTAL_PHASES" >> "${TD}/${TASK_ID}.task"
 ```
 
-**2. Create the runtime phase file for Session Manager auto-forwarding:**
+**2. Create the runtime phase file for SM auto-forwarding:**
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 mkdir -p "$RUNTIME_DIR/phases"
-```
-
-Then write the phase file using python3 (or printf fallback):
-
-```bash
 python3 -c "
 import json
 phases = [

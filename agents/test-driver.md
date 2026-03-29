@@ -69,7 +69,7 @@ Print `TEST $TEST_ID: <PASS|FAIL> (score X/10, duration Xs)` + `Report: $REPORT_
 
 ## Rules
 
-1. Only interact with Window Manager (pane 1.0) — never workers directly
-2. Log every observation to numbered file — never skip a cycle
-3. Answer unexpected questions naturally — err toward "yes"/"proceed"
-4. Log anomalies but keep going — they affect score, not flow
+1. Only interact with Window Manager (pane 1.0) — never workers directly.
+2. Log every observation to numbered file — never skip a cycle.
+3. Answer unexpected questions naturally — err toward "yes"/"proceed".
+4. Log anomalies but keep going — they affect score, not flow.

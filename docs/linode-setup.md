@@ -61,7 +61,7 @@ ufw --force enable && ufw allow OpenSSH && ufw allow 60000:61000/udp
 fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
-apt-get install -y -qq tmux git curl jq htop mosh locales
+apt-get install -y -qq tmux git curl unzip jq htop mosh locales
 locale-gen en_US.UTF-8
 SETUP
 ```
@@ -190,7 +190,7 @@ systemctl restart sshd
 ufw --force enable && ufw allow OpenSSH && ufw allow 60000:61000/udp
 fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
-apt-get install -y -qq tmux git curl jq htop mosh locales && locale-gen en_US.UTF-8
+apt-get install -y -qq tmux git curl unzip jq htop mosh locales && locale-gen en_US.UTF-8
 SERVER
 
 # Steps 3–4: Install Node.js, Claude Code, Doey, and set API key

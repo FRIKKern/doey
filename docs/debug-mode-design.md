@@ -35,7 +35,7 @@ DOEY_DEBUG_DISPLAY=false
 
 - File existence IS the master toggle (`[ -f "$RUNTIME_DIR/debug.conf" ]`)
 - When file doesn't exist: zero overhead (one `stat()` syscall, ~0.05ms)
-- Sub-toggles allow granularity (e.g., just hooks, just watchdog)
+- Sub-toggles allow granularity (e.g., just hooks, just lifecycle)
 - `DOEY_DEBUG_DISPLAY=true` prints debug info to stderr (opt-in, for human debugging)
 
 ### Skill: `/doey-debug on|off|status`
@@ -55,7 +55,6 @@ $RUNTIME_DIR/debug/
     lifecycle.jsonl     # pane start/stop/crash, agent, model
     state.jsonl         # status transitions (READY→BUSY→FINISHED)
     messages.jsonl      # IPC sends/receives to/from this pane
-  watchdog_W{N}.jsonl   # single-writer: watchdog scan details per team
 ```
 
 **Viewing all hooks across panes (chronological):**
@@ -120,160 +119,15 @@ Covers notification chain bugs (Manager↔SM, Worker→Manager delivery failures
 {"ts":1711300260200,"from":"1.0","to":"0.1","type":"mgr_to_sm","subject":"Team 1 wave complete","delivery":"file","success":true}
 ```
 
-## Implementation in common.sh
+## Implementation
 
-### Config parsing (safe, never sourced)
+All debug infrastructure lives in `.claude/hooks/common.sh` — see `_init_debug()`, `_debug_log()`, `_ms_now()`, `_debug_hook_entry()`, `_debug_hook_exit()`. The source code is the authoritative reference; this design doc covers the *why*, not the *what*.
 
-```bash
-# Parse debug.conf as flat key=value. Never source it.
-_init_debug() {
-  _DOEY_DEBUG=""
-  _DOEY_DEBUG_HOOKS=""
-  _DOEY_DEBUG_LIFECYCLE=""
-  _DOEY_DEBUG_STATE=""
-  _DOEY_DEBUG_MESSAGES=""
-  _DOEY_DEBUG_WATCHDOG=""
-  _DOEY_DEBUG_DISPLAY=""
-  [ -f "${RUNTIME_DIR}/debug.conf" ] || return 0
-  while IFS='=' read -r _dk _dv; do
-    case "$_dk" in
-      DOEY_DEBUG)           _DOEY_DEBUG="$_dv" ;;
-      DOEY_DEBUG_HOOKS)     _DOEY_DEBUG_HOOKS="$_dv" ;;
-      DOEY_DEBUG_LIFECYCLE) _DOEY_DEBUG_LIFECYCLE="$_dv" ;;
-      DOEY_DEBUG_STATE)     _DOEY_DEBUG_STATE="$_dv" ;;
-      DOEY_DEBUG_MESSAGES)  _DOEY_DEBUG_MESSAGES="$_dv" ;;
-      DOEY_DEBUG_WATCHDOG)  _DOEY_DEBUG_WATCHDOG="$_dv" ;;
-      DOEY_DEBUG_DISPLAY)   _DOEY_DEBUG_DISPLAY="$_dv" ;;
-    esac
-  done < "${RUNTIME_DIR}/debug.conf"
-}
-```
-
-### Millisecond timing (macOS bash 3.2 compatible)
-
-```bash
-_ms_now() {
-  /usr/bin/perl -MTime::HiRes -e 'printf "%d\n", Time::HiRes::time()*1000' 2>/dev/null \
-    || echo "$(date +%s)000"
-}
-```
-
-perl ships with macOS, Time::HiRes is a core module, ~15ms overhead (debug-only).
-
-### Debug log writer
-
-```bash
-# Write JSONL to per-pane category file. No-op when debug off.
-# Usage: _debug_log <category> <msg> [key=value ...]
-_debug_log() {
-  [ "${_DOEY_DEBUG:-}" = "true" ] || return 0
-  local cat="$1" msg="$2"; shift 2
-  local pane_dir="${RUNTIME_DIR}/debug/${PANE_SAFE:-unknown}"
-  [ -d "$pane_dir" ] || mkdir -p "$pane_dir" 2>/dev/null
-  local ts; ts=$(_ms_now)
-  local extras=""
-  local kv k v
-  for kv in "$@"; do
-    k="${kv%%=*}"; v="${kv#*=}"
-    v="${v//\\/\\\\}"; v="${v//\"/\\\"}"
-    extras="${extras},\"${k}\":\"${v}\""
-  done
-  printf '{"ts":%s,"pane":"%s","role":"%s","cat":"%s","msg":"%s"%s}\n' \
-    "$ts" "${PANE:-unknown}" "${DOEY_ROLE:-unknown}" "$cat" "$msg" "$extras" \
-    >> "${pane_dir}/${cat}.jsonl" 2>/dev/null
-  [ "${_DOEY_DEBUG_DISPLAY:-}" = "true" ] && \
-    printf '[DOEY-DEBUG] %s %s %s\n' "$cat" "$msg" "$*" >&2
-  return 0
-}
-```
-
-### Hook entry/exit timing
-
-```bash
-_debug_hook_entry() {
-  [ "${_DOEY_DEBUG_HOOKS:-}" = "true" ] || return 0
-  _HOOK_START_MS=$(_ms_now)
-  _debug_log hooks "entry" "hook=${_DOEY_HOOK_NAME:-unknown}"
-  trap '_debug_hook_exit $?' EXIT
-}
-
-_debug_hook_exit() {
-  [ "${_DOEY_DEBUG_HOOKS:-}" = "true" ] || return 0
-  local exit_code="${1:-0}" end_ms dur_ms
-  end_ms=$(_ms_now)
-  dur_ms=$(( end_ms - ${_HOOK_START_MS:-$end_ms} ))
-  [ "$dur_ms" -lt 0 ] && dur_ms=0
-  _debug_log hooks "exit" "hook=${_DOEY_HOOK_NAME:-unknown}" "dur_ms=$dur_ms" "exit=$exit_code"
-}
-```
-
-### Integration into init_hook()
-
-```bash
-init_hook() {
-  if [ -z "${INPUT:-}" ]; then INPUT=$(cat); fi
-  [ -z "${TMUX_PANE:-}" ] && exit 0
-  RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
-  [ -z "$RUNTIME_DIR" ] && exit 0
-  PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
-  PANE_SAFE=${PANE//[-:.]/_}
-  SESSION_NAME="${PANE%%:*}"
-  PANE_INDEX="${PANE##*.}"
-  local wp="${PANE#*:}"
-  WINDOW_INDEX="${wp%.*}"
-  NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
-  _ensure_dirs
-  _init_debug    # <-- NEW: load debug config after RUNTIME_DIR is set
-}
-```
-
-### Per-hook integration (one new line each)
-
-```bash
-# In each hook, after _DOEY_HOOK_NAME= line:
-_DOEY_HOOK_NAME="stop-status"
-_debug_hook_entry                   # <-- add this line
-```
-
-### on-pre-tool-use.sh (hot path — lightweight)
-
-Does NOT source common.sh. Minimal inline check:
-
-```bash
-# Near top, after _RD is resolved:
-_DBG=false
-[ -n "$_RD" ] && [ -f "$_RD/debug.conf" ] && _DBG=true
-
-# At exit points:
-if [ "$_DBG" = "true" ]; then
-  _pdir="$_RD/debug/${_PS:-unknown}"
-  [ -d "$_pdir" ] || mkdir -p "$_pdir" 2>/dev/null
-  printf '{"ts":"%s","pane":"%s","role":"%s","cat":"hooks","msg":"%s","hook":"on-pre-tool-use","tool":"%s"}\n' \
-    "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$_WP" "$_DOEY_ROLE" "$_action" "$TOOL_NAME" \
-    >> "$_pdir/hooks.jsonl" 2>/dev/null
-fi
-```
-
-Cost when off: one `[ -f ]` stat. Cost when on: one `date` + one `printf >>`. No perl, no subprocesses beyond date.
-
-## Integration Points Summary
-
-| File | Change | Lines | Category logged |
-|------|--------|-------|-----------------|
-| `common.sh` | `_init_debug`, `_debug_log`, `_ms_now`, hook entry/exit | ~60 | (infrastructure) |
-| `common.sh` `init_hook()` | Add `_init_debug` call | 1 | — |
-| `on-session-start.sh` | `_debug_hook_entry` + lifecycle events | ~5 | hooks, lifecycle |
-| `on-prompt-submit.sh` | `_debug_hook_entry` + state transition | ~3 | hooks, state |
-| `on-pre-tool-use.sh` | Lightweight inline debug (no common.sh) | ~8 | hooks |
-| `on-pre-compact.sh` | `_debug_hook_entry` | 1 | hooks |
-| `post-tool-lint.sh` | `_debug_hook_entry` | 1 | hooks |
-| `stop-status.sh` | `_debug_hook_entry` + state transition | ~3 | hooks, state |
-| `stop-results.sh` | `_debug_hook_entry` + lifecycle event | ~3 | hooks, lifecycle |
-| `stop-notify.sh` | `_debug_hook_entry` + message event | ~5 | hooks, messages |
-| `session-manager-wait.sh` | Wake event | ~3 | lifecycle |
-| `.claude/skills/doey-debug/SKILL.md` | New skill | ~50 | — |
-
-**Total: ~160 lines of new code. Zero behavioral change when debug is off.**
+Key implementation decisions:
+- `debug.conf` is parsed with `while read`/`case`, never `source`d (prevents syntax errors from killing hooks)
+- `_ms_now()` uses perl `Time::HiRes` (ships with macOS, ~15ms overhead, debug-only) with `date +%s` fallback
+- `on-pre-tool-use.sh` uses inline debug check (no common.sh) for hot-path performance: one `stat()` when off, one `date` + `printf` when on
+- Each hook adds one line (`_debug_hook_entry`) after setting `_DOEY_HOOK_NAME`
 
 ## Risk Mitigations
 
@@ -281,6 +135,6 @@ Cost when off: one `[ -f ]` stat. Cost when on: one `date` + one `printf >>`. No
 |------|-----------|
 | debug.conf syntax error kills hooks | Parse with `while read`/`case`, never `source` |
 | Concurrent writes corrupt JSONL | Per-pane files (each pane writes to own directory) |
-| debug/ dir missing on first write | Lazy `mkdir -p` in `_debug_log`, skill creates dir on `on` |
+| debug/ dir missing on first write | Lazy `mkdir -p` in `_debug_log` |
 | Hot-path overhead (on-pre-tool-use) | Inline check, no common.sh, no perl. One `stat()` when off |
-| Log growth | `_rotate_log` on debug files (500KB threshold, keep last 200 lines). `/tmp/` clears on reboot |
+| Log growth | `_rotate_log` (500KB/200 lines). `/tmp/` clears on reboot |

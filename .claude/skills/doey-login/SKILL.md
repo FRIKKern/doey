@@ -109,20 +109,15 @@ SESSION_NAME=$(grep '^SESSION_NAME=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 
 MY_PANE="${SESSION_NAME}:0.2"  # SM pane (0.1 is Boss)
 TEAM_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
 
-# Scope: team N — single team in current session
 case "$TARGET_SCOPE" in
 [0-9]|[0-9][0-9])
   restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$TARGET_SCOPE" "$MY_PANE"
   ;;
-
-# Scope: session — all teams in current session
 session)
   for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
     restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$W" "$MY_PANE"
   done
   ;;
-
-# Scope: all — all doey sessions
 all)
   for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
     restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$W" "$MY_PANE"

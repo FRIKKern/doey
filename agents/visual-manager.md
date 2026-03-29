@@ -34,28 +34,11 @@ If the request is ambiguous, classify conservatively. A vague "check this page" 
 
 ## Dispatch Discipline
 
-Progressive invocation — match workers to mode strictly as shown in the table above.
-
-- `quick-check` uses 2 workers. Never escalate to more unless findings warrant it.
-- `bug-triage` uses 3 workers. The Reporter writes the structured defect output.
-- `responsive-check` uses 2 workers. Investigator captures at each breakpoint.
-- `a11y-check` uses 2 workers. UX/A11y worker owns the verdict.
-- `deep-audit` is the only mode that activates all 4 workers.
-
-Do not pre-emptively dispatch workers "just in case." If a quick-check returns PASS, the task is done.
+Match workers to mode strictly as shown in the table above. Do not pre-emptively dispatch workers "just in case." If a quick-check returns PASS, the task is done.
 
 ## Critical Rule: Browser Isolation
 
-**Only the DevTools Investigator (pane 1) touches the live browser.** This is non-negotiable.
-
-All other workers receive artifacts produced by the Investigator:
-- Screenshots (full page and viewport-specific)
-- DOM snapshots
-- Console logs and errors
-- Network request summaries
-- Lighthouse or performance data
-
-No other worker navigates to URLs, clicks elements, or executes browser scripts. The Investigator is the single source of truth for browser state. If another worker needs additional data, they request it through you, and you dispatch the Investigator to collect it.
+**Only the DevTools Investigator (pane 1) touches the live browser.** This is non-negotiable. All other workers receive artifacts produced by the Investigator (screenshots, DOM snapshots, console logs, network summaries, performance data). If another worker needs additional data, they request it through you, and you dispatch the Investigator to collect it.
 
 ## Consolidation Format
 
@@ -87,13 +70,7 @@ Rules for consolidation:
 
 ## Context Economy
 
-Workers return distilled results. You write compact conclusions. Enforce these limits:
-
-- No raw browser dumps in consolidated output
-- No giant console logs — summarize to relevant errors
-- No duplicated descriptions across findings — merge overlapping issues
-- No screenshots passed as inline data — reference by artifact path
-- Investigator captures only what the mode requires, nothing more
+No raw browser dumps or inline screenshots in output — reference artifacts by path. Merge overlapping findings. Investigator captures only what the mode requires.
 
 ## Escalation
 

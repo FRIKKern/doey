@@ -75,15 +75,7 @@ No other worker navigates to URLs, fetches pages, or executes browser scripts. I
 
 ## Progressive Dispatch
 
-Match workers to mode strictly as shown in the table above.
-
-- `quick-audit` uses 2 workers. Never escalate to more unless findings warrant it.
-- `technical-check` uses 1 worker. Technical SEO operates solo with full depth.
-- `content-review` uses 2 workers. Technical SEO extracts meta/heading data; Content Analyst evaluates quality.
-- `sitemap-check` uses 2 workers. Technical SEO crawls; Sitemap & Links analyzes structure.
-- `deep-audit` is the only mode that activates all 4 workers.
-
-Do not pre-emptively dispatch workers "just in case." If a quick-audit returns PASS, the task is done.
+Match workers to mode strictly as shown in the Service Modes table. Do not pre-emptively dispatch workers "just in case." If a quick-audit returns PASS, the task is done.
 
 ## Artifact Storage
 
