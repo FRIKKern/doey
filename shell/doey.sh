@@ -1714,109 +1714,66 @@ _doc_check() {
 }
 
 # ── Task Management (schema v3, .doey/tasks/) ────────────────────────
+# Delegates to doey-task-helpers.sh for core CRUD operations.
+
+_task_helpers_sourced=0
+_task_source_helpers() {
+  [ "$_task_helpers_sourced" -eq 1 ] && return 0
+  local _helpers_path
+  _helpers_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/doey-task-helpers.sh"
+  if [ -f "$_helpers_path" ]; then
+    # shellcheck source=doey-task-helpers.sh
+    source "$_helpers_path"
+    _task_helpers_sourced=1
+    return 0
+  fi
+  printf '  %s✗ Task helpers not found: %s%s\n' "$ERROR" "$_helpers_path" "$RESET" >&2
+  return 1
+}
+
+# Thin wrappers — delegate to doey-task-helpers.sh while preserving
+# the existing interface (callers pass task file paths, not project dirs).
 
 _task_read() {
+  _task_source_helpers || return 1
   local _file="$1"
-  TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
-  TASK_TYPE=""; TASK_TAGS=""; TASK_CREATED_BY=""; TASK_ASSIGNED_TO=""
-  TASK_DESCRIPTION=""; TASK_ATTACHMENTS=""; TASK_ACCEPTANCE_CRITERIA=""
-  TASK_HYPOTHESES=""; TASK_DECISION_LOG=""; TASK_SUBTASKS=""
-  TASK_RELATED_FILES=""; TASK_BLOCKERS=""; TASK_TIMESTAMPS=""
-  TASK_NOTES=""; TASK_SCHEMA_VERSION=""
+  [ -s "$_file" ] || return 1
+  TASK_ATTACHMENTS=""  # legacy field not in helpers
+  task_read "$_file"
+  # Also read TASK_ATTACHMENTS (legacy, not in helpers schema)
+  local _line
   while IFS= read -r _line || [ -n "$_line" ]; do
     case "${_line%%=*}" in
-      TASK_ID)                  TASK_ID="${_line#*=}" ;;
-      TASK_TITLE)               TASK_TITLE="${_line#*=}" ;;
-      TASK_STATUS)              TASK_STATUS="${_line#*=}" ;;
-      TASK_CREATED)             TASK_CREATED="${_line#*=}" ;;
-      TASK_TYPE)                TASK_TYPE="${_line#*=}" ;;
-      TASK_TAGS)                TASK_TAGS="${_line#*=}" ;;
-      TASK_CREATED_BY)          TASK_CREATED_BY="${_line#*=}" ;;
-      TASK_ASSIGNED_TO)         TASK_ASSIGNED_TO="${_line#*=}" ;;
-      TASK_DESCRIPTION)         TASK_DESCRIPTION="${_line#*=}" ;;
-      TASK_ATTACHMENTS)         TASK_ATTACHMENTS="${_line#*=}" ;;
-      TASK_ACCEPTANCE_CRITERIA) TASK_ACCEPTANCE_CRITERIA="${_line#*=}" ;;
-      TASK_HYPOTHESES)          TASK_HYPOTHESES="${_line#*=}" ;;
-      TASK_DECISION_LOG)        TASK_DECISION_LOG="${_line#*=}" ;;
-      TASK_SUBTASKS)            TASK_SUBTASKS="${_line#*=}" ;;
-      TASK_RELATED_FILES)       TASK_RELATED_FILES="${_line#*=}" ;;
-      TASK_BLOCKERS)            TASK_BLOCKERS="${_line#*=}" ;;
-      TASK_TIMESTAMPS)          TASK_TIMESTAMPS="${_line#*=}" ;;
-      TASK_NOTES)               TASK_NOTES="${_line#*=}" ;;
-      TASK_SCHEMA_VERSION)      TASK_SCHEMA_VERSION="${_line#*=}" ;;
+      TASK_ATTACHMENTS) TASK_ATTACHMENTS="${_line#*=}" ;;
     esac
-  done < "$_file"
-  # Legacy compat: extract created timestamp from TASK_TIMESTAMPS if TASK_CREATED is empty
-  if [ -z "$TASK_CREATED" ] && [ -n "$TASK_TIMESTAMPS" ]; then
-    local _ts_entry
-    # TASK_TIMESTAMPS is comma-delimited: created=EPOCH,started=EPOCH,...
-    _ts_entry="${TASK_TIMESTAMPS%%,*}"
-    case "$_ts_entry" in
-      created=*) TASK_CREATED="${_ts_entry#created=}" ;;
-    esac
-  fi
+  done < "$_file" || true
+  [ -n "${TASK_ID:-}" ] || return 1
 }
 
 _task_age() {
-  local _created="$1" _now _elapsed
-  [ -z "$_created" ] && { printf '?'; return; }
-  _now=$(date +%s)
-  _elapsed=$((_now - _created))
-  if [ "$_elapsed" -lt 60 ]; then printf '%ss' "$_elapsed"
-  elif [ "$_elapsed" -lt 3600 ]; then printf '%sm' "$((_elapsed / 60))"
-  elif [ "$_elapsed" -lt 86400 ]; then printf '%sh' "$((_elapsed / 3600))"
-  else printf '%sd' "$((_elapsed / 86400))"; fi
-}
-
-_task_next_id() {
-  local _dir="$1" _counter_file _id=1
-  _counter_file="${_dir}/.next_id"
-  [ -f "$_counter_file" ] && _id=$(cat "$_counter_file")
-  echo $((_id + 1)) > "$_counter_file"
-  echo "$_id"
+  _task_source_helpers || { printf '?'; return; }
+  _task_age_str "$1"
 }
 
 _task_create() {
+  _task_source_helpers || return 1
   local _tasks_dir="$1" _title="$2"
   local _description="${3:-}" _attachments="${4:-}"
-  mkdir -p "$_tasks_dir"
-  local _id _now
-  _id="$(_task_next_id "$_tasks_dir")"
-  _now=$(date +%s)
-  local _tmp="${_tasks_dir}/${_id}.task.tmp"
-  printf 'TASK_ID=%s\nTASK_TITLE=%s\nTASK_STATUS=active\nTASK_TYPE=feature\nTASK_TAGS=\nTASK_CREATED_BY=user\nTASK_ASSIGNED_TO=\nTASK_DESCRIPTION=%s\nTASK_ATTACHMENTS=%s\nTASK_ACCEPTANCE_CRITERIA=\nTASK_HYPOTHESES=\nTASK_DECISION_LOG=\nTASK_SUBTASKS=\nTASK_RELATED_FILES=\nTASK_BLOCKERS=\nTASK_TIMESTAMPS=created=%s\nTASK_NOTES=\nTASK_SCHEMA_VERSION=3\n' \
-    "$_id" "$_title" "$_description" "$_attachments" "$_now" > "$_tmp"
-  mv "$_tmp" "${_tasks_dir}/${_id}.task"
+  # Derive project dir from tasks dir (strip /.doey/tasks or /tasks suffix)
+  local _proj_dir="${_tasks_dir%/.doey/tasks}"
+  [ "$_proj_dir" = "$_tasks_dir" ] && _proj_dir="${_tasks_dir%/tasks}"
+  local _id
+  _id="$(task_create "$_proj_dir" "$_title" "feature" "user" "$_description")"
+  # Append legacy TASK_ATTACHMENTS if provided (not in helpers schema)
+  if [ -n "$_attachments" ]; then
+    task_update_field "${_tasks_dir}/${_id}.task" "TASK_ATTACHMENTS" "$_attachments"
+  fi
   echo "$_id"
 }
 
-# Replace a single field in a .task file.  Usage: _task_set_field <file> <FIELD> <value>
 _task_set_field() {
-  local _file="$1" _field="$2" _value="$3" _tmp="${1}.tmp"
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    case "${_line%%=*}" in
-      "$_field") printf '%s=%s\n' "$_field" "$_value" ;;
-      *)         printf '%s\n' "$_line" ;;
-    esac
-  done < "$_file" > "$_tmp"
-  mv "$_tmp" "$_file"
-}
-
-# Append a key=epoch pair to TASK_TIMESTAMPS in a .task file
-_task_append_timestamp() {
-  local _file="$1" _key="$2"
-  local _now _existing=""
-  _now=$(date +%s)
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    case "${_line%%=*}" in
-      TASK_TIMESTAMPS) _existing="${_line#*=}" ;;
-    esac
-  done < "$_file"
-  if [ -n "$_existing" ]; then
-    _task_set_field "$_file" "TASK_TIMESTAMPS" "${_existing},${_key}=${_now}"
-  else
-    _task_set_field "$_file" "TASK_TIMESTAMPS" "${_key}=${_now}"
-  fi
+  _task_source_helpers || return 1
+  task_update_field "$1" "$2" "$3"
 }
 
 _task_set_description() {
@@ -1826,47 +1783,33 @@ _task_set_description() {
 }
 
 _task_add_attachment() {
+  _task_source_helpers || return 1
   local _tasks_dir="$1" _id="$2" _attachment="$3"
   local _file="${_tasks_dir}/${_id}.task"
   [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
-  local _tmp="${_file}.tmp" _existing=""
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    case "${_line%%=*}" in
-      TASK_ATTACHMENTS)
-        _existing="${_line#*=}"
-        if [ -n "$_existing" ]; then
-          printf 'TASK_ATTACHMENTS=%s|%s\n' "$_existing" "$_attachment"
-        else
-          printf 'TASK_ATTACHMENTS=%s\n' "$_attachment"
-        fi
-        ;;
-      *) printf '%s\n' "$_line" ;;
-    esac
-  done < "$_file" > "$_tmp"
-  mv "$_tmp" "$_file"
+  _task_append_to_field "$_file" "TASK_ATTACHMENTS" "$_attachment" "|"
 }
 
 _task_set_status() {
-  local _file="${1}/${2}.task"
-  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$2" "$RESET"; return 1; }
-  case "$3" in
-    draft|active|in_progress|paused|blocked|pending_user_confirmation|done|cancelled|failed) ;;
-    *) printf '  %s✗ Invalid status: %s%s\n' "$ERROR" "$3" "$RESET"; return 1 ;;
+  _task_source_helpers || return 1
+  local _tasks_dir="$1" _id="$2" _new_status="$3"
+  local _file="${_tasks_dir}/${_id}.task"
+  [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; return 1; }
+  # "failed" is a CLI-only status not in helpers — handle directly
+  case "$_new_status" in
+    failed)
+      task_update_field "$_file" "TASK_STATUS" "failed"
+      local _now; _now=$(date +%s)
+      _task_append_to_field "$_file" "TASK_TIMESTAMPS" "failed=${_now}" "|"
+      return 0
+      ;;
+    draft|active|in_progress|paused|blocked|pending_user_confirmation|done|cancelled) ;;
+    *) printf '  %s✗ Invalid status: %s%s\n' "$ERROR" "$_new_status" "$RESET"; return 1 ;;
   esac
-  _task_set_field "$_file" "TASK_STATUS" "$3"
-  local _ts_key
-  case "$3" in
-    active)                     _ts_key="activated" ;;
-    in_progress)                _ts_key="started" ;;
-    paused)                     _ts_key="paused" ;;
-    blocked)                    _ts_key="blocked" ;;
-    pending_user_confirmation)  _ts_key="pending" ;;
-    done)                       _ts_key="completed" ;;
-    cancelled)                  _ts_key="cancelled" ;;
-    failed)                     _ts_key="failed" ;;
-    *)                          _ts_key="" ;;
-  esac
-  [ -n "$_ts_key" ] && _task_append_timestamp "$_file" "$_ts_key"
+  # Derive project dir for helpers API
+  local _proj_dir="${_tasks_dir%/.doey/tasks}"
+  [ "$_proj_dir" = "$_tasks_dir" ] && _proj_dir="${_tasks_dir%/tasks}"
+  task_update_status "$_proj_dir" "$_id" "$_new_status"
 }
 
 # Walk up from cwd to find the project directory (contains .doey/)
@@ -1927,6 +1870,7 @@ _task_sync_to_runtime() {
   local _f
   for _f in "$_src"/*.task; do
     [ -f "$_f" ] || continue
+    [ -s "$_f" ] || continue  # skip empty files
     cp "$_f" "$_dst/$(basename "$_f")"
   done
 }
@@ -1993,12 +1937,13 @@ task_command() {
       local _count=0
       for _f in "${_tasks_dir}"/*.task; do
         [ -f "$_f" ] || continue
+        [ -s "$_f" ] || continue  # skip empty files
         local TASK_ID TASK_TITLE TASK_STATUS TASK_CREATED TASK_TYPE
         local TASK_TAGS TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION
         local TASK_ATTACHMENTS TASK_ACCEPTANCE_CRITERIA TASK_HYPOTHESES
         local TASK_DECISION_LOG TASK_SUBTASKS TASK_RELATED_FILES
         local TASK_BLOCKERS TASK_TIMESTAMPS TASK_NOTES TASK_SCHEMA_VERSION
-        _task_read "$_f"
+        _task_read "$_f" || continue  # skip malformed files
         [ "$TASK_STATUS" = "done" ] && continue
         [ "$TASK_STATUS" = "cancelled" ] && continue
         local _col _age

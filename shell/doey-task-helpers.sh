@@ -90,6 +90,7 @@ task_create() {
 #   TASK_CREATED (extracted from TASK_TIMESTAMPS for compat)
 task_read() {
   local file="$1"
+  [ -s "$file" ] || return 1
 
   TASK_SCHEMA_VERSION=""
   TASK_ID=""
@@ -160,6 +161,9 @@ task_read() {
       esac
     done
   fi
+
+  # Bail if no TASK_ID was parsed (malformed file)
+  [ -n "${TASK_ID:-}" ] || return 1
 
   # Defaults for missing fields
   if [ -z "$TASK_SCHEMA_VERSION" ]; then TASK_SCHEMA_VERSION="1"; fi
@@ -339,13 +343,15 @@ task_list() {
   local entries="" f
   for f in "${tasks_dir}"/*.task; do
     [ -f "$f" ] || continue
+    [ -s "$f" ] || continue  # skip empty files
 
     local TASK_SCHEMA_VERSION TASK_ID TASK_TITLE TASK_STATUS TASK_TYPE
     local TASK_TAGS TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION
     local TASK_ACCEPTANCE_CRITERIA TASK_HYPOTHESES TASK_DECISION_LOG
     local TASK_SUBTASKS TASK_RELATED_FILES TASK_BLOCKERS TASK_TIMESTAMPS
     local TASK_NOTES TASK_CREATED
-    task_read "$f"
+    task_read "$f" || continue
+    [ -n "${TASK_ID:-}" ] || continue
 
     # Apply status filter
     if [ -n "$status_filter" ] && [ "$TASK_STATUS" != "$status_filter" ]; then
@@ -394,6 +400,7 @@ task_sync_runtime() {
   local f line status
   for f in "${src}"/*.task; do
     [ -f "$f" ] || continue
+    [ -s "$f" ] || continue  # skip empty files
 
     # Quick status check without full parse
     status=""
@@ -583,15 +590,181 @@ task_add_related_file() {
   task_update_field "$task_file" "TASK_RELATED_FILES" "$current_files"
 }
 
+# ── _json_escape ─────────────────────────────────────────────────────
+# Escape a string for safe embedding in JSON. Bash 3.2 compatible.
+# Args: string
+# Returns (echo): escaped string (without surrounding quotes)
+_json_escape() {
+  printf '%s' "$1" | sed \
+    -e 's/\\/\\\\/g' \
+    -e 's/"/\\"/g' \
+    -e 's/	/\\t/g' \
+    -e "$(printf 's/\r/\\\\r/g')" \
+    -e 's/$/\\n/' | tr -d '\n' | sed 's/\\n$//'
+}
+
+# ── _json_array_from_lines ───────────────────────────────────────────
+# Convert a newline-separated string into a JSON array of strings.
+# Args: items_string (literal \n as separator)
+# Returns (echo): JSON array, e.g. ["a", "b"]
+_json_array_from_lines() {
+  local input="$1"
+  if [ -z "$input" ]; then
+    printf '[]'
+    return
+  fi
+  # Split on literal \n sequences
+  local remaining="$input" entry first=1
+  printf '['
+  while [ -n "$remaining" ]; do
+    case "$remaining" in
+      *\\n*)
+        entry="${remaining%%\\n*}"
+        remaining="${remaining#*\\n}"
+        ;;
+      *)
+        entry="$remaining"
+        remaining=""
+        ;;
+    esac
+    [ -z "$entry" ] && continue
+    local escaped
+    escaped="$(_json_escape "$entry")"
+    if [ "$first" -eq 1 ]; then
+      printf '"%s"' "$escaped"
+      first=0
+    else
+      printf ', "%s"' "$escaped"
+    fi
+  done
+  printf ']'
+}
+
 # ── _write_task_json (kept from v2) ──────────────────────────────────
-# Write companion .json file. Used by upgrade and dispatch.
+# Write a minimal companion .json file. Used by upgrade and dispatch.
 # Args: json_file task_id title task_type
 _write_task_json() {
   local json_file="$1" task_id="$2" title="$3" task_type="$4"
   local tmp="${json_file}.tmp"
+  local esc_title
+  esc_title="$(_json_escape "$title")"
   printf '{\n  "schema_version": 3,\n  "task_id": %s,\n  "title": "%s",\n  "task_type": "%s",\n  "intent": "",\n  "hypotheses": [],\n  "constraints": [],\n  "success_criteria": [],\n  "deliverables": [],\n  "dispatch_plan": {}\n}\n' \
-    "$task_id" "$title" "$task_type" > "$tmp"
+    "$task_id" "$esc_title" "$task_type" > "$tmp"
   mv "$tmp" "$json_file"
+}
+
+# ── task_write_json ──────────────────────────────────────────────────
+# Create a rich companion .json file for a task from .task metadata and
+# optional structured fields passed via environment variables.
+# Args: project_dir task_id
+# Env (optional):
+#   INTENT            — string describing what the task aims to achieve
+#   HYPOTHESES        — literal \n-separated list
+#   CONSTRAINTS       — literal \n-separated list
+#   SUCCESS_CRITERIA  — literal \n-separated list
+#   DELIVERABLES      — literal \n-separated list
+#   DISPATCH_MODE     — string (standard|phased|parallel|sequential)
+#   DISPATCH_TEAM     — string (team type)
+#   FORCE             — set to 1 to overwrite existing .json
+# Returns: 0 on success, 1 on error
+task_write_json() {
+  local project_dir="$1" task_id="$2"
+
+  local tasks_dir
+  tasks_dir="$(task_dir "$project_dir")"
+  local task_file="${tasks_dir}/${task_id}.task"
+  local json_file="${tasks_dir}/${task_id}.json"
+
+  if [ ! -f "$task_file" ]; then
+    printf 'Error: task file not found: %s\n' "$task_file" >&2
+    return 1
+  fi
+
+  # Don't overwrite unless FORCE=1
+  if [ -f "$json_file" ] && [ "${FORCE:-0}" != "1" ]; then
+    printf 'Warning: %s already exists (use FORCE=1 to overwrite)\n' "$json_file" >&2
+    return 0
+  fi
+
+  # Read task metadata
+  local title task_type
+  title="$(_task_read_field "$task_file" "TASK_TITLE")"
+  task_type="$(_task_read_field "$task_file" "TASK_TYPE")"
+
+  # Escape strings for JSON
+  local esc_title esc_intent esc_type
+  esc_title="$(_json_escape "$title")"
+  esc_type="$(_json_escape "${task_type:-feature}")"
+  esc_intent="$(_json_escape "${INTENT:-}")"
+
+  # Build arrays from literal \n-separated env vars
+  local arr_hyp arr_con arr_crit arr_del
+  arr_hyp="$(_json_array_from_lines "${HYPOTHESES:-}")"
+  arr_con="$(_json_array_from_lines "${CONSTRAINTS:-}")"
+  arr_crit="$(_json_array_from_lines "${SUCCESS_CRITERIA:-}")"
+  arr_del="$(_json_array_from_lines "${DELIVERABLES:-}")"
+
+  # Build dispatch_plan object
+  local dispatch_json="{}"
+  if [ -n "${DISPATCH_MODE:-}" ]; then
+    local esc_mode esc_team
+    esc_mode="$(_json_escape "$DISPATCH_MODE")"
+    esc_team="$(_json_escape "${DISPATCH_TEAM:-}")"
+    if [ -n "${DISPATCH_TEAM:-}" ]; then
+      dispatch_json=$(printf '{"mode": "%s", "team_type": "%s"}' "$esc_mode" "$esc_team")
+    else
+      dispatch_json=$(printf '{"mode": "%s"}' "$esc_mode")
+    fi
+  fi
+
+  # Write JSON with atomic tmp+mv
+  local tmp="${json_file}.tmp"
+  printf '{\n' > "$tmp"
+  printf '  "schema_version": 3,\n' >> "$tmp"
+  printf '  "task_id": %s,\n' "$task_id" >> "$tmp"
+  printf '  "title": "%s",\n' "$esc_title" >> "$tmp"
+  printf '  "task_type": "%s",\n' "$esc_type" >> "$tmp"
+  printf '  "intent": "%s",\n' "$esc_intent" >> "$tmp"
+  printf '  "hypotheses": %s,\n' "$arr_hyp" >> "$tmp"
+  printf '  "constraints": %s,\n' "$arr_con" >> "$tmp"
+  printf '  "success_criteria": %s,\n' "$arr_crit" >> "$tmp"
+  printf '  "deliverables": %s,\n' "$arr_del" >> "$tmp"
+  printf '  "dispatch_plan": %s\n' "$dispatch_json" >> "$tmp"
+  printf '}\n' >> "$tmp"
+  mv "$tmp" "$json_file"
+}
+
+# ── task_commit_msg ──────────────────────────────────────────────────
+# Generate a conventional commit message from task metadata.
+# Args: project_dir task_id
+# Returns (echo): "<prefix>: <title> (Task #<id>)"
+task_commit_msg() {
+  local project_dir="$1" task_id="$2"
+
+  local tasks_dir
+  tasks_dir="$(task_dir "$project_dir")"
+  local task_file="${tasks_dir}/${task_id}.task"
+
+  if [ ! -f "$task_file" ]; then
+    printf 'Error: task file not found: %s\n' "$task_file" >&2
+    return 1
+  fi
+
+  local title task_type
+  title="$(_task_read_field "$task_file" "TASK_TITLE")"
+  task_type="$(_task_read_field "$task_file" "TASK_TYPE")"
+
+  local prefix
+  case "${task_type:-}" in
+    feature)        prefix="feat" ;;
+    bug|bugfix)     prefix="fix" ;;
+    refactor)       prefix="refactor" ;;
+    docs)           prefix="docs" ;;
+    research|audit|infrastructure) prefix="chore" ;;
+    *)              prefix="chore" ;;
+  esac
+
+  printf '%s: %s (Task #%s)' "$prefix" "$title" "$task_id"
 }
 
 # ── task_upgrade_schema ───────────────────────────────────────────────
@@ -600,6 +773,7 @@ _write_task_json() {
 task_upgrade_schema() {
   local file="$1"
   [ -f "$file" ] || { printf 'Error: file not found: %s\n' "$file" >&2; return 1; }
+  [ -s "$file" ] || return 1
 
   # Read with task_read (handles all versions)
   local TASK_SCHEMA_VERSION TASK_ID TASK_TITLE TASK_STATUS TASK_TYPE
