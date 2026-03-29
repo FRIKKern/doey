@@ -83,10 +83,10 @@ sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd
 systemctl restart ssh.service || fail "Failed to restart ssh.service"
 echo "  SSH hardened: root login disabled, password auth disabled."
 
-# Firewall
-ufw --force enable
+# Firewall — allow SSH BEFORE enabling, or we lock ourselves out
 ufw allow OpenSSH
 ufw allow 60000:61000/udp  # mosh
+ufw --force enable
 echo "  UFW enabled: SSH + mosh allowed."
 
 # =============================================================================
@@ -161,16 +161,18 @@ DOEY_REPO="${DOEY_HOME}/doey"
 
 if [ -d "${DOEY_REPO}" ]; then
     echo "  Doey repo already exists, pulling latest."
-    sudo -u "${DOEY_USER}" bash -c "cd ${DOEY_REPO} && git pull"
+    sudo -u "${DOEY_USER}" bash -c 'cd "$1" && git pull' -- "${DOEY_REPO}"
 else
     sudo -u "${DOEY_USER}" git clone https://github.com/doeyai/doey.git "${DOEY_REPO}"
 fi
 
-sudo -u "${DOEY_USER}" bash -c "cd ${DOEY_REPO} && ./install.sh"
+sudo -u "${DOEY_USER}" bash -c 'cd "$1" && ./install.sh' -- "${DOEY_REPO}"
 
-# Ensure PATH includes ~/.local/bin
+# Ensure PATH includes ~/.local/bin and fnm
 sudo -u "${DOEY_USER}" bash -c '
     grep -q "\.local/bin" ~/.bashrc || echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> ~/.bashrc
+    grep -q "fnm env" ~/.bashrc || echo "eval \"\$(fnm env 2>/dev/null)\"" >> ~/.bashrc
+    grep -q "\.local/share/fnm" ~/.bashrc || echo "export PATH=\"\$HOME/.local/share/fnm:\$PATH\"" >> ~/.bashrc
 '
 
 # Fix ownership (belt and suspenders)
@@ -192,7 +194,7 @@ else
         echo "  Project directory already exists."
     else
         sudo -u "${DOEY_USER}" mkdir -p "${PROJECT_DIR}"
-        sudo -u "${DOEY_USER}" bash -c "cd ${PROJECT_DIR} && git init"
+        sudo -u "${DOEY_USER}" bash -c 'cd "$1" && git init' -- "${PROJECT_DIR}"
         echo "  Created ${PROJECT_DIR} with git repo."
     fi
     chown -R "${DOEY_USER}:${DOEY_USER}" "${PROJECT_DIR}"
@@ -207,7 +209,7 @@ SERVER_IP=$(hostname -I | awk '{print $1}')
 
 echo "  User:    ${DOEY_USER}"
 echo "  Project: ${PROJECT_DIR}"
-echo "  Node:    $(sudo -u ${DOEY_USER} bash -c 'export PATH="$HOME/.local/share/fnm:$PATH"; eval "$(fnm env)"; node --version' 2>/dev/null || echo 'check manually')"
+echo "  Node:    $(sudo -u "${DOEY_USER}" bash -c 'export PATH="$HOME/.local/share/fnm:$PATH"; eval "$(fnm env)"; node --version' 2>/dev/null || echo 'check manually')"
 echo ""
 echo "  Next steps:"
 echo "    1. SSH in:   ssh ${DOEY_USER}@${SERVER_IP}"

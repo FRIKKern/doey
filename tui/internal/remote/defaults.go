@@ -225,16 +225,16 @@ func (m DefaultsModel) renderPickers() string {
 	}
 	sections = append(sections, regionHeader)
 
+	if len(m.regions) == 0 {
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Warning).
+			Render("  No regions available"))
+	}
 	for i, r := range m.regions {
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(t.Text)
 		if i == m.regionIdx {
 			prefix = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("> ")
 			style = style.Bold(true)
-		}
-		label := fmt.Sprintf("%s  %s, %s", r.Name, r.City, r.Country)
-		if r.LatencyHint != "" {
-			label += lipgloss.NewStyle().Foreground(t.Muted).Render("  (" + r.LatencyHint + ")")
 		}
 		sections = append(sections, prefix+style.Render(r.Name)+
 			lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("  %s, %s", r.City, r.Country))+
@@ -252,6 +252,10 @@ func (m DefaultsModel) renderPickers() string {
 	}
 	sections = append(sections, serverHeader)
 
+	if len(m.serverTypes) == 0 {
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Warning).
+			Render("  No server types available"))
+	}
 	for i, s := range m.serverTypes {
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(t.Text)
@@ -260,7 +264,6 @@ func (m DefaultsModel) renderPickers() string {
 			style = style.Bold(true)
 		}
 		desc := fmt.Sprintf("%d vCPU, %.0f GB RAM", s.VCPUs, s.MemoryGB)
-		price := s.PriceMonthly
 		recommended := ""
 		if s.Name == "cx22" {
 			recommended = lipgloss.NewStyle().Foreground(t.Success).Render(" (recommended)")
@@ -268,7 +271,7 @@ func (m DefaultsModel) renderPickers() string {
 
 		line := prefix + style.Render(s.Name) +
 			lipgloss.NewStyle().Foreground(t.Muted).Render("  "+desc+"  ") +
-			lipgloss.NewStyle().Foreground(t.Warning).Render(price) +
+			lipgloss.NewStyle().Foreground(t.Warning).Render(s.PriceMonthly) +
 			recommended
 		sections = append(sections, line)
 	}

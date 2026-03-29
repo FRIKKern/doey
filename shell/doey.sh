@@ -4092,7 +4092,7 @@ doey_remote() {
       if hcloud server delete "$server_name" 2>/dev/null; then
         printf "  ${SUCCESS}Server deleted.${RESET}\n"
       else
-        printf "  ${WARNING}Server may already be deleted.${RESET}\n"
+        printf "  ${WARN}Server may already be deleted.${RESET}\n"
       fi
 
       printf "  ${DIM}Removing SSH key...${RESET}\n"
@@ -4125,18 +4125,9 @@ doey_remote() {
       server_name="$(grep '^SERVER_NAME=' "$remote_file" | cut -d= -f2-)"
       if [ -n "$server_name" ]; then
         printf "\n  ${DIM}Live status from Hetzner:${RESET}\n"
-        hcloud server describe "$server_name" 2>/dev/null | head -20 | sed 's/^/  /' || printf "  ${WARNING}Could not query server (may be deleted)${RESET}\n"
+        hcloud server describe "$server_name" 2>/dev/null | head -20 | sed 's/^/  /' || printf "  ${WARN}Could not query server (may be deleted)${RESET}\n"
       fi
       printf "\n"
-      ;;
-
-    setup)
-      if command -v doey-remote-setup >/dev/null 2>&1; then
-        doey-remote-setup
-      else
-        printf "  ${ERROR}doey-remote-setup not found.${RESET}\n"
-        printf "  Run: cd %s/tui && go build -o ~/.local/bin/doey-remote-setup ./cmd/doey-remote-setup/\n" "$DOEY_SOURCE_DIR"
-      fi
       ;;
 
     *)
@@ -4191,7 +4182,7 @@ _doey_remote_provision() {
       _doey_remote_attach "$project" "$existing_ip"
       return $?
     else
-      printf "  ${WARNING}Server from config is gone. Re-provisioning...${RESET}\n"
+      printf "  ${WARN}Server from config is gone. Re-provisioning...${RESET}\n"
       command -v trash >/dev/null 2>&1 && trash "$remote_file" || rm -f "$remote_file"
     fi
   fi
@@ -4294,7 +4285,7 @@ _doey_remote_attach() {
     -o StrictHostKeyChecking=accept-new \
     -i "$ssh_key" \
     doey@"$ip" \
-    "cd /home/doey/${project} && doey"
+    "cd '/home/doey/${project}' && doey"
 }
 
 # ── Main Dispatch ─────────────────────────────────────────────────────

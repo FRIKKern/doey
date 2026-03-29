@@ -107,7 +107,7 @@ func (m SaveModel) View() string {
 	}
 
 	var content string
-	if m.saving {
+	if m.saving || (!m.done && m.err == nil) {
 		content = strings.Join([]string{
 			"",
 			m.spinner.View() + " Saving configuration...",

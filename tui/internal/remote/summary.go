@@ -112,10 +112,13 @@ func (m SummaryModel) View() string {
 		Render(content)
 }
 
-// maskToken shows first 4 chars then asterisks.
+// maskToken shows first 4 chars then asterisks, or fully masks short tokens.
 func maskToken(token string) string {
+	if token == "" {
+		return ""
+	}
 	if len(token) <= 4 {
-		return token
+		return strings.Repeat("*", len(token))
 	}
 	return token[:4] + strings.Repeat("*", len(token)-4)
 }
