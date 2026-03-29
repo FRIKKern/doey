@@ -47,6 +47,7 @@ type AuthModel struct {
 	selected  bool
 	input     textinput.Model
 	showInput bool
+	errMsg    string
 
 	method string
 	value  string
@@ -94,8 +95,10 @@ func (m AuthModel) Update(msg tea.Msg) (AuthModel, tea.Cmd) {
 			case "enter":
 				val := strings.TrimSpace(m.input.Value())
 				if val == "" {
+					m.errMsg = "API key cannot be empty"
 					return m, nil
 				}
+				m.errMsg = ""
 				m.value = val
 				m.method = "apikey"
 				return m, func() tea.Msg { return NextStepMsg{} }
@@ -191,8 +194,11 @@ func (m AuthModel) View() string {
 	var extra string
 	if m.showInput {
 		extra = "\n" + lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render("API Key:") +
-			"\n" + m.input.View() +
-			"\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("Press Enter to confirm, Esc to cancel")
+			"\n" + m.input.View()
+		if m.errMsg != "" {
+			extra += "\n" + lipgloss.NewStyle().Foreground(t.Danger).Render("  "+m.errMsg)
+		}
+		extra += "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("Press Enter to confirm, Esc to cancel")
 	}
 
 	nav := lipgloss.NewStyle().Foreground(t.Muted).Render("j/k navigate  |  Enter select  |  Esc back")

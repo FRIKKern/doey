@@ -2,6 +2,7 @@ package remote
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -125,6 +126,9 @@ func (m TokenModel) Update(msg tea.Msg) (TokenModel, tea.Cmd) {
 
 func (m TokenModel) validateToken(token string) tea.Cmd {
 	return func() tea.Msg {
+		if m.provider == nil {
+			return TokenErrorMsg{Err: fmt.Errorf("no cloud provider configured")}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := m.provider.ValidateToken(ctx, token); err != nil {

@@ -60,6 +60,9 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.retreat()
 
 	case GoToStepMsg:
+		if msg.Step < StepWelcome || msg.Step > StepSave {
+			return m, nil
+		}
 		m.currentStep = msg.Step
 		return m.enterStep()
 
@@ -98,6 +101,10 @@ func (m WizardModel) View() string {
 
 // advance moves to the next step.
 func (m WizardModel) advance() (tea.Model, tea.Cmd) {
+	// Collect state from the step we're leaving
+	if m.currentStep == StepProvider {
+		m.config.Provider = "hetzner"
+	}
 	next := m.currentStep + 1
 	// Skip steps that other workers will create (token, ssh, defaults, auth)
 	// by jumping to the next step we handle.

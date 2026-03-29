@@ -20,7 +20,7 @@ const (
 // StepName returns the human-readable name for a wizard step.
 func StepName(s Step) string {
 	names := []string{"Welcome", "Provider", "API Token", "SSH Key", "Server", "Auth", "Summary", "Save", "Done"}
-	if int(s) < len(names) {
+	if s >= 0 && int(s) < len(names) {
 		return names[s]
 	}
 	return "Unknown"

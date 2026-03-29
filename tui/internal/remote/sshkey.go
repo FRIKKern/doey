@@ -60,6 +60,7 @@ func NewSSHKeyModel(theme styles.Theme, provider hetzner.Provider, token string,
 		provider: provider,
 		token:    token,
 		spinner:  sp,
+		loading:  true,
 	}
 }
 
@@ -70,7 +71,10 @@ func (m SSHKeyModel) Init() tea.Cmd {
 func (m SSHKeyModel) Update(msg tea.Msg) (SSHKeyModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if m.loading || m.done {
+		if m.loading || m.done || !m.loaded {
+			if msg.String() == "esc" {
+				return m, func() tea.Msg { return PrevStepMsg{} }
+			}
 			return m, nil
 		}
 		switch msg.String() {

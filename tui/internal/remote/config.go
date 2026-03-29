@@ -32,7 +32,10 @@ func DefaultConfig() Config {
 
 // DefaultConfigPath returns ~/.config/doey/remote.conf.
 func DefaultConfigPath() string {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join(os.TempDir(), "doey", "remote.conf")
+	}
 	return filepath.Join(home, ".config", "doey", "remote.conf")
 }
 
@@ -50,7 +53,7 @@ func LoadConfig(path string) (Config, error) {
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := strings.TrimSpace(strings.TrimRight(scanner.Text(), "\r"))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -82,10 +85,11 @@ func LoadConfig(path string) (Config, error) {
 }
 
 // SaveConfig writes config to a key=value file with 0600 permissions.
+// Uses atomic write (temp file + rename) to prevent partial writes on crash.
 func SaveConfig(path string, cfg Config) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
 	}
 
 	var b strings.Builder
@@ -100,5 +104,29 @@ func SaveConfig(path string, cfg Config) error {
 	fmt.Fprintf(&b, "AUTH_METHOD=%s\n", cfg.AuthMethod)
 	fmt.Fprintf(&b, "AUTH_VALUE=%s\n", cfg.AuthValue)
 
-	return os.WriteFile(path, []byte(b.String()), 0600)
+	// Atomic write: temp file in same dir, then rename
+	tmp, err := os.CreateTemp(dir, ".remote.conf.*")
+	if err != nil {
+		return fmt.Errorf("create temp config: %w", err)
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.WriteString(b.String()); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("write config: %w", err)
+	}
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("set config permissions: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close config: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename config: %w", err)
+	}
+	return nil
 }
