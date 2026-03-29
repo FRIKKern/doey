@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
+	"github.com/doey-cli/doey/tui/internal/taskcard"
 )
 
 // sectionOfStatus derives a display section from a canonical task status.
@@ -67,8 +69,10 @@ type TasksModel struct {
 	subtaskMap map[string][]runtime.Subtask // task ID -> subtasks
 	theme      styles.Theme
 
+	// Card-based list
+	list list.Model
+
 	// Navigation
-	cursor      int
 	summaryMode bool // true = list, false = detail
 	keyMap      keys.KeyMap
 
@@ -84,11 +88,23 @@ type TasksModel struct {
 
 // NewTasksModel creates a tasks panel starting in list mode.
 func NewTasksModel() TasksModel {
+	theme := styles.DefaultTheme()
+	delegate := taskcard.NewCardDelegate(theme)
+	l := list.New([]list.Item{}, delegate, 0, 0)
+	l.SetShowTitle(false)
+	l.SetShowStatusBar(false)
+	l.SetShowFilter(false)
+	l.SetShowHelp(false)
+	l.SetShowPagination(true)
+	l.KeyMap.CursorUp = key.NewBinding(key.WithKeys("k", "up"))
+	l.KeyMap.CursorDown = key.NewBinding(key.WithKeys("j", "down"))
+
 	return TasksModel{
-		theme:       styles.DefaultTheme(),
+		theme:       theme,
 		summaryMode: true,
 		keyMap:      keys.DefaultKeyMap(),
 		subtaskMap:  make(map[string][]runtime.Subtask),
+		list:        l,
 	}
 }
 
@@ -96,7 +112,11 @@ func NewTasksModel() TasksModel {
 func (m TasksModel) Init() tea.Cmd { return nil }
 
 // SetSize updates the panel dimensions.
-func (m *TasksModel) SetSize(w, h int) { m.width = w; m.height = h }
+func (m *TasksModel) SetSize(w, h int) {
+	m.width = w
+	m.height = h
+	m.list.SetSize(w, h-4)
+}
 
 // SetFocused toggles focus state.
 func (m *TasksModel) SetFocused(focused bool) { m.focused = focused }
@@ -116,9 +136,22 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 		m.subtaskMap[st.TaskID] = append(m.subtaskMap[st.TaskID], st)
 	}
 
-	if m.cursor >= len(m.entries) {
-		m.cursor = max(0, len(m.entries)-1)
+	// Convert entries to list items
+	items := make([]list.Item, len(m.entries))
+	for i, entry := range m.entries {
+		ti := taskcard.TaskItem{Task: entry}
+		if subs, ok := m.subtaskMap[entry.ID]; ok {
+			ti.Subtasks = subs
+			ti.SubtaskTotal = len(subs)
+			for _, s := range subs {
+				if s.Status == "done" {
+					ti.SubtaskDone++
+				}
+			}
+		}
+		items[i] = ti
 	}
+	m.list.SetItems(items)
 }
 
 func (m *TasksModel) sortEntries() {
@@ -200,61 +233,63 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
-	switch {
-	case key.Matches(msg, m.keyMap.Up):
-		m.cursor--
-		if m.cursor < 0 {
-			m.cursor = total - 1
-		}
-	case key.Matches(msg, m.keyMap.Down):
-		m.cursor++
-		if m.cursor >= total {
-			m.cursor = 0
-		}
-	case key.Matches(msg, m.keyMap.Select):
+	// Handle custom keys first
+	switch msg.String() {
+	case "n":
+		m.creating = true
+		m.inputText = ""
+		return m, nil
+	case "enter":
 		m.summaryMode = false
-
-	default:
-		switch msg.String() {
-		case "n":
-			m.creating = true
-			m.inputText = ""
-		case "m":
-			// Move to next status
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
-				next := nextMoveStatus(task.Status)
-				return m, func() tea.Msg {
-					return MoveTaskMsg{ID: task.ID, Status: next}
-				}
-			}
-		case "d":
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
-				return m, func() tea.Msg {
-					return DispatchTaskMsg{ID: task.ID, Title: task.Title}
-				}
-			}
-		case "s":
-			// Cycle through all statuses
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
-				next := nextStatus(task.Status)
-				return m, func() tea.Msg {
-					return SetStatusTaskMsg{ID: task.ID, Status: next}
-				}
-			}
-		case "x":
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
-				return m, func() tea.Msg {
-					return CancelTaskMsg{ID: task.ID}
-				}
-			}
+		return m, nil
+	case "m":
+		item := m.list.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		ti := item.(taskcard.TaskItem)
+		task := ti.Task
+		next := nextMoveStatus(task.Status)
+		return m, func() tea.Msg {
+			return MoveTaskMsg{ID: task.ID, Status: next}
+		}
+	case "d":
+		item := m.list.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		ti := item.(taskcard.TaskItem)
+		task := ti.Task
+		return m, func() tea.Msg {
+			return DispatchTaskMsg{ID: task.ID, Title: task.Title}
+		}
+	case "s":
+		item := m.list.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		ti := item.(taskcard.TaskItem)
+		task := ti.Task
+		next := nextStatus(task.Status)
+		return m, func() tea.Msg {
+			return SetStatusTaskMsg{ID: task.ID, Status: next}
+		}
+	case "x":
+		item := m.list.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		ti := item.(taskcard.TaskItem)
+		task := ti.Task
+		return m, func() tea.Msg {
+			return CancelTaskMsg{ID: task.ID}
 		}
 	}
 
-	return m, nil
+	// Delegate everything else (j/k/scroll) to the list model
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
 }
 
 func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
@@ -264,37 +299,39 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
+	idx := m.list.Index()
+
 	switch {
 	case key.Matches(msg, m.keyMap.Back):
 		m.summaryMode = true
 	default:
 		switch msg.String() {
 		case "m":
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
+			if idx >= 0 && idx < total {
+				task := m.entries[idx]
 				next := nextMoveStatus(task.Status)
 				return m, func() tea.Msg {
 					return MoveTaskMsg{ID: task.ID, Status: next}
 				}
 			}
 		case "s":
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
+			if idx >= 0 && idx < total {
+				task := m.entries[idx]
 				next := nextStatus(task.Status)
 				return m, func() tea.Msg {
 					return SetStatusTaskMsg{ID: task.ID, Status: next}
 				}
 			}
 		case "d":
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
+			if idx >= 0 && idx < total {
+				task := m.entries[idx]
 				return m, func() tea.Msg {
 					return DispatchTaskMsg{ID: task.ID, Title: task.Title}
 				}
 			}
 		case "x":
-			if m.cursor >= 0 && m.cursor < total {
-				task := m.entries[m.cursor]
+			if idx >= 0 && idx < total {
+				task := m.entries[idx]
 				return m, func() tea.Msg {
 					return CancelTaskMsg{ID: task.ID}
 				}
@@ -305,7 +342,7 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	return m, nil
 }
 
-// nextMoveStatus cycles through the main statuses: active → in_progress → done → active.
+// nextMoveStatus cycles through the main statuses: active -> in_progress -> done -> active.
 func nextMoveStatus(s string) string {
 	switch s {
 	case "active":
@@ -371,34 +408,8 @@ func (m TasksModel) viewList() string {
 
 	summary := m.taskSummary()
 
-	// Build rows with section headers (inverted pill badges)
-	var lines []string
-	lastSection := ""
-	for i, entry := range m.entries {
-		sec := sectionOfStatus(entry.Status)
-		section := sectionLabel(sec)
-		if section != lastSection {
-			if lastSection != "" {
-				lines = append(lines, "")
-			}
-			// Inverted-color pill for section headers (omm pattern)
-			pillColor := t.Primary
-			if sec == "complete" {
-				pillColor = t.Success
-			}
-			sectionHeader := " " + styles.SectionPill(section, pillColor)
-			lines = append(lines, sectionHeader)
-			lastSection = section
-		}
-
-		selected := m.focused && i == m.cursor
-		line := m.renderTaskRow(entry, w, selected)
-		lines = append(lines, line)
-	}
-
-	body := lipgloss.NewStyle().
-		Padding(0, 2).
-		Render(strings.Join(lines, "\n"))
+	// Use the list view instead of manual rows
+	listView := m.list.View()
 
 	hint := ""
 	if m.focused && !m.creating {
@@ -409,7 +420,7 @@ func (m TasksModel) viewList() string {
 			Render("enter = detail  n = new  m = move  s = status  d = dispatch  x = cancel")
 	}
 
-	content := header + "\n" + rule + "\n" + summary + "\n" + body + "\n" + hint
+	content := header + "\n" + rule + "\n" + summary + "\n" + listView + "\n" + hint
 	if m.creating {
 		content += "\n" + m.renderInputBar()
 	}
@@ -456,104 +467,6 @@ func sectionLabel(section string) string {
 	}
 }
 
-// renderTaskRow renders a single task as a one-liner.
-// When selected, uses ▎ (left 1/8 block) indicator instead of background highlight (omm pattern).
-func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int, selected bool) string {
-	t := m.theme
-
-	icon := statusIcon(task.Status, t)
-	id := t.Dim.Render(fmt.Sprintf("#%s", task.ID))
-
-	// Category badge
-	catBadge := ""
-	if task.Category != "" {
-		catBadge = " " + styles.CategoryBadge(task.Category)
-	}
-
-	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(task.Title)
-
-	age := ""
-	if task.Created > 0 {
-		age = t.Faint.Render(formatAge(time.Since(time.Unix(task.Created, 0))))
-	}
-
-	// Subtask progress — colored "(done/total done)" indicator
-	subtaskBadge := ""
-	if subs, ok := m.subtaskMap[task.ID]; ok && len(subs) > 0 {
-		done := 0
-		for _, s := range subs {
-			if s.Status == "done" {
-				done++
-			}
-		}
-		subtaskBadge = " " + styles.SubtaskProgress(done, len(subs))
-	}
-
-	// Priority badge (show for P0 and P1 only)
-	priBadge := ""
-	if task.Priority <= 1 {
-		priColor := t.Danger
-		if task.Priority == 1 {
-			priColor = t.Warning
-		}
-		priBadge = " " + lipgloss.NewStyle().Bold(true).Foreground(priColor).
-			Render(fmt.Sprintf("P%d", task.Priority))
-	}
-
-	// Team badge
-	teamBadge := ""
-	if task.Team != "" {
-		teamBadge = " " + lipgloss.NewStyle().Foreground(t.Accent).Render("["+task.Team+"]")
-	}
-
-	// Tags (max 3 in list view)
-	tagStr := ""
-	if len(task.Tags) > 0 {
-		limit := len(task.Tags)
-		if limit > 3 {
-			limit = 3
-		}
-		var tagParts []string
-		for _, tag := range task.Tags[:limit] {
-			tagParts = append(tagParts, styles.TagBadge(tag))
-		}
-		tagStr = " " + strings.Join(tagParts, " ")
-	}
-
-	// Blocker indicator
-	blockerBadge := ""
-	if task.Blockers != "" {
-		blockerBadge = " " + lipgloss.NewStyle().Bold(true).Foreground(t.Danger).Render("⚠")
-	}
-
-	// Type badge (compact)
-	typeBadge := ""
-	if task.Type != "" {
-		typeBadge = " " + t.Dim.Render("["+task.Type+"]")
-	}
-
-	// Selection indicator: ▎ (left 1/8 block) when selected, space when not (omm pattern)
-	indicator := "  "
-	if selected {
-		indicator = lipgloss.NewStyle().Foreground(t.Primary).Render("▎") + " "
-	}
-
-	row := indicator + icon + " " + id + catBadge + typeBadge + " " + title + priBadge + blockerBadge + subtaskBadge + teamBadge + tagStr + " " + age
-
-	// Selected rows get primary-colored text for the entire line
-	if selected {
-		row = lipgloss.NewStyle().Foreground(t.Primary).Render(row)
-	}
-
-	// Merged tasks are dimmed with a merge indicator
-	if task.MergedInto != "" {
-		row = lipgloss.NewStyle().Faint(true).Render(row) +
-			t.Dim.Render(" -> #"+task.MergedInto)
-	}
-
-	return row
-}
-
 // renderInputBar renders the inline text input for creating a task.
 func (m TasksModel) renderInputBar() string {
 	t := m.theme
@@ -573,12 +486,13 @@ func (m TasksModel) viewDetail() string {
 		w = 30
 	}
 
-	if m.cursor < 0 || m.cursor >= len(m.entries) {
+	idx := m.list.Index()
+	if idx < 0 || idx >= len(m.entries) {
 		m.summaryMode = true
 		return m.viewList()
 	}
 
-	task := m.entries[m.cursor]
+	task := m.entries[idx]
 
 	header := t.SectionHeader.Copy().PaddingLeft(2).
 		Render(fmt.Sprintf("TASK \u2014 #%s", task.ID))
@@ -734,8 +648,8 @@ func (m TasksModel) viewDetail() string {
 		if total > 0 {
 			filled = (doneCount * barWidth) / total
 		}
-		bar := lipgloss.NewStyle().Foreground(t.Success).Render(strings.Repeat("█", filled)) +
-			lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("░", barWidth-filled))
+		bar := lipgloss.NewStyle().Foreground(t.Success).Render(strings.Repeat("\u2588", filled)) +
+			lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("\u2591", barWidth-filled))
 		progressLabel := fmt.Sprintf(" %d/%d", doneCount, total)
 		progressLine := "   " + bar + t.Dim.Render(progressLabel)
 
@@ -748,14 +662,14 @@ func (m TasksModel) viewDetail() string {
 		subLines = append(subLines, progressLine)
 		now := time.Now()
 		for _, st := range subs {
-			dot := lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+			dot := lipgloss.NewStyle().Foreground(t.Muted).Render("\u25CB")
 			switch st.Status {
 			case "done":
-				dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
+				dot = lipgloss.NewStyle().Foreground(t.Success).Render("\u25CF")
 			case "active":
-				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("\u25CF")
 			case "failed":
-				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
+				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("\u2715")
 			}
 			pane := lipgloss.NewStyle().Foreground(t.Accent).Render(st.Pane)
 			title := valueStyle.Render(st.Title)
@@ -813,7 +727,7 @@ func (m TasksModel) viewDetail() string {
 	blockerBlock := ""
 	if task.Blockers != "" {
 		bHeader := lipgloss.NewStyle().Bold(true).Foreground(t.Danger).PaddingLeft(3).
-			Render("⚠ BLOCKERS")
+			Render("\u26A0 BLOCKERS")
 		bRule := lipgloss.NewStyle().PaddingLeft(3).
 			Render(lipgloss.NewStyle().Foreground(t.Danger).Render(strings.Repeat("\u2500", w-6)))
 		bBody := lipgloss.NewStyle().
@@ -837,7 +751,7 @@ func (m TasksModel) viewDetail() string {
 			if line == "" {
 				continue
 			}
-			acLines = append(acLines, "  "+lipgloss.NewStyle().Foreground(t.Muted).Render("□")+" "+valueStyle.Render(line))
+			acLines = append(acLines, "  "+lipgloss.NewStyle().Foreground(t.Muted).Render("\u25A1")+" "+valueStyle.Render(line))
 		}
 		if len(acLines) > 0 {
 			criteriaBlock = "\n" + acHeader + "\n" + acRule + "\n" +
@@ -863,7 +777,7 @@ func (m TasksModel) viewDetail() string {
 			if line == "" {
 				continue
 			}
-			dlLines = append(dlLines, "  "+lipgloss.NewStyle().Foreground(t.Accent).Render("→")+" "+
+			dlLines = append(dlLines, "  "+lipgloss.NewStyle().Foreground(t.Accent).Render("\u2192")+" "+
 				lipgloss.NewStyle().Foreground(t.Muted).Render(line))
 		}
 		if start > 0 {
