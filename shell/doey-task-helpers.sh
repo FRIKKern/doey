@@ -737,7 +737,10 @@ task_write_json() {
 # ── task_commit_msg ──────────────────────────────────────────────────
 # Generate a conventional commit message from task metadata.
 # Args: project_dir task_id
-# Returns (echo): "<prefix>: <title> (Task #<id>)"
+# Outputs: multi-line commit message to stdout
+#   Line 1: <prefix>(task-<id>): <title>
+#   Line 2: (blank, only if body follows)
+#   Line 3+: first 1-2 sentences of description/summary
 task_commit_msg() {
   local project_dir="$1" task_id="$2"
 
@@ -745,26 +748,57 @@ task_commit_msg() {
   tasks_dir="$(task_dir "$project_dir")"
   local task_file="${tasks_dir}/${task_id}.task"
 
-  if [ ! -f "$task_file" ]; then
-    printf 'Error: task file not found: %s\n' "$task_file" >&2
-    return 1
+  # Fallback for missing or empty file
+  if [ ! -f "$task_file" ] || [ ! -s "$task_file" ]; then
+    printf 'chore(task-%s): task %s\n' "$task_id" "$task_id"
+    return 0
   fi
 
-  local title task_type
+  local title task_type description summary
   title="$(_task_read_field "$task_file" "TASK_TITLE")"
   task_type="$(_task_read_field "$task_file" "TASK_TYPE")"
+  description="$(_task_read_field "$task_file" "TASK_DESCRIPTION")"
+  summary="$(_task_read_field "$task_file" "TASK_SUMMARY")"
 
+  # Fallback for empty title
+  if [ -z "$title" ]; then
+    title="task $task_id"
+  fi
+
+  # Map TASK_TYPE to conventional commit prefix
   local prefix
   case "${task_type:-}" in
-    feature)        prefix="feat" ;;
-    bug|bugfix)     prefix="fix" ;;
-    refactor)       prefix="refactor" ;;
-    docs)           prefix="docs" ;;
-    research|audit|infrastructure) prefix="chore" ;;
-    *)              prefix="chore" ;;
+    feature)                    prefix="feat" ;;
+    fix|bugfix)                 prefix="fix" ;;
+    refactor)                   prefix="refactor" ;;
+    docs|research)              prefix="docs" ;;
+    test)                       prefix="test" ;;
+    infrastructure|maintenance) prefix="chore" ;;
+    *)                          prefix="chore" ;;
   esac
 
-  printf '%s: %s (Task #%s)' "$prefix" "$title" "$task_id"
+  # Lowercase the title
+  local lc_title
+  lc_title="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')"
+
+  # Build subject line and truncate to ~72 chars
+  local subject="${prefix}(task-${task_id}): ${lc_title}"
+  if [ "${#subject}" -gt 72 ]; then
+    subject="$(printf '%s' "$subject" | cut -c1-69)..."
+  fi
+
+  printf '%s\n' "$subject"
+
+  # Body: prefer summary, fall back to description
+  local body="${summary:-$description}"
+  if [ -n "$body" ]; then
+    # Unescape literal \n sequences to real newlines, take first 2 lines
+    local short
+    short="$(printf '%s' "$body" | sed 's/\\n/\n/g' | head -2 | head -c 200)"
+    if [ -n "$short" ]; then
+      printf '\n%s\n' "$short"
+    fi
+  fi
 }
 
 # ── task_upgrade_schema ───────────────────────────────────────────────
@@ -914,4 +948,120 @@ task_update_phase() {
   if [ "$total" -gt 0 ]; then
     task_add_decision "$task_file" "Phase ${current}/${total}"
   fi
+}
+
+# ── task_context_overlap ─────────────────────────────────────────────
+# Score how relevant a worker's previous task context is to a new task.
+# Args: last_tags last_type last_files new_tags new_type new_files
+#   Tags: comma-separated. Files: pipe-delimited paths.
+# Returns (echo): integer 0-100
+task_context_overlap() {
+  local last_tags="${1:-}" last_type="${2:-}" last_files="${3:-}"
+  local new_tags="${4:-}" new_type="${5:-}" new_files="${6:-}"
+
+  # ── Tag overlap (0-40 points) ──
+  local tag_score=0
+  if [ -n "$last_tags" ] && [ -n "$new_tags" ]; then
+    local last_count=0 new_count=0 matches=0
+
+    # Count last tags
+    local remaining="$last_tags"
+    local last_list=""
+    while [ -n "$remaining" ]; do
+      local entry
+      case "$remaining" in
+        *,*) entry="${remaining%%,*}"; remaining="${remaining#*,}" ;;
+        *)   entry="$remaining"; remaining="" ;;
+      esac
+      entry="${entry## }"; entry="${entry%% }"
+      [ -z "$entry" ] && continue
+      last_list="${last_list}|${entry}|"
+      last_count=$((last_count + 1))
+    done
+
+    # Count new tags and check matches
+    remaining="$new_tags"
+    while [ -n "$remaining" ]; do
+      local entry
+      case "$remaining" in
+        *,*) entry="${remaining%%,*}"; remaining="${remaining#*,}" ;;
+        *)   entry="$remaining"; remaining="" ;;
+      esac
+      entry="${entry## }"; entry="${entry%% }"
+      [ -z "$entry" ] && continue
+      new_count=$((new_count + 1))
+      case "$last_list" in
+        *"|${entry}|"*) matches=$((matches + 1)) ;;
+      esac
+    done
+
+    local max_count="$last_count"
+    [ "$new_count" -gt "$max_count" ] && max_count="$new_count"
+    if [ "$max_count" -gt 0 ]; then
+      tag_score=$(( matches * 40 / max_count ))
+    fi
+  fi
+
+  # ── Type match (0-20 points) ──
+  local type_score=0
+  if [ -n "$last_type" ] && [ -n "$new_type" ] && [ "$last_type" = "$new_type" ]; then
+    type_score=20
+  fi
+
+  # ── File path overlap (0-40 points) ──
+  local file_score=0
+  if [ -n "$last_files" ] && [ -n "$new_files" ]; then
+    # Extract directory prefixes from last_files
+    local last_dirs="" last_dir_count=0
+    local remaining="$last_files"
+    while [ -n "$remaining" ]; do
+      local entry
+      case "$remaining" in
+        *\|*) entry="${remaining%%|*}"; remaining="${remaining#*|}" ;;
+        *)    entry="$remaining"; remaining="" ;;
+      esac
+      [ -z "$entry" ] && continue
+      local dir="${entry%/*}"
+      [ "$dir" = "$entry" ] && dir="."
+      last_dirs="${last_dirs}|${dir}|"
+      last_dir_count=$((last_dir_count + 1))
+    done
+
+    # Check new file dirs against last dirs
+    local new_dir_count=0 dir_matches=0
+    remaining="$new_files"
+    while [ -n "$remaining" ]; do
+      local entry
+      case "$remaining" in
+        *\|*) entry="${remaining%%|*}"; remaining="${remaining#*|}" ;;
+        *)    entry="$remaining"; remaining="" ;;
+      esac
+      [ -z "$entry" ] && continue
+      local dir="${entry%/*}"
+      [ "$dir" = "$entry" ] && dir="."
+      new_dir_count=$((new_dir_count + 1))
+      case "$last_dirs" in
+        *"|${dir}|"*) dir_matches=$((dir_matches + 1)) ;;
+      esac
+    done
+
+    local max_dir_count="$last_dir_count"
+    [ "$new_dir_count" -gt "$max_dir_count" ] && max_dir_count="$new_dir_count"
+    if [ "$max_dir_count" -gt 0 ]; then
+      file_score=$(( dir_matches * 40 / max_dir_count ))
+    fi
+  fi
+
+  echo $(( tag_score + type_score + file_score ))
+}
+
+# ── task_should_restart ──────────────────────────────────────────────
+# Decide whether a worker should be restarted (fresh context) or delegated to
+# (reuse existing context) based on task overlap.
+# Args: last_tags last_type last_files new_tags new_type new_files
+# Returns: exit 0 = should restart (low overlap), exit 1 = should delegate (high overlap)
+task_should_restart() {
+  local score
+  score="$(task_context_overlap "$@")"
+  [ "$score" -lt 30 ]
 }
