@@ -50,11 +50,15 @@ if [ "$WINDOW_INDEX" = "0" ]; then
     ROLE="info_panel"
   fi
 else
-  _team_type=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
+  _team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  _team_type=""
+  [ -f "$_team_file" ] && _team_type=$(_env_val "$_team_file" TEAM_TYPE)
   if [ "$_team_type" = "freelancer" ]; then
     ROLE="worker"
   else
-    mgr_pane=$(_env_val "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
+    mgr_pane=""
+    [ -f "$_team_file" ] && mgr_pane=$(_env_val "$_team_file" MANAGER_PANE)
+    # Default: pane 0 is always the manager in non-freelancer team windows
     [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
   fi
 fi
