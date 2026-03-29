@@ -4026,6 +4026,48 @@ _doey_ensure_hcloud() {
   return 0
 }
 
+# Ensure hcloud is authenticated (has an active context with a valid token).
+# If not, interactively prompt the user to paste their API token.
+_doey_ensure_hcloud_auth() {
+  # Already authenticated — skip
+  if hcloud server list >/dev/null 2>&1; then
+    return 0
+  fi
+
+  printf "\n  ${WARN}hcloud is not authenticated.${RESET}\n"
+  printf "  You need a Hetzner Cloud API token.\n"
+  printf "  Create one at: ${BOLD}https://console.hetzner.cloud${RESET}\n"
+  printf "  (Project → Security → API Tokens → Generate)\n\n"
+
+  local token=""
+  printf "  API Token: "
+  read -rs token
+  printf "\n"
+
+  if [ -z "$token" ]; then
+    printf "  ${ERROR}No token provided. Aborting.${RESET}\n"
+    return 1
+  fi
+
+  # Create hcloud context with the provided token
+  if ! echo "$token" | hcloud context create doey 2>&1 | sed 's/^/  /'; then
+    printf "  ${ERROR}Failed to create hcloud context.${RESET}\n"
+    printf "  Check that your token is valid and try again.\n"
+    return 1
+  fi
+
+  # Verify the token actually works
+  if ! hcloud server list >/dev/null 2>&1; then
+    printf "  ${ERROR}Authentication failed — token may be invalid or expired.${RESET}\n"
+    printf "  Delete the context with: ${BOLD}hcloud context delete doey${RESET}\n"
+    printf "  Then re-run: ${BOLD}doey remote setup <project>${RESET}\n"
+    return 1
+  fi
+
+  printf "  ${SUCCESS}Authenticated with Hetzner Cloud.${RESET}\n\n"
+  return 0
+}
+
 doey_remote() {
   local remotes_dir="$HOME/.config/doey/remotes"
   mkdir -p "$remotes_dir"
@@ -4144,11 +4186,8 @@ _doey_remote_provision() {
     return 1
   fi
 
-  # Check for Hetzner token (hcloud context must be active)
-  if ! hcloud server list >/dev/null 2>&1; then
-    printf "  ${ERROR}hcloud not authenticated.${RESET}\n"
-    printf "  Run: ${BOLD}hcloud context create doey${RESET}\n"
-    printf "  You'll need a Hetzner Cloud API token from https://console.hetzner.cloud\n"
+  # Ensure hcloud is authenticated (prompts interactively if needed)
+  if ! _doey_ensure_hcloud_auth; then
     return 1
   fi
 
