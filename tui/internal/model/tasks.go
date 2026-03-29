@@ -80,6 +80,9 @@ type TasksModel struct {
 	creating  bool   // inline create mode
 	inputText string // current input text
 
+	// Expanded card view (nil = not expanded)
+	expanded *taskcard.ExpandedCard
+
 	// Layout
 	width   int
 	height  int
@@ -116,6 +119,10 @@ func (m *TasksModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 	m.list.SetSize(w, h-4)
+	if m.expanded != nil {
+		m.expanded.Width = w
+		m.expanded.Height = h - 4
+	}
 }
 
 // SetFocused toggles focus state.
@@ -240,6 +247,20 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		m.inputText = ""
 		return m, nil
 	case "enter":
+		item := m.list.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		ti := item.(taskcard.TaskItem)
+		card := taskcard.ExpandedCard{
+			Item:          ti,
+			Theme:         m.theme,
+			Width:         m.width,
+			Height:        m.height - 4,
+			SubtaskCursor: -1,
+			ScrollOffset:  0,
+		}
+		m.expanded = &card
 		m.summaryMode = false
 		return m, nil
 	case "m":
@@ -296,11 +317,87 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	total := len(m.entries)
 	if total == 0 {
 		m.summaryMode = true
+		m.expanded = nil
 		return m, nil
 	}
 
 	idx := m.list.Index()
 
+	// Expanded card mode — handle scrolling and subtask nav
+	if m.expanded != nil {
+		switch msg.String() {
+		case "enter", "esc":
+			m.expanded = nil
+			m.summaryMode = true
+			return m, nil
+		case "tab":
+			n := len(m.expanded.Item.Subtasks)
+			if n > 0 {
+				if m.expanded.SubtaskCursor >= n-1 {
+					m.expanded.SubtaskCursor = -1
+				} else {
+					m.expanded.SubtaskCursor++
+				}
+			}
+			return m, nil
+		case "shift+tab":
+			n := len(m.expanded.Item.Subtasks)
+			if n > 0 {
+				if m.expanded.SubtaskCursor <= -1 {
+					m.expanded.SubtaskCursor = n - 1
+				} else {
+					m.expanded.SubtaskCursor--
+				}
+			}
+			return m, nil
+		case "up", "k":
+			if m.expanded.ScrollOffset > 0 {
+				m.expanded.ScrollOffset--
+			}
+			return m, nil
+		case "down", "j":
+			maxOff := m.expanded.ContentHeight() -
+				m.expanded.Height
+			if maxOff < 0 {
+				maxOff = 0
+			}
+			if m.expanded.ScrollOffset < maxOff {
+				m.expanded.ScrollOffset++
+			}
+			return m, nil
+		case "m":
+			task := m.expanded.Item.Task
+			next := nextMoveStatus(task.Status)
+			return m, func() tea.Msg {
+				return MoveTaskMsg{
+					ID: task.ID, Status: next,
+				}
+			}
+		case "s":
+			task := m.expanded.Item.Task
+			next := nextStatus(task.Status)
+			return m, func() tea.Msg {
+				return SetStatusTaskMsg{
+					ID: task.ID, Status: next,
+				}
+			}
+		case "d":
+			task := m.expanded.Item.Task
+			return m, func() tea.Msg {
+				return DispatchTaskMsg{
+					ID: task.ID, Title: task.Title,
+				}
+			}
+		case "x":
+			task := m.expanded.Item.Task
+			return m, func() tea.Msg {
+				return CancelTaskMsg{ID: task.ID}
+			}
+		}
+		return m, nil
+	}
+
+	// Legacy detail mode (fallback)
 	switch {
 	case key.Matches(msg, m.keyMap.Back):
 		m.summaryMode = true
@@ -369,12 +466,32 @@ func nextStatus(s string) string {
 	return allStatuses[0]
 }
 
-// View renders list or detail mode.
+// View renders list, expanded card, or detail mode.
 func (m TasksModel) View() string {
 	if m.summaryMode {
 		return m.viewList()
 	}
+	if m.expanded != nil {
+		return m.viewExpanded()
+	}
 	return m.viewDetail()
+}
+
+// viewExpanded renders the expanded card with header.
+func (m TasksModel) viewExpanded() string {
+	t := m.theme
+	w := m.width
+	if w < 30 {
+		w = 30
+	}
+	task := m.expanded.Item.Task
+	header := t.SectionHeader.Copy().PaddingLeft(2).
+		Render(fmt.Sprintf("TASK — #%s", task.ID))
+	rule := t.Faint.Render(strings.Repeat("─", w))
+	body := m.expanded.ViewportSlice()
+	content := header + "\n" + rule + "\n" + body
+	return lipgloss.NewStyle().
+		Width(w).Height(m.height).Render(content)
 }
 
 func (m TasksModel) viewList() string {
