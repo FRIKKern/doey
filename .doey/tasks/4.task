@@ -1,9 +1,12 @@
 TASK_ID=4
 TASK_TITLE=Fix Manager role detection — DOEY_ROLE=worker blocks dispatch
-TASK_STATUS=in_progress
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1774812600
 TASK_TYPE=bugfix
 TASK_DESCRIPTION=Window Managers at W.0 have DOEY_ROLE=worker instead of manager. This blocks send-keys via on-pre-tool-use.sh, preventing managers from dispatching to workers. Root cause: team_*.env has MANAGER_PANE="4" but Manager is actually at pane 0. The role assignment in on-session-start.sh and/or team setup logic needs to correctly identify the manager pane. Affects all managed teams.
 TASK_TAGS=infrastructure,hooks,roles,critical
 TASK_TEAM=W1
 TASK_LOG_1774815235=DISPATCHED: Sent to W1 freelancer pane 1.0
+TASK_LOG_1774815462=COMPLETE: Manager role detection fixed. Commit c3a8a98. File: shell/doey.sh
+TASK_RESULT=Removed stray wdg_slot arg in add_team_from_def. Sessions need restart for fix to take effect.
+TASK_FILES=shell/doey.sh
