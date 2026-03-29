@@ -1,0 +1,13 @@
+TASK_ID=19
+TASK_TITLE=Full mouse interactivity across the Go TUI — LazyGit-style clickable UI
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1774823480
+TASK_TYPE=feature
+TASK_OWNER=Boss
+TASK_PRIORITY=high
+TASK_SUMMARY=Make every interactive element in the Go TUI clickable by mouse — tabs, tasks, subtasks, buttons, navigation, scrolling — matching the seamless mouse UX of LazyGit
+TASK_SCHEMA_VERSION=2
+TASK_TAGS=tui,dashboard
+TASK_TEAM=W5
+TASK_LOG_1774823643=DISPATCHED: Auto-spawned W5 (3x2), dispatching P1 mouse interactivity task
+TASK_LOG_1774824535=COMPLETE: Committed 7a539f4. 8 files, +262/-39 lines. Full mouse interactivity.

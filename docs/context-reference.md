@@ -70,7 +70,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
 **Manager skills:**
-`/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-watchdog-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
+`/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-sm-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
 
 **Session Manager skills:**
 `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`

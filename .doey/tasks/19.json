@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "task_id": 19,
+  "title": "Full mouse interactivity across the Go TUI — LazyGit-style clickable UI",
+  "task_type": "feature",
+  "intent": "The Go TUI dashboard should feel as mouse-native as LazyGit. Every visible interactive element — tabs, task list items, subtask checkboxes, status badges, navigation hints, scroll regions, action buttons — must respond to mouse clicks. The user should never need to remember a keyboard shortcut to navigate; clicking should just work everywhere.",
+  "concepts": [
+    {"id": "A", "name": "Bubbletea mouse event handling"},
+    {"id": "B", "name": "Hit-testing / click zones per component"},
+    {"id": "C", "name": "Tab bar navigation"},
+    {"id": "D", "name": "List selection (tasks, agents, messages, logs)"},
+    {"id": "E", "name": "Detail view interactions (subtasks, scroll, collapse)"},
+    {"id": "F", "name": "Mouse scroll / wheel support"},
+    {"id": "G", "name": "Visual hover/click feedback"}
+  ],
+  "bridge_problem": "Bubbletea supports mouse events natively (tea.EnableMouseAllMotion or tea.EnableMouseCellMotion), but the TUI likely doesn't process them or map click coordinates to UI regions. Every component needs hit-testing: given a click at (x,y), which element was clicked?",
+  "representation_layer": [
+    "Bubbletea tea.MouseMsg event type",
+    "Component layout coordinates (position, width, height of each rendered element)",
+    "Zone-based hit testing (bubbletea-zone or manual coordinate mapping)",
+    "Tab bar click targets",
+    "List item click targets",
+    "Detail view scrollable regions",
+    "Button/badge click targets"
+  ],
+  "hypotheses": [
+    {"id": "H1", "text": "Bubbletea's built-in mouse support (tea.WithMouseCellMotion) can be enabled with minimal changes to the program init", "confidence": 0.90},
+    {"id": "H2", "text": "The charmbracelet/bubblezone library provides zone-based click detection that maps click coordinates to named regions without manual coordinate math", "confidence": 0.80},
+    {"id": "H3", "text": "Mouse scroll events can replace keyboard up/down for all scrollable lists and detail views", "confidence": 0.85},
+    {"id": "H4", "text": "Click feedback (highlight on click, cursor change) can be done with Lipgloss style changes on the clicked element", "confidence": 0.75}
+  ],
+  "constraints": [
+    "Keyboard navigation must continue to work — mouse is additive, not a replacement",
+    "Must not break existing Bubbletea update/view cycle",
+    "Go build must pass",
+    "Mouse support must be enabled by default (not opt-in)",
+    "Must work in tmux (tmux supports mouse with 'set -g mouse on')",
+    "No external dependencies beyond charmbracelet ecosystem (bubblezone is OK)",
+    "Click targets must be generous — not pixel-precise, forgiving hit zones"
+  ],
+  "success_criteria": [
+    "Tab bar: clicking a tab switches to that view",
+    "Task list: clicking a task selects it and opens detail view",
+    "Subtasks: clicking a subtask selects/toggles it",
+    "Scroll: mouse wheel scrolls any scrollable region (task list, detail view, activity log)",
+    "Back/close: clicking outside a detail view or on a close area dismisses it",
+    "Status badges: clicking a status badge opens status change if applicable",
+    "Action hints at bottom: clicking an action hint triggers that action",
+    "All interactions feel responsive — no lag, immediate visual feedback",
+    "Keyboard shortcuts continue working identically"
+  ],
+  "evidence_plan": [
+    "Research how LazyGit implements mouse support in Bubbletea (it uses gocui, but the pattern applies)",
+    "Test charmbracelet/bubblezone for zone-based click detection",
+    "Verify tmux mouse passthrough works with tea.WithMouseCellMotion",
+    "Test mouse wheel scrolling in nested Bubbletea components",
+    "Verify no regressions in keyboard navigation after adding mouse"
+  ],
+  "deliverables": [
+    "Mouse support enabled in the Bubbletea program",
+    "Tab bar responds to clicks",
+    "All list views respond to click-to-select",
+    "All scrollable regions respond to mouse wheel",
+    "Detail views respond to click interactions (subtasks, collapse, close)",
+    "Bottom action bar responds to clicks",
+    "Visual feedback on click (subtle highlight or state change)",
+    "Go build passes, no keyboard regressions"
+  ],
+  "dispatch_plan": {
+    "primary_team_type": "managed",
+    "dispatch_mode": "parallel",
+    "needs_validation_wave": true,
+    "needs_freelancer_research": true,
+    "research_brief": "Research how bubblezone and tea.WithMouseCellMotion work together, find examples of Bubbletea apps with full mouse support, document the pattern for hit-testing click coordinates against rendered component regions",
+    "phase_plan": [
+      {"phase": "Research", "scope": "Investigate bubblezone, Bubbletea mouse API, LazyGit patterns"},
+      {"phase": "Foundation", "scope": "Enable mouse in tea.Program, set up zone manager, add mouse event routing to Update()"},
+      {"phase": "Components", "scope": "Add click handlers to each component: tab bar, task list, detail view, subtasks, activity log, action bar"},
+      {"phase": "Polish", "scope": "Scroll support, click feedback, generous hit zones, tmux testing"}
+    ]
+  },
+  "phase": "exploration"
+}

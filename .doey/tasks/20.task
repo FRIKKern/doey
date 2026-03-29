@@ -1,0 +1,12 @@
+TASK_ID=20
+TASK_TITLE=Fix Manager agent tool restrictions — make blocked tools prominent
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1774823700
+TASK_TYPE=fix
+TASK_OWNER=Boss
+TASK_PRIORITY=high
+TASK_SUMMARY=Managers waste context attempting blocked tools (Agent, Read, Grep). Fix by making tool restrictions prominent and actionable in agent definitions.
+TASK_TAGS=agent-defs
+TASK_TEAM=W2
+TASK_LOG_1774823852=DISPATCHED: Sent to W2 Manager (P1 agent-def fix)
+TASK_LOG_1774824330=COMPLETE: Committed ee3536d. 3 agent defs updated with TOOL RESTRICTIONS sections.
