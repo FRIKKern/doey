@@ -262,13 +262,7 @@ if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-con
 fi
 
 printf "  ${BRAND}[6/7]${RESET} Installing doey-tui..."
-if [ -f "$SCRIPT_DIR/bin/doey-tui" ]; then
-  # Pre-built binary committed to repo
-  cp "$SCRIPT_DIR/bin/doey-tui" "$HOME/.local/bin/doey-tui"
-  chmod +x "$HOME/.local/bin/doey-tui"
-  step_ok
-  detail "~/.local/bin/doey-tui (pre-built)"
-elif [ -d "$SCRIPT_DIR/tui" ]; then
+if [ -d "$SCRIPT_DIR/tui" ]; then
   GO_BIN=""
   if command -v go &>/dev/null; then
     GO_BIN="go"
