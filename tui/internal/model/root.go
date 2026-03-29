@@ -206,6 +206,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		// Tab bar clicks — check on release to avoid double-fire
 		if msg.Action == tea.MouseActionRelease {
+			// Back button click — send Escape to active panel
+			if zone.Get("back-btn").InBounds(msg) {
+				escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+				var cmd tea.Cmd
+				switch m.focusIndex {
+				case 0:
+					m.welcome, cmd = m.welcome.Update(escMsg)
+				case 1:
+					m.team, cmd = m.team.Update(escMsg)
+				case 2:
+					m.tasks, cmd = m.tasks.Update(escMsg)
+				case 3:
+					m.agents, cmd = m.agents.Update(escMsg)
+				case 4:
+					m.debug, cmd = m.debug.Update(escMsg)
+				case 5:
+					m.messages, cmd = m.messages.Update(escMsg)
+				case 6:
+					m.logView, cmd = m.logView.Update(escMsg)
+				}
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
+
 			for i := range m.tabBar.tabs {
 				if zone.Get(fmt.Sprintf("tab-%d", i)).InBounds(msg) {
 					m.focusIndex = i
@@ -310,6 +334,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// isDetailView returns true if the active panel is showing a detail/expanded view.
+func (m Model) isDetailView() bool {
+	switch m.focusIndex {
+	case 1:
+		return !m.team.summaryMode
+	case 2:
+		return !m.tasks.summaryMode || m.tasks.expanded != nil
+	case 3:
+		return !m.agents.summaryMode
+	}
+	return false
+}
+
+// renderBackButton returns a clickable back button if in a detail view.
+func (m Model) renderBackButton() string {
+	if !m.isDetailView() {
+		return ""
+	}
+	theme := styles.DefaultTheme()
+	return "  " + styles.RenderButton("← Back", "back-btn", false, theme) + "\n"
+}
+
 // renderTabBar returns the tab bar view, synced to focusIndex.
 func (m Model) renderTabBar() string {
 	return m.tabBar.View()
@@ -323,13 +369,15 @@ func (m Model) View() string {
 
 	banner := RenderBanner(m.snapshot.Session.ProjectName, m.width)
 	tabBar := m.renderTabBar()
+	backBtn := m.renderBackButton()
 	footer := m.footer.View()
 
 	// Calculate body height
 	bannerH := lipgloss.Height(banner)
 	menuH := lipgloss.Height(tabBar)
+	backH := lipgloss.Height(backBtn)
 	footerH := lipgloss.Height(footer)
-	bodyH := m.height - bannerH - menuH - footerH
+	bodyH := m.height - bannerH - menuH - backH - footerH
 	if bodyH < 1 {
 		bodyH = 1
 	}
@@ -360,7 +408,7 @@ func (m Model) View() string {
 		body = m.logView.View()
 	}
 
-	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, body, footer))
+	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, backBtn, body, footer))
 }
 
 // propagateSizes distributes width/height to sub-models.

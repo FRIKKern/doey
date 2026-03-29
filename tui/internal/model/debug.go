@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
@@ -101,32 +102,127 @@ func containsFold(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// Update handles navigation, filter cycling, and search input.
+// Update handles navigation, filter cycling, search input, and mouse events.
 func (m DebugModel) Update(msg tea.Msg) (DebugModel, tea.Cmd) {
 	if !m.focused {
 		return m, nil
 	}
 
-	kmsg, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
+	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m.updateMouse(msg)
+
+	case tea.KeyMsg:
+		// Search input mode
+		if m.searchActive {
+			return m.updateSearch(msg), nil
+		}
+
+		// Detail mode
+		if m.detailMode {
+			if key.Matches(msg, m.keyMap.Back) {
+				m.detailMode = false
+			}
+			return m, nil
+		}
+
+		// List mode
+		return m.updateList(msg), nil
 	}
 
-	// Search input mode
-	if m.searchActive {
-		return m.updateSearch(kmsg), nil
-	}
+	return m, nil
+}
 
-	// Detail mode
+// updateMouse handles all mouse interactions for the debug panel.
+func (m DebugModel) updateMouse(msg tea.MouseMsg) (DebugModel, tea.Cmd) {
+	// Detail mode — click back or scroll
 	if m.detailMode {
-		if key.Matches(kmsg, m.keyMap.Back) {
-			m.detailMode = false
+		if msg.Action == tea.MouseActionRelease {
+			if zone.Get("debug-back").InBounds(msg) {
+				m.detailMode = false
+				return m, nil
+			}
 		}
 		return m, nil
 	}
 
-	// List mode
-	return m.updateList(kmsg), nil
+	// List mode — click entries to expand
+	if msg.Action == tea.MouseActionRelease {
+		// Click follow toggle
+		if zone.Get("debug-follow").InBounds(msg) {
+			m.autoScroll = !m.autoScroll
+			if m.autoScroll {
+				m.cursor = 0
+				m.offset = 0
+			}
+			return m, nil
+		}
+
+		// Click severity filter buttons
+		for _, sev := range []string{"ERROR", "WARN", "INFO", "DEBUG"} {
+			if zone.Get("debug-sev-"+sev).InBounds(msg) {
+				if m.severityFilter == sev {
+					m.severityFilter = ""
+				} else {
+					m.severityFilter = sev
+				}
+				m.applyFilters()
+				return m, nil
+			}
+		}
+
+		// Click type filter buttons
+		for _, typ := range []string{"STATUS_CHANGE", "IPC_MESSAGE", "HOOK_EVENT", "CRASH", "ISSUE", "LOG"} {
+			if zone.Get("debug-type-"+typ).InBounds(msg) {
+				if m.typeFilter == typ {
+					m.typeFilter = ""
+				} else {
+					m.typeFilter = typ
+				}
+				m.applyFilters()
+				return m, nil
+			}
+		}
+
+		// Click search toggle
+		if zone.Get("debug-search").InBounds(msg) {
+			m.searchActive = !m.searchActive
+			return m, nil
+		}
+
+		// Click entries to open detail
+		for i := m.offset; i < len(m.filtered); i++ {
+			if zone.Get(fmt.Sprintf("debug-entry-%d", i)).InBounds(msg) {
+				m.cursor = i
+				m.detailMode = true
+				return m, nil
+			}
+		}
+	}
+
+	// Mouse wheel in list mode
+	if msg.Action == tea.MouseActionPress {
+		if msg.Button == tea.MouseButtonWheelUp {
+			m.autoScroll = false
+			if m.cursor > 0 {
+				m.cursor--
+			}
+			m.ensureVisible()
+			return m, nil
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if m.cursor < len(m.filtered)-1 {
+				m.cursor++
+			}
+			if m.cursor == 0 {
+				m.autoScroll = true
+			}
+			m.ensureVisible()
+			return m, nil
+		}
+	}
+
+	return m, nil
 }
 
 func (m DebugModel) updateSearch(msg tea.KeyMsg) DebugModel {
@@ -299,9 +395,9 @@ func (m DebugModel) viewList() string {
 
 	scrollInd := ""
 	if m.autoScroll {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE")
+		scrollInd = zone.Mark("debug-follow", lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
 	} else {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED")
+		scrollInd = zone.Mark("debug-follow", lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
 	}
 
 	// Render visible entries
@@ -322,7 +418,7 @@ func (m DebugModel) viewList() string {
 				Width(w - 4).
 				Render(line)
 		}
-		lines = append(lines, line)
+		lines = append(lines, zone.Mark(fmt.Sprintf("debug-entry-%d", i), line))
 	}
 
 	body := lipgloss.NewStyle().
@@ -332,11 +428,13 @@ func (m DebugModel) viewList() string {
 	// Hint
 	hint := ""
 	if m.focused {
+		searchBtn := zone.Mark("debug-search", "/ = search")
+		followBtn := zone.Mark("debug-follow", "f = follow")
 		hint = lipgloss.NewStyle().
 			Foreground(t.Muted).
 			Faint(true).
 			Padding(1, 3).
-			Render("enter = detail  s = severity  t = type  / = search  f = follow  c = clear")
+			Render("enter = detail  s = severity  t = type  " + searchBtn + "  " + followBtn + "  c = clear")
 	}
 
 	content := header + "\n" + rule + "\n" + count + scrollInd + "\n" + filterBar + "\n" + body + "\n" + hint
@@ -348,12 +446,26 @@ func (m DebugModel) renderFilterBar() string {
 	t := m.theme
 	var parts []string
 
-	if m.severityFilter != "" {
-		color := m.severityColor(m.severityFilter)
-		parts = append(parts, lipgloss.NewStyle().Foreground(color).Render("sev:"+m.severityFilter))
+	// Severity filter chips
+	for _, sev := range []string{"ERROR", "WARN", "INFO", "DEBUG"} {
+		color := m.severityColor(sev)
+		style := lipgloss.NewStyle().Foreground(color)
+		if m.severityFilter == sev {
+			style = style.Bold(true).Underline(true)
+		} else {
+			style = style.Faint(true)
+		}
+		parts = append(parts, zone.Mark("debug-sev-"+sev, style.Render(sev)))
 	}
-	if m.typeFilter != "" {
-		parts = append(parts, lipgloss.NewStyle().Foreground(t.Accent).Render("type:"+m.typeFilter))
+	// Type filter chips
+	for _, typ := range []string{"STATUS_CHANGE", "IPC_MESSAGE", "HOOK_EVENT", "CRASH", "ISSUE", "LOG"} {
+		style := lipgloss.NewStyle().Foreground(t.Accent)
+		if m.typeFilter == typ {
+			style = style.Bold(true).Underline(true)
+		} else {
+			style = style.Faint(true)
+		}
+		parts = append(parts, zone.Mark("debug-type-"+typ, style.Render(m.typeShort(typ))))
 	}
 	if m.searchQuery != "" {
 		q := m.searchQuery
@@ -466,11 +578,11 @@ func (m DebugModel) viewDetail() string {
 	header := t.SectionHeader.Copy().PaddingLeft(2).
 		Render(fmt.Sprintf("DEBUG \u2014 %s", e.Type))
 	rule := t.Faint.Render(strings.Repeat("\u2500", w))
-	backHint := lipgloss.NewStyle().
+	backHint := zone.Mark("debug-back", lipgloss.NewStyle().
 		Foreground(t.Muted).
 		Faint(true).
 		PaddingLeft(3).
-		Render("esc to go back")
+		Render("esc to go back"))
 
 	labelStyle := t.StatLabel.Copy().Width(12)
 	valueStyle := t.Body

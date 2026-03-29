@@ -7,6 +7,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
@@ -40,17 +42,20 @@ type AgentsModel struct {
 	keyMap      keys.KeyMap
 
 	// Layout
-	width   int
-	height  int
-	focused bool
+	width            int
+	height           int
+	focused          bool
+	scrollOffset     int
+	collapsedDomains map[string]bool
 }
 
 // NewAgentsModel creates an agents panel starting in summary mode.
 func NewAgentsModel(theme styles.Theme) AgentsModel {
 	return AgentsModel{
-		theme:       theme,
-		summaryMode: true,
-		keyMap:      keys.DefaultKeyMap(),
+		theme:            theme,
+		summaryMode:      true,
+		keyMap:           keys.DefaultKeyMap(),
+		collapsedDomains: make(map[string]bool),
 	}
 }
 
@@ -65,11 +70,81 @@ func (m AgentsModel) Update(msg tea.Msg) (AgentsModel, tea.Cmd) {
 		return m, nil
 	}
 
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m.updateMouse(msg)
+	case tea.KeyMsg:
 		if m.summaryMode {
 			return m.updateSummary(msg)
 		}
 		return m.updateDetail(msg)
+	}
+
+	return m, nil
+}
+
+// updateMouse handles all mouse interactions for the agents panel.
+func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
+	// Click release — check interactive zones
+	if msg.Action == tea.MouseActionRelease {
+		// Domain headers — toggle collapse
+		for i, g := range m.groups {
+			if zone.Get(fmt.Sprintf("agent-domain-%d", i)).InBounds(msg) {
+				m.collapsedDomains[g.domain] = !m.collapsedDomains[g.domain]
+				return m, nil
+			}
+		}
+
+		if m.summaryMode {
+			// Agent entries — click to select and open detail
+			flatIdx := 0
+			for _, g := range m.groups {
+				if m.collapsedDomains[g.domain] {
+					flatIdx += len(g.agents)
+					continue
+				}
+				for range g.agents {
+					if zone.Get(fmt.Sprintf("agent-%d", flatIdx)).InBounds(msg) {
+						m.cursor = flatIdx
+						m.summaryMode = false
+						return m, nil
+					}
+					flatIdx++
+				}
+			}
+		} else {
+			// Detail mode — back button
+			if zone.Get("agent-detail-back").InBounds(msg) {
+				m.summaryMode = true
+				return m, nil
+			}
+		}
+	}
+
+	// Mouse wheel — scroll
+	if msg.Action == tea.MouseActionPress {
+		if msg.Button == tea.MouseButtonWheelUp {
+			if m.summaryMode {
+				if m.cursor > 0 {
+					m.cursor--
+				}
+			} else {
+				if m.scrollOffset > 0 {
+					m.scrollOffset--
+				}
+			}
+			return m, nil
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if m.summaryMode {
+				if m.cursor < len(m.agents)-1 {
+					m.cursor++
+				}
+			} else {
+				m.scrollOffset++
+			}
+			return m, nil
+		}
 	}
 
 	return m, nil
@@ -228,11 +303,21 @@ func (m AgentsModel) viewSummary() string {
 
 	var lines []string
 	flatIdx := 0
-	for _, g := range m.groups {
-		// Domain header
+	for gi, g := range m.groups {
+		// Domain header — clickable to collapse/expand
+		collapsed := m.collapsedDomains[g.domain]
+		arrow := "▾"
+		if collapsed {
+			arrow = "▸"
+		}
 		domainHeader := t.SectionHeader.Copy().PaddingLeft(1).
-			Render(fmt.Sprintf("%s (%d)", strings.ToUpper(g.domain), len(g.agents)))
-		lines = append(lines, "", domainHeader)
+			Render(fmt.Sprintf("%s %s (%d)", arrow, strings.ToUpper(g.domain), len(g.agents)))
+		lines = append(lines, "", zone.Mark(fmt.Sprintf("agent-domain-%d", gi), domainHeader))
+
+		if collapsed {
+			flatIdx += len(g.agents)
+			continue
+		}
 
 		for _, a := range g.agents {
 			// Colored dot
@@ -264,7 +349,7 @@ func (m AgentsModel) viewSummary() string {
 					Render(line)
 			}
 
-			lines = append(lines, line)
+			lines = append(lines, zone.Mark(fmt.Sprintf("agent-%d", flatIdx), line))
 			flatIdx++
 		}
 	}
@@ -306,11 +391,11 @@ func (m AgentsModel) viewDetail() string {
 
 	rule := t.Faint.Render(strings.Repeat("─", w))
 
-	back := lipgloss.NewStyle().
+	back := zone.Mark("agent-detail-back", lipgloss.NewStyle().
 		Foreground(t.Muted).
 		Faint(true).
 		PaddingLeft(3).
-		Render("esc to go back")
+		Render("esc to go back"))
 
 	// Detail fields
 	labelStyle := t.StatLabel.Copy().Width(14)

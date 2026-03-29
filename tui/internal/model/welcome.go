@@ -7,6 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
+
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -14,10 +16,12 @@ import (
 // WelcomeModel renders the home/welcome tab with onboarding, team status,
 // and command reference.
 type WelcomeModel struct {
-	snapshot runtime.Snapshot
-	theme    styles.Theme
-	width    int
-	height   int
+	snapshot     runtime.Snapshot
+	theme        styles.Theme
+	width        int
+	height       int
+	scrollOffset int
+	focused      bool
 }
 
 // NewWelcomeModel creates the welcome panel.
@@ -32,6 +36,68 @@ func (m WelcomeModel) Init() tea.Cmd { return nil }
 
 // Update handles messages relevant to the welcome view.
 func (m WelcomeModel) Update(msg tea.Msg) (WelcomeModel, tea.Cmd) {
+	if !m.focused {
+		return m, nil
+	}
+
+	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		return m.updateMouse(msg)
+	}
+
+	return m, nil
+}
+
+// SetFocused toggles focus state.
+func (m *WelcomeModel) SetFocused(focused bool) {
+	m.focused = focused
+}
+
+// updateMouse handles mouse interactions for the welcome panel.
+func (m WelcomeModel) updateMouse(msg tea.MouseMsg) (WelcomeModel, tea.Cmd) {
+	// Click release — check interactive zones
+	if msg.Action == tea.MouseActionRelease {
+		// Team status entries
+		for i := 0; i < 20; i++ {
+			if zone.Get(fmt.Sprintf("welcome-team-%d", i)).InBounds(msg) {
+				// Could trigger team switch — for now just acknowledge
+				return m, nil
+			}
+		}
+		// How-to-use steps
+		for i := 0; i < 3; i++ {
+			if zone.Get(fmt.Sprintf("welcome-step-%d", i)).InBounds(msg) {
+				return m, nil
+			}
+		}
+		// Slash command entries
+		for i := 0; i < 30; i++ {
+			if zone.Get(fmt.Sprintf("welcome-cmd-%d", i)).InBounds(msg) {
+				return m, nil
+			}
+		}
+		// CLI command entries
+		for i := 0; i < 10; i++ {
+			if zone.Get(fmt.Sprintf("welcome-cli-%d", i)).InBounds(msg) {
+				return m, nil
+			}
+		}
+	}
+
+	// Mouse wheel — scroll content
+	if msg.Action == tea.MouseActionPress {
+		if msg.Button == tea.MouseButtonWheelUp {
+			if m.scrollOffset > 0 {
+				m.scrollOffset--
+			}
+			return m, nil
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			m.scrollOffset++
+			return m, nil
+		}
+	}
+
 	return m, nil
 }
 
@@ -63,6 +129,19 @@ func (m WelcomeModel) View() string {
 	sections = append(sections, m.renderCLICommands(w))
 
 	content := strings.Join(sections, "\n")
+
+	// Apply scroll offset
+	lines := strings.Split(content, "\n")
+	if m.scrollOffset > len(lines)-1 {
+		m.scrollOffset = len(lines) - 1
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+	if m.scrollOffset > 0 && m.scrollOffset < len(lines) {
+		lines = lines[m.scrollOffset:]
+	}
+	content = strings.Join(lines, "\n")
 
 	return lipgloss.NewStyle().
 		Width(w).
@@ -133,7 +212,7 @@ func (m WelcomeModel) renderTeamStatus(w int) string {
 		summary += ")"
 
 		teamLine := fmt.Sprintf("  %s%s  %s", label, badge, summary)
-		lines = append(lines, teamLine)
+		lines = append(lines, zone.Mark(fmt.Sprintf("welcome-team-%d", wi), teamLine))
 	}
 
 	lines = append(lines, "")
@@ -170,8 +249,8 @@ func (m WelcomeModel) renderHowToUse() string {
 	lines = append(lines, "")
 	lines = append(lines, header)
 	lines = append(lines, "")
-	for _, step := range steps {
-		lines = append(lines, step)
+	for i, step := range steps {
+		lines = append(lines, zone.Mark(fmt.Sprintf("welcome-step-%d", i), step))
 		lines = append(lines, "")
 	}
 
@@ -259,6 +338,7 @@ func (m WelcomeModel) renderSlashCommands(w int) string {
 	lines = append(lines, header)
 	lines = append(lines, "")
 
+	cmdIdx := 0
 	for _, g := range groups {
 		lines = append(lines, "  "+g.style.Render(g.label))
 		if twoCol {
@@ -268,11 +348,15 @@ func (m WelcomeModel) renderSlashCommands(w int) string {
 				if i+1 < len(g.cmds) {
 					right = "  " + t.DottedLeader(g.cmds[i+1].name, g.cmds[i+1].desc, colW)
 				}
-				lines = append(lines, "  "+left+right)
+				line := "  " + left + right
+				lines = append(lines, zone.Mark(fmt.Sprintf("welcome-cmd-%d", cmdIdx), line))
+				cmdIdx++
 			}
 		} else {
 			for _, c := range g.cmds {
-				lines = append(lines, "  "+t.DottedLeader(c.name, c.desc, colW))
+				line := "  " + t.DottedLeader(c.name, c.desc, colW)
+				lines = append(lines, zone.Mark(fmt.Sprintf("welcome-cmd-%d", cmdIdx), line))
+				cmdIdx++
 			}
 		}
 		lines = append(lines, "")
@@ -308,8 +392,9 @@ func (m WelcomeModel) renderCLICommands(w int) string {
 	lines = append(lines, "")
 	lines = append(lines, header)
 	lines = append(lines, "")
-	for _, c := range cmds {
-		lines = append(lines, "  "+t.DottedLeader(c.name, c.desc, colW))
+	for i, c := range cmds {
+		line := "  " + t.DottedLeader(c.name, c.desc, colW)
+		lines = append(lines, zone.Mark(fmt.Sprintf("welcome-cli-%d", i), line))
 	}
 	lines = append(lines, "")
 
