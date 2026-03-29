@@ -224,9 +224,14 @@ func (r *Reader) parseTasks() []Task {
 		}
 
 		t := Task{
-			ID:     env["TASK_ID"],
-			Title:  env["TASK_TITLE"],
-			Status: env["TASK_STATUS"],
+			ID:         env["TASK_ID"],
+			Title:      env["TASK_TITLE"],
+			Status:     env["TASK_STATUS"],
+			Team:       env["TASK_TEAM"],
+			Priority:   env["TASK_PRIORITY"],
+			MergedInto: env["TASK_MERGED_INTO"],
+			Result:     env["TASK_RESULT"],
+			Category:   env["TASK_TYPE"],
 		}
 		if t.ID == "" {
 			t.ID = strings.TrimSuffix(filepath.Base(path), ".task")
@@ -240,6 +245,30 @@ func (r *Reader) parseTasks() []Task {
 		if att := env["TASK_ATTACHMENTS"]; att != "" {
 			t.Attachments = strings.Split(att, "|")
 		}
+		if tags := env["TASK_TAGS"]; tags != "" {
+			for _, tag := range strings.Split(tags, ",") {
+				tag = strings.TrimSpace(tag)
+				if tag != "" {
+					t.Tags = append(t.Tags, tag)
+				}
+			}
+		}
+
+		// Parse TASK_LOG_<timestamp>=<text> entries
+		for key, val := range env {
+			if strings.HasPrefix(key, "TASK_LOG_") {
+				tsStr := strings.TrimPrefix(key, "TASK_LOG_")
+				ts, err := strconv.ParseInt(tsStr, 10, 64)
+				if err != nil {
+					continue
+				}
+				t.Logs = append(t.Logs, TaskLog{Timestamp: ts, Entry: val})
+			}
+		}
+		sort.Slice(t.Logs, func(i, j int) bool {
+			return t.Logs[i].Timestamp < t.Logs[j].Timestamp
+		})
+
 		tasks = append(tasks, t)
 	}
 
@@ -249,26 +278,76 @@ func (r *Reader) parseTasks() []Task {
 func (r *Reader) parseSubtasks() []Subtask {
 	var subtasks []Subtask
 
-	matches, err := filepath.Glob(filepath.Join(r.runtimeDir, "tasks", "*", "subtasks", "*.subtask"))
-	if err != nil || len(matches) == 0 {
-		return subtasks
-	}
+	// Nested layout: tasks/<task_id>/subtasks/*.subtask
+	nestedMatches, _ := filepath.Glob(filepath.Join(r.runtimeDir, "tasks", "*", "subtasks", "*.subtask"))
 
-	for _, path := range matches {
+	// Flat layout: tasks/*.subtask (written by shell scripts)
+	flatMatches, _ := filepath.Glob(filepath.Join(r.runtimeDir, "tasks", "*.subtask"))
+
+	seen := make(map[string]bool)
+	allMatches := append(nestedMatches, flatMatches...)
+
+	for _, path := range allMatches {
+		// Deduplicate by absolute path
+		abs, _ := filepath.Abs(path)
+		if seen[abs] {
+			continue
+		}
+		seen[abs] = true
+
 		env, err := parseEnvFile(path)
 		if err != nil {
 			continue
 		}
-		created, _ := strconv.ParseInt(env["CREATED"], 10, 64)
+
+		// Support both prefixed (SUBTASK_*) and unprefixed field names
+		taskID := env["SUBTASK_PARENT_TASK_ID"]
+		if taskID == "" {
+			taskID = env["PARENT_TASK_ID"]
+		}
+		if taskID == "" {
+			taskID = env["TASK_ID"]
+		}
+
+		id := env["SUBTASK_ID"]
+
+		pane := env["SUBTASK_WORKER"]
+		if pane == "" {
+			pane = env["PANE"]
+		}
+
+		title := env["SUBTASK_TITLE"]
+		if title == "" {
+			title = env["TITLE"]
+		}
+
+		status := env["SUBTASK_STATUS"]
+		if status == "" {
+			status = env["STATUS"]
+		}
+
+		createdStr := env["SUBTASK_CREATED"]
+		if createdStr == "" {
+			createdStr = env["CREATED"]
+		}
+		created, _ := strconv.ParseInt(createdStr, 10, 64)
+
 		updated, _ := strconv.ParseInt(env["UPDATED"], 10, 64)
-		subtasks = append(subtasks, Subtask{
-			TaskID:  env["TASK_ID"],
-			Pane:    env["PANE"],
-			Title:   env["TITLE"],
-			Status:  env["STATUS"],
+
+		st := Subtask{
+			TaskID:  taskID,
+			Pane:    pane,
+			Title:   title,
+			Status:  status,
 			Created: created,
 			Updated: updated,
-		})
+		}
+		// Use SUBTASK_ID as fallback TaskID if still empty
+		if st.TaskID == "" && id != "" {
+			st.TaskID = id
+		}
+
+		subtasks = append(subtasks, st)
 	}
 
 	return subtasks

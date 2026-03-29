@@ -10,21 +10,29 @@ import (
 
 const taskConfigFile = "tasks.json"
 
+// PersistentTaskLog is a timestamped activity log entry stored in the persistent task store.
+type PersistentTaskLog struct {
+	Timestamp int64  `json:"ts"`
+	Entry     string `json:"entry"`
+}
+
 // PersistentTask is a task stored in the persistent JSON store.
 type PersistentTask struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Status      string `json:"status"`      // active, in_progress, pending_user_confirmation, done, cancelled, failed
-	Description string   `json:"description"`            // optional detail text
-	Attachments []string `json:"attachments,omitempty"`  // list of URLs/file paths
-	Team        string   `json:"team"`                   // assigned team name (optional)
-	Created     int64  `json:"created"`      // unix epoch
-	Updated     int64  `json:"updated"`      // unix epoch
-	Priority     int      `json:"priority"`                  // sort order (lower = higher priority)
-	Category     string   `json:"category,omitempty"`        // bug, feature, refactor, docs, infrastructure
-	Tags         []string `json:"tags,omitempty"`            // cross-cutting concerns
-	MergedInto   string   `json:"merged_into,omitempty"`     // task ID this was merged into
-	ParentTaskID string   `json:"parent_task_id,omitempty"`  // parent task for subtask hierarchy
+	ID           string              `json:"id"`
+	Title        string              `json:"title"`
+	Status       string              `json:"status"`                  // active, in_progress, pending_user_confirmation, done, cancelled, failed
+	Description  string              `json:"description"`             // optional detail text
+	Attachments  []string            `json:"attachments,omitempty"`   // list of URLs/file paths
+	Team         string              `json:"team"`                    // assigned team name (optional)
+	Created      int64               `json:"created"`                 // unix epoch
+	Updated      int64               `json:"updated"`                 // unix epoch
+	Priority     int                 `json:"priority"`                // sort order (lower = higher priority)
+	Category     string              `json:"category,omitempty"`      // bug, feature, refactor, docs, infrastructure
+	Tags         []string            `json:"tags,omitempty"`          // cross-cutting concerns
+	MergedInto   string              `json:"merged_into,omitempty"`   // task ID this was merged into
+	ParentTaskID string              `json:"parent_task_id,omitempty"` // parent task for subtask hierarchy
+	Result       string              `json:"result,omitempty"`        // outcome summary
+	Logs         []PersistentTaskLog `json:"logs,omitempty"`          // activity log entries
 }
 
 // TaskStore holds all persistent tasks.
@@ -150,34 +158,119 @@ func (s *TaskStore) FindTask(id string) *PersistentTask {
 	return nil
 }
 
-// MergeRuntimeTasks imports runtime tasks not already in the persistent store.
+// parsePriority converts a string priority (high/medium/low) to an int (1/2/3).
+// Returns 0 if the string is empty or unrecognized.
+func parsePriority(s string) int {
+	switch s {
+	case "high":
+		return 1
+	case "medium":
+		return 2
+	case "low":
+		return 3
+	default:
+		return 0
+	}
+}
+
+// mergeLogs appends new log entries from runtime that aren't already in the persistent store.
+// Comparison is by timestamp to avoid duplicates.
+func mergeLogs(existing []PersistentTaskLog, incoming []TaskLog) []PersistentTaskLog {
+	if len(incoming) == 0 {
+		return existing
+	}
+	seen := make(map[int64]bool, len(existing))
+	for _, l := range existing {
+		seen[l.Timestamp] = true
+	}
+	for _, l := range incoming {
+		if !seen[l.Timestamp] {
+			existing = append(existing, PersistentTaskLog{
+				Timestamp: l.Timestamp,
+				Entry:     l.Entry,
+			})
+			seen[l.Timestamp] = true
+		}
+	}
+	return existing
+}
+
+// mergeRuntimeIntoPersistent updates a persistent task with non-empty runtime fields.
+// Preserves existing persistent data when the runtime field is empty/zero.
+func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
+	if rt.Title != "" {
+		pt.Title = rt.Title
+	}
+	if rt.Status != "" {
+		pt.Status = rt.Status
+	}
+	if rt.Description != "" {
+		pt.Description = rt.Description
+	}
+	if len(rt.Attachments) > 0 {
+		pt.Attachments = rt.Attachments
+	}
+	if rt.Team != "" {
+		pt.Team = rt.Team
+	}
+	if rt.Category != "" {
+		pt.Category = rt.Category
+	}
+	if len(rt.Tags) > 0 {
+		pt.Tags = rt.Tags
+	}
+	if p := parsePriority(rt.Priority); p != 0 {
+		pt.Priority = p
+	}
+	if rt.MergedInto != "" {
+		pt.MergedInto = rt.MergedInto
+	}
+	if rt.ParentTaskID != "" {
+		pt.ParentTaskID = rt.ParentTaskID
+	}
+	if rt.Result != "" {
+		pt.Result = rt.Result
+	}
+	pt.Logs = mergeLogs(pt.Logs, rt.Logs)
+	pt.Updated = time.Now().Unix()
+}
+
+// MergeRuntimeTasks imports runtime tasks into the persistent store.
+// New tasks are added; existing tasks are updated with non-empty runtime fields.
 func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
-	existing := make(map[string]bool)
-	for _, t := range s.Tasks {
-		existing[t.ID] = true
+	index := make(map[string]int, len(s.Tasks))
+	for i, t := range s.Tasks {
+		index[t.ID] = i
 	}
 	for _, rt := range runtimeTasks {
-		if existing[rt.ID] {
-			continue
-		}
-
 		id, _ := strconv.Atoi(rt.ID)
 		if id >= s.NextID {
 			s.NextID = id + 1
 		}
 
-		s.Tasks = append(s.Tasks, PersistentTask{
+		if i, ok := index[rt.ID]; ok {
+			mergeRuntimeIntoPersistent(&s.Tasks[i], rt)
+			continue
+		}
+
+		pt := PersistentTask{
 			ID:           rt.ID,
 			Title:        rt.Title,
 			Status:       rt.Status,
 			Description:  rt.Description,
 			Attachments:  rt.Attachments,
+			Team:         rt.Team,
 			Created:      rt.Created,
 			Updated:      rt.Created,
+			Priority:     parsePriority(rt.Priority),
 			Category:     rt.Category,
 			Tags:         rt.Tags,
 			MergedInto:   rt.MergedInto,
 			ParentTaskID: rt.ParentTaskID,
-		})
+			Result:       rt.Result,
+		}
+		pt.Logs = mergeLogs(nil, rt.Logs)
+		index[rt.ID] = len(s.Tasks)
+		s.Tasks = append(s.Tasks, pt)
 	}
 }

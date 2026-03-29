@@ -489,6 +489,17 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		subtaskBadge = t.Dim.Render(fmt.Sprintf(" [%d/%d]", done, len(subs)))
 	}
 
+	// Priority badge (show for P0 and P1 only)
+	priBadge := ""
+	if task.Priority <= 1 {
+		priColor := t.Danger
+		if task.Priority == 1 {
+			priColor = t.Warning
+		}
+		priBadge = " " + lipgloss.NewStyle().Bold(true).Foreground(priColor).
+			Render(fmt.Sprintf("P%d", task.Priority))
+	}
+
 	// Team badge
 	teamBadge := ""
 	if task.Team != "" {
@@ -509,7 +520,7 @@ func (m TasksModel) renderTaskRow(task runtime.PersistentTask, maxW int) string 
 		tagStr = " " + strings.Join(tagParts, " ")
 	}
 
-	row := "  " + icon + " " + id + catBadge + " " + title + subtaskBadge + teamBadge + tagStr + " " + age
+	row := "  " + icon + " " + id + catBadge + " " + title + priBadge + subtaskBadge + teamBadge + tagStr + " " + age
 
 	// Merged tasks are dimmed with a merge indicator
 	if task.MergedInto != "" {
@@ -580,9 +591,30 @@ func (m TasksModel) viewDetail() string {
 	fields = append(fields, labelStyle.Render("Status")+
 		statusIcon(task.Status, t)+" "+lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
 
+	// Team — prominent, right after status
 	if task.Team != "" {
 		fields = append(fields, labelStyle.Render("Team")+
-			lipgloss.NewStyle().Foreground(t.Accent).Render(task.Team))
+			lipgloss.NewStyle().Bold(true).Foreground(t.Accent).Render(task.Team))
+	}
+	// Priority
+	{
+		priLabel := fmt.Sprintf("P%d", task.Priority)
+		priColor := t.Muted
+		switch {
+		case task.Priority == 0:
+			priColor = t.Danger
+			priLabel += " (critical)"
+		case task.Priority == 1:
+			priColor = t.Warning
+			priLabel += " (high)"
+		case task.Priority == 2:
+			priColor = t.Primary
+			priLabel += " (medium)"
+		default:
+			priLabel += " (low)"
+		}
+		fields = append(fields, labelStyle.Render("Priority")+
+			lipgloss.NewStyle().Foreground(priColor).Render(priLabel))
 	}
 	if task.Category != "" {
 		fields = append(fields, labelStyle.Render("Category")+styles.CategoryBadge(task.Category))
@@ -609,6 +641,9 @@ func (m TasksModel) viewDetail() string {
 	if task.Updated > 0 {
 		fields = append(fields, labelStyle.Render("Updated")+
 			valueStyle.Render(time.Unix(task.Updated, 0).Format("2006-01-02 15:04:05")))
+	}
+	if task.Result != "" {
+		fields = append(fields, labelStyle.Render("Result")+valueStyle.Render(task.Result))
 	}
 	fieldBlock := lipgloss.NewStyle().Padding(1, 3).Render(strings.Join(fields, "\n"))
 
@@ -648,29 +683,96 @@ func (m TasksModel) viewDetail() string {
 	// Subtasks
 	subtaskBlock := ""
 	if subs, ok := m.subtaskMap[task.ID]; ok && len(subs) > 0 {
-		subHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("SUBTASKS")
+		// Count done/total for progress
+		doneCount := 0
+		for _, st := range subs {
+			if st.Status == "done" {
+				doneCount++
+			}
+		}
+		total := len(subs)
+
+		// Progress bar
+		barWidth := 20
+		filled := 0
+		if total > 0 {
+			filled = (doneCount * barWidth) / total
+		}
+		bar := lipgloss.NewStyle().Foreground(t.Success).Render(strings.Repeat("█", filled)) +
+			lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("░", barWidth-filled))
+		progressLabel := fmt.Sprintf(" %d/%d", doneCount, total)
+		progressLine := "   " + bar + t.Dim.Render(progressLabel)
+
+		subHeader := t.SectionHeader.Copy().PaddingLeft(3).
+			Render(fmt.Sprintf("SUBTASKS (%d/%d)", doneCount, total))
 		subRule := lipgloss.NewStyle().PaddingLeft(3).
 			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
 
 		var subLines []string
+		subLines = append(subLines, progressLine)
+		now := time.Now()
 		for _, st := range subs {
-			dot := lipgloss.NewStyle().Foreground(t.Muted).Render("\u25cb")
-			if st.Status == "done" {
-				dot = lipgloss.NewStyle().Foreground(t.Success).Render("\u25cf")
-			} else if st.Status == "active" {
-				dot = lipgloss.NewStyle().Foreground(t.Primary).Render("\u25cf")
-			} else if st.Status == "failed" {
-				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("\u2715")
+			dot := lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+			switch st.Status {
+			case "done":
+				dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
+			case "active":
+				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+			case "failed":
+				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
 			}
-			pane := t.Dim.Render(st.Pane)
+			pane := lipgloss.NewStyle().Foreground(t.Accent).Render(st.Pane)
 			title := valueStyle.Render(st.Title)
-			status := lipgloss.NewStyle().Foreground(t.Muted).Render(st.Status)
-			subLines = append(subLines, fmt.Sprintf("  %s %s  %s  %s", dot, pane, title, status))
+			age := ""
+			if st.Created > 0 {
+				age = t.Faint.Render(formatAge(now.Sub(time.Unix(st.Created, 0))))
+			}
+			subLines = append(subLines, fmt.Sprintf("  %s %-6s %s  %s", dot, pane, title, age))
 		}
 		subtaskBlock = "\n" + subHeader + "\n" + subRule + "\n" +
 			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(subLines, "\n"))
 	}
 
-	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + descBlock + attachBlock + subtaskBlock
+	// Activity Log
+	logBlock := ""
+	if len(task.Logs) > 0 {
+		logHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("ACTIVITY LOG")
+		logRule := lipgloss.NewStyle().PaddingLeft(3).
+			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
+
+		// Reverse chronological — most recent first
+		logs := task.Logs
+		reversed := make([]runtime.PersistentTaskLog, len(logs))
+		for i, l := range logs {
+			reversed[len(logs)-1-i] = l
+		}
+
+		maxEntries := 10
+		truncated := 0
+		if len(reversed) > maxEntries {
+			truncated = len(reversed) - maxEntries
+			reversed = reversed[:maxEntries]
+		}
+
+		now := time.Now()
+		var logLines []string
+		for _, entry := range reversed {
+			age := "     "
+			if entry.Timestamp > 0 {
+				age = fmt.Sprintf("%-5s", formatAge(now.Sub(time.Unix(entry.Timestamp, 0))))
+			}
+			ts := t.Faint.Render(age)
+			text := lipgloss.NewStyle().Foreground(t.Muted).Render(entry.Entry)
+			logLines = append(logLines, "  "+ts+" "+text)
+		}
+		if truncated > 0 {
+			logLines = append(logLines, t.Faint.Render(fmt.Sprintf("  (%d more)", truncated)))
+		}
+
+		logBlock = "\n" + logHeader + "\n" + logRule + "\n" +
+			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(logLines, "\n"))
+	}
+
+	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + descBlock + attachBlock + subtaskBlock + logBlock
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }

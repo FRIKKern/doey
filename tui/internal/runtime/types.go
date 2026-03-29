@@ -33,19 +33,29 @@ type PaneStatus struct {
 	Updated string
 }
 
+// TaskLog represents a timestamped activity log entry within a task.
+type TaskLog struct {
+	Timestamp int64
+	Entry     string
+}
+
 // Task from tasks/*.task
 type Task struct {
-	ID          string
-	Title       string
-	Status      string    // active, in_progress, pending_user_confirmation, done, cancelled, failed
-	Description string    // multi-line task description
-	Attachments []string  // list of URLs/file paths
-	Created     int64     // unix epoch
+	ID           string
+	Title        string
+	Status       string    // active, in_progress, pending_user_confirmation, done, cancelled, failed
+	Description  string    // multi-line task description
+	Attachments  []string  // list of URLs/file paths
+	Created      int64     // unix epoch
 	Subtasks     []Subtask // worker assignments
-	Category     string   // bug, feature, refactor, docs, infrastructure
-	Tags         []string // cross-cutting concerns
-	MergedInto   string   // task ID this was merged into (audit trail)
-	ParentTaskID string   // parent task for subtask hierarchy
+	Category     string    // bug, feature, refactor, docs, infrastructure
+	Tags         []string  // cross-cutting concerns
+	MergedInto   string    // task ID this was merged into (audit trail)
+	ParentTaskID string    // parent task for subtask hierarchy
+	Team         string    // which team owns this task
+	Priority     string    // high, medium, low
+	Result       string    // outcome summary
+	Logs         []TaskLog // activity log entries (sorted by timestamp)
 }
 
 // Subtask represents a worker assignment under a parent task.
