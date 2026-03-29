@@ -1,6 +1,6 @@
 TASK_ID=9
 TASK_TITLE=Fix role detection + hook guards — Managers blocked from dispatch, Workers blocked from task writes
-TASK_STATUS=in_progress
+TASK_STATUS=done
 TASK_CREATED=1774819000
 TASK_TYPE=bugfix
 TASK_DESCRIPTION=Workers are blocked from writing TASK_LOG entries to .doey/tasks/*.task files. Two false-positive blocks observed:
@@ -36,3 +36,4 @@ TASK_LOG_1774819516=REPORT_W1: P0 role detection + hook guard fix complete. Chan
   on-session-start.sh: Added explicit team_file var and -f guards before _env_val calls. Pane 0 of non-freelancer team windows defaults to manager even without team_W.env.
   on-pre-tool-use.sh: (a) Defense-in-depth role inference (lines 124-143) — if .role file missing, infers role from pane position using team_W.env/session.env. Manager at W.0 always detected. (b) Managers already have full tmux access at line 198 exit path — defense-in-depth prevents them from falling through to worker path. (c-e) Extended whitelist (lines 189-195): .doey/tasks/*.task, /tmp/doey/* runtime writes, /reports/*, /tmp/*.sh and /tmp/*.md dispatch helpers.
   bash -n passes on both files.
+TASK_LOG_1774819570=COMPLETE: P0 fix committed 7fae04e. Role detection + hook guards + expanded whitelist. Both files pass bash -n.
