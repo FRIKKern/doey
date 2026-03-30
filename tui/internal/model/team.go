@@ -1055,7 +1055,7 @@ func (m TeamModel) paneDot(paneID string) string {
 	color := styles.StatusColor(ps.Status)
 	switch ps.Status {
 	case "RESERVED":
-		return lipgloss.NewStyle().Foreground(color).Faint(true).Render("⊘")
+		return lipgloss.NewStyle().Foreground(color).Faint(true).Render("•")
 	case "ERROR":
 		return lipgloss.NewStyle().Foreground(color).Bold(true).Render("●")
 	default:

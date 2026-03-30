@@ -169,7 +169,7 @@ func (m AuthModel) View() string {
 		prefix := "  "
 		labelStyle := lipgloss.NewStyle().Foreground(t.Text)
 		if i == m.cursor {
-			prefix = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("> ")
+			prefix = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("› ")
 			labelStyle = labelStyle.Bold(true)
 		}
 

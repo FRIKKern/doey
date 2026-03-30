@@ -116,7 +116,7 @@ func (m WizardModel) View() string {
 		Foreground(lipgloss.Color("99")).
 		MarginBottom(1)
 
-	title := titleStyle.Render("◈ Doey Setup Wizard")
+	title := titleStyle.Render("◆ Doey Setup Wizard")
 
 	switch m.step {
 	case StepPreset:
@@ -212,9 +212,9 @@ func (m WizardModel) renderSummary() string {
 
 	s := "Teams to create:\n\n"
 	for i, t := range m.result.Teams {
-		icon := "◉"
+		icon := "◆"
 		if t.Type == "freelancer" {
-			icon = "◈"
+			icon = "•"
 		}
 		s += fmt.Sprintf("  %s %d. %s (%s, %d workers)\n", icon, i+1, t.Name, t.Type, t.Workers)
 	}

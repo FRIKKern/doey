@@ -91,7 +91,7 @@ func TaskIcon(status string) string {
 	case "cancelled":
 		return dim(defaultTheme.Muted).Render("○")
 	case "failed":
-		return lipgloss.NewStyle().Foreground(defaultTheme.Danger).Render("✕")
+		return lipgloss.NewStyle().Foreground(defaultTheme.Danger).Render("✗")
 	default:
 		return dim(defaultTheme.Muted).Render("○")
 	}

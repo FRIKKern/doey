@@ -364,9 +364,9 @@ func (m AgentsModel) renderLeftPanel(w, h int) string {
 	for gi, g := range m.groups {
 		// Domain header
 		collapsed := m.collapsedDomains[g.domain]
-		arrow := "▾"
+		arrow := "↳"
 		if collapsed {
-			arrow = "▸"
+			arrow = "›"
 		}
 		domainLabel := fmt.Sprintf("%s %s (%d)", arrow, g.domain, len(g.agents))
 		domainHeader := lipgloss.NewStyle().
@@ -388,7 +388,7 @@ func (m AgentsModel) renderLeftPanel(w, h int) string {
 			selected := m.focused && m.leftFocused && flatIdx == m.cursor
 
 			// Agent row: colored dot + name
-			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("●")
+			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("◆")
 			nameStyle := lipgloss.NewStyle().Foreground(t.Text)
 			if selected {
 				nameStyle = nameStyle.Bold(true)
@@ -458,13 +458,13 @@ func (m AgentsModel) renderLeftPanel(w, h int) string {
 	// Scroll indicators
 	scrollHint := ""
 	if scrollTop > 0 {
-		scrollHint = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).PaddingLeft(1).Render("↑ more")
+		scrollHint = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).PaddingLeft(1).Render("› above")
 	}
 	if scrollTop+listH < len(allItems) {
 		if scrollHint != "" {
 			scrollHint += "  "
 		}
-		scrollHint += lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("↓ more")
+		scrollHint += lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("› below")
 	}
 
 	content := header + "\n" + countText + "\n" + body
@@ -498,7 +498,7 @@ func (m AgentsModel) renderDetailContent(w int) string {
 	fields = append(fields, labelStyle.Render("Domain")+"  "+valueStyle.Render(agent.Domain))
 
 	if agent.Color != "" {
-		colorDot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("●")
+		colorDot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
 		fields = append(fields, labelStyle.Render("Color")+"  "+colorDot+" "+t.Dim.Render(agent.Color))
 	}
 
@@ -553,7 +553,7 @@ func (m AgentsModel) maxRightScroll() int {
 
 	// Replicate the section-building logic from renderRightPanel
 	var sections []string
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("●")
+	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Render(agent.Name)
 	sections = append(sections, dot+" "+title)
 	if agent.Model != "" {
@@ -615,7 +615,7 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 	var sections []string
 
 	// Title
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("●")
+	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(agent.Name)
 	sections = append(sections, dot+" "+title)
 
@@ -639,7 +639,7 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 	// Nav hint
 	sections = append(sections, "")
 	if m.focused {
-		hint := "← back to list"
+		hint := "↳ back to list"
 		if m.leftFocused {
 			hint = "→ or enter for details"
 		}

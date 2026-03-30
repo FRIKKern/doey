@@ -243,11 +243,11 @@ func tuiFlow(steps []FlowStep, width int, theme styles.Theme) string {
 	for _, s := range steps {
 		totalW += lipgloss.Width(boxStyle.Render(s.Label))
 		if s.Arrow != "" {
-			totalW += 5 // " ──▶ "
+			totalW += 3 // " → "
 		}
 	}
 
-	arrow := arrowStyle.Render(" ──▶ ")
+	arrow := arrowStyle.Render(" → ")
 
 	if totalW <= width-4 {
 		// Horizontal layout.
@@ -267,7 +267,7 @@ func tuiFlow(steps []FlowStep, width int, theme styles.Theme) string {
 	for i, s := range steps {
 		lines = append(lines, boxStyle.Render(s.Label))
 		if i < len(steps)-1 {
-			lines = append(lines, arrowStyle.Render("  ▼"))
+			lines = append(lines, arrowStyle.Render("  ↳"))
 		}
 	}
 	return blockBorder("FLOW", strings.Join(lines, "\n"), width, theme)
@@ -453,20 +453,20 @@ func tuiDeps(nodes []DepNode, width int, theme styles.Theme) string {
 	var lines []string
 	for _, n := range nodes {
 		edge := n.Edge
-		edge = strings.ReplaceAll(edge, "-->", "──▶")
-		edge = strings.ReplaceAll(edge, "->", "──▶")
+		edge = strings.ReplaceAll(edge, "-->", "→")
+		edge = strings.ReplaceAll(edge, "->", "→")
 		// Style the edge label if embedded (e.g. "--unblocks-->").
 		if strings.Contains(edge, "--") {
 			// Extract the label between dashes: --label-->
 			edge = strings.TrimPrefix(edge, "--")
-			edge = strings.TrimSuffix(edge, "──▶")
+			edge = strings.TrimSuffix(edge, "→")
 			edge = strings.TrimSuffix(edge, "-->")
 			edge = strings.TrimSuffix(edge, "->")
 			edge = strings.TrimSuffix(edge, "--")
 			if edge != "" {
-				edge = "──(" + edge + ")──▶"
+				edge = "─(" + edge + ")→"
 			} else {
-				edge = "──▶"
+				edge = "→"
 			}
 		}
 

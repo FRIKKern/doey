@@ -58,7 +58,7 @@ func (m WelcomeModel) View() string {
 		"SSH key configuration",
 		"Server preferences (region, type)",
 	}
-	bullet := lipgloss.NewStyle().Foreground(t.Primary).Render("  *  ")
+	bullet := lipgloss.NewStyle().Foreground(t.Primary).Render("  •  ")
 	var bullets []string
 	for _, item := range items {
 		bullets = append(bullets, bullet+lipgloss.NewStyle().Foreground(t.Text).Render(item))
@@ -71,7 +71,7 @@ func (m WelcomeModel) View() string {
 
 	hint := lipgloss.NewStyle().
 		Foreground(t.Muted).
-		Render("Press Enter to begin ->")
+		Render("Press Enter to begin →")
 
 	content := strings.Join([]string{
 		"",

@@ -53,10 +53,10 @@ type quickAction struct {
 
 // quickActions is the ordered list of dashboard action cards.
 var quickActions = []quickAction{
-	{"◈", "Reserved Freelancers", "Spawn 6 reserved workers (3×2 grid)", "dash-spawn-freelancer"},
-	{"◉", "Get Status", "View team and worker status", "dash-get-status"},
-	{"⊞", "Create Team", "Add a new specialist team", "dash-create-team"},
-	{"☰", "View Tasks", "Browse and manage project tasks", "dash-view-tasks"},
+	{"◆", "Reserved Freelancers", "Spawn 6 reserved workers (3×2 grid)", "dash-spawn-freelancer"},
+	{"→", "Get Status", "View team and worker status", "dash-get-status"},
+	{"⟫", "Create Team", "Add a new specialist team", "dash-create-team"},
+	{"›", "View Tasks", "Browse and manage project tasks", "dash-view-tasks"},
 }
 
 // DashboardModel is the primary landing tab (command center).
@@ -518,20 +518,20 @@ func (m DashboardModel) renderTeamStatus(w int) string {
 		// Pane badges
 		var paneBadges []string
 		for _, ps := range panes {
-			icon := "○"
+			icon := "•"
 			var fg lipgloss.TerminalColor = t.Muted
 			switch ps.Status {
 			case "READY":
-				icon = "●"
+				icon = "◆"
 				fg = t.Success
 			case "BUSY", "WORKING":
-				icon = "●"
+				icon = "◆"
 				fg = t.Primary
 			case "FINISHED":
 				icon = "✓"
 				fg = t.Success
 			case "ERROR":
-				icon = "✕"
+				icon = "✗"
 				fg = t.Danger
 			case "RESERVED":
 				icon = "◆"
