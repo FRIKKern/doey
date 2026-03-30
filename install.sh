@@ -201,7 +201,11 @@ shopt -s nullglob
 for f in ~/.claude/commands/doey-*.md; do rm -f "$f"; done
 shopt -u nullglob
 
-echo "$SCRIPT_DIR" > ~/.claude/doey/repo-path
+# Only save repo-path if it's a persistent directory (not a temp dir)
+case "$SCRIPT_DIR" in
+  /tmp/*|/var/folders/*) ;; # Don't save temp paths — would break future 'doey update'
+  *) echo "$SCRIPT_DIR" > "$HOME/.claude/doey/repo-path" ;;
+esac
 
 INSTALLED_VERSION=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 INSTALLED_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
