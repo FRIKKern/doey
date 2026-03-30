@@ -5,10 +5,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -18,6 +20,7 @@ import (
 type WelcomeModel struct {
 	snapshot     runtime.Snapshot
 	theme        styles.Theme
+	keyMap       keys.KeyMap
 	width        int
 	height       int
 	scrollOffset int
@@ -27,7 +30,8 @@ type WelcomeModel struct {
 // NewWelcomeModel creates the welcome panel.
 func NewWelcomeModel() WelcomeModel {
 	return WelcomeModel{
-		theme: styles.DefaultTheme(),
+		theme:  styles.DefaultTheme(),
+		keyMap: keys.DefaultKeyMap(),
 	}
 }
 
@@ -41,6 +45,19 @@ func (m WelcomeModel) Update(msg tea.Msg) (WelcomeModel, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		maxOff := m.maxScrollOffset()
+		switch {
+		case key.Matches(msg, m.keyMap.Up):
+			if m.scrollOffset > 0 {
+				m.scrollOffset--
+			}
+		case key.Matches(msg, m.keyMap.Down):
+			if m.scrollOffset < maxOff {
+				m.scrollOffset++
+			}
+		}
+		return m, nil
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	}
@@ -93,12 +110,45 @@ func (m WelcomeModel) updateMouse(msg tea.MouseMsg) (WelcomeModel, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Button == tea.MouseButtonWheelDown {
-			m.scrollOffset++
+			if m.scrollOffset < m.maxScrollOffset() {
+				m.scrollOffset++
+			}
 			return m, nil
 		}
 	}
 
 	return m, nil
+}
+
+// maxScrollOffset returns the maximum valid scroll offset based on content height.
+func (m WelcomeModel) maxScrollOffset() int {
+	content := m.renderAllContent()
+	totalLines := strings.Count(content, "\n") + 1
+	viewH := m.height
+	if viewH <= 0 {
+		viewH = 1
+	}
+	off := totalLines - viewH
+	if off < 0 {
+		return 0
+	}
+	return off
+}
+
+// renderAllContent builds the full welcome content (used for scroll bounds).
+func (m WelcomeModel) renderAllContent() string {
+	w := m.width
+	if w < 40 {
+		w = 40
+	}
+	var sections []string
+	if ts := m.renderTeamStatus(w); ts != "" {
+		sections = append(sections, ts)
+	}
+	sections = append(sections, m.renderHowToUse())
+	sections = append(sections, m.renderSlashCommands(w))
+	sections = append(sections, m.renderCLICommands(w))
+	return strings.Join(sections, "\n")
 }
 
 // SetSnapshot updates the welcome panel with fresh runtime data.
@@ -115,20 +165,7 @@ func (m *WelcomeModel) SetSize(w, h int) {
 // View renders the welcome content (no banner — root.go handles that).
 func (m WelcomeModel) View() string {
 	w := m.width
-	if w < 40 {
-		w = 40
-	}
-
-	var sections []string
-
-	if ts := m.renderTeamStatus(w); ts != "" {
-		sections = append(sections, ts)
-	}
-	sections = append(sections, m.renderHowToUse())
-	sections = append(sections, m.renderSlashCommands(w))
-	sections = append(sections, m.renderCLICommands(w))
-
-	content := strings.Join(sections, "\n")
+	content := m.renderAllContent()
 
 	// Apply scroll offset
 	lines := strings.Split(content, "\n")

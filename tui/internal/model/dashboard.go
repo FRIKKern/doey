@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -50,6 +52,7 @@ type DashboardModel struct {
 	theme        styles.Theme
 	focused      bool
 	tasks        []taskEntry
+	keyMap       keys.KeyMap
 	scrollOffset int
 	snapshot     runtime.Snapshot // live snapshot for pane/result/message data
 }
@@ -62,6 +65,7 @@ func NewDashboardModel(runtimeDir, projectDir string, width, height int, theme s
 		width:      width,
 		height:     height,
 		theme:      theme,
+		keyMap:     keys.DefaultKeyMap(),
 	}
 	m.loadTasks()
 	return m
@@ -77,6 +81,21 @@ func (m DashboardModel) Update(msg tea.Msg) (DashboardModel, tea.Cmd) {
 	case SnapshotMsg:
 		m.snapshot = runtime.Snapshot(msg)
 		return m, nil
+
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, m.keyMap.Up):
+			if m.scrollOffset > 0 {
+				m.scrollOffset--
+			}
+			return m, nil
+		case key.Matches(msg, m.keyMap.Down):
+			maxOff := m.maxScrollOffset()
+			if m.scrollOffset < maxOff {
+				m.scrollOffset++
+			}
+			return m, nil
+		}
 
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
@@ -130,6 +149,26 @@ func (m DashboardModel) SetSize(w, h int) DashboardModel {
 func (m DashboardModel) SetFocused(f bool) DashboardModel {
 	m.focused = f
 	return m
+}
+
+// maxScrollOffset computes the maximum scroll offset based on rendered content height.
+func (m DashboardModel) maxScrollOffset() int {
+	// Build the same content as View to count total lines.
+	var sections []string
+	w := m.width
+	if w < 40 {
+		w = 40
+	}
+	sections = append(sections, m.renderActiveTasks(w))
+	sections = append(sections, m.renderTeamStatus(w))
+	sections = append(sections, m.renderQuickActions(w))
+	sections = append(sections, m.renderRecentActivity(w))
+	totalLines := len(strings.Split(strings.Join(sections, "\n"), "\n"))
+	maxOff := totalLines - m.height
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	return maxOff
 }
 
 // Init returns the initial tick command.
@@ -215,7 +254,10 @@ func (m DashboardModel) updateMouse(msg tea.MouseMsg) (DashboardModel, tea.Cmd) 
 			return m, nil
 		}
 		if msg.Button == tea.MouseButtonWheelDown {
-			m.scrollOffset++
+			maxOff := m.maxScrollOffset()
+			if m.scrollOffset < maxOff {
+				m.scrollOffset++
+			}
 			return m, nil
 		}
 	}

@@ -107,6 +107,7 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 					if zone.Get(fmt.Sprintf("agent-%d", flatIdx)).InBounds(msg) {
 						m.cursor = flatIdx
 						m.summaryMode = false
+						m.scrollOffset = 0
 						return m, nil
 					}
 					flatIdx++
@@ -141,7 +142,10 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 					m.cursor++
 				}
 			} else {
-				m.scrollOffset++
+				maxOff := m.detailMaxScroll()
+				if m.scrollOffset < maxOff {
+					m.scrollOffset++
+				}
 			}
 			return m, nil
 		}
@@ -169,14 +173,25 @@ func (m AgentsModel) updateSummary(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keyMap.Select):
 		m.summaryMode = false
+		m.scrollOffset = 0
 	}
 	return m, nil
 }
 
 func (m AgentsModel) updateDetail(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
-	if key.Matches(msg, m.keyMap.Back) {
+	switch {
+	case key.Matches(msg, m.keyMap.Back):
 		m.summaryMode = true
 		return m, nil
+	case key.Matches(msg, m.keyMap.Up):
+		if m.scrollOffset > 0 {
+			m.scrollOffset--
+		}
+	case key.Matches(msg, m.keyMap.Down):
+		maxOff := m.detailMaxScroll()
+		if m.scrollOffset < maxOff {
+			m.scrollOffset++
+		}
 	}
 	return m, nil
 }
@@ -417,8 +432,25 @@ func (m AgentsModel) viewSummary() string {
 	return header + "\n" + rule + "\n" + summary + "\n" + body + "\n" + hint
 }
 
-// viewDetail renders full info for the selected agent.
-func (m AgentsModel) viewDetail() string {
+// detailMaxScroll returns the maximum scroll offset for the detail view.
+func (m AgentsModel) detailMaxScroll() int {
+	// Render the detail content and measure it against viewport height.
+	// Use a conservative viewport: total height minus header/rule/back/padding (~5 lines).
+	content := m.renderDetailContent()
+	lines := strings.Split(content, "\n")
+	viewport := m.height - 5
+	if viewport < 1 {
+		viewport = 1
+	}
+	maxOff := len(lines) - viewport
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	return maxOff
+}
+
+// renderDetailContent returns the scrollable body portion of the detail view.
+func (m AgentsModel) renderDetailContent() string {
 	t := m.theme
 	w := m.width
 	if w < 20 {
@@ -427,22 +459,8 @@ func (m AgentsModel) viewDetail() string {
 
 	agent, ok := m.selectedAgent()
 	if !ok {
-		m.summaryMode = true
-		return m.viewSummary()
+		return ""
 	}
-
-	// Header with agent name
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("●")
-	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(dot + " " + strings.ToUpper(agent.Name))
-
-	rule := t.Faint.Render(strings.Repeat("─", w))
-
-	back := zone.Mark("agent-detail-back", lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
-		PaddingLeft(3).
-		Render("esc to go back"))
 
 	// Card dimensions
 	detailCardW := w - 8
@@ -488,13 +506,57 @@ func (m AgentsModel) viewDetail() string {
 		fields = append(fields, labelStyle.Render("File")+"  "+t.Dim.Render(agent.FilePath))
 	}
 
-	body := lipgloss.NewStyle().
+	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Separator).
 		Width(detailCardW).
 		Padding(1, 2).
 		MarginLeft(2).
 		Render(strings.Join(fields, "\n"))
+}
+
+// viewDetail renders full info for the selected agent.
+func (m AgentsModel) viewDetail() string {
+	t := m.theme
+	w := m.width
+	if w < 20 {
+		w = 20
+	}
+
+	agent, ok := m.selectedAgent()
+	if !ok {
+		m.summaryMode = true
+		return m.viewSummary()
+	}
+
+	// Header with agent name
+	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("●")
+	header := t.SectionHeader.Copy().PaddingLeft(2).
+		Render(dot + " " + strings.ToUpper(agent.Name))
+
+	rule := t.Faint.Render(strings.Repeat("─", w))
+
+	back := zone.Mark("agent-detail-back", lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true).
+		PaddingLeft(3).
+		Render("esc to go back"))
+
+	// Render scrollable body and apply scroll offset
+	body := m.renderDetailContent()
+	lines := strings.Split(body, "\n")
+	// Viewport = total height minus header (1) + rule (1) + back (1) + blank (1) = 4 fixed lines
+	viewport := m.height - 5
+	if viewport < 1 {
+		viewport = 1
+	}
+	if m.scrollOffset > 0 && m.scrollOffset < len(lines) {
+		lines = lines[m.scrollOffset:]
+	}
+	if len(lines) > viewport {
+		lines = lines[:viewport]
+	}
+	body = strings.Join(lines, "\n")
 
 	return header + "\n" + rule + "\n" + back + "\n\n" + body
 }
