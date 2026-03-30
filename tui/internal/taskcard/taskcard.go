@@ -3,6 +3,7 @@ package taskcard
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -517,6 +518,25 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, fileRows...)
 	}
 
+	// --- Attachments ---
+	if len(e.Item.Task.Attachments) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, "Attachments"))
+		for _, att := range e.Item.Task.Attachments {
+			name := filepath.Base(att)
+			badge := "file"
+			if strings.HasSuffix(name, ".result.json") {
+				badge = "result"
+			} else if strings.HasSuffix(name, ".report") {
+				badge = "report"
+			} else if strings.HasSuffix(name, ".plan") {
+				badge = "plan"
+			}
+			sections = append(sections, fmt.Sprintf("  [%s] %s",
+				badge, lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render(name)))
+		}
+	}
+
 	// --- Footer hint ---
 	sections = append(sections, "")
 	closeBtn := zone.Mark("detail-close",
@@ -581,6 +601,9 @@ func (e *ExpandedCard) ContentHeight() int {
 	}
 	if fileRows := e.renderFilesChanged(); len(fileRows) > 0 {
 		lines += 2 + len(fileRows)
+	}
+	if len(e.Item.Task.Attachments) > 0 {
+		lines += 2 + len(e.Item.Task.Attachments) // header + spacing + items
 	}
 	return lines
 }
