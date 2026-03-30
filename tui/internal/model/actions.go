@@ -155,14 +155,14 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 	}
 }
 
-// SpawnFreelancerCmd sends a "/doey-add-window freelancer" command to the Boss pane.
+// SpawnFreelancerCmd sends a "/doey-add-team freelancer" command to the Boss pane.
 func SpawnFreelancerCmd() tea.Cmd {
 	return func() tea.Msg {
 		sessionName := os.Getenv("SESSION_NAME")
 		if sessionName == "" {
 			sessionName = "doey-doey"
 		}
-		cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", "/doey-add-window freelancer", "Enter")
+		cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", "/doey-add-team freelancer", "Enter")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return SpawnFreelancerResultMsg{Err: fmt.Errorf("%w: %s", err, out)}

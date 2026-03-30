@@ -3210,6 +3210,8 @@ _batch_boot_workers() {
   local _bbw_is_freelancer="false"
   [ "$_bbw_team_type" = "freelancer" ] && _bbw_is_freelancer="true"
 
+  # Phase 1: Prepare all workers — build prompt files and command strings
+  local _bbw_pane_idxs="" _bbw_cmds="" _bbw_count=0
   local pair pane_idx worker_num
   for pair in "$@"; do
     pane_idx="${pair%%:*}"
@@ -3234,11 +3236,35 @@ _batch_boot_workers() {
     local cmd="claude --dangerously-skip-permissions --model $_bbw_worker_model --name \"T${team_window} ${_bbw_name_prefix}${worker_num}\""
     _append_settings cmd "$runtime_dir"
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
-    tmux send-keys -t "$session:${team_window}.${pane_idx}" "$cmd" Enter
-    sleep $DOEY_WORKER_LAUNCH_DELAY  # Auth stagger
 
-    write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
+    # Store pane index and command for phase 2 (newline-delimited)
+    if [ "$_bbw_count" -eq 0 ]; then
+      _bbw_pane_idxs="$pane_idx"
+      _bbw_cmds="$cmd"
+    else
+      _bbw_pane_idxs="${_bbw_pane_idxs}
+${pane_idx}"
+      _bbw_cmds="${_bbw_cmds}
+${cmd}"
+    fi
+    _bbw_count=$(( _bbw_count + 1 ))
   done
+
+  # Phase 2: Launch ALL workers rapidly — no sleep between sends
+  local _bbw_i=0
+  while [ "$_bbw_i" -lt "$_bbw_count" ]; do
+    local _bbw_cur_pane _bbw_cur_cmd
+    _bbw_cur_pane="$(printf '%s\n' "$_bbw_pane_idxs" | sed -n "$(( _bbw_i + 1 ))p")"
+    _bbw_cur_cmd="$(printf '%s\n' "$_bbw_cmds" | sed -n "$(( _bbw_i + 1 ))p")"
+    tmux send-keys -t "$session:${team_window}.${_bbw_cur_pane}" "$_bbw_cur_cmd" Enter
+    write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "READY"
+    _bbw_i=$(( _bbw_i + 1 ))
+  done
+
+  # Phase 3: Single sleep for auth stagger (O(1) instead of O(N))
+  if [ "$_bbw_count" -gt 0 ]; then
+    sleep $DOEY_WORKER_LAUNCH_DELAY
+  fi
 }
 
 doey_add_column() {
@@ -3535,13 +3561,64 @@ add_team_from_def() {
   printf "  ${DIM}Creating team '%s' in window %s...${RESET}\n" "$td_name" "$window_index"
 
   # Determine pane count from definition (find highest PANE_N key)
-  local max_pane=0 _p_idx=0
+  # Also detect whether any pane has role=manager for fast-path decision
+  local max_pane=0 _p_idx=0 _has_manager="false"
   while [ "$_p_idx" -le 20 ]; do
     if grep -q "^PANE_${_p_idx}_ROLE=" "$env_file" 2>/dev/null; then
       max_pane="$_p_idx"
+      local _p_role
+      _p_role=$(_env_val "$env_file" "PANE_${_p_idx}_ROLE" "")
+      [ "$_p_role" = "manager" ] && _has_manager="true"
     fi
     _p_idx=$((_p_idx + 1))
   done
+
+  # ── Fast-path: managerless (freelancer) teams ─────────────────────────
+  # All panes are workers — no manager launch, no briefing delay.
+  if [ "$_has_manager" = "false" ]; then
+    # Pre-split all panes at once (pane 0 already exists from new-window)
+    local _fp_i=1
+    while [ "$_fp_i" -le "$max_pane" ]; do
+      tmux split-window -t "${session}:${window_index}" -c "$dir" -h 2>/dev/null || \
+        tmux split-window -t "${session}:${window_index}" -c "$dir" -v 2>/dev/null
+      _fp_i=$((_fp_i + 1))
+    done
+    tmux select-layout -t "${session}:${window_index}" tiled 2>/dev/null || true
+
+    # Build pane list covering ALL panes (0..max_pane)
+    local _fp_pane_list="" _fp_count=0 _fp_j=0
+    while [ "$_fp_j" -le "$max_pane" ]; do
+      [ -n "$_fp_pane_list" ] && _fp_pane_list="${_fp_pane_list},"
+      _fp_pane_list="${_fp_pane_list}${_fp_j}"
+      _fp_count=$((_fp_count + 1))
+      _fp_j=$((_fp_j + 1))
+    done
+
+    # Write team env: MANAGER_PANE="" and TEAM_TYPE="freelancer"
+    write_team_env "$runtime_dir" "$window_index" "$td_grid" \
+      "$_fp_pane_list" "$_fp_count" "" "" "" "$td_name" "" \
+      "$td_worker_model" "$td_manager_model" "freelancer" "$td_name"
+    _register_team_window "$runtime_dir" "$window_index"
+    _ensure_worker_prompt "$runtime_dir" "$dir"
+
+    # Boot all panes as workers via _batch_boot_workers (pane 0 through max_pane)
+    local _fp_pairs="" _fp_k=0
+    while [ "$_fp_k" -le "$max_pane" ]; do
+      _fp_pairs="${_fp_pairs} ${_fp_k}:${_fp_k}"
+      _fp_k=$((_fp_k + 1))
+    done
+    _batch_boot_workers "$session" "$runtime_dir" "$window_index" $_fp_pairs
+
+    _build_worker_pane_list "$session" "$window_index"
+    rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
+    _name_team_window "$session" "$window_index" "" "$runtime_dir"
+
+    printf "  \033[0;32mTeam '%s' created in window %s (%s workers, managerless)\033[0m\n" \
+      "$td_name" "$window_index" "$_fp_count"
+    return 0
+  fi
+
+  # ── Standard path: teams with a manager ───────────────────────────────
 
   # Build worker panes (pane 0 = manager, rest are workers)
   local worker_pane_list="" worker_count=0 _wp_i=1
