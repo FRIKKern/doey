@@ -1,0 +1,9 @@
+TASK_ID=42
+TASK_TITLE=Use only elegant icons in Go TUI
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1743292800
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=The Go TUI (tui/ directory) should use only elegant, minimal icons throughout — no crude ASCII fallbacks, no emoji clutter. Review all string literals, labels, and decorative characters in the TUI code. Replace any ugly or inconsistent icons with elegant Unicode symbols (e.g., ◆, →, •, ↳, ✓, ✗, ⟫, ›, etc.). The aesthetic should feel polished and intentional — like a premium CLI tool. Check Huh form titles, descriptions, option labels, status indicators, and any spinner/progress characters. Must compile cleanly after changes (run `cd tui/ && go build ./...`).
+TASK_TAGS=tui,ux,polish
+TASK_TEAM=W2
+TASK_RESULT=Committed as 43b4135

@@ -1,0 +1,38 @@
+TASK_ID=45
+TASK_TITLE=Rich live task updates — subtasks, progress, and detail from all roles
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1743382800
+TASK_TYPE=feature
+TASK_DESCRIPTION=The task detail view in the Go TUI should feel alive — like watching a team work in real time. Right now tasks are static blobs. We need all roles (Session Manager, Window Managers, Workers) to actively write subtasks, status updates, decisions, and progress notes to task files as they work.
+
+WHAT NEEDS TO CHANGE:
+
+1. AGENT DEFINITIONS (agents/) — SM, Manager, and Worker agent definitions must instruct each role to update task files as they work:
+   - SM: When dispatching, add subtasks for each dispatch. When receiving results, update subtask status and add summary notes.
+   - Manager: When planning, add subtasks for each step. When delegating to workers, note which worker got what. When validating results, update subtask completion and add quality notes.
+   - Workers: When starting work, update their subtask to in-progress. When hitting milestones (file created, test passed, build succeeded), add progress notes. When done, mark subtask complete with a summary.
+
+2. TASK FILE FORMAT — Ensure .task files support:
+   - TASK_SUBTASK_N_TITLE, TASK_SUBTASK_N_STATUS, TASK_SUBTASK_N_ASSIGNEE fields (or a cleaner format if the helpers support it)
+   - TASK_UPDATE_N_TIMESTAMP, TASK_UPDATE_N_AUTHOR, TASK_UPDATE_N_TEXT for a running log of interesting updates
+   - The Go TUI must parse and render these richly
+
+3. GO TUI (tui/) — Task detail view should render:
+   - Subtask list with status indicators (pending/in-progress/done)
+   - Live update feed showing the latest activity on the task
+   - Who is working on what right now
+   - This should look compelling — the user should WANT to watch tasks update
+
+4. SHELL HELPERS (shell/doey-task-helpers.sh) — Add or verify helper functions that make it trivial for agents to add subtasks and updates from bash (since hooks use bash).
+
+The goal: watching the task detail view should be like watching a live mission control feed. Every meaningful action gets logged. The user should feel the team working.
+
+Must compile: cd tui/ && go build ./...
+TASK_TAGS=tui,agents,tasks,shell,ux,infrastructure
+TASK_TEAM=W1
+TASK_LOG_1774901869=DISPATCHED: Phase 1 (task format + shell helpers) to W1
+TASK_LOG_1774902152=PHASE 1 complete (c29a283), dispatching Phase 2 to W2
+TASK_LOG_1774902697=PHASE 2 complete (a41b20a), dispatching Phase 3 to W1
+TASK_RESULT=All 3 phases complete: c29a283 (helpers), a41b20a (TUI render), 54134ea (agents)
+TASK_FILES=shell/doey-task-helpers.sh,tests/test-task-helpers.sh,tui/internal/runtime/tasks_config.go,tui/internal/runtime/reader.go,tui/internal/taskcard/taskcard.go,agents/doey-session-manager.md,agents/doey-manager.md,agents/doey-worker.md
+TASK_LOG_1774902928=PHASE 3 complete (54134ea). All phases done.
