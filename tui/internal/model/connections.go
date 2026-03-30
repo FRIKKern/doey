@@ -145,7 +145,9 @@ func (m ConnectionsModel) updateMouse(msg tea.MouseMsg) (ConnectionsModel, tea.C
 					m.cursor++
 				}
 			} else {
-				m.rightScroll++
+				if m.rightScroll < m.height {
+					m.rightScroll++
+				}
 			}
 			return m, nil
 		}
@@ -202,7 +204,9 @@ func (m ConnectionsModel) updateKey(msg tea.KeyMsg) (ConnectionsModel, tea.Cmd) 
 				m.rightScroll = 0
 			}
 		} else {
-			m.rightScroll++
+			if m.rightScroll < m.height {
+				m.rightScroll++
+			}
 		}
 		return m, nil
 	}

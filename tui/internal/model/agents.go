@@ -134,7 +134,9 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 					m.rightScroll = 0
 				}
 			} else {
-				m.rightScroll++
+				if ms := m.maxRightScroll(); m.rightScroll < ms {
+					m.rightScroll++
+				}
 			}
 			return m, nil
 		}
@@ -190,7 +192,9 @@ func (m AgentsModel) updateKey(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
 				m.rightScroll = 0
 			}
 		} else {
-			m.rightScroll++
+			if ms := m.maxRightScroll(); m.rightScroll < ms {
+				m.rightScroll++
+			}
 		}
 		return m, nil
 	}
@@ -521,6 +525,60 @@ func (m AgentsModel) renderDetailContent(w int) string {
 	}
 
 	return strings.Join(fields, "\n")
+}
+
+// maxRightScroll returns the maximum valid rightScroll value for the current state.
+func (m AgentsModel) maxRightScroll() int {
+	h := m.height
+	if h < 10 {
+		h = 10
+	}
+	w := m.width
+	if w < 40 {
+		w = 40
+	}
+	leftW := w * 33 / 100
+	if leftW < 24 {
+		leftW = 24
+	}
+	rightW := w - leftW - 1
+	if rightW < 20 {
+		rightW = 20
+	}
+
+	agent, ok := m.selectedAgent()
+	if !ok {
+		return 0
+	}
+
+	// Replicate the section-building logic from renderRightPanel
+	var sections []string
+	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("●")
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Render(agent.Name)
+	sections = append(sections, dot+" "+title)
+	if agent.Model != "" {
+		sections = append(sections, lipgloss.NewStyle().
+			Foreground(m.theme.BgText).Background(m.theme.Accent).Padding(0, 1).
+			Render(agent.Model))
+	}
+	sections = append(sections, "")
+	detailContent := m.renderDetailContent(rightW)
+	if detailContent != "" {
+		sections = append(sections, detailContent)
+	}
+	sections = append(sections, "")
+	sections = append(sections, lipgloss.NewStyle().Foreground(m.theme.Muted).Faint(true).Render("hint"))
+
+	lines := strings.Split(strings.Join(sections, "\n"), "\n")
+	viewport := h - 2
+	if viewport < 1 {
+		viewport = 1
+	}
+	maxScroll := len(lines) - viewport
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	return maxScroll
 }
 
 // renderRightPanel renders the detail pane for the selected agent.
