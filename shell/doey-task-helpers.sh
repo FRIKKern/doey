@@ -1065,3 +1065,122 @@ task_should_restart() {
   score="$(task_context_overlap "$@")"
   [ "$score" -lt 30 ]
 }
+
+# ── _task_resolve_file ───────────────────────────────────────────────
+# Resolve task file path from project_dir + task_id.
+# Args: project_dir task_id
+# Returns (echo): absolute path to .task file, or returns 1 if missing.
+_task_resolve_file() {
+  local project_dir="$1" task_id="$2"
+  local task_file="${project_dir}/.doey/tasks/${task_id}.task"
+  if [ ! -f "$task_file" ]; then
+    printf 'Error: task %s not found\n' "$task_id" >&2
+    return 1
+  fi
+  printf '%s' "$task_file"
+}
+
+# ── doey_task_get_subtask_count ──────────────────────────────────────
+# Count TASK_SUBTASK_*_TITLE lines in a task file.
+# Args: project_dir task_id
+# Returns (echo): count (0 if missing/none)
+doey_task_get_subtask_count() {
+  local task_file
+  task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 1; }
+  local count=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      TASK_SUBTASK_*_TITLE=*) count=$((count + 1)) ;;
+    esac
+  done < "$task_file" || true
+  echo "$count"
+}
+
+# ── doey_task_add_subtask ────────────────────────────────────────────
+# Add a numbered subtask (TASK_SUBTASK_<N>_*) to a task file.
+# Args: project_dir task_id title [assignee]
+# Returns (echo): subtask number
+doey_task_add_subtask() {
+  local project_dir="$1" task_id="$2" title="$3"
+  local assignee="${4:-}"
+
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+
+  local count
+  count="$(doey_task_get_subtask_count "$project_dir" "$task_id")"
+  local n=$((count + 1))
+
+  printf 'TASK_SUBTASK_%s_TITLE=%s\n' "$n" "$title" >> "$task_file"
+  printf 'TASK_SUBTASK_%s_STATUS=pending\n' "$n" >> "$task_file"
+  if [ -n "$assignee" ]; then
+    printf 'TASK_SUBTASK_%s_ASSIGNEE=%s\n' "$n" "$assignee" >> "$task_file"
+  fi
+
+  echo "$n"
+}
+
+# ── doey_task_update_subtask ─────────────────────────────────────────
+# Update TASK_SUBTASK_<N>_STATUS in-place. Appends if missing.
+# Args: project_dir task_id subtask_n status
+doey_task_update_subtask() {
+  local project_dir="$1" task_id="$2" subtask_n="$3" new_status="$4"
+
+  # Validate subtask status
+  local valid=0 s
+  for s in $_TASK_VALID_SUBTASK_STATUSES; do
+    if [ "$s" = "$new_status" ]; then valid=1; break; fi
+  done
+  if [ "$valid" -eq 0 ]; then
+    printf 'Error: invalid subtask status "%s" (valid: %s)\n' "$new_status" "$_TASK_VALID_SUBTASK_STATUSES" >&2
+    return 1
+  fi
+
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+
+  local field="TASK_SUBTASK_${subtask_n}_STATUS"
+
+  # Check if the field exists
+  local found=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "${field}="*) found=1; break ;;
+    esac
+  done < "$task_file" || true
+
+  if [ "$found" -eq 1 ]; then
+    task_update_field "$task_file" "$field" "$new_status"
+  else
+    printf '%s=%s\n' "$field" "$new_status" >> "$task_file"
+  fi
+}
+
+# ── doey_task_add_update ─────────────────────────────────────────────
+# Add a numbered update (TASK_UPDATE_<N>_*) to a task file.
+# Args: project_dir task_id author text
+# Returns (echo): update number
+doey_task_add_update() {
+  local project_dir="$1" task_id="$2" author="$3" text="$4"
+
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+
+  # Count existing updates
+  local count=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      TASK_UPDATE_*_TIMESTAMP=*) count=$((count + 1)) ;;
+    esac
+  done < "$task_file" || true
+
+  local n=$((count + 1))
+  local now
+  now=$(date +%s)
+
+  printf 'TASK_UPDATE_%s_TIMESTAMP=%s\n' "$n" "$now" >> "$task_file"
+  printf 'TASK_UPDATE_%s_AUTHOR=%s\n' "$n" "$author" >> "$task_file"
+  printf 'TASK_UPDATE_%s_TEXT=%s\n' "$n" "$text" >> "$task_file"
+
+  echo "$n"
+}

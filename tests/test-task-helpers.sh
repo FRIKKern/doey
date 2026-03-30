@@ -328,6 +328,88 @@ _test_fails "score 60 -> should delegate (exit 1)" \
 _test "all empty -> should restart (exit 0)" \
   task_should_restart "" "" "" "" "" ""
 
+# ── 16. task_add_subtask ───────────────────────────────────────────
+echo ""
+echo "=== Test: task_add_subtask ==="
+
+rm -rf "${TEST_DIR}/.doey/tasks"
+mkdir -p "${TEST_DIR}/.doey/tasks"
+
+SUB_ID=$(task_create "$TEST_DIR" "Subtask host")
+SUB_FILE="${TEST_DIR}/.doey/tasks/${SUB_ID}.task"
+
+S1=$(task_add_subtask "$SUB_FILE" "First subtask")
+_test "add_subtask returns 1" test "$S1" = "1"
+_test "subtask 1 stored in TASK_SUBTASKS" grep -q "TASK_SUBTASKS=1:First subtask:pending" "$SUB_FILE"
+
+S2=$(task_add_subtask "$SUB_FILE" "Second subtask")
+_test "add_subtask returns 2" test "$S2" = "2"
+_test "subtask 2 appended" grep -q "2:Second subtask:pending" "$SUB_FILE"
+
+# Verify subtask count via parsing
+SUB_RAW=$(grep "^TASK_SUBTASKS=" "$SUB_FILE" | head -1)
+SUB_VAL="${SUB_RAW#TASK_SUBTASKS=}"
+# Count entries separated by literal \n
+SUB_COUNT=1
+_sub_rem="$SUB_VAL"
+while true; do
+  case "$_sub_rem" in
+    *\\n*) SUB_COUNT=$((SUB_COUNT + 1)); _sub_rem="${_sub_rem#*\\n}" ;;
+    *) break ;;
+  esac
+done
+_test "subtask count is 2" test "$SUB_COUNT" -eq 2
+
+# ── 17. task_update_subtask ────────────────────────────────────────
+echo ""
+echo "=== Test: task_update_subtask ==="
+
+task_update_subtask "$SUB_FILE" 1 in_progress
+_test "subtask 1 status -> in_progress" grep -q "1:First subtask:in_progress" "$SUB_FILE"
+
+task_update_subtask "$SUB_FILE" 1 done
+_test "subtask 1 status -> done" grep -q "1:First subtask:done" "$SUB_FILE"
+
+_test "subtask 2 still pending" grep -q "2:Second subtask:pending" "$SUB_FILE"
+
+_test_fails "invalid subtask status rejected" task_update_subtask "$SUB_FILE" 1 "bogus"
+
+_test_fails "non-existent subtask rejected" task_update_subtask "$SUB_FILE" 99 "done"
+
+# ── 18. task_add_decision (activity updates) ───────────────────────
+echo ""
+echo "=== Test: task_add_decision ==="
+
+task_add_decision "$SUB_FILE" "Starting implementation"
+_test "decision 1 stored" grep -q "Starting implementation" "$SUB_FILE"
+
+task_add_decision "$SUB_FILE" "Files changed: foo.go"
+_test "decision 2 appended" grep -q "Files changed: foo.go" "$SUB_FILE"
+
+# Verify TASK_DECISION_LOG has timestamp prefix (epoch:text format)
+DL_RAW=$(grep "^TASK_DECISION_LOG=" "$SUB_FILE" | head -1)
+DL_VAL="${DL_RAW#TASK_DECISION_LOG=}"
+_test "decision log has timestamp prefix" _contains "$DL_VAL" "^[0-9].*:"
+
+# ── 19. task_add_note ──────────────────────────────────────────────
+echo ""
+echo "=== Test: task_add_note ==="
+
+task_add_note "$SUB_FILE" "First note"
+_test "note 1 stored" grep -q "First note" "$SUB_FILE"
+
+task_add_note "$SUB_FILE" "Second note"
+_test "note 2 appended" grep -q "Second note" "$SUB_FILE"
+
+# ── 20. original fields intact after mutations ─────────────────────
+echo ""
+echo "=== Test: original fields intact ==="
+
+_test "TASK_ID still intact" grep -q "TASK_ID=${SUB_ID}" "$SUB_FILE"
+_test "TASK_TITLE still intact" grep -q "TASK_TITLE=Subtask host" "$SUB_FILE"
+_test "TASK_STATUS still intact" grep -q "TASK_STATUS=active" "$SUB_FILE"
+_test "TASK_SCHEMA_VERSION still intact" grep -q "TASK_SCHEMA_VERSION=3" "$SUB_FILE"
+
 # ── Results ─────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
