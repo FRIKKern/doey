@@ -1,0 +1,18 @@
+TASK_ID=54
+TASK_TITLE=TUI navigation tabs — remove icons, make elegant clickable cards
+TASK_STATUS=in_progress
+TASK_CREATED=1774938000
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=The Go TUI top-level navigation items (Dashboard, Tasks, Agents, Teams, Connections, Logs, etc.) currently have icons/emoji that look cluttered. Remove ALL icons from navigation tab labels — text only. Then restyle the tabs as elegant, clickable-feeling cards using Lip Gloss:
+
+CHANGES:
+1. Remove all icons/emoji from tab labels in root.go (or wherever tabs are defined). Just clean text: "Dashboard", "Tasks", "Agents", "Teams", "Connections", "Logs"
+2. Style each tab as a card-like element: subtle background, rounded border or pill shape, clear active/inactive states
+3. Active tab: bold text, accent background, slightly larger or highlighted
+4. Inactive tabs: dimmed text, subtle border or no border, clear hover/focus feel
+5. Spacing between tabs should feel intentional — not cramped, not wasteful
+6. The overall nav bar should feel like a premium CLI tool — minimal, elegant, confident
+
+Must compile: cd tui/ && go build ./...
+TASK_TAGS=tui,ux,navigation,polish
+TASK_TEAM=W2

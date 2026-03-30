@@ -73,12 +73,12 @@ type Model struct {
 func New(runtimeDir string) Model {
 	theme := styles.DefaultTheme()
 	tabs := []TabItem{
-		{Name: "Dashboard", Icon: "◆"},
-		{Name: "Teams", Icon: "⟫"},
-		{Name: "Tasks", Icon: "›"},
-		{Name: "Agents", Icon: "•"},
-		{Name: "Logs", Icon: "─"},
-		{Name: "Connections", Icon: "→"},
+		{Name: "Dashboard"},
+		{Name: "Teams"},
+		{Name: "Tasks"},
+		{Name: "Agents"},
+		{Name: "Logs"},
+		{Name: "Connections"},
 	}
 	return Model{
 		runtime:   runtime.NewReader(runtimeDir),
