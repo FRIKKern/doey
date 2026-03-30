@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -89,6 +90,11 @@ type TasksModel struct {
 	// Expanded card view (nil = not expanded)
 	expanded *taskcard.ExpandedCard
 
+	// Sidecar/result for detail view
+	detailSidecar *runtime.TaskSidecar
+	detailResult  *runtime.TaskResult
+	projectDir    string
+
 	// Layout
 	width   int
 	height  int
@@ -138,6 +144,7 @@ func (m *TasksModel) SetFocused(focused bool) { m.focused = focused }
 // SetSnapshot merges persistent + runtime tasks and rebuilds the view.
 func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	runtime.SetProjectDir(snap.Session.ProjectDir)
+	m.projectDir = snap.Session.ProjectDir
 	store, _ := runtime.ReadTaskStore()
 	store.MergeRuntimeTasks(snap.Tasks)
 
@@ -284,6 +291,12 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 				}
 				m.expanded = &card
 				m.summaryMode = false
+				// Load sidecar + result for detail view
+				if m.projectDir != "" {
+					tasksDir := filepath.Join(m.projectDir, ".doey", "tasks")
+					m.detailSidecar = runtime.ReadTaskSidecar(tasksDir, ti.Task.ID)
+					m.detailResult = runtime.ReadTaskResult(tasksDir, ti.Task.ID)
+				}
 				return m, nil
 			}
 		}
@@ -406,6 +419,12 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		}
 		m.expanded = &card
 		m.summaryMode = false
+		// Load sidecar + result for detail view
+		if m.projectDir != "" {
+			tasksDir := filepath.Join(m.projectDir, ".doey", "tasks")
+			m.detailSidecar = runtime.ReadTaskSidecar(tasksDir, ti.Task.ID)
+			m.detailResult = runtime.ReadTaskResult(tasksDir, ti.Task.ID)
+		}
 		return m, nil
 	case "m":
 		item := m.list.SelectedItem()
@@ -1173,6 +1192,203 @@ func (m TasksModel) viewDetail() string {
 		}
 	}
 
+	// --- Sidecar: Planning ---
+	planningBlock := ""
+	if sc := m.detailSidecar; sc != nil {
+		sectionWidth := w - 10
+		if sectionWidth < 30 {
+			sectionWidth = 30
+		}
+		var planParts []string
+
+		if sc.Intent != "" {
+			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "INTENT")))
+			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.DescriptionBlock(t, sc.Intent, sectionWidth)))
+		}
+		if len(sc.Hypotheses) > 0 {
+			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "HYPOTHESES")))
+			var hLines []string
+			for _, h := range sc.Hypotheses {
+				name := h.Text
+				if name == "" {
+					name = h.Name
+				}
+				if h.ID != "" {
+					name = h.ID + ": " + name
+				}
+				conf := h.Confidence
+				if conf == "" {
+					conf = "medium"
+				}
+				hLines = append(hLines, styles.HypothesisRow(t, name, conf, sectionWidth))
+			}
+			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(strings.Join(hLines, "\n")))
+		}
+		if len(sc.Constraints) > 0 {
+			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "CONSTRAINTS")))
+			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.BulletList(t, sc.Constraints, sectionWidth)))
+		}
+		if len(sc.SuccessCriteria) > 0 {
+			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "SUCCESS CRITERIA")))
+			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.BulletList(t, sc.SuccessCriteria, sectionWidth)))
+		}
+		if len(sc.Deliverables) > 0 {
+			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "DELIVERABLES")))
+			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.BulletList(t, sc.Deliverables, sectionWidth)))
+		}
+
+		if len(planParts) > 0 {
+			planningBlock = "\n" + strings.Join(planParts, "\n")
+		}
+	}
+
+	// --- Sidecar: Execution ---
+	executionBlock := ""
+	if sc := m.detailSidecar; sc != nil {
+		sectionWidth := w - 10
+		if sectionWidth < 30 {
+			sectionWidth = 30
+		}
+		var execParts []string
+
+		if sc.Phase != "" || sc.TotalPhases > 0 {
+			badge := styles.PhaseBadge(t, sc.Phase, sc.CurrentPhase, sc.TotalPhases)
+			if badge != "" {
+				execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
+					Render(styles.MetaLine(t, "Phase", badge)))
+			}
+		}
+		if sc.DispatchMode != "" {
+			execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.MetaLine(t, "Dispatch", sc.DispatchMode)))
+		}
+		if sc.DispatchPlan != nil && len(sc.DispatchPlan.Phases) > 0 {
+			var phaseLines []string
+			for _, p := range sc.DispatchPlan.Phases {
+				label := p.Title
+				if label == "" {
+					label = p.Brief
+				}
+				if label == "" {
+					label = fmt.Sprintf("Phase %d", p.Phase)
+				}
+				phaseLines = append(phaseLines, label)
+			}
+			execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "DISPATCH PLAN")))
+			execParts = append(execParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.NumberedList(t, phaseLines, sectionWidth)))
+		}
+		if len(sc.EvidencePlan) > 0 {
+			execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "EVIDENCE PLAN")))
+			execParts = append(execParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.BulletList(t, sc.EvidencePlan, sectionWidth)))
+		}
+
+		if len(execParts) > 0 {
+			executionBlock = "\n" + strings.Join(execParts, "\n")
+		}
+	}
+
+	// --- Sidecar: Semantic ---
+	semanticBlock := ""
+	if sc := m.detailSidecar; sc != nil {
+		sectionWidth := w - 10
+		if sectionWidth < 30 {
+			sectionWidth = 30
+		}
+		var semParts []string
+
+		if len(sc.Concepts) > 0 {
+			var names []string
+			for _, c := range sc.Concepts {
+				label := c.Name
+				if c.ID != "" {
+					label = c.ID + ": " + label
+				}
+				names = append(names, label)
+			}
+			semParts = append(semParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "CONCEPTS")))
+			semParts = append(semParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.BulletList(t, names, sectionWidth)))
+		}
+		if sc.BridgeProblem != "" {
+			semParts = append(semParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "BRIDGE PROBLEM")))
+			semParts = append(semParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.DescriptionBlock(t, sc.BridgeProblem, sectionWidth)))
+		}
+		if len(sc.RepresentationLayer) > 0 {
+			semParts = append(semParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "REPRESENTATION LAYER")))
+			semParts = append(semParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.BulletList(t, sc.RepresentationLayer, sectionWidth)))
+		}
+
+		if len(semParts) > 0 {
+			semanticBlock = "\n" + strings.Join(semParts, "\n")
+		}
+	}
+
+	// --- Result data ---
+	resultBlock := ""
+	if res := m.detailResult; res != nil {
+		sectionWidth := w - 10
+		if sectionWidth < 30 {
+			sectionWidth = 30
+		}
+		var resParts []string
+
+		if res.NeedsFollowUp {
+			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.FollowUpBadge(t)))
+		}
+		if len(res.HypothesisUpdates) > 0 {
+			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "HYPOTHESIS UPDATES")))
+			var hLines []string
+			for _, hu := range res.HypothesisUpdates {
+				name := hu.ID
+				if hu.Evidence != "" {
+					name += ": " + hu.Evidence
+				}
+				conf := hu.Confidence
+				if conf == "" {
+					conf = hu.Status
+				}
+				hLines = append(hLines, styles.HypothesisRow(t, name, conf, sectionWidth))
+			}
+			resParts = append(resParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(strings.Join(hLines, "\n")))
+		}
+		if len(res.Evidence) > 0 {
+			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.SectionTitle(t, "EVIDENCE")))
+			resParts = append(resParts, lipgloss.NewStyle().Padding(0, 3).
+				Render(styles.BulletList(t, res.Evidence, sectionWidth)))
+		}
+		if res.ToolCalls > 0 {
+			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
+				Render(styles.MetaLine(t, "Tool Calls", fmt.Sprintf("%d", res.ToolCalls))))
+		}
+
+		if len(resParts) > 0 {
+			resultBlock = "\n" + strings.Join(resParts, "\n")
+		}
+	}
+
 	// Decision Log (last 3 entries)
 	decisionBlock := ""
 	if task.DecisionLog != "" {
@@ -1227,7 +1443,9 @@ func (m TasksModel) viewDetail() string {
 	}
 
 	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock +
-		blockerBlock + descBlock + criteriaBlock + attachBlock + subtaskBlock +
+		blockerBlock + descBlock + criteriaBlock +
+		planningBlock + executionBlock + semanticBlock + resultBlock +
+		attachBlock + subtaskBlock +
 		decisionBlock + notesBlock + logBlock
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
