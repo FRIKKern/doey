@@ -260,12 +260,27 @@ Never dispatch Wave N+1 until Wave N is fully complete. Track worker→task mapp
 
 ## Subtask Management
 
-Create `.subtask` files (not `.task`) in `${PROJECT_DIR}/.doey/tasks/` **before** dispatching (falls back to `${RUNTIME_DIR}/tasks/` if `.doey/tasks/` doesn't exist). Pattern: `<parent_id>_<subtask_num>.subtask`. Fields: `SUBTASK_ID`, `PARENT_TASK_ID`, `SUBTASK_TITLE`, `SUBTASK_STATUS` (active|in_progress|done|failed), `SUBTASK_WORKER`, `SUBTASK_CREATED`.
+Use `doey-task-helpers.sh` to track subtasks inline in the `.task` file. Only when `TASK_ID` is available from the structured brief or dispatch.
 
 ```bash
-TD="${PROJECT_DIR}/.doey/tasks"
-[ ! -d "$TD" ] && TD="${RUNTIME_DIR}/tasks"
-mkdir -p "$TD"
+source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
+```
+
+**When planning waves — add a subtask per worker assignment:**
+```bash
+S1=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.1: implement sorting")
+S2=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.2: add tests")
+```
+
+**When a worker finishes — update its subtask status:**
+```bash
+task_update_subtask "$TASK_FILE" "$S1" "done"       # pending|in_progress|done|skipped
+```
+
+**When consolidating results — log a decision entry:**
+```bash
+task_add_decision "$TASK_FILE" "Wave 1 complete: 3/3 workers finished, all tests pass"
 ```
 
 One subtask per worker per wave. Update status immediately on worker report. Roll up progress to parent task and notify SM when all subtasks complete or fail.
