@@ -32,6 +32,13 @@ type saveTeamDoneMsg struct {
 	err  error
 }
 
+// Boss action messages from sub-models.
+type CompactSMMsg struct{}
+type BossMarkDoneMsg struct{ ID string }
+type BossCancelTaskBossMsg struct{ ID string }
+type BossKillTeamMsg struct{ WindowIdx int }
+type BossRestartTeamMsg struct{ WindowIdx int }
+
 // ReservedFreelancerResultMsg is returned after spawning reserved freelancers.
 type ReservedFreelancerResultMsg struct {
 	Err error
@@ -208,6 +215,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, DispatchTaskCmd(runtimeDir, sessionName, msg.ID, msg.Title)
 
 	case DispatchTaskResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case GetStatusMsg:
+		return m, GetStatusCmd()
+
+	case GetStatusResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case CompactSMMsg:
+		return m, CompactSMCmd()
+
+	case CompactSMResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case BossMarkDoneMsg:
+		return m, BossMarkDoneCmd(msg.ID)
+
+	case BossMarkDoneResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case BossCancelTaskBossMsg:
+		return m, BossCancelTaskCmd(msg.ID)
+
+	case BossCancelTaskResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case BossKillTeamMsg:
+		return m, BossKillTeamCmd(msg.WindowIdx)
+
+	case BossKillTeamResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case BossRestartTeamMsg:
+		return m, BossRestartTeamCmd(msg.WindowIdx)
+
+	case BossRestartTeamResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case BossNewTaskResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case EditTeamMsg:

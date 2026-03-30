@@ -283,4 +283,12 @@ task_update_subtask "$TASK_FILE" "$S1" "done"       # pending|in_progress|done|s
 task_add_decision "$TASK_FILE" "Wave 1 complete: 3/3 workers finished, all tests pass"
 ```
 
+**When consolidating wave results — submit a report:**
+```bash
+task_add_report "$TASK_FILE" "progress" "Wave N Complete" "Summary of what workers achieved" "Manager_W${DOEY_TEAM_WINDOW}"
+```
+
+Report types: `progress` (wave complete), `decision` (architectural/routing choice), `completion` (all waves done), `error` (critical failure).
+Write a report: after each wave completes, when making cross-team decisions, and on task completion.
+
 One subtask per worker per wave. Update status immediately on worker report. Roll up progress to parent task and notify SM when all subtasks complete or fail.

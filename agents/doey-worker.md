@@ -26,4 +26,12 @@ source "$PROJECT_DIR/shell/doey-task-helpers.sh" && doey_task_add_update "$PROJE
 source "$PROJECT_DIR/shell/doey-task-helpers.sh" && doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$SUBTASK_N" "done"
 ```
 
+**Submit a report** when you produce a deliverable or complete significant work:
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh" && doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "TYPE" "Title" "Body summary" "W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
+```
+
+Report types: `research` (investigation findings), `progress` (milestone reached), `completion` (task done), `error` (something failed).
+Write a report when: research task completes, implementation is verified, or an error requires escalation.
+
 `PROJECT_DIR`, `DOEY_TEAM_WINDOW`, and `DOEY_PANE_INDEX` are injected by `on-session-start.sh`.
