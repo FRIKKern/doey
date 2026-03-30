@@ -24,3 +24,4 @@ TASK_LOG_1774880714=DISPATCHED to W2 Manager
 TASK_LOG_1774881011=COMPLETED: Committed as 7d8fefa — rightScroll clamping in 4 files
 TASK_RESULT=Audit found no functional scroll bugs. Fixed code quality: clamped rightScroll in tasks.go, agents.go, connections.go, team.go
 TASK_FILES=tui/internal/model/tasks.go,tui/internal/model/agents.go,tui/internal/model/connections.go,tui/internal/model/team.go
+TASK_LOG_1774899720=COMPLETE: SM auto-sleep committed (95874fe)
