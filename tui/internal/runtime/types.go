@@ -200,6 +200,17 @@ type HeartbeatState struct {
 	SpinnerActive    bool      // true when any worker is BUSY
 }
 
+// Connection represents an external service integration.
+type Connection struct {
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`         // api, webhook, mcp, tunnel
+	Status      string            `json:"status"`       // connected, disconnected, error, pending
+	URL         string            `json:"url"`
+	LastChecked int64             `json:"last_checked"`
+	Error       string            `json:"error,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+}
+
 // Snapshot is a complete point-in-time view of the runtime
 type Snapshot struct {
 	Session    SessionConfig
@@ -216,4 +227,5 @@ type Snapshot struct {
 	DebugEntries []DebugEntry  // chronological debug events
 	TeamEntries []TeamEntry    // merged view: defs + running state + user prefs
 	TeamUserCfg TeamUserConfig // persisted preferences
+	Connections []Connection   // external service integrations
 }

@@ -48,11 +48,12 @@ type Model struct {
 	agents     AgentsModel
 	debug      DebugModel
 	messages   MessagesModel
-	logView    LogViewModel
-	tabBar     TabBarModel
+	logView     LogViewModel
+	connections ConnectionsModel
+	tabBar      TabBarModel
 	footer     FooterModel
 	heartbeats map[string]runtime.HeartbeatState
-	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=agents, 4=info, 5=debug, 6=messages, 7=logs
+	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=agents, 4=info, 5=debug, 6=messages, 7=logs, 8=connections
 	width      int
 	height     int
 	ready      bool
@@ -70,6 +71,7 @@ func New(runtimeDir string) Model {
 		{Name: "Debug", Icon: "⚙"},
 		{Name: "Messages", Icon: "✉"},
 		{Name: "Logs", Icon: "▤"},
+		{Name: "Connections", Icon: "⊕"},
 	}
 	return Model{
 		runtime:   runtime.NewReader(runtimeDir),
@@ -81,8 +83,9 @@ func New(runtimeDir string) Model {
 		agents:    NewAgentsModel(theme),
 		debug:     NewDebugModel(theme),
 		messages:  NewMessagesModel(theme),
-		logView:   NewLogViewModel(theme),
-		tabBar:    NewTabBarModel(tabs),
+		logView:     NewLogViewModel(theme),
+		connections: NewConnectionsModel(theme),
+		tabBar:      NewTabBarModel(tabs),
 		footer:    NewFooterModel(),
 	}
 }
@@ -129,6 +132,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.debug.SetSnapshot(m.snapshot)
 		m.messages.SetSnapshot(m.snapshot)
 		m.logView.SetSnapshot(m.snapshot)
+		m.connections.SetSnapshot(m.snapshot)
 
 	case SnapshotRefreshMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
@@ -236,6 +240,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.messages, cmd = m.messages.Update(escMsg)
 				case 7:
 					m.logView, cmd = m.logView.Update(escMsg)
+				case 8:
+					m.connections, cmd = m.connections.Update(escMsg)
 				}
 				cmds = append(cmds, cmd)
 				return m, tea.Batch(cmds...)
@@ -269,6 +275,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages, cmd = m.messages.Update(msg)
 		case 7:
 			m.logView, cmd = m.logView.Update(msg)
+		case 8:
+			m.connections, cmd = m.connections.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 
@@ -283,12 +291,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel, m.footer.keyMap.RightPanel) {
-			m.focusIndex = (m.focusIndex + 1) % 8
+			m.focusIndex = (m.focusIndex + 1) % 9
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel, m.footer.keyMap.LeftPanel) {
-			m.focusIndex = (m.focusIndex + 7) % 8 // +7 mod 8 == -1 with wrap
+			m.focusIndex = (m.focusIndex + 8) % 9 // +8 mod 9 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -342,6 +350,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages, cmd = m.messages.Update(msg)
 		case 7:
 			m.logView, cmd = m.logView.Update(msg)
+		case 8:
+			m.connections, cmd = m.connections.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -426,6 +436,9 @@ func (m Model) View() string {
 	case 7:
 		m.logView.SetSize(m.width, bodyH)
 		body = m.logView.View()
+	case 8:
+		m.connections.SetSize(m.width, bodyH)
+		body = m.connections.View()
 	}
 
 	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, backBtn, body, footer))
@@ -453,6 +466,7 @@ func (m *Model) propagateSizes() {
 	m.debug.SetSize(m.width, bodyH)
 	m.messages.SetSize(m.width, bodyH)
 	m.logView.SetSize(m.width, bodyH)
+	m.connections.SetSize(m.width, bodyH)
 	m.updateFocus()
 }
 
@@ -467,6 +481,7 @@ func (m *Model) updateFocus() {
 	m.debug.SetFocused(m.focusIndex == 5)
 	m.messages.SetFocused(m.focusIndex == 6)
 	m.logView.SetFocused(m.focusIndex == 7)
+	m.connections.SetFocused(m.focusIndex == 8)
 }
 
 // snapshotTickCmd triggers a full snapshot re-read every 5s.
