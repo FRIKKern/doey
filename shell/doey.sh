@@ -20,6 +20,7 @@ set -euo pipefail
 #   doey dynamic      # Launch with dynamic grid (add workers on demand)
 #   doey add          # Add a worker column (2 workers) to dynamic session
 #   doey remove 2     # Remove worker column 2 from dynamic session
+#   doey deploy       # Deploy validation pipeline
 #   doey remote       # Manage remote Hetzner servers
 #   doey --help       # Show usage
 #
@@ -196,6 +197,43 @@ project_acronym() {
 find_project() {
   local dir="$1"
   grep -m1 ":${dir}$" "$PROJECTS_FILE" 2>/dev/null | cut -d: -f1 || true
+}
+
+# Detect project language/type from marker files and write to session.env
+_detect_project_type() {
+  local dir="$1"
+  local lang="unknown" build_cmd="" test_cmd="" lint_cmd=""
+
+  if [ -f "$dir/go.mod" ]; then
+    lang="Go"; build_cmd="go build ./..."; test_cmd="go test ./..."; lint_cmd="golangci-lint run"
+  elif [ -f "$dir/package.json" ]; then
+    lang="Node"; build_cmd="npm run build"; test_cmd="npm test"; lint_cmd="npm run lint"
+  elif [ -f "$dir/Cargo.toml" ]; then
+    lang="Rust"; build_cmd="cargo build"; test_cmd="cargo test"; lint_cmd="cargo clippy"
+  elif [ -f "$dir/pyproject.toml" ] || [ -f "$dir/setup.py" ]; then
+    lang="Python"; build_cmd="python -m build"; test_cmd="pytest"; lint_cmd="ruff check ."
+  elif [ -f "$dir/Gemfile" ]; then
+    lang="Ruby"; build_cmd=""; test_cmd="bundle exec rspec"; lint_cmd="bundle exec rubocop"
+  elif [ -f "$dir/Makefile" ]; then
+    lang="Make"; build_cmd="make"; test_cmd="make test"; lint_cmd="make lint"
+  fi
+
+  # Export for current shell
+  PROJECT_LANGUAGE="$lang"
+  BUILD_CMD="$build_cmd"
+  TEST_CMD="$test_cmd"
+  LINT_CMD="$lint_cmd"
+
+  printf '%b Detected: %s project\n' "$BRAND" "$lang"
+}
+
+# Write project type fields to session.env (call after session.env exists)
+_write_project_type_env() {
+  local runtime_dir="$1"
+  [ -f "${runtime_dir}/session.env" ] || return 0
+  printf 'PROJECT_LANGUAGE="%s"\nBUILD_CMD="%s"\nTEST_CMD="%s"\nLINT_CMD="%s"\n' \
+    "${PROJECT_LANGUAGE:-unknown}" "${BUILD_CMD:-}" "${TEST_CMD:-}" "${LINT_CMD:-}" \
+    >> "${runtime_dir}/session.env"
 }
 
 # < /dev/null prevents tmux from consuming stdin in read loops
@@ -1505,6 +1543,9 @@ BOSS_PANE="0.1"
 SM_PANE="0.2"
 REMOTE="$(_detect_remote)"
 MANIFEST
+
+  _detect_project_type "$dir"
+  _write_project_type_env "$runtime_dir"
 
   # Auto-start tunnel if enabled and running remotely
   if [ "$DOEY_TUNNEL_ENABLED" = "true" ] && [ "$(_detect_remote)" = "true" ]; then
@@ -2829,6 +2870,9 @@ SM_PANE="0.2"
 REMOTE="$(_detect_remote)"
 MANIFEST
 
+  _detect_project_type "$dir"
+  _write_project_type_env "$runtime_dir"
+
   # Auto-start tunnel if enabled and running remotely
   if [ "$DOEY_TUNNEL_ENABLED" = "true" ] && [ "$(_detect_remote)" = "true" ]; then
     local tunnel_script="${DOEY_DIR}/shell/doey-tunnel.sh"
@@ -3934,6 +3978,51 @@ run_test() {
   fi
 }
 
+# ── Deploy Pipeline ───────────────────────────────────────────────────
+
+doey_deploy() {
+  local session="$1" runtime_dir="$2" dir="$3"
+  shift 3
+  local subcmd="${1:-start}"
+  case "$subcmd" in
+    start)
+      printf '%b Starting deploy validation pipeline...\n' "$BRAND"
+      # Run project detection if not already done
+      if [ -z "${PROJECT_LANGUAGE:-}" ]; then
+        _detect_project_type "$dir"
+        [ -f "$runtime_dir/session.env" ] && . "$runtime_dir/session.env"
+      fi
+      # Spawn deploy team via add_team_from_def
+      add_team_from_def "$session" "$runtime_dir" "$dir" "deploy"
+      printf '%b Deploy team spawned. Monitor with: doey deploy status\n' "$SUCCESS"
+      ;;
+    status)
+      printf '%b Deploy Pipeline Status\n' "$BRAND"
+      printf '%b─────────────────────%b\n' "$BRAND" "$RESET"
+      if [ -f "$runtime_dir/deploy_status" ]; then
+        cat "$runtime_dir/deploy_status"
+      else
+        printf '  No active deploy pipeline. Run: doey deploy start\n'
+      fi
+      ;;
+    gate)
+      local gate_script="${dir}/shell/pre-push-gate.sh"
+      if [ -f "$gate_script" ]; then
+        bash "$gate_script" "$dir" "$runtime_dir"
+      else
+        printf '%b pre-push-gate.sh not found\n' "$ERROR"
+        return 1
+      fi
+      ;;
+    *)
+      printf '%b Usage: doey deploy [start|status|gate]\n' "$BRAND"
+      printf '  start  — Spawn deploy validation team\n'
+      printf '  status — Show pipeline status\n'
+      printf '  gate   — Run pre-push quality gate\n'
+      ;;
+  esac
+}
+
 # Sets: dir, name, session, runtime_dir
 require_running_session() {
   dir="$(pwd)"
@@ -4612,6 +4701,7 @@ case "${1:-}" in
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions
+    deploy     Deploy validation pipeline (start/status/gate)
     remote     Manage remote Hetzner servers (list/provision/stop/status)
     settings   Open interactive settings editor window
     version    Show version and installation info
@@ -4676,6 +4766,12 @@ HELP
   reload)       shift; reload_session "$@"; exit 0 ;;
   test)         shift; run_test "$@"; exit $? ;;
   settings)     doey_settings; exit 0 ;;
+  deploy)
+    require_running_session
+    shift
+    doey_deploy "$session" "$runtime_dir" "$dir" "$@"
+    exit 0
+    ;;
   dynamic|d)
     _check_prereqs
     register_project "$(pwd)"
