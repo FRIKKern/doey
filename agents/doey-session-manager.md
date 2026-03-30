@@ -406,6 +406,37 @@ While ANY task is `active` or `in_progress`: full monitoring cycle every turn. D
 - Never delete task files or skip status transitions
 - Boss owns creation, SM owns lifecycle
 
+## Live Task Updates
+
+When a `TASK_ID` is known (from `dispatch_task` messages or `.task` files), record progress with structured subtasks and updates. Source the helpers once per cycle:
+
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+```
+
+**On dispatch** — create a subtask for the assigned team:
+```bash
+doey_task_add_subtask "$PROJECT_DIR" "$TASK_ID" "Dispatch to Team W${W}" "Manager_W${W}"
+```
+
+**On result received** — mark the subtask done (N = subtask number from dispatch):
+```bash
+doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "done"
+```
+
+**On significant decisions** — log a timestamped update:
+```bash
+doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "SM" "Routed task to Team W${W} for implementation"
+```
+
+**On failure** — mark subtask failed, add explanation:
+```bash
+doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "failed"
+doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "SM" "Team W${W} failed: $REASON"
+```
+
+Only call these when `TASK_ID` is set. Skip for ad-hoc messages without a tracked task.
+
 ## Rules
 
 1. Managed teams: dispatch through Window Managers, not workers directly
