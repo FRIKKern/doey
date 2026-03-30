@@ -13,7 +13,6 @@ import (
 // TabItem represents a single tab in the bar.
 type TabItem struct {
 	Name        string
-	Icon        string
 	HasActivity bool
 }
 
@@ -67,63 +66,47 @@ func (m *TabBarModel) Prev() {
 	m.activeIndex = (m.activeIndex + len(m.tabs) - 1) % len(m.tabs)
 }
 
-// View renders the tab bar.
+// View renders the tab bar as pill-shaped cards.
 func (m TabBarModel) View() string {
 	if len(m.tabs) == 0 {
 		return ""
 	}
 
 	t := m.theme
-	sepStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
-	activityDot := lipgloss.NewStyle().Foreground(t.Warning).Render("◆")
 
-	// Calculate available width for tab labels
-	availWidth := m.width
-	if availWidth < 20 {
-		availWidth = 80 // fallback
-	}
+	activeStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(t.BgText).
+		Background(t.Primary).
+		Padding(0, 2).
+		MarginRight(1)
 
-	// Determine if we need to truncate: each tab uses icon + name + padding
-	truncate := false
-	totalWidth := 2 // leading padding
-	for i, tab := range m.tabs {
-		w := len(tab.Icon) + 1 + len(tab.Name) + 8 // icon + space + name + padding (3 each side)
-		if tab.HasActivity {
-			w += 2 // dot + space
-		}
-		if i > 0 {
-			w += 3 // separator " · "
-		}
-		totalWidth += w
-	}
-	if totalWidth > availWidth {
-		truncate = true
-	}
+	inactiveStyle := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Padding(0, 2).
+		MarginRight(1)
+
+	activityDot := lipgloss.NewStyle().Foreground(t.Warning).Render("*")
 
 	var parts []string
 	for i, tab := range m.tabs {
-		label := tab.Icon + " " + tab.Name
-		if truncate && len(tab.Name) > 4 {
-			label = tab.Icon + " " + tab.Name[:3] + "…"
-		}
-
+		label := tab.Name
 		if tab.HasActivity && i != m.activeIndex {
 			label = activityDot + " " + label
 		}
 
 		zoneID := fmt.Sprintf("tab-%d", i)
 		if i == m.activeIndex {
-			parts = append(parts, zone.Mark(zoneID, t.MenuActive.Padding(0, 3).Render(label)))
+			parts = append(parts, zone.Mark(zoneID, activeStyle.Render(label)))
 		} else {
-			parts = append(parts, zone.Mark(zoneID, t.MenuInactive.Padding(0, 3).Render(label)))
+			parts = append(parts, zone.Mark(zoneID, inactiveStyle.Render(label)))
 		}
 	}
 
-	menu := "  " + strings.Join(parts, sepStyle.Render("·"))
+	menu := "  " + strings.Join(parts, "")
 
 	rule := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
+		Foreground(t.Separator).
 		Width(m.width).
 		Render(strings.Repeat("─", m.width))
 
