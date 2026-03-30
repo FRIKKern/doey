@@ -313,10 +313,34 @@ type ExpandedCard struct {
 	ProjectDir   string                       // path to project directory
 	PaneStatuses []runtime.PaneStatus         // all pane statuses from snapshot
 	Results      map[string]runtime.PaneResult // pane ID -> result from snapshot
+
+	// Sidecar and result data (loaded lazily on first Render)
+	Sidecar       *runtime.TaskSidecar
+	TaskResult    *runtime.TaskResult
+	sidecarLoaded bool // prevents repeated load attempts
+}
+
+// loadSidecar lazily loads sidecar and result data on first call.
+func (e *ExpandedCard) loadSidecar() {
+	if e.sidecarLoaded {
+		return
+	}
+	e.sidecarLoaded = true
+	if e.ProjectDir == "" || e.Item.Task.ID == "" {
+		return
+	}
+	tasksDir := filepath.Join(e.ProjectDir, ".doey", "tasks")
+	if e.Sidecar == nil {
+		e.Sidecar = runtime.ReadTaskSidecar(tasksDir, e.Item.Task.ID)
+	}
+	if e.TaskResult == nil {
+		e.TaskResult = runtime.ReadTaskResult(tasksDir, e.Item.Task.ID)
+	}
 }
 
 // Render draws the full expanded card content as a styled string.
 func (e *ExpandedCard) Render() string {
+	e.loadSidecar()
 	task := e.Item.Task
 	contentWidth := e.Width - 6
 	if contentWidth < 20 {
@@ -359,6 +383,30 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(e.Theme, "Description"))
 		sections = append(sections, styles.DescriptionBlock(e.Theme, task.Description, contentWidth))
+	}
+
+	// --- Planning (from JSON sidecar) ---
+	if planning := e.renderPlanningSection(contentWidth); planning != "" {
+		sections = append(sections, "")
+		sections = append(sections, planning)
+	}
+
+	// --- Execution (from JSON sidecar) ---
+	if execution := e.renderExecutionSection(contentWidth); execution != "" {
+		sections = append(sections, "")
+		sections = append(sections, execution)
+	}
+
+	// --- Semantic (from JSON sidecar) ---
+	if semantic := e.renderSemanticSection(contentWidth); semantic != "" {
+		sections = append(sections, "")
+		sections = append(sections, semantic)
+	}
+
+	// --- Result Details (from .result.json) ---
+	if result := e.renderResultSection(contentWidth); result != "" {
+		sections = append(sections, "")
+		sections = append(sections, result)
 	}
 
 	// --- Proof of Completion ---
@@ -1028,4 +1076,161 @@ func (e *ExpandedCard) extractLogCommits() []string {
 		}
 	}
 	return commits
+}
+
+// renderPlanningSection renders intent, hypotheses, constraints, success criteria, deliverables.
+func (e *ExpandedCard) renderPlanningSection(w int) string {
+	if e.Sidecar == nil {
+		return ""
+	}
+	s := e.Sidecar
+	t := e.Theme
+	var sections []string
+
+	if s.Intent != "" {
+		sections = append(sections, styles.SectionTitle(t, "Intent"))
+		sections = append(sections, styles.DescriptionBlock(t, s.Intent, w))
+	}
+	if len(s.Hypotheses) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Hypotheses"))
+		for _, h := range s.Hypotheses {
+			name := h.Name
+			if name == "" {
+				name = h.Text
+			}
+			sections = append(sections, styles.HypothesisRow(t, name, h.Confidence, w))
+		}
+	}
+	if len(s.Constraints) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Constraints"))
+		sections = append(sections, styles.BulletList(t, s.Constraints, w))
+	}
+	if len(s.SuccessCriteria) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Success Criteria"))
+		sections = append(sections, styles.BulletList(t, s.SuccessCriteria, w))
+	}
+	if len(s.Deliverables) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Deliverables"))
+		sections = append(sections, styles.BulletList(t, s.Deliverables, w))
+	}
+	if len(sections) == 0 {
+		return ""
+	}
+	return strings.Join(sections, "\n")
+}
+
+// renderExecutionSection renders dispatch plan, phases, evidence plan.
+func (e *ExpandedCard) renderExecutionSection(w int) string {
+	if e.Sidecar == nil {
+		return ""
+	}
+	s := e.Sidecar
+	t := e.Theme
+	var sections []string
+
+	if s.Phase != "" || s.TotalPhases > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Phase"))
+		sections = append(sections, "  "+styles.PhaseBadge(t, s.Phase, s.CurrentPhase, s.TotalPhases))
+	}
+	if s.DispatchMode != "" {
+		sections = append(sections, styles.MetaLine(t, "Dispatch Mode", s.DispatchMode))
+	}
+	if s.DispatchPlan != nil {
+		sections = append(sections, styles.SectionTitle(t, "Dispatch Plan"))
+		if s.DispatchPlan.Mode != "" {
+			sections = append(sections, styles.MetaLine(t, "Mode", s.DispatchPlan.Mode))
+		}
+		if len(s.DispatchPlan.Phases) > 0 {
+			var phases []string
+			for _, p := range s.DispatchPlan.Phases {
+				label := p.Title
+				if label == "" {
+					label = p.Scope
+				}
+				if label == "" {
+					label = fmt.Sprintf("Phase %d", p.Phase)
+				}
+				phases = append(phases, label)
+			}
+			sections = append(sections, styles.NumberedList(t, phases, w))
+		}
+	}
+	if len(s.EvidencePlan) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Evidence Plan"))
+		sections = append(sections, styles.BulletList(t, s.EvidencePlan, w))
+	}
+	if len(sections) == 0 {
+		return ""
+	}
+	return strings.Join(sections, "\n")
+}
+
+// renderSemanticSection renders concepts, bridge problem, representation layer.
+func (e *ExpandedCard) renderSemanticSection(w int) string {
+	if e.Sidecar == nil {
+		return ""
+	}
+	s := e.Sidecar
+	t := e.Theme
+	var sections []string
+
+	if len(s.Concepts) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Concepts"))
+		var names []string
+		for _, c := range s.Concepts {
+			names = append(names, c.Name)
+		}
+		sections = append(sections, styles.BulletList(t, names, w))
+	}
+	if s.BridgeProblem != "" {
+		sections = append(sections, styles.SectionTitle(t, "Bridge Problem"))
+		sections = append(sections, styles.DescriptionBlock(t, s.BridgeProblem, w))
+	}
+	if len(s.RepresentationLayer) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Representation"))
+		sections = append(sections, styles.BulletList(t, s.RepresentationLayer, w))
+	}
+	if len(sections) == 0 {
+		return ""
+	}
+	return strings.Join(sections, "\n")
+}
+
+// renderResultSection renders hypothesis updates, evidence, follow-up, tool calls.
+func (e *ExpandedCard) renderResultSection(w int) string {
+	if e.TaskResult == nil {
+		return ""
+	}
+	r := e.TaskResult
+	t := e.Theme
+	var sections []string
+
+	if len(r.HypothesisUpdates) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Hypothesis Updates"))
+		for _, hu := range r.HypothesisUpdates {
+			label := hu.ID
+			if hu.Status != "" {
+				label += ": " + hu.Status
+			}
+			sections = append(sections, styles.HypothesisRow(t, label, hu.Confidence, w))
+			if hu.Evidence != "" {
+				evidence := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hu.Evidence)
+				sections = append(sections, "    "+evidence)
+			}
+		}
+	}
+	if len(r.Evidence) > 0 {
+		sections = append(sections, styles.SectionTitle(t, "Evidence"))
+		sections = append(sections, styles.BulletList(t, r.Evidence, w))
+	}
+	if r.NeedsFollowUp {
+		sections = append(sections, styles.FollowUpBadge(t))
+	}
+	if r.ToolCalls > 0 {
+		sections = append(sections, styles.MetaLine(t, "Tool Calls", fmt.Sprintf("%d", r.ToolCalls)))
+	}
+	if len(sections) == 0 {
+		return ""
+	}
+	return strings.Join(sections, "\n")
 }

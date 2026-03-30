@@ -409,6 +409,102 @@ func NoteBlock(theme Theme, text string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
+// BulletList renders a list of strings as indented bullets.
+// Uses "  ◦" prefix in muted color with content in text color.
+func BulletList(t Theme, items []string, width int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	bullet := lipgloss.NewStyle().Foreground(t.Muted).Render("  ◦ ")
+	contentStyle := lipgloss.NewStyle().
+		Foreground(t.Text).
+		Width(width - 6)
+	var lines []string
+	for _, item := range items {
+		lines = append(lines, bullet+contentStyle.Render(item))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// NumberedList renders a numbered list of strings.
+func NumberedList(t Theme, items []string, width int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	numStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+	contentStyle := lipgloss.NewStyle().
+		Foreground(t.Text).
+		Width(width - 6)
+	var lines []string
+	for i, item := range items {
+		num := numStyle.Render(fmt.Sprintf("  %d. ", i+1))
+		lines = append(lines, num+contentStyle.Render(item))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// HypothesisRow renders a hypothesis with confidence badge.
+// confidence should be "high", "medium", or "low".
+func HypothesisRow(t Theme, name, confidence string, width int) string {
+	// Confidence badge color
+	var badgeColor lipgloss.AdaptiveColor
+	switch strings.ToLower(confidence) {
+	case "high":
+		badgeColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"} // green
+	case "medium":
+		badgeColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // amber
+	default:
+		badgeColor = lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#9CA3AF"} // gray
+	}
+	badge := lipgloss.NewStyle().
+		Foreground(badgeColor).
+		Render("[" + strings.ToUpper(confidence) + "]")
+	nameStr := lipgloss.NewStyle().
+		Foreground(t.Text).
+		Width(width - 14).
+		Render(name)
+	return "  " + badge + " " + nameStr
+}
+
+// KeyValueBlock renders a key-value pair with the key in muted/bold and value below.
+func KeyValueBlock(t Theme, key, value string, width int) string {
+	if value == "" {
+		return ""
+	}
+	keyStr := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Bold(true).
+		Render("  " + key + ":")
+	valStr := lipgloss.NewStyle().
+		Foreground(t.Text).
+		Width(width - 4).
+		PaddingLeft(4).
+		Render(value)
+	return keyStr + "\n" + valStr
+}
+
+// PhaseBadge renders a phase indicator with current/total.
+func PhaseBadge(t Theme, phase string, current, total int) string {
+	if phase == "" && total == 0 {
+		return ""
+	}
+	phaseStyle := lipgloss.NewStyle().
+		Foreground(t.Accent).
+		Bold(true)
+	if total > 0 {
+		return phaseStyle.Render(fmt.Sprintf("Phase %d/%d", current, total))
+	}
+	return phaseStyle.Render(phase)
+}
+
+// FollowUpBadge renders a "Needs Follow-up" warning badge.
+func FollowUpBadge(t Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "#DC2626", Dark: "#F87171"}).
+		Bold(true).
+		Render("⚠ Needs Follow-up")
+}
+
 // InfoCard renders a bordered card with title and body content.
 // zoneID wraps the card in a click zone. w = desired width.
 func InfoCard(title, body, zoneID string, w int, theme Theme) string {

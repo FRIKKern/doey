@@ -232,3 +232,69 @@ type Snapshot struct {
 	TeamUserCfg TeamUserConfig // persisted preferences
 	Connections []Connection   // external service integrations
 }
+
+// TaskSidecar holds structured planning data from the JSON companion file (.doey/tasks/<id>.json).
+type TaskSidecar struct {
+	Intent              string              `json:"intent"`
+	Hypotheses          []SidecarHypothesis `json:"hypotheses"`
+	Constraints         []string            `json:"constraints"`
+	SuccessCriteria     []string            `json:"success_criteria"`
+	Deliverables        []string            `json:"deliverables"`
+	EvidencePlan        []string            `json:"evidence_plan"`
+	DispatchPlan        *SidecarDispatch    `json:"dispatch_plan"`
+	Concepts            []Concept           `json:"concepts"`
+	BridgeProblem       string              `json:"bridge_problem"`
+	RepresentationLayer []string            `json:"representation_layer"`
+	Phase               string              `json:"phase"`
+	CurrentPhase        int                 `json:"current_phase"`
+	TotalPhases         int                 `json:"total_phases"`
+	DispatchMode        string              `json:"dispatch_mode"`
+}
+
+// SidecarHypothesis is a structured hypothesis from JSON sidecar data.
+// The field may be a string like "H1: description — CONFIDENCE" or structured.
+type SidecarHypothesis struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Text       string `json:"text"`
+	Confidence string `json:"confidence"`
+}
+
+// Concept is a semantic concept extracted during task compilation.
+type Concept struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// SidecarDispatch describes how a task should be distributed to workers.
+type SidecarDispatch struct {
+	Mode   string       `json:"mode"`
+	Phases []PhasePlan  `json:"phases"`
+}
+
+// PhasePlan describes a single phase in the dispatch plan.
+type PhasePlan struct {
+	Phase     int    `json:"phase"`
+	Title     string `json:"title"`
+	Brief     string `json:"brief"`
+	Scope     string `json:"scope"`
+	TeamScope string `json:"team_scope"`
+}
+
+// TaskResult holds per-task result data from .result.json files.
+type TaskResult struct {
+	HypothesisUpdates []HypothesisUpdate `json:"hypothesis_updates"`
+	Evidence          []string           `json:"evidence"`
+	NeedsFollowUp    bool               `json:"needs_follow_up"`
+	ToolCalls         int                `json:"tool_calls"`
+	Summary           string             `json:"summary"`
+	FilesChanged      []string           `json:"files_changed"`
+}
+
+// HypothesisUpdate records a change in hypothesis confidence after execution.
+type HypothesisUpdate struct {
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	Confidence string `json:"confidence"`
+	Evidence   string `json:"evidence"`
+}
