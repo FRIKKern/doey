@@ -152,9 +152,7 @@ func (m DashboardModel) View() string {
 		sections = append(sections, feedbackStyle.Render("✓ "+m.feedbackMsg))
 	}
 	sections = append(sections, m.renderActiveTasks(w))
-	sections = append(sections, m.renderTeamStatus(w))
 	sections = append(sections, m.renderQuickActions(w))
-	sections = append(sections, m.renderRecentActivity(w))
 
 	content := strings.Join(sections, "\n")
 
@@ -199,9 +197,7 @@ func (m DashboardModel) maxScrollOffset() int {
 		w = 40
 	}
 	sections = append(sections, m.renderActiveTasks(w))
-	sections = append(sections, m.renderTeamStatus(w))
 	sections = append(sections, m.renderQuickActions(w))
-	sections = append(sections, m.renderRecentActivity(w))
 	totalLines := len(strings.Split(strings.Join(sections, "\n"), "\n"))
 	maxOff := totalLines - m.height
 	if maxOff < 0 {
@@ -526,6 +522,55 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		filesLine = styles.CardMetaStyle(t).Render("files: " + strings.Join(shown, ", ") + suffix)
 	}
 
+	// --- Activity: recent messages relevant to this task ---
+	var activityLines []string
+	if len(m.snapshot.Messages) > 0 {
+		taskID := task.ID
+		taskIDHash := "#" + taskID
+		teamName := task.Team
+
+		// Filter messages matching this task
+		var matched []runtime.Message
+		for _, msg := range m.snapshot.Messages {
+			if strings.Contains(msg.Body, taskIDHash) || strings.Contains(msg.Body, taskID) ||
+				strings.Contains(msg.Subject, taskIDHash) || strings.Contains(msg.Subject, taskID) ||
+				(teamName != "" && strings.Contains(msg.From, teamName)) {
+				matched = append(matched, msg)
+			}
+		}
+
+		// Sort descending by timestamp, take at most 3
+		sort.Slice(matched, func(i, j int) bool {
+			return matched[i].Timestamp > matched[j].Timestamp
+		})
+		if len(matched) > 3 {
+			matched = matched[:3]
+		}
+
+		if len(matched) > 0 {
+			activityHeader := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("Activity")
+			activityLines = append(activityLines, activityHeader)
+			for _, msg := range matched {
+				from := lipgloss.NewStyle().Foreground(t.Primary).Render(msg.From)
+				subj := lipgloss.NewStyle().Foreground(t.Muted).Render(msg.Subject)
+				body := strings.ReplaceAll(msg.Body, "\n", " ")
+				maxBody := w - 30
+				if maxBody < 20 {
+					maxBody = 20
+				}
+				if len(body) > maxBody {
+					body = body[:maxBody-3] + "..."
+				}
+				bodyTxt := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(body)
+				line := "  → " + from + " · " + subj
+				if body != "" {
+					line += " — " + bodyTxt
+				}
+				activityLines = append(activityLines, line)
+			}
+		}
+	}
+
 	// Assemble all non-empty lines
 	var lines []string
 	lines = append(lines, line1, line2)
@@ -541,6 +586,9 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 	}
 	if filesLine != "" {
 		lines = append(lines, filesLine)
+	}
+	if len(activityLines) > 0 {
+		lines = append(lines, activityLines...)
 	}
 
 	content := strings.Join(lines, "\n")
@@ -619,149 +667,3 @@ func (m DashboardModel) renderQuickActions(w int) string {
 	return "\n" + header + "\n" + rule + "\n" + body + "\n" + hint + "\n"
 }
 
-// renderTeamStatus shows a compact grid of pane statuses grouped by window.
-func (m DashboardModel) renderTeamStatus(w int) string {
-	t := m.theme
-
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TEAM STATUS")
-	rule := t.Faint.Render(strings.Repeat("─", w))
-
-	if len(m.snapshot.Panes) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No workers running")
-		return "\n" + header + "\n" + rule + "\n" + empty + "\n"
-	}
-
-	// Group panes by window index
-	byWindow := make(map[int][]runtime.PaneStatus)
-	for _, ps := range m.snapshot.Panes {
-		byWindow[ps.WindowIdx] = append(byWindow[ps.WindowIdx], ps)
-	}
-
-	// Sort window indices
-	windowIdxs := make([]int, 0, len(byWindow))
-	for wi := range byWindow {
-		windowIdxs = append(windowIdxs, wi)
-	}
-	sort.Ints(windowIdxs)
-
-	var windowRows []string
-	for _, wi := range windowIdxs {
-		panes := byWindow[wi]
-		// Sort by pane index
-		sort.Slice(panes, func(i, j int) bool {
-			return panes[i].PaneIdx < panes[j].PaneIdx
-		})
-
-		// Window label
-		teamName := fmt.Sprintf("Window %d", wi)
-		if tc, ok := m.snapshot.Teams[wi]; ok && tc.TeamName != "" {
-			teamName = tc.TeamName
-		}
-		windowLabel := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(t.Text).
-			Render(teamName)
-
-		// Pane badges
-		var paneBadges []string
-		for _, ps := range panes {
-			icon := "•"
-			var fg lipgloss.TerminalColor = t.Muted
-			switch ps.Status {
-			case "READY":
-				icon = "◆"
-				fg = t.Success
-			case "BUSY", "WORKING":
-				icon = "◆"
-				fg = t.Primary
-			case "FINISHED":
-				icon = "✓"
-				fg = t.Success
-			case "ERROR":
-				icon = "✗"
-				fg = t.Danger
-			case "RESERVED":
-				icon = "◆"
-				fg = t.Accent
-			}
-
-			label := fmt.Sprintf("%s %d.%d %s", icon, ps.WindowIdx, ps.PaneIdx, ps.Status)
-			badge := lipgloss.NewStyle().
-				Foreground(fg).
-				Render(label)
-			paneBadges = append(paneBadges, zone.Mark(
-				fmt.Sprintf("dash-pane-%d-%d", ps.WindowIdx, ps.PaneIdx),
-				badge,
-			))
-		}
-
-		windowRows = append(windowRows, windowLabel+"\n  "+strings.Join(paneBadges, "  "))
-	}
-
-	body := lipgloss.NewStyle().
-		Padding(1, 3).
-		Render(strings.Join(windowRows, "\n\n"))
-
-	return "\n" + header + "\n" + rule + "\n" + body
-}
-
-// renderRecentActivity shows the last few IPC messages.
-func (m DashboardModel) renderRecentActivity(w int) string {
-	t := m.theme
-
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render("RECENT ACTIVITY")
-	rule := t.Faint.Render(strings.Repeat("─", w))
-
-	msgs := m.snapshot.Messages
-	if len(msgs) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No recent activity")
-		return "\n" + header + "\n" + rule + "\n" + empty + "\n"
-	}
-
-	// Sort by timestamp descending and take last 5
-	sorted := make([]runtime.Message, len(msgs))
-	copy(sorted, msgs)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp > sorted[j].Timestamp
-	})
-	if len(sorted) > 5 {
-		sorted = sorted[:5]
-	}
-
-	fromStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
-	subjStyle := lipgloss.NewStyle().Foreground(t.Warning)
-	bodyStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
-
-	var lines []string
-	for _, msg := range sorted {
-		from := fromStyle.Render(msg.From)
-		subj := subjStyle.Render(msg.Subject)
-
-		body := msg.Body
-		body = strings.ReplaceAll(body, "\n", " ")
-		if len(body) > 80 {
-			body = body[:77] + "..."
-		}
-		bodyTxt := bodyStyle.Render(body)
-
-		line := fmt.Sprintf("  %s  %s", from, subj)
-		if body != "" {
-			line += "\n    " + bodyTxt
-		}
-		lines = append(lines, line)
-	}
-
-	content := lipgloss.NewStyle().
-		Padding(1, 1).
-		Render(strings.Join(lines, "\n"))
-
-	return "\n" + header + "\n" + rule + "\n" + content + "\n"
-}

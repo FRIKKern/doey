@@ -267,7 +267,7 @@ func (m *TasksModel) loadSelectedDetail() {
 		Height:        m.height - 4,
 		SubtaskCursor: -1,
 		ScrollOffset:  0,
-		Messages:      filterMessagesForTask(m.messages, task.ID, task.Team),
+		Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
 		PaneStatuses:  paneStatusSlice(m.paneStatuses),
 		Results:       m.paneResults,
 	}
@@ -613,9 +613,9 @@ func nextStatus(s string) string {
 	return allStatuses[0]
 }
 
-// filterMessagesForTask returns IPC messages relevant to the given task,
+// FilterMessagesForTask returns IPC messages relevant to the given task,
 // sorted chronologically (oldest first).
-func filterMessagesForTask(messages []runtime.Message, taskID string, taskTeam string) []runtime.Message {
+func FilterMessagesForTask(messages []runtime.Message, taskID string, taskTeam string) []runtime.Message {
 	var filtered []runtime.Message
 	idPattern := fmt.Sprintf("Task #%s", taskID)
 	idPattern2 := fmt.Sprintf("task_%s", taskID)

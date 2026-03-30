@@ -147,7 +147,7 @@ CREATED=1711440000
 `)
 
 	r := NewReader(dir)
-	tasks := r.parseTasks()
+	tasks := r.ParseTasks()
 
 	if len(tasks) != 2 {
 		t.Fatalf("got %d tasks, want 2", len(tasks))
