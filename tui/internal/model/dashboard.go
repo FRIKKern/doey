@@ -32,6 +32,9 @@ type CreateTeamMsg struct{}
 // ViewTasksMsg requests switching to the Tasks tab.
 type ViewTasksMsg struct{}
 
+// CreateSpecializedTeamMsg requests spawning a team from a definition file.
+type CreateSpecializedTeamMsg struct{}
+
 // dashTickMsg is the internal tick for reloading task data.
 type dashTickMsg time.Time
 
@@ -45,11 +48,9 @@ type quickAction struct {
 
 // quickActions is the ordered list of dashboard action cards.
 var quickActions = []quickAction{
-	{"◆", "Spawn Freelancers", "Reserve 6 workers (3×2 grid)", "dash-spawn-freelancer"},
-	{"→", "Get Status", "Ask Boss for team status", "dash-get-status"},
-	{"⟫", "Create Team", "Add a new specialist team", "dash-create-team"},
-	{"›", "View Tasks", "Browse and manage project tasks", "dash-view-tasks"},
-	{"⊘", "Compact SM", "Compact Session Manager context", "dash-compact-sm"},
+	{"◆", "Reserved Freelancers", "Reserve independent workers", "dash-spawn-freelancer"},
+	{"⟫", "Regular Team", "Manager + workers team", "dash-create-team"},
+	{"◈", "Specialized Team", "Team from definition file", "dash-create-specialized"},
 }
 
 // DashboardModel is the primary landing tab (command center).
@@ -243,6 +244,15 @@ func (m *DashboardModel) loadTasks() {
 		return
 	}
 
+	// Merge .task files so dashboard sees tasks that only exist on disk
+	reader := runtime.NewReader(m.runtimeDir)
+	if m.projectDir != "" {
+		reader.SetProjectDir(m.projectDir)
+	}
+	if runtimeTasks := reader.ParseTasks(); len(runtimeTasks) > 0 {
+		store.MergeRuntimeTasks(runtimeTasks)
+	}
+
 	var active []runtime.PersistentTask
 	for _, t := range store.Tasks {
 		if t.Status == "active" || t.Status == "in_progress" {
@@ -260,14 +270,10 @@ func (m DashboardModel) activateAction(idx int) tea.Cmd {
 	switch quickActions[idx].zoneID {
 	case "dash-spawn-freelancer":
 		return func() tea.Msg { return ReservedFreelancerMsg{} }
-	case "dash-get-status":
-		return func() tea.Msg { return GetStatusMsg{} }
 	case "dash-create-team":
 		return func() tea.Msg { return CreateTeamMsg{} }
-	case "dash-view-tasks":
-		return func() tea.Msg { return ViewTasksMsg{} }
-	case "dash-compact-sm":
-		return func() tea.Msg { return CompactSMMsg{} }
+	case "dash-create-specialized":
+		return func() tea.Msg { return CreateSpecializedTeamMsg{} }
 	}
 	return nil
 }
@@ -567,7 +573,7 @@ func formatDashAge(d time.Duration) string {
 func (m DashboardModel) renderQuickActions(w int) string {
 	t := m.theme
 
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render("QUICK ACTIONS")
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("SPAWN TEAMS")
 	rule := t.Faint.Render(strings.Repeat("─", w))
 
 	numCards := len(quickActions)
