@@ -2,11 +2,11 @@ package setup
 
 // TeamEntry represents a team to be created.
 type TeamEntry struct {
-	Type        string // "regular", "freelancer", "premade"
-	Name        string // display name
-	Def         string // .team.md definition name (for premade)
-	Workers     int    // number of workers
-	WorkerModel string // model for workers
+	Type        string `json:"type"`        // "regular", "freelancer", "premade"
+	Name        string `json:"name"`        // display name
+	Def         string `json:"def"`         // .team.md definition name (for premade)
+	Workers     int    `json:"workers"`     // number of workers
+	WorkerModel string `json:"workermodel"` // model for workers
 }
 
 // SetupResult is the wizard output consumed by doey.sh.

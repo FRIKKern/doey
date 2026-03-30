@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -166,14 +167,24 @@ func (m WizardModel) handlePresetDone() (tea.Model, tea.Cmd) {
 }
 
 func (m *WizardModel) buildCustomForm() *huh.Form {
+	options := []huh.Option[string]{
+		huh.NewOption("Regular Team (4 workers)", "regular"),
+		huh.NewOption("Reserved Freelancers (3×2 grid, born reserved)", "freelancer"),
+	}
+
+	// Discover premade team definitions from .team.md files
+	if cwd, err := os.Getwd(); err == nil {
+		for _, d := range DiscoverTeamDefs(cwd) {
+			label := fmt.Sprintf("Premade: %s", d.Name)
+			options = append(options, huh.NewOption(label, "premade:"+d.Def))
+		}
+	}
+
 	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Select team types to add:").
-				Options(
-					huh.NewOption("Regular Team (4 workers)", "regular"),
-					huh.NewOption("Reserved Freelancers (3×2 grid, born reserved)", "freelancer"),
-				).
+				Options(options...).
 				Value(&m.customTypes),
 		),
 	).WithTheme(huh.ThemeCharm())
@@ -182,18 +193,25 @@ func (m *WizardModel) buildCustomForm() *huh.Form {
 func (m WizardModel) handleCustomDone() (tea.Model, tea.Cmd) {
 	m.result.Teams = nil
 	for i, t := range m.customTypes {
-		switch t {
-		case "regular":
+		switch {
+		case t == "regular":
 			m.result.Teams = append(m.result.Teams, TeamEntry{
 				Type:    "regular",
 				Name:    fmt.Sprintf("Team %d", i+1),
 				Workers: 4,
 			})
-		case "freelancer":
+		case t == "freelancer":
 			m.result.Teams = append(m.result.Teams, TeamEntry{
 				Type:    "freelancer",
 				Name:    "Reserved Freelancers",
 				Workers: 6,
+			})
+		case strings.HasPrefix(t, "premade:"):
+			def := strings.TrimPrefix(t, "premade:")
+			m.result.Teams = append(m.result.Teams, TeamEntry{
+				Type: "premade",
+				Name: def,
+				Def:  def,
 			})
 		}
 	}
