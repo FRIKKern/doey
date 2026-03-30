@@ -122,12 +122,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateFocus()
 		return m, nil
 
-	case SpawnFreelancerMsg:
-		return m, SpawnFreelancerCmd()
-
-	case SpawnFreelancerResultMsg:
-		cmds = append(cmds, m.readSnapshotCmd())
-
 	case CreateTeamMsg:
 		m.focusIndex = 1
 		m.updateFocus()
