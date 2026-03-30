@@ -108,6 +108,25 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   return 1
 }
 
+_all_idle() {
+  local _td="${PROJECT_DIR:-.}/.doey/tasks"
+  if [ -d "$_td" ]; then
+    local _tf
+    for _tf in "$_td"/*.task; do
+      [ -f "$_tf" ] || continue
+      case "$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | cut -d= -f2-)" in
+        active|in_progress) return 1 ;;
+      esac
+    done
+  fi
+  local _sf
+  for _sf in "$RUNTIME_DIR/status"/*.status; do
+    [ -f "$_sf" ] || continue
+    grep -q '^STATUS: BUSY' "$_sf" 2>/dev/null && return 1
+  done
+  return 0
+}
+
 if [ "$((_sm_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
   echo "0" > "$CYCLE_FILE"
   _sm_dbg_wake "compact_cycle" "0"
@@ -117,9 +136,14 @@ fi
 
 _check_work "0" || true
 
-sleep 3
-
-_check_work "3" || true
-
-_sm_dbg_wake "idle" "3"
-echo "IDLE"
+if _all_idle; then
+  sleep 10
+  _check_work "10" || true
+  _sm_dbg_wake "idle_extended" "10"
+  echo "IDLE"
+else
+  sleep 3
+  _check_work "3" || true
+  _sm_dbg_wake "idle" "3"
+  echo "IDLE"
+fi
