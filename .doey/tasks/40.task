@@ -1,6 +1,6 @@
 TASK_ID=41
 TASK_TITLE=Huh-based interactive startup wizard for Doey
-TASK_STATUS=in_progress
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1743292800
 TASK_TYPE=feature
 TASK_DESCRIPTION=When a user runs `doey`, instead of jumping straight into a session, present an interactive startup wizard using Charmbracelet's Huh library (Go). The wizard lets the user choose their session setup before launch.
@@ -28,3 +28,4 @@ This is a major UX improvement — the startup experience defines first impressi
 TASK_TAGS=tui,shell,huh,startup,config,ux
 TASK_TEAM=W2
 TASK_LOG_1774899933=DISPATCHED: Sent to Team 2 (premade, manager W2.0)
+TASK_LOG_1774900540=COMPLETE: Wizard + effort committed d47f8cc
