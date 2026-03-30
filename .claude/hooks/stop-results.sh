@@ -14,6 +14,29 @@ RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
 TMPFILE=""
 trap '[ -n "${TMPFILE:-}" ] && rm -f "$TMPFILE" 2>/dev/null' EXIT
 
+# Append a path to the pipe-delimited TASK_ATTACHMENTS field in a .task file.
+_append_attachment() {
+  local task_file="$1" att_path="$2"
+  [ -f "$task_file" ] || return 0
+  local current
+  current=$(grep '^TASK_ATTACHMENTS=' "$task_file" 2>/dev/null | head -1 | cut -d= -f2-) || current=""
+  # Skip if already present
+  case "|${current}|" in *"|${att_path}|"*) return 0 ;; esac
+  local new_val
+  if [ -n "$current" ]; then
+    new_val="${current}|${att_path}"
+  else
+    new_val="${att_path}"
+  fi
+  # Update or append — use tmp+mv for macOS compat (no sed -i)
+  local tmp_att="${task_file}.tmp.$$"
+  if grep -q '^TASK_ATTACHMENTS=' "$task_file" 2>/dev/null; then
+    sed "s|^TASK_ATTACHMENTS=.*|TASK_ATTACHMENTS=${new_val}|" "$task_file" > "$tmp_att" && mv "$tmp_att" "$task_file"
+  else
+    cp "$task_file" "$tmp_att" && echo "TASK_ATTACHMENTS=${new_val}" >> "$tmp_att" && mv "$tmp_att" "$task_file"
+  fi
+}
+
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 [ -z "$OUTPUT" ] && _log_error "HOOK_ERROR" "tmux capture-pane returned empty" "pane=$PANE"
 
@@ -97,6 +120,19 @@ _log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_CO
 
 if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
   cp "$RESULT_FILE" "${PROJECT_DIR}/.doey/tasks/${local_task_id}.result.json" 2>/dev/null || true
+
+  # Auto-attach result and research report to task
+  _local_task_file="${PROJECT_DIR}/.doey/tasks/${local_task_id}.task"
+  _result_att=".doey/tasks/${local_task_id}.result.json"
+  _append_attachment "$_local_task_file" "$_result_att" 2>/dev/null || true
+
+  _local_report="${RUNTIME_DIR}/reports/pane_${WINDOW_INDEX}_${PANE_INDEX}.report"
+  if [ -f "$_local_report" ]; then
+    _report_dest="${PROJECT_DIR}/.doey/tasks/${local_task_id}.report"
+    cp "$_local_report" "$_report_dest" 2>/dev/null || true
+    _report_att=".doey/tasks/${local_task_id}.report"
+    _append_attachment "$_local_task_file" "$_report_att" 2>/dev/null || true
+  fi
 fi
 
 _FILES_COUNT=0

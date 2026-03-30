@@ -279,6 +279,8 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 					SubtaskCursor: -1,
 					ScrollOffset:  0,
 					Messages:      filterMessagesForTask(m.messages, ti.Task.ID, ti.Task.Team),
+					PaneStatuses:  paneStatusSlice(m.paneStatuses),
+					Results:       m.paneResults,
 				}
 				m.expanded = &card
 				m.summaryMode = false
@@ -399,6 +401,8 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 			SubtaskCursor: -1,
 			ScrollOffset:  0,
 			Messages:      filterMessagesForTask(m.messages, ti.Task.ID, ti.Task.Team),
+			PaneStatuses:  paneStatusSlice(m.paneStatuses),
+			Results:       m.paneResults,
 		}
 		m.expanded = &card
 		m.summaryMode = false
@@ -637,6 +641,18 @@ func filterMessagesForTask(messages []runtime.Message, taskID string, taskTeam s
 		return filtered[i].Timestamp < filtered[j].Timestamp
 	})
 	return filtered
+}
+
+// paneStatusSlice converts a pane status map to a slice for the expanded card.
+func paneStatusSlice(m map[string]runtime.PaneStatus) []runtime.PaneStatus {
+	if m == nil {
+		return nil
+	}
+	out := make([]runtime.PaneStatus, 0, len(m))
+	for _, ps := range m {
+		out = append(out, ps)
+	}
+	return out
 }
 
 // View renders list, expanded card, or detail mode.
