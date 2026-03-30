@@ -1,0 +1,10 @@
+TASK_ID=33
+TASK_TITLE=Make Teams and Agents lists scrollable in TUI dashboard
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1774862658
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=When the Teams list or Agents list in the TUI dashboard has too many items, the user gets stuck at the bottom with no way to scroll. Both lists need proper scrollable viewport behavior — when content exceeds the visible area, the user should be able to scroll up/down with arrow keys or j/k. Follow Charmbracelet best practices: use a Bubble Tea viewport or list component with proper scrolling. Ensure scroll position is visible (e.g. scrollbar indicator or "N more below" hint). Both the Teams panel and the Agents panel are affected.
+TASK_TAGS=tui,dashboard
+TASK_TEAM=W1
+TASK_LOG_1774862691=PROGRESS: Dispatched to Team 1 freelancer (pane 1.1)
+TASK_LOG_1774863013=COMPLETE: Committed and awaiting user confirmation
