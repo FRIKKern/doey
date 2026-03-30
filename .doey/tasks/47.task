@@ -1,6 +1,6 @@
 TASK_ID=47
 TASK_TITLE=Beautiful heartbeat task cards on Go TUI Dashboard — active tasks only
-TASK_STATUS=in_progress
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1774929600
 TASK_TYPE=feature
 TASK_DESCRIPTION=Redesign the Dashboard tab in the Go TUI (tui/internal/model/dashboard.go) to feature beautiful, large, detailed "heartbeat" task cards for all ACTIVE tasks (status=active or in_progress only — exclude done, cancelled, pending_user_confirmation).
@@ -44,3 +44,4 @@ TECHNICAL:
 The Dashboard should feel like a live command center — when tasks are active, you see them breathing. When everything is done, it's calm and clean.
 TASK_TAGS=tui,dashboard,lipgloss,charmbracelet,ux,tasks
 TASK_TEAM=W2
+TASK_RESULT=Dashboard redesigned with heartbeat cards, Lip Gloss styling, active task filtering, auto-refresh. Committed and pushed.
