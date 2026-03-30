@@ -361,6 +361,13 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, styles.DescriptionBlock(e.Theme, task.Description, contentWidth))
 	}
 
+	// --- Proof of Completion ---
+	proofRows := e.renderProofSection()
+	if len(proofRows) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, proofRows...)
+	}
+
 	// --- Subtasks ---
 	if len(e.Item.Subtasks) > 0 {
 		sections = append(sections, "")
@@ -570,6 +577,9 @@ func (e *ExpandedCard) ContentHeight() int {
 			descLines = 1
 		}
 		lines += descLines + 1 // +1 for section header
+	}
+	if proofRows := e.renderProofSection(); len(proofRows) > 0 {
+		lines += len(proofRows) + 1 // proof section + spacing
 	}
 	if len(e.Item.Subtasks) > 0 {
 		lines += len(e.Item.Subtasks) + 3 // header + progress bar + items + spacing
@@ -813,4 +823,209 @@ func (e *ExpandedCard) renderFilesChanged() []string {
 		rows = append(rows, bullet+file)
 	}
 	return rows
+}
+
+// renderProofSection renders a prominent proof-of-completion section.
+// Shows commits, files changed, build status, and worker summary.
+// Displays a warning if proof is missing for completed tasks.
+func (e *ExpandedCard) renderProofSection() []string {
+	task := e.Item.Task
+	contentWidth := e.Width - 6
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+	if contentWidth > styles.MaxCardWidth-6 {
+		contentWidth = styles.MaxCardWidth - 6
+	}
+
+	isComplete := task.Status == "done" || task.Status == "pending_user_confirmation"
+	hasResult := task.Result != ""
+	hasFiles := len(task.FilesChanged) > 0
+	hasCommits := task.Commits != ""
+
+	// Also check pane results for files if task-level field is empty
+	paneFiles := e.collectProofFiles()
+	if !hasFiles && len(paneFiles) > 0 {
+		hasFiles = true
+	}
+
+	// Extract commits from activity log if TASK_COMMITS is empty
+	logCommits := e.extractLogCommits()
+	if !hasCommits && len(logCommits) > 0 {
+		hasCommits = true
+	}
+
+	hasAnyProof := hasResult || hasFiles || hasCommits
+
+	// Skip section entirely for non-complete tasks with no proof
+	if !isComplete && !hasAnyProof {
+		return nil
+	}
+
+	var rows []string
+
+	// Section header with proof icon
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text)
+	if hasAnyProof {
+		rows = append(rows, headerStyle.Render("◆ Proof of Completion"))
+	} else {
+		warnStyle := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Warning)
+		rows = append(rows, warnStyle.Render("◆ Proof of Completion"))
+	}
+	rows = append(rows, styles.ThinSeparator(e.Theme, contentWidth))
+
+	// Warning if proof is missing for completed tasks
+	if isComplete && !hasAnyProof {
+		warn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("  No proof captured")
+		rows = append(rows, warn)
+		return rows
+	}
+
+	// Commits
+	if hasCommits || len(logCommits) > 0 {
+		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Commits")
+		rows = append(rows, label)
+		if task.Commits != "" {
+			for _, line := range strings.Split(task.Commits, "|") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				commitIcon := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("    ●")
+				commitText := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + line)
+				rows = append(rows, commitIcon+commitText)
+			}
+		}
+		for _, c := range logCommits {
+			commitIcon := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("    ●")
+			commitText := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + c)
+			rows = append(rows, commitIcon+commitText)
+		}
+	}
+
+	// Files Changed
+	if hasFiles {
+		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Files Changed")
+		rows = append(rows, label)
+		files := task.FilesChanged
+		if len(files) == 0 {
+			files = paneFiles
+		}
+		maxShow := 10
+		for i, f := range files {
+			if i >= maxShow {
+				more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
+					Render(fmt.Sprintf("    … and %d more", len(files)-maxShow))
+				rows = append(rows, more)
+				break
+			}
+			bullet := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("    •")
+			file := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + f)
+			rows = append(rows, bullet+file)
+		}
+	}
+
+	// Worker Summary (from Result field)
+	if hasResult {
+		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Summary")
+		rows = append(rows, label)
+		wrapped := wordWrap(task.Result, contentWidth-4)
+		for _, line := range strings.Split(wrapped, "\n") {
+			rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Text).Render(line))
+		}
+	}
+
+	// Incomplete evidence warning
+	if isComplete {
+		missing := []string{}
+		if !hasCommits {
+			missing = append(missing, "commits")
+		}
+		if !hasFiles {
+			missing = append(missing, "files")
+		}
+		if !hasResult {
+			missing = append(missing, "summary")
+		}
+		if len(missing) > 0 {
+			warn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Faint(true).
+				Render("  Incomplete evidence: missing " + strings.Join(missing, ", "))
+			rows = append(rows, warn)
+		}
+	}
+
+	return rows
+}
+
+// collectProofFiles gathers unique files from pane results associated with this task.
+func (e *ExpandedCard) collectProofFiles() []string {
+	if len(e.Results) == 0 {
+		return nil
+	}
+	task := e.Item.Task
+	taskID := task.ID
+	taskTitle := strings.ToLower(task.Title)
+
+	seen := make(map[string]bool)
+	var files []string
+	for _, result := range e.Results {
+		resultTitle := strings.ToLower(result.Title)
+		if resultTitle != "" &&
+			!strings.Contains(resultTitle, taskID) &&
+			!strings.Contains(resultTitle, taskTitle) {
+			continue
+		}
+		for _, f := range result.FilesChanged {
+			if !seen[f] {
+				seen[f] = true
+				files = append(files, f)
+			}
+		}
+	}
+	sort.Strings(files)
+	return files
+}
+
+// extractLogCommits parses commit references from task activity logs.
+// Looks for patterns like "Committed abc1234" or "commit abc1234".
+func (e *ExpandedCard) extractLogCommits() []string {
+	var commits []string
+	seen := make(map[string]bool)
+	for _, log := range e.Item.Task.Logs {
+		entry := log.Entry
+		// Look for "Committed <hash>" pattern
+		for _, prefix := range []string{"Committed ", "committed ", "Commit ", "commit "} {
+			idx := strings.Index(entry, prefix)
+			if idx < 0 {
+				continue
+			}
+			rest := entry[idx+len(prefix):]
+			// Extract hash (7+ hex chars)
+			hash := ""
+			for i, c := range rest {
+				if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+					hash += string(c)
+				} else if i >= 7 {
+					break
+				} else {
+					hash = ""
+					break
+				}
+				if i > 12 {
+					break
+				}
+			}
+			if len(hash) >= 7 && !seen[hash] {
+				seen[hash] = true
+				// Try to get surrounding context as the message
+				msg := strings.TrimSpace(rest)
+				if dashIdx := strings.Index(msg, " — "); dashIdx > 0 {
+					commits = append(commits, hash+" "+msg[dashIdx:])
+				} else {
+					commits = append(commits, hash)
+				}
+			}
+		}
+	}
+	return commits
 }

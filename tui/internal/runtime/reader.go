@@ -333,6 +333,15 @@ func (r *Reader) parseTasks() []Task {
 		if rf := env["TASK_RELATED_FILES"]; rf != "" {
 			t.RelatedFiles = strings.Split(rf, "|")
 		}
+		if fc := env["TASK_FILES"]; fc != "" {
+			for _, f := range strings.Split(fc, ",") {
+				f = strings.TrimSpace(f)
+				if f != "" {
+					t.FilesChanged = append(t.FilesChanged, f)
+				}
+			}
+		}
+		t.Commits = env["TASK_COMMITS"]
 		if tags := env["TASK_TAGS"]; tags != "" {
 			for _, tag := range strings.Split(tags, ",") {
 				tag = strings.TrimSpace(tag)
