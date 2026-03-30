@@ -54,6 +54,29 @@ type CreateTeamResultMsg struct {
 // SnapshotRefreshMsg requests a fresh snapshot read.
 type SnapshotRefreshMsg struct{}
 
+// --- Boss command result types ---
+
+// GetStatusResultMsg is returned after sending a status request to Boss.
+type GetStatusResultMsg struct{ Err error }
+
+// CompactSMResultMsg is returned after sending a compact-SM command to Boss.
+type CompactSMResultMsg struct{ Err error }
+
+// BossNewTaskResultMsg is returned after sending a new-task command to Boss.
+type BossNewTaskResultMsg struct{ Err error }
+
+// BossMarkDoneResultMsg is returned after sending a mark-done command to Boss.
+type BossMarkDoneResultMsg struct{ Err error }
+
+// BossCancelTaskResultMsg is returned after sending a cancel-task command to Boss.
+type BossCancelTaskResultMsg struct{ Err error }
+
+// BossKillTeamResultMsg is returned after sending a kill-team command to Boss.
+type BossKillTeamResultMsg struct{ Err error }
+
+// BossRestartTeamResultMsg is returned after sending a restart-team command to Boss.
+type BossRestartTeamResultMsg struct{ Err error }
+
 // --- Command functions ---
 
 // LaunchTeamCmd runs "doey add-team <name>" to spawn a new team window.
@@ -155,41 +178,88 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 	}
 }
 
+// sendToBoss sends a text command to the Boss pane (0.1) via tmux send-keys.
+func sendToBoss(text string) error {
+	sessionName := os.Getenv("SESSION_NAME")
+	if sessionName == "" {
+		sessionName = "doey-doey"
+	}
+	cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", text, "Enter")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, out)
+	}
+	return nil
+}
+
 // SpawnFreelancerCmd sends a "/doey-add-team freelancer" command to the Boss pane.
 func SpawnFreelancerCmd() tea.Cmd {
 	return func() tea.Msg {
-		sessionName := os.Getenv("SESSION_NAME")
-		if sessionName == "" {
-			sessionName = "doey-doey"
-		}
-		cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", "/doey-add-team freelancer", "Enter")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return SpawnFreelancerResultMsg{Err: fmt.Errorf("%w: %s", err, out)}
-		}
-		return SpawnFreelancerResultMsg{}
+		return SpawnFreelancerResultMsg{Err: sendToBoss("/doey-add-team freelancer")}
 	}
 }
 
 // CreateTeamCmd sends a "create a new team" request to the Boss pane.
 func CreateTeamCmd() tea.Cmd {
 	return func() tea.Msg {
-		sessionName := os.Getenv("SESSION_NAME")
-		if sessionName == "" {
-			sessionName = "doey-doey"
-		}
-		cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", "I want to create a new team", "Enter")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return CreateTeamResultMsg{Err: fmt.Errorf("%w: %s", err, out)}
-		}
-		return CreateTeamResultMsg{}
+		return CreateTeamResultMsg{Err: sendToBoss("I want to create a new team")}
 	}
 }
 
 // RefreshSnapshotCmd returns a message that triggers a fresh snapshot read.
 func RefreshSnapshotCmd() tea.Msg {
 	return SnapshotRefreshMsg{}
+}
+
+// --- Boss command functions ---
+
+// GetStatusCmd sends a status request to Boss.
+func GetStatusCmd() tea.Cmd {
+	return func() tea.Msg {
+		return GetStatusResultMsg{Err: sendToBoss("status?")}
+	}
+}
+
+// CompactSMCmd sends a compact-SM command to Boss.
+func CompactSMCmd() tea.Cmd {
+	return func() tea.Msg {
+		return CompactSMResultMsg{Err: sendToBoss("/doey-sm-compact")}
+	}
+}
+
+// BossNewTaskCmd sends a new-task command to Boss.
+func BossNewTaskCmd(title string) tea.Cmd {
+	return func() tea.Msg {
+		return BossNewTaskResultMsg{Err: sendToBoss("I have a new task: " + title)}
+	}
+}
+
+// BossMarkDoneCmd sends a mark-done command to Boss.
+func BossMarkDoneCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		return BossMarkDoneResultMsg{Err: sendToBoss("doey task done " + id)}
+	}
+}
+
+// BossCancelTaskCmd sends a cancel-task command to Boss.
+func BossCancelTaskCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		return BossCancelTaskResultMsg{Err: sendToBoss("Cancel task " + id)}
+	}
+}
+
+// BossKillTeamCmd sends a kill-team command to Boss.
+func BossKillTeamCmd(windowIdx int) tea.Cmd {
+	return func() tea.Msg {
+		return BossKillTeamResultMsg{Err: sendToBoss("/doey-kill-window " + strconv.Itoa(windowIdx))}
+	}
+}
+
+// BossRestartTeamCmd sends a restart-team command to Boss.
+func BossRestartTeamCmd(windowIdx int) tea.Cmd {
+	return func() tea.Msg {
+		return BossRestartTeamResultMsg{Err: sendToBoss("/doey-clear " + strconv.Itoa(windowIdx))}
+	}
 }
 
 // --- Task management messages ---

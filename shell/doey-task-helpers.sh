@@ -1184,3 +1184,70 @@ doey_task_add_update() {
 
   echo "$n"
 }
+
+# ── Reports ──────────────────────────────────────────────────────────
+
+# ── task_add_report ─────────────────────────────────────────────────
+# Add a numbered report (TASK_REPORT_<N>_*) to a task file.
+# Args: task_file report_type title body [author]
+# Report types: research, progress, decision, completion, error
+# Returns (echo): report number
+task_add_report() {
+  local task_file="$1" report_type="$2" title="$3" body="$4" author="${5:-unknown}"
+
+  [ ! -f "$task_file" ] && return 1
+
+  # Count existing reports (bash 3.2 compatible loop, not grep -c)
+  local count=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      TASK_REPORT_*_TIMESTAMP=*) count=$((count + 1)) ;;
+    esac
+  done < "$task_file" || true
+
+  local n=$((count + 1))
+  local ts
+  ts=$(date +%s)
+
+  printf 'TASK_REPORT_%s_TIMESTAMP=%s\n' "$n" "$ts" >> "$task_file"
+  printf 'TASK_REPORT_%s_AUTHOR=%s\n' "$n" "$author" >> "$task_file"
+  printf 'TASK_REPORT_%s_TYPE=%s\n' "$n" "$report_type" >> "$task_file"
+  printf 'TASK_REPORT_%s_TITLE=%s\n' "$n" "$title" >> "$task_file"
+  printf 'TASK_REPORT_%s_BODY=%s\n' "$n" "$body" >> "$task_file"
+
+  echo "$n"
+}
+
+# ── doey_task_get_report_count ──────────────────────────────────────
+# Count TASK_REPORT_*_TIMESTAMP lines in a task file.
+# Args: project_dir task_id
+# Returns (echo): count (0 if missing/none)
+doey_task_get_report_count() {
+  local project_dir="$1" task_id="$2"
+
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || { echo "0"; return 1; }
+
+  local count=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      TASK_REPORT_*_TIMESTAMP=*) count=$((count + 1)) ;;
+    esac
+  done < "$task_file" || true
+
+  echo "$count"
+}
+
+# ── doey_task_add_report ────────────────────────────────────────────
+# Add a numbered report (TASK_REPORT_<N>_*) to a task file.
+# Wrapper around task_add_report() that resolves task file from project_dir + task_id.
+# Args: project_dir task_id report_type title body [author]
+# Returns (echo): report number
+doey_task_add_report() {
+  local project_dir="$1" task_id="$2" report_type="$3" title="$4" body="$5" author="${6:-unknown}"
+
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+
+  task_add_report "$task_file" "$report_type" "$title" "$body" "$author"
+}

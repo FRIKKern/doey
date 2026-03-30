@@ -474,6 +474,48 @@ func (r *Reader) parseTasks() []Task {
 			}
 		}
 
+		// Parse TASK_REPORT_<N>_* fields
+		reportMap := make(map[int]*Report)
+		for key := range env {
+			if !strings.HasPrefix(key, "TASK_REPORT_") {
+				continue
+			}
+			rest := strings.TrimPrefix(key, "TASK_REPORT_")
+			parts := strings.SplitN(rest, "_", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			idx, err := strconv.Atoi(parts[0])
+			if err != nil {
+				continue
+			}
+			if reportMap[idx] == nil {
+				reportMap[idx] = &Report{TaskID: t.ID, Index: idx}
+			}
+			switch parts[1] {
+			case "TIMESTAMP":
+				reportMap[idx].Created, _ = strconv.ParseInt(env[key], 10, 64)
+			case "AUTHOR":
+				reportMap[idx].Author = env[key]
+			case "TYPE":
+				reportMap[idx].Type = env[key]
+			case "TITLE":
+				reportMap[idx].Title = env[key]
+			case "BODY":
+				reportMap[idx].Body = env[key]
+			}
+		}
+		if len(reportMap) > 0 {
+			idxs := make([]int, 0, len(reportMap))
+			for idx := range reportMap {
+				idxs = append(idxs, idx)
+			}
+			sort.Ints(idxs)
+			for _, idx := range idxs {
+				t.Reports = append(t.Reports, *reportMap[idx])
+			}
+		}
+
 		tasks = append(tasks, t)
 	}
 

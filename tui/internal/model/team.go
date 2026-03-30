@@ -217,6 +217,17 @@ func (m TeamModel) updateMouse(msg tea.MouseMsg) (TeamModel, tea.Cmd) {
 				}
 			}
 		}
+		if zone.Get("team-restart").InBounds(msg) {
+			if m.cursor >= 0 && m.cursor < len(m.entries) {
+				entry := m.entries[m.cursor]
+				if entry.Running {
+					wIdx := entry.WindowIdx
+					return m, func() tea.Msg {
+						return BossRestartTeamMsg{WindowIdx: wIdx}
+					}
+				}
+			}
+		}
 		if zone.Get("team-star").InBounds(msg) {
 			if m.cursor >= 0 && m.cursor < len(m.entries) {
 				entry := m.entries[m.cursor]
@@ -358,6 +369,13 @@ func (m TeamModel) handleAction(msg tea.KeyMsg) (TeamModel, tea.Cmd) {
 			m.dispatchInput = ""
 			m.dispatchTarget = entry.WindowIdx
 			return m, nil
+		}
+	case "r":
+		if entry.Running {
+			wIdx := entry.WindowIdx
+			return m, func() tea.Msg {
+				return BossRestartTeamMsg{WindowIdx: wIdx}
+			}
 		}
 	case "x":
 		if entry.Running {
@@ -943,6 +961,7 @@ func (m TeamModel) renderRightActions(entry runtime.TeamEntry) string {
 
 	if entry.Running {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Primary).Render("d = dispatch"))
+		parts = append(parts, zone.Mark("team-restart", lipgloss.NewStyle().Foreground(t.Warning).Render("r = restart")))
 		parts = append(parts, zone.Mark("team-stop", lipgloss.NewStyle().Foreground(t.Danger).Render("x = stop")))
 	} else {
 		parts = append(parts, zone.Mark("team-launch", lipgloss.NewStyle().Foreground(t.Success).Render("enter = launch")))

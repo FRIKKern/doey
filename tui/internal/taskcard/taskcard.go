@@ -121,7 +121,12 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		elapsed := time.Since(time.Unix(task.Created, 0))
 		age = "  " + styles.CardMetaStyle(d.Theme).Render(formatAge(elapsed))
 	}
-	line2 := statusLabel + progress + age
+	reportsBadge := ""
+	if len(ti.Task.Reports) > 0 {
+		reportsBadge = "  " + lipgloss.NewStyle().Foreground(d.Theme.Info).Render(
+			fmt.Sprintf("%dR", len(ti.Task.Reports)))
+	}
+	line2 := statusLabel + progress + reportsBadge + age
 
 	// --- Line 3: heartbeat (if available) ---
 	heartbeatLine := ""
@@ -416,6 +421,54 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, proofRows...)
 	}
 
+	// --- Reports ---
+	if len(task.Reports) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("Reports (%d)", len(task.Reports))))
+		for _, report := range task.Reports {
+			var typeColor lipgloss.AdaptiveColor
+			switch report.Type {
+			case "research":
+				typeColor = e.Theme.Info
+			case "progress":
+				typeColor = e.Theme.Success
+			case "decision":
+				typeColor = e.Theme.Accent
+			case "completion":
+				typeColor = e.Theme.Warning
+			case "error":
+				typeColor = e.Theme.Danger
+			default:
+				typeColor = e.Theme.Muted
+			}
+			badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render("[" + report.Type + "]")
+			titleText := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true).Render(report.Title)
+			author := ""
+			if report.Author != "" {
+				author = "  " + lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(report.Author)
+			}
+			timeStr := ""
+			if report.Created > 0 {
+				timeStr = "  " + lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).
+					Render(time.Unix(report.Created, 0).Format("15:04"))
+			}
+			sections = append(sections, fmt.Sprintf("  %s %s%s%s", badge, titleText, author, timeStr))
+
+			if report.Body != "" {
+				bodyLines := strings.Split(report.Body, "\n")
+				if len(bodyLines) > 3 {
+					bodyLines = bodyLines[:3]
+					bodyLines = append(bodyLines, "...")
+				}
+				bodyStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).PaddingLeft(4)
+				for _, line := range bodyLines {
+					sections = append(sections, bodyStyle.Render(line))
+				}
+			}
+			sections = append(sections, "")
+		}
+	}
+
 	// --- Subtasks (prefer persistent subtasks with assignees, fall back to runtime) ---
 	if len(task.Subtasks) > 0 {
 		sections = append(sections, "")
@@ -665,6 +718,9 @@ func (e *ExpandedCard) ContentHeight() int {
 	}
 	if proofRows := e.renderProofSection(); len(proofRows) > 0 {
 		lines += len(proofRows) + 1 // proof section + spacing
+	}
+	if len(e.Item.Task.Reports) > 0 {
+		lines += 2 + len(e.Item.Task.Reports)*5 // header + spacing + ~5 lines per report
 	}
 	if len(e.Item.Task.Subtasks) > 0 {
 		lines += len(e.Item.Task.Subtasks) + 3

@@ -449,9 +449,12 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
 		next := nextMoveStatus(task.Status)
-		return m, func() tea.Msg {
-			return MoveTaskMsg{ID: task.ID, Status: next}
+		moveCmd := func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: next} }
+		if next == "done" {
+			bossCmd := func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} }
+			return m, tea.Batch(moveCmd, bossCmd)
 		}
+		return m, moveCmd
 	case "d":
 		item := m.list.SelectedItem()
 		if item == nil {
@@ -480,9 +483,9 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		}
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
-		return m, func() tea.Msg {
-			return CancelTaskMsg{ID: task.ID}
-		}
+		cancelCmd := func() tea.Msg { return CancelTaskMsg{ID: task.ID} }
+		bossCmd := func() tea.Msg { return BossCancelTaskBossMsg{ID: task.ID} }
+		return m, tea.Batch(cancelCmd, bossCmd)
 	}
 
 	// Delegate everything else (j/k/scroll) to the list model
@@ -546,9 +549,12 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
 			next := nextMoveStatus(task.Status)
-			return m, func() tea.Msg {
-				return MoveTaskMsg{ID: task.ID, Status: next}
+			moveCmd := func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: next} }
+			if next == "done" {
+				bossCmd := func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} }
+				return m, tea.Batch(moveCmd, bossCmd)
 			}
+			return m, moveCmd
 		}
 	case "s":
 		idx := m.list.Index()
@@ -571,9 +577,9 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
-			return m, func() tea.Msg {
-				return CancelTaskMsg{ID: task.ID}
-			}
+			cancelCmd := func() tea.Msg { return CancelTaskMsg{ID: task.ID} }
+			bossCmd := func() tea.Msg { return BossCancelTaskBossMsg{ID: task.ID} }
+			return m, tea.Batch(cancelCmd, bossCmd)
 		}
 	}
 
@@ -897,6 +903,54 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			sections = append(sections, "")
 			sections = append(sections, styles.SectionTitle(t, "ACCEPTANCE CRITERIA"))
 			sections = append(sections, styles.BulletList(t, acLines, contentW))
+		}
+	}
+
+	// Reports
+	if len(task.Reports) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("REPORTS (%d)", len(task.Reports))))
+		for _, report := range task.Reports {
+			var typeColor lipgloss.AdaptiveColor
+			switch report.Type {
+			case "research":
+				typeColor = t.Info
+			case "progress":
+				typeColor = t.Success
+			case "decision":
+				typeColor = t.Accent
+			case "completion":
+				typeColor = t.Warning
+			case "error":
+				typeColor = t.Danger
+			default:
+				typeColor = t.Muted
+			}
+			badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render("[" + report.Type + "]")
+			titleText := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(report.Title)
+			author := ""
+			if report.Author != "" {
+				author = "  " + lipgloss.NewStyle().Foreground(t.Muted).Render(report.Author)
+			}
+			timeStr := ""
+			if report.Created > 0 {
+				timeStr = "  " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).
+					Render(time.Unix(report.Created, 0).Format("15:04"))
+			}
+			sections = append(sections, fmt.Sprintf("  %s %s%s%s", badge, titleText, author, timeStr))
+
+			if report.Body != "" {
+				bodyLines := strings.Split(report.Body, "\n")
+				if len(bodyLines) > 3 {
+					bodyLines = bodyLines[:3]
+					bodyLines = append(bodyLines, "...")
+				}
+				bodyStyle := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(4)
+				for _, line := range bodyLines {
+					sections = append(sections, bodyStyle.Render(line))
+				}
+			}
+			sections = append(sections, "")
 		}
 	}
 

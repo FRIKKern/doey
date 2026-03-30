@@ -51,6 +51,18 @@ type TaskLog struct {
 	Entry     string
 }
 
+// Report is a structured report attached to a task.
+// Parsed from TASK_REPORT_<N>_* fields in .task files.
+type Report struct {
+	TaskID  string `json:"task_id"`
+	Index   int    `json:"index"`
+	Author  string `json:"author"`
+	Type    string `json:"type"`    // research, progress, decision, completion, error
+	Title   string `json:"title"`
+	Body    string `json:"body"`
+	Created int64  `json:"created"`
+}
+
 // Task from tasks/*.task (v3 schema)
 type Task struct {
 	ID                 string
@@ -78,6 +90,7 @@ type Task struct {
 	CreatedBy          string    // v3: who created it
 	AssignedTo         string    // v3: who/what team
 	SchemaVersion      int       // v3: schema version number
+	Reports []Report // from TASK_REPORT_N_* fields
 	// Proof-of-completion fields
 	FilesChanged []string // from TASK_FILES
 	Commits      string   // from TASK_COMMITS (hash + message lines)

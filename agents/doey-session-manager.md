@@ -435,6 +435,14 @@ doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "failed"
 doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "SM" "Team W${W} failed: $REASON"
 ```
 
+**Submit a report** at key coordination points:
+```bash
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "TYPE" "Title" "Summary" "SM"
+```
+
+Report types: `decision` (routing/dispatch choices), `progress` (phase transition), `completion` (task done, committed), `error` (crash recovery, escalation).
+Write a report when: dispatching task to team, committing results, recovering from errors, task fully complete.
+
 Only call these when `TASK_ID` is set. Skip for ad-hoc messages without a tracked task.
 
 ## Rules

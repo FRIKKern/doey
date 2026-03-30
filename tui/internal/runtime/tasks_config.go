@@ -44,6 +44,16 @@ type PersistentUpdate struct {
 	Text      string `json:"text"`
 }
 
+// PersistentReport represents a worker report stored in the persistent task store.
+type PersistentReport struct {
+	Index   int    `json:"index"`
+	Author  string `json:"author,omitempty"`
+	Type    string `json:"type"`
+	Title   string `json:"title"`
+	Body    string `json:"body"`
+	Created int64  `json:"created"`
+}
+
 // PersistentTask is a task stored in the persistent JSON store.
 type PersistentTask struct {
 	ID           string              `json:"id"`
@@ -75,6 +85,7 @@ type PersistentTask struct {
 	// Live tracking fields
 	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
 	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log
+	Reports  []PersistentReport  `json:"reports,omitempty"`  // worker reports
 }
 
 // TaskStore holds all persistent tasks.
@@ -312,6 +323,15 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 	}
 	if rt.Commits != "" {
 		pt.Commits = rt.Commits
+	}
+	if len(rt.Reports) > 0 {
+		pt.Reports = nil
+		for _, r := range rt.Reports {
+			pt.Reports = append(pt.Reports, PersistentReport{
+				Index: r.Index, Author: r.Author, Type: r.Type,
+				Title: r.Title, Body: r.Body, Created: r.Created,
+			})
+		}
 	}
 	pt.Logs = mergeLogs(pt.Logs, rt.Logs)
 	pt.Updated = time.Now().Unix()

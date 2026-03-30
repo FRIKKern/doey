@@ -45,10 +45,11 @@ type quickAction struct {
 
 // quickActions is the ordered list of dashboard action cards.
 var quickActions = []quickAction{
-	{"◆", "Reserved Freelancers", "Spawn 6 reserved workers (3×2 grid)", "dash-spawn-freelancer"},
-	{"→", "Get Status", "View team and worker status", "dash-get-status"},
+	{"◆", "Spawn Freelancers", "Reserve 6 workers (3×2 grid)", "dash-spawn-freelancer"},
+	{"→", "Get Status", "Ask Boss for team status", "dash-get-status"},
 	{"⟫", "Create Team", "Add a new specialist team", "dash-create-team"},
 	{"›", "View Tasks", "Browse and manage project tasks", "dash-view-tasks"},
+	{"⊘", "Compact SM", "Compact Session Manager context", "dash-compact-sm"},
 }
 
 // DashboardModel is the primary landing tab (command center).
@@ -63,8 +64,10 @@ type DashboardModel struct {
 	heartbeats   map[string]runtime.HeartbeatState
 	keyMap       keys.KeyMap
 	scrollOffset int
-	actionCursor int              // selected quick action card (0..3)
+	actionCursor int              // selected quick action card (0..4)
 	snapshot     runtime.Snapshot // live snapshot for pane/result/message data
+	feedbackMsg  string
+	feedbackTime time.Time
 }
 
 // NewDashboardModel creates the dashboard command center panel.
@@ -86,6 +89,9 @@ func (m DashboardModel) Update(msg tea.Msg) (DashboardModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case dashTickMsg:
 		m.loadTasks()
+		if m.feedbackMsg != "" && time.Since(m.feedbackTime) > 3*time.Second {
+			m.feedbackMsg = ""
+		}
 		return m, m.tickCmd()
 
 	case SnapshotMsg:
@@ -137,6 +143,13 @@ func (m DashboardModel) View() string {
 	}
 
 	var sections []string
+	if m.feedbackMsg != "" && time.Since(m.feedbackTime) < 3*time.Second {
+		feedbackStyle := lipgloss.NewStyle().
+			Foreground(m.theme.Success).
+			Bold(true).
+			PaddingLeft(2)
+		sections = append(sections, feedbackStyle.Render("✓ "+m.feedbackMsg))
+	}
 	sections = append(sections, m.renderActiveTasks(w))
 	sections = append(sections, m.renderTeamStatus(w))
 	sections = append(sections, m.renderQuickActions(w))
@@ -213,6 +226,12 @@ func (m *DashboardModel) SetHeartbeats(hb map[string]runtime.HeartbeatState) {
 	m.heartbeats = hb
 }
 
+// SetFeedback sets a temporary feedback message shown for 3 seconds.
+func (m *DashboardModel) SetFeedback(msg string) {
+	m.feedbackMsg = msg
+	m.feedbackTime = time.Now()
+}
+
 // loadTasks reads .doey/tasks/ and filters for active/in_progress tasks.
 func (m *DashboardModel) loadTasks() {
 	if m.projectDir != "" {
@@ -247,6 +266,8 @@ func (m DashboardModel) activateAction(idx int) tea.Cmd {
 		return func() tea.Msg { return CreateTeamMsg{} }
 	case "dash-view-tasks":
 		return func() tea.Msg { return ViewTasksMsg{} }
+	case "dash-compact-sm":
+		return func() tea.Msg { return CompactSMMsg{} }
 	}
 	return nil
 }
@@ -284,6 +305,9 @@ func (m DashboardModel) updateMouse(msg tea.MouseMsg) (DashboardModel, tea.Cmd) 
 		}
 		if zone.Get("dash-view-tasks").InBounds(msg) {
 			return m, func() tea.Msg { return ViewTasksMsg{} }
+		}
+		if zone.Get("dash-compact-sm").InBounds(msg) {
+			return m, func() tea.Msg { return CompactSMMsg{} }
 		}
 	}
 
