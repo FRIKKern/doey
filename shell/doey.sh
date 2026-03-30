@@ -2115,21 +2115,47 @@ update_system() {
   printf "  ${BRAND}Updating doey...${RESET}\n\n"
 
   if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
-    local old_hash new_hash
+    local old_hash new_hash current_branch
     old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
-    [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]] && \
-      printf "  ${WARN}⚠ Repo has local changes — git pull may fail${RESET}\n"
-    git -C "$repo_dir" pull || printf "  ${WARN}git pull failed — continuing with reinstall${RESET}\n"
-    new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
-    if [[ "$old_hash" == "$new_hash" ]]; then
-      printf "  ${SUCCESS}Already up to date${RESET} ${DIM}($old_hash)${RESET}\n"
-    else
-      printf "  ${SUCCESS}Updated${RESET} ${DIM}$old_hash → $new_hash${RESET}\n"
+
+    # Ensure we're on main — detached HEAD or wrong branch can't fast-forward
+    current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || true)
+    if [[ -z "$current_branch" ]]; then
+      printf "  ${WARN}⚠ Detached HEAD — checking out main${RESET}\n"
+      git -C "$repo_dir" checkout main 2>/dev/null || \
+        git -C "$repo_dir" checkout -b main origin/main 2>/dev/null || true
+    elif [[ "$current_branch" != "main" ]]; then
+      printf "  ${WARN}⚠ On branch '%s' — switching to main${RESET}\n" "$current_branch"
+      git -C "$repo_dir" checkout main 2>/dev/null || true
     fi
-    install_dir="$repo_dir"
-  else
+
+    # Stash local changes so pull can fast-forward cleanly
+    if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
+      printf "  ${WARN}⚠ Stashing local changes${RESET}\n"
+      git -C "$repo_dir" stash --quiet 2>/dev/null || true
+    fi
+
+    # Explicit fetch + fast-forward pull from origin/main
+    git -C "$repo_dir" fetch origin main --quiet 2>/dev/null || true
+    if git -C "$repo_dir" pull --ff-only origin main 2>/dev/null; then
+      new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
+      if [[ "$old_hash" == "$new_hash" ]]; then
+        printf "  ${SUCCESS}Already up to date${RESET} ${DIM}($old_hash)${RESET}\n"
+      else
+        printf "  ${SUCCESS}Updated${RESET} ${DIM}$old_hash → $new_hash${RESET}\n"
+      fi
+      install_dir="$repo_dir"
+    else
+      printf "  ${ERROR}✗ git pull --ff-only failed (local divergence?)${RESET}\n"
+      printf "  ${DIM}Falling back to fresh clone...${RESET}\n"
+      install_dir=""
+    fi
+  fi
+
+  # Clone from remote if no local repo exists or pull failed
+  if [[ -z "${install_dir:-}" ]]; then
     install_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
-    printf "  ${DIM}No local repo — cloning from remote...${RESET}\n"
+    printf "  ${DIM}Cloning from remote...${RESET}\n"
     if ! git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir"; then
       printf "  ${ERROR}✗ Clone failed${RESET}\n"
       rm -rf "$install_dir"
@@ -3084,6 +3110,18 @@ MANIFEST
   attach_or_switch "$session"
 }
 
+_check_grid_feasibility() {
+  local session="$1" window="$2" min_col_w="${3:-40}" min_row_h="${4:-8}"
+  local win_dims
+  win_dims="$(tmux display-message -t "$session:$window" -p '#{window_width} #{window_height}' 2>/dev/null)" || return 1
+  local win_w="${win_dims%% *}"
+  local win_h="${win_dims##* }"
+  _FEASIBLE_MAX_COLS=$(( (win_w - 1) / (min_col_w + 1) ))
+  _FEASIBLE_MAX_ROWS=$(( win_h / (min_row_h + 1) ))
+  [ "$_FEASIBLE_MAX_COLS" -lt 1 ] && _FEASIBLE_MAX_COLS=1
+  [ "$_FEASIBLE_MAX_ROWS" -lt 1 ] && _FEASIBLE_MAX_ROWS=1
+}
+
 _layout_checksum() {
   local s="$1" csum=0 i c
   for ((i=0; i<${#s}; i++)); do
@@ -3287,6 +3325,23 @@ doey_add_column() {
   if (( _ts_worker_count >= DOEY_MAX_WORKERS )); then
     printf "  ${ERROR}Max workers reached (%s)${RESET}\n" "$DOEY_MAX_WORKERS"
     return 1
+  fi
+
+  # Pre-check: can we fit another column?
+  local _dac_win_w
+  _dac_win_w="$(tmux display-message -t "$session:$team_window" -p '#{window_width}' 2>/dev/null)" || true
+  if [ -n "$_dac_win_w" ]; then
+    local _dac_pane_count
+    _dac_pane_count="$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')"
+    local _dac_min_col_w=40
+    # Calculate width per column with current panes
+    local _dac_cols_now=$(( (_dac_pane_count + 1) / 2 ))  # rough: 2 panes per column
+    local _dac_needed_w=$(( (_dac_cols_now + 1) * _dac_min_col_w ))
+    if [ "$_dac_needed_w" -gt "$_dac_win_w" ]; then
+      printf "  %s Terminal too narrow for another column (%s available, need %s+)%s\n" \
+        "${WARN:-}" "$_dac_win_w" "$_dac_needed_w" "${RESET:-}" >&2
+      return 1
+    fi
   fi
 
   printf "  ${DIM}Adding worker column to team %s...${RESET}\n" "$team_window"
@@ -3818,6 +3873,14 @@ add_dynamic_team_window() {
     write_team_env "$runtime_dir" "$window_index" "dynamic" "" "1" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
   else
     _launch_team_manager "$session" "$runtime_dir" "$window_index"
+  fi
+
+  # Calculate max feasible columns
+  _check_grid_feasibility "$session" "$window_index" 40 8 2>/dev/null || true
+  if [ "${_FEASIBLE_MAX_COLS:-99}" -lt "$initial_cols" ]; then
+    printf "  %s Requested %s worker columns but only %s fit — reducing%s\n" \
+      "${WARN:-}" "$initial_cols" "$_FEASIBLE_MAX_COLS" "${RESET:-}" >&2
+    initial_cols="$_FEASIBLE_MAX_COLS"
   fi
 
   local _col_i
@@ -4922,18 +4985,28 @@ HELP
     ;;
   add-window)
     require_running_session
-    wt_spec="" grid_arg="4x2"
+    local _aw_wt_spec="" _aw_team_type="" _aw_reserved="" _aw_grid_cols=""
     shift
-    for _arg in "$@"; do
-      case "$_arg" in
-        --worktree) wt_spec="auto" ;;
-        *x*) grid_arg="$_arg" ;;
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --worktree) _aw_wt_spec="auto" ;;
+        --type) shift; _aw_team_type="${1:-}" ;;
+        --grid) shift; _aw_grid_cols="${1%%x*}" ;;
+        --reserved) _aw_reserved="true" ;;
+        *) ;; # ignore unknown
       esac
+      shift
     done
-    if [ -n "$wt_spec" ]; then
-      add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "$wt_spec"
+    if [ "$_aw_team_type" = "freelancer" ]; then
+      local _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
+        "$_aw_cols" "$_aw_wt_spec" "Freelancers" "" "" "" "freelancer"
+    elif [ -n "$_aw_wt_spec" ] || [ -n "$_aw_grid_cols" ]; then
+      local _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
+        "$_aw_cols" "$_aw_wt_spec"
     else
-      add_team_window "$session" "$runtime_dir" "$dir" "$grid_arg"
+      add_team_window "$session" "$runtime_dir" "$dir" "4x2"
     fi
     exit 0
     ;;
