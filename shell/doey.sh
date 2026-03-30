@@ -40,6 +40,19 @@ PROJECTS_FILE="$HOME/.claude/doey/projects"
 mkdir -p "$(dirname "$PROJECTS_FILE")"
 touch "$PROJECTS_FILE"
 
+# ── Source-first exec ────────────────────────────────────────────────
+# If running from installed copy, re-exec from source repo so dev
+# changes take effect without reinstalling. No-op for curl|bash users.
+if [ -z "${DOEY_SOURCE_EXEC:-}" ] && [ -f "$HOME/.claude/doey/repo-path" ]; then
+  _source_repo="$(cat "$HOME/.claude/doey/repo-path")"
+  _source_script="${_source_repo}/shell/doey.sh"
+  if [ -f "$_source_script" ] && [ "$(cd "$(dirname "$_source_script")" && pwd)/$(basename "$_source_script")" != "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")" ]; then
+    export DOEY_SOURCE_EXEC=1
+    exec bash "$_source_script" "$@"
+  fi
+  unset _source_repo _source_script
+fi
+
 # ── Configuration ───────────────────────────────────────────────────
 # Load user config (optional), then apply defaults for any unset variables.
 # Hierarchy: project .doey/config.sh > global ~/.config/doey/config.sh > defaults
@@ -119,6 +132,80 @@ resolve_repo_dir() {
     cat "$HOME/.claude/doey/repo-path"
   else
     (cd "$SCRIPT_DIR/.." && pwd)
+  fi
+}
+
+# ── Dev-sync ─────────────────────────────────────────────────────────
+# Sync stale installed files from source repo on every launch.
+# No-op if no source repo is registered (curl|bash users).
+_dev_sync() {
+  if [ ! -f "$HOME/.claude/doey/repo-path" ]; then
+    return 0
+  fi
+  local repo_dir
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path")"
+  if [ ! -d "$repo_dir" ]; then
+    return 0
+  fi
+
+  local updated=0
+
+  # Sync shell/*.sh → ~/.local/bin/
+  local src dst src_mt dst_mt
+  for src in "$repo_dir"/shell/*.sh; do
+    [ -f "$src" ] || continue
+    dst="$HOME/.local/bin/$(basename "$src")"
+    [ -f "$dst" ] || continue
+    src_mt="$(stat -f %m "$src")"
+    dst_mt="$(stat -f %m "$dst")"
+    if [ "$src_mt" -gt "$dst_mt" ]; then
+      cp "$src" "$dst"
+      chmod +x "$dst"
+      updated=$((updated + 1))
+    fi
+  done
+
+  # Sync agents/*.md → ~/.claude/agents/
+  for src in "$repo_dir"/agents/*.md; do
+    [ -f "$src" ] || continue
+    dst="$HOME/.claude/agents/$(basename "$src")"
+    if [ ! -f "$dst" ]; then
+      cp "$src" "$dst"
+      updated=$((updated + 1))
+      continue
+    fi
+    src_mt="$(stat -f %m "$src")"
+    dst_mt="$(stat -f %m "$dst")"
+    if [ "$src_mt" -gt "$dst_mt" ]; then
+      cp "$src" "$dst"
+      updated=$((updated + 1))
+    fi
+  done
+
+  # Go TUI rebuild if any tui/ file is newer than the binary
+  if command -v go >/dev/null 2>&1 && [ -d "$repo_dir/tui" ]; then
+    local tui_bin="$HOME/.local/bin/doey-tui"
+    if [ -f "$tui_bin" ]; then
+      local tui_mt rebuild=false
+      tui_mt="$(stat -f %m "$tui_bin")"
+      for src in "$repo_dir"/tui/*; do
+        [ -f "$src" ] || continue
+        src_mt="$(stat -f %m "$src")"
+        if [ "$src_mt" -gt "$tui_mt" ]; then
+          rebuild=true
+          break
+        fi
+      done
+      if [ "$rebuild" = "true" ]; then
+        if (cd "$repo_dir/tui" && go build -o "$tui_bin" . 2>/dev/null); then
+          updated=$((updated + 1))
+        fi
+      fi
+    fi
+  fi
+
+  if [ "$updated" -gt 0 ]; then
+    echo "  ↻ dev-sync: updated $updated files"
   fi
 }
 
@@ -4192,6 +4279,9 @@ _check_prereqs() {
 }
 
 grid="dynamic"
+
+# Sync installed files from source repo (no-op if no repo registered)
+_dev_sync
 
 case "${1:-}" in
   --help|-h)
