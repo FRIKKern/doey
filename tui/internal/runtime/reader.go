@@ -386,6 +386,94 @@ func (r *Reader) parseTasks() []Task {
 			return t.Logs[i].Timestamp < t.Logs[j].Timestamp
 		})
 
+		// Parse TASK_SUBTASK_<N>_TITLE/STATUS/ASSIGNEE entries
+		subtaskMap := make(map[int]*Subtask)
+		for key := range env {
+			if !strings.HasPrefix(key, "TASK_SUBTASK_") {
+				continue
+			}
+			rest := strings.TrimPrefix(key, "TASK_SUBTASK_")
+			// rest is e.g. "1_TITLE", "2_STATUS"
+			parts := strings.SplitN(rest, "_", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			idx, err := strconv.Atoi(parts[0])
+			if err != nil {
+				continue
+			}
+			if subtaskMap[idx] == nil {
+				subtaskMap[idx] = &Subtask{TaskID: t.ID, Pane: strconv.Itoa(idx)}
+			}
+			switch parts[1] {
+			case "TITLE":
+				subtaskMap[idx].Title = env[key]
+			case "STATUS":
+				subtaskMap[idx].Status = env[key]
+			case "ASSIGNEE":
+				subtaskMap[idx].Pane = env[key]
+			}
+		}
+		if len(subtaskMap) > 0 {
+			idxs := make([]int, 0, len(subtaskMap))
+			for idx := range subtaskMap {
+				idxs = append(idxs, idx)
+			}
+			sort.Ints(idxs)
+			for _, idx := range idxs {
+				t.Subtasks = append(t.Subtasks, *subtaskMap[idx])
+			}
+		}
+
+		// Parse TASK_UPDATE_<N>_TIMESTAMP/AUTHOR/TEXT entries
+		type updateEntry struct {
+			index int
+			ts    int64
+			author string
+			text   string
+		}
+		updateMap := make(map[int]*updateEntry)
+		for key := range env {
+			if !strings.HasPrefix(key, "TASK_UPDATE_") {
+				continue
+			}
+			rest := strings.TrimPrefix(key, "TASK_UPDATE_")
+			parts := strings.SplitN(rest, "_", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			idx, err := strconv.Atoi(parts[0])
+			if err != nil {
+				continue
+			}
+			if updateMap[idx] == nil {
+				updateMap[idx] = &updateEntry{index: idx}
+			}
+			switch parts[1] {
+			case "TIMESTAMP":
+				updateMap[idx].ts, _ = strconv.ParseInt(env[key], 10, 64)
+			case "AUTHOR":
+				updateMap[idx].author = env[key]
+			case "TEXT":
+				updateMap[idx].text = env[key]
+			}
+		}
+		if len(updateMap) > 0 {
+			idxs := make([]int, 0, len(updateMap))
+			for idx := range updateMap {
+				idxs = append(idxs, idx)
+			}
+			sort.Ints(idxs)
+			for _, idx := range idxs {
+				u := updateMap[idx]
+				entry := u.text
+				if u.author != "" {
+					entry = "[" + u.author + "] " + entry
+				}
+				t.Logs = append(t.Logs, TaskLog{Timestamp: u.ts, Entry: entry})
+			}
+		}
+
 		tasks = append(tasks, t)
 	}
 
