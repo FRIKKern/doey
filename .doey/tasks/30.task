@@ -1,0 +1,44 @@
+TASK_ID=30
+TASK_TITLE=doey deploy — dedicated validation team + pre-push quality gate
+TASK_STATUS=in_progress
+TASK_CREATED=1743307200
+TASK_TYPE=feature
+TASK_DESCRIPTION=New Doey command that spawns a dedicated deployment/validation team. This team acts as a quality gate — every commit goes through a full validation pipeline before it gets pushed. The user should never push broken code again.
+
+COMMAND: `doey deploy` (or `doey gate` — name TBD)
+- Spawns a dedicated team window with specialized workers
+- Can run alongside existing dev teams
+- Activates a pre-push pipeline that validates everything
+
+THE PIPELINE (runs before every push):
+1. BUILD TEST — compile/build the project. Language-aware: detect Go, Node, Python, Rust etc from project files and run the right build command. Must pass.
+2. LINT/FORMAT — run project linters if configured (golangci-lint, eslint, prettier, etc). Must pass.
+3. TEST SUITE — run project tests if they exist. Report pass/fail/skip counts.
+4. PROOF OF WORK — verify the task file has: commit hashes, files changed, build status, worker summary. Flag if proof is incomplete (ties into task 29).
+5. DEPLOYMENT TEST — if the project has a deploy config (Vercel, Docker, etc), do a dry-run deploy or build the deploy artifact to verify it would succeed.
+6. COMMIT QUALITY — ensure commit message is detailed, follows conventions, references task ID.
+7. PUSH — only after all checks pass, push with confidence.
+
+If any step fails, the pipeline stops, reports exactly what failed, and the team attempts to fix it automatically (or escalates to the user if it can't).
+
+TEAM DEFINITION:
+- Create a .team.md definition file (like existing team defs)
+- Workers with specialized roles: Build Validator, Test Runner, Deploy Checker, Commit Auditor
+- Manager coordinates the pipeline sequentially
+- Results feed back into the task system (task 29 proof fields)
+
+INTEGRATION:
+- Hook into git pre-push or wrap `git push` so the pipeline runs automatically
+- Can also be triggered manually: `doey deploy check` (run pipeline without pushing), `doey deploy push` (run + push)
+- Status visible in Go TUI — maybe a "Deploy" tab or section showing pipeline status, last run, pass/fail history
+- Desktop notification on pipeline complete (pass or fail)
+
+CONFIGURATION:
+- Project-level config in .doey/deploy.sh or .doey/config.sh for: build commands, test commands, deploy commands, which checks to enable/skip
+- Sensible defaults: auto-detect build system, skip deploy check if no deploy config found
+- Must work on fresh install with zero config for common project types (Go, Node)
+
+This should feel like having a CI/CD team sitting next to you — but local, instant, and integrated into the Doey workflow.
+TASK_TAGS=feature,shell,agents,hooks,tui,infrastructure,deploy,teams
+TASK_TEAM=W2
+TASK_LOG_1774861052=DISPATCHED: Sent to Team 2 manager (research-first approach)
