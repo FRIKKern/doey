@@ -1,0 +1,30 @@
+TASK_ID=41
+TASK_TITLE=Huh-based interactive startup wizard for Doey
+TASK_STATUS=in_progress
+TASK_CREATED=1743292800
+TASK_TYPE=feature
+TASK_DESCRIPTION=When a user runs `doey`, instead of jumping straight into a session, present an interactive startup wizard using Charmbracelet's Huh library (Go). The wizard lets the user choose their session setup before launch.
+
+PRESET OPTIONS:
+1. "Regular Setup" — 2 regular teams (default)
+2. "Reserved Freelancers + Regular Team" — 1 reserved freelancer pool (3x2, born RESERVED per task 35) + 1 regular team
+3. "Custom Combination" — mix and match from a menu
+
+CUSTOM COMBINATION FLOW:
+- Show a list of available team types: Regular Team, Reserved Freelancers, plus any premade .team.md definitions
+- User can add multiple of the same type (e.g., 3 regular teams)
+- Favorites appear first (track usage frequency in user config ~/.config/doey/config.sh or similar)
+- User confirms final selection, then Doey launches with exactly that setup
+
+IMPLEMENTATION NOTES:
+- The Huh form runs BEFORE tmux session creation — it's the first thing the user sees
+- Output of the wizard is a structured team manifest that doey.sh consumes to build the session
+- Must integrate with the existing Go TUI binary (tui/ directory) — could be a separate subcommand like `doey-tui setup` or built into the main binary
+- Should feel fast, polished, and obvious — no confusion about what each option does
+- Premade teams come from .team.md files in the repo or user's config dir
+- Skip the wizard if --quick or similar flag is passed (power users)
+
+This is a major UX improvement — the startup experience defines first impressions.
+TASK_TAGS=tui,shell,huh,startup,config,ux
+TASK_TEAM=W2
+TASK_LOG_1774899933=DISPATCHED: Sent to Team 2 (premade, manager W2.0)
