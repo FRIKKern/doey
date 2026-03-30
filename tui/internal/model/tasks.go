@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -200,22 +201,37 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	m.list.SetDelegate(delegate)
 }
 
+// statusPriority returns a sort group for the given task status.
+// Lower values sort to the top of the list.
+func statusPriority(status string) int {
+	switch status {
+	case "active", "in_progress":
+		return 0
+	case "paused", "blocked":
+		return 1
+	case "pending_user_confirmation":
+		return 2
+	case "draft":
+		return 3
+	case "done", "cancelled":
+		return 4
+	default:
+		return 3 // unknown statuses sort with drafts
+	}
+}
+
 func (m *TasksModel) sortEntries() {
-	sectionOrder := map[string]int{"active": 0, "complete": 1}
 	sort.SliceStable(m.entries, func(i, j int) bool {
 		a, b := m.entries[i], m.entries[j]
-		sa := sectionOrder[sectionOfStatus(a.Status)]
-		sb := sectionOrder[sectionOfStatus(b.Status)]
-		if sa != sb {
-			return sa < sb
+		pa, pb := statusPriority(a.Status), statusPriority(b.Status)
+		if pa != pb {
+			return pa < pb
 		}
-		ha := m.heartbeats[a.ID]
-		hb := m.heartbeats[b.ID]
-		if ha.ActiveWorkers != hb.ActiveWorkers {
-			return ha.ActiveWorkers > hb.ActiveWorkers
-		}
-		if !ha.LastActivity.Equal(hb.LastActivity) {
-			return ha.LastActivity.After(hb.LastActivity)
+		// Within the same group, sort by task ID descending (newest first).
+		ai, errA := strconv.Atoi(a.ID)
+		bi, errB := strconv.Atoi(b.ID)
+		if errA == nil && errB == nil {
+			return ai > bi
 		}
 		return a.ID > b.ID
 	})

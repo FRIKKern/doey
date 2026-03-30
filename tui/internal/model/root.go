@@ -110,6 +110,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case HeartbeatTickMsg:
 		// Lightweight: recompute health/staleness from existing snapshot (no I/O)
 		m.heartbeats = runtime.AggregateHeartbeats(m.snapshot)
+		m.dashboard.SetHeartbeats(m.heartbeats)
 		cmds = append(cmds, heartbeatTickCmd())
 
 	case SwitchToTaskMsg:
@@ -133,6 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SnapshotMsg:
 		m.snapshot = runtime.Snapshot(msg)
 		m.heartbeats = runtime.AggregateHeartbeats(m.snapshot)
+		m.dashboard.SetHeartbeats(m.heartbeats)
 		m.header.SetSnapshot(m.snapshot)
 		m.dashboard, _ = m.dashboard.Update(msg)
 		m.tasks.SetSnapshot(m.snapshot)
