@@ -43,6 +43,21 @@ type taskEntry struct {
 	Type   string
 }
 
+// quickAction defines a quick action card.
+type quickAction struct {
+	icon   string
+	label  string
+	zoneID string
+}
+
+// quickActions is the ordered list of dashboard action cards.
+var quickActions = []quickAction{
+	{"🚀", "Spawn Reserved\nFreelancers", "dash-spawn-freelancer"},
+	{"📊", "Get Status", "dash-get-status"},
+	{"👥", "Create Team", "dash-create-team"},
+	{"📋", "View Tasks", "dash-view-tasks"},
+}
+
 // DashboardModel is the primary landing tab (command center).
 type DashboardModel struct {
 	runtimeDir   string
@@ -54,6 +69,7 @@ type DashboardModel struct {
 	tasks        []taskEntry
 	keyMap       keys.KeyMap
 	scrollOffset int
+	actionCursor int              // selected quick action card (0..3)
 	snapshot     runtime.Snapshot // live snapshot for pane/result/message data
 }
 
@@ -95,6 +111,21 @@ func (m DashboardModel) Update(msg tea.Msg) (DashboardModel, tea.Cmd) {
 				m.scrollOffset++
 			}
 			return m, nil
+		}
+		// Quick action card navigation: h/l = left/right, Enter = activate
+		switch msg.String() {
+		case "h":
+			if m.actionCursor > 0 {
+				m.actionCursor--
+			}
+			return m, nil
+		case "l":
+			if m.actionCursor < len(quickActions)-1 {
+				m.actionCursor++
+			}
+			return m, nil
+		case "enter":
+			return m, m.activateAction(m.actionCursor)
 		}
 
 	case tea.MouseMsg:
@@ -207,6 +238,24 @@ func (m *DashboardModel) loadTasks() {
 		}
 	}
 	m.tasks = active
+}
+
+// activateAction returns the tea.Cmd for the given action index.
+func (m DashboardModel) activateAction(idx int) tea.Cmd {
+	if idx < 0 || idx >= len(quickActions) {
+		return nil
+	}
+	switch quickActions[idx].zoneID {
+	case "dash-spawn-freelancer":
+		return func() tea.Msg { return SpawnFreelancerMsg{} }
+	case "dash-get-status":
+		return func() tea.Msg { return GetStatusMsg{} }
+	case "dash-create-team":
+		return func() tea.Msg { return CreateTeamMsg{} }
+	case "dash-view-tasks":
+		return func() tea.Msg { return ViewTasksMsg{} }
+	}
+	return nil
 }
 
 // --- Mouse handling ---
@@ -375,21 +424,83 @@ func (m DashboardModel) renderQuickActions(w int) string {
 	header := t.SectionHeader.Copy().PaddingLeft(2).Render("QUICK ACTIONS")
 	rule := t.Faint.Render(strings.Repeat("─", w))
 
-	// Render buttons using styles.RenderButton
-	btn1 := styles.RenderButton("Spawn Freelancer", "dash-spawn-freelancer", true, t)
-	btn2 := styles.RenderButton("Get Status", "dash-get-status", false, t)
-	btn3 := styles.RenderButton("Create Team", "dash-create-team", true, t)
-	btn4 := styles.RenderButton("View Tasks", "dash-view-tasks", false, t)
+	numCards := len(quickActions)
+	if numCards == 0 {
+		return "\n" + header + "\n" + rule + "\n"
+	}
 
-	gap := "  "
-	row1 := lipgloss.JoinHorizontal(lipgloss.Center, btn1, gap, btn2)
-	row2 := lipgloss.JoinHorizontal(lipgloss.Center, btn3, gap, btn4)
+	// Card sizing — responsive to terminal width
+	usableW := w - 8 // outer padding
+	gap := 2
+	cardW := (usableW - gap*(numCards-1)) / numCards
+	if cardW < 16 {
+		cardW = 16
+	}
+	if cardW > 28 {
+		cardW = 28
+	}
 
-	grid := lipgloss.NewStyle().
+	// Render each vertical card
+	var cards []string
+	for i, action := range quickActions {
+		selected := m.focused && i == m.actionCursor
+
+		// Icon — centered, generous vertical space
+		iconStyle := lipgloss.NewStyle().
+			Width(cardW - 4). // account for card padding
+			Align(lipgloss.Center)
+		iconLine := iconStyle.Render(action.icon)
+
+		// Label — centered, may be multi-line
+		labelFg := t.Text
+		if selected {
+			labelFg = t.Primary
+		}
+		labelStyle := lipgloss.NewStyle().
+			Foreground(labelFg).
+			Bold(selected).
+			Width(cardW - 4).
+			Align(lipgloss.Center)
+		labelLine := labelStyle.Render(action.label)
+
+		cardContent := "\n" + iconLine + "\n\n" + labelLine + "\n"
+
+		// Card border and background
+		borderColor := t.Separator
+		bgColor := lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F172A"}
+		if selected {
+			borderColor = t.Primary
+			bgColor = lipgloss.AdaptiveColor{Light: "#F0F4FF", Dark: "#1E293B"}
+		}
+
+		card := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
+			Background(bgColor).
+			Width(cardW).
+			Padding(1, 1).
+			Render(cardContent)
+
+		cards = append(cards, zone.Mark(action.zoneID, card))
+	}
+
+	row := lipgloss.JoinHorizontal(lipgloss.Top, cards[0])
+	for i := 1; i < len(cards); i++ {
+		row = lipgloss.JoinHorizontal(lipgloss.Top, row, strings.Repeat(" ", gap), cards[i])
+	}
+
+	hint := ""
+	if m.focused {
+		hint = lipgloss.NewStyle().
+			Foreground(t.Muted).Faint(true).PaddingLeft(3).
+			Render("h/l = navigate  enter = activate")
+	}
+
+	body := lipgloss.NewStyle().
 		Padding(1, 3).
-		Render(row1 + "\n\n" + row2)
+		Render(row)
 
-	return "\n" + header + "\n" + rule + "\n" + grid + "\n"
+	return "\n" + header + "\n" + rule + "\n" + body + "\n" + hint + "\n"
 }
 
 // renderTeamStatus shows a compact grid of pane statuses grouped by window.
