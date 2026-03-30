@@ -138,6 +138,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CreateTeamResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
+	case CreateSpecializedTeamMsg:
+		m.focusIndex = 1
+		m.updateFocus()
+		return m, CreateSpecializedTeamCmd()
+
+	case CreateSpecializedTeamResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
 	case SnapshotMsg:
 		m.snapshot = runtime.Snapshot(msg)
 		m.heartbeats = runtime.AggregateHeartbeats(m.snapshot)

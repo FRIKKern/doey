@@ -28,6 +28,11 @@ func (r *Reader) RuntimeDir() string {
 	return r.runtimeDir
 }
 
+// SetProjectDir sets the project directory used for resolving .doey/tasks/.
+func (r *Reader) SetProjectDir(dir string) {
+	r.projectDir = dir
+}
+
 // taskDir returns the primary task directory (.doey/tasks/ if it exists, else runtimeDir/tasks/)
 func (r *Reader) taskDir() string {
 	if r.projectDir != "" {
@@ -64,7 +69,7 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	}
 
 	snap.Panes = r.parsePaneStatuses()
-	snap.Tasks = r.parseTasks()
+	snap.Tasks = r.ParseTasks()
 	snap.Subtasks = r.parseSubtasks()
 
 	// Attach subtasks to their parent tasks
@@ -249,7 +254,8 @@ func (r *Reader) parsePaneStatuses() map[string]PaneStatus {
 	return statuses
 }
 
-func (r *Reader) parseTasks() []Task {
+// ParseTasks reads and returns all persistent tasks from the task directories.
+func (r *Reader) ParseTasks() []Task {
 	var tasks []Task
 	primaryDir := r.taskDir()
 	fallbackDir := filepath.Join(r.runtimeDir, "tasks")

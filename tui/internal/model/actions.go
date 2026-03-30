@@ -51,6 +51,11 @@ type CreateTeamResultMsg struct {
 	Err error
 }
 
+// CreateSpecializedTeamResultMsg is returned after sending a create-specialized-team command to Boss.
+type CreateSpecializedTeamResultMsg struct {
+	Err error
+}
+
 // SnapshotRefreshMsg requests a fresh snapshot read.
 type SnapshotRefreshMsg struct{}
 
@@ -203,6 +208,13 @@ func SpawnFreelancerCmd() tea.Cmd {
 func CreateTeamCmd() tea.Cmd {
 	return func() tea.Msg {
 		return CreateTeamResultMsg{Err: sendToBoss("I want to create a new team")}
+	}
+}
+
+// CreateSpecializedTeamCmd sends a "spawn specialized team from definition" command to the Boss pane.
+func CreateSpecializedTeamCmd() tea.Cmd {
+	return func() tea.Msg {
+		return CreateSpecializedTeamResultMsg{Err: sendToBoss("/doey-add-team specialized")}
 	}
 }
 
