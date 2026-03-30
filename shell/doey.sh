@@ -71,8 +71,8 @@ DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
 # Auth & Launch Timing
 # Defaults are conservative to avoid Claude API rate-limit errors on session start.
 # Lower only if your account has high rate limits and you need faster boots.
-DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
-DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
+DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-1}"
+DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-5}"
 DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
 DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-8}"
 
@@ -2995,71 +2995,22 @@ MANIFEST
     step_done
 
     step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
-    sleep 0.2  # reduced from 0.5s — tmux is fast
+    # Removed sleep 0.2 — tmux split-window is synchronous
     local _col_i
     for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
       doey_add_column "$session" "$runtime_dir" "$dir"
-      (( _col_i < DOEY_INITIAL_WORKER_COLS - 1 )) && sleep 0.3
+      # Removed sleep 0.3 — tmux split-window is synchronous
     done
     step_done
   fi
 
-  # Per-team config mode: when DOEY_TEAM_COUNT is set, use DOEY_TEAM_<N>_* variables
+  # ── Attach early, build remaining teams in background ────────────────
+  # Team 1 + dashboard are ready. Spawn remaining teams (T2+, freelancers,
+  # worktrees) and briefings in a background subshell so the user gets
+  # attached to tmux immediately instead of waiting for all teams.
+
+  # Update team 1's env with per-team config if specified (quick, no tmux ops)
   if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
-    local _ptc_total="${DOEY_TEAM_COUNT}"
-    local _ptc_remaining=$((_ptc_total - 1))  # Team 1 already created above
-    if [ "$_ptc_remaining" -gt 0 ]; then
-      step_start 6 "Adding ${_ptc_remaining} configured teams..."
-      local _ptc_i _ptc_fail=0
-      for (( _ptc_i=2; _ptc_i<=_ptc_total; _ptc_i++ )); do
-        local _ptc_type _ptc_workers _ptc_name _ptc_role _ptc_wm _ptc_mm _ptc_cols _ptc_wt_spec
-        _ptc_type=$(_read_team_config "$_ptc_i" "TYPE" "")
-        _ptc_workers=$(_read_team_config "$_ptc_i" "WORKERS" "")
-        _ptc_name=$(_read_team_config "$_ptc_i" "NAME" "")
-        _ptc_role=$(_read_team_config "$_ptc_i" "ROLE" "")
-        _ptc_wm=$(_read_team_config "$_ptc_i" "WORKER_MODEL" "")
-        _ptc_mm=$(_read_team_config "$_ptc_i" "MANAGER_MODEL" "")
-
-        # Default type based on position
-        if [ -z "$_ptc_type" ]; then
-          if [ "$_ptc_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _ptc_type="local"; else _ptc_type="worktree"; fi
-        fi
-        # Default worker count from grid
-        [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
-        # Convert workers to cols: cols = ceil(workers/2) — dynamic grid uses 2 rows
-        _ptc_cols=$(( (_ptc_workers + 1) / 2 ))
-        [ "$_ptc_cols" -lt 1 ] && _ptc_cols=1
-
-        _ptc_wt_spec=""
-        [ "$_ptc_type" = "worktree" ] && _ptc_wt_spec="auto"
-        local _ptc_team_type=""
-        [ "$_ptc_type" = "freelancer" ] && _ptc_team_type="freelancer"
-
-        local _ptc_def
-        _ptc_def=$(_read_team_config "$_ptc_i" "DEF" "")
-        # Premade type requires DEF; any team with DEF set uses definition-based spawn
-        if [ "$_ptc_type" = "premade" ] || [ -n "$_ptc_def" ]; then
-          if [ -z "$_ptc_def" ]; then
-            printf "${WARN}Team %s has type=premade but no DEF — skipping${RESET}\n" "$_ptc_i"
-            _ptc_fail=$((_ptc_fail + 1))
-            continue
-          fi
-          if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_ptc_def" "$_ptc_type" ); then
-            _ptc_fail=$((_ptc_fail + 1))
-          fi
-          (( _ptc_i < _ptc_total )) && sleep $DOEY_TEAM_LAUNCH_DELAY
-          continue
-        fi
-
-        if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$_ptc_cols" "$_ptc_wt_spec" "$_ptc_name" "$_ptc_role" "$_ptc_wm" "$_ptc_mm" "$_ptc_team_type" ); then
-          _ptc_fail=$((_ptc_fail + 1))
-        fi
-        (( _ptc_i < _ptc_total )) && sleep $DOEY_TEAM_LAUNCH_DELAY
-      done
-      [ "$_ptc_fail" -gt 0 ] && printf "${WARN}${_ptc_fail} team(s) failed${RESET}\n"
-      step_done
-    fi
-    # Update team 1's env with per-team config if specified (skip if DEF-based — already configured)
     if [ -z "$_team1_def" ]; then
       local _ptc1_name _ptc1_role _ptc1_wm _ptc1_mm
       _ptc1_name=$(_read_team_config "1" "NAME" "")
@@ -3074,77 +3025,21 @@ MANIFEST
         [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:1" "$_ptc1_name"
       fi
     fi
-  else
-    local _extra_teams=$((DOEY_INITIAL_TEAMS - 1))
-    if [ "$_extra_teams" -gt 0 ]; then
-      step_start 6 "Adding ${_extra_teams} more team windows..."
-      # Serialize team launches to prevent concurrent OAuth token requests
-      local _team_i _team_fail=0
-      for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
-        if ! ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" ); then
-          _team_fail=$((_team_fail + 1))
-        fi
-        (( _team_i < _extra_teams - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
-      done
-      [ "$_team_fail" -gt 0 ] && printf "${WARN}${_team_fail} team(s) failed${RESET}\n"
-      step_done
-    fi
+  fi
 
-    step_start 7 "Adding ${DOEY_INITIAL_WORKTREE_TEAMS} isolated worktree teams..."
-    # Serialize worktree team launches to prevent concurrent OAuth token requests
-    local TEAM_LAUNCH_DELAY=$DOEY_TEAM_LAUNCH_DELAY
-    local _wt_i _wt_ok=0
-    for (( _wt_i=0; _wt_i<DOEY_INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
-      if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "auto" ); then
-        _wt_ok=$((_wt_ok + 1))
-      fi
-      (( _wt_i < DOEY_INITIAL_WORKTREE_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
-    done
-    if [ "$_wt_ok" -gt 0 ]; then
-      step_done
-    else
-      printf "${WARN}skipped${RESET}\n"
-    fi
-
-    if [ "$DOEY_INITIAL_FREELANCER_TEAMS" -gt 0 ]; then
-      step_start 8 "Adding ${DOEY_INITIAL_FREELANCER_TEAMS} freelancer team(s)..."
-      local _fl_i _fl_ok=0
-      for (( _fl_i=0; _fl_i<DOEY_INITIAL_FREELANCER_TEAMS; _fl_i++ )); do
-        if ( add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "" "Freelancers" "" "" "" "freelancer" ); then
-          _fl_ok=$((_fl_ok + 1))
-        fi
-        (( _fl_i < DOEY_INITIAL_FREELANCER_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
-      done
-      if [ "$_fl_ok" -gt 0 ]; then
-        step_done
-      else
-        printf "${WARN}skipped${RESET}\n"
-      fi
-    fi
-  fi  # end of DOEY_TEAM_COUNT check
-
-  local final_team_windows team_count=0 _tw
-  final_team_windows=$(read_team_windows "$runtime_dir")
-  for _tw in $(echo "$final_team_windows" | tr ',' ' '); do
-    team_count=$((team_count + 1))
+  # Count T1 for the initial summary (remaining teams update session.env when done)
+  local _t1_team_windows _t1_team_count=0 _t1_tw
+  _t1_team_windows=$(read_team_windows "$runtime_dir")
+  for _t1_tw in $(echo "$_t1_team_windows" | tr ',' ' '); do
+    _t1_team_count=$((_t1_team_count + 1))
   done
-
-  (
-    sleep "$DOEY_MANAGER_BRIEF_DELAY"
-    # Boss briefing (pane 0.1)
-    tmux send-keys -t "$session:0.1" \
-      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. SM is at pane 0.2. ${team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
-    # SM briefing (pane 0.2)
-    tmux send-keys -t "$session:${SM_PANE}" \
-      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
-  ) &
 
   printf '\n'
   printf "   ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}\n"
   printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
   printf "\n"
   printf "   ${BOLD}Dashboard${RESET}  ${DIM}win 0  Info panel + Boss${RESET}\n"
-  printf "   ${BOLD}Teams${RESET}      ${DIM}%-4s windows (${final_team_windows})${RESET}\n" "$team_count"
+  printf "   ${BOLD}Teams${RESET}      ${DIM}%-4s windows (${_t1_team_windows})${RESET}\n" "$_t1_team_count"
   printf "   ${BOLD}Workers${RESET}    ${DIM}T1: %-4s (auto-expands, doey add)${RESET}\n" "$initial_workers"
   printf "\n"
   printf "   ${DIM}Project${RESET}   ${BOLD}%s${RESET}\n" "$name"
@@ -3156,8 +3051,98 @@ MANIFEST
   printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
   printf '\n'
 
+  # Background subshell: spawn remaining teams + send briefings
+  (
+    sleep 1  # Let attach happen first
+
+    # ── Spawn remaining teams (T2+) ──
+    if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
+      local _ptc_total="${DOEY_TEAM_COUNT}"
+      local _ptc_remaining=$((_ptc_total - 1))
+      if [ "$_ptc_remaining" -gt 0 ]; then
+        local _ptc_i _ptc_fail=0
+        for (( _ptc_i=2; _ptc_i<=_ptc_total; _ptc_i++ )); do
+          local _ptc_type _ptc_workers _ptc_name _ptc_role _ptc_wm _ptc_mm _ptc_cols _ptc_wt_spec
+          _ptc_type=$(_read_team_config "$_ptc_i" "TYPE" "")
+          _ptc_workers=$(_read_team_config "$_ptc_i" "WORKERS" "")
+          _ptc_name=$(_read_team_config "$_ptc_i" "NAME" "")
+          _ptc_role=$(_read_team_config "$_ptc_i" "ROLE" "")
+          _ptc_wm=$(_read_team_config "$_ptc_i" "WORKER_MODEL" "")
+          _ptc_mm=$(_read_team_config "$_ptc_i" "MANAGER_MODEL" "")
+
+          if [ -z "$_ptc_type" ]; then
+            if [ "$_ptc_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _ptc_type="local"; else _ptc_type="worktree"; fi
+          fi
+          [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
+          _ptc_cols=$(( (_ptc_workers + 1) / 2 ))
+          [ "$_ptc_cols" -lt 1 ] && _ptc_cols=1
+
+          _ptc_wt_spec=""
+          [ "$_ptc_type" = "worktree" ] && _ptc_wt_spec="auto"
+          local _ptc_team_type=""
+          [ "$_ptc_type" = "freelancer" ] && _ptc_team_type="freelancer"
+
+          local _ptc_def
+          _ptc_def=$(_read_team_config "$_ptc_i" "DEF" "")
+          if [ "$_ptc_type" = "premade" ] || [ -n "$_ptc_def" ]; then
+            if [ -n "$_ptc_def" ]; then
+              add_team_from_def "$session" "$runtime_dir" "$dir" "$_ptc_def" "$_ptc_type" || true
+            fi
+            (( _ptc_i < _ptc_total )) && sleep $DOEY_TEAM_LAUNCH_DELAY
+            continue
+          fi
+
+          add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$_ptc_cols" "$_ptc_wt_spec" "$_ptc_name" "$_ptc_role" "$_ptc_wm" "$_ptc_mm" "$_ptc_team_type" || true
+          (( _ptc_i < _ptc_total )) && sleep $DOEY_TEAM_LAUNCH_DELAY
+        done
+      fi
+    else
+      # Legacy mode: extra teams, worktrees, freelancers
+      local _extra_teams=$((DOEY_INITIAL_TEAMS - 1))
+      if [ "$_extra_teams" -gt 0 ]; then
+        local _team_i
+        for (( _team_i=0; _team_i<_extra_teams; _team_i++ )); do
+          add_dynamic_team_window "$session" "$runtime_dir" "$dir" || true
+          (( _team_i < _extra_teams - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
+        done
+      fi
+
+      local _wt_i
+      for (( _wt_i=0; _wt_i<DOEY_INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
+        add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "auto" || true
+        (( _wt_i < DOEY_INITIAL_WORKTREE_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
+      done
+
+      if [ "$DOEY_INITIAL_FREELANCER_TEAMS" -gt 0 ]; then
+        local _fl_i
+        for (( _fl_i=0; _fl_i<DOEY_INITIAL_FREELANCER_TEAMS; _fl_i++ )); do
+          add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "" "Freelancers" "" "" "" "freelancer" || true
+          (( _fl_i < DOEY_INITIAL_FREELANCER_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
+        done
+      fi
+    fi
+
+    # ── Briefings (after all teams are up) ──
+    sleep "$DOEY_MANAGER_BRIEF_DELAY"
+    local final_team_windows final_team_count=0 _ftw
+    final_team_windows=$(read_team_windows "$runtime_dir")
+    for _ftw in $(echo "$final_team_windows" | tr ',' ' '); do
+      final_team_count=$((final_team_count + 1))
+    done
+
+    tmux send-keys -t "$session:0.1" \
+      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. SM is at pane 0.2. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
+    tmux send-keys -t "$session:${SM_PANE}" \
+      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${final_team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
+  ) &
+  local _BG_SPAWN_PID=$!
+
+  # Attach immediately — user sees dashboard + T1 while remaining teams spawn behind
   tmux select-window -t "$session:0"
   attach_or_switch "$session"
+
+  # After detach, wait for background spawner to finish
+  wait "$_BG_SPAWN_PID" 2>/dev/null || true
 }
 
 _check_grid_feasibility() {
@@ -3563,7 +3548,7 @@ _launch_team_manager() {
   _append_settings _mgr_cmd "$runtime_dir"
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
-  sleep 0.2  # reduced from 0.5s — tmux is fast
+  # Removed sleep 0.2 — tmux send-keys is synchronous
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 }
 
@@ -3873,50 +3858,19 @@ add_dynamic_team_window() {
 
   # Only launch manager for non-freelancer teams
   if [ "$is_freelancer" = "true" ]; then
-    # Freelancer: pane 0 becomes a worker, split vertically for pane 1 — two rows in first column
-    local _fl_wm="${worker_model:-$DOEY_WORKER_MODEL}"
-    local _fl_acronym=""
-    [ -f "${runtime_dir}/session.env" ] && _fl_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
-
-    # Launch F0 as a regular freelancer worker in pane 0 (top of first column)
-    local _fl_pane_id="t${window_index}-f0"
-    [ -n "$_fl_acronym" ] && _fl_pane_id="${_fl_acronym}-${_fl_pane_id}"
-    local _fl_prompt="${runtime_dir}/worker-system-prompt-w${window_index}-0.md"
-    cp "${runtime_dir}/worker-system-prompt.md" "$_fl_prompt"
-    printf '\n\n## Identity\nYou are Freelancer 0 (%s) in pane %s.0 of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
-      "$_fl_pane_id" "$window_index" "$session" >> "$_fl_prompt"
-    local _fl_cmd="claude --dangerously-skip-permissions --effort high --model $_fl_wm --name \"T${window_index} F0\""
-    _append_settings _fl_cmd "$runtime_dir"
-    _fl_cmd+=" --append-system-prompt-file \"${_fl_prompt}\""
-    tmux send-keys -t "$session:${window_index}.0" "$_fl_cmd" Enter
-    tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
-    write_pane_status "$runtime_dir" "${session}:${window_index}.0" "RESERVED"
-    local _fl_safe0="${session}:${window_index}.0"
-    _fl_safe0="${_fl_safe0//[-:.]/_}"
-    echo "permanent" > "${runtime_dir}/status/${_fl_safe0}.reserved"
-    sleep "$DOEY_WORKER_LAUNCH_DELAY"
-
-    # Split pane 0 vertically to create pane 1 (bottom of first column)
+    # Freelancer: pane 0 is F0, split vertically for pane 1 (F1) — two rows in first column
+    # Split first, then batch-boot both workers in one call (single DOEY_WORKER_LAUNCH_DELAY)
     tmux split-window -v -t "$session:${window_index}.0" -c "$team_dir"
-    sleep 0.1
+    # Removed sleep 0.1 — tmux split-window is synchronous
     local _fl_p1
     _fl_p1="$(tmux list-panes -t "$session:$window_index" -F '#{pane_index}' | tail -1)"
-    local _fl_pane_id1="t${window_index}-f1"
-    [ -n "$_fl_acronym" ] && _fl_pane_id1="${_fl_acronym}-${_fl_pane_id1}"
-    local _fl_prompt1="${runtime_dir}/worker-system-prompt-w${window_index}-1.md"
-    cp "${runtime_dir}/worker-system-prompt.md" "$_fl_prompt1"
-    printf '\n\n## Identity\nYou are Freelancer 1 (%s) in pane %s.%s of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
-      "$_fl_pane_id1" "$window_index" "$_fl_p1" "$session" >> "$_fl_prompt1"
-    local _fl_cmd1="claude --dangerously-skip-permissions --effort high --model $_fl_wm --name \"T${window_index} F1\""
-    _append_settings _fl_cmd1 "$runtime_dir"
-    _fl_cmd1+=" --append-system-prompt-file \"${_fl_prompt1}\""
-    tmux send-keys -t "$session:${window_index}.${_fl_p1}" "$_fl_cmd1" Enter
+
+    # Name panes before boot
+    tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
     tmux select-pane -t "$session:${window_index}.${_fl_p1}" -T "T${window_index} F1"
-    write_pane_status "$runtime_dir" "${session}:${window_index}.${_fl_p1}" "RESERVED"
-    local _fl_safe1="${session}:${window_index}.${_fl_p1}"
-    _fl_safe1="${_fl_safe1//[-:.]/_}"
-    echo "permanent" > "${runtime_dir}/status/${_fl_safe1}.reserved"
-    sleep "$DOEY_WORKER_LAUNCH_DELAY"
+
+    # Batch-boot both freelancers — handles prompt files, commands, status, and RESERVED flags
+    _batch_boot_workers "$session" "$runtime_dir" "$window_index" "0:0" "${_fl_p1}:1"
 
     # Update worker count: F0 is uncounted (like manager pane), F1 adds 1
     # so doey_add_column numbering continues sequentially (F2, F3, ...)
@@ -3936,7 +3890,7 @@ add_dynamic_team_window() {
   local _col_i
   for (( _col_i=0; _col_i<initial_cols; _col_i++ )); do
     doey_add_column "$session" "$runtime_dir" "$team_dir" "$window_index"
-    (( _col_i < initial_cols - 1 )) && sleep 0.3
+    # Removed sleep 0.3 — tmux split-window is synchronous
   done
 
   _build_worker_pane_list "$session" "$window_index"
@@ -3992,7 +3946,7 @@ add_team_window() {
       tmux split-window -h -t "${session}:${window_index}.$((r * cols))" -c "$team_dir"
     done
   done
-  sleep 0.3
+  # Removed sleep 0.3 — tmux split-window is synchronous
 
   local actual
   actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l | tr -d ' ')
