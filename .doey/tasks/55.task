@@ -1,0 +1,12 @@
+TASK_ID=55
+TASK_TITLE=Redesign Huh wizard — fewer steps, charmbracelet polish, actually spawn teams
+TASK_STATUS=in_progress
+TASK_CREATED=1774909885
+TASK_TYPE=feature
+TASK_DESCRIPTION=The "Huh" setup wizard shown on first launch needs a complete overhaul. Three problems: (1) It has too many steps — consolidate into fewer, snappier screens. (2) The visual quality is low — make it charmbracelet-level polished (clean typography, good use of color, smooth flow). (3) It's broken — the teams it promises to start never actually get spawned. After the wizard completes, the teams it configured MUST actually be launched. Research the current wizard code first to understand the flow, then redesign and fix. The wizard lives somewhere in shell/ (likely doey.sh or a related file). Key acceptance criteria: fewer wizard steps, visually impressive output, and teams actually start after wizard completes.
+TASK_TAGS=tui,shell,install
+TASK_TEAM=W1
+TASK_LOG_1774909963=DISPATCHED: Phase 1 research to W1.0 freelancer
+TASK_LOG_1774909997=SCOPE_EXPANDED: Boss added TUI dashboard changes — reduce actions to 3, rename Quick Actions to Spawn Teams
+TASK_LOG_1774910041=SCOPE_EXPANDED: Dashboard task display broken — shows 'All clear' when tasks are active. Forwarded to W2.
+TASK_LOG_1774911520=PHASE_2: Research complete, dispatching implementation to W2

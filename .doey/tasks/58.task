@@ -1,0 +1,13 @@
+TASK_ID=58
+TASK_TITLE=Boss agent — enforce one-concern-per-task as standard procedure
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1774910158
+TASK_TYPE=feature
+TASK_DESCRIPTION=The Boss agent definition (agents/doey-boss.md) should enforce that each task covers exactly one concern. When a user gives multiple pieces of feedback (e.g. wizard redesign + dashboard action count + task display bug), Boss must automatically create separate tasks for each distinct concern — not bundle them into one mega-task. This is a product behavior rule, not a per-user memory. Add it to the Task Management section of the Boss agent definition. Criteria for splitting: different code areas, different work types (feature vs bugfix), or different acceptance criteria = separate tasks.
+TASK_TAGS=agent-defs,task-system
+TASK_LOG_1774910206=DISPATCHED: Sent to W1.0 for direct edit
+TASK_LOG_1774910229=RE-QUEUED: W1.0 has identity issue, waiting for idle worker
+TASK_TEAM=W1
+TASK_LOG_1774910266=DISPATCHED: Sent to W1.1 worker directly
+TASK_RESULT=Committed fb401f1
+TASK_FILES=agents/doey-boss.md
