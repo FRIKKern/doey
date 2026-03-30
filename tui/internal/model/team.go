@@ -616,10 +616,37 @@ func (m TeamModel) viewList() string {
 	if m.scrollOffset < 0 {
 		m.scrollOffset = 0
 	}
+
+	viewport := m.height - 1 // reserve 1 line for scroll indicator
+	if viewport < 1 {
+		viewport = 1
+	}
+
+	aboveCount := m.scrollOffset
+	belowCount := 0
 	if m.scrollOffset > 0 && m.scrollOffset < len(scrollLines) {
 		scrollLines = scrollLines[m.scrollOffset:]
 	}
+	if len(scrollLines) > viewport {
+		belowCount = len(scrollLines) - viewport
+		scrollLines = scrollLines[:viewport]
+	}
 	content = strings.Join(scrollLines, "\n")
+
+	// Scroll indicators
+	var indicators []string
+	if aboveCount > 0 {
+		indicators = append(indicators, fmt.Sprintf("↑ %d more above", aboveCount))
+	}
+	if belowCount > 0 {
+		indicators = append(indicators, fmt.Sprintf("↓ %d more below", belowCount))
+	}
+	if len(indicators) > 0 {
+		scrollHint := lipgloss.NewStyle().
+			Foreground(t.Muted).Faint(true).PaddingLeft(3).
+			Render(strings.Join(indicators, "  "))
+		content += "\n" + scrollHint
+	}
 
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }

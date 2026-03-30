@@ -128,6 +128,7 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 			if m.summaryMode {
 				if m.cursor > 0 {
 					m.cursor--
+					m.ensureAgentVisible()
 				}
 			} else {
 				if m.scrollOffset > 0 {
@@ -140,6 +141,7 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 			if m.summaryMode {
 				if m.cursor < len(m.agents)-1 {
 					m.cursor++
+					m.ensureAgentVisible()
 				}
 			} else {
 				maxOff := m.detailMaxScroll()
@@ -166,11 +168,13 @@ func (m AgentsModel) updateSummary(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
 		if m.cursor < 0 {
 			m.cursor = total - 1
 		}
+		m.ensureAgentVisible()
 	case key.Matches(msg, m.keyMap.Down):
 		m.cursor++
 		if m.cursor >= total {
 			m.cursor = 0
 		}
+		m.ensureAgentVisible()
 	case key.Matches(msg, m.keyMap.Select):
 		m.summaryMode = false
 		m.scrollOffset = 0
@@ -251,6 +255,53 @@ func (m *AgentsModel) rebuildGroups() {
 		for range agents {
 			m.flat = append(m.flat, groupIdx)
 		}
+	}
+}
+
+// ensureAgentVisible adjusts scrollOffset so the cursor card is in view.
+func (m *AgentsModel) ensureAgentVisible() {
+	if len(m.agents) == 0 {
+		m.scrollOffset = 0
+		return
+	}
+
+	// Each card is ~6 rendered lines (border + padding + content + gap).
+	// Domain headers take ~3 lines (blank + header + blank).
+	// Header overhead: AGENTS header + rule + summary = ~4 lines.
+	const linesPerCard = 6
+	const headerOverhead = 4
+
+	cursorLine := headerOverhead
+	flatIdx := 0
+	for _, g := range m.groups {
+		if m.collapsedDomains[g.domain] {
+			flatIdx += len(g.agents)
+			continue
+		}
+		// Domain header takes ~3 lines
+		cursorLine += 3
+		for range g.agents {
+			if flatIdx == m.cursor {
+				goto found
+			}
+			cursorLine += linesPerCard
+			flatIdx++
+		}
+	}
+found:
+	viewport := m.height - 2
+	if viewport < 1 {
+		viewport = 1
+	}
+
+	if cursorLine < m.scrollOffset {
+		m.scrollOffset = cursorLine
+	}
+	if cursorLine+linesPerCard > m.scrollOffset+viewport {
+		m.scrollOffset = cursorLine + linesPerCard - viewport
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
 	}
 }
 
@@ -429,7 +480,49 @@ func (m AgentsModel) viewSummary() string {
 			Render("enter to view details")
 	}
 
-	return header + "\n" + rule + "\n" + summary + "\n" + body + "\n" + hint
+	content := header + "\n" + rule + "\n" + summary + "\n" + body + "\n" + hint
+
+	// Apply scroll offset — viewport follows cursor
+	allLines := strings.Split(content, "\n")
+	if m.scrollOffset > len(allLines)-1 {
+		m.scrollOffset = len(allLines) - 1
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+
+	viewport := m.height - 1 // reserve 1 line for scroll indicator
+	if viewport < 1 {
+		viewport = 1
+	}
+
+	aboveCount := m.scrollOffset
+	belowCount := 0
+	if m.scrollOffset > 0 && m.scrollOffset < len(allLines) {
+		allLines = allLines[m.scrollOffset:]
+	}
+	if len(allLines) > viewport {
+		belowCount = len(allLines) - viewport
+		allLines = allLines[:viewport]
+	}
+	content = strings.Join(allLines, "\n")
+
+	// Scroll indicators
+	var indicators []string
+	if aboveCount > 0 {
+		indicators = append(indicators, fmt.Sprintf("↑ %d more above", aboveCount))
+	}
+	if belowCount > 0 {
+		indicators = append(indicators, fmt.Sprintf("↓ %d more below", belowCount))
+	}
+	if len(indicators) > 0 {
+		scrollHint := lipgloss.NewStyle().
+			Foreground(t.Muted).Faint(true).PaddingLeft(3).
+			Render(strings.Join(indicators, "  "))
+		content += "\n" + scrollHint
+	}
+
+	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
 
 // detailMaxScroll returns the maximum scroll offset for the detail view.
