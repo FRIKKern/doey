@@ -30,6 +30,14 @@ while IFS='=' read -r key value; do
   esac
 done < "$SESSION_ENV"
 
+REMOTE=$(grep '^REMOTE=' "$SESSION_ENV" 2>/dev/null | head -1 | cut -d= -f2-) || true
+
+TUNNEL_URL=""
+TUNNEL_ENV="${RUNTIME_DIR}/tunnel.env"
+if [ -f "$TUNNEL_ENV" ]; then
+  TUNNEL_URL=$(grep '^TUNNEL_URL=' "$TUNNEL_ENV" 2>/dev/null | head -1 | cut -d= -f2-) || true
+fi
+
 # Pane identity
 PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
 PANE_INDEX="${PANE##*.}"
@@ -125,6 +133,8 @@ export DOEY_TEAM_DIR="${wt_dir:-$PROJECT_DIR}"
 export DOEY_PROJECT_ACRONYM="$PROJECT_ACRONYM"
 export DOEY_PANE_ID="$PANE_ID"
 export DOEY_FULL_PANE_ID="$FULL_PANE_ID"
+export DOEY_REMOTE="${REMOTE:-false}"
+export DOEY_TUNNEL_URL="${TUNNEL_URL:-}"
 EOF
 fi
 

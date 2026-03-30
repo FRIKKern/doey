@@ -181,3 +181,20 @@
 #   DOEY_INITIAL_TEAMS=4
 #   DOEY_INITIAL_WORKTREE_TEAMS=2
 #   DOEY_MAX_WORKERS=30
+
+# =============================================================================
+# Remote Access & Tunneling
+# =============================================================================
+# Auto-detect remote sessions and start tunnels for localhost services.
+
+# Enable auto-tunnel when remote session detected (true/false)
+# DOEY_TUNNEL_ENABLED=false
+
+# Tunnel provider: cloudflared, ngrok, bore, or auto (detect first available)
+# DOEY_TUNNEL_PROVIDER=auto
+
+# Ports to tunnel (comma-separated). Empty = auto-detect common ports.
+# DOEY_TUNNEL_PORTS=
+
+# Custom domain for tunnel (provider-specific, optional)
+# DOEY_TUNNEL_DOMAIN=
