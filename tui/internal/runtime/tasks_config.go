@@ -28,6 +28,22 @@ type PersistentTaskLog struct {
 	Entry     string `json:"entry"`
 }
 
+// PersistentSubtask represents a subtask parsed from TASK_SUBTASK_<N>_* fields.
+type PersistentSubtask struct {
+	Index    int    `json:"index"`
+	Title    string `json:"title"`
+	Status   string `json:"status"`             // pending, in_progress, done, failed
+	Assignee string `json:"assignee,omitempty"`
+}
+
+// PersistentUpdate represents a live update parsed from TASK_UPDATE_<N>_* fields.
+type PersistentUpdate struct {
+	Index     int    `json:"index"`
+	Timestamp int64  `json:"ts"`
+	Author    string `json:"author,omitempty"`
+	Text      string `json:"text"`
+}
+
 // PersistentTask is a task stored in the persistent JSON store.
 type PersistentTask struct {
 	ID           string              `json:"id"`
@@ -56,6 +72,9 @@ type PersistentTask struct {
 	// Proof-of-completion fields
 	FilesChanged []string `json:"files_changed,omitempty"` // files modified by task workers
 	Commits      string   `json:"commits,omitempty"`       // commit hashes with one-line messages
+	// Live tracking fields
+	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
+	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log
 }
 
 // TaskStore holds all persistent tasks.

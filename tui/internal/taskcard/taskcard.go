@@ -416,8 +416,24 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, proofRows...)
 	}
 
-	// --- Subtasks ---
-	if len(e.Item.Subtasks) > 0 {
+	// --- Subtasks (prefer persistent subtasks with assignees, fall back to runtime) ---
+	if len(task.Subtasks) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, "Subtasks"))
+		// Count done for progress bar.
+		pDone := 0
+		for _, ps := range task.Subtasks {
+			if ps.Status == "done" {
+				pDone++
+			}
+		}
+		sections = append(sections, styles.ExpandedProgressBar(e.Theme, pDone, len(task.Subtasks), contentWidth))
+		for i, ps := range task.Subtasks {
+			selected := i == e.SubtaskCursor
+			row := persistentSubtaskRow(e.Theme, ps, selected)
+			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), row))
+		}
+	} else if len(e.Item.Subtasks) > 0 {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(e.Theme, "Subtasks"))
 		sections = append(sections, styles.ExpandedProgressBar(e.Theme, e.Item.SubtaskDone, e.Item.SubtaskTotal, contentWidth))
@@ -426,6 +442,27 @@ func (e *ExpandedCard) Render() string {
 			selected := i == e.SubtaskCursor
 			row := styles.SubtaskRow(e.Theme, st.Title, st.Status, done, selected, 0)
 			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), row))
+		}
+	}
+
+	// --- Live Updates ---
+	if len(task.Updates) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(e.Theme, "Live Updates"))
+		for _, upd := range task.Updates {
+			ts := relativeTime(upd.Timestamp)
+			styledTs := lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(ts)
+			author := ""
+			if upd.Author != "" {
+				author = lipgloss.NewStyle().Foreground(e.Theme.Accent).Bold(true).Render(upd.Author)
+			}
+			text := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(upd.Text)
+			line := "  " + styledTs
+			if author != "" {
+				line += "  " + author
+			}
+			line += "  " + text
+			sections = append(sections, line)
 		}
 	}
 
@@ -629,8 +666,13 @@ func (e *ExpandedCard) ContentHeight() int {
 	if proofRows := e.renderProofSection(); len(proofRows) > 0 {
 		lines += len(proofRows) + 1 // proof section + spacing
 	}
-	if len(e.Item.Subtasks) > 0 {
+	if len(e.Item.Task.Subtasks) > 0 {
+		lines += len(e.Item.Task.Subtasks) + 3
+	} else if len(e.Item.Subtasks) > 0 {
 		lines += len(e.Item.Subtasks) + 3 // header + progress bar + items + spacing
+	}
+	if len(e.Item.Task.Updates) > 0 {
+		lines += len(e.Item.Task.Updates) + 2 // header + spacing + items
 	}
 	if e.Item.Task.DecisionLog != "" {
 		decLines := strings.Count(e.Item.Task.DecisionLog, "\n") + 1
@@ -760,6 +802,50 @@ func formatAge(d time.Duration) string {
 	default:
 		days := int(d.Hours() / 24)
 		return fmt.Sprintf("%dd", days)
+	}
+}
+
+// persistentSubtaskRow renders a single persistent subtask with status icon and optional assignee.
+func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, selected bool) string {
+	var icon string
+	switch ps.Status {
+	case "done":
+		icon = lipgloss.NewStyle().Foreground(theme.Success).Render("●")
+	case "in_progress":
+		icon = lipgloss.NewStyle().Foreground(theme.Warning).Render("◑")
+	case "failed":
+		icon = lipgloss.NewStyle().Foreground(theme.Danger).Render("✗")
+	default: // pending
+		icon = lipgloss.NewStyle().Foreground(theme.Muted).Render("○")
+	}
+
+	title := ps.Title
+	if selected {
+		title = lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render(title)
+	}
+
+	row := "  " + icon + " " + title
+	if ps.Assignee != "" {
+		row += "  " + lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render("↳ "+ps.Assignee)
+	}
+	return row
+}
+
+// relativeTime converts a unix epoch timestamp to a relative time string.
+func relativeTime(epoch int64) string {
+	if epoch <= 0 {
+		return ""
+	}
+	d := time.Since(time.Unix(epoch, 0))
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
 }
 
