@@ -42,18 +42,15 @@ type Model struct {
 	snapshot   runtime.Snapshot
 	header     HeaderModel
 	dashboard  DashboardModel
-	welcome    WelcomeModel
 	tasks      TasksModel
 	team       TeamModel
 	agents     AgentsModel
-	debug      DebugModel
-	messages   MessagesModel
-	logView     LogViewModel
+	logsGroup  LogsGroupModel
 	connections ConnectionsModel
 	tabBar      TabBarModel
 	footer     FooterModel
 	heartbeats map[string]runtime.HeartbeatState
-	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=agents, 4=info, 5=debug, 6=messages, 7=logs, 8=connections
+	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=agents, 4=logs(group), 5=connections
 	width      int
 	height     int
 	ready      bool
@@ -67,9 +64,6 @@ func New(runtimeDir string) Model {
 		{Name: "Teams", Icon: "◈"},
 		{Name: "Tasks", Icon: "▣"},
 		{Name: "Agents", Icon: "◉"},
-		{Name: "Info", Icon: "ℹ"},
-		{Name: "Debug", Icon: "⚙"},
-		{Name: "Messages", Icon: "✉"},
 		{Name: "Logs", Icon: "▤"},
 		{Name: "Connections", Icon: "⊕"},
 	}
@@ -77,13 +71,10 @@ func New(runtimeDir string) Model {
 		runtime:   runtime.NewReader(runtimeDir),
 		header:    NewHeaderModel(),
 		dashboard: NewDashboardModel(runtimeDir, "", 0, 0, theme),
-		welcome:   NewWelcomeModel(),
-		tasks:     NewTasksModel(),
-		team:      NewTeamModel(theme),
-		agents:    NewAgentsModel(theme),
-		debug:     NewDebugModel(theme),
-		messages:  NewMessagesModel(theme),
-		logView:     NewLogViewModel(theme),
+		tasks:       NewTasksModel(),
+		team:        NewTeamModel(theme),
+		agents:      NewAgentsModel(theme),
+		logsGroup:   NewLogsGroupModel(theme),
 		connections: NewConnectionsModel(theme),
 		tabBar:      NewTabBarModel(tabs),
 		footer:    NewFooterModel(),
@@ -144,13 +135,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.heartbeats = runtime.AggregateHeartbeats(m.snapshot)
 		m.header.SetSnapshot(m.snapshot)
 		m.dashboard, _ = m.dashboard.Update(msg)
-		m.welcome.SetSnapshot(m.snapshot)
 		m.tasks.SetSnapshot(m.snapshot)
 		m.team.SetSnapshot(m.snapshot)
 		m.agents.SetSnapshot(m.snapshot)
-		m.debug.SetSnapshot(m.snapshot)
-		m.messages.SetSnapshot(m.snapshot)
-		m.logView.SetSnapshot(m.snapshot)
+		m.logsGroup.SetSnapshot(m.snapshot)
 		m.connections.SetSnapshot(m.snapshot)
 
 	case SnapshotRefreshMsg:
@@ -252,14 +240,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case 3:
 					m.agents, cmd = m.agents.Update(escMsg)
 				case 4:
-					m.welcome, cmd = m.welcome.Update(escMsg)
+					m.logsGroup, cmd = m.logsGroup.Update(escMsg)
 				case 5:
-					m.debug, cmd = m.debug.Update(escMsg)
-				case 6:
-					m.messages, cmd = m.messages.Update(escMsg)
-				case 7:
-					m.logView, cmd = m.logView.Update(escMsg)
-				case 8:
 					m.connections, cmd = m.connections.Update(escMsg)
 				}
 				cmds = append(cmds, cmd)
@@ -287,14 +269,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 3:
 			m.agents, cmd = m.agents.Update(msg)
 		case 4:
-			m.welcome, cmd = m.welcome.Update(msg)
+			m.logsGroup, cmd = m.logsGroup.Update(msg)
 		case 5:
-			m.debug, cmd = m.debug.Update(msg)
-		case 6:
-			m.messages, cmd = m.messages.Update(msg)
-		case 7:
-			m.logView, cmd = m.logView.Update(msg)
-		case 8:
 			m.connections, cmd = m.connections.Update(msg)
 		}
 		cmds = append(cmds, cmd)
@@ -310,12 +286,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel) {
-			m.focusIndex = (m.focusIndex + 1) % 9
+			m.focusIndex = (m.focusIndex + 1) % 6
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel) {
-			m.focusIndex = (m.focusIndex + 8) % 9 // +8 mod 9 == -1 with wrap
+			m.focusIndex = (m.focusIndex + 5) % 6 // +5 mod 6 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -362,14 +338,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 3:
 			m.agents, cmd = m.agents.Update(msg)
 		case 4:
-			m.welcome, cmd = m.welcome.Update(msg)
+			m.logsGroup, cmd = m.logsGroup.Update(msg)
 		case 5:
-			m.debug, cmd = m.debug.Update(msg)
-		case 6:
-			m.messages, cmd = m.messages.Update(msg)
-		case 7:
-			m.logView, cmd = m.logView.Update(msg)
-		case 8:
 			m.connections, cmd = m.connections.Update(msg)
 		}
 		cmds = append(cmds, cmd)
@@ -388,7 +358,7 @@ func (m Model) isDetailView() bool {
 	case 3:
 		return !m.agents.leftFocused
 	case 4:
-		return false // Info (welcome) has no detail view
+		return !m.logsGroup.leftFocused
 	}
 	return false
 }
@@ -444,18 +414,9 @@ func (m Model) View() string {
 		m.agents.SetSize(m.width, bodyH)
 		body = m.agents.View()
 	case 4:
-		m.welcome.SetSize(m.width, bodyH)
-		body = m.welcome.View()
+		m.logsGroup.SetSize(m.width, bodyH)
+		body = m.logsGroup.View()
 	case 5:
-		m.debug.SetSize(m.width, bodyH)
-		body = m.debug.View()
-	case 6:
-		m.messages.SetSize(m.width, bodyH)
-		body = m.messages.View()
-	case 7:
-		m.logView.SetSize(m.width, bodyH)
-		body = m.logView.View()
-	case 8:
 		m.connections.SetSize(m.width, bodyH)
 		body = m.connections.View()
 	}
@@ -478,13 +439,10 @@ func (m *Model) propagateSizes() {
 
 	// All panels get full width — only one shown at a time
 	m.dashboard = m.dashboard.SetSize(m.width, bodyH)
-	m.welcome.SetSize(m.width, bodyH)
 	m.tasks.SetSize(m.width, bodyH)
 	m.team.SetSize(m.width, bodyH)
 	m.agents.SetSize(m.width, bodyH)
-	m.debug.SetSize(m.width, bodyH)
-	m.messages.SetSize(m.width, bodyH)
-	m.logView.SetSize(m.width, bodyH)
+	m.logsGroup.SetSize(m.width, bodyH)
 	m.connections.SetSize(m.width, bodyH)
 	m.updateFocus()
 }
@@ -496,11 +454,8 @@ func (m *Model) updateFocus() {
 	m.team.SetFocused(m.focusIndex == 1)
 	m.tasks.SetFocused(m.focusIndex == 2)
 	m.agents.SetFocused(m.focusIndex == 3)
-	m.welcome.SetFocused(m.focusIndex == 4)
-	m.debug.SetFocused(m.focusIndex == 5)
-	m.messages.SetFocused(m.focusIndex == 6)
-	m.logView.SetFocused(m.focusIndex == 7)
-	m.connections.SetFocused(m.focusIndex == 8)
+	m.logsGroup.SetFocused(m.focusIndex == 4)
+	m.connections.SetFocused(m.focusIndex == 5)
 }
 
 // snapshotTickCmd triggers a full snapshot re-read every 5s.
