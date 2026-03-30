@@ -35,14 +35,6 @@ type ViewTasksMsg struct{}
 // dashTickMsg is the internal tick for reloading task data.
 type dashTickMsg time.Time
 
-// taskEntry is an internal summary of an active task for display.
-type taskEntry struct {
-	ID     int
-	Title  string
-	Status string
-	Type   string
-}
-
 // quickAction defines a quick action card.
 type quickAction struct {
 	icon        string
@@ -67,7 +59,8 @@ type DashboardModel struct {
 	height       int
 	theme        styles.Theme
 	focused      bool
-	tasks        []taskEntry
+	tasks        []runtime.PersistentTask
+	heartbeats   map[string]runtime.HeartbeatState
 	keyMap       keys.KeyMap
 	scrollOffset int
 	actionCursor int              // selected quick action card (0..3)
@@ -215,6 +208,11 @@ func (m DashboardModel) tickCmd() tea.Cmd {
 	})
 }
 
+// SetHeartbeats updates the heartbeat state map for all tasks.
+func (m *DashboardModel) SetHeartbeats(hb map[string]runtime.HeartbeatState) {
+	m.heartbeats = hb
+}
+
 // loadTasks reads .doey/tasks/ and filters for active/in_progress tasks.
 func (m *DashboardModel) loadTasks() {
 	if m.projectDir != "" {
@@ -226,16 +224,10 @@ func (m *DashboardModel) loadTasks() {
 		return
 	}
 
-	var active []taskEntry
+	var active []runtime.PersistentTask
 	for _, t := range store.Tasks {
 		if t.Status == "active" || t.Status == "in_progress" {
-			id, _ := strconv.Atoi(t.ID)
-			active = append(active, taskEntry{
-				ID:     id,
-				Title:  t.Title,
-				Status: t.Status,
-				Type:   t.Type,
-			})
+			active = append(active, t)
 		}
 	}
 	m.tasks = active
@@ -266,8 +258,8 @@ func (m DashboardModel) updateMouse(msg tea.MouseMsg) (DashboardModel, tea.Cmd) 
 	if msg.Action == tea.MouseActionRelease {
 		// Task card clicks
 		for _, t := range m.tasks {
-			if zone.Get(fmt.Sprintf("dash-task-%d", t.ID)).InBounds(msg) {
-				id := t.ID
+			if zone.Get(fmt.Sprintf("dash-task-%s", t.ID)).InBounds(msg) {
+				id, _ := strconv.Atoi(t.ID)
 				return m, func() tea.Msg { return SwitchToTaskMsg{TaskID: id} }
 			}
 		}
@@ -326,97 +318,226 @@ func (m DashboardModel) renderActiveTasks(w int) string {
 	if len(m.tasks) == 0 {
 		empty := lipgloss.NewStyle().
 			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No active tasks")
+			Align(lipgloss.Center).
+			Width(w).
+			PaddingTop(2).
+			PaddingBottom(1).
+			Render("All clear — no active tasks ✓")
 		return "\n" + header + "\n" + rule + "\n" + empty + "\n"
 	}
 
-	cardW := w - 8
-	if cardW > styles.MaxCardWidth {
-		cardW = styles.MaxCardWidth
-	}
-	if cardW < 30 {
-		cardW = 30
+	cardW := w - 4
+	if cardW < 40 {
+		cardW = 40
 	}
 
 	var cards []string
 	for _, task := range m.tasks {
-		card := m.renderTaskCard(task, cardW)
+		card := m.renderHeartbeatCard(task, cardW)
 		cards = append(cards, card)
 	}
 
 	body := lipgloss.NewStyle().
-		Padding(1, 3).
-		Render(strings.Join(cards, "\n"))
+		Padding(1, 1).
+		Render(strings.Join(cards, "\n\n"))
 
 	return "\n" + header + "\n" + rule + "\n" + body
 }
 
-func (m DashboardModel) renderTaskCard(task taskEntry, w int) string {
+// categoryAccentColor returns the accent color for a task category.
+func categoryAccentColor(category string, t styles.Theme) lipgloss.AdaptiveColor {
+	switch category {
+	case "feature":
+		return t.Info
+	case "bug", "bugfix":
+		return t.Warning
+	case "infrastructure":
+		return t.Accent
+	case "refactor":
+		return t.Primary
+	case "docs":
+		return t.Success
+	default:
+		return t.Primary
+	}
+}
+
+func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) string {
 	t := m.theme
+	accent := categoryAccentColor(task.Category, t)
 
-	// Status badge
+	// --- Line 1: icon + #ID bold + Title ---
+	icon := styles.TaskIcon(task.Status)
+	idTag := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(fmt.Sprintf("#%s", task.ID))
+	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(task.Title)
+	line1 := icon + " " + idTag + " " + title
+
+	// --- Line 2: status badge + type tag + team badge + tags ---
 	badge := styles.StatusBadgeCard(task.Status, t)
-
-	// Type tag
 	typeTag := ""
 	if task.Type != "" {
 		typeTag = " " + styles.TypeTagCard(task.Type, t)
 	}
-
-	// Title
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(t.Text).
-		Render(fmt.Sprintf("#%d %s", task.ID, task.Title))
-
-	// ID line
-	idStr := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
-		Render(fmt.Sprintf("Task %d", task.ID))
-
-	content := title + "\n" + badge + typeTag + "  " + idStr
-
-	// Show assigned workers from pane statuses
-	taskIDStr := strconv.Itoa(task.ID)
-	var assignedPanes []runtime.PaneStatus
-	for _, ps := range m.snapshot.Panes {
-		if ps.Task != "" && strings.Contains(ps.Task, taskIDStr) {
-			assignedPanes = append(assignedPanes, ps)
-		}
+	teamBadge := ""
+	if task.Team != "" {
+		teamBadge = " " + lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(accent).
+			Padding(0, 1).
+			Render(task.Team)
 	}
-	if len(assignedPanes) > 0 {
-		var workerBadges []string
-		finished := 0
-		for _, ps := range assignedPanes {
-			label := fmt.Sprintf("W%d.%d", ps.WindowIdx, ps.PaneIdx)
-			var statusStyle lipgloss.Style
-			switch ps.Status {
-			case "BUSY", "WORKING":
-				statusStyle = lipgloss.NewStyle().Foreground(t.Primary)
-			case "FINISHED":
-				statusStyle = lipgloss.NewStyle().Foreground(t.Success)
-				finished++
-			case "ERROR":
-				statusStyle = lipgloss.NewStyle().Foreground(t.Danger)
-			default:
-				statusStyle = lipgloss.NewStyle().Foreground(t.Muted)
+	tagPills := ""
+	for _, tag := range task.Tags {
+		tagPills += " " + lipgloss.NewStyle().
+			Foreground(accent).
+			Faint(true).
+			Render("‹"+tag+"›")
+	}
+	line2 := badge + typeTag + teamBadge + tagPills
+
+	// --- Line 3: description excerpt (first 2-3 lines, dimmed) ---
+	descLine := ""
+	if task.Description != "" {
+		desc := task.Description
+		descLines := strings.SplitN(desc, "\n", 4)
+		if len(descLines) > 3 {
+			descLines = descLines[:3]
+		}
+		descText := strings.Join(descLines, "\n")
+		contentW := w - 4
+		if contentW > 0 && len(descText) > contentW*3 {
+			descText = descText[:contentW*3-3] + "..."
+		}
+		descLine = t.Dim.Render(descText)
+	}
+
+	// --- Line 4: subtask progress bar ---
+	progressLine := ""
+	if len(task.Subtasks) > 0 {
+		done := 0
+		for _, st := range task.Subtasks {
+			if st.Status == "done" {
+				done++
 			}
-			workerBadges = append(workerBadges, statusStyle.Render(label+": "+ps.Status))
 		}
-		workerLine := lipgloss.NewStyle().Foreground(t.Muted).Render("Workers: ") +
-			strings.Join(workerBadges, lipgloss.NewStyle().Foreground(t.Muted).Render(" | "))
-		progress := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
-			Render(fmt.Sprintf("  (%d/%d done)", finished, len(assignedPanes)))
-		content += "\n" + workerLine + progress
+		total := len(task.Subtasks)
+		barWidth := w - 22
+		if barWidth < 10 {
+			barWidth = 10
+		}
+		bar := styles.ExpandedProgressBar(t, done, total, barWidth)
+		label := styles.CardMetaStyle(t).Render(fmt.Sprintf("  %d/%d subtasks", done, total))
+		progressLine = bar + label
 	}
 
-	cardStyle := styles.CardStyle(t, task.Status, false, w)
-	rendered := cardStyle.Render(content)
+	// --- Line 5: heartbeat line ---
+	heartbeatLine := ""
+	if hs, ok := m.heartbeats[task.ID]; ok && hs.ActiveWorkers > 0 {
+		var healthDot string
+		switch hs.Health {
+		case "green", "healthy":
+			healthDot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
+		case "amber", "degraded":
+			healthDot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+		case "idle":
+			healthDot = lipgloss.NewStyle().Foreground(t.Muted).Render("●")
+		default:
+			healthDot = lipgloss.NewStyle().Foreground(t.Danger).Render("●")
+		}
+		workers := fmt.Sprintf("%d worker", hs.ActiveWorkers)
+		if hs.ActiveWorkers != 1 {
+			workers += "s"
+		}
+		parts := healthDot + " " + styles.CardMetaStyle(t).Render(workers+" active")
+		if hs.ActivityText != "" {
+			parts += t.DotSeparator() + styles.CardMetaStyle(t).Render(hs.ActivityText)
+		}
+		if !hs.LastActivity.IsZero() {
+			elapsed := time.Since(hs.LastActivity)
+			if elapsed < 5*time.Second {
+				parts += lipgloss.NewStyle().Foreground(t.Success).Render("  now")
+			} else {
+				parts += styles.CardMetaStyle(t).Render("  " + formatDashAge(elapsed) + " ago")
+			}
+		}
+		heartbeatLine = parts
+	} else {
+		heartbeatLine = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("● waiting for activity...")
+	}
 
-	return zone.Mark(fmt.Sprintf("dash-task-%d", task.ID), rendered)
+	// --- Line 6: latest update ---
+	updateLine := ""
+	if len(task.Updates) > 0 {
+		latest := task.Updates[len(task.Updates)-1]
+		ts := ""
+		if latest.Timestamp > 0 {
+			ts = time.Unix(latest.Timestamp, 0).Format("15:04") + " "
+		}
+		author := ""
+		if latest.Author != "" {
+			author = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(latest.Author) + " "
+		}
+		text := latest.Text
+		if len(text) > w-20 {
+			text = text[:w-23] + "..."
+		}
+		updateLine = styles.CardMetaStyle(t).Render(ts) + author + t.Dim.Render(text)
+	}
+
+	// --- Line 7: files changed ---
+	filesLine := ""
+	if len(task.FilesChanged) > 0 {
+		shown := task.FilesChanged
+		suffix := ""
+		if len(shown) > 3 {
+			shown = shown[:3]
+			suffix = fmt.Sprintf(" +%d more", len(task.FilesChanged)-3)
+		}
+		filesLine = styles.CardMetaStyle(t).Render("files: " + strings.Join(shown, ", ") + suffix)
+	}
+
+	// Assemble all non-empty lines
+	var lines []string
+	lines = append(lines, line1, line2)
+	if descLine != "" {
+		lines = append(lines, descLine)
+	}
+	if progressLine != "" {
+		lines = append(lines, progressLine)
+	}
+	lines = append(lines, heartbeatLine)
+	if updateLine != "" {
+		lines = append(lines, updateLine)
+	}
+	if filesLine != "" {
+		lines = append(lines, filesLine)
+	}
+
+	content := strings.Join(lines, "\n")
+
+	// Card with rounded border, accent-colored
+	cardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(accent).
+		Padding(0, 1).
+		Width(w - 2)
+
+	rendered := cardStyle.Render(content)
+	return zone.Mark(fmt.Sprintf("dash-task-%s", task.ID), rendered)
+}
+
+// formatDashAge formats a duration into a compact age string.
+func formatDashAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
 }
 
 func (m DashboardModel) renderQuickActions(w int) string {
