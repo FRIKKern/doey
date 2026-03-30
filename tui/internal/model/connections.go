@@ -16,24 +16,68 @@ import (
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
-// ConnectionsModel displays external service connections.
+// defaultConnections returns placeholder connections shown when none are configured.
+func defaultConnections() []runtime.Connection {
+	return []runtime.Connection{
+		{Name: "GitHub", Type: "api", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Repository access, PRs, and issues"}},
+		{Name: "Vercel", Type: "api", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Deploy previews and production hosting"}},
+		{Name: "Sanity", Type: "api", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Headless CMS content management"}},
+		{Name: "Figma", Type: "api", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Design files and component libraries"}},
+		{Name: "PostgreSQL", Type: "database", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Primary relational database"}},
+		{Name: "Redis", Type: "database", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Caching and session storage"}},
+		{Name: "Custom API", Type: "api", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Connect any REST or GraphQL API"}},
+		{Name: "MCP Server", Type: "mcp", Status: "disconnected", URL: "", Metadata: map[string]string{"description": "Model Context Protocol server"}},
+	}
+}
+
+// connectionGuidance returns helpful text for a connection type/name.
+func connectionGuidance(name, connType string) string {
+	switch strings.ToLower(name) {
+	case "github":
+		return "Provide a personal access token with repo scope.\nUsed for repository access, pull requests, and issue tracking."
+	case "vercel":
+		return "Add your Vercel API token from vercel.com/account/tokens.\nEnables deploy previews and production deployment management."
+	case "sanity":
+		return "Enter your Sanity project ID and API token.\nConnects to your headless CMS for content management."
+	case "figma":
+		return "Add your Figma personal access token.\nProvides access to design files and component libraries."
+	case "postgresql", "postgres":
+		return "Provide a connection string: postgresql://user:pass@host:5432/db\nUsed as the primary relational database."
+	case "redis":
+		return "Provide a connection string: redis://host:6379\nUsed for caching, queues, and session storage."
+	case "mcp server":
+		return "Enter the MCP server URL and any required auth token.\nConnects to a Model Context Protocol server for tool access."
+	}
+	switch connType {
+	case "database":
+		return "Provide a database connection string or host/port.\nUsed for data storage and retrieval."
+	case "api":
+		return "Enter the API base URL and authentication key.\nUsed for external service integration."
+	case "mcp":
+		return "Enter the MCP server endpoint URL.\nProvides tool and resource access via Model Context Protocol."
+	default:
+		return "Configure this connection with the required credentials."
+	}
+}
+
+// ConnectionsModel displays external service connections in a split-panel layout.
 type ConnectionsModel struct {
 	connections  []runtime.Connection
 	theme        styles.Theme
-	summaryMode  bool
 	cursor       int
 	keyMap       keys.KeyMap
 	width        int
 	height       int
 	focused      bool
-	scrollOffset int
+	leftFocused  bool
+	rightScroll  int
 }
 
-// NewConnectionsModel creates a connections panel starting in summary mode.
+// NewConnectionsModel creates a connections panel with left list focused.
 func NewConnectionsModel(theme styles.Theme) ConnectionsModel {
 	return ConnectionsModel{
 		theme:       theme,
-		summaryMode: true,
+		leftFocused: true,
 		keyMap:      keys.DefaultKeyMap(),
 	}
 }
@@ -43,7 +87,15 @@ func (m ConnectionsModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles navigation in both modes.
+// effectiveConnections returns real connections or defaults if empty.
+func (m ConnectionsModel) effectiveConnections() []runtime.Connection {
+	if len(m.connections) > 0 {
+		return m.connections
+	}
+	return defaultConnections()
+}
+
+// Update handles navigation in the split-panel layout.
 func (m ConnectionsModel) Update(msg tea.Msg) (ConnectionsModel, tea.Cmd) {
 	if !m.focused {
 		return m, nil
@@ -53,61 +105,47 @@ func (m ConnectionsModel) Update(msg tea.Msg) (ConnectionsModel, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	case tea.KeyMsg:
-		if m.summaryMode {
-			return m.updateSummary(msg)
-		}
-		return m.updateDetail(msg)
+		return m.updateKey(msg)
 	}
 
 	return m, nil
 }
 
-// updateMouse handles all mouse interactions for the connections panel.
+// updateMouse handles mouse interactions.
 func (m ConnectionsModel) updateMouse(msg tea.MouseMsg) (ConnectionsModel, tea.Cmd) {
-	// Click release — check interactive zones
+	conns := m.effectiveConnections()
+
 	if msg.Action == tea.MouseActionRelease {
-		if m.summaryMode {
-			for i := range m.connections {
-				if zone.Get(fmt.Sprintf("conn-%d", i)).InBounds(msg) {
-					m.cursor = i
-					m.summaryMode = false
-					m.scrollOffset = 0
-					return m, nil
-				}
-			}
-		} else {
-			if zone.Get("conn-detail-back").InBounds(msg) {
-				m.summaryMode = true
-				m.scrollOffset = 0
+		for i := range conns {
+			if zone.Get(fmt.Sprintf("conn-%d", i)).InBounds(msg) {
+				m.cursor = i
+				m.leftFocused = true
+				m.rightScroll = 0
 				return m, nil
 			}
 		}
 	}
 
-	// Mouse wheel — scroll
 	if msg.Action == tea.MouseActionPress {
 		if msg.Button == tea.MouseButtonWheelUp {
-			if m.summaryMode {
+			if m.leftFocused {
 				if m.cursor > 0 {
 					m.cursor--
 				}
 			} else {
-				if m.scrollOffset > 0 {
-					m.scrollOffset--
+				if m.rightScroll > 0 {
+					m.rightScroll--
 				}
 			}
 			return m, nil
 		}
 		if msg.Button == tea.MouseButtonWheelDown {
-			if m.summaryMode {
-				if m.cursor < len(m.connections)-1 {
+			if m.leftFocused {
+				if m.cursor < len(conns)-1 {
 					m.cursor++
 				}
 			} else {
-				maxOff := m.maxScrollOffset()
-				if m.scrollOffset < maxOff {
-					m.scrollOffset++
-				}
+				m.rightScroll++
 			}
 			return m, nil
 		}
@@ -116,54 +154,68 @@ func (m ConnectionsModel) updateMouse(msg tea.MouseMsg) (ConnectionsModel, tea.C
 	return m, nil
 }
 
-func (m ConnectionsModel) updateSummary(msg tea.KeyMsg) (ConnectionsModel, tea.Cmd) {
-	total := len(m.connections)
-	if total == 0 {
+// updateKey handles keyboard navigation for both panels.
+func (m ConnectionsModel) updateKey(msg tea.KeyMsg) (ConnectionsModel, tea.Cmd) {
+	conns := m.effectiveConnections()
+	total := len(conns)
+
+	switch {
+	// Focus right panel
+	case key.Matches(msg, m.keyMap.RightPanel) || (!m.leftFocused && false) || (m.leftFocused && key.Matches(msg, m.keyMap.Select)):
+		if m.leftFocused && total > 0 {
+			m.leftFocused = false
+			m.rightScroll = 0
+		}
+		return m, nil
+
+	// Focus left panel
+	case key.Matches(msg, m.keyMap.LeftPanel) || key.Matches(msg, m.keyMap.Back):
+		if !m.leftFocused {
+			m.leftFocused = true
+			return m, nil
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keyMap.Up):
+		if m.leftFocused {
+			if total > 0 {
+				m.cursor--
+				if m.cursor < 0 {
+					m.cursor = total - 1
+				}
+				m.rightScroll = 0
+			}
+		} else {
+			if m.rightScroll > 0 {
+				m.rightScroll--
+			}
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keyMap.Down):
+		if m.leftFocused {
+			if total > 0 {
+				m.cursor++
+				if m.cursor >= total {
+					m.cursor = 0
+				}
+				m.rightScroll = 0
+			}
+		} else {
+			m.rightScroll++
+		}
 		return m, nil
 	}
 
-	switch {
-	case key.Matches(msg, m.keyMap.Up):
-		m.cursor--
-		if m.cursor < 0 {
-			m.cursor = total - 1
-		}
-	case key.Matches(msg, m.keyMap.Down):
-		m.cursor++
-		if m.cursor >= total {
-			m.cursor = 0
-		}
-	case key.Matches(msg, m.keyMap.Select):
-		m.summaryMode = false
-		m.scrollOffset = 0
-	}
-	return m, nil
-}
-
-func (m ConnectionsModel) updateDetail(msg tea.KeyMsg) (ConnectionsModel, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keyMap.Back):
-		m.summaryMode = true
-		m.scrollOffset = 0
-		return m, nil
-	case key.Matches(msg, m.keyMap.Up):
-		if m.scrollOffset > 0 {
-			m.scrollOffset--
-		}
-	case key.Matches(msg, m.keyMap.Down):
-		maxOff := m.maxScrollOffset()
-		if m.scrollOffset < maxOff {
-			m.scrollOffset++
-		}
-	}
 	return m, nil
 }
 
 // SetSnapshot updates connection list from fresh snapshot.
 func (m *ConnectionsModel) SetSnapshot(snap runtime.Snapshot) {
 	m.connections = snap.Connections
-	if m.cursor >= len(m.connections) {
-		m.cursor = max(0, len(m.connections)-1)
+	conns := m.effectiveConnections()
+	if m.cursor >= len(conns) {
+		m.cursor = max(0, len(conns)-1)
 	}
 }
 
@@ -178,34 +230,41 @@ func (m *ConnectionsModel) SetFocused(focused bool) {
 	m.focused = focused
 }
 
-// View renders summary or detail mode.
+// View renders the split-panel layout.
 func (m ConnectionsModel) View() string {
-	if m.summaryMode {
-		return m.viewSummary()
+	t := m.theme
+	w := m.width
+	if w < 40 {
+		w = 40
 	}
-	return m.viewDetail()
+	h := m.height
+	if h < 10 {
+		h = 10
+	}
+
+	// Panel widths: ~33% left, ~67% right, minus separator
+	leftW := w * 33 / 100
+	if leftW < 24 {
+		leftW = 24
+	}
+	rightW := w - leftW - 1 // 1 for separator
+	if rightW < 20 {
+		rightW = 20
+	}
+
+	leftPanel := m.renderLeftPanel(leftW, h)
+	rightPanel := m.renderRightPanel(rightW, h)
+
+	// Separator
+	sepColor := t.Separator
+	sep := lipgloss.NewStyle().
+		Foreground(sepColor).
+		Render(strings.Repeat("│\n", h-1) + "│")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sep, rightPanel)
 }
 
-// maxScrollOffset returns the maximum scroll offset for the current view.
-func (m ConnectionsModel) maxScrollOffset() int {
-	content := m.renderAllContent()
-	totalLines := strings.Count(content, "\n") + 1
-	off := totalLines - m.height
-	if off < 0 {
-		return 0
-	}
-	return off
-}
-
-// renderAllContent returns the full content for the current mode (before scroll slicing).
-func (m ConnectionsModel) renderAllContent() string {
-	if m.summaryMode {
-		return m.renderSummaryContent()
-	}
-	return m.renderDetailContent()
-}
-
-// statusDot returns a colored status indicator for a connection.
+// statusDot returns a colored status indicator.
 func statusDot(status string, t styles.Theme) string {
 	switch status {
 	case "connected":
@@ -214,252 +273,314 @@ func statusDot(status string, t styles.Theme) string {
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("●")
 	case "pending":
 		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-	default: // disconnected or unknown
+	default:
 		return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
 	}
 }
 
-// renderSummaryContent builds the full summary body (before scroll slicing).
-func (m ConnectionsModel) renderSummaryContent() string {
-	t := m.theme
-	w := m.width
-	if w < 20 {
-		w = 20
+// typeBadge returns a styled type label.
+func typeBadge(connType string, t styles.Theme) string {
+	color := t.Muted
+	switch connType {
+	case "database":
+		color = t.Info
+	case "mcp":
+		color = t.Accent
+	case "api":
+		color = t.Primary
 	}
-
-	cardW := w - 10
-	if cardW > styles.MaxCardWidth {
-		cardW = styles.MaxCardWidth
-	}
-	if cardW < 20 {
-		cardW = 20
-	}
-
-	var lines []string
-
-	for i, conn := range m.connections {
-		selected := m.focused && i == m.cursor
-
-		// Title line: status dot + name + type badge
-		dot := statusDot(conn.Status, t)
-		name := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(conn.Name)
-		typeBadge := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("[" + conn.Type + "]")
-		titleLine := dot + " " + name + " " + typeBadge
-
-		// URL line (truncated)
-		urlLine := ""
-		if conn.URL != "" {
-			url := conn.URL
-			maxURL := cardW - 8
-			if maxURL < 10 {
-				maxURL = 10
-			}
-			if len(url) > maxURL {
-				url = url[:maxURL-1] + "…"
-			}
-			urlLine = lipgloss.NewStyle().Foreground(t.Muted).Render(url)
-		}
-
-		var cardContent string
-		if urlLine != "" {
-			cardContent = titleLine + "\n" + urlLine
-		} else {
-			cardContent = titleLine
-		}
-
-		// Card border
-		borderColor := t.Separator
-		if selected {
-			borderColor = t.Primary
-		}
-		bgColor := lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F172A"}
-		if selected {
-			bgColor = lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"}
-		}
-
-		card := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderColor).
-			Background(bgColor).
-			Width(cardW).
-			Padding(1, 2).
-			Render(cardContent)
-
-		lines = append(lines, zone.Mark(fmt.Sprintf("conn-%d", i), card))
-	}
-
-	return lipgloss.NewStyle().
-		Padding(0, 2).
-		Render(strings.Join(lines, "\n"))
+	return lipgloss.NewStyle().Foreground(color).Render("[" + connType + "]")
 }
 
-// viewSummary renders the connection list.
-func (m ConnectionsModel) viewSummary() string {
+// renderLeftPanel renders the connection list.
+func (m ConnectionsModel) renderLeftPanel(w, h int) string {
 	t := m.theme
-	w := m.width
-	if w < 20 {
-		w = 20
+	conns := m.effectiveConnections()
+
+	// Header
+	headerStyle := t.SectionHeader.Copy().Width(w).PaddingLeft(1)
+	header := headerStyle.Render("CONNECTIONS")
+
+	borderColor := t.Separator
+	if m.focused && m.leftFocused {
+		borderColor = t.Primary
 	}
 
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render("CONNECTIONS")
-	rule := t.Faint.Render(strings.Repeat("─", w))
-
-	if len(m.connections) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No connections configured\n\nAdd connections in .doey/connections.json")
-		return header + "\n" + rule + "\n" + empty
-	}
-
-	// Summary count
+	// Count
 	connected := 0
-	for _, c := range m.connections {
+	for _, c := range conns {
 		if c.Status == "connected" {
 			connected++
 		}
 	}
-	summary := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
-		Render(fmt.Sprintf("%d connections (%d active)", len(m.connections), connected))
+	countText := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(1).
+		Render(fmt.Sprintf("%d total, %d active", len(conns), connected))
 
-	// Build body and apply scroll
-	body := m.renderSummaryContent()
-	lines := strings.Split(body, "\n")
-	viewport := m.height - 5
-	if viewport < 1 {
-		viewport = 1
-	}
-	if m.scrollOffset > 0 && m.scrollOffset < len(lines) {
-		lines = lines[m.scrollOffset:]
-	}
-	if len(lines) > viewport {
-		lines = lines[:viewport]
-	}
-	body = strings.Join(lines, "\n")
-
-	hint := ""
-	if m.focused && len(m.connections) > 0 {
-		hint = lipgloss.NewStyle().
-			Foreground(t.Muted).
-			Faint(true).
-			Padding(1, 3).
-			Render("enter to view details")
+	// List items
+	listH := h - 4 // header + count + padding
+	if listH < 1 {
+		listH = 1
 	}
 
-	return header + "\n" + rule + "\n" + summary + "\n" + body + "\n" + hint
-}
-
-// renderDetailContent returns the scrollable body portion of the detail view.
-func (m ConnectionsModel) renderDetailContent() string {
-	t := m.theme
-	w := m.width
-	if w < 20 {
-		w = 20
+	// Calculate scroll window for the left panel list
+	scrollTop := 0
+	if m.cursor >= listH {
+		scrollTop = m.cursor - listH + 1
 	}
 
-	if m.cursor < 0 || m.cursor >= len(m.connections) {
-		return ""
-	}
-	conn := m.connections[m.cursor]
-
-	detailCardW := w - 8
-	if detailCardW > styles.MaxCardWidth+10 {
-		detailCardW = styles.MaxCardWidth + 10
+	itemW := w - 4 // padding
+	if itemW < 16 {
+		itemW = 16
 	}
 
-	labelStyle := t.StatLabel.Copy().Width(14)
-	valueStyle := t.Body
-
-	var fields []string
-
-	// Status with colored badge
-	dot := statusDot(conn.Status, t)
-	statusLabel := lipgloss.NewStyle().Foreground(styles.StatusAccentColor(t, conn.Status)).Render(conn.Status)
-	fields = append(fields, labelStyle.Render("Status")+"  "+dot+" "+statusLabel)
-
-	fields = append(fields, labelStyle.Render("Type")+"  "+valueStyle.Render(conn.Type))
-
-	if conn.URL != "" {
-		fields = append(fields, labelStyle.Render("URL")+"  "+valueStyle.Render(conn.URL))
-	}
-
-	if conn.LastChecked > 0 {
-		checked := time.Unix(conn.LastChecked, 0).Format("2006-01-02 15:04:05")
-		fields = append(fields, labelStyle.Render("Last Checked")+"  "+valueStyle.Render(checked))
-	}
-
-	if conn.Error != "" {
-		errStyle := lipgloss.NewStyle().Foreground(t.Danger)
-		fields = append(fields, labelStyle.Render("Error")+"  "+errStyle.Render(conn.Error))
-	}
-
-	// Metadata key-value pairs
-	if len(conn.Metadata) > 0 {
-		fields = append(fields, "")
-		fields = append(fields, lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render("Metadata"))
-
-		// Sort keys for stable output
-		metaKeys := make([]string, 0, len(conn.Metadata))
-		for k := range conn.Metadata {
-			metaKeys = append(metaKeys, k)
+	var items []string
+	for i, conn := range conns {
+		if i < scrollTop {
+			continue
 		}
-		sort.Strings(metaKeys)
-
-		for _, k := range metaKeys {
-			fields = append(fields, labelStyle.Render(k)+"  "+t.Dim.Render(conn.Metadata[k]))
+		if len(items) >= listH {
+			break
 		}
+
+		selected := m.focused && m.leftFocused && i == m.cursor
+		dot := statusDot(conn.Status, t)
+		badge := typeBadge(conn.Type, t)
+
+		nameStyle := lipgloss.NewStyle().Foreground(t.Text)
+		if selected {
+			nameStyle = nameStyle.Bold(true)
+		}
+
+		// Truncate name if needed
+		name := conn.Name
+		maxNameW := itemW - 10 // dot + badge + spacing
+		if maxNameW < 4 {
+			maxNameW = 4
+		}
+		if len(name) > maxNameW {
+			name = name[:maxNameW-1] + "…"
+		}
+
+		line := fmt.Sprintf(" %s %s %s", dot, nameStyle.Render(name), badge)
+
+		rowStyle := lipgloss.NewStyle().Width(w - 2).PaddingLeft(1)
+		if selected {
+			rowStyle = rowStyle.
+				Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1E293B"}).
+				Foreground(t.Text)
+		}
+
+		rendered := rowStyle.Render(line)
+		items = append(items, zone.Mark(fmt.Sprintf("conn-%d", i), rendered))
+	}
+
+	body := strings.Join(items, "\n")
+
+	// Scroll indicators
+	scrollHint := ""
+	if scrollTop > 0 {
+		scrollHint = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).PaddingLeft(1).Render("↑ more")
+	}
+	if scrollTop+listH < len(conns) {
+		if scrollHint != "" {
+			scrollHint += "  "
+		}
+		scrollHint += lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("↓ more")
+	}
+
+	content := header + "\n" + countText + "\n" + body
+	if scrollHint != "" {
+		content += "\n" + scrollHint
 	}
 
 	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Separator).
-		Width(detailCardW).
-		Padding(1, 2).
-		MarginLeft(2).
-		Render(strings.Join(fields, "\n"))
+		Width(w).
+		Height(h).
+		BorderRight(false).
+		BorderForeground(borderColor).
+		Render(content)
 }
 
-// viewDetail renders full info for the selected connection.
-func (m ConnectionsModel) viewDetail() string {
+// renderRightPanel renders the detail/config pane for the selected connection.
+func (m ConnectionsModel) renderRightPanel(w, h int) string {
 	t := m.theme
-	w := m.width
-	if w < 20 {
-		w = 20
+	conns := m.effectiveConnections()
+
+	borderColor := t.Separator
+	if m.focused && !m.leftFocused {
+		borderColor = t.Primary
 	}
 
-	if m.cursor < 0 || m.cursor >= len(m.connections) {
-		m.summaryMode = true
-		return m.viewSummary()
+	if len(conns) == 0 || m.cursor < 0 || m.cursor >= len(conns) {
+		empty := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Padding(2, 3).
+			Width(w).
+			Height(h).
+			Render("No connection selected")
+		return empty
 	}
-	conn := m.connections[m.cursor]
 
+	conn := conns[m.cursor]
+
+	// Build detail content
+	var sections []string
+
+	// Title
 	dot := statusDot(conn.Status, t)
-	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(dot + " " + strings.ToUpper(conn.Name))
+	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(conn.Name)
+	sections = append(sections, dot+" "+title)
+	sections = append(sections, "")
 
-	rule := t.Faint.Render(strings.Repeat("─", w))
+	// Status badge
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Width(14)
+	valueStyle := lipgloss.NewStyle().Foreground(t.Text)
 
-	back := zone.Mark("conn-detail-back", lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
-		PaddingLeft(3).
-		Render("esc to go back"))
+	statusColor := t.Muted
+	switch conn.Status {
+	case "connected":
+		statusColor = t.Success
+	case "error":
+		statusColor = t.Danger
+	case "pending":
+		statusColor = t.Warning
+	}
+	statusText := lipgloss.NewStyle().Foreground(statusColor).Render(conn.Status)
+	sections = append(sections, labelStyle.Render("Status")+"  "+statusText)
+	sections = append(sections, labelStyle.Render("Type")+"  "+valueStyle.Render(conn.Type))
 
-	// Render scrollable body and apply scroll offset
-	body := m.renderDetailContent()
-	lines := strings.Split(body, "\n")
-	viewport := m.height - 5
+	// Name
+	sections = append(sections, labelStyle.Render("Name")+"  "+valueStyle.Render(conn.Name))
+	sections = append(sections, "")
+
+	// URL
+	if conn.URL != "" {
+		sections = append(sections, labelStyle.Render("URL")+"  "+valueStyle.Render(conn.URL))
+	} else {
+		placeholder := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("Enter URL to connect")
+		sections = append(sections, labelStyle.Render("URL")+"  "+placeholder)
+	}
+
+	// API Key (masked)
+	apiKey := ""
+	if conn.Metadata != nil {
+		apiKey = conn.Metadata["api_key"]
+	}
+	if apiKey != "" {
+		masked := strings.Repeat("•", 8) + apiKey[max(0, len(apiKey)-4):]
+		sections = append(sections, labelStyle.Render("API Key")+"  "+valueStyle.Render(masked))
+	} else {
+		placeholder := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("Enter your API key to connect")
+		sections = append(sections, labelStyle.Render("API Key")+"  "+placeholder)
+	}
+
+	// Project ID
+	projectID := ""
+	if conn.Metadata != nil {
+		projectID = conn.Metadata["project_id"]
+	}
+	if projectID != "" {
+		sections = append(sections, labelStyle.Render("Project ID")+"  "+valueStyle.Render(projectID))
+	}
+
+	// Account
+	account := ""
+	if conn.Metadata != nil {
+		account = conn.Metadata["account"]
+	}
+	if account != "" {
+		sections = append(sections, labelStyle.Render("Account")+"  "+valueStyle.Render(account))
+	}
+
+	sections = append(sections, "")
+
+	// Guidance text
+	guidance := connectionGuidance(conn.Name, conn.Type)
+	guidanceStyle := lipgloss.NewStyle().Foreground(t.Info).Width(w - 8)
+	sections = append(sections, guidanceStyle.Render(guidance))
+	sections = append(sections, "")
+
+	// Last Checked
+	if conn.LastChecked > 0 {
+		checked := time.Unix(conn.LastChecked, 0).Format("2006-01-02 15:04:05")
+		sections = append(sections, labelStyle.Render("Last Checked")+"  "+valueStyle.Render(checked))
+	}
+
+	// Error
+	if conn.Error != "" {
+		errStyle := lipgloss.NewStyle().Foreground(t.Danger)
+		sections = append(sections, labelStyle.Render("Error")+"  "+errStyle.Render(conn.Error))
+	}
+
+	// Metadata (excluding internal keys already displayed)
+	if len(conn.Metadata) > 0 {
+		skipKeys := map[string]bool{"description": true, "api_key": true, "project_id": true, "account": true}
+		metaKeys := make([]string, 0, len(conn.Metadata))
+		for k := range conn.Metadata {
+			if !skipKeys[k] {
+				metaKeys = append(metaKeys, k)
+			}
+		}
+		sort.Strings(metaKeys)
+
+		if len(metaKeys) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render("Metadata"))
+			for _, k := range metaKeys {
+				sections = append(sections, labelStyle.Render(k)+"  "+lipgloss.NewStyle().Foreground(t.Muted).Render(conn.Metadata[k]))
+			}
+		}
+	}
+
+	// Nav hint
+	sections = append(sections, "")
+	if m.focused {
+		hint := "← back to list"
+		if m.leftFocused {
+			hint = "→ or enter for details"
+		}
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
+	}
+
+	fullContent := strings.Join(sections, "\n")
+
+	// Apply scroll
+	lines := strings.Split(fullContent, "\n")
+	viewport := h - 2 // padding
 	if viewport < 1 {
 		viewport = 1
 	}
-	if m.scrollOffset > 0 && m.scrollOffset < len(lines) {
-		lines = lines[m.scrollOffset:]
+
+	// Clamp right scroll
+	maxScroll := len(lines) - viewport
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.rightScroll > maxScroll {
+		// Return a copy with clamped scroll (can't mutate in View)
+		// Just clamp for display
+	}
+	scrollOff := m.rightScroll
+	if scrollOff > maxScroll {
+		scrollOff = maxScroll
+	}
+
+	if scrollOff > 0 && scrollOff < len(lines) {
+		lines = lines[scrollOff:]
 	}
 	if len(lines) > viewport {
 		lines = lines[:viewport]
 	}
-	body = strings.Join(lines, "\n")
 
-	return header + "\n" + rule + "\n" + back + "\n\n" + body
+	displayed := strings.Join(lines, "\n")
+
+	panelStyle := lipgloss.NewStyle().
+		Width(w).
+		Height(h).
+		Padding(1, 2).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor)
+
+	return panelStyle.Render(displayed)
 }

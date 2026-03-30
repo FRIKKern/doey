@@ -290,12 +290,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.propagateSizes() // help overlay changes available height
 			return m, nil
 		}
-		if key.Matches(msg, m.footer.keyMap.NextPanel, m.footer.keyMap.RightPanel) {
+		if key.Matches(msg, m.footer.keyMap.NextPanel) {
 			m.focusIndex = (m.focusIndex + 1) % 9
 			m.updateFocus()
 			return m, nil
 		}
-		if key.Matches(msg, m.footer.keyMap.PrevPanel, m.footer.keyMap.LeftPanel) {
+		if key.Matches(msg, m.footer.keyMap.PrevPanel) {
 			m.focusIndex = (m.focusIndex + 8) % 9 // +8 mod 9 == -1 with wrap
 			m.updateFocus()
 			return m, nil
