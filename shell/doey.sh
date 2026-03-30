@@ -2545,7 +2545,7 @@ reload_session() {
 
         local w_name
         w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "T${tw} W${wp}")
-        local worker_cmd="claude --dangerously-skip-permissions --model $DOEY_WORKER_MODEL --name \"${w_name}\""
+        local worker_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"${w_name}\""
         _append_settings worker_cmd "$runtime_dir"
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
@@ -2849,6 +2849,56 @@ launch_session_dynamic() {
 
   cd "$dir"
   _doey_load_config  # Reload config now that we're in the project dir
+
+  # Quick mode: minimal defaults, skip wizard
+  if [ "$DOEY_QUICK" = "true" ]; then
+    : "${DOEY_INITIAL_TEAMS:=1}"
+    : "${DOEY_INITIAL_WORKER_COLS:=1}"
+    : "${DOEY_INITIAL_FREELANCER_TEAMS:=0}"
+  fi
+
+  # Run startup wizard if not skipped
+  if [ "$DOEY_SKIP_WIZARD" != "true" ] && command -v doey-tui >/dev/null 2>&1; then
+    local _wizard_out
+    _wizard_out="$(doey-tui setup 2>/dev/null)" || true
+    if [ -n "$_wizard_out" ]; then
+      # Parse wizard JSON output to set team config
+      local _wiz_team_count
+      _wiz_team_count="$(printf '%s' "$_wizard_out" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('teams',[])))" 2>/dev/null)" || true
+      if [ -n "$_wiz_team_count" ] && [ "$_wiz_team_count" -gt 0 ] 2>/dev/null; then
+        DOEY_TEAM_COUNT="$_wiz_team_count"
+        local _wiz_i=1
+        while [ "$_wiz_i" -le "$_wiz_team_count" ]; do
+          local _wiz_type _wiz_name _wiz_workers _wiz_def
+          _wiz_type="$(printf '%s' "$_wizard_out" | python3 -c "import sys,json; d=json.load(sys.stdin); t=d['teams'][$_wiz_i-1]; print(t.get('type','regular'))" 2>/dev/null)" || true
+          _wiz_name="$(printf '%s' "$_wizard_out" | python3 -c "import sys,json; d=json.load(sys.stdin); t=d['teams'][$_wiz_i-1]; print(t.get('name',''))" 2>/dev/null)" || true
+          _wiz_workers="$(printf '%s' "$_wizard_out" | python3 -c "import sys,json; d=json.load(sys.stdin); t=d['teams'][$_wiz_i-1]; print(t.get('workers',4))" 2>/dev/null)" || true
+          _wiz_def="$(printf '%s' "$_wizard_out" | python3 -c "import sys,json; d=json.load(sys.stdin); t=d['teams'][$_wiz_i-1]; print(t.get('def',''))" 2>/dev/null)" || true
+
+          case "$_wiz_type" in
+            freelancer)
+              eval "DOEY_TEAM_${_wiz_i}_TYPE=freelancer"
+              eval "DOEY_TEAM_${_wiz_i}_NAME=\"${_wiz_name:-Freelancers}\""
+              ;;
+            premade)
+              eval "DOEY_TEAM_${_wiz_i}_TYPE=premade"
+              eval "DOEY_TEAM_${_wiz_i}_DEF=\"${_wiz_def}\""
+              eval "DOEY_TEAM_${_wiz_i}_NAME=\"${_wiz_name}\""
+              ;;
+            *)
+              eval "DOEY_TEAM_${_wiz_i}_TYPE=local"
+              eval "DOEY_TEAM_${_wiz_i}_NAME=\"${_wiz_name:-Team ${_wiz_i}}\""
+              eval "DOEY_TEAM_${_wiz_i}_WORKERS=\"${_wiz_workers:-4}\""
+              ;;
+          esac
+          _wiz_i=$((_wiz_i + 1))
+        done
+        # Disable legacy team/freelancer creation
+        DOEY_INITIAL_TEAMS=0
+        DOEY_INITIAL_FREELANCER_TEAMS=0
+      fi
+    fi
+  fi
 
   _print_full_banner "Let Doey do it for you"
   local initial_workers=$(( DOEY_INITIAL_WORKER_COLS * 2 ))
@@ -3271,7 +3321,7 @@ _batch_boot_workers() {
 
     local _bbw_name_prefix="W"
     [ "$_bbw_is_freelancer" = "true" ] && _bbw_name_prefix="F"
-    local cmd="claude --dangerously-skip-permissions --model $_bbw_worker_model --name \"T${team_window} ${_bbw_name_prefix}${worker_num}\""
+    local cmd="claude --dangerously-skip-permissions --effort high --model $_bbw_worker_model --name \"T${team_window} ${_bbw_name_prefix}${worker_num}\""
     _append_settings cmd "$runtime_dir"
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
 
@@ -3723,7 +3773,7 @@ add_team_from_def() {
     w_name=$(_env_val "$env_file" "PANE_${_w_i}_NAME" "Worker ${_w_i}")
     w_model="${td_worker_model:-$DOEY_WORKER_MODEL}"
 
-    local _w_cmd="claude --dangerously-skip-permissions --model $w_model --name \"${w_name}\""
+    local _w_cmd="claude --dangerously-skip-permissions --effort high --model $w_model --name \"${w_name}\""
     if [ -n "$w_agent" ]; then
       w_agent_name=$(generate_team_agent "$w_agent" "$window_index")
       _w_cmd+=" --agent \"$w_agent_name\""
@@ -3835,7 +3885,7 @@ add_dynamic_team_window() {
     cp "${runtime_dir}/worker-system-prompt.md" "$_fl_prompt"
     printf '\n\n## Identity\nYou are Freelancer 0 (%s) in pane %s.0 of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
       "$_fl_pane_id" "$window_index" "$session" >> "$_fl_prompt"
-    local _fl_cmd="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F0\""
+    local _fl_cmd="claude --dangerously-skip-permissions --effort high --model $_fl_wm --name \"T${window_index} F0\""
     _append_settings _fl_cmd "$runtime_dir"
     _fl_cmd+=" --append-system-prompt-file \"${_fl_prompt}\""
     tmux send-keys -t "$session:${window_index}.0" "$_fl_cmd" Enter
@@ -3857,7 +3907,7 @@ add_dynamic_team_window() {
     cp "${runtime_dir}/worker-system-prompt.md" "$_fl_prompt1"
     printf '\n\n## Identity\nYou are Freelancer 1 (%s) in pane %s.%s of session %s.\nYou are part of the Freelancer pool — independent workers available to any team.\n' \
       "$_fl_pane_id1" "$window_index" "$_fl_p1" "$session" >> "$_fl_prompt1"
-    local _fl_cmd1="claude --dangerously-skip-permissions --model $_fl_wm --name \"T${window_index} F1\""
+    local _fl_cmd1="claude --dangerously-skip-permissions --effort high --model $_fl_wm --name \"T${window_index} F1\""
     _append_settings _fl_cmd1 "$runtime_dir"
     _fl_cmd1+=" --append-system-prompt-file \"${_fl_prompt1}\""
     tmux send-keys -t "$session:${window_index}.${_fl_p1}" "$_fl_cmd1" Enter
@@ -4835,6 +4885,19 @@ _check_prereqs() {
 }
 
 grid="dynamic"
+
+# Parse global flags
+DOEY_QUICK="${DOEY_QUICK:-false}"
+DOEY_SKIP_WIZARD="${DOEY_SKIP_WIZARD:-false}"
+_doey_parsed_args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --quick|-q) DOEY_QUICK=true; DOEY_SKIP_WIZARD=true; shift ;;
+    --no-wizard) DOEY_SKIP_WIZARD=true; shift ;;
+    *) _doey_parsed_args+=("$1"); shift ;;
+  esac
+done
+set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 
 case "${1:-}" in
   --help|-h)
