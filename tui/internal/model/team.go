@@ -62,9 +62,10 @@ type TeamModel struct {
 	dispatchTarget int
 
 	// Layout
-	width   int
-	height  int
-	focused bool
+	width        int
+	height       int
+	focused      bool
+	scrollOffset int
 }
 
 // NewTeamModel creates a team panel starting in summary (list) mode.
@@ -166,6 +167,7 @@ func (m TeamModel) updateMouse(msg tea.MouseMsg) (TeamModel, tea.Cmd) {
 		for i := range m.entries {
 			if zone.Get(fmt.Sprintf("team-%d", i)).InBounds(msg) {
 				m.cursor = i
+				m.ensureTeamVisible()
 				m.summaryMode = false
 				return m, nil
 			}
@@ -182,6 +184,7 @@ func (m TeamModel) updateMouse(msg tea.MouseMsg) (TeamModel, tea.Cmd) {
 			for ci := range tc.WorkerPanes {
 				if zone.Get(fmt.Sprintf("health-%d-%d", ri, ci)).InBounds(msg) {
 					m.cursor = ri
+					m.ensureTeamVisible()
 					m.summaryMode = false
 					return m, nil
 				}
@@ -239,6 +242,7 @@ func (m TeamModel) updateMouse(msg tea.MouseMsg) (TeamModel, tea.Cmd) {
 				if m.cursor < 0 {
 					m.cursor = max(0, len(m.entries)-1)
 				}
+				m.ensureTeamVisible()
 			}
 			return m, nil
 		}
@@ -248,6 +252,7 @@ func (m TeamModel) updateMouse(msg tea.MouseMsg) (TeamModel, tea.Cmd) {
 				if m.cursor >= len(m.entries) {
 					m.cursor = 0
 				}
+				m.ensureTeamVisible()
 			}
 			return m, nil
 		}
@@ -272,11 +277,13 @@ func (m TeamModel) updateList(msg tea.KeyMsg) (TeamModel, tea.Cmd) {
 		if m.cursor < 0 {
 			m.cursor = total - 1
 		}
+		m.ensureTeamVisible()
 	case key.Matches(msg, m.keyMap.Down):
 		m.cursor++
 		if m.cursor >= total {
 			m.cursor = 0
 		}
+		m.ensureTeamVisible()
 	case key.Matches(msg, m.keyMap.Select):
 		m.summaryMode = false
 	default:
@@ -399,6 +406,62 @@ func (m *TeamModel) sortEntries() {
 		}
 		return nameA < nameB
 	})
+}
+
+// ensureTeamVisible adjusts scrollOffset so the cursor card is in view.
+// Each card is ~6 rendered lines (border + padding + 2-3 content lines + gap),
+// plus section headers take ~2 lines. We estimate conservatively.
+func (m *TeamModel) ensureTeamVisible() {
+	if len(m.entries) == 0 {
+		m.scrollOffset = 0
+		return
+	}
+
+	// Estimate lines per card (rounded border + 1 padding top/bottom + 2-3 content + gap)
+	const linesPerCard = 7
+	const headerOverhead = 6 // TEAMS header + rule + summary + health grid estimate
+
+	// Approximate line position of the cursor card
+	cursorLine := headerOverhead
+	lastSection := ""
+	for i := 0; i < m.cursor && i < len(m.entries); i++ {
+		section := m.sectionOf(m.entries[i])
+		if section != lastSection {
+			if lastSection != "" {
+				cursorLine += 1 // blank line between sections
+			}
+			cursorLine += 1 // section header
+			lastSection = section
+		}
+		cursorLine += linesPerCard
+	}
+	// Account for section header of cursor's own section
+	if m.cursor < len(m.entries) {
+		section := m.sectionOf(m.entries[m.cursor])
+		if section != lastSection {
+			if lastSection != "" {
+				cursorLine += 1
+			}
+			cursorLine += 1
+		}
+	}
+
+	viewport := m.height - 2
+	if viewport < 1 {
+		viewport = 1
+	}
+
+	// If cursor is above the visible area, scroll up
+	if cursorLine < m.scrollOffset {
+		m.scrollOffset = cursorLine
+	}
+	// If cursor is below the visible area, scroll down
+	if cursorLine+linesPerCard > m.scrollOffset+viewport {
+		m.scrollOffset = cursorLine + linesPerCard - viewport
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
 }
 
 // SetSize updates the panel dimensions.
@@ -544,6 +607,20 @@ func (m TeamModel) viewList() string {
 	if m.dispatching {
 		content += "\n" + m.renderDispatchBar()
 	}
+
+	// Apply scroll offset — viewport follows cursor
+	scrollLines := strings.Split(content, "\n")
+	if m.scrollOffset > len(scrollLines)-1 {
+		m.scrollOffset = len(scrollLines) - 1
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+	if m.scrollOffset > 0 && m.scrollOffset < len(scrollLines) {
+		scrollLines = scrollLines[m.scrollOffset:]
+	}
+	content = strings.Join(scrollLines, "\n")
+
 	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
 
