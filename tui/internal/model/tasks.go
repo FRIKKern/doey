@@ -217,7 +217,7 @@ func (m *TasksModel) sortEntries() {
 		if !ha.LastActivity.Equal(hb.LastActivity) {
 			return ha.LastActivity.After(hb.LastActivity)
 		}
-		return a.ID < b.ID
+		return a.ID > b.ID
 	})
 }
 
