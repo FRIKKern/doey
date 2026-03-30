@@ -87,6 +87,23 @@ DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
 DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-opus}"
 DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
 
+# Remote Access & Tunneling
+DOEY_TUNNEL_ENABLED="${DOEY_TUNNEL_ENABLED:-false}"
+DOEY_TUNNEL_PROVIDER="${DOEY_TUNNEL_PROVIDER:-auto}"
+DOEY_TUNNEL_PORTS="${DOEY_TUNNEL_PORTS:-}"
+DOEY_TUNNEL_DOMAIN="${DOEY_TUNNEL_DOMAIN:-}"
+
+# Detect whether the current session is running remotely (SSH, container, etc.)
+_detect_remote() {
+  if [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_CLIENT:-}" ] || [ -n "${SSH_TTY:-}" ]; then
+    echo "true"
+  elif [ -f "/.dockerenv" ]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+}
+
 # ── Helpers ───────────────────────────────────────────────────────────
 
 # Read a key=value from an env file, stripping quotes.
@@ -1486,7 +1503,16 @@ IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
 BOSS_PANE="0.1"
 SM_PANE="0.2"
+REMOTE="$(_detect_remote)"
 MANIFEST
+
+  # Auto-start tunnel if enabled and running remotely
+  if [ "$DOEY_TUNNEL_ENABLED" = "true" ] && [ "$(_detect_remote)" = "true" ]; then
+    local tunnel_script="${DOEY_DIR}/shell/doey-tunnel.sh"
+    if [ -f "$tunnel_script" ]; then
+      bash "$tunnel_script" "$runtime_dir" >> "${runtime_dir}/tunnel.log" 2>&1 &
+    fi
+  fi
 
   write_team_env "$runtime_dir" "1" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
 
@@ -2730,6 +2756,12 @@ _init_doey_session() {
 SJSON
     tmux set-environment -t "$session" DOEY_SETTINGS "${runtime_dir}/doey-settings.json"
   fi
+
+  # Remote detection — expose to hooks and info-panel
+  local is_remote
+  is_remote=$(_detect_remote)
+  tmux set-environment -t "$session" DOEY_REMOTE "$is_remote"
+  tmux set-environment -t "$session" DOEY_TUNNEL_URL ""
 }
 
 launch_session_headless() {
@@ -2794,7 +2826,16 @@ IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
 BOSS_PANE="0.1"
 SM_PANE="0.2"
+REMOTE="$(_detect_remote)"
 MANIFEST
+
+  # Auto-start tunnel if enabled and running remotely
+  if [ "$DOEY_TUNNEL_ENABLED" = "true" ] && [ "$(_detect_remote)" = "true" ]; then
+    local tunnel_script="${DOEY_DIR}/shell/doey-tunnel.sh"
+    if [ -f "$tunnel_script" ]; then
+      bash "$tunnel_script" "$runtime_dir" >> "${runtime_dir}/tunnel.log" 2>&1 &
+    fi
+  fi
 
   # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
   local _team1_def=""

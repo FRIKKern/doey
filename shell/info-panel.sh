@@ -268,6 +268,19 @@ while true; do
     TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
   done
 
+  # Tunnel status
+  _tunnel_url=""
+  _tunnel_provider=""
+  _tunnel_error=""
+  if [ -f "${RUNTIME_DIR}/tunnel.env" ]; then
+    _tunnel_url=$(grep '^TUNNEL_URL=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-)
+    _tunnel_provider=$(grep '^TUNNEL_PROVIDER=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-)
+    _tunnel_error=$(grep '^TUNNEL_ERROR=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-)
+  fi
+
+  # Remote mode
+  _is_remote=$(tmux show-environment DOEY_REMOTE 2>/dev/null | cut -d= -f2-) || _is_remote=""
+
   LC=0
   add_left ""
   add_left "$(printf '%b  HOW TO USE DOEY%b' "${C_BOLD_CYAN}" "${C_RESET}")"
@@ -365,6 +378,19 @@ while true; do
     "$stat_teams"
 
   printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
+
+  # Tunnel URL (only shown when tunnel is active or errored)
+  if [ -n "$_tunnel_url" ]; then
+    printf '  %b TUNNEL%b  %s' "${C_BOLD_GREEN}" "${C_RESET}" "$_tunnel_url"
+    [ -n "$_tunnel_provider" ] && printf '  %b(%s)%b' "${C_DIM}" "$_tunnel_provider" "${C_RESET}"
+    [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
+    printf '\n'
+  elif [ -n "$_tunnel_error" ]; then
+    printf '  %b TUNNEL%b  %b%s%b\n' "${C_BOLD_YELLOW}" "${C_RESET}" "${C_DIM}" "$_tunnel_error" "${C_RESET}"
+  elif [ "$_is_remote" = "true" ]; then
+    printf '  %b[REMOTE]%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
+  fi
+
   printf '\n'
 
   # ── Tasks (single-pass: header printed on first visible task) ──
