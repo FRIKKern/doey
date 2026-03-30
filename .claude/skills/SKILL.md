@@ -123,9 +123,4 @@ done
 ```
 
 ## Step 10: Report
-Output: mode (isolate/return), window, branch, directory, booted/failed count.
-
-### Rules
-- Never transform window 0. Kill by PID only (SIGTERM → SIGKILL). No `eval`/`source` on team env.
-- Atomic writes (temp file + mv). Copy `.claude/settings.local.json` to worktrees.
-- Branch preserved on `--back` — user merges manually. Bash 3.2 compatible.
+Output: mode (isolate/return), window, branch, directory, booted/failed count. Never transform window 0. Bash 3.2.

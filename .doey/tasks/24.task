@@ -1,6 +1,6 @@
 TASK_ID=24
 TASK_TITLE=Remote detection + auto-tunnel for localhost URLs
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1743321600
 TASK_TYPE=feature
 TASK_DESCRIPTION=When Doey runs on a remote server (e.g. Hetzner), detect it automatically and start a tunnel so the user can access dev server URLs (localhost:3000 etc) from their local browser. Two parts: (1) Detection — check for SSH_CLIENT or SSH_TTY env vars. Export DOEY_REMOTE=1 when detected so all hooks/scripts can branch on it. Set this in on-session-start.sh or session env. (2) Auto-tunnel — when DOEY_REMOTE=1, auto-start a tunnel (cloudflared is preferred if available, fall back to bore or similar). Surface the public tunnel URL in the dashboard info panel and/or desktop notification. Add config option to disable or configure tunnel tool. Must work on fresh install — if no tunnel binary is found, warn but don't fail.
