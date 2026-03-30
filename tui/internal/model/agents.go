@@ -28,7 +28,7 @@ type agentGroup struct {
 	agents []runtime.AgentDef
 }
 
-// AgentsModel displays agent definitions grouped by domain.
+// AgentsModel displays agent definitions grouped by domain in a split-panel layout.
 type AgentsModel struct {
 	// Data
 	groups []agentGroup
@@ -37,9 +37,10 @@ type AgentsModel struct {
 	theme  styles.Theme
 
 	// Navigation
-	summaryMode bool
 	cursor      int
 	keyMap      keys.KeyMap
+	leftFocused bool
+	rightScroll int
 
 	// Layout
 	width            int
@@ -49,11 +50,11 @@ type AgentsModel struct {
 	collapsedDomains map[string]bool
 }
 
-// NewAgentsModel creates an agents panel starting in summary mode.
+// NewAgentsModel creates an agents panel with the left list focused.
 func NewAgentsModel(theme styles.Theme) AgentsModel {
 	return AgentsModel{
 		theme:            theme,
-		summaryMode:      true,
+		leftFocused:      true,
 		keyMap:           keys.DefaultKeyMap(),
 		collapsedDomains: make(map[string]bool),
 	}
@@ -64,7 +65,7 @@ func (m AgentsModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles navigation in both modes.
+// Update handles navigation in the split-panel layout.
 func (m AgentsModel) Update(msg tea.Msg) (AgentsModel, tea.Cmd) {
 	if !m.focused {
 		return m, nil
@@ -74,10 +75,7 @@ func (m AgentsModel) Update(msg tea.Msg) (AgentsModel, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	case tea.KeyMsg:
-		if m.summaryMode {
-			return m.updateSummary(msg)
-		}
-		return m.updateDetail(msg)
+		return m.updateKey(msg)
 	}
 
 	return m, nil
@@ -95,59 +93,48 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 			}
 		}
 
-		if m.summaryMode {
-			// Agent entries — click to select and open detail
-			flatIdx := 0
-			for _, g := range m.groups {
-				if m.collapsedDomains[g.domain] {
-					flatIdx += len(g.agents)
-					continue
-				}
-				for range g.agents {
-					if zone.Get(fmt.Sprintf("agent-%d", flatIdx)).InBounds(msg) {
-						m.cursor = flatIdx
-						m.summaryMode = false
-						m.scrollOffset = 0
-						return m, nil
-					}
-					flatIdx++
-				}
+		// Agent entries — click to select
+		flatIdx := 0
+		for _, g := range m.groups {
+			if m.collapsedDomains[g.domain] {
+				flatIdx += len(g.agents)
+				continue
 			}
-		} else {
-			// Detail mode — back button
-			if zone.Get("agent-detail-back").InBounds(msg) {
-				m.summaryMode = true
-				return m, nil
+			for range g.agents {
+				if zone.Get(fmt.Sprintf("agent-%d", flatIdx)).InBounds(msg) {
+					m.cursor = flatIdx
+					m.leftFocused = true
+					m.rightScroll = 0
+					return m, nil
+				}
+				flatIdx++
 			}
 		}
 	}
 
-	// Mouse wheel — scroll
+	// Mouse wheel — route to focused panel
 	if msg.Action == tea.MouseActionPress {
 		if msg.Button == tea.MouseButtonWheelUp {
-			if m.summaryMode {
+			if m.leftFocused {
 				if m.cursor > 0 {
 					m.cursor--
-					m.ensureAgentVisible()
+					m.rightScroll = 0
 				}
 			} else {
-				if m.scrollOffset > 0 {
-					m.scrollOffset--
+				if m.rightScroll > 0 {
+					m.rightScroll--
 				}
 			}
 			return m, nil
 		}
 		if msg.Button == tea.MouseButtonWheelDown {
-			if m.summaryMode {
+			if m.leftFocused {
 				if m.cursor < len(m.agents)-1 {
 					m.cursor++
-					m.ensureAgentVisible()
+					m.rightScroll = 0
 				}
 			} else {
-				maxOff := m.detailMaxScroll()
-				if m.scrollOffset < maxOff {
-					m.scrollOffset++
-				}
+				m.rightScroll++
 			}
 			return m, nil
 		}
@@ -156,47 +143,58 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m AgentsModel) updateSummary(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
+// updateKey handles keyboard navigation for both panels.
+func (m AgentsModel) updateKey(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
 	total := len(m.agents)
-	if total == 0 {
+
+	switch {
+	// Focus right panel
+	case key.Matches(msg, m.keyMap.RightPanel) || (m.leftFocused && key.Matches(msg, m.keyMap.Select)):
+		if m.leftFocused && total > 0 {
+			m.leftFocused = false
+			m.rightScroll = 0
+		}
+		return m, nil
+
+	// Focus left panel
+	case key.Matches(msg, m.keyMap.LeftPanel) || key.Matches(msg, m.keyMap.Back):
+		if !m.leftFocused {
+			m.leftFocused = true
+			return m, nil
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keyMap.Up):
+		if m.leftFocused {
+			if total > 0 {
+				m.cursor--
+				if m.cursor < 0 {
+					m.cursor = total - 1
+				}
+				m.rightScroll = 0
+			}
+		} else {
+			if m.rightScroll > 0 {
+				m.rightScroll--
+			}
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keyMap.Down):
+		if m.leftFocused {
+			if total > 0 {
+				m.cursor++
+				if m.cursor >= total {
+					m.cursor = 0
+				}
+				m.rightScroll = 0
+			}
+		} else {
+			m.rightScroll++
+		}
 		return m, nil
 	}
 
-	switch {
-	case key.Matches(msg, m.keyMap.Up):
-		m.cursor--
-		if m.cursor < 0 {
-			m.cursor = total - 1
-		}
-		m.ensureAgentVisible()
-	case key.Matches(msg, m.keyMap.Down):
-		m.cursor++
-		if m.cursor >= total {
-			m.cursor = 0
-		}
-		m.ensureAgentVisible()
-	case key.Matches(msg, m.keyMap.Select):
-		m.summaryMode = false
-		m.scrollOffset = 0
-	}
-	return m, nil
-}
-
-func (m AgentsModel) updateDetail(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keyMap.Back):
-		m.summaryMode = true
-		return m, nil
-	case key.Matches(msg, m.keyMap.Up):
-		if m.scrollOffset > 0 {
-			m.scrollOffset--
-		}
-	case key.Matches(msg, m.keyMap.Down):
-		maxOff := m.detailMaxScroll()
-		if m.scrollOffset < maxOff {
-			m.scrollOffset++
-		}
-	}
 	return m, nil
 }
 
@@ -258,53 +256,6 @@ func (m *AgentsModel) rebuildGroups() {
 	}
 }
 
-// ensureAgentVisible adjusts scrollOffset so the cursor card is in view.
-func (m *AgentsModel) ensureAgentVisible() {
-	if len(m.agents) == 0 {
-		m.scrollOffset = 0
-		return
-	}
-
-	// Each card is ~6 rendered lines (border + padding + content + gap).
-	// Domain headers take ~3 lines (blank + header + blank).
-	// Header overhead: AGENTS header + rule + summary = ~4 lines.
-	const linesPerCard = 6
-	const headerOverhead = 4
-
-	cursorLine := headerOverhead
-	flatIdx := 0
-	for _, g := range m.groups {
-		if m.collapsedDomains[g.domain] {
-			flatIdx += len(g.agents)
-			continue
-		}
-		// Domain header takes ~3 lines
-		cursorLine += 3
-		for range g.agents {
-			if flatIdx == m.cursor {
-				goto found
-			}
-			cursorLine += linesPerCard
-			flatIdx++
-		}
-	}
-found:
-	viewport := m.height - 2
-	if viewport < 1 {
-		viewport = 1
-	}
-
-	if cursorLine < m.scrollOffset {
-		m.scrollOffset = cursorLine
-	}
-	if cursorLine+linesPerCard > m.scrollOffset+viewport {
-		m.scrollOffset = cursorLine + linesPerCard - viewport
-	}
-	if m.scrollOffset < 0 {
-		m.scrollOffset = 0
-	}
-}
-
 // SetSize updates the panel dimensions.
 func (m *AgentsModel) SetSize(w, h int) {
 	m.width = w
@@ -316,12 +267,38 @@ func (m *AgentsModel) SetFocused(focused bool) {
 	m.focused = focused
 }
 
-// View renders summary or detail mode.
+// View renders the split-panel layout.
 func (m AgentsModel) View() string {
-	if m.summaryMode {
-		return m.viewSummary()
+	t := m.theme
+	w := m.width
+	if w < 40 {
+		w = 40
 	}
-	return m.viewDetail()
+	h := m.height
+	if h < 10 {
+		h = 10
+	}
+
+	// Panel widths: ~33% left, ~67% right, minus separator
+	leftW := w * 33 / 100
+	if leftW < 24 {
+		leftW = 24
+	}
+	rightW := w - leftW - 1 // 1 for separator
+	if rightW < 20 {
+		rightW = 20
+	}
+
+	leftPanel := m.renderLeftPanel(leftW, h)
+	rightPanel := m.renderRightPanel(rightW, h)
+
+	// Separator
+	sepColor := t.Separator
+	sep := lipgloss.NewStyle().
+		Foreground(sepColor).
+		Render(strings.Repeat("│\n", h-1) + "│")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sep, rightPanel)
 }
 
 // selectedAgent returns the agent at the current cursor position, if any.
@@ -338,60 +315,65 @@ func (m AgentsModel) selectedAgent() (runtime.AgentDef, bool) {
 	return runtime.AgentDef{}, false
 }
 
-// viewSummary renders agents grouped by domain.
-func (m AgentsModel) viewSummary() string {
+// renderLeftPanel renders the domain-grouped agent list.
+func (m AgentsModel) renderLeftPanel(w, h int) string {
 	t := m.theme
-	w := m.width
-	if w < 20 {
-		w = 20
+
+	// Header
+	headerStyle := t.SectionHeader.Copy().Width(w).PaddingLeft(1)
+	header := headerStyle.Render("AGENTS")
+
+	borderColor := t.Separator
+	if m.focused && m.leftFocused {
+		borderColor = t.Primary
 	}
-
-	// Section header
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render("AGENTS")
-
-	// Thin separator
-	rule := t.Faint.Render(strings.Repeat("─", w))
+	_ = borderColor // used conceptually for focus indication
 
 	if len(m.agents) == 0 {
 		empty := lipgloss.NewStyle().
 			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No agents found. Agent definitions will appear when loaded.")
-		return header + "\n" + rule + "\n" + empty
+			PaddingLeft(1).
+			Render("No agents found.")
+		content := header + "\n" + empty
+		return lipgloss.NewStyle().Width(w).Height(h).Render(content)
 	}
 
-	// Summary line
-	summary := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
-		Render(fmt.Sprintf("%d agents across %d domains", len(m.agents), len(m.groups)))
+	// Count
+	countText := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(1).
+		Render(fmt.Sprintf("%d agents, %d domains", len(m.agents), len(m.groups)))
 
-	// Card dimensions
-	cardW := w - 10
-	if cardW > styles.MaxCardWidth {
-		cardW = styles.MaxCardWidth
-	}
-	if cardW < 20 {
-		cardW = 20
+	// List items
+	listH := h - 4 // header + count + padding
+	if listH < 1 {
+		listH = 1
 	}
 
-	var lines []string
+	// Build flat list of renderable items (domain headers + agent rows)
+	type listItem struct {
+		rendered string
+		isAgent  bool
+		flatIdx  int
+	}
+	var allItems []listItem
+
 	flatIdx := 0
 	for gi, g := range m.groups {
-		// Domain header — clickable to collapse/expand, visually prominent
+		// Domain header
 		collapsed := m.collapsedDomains[g.domain]
 		arrow := "▾"
 		if collapsed {
 			arrow = "▸"
 		}
-		domainLabel := fmt.Sprintf("%s %s (%d)", arrow, strings.ToUpper(g.domain), len(g.agents))
+		domainLabel := fmt.Sprintf("%s %s (%d)", arrow, g.domain, len(g.agents))
 		domainHeader := lipgloss.NewStyle().
 			Foreground(t.Text).
-			Background(lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#1E293B"}).
 			Bold(true).
-			Padding(0, 2).
-			Width(cardW + 4).
+			PaddingLeft(1).
+			Width(w - 2).
 			Render(domainLabel)
-		lines = append(lines, "", zone.Mark(fmt.Sprintf("agent-domain-%d", gi), domainHeader))
+		allItems = append(allItems, listItem{
+			rendered: zone.Mark(fmt.Sprintf("agent-domain-%d", gi), domainHeader),
+		})
 
 		if collapsed {
 			flatIdx += len(g.agents)
@@ -399,166 +381,106 @@ func (m AgentsModel) viewSummary() string {
 		}
 
 		for _, a := range g.agents {
-			selected := m.focused && flatIdx == m.cursor
+			selected := m.focused && m.leftFocused && flatIdx == m.cursor
 
-			// Card content
-			// Title line: colored dot + name
+			// Agent row: colored dot + name
 			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("●")
-			name := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(a.Name)
-			titleLine := dot + " " + name
-
-			// Model badge
-			if a.Model != "" {
-				modelBadge := lipgloss.NewStyle().
-					Foreground(t.BgText).
-					Background(t.Accent).
-					Padding(0, 1).
-					Render(a.Model)
-				nameW := lipgloss.Width(titleLine)
-				badgeW := lipgloss.Width(modelBadge)
-				gap := cardW - 6 - nameW - badgeW
-				if gap < 1 {
-					gap = 1
-				}
-				titleLine = titleLine + strings.Repeat(" ", gap) + modelBadge
-			}
-
-			// Description (truncated)
-			descLine := ""
-			if a.Description != "" {
-				dd := a.Description
-				maxDesc := cardW - 8
-				if maxDesc < 10 {
-					maxDesc = 10
-				}
-				if len(dd) > maxDesc {
-					dd = dd[:maxDesc-1] + "…"
-				}
-				descLine = lipgloss.NewStyle().Foreground(t.Muted).Render(dd)
-			}
-
-			var cardContent string
-			if descLine != "" {
-				cardContent = titleLine + "\n" + descLine
-			} else {
-				cardContent = titleLine
-			}
-
-			// Card border
-			borderColor := t.Separator
+			nameStyle := lipgloss.NewStyle().Foreground(t.Text)
 			if selected {
-				borderColor = t.Primary
+				nameStyle = nameStyle.Bold(true)
 			}
-			bgColor := lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F172A"}
+
+			name := a.Name
+			maxNameW := w - 8
+			if maxNameW < 4 {
+				maxNameW = 4
+			}
+			if len(name) > maxNameW {
+				name = name[:maxNameW-1] + "…"
+			}
+
+			line := fmt.Sprintf(" %s %s", dot, nameStyle.Render(name))
+
+			rowStyle := lipgloss.NewStyle().Width(w - 2).PaddingLeft(1)
 			if selected {
-				bgColor = lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"}
+				rowStyle = rowStyle.
+					Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1E293B"}).
+					Foreground(t.Text)
 			}
 
-			card := lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(borderColor).
-				Background(bgColor).
-				Width(cardW).
-				Padding(1, 2).
-				Render(cardContent)
-
-			lines = append(lines, zone.Mark(fmt.Sprintf("agent-%d", flatIdx), card))
+			rendered := rowStyle.Render(line)
+			allItems = append(allItems, listItem{
+				rendered: zone.Mark(fmt.Sprintf("agent-%d", flatIdx), rendered),
+				isAgent:  true,
+				flatIdx:  flatIdx,
+			})
 			flatIdx++
 		}
 	}
 
-	body := lipgloss.NewStyle().
-		Padding(0, 2).
-		Render(strings.Join(lines, "\n"))
-
-	hint := ""
-	if m.focused && len(m.agents) > 0 {
-		hint = lipgloss.NewStyle().
-			Foreground(t.Muted).
-			Faint(true).
-			Padding(1, 3).
-			Render("enter to view details")
+	// Calculate scroll window to keep cursor visible
+	cursorItemIdx := 0
+	for i, item := range allItems {
+		if item.isAgent && item.flatIdx == m.cursor {
+			cursorItemIdx = i
+			break
+		}
 	}
 
-	content := header + "\n" + rule + "\n" + summary + "\n" + body + "\n" + hint
-
-	// Apply scroll offset — viewport follows cursor
-	allLines := strings.Split(content, "\n")
-	if m.scrollOffset > len(allLines)-1 {
-		m.scrollOffset = len(allLines) - 1
+	scrollTop := m.scrollOffset
+	if cursorItemIdx < scrollTop {
+		scrollTop = cursorItemIdx
 	}
-	if m.scrollOffset < 0 {
-		m.scrollOffset = 0
+	if cursorItemIdx >= scrollTop+listH {
+		scrollTop = cursorItemIdx - listH + 1
 	}
-
-	viewport := m.height - 1 // reserve 1 line for scroll indicator
-	if viewport < 1 {
-		viewport = 1
+	if scrollTop < 0 {
+		scrollTop = 0
 	}
 
-	aboveCount := m.scrollOffset
-	belowCount := 0
-	if m.scrollOffset > 0 && m.scrollOffset < len(allLines) {
-		allLines = allLines[m.scrollOffset:]
+	var items []string
+	for i, item := range allItems {
+		if i < scrollTop {
+			continue
+		}
+		if len(items) >= listH {
+			break
+		}
+		items = append(items, item.rendered)
 	}
-	if len(allLines) > viewport {
-		belowCount = len(allLines) - viewport
-		allLines = allLines[:viewport]
-	}
-	content = strings.Join(allLines, "\n")
+
+	body := strings.Join(items, "\n")
 
 	// Scroll indicators
-	var indicators []string
-	if aboveCount > 0 {
-		indicators = append(indicators, fmt.Sprintf("↑ %d more above", aboveCount))
+	scrollHint := ""
+	if scrollTop > 0 {
+		scrollHint = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).PaddingLeft(1).Render("↑ more")
 	}
-	if belowCount > 0 {
-		indicators = append(indicators, fmt.Sprintf("↓ %d more below", belowCount))
+	if scrollTop+listH < len(allItems) {
+		if scrollHint != "" {
+			scrollHint += "  "
+		}
+		scrollHint += lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("↓ more")
 	}
-	if len(indicators) > 0 {
-		scrollHint := lipgloss.NewStyle().
-			Foreground(t.Muted).Faint(true).PaddingLeft(3).
-			Render(strings.Join(indicators, "  "))
+
+	content := header + "\n" + countText + "\n" + body
+	if scrollHint != "" {
 		content += "\n" + scrollHint
 	}
 
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return lipgloss.NewStyle().
+		Width(w).
+		Height(h).
+		Render(content)
 }
 
-// detailMaxScroll returns the maximum scroll offset for the detail view.
-func (m AgentsModel) detailMaxScroll() int {
-	// Render the detail content and measure it against viewport height.
-	// Use a conservative viewport: total height minus header/rule/back/padding (~5 lines).
-	content := m.renderDetailContent()
-	lines := strings.Split(content, "\n")
-	viewport := m.height - 5
-	if viewport < 1 {
-		viewport = 1
-	}
-	maxOff := len(lines) - viewport
-	if maxOff < 0 {
-		maxOff = 0
-	}
-	return maxOff
-}
-
-// renderDetailContent returns the scrollable body portion of the detail view.
-func (m AgentsModel) renderDetailContent() string {
+// renderDetailContent returns the detail body for the selected agent.
+func (m AgentsModel) renderDetailContent(w int) string {
 	t := m.theme
-	w := m.width
-	if w < 20 {
-		w = 20
-	}
 
 	agent, ok := m.selectedAgent()
 	if !ok {
 		return ""
-	}
-
-	// Card dimensions
-	detailCardW := w - 8
-	if detailCardW > styles.MaxCardWidth+10 {
-		detailCardW = styles.MaxCardWidth + 10
 	}
 
 	// Detail fields
@@ -581,13 +503,12 @@ func (m AgentsModel) renderDetailContent() string {
 	}
 
 	if agent.Description != "" {
-		descWidth := detailCardW - 24
+		descWidth := w - 24
 		if descWidth < 20 {
 			descWidth = 20
 		}
-		desc := agent.Description
 		fields = append(fields, labelStyle.Render("Description")+"  "+
-			lipgloss.NewStyle().Foreground(t.Text).Width(descWidth).Render(desc))
+			lipgloss.NewStyle().Foreground(t.Text).Width(descWidth).Render(agent.Description))
 	}
 
 	if len(agent.UsedByTeams) > 0 {
@@ -599,57 +520,109 @@ func (m AgentsModel) renderDetailContent() string {
 		fields = append(fields, labelStyle.Render("File")+"  "+t.Dim.Render(agent.FilePath))
 	}
 
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Separator).
-		Width(detailCardW).
-		Padding(1, 2).
-		MarginLeft(2).
-		Render(strings.Join(fields, "\n"))
+	return strings.Join(fields, "\n")
 }
 
-// viewDetail renders full info for the selected agent.
-func (m AgentsModel) viewDetail() string {
+// renderRightPanel renders the detail pane for the selected agent.
+func (m AgentsModel) renderRightPanel(w, h int) string {
 	t := m.theme
-	w := m.width
-	if w < 20 {
-		w = 20
+
+	borderColor := t.Separator
+	if m.focused && !m.leftFocused {
+		borderColor = t.Primary
+	}
+
+	if len(m.agents) == 0 || m.cursor < 0 || m.cursor >= len(m.agents) {
+		empty := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Padding(2, 3).
+			Width(w).
+			Height(h).
+			Render("No agent selected")
+		return empty
 	}
 
 	agent, ok := m.selectedAgent()
 	if !ok {
-		m.summaryMode = true
-		return m.viewSummary()
+		empty := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Padding(2, 3).
+			Width(w).
+			Height(h).
+			Render("No agent selected")
+		return empty
 	}
 
-	// Header with agent name
+	// Build detail content
+	var sections []string
+
+	// Title
 	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("●")
-	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(dot + " " + strings.ToUpper(agent.Name))
+	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(agent.Name)
+	sections = append(sections, dot+" "+title)
 
-	rule := t.Faint.Render(strings.Repeat("─", w))
+	// Model badge
+	if agent.Model != "" {
+		modelBadge := lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(t.Accent).
+			Padding(0, 1).
+			Render(agent.Model)
+		sections = append(sections, modelBadge)
+	}
+	sections = append(sections, "")
 
-	back := zone.Mark("agent-detail-back", lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
-		PaddingLeft(3).
-		Render("esc to go back"))
+	// Detail fields
+	detailContent := m.renderDetailContent(w)
+	if detailContent != "" {
+		sections = append(sections, detailContent)
+	}
 
-	// Render scrollable body and apply scroll offset
-	body := m.renderDetailContent()
-	lines := strings.Split(body, "\n")
-	// Viewport = total height minus header (1) + rule (1) + back (1) + blank (1) = 4 fixed lines
-	viewport := m.height - 5
+	// Nav hint
+	sections = append(sections, "")
+	if m.focused {
+		hint := "← back to list"
+		if m.leftFocused {
+			hint = "→ or enter for details"
+		}
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
+	}
+
+	fullContent := strings.Join(sections, "\n")
+
+	// Apply scroll
+	lines := strings.Split(fullContent, "\n")
+	viewport := h - 2 // padding
 	if viewport < 1 {
 		viewport = 1
 	}
-	if m.scrollOffset > 0 && m.scrollOffset < len(lines) {
-		lines = lines[m.scrollOffset:]
+
+	// Clamp right scroll
+	maxScroll := len(lines) - viewport
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	scrollOff := m.rightScroll
+	if scrollOff > maxScroll {
+		scrollOff = maxScroll
+	}
+
+	if scrollOff > 0 && scrollOff < len(lines) {
+		lines = lines[scrollOff:]
 	}
 	if len(lines) > viewport {
 		lines = lines[:viewport]
 	}
-	body = strings.Join(lines, "\n")
 
-	return header + "\n" + rule + "\n" + back + "\n\n" + body
+	displayed := strings.Join(lines, "\n")
+
+	panelStyle := lipgloss.NewStyle().
+		Width(w).
+		Height(h).
+		Padding(1, 2).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor)
+
+	return panelStyle.Render(displayed)
 }

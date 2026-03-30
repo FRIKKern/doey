@@ -65,29 +65,30 @@ func formatAge(d time.Duration) string {
 	return fmt.Sprintf("%dm", m)
 }
 
-// TasksModel displays a kanban-style task board with sections, CRUD, and subtask nesting.
+// TasksModel displays tasks in a split-pane layout with list left, detail right.
 type TasksModel struct {
 	// Data
-	entries       []runtime.PersistentTask              // from persistent store + merged runtime
-	subtaskMap    map[string][]runtime.Subtask          // task ID -> subtasks
-	heartbeats    map[string]runtime.HeartbeatState     // task ID -> live heartbeat
-	messages      []runtime.Message                     // IPC messages from snapshot
-	paneStatuses  map[string]runtime.PaneStatus         // pane ID -> live status
-	paneResults   map[string]runtime.PaneResult         // pane ID -> results
-	theme         styles.Theme
+	entries      []runtime.PersistentTask
+	subtaskMap   map[string][]runtime.Subtask
+	heartbeats   map[string]runtime.HeartbeatState
+	messages     []runtime.Message
+	paneStatuses map[string]runtime.PaneStatus
+	paneResults  map[string]runtime.PaneResult
+	theme        styles.Theme
 
 	// Card-based list
 	list list.Model
 
-	// Navigation
-	summaryMode bool // true = list, false = detail
+	// Navigation — split-pane
+	leftFocused bool // true = list panel focused, false = detail panel focused
+	rightScroll int  // vertical scroll offset for right panel
 	keyMap      keys.KeyMap
 
 	// Input modes
-	creating  bool   // inline create mode
-	inputText string // current input text
+	creating  bool
+	inputText string
 
-	// Expanded card view (nil = not expanded)
+	// Expanded card (used for subtask nav in right panel)
 	expanded *taskcard.ExpandedCard
 
 	// Sidecar/result for detail view
@@ -96,13 +97,13 @@ type TasksModel struct {
 	projectDir    string
 
 	// Layout
-	width   int
-	height  int
+	width    int
+	height   int
 	focused  bool
-	showHelp bool // ? key toggles keyboard help overlay
+	showHelp bool
 }
 
-// NewTasksModel creates a tasks panel starting in list mode.
+// NewTasksModel creates a tasks panel starting with left panel focused.
 func NewTasksModel() TasksModel {
 	theme := styles.DefaultTheme()
 	delegate := taskcard.NewCardDelegate(theme)
@@ -117,7 +118,7 @@ func NewTasksModel() TasksModel {
 
 	return TasksModel{
 		theme:       theme,
-		summaryMode: true,
+		leftFocused: true,
 		keyMap:      keys.DefaultKeyMap(),
 		subtaskMap:  make(map[string][]runtime.Subtask),
 		list:        l,
@@ -131,9 +132,18 @@ func (m TasksModel) Init() tea.Cmd { return nil }
 func (m *TasksModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
-	m.list.SetSize(w, h-4)
+	// Size the list for the left panel width
+	leftW := w * 40 / 100
+	if leftW < 28 {
+		leftW = 28
+	}
+	m.list.SetSize(leftW, h-4)
 	if m.expanded != nil {
-		m.expanded.Width = w
+		rightW := w - leftW - 1
+		if rightW < 24 {
+			rightW = 24
+		}
+		m.expanded.Width = rightW
 		m.expanded.Height = h - 4
 	}
 }
@@ -199,20 +209,57 @@ func (m *TasksModel) sortEntries() {
 		if sa != sb {
 			return sa < sb
 		}
-		// Within active section, sort by heartbeat activity
 		ha := m.heartbeats[a.ID]
 		hb := m.heartbeats[b.ID]
-		// Tasks with busy workers sort highest
 		if ha.ActiveWorkers != hb.ActiveWorkers {
 			return ha.ActiveWorkers > hb.ActiveWorkers
 		}
-		// Then by most recent heartbeat activity
 		if !ha.LastActivity.Equal(hb.LastActivity) {
 			return ha.LastActivity.After(hb.LastActivity)
 		}
-		// Fall back to task ID for stability
 		return a.ID < b.ID
 	})
+}
+
+// loadSelectedDetail loads sidecar/result data for the currently selected task.
+func (m *TasksModel) loadSelectedDetail() {
+	idx := m.list.Index()
+	if idx < 0 || idx >= len(m.entries) {
+		m.detailSidecar = nil
+		m.detailResult = nil
+		m.expanded = nil
+		return
+	}
+	task := m.entries[idx]
+	item := m.list.SelectedItem()
+	if item == nil {
+		return
+	}
+	ti := item.(taskcard.TaskItem)
+	leftW := m.width * 40 / 100
+	if leftW < 28 {
+		leftW = 28
+	}
+	rightW := m.width - leftW - 1
+	if rightW < 24 {
+		rightW = 24
+	}
+	m.expanded = &taskcard.ExpandedCard{
+		Item:          ti,
+		Theme:         m.theme,
+		Width:         rightW,
+		Height:        m.height - 4,
+		SubtaskCursor: -1,
+		ScrollOffset:  0,
+		Messages:      filterMessagesForTask(m.messages, task.ID, task.Team),
+		PaneStatuses:  paneStatusSlice(m.paneStatuses),
+		Results:       m.paneResults,
+	}
+	if m.projectDir != "" {
+		tasksDir := filepath.Join(m.projectDir, ".doey", "tasks")
+		m.detailSidecar = runtime.ReadTaskSidecar(tasksDir, task.ID)
+		m.detailResult = runtime.ReadTaskResult(tasksDir, task.ID)
+	}
 }
 
 // Update handles input modes, detail, and list navigation.
@@ -242,12 +289,12 @@ func (m TasksModel) Update(msg tea.Msg) (TasksModel, tea.Cmd) {
 			return m.updateInput(msg)
 		}
 
-		// Detail mode
-		if !m.summaryMode {
+		// Right panel focused — detail navigation
+		if !m.leftFocused {
 			return m.updateDetail(msg)
 		}
 
-		// List mode
+		// Left panel focused — list navigation
 		return m.updateList(msg)
 	}
 
@@ -262,93 +309,47 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Expanded card mode
-	if !m.summaryMode && m.expanded != nil {
-		return m.updateMouseExpanded(msg)
-	}
-
-	// List mode — only handle click release to prevent double-fire
-	if m.summaryMode && msg.Action == tea.MouseActionRelease {
+	// Click release — check list item zones
+	if msg.Action == tea.MouseActionRelease {
 		for i := range m.entries {
 			if zone.Get(fmt.Sprintf("task-card-%d", i)).InBounds(msg) {
 				m.list.Select(i)
-				// Open expanded card (same as Enter)
-				item := m.list.SelectedItem()
-				if item == nil {
+				m.rightScroll = 0
+				m.loadSelectedDetail()
+				return m, nil
+			}
+		}
+		// Subtask clicks in right panel
+		if !m.leftFocused && m.expanded != nil {
+			for i := range m.expanded.Item.Subtasks {
+				if zone.Get(fmt.Sprintf("subtask-%d", i)).InBounds(msg) {
+					m.expanded.SubtaskCursor = i
 					return m, nil
 				}
-				ti := item.(taskcard.TaskItem)
-				card := taskcard.ExpandedCard{
-					Item:          ti,
-					Theme:         m.theme,
-					Width:         m.width,
-					Height:        m.height - 4,
-					SubtaskCursor: -1,
-					ScrollOffset:  0,
-					Messages:      filterMessagesForTask(m.messages, ti.Task.ID, ti.Task.Team),
-					PaneStatuses:  paneStatusSlice(m.paneStatuses),
-					Results:       m.paneResults,
-				}
-				m.expanded = &card
-				m.summaryMode = false
-				// Load sidecar + result for detail view
-				if m.projectDir != "" {
-					tasksDir := filepath.Join(m.projectDir, ".doey", "tasks")
-					m.detailSidecar = runtime.ReadTaskSidecar(tasksDir, ti.Task.ID)
-					m.detailResult = runtime.ReadTaskResult(tasksDir, ti.Task.ID)
-				}
-				return m, nil
 			}
 		}
 	}
 
-	// Mouse wheel in list mode — forward to list model for scrolling
-	if m.summaryMode && msg.Action == tea.MouseActionPress {
-		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
-			var cmd tea.Cmd
-			m.list, cmd = m.list.Update(msg)
-			return m, cmd
-		}
-	}
-
-	return m, nil
-}
-
-// updateMouseExpanded handles mouse in expanded card view.
-func (m TasksModel) updateMouseExpanded(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
-	// Click release — check zones
-	if msg.Action == tea.MouseActionRelease {
-		// Close button
-		if zone.Get("detail-close").InBounds(msg) {
-			m.expanded = nil
-			m.summaryMode = true
-			return m, nil
-		}
-		// Subtask clicks
-		for i := range m.expanded.Item.Subtasks {
-			if zone.Get(fmt.Sprintf("subtask-%d", i)).InBounds(msg) {
-				m.expanded.SubtaskCursor = i
-				return m, nil
-			}
-		}
-	}
-
-	// Mouse wheel — scroll expanded card
+	// Mouse wheel — route to focused panel
 	if msg.Action == tea.MouseActionPress {
 		if msg.Button == tea.MouseButtonWheelUp {
-			if m.expanded.ScrollOffset > 0 {
-				m.expanded.ScrollOffset--
+			if m.leftFocused {
+				var cmd tea.Cmd
+				m.list, cmd = m.list.Update(msg)
+				return m, cmd
+			}
+			if m.rightScroll > 0 {
+				m.rightScroll--
 			}
 			return m, nil
 		}
 		if msg.Button == tea.MouseButtonWheelDown {
-			maxOff := m.expanded.ContentHeight() - m.expanded.Height
-			if maxOff < 0 {
-				maxOff = 0
+			if m.leftFocused {
+				var cmd tea.Cmd
+				m.list, cmd = m.list.Update(msg)
+				return m, cmd
 			}
-			if m.expanded.ScrollOffset < maxOff {
-				m.expanded.ScrollOffset++
-			}
+			m.rightScroll++
 			return m, nil
 		}
 	}
@@ -394,37 +395,22 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle custom keys first
+	switch {
+	// Focus right panel
+	case key.Matches(msg, m.keyMap.RightPanel), key.Matches(msg, m.keyMap.Select):
+		if total > 0 {
+			m.leftFocused = false
+			m.rightScroll = 0
+			m.loadSelectedDetail()
+		}
+		return m, nil
+	}
+
+	// Handle custom keys
 	switch msg.String() {
 	case "n":
 		m.creating = true
 		m.inputText = ""
-		return m, nil
-	case "enter":
-		item := m.list.SelectedItem()
-		if item == nil {
-			return m, nil
-		}
-		ti := item.(taskcard.TaskItem)
-		card := taskcard.ExpandedCard{
-			Item:          ti,
-			Theme:         m.theme,
-			Width:         m.width,
-			Height:        m.height - 4,
-			SubtaskCursor: -1,
-			ScrollOffset:  0,
-			Messages:      filterMessagesForTask(m.messages, ti.Task.ID, ti.Task.Team),
-			PaneStatuses:  paneStatusSlice(m.paneStatuses),
-			Results:       m.paneResults,
-		}
-		m.expanded = &card
-		m.summaryMode = false
-		// Load sidecar + result for detail view
-		if m.projectDir != "" {
-			tasksDir := filepath.Join(m.projectDir, ".doey", "tasks")
-			m.detailSidecar = runtime.ReadTaskSidecar(tasksDir, ti.Task.ID)
-			m.detailResult = runtime.ReadTaskResult(tasksDir, ti.Task.ID)
-		}
 		return m, nil
 	case "m":
 		item := m.list.SelectedItem()
@@ -479,21 +465,29 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	total := len(m.entries)
 	if total == 0 {
-		m.summaryMode = true
+		m.leftFocused = true
 		m.expanded = nil
 		return m, nil
 	}
 
-	idx := m.list.Index()
+	switch {
+	// Focus left panel
+	case key.Matches(msg, m.keyMap.LeftPanel), key.Matches(msg, m.keyMap.Back):
+		m.leftFocused = true
+		return m, nil
+	}
 
-	// Expanded card mode — handle scrolling and subtask nav
-	if m.expanded != nil {
-		switch msg.String() {
-		case "enter", "esc":
-			m.expanded = nil
-			m.summaryMode = true
-			return m, nil
-		case "tab":
+	switch msg.String() {
+	case "up", "k":
+		if m.rightScroll > 0 {
+			m.rightScroll--
+		}
+		return m, nil
+	case "down", "j":
+		m.rightScroll++
+		return m, nil
+	case "tab":
+		if m.expanded != nil {
 			n := len(m.expanded.Item.Subtasks)
 			if n > 0 {
 				if m.expanded.SubtaskCursor >= n-1 {
@@ -502,8 +496,10 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 					m.expanded.SubtaskCursor++
 				}
 			}
-			return m, nil
-		case "shift+tab":
+		}
+		return m, nil
+	case "shift+tab":
+		if m.expanded != nil {
 			n := len(m.expanded.Item.Subtasks)
 			if n > 0 {
 				if m.expanded.SubtaskCursor <= -1 {
@@ -512,89 +508,40 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 					m.expanded.SubtaskCursor--
 				}
 			}
-			return m, nil
-		case "up", "k":
-			if m.expanded.ScrollOffset > 0 {
-				m.expanded.ScrollOffset--
-			}
-			return m, nil
-		case "down", "j":
-			maxOff := m.expanded.ContentHeight() -
-				m.expanded.Height
-			if maxOff < 0 {
-				maxOff = 0
-			}
-			if m.expanded.ScrollOffset < maxOff {
-				m.expanded.ScrollOffset++
-			}
-			return m, nil
-		case "m":
-			task := m.expanded.Item.Task
-			next := nextMoveStatus(task.Status)
-			return m, func() tea.Msg {
-				return MoveTaskMsg{
-					ID: task.ID, Status: next,
-				}
-			}
-		case "s":
-			task := m.expanded.Item.Task
-			next := nextStatus(task.Status)
-			return m, func() tea.Msg {
-				return SetStatusTaskMsg{
-					ID: task.ID, Status: next,
-				}
-			}
-		case "d":
-			task := m.expanded.Item.Task
-			return m, func() tea.Msg {
-				return DispatchTaskMsg{
-					ID: task.ID, Title: task.Title,
-				}
-			}
-		case "x":
-			task := m.expanded.Item.Task
-			return m, func() tea.Msg {
-				return CancelTaskMsg{ID: task.ID}
-			}
 		}
 		return m, nil
-	}
-
-	// Legacy detail mode (fallback)
-	switch {
-	case key.Matches(msg, m.keyMap.Back):
-		m.summaryMode = true
-	default:
-		switch msg.String() {
-		case "m":
-			if idx >= 0 && idx < total {
-				task := m.entries[idx]
-				next := nextMoveStatus(task.Status)
-				return m, func() tea.Msg {
-					return MoveTaskMsg{ID: task.ID, Status: next}
-				}
+	case "m":
+		idx := m.list.Index()
+		if idx >= 0 && idx < total {
+			task := m.entries[idx]
+			next := nextMoveStatus(task.Status)
+			return m, func() tea.Msg {
+				return MoveTaskMsg{ID: task.ID, Status: next}
 			}
-		case "s":
-			if idx >= 0 && idx < total {
-				task := m.entries[idx]
-				next := nextStatus(task.Status)
-				return m, func() tea.Msg {
-					return SetStatusTaskMsg{ID: task.ID, Status: next}
-				}
+		}
+	case "s":
+		idx := m.list.Index()
+		if idx >= 0 && idx < total {
+			task := m.entries[idx]
+			next := nextStatus(task.Status)
+			return m, func() tea.Msg {
+				return SetStatusTaskMsg{ID: task.ID, Status: next}
 			}
-		case "d":
-			if idx >= 0 && idx < total {
-				task := m.entries[idx]
-				return m, func() tea.Msg {
-					return DispatchTaskMsg{ID: task.ID, Title: task.Title}
-				}
+		}
+	case "d":
+		idx := m.list.Index()
+		if idx >= 0 && idx < total {
+			task := m.entries[idx]
+			return m, func() tea.Msg {
+				return DispatchTaskMsg{ID: task.ID, Title: task.Title}
 			}
-		case "x":
-			if idx >= 0 && idx < total {
-				task := m.entries[idx]
-				return m, func() tea.Msg {
-					return CancelTaskMsg{ID: task.ID}
-				}
+		}
+	case "x":
+		idx := m.list.Index()
+		if idx >= 0 && idx < total {
+			task := m.entries[idx]
+			return m, func() tea.Msg {
+				return CancelTaskMsg{ID: task.ID}
 			}
 		}
 	}
@@ -640,7 +587,6 @@ func filterMessagesForTask(messages []runtime.Message, taskID string, taskTeam s
 		bodyLower := strings.ToLower(msg.Body)
 		subjectLower := strings.ToLower(msg.Subject)
 
-		// Check if message mentions this task by ID
 		if strings.Contains(msg.Body, idPattern) ||
 			strings.Contains(bodyLower, strings.ToLower(idPattern2)) ||
 			strings.Contains(msg.Body, idPattern3) {
@@ -648,7 +594,6 @@ func filterMessagesForTask(messages []runtime.Message, taskID string, taskTeam s
 			continue
 		}
 
-		// Check if message is from/to the task's team with a task-related subject
 		if taskTeam != "" && (strings.Contains(msg.From, taskTeam) || strings.Contains(msg.To, taskTeam)) {
 			if subjectLower == "task_complete" || subjectLower == "worker_finished" ||
 				subjectLower == "commit_request" {
@@ -674,41 +619,567 @@ func paneStatusSlice(m map[string]runtime.PaneStatus) []runtime.PaneStatus {
 	return out
 }
 
-// View renders list, expanded card, or detail mode.
+// View renders the split-pane layout or help overlay.
 func (m TasksModel) View() string {
 	if m.showHelp {
 		return m.viewHelp()
 	}
-	if m.summaryMode {
-		return m.viewList()
-	}
-	if m.expanded != nil {
-		return m.viewExpanded()
-	}
-	return m.viewDetail()
-}
 
-// viewExpanded renders the expanded card with header.
-func (m TasksModel) viewExpanded() string {
 	t := m.theme
 	w := m.width
-	if w < 30 {
-		w = 30
+	if w < 52 {
+		w = 52
 	}
-	task := m.expanded.Item.Task
-	headerText := fmt.Sprintf("TASK — #%s", task.ID)
+	h := m.height
+	if h < 10 {
+		h = 10
+	}
+
+	// Panel widths: 40% left, 60% right, minus separator
+	leftW := w * 40 / 100
+	if leftW < 28 {
+		leftW = 28
+	}
+	rightW := w - leftW - 1
+	if rightW < 24 {
+		rightW = 24
+	}
+
+	leftPanel := m.renderLeftPanel(leftW, h)
+	rightPanel := m.renderRightPanel(rightW, h)
+
+	// Separator
+	sepColor := t.Separator
+	sep := lipgloss.NewStyle().
+		Foreground(sepColor).
+		Render(strings.Repeat("│\n", h-1) + "│")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sep, rightPanel)
+}
+
+// renderLeftPanel renders the task list.
+func (m TasksModel) renderLeftPanel(w, h int) string {
+	t := m.theme
+
+	borderColor := t.Separator
+	if m.focused && m.leftFocused {
+		borderColor = t.Primary
+	}
+	_ = borderColor // used in panel style below
+
+	// Header
+	header := t.SectionHeader.Copy().Width(w).PaddingLeft(1).Render("TASKS")
+
+	if len(m.entries) == 0 {
+		icon := styles.EmptyStateIcon(t)
+		title := styles.EmptyStateTitle(t)
+		hint := styles.EmptyStateHint(t)
+
+		emptyBox := lipgloss.NewStyle().
+			Align(lipgloss.Center).
+			Width(w).
+			PaddingTop(2).
+			Render(icon + "\n\n" + title + "\n" + hint)
+
+		content := header + "\n" + emptyBox
+		if m.creating {
+			content += "\n" + m.renderInputBar()
+		}
+		return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+	}
+
+	summary := m.taskSummary()
+
+	// Set list size for left panel
+	listH := h - 4 // header + summary + hints
+	if listH < 1 {
+		listH = 1
+	}
+	// Create a temporary copy for rendering at correct size
+	l := m.list
+	l.SetSize(w, listH)
+	listView := l.View()
+
+	hint := ""
+	if m.focused && m.leftFocused && !m.creating {
+		hint = styles.FooterHintBarStyle(t).
+			Render("j/k nav  enter/→ detail  n new  m move  ? help")
+	}
+
+	content := header + "\n" + summary + "\n" + listView + "\n" + hint
+	if m.creating {
+		content += "\n" + m.renderInputBar()
+	}
+	return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+}
+
+// renderRightPanel renders the detail pane for the selected task.
+func (m TasksModel) renderRightPanel(w, h int) string {
+	t := m.theme
+
+	borderColor := t.Separator
+	if m.focused && !m.leftFocused {
+		borderColor = t.Primary
+	}
+
+	idx := m.list.Index()
+	if len(m.entries) == 0 || idx < 0 || idx >= len(m.entries) {
+		empty := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Padding(2, 3).
+			Width(w).
+			Height(h).
+			Render("No task selected")
+		return empty
+	}
+
+	task := m.entries[idx]
+	contentW := w - 6
+	if contentW < 20 {
+		contentW = 20
+	}
+
+	var sections []string
+
+	// Title
+	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(task.Title)
+	sections = append(sections, statusIcon(task.Status, t)+" "+title)
+	sections = append(sections, "")
+
+	// Status with color
+	statusColor := t.Muted
+	switch task.Status {
+	case "active":
+		statusColor = t.Muted
+	case "in_progress":
+		statusColor = t.Primary
+	case "pending_user_confirmation":
+		statusColor = t.Warning
+	case "done":
+		statusColor = t.Success
+	case "cancelled":
+		statusColor = t.Muted
+	case "failed":
+		statusColor = t.Danger
+	}
+	sections = append(sections, styles.MetaLine(t, "Status", lipgloss.NewStyle().Foreground(statusColor).Render(task.Status)))
+
+	// Live workers
 	if ws := m.workerSummaryForTask(task.ID); ws != "" {
-		headerText += "  " + ws
+		sections = append(sections, styles.MetaLine(t, "Workers", ws))
 	}
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render(headerText)
-	rule := t.Faint.Render(strings.Repeat("─", w))
-	body := m.expanded.ViewportSlice()
-	closeHint := zone.Mark("detail-close", "enter/esc close")
-	hint := styles.FooterHintBarStyle(t).
-		Render("↑/↓ scroll  " + closeHint + "  tab subtask  m move  s status  ? help")
-	content := header + "\n" + rule + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().
-		Width(w).Height(m.height).Render(content)
+
+	// Type
+	if task.Type != "" {
+		sections = append(sections, styles.MetaLine(t, "Type", task.Type))
+	}
+
+	// Team
+	if task.Team != "" {
+		sections = append(sections, styles.MetaLine(t, "Team",
+			lipgloss.NewStyle().Bold(true).Foreground(t.Accent).Render(task.Team)))
+	}
+
+	// Owner
+	if task.CreatedBy != "" {
+		sections = append(sections, styles.MetaLine(t, "Created by", task.CreatedBy))
+	}
+	if task.AssignedTo != "" {
+		sections = append(sections, styles.MetaLine(t, "Assigned to",
+			lipgloss.NewStyle().Bold(true).Foreground(t.Accent).Render(task.AssignedTo)))
+	}
+
+	// Priority
+	{
+		priLabel := fmt.Sprintf("P%d", task.Priority)
+		priColor := t.Muted
+		switch {
+		case task.Priority == 0:
+			priColor = t.Danger
+			priLabel += " (critical)"
+		case task.Priority == 1:
+			priColor = t.Warning
+			priLabel += " (high)"
+		case task.Priority == 2:
+			priColor = t.Primary
+			priLabel += " (medium)"
+		default:
+			priLabel += " (low)"
+		}
+		sections = append(sections, styles.MetaLine(t, "Priority",
+			lipgloss.NewStyle().Foreground(priColor).Render(priLabel)))
+	}
+
+	if task.Category != "" {
+		sections = append(sections, styles.MetaLine(t, "Category", styles.CategoryBadge(task.Category)))
+	}
+	if len(task.Tags) > 0 {
+		var tagParts []string
+		for _, tag := range task.Tags {
+			tagParts = append(tagParts, styles.TagBadge(tag))
+		}
+		sections = append(sections, styles.MetaLine(t, "Tags", strings.Join(tagParts, " ")))
+	}
+	if task.MergedInto != "" {
+		sections = append(sections, styles.MetaLine(t, "Merged into",
+			lipgloss.NewStyle().Foreground(t.Accent).Render("#"+task.MergedInto)))
+	}
+	if task.ParentTaskID != "" {
+		sections = append(sections, styles.MetaLine(t, "Parent", t.Dim.Render("#"+task.ParentTaskID)))
+	}
+	if task.Created > 0 {
+		sections = append(sections, styles.MetaLine(t, "Created",
+			time.Unix(task.Created, 0).Format("2006-01-02 15:04:05")))
+	}
+	if task.Updated > 0 {
+		sections = append(sections, styles.MetaLine(t, "Updated",
+			time.Unix(task.Updated, 0).Format("2006-01-02 15:04:05")))
+	}
+	if task.Result != "" {
+		sections = append(sections, styles.MetaLine(t, "Result", task.Result))
+	}
+
+	// Blockers — highlighted red
+	if task.Blockers != "" {
+		sections = append(sections, "")
+		sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(t.Danger).Render("⚠ BLOCKERS"))
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Danger).Width(contentW).Render(task.Blockers))
+	}
+
+	// Description
+	if task.Description != "" {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(t, "DESCRIPTION"))
+		sections = append(sections, styles.DescriptionBlock(t, task.Description, contentW))
+	}
+
+	// Acceptance Criteria
+	if task.AcceptanceCriteria != "" {
+		var acLines []string
+		for _, line := range strings.Split(task.AcceptanceCriteria, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				acLines = append(acLines, line)
+			}
+		}
+		if len(acLines) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "ACCEPTANCE CRITERIA"))
+			sections = append(sections, styles.BulletList(t, acLines, contentW))
+		}
+	}
+
+	// Subtasks
+	if subs, ok := m.subtaskMap[task.ID]; ok && len(subs) > 0 {
+		doneCount := 0
+		for _, st := range subs {
+			if st.Status == "done" {
+				doneCount++
+			}
+		}
+		total := len(subs)
+
+		barWidth := 20
+		filled := 0
+		if total > 0 {
+			filled = (doneCount * barWidth) / total
+		}
+		bar := lipgloss.NewStyle().Foreground(t.Success).Render(strings.Repeat("█", filled)) +
+			lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("░", barWidth-filled))
+		progressLabel := fmt.Sprintf(" %d/%d", doneCount, total)
+
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("SUBTASKS (%d/%d)", doneCount, total)))
+		sections = append(sections, bar+t.Dim.Render(progressLabel))
+
+		now := time.Now()
+		for i, st := range subs {
+			dot := lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+			switch st.Status {
+			case "done":
+				dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
+			case "active":
+				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+			case "failed":
+				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
+			}
+			pane := lipgloss.NewStyle().Foreground(t.Accent).Render(st.Pane)
+			stTitle := t.Body.Render(st.Title)
+			age := ""
+			if st.Created > 0 {
+				age = t.Faint.Render(formatAge(now.Sub(time.Unix(st.Created, 0))))
+			}
+
+			// Highlight selected subtask
+			line := fmt.Sprintf("%s %-6s %s  %s", dot, pane, stTitle, age)
+			if m.expanded != nil && m.expanded.SubtaskCursor == i {
+				line = lipgloss.NewStyle().Bold(true).Render(line)
+			}
+			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), line))
+		}
+	}
+
+	// Attachments
+	if len(task.Attachments) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(t, "LINKS & ATTACHMENTS"))
+		for _, att := range task.Attachments {
+			sections = append(sections, lipgloss.NewStyle().Foreground(t.Accent).Render("🔗 "+att))
+		}
+	}
+
+	// --- Sidecar: Planning ---
+	if sc := m.detailSidecar; sc != nil {
+		if sc.Intent != "" {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "INTENT"))
+			sections = append(sections, styles.DescriptionBlock(t, sc.Intent, contentW))
+		}
+		if len(sc.Hypotheses) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "HYPOTHESES"))
+			for _, h := range sc.Hypotheses {
+				name := h.Text
+				if name == "" {
+					name = h.Name
+				}
+				if h.ID != "" {
+					name = h.ID + ": " + name
+				}
+				conf := h.Confidence
+				if conf == "" {
+					conf = "medium"
+				}
+				sections = append(sections, styles.HypothesisRow(t, name, conf, contentW))
+			}
+		}
+		if len(sc.Constraints) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "CONSTRAINTS"))
+			sections = append(sections, styles.BulletList(t, sc.Constraints, contentW))
+		}
+		if len(sc.SuccessCriteria) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "SUCCESS CRITERIA"))
+			sections = append(sections, styles.BulletList(t, sc.SuccessCriteria, contentW))
+		}
+		if len(sc.Deliverables) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "DELIVERABLES"))
+			sections = append(sections, styles.BulletList(t, sc.Deliverables, contentW))
+		}
+	}
+
+	// --- Sidecar: Execution ---
+	if sc := m.detailSidecar; sc != nil {
+		if sc.Phase != "" || sc.TotalPhases > 0 {
+			badge := styles.PhaseBadge(t, sc.Phase, sc.CurrentPhase, sc.TotalPhases)
+			if badge != "" {
+				sections = append(sections, "")
+				sections = append(sections, styles.MetaLine(t, "Phase", badge))
+			}
+		}
+		if sc.DispatchMode != "" {
+			sections = append(sections, styles.MetaLine(t, "Dispatch", sc.DispatchMode))
+		}
+		if sc.DispatchPlan != nil && len(sc.DispatchPlan.Phases) > 0 {
+			var phaseLines []string
+			for _, p := range sc.DispatchPlan.Phases {
+				label := p.Title
+				if label == "" {
+					label = p.Brief
+				}
+				if label == "" {
+					label = fmt.Sprintf("Phase %d", p.Phase)
+				}
+				phaseLines = append(phaseLines, label)
+			}
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "DISPATCH PLAN"))
+			sections = append(sections, styles.NumberedList(t, phaseLines, contentW))
+		}
+		if len(sc.EvidencePlan) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "EVIDENCE PLAN"))
+			sections = append(sections, styles.BulletList(t, sc.EvidencePlan, contentW))
+		}
+	}
+
+	// --- Sidecar: Semantic ---
+	if sc := m.detailSidecar; sc != nil {
+		if len(sc.Concepts) > 0 {
+			var names []string
+			for _, c := range sc.Concepts {
+				label := c.Name
+				if c.ID != "" {
+					label = c.ID + ": " + label
+				}
+				names = append(names, label)
+			}
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "CONCEPTS"))
+			sections = append(sections, styles.BulletList(t, names, contentW))
+		}
+		if sc.BridgeProblem != "" {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "BRIDGE PROBLEM"))
+			sections = append(sections, styles.DescriptionBlock(t, sc.BridgeProblem, contentW))
+		}
+		if len(sc.RepresentationLayer) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "REPRESENTATION LAYER"))
+			sections = append(sections, styles.BulletList(t, sc.RepresentationLayer, contentW))
+		}
+	}
+
+	// --- Result data ---
+	if res := m.detailResult; res != nil {
+		if res.NeedsFollowUp {
+			sections = append(sections, "")
+			sections = append(sections, styles.FollowUpBadge(t))
+		}
+		if len(res.HypothesisUpdates) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "HYPOTHESIS UPDATES"))
+			for _, hu := range res.HypothesisUpdates {
+				name := hu.ID
+				if hu.Evidence != "" {
+					name += ": " + hu.Evidence
+				}
+				conf := hu.Confidence
+				if conf == "" {
+					conf = hu.Status
+				}
+				sections = append(sections, styles.HypothesisRow(t, name, conf, contentW))
+			}
+		}
+		if len(res.Evidence) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "EVIDENCE"))
+			sections = append(sections, styles.BulletList(t, res.Evidence, contentW))
+		}
+		if res.ToolCalls > 0 {
+			sections = append(sections, styles.MetaLine(t, "Tool Calls", fmt.Sprintf("%d", res.ToolCalls)))
+		}
+	}
+
+	// Decision Log (last 3 entries)
+	if task.DecisionLog != "" {
+		lines := strings.Split(strings.TrimSpace(task.DecisionLog), "\n")
+		start := 0
+		if len(lines) > 3 {
+			start = len(lines) - 3
+		}
+		var dlLines []string
+		for _, line := range lines[start:] {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				dlLines = append(dlLines, line)
+			}
+		}
+		if len(dlLines) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, "DECISIONS"))
+			sections = append(sections, styles.BulletList(t, dlLines, contentW))
+			if start > 0 {
+				sections = append(sections, t.Faint.Render(fmt.Sprintf("(%d more)", start)))
+			}
+		}
+	}
+
+	// Notes (truncated to 5 lines)
+	if task.Notes != "" {
+		lines := strings.Split(strings.TrimSpace(task.Notes), "\n")
+		truncated := false
+		if len(lines) > 5 {
+			lines = lines[:5]
+			truncated = true
+		}
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(t, "NOTES"))
+		sections = append(sections, styles.DescriptionBlock(t, strings.Join(lines, "\n"), contentW))
+		if truncated {
+			sections = append(sections, t.Faint.Render("(truncated)"))
+		}
+	}
+
+	// Activity Log
+	if len(task.Logs) > 0 {
+		reversed := make([]runtime.PersistentTaskLog, len(task.Logs))
+		for i, l := range task.Logs {
+			reversed[len(task.Logs)-1-i] = l
+		}
+		maxEntries := 10
+		truncated := 0
+		if len(reversed) > maxEntries {
+			truncated = len(reversed) - maxEntries
+			reversed = reversed[:maxEntries]
+		}
+		now := time.Now()
+		var logLines []string
+		for _, entry := range reversed {
+			age := "     "
+			if entry.Timestamp > 0 {
+				age = fmt.Sprintf("%-5s", formatAge(now.Sub(time.Unix(entry.Timestamp, 0))))
+			}
+			logLines = append(logLines, lipgloss.NewStyle().Foreground(t.Muted).Render(age+" "+entry.Entry))
+		}
+		if truncated > 0 {
+			logLines = append(logLines, t.Faint.Render(fmt.Sprintf("(%d more)", truncated)))
+		}
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(t, "ACTIVITY LOG"))
+		sections = append(sections, strings.Join(logLines, "\n"))
+	}
+
+	// Nav hint
+	sections = append(sections, "")
+	if m.focused {
+		hint := "← back to list"
+		if m.leftFocused {
+			hint = "→ or enter for details"
+		} else {
+			hint += "  m move  s status  d dispatch  x cancel  tab subtask"
+		}
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
+	}
+
+	fullContent := strings.Join(sections, "\n")
+
+	// Apply scroll
+	lines := strings.Split(fullContent, "\n")
+	viewport := h - 2
+	if viewport < 1 {
+		viewport = 1
+	}
+
+	maxScroll := len(lines) - viewport
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	scrollOff := m.rightScroll
+	if scrollOff > maxScroll {
+		scrollOff = maxScroll
+	}
+
+	if scrollOff > 0 && scrollOff < len(lines) {
+		lines = lines[scrollOff:]
+	}
+	if len(lines) > viewport {
+		lines = lines[:viewport]
+	}
+
+	displayed := strings.Join(lines, "\n")
+
+	panelStyle := lipgloss.NewStyle().
+		Width(w).
+		Height(h).
+		Padding(1, 2).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor)
+
+	return panelStyle.Render(displayed)
 }
 
 // viewHelp renders a floating keyboard help overlay.
@@ -727,17 +1198,17 @@ func (m TasksModel) viewHelp() string {
 	descStyle := styles.HelpDescStyle(t)
 
 	bindings := []struct{ key, desc string }{
-		{"j / k", "Navigate cards up/down"},
-		{"Enter", "Expand selected card"},
-		{"Esc", "Collapse / go back"},
+		{"j / k", "Navigate cards up/down (list)"},
+		{"Enter / →", "Focus detail panel"},
+		{"Esc / ←", "Focus list panel"},
+		{"↑ / ↓", "Scroll detail panel"},
 		{"n", "Create new task"},
 		{"m", "Move task (active → in_progress → done)"},
 		{"s", "Cycle through all statuses"},
 		{"d", "Dispatch task to a team"},
 		{"x", "Cancel task"},
-		{"Tab", "Next subtask (expanded view)"},
-		{"Shift+Tab", "Previous subtask (expanded view)"},
-		{"↑ / ↓", "Scroll expanded card"},
+		{"Tab", "Next subtask (detail panel)"},
+		{"Shift+Tab", "Previous subtask (detail panel)"},
 		{"?", "Toggle this help"},
 	}
 
@@ -753,7 +1224,6 @@ func (m TasksModel) viewHelp() string {
 
 	overlay := styles.HelpOverlayStyle(t, w).Render(content)
 
-	// Center vertically
 	topPad := (m.height - lipgloss.Height(overlay)) / 2
 	if topPad < 0 {
 		topPad = 0
@@ -764,58 +1234,6 @@ func (m TasksModel) viewHelp() string {
 		Height(m.height).
 		PaddingTop(topPad).
 		Render(overlay)
-}
-
-func (m TasksModel) viewList() string {
-	t := m.theme
-	w := m.width
-	if w < 30 {
-		w = 30
-	}
-
-	// Cap card content area for readability
-	listWidth := w
-	if listWidth > styles.MaxCardWidth {
-		listWidth = styles.MaxCardWidth
-	}
-
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TASKS")
-	rule := t.Faint.Render(strings.Repeat("\u2500", listWidth))
-
-	if len(m.entries) == 0 {
-		icon := styles.EmptyStateIcon(t)
-		title := styles.EmptyStateTitle(t)
-		hint := styles.EmptyStateHint(t)
-
-		emptyBox := lipgloss.NewStyle().
-			Align(lipgloss.Center).
-			Width(w).
-			PaddingTop(2).
-			Render(icon + "\n\n" + title + "\n" + hint)
-
-		content := header + "\n" + rule + "\n" + emptyBox
-		if m.creating {
-			content += "\n" + m.renderInputBar()
-		}
-		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
-	}
-
-	summary := m.taskSummary()
-
-	// Use the list view instead of manual rows
-	listView := m.list.View()
-
-	hint := ""
-	if m.focused && !m.creating {
-		hint = styles.FooterHintBarStyle(t).
-			Render("j/k navigate  enter detail  n new  m move  s status  d dispatch  x cancel  ? help")
-	}
-
-	content := header + "\n" + rule + "\n" + summary + "\n" + listView + "\n" + hint
-	if m.creating {
-		content += "\n" + m.renderInputBar()
-	}
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
 
 // taskSummary returns section counts with live worker assignment info.
@@ -831,7 +1249,7 @@ func (m TasksModel) taskSummary() string {
 		}
 	}
 
-	total := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
+	total := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(1).
 		Render(fmt.Sprintf("%d tasks", len(m.entries)))
 
 	var parts []string
@@ -842,7 +1260,6 @@ func (m TasksModel) taskSummary() string {
 		parts = append(parts, styles.SectionPill(fmt.Sprintf("%d complete", complete), t.Success))
 	}
 
-	// Count total busy workers across all tasks
 	busyWorkers := 0
 	for _, hs := range m.heartbeats {
 		busyWorkers += hs.ActiveWorkers
@@ -862,12 +1279,10 @@ func (m TasksModel) taskSummary() string {
 }
 
 // workerSummaryForTask returns a compact live status string for a task.
-// Checks heartbeat data and pane statuses for workers assigned to this task.
 func (m TasksModel) workerSummaryForTask(taskID string) string {
 	t := m.theme
 	hs, ok := m.heartbeats[taskID]
 	if !ok || hs.ActiveWorkers == 0 {
-		// Check pane statuses as fallback — match task title
 		return ""
 	}
 
@@ -901,551 +1316,6 @@ func (m TasksModel) renderInputBar() string {
 	prompt := lipgloss.NewStyle().Bold(true).Foreground(t.Primary).
 		Render("New task: ")
 	input := lipgloss.NewStyle().Foreground(t.Text).
-		Render(m.inputText + "\u2588")
+		Render(m.inputText + "█")
 	return lipgloss.NewStyle().Padding(1, 3).Render(prompt + input)
-}
-
-// --- Detail view ---
-
-func (m TasksModel) viewDetail() string {
-	t := m.theme
-	w := m.width
-	if w < 30 {
-		w = 30
-	}
-
-	idx := m.list.Index()
-	if idx < 0 || idx >= len(m.entries) {
-		m.summaryMode = true
-		return m.viewList()
-	}
-
-	task := m.entries[idx]
-
-	header := t.SectionHeader.Copy().PaddingLeft(2).
-		Render(fmt.Sprintf("TASK \u2014 #%s", task.ID))
-	rule := t.Faint.Render(strings.Repeat("\u2500", w))
-	backHint := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true).
-		PaddingLeft(3).
-		Render("esc = back  m = move  s = status  d = dispatch  x = cancel")
-
-	labelStyle := t.StatLabel.Copy().Width(14)
-	valueStyle := t.Body
-
-	// Status with color
-	statusColor := t.Muted
-	switch task.Status {
-	case "active":
-		statusColor = t.Muted
-	case "in_progress":
-		statusColor = t.Primary
-	case "pending_user_confirmation":
-		statusColor = t.Warning
-	case "done":
-		statusColor = t.Success
-	case "cancelled":
-		statusColor = t.Muted
-	case "failed":
-		statusColor = t.Danger
-	}
-
-	var fields []string
-	fields = append(fields, labelStyle.Render("Title")+valueStyle.Render(task.Title))
-	fields = append(fields, labelStyle.Render("Status")+
-		statusIcon(task.Status, t)+" "+lipgloss.NewStyle().Foreground(statusColor).Render(task.Status))
-
-	// Live worker assignment
-	if ws := m.workerSummaryForTask(task.ID); ws != "" {
-		fields = append(fields, labelStyle.Render("Workers")+ws)
-	}
-
-	// Type
-	if task.Type != "" {
-		fields = append(fields, labelStyle.Render("Type")+valueStyle.Render(task.Type))
-	}
-
-	// Team — prominent, right after status
-	if task.Team != "" {
-		fields = append(fields, labelStyle.Render("Team")+
-			lipgloss.NewStyle().Bold(true).Foreground(t.Accent).Render(task.Team))
-	}
-	// Owner info
-	if task.CreatedBy != "" {
-		fields = append(fields, labelStyle.Render("Created by")+valueStyle.Render(task.CreatedBy))
-	}
-	if task.AssignedTo != "" {
-		fields = append(fields, labelStyle.Render("Assigned to")+
-			lipgloss.NewStyle().Bold(true).Foreground(t.Accent).Render(task.AssignedTo))
-	}
-	// Priority
-	{
-		priLabel := fmt.Sprintf("P%d", task.Priority)
-		priColor := t.Muted
-		switch {
-		case task.Priority == 0:
-			priColor = t.Danger
-			priLabel += " (critical)"
-		case task.Priority == 1:
-			priColor = t.Warning
-			priLabel += " (high)"
-		case task.Priority == 2:
-			priColor = t.Primary
-			priLabel += " (medium)"
-		default:
-			priLabel += " (low)"
-		}
-		fields = append(fields, labelStyle.Render("Priority")+
-			lipgloss.NewStyle().Foreground(priColor).Render(priLabel))
-	}
-	if task.Category != "" {
-		fields = append(fields, labelStyle.Render("Category")+styles.CategoryBadge(task.Category))
-	}
-	if len(task.Tags) > 0 {
-		var tagParts []string
-		for _, tag := range task.Tags {
-			tagParts = append(tagParts, styles.TagBadge(tag))
-		}
-		fields = append(fields, labelStyle.Render("Tags")+strings.Join(tagParts, " "))
-	}
-	if task.MergedInto != "" {
-		fields = append(fields, labelStyle.Render("Merged into")+
-			lipgloss.NewStyle().Foreground(t.Accent).Render("#"+task.MergedInto))
-	}
-	if task.ParentTaskID != "" {
-		fields = append(fields, labelStyle.Render("Parent")+
-			t.Dim.Render("#"+task.ParentTaskID))
-	}
-	if task.Created > 0 {
-		fields = append(fields, labelStyle.Render("Created")+
-			valueStyle.Render(time.Unix(task.Created, 0).Format("2006-01-02 15:04:05")))
-	}
-	if task.Updated > 0 {
-		fields = append(fields, labelStyle.Render("Updated")+
-			valueStyle.Render(time.Unix(task.Updated, 0).Format("2006-01-02 15:04:05")))
-	}
-	if task.Result != "" {
-		fields = append(fields, labelStyle.Render("Result")+valueStyle.Render(task.Result))
-	}
-	fieldBlock := lipgloss.NewStyle().Padding(1, 3).Render(strings.Join(fields, "\n"))
-
-	// Description
-	descBlock := ""
-	if task.Description != "" {
-		descWidth := w - 10
-		if descWidth < 30 {
-			descWidth = 30
-		}
-		descHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("DESCRIPTION")
-		descRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
-		descBody := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			Width(descWidth).
-			Padding(0, 3).
-			Render(task.Description)
-		descBlock = "\n" + descHeader + "\n" + descRule + "\n" + descBody
-	}
-
-	// Attachments
-	attachBlock := ""
-	if len(task.Attachments) > 0 {
-		attHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("LINKS & ATTACHMENTS")
-		attRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
-		var attLines []string
-		for _, att := range task.Attachments {
-			link := lipgloss.NewStyle().Foreground(t.Accent).Render(att)
-			attLines = append(attLines, "  \U0001F517 "+link)
-		}
-		attachBlock = "\n" + attHeader + "\n" + attRule + "\n" +
-			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(attLines, "\n"))
-	}
-
-	// Subtasks
-	subtaskBlock := ""
-	if subs, ok := m.subtaskMap[task.ID]; ok && len(subs) > 0 {
-		// Count done/total for progress
-		doneCount := 0
-		for _, st := range subs {
-			if st.Status == "done" {
-				doneCount++
-			}
-		}
-		total := len(subs)
-
-		// Progress bar
-		barWidth := 20
-		filled := 0
-		if total > 0 {
-			filled = (doneCount * barWidth) / total
-		}
-		bar := lipgloss.NewStyle().Foreground(t.Success).Render(strings.Repeat("\u2588", filled)) +
-			lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("\u2591", barWidth-filled))
-		progressLabel := fmt.Sprintf(" %d/%d", doneCount, total)
-		progressLine := "   " + bar + t.Dim.Render(progressLabel)
-
-		subHeader := t.SectionHeader.Copy().PaddingLeft(3).
-			Render(fmt.Sprintf("SUBTASKS (%d/%d)", doneCount, total))
-		subRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
-
-		var subLines []string
-		subLines = append(subLines, progressLine)
-		now := time.Now()
-		for _, st := range subs {
-			dot := lipgloss.NewStyle().Foreground(t.Muted).Render("\u25CB")
-			switch st.Status {
-			case "done":
-				dot = lipgloss.NewStyle().Foreground(t.Success).Render("\u25CF")
-			case "active":
-				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("\u25CF")
-			case "failed":
-				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("\u2715")
-			}
-			pane := lipgloss.NewStyle().Foreground(t.Accent).Render(st.Pane)
-			title := valueStyle.Render(st.Title)
-			age := ""
-			if st.Created > 0 {
-				age = t.Faint.Render(formatAge(now.Sub(time.Unix(st.Created, 0))))
-			}
-			subLines = append(subLines, fmt.Sprintf("  %s %-6s %s  %s", dot, pane, title, age))
-		}
-		subtaskBlock = "\n" + subHeader + "\n" + subRule + "\n" +
-			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(subLines, "\n"))
-	}
-
-	// Activity Log
-	logBlock := ""
-	if len(task.Logs) > 0 {
-		logHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("ACTIVITY LOG")
-		logRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
-
-		// Reverse chronological — most recent first
-		logs := task.Logs
-		reversed := make([]runtime.PersistentTaskLog, len(logs))
-		for i, l := range logs {
-			reversed[len(logs)-1-i] = l
-		}
-
-		maxEntries := 10
-		truncated := 0
-		if len(reversed) > maxEntries {
-			truncated = len(reversed) - maxEntries
-			reversed = reversed[:maxEntries]
-		}
-
-		now := time.Now()
-		var logLines []string
-		for _, entry := range reversed {
-			age := "     "
-			if entry.Timestamp > 0 {
-				age = fmt.Sprintf("%-5s", formatAge(now.Sub(time.Unix(entry.Timestamp, 0))))
-			}
-			ts := t.Faint.Render(age)
-			text := lipgloss.NewStyle().Foreground(t.Muted).Render(entry.Entry)
-			logLines = append(logLines, "  "+ts+" "+text)
-		}
-		if truncated > 0 {
-			logLines = append(logLines, t.Faint.Render(fmt.Sprintf("  (%d more)", truncated)))
-		}
-
-		logBlock = "\n" + logHeader + "\n" + logRule + "\n" +
-			lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(logLines, "\n"))
-	}
-
-	// Blockers — highlighted red
-	blockerBlock := ""
-	if task.Blockers != "" {
-		bHeader := lipgloss.NewStyle().Bold(true).Foreground(t.Danger).PaddingLeft(3).
-			Render("\u26A0 BLOCKERS")
-		bRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(lipgloss.NewStyle().Foreground(t.Danger).Render(strings.Repeat("\u2500", w-6)))
-		bBody := lipgloss.NewStyle().
-			Foreground(t.Danger).
-			Width(w - 10).
-			Padding(0, 3).
-			Render(task.Blockers)
-		blockerBlock = "\n" + bHeader + "\n" + bRule + "\n" + bBody
-	}
-
-	// Acceptance Criteria
-	criteriaBlock := ""
-	if task.AcceptanceCriteria != "" {
-		acHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("ACCEPTANCE CRITERIA")
-		acRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
-		// Render each line as a checklist item
-		var acLines []string
-		for _, line := range strings.Split(task.AcceptanceCriteria, "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			acLines = append(acLines, "  "+lipgloss.NewStyle().Foreground(t.Muted).Render("\u25A1")+" "+valueStyle.Render(line))
-		}
-		if len(acLines) > 0 {
-			criteriaBlock = "\n" + acHeader + "\n" + acRule + "\n" +
-				lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(acLines, "\n"))
-		}
-	}
-
-	// --- Sidecar: Planning ---
-	planningBlock := ""
-	if sc := m.detailSidecar; sc != nil {
-		sectionWidth := w - 10
-		if sectionWidth < 30 {
-			sectionWidth = 30
-		}
-		var planParts []string
-
-		if sc.Intent != "" {
-			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "INTENT")))
-			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.DescriptionBlock(t, sc.Intent, sectionWidth)))
-		}
-		if len(sc.Hypotheses) > 0 {
-			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "HYPOTHESES")))
-			var hLines []string
-			for _, h := range sc.Hypotheses {
-				name := h.Text
-				if name == "" {
-					name = h.Name
-				}
-				if h.ID != "" {
-					name = h.ID + ": " + name
-				}
-				conf := h.Confidence
-				if conf == "" {
-					conf = "medium"
-				}
-				hLines = append(hLines, styles.HypothesisRow(t, name, conf, sectionWidth))
-			}
-			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(strings.Join(hLines, "\n")))
-		}
-		if len(sc.Constraints) > 0 {
-			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "CONSTRAINTS")))
-			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.BulletList(t, sc.Constraints, sectionWidth)))
-		}
-		if len(sc.SuccessCriteria) > 0 {
-			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "SUCCESS CRITERIA")))
-			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.BulletList(t, sc.SuccessCriteria, sectionWidth)))
-		}
-		if len(sc.Deliverables) > 0 {
-			planParts = append(planParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "DELIVERABLES")))
-			planParts = append(planParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.BulletList(t, sc.Deliverables, sectionWidth)))
-		}
-
-		if len(planParts) > 0 {
-			planningBlock = "\n" + strings.Join(planParts, "\n")
-		}
-	}
-
-	// --- Sidecar: Execution ---
-	executionBlock := ""
-	if sc := m.detailSidecar; sc != nil {
-		sectionWidth := w - 10
-		if sectionWidth < 30 {
-			sectionWidth = 30
-		}
-		var execParts []string
-
-		if sc.Phase != "" || sc.TotalPhases > 0 {
-			badge := styles.PhaseBadge(t, sc.Phase, sc.CurrentPhase, sc.TotalPhases)
-			if badge != "" {
-				execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
-					Render(styles.MetaLine(t, "Phase", badge)))
-			}
-		}
-		if sc.DispatchMode != "" {
-			execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.MetaLine(t, "Dispatch", sc.DispatchMode)))
-		}
-		if sc.DispatchPlan != nil && len(sc.DispatchPlan.Phases) > 0 {
-			var phaseLines []string
-			for _, p := range sc.DispatchPlan.Phases {
-				label := p.Title
-				if label == "" {
-					label = p.Brief
-				}
-				if label == "" {
-					label = fmt.Sprintf("Phase %d", p.Phase)
-				}
-				phaseLines = append(phaseLines, label)
-			}
-			execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "DISPATCH PLAN")))
-			execParts = append(execParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.NumberedList(t, phaseLines, sectionWidth)))
-		}
-		if len(sc.EvidencePlan) > 0 {
-			execParts = append(execParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "EVIDENCE PLAN")))
-			execParts = append(execParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.BulletList(t, sc.EvidencePlan, sectionWidth)))
-		}
-
-		if len(execParts) > 0 {
-			executionBlock = "\n" + strings.Join(execParts, "\n")
-		}
-	}
-
-	// --- Sidecar: Semantic ---
-	semanticBlock := ""
-	if sc := m.detailSidecar; sc != nil {
-		sectionWidth := w - 10
-		if sectionWidth < 30 {
-			sectionWidth = 30
-		}
-		var semParts []string
-
-		if len(sc.Concepts) > 0 {
-			var names []string
-			for _, c := range sc.Concepts {
-				label := c.Name
-				if c.ID != "" {
-					label = c.ID + ": " + label
-				}
-				names = append(names, label)
-			}
-			semParts = append(semParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "CONCEPTS")))
-			semParts = append(semParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.BulletList(t, names, sectionWidth)))
-		}
-		if sc.BridgeProblem != "" {
-			semParts = append(semParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "BRIDGE PROBLEM")))
-			semParts = append(semParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.DescriptionBlock(t, sc.BridgeProblem, sectionWidth)))
-		}
-		if len(sc.RepresentationLayer) > 0 {
-			semParts = append(semParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "REPRESENTATION LAYER")))
-			semParts = append(semParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.BulletList(t, sc.RepresentationLayer, sectionWidth)))
-		}
-
-		if len(semParts) > 0 {
-			semanticBlock = "\n" + strings.Join(semParts, "\n")
-		}
-	}
-
-	// --- Result data ---
-	resultBlock := ""
-	if res := m.detailResult; res != nil {
-		sectionWidth := w - 10
-		if sectionWidth < 30 {
-			sectionWidth = 30
-		}
-		var resParts []string
-
-		if res.NeedsFollowUp {
-			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.FollowUpBadge(t)))
-		}
-		if len(res.HypothesisUpdates) > 0 {
-			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "HYPOTHESIS UPDATES")))
-			var hLines []string
-			for _, hu := range res.HypothesisUpdates {
-				name := hu.ID
-				if hu.Evidence != "" {
-					name += ": " + hu.Evidence
-				}
-				conf := hu.Confidence
-				if conf == "" {
-					conf = hu.Status
-				}
-				hLines = append(hLines, styles.HypothesisRow(t, name, conf, sectionWidth))
-			}
-			resParts = append(resParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(strings.Join(hLines, "\n")))
-		}
-		if len(res.Evidence) > 0 {
-			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.SectionTitle(t, "EVIDENCE")))
-			resParts = append(resParts, lipgloss.NewStyle().Padding(0, 3).
-				Render(styles.BulletList(t, res.Evidence, sectionWidth)))
-		}
-		if res.ToolCalls > 0 {
-			resParts = append(resParts, lipgloss.NewStyle().PaddingLeft(3).
-				Render(styles.MetaLine(t, "Tool Calls", fmt.Sprintf("%d", res.ToolCalls))))
-		}
-
-		if len(resParts) > 0 {
-			resultBlock = "\n" + strings.Join(resParts, "\n")
-		}
-	}
-
-	// Decision Log (last 3 entries)
-	decisionBlock := ""
-	if task.DecisionLog != "" {
-		dlHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("DECISIONS")
-		dlRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
-		lines := strings.Split(strings.TrimSpace(task.DecisionLog), "\n")
-		// Show last 3
-		start := 0
-		if len(lines) > 3 {
-			start = len(lines) - 3
-		}
-		var dlLines []string
-		for _, line := range lines[start:] {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			dlLines = append(dlLines, "  "+lipgloss.NewStyle().Foreground(t.Accent).Render("\u2192")+" "+
-				lipgloss.NewStyle().Foreground(t.Muted).Render(line))
-		}
-		if start > 0 {
-			dlLines = append(dlLines, t.Faint.Render(fmt.Sprintf("  (%d more)", start)))
-		}
-		if len(dlLines) > 0 {
-			decisionBlock = "\n" + dlHeader + "\n" + dlRule + "\n" +
-				lipgloss.NewStyle().Padding(0, 3).Render(strings.Join(dlLines, "\n"))
-		}
-	}
-
-	// Notes (truncated to 5 lines)
-	notesBlock := ""
-	if task.Notes != "" {
-		nHeader := t.SectionHeader.Copy().PaddingLeft(3).Render("NOTES")
-		nRule := lipgloss.NewStyle().PaddingLeft(3).
-			Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
-		lines := strings.Split(strings.TrimSpace(task.Notes), "\n")
-		truncated := false
-		if len(lines) > 5 {
-			lines = lines[:5]
-			truncated = true
-		}
-		body := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			Width(w - 10).
-			Padding(0, 3).
-			Render(strings.Join(lines, "\n"))
-		if truncated {
-			body += "\n" + lipgloss.NewStyle().PaddingLeft(3).Render(t.Faint.Render("  (truncated)"))
-		}
-		notesBlock = "\n" + nHeader + "\n" + nRule + "\n" + body
-	}
-
-	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock +
-		blockerBlock + descBlock + criteriaBlock +
-		planningBlock + executionBlock + semanticBlock + resultBlock +
-		attachBlock + subtaskBlock +
-		decisionBlock + notesBlock + logBlock
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
 }
