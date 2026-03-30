@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -29,6 +30,11 @@ type SnapshotMsg runtime.Snapshot
 type saveTeamDoneMsg struct {
 	name string
 	err  error
+}
+
+// ReservedFreelancerResultMsg is returned after spawning reserved freelancers.
+type ReservedFreelancerResultMsg struct {
+	Err error
 }
 
 const (
@@ -142,6 +148,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connections.SetSnapshot(m.snapshot)
 
 	case SnapshotRefreshMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case ReservedFreelancerMsg:
+		return m, SpawnReservedFreelancerCmd()
+
+	case ReservedFreelancerResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case LaunchTeamMsg:
@@ -487,6 +499,22 @@ func (m Model) saveTeamCmd(msg SaveTeamMsg) tea.Cmd {
 			return saveTeamDoneMsg{name: def.Name, err: err}
 		}
 		return saveTeamDoneMsg{name: def.Name}
+	}
+}
+
+// SpawnReservedFreelancerCmd runs "doey add-window --type freelancer --reserved --grid 3x2".
+func SpawnReservedFreelancerCmd() tea.Cmd {
+	return func() tea.Msg {
+		path, err := exec.LookPath("doey")
+		if err != nil {
+			return ReservedFreelancerResultMsg{Err: fmt.Errorf("doey not found in PATH: %w", err)}
+		}
+		cmd := exec.Command(path, "add-window", "--type", "freelancer", "--reserved", "--grid", "3x2")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return ReservedFreelancerResultMsg{Err: fmt.Errorf("%w: %s", err, out)}
+		}
+		return ReservedFreelancerResultMsg{}
 	}
 }
 

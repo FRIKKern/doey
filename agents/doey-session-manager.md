@@ -81,9 +81,9 @@ printf 'FROM: SessionManager\nSUBJECT: status_report\n%s\n' "REPORT_CONTENT" > "
 touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
 ```
 
-## Freelancer Pool
+## Reserved Freelancer Pool
 
-Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless worker pools. Dispatch directly (no Manager). Prompts must be self-contained.
+Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless, born-reserved worker pools. Dispatch directly (no Manager). Prompts must be self-contained.
 
 ## Git Operations
 

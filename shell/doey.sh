@@ -3257,7 +3257,14 @@ ${cmd}"
     _bbw_cur_pane="$(printf '%s\n' "$_bbw_pane_idxs" | sed -n "$(( _bbw_i + 1 ))p")"
     _bbw_cur_cmd="$(printf '%s\n' "$_bbw_cmds" | sed -n "$(( _bbw_i + 1 ))p")"
     tmux send-keys -t "$session:${team_window}.${_bbw_cur_pane}" "$_bbw_cur_cmd" Enter
-    write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "READY"
+    if [ "$_bbw_is_freelancer" = "true" ]; then
+      write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "RESERVED"
+      local _bbw_safe="${session}:${team_window}.${_bbw_cur_pane}"
+      _bbw_safe="${_bbw_safe//[-:.]/_}"
+      echo "permanent" > "${runtime_dir}/status/${_bbw_safe}.reserved"
+    else
+      write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "READY"
+    fi
     _bbw_i=$(( _bbw_i + 1 ))
   done
 
@@ -3721,6 +3728,12 @@ add_dynamic_team_window() {
   local is_freelancer="false"
   [ "$team_type" = "freelancer" ] && is_freelancer="true"
 
+  # Freelancer teams always get a fixed 3x2 grid (6 panes total)
+  # Panes 0+1 form the first column, then 2 more columns via doey_add_column
+  if [ "$is_freelancer" = "true" ]; then
+    initial_cols=2
+  fi
+
   local window_index
   window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
 
@@ -3772,7 +3785,10 @@ add_dynamic_team_window() {
     _fl_cmd+=" --append-system-prompt-file \"${_fl_prompt}\""
     tmux send-keys -t "$session:${window_index}.0" "$_fl_cmd" Enter
     tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
-    write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
+    write_pane_status "$runtime_dir" "${session}:${window_index}.0" "RESERVED"
+    local _fl_safe0="${session}:${window_index}.0"
+    _fl_safe0="${_fl_safe0//[-:.]/_}"
+    echo "permanent" > "${runtime_dir}/status/${_fl_safe0}.reserved"
     sleep "$DOEY_WORKER_LAUNCH_DELAY"
 
     # Split pane 0 vertically to create pane 1 (bottom of first column)
@@ -3791,7 +3807,10 @@ add_dynamic_team_window() {
     _fl_cmd1+=" --append-system-prompt-file \"${_fl_prompt1}\""
     tmux send-keys -t "$session:${window_index}.${_fl_p1}" "$_fl_cmd1" Enter
     tmux select-pane -t "$session:${window_index}.${_fl_p1}" -T "T${window_index} F1"
-    write_pane_status "$runtime_dir" "${session}:${window_index}.${_fl_p1}" "READY"
+    write_pane_status "$runtime_dir" "${session}:${window_index}.${_fl_p1}" "RESERVED"
+    local _fl_safe1="${session}:${window_index}.${_fl_p1}"
+    _fl_safe1="${_fl_safe1//[-:.]/_}"
+    echo "permanent" > "${runtime_dir}/status/${_fl_safe1}.reserved"
     sleep "$DOEY_WORKER_LAUNCH_DELAY"
 
     # Update worker count: F0 is uncounted (like manager pane), F1 adds 1

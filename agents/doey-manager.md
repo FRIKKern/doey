@@ -73,9 +73,9 @@ LOG="$RUNTIME_DIR/context_log_W${DOEY_TEAM_WINDOW}.md"
 3. **Log before you dispatch.** Update the context log BEFORE the next wave.
 4. **Read the log after compaction.** After `/compact`, first action: `cat "$LOG"`.
 
-## Freelancer Pool
+## Reserved Freelancer Pool
 
-Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless worker pools — offload research, verification, or golden context generation.
+Freelancer teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless, born-reserved worker pools — offload research, verification, or golden context generation.
 
 ```bash
 # Find freelancers: check TEAM_TYPE in ${RUNTIME_DIR}/team_${W}.env
