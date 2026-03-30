@@ -384,9 +384,9 @@ func (m Model) isDetailView() bool {
 	case 1:
 		return !m.team.summaryMode
 	case 2:
-		return !m.tasks.summaryMode || m.tasks.expanded != nil
+		return !m.tasks.leftFocused
 	case 3:
-		return !m.agents.summaryMode
+		return !m.agents.leftFocused
 	case 4:
 		return false // Info (welcome) has no detail view
 	}
