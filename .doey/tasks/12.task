@@ -1,6 +1,6 @@
 TASK_ID=12
 TASK_TITLE=Beautify activity log and task descriptions in Go TUI dashboard
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774821329
 TASK_TYPE=feature
 TASK_DESCRIPTION=The Go TUI dashboard (info panel, pane 0.0) currently displays the activity log and task descriptions in a plain/utilitarian way. Make them significantly more beautiful — better formatting, visual hierarchy, use of color, spacing, and Charmbracelet/Lipgloss styling. The activity log entries and task description text should be easy to scan, visually appealing, and feel polished. Focus on typography, color palette, alignment, and whitespace. Do NOT change functionality — purely visual enhancement.
