@@ -2859,8 +2859,15 @@ launch_session_dynamic() {
 
   # Run startup wizard if not skipped
   if [ "$DOEY_SKIP_WIZARD" != "true" ] && command -v doey-tui >/dev/null 2>&1; then
-    local _wizard_out
-    _wizard_out="$(doey-tui setup 2>/dev/null)" || true
+    local _wizard_out=""
+    local _wizard_tmpfile
+    _wizard_tmpfile="$(mktemp "${TMPDIR:-/tmp}/doey-wizard-XXXXXX.json")"
+    # Run wizard with direct TTY access — command substitution $() steals
+    # stdout and breaks huh's terminal rendering, so capture via temp file.
+    if doey-tui setup > "$_wizard_tmpfile" </dev/tty 2>/dev/tty; then
+      _wizard_out="$(cat "$_wizard_tmpfile")"
+    fi
+    rm -f "$_wizard_tmpfile"
     if [ -n "$_wizard_out" ]; then
       # Parse wizard JSON output to set team config
       local _wiz_team_count
