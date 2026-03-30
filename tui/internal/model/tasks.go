@@ -45,7 +45,7 @@ func statusIcon(status string, t styles.Theme) string {
 	case "cancelled":
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("—")
 	case "failed":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
 	default:
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
 	}
@@ -857,7 +857,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 	// Blockers — highlighted red
 	if task.Blockers != "" {
 		sections = append(sections, "")
-		sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(t.Danger).Render("⚠ BLOCKERS"))
+		sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(t.Danger).Render("✗ BLOCKERS"))
 		sections = append(sections, lipgloss.NewStyle().Foreground(t.Danger).Width(contentW).Render(task.Blockers))
 	}
 
@@ -916,7 +916,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			case "active":
 				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
 			case "failed":
-				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
+				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
 			}
 			pane := lipgloss.NewStyle().Foreground(t.Accent).Render(st.Pane)
 			stTitle := t.Body.Render(st.Title)
@@ -939,7 +939,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(t, "LINKS & ATTACHMENTS"))
 		for _, att := range task.Attachments {
-			sections = append(sections, lipgloss.NewStyle().Foreground(t.Accent).Render("🔗 "+att))
+			sections = append(sections, lipgloss.NewStyle().Foreground(t.Accent).Render("→ "+att))
 		}
 	}
 
@@ -1118,29 +1118,26 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		}
 	}
 
-	// Activity Log
+	// Activity Log (chronological: oldest first, newest last)
 	if len(task.Logs) > 0 {
-		reversed := make([]runtime.PersistentTaskLog, len(task.Logs))
-		for i, l := range task.Logs {
-			reversed[len(task.Logs)-1-i] = l
-		}
+		logs := task.Logs
 		maxEntries := 10
 		truncated := 0
-		if len(reversed) > maxEntries {
-			truncated = len(reversed) - maxEntries
-			reversed = reversed[:maxEntries]
+		if len(logs) > maxEntries {
+			truncated = len(logs) - maxEntries
+			logs = logs[len(logs)-maxEntries:]
 		}
 		now := time.Now()
 		var logLines []string
-		for _, entry := range reversed {
+		if truncated > 0 {
+			logLines = append(logLines, t.Faint.Render(fmt.Sprintf("(%d older)", truncated)))
+		}
+		for _, entry := range logs {
 			age := "     "
 			if entry.Timestamp > 0 {
 				age = fmt.Sprintf("%-5s", formatAge(now.Sub(time.Unix(entry.Timestamp, 0))))
 			}
 			logLines = append(logLines, lipgloss.NewStyle().Foreground(t.Muted).Render(age+" "+entry.Entry))
-		}
-		if truncated > 0 {
-			logLines = append(logLines, t.Faint.Render(fmt.Sprintf("(%d more)", truncated)))
 		}
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(t, "ACTIVITY LOG"))
@@ -1206,7 +1203,7 @@ func (m TasksModel) viewHelp() string {
 	}
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Primary).
-		Render("⌨  Keyboard Shortcuts")
+		Render("⟫ Keyboard Shortcuts")
 	sep := t.Faint.Render(strings.Repeat("─", w-6))
 
 	keyStyle := styles.HelpKeyStyle(t)

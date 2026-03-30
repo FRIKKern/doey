@@ -75,7 +75,7 @@ func (m TabBarModel) View() string {
 
 	t := m.theme
 	sepStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
-	activityDot := lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+	activityDot := lipgloss.NewStyle().Foreground(t.Warning).Render("◆")
 
 	// Calculate available width for tab labels
 	availWidth := m.width

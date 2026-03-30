@@ -230,7 +230,7 @@ func (m SSHKeyModel) renderKeyList() string {
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(t.Text)
 		if i == m.cursor {
-			prefix = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("> ")
+			prefix = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("› ")
 			style = style.Bold(true)
 		}
 		name := style.Render(key.Name)
@@ -243,7 +243,7 @@ func (m SSHKeyModel) renderKeyList() string {
 	prefix := "  "
 	style := lipgloss.NewStyle().Foreground(t.Accent)
 	if m.cursor == genIdx {
-		prefix = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("> ")
+		prefix = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("› ")
 		style = style.Bold(true)
 	}
 	lines = append(lines, "")

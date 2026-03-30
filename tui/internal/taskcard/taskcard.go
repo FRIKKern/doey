@@ -212,7 +212,7 @@ func statusIcon(status string, t styles.Theme) string {
 	case "active":
 		return dim(t.Muted).Render("○")
 	case "failed":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("✕")
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
 	case "blocked":
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("○")
 	case "pending_user_confirmation":

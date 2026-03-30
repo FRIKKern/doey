@@ -113,7 +113,7 @@ func (m SaveModel) View() string {
 			m.spinner.View() + " Saving configuration...",
 		}, "\n")
 	} else if m.err != nil {
-		errIcon := lipgloss.NewStyle().Foreground(t.Danger).Bold(true).Render("x")
+		errIcon := lipgloss.NewStyle().Foreground(t.Danger).Bold(true).Render("✗")
 		errMsg := lipgloss.NewStyle().Foreground(t.Danger).Render(fmt.Sprintf("Failed to save: %v", m.err))
 		hint := lipgloss.NewStyle().Foreground(t.Muted).Render("Press q to exit")
 		content = strings.Join([]string{
@@ -123,7 +123,7 @@ func (m SaveModel) View() string {
 			hint,
 		}, "\n")
 	} else {
-		check := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("v")
+		check := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("✓")
 		saved := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render("Configuration saved!")
 		path := lipgloss.NewStyle().Foreground(t.Muted).Render(m.configPath)
 		cmd := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("doey remote <project>")

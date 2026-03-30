@@ -248,7 +248,7 @@ func EmptyStateIcon(t Theme) string {
 	return lipgloss.NewStyle().
 		Foreground(t.Muted).
 		Faint(true).
-		Render("📋")
+		Render("◆")
 }
 
 // EmptyStateTitle returns styled "No tasks yet" title text.
@@ -415,7 +415,7 @@ func BulletList(t Theme, items []string, width int) string {
 	if len(items) == 0 {
 		return ""
 	}
-	bullet := lipgloss.NewStyle().Foreground(t.Muted).Render("  ◦ ")
+	bullet := lipgloss.NewStyle().Foreground(t.Muted).Render("  • ")
 	contentStyle := lipgloss.NewStyle().
 		Foreground(t.Text).
 		Width(width - 6)
@@ -502,7 +502,7 @@ func FollowUpBadge(t Theme) string {
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "#DC2626", Dark: "#F87171"}).
 		Bold(true).
-		Render("⚠ Needs Follow-up")
+		Render("◆ Needs Follow-up")
 }
 
 // InfoCard renders a bordered card with title and body content.

@@ -67,11 +67,11 @@ func New(runtimeDir string) Model {
 	theme := styles.DefaultTheme()
 	tabs := []TabItem{
 		{Name: "Dashboard", Icon: "◆"},
-		{Name: "Teams", Icon: "◈"},
-		{Name: "Tasks", Icon: "▣"},
-		{Name: "Agents", Icon: "◉"},
-		{Name: "Logs", Icon: "▤"},
-		{Name: "Connections", Icon: "⊕"},
+		{Name: "Teams", Icon: "⟫"},
+		{Name: "Tasks", Icon: "›"},
+		{Name: "Agents", Icon: "•"},
+		{Name: "Logs", Icon: "─"},
+		{Name: "Connections", Icon: "→"},
 	}
 	return Model{
 		runtime:   runtime.NewReader(runtimeDir),

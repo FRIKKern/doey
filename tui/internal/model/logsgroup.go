@@ -22,10 +22,10 @@ type logsGroupEntry struct {
 }
 
 var logsGroupItems = []logsGroupEntry{
-	{icon: "▤", name: "Logs", desc: "Live log stream"},
-	{icon: "✉", name: "Messages", desc: "IPC messages"},
-	{icon: "⚙", name: "Debug", desc: "Flight recorder"},
-	{icon: "ℹ", name: "Info", desc: "Session overview"},
+	{icon: "◆", name: "Logs", desc: "Live log stream"},
+	{icon: "→", name: "Messages", desc: "IPC messages"},
+	{icon: "•", name: "Debug", desc: "Flight recorder"},
+	{icon: "›", name: "Info", desc: "Session overview"},
 }
 
 // LogsGroupModel groups Logs, Messages, Debug, and Info sub-models under
