@@ -87,10 +87,33 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 
 	snap.TeamUserCfg, _ = ReadTeamUserConfig()
 	snap.TeamEntries = buildTeamEntries(snap.TeamDefs, snap.Teams, snap.TeamUserCfg)
+	snap.Connections = r.parseConnections()
 	snap.DebugEntries = r.parseDebugEntries()
 	snap.Messages = r.parseMessages()
 
 	return snap, nil
+}
+
+// parseConnections reads external service connections from project or global config.
+func (r *Reader) parseConnections() []Connection {
+	// Try project-level first
+	data, err := os.ReadFile(filepath.Join(r.projectDir, ".doey", "connections.json"))
+	if err != nil {
+		// Fallback to global config
+		home, herr := os.UserHomeDir()
+		if herr != nil {
+			return nil
+		}
+		data, err = os.ReadFile(filepath.Join(home, ".config", "doey", "connections.json"))
+		if err != nil {
+			return nil
+		}
+	}
+	var conns []Connection
+	if err := json.Unmarshal(data, &conns); err != nil {
+		return nil
+	}
+	return conns
 }
 
 // parseEnvFile reads a KEY=VALUE file, stripping quotes
