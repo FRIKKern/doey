@@ -1,6 +1,6 @@
 TASK_ID=29
 TASK_TITLE=Task proof-of-completion — capture and display in TUI
-TASK_STATUS=in_progress
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1774860817
 TASK_TYPE=feature
 TASK_DESCRIPTION=Every task needs verifiable proof that it was actually completed. When a user opens a task in the Go TUI, they must see concrete evidence — not just "status: done".
@@ -31,3 +31,7 @@ The goal: when the user opens any task in the TUI, they can immediately verify t
 TASK_TAGS=tui,task-system,hooks,infrastructure,ux
 TASK_TEAM=W1
 TASK_LOG_1774860864=DISPATCHED: Sent to Team 1 freelancer pane 1.1
+TASK_COMMITS=cc220f1
+TASK_FILES=tui/internal/runtime/types.go,tui/internal/runtime/reader.go,tui/internal/runtime/tasks_config.go,tui/internal/taskcard/taskcard.go
+TASK_RESULT=Added proof display in TUI task detail. Shows commits, files changed, build status. Warning when proof missing. Hook edit (stop-results.sh) deferred.
+TASK_LOG_1774861866=COMPLETE: Committed cc220f1, pending user confirmation
