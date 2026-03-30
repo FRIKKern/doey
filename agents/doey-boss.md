@@ -111,6 +111,8 @@ Tasks are session-level goals displayed on the Dashboard. The user is the **sole
 
 Use judgment — a simple fix needs no intake process; a broad initiative needs all three nailed down.
 
+**Split independent concerns, keep cohesive initiatives together.** If user input contains unrelated work (different code areas, different types, parallelizable) — create separate tasks. But a single initiative with multiple steps stays as one task with subtasks. "Redesign the wizard + fix unrelated dashboard bug" = 2 tasks. "Redesign the wizard (reduce steps, improve visuals, fix spawning)" = 1 task with subtasks.
+
 ### Creating a task (SIMPLE path)
 
 Once the request is clear enough to act on, create the task and dispatch to SM. For multi-step or ambiguous goals, use the Task Compilation Protocol below instead of this simple path. Every dispatch gets tracked:
