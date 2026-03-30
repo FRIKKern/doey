@@ -45,17 +45,18 @@ type taskEntry struct {
 
 // quickAction defines a quick action card.
 type quickAction struct {
-	icon   string
-	label  string
-	zoneID string
+	icon        string
+	label       string
+	description string
+	zoneID      string
 }
 
 // quickActions is the ordered list of dashboard action cards.
 var quickActions = []quickAction{
-	{"🚀", "Spawn Reserved\nFreelancers", "dash-spawn-freelancer"},
-	{"📊", "Get Status", "dash-get-status"},
-	{"👥", "Create Team", "dash-create-team"},
-	{"📋", "View Tasks", "dash-view-tasks"},
+	{"◈", "Spawn Freelancers", "Launch reserved freelancer pool", "dash-spawn-freelancer"},
+	{"◉", "Get Status", "View team and worker status", "dash-get-status"},
+	{"⊞", "Create Team", "Add a new specialist team", "dash-create-team"},
+	{"☰", "View Tasks", "Browse and manage project tasks", "dash-view-tasks"},
 }
 
 // DashboardModel is the primary landing tab (command center).
@@ -436,52 +437,16 @@ func (m DashboardModel) renderQuickActions(w int) string {
 	if cardW < 16 {
 		cardW = 16
 	}
-	if cardW > 28 {
-		cardW = 28
+	if cardW > 30 {
+		cardW = 30
 	}
 
-	// Render each vertical card
+	// Render each card using the QuickActionCard style function
 	var cards []string
 	for i, action := range quickActions {
 		selected := m.focused && i == m.actionCursor
-
-		// Icon — centered, generous vertical space
-		iconStyle := lipgloss.NewStyle().
-			Width(cardW - 4). // account for card padding
-			Align(lipgloss.Center)
-		iconLine := iconStyle.Render(action.icon)
-
-		// Label — centered, may be multi-line
-		labelFg := t.Text
-		if selected {
-			labelFg = t.Primary
-		}
-		labelStyle := lipgloss.NewStyle().
-			Foreground(labelFg).
-			Bold(selected).
-			Width(cardW - 4).
-			Align(lipgloss.Center)
-		labelLine := labelStyle.Render(action.label)
-
-		cardContent := "\n" + iconLine + "\n\n" + labelLine + "\n"
-
-		// Card border and background
-		borderColor := t.Separator
-		bgColor := lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F172A"}
-		if selected {
-			borderColor = t.Primary
-			bgColor = lipgloss.AdaptiveColor{Light: "#F0F4FF", Dark: "#1E293B"}
-		}
-
-		card := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderColor).
-			Background(bgColor).
-			Width(cardW).
-			Padding(1, 1).
-			Render(cardContent)
-
-		cards = append(cards, zone.Mark(action.zoneID, card))
+		cardStr := styles.QuickActionCard(t, action.icon, action.label, action.description, cardW, selected)
+		cards = append(cards, zone.Mark(action.zoneID, cardStr))
 	}
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, cards[0])

@@ -472,6 +472,52 @@ func StatusBadgePill(status string, theme Theme) string {
 		Render(strings.ToUpper(status))
 }
 
+// QuickActionCard renders a single quick action card with icon, title, and description.
+// selected indicates keyboard/mouse focus state.
+func QuickActionCard(t Theme, icon, title, description string, width int, selected bool) string {
+	borderColor := t.Separator
+	if selected {
+		borderColor = t.Accent
+	}
+
+	cardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(1, 2).
+		Width(width)
+
+	if selected {
+		cardStyle = cardStyle.Background(lipgloss.AdaptiveColor{Light: "#F5F3FF", Dark: "#1E1B2E"})
+	}
+
+	iconStr := lipgloss.NewStyle().
+		Foreground(t.Accent).
+		Align(lipgloss.Center).
+		Width(width - 6). // account for padding + border
+		Render(icon)
+
+	titleColor := t.Text
+	if selected {
+		titleColor = t.Accent
+	}
+	titleStr := lipgloss.NewStyle().
+		Foreground(titleColor).
+		Bold(true).
+		Align(lipgloss.Center).
+		Width(width - 6).
+		Render(title)
+
+	descStr := lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true).
+		Align(lipgloss.Center).
+		Width(width - 6).
+		Render(description)
+
+	content := lipgloss.JoinVertical(lipgloss.Center, iconStr, titleStr, descStr)
+	return cardStyle.Render(content)
+}
+
 // CardGrid arranges cards into a grid layout with cols columns.
 // totalWidth is the available width for the grid.
 func CardGrid(cards []string, cols, totalWidth int) string {
