@@ -20,6 +20,9 @@ func main() {
 		case "--version":
 			fmt.Println(version)
 			return
+		case "--help", "-h":
+			fmt.Fprintf(os.Stderr, "Usage: doey-tui <runtime-dir>\n       doey-tui setup\n       doey-tui --version\n")
+			return
 		case "setup":
 			result, err := setup.Run()
 			if err != nil {
@@ -29,7 +32,10 @@ func main() {
 			if result.Cancelled {
 				os.Exit(1)
 			}
-			json.NewEncoder(os.Stdout).Encode(result)
+			if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+				fmt.Fprintf(os.Stderr, "Error writing result: %v\n", err)
+				os.Exit(1)
+			}
 			return
 		}
 	}

@@ -3,6 +3,7 @@ package setup
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -41,44 +42,43 @@ func DiscoverTeamDefs(projectDir string) []TeamEntry {
 			}
 			seen[name] = true
 
-			// Parse basic info from frontmatter
-			desc := parseTeamDescription(filepath.Join(dir, e.Name()))
-
 			teams = append(teams, TeamEntry{
-				Type: "premade",
-				Name: name,
-				Def:  name,
+				Type:    "premade",
+				Name:    name,
+				Def:     name,
+				Workers: parseTeamWorkers(filepath.Join(dir, e.Name())),
 			})
-			_ = desc // available for display later
 		}
 	}
 
 	return teams
 }
 
-// parseTeamDescription extracts the description from .team.md frontmatter.
-func parseTeamDescription(path string) string {
+// parseTeamWorkers extracts the workers count from .team.md frontmatter.
+// Returns 4 if not specified or on any parse error.
+func parseTeamWorkers(path string) int {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return 4
 	}
 	content := string(data)
 	if !strings.HasPrefix(content, "---") {
-		return ""
+		return 4
 	}
 	end := strings.Index(content[3:], "---")
 	if end < 0 {
-		return ""
+		return 4
 	}
 	frontmatter := content[3 : 3+end]
 	for _, line := range strings.Split(frontmatter, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "description:") {
-			desc := strings.TrimPrefix(line, "description:")
-			desc = strings.TrimSpace(desc)
-			desc = strings.Trim(desc, "\"'")
-			return desc
+		if strings.HasPrefix(line, "workers:") {
+			val := strings.TrimPrefix(line, "workers:")
+			val = strings.TrimSpace(val)
+			if n, err := strconv.Atoi(val); err == nil && n > 0 {
+				return n
+			}
 		}
 	}
-	return ""
+	return 4
 }
