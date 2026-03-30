@@ -1,6 +1,6 @@
 TASK_ID=53
 TASK_TITLE=Implement fast spawn — Phase 1 quick wins + Phase 2 structural improvements
-TASK_STATUS=in_progress
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1774937000
 TASK_TYPE=infrastructure
 TASK_DESCRIPTION=Based on the research report (.doey/tasks/52/research-report.md), implement spawn optimizations. Current default launch: ~42-50s. Target: ~8s perceived, ~20s total.
@@ -40,4 +40,5 @@ CONSTRAINTS:
 ONE WORKER PER FILE — doey.sh is the main target, tmux-theme.sh is secondary. Do NOT split doey.sh across workers.
 TASK_TAGS=performance,shell,spawn,tmux,infrastructure
 TASK_TEAM=W1
-TASK_SUBTASKS=1:W1.1: doey.sh Phase 1 quick wins + Phase 2 structural:pending\n2:W1.2: tmux-theme.sh source-file batching:pending\n3:W1.3: Build + bash compat verification:pending
+TASK_SUBTASKS=1:W1.1: doey.sh Phase 1 quick wins + Phase 2 structural:done\n2:W1.2: tmux-theme.sh source-file batching:done\n3:W1.3: Build + bash compat verification:done
+TASK_DECISION_LOG=1774908821:All Phase 1 + Phase 2 implemented. 14/14 verification checks pass.
