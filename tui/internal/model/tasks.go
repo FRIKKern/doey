@@ -349,12 +349,25 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 				m.list, cmd = m.list.Update(msg)
 				return m, cmd
 			}
-			m.rightScroll++
+			if cap := m.rightScrollCap(); m.rightScroll < cap {
+				m.rightScroll++
+			}
 			return m, nil
 		}
 	}
 
 	return m, nil
+}
+
+// rightScrollCap returns a generous upper bound for rightScroll to prevent
+// unbounded growth. The exact max is computed at render time; this just
+// keeps the field from drifting.
+func (m TasksModel) rightScrollCap() int {
+	cap := m.height * 3
+	if cap < 100 {
+		cap = 100
+	}
+	return cap
 }
 
 func (m TasksModel) updateInput(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
@@ -484,7 +497,9 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		}
 		return m, nil
 	case "down", "j":
-		m.rightScroll++
+		if cap := m.rightScrollCap(); m.rightScroll < cap {
+			m.rightScroll++
+		}
 		return m, nil
 	case "tab":
 		if m.expanded != nil {

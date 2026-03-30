@@ -265,6 +265,7 @@ func (m TeamModel) updateMouse(msg tea.MouseMsg) (TeamModel, tea.Cmd) {
 				m.rightScroll = 0
 			} else {
 				m.rightScroll++
+				m.clampRightScroll()
 			}
 			return m, nil
 		}
@@ -323,6 +324,7 @@ func (m TeamModel) updateKey(msg tea.KeyMsg) (TeamModel, tea.Cmd) {
 			}
 		} else {
 			m.rightScroll++
+			m.clampRightScroll()
 		}
 		return m, nil
 	}
@@ -457,6 +459,20 @@ func (m *TeamModel) ensureTeamVisible() {
 	}
 	if m.scrollOffset < 0 {
 		m.scrollOffset = 0
+	}
+}
+
+// clampRightScroll prevents rightScroll from growing beyond useful range.
+// The render path clamps visually, but without this the field drifts unbounded.
+func (m *TeamModel) clampRightScroll() {
+	// Use a generous upper bound — real content rarely exceeds 200 lines.
+	// The render path will further clamp to actual content length.
+	upper := 500
+	if m.height > 0 {
+		upper = m.height * 3
+	}
+	if m.rightScroll > upper {
+		m.rightScroll = upper
 	}
 }
 
