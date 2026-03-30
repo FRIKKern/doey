@@ -27,7 +27,7 @@
 # Number of teams that start in isolated git worktrees
 # DOEY_INITIAL_WORKTREE_TEAMS=0
 
-# Number of freelancer teams (no manager, independent workers available to all teams)
+# Number of reserved freelancer teams (no manager, born-reserved workers available to all teams)
 # DOEY_INITIAL_FREELANCER_TEAMS=1
 
 # Maximum number of worker panes across all teams
@@ -103,7 +103,7 @@
 #                      (default: local)
 #                      Worktree teams get an isolated git branch.
 #                      Freelancer teams have no manager — all panes are
-#                      independent workers available to any team.
+#                      born-reserved workers available to any team.
 #                      Premade teams use a .team.md definition file.
 #
 #   DEF .............. Team definition name (required for premade teams)

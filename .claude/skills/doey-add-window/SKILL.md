@@ -1,6 +1,6 @@
 ---
 name: doey-add-window
-description: Add a new team window (Manager + Workers), optionally in a git worktree or as a freelancer pool.
+description: Add a new team window (Manager + Workers), optionally in a git worktree or as a reserved freelancer pool.
 ---
 
 `/doey-add-window [grid] [--worktree] [--freelancer]` — default grid: 4x2
@@ -51,7 +51,7 @@ bash: sleep 8 && NOT_READY=0 && DOWN_PANES="" && for i in 0 $(echo "$WORKER_PANE
 If not ready: `tmux capture-pane -t <pane> -p`, retry send-keys. Output summary: grid, manager, worker range, worktree info.
 
 ### Rules
-- Standard: pane 0 = Manager, 1+ = Workers. Freelancer: all = Workers
+- Standard: pane 0 = Manager, 1+ = Workers. Freelancer: all = born-reserved Workers
 - Write team_W.env before launching; never hardcode window indices
 - Agent names: `t${WIN}-manager`. Worktree: `/tmp/doey/${PROJECT_NAME}/worktrees/team-${WIN}`
 - Copy `.claude/settings.local.json` into worktrees

@@ -20,8 +20,8 @@ import (
 // SwitchToTaskMsg requests the root model switch to the Tasks tab and select a task.
 type SwitchToTaskMsg struct{ TaskID int }
 
-// SpawnFreelancerMsg requests launching a freelancer.
-type SpawnFreelancerMsg struct{}
+// ReservedFreelancerMsg requests launching a reserved freelancer pool.
+type ReservedFreelancerMsg struct{}
 
 // GetStatusMsg requests a status refresh.
 type GetStatusMsg struct{}
@@ -53,7 +53,7 @@ type quickAction struct {
 
 // quickActions is the ordered list of dashboard action cards.
 var quickActions = []quickAction{
-	{"◈", "Spawn Freelancers", "Launch reserved freelancer pool", "dash-spawn-freelancer"},
+	{"◈", "Reserved Freelancers", "Spawn 6 reserved workers (3×2 grid)", "dash-spawn-freelancer"},
 	{"◉", "Get Status", "View team and worker status", "dash-get-status"},
 	{"⊞", "Create Team", "Add a new specialist team", "dash-create-team"},
 	{"☰", "View Tasks", "Browse and manage project tasks", "dash-view-tasks"},
@@ -248,7 +248,7 @@ func (m DashboardModel) activateAction(idx int) tea.Cmd {
 	}
 	switch quickActions[idx].zoneID {
 	case "dash-spawn-freelancer":
-		return func() tea.Msg { return SpawnFreelancerMsg{} }
+		return func() tea.Msg { return ReservedFreelancerMsg{} }
 	case "dash-get-status":
 		return func() tea.Msg { return GetStatusMsg{} }
 	case "dash-create-team":
@@ -282,7 +282,7 @@ func (m DashboardModel) updateMouse(msg tea.MouseMsg) (DashboardModel, tea.Cmd) 
 
 		// Quick action clicks
 		if zone.Get("dash-spawn-freelancer").InBounds(msg) {
-			return m, func() tea.Msg { return SpawnFreelancerMsg{} }
+			return m, func() tea.Msg { return ReservedFreelancerMsg{} }
 		}
 		if zone.Get("dash-get-status").InBounds(msg) {
 			return m, func() tea.Msg { return GetStatusMsg{} }
