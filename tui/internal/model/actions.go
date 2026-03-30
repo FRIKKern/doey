@@ -41,6 +41,16 @@ type ToggleStartupResultMsg struct {
 	Err     error
 }
 
+// SpawnFreelancerResultMsg is returned after sending a spawn-freelancer command to Boss.
+type SpawnFreelancerResultMsg struct {
+	Err error
+}
+
+// CreateTeamResultMsg is returned after sending a create-team command to Boss.
+type CreateTeamResultMsg struct {
+	Err error
+}
+
 // SnapshotRefreshMsg requests a fresh snapshot read.
 type SnapshotRefreshMsg struct{}
 
@@ -142,6 +152,38 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 		os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644)
 
 		return DispatchTeamResultMsg{WindowIdx: windowIdx, Err: nil}
+	}
+}
+
+// SpawnFreelancerCmd sends a "/doey-add-window freelancer" command to the Boss pane.
+func SpawnFreelancerCmd() tea.Cmd {
+	return func() tea.Msg {
+		sessionName := os.Getenv("SESSION_NAME")
+		if sessionName == "" {
+			sessionName = "doey-doey"
+		}
+		cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", "/doey-add-window freelancer", "Enter")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return SpawnFreelancerResultMsg{Err: fmt.Errorf("%w: %s", err, out)}
+		}
+		return SpawnFreelancerResultMsg{}
+	}
+}
+
+// CreateTeamCmd sends a "create a new team" request to the Boss pane.
+func CreateTeamCmd() tea.Cmd {
+	return func() tea.Msg {
+		sessionName := os.Getenv("SESSION_NAME")
+		if sessionName == "" {
+			sessionName = "doey-doey"
+		}
+		cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", "I want to create a new team", "Enter")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return CreateTeamResultMsg{Err: fmt.Errorf("%w: %s", err, out)}
+		}
+		return CreateTeamResultMsg{}
 	}
 }
 
