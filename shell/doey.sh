@@ -151,11 +151,23 @@ _dev_sync() {
   local updated=0
 
   # Sync shell/*.sh → ~/.local/bin/
-  local src dst src_mt dst_mt
+  local src dst base src_mt dst_mt
   for src in "$repo_dir"/shell/*.sh; do
     [ -f "$src" ] || continue
-    dst="$HOME/.local/bin/$(basename "$src")"
-    [ -f "$dst" ] || continue
+    base="$(basename "$src")"
+    # Map source filename to installed name (CLI commands drop .sh)
+    case "$base" in
+      doey.sh|doey-msg.sh|doey-task-util.sh|doey-status-util.sh)
+        dst="$HOME/.local/bin/${base%.sh}" ;;
+      *)
+        dst="$HOME/.local/bin/$base" ;;
+    esac
+    if [ ! -f "$dst" ]; then
+      cp "$src" "$dst"
+      chmod +x "$dst"
+      updated=$((updated + 1))
+      continue
+    fi
     src_mt="$(stat -f %m "$src")"
     dst_mt="$(stat -f %m "$dst")"
     if [ "$src_mt" -gt "$dst_mt" ]; then

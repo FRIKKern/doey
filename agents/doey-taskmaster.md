@@ -68,7 +68,7 @@ Escalate any crashes to Boss.
 
 After acting on everything, pause briefly before the next cycle:
 ```bash
-bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"
+bash "$PROJECT_DIR/.claude/hooks/taskmaster-wait.sh"
 ```
 This is a **3-5 second pause**, not a blocking wait. It returns quickly. Ignore its output — you check everything yourself in Step 2. The wait hook is just a throttle to avoid spinning.
 
