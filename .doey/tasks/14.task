@@ -1,6 +1,6 @@
 TASK_ID=14
 TASK_TITLE=Show task-related messages in Go TUI task detail view
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774822035
 TASK_TYPE=feature
 TASK_DESCRIPTION=When viewing a task in the Go TUI dashboard (info panel), display all messages related to that task — dispatches from Boss to SM, SM routing decisions, team assignments, worker results, status updates, completion reports. The task detail view should aggregate and show the full message history for that task ID so the user can see the complete lifecycle of a task without switching panes. Messages should be displayed chronologically with sender, timestamp, and content. Source messages from the runtime messages directory and any task log entries.

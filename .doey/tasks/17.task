@@ -1,6 +1,6 @@
 TASK_ID=17
 TASK_TITLE=Harden task file parsing — handle empty/malformed .task files gracefully
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774822717
 TASK_TYPE=bugfix
 TASK_DESCRIPTION=SM and task listing scripts are failing with exit code 1 when encountering empty or malformed .task files (e.g. task 5 appears to have no content). The task parsing logic across shell helpers, SM scripts, and any code that iterates .task files must handle edge cases gracefully: skip empty files, skip files missing required fields (TASK_ID, TASK_STATUS), log a warning instead of erroring out. An empty or corrupt .task file should never cause a pipeline failure or exit code 1. Audit all places that parse .task files — shell/doey-task-helpers.sh, SM message handling, Manager dispatch logic, info-panel.sh — and add guards. Also clean up task 5 if it is indeed empty/corrupt.

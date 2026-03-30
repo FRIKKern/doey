@@ -1,6 +1,6 @@
 TASK_ID=19
 TASK_TITLE=Full mouse interactivity across the Go TUI — LazyGit-style clickable UI
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774823480
 TASK_TYPE=feature
 TASK_OWNER=Boss
