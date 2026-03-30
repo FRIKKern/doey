@@ -61,7 +61,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
 | `stop-results.sh` | Stop | Result JSON and completion events |
 | `stop-notify.sh` | Stop | Unified stop notifications: Worker→Team Lead, Team Lead→Taskmaster, Taskmaster→desktop |
 | `on-notification.sh` | Notification | Desktop notification for TM permission requests (30s cooldown) |
-| `session-manager-wait.sh` | — | Taskmaster sleep/wake between cycles (trigger, message, result, crash) |
+| `taskmaster-wait.sh` | — | Taskmaster sleep/wake between cycles (trigger, message, result, crash) |
 | `watchdog-scan.sh` | — | Pane scanning (called directly, not registered) |
 | `watchdog-wait.sh` | — | Event-driven sleep between scans |
 
@@ -87,7 +87,7 @@ Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not se
 
 - Boss: `~/.claude/agent-memory/doey-boss/MEMORY.md`
 - Team Lead: `~/.claude/agent-memory/doey-manager/MEMORY.md`
-- Taskmaster: `~/.claude/agent-memory/doey-session-manager/MEMORY.md`
+- Taskmaster: `~/.claude/agent-memory/doey-taskmaster/MEMORY.md`
 - Watchdog: disabled (`memory: none`)
 
 
@@ -110,14 +110,14 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 | Instance | Command |
 |----------|---------|
 | Boss | `claude --dangerously-skip-permissions --agent doey-boss` |
-| Taskmaster | `claude --dangerously-skip-permissions --agent doey-session-manager` |
+| Taskmaster | `claude --dangerously-skip-permissions --agent doey-taskmaster` |
 | Team Lead | `claude --dangerously-skip-permissions --model opus --name "T<N> Team Lead" --agent doey-manager` |
 | Watchdog | `claude --dangerously-skip-permissions --model sonnet --name "T<N> Watchdog" --agent doey-watchdog` |
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
 
-**Note:** Taskmaster does not pass `--model` explicitly — it relies on the `model: opus` frontmatter in `agents/doey-session-manager.md`.
+**Note:** Taskmaster does not pass `--model` explicitly — it relies on the `model: opus` frontmatter in `agents/doey-taskmaster.md`.
 
 
 ## Shell Scripts

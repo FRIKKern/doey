@@ -252,6 +252,10 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
+  # Utility CLIs — installed without .sh extension
+  for s in doey-msg doey-task-util doey-status-util; do
+    install_script "$SCRIPT_DIR/shell/${s}.sh" "$HOME/.local/bin/$s"
+  done
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
 detail "~/.local/bin/doey"
 

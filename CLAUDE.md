@@ -97,7 +97,7 @@ Things that have tricked us before:
 | `stop-notify.sh` | On stop (async) | Notification chain: Worker → Manager → Taskmaster → desktop |
 | `watchdog-scan.sh` | Watchdog cycle | Pane state detection, anomaly reporting, heartbeat |
 | `watchdog-wait.sh` | Watchdog idle | Sleep/wake (30s default, wakes on trigger) |
-| `session-manager-wait.sh` | TM idle | Multi-trigger sleep: messages, results, crash alerts |
+| `taskmaster-wait.sh` | TM idle | Multi-trigger sleep: messages, results, crash alerts |
 
 Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 
