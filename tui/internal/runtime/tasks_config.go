@@ -51,8 +51,11 @@ type PersistentTask struct {
 	CreatedBy          string `json:"created_by,omitempty"`          // who created it
 	AssignedTo         string `json:"assigned_to,omitempty"`         // who/what team
 	AcceptanceCriteria string `json:"acceptance_criteria,omitempty"` // bulleted criteria
-	DecisionLog        string `json:"decision_log,omitempty"`        // timestamped decisions
-	Notes              string `json:"notes,omitempty"`               // free-form journal
+	DecisionLog        string   `json:"decision_log,omitempty"`        // timestamped decisions
+	Notes              string   `json:"notes,omitempty"`               // free-form journal
+	// Proof-of-completion fields
+	FilesChanged []string `json:"files_changed,omitempty"` // files modified by task workers
+	Commits      string   `json:"commits,omitempty"`       // commit hashes with one-line messages
 }
 
 // TaskStore holds all persistent tasks.
@@ -285,6 +288,12 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 	if rt.Notes != "" {
 		pt.Notes = rt.Notes
 	}
+	if len(rt.FilesChanged) > 0 {
+		pt.FilesChanged = rt.FilesChanged
+	}
+	if rt.Commits != "" {
+		pt.Commits = rt.Commits
+	}
 	pt.Logs = mergeLogs(pt.Logs, rt.Logs)
 	pt.Updated = time.Now().Unix()
 }
@@ -329,6 +338,8 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 			AcceptanceCriteria: rt.AcceptanceCriteria,
 			DecisionLog:        rt.DecisionLog,
 			Notes:              rt.Notes,
+			FilesChanged:       rt.FilesChanged,
+			Commits:            rt.Commits,
 		}
 		pt.Logs = mergeLogs(nil, rt.Logs)
 		index[rt.ID] = len(s.Tasks)

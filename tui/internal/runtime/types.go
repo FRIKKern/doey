@@ -78,6 +78,9 @@ type Task struct {
 	CreatedBy          string    // v3: who created it
 	AssignedTo         string    // v3: who/what team
 	SchemaVersion      int       // v3: schema version number
+	// Proof-of-completion fields
+	FilesChanged []string // from TASK_FILES
+	Commits      string   // from TASK_COMMITS (hash + message lines)
 }
 
 // Subtask represents a worker assignment under a parent task.
