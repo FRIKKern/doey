@@ -293,11 +293,25 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   case "$_CMD" in *"git commit"*)
     _staged_go=$(git diff --cached --name-only 2>/dev/null | grep -c '^tui/' 2>/dev/null) || _staged_go=0
     if [ "$_staged_go" -gt 0 ] 2>/dev/null; then
+      # Discover Go via shared helper (inline fallback if helper not available)
       _GO_BIN=""
-      for _d in /snap/go/current/bin /usr/local/go/bin "$HOME/go/bin"; do
-        if [ -x "$_d/go" ]; then _GO_BIN="$_d/go"; break; fi
-      done
-      if [ -z "$_GO_BIN" ]; then command -v go >/dev/null 2>&1 && _GO_BIN="go"; fi
+      _project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+      if [ -f "${_project_dir}/shell/doey-go-helpers.sh" ]; then
+        source "${_project_dir}/shell/doey-go-helpers.sh" 2>/dev/null || true
+        if type _find_go_bin >/dev/null 2>&1; then
+          _find_go_bin
+          _GO_BIN="${GO_BIN:-}"
+        fi
+      fi
+      if [ -z "$_GO_BIN" ]; then
+        # Inline fallback: check common Go install locations
+        if command -v go >/dev/null 2>&1; then _GO_BIN="go"
+        else
+          for _d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
+            if [ -x "$_d/go" ]; then _GO_BIN="$_d/go"; break; fi
+          done
+        fi
+      fi
       if [ -n "$_GO_BIN" ]; then
         _proj_dir="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
         if [ -d "${_proj_dir}/tui" ] && ! (cd "${_proj_dir}/tui" && "$_GO_BIN" build ./...) >/dev/null 2>&1; then

@@ -7,11 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRAND='\033[1;36m'  SUCCESS='\033[0;32m'  DIM='\033[0;90m'
 WARN='\033[0;33m'   ERROR='\033[0;31m'   BOLD='\033[1m'   RESET='\033[0m'
 
-# Source shared Go helpers (optional — inline fallbacks below if missing)
-_HAS_GO_HELPERS=false
-if [ -f "$SCRIPT_DIR/shell/doey-go-helpers.sh" ]; then
-  source "$SCRIPT_DIR/shell/doey-go-helpers.sh" && _HAS_GO_HELPERS=true
-fi
+# Source shared Go helpers
+source "$(dirname "$0")/shell/doey-go-helpers.sh" 2>/dev/null || true
 
 step_ok()   { printf "   ${SUCCESS}✓${RESET}\n"; }
 step_fail() { printf "   ${ERROR}✗${RESET}\n"; }
@@ -279,25 +276,21 @@ fi
 
 # Detect Go binary — sets GO_BIN or leaves it empty.
 _find_go() {
-  GO_BIN=""
-  if [ "$_HAS_GO_HELPERS" = true ]; then
+  if type _find_go_bin >/dev/null 2>&1; then
     GO_BIN=$(_find_go_bin 2>/dev/null) || GO_BIN=""
   else
-    # Inline fallback when helper not available
-    if command -v go &>/dev/null; then GO_BIN="go"
-    elif [ -x /usr/local/go/bin/go ]; then GO_BIN="/usr/local/go/bin/go"
-    elif [ -x /opt/homebrew/bin/go ]; then GO_BIN="/opt/homebrew/bin/go"
-    elif [ -x /snap/go/current/bin/go ]; then GO_BIN="/snap/go/current/bin/go"
-    elif [ -x "$HOME/go/bin/go" ]; then GO_BIN="$HOME/go/bin/go"
-    elif [ -x "$HOME/.local/go/bin/go" ]; then GO_BIN="$HOME/.local/go/bin/go"
-    fi
+    GO_BIN=""
+    command -v go >/dev/null 2>&1 && GO_BIN="go" && return 0
+    for d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
+      [ -x "$d/go" ] && GO_BIN="$d/go" && return 0
+    done
   fi
 }
 
-# Build doey-tui (and optional doey-remote-setup). Returns 0 on success.
+# Build doey-tui (and doey-remote-setup). Returns 0 on success.
 _build_tui() {
   local rc=0
-  if [ "$_HAS_GO_HELPERS" = true ]; then
+  if type _build_go_binary >/dev/null 2>&1; then
     # Use shared helper for consistent build logic
     set +e
     _build_go_binary "$SCRIPT_DIR/tui" ./cmd/doey-tui/ "$HOME/.local/bin/doey-tui"
@@ -306,16 +299,22 @@ _build_tui() {
     if [ $rc -eq 0 ]; then
       step_ok
       detail "~/.local/bin/doey-tui (built from source)"
-      # Build remote setup wizard (optional — non-fatal)
-      set +e
-      _build_go_binary "$SCRIPT_DIR/tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
-      set -e
-      if [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
-        detail "~/.local/bin/doey-remote-setup (built from source)"
-      fi
     else
       step_fail
       warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+      return $rc
+    fi
+    # Build doey-remote-setup
+    printf "         ${DIM}→ building doey-remote-setup...${RESET}"
+    set +e
+    _build_go_binary "$SCRIPT_DIR/tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
+    local rs_rc=$?
+    set -e
+    if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
+      printf " ${SUCCESS}✓${RESET}\n"
+      detail "~/.local/bin/doey-remote-setup (built from source)"
+    else
+      printf " ${DIM}skipped${RESET}\n"
     fi
   else
     # Inline fallback when helper not available
@@ -326,16 +325,22 @@ _build_tui() {
     if [ $rc -eq 0 ]; then
       step_ok
       detail "~/.local/bin/doey-tui (built from source)"
-      # Build remote setup wizard (optional — non-fatal)
-      set +e
-      (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
-      set -e
-      if [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
-        detail "~/.local/bin/doey-remote-setup (built from source)"
-      fi
     else
       step_fail
       warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+      return $rc
+    fi
+    # Build doey-remote-setup
+    printf "         ${DIM}→ building doey-remote-setup...${RESET}"
+    set +e
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
+    local rs_rc=$?
+    set -e
+    if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
+      printf " ${SUCCESS}✓${RESET}\n"
+      detail "~/.local/bin/doey-remote-setup (built from source)"
+    else
+      printf " ${DIM}skipped${RESET}\n"
     fi
   fi
   return $rc
