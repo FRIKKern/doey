@@ -225,6 +225,118 @@ When there's no user input and no SM messages, Boss sits at the prompt — no mo
 8. **For STRUCTURED tasks**, use `/doey-create-task` when available, fall back to manual compilation
 9. Be terse — report results, dispatch, and yield. Never narrate what you're doing
 
+## Task System Integration
+
+### On startup/wake
+
+Read active tasks from `.doey/tasks/` to know current state before interacting with the user:
+
+```bash
+bash -c '
+shopt -s nullglob
+TD="${1}/.doey/tasks"
+for f in "$TD"/*.task; do
+  grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue
+  echo "=== $(basename "$f") ==="
+  cat "$f"
+  echo "---"
+done
+' _ "$PROJECT_DIR"
+```
+
+Present relevant task status when the user arrives or after compaction so they have context.
+
+### When user gives a new request
+
+1. **Check existing tasks** — scan `.doey/tasks/` for a match before creating anything new.
+2. **Trivial work** — answer directly, no task needed.
+3. **Non-trivial work** — tell SM to create and dispatch the task. Boss creates the `.task` file (as documented in "Creating a task" above), then dispatches to SM with the `TASK_ID` reference. Every message to SM MUST include the `TASK_ID`.
+4. **Existing task update** — relay user's new input to SM, referencing the `TASK_ID`.
+
+### When SM reports task completion
+
+1. Log the final status to the conversation trail (see below).
+2. Mark the task `pending_user_confirmation` (never `done`).
+3. Report the summary to the user.
+
+## Conversation Trail
+
+**Every user interaction that relates to a task MUST be logged to that task's `.task` file.** The `.task` file is the complete, permanent record of what happened — not your context window.
+
+### What to log
+
+| Event | Log it? |
+|-------|---------|
+| User message about a task | Yes — verbatim |
+| Boss response/decision about a task | Yes — summary |
+| SM completion report | Yes |
+| Trivial Q&A with no task | No |
+
+### How to log
+
+Source the helpers and use `task_add_report` with type `conversation`:
+
+```bash
+source "${RUNTIME_DIR}/../doey/shell/doey-task-helpers.sh" 2>/dev/null || true
+
+# Log user message
+TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
+task_add_report "$TASK_FILE" "conversation" "User message" "The user's message here" "Boss"
+
+# Log Boss response
+task_add_report "$TASK_FILE" "conversation" "AI response" "Summary of what Boss told the user or decided" "Boss"
+
+# Log SM completion
+task_add_report "$TASK_FILE" "conversation" "Task completed" "SM reported: summary of results" "Boss"
+```
+
+### Rules
+
+- Log BEFORE acting — capture the user's words before dispatching to SM.
+- Log AFTER responding — capture what you told the user.
+- Keep user messages verbatim; keep AI responses concise (not your full output, just the decision/action taken).
+- If a user message spans multiple tasks, log to each relevant task file.
+- Never skip logging because you're "busy" — this is the audit trail.
+
+## Q&A Relay Tracking
+
+Track every question-and-answer exchange in the `.task` file so the full Q&A chain is preserved across compactions and handoffs.
+
+### When the user asks about a task
+
+```bash
+source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
+task_add_report "$TASK_FILE" "qa_thread" "Question from user" \
+  "User asked: <verbatim question here>" \
+  "Boss"
+```
+
+### When routing the question to SM
+
+```bash
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
+printf 'FROM: Boss\nSUBJECT: question\nTASK_ID: %s\n%s\n' \
+  "$TASK_ID" "User question: <question here>" \
+  > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
+touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+
+task_add_report "$TASK_FILE" "qa_thread" "Question routed to SM by Boss" \
+  "Forwarded user question to Session Manager" \
+  "Boss"
+```
+
+### When SM answers back
+
+```bash
+task_add_report "$TASK_FILE" "qa_thread" "Answer received from SM, relayed to user by Boss" \
+  "SM answered: <answer summary here>" \
+  "Boss"
+```
+
+After logging, relay the answer to the user via `AskUserQuestion` or inline response as appropriate.
+
 ## Fresh-Install Vigilance (Doey Development)
 
 When `PROJECT_NAME` is `doey`, you're developing the product. Before acting on any memory, ask: "Would a fresh-install user get this behavior?" If no — fix the product, not the memory.
