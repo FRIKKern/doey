@@ -522,6 +522,12 @@ func (r *Reader) ParseTasks() []Task {
 			}
 		}
 
+		// Parse TASK_TIMESTAMPS into StatusTimeline
+		t.StatusTimeline = parseStatusTimeline(t.Timestamps)
+
+		// Parse conversation trail from logs and reports
+		t.ConversationTrail = parseConversationTrail(t.Logs, t.Reports)
+
 		tasks = append(tasks, t)
 	}
 
@@ -1331,6 +1337,133 @@ func mapIssueSeverity(s string) string {
 	default:
 		return "INFO"
 	}
+}
+
+// parseStatusTimeline parses pipe-delimited "event=epoch" pairs from TASK_TIMESTAMPS
+// into a sorted slice of StatusTransition.
+func parseStatusTimeline(timestamps string) []StatusTransition {
+	if timestamps == "" {
+		return nil
+	}
+
+	var timeline []StatusTransition
+	for _, pair := range strings.Split(timestamps, "|") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		eqIdx := strings.IndexByte(pair, '=')
+		if eqIdx < 0 {
+			continue
+		}
+		status := pair[:eqIdx]
+		epoch, err := strconv.ParseInt(pair[eqIdx+1:], 10, 64)
+		if err != nil {
+			continue
+		}
+		label := humanTime(epoch)
+		timeline = append(timeline, StatusTransition{
+			Status:    status,
+			Timestamp: epoch,
+			Label:     label,
+		})
+	}
+
+	sort.Slice(timeline, func(i, j int) bool {
+		return timeline[i].Timestamp < timeline[j].Timestamp
+	})
+	return timeline
+}
+
+// humanTime returns a human-readable relative time string for a unix epoch.
+func humanTime(epoch int64) string {
+	if epoch == 0 {
+		return ""
+	}
+	t := time.Unix(epoch, 0)
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		m := int(d.Minutes())
+		if m == 1 {
+			return "1m ago"
+		}
+		return strconv.Itoa(m) + "m ago"
+	case d < 24*time.Hour:
+		h := int(d.Hours())
+		if h == 1 {
+			return "1h ago"
+		}
+		return strconv.Itoa(h) + "h ago"
+	default:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1d ago"
+		}
+		return strconv.Itoa(days) + "d ago"
+	}
+}
+
+// parseConversationTrail extracts conversation entries from task logs and reports.
+// Logs starting with "USER:", "AI:", or "CONVERSATION:" are parsed.
+// Reports with type "conversation" are also included.
+func parseConversationTrail(logs []TaskLog, reports []Report) []ConversationEntry {
+	var trail []ConversationEntry
+
+	for _, log := range logs {
+		entry := log.Entry
+		switch {
+		case strings.HasPrefix(entry, "USER:"):
+			trail = append(trail, ConversationEntry{
+				Role:      "user",
+				Message:   strings.TrimSpace(strings.TrimPrefix(entry, "USER:")),
+				Timestamp: log.Timestamp,
+			})
+		case strings.HasPrefix(entry, "AI:"):
+			trail = append(trail, ConversationEntry{
+				Role:      "ai",
+				Message:   strings.TrimSpace(strings.TrimPrefix(entry, "AI:")),
+				Timestamp: log.Timestamp,
+			})
+		case strings.HasPrefix(entry, "CONVERSATION:"):
+			// Format: "CONVERSATION: [role] message"
+			body := strings.TrimSpace(strings.TrimPrefix(entry, "CONVERSATION:"))
+			role := "user"
+			if strings.HasPrefix(body, "[ai]") || strings.HasPrefix(body, "[AI]") {
+				role = "ai"
+				body = strings.TrimSpace(body[4:])
+			} else if strings.HasPrefix(body, "[user]") || strings.HasPrefix(body, "[USER]") {
+				body = strings.TrimSpace(body[6:])
+			}
+			trail = append(trail, ConversationEntry{
+				Role:      role,
+				Message:   body,
+				Timestamp: log.Timestamp,
+			})
+		}
+	}
+
+	for _, report := range reports {
+		if report.Type == "conversation" {
+			role := "ai"
+			if strings.EqualFold(report.Author, "user") {
+				role = "user"
+			}
+			trail = append(trail, ConversationEntry{
+				Role:      role,
+				Message:   report.Body,
+				Timestamp: report.Created,
+				Author:    report.Author,
+			})
+		}
+	}
+
+	sort.Slice(trail, func(i, j int) bool {
+		return trail[i].Timestamp < trail[j].Timestamp
+	})
+	return trail
 }
 
 // underscoreToPaneID converts "doey-proj_W_P" or "W_P" to a pane-style ID "W.P"
