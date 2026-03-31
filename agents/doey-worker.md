@@ -13,22 +13,22 @@ When your task prompt includes `TASK_ID` and `SUBTASK_N`, report progress via th
 
 **Mark subtask in-progress** (immediately on starting):
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh" && doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$SUBTASK_N" "in_progress"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" && doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$SUBTASK_N" "in_progress"
 ```
 
 **Log milestones** (after completing significant steps):
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh" && doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "Worker_W${DOEY_TEAM_WINDOW}_${DOEY_PANE_INDEX}" "Completed: brief description"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" && doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "Worker_W${DOEY_TEAM_WINDOW}_${DOEY_PANE_INDEX}" "Completed: brief description"
 ```
 
 **Mark subtask done** (when finished):
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh" && doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$SUBTASK_N" "done"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" && doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$SUBTASK_N" "done"
 ```
 
 **Submit a report** when you produce a deliverable or complete significant work:
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh" && doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "TYPE" "Title" "Body summary" "W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" && doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "TYPE" "Title" "Body summary" "W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
 ```
 
 Report types: `research` (investigation findings), `progress` (milestone reached), `completion` (task done), `error` (something failed).
@@ -42,7 +42,7 @@ When your dispatch prompt includes Q&A tracking info (a `QA_TIMESTAMP` value), l
 
 **Log question receipt** (immediately):
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
   "qa-${TASK_ID}-${QA_TIMESTAMP}: received" \
   "Q: <question text>" \
@@ -51,7 +51,7 @@ doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
 
 **Log when starting to answer:**
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
   "qa-${TASK_ID}-${QA_TIMESTAMP}: answering" \
   "Working on answer..." \
@@ -60,7 +60,7 @@ doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
 
 **Log the answer:**
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
   "qa-${TASK_ID}-${QA_TIMESTAMP}: answered" \
   "A: <your answer here>" \
@@ -76,7 +76,7 @@ doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
 When producing a research report, build log, test result, or error report: write it as a task attachment so the Manager and SM can review it from the task file.
 
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh" && \
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" && \
   task_write_attachment "$PROJECT_DIR" "$TASK_ID" "<type>" "<title>" "<body>" \
     "Worker_W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
 ```

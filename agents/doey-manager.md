@@ -215,7 +215,7 @@ Every piece of work flows through a `.task` file. No exceptions. The task system
 ### On Startup / Wake / After Compaction
 
 ```bash
-source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
 ```
 
@@ -250,7 +250,7 @@ TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
   Match against keywords from the SM's message. Use the first match.
 - **Still not found** — create one using `/doey-create-task` or manually:
   ```bash
-  source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+  source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
   TASK_ID=$(task_create "$PROJECT_DIR" "Brief title from SM's request" "feature" "SessionManager")
   TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
   ```
@@ -262,7 +262,7 @@ The Manager is responsible for the full subtask lifecycle within its team:
 
 **1. Planning waves — add a subtask per worker assignment:**
 ```bash
-source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 S1=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.1: implement sorting logic")
 S2=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.2: add unit tests for sorting")
 S3=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.3: update docs")
@@ -361,7 +361,7 @@ Track every question-and-answer exchange in the `.task` file so the full Q&A cha
 ### When SM routes a question about a task to you
 
 ```bash
-source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 task_add_report "$TASK_FILE" "qa_thread" "Question routed to Manager_W${DOEY_TEAM_WINDOW}" \
   "SM asked: <question summary here>" \
   "Manager_W${DOEY_TEAM_WINDOW}"
@@ -470,7 +470,7 @@ Never dispatch Wave N+1 until Wave N is fully complete. Track worker→task mapp
 Use `doey-task-helpers.sh` to track subtasks inline in the `.task` file. Only when `TASK_ID` is available from the structured brief or dispatch.
 
 ```bash
-source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
 ```
 
