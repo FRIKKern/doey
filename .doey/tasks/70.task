@@ -1,6 +1,6 @@
 TASK_ID=70
 TASK_TITLE=Dashboard info panel must display active tasks
-TASK_STATUS=in_progress
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1774965520
 TASK_TYPE=bug
 TASK_DESCRIPTION=Active tasks (from .doey/tasks/ with non-done status) are visible in the Go TUI Tasks tab but NOT on the Dashboard info panel (pane 0.0, shell/info-panel.sh). The Dashboard should prominently display currently active tasks with their ID, title, status, and assigned team. This is critical for at-a-glance awareness — the user should see what's being worked on without switching to the TUI. Investigate how the info panel renders its sections, find where task display should be integrated, and implement it. Tasks with status in_progress or active should show prominently. Also ensure task 69 (Charmbracelet upgrade) shows with its priority.
@@ -11,3 +11,6 @@ TASK_TEAM=W3
 TASK_LOG_1774965732=PROGRESS: Auto-spawned Team 3, dispatching now
 TASK_DECISION_LOG=1774965968:Wave 2 complete: info-panel.sh enhanced with TASK_TEAM + TASK_PRIORITY display. Bash compat PASS.
 TASK_UPDATED=1774965968
+TASK_RESULT=Dashboard info panel now shows TASK_TEAM and TASK_PRIORITY for each active task
+TASK_FILES=shell/info-panel.sh
+TASK_LOG_1774966072=COMPLETE: Committed f80e3b4. Pending user confirmation.

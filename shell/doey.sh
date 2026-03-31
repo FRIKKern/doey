@@ -215,6 +215,10 @@ PROJECTS_FILE="$HOME/.claude/doey/projects"
 mkdir -p "$(dirname "$PROJECTS_FILE")"
 touch "$PROJECTS_FILE"
 
+# Go build helpers (used by: doey build, doctor, reload, uninstall)
+# shellcheck source=doey-go-helpers.sh
+source "${SCRIPT_DIR}/doey-go-helpers.sh" 2>/dev/null || true
+
 # ── Configuration ───────────────────────────────────────────────────
 # Load user config (optional), then apply defaults for any unset variables.
 # Hierarchy: project .doey/config.sh > global ~/.config/doey/config.sh > defaults
@@ -2769,7 +2773,11 @@ uninstall_system() {
   doey_confirm "Continue?" || { doey_info "Cancelled."; printf '\n'; return 0; }
 
   rm -f ~/.local/bin/doey ~/.local/bin/tmux-statusbar.sh ~/.local/bin/pane-border-status.sh
-  rm -f ~/.local/bin/doey-tui ~/.local/bin/doey-remote-setup
+  if command -v trash >/dev/null 2>&1; then
+    trash ~/.local/bin/doey-tui ~/.local/bin/doey-remote-setup 2>/dev/null
+  else
+    rm -f ~/.local/bin/doey-tui ~/.local/bin/doey-remote-setup
+  fi
   rm -f ~/.claude/agents/doey-*.md
   rm -rf ~/.claude/doey
 
@@ -5175,21 +5183,17 @@ HELP
   --post-update) _post_update "$2"; exit 0 ;;
   update|reinstall) update_system; exit 0 ;;
   build)
-    printf "  ${BRAND}Building Go binaries...${RESET}\n"
-    if ! type _find_go_bin >/dev/null 2>&1 || ! _find_go_bin >/dev/null 2>&1; then
-      printf "  ${ERROR}✗ Go not found. Install Go to build doey-tui.${RESET}\n"
-      exit 1
-    fi
-    local repo_dir
-    repo_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+    printf "  %bBuilding Go binaries...%b\n" "$BRAND" "$RESET"
     if type _build_all_go_binaries >/dev/null 2>&1; then
-      _build_all_go_binaries "$repo_dir"
-      printf "  ${SUCCESS}✓ Go binaries built${RESET}\n"
+      local repo_dir; repo_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+      if _build_all_go_binaries "$repo_dir"; then
+        printf "  %b✓ Go binaries built%b\n" "$SUCCESS" "$RESET"
+      else
+        printf "  %b✗ Build failed%b\n" "$ERROR" "$RESET"; exit 1
+      fi
     else
-      printf "  ${ERROR}✗ Go build helpers not found (missing doey-go-helpers.sh)${RESET}\n"
-      exit 1
+      printf "  %b✗ Go helpers not loaded%b\n" "$ERROR" "$RESET"; exit 1
     fi
-    exit 0
     ;;
   config)       shift; doey_config "$@"; exit 0 ;;
   task|tasks)   shift; task_command "$@"; exit 0 ;;
