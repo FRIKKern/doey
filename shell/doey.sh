@@ -2332,12 +2332,19 @@ _update_contributor() {
     doey_warn "On branch '$current_branch' — switching to main"
     git -C "$repo_dir" checkout main 2>/dev/null || true
   fi
-  if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
+  # Check for tracked-file changes only (untracked files don't block pull --ff-only)
+  if ! git -C "$repo_dir" diff --quiet HEAD 2>/dev/null || \
+     ! git -C "$repo_dir" diff --cached --quiet HEAD 2>/dev/null; then
     dirty=true
-    if doey_confirm "You have uncommitted changes. Stash and continue?"; then
+    if [ -t 0 ] && doey_confirm "You have uncommitted changes. Stash and continue?"; then
       git -C "$repo_dir" stash --quiet 2>/dev/null || true
       stashed=true
       doey_ok "Changes stashed"
+    elif [ ! -t 0 ]; then
+      # Non-interactive: auto-stash (matches pre-Task-74 behavior)
+      git -C "$repo_dir" stash --quiet 2>/dev/null || true
+      stashed=true
+      doey_ok "Changes auto-stashed (non-interactive)"
     else
       doey_info "Update cancelled"
       return 0
