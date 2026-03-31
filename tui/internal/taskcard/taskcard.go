@@ -126,7 +126,16 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		reportsBadge = "  " + lipgloss.NewStyle().Foreground(d.Theme.Info).Render(
 			fmt.Sprintf("%dR", len(ti.Task.Reports)))
 	}
-	line2 := statusLabel + progress + reportsBadge + age
+	qaBadge := ""
+	for _, qa := range ti.Task.QAThread {
+		if qa.Status != "answered" {
+			qaBadge = "  " + lipgloss.NewStyle().
+				Foreground(lipgloss.AdaptiveColor{Light: "#0891B2", Dark: "#22D3EE"}).
+				Render("❓")
+			break
+		}
+	}
+	line2 := statusLabel + progress + reportsBadge + qaBadge + age
 
 	// --- Line 3: heartbeat (if available) ---
 	heartbeatLine := ""
@@ -165,6 +174,17 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 			parts += styles.CardMetaStyle(d.Theme).Render("  " + hs.ProgressText)
 		}
 		heartbeatLine = parts
+
+		// Append stale badge when health is stale
+		if hs.Health == "stale" && !hs.HealthSince.IsZero() {
+			staleDur := formatAge(time.Since(hs.HealthSince))
+			heartbeatLine += "  " + styles.StaleTimeBadge(d.Theme, staleDur)
+		}
+	}
+
+	// If no heartbeat but task is in_progress with recovery events, show stale badge on line 2
+	if heartbeatLine == "" && status == "in_progress" && len(ti.Task.RecoveryLog) > 0 {
+		line2 += "  " + styles.StaleBadge(d.Theme)
 	}
 
 	// --- Lines 3-4: description preview ---
@@ -386,6 +406,12 @@ func (e *ExpandedCard) Render() string {
 	}
 
 	sections = append(sections, "")
+
+	// --- Recovery Events ---
+	if recovery := e.renderRecoverySection(); recovery != "" {
+		sections = append(sections, recovery)
+		sections = append(sections, "")
+	}
 
 	// --- Meta ---
 	if task.Created > 0 {
@@ -632,6 +658,12 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, trail)
 	}
 
+	// --- Q&A Relay Chain ---
+	if qaSection := e.renderQARelayChain(contentWidth); qaSection != "" {
+		sections = append(sections, "")
+		sections = append(sections, qaSection)
+	}
+
 	// --- Messages ---
 	if len(e.Messages) > 0 {
 		sections = append(sections, "")
@@ -808,6 +840,14 @@ func (e *ExpandedCard) ContentHeight() int {
 	convCount := e.countConversationEntries()
 	if convCount > 0 {
 		lines += 2 + convCount*3 // section header + spacing + ~3 lines per conversation entry
+	}
+	// Q&A relay chain estimate
+	qaCount := len(e.Item.Task.QAThread)
+	if qaCount > 10 {
+		qaCount = 10
+	}
+	if qaCount > 0 {
+		lines += 2 + qaCount*4 // section header + spacing + ~4 lines per Q&A entry
 	}
 	if len(e.Messages) > 0 {
 		msgCount := len(e.Messages)
@@ -1441,6 +1481,37 @@ func (e *ExpandedCard) renderResultSection(w int) string {
 	return strings.Join(sections, "\n")
 }
 
+// renderRecoverySection renders recovery events (stale detection, reroutes) for the expanded card.
+func (e *ExpandedCard) renderRecoverySection() string {
+	events := e.Item.Task.RecoveryLog
+	if len(events) == 0 {
+		return ""
+	}
+
+	t := e.Theme
+	var lines []string
+	lines = append(lines, styles.SectionTitle(t, fmt.Sprintf("Recovery Events (%d)", len(events))))
+
+	for _, ev := range events {
+		elapsed := time.Since(time.Unix(ev.Timestamp, 0))
+		timeStr := formatAge(elapsed) + " ago"
+		icon := styles.RecoveryEventIcon(ev.Event)
+		dot := styles.RecoveryDot(t, ev.Event)
+		desc := ev.Description
+		if desc == "" {
+			desc = ev.Event
+		}
+		line := dot + " " + icon + " " + styles.CardMetaStyle(t).Render(timeStr) + "  " + desc
+		lines = append(lines, line)
+
+		if ev.NewAgent != "" {
+			lines = append(lines, styles.RecoveryArrow(t)+" Rerouted to "+ev.NewAgent)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 // statusTransition represents a status change with timestamp for timeline rendering.
 type statusTransition struct {
 	Status    string
@@ -1707,6 +1778,102 @@ func (e *ExpandedCard) renderConversationTrail(width int) string {
 		if i < len(entries)-1 {
 			lines = append(lines, "")
 		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderQARelayChain renders the Q&A relay chain section for the expanded card.
+func (e *ExpandedCard) renderQARelayChain(width int) string {
+	task := e.Item.Task
+	if len(task.QAThread) == 0 {
+		return ""
+	}
+
+	t := e.Theme
+	var lines []string
+
+	// Cap at last 10 entries
+	entries := task.QAThread
+	if len(entries) > 10 {
+		entries = entries[len(entries)-10:]
+	}
+
+	lines = append(lines, styles.SectionTitle(t, fmt.Sprintf("Q&A Relay (%d)", len(task.QAThread))))
+
+	for _, qa := range entries {
+		// Status icon
+		var icon string
+		var chainColor lipgloss.AdaptiveColor
+		switch qa.Status {
+		case "answered":
+			icon = "✅"
+			chainColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"} // green
+		case "answering":
+			icon = "⏳"
+			chainColor = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"} // blue
+		case "routing", "forwarded":
+			icon = "🔀"
+			chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // yellow
+		default:
+			icon = "❓"
+			chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // yellow
+		}
+
+		// Question line
+		question := qa.Question
+		maxQ := width - 8
+		if maxQ > 0 && len(question) > maxQ {
+			question = question[:maxQ-1] + "\u2026"
+		}
+		qLine := icon + " Q: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+question+"\"")
+		lines = append(lines, qLine)
+
+		// Hop chain: Role₁ → Role₂ → Role₃ (status)
+		if len(qa.Hops) > 0 {
+			var hopParts []string
+			for _, hop := range qa.Hops {
+				role := hop.Role
+				if role == "" {
+					role = hop.Pane
+				}
+				hopParts = append(hopParts, role)
+			}
+			chain := strings.Join(hopParts, " → ")
+			// Add status suffix
+			lastAction := qa.Hops[len(qa.Hops)-1].Action
+			if qa.Status != "answered" {
+				chain += " (" + lastAction + "...)"
+			}
+			chainStyled := lipgloss.NewStyle().Foreground(chainColor).Render(chain)
+			lines = append(lines, "   "+chainStyled)
+		}
+
+		// Answer line (if answered)
+		if qa.Status == "answered" && qa.Answer != "" {
+			answer := qa.Answer
+			maxA := width - 12
+			if maxA > 0 && len(answer) > maxA {
+				answer = answer[:maxA-1] + "\u2026"
+			}
+			// Find who answered (last hop)
+			answerer := ""
+			if len(qa.Hops) > 0 {
+				last := qa.Hops[len(qa.Hops)-1]
+				if last.Role != "" {
+					answerer = last.Role
+				} else {
+					answerer = last.Pane
+				}
+			}
+			aText := "✅ A: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+answer+"\"")
+			if answerer != "" {
+				aText += lipgloss.NewStyle().Foreground(t.Muted).Render(" — "+answerer)
+			}
+			lines = append(lines, "   "+aText)
+		}
+
+		lines = append(lines, "")
 	}
 
 	return strings.Join(lines, "\n")
