@@ -49,7 +49,7 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 }
 
 // Height returns the fixed card height (title + status + heartbeat + 2 desc lines + bottom padding).
-func (d CardDelegate) Height() int { return 6 }
+func (d CardDelegate) Height() int { return 8 }
 
 // Spacing returns the gap between cards.
 func (d CardDelegate) Spacing() int { return 1 }
@@ -76,55 +76,67 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	task := ti.Task
 	status := task.Status
 
-	// Use shared card style from styles package.
-	cardStyle := styles.CardStyle(d.Theme, status, selected, cardWidth)
-
-	// --- Line 1: icon + #ID + [type] + title ---
-	icon := statusIcon(status, d.Theme)
-	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(true).Render("#" + task.ID)
-
-	typeBadge := ""
-	if task.Type != "" {
-		typeBadge = styles.TypeTagCard(task.Type, d.Theme) + " "
+	t := d.Theme
+	hs, hasHB := d.Heartbeats[task.ID]
+	health := ""
+	if hasHB {
+		health = hs.Health
 	}
+	isDone := status == "done" || status == "cancelled"
+	isBlocked := status == "blocked" || task.Blockers != ""
 
-	titleStyle := styles.CardTitleStyle(d.Theme, selected)
+	// Health-aware card style
+	cardStyle := d.healthCardStyle(health, selected, isBlocked, isDone, cardWidth)
 
-	// Calculate how much space the title can occupy.
-	// Content width = cardWidth minus horizontal border chars (2).
 	contentWidth := cardWidth - 2
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
+	dimText := isDone || health == "stale"
 
+	// --- Line 1: icon/spinner + #ID + [type] + title ---
+	icon := statusIcon(status, t)
+	if hasHB && hs.SpinnerActive {
+		icon = lipgloss.NewStyle().Foreground(t.Primary).Render("⠋")
+	}
+	idStr := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("#" + task.ID)
+	typeBadge := ""
+	if task.Type != "" {
+		typeBadge = styles.TypeTagCard(task.Type, t) + " "
+	}
 	prefix := icon + " " + idStr + " " + typeBadge
 	prefixWidth := lipgloss.Width(prefix)
-	titleMaxWidth := contentWidth - prefixWidth
-	if titleMaxWidth < 4 {
-		titleMaxWidth = 4
+	titleMaxW := contentWidth - prefixWidth
+	if titleMaxW < 4 {
+		titleMaxW = 4
 	}
 	titleText := task.Title
-	if lipgloss.Width(titleText) > titleMaxWidth {
-		titleText = titleText[:titleMaxWidth-3] + "..."
+	if lipgloss.Width(titleText) > titleMaxW {
+		titleText = titleText[:titleMaxW-3] + "..."
 	}
-	line1 := prefix + titleStyle.Render(titleText)
+	titleFg := t.Text
+	if selected {
+		titleFg = t.Primary
+	}
+	if dimText {
+		titleFg = t.Muted
+	}
+	line1 := prefix + lipgloss.NewStyle().Foreground(titleFg).Bold(true).Render(titleText)
 
-	// --- Line 2: status text + subtask progress + age ---
-	statusClr := styles.StatusAccentColor(d.Theme, status)
+	// --- Line 2: status pill + team badge + tags + Q&A ---
+	statusClr := styles.StatusAccentColor(t, status)
 	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(status)
-	progress := ""
-	if ti.SubtaskTotal > 0 {
-		progress = "  " + styles.SubtaskProgress(ti.SubtaskDone, ti.SubtaskTotal)
+	teamBadge := ""
+	if task.Team != "" {
+		teamBadge = "  " + lipgloss.NewStyle().Foreground(t.Accent).Faint(dimText).Render("["+task.Team+"]")
 	}
-	age := ""
-	if task.Created > 0 {
-		elapsed := time.Since(time.Unix(task.Created, 0))
-		age = "  " + styles.CardMetaStyle(d.Theme).Render(formatAge(elapsed))
-	}
-	reportsBadge := ""
-	if len(ti.Task.Reports) > 0 {
-		reportsBadge = "  " + lipgloss.NewStyle().Foreground(d.Theme.Info).Render(
-			fmt.Sprintf("%dR", len(ti.Task.Reports)))
+	tagStr := ""
+	for i, tag := range task.Tags {
+		if i >= 3 {
+			tagStr += " +"
+			break
+		}
+		tagStr += " " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render("#"+tag)
 	}
 	qaBadge := ""
 	for _, qa := range ti.Task.QAThread {
@@ -135,69 +147,111 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 			break
 		}
 	}
-	line2 := statusLabel + progress + reportsBadge + qaBadge + age
+	phaseBadge := ""
+	if task.Phase != "" {
+		phaseBadge = "  " + styles.TaskPhaseBadge(t, task.Phase)
+	}
+	line2 := statusLabel + phaseBadge + teamBadge + tagStr + qaBadge
 
-	// --- Line 3: heartbeat (if available) ---
-	heartbeatLine := ""
-	if hs, ok := d.Heartbeats[task.ID]; ok && hs.ActiveWorkers > 0 {
-		var healthDot string
-		switch hs.Health {
-		case "green", "healthy":
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Success).Render("●")
-		case "amber", "degraded":
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Warning).Render("●")
-		case "idle":
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("●")
+	// --- Line 3: workers + health + activity ---
+	line3 := ""
+	if hasHB && hs.ActiveWorkers > 0 {
+		var dot string
+		switch health {
+		case "healthy":
+			dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
+		case "degraded":
+			dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
 		default:
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Danger).Render("●")
+			dot = lipgloss.NewStyle().Foreground(t.Muted).Render("●")
 		}
-
-		workers := fmt.Sprintf("%d worker", hs.ActiveWorkers)
-		if hs.ActiveWorkers != 1 {
-			workers += "s"
+		names := strings.Join(hs.ActiveWorkerNames, ", ")
+		if names == "" {
+			names = fmt.Sprintf("%d worker", hs.ActiveWorkers)
+			if hs.ActiveWorkers != 1 {
+				names += "s"
+			}
 		}
-		activity := styles.CardMetaStyle(d.Theme).Render(workers + " active")
-
-		parts := healthDot + " " + activity
+		line3 = dot + " " + lipgloss.NewStyle().Foreground(t.Text).Render(names)
 		if hs.ActivityText != "" {
-			parts += d.Theme.DotSeparator() + styles.CardMetaStyle(d.Theme).Render(hs.ActivityText)
+			line3 += t.DotSeparator() + styles.CardMetaStyle(t).Render(hs.ActivityText)
 		}
 		if !hs.LastActivity.IsZero() {
 			elapsed := time.Since(hs.LastActivity)
 			if elapsed < 5*time.Second {
-				parts += lipgloss.NewStyle().Foreground(d.Theme.Success).Render("  now")
+				line3 += lipgloss.NewStyle().Foreground(t.Success).Render("  now")
 			} else {
-				parts += styles.CardMetaStyle(d.Theme).Render("  " + formatAge(elapsed) + " ago")
+				line3 += styles.CardMetaStyle(t).Render("  " + formatAge(elapsed) + " ago")
 			}
 		}
-		if hs.ProgressText != "" {
-			parts += styles.CardMetaStyle(d.Theme).Render("  " + hs.ProgressText)
-		}
-		heartbeatLine = parts
-
-		// Append stale badge when health is stale
-		if hs.Health == "stale" && !hs.HealthSince.IsZero() {
+		// Stale badge with duration
+		if health == "stale" && !hs.HealthSince.IsZero() {
 			staleDur := formatAge(time.Since(hs.HealthSince))
-			heartbeatLine += "  " + styles.StaleTimeBadge(d.Theme, staleDur)
+			line3 += "  " + styles.StaleTimeBadge(t, staleDur)
 		}
+	} else if isBlocked && task.Blockers != "" {
+		bl := strings.SplitN(task.Blockers, "\n", 2)[0]
+		if len(bl) > contentWidth-4 {
+			bl = bl[:contentWidth-7] + "..."
+		}
+		line3 = lipgloss.NewStyle().Foreground(t.Danger).Render("⚠ " + bl)
+	} else if status == "in_progress" && len(ti.Task.RecoveryLog) > 0 {
+		line3 = styles.StaleBadge(t)
 	}
 
-	// If no heartbeat but task is in_progress with recovery events, show stale badge on line 2
-	if heartbeatLine == "" && status == "in_progress" && len(ti.Task.RecoveryLog) > 0 {
-		line2 += "  " + styles.StaleBadge(d.Theme)
+	// --- Line 4: progress bar + reports ---
+	line4 := ""
+	if ti.SubtaskTotal > 0 {
+		barW := contentWidth / 2
+		if barW > 30 {
+			barW = 30
+		}
+		line4 = styles.ExpandedProgressBar(t, ti.SubtaskDone, ti.SubtaskTotal, barW)
+	}
+	if len(task.Reports) > 0 {
+		line4 += "  " + lipgloss.NewStyle().Foreground(t.Info).Render(fmt.Sprintf("%dR", len(task.Reports)))
+	}
+	if hasHB && hs.ProgressText != "" && ti.SubtaskTotal == 0 {
+		line4 += styles.CardMetaStyle(t).Render(hs.ProgressText)
 	}
 
-	// --- Lines 3-4: description preview ---
-	descLines := truncateDesc(task.Description, 2, contentWidth)
-
-	renderedDesc := styles.CardDescStyle(d.Theme).Render(descLines)
-
-	var content string
-	if heartbeatLine != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2, heartbeatLine, renderedDesc)
-	} else {
-		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2, renderedDesc)
+	// --- Line 5: description preview (1 line) ---
+	descStyle := styles.CardDescStyle(t)
+	if dimText {
+		descStyle = descStyle.Faint(true)
 	}
+	line5 := descStyle.Render(truncateDesc(task.Description, 1, contentWidth))
+
+	// --- Line 6: tool hint / finding + updates + age ---
+	var metaParts []string
+	if hasHB && hs.LastToolCall != "" {
+		hint := hs.LastToolCall
+		if len(hint) > 30 {
+			hint = hint[:27] + "..."
+		}
+		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(hint))
+	} else if hasHB && hs.LatestFinding != "" {
+		finding := hs.LatestFinding
+		if len(finding) > 30 {
+			finding = finding[:27] + "..."
+		}
+		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(finding))
+	}
+	if len(task.Updates) > 0 {
+		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
+			fmt.Sprintf("%d updates", len(task.Updates))))
+	}
+	if len(task.QAThread) > 0 {
+		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
+			fmt.Sprintf("Q&A: %d", len(task.QAThread))))
+	}
+	if task.Created > 0 {
+		elapsed := time.Since(time.Unix(task.Created, 0))
+		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(formatAge(elapsed)))
+	}
+	line6 := strings.Join(metaParts, "  ")
+
+	content := lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3, line4, line5, line6)
 	marked := zone.Mark(fmt.Sprintf("task-card-%d", index), cardStyle.Render(content))
 	fmt.Fprint(w, marked)
 }
@@ -222,6 +276,56 @@ func (d CardDelegate) taskStatusColor(status string) lipgloss.AdaptiveColor {
 	default:
 		return d.Theme.Muted
 	}
+}
+
+// healthCardStyle returns a card style with border color reflecting health state.
+// Active tasks glow (green/yellow left accent), stale/idle tasks dim, blocked tasks warn.
+func (d CardDelegate) healthCardStyle(health string, selected, isBlocked, isDone bool, width int) lipgloss.Style {
+	t := d.Theme
+	border := lipgloss.RoundedBorder()
+	border.Left = "│"
+	border.TopLeft = "│"
+	border.BottomLeft = "│"
+
+	borderFg := t.Separator
+	leftFg := t.Separator
+
+	switch {
+	case isDone:
+		borderFg = t.Muted
+		leftFg = t.Muted
+	case isBlocked:
+		leftFg = t.Danger
+	case health == "healthy":
+		leftFg = t.Success
+	case health == "degraded":
+		leftFg = t.Warning
+	case health == "stale":
+		leftFg = t.Muted
+	}
+
+	s := lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(borderFg).
+		BorderLeftForeground(leftFg).
+		Width(width).
+		Padding(0, 1)
+
+	if selected {
+		s = s.BorderForeground(t.Primary).
+			Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"})
+		// Preserve health accent on left border when selected
+		switch {
+		case isBlocked:
+			s = s.BorderLeftForeground(t.Danger)
+		case health == "healthy":
+			s = s.BorderLeftForeground(t.Success)
+		case health == "degraded":
+			s = s.BorderLeftForeground(t.Warning)
+		}
+	}
+
+	return s
 }
 
 // statusIcon returns a subtle colored status icon for the given task status.
@@ -395,7 +499,15 @@ func (e *ExpandedCard) Render() string {
 	if typeTag != "" {
 		header += " " + typeTag
 	}
+	if task.Phase != "" {
+		header += "  " + styles.TaskPhaseBadge(e.Theme, task.Phase)
+	}
 	sections = append(sections, header)
+
+	// --- Phase banner (prominent for review phase) ---
+	if phaseBanner := styles.TaskPhaseBanner(e.Theme, task.Phase, contentWidth); phaseBanner != "" {
+		sections = append(sections, phaseBanner)
+	}
 
 	// --- Separator ---
 	sections = append(sections, styles.ThinSeparator(e.Theme, contentWidth))

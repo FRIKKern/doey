@@ -51,11 +51,12 @@ Run ALL in order:
 
 1. **Drain inbox** — `bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"` (where `SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"`)
 2. **Read status files** — `bash -c 'shopt -s nullglob; for f in "$1"/status/*.status; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — look for FINISHED, ERROR, LOGGED_OUT, stale BOOTING
-3. **Check results** — `bash -c 'shopt -s nullglob; for f in "$1"/results/*.json; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — route follow-ups, commit if files changed, report to Boss
-4. **Check crashes** — `bash -c 'shopt -s nullglob; for f in "$1"/status/crash_pane_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — escalate to Boss
-5. **Act** — dispatch follow-ups, commit changes, report to Boss, handle anomalies
-6. **Pause** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (3-5s throttle, not a blocking wait)
-7. **Loop** — go to step 1
+3. **Check stale alerts** — `bash -c 'shopt -s nullglob; for f in "$1"/status/stale_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — run recovery for each (see Stale Task Detection section)
+4. **Check results** — `bash -c 'shopt -s nullglob; for f in "$1"/results/*.json; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — route follow-ups, commit if files changed, report to Boss
+5. **Check crashes** — `bash -c 'shopt -s nullglob; for f in "$1"/status/crash_pane_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — escalate to Boss
+6. **Act** — dispatch follow-ups, commit changes, report to Boss, handle anomalies
+7. **Pause** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (3-5s throttle, not a blocking wait)
+8. **Loop** — go to step 1
 
 **NEVER return to the prompt.** Only exits: `/exit`, `/compact`, or user message. After `/compact`: re-source `session.env` if needed, resume at step 1.
 
@@ -204,34 +205,131 @@ Priority ordering: P0 (critical) dispatches first, through P3 (low). Default pri
 
 ### Crash Recovery
 
-A team is considered **stale** when its Manager has been BUSY for >300s and the `unchanged_count` file shows ≥3 consecutive unchanged cycles.
+Stale detection is **heartbeat-based** — `session-manager-wait.sh` writes `stale_*` alert files to `$RUNTIME_DIR/status/` when any pane's heartbeat exceeds 120s. SM reads these in step 2.5 of the active cycle (see Stale Task Detection below). This replaces the old `unchanged_count` heuristic — do NOT use `unchanged_count` files.
 
 **Recovery procedure:**
 
-1. Log the issue to `$RUNTIME_DIR/issues/`
-2. Find the task assigned to the stale team (`TASK_TEAM=W<N>` in the .task file)
-3. Remove `TASK_TEAM` from the task file to re-queue it
-4. Reset `TASK_STATUS=active` so Queue Drain picks it up
-5. Queue Drain assigns the task to the next available team on the next cycle
-6. Report the crash and re-queue to Boss via `.msg` file
+1. Read stale alert files (see Stale Task Detection below for exact commands)
+2. Log the issue to `$RUNTIME_DIR/issues/`
+3. Find the task assigned to the stale pane (`TASK_TEAM=W<N>` in the .task file)
+4. Add a recovery event to the task file (structured tracking for the TUI)
+5. Remove `TASK_TEAM` from the task file to re-queue it
+6. Reset `TASK_STATUS=active` so Queue Drain picks it up
+7. Queue Drain assigns the task to the next available team on the next cycle
+8. Report the crash and re-queue to Boss via `.msg` file
+
+## Stale Task Detection & Auto-Recovery
+
+This is the primary mechanism for detecting stuck workers and recovering their tasks. It runs as **step 3** of the active cycle, after reading status files and before checking results.
+
+### How stale alerts work
+
+`session-manager-wait.sh` monitors pane heartbeats. When any pane's last status update exceeds 120s, it writes a stale alert file to `$RUNTIME_DIR/status/`. Each alert file contains: `PANE_ID TASK_ID HB_TIME AGE` (space-separated, one line per stale pane).
+
+### Step 3: Read stale alerts
 
 ```bash
-for W in $TEAM_WINDOWS; do
-  MGR_STATUS_FILE="${RUNTIME_DIR}/status/pane_${W}_0.status"
-  [ -f "$MGR_STATUS_FILE" ] || continue
-  STATUS=$(grep '^STATUS=' "$MGR_STATUS_FILE" | cut -d= -f2-)
-  UPDATED=$(grep '^UPDATED=' "$MGR_STATUS_FILE" | cut -d= -f2-)
-  NOW=$(date +%s)
-  AGE=$((NOW - ${UPDATED:-0}))
-  UNCHANGED_FILE="${RUNTIME_DIR}/status/unchanged_count_${W}_0"
-  UNCHANGED=$(cat "$UNCHANGED_FILE" 2>/dev/null || echo "0")
-  if [ "$STATUS" = "BUSY" ] && [ "$AGE" -gt 300 ] && [ "$UNCHANGED" -ge 3 ]; then
-    echo "STALE_$(date +%s)=W${W} manager stale (${AGE}s, unchanged=${UNCHANGED})" \
-      >> "${RUNTIME_DIR}/issues/crash_W${W}_$(date +%s).log"
-    # Recovery: find and re-queue the assigned task (handled in main loop)
-  fi
-done
+bash -c 'shopt -s nullglob; for f in "$1"/status/stale_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
 ```
+
+For each stale alert, extract the fields:
+
+```bash
+PANE_ID="<from alert>"    # e.g. "2.1"
+TASK_ID="<from alert>"    # e.g. "42"
+AGE="<from alert>"        # seconds since last heartbeat
+```
+
+### Recovery action for each stale task
+
+Run these steps in order for each stale alert:
+
+**1. Look up the task file:**
+```bash
+TD="${PROJECT_DIR}/.doey/tasks"; [ -d "$TD" ] || TD="${RUNTIME_DIR}/tasks"
+TASK_FILE="${TD}/${TASK_ID}.task"
+[ -f "$TASK_FILE" ] || continue  # no task file = nothing to recover
+```
+
+**2. Add a structured recovery event to the task file** (for TUI display):
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+NOW=$(date +%s)
+# Find next recovery event index
+NEXT_IDX=$(grep -c '^TASK_RECOVERY_' "$TASK_FILE" 2>/dev/null | awk '{print int($1/4)}')
+cat >> "$TASK_FILE" << EOF
+TASK_RECOVERY_${NEXT_IDX}_TIMESTAMP=${NOW}
+TASK_RECOVERY_${NEXT_IDX}_TYPE=stale_detected
+TASK_RECOVERY_${NEXT_IDX}_WORKER=${PANE_ID}
+TASK_RECOVERY_${NEXT_IDX}_REASON=No heartbeat for ${AGE}s
+EOF
+```
+
+**3. Re-queue the task** (remove team assignment, reset status):
+```bash
+TMP="${TASK_FILE}.tmp"
+while IFS= read -r line; do
+  case "${line%%=*}" in
+    TASK_TEAM) ;; # remove — task is now unassigned
+    TASK_STATUS) echo "TASK_STATUS=active" ;;
+    *) echo "$line" ;;
+  esac
+done < "$TASK_FILE" > "$TMP" && mv "$TMP" "$TASK_FILE"
+```
+
+**4. Log a task update:**
+```bash
+echo "TASK_LOG_$(date +%s)=RECOVERY: Worker ${PANE_ID} stale (${AGE}s no heartbeat), task re-queued" >> "$TASK_FILE"
+```
+
+**5. Clean up the stale alert file:**
+```bash
+rm -f "${RUNTIME_DIR}/status/stale_${PANE_ID//\./_}"
+```
+
+**6. Log to issues directory:**
+```bash
+mkdir -p "${RUNTIME_DIR}/issues"
+echo "STALE_$(date +%s)=Pane ${PANE_ID} stale for task #${TASK_ID} (${AGE}s). Re-queued." \
+  >> "${RUNTIME_DIR}/issues/stale_recovery_$(date +%s).log"
+```
+
+**7. Notify Boss:**
+```bash
+BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
+MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
+printf 'FROM: SessionManager\nSUBJECT: stale_recovery\n⚠ Task #%s stale on pane %s (%ss no heartbeat). Re-queued for dispatch.\n' \
+  "$TASK_ID" "$PANE_ID" "$AGE" > "${MSG_DIR}/${BOSS_SAFE}_$(date +%s)_$$.msg"
+touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
+```
+
+After processing all stale alerts, Queue Drain (step 6 of the active cycle) will pick up the re-queued tasks and dispatch them to idle teams automatically.
+
+### Q&A relay stale detection
+
+Messages in the queue can go stale too. When processing inbox (step 1), check for question messages older than 60s where the target pane is no longer BUSY:
+
+```bash
+# For each question message being processed:
+MSG_AGE=$(($(date +%s) - MSG_TIMESTAMP))
+TARGET_STATUS=$(grep '^STATUS=' "${RUNTIME_DIR}/status/pane_${TARGET_W}_${TARGET_P}.status" 2>/dev/null | cut -d= -f2-)
+
+if [ "$MSG_AGE" -gt 60 ] && [ "$TARGET_STATUS" != "BUSY" ] && [ "$TARGET_STATUS" != "WORKING" ]; then
+  # Target pane finished/crashed — reroute this question
+  # Find another BUSY pane working on the same task, or escalate to the Manager
+  # Log the reroute:
+  echo "TASK_LOG_$(date +%s)=REROUTE: Q&A message rerouted from ${TARGET_W}.${TARGET_P} (${TARGET_STATUS}) — original target no longer active" \
+    >> "${TD}/${TASK_ID}.task"
+fi
+```
+
+If no suitable target exists, hold the message and log: `TASK_LOG_<epoch>=BLOCKED: Q&A message has no active target, awaiting redispatch`.
+
+### When NOT to recover
+
+- Pane status is `RESERVED` — user intentionally reserved it, skip
+- Task status is `done` or `cancelled` — stale alert is outdated, just clean up the alert file
+- Same task was already recovered in this cycle — deduplicate, process only once
 
 ## Message Processing
 
@@ -308,7 +406,7 @@ Status files: `RUNTIME_DIR/status/<pane_safe>.status` with fields `PANE`, `UPDAT
 | `ERROR` | Worker hit a problem. For managed teams, notify Manager. For freelancers, escalate to Boss |
 | `LOGGED_OUT` | Auth issue. Follow LOGGED_OUT recovery protocol |
 | `BOOTING` (stale >60s) | Pane may be stuck booting. Note for next cycle, escalate if persists |
-| `BUSY` (stale >300s) | Pane may be stuck. Check `unchanged_count_*` files. Escalate if count ≥ 3 |
+| `BUSY` (stale >300s) | Pane may be stuck. Check `stale_*` alert files in `$RUNTIME_DIR/status/`. See **Stale Task Detection** below |
 | `READY` | Available for dispatch |
 | `RESERVED` | Skip — user reserved this pane |
 
@@ -549,6 +647,36 @@ doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" "Answered by SM at pa
 ```
 
 Q/A pairs build an audit trail on the task file. If the question is forwarded to a team, log both the forward and the eventual answer.
+
+## Research Dispatch Pattern
+
+**When Boss requests research on a task:**
+- Route to a SINGLE focused worker — not a full team
+- Use the `/doey-research` skill which guarantees report-back (stop hook blocks until report written)
+- Worker gets: specific questions from Boss, task context, structured report template
+- SM tracks research as a subtask: `research_dispatched` status on the parent task
+
+**Research worker selection:**
+- Prefer a worker with relevant domain context (if available)
+- If no relevant context: pick any idle worker
+- NEVER dispatch research to a full team — it's one worker, deep exploration
+
+**Report routing:**
+- When research worker finishes: read the report file
+- Forward report summary to Boss via message queue
+- Update task status: `research_complete`
+- Trigger notification to Boss pane
+
+**Research iteration:**
+- Boss may request more research after reviewing — SM dispatches again
+- Each research cycle is a new subtask with incrementing label: "Research round N"
+- All research reports accumulate on the task record
+
+**Task phase tracking:**
+- When dispatching research: set TASK_PHASE=research on the task file
+- When research completes and Boss is reviewing: TASK_PHASE=review
+- When Boss dispatches implementation: TASK_PHASE=implementation
+- Use: `task_update_field "$TASK_FILE" "TASK_PHASE" "research"`
 
 ## Rules
 

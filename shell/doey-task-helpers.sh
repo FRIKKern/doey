@@ -1251,3 +1251,69 @@ doey_task_add_report() {
 
   task_add_report "$task_file" "$report_type" "$title" "$body" "$author"
 }
+
+# ── Recovery Events ─────────────────────────────────────────────────
+
+# ── task_add_recovery_event ─────────────────────────────────────────
+# Add a numbered recovery event (TASK_RECOVERY_<N>_*) to a task file.
+# Args: task_file event_type failed_agent new_agent description
+# Event types: stale_detected, redispatched, rerouted, heartbeat_timeout, crash_recovery
+# Returns (echo): recovery event number
+task_add_recovery_event() {
+  local task_file="$1" event_type="$2" failed_agent="$3" new_agent="$4" description="$5"
+
+  [ ! -f "$task_file" ] && return 1
+
+  # Count existing recovery events (bash 3.2 compatible loop, not grep -c)
+  local count=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      TASK_RECOVERY_*_TIMESTAMP=*) count=$((count + 1)) ;;
+    esac
+  done < "$task_file" || true
+
+  local n=$((count + 1))
+  local ts
+  ts=$(date +%s)
+
+  printf 'TASK_RECOVERY_%s_TIMESTAMP=%s\n' "$n" "$ts" >> "$task_file"
+  printf 'TASK_RECOVERY_%s_EVENT=%s\n' "$n" "$event_type" >> "$task_file"
+  printf 'TASK_RECOVERY_%s_FAILED_AGENT=%s\n' "$n" "$failed_agent" >> "$task_file"
+  printf 'TASK_RECOVERY_%s_NEW_AGENT=%s\n' "$n" "$new_agent" >> "$task_file"
+  printf 'TASK_RECOVERY_%s_DESCRIPTION=%s\n' "$n" "$description" >> "$task_file"
+
+  echo "$n"
+}
+
+# ── task_get_recovery_count ─────────────────────────────────────────
+# Count TASK_RECOVERY_*_TIMESTAMP lines in a task file.
+# Args: task_file
+# Returns (echo): count (0 if missing/none)
+task_get_recovery_count() {
+  local task_file="$1"
+
+  [ ! -f "$task_file" ] && { echo "0"; return 1; }
+
+  local count=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      TASK_RECOVERY_*_TIMESTAMP=*) count=$((count + 1)) ;;
+    esac
+  done < "$task_file" || true
+
+  echo "$count"
+}
+
+# ── doey_task_add_recovery_event ────────────────────────────────────
+# Add a recovery event to a task file, resolving from project_dir + task_id.
+# Args: project_dir task_id event_type failed_agent new_agent description
+# Returns (echo): recovery event number
+doey_task_add_recovery_event() {
+  local project_dir="$1" task_id="$2"
+
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+
+  shift 2
+  task_add_recovery_event "$task_file" "$@"
+}

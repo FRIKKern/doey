@@ -142,6 +142,20 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
   fi
 fi
 
+# ── Heartbeat emission (for stale detection by SM) ──
+if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
+  _HB_FILE="${_RD}/status/${_PS}.heartbeat"
+  _hb_write=true
+  if [ -f "$_HB_FILE" ]; then
+    _hb_age=$(( $(date +%s) - $(stat -f%m "$_HB_FILE" 2>/dev/null || echo 0) ))
+    [ "$_hb_age" -lt 10 ] && _hb_write=false
+  fi
+  if [ "$_hb_write" = "true" ]; then
+    _hb_tmp="${_HB_FILE}.tmp"
+    printf '%s %s %s\n' "$(date +%s)" "${DOEY_TASK_ID:-}" "${DOEY_PANE_ID:-${_PS}}" > "$_hb_tmp" && mv "$_hb_tmp" "$_HB_FILE"
+  fi
+fi
+
 _DBG=false
 [ -n "${_RD:-}" ] && [ -f "${_RD}/debug.conf" ] && _DBG=true
 
