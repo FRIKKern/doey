@@ -445,6 +445,111 @@ Write a report when: dispatching task to team, committing results, recovering fr
 
 Only call these when `TASK_ID` is set. Skip for ad-hoc messages without a tracked task.
 
+## Task System — Source of Truth
+
+Tasks in `.doey/tasks/` are the **single source of truth** for all work. Every action SM takes must be traceable to a task ID.
+
+### On startup / wake / after compaction
+
+Before doing anything else, list all active tasks and log them to context:
+
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/*.task; do
+  ID=$(grep "^TASK_ID=" "$f" | cut -d= -f2-)
+  TITLE=$(grep "^TASK_TITLE=" "$f" | cut -d= -f2-)
+  STATUS=$(grep "^TASK_STATUS=" "$f" | cut -d= -f2-)
+  TEAM=$(grep "^TASK_TEAM=" "$f" | cut -d= -f2-)
+  [ "$STATUS" = "done" ] || [ "$STATUS" = "cancelled" ] && continue
+  printf "◆ Task #%s — %s [%s] team=%s\n" "$ID" "$TITLE" "$STATUS" "${TEAM:-unassigned}"
+done' _ "$PROJECT_DIR"
+```
+
+This is **mandatory** — never skip it. If no tasks exist, note "No active tasks" and proceed.
+
+### When receiving work from Boss
+
+**ALWAYS** check for a matching task before starting work:
+
+1. Search `.doey/tasks/` by title/keywords from the Boss message
+2. **If found:** reuse that task ID, update status to `in_progress`:
+   ```bash
+   task_update_status "$PROJECT_DIR" "$TASK_ID" "in_progress"
+   ```
+3. **If not found:** create a new task using the helpers:
+   ```bash
+   TASK_ID=$(task_create "$PROJECT_DIR" "Task title from Boss message" "feature" "Boss" "Description")
+   ```
+   Or use `/doey-create-task` for complex goals that need structured planning.
+4. **NEVER start non-trivial work without a task ID.** Ad-hoc monitoring and status checks are exempt; everything else gets a task.
+
+### Task lifecycle updates
+
+Use `doey-task-helpers.sh` functions at every state transition:
+
+| Event | Function call |
+|-------|--------------|
+| Delegating to a team | `doey_task_add_subtask "$PROJECT_DIR" "$TASK_ID" "Dispatch to Team W${W}" "Manager_W${W}"` |
+| Team reports back | `doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "done"` |
+| Routing/architectural choice | `task_add_decision "$PROJECT_DIR" "$TASK_ID" "Chose W${W}: reason"` |
+| Completion or milestone | `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "completion" "Title" "Summary" "SM"` |
+| Error or crash recovery | `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "error" "Title" "Details" "SM"` |
+
+### Dispatch messages MUST include task context
+
+Every brief sent to a Window Manager must contain:
+
+1. **TASK_ID** — e.g., `Task #42`
+2. **Task file path** — e.g., `.doey/tasks/42.task`
+3. **Success criteria** — from `TASK_ACCEPTANCE_CRITERIA` or the task JSON's `success_criteria`
+
+Example dispatch prefix:
+```
+[Task #42 — .doey/tasks/42.task]
+Success criteria: All tests pass, no new lint warnings.
+---
+<actual task brief>
+```
+
+## Conversation Trail
+
+Every user message relayed through Boss must be logged on the task for traceability.
+
+### Logging user messages
+
+When Boss relays a user message tied to a task:
+```bash
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "conversation" "User message" "<content>" "SessionManager"
+```
+
+### Logging decisions and status changes
+
+All SM decisions and status transitions get logged:
+```bash
+task_add_decision "$PROJECT_DIR" "$TASK_ID" "SM routed to W${W} — reason: best capacity"
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "decision" "Routing choice" "Assigned to W${W} because..." "SM"
+```
+
+Every question routed through SM must be logged — no silent routing.
+
+## Q&A Relay Tracking
+
+Questions and answers about tasks are tracked as `qa_thread` reports on the task file.
+
+### When receiving a question about a task
+
+```bash
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" "Question routed to SM" "Q: <question content>" "SessionManager"
+```
+
+### When answering
+
+```bash
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" "Answered by SM at pane 0.2" "A: <answer content>" "SessionManager"
+```
+
+Q/A pairs build an audit trail on the task file. If the question is forwarded to a team, log both the forward and the eventual answer.
+
 ## Rules
 
 1. Managed teams: dispatch through Window Managers, not workers directly

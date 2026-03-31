@@ -208,6 +208,200 @@ Decompose DELIVERABLES into per-worker assignments. Include TASK_ID, constraints
 
 Completion report to SM: TASK_ID, HYPOTHESES_TESTED, EVIDENCE, DELIVERABLES_PRODUCED, SUCCESS_CRITERIA_MET.
 
+## Task System — Source of Truth
+
+Every piece of work flows through a `.task` file. No exceptions. The task system is **the** record of what happened, what was decided, and what was delivered. If it's not in a `.task` file, it didn't happen.
+
+### On Startup / Wake / After Compaction
+
+```bash
+source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
+```
+
+1. Read the context log first (existing behavior: `cat "$LOG"`)
+2. Load active tasks from `.doey/tasks/`:
+   ```bash
+   bash -c 'shopt -s nullglob; for f in "${1}"/.doey/tasks/*.task; do
+     STATUS=""; while IFS= read -r line; do case "${line%%=*}" in TASK_STATUS) STATUS="${line#*=}" ;; esac; done < "$f"
+     case "$STATUS" in active|in_progress) echo "$(basename "$f"): $STATUS" ;; esac
+   done' _ "$PROJECT_DIR"
+   ```
+3. If a `TASK_ID` was provided in the dispatch brief, load that task file immediately:
+   ```bash
+   if [ -n "${TASK_ID:-}" ] && [ -f "$TASK_FILE" ]; then
+     task_read "$TASK_FILE"
+   fi
+   ```
+
+### When Receiving Work from Session Manager
+
+- **SM provides TASK_ID** — use it. Set `TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"` and load.
+- **No TASK_ID provided** — search `.doey/tasks/` for a matching task by title/keywords:
+  ```bash
+  bash -c 'shopt -s nullglob; for f in "${1}"/.doey/tasks/*.task; do
+    TITLE=""; STATUS=""
+    while IFS= read -r line; do
+      case "${line%%=*}" in TASK_TITLE) TITLE="${line#*=}" ;; TASK_STATUS) STATUS="${line#*=}" ;; esac
+    done < "$f"
+    case "$STATUS" in active|in_progress) echo "$(basename "$f" .task)|$TITLE" ;; esac
+  done' _ "$PROJECT_DIR"
+  ```
+  Match against keywords from the SM's message. Use the first match.
+- **Still not found** — create one using `/doey-create-task` or manually:
+  ```bash
+  source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+  TASK_ID=$(task_create "$PROJECT_DIR" "Brief title from SM's request" "feature" "SessionManager")
+  TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
+  ```
+- **NEVER dispatch workers without a tracked `.task` file.** Every worker assignment must trace back to a TASK_ID.
+
+### Task Lifecycle — The Manager Drives Subtask Tracking
+
+The Manager is responsible for the full subtask lifecycle within its team:
+
+**1. Planning waves — add a subtask per worker assignment:**
+```bash
+source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+S1=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.1: implement sorting logic")
+S2=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.2: add unit tests for sorting")
+S3=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.3: update docs")
+```
+
+**2. Worker reports FINISHED/ERROR — update immediately:**
+```bash
+task_update_subtask "$TASK_FILE" "$S1" "done"         # worker succeeded
+task_update_subtask "$TASK_FILE" "$S2" "done"         # worker succeeded
+task_update_subtask "$TASK_FILE" "$S3" "skipped"      # not needed after wave 1
+# Valid statuses: pending | in_progress | done | skipped
+```
+
+**3. Wave-level decisions — log what passed, failed, what to retry:**
+```bash
+task_add_decision "$TASK_FILE" "Wave 1: 2/3 passed. W.3 skipped (docs not needed). Proceeding to wave 2."
+```
+
+**4. After each wave completes — submit a progress report:**
+```bash
+task_add_report "$TASK_FILE" "progress" "Wave 1 Complete" \
+  "2/3 workers finished. Sorting implemented and tested. Docs deferred." \
+  "Manager_W${DOEY_TEAM_WINDOW}"
+```
+
+**5. On task completion — submit a completion report:**
+```bash
+task_add_report "$TASK_FILE" "completion" "Task Done" \
+  "All waves complete. 5 files changed, all tests pass. Ready for SM review." \
+  "Manager_W${DOEY_TEAM_WINDOW}"
+```
+
+Report types: `progress` (wave done), `decision` (routing/arch choice), `completion` (all waves done), `error` (critical failure).
+
+### Worker Dispatch Messages MUST Include
+
+Every worker prompt must reference the task system. Include these in every dispatch:
+
+1. **TASK_ID reference** — `Task #${TASK_ID}: ${TASK_TITLE}`
+2. **Which subtask** — `You are handling subtask S${N}: <description>`
+3. **Success criteria** from the parent task — copied from `TASK_ACCEPTANCE_CRITERIA`
+4. **"When done" instructions** that reference the task — e.g., "Just finish normally. Your result will be tracked under Task #42, subtask S3."
+
+Example dispatch prompt fragment:
+```
+Task #42: Implement user sorting
+You are handling subtask S2: add unit tests for sorting
+Success criteria: All sort functions have >80% coverage, no regressions.
+When done: Just finish normally. Your result is tracked under Task #42, subtask S2.
+```
+
+## Conversation Trail
+
+Track all user messages, scope updates, decisions, and status changes in the `.task` file so they survive compaction and team handoffs.
+
+### When SM Relays User Messages or Scope Updates
+
+Append directly to the task file as notes or reports:
+
+```bash
+task_add_report "$TASK_FILE" "conversation" "User Update" \
+  "User wants to change sort order to descending by default" \
+  "SessionManager"
+```
+
+Or use `task_add_note` for brief annotations:
+```bash
+task_add_note "$TASK_FILE" "$(date +%s): User clarified — only sort the active list, not archived"
+```
+
+### Decision and Status Logging
+
+Log every significant decision as it happens — don't batch them:
+
+```bash
+# Scope change from user
+task_add_decision "$TASK_FILE" "User narrowed scope: sort active list only, skip archived"
+
+# Routing decision
+task_add_decision "$TASK_FILE" "Splitting into 2 waves: wave 1 = core logic, wave 2 = tests"
+
+# Error recovery
+task_add_decision "$TASK_FILE" "W.2 crashed mid-test. Reassigning to W.3 with same prompt."
+
+# Status transition
+task_update_field "$TASK_FILE" "TASK_STATUS" "in_progress"
+task_add_decision "$TASK_FILE" "Moving to in_progress — wave 1 dispatched"
+```
+
+The `.task` file is the authoritative trail. After compaction, read the context log AND the task file to recover full state.
+
+## Q&A Relay Tracking
+
+Track every question-and-answer exchange in the `.task` file so the full Q&A chain is preserved across compactions and team handoffs.
+
+### When SM routes a question about a task to you
+
+```bash
+source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+task_add_report "$TASK_FILE" "qa_thread" "Question routed to Manager_W${DOEY_TEAM_WINDOW}" \
+  "SM asked: <question summary here>" \
+  "Manager_W${DOEY_TEAM_WINDOW}"
+```
+
+### When you answer the question directly
+
+```bash
+task_add_report "$TASK_FILE" "qa_thread" "Answered by Manager_W${DOEY_TEAM_WINDOW} at pane ${DOEY_TEAM_WINDOW}.0" \
+  "Answer: <your answer here>" \
+  "Manager_W${DOEY_TEAM_WINDOW}"
+```
+
+### When you forward a question to a worker
+
+```bash
+task_add_report "$TASK_FILE" "qa_thread" "Question forwarded to Worker W${DOEY_TEAM_WINDOW}.N" \
+  "Forwarded question: <question summary here>" \
+  "Manager_W${DOEY_TEAM_WINDOW}"
+```
+
+### When the worker answers
+
+```bash
+task_add_report "$TASK_FILE" "qa_thread" "Answered by Worker W${DOEY_TEAM_WINDOW}.N" \
+  "Worker response: <distilled answer here>" \
+  "Worker_W${DOEY_TEAM_WINDOW}.N"
+```
+
+After receiving a worker's answer, relay it back to SM so the chain completes:
+
+```bash
+SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
+MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
+printf 'FROM: Manager_W%s\nSUBJECT: question_answer\nTASK_ID: %s\n%s\n' \
+  "$DOEY_TEAM_WINDOW" "$TASK_ID" "Answer: <distilled answer>" \
+  > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
+touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+```
+
 ## Rules
 
 1. **Git commit/push are hook-blocked.** Send a `commit_request` `.msg` to SM with changed files. SM handles git directly.
