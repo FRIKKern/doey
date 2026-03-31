@@ -211,6 +211,9 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if len(task.Reports) > 0 {
 		line4 += "  " + lipgloss.NewStyle().Foreground(t.Info).Render(fmt.Sprintf("%dR", len(task.Reports)))
 	}
+	if len(task.TaskAttachments) > 0 {
+		line4 += "  " + lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("📎%d", len(task.TaskAttachments)))
+	}
 	if hasHB && hs.ProgressText != "" && ti.SubtaskTotal == 0 {
 		line4 += styles.CardMetaStyle(t).Render(hs.ProgressText)
 	}
@@ -451,6 +454,10 @@ type ExpandedCard struct {
 	// Expandable report tracking
 	ExpandedReports map[int]bool // which reports are expanded (by index)
 	ReportCursor    int          // focused report index (-1 = none)
+
+	// Expandable attachment tracking
+	ExpandedAttachments map[int]bool // which attachments are expanded (by index)
+	AttachmentCursor    int          // focused attachment index (-1 = none)
 }
 
 // loadSidecar lazily loads sidecar and result data on first call.
@@ -644,6 +651,12 @@ func (e *ExpandedCard) Render() string {
 			}
 			sections = append(sections, "")
 		}
+	}
+
+	// --- Attachments (structured file attachments) ---
+	if attachments := e.renderAttachments(contentWidth); attachments != "" {
+		sections = append(sections, "")
+		sections = append(sections, attachments)
 	}
 
 	// --- Subtasks (prefer persistent subtasks with assignees, fall back to runtime) ---
@@ -852,8 +865,8 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, fileRows...)
 	}
 
-	// --- Attachments ---
-	if len(e.Item.Task.Attachments) > 0 {
+	// --- Legacy Attachments (string paths) ---
+	if len(e.Item.Task.Attachments) > 0 && len(e.Item.Task.TaskAttachments) == 0 {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(e.Theme, "Attachments"))
 		for _, att := range e.Item.Task.Attachments {
@@ -974,8 +987,33 @@ func (e *ExpandedCard) ContentHeight() int {
 	if fileRows := e.renderFilesChanged(); len(fileRows) > 0 {
 		lines += 2 + len(fileRows)
 	}
-	if len(e.Item.Task.Attachments) > 0 {
+	if len(e.Item.Task.Attachments) > 0 && len(e.Item.Task.TaskAttachments) == 0 {
 		lines += 2 + len(e.Item.Task.Attachments) // header + spacing + items
+	}
+	// Structured attachments
+	if ta := e.Item.Task.TaskAttachments; len(ta) > 0 {
+		count := len(ta)
+		if count > 20 {
+			count = 20
+		}
+		lines += 2 // section header + spacing
+		for i, att := range ta {
+			if i >= count {
+				break
+			}
+			lines += 2 // header line + blank
+			if att.Body != "" {
+				if e.ExpandedAttachments != nil && e.ExpandedAttachments[i] {
+					lines += strings.Count(att.Body, "\n") + 2
+				} else {
+					bodyLines := strings.Count(att.Body, "\n") + 1
+					if bodyLines > 3 {
+						bodyLines = 4 // 3 lines + toggle
+					}
+					lines += bodyLines
+				}
+			}
+		}
 	}
 	return lines
 }
@@ -996,6 +1034,118 @@ func (e *ExpandedCard) ViewportSlice() string {
 		end = len(lines)
 	}
 	return strings.Join(lines[start:end], "\n")
+}
+
+// attachmentTypeEmoji returns an emoji badge for the attachment type.
+func attachmentTypeEmoji(t string) string {
+	switch t {
+	case "research":
+		return "🔍"
+	case "build":
+		return "🔨"
+	case "test":
+		return "✅"
+	case "review":
+		return "👁"
+	case "error":
+		return "⚠️"
+	case "progress":
+		return "📊"
+	case "completion":
+		return "🏁"
+	default:
+		return "📄"
+	}
+}
+
+// renderAttachments renders the structured attachments section for expanded cards.
+func (e *ExpandedCard) renderAttachments(width int) string {
+	attachments := e.Item.Task.TaskAttachments
+	if len(attachments) == 0 {
+		return ""
+	}
+
+	if e.ExpandedAttachments == nil {
+		e.ExpandedAttachments = make(map[int]bool)
+	}
+
+	// Cap at 20, newest first (already sorted by timestamp descending from loader).
+	display := attachments
+	if len(display) > 20 {
+		display = display[:20]
+	}
+
+	var sections []string
+	sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("📎 Attachments (%d)", len(attachments))))
+
+	for i, att := range display {
+		emoji := attachmentTypeEmoji(att.Type)
+		typeColor := styles.AttachmentTypeColor(e.Theme, att.Type)
+		badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
+
+		titleText := att.Title
+		if titleText == "" {
+			titleText = att.Filename
+		}
+		title := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true).Render(titleText)
+
+		meta := ""
+		if att.Author != "" {
+			meta += " — " + lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(att.Author)
+		}
+		if att.Timestamp > 0 {
+			elapsed := time.Since(time.Unix(att.Timestamp, 0))
+			meta += ", " + lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+		}
+
+		// Focus indicator
+		focusIndicator := "  "
+		if i == e.AttachmentCursor {
+			focusIndicator = lipgloss.NewStyle().Foreground(e.Theme.Primary).Render("> ")
+		}
+		sections = append(sections, fmt.Sprintf("%s%s %s%s", focusIndicator, badge, title, meta))
+
+		// Expandable body
+		if att.Body != "" {
+			expanded := e.ExpandedAttachments[i]
+			bodyLines := strings.Split(att.Body, "\n")
+			bodyStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).PaddingLeft(4)
+
+			if expanded {
+				// Wrap body to width
+				bodyWidth := width - 6
+				if bodyWidth < 20 {
+					bodyWidth = 20
+				}
+				wrappedBody := lipgloss.NewStyle().Width(bodyWidth).Render(att.Body)
+				for _, line := range strings.Split(wrappedBody, "\n") {
+					sections = append(sections, bodyStyle.Render(line))
+				}
+				toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+					Render("[-] Show less")
+				sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
+			} else {
+				// Truncated preview: 3 lines max
+				showLines := bodyLines
+				truncated := false
+				if len(showLines) > 3 {
+					showLines = showLines[:3]
+					truncated = true
+				}
+				for _, line := range showLines {
+					sections = append(sections, bodyStyle.Render(line))
+				}
+				if truncated {
+					toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+						Render(fmt.Sprintf("[+] Show more (%d lines)", len(bodyLines)))
+					sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
+				}
+			}
+		}
+		sections = append(sections, "")
+	}
+
+	return strings.Join(sections, "\n")
 }
 
 // wordWrap wraps text to the given width, breaking on word boundaries.

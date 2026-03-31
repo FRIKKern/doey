@@ -795,6 +795,28 @@ func CompletedCardStyle(t Theme, width int) lipgloss.Style {
 		Padding(0, 1)
 }
 
+// AttachmentTypeColor returns the accent color for a given attachment type.
+func AttachmentTypeColor(t Theme, attachType string) lipgloss.AdaptiveColor {
+	switch attachType {
+	case "research":
+		return t.Info
+	case "build":
+		return t.Warning
+	case "test":
+		return t.Success
+	case "review":
+		return t.Accent
+	case "error":
+		return t.Danger
+	case "progress":
+		return t.Muted
+	case "completion":
+		return t.Success
+	default:
+		return t.Muted
+	}
+}
+
 // ReportTypeColor returns the accent color for a given report type.
 func ReportTypeColor(t Theme, reportType string) lipgloss.AdaptiveColor {
 	switch reportType {

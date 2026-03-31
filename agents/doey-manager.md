@@ -486,3 +486,13 @@ Report types: `progress` (wave complete), `decision` (architectural/routing choi
 Write a report: after each wave completes, when making cross-team decisions, and on task completion.
 
 One subtask per worker per wave. Update status immediately on worker report. Roll up progress to parent task and notify SM when all subtasks complete or fail.
+
+## Worker Report Attachments
+
+Before marking a subtask complete, verify the worker wrote an attachment (if the task required a deliverable like research, test results, or error details):
+
+```bash
+bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/"$2"/attachments/*; do echo "$(basename "$f")"; done' _ "$PROJECT_DIR" "$TASK_ID"
+```
+
+If no attachment exists for a worker that should have produced one, note it in the context log and consider re-dispatching. The stop hook auto-attaches worker output on completion, so at minimum a `completion` attachment should appear.

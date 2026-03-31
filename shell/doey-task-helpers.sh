@@ -1339,3 +1339,65 @@ doey_task_add_recovery_event() {
   shift 2
   task_add_recovery_event "$task_file" "$@"
 }
+
+# ── task_attachment_dir ──────────────────────────────────────────────
+# Returns the attachment directory for a task, creates if needed.
+# Args: project_dir task_id
+# Returns (echo): absolute path to .doey/tasks/<id>/attachments/
+task_attachment_dir() {
+  local project_dir="$1" task_id="$2"
+  local dir="${project_dir}/.doey/tasks/${task_id}/attachments"
+  mkdir -p "$dir"
+  echo "$dir"
+}
+
+# ── task_write_attachment ────────────────────────────────────────────
+# Write a report as a task attachment file.
+# Args: project_dir task_id type title body author
+# Types: research, build, test, review, error, progress, completion
+# Creates: .doey/tasks/<id>/attachments/<timestamp>_<type>_<author_safe>.md
+# Returns (echo): filepath of created attachment
+task_write_attachment() {
+  local project_dir="$1" task_id="$2" report_type="$3" title="$4" body="$5" author="$6"
+  local dir; dir=$(task_attachment_dir "$project_dir" "$task_id")
+  local ts; ts=$(date +%s)
+  local author_safe; author_safe=$(echo "$author" | tr ' /:.' '_')
+  local filename="${ts}_${report_type}_${author_safe}.md"
+  local filepath="${dir}/${filename}"
+
+  cat > "$filepath" << ATTACHMENT_EOF
+---
+type: ${report_type}
+title: ${title}
+author: ${author}
+timestamp: ${ts}
+task_id: ${task_id}
+---
+
+${body}
+ATTACHMENT_EOF
+
+  # Touch TASK_UPDATED on parent task
+  local task_file="${project_dir}/.doey/tasks/${task_id}.task"
+  [ -f "$task_file" ] && _touch_task_updated "$task_file"
+
+  echo "$filepath"
+}
+
+# ── task_list_attachments ────────────────────────────────────────────
+# List attachments for a task (newest first).
+# Args: project_dir task_id
+# Returns (echo): one filepath per line, sorted newest first
+task_list_attachments() {
+  local project_dir="$1" task_id="$2"
+  local dir="${project_dir}/.doey/tasks/${task_id}/attachments"
+  [ -d "$dir" ] || return 0
+  ls -1 "$dir"/*.md 2>/dev/null | sort -r
+}
+
+# ── doey_task_write_attachment ───────────────────────────────────────
+# Convenience wrapper matching doey_task_* pattern.
+# Args: project_dir task_id type title body author
+doey_task_write_attachment() {
+  task_write_attachment "$@"
+}
