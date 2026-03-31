@@ -204,17 +204,39 @@ func SpawnFreelancerCmd() tea.Cmd {
 	}
 }
 
-// CreateTeamCmd sends a "create a new team" request to the Boss pane.
+// CreateTeamCmd runs "doey add-window" to spawn a new regular team (Manager + Workers).
 func CreateTeamCmd() tea.Cmd {
 	return func() tea.Msg {
-		return CreateTeamResultMsg{Err: sendToBoss("I want to create a new team")}
+		path, err := exec.LookPath("doey")
+		if err != nil {
+			return CreateTeamResultMsg{Err: fmt.Errorf("doey not found in PATH: %w", err)}
+		}
+		cmd := exec.Command(path, "add-window")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return CreateTeamResultMsg{Err: fmt.Errorf("%w: %s", err, out)}
+		}
+		return CreateTeamResultMsg{}
 	}
 }
 
-// CreateSpecializedTeamCmd sends a "spawn specialized team from definition" command to the Boss pane.
-func CreateSpecializedTeamCmd() tea.Cmd {
+// CreateSpecializedTeamCmd runs "doey add-team <name>" to spawn a team from a .team.md definition.
+// If name is empty, returns an error prompting the user to select a team definition.
+func CreateSpecializedTeamCmd(name string) tea.Cmd {
 	return func() tea.Msg {
-		return CreateSpecializedTeamResultMsg{Err: sendToBoss("/doey-add-team specialized")}
+		if name == "" {
+			return CreateSpecializedTeamResultMsg{Err: fmt.Errorf("no team definition specified — use doey teams to list available definitions")}
+		}
+		path, err := exec.LookPath("doey")
+		if err != nil {
+			return CreateSpecializedTeamResultMsg{Err: fmt.Errorf("doey not found in PATH: %w", err)}
+		}
+		cmd := exec.Command(path, "add-team", name)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return CreateSpecializedTeamResultMsg{Err: fmt.Errorf("%w: %s", err, out)}
+		}
+		return CreateSpecializedTeamResultMsg{}
 	}
 }
 

@@ -141,7 +141,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CreateSpecializedTeamMsg:
 		m.focusIndex = 1
 		m.updateFocus()
-		return m, CreateSpecializedTeamCmd()
+		return m, CreateSpecializedTeamCmd("")
 
 	case CreateSpecializedTeamResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
