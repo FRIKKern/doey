@@ -160,6 +160,9 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	store.MergeRuntimeTasks(snap.Tasks)
 
 	m.entries = store.Tasks
+
+	// Aggregate heartbeat state BEFORE sorting — sortEntries uses heartbeats
+	m.heartbeats = runtime.AggregateHeartbeats(snap)
 	m.sortEntries()
 
 	// Build subtask map
@@ -167,9 +170,6 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	for _, st := range snap.Subtasks {
 		m.subtaskMap[st.TaskID] = append(m.subtaskMap[st.TaskID], st)
 	}
-
-	// Aggregate heartbeat state for live activity display
-	m.heartbeats = runtime.AggregateHeartbeats(snap)
 
 	// Store IPC messages for expanded card filtering
 	m.messages = snap.Messages
@@ -225,6 +225,21 @@ func statusPriority(status string) int {
 	}
 }
 
+// taskActivityTime returns the best activity timestamp for a task:
+// heartbeat LastActivity > task Updated > task Created.
+func (m *TasksModel) taskActivityTime(t runtime.PersistentTask) time.Time {
+	if hb, ok := m.heartbeats[t.ID]; ok && !hb.LastActivity.IsZero() {
+		return hb.LastActivity
+	}
+	if t.Updated > 0 {
+		return time.Unix(t.Updated, 0)
+	}
+	if t.Created > 0 {
+		return time.Unix(t.Created, 0)
+	}
+	return time.Time{}
+}
+
 func (m *TasksModel) sortEntries() {
 	sort.SliceStable(m.entries, func(i, j int) bool {
 		a, b := m.entries[i], m.entries[j]
@@ -232,7 +247,12 @@ func (m *TasksModel) sortEntries() {
 		if pa != pb {
 			return pa < pb
 		}
-		// Within the same group, sort by task ID descending (newest first).
+		// Within the same status group, sort by activity (most recent first).
+		ta, tb := m.taskActivityTime(a), m.taskActivityTime(b)
+		if !ta.Equal(tb) {
+			return ta.After(tb)
+		}
+		// Final tiebreaker: task ID descending (newest first).
 		ai, errA := strconv.Atoi(a.ID)
 		bi, errB := strconv.Atoi(b.ID)
 		if errA == nil && errB == nil {

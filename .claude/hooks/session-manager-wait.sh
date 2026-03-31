@@ -67,6 +67,22 @@ _mark_results_seen() {
   echo "$_seen_results" > "$SEEN_FILE"
 }
 
+_check_stale_heartbeats() {
+  local _hb _now _hb_time _task_id _pane_id _age _found=false
+  _now=$(date +%s)
+  for _hb in "$RUNTIME_DIR/status"/*.heartbeat; do
+    [ -f "$_hb" ] || continue
+    read -r _hb_time _task_id _pane_id < "$_hb" 2>/dev/null || continue
+    [ -z "$_hb_time" ] && continue
+    _age=$(( _now - _hb_time ))
+    [ "$_age" -ge 90 ] || continue
+    printf '%s %s %s %s\n' "$_pane_id" "$_task_id" "$_hb_time" "$_age" \
+      > "${RUNTIME_DIR}/status/stale_${_pane_id}" 2>/dev/null || true
+    _found=true
+  done
+  [ "$_found" = true ]
+}
+
 CYCLE_FILE="${RUNTIME_DIR}/status/sm_cycle_count"
 COMPACT_INTERVAL="${DOEY_SM_COMPACT_INTERVAL:-20}"
 _sm_cycle=0
@@ -94,6 +110,9 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   set -- "$RUNTIME_DIR/status"/crash_pane_*
   if [ -f "${1:-}" ]; then
     _sm_bump_cycle; _sm_dbg_wake "crash_alert" "$elapsed"; echo "CRASH_ALERT"; exit 0
+  fi
+  if _check_stale_heartbeats; then
+    _sm_bump_cycle; _sm_dbg_wake "stale_heartbeat" "$elapsed"; echo "STALE_HEARTBEAT"; exit 0
   fi
   # Check for queued tasks (active status, no team assigned yet)
   if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
