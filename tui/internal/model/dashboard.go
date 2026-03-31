@@ -357,6 +357,21 @@ func (m DashboardModel) renderActiveTasks(w int) string {
 		cardW = 40
 	}
 
+	sort.Slice(m.tasks, func(i, j int) bool {
+		var timeI, timeJ time.Time
+		if hb, ok := m.heartbeats[m.tasks[i].ID]; ok {
+			timeI = hb.LastActivity
+		} else {
+			timeI = time.Unix(m.tasks[i].Updated, 0)
+		}
+		if hb, ok := m.heartbeats[m.tasks[j].ID]; ok {
+			timeJ = hb.LastActivity
+		} else {
+			timeJ = time.Unix(m.tasks[j].Updated, 0)
+		}
+		return timeI.After(timeJ)
+	})
+
 	var cards []string
 	for _, task := range m.tasks {
 		card := m.renderHeartbeatCard(task, cardW)
