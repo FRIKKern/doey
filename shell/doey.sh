@@ -1098,8 +1098,8 @@ show_menu() {
         _kill_opts+=("← Back")
 
         local _kill_picks
-        _kill_picks=$(gum choose --no-limit --cursor "▸ " --cursor.foreground 1 \
-          --header "Select session(s) to kill:" "${_kill_opts[@]}") || { show_menu "$grid"; return $?; }
+        _kill_picks=$(gum choose --cursor "▸ " --cursor.foreground 1 \
+          --header "Select session to kill:" "${_kill_opts[@]}") || { show_menu "$grid"; return $?; }
 
         if [ -z "$_kill_picks" ]; then
           show_menu "$grid"; return $?
