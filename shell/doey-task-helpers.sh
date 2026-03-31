@@ -1395,6 +1395,142 @@ task_list_attachments() {
   ls -1 "$dir"/*.md 2>/dev/null | sort -r
 }
 
+# ── task_find_similar ─────────────────────────────────────────────────
+# Fuzzy-match active tasks by title keyword overlap.
+# Args: project_dir title_string
+# Returns (echo): matching TASK_ID (first match), exit 0. No match: exit 1.
+task_find_similar() {
+  local project_dir="$1" title_string="$2"
+  local tasks_dir="${project_dir}/.doey/tasks"
+  [ -d "$tasks_dir" ] || return 1
+
+  # Stop words to skip during matching
+  local stop_words="|the|a|an|and|or|in|on|at|to|for|of|is|it|fix|add|update|"
+
+  # Tokenize input title: lowercase, strip punctuation, split on spaces
+  local input_lower
+  input_lower="$(printf '%s' "$title_string" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' ' ')"
+
+  # Build input keyword list (excluding stop words)
+  local input_keys="" input_count=0
+  local remaining="$input_lower"
+  while [ -n "$remaining" ]; do
+    local word
+    remaining="${remaining## }"  # strip leading spaces
+    [ -z "$remaining" ] && break
+    case "$remaining" in
+      *" "*) word="${remaining%% *}"; remaining="${remaining#* }" ;;
+      *)     word="$remaining"; remaining="" ;;
+    esac
+    [ -z "$word" ] && continue
+    # Skip stop words
+    case "$stop_words" in
+      *"|${word}|"*) continue ;;
+    esac
+    # Skip duplicates
+    case "$input_keys" in
+      *"|${word}|"*) continue ;;
+    esac
+    input_keys="${input_keys}|${word}|"
+    input_count=$((input_count + 1))
+  done
+
+  [ "$input_count" -eq 0 ] && return 1
+
+  local f
+  for f in "${tasks_dir}"/*.task; do
+    [ -f "$f" ] || continue
+    [ -s "$f" ] || continue
+
+    # Quick-read status, title, tags without full task_read
+    local _fs_status="" _fs_title="" _fs_tags="" _fs_id="" _fs_line
+    while IFS= read -r _fs_line || [ -n "$_fs_line" ]; do
+      case "${_fs_line%%=*}" in
+        TASK_STATUS) _fs_status="${_fs_line#*=}" ;;
+        TASK_TITLE)  _fs_title="${_fs_line#*=}" ;;
+        TASK_TAGS)   _fs_tags="${_fs_line#*=}" ;;
+        TASK_ID)     _fs_id="${_fs_line#*=}" ;;
+      esac
+    done < "$f" || true
+
+    [ -n "$_fs_id" ] || continue
+
+    # Skip terminal statuses
+    case "$_fs_status" in
+      done|cancelled|pending_user_confirmation) continue ;;
+    esac
+
+    # Tokenize task title + tags
+    local task_text
+    task_text="$(printf '%s %s' "$_fs_title" "$_fs_tags" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' ' ')"
+
+    local task_keys="" task_count=0
+    remaining="$task_text"
+    while [ -n "$remaining" ]; do
+      local word
+      remaining="${remaining## }"
+      [ -z "$remaining" ] && break
+      case "$remaining" in
+        *" "*) word="${remaining%% *}"; remaining="${remaining#* }" ;;
+        *)     word="$remaining"; remaining="" ;;
+      esac
+      [ -z "$word" ] && continue
+      case "$stop_words" in
+        *"|${word}|"*) continue ;;
+      esac
+      case "$task_keys" in
+        *"|${word}|"*) continue ;;
+      esac
+      task_keys="${task_keys}|${word}|"
+      task_count=$((task_count + 1))
+    done
+
+    [ "$task_count" -eq 0 ] && continue
+
+    # Count keyword overlap
+    local matches=0 unique_total="$input_count"
+    # Add task keywords not already in input to unique total
+    remaining="$task_keys"
+    while [ -n "$remaining" ]; do
+      # Extract each "|word|" entry
+      remaining="${remaining#|}"  # strip leading pipe
+      [ -z "$remaining" ] && break
+      local word="${remaining%%|*}"
+      remaining="${remaining#*|}"
+      [ -z "$word" ] && continue
+      case "$input_keys" in
+        *"|${word}|"*) matches=$((matches + 1)) ;;
+        *)             unique_total=$((unique_total + 1)) ;;
+      esac
+    done
+
+    # Check overlap >= 50%
+    if [ "$unique_total" -gt 0 ] && [ $((matches * 100 / unique_total)) -ge 50 ]; then
+      printf '%s' "$_fs_id"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+# ── task_find_or_create ──────────────────────────────────────────────
+# Find a similar active task, or create a new one if none match.
+# Args: project_dir title type owner
+# Returns (echo): task ID (existing or new)
+task_find_or_create() {
+  local project_dir="$1" title="$2"
+  local task_type="${3:-feature}" owner="${4:-Boss}"
+
+  local existing_id
+  if existing_id="$(task_find_similar "$project_dir" "$title")" && [ -n "$existing_id" ]; then
+    printf '%s' "$existing_id"
+    return 0
+  fi
+
+  task_create "$project_dir" "$title" "$task_type" "$owner"
+}
+
 # ── doey_task_write_attachment ───────────────────────────────────────
 # Convenience wrapper matching doey_task_* pattern.
 # Args: project_dir task_id type title body author

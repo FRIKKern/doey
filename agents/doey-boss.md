@@ -101,6 +101,33 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 
 Tasks are session-level goals displayed on the Dashboard. The user is the **sole authority** on task completion.
 
+### HARD RULE: Task Deduplication — Check Before You Create
+
+**Before creating ANY new task, you MUST search for existing tasks with similar scope.** Duplicate tasks waste workers, cause merge conflicts, and confuse the user. This is not optional.
+
+**Procedure — every time, no exceptions:**
+
+1. **Search for similar tasks** before writing a `.task` file:
+   ```bash
+   bash -c 'source "${PROJECT_DIR}/shell/doey-task-helpers.sh"; task_find_similar "${PROJECT_DIR}" "proposed task title here"'
+   ```
+2. **If a match is found** (exit code 0, prints matching task ID):
+   - **DO NOT create a new task.** Instead, add a subtask to the existing parent:
+     ```bash
+     source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+     task_add_subtask "${PROJECT_DIR}/.doey/tasks/PARENT_ID.task" "New subtask title" "Description of additional scope"
+     ```
+   - Update the parent task's description if the user's request expands its scope.
+   - Dispatch the subtask to SM referencing the parent `TASK_ID`.
+3. **If no match** (exit code 1, no output): proceed with normal task creation below.
+
+**Principles:**
+- **Same concern = subtask under the parent, NEVER a sibling task.** "Fix hooks" and "Update hook error handling" are the same concern — the second is a subtask of the first.
+- **One initiative = one parent task with subtasks.** A user saying "improve the task system" gets ONE task, not five.
+- **If the user explicitly asks for a separate task** despite overlap, note the existing task, explain the relationship, and only then create a new one if they insist.
+
+**Violations:** Creating a duplicate task when `task_find_similar` returns a match is a critical error — it fragments work tracking and wastes team capacity.
+
 ### Task intake — quality in, quality out
 
 **Before creating a task**, evaluate whether the request is clear enough to act on. If any of the following are ambiguous, use `AskUserQuestion` to clarify:
@@ -248,9 +275,9 @@ Present relevant task status when the user arrives or after compaction so they h
 
 ### When user gives a new request
 
-1. **Check existing tasks** — scan `.doey/tasks/` for a match before creating anything new.
+1. **Dedup check (MANDATORY)** — run `task_find_similar` as documented in "HARD RULE: Task Deduplication" above. If a match exists, add a subtask — do NOT create a new task.
 2. **Trivial work** — answer directly, no task needed.
-3. **Non-trivial work** — tell SM to create and dispatch the task. Boss creates the `.task` file (as documented in "Creating a task" above), then dispatches to SM with the `TASK_ID` reference. Every message to SM MUST include the `TASK_ID`.
+3. **Non-trivial, no match** — create the `.task` file (as documented in "Creating a task" above), then dispatch to SM with the `TASK_ID` reference. Every message to SM MUST include the `TASK_ID`.
 4. **Existing task update** — relay user's new input to SM, referencing the `TASK_ID`.
 
 ### When SM reports task completion
