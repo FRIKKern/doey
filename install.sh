@@ -293,7 +293,7 @@ _build_tui() {
   if type _build_go_binary >/dev/null 2>&1; then
     # Use shared helper for consistent build logic
     set +e
-    _build_go_binary "$SCRIPT_DIR/tui" ./cmd/doey-tui/ "$HOME/.local/bin/doey-tui"
+    _build_go_binary "tui" ./cmd/doey-tui/ "$HOME/.local/bin/doey-tui"
     rc=$?
     set -e
     if [ $rc -eq 0 ]; then
@@ -307,7 +307,7 @@ _build_tui() {
     # Build doey-remote-setup
     printf "         ${DIM}→ building doey-remote-setup...${RESET}"
     set +e
-    _build_go_binary "$SCRIPT_DIR/tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
+    _build_go_binary "tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
     local rs_rc=$?
     set -e
     if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
