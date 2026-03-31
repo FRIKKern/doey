@@ -2296,89 +2296,272 @@ task_command() {
 }
 
 # ── Update / Reinstall ───────────────────────────────────────────────
-update_system() {
-  local repo_dir install_dir=""
-  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
-
-  printf "  ${BRAND}Updating doey...${RESET}\n\n"
-
-  if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
-    local old_hash new_hash current_branch
-    old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
-
-    # Ensure we're on main — detached HEAD or wrong branch can't fast-forward
-    current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || true)
-    if [[ -z "$current_branch" ]]; then
-      doey_warn "Detached HEAD — checking out main"
-      git -C "$repo_dir" checkout main 2>/dev/null || \
-        git -C "$repo_dir" checkout -b main origin/main 2>/dev/null || true
-    elif [[ "$current_branch" != "main" ]]; then
-      doey_warn "On branch '$current_branch' — switching to main"
-      git -C "$repo_dir" checkout main 2>/dev/null || true
-    fi
-
-    # Stash local changes so pull can fast-forward cleanly
-    if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
-      doey_warn "Stashing local changes"
-      git -C "$repo_dir" stash --quiet 2>/dev/null || true
-    fi
-
-    # Explicit fetch + fast-forward pull from origin/main
-    git -C "$repo_dir" fetch origin main --quiet 2>/dev/null || true
-    if git -C "$repo_dir" pull --ff-only origin main 2>/dev/null; then
-      new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
-      if [[ "$old_hash" == "$new_hash" ]]; then
-        doey_ok "Already up to date ($old_hash)"
-      else
-        doey_ok "Updated $old_hash → $new_hash"
-      fi
-      install_dir="$repo_dir"
-    else
-      doey_error "git pull --ff-only failed (local divergence?)"
-      doey_info "Falling back to fresh clone..."
-      install_dir=""
-    fi
+# Read current doey version hash from the version file or git.
+_doey_current_version() {
+  local vf="$HOME/.claude/doey/version"
+  if [[ -f "$vf" ]]; then
+    _env_val "$vf" version
+  else
+    local rp
+    rp="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
+    [[ -d "${rp:-}/.git" ]] && git -C "$rp" rev-parse --short HEAD 2>/dev/null || echo "unknown"
   fi
-
-  # Clone from remote if no local repo exists or pull failed
-  if [[ -z "${install_dir:-}" ]]; then
-    install_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
-    doey_info "Cloning from remote..."
-    if ! git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir"; then
-      doey_error "Clone failed"
-      rm -rf "$install_dir"
-      exit 1
-    fi
-  fi
-
-  # Re-exec from the NEW code to avoid stale in-memory logic.
-  # The new doey binary handles --post-update to finish the install.
-  local new_doey="$install_dir/shell/doey.sh"
-  if [[ -x "$new_doey" ]] || [[ -f "$new_doey" ]]; then
-    doey_info "Re-executing from updated code..."
-    exec bash "$new_doey" --post-update "$install_dir"
-  fi
-
-  # Fallback: if re-exec fails (e.g., new code doesn't have --post-update yet),
-  # run install.sh directly from old code
-  printf '\n'
-  doey_info "Running install.sh..."
-  if ! bash "$install_dir/install.sh"; then
-    doey_error "Install failed"
-    [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
-    exit 1
-  fi
-  [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
-
-  _update_finish
 }
 
-_update_finish() {
+# ── Update: contributor path (local git repo) ──────────────────────
+_update_contributor() {
+  local repo_dir="$1"
+  local old_hash
+  old_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+  doey_header "Updating Doey (Developer Mode)"
+  printf '\n'
+  doey_info "Source     ${repo_dir}"
+  doey_info "Current    ${old_hash}"
+  printf '\n'
+
+  # Step 1: Check working tree
+  doey_step "1/6" "Checking working tree..."
+  local current_branch dirty=false stashed=false
+  current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || true)
+  if [[ -z "$current_branch" ]]; then
+    doey_warn "Detached HEAD — checking out main"
+    git -C "$repo_dir" checkout main 2>/dev/null || \
+      git -C "$repo_dir" checkout -b main origin/main 2>/dev/null || true
+  elif [[ "$current_branch" != "main" ]]; then
+    doey_warn "On branch '$current_branch' — switching to main"
+    git -C "$repo_dir" checkout main 2>/dev/null || true
+  fi
+  if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
+    dirty=true
+    if doey_confirm "You have uncommitted changes. Stash and continue?"; then
+      git -C "$repo_dir" stash --quiet 2>/dev/null || true
+      stashed=true
+      doey_ok "Changes stashed"
+    else
+      doey_info "Update cancelled"
+      return 0
+    fi
+  else
+    doey_success "Working tree clean"
+  fi
+
+  # Step 2: Pull latest
+  doey_step "2/6" "Pulling latest from origin/main..."
+  local pull_output pull_rc=0
+  git -C "$repo_dir" fetch origin main --quiet 2>/dev/null || true
+  if [ "$HAS_GUM" = true ]; then
+    set +e
+    pull_output=$(gum spin --spinner dot --title "Pulling latest..." -- \
+      git -C "$repo_dir" pull --ff-only origin main 2>&1)
+    pull_rc=$?
+    set -e
+  else
+    set +e
+    pull_output=$(git -C "$repo_dir" pull --ff-only origin main 2>&1)
+    pull_rc=$?
+    set -e
+  fi
+  if [ $pull_rc -ne 0 ]; then
+    doey_error "git pull --ff-only failed"
+    doey_info "This usually means local commits diverge from origin/main."
+    doey_info "Resolve manually: cd $repo_dir && git pull --rebase origin main"
+    [ "$stashed" = true ] && doey_info "Your stashed changes: git stash pop"
+    return 1
+  fi
+  local new_hash
+  new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  if [[ "$old_hash" == "$new_hash" ]]; then
+    doey_ok "Already up to date ($old_hash)"
+  else
+    doey_ok "Pulled $old_hash → $new_hash"
+  fi
+
+  # Step 3: Run install
+  doey_step "3/6" "Running install..."
+  if [ "$HAS_GUM" = true ]; then
+    if ! gum spin --spinner dot --title "Installing files..." -- bash "$repo_dir/install.sh"; then
+      doey_error "Install failed"
+      doey_info "Try manually: cd $repo_dir && ./install.sh"
+      return 1
+    fi
+  else
+    if ! bash "$repo_dir/install.sh" >/dev/null 2>&1; then
+      doey_error "Install failed"
+      doey_info "Try manually: cd $repo_dir && ./install.sh"
+      return 1
+    fi
+  fi
+  doey_success "Files installed"
+
+  # Step 4: Rebuild Go binaries
+  doey_step "4/6" "Rebuilding Go binaries..."
+  if type _build_all_go_binaries >/dev/null 2>&1; then
+    if [ "$HAS_GUM" = true ]; then
+      set +e
+      gum spin --spinner dot --title "Building Go binaries..." -- bash -c \
+        "source '${repo_dir}/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" 2>/dev/null
+      local go_rc=$?
+      set -e
+    else
+      set +e
+      bash -c "source '${repo_dir}/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" >/dev/null 2>&1
+      local go_rc=$?
+      set -e
+    fi
+    if [ "${go_rc:-0}" -eq 0 ]; then
+      doey_success "Go binaries built"
+    else
+      doey_warn "Go build failed — doey-tui will use shell fallback"
+    fi
+  else
+    doey_info "Go helpers not available — skipped"
+  fi
+
+  # Step 5: Verify installation
+  doey_step "5/6" "Verifying installation..."
+  if bash "$HOME/.local/bin/doey" doctor --quiet 2>/dev/null; then
+    doey_success "All checks pass"
+  else
+    doey_warn "Some doctor checks have warnings (run: doey doctor)"
+  fi
+
+  # Step 6: Version comparison
+  doey_step "6/6" "Version summary"
+  local final_hash
+  final_hash=$(_doey_current_version)
+  printf '\n'
+  if [[ "$old_hash" != "$final_hash" ]]; then
+    doey_ok "Updated: $old_hash → $final_hash"
+  else
+    doey_ok "Version: $final_hash (already latest)"
+  fi
+  [ "$stashed" = true ] && doey_info "Stashed changes preserved — restore with: cd $repo_dir && git stash pop"
+
+  _update_finish_banner
+}
+
+# ── Update: normal user path (download + install) ──────────────────
+_update_normal() {
+  local repo_dir="${1:-}"
+  local old_version
+  old_version=$(_doey_current_version)
+
+  doey_header "Updating Doey"
+  printf '\n'
+  doey_info "Current version: ${old_version}"
+  printf '\n'
+
+  # Step 1: Download latest
+  doey_step "1/5" "Downloading latest release..."
+  local install_dir
+  install_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
+  local clone_rc=0
+  if [ "$HAS_GUM" = true ]; then
+    set +e
+    gum spin --spinner dot --title "Cloning latest release..." -- \
+      git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir" 2>/dev/null
+    clone_rc=$?
+    set -e
+  else
+    set +e
+    git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir" >/dev/null 2>&1
+    clone_rc=$?
+    set -e
+  fi
+  if [ $clone_rc -ne 0 ]; then
+    doey_error "Download failed — check your internet connection"
+    rm -rf "$install_dir"
+    return 1
+  fi
+  doey_success "Downloaded"
+
+  # Step 2: Run install
+  doey_step "2/5" "Running install..."
+  if [ "$HAS_GUM" = true ]; then
+    if ! gum spin --spinner dot --title "Installing files..." -- bash "$install_dir/install.sh"; then
+      doey_error "Install failed"
+      doey_info "Try: cd $install_dir && ./install.sh"
+      rm -rf "$install_dir"
+      return 1
+    fi
+  else
+    if ! bash "$install_dir/install.sh" >/dev/null 2>&1; then
+      doey_error "Install failed"
+      doey_info "Try downloading again: curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash"
+      rm -rf "$install_dir"
+      return 1
+    fi
+  fi
+  doey_success "Installed"
+
+  # Step 3: Rebuild Go binaries
+  doey_step "3/5" "Rebuilding Go binaries..."
+  if [ -f "$install_dir/shell/doey-go-helpers.sh" ]; then
+    if [ "$HAS_GUM" = true ]; then
+      set +e
+      gum spin --spinner dot --title "Building Go binaries..." -- bash -c \
+        "source '$install_dir/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" 2>/dev/null
+      local go_rc=$?
+      set -e
+    else
+      set +e
+      bash -c "source '$install_dir/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" >/dev/null 2>&1
+      local go_rc=$?
+      set -e
+    fi
+    if [ "${go_rc:-0}" -eq 0 ]; then
+      doey_success "Go binaries built"
+    else
+      doey_warn "Go build failed — doey-tui will use shell fallback"
+    fi
+  else
+    doey_info "Go helpers not found — skipped"
+  fi
+
+  # Step 4: Verify installation
+  doey_step "4/5" "Verifying installation..."
+  if bash "$HOME/.local/bin/doey" doctor --quiet 2>/dev/null; then
+    doey_success "All checks pass"
+  else
+    doey_warn "Some doctor checks have warnings (run: doey doctor)"
+  fi
+
+  # Step 5: Version comparison
+  doey_step "5/5" "Version summary"
+  local new_version
+  new_version=$(_doey_current_version)
+  printf '\n'
+  if [[ "$old_version" != "$new_version" ]]; then
+    doey_ok "Updated: $old_version → $new_version"
+  else
+    doey_ok "Version: $new_version (already latest)"
+  fi
+
+  rm -rf "$install_dir"
+  _update_finish_banner
+}
+
+update_system() {
+  local repo_dir
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
+
+  # Detect contributor: has a .git repo for the doey source
+  if [[ -n "$repo_dir" ]] && [[ -d "$repo_dir/.git" ]]; then
+    _update_contributor "$repo_dir"
+  else
+    _update_normal "$repo_dir"
+  fi
+}
+
+_update_finish_banner() {
   rm -f "$HOME/.claude/doey/last-update-check.available"
   _check_claude_update
   printf '\n'
+  doey_divider
+  printf '\n'
   doey_banner
-  doey_success "Update complete. Restart sessions: doey reload"
+  doey_success "Update complete — restart sessions with: doey reload"
 }
 
 # Called via re-exec after git pull — runs from the NEW code on disk.
@@ -2389,16 +2572,40 @@ _post_update() {
     exit 1
   fi
 
+  local old_version
+  old_version=$(_doey_current_version)
+
+  doey_header "Completing Update..."
   printf '\n'
-  doey_info "Running install.sh (from updated code)..."
-  if ! bash "$install_dir/install.sh"; then
-    doey_error "Install failed"
-    [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
-    exit 1
+
+  doey_step "1/2" "Running install from updated code..."
+  if [ "$HAS_GUM" = true ]; then
+    if ! gum spin --spinner dot --title "Installing..." -- bash "$install_dir/install.sh"; then
+      doey_error "Install failed"
+      [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
+      exit 1
+    fi
+  else
+    if ! bash "$install_dir/install.sh" >/dev/null 2>&1; then
+      doey_error "Install failed"
+      [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
+      exit 1
+    fi
   fi
+  doey_success "Installed"
   [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
 
-  _update_finish
+  doey_step "2/2" "Version summary"
+  local new_version
+  new_version=$(_doey_current_version)
+  printf '\n'
+  if [[ "$old_version" != "$new_version" ]]; then
+    doey_ok "Updated: $old_version → $new_version"
+  else
+    doey_ok "Version: $new_version"
+  fi
+
+  _update_finish_banner
 }
 
 # Detect how Claude Code was installed and return the package manager name.
