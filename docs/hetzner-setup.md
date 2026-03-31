@@ -1,50 +1,26 @@
 # Hetzner Cloud Setup Guide
 
-> Deploy Doey on Hetzner Cloud — 16 GB for ~€9/mo. Start a task, detach, come back to find work done.
+> Deploy Doey on Hetzner Cloud — 16 GB for ~€9/mo. Start a task, detach, come back later.
 
 ## Prerequisites
 
-**SSH key:**
-
 ```bash
+# SSH key
 ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519
-```
 
-**Hetzner CLI (`hcloud`):**
+# Hetzner CLI
+brew install hcloud                    # macOS
+# Linux: curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xz -C /usr/local/bin
 
-```bash
-# macOS
-brew install hcloud
-
-# Linux
-curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xz -C /usr/local/bin
-
-# Windows (Git Bash)
-curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-windows-amd64.zip -o /tmp/hcloud.zip
-unzip /tmp/hcloud.zip -d /tmp/hcloud
-cp /tmp/hcloud/hcloud.exe ~/.local/bin/
-```
-
-**Hetzner API token:**
-
-1. Go to [console.hetzner.cloud](https://console.hetzner.cloud)
-2. Create or select a project
-3. **Security** > **API Tokens** > **Generate API Token**
-4. Permissions: **Read & Write**
-5. Copy the token (shown only once)
-
-```bash
+# API token: console.hetzner.cloud > Security > API Tokens > Generate (Read & Write)
 export HCLOUD_TOKEN="your-token-here"
 ```
 
-**Claude auth** — one of:
-
-- **Anthropic API key** (`sk-ant-...`)
-- **Claude Max** (OAuth — requires interactive SSH)
+**Claude auth:** Anthropic API key (`sk-ant-...`) or Claude Max (OAuth — requires `ssh -t`).
 
 ## Sizing Guide
 
-Each Claude Code agent uses 200–400 MB RAM. Choose your plan based on team size:
+Each agent uses 200–400 MB RAM:
 
 | Plan | RAM | vCPUs | Max agents | Price |
 |------|-----|-------|------------|-------|
@@ -79,9 +55,7 @@ ssh -o StrictHostKeyChecking=accept-new root@$HETZNER_IP echo "Connected"
 
 ## 2. Configure Server
 
-Creates `doey` user, hardens SSH, enables firewall + swap, installs dependencies.
-
-> **Important:** Hetzner Ubuntu uses `ssh.service` (not `sshd.service`). The script below handles this correctly.
+Creates `doey` user, hardens SSH, enables firewall + swap. Note: Hetzner Ubuntu uses `ssh.service` (not `sshd.service`).
 
 ```bash
 ssh root@$HETZNER_IP 'bash -s' << 'SETUP'
@@ -214,21 +188,17 @@ SYSTEMD
 
 ## Resizing
 
-Hetzner makes resizing easy. You can scale up or down:
-
 ```bash
 # Scale up (server must be off)
 hcloud server shutdown doey-server
-hcloud server change-type doey-server --server-type cx53   # 32 GB
-hcloud server poweron doey-server
+hcloud server change-type doey-server --server-type cx53 && hcloud server poweron doey-server
 
-# Scale down (only if disk fits — can't shrink below current disk usage)
+# Scale down (--keep-disk: can't shrink below current disk usage)
 hcloud server shutdown doey-server
-hcloud server change-type doey-server --server-type cx33 --keep-disk  # keep disk size, change RAM/CPU only
-hcloud server poweron doey-server
+hcloud server change-type doey-server --server-type cx33 --keep-disk && hcloud server poweron doey-server
 ```
 
-> Unlike Linode, Hetzner resizes are near-instant (no migration wait).
+Hetzner resizes are near-instant (no migration wait).
 
 <details>
 <summary><strong>Full Automation Script (Steps 1–5)</strong></summary>

@@ -64,12 +64,8 @@ _dotleader() {
   if [ "$dots_needed" -lt 2 ]; then
     dots_needed=2
   fi
-  local dots=""
-  local i=0
-  while [ "$i" -lt "$dots_needed" ]; do
-    dots="${dots}."
-    i=$((i + 1))
-  done
+  local dots
+  dots=$(printf '%*s' "$dots_needed" '' | tr ' ' '.')
 
   if [ "$HAS_GUM" = true ]; then
     # Gum-styled status badge

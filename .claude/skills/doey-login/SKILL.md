@@ -135,10 +135,8 @@ esac
 ```
 
 ## Step 4: Report
-
 Print: token status, scope, counts (restarted/skipped).
 
 ## Rules
-
-- Never restart current pane or Info Panel (0.0). Skip reserved panes
-- 0.5s between restarts. Valid token = skip /login. Default scope: session. Bash 3.2
+- Never restart current pane or Info Panel (0.0). Skip reserved. 0.5s between restarts
+- Valid token = skip /login. Default scope: session. Bash 3.2

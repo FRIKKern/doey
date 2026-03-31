@@ -136,8 +136,6 @@ task_add_related_file "${TD}/ID_HERE.task" "path/to/file.sh"
 ```
 
 ### Rules
-- Tasks persist in `.doey/tasks/` — project-local, survives reboot
-- Every status transition appends `status=epoch` to TASK_TIMESTAMPS
-- Multiline fields use `\n` literal encoding; related files are pipe-delimited; tags comma-separated
-- Subtask format: `index:title:status`; decision log: `epoch:text`
-- All writes use atomic tmp+mv pattern (handled by library functions)
+- Persistent in `.doey/tasks/`. Multiline: `\n` literal. Files: pipe-delimited. Tags: comma-separated
+- Subtask: `index:title:status`. Decisions: `epoch:text`. Status transitions append to TASK_TIMESTAMPS
+- All writes atomic (tmp+mv via library)

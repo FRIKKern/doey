@@ -293,59 +293,43 @@ _find_go() {
 # Build doey-tui (and doey-remote-setup). Returns 0 on success.
 _build_tui() {
   local rc=0
+
+  # Build doey-tui — prefer shared helper, inline fallback
+  set +e
   if type _build_go_binary >/dev/null 2>&1; then
-    # Use shared helper for consistent build logic
-    set +e
     _build_go_binary "tui" ./cmd/doey-tui/ "$HOME/.local/bin/doey-tui"
-    rc=$?
-    set -e
-    if [ $rc -eq 0 ]; then
-      step_ok
-      detail "~/.local/bin/doey-tui (built from source)"
-    else
-      step_fail
-      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
-      return $rc
-    fi
-    # Build doey-remote-setup
-    printf "         ${DIM}→ building doey-remote-setup...${RESET}"
-    set +e
-    _build_go_binary "tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
-    local rs_rc=$?
-    set -e
-    if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
-      printf " ${SUCCESS}✓${RESET}\n"
-      detail "~/.local/bin/doey-remote-setup (built from source)"
-    else
-      printf " ${DIM}skipped${RESET}\n"
-    fi
   else
-    # Inline fallback when helper not available
-    set +e
     (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
-    rc=$?
-    set -e
-    if [ $rc -eq 0 ]; then
-      step_ok
-      detail "~/.local/bin/doey-tui (built from source)"
-    else
-      step_fail
-      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
-      return $rc
-    fi
-    # Build doey-remote-setup
-    printf "         ${DIM}→ building doey-remote-setup...${RESET}"
-    set +e
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
-    local rs_rc=$?
-    set -e
-    if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
-      printf " ${SUCCESS}✓${RESET}\n"
-      detail "~/.local/bin/doey-remote-setup (built from source)"
-    else
-      printf " ${DIM}skipped${RESET}\n"
-    fi
   fi
+  rc=$?
+  set -e
+
+  if [ $rc -eq 0 ]; then
+    step_ok
+    detail "~/.local/bin/doey-tui (built from source)"
+  else
+    step_fail
+    warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+    return $rc
+  fi
+
+  # Build doey-remote-setup
+  printf "         ${DIM}→ building doey-remote-setup...${RESET}"
+  set +e
+  if type _build_go_binary >/dev/null 2>&1; then
+    _build_go_binary "tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
+  else
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
+  fi
+  local rs_rc=$?
+  set -e
+  if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
+    printf " ${SUCCESS}✓${RESET}\n"
+    detail "~/.local/bin/doey-remote-setup (built from source)"
+  else
+    printf " ${DIM}skipped${RESET}\n"
+  fi
+
   return $rc
 }
 

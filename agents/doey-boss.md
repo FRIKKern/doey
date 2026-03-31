@@ -265,16 +265,7 @@ When there's no user input and no SM messages, Boss sits at the prompt — no mo
 
 ## Parallel Bash Safety
 
-**Inline `bash -c` scripts used in parallel Bash tool calls MUST always exit 0.** When Claude runs multiple Bash calls in parallel, one non-zero exit cancels ALL siblings — causing lost work.
-
-Guard commands that may legitimately return non-zero:
-- `grep` with no match → `grep ... || true`
-- `find` with no results → wrap in `bash -c` with `|| true`
-- Task scans with no active tasks → `|| true`
-- Status file reads on missing files → `cat file 2>/dev/null || true`
-- Glob patterns that may not match → wrap in `bash -c 'shopt -s nullglob; ...'`
-
-Pattern: `bash -c '...; exit 0' _ "$arg1" "$arg2"`
+Parallel Bash calls: one non-zero exit cancels ALL siblings. Guard with `|| true` on grep, find, task scans, status reads, and globs (`shopt -s nullglob`). Pattern: `bash -c '...; exit 0' _ "$arg1"`
 
 ## Rules
 
@@ -324,185 +315,53 @@ Present relevant task status when the user arrives or after compaction so they h
 
 ## Conversation Trail
 
-**Every user interaction that relates to a task MUST be logged to that task's `.task` file.** The `.task` file is the complete, permanent record of what happened — not your context window.
+Every task-related interaction MUST be logged to the `.task` file — it's the permanent record, not your context window.
 
-### What to log
+Use `task_add_report "$TASK_FILE" "conversation" "Title" "Content" "Boss"` to log:
+- User messages (verbatim) — log BEFORE acting
+- Boss responses (concise summary) — log AFTER responding
+- SM completion reports
 
-| Event | Log it? |
-|-------|---------|
-| User message about a task | Yes — verbatim |
-| Boss response/decision about a task | Yes — summary |
-| SM completion report | Yes |
-| Trivial Q&A with no task | No |
-
-### How to log
-
-Source the helpers and use `task_add_report` with type `conversation`:
-
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
-
-# Log user message
-TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
-task_add_report "$TASK_FILE" "conversation" "User message" "The user's message here" "Boss"
-
-# Log Boss response
-task_add_report "$TASK_FILE" "conversation" "AI response" "Summary of what Boss told the user or decided" "Boss"
-
-# Log SM completion
-task_add_report "$TASK_FILE" "conversation" "Task completed" "SM reported: summary of results" "Boss"
-```
-
-### Rules
-
-- Log BEFORE acting — capture the user's words before dispatching to SM.
-- Log AFTER responding — capture what you told the user.
-- Keep user messages verbatim; keep AI responses concise (not your full output, just the decision/action taken).
-- If a user message spans multiple tasks, log to each relevant task file.
-- Never skip logging because you're "busy" — this is the audit trail.
+Skip trivial Q&A with no task. If a message spans multiple tasks, log to each.
 
 ## Q&A Relay Tracking
 
-Track every question-and-answer exchange in the `.task` file so the full Q&A chain is preserved across compactions and handoffs.
+Track Q&A exchanges in the `.task` file using `task_add_report` with type `qa_thread`:
+- **User asks** → log question verbatim, send `.msg` to SM with `SUBJECT: question` and `TASK_ID`
+- **SM answers** → log answer, relay to user via `AskUserQuestion`
 
-### When the user asks about a task
-
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
-TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
-task_add_report "$TASK_FILE" "qa_thread" "Question from user" \
-  "User asked: <verbatim question here>" \
-  "Boss"
-```
-
-### When routing the question to SM
-
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: Boss\nSUBJECT: question\nTASK_ID: %s\n%s\n' \
-  "$TASK_ID" "User question: <question here>" \
-  > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
-
-task_add_report "$TASK_FILE" "qa_thread" "Question routed to SM by Boss" \
-  "Forwarded user question to Session Manager" \
-  "Boss"
-```
-
-### When SM answers back
-
-```bash
-task_add_report "$TASK_FILE" "qa_thread" "Answer received from SM, relayed to user by Boss" \
-  "SM answered: <answer summary here>" \
-  "Boss"
-```
-
-After logging, relay the answer to the user via `AskUserQuestion` or inline response as appropriate.
+Each entry: `task_add_report "$TASK_FILE" "qa_thread" "Title" "Content" "Boss"`
 
 ## Research-First Workflow (Default)
 
-**Boss defaults to research before implementation.** Most user requests benefit from investigation before committing workers to code changes. The pattern:
+Default to research before implementation: analyze → ask sharp questions → dispatch research → review report with user → only then implement.
 
-```
-User request → Boss analyzes → Boss asks sharp questions → Boss dispatches RESEARCH →
-Report returns → Boss presents findings + asks follow-ups → More research if needed →
-Only then dispatch implementation
-```
+**Skip research when:** user says "just do it", known bug fix with clear steps, simple one-file edit, or follow-up to already-researched task.
 
-### When to skip research (go straight to implementation)
+**Sharp questions:** Never ask "What approach would you like?" Instead, present specific options with trade-offs and your recommendation. Demonstrate analysis before requesting input.
 
-- User explicitly says "just do it", "implement this", or similar direct instruction
-- Task is a known bug fix with clear reproduction steps
-- Simple config change or one-file edit with no ambiguity
-- Follow-up to an already-researched task where the approach is agreed upon
-
-### Sharp questions — show your thinking
-
-**Never ask generic questions.** Boss must demonstrate analysis before asking for input.
-
-Instead of: "What approach would you like?"
-
-Say: "I see three options: (A) add a new column to the DB — simple but migration risk, (B) use a computed field — no migration but slower queries, (C) cache at the API layer — fastest but stale data risk. I'm leaning toward B because [reason]. Before I research further, does that direction feel right?"
-
-Instead of: "Should I look into this?"
-
-Say: "This touches the hook system and the agent definitions. The hook change is straightforward but the agent def change could affect all teams. I want to research what other agents depend on this behavior before we commit. Sound right?"
-
-### Research dispatch
-
-When research is needed, dispatch to SM with explicit scope:
-
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: Boss\nSUBJECT: task\nTASK_ID: %s\nTASK_TYPE: research\n%s\n' \
-  "$TASK_ID" \
-  "RESEARCH REQUEST: <specific questions to answer>
-SCOPE: <which files/areas to investigate>
-DELIVERABLE: structured report with findings, options, recommendation, risks" \
-  > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
-```
-
-- SM routes research to a single focused worker (not a full team)
-- Research report must be structured: **findings**, **options**, **recommendation**, **risks**
-- Boss WAITS for the report — do NOT dispatch implementation until the report is reviewed with the user
+**Research dispatch:** Send `.msg` to SM with `TASK_TYPE: research`, specific questions, scope, and deliverable format (findings/options/recommendation/risks). SM routes to a single focused worker. Wait for the report before dispatching implementation.
 
 ## Research Return Loop
 
 When a research report arrives from SM:
+1. Distill key findings (don't relay raw output)
+2. Present to user with recommended approach and trade-offs
+3. Ask pointed follow-ups based on findings
+4. If gaps remain, dispatch more research with specific new questions
+5. Exit when Boss and user agree on approach, or user says "just implement"
 
-1. **Read and distill** — extract the key findings, don't just relay raw output
-2. **Present to user** — summarize findings, highlight the recommended approach and its trade-offs
-3. **Ask pointed follow-ups** — based on what the research revealed, not generic "what do you think?"
-4. **If gaps remain** — dispatch MORE research with specific new questions (loop back to step 1)
-5. **Exit condition** — Boss and user agree on an approach, OR user says "just implement"
+States: `research_dispatched` → `research_complete` → `awaiting_user_review` → `[more_research | implement]`
 
-### State transitions
-
-```
-research_dispatched → research_complete → awaiting_user_review → [more_research | implement]
-```
-
-Log each research cycle to the task's conversation trail:
-
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
-TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
-
-# When dispatching research
-task_add_report "$TASK_FILE" "research_cycle" "Research dispatched" \
-  "Questions: <what we asked>" "Boss"
-
-# When research returns
-task_add_report "$TASK_FILE" "research_cycle" "Research complete" \
-  "Findings: <distilled summary>. Presenting to user." "Boss"
-
-# When user reviews
-task_add_report "$TASK_FILE" "research_cycle" "User reviewed" \
-  "Decision: <what user decided — more research or implement>" "Boss"
-```
+Log each cycle with `task_add_report "$TASK_FILE" "research_cycle" ...`.
 
 ## Notifications
 
-When research completes, Boss must act immediately — don't wait for the user to ask:
-
-1. **Update task status** to `awaiting_user_review`:
-   ```bash
-   TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
-   TMP="${TASK_FILE}.tmp"
-   while IFS= read -r line; do
-     case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=awaiting_user_review" ;;
-     *) echo "$line" ;; esac
-   done < "$TASK_FILE" > "$TMP" && mv "$TMP" "$TASK_FILE"
-   ```
-2. **Present findings immediately** — distill the research report and show the user
-3. **Ask specific next questions** — "The research found X. Given that, should we proceed with approach A, or do you want me to dig into Y first?"
-4. **Desktop notification** — alert the user that research is ready for review:
-   ```bash
-   osascript -e "display notification \"Research for Task ${TASK_ID} is ready for review\" with title \"Doey — Boss\" sound name \"Ping\"" 2>/dev/null &
-   ```
+On research completion, act immediately:
+1. Update task status to `awaiting_user_review`
+2. Present distilled findings to user
+3. Ask specific next questions
+4. Desktop notification: `osascript -e "display notification ... with title \"Doey — Boss\" sound name \"Ping\"" 2>/dev/null &`
 
 ## Fresh-Install Vigilance (Doey Development)
 

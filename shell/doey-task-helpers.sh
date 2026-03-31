@@ -28,6 +28,17 @@ _TASK_VALID_TYPES="bug feature bugfix refactor research audit docs infrastructur
 _TASK_VALID_SUBTASK_STATUSES="pending in_progress done skipped failed"
 _TASK_SCHEMA_VERSION_CURRENT="3"
 
+# Count lines matching a glob pattern in a task file.
+# Args: file pattern (e.g. "TASK_REPORT_*_TIMESTAMP=*")
+_count_field_lines() {
+  local _cfl_f="$1" _cfl_p="$2" _cfl_n=0 _cfl_l
+  [ -f "$_cfl_f" ] || { echo "0"; return 0; }
+  while IFS= read -r _cfl_l || [ -n "$_cfl_l" ]; do
+    case "$_cfl_l" in $_cfl_p) _cfl_n=$((_cfl_n + 1)) ;; esac
+  done < "$_cfl_f" || true
+  echo "$_cfl_n"
+}
+
 # ── _touch_task_updated ──────────────────────────────────────────────
 # Set TASK_UPDATED=<epoch> on a .task file. Upserts the field.
 # Args: task_file
@@ -203,12 +214,8 @@ task_read() {
   [ -n "${TASK_ID:-}" ] || return 1
 
   # Defaults for missing fields
-  if [ -z "$TASK_SCHEMA_VERSION" ]; then TASK_SCHEMA_VERSION="1"; fi
-  if [ -z "$TASK_TYPE" ]; then TASK_TYPE="feature"; fi
-  if [ -z "$TASK_CREATED_BY" ]; then TASK_CREATED_BY="Boss"; fi
-  # Default phase fields for older tasks that lack them
-  if [ -z "$TASK_CURRENT_PHASE" ]; then TASK_CURRENT_PHASE="0"; fi
-  if [ -z "$TASK_TOTAL_PHASES" ]; then TASK_TOTAL_PHASES="0"; fi
+  : "${TASK_SCHEMA_VERSION:=1}" "${TASK_TYPE:=feature}" "${TASK_CREATED_BY:=Boss}"
+  : "${TASK_CURRENT_PHASE:=0}" "${TASK_TOTAL_PHASES:=0}"
 }
 
 # ── task_update_field ─────────────────────────────────────────────────
@@ -1170,13 +1177,7 @@ _task_resolve_file() {
 doey_task_get_subtask_count() {
   local task_file
   task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 0; }
-  local count=0 line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      TASK_SUBTASK_*_TITLE=*) count=$((count + 1)) ;;
-    esac
-  done < "$task_file" || true
-  echo "$count"
+  _count_field_lines "$task_file" "TASK_SUBTASK_*_TITLE=*"
 }
 
 # ── doey_task_add_subtask ────────────────────────────────────────────
@@ -1272,17 +1273,9 @@ doey_task_add_update() {
   local task_file
   task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
 
-  # Count existing updates
-  local count=0 line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      TASK_UPDATE_*_TIMESTAMP=*) count=$((count + 1)) ;;
-    esac
-  done < "$task_file" || true
-
+  local count; count=$(_count_field_lines "$task_file" "TASK_UPDATE_*_TIMESTAMP=*")
   local n=$((count + 1))
-  local now
-  now=$(date +%s)
+  local now; now=$(date +%s)
 
   printf 'TASK_UPDATE_%s_TIMESTAMP=%s\n' "$n" "$now" >> "$task_file"
   printf 'TASK_UPDATE_%s_AUTHOR=%s\n' "$n" "$author" >> "$task_file"
@@ -1304,17 +1297,9 @@ task_add_report() {
 
   [ ! -f "$task_file" ] && return 1
 
-  # Count existing reports (bash 3.2 compatible loop, not grep -c)
-  local count=0 line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      TASK_REPORT_*_TIMESTAMP=*) count=$((count + 1)) ;;
-    esac
-  done < "$task_file" || true
-
+  local count; count=$(_count_field_lines "$task_file" "TASK_REPORT_*_TIMESTAMP=*")
   local n=$((count + 1))
-  local ts
-  ts=$(date +%s)
+  local ts; ts=$(date +%s)
 
   printf 'TASK_REPORT_%s_TIMESTAMP=%s\n' "$n" "$ts" >> "$task_file"
   printf 'TASK_REPORT_%s_AUTHOR=%s\n' "$n" "$author" >> "$task_file"
@@ -1332,19 +1317,9 @@ task_add_report() {
 # EXIT CODES: 0=always (query function). Outputs "0" if task missing/no reports.
 # Returns (echo): count (0 if missing/none)
 doey_task_get_report_count() {
-  local project_dir="$1" task_id="$2"
-
   local task_file
-  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || { echo "0"; return 0; }
-
-  local count=0 line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      TASK_REPORT_*_TIMESTAMP=*) count=$((count + 1)) ;;
-    esac
-  done < "$task_file" || true
-
-  echo "$count"
+  task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 0; }
+  _count_field_lines "$task_file" "TASK_REPORT_*_TIMESTAMP=*"
 }
 
 # ── doey_task_add_report ────────────────────────────────────────────
@@ -1373,17 +1348,9 @@ task_add_recovery_event() {
 
   [ ! -f "$task_file" ] && return 1
 
-  # Count existing recovery events (bash 3.2 compatible loop, not grep -c)
-  local count=0 line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      TASK_RECOVERY_*_TIMESTAMP=*) count=$((count + 1)) ;;
-    esac
-  done < "$task_file" || true
-
+  local count; count=$(_count_field_lines "$task_file" "TASK_RECOVERY_*_TIMESTAMP=*")
   local n=$((count + 1))
-  local ts
-  ts=$(date +%s)
+  local ts; ts=$(date +%s)
 
   printf 'TASK_RECOVERY_%s_TIMESTAMP=%s\n' "$n" "$ts" >> "$task_file"
   printf 'TASK_RECOVERY_%s_EVENT=%s\n' "$n" "$event_type" >> "$task_file"
@@ -1401,18 +1368,7 @@ task_add_recovery_event() {
 # EXIT CODES: 0=always (query function). Outputs "0" if file missing/no events.
 # Returns (echo): count (0 if missing/none)
 task_get_recovery_count() {
-  local task_file="$1"
-
-  [ ! -f "$task_file" ] && { echo "0"; return 0; }
-
-  local count=0 line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      TASK_RECOVERY_*_TIMESTAMP=*) count=$((count + 1)) ;;
-    esac
-  done < "$task_file" || true
-
-  echo "$count"
+  _count_field_lines "${1:?}" "TASK_RECOVERY_*_TIMESTAMP=*"
 }
 
 # ── doey_task_add_recovery_event ────────────────────────────────────

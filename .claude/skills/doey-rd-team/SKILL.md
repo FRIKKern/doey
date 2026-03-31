@@ -51,7 +51,7 @@ tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.3" -T "Critic"
 WORKER_PANES_LIST="1,2,3"
 ```
 
-### Step 3: Write team env
+### Step 3: Write team env, update TEAM_WINDOWS
 
 ```bash
 TEAM_FILE="${RUNTIME_DIR}/team_${NEW_WIN}.env"
@@ -71,7 +71,6 @@ RD_TEAM=true
 TEAM_EOF
 mv "${TEAM_FILE}.tmp" "$TEAM_FILE"
 
-# Append to TEAM_WINDOWS
 CURRENT_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
 [ -n "$CURRENT_WINDOWS" ] && NEW_WINDOWS="${CURRENT_WINDOWS},${NEW_WIN}" || NEW_WINDOWS="${NEW_WIN}"
 TMPENV=$(mktemp "${RUNTIME_DIR}/session.env.tmp_XXXXXX")
@@ -145,26 +144,14 @@ Dispatch audit task to Brain via load-buffer:
 MGR_PANE="${SESSION_NAME}:${NEW_WIN}.0"
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'AUDIT_TASK'
-Run a Doey R&D audit on the live codebase. You can read everything, and see real-time changes from other teams.
+Run a Doey R&D audit on the live codebase. 3 specialist workers:
+- Pane 1 (Platform): shell/*.sh, .claude/hooks/* — tmux races, bash 3.2 violations
+- Pane 2 (Claude): hooks, agents/*.md, skills — semantics, exit codes, correctness
+- Pane 3 (Critic): bash -n, frontmatter, tests/, docs accuracy
 
-You have 3 specialist workers:
-- Pane 1 (Platform Expert): tmux internals, bash 3.2 portability, shell scripts, race conditions
-- Pane 2 (Claude Expert): hooks (lifecycle, exit codes, ordering), agents, skills, settings overlays
-- Pane 3 (Critic): regression checks, output quality validation, before/after comparison
-
-Phase 1 — dispatch specialists in parallel:
-- Platform Expert (pane 1): audit shell/doey.sh, shell/*.sh, .claude/hooks/* for tmux races, bash 3.2 violations, portability issues
-- Claude Expert (pane 2): audit .claude/hooks/* (hook semantics, exit codes), agents/*.md, .claude/skills/doey-*/ for correctness
-- Critic (pane 3): run bash -n on all .sh files, validate agent frontmatter, run tests/, check docs/ vs code accuracy
-
-Check the live error log at /tmp/doey/*/errors/errors.log for runtime issues:
-Platform Expert focuses on tmux/bash errors, Claude Expert on hook/agent errors.
-Critic validates the error categorization and proposes product fixes.
-
-Also check `git log --oneline -10` and `git diff` to see what other teams are working on right now.
-
-Phase 2: Consolidate findings. Each specialist proposes fixes in their domain. Critic reviews all proposals.
-Phase 3: Implement fixes (one specialist per file, separate commits). Critic runs regression checks. Report to Session Manager.
+Phase 1: Dispatch in parallel. Check /tmp/doey/*/errors/errors.log + `git log --oneline -10`.
+Phase 2: Consolidate. Each specialist proposes fixes. Critic reviews.
+Phase 3: Implement (one file per specialist, separate commits). Report to SM.
 AUDIT_TASK
 
 tmux copy-mode -q -t "$MGR_PANE" 2>/dev/null
@@ -175,5 +162,4 @@ rm "$TASKFILE"
 ```
 
 ### Step 7: Report
-
-Output: window number, pane layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`. Never hardcode window indices. Bash 3.2 compatible.
+Output: window number, pane layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`. Bash 3.2.

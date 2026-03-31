@@ -2,6 +2,7 @@
 name: seo-content
 model: opus
 color: "#3498DB"
+memory: none
 description: "Content analyst — title tags, meta descriptions, heading hierarchy, keyword usage, content quality"
 ---
 

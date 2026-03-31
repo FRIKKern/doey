@@ -21,15 +21,20 @@ TUNNEL_DOMAIN="${DOEY_TUNNEL_DOMAIN:-}"
 
 TUNNEL_ENV="${RUNTIME_DIR}/tunnel.env"
 
+# --- Helpers ---
+
+_read_tunnel_pid() {
+    local _pid=""
+    while IFS='=' read -r k v; do
+        case "$k" in TUNNEL_PID) _pid="$v" ;; esac
+    done < "$TUNNEL_ENV"
+    printf '%s' "$_pid"
+}
+
 # --- Idempotency: exit early if tunnel already running ---
 
 if [ -f "$TUNNEL_ENV" ]; then
-    existing_pid=""
-    while IFS='=' read -r k v; do
-        case "$k" in
-            TUNNEL_PID) existing_pid="$v" ;;
-        esac
-    done < "$TUNNEL_ENV"
+    existing_pid=$(_read_tunnel_pid)
     if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
         echo "[tunnel] Already running (PID $existing_pid), exiting."
         exit 0
@@ -155,12 +160,8 @@ _stop_tunnel() {
         return
     fi
 
-    local pid=""
-    while IFS='=' read -r k v; do
-        case "$k" in
-            TUNNEL_PID) pid="$v" ;;
-        esac
-    done < "$TUNNEL_ENV"
+    local pid
+    pid=$(_read_tunnel_pid)
 
     if [ -n "$pid" ]; then
         echo "[tunnel] Stopping PID $pid"
@@ -194,12 +195,8 @@ _health_check() {
             return
         fi
 
-        local pid=""
-        while IFS='=' read -r k v; do
-            case "$k" in
-                TUNNEL_PID) pid="$v" ;;
-            esac
-        done < "$TUNNEL_ENV"
+        local pid
+        pid=$(_read_tunnel_pid)
 
         if [ -z "$pid" ]; then
             echo "[tunnel] No PID in tunnel.env, exiting health check"

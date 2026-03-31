@@ -419,25 +419,17 @@ while true; do
     printf '%b\n' "${C_RESET}"
   fi
 
+  _stat_item() {
+    if [ "$HAS_GUM" = true ]; then printf '%s %s' "$(gum style --foreground 15 --bold "$1")" "$2"
+    else printf '%b %s %b %s' "${C_BOLD_WHITE}" "$1" "${C_RESET}" "$2"; fi
+  }
+
   gum_divider "$HR_THICK"
-  if [ "$HAS_GUM" = true ]; then
-    stat_project="$(gum style --foreground 15 --bold 'PROJECT') $PROJECT_NAME"
-    stat_session="$(gum style --foreground 15 --bold 'SESSION') $SESSION_NAME"
-    stat_uptime="$(gum style --foreground 15 --bold 'UPTIME') $UPTIME_STR"
-    stat_teams="$(gum style --foreground 15 --bold 'TEAMS') $TEAM_COUNT"
-  else
-    stat_project="$(printf '%b PROJECT %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$PROJECT_NAME")"
-    stat_session="$(printf '%b SESSION %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$SESSION_NAME")"
-    stat_uptime="$(printf '%b UPTIME %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$UPTIME_STR")"
-    stat_teams="$(printf '%b TEAMS %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$TEAM_COUNT")"
-  fi
-
-  printf '  %b  %b·%b  %b  %b·%b  %b  %b·%b  %b\n' \
-    "$stat_project" "${C_DIM}" "${C_RESET}" \
-    "$stat_session" "${C_DIM}" "${C_RESET}" \
-    "$stat_uptime" "${C_DIM}" "${C_RESET}" \
-    "$stat_teams"
-
+  printf '  %s  %b·%b  %s  %b·%b  %s  %b·%b  %s\n' \
+    "$(_stat_item PROJECT "$PROJECT_NAME")" "${C_DIM}" "${C_RESET}" \
+    "$(_stat_item SESSION "$SESSION_NAME")" "${C_DIM}" "${C_RESET}" \
+    "$(_stat_item UPTIME "$UPTIME_STR")" "${C_DIM}" "${C_RESET}" \
+    "$(_stat_item TEAMS "$TEAM_COUNT")"
   gum_divider "$HR_THICK"
 
   # Tunnel URL (only shown when tunnel is active or errored)

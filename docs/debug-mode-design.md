@@ -2,21 +2,19 @@
 
 ## Motivation
 
-122 bug-fix commits across 5 recurring patterns. When things go wrong in a multi-agent tmux session, reconstructing what happened requires manually reading status files, capture-pane, git log, and errors.log. Debug mode provides a flight recorder that captures the full story automatically.
+Flight recorder for multi-agent tmux sessions. Captures hook execution, state transitions, IPC, and lifecycle events automatically.
 
 ## Bug Pattern → Log Category Mapping
 
-Grounded in real commit history, not speculation:
-
-| Bug Pattern | What would help | Log Category |
-|---|---|---|
-| Pane addressing (18+) | Pane targeted, resolved address, role applied | `hooks` |
-| Role resolution (8+) | Role source (env/file/fallback), stale detection | `hooks` |
-| Auth exhaustion (5+) | Start times, launch stagger, rate limit hits | `lifecycle` |
-| Notification chain (5+) | Message from→to, delivery, success/failure | `messages` |
-| Race conditions (8+) | Timing of concurrent ops, state transitions | `state` |
-| Bash/zsh compat (8+) | N/A — syntax issues, not runtime | — |
-| Install/shipping (12+) | N/A — build-time issues, not runtime | — |
+| Bug Pattern | Log Category |
+|---|---|
+| Pane addressing (18+ commits) | `hooks` |
+| Role resolution (8+) | `hooks` |
+| Auth exhaustion (5+) | `lifecycle` |
+| Notification chain (5+) | `messages` |
+| Race conditions (8+) | `state` |
+| Bash/zsh compat (8+) | N/A (syntax, not runtime) |
+| Install/shipping (12+) | N/A (build-time) |
 
 ## Toggle Mechanism (WordPress-style)
 
@@ -121,13 +119,13 @@ Covers notification chain bugs (Manager↔SM, Worker→Manager delivery failures
 
 ## Implementation
 
-All debug infrastructure lives in `.claude/hooks/common.sh` — see `_init_debug()`, `_debug_log()`, `_ms_now()`, `_debug_hook_entry()`, `_debug_hook_exit()`. The source code is the authoritative reference; this design doc covers the *why*, not the *what*.
+All debug infrastructure lives in `.claude/hooks/common.sh` (`_init_debug()`, `_debug_log()`, `_ms_now()`, `_debug_hook_entry()`, `_debug_hook_exit()`). Source code is authoritative; this doc covers the *why*.
 
-Key implementation decisions:
-- `debug.conf` is parsed with `while read`/`case`, never `source`d (prevents syntax errors from killing hooks)
-- `_ms_now()` uses perl `Time::HiRes` (ships with macOS, ~15ms overhead, debug-only) with `date +%s` fallback
-- `on-pre-tool-use.sh` uses inline debug check (no common.sh) for hot-path performance: one `stat()` when off, one `date` + `printf` when on
-- Each hook adds one line (`_debug_hook_entry`) after setting `_DOEY_HOOK_NAME`
+Key decisions:
+- `debug.conf` parsed with `while read`/`case`, never `source`d (syntax errors can't kill hooks)
+- `_ms_now()` uses perl `Time::HiRes` (macOS-native, ~15ms, debug-only) with `date +%s` fallback
+- `on-pre-tool-use.sh` uses inline debug check (no common.sh) for hot-path: one `stat()` when off
+- Each hook adds `_debug_hook_entry` after setting `_DOEY_HOOK_NAME`
 
 ## Risk Mitigations
 

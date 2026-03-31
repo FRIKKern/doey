@@ -228,116 +228,27 @@ Stale detection is **heartbeat-based** — `session-manager-wait.sh` writes `sta
 
 ## Stale Task Detection & Auto-Recovery
 
-This is the primary mechanism for detecting stuck workers and recovering their tasks. It runs as **step 3** of the active cycle, after reading status files and before checking results.
+Runs as **step 3** of the active cycle. `session-manager-wait.sh` writes `stale_*` alert files when pane heartbeats exceed 120s. Each alert: `PANE_ID TASK_ID HB_TIME AGE`.
 
-### How stale alerts work
+### Recovery per stale alert
 
-`session-manager-wait.sh` monitors pane heartbeats. When any pane's last status update exceeds 120s, it writes a stale alert file to `$RUNTIME_DIR/status/`. Each alert file contains: `PANE_ID TASK_ID HB_TIME AGE` (space-separated, one line per stale pane).
+1. Look up `TASK_FILE="${TD}/${TASK_ID}.task"` — skip if missing
+2. Add `TASK_RECOVERY_N_*` event to task file (TIMESTAMP, TYPE=stale_detected, WORKER, REASON)
+3. Re-queue: remove `TASK_TEAM`, set `TASK_STATUS=active` (atomic write via `.tmp` + `mv`)
+4. Log: `TASK_LOG_<epoch>=RECOVERY: Worker stale, re-queued`
+5. Clean up: `rm -f "${RUNTIME_DIR}/status/stale_${PANE_ID//\./_}"`
+6. Log to `$RUNTIME_DIR/issues/`
+7. Notify Boss via `.msg` with `SUBJECT: stale_recovery`
 
-### Step 3: Read stale alerts
-
-```bash
-bash -c 'shopt -s nullglob; for f in "$1"/status/stale_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"
-```
-
-For each stale alert, extract the fields:
-
-```bash
-PANE_ID="<from alert>"    # e.g. "2.1"
-TASK_ID="<from alert>"    # e.g. "42"
-AGE="<from alert>"        # seconds since last heartbeat
-```
-
-### Recovery action for each stale task
-
-Run these steps in order for each stale alert:
-
-**1. Look up the task file:**
-```bash
-TD="${PROJECT_DIR}/.doey/tasks"; [ -d "$TD" ] || TD="${RUNTIME_DIR}/tasks"
-TASK_FILE="${TD}/${TASK_ID}.task"
-[ -f "$TASK_FILE" ] || continue  # no task file = nothing to recover
-```
-
-**2. Add a structured recovery event to the task file** (for TUI display):
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
-NOW=$(date +%s)
-# Find next recovery event index
-NEXT_IDX=$(grep -c '^TASK_RECOVERY_' "$TASK_FILE" 2>/dev/null | awk '{print int($1/4)}')
-cat >> "$TASK_FILE" << EOF
-TASK_RECOVERY_${NEXT_IDX}_TIMESTAMP=${NOW}
-TASK_RECOVERY_${NEXT_IDX}_TYPE=stale_detected
-TASK_RECOVERY_${NEXT_IDX}_WORKER=${PANE_ID}
-TASK_RECOVERY_${NEXT_IDX}_REASON=No heartbeat for ${AGE}s
-EOF
-```
-
-**3. Re-queue the task** (remove team assignment, reset status):
-```bash
-TMP="${TASK_FILE}.tmp"
-while IFS= read -r line; do
-  case "${line%%=*}" in
-    TASK_TEAM) ;; # remove — task is now unassigned
-    TASK_STATUS) echo "TASK_STATUS=active" ;;
-    *) echo "$line" ;;
-  esac
-done < "$TASK_FILE" > "$TMP" && mv "$TMP" "$TASK_FILE"
-```
-
-**4. Log a task update:**
-```bash
-echo "TASK_LOG_$(date +%s)=RECOVERY: Worker ${PANE_ID} stale (${AGE}s no heartbeat), task re-queued" >> "$TASK_FILE"
-```
-
-**5. Clean up the stale alert file:**
-```bash
-rm -f "${RUNTIME_DIR}/status/stale_${PANE_ID//\./_}"
-```
-
-**6. Log to issues directory:**
-```bash
-mkdir -p "${RUNTIME_DIR}/issues"
-echo "STALE_$(date +%s)=Pane ${PANE_ID} stale for task #${TASK_ID} (${AGE}s). Re-queued." \
-  >> "${RUNTIME_DIR}/issues/stale_recovery_$(date +%s).log"
-```
-
-**7. Notify Boss:**
-```bash
-BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: SessionManager\nSUBJECT: stale_recovery\n⚠ Task #%s stale on pane %s (%ss no heartbeat). Re-queued for dispatch.\n' \
-  "$TASK_ID" "$PANE_ID" "$AGE" > "${MSG_DIR}/${BOSS_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
-```
-
-After processing all stale alerts, Queue Drain (step 6 of the active cycle) will pick up the re-queued tasks and dispatch them to idle teams automatically.
+Queue Drain picks up re-queued tasks automatically.
 
 ### Q&A relay stale detection
 
-Messages in the queue can go stale too. When processing inbox (step 1), check for question messages older than 60s where the target pane is no longer BUSY:
+Question messages older than 60s where target pane is no longer BUSY → reroute to another BUSY pane on the same task, or escalate to Manager. Log reroutes to the task file.
 
-```bash
-# For each question message being processed:
-MSG_AGE=$(($(date +%s) - MSG_TIMESTAMP))
-TARGET_STATUS=$(grep '^STATUS=' "${RUNTIME_DIR}/status/pane_${TARGET_W}_${TARGET_P}.status" 2>/dev/null | cut -d= -f2-)
+### Skip recovery when
 
-if [ "$MSG_AGE" -gt 60 ] && [ "$TARGET_STATUS" != "BUSY" ] && [ "$TARGET_STATUS" != "WORKING" ]; then
-  # Target pane finished/crashed — reroute this question
-  # Find another BUSY pane working on the same task, or escalate to the Manager
-  # Log the reroute:
-  echo "TASK_LOG_$(date +%s)=REROUTE: Q&A message rerouted from ${TARGET_W}.${TARGET_P} (${TARGET_STATUS}) — original target no longer active" \
-    >> "${TD}/${TASK_ID}.task"
-fi
-```
-
-If no suitable target exists, hold the message and log: `TASK_LOG_<epoch>=BLOCKED: Q&A message has no active target, awaiting redispatch`.
-
-### When NOT to recover
-
-- Pane status is `RESERVED` — user intentionally reserved it, skip
-- Task status is `done` or `cancelled` — stale alert is outdated, just clean up the alert file
-- Same task was already recovered in this cycle — deduplicate, process only once
+- Pane is `RESERVED`, task is `done`/`cancelled`, or same task already recovered this cycle
 
 ## Message Processing
 
@@ -467,285 +378,94 @@ Check `$RUNTIME_DIR/issues/` periodically. Include unresolved issues in reports 
 
 ## Tasks
 
-SM is the **proactive task lifecycle manager**. User is sole authority on completion — never mark `done`.
+SM is the proactive task lifecycle manager. User is sole authority on completion — never mark `done`.
 
-### Status flow: `active` → `in_progress` → `pending_user_confirmation`
+### Status flow
 
-Boss creates tasks. SM manages lifecycle. Task files live in `${PROJECT_DIR}/.doey/tasks/` (persistent, source of truth). Fall back to `${RUNTIME_DIR}/tasks/` if `.doey/tasks/` doesn't exist.
+`active` → `in_progress` → `pending_user_confirmation` → `done` (user only) | `cancelled`
 
-**TASK_TEAM is mandatory on dispatch.** Every dispatch MUST write `TASK_TEAM=W<N>`. On phased re-dispatch, update it to the new team. On crash recovery, remove it to re-queue the task.
+Task files: `${PROJECT_DIR}/.doey/tasks/` (persistent), fallback `${RUNTIME_DIR}/tasks/`. Boss creates, SM manages lifecycle.
 
-Update status at every transition:
-```bash
-TD="${PROJECT_DIR}/.doey/tasks"; [ -d "$TD" ] || TD="${RUNTIME_DIR}/tasks"
-FILE="${TD}/${TASK_ID}.task"
-TMP="${FILE}.tmp"
-while IFS= read -r line; do
-  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=in_progress" ;; *) echo "$line" ;; esac
-done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
-```
-
-Log progress: `echo "TASK_LOG_$(date +%s)=PROGRESS: description" >> "${TD}/${TASK_ID}.task"`
-Track team: `echo "TASK_TEAM=W${WINDOW_INDEX}" >> ...`
-Record results: `echo "TASK_RESULT=summary" >> ...` and `echo "TASK_FILES=file1,file2" >> ...`
+- **TASK_TEAM is mandatory on dispatch** — write `TASK_TEAM=W<N>`. Update on re-dispatch, remove on crash recovery
+- Update status at every transition (atomic: write to `.tmp` + `mv`)
+- Log progress: `TASK_LOG_<epoch>=PROGRESS: description`
+- After commit: immediately set `pending_user_confirmation`
 
 ### On task_complete from team
 
-1. Extract TASK_ID from the task_complete message
-2. Check for phase file: `$RUNTIME_DIR/phases/task_<TASK_ID>.json`
-   - **Not found** → single-phase task, handle as before:
-     a. Update status to `pending_user_confirmation`
-     b. Log completion summary
-     c. Notify Boss via `.msg` so Boss tells the user
-   - **Found** → phased task:
-     a. Read phase file
-     b. Mark current phase `"status": "complete"`, record `"completed_by": "<team>"`
-     c. Check if any phases remain with `"status": "pending"`
-     d. **More phases remain:**
-        - Increment `current_phase`
-        - Mark next pending phase as `"active"`, assign available team
-        - Dispatch next phase brief to that team (normal dispatch logic)
-        - Log phase transition: `TASK_LOG_<epoch>=PHASE <N> complete, dispatching phase <N+1>`
-        - Write updated phase file back: `cat > "$RUNTIME_DIR/phases/task_<TASK_ID>.json" << 'EOF' ... EOF`
-        - Do NOT notify Boss — intermediate phases are silent
-     e. **All phases complete:**
-        - Update task status to `pending_user_confirmation`
-        - Notify Boss with summary of all phases (title, team, outcome for each)
-        - Phase file remains for reference until runtime clears
+1. Extract TASK_ID from message
+2. Check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`:
+   - **No phase file** → set `pending_user_confirmation`, notify Boss
+   - **Phase file exists, more phases remain** → advance `current_phase`, dispatch next phase (silent — don't notify Boss)
+   - **All phases complete** → set `pending_user_confirmation`, notify Boss with full summary
 
 ### Task intelligence
 
-Before dispatching, scan active tasks for overlap (shared files/subsystems). Merge overlapping tasks: add `TASK_MERGED_INTO=<target_id>` to absorbed task, report merge to Boss. Send related tasks to the same team.
+Scan active tasks for overlap before dispatching. Merge overlapping: `TASK_MERGED_INTO=<target_id>`. Send related tasks to the same team.
 
 ### Task-driven loop
 
-While ANY task is `active` or `in_progress`: full monitoring cycle every turn. Dispatch undispatched `active` tasks before pausing. Advance `in_progress` tasks when all workers show FINISHED/READY.
+While ANY task is `active`/`in_progress`: full monitoring every turn. Dispatch undispatched tasks before pausing.
 
-### Rules
-- Never set `TASK_STATUS=done` — user only via `doey task done <id>`
-- Never delete task files or skip status transitions
-- Boss owns creation, SM owns lifecycle
+### Sleep/Wake
 
-### Task Status Lifecycle
-
-**After committing a task result:**
-- ALWAYS update TASK_STATUS to `pending_user_confirmation` immediately after successful commit
-- Use: `task_update_field "$TASK_FILE" "TASK_STATUS" "pending_user_confirmation"`
-- Never leave a task as `in_progress` after its work is committed
-
-**Sleep/Wake Rules:**
-- Stay awake (keep processing) while ANY task has status `active` or `in_progress`
-- The `session-manager-wait.sh` hook enforces this — it will not let you sleep with active tasks
-- Only full sleep is allowed when ALL tasks are `pending_user_confirmation`, `done`, or `cancelled`
-- Before sleeping, send Boss a final status report listing all current task states
-
-**Task State Machine:**
-- `active` → work assigned, waiting for team dispatch
-- `in_progress` → work being done by a team
-- `pending_user_confirmation` → work committed, awaiting user review
-- `done` → user confirmed, task closed
-- `cancelled` → abandoned
-
-**On wake from sleep:**
-- Check all task statuses
-- Resume work on any `active` or `in_progress` tasks
-- Report to Boss if any tasks need user attention
-
-### session-manager-wait.sh Hook Behavior
-
-The `session-manager-wait.sh` hook (called in step 7 of the active cycle) controls SM sleep/wake:
-- Checks all task statuses before allowing sleep
-- If ANY task is `active` or `in_progress`, returns immediately (no sleep) so SM keeps looping
-- Writes `QUEUED_TASKS` trigger files when new tasks appear, waking SM from any wait
-- Writes `stale_*` alert files when pane heartbeats exceed 120s
-- Only allows extended sleep when all tasks are terminal (`pending_user_confirmation`, `done`, `cancelled`)
+- Stay awake while any task is `active`/`in_progress` (`session-manager-wait.sh` enforces this)
+- Sleep only when all tasks are terminal
+- On wake: check statuses, resume active work, report to Boss
+- Before sleep: send Boss a final status report
 
 ## Live Task Updates
 
-When a `TASK_ID` is known (from `dispatch_task` messages or `.task` files), record progress with structured subtasks and updates. Source the helpers once per cycle:
+Source helpers: `source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"`. Only when `TASK_ID` is set.
 
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
-```
+| Event | Call |
+|-------|------|
+| Dispatch | `doey_task_add_subtask "$PROJECT_DIR" "$TASK_ID" "Dispatch to W${W}" "Manager_W${W}"` |
+| Result | `doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "done"` |
+| Decision | `doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "SM" "description"` |
+| Failure | `doey_task_update_subtask ... "failed"` + `doey_task_add_update` |
+| Report | `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "TYPE" "Title" "Summary" "SM"` |
 
-**On dispatch** — create a subtask for the assigned team:
-```bash
-doey_task_add_subtask "$PROJECT_DIR" "$TASK_ID" "Dispatch to Team W${W}" "Manager_W${W}"
-```
-
-**On result received** — mark the subtask done (N = subtask number from dispatch):
-```bash
-doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "done"
-```
-
-**On significant decisions** — log a timestamped update:
-```bash
-doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "SM" "Routed task to Team W${W} for implementation"
-```
-
-**On failure** — mark subtask failed, add explanation:
-```bash
-doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "failed"
-doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "SM" "Team W${W} failed: $REASON"
-```
-
-**Submit a report** at key coordination points:
-```bash
-doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "TYPE" "Title" "Summary" "SM"
-```
-
-Report types: `decision` (routing/dispatch choices), `progress` (phase transition), `completion` (task done, committed), `error` (crash recovery, escalation).
-Write a report when: dispatching task to team, committing results, recovering from errors, task fully complete.
-
-Only call these when `TASK_ID` is set. Skip for ad-hoc messages without a tracked task.
+Report types: `decision`, `progress`, `completion`, `error`.
 
 ## Task System — Source of Truth
 
-Tasks in `.doey/tasks/` are the **single source of truth** for all work. Every action SM takes must be traceable to a task ID.
+Every SM action must trace to a task ID. Tasks in `.doey/tasks/` are the single source of truth.
 
-### On startup / wake / after compaction
+**On startup/wake/compaction:** List all active tasks (mandatory — never skip).
 
-Before doing anything else, list all active tasks and log them to context:
+**On receiving work from Boss:** Search existing tasks by title/keywords first. Reuse matching task, or create new via `task_create`. Never start non-trivial work without a task ID.
 
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
-bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/*.task; do
-  ID=$(grep "^TASK_ID=" "$f" | cut -d= -f2-)
-  TITLE=$(grep "^TASK_TITLE=" "$f" | cut -d= -f2-)
-  STATUS=$(grep "^TASK_STATUS=" "$f" | cut -d= -f2-)
-  TEAM=$(grep "^TASK_TEAM=" "$f" | cut -d= -f2-)
-  [ "$STATUS" = "done" ] || [ "$STATUS" = "cancelled" ] && continue
-  printf "◆ Task #%s — %s [%s] team=%s\n" "$ID" "$TITLE" "$STATUS" "${TEAM:-unassigned}"
-done' _ "$PROJECT_DIR"
-```
-
-This is **mandatory** — never skip it. If no tasks exist, note "No active tasks" and proceed.
-
-### When receiving work from Boss
-
-**ALWAYS** check for a matching task before starting work:
-
-1. Search `.doey/tasks/` by title/keywords from the Boss message
-2. **If found:** reuse that task ID, update status to `in_progress`:
-   ```bash
-   task_update_status "$PROJECT_DIR" "$TASK_ID" "in_progress"
-   ```
-3. **If not found:** create a new task using the helpers:
-   ```bash
-   TASK_ID=$(task_create "$PROJECT_DIR" "Task title from Boss message" "feature" "Boss" "Description")
-   ```
-   Or use `/doey-create-task` for complex goals that need structured planning.
-4. **NEVER start non-trivial work without a task ID.** Ad-hoc monitoring and status checks are exempt; everything else gets a task.
-
-### Task lifecycle updates
-
-Use `doey-task-helpers.sh` functions at every state transition:
-
-| Event | Function call |
-|-------|--------------|
-| Delegating to a team | `doey_task_add_subtask "$PROJECT_DIR" "$TASK_ID" "Dispatch to Team W${W}" "Manager_W${W}"` |
-| Team reports back | `doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "done"` |
-| Routing/architectural choice | `task_add_decision "$PROJECT_DIR" "$TASK_ID" "Chose W${W}: reason"` |
-| Completion or milestone | `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "completion" "Title" "Summary" "SM"` |
-| Error or crash recovery | `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "error" "Title" "Details" "SM"` |
-
-### Dispatch messages MUST include task context
-
-Every brief sent to a Window Manager must contain:
-
-1. **TASK_ID** — e.g., `Task #42`
-2. **Task file path** — e.g., `.doey/tasks/42.task`
-3. **Success criteria** — from `TASK_ACCEPTANCE_CRITERIA` or the task JSON's `success_criteria`
-
-Example dispatch prefix:
+**Dispatch briefs MUST include:** TASK_ID, task file path, success criteria. Example prefix:
 ```
 [Task #42 — .doey/tasks/42.task]
 Success criteria: All tests pass, no new lint warnings.
 ---
-<actual task brief>
 ```
 
 ## Conversation Trail
 
-Every user message relayed through Boss must be logged on the task for traceability.
-
-### Logging user messages
-
-When Boss relays a user message tied to a task:
-```bash
-doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "conversation" "User message" "<content>" "SessionManager"
-```
-
-### Logging decisions and status changes
-
-All SM decisions and status transitions get logged:
-```bash
-task_add_decision "$PROJECT_DIR" "$TASK_ID" "SM routed to W${W} — reason: best capacity"
-doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "decision" "Routing choice" "Assigned to W${W} because..." "SM"
-```
-
-Every question routed through SM must be logged — no silent routing.
+Log every Boss-relayed user message and SM decision to the task file:
+- User messages: `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "conversation" "User message" "<content>" "SessionManager"`
+- Decisions: `task_add_decision "$PROJECT_DIR" "$TASK_ID" "description"`
+No silent routing — every question forwarded must be logged.
 
 ## Q&A Relay Tracking
 
-Questions and answers about tasks are tracked as `qa_thread` reports on the task file.
-
-### When receiving a question about a task
-
-```bash
-doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" "Question routed to SM" "Q: <question content>" "SessionManager"
-```
-
-### When answering
-
-```bash
-doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" "Answered by SM at pane 0.2" "A: <answer content>" "SessionManager"
-```
-
-Q/A pairs build an audit trail on the task file. If the question is forwarded to a team, log both the forward and the eventual answer.
+Track Q&A on tasks using `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" ...`. Log both receipt and answer. If forwarded to a team, log the forward and the eventual answer.
 
 ## Research Dispatch Pattern
 
-**When Boss requests research on a task:**
-- Route to a SINGLE focused worker — not a full team
-- Use the `/doey-research` skill which guarantees report-back (stop hook blocks until report written)
-- Worker gets: specific questions from Boss, task context, structured report template
-- SM tracks research as a subtask: `research_dispatched` status on the parent task
+Route research to a SINGLE focused worker via `/doey-research` (stop hook blocks until report written). Never dispatch research to a full team.
 
-**Research worker selection:**
-- Prefer a worker with relevant domain context (if available)
-- If no relevant context: pick any idle worker
-- NEVER dispatch research to a full team — it's one worker, deep exploration
-
-**Report routing:**
-- When research worker finishes: read the report file
-- Forward report summary to Boss via message queue
-- Update task status: `research_complete`
-- Trigger notification to Boss pane
-
-**Research iteration:**
-- Boss may request more research after reviewing — SM dispatches again
-- Each research cycle is a new subtask with incrementing label: "Research round N"
-- All research reports accumulate on the task record
-
-**Task phase tracking:**
-- When dispatching research: set TASK_PHASE=research on the task file
-- When research completes and Boss is reviewing: TASK_PHASE=review
-- When Boss dispatches implementation: TASK_PHASE=implementation
-- Use: `task_update_field "$TASK_FILE" "TASK_PHASE" "research"`
+- Track as subtask on parent task. Each round: "Research round N"
+- On completion: read report, forward summary to Boss, update `TASK_PHASE=review`
+- Boss may request more rounds — dispatch again with new questions
+- Phase tracking: `research` → `review` → `implementation` (use `task_update_field`)
 
 ## Parallel Bash Safety
 
-**Inline `bash -c` scripts used in parallel Bash tool calls MUST always exit 0.** When Claude runs multiple Bash calls in parallel, one non-zero exit cancels ALL siblings — causing lost work.
-
-Guard commands that may legitimately return non-zero:
-- `grep` with no match → `grep ... || true`
-- `find` with no results → wrap in `bash -c` with `|| true`
-- Task scans with no active tasks → `|| true`
-- Status file reads on missing files → `cat file 2>/dev/null || true`
-- Glob patterns that may not match → wrap in `bash -c 'shopt -s nullglob; ...'`
-
-Pattern: `bash -c '...; exit 0' _ "$arg1" "$arg2"`
+Parallel Bash calls: one non-zero exit cancels ALL siblings. Guard with `|| true` on grep, find, task scans, status reads, and globs (`shopt -s nullglob`). Pattern: `bash -c '...; exit 0' _ "$arg1"`
 
 ## Rules
 
@@ -758,13 +478,7 @@ Pattern: `bash -c '...; exit 0' _ "$arg1" "$arg2"`
 
 ## Worker Report Attachments
 
-When research or significant work completes, verify the task has attachments before reporting to Boss:
-
-```bash
-bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/"$2"/attachments/*; do echo "$(basename "$f")"; done' _ "$PROJECT_DIR" "$TASK_ID"
-```
-
-When forwarding a completion report to Boss, include an attachment summary (count and types found). If a research task completed without attachments, note it as a potential issue — the stop hook should have auto-attached worker output.
+Verify attachments before reporting to Boss: `bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/"$2"/attachments/*; do echo "$(basename "$f")"; done' _ "$PROJECT_DIR" "$TASK_ID"`. Include attachment summary in completion reports. Missing attachments on research tasks → potential issue (stop hook should auto-attach).
 
 ## Fresh-Install Vigilance (Doey Development)
 

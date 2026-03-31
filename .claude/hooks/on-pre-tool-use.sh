@@ -110,6 +110,8 @@ _check_blocked() {
 
 _HAS_JQ=0; command -v jq >/dev/null 2>&1 && _HAS_JQ=1
 TOOL_NAME=$(_json_str tool_name)
+_BASH_CMD=""
+[ "$TOOL_NAME" = "Bash" ] && _BASH_CMD=$(_json_str tool_input.command)
 
 # Per-pane role file is authoritative (tmux env may be stale)
 _DOEY_ROLE="${DOEY_ROLE:-}"
@@ -173,7 +175,7 @@ _dbg_write() {
 }
 
 if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
-  _BOSS_CMD=$(_json_str tool_input.command)
+  _BOSS_CMD="$_BASH_CMD"
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
     _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*-t[[:space:]]*//' | sed 's/[[:space:]].*//' | sed 's/^"//;s/"$//')
     case "$_boss_target" in
@@ -189,64 +191,41 @@ if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   ;; esac
 fi
 
-# Boss restrictions on non-Bash tools (relay/PM only — no project source access)
-if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" != "Bash" ]; then
+# Boss/Manager restrictions on non-Bash tools (no project source access)
+if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Agent)
-      _log_block "TOOL_BLOCKED" "Boss cannot use Agent tool" "relay to Session Manager instead"
-      _dbg_write "block_boss_agent"
-      echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Session Manager instead." >&2
+      _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
+      _dbg_write "block_${_DOEY_ROLE}_agent"
+      if [ "$_DOEY_ROLE" = "boss" ]; then
+        echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Session Manager instead." >&2
+      else
+        echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2
+      fi
       exit 2 ;;
     Read|Edit|Write|Glob|Grep)
-      _BOSS_PATH=$(_json_str tool_input.file_path)
-      [ -z "$_BOSS_PATH" ] && _BOSS_PATH=$(_json_str tool_input.path)
-      [ -z "$_BOSS_PATH" ] && _BOSS_PATH=$(_json_str tool_input.pattern)
-      _boss_allowed=false
-      case "${_BOSS_PATH:-}" in
-        */.doey/tasks/*|*/.doey/tasks) _boss_allowed=true ;;
-        "${_RD:-__none__}"/*|*/tmp/doey/*) _boss_allowed=true ;;
+      _CHK_PATH=$(_json_str tool_input.file_path)
+      [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.path)
+      [ "$_DOEY_ROLE" = "boss" ] && [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.pattern)
+      case "${_CHK_PATH:-}" in
+        */.doey/tasks/*|*/.doey/tasks|\
+        "${_RD:-__none__}"/*|*/tmp/doey/*)
+          _dbg_write "allow_${_DOEY_ROLE}_taskfile_${TOOL_NAME}"; exit 0 ;;
       esac
-      if [ "$_boss_allowed" = "false" ]; then
-        _log_block "TOOL_BLOCKED" "Boss $TOOL_NAME on project source blocked" "${_BOSS_PATH:-project root}"
-        _dbg_write "block_boss_source_${TOOL_NAME}"
+      _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} $TOOL_NAME on project source blocked" "${_CHK_PATH:-project root}"
+      _dbg_write "block_${_DOEY_ROLE}_source_${TOOL_NAME}"
+      if [ "$_DOEY_ROLE" = "boss" ]; then
         echo "BLOCKED: Boss cannot $TOOL_NAME project source files. Relay file operations to Session Manager." >&2
-        exit 2
+      else
+        echo "BLOCKED: Managers cannot $TOOL_NAME project source files. Delegate file operations to workers." >&2
       fi
-      _dbg_write "allow_boss_taskfile_${TOOL_NAME}"
-      exit 0 ;;
+      exit 2 ;;
   esac
 fi
 
 if [ "$_DOEY_ROLE" = "boss" ]; then
   _dbg_write "allow_boss"
   exit 0
-fi
-
-# Manager restrictions on non-Bash tools (coordinator only — no project source access)
-if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" != "Bash" ]; then
-  case "$TOOL_NAME" in
-    Agent)
-      _log_block "TOOL_BLOCKED" "Manager cannot use Agent tool" "delegate to workers instead"
-      _dbg_write "block_manager_agent"
-      echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2
-      exit 2 ;;
-    Read|Edit|Write|Glob|Grep)
-      _MGR_PATH=$(_json_str tool_input.file_path)
-      [ -z "$_MGR_PATH" ] && _MGR_PATH=$(_json_str tool_input.path)
-      _mgr_allowed=false
-      case "${_MGR_PATH:-}" in
-        */.doey/tasks/*|*/.doey/tasks) _mgr_allowed=true ;;
-        "${_RD:-__none__}"/*|*/tmp/doey/*) _mgr_allowed=true ;;
-      esac
-      if [ "$_mgr_allowed" = "false" ]; then
-        _log_block "TOOL_BLOCKED" "Manager $TOOL_NAME on project source blocked" "${_MGR_PATH:-project root}"
-        _dbg_write "block_manager_source_${TOOL_NAME}"
-        echo "BLOCKED: Managers cannot $TOOL_NAME project source files. Delegate file operations to workers." >&2
-        exit 2
-      fi
-      _dbg_write "allow_manager_taskfile_${TOOL_NAME}"
-      exit 0 ;;
-  esac
 fi
 
 if [ "$TOOL_NAME" != "Bash" ]; then
@@ -265,8 +244,7 @@ fi
 
 # Whitelist: file writes whose CONTENT may contain blocked substrings (e.g. "git commit").
 # Redirects to task files, runtime dirs, reports, and /tmp/ dispatch helpers are safe.
-_WL_CMD=$(_json_str tool_input.command)
-case "${_WL_CMD:-}" in
+case "${_BASH_CMD:-}" in
   *">>"*".doey/tasks/"*.task|*">"*".doey/tasks/"*.task) _dbg_write "allow_task_write"; exit 0 ;;
   *">>"*"/tmp/doey/"*|*">"*"/tmp/doey/"*)              _dbg_write "allow_runtime_write"; exit 0 ;;
   *">>"*"/reports/"*|*">"*"/reports/"*)                 _dbg_write "allow_report_write"; exit 0 ;;
@@ -276,8 +254,7 @@ esac
 # Manager tmux dispatch: allow safe tmux commands, block destructive ones.
 # Must run BEFORE git check — tmux payloads may contain git-related strings.
 if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" = "Bash" ]; then
-  _TMUX_CMD=$(_json_str tool_input.command)
-  _tmux_stripped=$(echo "$_TMUX_CMD" | sed 's/^[[:space:]]*//')
+  _tmux_stripped=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
   case "$_tmux_stripped" in
     "tmux kill-session"*|"tmux kill-server"*|"tmux kill-window"*)
       _log_block "TOOL_BLOCKED" "Manager destructive tmux command blocked" "$_tmux_stripped"
@@ -293,14 +270,13 @@ if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" = "Bash" ]; then
 fi
 
 if [ "$_DOEY_ROLE" != "session_manager" ]; then
-  _GIT_CMD=$(_json_str tool_input.command)
-  if [ -n "$_GIT_CMD" ] && [ "$_GIT_CMD" != "__PARSE_FAILED__" ]; then
-    case "$_GIT_CMD" in
+  if [ -n "$_BASH_CMD" ] && [ "$_BASH_CMD" != "__PARSE_FAILED__" ]; then
+    case "$_BASH_CMD" in
       *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
-        _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_GIT_CMD"
+        _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_BASH_CMD"
         _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
         if [ "$_DOEY_ROLE" = "worker" ]; then
-          _escalate_permission "Bash" "$_GIT_CMD" "git write operations blocked for workers"
+          _escalate_permission "Bash" "$_BASH_CMD" "git write operations blocked for workers"
           echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager. Manager notified — it may approve this for you." >&2
         else
           echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager." >&2
@@ -311,8 +287,7 @@ if [ "$_DOEY_ROLE" != "session_manager" ]; then
 fi
 
 if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
-  _CMD=$(_json_str tool_input.command)
-  _CMD=$(echo "$_CMD" | sed 's/^[[:space:]]*//')
+  _CMD=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
   case "$_CMD" in
     "tmux send-keys"*"/rename"*|*"&& tmux send-keys"*"/rename"*|*"; tmux send-keys"*"/rename"*)
       _log_block "TOOL_BLOCKED" "send /rename via send-keys blocked" "opens interactive prompt"
@@ -363,7 +338,7 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
 fi
 
 if [ "$_DOEY_ROLE" = "worker" ]; then
-  TOOL_COMMAND=$(_json_str tool_input.command)
+  TOOL_COMMAND="$_BASH_CMD"
   [ -z "$TOOL_COMMAND" ] && exit 0
   [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
   # Exception: workers may send-keys to the Session Manager pane
@@ -392,23 +367,6 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   exit 0
 fi
 
-source "$(dirname "$0")/common.sh"
-init_hook
-
-is_manager && { _dbg_write "allow_manager_slow"; exit 0; }
-is_session_manager && { _dbg_write "allow_sm_slow"; exit 0; }
-is_boss && { _dbg_write "allow_boss_slow"; exit 0; }
-
-TOOL_COMMAND=$(_json_str tool_input.command)
-[ -z "$TOOL_COMMAND" ] && exit 0
-[ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
-
-if _check_blocked "$TOOL_COMMAND"; then
-  _log_block "TOOL_BLOCKED" "worker $MSG blocked" "$TOOL_COMMAND"
-  _dbg_write "block_worker"
-  _escalate_permission "Bash" "$TOOL_COMMAND" "Worker blocked: $MSG"
-  echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this. Manager notified — it may approve this for you." >&2
-  exit 2
-fi
-_dbg_write "allow_slow"
+# Fallback for unhandled roles (info_panel, non-Doey sessions) — allow
+_dbg_write "allow_fallback"
 exit 0

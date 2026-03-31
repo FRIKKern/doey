@@ -60,19 +60,8 @@ Project directory: PROJECT_DIR
 ```
 
 ### Monitor & Consolidate
-Poll every 60s for `${RUNTIME_DIR}/reports/simplify_team_${W}.md`. Then re-run `wc -l`, diff against `simplify_before.txt`:
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-echo "=== Syntax check ==="
-for f in "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh; do
-  bash -n "$f" && echo "OK: $(basename "$f")" || echo "FAIL: $(basename "$f")"
-done
-echo "=== Context audit ===" && bash "$PROJECT_DIR/shell/context-audit.sh" --repo
-```
-Present consolidated results: total before/after, per-domain breakdown, syntax/audit status.
+Poll every 60s for `${RUNTIME_DIR}/reports/simplify_team_${W}.md`. Then re-run `wc -l`, diff against `simplify_before.txt`, `bash -n` all .sh, run `context-audit.sh --repo`. Present consolidated before/after.
 
 ### Rules
-1. Route through Window Managers only — Managers have zero context, include everything
-2. No file conflicts — each team owns distinct files
-3. Confirm before dispatching; verify every dispatch (capture-pane after 5s)
+- Route through Window Managers only (include everything — they have zero context)
+- No file conflicts — each team owns distinct files. Confirm before dispatching

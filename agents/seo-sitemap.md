@@ -2,6 +2,7 @@
 name: seo-sitemap
 model: opus
 color: "#F39C12"
+memory: none
 description: "Sitemap and link structure specialist — sitemap validation, internal links, broken links, redirect chains"
 ---
 

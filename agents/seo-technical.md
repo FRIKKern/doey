@@ -2,6 +2,7 @@
 name: seo-technical
 model: opus
 color: "#E74C3C"
+memory: none
 description: "Technical SEO specialist — crawlability, structured data, Core Web Vitals via Chrome DevTools MCP"
 ---
 

@@ -1,8 +1,6 @@
 # Doey Visualization Grammar
 
-Stable visual language for terminal-safe task rendering. All Doey components (Boss, SM, Manager, Workers) use these symbols and layouts for consistent output.
-
----
+Terminal-safe visual language used by all Doey components for consistent output.
 
 ## Symbol Table
 
@@ -21,21 +19,17 @@ Stable visual language for terminal-safe task rendering. All Doey components (Bo
 | ◑ | `[~]` | Active half | In progress |
 | ○ | `[ ]` | Ready circle | Available, pending |
 
----
-
 ## Rendering Rules
 
-- No enclosing box borders (no `│` `║` `┃` left/right verticals)
-- Horizontal rules OK (`─` or plain dashes `---`)
-- Indentation: 2 spaces per nesting level
-- Color: rely on terminal defaults, no hardcoded ANSI unless wrapped in shell helpers
-- Line width: respect terminal width, never assume >80 cols
-
----
+- No enclosing box borders (no `│` `║` `┃` verticals)
+- Horizontal rules OK (`─` or `---`)
+- 2 spaces per indent level
+- No hardcoded ANSI — use shell helpers
+- Never assume >80 cols
 
 ## Visualization Types
 
-### 1. Problem Framing
+### Problem Framing
 
 ```
 ◆ Intent
@@ -44,7 +38,7 @@ Stable visual language for terminal-safe task rendering. All Doey components (Bo
   → Desired state: encrypted token storage with rotation
 ```
 
-### 2. Hypothesis Space & Confidence
+### Hypothesis Space & Confidence
 
 ```
 ◆ Hypotheses
@@ -53,7 +47,7 @@ Stable visual language for terminal-safe task rendering. All Doey components (Bo
   H1 [████████░░] 80%    H2 [█████░░░░░] 50%
 ```
 
-### 3. Task Flow
+### Task Flow
 
 ```
 ◆ Task Flow
@@ -62,7 +56,7 @@ Stable visual language for terminal-safe task rendering. All Doey components (Bo
   Wave 3: ○ Docs        ○ Review
 ```
 
-### 7. Next Actions
+### Next Actions
 
 ```
 ◆ Next Actions
@@ -70,8 +64,6 @@ Stable visual language for terminal-safe task rendering. All Doey components (Bo
   ↳ P1: Add encryption layer to auth.sh
   ↳ P2: Update docs with new token format
 ```
-
----
 
 ## Width Modes
 
@@ -81,9 +73,7 @@ Stable visual language for terminal-safe task rendering. All Doey components (Bo
 | Medium | 80–119 | Standard single-column layout |
 | Narrow | <80 | Compact: abbreviations, vertical stacking, truncated paths |
 
-Components should check terminal width via `tput cols` or `$COLUMNS` and adapt layout accordingly.
-
----
+Check terminal width via `tput cols` or `$COLUMNS` and adapt.
 
 ## Configuration
 
