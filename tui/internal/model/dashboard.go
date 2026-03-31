@@ -489,13 +489,22 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 	t := m.theme
 	accent := categoryAccentColor(task.Category, t)
 
+	// Determine health state for visual hierarchy
+	health := ""
+	if hs, ok := m.heartbeats[task.ID]; ok {
+		health = hs.Health
+	}
+	isBlocked := task.Blockers != ""
+	isDone := task.Status == "done" || task.Status == "cancelled"
+	isFaint := isDone || health == "stale" || (health == "idle" && !isDone)
+
 	// --- Line 1: icon + #ID bold + Title ---
 	icon := styles.TaskIcon(task.Status)
 	idTag := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(fmt.Sprintf("#%s", task.ID))
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(task.Title)
 	line1 := icon + " " + idTag + " " + title
 
-	// --- Line 2: status badge + type tag + team badge + tags ---
+	// --- Line 2: status badge + type tag + team badge + tags + Q&A badge ---
 	badge := styles.StatusBadgeCard(task.Status, t)
 	typeTag := ""
 	if task.Type != "" {
@@ -516,7 +525,32 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 			Faint(true).
 			Render("‹"+tag+"›")
 	}
-	line2 := badge + typeTag + teamBadge + tagPills
+	// Q&A badge: count conversation entries from logs
+	qaCount := 0
+	for _, log := range task.Logs {
+		upper := strings.ToUpper(log.Entry)
+		if strings.HasPrefix(upper, "USER:") || strings.HasPrefix(upper, "AI:") || strings.HasPrefix(upper, "CONVERSATION:") {
+			qaCount++
+		}
+	}
+	qaBadge := ""
+	if qaCount > 0 {
+		qaBadge = " " + lipgloss.NewStyle().Foreground(t.Info).Render(fmt.Sprintf("💬 %d", qaCount))
+	}
+	line2 := badge + typeTag + teamBadge + tagPills + qaBadge
+
+	// --- Line 2b: blocked indicator ---
+	blockedLine := ""
+	if isBlocked {
+		firstLine := task.Blockers
+		if idx := strings.Index(firstLine, "\n"); idx > 0 {
+			firstLine = firstLine[:idx]
+		}
+		if len(firstLine) > w-20 {
+			firstLine = firstLine[:w-23] + "..."
+		}
+		blockedLine = lipgloss.NewStyle().Foreground(t.Danger).Bold(true).Render("⚠ Blocked: " + firstLine)
+	}
 
 	// --- Line 3: description excerpt (first 2-3 lines, dimmed) ---
 	descLine := ""
@@ -567,20 +601,34 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		default:
 			healthDot = lipgloss.NewStyle().Foreground(t.Danger).Render("●")
 		}
+
+		// Spinner active indicator
+		spinnerPrefix := ""
+		if hs.SpinnerActive {
+			spinnerPrefix = lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("● ")
+		}
+
 		workers := fmt.Sprintf("%d worker", hs.ActiveWorkers)
 		if hs.ActiveWorkers != 1 {
 			workers += "s"
 		}
-		parts := healthDot + " " + styles.CardMetaStyle(t).Render(workers+" active")
+		parts := spinnerPrefix + healthDot + " " + styles.CardMetaStyle(t).Render(workers+" active")
 		if hs.ActivityText != "" {
 			parts += t.DotSeparator() + styles.CardMetaStyle(t).Render(hs.ActivityText)
 		}
+		// Activity time emphasis: color based on recency
 		if !hs.LastActivity.IsZero() {
 			elapsed := time.Since(hs.LastActivity)
-			if elapsed < 5*time.Second {
-				parts += lipgloss.NewStyle().Foreground(t.Success).Render("  now")
-			} else {
-				parts += styles.CardMetaStyle(t).Render("  " + formatDashAge(elapsed) + " ago")
+			ageText := formatDashAge(elapsed) + " ago"
+			switch {
+			case elapsed < 10*time.Second:
+				parts += lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("  now")
+			case elapsed < 60*time.Second:
+				parts += lipgloss.NewStyle().Foreground(t.Success).Render("  " + ageText)
+			case elapsed < 120*time.Second:
+				parts += lipgloss.NewStyle().Foreground(t.Warning).Render("  " + ageText)
+			default:
+				parts += lipgloss.NewStyle().Foreground(t.Danger).Faint(true).Render("  " + ageText)
 			}
 		}
 		heartbeatLine = parts
@@ -671,6 +719,9 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 	// Assemble all non-empty lines
 	var lines []string
 	lines = append(lines, line1, line2)
+	if blockedLine != "" {
+		lines = append(lines, blockedLine)
+	}
 	if descLine != "" {
 		lines = append(lines, descLine)
 	}
@@ -690,10 +741,29 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 
 	content := strings.Join(lines, "\n")
 
-	// Card with rounded border, accent-colored
+	// Apply faint to entire content for stale/done/idle tasks
+	if isFaint {
+		content = lipgloss.NewStyle().Faint(true).Render(content)
+	}
+
+	// Card border color based on health + blocked state
+	borderColor := accent // default: category accent (prominent)
+	switch {
+	case isBlocked:
+		borderColor = t.Danger
+	case isDone:
+		borderColor = t.Muted
+	case health == "stale":
+		borderColor = t.Muted
+	case health == "degraded":
+		borderColor = t.Warning
+	case health == "idle":
+		borderColor = t.Subtle
+	}
+
 	cardStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(accent).
+		BorderForeground(borderColor).
 		Padding(0, 1).
 		Width(w - 2)
 
