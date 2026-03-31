@@ -262,6 +262,7 @@ install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
 {
   install_script "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
+  cp "$SCRIPT_DIR/shell/doey-go-helpers.sh" "$HOME/.local/bin/doey-go-helpers.sh"
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done

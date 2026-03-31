@@ -216,8 +216,12 @@ mkdir -p "$(dirname "$PROJECTS_FILE")"
 touch "$PROJECTS_FILE"
 
 # Go build helpers (used by: doey build, doctor, reload, uninstall)
-# shellcheck source=doey-go-helpers.sh
-source "${SCRIPT_DIR}/doey-go-helpers.sh" 2>/dev/null || true
+# Guard: doey-go-helpers.sh may not exist on older installs
+_go_helpers="${SCRIPT_DIR}/doey-go-helpers.sh"
+if [ -f "$_go_helpers" ]; then
+  # shellcheck source=doey-go-helpers.sh
+  source "$_go_helpers"
+fi
 
 # ── Configuration ───────────────────────────────────────────────────
 # Load user config (optional), then apply defaults for any unset variables.
