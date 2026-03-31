@@ -51,7 +51,7 @@ if [ -n "$PROJECT_DIR" ]; then
   command -v gtimeout >/dev/null 2>&1 && _timeout_cmd="gtimeout 2"  # macOS fallback
   FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && $_timeout_cmd git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
 fi
-[ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty" || true
+{ [ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty"; } || true
 FILES_JSON="[]"
 if [ -n "$FILES_LIST" ]; then
   FILES_JSON=$(echo "$FILES_LIST" | jq -R '.' | jq -s '.' 2>/dev/null) || FILES_JSON="[]"

@@ -12,6 +12,8 @@ else
 fi
 source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 
+# ERR trap: prevent unexpected non-zero exits (common.sh sets this too, but guard the source)
+trap 'exit 0' ERR
 source "$(dirname "$0")/common.sh" 2>/dev/null || true  # write_pane_status; skip init_hook
 
 SM_PANE="${SM_PANE:-0.2}"

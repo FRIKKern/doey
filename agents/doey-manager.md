@@ -402,6 +402,19 @@ printf 'FROM: Manager_W%s\nSUBJECT: question_answer\nTASK_ID: %s\n%s\n' \
 touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 ```
 
+## Parallel Bash Safety
+
+**Inline `bash -c` scripts used in parallel Bash tool calls MUST always exit 0.** When Claude runs multiple Bash calls in parallel, one non-zero exit cancels ALL siblings — causing lost work.
+
+Guard commands that may legitimately return non-zero:
+- `grep` with no match → `grep ... || true`
+- `find` with no results → wrap in `bash -c` with `|| true`
+- Task scans with no active tasks → `|| true`
+- Status file reads on missing files → `cat file 2>/dev/null || true`
+- Glob patterns that may not match → wrap in `bash -c 'shopt -s nullglob; ...'`
+
+Pattern: `bash -c '...; exit 0' _ "$arg1" "$arg2"`
+
 ## Rules
 
 1. **Git commit/push are hook-blocked.** Send a `commit_request` `.msg` to SM with changed files. SM handles git directly.

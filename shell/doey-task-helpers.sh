@@ -3,6 +3,21 @@
 # Sourceable library, not standalone. Tasks stored in .doey/tasks/ (persistent).
 set -euo pipefail
 
+# ── Exit Code Contract ──────────────────────────────────────────────
+# Functions in this library may return non-zero exit codes.
+# When calling from parallel Bash tool calls, ALWAYS guard:
+#   bash -c 'source helpers.sh; task_find_similar ... || true'
+# One non-zero exit in a parallel Bash call cancels ALL siblings.
+#
+# Categories:
+#   QUERY functions (task_find_similar, task_list, count functions):
+#     Return 0 always. Empty output = no results.
+#   MUTATION functions (task_update_*, task_create, task_add_*):
+#     Return 1 on invalid input or missing file — these are real errors.
+#   VALIDATION helpers (_task_validate_status):
+#     Return 1 on invalid — callers should handle.
+# ─────────────────────────────────────────────────────────────────────
+
 # Charmbracelet gum detection (output styling only)
 HAS_GUM=false
 command -v gum >/dev/null 2>&1 && HAS_GUM=true
@@ -101,6 +116,9 @@ task_create() {
 # ── task_read ─────────────────────────────────────────────────────────
 # Parse a .task file and set all schema v3 shell variables.
 # Args: task_file_path
+# EXIT CODES: 0=success, 1=file missing/empty/malformed (no TASK_ID)
+# NOTE: Callers in loops (task_list, task_sync_runtime) already guard
+#       with `|| continue`. In parallel Bash calls, guard with `|| true`.
 # Sets: TASK_SCHEMA_VERSION, TASK_ID, TASK_TITLE, TASK_STATUS, TASK_TYPE,
 #   TASK_TAGS, TASK_CREATED_BY, TASK_ASSIGNED_TO, TASK_DESCRIPTION,
 #   TASK_ACCEPTANCE_CRITERIA, TASK_HYPOTHESES, TASK_DECISION_LOG,
@@ -252,8 +270,9 @@ _task_append_to_field() {
 }
 
 # ── _task_validate_status ─────────────────────────────────────────────
-# Validate a status string. Returns 0 if valid, 1 if not.
+# Validate a status string.
 # Args: status
+# EXIT CODES: 0=valid, 1=invalid (intentional — used in conditionals)
 _task_validate_status() {
   local status="$1" s
   for s in $_TASK_VALID_STATUSES; do
@@ -483,6 +502,7 @@ task_add_note() {
 # ── task_update_subtask ───────────────────────────────────────────────
 # Update a subtask's status.
 # Args: task_file subtask_id new_status
+# EXIT CODES: 0=updated, 1=invalid status/no subtasks/subtask not found
 # Subtask format: id:title:status separated by \n
 task_update_subtask() {
   local task_file="$1" subtask_id="$2" new_status="$3"
@@ -1145,10 +1165,11 @@ _task_resolve_file() {
 # ── doey_task_get_subtask_count ──────────────────────────────────────
 # Count TASK_SUBTASK_*_TITLE lines in a task file.
 # Args: project_dir task_id
+# EXIT CODES: 0=always (query function). Outputs "0" if task missing/no subtasks.
 # Returns (echo): count (0 if missing/none)
 doey_task_get_subtask_count() {
   local task_file
-  task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 1; }
+  task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 0; }
   local count=0 line
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
@@ -1308,12 +1329,13 @@ task_add_report() {
 # ── doey_task_get_report_count ──────────────────────────────────────
 # Count TASK_REPORT_*_TIMESTAMP lines in a task file.
 # Args: project_dir task_id
+# EXIT CODES: 0=always (query function). Outputs "0" if task missing/no reports.
 # Returns (echo): count (0 if missing/none)
 doey_task_get_report_count() {
   local project_dir="$1" task_id="$2"
 
   local task_file
-  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || { echo "0"; return 1; }
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || { echo "0"; return 0; }
 
   local count=0 line
   while IFS= read -r line || [ -n "$line" ]; do
@@ -1376,11 +1398,12 @@ task_add_recovery_event() {
 # ── task_get_recovery_count ─────────────────────────────────────────
 # Count TASK_RECOVERY_*_TIMESTAMP lines in a task file.
 # Args: task_file
+# EXIT CODES: 0=always (query function). Outputs "0" if file missing/no events.
 # Returns (echo): count (0 if missing/none)
 task_get_recovery_count() {
   local task_file="$1"
 
-  [ ! -f "$task_file" ] && { echo "0"; return 1; }
+  [ ! -f "$task_file" ] && { echo "0"; return 0; }
 
   local count=0 line
   while IFS= read -r line || [ -n "$line" ]; do
@@ -1464,11 +1487,12 @@ task_list_attachments() {
 # ── task_find_similar ─────────────────────────────────────────────────
 # Fuzzy-match active tasks by title keyword overlap.
 # Args: project_dir title_string
-# Returns (echo): matching TASK_ID (first match), exit 0. No match: exit 1.
+# EXIT CODES: 0=always (query function). Empty output = no match.
+# Returns (echo): matching TASK_ID (first match), or empty string if none.
 task_find_similar() {
   local project_dir="$1" title_string="$2"
   local tasks_dir="${project_dir}/.doey/tasks"
-  [ -d "$tasks_dir" ] || return 1
+  [ -d "$tasks_dir" ] || return 0
 
   # Stop words to skip during matching
   local stop_words="|the|a|an|and|or|in|on|at|to|for|of|is|it|fix|add|update|"
@@ -1501,7 +1525,7 @@ task_find_similar() {
     input_count=$((input_count + 1))
   done
 
-  [ "$input_count" -eq 0 ] && return 1
+  [ "$input_count" -eq 0 ] && return 0
 
   local f
   for f in "${tasks_dir}"/*.task; do
@@ -1577,7 +1601,8 @@ task_find_similar() {
     fi
   done
 
-  return 1
+  # No match — return 0 with empty output (query, not error)
+  return 0
 }
 
 # ── task_find_or_create ──────────────────────────────────────────────

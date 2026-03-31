@@ -10,7 +10,7 @@ source "${HOOK_DIR}/common.sh"
 init_hook
 
 _DOEY_HOOK_NAME="post-push-complete"
-_debug_hook_entry
+type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
 
 # Only Session Manager can push
 [ "${DOEY_ROLE:-}" = "session_manager" ] || exit 0
