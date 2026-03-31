@@ -163,12 +163,14 @@ type Task struct {
 // Subtask represents a worker assignment under a parent task.
 // Stored in $RUNTIME_DIR/tasks/<task_id>/subtasks/<pane>.subtask
 type Subtask struct {
-	TaskID  string // parent task ID
-	Pane    string // e.g. "2.3" — which worker pane
-	Title   string // what was dispatched
-	Status  string // active, done, failed
-	Created int64  // unix epoch
-	Updated int64  // unix epoch
+	TaskID      string // parent task ID
+	Pane        string // e.g. "2.3" — which worker pane (assignee)
+	Title       string // what was dispatched
+	Status      string // active, done, failed
+	Created     int64  // unix epoch
+	Updated     int64  // unix epoch
+	Worker      string // pane ID doing the work (e.g. "3.2")
+	CompletedAt int64  // unix epoch (set when done/failed)
 }
 
 // DebugEntry represents a single debug event from any source.
