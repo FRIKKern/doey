@@ -1068,7 +1068,7 @@ show_menu() {
     done
     _gum_opts+=("+ Init current directory")
     if [[ $running_count -gt 0 ]]; then
-      _gum_opts+=("✗ Kill all sessions (${running_count} active)")
+      _gum_opts+=("✗ Kill sessions...")
     fi
     _gum_opts+=("  Quit")
 
@@ -1085,17 +1085,67 @@ show_menu() {
           launch_with_grid "$init_name" "$(pwd)" "$grid"
         fi
         ;;
-      "✗ Kill all"*)
-        if doey_confirm "Kill all ${running_count} running session(s)?"; then
+      "✗ Kill sessions..."*)
+        # ── Per-session kill picker (gum multi-select) ──
+        local _kill_opts=()
+        for i in "${!names[@]}"; do
+          if [ "${status_plain[$i]}" = "running" ]; then
+            local _ksp="${paths[$i]/#$HOME/\~}"
+            _kill_opts+=("● ${names[$i]}  ${_ksp}")
+          fi
+        done
+        _kill_opts+=("✗ Kill all (${running_count} sessions)")
+        _kill_opts+=("← Back")
+
+        local _kill_picks
+        _kill_picks=$(gum choose --no-limit --cursor "▸ " --cursor.foreground 1 \
+          --header "Select session(s) to kill:" "${_kill_opts[@]}") || { show_menu "$grid"; return $?; }
+
+        if [ -z "$_kill_picks" ]; then
+          show_menu "$grid"; return $?
+        fi
+
+        # Check for "Back" or "Kill all"
+        local _do_kill_all=false _did_kill=false
+        if printf '%s\n' "$_kill_picks" | grep -q "^← Back$"; then
+          show_menu "$grid"; return $?
+        fi
+        if printf '%s\n' "$_kill_picks" | grep -q "^✗ Kill all"; then
+          _do_kill_all=true
+        fi
+
+        if [ "$_do_kill_all" = true ]; then
           for i in "${!names[@]}"; do
             local sess="doey-${names[$i]}"
             if session_exists "$sess"; then
               _kill_doey_session "$sess"
-              doey_ok "Killed ${sess}"
+              doey_ok "Killed ${names[$i]}"
+              _did_kill=true
             fi
           done
-          doey_success "All sessions killed"
+        else
+          # Kill individually selected sessions
+          while IFS= read -r _kline; do
+            [ -z "$_kline" ] && continue
+            local _kname
+            _kname=$(printf '%s' "$_kline" | sed 's/^● *//; s/  .*//')
+            for i in "${!names[@]}"; do
+              if [ "${names[$i]}" = "$_kname" ]; then
+                local _ks="doey-${_kname}"
+                if session_exists "$_ks"; then
+                  _kill_doey_session "$_ks"
+                  doey_ok "Killed ${_kname}"
+                  _did_kill=true
+                fi
+                break
+              fi
+            done
+          done << EOF_KILLS
+${_kill_picks}
+EOF_KILLS
         fi
+
+        [ "$_did_kill" = true ] && doey_success "Done"
         ;;
       *)
         # Extract project name from "● name  path" or "○ name  path"
@@ -1170,12 +1220,8 @@ show_menu() {
     [kK][0-9]*)
       _menu_select "${choice#[kK]}" || return 1
       if session_exists "$_sel_session"; then
-        if doey_confirm "Kill ${_sel_session}?"; then
-          _kill_doey_session "$_sel_session"
-          doey_success "Killed ${_sel_session}"
-        else
-          doey_info "Cancelled"
-        fi
+        _kill_doey_session "$_sel_session"
+        doey_success "Killed ${_sel_name}"
       else
         doey_info "${_sel_name} is not running"
       fi
