@@ -2,6 +2,7 @@
 name: seo-reporter
 model: opus
 color: "#9B59B6"
+memory: none
 description: "SERP reporter — prioritized findings, competitor context, action-ready SEO reports"
 ---
 

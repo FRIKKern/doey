@@ -50,13 +50,7 @@ tmux capture-pane -t "${SESSION_NAME}:${WINDOW_INDEX}.X" -p -S -3
 
 ### Smart Context Check
 
-Before killing a worker, check if its previous task context is relevant to the new task.
-Workers that already have useful context loaded (same tags, same files, same domain) perform
-better when delegated into — no cold start, shared file caches, continuity. Workers with
-unrelated context get a clean restart for best results.
-
-**Default bias: restart.** Missing metadata, empty fields, or `FORCE_RESTART=1` all trigger a
-clean restart. This is the safe default — fresh context beats stale context for unrelated work.
+Reuse worker context if overlap ≥30% (same tags/files/domain). Default: restart (missing metadata or `FORCE_RESTART=1` → clean start).
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -74,11 +68,6 @@ if [ "${FORCE_RESTART:-0}" != "1" ] && [ -f "$STATUS_FILE" ]; then
   LAST_FILES=$(grep '^LAST_FILES: ' "$STATUS_FILE" 2>/dev/null | cut -d' ' -f2-) || LAST_FILES=""
 
   if [ -n "$LAST_TAGS" ] || [ -n "$LAST_TYPE" ] || [ -n "$LAST_FILES" ]; then
-    # NEW_TASK_TAGS, NEW_TASK_TYPE, NEW_TASK_FILES should be set by the Manager before dispatch.
-    # Extract from the .task file if a TASK_ID is known:
-    #   NEW_TASK_TAGS=$(grep "^TASK_TAGS=" "$PROJECT_DIR/.doey/tasks/${TASK_ID}.task" 2>/dev/null | cut -d= -f2-)
-    #   NEW_TASK_TYPE=$(grep "^TASK_TYPE=" "$PROJECT_DIR/.doey/tasks/${TASK_ID}.task" 2>/dev/null | cut -d= -f2-)
-    #   NEW_TASK_FILES: comma-separated list of files the task will touch (from task description or dispatch plan)
     source "${PROJECT_DIR}/shell/doey-task-helpers.sh" 2>/dev/null || true
     if type task_should_restart >/dev/null 2>&1; then
       if ! task_should_restart "$LAST_TAGS" "$LAST_TYPE" "$LAST_FILES" \
@@ -91,7 +80,7 @@ if [ "${FORCE_RESTART:-0}" != "1" ] && [ -f "$STATUS_FILE" ]; then
 fi
 ```
 
-If `USE_DELEGATE=true`, skip kill+restart and go straight to step 3 (Rename) → 4 (Paste task) → 5 (Settle) → 6 (Verify). The worker keeps its loaded context.
+If `USE_DELEGATE=true`, skip kill+restart → go to step 3 (Rename) → 4 → 5 → 6.
 
 ### Dispatch Sequence
 
@@ -165,18 +154,13 @@ fi
 
 ### Variants
 
-**Batch:** Parallel Bash calls per worker. **Short (< 200 chars):** `send-keys` directly, settle + verify still mandatory.
-**File conflicts:** One file owner per worker. Shared files: non-overlapping sections, Edit only.
-**Unstick:** `copy-mode -q` → `C-c` → `C-u` → `Enter`, 3s wait. After 2 fails: `kill -9`, relaunch, re-dispatch.
-
-### Overrides
-
-**Force restart (ignore context overlap):** Set `FORCE_RESTART=1` before dispatching. Useful when the worker's context is known to be corrupted, or you want a clean slate regardless of overlap.
-
-**Force delegate (skip context check):** Use `/doey-delegate` directly. Bypasses the scoring logic entirely and sends the task into the existing session as-is.
+- **Batch:** Parallel Bash calls per worker. **Short (< 200 chars):** `send-keys` directly, settle + verify still mandatory
+- **File conflicts:** One file owner per worker. Shared files: non-overlapping sections, Edit only
+- **Unstick:** `copy-mode -q` → `C-c` → `C-u` → `Enter`, 3s. After 2 fails: `kill -9`, relaunch, re-dispatch
+- **Force restart:** `FORCE_RESTART=1` — ignores context overlap
+- **Force delegate:** Use `/doey-delegate` — bypasses scoring, sends task into existing session
 
 ## Rules
 
-- Re-check `.reserved` before dispatch; verify after (step 6)
-- Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task. One task per worker per cycle
-- Smart context: delegate when overlap ≥30%, restart when <30% or metadata missing. Default: restart
+- Re-check `.reserved` before dispatch; verify after (step 6). One task per worker per cycle
+- Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths in every task

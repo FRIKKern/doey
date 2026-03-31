@@ -2,6 +2,7 @@
 name: visual-reporter
 model: opus
 color: "#F39C12"
+memory: none
 description: "Defect reporter — groups findings, deduplicates root causes, produces ticket-ready output"
 ---
 

@@ -210,16 +210,11 @@ DOEY_ART
 
 doey_divider() {
   local width="${1:-50}"
+  local line; line="$(printf '%*s' "$width" '' | tr ' ' '─')"
   if [ "$HAS_GUM" = true ]; then
-    local line=""
-    local _dd_i=0
-    while [ "$_dd_i" -lt "$width" ]; do line="${line}─"; _dd_i=$((_dd_i + 1)); done
     gum style --foreground 240 --margin "0 1" "$line"
   else
-    printf "  ${DIM}"
-    local _dd_i=0
-    while [ "$_dd_i" -lt "$width" ]; do printf '─'; _dd_i=$((_dd_i + 1)); done
-    printf "${RESET}\n"
+    printf "  ${DIM}%s${RESET}\n" "$line"
   fi
 }
 
@@ -316,6 +311,14 @@ _detect_remote() {
   else
     echo "false"
   fi
+}
+
+# Start tunnel if enabled and running remotely
+_maybe_start_tunnel() {
+  local runtime_dir="$1" is_remote="$2"
+  [ "$DOEY_TUNNEL_ENABLED" = "true" ] && [ "$is_remote" = "true" ] || return 0
+  local tunnel_script="${DOEY_DIR}/shell/doey-tunnel.sh"
+  [ -f "$tunnel_script" ] && bash "$tunnel_script" "$runtime_dir" >> "${runtime_dir}/tunnel.log" 2>&1 &
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -1795,7 +1798,6 @@ doey_purge() {
     "$rt_files" "$rt_bytes" "$res_files" "$res_bytes"
 }
 
-
 check_claude_auth() {
   if ! command -v claude >/dev/null 2>&1; then
     doey_error "claude CLI not found"
@@ -1874,14 +1876,7 @@ MANIFEST
 
   _detect_project_type "$dir"
   _write_project_type_env "$runtime_dir"
-
-  # Auto-start tunnel if enabled and running remotely
-  if [ "$DOEY_TUNNEL_ENABLED" = "true" ] && [ "$(_detect_remote)" = "true" ]; then
-    local tunnel_script="${DOEY_DIR}/shell/doey-tunnel.sh"
-    if [ -f "$tunnel_script" ]; then
-      bash "$tunnel_script" "$runtime_dir" >> "${runtime_dir}/tunnel.log" 2>&1 &
-    fi
-  fi
+  _maybe_start_tunnel "$runtime_dir" "$(_detect_remote)"
 
   write_team_env "$runtime_dir" "1" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
 
@@ -2303,7 +2298,9 @@ _task_sync_to_runtime() {
   done
 }
 
-# Show all fields of a single task
+# Print a task field if non-empty
+_tsf() { [ -n "$2" ] && printf '  %b%-16s%b %s\n' "$BOLD" "$1" "$RESET" "$2"; }
+
 _task_show() {
   local _file="$1"
   [ -f "$_file" ] || { printf '  %s✗ Task file not found%s\n' "$ERROR" "$RESET"; return 1; }
@@ -2312,39 +2309,24 @@ _task_show() {
   [ -n "$TASK_CREATED" ] && _age="$(_task_age "$TASK_CREATED")"
   printf '\n'
   printf '  %b━━━ Task #%s ━━━%b\n' "$BRAND" "$TASK_ID" "$RESET"
-  printf '  %bTitle:%b          %s\n' "$BOLD" "$RESET" "$TASK_TITLE"
-  printf '  %bStatus:%b         %s\n' "$BOLD" "$RESET" "$TASK_STATUS"
-  [ -n "$TASK_TYPE" ] && \
-  printf '  %bType:%b           %s\n' "$BOLD" "$RESET" "$TASK_TYPE"
-  [ -n "$TASK_TAGS" ] && \
-  printf '  %bTags:%b           %s\n' "$BOLD" "$RESET" "$TASK_TAGS"
-  [ -n "$TASK_CREATED_BY" ] && \
-  printf '  %bCreated by:%b     %s\n' "$BOLD" "$RESET" "$TASK_CREATED_BY"
-  [ -n "$TASK_ASSIGNED_TO" ] && \
-  printf '  %bAssigned to:%b    %s\n' "$BOLD" "$RESET" "$TASK_ASSIGNED_TO"
-  [ -n "$_age" ] && \
-  printf '  %bAge:%b            %s ago\n' "$BOLD" "$RESET" "$_age"
-  [ -n "$TASK_DESCRIPTION" ] && \
-  printf '  %bDescription:%b    %s\n' "$BOLD" "$RESET" "$TASK_DESCRIPTION"
-  [ -n "$TASK_ACCEPTANCE_CRITERIA" ] && \
-  printf '  %bAcceptance:%b     %s\n' "$BOLD" "$RESET" "$TASK_ACCEPTANCE_CRITERIA"
-  [ -n "$TASK_HYPOTHESES" ] && \
-  printf '  %bHypotheses:%b     %s\n' "$BOLD" "$RESET" "$TASK_HYPOTHESES"
-  [ -n "$TASK_DECISION_LOG" ] && \
-  printf '  %bDecisions:%b      %s\n' "$BOLD" "$RESET" "$TASK_DECISION_LOG"
-  [ -n "$TASK_SUBTASKS" ] && \
-  printf '  %bSubtasks:%b       %s\n' "$BOLD" "$RESET" "$TASK_SUBTASKS"
-  [ -n "$TASK_RELATED_FILES" ] && \
-  printf '  %bRelated files:%b  %s\n' "$BOLD" "$RESET" "$TASK_RELATED_FILES"
-  [ -n "$TASK_BLOCKERS" ] && \
-  printf '  %bBlockers:%b       %s\n' "$BOLD" "$RESET" "$TASK_BLOCKERS"
-  [ -n "$TASK_ATTACHMENTS" ] && \
-  printf '  %bAttachments:%b    %s\n' "$BOLD" "$RESET" "$TASK_ATTACHMENTS"
-  [ -n "$TASK_TIMESTAMPS" ] && \
-  printf '  %bTimestamps:%b     %s\n' "$BOLD" "$RESET" "$TASK_TIMESTAMPS"
-  [ -n "$TASK_NOTES" ] && \
-  printf '  %bNotes:%b          %s\n' "$BOLD" "$RESET" "$TASK_NOTES"
-  printf '  %bSchema:%b         v%s\n' "$DIM" "$RESET" "${TASK_SCHEMA_VERSION:-1}"
+  printf '  %b%-16s%b %s\n' "$BOLD" "Title:" "$RESET" "$TASK_TITLE"
+  printf '  %b%-16s%b %s\n' "$BOLD" "Status:" "$RESET" "$TASK_STATUS"
+  _tsf "Type:" "$TASK_TYPE"
+  _tsf "Tags:" "$TASK_TAGS"
+  _tsf "Created by:" "$TASK_CREATED_BY"
+  _tsf "Assigned to:" "$TASK_ASSIGNED_TO"
+  [ -n "$_age" ] && printf '  %b%-16s%b %s ago\n' "$BOLD" "Age:" "$RESET" "$_age"
+  _tsf "Description:" "$TASK_DESCRIPTION"
+  _tsf "Acceptance:" "$TASK_ACCEPTANCE_CRITERIA"
+  _tsf "Hypotheses:" "$TASK_HYPOTHESES"
+  _tsf "Decisions:" "$TASK_DECISION_LOG"
+  _tsf "Subtasks:" "$TASK_SUBTASKS"
+  _tsf "Related files:" "$TASK_RELATED_FILES"
+  _tsf "Blockers:" "$TASK_BLOCKERS"
+  _tsf "Attachments:" "$TASK_ATTACHMENTS"
+  _tsf "Timestamps:" "$TASK_TIMESTAMPS"
+  _tsf "Notes:" "$TASK_NOTES"
+  printf '  %b%-16s%b v%s\n' "$DIM" "Schema:" "$RESET" "${TASK_SCHEMA_VERSION:-1}"
   printf '\n'
 }
 
@@ -3326,26 +3308,15 @@ check_doctor() {
 
   # Task counter — validate .next_id if .doey/tasks/ exists
   local _tasks_dir="${PROJECT_DIR}/.doey/tasks"
-  if [[ -d "$_tasks_dir" ]]; then
-    local _next_id_file="${_tasks_dir}/.next_id"
-    if [[ -f "$_next_id_file" ]]; then
-      local _nid=""
-      _nid="$(cat "$_next_id_file" 2>/dev/null || true)"
-      case "$_nid" in
-        ''|*[!0-9]*)
-          _doc_check warn "Task counter" ".next_id is not a positive integer: ${_nid:-empty}"
-          ;;
-        *)
-          if [[ "$_nid" -gt 0 ]]; then
-            _doc_check ok "Task counter" ".next_id=${_nid}"
-          else
-            _doc_check warn "Task counter" ".next_id=0 — may collide with existing tasks"
-          fi
-          ;;
-      esac
-    else
-      _doc_check skip "Task counter" ".doey/tasks/ exists but no .next_id yet"
-    fi
+  if [[ -d "$_tasks_dir" ]] && [[ -f "${_tasks_dir}/.next_id" ]]; then
+    local _nid; _nid="$(cat "${_tasks_dir}/.next_id" 2>/dev/null || true)"
+    case "$_nid" in
+      ''|*[!0-9]*) _doc_check warn "Task counter" ".next_id is not a positive integer: ${_nid:-empty}" ;;
+      0)           _doc_check warn "Task counter" ".next_id=0 — may collide with existing tasks" ;;
+      *)           _doc_check ok "Task counter" ".next_id=${_nid}" ;;
+    esac
+  elif [[ -d "$_tasks_dir" ]]; then
+    _doc_check skip "Task counter" ".doey/tasks/ exists but no .next_id yet"
   fi
 
   # ── Summary footer ──
@@ -3639,13 +3610,7 @@ MANIFEST
   _detect_project_type "$dir"
   _write_project_type_env "$runtime_dir"
 
-  # Auto-start tunnel if enabled and running remotely
-  if [ "$DOEY_TUNNEL_ENABLED" = "true" ] && [ "$(_detect_remote)" = "true" ]; then
-    local tunnel_script="${DOEY_DIR}/shell/doey-tunnel.sh"
-    if [ -f "$tunnel_script" ]; then
-      bash "$tunnel_script" "$runtime_dir" >> "${runtime_dir}/tunnel.log" 2>&1 &
-    fi
-  fi
+  _maybe_start_tunnel "$runtime_dir" "$(_detect_remote)"
 
   # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
   local _team1_def=""
@@ -3685,11 +3650,10 @@ MANIFEST
     step_done
 
     step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
-    # Removed sleep 0.2 — tmux split-window is synchronous
     local _col_i
     for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
       doey_add_column "$session" "$runtime_dir" "$dir"
-      # Removed sleep 0.3 — tmux split-window is synchronous
+  
     done
     step_done
   fi
@@ -4305,7 +4269,6 @@ _launch_team_manager() {
   _append_settings _mgr_cmd "$runtime_dir"
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
-  # Removed sleep 0.2 — tmux send-keys is synchronous
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 }
 
@@ -4618,7 +4581,6 @@ add_dynamic_team_window() {
     # Freelancer: pane 0 is F0, split vertically for pane 1 (F1) — two rows in first column
     # Split first, then batch-boot both workers in one call (single DOEY_WORKER_LAUNCH_DELAY)
     tmux split-window -v -t "$session:${window_index}.0" -c "$team_dir"
-    # Removed sleep 0.1 — tmux split-window is synchronous
     local _fl_p1
     _fl_p1="$(tmux list-panes -t "$session:$window_index" -F '#{pane_index}' | tail -1)"
 
@@ -4647,7 +4609,7 @@ add_dynamic_team_window() {
   local _col_i
   for (( _col_i=0; _col_i<initial_cols; _col_i++ )); do
     doey_add_column "$session" "$runtime_dir" "$team_dir" "$window_index"
-    # Removed sleep 0.3 — tmux split-window is synchronous
+
   done
 
   _build_worker_pane_list "$session" "$window_index"
@@ -4703,7 +4665,6 @@ add_team_window() {
       tmux split-window -h -t "${session}:${window_index}.$((r * cols))" -c "$team_dir"
     done
   done
-  # Removed sleep 0.3 — tmux split-window is synchronous
 
   local actual
   actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l | tr -d ' ')

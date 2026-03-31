@@ -63,10 +63,8 @@ done
 
 ```bash
 TEAMDEF_FILE="${RUNTIME_DIR}/teamdef_${TEAM_NAME}.env"
-# Extract description from YAML frontmatter
 TEAM_DESC=$(sed -n '/^---$/,/^---$/{ /^description:/{ s/^description:[[:space:]]*//; p; }; }' "$TEAM_DEF")
 
-# Parse pane table: skip header rows, extract pipe-delimited fields
 PANE_COUNT=0
 PANE_DEFS=""
 _in_panes=false
@@ -76,10 +74,8 @@ while IFS= read -r line; do
     "## "*) _in_panes=false; continue ;;
   esac
   [ "$_in_panes" = "false" ] && continue
-  # Skip header and separator rows
   echo "$line" | grep -q '^|[[:space:]]*Pane' && continue
   echo "$line" | grep -q '^|[[:space:]]*-' && continue
-  # Parse: | Pane | Role | Agent | Name | Model |
   echo "$line" | grep -q '^|' || continue
   _pane=$(echo "$line" | cut -d'|' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   _role=$(echo "$line" | cut -d'|' -f3 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -143,7 +139,6 @@ done
 tmux select-layout -t "${SESSION_NAME}:${NEW_WIN}" tiled
 sleep 0.5
 
-# Heredoc to avoid pipe-subshell (bash 3.2)
 MANAGER_PANE_IDX=""
 WORKER_PANES_LIST=""
 while IFS='|' read -r _pane _role _agent _name _model; do
@@ -159,7 +154,7 @@ PANE_INPUT
 WORKER_COUNT=$(echo "$WORKER_PANES_LIST" | tr ',' '\n' | grep -c .)
 ```
 
-### Step 4: Write team env and update session
+### Step 4: Write team env, update TEAM_WINDOWS
 
 ```bash
 TEAM_FILE="${RUNTIME_DIR}/team_${NEW_WIN}.env"
@@ -181,7 +176,6 @@ TEAM_DESC=${TEAM_DESC}
 TEAM_EOF
 mv "${TEAM_FILE}.tmp" "$TEAM_FILE"
 
-# Update TEAM_WINDOWS in session.env
 CURRENT_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
 [ -n "$CURRENT_WINDOWS" ] && NEW_WINDOWS="${CURRENT_WINDOWS},${NEW_WIN}" || NEW_WINDOWS="${NEW_WIN}"
 TMPENV=$(mktemp "${RUNTIME_DIR}/session.env.tmp_XXXXXX")
@@ -192,12 +186,9 @@ else
   echo "TEAM_WINDOWS=${NEW_WINDOWS}" >> "$TMPENV"
 fi
 mv "$TMPENV" "${RUNTIME_DIR}/session.env"
-echo "team_${NEW_WIN}.env written, TEAM_WINDOWS=${NEW_WINDOWS}"
 ```
 
-### Step 5: Launch Claude instances per pane definition
-
-Use 3s stagger to prevent auth session exhaustion.
+### Step 5: Launch Claude instances (3s stagger)
 
 ```bash
 while IFS='|' read -r _pane _role _agent _name _model; do
@@ -214,7 +205,6 @@ $(echo "$PANE_DEFS")
 LAUNCH_INPUT
 echo "All ${PANE_COUNT} Claude instances launched"
 
-# Apply standard manager-left/workers-right layout
 bash -c "
   eval \"\$(sed -n '/^_env_val()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\"
   eval \"\$(sed -n '/^_layout_checksum()/,/^}/p' '${PROJECT_DIR}/shell/doey.sh')\"
@@ -269,12 +259,9 @@ VERIFY_INPUT
 if [ "$NOT_READY" -eq 0 ]; then echo "All panes booted"; else echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"; fi
 ```
 
-Output summary: team name, window number, pane layout, boot status. Include teardown: `/doey-kill-window ${NEW_WIN}`
+Output: team name, window number, pane layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`
 
 ### Rules
-
-- **SM or Window Manager only** — workers must not run this
-- Never hardcode window indices. Bash 3.2 compatible. 3s launch stagger
-- Search order: project root → `.doey/` → `~/.config/doey/teams/` → doey share dir
-- No `## Workflows` section = skip workflow parsing (not an error)
-- Agent `-` = no agent flag
+- SM or Window Manager only. Bash 3.2. 3s launch stagger
+- Search: project root → `.doey/` → `~/.config/doey/teams/` → share dir
+- No `## Workflows` = skip (not error). Agent `-` = no agent flag

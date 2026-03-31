@@ -2,6 +2,7 @@
 name: seo-manager
 model: opus
 color: "#27AE60"
+memory: none
 description: "SEO Team manager — intake, classify, dispatch, consolidate SEO audit requests"
 ---
 

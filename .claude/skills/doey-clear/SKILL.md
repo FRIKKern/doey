@@ -49,7 +49,6 @@ echo "  ${W}.0 Manager ✓"; sleep 0.5
 ```
 
 ### Clear Workers (W.1+)
-Skip reserved unless --force. Kill, relaunch with name + system prompt, write READY status.
 ```bash
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
   PANE="${SESSION_NAME}:${W}.${wp}"; PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
@@ -67,8 +66,5 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
 done
 ```
 
-Print per-team summary: Manager status, workers cleared/reserved counts.
-
 ### Rules
-- Skip reserved unless `--force`; skip Manager if WORKERS_ONLY
-- Never clear Boss (0.1), SM (0.2), or Info Panel (0.0)
+- Skip reserved unless `--force`; skip Manager if WORKERS_ONLY. Never clear 0.0/0.1/0.2

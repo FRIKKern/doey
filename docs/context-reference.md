@@ -1,8 +1,6 @@
 # Context Reference
 
-> **Core principle:** Strategic utilization over brute-force parallelism. Workers are disposable context — they feed high-quality content to the Manager, who validates everything. Force multipliers: ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms. See CLAUDE.md § Philosophy.
-
-How Claude Code instances in a Doey session receive their configuration, from lowest to highest precedence.
+Configuration precedence for Claude Code instances in a Doey session (lowest → highest):
 
 | Precedence | Source | Applies To |
 |------------|--------|------------|
@@ -30,12 +28,12 @@ Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 
 Precedence: CLI `--model` > frontmatter > settings.
 
-**Specialist team agents** (SEO, Visual) are also in `agents/` but only loaded when those teams are spawned: `seo-manager`, `seo-technical`, `seo-content`, `seo-sitemap`, `seo-reporter`, `visual-manager`, `visual-investigator`, `visual-reviewer`, `visual-a11y`, `visual-reporter`.
+**Specialist agents** (SEO, Visual) in `agents/` are loaded only when those teams are spawned.
 
 
 ## Settings
 
-Merge order (later wins for scalars; arrays additive; objects deep-merged):
+Merge order (scalars: last wins; arrays: additive; objects: deep-merged):
 
 1. `~/.claude/settings.json` — agent teams, model, notifications
 2. `~/.claude/settings.local.json` — user-level overrides
@@ -108,12 +106,9 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 | Boss | `claude --dangerously-skip-permissions --agent doey-boss` |
 | Session Manager | `claude --dangerously-skip-permissions --agent doey-session-manager` |
 | Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
-| ~~Watchdog~~ | ~~`claude --dangerously-skip-permissions --model sonnet --name "T<N> Watchdog" --agent doey-watchdog`~~ (deprecated) |
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
-Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings.
-
-**Note:** Session Manager does not pass `--model` explicitly — it relies on the `model: opus` frontmatter in `agents/doey-session-manager.md`.
+Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings. Session Manager relies on `model: opus` in its agent frontmatter (no explicit `--model`).
 
 
 ## Shell Scripts
@@ -139,20 +134,17 @@ All in `shell/`, installed to `~/.local/bin/` by `install.sh`.
 ## tmux Layout
 
 ```
-Dashboard: [0.0 Info] [0.1 Boss] [0.2 Session Mgr]   (0.3+ formerly Watchdog slots — deprecated)
+Dashboard: [0.0 Info] [0.1 Boss] [0.2 Session Mgr]
 Team W:    [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
 ```
 
 Dynamic grid auto-expands when all workers are busy.
 
-**Pane communication:**
-- `send-keys` — short commands (< 200 chars)
-- `load-buffer` + `paste-buffer` — long/multi-line tasks
-- `capture-pane` — read pane output
+**Pane communication:** `send-keys` (< 200 chars) · `load-buffer` + `paste-buffer` (long tasks) · `capture-pane` (read output)
 
 **Key details:**
 - **PANE_SAFE escaping:** `${PANE//[-:.]/_}` — e.g. `doey-project:0.5` → `doey_project_0_5`
-- **Pane titles:** Format is `"<pane_id> | <role>"` — e.g. `"d-t1-mgr | doey T1 Mgr"`, `"d-sm | doey SM"`, `"d-boss | doey Boss"`, `"d-t1-w1 | Worker"`
+- **Pane titles:** `"<pane_id> | <role>"` — e.g. `"d-t1-mgr | doey T1 Mgr"`, `"d-sm | doey SM"`
 - **Startup timing:** Manager briefing 8s; workers ready ~15s
 - **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript` instead
 

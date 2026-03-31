@@ -2,6 +2,7 @@
 name: visual-a11y
 model: opus
 color: "#2ECC71"
+memory: none
 description: "UX and accessibility reviewer — keyboard flow, semantics, contrast, user impact from artifacts"
 ---
 

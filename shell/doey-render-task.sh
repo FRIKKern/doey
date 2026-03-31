@@ -31,6 +31,26 @@ _gum_style() {
   fi
 }
 
+# gum style single-line wrapper — outputs text with newline and color
+_styled_line() {
+  local fg="$1"; shift
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground "$fg" "$*" 2>/dev/null || printf '%s\n' "$*"
+  else
+    printf '%s\n' "$*"
+  fi
+}
+
+# Error-exit with styled message
+_die() {
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 1 ${2:+--bold} "$1" 2>/dev/null || echo "$1"
+  else
+    echo "$1"
+  fi
+  exit 1
+}
+
 # ── Confidence bar ─────────────────────────────────────────────────────
 render_bar() {
   local pct="$1" width="${2:-10}" filled empty bar_str=""
@@ -161,21 +181,11 @@ render_basic() {
     printf '\n'
     _gum_style "$S_SECTION Description" --bold --foreground 5
     printf '\n'
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 7 "  $TASK_DESCRIPTION" 2>/dev/null || printf '  %s\n' "$TASK_DESCRIPTION"
-    else
-      printf '  %s\n' "$TASK_DESCRIPTION"
-    fi
+    _styled_line 7 "  $TASK_DESCRIPTION"
   fi
   local age
   age=$(compute_age "$TASK_CREATED")
-  if [ -n "$age" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 8 "  $S_ARROW Age: $age" 2>/dev/null || printf '  %s Age: %s\n' "$S_ARROW" "$age"
-    else
-      printf '  %s Age: %s\n' "$S_ARROW" "$age"
-    fi
-  fi
+  [ -n "$age" ] && _styled_line 8 "  $S_ARROW Age: $age"
 }
 
 # ── Render: list section (shared by deliverables, constraints, criteria) ──
@@ -190,11 +200,7 @@ _render_list_section() {
       printf '\n'
       has=1
     fi
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 7 "  $symbol $line" 2>/dev/null || printf '  %s %s\n' "$symbol" "$line"
-    else
-      printf '  %s %s\n' "$symbol" "$line"
-    fi
+    _styled_line 7 "  $symbol $line"
   done <<EOF
 $(read_json_array "$json_file" "$field")
 EOF
@@ -213,11 +219,7 @@ render_structured() {
     printf '\n'
     _gum_style "$S_SECTION Intent" --bold --foreground 5
     printf '\n'
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 7 "  $intent" 2>/dev/null || printf '  %s\n' "$intent"
-    else
-      printf '  %s\n' "$intent"
-    fi
+    _styled_line 7 "  $intent"
   fi
 
   # Hypotheses
@@ -236,22 +238,11 @@ render_structured() {
     hname=$(printf '%s' "$hyp_line" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('name',d.get('description','')))" 2>/dev/null) || hname="$hyp_line"
     hconf=$(printf '%s' "$hyp_line" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('confidence',50))" 2>/dev/null) || hconf=""
     if [ -n "$hconf" ] && [ "$hconf" != "$hyp_line" ]; then
-      if [ "$HAS_GUM" = true ]; then
-        local bar_out
-        bar_out=$(render_bar "$hconf" 10)
-        gum style --foreground 6 "  $S_BULLET $hname — $bar_out" 2>/dev/null \
-          || { printf '  %s %s — %s\n' "$S_BULLET" "$hname" "$bar_out"; }
-      else
-        printf '  %s %s — ' "$S_BULLET" "$hname"
-        render_bar "$hconf" 10
-        printf '\n'
-      fi
+      local bar_out
+      bar_out=$(render_bar "$hconf" 10)
+      _styled_line 6 "  $S_BULLET $hname — $bar_out"
     else
-      if [ "$HAS_GUM" = true ]; then
-        gum style --foreground 6 "  $S_BULLET $hyp_line" 2>/dev/null || printf '  %s %s\n' "$S_BULLET" "$hyp_line"
-      else
-        printf '  %s %s\n' "$S_BULLET" "$hyp_line"
-      fi
+      _styled_line 6 "  $S_BULLET $hyp_line"
     fi
   done <<EOF
 $(read_json_array "$json_file" "hypotheses")
@@ -273,11 +264,7 @@ EOF
     printf '\n'
     _gum_style "$S_SECTION Dispatch Plan" --bold --foreground 5
     printf '\n'
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 8 "  $S_ARROW $dp" 2>/dev/null || printf '  %s %s\n' "$S_ARROW" "$dp"
-    else
-      printf '  %s %s\n' "$S_ARROW" "$dp"
-    fi
+    _styled_line 8 "  $S_ARROW $dp"
   fi
 }
 
@@ -309,30 +296,9 @@ main() {
     fi
   fi
 
-  if [ -z "$task_file" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 1 "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>" 2>/dev/null
-    else
-      echo "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>"
-    fi
-    exit 1
-  fi
-  if [ ! -f "$task_file" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 1 --bold "Error: task file not found: $task_file" 2>/dev/null
-    else
-      echo "Error: task file not found: $task_file"
-    fi
-    exit 1
-  fi
-  if [ ! -s "$task_file" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      gum style --foreground 1 "Empty task file: $task_file" 2>/dev/null
-    else
-      echo "Empty task file: $task_file"
-    fi
-    exit 1
-  fi
+  [ -z "$task_file" ] && _die "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>"
+  [ ! -f "$task_file" ] && _die "Error: task file not found: $task_file" bold
+  [ ! -s "$task_file" ] && _die "Empty task file: $task_file"
 
   # Auto-detect json companion
   if [ -z "$json_file" ]; then

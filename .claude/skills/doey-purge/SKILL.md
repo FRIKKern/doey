@@ -22,19 +22,17 @@ wc -l "$PROJECT_DIR"/agents/*.md "$PROJECT_DIR"/CLAUDE.md \
 ```
 
 ### Wave 1: Audit (4 workers)
-Dispatch via `/doey-dispatch`. No Agent tool. Each writes `${RUNTIME_DIR}/reports/purge_<domain>.md`. Rename panes: `purge-<domain>_$(date +%m%d)`.
+Dispatch via `/doey-dispatch`. No Agent tool. Each writes `${RUNTIME_DIR}/reports/purge_<domain>.md`.
 
 **Categories** (HIGH/MED/LOW): BLOAT, REDUNDANCY, STALENESS, CONTRADICTION, DEAD WEIGHT, BASH 3.2, BUG, DEAD CODE.
-
 **Assignments:** A=Agents+CLAUDE.md, B=Hooks+Shell+Settings, C=Skills, D=Docs+README+Memory.
-
-**Report format:** `## File: path (N lines)` → `CATEGORY [severity] [lines]: description + fix` → `Condensation Estimate: N → ~M (-X%)`
+**Report:** `## File: path (N lines)` → `CATEGORY [severity]: description + fix` → `Estimate: N → ~M (-X%)`
 
 ### Between Waves
 Read all `purge_*.md` reports. Present consolidated summary. **Ask user before dispatching fixes.**
 
 ### Wave 2: Fix (4 workers)
-Assign by file ownership (no conflicts): A=agents+CLAUDE.md, B=hooks+shell, C=skills, D=docs+README+memory. Edit not Write. Read before editing. `.sh`: `bash -n` after every edit.
+Same ownership split. Edit not Write. Read before editing. `bash -n` after .sh edits.
 
 ### Verification
 Re-run `wc -l`, diff against `purge_before.txt`:

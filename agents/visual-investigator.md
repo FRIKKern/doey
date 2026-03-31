@@ -2,6 +2,7 @@
 name: visual-investigator
 model: opus
 color: "#E74C3C"
+memory: none
 description: "DevTools browser operator — navigates, captures evidence, reproduces issues via Chrome DevTools MCP"
 ---
 

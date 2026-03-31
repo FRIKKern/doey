@@ -2,6 +2,7 @@
 name: visual-manager
 model: opus
 color: "#9B59B6"
+memory: none
 description: "Visual Team manager — intake, classify, dispatch, consolidate UI verification requests"
 ---
 

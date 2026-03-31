@@ -36,8 +36,6 @@ echo "To view: cat $RD/debug/*/hooks.jsonl | sort -t'\"' -k4"
 
 ### `off`
 
-Preserves logs, removes config only.
-
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 [ -z "$RD" ] && { echo "ERROR: DOEY_RUNTIME not set"; exit 1; }
@@ -91,9 +89,6 @@ fi
 ```
 
 ## Rules
-
-- Debug config is NEVER sourced — it is parsed with `while read`/`case` in `common.sh`
-- File existence IS the master toggle: `[ -f "$RUNTIME_DIR/debug.conf" ]`
-- Per-pane log directories prevent concurrent write races
-- Logs survive `off` — only `debug.conf` is removed
-- Zero overhead when off: one `stat()` syscall per hook (~0.05ms)
+- Config parsed (not sourced) via `while read`/`case` in `common.sh`
+- File existence = master toggle. Per-pane dirs prevent races
+- Logs survive `off`. Zero overhead when off (~0.05ms stat per hook)

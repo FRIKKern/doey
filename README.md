@@ -182,19 +182,16 @@ Workers and Managers can mark tasks as `pending` but only **you** can mark them 
 
 ## Debug Mode
 
-When something goes wrong, the flight recorder captures what hooks are doing across all panes:
-
 ```
-/doey-debug on       # start recording
-/doey-debug status   # see what's been captured
-/doey-debug off      # stop (logs preserved)
+/doey-debug on       # start flight recorder
+/doey-debug status   # see captured events
+/doey-debug off      # stop (logs preserved for post-mortem)
 ```
 
-Records hook timing, state transitions, lifecycle events, and IPC messages as structured JSONL. Zero overhead when off (one `stat()` call per hook). Logs survive `off` for post-mortem analysis.
+Captures hook timing, state transitions, lifecycle events, and IPC as structured JSONL. Zero overhead when off (one `stat()` per hook).
 
 ```bash
-# View all hook events sorted by time
-cat /tmp/doey/*/debug/*/hooks.jsonl | sort -t'"' -k4
+cat /tmp/doey/*/debug/*/hooks.jsonl | sort -t'"' -k4   # view chronologically
 ```
 
 <details>

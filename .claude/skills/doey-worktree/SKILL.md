@@ -123,4 +123,4 @@ done
 ```
 
 ## Step 10: Report
-Output: mode (isolate/return), window, branch, directory, booted/failed count. Never transform window 0. Bash 3.2.
+Output: mode, window, branch, directory, boot count. Never transform window 0. Bash 3.2.

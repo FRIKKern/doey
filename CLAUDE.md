@@ -6,14 +6,14 @@ Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. A user
 
 ## ALWAYS DO THESE THINGS
 
-- **Think "fresh install"** — Every change must work for someone who just ran `curl | bash` to install Doey for the first time. If a feature depends on local state, config, or manual setup that isn't in the install path — it's broken
-- **Ship in the repo, not in local files** — Changes to `~/.claude/settings.json`, `~/.claude/statusline-command.sh`, or other user-level files are LOCAL ONLY. They don't ship with Doey. If a feature needs those files, it must be set up by the install script or on-session-start hook
-- **Test the install path** — After changing install.sh, doey.sh, or any `shell/` script: does `./install.sh` still produce a working install? Does `doey doctor` pass?
-- **Don't assume your environment** — Our dev session has DOEY_* env vars, tmux, multiple teams. A user's first launch has none of that. Guard every assumption
-- **Bash 3.2 compatible** — macOS ships `/bin/bash` 3.2. Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `BASH_REMATCH` capture groups. Run `tests/test-bash-compat.sh` after any `.sh` change
-- **Bash tool commands must be zsh-safe** — The Bash tool runs in the user's login shell, which is zsh on macOS. Patterns that break: `for f in *.ext 2>/dev/null` (zsh parse error on glob redirect), unquoted globs that fail with `nomatch`. Fix: wrap bash-specific logic in `bash -c '...'`, or use `ls dir/ 2>/dev/null` instead of glob loops. Parallel Bash tool calls must not depend on glob success — one failure cancels siblings
-- **One worker per file** — Never split a file across workers. Concurrent edits to the same file cause conflicts
-- **Validate before writing** — Read state before mutating it. GET calls are cheap, broken writes cause cascading failures
+- **Think "fresh install"** — Every change must work after `curl | bash`. No local state, config, or manual setup outside the install path
+- **Ship in the repo, not in local files** — `~/.claude/settings.json` and other user-level files are LOCAL ONLY. Features needing them must be set up by install.sh or on-session-start hook
+- **Test the install path** — After changing install.sh, doey.sh, or `shell/` scripts: does `./install.sh` work? Does `doey doctor` pass?
+- **Don't assume your environment** — A user's first launch has no DOEY_* env vars, tmux, or teams. Guard every assumption
+- **Bash 3.2 compatible** — Forbidden: `declare -A/-n/-l/-u`, `printf '%(%s)T'`, `mapfile`/`readarray`, `|&`, `&>>`, `coproc`, `BASH_REMATCH` capture groups. Run `tests/test-bash-compat.sh` after `.sh` changes
+- **Bash tool commands must be zsh-safe** — zsh on macOS breaks: `for f in *.ext 2>/dev/null`, unquoted globs with `nomatch`. Fix: `bash -c '...'` or `ls dir/ 2>/dev/null`. Parallel Bash calls must not depend on glob success
+- **One worker per file** — Concurrent edits cause conflicts
+- **Validate before writing** — Read state before mutating. GET calls are cheap, broken writes cascade
 - **Use `set -euo pipefail`** — Every shell script. No exceptions
 - **Use `trash` not `rm`** — For file deletion (recoverable)
 
@@ -21,9 +21,9 @@ Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. A user
 
 Before any change: **"Would this work after deleting `~/.config/doey/`, `~/.local/bin/doey`, `~/.claude/agents/doey-*` and running `./install.sh` fresh?"**
 
-Past traps: editing user files that don't ship, relying on session-only env vars, agent features needing uninstalled settings.json entries, assuming pane titles before `on-session-start.sh`, bash-only globs in zsh Bash tool commands.
+Past traps: editing user files that don't ship, session-only env vars, uninstalled settings.json entries, assuming pane titles before `on-session-start.sh`, bash-only globs in zsh.
 
-**Shippable pattern:** Ship script in `shell/` → install via `install.sh` → generate overlay in `_init_doey_session()` → pass `--settings` on launch. Never edit `~/.claude/settings.json`.
+**Shippable pattern:** `shell/` → `install.sh` → `_init_doey_session()` → `--settings` on launch. Never edit `~/.claude/settings.json`.
 
 **Ships:** `shell/`, `agents/`, `.claude/hooks/`, `.claude/skills/`, `docs/`, `install.sh`, `web-install.sh`
 **Local only:** `~/.claude/settings.json`, `~/.config/doey/config.sh`, `/tmp/doey/`
@@ -35,17 +35,17 @@ Past traps: editing user files that don't ship, relying on session-only env vars
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
 | Boss | `0.1` | User-facing Project Manager. Receives user intent, manages tasks, reports results |
 | Session Manager | `0.2` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work. Not user-facing — users interact via Boss |
-| Watchdog | `0.3+` | DEPRECATED — Watchdog functionality is no longer active. Hook files retained for reference |
+| ~~Watchdog~~ | `0.3+` | DEPRECATED — inactive, hook files retained for reference |
 | Window Manager | `W.0` | Plans, delegates, validates all context. Never writes code |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
 | Test Driver | external | E2E test runner via `doey test` |
 
-**Communication:** User → Boss → Session Manager (relay) | SM → Window Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Manager → Session Manager (cross-team)
+**Communication:** User → Boss → SM (relay) | SM → Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Manager → SM (cross-team)
 
 **Runtime:** `/tmp/doey/<project>/` — ephemeral, clears on reboot
 
-### Tool Restrictions (via `on-pre-tool-use.sh`)
+### Tool Restrictions (`on-pre-tool-use.sh`)
 
 | Role | Blocked |
 |------|---------|
@@ -55,11 +55,9 @@ Past traps: editing user files that don't ship, relying on session-only env vars
 
 ## Philosophy
 
-**Strategic utilization over brute-force parallelism.** Fewer workers used well beat many workers used carelessly.
-
-**The Manager is the bastion.** Nothing enters the golden context log unchallenged. Workers produce raw output — the Manager validates, distills, and decides what becomes knowledge.
-
-**Force multipliers over headcount:** ultrathink, `/batch`, `/doey-research`, `/doey-simplify-everything`, agent swarms. Scale up only when parallelism genuinely helps.
+- **Strategic utilization over brute-force parallelism.** Fewer workers used well beat many used carelessly
+- **The Manager is the bastion.** Workers produce raw output — Manager validates, distills, and decides what becomes knowledge
+- **Force multipliers over headcount:** ultrathink, `/batch`, `/doey-research`, agent swarms. Scale only when parallelism genuinely helps
 
 ## Project Layout
 
@@ -87,8 +85,8 @@ Past traps: editing user files that don't ship, relying on session-only env vars
 | `stop-status.sh` | On stop (sync) | Sets FINISHED/RESERVED status, blocks incomplete research |
 | `stop-results.sh` | On stop (async) | Captures output, files changed, tool counts → JSON result |
 | `stop-notify.sh` | On stop (async) | Notification chain: Worker → Manager → Session Manager → desktop |
-| `watchdog-scan.sh` | Watchdog cycle | DEPRECATED — Pane state detection, anomaly reporting, heartbeat |
-| `watchdog-wait.sh` | Watchdog idle | DEPRECATED — Sleep/wake (30s default, wakes on trigger) |
+| ~~`watchdog-scan.sh`~~ | Watchdog cycle | DEPRECATED |
+| ~~`watchdog-wait.sh`~~ | Watchdog idle | DEPRECATED |
 | `session-manager-wait.sh` | SM idle | Multi-trigger sleep: messages, results, crash alerts |
 
 Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
@@ -96,8 +94,8 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 ## Conventions
 
 - **Shell:** `set -euo pipefail`, bash 3.2 compatible
-- **Agents:** YAML frontmatter (name, model, color, memory, description)
-- **Skills:** YAML frontmatter (name, description) in `.claude/skills/<name>/SKILL.md`
+- **Agents:** YAML frontmatter in `agents/` (name, model, color, memory, description)
+- **Skills:** YAML frontmatter in `.claude/skills/<name>/SKILL.md`
 - **Naming:** sessions `doey-<project>`, runtime `/tmp/doey/<project>/`
 
 ## Testing Changes

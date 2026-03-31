@@ -405,6 +405,28 @@ _TEAM_ITEM_COUNT=0
 # Lineup state (indexed variables pattern for bash 3.2)
 _LINEUP_COUNT=0
 
+# Fill N lineup slots of a given type. Uses _li from caller scope.
+_fill_lineup_slots() {
+  local _n="$1" _type="$2" _w="$3" _label="$4" _c=0
+  while [ "$_c" -lt "$_n" ]; do
+    eval "_LINEUP_${_li}_TYPE=$_type; _LINEUP_${_li}_DEF=; _LINEUP_${_li}_WORKERS=$_w; _LINEUP_${_li}_NAME=; _LINEUP_${_li}_LABEL='$_w workers ($_label)'"
+    _li=$((_li + 1)); _c=$((_c + 1))
+  done
+}
+
+# Write lineup teams to config file, optionally skipping one index.
+_write_lineup_teams() {
+  local _wlt_cf="$1" _wlt_count="$2" _wlt_skip="${3:-0}" _si=1 _di=1
+  while [ "$_si" -le "$_wlt_count" ]; do
+    [ "$_si" -eq "$_wlt_skip" ] && { _si=$((_si + 1)); continue; }
+    eval "local _et=\${_LINEUP_${_si}_TYPE:-local} _ed=\${_LINEUP_${_si}_DEF:-} _ew=\${_LINEUP_${_si}_WORKERS:-}"
+    printf 'DOEY_TEAM_%s_TYPE=%s\n' "$_di" "$_et" >> "$_wlt_cf"
+    [ -n "$_ed" ] && printf 'DOEY_TEAM_%s_DEF=%s\n' "$_di" "$_ed" >> "$_wlt_cf"
+    [ -n "$_ew" ] && printf 'DOEY_TEAM_%s_WORKERS=%s\n' "$_di" "$_ew" >> "$_wlt_cf"
+    _si=$((_si + 1)); _di=$((_di + 1))
+  done
+}
+
 # Derive the effective team lineup from config (explicit or legacy mode).
 # Sets _LINEUP_COUNT and _LINEUP_<i>_TYPE, _LINEUP_<i>_DEF, _LINEUP_<i>_WORKERS,
 # _LINEUP_<i>_NAME, _LINEUP_<i>_LABEL as indexed variables.
@@ -454,43 +476,11 @@ _derive_effective_lineup() {
     local _ft="${DOEY_INITIAL_FREELANCER_TEAMS:-1}"
     _LINEUP_COUNT=0
     local _li=1
+    local _fw=$(( _default_workers + 2 ))
 
-    # Local teams
-    local _c=0
-    while [ "$_c" -lt "$_lt" ]; do
-      eval "_LINEUP_${_li}_TYPE=local"
-      eval "_LINEUP_${_li}_DEF="
-      eval "_LINEUP_${_li}_WORKERS=$_default_workers"
-      eval "_LINEUP_${_li}_NAME="
-      eval "_LINEUP_${_li}_LABEL='$_default_workers workers (default)'"
-      _li=$((_li + 1))
-      _c=$((_c + 1))
-    done
-
-    # Worktree teams
-    _c=0
-    while [ "$_c" -lt "$_wt" ]; do
-      eval "_LINEUP_${_li}_TYPE=worktree"
-      eval "_LINEUP_${_li}_DEF="
-      eval "_LINEUP_${_li}_WORKERS=$_default_workers"
-      eval "_LINEUP_${_li}_NAME="
-      eval "_LINEUP_${_li}_LABEL='$_default_workers workers (worktree)'"
-      _li=$((_li + 1))
-      _c=$((_c + 1))
-    done
-
-    # Freelancer teams
-    _c=0
-    while [ "$_c" -lt "$_ft" ]; do
-      local _fw=$(( _default_workers + 2 ))
-      eval "_LINEUP_${_li}_TYPE=freelancer"
-      eval "_LINEUP_${_li}_DEF="
-      eval "_LINEUP_${_li}_WORKERS=$_fw"
-      eval "_LINEUP_${_li}_NAME="
-      eval "_LINEUP_${_li}_LABEL='$_fw workers (pool)'"
-      _li=$((_li + 1))
-      _c=$((_c + 1))
-    done
+    _fill_lineup_slots "$_lt" "local"      "$_default_workers" "default"
+    _fill_lineup_slots "$_wt" "worktree"   "$_default_workers" "worktree"
+    _fill_lineup_slots "$_ft" "freelancer" "$_fw"              "pool"
 
     _LINEUP_COUNT=$((_li - 1))
   fi
@@ -659,18 +649,7 @@ _add_team() {
 
   # Write full explicit config
   printf '\nDOEY_TEAM_COUNT=%s\n' "$new_count" >> "$config_file"
-
-  # Write existing teams
-  local _wi=1
-  while [ "$_wi" -le "$old_count" ]; do
-    eval "local _et=\${_LINEUP_${_wi}_TYPE:-local}"
-    eval "local _ed=\${_LINEUP_${_wi}_DEF:-}"
-    eval "local _ew=\${_LINEUP_${_wi}_WORKERS:-}"
-    printf 'DOEY_TEAM_%s_TYPE=%s\n' "$_wi" "$_et" >> "$config_file"
-    [ -n "$_ed" ] && printf 'DOEY_TEAM_%s_DEF=%s\n' "$_wi" "$_ed" >> "$config_file"
-    [ -n "$_ew" ] && printf 'DOEY_TEAM_%s_WORKERS=%s\n' "$_wi" "$_ew" >> "$config_file"
-    _wi=$((_wi + 1))
-  done
+  _write_lineup_teams "$config_file" "$old_count"
 
   # Write the new team
   printf 'DOEY_TEAM_%s_TYPE=%s\n' "$new_count" "$team_type" >> "$config_file"
@@ -701,23 +680,7 @@ _remove_startup_team() {
     :
   else
     printf '\nDOEY_TEAM_COUNT=%s\n' "$new_count" >> "$config_file"
-
-    # Rewrite all teams except the removed one
-    local _wi=1 _di=1
-    while [ "$_wi" -le "$_LINEUP_COUNT" ]; do
-      if [ "$_wi" -eq "$remove_idx" ]; then
-        _wi=$((_wi + 1))
-        continue
-      fi
-      eval "local _et=\${_LINEUP_${_wi}_TYPE:-local}"
-      eval "local _ed=\${_LINEUP_${_wi}_DEF:-}"
-      eval "local _ew=\${_LINEUP_${_wi}_WORKERS:-}"
-      printf 'DOEY_TEAM_%s_TYPE=%s\n' "$_di" "$_et" >> "$config_file"
-      [ -n "$_ed" ] && printf 'DOEY_TEAM_%s_DEF=%s\n' "$_di" "$_ed" >> "$config_file"
-      [ -n "$_ew" ] && printf 'DOEY_TEAM_%s_WORKERS=%s\n' "$_di" "$_ew" >> "$config_file"
-      _wi=$((_wi + 1))
-      _di=$((_di + 1))
-    done
+    _write_lineup_teams "$config_file" "$_LINEUP_COUNT" "$remove_idx"
   fi
 
   # Clamp cursor

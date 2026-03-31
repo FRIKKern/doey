@@ -42,18 +42,7 @@ Analyze the goal and compile a structured task specification:
 ◆ DISPATCH PLAN: [team assignment, wave structure, phases if applicable]
 ```
 
-**Phase Detection:** Before finalizing, check if the goal is phased. Suggest `DISPATCH MODE: phased` if ANY of these apply:
-- Goal explicitly mentions "Phase 1", "Phase 2", etc.
-- Goal has sequential dependencies ("first X, then Y", "after that", "once X is done")
-- User says "phased", "multi-phase", or "staged"
-
-If phased is detected, tell the user: "This looks like a phased task (N phases detected). Creating as phased — let me know if you'd prefer standard." Then structure the DISPATCH PLAN with numbered phases:
-```
-◆ DISPATCH PLAN:
-  Phase 1: [title] — [brief]
-  Phase 2: [title] — [brief]
-  ...
-```
+**Phase Detection:** Use `DISPATCH MODE: phased` if goal mentions "Phase 1/2", sequential deps ("first X, then Y"), or "phased"/"staged". Tell user: "Creating as phased — let me know if you'd prefer standard."
 
 ### Step 3: Create Task Artifacts
 
@@ -74,17 +63,12 @@ TASK_ID=$(task_create "$RUNTIME_DIR" \
 echo "Created task #${TASK_ID}"
 ```
 
-Then update the companion .json with the compiled structured fields:
+Then update the .json with compiled fields:
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 PD=$(grep '^PROJECT_DIR=' "$RUNTIME_DIR/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-# Prefer persistent .doey/tasks/, fall back to runtime
-if [ -n "$PD" ] && [ -d "$PD/.doey/tasks" ]; then
-  TD="$PD/.doey/tasks"
-else
-  TD="${RUNTIME_DIR}/tasks"
-fi
+if [ -n "$PD" ] && [ -d "$PD/.doey/tasks" ]; then TD="$PD/.doey/tasks"; else TD="${RUNTIME_DIR}/tasks"; fi
 python3 -c "
 import json
 with open('${TD}/${TASK_ID}.json', 'r') as f:
@@ -100,13 +84,11 @@ with open('${TD}/${TASK_ID}.json', 'w') as f:
 " 2>/dev/null
 ```
 
-Replace all placeholder values with actual compiled content from Step 2. If python3 is unavailable, use printf.
+Replace placeholders with actual compiled content. If python3 unavailable, use printf.
 
-### Step 3b: Phased Task Runtime Setup (only if DISPATCH MODE is phased)
+### Step 3b: Phased Task Runtime Setup (phased only)
 
-If the task is phased, perform two additional steps:
-
-**1. Update the .task file with phase tracking fields:**
+Update the .task file with phase tracking:
 
 ```bash
 printf 'TASK_DISPATCH_MODE="phased"\n' >> "${TD}/${TASK_ID}.task"
@@ -115,7 +97,7 @@ printf 'TASK_TOTAL_PHASES=%d\n' "$TOTAL_PHASES" >> "${TD}/${TASK_ID}.task"
 task_update_field "${TD}/${TASK_ID}.task" "TASK_UPDATED" "$(date +%s)"
 ```
 
-**2. Create the runtime phase file for SM auto-forwarding:**
+Create runtime phase file for SM auto-forwarding:
 
 ```bash
 mkdir -p "$RUNTIME_DIR/phases"
@@ -136,15 +118,13 @@ with open('${RUNTIME_DIR}/phases/task_${TASK_ID}.json', 'w') as f:
 " 2>/dev/null
 ```
 
-Replace the phases list with actual phases from Step 2. Skip this entire step for standard (non-phased) tasks.
+Replace phases list with actual phases. Skip for standard tasks.
 
 ### Step 4: Output Summary
 
-Display in open-layout format (◆ sections, • items, → implications, ↳ sub-steps). Include: task ID, title, type, intent, hypotheses, dispatch plan, file paths. For phased tasks, also show: dispatch mode (phased), phase count, phase titles, and runtime phase file path.
+Display: task ID, title, type, intent, hypotheses, dispatch plan, file paths. Phased: also show phase count/titles.
 
 ## Rules
-
-- Always use `task_create` from `doey-task-helpers.sh` — never duplicate logic
+- Use `task_create` from `doey-task-helpers.sh` — never duplicate logic
 - `/doey-task add` for simple tasks; this skill for structured compilation only
-- No border characters (│, ║, ┃). One clarifying question max if ambiguous
-- Always show triviality classification before proceeding
+- No border characters. One clarifying question max. Show triviality classification first

@@ -316,104 +316,24 @@ When done: Just finish normally. Your result is tracked under Task #42, subtask 
 
 ## Conversation Trail
 
-Track all user messages, scope updates, decisions, and status changes in the `.task` file so they survive compaction and team handoffs.
+Log all user messages, scope updates, decisions, and status changes to the `.task` file (survives compaction):
+- **User messages/scope updates:** `task_add_report "$TASK_FILE" "conversation" ...` or `task_add_note` for brief annotations
+- **Decisions:** `task_add_decision "$TASK_FILE" "description"` — log as they happen, don't batch
+- **Status transitions:** `task_update_field "$TASK_FILE" "TASK_STATUS" "in_progress"` + decision log
 
-### When SM Relays User Messages or Scope Updates
-
-Append directly to the task file as notes or reports:
-
-```bash
-task_add_report "$TASK_FILE" "conversation" "User Update" \
-  "User wants to change sort order to descending by default" \
-  "SessionManager"
-```
-
-Or use `task_add_note` for brief annotations:
-```bash
-task_add_note "$TASK_FILE" "$(date +%s): User clarified — only sort the active list, not archived"
-```
-
-### Decision and Status Logging
-
-Log every significant decision as it happens — don't batch them:
-
-```bash
-# Scope change from user
-task_add_decision "$TASK_FILE" "User narrowed scope: sort active list only, skip archived"
-
-# Routing decision
-task_add_decision "$TASK_FILE" "Splitting into 2 waves: wave 1 = core logic, wave 2 = tests"
-
-# Error recovery
-task_add_decision "$TASK_FILE" "W.2 crashed mid-test. Reassigning to W.3 with same prompt."
-
-# Status transition
-task_update_field "$TASK_FILE" "TASK_STATUS" "in_progress"
-task_add_decision "$TASK_FILE" "Moving to in_progress — wave 1 dispatched"
-```
-
-The `.task` file is the authoritative trail. After compaction, read the context log AND the task file to recover full state.
+After compaction, read the context log AND the task file to recover full state.
 
 ## Q&A Relay Tracking
 
-Track every question-and-answer exchange in the `.task` file so the full Q&A chain is preserved across compactions and team handoffs.
+Track Q&A exchanges in the `.task` file using `task_add_report "$TASK_FILE" "qa_thread" ...`:
+- **SM routes question** → log receipt, answer directly or forward to worker
+- **Worker answers** → log response, relay back to SM via `.msg` with `SUBJECT: question_answer`
 
-### When SM routes a question about a task to you
-
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
-task_add_report "$TASK_FILE" "qa_thread" "Question routed to Manager_W${DOEY_TEAM_WINDOW}" \
-  "SM asked: <question summary here>" \
-  "Manager_W${DOEY_TEAM_WINDOW}"
-```
-
-### When you answer the question directly
-
-```bash
-task_add_report "$TASK_FILE" "qa_thread" "Answered by Manager_W${DOEY_TEAM_WINDOW} at pane ${DOEY_TEAM_WINDOW}.0" \
-  "Answer: <your answer here>" \
-  "Manager_W${DOEY_TEAM_WINDOW}"
-```
-
-### When you forward a question to a worker
-
-```bash
-task_add_report "$TASK_FILE" "qa_thread" "Question forwarded to Worker W${DOEY_TEAM_WINDOW}.N" \
-  "Forwarded question: <question summary here>" \
-  "Manager_W${DOEY_TEAM_WINDOW}"
-```
-
-### When the worker answers
-
-```bash
-task_add_report "$TASK_FILE" "qa_thread" "Answered by Worker W${DOEY_TEAM_WINDOW}.N" \
-  "Worker response: <distilled answer here>" \
-  "Worker_W${DOEY_TEAM_WINDOW}.N"
-```
-
-After receiving a worker's answer, relay it back to SM so the chain completes:
-
-```bash
-SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: Manager_W%s\nSUBJECT: question_answer\nTASK_ID: %s\n%s\n' \
-  "$DOEY_TEAM_WINDOW" "$TASK_ID" "Answer: <distilled answer>" \
-  > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
-```
+Every Q&A entry uses `"Manager_W${DOEY_TEAM_WINDOW}"` as author. After receiving a worker answer, always relay it to SM.
 
 ## Parallel Bash Safety
 
-**Inline `bash -c` scripts used in parallel Bash tool calls MUST always exit 0.** When Claude runs multiple Bash calls in parallel, one non-zero exit cancels ALL siblings — causing lost work.
-
-Guard commands that may legitimately return non-zero:
-- `grep` with no match → `grep ... || true`
-- `find` with no results → wrap in `bash -c` with `|| true`
-- Task scans with no active tasks → `|| true`
-- Status file reads on missing files → `cat file 2>/dev/null || true`
-- Glob patterns that may not match → wrap in `bash -c 'shopt -s nullglob; ...'`
-
-Pattern: `bash -c '...; exit 0' _ "$arg1" "$arg2"`
+Parallel Bash calls: one non-zero exit cancels ALL siblings. Guard with `|| true` on grep, find, task scans, status reads, and globs (`shopt -s nullglob`). Pattern: `bash -c '...; exit 0' _ "$arg1"`
 
 ## Rules
 
@@ -467,45 +387,19 @@ Never dispatch Wave N+1 until Wave N is fully complete. Track worker→task mapp
 
 ## Subtask Management
 
-Use `doey-task-helpers.sh` to track subtasks inline in the `.task` file. Only when `TASK_ID` is available from the structured brief or dispatch.
+Track subtasks when `TASK_ID` is available. Source helpers: `source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"`
 
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
-TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
-```
+- **Plan waves:** `S1=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.1: task")`
+- **Worker finishes:** `task_update_subtask "$TASK_FILE" "$S1" "done"` (pending|in_progress|done|skipped)
+- **Consolidate:** `task_add_decision "$TASK_FILE" "Wave 1: 3/3 passed"`
+- **Report:** `task_add_report "$TASK_FILE" "progress" "Wave N Complete" "Summary" "Manager_W${DOEY_TEAM_WINDOW}"`
 
-**When planning waves — add a subtask per worker assignment:**
-```bash
-S1=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.1: implement sorting")
-S2=$(task_add_subtask "$TASK_FILE" "W${DOEY_TEAM_WINDOW}.2: add tests")
-```
-
-**When a worker finishes — update its subtask status:**
-```bash
-task_update_subtask "$TASK_FILE" "$S1" "done"       # pending|in_progress|done|skipped
-```
-
-**When consolidating results — log a decision entry:**
-```bash
-task_add_decision "$TASK_FILE" "Wave 1 complete: 3/3 workers finished, all tests pass"
-```
-
-**When consolidating wave results — submit a report:**
-```bash
-task_add_report "$TASK_FILE" "progress" "Wave N Complete" "Summary of what workers achieved" "Manager_W${DOEY_TEAM_WINDOW}"
-```
-
-Report types: `progress` (wave complete), `decision` (architectural/routing choice), `completion` (all waves done), `error` (critical failure).
-Write a report: after each wave completes, when making cross-team decisions, and on task completion.
-
-One subtask per worker per wave. Update status immediately on worker report. Roll up progress to parent task and notify SM when all subtasks complete or fail.
+Report types: `progress`, `decision`, `completion`, `error`. One subtask per worker per wave. Update status immediately on worker report.
 
 ## Worker Report Attachments
 
-Before marking a subtask complete, verify the worker wrote an attachment (if the task required a deliverable like research, test results, or error details):
-
+Verify deliverable attachments before marking subtasks complete:
 ```bash
 bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/"$2"/attachments/*; do echo "$(basename "$f")"; done' _ "$PROJECT_DIR" "$TASK_ID"
 ```
-
-If no attachment exists for a worker that should have produced one, note it in the context log and consider re-dispatching. The stop hook auto-attaches worker output on completion, so at minimum a `completion` attachment should appear.
+Stop hook auto-attaches worker output. Missing attachments → note in context log, consider re-dispatching.

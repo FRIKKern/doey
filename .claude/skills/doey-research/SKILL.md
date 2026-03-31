@@ -21,8 +21,7 @@ MARKER
 rm -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
 ```
 
-### 3. Rename pane
-If crashed (bare shell), restart per `/doey-dispatch` pre-flight.
+### 3. Rename pane (restart if crashed per `/doey-dispatch` pre-flight)
 ```bash
 tmux select-pane -t "$PANE" -T "research-topic_$(date +%m%d)"
 ```
@@ -52,6 +51,5 @@ Dispatch: `tmux load-buffer $TASKFILE && tmux paste-buffer -t $PANE`, sleep by l
 Check `${RUNTIME_DIR}/reports/${PANE_SAFE}.report`. Present summary, ask Option A or B, dispatch via `/doey-dispatch`.
 
 ### Rules
-1. Task marker BEFORE dispatch — stop hook blocks until report written
-2. Include report path in prompt — worker writes there, stop hook checks it
-3. Never delegate to own pane; always tmpfile + `load-buffer`
+- Task marker BEFORE dispatch (stop hook blocks until report written)
+- Include report path in prompt. Never delegate to own pane. Always tmpfile + `load-buffer`
