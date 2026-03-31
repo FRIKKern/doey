@@ -58,9 +58,29 @@ printf 'FROM: Boss\nSUBJECT: task\n%s\n' "YOUR_COMMAND" > "${MSG_DIR}/${SM_SAFE}
 touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 ```
 
-### Pre-Send SM Health Check
+### Pre-Send SM Health Check (MANDATORY)
 
-Before sending any `.msg`, check SM is alive: read `${RUNTIME_DIR}/status/${SM_SAFE}.status`. SM is alive if `STATUS=BUSY` and `UPDATED` < 60s old. If dead/stale, wake with `tmux send-keys -t "${SESSION_NAME}:0.2" Enter`, wait 3s, then send.
+**Before writing ANY `.msg` file**, verify SM is alive. Dead SM = unread messages = silent failure.
+
+```bash
+# ── SM health gate — run before every .msg write ──
+_sm_status_file="${RUNTIME_DIR}/status/${SM_SAFE}.status"
+_sm_alive=false
+if [ -f "$_sm_status_file" ]; then
+  _sm_st=$(grep '^STATUS:' "$_sm_status_file" | head -1 | cut -d' ' -f2-)
+  _sm_ts=$(grep '^UPDATED:' "$_sm_status_file" | head -1 | cut -d' ' -f2-)
+  _sm_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S%z' "$_sm_ts" +%s 2>/dev/null || date -d "$_sm_ts" +%s 2>/dev/null || echo 0)
+  _sm_age=$(( $(date +%s) - _sm_epoch ))
+  case "$_sm_st" in BUSY|READY) [ "$_sm_age" -lt 120 ] && _sm_alive=true ;; esac
+fi
+if [ "$_sm_alive" = false ]; then
+  tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
+  sleep 3
+fi
+# Now safe to write .msg and touch trigger
+```
+
+**Never skip this.** Every code block that writes a `.msg` file must include the health gate above it.
 
 ### Command types to send SM
 
@@ -224,10 +244,13 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 
 ## SM Health Monitoring
 
-Check: `cat "${RUNTIME_DIR}/status/${SM_SAFE}.status"` — fields: PANE, UPDATED, STATUS, TASK. Restart if STATUS is FINISHED/ERROR or UPDATED > 60s stale.
+SM status file: `${RUNTIME_DIR}/status/${SM_SAFE}.status` — fields: PANE, UPDATED, STATUS, TASK.
 
-Restart: `tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter`
-Context issues: use `/doey-sm-compact` to compact SM.
+- **Alive:** STATUS is BUSY or READY and UPDATED < 120s old
+- **Dead/stale:** STATUS is FINISHED/ERROR, or UPDATED > 120s stale → wake with `tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter`
+- **Context bloat:** use `/doey-sm-compact` to compact SM
+
+The pre-send health gate (see "Commanding Session Manager" above) handles this automatically before every message. You do NOT need a separate monitoring loop.
 
 ## Desktop Notifications
 
