@@ -24,8 +24,7 @@ HAS_GUM=false
 command -v gum >/dev/null 2>&1 && HAS_GUM=true
 
 # ── Arguments ─────────────────────────────────────────────────────────
-PROJECT_DIR="${1:-.}"
-PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+PROJECT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || { cd "${1:-.}" && pwd; })"
 
 PROJECT_NAME="$(basename "$PROJECT_DIR")"
 RUNTIME_DIR="${2:-/tmp/doey/${PROJECT_NAME}}"
