@@ -897,6 +897,25 @@ task_upgrade_schema() {
   printf 'TASK_TOTAL_PHASES=%s\n' "${TASK_TOTAL_PHASES:-0}" >> "$tmp"
   printf 'TASK_NOTES=%s\n' "${TASK_NOTES:-}" >> "$tmp"
   printf 'TASK_UPDATED=%s\n' "$(date +%s)" >> "$tmp"
+
+  # Preserve extension fields (TASK_REPORT_*, TASK_LOG_*, TASK_SUBTASK_N_*, etc.)
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "${line%%=*}" in
+      TASK_SCHEMA_VERSION|TASK_ID|TASK_TITLE|TASK_STATUS|TASK_TYPE|\
+      TASK_TAGS|TASK_CREATED_BY|TASK_ASSIGNED_TO|TASK_DESCRIPTION|\
+      TASK_ACCEPTANCE_CRITERIA|TASK_HYPOTHESES|TASK_DECISION_LOG|\
+      TASK_SUBTASKS|TASK_RELATED_FILES|TASK_BLOCKERS|TASK_TIMESTAMPS|\
+      TASK_CURRENT_PHASE|TASK_TOTAL_PHASES|TASK_NOTES|TASK_UPDATED)
+        ;; # already written above — skip
+      TASK_OWNER|TASK_PRIORITY|TASK_CREATED)
+        ;; # legacy fields — intentionally dropped during migration
+      TASK_*)
+        printf '%s\n' "$line" ;; # preserve all extension fields
+      *)
+        ;; # skip non-TASK lines (blank lines, comments, etc.)
+    esac
+  done < "$file" >> "$tmp"
+
   mv "$tmp" "$file"
 
   # Create companion .json if missing
