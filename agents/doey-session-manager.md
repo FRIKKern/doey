@@ -118,6 +118,14 @@ When a Manager sends a `task_complete` message that includes changed files, SM c
 - **Use conventional commits** — read `git log --oneline -10` for the repo's style
 - **Verify before committing** — `git -C "$PROJECT_DIR" diff --cached --stat` to confirm staged files match expectations
 
+### After Successful Push
+When a VCS push succeeds, the `post-push-complete.sh` hook automatically marks referenced tasks as done. The hook:
+- Scans recent commit messages for `task-N` references
+- Sets matching tasks (in_progress/pending_user_confirmation) to `done`
+- Logs the auto-completion in each task file
+
+After pushing, note in your status report which tasks were auto-completed. Example: "Tasks auto-completed by push: #42, #67"
+
 ## Dispatch
 
 **ALWAYS check capacity before dispatching.** Before sending ANY task to a team:
@@ -351,7 +359,21 @@ When SM receives a `dispatch_task` message from Boss:
 
 2. **Read structured fields** from the .json file (TASK_JSON field). Fields: intent, hypotheses, constraints, success_criteria, deliverables, dispatch_plan.
 
-3. **Choose routing** based on DISPATCH_MODE:
+3. **Duplicate check (REQUIRED gate — run before routing):**
+
+   Before dispatching, check if a similar task already exists:
+   ```bash
+   source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+   SIMILAR_ID=$(bash -c 'source "${1}/shell/doey-task-helpers.sh"; task_find_similar "$1" "$2"' _ "$PROJECT_DIR" "$TASK_TITLE")
+   ```
+   - **Match found** (exit 0, prints task ID in `$SIMILAR_ID`):
+     - Log a decision on the existing task: `task_add_decision "$PROJECT_DIR" "$SIMILAR_ID" "Duplicate dispatch rejected — new task '$TASK_TITLE' matches this task"`
+     - Notify Boss: send a `.msg` with `SUBJECT: duplicate_detected` and body: `Duplicate detected — Task #<SIMILAR_ID> already covers "$TASK_TITLE". Please consolidate or confirm this is intentionally separate.`
+     - **STOP** — do NOT proceed to routing. Return to main loop.
+   - **No match** (exit 1): proceed to step 4.
+   - **Exception:** if Boss message explicitly states the task is intentionally separate (e.g., "I checked, this is intentionally separate"), skip this gate and proceed.
+
+4. **Choose routing** based on DISPATCH_MODE:
 
    | DISPATCH_MODE | Routing |
    |---------------|---------|
@@ -359,9 +381,9 @@ When SM receives a `dispatch_task` message from Boss:
    | `sequential` | Queue tasks, send next after previous completes |
    | `phased` | Send wave 1, validate, then send wave 2, etc. (see Phased Dispatch below) |
 
-4. **Generate scoped briefs** for target team Manager — include: task title, intent, relevant hypotheses, constraints, success criteria, deliverables for that team, and file paths from dispatch_plan if specified.
+5. **Generate scoped briefs** for target team Manager — include: task title, intent, relevant hypotheses, constraints, success criteria, deliverables for that team, and file paths from dispatch_plan if specified.
 
-5. **Track progress** by TASK_ID (task files in `${PROJECT_DIR}/.doey/tasks/`, fallback `${RUNTIME_DIR}/tasks/`):
+6. **Track progress** by TASK_ID (task files in `${PROJECT_DIR}/.doey/tasks/`, fallback `${RUNTIME_DIR}/tasks/`):
    - Update .task file: set `TASK_STATUS=in_progress`, add `TASK_TEAM=<assigned team>`
    - On completion: set `TASK_STATUS=pending_user_confirmation`
    - On failure: set `TASK_STATUS=failed`, notify Boss
