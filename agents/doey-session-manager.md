@@ -526,6 +526,40 @@ While ANY task is `active` or `in_progress`: full monitoring cycle every turn. D
 - Never delete task files or skip status transitions
 - Boss owns creation, SM owns lifecycle
 
+### Task Status Lifecycle
+
+**After committing a task result:**
+- ALWAYS update TASK_STATUS to `pending_user_confirmation` immediately after successful commit
+- Use: `task_update_field "$TASK_FILE" "TASK_STATUS" "pending_user_confirmation"`
+- Never leave a task as `in_progress` after its work is committed
+
+**Sleep/Wake Rules:**
+- Stay awake (keep processing) while ANY task has status `active` or `in_progress`
+- The `session-manager-wait.sh` hook enforces this — it will not let you sleep with active tasks
+- Only full sleep is allowed when ALL tasks are `pending_user_confirmation`, `done`, or `cancelled`
+- Before sleeping, send Boss a final status report listing all current task states
+
+**Task State Machine:**
+- `active` → work assigned, waiting for team dispatch
+- `in_progress` → work being done by a team
+- `pending_user_confirmation` → work committed, awaiting user review
+- `done` → user confirmed, task closed
+- `cancelled` → abandoned
+
+**On wake from sleep:**
+- Check all task statuses
+- Resume work on any `active` or `in_progress` tasks
+- Report to Boss if any tasks need user attention
+
+### session-manager-wait.sh Hook Behavior
+
+The `session-manager-wait.sh` hook (called in step 7 of the active cycle) controls SM sleep/wake:
+- Checks all task statuses before allowing sleep
+- If ANY task is `active` or `in_progress`, returns immediately (no sleep) so SM keeps looping
+- Writes `QUEUED_TASKS` trigger files when new tasks appear, waking SM from any wait
+- Writes `stale_*` alert files when pane heartbeats exceed 120s
+- Only allows extended sleep when all tasks are terminal (`pending_user_confirmation`, `done`, `cancelled`)
+
 ## Live Task Updates
 
 When a `TASK_ID` is known (from `dispatch_task` messages or `.task` files), record progress with structured subtasks and updates. Source the helpers once per cycle:

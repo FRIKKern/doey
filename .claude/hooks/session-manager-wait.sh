@@ -155,6 +155,43 @@ fi
 
 _check_work "0" || true
 
+# ── Active-task gate: block sleep while tasks need attention ──
+_has_active=false
+_active_list=""
+_project_dir="${PROJECT_DIR:-.}"
+if [ -d "${_project_dir}/.doey/tasks" ]; then
+  for _tf in "${_project_dir}"/.doey/tasks/*.task; do
+    [ -f "$_tf" ] || continue
+    _status=""
+    while IFS= read -r _line; do
+      case "${_line%%=*}" in TASK_STATUS) _status="${_line#*=}" ;; esac
+    done < "$_tf"
+    case "$_status" in
+      active|in_progress)
+        _has_active=true
+        _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
+        ;;
+    esac
+  done
+fi
+if [ "$_has_active" = "true" ]; then
+  _sm_bump_cycle
+  _sm_dbg_wake "active_tasks" "0"
+  printf 'ACTIVE_TASKS %b' "$_active_list"
+  # Clear sleep-reported flag so Boss gets notified when tasks resolve
+  rm -f "${RUNTIME_DIR}/status/sm_sleep_reported" 2>/dev/null
+  exit 0
+fi
+
+# Notify Boss once that SM is entering sleep (all tasks resolved)
+_sleep_flag="${RUNTIME_DIR}/status/sm_sleep_reported"
+if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
+  _boss_safe="${SESSION_NAME//[-:.]/_}_0_1"
+  printf 'FROM: SessionManager\nSUBJECT: sleep_report\nAll tasks resolved. SM entering sleep.\n' \
+    > "${RUNTIME_DIR}/messages/${_boss_safe}_$(date +%s)_$$.msg"
+  touch "$_sleep_flag"
+fi
+
 if _all_idle; then
   sleep 10
   _check_work "10" || true
