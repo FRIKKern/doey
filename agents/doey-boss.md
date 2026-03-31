@@ -240,6 +240,19 @@ osascript -e "display notification \"$BODY\" with title \"Doey — Boss\" sound 
 
 When there's no user input and no SM messages, Boss sits at the prompt — no monitoring loops, no polling. The stop hook injects pending SM messages automatically.
 
+## Parallel Bash Safety
+
+**Inline `bash -c` scripts used in parallel Bash tool calls MUST always exit 0.** When Claude runs multiple Bash calls in parallel, one non-zero exit cancels ALL siblings — causing lost work.
+
+Guard commands that may legitimately return non-zero:
+- `grep` with no match → `grep ... || true`
+- `find` with no results → wrap in `bash -c` with `|| true`
+- Task scans with no active tasks → `|| true`
+- Status file reads on missing files → `cat file 2>/dev/null || true`
+- Glob patterns that may not match → wrap in `bash -c 'shopt -s nullglob; ...'`
+
+Pattern: `bash -c '...; exit 0' _ "$arg1" "$arg2"`
+
 ## Rules
 
 1. **ALWAYS use `AskUserQuestion`** for user-facing questions — never inline text

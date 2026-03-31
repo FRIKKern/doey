@@ -734,6 +734,19 @@ Q/A pairs build an audit trail on the task file. If the question is forwarded to
 - When Boss dispatches implementation: TASK_PHASE=implementation
 - Use: `task_update_field "$TASK_FILE" "TASK_PHASE" "research"`
 
+## Parallel Bash Safety
+
+**Inline `bash -c` scripts used in parallel Bash tool calls MUST always exit 0.** When Claude runs multiple Bash calls in parallel, one non-zero exit cancels ALL siblings — causing lost work.
+
+Guard commands that may legitimately return non-zero:
+- `grep` with no match → `grep ... || true`
+- `find` with no results → wrap in `bash -c` with `|| true`
+- Task scans with no active tasks → `|| true`
+- Status file reads on missing files → `cat file 2>/dev/null || true`
+- Glob patterns that may not match → wrap in `bash -c 'shopt -s nullglob; ...'`
+
+Pattern: `bash -c '...; exit 0' _ "$arg1" "$arg2"`
+
 ## Rules
 
 1. Managed teams: dispatch through Window Managers, not workers directly

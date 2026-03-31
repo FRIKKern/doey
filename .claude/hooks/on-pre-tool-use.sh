@@ -3,6 +3,10 @@
 # Hot path: runs before EVERY tool call. Must be fast.
 set -euo pipefail
 
+# ERR trap: prevent unexpected non-zero exits from cancelling parallel Bash calls.
+# This hook intentionally exits 2 (block) or 0 (allow); any other exit is a bug.
+trap 'exit 0' ERR
+
 INPUT=$(cat)
 
 _log_block() {

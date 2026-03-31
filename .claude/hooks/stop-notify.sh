@@ -164,7 +164,7 @@ if is_worker; then
   [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
   _notify_pane "$_target" "$_subject" "$MSG"
   _debug_sent "$_target" "$_subject"
-  [ "$_team_type" = "freelancer" ] && touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+  { [ "$_team_type" = "freelancer" ] && touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null; } || true
   _log "stop-notify: sent ${_subject} to ${_target}"
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
   _wake_sm
