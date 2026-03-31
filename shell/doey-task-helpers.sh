@@ -9,6 +9,20 @@ _TASK_VALID_TYPES="bug feature bugfix refactor research audit docs infrastructur
 _TASK_VALID_SUBTASK_STATUSES="pending in_progress done skipped"
 _TASK_SCHEMA_VERSION_CURRENT="3"
 
+# ── _touch_task_updated ──────────────────────────────────────────────
+# Set TASK_UPDATED=<epoch> on a .task file. Upserts the field.
+# Args: task_file
+_touch_task_updated() {
+  local task_file="$1"
+  [ -f "$task_file" ] || return 0
+  local _ts; _ts=$(date +%s)
+  if grep -q '^TASK_UPDATED=' "$task_file" 2>/dev/null; then
+    sed -i '' "s/^TASK_UPDATED=.*/TASK_UPDATED=${_ts}/" "$task_file"
+  else
+    echo "TASK_UPDATED=${_ts}" >> "$task_file"
+  fi
+}
+
 # ── task_dir ──────────────────────────────────────────────────────────
 # Resolve .doey/tasks/ path relative to project root. Auto-creates on first call.
 # Args: project_dir
@@ -74,6 +88,7 @@ task_create() {
   printf 'TASK_CURRENT_PHASE=0\n' >> "$tmp"
   printf 'TASK_TOTAL_PHASES=0\n' >> "$tmp"
   printf 'TASK_NOTES=\n' >> "$tmp"
+  printf 'TASK_UPDATED=%s\n' "$now" >> "$tmp"
 
   mv "$tmp" "$task_file"
   echo "$id"
@@ -203,6 +218,7 @@ task_update_field() {
   fi
 
   mv "$tmp" "$task_file"
+  _touch_task_updated "$task_file"
 }
 
 # ── _task_read_field ─────────────────────────────────────────────────
@@ -880,6 +896,7 @@ task_upgrade_schema() {
   printf 'TASK_CURRENT_PHASE=%s\n' "${TASK_CURRENT_PHASE:-0}" >> "$tmp"
   printf 'TASK_TOTAL_PHASES=%s\n' "${TASK_TOTAL_PHASES:-0}" >> "$tmp"
   printf 'TASK_NOTES=%s\n' "${TASK_NOTES:-}" >> "$tmp"
+  printf 'TASK_UPDATED=%s\n' "$(date +%s)" >> "$tmp"
   mv "$tmp" "$file"
 
   # Create companion .json if missing
@@ -1117,6 +1134,7 @@ doey_task_add_subtask() {
     printf 'TASK_SUBTASK_%s_ASSIGNEE=%s\n' "$n" "$assignee" >> "$task_file"
   fi
 
+  _touch_task_updated "$task_file"
   echo "$n"
 }
 
@@ -1153,6 +1171,7 @@ doey_task_update_subtask() {
     task_update_field "$task_file" "$field" "$new_status"
   else
     printf '%s=%s\n' "$field" "$new_status" >> "$task_file"
+    _touch_task_updated "$task_file"
   fi
 }
 
@@ -1182,6 +1201,7 @@ doey_task_add_update() {
   printf 'TASK_UPDATE_%s_AUTHOR=%s\n' "$n" "$author" >> "$task_file"
   printf 'TASK_UPDATE_%s_TEXT=%s\n' "$n" "$text" >> "$task_file"
 
+  _touch_task_updated "$task_file"
   echo "$n"
 }
 
@@ -1215,6 +1235,7 @@ task_add_report() {
   printf 'TASK_REPORT_%s_TITLE=%s\n' "$n" "$title" >> "$task_file"
   printf 'TASK_REPORT_%s_BODY=%s\n' "$n" "$body" >> "$task_file"
 
+  _touch_task_updated "$task_file"
   echo "$n"
 }
 
@@ -1282,6 +1303,7 @@ task_add_recovery_event() {
   printf 'TASK_RECOVERY_%s_NEW_AGENT=%s\n' "$n" "$new_agent" >> "$task_file"
   printf 'TASK_RECOVERY_%s_DESCRIPTION=%s\n' "$n" "$description" >> "$task_file"
 
+  _touch_task_updated "$task_file"
   echo "$n"
 }
 

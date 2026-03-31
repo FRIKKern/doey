@@ -112,6 +112,7 @@ If the task is phased, perform two additional steps:
 printf 'TASK_DISPATCH_MODE="phased"\n' >> "${TD}/${TASK_ID}.task"
 printf 'TASK_CURRENT_PHASE=0\n' >> "${TD}/${TASK_ID}.task"
 printf 'TASK_TOTAL_PHASES=%d\n' "$TOTAL_PHASES" >> "${TD}/${TASK_ID}.task"
+task_update_field "${TD}/${TASK_ID}.task" "TASK_UPDATED" "$(date +%s)"
 ```
 
 **2. Create the runtime phase file for SM auto-forwarding:**

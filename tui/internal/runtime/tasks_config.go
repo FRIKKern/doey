@@ -369,7 +369,11 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 		}
 	}
 	pt.Logs = mergeLogs(pt.Logs, rt.Logs)
-	pt.Updated = time.Now().Unix()
+	if rt.Updated != 0 {
+		pt.Updated = rt.Updated
+	} else {
+		pt.Updated = time.Now().Unix()
+	}
 }
 
 // MergeRuntimeTasks imports runtime tasks into the persistent store.

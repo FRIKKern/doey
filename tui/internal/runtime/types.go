@@ -117,6 +117,7 @@ type Task struct {
 	Description        string    // multi-line task description
 	Attachments        []string  // list of URLs/file paths
 	Created            int64     // unix epoch
+	Updated            int64     // unix epoch
 	Subtasks           []Subtask // worker assignments
 	Category           string    // bug, feature, refactor, docs, infrastructure
 	Tags               []string  // cross-cutting concerns
