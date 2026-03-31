@@ -38,6 +38,21 @@ type PaneStatus struct {
 // WorkerResult is an alias for PaneResult used by the dashboard.
 type WorkerResult = PaneResult
 
+// StatusTransition represents a parsed status change from TASK_TIMESTAMPS.
+type StatusTransition struct {
+	Status    string
+	Timestamp int64
+	Label     string // human-readable time, e.g. "2m ago"
+}
+
+// ConversationEntry represents a parsed conversation entry from task logs/reports.
+type ConversationEntry struct {
+	Role      string // "user" or "ai"
+	Message   string
+	Timestamp int64
+	Author    string
+}
+
 // LogEntry represents a parsed task log entry with action and detail.
 type LogEntry struct {
 	Timestamp string
@@ -90,7 +105,9 @@ type Task struct {
 	CreatedBy          string    // v3: who created it
 	AssignedTo         string    // v3: who/what team
 	SchemaVersion      int       // v3: schema version number
-	Reports []Report // from TASK_REPORT_N_* fields
+	Reports           []Report             // from TASK_REPORT_N_* fields
+	StatusTimeline    []StatusTransition   // parsed from TASK_TIMESTAMPS
+	ConversationTrail []ConversationEntry  // parsed from logs/reports
 	// Proof-of-completion fields
 	FilesChanged []string // from TASK_FILES
 	Commits      string   // from TASK_COMMITS (hash + message lines)

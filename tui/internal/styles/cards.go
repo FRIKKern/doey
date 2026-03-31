@@ -614,6 +614,78 @@ func QuickActionCard(t Theme, icon, title, description string, width int, select
 	return cardStyle.Render(content)
 }
 
+// TimelineDot renders a colored dot for the status timeline display.
+func TimelineDot(color lipgloss.AdaptiveColor) string {
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Render("●")
+}
+
+// TimelineArrow renders a dim arrow connector between timeline dots.
+func TimelineArrow(t Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(t.Subtle).
+		Faint(true).
+		Render(" → ")
+}
+
+// ConversationBubbleUser returns a style for user message bubbles.
+// Right-aligned with a subtle primary-tinted background.
+func ConversationBubbleUser(t Theme, width int) lipgloss.Style {
+	bubbleWidth := width * 3 / 4
+	if bubbleWidth < 20 {
+		bubbleWidth = 20
+	}
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
+		Foreground(t.Text).
+		Background(lipgloss.AdaptiveColor{Light: "#EFF6FF", Dark: "#1E293B"}).
+		Width(bubbleWidth).
+		Padding(0, 1).
+		MarginLeft(width - bubbleWidth - 2)
+}
+
+// ConversationBubbleAI returns a style for AI response bubbles.
+// Left-aligned with a subtle accent-tinted background.
+func ConversationBubbleAI(t Theme, width int) lipgloss.Style {
+	bubbleWidth := width * 3 / 4
+	if bubbleWidth < 20 {
+		bubbleWidth = 20
+	}
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Muted).
+		Foreground(t.Text).
+		Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#0F172A"}).
+		Width(bubbleWidth).
+		Padding(0, 1)
+}
+
+// ExpandedReportContainer returns a style for the full report body container.
+func ExpandedReportContainer(t Theme, width int) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Separator).
+		Foreground(t.Text).
+		Width(width).
+		Padding(1, 1)
+}
+
+// ReportToggle renders a toggle label: "[+] Show more" or "[-] Show less".
+func ReportToggle(t Theme, expanded bool) string {
+	if expanded {
+		return lipgloss.NewStyle().
+			Foreground(t.Accent).
+			Bold(true).
+			Render("[-] Show less")
+	}
+	return lipgloss.NewStyle().
+		Foreground(t.Accent).
+		Bold(true).
+		Render("[+] Show more")
+}
+
 // CardGrid arranges cards into a grid layout with cols columns.
 // totalWidth is the available width for the grid.
 func CardGrid(cards []string, cols, totalWidth int) string {

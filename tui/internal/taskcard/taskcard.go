@@ -323,6 +323,10 @@ type ExpandedCard struct {
 	Sidecar       *runtime.TaskSidecar
 	TaskResult    *runtime.TaskResult
 	sidecarLoaded bool // prevents repeated load attempts
+
+	// Expandable report tracking
+	ExpandedReports map[int]bool // which reports are expanded (by index)
+	ReportCursor    int          // focused report index (-1 = none)
 }
 
 // loadSidecar lazily loads sidecar and result data on first call.
@@ -375,6 +379,12 @@ func (e *ExpandedCard) Render() string {
 
 	// --- Separator ---
 	sections = append(sections, styles.ThinSeparator(e.Theme, contentWidth))
+
+	// --- Status Timeline ---
+	if timeline := e.renderStatusTimeline(contentWidth); timeline != "" {
+		sections = append(sections, timeline)
+	}
+
 	sections = append(sections, "")
 
 	// --- Meta ---
@@ -425,7 +435,10 @@ func (e *ExpandedCard) Render() string {
 	if len(task.Reports) > 0 {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("Reports (%d)", len(task.Reports))))
-		for _, report := range task.Reports {
+		if e.ExpandedReports == nil {
+			e.ExpandedReports = make(map[int]bool)
+		}
+		for i, report := range task.Reports {
 			var typeColor lipgloss.AdaptiveColor
 			switch report.Type {
 			case "research":
@@ -452,17 +465,43 @@ func (e *ExpandedCard) Render() string {
 				timeStr = "  " + lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).
 					Render(time.Unix(report.Created, 0).Format("15:04"))
 			}
-			sections = append(sections, fmt.Sprintf("  %s %s%s%s", badge, titleText, author, timeStr))
+
+			// Focused report gets a subtle highlight indicator
+			focusIndicator := "  "
+			if i == e.ReportCursor {
+				focusIndicator = lipgloss.NewStyle().Foreground(e.Theme.Primary).Render("> ")
+			}
+			sections = append(sections, fmt.Sprintf("%s%s %s%s%s", focusIndicator, badge, titleText, author, timeStr))
 
 			if report.Body != "" {
+				expanded := e.ExpandedReports[i]
 				bodyLines := strings.Split(report.Body, "\n")
-				if len(bodyLines) > 3 {
-					bodyLines = bodyLines[:3]
-					bodyLines = append(bodyLines, "...")
-				}
 				bodyStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).PaddingLeft(4)
-				for _, line := range bodyLines {
-					sections = append(sections, bodyStyle.Render(line))
+
+				if expanded {
+					// Show full body
+					for _, line := range bodyLines {
+						sections = append(sections, bodyStyle.Render(line))
+					}
+					toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+						Render("[-] Show less")
+					sections = append(sections, zone.Mark(fmt.Sprintf("report-toggle-%d", i), toggle))
+				} else {
+					// Show truncated body (3 lines max)
+					showLines := bodyLines
+					truncated := false
+					if len(showLines) > 3 {
+						showLines = showLines[:3]
+						truncated = true
+					}
+					for _, line := range showLines {
+						sections = append(sections, bodyStyle.Render(line))
+					}
+					if truncated {
+						toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+							Render(fmt.Sprintf("[+] Show more (%d lines)", len(bodyLines)))
+						sections = append(sections, zone.Mark(fmt.Sprintf("report-toggle-%d", i), toggle))
+					}
 				}
 			}
 			sections = append(sections, "")
@@ -587,6 +626,12 @@ func (e *ExpandedCard) Render() string {
 		}
 	}
 
+	// --- Conversation Trail ---
+	if trail := e.renderConversationTrail(contentWidth); trail != "" {
+		sections = append(sections, "")
+		sections = append(sections, trail)
+	}
+
 	// --- Messages ---
 	if len(e.Messages) > 0 {
 		sections = append(sections, "")
@@ -688,7 +733,7 @@ func (e *ExpandedCard) Render() string {
 		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("[Enter] collapse"))
 	hint := closeBtn + "  " +
 		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
-			Render("[Tab] next subtask  [↑↓] scroll")
+			Render("[Tab] next subtask  [r] toggle report  [↑↓] scroll")
 	sections = append(sections, hint)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
@@ -701,8 +746,8 @@ func (e *ExpandedCard) Render() string {
 
 // ContentHeight estimates the total content lines for scroll bounds.
 func (e *ExpandedCard) ContentHeight() int {
-	// Count sections: header(1) + sep(1) + desc + subtasks + decisions + notes + hint(2)
-	lines := 4 // header + sep + empty + hint
+	// Count sections: header(1) + sep(1) + timeline(1) + desc + subtasks + decisions + notes + hint(2)
+	lines := 5 // header + sep + timeline + empty + hint
 	if e.Item.Task.Description != "" {
 		// Section header + wrapped text (rough estimate: chars / width)
 		contentWidth := e.Width - 6
@@ -720,7 +765,21 @@ func (e *ExpandedCard) ContentHeight() int {
 		lines += len(proofRows) + 1 // proof section + spacing
 	}
 	if len(e.Item.Task.Reports) > 0 {
-		lines += 2 + len(e.Item.Task.Reports)*5 // header + spacing + ~5 lines per report
+		for i, report := range e.Item.Task.Reports {
+			lines += 3 // header line + spacing + toggle
+			if report.Body != "" {
+				if e.ExpandedReports != nil && e.ExpandedReports[i] {
+					lines += strings.Count(report.Body, "\n") + 2
+				} else {
+					bodyLines := strings.Count(report.Body, "\n") + 1
+					if bodyLines > 3 {
+						bodyLines = 4 // 3 lines + toggle
+					}
+					lines += bodyLines
+				}
+			}
+		}
+		lines += 2 // section header + spacing
 	}
 	if len(e.Item.Task.Subtasks) > 0 {
 		lines += len(e.Item.Task.Subtasks) + 3
@@ -744,6 +803,11 @@ func (e *ExpandedCard) ContentHeight() int {
 			logLines := strings.Count(log.Entry, "\n") + 2 // entry + rendered blocks estimate
 			lines += logLines
 		}
+	}
+	// Conversation trail estimate
+	convCount := e.countConversationEntries()
+	if convCount > 0 {
+		lines += 2 + convCount*3 // section header + spacing + ~3 lines per conversation entry
 	}
 	if len(e.Messages) > 0 {
 		msgCount := len(e.Messages)
@@ -1375,4 +1439,283 @@ func (e *ExpandedCard) renderResultSection(w int) string {
 		return ""
 	}
 	return strings.Join(sections, "\n")
+}
+
+// statusTransition represents a status change with timestamp for timeline rendering.
+type statusTransition struct {
+	Status    string
+	Timestamp int64
+}
+
+// renderStatusTimeline parses activity logs for status transitions and renders
+// a horizontal timeline: ○ created (Mar 31) → ● active (Mar 31) → ...
+func (e *ExpandedCard) renderStatusTimeline(width int) string {
+	task := e.Item.Task
+
+	var transitions []statusTransition
+
+	// Start with "created" from the task creation time.
+	if task.Created > 0 {
+		transitions = append(transitions, statusTransition{Status: "created", Timestamp: task.Created})
+	}
+
+	// Scan activity log entries for status change patterns.
+	for _, log := range task.Logs {
+		entry := strings.ToLower(log.Entry)
+		// Pattern: "→ status_name" or "-> status_name"
+		for _, arrow := range []string{"→ ", "-> "} {
+			if idx := strings.Index(entry, arrow); idx >= 0 {
+				rest := strings.TrimSpace(entry[idx+len(arrow):])
+				status := extractStatusName(rest)
+				if status != "" {
+					transitions = append(transitions, statusTransition{Status: status, Timestamp: log.Timestamp})
+				}
+			}
+		}
+		// Pattern: "STATUS: status_name" or "status changed to status_name"
+		for _, prefix := range []string{"status: ", "status:", "status changed to "} {
+			if idx := strings.Index(entry, prefix); idx >= 0 {
+				rest := strings.TrimSpace(entry[idx+len(prefix):])
+				status := extractStatusName(rest)
+				if status != "" {
+					transitions = append(transitions, statusTransition{Status: status, Timestamp: log.Timestamp})
+				}
+			}
+		}
+	}
+
+	// Deduplicate consecutive identical statuses.
+	var deduped []statusTransition
+	for _, tr := range transitions {
+		if len(deduped) == 0 || deduped[len(deduped)-1].Status != tr.Status {
+			deduped = append(deduped, tr)
+		}
+	}
+
+	if len(deduped) == 0 {
+		return ""
+	}
+
+	// Render the timeline as: ○ created (Mar 31) → ● active (Mar 31) → ...
+	t := e.Theme
+	arrowStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+	var parts []string
+	for i, tr := range deduped {
+		isLast := i == len(deduped)-1
+		dotColor := styles.StatusAccentColor(t, tr.Status)
+
+		dot := "○"
+		if isLast {
+			dot = "●"
+		}
+		styledDot := lipgloss.NewStyle().Foreground(dotColor).Render(dot)
+
+		statusStr := lipgloss.NewStyle().Foreground(t.Text).Render(tr.Status)
+		dateStr := ""
+		if tr.Timestamp > 0 {
+			dateStr = " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
+				Render("("+time.Unix(tr.Timestamp, 0).Format("Jan 2")+")")
+		}
+
+		part := styledDot + " " + statusStr + dateStr
+		parts = append(parts, part)
+
+		if !isLast {
+			parts = append(parts, arrowStyle.Render(" → "))
+		}
+	}
+
+	timeline := strings.Join(parts, "")
+	// If timeline is too wide, wrap it vertically
+	if lipgloss.Width(timeline) > width {
+		var lines []string
+		for i, tr := range deduped {
+			isLast := i == len(deduped)-1
+			dotColor := styles.StatusAccentColor(t, tr.Status)
+			dot := "○"
+			if isLast {
+				dot = "●"
+			}
+			styledDot := lipgloss.NewStyle().Foreground(dotColor).Render(dot)
+			statusStr := lipgloss.NewStyle().Foreground(t.Text).Render(tr.Status)
+			dateStr := ""
+			if tr.Timestamp > 0 {
+				dateStr = " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
+					Render("("+time.Unix(tr.Timestamp, 0).Format("Jan 2")+")")
+			}
+			connector := ""
+			if !isLast {
+				connector = arrowStyle.Render(" →")
+			}
+			lines = append(lines, "  "+styledDot+" "+statusStr+dateStr+connector)
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	return timeline
+}
+
+// extractStatusName extracts a known status name from the beginning of a string.
+func extractStatusName(s string) string {
+	s = strings.TrimSpace(s)
+	known := []string{
+		"pending_user_confirmation", "in_progress",
+		"done", "active", "draft", "paused", "blocked", "cancelled", "failed",
+	}
+	for _, k := range known {
+		if strings.HasPrefix(s, k) {
+			return k
+		}
+	}
+	return ""
+}
+
+// conversationEntry represents a parsed user/AI message from activity logs.
+type conversationEntry struct {
+	Role      string // "user" or "ai"
+	Text      string
+	Timestamp int64
+}
+
+// parseConversationEntries extracts conversation-style entries from task logs.
+// Looks for entries prefixed with "USER:", "AI:", or "CONVERSATION:".
+// Also checks reports with type "conversation".
+func (e *ExpandedCard) parseConversationEntries() []conversationEntry {
+	var entries []conversationEntry
+
+	// Parse from activity logs
+	for _, log := range e.Item.Task.Logs {
+		entry := strings.TrimSpace(log.Entry)
+		upper := strings.ToUpper(entry)
+
+		if strings.HasPrefix(upper, "USER:") {
+			text := strings.TrimSpace(entry[5:])
+			entries = append(entries, conversationEntry{Role: "user", Text: text, Timestamp: log.Timestamp})
+		} else if strings.HasPrefix(upper, "AI:") {
+			text := strings.TrimSpace(entry[3:])
+			entries = append(entries, conversationEntry{Role: "ai", Text: text, Timestamp: log.Timestamp})
+		} else if strings.HasPrefix(upper, "CONVERSATION:") {
+			text := strings.TrimSpace(entry[13:])
+			// Detect role from content
+			role := "ai"
+			if strings.HasPrefix(strings.ToUpper(text), "USER:") {
+				role = "user"
+				text = strings.TrimSpace(text[5:])
+			} else if strings.HasPrefix(strings.ToUpper(text), "AI:") {
+				text = strings.TrimSpace(text[3:])
+			}
+			entries = append(entries, conversationEntry{Role: role, Text: text, Timestamp: log.Timestamp})
+		}
+	}
+
+	// Parse from reports with type "conversation"
+	for _, report := range e.Item.Task.Reports {
+		if report.Type != "conversation" {
+			continue
+		}
+		for _, line := range strings.Split(report.Body, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			upper := strings.ToUpper(line)
+			if strings.HasPrefix(upper, "USER:") {
+				entries = append(entries, conversationEntry{
+					Role: "user", Text: strings.TrimSpace(line[5:]), Timestamp: report.Created,
+				})
+			} else if strings.HasPrefix(upper, "AI:") {
+				entries = append(entries, conversationEntry{
+					Role: "ai", Text: strings.TrimSpace(line[3:]), Timestamp: report.Created,
+				})
+			}
+		}
+	}
+
+	// Sort by timestamp ascending
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Timestamp < entries[j].Timestamp
+	})
+
+	// Cap at last 20 messages
+	if len(entries) > 20 {
+		entries = entries[len(entries)-20:]
+	}
+
+	return entries
+}
+
+// countConversationEntries returns the number of conversation entries for height estimation.
+func (e *ExpandedCard) countConversationEntries() int {
+	return len(e.parseConversationEntries())
+}
+
+// renderConversationTrail renders a conversation trail section with user/AI messages.
+func (e *ExpandedCard) renderConversationTrail(width int) string {
+	entries := e.parseConversationEntries()
+	if len(entries) == 0 {
+		return ""
+	}
+
+	t := e.Theme
+	var lines []string
+	lines = append(lines, styles.SectionTitle(t, "Conversation"))
+
+	userBg := lipgloss.AdaptiveColor{Light: "#E8F4FD", Dark: "#1E3A5F"}
+	aiBg := lipgloss.AdaptiveColor{Light: "#F0F4E8", Dark: "#2D3A1E"}
+
+	bodyWidth := width - 8
+	if bodyWidth < 20 {
+		bodyWidth = 20
+	}
+
+	for i, entry := range entries {
+		// Timestamp
+		ts := ""
+		if entry.Timestamp > 0 {
+			ts = time.Unix(entry.Timestamp, 0).Format("15:04")
+		}
+		styledTs := lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(ts)
+
+		// Role label and message styling
+		var roleLabel string
+		var msgStyle lipgloss.Style
+
+		if entry.Role == "user" {
+			roleLabel = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("USER")
+			msgStyle = lipgloss.NewStyle().
+				Background(userBg).
+				Foreground(t.Text).
+				Width(bodyWidth).
+				Padding(0, 1)
+		} else {
+			roleLabel = lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("AI")
+			msgStyle = lipgloss.NewStyle().
+				Background(aiBg).
+				Foreground(t.Text).
+				Width(bodyWidth).
+				Padding(0, 1)
+		}
+
+		// Header: timestamp + role
+		lines = append(lines, fmt.Sprintf("  %s  %s", styledTs, roleLabel))
+
+		// Message body (wrapped)
+		wrapped := wordWrap(entry.Text, bodyWidth-2)
+		lines = append(lines, "  "+msgStyle.Render(wrapped))
+
+		// Spacing between messages (not after last)
+		if i < len(entries)-1 {
+			lines = append(lines, "")
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// ToggleReportExpand toggles the expansion state of the report at the given index.
+func (e *ExpandedCard) ToggleReportExpand(index int) {
+	if e.ExpandedReports == nil {
+		e.ExpandedReports = make(map[int]bool)
+	}
+	e.ExpandedReports[index] = !e.ExpandedReports[index]
 }
