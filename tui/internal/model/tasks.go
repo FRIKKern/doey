@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
@@ -81,9 +82,9 @@ type TasksModel struct {
 	list list.Model
 
 	// Navigation — split-pane
-	leftFocused bool // true = list panel focused, false = detail panel focused
-	rightScroll int  // vertical scroll offset for right panel
-	keyMap      keys.KeyMap
+	leftFocused    bool           // true = list panel focused, false = detail panel focused
+	detailViewport viewport.Model // viewport for right detail panel scrolling
+	keyMap         keys.KeyMap
 
 	// Input modes
 	creating  bool
@@ -117,12 +118,16 @@ func NewTasksModel() TasksModel {
 	l.KeyMap.CursorUp = key.NewBinding(key.WithKeys("k", "up"))
 	l.KeyMap.CursorDown = key.NewBinding(key.WithKeys("j", "down"))
 
+	vp := viewport.New(0, 0)
+	vp.MouseWheelEnabled = true
+
 	return TasksModel{
-		theme:       theme,
-		leftFocused: true,
-		keyMap:      keys.DefaultKeyMap(),
-		subtaskMap:  make(map[string][]runtime.Subtask),
-		list:        l,
+		theme:          theme,
+		leftFocused:    true,
+		detailViewport: vp,
+		keyMap:         keys.DefaultKeyMap(),
+		subtaskMap:     make(map[string][]runtime.Subtask),
+		list:           l,
 	}
 }
 
@@ -139,13 +144,19 @@ func (m *TasksModel) SetSize(w, h int) {
 		leftW = 28
 	}
 	m.list.SetSize(leftW, h-4)
+	rightW := w - leftW - 1
+	if rightW < 24 {
+		rightW = 24
+	}
+	vpH := h - 4
+	if vpH < 1 {
+		vpH = 1
+	}
+	m.detailViewport.Width = rightW - 4 // account for panel padding
+	m.detailViewport.Height = vpH - 1   // leave room for hint bar
 	if m.expanded != nil {
-		rightW := w - leftW - 1
-		if rightW < 24 {
-			rightW = 24
-		}
 		m.expanded.Width = rightW
-		m.expanded.Height = h - 4
+		m.expanded.Height = vpH
 	}
 }
 
@@ -296,7 +307,6 @@ func (m *TasksModel) loadSelectedDetail() {
 		Width:         rightW,
 		Height:        m.height - 4,
 		SubtaskCursor: prevCursor,
-		ScrollOffset:  0,
 		Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
 		PaneStatuses:  paneStatusSlice(m.paneStatuses),
 		Results:       m.paneResults,
@@ -363,7 +373,7 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 		for i := range m.entries {
 			if zone.Get(fmt.Sprintf("task-card-%d", i)).InBounds(msg) {
 				m.list.Select(i)
-				m.rightScroll = 0
+				m.detailViewport.GotoTop()
 				m.loadSelectedDetail()
 				return m, nil
 			}
@@ -381,53 +391,19 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 
 	// Mouse wheel — route to focused panel
 	if msg.Action == tea.MouseActionPress {
-		if msg.Button == tea.MouseButtonWheelUp {
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
 			if m.leftFocused {
 				var cmd tea.Cmd
 				m.list, cmd = m.list.Update(msg)
 				return m, cmd
 			}
-			if m.rightScroll > 0 {
-				m.rightScroll--
-			}
-			return m, nil
-		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			if m.leftFocused {
-				var cmd tea.Cmd
-				m.list, cmd = m.list.Update(msg)
-				return m, cmd
-			}
-			if cap := m.rightScrollCap(); m.rightScroll < cap {
-				m.rightScroll++
-			}
-			return m, nil
+			var cmd tea.Cmd
+			m.detailViewport, cmd = m.detailViewport.Update(msg)
+			return m, cmd
 		}
 	}
 
 	return m, nil
-}
-
-// rightScrollCap returns the maximum scroll offset for the right panel.
-// Uses ExpandedCard content height when available for accurate bounds.
-func (m TasksModel) rightScrollCap() int {
-	if m.expanded != nil {
-		viewport := m.height - 4
-		if viewport < 1 {
-			viewport = 1
-		}
-		ch := m.expanded.ContentHeight()
-		cap := ch - viewport
-		if cap < 0 {
-			return 0
-		}
-		return cap
-	}
-	cap := m.height * 3
-	if cap < 100 {
-		cap = 100
-	}
-	return cap
 }
 
 func (m TasksModel) updateInput(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
@@ -473,7 +449,7 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	case key.Matches(msg, m.keyMap.RightPanel), key.Matches(msg, m.keyMap.Select):
 		if total > 0 {
 			m.leftFocused = false
-			m.rightScroll = 0
+			m.detailViewport.GotoTop()
 			m.loadSelectedDetail()
 		}
 		return m, nil
@@ -554,16 +530,10 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "up", "k":
-		if m.rightScroll > 0 {
-			m.rightScroll--
-		}
-		return m, nil
-	case "down", "j":
-		if cap := m.rightScrollCap(); m.rightScroll < cap {
-			m.rightScroll++
-		}
-		return m, nil
+	case "up", "k", "down", "j", "pgup", "pgdown", "home", "end":
+		var cmd tea.Cmd
+		m.detailViewport, cmd = m.detailViewport.Update(msg)
+		return m, cmd
 	case "tab":
 		if m.expanded != nil {
 			n := len(m.expanded.Item.Subtasks)
@@ -1283,7 +1253,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
-	scrollOff := m.rightScroll
+	scrollOff := m.detailViewport.YOffset
 	if scrollOff > maxScroll {
 		scrollOff = maxScroll
 	}
@@ -1352,30 +1322,25 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		}
 	}
 
-	// Sync dimensions and scroll offset to current layout
+	// Sync dimensions to current layout
 	renderW := w - 4
 	if renderW < 20 {
 		renderW = 20
 	}
 	expanded.Width = renderW
-	viewport := h - 4
-	if viewport < 1 {
-		viewport = 1
+	vpH := h - 4
+	if vpH < 1 {
+		vpH = 1
 	}
-	expanded.Height = viewport
-	expanded.ScrollOffset = m.rightScroll
+	expanded.Height = vpH
 
-	// Clamp scroll to content bounds
-	contentH := expanded.ContentHeight()
-	maxScroll := contentH - viewport
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if expanded.ScrollOffset > maxScroll {
-		expanded.ScrollOffset = maxScroll
-	}
+	// Render full content and feed to viewport
+	content := expanded.Render()
+	m.detailViewport.Width = renderW
+	m.detailViewport.Height = vpH - 1 // leave room for hint bar
+	m.detailViewport.SetContent(content)
 
-	displayed := expanded.ViewportSlice()
+	displayed := m.detailViewport.View()
 
 	// Hint bar
 	if m.focused && !m.leftFocused {
