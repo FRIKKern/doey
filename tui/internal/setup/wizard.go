@@ -92,70 +92,48 @@ func Run() (SetupResult, error) {
 		Foreground(lipgloss.Color("99")).
 		MarginBottom(1)
 
-	for {
-		// Step 1: Preset selection
-		fmt.Fprintln(os.Stderr, titleStyle.Render("◆ Doey Setup Wizard"))
+	// Step 1: Preset selection
+	fmt.Fprintln(os.Stderr, titleStyle.Render("◆ Doey Setup Wizard"))
 
-		var presetChoice string
+	var presetChoice string
+	err := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Choose a setup:").
+				Options(buildPresetOptions()...).
+				Value(&presetChoice),
+		),
+	).WithTheme(huh.ThemeCharm()).Run()
+	if err != nil {
+		return SetupResult{Cancelled: true}, nil
+	}
+
+	var teams []TeamEntry
+
+	switch presetChoice {
+	case "regular":
+		teams = Presets["regular"]
+	case "freelancer_regular":
+		teams = Presets["freelancer_regular"]
+	case "custom":
+		// Step 2: Custom team selection
+		var customTypes []string
 		err := huh.NewForm(
 			huh.NewGroup(
-				huh.NewSelect[string]().
-					Title("Choose a setup:").
-					Options(buildPresetOptions()...).
-					Value(&presetChoice),
+				huh.NewMultiSelect[string]().
+					Title("Select team types to add:").
+					Options(buildCustomOptions()...).
+					Value(&customTypes),
 			),
 		).WithTheme(huh.ThemeCharm()).Run()
 		if err != nil {
 			return SetupResult{Cancelled: true}, nil
 		}
-
-		var teams []TeamEntry
-
-		switch presetChoice {
-		case "regular":
-			teams = Presets["regular"]
-		case "freelancer_regular":
-			teams = Presets["freelancer_regular"]
-		case "custom":
-			// Step 2: Custom team selection
-			var customTypes []string
-			err := huh.NewForm(
-				huh.NewGroup(
-					huh.NewMultiSelect[string]().
-						Title("Select team types to add:").
-						Options(buildCustomOptions()...).
-						Value(&customTypes),
-				),
-			).WithTheme(huh.ThemeCharm()).Run()
-			if err != nil {
-				return SetupResult{Cancelled: true}, nil
-			}
-			teams = buildTeamsFromCustom(customTypes)
-		default:
-			continue
-		}
-
-		// Step 3: Summary + confirm/back
-		fmt.Fprintln(os.Stderr, titleStyle.Render("◆ Doey Setup Wizard"))
-		fmt.Fprintln(os.Stderr, renderSummary(teams))
-
-		var confirmed bool
-		err = huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title("Launch with this configuration?").
-					Affirmative("Launch").
-					Negative("Go back").
-					Value(&confirmed),
-			),
-		).WithTheme(huh.ThemeCharm()).Run()
-		if err != nil {
-			return SetupResult{Cancelled: true}, nil
-		}
-
-		if confirmed {
-			return SetupResult{Teams: teams}, nil
-		}
-		// Not confirmed — loop back to preset selection
+		teams = buildTeamsFromCustom(customTypes)
+	default:
+		return SetupResult{Cancelled: true}, nil
 	}
+
+	fmt.Fprintln(os.Stderr, renderSummary(teams))
+	return SetupResult{Teams: teams}, nil
 }

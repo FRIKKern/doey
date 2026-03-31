@@ -59,7 +59,7 @@ doey_style() {
 doey_header() {
   # Styled section header — e.g., "Doey — System Check"
   if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 6 --bold --padding "0 1" "$1"
+    gum style --foreground 6 --bold --padding "0 1" --margin "1 0 0 0" "◆ $1"
   else
     printf "\n  ${BRAND}${BOLD}%s${RESET}\n" "$1"
   fi
@@ -167,23 +167,54 @@ doey_info() {
 doey_banner() {
   # Render the doey banner with luxury styling
   if [ "$HAS_GUM" = true ]; then
-    gum style \
-      --foreground 6 --bold \
-      --border rounded --border-foreground 6 \
-      --padding "1 3" --margin "1 0" \
-      "  D O E Y" "" "  Multi-Agent Claude Code Teams"
+    cat << 'DOEY_ART' | gum style --foreground 6 --bold --border rounded --border-foreground 6 --padding "1 3" --margin "1 0"
+
+            .
+           ...      :-=++++==--:
+               .-***=-:.   ..:=+#%*:
+    .     :=----=.               .=%*=:
+    ..   -=-                     .::. :#*:
+      .+=    := .-+**+:        :#@%%@%- :*%=
+      *+.    @.*@**@@@@#.      %@=  *@@= :*=
+    :*:     .@=@=  *@@@@%      #@%+#@%#@  :-+
+   .%++      #*@@#%@@#%@@      :@@@@@*+@  :%#
+    %#       ==%@@@@@=+@+       :*%@@@#: :=*
+   .@--     -+=.+%@@@@*:            :.:--:-.
+   .@%#    ##*  ...:.:                 +=
+    .-@- .#*.   . ..                   :%
+      :+++%.:       .=.                 #+
+          =**        .*=                :@.
+       .   .@:+.       +#:               =%
+            :*:+:--.   =+%*.              *+
+                .- :-=:-+:+%=              #:
+                           .*%-            .%.
+                             :%#:        ...-#
+                               =%*.   =#@%@@@@*
+                                 =%+.-@@#=%@@@@-
+                                   -#*@@@@@@@@@.
+                                     .=#@@@@%+.
+
+   ██████╗  ██████╗ ███████╗██╗   ██╗
+   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
+   ██║  ██║██║   ██║█████╗   ╚████╔╝
+   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
+   ██████╔╝╚██████╔╝███████╗   ██║
+   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
+
+   Let me Doey for you
+DOEY_ART
   else
     _print_full_banner
   fi
 }
 
 doey_divider() {
-  local width="${1:-60}"
+  local width="${1:-50}"
   if [ "$HAS_GUM" = true ]; then
     local line=""
     local _dd_i=0
     while [ "$_dd_i" -lt "$width" ]; do line="${line}─"; _dd_i=$((_dd_i + 1)); done
-    gum style --foreground 8 "$line"
+    gum style --foreground 240 --margin "0 1" "$line"
   else
     printf "  ${DIM}"
     local _dd_i=0
@@ -1006,18 +1037,90 @@ show_menu() {
   printf '\n'
 
   # Read projects into arrays
-  local names paths statuses; names=() paths=() statuses=()
+  local names paths statuses status_plain; names=() paths=() statuses=() status_plain=()
   while IFS=: read -r name path; do
     [[ -z "$name" ]] && continue
     names+=("$name")
     paths+=("$path")
     if session_exists "doey-${name}"; then
       statuses+=("${SUCCESS}● running${RESET}")
+      status_plain+=("running")
     else
       statuses+=("${DIM}○ stopped${RESET}")
+      status_plain+=("stopped")
     fi
   done < "$PROJECTS_FILE"
 
+  # Count running sessions for the kill-all option
+  local running_count=0
+  for i in "${!names[@]}"; do
+    session_exists "doey-${names[$i]}" && running_count=$((running_count + 1))
+  done
+
+  if [ "$HAS_GUM" = true ] && [[ ${#names[@]} -gt 0 ]]; then
+    # ── Gum path: build gum choose options ──
+    local _gum_opts=()
+    for i in "${!names[@]}"; do
+      local _sp="${paths[$i]/#$HOME/\~}"
+      local _status_icon="○"
+      [ "${status_plain[$i]}" = "running" ] && _status_icon="●"
+      _gum_opts+=("${_status_icon} ${names[$i]}  ${_sp}")
+    done
+    _gum_opts+=("+ Init current directory")
+    if [[ $running_count -gt 0 ]]; then
+      _gum_opts+=("✗ Kill all sessions (${running_count} active)")
+    fi
+    _gum_opts+=("  Quit")
+
+    local _gum_pick
+    _gum_pick=$(gum choose --cursor "▸ " --cursor.foreground 6 --header "Select a project:" "${_gum_opts[@]}") || { return 0; }
+
+    case "$_gum_pick" in
+      "  Quit") return 0 ;;
+      "+ Init current directory")
+        register_project "$(pwd)"
+        local init_name
+        init_name="$(find_project "$(pwd)")"
+        if [[ -n "$init_name" ]]; then
+          launch_with_grid "$init_name" "$(pwd)" "$grid"
+        fi
+        ;;
+      "✗ Kill all"*)
+        if doey_confirm "Kill all ${running_count} running session(s)?"; then
+          for i in "${!names[@]}"; do
+            local sess="doey-${names[$i]}"
+            if session_exists "$sess"; then
+              _kill_doey_session "$sess"
+              doey_ok "Killed ${sess}"
+            fi
+          done
+          doey_success "All sessions killed"
+        fi
+        ;;
+      *)
+        # Extract project name from "● name  path" or "○ name  path"
+        local _pick_name
+        _pick_name=$(printf '%s' "$_gum_pick" | sed 's/^[●○] *//; s/  .*//')
+        local _pick_idx=-1
+        for i in "${!names[@]}"; do
+          if [ "${names[$i]}" = "$_pick_name" ]; then _pick_idx=$i; break; fi
+        done
+        if [ "$_pick_idx" -ge 0 ]; then
+          local _pick_session="doey-${names[$_pick_idx]}"
+          if session_exists "$_pick_session"; then
+            attach_or_switch "$_pick_session"
+          else
+            launch_with_grid "${names[$_pick_idx]}" "${paths[$_pick_idx]}" "$grid"
+          fi
+        else
+          doey_error "Could not find project: ${_pick_name}"
+        fi
+        ;;
+    esac
+    return 0
+  fi
+
+  # ── Non-gum fallback ──
   if [[ ${#names[@]} -gt 0 ]]; then
     printf "  ${BOLD}Known projects:${RESET}\n"
     for i in "${!names[@]}"; do
@@ -1026,12 +1129,6 @@ show_menu() {
     done
     printf '\n'
   fi
-
-  # Count running sessions for the kill-all option
-  local running_count=0
-  for i in "${!names[@]}"; do
-    session_exists "doey-${names[$i]}" && running_count=$((running_count + 1))
-  done
 
   printf "  ${DIM}Options:${RESET}\n"
   printf "    ${BOLD}#${RESET})    Enter number to open a project\n"
@@ -1131,11 +1228,19 @@ STEP_TOTAL=6
 
 step_start() {
   local n="$1"; local label="$2"
-  printf "   ${DIM}[${n}/${STEP_TOTAL}]${RESET} %-40s" "$label"
+  if [ "$HAS_GUM" = true ]; then
+    printf "   $(gum style --foreground 240 "[${n}/${STEP_TOTAL}]") %-40s" "$label"
+  else
+    printf "   ${DIM}[${n}/${STEP_TOTAL}]${RESET} %-40s" "$label"
+  fi
 }
 
 step_done() {
-  printf "${SUCCESS}done${RESET}\n"
+  if [ "$HAS_GUM" = true ]; then
+    printf '%s\n' "$(gum style --foreground 2 '✓')"
+  else
+    printf "${SUCCESS}done${RESET}\n"
+  fi
 }
 
 # Print step header — uses step_start in interactive mode, dim printf in headless.
@@ -1836,11 +1941,21 @@ launch_session() {
   _launch_session_core "$name" "$dir" "$grid" 0
 
   printf '\n'
-  doey_success "Doey is ready"
-  doey_info "Project ${name}  Grid ${grid}  Workers ${worker_count}"
-  doey_info "Session ${session}  Dir ${short_dir}"
-  doey_info "Manager 1.0  Dashboard win 0"
-  doey_info "Tip: Workers ready in ~15s"
+  if [ "$HAS_GUM" = true ]; then
+    printf '%s\n' "$(gum style --foreground 2 --bold '✓ Doey is ready')"
+    gum style --border rounded --border-foreground 6 --padding "1 2" --margin "0 1" \
+      "$(gum style --foreground 6 --bold 'Project')  ${name}   $(gum style --foreground 6 --bold 'Grid')  ${grid}   $(gum style --foreground 6 --bold 'Workers')  ${worker_count}" \
+      "$(gum style --foreground 6 --bold 'Session')  ${session}" \
+      "$(gum style --foreground 6 --bold 'Dir')      ${short_dir}" \
+      "" \
+      "$(gum style --foreground 240 'Tip: Workers ready in ~15s')"
+  else
+    doey_success "Doey is ready"
+    doey_info "Project ${name}  Grid ${grid}  Workers ${worker_count}"
+    doey_info "Session ${session}  Dir ${short_dir}"
+    doey_info "Manager 1.0  Dashboard win 0"
+    doey_info "Tip: Workers ready in ~15s"
+  fi
   printf '\n'
 
   attach_or_switch "$session"
@@ -1944,9 +2059,18 @@ _kill_pane_child() {
 }
 
 # Print a doctor-style check line.
+# Doctor counters — reset before each run, read after
+_DOC_OK=0 _DOC_WARN=0 _DOC_FAIL=0 _DOC_SKIP=0
+
 # Usage: _doc_check ok|warn|fail|skip "label" ["detail"]
 _doc_check() {
   local level="$1" label="$2" detail="${3:-}"
+  case "$level" in
+    ok)   _DOC_OK=$((_DOC_OK + 1)) ;;
+    warn) _DOC_WARN=$((_DOC_WARN + 1)) ;;
+    fail) _DOC_FAIL=$((_DOC_FAIL + 1)) ;;
+    skip) _DOC_SKIP=$((_DOC_SKIP + 1)) ;;
+  esac
   if [ "$HAS_GUM" = true ]; then
     local icon color
     case "$level" in
@@ -1955,18 +2079,18 @@ _doc_check() {
       fail) icon="✗"; color="1" ;;
       skip) icon="–"; color="8" ;;
     esac
-    local line
-    line="$(gum style --foreground "$color" "$icon") $label"
-    [ -n "$detail" ] && line="$line  $(gum style --foreground 8 "$detail")"
-    printf '  %s\n' "$line"
+    printf '  %s %-22s %s\n' \
+      "$(gum style --foreground "$color" "$icon")" \
+      "$label" \
+      "$([ -n "$detail" ] && gum style --foreground 240 "$detail")"
   else
     case "$level" in
-      ok)   printf "  ${SUCCESS}✓${RESET} %s" "$label" ;;
-      warn) printf "  ${WARN}⚠${RESET} %s" "$label" ;;
-      fail) printf "  ${ERROR}✗${RESET} %s" "$label" ;;
-      skip) printf "  ${DIM}–${RESET} %s" "$label" ;;
+      ok)   printf "  ${SUCCESS}✓${RESET} %-22s" "$label" ;;
+      warn) printf "  ${WARN}⚠${RESET} %-22s" "$label" ;;
+      fail) printf "  ${ERROR}✗${RESET} %-22s" "$label" ;;
+      skip) printf "  ${DIM}–${RESET} %-22s" "$label" ;;
     esac
-    [ -n "$detail" ] && printf "  ${DIM}%s${RESET}" "$detail"
+    [ -n "$detail" ] && printf " ${DIM}%s${RESET}" "$detail"
     printf '\n'
   fi
 }
@@ -3005,6 +3129,7 @@ uninstall_system() {
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
+  _DOC_OK=0 _DOC_WARN=0 _DOC_FAIL=0 _DOC_SKIP=0
   doey_header "Doey — System Check"
   printf '\n'
 
@@ -3135,6 +3260,23 @@ check_doctor() {
     _doc_check skip "Context audit" "(script not found)"
   fi
 
+  # ── Summary footer ──
+  printf '\n'
+  local _doc_total=$((_DOC_OK + _DOC_WARN + _DOC_FAIL))
+  if [ "$HAS_GUM" = true ]; then
+    local _doc_summary=""
+    _doc_summary="$(gum style --foreground 2 "${_DOC_OK} passed")"
+    [ "$_DOC_WARN" -gt 0 ] && _doc_summary="${_doc_summary}  $(gum style --foreground 3 "${_DOC_WARN} warnings")"
+    [ "$_DOC_FAIL" -gt 0 ] && _doc_summary="${_doc_summary}  $(gum style --foreground 1 --bold "${_DOC_FAIL} failed")"
+    [ "$_DOC_SKIP" -gt 0 ] && _doc_summary="${_doc_summary}  $(gum style --foreground 240 "${_DOC_SKIP} skipped")"
+    gum style --padding "0 1" "$_doc_summary"
+  else
+    printf "  ${SUCCESS}%d passed${RESET}" "$_DOC_OK"
+    [ "$_DOC_WARN" -gt 0 ] && printf "  ${WARN}%d warnings${RESET}" "$_DOC_WARN"
+    [ "$_DOC_FAIL" -gt 0 ] && printf "  ${ERROR}%d failed${RESET}" "$_DOC_FAIL"
+    [ "$_DOC_SKIP" -gt 0 ] && printf "  ${DIM}%d skipped${RESET}" "$_DOC_SKIP"
+    printf '\n'
+  fi
   printf '\n'
 }
 
@@ -3495,20 +3637,34 @@ MANIFEST
   done
 
   printf '\n'
-  doey_success "Doey is ready  (dynamic grid)"
-  doey_divider 50
-  printf "\n"
-  doey_info "Dashboard  win 0  Info panel + Boss"
-  doey_info "Teams      ${_t1_team_count} windows (${_t1_team_windows})"
-  doey_info "Workers    T1: ${initial_workers} (auto-expands, doey add)"
-  printf "\n"
-  doey_info "Project   ${name}"
-  doey_info "Grid      dynamic  Max workers  ${DOEY_MAX_WORKERS}"
-  doey_info "Session   ${session}"
-  doey_info "Manifest  ${runtime_dir}/session.env"
-  printf "\n"
-  doey_info "Tip: doey add — adds 2 more workers"
-  doey_divider 50
+  if [ "$HAS_GUM" = true ]; then
+    printf '%s\n' "$(gum style --foreground 2 --bold '✓ Doey is ready  (dynamic grid)')"
+    gum style --border rounded --border-foreground 6 --padding "1 2" --margin "0 1" \
+      "$(gum style --foreground 6 --bold 'Dashboard')  win 0  Info panel + Boss" \
+      "$(gum style --foreground 6 --bold 'Teams')      ${_t1_team_count} windows (${_t1_team_windows})" \
+      "$(gum style --foreground 6 --bold 'Workers')    T1: ${initial_workers} (auto-expands)" \
+      "" \
+      "$(gum style --foreground 6 --bold 'Project')   ${name}" \
+      "$(gum style --foreground 6 --bold 'Grid')      dynamic  Max workers  ${DOEY_MAX_WORKERS}" \
+      "$(gum style --foreground 6 --bold 'Session')   ${session}" \
+      "" \
+      "$(gum style --foreground 240 'Tip: doey add — adds 2 more workers')"
+  else
+    doey_success "Doey is ready  (dynamic grid)"
+    doey_divider 50
+    printf "\n"
+    doey_info "Dashboard  win 0  Info panel + Boss"
+    doey_info "Teams      ${_t1_team_count} windows (${_t1_team_windows})"
+    doey_info "Workers    T1: ${initial_workers} (auto-expands, doey add)"
+    printf "\n"
+    doey_info "Project   ${name}"
+    doey_info "Grid      dynamic  Max workers  ${DOEY_MAX_WORKERS}"
+    doey_info "Session   ${session}"
+    doey_info "Manifest  ${runtime_dir}/session.env"
+    printf "\n"
+    doey_info "Tip: doey add — adds 2 more workers"
+    doey_divider 50
+  fi
   printf '\n'
 
   # Background subshell: spawn remaining teams + send briefings
