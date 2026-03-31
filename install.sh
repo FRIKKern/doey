@@ -7,6 +7,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRAND='\033[1;36m'  SUCCESS='\033[0;32m'  DIM='\033[0;90m'
 WARN='\033[0;33m'   ERROR='\033[0;31m'   BOLD='\033[1m'   RESET='\033[0m'
 
+# Source shared Go helpers (optional — inline fallbacks below if missing)
+_HAS_GO_HELPERS=false
+if [ -f "$SCRIPT_DIR/shell/doey-go-helpers.sh" ]; then
+  source "$SCRIPT_DIR/shell/doey-go-helpers.sh" && _HAS_GO_HELPERS=true
+fi
+
 step_ok()   { printf "   ${SUCCESS}✓${RESET}\n"; }
 step_fail() { printf "   ${ERROR}✗${RESET}\n"; }
 detail()    { printf "         ${DIM}→ %s${RESET}\n" "$1"; }
@@ -183,6 +189,12 @@ else
   warn_msg "jq not found (optional — hooks will use python3 fallback)"
 fi
 
+if has gum; then
+  check_ok "gum" "$(gum --version 2>/dev/null || echo 'unknown')"
+else
+  warn_msg "gum not found (optional — install with: brew install gum for luxury CLI)"
+fi
+
 if [ -f ~/.claude/agents/doey-manager.md ] && [ -f ~/.local/bin/doey ]; then
   echo ""
   warn_msg "Doey appears to already be installed."
@@ -268,28 +280,63 @@ fi
 # Detect Go binary — sets GO_BIN or leaves it empty.
 _find_go() {
   GO_BIN=""
-  if command -v go &>/dev/null; then GO_BIN="go"
-  elif [ -x /usr/local/go/bin/go ]; then GO_BIN="/usr/local/go/bin/go"
-  elif [ -x /opt/homebrew/bin/go ]; then GO_BIN="/opt/homebrew/bin/go"
+  if [ "$_HAS_GO_HELPERS" = true ]; then
+    GO_BIN=$(_find_go_bin 2>/dev/null) || GO_BIN=""
+  else
+    # Inline fallback when helper not available
+    if command -v go &>/dev/null; then GO_BIN="go"
+    elif [ -x /usr/local/go/bin/go ]; then GO_BIN="/usr/local/go/bin/go"
+    elif [ -x /opt/homebrew/bin/go ]; then GO_BIN="/opt/homebrew/bin/go"
+    elif [ -x /snap/go/current/bin/go ]; then GO_BIN="/snap/go/current/bin/go"
+    elif [ -x "$HOME/go/bin/go" ]; then GO_BIN="$HOME/go/bin/go"
+    elif [ -x "$HOME/.local/go/bin/go" ]; then GO_BIN="$HOME/.local/go/bin/go"
+    fi
   fi
 }
 
 # Build doey-tui (and optional doey-remote-setup). Returns 0 on success.
 _build_tui() {
-  set +e
-  (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
-  local rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    step_ok
-    detail "~/.local/bin/doey-tui (built from source)"
-    # Build remote setup wizard (optional — non-fatal)
+  local rc=0
+  if [ "$_HAS_GO_HELPERS" = true ]; then
+    # Use shared helper for consistent build logic
     set +e
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
+    _build_go_binary "$SCRIPT_DIR/tui" ./cmd/doey-tui/ "$HOME/.local/bin/doey-tui"
+    rc=$?
     set -e
+    if [ $rc -eq 0 ]; then
+      step_ok
+      detail "~/.local/bin/doey-tui (built from source)"
+      # Build remote setup wizard (optional — non-fatal)
+      set +e
+      _build_go_binary "$SCRIPT_DIR/tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
+      set -e
+      if [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
+        detail "~/.local/bin/doey-remote-setup (built from source)"
+      fi
+    else
+      step_fail
+      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+    fi
   else
-    step_fail
-    warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+    # Inline fallback when helper not available
+    set +e
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
+    rc=$?
+    set -e
+    if [ $rc -eq 0 ]; then
+      step_ok
+      detail "~/.local/bin/doey-tui (built from source)"
+      # Build remote setup wizard (optional — non-fatal)
+      set +e
+      (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
+      set -e
+      if [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
+        detail "~/.local/bin/doey-remote-setup (built from source)"
+      fi
+    else
+      step_fail
+      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+    fi
   fi
   return $rc
 }
