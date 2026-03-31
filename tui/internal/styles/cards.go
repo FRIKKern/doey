@@ -817,6 +817,72 @@ func ReportTypeColor(t Theme, reportType string) lipgloss.AdaptiveColor {
 	}
 }
 
+// ResearchPhaseColor returns a science-y blue/purple for research phase.
+func ResearchPhaseColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"} // violet
+}
+
+// ReviewPhaseColor returns a bright attention-grabbing orange for review phase.
+func ReviewPhaseColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // amber/orange
+}
+
+// ImplementationPhaseColor returns a green/success color for implementation phase.
+func ImplementationPhaseColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"} // green
+}
+
+// TaskPhaseBadge renders a compact phase indicator badge for task cards.
+// Returns "" for empty/unknown phase (backward compatible).
+func TaskPhaseBadge(t Theme, phase string) string {
+	switch phase {
+	case "research":
+		return lipgloss.NewStyle().
+			Foreground(ResearchPhaseColor()).
+			Render("🔬 Research")
+	case "review":
+		return lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(ReviewPhaseColor()).
+			Bold(true).
+			Padding(0, 1).
+			Render("📋 Awaiting Review")
+	case "implementation":
+		return lipgloss.NewStyle().
+			Foreground(ImplementationPhaseColor()).
+			Render("🔨 Implementing")
+	default:
+		return ""
+	}
+}
+
+// TaskPhaseBanner renders a prominent banner for expanded card view.
+// Returns "" for empty/unknown phase.
+func TaskPhaseBanner(t Theme, phase string, width int) string {
+	switch phase {
+	case "review":
+		return lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(ReviewPhaseColor()).
+			Bold(true).
+			Width(width).
+			Align(lipgloss.Center).
+			Padding(0, 1).
+			Render("⚡ Research Complete — Awaiting Your Review")
+	case "research":
+		return lipgloss.NewStyle().
+			Foreground(ResearchPhaseColor()).
+			Bold(true).
+			Render("🔬 Research In Progress")
+	case "implementation":
+		return lipgloss.NewStyle().
+			Foreground(ImplementationPhaseColor()).
+			Render("🔨 Implementation In Progress")
+	default:
+		return ""
+	}
+}
+
 // QABadge renders a conversation count badge. Returns "" if count is 0.
 func QABadge(t Theme, count int) string {
 	if count == 0 {

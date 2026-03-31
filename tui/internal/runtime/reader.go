@@ -298,6 +298,7 @@ func (r *Reader) ParseTasks() []Task {
 			ID:         env["TASK_ID"],
 			Title:      env["TASK_TITLE"],
 			Status:     env["TASK_STATUS"],
+			Phase:      env["TASK_PHASE"],
 			Team:       env["TASK_TEAM"],
 			Priority:   env["TASK_PRIORITY"],
 			MergedInto: env["TASK_MERGED_INTO"],

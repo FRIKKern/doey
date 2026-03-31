@@ -88,6 +88,7 @@ type PersistentTask struct {
 	ID           string              `json:"id"`
 	Title        string              `json:"title"`
 	Status       string              `json:"status"`                  // draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled
+	Phase        string              `json:"phase,omitempty"`         // research, review, implementation
 	Description  string              `json:"description"`             // optional detail text
 	Attachments  []string            `json:"attachments,omitempty"`   // list of URLs/file paths
 	Team         string              `json:"team"`                    // assigned team name (optional)
@@ -300,6 +301,9 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 	}
 	if rt.Status != "" {
 		pt.Status = rt.Status
+	}
+	if rt.Phase != "" {
+		pt.Phase = rt.Phase
 	}
 	if rt.Description != "" {
 		pt.Description = rt.Description

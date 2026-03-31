@@ -113,6 +113,7 @@ type Task struct {
 	ID                 string
 	Title              string
 	Status             string    // draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled
+	Phase              string    // research, review, implementation, "" (empty = no phase)
 	Description        string    // multi-line task description
 	Attachments        []string  // list of URLs/file paths
 	Created            int64     // unix epoch
