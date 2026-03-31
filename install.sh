@@ -390,13 +390,27 @@ else
   detail "tui/ directory not found"
 fi
 
-# Install pre-commit hook for Go binary rebuilds
-if [ -d "$SCRIPT_DIR/.git/hooks" ] && [ -f "$SCRIPT_DIR/shell/pre-commit-go.sh" ]; then
-  # Guard: skip if source and destination are the same file (re-install with symlink/hardlink)
-  if [ ! "$SCRIPT_DIR/shell/pre-commit-go.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-commit" ]; then
-    cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
-    chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
-    detail "installed pre-commit hook for Go builds"
+# Install git hooks for Go binary rebuilds
+if [ -d "$SCRIPT_DIR/.git/hooks" ]; then
+  # Copy shared Go helpers so hooks can source them
+  if [ -f "$SCRIPT_DIR/shell/doey-go-helpers.sh" ]; then
+    cp "$SCRIPT_DIR/shell/doey-go-helpers.sh" "$SCRIPT_DIR/.git/hooks/doey-go-helpers.sh"
+  fi
+  # Pre-commit: verify Go compiles
+  if [ -f "$SCRIPT_DIR/shell/pre-commit-go.sh" ]; then
+    if [ ! "$SCRIPT_DIR/shell/pre-commit-go.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-commit" ]; then
+      cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
+      chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
+      detail "installed pre-commit hook for Go builds"
+    fi
+  fi
+  # Pre-push: rebuild stale Go binaries
+  if [ -f "$SCRIPT_DIR/shell/pre-push-gate.sh" ]; then
+    if [ ! "$SCRIPT_DIR/shell/pre-push-gate.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-push" ]; then
+      cp "$SCRIPT_DIR/shell/pre-push-gate.sh" "$SCRIPT_DIR/.git/hooks/pre-push"
+      chmod +x "$SCRIPT_DIR/.git/hooks/pre-push"
+      detail "installed pre-push hook for Go builds"
+    fi
   fi
 fi
 
