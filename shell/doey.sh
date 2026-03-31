@@ -36,6 +36,180 @@ ERROR='\033[0;31m'    # Red
 BOLD='\033[1m'        # Bold
 RESET='\033[0m'       # Reset
 
+# Charmbracelet gum (optional — luxury CLI experience)
+HAS_GUM=false
+command -v gum >/dev/null 2>&1 && HAS_GUM=true
+
+# ── Charmbracelet wrappers (gum with plain-text fallback) ────────────
+
+doey_style() {
+  # Usage: doey_style "text" [--foreground N] [--bold] [--border rounded] etc.
+  if [ "$HAS_GUM" = true ]; then
+    gum style "$@"
+  else
+    local text=""
+    local arg
+    for arg in "$@"; do
+      case "$arg" in --*) ;; *) text="$arg"; break ;; esac
+    done
+    printf '%s\n' "$text"
+  fi
+}
+
+doey_header() {
+  # Styled section header — e.g., "Doey — System Check"
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 6 --bold --padding "0 1" "$1"
+  else
+    printf "\n  ${BRAND}${BOLD}%s${RESET}\n" "$1"
+  fi
+}
+
+doey_confirm() {
+  # Usage: doey_confirm "Delete session?" — returns 0=yes, 1=no
+  if [ "$HAS_GUM" = true ]; then
+    gum confirm "$1"
+  else
+    printf "  %s [y/N] " "$1"
+    read -r reply
+    case "$reply" in [Yy]*) return 0 ;; *) return 1 ;; esac
+  fi
+}
+
+doey_confirm_default_yes() {
+  # Same but default is Yes
+  if [ "$HAS_GUM" = true ]; then
+    gum confirm --default=yes "$1"
+  else
+    printf "  %s [Y/n] " "$1"
+    read -r reply
+    case "$reply" in [Nn]*) return 1 ;; *) return 0 ;; esac
+  fi
+}
+
+doey_choose() {
+  # Usage: selected=$(doey_choose "option1" "option2" "option3")
+  if [ "$HAS_GUM" = true ]; then
+    gum choose "$@"
+  else
+    local i=1
+    local item
+    for item in "$@"; do printf "  %d) %s\n" "$i" "$item"; i=$((i + 1)); done
+    printf "  Choice: "
+    read -r choice
+    local j=1
+    for item in "$@"; do
+      if [ "$j" = "$choice" ]; then echo "$item"; return 0; fi
+      j=$((j + 1))
+    done
+    return 1
+  fi
+}
+
+doey_input() {
+  # Usage: value=$(doey_input "Prompt text" "placeholder" "default")
+  if [ "$HAS_GUM" = true ]; then
+    gum input --prompt "$1: " --placeholder "${2:-}" --value "${3:-}"
+  else
+    printf "  %s" "$1: "
+    if [ -n "${3:-}" ]; then printf "[%s] " "$3"; fi
+    local value
+    read -r value
+    if [ -z "$value" ] && [ -n "${3:-}" ]; then value="$3"; fi
+    echo "$value"
+  fi
+}
+
+doey_spin() {
+  # Usage: doey_spin "Installing..." command arg1 arg2
+  local title="$1"; shift
+  if [ "$HAS_GUM" = true ]; then
+    gum spin --spinner dot --title "$title" -- "$@"
+  else
+    printf "  %s" "$title"
+    "$@" >/dev/null 2>&1
+    printf " done\n"
+  fi
+}
+
+doey_success() {
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 2 "✓ $1"
+  else
+    printf "  ${SUCCESS}✓ %s${RESET}\n" "$1"
+  fi
+}
+
+doey_warn() {
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 3 "⚠ $1"
+  else
+    printf "  ${WARN}⚠ %s${RESET}\n" "$1"
+  fi
+}
+
+doey_error() {
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 1 --bold "✗ $1"
+  else
+    printf "  ${ERROR}✗ %s${RESET}\n" "$1"
+  fi
+}
+
+doey_info() {
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 8 "$1"
+  else
+    printf "  ${DIM}%s${RESET}\n" "$1"
+  fi
+}
+
+doey_banner() {
+  # Render the doey banner with luxury styling
+  if [ "$HAS_GUM" = true ]; then
+    gum style \
+      --foreground 6 --bold \
+      --border rounded --border-foreground 6 \
+      --padding "1 3" --margin "1 0" \
+      "  D O E Y" "" "  Multi-Agent Claude Code Teams"
+  else
+    _print_full_banner
+  fi
+}
+
+doey_divider() {
+  local width="${1:-60}"
+  if [ "$HAS_GUM" = true ]; then
+    local line=""
+    local _dd_i=0
+    while [ "$_dd_i" -lt "$width" ]; do line="${line}─"; _dd_i=$((_dd_i + 1)); done
+    gum style --foreground 8 "$line"
+  else
+    printf "  ${DIM}"
+    local _dd_i=0
+    while [ "$_dd_i" -lt "$width" ]; do printf '─'; _dd_i=$((_dd_i + 1)); done
+    printf "${RESET}\n"
+  fi
+}
+
+doey_ok() {
+  # Green text, no icon — for action results like "Registered", "Stopped"
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 2 "$1"
+  else
+    printf "  ${SUCCESS}%s${RESET}\n" "$1"
+  fi
+}
+
+doey_step() {
+  # Numbered step: doey_step "1/6" "Creating sandbox..."
+  if [ "$HAS_GUM" = true ]; then
+    printf "  %s %s\n" "$(gum style --foreground 8 "[$1]")" "$2"
+  else
+    printf "  ${DIM}[%s]${RESET} %s\n" "$1" "$2"
+  fi
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECTS_FILE="$HOME/.claude/doey/projects"
 mkdir -p "$(dirname "$PROJECTS_FILE")"
@@ -581,12 +755,14 @@ setup_dashboard() {
   BOSS_PANE="0.1"
   SM_PANE="0.2"
 
-  # Dev mode: check Go install before TUI launch (advisory only)
-  if [ -f "${SCRIPT_DIR}/doey-go-check.sh" ]; then
+  # Go helpers (build pipeline + advisory check)
+  if [ -f "${SCRIPT_DIR}/doey-go-helpers.sh" ]; then
+    source "${SCRIPT_DIR}/doey-go-helpers.sh"
+  elif [ -f "${SCRIPT_DIR}/doey-go-check.sh" ]; then
     source "${SCRIPT_DIR}/doey-go-check.sh"
-    if is_doey_repo "${SCRIPT_DIR}/.."; then
-      check_go_install "${SCRIPT_DIR}/.."
-    fi
+  fi
+  if type is_doey_repo >/dev/null 2>&1 && is_doey_repo "${SCRIPT_DIR}/.."; then
+    type check_go_install >/dev/null 2>&1 && check_go_install "${SCRIPT_DIR}/.."
   fi
 
   # Info Panel
@@ -650,7 +826,7 @@ register_project() {
 
   # Already registered?
   if grep -q ":${dir}$" "$PROJECTS_FILE" 2>/dev/null; then
-    printf "  ${SUCCESS}Already registered as '%s'${RESET}\n" "$(find_project "$dir")"
+    doey_ok "Already registered as '$(find_project "$dir")'"
     return 0
   fi
 
@@ -662,7 +838,7 @@ register_project() {
   fi
 
   echo "${name}:${dir}" >> "$PROJECTS_FILE"
-  printf "  ${SUCCESS}Registered${RESET} ${BOLD}%s${RESET} ${DIM}→${RESET} %s\n" "$name" "$dir"
+  doey_ok "Registered ${name} → ${dir}"
 
   # Create .doey/ project config directory with template
   if [ ! -d "${dir}/.doey" ]; then
@@ -671,14 +847,13 @@ register_project() {
     if [ -f "$template" ]; then
       cp "$template" "${dir}/.doey/config.sh"
     fi
-    printf "  ${SUCCESS}Created${RESET} .doey/config.sh\n"
+    doey_ok "Created .doey/config.sh"
   fi
 }
 
 # List all projects with running status
 list_projects() {
-  printf '\n'
-  printf "  ${BRAND}Doey — Projects${RESET}\n"
+  doey_header "Doey — Projects"
   printf '\n'
   local has_projects=false
   while IFS=: read -r name path; do
@@ -692,7 +867,7 @@ list_projects() {
     fi
   done < "$PROJECTS_FILE"
   if [[ "$has_projects" == false ]]; then
-    printf "  ${DIM}(no projects registered)${RESET}\n"
+    doey_info "(no projects registered)"
   fi
   printf '\n'
   printf "  ${SUCCESS}●${RESET} running  ${DIM}○${RESET} stopped\n"
@@ -706,9 +881,9 @@ stop_project() {
     local current_session
     current_session="$(tmux display-message -p '#S' 2>/dev/null || true)"
     if [[ "$current_session" == doey-* ]]; then
-      printf "  Stopping doey session: ${BOLD}%s${RESET}...\n" "$current_session"
+      doey_info "Stopping doey session: ${current_session}..."
       _kill_doey_session "$current_session"
-      printf "  ${SUCCESS}Stopped${RESET} %s\n" "$current_session"
+      doey_ok "Stopped $current_session"
       return 0
     fi
   fi
@@ -719,11 +894,11 @@ stop_project() {
   if [[ -n "$name" ]]; then
     local session="doey-${name}"
     if session_exists "$session"; then
-      printf "  Stopping doey session: ${BOLD}%s${RESET}...\n" "$session"
+      doey_info "Stopping doey session: ${session}..."
       _kill_doey_session "$session"
-      printf "  ${SUCCESS}Stopped${RESET} %s\n" "$session"
+      doey_ok "Stopped $session"
     else
-      printf "  ${DIM}No active session for %s${RESET}\n" "$name"
+      doey_info "No active session for $name"
     fi
     return 0
   fi
@@ -735,18 +910,17 @@ stop_project() {
   done < <(tmux list-sessions -F '#S' 2>/dev/null || true)
 
   if [[ ${#running_sessions[@]} -eq 0 ]]; then
-    printf "  ${DIM}No running Doey sessions found.${RESET}\n"
+    doey_info "No running Doey sessions found."
     return 0
   fi
 
   if [[ ${#running_sessions[@]} -eq 1 ]]; then
     printf '\n'
-    read -rp "  Stop ${BOLD}${running_sessions[0]}${RESET}? (y/N) " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    if doey_confirm "Stop ${running_sessions[0]}?"; then
       _kill_doey_session "${running_sessions[0]}"
-      printf "  ${SUCCESS}Stopped${RESET} ${running_sessions[0]}\n"
+      doey_success "Stopped ${running_sessions[0]}"
     else
-      printf "  ${DIM}Cancelled${RESET}\n"
+      doey_info "Cancelled"
     fi
     return 0
   fi
@@ -764,21 +938,21 @@ stop_project() {
     all|ALL)
       for sess in "${running_sessions[@]}"; do
         _kill_doey_session "$sess"
-        printf "  ${SUCCESS}Stopped${RESET} ${sess}\n"
+        doey_ok "Stopped ${sess}"
       done
       ;;
     [0-9]*)
       local idx=$((choice - 1))
       if [[ $idx -ge 0 && $idx -lt ${#running_sessions[@]} ]]; then
         _kill_doey_session "${running_sessions[$idx]}"
-        printf "  ${SUCCESS}Stopped${RESET} ${running_sessions[$idx]}\n"
+        doey_ok "Stopped ${running_sessions[$idx]}"
       else
-        printf "  ${ERROR}Invalid selection${RESET}\n"
+        doey_error "Invalid selection"
         return 1
       fi
       ;;
     *)
-      printf "  ${DIM}Cancelled${RESET}\n"
+      doey_info "Cancelled"
       ;;
   esac
 }
@@ -819,10 +993,8 @@ _kill_doey_session() {
 show_menu() {
   local grid="$1"
 
-  printf '\n'
-  printf "  ${BRAND}Doey${RESET}\n"
-  printf '\n'
-  printf "  ${WARN}No project registered for %s${RESET}\n" "$(pwd)"
+  doey_header "Doey"
+  doey_warn "No project registered for $(pwd)"
   printf '\n'
 
   # Read projects into arrays
@@ -872,7 +1044,7 @@ show_menu() {
     local num="$1"
     _sel_idx=$((num - 1))
     if [[ $_sel_idx -lt 0 || $_sel_idx -ge ${#names[@]} ]]; then
-      printf "  ${ERROR}Invalid selection${RESET}\n"; return 1
+      doey_error "Invalid selection"; return 1
     fi
     _sel_name="${names[$_sel_idx]}"
     _sel_path="${paths[$_sel_idx]}"
@@ -883,25 +1055,24 @@ show_menu() {
     [rR][0-9]*)
       _menu_select "${choice#[rR]}" || return 1
       if session_exists "$_sel_session"; then
-        printf "  Restarting ${BOLD}%s${RESET}...\n" "$_sel_session"
+        doey_info "Restarting ${_sel_session}..."
         _kill_doey_session "$_sel_session"
-        printf "  ${SUCCESS}Killed${RESET} %s\n" "$_sel_session"
+        doey_ok "Killed ${_sel_session}"
       fi
-      printf "  Launching ${BOLD}%s${RESET}...\n" "$_sel_name"
+      doey_info "Launching ${_sel_name}..."
       launch_with_grid "$_sel_name" "$_sel_path" "$grid"
       ;;
     [kK][0-9]*)
       _menu_select "${choice#[kK]}" || return 1
       if session_exists "$_sel_session"; then
-        read -rp "  Kill ${BOLD}${_sel_session}${RESET}? (y/N) " confirm
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        if doey_confirm "Kill ${_sel_session}?"; then
           _kill_doey_session "$_sel_session"
-          printf "  ${SUCCESS}Killed${RESET} %s\n" "$_sel_session"
+          doey_success "Killed ${_sel_session}"
         else
-          printf "  ${DIM}Cancelled${RESET}\n"
+          doey_info "Cancelled"
         fi
       else
-        printf "  ${DIM}%s is not running${RESET}\n" "$_sel_name"
+        doey_info "${_sel_name} is not running"
       fi
       ;;
     [0-9]*)
@@ -922,27 +1093,26 @@ show_menu() {
       ;;
     k|K|kill)
       if [[ $running_count -eq 0 ]]; then
-        printf "  ${DIM}No running sessions to kill${RESET}\n"
+        doey_info "No running sessions to kill"
         return 0
       fi
       printf '\n'
-      read -rp "  Kill all ${running_count} running session(s)? (y/N) " confirm
-      if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      if doey_confirm "Kill all ${running_count} running session(s)?"; then
         for i in "${!names[@]}"; do
           local sess="doey-${names[$i]}"
           if session_exists "$sess"; then
             _kill_doey_session "$sess"
-            printf "  ${SUCCESS}Killed${RESET} %s\n" "$sess"
+            doey_ok "Killed ${sess}"
           fi
         done
-        printf "\n  ${SUCCESS}All sessions killed${RESET}\n"
+        doey_success "All sessions killed"
       else
-        printf "  ${DIM}Cancelled${RESET}\n"
+        doey_info "Cancelled"
       fi
       ;;
     q|Q) return 0 ;;
     *)
-      printf "  ${ERROR}Invalid option${RESET}\n"
+      doey_error "Invalid option"
       return 1
       ;;
   esac
@@ -1342,7 +1512,7 @@ doey_purge() {
       --force)    force=true ;;
       --scope)    scope="${2:?--scope requires a value}"; shift ;;
       -h|--help)  purge_usage; return 0 ;;
-      *)          printf "  ${ERROR}Unknown purge flag: %s${RESET}\n" "$1"; return 1 ;;
+      *)          doey_error "Unknown purge flag: $1"; return 1 ;;
     esac
     shift
   done
@@ -1350,7 +1520,7 @@ doey_purge() {
   # Validate scope
   case "$scope" in
     runtime|context|hooks|all) ;;
-    *) printf "  ${ERROR}Invalid scope: %s (use: runtime, context, hooks, all)${RESET}\n" "$scope"; return 1 ;;
+    *) doey_error "Invalid scope: $scope (use: runtime, context, hooks, all)"; return 1 ;;
   esac
 
   # Resolve project
@@ -1359,7 +1529,7 @@ doey_purge() {
   PROJECT_DIR="$dir"
   name="$(find_project "$dir")"
   if [[ -z "$name" ]]; then
-    printf "  ${DIM}No project registered for %s — nothing to purge${RESET}\n" "$dir"
+    doey_info "No project registered for $dir — nothing to purge"
     return 0
   fi
 
@@ -1382,7 +1552,7 @@ doey_purge() {
   # Header
   local state_label="stopped"; $session_active && state_label="active"
   printf '\n'
-  printf "  ${BRAND}Doey — Purge${RESET}  ${DIM}(session %s)${RESET}\n\n" "$state_label"
+  doey_header "Doey — Purge  (session ${state_label})"
 
   # Calculate step count based on scope
   local step=0
@@ -1452,10 +1622,7 @@ doey_purge() {
     if ! $dry_run; then
       local do_purge=true
       if ! $force; then
-        local confirm
-        printf "   Found %d stale files (%s). Purge? (y/N) " "$total_files" "$(_purge_format_bytes "$((rt_bytes + res_bytes))")"
-        read -r confirm
-        [[ "$confirm" =~ ^[Yy]$ ]] || do_purge=false
+        doey_confirm "Found ${total_files} stale files ($(_purge_format_bytes "$((rt_bytes + res_bytes))")). Purge?" || do_purge=false
       fi
       if $do_purge; then
         _purge_execute "$list_file"
@@ -1472,17 +1639,19 @@ doey_purge() {
 
 check_claude_auth() {
   if ! command -v claude >/dev/null 2>&1; then
-    printf "  ${ERROR}✗ claude CLI not found${RESET}\n"
+    doey_error "claude CLI not found"
     return 1
   fi
   _parse_auth_status
   if [ "$_AUTH_OK" = true ]; then
-    printf "  ${SUCCESS}✓ Authenticated${RESET} ${DIM}(%s · %s · %s)${RESET}\n" "$_AUTH_METHOD" "$_AUTH_EMAIL" "$_AUTH_SUB"
+    doey_success "Authenticated (${_AUTH_METHOD} · ${_AUTH_EMAIL} · ${_AUTH_SUB})"
     return 0
   else
-    printf "\n  ${ERROR}✗ Not logged in${RESET}\n"
-    printf "  ${DIM}All Claude instances share one auth session.${RESET}\n"
-    printf "  ${DIM}Run ${RESET}${BOLD}claude${RESET}${DIM} and authenticate, then retry.${RESET}\n\n"
+    printf '\n'
+    doey_error "Not logged in"
+    doey_info "All Claude instances share one auth session."
+    doey_info "Run claude and authenticate, then retry."
+    printf '\n'
     return 1
   fi
 }
@@ -1649,9 +1818,9 @@ launch_session() {
   local session="doey-${name}"
   local short_dir="${dir/#$HOME/~}"
 
-  _print_full_banner
-  printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}${grid}${RESET}  ${DIM}Workers${RESET} ${BOLD}${worker_count}${RESET}\n"
-  printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
+  doey_banner
+  doey_info "Project ${name}  Grid ${grid}  Workers ${worker_count}"
+  doey_info "Dir ${short_dir}  Session ${session}"
   printf '\n'
 
   ensure_project_trusted "$dir"
@@ -1659,11 +1828,11 @@ launch_session() {
   _launch_session_core "$name" "$dir" "$grid" 0
 
   printf '\n'
-  printf "   ${SUCCESS}Doey is ready${RESET}\n"
-  printf "   ${DIM}Project${RESET} ${BOLD}%s${RESET}  ${DIM}Grid${RESET} ${BOLD}%s${RESET}  ${DIM}Workers${RESET} ${BOLD}%s${RESET}\n" "$name" "$grid" "$worker_count"
-  printf "   ${DIM}Session${RESET} ${BOLD}%s${RESET}  ${DIM}Dir${RESET} ${BOLD}%s${RESET}\n" "$session" "$short_dir"
-  printf "   ${DIM}Manager${RESET} 1.0  ${DIM}Dashboard${RESET} win 0\n"
-  printf "   ${DIM}Tip: Workers ready in ~15s${RESET}\n"
+  doey_success "Doey is ready"
+  doey_info "Project ${name}  Grid ${grid}  Workers ${worker_count}"
+  doey_info "Session ${session}  Dir ${short_dir}"
+  doey_info "Manager 1.0  Dashboard win 0"
+  doey_info "Tip: Workers ready in ~15s"
   printf '\n'
 
   attach_or_switch "$session"
@@ -1770,14 +1939,28 @@ _kill_pane_child() {
 # Usage: _doc_check ok|warn|fail|skip "label" ["detail"]
 _doc_check() {
   local level="$1" label="$2" detail="${3:-}"
-  case "$level" in
-    ok)   printf "  ${SUCCESS}✓${RESET} %s" "$label" ;;
-    warn) printf "  ${WARN}⚠${RESET} %s" "$label" ;;
-    fail) printf "  ${ERROR}✗${RESET} %s" "$label" ;;
-    skip) printf "  ${DIM}–${RESET} %s" "$label" ;;
-  esac
-  [ -n "$detail" ] && printf "  ${DIM}%s${RESET}" "$detail"
-  printf '\n'
+  if [ "$HAS_GUM" = true ]; then
+    local icon color
+    case "$level" in
+      ok)   icon="✓"; color="2" ;;
+      warn) icon="⚠"; color="3" ;;
+      fail) icon="✗"; color="1" ;;
+      skip) icon="–"; color="8" ;;
+    esac
+    local line
+    line="$(gum style --foreground "$color" "$icon") $label"
+    [ -n "$detail" ] && line="$line  $(gum style --foreground 8 "$detail")"
+    printf '  %s\n' "$line"
+  else
+    case "$level" in
+      ok)   printf "  ${SUCCESS}✓${RESET} %s" "$label" ;;
+      warn) printf "  ${WARN}⚠${RESET} %s" "$label" ;;
+      fail) printf "  ${ERROR}✗${RESET} %s" "$label" ;;
+      skip) printf "  ${DIM}–${RESET} %s" "$label" ;;
+    esac
+    [ -n "$detail" ] && printf "  ${DIM}%s${RESET}" "$detail"
+    printf '\n'
+  fi
 }
 
 # ── Task Management (schema v3, .doey/tasks/) ────────────────────────
@@ -2000,7 +2183,8 @@ task_command() {
 
   case "$_subcmd" in
     list|ls|"")
-      printf '\n  %bDoey Tasks%b\n\n' "$BRAND" "$RESET"
+      doey_header "Doey Tasks"
+      printf '\n'
       local _count=0
       for _f in "${_tasks_dir}"/*.task; do
         [ -f "$_f" ] || continue
@@ -2121,17 +2305,17 @@ update_system() {
     # Ensure we're on main — detached HEAD or wrong branch can't fast-forward
     current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || true)
     if [[ -z "$current_branch" ]]; then
-      printf "  ${WARN}⚠ Detached HEAD — checking out main${RESET}\n"
+      doey_warn "Detached HEAD — checking out main"
       git -C "$repo_dir" checkout main 2>/dev/null || \
         git -C "$repo_dir" checkout -b main origin/main 2>/dev/null || true
     elif [[ "$current_branch" != "main" ]]; then
-      printf "  ${WARN}⚠ On branch '%s' — switching to main${RESET}\n" "$current_branch"
+      doey_warn "On branch '$current_branch' — switching to main"
       git -C "$repo_dir" checkout main 2>/dev/null || true
     fi
 
     # Stash local changes so pull can fast-forward cleanly
     if [[ -n "$(git -C "$repo_dir" status --porcelain 2>/dev/null)" ]]; then
-      printf "  ${WARN}⚠ Stashing local changes${RESET}\n"
+      doey_warn "Stashing local changes"
       git -C "$repo_dir" stash --quiet 2>/dev/null || true
     fi
 
@@ -2140,14 +2324,14 @@ update_system() {
     if git -C "$repo_dir" pull --ff-only origin main 2>/dev/null; then
       new_hash=$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null)
       if [[ "$old_hash" == "$new_hash" ]]; then
-        printf "  ${SUCCESS}Already up to date${RESET} ${DIM}($old_hash)${RESET}\n"
+        doey_ok "Already up to date ($old_hash)"
       else
-        printf "  ${SUCCESS}Updated${RESET} ${DIM}$old_hash → $new_hash${RESET}\n"
+        doey_ok "Updated $old_hash → $new_hash"
       fi
       install_dir="$repo_dir"
     else
-      printf "  ${ERROR}✗ git pull --ff-only failed (local divergence?)${RESET}\n"
-      printf "  ${DIM}Falling back to fresh clone...${RESET}\n"
+      doey_error "git pull --ff-only failed (local divergence?)"
+      doey_info "Falling back to fresh clone..."
       install_dir=""
     fi
   fi
@@ -2155,9 +2339,9 @@ update_system() {
   # Clone from remote if no local repo exists or pull failed
   if [[ -z "${install_dir:-}" ]]; then
     install_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
-    printf "  ${DIM}Cloning from remote...${RESET}\n"
+    doey_info "Cloning from remote..."
     if ! git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir"; then
-      printf "  ${ERROR}✗ Clone failed${RESET}\n"
+      doey_error "Clone failed"
       rm -rf "$install_dir"
       exit 1
     fi
@@ -2167,15 +2351,16 @@ update_system() {
   # The new doey binary handles --post-update to finish the install.
   local new_doey="$install_dir/shell/doey.sh"
   if [[ -x "$new_doey" ]] || [[ -f "$new_doey" ]]; then
-    printf "  ${DIM}Re-executing from updated code...${RESET}\n"
+    doey_info "Re-executing from updated code..."
     exec bash "$new_doey" --post-update "$install_dir"
   fi
 
   # Fallback: if re-exec fails (e.g., new code doesn't have --post-update yet),
   # run install.sh directly from old code
-  printf "\n  ${DIM}Running install.sh...${RESET}\n"
+  printf '\n'
+  doey_info "Running install.sh..."
   if ! bash "$install_dir/install.sh"; then
-    printf "  ${ERROR}✗ Install failed${RESET}\n"
+    doey_error "Install failed"
     [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
     exit 1
   fi
@@ -2188,22 +2373,22 @@ _update_finish() {
   rm -f "$HOME/.claude/doey/last-update-check.available"
   _check_claude_update
   printf '\n'
-  _print_doey_banner
-  printf "   ${DIM}Let me Doey for you${RESET}\n\n"
-  printf "  ${SUCCESS}Update complete.${RESET} Restart sessions: ${BOLD}doey reload${RESET}\n"
+  doey_banner
+  doey_success "Update complete. Restart sessions: doey reload"
 }
 
 # Called via re-exec after git pull — runs from the NEW code on disk.
 _post_update() {
   local install_dir="${1:-}"
   if [[ -z "$install_dir" ]] || [[ ! -d "$install_dir" ]]; then
-    printf "  ${ERROR}✗ --post-update: missing or invalid install dir${RESET}\n"
+    doey_error "--post-update: missing or invalid install dir"
     exit 1
   fi
 
-  printf "\n  ${DIM}Running install.sh (from updated code)...${RESET}\n"
+  printf '\n'
+  doey_info "Running install.sh (from updated code)..."
   if ! bash "$install_dir/install.sh"; then
-    printf "  ${ERROR}✗ Install failed${RESET}\n"
+    doey_error "Install failed"
     [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
     exit 1
   fi
@@ -2354,24 +2539,18 @@ _claude_latest_ver() {
 # Check if Claude Code CLI has an update available, offer to install/upgrade it.
 _check_claude_update() {
   if ! command -v claude >/dev/null 2>&1; then
-    printf "\n  ${WARN}⚠${RESET} Claude Code CLI not installed\n"
+    doey_warn "Claude Code CLI not installed"
     if [ -t 0 ]; then
-      printf "  Install now? ${DIM}[Y/n]${RESET} "
-      local reply=""
-      read -r reply </dev/tty 2>/dev/null || reply="y"
-      case "$reply" in
-        [Nn]*) ;;
-        *)
-          printf "  ${DIM}Installing Claude Code...${RESET}\n"
-          if _claude_install "unknown"; then
-            command -v claude >/dev/null 2>&1 && printf "  ${SUCCESS}✓ Claude Code installed${RESET}\n"
-          else
-            printf "  ${ERROR}✗ Install failed${RESET} — visit https://docs.anthropic.com/en/docs/claude-code\n"
-          fi
-          ;;
-      esac
+      if doey_confirm_default_yes "Install now?"; then
+        doey_info "Installing Claude Code..."
+        if _claude_install "unknown"; then
+          command -v claude >/dev/null 2>&1 && doey_success "Claude Code installed"
+        else
+          doey_error "Install failed — visit https://docs.anthropic.com/en/docs/claude-code"
+        fi
+      fi
     else
-      printf "  ${DIM}Install: https://docs.anthropic.com/en/docs/claude-code${RESET}\n"
+      doey_info "Install: https://docs.anthropic.com/en/docs/claude-code"
     fi
     return
   fi
@@ -2400,23 +2579,17 @@ _check_claude_update() {
     printf "\r  ${WARN}⚠${RESET} Claude Code ${BOLD}%s${RESET} → ${SUCCESS}%s${RESET} available              \n" "$current_ver" "$latest_ver"
     [[ "$method" != "unknown" ]] && printf "    ${DIM}installed via %s${RESET}\n" "$method"
     if [ -t 0 ]; then
-      printf "  Update Claude Code? ${DIM}[Y/n]${RESET} "
-      local reply=""
-      read -r reply </dev/tty 2>/dev/null || reply="y"
-      case "$reply" in
-        [Nn]*) ;;
-        *)
-          printf "  ${DIM}Updating Claude Code...${RESET}\n"
-          if _claude_upgrade "$method" "$latest_ver"; then
-            local new_ver
-            new_ver="$(_claude_semver)"
-            printf "  ${SUCCESS}✓ Claude Code updated to %s${RESET}\n" "${new_ver:-$latest_ver}"
-          else
-            printf "  ${ERROR}✗ Update failed${RESET}\n"
-            _claude_update_hint "$method" "Try"
-          fi
-          ;;
-      esac
+      if doey_confirm_default_yes "Update Claude Code?"; then
+        doey_info "Updating Claude Code..."
+        if _claude_upgrade "$method" "$latest_ver"; then
+          local new_ver
+          new_ver="$(_claude_semver)"
+          doey_success "Claude Code updated to ${new_ver:-$latest_ver}"
+        else
+          doey_error "Update failed"
+          _claude_update_hint "$method" "Try"
+        fi
+      fi
     else
       _claude_update_hint "$method" "Update"
     fi
@@ -2436,23 +2609,26 @@ reload_session() {
   local dir name session runtime_dir
   dir="$(pwd)"
   name="$(find_project "$dir")"
-  [ -z "$name" ] && { printf "  ${ERROR}✗ No doey project for %s${RESET}\n" "$dir"; exit 1; }
+  [ -z "$name" ] && { doey_error "No doey project for $dir"; exit 1; }
   session="doey-${name}"
   runtime_dir="/tmp/doey/${name}"
-  session_exists "$session" || { printf "  ${ERROR}✗ No running session: ${session}${RESET}\n"; exit 1; }
-  [ -f "${runtime_dir}/session.env" ] || { printf "  ${ERROR}✗ session.env not found${RESET}\n"; exit 1; }
+  session_exists "$session" || { doey_error "No running session: ${session}"; exit 1; }
+  [ -f "${runtime_dir}/session.env" ] || { doey_error "session.env not found"; exit 1; }
 
-  printf "  ${BRAND}Reloading ${session}...${RESET}\n\n"
+  doey_header "Reloading ${session}..."
 
   # Install latest files from repo
   local repo_dir
   repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
   if [ -n "$repo_dir" ] && [ -d "$repo_dir" ]; then
-    printf "  ${DIM}Installing latest files...${RESET}\n"
+    doey_info "Installing latest files..."
     bash "$repo_dir/install.sh" 2>&1 | sed 's/^/    /'
-    printf "\n  ${SUCCESS}✓ Files installed${RESET}\n\n"
+    printf '\n'
+    doey_success "Files installed"
+    printf '\n'
   else
-    printf "  ${WARN}⚠ No repo path — skipping install${RESET}\n\n"
+    doey_warn "No repo path — skipping install"
+    printf '\n'
   fi
 
   # Refresh hooks in project + worktree dirs
@@ -2467,9 +2643,10 @@ reload_session() {
   safe_source_session_env "${runtime_dir}/session.env"
 
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
-  printf "  ${SUCCESS}✓ Worker system prompts updated${RESET}\n"
+  doey_success "Worker system prompts updated"
 
-  printf "\n  ${DIM}Reloading Manager...${RESET}\n"
+  printf '\n'
+  doey_info "Reloading Manager..."
 
   local team_windows="" tf tw
   for tf in "${runtime_dir}"/team_*.env; do
@@ -2516,11 +2693,12 @@ reload_session() {
 
   done
 
-  printf "\n  ${SUCCESS}✓ Manager reloaded${RESET}\n"
+  printf '\n'; doey_success "Manager reloaded"
 
   # 7. Optionally restart workers
   if $restart_workers; then
-    printf "\n  ${DIM}Restarting workers...${RESET}\n"
+    printf '\n'
+    doey_info "Restarting workers..."
     for tw in $team_windows; do
       local team_env="${runtime_dir}/team_${tw}.env"
       [ -f "$team_env" ] || continue
@@ -2555,26 +2733,43 @@ reload_session() {
         sleep "$DOEY_WORKER_LAUNCH_DELAY"
       done
     done
-    printf "\n  ${SUCCESS}✓ Workers restarted${RESET}\n"
+    printf '\n'; doey_success "Workers restarted"
   fi
 
-  printf "\n  ${SUCCESS}✓ Reload complete${RESET}\n"
-  $restart_workers || printf "  ${DIM}Workers kept running. Use 'doey reload --workers' to restart them too.${RESET}\n"
+  # Rebuild stale Go binaries if helpers available
+  if [ -n "$repo_dir" ] && type _check_go_freshness >/dev/null 2>&1; then
+    local _stale_output
+    if _stale_output=$(_check_go_freshness "$repo_dir" 2>&1) && [ -z "$_stale_output" ]; then
+      : # all fresh, nothing to do
+    elif type _build_all_go_binaries >/dev/null 2>&1; then
+      doey_info "Rebuilding stale Go binaries..."
+      if _build_all_go_binaries "$repo_dir" 2>&1; then
+        doey_success "Go binaries rebuilt"
+      else
+        doey_warn "Go rebuild failed (non-fatal)"
+      fi
+    fi
+  fi
+
+  printf '\n'; doey_success "Reload complete"
+  $restart_workers || doey_info "Workers kept running. Use 'doey reload --workers' to restart them too."
 }
 
 # ── Uninstall ──────────────────────────────────────────────────────
 uninstall_system() {
-  printf '\n  %bDoey — Uninstall%b\n\n' "$BRAND" "$RESET"
+  doey_header "Doey — Uninstall"
+  printf '\n'
   printf "  This will remove:\n"
   printf "    ${DIM}• ~/.local/bin/doey, tmux-statusbar.sh, pane-border-status.sh${RESET}\n"
+  printf "    ${DIM}• ~/.local/bin/doey-tui, doey-remote-setup (Go binaries)${RESET}\n"
   printf "    ${DIM}• ~/.claude/agents/doey-*.md${RESET}\n"
   printf "    ${DIM}• ~/.claude/doey/ (config & state)${RESET}\n"
   printf "\n  ${DIM}Will NOT remove: git repo, /tmp/doey, or agent-memory${RESET}\n\n"
 
-  read -rp "  Continue? [y/N] " confirm
-  [[ "$confirm" == [yY] ]] || { printf "  ${DIM}Cancelled.${RESET}\n\n"; return 0; }
+  doey_confirm "Continue?" || { doey_info "Cancelled."; printf '\n'; return 0; }
 
   rm -f ~/.local/bin/doey ~/.local/bin/tmux-statusbar.sh ~/.local/bin/pane-border-status.sh
+  rm -f ~/.local/bin/doey-tui ~/.local/bin/doey-remote-setup
   rm -f ~/.claude/agents/doey-*.md
   rm -rf ~/.claude/doey
 
@@ -2584,7 +2779,8 @@ uninstall_system() {
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
-  printf '\n  %bDoey — System Check%b\n\n' "$BRAND" "$RESET"
+  doey_header "Doey — System Check"
+  printf '\n'
 
   # Required commands — offer install if missing
   if command -v tmux >/dev/null 2>&1; then
@@ -2651,6 +2847,13 @@ check_doctor() {
   if command -v jq >/dev/null 2>&1; then _doc_check ok "jq" "$(jq --version 2>/dev/null || echo 'unknown')"
   else _doc_check warn "jq not found — auto-trust skipped"; fi
 
+  # gum (optional luxury CLI)
+  if command -v gum >/dev/null 2>&1; then
+    _doc_check ok "gum" "$(gum --version 2>/dev/null || echo 'unknown')"
+  else
+    _doc_check skip "gum not installed" "install: brew install gum (optional luxury CLI)"
+  fi
+
   # Version
   local version_file="$HOME/.claude/doey/version"
   if [[ -f "$version_file" ]]; then
@@ -2664,9 +2867,32 @@ check_doctor() {
     _doc_check ok "doey-tui" "$(doey-tui --version 2>/dev/null || echo 'installed')"
   else
     if command -v go >/dev/null 2>&1 || [ -x /usr/local/go/bin/go ] || [ -x /opt/homebrew/bin/go ]; then
-      _doc_check warn "doey-tui not installed" "Go available — run install.sh to build"
+      _doc_check warn "doey-tui not installed" "Go available — run: doey build"
     else
       _doc_check skip "doey-tui not installed" "using info-panel.sh fallback"
+    fi
+  fi
+
+  # Remote setup wizard
+  if command -v doey-remote-setup >/dev/null 2>&1; then
+    _doc_check ok "doey-remote-setup" "installed"
+  else
+    _doc_check skip "doey-remote-setup not installed" "optional — run: doey build"
+  fi
+
+  # Go binary freshness
+  if [[ -n "$repo_dir" ]] && type _go_binary_stale >/dev/null 2>&1; then
+    local _stale_bins=""
+    if _go_binary_stale "$HOME/.local/bin/doey-tui" "$repo_dir/tui" 2>/dev/null; then
+      _stale_bins="doey-tui"
+    fi
+    if _go_binary_stale "$HOME/.local/bin/doey-remote-setup" "$repo_dir/tui" 2>/dev/null; then
+      _stale_bins="${_stale_bins:+${_stale_bins}, }doey-remote-setup"
+    fi
+    if [[ -n "$_stale_bins" ]]; then
+      _doc_check warn "Go binaries may be stale: ${_stale_bins}" "run: doey build"
+    else
+      _doc_check ok "Go binaries fresh"
     fi
   fi
 
@@ -2692,9 +2918,9 @@ remove_project() {
   [[ -z "$name" ]] && name="$(find_project "$(pwd)")"
 
   if [[ -z "$name" ]]; then
-    printf "  ${ERROR}No project specified and no project registered for %s${RESET}\n" "$(pwd)"
+    doey_error "No project specified and no project registered for $(pwd)"
     printf '\n'
-    printf "  ${DIM}Registered projects:${RESET}\n"
+    doey_info "Registered projects:"
     while IFS=: read -r pname ppath; do
       [[ -z "$pname" ]] && continue
       printf "    ${BOLD}%s${RESET}  ${DIM}%s${RESET}\n" "$pname" "$ppath"
@@ -2704,18 +2930,19 @@ remove_project() {
     return 1
   fi
 
-  [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { printf "  ${ERROR}Invalid project name: %s${RESET}\n" "$name"; return 1; }
-  grep -q "^${name}:" "$PROJECTS_FILE" 2>/dev/null || { printf "  ${ERROR}No project '%s' in registry${RESET}\n" "$name"; return 1; }
+  [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { doey_error "Invalid project name: $name"; return 1; }
+  grep -q "^${name}:" "$PROJECTS_FILE" 2>/dev/null || { doey_error "No project '$name' in registry"; return 1; }
 
   grep -v "^${name}:" "$PROJECTS_FILE" > "${PROJECTS_FILE}.tmp" && mv "${PROJECTS_FILE}.tmp" "$PROJECTS_FILE"
-  printf "  ${SUCCESS}Removed '%s' from registry${RESET}\n" "$name"
+  doey_ok "Removed '$name' from registry"
   session_exists "doey-${name}" && \
-    printf "  ${WARN}Session doey-%s still running — use 'doey stop' to stop it${RESET}\n" "$name"
+    doey_warn "Session doey-${name} still running — use 'doey stop' to stop it"
 }
 
 # ── Version — show installation info ─────────────────────────────────
 show_version() {
-  printf '\n  %bDoey%b\n\n' "$BRAND" "$RESET"
+  doey_header "Doey"
+  printf '\n'
 
   local version_file="$HOME/.claude/doey/version"
   local repo_dir=""
@@ -2750,12 +2977,12 @@ show_version() {
     fi
   fi
 
-  printf "  ${DIM}Agents${RESET}     ${BOLD}~/.claude/agents/${RESET}\n"
-  printf "  ${DIM}Skills${RESET}     ${BOLD}.claude/skills/${RESET}\n"
-  printf "  ${DIM}CLI${RESET}        ${BOLD}~/.local/bin/doey${RESET}\n"
+  doey_info "Agents     ~/.claude/agents/"
+  doey_info "Skills     .claude/skills/"
+  doey_info "CLI        ~/.local/bin/doey"
   local project_count=0
   [[ -f "$PROJECTS_FILE" ]] && project_count="$(grep -c '.' "$PROJECTS_FILE" 2>/dev/null || echo 0)"
-  printf "  ${DIM}Projects${RESET}   ${BOLD}%s registered${RESET}\n" "$project_count"
+  doey_info "Projects   ${project_count} registered"
 
   printf '\n'
 }
@@ -2907,10 +3134,10 @@ launch_session_dynamic() {
     fi
   fi
 
-  _print_full_banner "Let Doey do it for you"
+  doey_banner
   local initial_workers=$(( DOEY_INITIAL_WORKER_COLS * 2 ))
-  printf "   ${DIM}Project${RESET} ${BOLD}${name}${RESET}  ${DIM}Grid${RESET} ${BOLD}dynamic${RESET}  ${DIM}Workers${RESET} ${BOLD}${initial_workers} (auto-expands)${RESET}\n"
-  printf "   ${DIM}Dir${RESET} ${BOLD}${short_dir}${RESET}  ${DIM}Session${RESET} ${BOLD}${session}${RESET}\n"
+  doey_info "Project ${name}  Grid dynamic  Workers ${initial_workers} (auto-expands)"
+  doey_info "Dir ${short_dir}  Session ${session}"
   printf '\n'
 
   ensure_project_trusted "$dir"
@@ -2978,7 +3205,7 @@ MANIFEST
 
     step_start 4 "Launching team 1 from definition '${_team1_def}'..."
     if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_team1_def" "$_team1_type" ); then
-      printf "  ${ERROR}Failed to launch team 1 from definition '${_team1_def}'${RESET}\n"
+      doey_error "Failed to launch team 1 from definition '${_team1_def}'"
     fi
     step_done
 
@@ -3042,20 +3269,20 @@ MANIFEST
   done
 
   printf '\n'
-  printf "   ${SUCCESS}Doey is ready${RESET}  ${DIM}(dynamic grid)${RESET}\n"
-  printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
+  doey_success "Doey is ready  (dynamic grid)"
+  doey_divider 50
   printf "\n"
-  printf "   ${BOLD}Dashboard${RESET}  ${DIM}win 0  Info panel + Boss${RESET}\n"
-  printf "   ${BOLD}Teams${RESET}      ${DIM}%-4s windows (${_t1_team_windows})${RESET}\n" "$_t1_team_count"
-  printf "   ${BOLD}Workers${RESET}    ${DIM}T1: %-4s (auto-expands, doey add)${RESET}\n" "$initial_workers"
+  doey_info "Dashboard  win 0  Info panel + Boss"
+  doey_info "Teams      ${_t1_team_count} windows (${_t1_team_windows})"
+  doey_info "Workers    T1: ${initial_workers} (auto-expands, doey add)"
   printf "\n"
-  printf "   ${DIM}Project${RESET}   ${BOLD}%s${RESET}\n" "$name"
-  printf "   ${DIM}Grid${RESET}      ${BOLD}dynamic${RESET}  ${DIM}Max workers${RESET}  ${BOLD}%s${RESET}\n" "$DOEY_MAX_WORKERS"
-  printf "   ${DIM}Session${RESET}   ${BOLD}%s${RESET}\n" "$session"
-  printf "   ${DIM}Manifest${RESET}  ${BOLD}%s${RESET}\n" "${runtime_dir}/session.env"
+  doey_info "Project   ${name}"
+  doey_info "Grid      dynamic  Max workers  ${DOEY_MAX_WORKERS}"
+  doey_info "Session   ${session}"
+  doey_info "Manifest  ${runtime_dir}/session.env"
   printf "\n"
-  printf "   ${DIM}Tip: doey add — adds 2 more workers${RESET}\n"
-  printf "   ${DIM}──────────────────────────────────────────────────${RESET}\n"
+  doey_info "Tip: doey add — adds 2 more workers"
+  doey_divider 50
   printf '\n'
 
   # Background subshell: spawn remaining teams + send briefings
@@ -3361,11 +3588,11 @@ doey_add_column() {
   _read_team_state "$session" "$runtime_dir" "$dir" "$team_window"
 
   if [[ "$_ts_grid" != "dynamic" ]]; then
-    printf "  ${ERROR}Team window %s is not using dynamic grid mode${RESET}\n" "$team_window"
+    doey_error "Team window $team_window is not using dynamic grid mode"
     return 1
   fi
   if (( _ts_worker_count >= DOEY_MAX_WORKERS )); then
-    printf "  ${ERROR}Max workers reached (%s)${RESET}\n" "$DOEY_MAX_WORKERS"
+    doey_error "Max workers reached ($DOEY_MAX_WORKERS)"
     return 1
   fi
 
@@ -3386,7 +3613,7 @@ doey_add_column() {
     fi
   fi
 
-  printf "  ${DIM}Adding worker column to team %s...${RESET}\n" "$team_window"
+  doey_info "Adding worker column to team ${team_window}..."
 
   local last_pane new_pane_top new_pane_bottom
   last_pane="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
@@ -3410,7 +3637,7 @@ doey_add_column() {
   _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${new_pane_bottom}:${w2_num}"
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
-  printf "  ${SUCCESS}Added${RESET} W${BOLD}${w1_num}${RESET} and W${BOLD}${w2_num}${RESET} — ${new_worker_count} workers in $((_ts_cols + 1)) columns\n"
+  doey_ok "Added W${w1_num} and W${w2_num} — ${new_worker_count} workers in $((_ts_cols + 1)) columns"
 }
 
 doey_remove_column() {
@@ -3420,11 +3647,11 @@ doey_remove_column() {
   _read_team_state "$session" "$runtime_dir" "${PROJECT_DIR}" "$team_window"
 
   if [[ "$_ts_grid" != "dynamic" ]]; then
-    printf "  ${ERROR}Team window %s is not using dynamic grid mode${RESET}\n" "$team_window"
+    doey_error "Team window $team_window is not using dynamic grid mode"
     return 1
   fi
   if (( _ts_worker_count == 0 )); then
-    printf "  ${ERROR}No worker columns to remove${RESET}\n"
+    doey_error "No worker columns to remove"
     return 1
   fi
 
@@ -3433,7 +3660,7 @@ doey_remove_column() {
   # Parse worker panes into positional params (bash 3.2 safe)
   local _old_ifs="$IFS"; IFS=','; set -- $_ts_worker_panes; IFS="$_old_ifs"
   if [ "$#" -lt 2 ]; then
-    printf "  ${ERROR}Not enough worker panes to remove a column${RESET}\n"
+    doey_error "Not enough worker panes to remove a column"
     return 1
   fi
 
@@ -3444,7 +3671,7 @@ doey_remove_column() {
   else
     local ci=$(( col_index ))
     if [ "$ci" -lt 1 ] || [ "$ci" -gt $(( _ts_worker_count / 2 )) ]; then
-      printf "  ${ERROR}Invalid column: %s (valid: 1-%s)${RESET}\n" "$col_index" "$(( _ts_worker_count / 2 ))"
+      doey_error "Invalid column: $col_index (valid: 1-$(( _ts_worker_count / 2 )))"
       return 1
     fi
     local pair_start=$(( (ci - 1) * 2 + 1 ))
@@ -3452,7 +3679,7 @@ doey_remove_column() {
     eval "remove_bottom=\${$(( pair_start + 1 ))}"
   fi
 
-  printf "  ${DIM}Removing panes ${team_window}.${remove_top} and ${team_window}.${remove_bottom}...${RESET}\n"
+  doey_info "Removing panes ${team_window}.${remove_top} and ${team_window}.${remove_bottom}..."
 
   # Stop processes in both panes
   local pane_idx pane_pid
@@ -3480,7 +3707,7 @@ doey_remove_column() {
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
-  printf "  ${SUCCESS}Removed${RESET} worker column — ${BOLD}${new_worker_count}${RESET} workers remaining\n"
+  doey_ok "Removed worker column — ${new_worker_count} workers remaining"
 }
 
 _apply_team_border_theme() {
@@ -4027,7 +4254,8 @@ kill_team_window() {
 list_team_windows() {
   local session="$1" runtime_dir="$2"
 
-  printf '\n  %sDoey — Team Windows%s\n\n' "$BRAND" "$RESET"
+  doey_header "Doey — Team Windows"
+  printf '\n'
 
   local team_windows
   team_windows=$(read_team_windows "$runtime_dir")
@@ -4069,7 +4297,7 @@ run_test() {
       --open) open=true; shift ;;
       --grid) grid="$2"; shift 2 ;;
       [0-9]*x[0-9]*) grid="$1"; shift ;;
-      *) printf "  ${ERROR}Unknown test flag: %s${RESET}\n" "$1"; return 1 ;;
+      *) doey_error "Unknown test flag: $1"; return 1 ;;
     esac
   done
 
@@ -4081,13 +4309,15 @@ run_test() {
   local test_project_name="e2e-test-${last8}"
   local session="doey-${test_project_name}"
 
-  printf '\n  %sDoey — E2E Test%s\n\n' "$BRAND" "$RESET"
-  printf "  ${DIM}Test ID${RESET}    ${BOLD}${test_id}${RESET}\n"
-  printf "  ${DIM}Grid${RESET}       ${BOLD}${grid}${RESET}\n"
-  printf "  ${DIM}Sandbox${RESET}    ${BOLD}${project_dir}${RESET}\n"
-  printf "  ${DIM}Report${RESET}     ${BOLD}${report_file}${RESET}\n\n"
+  doey_header "Doey — E2E Test"
+  printf '\n'
+  doey_info "Test ID    ${test_id}"
+  doey_info "Grid       ${grid}"
+  doey_info "Sandbox    ${project_dir}"
+  doey_info "Report     ${report_file}"
+  printf '\n'
 
-  printf "  ${DIM}[1/6]${RESET} Creating sandbox project...\n"
+  doey_step "1/6" "Creating sandbox project..."
   mkdir -p "${project_dir}/.claude/hooks"
   cd "$project_dir"
   git init -q
@@ -4095,50 +4325,52 @@ run_test() {
   printf 'E2E Test Sandbox - build whatever is requested\n' > CLAUDE.md
   install_doey_hooks "$project_dir" "  "
   git add -A && git commit -q -m "Initial sandbox commit"
-  printf "  ${SUCCESS}Sandbox created${RESET}\n"
+  doey_ok "Sandbox created"
 
-  printf "  ${DIM}[2/6]${RESET} Registering sandbox...\n"
+  doey_step "2/6" "Registering sandbox..."
   echo "${test_project_name}:${project_dir}" >> "$PROJECTS_FILE"
-  printf "  ${SUCCESS}Registered${RESET} ${BOLD}${test_project_name}${RESET}\n"
+  doey_ok "Registered ${test_project_name}"
 
-  printf "  ${DIM}[3/6]${RESET} Launching team...\n"
+  doey_step "3/6" "Launching team..."
   launch_session_headless "$test_project_name" "$project_dir" "$grid"
-  printf "  ${DIM}[4/6]${RESET} Waiting for boot (30s)...\n"
+  doey_step "4/6" "Waiting for boot (30s)..."
   sleep 30
-  printf "  ${SUCCESS}Boot complete${RESET}\n"
+  doey_ok "Boot complete"
 
-  printf "  ${DIM}[5/6]${RESET} Launching test driver...\n"
+  doey_step "5/6" "Launching test driver..."
   local repo_dir
   repo_dir="$(resolve_repo_dir)"
   local journey_file="${repo_dir}/tests/e2e/journey.md"
   if [[ ! -f "$journey_file" ]]; then
-    printf "  ${ERROR}Journey file not found: %s${RESET}\n" "$journey_file"
+    doey_error "Journey file not found: $journey_file"
     return 1
   fi
   mkdir -p "${test_root}/observations"
-  printf "  ${DIM}Watch live:${RESET} tmux attach -t ${session}\n\n"
+  doey_info "Watch live: tmux attach -t ${session}"
+  printf '\n'
 
   claude --dangerously-skip-permissions --agent test-driver --model opus \
     "Run the E2E test. Session: ${session}. Project name: ${test_project_name}. Project dir: ${project_dir}. Runtime dir: /tmp/doey/${test_project_name}. Journey file: ${journey_file}. Observations dir: ${test_root}/observations. Report file: ${report_file}. Test ID: ${test_id}"
 
-  printf '\n  %s[6/6]%s Results\n' "${DIM}" "${RESET}"
+  printf '\n'
+  doey_step "6/6" "Results"
   if [[ -f "$report_file" ]]; then
     local result_color="$ERROR" result_text="TEST FAILED"
     grep -q "Result: PASS" "$report_file" 2>/dev/null && { result_color="$SUCCESS"; result_text="TEST PASSED"; }
     printf '\n  %s══════ %s ══════%s\n\n' "$result_color" "$result_text" "$RESET"
-    printf "  ${DIM}Report:${RESET} ${BOLD}${report_file}${RESET}\n"
+    doey_info "Report: ${report_file}"
   else
-    printf "  ${WARN}No report generated${RESET}\n"
+    doey_warn "No report generated"
   fi
 
   if [[ "$open" == true ]]; then open "${project_dir}/index.html" 2>/dev/null || true; fi
 
   if [[ "$keep" == false ]]; then
-    printf "  ${DIM}Cleaning up...${RESET}\n"
+    doey_info "Cleaning up..."
     tmux kill-session -t "$session" 2>/dev/null || true
     grep -v "^${test_project_name}:" "$PROJECTS_FILE" > "${PROJECTS_FILE}.tmp" && mv "${PROJECTS_FILE}.tmp" "$PROJECTS_FILE"
     rm -rf "$test_root"
-    printf "  ${SUCCESS}Cleaned up${RESET}\n"
+    doey_ok "Cleaned up"
   else
     printf '\n  %sKept for inspection:%s\n' "$BOLD" "$RESET"
     printf "    ${DIM}Session${RESET}   tmux attach -t ${session}\n"
@@ -4197,9 +4429,9 @@ doey_deploy() {
 require_running_session() {
   dir="$(pwd)"
   name="$(find_project "$dir")"
-  [[ -z "$name" ]] && { printf "  ${ERROR}No project registered for %s${RESET}\n" "$dir"; exit 1; }
+  [[ -z "$name" ]] && { doey_error "No project registered for $dir"; exit 1; }
   session="doey-${name}"
-  session_exists "$session" || { printf "  ${ERROR}Session %s not running${RESET}\n" "$session"; exit 1; }
+  session_exists "$session" || { doey_error "Session $session not running"; exit 1; }
   runtime_dir="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 }
 
@@ -4222,7 +4454,8 @@ doey_config() {
 
   case "${1:-}" in
     --show)
-      printf "  ${BRAND}Doey Configuration${RESET}\n\n"
+      doey_header "Doey Configuration"
+      printf '\n'
       printf "  ${DIM}Global:${RESET}  %s" "$global_config"
       [ -f "$global_config" ] && printf " ${SUCCESS}(loaded)${RESET}\n" || printf " ${DIM}(not found)${RESET}\n"
       printf "  ${DIM}Project:${RESET} "
@@ -4307,7 +4540,8 @@ _doey_ensure_hcloud() {
   # Already installed? Done.
   command -v hcloud >/dev/null 2>&1 && return 0
 
-  printf "\n  ${WARN}hcloud CLI not found.${RESET}\n"
+  printf '\n'
+  doey_warn "hcloud CLI not found."
   printf "  The Hetzner Cloud CLI is required for remote server management.\n\n"
 
   # Detect OS
@@ -4325,7 +4559,8 @@ _doey_ensure_hcloud() {
       install_method="brew"
       printf "  Install hcloud via Homebrew? [Y/n] "
     else
-      printf "  ${ERROR}Homebrew not found.${RESET} Install hcloud manually:\n"
+      doey_error "Homebrew not found."
+      printf "  Install hcloud manually:\n"
       printf "  ${BOLD}brew install hcloud${RESET} (after installing Homebrew) or\n"
       printf "  See https://github.com/hetznercloud/cli/releases\n"
       return 1
@@ -4334,7 +4569,8 @@ _doey_ensure_hcloud() {
     install_method="script"
     printf "  Install hcloud via official install script? [Y/n] "
   else
-    printf "  ${ERROR}Unsupported OS.${RESET} Install hcloud manually from:\n"
+    doey_error "Unsupported OS."
+    printf "  Install hcloud manually from:\n"
     printf "  https://github.com/hetznercloud/cli/releases\n"
     return 1
   fi
@@ -4357,19 +4593,19 @@ _doey_ensure_hcloud() {
   # Install
   printf "\n"
   if [ "$install_method" = "brew" ]; then
-    printf "  ${DIM}Running: brew install hcloud ...${RESET}\n"
+    doey_info "Running: brew install hcloud ..."
     if ! brew install hcloud 2>&1 | sed 's/^/  /'; then
-      printf "  ${ERROR}brew install failed.${RESET}\n"
+      doey_error "brew install failed."
       return 1
     fi
   elif [ "$install_method" = "script" ]; then
-    printf "  ${DIM}Downloading hcloud from GitHub releases...${RESET}\n"
+    doey_info "Downloading hcloud from GitHub releases..."
     local arch=""
     case "$(uname -m)" in
       x86_64|amd64)  arch="amd64" ;;
       aarch64|arm64) arch="arm64" ;;
       *)
-        printf "  ${ERROR}Unsupported architecture: $(uname -m)${RESET}\n"
+        doey_error "Unsupported architecture: $(uname -m)"
         return 1
         ;;
     esac
@@ -4377,12 +4613,12 @@ _doey_ensure_hcloud() {
     tmp_dir="$(mktemp -d)"
     local url="https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-${arch}.tar.gz"
     if ! curl -sSL "$url" -o "${tmp_dir}/hcloud.tar.gz" 2>&1; then
-      printf "  ${ERROR}Download failed.${RESET}\n"
+      doey_error "Download failed."
       rm -rf "$tmp_dir"
       return 1
     fi
     if ! tar xzf "${tmp_dir}/hcloud.tar.gz" -C "$tmp_dir" 2>&1; then
-      printf "  ${ERROR}Extract failed.${RESET}\n"
+      doey_error "Extract failed."
       rm -rf "$tmp_dir"
       return 1
     fi
@@ -4393,9 +4629,9 @@ _doey_ensure_hcloud() {
       mkdir -p "$install_dir"
     fi
     if ! mv "${tmp_dir}/hcloud" "${install_dir}/hcloud" 2>/dev/null; then
-      printf "  ${DIM}Trying with sudo...${RESET}\n"
+      doey_info "Trying with sudo..."
       if ! sudo mv "${tmp_dir}/hcloud" "/usr/local/bin/hcloud"; then
-        printf "  ${ERROR}Install failed. Move hcloud to your PATH manually.${RESET}\n"
+        doey_error "Install failed. Move hcloud to your PATH manually."
         printf "  Binary is at: ${tmp_dir}/hcloud\n"
         return 1
       fi
@@ -4408,19 +4644,20 @@ _doey_ensure_hcloud() {
       *":${install_dir}:"*) ;;
       *) export PATH="${install_dir}:${PATH}" ;;
     esac
-    printf "  ${DIM}Installed to ${install_dir}/hcloud${RESET}\n"
+    doey_info "Installed to ${install_dir}/hcloud"
   fi
 
   # Verify
   if ! command -v hcloud >/dev/null 2>&1; then
-    printf "  ${ERROR}hcloud still not found on PATH after install.${RESET}\n"
+    doey_error "hcloud still not found on PATH after install."
     printf "  You may need to restart your shell or add it to your PATH.\n"
     return 1
   fi
 
   local hcloud_ver=""
   hcloud_ver="$(hcloud version 2>/dev/null | head -1 || echo "unknown")"
-  printf "  ${SUCCESS}hcloud installed: %s${RESET}\n\n" "$hcloud_ver"
+  doey_success "hcloud installed: ${hcloud_ver}"
+  printf '\n'
   return 0
 }
 
@@ -4432,7 +4669,8 @@ _doey_ensure_hcloud_auth() {
     return 0
   fi
 
-  printf "\n  ${WARN}hcloud is not authenticated.${RESET}\n"
+  printf '\n'
+  doey_warn "hcloud is not authenticated."
   printf "  You need a Hetzner Cloud API token.\n"
   printf "  Create one at: ${BOLD}https://console.hetzner.cloud${RESET}\n"
   printf "  (Project → Security → API Tokens → Generate)\n\n"
@@ -4443,26 +4681,27 @@ _doey_ensure_hcloud_auth() {
   printf "\n"
 
   if [ -z "$token" ]; then
-    printf "  ${ERROR}No token provided. Aborting.${RESET}\n"
+    doey_error "No token provided. Aborting."
     return 1
   fi
 
   # Create hcloud context with the provided token
   if ! echo "$token" | hcloud context create doey 2>&1 | sed 's/^/  /'; then
-    printf "  ${ERROR}Failed to create hcloud context.${RESET}\n"
+    doey_error "Failed to create hcloud context."
     printf "  Check that your token is valid and try again.\n"
     return 1
   fi
 
   # Verify the token actually works
   if ! hcloud server list >/dev/null 2>&1; then
-    printf "  ${ERROR}Authentication failed — token may be invalid or expired.${RESET}\n"
+    doey_error "Authentication failed — token may be invalid or expired."
     printf "  Delete the context with: ${BOLD}hcloud context delete doey${RESET}\n"
     printf "  Then re-run: ${BOLD}doey remote setup <project>${RESET}\n"
     return 1
   fi
 
-  printf "  ${SUCCESS}Authenticated with Hetzner Cloud.${RESET}\n\n"
+  doey_success "Authenticated with Hetzner Cloud."
+  printf '\n'
   return 0
 }
 
@@ -4502,9 +4741,9 @@ doey_remote() {
 
     stop)
       local project="${2:-}"
-      [ -z "$project" ] && { printf "  ${ERROR}Usage: doey remote stop <project>${RESET}\n"; return 1; }
+      [ -z "$project" ] && { doey_error "Usage: doey remote stop <project>"; return 1; }
       local remote_file="$remotes_dir/${project}.remote"
-      [ -f "$remote_file" ] || { printf "  ${ERROR}No remote config found for '%s'${RESET}\n" "$project"; return 1; }
+      [ -f "$remote_file" ] || { doey_error "No remote config found for '$project'"; return 1; }
 
       if ! _doey_ensure_hcloud; then
         return 1
@@ -4512,27 +4751,28 @@ doey_remote() {
 
       local server_name
       server_name="$(grep '^SERVER_NAME=' "$remote_file" | cut -d= -f2-)"
-      [ -z "$server_name" ] && { printf "  ${ERROR}No SERVER_NAME in %s${RESET}\n" "$remote_file"; return 1; }
+      [ -z "$server_name" ] && { doey_error "No SERVER_NAME in $remote_file"; return 1; }
 
-      printf "  ${DIM}Deleting server %s...${RESET}\n" "$server_name"
+      doey_info "Deleting server ${server_name}..."
       if hcloud server delete "$server_name" 2>/dev/null; then
-        printf "  ${SUCCESS}Server deleted.${RESET}\n"
+        doey_ok "Server deleted."
       else
-        printf "  ${WARN}Server may already be deleted.${RESET}\n"
+        doey_warn "Server may already be deleted."
       fi
 
-      printf "  ${DIM}Removing SSH key...${RESET}\n"
+      doey_info "Removing SSH key..."
       hcloud ssh-key delete "doey-${project}" 2>/dev/null || true
 
       command -v trash >/dev/null 2>&1 && trash "$remote_file" || rm -f "$remote_file"
-      printf "  ${SUCCESS}Remote '%s' removed.${RESET}\n\n" "$project"
+      doey_ok "Remote '$project' removed."
+      printf '\n'
       ;;
 
     status)
       local project="${2:-}"
-      [ -z "$project" ] && { printf "  ${ERROR}Usage: doey remote status <project>${RESET}\n"; return 1; }
+      [ -z "$project" ] && { doey_error "Usage: doey remote status <project>"; return 1; }
       local remote_file="$remotes_dir/${project}.remote"
-      [ -f "$remote_file" ] || { printf "  ${ERROR}No remote config found for '%s'${RESET}\n" "$project"; return 1; }
+      [ -f "$remote_file" ] || { doey_error "No remote config found for '$project'"; return 1; }
 
       if ! _doey_ensure_hcloud; then
         return 1
@@ -4566,7 +4806,8 @@ doey_remote() {
 _doey_remote_provision() {
   local project="$1"
   if [ -z "$project" ] || ! echo "$project" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9_-]*$'; then
-    printf "  ${ERROR}Invalid project name.${RESET} Use only letters, numbers, hyphens, and underscores.\n"
+    doey_error "Invalid project name."
+    printf "  Use only letters, numbers, hyphens, and underscores.\n"
     return 1
   fi
   local remotes_dir="$HOME/.config/doey/remotes"
@@ -4580,7 +4821,7 @@ _doey_remote_provision() {
   fi
 
   if ! command -v ssh >/dev/null 2>&1; then
-    printf "  ${ERROR}ssh not found.${RESET}\n"
+    doey_error "ssh not found."
     return 1
   fi
 
@@ -4596,32 +4837,32 @@ _doey_remote_provision() {
     existing_name="$(grep '^SERVER_NAME=' "$remote_file" | cut -d= -f2-)"
 
     if [ -n "$existing_name" ] && hcloud server describe "$existing_name" >/dev/null 2>&1; then
-      printf "  ${SUCCESS}Server '%s' is running at %s${RESET}\n" "$existing_name" "$existing_ip"
-      printf "  ${DIM}Attaching...${RESET}\n"
+      doey_ok "Server '$existing_name' is running at $existing_ip"
+      doey_info "Attaching..."
       _doey_remote_attach "$project" "$existing_ip"
       return $?
     else
-      printf "  ${WARN}Server from config is gone. Re-provisioning...${RESET}\n"
+      doey_warn "Server from config is gone. Re-provisioning..."
       command -v trash >/dev/null 2>&1 && trash "$remote_file" || rm -f "$remote_file"
     fi
   fi
 
   # Generate SSH key if needed
   if [ ! -f "$ssh_key" ]; then
-    printf "  ${DIM}Generating SSH key...${RESET}\n"
+    doey_info "Generating SSH key..."
     ssh-keygen -t ed25519 -f "$ssh_key" -N "" -C "doey-remote" >/dev/null 2>&1
   fi
 
   # Upload SSH key to Hetzner (delete old one first if exists)
   hcloud ssh-key delete "doey-${project}" 2>/dev/null || true
-  printf "  ${DIM}Uploading SSH key to Hetzner...${RESET}\n"
+  doey_info "Uploading SSH key to Hetzner..."
   if ! hcloud ssh-key create --name "doey-${project}" --public-key-from-file "${ssh_key}.pub" >/dev/null 2>&1; then
-    printf "  ${ERROR}Failed to upload SSH key to Hetzner${RESET}\n"
+    doey_error "Failed to upload SSH key to Hetzner"
     return 1
   fi
 
   # Create server
-  printf "  ${DIM}Creating server '%s' (cx22, Ubuntu 24.04, nbg1)...${RESET}\n" "$server_name"
+  doey_info "Creating server '${server_name}' (cx22, Ubuntu 24.04, nbg1)..."
   local create_output
   if ! create_output=$(hcloud server create \
     --name "$server_name" \
@@ -4629,32 +4870,33 @@ _doey_remote_provision() {
     --image ubuntu-24.04 \
     --location nbg1 \
     --ssh-key "doey-${project}" 2>&1); then
-    printf "  ${ERROR}Failed to create server.${RESET} Check hcloud output:\n"
+    doey_error "Failed to create server."
+    printf "  Check hcloud output:\n"
     echo "$create_output" | sed 's/^/  /'
     return 1
   fi
 
   # Wait for IP
-  printf "  ${DIM}Waiting for server IP...${RESET}\n"
+  doey_info "Waiting for server IP..."
   local server_ip=""
   local attempts=0
   while [ -z "$server_ip" ] || [ "$server_ip" = "-" ]; do
     if [ "$attempts" -ge 30 ]; then
-      printf "  ${ERROR}Timed out waiting for server IP${RESET}\n"
+      doey_error "Timed out waiting for server IP"
       return 1
     fi
     sleep 2
     server_ip="$(hcloud server ip "$server_name" 2>/dev/null || echo "")"
     attempts=$((attempts + 1))
   done
-  printf "  ${SUCCESS}Server ready at %s${RESET}\n" "$server_ip"
+  doey_ok "Server ready at ${server_ip}"
 
   # Wait for SSH to become available
-  printf "  ${DIM}Waiting for SSH...${RESET}\n"
+  doey_info "Waiting for SSH..."
   attempts=0
   while ! ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i "$ssh_key" root@"$server_ip" "echo ok" >/dev/null 2>&1; do
     if [ "$attempts" -ge 30 ]; then
-      printf "  ${ERROR}Timed out waiting for SSH${RESET}\n"
+      doey_error "Timed out waiting for SSH"
       return 1
     fi
     sleep 3
@@ -4664,17 +4906,17 @@ _doey_remote_provision() {
   # Copy and run provisioning script
   local provision_script="$HOME/.local/bin/doey-remote-provision.sh"
   if [ ! -f "$provision_script" ]; then
-    printf "  ${ERROR}Provisioning script not found at %s${RESET}\n" "$provision_script"
+    doey_error "Provisioning script not found at $provision_script"
     printf "  Run ${BOLD}doey update${RESET} to install it.\n"
     return 1
   fi
 
-  printf "  ${DIM}Uploading provisioning script...${RESET}\n"
+  doey_info "Uploading provisioning script..."
   scp -o StrictHostKeyChecking=accept-new -i "$ssh_key" "$provision_script" root@"$server_ip":/tmp/doey-remote-provision.sh >/dev/null 2>&1
 
-  printf "  ${DIM}Provisioning server (this may take a few minutes)...${RESET}\n"
+  doey_info "Provisioning server (this may take a few minutes)..."
   if ! ssh -o StrictHostKeyChecking=accept-new -i "$ssh_key" root@"$server_ip" "bash /tmp/doey-remote-provision.sh '$project'" 2>&1 | sed 's/^/  /'; then
-    printf "  ${ERROR}Provisioning failed.${RESET}\n"
+    doey_error "Provisioning failed."
     return 1
   fi
 
@@ -4690,7 +4932,7 @@ STATUS=running
 CREATED=$(date +%Y-%m-%dT%H:%M:%S)
 REMOTE_EOF
 
-  printf "  ${SUCCESS}Server provisioned and ready!${RESET}\n"
+  doey_success "Server provisioned and ready!"
   _doey_remote_attach "$project" "$server_ip"
 }
 
@@ -4699,7 +4941,8 @@ _doey_remote_attach() {
   local ip="$2"
   local ssh_key="$HOME/.config/doey/remotes/doey_ed25519"
 
-  printf "  ${DIM}Connecting to doey@%s...${RESET}\n\n" "$ip"
+  doey_info "Connecting to doey@${ip}..."
+  printf '\n'
   ssh -t \
     -o StrictHostKeyChecking=accept-new \
     -i "$ssh_key" \
@@ -4711,7 +4954,7 @@ _doey_remote_attach() {
 
 _attach_session() {
   local session="$1"
-  printf "  ${SUCCESS}Attaching to${RESET} ${BOLD}%s${RESET}...\n" "$session"
+  doey_ok "Attaching to ${session}..."
   tmux select-window -t "$session:0"
   attach_or_switch "$session"
 }
@@ -4729,28 +4972,27 @@ _check_prereqs() {
   if ! command -v tmux >/dev/null 2>&1; then
     missing=true
     echo ""
-    printf "  ${ERROR}✗ tmux is not installed${RESET}\n"
-    printf "  ${DIM}Doey needs tmux to run parallel Claude Code agents.${RESET}\n\n"
+    doey_error "tmux is not installed"
+    doey_info "Doey needs tmux to run parallel Claude Code agents."
+    printf '\n'
     case "$(uname -s)" in
       Darwin)
         if command -v brew >/dev/null 2>&1; then
           printf "  ${BOLD}Install now:${RESET}\n"
           printf "    ${BRAND}brew install tmux${RESET}\n\n"
           if [ -t 0 ]; then
-            printf "  Run this command? ${DIM}[Y/n]${RESET} "
-            read -r reply
-            case "$reply" in
-              [Nn]*) ;;
-              *)
-                printf "\n  ${DIM}Installing tmux...${RESET}\n"
-                if brew install tmux; then
-                  printf "  ${SUCCESS}✓ tmux installed${RESET}\n\n"
-                  missing=false
-                else
-                  printf "  ${ERROR}✗ Install failed${RESET} — try manually: brew install tmux\n\n"
-                fi
-                ;;
-            esac
+            if doey_confirm_default_yes "Run this command?"; then
+              printf '\n'
+              doey_info "Installing tmux..."
+              if brew install tmux; then
+                doey_success "tmux installed"
+                printf '\n'
+                missing=false
+              else
+                doey_error "Install failed — try manually: brew install tmux"
+                printf '\n'
+              fi
+            fi
           fi
         else
           printf "  ${BOLD}Option 1 — Install Homebrew first (recommended):${RESET}\n"
@@ -4765,20 +5007,18 @@ _check_prereqs() {
         if command -v apt-get >/dev/null 2>&1; then
           printf "    ${BRAND}sudo apt-get install -y tmux${RESET}\n\n"
           if [ -t 0 ]; then
-            printf "  Run this command? ${DIM}[Y/n]${RESET} "
-            read -r reply
-            case "$reply" in
-              [Nn]*) ;;
-              *)
-                printf "\n  ${DIM}Installing tmux...${RESET}\n"
-                if sudo apt-get update -qq && sudo apt-get install -y tmux; then
-                  printf "  ${SUCCESS}✓ tmux installed${RESET}\n\n"
-                  missing=false
-                else
-                  printf "  ${ERROR}✗ Install failed${RESET}\n\n"
-                fi
-                ;;
-            esac
+            if doey_confirm_default_yes "Run this command?"; then
+              printf '\n'
+              doey_info "Installing tmux..."
+              if sudo apt-get update -qq && sudo apt-get install -y tmux; then
+                doey_success "tmux installed"
+                printf '\n'
+                missing=false
+              else
+                doey_error "Install failed"
+                printf '\n'
+              fi
+            fi
           fi
         elif command -v dnf >/dev/null 2>&1; then
           printf "    ${BRAND}sudo dnf install -y tmux${RESET}\n\n"
@@ -4791,34 +5031,34 @@ _check_prereqs() {
         fi
         ;;
       *)
-        printf "  ${DIM}Install tmux for your platform: https://github.com/tmux/tmux/wiki/Installing${RESET}\n\n"
+        doey_info "Install tmux for your platform: https://github.com/tmux/tmux/wiki/Installing"
+        printf '\n'
         ;;
     esac
   fi
 
   if ! command -v claude >/dev/null 2>&1; then
     missing=true
-    printf "  ${ERROR}✗ Claude Code CLI is not installed${RESET}\n"
-    printf "  ${DIM}Doey orchestrates Claude Code instances — the CLI is required.${RESET}\n\n"
+    doey_error "Claude Code CLI is not installed"
+    doey_info "Doey orchestrates Claude Code instances — the CLI is required."
+    printf '\n'
     if command -v node >/dev/null 2>&1; then
       printf "  ${BOLD}Install now:${RESET}\n"
       printf "    ${BRAND}npm install -g @anthropic-ai/claude-code${RESET}\n\n"
       if [ -t 0 ]; then
-        printf "  Run this command? ${DIM}[Y/n]${RESET} "
-        read -r reply
-        case "$reply" in
-          [Nn]*) ;;
-          *)
-            printf "\n  ${DIM}Installing Claude Code...${RESET}\n"
-            if npm install -g @anthropic-ai/claude-code; then
-              printf "  ${SUCCESS}✓ Claude Code installed${RESET}\n"
-              printf "  ${DIM}Run ${RESET}${BOLD}claude${RESET}${DIM} once to authenticate, then re-run ${RESET}${BOLD}doey${RESET}\n\n"
-              missing=false
-            else
-              printf "  ${ERROR}✗ Install failed${RESET} — try: sudo npm install -g @anthropic-ai/claude-code\n\n"
-            fi
-            ;;
-        esac
+        if doey_confirm_default_yes "Run this command?"; then
+          printf '\n'
+          doey_info "Installing Claude Code..."
+          if npm install -g @anthropic-ai/claude-code; then
+            doey_success "Claude Code installed"
+            doey_info "Run claude once to authenticate, then re-run doey"
+            printf '\n'
+            missing=false
+          else
+            doey_error "Install failed — try: sudo npm install -g @anthropic-ai/claude-code"
+            printf '\n'
+          fi
+        fi
       fi
     else
       printf "  ${BOLD}Step 1 — Install Node.js 18+:${RESET}\n"
@@ -4840,7 +5080,7 @@ _check_prereqs() {
   fi
 
   if [ "$missing" = true ]; then
-    printf "  ${DIM}After installing, re-run: ${RESET}${BOLD}doey${RESET}\n"
+    doey_info "After installing, re-run: doey"
     exit 1
   fi
 }
@@ -4862,7 +5102,8 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 
 case "${1:-}" in
   --help|-h)
-    printf '\n  %sDoey%s\n\n' "$BRAND" "$RESET"
+    doey_header "Doey"
+    printf '\n'
     cat << 'HELP'
   Usage: doey [command] [grid]
 
@@ -4933,6 +5174,23 @@ HELP
   uninstall)    uninstall_system; exit 0 ;;
   --post-update) _post_update "$2"; exit 0 ;;
   update|reinstall) update_system; exit 0 ;;
+  build)
+    printf "  ${BRAND}Building Go binaries...${RESET}\n"
+    if ! type _find_go_bin >/dev/null 2>&1 || ! _find_go_bin >/dev/null 2>&1; then
+      printf "  ${ERROR}✗ Go not found. Install Go to build doey-tui.${RESET}\n"
+      exit 1
+    fi
+    local repo_dir
+    repo_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+    if type _build_all_go_binaries >/dev/null 2>&1; then
+      _build_all_go_binaries "$repo_dir"
+      printf "  ${SUCCESS}✓ Go binaries built${RESET}\n"
+    else
+      printf "  ${ERROR}✗ Go build helpers not found (missing doey-go-helpers.sh)${RESET}\n"
+      exit 1
+    fi
+    exit 0
+    ;;
   config)       shift; doey_config "$@"; exit 0 ;;
   task|tasks)   shift; task_command "$@"; exit 0 ;;
   remote)       shift; doey_remote "$@"; exit 0 ;;
@@ -5000,7 +5258,7 @@ HELP
     shift
     _at_name="${1:-}"
     if [ -z "$_at_name" ]; then
-      printf "  ${ERROR}Usage: doey add-team <name>${RESET}\n"
+      doey_error "Usage: doey add-team <name>"
       printf "  Example: doey add-team rd\n"
       exit 1
     fi
@@ -5035,7 +5293,7 @@ HELP
     exit 0
     ;;
   kill-window|kill-team)
-    [ -n "${2:-}" ] || { printf "  ${ERROR}Usage: doey kill-team <window-index>${RESET}\n"; exit 1; }
+    [ -n "${2:-}" ] || { doey_error "Usage: doey kill-team <window-index>"; exit 1; }
     require_running_session
     kill_team_window "$session" "$runtime_dir" "$2"
     exit 0
@@ -5075,7 +5333,7 @@ HELP
     ;;
   "") ;;
   *)
-    printf "  ${ERROR}Unknown command: %s${RESET}\n" "$1"
+    doey_error "Unknown command: $1"
     printf "  Run ${BOLD}doey --help${RESET} for usage\n"
     exit 1
     ;;

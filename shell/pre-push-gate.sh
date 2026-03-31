@@ -19,6 +19,10 @@ RESET='\033[0m'       # Reset
 BRAND='\033[1;36m'    # Bold cyan
 DIM='\033[0;90m'      # Gray
 
+# ── Gum detection (optional luxury styling) ──────────────────────────
+HAS_GUM=false
+command -v gum >/dev/null 2>&1 && HAS_GUM=true
+
 # ── Arguments ─────────────────────────────────────────────────────────
 PROJECT_DIR="${1:-.}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -67,11 +71,32 @@ _dotleader() {
     dots="${dots}."
     i=$((i + 1))
   done
-  printf '  %b %s %b%s%b %b%s%b' "$icon" "$name" "$DIM" "$dots" "$RESET" "$status_color" "$status_text" "$RESET"
-  if [ -n "$detail" ]; then
-    printf ' %b(%s)%b' "$DIM" "$detail" "$RESET"
+
+  if [ "$HAS_GUM" = true ]; then
+    # Gum-styled status badge
+    local gum_fg="7"
+    case "$status_text" in
+      PASS) gum_fg="2" ;;
+      FAIL) gum_fg="1" ;;
+      WARN) gum_fg="3" ;;
+      SKIP) gum_fg="8" ;;
+    esac
+    local badge
+    badge="$(gum style --foreground "$gum_fg" --bold "$status_text")"
+    local line="  ${name} ${dots} ${badge}"
+    if [ -n "$detail" ]; then
+      local dim_detail
+      dim_detail="$(gum style --foreground 8 "(${detail})")"
+      line="${line} ${dim_detail}"
+    fi
+    printf '%s\n' "$line"
+  else
+    printf '  %b %s %b%s%b %b%s%b' "$icon" "$name" "$DIM" "$dots" "$RESET" "$status_color" "$status_text" "$RESET"
+    if [ -n "$detail" ]; then
+      printf ' %b(%s)%b' "$DIM" "$detail" "$RESET"
+    fi
+    printf '\n'
   fi
-  printf '\n'
 }
 
 _cmd_exists() {
@@ -81,10 +106,17 @@ _cmd_exists() {
 # ── Banner ────────────────────────────────────────────────────────────
 _print_banner() {
   printf '\n'
-  printf '  %b┌─────────────────────────────────────┐%b\n' "$BRAND" "$RESET"
-  printf '  %b│%b  Doey Pre-Push Quality Gate         %b│%b\n' "$BRAND" "$RESET" "$BRAND" "$RESET"
-  printf '  %b│%b  Project: %b%-15s%b (%s)  %b│%b\n' "$BRAND" "$RESET" "$BOLD" "$PROJECT_NAME" "$RESET" "$LANGUAGE" "$BRAND" "$RESET"
-  printf '  %b└─────────────────────────────────────┘%b\n' "$BRAND" "$RESET"
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 6 --bold --border rounded --border-foreground 6 \
+      --padding "0 2" --margin "0 2" \
+      "Doey Pre-Push Quality Gate" \
+      "Project: ${PROJECT_NAME} (${LANGUAGE})"
+  else
+    printf '  %b┌─────────────────────────────────────┐%b\n' "$BRAND" "$RESET"
+    printf '  %b│%b  Doey Pre-Push Quality Gate         %b│%b\n' "$BRAND" "$RESET" "$BRAND" "$RESET"
+    printf '  %b│%b  Project: %b%-15s%b (%s)  %b│%b\n' "$BRAND" "$RESET" "$BOLD" "$PROJECT_NAME" "$RESET" "$LANGUAGE" "$BRAND" "$RESET"
+    printf '  %b└─────────────────────────────────────┘%b\n' "$BRAND" "$RESET"
+  fi
   printf '\n'
 }
 
@@ -455,17 +487,35 @@ _print_results() {
 
     # Show failure hint
     if [ "$result" = "fail" ]; then
-      printf '    %b→ fix failures before pushing%b\n' "$FAIL" "$RESET"
+      if [ "$HAS_GUM" = true ]; then
+        gum style --foreground 1 --italic "    → fix failures before pushing" 2>/dev/null \
+          || printf '    %b→ fix failures before pushing%b\n' "$FAIL" "$RESET"
+      else
+        printf '    %b→ fix failures before pushing%b\n' "$FAIL" "$RESET"
+      fi
     fi
 
     i=$((i + 1))
   done
 
   printf '\n'
-  if [ "$HAS_CRITICAL_FAILURE" -eq 1 ]; then
-    printf '  %bResult: BLOCKED — fix failures before pushing%b\n\n' "$FAIL" "$RESET"
+  if [ "$HAS_GUM" = true ]; then
+    if [ "$HAS_CRITICAL_FAILURE" -eq 1 ]; then
+      gum style --foreground 1 --bold --border rounded --border-foreground 1 \
+        --padding "0 2" --margin "0 2" \
+        "BLOCKED — fix failures before pushing"
+    else
+      gum style --foreground 2 --bold --border rounded --border-foreground 2 \
+        --padding "0 2" --margin "0 2" \
+        "READY TO PUSH ✓"
+    fi
+    printf '\n'
   else
-    printf '  %bResult: READY TO PUSH ✓%b\n\n' "$PASS" "$RESET"
+    if [ "$HAS_CRITICAL_FAILURE" -eq 1 ]; then
+      printf '  %bResult: BLOCKED — fix failures before pushing%b\n\n' "$FAIL" "$RESET"
+    else
+      printf '  %bResult: READY TO PUSH ✓%b\n\n' "$PASS" "$RESET"
+    fi
   fi
 }
 
