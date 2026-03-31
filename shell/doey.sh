@@ -5009,7 +5009,7 @@ HELP
     ;;
   add-window)
     require_running_session
-    local _aw_wt_spec="" _aw_team_type="" _aw_reserved="" _aw_grid_cols=""
+    _aw_wt_spec="" _aw_team_type="" _aw_reserved="" _aw_grid_cols=""
     shift
     while [ $# -gt 0 ]; do
       case "$1" in
@@ -5022,11 +5022,11 @@ HELP
       shift
     done
     if [ "$_aw_team_type" = "freelancer" ]; then
-      local _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
+      _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
         "$_aw_cols" "$_aw_wt_spec" "Freelancers" "" "" "" "freelancer"
     elif [ -n "$_aw_wt_spec" ] || [ -n "$_aw_grid_cols" ]; then
-      local _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
+      _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
         "$_aw_cols" "$_aw_wt_spec"
     else
