@@ -597,12 +597,12 @@ setup_dashboard() {
   fi
 
   # Boss (pane 0.1)
-  local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_SESSION_MANAGER_MODEL} --agent doey-boss"
+  local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_SESSION_MANAGER_MODEL} --name \"Boss\" --agent doey-boss"
   _append_settings _boss_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.1" "$_boss_cmd" Enter
 
   # Session Manager (pane 0.2)
-  local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --agent doey-session-manager"
+  local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --name \"Session Manager\" --agent doey-session-manager"
   _append_settings _sm_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.2" "$_sm_cmd" Enter
 

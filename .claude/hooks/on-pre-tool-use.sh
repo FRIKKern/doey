@@ -171,8 +171,36 @@ if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   ;; esac
 fi
 
+# Boss restrictions on non-Bash tools (relay/PM only — no project source access)
+if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" != "Bash" ]; then
+  case "$TOOL_NAME" in
+    Agent)
+      _log_block "TOOL_BLOCKED" "Boss cannot use Agent tool" "relay to Session Manager instead"
+      _dbg_write "block_boss_agent"
+      echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Session Manager instead." >&2
+      exit 2 ;;
+    Read|Edit|Write|Glob|Grep)
+      _BOSS_PATH=$(_json_str tool_input.file_path)
+      [ -z "$_BOSS_PATH" ] && _BOSS_PATH=$(_json_str tool_input.path)
+      [ -z "$_BOSS_PATH" ] && _BOSS_PATH=$(_json_str tool_input.pattern)
+      _boss_allowed=false
+      case "${_BOSS_PATH:-}" in
+        */.doey/tasks/*|*/.doey/tasks) _boss_allowed=true ;;
+        "${_RD:-__none__}"/*|*/tmp/doey/*) _boss_allowed=true ;;
+      esac
+      if [ "$_boss_allowed" = "false" ]; then
+        _log_block "TOOL_BLOCKED" "Boss $TOOL_NAME on project source blocked" "${_BOSS_PATH:-project root}"
+        _dbg_write "block_boss_source_${TOOL_NAME}"
+        echo "BLOCKED: Boss cannot $TOOL_NAME project source files. Relay file operations to Session Manager." >&2
+        exit 2
+      fi
+      _dbg_write "allow_boss_taskfile_${TOOL_NAME}"
+      exit 0 ;;
+  esac
+fi
+
 if [ "$_DOEY_ROLE" = "boss" ]; then
-  _dbg_write "allow_boss_unrestricted"
+  _dbg_write "allow_boss"
   exit 0
 fi
 
