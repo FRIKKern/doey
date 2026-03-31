@@ -1,6 +1,6 @@
 TASK_ID=37
 TASK_TITLE=Fast freelancer spawn — premade 3x2 team with one-click launch
-TASK_STATUS=in_progress
+TASK_STATUS=done
 TASK_CREATED=1743350400
 TASK_TYPE=infrastructure
 TASK_DESCRIPTION=The "Spawn Freelancer" flow is too slow and clunky. It needs to be instant and smooth — one click from the TUI Quick Action card or one command, and 6 freelancers are up in seconds.

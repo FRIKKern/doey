@@ -1,6 +1,6 @@
 TASK_ID=38
 TASK_TITLE=Logs tab group in Go TUI — Logs, Messages, Debug, Info sub-tabs
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1743350400
 TASK_TYPE=feature
 TASK_DESCRIPTION=Add a new top-level tab group to the Go TUI called "Logs" (or similar) that contains four sub-views accessible from a left-column selector — exactly like how Agents, Tasks, Teams, and Connections tabs work with the split-pane pattern (task 36).

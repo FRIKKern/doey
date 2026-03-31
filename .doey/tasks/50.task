@@ -1,6 +1,6 @@
 TASK_ID=50
 TASK_TITLE=TUI command buttons that drive Boss actions — action-driven dashboard
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774934000
 TASK_TYPE=feature
 TASK_DESCRIPTION=ALL task/action buttons in the Go TUI must work by sending commands to Boss (pane 0.1) via tmux send-keys. The TUI is a command surface — Boss is the executor. Every button press translates to a text command sent to Boss's pane via tmux.
