@@ -422,6 +422,12 @@ func (r *Reader) ParseTasks() []Task {
 				subtaskMap[idx].Status = env[key]
 			case "ASSIGNEE":
 				subtaskMap[idx].Pane = env[key]
+			case "WORKER":
+				subtaskMap[idx].Worker = env[key]
+			case "CREATED_AT":
+				subtaskMap[idx].Created, _ = strconv.ParseInt(env[key], 10, 64)
+			case "COMPLETED_AT":
+				subtaskMap[idx].CompletedAt, _ = strconv.ParseInt(env[key], 10, 64)
 			}
 		}
 		if len(subtaskMap) > 0 {

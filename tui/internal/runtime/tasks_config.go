@@ -30,10 +30,13 @@ type PersistentTaskLog struct {
 
 // PersistentSubtask represents a subtask parsed from TASK_SUBTASK_<N>_* fields.
 type PersistentSubtask struct {
-	Index    int    `json:"index"`
-	Title    string `json:"title"`
-	Status   string `json:"status"`             // pending, in_progress, done, failed
-	Assignee string `json:"assignee,omitempty"`
+	Index       int    `json:"index"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`                // pending, in_progress, done, failed
+	Assignee    string `json:"assignee,omitempty"`
+	Worker      string `json:"worker,omitempty"`       // pane ID doing the work (e.g. "3.2")
+	CreatedAt   int64  `json:"created_at,omitempty"`   // unix epoch
+	CompletedAt int64  `json:"completed_at,omitempty"` // unix epoch (set when done/failed)
 }
 
 // PersistentUpdate represents a live update parsed from TASK_UPDATE_<N>_* fields.

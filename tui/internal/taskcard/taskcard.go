@@ -1227,7 +1227,7 @@ func formatAge(d time.Duration) string {
 	}
 }
 
-// persistentSubtaskRow renders a single persistent subtask with status icon and optional assignee.
+// persistentSubtaskRow renders a single persistent subtask with status icon, worker pane, and timing.
 func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, selected bool) string {
 	var icon string
 	switch ps.Status {
@@ -1247,9 +1247,29 @@ func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, sele
 	}
 
 	row := "  " + icon + " " + title
-	if ps.Assignee != "" {
-		row += "  " + lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render("↳ "+ps.Assignee)
+
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true)
+
+	// Show worker pane assignment (e.g. [W3.2]).
+	if ps.Worker != "" {
+		row += "  " + dimStyle.Render("[W"+ps.Worker+"]")
+	} else if ps.Assignee != "" {
+		row += "  " + dimStyle.Render("↳ "+ps.Assignee)
 	}
+
+	// Show elapsed time: completed duration for done/failed, running duration for in_progress.
+	if ps.CreatedAt > 0 {
+		var elapsed time.Duration
+		if ps.CompletedAt > 0 {
+			elapsed = time.Unix(ps.CompletedAt, 0).Sub(time.Unix(ps.CreatedAt, 0))
+		} else if ps.Status == "in_progress" {
+			elapsed = time.Since(time.Unix(ps.CreatedAt, 0))
+		}
+		if elapsed > 0 {
+			row += " " + dimStyle.Render(formatAge(elapsed))
+		}
+	}
+
 	return row
 }
 

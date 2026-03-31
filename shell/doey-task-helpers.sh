@@ -3,10 +3,14 @@
 # Sourceable library, not standalone. Tasks stored in .doey/tasks/ (persistent).
 set -euo pipefail
 
+# Charmbracelet gum detection (output styling only)
+HAS_GUM=false
+command -v gum >/dev/null 2>&1 && HAS_GUM=true
+
 # ── Constants ─────────────────────────────────────────────────────────
 _TASK_VALID_STATUSES="draft active in_progress paused blocked pending_user_confirmation done cancelled"
 _TASK_VALID_TYPES="bug feature bugfix refactor research audit docs infrastructure"
-_TASK_VALID_SUBTASK_STATUSES="pending in_progress done skipped"
+_TASK_VALID_SUBTASK_STATUSES="pending in_progress done skipped failed"
 _TASK_SCHEMA_VERSION_CURRENT="3"
 
 # ── _touch_task_updated ──────────────────────────────────────────────
@@ -292,7 +296,8 @@ task_update_status() {
   local project_dir="$1" task_id="$2" new_status="$3"
 
   if ! _task_validate_status "$new_status"; then
-    printf 'Error: invalid status "%s" (valid: %s)\n' "$new_status" "$_TASK_VALID_STATUSES" >&2
+    if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: invalid status \"${new_status}\" (valid: ${_TASK_VALID_STATUSES})" >&2
+    else printf 'Error: invalid status "%s" (valid: %s)\n' "$new_status" "$_TASK_VALID_STATUSES" >&2; fi
     return 1
   fi
 
@@ -301,7 +306,8 @@ task_update_status() {
   local task_file="${tasks_dir}/${task_id}.task"
 
   if [ ! -f "$task_file" ]; then
-    printf 'Error: task %s not found\n' "$task_id" >&2
+    if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: task ${task_id} not found" >&2
+    else printf 'Error: task %s not found\n' "$task_id" >&2; fi
     return 1
   fi
 
@@ -352,7 +358,8 @@ task_list() {
 
   local tasks_dir="${project_dir}/.doey/tasks"
   if [ ! -d "$tasks_dir" ]; then
-    echo "No tasks."
+    if [ "$HAS_GUM" = true ]; then gum style --foreground 8 "No tasks."
+    else echo "No tasks."; fi
     return 0
   fi
 
@@ -385,17 +392,35 @@ task_list() {
     age="$(_task_age_str "$TASK_CREATED")"
 
     local line
-    line=$(printf '#%s [%s] [%s] %s (%s)' \
-      "$TASK_ID" "$TASK_STATUS" "$TASK_TYPE" "$TASK_TITLE" "$age")
+    if [ "$HAS_GUM" = true ]; then
+      local _st_icon _st_fg
+      case "$TASK_STATUS" in
+        active|in_progress) _st_icon="●"; _st_fg="3" ;;
+        blocked)            _st_icon="■"; _st_fg="1" ;;
+        paused)             _st_icon="◆"; _st_fg="5" ;;
+        pending_*)          _st_icon="⬤"; _st_fg="6" ;;
+        done)               _st_icon="✓"; _st_fg="2" ;;
+        cancelled)          _st_icon="✗"; _st_fg="8" ;;
+        *)                  _st_icon="○"; _st_fg="8" ;;
+      esac
+      local _styled_st _styled_meta
+      _styled_st="$(gum style --foreground "$_st_fg" "${_st_icon}")"
+      _styled_meta="$(gum style --foreground 8 "[${TASK_TYPE}] (${age})")"
+      line=$(printf '%s #%s [%s] %s %s' "$_styled_st" "$TASK_ID" "$TASK_STATUS" "$TASK_TITLE" "$_styled_meta")
+    else
+      line=$(printf '#%s [%s] [%s] %s (%s)' \
+        "$TASK_ID" "$TASK_STATUS" "$TASK_TYPE" "$TASK_TITLE" "$age")
+    fi
     entries="${entries}${TASK_ID}|${line}"$'\n'
   done
 
   if [ -n "$entries" ]; then
     printf '%s' "$entries" | sort -t'|' -k1,1n | while IFS='|' read -r _ line; do
-      echo "$line"
+      printf '%s\n' "$line"
     done
   else
-    echo "No tasks found."
+    if [ "$HAS_GUM" = true ]; then gum style --foreground 8 "No tasks found."
+    else echo "No tasks found."; fi
   fi
 }
 
@@ -1110,7 +1135,8 @@ _task_resolve_file() {
   local project_dir="$1" task_id="$2"
   local task_file="${project_dir}/.doey/tasks/${task_id}.task"
   if [ ! -f "$task_file" ]; then
-    printf 'Error: task %s not found\n' "$task_id" >&2
+    if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: task ${task_id} not found" >&2
+    else printf 'Error: task %s not found\n' "$task_id" >&2; fi
     return 1
   fi
   printf '%s' "$task_file"
@@ -1134,11 +1160,11 @@ doey_task_get_subtask_count() {
 
 # ── doey_task_add_subtask ────────────────────────────────────────────
 # Add a numbered subtask (TASK_SUBTASK_<N>_*) to a task file.
-# Args: project_dir task_id title [assignee]
+# Args: project_dir task_id title [assignee] [worker_pane]
 # Returns (echo): subtask number
 doey_task_add_subtask() {
   local project_dir="$1" task_id="$2" title="$3"
-  local assignee="${4:-}"
+  local assignee="${4:-}" worker_pane="${5:-}"
 
   local task_file
   task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
@@ -1152,6 +1178,10 @@ doey_task_add_subtask() {
   if [ -n "$assignee" ]; then
     printf 'TASK_SUBTASK_%s_ASSIGNEE=%s\n' "$n" "$assignee" >> "$task_file"
   fi
+  if [ -n "$worker_pane" ]; then
+    printf 'TASK_SUBTASK_%s_WORKER=%s\n' "$n" "$worker_pane" >> "$task_file"
+  fi
+  printf 'TASK_SUBTASK_%s_CREATED_AT=%s\n' "$n" "$(date +%s)" >> "$task_file"
 
   _touch_task_updated "$task_file"
   echo "$n"
@@ -1159,6 +1189,7 @@ doey_task_add_subtask() {
 
 # ── doey_task_update_subtask ─────────────────────────────────────────
 # Update TASK_SUBTASK_<N>_STATUS in-place. Appends if missing.
+# When status becomes "done" or "failed", writes TASK_SUBTASK_<N>_COMPLETED_AT.
 # Args: project_dir task_id subtask_n status
 doey_task_update_subtask() {
   local project_dir="$1" task_id="$2" subtask_n="$3" new_status="$4"
@@ -1191,6 +1222,22 @@ doey_task_update_subtask() {
   else
     printf '%s=%s\n' "$field" "$new_status" >> "$task_file"
     _touch_task_updated "$task_file"
+  fi
+
+  # Write completion timestamp for terminal statuses
+  if [ "$new_status" = "done" ] || [ "$new_status" = "failed" ]; then
+    local ts_field="TASK_SUBTASK_${subtask_n}_COMPLETED_AT"
+    local ts_found=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        "${ts_field}="*) ts_found=1; break ;;
+      esac
+    done < "$task_file" || true
+    if [ "$ts_found" -eq 1 ]; then
+      task_update_field "$task_file" "$ts_field" "$(date +%s)"
+    else
+      printf '%s=%s\n' "$ts_field" "$(date +%s)" >> "$task_file"
+    fi
   fi
 }
 
