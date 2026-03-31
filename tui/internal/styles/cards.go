@@ -505,6 +505,61 @@ func FollowUpBadge(t Theme) string {
 		Render("◆ Needs Follow-up")
 }
 
+// StaleBadge renders "⚠ STALE" in bold Danger color.
+func StaleBadge(theme Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(theme.Danger).
+		Bold(true).
+		Render("⚠ STALE")
+}
+
+// StaleTimeBadge renders "⚠ STALE (3m)" with duration in bold Danger color.
+func StaleTimeBadge(theme Theme, duration string) string {
+	return lipgloss.NewStyle().
+		Foreground(theme.Danger).
+		Bold(true).
+		Render("⚠ STALE (" + duration + ")")
+}
+
+// RecoveryDot returns a colored dot for recovery event types.
+func RecoveryDot(theme Theme, eventType string) string {
+	var clr lipgloss.AdaptiveColor
+	switch eventType {
+	case "stale_detected", "heartbeat_timeout":
+		clr = theme.Danger
+	case "redispatched", "rerouted":
+		clr = theme.Warning
+	case "recovered":
+		clr = theme.Success
+	default:
+		clr = theme.Muted
+	}
+	return lipgloss.NewStyle().Foreground(clr).Render("●")
+}
+
+// RecoveryEventIcon returns a semantic icon for recovery event types.
+func RecoveryEventIcon(eventType string) string {
+	switch eventType {
+	case "stale_detected", "heartbeat_timeout":
+		return "⚠"
+	case "redispatched":
+		return "↻"
+	case "rerouted":
+		return "↪"
+	case "recovered":
+		return "✓"
+	default:
+		return "○"
+	}
+}
+
+// RecoveryArrow renders an indented connector for reroute details.
+func RecoveryArrow(theme Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(theme.Muted).
+		Render("  ↳")
+}
+
 // InfoCard renders a bordered card with title and body content.
 // zoneID wraps the card in a click zone. w = desired width.
 func InfoCard(title, body, zoneID string, w int, theme Theme) string {
@@ -612,6 +667,309 @@ func QuickActionCard(t Theme, icon, title, description string, width int, select
 
 	content := lipgloss.JoinVertical(lipgloss.Center, iconStr, titleStr, descStr)
 	return cardStyle.Render(content)
+}
+
+// TimelineDot renders a colored dot for the status timeline display.
+func TimelineDot(color lipgloss.AdaptiveColor) string {
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Render("●")
+}
+
+// TimelineArrow renders a dim arrow connector between timeline dots.
+func TimelineArrow(t Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(t.Subtle).
+		Faint(true).
+		Render(" → ")
+}
+
+// ConversationBubbleUser returns a style for user message bubbles.
+// Right-aligned with a subtle primary-tinted background.
+func ConversationBubbleUser(t Theme, width int) lipgloss.Style {
+	bubbleWidth := width * 3 / 4
+	if bubbleWidth < 20 {
+		bubbleWidth = 20
+	}
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
+		Foreground(t.Text).
+		Background(lipgloss.AdaptiveColor{Light: "#EFF6FF", Dark: "#1E293B"}).
+		Width(bubbleWidth).
+		Padding(0, 1).
+		MarginLeft(width - bubbleWidth - 2)
+}
+
+// ConversationBubbleAI returns a style for AI response bubbles.
+// Left-aligned with a subtle accent-tinted background.
+func ConversationBubbleAI(t Theme, width int) lipgloss.Style {
+	bubbleWidth := width * 3 / 4
+	if bubbleWidth < 20 {
+		bubbleWidth = 20
+	}
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Muted).
+		Foreground(t.Text).
+		Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#0F172A"}).
+		Width(bubbleWidth).
+		Padding(0, 1)
+}
+
+// ExpandedReportContainer returns a style for the full report body container.
+func ExpandedReportContainer(t Theme, width int) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Separator).
+		Foreground(t.Text).
+		Width(width).
+		Padding(1, 1)
+}
+
+// ReportToggle renders a toggle label: "[+] Show more" or "[-] Show less".
+func ReportToggle(t Theme, expanded bool) string {
+	if expanded {
+		return lipgloss.NewStyle().
+			Foreground(t.Accent).
+			Bold(true).
+			Render("[-] Show less")
+	}
+	return lipgloss.NewStyle().
+		Foreground(t.Accent).
+		Bold(true).
+		Render("[+] Show more")
+}
+
+// CardStyleForHealth returns a card border style based on heartbeat health state.
+func CardStyleForHealth(t Theme, health string, width int) lipgloss.Style {
+	border := accentBorder()
+	base := lipgloss.NewStyle().
+		Border(border).
+		Width(width).
+		Padding(0, 1)
+
+	switch health {
+	case "healthy":
+		return base.
+			BorderForeground(t.Accent).
+			Foreground(t.Text)
+	case "degraded":
+		return base.
+			BorderForeground(t.Warning).
+			Foreground(t.Text).
+			Faint(true)
+	case "stale":
+		return base.
+			BorderForeground(t.Muted).
+			Foreground(t.Muted).
+			Faint(true)
+	default: // "idle" or unknown
+		return base.
+			BorderForeground(t.Subtle).
+			Foreground(t.Muted).
+			Faint(true)
+	}
+}
+
+// BlockedCardStyle returns a card style with a danger-colored border for blocked tasks.
+func BlockedCardStyle(t Theme, width int) lipgloss.Style {
+	border := accentBorder()
+	return lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(t.Danger).
+		BorderLeftForeground(t.Danger).
+		Width(width).
+		Padding(0, 1)
+}
+
+// CompletedCardStyle returns a very muted, faint card style for done/completed tasks.
+func CompletedCardStyle(t Theme, width int) lipgloss.Style {
+	border := accentBorder()
+	return lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(t.Separator).
+		Foreground(t.Muted).
+		Faint(true).
+		Width(width).
+		Padding(0, 1)
+}
+
+// AttachmentTypeColor returns the accent color for a given attachment type.
+func AttachmentTypeColor(t Theme, attachType string) lipgloss.AdaptiveColor {
+	switch attachType {
+	case "research":
+		return t.Info
+	case "build":
+		return t.Warning
+	case "test":
+		return t.Success
+	case "review":
+		return t.Accent
+	case "error":
+		return t.Danger
+	case "progress":
+		return t.Muted
+	case "completion":
+		return t.Success
+	default:
+		return t.Muted
+	}
+}
+
+// ReportTypeColor returns the accent color for a given report type.
+func ReportTypeColor(t Theme, reportType string) lipgloss.AdaptiveColor {
+	switch reportType {
+	case "research":
+		return t.Info
+	case "progress":
+		return t.Success
+	case "decision":
+		return t.Accent
+	case "completion":
+		return t.Warning
+	case "error":
+		return t.Danger
+	case "qa_thread":
+		return lipgloss.AdaptiveColor{Light: "#0891B2", Dark: "#22D3EE"} // cyan/teal
+	case "conversation":
+		return lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"} // violet
+	default:
+		return t.Muted
+	}
+}
+
+// ResearchPhaseColor returns a science-y blue/purple for research phase.
+func ResearchPhaseColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"} // violet
+}
+
+// ReviewPhaseColor returns a bright attention-grabbing orange for review phase.
+func ReviewPhaseColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // amber/orange
+}
+
+// ImplementationPhaseColor returns a green/success color for implementation phase.
+func ImplementationPhaseColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"} // green
+}
+
+// TaskPhaseBadge renders a compact phase indicator badge for task cards.
+// Returns "" for empty/unknown phase (backward compatible).
+func TaskPhaseBadge(t Theme, phase string) string {
+	switch phase {
+	case "research":
+		return lipgloss.NewStyle().
+			Foreground(ResearchPhaseColor()).
+			Render("🔬 Research")
+	case "review":
+		return lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(ReviewPhaseColor()).
+			Bold(true).
+			Padding(0, 1).
+			Render("📋 Awaiting Review")
+	case "implementation":
+		return lipgloss.NewStyle().
+			Foreground(ImplementationPhaseColor()).
+			Render("🔨 Implementing")
+	default:
+		return ""
+	}
+}
+
+// TaskPhaseBanner renders a prominent banner for expanded card view.
+// Returns "" for empty/unknown phase.
+func TaskPhaseBanner(t Theme, phase string, width int) string {
+	switch phase {
+	case "review":
+		return lipgloss.NewStyle().
+			Foreground(t.BgText).
+			Background(ReviewPhaseColor()).
+			Bold(true).
+			Width(width).
+			Align(lipgloss.Center).
+			Padding(0, 1).
+			Render("⚡ Research Complete — Awaiting Your Review")
+	case "research":
+		return lipgloss.NewStyle().
+			Foreground(ResearchPhaseColor()).
+			Bold(true).
+			Render("🔬 Research In Progress")
+	case "implementation":
+		return lipgloss.NewStyle().
+			Foreground(ImplementationPhaseColor()).
+			Render("🔨 Implementation In Progress")
+	default:
+		return ""
+	}
+}
+
+// QABadge renders a conversation count badge. Returns "" if count is 0.
+func QABadge(t Theme, count int) string {
+	if count == 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Foreground(t.Info).
+		Render(fmt.Sprintf("%d", count))
+}
+
+// ActivityTimeBadge renders a color-coded seconds-ago indicator.
+// <10s green, 10-60s normal text, 60-120s warning, >120s danger.
+func ActivityTimeBadge(t Theme, secondsAgo int) string {
+	var label string
+	var color lipgloss.AdaptiveColor
+
+	switch {
+	case secondsAgo < 10:
+		label = fmt.Sprintf("%ds", secondsAgo)
+		color = t.Success
+	case secondsAgo < 60:
+		label = fmt.Sprintf("%ds", secondsAgo)
+		color = t.Text
+	case secondsAgo < 120:
+		label = fmt.Sprintf("%dm", secondsAgo/60)
+		color = t.Warning
+	default:
+		label = fmt.Sprintf("%dm", secondsAgo/60)
+		color = t.Danger
+	}
+
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Render(label)
+}
+
+// AgentAssignmentLine renders a worker assignment line, e.g. "Workers: W2.1, W2.3".
+// Returns "Workers: none" in muted style if the list is empty.
+func AgentAssignmentLine(t Theme, workerNames []string, width int) string {
+	labelStyle := lipgloss.NewStyle().Foreground(t.Subtle).Bold(true)
+	if len(workerNames) == 0 {
+		return labelStyle.Render("Workers:") + " " +
+			lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("none")
+	}
+	names := lipgloss.NewStyle().
+		Foreground(t.Text).
+		Width(width - 10).
+		Render(strings.Join(workerNames, ", "))
+	return labelStyle.Render("Workers:") + " " + names
+}
+
+// SpinnerDot renders a status indicator dot: bright if active, muted if not.
+func SpinnerDot(t Theme, active bool) string {
+	if active {
+		return lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("●")
+	}
+	return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
+}
+
+// StaleIndicator renders a muted "stale" label for tasks with no recent activity.
+func StaleIndicator(t Theme) string {
+	return lipgloss.NewStyle().
+		Foreground(t.Muted).
+		Faint(true).
+		Render("stale")
 }
 
 // CardGrid arranges cards into a grid layout with cols columns.

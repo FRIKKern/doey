@@ -38,6 +38,40 @@ type PaneStatus struct {
 // WorkerResult is an alias for PaneResult used by the dashboard.
 type WorkerResult = PaneResult
 
+// StatusTransition represents a parsed status change from TASK_TIMESTAMPS.
+type StatusTransition struct {
+	Status    string
+	Timestamp int64
+	Label     string // human-readable time, e.g. "2m ago"
+}
+
+// ConversationEntry represents a parsed conversation entry from task logs/reports.
+type ConversationEntry struct {
+	Role      string // "user" or "ai"
+	Message   string
+	Timestamp int64
+	Author    string
+}
+
+// QAHop represents one step in a Q&A relay chain.
+type QAHop struct {
+	Role      string // "Boss", "SessionManager", "Manager_W1", "Worker_W1.2"
+	Pane      string // "0.1", "0.2", "1.0", "1.2"
+	Action    string // "received", "routing", "forwarded", "answering", "answered"
+	Timestamp int64
+}
+
+// QAEntry represents a complete question-answer exchange with relay chain.
+type QAEntry struct {
+	TrackingID string   // unique ID: "qa-<task_id>-<timestamp>"
+	Question   string   // the question text
+	Answer     string   // the answer text (empty until answered)
+	Status     string   // "routing", "forwarded", "answering", "answered"
+	Hops       []QAHop  // ordered chain of handoffs
+	Created    int64    // when question was asked
+	Answered   int64    // when answer arrived (0 if pending)
+}
+
 // LogEntry represents a parsed task log entry with action and detail.
 type LogEntry struct {
 	Timestamp string
@@ -49,6 +83,17 @@ type LogEntry struct {
 type TaskLog struct {
 	Timestamp int64
 	Entry     string
+}
+
+// RecoveryEvent represents a stale detection or auto-recovery event.
+// Parsed from TASK_RECOVERY_<N>_* fields in .task files.
+type RecoveryEvent struct {
+	Index       int    `json:"index"`
+	Timestamp   int64  `json:"timestamp"`
+	Event       string `json:"event"`        // stale_detected, redispatched, rerouted, heartbeat_timeout, crash_recovery
+	FailedAgent string `json:"failed_agent"` // pane that failed, e.g. "W4.2"
+	NewAgent    string `json:"new_agent"`    // pane that took over (empty if not yet rerouted)
+	Description string `json:"description"`
 }
 
 // Report is a structured report attached to a task.
@@ -63,14 +108,28 @@ type Report struct {
 	Created int64  `json:"created"`
 }
 
+// Attachment represents a file attached to a task (worker reports, build logs, etc.)
+type Attachment struct {
+	Filename  string // e.g. "1774955000_research_Worker_W1_2.md"
+	Type      string // research, build, test, review, error, progress, completion
+	Title     string
+	Author    string
+	Timestamp int64
+	TaskID    string
+	Body      string // full content after frontmatter
+	FilePath  string // absolute path to the file
+}
+
 // Task from tasks/*.task (v3 schema)
 type Task struct {
 	ID                 string
 	Title              string
 	Status             string    // draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled
+	Phase              string    // research, review, implementation, "" (empty = no phase)
 	Description        string    // multi-line task description
 	Attachments        []string  // list of URLs/file paths
 	Created            int64     // unix epoch
+	Updated            int64     // unix epoch
 	Subtasks           []Subtask // worker assignments
 	Category           string    // bug, feature, refactor, docs, infrastructure
 	Tags               []string  // cross-cutting concerns
@@ -90,7 +149,12 @@ type Task struct {
 	CreatedBy          string    // v3: who created it
 	AssignedTo         string    // v3: who/what team
 	SchemaVersion      int       // v3: schema version number
-	Reports []Report // from TASK_REPORT_N_* fields
+	Reports           []Report             // from TASK_REPORT_N_* fields
+	TaskAttachments   []Attachment         // from .doey/tasks/<id>/attachments/*.md
+	RecoveryLog       []RecoveryEvent      // from TASK_RECOVERY_N_* fields
+	StatusTimeline    []StatusTransition   // parsed from TASK_TIMESTAMPS
+	ConversationTrail []ConversationEntry  // parsed from logs/reports
+	QAThread          []QAEntry            // Q&A relay chain entries
 	// Proof-of-completion fields
 	FilesChanged []string // from TASK_FILES
 	Commits      string   // from TASK_COMMITS (hash + message lines)
@@ -99,12 +163,14 @@ type Task struct {
 // Subtask represents a worker assignment under a parent task.
 // Stored in $RUNTIME_DIR/tasks/<task_id>/subtasks/<pane>.subtask
 type Subtask struct {
-	TaskID  string // parent task ID
-	Pane    string // e.g. "2.3" — which worker pane
-	Title   string // what was dispatched
-	Status  string // active, done, failed
-	Created int64  // unix epoch
-	Updated int64  // unix epoch
+	TaskID      string // parent task ID
+	Pane        string // e.g. "2.3" — which worker pane (assignee)
+	Title       string // what was dispatched
+	Status      string // active, done, failed
+	Created     int64  // unix epoch
+	Updated     int64  // unix epoch
+	Worker      string // pane ID doing the work (e.g. "3.2")
+	CompletedAt int64  // unix epoch (set when done/failed)
 }
 
 // DebugEntry represents a single debug event from any source.

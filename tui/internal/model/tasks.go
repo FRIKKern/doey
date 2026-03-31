@@ -160,6 +160,9 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	store.MergeRuntimeTasks(snap.Tasks)
 
 	m.entries = store.Tasks
+
+	// Aggregate heartbeat state BEFORE sorting — sortEntries uses heartbeats
+	m.heartbeats = runtime.AggregateHeartbeats(snap)
 	m.sortEntries()
 
 	// Build subtask map
@@ -167,9 +170,6 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	for _, st := range snap.Subtasks {
 		m.subtaskMap[st.TaskID] = append(m.subtaskMap[st.TaskID], st)
 	}
-
-	// Aggregate heartbeat state for live activity display
-	m.heartbeats = runtime.AggregateHeartbeats(snap)
 
 	// Store IPC messages for expanded card filtering
 	m.messages = snap.Messages
@@ -199,6 +199,11 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	delegate := taskcard.NewCardDelegate(m.theme)
 	delegate.Heartbeats = m.heartbeats
 	m.list.SetDelegate(delegate)
+
+	// Refresh expanded detail card with updated snapshot data
+	if m.expanded != nil {
+		m.loadSelectedDetail()
+	}
 }
 
 // statusPriority returns a sort group for the given task status.
@@ -220,6 +225,21 @@ func statusPriority(status string) int {
 	}
 }
 
+// taskActivityTime returns the best activity timestamp for a task:
+// heartbeat LastActivity > task Updated > task Created.
+func (m *TasksModel) taskActivityTime(t runtime.PersistentTask) time.Time {
+	if hb, ok := m.heartbeats[t.ID]; ok && !hb.LastActivity.IsZero() {
+		return hb.LastActivity
+	}
+	if t.Updated > 0 {
+		return time.Unix(t.Updated, 0)
+	}
+	if t.Created > 0 {
+		return time.Unix(t.Created, 0)
+	}
+	return time.Time{}
+}
+
 func (m *TasksModel) sortEntries() {
 	sort.SliceStable(m.entries, func(i, j int) bool {
 		a, b := m.entries[i], m.entries[j]
@@ -227,7 +247,12 @@ func (m *TasksModel) sortEntries() {
 		if pa != pb {
 			return pa < pb
 		}
-		// Within the same group, sort by task ID descending (newest first).
+		// Within the same status group, sort by activity (most recent first).
+		ta, tb := m.taskActivityTime(a), m.taskActivityTime(b)
+		if !ta.Equal(tb) {
+			return ta.After(tb)
+		}
+		// Final tiebreaker: task ID descending (newest first).
 		ai, errA := strconv.Atoi(a.ID)
 		bi, errB := strconv.Atoi(b.ID)
 		if errA == nil && errB == nil {
@@ -260,21 +285,29 @@ func (m *TasksModel) loadSelectedDetail() {
 	if rightW < 24 {
 		rightW = 24
 	}
+	// Preserve subtask cursor if refreshing the same task
+	prevCursor := -1
+	if m.expanded != nil && m.expanded.Item.Task.ID == task.ID {
+		prevCursor = m.expanded.SubtaskCursor
+	}
 	m.expanded = &taskcard.ExpandedCard{
 		Item:          ti,
 		Theme:         m.theme,
 		Width:         rightW,
 		Height:        m.height - 4,
-		SubtaskCursor: -1,
+		SubtaskCursor: prevCursor,
 		ScrollOffset:  0,
 		Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
 		PaneStatuses:  paneStatusSlice(m.paneStatuses),
 		Results:       m.paneResults,
+		ProjectDir:    m.projectDir,
 	}
 	if m.projectDir != "" {
 		tasksDir := filepath.Join(m.projectDir, ".doey", "tasks")
 		m.detailSidecar = runtime.ReadTaskSidecar(tasksDir, task.ID)
 		m.detailResult = runtime.ReadTaskResult(tasksDir, task.ID)
+		m.expanded.Sidecar = m.detailSidecar
+		m.expanded.TaskResult = m.detailResult
 	}
 }
 
@@ -375,10 +408,21 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 	return m, nil
 }
 
-// rightScrollCap returns a generous upper bound for rightScroll to prevent
-// unbounded growth. The exact max is computed at render time; this just
-// keeps the field from drifting.
+// rightScrollCap returns the maximum scroll offset for the right panel.
+// Uses ExpandedCard content height when available for accurate bounds.
 func (m TasksModel) rightScrollCap() int {
+	if m.expanded != nil {
+		viewport := m.height - 4
+		if viewport < 1 {
+			viewport = 1
+		}
+		ch := m.expanded.ContentHeight()
+		cap := ch - viewport
+		if cap < 0 {
+			return 0
+		}
+		return cap
+	}
 	cap := m.height * 3
 	if cap < 100 {
 		cap = 100
@@ -683,7 +727,7 @@ func (m TasksModel) View() string {
 	}
 
 	leftPanel := m.renderLeftPanel(leftW, h)
-	rightPanel := m.renderRightPanel(rightW, h)
+	rightPanel := m.renderExpandedRightPanel(rightW, h)
 
 	// Separator
 	sepColor := t.Separator
@@ -1252,6 +1296,93 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 	}
 
 	displayed := strings.Join(lines, "\n")
+
+	panelStyle := lipgloss.NewStyle().
+		Width(w).
+		Height(h).
+		Padding(1, 2).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor)
+
+	return panelStyle.Render(displayed)
+}
+
+// renderExpandedRightPanel renders the detail pane using the ExpandedCard
+// for rich display including reports, proof of completion, live updates,
+// worker status, grammar-parsed activity log, and IPC messages.
+func (m TasksModel) renderExpandedRightPanel(w, h int) string {
+	t := m.theme
+
+	borderColor := t.Separator
+	if m.focused && !m.leftFocused {
+		borderColor = t.Primary
+	}
+
+	idx := m.list.Index()
+	if len(m.entries) == 0 || idx < 0 || idx >= len(m.entries) {
+		empty := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			Padding(2, 3).
+			Width(w).
+			Height(h).
+			Render("No task selected")
+		return empty
+	}
+
+	// Use the pre-built expanded card, or create a temporary one for this render
+	expanded := m.expanded
+	if expanded == nil {
+		item := m.list.SelectedItem()
+		if item == nil {
+			return lipgloss.NewStyle().Width(w).Height(h).Render("")
+		}
+		ti := item.(taskcard.TaskItem)
+		task := m.entries[idx]
+		expanded = &taskcard.ExpandedCard{
+			Item:          ti,
+			Theme:         m.theme,
+			Width:         w - 4,
+			Height:        h - 4,
+			SubtaskCursor: -1,
+			Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
+			PaneStatuses:  paneStatusSlice(m.paneStatuses),
+			Results:       m.paneResults,
+			ProjectDir:    m.projectDir,
+		}
+	}
+
+	// Sync dimensions and scroll offset to current layout
+	renderW := w - 4
+	if renderW < 20 {
+		renderW = 20
+	}
+	expanded.Width = renderW
+	viewport := h - 4
+	if viewport < 1 {
+		viewport = 1
+	}
+	expanded.Height = viewport
+	expanded.ScrollOffset = m.rightScroll
+
+	// Clamp scroll to content bounds
+	contentH := expanded.ContentHeight()
+	maxScroll := contentH - viewport
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if expanded.ScrollOffset > maxScroll {
+		expanded.ScrollOffset = maxScroll
+	}
+
+	displayed := expanded.ViewportSlice()
+
+	// Hint bar
+	if m.focused && !m.leftFocused {
+		hint := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
+			Render("← back  m move  s status  d dispatch  x cancel  ↑↓ scroll  tab subtask")
+		displayed += "\n" + hint
+	}
 
 	panelStyle := lipgloss.NewStyle().
 		Width(w).

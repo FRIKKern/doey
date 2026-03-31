@@ -3,6 +3,10 @@
 # Hot path: runs before EVERY tool call. Must be fast.
 set -euo pipefail
 
+# ERR trap: prevent unexpected non-zero exits from cancelling parallel Bash calls.
+# This hook intentionally exits 2 (block) or 0 (allow); any other exit is a bug.
+trap 'exit 0' ERR
+
 INPUT=$(cat)
 
 _log_block() {
@@ -139,6 +143,20 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
       [ "$_di_pi" = "${_di_mp:-0}" ] && _DOEY_ROLE="manager"
     fi
     [ -z "$_DOEY_ROLE" ] && _DOEY_ROLE="worker"
+  fi
+fi
+
+# ── Heartbeat emission (for stale detection by SM) ──
+if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
+  _HB_FILE="${_RD}/status/${_PS}.heartbeat"
+  _hb_write=true
+  if [ -f "$_HB_FILE" ]; then
+    _hb_age=$(( $(date +%s) - $(stat -f%m "$_HB_FILE" 2>/dev/null || echo 0) ))
+    [ "$_hb_age" -lt 10 ] && _hb_write=false
+  fi
+  if [ "$_hb_write" = "true" ]; then
+    _hb_tmp="${_HB_FILE}.tmp"
+    printf '%s %s %s\n' "$(date +%s)" "${DOEY_TASK_ID:-}" "${DOEY_PANE_ID:-${_PS}}" > "$_hb_tmp" && mv "$_hb_tmp" "$_HB_FILE"
   fi
 fi
 
@@ -307,11 +325,24 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
   case "$_CMD" in *"git commit"*)
     _staged_go=$(git diff --cached --name-only 2>/dev/null | grep -c '^tui/' 2>/dev/null) || _staged_go=0
     if [ "$_staged_go" -gt 0 ] 2>/dev/null; then
+      # Discover Go via shared helper (inline fallback if helper not available)
       _GO_BIN=""
-      for _d in /snap/go/current/bin /usr/local/go/bin "$HOME/go/bin"; do
-        if [ -x "$_d/go" ]; then _GO_BIN="$_d/go"; break; fi
-      done
-      if [ -z "$_GO_BIN" ]; then command -v go >/dev/null 2>&1 && _GO_BIN="go"; fi
+      _project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+      if [ -f "${_project_dir}/shell/doey-go-helpers.sh" ]; then
+        source "${_project_dir}/shell/doey-go-helpers.sh" 2>/dev/null || true
+        if type _find_go_bin >/dev/null 2>&1; then
+          _GO_BIN="$(_find_go_bin)" || true
+        fi
+      fi
+      if [ -z "$_GO_BIN" ]; then
+        # Inline fallback: check common Go install locations
+        if command -v go >/dev/null 2>&1; then _GO_BIN="go"
+        else
+          for _d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
+            if [ -x "$_d/go" ]; then _GO_BIN="$_d/go"; break; fi
+          done
+        fi
+      fi
       if [ -n "$_GO_BIN" ]; then
         _proj_dir="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
         if [ -d "${_proj_dir}/tui" ] && ! (cd "${_proj_dir}/tui" && "$_GO_BIN" build ./...) >/dev/null 2>&1; then

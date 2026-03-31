@@ -1,0 +1,7 @@
+TASK_ID=67
+TASK_TITLE=Auto-complete tasks on git push — committed+pushed = done
+TASK_STATUS=done
+TASK_CREATED=1743379200
+TASK_TYPE=infrastructure
+TASK_DESCRIPTION=When a git push succeeds, any tasks whose changes are included in the push should automatically transition to TASK_STATUS=done — skipping the pending_user_confirmation step entirely. The user's rule: committed + pushed = done. Implementation approach: hook into the git push event (likely via a post-push hook or by detecting push in on-pre-tool-use.sh / stop hooks). When a push completes successfully, scan the pushed commits for task references (TASK_ID in commit messages, e.g. "task-67" or "Task 67"), then set those tasks to done with a TASK_UPDATED timestamp. This should work for both Boss-initiated pushes and worker-initiated pushes. The task file must record who/what completed it (e.g. TASK_COMPLETED_BY=git-push).
+TASK_TAGS=task-system,hooks,infrastructure

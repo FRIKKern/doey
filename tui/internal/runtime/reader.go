@@ -298,6 +298,7 @@ func (r *Reader) ParseTasks() []Task {
 			ID:         env["TASK_ID"],
 			Title:      env["TASK_TITLE"],
 			Status:     env["TASK_STATUS"],
+			Phase:      env["TASK_PHASE"],
 			Team:       env["TASK_TEAM"],
 			Priority:   env["TASK_PRIORITY"],
 			MergedInto: env["TASK_MERGED_INTO"],
@@ -321,6 +322,9 @@ func (r *Reader) ParseTasks() []Task {
 		}
 		if c := env["TASK_CREATED"]; c != "" {
 			t.Created, _ = strconv.ParseInt(c, 10, 64)
+		}
+		if u := env["TASK_UPDATED"]; u != "" {
+			t.Updated, _ = strconv.ParseInt(u, 10, 64)
 		}
 		// Fall back to TASK_TIMESTAMPS created= field
 		if t.Created == 0 && t.Timestamps != "" {
@@ -418,6 +422,12 @@ func (r *Reader) ParseTasks() []Task {
 				subtaskMap[idx].Status = env[key]
 			case "ASSIGNEE":
 				subtaskMap[idx].Pane = env[key]
+			case "WORKER":
+				subtaskMap[idx].Worker = env[key]
+			case "CREATED_AT":
+				subtaskMap[idx].Created, _ = strconv.ParseInt(env[key], 10, 64)
+			case "COMPLETED_AT":
+				subtaskMap[idx].CompletedAt, _ = strconv.ParseInt(env[key], 10, 64)
 			}
 		}
 		if len(subtaskMap) > 0 {
@@ -522,10 +532,138 @@ func (r *Reader) ParseTasks() []Task {
 			}
 		}
 
+		// Parse TASK_RECOVERY_<N>_* fields
+		recoveryMap := make(map[int]*RecoveryEvent)
+		for key := range env {
+			if !strings.HasPrefix(key, "TASK_RECOVERY_") {
+				continue
+			}
+			rest := strings.TrimPrefix(key, "TASK_RECOVERY_")
+			parts := strings.SplitN(rest, "_", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			idx, err := strconv.Atoi(parts[0])
+			if err != nil {
+				continue
+			}
+			if recoveryMap[idx] == nil {
+				recoveryMap[idx] = &RecoveryEvent{Index: idx}
+			}
+			switch parts[1] {
+			case "TIMESTAMP":
+				recoveryMap[idx].Timestamp, _ = strconv.ParseInt(env[key], 10, 64)
+			case "EVENT":
+				recoveryMap[idx].Event = env[key]
+			case "FAILED_AGENT":
+				recoveryMap[idx].FailedAgent = env[key]
+			case "NEW_AGENT":
+				recoveryMap[idx].NewAgent = env[key]
+			case "DESCRIPTION":
+				recoveryMap[idx].Description = env[key]
+			}
+		}
+		if len(recoveryMap) > 0 {
+			idxs := make([]int, 0, len(recoveryMap))
+			for idx := range recoveryMap {
+				idxs = append(idxs, idx)
+			}
+			sort.Ints(idxs)
+			for _, idx := range idxs {
+				t.RecoveryLog = append(t.RecoveryLog, *recoveryMap[idx])
+			}
+		}
+
+		// Parse TASK_TIMESTAMPS into StatusTimeline
+		t.StatusTimeline = parseStatusTimeline(t.Timestamps)
+
+		// Parse conversation trail from logs and reports
+		t.ConversationTrail = parseConversationTrail(t.Logs, t.Reports)
+
+		// Parse Q&A relay chain from reports
+		t.QAThread = parseQAThread(t.Reports)
+
+		// Parse file attachments from .doey/tasks/<id>/attachments/
+		t.TaskAttachments = r.parseAttachments(t.ID)
+
 		tasks = append(tasks, t)
 	}
 
 	return tasks
+}
+
+// parseAttachments reads .doey/tasks/<id>/attachments/*.md and returns parsed Attachment structs.
+// Each file has YAML-like frontmatter (type, title, author, timestamp, task_id) delimited by ---.
+func (r *Reader) parseAttachments(taskID string) []Attachment {
+	if r.projectDir == "" {
+		return nil
+	}
+	dir := filepath.Join(r.projectDir, ".doey", "tasks", taskID, "attachments")
+	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil || len(matches) == 0 {
+		return nil
+	}
+
+	var attachments []Attachment
+	for _, path := range matches {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		content := string(data)
+
+		// Split on "---" frontmatter delimiters
+		// Expected format: ---\nkey: value\n...\n---\nbody
+		parts := strings.SplitN(content, "---", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		frontmatter := parts[1]
+		body := strings.TrimSpace(parts[2])
+
+		a := Attachment{
+			Filename: filepath.Base(path),
+			TaskID:   taskID,
+			Body:     body,
+			FilePath: path,
+		}
+
+		// Parse key: value lines from frontmatter
+		scanner := bufio.NewScanner(strings.NewReader(frontmatter))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			kv := strings.SplitN(line, ":", 2)
+			if len(kv) != 2 {
+				continue
+			}
+			key := strings.TrimSpace(kv[0])
+			val := strings.TrimSpace(kv[1])
+			switch key {
+			case "type":
+				a.Type = val
+			case "title":
+				a.Title = val
+			case "author":
+				a.Author = val
+			case "timestamp":
+				a.Timestamp, _ = strconv.ParseInt(val, 10, 64)
+			case "task_id":
+				a.TaskID = val
+			}
+		}
+
+		attachments = append(attachments, a)
+	}
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(attachments, func(i, j int) bool {
+		return attachments[i].Timestamp > attachments[j].Timestamp
+	})
+
+	return attachments
 }
 
 func (r *Reader) parseSubtasks() []Subtask {
@@ -1331,6 +1469,212 @@ func mapIssueSeverity(s string) string {
 	default:
 		return "INFO"
 	}
+}
+
+// parseStatusTimeline parses pipe-delimited "event=epoch" pairs from TASK_TIMESTAMPS
+// into a sorted slice of StatusTransition.
+func parseStatusTimeline(timestamps string) []StatusTransition {
+	if timestamps == "" {
+		return nil
+	}
+
+	var timeline []StatusTransition
+	for _, pair := range strings.Split(timestamps, "|") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		eqIdx := strings.IndexByte(pair, '=')
+		if eqIdx < 0 {
+			continue
+		}
+		status := pair[:eqIdx]
+		epoch, err := strconv.ParseInt(pair[eqIdx+1:], 10, 64)
+		if err != nil {
+			continue
+		}
+		label := humanTime(epoch)
+		timeline = append(timeline, StatusTransition{
+			Status:    status,
+			Timestamp: epoch,
+			Label:     label,
+		})
+	}
+
+	sort.Slice(timeline, func(i, j int) bool {
+		return timeline[i].Timestamp < timeline[j].Timestamp
+	})
+	return timeline
+}
+
+// humanTime returns a human-readable relative time string for a unix epoch.
+func humanTime(epoch int64) string {
+	if epoch == 0 {
+		return ""
+	}
+	t := time.Unix(epoch, 0)
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		m := int(d.Minutes())
+		if m == 1 {
+			return "1m ago"
+		}
+		return strconv.Itoa(m) + "m ago"
+	case d < 24*time.Hour:
+		h := int(d.Hours())
+		if h == 1 {
+			return "1h ago"
+		}
+		return strconv.Itoa(h) + "h ago"
+	default:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1d ago"
+		}
+		return strconv.Itoa(days) + "d ago"
+	}
+}
+
+// parseConversationTrail extracts conversation entries from task logs and reports.
+// Logs starting with "USER:", "AI:", or "CONVERSATION:" are parsed.
+// Reports with type "conversation" are also included.
+func parseConversationTrail(logs []TaskLog, reports []Report) []ConversationEntry {
+	var trail []ConversationEntry
+
+	for _, log := range logs {
+		entry := log.Entry
+		switch {
+		case strings.HasPrefix(entry, "USER:"):
+			trail = append(trail, ConversationEntry{
+				Role:      "user",
+				Message:   strings.TrimSpace(strings.TrimPrefix(entry, "USER:")),
+				Timestamp: log.Timestamp,
+			})
+		case strings.HasPrefix(entry, "AI:"):
+			trail = append(trail, ConversationEntry{
+				Role:      "ai",
+				Message:   strings.TrimSpace(strings.TrimPrefix(entry, "AI:")),
+				Timestamp: log.Timestamp,
+			})
+		case strings.HasPrefix(entry, "CONVERSATION:"):
+			// Format: "CONVERSATION: [role] message"
+			body := strings.TrimSpace(strings.TrimPrefix(entry, "CONVERSATION:"))
+			role := "user"
+			if strings.HasPrefix(body, "[ai]") || strings.HasPrefix(body, "[AI]") {
+				role = "ai"
+				body = strings.TrimSpace(body[4:])
+			} else if strings.HasPrefix(body, "[user]") || strings.HasPrefix(body, "[USER]") {
+				body = strings.TrimSpace(body[6:])
+			}
+			trail = append(trail, ConversationEntry{
+				Role:      role,
+				Message:   body,
+				Timestamp: log.Timestamp,
+			})
+		}
+	}
+
+	for _, report := range reports {
+		if report.Type == "conversation" || report.Type == "qa_thread" {
+			role := "ai"
+			if report.Type == "qa_thread" {
+				role = "qa"
+			} else if strings.EqualFold(report.Author, "user") {
+				role = "user"
+			}
+			trail = append(trail, ConversationEntry{
+				Role:      role,
+				Message:   report.Body,
+				Timestamp: report.Created,
+				Author:    report.Author,
+			})
+		}
+	}
+
+	sort.Slice(trail, func(i, j int) bool {
+		return trail[i].Timestamp < trail[j].Timestamp
+	})
+	return trail
+}
+
+// parseQAThread extracts Q&A relay chain entries from qa_thread reports.
+// Reports are grouped by tracking ID (parsed from title format "qa-<taskid>-<ts>: <action>").
+func parseQAThread(reports []Report) []QAEntry {
+	groups := make(map[string]*QAEntry)
+	var order []string // preserve insertion order for stable output
+
+	for _, r := range reports {
+		if r.Type != "qa_thread" {
+			continue
+		}
+
+		// Parse tracking ID and action from title: "qa-<taskid>-<ts>: <action>"
+		trackingID := ""
+		action := ""
+		if idx := strings.Index(r.Title, ": "); idx >= 0 {
+			trackingID = r.Title[:idx]
+			action = strings.TrimSpace(r.Title[idx+2:])
+		} else if strings.HasPrefix(r.Title, "qa-") {
+			trackingID = r.Title
+			action = "update"
+		}
+		if trackingID == "" {
+			trackingID = fmt.Sprintf("qa-untracked-%d", r.Created)
+			action = "update"
+		}
+
+		entry, exists := groups[trackingID]
+		if !exists {
+			entry = &QAEntry{
+				TrackingID: trackingID,
+				Created:    r.Created,
+			}
+			groups[trackingID] = entry
+			order = append(order, trackingID)
+		}
+
+		// Extract Q: and A: lines from body
+		for _, line := range strings.Split(r.Body, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "Q:") && entry.Question == "" {
+				entry.Question = strings.TrimSpace(strings.TrimPrefix(trimmed, "Q:"))
+			} else if strings.HasPrefix(trimmed, "A:") && entry.Answer == "" {
+				entry.Answer = strings.TrimSpace(strings.TrimPrefix(trimmed, "A:"))
+				entry.Answered = r.Created
+			}
+		}
+
+		// Build hop from this report
+		entry.Hops = append(entry.Hops, QAHop{
+			Role:      r.Author,
+			Action:    action,
+			Timestamp: r.Created,
+		})
+
+		// Update created to earliest timestamp
+		if r.Created < entry.Created {
+			entry.Created = r.Created
+		}
+	}
+
+	// Sort hops by timestamp and determine status
+	var result []QAEntry
+	for _, id := range order {
+		entry := groups[id]
+		sort.Slice(entry.Hops, func(i, j int) bool {
+			return entry.Hops[i].Timestamp < entry.Hops[j].Timestamp
+		})
+		if entry.Answer != "" {
+			entry.Status = "answered"
+		} else if len(entry.Hops) > 0 {
+			entry.Status = entry.Hops[len(entry.Hops)-1].Action
+		}
+		result = append(result, *entry)
+	}
+	return result
 }
 
 // underscoreToPaneID converts "doey-proj_W_P" or "W_P" to a pane-style ID "W.P"

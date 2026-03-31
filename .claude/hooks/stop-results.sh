@@ -51,7 +51,7 @@ if [ -n "$PROJECT_DIR" ]; then
   command -v gtimeout >/dev/null 2>&1 && _timeout_cmd="gtimeout 2"  # macOS fallback
   FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && $_timeout_cmd git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
 fi
-[ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty" || true
+{ [ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty"; } || true
 FILES_JSON="[]"
 if [ -n "$FILES_LIST" ]; then
   FILES_JSON=$(echo "$FILES_LIST" | jq -R '.' | jq -s '.' 2>/dev/null) || FILES_JSON="[]"
@@ -132,6 +132,39 @@ if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doe
     cp "$_local_report" "$_report_dest" 2>/dev/null || true
     _report_att=".doey/tasks/${local_task_id}.report"
     _append_attachment "$_local_task_file" "$_report_att" 2>/dev/null || true
+  fi
+
+  # Write captured output as a task attachment (completion report)
+  if [ -n "$FILTERED" ]; then
+    _PANE_SAFE="${WINDOW_INDEX}_${PANE_INDEX}"
+    _ATTACH_TS=$(date +%s)
+    if [ -f "$PROJECT_DIR/shell/doey-task-helpers.sh" ] && \
+       grep -q 'task_write_attachment' "$PROJECT_DIR/shell/doey-task-helpers.sh" 2>/dev/null; then
+      # Use the helper if available
+      # shellcheck disable=SC1091
+      source "$PROJECT_DIR/shell/doey-task-helpers.sh" && \
+        task_write_attachment "$PROJECT_DIR" "$local_task_id" "completion" \
+          "Worker ${WINDOW_INDEX}.${PANE_INDEX} output" "$FILTERED" \
+          "Worker_${_PANE_SAFE}" 2>/dev/null || true
+    else
+      # Fallback: write attachment directly
+      _ATTACH_DIR="${PROJECT_DIR}/.doey/tasks/${local_task_id}/attachments"
+      mkdir -p "$_ATTACH_DIR" 2>/dev/null || true
+      _ATTACH_FILE="${_ATTACH_DIR}/${_ATTACH_TS}_completion_${_PANE_SAFE}.md"
+      cat > "$_ATTACH_FILE" <<ATTACH_EOF
+---
+type: completion
+title: Worker ${WINDOW_INDEX}.${PANE_INDEX} output
+author: Worker_${_PANE_SAFE}
+timestamp: ${_ATTACH_TS}
+task_id: ${local_task_id}
+---
+
+${FILTERED}
+ATTACH_EOF
+      _attach_rel=".doey/tasks/${local_task_id}/attachments/${_ATTACH_TS}_completion_${_PANE_SAFE}.md"
+      _append_attachment "$_local_task_file" "$_attach_rel" 2>/dev/null || true
+    fi
   fi
 fi
 
