@@ -303,8 +303,7 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
       if [ -f "${_project_dir}/shell/doey-go-helpers.sh" ]; then
         source "${_project_dir}/shell/doey-go-helpers.sh" 2>/dev/null || true
         if type _find_go_bin >/dev/null 2>&1; then
-          _find_go_bin
-          _GO_BIN="${GO_BIN:-}"
+          _GO_BIN="$(_find_go_bin)" || true
         fi
       fi
       if [ -z "$_GO_BIN" ]; then
