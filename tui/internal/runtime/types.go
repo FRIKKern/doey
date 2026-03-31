@@ -53,6 +53,25 @@ type ConversationEntry struct {
 	Author    string
 }
 
+// QAHop represents one step in a Q&A relay chain.
+type QAHop struct {
+	Role      string // "Boss", "SessionManager", "Manager_W1", "Worker_W1.2"
+	Pane      string // "0.1", "0.2", "1.0", "1.2"
+	Action    string // "received", "routing", "forwarded", "answering", "answered"
+	Timestamp int64
+}
+
+// QAEntry represents a complete question-answer exchange with relay chain.
+type QAEntry struct {
+	TrackingID string   // unique ID: "qa-<task_id>-<timestamp>"
+	Question   string   // the question text
+	Answer     string   // the answer text (empty until answered)
+	Status     string   // "routing", "forwarded", "answering", "answered"
+	Hops       []QAHop  // ordered chain of handoffs
+	Created    int64    // when question was asked
+	Answered   int64    // when answer arrived (0 if pending)
+}
+
 // LogEntry represents a parsed task log entry with action and detail.
 type LogEntry struct {
 	Timestamp string
@@ -64,6 +83,17 @@ type LogEntry struct {
 type TaskLog struct {
 	Timestamp int64
 	Entry     string
+}
+
+// RecoveryEvent represents a stale detection or auto-recovery event.
+// Parsed from TASK_RECOVERY_<N>_* fields in .task files.
+type RecoveryEvent struct {
+	Index       int    `json:"index"`
+	Timestamp   int64  `json:"timestamp"`
+	Event       string `json:"event"`        // stale_detected, redispatched, rerouted, heartbeat_timeout, crash_recovery
+	FailedAgent string `json:"failed_agent"` // pane that failed, e.g. "W4.2"
+	NewAgent    string `json:"new_agent"`    // pane that took over (empty if not yet rerouted)
+	Description string `json:"description"`
 }
 
 // Report is a structured report attached to a task.
@@ -106,8 +136,10 @@ type Task struct {
 	AssignedTo         string    // v3: who/what team
 	SchemaVersion      int       // v3: schema version number
 	Reports           []Report             // from TASK_REPORT_N_* fields
+	RecoveryLog       []RecoveryEvent      // from TASK_RECOVERY_N_* fields
 	StatusTimeline    []StatusTransition   // parsed from TASK_TIMESTAMPS
 	ConversationTrail []ConversationEntry  // parsed from logs/reports
+	QAThread          []QAEntry            // Q&A relay chain entries
 	// Proof-of-completion fields
 	FilesChanged []string // from TASK_FILES
 	Commits      string   // from TASK_COMMITS (hash + message lines)

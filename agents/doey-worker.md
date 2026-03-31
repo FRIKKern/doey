@@ -35,3 +35,47 @@ Report types: `research` (investigation findings), `progress` (milestone reached
 Write a report when: research task completes, implementation is verified, or an error requires escalation.
 
 `PROJECT_DIR`, `DOEY_TEAM_WINDOW`, and `DOEY_PANE_INDEX` are injected by `on-session-start.sh`.
+
+## Q&A Relay Tracking
+
+When your dispatch prompt includes Q&A tracking info (a `QA_TIMESTAMP` value), log your participation in the relay chain. Skip this section if no QA_TIMESTAMP is provided.
+
+**Log question receipt** (immediately):
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
+  "qa-${TASK_ID}-${QA_TIMESTAMP}: received" \
+  "Q: <question text>" \
+  "Worker_W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
+```
+
+**Log when starting to answer:**
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
+  "qa-${TASK_ID}-${QA_TIMESTAMP}: answering" \
+  "Working on answer..." \
+  "Worker_W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
+```
+
+**Log the answer:**
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
+  "qa-${TASK_ID}-${QA_TIMESTAMP}: answered" \
+  "A: <your answer here>" \
+  "Worker_W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
+```
+
+- Tracking ID format: `qa-<task_id>-<original_timestamp>`
+- Always prefix the body with `Q:` or `A:` so the relay chain is readable
+- QA_TIMESTAMP is passed in the dispatch prompt from the Manager
+
+## Subtask Protocol
+
+When your dispatch includes `TASK_ID` and `SUBTASK_N`:
+
+1. **Mark subtask in_progress immediately** on receipt
+2. **Log significant progress** via `doey_task_add_update` at meaningful milestones
+3. **Mark subtask done** when finished
+4. **Attach all findings/output** to the subtask via reports (use `doey_task_add_report`)

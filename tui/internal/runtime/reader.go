@@ -522,11 +522,56 @@ func (r *Reader) ParseTasks() []Task {
 			}
 		}
 
+		// Parse TASK_RECOVERY_<N>_* fields
+		recoveryMap := make(map[int]*RecoveryEvent)
+		for key := range env {
+			if !strings.HasPrefix(key, "TASK_RECOVERY_") {
+				continue
+			}
+			rest := strings.TrimPrefix(key, "TASK_RECOVERY_")
+			parts := strings.SplitN(rest, "_", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			idx, err := strconv.Atoi(parts[0])
+			if err != nil {
+				continue
+			}
+			if recoveryMap[idx] == nil {
+				recoveryMap[idx] = &RecoveryEvent{Index: idx}
+			}
+			switch parts[1] {
+			case "TIMESTAMP":
+				recoveryMap[idx].Timestamp, _ = strconv.ParseInt(env[key], 10, 64)
+			case "EVENT":
+				recoveryMap[idx].Event = env[key]
+			case "FAILED_AGENT":
+				recoveryMap[idx].FailedAgent = env[key]
+			case "NEW_AGENT":
+				recoveryMap[idx].NewAgent = env[key]
+			case "DESCRIPTION":
+				recoveryMap[idx].Description = env[key]
+			}
+		}
+		if len(recoveryMap) > 0 {
+			idxs := make([]int, 0, len(recoveryMap))
+			for idx := range recoveryMap {
+				idxs = append(idxs, idx)
+			}
+			sort.Ints(idxs)
+			for _, idx := range idxs {
+				t.RecoveryLog = append(t.RecoveryLog, *recoveryMap[idx])
+			}
+		}
+
 		// Parse TASK_TIMESTAMPS into StatusTimeline
 		t.StatusTimeline = parseStatusTimeline(t.Timestamps)
 
 		// Parse conversation trail from logs and reports
 		t.ConversationTrail = parseConversationTrail(t.Logs, t.Reports)
+
+		// Parse Q&A relay chain from reports
+		t.QAThread = parseQAThread(t.Reports)
 
 		tasks = append(tasks, t)
 	}
@@ -1446,9 +1491,11 @@ func parseConversationTrail(logs []TaskLog, reports []Report) []ConversationEntr
 	}
 
 	for _, report := range reports {
-		if report.Type == "conversation" {
+		if report.Type == "conversation" || report.Type == "qa_thread" {
 			role := "ai"
-			if strings.EqualFold(report.Author, "user") {
+			if report.Type == "qa_thread" {
+				role = "qa"
+			} else if strings.EqualFold(report.Author, "user") {
 				role = "user"
 			}
 			trail = append(trail, ConversationEntry{
@@ -1464,6 +1511,83 @@ func parseConversationTrail(logs []TaskLog, reports []Report) []ConversationEntr
 		return trail[i].Timestamp < trail[j].Timestamp
 	})
 	return trail
+}
+
+// parseQAThread extracts Q&A relay chain entries from qa_thread reports.
+// Reports are grouped by tracking ID (parsed from title format "qa-<taskid>-<ts>: <action>").
+func parseQAThread(reports []Report) []QAEntry {
+	groups := make(map[string]*QAEntry)
+	var order []string // preserve insertion order for stable output
+
+	for _, r := range reports {
+		if r.Type != "qa_thread" {
+			continue
+		}
+
+		// Parse tracking ID and action from title: "qa-<taskid>-<ts>: <action>"
+		trackingID := ""
+		action := ""
+		if idx := strings.Index(r.Title, ": "); idx >= 0 {
+			trackingID = r.Title[:idx]
+			action = strings.TrimSpace(r.Title[idx+2:])
+		} else if strings.HasPrefix(r.Title, "qa-") {
+			trackingID = r.Title
+			action = "update"
+		}
+		if trackingID == "" {
+			trackingID = fmt.Sprintf("qa-untracked-%d", r.Created)
+			action = "update"
+		}
+
+		entry, exists := groups[trackingID]
+		if !exists {
+			entry = &QAEntry{
+				TrackingID: trackingID,
+				Created:    r.Created,
+			}
+			groups[trackingID] = entry
+			order = append(order, trackingID)
+		}
+
+		// Extract Q: and A: lines from body
+		for _, line := range strings.Split(r.Body, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "Q:") && entry.Question == "" {
+				entry.Question = strings.TrimSpace(strings.TrimPrefix(trimmed, "Q:"))
+			} else if strings.HasPrefix(trimmed, "A:") && entry.Answer == "" {
+				entry.Answer = strings.TrimSpace(strings.TrimPrefix(trimmed, "A:"))
+				entry.Answered = r.Created
+			}
+		}
+
+		// Build hop from this report
+		entry.Hops = append(entry.Hops, QAHop{
+			Role:      r.Author,
+			Action:    action,
+			Timestamp: r.Created,
+		})
+
+		// Update created to earliest timestamp
+		if r.Created < entry.Created {
+			entry.Created = r.Created
+		}
+	}
+
+	// Sort hops by timestamp and determine status
+	var result []QAEntry
+	for _, id := range order {
+		entry := groups[id]
+		sort.Slice(entry.Hops, func(i, j int) bool {
+			return entry.Hops[i].Timestamp < entry.Hops[j].Timestamp
+		})
+		if entry.Answer != "" {
+			entry.Status = "answered"
+		} else if len(entry.Hops) > 0 {
+			entry.Status = entry.Hops[len(entry.Hops)-1].Action
+		}
+		result = append(result, *entry)
+	}
+	return result
 }
 
 // underscoreToPaneID converts "doey-proj_W_P" or "W_P" to a pane-style ID "W.P"

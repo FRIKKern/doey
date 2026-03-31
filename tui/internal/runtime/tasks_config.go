@@ -54,6 +54,35 @@ type PersistentReport struct {
 	Created int64  `json:"created"`
 }
 
+// PersistentRecoveryEvent represents a stale detection or auto-recovery event (persistent store).
+type PersistentRecoveryEvent struct {
+	Index       int    `json:"index"`
+	Timestamp   int64  `json:"timestamp"`
+	Event       string `json:"event"`
+	FailedAgent string `json:"failed_agent,omitempty"`
+	NewAgent    string `json:"new_agent,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// PersistentQAHop represents one step in a Q&A relay chain (persistent store).
+type PersistentQAHop struct {
+	Role      string `json:"role"`
+	Pane      string `json:"pane"`
+	Action    string `json:"action"`
+	Timestamp int64  `json:"ts"`
+}
+
+// PersistentQAEntry represents a complete Q&A exchange with relay chain (persistent store).
+type PersistentQAEntry struct {
+	TrackingID string            `json:"tracking_id"`
+	Question   string            `json:"question"`
+	Answer     string            `json:"answer,omitempty"`
+	Status     string            `json:"status"`
+	Hops       []PersistentQAHop `json:"hops"`
+	Created    int64             `json:"created"`
+	Answered   int64             `json:"answered,omitempty"`
+}
+
 // PersistentTask is a task stored in the persistent JSON store.
 type PersistentTask struct {
 	ID           string              `json:"id"`
@@ -85,7 +114,9 @@ type PersistentTask struct {
 	// Live tracking fields
 	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
 	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log
-	Reports  []PersistentReport  `json:"reports,omitempty"`  // worker reports
+	Reports     []PersistentReport         `json:"reports,omitempty"`      // worker reports
+	RecoveryLog []PersistentRecoveryEvent `json:"recovery_log,omitempty"` // stale detection / auto-recovery events
+	QAThread []PersistentQAEntry `json:"qa_thread,omitempty"` // Q&A relay chain entries
 }
 
 // TaskStore holds all persistent tasks.
