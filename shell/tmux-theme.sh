@@ -53,8 +53,8 @@ bind-key -n MouseDown1Status if-shell -F '#{==:#{mouse_status_range},settings}' 
 
 # ── Window tabs (global) ─────────────────────────────────────────────
 set-window-option -g -t $session window-status-separator ''
-set-window-option -g -t $session window-status-format '#[fg=colour245,bg=default] #I #W '
-set-window-option -g -t $session window-status-current-format '#[fg=cyan,bg=default,bold] #I #W #[nobold]'
+set-window-option -g -t $session window-status-format '#[fg=colour245,bg=default] #I #W #(${SCRIPT_DIR}/tmux-window-workers.sh #I)#[default] '
+set-window-option -g -t $session window-status-current-format '#[fg=cyan,bg=default,bold] #I #W#[nobold] #(${SCRIPT_DIR}/tmux-window-workers.sh #I)#[default] '
 set-window-option -g -t $session window-status-activity-style 'fg=colour214,bg=colour236,bold'
 set-window-option -g -t $session monitor-activity on
 set-window-option -g -t $session allow-rename off

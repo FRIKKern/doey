@@ -30,10 +30,13 @@ type PersistentTaskLog struct {
 
 // PersistentSubtask represents a subtask parsed from TASK_SUBTASK_<N>_* fields.
 type PersistentSubtask struct {
-	Index    int    `json:"index"`
-	Title    string `json:"title"`
-	Status   string `json:"status"`             // pending, in_progress, done, failed
-	Assignee string `json:"assignee,omitempty"`
+	Index       int    `json:"index"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`                // pending, in_progress, done, failed
+	Assignee    string `json:"assignee,omitempty"`
+	Worker      string `json:"worker,omitempty"`       // pane ID doing the work (e.g. "3.2")
+	CreatedAt   int64  `json:"created_at,omitempty"`   // unix epoch
+	CompletedAt int64  `json:"completed_at,omitempty"` // unix epoch (set when done/failed)
 }
 
 // PersistentUpdate represents a live update parsed from TASK_UPDATE_<N>_* fields.
@@ -54,11 +57,52 @@ type PersistentReport struct {
 	Created int64  `json:"created"`
 }
 
+// PersistentAttachment represents a file attachment stored with a task (persistent store).
+type PersistentAttachment struct {
+	Filename  string `json:"filename"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Author    string `json:"author"`
+	Timestamp int64  `json:"timestamp"`
+	Body      string `json:"body,omitempty"`
+	FilePath  string `json:"filepath,omitempty"`
+}
+
+// PersistentRecoveryEvent represents a stale detection or auto-recovery event (persistent store).
+type PersistentRecoveryEvent struct {
+	Index       int    `json:"index"`
+	Timestamp   int64  `json:"timestamp"`
+	Event       string `json:"event"`
+	FailedAgent string `json:"failed_agent,omitempty"`
+	NewAgent    string `json:"new_agent,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// PersistentQAHop represents one step in a Q&A relay chain (persistent store).
+type PersistentQAHop struct {
+	Role      string `json:"role"`
+	Pane      string `json:"pane"`
+	Action    string `json:"action"`
+	Timestamp int64  `json:"ts"`
+}
+
+// PersistentQAEntry represents a complete Q&A exchange with relay chain (persistent store).
+type PersistentQAEntry struct {
+	TrackingID string            `json:"tracking_id"`
+	Question   string            `json:"question"`
+	Answer     string            `json:"answer,omitempty"`
+	Status     string            `json:"status"`
+	Hops       []PersistentQAHop `json:"hops"`
+	Created    int64             `json:"created"`
+	Answered   int64             `json:"answered,omitempty"`
+}
+
 // PersistentTask is a task stored in the persistent JSON store.
 type PersistentTask struct {
 	ID           string              `json:"id"`
 	Title        string              `json:"title"`
 	Status       string              `json:"status"`                  // draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled
+	Phase        string              `json:"phase,omitempty"`         // research, review, implementation
 	Description  string              `json:"description"`             // optional detail text
 	Attachments  []string            `json:"attachments,omitempty"`   // list of URLs/file paths
 	Team         string              `json:"team"`                    // assigned team name (optional)
@@ -85,7 +129,10 @@ type PersistentTask struct {
 	// Live tracking fields
 	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
 	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log
-	Reports  []PersistentReport  `json:"reports,omitempty"`  // worker reports
+	Reports         []PersistentReport         `json:"reports,omitempty"`          // worker reports
+	TaskAttachments []PersistentAttachment     `json:"task_attachments,omitempty"` // file attachments from .doey/tasks/<id>/attachments/
+	RecoveryLog     []PersistentRecoveryEvent  `json:"recovery_log,omitempty"`     // stale detection / auto-recovery events
+	QAThread []PersistentQAEntry `json:"qa_thread,omitempty"` // Q&A relay chain entries
 }
 
 // TaskStore holds all persistent tasks.
@@ -270,6 +317,9 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 	if rt.Status != "" {
 		pt.Status = rt.Status
 	}
+	if rt.Phase != "" {
+		pt.Phase = rt.Phase
+	}
 	if rt.Description != "" {
 		pt.Description = rt.Description
 	}
@@ -334,7 +384,11 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 		}
 	}
 	pt.Logs = mergeLogs(pt.Logs, rt.Logs)
-	pt.Updated = time.Now().Unix()
+	if rt.Updated != 0 {
+		pt.Updated = rt.Updated
+	} else {
+		pt.Updated = time.Now().Unix()
+	}
 }
 
 // MergeRuntimeTasks imports runtime tasks into the persistent store.

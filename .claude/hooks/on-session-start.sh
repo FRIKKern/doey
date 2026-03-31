@@ -30,6 +30,14 @@ while IFS='=' read -r key value; do
   esac
 done < "$SESSION_ENV"
 
+# Resolve DOEY_LIB: directory containing doey-task-helpers.sh
+DOEY_LIB=""
+if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
+  DOEY_LIB="${PROJECT_DIR}/shell"
+elif [ -f "$HOME/.local/bin/doey-task-helpers.sh" ]; then
+  DOEY_LIB="$HOME/.local/bin"
+fi
+
 REMOTE=$(grep '^REMOTE=' "$SESSION_ENV" 2>/dev/null | head -1 | cut -d= -f2-) || true
 
 TUNNEL_URL=""
@@ -135,6 +143,7 @@ export DOEY_PANE_ID="$PANE_ID"
 export DOEY_FULL_PANE_ID="$FULL_PANE_ID"
 export DOEY_REMOTE="${REMOTE:-false}"
 export DOEY_TUNNEL_URL="${TUNNEL_URL:-}"
+export DOEY_LIB="${DOEY_LIB}"
 EOF
 fi
 

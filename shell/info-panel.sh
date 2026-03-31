@@ -7,7 +7,11 @@ if [ -z "$RUNTIME_DIR" ]; then
   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
 fi
 if [ -z "$RUNTIME_DIR" ] || [ ! -d "$RUNTIME_DIR" ]; then
-  printf "Doey Info Panel: waiting for runtime directory...\n"
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 8 --italic "  Waiting for runtime directory..."
+  else
+    printf "Doey Info Panel: waiting for runtime directory...\n"
+  fi
   while true; do
     sleep 5
     RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
@@ -42,6 +46,31 @@ C_BOLD_GREEN='\033[1;32m'
 C_BOLD_YELLOW='\033[1;33m'
 C_BOLD_RED='\033[1;31m'
 C_BOLD_MAGENTA='\033[1;35m'
+
+# Charmbracelet gum detection (output styling only — no interactive commands)
+HAS_GUM=false
+command -v gum >/dev/null 2>&1 && HAS_GUM=true
+
+# Render a section header with gum styling or ANSI fallback
+# Usage: gum_header "TITLE" [gum_fg_color] [ansi_escape]
+gum_header() {
+  local text="$1" gum_fg="${2:-6}" ansi="${3:-${C_BOLD_CYAN}}"
+  if [ "$HAS_GUM" = true ]; then
+    gum style --bold --foreground "$gum_fg" "  $text"
+  else
+    printf '%b  %s%b' "$ansi" "$text" "${C_RESET}"
+  fi
+}
+
+# Render a divider with gum styling or ANSI fallback
+gum_divider() {
+  local line="$1"
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 8 "$line"
+  else
+    printf '%b%s%b\n' "${C_DIM}" "$line" "${C_RESET}"
+  fi
+}
 
 # Sets _ENV_<KEY> for each requested key from an env file (single-pass, 0 forks).
 read_env_file() {
@@ -199,7 +228,11 @@ while true; do
   printf '\033[2J\033[H'
 
   if [ ! -f "$SESSION_ENV" ]; then
-    printf 'Doey Info Panel: waiting for session.env...\n'
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 8 --italic "  Waiting for session.env..."
+    else
+      printf 'Doey Info Panel: waiting for session.env...\n'
+    fi
     sleep 5
     continue
   fi
@@ -283,46 +316,58 @@ while true; do
 
   LC=0
   add_left ""
-  add_left "$(printf '%b  HOW TO USE DOEY%b' "${C_BOLD_CYAN}" "${C_RESET}")"
+  add_left "$(gum_header 'HOW TO USE DOEY')"
   add_left ""
-  add_left "$(printf '%b  1.%b Talk to the %bBoss%b (pane 0.1, right side' "${C_BOLD_WHITE}" "${C_RESET}" "${C_CYAN}" "${C_RESET}")"
-  add_left "$(printf '     of this window) %b—%b describe your task and' "${C_DIM}" "${C_RESET}")"
-  add_left "     it coordinates with the team for you."
+  if [ "$HAS_GUM" = true ]; then
+    add_left "  $(gum style --foreground 15 --bold '1.') Talk to the $(gum style --foreground 6 'Boss') (pane 0.1, right side"
+    add_left "     of this window) $(gum style --foreground 8 '—') describe your task and"
+    add_left "     it coordinates with the team for you."
+    add_left ""
+    add_left "  $(gum style --foreground 15 --bold '2.') Switch to a team window ($(gum style --foreground 3 'Ctrl-b 1')) and"
+    add_left "     talk to the Window Manager directly."
+    add_left ""
+    add_left "  $(gum style --foreground 15 --bold '3.') Click any worker pane and run $(gum style --foreground 2 '/doey-reserve')"
+    add_left "     to claim it for yourself."
+  else
+    add_left "$(printf '%b  1.%b Talk to the %bBoss%b (pane 0.1, right side' "${C_BOLD_WHITE}" "${C_RESET}" "${C_CYAN}" "${C_RESET}")"
+    add_left "$(printf '     of this window) %b—%b describe your task and' "${C_DIM}" "${C_RESET}")"
+    add_left "     it coordinates with the team for you."
+    add_left ""
+    add_left "$(printf '%b  2.%b Switch to a team window (%bCtrl-b 1%b) and' "${C_BOLD_WHITE}" "${C_RESET}" "${C_YELLOW}" "${C_RESET}")"
+    add_left "     talk to the Window Manager directly."
+    add_left ""
+    add_left "$(printf '%b  3.%b Click any worker pane and run %b/doey-reserve%b' "${C_BOLD_WHITE}" "${C_RESET}" "${C_GREEN}" "${C_RESET}")"
+    add_left "     to claim it for yourself."
+  fi
   add_left ""
-  add_left "$(printf '%b  2.%b Switch to a team window (%bCtrl-b 1%b) and' "${C_BOLD_WHITE}" "${C_RESET}" "${C_YELLOW}" "${C_RESET}")"
-  add_left "     talk to the Window Manager directly."
   add_left ""
-  add_left "$(printf '%b  3.%b Click any worker pane and run %b/doey-reserve%b' "${C_BOLD_WHITE}" "${C_RESET}" "${C_GREEN}" "${C_RESET}")"
-  add_left "     to claim it for yourself."
-  add_left ""
-  add_left ""
-  add_left "$(printf '%b  SLASH COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
+  add_left "$(gum_header 'SLASH COMMANDS')"
   add_left ""
 
   CMD_W=$((LEFT_W - 4))
   COL_W=$((CMD_W / 2 - 1))
 
-  add_left "$(printf '  %b Tasks%b' "${C_BOLD_GREEN}" "${C_RESET}")"
+  add_left "$(gum_header ' Tasks' 2 "${C_BOLD_GREEN}")"
   add_cmd_pair "${C_GREEN}" "/doey-dispatch" "Send tasks" "${C_GREEN}" "/doey-delegate" "Delegate task"
   add_cmd_pair "${C_GREEN}" "/doey-broadcast" "Broadcast" "${C_GREEN}" "/doey-research" "Research task"
   add_cmd_pair "${C_GREEN}" "/doey-task" "Manage tasks" "${C_GREEN}" "/doey-reserve" "Reserve pane"
   add_left ""
-  add_left "$(printf '  %b Monitoring%b' "${C_BOLD_CYAN}" "${C_RESET}")"
+  add_left "$(gum_header ' Monitoring' 6 "${C_BOLD_CYAN}")"
   add_cmd_pair "${C_CYAN}" "/doey-status" "Pane status" "${C_CYAN}" "/doey-monitor" "Monitor workers"
   add_cmd_pair "${C_CYAN}" "/doey-list-windows" "List teams"
   add_left ""
-  add_left "$(printf '  %b Team Management%b' "${C_BOLD_YELLOW}" "${C_RESET}")"
+  add_left "$(gum_header ' Team Management' 3 "${C_BOLD_YELLOW}")"
   add_cmd_pair "${C_YELLOW}" "/doey-add-window" "Add team" "${C_YELLOW}" "/doey-kill-window" "Kill team"
   add_cmd_pair "${C_YELLOW}" "/doey-worktree" "Git worktree" "${C_YELLOW}" "/doey-clear" "Relaunch"
   add_cmd_pair "${C_YELLOW}" "/doey-reload" "Hot-reload"
   add_left ""
-  add_left "$(printf '  %b Maintenance%b' "${C_BOLD_MAGENTA}" "${C_RESET}")"
+  add_left "$(gum_header ' Maintenance' 5 "${C_BOLD_MAGENTA}")"
   add_cmd_pair "${C_MAGENTA}" "/doey-stop" "Stop worker" "${C_MAGENTA}" "/doey-purge" "Audit/fix"
   add_cmd_pair "${C_MAGENTA}" "/doey-simplify-everything" "Simplify" "${C_MAGENTA}" "/doey-repair" "Fix Dashboard"
   add_cmd_pair "${C_MAGENTA}" "/doey-reinstall" "Reinstall"
   add_cmd_pair "${C_MAGENTA}" "/doey-kill-session" "Kill session" "${C_MAGENTA}" "/doey-kill-all-sessions" "Kill all"
   add_left ""
-  add_left "$(printf '%b  CLI COMMANDS%b' "${C_BOLD_CYAN}" "${C_RESET}")"
+  add_left "$(gum_header 'CLI COMMANDS')"
   add_left ""
   add_cmd "${C_YELLOW}" "doey"          "Launch (dynamic grid)"
   add_cmd "${C_YELLOW}" "doey add"      "Add worker column"
@@ -359,17 +404,33 @@ while true; do
     5) TITLE_COLOR="${C_BOLD_WHITE}" ;;
   esac
 
-  printf '\n%b' "$TITLE_COLOR"
-  for _tr in "$TITLE_R0" "$TITLE_R1" "$TITLE_R2" "$TITLE_R3" "$TITLE_R4" "$TITLE_R5"; do
-    printf '    %s\n' "$_tr"
-  done
-  printf '%b\n' "${C_RESET}"
+  if [ "$HAS_GUM" = true ]; then
+    case "$_color_idx" in
+      0) _gum_fg="6" ;; 1) _gum_fg="2" ;; 2) _gum_fg="3" ;;
+      3) _gum_fg="5" ;; 4) _gum_fg="1" ;; *) _gum_fg="15" ;;
+    esac
+    printf '%s\n' "$TITLE_R0" "$TITLE_R1" "$TITLE_R2" "$TITLE_R3" "$TITLE_R4" "$TITLE_R5" | \
+      gum style --border rounded --foreground "$_gum_fg" --bold --padding "1 3"
+  else
+    printf '\n%b' "$TITLE_COLOR"
+    for _tr in "$TITLE_R0" "$TITLE_R1" "$TITLE_R2" "$TITLE_R3" "$TITLE_R4" "$TITLE_R5"; do
+      printf '    %s\n' "$_tr"
+    done
+    printf '%b\n' "${C_RESET}"
+  fi
 
-  printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
-  stat_project="$(printf '%b PROJECT %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$PROJECT_NAME")"
-  stat_session="$(printf '%b SESSION %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$SESSION_NAME")"
-  stat_uptime="$(printf '%b UPTIME %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$UPTIME_STR")"
-  stat_teams="$(printf '%b TEAMS %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$TEAM_COUNT")"
+  gum_divider "$HR_THICK"
+  if [ "$HAS_GUM" = true ]; then
+    stat_project="$(gum style --foreground 15 --bold 'PROJECT') $PROJECT_NAME"
+    stat_session="$(gum style --foreground 15 --bold 'SESSION') $SESSION_NAME"
+    stat_uptime="$(gum style --foreground 15 --bold 'UPTIME') $UPTIME_STR"
+    stat_teams="$(gum style --foreground 15 --bold 'TEAMS') $TEAM_COUNT"
+  else
+    stat_project="$(printf '%b PROJECT %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$PROJECT_NAME")"
+    stat_session="$(printf '%b SESSION %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$SESSION_NAME")"
+    stat_uptime="$(printf '%b UPTIME %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$UPTIME_STR")"
+    stat_teams="$(printf '%b TEAMS %b %s' "${C_BOLD_WHITE}" "${C_RESET}" "$TEAM_COUNT")"
+  fi
 
   printf '  %b  %b·%b  %b  %b·%b  %b  %b·%b  %b\n' \
     "$stat_project" "${C_DIM}" "${C_RESET}" \
@@ -377,18 +438,33 @@ while true; do
     "$stat_uptime" "${C_DIM}" "${C_RESET}" \
     "$stat_teams"
 
-  printf '%b%s%b\n' "${C_DIM}" "$HR_THICK" "${C_RESET}"
+  gum_divider "$HR_THICK"
 
   # Tunnel URL (only shown when tunnel is active or errored)
   if [ -n "$_tunnel_url" ]; then
-    printf '  %b TUNNEL%b  %s' "${C_BOLD_GREEN}" "${C_RESET}" "$_tunnel_url"
-    [ -n "$_tunnel_provider" ] && printf '  %b(%s)%b' "${C_DIM}" "$_tunnel_provider" "${C_RESET}"
-    [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
-    printf '\n'
+    if [ "$HAS_GUM" = true ]; then
+      _tun_line="  $(gum style --foreground 2 --bold 'TUNNEL')  $(gum style --foreground 2 "$_tunnel_url")"
+      [ -n "$_tunnel_provider" ] && _tun_line="${_tun_line}  $(gum style --foreground 8 "(${_tunnel_provider})")"
+      [ "$_is_remote" = "true" ] && _tun_line="${_tun_line}  $(gum style --foreground 6 --bold '[REMOTE]')"
+      printf '%s\n' "$_tun_line"
+    else
+      printf '  %b TUNNEL%b  %s' "${C_BOLD_GREEN}" "${C_RESET}" "$_tunnel_url"
+      [ -n "$_tunnel_provider" ] && printf '  %b(%s)%b' "${C_DIM}" "$_tunnel_provider" "${C_RESET}"
+      [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
+      printf '\n'
+    fi
   elif [ -n "$_tunnel_error" ]; then
-    printf '  %b TUNNEL%b  %b%s%b\n' "${C_BOLD_YELLOW}" "${C_RESET}" "${C_DIM}" "$_tunnel_error" "${C_RESET}"
+    if [ "$HAS_GUM" = true ]; then
+      printf '  %s  %s\n' "$(gum style --foreground 3 --bold 'TUNNEL')" "$(gum style --foreground 8 "$_tunnel_error")"
+    else
+      printf '  %b TUNNEL%b  %b%s%b\n' "${C_BOLD_YELLOW}" "${C_RESET}" "${C_DIM}" "$_tunnel_error" "${C_RESET}"
+    fi
   elif [ "$_is_remote" = "true" ]; then
-    printf '  %b[REMOTE]%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
+    if [ "$HAS_GUM" = true ]; then
+      printf '  %s\n' "$(gum style --foreground 6 --bold '[REMOTE]')"
+    else
+      printf '  %b[REMOTE]%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
+    fi
   fi
 
   printf '\n'
@@ -406,7 +482,7 @@ while true; do
     for _tf in "${_tasks_dir}"/*.task; do
       [ -f "$_tf" ] || continue
       [ -s "$_tf" ] || continue  # skip empty files
-      _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""
+      _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""; _tteam=""; _tpri=""
       while IFS= read -r _tl; do
         case "${_tl%%=*}" in
           TASK_ID)          _tid="${_tl#*=}" ;;
@@ -414,6 +490,8 @@ while true; do
           TASK_STATUS)      _tstatus="${_tl#*=}" ;;
           TASK_CREATED)     _tcreated="${_tl#*=}" ;;
           TASK_MERGED_INTO) _tmerged="${_tl#*=}" ;;
+          TASK_TEAM)        _tteam="${_tl#*=}" ;;
+          TASK_PRIORITY)    _tpri="${_tl#*=}" ;;
         esac
       done < "$_tf" || true
       [ -n "${_tid:-}" ] || continue  # skip files missing TASK_ID
@@ -422,7 +500,11 @@ while true; do
       [ "$_tstatus" = "cancelled" ] && continue
 
       if [ "$_task_header_printed" = false ]; then
-        printf '  %b TASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+        if [ "$HAS_GUM" = true ]; then
+          printf '  %s\n\n' "$(gum style --bold --foreground 6 'TASKS')"
+        else
+          printf '  %b TASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+        fi
         _task_header_printed=true
       fi
 
@@ -435,11 +517,27 @@ while true; do
         pending_user_confirmation) _tcol="${C_CYAN}";   _ticon="⬤" ;;
         *)                         _tcol="${C_DIM}";    _ticon="○" ;;
       esac
-      printf '  %b%s%b %b#%s%b  %s  %b%s%b\n' \
-        "$_tcol" "$_ticon" "${C_RESET}" \
-        "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
-        "$_ttitle" \
-        "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
+      _tmeta=""
+      [ -n "$_tpri" ] && _tmeta="${_tmeta} [${_tpri}]"
+      [ -n "$_tteam" ] && _tmeta="${_tmeta} [${_tteam}]"
+      if [ "$HAS_GUM" = true ]; then
+        case "$_tstatus" in
+          active|in_progress)        _gum_tcol="3" ;;
+          pending_user_confirmation) _gum_tcol="6" ;;
+          *)                         _gum_tcol="8" ;;
+        esac
+        printf '  %s %s  %s  %s\n' \
+          "$(gum style --foreground "$_gum_tcol" "$_ticon")" \
+          "$(gum style --foreground 15 --bold "#${_tid}")" \
+          "$_ttitle" \
+          "$(gum style --foreground 8 "${_tage:+${_tage} ago}${_tmeta}")"
+      else
+        printf '  %b%s%b %b#%s%b  %s  %b%s%s%b\n' \
+          "$_tcol" "$_ticon" "${C_RESET}" \
+          "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
+          "$_ttitle" \
+          "${C_DIM}" "${_tage:+${_tage} ago}" "$_tmeta" "${C_RESET}"
+      fi
       if [ "$_has_render" = true ]; then
         _tjson="${_tf%.task}.json"
         if [ -f "$_tjson" ]; then
@@ -453,7 +551,11 @@ while true; do
           _tintent=""
           _tintent=$(python3 -c "import json; d=json.load(open('$_tjson')); print(d.get('intent','')[:60])" 2>/dev/null) || _tintent=""
           if [ -n "$_tintent" ]; then
-            printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
+            if [ "$HAS_GUM" = true ]; then
+              printf '    %s %s\n' "$(gum style --foreground 8 '→')" "$_tintent"
+            else
+              printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
+            fi
           fi
         fi
       fi
@@ -462,7 +564,11 @@ while true; do
   fi
 
   if [ "$TEAM_LINE_COUNT" -gt 0 ]; then
-    printf '  %b TEAM STATUS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+    if [ "$HAS_GUM" = true ]; then
+      printf '  %s\n\n' "$(gum style --bold --foreground 6 'TEAM STATUS')"
+    else
+      printf '  %b TEAM STATUS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+    fi
     _ti=0
     while [ "$_ti" -lt "$TEAM_LINE_COUNT" ]; do
       _ref="TEAM_WIN_${_ti}"; _tw="${!_ref}"
@@ -475,25 +581,48 @@ while true; do
       _ref="TEAM_TYPE_${_ti}"; _ttype="${!_ref:-}"
       _ref="TEAM_NAME_V_${_ti}"; _tnm="${!_ref:-}"
 
-      if [ "$_ttype" = "freelancer" ]; then
-        _tname="$(printf '  %b%s%b %b[F]%b ' "${C_BOLD_WHITE}" "${_tnm:-Freelancers}" "${C_RESET}" "${C_BOLD_YELLOW}" "${C_RESET}")"
-      elif [ -n "$_twtd" ]; then
-        _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
-      else
-        _tname="$(printf '  Team %s     ' "$_tw")"
-      fi
+      if [ "$HAS_GUM" = true ]; then
+        if [ "$_ttype" = "freelancer" ]; then
+          _tname="  $(gum style --foreground 15 --bold "${_tnm:-Freelancers}") $(gum style --foreground 3 --bold '[F]') "
+        elif [ -n "$_twtd" ]; then
+          _tname="  Team $_tw $(gum style --foreground 6 --bold '[wt]')"
+        else
+          _tname="  Team $_tw     "
+        fi
 
-      _tsummary="$(printf '%sW (%b%s busy%b, %b%s idle%b' "$_twc" "${C_YELLOW}" "$_tb" "${C_RESET}" "${C_GREEN}" "$_tidle" "${C_RESET}")"
-      if [ "$_tr" -gt 0 ]; then
-        _tsummary="${_tsummary}$(printf ', %b%s rsv%b)' "${C_MAGENTA}" "$_tr" "${C_RESET}")"
-      else
-        _tsummary="${_tsummary})"
-      fi
+        _tsummary="${_twc}W ($(gum style --foreground 3 "${_tb} busy"), $(gum style --foreground 2 "${_tidle} idle")"
+        if [ "$_tr" -gt 0 ]; then
+          _tsummary="${_tsummary}, $(gum style --foreground 5 "${_tr} rsv"))"
+        else
+          _tsummary="${_tsummary})"
+        fi
 
-      if [ -n "$_twtb" ]; then
-        printf '%b  %-20s %s  %b%s%b\n' "${C_RESET}" "$_tname" "$_tsummary" "${C_DIM}" "$_twtb" "${C_RESET}"
+        if [ -n "$_twtb" ]; then
+          printf '  %-20s %s  %s\n' "$_tname" "$_tsummary" "$(gum style --foreground 8 "$_twtb")"
+        else
+          printf '  %s %s\n' "$_tname" "$_tsummary"
+        fi
       else
-        printf '%b  %s %s\n' "${C_RESET}" "$_tname" "$_tsummary"
+        if [ "$_ttype" = "freelancer" ]; then
+          _tname="$(printf '  %b%s%b %b[F]%b ' "${C_BOLD_WHITE}" "${_tnm:-Freelancers}" "${C_RESET}" "${C_BOLD_YELLOW}" "${C_RESET}")"
+        elif [ -n "$_twtd" ]; then
+          _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
+        else
+          _tname="$(printf '  Team %s     ' "$_tw")"
+        fi
+
+        _tsummary="$(printf '%sW (%b%s busy%b, %b%s idle%b' "$_twc" "${C_YELLOW}" "$_tb" "${C_RESET}" "${C_GREEN}" "$_tidle" "${C_RESET}")"
+        if [ "$_tr" -gt 0 ]; then
+          _tsummary="${_tsummary}$(printf ', %b%s rsv%b)' "${C_MAGENTA}" "$_tr" "${C_RESET}")"
+        else
+          _tsummary="${_tsummary})"
+        fi
+
+        if [ -n "$_twtb" ]; then
+          printf '%b  %-20s %s  %b%s%b\n' "${C_RESET}" "$_tname" "$_tsummary" "${C_DIM}" "$_twtb" "${C_RESET}"
+        else
+          printf '%b  %s %s\n' "${C_RESET}" "$_tname" "$_tsummary"
+        fi
       fi
 
       _ti=$((_ti + 1))

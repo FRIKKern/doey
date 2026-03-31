@@ -135,15 +135,15 @@ func TestParseTasks(t *testing.T) {
 	dir := t.TempDir()
 	taskDir := filepath.Join(dir, "tasks")
 
-	writeFile(t, filepath.Join(taskDir, "001.task"), `ID=001
-TITLE="Build charm TUI dashboard"
-STATUS=active
-CREATED=1711443600
+	writeFile(t, filepath.Join(taskDir, "001.task"), `TASK_ID=001
+TASK_TITLE="Build charm TUI dashboard"
+TASK_STATUS=active
+TASK_CREATED=1711443600
 `)
-	writeFile(t, filepath.Join(taskDir, "002.task"), `ID=002
-TITLE='Fix pane border rendering'
-STATUS=done
-CREATED=1711440000
+	writeFile(t, filepath.Join(taskDir, "002.task"), `TASK_ID=002
+TASK_TITLE='Fix pane border rendering'
+TASK_STATUS=done
+TASK_CREATED=1711440000
 `)
 
 	r := NewReader(dir)
@@ -239,10 +239,10 @@ UPDATED: 2026-03-26T10:55:00
 `)
 
 	// tasks
-	writeFile(t, filepath.Join(dir, "tasks", "t1.task"), `ID=t1
-TITLE="Build TUI"
-STATUS=active
-CREATED=1711443600
+	writeFile(t, filepath.Join(dir, "tasks", "t1.task"), `TASK_ID=t1
+TASK_TITLE="Build TUI"
+TASK_STATUS=active
+TASK_CREATED=1711443600
 `)
 
 	// results
@@ -257,9 +257,9 @@ CREATED=1711443600
 	resultJSON, _ := json.Marshal(result)
 	writeFile(t, filepath.Join(dir, "results", "pane_1_1.json"), string(resultJSON))
 
-	// context percentages
-	writeFile(t, filepath.Join(dir, "context_pct_1_1"), "42")
-	writeFile(t, filepath.Join(dir, "context_pct_2_0"), "15")
+	// context percentages (live in status/ subdir)
+	writeFile(t, filepath.Join(dir, "status", "context_pct_1_1"), "42")
+	writeFile(t, filepath.Join(dir, "status", "context_pct_2_0"), "15")
 
 	r := NewReader(dir)
 	snap, err := r.ReadSnapshot()

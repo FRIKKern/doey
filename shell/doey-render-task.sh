@@ -16,15 +16,39 @@ else
   S_BAR_FILL="█"; S_BAR_EMPTY="░"; S_BLOCKED="⊘"
 fi
 
+# ── Gum detection (Charmbracelet CLI) ─────────────────────────────────
+HAS_GUM=false
+command -v gum >/dev/null 2>&1 && HAS_GUM=true
+
+# gum style wrapper — falls back to plain printf when gum is unavailable.
+# Usage: _gum_style "text" [gum-style-flags...]
+_gum_style() {
+  local text="$1"; shift
+  if [ "$HAS_GUM" = true ]; then
+    gum style "$@" -- "$text" 2>/dev/null || printf '%s' "$text"
+  else
+    printf '%s' "$text"
+  fi
+}
+
 # ── Confidence bar ─────────────────────────────────────────────────────
 render_bar() {
-  local pct="$1" width="${2:-10}" filled empty
+  local pct="$1" width="${2:-10}" filled empty bar_str=""
   filled=$(( pct * width / 100 ))
   empty=$(( width - filled ))
-  printf '['
-  local i=0; while [ $i -lt $filled ]; do printf '%s' "$S_BAR_FILL"; i=$((i+1)); done
-  i=0; while [ $i -lt $empty ]; do printf '%s' "$S_BAR_EMPTY"; i=$((i+1)); done
-  printf '] %d%%' "$pct"
+  bar_str="["
+  local i=0; while [ $i -lt $filled ]; do bar_str="${bar_str}${S_BAR_FILL}"; i=$((i+1)); done
+  i=0; while [ $i -lt $empty ]; do bar_str="${bar_str}${S_BAR_EMPTY}"; i=$((i+1)); done
+  bar_str="${bar_str}] ${pct}%"
+  if [ "$HAS_GUM" = true ]; then
+    local bar_color="2"
+    if [ "$pct" -lt 40 ]; then bar_color="1"
+    elif [ "$pct" -lt 70 ]; then bar_color="3"
+    fi
+    gum style --foreground "$bar_color" "$bar_str" 2>/dev/null || printf '%s' "$bar_str"
+  else
+    printf '%s' "$bar_str"
+  fi
 }
 
 # ── Status symbol mapping ─────────────────────────────────────────────
@@ -101,12 +125,31 @@ compute_age() {
 }
 
 # ── Render: header ─────────────────────────────────────────────────────
+_status_color() {
+  case "$1" in
+    done)                       printf '2' ;;   # green
+    active|in_progress)         printf '3' ;;   # yellow
+    cancelled|failed)           printf '1' ;;   # red
+    *)                          printf '8' ;;   # gray
+  esac
+}
+
 render_header() {
-  local sym
+  local sym title_line meta_line
   sym=$(status_symbol "$TASK_STATUS")
-  printf '%s #%s — %s\n' "$S_SECTION" "$TASK_ID" "$TASK_TITLE"
-  printf '  Type: %s | Priority: %s | Owner: %s | Status: %s %s\n' \
-    "$TASK_TYPE" "$TASK_PRIORITY" "$TASK_OWNER" "$sym" "$TASK_STATUS"
+  title_line=$(printf '%s #%s — %s' "$S_SECTION" "$TASK_ID" "$TASK_TITLE")
+  meta_line=$(printf 'Type: %s | Priority: %s | Owner: %s | Status: %s %s' \
+    "$TASK_TYPE" "$TASK_PRIORITY" "$TASK_OWNER" "$sym" "$TASK_STATUS")
+
+  if [ "$HAS_GUM" = true ]; then
+    local sc
+    sc=$(_status_color "$TASK_STATUS")
+    gum style --border rounded --foreground 6 --bold --padding "0 2" \
+      --border-foreground "$sc" -- "$title_line" "$meta_line" 2>/dev/null \
+      || { printf '%s\n  %s\n' "$title_line" "$meta_line"; }
+  else
+    printf '%s\n  %s\n' "$title_line" "$meta_line"
+  fi
 }
 
 # ── Render: basic (.task only) ─────────────────────────────────────────
@@ -115,12 +158,23 @@ render_basic() {
   [ "$density" = "compact" ] && return 0
 
   if [ -n "$TASK_DESCRIPTION" ]; then
-    printf '\n%s Description\n  %s\n' "$S_SECTION" "$TASK_DESCRIPTION"
+    printf '\n'
+    _gum_style "$S_SECTION Description" --bold --foreground 5
+    printf '\n'
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 7 "  $TASK_DESCRIPTION" 2>/dev/null || printf '  %s\n' "$TASK_DESCRIPTION"
+    else
+      printf '  %s\n' "$TASK_DESCRIPTION"
+    fi
   fi
   local age
   age=$(compute_age "$TASK_CREATED")
   if [ -n "$age" ]; then
-    printf '  %s Age: %s\n' "$S_ARROW" "$age"
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 8 "  $S_ARROW Age: $age" 2>/dev/null || printf '  %s Age: %s\n' "$S_ARROW" "$age"
+    else
+      printf '  %s Age: %s\n' "$S_ARROW" "$age"
+    fi
   fi
 }
 
@@ -131,10 +185,16 @@ _render_list_section() {
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     if [ "$has" -eq 0 ]; then
-      printf '\n%s %s\n' "$S_SECTION" "$title"
+      printf '\n'
+      _gum_style "$S_SECTION $title" --bold --foreground 5
+      printf '\n'
       has=1
     fi
-    printf '  %s %s\n' "$symbol" "$line"
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 7 "  $symbol $line" 2>/dev/null || printf '  %s %s\n' "$symbol" "$line"
+    else
+      printf '  %s %s\n' "$symbol" "$line"
+    fi
   done <<EOF
 $(read_json_array "$json_file" "$field")
 EOF
@@ -150,7 +210,14 @@ render_structured() {
   local intent
   intent=$(read_json_field "$json_file" "intent")
   if [ -n "$intent" ]; then
-    printf '\n%s Intent\n  %s\n' "$S_SECTION" "$intent"
+    printf '\n'
+    _gum_style "$S_SECTION Intent" --bold --foreground 5
+    printf '\n'
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 7 "  $intent" 2>/dev/null || printf '  %s\n' "$intent"
+    else
+      printf '  %s\n' "$intent"
+    fi
   fi
 
   # Hypotheses
@@ -159,7 +226,9 @@ render_structured() {
   while IFS= read -r hyp_line; do
     [ -z "$hyp_line" ] && continue
     if [ "$has_hyp" -eq 0 ]; then
-      printf '\n%s Hypotheses\n' "$S_SECTION"
+      printf '\n'
+      _gum_style "$S_SECTION Hypotheses" --bold --foreground 5
+      printf '\n'
       has_hyp=1
     fi
     # Try to extract name and confidence from JSON object
@@ -167,11 +236,22 @@ render_structured() {
     hname=$(printf '%s' "$hyp_line" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('name',d.get('description','')))" 2>/dev/null) || hname="$hyp_line"
     hconf=$(printf '%s' "$hyp_line" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('confidence',50))" 2>/dev/null) || hconf=""
     if [ -n "$hconf" ] && [ "$hconf" != "$hyp_line" ]; then
-      printf '  %s %s — ' "$S_BULLET" "$hname"
-      render_bar "$hconf" 10
-      printf '\n'
+      if [ "$HAS_GUM" = true ]; then
+        local bar_out
+        bar_out=$(render_bar "$hconf" 10)
+        gum style --foreground 6 "  $S_BULLET $hname — $bar_out" 2>/dev/null \
+          || { printf '  %s %s — %s\n' "$S_BULLET" "$hname" "$bar_out"; }
+      else
+        printf '  %s %s — ' "$S_BULLET" "$hname"
+        render_bar "$hconf" 10
+        printf '\n'
+      fi
     else
-      printf '  %s %s\n' "$S_BULLET" "$hyp_line"
+      if [ "$HAS_GUM" = true ]; then
+        gum style --foreground 6 "  $S_BULLET $hyp_line" 2>/dev/null || printf '  %s %s\n' "$S_BULLET" "$hyp_line"
+      else
+        printf '  %s %s\n' "$S_BULLET" "$hyp_line"
+      fi
     fi
   done <<EOF
 $(read_json_array "$json_file" "hypotheses")
@@ -190,7 +270,14 @@ EOF
   local dp
   dp=$(read_json_field "$json_file" "dispatch_plan")
   if [ -n "$dp" ] && [ "$dp" != "{}" ]; then
-    printf '\n%s Dispatch Plan\n  %s %s\n' "$S_SECTION" "$S_ARROW" "$dp"
+    printf '\n'
+    _gum_style "$S_SECTION Dispatch Plan" --bold --foreground 5
+    printf '\n'
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 8 "  $S_ARROW $dp" 2>/dev/null || printf '  %s %s\n' "$S_ARROW" "$dp"
+    else
+      printf '  %s %s\n' "$S_ARROW" "$dp"
+    fi
   fi
 }
 
@@ -222,9 +309,30 @@ main() {
     fi
   fi
 
-  [ -z "$task_file" ] && { echo "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>"; exit 1; }
-  [ ! -f "$task_file" ] && { echo "Error: task file not found: $task_file"; exit 1; }
-  [ -s "$task_file" ] || { echo "Empty task file: $task_file"; exit 1; }
+  if [ -z "$task_file" ]; then
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 1 "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>" 2>/dev/null
+    else
+      echo "Usage: $0 <task_file> [json_file] | --id <id> --runtime <dir>"
+    fi
+    exit 1
+  fi
+  if [ ! -f "$task_file" ]; then
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 1 --bold "Error: task file not found: $task_file" 2>/dev/null
+    else
+      echo "Error: task file not found: $task_file"
+    fi
+    exit 1
+  fi
+  if [ ! -s "$task_file" ]; then
+    if [ "$HAS_GUM" = true ]; then
+      gum style --foreground 1 "Empty task file: $task_file" 2>/dev/null
+    else
+      echo "Empty task file: $task_file"
+    fi
+    exit 1
+  fi
 
   # Auto-detect json companion
   if [ -z "$json_file" ]; then

@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRAND='\033[1;36m'  SUCCESS='\033[0;32m'  DIM='\033[0;90m'
 WARN='\033[0;33m'   ERROR='\033[0;31m'   BOLD='\033[1m'   RESET='\033[0m'
 
+# Source shared Go helpers
+source "$(dirname "$0")/shell/doey-go-helpers.sh" 2>/dev/null || true
+
 step_ok()   { printf "   ${SUCCESS}✓${RESET}\n"; }
 step_fail() { printf "   ${ERROR}✗${RESET}\n"; }
 detail()    { printf "         ${DIM}→ %s${RESET}\n" "$1"; }
@@ -183,6 +186,12 @@ else
   warn_msg "jq not found (optional — hooks will use python3 fallback)"
 fi
 
+if has gum; then
+  check_ok "gum" "$(gum --version 2>/dev/null || echo 'unknown')"
+else
+  warn_msg "gum not found (optional — install with: brew install gum for luxury CLI)"
+fi
+
 if [ -f ~/.claude/agents/doey-manager.md ] && [ -f ~/.local/bin/doey ]; then
   echo ""
   warn_msg "Doey appears to already be installed."
@@ -253,6 +262,9 @@ install_script() { rm -f "$2"; cp "$1" "$2"; chmod +x "$2"; }
 printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
 {
   install_script "$SCRIPT_DIR/shell/doey.sh" ~/.local/bin/doey
+  cp "$SCRIPT_DIR/shell/doey-go-helpers.sh" "$HOME/.local/bin/doey-go-helpers.sh"
+  cp "$SCRIPT_DIR/shell/doey-task-helpers.sh" "$HOME/.local/bin/doey-task-helpers.sh"
+  cp "$SCRIPT_DIR/shell/doey-render-task.sh" "$HOME/.local/bin/doey-render-task.sh"
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
@@ -267,29 +279,72 @@ fi
 
 # Detect Go binary — sets GO_BIN or leaves it empty.
 _find_go() {
-  GO_BIN=""
-  if command -v go &>/dev/null; then GO_BIN="go"
-  elif [ -x /usr/local/go/bin/go ]; then GO_BIN="/usr/local/go/bin/go"
-  elif [ -x /opt/homebrew/bin/go ]; then GO_BIN="/opt/homebrew/bin/go"
+  if type _find_go_bin >/dev/null 2>&1; then
+    GO_BIN=$(_find_go_bin 2>/dev/null) || GO_BIN=""
+  else
+    GO_BIN=""
+    command -v go >/dev/null 2>&1 && GO_BIN="go" && return 0
+    for d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
+      [ -x "$d/go" ] && GO_BIN="$d/go" && return 0
+    done
   fi
 }
 
-# Build doey-tui (and optional doey-remote-setup). Returns 0 on success.
+# Build doey-tui (and doey-remote-setup). Returns 0 on success.
 _build_tui() {
-  set +e
-  (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
-  local rc=$?
-  set -e
-  if [ $rc -eq 0 ]; then
-    step_ok
-    detail "~/.local/bin/doey-tui (built from source)"
-    # Build remote setup wizard (optional — non-fatal)
+  local rc=0
+  if type _build_go_binary >/dev/null 2>&1; then
+    # Use shared helper for consistent build logic
+    set +e
+    _build_go_binary "tui" ./cmd/doey-tui/ "$HOME/.local/bin/doey-tui"
+    rc=$?
+    set -e
+    if [ $rc -eq 0 ]; then
+      step_ok
+      detail "~/.local/bin/doey-tui (built from source)"
+    else
+      step_fail
+      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+      return $rc
+    fi
+    # Build doey-remote-setup
+    printf "         ${DIM}→ building doey-remote-setup...${RESET}"
+    set +e
+    _build_go_binary "tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
+    local rs_rc=$?
+    set -e
+    if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
+      printf " ${SUCCESS}✓${RESET}\n"
+      detail "~/.local/bin/doey-remote-setup (built from source)"
+    else
+      printf " ${DIM}skipped${RESET}\n"
+    fi
+  else
+    # Inline fallback when helper not available
+    set +e
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
+    rc=$?
+    set -e
+    if [ $rc -eq 0 ]; then
+      step_ok
+      detail "~/.local/bin/doey-tui (built from source)"
+    else
+      step_fail
+      warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+      return $rc
+    fi
+    # Build doey-remote-setup
+    printf "         ${DIM}→ building doey-remote-setup...${RESET}"
     set +e
     (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
+    local rs_rc=$?
     set -e
-  else
-    step_fail
-    warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
+    if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
+      printf " ${SUCCESS}✓${RESET}\n"
+      detail "~/.local/bin/doey-remote-setup (built from source)"
+    else
+      printf " ${DIM}skipped${RESET}\n"
+    fi
   fi
   return $rc
 }
@@ -337,13 +392,27 @@ else
   detail "tui/ directory not found"
 fi
 
-# Install pre-commit hook for Go binary rebuilds
-if [ -d "$SCRIPT_DIR/.git/hooks" ] && [ -f "$SCRIPT_DIR/shell/pre-commit-go.sh" ]; then
-  # Guard: skip if source and destination are the same file (re-install with symlink/hardlink)
-  if [ ! "$SCRIPT_DIR/shell/pre-commit-go.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-commit" ]; then
-    cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
-    chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
-    detail "installed pre-commit hook for Go builds"
+# Install git hooks for Go binary rebuilds
+if [ -d "$SCRIPT_DIR/.git/hooks" ]; then
+  # Copy shared Go helpers so hooks can source them
+  if [ -f "$SCRIPT_DIR/shell/doey-go-helpers.sh" ]; then
+    cp "$SCRIPT_DIR/shell/doey-go-helpers.sh" "$SCRIPT_DIR/.git/hooks/doey-go-helpers.sh"
+  fi
+  # Pre-commit: verify Go compiles
+  if [ -f "$SCRIPT_DIR/shell/pre-commit-go.sh" ]; then
+    if [ ! "$SCRIPT_DIR/shell/pre-commit-go.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-commit" ]; then
+      cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
+      chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
+      detail "installed pre-commit hook for Go builds"
+    fi
+  fi
+  # Pre-push: rebuild stale Go binaries
+  if [ -f "$SCRIPT_DIR/shell/pre-push-gate.sh" ]; then
+    if [ ! "$SCRIPT_DIR/shell/pre-push-gate.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-push" ]; then
+      cp "$SCRIPT_DIR/shell/pre-push-gate.sh" "$SCRIPT_DIR/.git/hooks/pre-push"
+      chmod +x "$SCRIPT_DIR/.git/hooks/pre-push"
+      detail "installed pre-push hook for Go builds"
+    fi
   fi
 fi
 

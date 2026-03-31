@@ -49,7 +49,7 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 }
 
 // Height returns the fixed card height (title + status + heartbeat + 2 desc lines + bottom padding).
-func (d CardDelegate) Height() int { return 6 }
+func (d CardDelegate) Height() int { return 8 }
 
 // Spacing returns the gap between cards.
 func (d CardDelegate) Spacing() int { return 1 }
@@ -76,108 +76,185 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	task := ti.Task
 	status := task.Status
 
-	// Use shared card style from styles package.
-	cardStyle := styles.CardStyle(d.Theme, status, selected, cardWidth)
-
-	// --- Line 1: icon + #ID + [type] + title ---
-	icon := statusIcon(status, d.Theme)
-	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(true).Render("#" + task.ID)
-
-	typeBadge := ""
-	if task.Type != "" {
-		typeBadge = styles.TypeTagCard(task.Type, d.Theme) + " "
+	t := d.Theme
+	hs, hasHB := d.Heartbeats[task.ID]
+	health := ""
+	if hasHB {
+		health = hs.Health
 	}
+	isDone := status == "done" || status == "cancelled"
+	isBlocked := status == "blocked" || task.Blockers != ""
 
-	titleStyle := styles.CardTitleStyle(d.Theme, selected)
+	// Health-aware card style
+	cardStyle := d.healthCardStyle(health, selected, isBlocked, isDone, cardWidth)
 
-	// Calculate how much space the title can occupy.
-	// Content width = cardWidth minus horizontal border chars (2).
 	contentWidth := cardWidth - 2
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
+	dimText := isDone || health == "stale"
 
+	// --- Line 1: icon/spinner + #ID + [type] + title ---
+	icon := statusIcon(status, t)
+	if hasHB && hs.SpinnerActive {
+		icon = lipgloss.NewStyle().Foreground(t.Primary).Render("⠋")
+	}
+	idStr := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("#" + task.ID)
+	typeBadge := ""
+	if task.Type != "" {
+		typeBadge = styles.TypeTagCard(task.Type, t) + " "
+	}
 	prefix := icon + " " + idStr + " " + typeBadge
 	prefixWidth := lipgloss.Width(prefix)
-	titleMaxWidth := contentWidth - prefixWidth
-	if titleMaxWidth < 4 {
-		titleMaxWidth = 4
+	titleMaxW := contentWidth - prefixWidth
+	if titleMaxW < 4 {
+		titleMaxW = 4
 	}
 	titleText := task.Title
-	if lipgloss.Width(titleText) > titleMaxWidth {
-		titleText = titleText[:titleMaxWidth-3] + "..."
+	if lipgloss.Width(titleText) > titleMaxW {
+		titleText = titleText[:titleMaxW-3] + "..."
 	}
-	line1 := prefix + titleStyle.Render(titleText)
+	titleFg := t.Text
+	if selected {
+		titleFg = t.Primary
+	}
+	if dimText {
+		titleFg = t.Muted
+	}
+	line1 := prefix + lipgloss.NewStyle().Foreground(titleFg).Bold(true).Render(titleText)
 
-	// --- Line 2: status text + subtask progress + age ---
-	statusClr := styles.StatusAccentColor(d.Theme, status)
+	// --- Line 2: status pill + team badge + tags + Q&A ---
+	statusClr := styles.StatusAccentColor(t, status)
 	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(status)
-	progress := ""
-	if ti.SubtaskTotal > 0 {
-		progress = "  " + styles.SubtaskProgress(ti.SubtaskDone, ti.SubtaskTotal)
+	teamBadge := ""
+	if task.Team != "" {
+		teamBadge = "  " + lipgloss.NewStyle().Foreground(t.Accent).Faint(dimText).Render("["+task.Team+"]")
 	}
-	age := ""
-	if task.Created > 0 {
-		elapsed := time.Since(time.Unix(task.Created, 0))
-		age = "  " + styles.CardMetaStyle(d.Theme).Render(formatAge(elapsed))
+	tagStr := ""
+	for i, tag := range task.Tags {
+		if i >= 3 {
+			tagStr += " +"
+			break
+		}
+		tagStr += " " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render("#"+tag)
 	}
-	reportsBadge := ""
-	if len(ti.Task.Reports) > 0 {
-		reportsBadge = "  " + lipgloss.NewStyle().Foreground(d.Theme.Info).Render(
-			fmt.Sprintf("%dR", len(ti.Task.Reports)))
+	qaBadge := ""
+	for _, qa := range ti.Task.QAThread {
+		if qa.Status != "answered" {
+			qaBadge = "  " + lipgloss.NewStyle().
+				Foreground(lipgloss.AdaptiveColor{Light: "#0891B2", Dark: "#22D3EE"}).
+				Render("❓")
+			break
+		}
 	}
-	line2 := statusLabel + progress + reportsBadge + age
+	phaseBadge := ""
+	if task.Phase != "" {
+		phaseBadge = "  " + styles.TaskPhaseBadge(t, task.Phase)
+	}
+	line2 := statusLabel + phaseBadge + teamBadge + tagStr + qaBadge
 
-	// --- Line 3: heartbeat (if available) ---
-	heartbeatLine := ""
-	if hs, ok := d.Heartbeats[task.ID]; ok && hs.ActiveWorkers > 0 {
-		var healthDot string
-		switch hs.Health {
-		case "green", "healthy":
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Success).Render("●")
-		case "amber", "degraded":
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Warning).Render("●")
-		case "idle":
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("●")
+	// --- Line 3: workers + health + activity ---
+	line3 := ""
+	if hasHB && hs.ActiveWorkers > 0 {
+		var dot string
+		switch health {
+		case "healthy":
+			dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
+		case "degraded":
+			dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
 		default:
-			healthDot = lipgloss.NewStyle().Foreground(d.Theme.Danger).Render("●")
+			dot = lipgloss.NewStyle().Foreground(t.Muted).Render("●")
 		}
-
-		workers := fmt.Sprintf("%d worker", hs.ActiveWorkers)
-		if hs.ActiveWorkers != 1 {
-			workers += "s"
+		names := strings.Join(hs.ActiveWorkerNames, ", ")
+		if names == "" {
+			names = fmt.Sprintf("%d worker", hs.ActiveWorkers)
+			if hs.ActiveWorkers != 1 {
+				names += "s"
+			}
 		}
-		activity := styles.CardMetaStyle(d.Theme).Render(workers + " active")
-
-		parts := healthDot + " " + activity
+		line3 = dot + " " + lipgloss.NewStyle().Foreground(t.Text).Render(names)
 		if hs.ActivityText != "" {
-			parts += d.Theme.DotSeparator() + styles.CardMetaStyle(d.Theme).Render(hs.ActivityText)
+			line3 += t.DotSeparator() + styles.CardMetaStyle(t).Render(hs.ActivityText)
 		}
 		if !hs.LastActivity.IsZero() {
 			elapsed := time.Since(hs.LastActivity)
 			if elapsed < 5*time.Second {
-				parts += lipgloss.NewStyle().Foreground(d.Theme.Success).Render("  now")
+				line3 += lipgloss.NewStyle().Foreground(t.Success).Render("  now")
 			} else {
-				parts += styles.CardMetaStyle(d.Theme).Render("  " + formatAge(elapsed) + " ago")
+				line3 += styles.CardMetaStyle(t).Render("  " + formatAge(elapsed) + " ago")
 			}
 		}
-		if hs.ProgressText != "" {
-			parts += styles.CardMetaStyle(d.Theme).Render("  " + hs.ProgressText)
+		// Stale badge with duration
+		if health == "stale" && !hs.HealthSince.IsZero() {
+			staleDur := formatAge(time.Since(hs.HealthSince))
+			line3 += "  " + styles.StaleTimeBadge(t, staleDur)
 		}
-		heartbeatLine = parts
+	} else if isBlocked && task.Blockers != "" {
+		bl := strings.SplitN(task.Blockers, "\n", 2)[0]
+		if len(bl) > contentWidth-4 {
+			bl = bl[:contentWidth-7] + "..."
+		}
+		line3 = lipgloss.NewStyle().Foreground(t.Danger).Render("⚠ " + bl)
+	} else if status == "in_progress" && len(ti.Task.RecoveryLog) > 0 {
+		line3 = styles.StaleBadge(t)
 	}
 
-	// --- Lines 3-4: description preview ---
-	descLines := truncateDesc(task.Description, 2, contentWidth)
-
-	renderedDesc := styles.CardDescStyle(d.Theme).Render(descLines)
-
-	var content string
-	if heartbeatLine != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2, heartbeatLine, renderedDesc)
-	} else {
-		content = lipgloss.JoinVertical(lipgloss.Left, line1, line2, renderedDesc)
+	// --- Line 4: progress bar + reports ---
+	line4 := ""
+	if ti.SubtaskTotal > 0 {
+		barW := contentWidth / 2
+		if barW > 30 {
+			barW = 30
+		}
+		line4 = styles.ExpandedProgressBar(t, ti.SubtaskDone, ti.SubtaskTotal, barW)
 	}
+	if len(task.Reports) > 0 {
+		line4 += "  " + lipgloss.NewStyle().Foreground(t.Info).Render(fmt.Sprintf("%dR", len(task.Reports)))
+	}
+	if len(task.TaskAttachments) > 0 {
+		line4 += "  " + lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("📎%d", len(task.TaskAttachments)))
+	}
+	if hasHB && hs.ProgressText != "" && ti.SubtaskTotal == 0 {
+		line4 += styles.CardMetaStyle(t).Render(hs.ProgressText)
+	}
+
+	// --- Line 5: description preview (1 line) ---
+	descStyle := styles.CardDescStyle(t)
+	if dimText {
+		descStyle = descStyle.Faint(true)
+	}
+	line5 := descStyle.Render(truncateDesc(task.Description, 1, contentWidth))
+
+	// --- Line 6: tool hint / finding + updates + age ---
+	var metaParts []string
+	if hasHB && hs.LastToolCall != "" {
+		hint := hs.LastToolCall
+		if len(hint) > 30 {
+			hint = hint[:27] + "..."
+		}
+		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(hint))
+	} else if hasHB && hs.LatestFinding != "" {
+		finding := hs.LatestFinding
+		if len(finding) > 30 {
+			finding = finding[:27] + "..."
+		}
+		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(finding))
+	}
+	if len(task.Updates) > 0 {
+		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
+			fmt.Sprintf("%d updates", len(task.Updates))))
+	}
+	if len(task.QAThread) > 0 {
+		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
+			fmt.Sprintf("Q&A: %d", len(task.QAThread))))
+	}
+	if task.Created > 0 {
+		elapsed := time.Since(time.Unix(task.Created, 0))
+		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(formatAge(elapsed)))
+	}
+	line6 := strings.Join(metaParts, "  ")
+
+	content := lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3, line4, line5, line6)
 	marked := zone.Mark(fmt.Sprintf("task-card-%d", index), cardStyle.Render(content))
 	fmt.Fprint(w, marked)
 }
@@ -202,6 +279,56 @@ func (d CardDelegate) taskStatusColor(status string) lipgloss.AdaptiveColor {
 	default:
 		return d.Theme.Muted
 	}
+}
+
+// healthCardStyle returns a card style with border color reflecting health state.
+// Active tasks glow (green/yellow left accent), stale/idle tasks dim, blocked tasks warn.
+func (d CardDelegate) healthCardStyle(health string, selected, isBlocked, isDone bool, width int) lipgloss.Style {
+	t := d.Theme
+	border := lipgloss.RoundedBorder()
+	border.Left = "│"
+	border.TopLeft = "│"
+	border.BottomLeft = "│"
+
+	borderFg := t.Separator
+	leftFg := t.Separator
+
+	switch {
+	case isDone:
+		borderFg = t.Muted
+		leftFg = t.Muted
+	case isBlocked:
+		leftFg = t.Danger
+	case health == "healthy":
+		leftFg = t.Success
+	case health == "degraded":
+		leftFg = t.Warning
+	case health == "stale":
+		leftFg = t.Muted
+	}
+
+	s := lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(borderFg).
+		BorderLeftForeground(leftFg).
+		Width(width).
+		Padding(0, 1)
+
+	if selected {
+		s = s.BorderForeground(t.Primary).
+			Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"})
+		// Preserve health accent on left border when selected
+		switch {
+		case isBlocked:
+			s = s.BorderLeftForeground(t.Danger)
+		case health == "healthy":
+			s = s.BorderLeftForeground(t.Success)
+		case health == "degraded":
+			s = s.BorderLeftForeground(t.Warning)
+		}
+	}
+
+	return s
 }
 
 // statusIcon returns a subtle colored status icon for the given task status.
@@ -323,6 +450,14 @@ type ExpandedCard struct {
 	Sidecar       *runtime.TaskSidecar
 	TaskResult    *runtime.TaskResult
 	sidecarLoaded bool // prevents repeated load attempts
+
+	// Expandable report tracking
+	ExpandedReports map[int]bool // which reports are expanded (by index)
+	ReportCursor    int          // focused report index (-1 = none)
+
+	// Expandable attachment tracking
+	ExpandedAttachments map[int]bool // which attachments are expanded (by index)
+	AttachmentCursor    int          // focused attachment index (-1 = none)
 }
 
 // loadSidecar lazily loads sidecar and result data on first call.
@@ -371,11 +506,31 @@ func (e *ExpandedCard) Render() string {
 	if typeTag != "" {
 		header += " " + typeTag
 	}
+	if task.Phase != "" {
+		header += "  " + styles.TaskPhaseBadge(e.Theme, task.Phase)
+	}
 	sections = append(sections, header)
+
+	// --- Phase banner (prominent for review phase) ---
+	if phaseBanner := styles.TaskPhaseBanner(e.Theme, task.Phase, contentWidth); phaseBanner != "" {
+		sections = append(sections, phaseBanner)
+	}
 
 	// --- Separator ---
 	sections = append(sections, styles.ThinSeparator(e.Theme, contentWidth))
+
+	// --- Status Timeline ---
+	if timeline := e.renderStatusTimeline(contentWidth); timeline != "" {
+		sections = append(sections, timeline)
+	}
+
 	sections = append(sections, "")
+
+	// --- Recovery Events ---
+	if recovery := e.renderRecoverySection(); recovery != "" {
+		sections = append(sections, recovery)
+		sections = append(sections, "")
+	}
 
 	// --- Meta ---
 	if task.Created > 0 {
@@ -425,7 +580,10 @@ func (e *ExpandedCard) Render() string {
 	if len(task.Reports) > 0 {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("Reports (%d)", len(task.Reports))))
-		for _, report := range task.Reports {
+		if e.ExpandedReports == nil {
+			e.ExpandedReports = make(map[int]bool)
+		}
+		for i, report := range task.Reports {
 			var typeColor lipgloss.AdaptiveColor
 			switch report.Type {
 			case "research":
@@ -452,21 +610,53 @@ func (e *ExpandedCard) Render() string {
 				timeStr = "  " + lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).
 					Render(time.Unix(report.Created, 0).Format("15:04"))
 			}
-			sections = append(sections, fmt.Sprintf("  %s %s%s%s", badge, titleText, author, timeStr))
+
+			// Focused report gets a subtle highlight indicator
+			focusIndicator := "  "
+			if i == e.ReportCursor {
+				focusIndicator = lipgloss.NewStyle().Foreground(e.Theme.Primary).Render("> ")
+			}
+			sections = append(sections, fmt.Sprintf("%s%s %s%s%s", focusIndicator, badge, titleText, author, timeStr))
 
 			if report.Body != "" {
+				expanded := e.ExpandedReports[i]
 				bodyLines := strings.Split(report.Body, "\n")
-				if len(bodyLines) > 3 {
-					bodyLines = bodyLines[:3]
-					bodyLines = append(bodyLines, "...")
-				}
 				bodyStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).PaddingLeft(4)
-				for _, line := range bodyLines {
-					sections = append(sections, bodyStyle.Render(line))
+
+				if expanded {
+					// Show full body
+					for _, line := range bodyLines {
+						sections = append(sections, bodyStyle.Render(line))
+					}
+					toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+						Render("[-] Show less")
+					sections = append(sections, zone.Mark(fmt.Sprintf("report-toggle-%d", i), toggle))
+				} else {
+					// Show truncated body (3 lines max)
+					showLines := bodyLines
+					truncated := false
+					if len(showLines) > 3 {
+						showLines = showLines[:3]
+						truncated = true
+					}
+					for _, line := range showLines {
+						sections = append(sections, bodyStyle.Render(line))
+					}
+					if truncated {
+						toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+							Render(fmt.Sprintf("[+] Show more (%d lines)", len(bodyLines)))
+						sections = append(sections, zone.Mark(fmt.Sprintf("report-toggle-%d", i), toggle))
+					}
 				}
 			}
 			sections = append(sections, "")
 		}
+	}
+
+	// --- Attachments (structured file attachments) ---
+	if attachments := e.renderAttachments(contentWidth); attachments != "" {
+		sections = append(sections, "")
+		sections = append(sections, attachments)
 	}
 
 	// --- Subtasks (prefer persistent subtasks with assignees, fall back to runtime) ---
@@ -587,6 +777,18 @@ func (e *ExpandedCard) Render() string {
 		}
 	}
 
+	// --- Conversation Trail ---
+	if trail := e.renderConversationTrail(contentWidth); trail != "" {
+		sections = append(sections, "")
+		sections = append(sections, trail)
+	}
+
+	// --- Q&A Relay Chain ---
+	if qaSection := e.renderQARelayChain(contentWidth); qaSection != "" {
+		sections = append(sections, "")
+		sections = append(sections, qaSection)
+	}
+
 	// --- Messages ---
 	if len(e.Messages) > 0 {
 		sections = append(sections, "")
@@ -663,8 +865,8 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, fileRows...)
 	}
 
-	// --- Attachments ---
-	if len(e.Item.Task.Attachments) > 0 {
+	// --- Legacy Attachments (string paths) ---
+	if len(e.Item.Task.Attachments) > 0 && len(e.Item.Task.TaskAttachments) == 0 {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(e.Theme, "Attachments"))
 		for _, att := range e.Item.Task.Attachments {
@@ -688,7 +890,7 @@ func (e *ExpandedCard) Render() string {
 		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("[Enter] collapse"))
 	hint := closeBtn + "  " +
 		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
-			Render("[Tab] next subtask  [↑↓] scroll")
+			Render("[Tab] next subtask  [r] toggle report  [↑↓] scroll")
 	sections = append(sections, hint)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
@@ -701,8 +903,8 @@ func (e *ExpandedCard) Render() string {
 
 // ContentHeight estimates the total content lines for scroll bounds.
 func (e *ExpandedCard) ContentHeight() int {
-	// Count sections: header(1) + sep(1) + desc + subtasks + decisions + notes + hint(2)
-	lines := 4 // header + sep + empty + hint
+	// Count sections: header(1) + sep(1) + timeline(1) + desc + subtasks + decisions + notes + hint(2)
+	lines := 5 // header + sep + timeline + empty + hint
 	if e.Item.Task.Description != "" {
 		// Section header + wrapped text (rough estimate: chars / width)
 		contentWidth := e.Width - 6
@@ -720,7 +922,21 @@ func (e *ExpandedCard) ContentHeight() int {
 		lines += len(proofRows) + 1 // proof section + spacing
 	}
 	if len(e.Item.Task.Reports) > 0 {
-		lines += 2 + len(e.Item.Task.Reports)*5 // header + spacing + ~5 lines per report
+		for i, report := range e.Item.Task.Reports {
+			lines += 3 // header line + spacing + toggle
+			if report.Body != "" {
+				if e.ExpandedReports != nil && e.ExpandedReports[i] {
+					lines += strings.Count(report.Body, "\n") + 2
+				} else {
+					bodyLines := strings.Count(report.Body, "\n") + 1
+					if bodyLines > 3 {
+						bodyLines = 4 // 3 lines + toggle
+					}
+					lines += bodyLines
+				}
+			}
+		}
+		lines += 2 // section header + spacing
 	}
 	if len(e.Item.Task.Subtasks) > 0 {
 		lines += len(e.Item.Task.Subtasks) + 3
@@ -745,6 +961,19 @@ func (e *ExpandedCard) ContentHeight() int {
 			lines += logLines
 		}
 	}
+	// Conversation trail estimate
+	convCount := e.countConversationEntries()
+	if convCount > 0 {
+		lines += 2 + convCount*3 // section header + spacing + ~3 lines per conversation entry
+	}
+	// Q&A relay chain estimate
+	qaCount := len(e.Item.Task.QAThread)
+	if qaCount > 10 {
+		qaCount = 10
+	}
+	if qaCount > 0 {
+		lines += 2 + qaCount*4 // section header + spacing + ~4 lines per Q&A entry
+	}
 	if len(e.Messages) > 0 {
 		msgCount := len(e.Messages)
 		if msgCount > 20 {
@@ -758,8 +987,33 @@ func (e *ExpandedCard) ContentHeight() int {
 	if fileRows := e.renderFilesChanged(); len(fileRows) > 0 {
 		lines += 2 + len(fileRows)
 	}
-	if len(e.Item.Task.Attachments) > 0 {
+	if len(e.Item.Task.Attachments) > 0 && len(e.Item.Task.TaskAttachments) == 0 {
 		lines += 2 + len(e.Item.Task.Attachments) // header + spacing + items
+	}
+	// Structured attachments
+	if ta := e.Item.Task.TaskAttachments; len(ta) > 0 {
+		count := len(ta)
+		if count > 20 {
+			count = 20
+		}
+		lines += 2 // section header + spacing
+		for i, att := range ta {
+			if i >= count {
+				break
+			}
+			lines += 2 // header line + blank
+			if att.Body != "" {
+				if e.ExpandedAttachments != nil && e.ExpandedAttachments[i] {
+					lines += strings.Count(att.Body, "\n") + 2
+				} else {
+					bodyLines := strings.Count(att.Body, "\n") + 1
+					if bodyLines > 3 {
+						bodyLines = 4 // 3 lines + toggle
+					}
+					lines += bodyLines
+				}
+			}
+		}
 	}
 	return lines
 }
@@ -780,6 +1034,118 @@ func (e *ExpandedCard) ViewportSlice() string {
 		end = len(lines)
 	}
 	return strings.Join(lines[start:end], "\n")
+}
+
+// attachmentTypeEmoji returns an emoji badge for the attachment type.
+func attachmentTypeEmoji(t string) string {
+	switch t {
+	case "research":
+		return "🔍"
+	case "build":
+		return "🔨"
+	case "test":
+		return "✅"
+	case "review":
+		return "👁"
+	case "error":
+		return "⚠️"
+	case "progress":
+		return "📊"
+	case "completion":
+		return "🏁"
+	default:
+		return "📄"
+	}
+}
+
+// renderAttachments renders the structured attachments section for expanded cards.
+func (e *ExpandedCard) renderAttachments(width int) string {
+	attachments := e.Item.Task.TaskAttachments
+	if len(attachments) == 0 {
+		return ""
+	}
+
+	if e.ExpandedAttachments == nil {
+		e.ExpandedAttachments = make(map[int]bool)
+	}
+
+	// Cap at 20, newest first (already sorted by timestamp descending from loader).
+	display := attachments
+	if len(display) > 20 {
+		display = display[:20]
+	}
+
+	var sections []string
+	sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("📎 Attachments (%d)", len(attachments))))
+
+	for i, att := range display {
+		emoji := attachmentTypeEmoji(att.Type)
+		typeColor := styles.AttachmentTypeColor(e.Theme, att.Type)
+		badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
+
+		titleText := att.Title
+		if titleText == "" {
+			titleText = att.Filename
+		}
+		title := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true).Render(titleText)
+
+		meta := ""
+		if att.Author != "" {
+			meta += " — " + lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(att.Author)
+		}
+		if att.Timestamp > 0 {
+			elapsed := time.Since(time.Unix(att.Timestamp, 0))
+			meta += ", " + lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+		}
+
+		// Focus indicator
+		focusIndicator := "  "
+		if i == e.AttachmentCursor {
+			focusIndicator = lipgloss.NewStyle().Foreground(e.Theme.Primary).Render("> ")
+		}
+		sections = append(sections, fmt.Sprintf("%s%s %s%s", focusIndicator, badge, title, meta))
+
+		// Expandable body
+		if att.Body != "" {
+			expanded := e.ExpandedAttachments[i]
+			bodyLines := strings.Split(att.Body, "\n")
+			bodyStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).PaddingLeft(4)
+
+			if expanded {
+				// Wrap body to width
+				bodyWidth := width - 6
+				if bodyWidth < 20 {
+					bodyWidth = 20
+				}
+				wrappedBody := lipgloss.NewStyle().Width(bodyWidth).Render(att.Body)
+				for _, line := range strings.Split(wrappedBody, "\n") {
+					sections = append(sections, bodyStyle.Render(line))
+				}
+				toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+					Render("[-] Show less")
+				sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
+			} else {
+				// Truncated preview: 3 lines max
+				showLines := bodyLines
+				truncated := false
+				if len(showLines) > 3 {
+					showLines = showLines[:3]
+					truncated = true
+				}
+				for _, line := range showLines {
+					sections = append(sections, bodyStyle.Render(line))
+				}
+				if truncated {
+					toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
+						Render(fmt.Sprintf("[+] Show more (%d lines)", len(bodyLines)))
+					sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
+				}
+			}
+		}
+		sections = append(sections, "")
+	}
+
+	return strings.Join(sections, "\n")
 }
 
 // wordWrap wraps text to the given width, breaking on word boundaries.
@@ -861,7 +1227,7 @@ func formatAge(d time.Duration) string {
 	}
 }
 
-// persistentSubtaskRow renders a single persistent subtask with status icon and optional assignee.
+// persistentSubtaskRow renders a single persistent subtask with status icon, worker pane, and timing.
 func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, selected bool) string {
 	var icon string
 	switch ps.Status {
@@ -881,9 +1247,29 @@ func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, sele
 	}
 
 	row := "  " + icon + " " + title
-	if ps.Assignee != "" {
-		row += "  " + lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render("↳ "+ps.Assignee)
+
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true)
+
+	// Show worker pane assignment (e.g. [W3.2]).
+	if ps.Worker != "" {
+		row += "  " + dimStyle.Render("[W"+ps.Worker+"]")
+	} else if ps.Assignee != "" {
+		row += "  " + dimStyle.Render("↳ "+ps.Assignee)
 	}
+
+	// Show elapsed time: completed duration for done/failed, running duration for in_progress.
+	if ps.CreatedAt > 0 {
+		var elapsed time.Duration
+		if ps.CompletedAt > 0 {
+			elapsed = time.Unix(ps.CompletedAt, 0).Sub(time.Unix(ps.CreatedAt, 0))
+		} else if ps.Status == "in_progress" {
+			elapsed = time.Since(time.Unix(ps.CreatedAt, 0))
+		}
+		if elapsed > 0 {
+			row += " " + dimStyle.Render(formatAge(elapsed))
+		}
+	}
+
 	return row
 }
 
@@ -1375,4 +1761,410 @@ func (e *ExpandedCard) renderResultSection(w int) string {
 		return ""
 	}
 	return strings.Join(sections, "\n")
+}
+
+// renderRecoverySection renders recovery events (stale detection, reroutes) for the expanded card.
+func (e *ExpandedCard) renderRecoverySection() string {
+	events := e.Item.Task.RecoveryLog
+	if len(events) == 0 {
+		return ""
+	}
+
+	t := e.Theme
+	var lines []string
+	lines = append(lines, styles.SectionTitle(t, fmt.Sprintf("Recovery Events (%d)", len(events))))
+
+	for _, ev := range events {
+		elapsed := time.Since(time.Unix(ev.Timestamp, 0))
+		timeStr := formatAge(elapsed) + " ago"
+		icon := styles.RecoveryEventIcon(ev.Event)
+		dot := styles.RecoveryDot(t, ev.Event)
+		desc := ev.Description
+		if desc == "" {
+			desc = ev.Event
+		}
+		line := dot + " " + icon + " " + styles.CardMetaStyle(t).Render(timeStr) + "  " + desc
+		lines = append(lines, line)
+
+		if ev.NewAgent != "" {
+			lines = append(lines, styles.RecoveryArrow(t)+" Rerouted to "+ev.NewAgent)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// statusTransition represents a status change with timestamp for timeline rendering.
+type statusTransition struct {
+	Status    string
+	Timestamp int64
+}
+
+// renderStatusTimeline parses activity logs for status transitions and renders
+// a horizontal timeline: ○ created (Mar 31) → ● active (Mar 31) → ...
+func (e *ExpandedCard) renderStatusTimeline(width int) string {
+	task := e.Item.Task
+
+	var transitions []statusTransition
+
+	// Start with "created" from the task creation time.
+	if task.Created > 0 {
+		transitions = append(transitions, statusTransition{Status: "created", Timestamp: task.Created})
+	}
+
+	// Scan activity log entries for status change patterns.
+	for _, log := range task.Logs {
+		entry := strings.ToLower(log.Entry)
+		// Pattern: "→ status_name" or "-> status_name"
+		for _, arrow := range []string{"→ ", "-> "} {
+			if idx := strings.Index(entry, arrow); idx >= 0 {
+				rest := strings.TrimSpace(entry[idx+len(arrow):])
+				status := extractStatusName(rest)
+				if status != "" {
+					transitions = append(transitions, statusTransition{Status: status, Timestamp: log.Timestamp})
+				}
+			}
+		}
+		// Pattern: "STATUS: status_name" or "status changed to status_name"
+		for _, prefix := range []string{"status: ", "status:", "status changed to "} {
+			if idx := strings.Index(entry, prefix); idx >= 0 {
+				rest := strings.TrimSpace(entry[idx+len(prefix):])
+				status := extractStatusName(rest)
+				if status != "" {
+					transitions = append(transitions, statusTransition{Status: status, Timestamp: log.Timestamp})
+				}
+			}
+		}
+	}
+
+	// Deduplicate consecutive identical statuses.
+	var deduped []statusTransition
+	for _, tr := range transitions {
+		if len(deduped) == 0 || deduped[len(deduped)-1].Status != tr.Status {
+			deduped = append(deduped, tr)
+		}
+	}
+
+	if len(deduped) == 0 {
+		return ""
+	}
+
+	// Render the timeline as: ○ created (Mar 31) → ● active (Mar 31) → ...
+	t := e.Theme
+	arrowStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+	var parts []string
+	for i, tr := range deduped {
+		isLast := i == len(deduped)-1
+		dotColor := styles.StatusAccentColor(t, tr.Status)
+
+		dot := "○"
+		if isLast {
+			dot = "●"
+		}
+		styledDot := lipgloss.NewStyle().Foreground(dotColor).Render(dot)
+
+		statusStr := lipgloss.NewStyle().Foreground(t.Text).Render(tr.Status)
+		dateStr := ""
+		if tr.Timestamp > 0 {
+			dateStr = " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
+				Render("("+time.Unix(tr.Timestamp, 0).Format("Jan 2")+")")
+		}
+
+		part := styledDot + " " + statusStr + dateStr
+		parts = append(parts, part)
+
+		if !isLast {
+			parts = append(parts, arrowStyle.Render(" → "))
+		}
+	}
+
+	timeline := strings.Join(parts, "")
+	// If timeline is too wide, wrap it vertically
+	if lipgloss.Width(timeline) > width {
+		var lines []string
+		for i, tr := range deduped {
+			isLast := i == len(deduped)-1
+			dotColor := styles.StatusAccentColor(t, tr.Status)
+			dot := "○"
+			if isLast {
+				dot = "●"
+			}
+			styledDot := lipgloss.NewStyle().Foreground(dotColor).Render(dot)
+			statusStr := lipgloss.NewStyle().Foreground(t.Text).Render(tr.Status)
+			dateStr := ""
+			if tr.Timestamp > 0 {
+				dateStr = " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
+					Render("("+time.Unix(tr.Timestamp, 0).Format("Jan 2")+")")
+			}
+			connector := ""
+			if !isLast {
+				connector = arrowStyle.Render(" →")
+			}
+			lines = append(lines, "  "+styledDot+" "+statusStr+dateStr+connector)
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	return timeline
+}
+
+// extractStatusName extracts a known status name from the beginning of a string.
+func extractStatusName(s string) string {
+	s = strings.TrimSpace(s)
+	known := []string{
+		"pending_user_confirmation", "in_progress",
+		"done", "active", "draft", "paused", "blocked", "cancelled", "failed",
+	}
+	for _, k := range known {
+		if strings.HasPrefix(s, k) {
+			return k
+		}
+	}
+	return ""
+}
+
+// conversationEntry represents a parsed user/AI message from activity logs.
+type conversationEntry struct {
+	Role      string // "user" or "ai"
+	Text      string
+	Timestamp int64
+}
+
+// parseConversationEntries extracts conversation-style entries from task logs.
+// Looks for entries prefixed with "USER:", "AI:", or "CONVERSATION:".
+// Also checks reports with type "conversation".
+func (e *ExpandedCard) parseConversationEntries() []conversationEntry {
+	var entries []conversationEntry
+
+	// Parse from activity logs
+	for _, log := range e.Item.Task.Logs {
+		entry := strings.TrimSpace(log.Entry)
+		upper := strings.ToUpper(entry)
+
+		if strings.HasPrefix(upper, "USER:") {
+			text := strings.TrimSpace(entry[5:])
+			entries = append(entries, conversationEntry{Role: "user", Text: text, Timestamp: log.Timestamp})
+		} else if strings.HasPrefix(upper, "AI:") {
+			text := strings.TrimSpace(entry[3:])
+			entries = append(entries, conversationEntry{Role: "ai", Text: text, Timestamp: log.Timestamp})
+		} else if strings.HasPrefix(upper, "CONVERSATION:") {
+			text := strings.TrimSpace(entry[13:])
+			// Detect role from content
+			role := "ai"
+			if strings.HasPrefix(strings.ToUpper(text), "USER:") {
+				role = "user"
+				text = strings.TrimSpace(text[5:])
+			} else if strings.HasPrefix(strings.ToUpper(text), "AI:") {
+				text = strings.TrimSpace(text[3:])
+			}
+			entries = append(entries, conversationEntry{Role: role, Text: text, Timestamp: log.Timestamp})
+		}
+	}
+
+	// Parse from reports with type "conversation"
+	for _, report := range e.Item.Task.Reports {
+		if report.Type != "conversation" {
+			continue
+		}
+		for _, line := range strings.Split(report.Body, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			upper := strings.ToUpper(line)
+			if strings.HasPrefix(upper, "USER:") {
+				entries = append(entries, conversationEntry{
+					Role: "user", Text: strings.TrimSpace(line[5:]), Timestamp: report.Created,
+				})
+			} else if strings.HasPrefix(upper, "AI:") {
+				entries = append(entries, conversationEntry{
+					Role: "ai", Text: strings.TrimSpace(line[3:]), Timestamp: report.Created,
+				})
+			}
+		}
+	}
+
+	// Sort by timestamp ascending
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Timestamp < entries[j].Timestamp
+	})
+
+	// Cap at last 20 messages
+	if len(entries) > 20 {
+		entries = entries[len(entries)-20:]
+	}
+
+	return entries
+}
+
+// countConversationEntries returns the number of conversation entries for height estimation.
+func (e *ExpandedCard) countConversationEntries() int {
+	return len(e.parseConversationEntries())
+}
+
+// renderConversationTrail renders a conversation trail section with user/AI messages.
+func (e *ExpandedCard) renderConversationTrail(width int) string {
+	entries := e.parseConversationEntries()
+	if len(entries) == 0 {
+		return ""
+	}
+
+	t := e.Theme
+	var lines []string
+	lines = append(lines, styles.SectionTitle(t, "Conversation"))
+
+	userBg := lipgloss.AdaptiveColor{Light: "#E8F4FD", Dark: "#1E3A5F"}
+	aiBg := lipgloss.AdaptiveColor{Light: "#F0F4E8", Dark: "#2D3A1E"}
+
+	bodyWidth := width - 8
+	if bodyWidth < 20 {
+		bodyWidth = 20
+	}
+
+	for i, entry := range entries {
+		// Timestamp
+		ts := ""
+		if entry.Timestamp > 0 {
+			ts = time.Unix(entry.Timestamp, 0).Format("15:04")
+		}
+		styledTs := lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(ts)
+
+		// Role label and message styling
+		var roleLabel string
+		var msgStyle lipgloss.Style
+
+		if entry.Role == "user" {
+			roleLabel = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("USER")
+			msgStyle = lipgloss.NewStyle().
+				Background(userBg).
+				Foreground(t.Text).
+				Width(bodyWidth).
+				Padding(0, 1)
+		} else {
+			roleLabel = lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("AI")
+			msgStyle = lipgloss.NewStyle().
+				Background(aiBg).
+				Foreground(t.Text).
+				Width(bodyWidth).
+				Padding(0, 1)
+		}
+
+		// Header: timestamp + role
+		lines = append(lines, fmt.Sprintf("  %s  %s", styledTs, roleLabel))
+
+		// Message body (wrapped)
+		wrapped := wordWrap(entry.Text, bodyWidth-2)
+		lines = append(lines, "  "+msgStyle.Render(wrapped))
+
+		// Spacing between messages (not after last)
+		if i < len(entries)-1 {
+			lines = append(lines, "")
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderQARelayChain renders the Q&A relay chain section for the expanded card.
+func (e *ExpandedCard) renderQARelayChain(width int) string {
+	task := e.Item.Task
+	if len(task.QAThread) == 0 {
+		return ""
+	}
+
+	t := e.Theme
+	var lines []string
+
+	// Cap at last 10 entries
+	entries := task.QAThread
+	if len(entries) > 10 {
+		entries = entries[len(entries)-10:]
+	}
+
+	lines = append(lines, styles.SectionTitle(t, fmt.Sprintf("Q&A Relay (%d)", len(task.QAThread))))
+
+	for _, qa := range entries {
+		// Status icon
+		var icon string
+		var chainColor lipgloss.AdaptiveColor
+		switch qa.Status {
+		case "answered":
+			icon = "✅"
+			chainColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"} // green
+		case "answering":
+			icon = "⏳"
+			chainColor = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"} // blue
+		case "routing", "forwarded":
+			icon = "🔀"
+			chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // yellow
+		default:
+			icon = "❓"
+			chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // yellow
+		}
+
+		// Question line
+		question := qa.Question
+		maxQ := width - 8
+		if maxQ > 0 && len(question) > maxQ {
+			question = question[:maxQ-1] + "\u2026"
+		}
+		qLine := icon + " Q: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+question+"\"")
+		lines = append(lines, qLine)
+
+		// Hop chain: Role₁ → Role₂ → Role₃ (status)
+		if len(qa.Hops) > 0 {
+			var hopParts []string
+			for _, hop := range qa.Hops {
+				role := hop.Role
+				if role == "" {
+					role = hop.Pane
+				}
+				hopParts = append(hopParts, role)
+			}
+			chain := strings.Join(hopParts, " → ")
+			// Add status suffix
+			lastAction := qa.Hops[len(qa.Hops)-1].Action
+			if qa.Status != "answered" {
+				chain += " (" + lastAction + "...)"
+			}
+			chainStyled := lipgloss.NewStyle().Foreground(chainColor).Render(chain)
+			lines = append(lines, "   "+chainStyled)
+		}
+
+		// Answer line (if answered)
+		if qa.Status == "answered" && qa.Answer != "" {
+			answer := qa.Answer
+			maxA := width - 12
+			if maxA > 0 && len(answer) > maxA {
+				answer = answer[:maxA-1] + "\u2026"
+			}
+			// Find who answered (last hop)
+			answerer := ""
+			if len(qa.Hops) > 0 {
+				last := qa.Hops[len(qa.Hops)-1]
+				if last.Role != "" {
+					answerer = last.Role
+				} else {
+					answerer = last.Pane
+				}
+			}
+			aText := "✅ A: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+answer+"\"")
+			if answerer != "" {
+				aText += lipgloss.NewStyle().Foreground(t.Muted).Render(" — "+answerer)
+			}
+			lines = append(lines, "   "+aText)
+		}
+
+		lines = append(lines, "")
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// ToggleReportExpand toggles the expansion state of the report at the given index.
+func (e *ExpandedCard) ToggleReportExpand(index int) {
+	if e.ExpandedReports == nil {
+		e.ExpandedReports = make(map[int]bool)
+	}
+	e.ExpandedReports[index] = !e.ExpandedReports[index]
 }
