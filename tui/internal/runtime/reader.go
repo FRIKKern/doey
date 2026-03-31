@@ -323,6 +323,9 @@ func (r *Reader) ParseTasks() []Task {
 		if c := env["TASK_CREATED"]; c != "" {
 			t.Created, _ = strconv.ParseInt(c, 10, 64)
 		}
+		if u := env["TASK_UPDATED"]; u != "" {
+			t.Updated, _ = strconv.ParseInt(u, 10, 64)
+		}
 		// Fall back to TASK_TIMESTAMPS created= field
 		if t.Created == 0 && t.Timestamps != "" {
 			for _, pair := range strings.Split(t.Timestamps, "|") {
