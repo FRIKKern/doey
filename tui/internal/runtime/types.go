@@ -108,6 +108,18 @@ type Report struct {
 	Created int64  `json:"created"`
 }
 
+// Attachment represents a file attached to a task (worker reports, build logs, etc.)
+type Attachment struct {
+	Filename  string // e.g. "1774955000_research_Worker_W1_2.md"
+	Type      string // research, build, test, review, error, progress, completion
+	Title     string
+	Author    string
+	Timestamp int64
+	TaskID    string
+	Body      string // full content after frontmatter
+	FilePath  string // absolute path to the file
+}
+
 // Task from tasks/*.task (v3 schema)
 type Task struct {
 	ID                 string
@@ -138,6 +150,7 @@ type Task struct {
 	AssignedTo         string    // v3: who/what team
 	SchemaVersion      int       // v3: schema version number
 	Reports           []Report             // from TASK_REPORT_N_* fields
+	TaskAttachments   []Attachment         // from .doey/tasks/<id>/attachments/*.md
 	RecoveryLog       []RecoveryEvent      // from TASK_RECOVERY_N_* fields
 	StatusTimeline    []StatusTransition   // parsed from TASK_TIMESTAMPS
 	ConversationTrail []ConversationEntry  // parsed from logs/reports

@@ -687,6 +687,16 @@ Q/A pairs build an audit trail on the task file. If the question is forwarded to
 5. Never send input to editors, REPLs, or password prompts
 6. Log issues to `$RUNTIME_DIR/issues/` (one file per issue)
 
+## Worker Report Attachments
+
+When research or significant work completes, verify the task has attachments before reporting to Boss:
+
+```bash
+bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/"$2"/attachments/*; do echo "$(basename "$f")"; done' _ "$PROJECT_DIR" "$TASK_ID"
+```
+
+When forwarding a completion report to Boss, include an attachment summary (count and types found). If a research task completed without attachments, note it as a potential issue — the stop hook should have auto-attached worker output.
+
 ## Fresh-Install Vigilance (Doey Development)
 
 When `PROJECT_NAME` is `doey`, you're developing the product. Before acting on any memory, ask: "Would a fresh-install user get this behavior?" If no — fix the product, not the memory. Flag divergence: "⚠️ Fresh-install check: [what would break]. Fixing in [file]."

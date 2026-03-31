@@ -71,6 +71,20 @@ doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "qa_thread" \
 - Always prefix the body with `Q:` or `A:` so the relay chain is readable
 - QA_TIMESTAMP is passed in the dispatch prompt from the Manager
 
+## Report Attachments
+
+When producing a research report, build log, test result, or error report: write it as a task attachment so the Manager and SM can review it from the task file.
+
+```bash
+source "$PROJECT_DIR/shell/doey-task-helpers.sh" && \
+  task_write_attachment "$PROJECT_DIR" "$TASK_ID" "<type>" "<title>" "<body>" \
+    "Worker_W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"
+```
+
+Attachment types: `research` (investigation findings), `build` (build/compile output), `test` (test results), `review` (code review notes), `error` (failure details).
+
+Write an attachment when: research completes, tests are run, a build succeeds or fails, or an error needs detailed context beyond what fits in a report summary. The stop hook also auto-attaches your final output on completion.
+
 ## Subtask Protocol
 
 When your dispatch includes `TASK_ID` and `SUBTASK_N`:

@@ -54,6 +54,17 @@ type PersistentReport struct {
 	Created int64  `json:"created"`
 }
 
+// PersistentAttachment represents a file attachment stored with a task (persistent store).
+type PersistentAttachment struct {
+	Filename  string `json:"filename"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Author    string `json:"author"`
+	Timestamp int64  `json:"timestamp"`
+	Body      string `json:"body,omitempty"`
+	FilePath  string `json:"filepath,omitempty"`
+}
+
 // PersistentRecoveryEvent represents a stale detection or auto-recovery event (persistent store).
 type PersistentRecoveryEvent struct {
 	Index       int    `json:"index"`
@@ -115,8 +126,9 @@ type PersistentTask struct {
 	// Live tracking fields
 	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
 	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log
-	Reports     []PersistentReport         `json:"reports,omitempty"`      // worker reports
-	RecoveryLog []PersistentRecoveryEvent `json:"recovery_log,omitempty"` // stale detection / auto-recovery events
+	Reports         []PersistentReport         `json:"reports,omitempty"`          // worker reports
+	TaskAttachments []PersistentAttachment     `json:"task_attachments,omitempty"` // file attachments from .doey/tasks/<id>/attachments/
+	RecoveryLog     []PersistentRecoveryEvent  `json:"recovery_log,omitempty"`     // stale detection / auto-recovery events
 	QAThread []PersistentQAEntry `json:"qa_thread,omitempty"` // Q&A relay chain entries
 }
 

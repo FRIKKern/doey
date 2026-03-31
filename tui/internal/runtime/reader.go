@@ -577,10 +577,87 @@ func (r *Reader) ParseTasks() []Task {
 		// Parse Q&A relay chain from reports
 		t.QAThread = parseQAThread(t.Reports)
 
+		// Parse file attachments from .doey/tasks/<id>/attachments/
+		t.TaskAttachments = r.parseAttachments(t.ID)
+
 		tasks = append(tasks, t)
 	}
 
 	return tasks
+}
+
+// parseAttachments reads .doey/tasks/<id>/attachments/*.md and returns parsed Attachment structs.
+// Each file has YAML-like frontmatter (type, title, author, timestamp, task_id) delimited by ---.
+func (r *Reader) parseAttachments(taskID string) []Attachment {
+	if r.projectDir == "" {
+		return nil
+	}
+	dir := filepath.Join(r.projectDir, ".doey", "tasks", taskID, "attachments")
+	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil || len(matches) == 0 {
+		return nil
+	}
+
+	var attachments []Attachment
+	for _, path := range matches {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		content := string(data)
+
+		// Split on "---" frontmatter delimiters
+		// Expected format: ---\nkey: value\n...\n---\nbody
+		parts := strings.SplitN(content, "---", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		frontmatter := parts[1]
+		body := strings.TrimSpace(parts[2])
+
+		a := Attachment{
+			Filename: filepath.Base(path),
+			TaskID:   taskID,
+			Body:     body,
+			FilePath: path,
+		}
+
+		// Parse key: value lines from frontmatter
+		scanner := bufio.NewScanner(strings.NewReader(frontmatter))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			kv := strings.SplitN(line, ":", 2)
+			if len(kv) != 2 {
+				continue
+			}
+			key := strings.TrimSpace(kv[0])
+			val := strings.TrimSpace(kv[1])
+			switch key {
+			case "type":
+				a.Type = val
+			case "title":
+				a.Title = val
+			case "author":
+				a.Author = val
+			case "timestamp":
+				a.Timestamp, _ = strconv.ParseInt(val, 10, 64)
+			case "task_id":
+				a.TaskID = val
+			}
+		}
+
+		attachments = append(attachments, a)
+	}
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(attachments, func(i, j int) bool {
+		return attachments[i].Timestamp > attachments[j].Timestamp
+	})
+
+	return attachments
 }
 
 func (r *Reader) parseSubtasks() []Subtask {
