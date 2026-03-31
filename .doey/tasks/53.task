@@ -1,6 +1,6 @@
 TASK_ID=53
 TASK_TITLE=Implement fast spawn — Phase 1 quick wins + Phase 2 structural improvements
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774937000
 TASK_TYPE=infrastructure
 TASK_DESCRIPTION=Based on the research report (.doey/tasks/52/research-report.md), implement spawn optimizations. Current default launch: ~42-50s. Target: ~8s perceived, ~20s total.

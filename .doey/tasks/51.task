@@ -1,6 +1,6 @@
 TASK_ID=51
 TASK_TITLE=Live task reports in Go TUI — real-time updates, expandable detail
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774935000
 TASK_TYPE=feature
 TASK_DESCRIPTION=Reports are a core part of Doey. Every task must accumulate reports as work progresses, and the Go TUI must show these reports in real time — updated live, expandable, rich.
