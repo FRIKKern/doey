@@ -406,7 +406,7 @@ while true; do
     for _tf in "${_tasks_dir}"/*.task; do
       [ -f "$_tf" ] || continue
       [ -s "$_tf" ] || continue  # skip empty files
-      _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""
+      _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""; _tteam=""; _tpri=""
       while IFS= read -r _tl; do
         case "${_tl%%=*}" in
           TASK_ID)          _tid="${_tl#*=}" ;;
@@ -414,6 +414,8 @@ while true; do
           TASK_STATUS)      _tstatus="${_tl#*=}" ;;
           TASK_CREATED)     _tcreated="${_tl#*=}" ;;
           TASK_MERGED_INTO) _tmerged="${_tl#*=}" ;;
+          TASK_TEAM)        _tteam="${_tl#*=}" ;;
+          TASK_PRIORITY)    _tpri="${_tl#*=}" ;;
         esac
       done < "$_tf" || true
       [ -n "${_tid:-}" ] || continue  # skip files missing TASK_ID
@@ -435,11 +437,14 @@ while true; do
         pending_user_confirmation) _tcol="${C_CYAN}";   _ticon="⬤" ;;
         *)                         _tcol="${C_DIM}";    _ticon="○" ;;
       esac
-      printf '  %b%s%b %b#%s%b  %s  %b%s%b\n' \
+      _tmeta=""
+      [ -n "$_tpri" ] && _tmeta="${_tmeta} [${_tpri}]"
+      [ -n "$_tteam" ] && _tmeta="${_tmeta} [${_tteam}]"
+      printf '  %b%s%b %b#%s%b  %s  %b%s%s%b\n' \
         "$_tcol" "$_ticon" "${C_RESET}" \
         "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
         "$_ttitle" \
-        "${C_DIM}" "${_tage:+${_tage} ago}" "${C_RESET}"
+        "${C_DIM}" "${_tage:+${_tage} ago}" "$_tmeta" "${C_RESET}"
       if [ "$_has_render" = true ]; then
         _tjson="${_tf%.task}.json"
         if [ -f "$_tjson" ]; then
