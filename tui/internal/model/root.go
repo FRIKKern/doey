@@ -136,14 +136,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, CreateTeamCmd()
 
 	case CreateTeamResultMsg:
+		if msg.Err != nil {
+			m.dashboard.SetFeedback("Error: " + msg.Err.Error())
+		} else {
+			m.dashboard.SetFeedback("Regular team spawned")
+		}
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case CreateSpecializedTeamMsg:
-		m.focusIndex = 1
-		m.updateFocus()
-		return m, CreateSpecializedTeamCmd("")
+		// If a team name is provided (from picker), spawn it directly
+		if msg.Name != "" {
+			return m, CreateSpecializedTeamCmd(msg.Name)
+		}
+		// Otherwise show the picker on the dashboard
+		m.dashboard.ShowTeamPicker(m.snapshot.TeamDefs)
+		return m, nil
 
 	case CreateSpecializedTeamResultMsg:
+		if msg.Err != nil {
+			m.dashboard.SetFeedback("Error: " + msg.Err.Error())
+		} else {
+			m.dashboard.SetFeedback("Specialized team spawned")
+		}
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case SnapshotMsg:
@@ -165,6 +179,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, SpawnReservedFreelancerCmd()
 
 	case ReservedFreelancerResultMsg:
+		if msg.Err != nil {
+			m.dashboard.SetFeedback("Error: " + msg.Err.Error())
+		} else {
+			m.dashboard.SetFeedback("Reserved freelancers spawned")
+		}
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case LaunchTeamMsg:

@@ -33,7 +33,10 @@ type CreateTeamMsg struct{}
 type ViewTasksMsg struct{}
 
 // CreateSpecializedTeamMsg requests spawning a team from a definition file.
-type CreateSpecializedTeamMsg struct{}
+// Name is empty when requesting the picker, or set when a team was selected.
+type CreateSpecializedTeamMsg struct {
+	Name string
+}
 
 // dashTickMsg is the internal tick for reloading task data.
 type dashTickMsg time.Time
@@ -55,20 +58,23 @@ var quickActions = []quickAction{
 
 // DashboardModel is the primary landing tab (command center).
 type DashboardModel struct {
-	runtimeDir   string
-	projectDir   string
-	width        int
-	height       int
-	theme        styles.Theme
-	focused      bool
-	tasks        []runtime.PersistentTask
-	heartbeats   map[string]runtime.HeartbeatState
-	keyMap       keys.KeyMap
-	scrollOffset int
-	actionCursor int              // selected quick action card (0..4)
-	snapshot     runtime.Snapshot // live snapshot for pane/result/message data
-	feedbackMsg  string
-	feedbackTime time.Time
+	runtimeDir     string
+	projectDir     string
+	width          int
+	height         int
+	theme          styles.Theme
+	focused        bool
+	tasks          []runtime.PersistentTask
+	heartbeats     map[string]runtime.HeartbeatState
+	keyMap         keys.KeyMap
+	scrollOffset   int
+	actionCursor   int              // selected quick action card (0..2)
+	snapshot       runtime.Snapshot // live snapshot for pane/result/message data
+	feedbackMsg    string
+	feedbackTime   time.Time
+	pickerActive   bool               // true when team def picker is visible
+	pickerDefs     []runtime.TeamDef  // available team defs
+	pickerCursor   int                // selected item in picker
 }
 
 // NewDashboardModel creates the dashboard command center panel.
@@ -100,6 +106,33 @@ func (m DashboardModel) Update(msg tea.Msg) (DashboardModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Team def picker intercepts all keys when active
+		if m.pickerActive {
+			switch msg.String() {
+			case "esc":
+				m.pickerActive = false
+				return m, nil
+			case "up", "k":
+				if m.pickerCursor > 0 {
+					m.pickerCursor--
+				}
+				return m, nil
+			case "down", "j":
+				if m.pickerCursor < len(m.pickerDefs)-1 {
+					m.pickerCursor++
+				}
+				return m, nil
+			case "enter":
+				if len(m.pickerDefs) > 0 && m.pickerCursor < len(m.pickerDefs) {
+					name := m.pickerDefs[m.pickerCursor].Name
+					m.pickerActive = false
+					return m, func() tea.Msg { return CreateSpecializedTeamMsg{Name: name} }
+				}
+				return m, nil
+			}
+			return m, nil
+		}
+
 		switch {
 		case key.Matches(msg, m.keyMap.Up):
 			if m.scrollOffset > 0 {
@@ -145,11 +178,20 @@ func (m DashboardModel) View() string {
 
 	var sections []string
 	if m.feedbackMsg != "" && time.Since(m.feedbackTime) < 3*time.Second {
+		fbColor := m.theme.Success
+		prefix := "✓ "
+		if strings.HasPrefix(m.feedbackMsg, "Error:") {
+			fbColor = m.theme.Danger
+			prefix = "✗ "
+		}
 		feedbackStyle := lipgloss.NewStyle().
-			Foreground(m.theme.Success).
+			Foreground(fbColor).
 			Bold(true).
 			PaddingLeft(2)
-		sections = append(sections, feedbackStyle.Render("✓ "+m.feedbackMsg))
+		sections = append(sections, feedbackStyle.Render(prefix+m.feedbackMsg))
+	}
+	if m.pickerActive {
+		sections = append(sections, m.renderTeamPicker(w))
 	}
 	sections = append(sections, m.renderActiveTasks(w))
 	sections = append(sections, m.renderQuickActions(w))
@@ -223,6 +265,13 @@ func (m *DashboardModel) SetHeartbeats(hb map[string]runtime.HeartbeatState) {
 	m.heartbeats = hb
 }
 
+// ShowTeamPicker opens the team definition picker overlay.
+func (m *DashboardModel) ShowTeamPicker(defs []runtime.TeamDef) {
+	m.pickerActive = true
+	m.pickerDefs = defs
+	m.pickerCursor = 0
+}
+
 // SetFeedback sets a temporary feedback message shown for 3 seconds.
 func (m *DashboardModel) SetFeedback(msg string) {
 	m.feedbackMsg = msg
@@ -279,6 +328,20 @@ func (m DashboardModel) activateAction(idx int) tea.Cmd {
 func (m DashboardModel) updateMouse(msg tea.MouseMsg) (DashboardModel, tea.Cmd) {
 	// Click release — check zones
 	if msg.Action == tea.MouseActionRelease {
+		// Picker item clicks
+		if m.pickerActive {
+			for i, def := range m.pickerDefs {
+				if zone.Get(fmt.Sprintf("picker-team-%d", i)).InBounds(msg) {
+					name := def.Name
+					m.pickerActive = false
+					return m, func() tea.Msg { return CreateSpecializedTeamMsg{Name: name} }
+				}
+			}
+			// Click outside picker dismisses it
+			m.pickerActive = false
+			return m, nil
+		}
+
 		// Task card clicks
 		for _, t := range m.tasks {
 			if zone.Get(fmt.Sprintf("dash-task-%s", t.ID)).InBounds(msg) {
@@ -304,6 +367,9 @@ func (m DashboardModel) updateMouse(msg tea.MouseMsg) (DashboardModel, tea.Cmd) 
 		}
 		if zone.Get("dash-create-team").InBounds(msg) {
 			return m, func() tea.Msg { return CreateTeamMsg{} }
+		}
+		if zone.Get("dash-create-specialized").InBounds(msg) {
+			return m, func() tea.Msg { return CreateSpecializedTeamMsg{} }
 		}
 		if zone.Get("dash-view-tasks").InBounds(msg) {
 			return m, func() tea.Msg { return ViewTasksMsg{} }
@@ -372,10 +438,26 @@ func (m DashboardModel) renderActiveTasks(w int) string {
 		return timeI.After(timeJ)
 	})
 
+	const maxDashTasks = 6
+	shown := m.tasks
+	overflow := 0
+	if len(shown) > maxDashTasks {
+		overflow = len(shown) - maxDashTasks
+		shown = shown[:maxDashTasks]
+	}
+
 	var cards []string
-	for _, task := range m.tasks {
+	for _, task := range shown {
 		card := m.renderHeartbeatCard(task, cardW)
 		cards = append(cards, card)
+	}
+
+	if overflow > 0 {
+		more := lipgloss.NewStyle().
+			Foreground(t.Primary).
+			PaddingLeft(2).
+			Render(fmt.Sprintf("  ＋ %d more tasks → press 3 to view all", overflow))
+		cards = append(cards, zone.Mark("dash-view-tasks", more))
 	}
 
 	body := lipgloss.NewStyle().
@@ -631,6 +713,49 @@ func formatDashAge(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+}
+
+func (m DashboardModel) renderTeamPicker(w int) string {
+	t := m.theme
+
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("SELECT TEAM DEFINITION")
+	rule := t.Faint.Render(strings.Repeat("─", w))
+
+	if len(m.pickerDefs) == 0 {
+		empty := lipgloss.NewStyle().
+			Foreground(t.Muted).
+			PaddingLeft(4).
+			Render("No .team.md files found in teams/  (esc to close)")
+		return "\n" + header + "\n" + rule + "\n" + empty + "\n"
+	}
+
+	var rows []string
+	for i, def := range m.pickerDefs {
+		cursor := "  "
+		nameStyle := lipgloss.NewStyle().Foreground(t.Text)
+		descStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+		if i == m.pickerCursor {
+			cursor = "▸ "
+			nameStyle = nameStyle.Bold(true).Foreground(t.Primary)
+		}
+		name := nameStyle.Render(def.Name)
+		desc := ""
+		if def.Description != "" {
+			desc = descStyle.Render(" — " + def.Description)
+		}
+		row := cursor + name + desc
+		rows = append(rows, zone.Mark(fmt.Sprintf("picker-team-%d", i), row))
+	}
+
+	hint := lipgloss.NewStyle().
+		Foreground(t.Muted).Faint(true).PaddingLeft(4).
+		Render("j/k = navigate  enter = spawn  esc = cancel")
+
+	body := lipgloss.NewStyle().
+		PaddingLeft(3).PaddingTop(1).PaddingBottom(1).
+		Render(strings.Join(rows, "\n"))
+
+	return "\n" + header + "\n" + rule + "\n" + body + "\n" + hint + "\n"
 }
 
 func (m DashboardModel) renderQuickActions(w int) string {
