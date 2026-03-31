@@ -3306,6 +3306,48 @@ check_doctor() {
     _doc_check skip "Context audit" "(script not found)"
   fi
 
+  # Task helpers — verify doey-task-helpers.sh is reachable
+  local _task_helpers=""
+  if [[ -n "$repo_dir" ]] && [[ -f "$repo_dir/shell/doey-task-helpers.sh" ]]; then
+    _task_helpers="$repo_dir/shell/doey-task-helpers.sh"
+  else
+    # Fall back to location relative to the installed doey script
+    local _doey_bin=""
+    _doey_bin="$(command -v doey 2>/dev/null || true)"
+    if [[ -n "$_doey_bin" ]] && [[ -f "$(dirname "$_doey_bin")/doey-task-helpers.sh" ]]; then
+      _task_helpers="$(dirname "$_doey_bin")/doey-task-helpers.sh"
+    fi
+  fi
+  if [[ -n "$_task_helpers" ]]; then
+    _doc_check ok "Task helpers" "${_task_helpers/#$HOME/~}"
+  else
+    _doc_check warn "Task helpers not found" "doey-task-helpers.sh missing from repo and PATH"
+  fi
+
+  # Task counter — validate .next_id if .doey/tasks/ exists
+  local _tasks_dir="${PROJECT_DIR}/.doey/tasks"
+  if [[ -d "$_tasks_dir" ]]; then
+    local _next_id_file="${_tasks_dir}/.next_id"
+    if [[ -f "$_next_id_file" ]]; then
+      local _nid=""
+      _nid="$(cat "$_next_id_file" 2>/dev/null || true)"
+      case "$_nid" in
+        ''|*[!0-9]*)
+          _doc_check warn "Task counter" ".next_id is not a positive integer: ${_nid:-empty}"
+          ;;
+        *)
+          if [[ "$_nid" -gt 0 ]]; then
+            _doc_check ok "Task counter" ".next_id=${_nid}"
+          else
+            _doc_check warn "Task counter" ".next_id=0 — may collide with existing tasks"
+          fi
+          ;;
+      esac
+    else
+      _doc_check skip "Task counter" ".doey/tasks/ exists but no .next_id yet"
+    fi
+  fi
+
   # ── Summary footer ──
   printf '\n'
   local _doc_total=$((_DOC_OK + _DOC_WARN + _DOC_FAIL))

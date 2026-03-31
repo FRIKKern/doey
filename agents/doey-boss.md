@@ -129,12 +129,12 @@ Tasks are session-level goals displayed on the Dashboard. The user is the **sole
 
 1. **Search for similar tasks** before writing a `.task` file:
    ```bash
-   bash -c 'source "${PROJECT_DIR}/shell/doey-task-helpers.sh"; task_find_similar "${PROJECT_DIR}" "proposed task title here"'
+   bash -c 'source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"; task_find_similar "${PROJECT_DIR}" "proposed task title here"'
    ```
 2. **If a match is found** (exit code 0, prints matching task ID):
    - **DO NOT create a new task.** Instead, add a subtask to the existing parent:
      ```bash
-     source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+     source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
      task_add_subtask "${PROJECT_DIR}/.doey/tasks/PARENT_ID.task" "New subtask title" "Description of additional scope"
      ```
    - Update the parent task's description if the user's request expands its scope.
@@ -228,7 +228,7 @@ Use `/doey-create-task` when available, or compile manually with sections: INTEN
 
 Create via helpers:
 ```bash
-source "${RUNTIME_DIR}/../doey/shell/doey-task-helpers.sh" 2>/dev/null || source /home/doey/doey/shell/doey-task-helpers.sh
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
 TASK_ID=$(task_create "$RUNTIME_DIR" "Title" "feature" "Boss" "P1" "Summary" "Description")
 ```
 
@@ -340,7 +340,7 @@ Present relevant task status when the user arrives or after compaction so they h
 Source the helpers and use `task_add_report` with type `conversation`:
 
 ```bash
-source "${RUNTIME_DIR}/../doey/shell/doey-task-helpers.sh" 2>/dev/null || true
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
 
 # Log user message
 TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
@@ -368,7 +368,7 @@ Track every question-and-answer exchange in the `.task` file so the full Q&A cha
 ### When the user asks about a task
 
 ```bash
-source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
 task_add_report "$TASK_FILE" "qa_thread" "Question from user" \
   "User asked: <verbatim question here>" \
@@ -468,7 +468,7 @@ research_dispatched → research_complete → awaiting_user_review → [more_res
 Log each research cycle to the task's conversation trail:
 
 ```bash
-source "${RUNTIME_DIR}/../doey/shell/doey-task-helpers.sh" 2>/dev/null || true
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
 TASK_FILE="${PROJECT_DIR}/.doey/tasks/${TASK_ID}.task"
 
 # When dispatching research

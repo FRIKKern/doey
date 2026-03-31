@@ -261,7 +261,7 @@ TASK_FILE="${TD}/${TASK_ID}.task"
 
 **2. Add a structured recovery event to the task file** (for TUI display):
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 NOW=$(date +%s)
 # Find next recovery event index
 NEXT_IDX=$(grep -c '^TASK_RECOVERY_' "$TASK_FILE" 2>/dev/null | awk '{print int($1/4)}')
@@ -363,8 +363,8 @@ When SM receives a `dispatch_task` message from Boss:
 
    Before dispatching, check if a similar task already exists:
    ```bash
-   source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
-   SIMILAR_ID=$(bash -c 'source "${1}/shell/doey-task-helpers.sh"; task_find_similar "$1" "$2"' _ "$PROJECT_DIR" "$TASK_TITLE")
+   source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
+   SIMILAR_ID=$(bash -c 'source "${DOEY_LIB:-${1}/shell}/doey-task-helpers.sh"; task_find_similar "$1" "$2"' _ "$PROJECT_DIR" "$TASK_TITLE")
    ```
    - **Match found** (exit 0, prints task ID in `$SIMILAR_ID`):
      - Log a decision on the existing task: `task_add_decision "$PROJECT_DIR" "$SIMILAR_ID" "Duplicate dispatch rejected — new task '$TASK_TITLE' matches this task"`
@@ -565,7 +565,7 @@ The `session-manager-wait.sh` hook (called in step 7 of the active cycle) contro
 When a `TASK_ID` is known (from `dispatch_task` messages or `.task` files), record progress with structured subtasks and updates. Source the helpers once per cycle:
 
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 ```
 
 **On dispatch** — create a subtask for the assigned team:
@@ -608,7 +608,7 @@ Tasks in `.doey/tasks/` are the **single source of truth** for all work. Every a
 Before doing anything else, list all active tasks and log them to context:
 
 ```bash
-source "$PROJECT_DIR/shell/doey-task-helpers.sh"
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"
 bash -c 'shopt -s nullglob; for f in "$1"/.doey/tasks/*.task; do
   ID=$(grep "^TASK_ID=" "$f" | cut -d= -f2-)
   TITLE=$(grep "^TASK_TITLE=" "$f" | cut -d= -f2-)
