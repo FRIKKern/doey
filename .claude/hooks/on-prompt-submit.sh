@@ -23,6 +23,15 @@ write_activity "task_assigned" "{\"task\":\"${_prompt_safe}\"}"
 notify_sm "BUSY" "${PROMPT:0:60}"
 _log "task started: $(echo "$PROMPT" | head -c 80)"
 
+# Persist task ID for stop hooks — extract Task #N from dispatch prompts
+if is_worker; then
+  _task_num=$(printf '%s' "$PROMPT" | grep -oE 'Task #[0-9]+' | head -1 | sed 's/Task #//') || _task_num=""
+  if [ -n "$_task_num" ]; then
+    printf '%s\n' "$_task_num" > "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id"
+    _log "task_id persisted: ${_task_num}"
+  fi
+fi
+
 if is_session_manager; then
   touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
   touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true

@@ -18,3 +18,7 @@ TASK_TAGS=tui,dashboard,config,infrastructure
 TASK_TEAM=W2
 TASK_LOG_1774858888=DISPATCHED: Sent to W2 Manager
 TASK_LOG_1774859660=COMPLETE: Committed 4e179a2 — Connections tab with 465-line model, types, reader, root.go registration
+TASK_UPDATED=1775063622
+TASK_TIMESTAMPS=completed=1775063622|completed=1775063744|completed=1775068471
+TASK_DECISION_LOG=1775063622:Status changed to done\n1775063744:Status changed to done\n1775068471:Status changed to done
+TASK_ATTACHMENTS=.doey/tasks/26.result.json

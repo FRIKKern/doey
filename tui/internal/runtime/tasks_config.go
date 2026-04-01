@@ -124,7 +124,8 @@ type PersistentTask struct {
 	DecisionLog        string   `json:"decision_log,omitempty"`        // timestamped decisions
 	Notes              string   `json:"notes,omitempty"`               // free-form journal
 	// Plan linkage
-	PlanID string `json:"plan_id,omitempty"` // links task to a plan
+	PlanID    string `json:"plan_id,omitempty"`    // links task to a plan
+	PlanTitle string `json:"plan_title,omitempty"` // plan title for display
 	// Proof-of-completion fields
 	FilesChanged []string `json:"files_changed,omitempty"` // files modified by task workers
 	Commits      string   `json:"commits,omitempty"`       // commit hashes with one-line messages
@@ -373,6 +374,9 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 	if rt.PlanID != "" {
 		pt.PlanID = rt.PlanID
 	}
+	if rt.PlanTitle != "" {
+		pt.PlanTitle = rt.PlanTitle
+	}
 	if len(rt.FilesChanged) > 0 {
 		pt.FilesChanged = rt.FilesChanged
 	}
@@ -437,6 +441,7 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 			DecisionLog:        rt.DecisionLog,
 			Notes:              rt.Notes,
 			PlanID:             rt.PlanID,
+			PlanTitle:          rt.PlanTitle,
 			FilesChanged:       rt.FilesChanged,
 			Commits:            rt.Commits,
 		}

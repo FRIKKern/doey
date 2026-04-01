@@ -376,6 +376,7 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 		for i := range m.entries {
 			if zone.Get(fmt.Sprintf("task-card-%d", i)).InBounds(msg) {
 				m.list.Select(i)
+				m.leftFocused = false
 				m.detailViewport.GotoTop()
 				m.loadSelectedDetail()
 				return m, nil
@@ -392,10 +393,14 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 		}
 	}
 
-	// Mouse wheel — route to focused panel
+	// Mouse wheel — route based on cursor position, not focus state
 	if msg.Action == tea.MouseActionPress {
 		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
-			if m.leftFocused {
+			leftW := m.width * 40 / 100
+			if leftW < 28 {
+				leftW = 28
+			}
+			if msg.X < leftW {
 				var cmd tea.Cmd
 				m.list, cmd = m.list.Update(msg)
 				return m, cmd

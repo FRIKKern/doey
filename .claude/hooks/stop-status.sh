@@ -19,6 +19,10 @@ is_reserved && STOP_STATUS="RESERVED"
 _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
 task_id="${DOEY_TASK_ID:-}"
+# Fallback: read task ID persisted by on-prompt-submit
+if [ -z "$task_id" ]; then
+  task_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id" 2>/dev/null) || task_id=""
+fi
 
 PROJECT_DIR=$(_resolve_project_dir)
 
@@ -55,6 +59,14 @@ rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.heartbeat" 2>/dev/null || true
 if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
   _persistent_status="${PROJECT_DIR}/.doey/tasks/${task_id}.status"
   printf '%s\n' "$STOP_STATUS" > "$_persistent_status" 2>/dev/null || true
+
+  # Update .task file status on worker completion
+  if [ "$STOP_STATUS" = "FINISHED" ] && [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
+    (
+      source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+      task_update_status "$PROJECT_DIR" "$task_id" "done"
+    ) 2>/dev/null || true
+  fi
 fi
 
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"

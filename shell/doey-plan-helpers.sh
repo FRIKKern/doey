@@ -156,3 +156,86 @@ plan_get_field() {
     esac
   done < "$plan_file"
 }
+
+# plan_find_by_task_id(project_dir, task_id)
+# Find the first plan file whose frontmatter task_id matches. Prints path to stdout.
+# Returns 0 if found, 1 if not.
+plan_find_by_task_id() {
+  local project_dir="$1" task_id="$2"
+  local plans_dir="${project_dir}/.doey/plans"
+  [ -d "$plans_dir" ] || return 1
+
+  local f
+  for f in "$plans_dir"/*.md; do
+    [ -f "$f" ] || continue
+
+    local in_front=false
+    while IFS= read -r line; do
+      case "$line" in
+        "---")
+          if [ "$in_front" = "true" ]; then break; fi
+          in_front=true; continue ;;
+      esac
+      [ "$in_front" = "true" ] || continue
+      case "$line" in
+        task_id:*)
+          local val="${line#task_id: }"
+          val="${val#\"}"; val="${val%\"}"
+          if [ "$val" = "$task_id" ]; then
+            echo "$f"
+            return 0
+          fi
+          break ;;
+      esac
+    done < "$f"
+  done
+
+  return 1
+}
+
+# plan_check_checkbox(plan_file, task_id, task_title)
+# Check off a matching unchecked checkbox in the plan body.
+# Tries <!-- task_id=N --> comment first, falls back to title text match.
+# Returns 0 if a box was checked, 1 if nothing matched.
+plan_check_checkbox() {
+  local plan_file="$1" task_id="$2" task_title="$3"
+  if [ ! -f "$plan_file" ]; then
+    echo "ERROR: Plan file not found: ${plan_file}" >&2
+    return 1
+  fi
+
+  local tmp="${plan_file}.tmp.$$"
+  local matched=false
+  local now
+  now=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+  while IFS= read -r line; do
+    if [ "$matched" = "false" ]; then
+      # Try comment-tag match: - [ ] ... <!-- task_id=N -->
+      case "$line" in
+        *"- [ ]"*"<!-- task_id=${task_id} -->"*)
+          line="${line/- \[ \]/- [x]}"
+          matched=true ;;
+        *)
+          # Fallback: match unchecked box containing task_title text
+          case "$line" in
+            *"- [ ]"*"${task_title}"*)
+              line="${line/- \[ \]/- [x]}"
+              matched=true ;;
+          esac ;;
+      esac
+    fi
+    printf '%s\n' "$line"
+  done < "$plan_file" > "$tmp"
+
+  if [ "$matched" = "false" ]; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  # Update the updated: timestamp in frontmatter
+  local tmp2="${plan_file}.tmp2.$$"
+  sed "s|^updated:.*|updated: ${now}|" "$tmp" > "$tmp2" && mv "$tmp2" "$plan_file"
+  rm -f "$tmp"
+  return 0
+}
