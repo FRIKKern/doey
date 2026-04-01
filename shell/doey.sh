@@ -3219,12 +3219,15 @@ check_doctor() {
     esac
   fi
   if command -v claude >/dev/null 2>&1; then
-    local _claude_ver _claude_latest
-    _claude_ver=$(claude --version 2>/dev/null || echo "unknown")
-    _claude_latest=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "")
+    local _claude_ver _claude_raw _claude_latest
+    _claude_raw=$(claude --version 2>/dev/null || echo "unknown")
+    _claude_ver=$(_claude_semver)
+    _claude_ver="${_claude_ver:-$_claude_raw}"
+    _claude_latest=$(_claude_latest_ver)
     if [ -n "$_claude_latest" ] && [ "$_claude_ver" != "$_claude_latest" ]; then
       _doc_check warn "claude CLI" "$_claude_ver → $_claude_latest available"
-      printf "\n         ${DIM}Update: ${RESET}${BRAND}npm install -g @anthropic-ai/claude-code@latest${RESET}\n"
+      printf "\n         "
+      _claude_update_hint "$(_claude_install_method)" "Update"
     else
       _doc_check ok "claude CLI" "$_claude_ver${_claude_latest:+ (latest)}"
     fi
