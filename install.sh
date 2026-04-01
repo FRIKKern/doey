@@ -197,9 +197,20 @@ _find_gum() {
 if _find_gum; then
   check_ok "gum ${DIM}($(gum --version 2>/dev/null || echo 'unknown'))${RESET}"
 else
-  if [ -n "${GO_BIN:-}" ] || command -v go >/dev/null 2>&1; then
+  # Discover Go binary early (before _find_go is called later for TUI builds)
+  _gum_go_bin=""
+  if type _find_go_bin >/dev/null 2>&1; then
+    _gum_go_bin="$(_find_go_bin 2>/dev/null)" || _gum_go_bin=""
+  fi
+  if [ -z "$_gum_go_bin" ]; then
+    command -v go >/dev/null 2>&1 && _gum_go_bin="go"
+    for d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
+      [ -x "$d/go" ] && _gum_go_bin="$d/go" && break
+    done
+  fi
+  if [ -n "$_gum_go_bin" ]; then
     printf "  ${WARN}⚠${RESET}  gum not found — installing via go install...\n"
-    if go install github.com/charmbracelet/gum@latest 2>&1; then
+    if "$_gum_go_bin" install github.com/charmbracelet/gum@latest 2>&1; then
       if _find_gum; then
         check_ok "gum installed ${DIM}($(gum --version 2>/dev/null || echo 'unknown'))${RESET}"
       else
