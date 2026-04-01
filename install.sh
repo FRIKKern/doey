@@ -188,8 +188,13 @@ fi
 
 _find_gum() {
   command -v gum >/dev/null 2>&1 && return 0
-  for d in "$(go env GOPATH 2>/dev/null)/bin" "$HOME/go/bin"; do
-    [ -x "$d/gum" ] && { export PATH="$d:$PATH"; return 0; }
+  for d in "$HOME/go/bin" "$HOME/.local/go/bin"; do
+    if [ -x "$d/gum" ]; then
+      # Symlink to ~/.local/bin/ so it persists on PATH
+      mkdir -p "$HOME/.local/bin"
+      ln -sf "$d/gum" "$HOME/.local/bin/gum" 2>/dev/null || true
+      return 0
+    fi
   done
   return 1
 }
@@ -211,6 +216,15 @@ else
   if [ -n "$_gum_go_bin" ]; then
     printf "  ${WARN}⚠${RESET}  gum not found — installing via go install...\n"
     if "$_gum_go_bin" install github.com/charmbracelet/gum@latest 2>&1; then
+      # Symlink to ~/.local/bin/ for persistent PATH access
+      _gum_gopath="$("$_gum_go_bin" env GOPATH 2>/dev/null)" || _gum_gopath="$HOME/go"
+      for d in "$_gum_gopath/bin" "$HOME/go/bin"; do
+        if [ -x "$d/gum" ]; then
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$d/gum" "$HOME/.local/bin/gum" 2>/dev/null || true
+          break
+        fi
+      done
       if _find_gum; then
         check_ok "gum installed ${DIM}($(gum --version 2>/dev/null || echo 'unknown'))${RESET}"
       else
