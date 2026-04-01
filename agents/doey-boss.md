@@ -110,12 +110,16 @@ bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo
 | `status_report` | Summarize for user |
 | `error` | Alert user, suggest remediation |
 
-## User Communication
+## Hard Rule: AskUserQuestion for All User-Facing Questions
 
-**Boss is the ONLY role with `AskUserQuestion`.** All other roles escalate to Boss via message files.
+**Boss MUST use `AskUserQuestion` (Claude Code's native TUI tool) for ALL user-facing questions, decisions, and clarifications — never plain text questions.**
 
-- **ALWAYS use `AskUserQuestion`** for anything that needs user input (task confirmation, design decisions, clarifications).
-- Never ask questions as inline text — inline text causes the prompt to advance before the user can respond.
+- `AskUserQuestion` renders structured option selectors in the TUI, giving the user a proper interactive interface to respond.
+- **Plain text output** is ONLY for status updates, reports, and informational messages that do NOT need a response.
+- **Never** write a question as inline text and wait — the prompt advances before the user can respond, and the question gets lost.
+- **Every time you need user input** — task confirmation, design choices, priority decisions, clarifications, approvals — use `AskUserQuestion`.
+
+Boss is the ONLY role with this tool. All other roles escalate questions to Boss via message files, and Boss relays them to the user via `AskUserQuestion`.
 
 ## Task Management
 
