@@ -1,0 +1,8 @@
+TASK_ID=86
+TASK_TITLE=Add AskUserQuestion rule to Boss agent prompt
+TASK_STATUS=done
+TASK_CREATED=1775028800
+TASK_TYPE=feature
+TASK_DESCRIPTION=Update agents/doey-boss.md to require AskUserQuestion for all user-facing questions/decisions/clarifications. Plain text only for status updates that don't need a response.
+TASK_TAGS=agent,boss,tui,askuserquestion
+TASK_TEAM=W1
