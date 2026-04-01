@@ -94,17 +94,21 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	dimText := isDone || health == "stale"
 
-	// --- Line 1: icon/spinner + #ID + [type] + title ---
+	// --- Line 1: icon/spinner + #ID + [priority] + [type] + title ---
 	icon := statusIcon(status, t)
 	if hasHB && hs.SpinnerActive {
 		icon = lipgloss.NewStyle().Foreground(t.Primary).Render("⠋")
 	}
 	idStr := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("#" + task.ID)
+	prioBadge := ""
+	if task.Priority >= 0 && task.Priority <= 2 {
+		prioBadge = " " + styles.PriorityBadge(t, task.Priority)
+	}
 	typeBadge := ""
 	if task.Type != "" {
 		typeBadge = styles.TypeTagCard(task.Type, t) + " "
 	}
-	prefix := icon + " " + idStr + " " + typeBadge
+	prefix := icon + " " + idStr + prioBadge + " " + typeBadge
 	prefixWidth := lipgloss.Width(prefix)
 	titleMaxW := contentWidth - prefixWidth
 	if titleMaxW < 4 {
@@ -123,9 +127,9 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	line1 := prefix + lipgloss.NewStyle().Foreground(titleFg).Bold(true).Render(titleText)
 
-	// --- Line 2: status pill + team badge + tags + Q&A ---
+	// --- Line 2: status label + team badge + tags + Q&A ---
 	statusClr := styles.StatusAccentColor(t, status)
-	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(status)
+	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(styles.StatusLabel(status))
 	teamBadge := ""
 	if task.Team != "" {
 		teamBadge = "  " + lipgloss.NewStyle().Foreground(t.Accent).Faint(dimText).Render("["+task.Team+"]")
@@ -344,7 +348,7 @@ func statusIcon(status string, t styles.Theme) string {
 		return lipgloss.NewStyle().Foreground(c).Faint(true)
 	}
 	switch status {
-	case "done":
+	case "done", "complete":
 		return dim(t.Success).Render("✓")
 	case "in_progress":
 		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
@@ -355,7 +359,11 @@ func statusIcon(status string, t styles.Theme) string {
 	case "blocked":
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("○")
 	case "pending_user_confirmation":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
+		return lipgloss.NewStyle().Foreground(styles.StatusAccentColor(t, status)).Render("◉")
+	case "awaiting_user_review":
+		return lipgloss.NewStyle().Foreground(styles.StatusAccentColor(t, status)).Render("◈")
+	case "research":
+		return lipgloss.NewStyle().Foreground(t.Info).Render("◇")
 	case "cancelled":
 		return dim(t.Muted).Render("○")
 	default:

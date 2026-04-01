@@ -37,7 +37,7 @@ func RenderButton(label string, zoneID string, active bool, t Theme) string {
 // StatusAccentColor maps a task status string to an accent color from the theme.
 func StatusAccentColor(t Theme, status string) lipgloss.AdaptiveColor {
 	switch status {
-	case "done":
+	case "done", "complete":
 		return t.Success
 	case "in_progress":
 		return t.Warning
@@ -48,10 +48,64 @@ func StatusAccentColor(t Theme, status string) lipgloss.AdaptiveColor {
 	case "cancelled":
 		return t.Muted
 	case "pending_user_confirmation":
-		return t.Warning
+		return lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
+	case "awaiting_user_review":
+		return lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#C4B5FD"}
+	case "research":
+		return t.Info
 	default:
 		return t.Muted
 	}
+}
+
+// StatusLabel returns a human-friendly label for a raw task status string.
+func StatusLabel(status string) string {
+	switch status {
+	case "active", "in_progress":
+		return "In Progress"
+	case "awaiting_user_review":
+		return "Needs Review"
+	case "pending_user_confirmation":
+		return "Needs Confirmation"
+	case "done", "complete":
+		return "Done"
+	case "cancelled":
+		return "Cancelled"
+	case "research":
+		return "Researching"
+	case "blocked":
+		return "Blocked"
+	case "paused":
+		return "Paused"
+	case "failed":
+		return "Failed"
+	case "draft":
+		return "Draft"
+	default:
+		return status
+	}
+}
+
+// PriorityBadge renders a colored priority badge like "[P0]".
+// Returns "" if priority is negative (unset).
+func PriorityBadge(t Theme, priority int) string {
+	if priority < 0 {
+		return ""
+	}
+	var color lipgloss.AdaptiveColor
+	switch priority {
+	case 0:
+		color = t.Danger
+	case 1:
+		color = t.Warning
+	default:
+		color = t.Muted
+	}
+	label := fmt.Sprintf("[P%d]", priority)
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Bold(true).
+		Render(label)
 }
 
 // accentBorder returns a rounded border with a thin left-side line.

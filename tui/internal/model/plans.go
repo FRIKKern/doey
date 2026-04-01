@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
@@ -131,6 +132,11 @@ type PlansModel struct {
 	detailViewport viewport.Model
 	keyMap         keys.KeyMap
 
+	// Glamour rendering cache
+	lastRenderedBody  string // raw body that was last rendered
+	lastRenderWidth   int    // viewport width used for last render
+	glamourCache      string // cached glamour output
+
 	// Layout
 	width   int
 	height  int
@@ -183,6 +189,11 @@ func (m *PlansModel) SetSize(w, h int) {
 	}
 	m.detailViewport.Width = rightW - 4
 	m.detailViewport.Height = vpH - 1
+
+	// Re-render glamour content if width changed
+	if m.detailViewport.Width != m.lastRenderWidth && m.selectedPlan != nil {
+		m.loadSelectedDetail()
+	}
 }
 
 // SetFocused toggles focus state.
@@ -309,23 +320,17 @@ func (m *PlansModel) loadSelectedDetail() {
 	plan := m.entries[idx]
 	m.selectedPlan = &plan
 
-	// Render plan body as plain text for now.
-	// Once glamour is added, this will render markdown to styled ANSI output.
 	content := m.renderPlanDetail(&plan)
 	m.detailViewport.SetContent(content)
 }
 
 // renderPlanDetail renders the plan detail for the right panel.
+// Metadata is rendered with lipgloss; the body is rendered through glamour.
 func (m *PlansModel) renderPlanDetail(plan *Plan) string {
 	t := m.theme
 	var b strings.Builder
 
-	// Title
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Primary)
-	b.WriteString(titleStyle.Render(plan.Title))
-	b.WriteString("\n\n")
-
-	// Metadata
+	// Metadata header
 	metaStyle := lipgloss.NewStyle().Foreground(t.Muted)
 	if plan.Status != "" {
 		icon := planStatusIcon(plan.Status, t)
@@ -341,13 +346,53 @@ func (m *PlansModel) renderPlanDetail(plan *Plan) string {
 		b.WriteString(metaStyle.Render("Tags: "+strings.Join(plan.Tags, ", ")) + "\n")
 	}
 
-	// Body
+	// Body — render through glamour with caching
 	if plan.Body != "" {
-		b.WriteString("\n")
-		b.WriteString(plan.Body)
+		rendered := m.renderMarkdown(plan.Body)
+		b.WriteString(rendered)
 	}
 
 	return b.String()
+}
+
+// renderMarkdown renders markdown through glamour with caching.
+// Re-renders only when the body content or viewport width changes.
+func (m *PlansModel) renderMarkdown(body string) string {
+	vpWidth := m.detailViewport.Width
+	if vpWidth < 20 {
+		vpWidth = 20
+	}
+
+	// Return cached result if content and width haven't changed
+	if body == m.lastRenderedBody && vpWidth == m.lastRenderWidth && m.glamourCache != "" {
+		return m.glamourCache
+	}
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(vpWidth),
+	)
+	if err != nil {
+		// Fallback to plain text
+		m.glamourCache = "\n" + body
+		m.lastRenderedBody = body
+		m.lastRenderWidth = vpWidth
+		return m.glamourCache
+	}
+
+	rendered, err := renderer.Render(body)
+	if err != nil {
+		// Fallback to plain text
+		m.glamourCache = "\n" + body
+		m.lastRenderedBody = body
+		m.lastRenderWidth = vpWidth
+		return m.glamourCache
+	}
+
+	m.glamourCache = rendered
+	m.lastRenderedBody = body
+	m.lastRenderWidth = vpWidth
+	return rendered
 }
 
 // View renders the split-pane layout.
