@@ -186,10 +186,31 @@ else
   warn_msg "jq not found (optional — hooks will use python3 fallback)"
 fi
 
-if has gum; then
-  check_ok "gum" "$(gum --version 2>/dev/null || echo 'unknown')"
+_find_gum() {
+  command -v gum >/dev/null 2>&1 && return 0
+  for d in "$(go env GOPATH 2>/dev/null)/bin" "$HOME/go/bin"; do
+    [ -x "$d/gum" ] && { export PATH="$d:$PATH"; return 0; }
+  done
+  return 1
+}
+
+if _find_gum; then
+  check_ok "gum ${DIM}($(gum --version 2>/dev/null || echo 'unknown'))${RESET}"
 else
-  warn_msg "gum not found (optional — install with: brew install gum for luxury CLI)"
+  if [ -n "${GO_BIN:-}" ] || command -v go >/dev/null 2>&1; then
+    printf "  ${WARN}⚠${RESET}  gum not found — installing via go install...\n"
+    if go install github.com/charmbracelet/gum@latest 2>&1; then
+      if _find_gum; then
+        check_ok "gum installed ${DIM}($(gum --version 2>/dev/null || echo 'unknown'))${RESET}"
+      else
+        warn_msg "gum installed but not found on PATH — add \$(go env GOPATH)/bin to PATH"
+      fi
+    else
+      warn_msg "gum install failed (optional — luxury CLI will use fallback)"
+    fi
+  else
+    warn_msg "gum not found (optional — install with: go install github.com/charmbracelet/gum@latest)"
+  fi
 fi
 
 if [ -f ~/.claude/agents/doey-manager.md ] && [ -f ~/.local/bin/doey ]; then

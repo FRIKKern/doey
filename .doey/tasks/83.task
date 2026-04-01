@@ -1,0 +1,10 @@
+TASK_ID=83
+TASK_TITLE=Fix doctor skills check path bug
+TASK_STATUS=done
+TASK_CREATED=1775027600
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Doctor checks skills at $PROJECT_DIR/.claude/skills/ which fails when run from non-Doey projects. Should resolve relative to Doey install source.
+TASK_TAGS=doctor,skills,bugfix
+TASK_TEAM=W1
+TASK_LOG_1775027600=DISPATCHED: to W1.6
+TASK_LOG_1775027778=COMPLETE: W1.6 finished. Fix: doctor skills check now uses resolve_repo_dir() instead of $PROJECT_DIR for skills path. Changed line 3229 from $PROJECT_DIR to $_doey_repo. Bash 3.2 compat pass.

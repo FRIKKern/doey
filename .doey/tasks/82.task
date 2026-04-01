@@ -1,0 +1,10 @@
+TASK_ID=82
+TASK_TITLE=Add automatic gum installation to install.sh and doey update
+TASK_STATUS=done
+TASK_CREATED=1775027400
+TASK_TYPE=feature
+TASK_DESCRIPTION=Auto-install gum via go install in install.sh and doey update flow so premium banner works out of the box. Add gum to doctor checks.
+TASK_TAGS=install,gum,banner,doctor
+TASK_TEAM=W1
+TASK_LOG_1775027400=DISPATCHED: to W1.5
+TASK_LOG_1775027512=COMPLETE: W1.5 finished. Changes: install.sh (auto-install gum via go install, fallback warning), shell/doey.sh _update_finish_banner (same gum install logic + sets HAS_GUM=true), shell/doey.sh doctor (changed gum check from _doc_check skip to _doc_check fail). Bash 3.2 compat tests pass (41 files, 0 violations).

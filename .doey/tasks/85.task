@@ -1,0 +1,8 @@
+TASK_ID=85
+TASK_TITLE=Add hook enforcement — block dispatch without active .task file
+TASK_STATUS=done
+TASK_CREATED=1775028300
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Edit .claude/hooks/on-pre-tool-use.sh — when SM does send-keys to team window pane (window > 0), verify .doey/tasks/ has at least one TASK_STATUS=active or in_progress. Block with exit 2 if none found.
+TASK_TAGS=hook,sm,dispatch,enforcement
+TASK_TEAM=W1
