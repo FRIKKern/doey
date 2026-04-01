@@ -1,0 +1,25 @@
+TASK_ID=79
+TASK_TITLE=Full codebase simplification
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=1774990676
+TASK_TYPE=refactor
+TASK_DESCRIPTION=Full simplification pass across the entire Doey codebase. Goal: reduce cognitive load, cut ceremony, DRY repeated logic, align patterns. Two teams working in parallel on non-overlapping domains. Team 1: shell core + hooks. Team 2: skills + agents + docs. Constraints: bash 3.2 compat, Edit not Write, Read before editing, preserve all behavior, bash -n all .sh files after. Each team writes a report to RUNTIME_DIR/reports/simplify_team_W.md with per-file before/after line counts.
+TASK_TAGS=refactor,shell,hooks,agents,skills,docs
+TASK_PRIORITY=P1
+TASK_TEAM=W1,W2
+TASK_LOG_1774991084=PROGRESS: Dispatching parallel simplification — W1=Shell+Hooks, W2=Skills+Agents+Docs
+TASK_SUBTASKS=1:W1.1: Simplify shell/doey.sh (5878L):done\n2:W1.2: Simplify doey-task-helpers.sh, settings-panel.sh, info-panel.sh:done\n3:W1.3: Simplify small shell scripts (17 files):done\n4:W1.4: Simplify all .claude/hooks/ (14 files):done\n5:W2.1: Simplify all .claude/skills/*/SKILL.md files (~25 files):done\n6:W2.2: Simplify all agents/*.md files (~18 files):done\n7:W2.3: Simplify CLAUDE.md, README.md, docs/*.md files:done
+TASK_UPDATED=1774991114
+TASK_DECISION_LOG=1774991646:W1.2 done (89L saved across 3 files). W1.3 done (57L saved across 4 of 17 files). W1.1 and W1.4 still working.\n1774992004:All 4 workers FINISHED. W1: doey.sh -39L, W2: helpers -89L, W3: small scripts -57L, W4: hooks -15L (1 file). Total ~200L saved. All bash -n pass.\n1774992468:Wave 1 complete: 3/3 workers finished. Skills -91L, Agents -556L, Docs -55L. Total -702L (-9.7%). No behavior changes.
+TASK_REPORT_1_TIMESTAMP=1774992004
+TASK_REPORT_1_AUTHOR=Manager_W1
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Task #79 W1 Complete
+TASK_REPORT_1_BODY=Shell+Hooks simplification done. 4 workers, ~200 lines removed. All bash -n pass. Report at /tmp/doey/doey/reports/simplify_team_1.md
+TASK_REPORT_2_TIMESTAMP=1774992468
+TASK_REPORT_2_AUTHOR=Manager_W2
+TASK_REPORT_2_TYPE=completion
+TASK_REPORT_2_TITLE=Team 2 Complete
+TASK_REPORT_2_BODY=All 3 subtasks done. 60 files processed, 702 lines removed (9.7% reduction). Report at /tmp/doey/doey/reports/simplify_team_2.md
+TASK_RESULT=Committed 73f743a: 45 files, -929 lines. W1: shell/hooks, W2: skills/agents/docs
+TASK_FILES=shell/doey.sh,agents/doey-session-manager.md,agents/doey-boss.md,.claude/skills/doey-dispatch/SKILL.md,CLAUDE.md
