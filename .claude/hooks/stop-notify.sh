@@ -18,6 +18,10 @@ _debug_sent() {
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=$1" "type=$2" "delivery=${3:-file}" "success=true"
 }
 
+_xml_escape() {
+  printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
 _send_message_file() {
   local target_pane="$1" subject="$2" body="$3"
   local sender="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
@@ -97,28 +101,63 @@ if is_worker; then
 
   RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
   STATUS="done"
+  _SUMMARY="" _TOOL_COUNT="0" _FILES_COUNT="0" _RESULT_TS="0"
   if [ -f "$RESULT_FILE" ]; then
-    STATUS=$(jq -r '.status // "done"' "$RESULT_FILE" 2>/dev/null) \
-      || STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('status','done'))" < "$RESULT_FILE" 2>/dev/null) \
-      || STATUS="done"
+    if command -v jq >/dev/null 2>&1; then
+      STATUS=$(jq -r '.status // "done"' "$RESULT_FILE" 2>/dev/null) || STATUS="done"
+      _SUMMARY=$(jq -r '.summary // ""' "$RESULT_FILE" 2>/dev/null) || _SUMMARY=""
+      _TOOL_COUNT=$(jq -r '.tool_calls // 0' "$RESULT_FILE" 2>/dev/null) || _TOOL_COUNT="0"
+      _FILES_COUNT=$(jq '.files_changed | length' "$RESULT_FILE" 2>/dev/null) || _FILES_COUNT="0"
+      _RESULT_TS=$(jq -r '.timestamp // 0' "$RESULT_FILE" 2>/dev/null) || _RESULT_TS="0"
+    elif command -v python3 >/dev/null 2>&1; then
+      STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('status','done'))" "$RESULT_FILE" 2>/dev/null) || STATUS="done"
+      _SUMMARY=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('summary',''))" "$RESULT_FILE" 2>/dev/null) || _SUMMARY=""
+      _TOOL_COUNT=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('tool_calls',0))" "$RESULT_FILE" 2>/dev/null) || _TOOL_COUNT="0"
+      _FILES_COUNT=$(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1])).get('files_changed',[])))" "$RESULT_FILE" 2>/dev/null) || _FILES_COUNT="0"
+      _RESULT_TS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('timestamp',0))" "$RESULT_FILE" 2>/dev/null) || _RESULT_TS="0"
+    fi
   fi
 
-  PANE_DISPLAY="${DOEY_PANE_ID:-${PANE_TITLE}}"
+  # Compute duration from status file
+  _DURATION="unknown"
+  _STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+  if [ -f "$_STATUS_FILE" ] && [ "${_RESULT_TS}" != "0" ]; then
+    _start_ts=$(grep '^UPDATED:' "$_STATUS_FILE" 2>/dev/null | head -1 | sed 's/^UPDATED:[[:space:]]*//' | tr -d ' ') || _start_ts=""
+    if [ -z "$_start_ts" ]; then
+      _start_ts=$(stat -c%Y "$_STATUS_FILE" 2>/dev/null || stat -f%m "$_STATUS_FILE" 2>/dev/null) || _start_ts=""
+    fi
+    if [ -n "${_start_ts:-}" ] && [ "$_start_ts" -gt 0 ] 2>/dev/null && [ "$_RESULT_TS" -gt "$_start_ts" ] 2>/dev/null; then
+      _DURATION="$((_RESULT_TS - _start_ts))s"
+    fi
+  fi
+
   LAST_MSG=$(parse_field "last_assistant_message")
 
   if [ "$_team_type" = "freelancer" ]; then
     _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
     _target="$SESSION_NAME:${_sm_pane:-0.2}"
-    _label="Freelancer"; _subject="freelancer_finished"
+    _subject="freelancer_finished"
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
     _target="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
-    _label="Worker"; _subject="worker_finished"
+    _subject="worker_finished"
   fi
 
   _pane_alive "$_target" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$_target"; exit 0; }
-  MSG="${_label} ${PANE_DISPLAY} finished (${STATUS})"
-  [ -n "$LAST_MSG" ] && MSG="${MSG}: $(sanitize_message "$LAST_MSG" 100)"
+
+  # Build summary: prefer result summary, fall back to last message
+  _NOTIFY_SUMMARY="${_SUMMARY}"
+  [ -z "$_NOTIFY_SUMMARY" ] && [ -n "$LAST_MSG" ] && _NOTIFY_SUMMARY=$(sanitize_message "$LAST_MSG" 100)
+  _STATUS_LABEL="FINISHED"
+  [ "$STATUS" = "error" ] && _STATUS_LABEL="ERROR"
+  MSG="<task-notification>
+  <pane>${WINDOW_INDEX}.${PANE_INDEX}</pane>
+  <status>${_STATUS_LABEL}</status>
+  <summary>$(_xml_escape "${_NOTIFY_SUMMARY}")</summary>
+  <files-changed>${_FILES_COUNT}</files-changed>
+  <tool-count>${_TOOL_COUNT}</tool-count>
+  <duration>${_DURATION}</duration>
+</task-notification>"
   _notify_pane "$_target" "$_subject" "$MSG"
   _debug_sent "$_target" "$_subject"
   { [ "$_team_type" = "freelancer" ] && touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null; } || true

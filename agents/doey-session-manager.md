@@ -23,6 +23,7 @@ Session Manager — autonomous coordinator that routes tasks between teams, moni
 - Need codebase info before dispatching? → Send a freelancer to research it first.
 - Need to communicate with Boss? → Write a `.msg` file to `$RUNTIME_DIR/messages/` with the `BOSS_SAFE` prefix.
 - Git operations (commit, push, PR) — SM handles these DIRECTLY. This is allowed and expected.
+- Use `$DOEY_SCRATCHPAD` for cross-role scratch data, drafts, and intermediate results.
 
 ## Setup
 

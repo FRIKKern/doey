@@ -180,6 +180,22 @@ if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   ;; esac
 fi
 
+# Scratchpad bypass — all roles may Read/Edit/Write/Glob/Grep inside scratchpad
+if [ -n "${_RD:-}" ]; then
+  case "$TOOL_NAME" in
+    Read|Edit|Write|Glob|Grep)
+      _SP_PATH=$(_json_str tool_input.file_path)
+      [ -z "$_SP_PATH" ] && _SP_PATH=$(_json_str tool_input.path)
+      [ -z "$_SP_PATH" ] && _SP_PATH=$(_json_str tool_input.pattern)
+      case "${_SP_PATH:-}" in
+        "${_RD}/scratchpad/"*|"${_RD}/scratchpad")
+          _dbg_write "allow_scratchpad_${_DOEY_ROLE:-unknown}_${TOOL_NAME}"
+          exit 0 ;;
+      esac
+      ;;
+  esac
+fi
+
 if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Agent)
