@@ -3,24 +3,14 @@ name: doey-login
 description: Fix auth across Doey sessions. Checks Keychain token — if valid, restarts instances immediately. If expired, prompts for one /login then restarts. Use when you need to "login", "fix auth", "not logged in", or "refresh authentication".
 ---
 
-## Context
-
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - All sessions: !`tmux list-sessions -F '#{session_name} #{session_windows}w' 2>/dev/null | grep doey || true`
-- Window index: !`echo "${DOEY_WINDOW_INDEX:-0}"`
 
-## Usage
+Usage: `/doey-login` (ask scope) | `session` (default) | `all` | `team N`
 
-`/doey-login` — interactive (ask scope)
-`/doey-login session` — current session only (default)
-`/doey-login all` — all doey sessions
-`/doey-login team N` — specific team window only
+### 1. Parse → set TARGET_SCOPE (`session`|`all`|window number)
 
-## Step 1: Parse arguments
-
-No args → ask (default: this session). Set **TARGET_SCOPE** to `session`, `all`, or a window number.
-
-## Step 2: Check token validity
+### 2. Check token validity
 
 ```bash
 CRED=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
@@ -32,33 +22,19 @@ exp = oauth.get('expiresAt', 0)
 exp_dt = datetime.datetime.fromtimestamp(exp/1000 if exp > 1e12 else exp)
 now = datetime.datetime.now()
 remaining = exp_dt - now
-print(f'Expires: {exp_dt}')
-print(f'Remaining: {remaining}')
-valid = now < exp_dt
-print(f'Valid: {valid}')
+print(f'Expires: {exp_dt}  Remaining: {remaining}  Valid: {now < exp_dt}')
 print(f'Tier: {oauth.get(\"rateLimitTier\", \"unknown\")}')
-if not valid:
-    print('ACTION: needs_login')
-elif remaining < datetime.timedelta(hours=1):
-    print('ACTION: needs_login')
-else:
-    print('ACTION: restart_only')
+print('ACTION: restart_only' if now < exp_dt and remaining >= datetime.timedelta(hours=1) else 'ACTION: needs_login')
 " 2>/dev/null
 ```
 
-**If `restart_only`:** proceed to Step 3.
-**If `needs_login`:** tell user to run `/login`, wait for confirmation, re-check, then proceed.
+`restart_only` → Step 3. `needs_login` → tell user to `/login`, wait, re-check.
 
-## Step 3: Restart instances
-
-Restart based on TARGET_SCOPE. Never restart Info Panel (0.0) or the current pane.
-
-### Helper
+### 3. Restart (never 0.0 or current pane)
 
 ```bash
 kill_and_relaunch() {
-  local PANE="$1" CMD="$2"
-  local SHELL_PID CHILD_PID
+  local PANE="$1" CMD="$2" SHELL_PID CHILD_PID
   SHELL_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}' 2>/dev/null || true)
   [ -z "$SHELL_PID" ] && return 1
   CHILD_PID=$(pgrep -P "$SHELL_PID" 2>/dev/null || true)
@@ -69,22 +45,16 @@ kill_and_relaunch() {
   tmux send-keys -t "$PANE" "clear" Enter 2>/dev/null || true; sleep 0.5
   tmux send-keys -t "$PANE" "$CMD" Enter; sleep 0.5
 }
-```
 
-### restart_team function
-
-```bash
 restart_team() {
   local SESS="$1" RT="$2" W="$3" SKIP_PANE="$4"
   local TEAM_ENV="${RT}/team_${W}.env"
   [ ! -f "$TEAM_ENV" ] && { echo "WARNING: team_${W}.env not found"; return; }
   local WORKER_PANES=$(grep '^WORKER_PANES=' "$TEAM_ENV" | cut -d= -f2 | tr -d '"')
   echo "=== Team $W ==="
-
   [ "${SESS}:${W}.0" != "$SKIP_PANE" ] && {
     kill_and_relaunch "${SESS}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\""
     echo "  ${W}.0 Manager ✓"; }
-
   for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
     local PANE="${SESS}:${W}.${wp}" PANE_SAFE=$(echo "${SESS}:${W}.${wp}" | tr ':-.' '_')
     [ "$PANE" = "$SKIP_PANE" ] && continue
@@ -101,42 +71,26 @@ restart_team() {
 }
 ```
 
-### Apply based on scope
+### Apply scope
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-SESSION_NAME=$(grep '^SESSION_NAME=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
-MY_PANE="${SESSION_NAME}:0.2"  # SM pane (0.1 is Boss)
-TEAM_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" | cut -d= -f2 | tr -d '"')
-
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+SESSION_NAME=$(grep '^SESSION_NAME=' "${RD}/session.env" | cut -d= -f2 | tr -d '"')
+MY_PANE="${SESSION_NAME}:0.2"
+TEAM_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RD}/session.env" | cut -d= -f2 | tr -d '"')
 case "$TARGET_SCOPE" in
-[0-9]|[0-9][0-9])
-  restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$TARGET_SCOPE" "$MY_PANE"
-  ;;
-session)
-  for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-    restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$W" "$MY_PANE"
-  done
-  ;;
+[0-9]|[0-9][0-9]) restart_team "$SESSION_NAME" "$RD" "$TARGET_SCOPE" "$MY_PANE" ;;
+session) for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do restart_team "$SESSION_NAME" "$RD" "$W" "$MY_PANE"; done ;;
 all)
-  for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-    restart_team "$SESSION_NAME" "$RUNTIME_DIR" "$W" "$MY_PANE"
-  done
+  for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do restart_team "$SESSION_NAME" "$RD" "$W" "$MY_PANE"; done
   for OTHER in $(tmux list-sessions -F '#{session_name}' | grep '^doey-' | grep -v "$SESSION_NAME"); do
     OTHER_RT=$(tmux show-environment -t "$OTHER" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
     [ -z "$OTHER_RT" ] && continue
-    OTHER_TEAMS=$(grep '^TEAM_WINDOWS=' "${OTHER_RT}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
-    for W in $(echo "$OTHER_TEAMS" | tr ',' ' '); do
+    for W in $(grep '^TEAM_WINDOWS=' "${OTHER_RT}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"' | tr ',' ' '); do
       restart_team "$OTHER" "$OTHER_RT" "$W" ""
     done
-  done
-  ;;
+  done ;;
 esac
 ```
 
-## Step 4: Report
-Print: token status, scope, counts (restarted/skipped).
-
-## Rules
-- Never restart current pane or Info Panel (0.0). Skip reserved. 0.5s between restarts
-- Valid token = skip /login. Default scope: session. Bash 3.2
+Report: token status, scope, counts. Never restart current pane or 0.0. Skip reserved.

@@ -14,9 +14,9 @@
 # All variables use the DOEY_ prefix and are commented out by default.
 # The values shown are the built-in defaults.
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Grid & Teams
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Number of worker columns in the initial grid layout (workers = cols × 2)
 # DOEY_INITIAL_WORKER_COLS=2
@@ -37,9 +37,9 @@
 # Prevents runaway team creation under load.
 # DOEY_MAX_TEAMS=5
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Auth & Launch Timing
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Seconds between launching each worker instance (prevents auth rate-limit on startup)
 # Lower only if your account has high rate limits and you need faster boots.
@@ -54,9 +54,9 @@
 # Seconds the Window Manager waits after launch before briefing
 # DOEY_MANAGER_BRIEF_DELAY=8
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Dynamic Grid Behavior
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Seconds of idle time before a worker column is collapsed
 # DOEY_IDLE_COLLAPSE_AFTER=60
@@ -67,16 +67,16 @@
 # Milliseconds to wait after paste for the terminal to settle
 # DOEY_PASTE_SETTLE_MS=500
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Panel & Monitoring
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Seconds between info panel / settings panel refresh cycles
 # DOEY_INFO_PANEL_REFRESH=300
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Models
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Model for Window Manager instances (orchestrator — needs strong reasoning)
 # DOEY_MANAGER_MODEL=opus
@@ -87,9 +87,9 @@
 # Model for Session Manager (cross-team orchestration)
 # DOEY_SESSION_MANAGER_MODEL=opus
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Team Definitions (Advanced)
-# =============================================================================
+# ─────────────────────────────────────────────
 #
 # Define custom teams with specific configurations. When DOEY_TEAM_COUNT is
 # set, it overrides DOEY_INITIAL_TEAMS and DOEY_INITIAL_WORKTREE_TEAMS.
@@ -164,9 +164,9 @@
 # DOEY_TEAM_2_TYPE=premade
 # DOEY_TEAM_2_DEF=seo
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Project-Specific Overrides
-# =============================================================================
+# ─────────────────────────────────────────────
 # These settings are most useful in per-project .doey/config.sh files.
 # They let you tune team size and timing per-project without affecting
 # your global defaults.
@@ -182,9 +182,9 @@
 #   DOEY_INITIAL_WORKTREE_TEAMS=2
 #   DOEY_MAX_WORKERS=30
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Remote Access & Tunneling
-# =============================================================================
+# ─────────────────────────────────────────────
 # Auto-detect remote sessions and start tunnels for localhost services.
 
 # Enable auto-tunnel when remote session detected (true/false)

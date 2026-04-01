@@ -7,49 +7,33 @@ description: Dispatch a research task to a worker. Stop hook blocks until report
 - Team env: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_${DOEY_WINDOW_INDEX:-0}.env 2>/dev/null || true`
 - Statuses: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status/*.status; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done 2>/dev/null || true`
 
-Dispatch a research task with guaranteed report-back. `PANE_SAFE` = pane ID with `tr ':-.' '_'`.
+Research with guaranteed report. `PANE_SAFE` = pane ID via `tr ':-.' '_'`.
 
-### 1. Pick idle worker
-Find unreserved worker at `❯` prompt. Skip `.reserved`. If none idle, pick a different worker.
+### 1. Pick idle unreserved worker (❯ prompt)
 
-### 2. Create task marker + clear old report
+### 2. Create marker + rename
 ```bash
-mkdir -p "${RUNTIME_DIR}/research" "${RUNTIME_DIR}/reports"
-cat > "${RUNTIME_DIR}/research/${PANE_SAFE}.task" << 'MARKER'
-<research question or goal>
-MARKER
-rm -f "${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
-```
-
-### 3. Rename pane (restart if crashed per `/doey-dispatch` pre-flight)
-```bash
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+mkdir -p "${RD}/research" "${RD}/reports"
+echo "<research goal>" > "${RD}/research/${PANE_SAFE}.task"
+rm -f "${RD}/reports/${PANE_SAFE}.report"
 tmux select-pane -t "$PANE" -T "research-topic_$(date +%m%d)"
 ```
 
-### 4. Dispatch task prompt
-Write to tmpfile, paste via load-buffer, submit:
+### 3. Dispatch (tmpfile → load-buffer → paste-buffer → Enter)
 ```
 Research & Planning Agent — project: ${PROJECT_NAME}
-Project directory: ${PROJECT_DIR}  |  Use absolute paths.
-## Research Task
-<QUESTION_OR_GOAL>
-## Instructions
-**Phase 1 — Research:** Spawn subagents in parallel (Explore/Plan/general-purpose). Second wave if gaps.
-**Phase 2 — Plan:** Option A (recommended) + Option B (alternative). Include dispatch-ready task prompts.
-**Phase 3 — Write Report** to ${REPORT_PATH}:
-## Research Report
-**Topic:** ...  |  **Pane:** ${PANE}  |  **Time:** ...
-### Summary | Findings | Key Files | Proposed Plan (Option A + B) | Risks
+Project directory: ${PROJECT_DIR}  |  Absolute paths.
+## Task: <QUESTION_OR_GOAL>
+Phase 1: Spawn subagents in parallel. Second wave if gaps.
+Phase 2: Option A (recommended) + B. Include dispatch-ready prompts.
+Phase 3: Write report to ${REPORT_PATH} — Summary, Findings, Key Files, Plan (A+B), Risks.
 Stop hook blocks until report exists.
 ```
-Dispatch: `tmux load-buffer $TASKFILE && tmux paste-buffer -t $PANE`, sleep by line count (>200: 2s, >100: 1.5s, else 0.5s), Enter, rm tmpfile.
+Settle by line count (>200: 2s, >100: 1.5s, else 0.5s).
 
-### 5. Verify
-`sleep 5`, grep for `Read|Edit|Bash|thinking`. If idle: Enter again, 3s, re-check → unstick per `/doey-dispatch`.
+### 4. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)
 
-### 6. Read report
-Check `${RUNTIME_DIR}/reports/${PANE_SAFE}.report`. Present summary, ask Option A or B, dispatch via `/doey-dispatch`.
+### 5. Read report → present summary → ask A or B → `/doey-dispatch`
 
-### Rules
-- Task marker BEFORE dispatch (stop hook blocks until report written)
-- Include report path in prompt. Never delegate to own pane. Always tmpfile + `load-buffer`
+Marker BEFORE dispatch (stop hook blocks). Include report path. Never own pane. Always tmpfile + `load-buffer`.

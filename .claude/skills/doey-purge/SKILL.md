@@ -4,47 +4,33 @@ description: Two-wave purge — audit every project file for context rot and cod
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-- Team env: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_${DOEY_WINDOW_INDEX:-0}.env 2>/dev/null || true`
 
-**Usage:** `/doey-purge` (full 2-wave audit+fix) | `runtime` (clean stale runtime files only)
+Usage: `/doey-purge` (2-wave audit+fix) | `runtime` (clean stale files only)
 
 ### Inventory
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-WINDOW_INDEX="${DOEY_WINDOW_INDEX:-0}"
-[ -f "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" ] && source "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-mkdir -p "${RUNTIME_DIR}/reports"
-wc -l "$PROJECT_DIR"/agents/*.md "$PROJECT_DIR"/CLAUDE.md \
-      "$PROJECT_DIR"/.claude/skills/*/SKILL.md "$PROJECT_DIR"/docs/*.md \
-      "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh \
-      "$PROJECT_DIR"/.claude/settings.local.json 2>/dev/null | sort -rn | tee "${RUNTIME_DIR}/reports/purge_before.txt"
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RD}/session.env"
+mkdir -p "${RD}/reports"
+wc -l "$PROJECT_DIR"/{agents/*.md,CLAUDE.md,.claude/skills/*/SKILL.md,docs/*.md,.claude/hooks/*.sh,shell/*.sh} 2>/dev/null | sort -rn | tee "${RD}/reports/purge_before.txt"
 ```
 
-### Wave 1: Audit (4 workers)
-Dispatch via `/doey-dispatch`. No Agent tool. Each writes `${RUNTIME_DIR}/reports/purge_<domain>.md`.
+### Wave 1: Audit (4 workers via `/doey-dispatch`, no Agent)
+Each writes `${RD}/reports/purge_<domain>.md`.
+Categories (HIGH/MED/LOW): BLOAT, REDUNDANCY, STALENESS, CONTRADICTION, DEAD WEIGHT, BASH 3.2, BUG, DEAD CODE.
+Assignments: A=Agents+CLAUDE.md, B=Hooks+Shell, C=Skills, D=Docs+README.
 
-**Categories** (HIGH/MED/LOW): BLOAT, REDUNDANCY, STALENESS, CONTRADICTION, DEAD WEIGHT, BASH 3.2, BUG, DEAD CODE.
-**Assignments:** A=Agents+CLAUDE.md, B=Hooks+Shell+Settings, C=Skills, D=Docs+README+Memory.
-**Report:** `## File: path (N lines)` → `CATEGORY [severity]: description + fix` → `Estimate: N → ~M (-X%)`
+### Between Waves — **ask user before fixes**
 
-### Between Waves
-Read all `purge_*.md` reports. Present consolidated summary. **Ask user before dispatching fixes.**
+### Wave 2: Fix (same ownership, Edit not Write, `bash -n` after .sh)
 
-### Wave 2: Fix (4 workers)
-Same ownership split. Edit not Write. Read before editing. `bash -n` after .sh edits.
-
-### Verification
-Re-run `wc -l`, diff against `purge_before.txt`:
+### Verify
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
+source "${RD}/session.env"
 for f in "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh; do
   bash -n "$f" && echo "OK: $(basename "$f")" || echo "FAIL: $(basename "$f")"
 done
-echo "=== Context audit ===" && bash "$PROJECT_DIR/shell/context-audit.sh" --repo
+bash "$PROJECT_DIR/shell/context-audit.sh" --repo
 ```
 
-### Rules
-1. Ask user before Wave 2 — never auto-fix without confirmation
-2. No Agent tool in worker prompts
+No Agent tool in worker prompts.

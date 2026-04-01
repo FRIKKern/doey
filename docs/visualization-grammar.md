@@ -1,31 +1,28 @@
-# Doey Visualization Grammar
+# Visualization Grammar
 
-Terminal-safe visual language used by all Doey components for consistent output.
+Terminal-safe visual language for consistent Doey output.
 
-## Symbol Table
+## Symbols
 
-| Symbol | ASCII | Name | Usage |
-|--------|-------|------|-------|
-| ◆ | `*` | Section diamond | Top-level sections |
-| • | `-` | Subsection bullet | List items |
-| → | `->` | Flow arrow | Implications, transitions |
-| ↳ | `>` | Nested detail | Sub-steps, indented context |
-| ⇒ | `=>` | Convergence | Agreement across sources |
-| ⚡ | `!!` | Conflict | Disagreement, incompatibility |
-| ⚠ | `[!]` | Risk | Warning, potential issue |
-| ⊘ | `[X]` | Bottleneck | Blocked, capacity limit |
-| ★ | `[*]` | New evidence | Fresh finding |
-| ✓ | `[v]` | Done check | Completed |
-| ◑ | `[~]` | Active half | In progress |
-| ○ | `[ ]` | Ready circle | Available, pending |
+| Symbol | ASCII | Meaning |
+|--------|-------|---------|
+| ◆ | `*` | Top-level section |
+| • | `-` | List item |
+| → | `->` | Transition |
+| ↳ | `>` | Nested detail |
+| ⇒ | `=>` | Agreement |
+| ⚡ | `!!` | Conflict |
+| ⚠ | `[!]` | Warning |
+| ⊘ | `[X]` | Blocked |
+| ★ | `[*]` | New finding |
+| ✓ | `[v]` | Done |
+| ◑ | `[~]` | In progress |
+| ○ | `[ ]` | Pending |
 
-## Rendering Rules
+## Rules
 
-- No enclosing box borders (no `│` `║` `┃` verticals)
-- Horizontal rules OK (`─` or `---`)
-- 2 spaces per indent level
-- No hardcoded ANSI — use shell helpers
-- Never assume >80 cols
+- No box borders (`│` `║` `┃`); horizontal rules OK (`─`/`---`)
+- 2-space indent, no hardcoded ANSI, max 80 cols
 
 ## Visualization Types
 
@@ -69,11 +66,11 @@ Terminal-safe visual language used by all Doey components for consistent output.
 
 | Mode | Columns | Behavior |
 |------|---------|----------|
-| Wide | ≥120 | Full detail, side-by-side layout where useful |
-| Medium | 80–119 | Standard single-column layout |
-| Narrow | <80 | Compact: abbreviations, vertical stacking, truncated paths |
+| Wide | ≥120 | Full detail, side-by-side |
+| Medium | 80–119 | Standard single-column |
+| Narrow | <80 | Abbreviations, vertical stacking, truncated paths |
 
-Check terminal width via `tput cols` or `$COLUMNS` and adapt.
+Detect via `tput cols` or `$COLUMNS`.
 
 ## Configuration
 

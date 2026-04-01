@@ -117,17 +117,15 @@ plan_update_field() {
     return 1
   fi
 
-  local tmp="${plan_file}.tmp.$$"
   local now
   now=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-  # Update the target field
-  sed "s|^${field}:.*|${field}: ${value}|" "$plan_file" > "$tmp" && mv "$tmp" "$plan_file"
-
-  # Also update the 'updated' timestamp (unless we just set it)
+  # Update the target field (and timestamp) in one pass
+  local tmp="${plan_file}.tmp.$$"
   if [ "$field" != "updated" ]; then
-    tmp="${plan_file}.tmp.$$"
-    sed "s|^updated:.*|updated: ${now}|" "$plan_file" > "$tmp" && mv "$tmp" "$plan_file"
+    sed -e "s|^${field}:.*|${field}: ${value}|" -e "s|^updated:.*|updated: ${now}|" "$plan_file" > "$tmp" && mv "$tmp" "$plan_file"
+  else
+    sed "s|^${field}:.*|${field}: ${value}|" "$plan_file" > "$tmp" && mv "$tmp" "$plan_file"
   fi
 }
 

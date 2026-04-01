@@ -1,6 +1,6 @@
 # Windows (WSL2)
 
-> Requires Windows 10 (2004+) or Windows 11 with admin access.
+> Windows 10 (2004+) or Windows 11, admin access required.
 
 ### Setup
 
@@ -25,8 +25,8 @@ From here, usage is identical to macOS/Linux. See [Quick Start](../README.md#qui
 
 ### Tips
 
-- Work inside `~/` — `/mnt/c/...` is significantly slower
-- **Windows Terminal** renders the tmux grid best
+- Work inside `~/` — `/mnt/c/` is much slower
+- **Windows Terminal** renders tmux best
 - `code .` opens VS Code with WSL remote extension
 - Limit WSL2 RAM in `%UserProfile%\.wslconfig`:
   ```ini

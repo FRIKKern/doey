@@ -302,14 +302,10 @@ while true; do
   done
 
   # Tunnel status
-  _tunnel_url=""
-  _tunnel_provider=""
-  _tunnel_error=""
-  if [ -f "${RUNTIME_DIR}/tunnel.env" ]; then
-    _tunnel_url=$(grep '^TUNNEL_URL=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-)
-    _tunnel_provider=$(grep '^TUNNEL_PROVIDER=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-)
-    _tunnel_error=$(grep '^TUNNEL_ERROR=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-)
-  fi
+  read_env_file "${RUNTIME_DIR}/tunnel.env" TUNNEL_URL TUNNEL_PROVIDER TUNNEL_ERROR
+  _tunnel_url="$_ENV_TUNNEL_URL"
+  _tunnel_provider="$_ENV_TUNNEL_PROVIDER"
+  _tunnel_error="$_ENV_TUNNEL_ERROR"
 
   # Remote mode
   _is_remote=$(tmux show-environment DOEY_REMOTE 2>/dev/null | cut -d= -f2-) || _is_remote=""
@@ -396,19 +392,15 @@ while true; do
 
   _color_idx=$((RANDOM % 6))
   case "$_color_idx" in
-    0) TITLE_COLOR="${C_BOLD_CYAN}" ;;
-    1) TITLE_COLOR="${C_BOLD_GREEN}" ;;
-    2) TITLE_COLOR="${C_BOLD_YELLOW}" ;;
-    3) TITLE_COLOR="${C_BOLD_MAGENTA}" ;;
-    4) TITLE_COLOR="${C_BOLD_RED}" ;;
-    5) TITLE_COLOR="${C_BOLD_WHITE}" ;;
+    0) TITLE_COLOR="${C_BOLD_CYAN}";    _gum_fg="6" ;;
+    1) TITLE_COLOR="${C_BOLD_GREEN}";   _gum_fg="2" ;;
+    2) TITLE_COLOR="${C_BOLD_YELLOW}";  _gum_fg="3" ;;
+    3) TITLE_COLOR="${C_BOLD_MAGENTA}"; _gum_fg="5" ;;
+    4) TITLE_COLOR="${C_BOLD_RED}";     _gum_fg="1" ;;
+    5) TITLE_COLOR="${C_BOLD_WHITE}";   _gum_fg="15" ;;
   esac
 
   if [ "$HAS_GUM" = true ]; then
-    case "$_color_idx" in
-      0) _gum_fg="6" ;; 1) _gum_fg="2" ;; 2) _gum_fg="3" ;;
-      3) _gum_fg="5" ;; 4) _gum_fg="1" ;; *) _gum_fg="15" ;;
-    esac
     printf '%s\n' "$TITLE_R0" "$TITLE_R1" "$TITLE_R2" "$TITLE_R3" "$TITLE_R4" "$TITLE_R5" | \
       gum style --border rounded --foreground "$_gum_fg" --bold --padding "1 3"
   else
@@ -434,29 +426,14 @@ while true; do
 
   # Tunnel URL (only shown when tunnel is active or errored)
   if [ -n "$_tunnel_url" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      _tun_line="  $(gum style --foreground 2 --bold 'TUNNEL')  $(gum style --foreground 2 "$_tunnel_url")"
-      [ -n "$_tunnel_provider" ] && _tun_line="${_tun_line}  $(gum style --foreground 8 "(${_tunnel_provider})")"
-      [ "$_is_remote" = "true" ] && _tun_line="${_tun_line}  $(gum style --foreground 6 --bold '[REMOTE]')"
-      printf '%s\n' "$_tun_line"
-    else
-      printf '  %b TUNNEL%b  %s' "${C_BOLD_GREEN}" "${C_RESET}" "$_tunnel_url"
-      [ -n "$_tunnel_provider" ] && printf '  %b(%s)%b' "${C_DIM}" "$_tunnel_provider" "${C_RESET}"
-      [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
-      printf '\n'
-    fi
+    printf '  %b TUNNEL%b  %s' "${C_BOLD_GREEN}" "${C_RESET}" "$_tunnel_url"
+    [ -n "$_tunnel_provider" ] && printf '  %b(%s)%b' "${C_DIM}" "$_tunnel_provider" "${C_RESET}"
+    [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
+    printf '\n'
   elif [ -n "$_tunnel_error" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      printf '  %s  %s\n' "$(gum style --foreground 3 --bold 'TUNNEL')" "$(gum style --foreground 8 "$_tunnel_error")"
-    else
-      printf '  %b TUNNEL%b  %b%s%b\n' "${C_BOLD_YELLOW}" "${C_RESET}" "${C_DIM}" "$_tunnel_error" "${C_RESET}"
-    fi
+    printf '  %b TUNNEL%b  %b%s%b\n' "${C_BOLD_YELLOW}" "${C_RESET}" "${C_DIM}" "$_tunnel_error" "${C_RESET}"
   elif [ "$_is_remote" = "true" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      printf '  %s\n' "$(gum style --foreground 6 --bold '[REMOTE]')"
-    else
-      printf '  %b[REMOTE]%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
-    fi
+    printf '  %b[REMOTE]%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
   fi
 
   printf '\n'
@@ -492,11 +469,7 @@ while true; do
       [ "$_tstatus" = "cancelled" ] && continue
 
       if [ "$_task_header_printed" = false ]; then
-        if [ "$HAS_GUM" = true ]; then
-          printf '  %s\n\n' "$(gum style --bold --foreground 6 'TASKS')"
-        else
-          printf '  %b TASKS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
-        fi
+        gum_header 'TASKS'; printf '\n\n'
         _task_header_printed=true
       fi
 
@@ -512,24 +485,11 @@ while true; do
       _tmeta=""
       [ -n "$_tpri" ] && _tmeta="${_tmeta} [${_tpri}]"
       [ -n "$_tteam" ] && _tmeta="${_tmeta} [${_tteam}]"
-      if [ "$HAS_GUM" = true ]; then
-        case "$_tstatus" in
-          active|in_progress)        _gum_tcol="3" ;;
-          pending_user_confirmation) _gum_tcol="6" ;;
-          *)                         _gum_tcol="8" ;;
-        esac
-        printf '  %s %s  %s  %s\n' \
-          "$(gum style --foreground "$_gum_tcol" "$_ticon")" \
-          "$(gum style --foreground 15 --bold "#${_tid}")" \
-          "$_ttitle" \
-          "$(gum style --foreground 8 "${_tage:+${_tage} ago}${_tmeta}")"
-      else
-        printf '  %b%s%b %b#%s%b  %s  %b%s%s%b\n' \
-          "$_tcol" "$_ticon" "${C_RESET}" \
-          "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
-          "$_ttitle" \
-          "${C_DIM}" "${_tage:+${_tage} ago}" "$_tmeta" "${C_RESET}"
-      fi
+      printf '  %b%s%b %b#%s%b  %s  %b%s%s%b\n' \
+        "$_tcol" "$_ticon" "${C_RESET}" \
+        "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
+        "$_ttitle" \
+        "${C_DIM}" "${_tage:+${_tage} ago}" "$_tmeta" "${C_RESET}"
       if [ "$_has_render" = true ]; then
         _tjson="${_tf%.task}.json"
         if [ -f "$_tjson" ]; then
@@ -542,13 +502,7 @@ while true; do
           fi
           _tintent=""
           _tintent=$(python3 -c "import json; d=json.load(open('$_tjson')); print(d.get('intent','')[:60])" 2>/dev/null) || _tintent=""
-          if [ -n "$_tintent" ]; then
-            if [ "$HAS_GUM" = true ]; then
-              printf '    %s %s\n' "$(gum style --foreground 8 '→')" "$_tintent"
-            else
-              printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
-            fi
-          fi
+          [ -n "$_tintent" ] && printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
         fi
       fi
     done
@@ -556,11 +510,8 @@ while true; do
   fi
 
   if [ "$TEAM_LINE_COUNT" -gt 0 ]; then
-    if [ "$HAS_GUM" = true ]; then
-      printf '  %s\n\n' "$(gum style --bold --foreground 6 'TEAM STATUS')"
-    else
-      printf '  %b TEAM STATUS%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
-    fi
+    gum_header 'TEAM STATUS'
+    printf '\n\n'
     _ti=0
     while [ "$_ti" -lt "$TEAM_LINE_COUNT" ]; do
       _ref="TEAM_WIN_${_ti}"; _tw="${!_ref}"
@@ -573,49 +524,20 @@ while true; do
       _ref="TEAM_TYPE_${_ti}"; _ttype="${!_ref:-}"
       _ref="TEAM_NAME_V_${_ti}"; _tnm="${!_ref:-}"
 
-      if [ "$HAS_GUM" = true ]; then
-        if [ "$_ttype" = "freelancer" ]; then
-          _tname="  $(gum style --foreground 15 --bold "${_tnm:-Freelancers}") $(gum style --foreground 3 --bold '[F]') "
-        elif [ -n "$_twtd" ]; then
-          _tname="  Team $_tw $(gum style --foreground 6 --bold '[wt]')"
-        else
-          _tname="  Team $_tw     "
-        fi
-
-        _tsummary="${_twc}W ($(gum style --foreground 3 "${_tb} busy"), $(gum style --foreground 2 "${_tidle} idle")"
-        if [ "$_tr" -gt 0 ]; then
-          _tsummary="${_tsummary}, $(gum style --foreground 5 "${_tr} rsv"))"
-        else
-          _tsummary="${_tsummary})"
-        fi
-
-        if [ -n "$_twtb" ]; then
-          printf '  %-20s %s  %s\n' "$_tname" "$_tsummary" "$(gum style --foreground 8 "$_twtb")"
-        else
-          printf '  %s %s\n' "$_tname" "$_tsummary"
-        fi
+      if [ "$_ttype" = "freelancer" ]; then
+        _tname="$(printf '  %b%s%b %b[F]%b ' "${C_BOLD_WHITE}" "${_tnm:-Freelancers}" "${C_RESET}" "${C_BOLD_YELLOW}" "${C_RESET}")"
+      elif [ -n "$_twtd" ]; then
+        _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
       else
-        if [ "$_ttype" = "freelancer" ]; then
-          _tname="$(printf '  %b%s%b %b[F]%b ' "${C_BOLD_WHITE}" "${_tnm:-Freelancers}" "${C_RESET}" "${C_BOLD_YELLOW}" "${C_RESET}")"
-        elif [ -n "$_twtd" ]; then
-          _tname="$(printf '  Team %s %b[wt]%b' "$_tw" "${C_BOLD_CYAN}" "${C_RESET}")"
-        else
-          _tname="$(printf '  Team %s     ' "$_tw")"
-        fi
-
-        _tsummary="$(printf '%sW (%b%s busy%b, %b%s idle%b' "$_twc" "${C_YELLOW}" "$_tb" "${C_RESET}" "${C_GREEN}" "$_tidle" "${C_RESET}")"
-        if [ "$_tr" -gt 0 ]; then
-          _tsummary="${_tsummary}$(printf ', %b%s rsv%b)' "${C_MAGENTA}" "$_tr" "${C_RESET}")"
-        else
-          _tsummary="${_tsummary})"
-        fi
-
-        if [ -n "$_twtb" ]; then
-          printf '%b  %-20s %s  %b%s%b\n' "${C_RESET}" "$_tname" "$_tsummary" "${C_DIM}" "$_twtb" "${C_RESET}"
-        else
-          printf '%b  %s %s\n' "${C_RESET}" "$_tname" "$_tsummary"
-        fi
+        _tname="$(printf '  Team %s     ' "$_tw")"
       fi
+
+      _tsummary="$(printf '%sW (%b%s busy%b, %b%s idle%b' "$_twc" "${C_YELLOW}" "$_tb" "${C_RESET}" "${C_GREEN}" "$_tidle" "${C_RESET}")"
+      [ "$_tr" -gt 0 ] && _tsummary="${_tsummary}$(printf ', %b%s rsv%b)' "${C_MAGENTA}" "$_tr" "${C_RESET}")" || _tsummary="${_tsummary})"
+
+      printf '  %-20s %s' "$_tname" "$_tsummary"
+      [ -n "$_twtb" ] && printf '  %b%s%b' "${C_DIM}" "$_twtb" "${C_RESET}"
+      printf '\n'
 
       _ti=$((_ti + 1))
     done
@@ -636,11 +558,7 @@ while true; do
     }' "${RUNTIME_DIR}"/activity/*.jsonl 2>/dev/null | sort -t$'\t' -k1 -rn | head -12)
 
     if [ -n "$_act_raw" ]; then
-      if [ "$HAS_GUM" = true ]; then
-        printf '  %s\n\n' "$(gum style --bold --foreground 6 'RECENT ACTIVITY')"
-      else
-        printf '  %b RECENT ACTIVITY%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
-      fi
+      gum_header 'RECENT ACTIVITY'; printf '\n\n'
 
       while IFS=$'\t' read -r _ats _apane _aevt _adetail; do
         # Cross-platform timestamp: GNU date -d, then BSD date -r
@@ -658,21 +576,11 @@ while true; do
 
         _adtxt=""
         [ -n "${_adetail:-}" ] && _adtxt="  ${_adetail}"
-
-        if [ "$HAS_GUM" = true ]; then
-          _gum_dt=""
-          [ -n "${_adetail:-}" ] && _gum_dt="$(gum style --foreground 8 "  ${_adetail}")"
-          printf '    %s  %s  %s%s\n' \
-            "$(gum style --foreground 8 "$_atime")" \
-            "$(gum style --foreground 15 --bold "$(printf '%-7s' "$_apane")")" \
-            "$_aevt" "$_gum_dt"
-        else
-          printf '    %b%s%b  %b%-7s%b  %b%-18s%b%b%s%b\n' \
-            "${C_DIM}" "$_atime" "${C_RESET}" \
-            "${C_BOLD_WHITE}" "$_apane" "${C_RESET}" \
-            "$_aecol" "$_aevt" "${C_RESET}" \
-            "${C_DIM}" "$_adtxt" "${C_RESET}"
-        fi
+        printf '    %b%s%b  %b%-7s%b  %b%-18s%b%b%s%b\n' \
+          "${C_DIM}" "$_atime" "${C_RESET}" \
+          "${C_BOLD_WHITE}" "$_apane" "${C_RESET}" \
+          "$_aecol" "$_aevt" "${C_RESET}" \
+          "${C_DIM}" "$_adtxt" "${C_RESET}"
       done <<< "$_act_raw"
       printf '\n'
     fi

@@ -186,6 +186,19 @@ else
   warn_msg "jq not found (optional — hooks will use python3 fallback)"
 fi
 
+# Detect Go binary — sets GO_BIN or leaves it empty.
+_find_go() {
+  if type _find_go_bin >/dev/null 2>&1; then
+    GO_BIN=$(_find_go_bin 2>/dev/null) || GO_BIN=""
+  else
+    GO_BIN=""
+    command -v go >/dev/null 2>&1 && GO_BIN="go" && return 0
+    for d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
+      [ -x "$d/go" ] && GO_BIN="$d/go" && return 0
+    done
+  fi
+}
+
 _find_gum() {
   command -v gum >/dev/null 2>&1 && return 0
   for d in "$HOME/go/bin" "$HOME/.local/go/bin"; do
@@ -202,17 +215,8 @@ _find_gum() {
 if _find_gum; then
   check_ok "gum ${DIM}($(gum --version 2>/dev/null || echo 'unknown'))${RESET}"
 else
-  # Discover Go binary early (before _find_go is called later for TUI builds)
-  _gum_go_bin=""
-  if type _find_go_bin >/dev/null 2>&1; then
-    _gum_go_bin="$(_find_go_bin 2>/dev/null)" || _gum_go_bin=""
-  fi
-  if [ -z "$_gum_go_bin" ]; then
-    command -v go >/dev/null 2>&1 && _gum_go_bin="go"
-    for d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
-      [ -x "$d/go" ] && _gum_go_bin="$d/go" && break
-    done
-  fi
+  _find_go
+  _gum_go_bin="$GO_BIN"
   if [ -n "$_gum_go_bin" ]; then
     printf "  ${WARN}⚠${RESET}  gum not found — installing via go install...\n"
     if "$_gum_go_bin" install github.com/charmbracelet/gum@latest 2>&1; then
@@ -323,19 +327,6 @@ if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-con
   detail "installed default config"
 fi
 
-# Detect Go binary — sets GO_BIN or leaves it empty.
-_find_go() {
-  if type _find_go_bin >/dev/null 2>&1; then
-    GO_BIN=$(_find_go_bin 2>/dev/null) || GO_BIN=""
-  else
-    GO_BIN=""
-    command -v go >/dev/null 2>&1 && GO_BIN="go" && return 0
-    for d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
-      [ -x "$d/go" ] && GO_BIN="$d/go" && return 0
-    done
-  fi
-}
-
 # Build doey-tui (and doey-remote-setup). Returns 0 on success.
 _build_tui() {
   local rc=0
@@ -428,22 +419,13 @@ if [ -d "$SCRIPT_DIR/.git/hooks" ]; then
   if [ -f "$SCRIPT_DIR/shell/doey-go-helpers.sh" ]; then
     cp "$SCRIPT_DIR/shell/doey-go-helpers.sh" "$SCRIPT_DIR/.git/hooks/doey-go-helpers.sh"
   fi
-  # Pre-commit: verify Go compiles
-  if [ -f "$SCRIPT_DIR/shell/pre-commit-go.sh" ]; then
-    if [ ! "$SCRIPT_DIR/shell/pre-commit-go.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-commit" ]; then
-      cp "$SCRIPT_DIR/shell/pre-commit-go.sh" "$SCRIPT_DIR/.git/hooks/pre-commit"
-      chmod +x "$SCRIPT_DIR/.git/hooks/pre-commit"
-      detail "installed pre-commit hook for Go builds"
+  for _hook in pre-commit:pre-commit-go.sh pre-push:pre-push-gate.sh; do
+    _name="${_hook%%:*}"; _script="${_hook#*:}"
+    if [ -f "$SCRIPT_DIR/shell/$_script" ] && [ ! "$SCRIPT_DIR/shell/$_script" -ef "$SCRIPT_DIR/.git/hooks/$_name" ]; then
+      install_script "$SCRIPT_DIR/shell/$_script" "$SCRIPT_DIR/.git/hooks/$_name"
+      detail "installed $_name hook for Go builds"
     fi
-  fi
-  # Pre-push: rebuild stale Go binaries
-  if [ -f "$SCRIPT_DIR/shell/pre-push-gate.sh" ]; then
-    if [ ! "$SCRIPT_DIR/shell/pre-push-gate.sh" -ef "$SCRIPT_DIR/.git/hooks/pre-push" ]; then
-      cp "$SCRIPT_DIR/shell/pre-push-gate.sh" "$SCRIPT_DIR/.git/hooks/pre-push"
-      chmod +x "$SCRIPT_DIR/.git/hooks/pre-push"
-      detail "installed pre-push hook for Go builds"
-    fi
-  fi
+  done
 fi
 
 PATH_OK=true

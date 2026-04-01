@@ -1,49 +1,36 @@
 #!/usr/bin/env bash
-# Session Manager wait — short pause utility. Checks for pending work,
-# sleeps briefly if idle, returns a reason string for compatibility.
+# Session Manager wait — checks for pending work, sleeps briefly if idle.
 set -euo pipefail
 
-if [ -n "${DOEY_RUNTIME:-}" ]; then
-  RUNTIME_DIR="$DOEY_RUNTIME"
-elif [ -n "${1:-}" ] && [ -d "${1}" ]; then
-  RUNTIME_DIR="$1"
-else
-  RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { sleep 5; exit 0; }
+if [ -n "${DOEY_RUNTIME:-}" ]; then RUNTIME_DIR="$DOEY_RUNTIME"
+elif [ -n "${1:-}" ] && [ -d "${1}" ]; then RUNTIME_DIR="$1"
+else RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { sleep 5; exit 0; }
 fi
 source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
-
-# ERR trap: prevent unexpected non-zero exits (common.sh sets this too, but guard the source)
 trap 'exit 0' ERR
-source "$(dirname "$0")/common.sh" 2>/dev/null || true  # write_pane_status; skip init_hook
+source "$(dirname "$0")/common.sh" 2>/dev/null || true
 
 SM_PANE="${SM_PANE:-0.2}"
 SM_SAFE="${SESSION_NAME//[-:.]/_}_${SM_PANE//[-:.]/_}"
-PANE="${SESSION_NAME}:${SM_PANE}"  # write_pane_status expects PANE/PANE_SAFE globals
-PANE_SAFE="$SM_SAFE"
+PANE="${SESSION_NAME}:${SM_PANE}"; PANE_SAFE="$SM_SAFE"
 _SM_STATUS_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-_sm_heartbeat() {
-  NOW=$(date '+%Y-%m-%dT%H:%M:%S%z')
-  write_pane_status "$_SM_STATUS_FILE" "BUSY" "Session Manager idle — listening" 2>/dev/null || true
-}
-trap _sm_heartbeat EXIT
+trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); write_pane_status "$_SM_STATUS_FILE" "BUSY" "SM idle — listening" 2>/dev/null || true' EXIT
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/session_manager_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger"
 TRIGGER3="${RUNTIME_DIR}/status/sm_trigger"
 
-_SM_DBG=false
-[ -f "${RUNTIME_DIR}/debug.conf" ] && _SM_DBG=true
-_SM_DBG_DIR="${RUNTIME_DIR}/debug"
-_SM_DBG_FILE="${_SM_DBG_DIR}/session_manager.jsonl"
+_SM_DBG=false; [ -f "${RUNTIME_DIR}/debug.conf" ] && _SM_DBG=true
+_SM_DBG_FILE="${RUNTIME_DIR}/debug/session_manager.jsonl"
 
 _sm_dbg_wake() {
   [ "$_SM_DBG" = "true" ] || return 0
-  local reason="$1" elapsed="$2"
-  [ -d "$_SM_DBG_DIR" ] || mkdir -p "$_SM_DBG_DIR" 2>/dev/null
+  mkdir -p "$(dirname "$_SM_DBG_FILE")" 2>/dev/null
   printf '{"ts":%s,"cat":"sm","msg":"sm_wake","reason":"%s","wait_s":%s}\n' \
-    "$(date +%s)" "$reason" "$elapsed" \
-    >> "$_SM_DBG_FILE" 2>/dev/null
+    "$(date +%s)" "$1" "${2:-0}" >> "$_SM_DBG_FILE" 2>/dev/null
 }
+
+_wake() { _sm_bump_cycle; _sm_dbg_wake "$1" "${2:-0}"; echo "$1"; exit 0; }
 
 SEEN_FILE="${RUNTIME_DIR}/status/sm_seen_results"
 _seen_results=""
@@ -98,32 +85,21 @@ _sm_bump_cycle() {
 _check_work() {  # Exits script if work found, returns 1 otherwise
   local elapsed="$1"
   if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
-    rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null
-    _sm_bump_cycle; _sm_dbg_wake "trigger" "$elapsed"; echo "TRIGGERED"; exit 0
+    rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null; _wake "TRIGGERED" "$elapsed"
   fi
   set -- "$MSG_DIR"/${SM_SAFE}_*.msg
-  if [ -f "${1:-}" ]; then
-    _sm_bump_cycle; _sm_dbg_wake "new_messages" "$elapsed"; echo "NEW_MESSAGES"; exit 0
-  fi
-  if _has_new_results; then
-    _mark_results_seen
-    _sm_bump_cycle; _sm_dbg_wake "new_results" "$elapsed"; echo "NEW_RESULTS"; exit 0
-  fi
+  [ -f "${1:-}" ] && _wake "NEW_MESSAGES" "$elapsed"
+  if _has_new_results; then _mark_results_seen; _wake "NEW_RESULTS" "$elapsed"; fi
   set -- "$RUNTIME_DIR/status"/crash_pane_*
-  if [ -f "${1:-}" ]; then
-    _sm_bump_cycle; _sm_dbg_wake "crash_alert" "$elapsed"; echo "CRASH_ALERT"; exit 0
-  fi
-  if _check_stale_heartbeats; then
-    _sm_bump_cycle; _sm_dbg_wake "stale_heartbeat" "$elapsed"; echo "STALE_HEARTBEAT"; exit 0
-  fi
-  # Check for queued tasks (active status, no team assigned yet)
+  [ -f "${1:-}" ] && _wake "CRASH_ALERT" "$elapsed"
+  _check_stale_heartbeats && _wake "STALE_HEARTBEAT" "$elapsed"
   if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
     local _tf
     for _tf in "${PROJECT_DIR:-.}/.doey/tasks"/*.task; do
       [ -f "$_tf" ] || continue
       grep -q 'TASK_STATUS=active' "$_tf" 2>/dev/null || continue
       grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null && continue
-      _sm_bump_cycle; _sm_dbg_wake "queued_tasks" "$elapsed"; echo "QUEUED_TASKS"; exit 0
+      _wake "QUEUED_TASKS" "$elapsed"
     done
   fi
   return 1
@@ -149,43 +125,28 @@ _all_idle() {
 }
 
 if [ "$((_sm_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
-  echo "0" > "$CYCLE_FILE"
-  _sm_dbg_wake "compact_cycle" "0"
-  echo "COMPACT_CYCLE"
-  exit 0
+  echo "0" > "$CYCLE_FILE"; _wake "COMPACT_CYCLE"
 fi
 
 _check_work "0" || true
 
-# ── Active-task gate: block sleep while tasks need attention ──
-_has_active=false
-_active_list=""
-_project_dir="${PROJECT_DIR:-.}"
-if [ -d "${_project_dir}/.doey/tasks" ]; then
-  for _tf in "${_project_dir}"/.doey/tasks/*.task; do
+_has_active=false; _active_list=""
+if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+  for _tf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
     [ -f "$_tf" ] || continue
-    _status=""
-    while IFS= read -r _line; do
-      case "${_line%%=*}" in TASK_STATUS) _status="${_line#*=}" ;; esac
-    done < "$_tf"
-    case "$_status" in
-      active|in_progress)
-        _has_active=true
-        _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
-        ;;
+    _status=$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
+    case "$_status" in active|in_progress)
+      _has_active=true; _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n" ;;
     esac
   done
 fi
 if [ "$_has_active" = "true" ]; then
-  _sm_bump_cycle
-  _sm_dbg_wake "active_tasks" "0"
+  _sm_bump_cycle; _sm_dbg_wake "active_tasks" "0"
   printf 'ACTIVE_TASKS %b' "$_active_list"
-  # Clear sleep-reported flag so Boss gets notified when tasks resolve
   rm -f "${RUNTIME_DIR}/status/sm_sleep_reported" 2>/dev/null
   exit 0
 fi
 
-# Notify Boss once that SM is entering sleep (all tasks resolved)
 _sleep_flag="${RUNTIME_DIR}/status/sm_sleep_reported"
 if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
   _boss_safe="${SESSION_NAME//[-:.]/_}_0_1"
@@ -194,14 +155,8 @@ if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
   touch "$_sleep_flag"
 fi
 
-if _all_idle; then
-  sleep 10
-  _check_work "10" || true
-  _sm_dbg_wake "idle_extended" "10"
-  echo "IDLE"
-else
-  sleep 3
-  _check_work "3" || true
-  _sm_dbg_wake "idle" "3"
-  echo "IDLE"
-fi
+_sleep_dur=3; _all_idle && _sleep_dur=10
+sleep "$_sleep_dur"
+_check_work "$_sleep_dur" || true
+_sm_dbg_wake "idle" "$_sleep_dur"
+echo "IDLE"

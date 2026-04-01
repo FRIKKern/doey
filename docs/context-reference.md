@@ -1,6 +1,6 @@
 # Context Reference
 
-Configuration precedence for Claude Code instances in a Doey session (lowest → highest):
+Precedence for Claude Code instances (lowest → highest):
 
 | Precedence | Source | Applies To |
 |------------|--------|------------|
@@ -18,7 +18,7 @@ Configuration precedence for Claude Code instances in a Doey session (lowest →
 
 ## Agent Definitions
 
-Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
+Files in `agents/` → `~/.claude/agents/`. Body = system prompt. Precedence: CLI `--model` > frontmatter > settings.
 
 | Field | Boss | Manager | Session Mgr | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
 |-------|------|---------|-------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
@@ -26,9 +26,7 @@ Files in `agents/` (installed to `~/.claude/agents/`). Body = system prompt.
 | `color` | `#E74C3C` | `green` | `#FF6B35` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
 | `memory` | `user` | `user` | `user` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
 
-Precedence: CLI `--model` > frontmatter > settings.
-
-**Specialist agents** (SEO, Visual) in `agents/` are loaded only when those teams are spawned.
+Specialist agents (SEO, Visual) loaded only when those teams are spawned.
 
 
 ## Settings
@@ -36,49 +34,44 @@ Precedence: CLI `--model` > frontmatter > settings.
 Merge order (scalars: last wins; arrays: additive; objects: deep-merged):
 
 1. `~/.claude/settings.json` — agent teams, model, notifications
-2. `~/.claude/settings.local.json` — user-level overrides
+2. `~/.claude/settings.local.json` — user overrides
 3. `<project>/.claude/settings.json` — project-level
-4. `<project>/.claude/settings.local.json` — permissions + hooks (copied by `doey init`)
+4. `<project>/.claude/settings.local.json` — permissions + hooks (`doey init`)
 
-Hooks require explicit registration in `settings.local.json` — not auto-discovered.
+Hooks must be registered in `settings.local.json` — not auto-discovered.
 
 
 ## Hooks
 
-All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback.
+All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback. Hooks must use `tmux display-message -t "$TMUX_PANE"` (without `-t`, tmux returns the focused pane).
 
 | File | Event | Purpose |
 |------|-------|---------|
-| `common.sh` | — | Shared utils: `init_hook()`, `parse_field()`, `_read_team_key()`, role checks, `send_notification()` |
-| `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX, DOEY_TEAM_WINDOW, DOEY_TEAM_DIR, DOEY_RUNTIME, SESSION_NAME, PROJECT_DIR, PROJECT_NAME |
+| `common.sh` | — | Shared utils: `init_hook()`, `parse_field()`, `_read_team_key()`, role checks |
+| `on-session-start.sh` | SessionStart | Sets DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX, DOEY_TEAM_WINDOW, etc. |
 | `on-prompt-submit.sh` | UserPromptSubmit | BUSY status; READY on `/compact`; collapsed column restore |
 | `on-pre-tool-use.sh` | PreToolUse | Role-based tool blocking |
 | `on-pre-compact.sh` | PreCompact | Preserves orchestration state before compaction |
 | `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
 | `stop-status.sh` | Stop | FINISHED/RESERVED/READY; blocks research without reports |
 | `stop-results.sh` | Stop | Result JSON and completion events |
-| `stop-notify.sh` | Stop | Unified stop notifications: Worker→Manager, Manager→Session Mgr, Session Mgr→desktop |
+| `stop-notify.sh` | Stop | Stop notifications: Worker→Manager→SM→desktop |
 | `on-notification.sh` | Notification | Desktop notification for SM permission requests (30s cooldown) |
-| `session-manager-wait.sh` | — | Session Manager sleep/wake between cycles (trigger, message, result, crash) |
-**Identity:** Hooks must use `tmux display-message -t "$TMUX_PANE"` — without `-t`, tmux returns the focused pane.
+| `session-manager-wait.sh` | — | SM sleep/wake between cycles (trigger, message, result, crash) |
 
 
 ## Skills
 
-Project-level in `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
+In `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
-**Manager skills:**
-`/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-sm-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
-
-**Session Manager skills:**
-`/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
-
-**Worker skills:** `/doey-status`, `/doey-reserve`, `/doey-stop`.
+- **Manager:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-sm-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
+- **Session Manager:** `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
+- **Worker:** `/doey-status`, `/doey-reserve`, `/doey-stop`
 
 
 ## Persistent Memory
 
-Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not session state.
+Auto-loaded at startup; lines after 200 truncated.
 
 - Boss: `~/.claude/agent-memory/doey-boss/MEMORY.md`
 - Manager: `~/.claude/agent-memory/doey-manager/MEMORY.md`
@@ -87,16 +80,15 @@ Auto-loaded at startup; lines after 200 truncated. Store stable patterns, not se
 
 ## Environment Variables
 
-Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session.env`.
+Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → `session.env`.
 
-**Session-level (`session.env`):**
-`PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS` (dynamic only), `MAX_WORKERS` (dynamic only), `CURRENT_COLS` (dynamic only), `TOTAL_PANES` (static only), `WORKER_COUNT`, `WORKER_PANES`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `SM_PANE`
+**Session-level (`session.env`):** `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS`/`MAX_WORKERS`/`CURRENT_COLS` (dynamic), `TOTAL_PANES` (static), `WORKER_COUNT`, `WORKER_PANES`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `SM_PANE`
 
-**Set by tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
+**tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
-**Set by hooks:** `DOEY_ROLE`, `DOEY_PANE_ID`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`, `DOEY_TEAM_DIR`, `DOEY_RUNTIME`, `DOEY_TEAM_ROLE`, `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`
+**Hooks:** `DOEY_ROLE`, `DOEY_PANE_ID`, `DOEY_PANE_INDEX`, `DOEY_WINDOW_INDEX`, `DOEY_TEAM_WINDOW`, `DOEY_TEAM_DIR`, `DOEY_RUNTIME`, `DOEY_TEAM_ROLE`, `SESSION_NAME`, `PROJECT_DIR`, `PROJECT_NAME`
 
-**Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WATCHDOG_PANE` (deprecated), `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`, `TEAM_TYPE` (`managed` or `freelancer`), `TEAM_DEF` (team definition name, if any). Loaded via `_read_team_key()`, overrides session.env for per-window fields.
+**Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`, `TEAM_TYPE` (`managed`/`freelancer`), `TEAM_DEF`. Loaded via `_read_team_key()`, overrides session.env.
 
 
 ## CLI Launch Flags
@@ -108,25 +100,25 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → writes `session
 | Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
-Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI flags > agent frontmatter > settings. Session Manager relies on `model: opus` in its agent frontmatter (no explicit `--model`).
+Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI > frontmatter > settings.
 
 
 ## Shell Scripts
 
-All in `shell/`, installed to `~/.local/bin/` by `install.sh`.
+All in `shell/` → `~/.local/bin/`.
 
 | File | Purpose |
 |------|---------|
-| `doey.sh` | CLI entry point — session lifecycle, grid management, all subcommands |
-| `info-panel.sh` | Live dashboard (pane 0.0) |
-| `settings-panel.sh` | Interactive settings TUI |
-| `doey-statusline.sh` | Claude Code statusline integration |
+| `doey.sh` | CLI entry — session lifecycle, grid, subcommands |
+| `info-panel.sh` | Live dashboard (0.0) |
+| `settings-panel.sh` | Settings TUI |
+| `doey-statusline.sh` | Claude Code statusline |
 | `doey-config-default.sh` | Default config template |
-| `doey-go-check.sh` | Go TUI availability check |
-| `pane-border-status.sh` | tmux pane border formatting |
-| `tmux-statusbar.sh` | tmux status bar content |
-| `tmux-theme.sh` | tmux color theme |
-| `tmux-settings-btn.sh` | Settings button for tmux status bar |
+| `doey-go-check.sh` | Go TUI check |
+| `pane-border-status.sh` | Pane border formatting |
+| `tmux-statusbar.sh` | Status bar content |
+| `tmux-theme.sh` | Color theme |
+| `tmux-settings-btn.sh` | Settings button |
 | `context-audit.sh` | Context rot auditor |
 | `pre-commit-go.sh` | Go pre-commit hook |
 
@@ -140,18 +132,17 @@ Team W:    [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
 
 Dynamic grid auto-expands when all workers are busy.
 
-**Pane communication:** `send-keys` (< 200 chars) · `load-buffer` + `paste-buffer` (long tasks) · `capture-pane` (read output)
+**Pane IPC:** `send-keys` (< 200 chars) · `load-buffer` + `paste-buffer` (long) · `capture-pane` (read)
 
-**Key details:**
-- **PANE_SAFE escaping:** `${PANE//[-:.]/_}` — e.g. `doey-project:0.5` → `doey_project_0_5`
-- **Pane titles:** `"<pane_id> | <role>"` — e.g. `"d-t1-mgr | doey T1 Mgr"`, `"d-sm | doey SM"`
-- **Startup timing:** Manager briefing 8s; workers ready ~15s
-- **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript` instead
+- **PANE_SAFE:** `${PANE//[-:.]/_}` — `doey-project:0.5` → `doey_project_0_5`
+- **Titles:** `"<pane_id> | <role>"` — `"d-t1-mgr | doey T1 Mgr"`, `"d-sm | doey SM"`
+- **Timing:** Manager briefing 8s; workers ready ~15s
+- **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript`
 
 
 ## Runtime State
 
-Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `init_hook()`.
+Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 
 | Path | Purpose |
 |------|---------|
@@ -184,23 +175,23 @@ Root: `/tmp/doey/<project>/`. Directories created by `doey init`, ensured by `in
 | `status/session_manager_trigger` | SM-specific fast-wake trigger |
 | `status/notif_cooldown_*` | Desktop notification cooldown timestamps |
 
-**Persistent task storage:** `${PROJECT_DIR}/.doey/tasks/` is the source of truth for session tasks (`.task`, `.json`, `.result.json` files). Survives reboots. Runtime `tasks/` above is a cache synced on session start. Hooks and agents read from `.doey/tasks/` first, falling back to `${RUNTIME_DIR}/tasks/` for backwards compatibility.
+**Persistent tasks:** `${PROJECT_DIR}/.doey/tasks/` (source of truth, survives reboots). Runtime `tasks/` is a cache synced on start. Agents read `.doey/tasks/` first, fall back to runtime.
 
 **Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED, LOGGED_OUT.
 
-**Research lifecycle:** dispatch → `.task` created → worker investigates → Stop hook blocks until `.report` written → Manager reads report.
+**Research lifecycle:** dispatch → `.task` → worker investigates → Stop hook blocks until `.report` → Manager reads.
 
 
 ## Debugging
 
 | Symptom | Check |
 |---------|-------|
-| Manager writes code itself | Memory lacks delegation-first rules |
-| Manager dispatches to invalid pane | Check `WORKER_PANES` in session.env |
-| Manager sends empty tasks | Task text empty before Enter |
-| All panes think they're Manager | Hook missing `-t "$TMUX_PANE"` |
-| Hooks not firing | `.claude/settings.local.json` missing (`doey init`) |
-| Research stops without report | Check exit 2 in `stop-status.sh`; verify `.task` exists |
-| Workers ignore hook changes | Restart workers (`/doey-clear workers`) |
-| Dispatch to reserved pane | Check `.reserved` file; verify `is_reserved()` |
-| Runtime file not found | Verify PANE_SAFE escaping; check `init_hook()` ran |
+| Manager writes code | Memory lacks delegation-first rules |
+| Invalid pane dispatch | Check `WORKER_PANES` in session.env |
+| Empty tasks dispatched | Task text empty before Enter |
+| All panes = Manager | Hook missing `-t "$TMUX_PANE"` |
+| Hooks not firing | Missing `settings.local.json` → `doey init` |
+| Research stops early | Check exit 2 in `stop-status.sh`; verify `.task` exists |
+| Hook changes ignored | Restart workers: `/doey-clear workers` |
+| Dispatch to reserved | Check `.reserved` file; verify `is_reserved()` |
+| Runtime file missing | Verify PANE_SAFE escaping; check `init_hook()` ran |

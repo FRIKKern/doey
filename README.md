@@ -26,7 +26,7 @@
  Boss relays user intent from Dashboard (window 0)
 ```
 
-Manager plans and delegates. Workers execute in parallel. Dynamic grid — scale with `doey add`.
+Manager plans, workers execute in parallel. Dynamic grid — scale with `doey add`.
 
 ## Quick Start
 
@@ -40,9 +40,9 @@ cd ~/your-project && doey
 
 Or: `git clone https://github.com/FRIKKern/doey.git && cd doey && ./install.sh`
 
-> **Other platforms:** [Linux server](docs/linux-server.md) · [Windows WSL2](docs/windows-wsl2.md) · [Linode VPS](docs/linode-setup.md)
+> [Linux server](docs/linux-server.md) · [Windows WSL2](docs/windows-wsl2.md) · [Linode VPS](docs/linode-setup.md)
 
-Tell the Boss your task — it relays to the Session Manager, teams plan and execute in parallel, results are consolidated.
+Tell the Boss your task — teams plan and execute in parallel, results are consolidated.
 
 ## CLI Commands
 
@@ -69,12 +69,12 @@ Window 0 is the dashboard; team windows (1+) each have a Manager + Workers.
 
 | Role | Pane | Description |
 |------|------|-------------|
-| Info Panel | `0.0` | Live dashboard with task list and team stats |
-| Boss | `0.1` | User-facing relay — receives user intent, forwards to Session Manager |
-| Session Manager | `0.2` | Internal coordinator — routes tasks, monitors panes, handles git |
-| Window Manager | `W.0` | The bastion — plans, delegates, validates all context |
+| Info Panel | `0.0` | Live dashboard — tasks and team stats |
+| Boss | `0.1` | User-facing relay → Session Manager |
+| Session Manager | `0.2` | Routes tasks, monitors panes, handles git |
+| Window Manager | `W.0` | Plans, delegates, validates context |
 | Workers | `W.1+` | Execute tasks in parallel |
-| Freelancers | `F.0+` | Independent workers — no manager, available to any team |
+| Freelancers | `F.0+` | Independent workers, no manager |
 
 ### Default Setup
 
@@ -98,22 +98,13 @@ Window 3 — Freelancers
   └── 6 independent workers
 ```
 
-2 managed teams + 1 freelancer pool + dashboard. Scale with `doey add` (worker columns) or `doey add-team` (entire teams). Customize via [config](#configuration).
-
-See [Context Reference](docs/context-reference.md) for details.
+Scale with `doey add` (columns) or `doey add-team` (teams). See [Context Reference](docs/context-reference.md).
 
 ## Configuration
 
-Doey works out of the box with sensible defaults. All configuration is optional.
+All optional. Hierarchy (last wins): hardcoded defaults → `~/.config/doey/config.sh` → `<project>/.doey/config.sh`.
 
-```
-Config hierarchy (last wins):
-  1. Hardcoded defaults
-  2. Global config:   ~/.config/doey/config.sh
-  3. Project config:  <project>/.doey/config.sh
-```
-
-Create a project config to customize per-project:
+Per-project example:
 
 ```bash
 mkdir -p .doey
@@ -159,11 +150,11 @@ DOEY_TEAM_2_WORKER_MODEL=sonnet
 
 ### Interactive Settings
 
-Run `/doey-settings` from any pane to open a split-screen Settings window: a live config panel on the left showing all current values, and a Claude-powered settings editor on the right. Click the **⚙ Settings** button in the status bar for the same thing.
+`/doey-settings` or the **⚙ Settings** button opens a split-screen editor with live config values.
 
 ## Task Tracking
 
-Doey has a built-in task system for tracking goals across the session. Tasks show on the Info Panel dashboard.
+Built-in task system — tasks show on the dashboard.
 
 ```
 /doey-task add Implement the auth system    # create a task
@@ -178,7 +169,7 @@ Doey has a built-in task system for tracking goals across the session. Tasks sho
 | `done` | You confirmed it's complete |
 | `cancelled` | Dropped |
 
-Workers and Managers can mark tasks as `pending` but only **you** can mark them `done`. The Session Manager proposes creating tasks for any goal that takes more than a few minutes.
+Workers can mark tasks `pending` but only **you** mark them `done`.
 
 ## Debug Mode
 
@@ -188,7 +179,7 @@ Workers and Managers can mark tasks as `pending` but only **you** can mark them 
 /doey-debug off      # stop (logs preserved for post-mortem)
 ```
 
-Captures hook timing, state transitions, lifecycle events, and IPC as structured JSONL. Zero overhead when off (one `stat()` per hook).
+Structured JSONL: hooks, state, lifecycle, IPC. Zero overhead when off.
 
 ```bash
 cat /tmp/doey/*/debug/*/hooks.jsonl | sort -t'"' -k4   # view chronologically
@@ -211,19 +202,19 @@ cat /tmp/doey/*/debug/*/hooks.jsonl | sort -t'"' -k4   # view chronologically
 
 | Issue | Fix |
 |-------|-----|
-| Workers "Not logged in" | Run `claude` in a terminal first to authenticate |
-| Terminal too small | Use `doey 3x2` or maximize terminal |
+| Workers "Not logged in" | Run `claude` first to authenticate |
+| Terminal too small | `doey 3x2` or maximize |
 | `doey` not found | Add `~/.local/bin` to PATH |
-| Workers stuck | `/doey-clear workers` restarts them |
-| `doey update` fails | Clone manually: `git clone ... && ./install.sh` |
-| Other | Run `doey doctor` |
+| Workers stuck | `/doey-clear workers` |
+| `doey update` fails | `git clone ... && ./install.sh` |
+| Other | `doey doctor` |
 
 ## Requirements
 
 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (authenticated) · [Node.js](https://nodejs.org/) v18+ · [tmux](https://github.com/tmux/tmux) · macOS or Linux
 
-> **Don't have tmux or Claude Code?** Doey will detect what's missing and offer to install it for you — just run `doey` or `./install.sh`.
+> Missing tmux or Claude Code? `doey` / `./install.sh` will detect and offer to install.
 
 ---
 
-Contributions welcome — [open an issue](https://github.com/FRIKKern/doey/issues) or submit a PR. Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+Contributions welcome — [open an issue](https://github.com/FRIKKern/doey/issues) or PR. Built with [Claude Code](https://docs.anthropic.com/en/docs/claude-code).

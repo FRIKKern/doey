@@ -8,10 +8,7 @@ description: Delegate a task to an idle Claude instance (no kill/restart). Use w
 - All panes: !`tmux list-panes -s -t "$(grep SESSION_NAME $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | cut -d= -f2)" -F '#{session_name}:#{window_index}.#{pane_index} #{pane_title} #{pane_pid}' 2>/dev/null|| true`
 - My pane: !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'|| true`
 
-### 1. Identify idle panes from context above
-### 2. Get target pane and task from user (if not provided)
-### 3. Validate idle + unreserved
-Check `.reserved` file and `❯` prompt via `capture-pane -S -5`.
+1. Identify idle panes from context. 2. Get target + task from user if needed. 3. Validate: no `.reserved`, has `❯` prompt.
 
 ### 4. Rename + dispatch
 ```bash
@@ -27,9 +24,6 @@ if [ "$TASK_LINES" -gt 200 ]; then sleep 2; elif [ "$TASK_LINES" -gt 100 ]; then
 tmux send-keys -t "$TARGET_PANE" Enter && rm "$TASKFILE"
 ```
 
-### 5. Verify
-`sleep 5`, grep for `Read|Edit|Bash|thinking`. If idle: Enter, 3s, re-check → unstick per `/doey-dispatch`.
+### 5. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)
 
-### Rules
-- Always tmpfile/load-buffer — never `send-keys` for task text
-- Never delegate to own pane; never kill/restart the worker
+Rules: Always tmpfile/load-buffer. Never delegate to own pane. Never kill/restart.

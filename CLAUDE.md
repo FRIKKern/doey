@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. A user runs `doey` in any project directory and gets a coordinated grid of Claude instances — a Boss that relays user intent, a Session Manager that coordinates, Managers that plan, and Workers that execute. Dynamic grid by default: starts small, grows on demand. Entry point: `shell/doey.sh`, installed to `~/.local/bin/doey`.
+Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. Run `doey` in any project directory to get a coordinated grid — Boss (user intent), Session Manager (coordination), Managers (planning), Workers (execution). Starts small, grows on demand. Entry point: `shell/doey.sh` → `~/.local/bin/doey`.
 
 ## ALWAYS DO THESE THINGS
 
@@ -94,7 +94,6 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 
 ## Conventions
 
-- **Shell:** `set -euo pipefail`, bash 3.2 compatible
 - **Agents:** YAML frontmatter in `agents/` (name, model, color, memory, description)
 - **Skills:** YAML frontmatter in `.claude/skills/<name>/SKILL.md`
 - **Naming:** sessions `doey-<project>`, runtime `/tmp/doey/<project>/`

@@ -30,25 +30,20 @@ Doey Settings Editor — read, explain, and modify config files and agent defini
 | DOEY_IDLE_REMOVE_AFTER | 300 | ≥1 (s) | Idle → pane removal |
 | DOEY_PASTE_SETTLE_MS | 500 | ≥1 (ms) | Post-paste settle |
 | DOEY_INFO_PANEL_REFRESH | 300 | ≥1 (s) | Panel refresh interval |
-| DOEY_SM_SCAN_INTERVAL | 30 | ≥1 (s) | SM scan trigger-file poll interval |
+| DOEY_SM_SCAN_INTERVAL | 30 | ≥1 (s) | SM scan poll interval |
 | DOEY_MANAGER_MODEL | opus | opus/sonnet/haiku | Manager model |
 | DOEY_WORKER_MODEL | opus | opus/sonnet/haiku | Worker model |
-| DOEY_SESSION_MANAGER_MODEL | opus | opus/sonnet/haiku | Session Manager model |
+| DOEY_SESSION_MANAGER_MODEL | opus | opus/sonnet/haiku | SM model |
 
 Warn if delays > 300s or refresh > 3600s.
 
 ## Reading Config
 
-`doey config --show` for resolved values, or:
-```bash
-GLOBAL=~/.config/doey/config.sh; PROJECT=$(pwd)/.doey/config.sh
-if [ -f "$GLOBAL" ]; then echo "=== Global ===" && grep -v '^#' "$GLOBAL" | grep '='; fi
-if [ -f "$PROJECT" ]; then echo "=== Project ===" && grep -v '^#' "$PROJECT" | grep '='; fi
-```
+`doey config --show` for resolved values. Manual: read `~/.config/doey/config.sh` (global) and `$(pwd)/.doey/config.sh` (project).
 
 ## Editing Config
 
-CLI: `doey config` (project), `doey config --global`, `doey config --reset`. Or use Edit tool, then refresh:
+CLI: `doey config` (project), `doey config --global`, `doey config --reset`. Or Edit tool, then touch refresh trigger:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 touch "${RUNTIME_DIR}/status/settings_refresh_trigger"
@@ -56,15 +51,11 @@ touch "${RUNTIME_DIR}/status/settings_refresh_trigger"
 
 ## Creating Config Files
 
-```bash
-TEMPLATE="$(cat ~/.claude/doey/repo-path)/shell/doey-config-default.sh"
-# Global:  mkdir -p ~/.config/doey && cp "$TEMPLATE" ~/.config/doey/config.sh
-# Project: mkdir -p .doey && cp "$TEMPLATE" .doey/config.sh
-```
+Template: `$(cat ~/.claude/doey/repo-path)/shell/doey-config-default.sh`. Copy to `~/.config/doey/config.sh` (global) or `.doey/config.sh` (project).
 
 ## View Navigation
 
-Views: `settings`, `teams`, `agents`, `agents:<name>`. Switch view BEFORE explaining changes. Always combine view switch + refresh trigger:
+Views: `settings`, `teams`, `agents`, `agents:<name>`. Switch view BEFORE explaining changes:
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 echo "teams" > "${RUNTIME_DIR}/status/settings_view"
@@ -75,68 +66,19 @@ touch "${RUNTIME_DIR}/status/settings_refresh_trigger"
 
 Agent files: `$PROJECT_DIR/agents/*.md` — Markdown with YAML frontmatter.
 
-### Frontmatter Validation
+**Frontmatter:** `name` (required, matches filename), `description` (required, quoted), `model` (required: opus/sonnet/haiku), `color` (optional hex), `memory` (optional: none/user).
 
-| Field | Required | Valid Values |
-|---|---|---|
-| `name` | Yes | lowercase alphanumeric + hyphens, matches filename |
-| `description` | Yes | quoted string, 1-2 sentences |
-| `model` | Yes | `opus`, `sonnet`, `haiku` |
-| `color` | No | hex string (e.g. `"#4A90D9"`) |
-| `memory` | No | `none`, `user` |
+**After edit:** (1) `cp "$PROJECT_DIR/agents/<name>.md" ~/.claude/agents/<name>.md"`, (2) switch settings view + refresh trigger, (3) tell user: Manager → `doey reload`, Worker → `doey reload --workers`, SM → `doey stop && doey`.
 
-### After Any Agent Edit
-
-1. **Install:** `cp "$PROJECT_DIR/agents/<name>.md" ~/.claude/agents/<name>.md`
-2. **Switch view:** write `agents:<name>` to settings_view, touch refresh trigger
-3. **Tell user to reload:**
-   - Manager agent → `doey reload`
-   - Worker agent → `doey reload --workers`
-   - Session Manager agent → `doey stop && doey`
-   - New unassigned agent → no reload needed
-
-### Deleting Agents
-
-```bash
-rm "$PROJECT_DIR/agents/<name>.md"
-rm -f ~/.claude/agents/<name>.md
-```
-
-Warn if the agent is currently assigned to a role.
+**Deleting:** Remove from `$PROJECT_DIR/agents/` and `~/.claude/agents/`. Warn if agent is assigned to a role.
 
 ## Premade Teams
 
-Premade teams ship with Doey and can be added to any project's startup configuration.
+Sources: `~/.local/share/doey/teams/*.team.md` (installed), `$PROJECT_DIR/teams/*.team.md` (project). Extract `name`/`description` from YAML frontmatter.
 
-### Listing premade teams
-Read `.team.md` files from:
-- `~/.local/share/doey/teams/` (installed premade)
-- `$PROJECT_DIR/teams/` (project-level)
+**Add to startup:** In `.doey/config.sh`, set `DOEY_TEAM_<N>_TYPE=premade`, `DOEY_TEAM_<N>_DEF=<name>`, update `DOEY_TEAM_COUNT`. Touch `${RUNTIME_DIR}/triggers/config_refresh.trigger`.
 
-Extract `name` and `description` from YAML frontmatter (between `---` markers).
-
-### Adding a premade team to startup
-Modify `.doey/config.sh`:
-1. Read current `DOEY_TEAM_COUNT` (default 0 if unset)
-2. Set new team: `DOEY_TEAM_<N+1>_TYPE=premade`, `DOEY_TEAM_<N+1>_DEF=<name>`
-3. Update `DOEY_TEAM_COUNT=<N+1>`
-4. Touch refresh trigger: `touch "${RUNTIME_DIR}/triggers/config_refresh.trigger" 2>/dev/null`
-
-### Removing a team from startup
-1. Remove `DOEY_TEAM_<N>_*` lines from `.doey/config.sh`
-2. Reindex remaining teams (N+1 → N, N+2 → N+1, etc.)
-3. Update `DOEY_TEAM_COUNT`
-4. Touch refresh trigger
-
-### Quick commands
-
-| User says | Action |
-|-----------|--------|
-| "add visual team to startup" | Add `DOEY_TEAM_<N>_TYPE=premade`, `DOEY_TEAM_<N>_DEF=visual` to config |
-| "show my startup teams" | Parse `.doey/config.sh` for `DOEY_TEAM_COUNT` and all `DOEY_TEAM_<N>_*` vars |
-| "remove seo team" | Find matching `DOEY_TEAM_<N>_DEF=seo`, remove its lines, reindex |
-| "what premade teams are available?" | List from `~/.local/share/doey/teams/` |
-| "edit visual team definition" | Open `~/.local/share/doey/teams/visual.team.md` or `teams/visual.team.md` |
+**Remove:** Delete `DOEY_TEAM_<N>_*` lines, reindex remaining teams, update count, touch trigger.
 
 ## Applying Changes
 

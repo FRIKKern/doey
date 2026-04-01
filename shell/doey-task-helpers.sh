@@ -1,36 +1,29 @@
 #!/usr/bin/env bash
 # doey-task-helpers.sh — Schema v3 persistent task management library
 # Sourceable library, not standalone. Tasks stored in .doey/tasks/ (persistent).
+# Exit codes: query functions return 0 always; mutation functions return 1 on error.
+# Guard parallel Bash calls: bash -c 'source helpers.sh; func ... || true'
 set -euo pipefail
 
-# ── Exit Code Contract ──────────────────────────────────────────────
-# Functions in this library may return non-zero exit codes.
-# When calling from parallel Bash tool calls, ALWAYS guard:
-#   bash -c 'source helpers.sh; task_find_similar ... || true'
-# One non-zero exit in a parallel Bash call cancels ALL siblings.
-#
-# Categories:
-#   QUERY functions (task_find_similar, task_list, count functions):
-#     Return 0 always. Empty output = no results.
-#   MUTATION functions (task_update_*, task_create, task_add_*):
-#     Return 1 on invalid input or missing file — these are real errors.
-#   VALIDATION helpers (_task_validate_status):
-#     Return 1 on invalid — callers should handle.
-# ─────────────────────────────────────────────────────────────────────
-
-# Charmbracelet gum detection (output styling only)
 HAS_GUM=false
 command -v gum >/dev/null 2>&1 && HAS_GUM=true
 
-# ── Constants ─────────────────────────────────────────────────────────
 _TASK_VALID_STATUSES="draft active in_progress paused blocked pending_user_confirmation done cancelled"
 _TASK_VALID_TYPES="bug feature bugfix refactor research audit docs infrastructure"
 _TASK_VALID_SUBTASK_STATUSES="pending in_progress done skipped failed"
 _TASK_SCHEMA_VERSION_CURRENT="3"
 
-# Count lines matching a glob pattern in a task file.
-# Args: file pattern (e.g. "TASK_REPORT_*_TIMESTAMP=*")
-_count_field_lines() {
+# Styled output helpers (gum when available, plain fallback)
+_task_err() {
+  if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "$1" >&2
+  else printf '%s\n' "$1" >&2; fi
+}
+_task_msg() {
+  if [ "$HAS_GUM" = true ]; then gum style --foreground 8 "$1"
+  else printf '%s\n' "$1"; fi
+}
+
+_count_field_lines() { # file pattern → count of matching lines
   local _cfl_f="$1" _cfl_p="$2" _cfl_n=0 _cfl_l
   [ -f "$_cfl_f" ] || { echo "0"; return 0; }
   while IFS= read -r _cfl_l || [ -n "$_cfl_l" ]; do
@@ -39,10 +32,7 @@ _count_field_lines() {
   echo "$_cfl_n"
 }
 
-# ── _touch_task_updated ──────────────────────────────────────────────
-# Set TASK_UPDATED=<epoch> on a .task file. Upserts the field.
-# Args: task_file
-_touch_task_updated() {
+_touch_task_updated() { # task_file → upsert TASK_UPDATED=epoch
   local task_file="$1"
   [ -f "$task_file" ] || return 0
   local _ts; _ts=$(date +%s)
@@ -53,22 +43,26 @@ _touch_task_updated() {
   fi
 }
 
-# ── task_dir ──────────────────────────────────────────────────────────
-# Resolve .doey/tasks/ path relative to project root. Auto-creates on first call.
-# Args: project_dir
-# Returns (echo): absolute path to .doey/tasks/
-task_dir() {
+_write_v3_fields() { # output_file → write all v3 TASK_* fields from caller vars
+  local _out="$1" _f _val
+  printf 'TASK_SCHEMA_VERSION=%s\n' "$_TASK_SCHEMA_VERSION_CURRENT" > "$_out"
+  for _f in ID TITLE STATUS TYPE TAGS CREATED_BY ASSIGNED_TO DESCRIPTION \
+            ACCEPTANCE_CRITERIA HYPOTHESES DECISION_LOG SUBTASKS \
+            RELATED_FILES BLOCKERS TIMESTAMPS CURRENT_PHASE TOTAL_PHASES \
+            NOTES UPDATED; do
+    eval "_val=\"\${TASK_${_f}:-}\""
+    printf 'TASK_%s=%s\n' "$_f" "$_val"
+  done >> "$_out"
+}
+
+task_dir() { # project_dir → echo .doey/tasks/ path (auto-creates)
   local project_dir="$1"
   local td="${project_dir}/.doey/tasks"
   mkdir -p "$td"
   echo "$td"
 }
 
-# ── task_next_id ──────────────────────────────────────────────────────
-# Get next auto-increment ID. Writes incremented value back.
-# Args: tasks_dir
-# Returns (echo): next ID
-task_next_id() {
+task_next_id() { # tasks_dir → echo next ID (auto-increments)
   local tasks_dir="$1"
   local counter_file="${tasks_dir}/.next_id"
   local id=1
@@ -79,87 +73,35 @@ task_next_id() {
   echo "$id"
 }
 
-# ── task_create ───────────────────────────────────────────────────────
-# Create a new .task file with all schema v3 fields.
-# Args: project_dir title [type] [created_by] [description]
-# Returns (echo): task ID
-task_create() {
+task_create() { # project_dir title [type] [created_by] [description] → echo task ID
   local project_dir="$1" title="$2"
   local task_type="${3:-feature}" created_by="${4:-Boss}" description="${5:-}"
-
-  local tasks_dir
-  tasks_dir="$(task_dir "$project_dir")"
-
-  local id
-  id="$(task_next_id "$tasks_dir")"
-
-  local now
-  now=$(date +%s)
-
+  local tasks_dir; tasks_dir="$(task_dir "$project_dir")"
+  local id; id="$(task_next_id "$tasks_dir")"
+  local now; now=$(date +%s)
   local task_file="${tasks_dir}/${id}.task"
-  local tmp="${task_file}.tmp"
 
-  printf 'TASK_SCHEMA_VERSION=%s\n' "$_TASK_SCHEMA_VERSION_CURRENT" > "$tmp"
-  printf 'TASK_ID=%s\n' "$id" >> "$tmp"
-  printf 'TASK_TITLE=%s\n' "$title" >> "$tmp"
-  printf 'TASK_STATUS=active\n' >> "$tmp"
-  printf 'TASK_TYPE=%s\n' "$task_type" >> "$tmp"
-  printf 'TASK_TAGS=\n' >> "$tmp"
-  printf 'TASK_CREATED_BY=%s\n' "$created_by" >> "$tmp"
-  printf 'TASK_ASSIGNED_TO=\n' >> "$tmp"
-  printf 'TASK_DESCRIPTION=%s\n' "$description" >> "$tmp"
-  printf 'TASK_ACCEPTANCE_CRITERIA=\n' >> "$tmp"
-  printf 'TASK_HYPOTHESES=\n' >> "$tmp"
-  printf 'TASK_DECISION_LOG=%s:Created task\n' "$now" >> "$tmp"
-  printf 'TASK_SUBTASKS=\n' >> "$tmp"
-  printf 'TASK_RELATED_FILES=\n' >> "$tmp"
-  printf 'TASK_BLOCKERS=\n' >> "$tmp"
-  printf 'TASK_TIMESTAMPS=created=%s\n' "$now" >> "$tmp"
-  printf 'TASK_CURRENT_PHASE=0\n' >> "$tmp"
-  printf 'TASK_TOTAL_PHASES=0\n' >> "$tmp"
-  printf 'TASK_NOTES=\n' >> "$tmp"
-  printf 'TASK_UPDATED=%s\n' "$now" >> "$tmp"
+  TASK_ID="$id" TASK_TITLE="$title" TASK_STATUS="active" TASK_TYPE="$task_type"
+  TASK_TAGS="" TASK_CREATED_BY="$created_by" TASK_ASSIGNED_TO=""
+  TASK_DESCRIPTION="$description" TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES=""
+  TASK_DECISION_LOG="${now}:Created task" TASK_SUBTASKS="" TASK_RELATED_FILES=""
+  TASK_BLOCKERS="" TASK_TIMESTAMPS="created=${now}" TASK_CURRENT_PHASE="0"
+  TASK_TOTAL_PHASES="0" TASK_NOTES="" TASK_UPDATED="$now"
 
-  mv "$tmp" "$task_file"
+  _write_v3_fields "${task_file}.tmp"
+  mv "${task_file}.tmp" "$task_file"
   echo "$id"
 }
 
-# ── task_read ─────────────────────────────────────────────────────────
-# Parse a .task file and set all schema v3 shell variables.
-# Args: task_file_path
-# EXIT CODES: 0=success, 1=file missing/empty/malformed (no TASK_ID)
-# NOTE: Callers in loops (task_list, task_sync_runtime) already guard
-#       with `|| continue`. In parallel Bash calls, guard with `|| true`.
-# Sets: TASK_SCHEMA_VERSION, TASK_ID, TASK_TITLE, TASK_STATUS, TASK_TYPE,
-#   TASK_TAGS, TASK_CREATED_BY, TASK_ASSIGNED_TO, TASK_DESCRIPTION,
-#   TASK_ACCEPTANCE_CRITERIA, TASK_HYPOTHESES, TASK_DECISION_LOG,
-#   TASK_SUBTASKS, TASK_RELATED_FILES, TASK_BLOCKERS, TASK_TIMESTAMPS,
-#   TASK_NOTES, TASK_CURRENT_PHASE, TASK_TOTAL_PHASES,
-#   TASK_CREATED (extracted from TASK_TIMESTAMPS for compat)
-task_read() {
+task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
   local file="$1"
   [ -s "$file" ] || return 1
 
-  TASK_SCHEMA_VERSION=""
-  TASK_ID=""
-  TASK_TITLE=""
-  TASK_STATUS=""
-  TASK_TYPE=""
-  TASK_TAGS=""
-  TASK_CREATED_BY=""
-  TASK_ASSIGNED_TO=""
-  TASK_DESCRIPTION=""
-  TASK_ACCEPTANCE_CRITERIA=""
-  TASK_HYPOTHESES=""
-  TASK_DECISION_LOG=""
-  TASK_SUBTASKS=""
-  TASK_RELATED_FILES=""
-  TASK_BLOCKERS=""
-  TASK_TIMESTAMPS=""
-  TASK_CURRENT_PHASE=""
-  TASK_TOTAL_PHASES=""
-  TASK_NOTES=""
-  TASK_CREATED=""
+  TASK_SCHEMA_VERSION="" TASK_ID="" TASK_TITLE="" TASK_STATUS="" TASK_TYPE=""
+  TASK_TAGS="" TASK_CREATED_BY="" TASK_ASSIGNED_TO="" TASK_DESCRIPTION=""
+  TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES="" TASK_DECISION_LOG=""
+  TASK_SUBTASKS="" TASK_RELATED_FILES="" TASK_BLOCKERS="" TASK_TIMESTAMPS=""
+  TASK_CURRENT_PHASE="" TASK_TOTAL_PHASES="" TASK_NOTES="" TASK_CREATED=""
 
   local line
   while IFS= read -r line || [ -n "$line" ]; do
@@ -186,8 +128,7 @@ task_read() {
     esac
   done < "$file" || true
 
-  # Extract TASK_CREATED from TASK_TIMESTAMPS for backward compat
-  # TASK_TIMESTAMPS format: created=epoch|started=epoch|...
+  # Extract TASK_CREATED from TASK_TIMESTAMPS (format: created=epoch|started=epoch|...)
   TASK_CREATED=""
   if [ -n "$TASK_TIMESTAMPS" ]; then
     local ts_entry
@@ -218,10 +159,7 @@ task_read() {
   : "${TASK_CURRENT_PHASE:=0}" "${TASK_TOTAL_PHASES:=0}"
 }
 
-# ── task_update_field ─────────────────────────────────────────────────
-# Update a single field in a .task file. Atomic write (tmp + mv).
-# Args: task_file field_name new_value
-task_update_field() {
+task_update_field() { # task_file field_name new_value → atomic upsert
   local task_file="$1" field_name="$2" new_value="$3"
 
   if [ ! -f "$task_file" ]; then
@@ -250,10 +188,7 @@ task_update_field() {
   _touch_task_updated "$task_file"
 }
 
-# ── _task_read_field ─────────────────────────────────────────────────
-# Read a single field value from a .task file.
-# Args: task_file field_name. Returns (echo): field value or empty.
-_task_read_field() {
+_task_read_field() { # task_file field_name → echo field value
   local _trf_result="" _trf_line
   while IFS= read -r _trf_line || [ -n "$_trf_line" ]; do
     case "${_trf_line%%=*}" in
@@ -263,10 +198,7 @@ _task_read_field() {
   printf '%s' "$_trf_result"
 }
 
-# ── _task_append_to_field ────────────────────────────────────────────
-# Append value to a delimited field. Reads current, appends, writes back.
-# Args: task_file field new_value [separator] (default separator: \\n)
-_task_append_to_field() {
+_task_append_to_field() { # task_file field new_value [separator=\\n]
   local current
   current="$(_task_read_field "$1" "$2")"
   if [ -n "$current" ]; then
@@ -276,27 +208,18 @@ _task_append_to_field() {
   fi
 }
 
-# ── _task_validate_status ─────────────────────────────────────────────
-# Validate a status string.
-# Args: status
-# EXIT CODES: 0=valid, 1=invalid (intentional — used in conditionals)
-_task_validate_status() {
-  local status="$1" s
-  for s in $_TASK_VALID_STATUSES; do
-    if [ "$s" = "$status" ]; then
-      return 0
-    fi
-  done
+_task_validate_status() { # status → 0=valid, 1=invalid
+  local s; for s in $_TASK_VALID_STATUSES; do [ "$s" = "$1" ] && return 0; done; return 1
+}
+
+_validate_subtask_status() { # status → 0=valid, 1=invalid (prints error)
+  local s; for s in $_TASK_VALID_SUBTASK_STATUSES; do [ "$s" = "$1" ] && return 0; done
+  _task_err "Error: invalid subtask status \"$1\" (valid: $_TASK_VALID_SUBTASK_STATUSES)"
   return 1
 }
 
-# ── _task_status_timestamp_key ────────────────────────────────────────
-# Map status to a timestamp key name.
-# Args: status
-# Returns (echo): timestamp key (e.g., "started", "completed")
-_task_status_timestamp_key() {
-  local status="$1"
-  case "$status" in
+_task_status_timestamp_key() { # status → echo timestamp key
+  case "$1" in
     active)                       echo "activated" ;;
     in_progress)                  echo "started" ;;
     paused)                       echo "paused" ;;
@@ -308,53 +231,27 @@ _task_status_timestamp_key() {
   esac
 }
 
-# ── _task_append_timestamp ────────────────────────────────────────────
-# Append a key=epoch entry to TASK_TIMESTAMPS field.
-# Args: task_file key epoch
-_task_append_timestamp() {
+_task_append_timestamp() { # task_file key epoch
   _task_append_to_field "$1" "TASK_TIMESTAMPS" "${2}=${3}" "|"
 }
 
-# ── task_update_status ────────────────────────────────────────────────
-# Update status with timestamp recording and validation.
-# Args: project_dir task_id new_status
-task_update_status() {
+task_update_status() { # project_dir task_id new_status
   local project_dir="$1" task_id="$2" new_status="$3"
 
   if ! _task_validate_status "$new_status"; then
-    if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: invalid status \"${new_status}\" (valid: ${_TASK_VALID_STATUSES})" >&2
-    else printf 'Error: invalid status "%s" (valid: %s)\n' "$new_status" "$_TASK_VALID_STATUSES" >&2; fi
-    return 1
+    _task_err "Error: invalid status \"${new_status}\" (valid: ${_TASK_VALID_STATUSES})"; return 1
   fi
 
-  local tasks_dir
-  tasks_dir="$(task_dir "$project_dir")"
-  local task_file="${tasks_dir}/${task_id}.task"
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
 
-  if [ ! -f "$task_file" ]; then
-    if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: task ${task_id} not found" >&2
-    else printf 'Error: task %s not found\n' "$task_id" >&2; fi
-    return 1
-  fi
-
-  local now
-  now=$(date +%s)
-
-  # Update status field
+  local now; now=$(date +%s)
   task_update_field "$task_file" "TASK_STATUS" "$new_status"
-
-  # Append timestamp
-  local ts_key
-  ts_key="$(_task_status_timestamp_key "$new_status")"
-  _task_append_timestamp "$task_file" "$ts_key" "$now"
-
-  # Add decision log entry
+  _task_append_timestamp "$task_file" "$(_task_status_timestamp_key "$new_status")" "$now"
   task_add_decision "$task_file" "Status changed to ${new_status}"
 }
 
-# ── _task_age_str ─────────────────────────────────────────────────────
-# Human-readable age from epoch. Args: epoch. Returns (echo): e.g., "3h"
-_task_age_str() {
+_task_age_str() { # epoch → echo human-readable age (e.g., "3h")
   local created="$1"
   if [ -z "$created" ]; then echo "?"; return; fi
   local now elapsed
@@ -366,11 +263,7 @@ _task_age_str() {
   else echo "$((elapsed / 86400))d"; fi
 }
 
-# ── task_list ─────────────────────────────────────────────────────────
-# List all tasks with optional status filter.
-# Args: project_dir [--status filter] [--all]
-# Prints formatted output sorted by ID.
-task_list() {
+task_list() { # project_dir [--status filter] [--all]
   local project_dir="$1"; shift
   local status_filter="" show_all=0
 
@@ -383,22 +276,16 @@ task_list() {
   done
 
   local tasks_dir="${project_dir}/.doey/tasks"
-  if [ ! -d "$tasks_dir" ]; then
-    if [ "$HAS_GUM" = true ]; then gum style --foreground 8 "No tasks."
-    else echo "No tasks."; fi
-    return 0
-  fi
+  if [ ! -d "$tasks_dir" ]; then _task_msg "No tasks."; return 0; fi
 
   local entries="" f
   for f in "${tasks_dir}"/*.task; do
     [ -f "$f" ] || continue
-    [ -s "$f" ] || continue  # skip empty files
-
-    local TASK_SCHEMA_VERSION TASK_ID TASK_TITLE TASK_STATUS TASK_TYPE
-    local TASK_TAGS TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION
-    local TASK_ACCEPTANCE_CRITERIA TASK_HYPOTHESES TASK_DECISION_LOG
-    local TASK_SUBTASKS TASK_RELATED_FILES TASK_BLOCKERS TASK_TIMESTAMPS
-    local TASK_NOTES TASK_CREATED
+    [ -s "$f" ] || continue
+    local TASK_SCHEMA_VERSION TASK_ID TASK_TITLE TASK_STATUS TASK_TYPE TASK_TAGS
+    local TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION TASK_ACCEPTANCE_CRITERIA
+    local TASK_HYPOTHESES TASK_DECISION_LOG TASK_SUBTASKS TASK_RELATED_FILES
+    local TASK_BLOCKERS TASK_TIMESTAMPS TASK_NOTES TASK_CREATED
     task_read "$f" || continue
     [ -n "${TASK_ID:-}" ] || continue
 
@@ -445,84 +332,40 @@ task_list() {
       printf '%s\n' "$line"
     done
   else
-    if [ "$HAS_GUM" = true ]; then gum style --foreground 8 "No tasks found."
-    else echo "No tasks found."; fi
+    _task_msg "No tasks found."
   fi
 }
 
-# ── task_sync_runtime ─────────────────────────────────────────────────
-# Copy active (non-terminal) task files from .doey/tasks/ to /tmp runtime cache.
-# Args: project_dir runtime_dir
-task_sync_runtime() {
+task_sync_runtime() { # project_dir runtime_dir → copy active tasks to runtime cache
   local project_dir="$1" runtime_dir="$2"
-  local src="${project_dir}/.doey/tasks"
-  local dst="${runtime_dir}/tasks"
-
-  if [ ! -d "$src" ]; then
-    return 0
-  fi
-
+  local src="${project_dir}/.doey/tasks" dst="${runtime_dir}/tasks"
+  [ -d "$src" ] || return 0
   mkdir -p "$dst"
 
   local f line status
   for f in "${src}"/*.task; do
     [ -f "$f" ] || continue
-    [ -s "$f" ] || continue  # skip empty files
-
-    # Quick status check without full parse
+    [ -s "$f" ] || continue
     status=""
     while IFS= read -r line || [ -n "$line" ]; do
-      case "${line%%=*}" in
-        TASK_STATUS) status="${line#*=}"; break ;;
-      esac
+      case "${line%%=*}" in TASK_STATUS) status="${line#*=}"; break ;; esac
     done < "$f" || true
-
-    # Skip terminal tasks
-    case "$status" in
-      done|cancelled) continue ;;
-    esac
-
+    case "$status" in done|cancelled) continue ;; esac
     cp "$f" "$dst/"
   done
-
-  # Sync .next_id
-  if [ -f "${src}/.next_id" ]; then
-    cp "${src}/.next_id" "${dst}/.next_id"
-  fi
+  [ -f "${src}/.next_id" ] && cp "${src}/.next_id" "${dst}/.next_id"
 }
 
-# ── task_add_decision ─────────────────────────────────────────────────
-# Append timestamped entry to TASK_DECISION_LOG.
-# Args: task_file entry_text
-task_add_decision() {
-  local now
-  now=$(date +%s)
-  _task_append_to_field "$1" "TASK_DECISION_LOG" "${now}:${2}"
+task_add_decision() { # task_file entry_text → append timestamped decision
+  local now; now=$(date +%s); _task_append_to_field "$1" "TASK_DECISION_LOG" "${now}:${2}"
 }
 
-# ── task_add_note ─────────────────────────────────────────────────────
-# Append to TASK_NOTES. Args: task_file note_text
-task_add_note() {
-  _task_append_to_field "$1" "TASK_NOTES" "$2"
-}
+task_add_note() { _task_append_to_field "$1" "TASK_NOTES" "$2"; } # task_file note_text
 
-# ── task_update_subtask ───────────────────────────────────────────────
-# Update a subtask's status.
-# Args: task_file subtask_id new_status
-# EXIT CODES: 0=updated, 1=invalid status/no subtasks/subtask not found
-# Subtask format: id:title:status separated by \n
-task_update_subtask() {
+task_update_subtask() { # task_file subtask_id new_status (format: id:title:status\\n...)
   local task_file="$1" subtask_id="$2" new_status="$3"
 
-  # Validate subtask status
-  local valid=0 s
-  for s in $_TASK_VALID_SUBTASK_STATUSES; do
-    if [ "$s" = "$new_status" ]; then valid=1; break; fi
-  done
-  if [ "$valid" -eq 0 ]; then
-    printf 'Error: invalid subtask status "%s" (valid: %s)\n' "$new_status" "$_TASK_VALID_SUBTASK_STATUSES" >&2
-    return 1
-  fi
+  _validate_subtask_status "$new_status" || return 1
 
   local current_subtasks
   current_subtasks="$(_task_read_field "$task_file" "TASK_SUBTASKS")"
@@ -577,11 +420,7 @@ task_update_subtask() {
   task_update_field "$task_file" "TASK_SUBTASKS" "$updated"
 }
 
-# ── task_add_subtask ──────────────────────────────────────────────────
-# Add a new subtask. Auto-increments subtask ID.
-# Args: task_file title
-# Returns (echo): new subtask ID
-task_add_subtask() {
+task_add_subtask() { # task_file title → echo new subtask ID
   local task_file="$1" title="$2"
 
   local current_subtasks
@@ -622,10 +461,7 @@ task_add_subtask() {
   echo "$new_id"
 }
 
-# ── task_add_related_file ─────────────────────────────────────────────
-# Append file to TASK_RELATED_FILES (pipe-delimited, no duplicates).
-# Args: task_file filepath
-task_add_related_file() {
+task_add_related_file() { # task_file filepath (pipe-delimited, no dupes)
   local task_file="$1" filepath="$2"
 
   local current_files
@@ -658,11 +494,7 @@ task_add_related_file() {
   task_update_field "$task_file" "TASK_RELATED_FILES" "$current_files"
 }
 
-# ── _json_escape ─────────────────────────────────────────────────────
-# Escape a string for safe embedding in JSON. Bash 3.2 compatible.
-# Args: string
-# Returns (echo): escaped string (without surrounding quotes)
-_json_escape() {
+_json_escape() { # string → echo JSON-safe escaped string
   printf '%s' "$1" | sed \
     -e 's/\\/\\\\/g' \
     -e 's/"/\\"/g' \
@@ -671,17 +503,9 @@ _json_escape() {
     -e 's/$/\\n/' | tr -d '\n' | sed 's/\\n$//'
 }
 
-# ── _json_array_from_lines ───────────────────────────────────────────
-# Convert a newline-separated string into a JSON array of strings.
-# Args: items_string (literal \n as separator)
-# Returns (echo): JSON array, e.g. ["a", "b"]
-_json_array_from_lines() {
+_json_array_from_lines() { # items_string (literal \\n sep) → echo JSON array
   local input="$1"
-  if [ -z "$input" ]; then
-    printf '[]'
-    return
-  fi
-  # Split on literal \n sequences
+  if [ -z "$input" ]; then printf '[]'; return; fi
   local remaining="$input" entry first=1
   printf '['
   while [ -n "$remaining" ]; do
@@ -708,10 +532,7 @@ _json_array_from_lines() {
   printf ']'
 }
 
-# ── _write_task_json (kept from v2) ──────────────────────────────────
-# Write a minimal companion .json file. Used by upgrade and dispatch.
-# Args: json_file task_id title task_type
-_write_task_json() {
+_write_task_json() { # json_file task_id title task_type → write minimal .json
   local json_file="$1" task_id="$2" title="$3" task_type="$4"
   local tmp="${json_file}.tmp"
   local esc_title
@@ -721,21 +542,7 @@ _write_task_json() {
   mv "$tmp" "$json_file"
 }
 
-# ── task_write_json ──────────────────────────────────────────────────
-# Create a rich companion .json file for a task from .task metadata and
-# optional structured fields passed via environment variables.
-# Args: project_dir task_id
-# Env (optional):
-#   INTENT            — string describing what the task aims to achieve
-#   HYPOTHESES        — literal \n-separated list
-#   CONSTRAINTS       — literal \n-separated list
-#   SUCCESS_CRITERIA  — literal \n-separated list
-#   DELIVERABLES      — literal \n-separated list
-#   DISPATCH_MODE     — string (standard|phased|parallel|sequential)
-#   DISPATCH_TEAM     — string (team type)
-#   FORCE             — set to 1 to overwrite existing .json
-# Returns: 0 on success, 1 on error
-task_write_json() {
+task_write_json() { # project_dir task_id; env: INTENT HYPOTHESES CONSTRAINTS SUCCESS_CRITERIA DELIVERABLES DISPATCH_MODE DISPATCH_TEAM FORCE
   local project_dir="$1" task_id="$2"
 
   local tasks_dir
@@ -787,39 +594,17 @@ task_write_json() {
 
   # Write JSON with atomic tmp+mv
   local tmp="${json_file}.tmp"
-  printf '{\n' > "$tmp"
-  printf '  "schema_version": 3,\n' >> "$tmp"
-  printf '  "task_id": %s,\n' "$task_id" >> "$tmp"
-  printf '  "title": "%s",\n' "$esc_title" >> "$tmp"
-  printf '  "task_type": "%s",\n' "$esc_type" >> "$tmp"
-  printf '  "intent": "%s",\n' "$esc_intent" >> "$tmp"
-  printf '  "hypotheses": %s,\n' "$arr_hyp" >> "$tmp"
-  printf '  "constraints": %s,\n' "$arr_con" >> "$tmp"
-  printf '  "success_criteria": %s,\n' "$arr_crit" >> "$tmp"
-  printf '  "deliverables": %s,\n' "$arr_del" >> "$tmp"
-  printf '  "dispatch_plan": %s\n' "$dispatch_json" >> "$tmp"
-  printf '}\n' >> "$tmp"
+  printf '{\n  "schema_version": 3,\n  "task_id": %s,\n  "title": "%s",\n  "task_type": "%s",\n  "intent": "%s",\n  "hypotheses": %s,\n  "constraints": %s,\n  "success_criteria": %s,\n  "deliverables": %s,\n  "dispatch_plan": %s\n}\n' \
+    "$task_id" "$esc_title" "$esc_type" "$esc_intent" "$arr_hyp" "$arr_con" "$arr_crit" "$arr_del" "$dispatch_json" > "$tmp"
   mv "$tmp" "$json_file"
 }
 
-# ── task_commit_msg ──────────────────────────────────────────────────
-# Generate a conventional commit message from task metadata.
-# Args: project_dir task_id
-# Outputs: multi-line commit message to stdout
-#   Line 1: <prefix>(task-<id>): <title>
-#   Line 2: (blank, only if body follows)
-#   Line 3+: first 1-2 sentences of description/summary
-task_commit_msg() {
+task_commit_msg() { # project_dir task_id → echo conventional commit message
   local project_dir="$1" task_id="$2"
+  local task_file="${project_dir}/.doey/tasks/${task_id}.task"
 
-  local tasks_dir
-  tasks_dir="$(task_dir "$project_dir")"
-  local task_file="${tasks_dir}/${task_id}.task"
-
-  # Fallback for missing or empty file
   if [ ! -f "$task_file" ] || [ ! -s "$task_file" ]; then
-    printf 'chore(task-%s): task %s\n' "$task_id" "$task_id"
-    return 0
+    printf 'chore(task-%s): task %s\n' "$task_id" "$task_id"; return 0
   fi
 
   local title task_type description summary
@@ -827,130 +612,65 @@ task_commit_msg() {
   task_type="$(_task_read_field "$task_file" "TASK_TYPE")"
   description="$(_task_read_field "$task_file" "TASK_DESCRIPTION")"
   summary="$(_task_read_field "$task_file" "TASK_SUMMARY")"
+  : "${title:=task $task_id}"
 
-  # Fallback for empty title
-  if [ -z "$title" ]; then
-    title="task $task_id"
-  fi
-
-  # Map TASK_TYPE to conventional commit prefix
   local prefix
   case "${task_type:-}" in
-    feature)                    prefix="feat" ;;
-    fix|bugfix)                 prefix="fix" ;;
-    refactor)                   prefix="refactor" ;;
-    docs|research)              prefix="docs" ;;
-    test)                       prefix="test" ;;
-    infrastructure|maintenance) prefix="chore" ;;
-    *)                          prefix="chore" ;;
+    feature) prefix="feat" ;; fix|bugfix) prefix="fix" ;; refactor) prefix="refactor" ;;
+    docs|research) prefix="docs" ;; test) prefix="test" ;; *) prefix="chore" ;;
   esac
 
-  # Lowercase the title
-  local lc_title
-  lc_title="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')"
-
-  # Build subject line and truncate to ~72 chars
+  local lc_title; lc_title="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')"
   local subject="${prefix}(task-${task_id}): ${lc_title}"
-  if [ "${#subject}" -gt 72 ]; then
-    subject="$(printf '%s' "$subject" | cut -c1-69)..."
-  fi
-
+  [ "${#subject}" -gt 72 ] && subject="$(printf '%s' "$subject" | cut -c1-69)..."
   printf '%s\n' "$subject"
 
-  # Body: prefer summary, fall back to description
   local body="${summary:-$description}"
   if [ -n "$body" ]; then
-    # Unescape literal \n sequences to real newlines, take first 2 lines
-    local short
-    short="$(printf '%s' "$body" | sed 's/\\n/\n/g' | head -2 | head -c 200)"
-    if [ -n "$short" ]; then
-      printf '\n%s\n' "$short"
-    fi
+    local short; short="$(printf '%s' "$body" | sed 's/\\n/\n/g' | head -2 | head -c 200)"
+    [ -n "$short" ] && printf '\n%s\n' "$short"
   fi
 }
 
-# ── task_upgrade_schema ───────────────────────────────────────────────
-# Upgrade v1 or v2 .task files to v3 format. Idempotent.
-# Args: task_file_path
-task_upgrade_schema() {
+task_upgrade_schema() { # task_file → upgrade v1/v2 to v3 (idempotent)
   local file="$1"
   [ -f "$file" ] || { printf 'Error: file not found: %s\n' "$file" >&2; return 1; }
   [ -s "$file" ] || return 1
 
-  # Read with task_read (handles all versions)
-  local TASK_SCHEMA_VERSION TASK_ID TASK_TITLE TASK_STATUS TASK_TYPE
-  local TASK_TAGS TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION
-  local TASK_ACCEPTANCE_CRITERIA TASK_HYPOTHESES TASK_DECISION_LOG
-  local TASK_SUBTASKS TASK_RELATED_FILES TASK_BLOCKERS TASK_TIMESTAMPS
-  local TASK_NOTES TASK_CREATED
+  local TASK_SCHEMA_VERSION TASK_ID TASK_TITLE TASK_STATUS TASK_TYPE TASK_TAGS
+  local TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION TASK_ACCEPTANCE_CRITERIA
+  local TASK_HYPOTHESES TASK_DECISION_LOG TASK_SUBTASKS TASK_RELATED_FILES
+  local TASK_BLOCKERS TASK_TIMESTAMPS TASK_NOTES TASK_CREATED
   task_read "$file"
+  [ "$TASK_SCHEMA_VERSION" = "3" ] && return 0
 
-  # Already v3 — nothing to do
-  if [ "$TASK_SCHEMA_VERSION" = "3" ]; then
-    return 0
-  fi
-
-  # Gather legacy fields that v1/v2 might have set via older parsers
-  # Read raw for fields task_read doesn't know about (v2: TASK_OWNER, TASK_PRIORITY, TASK_SUMMARY, TASK_ATTACHMENTS)
+  # Read legacy fields that task_read doesn't know about
   local legacy_owner="" legacy_priority="" legacy_summary="" legacy_attachments="" legacy_created_ts=""
   local line
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
-      TASK_OWNER)    legacy_owner="${line#*=}" ;;
-      TASK_PRIORITY) legacy_priority="${line#*=}" ;;
-      TASK_SUMMARY)  legacy_summary="${line#*=}" ;;
-      TASK_ATTACHMENTS) legacy_attachments="${line#*=}" ;;
-      TASK_CREATED)  legacy_created_ts="${line#*=}" ;;
+      TASK_OWNER) legacy_owner="${line#*=}" ;; TASK_PRIORITY) legacy_priority="${line#*=}" ;;
+      TASK_SUMMARY) legacy_summary="${line#*=}" ;; TASK_ATTACHMENTS) legacy_attachments="${line#*=}" ;;
+      TASK_CREATED) legacy_created_ts="${line#*=}" ;;
     esac
   done < "$file" || true
 
-  # Map legacy fields to v3
-  if [ -z "$TASK_CREATED_BY" ] && [ -n "$legacy_owner" ]; then
-    TASK_CREATED_BY="$legacy_owner"
-  fi
-  if [ -z "$TASK_CREATED_BY" ]; then TASK_CREATED_BY="Boss"; fi
-  if [ -z "$TASK_TYPE" ]; then TASK_TYPE="feature"; fi
+  [ -z "$TASK_CREATED_BY" ] && [ -n "$legacy_owner" ] && TASK_CREATED_BY="$legacy_owner"
+  : "${TASK_CREATED_BY:=Boss}" "${TASK_TYPE:=feature}"
 
-  # Build TASK_TIMESTAMPS from legacy TASK_CREATED if missing
   if [ -z "$TASK_TIMESTAMPS" ]; then
-    if [ -n "$legacy_created_ts" ]; then
-      TASK_TIMESTAMPS="created=${legacy_created_ts}"
-    elif [ -n "$TASK_CREATED" ]; then
-      TASK_TIMESTAMPS="created=${TASK_CREATED}"
-    else
-      TASK_TIMESTAMPS="created=$(date +%s)"
-    fi
+    if [ -n "$legacy_created_ts" ]; then TASK_TIMESTAMPS="created=${legacy_created_ts}"
+    elif [ -n "$TASK_CREATED" ]; then TASK_TIMESTAMPS="created=${TASK_CREATED}"
+    else TASK_TIMESTAMPS="created=$(date +%s)"; fi
   fi
 
-  # Migrate attachments to notes if present
-  if [ -n "$legacy_attachments" ] && [ -z "$TASK_NOTES" ]; then
-    TASK_NOTES="Migrated attachments: ${legacy_attachments}"
-  fi
+  [ -n "$legacy_attachments" ] && [ -z "$TASK_NOTES" ] && TASK_NOTES="Migrated attachments: ${legacy_attachments}"
 
-  # Rewrite file with all v3 fields
+  TASK_UPDATED="$(date +%s)"
   local tmp="${file}.tmp"
-  printf 'TASK_SCHEMA_VERSION=%s\n' "$_TASK_SCHEMA_VERSION_CURRENT" > "$tmp"
-  printf 'TASK_ID=%s\n' "$TASK_ID" >> "$tmp"
-  printf 'TASK_TITLE=%s\n' "$TASK_TITLE" >> "$tmp"
-  printf 'TASK_STATUS=%s\n' "$TASK_STATUS" >> "$tmp"
-  printf 'TASK_TYPE=%s\n' "$TASK_TYPE" >> "$tmp"
-  printf 'TASK_TAGS=%s\n' "${TASK_TAGS:-}" >> "$tmp"
-  printf 'TASK_CREATED_BY=%s\n' "$TASK_CREATED_BY" >> "$tmp"
-  printf 'TASK_ASSIGNED_TO=%s\n' "${TASK_ASSIGNED_TO:-}" >> "$tmp"
-  printf 'TASK_DESCRIPTION=%s\n' "${TASK_DESCRIPTION:-}" >> "$tmp"
-  printf 'TASK_ACCEPTANCE_CRITERIA=%s\n' "${TASK_ACCEPTANCE_CRITERIA:-}" >> "$tmp"
-  printf 'TASK_HYPOTHESES=%s\n' "${TASK_HYPOTHESES:-}" >> "$tmp"
-  printf 'TASK_DECISION_LOG=%s\n' "${TASK_DECISION_LOG:-}" >> "$tmp"
-  printf 'TASK_SUBTASKS=%s\n' "${TASK_SUBTASKS:-}" >> "$tmp"
-  printf 'TASK_RELATED_FILES=%s\n' "${TASK_RELATED_FILES:-}" >> "$tmp"
-  printf 'TASK_BLOCKERS=%s\n' "${TASK_BLOCKERS:-}" >> "$tmp"
-  printf 'TASK_TIMESTAMPS=%s\n' "$TASK_TIMESTAMPS" >> "$tmp"
-  printf 'TASK_CURRENT_PHASE=%s\n' "${TASK_CURRENT_PHASE:-0}" >> "$tmp"
-  printf 'TASK_TOTAL_PHASES=%s\n' "${TASK_TOTAL_PHASES:-0}" >> "$tmp"
-  printf 'TASK_NOTES=%s\n' "${TASK_NOTES:-}" >> "$tmp"
-  printf 'TASK_UPDATED=%s\n' "$(date +%s)" >> "$tmp"
+  _write_v3_fields "$tmp"
 
-  # Preserve extension fields (TASK_REPORT_*, TASK_LOG_*, TASK_SUBTASK_N_*, etc.)
+  # Preserve extension fields (TASK_REPORT_*, TASK_SUBTASK_N_*, etc.)
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
       TASK_SCHEMA_VERSION|TASK_ID|TASK_TITLE|TASK_STATUS|TASK_TYPE|\
@@ -959,45 +679,23 @@ task_upgrade_schema() {
       TASK_SUBTASKS|TASK_RELATED_FILES|TASK_BLOCKERS|TASK_TIMESTAMPS|\
       TASK_CURRENT_PHASE|TASK_TOTAL_PHASES|TASK_NOTES|TASK_UPDATED)
         ;; # already written above — skip
-      TASK_OWNER|TASK_PRIORITY|TASK_CREATED)
-        ;; # legacy fields — intentionally dropped during migration
-      TASK_*)
-        printf '%s\n' "$line" ;; # preserve all extension fields
-      *)
-        ;; # skip non-TASK lines (blank lines, comments, etc.)
+      TASK_OWNER|TASK_PRIORITY|TASK_CREATED) ;; # legacy — drop
+      TASK_*) printf '%s\n' "$line" ;; # preserve extension fields
     esac
   done < "$file" >> "$tmp"
-
   mv "$tmp" "$file"
 
-  # Create companion .json if missing
   local json_file="${file%.task}.json"
-  if [ ! -f "$json_file" ]; then
-    _write_task_json "$json_file" "$TASK_ID" "$TASK_TITLE" "$TASK_TYPE"
-  fi
-
-  return 0
+  [ ! -f "$json_file" ] && _write_task_json "$json_file" "$TASK_ID" "$TASK_TITLE" "$TASK_TYPE"
 }
 
-# ── task_dispatch_msg (kept from v2) ──────────────────────────────────
-# Generate a dispatch_task message body for sending to Session Manager.
-# Args: project_dir task_id [mode] [priority]
-#   mode: parallel|sequential|phased (default: sequential)
-#   priority: P0|P1|P2|P3 (default: P1)
-# Output: message body string
-task_dispatch_msg() {
+task_dispatch_msg() { # project_dir task_id [mode] [priority] → echo dispatch message
   local project_dir="$1" task_id="$2"
   local mode="${3:-sequential}" priority="${4:-P1}"
 
-  local tasks_dir
-  tasks_dir="$(task_dir "$project_dir")"
-  local task_file="${tasks_dir}/${task_id}.task"
-  local json_file="${tasks_dir}/${task_id}.json"
-
-  if [ ! -f "$task_file" ]; then
-    printf 'Error: task file not found: %s\n' "$task_file" >&2
-    return 1
-  fi
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+  local json_file="${task_file%.task}.json"
 
   local title summary
   title="$(_task_read_field "$task_file" "TASK_TITLE")"
@@ -1007,275 +705,112 @@ task_dispatch_msg() {
     "$task_id" "$task_file" "$json_file" "$mode" "$priority" "${summary:-$title}"
 }
 
-# ── task_update_phase ────────────────────────────────────────────────
-# Update phase tracking fields on a task.
-# Args: project_dir task_id current_phase total_phases
-#   current_phase: 0 = not phased, 1+ = current phase number
-#   total_phases:  0 = not phased, 1+ = total phase count
-task_update_phase() {
+task_update_phase() { # project_dir task_id current_phase total_phases
   local project_dir="$1" task_id="$2" current="$3" total="$4"
-  local task_file="${project_dir}/.doey/tasks/${task_id}.task"
-
-  if [ ! -f "$task_file" ]; then
-    printf 'Error: task %s not found\n' "$task_id" >&2
-    return 1
-  fi
-
-  # Validate integers
-  case "$current" in
-    *[!0-9]*) printf 'Error: current_phase must be integer, got "%s"\n' "$current" >&2; return 1 ;;
-  esac
-  case "$total" in
-    *[!0-9]*) printf 'Error: total_phases must be integer, got "%s"\n' "$total" >&2; return 1 ;;
-  esac
-
+  local task_file
+  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+  case "$current" in *[!0-9]*) _task_err "Error: current_phase must be integer, got \"$current\""; return 1 ;; esac
+  case "$total" in *[!0-9]*) _task_err "Error: total_phases must be integer, got \"$total\""; return 1 ;; esac
   task_update_field "$task_file" "TASK_CURRENT_PHASE" "$current"
   task_update_field "$task_file" "TASK_TOTAL_PHASES" "$total"
-
-  # Log phase change
-  if [ "$total" -gt 0 ]; then
-    task_add_decision "$task_file" "Phase ${current}/${total}"
-  fi
+  [ "$total" -gt 0 ] && task_add_decision "$task_file" "Phase ${current}/${total}"
 }
 
-# ── task_context_overlap ─────────────────────────────────────────────
-# Score how relevant a worker's previous task context is to a new task.
-# Args: last_tags last_type last_files new_tags new_type new_files
-#   Tags: comma-separated. Files: pipe-delimited paths.
-# Returns (echo): integer 0-100
-task_context_overlap() {
+_list_overlap_score() { # list_a list_b delim max_points [use_dirs] → echo 0-max_points
+  local list_a="$1" list_b="$2" delim="$3" max_points="$4" use_dirs="${5:-0}"
+  if [ -z "$list_a" ] || [ -z "$list_b" ]; then echo 0; return; fi
+  local items="" count_a=0 count_b=0 matches=0 remaining entry val
+
+  # Build lookup from list A
+  remaining="$list_a"
+  while [ -n "$remaining" ]; do
+    if [ "${remaining#*$delim}" != "$remaining" ]; then
+      entry="${remaining%%$delim*}"; remaining="${remaining#*$delim}"
+    else entry="$remaining"; remaining=""; fi
+    entry="${entry## }"; entry="${entry%% }"
+    [ -z "$entry" ] && continue
+    if [ "$use_dirs" = "1" ]; then val="${entry%/*}"; [ "$val" = "$entry" ] && val="."; else val="$entry"; fi
+    items="${items}|${val}|"; count_a=$((count_a + 1))
+  done
+
+  # Count matches from list B
+  remaining="$list_b"
+  while [ -n "$remaining" ]; do
+    if [ "${remaining#*$delim}" != "$remaining" ]; then
+      entry="${remaining%%$delim*}"; remaining="${remaining#*$delim}"
+    else entry="$remaining"; remaining=""; fi
+    entry="${entry## }"; entry="${entry%% }"
+    [ -z "$entry" ] && continue
+    if [ "$use_dirs" = "1" ]; then val="${entry%/*}"; [ "$val" = "$entry" ] && val="."; else val="$entry"; fi
+    count_b=$((count_b + 1))
+    case "$items" in *"|${val}|"*) matches=$((matches + 1)) ;; esac
+  done
+
+  local max_count="$count_a"
+  [ "$count_b" -gt "$max_count" ] && max_count="$count_b"
+  [ "$max_count" -gt 0 ] && echo $(( matches * max_points / max_count )) || echo 0
+}
+
+task_context_overlap() { # last_tags last_type last_files new_tags new_type new_files → echo 0-100
   local last_tags="${1:-}" last_type="${2:-}" last_files="${3:-}"
   local new_tags="${4:-}" new_type="${5:-}" new_files="${6:-}"
 
-  # ── Tag overlap (0-40 points) ──
-  local tag_score=0
-  if [ -n "$last_tags" ] && [ -n "$new_tags" ]; then
-    local last_count=0 new_count=0 matches=0
+  local tag_score; tag_score=$(_list_overlap_score "$last_tags" "$new_tags" "," 40)
 
-    # Count last tags
-    local remaining="$last_tags"
-    local last_list=""
-    while [ -n "$remaining" ]; do
-      local entry
-      case "$remaining" in
-        *,*) entry="${remaining%%,*}"; remaining="${remaining#*,}" ;;
-        *)   entry="$remaining"; remaining="" ;;
-      esac
-      entry="${entry## }"; entry="${entry%% }"
-      [ -z "$entry" ] && continue
-      last_list="${last_list}|${entry}|"
-      last_count=$((last_count + 1))
-    done
-
-    # Count new tags and check matches
-    remaining="$new_tags"
-    while [ -n "$remaining" ]; do
-      local entry
-      case "$remaining" in
-        *,*) entry="${remaining%%,*}"; remaining="${remaining#*,}" ;;
-        *)   entry="$remaining"; remaining="" ;;
-      esac
-      entry="${entry## }"; entry="${entry%% }"
-      [ -z "$entry" ] && continue
-      new_count=$((new_count + 1))
-      case "$last_list" in
-        *"|${entry}|"*) matches=$((matches + 1)) ;;
-      esac
-    done
-
-    local max_count="$last_count"
-    [ "$new_count" -gt "$max_count" ] && max_count="$new_count"
-    if [ "$max_count" -gt 0 ]; then
-      tag_score=$(( matches * 40 / max_count ))
-    fi
-  fi
-
-  # ── Type match (0-20 points) ──
   local type_score=0
-  if [ -n "$last_type" ] && [ -n "$new_type" ] && [ "$last_type" = "$new_type" ]; then
-    type_score=20
-  fi
+  [ -n "$last_type" ] && [ -n "$new_type" ] && [ "$last_type" = "$new_type" ] && type_score=20
 
-  # ── File path overlap (0-40 points) ──
-  local file_score=0
-  if [ -n "$last_files" ] && [ -n "$new_files" ]; then
-    # Extract directory prefixes from last_files
-    local last_dirs="" last_dir_count=0
-    local remaining="$last_files"
-    while [ -n "$remaining" ]; do
-      local entry
-      case "$remaining" in
-        *\|*) entry="${remaining%%|*}"; remaining="${remaining#*|}" ;;
-        *)    entry="$remaining"; remaining="" ;;
-      esac
-      [ -z "$entry" ] && continue
-      local dir="${entry%/*}"
-      [ "$dir" = "$entry" ] && dir="."
-      last_dirs="${last_dirs}|${dir}|"
-      last_dir_count=$((last_dir_count + 1))
-    done
-
-    # Check new file dirs against last dirs
-    local new_dir_count=0 dir_matches=0
-    remaining="$new_files"
-    while [ -n "$remaining" ]; do
-      local entry
-      case "$remaining" in
-        *\|*) entry="${remaining%%|*}"; remaining="${remaining#*|}" ;;
-        *)    entry="$remaining"; remaining="" ;;
-      esac
-      [ -z "$entry" ] && continue
-      local dir="${entry%/*}"
-      [ "$dir" = "$entry" ] && dir="."
-      new_dir_count=$((new_dir_count + 1))
-      case "$last_dirs" in
-        *"|${dir}|"*) dir_matches=$((dir_matches + 1)) ;;
-      esac
-    done
-
-    local max_dir_count="$last_dir_count"
-    [ "$new_dir_count" -gt "$max_dir_count" ] && max_dir_count="$new_dir_count"
-    if [ "$max_dir_count" -gt 0 ]; then
-      file_score=$(( dir_matches * 40 / max_dir_count ))
-    fi
-  fi
+  local file_score; file_score=$(_list_overlap_score "$last_files" "$new_files" "|" 40 1)
 
   echo $(( tag_score + type_score + file_score ))
 }
 
-# ── task_should_restart ──────────────────────────────────────────────
-# Decide whether a worker should be restarted (fresh context) or delegated to
-# (reuse existing context) based on task overlap.
-# Args: last_tags last_type last_files new_tags new_type new_files
-# Returns: exit 0 = should restart (low overlap), exit 1 = should delegate (high overlap)
-task_should_restart() {
+task_should_restart() { # same args as task_context_overlap; exit 0=restart, 1=delegate
   local score
   score="$(task_context_overlap "$@")"
   [ "$score" -lt 30 ]
 }
 
-# ── _task_resolve_file ───────────────────────────────────────────────
-# Resolve task file path from project_dir + task_id.
-# Args: project_dir task_id
-# Returns (echo): absolute path to .task file, or returns 1 if missing.
-_task_resolve_file() {
-  local project_dir="$1" task_id="$2"
-  local task_file="${project_dir}/.doey/tasks/${task_id}.task"
-  if [ ! -f "$task_file" ]; then
-    if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: task ${task_id} not found" >&2
-    else printf 'Error: task %s not found\n' "$task_id" >&2; fi
-    return 1
-  fi
+_task_resolve_file() { # project_dir task_id → echo .task path (returns 1 if missing)
+  local task_file="${1}/.doey/tasks/${2}.task"
+  if [ ! -f "$task_file" ]; then _task_err "Error: task ${2} not found"; return 1; fi
   printf '%s' "$task_file"
 }
 
-# ── doey_task_get_subtask_count ──────────────────────────────────────
-# Count TASK_SUBTASK_*_TITLE lines in a task file.
-# Args: project_dir task_id
-# EXIT CODES: 0=always (query function). Outputs "0" if task missing/no subtasks.
-# Returns (echo): count (0 if missing/none)
-doey_task_get_subtask_count() {
+doey_task_get_subtask_count() { # project_dir task_id → echo count (0 if none)
   local task_file
   task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 0; }
   _count_field_lines "$task_file" "TASK_SUBTASK_*_TITLE=*"
 }
 
-# ── doey_task_add_subtask ────────────────────────────────────────────
-# Add a numbered subtask (TASK_SUBTASK_<N>_*) to a task file.
-# Args: project_dir task_id title [assignee] [worker_pane]
-# Returns (echo): subtask number
-doey_task_add_subtask() {
+doey_task_add_subtask() { # project_dir task_id title [assignee] [worker_pane] → echo subtask N
   local project_dir="$1" task_id="$2" title="$3"
   local assignee="${4:-}" worker_pane="${5:-}"
-
-  local task_file
-  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
-
-  local count
-  count="$(doey_task_get_subtask_count "$project_dir" "$task_id")"
-  local n=$((count + 1))
+  local task_file; task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+  local n; n=$(($(doey_task_get_subtask_count "$project_dir" "$task_id") + 1))
 
   printf 'TASK_SUBTASK_%s_TITLE=%s\n' "$n" "$title" >> "$task_file"
   printf 'TASK_SUBTASK_%s_STATUS=pending\n' "$n" >> "$task_file"
-  if [ -n "$assignee" ]; then
-    printf 'TASK_SUBTASK_%s_ASSIGNEE=%s\n' "$n" "$assignee" >> "$task_file"
-  fi
-  if [ -n "$worker_pane" ]; then
-    printf 'TASK_SUBTASK_%s_WORKER=%s\n' "$n" "$worker_pane" >> "$task_file"
-  fi
+  [ -n "$assignee" ] && printf 'TASK_SUBTASK_%s_ASSIGNEE=%s\n' "$n" "$assignee" >> "$task_file"
+  [ -n "$worker_pane" ] && printf 'TASK_SUBTASK_%s_WORKER=%s\n' "$n" "$worker_pane" >> "$task_file"
   printf 'TASK_SUBTASK_%s_CREATED_AT=%s\n' "$n" "$(date +%s)" >> "$task_file"
-
   _touch_task_updated "$task_file"
   echo "$n"
 }
 
-# ── doey_task_update_subtask ─────────────────────────────────────────
-# Update TASK_SUBTASK_<N>_STATUS in-place. Appends if missing.
-# When status becomes "done" or "failed", writes TASK_SUBTASK_<N>_COMPLETED_AT.
-# Args: project_dir task_id subtask_n status
-doey_task_update_subtask() {
+doey_task_update_subtask() { # project_dir task_id subtask_n status
   local project_dir="$1" task_id="$2" subtask_n="$3" new_status="$4"
-
-  # Validate subtask status
-  local valid=0 s
-  for s in $_TASK_VALID_SUBTASK_STATUSES; do
-    if [ "$s" = "$new_status" ]; then valid=1; break; fi
-  done
-  if [ "$valid" -eq 0 ]; then
-    printf 'Error: invalid subtask status "%s" (valid: %s)\n' "$new_status" "$_TASK_VALID_SUBTASK_STATUSES" >&2
-    return 1
-  fi
-
-  local task_file
-  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
-
-  local field="TASK_SUBTASK_${subtask_n}_STATUS"
-
-  # Check if the field exists
-  local found=0 line
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      "${field}="*) found=1; break ;;
-    esac
-  done < "$task_file" || true
-
-  if [ "$found" -eq 1 ]; then
-    task_update_field "$task_file" "$field" "$new_status"
-  else
-    printf '%s=%s\n' "$field" "$new_status" >> "$task_file"
-    _touch_task_updated "$task_file"
-  fi
-
-  # Write completion timestamp for terminal statuses
-  if [ "$new_status" = "done" ] || [ "$new_status" = "failed" ]; then
-    local ts_field="TASK_SUBTASK_${subtask_n}_COMPLETED_AT"
-    local ts_found=0
-    while IFS= read -r line || [ -n "$line" ]; do
-      case "$line" in
-        "${ts_field}="*) ts_found=1; break ;;
-      esac
-    done < "$task_file" || true
-    if [ "$ts_found" -eq 1 ]; then
-      task_update_field "$task_file" "$ts_field" "$(date +%s)"
-    else
-      printf '%s=%s\n' "$ts_field" "$(date +%s)" >> "$task_file"
-    fi
-  fi
+  _validate_subtask_status "$new_status" || return 1
+  local task_file; task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
+  task_update_field "$task_file" "TASK_SUBTASK_${subtask_n}_STATUS" "$new_status"
+  case "$new_status" in done|failed) task_update_field "$task_file" "TASK_SUBTASK_${subtask_n}_COMPLETED_AT" "$(date +%s)" ;; esac
 }
 
-# ── doey_task_add_update ─────────────────────────────────────────────
-# Add a numbered update (TASK_UPDATE_<N>_*) to a task file.
-# Args: project_dir task_id author text
-# Returns (echo): update number
-doey_task_add_update() {
+doey_task_add_update() { # project_dir task_id author text → echo update N
   local project_dir="$1" task_id="$2" author="$3" text="$4"
-
-  local task_file
-  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
-
+  local task_file; task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
   local count; count=$(_count_field_lines "$task_file" "TASK_UPDATE_*_TIMESTAMP=*")
-  local n=$((count + 1))
-  local now; now=$(date +%s)
+  local n=$((count + 1)) now; now=$(date +%s)
 
   printf 'TASK_UPDATE_%s_TIMESTAMP=%s\n' "$n" "$now" >> "$task_file"
   printf 'TASK_UPDATE_%s_AUTHOR=%s\n' "$n" "$author" >> "$task_file"
@@ -1285,131 +820,53 @@ doey_task_add_update() {
   echo "$n"
 }
 
-# ── Reports ──────────────────────────────────────────────────────────
-
-# ── task_add_report ─────────────────────────────────────────────────
-# Add a numbered report (TASK_REPORT_<N>_*) to a task file.
-# Args: task_file report_type title body [author]
-# Report types: research, progress, decision, completion, error
-# Returns (echo): report number
-task_add_report() {
+task_add_report() { # task_file report_type title body [author] → echo report N
   local task_file="$1" report_type="$2" title="$3" body="$4" author="${5:-unknown}"
-
   [ ! -f "$task_file" ] && return 1
-
-  local count; count=$(_count_field_lines "$task_file" "TASK_REPORT_*_TIMESTAMP=*")
-  local n=$((count + 1))
+  local n; n=$(($(_count_field_lines "$task_file" "TASK_REPORT_*_TIMESTAMP=*") + 1))
   local ts; ts=$(date +%s)
-
-  printf 'TASK_REPORT_%s_TIMESTAMP=%s\n' "$n" "$ts" >> "$task_file"
-  printf 'TASK_REPORT_%s_AUTHOR=%s\n' "$n" "$author" >> "$task_file"
-  printf 'TASK_REPORT_%s_TYPE=%s\n' "$n" "$report_type" >> "$task_file"
-  printf 'TASK_REPORT_%s_TITLE=%s\n' "$n" "$title" >> "$task_file"
-  printf 'TASK_REPORT_%s_BODY=%s\n' "$n" "$body" >> "$task_file"
-
-  _touch_task_updated "$task_file"
-  echo "$n"
+  printf 'TASK_REPORT_%s_TIMESTAMP=%s\nTASK_REPORT_%s_AUTHOR=%s\nTASK_REPORT_%s_TYPE=%s\nTASK_REPORT_%s_TITLE=%s\nTASK_REPORT_%s_BODY=%s\n' \
+    "$n" "$ts" "$n" "$author" "$n" "$report_type" "$n" "$title" "$n" "$body" >> "$task_file"
+  _touch_task_updated "$task_file"; echo "$n"
 }
 
-# ── doey_task_get_report_count ──────────────────────────────────────
-# Count TASK_REPORT_*_TIMESTAMP lines in a task file.
-# Args: project_dir task_id
-# EXIT CODES: 0=always (query function). Outputs "0" if task missing/no reports.
-# Returns (echo): count (0 if missing/none)
-doey_task_get_report_count() {
-  local task_file
-  task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 0; }
+doey_task_get_report_count() { # project_dir task_id → echo count
+  local task_file; task_file="$(_task_resolve_file "$1" "$2")" || { echo "0"; return 0; }
   _count_field_lines "$task_file" "TASK_REPORT_*_TIMESTAMP=*"
 }
 
-# ── doey_task_add_report ────────────────────────────────────────────
-# Add a numbered report (TASK_REPORT_<N>_*) to a task file.
-# Wrapper around task_add_report() that resolves task file from project_dir + task_id.
-# Args: project_dir task_id report_type title body [author]
-# Returns (echo): report number
-doey_task_add_report() {
-  local project_dir="$1" task_id="$2" report_type="$3" title="$4" body="$5" author="${6:-unknown}"
-
-  local task_file
-  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
-
-  task_add_report "$task_file" "$report_type" "$title" "$body" "$author"
+doey_task_add_report() { # project_dir task_id report_type title body [author] → echo report N
+  local task_file; task_file="$(_task_resolve_file "$1" "$2")" || return 1
+  task_add_report "$task_file" "$3" "$4" "$5" "${6:-unknown}"
 }
 
-# ── Recovery Events ─────────────────────────────────────────────────
-
-# ── task_add_recovery_event ─────────────────────────────────────────
-# Add a numbered recovery event (TASK_RECOVERY_<N>_*) to a task file.
-# Args: task_file event_type failed_agent new_agent description
-# Event types: stale_detected, redispatched, rerouted, heartbeat_timeout, crash_recovery
-# Returns (echo): recovery event number
-task_add_recovery_event() {
+task_add_recovery_event() { # task_file event_type failed_agent new_agent description → echo N
   local task_file="$1" event_type="$2" failed_agent="$3" new_agent="$4" description="$5"
-
   [ ! -f "$task_file" ] && return 1
-
-  local count; count=$(_count_field_lines "$task_file" "TASK_RECOVERY_*_TIMESTAMP=*")
-  local n=$((count + 1))
+  local n; n=$(($(_count_field_lines "$task_file" "TASK_RECOVERY_*_TIMESTAMP=*") + 1))
   local ts; ts=$(date +%s)
-
-  printf 'TASK_RECOVERY_%s_TIMESTAMP=%s\n' "$n" "$ts" >> "$task_file"
-  printf 'TASK_RECOVERY_%s_EVENT=%s\n' "$n" "$event_type" >> "$task_file"
-  printf 'TASK_RECOVERY_%s_FAILED_AGENT=%s\n' "$n" "$failed_agent" >> "$task_file"
-  printf 'TASK_RECOVERY_%s_NEW_AGENT=%s\n' "$n" "$new_agent" >> "$task_file"
-  printf 'TASK_RECOVERY_%s_DESCRIPTION=%s\n' "$n" "$description" >> "$task_file"
-
-  _touch_task_updated "$task_file"
-  echo "$n"
+  printf 'TASK_RECOVERY_%s_TIMESTAMP=%s\nTASK_RECOVERY_%s_EVENT=%s\nTASK_RECOVERY_%s_FAILED_AGENT=%s\nTASK_RECOVERY_%s_NEW_AGENT=%s\nTASK_RECOVERY_%s_DESCRIPTION=%s\n' \
+    "$n" "$ts" "$n" "$event_type" "$n" "$failed_agent" "$n" "$new_agent" "$n" "$description" >> "$task_file"
+  _touch_task_updated "$task_file"; echo "$n"
 }
 
-# ── task_get_recovery_count ─────────────────────────────────────────
-# Count TASK_RECOVERY_*_TIMESTAMP lines in a task file.
-# Args: task_file
-# EXIT CODES: 0=always (query function). Outputs "0" if file missing/no events.
-# Returns (echo): count (0 if missing/none)
-task_get_recovery_count() {
-  _count_field_lines "${1:?}" "TASK_RECOVERY_*_TIMESTAMP=*"
+task_get_recovery_count() { _count_field_lines "${1:?}" "TASK_RECOVERY_*_TIMESTAMP=*"; }
+
+doey_task_add_recovery_event() { # project_dir task_id event_type failed_agent new_agent desc
+  local task_file; task_file="$(_task_resolve_file "$1" "$2")" || return 1
+  shift 2; task_add_recovery_event "$task_file" "$@"
 }
 
-# ── doey_task_add_recovery_event ────────────────────────────────────
-# Add a recovery event to a task file, resolving from project_dir + task_id.
-# Args: project_dir task_id event_type failed_agent new_agent description
-# Returns (echo): recovery event number
-doey_task_add_recovery_event() {
-  local project_dir="$1" task_id="$2"
-
-  local task_file
-  task_file="$(_task_resolve_file "$project_dir" "$task_id")" || return 1
-
-  shift 2
-  task_add_recovery_event "$task_file" "$@"
+task_attachment_dir() { # project_dir task_id → echo attachments path (auto-creates)
+  local dir="${1}/.doey/tasks/${2}/attachments"; mkdir -p "$dir"; echo "$dir"
 }
 
-# ── task_attachment_dir ──────────────────────────────────────────────
-# Returns the attachment directory for a task, creates if needed.
-# Args: project_dir task_id
-# Returns (echo): absolute path to .doey/tasks/<id>/attachments/
-task_attachment_dir() {
-  local project_dir="$1" task_id="$2"
-  local dir="${project_dir}/.doey/tasks/${task_id}/attachments"
-  mkdir -p "$dir"
-  echo "$dir"
-}
-
-# ── task_write_attachment ────────────────────────────────────────────
-# Write a report as a task attachment file.
-# Args: project_dir task_id type title body author
-# Types: research, build, test, review, error, progress, completion
-# Creates: .doey/tasks/<id>/attachments/<timestamp>_<type>_<author_safe>.md
-# Returns (echo): filepath of created attachment
-task_write_attachment() {
+task_write_attachment() { # project_dir task_id type title body author → echo filepath
   local project_dir="$1" task_id="$2" report_type="$3" title="$4" body="$5" author="$6"
   local dir; dir=$(task_attachment_dir "$project_dir" "$task_id")
   local ts; ts=$(date +%s)
   local author_safe; author_safe=$(echo "$author" | tr ' /:.' '_')
-  local filename="${ts}_${report_type}_${author_safe}.md"
-  local filepath="${dir}/${filename}"
-
+  local filepath="${dir}/${ts}_${report_type}_${author_safe}.md"
   cat > "$filepath" << ATTACHMENT_EOF
 ---
 type: ${report_type}
@@ -1421,66 +878,46 @@ task_id: ${task_id}
 
 ${body}
 ATTACHMENT_EOF
-
-  # Touch TASK_UPDATED on parent task
   local task_file="${project_dir}/.doey/tasks/${task_id}.task"
   [ -f "$task_file" ] && _touch_task_updated "$task_file"
-
   echo "$filepath"
 }
 
-# ── task_list_attachments ────────────────────────────────────────────
-# List attachments for a task (newest first).
-# Args: project_dir task_id
-# Returns (echo): one filepath per line, sorted newest first
-task_list_attachments() {
-  local project_dir="$1" task_id="$2"
-  local dir="${project_dir}/.doey/tasks/${task_id}/attachments"
+task_list_attachments() { # project_dir task_id → echo filepaths (newest first)
+  local dir="${1}/.doey/tasks/${2}/attachments"
   [ -d "$dir" ] || return 0
   ls -1 "$dir"/*.md 2>/dev/null | sort -r
 }
 
-# ── task_find_similar ─────────────────────────────────────────────────
-# Fuzzy-match active tasks by title keyword overlap.
-# Args: project_dir title_string
-# EXIT CODES: 0=always (query function). Empty output = no match.
-# Returns (echo): matching TASK_ID (first match), or empty string if none.
-task_find_similar() {
-  local project_dir="$1" title_string="$2"
-  local tasks_dir="${project_dir}/.doey/tasks"
-  [ -d "$tasks_dir" ] || return 0
-
-  # Stop words to skip during matching
-  local stop_words="|the|a|an|and|or|in|on|at|to|for|of|is|it|fix|add|update|"
-
-  # Tokenize input title: lowercase, strip punctuation, split on spaces
-  local input_lower
-  input_lower="$(printf '%s' "$title_string" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' ' ')"
-
-  # Build input keyword list (excluding stop words)
-  local input_keys="" input_count=0
-  local remaining="$input_lower"
+_tokenize() { # text stop_words → sets _TKN_KEYS and _TKN_COUNT in caller
+  local lower; lower=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' ' ')
+  local stops="$2"
+  _TKN_KEYS="" _TKN_COUNT=0
+  local remaining="$lower" word
   while [ -n "$remaining" ]; do
-    local word
-    remaining="${remaining## }"  # strip leading spaces
+    remaining="${remaining## }"
     [ -z "$remaining" ] && break
     case "$remaining" in
       *" "*) word="${remaining%% *}"; remaining="${remaining#* }" ;;
       *)     word="$remaining"; remaining="" ;;
     esac
     [ -z "$word" ] && continue
-    # Skip stop words
-    case "$stop_words" in
-      *"|${word}|"*) continue ;;
-    esac
-    # Skip duplicates
-    case "$input_keys" in
-      *"|${word}|"*) continue ;;
-    esac
-    input_keys="${input_keys}|${word}|"
-    input_count=$((input_count + 1))
+    case "$stops" in *"|${word}|"*) continue ;; esac
+    case "$_TKN_KEYS" in *"|${word}|"*) continue ;; esac
+    _TKN_KEYS="${_TKN_KEYS}|${word}|"
+    _TKN_COUNT=$((_TKN_COUNT + 1))
   done
+}
 
+task_find_similar() { # project_dir title_string → echo matching TASK_ID or empty
+  local project_dir="$1" title_string="$2"
+  local tasks_dir="${project_dir}/.doey/tasks"
+  [ -d "$tasks_dir" ] || return 0
+
+  local stop_words="|the|a|an|and|or|in|on|at|to|for|of|is|it|fix|add|update|"
+
+  _tokenize "$title_string" "$stop_words"
+  local input_keys="$_TKN_KEYS" input_count="$_TKN_COUNT"
   [ "$input_count" -eq 0 ] && return 0
 
   local f
@@ -1488,7 +925,6 @@ task_find_similar() {
     [ -f "$f" ] || continue
     [ -s "$f" ] || continue
 
-    # Quick-read status, title, tags without full task_read
     local _fs_status="" _fs_title="" _fs_tags="" _fs_id="" _fs_line
     while IFS= read -r _fs_line || [ -n "$_fs_line" ]; do
       case "${_fs_line%%=*}" in
@@ -1500,46 +936,14 @@ task_find_similar() {
     done < "$f" || true
 
     [ -n "$_fs_id" ] || continue
+    case "$_fs_status" in done|cancelled|pending_user_confirmation) continue ;; esac
 
-    # Skip terminal statuses
-    case "$_fs_status" in
-      done|cancelled|pending_user_confirmation) continue ;;
-    esac
+    _tokenize "$(printf '%s %s' "$_fs_title" "$_fs_tags")" "$stop_words"
+    [ "$_TKN_COUNT" -eq 0 ] && continue
 
-    # Tokenize task title + tags
-    local task_text
-    task_text="$(printf '%s %s' "$_fs_title" "$_fs_tags" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' ' ')"
-
-    local task_keys="" task_count=0
-    remaining="$task_text"
+    local matches=0 unique_total="$input_count" remaining="$_TKN_KEYS"
     while [ -n "$remaining" ]; do
-      local word
-      remaining="${remaining## }"
-      [ -z "$remaining" ] && break
-      case "$remaining" in
-        *" "*) word="${remaining%% *}"; remaining="${remaining#* }" ;;
-        *)     word="$remaining"; remaining="" ;;
-      esac
-      [ -z "$word" ] && continue
-      case "$stop_words" in
-        *"|${word}|"*) continue ;;
-      esac
-      case "$task_keys" in
-        *"|${word}|"*) continue ;;
-      esac
-      task_keys="${task_keys}|${word}|"
-      task_count=$((task_count + 1))
-    done
-
-    [ "$task_count" -eq 0 ] && continue
-
-    # Count keyword overlap
-    local matches=0 unique_total="$input_count"
-    # Add task keywords not already in input to unique total
-    remaining="$task_keys"
-    while [ -n "$remaining" ]; do
-      # Extract each "|word|" entry
-      remaining="${remaining#|}"  # strip leading pipe
+      remaining="${remaining#|}"
       [ -z "$remaining" ] && break
       local word="${remaining%%|*}"
       remaining="${remaining#*|}"
@@ -1550,37 +954,21 @@ task_find_similar() {
       esac
     done
 
-    # Check overlap >= 50%
-    if [ "$unique_total" -gt 0 ] && [ $((matches * 100 / unique_total)) -ge 50 ]; then
-      printf '%s' "$_fs_id"
-      return 0
-    fi
+    [ "$unique_total" -gt 0 ] && [ $((matches * 100 / unique_total)) -ge 50 ] && {
+      printf '%s' "$_fs_id"; return 0
+    }
   done
-
-  # No match — return 0 with empty output (query, not error)
   return 0
 }
 
-# ── task_find_or_create ──────────────────────────────────────────────
-# Find a similar active task, or create a new one if none match.
-# Args: project_dir title type owner
-# Returns (echo): task ID (existing or new)
-task_find_or_create() {
+task_find_or_create() { # project_dir title [type] [owner] → echo task ID
   local project_dir="$1" title="$2"
   local task_type="${3:-feature}" owner="${4:-Boss}"
-
   local existing_id
   if existing_id="$(task_find_similar "$project_dir" "$title")" && [ -n "$existing_id" ]; then
-    printf '%s' "$existing_id"
-    return 0
+    printf '%s' "$existing_id"; return 0
   fi
-
   task_create "$project_dir" "$title" "$task_type" "$owner"
 }
 
-# ── doey_task_write_attachment ───────────────────────────────────────
-# Convenience wrapper matching doey_task_* pattern.
-# Args: project_dir task_id type title body author
-doey_task_write_attachment() {
-  task_write_attachment "$@"
-}
+doey_task_write_attachment() { task_write_attachment "$@"; } # convenience wrapper

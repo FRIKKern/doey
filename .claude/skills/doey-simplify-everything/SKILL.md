@@ -5,63 +5,39 @@ description: Full codebase simplification across all teams. Session Manager inve
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Teams: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done || true`
-- Git status: !`git -C "$(grep PROJECT_DIR $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null | head -1 | cut -d= -f2)" status --porcelain 2>/dev/null | head -5|| true`
 
-Route through Window Managers — never dispatch to workers directly.
+Route through Window Managers only. **Confirm before dispatching.**
 
 ### Inventory
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
-DIRTY=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)
-if [ -n "$DIRTY" ]; then echo "ERROR: Uncommitted changes. Commit or stash first."; exit 1; fi
-TEAM_COUNT=0; TOTAL_WORKERS=0
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RD}/session.env"
+[ -n "$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)" ] && { echo "ERROR: Uncommitted changes"; exit 1; }
 for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-  TEAM_ENV="${RUNTIME_DIR}/team_${W}.env"
-  [ -f "$TEAM_ENV" ] || continue
-  WC=$(grep '^WORKER_COUNT=' "$TEAM_ENV" | cut -d= -f2- | tr -d '"')
-  WT=$(grep '^WORKTREE_DIR=' "$TEAM_ENV" | cut -d= -f2- | tr -d '"')
-  TYPE="local"; [ -n "$WT" ] && TYPE="worktree"
-  echo "Team $W: ${WC} workers ($TYPE)"
-  TEAM_COUNT=$((TEAM_COUNT + 1)); TOTAL_WORKERS=$((TOTAL_WORKERS + WC))
+  [ -f "${RD}/team_${W}.env" ] && echo "Team $W: $(grep '^WORKER_COUNT=' "${RD}/team_${W}.env" | cut -d= -f2) workers"
 done
-echo "Total: $TEAM_COUNT teams, $TOTAL_WORKERS workers"
-mkdir -p "${RUNTIME_DIR}/reports"
-wc -l "$PROJECT_DIR"/agents/*.md "$PROJECT_DIR"/CLAUDE.md \
-      "$PROJECT_DIR"/.claude/skills/*/SKILL.md "$PROJECT_DIR"/docs/*.md \
-      "$PROJECT_DIR"/.claude/hooks/*.sh "$PROJECT_DIR"/shell/*.sh \
-      "$PROJECT_DIR"/{README.md,install.sh,.claude/settings.local.json} 2>/dev/null | sort -rn | tee "${RUNTIME_DIR}/reports/simplify_before.txt"
+mkdir -p "${RD}/reports"
+wc -l "$PROJECT_DIR"/{agents/*.md,CLAUDE.md,.claude/skills/*/SKILL.md,docs/*.md,.claude/hooks/*.sh,shell/*.sh,README.md,install.sh} 2>/dev/null | sort -rn | tee "${RD}/reports/simplify_before.txt"
 ```
 
 ### Domains
-| Domain | Files |
-|--------|-------|
-| D1: Shell core | `shell/doey.sh`, `install.sh` |
-| D2: Hooks | `.claude/hooks/*.sh` |
-| D3: Skills | `.claude/skills/*/SKILL.md` |
-| D4: Agents+CLAUDE.md | `agents/*.md`, `CLAUDE.md` |
-| D5: Docs+README | `docs/*.md`, `README.md` |
-| D6: Shell support | `shell/{info-panel,context-audit,pane-border-status,tmux-statusbar}.sh`, `tests/` |
+D1: Shell core (`doey.sh`, `install.sh`) | D2: Hooks | D3: Skills | D4: Agents+CLAUDE.md | D5: Docs+README | D6: Shell support+tests
 
 **By team count:** 4+: D1, D2, D3+D4, D5+D6 | 3: D1+D6, D2+D4, D3+D5 | 2: D1+D2+D6, D3+D4+D5 | 1: all
+Worktree for low-conflict (docs, agents). Local for hooks/shell.
 
-Worktree teams for low-conflict domains (docs, agents). Local for hooks/shell core. **Confirm before dispatching.**
-
-### Task template
-Dispatch via `load-buffer`/`paste-buffer` (exit copy-mode, sleep 0.5s, Enter, verify after 5s):
+### Task template (load-buffer/paste-buffer)
 ```
-Run a full simplification of [DOMAIN]. You have N workers — use /doey-dispatch.
+Run a full simplification of [DOMAIN]. N workers — use /doey-dispatch.
 Project directory: PROJECT_DIR
-**Goal:** Reduce cognitive load, cut ceremony, DRY repeated logic, align patterns.
-**Files:** [LIST EVERY FILE with line count]
-**Constraints:** No Agent tool. bash 3.2 (`bash -n` after). Edit not Write. Read before editing. Preserve behavior.
-**Assignment:** 1-3 files/worker by complexity. Largest files = dedicated workers.
-**When done:** `bash -n` all .sh, write RUNTIME_DIR/reports/simplify_team_W.md (per-file before/after), report completion.
+Goal: Reduce cognitive load, cut ceremony, DRY, align patterns.
+Files: [LIST with line counts]
+Constraints: No Agent. bash 3.2 (bash -n after). Edit not Write. Read first. Preserve behavior.
+Assignment: 1-3 files/worker. Largest = dedicated.
+When done: bash -n .sh, write RUNTIME_DIR/reports/simplify_team_W.md (before/after).
 ```
 
-### Monitor & Consolidate
-Poll every 60s for `${RUNTIME_DIR}/reports/simplify_team_${W}.md`. Then re-run `wc -l`, diff against `simplify_before.txt`, `bash -n` all .sh, run `context-audit.sh --repo`. Present consolidated before/after.
+### Monitor
+Poll 60s for reports. Re-run `wc -l`, diff vs before, `bash -n` all .sh, `context-audit.sh --repo`.
 
-### Rules
-- Route through Window Managers only (include everything — they have zero context)
-- No file conflicts — each team owns distinct files. Confirm before dispatching
+No file conflicts — each team owns distinct files.

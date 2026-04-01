@@ -3,9 +3,6 @@ name: doey-add-team
 description: Spawn a team from a .team.md definition file. Usage: /doey-add-team <name>
 ---
 
-## Usage
-`/doey-add-team <name>` — spawn a team defined in a `.team.md` file
-
 ## Context
 
 - Session config: !`cat /tmp/doey/*/session.env 2>/dev/null | head -20 || true`
@@ -14,11 +11,9 @@ description: Spawn a team from a .team.md definition file. Usage: /doey-add-team
 
 ## Prompt
 
-Spawn a team from a `.team.md` definition file. **Do NOT ask for confirmation — just do it.** This skill is for **Session Manager or Window Manager** only — workers must not run it.
+Spawn a team from a `.team.md` file. **No confirmation. SM/Manager only.**
 
 ### .team.md Format
-
-Team definitions use this format:
 
 ```markdown
 ---
@@ -259,9 +254,4 @@ VERIFY_INPUT
 if [ "$NOT_READY" -eq 0 ]; then echo "All panes booted"; else echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"; fi
 ```
 
-Output: team name, window number, pane layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`
-
-### Rules
-- SM or Window Manager only. Bash 3.2. 3s launch stagger
-- Search: project root → `.doey/` → `~/.config/doey/teams/` → share dir
-- No `## Workflows` = skip (not error). Agent `-` = no agent flag
+Output: team name, window, layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`. Bash 3.2. 3s stagger. Search: root → `.doey/` → `~/.config/doey/teams/` → share. Missing `## Workflows` = skip. Agent `-` = no flag.

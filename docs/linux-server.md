@@ -62,7 +62,7 @@ systemctl --user enable doey && systemctl --user start doey
 
 ### Cloud Providers
 
-Any Linux VPS with tmux and Node.js works. Never commit API keys — use env vars or `claude auth`.
+Any Linux VPS with tmux and Node.js works. Never commit API keys.
 
 | Provider | Instance | Notes |
 |----------|----------|-------|
@@ -70,7 +70,7 @@ Any Linux VPS with tmux and Node.js works. Never commit API keys — use env var
 | **DigitalOcean** | Basic Droplet ($6/mo) | Simple UI |
 | **AWS** | t3.micro (free tier) | 12 months free |
 
-Step-by-step guides: [Hetzner](hetzner-setup.md) · [Linode](linode-setup.md).
+Guides: [Hetzner](hetzner-setup.md) · [Linode](linode-setup.md).
 
 ### Troubleshooting
 
@@ -78,7 +78,7 @@ Step-by-step guides: [Hetzner](hetzner-setup.md) · [Linode](linode-setup.md).
 |-------|-----|
 | tmux too old (< 2.4) | Install from source or backports |
 | `node` not found | `source ~/.bashrc` (fnm PATH) |
-| Locale/UTF-8 errors | `sudo apt install -y locales && sudo locale-gen en_US.UTF-8` |
+| Locale/UTF-8 errors | `sudo locale-gen en_US.UTF-8` |
 | `doey` not found | `export PATH="$HOME/.local/bin:$PATH"` |
-| Workers fail to start | Verify `claude --version` works |
-| macOS notifications | `osascript` calls silently skipped on Linux |
+| Workers fail | `claude --version` to verify auth |
+| macOS notifications | `osascript` silently skipped on Linux |

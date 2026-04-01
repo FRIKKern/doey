@@ -13,7 +13,6 @@ init_hook() {
   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || exit 0
   [ -z "$RUNTIME_DIR" ] && exit 0
 
-  # -t "$TMUX_PANE" resolves THIS pane (without -t, workers misidentify as Manager)
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
   PANE_SAFE=${PANE//[-:.]/_}
   SESSION_NAME="${PANE%%:*}"
@@ -24,6 +23,40 @@ init_hook() {
 
   _ensure_dirs
   _init_debug
+}
+
+init_named_hook() {  # init_hook + set hook name + debug entry
+  init_hook
+  _DOEY_HOOK_NAME="${1:-unknown}"
+  type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
+}
+
+_resolve_project_dir() {
+  local dir="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
+  [ -z "$dir" ] && dir=$(git rev-parse --show-toplevel 2>/dev/null) || true
+  echo "${dir:-}"
+}
+
+_check_cooldown() {  # Returns 1 if within cooldown period
+  local key="$1" seconds="${2:-60}"
+  [ -n "${RUNTIME_DIR:-}" ] || return 0
+  local file="${RUNTIME_DIR}/status/notif_cooldown_${key}"
+  local last now
+  last=$(cat "$file" 2>/dev/null) || last=0
+  now=$(date +%s)
+  [ "$((now - last))" -lt "$seconds" ] && return 1
+  echo "$now" > "$file" 2>/dev/null || true
+}
+
+_parse_tool_field() {  # Parse field from tool hook JSON (jq preferred, grep fallback)
+  local f="$1"
+  if command -v jq >/dev/null 2>&1; then
+    echo "$INPUT" | jq -r ".$f // empty" 2>/dev/null || echo ""
+  else
+    local k="${f##*.}"
+    echo "$INPUT" | grep -oE "\"${k}\"[[:space:]]*:[[:space:]]*(\"[^\"]*\"|[0-9]+)" | head -1 \
+      | sed "s/.*\"${k}\"[[:space:]]*:[[:space:]]*//;s/^\"//;s/\"$//" 2>/dev/null || echo ""
+  fi
 }
 
 _ensure_dirs() {
@@ -109,33 +142,16 @@ _log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1" >> "$log_file" 2>/dev/null
 }
 
-# Structured error logger — per-pane log + shared errors.log + individual .err files.
+# Structured error logger — per-pane log + shared errors.log
 _log_error() {
   local category="${1:-UNKNOWN}" msg="${2:-}" detail="${3:-}"
-  local pane_id="${DOEY_PANE_ID:-unknown}" role="${DOEY_ROLE:-unknown}"
-  local hook_name="${_DOEY_HOOK_NAME:-unknown}" tool="${_DOEY_TOOL_NAME:-}"
-  local err_dir="${RUNTIME_DIR}/errors" now
-  now=$(date '+%Y-%m-%dT%H:%M:%S')
-
+  local now; now=$(date '+%Y-%m-%dT%H:%M:%S')
   _log "ERROR [$category] ${msg}${detail:+ | $detail}"
-
   printf '[%s] %s | %s | %s | %s | %s | %s | %s\n' \
-    "$now" "$category" "$pane_id" "$role" "$hook_name" "${tool:-n/a}" "${detail:-n/a}" "$msg" \
-    >> "${err_dir}/errors.log" 2>/dev/null
-
-  cat > "${err_dir}/${pane_id}_$(date +%s)_$$.err" 2>/dev/null <<ERR_EOF
-TIMESTAMP=$now
-CATEGORY=$category
-PANE_ID=$pane_id
-ROLE=$role
-HOOK=$hook_name
-TOOL=${tool:-}
-DETAIL=${detail:-}
-MESSAGE=$msg
-ERR_EOF
-
-  _rotate_log "${err_dir}/errors.log"
-  case "$(date +%s)" in *00) find "$err_dir" -name '*.err' -mmin +60 -delete 2>/dev/null || true ;; esac
+    "$now" "$category" "${DOEY_PANE_ID:-unknown}" "${DOEY_ROLE:-unknown}" \
+    "${_DOEY_HOOK_NAME:-unknown}" "${_DOEY_TOOL_NAME:-n/a}" "${detail:-n/a}" "$msg" \
+    >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null
+  _rotate_log "${RUNTIME_DIR}/errors/errors.log"
 }
 
 parse_field() {
@@ -149,7 +165,7 @@ parse_field() {
 
 _read_team_key() {
   local val
-  val=$(grep "^$2=" "$1" | cut -d= -f2-) || true
+  val=$(grep "^$2=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true
   val="${val%\"}"; val="${val#\"}"
   echo "$val"
 }
@@ -217,11 +233,8 @@ is_reserved() {
 atomic_write() { printf '%s\n' "$2" > "$1.tmp" && mv "$1.tmp" "$1"; }
 
 write_pane_status() {
-  local target="$1" status="$2" task="${3:-}" tmp
-  tmp=$(mktemp "${RUNTIME_DIR}/status/.tmp_XXXXXX" 2>/dev/null) || tmp=""
-  [ -z "$tmp" ] || [ ! -f "$tmp" ] && tmp="$target"
-  printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$NOW" "$status" "$task" > "$tmp"
-  [ "$tmp" != "$target" ] && mv "$tmp" "$target"
+  local target="$1" status="$2" task="${3:-}"
+  printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$NOW" "$status" "$task" > "$target.tmp" && mv "$target.tmp" "$target"
 }
 
 NL='
@@ -272,15 +285,6 @@ APPLESCRIPT
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"
   is_boss || return 0
-  if [ -n "${RUNTIME_DIR:-}" ]; then  # 60s cooldown per title
-    local title_safe="${title//[^a-zA-Z0-9]/_}"
-    local cooldown_file="${RUNTIME_DIR}/status/notif_cooldown_${title_safe}"
-    local last_sent now
-    last_sent=$(cat "$cooldown_file" 2>/dev/null) || last_sent=0
-    now=$(date +%s)
-    [ "$((now - last_sent))" -lt 60 ] && return 0
-    echo "$now" > "$cooldown_file" 2>/dev/null || true
-  fi
-
+  _check_cooldown "${title//[^a-zA-Z0-9]/_}" 60 || return 0
   _send_desktop_notification "$title" "$body"
 }

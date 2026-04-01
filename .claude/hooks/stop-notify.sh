@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 # Stop hook: unified notification dispatch (async)
-#   Worker          → notify Window Manager pane
-#   Window Manager  → notify Session Manager pane
-#   Session Manager → notify Boss pane
-#   Boss            → desktop notification
+# Worker→Manager, Manager→SM, SM→Boss, Boss→desktop
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
-init_hook
-_DOEY_HOOK_NAME="stop-notify"
-type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
+init_named_hook "stop-notify"
 
 [ "$WINDOW_INDEX" = "0" ] && [ "$PANE_INDEX" = "0" ] && exit 0  # info panel
 
@@ -24,26 +19,17 @@ _debug_sent() {
 }
 
 _send_message_file() {
-  local target_pane="$1" subject="$2" body="$3" sender="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
-  local target_safe
-  target_safe=$(printf '%s' "$target_pane" | tr ':.-' '_')
-
-  local msg_dir="${RUNTIME_DIR}/messages"
-  local trig_dir="${RUNTIME_DIR}/triggers"
-  mkdir -p "$msg_dir" "$trig_dir" 2>/dev/null || true
-
-  local timestamp
-  timestamp="$(date +%s)_$$"
-  local msg_file="${msg_dir}/${target_safe}_${timestamp}.msg"
-  local tmp_file="${msg_file}.tmp"
-
-  if printf 'FROM: %s\nSUBJECT: %s\n%s\n' "$sender" "$subject" "$body" > "$tmp_file" 2>/dev/null \
-     && mv "$tmp_file" "$msg_file" 2>/dev/null; then
-    touch "${trig_dir}/${target_safe}.trigger" 2>/dev/null || true
+  local target_pane="$1" subject="$2" body="$3"
+  local sender="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
+  local target_safe; target_safe=$(printf '%s' "$target_pane" | tr ':.-' '_')
+  mkdir -p "${RUNTIME_DIR}/messages" "${RUNTIME_DIR}/triggers" 2>/dev/null || true
+  local msg_file="${RUNTIME_DIR}/messages/${target_safe}_$(date +%s)_$$.msg"
+  if printf 'FROM: %s\nSUBJECT: %s\n%s\n' "$sender" "$subject" "$body" > "${msg_file}.tmp" 2>/dev/null \
+     && mv "${msg_file}.tmp" "$msg_file" 2>/dev/null; then
+    touch "${RUNTIME_DIR}/triggers/${target_safe}.trigger" 2>/dev/null || true
     return 0
   fi
-
-  rm -f "$tmp_file" 2>/dev/null || true
+  rm -f "${msg_file}.tmp" 2>/dev/null || true
   return 1
 }
 
@@ -60,78 +46,50 @@ _notify_pane() {
 _dispatch_workflow_hooks() {
   local runtime_dir="$1" win_idx="$2" pane_idx="$3"
   local team_env="${runtime_dir}/team_${win_idx}.env"
-  local team_def
-  team_def=$(_read_team_key "$team_env" TEAM_DEF 2>/dev/null) || return 0
+  local team_def; team_def=$(_read_team_key "$team_env" TEAM_DEF 2>/dev/null) || return 0
   [ -n "$team_def" ] || return 0
-
   local teamdef_env="${runtime_dir}/teamdef_${team_def}.env"
   [ -f "$teamdef_env" ] || return 0
-
-  local my_role
-  my_role=$(grep "^PANE_${pane_idx}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) || true
+  local my_role; my_role=$(grep "^PANE_${pane_idx}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) || true
   [ -n "$my_role" ] || return 0
+  local mgr_pane; mgr_pane=$(_read_team_key "$team_env" MANAGER_PANE 2>/dev/null) || mgr_pane=""
 
-  local mgr_pane
-  mgr_pane=$(_read_team_key "$team_env" MANAGER_PANE 2>/dev/null) || mgr_pane=""
-
-  local i=0
-  while true; do
-    local rule
-    rule=$(grep "^WORKFLOW_${i}=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) || true
-    [ -n "$rule" ] || break
+  local i=0 rule
+  while rule=$(grep "^WORKFLOW_${i}=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) && [ -n "$rule" ]; do
     i=$((i + 1))
-
     local trigger from_role to_role subject
-    trigger=$(printf '%s' "$rule" | cut -d'|' -f1)
-    from_role=$(printf '%s' "$rule" | cut -d'|' -f2)
-    to_role=$(printf '%s' "$rule" | cut -d'|' -f3)
-    subject=$(printf '%s' "$rule" | cut -d'|' -f4)
-
+    trigger=$(printf '%s' "$rule" | cut -d'|' -f1); from_role=$(printf '%s' "$rule" | cut -d'|' -f2)
+    to_role=$(printf '%s' "$rule" | cut -d'|' -f3); subject=$(printf '%s' "$rule" | cut -d'|' -f4)
     [ "$trigger" = "stop" ] && [ "$from_role" = "$my_role" ] || continue
 
     local target=""
     if [ -n "$mgr_pane" ]; then
       target="${SESSION_NAME}:${win_idx}.${mgr_pane}"
     else
-      local p=0
-      while true; do
-        local p_role
-        p_role=$(grep "^PANE_${p}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) || true
-        [ -n "$p_role" ] || break
-        if [ "$p_role" = "$to_role" ]; then
-          target="${SESSION_NAME}:${win_idx}.${p}"
-          break
-        fi
+      local p=0 p_role
+      while p_role=$(grep "^PANE_${p}_ROLE=" "$teamdef_env" 2>/dev/null | head -1 | cut -d'=' -f2-) && [ -n "$p_role" ]; do
+        [ "$p_role" = "$to_role" ] && { target="${SESSION_NAME}:${win_idx}.${p}"; break; }
         p=$((p + 1))
       done
     fi
-
     [ -n "$target" ] || continue
 
-    local result_file="${runtime_dir}/results/pane_${win_idx}_${pane_idx}.json"
     local body="WORKFLOW_TARGET: ${to_role}
 WORKFLOW_SOURCE: ${my_role}
 Workflow rule matched: ${from_role} → ${to_role}"
+    local result_file="${runtime_dir}/results/pane_${win_idx}_${pane_idx}.json"
     if [ -f "$result_file" ]; then
-      local summary
-      summary=$(head -20 "$result_file" 2>/dev/null) || summary=""
+      local summary; summary=$(head -20 "$result_file" 2>/dev/null) || summary=""
       [ -n "$summary" ] && body="${body}
 ${summary}"
     fi
-
-    if _send_message_file "$target" "workflow:${subject}" "$body" 2>/dev/null; then
-      type _debug_log >/dev/null 2>&1 && _debug_log workflow "dispatched" "rule=${from_role}->${to_role}" "subject=${subject}" "target=${target}"
-    fi
+    _send_message_file "$target" "workflow:${subject}" "$body" 2>/dev/null \
+      && type _debug_log >/dev/null 2>&1 && _debug_log workflow "dispatched" "rule=${from_role}->${to_role}" "subject=${subject}" "target=${target}"
   done
 }
 
-# Belt-and-suspenders: send-keys wake to Session Manager (supplements trigger file)
-_wake_sm() {
-  local sm_pane="${SM_PANE:-0.2}"
-  tmux send-keys -t "${SESSION_NAME}:${sm_pane}" "" 2>/dev/null || true
-}
+_wake_sm() { tmux send-keys -t "${SESSION_NAME}:${SM_PANE:-0.2}" "" 2>/dev/null || true; }
 
-# --- Worker: notify its Window Manager (or Session Manager for freelancers) ---
 if is_worker; then
   _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
 
@@ -148,7 +106,6 @@ if is_worker; then
   PANE_DISPLAY="${DOEY_PANE_ID:-${PANE_TITLE}}"
   LAST_MSG=$(parse_field "last_assistant_message")
 
-  # Determine target pane, label, and subject
   if [ "$_team_type" = "freelancer" ]; then
     _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
     _target="$SESSION_NAME:${_sm_pane:-0.2}"
@@ -171,7 +128,6 @@ if is_worker; then
   exit 0
 fi
 
-# --- Window Manager: notify Session Manager ---
 if is_manager; then
   STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
   [ -f "$STATUS_FILE" ] || exit 0
@@ -192,7 +148,6 @@ if is_manager; then
   exit 0
 fi
 
-# --- Session Manager: notify Boss ---
 if is_session_manager; then
   LAST_MSG=$(parse_field "last_assistant_message")
   [ -z "$LAST_MSG" ] && exit 0
@@ -207,7 +162,6 @@ if is_session_manager; then
   fi
 fi
 
-# --- Boss: desktop notification ---
 if is_boss; then
   LAST_MSG=$(parse_field "last_assistant_message")
   [ -z "$LAST_MSG" ] && exit 0

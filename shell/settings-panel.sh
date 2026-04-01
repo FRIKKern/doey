@@ -29,7 +29,6 @@ repeat_char() {
   printf '%s' "$out"
 }
 
-# Get the Nth word (0-indexed) from a space-separated string.
 _nth_word() {
   local idx="$1" i=0; shift
   for v in $*; do
@@ -39,7 +38,6 @@ _nth_word() {
   return 1
 }
 
-# Resolve project directory from session.env. Prints path or "." if unavailable.
 _get_proj_dir() {
   local _d=""
   if [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
@@ -70,21 +68,25 @@ _doey_load_config() {
   [ -f "${proj_dir}/.doey/config.sh" ] && source "${proj_dir}/.doey/config.sh"
 }
 
-_parse_agent_frontmatter() {
-  local agent_file="$1" field="$2"
+_parse_agent_all() {
+  local agent_file="$1" in_front=false _v
+  _AF_name="" _AF_model="" _AF_description="" _AF_color="" _AF_memory=""
   [ -f "$agent_file" ] || return 1
-  local in_front=false val=""
   while IFS= read -r line; do
     case "$line" in
       ---) if [ "$in_front" = false ]; then in_front=true; continue; else break; fi ;;
     esac
     if [ "$in_front" = true ]; then
+      _v="${line#*:}"; _v="${_v# }"; _v="${_v#\"}"; _v="${_v%\"}"
       case "$line" in
-        "${field}:"*) val=$(echo "$line" | sed "s/^${field}:[[:space:]]*//" | sed 's/^"//' | sed 's/"$//'); break ;;
+        name:*)        _AF_name="$_v" ;;
+        model:*)       _AF_model="$_v" ;;
+        description:*) _AF_description="$_v" ;;
+        color:*)       _AF_color="$_v" ;;
+        memory:*)      _AF_memory="$_v" ;;
       esac
     fi
   done < "$agent_file"
-  [ -n "$val" ] && printf '%s' "$val"
 }
 
 _truncate() {
@@ -96,27 +98,18 @@ _truncate() {
   fi
 }
 
-# ── Cursor State Management ──────────────────────────────────────────────────
-
 _CURSOR_POS=0
 _CURSOR_MAX=0
-_EDIT_MODE=false
-_EDIT_VAR=""
 _STATUS_MSG=""
 _STATUS_EXPIRE=0
 
+_set_status() { _STATUS_MSG="$1"; _STATUS_EXPIRE=$(($(date +%s) + ${2:-3})); }
+
 _read_cursor() {
-  local view="$1"
-  local cursor_file="${RUNTIME_DIR}/status/settings_cursor_${view}"
-  if [ -f "$cursor_file" ]; then
-    _CURSOR_POS=$(cat "$cursor_file" 2>/dev/null)
-    # Ensure numeric
-    case "$_CURSOR_POS" in
-      *[!0-9]*) _CURSOR_POS=0 ;;
-    esac
-  else
-    _CURSOR_POS=0
-  fi
+  local cursor_file="${RUNTIME_DIR}/status/settings_cursor_${1}"
+  _CURSOR_POS=0
+  [ -f "$cursor_file" ] && _CURSOR_POS=$(cat "$cursor_file" 2>/dev/null) || true
+  case "$_CURSOR_POS" in *[!0-9]*) _CURSOR_POS=0 ;; esac
 }
 
 _write_cursor() {
@@ -138,10 +131,6 @@ _cursor_move() {
   _write_cursor "$view" "$_CURSOR_POS"
 }
 
-# ── Validation ───────────────────────────────────────────────────────────────
-
-# Validate a setting value. Returns 0 if valid, 1 if not.
-# Prints error message on failure.
 _validate_int_range() {
   local val="$1" min="$2" max="$3"
   case "$val" in *[!0-9]*) printf 'Must be a number %s-%s' "$min" "$max"; return 1 ;; esac
@@ -168,7 +157,6 @@ _validate_setting() {
   esac
 }
 
-# Get validation hint for a setting (shown in edit prompt)
 _validation_hint() {
   local var="$1"
   case "$var" in
@@ -183,10 +171,6 @@ _validation_hint() {
   esac
 }
 
-# ── Config Writing ───────────────────────────────────────────────────────────
-
-# Ensure project config file exists (creates from default template or minimal stub).
-# Prints the config file path.
 _ensure_config_file() {
   local proj_dir config_file
   proj_dir=$(_get_proj_dir)
@@ -200,14 +184,12 @@ _ensure_config_file() {
   printf '%s' "$config_file"
 }
 
-# Touch the settings refresh trigger file.
 _touch_refresh_trigger() {
   local trigger="${RUNTIME_DIR}/status/settings_refresh_trigger"
   mkdir -p "$(dirname "$trigger")" 2>/dev/null || true
   touch "$trigger"
 }
 
-# Strip legacy team vars + explicit DOEY_TEAM_* lines from config (for rewrite).
 _strip_team_config_vars() {
   local cf="$1" tmp="${1}.tmp"
   sed '/^DOEY_INITIAL_TEAMS=/d;/^DOEY_INITIAL_WORKTREE_TEAMS=/d;/^DOEY_INITIAL_FREELANCER_TEAMS=/d' "$cf" > "$tmp"; mv "$tmp" "$cf"
@@ -215,31 +197,24 @@ _strip_team_config_vars() {
   sed '/^DOEY_TEAM_[0-9]/d;/^DOEY_TEAM_COUNT=/d' "$cf" > "$tmp"; mv "$tmp" "$cf"
 }
 
-# Write a setting to the project config file. Atomic write via tmp+mv.
 _write_config_setting() {
   local var="$1" val="$2"
   local config_file
   config_file=$(_ensure_config_file)
 
   local tmp_file="${config_file}.tmp"
-  # Check if var already exists (commented or uncommented)
   if grep -q "^${var}=" "$config_file" 2>/dev/null; then
-    # Update existing uncommented line
     sed "s|^${var}=.*|${var}=${val}|" "$config_file" > "$tmp_file"
     mv "$tmp_file" "$config_file"
   elif grep -q "^# *${var}=" "$config_file" 2>/dev/null; then
-    # Uncomment and set value
     sed "s|^# *${var}=.*|${var}=${val}|" "$config_file" > "$tmp_file"
     mv "$tmp_file" "$config_file"
   else
-    # Append
     printf '%s=%s\n' "$var" "$val" >> "$config_file"
   fi
 
   _touch_refresh_trigger
 }
-
-# ── Agent Frontmatter Writing ────────────────────────────────────────────────
 
 _write_agent_frontmatter() {
   local agent_file="$1" field="$2" new_val="$3"
@@ -285,12 +260,6 @@ _write_agent_frontmatter() {
   fi
 }
 
-# ── Settings Row (cursor-aware) ──────────────────────────────────────────────
-
-# Parallel arrays for settings items (populated during render)
-_SETTINGS_VARS=""    # newline-separated var names
-_SETTINGS_COUNT=0
-
 _settings_row() {
   local var_name="$1" default_val="$2" current_val="$3"
   local row_idx="$4"  # cursor index for this row
@@ -325,9 +294,6 @@ _settings_row() {
   fi
 }
 
-# ── Render: Settings View ────────────────────────────────────────────────────
-
-# Settings vars list (order matches render, used for cursor→var lookup)
 _SETTINGS_VAR_LIST=""
 
 # Helper: register and render a setting row. Uses _ri and _SETTINGS_VAR_LIST
@@ -396,11 +362,7 @@ _render_settings_view() {
 
 _settings_var_at() { _nth_word "$1" $_SETTINGS_VAR_LIST; }
 
-# ── Render: Teams View (cursor-aware) ────────────────────────────────────────
-
-# Team items list for cursor reference
 _TEAM_ITEMS=""       # "running:W" or "startup:N" space-separated
-_TEAM_ITEM_COUNT=0
 
 # Lineup state (indexed variables pattern for bash 3.2)
 _LINEUP_COUNT=0
@@ -495,7 +457,6 @@ _render_team_blueprint() {
   [ "$_cw" -lt 40 ] && _cw=40
 
   _TEAM_ITEMS=""
-  _TEAM_ITEM_COUNT=0
   local _ri=0
 
   # --- Section 0: Running Teams (live) ---
@@ -587,23 +548,13 @@ _render_team_blueprint() {
             "${C_BOLD_CYAN}" "${_def:-?}" "${C_RESET}" \
             "${C_DIM}" "$(_truncate "$_def_desc" $(( _cw - 34 )))" "${C_RESET}")
           ;;
-        freelancer)
-          _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b(pool)%b' \
-            "${C_GREEN}" "freelancer" "${C_RESET}" \
-            "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" \
-            "${C_DIM}" "${C_RESET}")
-          ;;
-        worktree)
-          _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b(worktree)%b' \
-            "${C_CYAN}" "worktree" "${C_RESET}" \
-            "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" \
-            "${C_DIM}" "${C_RESET}")
-          ;;
         *)
-          _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b(default)%b' \
-            "${C_CYAN}" "$_type" "${C_RESET}" \
+          local _tc="${C_CYAN}" _suffix="(default)"
+          case "$_type" in freelancer) _tc="${C_GREEN}"; _suffix="(pool)" ;; worktree) _suffix="(worktree)" ;; esac
+          _line_detail=$(printf '%b%-10s%b %b%s workers%b  %b%s%b' \
+            "$_tc" "$_type" "${C_RESET}" \
             "${C_BOLD_GREEN}" "$_workers" "${C_RESET}" \
-            "${C_DIM}" "${C_RESET}")
+            "${C_DIM}" "$_suffix" "${C_RESET}")
           ;;
       esac
 
@@ -624,7 +575,6 @@ _render_team_blueprint() {
   fi
 
   _CURSOR_MAX=$_ri
-  _TEAM_ITEM_COUNT=$_ri
 }
 
 _team_item_at() { _nth_word "$1" $_TEAM_ITEMS; }
@@ -692,11 +642,7 @@ _remove_startup_team() {
   _touch_refresh_trigger
 }
 
-# ── Render: Agents View (cursor-aware) ───────────────────────────────────────
-
-_AGENT_FILES=""      # space-separated agent file paths
 _AGENT_NAMES=""      # space-separated agent names
-_AGENT_COUNT=0
 
 _render_available_agents() {
   local _proj_dir _agents_dir _f _name _model _desc _color _memory _idx
@@ -713,20 +659,16 @@ _render_available_agents() {
   fi
 
   _idx=0
-  _AGENT_FILES=""
   _AGENT_NAMES=""
   for _f in "$_agents_dir"/*.md; do
     [ -f "$_f" ] || continue
-    _name=$(_parse_agent_frontmatter "$_f" "name")
-    _model=$(_parse_agent_frontmatter "$_f" "model")
-    _desc=$(_parse_agent_frontmatter "$_f" "description")
-    _color=$(_parse_agent_frontmatter "$_f" "color")
-    _memory=$(_parse_agent_frontmatter "$_f" "memory")
+    _parse_agent_all "$_f"
+    _name="${_AF_name}"; _model="${_AF_model}"; _desc="${_AF_description}"
+    _color="${_AF_color}"; _memory="${_AF_memory}"
     [ -z "$_name" ] && _name=$(basename "$_f" .md)
     [ -z "$_model" ] && _model="?"
     [ -z "$_desc" ] && _desc="(no description)"
 
-    _AGENT_FILES="${_AGENT_FILES}${_f} "
     _AGENT_NAMES="${_AGENT_NAMES}${_name} "
 
     local _is_sel=false
@@ -751,13 +693,9 @@ _render_available_agents() {
   done
   [ "$_idx" -eq 0 ] && printf '    %b(no agent files found)%b\n' "${C_DIM}" "${C_RESET}"
   _CURSOR_MAX=$_idx
-  _AGENT_COUNT=$_idx
 }
 
 _agent_name_at() { _nth_word "$1" $_AGENT_NAMES; }
-_agent_file_at() { _nth_word "$1" $_AGENT_FILES; }
-
-# ── Render: Agent Detail (cursor-aware) ──────────────────────────────────────
 
 # Editable properties for agent detail cursor
 _AGENT_DETAIL_PROPS=""   # space-separated: model color memory description
@@ -771,8 +709,8 @@ _render_agent_detail() {
 
   for _f in "$_agents_dir"/*.md; do
     [ -f "$_f" ] || continue
-    local _n
-    _n=$(_parse_agent_frontmatter "$_f" "name")
+    _parse_agent_all "$_f"
+    local _n="${_AF_name}"
     [ -z "$_n" ] && _n=$(basename "$_f" .md)
     if [ "$_n" = "$_agent_name" ] || [ "$(basename "$_f" .md)" = "$_agent_name" ]; then
       _found="$_f"
@@ -790,24 +728,16 @@ _render_agent_detail() {
   _AGENT_DETAIL_FILE="$_found"
   _AGENT_DETAIL_PROPS="model color memory description"
 
-  local _name _model _desc _color _memory
-  _name=$(_parse_agent_frontmatter "$_found" "name")
-  _model=$(_parse_agent_frontmatter "$_found" "model")
-  _desc=$(_parse_agent_frontmatter "$_found" "description")
-  _color=$(_parse_agent_frontmatter "$_found" "color")
-  _memory=$(_parse_agent_frontmatter "$_found" "memory")
+  _parse_agent_all "$_found"
+  local _name="${_AF_name}" _model="${_AF_model}" _desc="${_AF_description}"
+  local _color="${_AF_color}" _memory="${_AF_memory}"
   [ -z "$_name" ] && _name=$(basename "$_found" .md)
 
   printf '\n  %b● %s%b\n' "${C_BOLD_CYAN}" "$_name" "${C_RESET}"
   printf '  %b──────────────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
 
-  # Editable properties with cursor (use indexed approach to avoid word-split issues)
-  local _ri=0
-
-  # Render each property row individually
-  local _prop_names="model color memory description"
-  local _prop_label _prop_val
-  for _prop in $_prop_names; do
+  local _ri=0 _prop_label _prop_val
+  for _prop in $_AGENT_DETAIL_PROPS; do
     case "$_prop" in
       model) _prop_label="Model"; _prop_val="${_model:-?}" ;;
       color) _prop_label="Color"; _prop_val="${_color:---}" ;;
@@ -826,7 +756,6 @@ _render_agent_detail() {
   printf '  %bFile:%b       %s\n' "${C_BOLD_WHITE}" "${C_RESET}" "$_found"
   printf '\n'
 
-  # Read full body (everything after second ---)
   printf '  %bAgent Instructions%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
   printf '  %b──────────────────────────────────────────%b\n' "${C_DIM}" "${C_RESET}"
 
@@ -865,8 +794,6 @@ _render_agent_detail() {
 
 _agent_detail_prop_at() { _nth_word "$1" $_AGENT_DETAIL_PROPS; }
 
-# ── Render: Nav Bar ──────────────────────────────────────────────────────────
-
 _render_nav_bar() {
   local _active="${1:-settings}"
   local _views="settings teams agents"
@@ -889,7 +816,13 @@ _render_nav_bar() {
   printf '\n'
 }
 
-# ── Context-Sensitive Footer ─────────────────────────────────────────────────
+_keys() {
+  printf '  '
+  while [ $# -ge 2 ]; do
+    printf '%b[%s]%b %s  ' "${C_BOLD_CYAN}" "$1" "${C_RESET}" "$2"; shift 2
+  done
+  printf '\n'
+}
 
 _render_footer() {
   local view="$1"
@@ -907,45 +840,20 @@ _render_footer() {
   fi
 
   case "$view" in
-    settings)
-      printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b edit  %b[r]%b reload  %b[1-3]%b views\n' \
-        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
-      ;;
+    settings)    _keys "↑↓/jk" navigate Enter edit r reload "1-3" views ;;
     teams)
-      # Context-sensitive footer based on cursor position
       local _foot_item=""
       _foot_item=$(_team_item_at "$_CURSOR_POS" 2>/dev/null) || true
       case "$_foot_item" in
-        startup:*)
-          printf '  %b[↑↓/jk]%b navigate  %b[d]%b remove  %b[r]%b reload  %b[1-3]%b views\n' \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
-          ;;
-        *)
-          printf '  %b[↑↓/jk]%b navigate  %b[r]%b reload  %b[1-3]%b views\n' \
-            "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-            "${C_BOLD_CYAN}" "${C_RESET}"
-          ;;
+        startup:*) _keys "↑↓/jk" navigate d remove r reload "1-3" views ;;
+        *)         _keys "↑↓/jk" navigate r reload "1-3" views ;;
       esac
       ;;
-    agents)
-      printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b inspect  %b[1-3]%b views\n' \
-        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-        "${C_BOLD_CYAN}" "${C_RESET}"
-      ;;
-    agent_detail)
-      printf '  %b[↑↓/jk]%b navigate  %b[Enter]%b edit  %b[b]%b back  %b[1-3]%b views\n' \
-        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}" \
-        "${C_BOLD_CYAN}" "${C_RESET}" "${C_BOLD_CYAN}" "${C_RESET}"
-      ;;
+    agents)       _keys "↑↓/jk" navigate Enter inspect "1-3" views ;;
+    agent_detail) _keys "↑↓/jk" navigate Enter edit b back "1-3" views ;;
   esac
 }
 
-# ── Edit Prompt ──────────────────────────────────────────────────────────────
-
-# Show an input prompt at the bottom of the screen, read user input.
-# Returns the new value via stdout, or empty string if cancelled.
 _edit_prompt() {
   local prompt_label="$1" hint="${2:-}"
   local input=""
@@ -958,27 +866,11 @@ _edit_prompt() {
   printf '%s' "$input"
 }
 
-# ── Key Reading (arrow key aware, bash 3.2 compatible) ───────────────────────
-
 _read_key() {
   local _key="" _rest=""
-  # read -s -n 1: returns empty string for Enter key, sets exit code >0 on timeout
-  if ! read -s -n 1 -t 1 _key 2>/dev/null; then
-    # Timeout — no key pressed
-    printf ''
-    return
-  fi
-  # Enter key produces empty string
-  if [ -z "$_key" ]; then
-    printf 'ENTER'
-    return
-  fi
-  # Backspace (0x7f or 0x08)
-  if [ "$_key" = $'\177' ] || [ "$_key" = $'\010' ]; then
-    printf 'BACKSPACE'
-    return
-  fi
-  # Check for escape sequence (arrow keys)
+  if ! read -s -n 1 -t 1 _key 2>/dev/null; then printf ''; return; fi
+  if [ -z "$_key" ]; then printf 'ENTER'; return; fi
+  if [ "$_key" = $'\177' ] || [ "$_key" = $'\010' ]; then printf 'BACKSPACE'; return; fi
   if [ "$_key" = $'\033' ]; then
     read -s -n 2 -t 1 _rest 2>/dev/null || true
     case "$_rest" in
@@ -992,38 +884,22 @@ _read_key() {
   printf '%s' "$_key"
 }
 
-# ── Main Handle Key ─────────────────────────────────────────────────────────
-
 _handle_key() {
   local _key="$1"
   local _view_file="${RUNTIME_DIR}/status/settings_view"
 
   case "$_key" in
-    # View switching
     1) echo "settings" > "$_view_file"; _CURSOR_POS=0; _write_cursor "settings" 0 ;;
     2) echo "teams" > "$_view_file"; _read_cursor "teams" ;;
     3) echo "agents" > "$_view_file"; _read_cursor "agents" ;;
-
-    # Cursor movement
-    UP|k)
-      _cursor_move "up" "$_CURRENT_VIEW"
-      ;;
-    DOWN|j)
-      _cursor_move "down" "$_CURRENT_VIEW"
-      ;;
-
-    # Reload
+    UP|k)   _cursor_move "up" "$_CURRENT_VIEW" ;;
+    DOWN|j) _cursor_move "down" "$_CURRENT_VIEW" ;;
     r)
-      _STATUS_MSG="Reloading..."
-      _STATUS_EXPIRE=$(($(date +%s) + 3))
-      # Run doey reload in background
+      _set_status "Reloading..."
       bash -c 'doey reload' >/dev/null 2>&1 &
       sleep 1
-      _STATUS_MSG="✓ Applied"
-      _STATUS_EXPIRE=$(($(date +%s) + 2))
+      _set_status "✓ Applied" 2
       ;;
-
-    # Enter — context-dependent action
     ENTER)
       case "$_CURRENT_VIEW" in
         settings)
@@ -1037,11 +913,9 @@ _handle_key() {
             local _err=""
             if _err=$(_validate_setting "$_var" "$_new_val"); then
               _write_config_setting "$_var" "$_new_val"
-              _STATUS_MSG="✓ Set ${_var}=${_new_val}"
-              _STATUS_EXPIRE=$(($(date +%s) + 3))
+              _set_status "✓ Set ${_var}=${_new_val}"
             else
-              _STATUS_MSG="✗ ${_err}"
-              _STATUS_EXPIRE=$(($(date +%s) + 3))
+              _set_status "✗ ${_err}"
             fi
           fi
           ;;
@@ -1050,12 +924,10 @@ _handle_key() {
           _item=$(_team_item_at "$_CURSOR_POS") || return
           case "$_item" in
             startup:*)
-              _STATUS_MSG="Use [d] to remove startup teams"
-              _STATUS_EXPIRE=$(($(date +%s) + 2))
+              _set_status "Use [d] to remove startup teams" 2
               ;;
             running:*)
-              _STATUS_MSG="Team already running"
-              _STATUS_EXPIRE=$(($(date +%s) + 2))
+              _set_status "Team already running" 2
               ;;
           esac
           ;;
@@ -1084,8 +956,7 @@ _handle_key() {
               case "$_new_val" in
                 opus|sonnet|haiku) ;;
                 *)
-                  _STATUS_MSG="✗ Model must be: opus, sonnet, or haiku"
-                  _STATUS_EXPIRE=$(($(date +%s) + 3))
+                  _set_status "✗ Model must be: opus, sonnet, or haiku"
                   return
                   ;;
               esac
@@ -1096,14 +967,12 @@ _handle_key() {
               *" "*) _write_val="\"${_new_val}\"" ;;
             esac
             _write_agent_frontmatter "$_AGENT_DETAIL_FILE" "$_prop" "$_write_val"
-            _STATUS_MSG="✓ Updated ${_prop} → ${_new_val}"
-            _STATUS_EXPIRE=$(($(date +%s) + 3))
+            _set_status "✓ Updated ${_prop} → ${_new_val}"
           fi
           ;;
       esac
       ;;
 
-    # Delete team
     d)
       if [ "$_CURRENT_VIEW" = "teams" ]; then
         local _item
@@ -1113,18 +982,15 @@ _handle_key() {
             local _tidx
             _tidx=$(echo "$_item" | cut -d: -f2)
             _remove_startup_team "$_tidx"
-            _STATUS_MSG="✓ Removed team ${_tidx}"
-            _STATUS_EXPIRE=$(($(date +%s) + 3))
+            _set_status "✓ Removed team ${_tidx}"
             ;;
           *)
-            _STATUS_MSG="Can only remove startup teams"
-            _STATUS_EXPIRE=$(($(date +%s) + 2))
+            _set_status "Can only remove startup teams" 2
             ;;
         esac
       fi
       ;;
 
-    # Back from agent detail
     b|BACKSPACE)
       if [ "$_CURRENT_VIEW" = "agent_detail" ]; then
         echo "agents" > "$_view_file"
@@ -1133,8 +999,6 @@ _handle_key() {
       ;;
   esac
 }
-
-# ── Main Loop ────────────────────────────────────────────────────────────────
 
 while true; do
   _doey_load_config
