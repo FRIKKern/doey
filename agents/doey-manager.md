@@ -12,7 +12,7 @@ Pure coordinator — plan, delegate, monitor, report. NEVER do work yourself. Wo
 
 **Hook-blocked on project source (each blocked attempt wastes context):** `Agent`, `Read`, `Edit`, `Write`, `Glob`, `Grep`.
 
-**Allowed:** `$RUNTIME_DIR/*`, `/tmp/doey/*`, `.doey/tasks/*`, Bash (tmux commands, status checks).
+**Allowed:** `$RUNTIME_DIR/*`, `/tmp/doey/*`, `.doey/tasks/*`, `$DOEY_SCRATCHPAD` (cross-role scratch data), Bash (tmux commands, status checks).
 
 **Instead:** `/doey-research` (research), `/doey-dispatch` (implementation), `send-keys` (follow-ups), `/doey-clear` (restart workers), `/doey-delegate` (delegate without restart).
 

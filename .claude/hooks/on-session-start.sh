@@ -81,7 +81,7 @@ esac
 FULL_PANE_ID="${PROJECT_ACRONYM}-${PANE_ID}"
 
 PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.-' '_')
-mkdir -p "${RUNTIME_DIR}/status"
+mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/scratchpad"
 atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
 
 wt_dir=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
@@ -126,6 +126,7 @@ export DOEY_PANE_SAFE="$PANE_SAFE"
 export DOEY_REMOTE="${REMOTE:-false}"
 export DOEY_TUNNEL_URL="${TUNNEL_URL:-}"
 export DOEY_LIB="${DOEY_LIB}"
+export DOEY_SCRATCHPAD="${RUNTIME_DIR}/scratchpad"
 EOF
 fi
 
