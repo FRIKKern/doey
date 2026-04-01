@@ -21,6 +21,9 @@ import (
 	"github.com/doey-cli/doey/tui/internal/taskcard"
 )
 
+// SwitchToPlanMsg requests the root model to switch to the Plans tab for a specific plan.
+type SwitchToPlanMsg struct{ PlanID string }
+
 // sectionOfStatus derives a display section from a canonical task status.
 func sectionOfStatus(status string) string {
 	switch status {
@@ -496,6 +499,17 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		return m, func() tea.Msg {
 			return SetStatusTaskMsg{ID: task.ID, Status: next}
 		}
+	case "p":
+		item := m.list.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		ti := item.(taskcard.TaskItem)
+		if ti.Task.PlanID != "" {
+			planID := ti.Task.PlanID
+			return m, func() tea.Msg { return SwitchToPlanMsg{PlanID: planID} }
+		}
+		return m, nil
 	case "x":
 		item := m.list.SelectedItem()
 		if item == nil {
@@ -1384,6 +1398,7 @@ func (m TasksModel) viewHelp() string {
 		{"m", "Move task (active → in_progress → done)"},
 		{"s", "Cycle through all statuses"},
 		{"d", "Dispatch task to a team"},
+		{"p", "View linked plan"},
 		{"x", "Cancel task"},
 		{"Tab", "Next subtask (detail panel)"},
 		{"Shift+Tab", "Previous subtask (detail panel)"},

@@ -56,6 +56,7 @@ type Model struct {
 	header     HeaderModel
 	dashboard  DashboardModel
 	tasks      TasksModel
+	plans      PlansModel
 	team       TeamModel
 	agents     AgentsModel
 	logsGroup  LogsGroupModel
@@ -63,7 +64,7 @@ type Model struct {
 	tabBar      TabBarModel
 	footer     FooterModel
 	heartbeats map[string]runtime.HeartbeatState
-	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=agents, 4=logs(group), 5=connections
+	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=plans, 4=agents, 5=logs(group), 6=connections
 	width      int
 	height     int
 	ready      bool
@@ -76,6 +77,7 @@ func New(runtimeDir string) Model {
 		{Name: "Dashboard"},
 		{Name: "Teams"},
 		{Name: "Tasks"},
+		{Name: "Plans"},
 		{Name: "Agents"},
 		{Name: "Logs"},
 		{Name: "Connections"},
@@ -85,6 +87,7 @@ func New(runtimeDir string) Model {
 		header:    NewHeaderModel(),
 		dashboard: NewDashboardModel(runtimeDir, "", 0, 0, theme),
 		tasks:       NewTasksModel(),
+		plans:       NewPlansModel(theme),
 		team:        NewTeamModel(theme),
 		agents:      NewAgentsModel(theme),
 		logsGroup:   NewLogsGroupModel(theme),
@@ -122,6 +125,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SwitchToTaskMsg:
 		m.focusIndex = 2
+		m.updateFocus()
+		return m, nil
+
+	case SwitchToPlanMsg:
+		m.focusIndex = 3
 		m.updateFocus()
 		return m, nil
 
@@ -167,6 +175,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.header.SetSnapshot(m.snapshot)
 		m.dashboard, _ = m.dashboard.Update(msg)
 		m.tasks.SetSnapshot(m.snapshot)
+		m.plans.SetSnapshot(m.snapshot)
 		m.team.SetSnapshot(m.snapshot)
 		m.agents.SetSnapshot(m.snapshot)
 		m.logsGroup.SetSnapshot(m.snapshot)
@@ -319,10 +328,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case 2:
 					m.tasks, cmd = m.tasks.Update(escMsg)
 				case 3:
-					m.agents, cmd = m.agents.Update(escMsg)
+					m.plans, cmd = m.plans.Update(escMsg)
 				case 4:
-					m.logsGroup, cmd = m.logsGroup.Update(escMsg)
+					m.agents, cmd = m.agents.Update(escMsg)
 				case 5:
+					m.logsGroup, cmd = m.logsGroup.Update(escMsg)
+				case 6:
 					m.connections, cmd = m.connections.Update(escMsg)
 				}
 				cmds = append(cmds, cmd)
@@ -348,10 +359,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 2:
 			m.tasks, cmd = m.tasks.Update(msg)
 		case 3:
-			m.agents, cmd = m.agents.Update(msg)
+			m.plans, cmd = m.plans.Update(msg)
 		case 4:
-			m.logsGroup, cmd = m.logsGroup.Update(msg)
+			m.agents, cmd = m.agents.Update(msg)
 		case 5:
+			m.logsGroup, cmd = m.logsGroup.Update(msg)
+		case 6:
 			m.connections, cmd = m.connections.Update(msg)
 		}
 		cmds = append(cmds, cmd)
@@ -367,12 +380,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel) {
-			m.focusIndex = (m.focusIndex + 1) % 6
+			m.focusIndex = (m.focusIndex + 1) % 7
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel) {
-			m.focusIndex = (m.focusIndex + 5) % 6 // +5 mod 6 == -1 with wrap
+			m.focusIndex = (m.focusIndex + 6) % 7 // +6 mod 7 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -406,6 +419,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateFocus()
 			return m, nil
 		}
+		if key.Matches(msg, m.footer.keyMap.PanelSeven) {
+			m.focusIndex = 6
+			m.updateFocus()
+			return m, nil
+		}
 
 		// Route to focused sub-model
 		var cmd tea.Cmd
@@ -417,10 +435,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 2:
 			m.tasks, cmd = m.tasks.Update(msg)
 		case 3:
-			m.agents, cmd = m.agents.Update(msg)
+			m.plans, cmd = m.plans.Update(msg)
 		case 4:
-			m.logsGroup, cmd = m.logsGroup.Update(msg)
+			m.agents, cmd = m.agents.Update(msg)
 		case 5:
+			m.logsGroup, cmd = m.logsGroup.Update(msg)
+		case 6:
 			m.connections, cmd = m.connections.Update(msg)
 		}
 		cmds = append(cmds, cmd)
@@ -437,8 +457,10 @@ func (m Model) isDetailView() bool {
 	case 2:
 		return !m.tasks.leftFocused
 	case 3:
-		return !m.agents.leftFocused
+		return !m.plans.leftFocused
 	case 4:
+		return !m.agents.leftFocused
+	case 5:
 		return !m.logsGroup.leftFocused
 	}
 	return false
@@ -492,12 +514,15 @@ func (m Model) View() string {
 		m.tasks.SetSize(m.width, bodyH)
 		body = m.tasks.View()
 	case 3:
+		m.plans.SetSize(m.width, bodyH)
+		body = m.plans.View()
+	case 4:
 		m.agents.SetSize(m.width, bodyH)
 		body = m.agents.View()
-	case 4:
+	case 5:
 		m.logsGroup.SetSize(m.width, bodyH)
 		body = m.logsGroup.View()
-	case 5:
+	case 6:
 		m.connections.SetSize(m.width, bodyH)
 		body = m.connections.View()
 	}
@@ -521,6 +546,7 @@ func (m *Model) propagateSizes() {
 	// All panels get full width — only one shown at a time
 	m.dashboard = m.dashboard.SetSize(m.width, bodyH)
 	m.tasks.SetSize(m.width, bodyH)
+	m.plans.SetSize(m.width, bodyH)
 	m.team.SetSize(m.width, bodyH)
 	m.agents.SetSize(m.width, bodyH)
 	m.logsGroup.SetSize(m.width, bodyH)
@@ -534,9 +560,10 @@ func (m *Model) updateFocus() {
 	m.dashboard = m.dashboard.SetFocused(m.focusIndex == 0)
 	m.team.SetFocused(m.focusIndex == 1)
 	m.tasks.SetFocused(m.focusIndex == 2)
-	m.agents.SetFocused(m.focusIndex == 3)
-	m.logsGroup.SetFocused(m.focusIndex == 4)
-	m.connections.SetFocused(m.focusIndex == 5)
+	m.plans.SetFocused(m.focusIndex == 3)
+	m.agents.SetFocused(m.focusIndex == 4)
+	m.logsGroup.SetFocused(m.focusIndex == 5)
+	m.connections.SetFocused(m.focusIndex == 6)
 }
 
 // snapshotTickCmd triggers a full snapshot re-read every 5s.

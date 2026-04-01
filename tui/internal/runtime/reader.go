@@ -88,6 +88,7 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	if session.ProjectDir != "" {
 		snap.AgentDefs = r.readAgentDefs(session.ProjectDir)
 		snap.TeamDefs = r.readTeamDefs(session.ProjectDir)
+		snap.Plans = ReadPlans(session.ProjectDir)
 	}
 
 	snap.TeamUserCfg, _ = ReadTeamUserConfig()
@@ -313,6 +314,7 @@ func (r *Reader) ParseTasks() []Task {
 			Notes:              strings.ReplaceAll(env["TASK_NOTES"], "\\n", "\n"),
 			CreatedBy:          env["TASK_CREATED_BY"],
 			AssignedTo:         env["TASK_ASSIGNED_TO"],
+			PlanID:             env["TASK_PLAN_ID"],
 		}
 		if v := env["TASK_SCHEMA_VERSION"]; v != "" {
 			t.SchemaVersion, _ = strconv.Atoi(v)
