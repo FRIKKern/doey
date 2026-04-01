@@ -333,6 +333,36 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
       fi
     fi
   ;; esac
+
+  # SM dispatch guard: block send-keys to team panes if no active .task files exist
+  if [ "$_DOEY_ROLE" = "session_manager" ]; then
+    _CMD_CHECK=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
+    case "$_CMD_CHECK" in
+      "tmux send-keys"*|"tmux paste-buffer"*|"tmux load-buffer"*)
+        # Check if targeting a team window (window index > 0)
+        _tgt_window=""
+        case "$_CMD_CHECK" in *":0."*) ;; *":"[0-9]*"."*) _tgt_window="team" ;; esac
+        if [ -n "$_tgt_window" ]; then
+          _has_active=false
+          _task_dir="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}/.doey/tasks"
+          if [ -d "$_task_dir" ]; then
+            for _tf in "$_task_dir"/*.task; do
+              [ -f "$_tf" ] || continue
+              case "$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | head -1)" in
+                *=active|*=in_progress) _has_active=true; break ;;
+              esac
+            done
+          fi
+          if [ "$_has_active" = false ]; then
+            _log_block "TOOL_BLOCKED" "SM dispatch without active .task file" "$_CMD_CHECK"
+            _dbg_write "block_sm_no_task"
+            echo "BLOCKED: Create a .task file before dispatching work. Without active tasks in .doey/tasks/, SM will be put to sleep by the wait hook." >&2
+            exit 2
+          fi
+        fi ;;
+    esac
+  fi
+
   _dbg_write "allow_manager"
   exit 0
 fi

@@ -60,6 +60,18 @@ Run ALL in order:
 
 **NEVER return to the prompt.** Only exits: `/exit`, `/compact`, or user message. After `/compact`: re-source `session.env` if needed, resume at step 1.
 
+## Hard Rule: No Dispatch Without Task
+
+**Every dispatch to a worker or manager pane MUST have a corresponding `.task` file created FIRST.**
+
+Before ANY `send-keys`, `paste-buffer`, or dispatch to a team window pane:
+1. Create a `.task` file in `.doey/tasks/` with `TASK_STATUS=in_progress`
+2. Then dispatch the work
+
+**Why this exists:** The `session-manager-wait.sh` hook checks `.doey/tasks/` for files with `TASK_STATUS=active` or `TASK_STATUS=in_progress` to decide whether to keep SM awake. If you dispatch without creating a task file, the hook sees zero active tasks and **puts you to sleep**. You lose consciousness and stop monitoring — workers finish with no one to process results.
+
+No task file = you get put to sleep = dispatched work is orphaned.
+
 ## Hard Rule: SM Never Codes
 
 **You are a router and monitor. You NEVER touch project source code.**

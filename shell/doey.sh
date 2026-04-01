@@ -2720,6 +2720,26 @@ update_system() {
 _update_finish_banner() {
   rm -f "$HOME/.claude/doey/last-update-check.available"
   _check_claude_update
+
+  # Install gum if missing (best-effort, don't fail update)
+  if ! command -v gum >/dev/null 2>&1; then
+    local _gum_found=false
+    for _d in "$(go env GOPATH 2>/dev/null)/bin" "$HOME/go/bin"; do
+      [ -x "$_d/gum" ] && { export PATH="$_d:$PATH"; _gum_found=true; break; }
+    done
+    if [ "$_gum_found" = false ] && command -v go >/dev/null 2>&1; then
+      doey_step "+" "Installing gum for luxury CLI..."
+      if go install github.com/charmbracelet/gum@latest 2>&1; then
+        for _d in "$(go env GOPATH 2>/dev/null)/bin" "$HOME/go/bin"; do
+          [ -x "$_d/gum" ] && { export PATH="$_d:$PATH"; HAS_GUM=true; break; }
+        done
+        [ "$HAS_GUM" = true ] && doey_ok "gum installed" || doey_warn "gum installed but not on PATH"
+      else
+        doey_warn "gum install failed (optional)"
+      fi
+    fi
+  fi
+
   printf '\n'
   doey_divider
   printf '\n'
@@ -3203,9 +3223,10 @@ check_doctor() {
   else _doc_check warn "~/.local/bin not in PATH"; fi
 
   # Installed files
-  local _f _label
+  local _f _label _doey_repo
+  _doey_repo="$(resolve_repo_dir)"
   for _f in "$HOME/.claude/agents/doey-manager.md:Agents" \
-            "$PROJECT_DIR/.claude/skills/doey-dispatch/SKILL.md:Skills" \
+            "$_doey_repo/.claude/skills/doey-dispatch/SKILL.md:Skills" \
             "$HOME/.local/bin/doey:CLI"; do
     _label="${_f##*:}"; _f="${_f%:*}"
     if [[ -f "$_f" ]]; then _doc_check ok "$_label installed" "${_f/#$HOME/~}"
@@ -3230,7 +3251,7 @@ check_doctor() {
   if command -v gum >/dev/null 2>&1; then
     _doc_check ok "gum" "$(gum --version 2>/dev/null || echo 'unknown')"
   else
-    _doc_check skip "gum not installed" "install: brew install gum (optional luxury CLI)"
+    _doc_check fail "Gum missing" "run: go install github.com/charmbracelet/gum@latest"
   fi
 
   # Version
