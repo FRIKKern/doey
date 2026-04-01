@@ -315,6 +315,7 @@ func (r *Reader) ParseTasks() []Task {
 			CreatedBy:          env["TASK_CREATED_BY"],
 			AssignedTo:         env["TASK_ASSIGNED_TO"],
 			PlanID:             env["TASK_PLAN_ID"],
+			PlanTitle:          env["TASK_ORIGIN_PLAN_TITLE"],
 		}
 		if v := env["TASK_SCHEMA_VERSION"]; v != "" {
 			t.SchemaVersion, _ = strconv.Atoi(v)

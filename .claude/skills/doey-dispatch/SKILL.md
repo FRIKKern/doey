@@ -65,6 +65,19 @@ fi
 
 `USE_DELEGATE=true` → skip kill+restart, jump to Rename.
 
+### Task Registration (before dispatch)
+
+```bash
+# Create persistent .task file so TUI tracks it
+source "${PROJECT_DIR}/shell/doey-task-helpers.sh" 2>/dev/null || true
+if type task_create >/dev/null 2>&1; then
+  TASK_ID=$(task_create "$PROJECT_DIR" "$TASK_TITLE" "${TASK_TYPE:-feature}" "SM" "$TASK_DESCRIPTION")
+  echo "Created task #${TASK_ID}"
+fi
+```
+
+Include `Task #${TASK_ID}` in the prompt header so hooks can track it.
+
 ### Dispatch Sequence
 
 ```bash

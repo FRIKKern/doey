@@ -75,6 +75,10 @@ if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
 fi
 
 local_task_id="${DOEY_TASK_ID:-}"
+# Fallback: read task ID persisted by on-prompt-submit
+if [ -z "$local_task_id" ]; then
+  local_task_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id" 2>/dev/null) || local_task_id=""
+fi
 local_summary="${DOEY_SUMMARY:-}"
 local_summary_escaped=$(printf '%s' "$local_summary" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g' -e 's/	/\\t/g')
 
@@ -145,5 +149,16 @@ TIMESTAMP=$(date +%s)
 COMPLETE
 mv "${COMPLETION}.tmp" "$COMPLETION"
 [ ! -f "$COMPLETION" ] && _log_error "HOOK_ERROR" "Completion event file not written" "path=$COMPLETION"
+
+# Update .task file to error if errors detected (stop-status.sh already set "done")
+if [ "$STATUS" = "error" ] && [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ]; then
+  if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
+    (
+      source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+      _task_file="${PROJECT_DIR}/.doey/tasks/${local_task_id}.task"
+      [ -f "$_task_file" ] && task_update_field "$_task_file" "TASK_STATUS" "error"
+    ) 2>/dev/null || true
+  fi
+fi
 
 touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true

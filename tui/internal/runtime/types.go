@@ -156,7 +156,8 @@ type Task struct {
 	ConversationTrail []ConversationEntry  // parsed from logs/reports
 	QAThread          []QAEntry            // Q&A relay chain entries
 	// Plan linkage
-	PlanID string // from TASK_PLAN_ID — links task to a plan
+	PlanID    string // from TASK_PLAN_ID — links task to a plan
+	PlanTitle string // from TASK_ORIGIN_PLAN_TITLE
 	// Proof-of-completion fields
 	FilesChanged []string // from TASK_FILES
 	Commits      string   // from TASK_COMMITS (hash + message lines)

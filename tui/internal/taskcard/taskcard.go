@@ -551,6 +551,13 @@ func (e *ExpandedCard) Render() string {
 		created := time.Unix(task.Created, 0).Format("2006-01-02 15:04")
 		sections = append(sections, styles.MetaLine(e.Theme, "Created", created))
 	}
+	if task.PlanID != "" {
+		originText := "Plan #" + task.PlanID
+		if task.PlanTitle != "" {
+			originText += " - " + task.PlanTitle
+		}
+		sections = append(sections, styles.MetaLine(e.Theme, "Origin", originText))
+	}
 
 	// --- Description ---
 	if task.Description != "" {

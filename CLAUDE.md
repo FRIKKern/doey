@@ -16,6 +16,7 @@ Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. Run `d
 - **Validate before writing** — Read state before mutating. GET calls are cheap, broken writes cascade
 - **Use `set -euo pipefail`** — Every shell script. No exceptions
 - **Use `trash` not `rm`** — For file deletion (recoverable)
+- **Use AskUserQuestion for questions** — When asking the user questions, always use the AskUserQuestion tool (native Claude Code question UI) — never put questions inline in text responses. This applies to all user-facing roles (especially Boss)
 
 ## The End-User Test
 
