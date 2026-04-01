@@ -622,6 +622,62 @@ while true; do
     printf '\n'
   fi
 
+  # ── Recent Activity (from worker JSONL event logs) ──
+  if [ -d "${RUNTIME_DIR}/activity" ]; then
+    _act_raw=$(awk '{
+      ts=$0; sub(/.*"ts" *: */, "", ts); sub(/[^0-9].*/, "", ts)
+      pn=$0; sub(/.*"pane" *: *"/, "", pn); sub(/".*/, "", pn)
+      ev=$0; sub(/.*"event" *: *"/, "", ev); sub(/".*/, "", ev)
+      dt=""
+      s=$0; if (sub(/.*"detail" *: *"/, "", s)) { sub(/".*/, "", s); dt=s }
+      if (dt == "") { s=$0; if (sub(/.*"status" *: *"/, "", s)) { sub(/".*/, "", s); dt=s } }
+      if (length(dt) > 30) dt = substr(dt, 1, 27) "..."
+      if (ts+0 > 0) print ts "\t" pn "\t" ev "\t" dt
+    }' "${RUNTIME_DIR}"/activity/*.jsonl 2>/dev/null | sort -t$'\t' -k1 -rn | head -12)
+
+    if [ -n "$_act_raw" ]; then
+      if [ "$HAS_GUM" = true ]; then
+        printf '  %s\n\n' "$(gum style --bold --foreground 6 'RECENT ACTIVITY')"
+      else
+        printf '  %b RECENT ACTIVITY%b\n\n' "${C_BOLD_CYAN}" "${C_RESET}"
+      fi
+
+      while IFS=$'\t' read -r _ats _apane _aevt _adetail; do
+        # Cross-platform timestamp: GNU date -d, then BSD date -r
+        _atime=$(date -d "@${_ats}" '+%H:%M:%S' 2>/dev/null) || \
+          _atime=$(date -r "${_ats}" '+%H:%M:%S' 2>/dev/null) || \
+          _atime="??:??:??"
+
+        case "$_aevt" in
+          status_change|busy|working)   _aecol="${C_YELLOW}" ;;
+          finished|done|complete*)      _aecol="${C_GREEN}" ;;
+          error|crash|fail*)            _aecol="${C_BOLD_RED}" ;;
+          dispatch*|task_start)         _aecol="${C_CYAN}" ;;
+          *)                            _aecol="${C_DIM}" ;;
+        esac
+
+        _adtxt=""
+        [ -n "${_adetail:-}" ] && _adtxt="  ${_adetail}"
+
+        if [ "$HAS_GUM" = true ]; then
+          _gum_dt=""
+          [ -n "${_adetail:-}" ] && _gum_dt="$(gum style --foreground 8 "  ${_adetail}")"
+          printf '    %s  %s  %s%s\n' \
+            "$(gum style --foreground 8 "$_atime")" \
+            "$(gum style --foreground 15 --bold "$(printf '%-7s' "$_apane")")" \
+            "$_aevt" "$_gum_dt"
+        else
+          printf '    %b%s%b  %b%-7s%b  %b%-18s%b%b%s%b\n' \
+            "${C_DIM}" "$_atime" "${C_RESET}" \
+            "${C_BOLD_WHITE}" "$_apane" "${C_RESET}" \
+            "$_aecol" "$_aevt" "${C_RESET}" \
+            "${C_DIM}" "$_adtxt" "${C_RESET}"
+        fi
+      done <<< "$_act_raw"
+      printf '\n'
+    fi
+  fi
+
   row=0
   while [ "$row" -lt "$LC" ]; do
     _ref="L_${row}"; left_line="${!_ref}"

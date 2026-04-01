@@ -76,6 +76,7 @@ if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/task
 fi
 
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
+write_activity "status_change" "{\"status\":\"${STOP_STATUS}\"}"
 
 notify_sm "$STOP_STATUS"
 

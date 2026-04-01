@@ -58,4 +58,43 @@ fi
 # Worker panes: show lock icon if reserved
 [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { _prefix_id "${TITLE} 🔒"; exit 0; }
 
-_prefix_id "$TITLE"
+# Extract current task label from status file
+_task_label=""
+_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+if [ -f "$_status_file" ]; then
+  _pane_status=$(grep '^STATUS: ' "$_status_file" 2>/dev/null | head -1 | sed 's/^STATUS: *//')
+  if [ "$_pane_status" = "BUSY" ] || [ "$_pane_status" = "WORKING" ]; then
+    _task_field=$(grep '^TASK: ' "$_status_file" 2>/dev/null | head -1 | sed 's/^TASK: *//')
+    if [ -n "$_task_field" ]; then
+      # Extract #NN task ID from various formats:
+      #   "[Task #80 — ...]", "Task #81", "**Task #80**", "#80"
+      _task_id=$(echo "$_task_field" | sed -n 's/.*#\([0-9][0-9]*\).*/\1/p' | head -1)
+      if [ -n "$_task_id" ]; then
+        # Try to get short title from .task file
+        _task_title=""
+        for _td in "$RUNTIME_DIR" "$(env_val "${RUNTIME_DIR}/session.env" PROJECT_DIR 2>/dev/null)/.doey/tasks"; do
+          _tf="${_td}/tasks/${_task_id}.task"
+          [ -f "$_tf" ] || _tf="${_td}/${_task_id}.task"
+          if [ -f "$_tf" ]; then
+            _task_title=$(grep '^TASK_TITLE=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//')
+            break
+          fi
+        done
+        if [ -n "$_task_title" ]; then
+          # Truncate to 20 chars
+          _short_title=$(printf '%.20s' "$_task_title")
+          [ ${#_task_title} -gt 20 ] && _short_title="${_short_title}.."
+          _task_label="#${_task_id} ${_short_title}"
+        else
+          _task_label="#${_task_id}"
+        fi
+      fi
+    fi
+  fi
+fi
+
+if [ -n "$_task_label" ]; then
+  _prefix_id "${TITLE} [${_task_label}]"
+else
+  _prefix_id "$TITLE"
+fi

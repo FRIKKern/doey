@@ -229,6 +229,19 @@ NL='
 
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 
+write_activity() {  # Append JSONL activity event: write_activity <event> <data_json>
+  local event="$1" data="${2:-"{}"}"
+  local pane_safe="${PANE_SAFE:-${DOEY_PANE_SAFE:-unknown}}"
+  local ts pane_label activity_dir
+  ts=$(date +%s)
+  pane_label="W${WINDOW_INDEX:-${DOEY_WINDOW_INDEX:-0}}.${PANE_INDEX:-${DOEY_PANE_INDEX:-0}}"
+  activity_dir="${RUNTIME_DIR:-/tmp/doey}/activity"
+  mkdir -p "$activity_dir" 2>/dev/null || return 0
+  printf '{"ts":%s,"pane":"%s","event":"%s","data":%s}\n' \
+    "$ts" "$pane_label" "$event" "$data" \
+    >> "${activity_dir}/${pane_safe}.jsonl" 2>/dev/null
+}
+
 notify_sm() {  # Lifecycle event -> SM wake trigger
   local status="${1:-}" detail="${2:-}"
   local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
