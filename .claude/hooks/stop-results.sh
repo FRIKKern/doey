@@ -171,6 +171,7 @@ fi
 _FILES_COUNT=0
 [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
 type _debug_log >/dev/null 2>&1 && _debug_log lifecycle "result_captured" "files_changed=${_FILES_COUNT}" "tool_calls=${TOOL_COUNT}"
+write_activity "task_completed" "{\"status\":\"${STATUS}\",\"tools\":${TOOL_COUNT},\"files\":${_FILES_COUNT}}"
 
 COMPLETION="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"
 cat > "${COMPLETION}.tmp" <<COMPLETE

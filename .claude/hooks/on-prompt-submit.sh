@@ -16,6 +16,12 @@ esac
 write_pane_status "$STATUS_FILE" "BUSY" "${PROMPT:0:80}"
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=READY" "to=BUSY" "trigger=prompt-submit"
 [ -n "${DOEY_PANE_ID:-}" ] && write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "BUSY" "${PROMPT:0:80}"
+
+# Activity logging
+_prompt_safe=$(printf '%s' "${PROMPT:0:120}" | tr '"\\' '__')
+write_activity "status_change" '{"status":"BUSY"}'
+write_activity "task_assigned" "{\"task\":\"${_prompt_safe}\"}"
+
 notify_sm "BUSY" "${PROMPT:0:60}"
 _log "task started: $(echo "$PROMPT" | head -c 80)"
 
