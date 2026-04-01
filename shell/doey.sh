@@ -2576,6 +2576,9 @@ _update_contributor() {
     doey_ok "Already up to date ($old_hash)"
   else
     doey_ok "Pulled $old_hash → $new_hash"
+    # Code on disk changed — re-exec so steps 3-6 run from the NEW source.
+    _info "Re-executing from updated source..."
+    exec bash "$repo_dir/shell/doey.sh" --post-update "$repo_dir"
   fi
 
   # Step 3: Run install
@@ -2743,16 +2746,23 @@ _post_update() {
   doey_header "Completing Update..."
   printf '\n'
 
-  doey_step "1/2" "Running install from updated code..."
+  doey_step "1/4" "Running install from updated code..."
   if ! _spin "Installing..." bash "$install_dir/install.sh"; then
     doey_error "Install failed"
     [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
     exit 1
   fi
   doey_success "Installed"
+
+  doey_step "2/4" "Rebuilding Go binaries..."
+  _update_go_build_step "$install_dir"
+
   [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
 
-  doey_step "2/2" "Version summary"
+  doey_step "3/4" "Verifying installation..."
+  _verify_install_step
+
+  doey_step "4/4" "Version summary"
   local new_version
   new_version=$(_doey_current_version)
   printf '\n'
