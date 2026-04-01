@@ -2723,9 +2723,14 @@ _update_finish_banner() {
 
   # Install gum if missing (best-effort, don't fail update)
   if ! command -v gum >/dev/null 2>&1; then
+    # Check known dirs and symlink if found
     local _gum_found=false
     for _d in "$HOME/go/bin" "$HOME/.local/go/bin"; do
-      [ -x "$_d/gum" ] && { export PATH="$_d:$PATH"; _gum_found=true; break; }
+      if [ -x "$_d/gum" ]; then
+        mkdir -p "$HOME/.local/bin"
+        ln -sf "$_d/gum" "$HOME/.local/bin/gum" 2>/dev/null || true
+        _gum_found=true; HAS_GUM=true; break
+      fi
     done
     if [ "$_gum_found" = false ]; then
       # Discover Go binary via shared helper (may not be on PATH)
@@ -2748,7 +2753,11 @@ _update_finish_banner() {
           local _gopath
           _gopath="$("$_go_bin" env GOPATH 2>/dev/null)" || _gopath="$HOME/go"
           for _d in "$_gopath/bin" "$HOME/go/bin"; do
-            [ -x "$_d/gum" ] && { export PATH="$_d:$PATH"; HAS_GUM=true; break; }
+            if [ -x "$_d/gum" ]; then
+              mkdir -p "$HOME/.local/bin"
+              ln -sf "$_d/gum" "$HOME/.local/bin/gum" 2>/dev/null || true
+              HAS_GUM=true; break
+            fi
           done
           [ "$HAS_GUM" = true ] && doey_ok "gum installed" || doey_warn "gum installed but not on PATH"
         else
