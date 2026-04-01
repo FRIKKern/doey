@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse hook — blocks dangerous commands per role.
-# Hot path: runs before EVERY tool call. Must be fast.
+# PreToolUse hook — blocks dangerous commands per role. Hot path: must be fast.
+# Exit codes: 0=allow, 2=block. ERR trap prevents accidental cancellation.
 set -euo pipefail
-
-# ERR trap: prevent unexpected non-zero exits from cancelling parallel Bash calls.
-# This hook intentionally exits 2 (block) or 0 (allow); any other exit is a bug.
 trap 'exit 0' ERR
 
 INPUT=$(cat)
@@ -43,6 +40,9 @@ print(d if isinstance(d,str) else '')" 2>/dev/null || echo ""
   fi
 }
 
+# Read key=value from env file (no common.sh — this hook must be self-contained for speed)
+_rk() { grep "^$1=" "$2" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
+
 _is_destructive_rm() {
   local cmd="$1"
   case "$cmd" in *"rm "*) ;; *) return 1 ;; esac
@@ -70,21 +70,15 @@ _escalate_permission() {
   local _tool="$1" _cmd="$2" _reason="$3"
   local _rtd="${_RD:-${DOEY_RUNTIME:-}}"
   [ -z "$_rtd" ] && return 0
-  local _sn="${SESSION_NAME:-}"
-  [ -z "$_sn" ] && _sn=$(grep '^SESSION_NAME=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SESSION_NAME=//;s/^"//;s/"$//') || true
+  local _sn="${SESSION_NAME:-}"; [ -z "$_sn" ] && _sn=$(_rk SESSION_NAME "${_rtd}/session.env")
   [ -z "$_sn" ] && return 0
-  local _wi="${DOEY_WINDOW_INDEX:-}"
-  [ -z "$_wi" ] && _wi=$(grep '^DOEY_WINDOW_INDEX=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^DOEY_WINDOW_INDEX=//') || true
+  local _wi="${DOEY_WINDOW_INDEX:-}"; [ -z "$_wi" ] && _wi=$(_rk DOEY_WINDOW_INDEX "${_rtd}/session.env")
   [ -z "$_wi" ] && return 0
   local _mgr_safe; _mgr_safe=$(printf '%s_%s_0' "$_sn" "$_wi" | tr ':.-' '_')
-  local _pane_id="${_WP:-unknown}"
-  local _pane_safe="${_PS:-unknown}"
-  local _cmd_short; _cmd_short=$(printf '%.200s' "$_cmd")
-  local _msg_dir="${_rtd}/messages"
-  mkdir -p "$_msg_dir" 2>/dev/null || return 0
-  printf 'FROM: %s\nSUBJECT: permission_request\nTOOL: %s\nCOMMAND: %s\nREASON: %s\nPANE: %s\n' \
-    "$_pane_safe" "$_tool" "$_cmd_short" "$_reason" "$_pane_id" \
-    > "${_msg_dir}/${_mgr_safe}_$(date +%s)_$$.msg" 2>/dev/null || true
+  mkdir -p "${_rtd}/messages" 2>/dev/null || return 0
+  printf 'FROM: %s\nSUBJECT: permission_request\nTOOL: %s\nCOMMAND: %.200s\nREASON: %s\nPANE: %s\n' \
+    "${_PS:-unknown}" "$_tool" "$_cmd" "$_reason" "${_WP:-unknown}" \
+    > "${_rtd}/messages/${_mgr_safe}_$(date +%s)_$$.msg" 2>/dev/null || true
   touch "${_rtd}/triggers/${_mgr_safe}.trigger" 2>/dev/null || true
 }
 
@@ -113,7 +107,6 @@ TOOL_NAME=$(_json_str tool_name)
 _BASH_CMD=""
 [ "$TOOL_NAME" = "Bash" ] && _BASH_CMD=$(_json_str tool_input.command)
 
-# Per-pane role file is authoritative (tmux env may be stale)
 _DOEY_ROLE="${DOEY_ROLE:-}"
 if [ -n "${TMUX_PANE:-}" ]; then
   _RD="${DOEY_RUNTIME:-}"
@@ -127,7 +120,6 @@ if [ -n "${TMUX_PANE:-}" ]; then
   fi
 fi
 
-# Defense-in-depth: infer role from pane position if .role file was missing
 if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
   _di_wi="${_WP#*:}"; _di_wi="${_di_wi%.*}"
   _di_pi="${_WP##*.}"
@@ -135,31 +127,28 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
     case "$_di_pi" in
       1) _DOEY_ROLE="boss" ;;
       0) _DOEY_ROLE="info_panel" ;;
-      *) _sm_p=""; [ -f "${_RD}/session.env" ] && _sm_p=$(grep '^SM_PANE=' "${_RD}/session.env" 2>/dev/null | head -1 | sed 's/^SM_PANE=//;s/^"//;s/"$//')
+      *) _sm_p=$(_rk SM_PANE "${_RD}/session.env")
          [ "0.${_di_pi}" = "${_sm_p:-0.2}" ] && _DOEY_ROLE="session_manager" ;;
     esac
   else
-    _di_tt=""; [ -f "${_RD}/team_${_di_wi}.env" ] && _di_tt=$(grep '^TEAM_TYPE=' "${_RD}/team_${_di_wi}.env" 2>/dev/null | head -1 | sed 's/^TEAM_TYPE=//;s/^"//;s/"$//')
+    _di_tt=$(_rk TEAM_TYPE "${_RD}/team_${_di_wi}.env")
     if [ "$_di_tt" != "freelancer" ]; then
-      _di_mp=""; [ -f "${_RD}/team_${_di_wi}.env" ] && _di_mp=$(grep '^MANAGER_PANE=' "${_RD}/team_${_di_wi}.env" 2>/dev/null | head -1 | sed 's/^MANAGER_PANE=//;s/^"//;s/"$//')
+      _di_mp=$(_rk MANAGER_PANE "${_RD}/team_${_di_wi}.env")
       [ "$_di_pi" = "${_di_mp:-0}" ] && _DOEY_ROLE="manager"
     fi
     [ -z "$_DOEY_ROLE" ] && _DOEY_ROLE="worker"
   fi
 fi
 
-# ── Heartbeat emission (for stale detection by SM) ──
 if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
   _HB_FILE="${_RD}/status/${_PS}.heartbeat"
   _hb_write=true
   if [ -f "$_HB_FILE" ]; then
-    _hb_age=$(( $(date +%s) - $(stat -f%m "$_HB_FILE" 2>/dev/null || echo 0) ))
-    [ "$_hb_age" -lt 10 ] && _hb_write=false
+    _hb_mtime=$(stat -c%Y "$_HB_FILE" 2>/dev/null || stat -f%m "$_HB_FILE" 2>/dev/null || echo 0)
+    [ "$(( $(date +%s) - _hb_mtime ))" -lt 10 ] && _hb_write=false
   fi
-  if [ "$_hb_write" = "true" ]; then
-    _hb_tmp="${_HB_FILE}.tmp"
-    printf '%s %s %s\n' "$(date +%s)" "${DOEY_TASK_ID:-}" "${DOEY_PANE_ID:-${_PS}}" > "$_hb_tmp" && mv "$_hb_tmp" "$_HB_FILE"
-  fi
+  [ "$_hb_write" = "true" ] && \
+    printf '%s %s %s\n' "$(date +%s)" "${DOEY_TASK_ID:-}" "${DOEY_PANE_ID:-${_PS}}" > "${_HB_FILE}.tmp" && mv "${_HB_FILE}.tmp" "$_HB_FILE"
 fi
 
 _DBG=false
@@ -177,7 +166,7 @@ _dbg_write() {
 if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD="$_BASH_CMD"
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
-    _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//' | sed 's/[[:space:]].*//' | sed 's/^"//;s/"$//')
+    _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
     case "$_boss_target" in
       *:0.2|*_0_2*|0.2)
         _dbg_write "allow_boss_sendkeys_sm"
@@ -191,17 +180,15 @@ if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   ;; esac
 fi
 
-# Boss/Manager restrictions on non-Bash tools (no project source access)
 if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Agent)
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
       _dbg_write "block_${_DOEY_ROLE}_agent"
-      if [ "$_DOEY_ROLE" = "boss" ]; then
-        echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Session Manager instead." >&2
-      else
-        echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2
-      fi
+      case "$_DOEY_ROLE" in
+        boss) echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Session Manager instead." >&2 ;;
+        *)    echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2 ;;
+      esac
       exit 2 ;;
     Read|Edit|Write|Glob|Grep)
       _CHK_PATH=$(_json_str tool_input.file_path)
@@ -214,13 +201,12 @@ if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_RO
       esac
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} $TOOL_NAME on project source blocked" "${_CHK_PATH:-project root}"
       _dbg_write "block_${_DOEY_ROLE}_source_${TOOL_NAME}"
-      if [ "$_DOEY_ROLE" = "boss" ]; then
-        echo "BLOCKED: Boss cannot $TOOL_NAME project source files. Relay file operations to Session Manager." >&2
-      elif [ "$_DOEY_ROLE" = "session_manager" ]; then
-        echo "BLOCKED: Session Manager cannot $TOOL_NAME project source files. Coordinate workers to handle file operations." >&2
-      else
-        echo "BLOCKED: Managers cannot $TOOL_NAME project source files. Delegate file operations to workers." >&2
-      fi
+      case "$_DOEY_ROLE" in
+        boss)            _advice="Relay file operations to Session Manager" ;;
+        session_manager) _advice="Coordinate workers to handle file operations" ;;
+        *)               _advice="Delegate file operations to workers" ;;
+      esac
+      echo "BLOCKED: Cannot $TOOL_NAME project source files. ${_advice}." >&2
       exit 2 ;;
   esac
 fi
@@ -244,8 +230,7 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
-# Whitelist: file writes whose CONTENT may contain blocked substrings (e.g. "git commit").
-# Redirects to task files, runtime dirs, reports, and /tmp/ dispatch helpers are safe.
+# Whitelist: file writes whose content may contain blocked substrings
 case "${_BASH_CMD:-}" in
   *">>"*".doey/tasks/"*.task|*">"*".doey/tasks/"*.task) _dbg_write "allow_task_write"; exit 0 ;;
   *">>"*"/tmp/doey/"*|*">"*"/tmp/doey/"*)              _dbg_write "allow_runtime_write"; exit 0 ;;
@@ -253,8 +238,7 @@ case "${_BASH_CMD:-}" in
   *">"*"/tmp/"*".sh"*|*">"*"/tmp/"*".md"*)              _dbg_write "allow_tmp_script"; exit 0 ;;
 esac
 
-# Manager tmux dispatch: allow safe tmux commands, block destructive ones.
-# Must run BEFORE git check — tmux payloads may contain git-related strings.
+# Manager tmux dispatch (must run BEFORE git check — payloads may contain git strings)
 if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _tmux_stripped=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
   case "$_tmux_stripped" in
@@ -298,25 +282,20 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
       _dbg_write "block_rename_sendkeys"
       exit 2 ;;
   esac
-  # Go build gate: block commits if staged tui/ Go files don't compile
   case "$_CMD" in *"git commit"*)
     _staged_go=$(git diff --cached --name-only 2>/dev/null | grep -c '^tui/' 2>/dev/null) || _staged_go=0
     if [ "$_staged_go" -gt 0 ] 2>/dev/null; then
-      # Discover Go via shared helper (inline fallback if helper not available)
       _GO_BIN=""
       _project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
       if [ -f "${_project_dir}/shell/doey-go-helpers.sh" ]; then
         source "${_project_dir}/shell/doey-go-helpers.sh" 2>/dev/null || true
-        if type _find_go_bin >/dev/null 2>&1; then
-          _GO_BIN="$(_find_go_bin)" || true
-        fi
+        type _find_go_bin >/dev/null 2>&1 && _GO_BIN="$(_find_go_bin)" || true
       fi
       if [ -z "$_GO_BIN" ]; then
-        # Inline fallback: check common Go install locations
         if command -v go >/dev/null 2>&1; then _GO_BIN="go"
         else
           for _d in /usr/local/go/bin /opt/homebrew/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
-            if [ -x "$_d/go" ]; then _GO_BIN="$_d/go"; break; fi
+            [ -x "$_d/go" ] && { _GO_BIN="$_d/go"; break; }
           done
         fi
       fi
@@ -336,14 +315,11 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
     fi
   ;; esac
 
-  # SM dispatch guard: block send-keys to team panes if no active .task files exist
   if [ "$_DOEY_ROLE" = "session_manager" ]; then
-    _CMD_CHECK=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
-    case "$_CMD_CHECK" in
+    case "$_CMD" in
       "tmux send-keys"*|"tmux paste-buffer"*|"tmux load-buffer"*)
-        # Check if targeting a team window (window index > 0)
         _tgt_window=""
-        case "$_CMD_CHECK" in *":0."*) ;; *":"[0-9]*"."*) _tgt_window="team" ;; esac
+        case "$_CMD" in *":0."*) ;; *":"[0-9]*"."*) _tgt_window="team" ;; esac
         if [ -n "$_tgt_window" ]; then
           _has_active=false
           _task_dir="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}/.doey/tasks"
@@ -356,7 +332,7 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
             done
           fi
           if [ "$_has_active" = false ]; then
-            _log_block "TOOL_BLOCKED" "SM dispatch without active .task file" "$_CMD_CHECK"
+            _log_block "TOOL_BLOCKED" "SM dispatch without active .task file" "$_CMD"
             _dbg_write "block_sm_no_task"
             echo "BLOCKED: Create a .task file before dispatching work. Without active tasks in .doey/tasks/, SM will be put to sleep by the wait hook." >&2
             exit 2
@@ -377,14 +353,11 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
     if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
-      _sm_pane=$(grep '^SM_PANE=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SM_PANE=//;s/^"//;s/"$//')
-      [ -z "$_sm_pane" ] && _sm_pane="0.2"
-      _sn="${SESSION_NAME:-}"
-      [ -z "$_sn" ] && _sn=$(grep '^SESSION_NAME=' "${_rtd}/session.env" 2>/dev/null | head -1 | sed 's/^SESSION_NAME=//;s/^"//;s/"$//')
+      _sm_pane=$(_rk SM_PANE "${_rtd}/session.env"); [ -z "$_sm_pane" ] && _sm_pane="0.2"
+      _sn="${SESSION_NAME:-}"; [ -z "$_sn" ] && _sn=$(_rk SESSION_NAME "${_rtd}/session.env")
       case "$TOOL_COMMAND" in
         *"-t"*"${_sn}:${_sm_pane}"*|*"-t"*"${_sm_pane}"*)
-          _dbg_write "allow_worker_sendkeys_sm"
-          exit 0 ;;
+          _dbg_write "allow_worker_sendkeys_sm"; exit 0 ;;
       esac
     fi
   ;; esac
@@ -399,6 +372,5 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   exit 0
 fi
 
-# Fallback for unhandled roles (info_panel, non-Doey sessions) — allow
 _dbg_write "allow_fallback"
 exit 0

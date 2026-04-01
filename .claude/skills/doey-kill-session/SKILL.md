@@ -5,9 +5,8 @@ description: Kill the entire Doey session — all windows, processes, and runtim
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
-**Confirm first:** "This kills session `${SESSION_NAME}`, all processes, and removes `${RUNTIME_DIR}`. Proceed?"
+**Confirm first:** "This kills session `${SESSION_NAME}` and removes runtime. Proceed?"
 
-### Execute
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep "^SESSION_NAME=" "${RD}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
@@ -18,12 +17,8 @@ for sig in TERM 9; do
     done
   done; sleep 2
 done
-tmux kill-session -t "$SESSION_NAME"
-rm -rf "$RD"
-echo "Session ${SESSION_NAME} killed, runtime removed"
+tmux kill-session -t "$SESSION_NAME"; rm -rf "$RD"
+echo "Session killed, runtime removed"
 ```
 
-### Rules
-- Never proceed without explicit user confirmation
-- Kill processes before session (prevents orphans)
-- Re-init with `doey`
+Requires explicit confirmation. Kill processes before session. Re-init: `doey`.

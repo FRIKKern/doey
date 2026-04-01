@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # PreCompact hook: outputs essential state to survive context compaction.
 set -euo pipefail
-
 source "$(dirname "$0")/common.sh"
-init_hook
-_DOEY_HOOK_NAME="on-pre-compact"
-type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
+init_named_hook "on-pre-compact"
 
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 CURRENT_TASK=$(grep '^TASK:' "$STATUS_FILE" 2>/dev/null | cut -d: -f2- | sed 's/^ //' || true)
@@ -28,11 +25,10 @@ if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
     awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
-if is_boss; then               ROLE_LABEL="the Doey Boss"
-elif is_manager; then          ROLE_LABEL="the Doey Window Manager"
-elif is_session_manager; then  ROLE_LABEL="the Doey Session Manager"
-else                           ROLE_LABEL="a Doey worker"
-fi
+ROLE_LABEL="a Doey worker"
+is_boss && ROLE_LABEL="the Doey Boss"
+is_manager && ROLE_LABEL="the Doey Window Manager"
+is_session_manager && ROLE_LABEL="the Doey Session Manager"
 
 cat <<CONTEXT
 ## Context Preservation (Pre-Compaction)
@@ -84,14 +80,10 @@ if is_manager; then
   WORKER_ASSIGNMENTS=$(tmux list-panes -t "$SESSION_NAME:$_TEAM_W" -F '#{pane_index} #{pane_title}' 2>/dev/null || true)
 
   PENDING_RESULTS=""
-  _HAS_JQ=false; command -v jq >/dev/null 2>&1 && _HAS_JQ=true
   for rf in "$RUNTIME_DIR"/results/pane_${_TEAM_W}_*.json; do
     [ -f "$rf" ] || continue
-    if $_HAS_JQ; then
-      rf_status=$(jq -r '.status // "unknown"' "$rf" 2>/dev/null || echo "unknown")
-    else
-      rf_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$rf" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"$//' || echo "unknown")
-    fi
+    rf_status=$(jq -r '.status // "unknown"' "$rf" 2>/dev/null) \
+      || rf_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$rf" 2>/dev/null | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"//;s/"$//' || echo "unknown")
     PENDING_RESULTS="${PENDING_RESULTS}  $(basename "$rf") (status: ${rf_status})${NL}"
   done
 
@@ -127,7 +119,6 @@ MGRSTATE
   _MGR_SAFE="${SESSION_NAME//[-:.]/_}_${_TEAM_W}_0"
   _print_pending_msgs "$_MGR_SAFE" "$(_gather_msgs "$_MGR_SAFE")"
 
-  # Golden Context Log — accumulated knowledge that must survive compaction
   CONTEXT_LOG="${RUNTIME_DIR}/context_log_W${_TEAM_W}.md"
   if [ -f "$CONTEXT_LOG" ] && [ -s "$CONTEXT_LOG" ]; then
     LINES=$(wc -l < "$CONTEXT_LOG" 2>/dev/null | tr -d ' ') || LINES=0

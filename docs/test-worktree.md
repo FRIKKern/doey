@@ -1,8 +1,7 @@
 # Worktree Test Guide
 
-**Prerequisites:** Clean git repo, no running Doey session, macOS with bash 3.2.
+**Prerequisites:** Clean git repo, no running Doey session, macOS with bash 3.2. **Setup:**
 
-**Setup:**
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION=$(grep SESSION_NAME= "$RUNTIME_DIR/session.env" | cut -d= -f2)
@@ -65,12 +64,7 @@ Requires all workers idle.
 
 ## Test 6: `/doey-worktree W --back` (return to main)
 
-Run after Test 5. Optionally create a test file first:
-
-```bash
-WT_DIR=$(grep WORKTREE_DIR "$RUNTIME_DIR/team_1.env" | cut -d= -f2- | tr -d '"')
-echo "test" > "$WT_DIR/worktree-test.txt"
-```
+Run after Test 5. Optional setup: create a test file in `$WT_DIR/worktree-test.txt`.
 
 ```
 /doey-worktree 1 --back
@@ -91,16 +85,7 @@ Verify: `[worktree]` badge + branch for worktree teams; nothing extra for normal
 
 ## Test 8: `/doey-kill-window W` (kill worktree team)
 
-Setup — commit in worktree team 4:
-```bash
-WT_DIR=$(grep WORKTREE_DIR "$RUNTIME_DIR/team_4.env" | cut -d= -f2- | tr -d '"')
-echo "kill-test" > "$WT_DIR/kill-test.txt"
-git -C "$WT_DIR" add -A && git -C "$WT_DIR" commit -m "test commit in worktree"
-```
-
-```
-/doey-kill-window 4
-```
+Setup: commit a file in team 4's worktree, then `/doey-kill-window 4`.
 
 | Check | Command | Expected |
 |-------|---------|----------|
@@ -129,17 +114,7 @@ git -C "$WT_DIR" add -A && git -C "$WT_DIR" commit -m "test commit in worktree"
 
 ## Test 16: Info Panel
 
-```bash
-tmux capture-pane -t "$SESSION:0.0" -p -S -40 | grep -A 20 "TEAM STATUS"
-```
-
-Expected: `[wt]` badge in cyan for worktree teams, branch name dimmed.
-
-```
-TEAM STATUS
-  T1              6W (0 busy, 6 idle)
-  T4 [wt]         6W (0 busy, 6 idle)  doey/team-4-0317-1700
-```
+`tmux capture-pane -t "$SESSION:0.0" -p -S -40 | grep -A 20 "TEAM STATUS"` — expect `[wt]` badge in cyan for worktree teams, branch name dimmed.
 
 ## Quick Smoke Test
 

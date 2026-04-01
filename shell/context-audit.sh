@@ -3,34 +3,24 @@
 # Exit: 0=clean, 1=issues found, 2=usage error
 set -euo pipefail
 
-# Charmbracelet gum detection (output styling only)
 HAS_GUM=false
 command -v gum >/dev/null 2>&1 && HAS_GUM=true
 
-MODE=""
-USE_COLOR=true
+# Styled output helper: _msg <gum_fg> <text> [>&2]
+_msg() { if [ "$HAS_GUM" = true ]; then gum style --foreground "$1" --bold "$2"; else echo "$2"; fi; }
 
+MODE="" USE_COLOR=true
 for arg in "$@"; do
   case "$arg" in
     --installed) MODE="installed" ;;
     --repo)      MODE="repo" ;;
     --no-color)  USE_COLOR=false ;;
-    -h|--help)
-      if [ "$HAS_GUM" = true ]; then gum style --foreground 8 "Usage: context-audit.sh [--installed|--repo] [--no-color]"
-      else echo "Usage: context-audit.sh [--installed|--repo] [--no-color]"; fi
-      exit 0 ;;
-    *)
-      if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: unknown argument: $arg" >&2
-      else echo "Unknown argument: $arg" >&2; fi
-      exit 2 ;;
+    -h|--help)   _msg 8 "Usage: context-audit.sh [--installed|--repo] [--no-color]"; exit 0 ;;
+    *)           _msg 1 "Error: unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
 
-if [[ -z "$MODE" ]]; then
-  if [ "$HAS_GUM" = true ]; then gum style --foreground 1 --bold "Error: must specify --installed or --repo" >&2
-  else echo "Error: must specify --installed or --repo" >&2; fi
-  exit 2
-fi
+if [[ -z "$MODE" ]]; then _msg 1 "Error: must specify --installed or --repo" >&2; exit 2; fi
 
 if $USE_COLOR && [[ -t 1 ]]; then
   WARN='\033[0;33m' ERROR='\033[0;31m' DIM='\033[0;90m'
@@ -54,12 +44,7 @@ fi
 shopt -u nullglob
 
 if [[ ${#SCAN_FILES[@]} -eq 0 ]]; then
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 3 "  No files found to audit in ${MODE} mode"
-  else
-    printf "${WARN}  No files found to audit in %s mode${RESET}\n" "$MODE"
-  fi
-  exit 0
+  _msg 3 "  No files found to audit in ${MODE} mode"; exit 0
 fi
 
 YSPAM_RE='auto.accept|auto.unblock|handle.*y/n|handle.*prompt.*confirmation|accept.*permission.*prompt|send.*"y"|send-keys.*"y"|send.*yes.*Enter'
@@ -102,20 +87,14 @@ for file in "${SCAN_FILES[@]}"; do
 done
 
 if [[ ${#ISSUES[@]} -eq 0 ]]; then
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 2 --bold "✓ Context Audit: Clean — no issues found"
-  else
-    printf "${SUCCESS}  CONTEXT AUDIT: clean — no issues found${RESET}\n"
-  fi
+  if [ "$HAS_GUM" = true ]; then gum style --foreground 2 --bold "✓ Context Audit: Clean — no issues found"
+  else printf "${SUCCESS}  CONTEXT AUDIT: clean — no issues found${RESET}\n"; fi
   exit 0
 fi
 
 if [ "$HAS_GUM" = true ]; then
-  gum style --foreground 1 --bold --border rounded "$(printf '  CONTEXT AUDIT: %d issue(s) found' "${#ISSUES[@]}")"
-  printf '\n'
-else
-  printf "\n${ERROR}${BOLD}  CONTEXT AUDIT: %d issue(s) found${RESET}\n\n" "${#ISSUES[@]}"
-fi
+  gum style --foreground 1 --bold --border rounded "$(printf '  CONTEXT AUDIT: %d issue(s) found' "${#ISSUES[@]}")"; printf '\n'
+else printf "\n${ERROR}${BOLD}  CONTEXT AUDIT: %d issue(s) found${RESET}\n\n" "${#ISSUES[@]}"; fi
 
 for issue in "${ISSUES[@]}"; do
   IFS="$DELIM" read -r category file lnum pattern_desc risk_desc <<< "$issue"

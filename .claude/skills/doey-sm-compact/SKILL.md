@@ -3,11 +3,9 @@ name: doey-sm-compact
 description: Send /compact to Session Manager to reduce context window. Use when you need to "compact the SM", "reduce SM context", or "SM is running out of context".
 ---
 
-Only Window Manager or Boss (send-keys blocked for others).
-
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
-Send `/compact` to SM (pane 0.2), verify, retry once after 15s.
+WM/Boss only. Send `/compact` to SM (0.2), verify, retry once after 15s.
 
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"

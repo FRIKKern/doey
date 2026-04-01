@@ -9,20 +9,17 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || 
 [ -z "$RUNTIME_DIR" ] && exit 0
 
 source "$(dirname "$0")/common.sh"
+_DOEY_HOOK_NAME="on-session-start"
 if type _init_debug >/dev/null 2>&1; then
-  _init_debug
-  _DOEY_HOOK_NAME="on-session-start"
-  _debug_hook_entry
+  _init_debug; _debug_hook_entry
 fi
 
 SESSION_ENV="${RUNTIME_DIR}/session.env"
 [ -f "$SESSION_ENV" ] || exit 0
 
-_env_val() { local v; v=$(grep "^$2=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true; v="${v%\"}"; echo "${v#\"}"; }
-
 SESSION_NAME="" PROJECT_DIR="" PROJECT_NAME=""
 while IFS='=' read -r key value; do
-  value="${value%\"}" && value="${value#\"}"
+  value="${value%\"}"; value="${value#\"}"
   case "$key" in
     SESSION_NAME) SESSION_NAME="$value" ;;
     PROJECT_DIR)  PROJECT_DIR="$value" ;;
@@ -30,21 +27,14 @@ while IFS='=' read -r key value; do
   esac
 done < "$SESSION_ENV"
 
-# Resolve DOEY_LIB: directory containing doey-task-helpers.sh
 DOEY_LIB=""
-if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
-  DOEY_LIB="${PROJECT_DIR}/shell"
-elif [ -f "$HOME/.local/bin/doey-task-helpers.sh" ]; then
-  DOEY_LIB="$HOME/.local/bin"
+if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then DOEY_LIB="${PROJECT_DIR}/shell"
+elif [ -f "$HOME/.local/bin/doey-task-helpers.sh" ]; then DOEY_LIB="$HOME/.local/bin"
 fi
 
 REMOTE=$(grep '^REMOTE=' "$SESSION_ENV" 2>/dev/null | head -1 | cut -d= -f2-) || true
-
 TUNNEL_URL=""
-TUNNEL_ENV="${RUNTIME_DIR}/tunnel.env"
-if [ -f "$TUNNEL_ENV" ]; then
-  TUNNEL_URL=$(grep '^TUNNEL_URL=' "$TUNNEL_ENV" 2>/dev/null | head -1 | cut -d= -f2-) || true
-fi
+[ -f "${RUNTIME_DIR}/tunnel.env" ] && TUNNEL_URL=$(grep '^TUNNEL_URL=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-) || true
 
 # Pane identity
 PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
@@ -52,35 +42,26 @@ PANE_INDEX="${PANE##*.}"
 _WP="${PANE#*:}"
 WINDOW_INDEX="${_WP%.*}"
 
-# Role detection
 ROLE="worker"
 TEAM_WINDOW="$WINDOW_INDEX"
 
 if [ "$WINDOW_INDEX" = "0" ]; then
-  sm_val=$(_env_val "$SESSION_ENV" SM_PANE)
-  if [ "$PANE_INDEX" = "1" ]; then
-    ROLE="boss"
-  elif [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ]; then
-    ROLE="session_manager"
-  elif [ "$PANE_INDEX" = "0" ]; then
-    ROLE="info_panel"
-  fi
+  sm_val=$(_read_team_key "$SESSION_ENV" SM_PANE)
+  case "$PANE_INDEX" in
+    0) ROLE="info_panel" ;;
+    1) ROLE="boss" ;;
+    *) [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ] && ROLE="session_manager" ;;
+  esac
 else
   _team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
-  _team_type=""
-  [ -f "$_team_file" ] && _team_type=$(_env_val "$_team_file" TEAM_TYPE)
-  if [ "$_team_type" = "freelancer" ]; then
-    ROLE="worker"
-  else
-    mgr_pane=""
-    [ -f "$_team_file" ] && mgr_pane=$(_env_val "$_team_file" MANAGER_PANE)
-    # Default: pane 0 is always the manager in non-freelancer team windows
+  _team_type=""; [ -f "$_team_file" ] && _team_type=$(_read_team_key "$_team_file" TEAM_TYPE)
+  if [ "$_team_type" != "freelancer" ]; then
+    mgr_pane=""; [ -f "$_team_file" ] && mgr_pane=$(_read_team_key "$_team_file" MANAGER_PANE)
     [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
   fi
 fi
 
-# Compute pane identifiers
-PROJECT_ACRONYM=$(_env_val "$SESSION_ENV" PROJECT_ACRONYM)
+PROJECT_ACRONYM=$(_read_team_key "$SESSION_ENV" PROJECT_ACRONYM)
 [ -z "$PROJECT_ACRONYM" ] && PROJECT_ACRONYM=$(echo "$PROJECT_NAME" | awk -F- '{for(i=1;i<=NF;i++) printf substr($i,1,1)}' | cut -c1-4)
 
 case "$ROLE" in
@@ -103,7 +84,7 @@ PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.-' '_')
 mkdir -p "${RUNTIME_DIR}/status"
 atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
 
-wt_dir=$(_env_val "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
+wt_dir=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 
 _repo_path=""
 [ -f "$HOME/.claude/doey/repo-path" ] && _repo_path=$(cat "$HOME/.claude/doey/repo-path")

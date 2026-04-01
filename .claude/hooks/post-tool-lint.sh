@@ -4,38 +4,19 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-# Debug hook timing (common.sh functions, minimal init — no init_hook call)
+# Minimal init — no init_hook call (speed)
 RUNTIME_DIR="${DOEY_RUNTIME:-}"
 [ -z "$RUNTIME_DIR" ] && RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) 2>/dev/null || true
 PANE="${DOEY_PANE_ID:-unknown}"; PANE_SAFE="${PANE//[-:.]/_}"
 DOEY_ROLE="${DOEY_ROLE:-unknown}"
+_DOEY_HOOK_NAME="post-tool-lint"
 source "$(dirname "$0")/common.sh"
 if type _init_debug >/dev/null 2>&1; then
-  _init_debug
-  _DOEY_HOOK_NAME="post-tool-lint"
-  _debug_hook_entry
+  _init_debug; _debug_hook_entry
 fi
 
-_log_lint_error() {
-  local msg="$1" detail="${2:-}" _rt="${RUNTIME_DIR:-}"
-  [ -z "$_rt" ] && return 0
-  printf '[%s] LINT_ERROR | %s | %s | post-tool-lint | %s | %s | %s\n' \
-    "$(date '+%Y-%m-%dT%H:%M:%S')" "${DOEY_PANE_ID:-unknown}" "${DOEY_ROLE:-unknown}" "${TOOL_NAME:-n/a}" "${detail:-n/a}" "$msg" \
-    >> "${_rt}/errors/errors.log" 2>/dev/null
-}
-
-_HAS_JQ=false; command -v jq >/dev/null 2>&1 && _HAS_JQ=true
-
-_parse() {
-  if "$_HAS_JQ"; then
-    echo "$INPUT" | jq -r ".$1 // empty" 2>/dev/null || echo ""
-  else
-    echo "$INPUT" | grep -o "\"${1##*.}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed "s/.*\"${1##*.}\"[[:space:]]*:[[:space:]]*\"//;s/\"$//" 2>/dev/null || echo ""
-  fi
-}
-
-case "$(_parse tool_name)" in Write|Edit) ;; *) exit 0 ;; esac
-FILE_PATH=$(_parse tool_input.file_path)
+case "$(_parse_tool_field tool_name)" in Write|Edit) ;; *) exit 0 ;; esac
+FILE_PATH=$(_parse_tool_field tool_input.file_path)
 case "$FILE_PATH" in *.sh) ;; *) exit 0 ;; esac
 [ -f "$FILE_PATH" ] || exit 0
 case "$(basename "$FILE_PATH")" in post-tool-lint.sh|test-bash-compat.sh) exit 0 ;; esac
@@ -81,8 +62,8 @@ HEREDOC_EOF
 [ "$count" -eq 0 ] && exit 0
 
 reason=$(printf "Bash 3.2 compatibility violations in %s (%d found):\n%s" "$FILE_PATH" "$count" "$violations")
-_log_lint_error "Bash 3.2 violations found in $FILE_PATH ($count found)" "$violations"
-if "$_HAS_JQ"; then
+_log_error "LINT_ERROR" "Bash 3.2 violations found in $FILE_PATH ($count found)" "$violations"
+if command -v jq >/dev/null 2>&1; then
   jq -n --arg r "$reason" '{"decision":"block","reason":$r}'
 else
   reason_escaped=$(echo "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed '$ s/\\n$//')

@@ -24,11 +24,7 @@ TUNNEL_ENV="${RUNTIME_DIR}/tunnel.env"
 # --- Helpers ---
 
 _read_tunnel_pid() {
-    local _pid=""
-    while IFS='=' read -r k v; do
-        case "$k" in TUNNEL_PID) _pid="$v" ;; esac
-    done < "$TUNNEL_ENV"
-    printf '%s' "$_pid"
+    grep '^TUNNEL_PID=' "$TUNNEL_ENV" 2>/dev/null | head -1 | cut -d= -f2-
 }
 
 # --- Idempotency: exit early if tunnel already running ---

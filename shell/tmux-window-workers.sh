@@ -1,27 +1,19 @@
 #!/usr/bin/env bash
 set -uo pipefail
 # Per-window worker dot indicator for tmux window tabs.
-# Called from window-status-format via #(script #I).
-# Outputs: #[fg=color]●●○  (colored dots per worker status)
-# Must be FAST (<10ms) — single awk pass, no loops.
+# Must be FAST (<10ms) — single awk pass.
 
-WIN="${1:-}"
-[ -z "$WIN" ] && exit 0
-[ "$WIN" = "0" ] && exit 0  # window 0 is dashboard, no workers
+WIN="${1:-}"; [ -z "$WIN" ] && exit 0; [ "$WIN" = "0" ] && exit 0
 
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
 [ -z "$RUNTIME_DIR" ] && exit 0
-
 SESSION_NAME=$(tmux display-message -p '#{session_name}' 2>/dev/null) || true
 [ -z "$SESSION_NAME" ] && exit 0
 
-# Status files: ${session_safe}_${W}_${P}.status — skip pane 0 (manager)
 SESSION_SAFE="${SESSION_NAME//-/_}"
 STATUS_DIR="$RUNTIME_DIR/status"
 [ -d "$STATUS_DIR" ] || exit 0
 
-# Single awk pass: read all status files for this window (panes 1+),
-# count BUSY vs total, then output colored dots.
 # shellcheck disable=SC2012
 awk -v win="$WIN" -v prefix="$SESSION_SAFE" '
 BEGIN { busy = 0; total = 0 }

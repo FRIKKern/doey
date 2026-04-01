@@ -53,15 +53,7 @@ _find_go_bin() {
 # Cross-platform file modification time (epoch seconds).
 # macOS uses stat -f, Linux uses stat -c.
 _file_mtime() {
-    local file="$1"
-    if stat -f '%m' "$file" 2>/dev/null; then
-        return 0
-    fi
-    if stat -c '%Y' "$file" 2>/dev/null; then
-        return 0
-    fi
-    # Fallback: file exists but stat failed — treat as epoch 0
-    printf '0'
+    stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1" 2>/dev/null || printf '0'
 }
 
 # ── _go_binary_stale ────────────────────────────────────────────────

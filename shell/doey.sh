@@ -1394,6 +1394,54 @@ _append_settings() {
   [ -f "${2}/doey-settings.json" ] && eval "${1}+=' --settings \"${2}/doey-settings.json\"'"
 }
 
+# Run command with gum spinner if available, plain otherwise. Returns exit code.
+# Usage: if ! _spin "title" command args...; then handle_error; fi
+_spin() {
+  local title="$1"; shift
+  if [ "$HAS_GUM" = true ]; then
+    gum spin --spinner dot --title "$title" -- "$@"
+  else
+    "$@" >/dev/null 2>&1
+  fi
+}
+
+# Print version update summary.
+# Usage: _version_summary "old_ver" "new_ver"
+_version_summary() {
+  if [ "$1" != "$2" ]; then
+    doey_ok "Updated: $1 → $2"
+  else
+    doey_ok "Version: $2 (already latest)"
+  fi
+}
+
+# Verify doey installation via doctor --quiet.
+_verify_install_step() {
+  if bash "$HOME/.local/bin/doey" doctor --quiet 2>/dev/null; then
+    doey_success "All checks pass"
+  else
+    doey_warn "Some doctor checks have warnings (run: doey doctor)"
+  fi
+}
+
+# Build Go binaries during update flows.
+# Usage: _update_go_build_step <source_dir>
+_update_go_build_step() {
+  local helpers_file="${1}/shell/doey-go-helpers.sh"
+  if [ ! -f "$helpers_file" ]; then
+    doey_info "Go helpers not found — skipped"
+    return 0
+  fi
+  local go_rc=0
+  _spin "Building Go binaries..." \
+    bash -c "source '${helpers_file}' 2>/dev/null && _build_all_go_binaries" 2>/dev/null || go_rc=$?
+  if [ "$go_rc" -eq 0 ]; then
+    doey_success "Go binaries built"
+  else
+    doey_warn "Go build failed — doey-tui will use shell fallback"
+  fi
+}
+
 _purge_format_bytes() {
   local bytes="$1"
   if [[ "$bytes" -ge 1048576 ]]; then
@@ -2511,20 +2559,10 @@ _update_contributor() {
 
   # Step 2: Pull latest
   doey_step "2/6" "Pulling latest from origin/main..."
-  local pull_output pull_rc=0
+  local pull_rc=0
   git -C "$repo_dir" fetch origin main --quiet 2>/dev/null || true
-  if [ "$HAS_GUM" = true ]; then
-    set +e
-    pull_output=$(gum spin --spinner dot --title "Pulling latest..." -- \
-      git -C "$repo_dir" pull --ff-only origin main 2>&1)
-    pull_rc=$?
-    set -e
-  else
-    set +e
-    pull_output=$(git -C "$repo_dir" pull --ff-only origin main 2>&1)
-    pull_rc=$?
-    set -e
-  fi
+  _spin "Pulling latest..." \
+    git -C "$repo_dir" pull --ff-only origin main 2>/dev/null || pull_rc=$?
   if [ $pull_rc -ne 0 ]; then
     doey_error "git pull --ff-only failed"
     doey_info "This usually means local commits diverge from origin/main."
@@ -2542,63 +2580,27 @@ _update_contributor() {
 
   # Step 3: Run install
   doey_step "3/6" "Running install..."
-  if [ "$HAS_GUM" = true ]; then
-    if ! gum spin --spinner dot --title "Installing files..." -- bash "$repo_dir/install.sh"; then
-      doey_error "Install failed"
-      doey_info "Try manually: cd $repo_dir && ./install.sh"
-      return 1
-    fi
-  else
-    if ! bash "$repo_dir/install.sh" >/dev/null 2>&1; then
-      doey_error "Install failed"
-      doey_info "Try manually: cd $repo_dir && ./install.sh"
-      return 1
-    fi
+  if ! _spin "Installing files..." bash "$repo_dir/install.sh"; then
+    doey_error "Install failed"
+    doey_info "Try manually: cd $repo_dir && ./install.sh"
+    return 1
   fi
   doey_success "Files installed"
 
   # Step 4: Rebuild Go binaries
   doey_step "4/6" "Rebuilding Go binaries..."
-  if type _build_all_go_binaries >/dev/null 2>&1; then
-    if [ "$HAS_GUM" = true ]; then
-      set +e
-      gum spin --spinner dot --title "Building Go binaries..." -- bash -c \
-        "source '${repo_dir}/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" 2>/dev/null
-      local go_rc=$?
-      set -e
-    else
-      set +e
-      bash -c "source '${repo_dir}/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" >/dev/null 2>&1
-      local go_rc=$?
-      set -e
-    fi
-    if [ "${go_rc:-0}" -eq 0 ]; then
-      doey_success "Go binaries built"
-    else
-      doey_warn "Go build failed — doey-tui will use shell fallback"
-    fi
-  else
-    doey_info "Go helpers not available — skipped"
-  fi
+  _update_go_build_step "$repo_dir"
 
   # Step 5: Verify installation
   doey_step "5/6" "Verifying installation..."
-  if bash "$HOME/.local/bin/doey" doctor --quiet 2>/dev/null; then
-    doey_success "All checks pass"
-  else
-    doey_warn "Some doctor checks have warnings (run: doey doctor)"
-  fi
+  _verify_install_step
 
   # Step 6: Version comparison
   doey_step "6/6" "Version summary"
   local final_hash
   final_hash=$(_doey_current_version)
   printf '\n'
-  if [[ "$old_hash" != "$final_hash" ]]; then
-    doey_ok "Updated: $old_hash → $final_hash"
-  else
-    doey_ok "Version: $final_hash (already latest)"
-  fi
+  _version_summary "$old_hash" "$final_hash"
   [ "$stashed" = true ] && doey_info "Stashed changes preserved — restore with: cd $repo_dir && git stash pop"
 
   _update_finish_banner
@@ -2620,18 +2622,8 @@ _update_normal() {
   local install_dir
   install_dir=$(mktemp -d "${TMPDIR:-/tmp}/doey-update.XXXXXX")
   local clone_rc=0
-  if [ "$HAS_GUM" = true ]; then
-    set +e
-    gum spin --spinner dot --title "Cloning latest release..." -- \
-      git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir" 2>/dev/null
-    clone_rc=$?
-    set -e
-  else
-    set +e
-    git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir" >/dev/null 2>&1
-    clone_rc=$?
-    set -e
-  fi
+  _spin "Cloning latest release..." \
+    git clone --depth 1 "https://github.com/FRIKKern/doey.git" "$install_dir" 2>/dev/null || clone_rc=$?
   if [ $clone_rc -ne 0 ]; then
     doey_error "Download failed — check your internet connection"
     rm -rf "$install_dir"
@@ -2641,65 +2633,28 @@ _update_normal() {
 
   # Step 2: Run install
   doey_step "2/5" "Running install..."
-  if [ "$HAS_GUM" = true ]; then
-    if ! gum spin --spinner dot --title "Installing files..." -- bash "$install_dir/install.sh"; then
-      doey_error "Install failed"
-      doey_info "Try: cd $install_dir && ./install.sh"
-      rm -rf "$install_dir"
-      return 1
-    fi
-  else
-    if ! bash "$install_dir/install.sh" >/dev/null 2>&1; then
-      doey_error "Install failed"
-      doey_info "Try downloading again: curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash"
-      rm -rf "$install_dir"
-      return 1
-    fi
+  if ! _spin "Installing files..." bash "$install_dir/install.sh"; then
+    doey_error "Install failed"
+    doey_info "Try downloading again: curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash"
+    rm -rf "$install_dir"
+    return 1
   fi
   doey_success "Installed"
 
   # Step 3: Rebuild Go binaries
   doey_step "3/5" "Rebuilding Go binaries..."
-  if [ -f "$install_dir/shell/doey-go-helpers.sh" ]; then
-    if [ "$HAS_GUM" = true ]; then
-      set +e
-      gum spin --spinner dot --title "Building Go binaries..." -- bash -c \
-        "source '$install_dir/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" 2>/dev/null
-      local go_rc=$?
-      set -e
-    else
-      set +e
-      bash -c "source '$install_dir/shell/doey-go-helpers.sh' 2>/dev/null && _build_all_go_binaries" >/dev/null 2>&1
-      local go_rc=$?
-      set -e
-    fi
-    if [ "${go_rc:-0}" -eq 0 ]; then
-      doey_success "Go binaries built"
-    else
-      doey_warn "Go build failed — doey-tui will use shell fallback"
-    fi
-  else
-    doey_info "Go helpers not found — skipped"
-  fi
+  _update_go_build_step "$install_dir"
 
   # Step 4: Verify installation
   doey_step "4/5" "Verifying installation..."
-  if bash "$HOME/.local/bin/doey" doctor --quiet 2>/dev/null; then
-    doey_success "All checks pass"
-  else
-    doey_warn "Some doctor checks have warnings (run: doey doctor)"
-  fi
+  _verify_install_step
 
   # Step 5: Version comparison
   doey_step "5/5" "Version summary"
   local new_version
   new_version=$(_doey_current_version)
   printf '\n'
-  if [[ "$old_version" != "$new_version" ]]; then
-    doey_ok "Updated: $old_version → $new_version"
-  else
-    doey_ok "Version: $new_version (already latest)"
-  fi
+  _version_summary "$old_version" "$new_version"
 
   rm -rf "$install_dir"
   _update_finish_banner
@@ -2789,18 +2744,10 @@ _post_update() {
   printf '\n'
 
   doey_step "1/2" "Running install from updated code..."
-  if [ "$HAS_GUM" = true ]; then
-    if ! gum spin --spinner dot --title "Installing..." -- bash "$install_dir/install.sh"; then
-      doey_error "Install failed"
-      [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
-      exit 1
-    fi
-  else
-    if ! bash "$install_dir/install.sh" >/dev/null 2>&1; then
-      doey_error "Install failed"
-      [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
-      exit 1
-    fi
+  if ! _spin "Installing..." bash "$install_dir/install.sh"; then
+    doey_error "Install failed"
+    [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
+    exit 1
   fi
   doey_success "Installed"
   [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
@@ -2809,11 +2756,7 @@ _post_update() {
   local new_version
   new_version=$(_doey_current_version)
   printf '\n'
-  if [[ "$old_version" != "$new_version" ]]; then
-    doey_ok "Updated: $old_version → $new_version"
-  else
-    doey_ok "Version: $new_version"
-  fi
+  _version_summary "$old_version" "$new_version"
 
   _update_finish_banner
 }

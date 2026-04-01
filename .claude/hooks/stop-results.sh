@@ -2,33 +2,22 @@
 # Stop hook: capture worker results and write completion event (async)
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
-init_hook
-_DOEY_HOOK_NAME="stop-results"
-type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
+init_named_hook "stop-results"
 
 is_worker || exit 0
 
-mkdir -p "$RUNTIME_DIR/tasks" 2>/dev/null || true  # crash-recovery prompt storage
+mkdir -p "$RUNTIME_DIR/tasks" 2>/dev/null || true
 
 RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
 TMPFILE=""
 trap '[ -n "${TMPFILE:-}" ] && rm -f "$TMPFILE" 2>/dev/null' EXIT
 
-# Append a path to the pipe-delimited TASK_ATTACHMENTS field in a .task file.
 _append_attachment() {
   local task_file="$1" att_path="$2"
   [ -f "$task_file" ] || return 0
-  local current
-  current=$(grep '^TASK_ATTACHMENTS=' "$task_file" 2>/dev/null | head -1 | cut -d= -f2-) || current=""
-  # Skip if already present
+  local current; current=$(grep '^TASK_ATTACHMENTS=' "$task_file" 2>/dev/null | head -1 | cut -d= -f2-) || current=""
   case "|${current}|" in *"|${att_path}|"*) return 0 ;; esac
-  local new_val
-  if [ -n "$current" ]; then
-    new_val="${current}|${att_path}"
-  else
-    new_val="${att_path}"
-  fi
-  # Update or append — use tmp+mv for macOS compat (no sed -i)
+  local new_val="${att_path}"; [ -n "$current" ] && new_val="${current}|${att_path}"
   local tmp_att="${task_file}.tmp.$$"
   if grep -q '^TASK_ATTACHMENTS=' "$task_file" 2>/dev/null; then
     sed "s|^TASK_ATTACHMENTS=.*|TASK_ATTACHMENTS=${new_val}|" "$task_file" > "$tmp_att" && mv "$tmp_att" "$task_file"
@@ -40,18 +29,13 @@ _append_attachment() {
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 [ -z "$OUTPUT" ] && _log_error "HOOK_ERROR" "tmux capture-pane returned empty" "pane=$PANE"
 
-PROJECT_DIR="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
-if [ -z "$PROJECT_DIR" ]; then
-  PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR=""
-fi
+PROJECT_DIR=$(_resolve_project_dir)
 FILES_LIST=""
 if [ -n "$PROJECT_DIR" ]; then
-  _timeout_cmd=""
-  command -v timeout >/dev/null 2>&1 && _timeout_cmd="timeout 2"
-  command -v gtimeout >/dev/null 2>&1 && _timeout_cmd="gtimeout 2"  # macOS fallback
-  FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && $_timeout_cmd git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
+  _to=""; command -v timeout >/dev/null 2>&1 && _to="timeout 2"; command -v gtimeout >/dev/null 2>&1 && _to="gtimeout 2"
+  FILES_LIST=$(cd "$PROJECT_DIR" 2>/dev/null && $_to git diff --name-only HEAD 2>/dev/null | head -20) || FILES_LIST=""
+  [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty"
 fi
-{ [ -n "$PROJECT_DIR" ] && [ -z "$FILES_LIST" ] && _log "stop-results: git diff empty"; } || true
 FILES_JSON="[]"
 if [ -n "$FILES_LIST" ]; then
   FILES_JSON=$(echo "$FILES_LIST" | jq -R '.' | jq -s '.' 2>/dev/null) || FILES_JSON="[]"
@@ -61,11 +45,9 @@ FILTERED=""
 STATUS="done"
 TOOL_COUNT=0
 while IFS= read -r line; do
-  # Count tool calls
   case "$line" in
     *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
   esac
-  # UI chrome filters — update if Claude Code output format changes
   case "$line" in
     *"❯"*|*"───"*|*"Ctx █"*|*"bypass permissions"*|*"shift+tab"*|*"MCP server"*|*/doctor*) continue ;;
   esac
@@ -120,38 +102,21 @@ _log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_CO
 
 if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
   cp "$RESULT_FILE" "${PROJECT_DIR}/.doey/tasks/${local_task_id}.result.json" 2>/dev/null || true
-
-  # Auto-attach result and research report to task
   _local_task_file="${PROJECT_DIR}/.doey/tasks/${local_task_id}.task"
-  _result_att=".doey/tasks/${local_task_id}.result.json"
-  _append_attachment "$_local_task_file" "$_result_att" 2>/dev/null || true
+  _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}.result.json" 2>/dev/null || true
 
   _local_report="${RUNTIME_DIR}/reports/pane_${WINDOW_INDEX}_${PANE_INDEX}.report"
   if [ -f "$_local_report" ]; then
-    _report_dest="${PROJECT_DIR}/.doey/tasks/${local_task_id}.report"
-    cp "$_local_report" "$_report_dest" 2>/dev/null || true
-    _report_att=".doey/tasks/${local_task_id}.report"
-    _append_attachment "$_local_task_file" "$_report_att" 2>/dev/null || true
+    cp "$_local_report" "${PROJECT_DIR}/.doey/tasks/${local_task_id}.report" 2>/dev/null || true
+    _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}.report" 2>/dev/null || true
   fi
 
-  # Write captured output as a task attachment (completion report)
   if [ -n "$FILTERED" ]; then
     _PANE_SAFE="${WINDOW_INDEX}_${PANE_INDEX}"
     _ATTACH_TS=$(date +%s)
-    if [ -f "$PROJECT_DIR/shell/doey-task-helpers.sh" ] && \
-       grep -q 'task_write_attachment' "$PROJECT_DIR/shell/doey-task-helpers.sh" 2>/dev/null; then
-      # Use the helper if available
-      # shellcheck disable=SC1091
-      source "$PROJECT_DIR/shell/doey-task-helpers.sh" && \
-        task_write_attachment "$PROJECT_DIR" "$local_task_id" "completion" \
-          "Worker ${WINDOW_INDEX}.${PANE_INDEX} output" "$FILTERED" \
-          "Worker_${_PANE_SAFE}" 2>/dev/null || true
-    else
-      # Fallback: write attachment directly
-      _ATTACH_DIR="${PROJECT_DIR}/.doey/tasks/${local_task_id}/attachments"
-      mkdir -p "$_ATTACH_DIR" 2>/dev/null || true
-      _ATTACH_FILE="${_ATTACH_DIR}/${_ATTACH_TS}_completion_${_PANE_SAFE}.md"
-      cat > "$_ATTACH_FILE" <<ATTACH_EOF
+    _ATTACH_DIR="${PROJECT_DIR}/.doey/tasks/${local_task_id}/attachments"
+    mkdir -p "$_ATTACH_DIR" 2>/dev/null || true
+    cat > "${_ATTACH_DIR}/${_ATTACH_TS}_completion_${_PANE_SAFE}.md" 2>/dev/null <<ATTACH_EOF
 ---
 type: completion
 title: Worker ${WINDOW_INDEX}.${PANE_INDEX} output
@@ -162,9 +127,7 @@ task_id: ${local_task_id}
 
 ${FILTERED}
 ATTACH_EOF
-      _attach_rel=".doey/tasks/${local_task_id}/attachments/${_ATTACH_TS}_completion_${_PANE_SAFE}.md"
-      _append_attachment "$_local_task_file" "$_attach_rel" 2>/dev/null || true
-    fi
+    _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}/attachments/${_ATTACH_TS}_completion_${_PANE_SAFE}.md" 2>/dev/null || true
   fi
 fi
 
@@ -183,4 +146,4 @@ COMPLETE
 mv "${COMPLETION}.tmp" "$COMPLETION"
 [ ! -f "$COMPLETION" ] && _log_error "HOOK_ERROR" "Completion event file not written" "path=$COMPLETION"
 
-touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true  # wake SM
+touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true

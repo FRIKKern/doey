@@ -55,7 +55,7 @@ ssh -o StrictHostKeyChecking=accept-new root@$HETZNER_IP echo "Connected"
 
 ## 2. Configure Server
 
-Creates `doey` user, hardens SSH, enables firewall + swap. Note: Hetzner Ubuntu uses `ssh.service` (not `sshd.service`).
+Creates `doey` user, hardens SSH, enables firewall + swap. Hetzner Ubuntu uses `ssh.service` (not `sshd.service`).
 
 ```bash
 ssh root@$HETZNER_IP 'bash -s' << 'SETUP'
@@ -116,20 +116,14 @@ INSTALL
 
 ## 4. Authentication
 
-**API Key (recommended for headless):**
+**API Key (recommended):**
 
 ```bash
 ANTHROPIC_KEY="sk-ant-YOUR_KEY_HERE"
 ssh doey@$HETZNER_IP "echo 'export ANTHROPIC_API_KEY=\"$ANTHROPIC_KEY\"' >> ~/.bashrc"
 ```
 
-**OAuth / Claude Max (requires interactive terminal):**
-
-```bash
-ssh -t doey@$HETZNER_IP "source ~/.bashrc && claude auth"
-```
-
-Follow the URL prompt in your browser to complete login.
+**OAuth / Claude Max:** `ssh -t doey@$HETZNER_IP "source ~/.bashrc && claude auth"` — follow the URL prompt.
 
 **Verify:**
 
@@ -278,32 +272,30 @@ ssh doey@$HETZNER_IP "free -h && df -h / && du -sh /tmp/doey/ 2>/dev/null"      
 
 ## Security Notes
 
-- API keys in `~/.bashrc` — for production, use a secrets manager or `chmod 600` env file sourced separately
-- Firewall allows only SSH (22) + mosh (60000–61000/udp); root login and password auth disabled
-- Never commit API keys to git
-- Rotate any API tokens you may have shared in chat logs or terminals
-- Hetzner's default firewall is permissive — the `ufw` rules above handle this at the OS level
+- API keys in `~/.bashrc` — for production, use a secrets manager or `chmod 600` env file. Never commit keys to git
+- Firewall: SSH (22) + mosh (60000–61000/udp) only; root login and password auth disabled. Hetzner's default firewall is permissive — `ufw` rules above handle it
+- Rotate any API tokens shared in chat logs or terminals
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| **SSH connection refused** | Server still booting — Hetzner boots in ~10s, wait and retry |
-| **SSH hangs / times out** | Server likely OOM — reboot via `hcloud server reboot doey-server`, consider resizing |
-| **`sshd.service` not found** | Hetzner Ubuntu uses `ssh.service` — use `systemctl restart ssh.service` |
-| **`node` not found** | `source ~/.bashrc` (fnm needs shell init) |
-| **`doey` not found** | `export PATH="$HOME/.local/bin:$PATH"` |
-| **fnm install fails** | Missing `unzip` — run `sudo apt-get install -y unzip` then retry |
-| **Claude auth fails** | Check `echo $ANTHROPIC_API_KEY` or re-run `claude auth` with `ssh -t` |
-| **Skills missing after crash** | Re-run `cd ~/doey && ./install.sh` to reinstall |
-| **Out of memory** | `hcloud server shutdown doey-server && hcloud server change-type doey-server --server-type cx53 && hcloud server poweron doey-server` |
-| **Disk full** | `doey purge` + `du -sh /tmp/doey/ ~/` |
-| **SSH disconnects** | Use mosh: `mosh doey@$HETZNER_IP` |
-| **systemd service fails** | `journalctl --user -u doey -f` |
+| SSH connection refused | Wait ~10s and retry (Hetzner boots fast) |
+| SSH hangs / times out | Likely OOM — `hcloud server reboot doey-server` or resize |
+| `sshd.service` not found | Hetzner uses `ssh.service` — `systemctl restart ssh.service` |
+| `node` not found | `source ~/.bashrc` (fnm needs shell init) |
+| `doey` not found | `export PATH="$HOME/.local/bin:$PATH"` |
+| fnm install fails | Missing `unzip` — `sudo apt-get install -y unzip` |
+| Claude auth fails | Check `echo $ANTHROPIC_API_KEY` or re-run `claude auth` with `ssh -t` |
+| Skills missing | `cd ~/doey && ./install.sh` |
+| Out of memory | Shutdown → resize to cx53 → poweron (see [Resizing](#resizing)) |
+| Disk full | `doey purge` + `du -sh /tmp/doey/ ~/` |
+| SSH disconnects | `mosh doey@$HETZNER_IP` |
+| systemd service fails | `journalctl --user -u doey -f` |
 
 ## Snapshots
 
-Hetzner snapshots are cheaper than running golden images:
+Cheaper than golden images:
 
 ```bash
 # Create snapshot (~€0.01/GB/mo)
@@ -320,9 +312,9 @@ hcloud server delete doey-team-2
 
 ## Headless Chrome + DevTools MCP
 
-Run a headless browser on the server so Claude can inspect, screenshot, and debug your web apps via Chrome DevTools MCP — no local browser needed.
+Headless Chrome lets Claude inspect and debug web apps via DevTools MCP — no local browser needed.
 
-**Install Chrome and dependencies:**
+**Install:**
 
 ```bash
 sudo apt-get install -y fonts-liberation libgbm-dev libnss3 libatk-bridge2.0-0 libxkbcommon0
@@ -331,7 +323,7 @@ sudo dpkg -i /tmp/chrome.deb || sudo apt-get install -f -y
 rm /tmp/chrome.deb
 ```
 
-**Launch headless Chrome with remote debugging:**
+**Launch:**
 
 ```bash
 google-chrome --headless --no-sandbox --disable-gpu \
@@ -340,9 +332,7 @@ google-chrome --headless --no-sandbox --disable-gpu \
 # Optionally append a URL (e.g. http://localhost:3000) to open it directly
 ```
 
-**Configure Chrome DevTools MCP:**
-
-Add to your Claude Code MCP settings (`.claude/settings.json` or project settings):
+**Configure MCP** (add to `.claude/settings.json` or project settings):
 
 ```json
 {
@@ -357,7 +347,7 @@ Add to your Claude Code MCP settings (`.claude/settings.json` or project setting
 
 **Verify:** `curl -s http://localhost:9222/json/version | jq .`
 
-**Run Chrome as a background service (optional):**
+**Background service (optional):**
 
 ```bash
 cat > ~/.config/systemd/user/chrome-headless.service << 'EOF'
@@ -382,7 +372,7 @@ Port 9222 is localhost-only — not exposed to the internet.
 
 ## SSH Tunneling
 
-Add to `~/.ssh/config` (or `C:\Users\YOU\.ssh\config` on Windows):
+Add to `~/.ssh/config` (Windows: `C:\Users\YOU\.ssh\config`):
 
 ```
 Host doey
@@ -393,8 +383,8 @@ Host doey
     LocalForward 9222 localhost:9222
 ```
 
-Now `ssh doey` auto-forwards ports. Dev server on `:3000` → visit `localhost:3000` locally. Chrome DevTools on `:9222` → `chrome://inspect` > Configure > `localhost:9222`.
+`ssh doey` auto-forwards ports. DevTools on `:9222` → `chrome://inspect` > Configure > `localhost:9222`.
 
-**File transfer:** `scp local-file.txt doey:~/` (upload) · `scp doey:~/output.png ./` (download) · `rsync -avz ./src/ doey:~/project/src/`
+**File transfer:** `scp local-file.txt doey:~/` · `scp doey:~/output.png ./` · `rsync -avz ./src/ doey:~/project/src/`
 
-**Survive disconnects:** `mosh doey` or tmux detach (`Ctrl+B, D`).
+**Survive disconnects:** `mosh doey` or `Ctrl+B, D` (tmux detach).

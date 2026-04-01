@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
-init_hook
-_DOEY_HOOK_NAME="on-prompt-submit"
-type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
+init_named_hook "on-prompt-submit"
 
 PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"

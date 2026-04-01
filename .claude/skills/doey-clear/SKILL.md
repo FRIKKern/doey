@@ -4,28 +4,11 @@ description: Kill and relaunch Claude instances. Use when you need to "restart w
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
-- Window index: !`echo "${DOEY_WINDOW_INDEX:-}"|| true`
 - Teams: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do echo "--- $(basename "$f") ---"; cat "$f" 2>/dev/null; done || true`
 
-**Usage:** `/doey-clear` (interactive) | `all` | `team N` | `workers` (keep manager) | `all --force` (include reserved)
+Usage: `/doey-clear` (interactive) | `all` | `team N` | `workers` (keep manager) | `all --force`. No args → prompt. Set: TARGET_WINDOWS, FORCE, WORKERS_ONLY.
 
-### Parse Arguments
-No args → prompt (suggest "this team" for Manager, "all teams" for SM). Set: TARGET_WINDOWS, FORCE, WORKERS_ONLY.
-
-### Validate
-```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-for W in $TARGET_WINDOWS; do
-  TEAM_ENV="${RUNTIME_DIR}/team_${W}.env"
-  if [ ! -f "$TEAM_ENV" ]; then echo "WARNING: Team $W env not found — skipping"; continue; fi
-  _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
-  WORKER_PANES=$(_tv WORKER_PANES); WORKER_COUNT=$(_tv WORKER_COUNT)
-  echo "Team $W: manager=0, workers=${WORKER_PANES} (${WORKER_COUNT})"
-done
-```
-
-### kill_pane_process
-SIGTERM → 1s → SIGKILL → clear terminal. Returns 1 if pane missing.
+### kill_pane_process (SIGTERM → 1s → SIGKILL → clear)
 ```bash
 kill_pane_process() {
   local PANE="$1" SHELL_PID CHILD_PID
@@ -42,29 +25,26 @@ kill_pane_process() {
 
 ### Clear Manager (skip if WORKERS_ONLY)
 ```bash
-MGR_PANE="${SESSION_NAME}:${W}.0"
-kill_pane_process "$MGR_PANE"
-tmux send-keys -t "$MGR_PANE" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\"" Enter
-echo "  ${W}.0 Manager ✓"; sleep 0.5
+kill_pane_process "${SESSION_NAME}:${W}.0"
+tmux send-keys -t "${SESSION_NAME}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\"" Enter; sleep 0.5
 ```
 
-### Clear Workers (W.1+)
+### Clear Workers
 ```bash
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
   PANE="${SESSION_NAME}:${W}.${wp}"; PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
-  if [ "$FORCE" != "true" ] && [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]; then
-    echo "  ${W}.${wp} — reserved"; continue; fi
+  [ "$FORCE" != "true" ] && [ -f "${RD}/status/${PANE_SAFE}.reserved" ] && { echo "  ${W}.${wp} — reserved"; continue; }
   kill_pane_process "$PANE" || { echo "  ${W}.${wp} — not found"; continue; }
   W_NAME=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null || echo "T${W} W${wp}")
-  WORKER_PROMPT=$(grep -rl "pane ${W}\.${wp} " "${RUNTIME_DIR}"/worker-system-prompt-*.md 2>/dev/null | head -1 || true)
+  WP=$(grep -rl "pane ${W}\.${wp} " "${RD}"/worker-system-prompt-*.md 2>/dev/null | head -1 || true)
   CMD="claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\""
-  [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
+  [ -n "$WP" ] && CMD="${CMD} --append-system-prompt-file \"${WP}\""
   tmux send-keys -t "$PANE" "$CMD" Enter
-  mkdir -p "${RUNTIME_DIR}/status"
-  printf 'PANE: %s\nUPDATED: %s\nSTATUS: READY\nTASK: cleared\n' "$PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" > "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+  mkdir -p "${RD}/status"
+  printf 'PANE: %s\nUPDATED: %s\nSTATUS: READY\nTASK: cleared\n' "$PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" > "${RD}/status/${PANE_SAFE}.status"
   echo "  ${W}.${wp} ✓"; sleep 0.5
 done
 ```
 
-### Rules
-- Skip reserved unless `--force`; skip Manager if WORKERS_ONLY. Never clear 0.0/0.1/0.2
+Skip reserved unless `--force`. Skip Manager if WORKERS_ONLY. Never clear 0.0/0.1/0.2.

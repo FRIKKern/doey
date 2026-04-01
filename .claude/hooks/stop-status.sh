@@ -2,9 +2,7 @@
 # Stop hook: write pane status (synchronous)
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
-init_hook
-_DOEY_HOOK_NAME="stop-status"
-type _debug_hook_entry >/dev/null 2>&1 && _debug_hook_entry
+init_named_hook "stop-status"
 
 if is_worker && ! is_reserved; then
   REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
@@ -22,17 +20,10 @@ _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
 task_id="${DOEY_TASK_ID:-}"
 
-PROJECT_DIR="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
-if [ -z "$PROJECT_DIR" ]; then
-  PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || PROJECT_DIR=""
-fi
+PROJECT_DIR=$(_resolve_project_dir)
 
-_last_task_tags=""
-_last_task_type=""
-_last_files=""
-
+_last_task_tags="" _last_task_type="" _last_files=""
 if [ "$STOP_STATUS" = "FINISHED" ]; then
-  # Read task metadata from .task file if available
   if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ]; then
     _taskfile="${PROJECT_DIR}/.doey/tasks/${task_id}.task"
     if [ -f "$_taskfile" ]; then
@@ -40,17 +31,12 @@ if [ "$STOP_STATUS" = "FINISHED" ]; then
       _last_task_type=$(grep "^TASK_TYPE=" "$_taskfile" 2>/dev/null | cut -d= -f2-) || _last_task_type=""
     fi
   fi
-
-  # Read files_changed from result JSON, fall back to git diff
   _result_file="${RUNTIME_DIR}/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
   if [ -f "$_result_file" ]; then
-    # Extract files_changed array values, join with pipe
     _last_files=$(sed -n '/"files_changed"/,/]/p' "$_result_file" 2>/dev/null \
       | grep '"' | sed 's/.*"\(.*\)".*/\1/' | tr '\n' '|' | sed 's/|$//') || _last_files=""
   fi
-  if [ -z "$_last_files" ]; then
-    _last_files=$(timeout 2 git diff --name-only HEAD 2>/dev/null | head -20 | tr '\n' '|' | sed 's/|$//') || _last_files=""
-  fi
+  [ -z "$_last_files" ] && _last_files=$(timeout 2 git diff --name-only HEAD 2>/dev/null | head -20 | tr '\n' '|' | sed 's/|$//') || _last_files=""
 fi
 
 for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
@@ -59,14 +45,10 @@ for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   write_pane_status "$_status_file" "$STOP_STATUS"
   [ ! -f "$_status_file" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$_sf status=$STOP_STATUS"
   [ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "$_status_file"
-  if [ "$STOP_STATUS" = "FINISHED" ]; then
-    printf 'LAST_TASK_TAGS: %s\n' "$_last_task_tags" >> "$_status_file"
-    printf 'LAST_TASK_TYPE: %s\n' "$_last_task_type" >> "$_status_file"
-    printf 'LAST_FILES: %s\n' "$_last_files" >> "$_status_file"
-  fi
+  [ "$STOP_STATUS" = "FINISHED" ] && \
+    printf 'LAST_TASK_TAGS: %s\nLAST_TASK_TYPE: %s\nLAST_FILES: %s\n' "$_last_task_tags" "$_last_task_type" "$_last_files" >> "$_status_file"
 done
 
-# Remove heartbeat file so SM doesn't flag this pane as stale
 rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.heartbeat" 2>/dev/null || true
 { [ -n "${DOEY_PANE_ID:-}" ] && rm -f "${RUNTIME_DIR}/status/${DOEY_PANE_ID//[-:.]/_}.heartbeat" 2>/dev/null; } || true
 
@@ -80,7 +62,6 @@ write_activity "status_change" "{\"status\":\"${STOP_STATUS}\"}"
 
 notify_sm "$STOP_STATUS"
 
-# SM self-sustaining loop: re-trigger after stop to check messages/results
 if is_session_manager; then
   (
     sleep 3

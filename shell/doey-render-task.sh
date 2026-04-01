@@ -7,12 +7,12 @@ set -euo pipefail
 
 # ── Symbols (respect DOEY_ASCII_ONLY) ──────────────────────────────────
 if [ "${DOEY_ASCII_ONLY:-}" = "1" ] || [ "${DOEY_ASCII_ONLY:-}" = "true" ]; then
-  S_SECTION="*"; S_BULLET="-"; S_ARROW="->"; S_NESTED=">"; S_DONE="[v]"
-  S_ACTIVE="[~]"; S_READY="[ ]"; S_RISK="[!]"; S_NEW="[*]"
+  S_SECTION="*"; S_BULLET="-"; S_ARROW="->"; S_DONE="[v]"
+  S_ACTIVE="[~]"; S_READY="[ ]"; S_RISK="[!]"
   S_BAR_FILL="#"; S_BAR_EMPTY="."; S_BLOCKED="[X]"
 else
-  S_SECTION="◆"; S_BULLET="•"; S_ARROW="→"; S_NESTED="↳"; S_DONE="✓"
-  S_ACTIVE="◑"; S_READY="○"; S_RISK="⚠"; S_NEW="★"
+  S_SECTION="◆"; S_BULLET="•"; S_ARROW="→"; S_DONE="✓"
+  S_ACTIVE="◑"; S_READY="○"; S_RISK="⚠"
   S_BAR_FILL="█"; S_BAR_EMPTY="░"; S_BLOCKED="⊘"
 fi
 
@@ -125,10 +125,10 @@ parse_task() {
   [ -n "${TASK_ID:-}" ] || return 1
 
   # Defaults
-  if [ -z "$TASK_TYPE" ]; then TASK_TYPE="feature"; fi
-  if [ -z "$TASK_OWNER" ]; then TASK_OWNER="Boss"; fi
-  if [ -z "$TASK_PRIORITY" ]; then TASK_PRIORITY="P2"; fi
-  if [ -z "$TASK_SUMMARY" ]; then TASK_SUMMARY="$TASK_TITLE"; fi
+  TASK_TYPE="${TASK_TYPE:-feature}"
+  TASK_OWNER="${TASK_OWNER:-Boss}"
+  TASK_PRIORITY="${TASK_PRIORITY:-P2}"
+  TASK_SUMMARY="${TASK_SUMMARY:-$TASK_TITLE}"
 }
 
 # ── Compute age string ─────────────────────────────────────────────────
