@@ -2724,18 +2724,36 @@ _update_finish_banner() {
   # Install gum if missing (best-effort, don't fail update)
   if ! command -v gum >/dev/null 2>&1; then
     local _gum_found=false
-    for _d in "$(go env GOPATH 2>/dev/null)/bin" "$HOME/go/bin"; do
+    for _d in "$HOME/go/bin" "$HOME/.local/go/bin"; do
       [ -x "$_d/gum" ] && { export PATH="$_d:$PATH"; _gum_found=true; break; }
     done
-    if [ "$_gum_found" = false ] && command -v go >/dev/null 2>&1; then
-      doey_step "+" "Installing gum for luxury CLI..."
-      if go install github.com/charmbracelet/gum@latest 2>&1; then
-        for _d in "$(go env GOPATH 2>/dev/null)/bin" "$HOME/go/bin"; do
-          [ -x "$_d/gum" ] && { export PATH="$_d:$PATH"; HAS_GUM=true; break; }
+    if [ "$_gum_found" = false ]; then
+      # Discover Go binary via shared helper (may not be on PATH)
+      local _go_bin=""
+      local _script_dir
+      _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+      if [ -f "$_script_dir/doey-go-helpers.sh" ]; then
+        source "$_script_dir/doey-go-helpers.sh" 2>/dev/null || true
+        _go_bin="$(_find_go_bin 2>/dev/null)" || _go_bin=""
+      fi
+      if [ -z "$_go_bin" ]; then
+        command -v go >/dev/null 2>&1 && _go_bin="go"
+        for _d in /usr/local/go/bin /snap/go/current/bin "$HOME/go/bin" "$HOME/.local/go/bin"; do
+          [ -x "$_d/go" ] && _go_bin="$_d/go" && break
         done
-        [ "$HAS_GUM" = true ] && doey_ok "gum installed" || doey_warn "gum installed but not on PATH"
-      else
-        doey_warn "gum install failed (optional)"
+      fi
+      if [ -n "$_go_bin" ]; then
+        doey_step "+" "Installing gum for luxury CLI..."
+        if "$_go_bin" install github.com/charmbracelet/gum@latest 2>&1; then
+          local _gopath
+          _gopath="$("$_go_bin" env GOPATH 2>/dev/null)" || _gopath="$HOME/go"
+          for _d in "$_gopath/bin" "$HOME/go/bin"; do
+            [ -x "$_d/gum" ] && { export PATH="$_d:$PATH"; HAS_GUM=true; break; }
+          done
+          [ "$HAS_GUM" = true ] && doey_ok "gum installed" || doey_warn "gum installed but not on PATH"
+        else
+          doey_warn "gum install failed (optional)"
+        fi
       fi
     fi
   fi
