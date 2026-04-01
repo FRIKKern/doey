@@ -155,6 +155,8 @@ type Task struct {
 	StatusTimeline    []StatusTransition   // parsed from TASK_TIMESTAMPS
 	ConversationTrail []ConversationEntry  // parsed from logs/reports
 	QAThread          []QAEntry            // Q&A relay chain entries
+	// Plan linkage
+	PlanID string // from TASK_PLAN_ID — links task to a plan
 	// Proof-of-completion fields
 	FilesChanged []string // from TASK_FILES
 	Commits      string   // from TASK_COMMITS (hash + message lines)
@@ -310,6 +312,7 @@ type Snapshot struct {
 	TeamEntries []TeamEntry    // merged view: defs + running state + user prefs
 	TeamUserCfg TeamUserConfig // persisted preferences
 	Connections []Connection   // external service integrations
+	Plans       []Plan         // plan documents from .doey/plans/
 }
 
 // TaskSidecar holds structured planning data from the JSON companion file (.doey/tasks/<id>.json).

@@ -151,7 +151,14 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if task.Phase != "" {
 		phaseBadge = "  " + styles.TaskPhaseBadge(t, task.Phase)
 	}
-	line2 := statusLabel + phaseBadge + teamBadge + tagStr + qaBadge
+	planBadge := ""
+	if task.PlanID != "" {
+		planBadge = "  " + lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"}).
+			Render("📋 Plan")
+	}
+	line2 := statusLabel + phaseBadge + planBadge + teamBadge + tagStr + qaBadge
 
 	// --- Line 3: workers + health + activity ---
 	line3 := ""
