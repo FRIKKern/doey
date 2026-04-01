@@ -271,7 +271,7 @@ _doey_load_config() {
 _doey_load_config
 
 # Grid & Teams
-DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-2}"
+DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-1}"
 DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
 DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
 DOEY_INITIAL_FREELANCER_TEAMS="${DOEY_INITIAL_FREELANCER_TEAMS:-1}"
@@ -3792,7 +3792,7 @@ MANIFEST
           if [ -z "$_ptc_type" ]; then
             if [ "$_ptc_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _ptc_type="local"; else _ptc_type="worktree"; fi
           fi
-          [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-2} * 2 ))
+          [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-1} * 2 ))
           _ptc_cols=$(( (_ptc_workers + 1) / 2 ))
           [ "$_ptc_cols" -lt 1 ] && _ptc_cols=1
 
@@ -4589,10 +4589,9 @@ add_dynamic_team_window() {
   local is_freelancer="false"
   [ "$team_type" = "freelancer" ] && is_freelancer="true"
 
-  # Freelancer teams always get a fixed 3x2 grid (6 panes total)
-  # Panes 0+1 form the first column, then 2 more columns via doey_add_column
+  # Freelancer teams: panes 0+1 form the base (F0, F1), no extra columns by default
   if [ "$is_freelancer" = "true" ]; then
-    initial_cols=2
+    initial_cols=0
   fi
 
   local window_index
