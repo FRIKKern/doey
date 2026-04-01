@@ -177,7 +177,7 @@ _dbg_write() {
 if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD="$_BASH_CMD"
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
-    _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*-t[[:space:]]*//' | sed 's/[[:space:]].*//' | sed 's/^"//;s/"$//')
+    _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//' | sed 's/[[:space:]].*//' | sed 's/^"//;s/"$//')
     case "$_boss_target" in
       *:0.2|*_0_2*|0.2)
         _dbg_write "allow_boss_sendkeys_sm"
@@ -192,7 +192,7 @@ if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
 fi
 
 # Boss/Manager restrictions on non-Bash tools (no project source access)
-if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
+if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Agent)
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
@@ -216,6 +216,8 @@ if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ]; } && [ "$TOOL_
       _dbg_write "block_${_DOEY_ROLE}_source_${TOOL_NAME}"
       if [ "$_DOEY_ROLE" = "boss" ]; then
         echo "BLOCKED: Boss cannot $TOOL_NAME project source files. Relay file operations to Session Manager." >&2
+      elif [ "$_DOEY_ROLE" = "session_manager" ]; then
+        echo "BLOCKED: Session Manager cannot $TOOL_NAME project source files. Coordinate workers to handle file operations." >&2
       else
         echo "BLOCKED: Managers cannot $TOOL_NAME project source files. Delegate file operations to workers." >&2
       fi

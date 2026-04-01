@@ -50,6 +50,7 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 | Role | Blocked |
 |------|---------|
 | Window Manager | Read/Edit/Write/Glob/Grep on project source; Agent; implementation work (send-keys allowed) |
+| Session Manager | Read/Edit/Write/Glob/Grep on project source; Agent |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 
