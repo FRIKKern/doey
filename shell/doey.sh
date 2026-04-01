@@ -2562,7 +2562,7 @@ _update_contributor() {
   local pull_rc=0
   git -C "$repo_dir" fetch origin main --quiet 2>/dev/null || true
   _spin "Pulling latest..." \
-    git -C "$repo_dir" pull --ff-only origin main 2>/dev/null || pull_rc=$?
+    git -C "$repo_dir" pull --ff-only origin main || pull_rc=$?
   if [ $pull_rc -ne 0 ]; then
     doey_error "git pull --ff-only failed"
     doey_info "This usually means local commits diverge from origin/main."
