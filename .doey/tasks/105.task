@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=105
+TASK_TITLE=Create /doey-reset skill — restore default settings and agents
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=Create a new skill /doey-reset that resets Doey to default/standard configuration. Should: (1) Re-run expand-templates.sh to regenerate agents/skills from .md.tmpl templates, (2) Reinstall agents to ~/.claude/agents/ (same as install.sh does), (3) Reset any project-level .doey/config.sh overrides to defaults, (4) Confirm what was reset. This is the 'factory reset' for context and agent definitions — useful when customizations have drifted or corrupted. Should NOT touch tasks, plans, or runtime state. Look at existing skills in .claude/skills/ for the pattern (SKILL.md with YAML frontmatter).
+TASK_DECISION_LOG=1775127970:Created task\n1775128212:Status changed to done
+TASK_TIMESTAMPS=created=1775127970|completed=1775128212
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775127970
+TASK_TEAM=W2
+TASK_ATTACHMENTS=.doey/tasks/105.result.json
+TASK_LOG_1775128248=COMPLETE: /doey-reset skill created at .claude/skills/doey-reset/SKILL.md (64 lines). 4 reset actions: expand-templates, reinstall agents, reset config, report. Does NOT touch tasks/plans/runtime/git. Bash 3.2 compatible.

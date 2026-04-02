@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=115
+TASK_TITLE=Passive Taskmaster — replace polling loop with reactive sleep-wake model
+TASK_STATUS=done
+TASK_TYPE=infrastructure
+TASK_TAGS=shell,hooks,agents,infrastructure
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=Rewrote Taskmaster from active polling to reactive event-driven.
+TASK_TEAM=2
+TASK_PLAN_ID=9
+TASK_COMMIT=505cdfa
+TASK_TIMESTAMPS=created=1775137486
+TASK_UPDATED=1775137900

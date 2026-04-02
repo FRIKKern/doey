@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=22
+TASK_TITLE=Go TUI GUI-style mouse experience overhaul
+TASK_STATUS=done
+TASK_CREATED=1743220800
+TASK_TYPE=feature
+TASK_DESCRIPTION=Overhaul the Go TUI to feel like a traditional GUI application, not a terminal dashboard. Key design principles: (1) Back button in top-left corner — standard GUI navigation pattern. (2) Larger, more clickable buttons throughout — sized for comfortable mouse targeting, not minimal terminal aesthetics. (3) Apply standard GUI layout principles — consistent placement of navigation, actions, and content areas. (4) Cursor should feel natural — mouse interaction should be the primary input method, not an afterthought. The goal is that a user who has never used a terminal tool should feel at home — it should look and behave like a desktop app that happens to run in a terminal. Research the current TUI codebase first to understand existing mouse handling and component layout before proposing changes.
+TASK_TAGS=tui,mouse,ux,feature
+TASK_TEAM=W2
+TASK_LOG_1774826600=PROGRESS: Phase 1 — Research dispatched to freelancer 1.1
+TASK_LOG_1774826831=PROGRESS: Phase 1 complete. Research report at /tmp/doey/doey/results/research_tui_audit.md. Phase 2 dispatched to Team 2 Manager.
+TASK_LOG_1774827106=SCOPE_UPDATE: Boss added new Dashboard tab requirement. Current Dashboard→Info rename. New Dashboard = command center with active tasks + action buttons. Will dispatch after Phase 2 completes.
+TASK_LOG_1774827216=COMMIT: 814767e feat(task-22): add GUI-style mouse interactivity to all TUI panels (8 files, +637/-82)
+TASK_LOG_1774827645=COMMIT: e4a1449 feat(task-22): add Dashboard command center tab and card-based visual redesign (5 files, +657/-123)
+TASK_LOG_1774827823=SCOPE_UPDATE: Live task updates requirement added. Dashboard+task detail must show real-time agent status, progress, results.
+TASK_LOG_1774828164=COMMIT: 80c219d feat(task-22): add live task updates with runtime polling (6 files, +602/-12)

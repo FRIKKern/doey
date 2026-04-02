@@ -1,0 +1,29 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=149
+TASK_TITLE=Task file cleanup — high-standard .task files synced with DB
+TASK_STATUS=done
+TASK_TYPE=infrastructure
+TASK_DESCRIPTION=Clean up all 142 .task files to high standard, sync with SQLite DB, commit to git. Plan: .doey/plans/13.md. 4 steps: (1) Write bash cleanup script that processes each .task file — sync TASK_STATUS from DB via doey-ctl task get, strip empty fields, clean polluted decision logs (remove raw CLI arg entries like lines containing --type decision --author), remove noise TASK_REPORT_N entries where body matches completed with N tool calls 0 files changed, deduplicate TASK_TIMESTAMPS keeping first created and last completed, remove duplicate fields like double TASK_SUBTASKS, normalize to schema version 3, remove trailing status=done artifact lines. (2) Run script — backup to /tmp/doey/task-backup/ first, verify on 5 samples, then bulk run. (3) Update .gitignore — add !.doey/tasks/ and !.doey/plans/ exceptions after .doey/ line, keep .doey/doey.db ignored. (4) Stage .doey/tasks/*.task and .doey/plans/*.md, commit, push to main. Acceptance: zero status mismatches, no noise reports, no raw CLI args in logs, no duplicate fields, no empty placeholders, all schema v3, clean commit on main.
+TASK_DECISION_LOG=1775171730:Created task\n1775172339:Wave 1 Complete: 2/2 workers done. Script written+tested (2.1), .gitignore updated (2.2). Proceeding to Wave 2: bulk run.\n1775172477:Steps 1-3 Complete, Step 4 Pending\n1775172879:Review Failed — 5 Fixes: Reviewer found: (1) missing empty-field strips for TASK_ASSIGNED_TO/TASK_DECISION_LOG, (2) missing dedup for TASK_SUBTASKS/TASK_RESULT/TASK_REVIEW_TIMESTAMP, (3) re-run needed, (4) task 149 own log dirty, (5) stage for commit. Wave 3: fix script then re-run.\n1775173112:--type decision --author unknown --title Status changed to done --project-dir /home/doey/doey
+TASK_SUBTASKS=1:Write bash cleanup script for .task files:done\n2:Run cleanup — backup, verify samples, bulk process:done\n3:Update .gitignore — add !.doey/tasks/ and !.doey/plans/ exceptions:done\n4:Commit cleaned files + plans, push to main:in_progress
+TASK_TIMESTAMPS=created=1775171730|completed=1775172418|completed=1775173112
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775171730
+TASK_TEAM=W2
+
+TASK_ATTACHMENTS=.doey/tasks/149/attachments/1775172103_completion_2_2.md
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_COMPLETED_AT=1775172103
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_COMPLETED_AT=1775172317
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_COMPLETED_AT=1775172418
+TASK_REVIEW_VERDICT=FAIL
+TASK_REVIEW_FINDINGS=27 empty fields remain (TASK_ASSIGNED_TO, TASK_DECISION_LOG missing from strip list). 5 duplicate fields remain (TASK_SUBTASKS, TASK_RESULT, TASK_REVIEW_TIMESTAMP missing from dedup list). 149.task has noise in own decision log. Step 4 (commit) not done.
+TASK_REVIEW_TIMESTAMP=2026-04-02T23:30:00Z
+TASK_REPORT_1_TIMESTAMP=1775173112
+TASK_REPORT_1_AUTHOR=worker_2_6
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Worker 2.6 done
+TASK_REPORT_1_BODY=Worker 2.6 completed with 0 tool calls, 0 files changed

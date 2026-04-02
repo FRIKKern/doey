@@ -1,0 +1,30 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=3
+TASK_TITLE=Fix SM phase-forwarding — auto-push next phase when teams finish
+TASK_STATUS=done
+TASK_CREATED=1774811576
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=When a phased task completes Phase N, Session Manager currently goes idle and waits for Boss to kick Phase N+1. This is wrong — SM should autonomously detect phase completion and dispatch the next phase immediately.
+
+BUG OBSERVED: Task 2 (3-phase TUI redesign) completed Phase 1 research, SM reported results to Boss, then both Window Managers went FINISHED/idle. SM sat at "idle — listening" instead of pushing Phase 2. Required manual Boss intervention with send-keys to wake SM.
+
+ROOT CAUSE HYPOTHESIS: SM's agent definition and/or session-manager-wait.sh hook don't have logic to detect "phased task with pending phases" as a trigger to self-wake and dispatch. SM treats phase completion the same as task completion — reports up and stops.
+
+FIX REQUIREMENTS:
+1. SM must track phased tasks and their current phase (in runtime state or task file)
+2. When a phase-complete result arrives from a Window Manager, SM must check if there are remaining phases
+3. If yes — immediately dispatch next phase to an available team. No waiting for Boss
+4. SM should only report to Boss at final phase completion, or if a phase fails and needs user input
+5. The fix must work within existing IPC (message files + triggers + status files). No new infra
+
+CONSTRAINTS:
+- Bash 3.2 compatible
+- Must not break single-phase tasks (they still complete normally)
+- Must not break the SM wait/wake cycle for other trigger types
+- Fresh-install safe — no local-only state dependencies
+
+SUCCESS CRITERIA:
+- A phased task dispatched to SM auto-advances through all phases without Boss intervention
+- SM only reports to Boss on final completion or on error/question
+- Existing single-phase tasks unaffected
+TASK_TAGS=infrastructure,hooks,session-manager,ipc

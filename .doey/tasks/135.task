@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=135
+TASK_TITLE=Wire _create_core_team() into startup path — Core Team must spawn on every doey launch
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=The Core Team window (Taskmaster + Task Reviewer + Deployment + Doey Expert) does not spawn when running 'doey' in a project. The function _create_core_team() exists in shell/doey.sh (built by Task #128, verified by Task #133) but is not called in the main startup flow. Wire it into _start_session() or wherever team windows are created, so that the Core Team window (window 1, reserved specialist panes) spawns automatically on every doey startup for any project. This is a simple wiring fix — the function and optimized spawn pattern already exist.
+TASK_DECISION_LOG=1775158125:Created task
+TASK_TIMESTAMPS=created=1775158125|completed=1775160743
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775158125
+TASK_TEAM=W2
+TASK_ATTACHMENTS=.doey/tasks/135.result.json
+TASK_LOG_1775158673=RESOLVED: Research by W2.1 confirms _create_core_team() is already wired into all 3 startup paths (lines 1969, 3713, 3729 of doey.sh). No code change needed. Function creates window 1, splits 2x2, launches Taskmaster, marks 1.1-1.3 RESERVED.
+TASK_LOG_1775158812=SCOPE_CORRECTION: Wiring exists but specialist panes 1.1-1.3 are RESERVED and empty. Need to add _launch_claude calls for Task Reviewer, Deployment, Doey Expert agents in _create_core_team(). Re-dispatching to W2.
+TASK_LOG_1775159135=COMMITTED: be9f5e5 — feat: launch Core Team specialists on startup. shell/doey.sh changed: replaced RESERVED writes with Claude launches for Task Reviewer, Deployment, Doey Expert.

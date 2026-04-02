@@ -2,6 +2,10 @@
 .beads/
 .claude/scheduled_tasks.lock
 .doey/
+!.doey/tasks/
+!.doey/tasks/*.task
+!.doey/plans/
+!.doey/plans/*.md
 tui/doey-ctl
 tui/doey-router
 tui/gen-constants

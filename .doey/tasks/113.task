@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=113
+TASK_TITLE=Fix Plans tab — auto-inspect on open, overflow traps mouse, tabs unclickable
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TAGS=tui,go,plans
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=3 related bugs in Go TUI Plans tab fixed: SetFocused resets to list view, viewport clipped to prevent overflow, tabs stay clickable.
+TASK_ACCEPTANCE_CRITERIA=Plans tab opens to list view|Plan content scrolls within bounds|Tabs always clickable|go build passes
+TASK_RELATED_FILES=tui/internal/model/plans.go
+TASK_TEAM=2
+TASK_COMMIT=11dcae4
+TASK_DECISION_LOG=1775135676:Created task
+TASK_TIMESTAMPS=created=1775135676
+TASK_UPDATED=1775136100

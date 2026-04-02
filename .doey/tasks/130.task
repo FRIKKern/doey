@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=130
+TASK_TITLE=Fix duplicate task_complete notifications — same message fires 4x per event
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_ASSIGNED_TO=W1
+TASK_DESCRIPTION=task_complete messages are being sent 4 times in the same second for the same event. Likely stop-notify.sh or Subtaskmaster sending duplicate completions. Investigate the notification chain: Worker stop → stop-notify.sh → Subtaskmaster → Taskmaster. Add dedup guard — if same subject+body was sent within last 2 seconds, skip. Check .claude/hooks/stop-notify.sh for multiple trigger paths that could fire simultaneously.
+TASK_DECISION_LOG=1775150835:Created task
+TASK_TIMESTAMPS=created=1775150835|completed=1775151528
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775152882
+TASK_TEAM=W1
+TASK_ATTACHMENTS=.doey/tasks/130/attachments/1775151251_completion_1_2.md

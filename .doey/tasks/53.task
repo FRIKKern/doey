@@ -1,0 +1,45 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=53
+TASK_TITLE=Implement fast spawn — Phase 1 quick wins + Phase 2 structural improvements
+TASK_STATUS=done
+TASK_CREATED=1774937000
+TASK_TYPE=infrastructure
+TASK_DESCRIPTION=Based on the research report (.doey/tasks/52/research-report.md), implement spawn optimizations. Current default launch: ~42-50s. Target: ~8s perceived, ~20s total.
+
+PHASE 1 — QUICK WINS (do these first, commit separately):
+
+1. Reduce DOEY_TEAM_LAUNCH_DELAY default from 15 to 5 (line ~75 in doey.sh)
+2. Reduce DOEY_WORKER_LAUNCH_DELAY default from 3 to 1 (line ~74 in doey.sh)
+3. Remove 6 unnecessary sleeps:
+   - sleep 0.2 before worker columns (line ~2998)
+   - sleep 0.3 between worker columns (lines ~3002, ~3939)
+   - sleep 0.2 after manager launch (line ~3566)
+   - sleep 0.1 after freelancer split (line ~3901)
+   Add comments explaining why each was removed (tmux commands are synchronous)
+4. Expected savings: ~25s
+
+PHASE 2 — STRUCTURAL IMPROVEMENTS (after Phase 1 is committed):
+
+5. Fix freelancer F0/F1 sequential launch — refactor lines ~3875-3923 to use _batch_boot_workers instead of manual sequential launch with individual sleeps. Saves ~3s per freelancer team.
+
+6. Attach early, build behind — restructure launch_session_dynamic so that after dashboard + team 1 are created, the user is immediately attached to the session. Remaining teams spawn in a background subshell. This is the big perceived-latency win (42s → 8s perceived).
+   - After T1 is ready: select-window to dashboard, attach_or_switch
+   - Background: spawn T2, freelancer teams, etc.
+   - Dashboard should show "launching..." for teams still building
+   - Boss/SM briefing should note which teams are ready vs. pending
+
+7. Convert tmux-theme.sh to use source-file batching — generate a temp file with all 25 theme commands and run one tmux source-file call instead of 25 individual set-option calls. Saves ~60-100ms.
+
+CONSTRAINTS:
+- All delay values must remain configurable via DOEY_* env vars
+- Bash 3.2 compatible
+- Must work on fresh install
+- Test: run doey from scratch, verify all teams come up correctly
+- Test: verify dashboard attach works before all teams are ready
+- Run tests/test-bash-compat.sh after changes
+
+ONE WORKER PER FILE — doey.sh is the main target, tmux-theme.sh is secondary. Do NOT split doey.sh across workers.
+TASK_TAGS=performance,shell,spawn,tmux,infrastructure
+TASK_TEAM=W1
+TASK_SUBTASKS=1:W1.1: doey.sh Phase 1 quick wins + Phase 2 structural:done\n2:W1.2: tmux-theme.sh source-file batching:done\n3:W1.3: Build + bash compat verification:done
+TASK_DECISION_LOG=1774908821:All Phase 1 + Phase 2 implemented. 14/14 verification checks pass.

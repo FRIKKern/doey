@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=150
+TASK_TITLE=Add missing columns to doey-ctl SQLite task schema
+TASK_STATUS=pending
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=The DB only supports 10 fields (title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases) but .task files use 37. The Task Reviewer pipeline is BLOCKED — it cannot write review_verdict, review_findings, review_timestamp. Add these columns to the tasks table in Go via migration or ALTER TABLE: review_verdict, review_findings, review_timestamp, plan_id, priority, notes, result, decision_log, subtasks, timestamps, blockers, related_files, attachments, dispatch_mode, created_by, owner, files, commits, summary, depends_on, merged_into, updated. Also update the valid-fields whitelist in the task update command handler so doey-ctl task update accepts all of them. Go source is in tui/cmd/doey-ctl/. P0 — blocking the review pipeline for task 149.
+TASK_DECISION_LOG=1775172824:Created task
+TASK_TIMESTAMPS=created=1775172824|completed=1775173071
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775172824
+TASK_TEAM=W3
+TASK_ATTACHMENTS=.doey/tasks/150/attachments/1775173071_completion_3_1.md
+
+TASK_SUBTASKS=1:W3.2: Schema + Task struct + store methods (schema.go, tasks.go, store.go):pending\n2:W3.3: Update whitelist in commands.go (11 new switch cases):pending\n3:Verification: go build + doey-ctl task update test:pending

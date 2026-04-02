@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=94
+TASK_TITLE=TUI task list — show last-updated date/time beside categories
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=Boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=In the Go TUI task list (tui/ directory), add a date+time display showing when each task was last updated. Show it beside the category/tags on each task card. Format: readable date+time (e.g. 'Apr 2 14:30' or similar compact format). Source the timestamp from the task file — either TASK_UPDATED field if it exists, or fall back to file modification time. Must fit cleanly in the existing card layout without breaking alignment.
+TASK_DECISION_LOG=1775115863:Created task\n1775116132:Wave 1: Two workers — W2.2 edits taskCardDescription(), W2.3 edits expanded card. Both in same file but different functions, non-overlapping. Using absolute format 'Apr 2 14:30' per task spec.
+TASK_SUBTASKS=1:W2.2: Add last-updated date/time to card description line in taskcard.go:pending\n2:W2.3: Add updated timestamp to expanded card view in taskcard.go:pending\n3:W2.2: Add last-updated date/time to card description line:done\n4:W2.3: Add updated timestamp to expanded card view:pending
+TASK_TIMESTAMPS=created=1775115863
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775115891

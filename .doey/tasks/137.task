@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=137
+TASK_TITLE=Fix Taskmaster message loop — reads flat files but doey-ctl writes elsewhere
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=CRITICAL BUG: Taskmaster is stuck in a wake-check-sleep loop. It wakes via taskmaster-wait.sh (WAKE_REASON=TRIGGERED), then reads $RUNTIME_DIR/messages/*.msg looking for flat files. But doey-ctl msg send stores messages in SQLite or a different path. So Taskmaster always finds nothing and goes back to sleep. Two options: (1) Make doey-ctl msg send also write .msg flat files as triggers, or (2) Make Taskmaster read messages via doey-ctl msg read instead of scanning flat files. The Taskmaster agent prompt needs to use 'doey-ctl msg read --pane 1.0' instead of scanning $RUNTIME_DIR/messages/*.msg. This is the root cause of Taskmaster appearing dead/unresponsive.
+TASK_DECISION_LOG=1775159591:Created task
+TASK_TIMESTAMPS=created=1775159591|completed=1775161241
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775159591
+TASK_TEAM=W2
+TASK_ATTACHMENTS=.doey/tasks/137.result.json
+TASK_LOG_1775161313=COMMITTED: 0525d92 — taskmaster-wait.sh message glob fix

@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=28
+TASK_TITLE=Fix Teams tab scrolling — stuck at bottom, can't scroll to top
+TASK_STATUS=done
+TASK_CREATED=1774860505
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=The Teams tab in the Go TUI has a scrolling bug. When there are many teams, the user gets stuck at the bottom and cannot scroll back to the top. The scroll input only changes which item is highlighted but doesn't move the viewport — so items at the top become unreachable. The viewport needs to follow the selection: when the highlighted item moves above the visible area, the viewport must scroll up to keep it visible. Same for scrolling down. Audit the Teams tab scroll/selection logic, fix viewport tracking so the visible window follows the cursor in both directions. Ensure up/down keys, j/k, and mouse wheel all work correctly. Follow the same patterns used to fix scrolling in task 23 (dashboard.go, welcome.go, agents.go).
+TASK_TAGS=tui,dashboard,scrolling,bugfix
+TASK_TEAM=W1
+TASK_LOG_1774860537=DISPATCHED: Sent to Team 1 freelancer pane 1.0
+TASK_COMMITS=d8677fc
+TASK_RESULT=Fixed viewport scrolling in Teams tab. Added scrollOffset + ensureTeamVisible(). Build+vet pass.
+TASK_LOG_1774861003=COMPLETE: Committed d8677fc, pending user confirmation

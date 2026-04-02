@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=49
+TASK_TITLE=Sort active tasks to top of task list in Go TUI
+TASK_STATUS=done
+TASK_CREATED=1774933500
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=In the Go TUI task list (tui/internal/model/tasks.go), active/in_progress tasks must always sort to the TOP of the list, above done/cancelled/pending_user_confirmation tasks. Within the active group, newest first (highest ID). Within the inactive group, newest first.
+
+Sort priority: active/in_progress → pending_user_confirmation → done/cancelled. Then by ID descending within each group.
+
+Must compile: cd tui/ && go build ./...
+Test: verify active tasks appear above completed ones in the rendered list.
+TASK_TAGS=tui,ux,tasks,sorting
+TASK_TEAM=W2
+TASK_RESULT=Active/in-progress tasks sorted to top, then by newest ID. Committed and pushed.

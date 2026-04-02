@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=18
+TASK_TITLE=Redesign task detail view in Go TUI — elegant, subtle, light
+TASK_STATUS=done
+TASK_CREATED=1774822927
+TASK_TYPE=feature
+TASK_DESCRIPTION=The task detail view in the Go TUI dashboard is currently harsh and inelegant. Redesign it to be light, subtle, and beautiful. See specific issues and fixes below.
+TASK_TAGS=tui,dashboard
+TASK_TEAM=W2
+TASK_LOG_1774823290=DISPATCHED: Sent to W2 Manager (P1 TUI redesign)
+TASK_LOG_1774823843=COMPLETE: Committed 56c51b8. 4 files, -36 net lines. Muted palette, no cyan overload.
+TASK_RESULT=TUI redesigned: slate primary, text-only badges, ◆ section headers, dim borders, breathing room. Commit 56c51b8.

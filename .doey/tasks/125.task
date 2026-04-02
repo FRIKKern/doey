@@ -1,0 +1,35 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=125
+TASK_TITLE=Fix false error cascade — stop-results.sh + session-start hook
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_ASSIGNED_TO=W1
+TASK_DESCRIPTION=Two bugs causing false errors everywhere:
+
+BUG 1 — stop-results.sh line 57: Naive keyword match `*[Ee]rror*` on every output line marks results as 'error' even when work succeeded. The word 'error' in SessionStart messages, retried commands, or log output triggers false positives. This then propagates to .task files (lines 167-172), corrupting task status.
+
+FIX: Replace naive keyword scanning with smarter heuristics. Options: (a) Only check the LAST few lines of output (the conclusion), not every line. (b) Add exclusion patterns for known false positives like 'SessionStart:startup hook error', 'Exit code' followed by successful retry. (c) Check Claude's actual exit/stop reason rather than output text. (d) Look for positive signals ('PASS', 'completed', 'done') that should override incidental error mentions.
+
+BUG 2 — on-session-start.sh produces 'SessionStart:startup hook error' visible in every worker pane. Investigate why — is it a real error in the hook, or just Claude Code displaying a non-zero exit? Fix the root cause so workers start cleanly.
+
+ALSO: Clean up 3 stale tasks stuck in error state from old sessions (97, 116, 117) — cancel them.
+
+Files: .claude/hooks/stop-results.sh (primary), .claude/hooks/on-session-start.sh (secondary)
+TASK_DECISION_LOG=1775147704:Created task\n1775148256:Wave 1 Complete 3/3 workers finished. Research on stop-results.sh excellent — clear fix plan. Session-start research incomplete (worker thought 4.5min, no output). Stale tasks cancelled. Proceeding to Wave 2: implementation.\n1775148735:completion Task #125 Complete Both bugs fixed. BUG 1: stop-results.sh error detection now scans only last 8 lines with exclusion patterns and positive completion override. BUG 2: on-session-start.sh skips skill sync when source==target dir. Stale tasks 97,116,117 cancelled. Manager_W1
+TASK_SUBTASKS=1:W1.1: Research stop-results.sh false error cascade:done\n2:W1.2: Research on-session-start.sh startup error:done\n3:W1.3: Cancel stale tasks 97, 116, 117:done\n4:W2.1: Fix stop-results.sh — tail-only error scanning + exclusion patterns:done\n5:W2.2: Research + fix on-session-start.sh startup error:done
+TASK_TIMESTAMPS=created=1775147704|completed=1775148962
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775147704
+TASK_TEAM=W1
+TASK_ATTACHMENTS=.doey/tasks/125.result.json
+TASK_SUBTASK_121_STATUS=failed
+TASK_SUBTASK_121_COMPLETED_AT=1775147984
+TASK_SUBTASK_119_STATUS=failed
+TASK_SUBTASK_119_COMPLETED_AT=1775148044
+TASK_SUBTASK_4_STATUS=failed
+TASK_SUBTASK_4_COMPLETED_AT=1775148346
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_COMPLETED_AT=1775148697
+TASK_SUBTASK_120_STATUS=done
+TASK_SUBTASK_120_COMPLETED_AT=1775148963
