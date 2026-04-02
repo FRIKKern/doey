@@ -79,6 +79,15 @@ task_next_id() { # tasks_dir → echo next ID (auto-increments)
 }
 
 task_create() { # project_dir title [type] [created_by] [description] → echo task ID
+  # Fast path: use doey-ctl if available
+  if command -v doey-ctl >/dev/null 2>&1; then
+    local _result
+    _result=$(doey-ctl task create --title "$2" --type "${3:-feature}" --created-by "${4:-Boss}" --description "${5:-}" --project-dir "$1" 2>/dev/null) && {
+      echo "$_result"
+      return 0
+    }
+  fi
+  # Fallback: shell implementation continues below
   local project_dir="$1" title="$2"
   local task_type="${3:-feature}" created_by="${4:-Boss}" description="${5:-}"
   local tasks_dir; tasks_dir="$(task_dir "$project_dir")"
@@ -241,6 +250,11 @@ _task_append_timestamp() { # task_file key epoch
 }
 
 task_update_status() { # project_dir task_id new_status
+  # Fast path: use doey-ctl if available
+  if command -v doey-ctl >/dev/null 2>&1; then
+    doey-ctl task update "$2" --field TASK_STATUS --value "$3" --project-dir "$1" 2>/dev/null && return 0
+  fi
+  # Fallback: shell implementation continues below
   local project_dir="$1" task_id="$2" new_status="$3"
 
   if ! _task_validate_status "$new_status"; then
@@ -426,6 +440,17 @@ task_update_subtask() { # task_file subtask_id new_status (format: id:title:stat
 }
 
 task_add_subtask() { # task_file title → echo new subtask ID
+  # Fast path: use doey-ctl if available
+  if command -v doey-ctl >/dev/null 2>&1; then
+    local _task_id _project_dir _result
+    _task_id=$(basename "$1" .task)
+    _project_dir=$(cd "$(dirname "$1")/../.." && pwd)
+    _result=$(doey-ctl task subtask add "$_task_id" "$2" --project-dir "$_project_dir" 2>/dev/null) && {
+      echo "$_result"
+      return 0
+    }
+  fi
+  # Fallback: shell implementation continues below
   local task_file="$1" title="$2"
 
   local current_subtasks
