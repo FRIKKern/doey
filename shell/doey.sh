@@ -2577,7 +2577,7 @@ _update_contributor() {
   else
     doey_ok "Pulled $old_hash → $new_hash"
     # Code on disk changed — re-exec so steps 3-6 run from the NEW source.
-    _info "Re-executing from updated source..."
+    doey_info "Re-executing from updated source..."
     exec bash "$repo_dir/shell/doey.sh" --post-update "$repo_dir"
   fi
 
