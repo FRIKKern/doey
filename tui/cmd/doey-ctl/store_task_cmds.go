@@ -57,15 +57,17 @@ func dbTaskList(args []string) {
 }
 
 func dbTaskGet(args []string) {
+	if len(args) < 1 {
+		fatal("db-task get: missing task ID\n")
+	}
+	idStr := args[0]
+
 	fs := flag.NewFlagSet("db-task get", flag.ExitOnError)
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
-	if fs.NArg() < 1 {
-		fatal("db-task get: missing task ID\n")
-	}
-	id := int64(atoiOrFatal(fs.Arg(0), "db-task get"))
+	id := int64(atoiOrFatal(idStr, "db-task get"))
 
 	s := openStore(*dir)
 	defer s.Close()
@@ -167,21 +169,23 @@ func dbTaskCreate(args []string) {
 }
 
 func dbTaskUpdate(args []string) {
+	if len(args) < 1 {
+		fatal("db-task update: missing task ID\n")
+	}
+	idStr := args[0]
+
 	fs := flag.NewFlagSet("db-task update", flag.ExitOnError)
 	field := fs.String("field", "", "field to update (required)")
 	value := fs.String("value", "", "new value (required)")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
-	if fs.NArg() < 1 {
-		fatal("db-task update: missing task ID\n")
-	}
 	if *field == "" {
 		fatal("db-task update: --field is required\n")
 	}
 
-	id := int64(atoiOrFatal(fs.Arg(0), "db-task update"))
+	id := int64(atoiOrFatal(idStr, "db-task update"))
 
 	s := openStore(*dir)
 	defer s.Close()
@@ -236,15 +240,17 @@ func dbTaskUpdate(args []string) {
 }
 
 func dbTaskDelete(args []string) {
+	if len(args) < 1 {
+		fatal("db-task delete: missing task ID\n")
+	}
+	idStr := args[0]
+
 	fs := flag.NewFlagSet("db-task delete", flag.ExitOnError)
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
-	if fs.NArg() < 1 {
-		fatal("db-task delete: missing task ID\n")
-	}
-	id := int64(atoiOrFatal(fs.Arg(0), "db-task delete"))
+	id := int64(atoiOrFatal(idStr, "db-task delete"))
 
 	s := openStore(*dir)
 	defer s.Close()
@@ -279,15 +285,17 @@ func runDBSubtaskCmd(args []string) {
 }
 
 func dbSubtaskList(args []string) {
+	if len(args) < 1 {
+		fatal("db-subtask list: missing task ID\n")
+	}
+	idStr := args[0]
+
 	fs := flag.NewFlagSet("db-subtask list", flag.ExitOnError)
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
-	if fs.NArg() < 1 {
-		fatal("db-subtask list: missing task ID\n")
-	}
-	taskID := int64(atoiOrFatal(fs.Arg(0), "db-subtask list"))
+	taskID := int64(atoiOrFatal(idStr, "db-subtask list"))
 
 	s := openStore(*dir)
 	defer s.Close()
@@ -308,19 +316,21 @@ func dbSubtaskList(args []string) {
 }
 
 func dbSubtaskAdd(args []string) {
+	if len(args) < 1 {
+		fatal("db-subtask add: missing task ID\n")
+	}
+	idStr := args[0]
+
 	fs := flag.NewFlagSet("db-subtask add", flag.ExitOnError)
 	title := fs.String("title", "", "subtask title (required)")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
-	if fs.NArg() < 1 {
-		fatal("db-subtask add: missing task ID\n")
-	}
 	if *title == "" {
 		fatal("db-subtask add: --title is required\n")
 	}
-	taskID := int64(atoiOrFatal(fs.Arg(0), "db-subtask add"))
+	taskID := int64(atoiOrFatal(idStr, "db-subtask add"))
 
 	st := &store.Subtask{
 		TaskID: taskID,
@@ -344,20 +354,22 @@ func dbSubtaskAdd(args []string) {
 }
 
 func dbSubtaskUpdate(args []string) {
+	if len(args) < 1 {
+		fatal("db-subtask update: missing subtask ID\n")
+	}
+	idStr := args[0]
+
 	fs := flag.NewFlagSet("db-subtask update", flag.ExitOnError)
 	status := fs.String("status", "", "new status (required)")
 	title := fs.String("title", "", "new title")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
-	if fs.NArg() < 1 {
-		fatal("db-subtask update: missing subtask ID\n")
-	}
 	if *status == "" {
 		fatal("db-subtask update: --status is required\n")
 	}
-	id := int64(atoiOrFatal(fs.Arg(0), "db-subtask update"))
+	id := int64(atoiOrFatal(idStr, "db-subtask update"))
 
 	st := &store.Subtask{
 		ID:     id,
@@ -478,15 +490,17 @@ func dbMsgList(args []string) {
 }
 
 func dbMsgRead(args []string) {
+	if len(args) < 1 {
+		fatal("db-msg read: missing message ID\n")
+	}
+	idStr := args[0]
+
 	fs := flag.NewFlagSet("db-msg read", flag.ExitOnError)
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
-	if fs.NArg() < 1 {
-		fatal("db-msg read: missing message ID\n")
-	}
-	id := int64(atoiOrFatal(fs.Arg(0), "db-msg read"))
+	id := int64(atoiOrFatal(idStr, "db-msg read"))
 
 	s := openStore(*dir)
 	defer s.Close()
