@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=97
 TASK_TITLE=Centralized Role Definitions — single source of truth for all role names
-TASK_STATUS=done
+TASK_STATUS=error
 TASK_TYPE=infrastructure
 TASK_TAGS=
 TASK_CREATED_BY=Boss
@@ -10,11 +10,11 @@ TASK_TEAM=W1
 TASK_DESCRIPTION=One file (shell/doey-roles.sh) defines all role names. Shell sources it, Go generates from it, agents/skills use templates expanded on install. A rename = edit 1 file + run 1 command. Plan: .doey/plans/3.md. 4 phases: (1) Create doey-roles.sh + refactor shell/hooks to use variables, (2) Go generate for TUI constants, (3) Agent/skill .md.tmpl templates, (4) Verify + document rename workflow.
 TASK_ACCEPTANCE_CRITERIA=
 TASK_HYPOTHESES=
-TASK_DECISION_LOG=1775119213:Created task\n1775120665:Status changed to done\n1775120674:Status changed to done\n1775120819:Status changed to done\n1775122460:Status changed to done\n1775122530:Status changed to done
+TASK_DECISION_LOG=1775119213:Created task\n1775120665:Status changed to done\n1775120674:Status changed to done\n1775120819:Status changed to done\n1775122460:Status changed to done\n1775122530:Status changed to done\n1775124919:Status changed to done
 TASK_SUBTASKS=1:Phase 1 - Create doey-roles.sh + refactor all shell/hooks to use role variables:pending|2:Phase 2 - Go generate script reads roles.sh and produces tui/internal/roles/generated.go:pending|3:Phase 3 - Agent/skill .md.tmpl templates with ROLE placeholders expanded on install:pending|4:Phase 4 - Verify mock rename + document workflow in CLAUDE.md:pending\n2:W2.1: Create generator + doc.go + run go generate:pending\n3:W2.2: Refactor reader.go + team.go with roles constants:pending\n4:W2.3: Refactor editor.go + welcome.go + actions.go:pending\n5:W2.4: Final verification — go build + grep check:pending
 TASK_RELATED_FILES=
 TASK_BLOCKERS=
-TASK_TIMESTAMPS=created=1775119213|completed=1775120665|completed=1775120674|completed=1775120819|completed=1775122460|completed=1775122530
+TASK_TIMESTAMPS=created=1775119213|completed=1775120665|completed=1775120674|completed=1775120819|completed=1775122460|completed=1775122530|completed=1775124919
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_NOTES=
