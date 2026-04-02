@@ -16,7 +16,7 @@ Parse from prompt: `SESSION`, `PROJECT_NAME`, `PROJECT_DIR`, `RUNTIME_DIR`, `JOU
 
 ### 1. BOOT_WAIT → SEND_TASK
 
-Poll 5s, max 60s. Check `cat "$RUNTIME_DIR/status/${PANE_SAFE}.status"` (`PANE_SAFE=$(echo "${SESSION}_1_0" | tr ':-.' '_')`) and `tmux capture-pane -t "$SESSION:1.0" -p -S -10`. Ready when status=`READY` or pane shows briefing/`❯`/Claude running. Timeout → REPORTING(FAIL).
+Poll 5s, max 60s. Check `doey-ctl status get 1.0` and `tmux capture-pane -t "$SESSION:1.0" -p -S -10`. Ready when status=`READY` or pane shows briefing/`❯`/Claude running. Timeout → REPORTING(FAIL).
 
 ### 2. SEND_TASK → MONITORING
 

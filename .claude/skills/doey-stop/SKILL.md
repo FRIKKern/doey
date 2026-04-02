@@ -4,7 +4,7 @@ description: Stop a worker by pane number. Use when you need to "stop a worker",
 ---
 
 - Team config: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; [ -f "$RD/team_${W}.env" ] && cat "$RD/team_${W}.env" 2>/dev/null|| true`
-- Statuses: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; W="${DOEY_WINDOW_INDEX:-0}"; for f in "$RD"/status/*_${W}_*.status; do [ -f "$f" ] && echo "=== $(basename $f) ===" && cat "$f" && echo ""; done 2>/dev/null || true`
+- Statuses: !`doey-ctl status list --window "${DOEY_WINDOW_INDEX:-0}" 2>/dev/null || true`
 
 No pane number → list workers and ask.
 ```bash
@@ -26,8 +26,7 @@ else
   [ -n "$CHILD" ] && { kill -9 "$CHILD" 2>/dev/null; sleep 1; }
   [ -n "$(pgrep -P "$PANE_PID" 2>/dev/null)" ] && { echo "ERROR: Failed"; exit 1; }
 fi
-PANE_SAFE=$(echo "$PANE" | tr ':-.' '_'); mkdir -p "${RD}/status"
-printf 'PANE: %s\nUPDATED: %s\nSTATUS: FINISHED\nTASK: manually stopped\n' "$PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" > "${RD}/status/${PANE_SAFE}.status"
+doey-ctl status set --pane "$PANE" --status FINISHED --task "manually stopped"
 echo "Stopped ${W}.${TARGET}"
 ```
 Shell stays alive for restart.

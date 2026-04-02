@@ -78,10 +78,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 No AskUserQuestion — send status reports and completions to {{DOEY_ROLE_BOSS}} via `.msg` files. Never questions or approval requests. {{DOEY_ROLE_COORDINATOR}} decides autonomously.
 
 ```bash
-BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: {{DOEY_ROLE_COORDINATOR}}\nSUBJECT: status_report\n%s\n' "REPORT_CONTENT" > "${MSG_DIR}/${BOSS_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${BOSS_SAFE}.trigger" 2>/dev/null || true
+doey-ctl msg send --to 0.1 --from 0.2 --subject status_report --body "REPORT_CONTENT"
 ```
 
 ## Reserved {{DOEY_ROLE_FREELANCER}} Pool
@@ -131,13 +128,7 @@ Before dispatching, assess team availability:
 ```bash
 BUSY_COUNT=0; IDLE_TEAMS=""
 for W in $TEAM_WINDOWS; do
-  TEAM_BUSY=0
-  for sf in "${RUNTIME_DIR}/status/pane_${W}_"*.status; do
-    [ -f "$sf" ] || continue
-    STATUS=$(grep '^STATUS=' "$sf" | cut -d= -f2-)
-    [ "$STATUS" = "BUSY" ] && TEAM_BUSY=1 && break
-  done
-  if [ "$TEAM_BUSY" -eq 1 ]; then
+  if doey-ctl status list --window "$W" 2>/dev/null | grep -q "BUSY"; then
     BUSY_COUNT=$((BUSY_COUNT + 1))
   else
     IDLE_TEAMS="${IDLE_TEAMS} ${W}"
@@ -300,15 +291,15 @@ Task files: `${PROJECT_DIR}/.doey/tasks/` (persistent), fallback `${RUNTIME_DIR}
 
 ## Live Task Updates
 
-Source helpers: `source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh"`. Only when `TASK_ID` is set.
+Use `doey-ctl` for task updates. Only when `TASK_ID` is set.
 
 | Event | Call |
 |-------|------|
-| Dispatch | `doey_task_add_subtask "$PROJECT_DIR" "$TASK_ID" "Dispatch to W${W}" "Manager_W${W}"` |
-| Result | `doey_task_update_subtask "$PROJECT_DIR" "$TASK_ID" "$N" "done"` |
-| Decision | `doey_task_add_update "$PROJECT_DIR" "$TASK_ID" "{{DOEY_ROLE_COORDINATOR}}" "description"` |
-| Failure | `doey_task_update_subtask ... "failed"` + `doey_task_add_update` |
-| Report | `doey_task_add_report "$PROJECT_DIR" "$TASK_ID" "TYPE" "Title" "Summary" "{{DOEY_ROLE_COORDINATOR}}"` |
+| Dispatch | `doey-ctl task subtask add --task-id $TASK_ID --description "Dispatch to W${W}"` |
+| Result | `doey-ctl task subtask update --task-id $TASK_ID --subtask-id $N --status done` |
+| Decision | `doey-ctl task decision --task-id $TASK_ID --title "Decision" --body "description"` |
+| Failure | `doey-ctl task subtask update --task-id $TASK_ID --subtask-id $N --status failed` + `doey-ctl task log add ...` |
+| Report | `doey-ctl task log add --task-id $TASK_ID --type TYPE --title "Title" --body "Summary" --author "{{DOEY_ROLE_COORDINATOR}}"` |
 
 Report types: `decision`, `progress`, `completion`, `error`.
 

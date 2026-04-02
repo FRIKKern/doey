@@ -31,38 +31,29 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 ## Commanding Taskmaster
 
-Taskmaster lives at **pane 0.2**. Send commands via message files + trigger:
+Taskmaster lives at **pane 0.2**. Send commands via `doey-ctl`:
 
 ```bash
-TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_0_2"
-MSG_DIR="${RUNTIME_DIR}/messages"; mkdir -p "$MSG_DIR"
-printf 'FROM: Boss\nSUBJECT: task\n%s\n' "YOUR_COMMAND" > "${MSG_DIR}/${TASKMASTER_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${TASKMASTER_SAFE}.trigger" 2>/dev/null || true
+doey-ctl msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
 ```
 
 ### Pre-Send Taskmaster Health Check (MANDATORY)
 
-**Before writing ANY `.msg` file**, verify Taskmaster is alive. Dead Taskmaster = unread messages = silent failure.
+**Before sending ANY message**, verify Taskmaster is alive. Dead Taskmaster = unread messages = silent failure.
 
 ```bash
-# ── Taskmaster health gate — run before every .msg write ──
-_sm_status_file="${RUNTIME_DIR}/status/${TASKMASTER_SAFE}.status"
+# ── Taskmaster health gate — run before every msg send ──
+_sm_status=$(doey-ctl status get 0.2 2>/dev/null || echo "UNKNOWN")
 _sm_alive=false
-if [ -f "$_sm_status_file" ]; then
-  _sm_st=$(grep '^STATUS:' "$_sm_status_file" | head -1 | cut -d' ' -f2-)
-  _sm_ts=$(grep '^UPDATED:' "$_sm_status_file" | head -1 | cut -d' ' -f2-)
-  _sm_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S%z' "$_sm_ts" +%s 2>/dev/null || date -d "$_sm_ts" +%s 2>/dev/null || echo 0)
-  _sm_age=$(( $(date +%s) - _sm_epoch ))
-  case "$_sm_st" in BUSY|READY) [ "$_sm_age" -lt 120 ] && _sm_alive=true ;; esac
-fi
+case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
   tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
   sleep 3
 fi
-# Now safe to write .msg and touch trigger
+# Now safe to send message
 ```
 
-**Never skip this.** Every `.msg` write must include the health gate. If Taskmaster context is bloated: `/doey-taskmaster-compact`.
+**Never skip this.** Every message send must include the health gate. If Taskmaster context is bloated: `/doey-taskmaster-compact`.
 
 ### Command types to send Taskmaster
 
@@ -79,8 +70,7 @@ fi
 On each turn, check for messages from Taskmaster:
 
 ```bash
-BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
-bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$BOSS_SAFE"
+doey-ctl msg read --pane 0.1
 ```
 
 ### Message types from Taskmaster
@@ -113,19 +103,7 @@ Clarify via `AskUserQuestion` if scope, priority, or acceptance criteria are amb
 Create `.task` file and dispatch to Taskmaster. For multi-step/ambiguous goals, use Task Compilation Protocol instead.
 
 ```bash
-TD="${PROJECT_DIR}/.doey/tasks"; mkdir -p "$TD" "${RUNTIME_DIR}/tasks"
-NEXT_ID_FILE="${TD}/.next_id"; ID=1
-[ -f "$NEXT_ID_FILE" ] && ID=$(cat "$NEXT_ID_FILE")
-echo $((ID + 1)) > "$NEXT_ID_FILE"
-cat > "${TD}/${ID}.task" <<TASKEOF
-TASK_ID=${ID}
-TASK_TITLE=TITLE HERE
-TASK_STATUS=active
-TASK_CREATED=$(date +%s)
-TASK_TYPE=bug|feature|bugfix|refactor|research|audit|docs|infrastructure
-TASK_DESCRIPTION=Full context — what and why
-TASK_TAGS=hooks,tui,agent-defs,task-system,shell,skills,install,config,testing,dashboard
-TASKEOF
+TASK_ID=$(doey-ctl task create --title "TITLE HERE" --type "feature" --description "Full context — what and why")
 ```
 
 ### When work appears complete
@@ -134,12 +112,7 @@ Mark `pending_user_confirmation` and tell the user:
 > "Task [N] looks complete — run `doey task done N` to confirm."
 
 ```bash
-FILE="${PROJECT_DIR}/.doey/tasks/N.task"
-TMP="${FILE}.tmp"
-while IFS= read -r line; do
-  case "${line%%=*}" in TASK_STATUS) echo "TASK_STATUS=pending_user_confirmation" ;;
-  *) echo "$line" ;; esac
-done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+doey-ctl task update --id N --status pending_user_confirmation
 ```
 
 ### Never do this
@@ -200,11 +173,8 @@ Plans live at `.doey/plans/plan-<N>.md`. When a task originates from a plan:
 Use `dispatch_task` subject (not `task`) for structured tasks. Includes: `TASK_ID`, `TASK_FILE`, `TASK_JSON`, `DISPATCH_MODE` (parallel|sequential|phased), `PRIORITY`, `SUMMARY`.
 
 ```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
-TASK_ID=$(task_create "$RUNTIME_DIR" "Title" "feature" "Boss" "P1" "Summary" "Description")
-MSG_BODY=$(task_dispatch_msg "$RUNTIME_DIR" "$TASK_ID" "parallel" "P1")
-echo "$MSG_BODY" > "${MSG_DIR}/${TASKMASTER_SAFE}_$(date +%s)_$$.msg"
-touch "${RUNTIME_DIR}/triggers/${TASKMASTER_SAFE}.trigger" 2>/dev/null || true
+TASK_ID=$(doey-ctl task create --title "Title" --type "feature" --description "Description")
+doey-ctl msg send --to 0.2 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
 ```
 
 For manual dispatch without the skills (fallback only — prefer `/doey-planned-task` or `/doey-instant-task`).

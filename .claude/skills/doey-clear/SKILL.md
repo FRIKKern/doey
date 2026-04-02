@@ -41,8 +41,7 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
   CMD="claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\""
   [ -n "$WP" ] && CMD="${CMD} --append-system-prompt-file \"${WP}\""
   tmux send-keys -t "$PANE" "$CMD" Enter
-  mkdir -p "${RD}/status"
-  printf 'PANE: %s\nUPDATED: %s\nSTATUS: READY\nTASK: cleared\n' "$PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" > "${RD}/status/${PANE_SAFE}.status"
+  doey-ctl status set --pane "$PANE" --status READY --task "cleared"
   echo "  ${W}.${wp} ✓"; sleep 0.5
 done
 ```

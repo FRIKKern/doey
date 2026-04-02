@@ -64,8 +64,7 @@ restart_team() {
     local CMD="claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\""
     [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
     kill_and_relaunch "$PANE" "$CMD"
-    mkdir -p "${RT}/status"
-    printf 'PANE: %s\nUPDATED: %s\nSTATUS: READY\nTASK: login-restart\n' "$PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" > "${RT}/status/${PANE_SAFE}.status"
+    doey-ctl status set --pane "$PANE" --status READY --task "login-restart"
     echo "  ${W}.${wp} ✓"
   done
 }

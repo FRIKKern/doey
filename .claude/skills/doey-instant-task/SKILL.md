@@ -3,8 +3,7 @@ name: doey-instant-task
 description: Quick task creation without planning — create and dispatch immediately. Usage: /doey-instant-task <goal>
 ---
 
-- Current tasks: !`bash -c 'source /home/doey/doey/shell/doey-task-helpers.sh 2>/dev/null && task_list "$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d \")" 2>/dev/null || echo "No tasks"'`
-- Tasks dir: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); if [ -n "$PD" ] && [ -d "$PD/.doey/tasks" ]; then echo "$PD/.doey/tasks"; else echo "No tasks dir"; fi'`
+- Current tasks: !`doey-ctl task list 2>/dev/null || echo "No tasks"`
 
 Create and dispatch a task immediately from a natural-language goal. No planning step. Goal from ARGUMENTS (if empty, use AskUserQuestion to ask, then stop).
 
@@ -21,29 +20,27 @@ Infer from keywords: "fix"/"bug"/"broken" → bugfix, "add"/"new"/"create" → f
 ### 2. Create Task
 
 ```bash
-PD=$(grep '^PROJECT_DIR=' "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
-source "${PD}/shell/doey-task-helpers.sh" 2>/dev/null || source /home/doey/doey/shell/doey-task-helpers.sh
-TASK_ID=$(task_create "$PD" "TITLE" "TYPE" "Boss" "DESCRIPTION")
+TASK_ID=$(doey-ctl task create --title "TITLE" --type "TYPE" --description "DESCRIPTION")
 echo "Created task #${TASK_ID}"
 ```
 
 For tasks with obvious sub-parts, add subtasks:
 ```bash
-task_subtask_add "$PD" "$TASK_ID" "Subtask title"
+doey-ctl task subtask add --task-id "$TASK_ID" --description "Subtask title"
 ```
 
 ### 3. Dispatch to Taskmaster
 
 Send message to Taskmaster for routing:
 ```bash
-RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-SESSION_NAME=$(grep '^SESSION_NAME=' "$RD/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
-TASKMASTER_SAFE=$(printf '%s' "${SESSION_NAME}:0.2" | tr ':.-' '_')
-mkdir -p "${RD}/messages" "${RD}/triggers"
-printf 'FROM: Boss\nSUBJECT: new_task\nTASK_ID: %s\nTITLE: %s\nTYPE: %s\nPRIORITY: %s\nInstant task — ready for immediate dispatch.\n' \
-  "$TASK_ID" "$TASK_TITLE" "${TASK_TYPE:-feature}" "${TASK_PRIORITY:-P2}" \
-  > "${RD}/messages/${TASKMASTER_SAFE}_$(date +%s)_$$.msg"
-touch "${RD}/triggers/${TASKMASTER_SAFE}.trigger" 2>/dev/null || true
+doey-ctl msg send --to "${SESSION_NAME}:0.2" --from "${DOEY_PANE_ID}" \
+  --subject "new_task" \
+  --body "TASK_ID: ${TASK_ID}
+TITLE: ${TASK_TITLE}
+TYPE: ${TASK_TYPE:-feature}
+PRIORITY: ${TASK_PRIORITY:-P2}
+Instant task — ready for immediate dispatch."
+doey-ctl msg trigger --pane "${SESSION_NAME}:0.2"
 ```
 
 ### 4. Output
@@ -52,7 +49,7 @@ Report: task ID, title, type, priority, dispatch status. Keep it brief — this 
 
 ### Rules
 - Use AskUserQuestion if goal is empty — never inline questions
-- Use `task_create` from helpers — never duplicate
+- Use `doey-ctl task create` — never duplicate
 - No planning, no approval gate — create and dispatch immediately
 - If goal looks complex (multiple independent tracks, high risk, cross-team), suggest `/doey-planned-task` instead
 - Zero clarifying questions for obvious goals; one max for ambiguous ones
