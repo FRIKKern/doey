@@ -49,8 +49,8 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 	return CardDelegate{Theme: t}
 }
 
-// Height returns the fixed card height (icon+title line, description line, padding).
-func (d CardDelegate) Height() int { return 3 }
+// Height returns the fixed card height (icon+title line, description line).
+func (d CardDelegate) Height() int { return 2 }
 
 // Spacing returns the gap between cards.
 func (d CardDelegate) Spacing() int { return 0 }
@@ -58,7 +58,7 @@ func (d CardDelegate) Spacing() int { return 0 }
 // Update is a no-op; the delegate does not handle messages.
 func (d CardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
-// Render draws a single task card as a compact 3-line entry (matching Plans pattern).
+// Render draws a single task card as a compact 2-line entry.
 func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	ti, ok := item.(TaskItem)
 	if !ok {
@@ -67,11 +67,11 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 	isSelected := index == m.Index()
 
-	// Health-based icon color
+	// Health-based icon color — primary visual element
 	icon := taskHealthIcon(ti, d.Theme, d.Heartbeats)
 
-	// Task ID prefix
-	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("#" + ti.Task.ID)
+	// Subtle dim ID
+	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(true).Render("#" + ti.Task.ID)
 
 	// Title — truncate to fit panel width (icon + id + padding ~ 10 chars)
 	titleText := ti.Task.Title
@@ -90,11 +90,11 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	title := titleStyle.Render(titleText)
 
-	// Description line: compact — workers · subtask progress · type
-	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(taskCardDescription(ti, d.Heartbeats))
+	// Description line: compact metadata
+	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(!isSelected).Render(taskCardDescription(ti, d.Heartbeats))
 
-	// Compose card: ID + icon + title, then description
-	card := fmt.Sprintf(" %s %s %s\n   %s", idStr, icon, title, desc)
+	// Compose card: icon + title + dim ID on line 1, metadata on line 2
+	card := fmt.Sprintf(" %s %s %s\n   %s", icon, title, idStr, desc)
 
 	// Selected: left border only
 	if isSelected {
@@ -326,47 +326,40 @@ func (e *ExpandedCard) Render() string {
 
 	var sections []string
 
-	// --- Header: title + Plans-style metadata ---
+	// --- Header: title + compact metadata line ---
 	title := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text).Render(task.Title)
 	sections = append(sections, title)
 
+	// Compact metadata: status · team · priority · type on one line
 	metaStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted)
 	statusClr := styles.StatusAccentColor(e.Theme, task.Status)
 	stIcon := lipgloss.NewStyle().Foreground(statusClr).Render("◆")
-	sections = append(sections, fmt.Sprintf("%s %s", stIcon, metaStyle.Render("Status: "+task.Status)))
-
+	var metaParts []string
+	metaParts = append(metaParts, stIcon+" "+task.Status)
 	if task.Team != "" {
-		sections = append(sections, metaStyle.Render("Team: "+task.Team))
+		metaParts = append(metaParts, task.Team)
 	}
-
-	priType := ""
 	if task.Priority >= 0 && task.Priority <= 2 {
-		priNames := []string{"high", "medium", "low"}
-		priType = "Priority: " + priNames[task.Priority]
+		priNames := []string{"P0", "P1", "P2"}
+		metaParts = append(metaParts, priNames[task.Priority])
 	}
 	if task.Type != "" {
-		if priType != "" {
-			priType += " · "
-		}
-		priType += "Type: " + task.Type
+		metaParts = append(metaParts, task.Type)
 	}
-	if priType != "" {
-		sections = append(sections, metaStyle.Render(priType))
-	}
+	sections = append(sections, metaStyle.Render(strings.Join(metaParts, " · ")))
 
 	if task.Created > 0 {
-		sections = append(sections, metaStyle.Render("Created: "+time.Unix(task.Created, 0).Format("2006-01-02 15:04")))
+		sections = append(sections, metaStyle.Faint(true).Render(time.Unix(task.Created, 0).Format("2006-01-02 15:04")))
 	}
 	if task.Phase != "" {
 		sections = append(sections, styles.TaskPhaseBadge(e.Theme, task.Phase))
 	}
 
-	// --- Phase banner (prominent for review phase) ---
+	// Phase banner (prominent for review phase)
 	if phaseBanner := styles.TaskPhaseBanner(e.Theme, task.Phase, contentWidth); phaseBanner != "" {
 		sections = append(sections, phaseBanner)
 	}
 
-	// --- Separator ---
 	sections = append(sections, styles.ThinSeparator(e.Theme, contentWidth))
 
 	// --- Status Timeline ---
@@ -374,12 +367,9 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, timeline)
 	}
 
-	sections = append(sections, "")
-
 	// --- Recovery Events ---
 	if recovery := e.renderRecoverySection(); recovery != "" {
 		sections = append(sections, recovery)
-		sections = append(sections, "")
 	}
 
 	// --- Meta ---
@@ -406,33 +396,28 @@ func (e *ExpandedCard) Render() string {
 		if len(mdParts) > 0 {
 			combinedMD := strings.Join(mdParts, "\n\n")
 			rendered := renderMarkdown(combinedMD, contentWidth, &e.mdCache)
-			sections = append(sections, "")
 			sections = append(sections, rendered)
 		}
 	}
 
 	// --- Planning (from JSON sidecar) ---
 	if planning := e.renderPlanningSection(contentWidth); planning != "" {
-		sections = append(sections, "")
 		sections = append(sections, planning)
 	}
 
 	// --- Execution (from JSON sidecar) ---
 	if execution := e.renderExecutionSection(contentWidth); execution != "" {
-		sections = append(sections, "")
 		sections = append(sections, execution)
 	}
 
 	// --- Result Details (from .result.json) ---
 	if result := e.renderResultSection(contentWidth); result != "" {
-		sections = append(sections, "")
 		sections = append(sections, result)
 	}
 
 	// --- Proof of Completion ---
 	proofRows := e.renderProofSection()
 	if len(proofRows) > 0 {
-		sections = append(sections, "")
 		sections = append(sections, proofRows...)
 	}
 
@@ -509,7 +494,6 @@ func (e *ExpandedCard) Render() string {
 					}
 				}
 			}
-			sections = append(sections, "")
 		}
 	}
 
@@ -691,35 +675,6 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(e.Theme, "Files Changed"))
 		sections = append(sections, fileRows...)
-	}
-
-	// --- Action Buttons ---
-	{
-		t := e.Theme
-		status := task.Status
-		var buttons []string
-
-		if status != "done" && status != "cancelled" {
-			moveStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Primary).Padding(0, 2)
-			buttons = append(buttons, zone.Mark("task-move-btn", moveStyle.Render("Move (m)")))
-		}
-
-		if status == "in_progress" || status == "active" || status == "draft" || status == "pending" {
-			dispatchStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Accent).Padding(0, 2)
-			buttons = append(buttons, zone.Mark("task-dispatch-btn", dispatchStyle.Render("Dispatch (d)")))
-		}
-
-		if status != "cancelled" {
-			cancelStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Danger).Padding(0, 2)
-			buttons = append(buttons, zone.Mark("task-cancel-btn", cancelStyle.Render("Cancel (x)")))
-		}
-
-		if len(buttons) > 0 {
-			sections = append(sections, "")
-			row := strings.Join(buttons, "  ")
-			centered := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(row)
-			sections = append(sections, centered)
-		}
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)

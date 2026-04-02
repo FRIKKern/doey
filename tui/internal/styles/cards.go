@@ -9,12 +9,12 @@ import (
 )
 
 // RenderButton renders a clickable button with zone marking.
-// Minimum 3-char horizontal padding on each side, min-width 12 chars.
+// Minimum 2-char horizontal padding on each side, min-width 10 chars.
 // Active buttons use Primary background; inactive use Muted.
 func RenderButton(label string, zoneID string, active bool, t Theme) string {
-	padded := "   " + label + "   "
-	// Enforce min-width of 12
-	for len(padded) < 12 {
+	padded := "  " + label + "  "
+	// Enforce min-width of 10
+	for len(padded) < 10 {
 		padded = " " + padded + " "
 	}
 
@@ -165,7 +165,7 @@ func ExpandedCardStyle(theme Theme, status string, width int) lipgloss.Style {
 		BorderForeground(theme.Separator).
 		BorderLeftForeground(theme.Separator).
 		Width(width).
-		Padding(1, 1)
+		Padding(0, 1)
 }
 
 // SubtaskCheckbox returns a styled checkbox: "✓" (dim Success) or "○" (Muted).
@@ -224,7 +224,7 @@ func NotesBlock(theme Theme, text string, width int) string {
 }
 
 // MaxCardWidth is the maximum card width for readability.
-const MaxCardWidth = 80
+const MaxCardWidth = 72
 
 // HelpOverlayStyle returns a centered floating panel for the keyboard help overlay.
 func HelpOverlayStyle(t Theme, width int) lipgloss.Style {
@@ -596,7 +596,7 @@ func InfoCard(title, body, zoneID string, w int, theme Theme) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(theme.Primary).
 		Width(w).
-		Padding(1, 2).
+		Padding(0, 1).
 		Render(content)
 
 	if zoneID != "" {
@@ -620,7 +620,7 @@ func ActionCard(label, zoneID string, w int, theme Theme) string {
 		BorderForeground(theme.Accent).
 		Background(theme.Accent).
 		Width(w).
-		Padding(2, 4).
+		Padding(1, 2).
 		Render(labelRendered)
 
 	if zoneID != "" {
@@ -652,7 +652,7 @@ func QuickActionCard(t Theme, icon, title, description string, width int, select
 	cardStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Padding(1, 2).
+		Padding(0, 1).
 		Width(width)
 
 	if selected {
