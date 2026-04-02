@@ -165,7 +165,7 @@ func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatSta
 
 	// Subtask progress (compact)
 	if ti.SubtaskTotal > 0 {
-		parts = append(parts, fmt.Sprintf("%d/%d", ti.SubtaskDone, ti.SubtaskTotal))
+		parts = append(parts, styles.SubtaskProgress(ti.SubtaskDone, ti.SubtaskTotal))
 	}
 
 	// Type badge
@@ -534,7 +534,16 @@ func (e *ExpandedCard) Render() string {
 		for i, st := range e.Item.Subtasks {
 			done := st.Status == "done"
 			selected := i == e.SubtaskCursor
-			row := styles.SubtaskRow(e.Theme, st.Title, st.Status, done, selected, 0)
+			title := st.Title
+			pane := st.Pane
+			if pane == "" {
+				pane = st.Worker
+			}
+			if pane != "" {
+				paneTag := lipgloss.NewStyle().Foreground(e.Theme.Accent).Render("[W" + pane + "]")
+				title = paneTag + " " + title
+			}
+			row := styles.SubtaskRow(e.Theme, title, st.Status, done, selected, 0)
 			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), row))
 		}
 	}

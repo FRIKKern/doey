@@ -377,12 +377,20 @@ func (r *Reader) ParseTasks() []Task {
 				if len(parts) < 3 {
 					continue
 				}
-				t.Subtasks = append(t.Subtasks, Subtask{
+				st := Subtask{
 					TaskID: t.ID,
 					Pane:   parts[0], // index used as identifier
 					Title:  parts[1],
 					Status: parts[2],
-				})
+				}
+				// Extract worker pane from title prefix like "W2.1: ..."
+				if strings.Contains(st.Title, ": ") {
+					prefix := strings.SplitN(st.Title, ": ", 2)[0]
+					if len(prefix) >= 3 && prefix[0] == 'W' && strings.ContainsAny(prefix[1:], "0123456789") {
+						st.Worker = prefix
+					}
+				}
+				t.Subtasks = append(t.Subtasks, st)
 			}
 		}
 
