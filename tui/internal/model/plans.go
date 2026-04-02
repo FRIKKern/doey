@@ -207,12 +207,12 @@ func (m *PlansModel) SetSize(w, h int) {
 	if rightW < 24 {
 		rightW = 24
 	}
-	vpH := h - 4
+	vpH := h - 7 // account for header, scroll hint, button row, and parent chrome
 	if vpH < 1 {
 		vpH = 1
 	}
 	m.detailViewport.Width = rightW - 4
-	m.detailViewport.Height = vpH - 1
+	m.detailViewport.Height = vpH
 
 	// Re-render glamour content if width changed
 	if m.detailViewport.Width != m.lastRenderWidth && m.selectedPlan != nil {
@@ -220,8 +220,14 @@ func (m *PlansModel) SetSize(w, h int) {
 	}
 }
 
-// SetFocused toggles focus state.
-func (m *PlansModel) SetFocused(focused bool) { m.focused = focused }
+// SetFocused toggles focus state. Resets to list view when gaining focus
+// so the user sees the plan list rather than a stale detail inspection.
+func (m *PlansModel) SetFocused(focused bool) {
+	m.focused = focused
+	if focused {
+		m.leftFocused = true
+	}
+}
 
 // SetPanelOffset sets the absolute Y offset of the panel top in the terminal.
 func (m *PlansModel) SetPanelOffset(y int) { m.panelOffsetY = y }
@@ -931,5 +937,10 @@ func (m PlansModel) renderRightPanel(w, h int) string {
 		}
 	}
 
-	return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+	rendered := lipgloss.NewStyle().Width(w).Height(h).Render(content)
+	// Clip to h lines to prevent content overflowing past terminal bounds
+	if rl := strings.Split(rendered, "\n"); len(rl) > h {
+		rendered = strings.Join(rl[:h], "\n")
+	}
+	return rendered
 }
