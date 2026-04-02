@@ -1,12 +1,12 @@
 ---
 name: doey-simplify-everything
-description: Full codebase simplification across all teams. Session Manager inventories capacity, assigns domains, dispatches to Window Managers. Use when you need to "simplify the whole codebase", "reduce complexity everywhere", or "run a codebase-wide cleanup".
+description: Full codebase simplification across all teams. Taskmaster inventories capacity, assigns domains, dispatches to Subtaskmasters. Use when you need to "simplify the whole codebase", "reduce complexity everywhere", or "run a codebase-wide cleanup".
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 - Teams: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done || true`
 
-Route through Window Managers only. **Confirm before dispatching.**
+Route through Subtaskmasters only. **Confirm before dispatching.**
 
 ### Inventory
 ```bash

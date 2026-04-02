@@ -1,6 +1,6 @@
 ---
 name: doey-reserve
-description: Reserve/unreserve the current pane to prevent Window Manager dispatch. Use when you need to "reserve this pane", "prevent dispatch to my pane", or "unreserve a worker".
+description: Reserve/unreserve the current pane to prevent Subtaskmaster dispatch. Use when you need to "reserve this pane", "prevent dispatch to my pane", or "unreserve a worker".
 ---
 
 `/doey-reserve` (reserve) | `off` (unreserve) | `list` (show all)

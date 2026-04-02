@@ -12,7 +12,7 @@ RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 source "$RD/session.env"; W="${DOEY_WINDOW_INDEX:-0}"
 [ -f "$RD/team_${W}.env" ] && source "$RD/team_${W}.env"
 TARGET="$PANE_NUMBER"
-[ "$TARGET" = "0" ] && { echo "ERROR: Cannot stop Window Manager"; exit 1; }
+[ "$TARGET" = "0" ] && { echo "ERROR: Cannot stop Subtaskmaster"; exit 1; }
 VALID=false; for i in $(echo "$WORKER_PANES" | tr ',' ' '); do [ "$i" = "$TARGET" ] && VALID=true; done
 [ "$VALID" = "false" ] && { echo "ERROR: Not a worker. Valid: ${WORKER_PANES}"; exit 1; }
 PANE="${SESSION_NAME}:${W}.${TARGET}"

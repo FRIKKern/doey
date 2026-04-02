@@ -26,7 +26,7 @@ kill_pane_process() {
 ### Clear Manager (skip if WORKERS_ONLY)
 ```bash
 kill_pane_process "${SESSION_NAME}:${W}.0"
-tmux send-keys -t "${SESSION_NAME}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Window Manager\" --agent \"t${W}-manager\"" Enter; sleep 0.5
+tmux send-keys -t "${SESSION_NAME}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Subtaskmaster\" --agent \"t${W}-manager\"" Enter; sleep 0.5
 ```
 
 ### Clear Workers
