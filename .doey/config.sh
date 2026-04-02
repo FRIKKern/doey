@@ -14,25 +14,35 @@
 # All variables use the DOEY_ prefix and are commented out by default.
 # The values shown are the built-in defaults.
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Grid & Teams
-# =============================================================================
+# ─────────────────────────────────────────────
 
-# Number of worker columns in the initial grid layout
+# Number of worker columns in the initial grid layout (workers = cols × 2, default: 3)
 # DOEY_INITIAL_WORKER_COLS=3
 
 # Number of team windows to create at startup
+# DOEY_INITIAL_TEAMS=2
 
 # Number of teams that start in isolated git worktrees
+# DOEY_INITIAL_WORKTREE_TEAMS=0
+
+# Number of reserved freelancer teams (no manager, born-reserved workers available to all teams)
+# DOEY_INITIAL_FREELANCER_TEAMS=1
 
 # Maximum number of worker panes across all teams
 # DOEY_MAX_WORKERS=20
 
-# =============================================================================
-# Auth & Launch Timing
-# =============================================================================
+# Maximum number of team windows Taskmaster can auto-spawn
+# Prevents runaway team creation under load.
+# DOEY_MAX_TEAMS=5
 
-# Seconds between launching each worker instance (prevents auth exhaustion)
+# ─────────────────────────────────────────────
+# Auth & Launch Timing
+# ─────────────────────────────────────────────
+
+# Seconds between launching each worker instance (prevents auth rate-limit on startup)
+# Lower only if your account has high rate limits and you need faster boots.
 # DOEY_WORKER_LAUNCH_DELAY=3
 
 # Seconds between launching each team window
@@ -41,12 +51,12 @@
 # Seconds to wait before launching the Subtaskmaster in a new team
 # DOEY_MANAGER_LAUNCH_DELAY=3
 
-# Seconds the Subtaskmaster waits after launch before accepting tasks
-# DOEY_MANAGER_BRIEF_DELAY=15
+# Seconds the Subtaskmaster waits after launch before briefing
+# DOEY_MANAGER_BRIEF_DELAY=8
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Dynamic Grid Behavior
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Seconds of idle time before a worker column is collapsed
 # DOEY_IDLE_COLLAPSE_AFTER=60
@@ -57,16 +67,16 @@
 # Milliseconds to wait after paste for the terminal to settle
 # DOEY_PASTE_SETTLE_MS=500
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Panel & Monitoring
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Seconds between info panel / settings panel refresh cycles
 # DOEY_INFO_PANEL_REFRESH=300
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Models
-# =============================================================================
+# ─────────────────────────────────────────────
 
 # Model for Subtaskmaster instances (orchestrator — needs strong reasoning)
 # DOEY_MANAGER_MODEL=opus
@@ -77,57 +87,114 @@
 # Model for Taskmaster (cross-team orchestration)
 # DOEY_TASKMASTER_MODEL=opus
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Team Definitions (Advanced)
-# =============================================================================
+# ─────────────────────────────────────────────
 #
-# Define custom teams with specific configurations.
-# If no DOEY_TEAM_* vars are set, default behavior applies
-# (DOEY_INITIAL_TEAMS local + DOEY_INITIAL_WORKTREE_TEAMS worktree).
+# Define custom teams with specific configurations. When DOEY_TEAM_COUNT is
+# set, it overrides DOEY_INITIAL_TEAMS and DOEY_INITIAL_WORKTREE_TEAMS.
+# If no DOEY_TEAM_* vars are set, default behavior applies.
 #
 # Format: DOEY_TEAM_<N>_<PROPERTY>=value
 #
-# Example:
+# Available properties:
+#
+#   TYPE ............. "local", "worktree", "freelancer", or "premade"
+#                      (default: local)
+#                      Worktree teams get an isolated git branch.
+#                      Freelancer teams have no manager — all panes are
+#                      born-reserved workers available to any team.
+#                      Premade teams use a .team.md definition file.
+#
+#   DEF .............. Team definition name (required for premade teams)
+#                      Must match a file in ~/.local/share/doey/teams/.
+#                      Run `doey teams` to list available definitions.
+#
+#   WORKERS .......... Number of worker panes (default: from grid calculation)
+#                      Each worker runs one Claude instance.
+#
+#   NAME ............. Human-readable team name (default: "Team <N>")
+#                      Shown in settings panel and pane borders.
+#
+#   ROLE ............. Team specialization hint (default: none)
+#                      Injected into worker system prompts. Examples:
+#                      "backend", "frontend", "testing", "docs"
+#
+#   WORKER_MODEL ..... Model for workers in this team (default: DOEY_WORKER_MODEL)
+#                      Overrides the global worker model for this team only.
+#
+#   MANAGER_MODEL .... Model for the manager (default: DOEY_MANAGER_MODEL)
+#                      Overrides the global manager model for this team only.
+#
+# Example — two specialized teams:
+#
 # DOEY_TEAM_COUNT=2
 #
 # DOEY_TEAM_1_TYPE=local
 # DOEY_TEAM_1_WORKERS=6
-# DOEY_TEAM_1_WORKER_MODEL=opus
-# DOEY_TEAM_1_NAME="Core Team"
+# DOEY_TEAM_1_NAME="Backend"
 # DOEY_TEAM_1_ROLE=backend
+# DOEY_TEAM_1_WORKER_MODEL=opus
+# DOEY_TEAM_1_MANAGER_MODEL=opus
 #
 # DOEY_TEAM_2_TYPE=worktree
 # DOEY_TEAM_2_WORKERS=4
-# DOEY_TEAM_2_WORKER_MODEL=sonnet
 # DOEY_TEAM_2_NAME="Frontend"
 # DOEY_TEAM_2_ROLE=frontend
+# DOEY_TEAM_2_WORKER_MODEL=sonnet
+# DOEY_TEAM_2_MANAGER_MODEL=opus
+#
+# Example — local team + premade visual verification:
+#
+# DOEY_TEAM_COUNT=2
+#
+# DOEY_TEAM_1_TYPE=local
+# DOEY_TEAM_1_WORKERS=4
+#
+# DOEY_TEAM_2_TYPE=premade
+# DOEY_TEAM_2_DEF=visual
+#
+# Example — two premade specialist teams:
+#
+# DOEY_TEAM_COUNT=2
+#
+# DOEY_TEAM_1_TYPE=premade
+# DOEY_TEAM_1_DEF=visual
+#
+# DOEY_TEAM_2_TYPE=premade
+# DOEY_TEAM_2_DEF=seo
 
-# =============================================================================
+# ─────────────────────────────────────────────
 # Project-Specific Overrides
-# =============================================================================
+# ─────────────────────────────────────────────
 # These settings are most useful in per-project .doey/config.sh files.
 # They let you tune team size and timing per-project without affecting
 # your global defaults.
 #
 # Examples:
-#   # Smaller team for a simple project
-#   DOEY_INITIAL_WORKER_COLS=2
+#   # Minimal team for a simple project
+#   DOEY_INITIAL_WORKER_COLS=1
+#   DOEY_INITIAL_TEAMS=1
 #
 #   # Larger team for a monorepo
-#   DOEY_INITIAL_WORKER_COLS=4
+#   DOEY_INITIAL_WORKER_COLS=3
+#   DOEY_INITIAL_TEAMS=4
+#   DOEY_INITIAL_WORKTREE_TEAMS=2
 #   DOEY_MAX_WORKERS=30
 
+# ─────────────────────────────────────────────
+# Remote Access & Tunneling
+# ─────────────────────────────────────────────
+# Auto-detect remote sessions and start tunnels for localhost services.
 
+# Enable auto-tunnel when remote session detected (true/false)
+# DOEY_TUNNEL_ENABLED=false
 
+# Tunnel provider: cloudflared, ngrok, bore, or auto (detect first available)
+# DOEY_TUNNEL_PROVIDER=auto
 
+# Ports to tunnel (comma-separated). Empty = auto-detect common ports.
+# DOEY_TUNNEL_PORTS=
 
-
-
-
-DOEY_TEAM_COUNT=2
-DOEY_TEAM_1_TYPE=freelancer
-DOEY_TEAM_1_DEF=generic
-DOEY_TEAM_1_WORKERS=4
-DOEY_TEAM_2_TYPE=premade
-DOEY_TEAM_2_DEF=generic
-DOEY_TEAM_2_WORKERS=4
+# Custom domain for tunnel (provider-specific, optional)
+# DOEY_TUNNEL_DOMAIN=
