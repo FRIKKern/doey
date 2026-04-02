@@ -106,12 +106,15 @@ if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
     case "$_status" in
       active)
         if ! grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null; then
-          _has_queued=true
+          _has_queued=true; _has_active=true
+          _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
         fi
-        _has_active=true; _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
         ;;
       in_progress)
-        _has_active=true; _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
+        if ! grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null; then
+          _has_active=true
+          _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
+        fi
         ;;
     esac
   done
