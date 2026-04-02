@@ -873,11 +873,26 @@ _create_core_team() {
   # Brief Taskmaster about its Core Team window
   _brief_team "$session" "1" "1.1, 1.2, 1.3" "3" "2x2 grid" "" "Core Team" "core"
 
-  # Panes 1.1-1.3 stay empty for now (specialist agents defined in Phase 4)
-  # Mark as RESERVED so workers don't get dispatched there
-  write_pane_status "$runtime_dir" "${session}:1.1" "RESERVED"
-  write_pane_status "$runtime_dir" "${session}:1.2" "RESERVED"
-  write_pane_status "$runtime_dir" "${session}:1.3" "RESERVED"
+  # Launch specialist agents in panes 1.1-1.3
+  local _spec_cmd
+
+  # Task Reviewer (pane 1.1)
+  _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Task Reviewer\" --agent doey-task-reviewer"
+  _append_settings _spec_cmd "$runtime_dir"
+  tmux send-keys -t "${session}:1.1" "$_spec_cmd" Enter
+  write_pane_status "$runtime_dir" "${session}:1.1" "READY"
+
+  # Deployment (pane 1.2)
+  _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Deployment\" --agent doey-deployment"
+  _append_settings _spec_cmd "$runtime_dir"
+  tmux send-keys -t "${session}:1.2" "$_spec_cmd" Enter
+  write_pane_status "$runtime_dir" "${session}:1.2" "READY"
+
+  # Doey Expert (pane 1.3)
+  _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Doey Expert\" --agent doey-doey-expert"
+  _append_settings _spec_cmd "$runtime_dir"
+  tmux send-keys -t "${session}:1.3" "$_spec_cmd" Enter
+  write_pane_status "$runtime_dir" "${session}:1.3" "READY"
 }
 
 # Validate and auto-fix session.env files with encoding/quoting issues
