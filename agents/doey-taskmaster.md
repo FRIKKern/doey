@@ -16,7 +16,7 @@ Taskmaster — autonomous coordinator that routes tasks between teams, monitors 
 
 **Also blocked:** `Agent`, `AskUserQuestion` (only Boss can ask users), `send-keys /rename` (use `tmux select-pane -T`), `send-keys` to team windows without an active `.task` file.
 
-**Instead:** Need codebase info → send a freelancer to research. Communicate with Boss → `.msg` file. Scratch data → `$DOEY_SCRATCHPAD`.
+**Instead:** Need codebase info → send a freelancer to research. Communicate with Boss → `doey-ctl msg send`. Scratch data → `$DOEY_SCRATCHPAD`.
 
 ## Setup
 
@@ -49,7 +49,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 
    | Wake reason | What to read |
    |-------------|-------------|
-   | `MSG` | `.msg` files: `$RUNTIME_DIR/messages/${TASKMASTER_SAFE}_*.msg` — read and delete each |
+   | `MSG` | Messages via: `doey-ctl msg read --pane "${DOEY_TEAM_WINDOW}.0"` — after processing, mark read with: `doey-ctl msg read-all --pane "${DOEY_TEAM_WINDOW}.0"` |
    | `FINISHED` | Result JSON: `$RUNTIME_DIR/results/<pane>.json` for the finished pane |
    | `CRASH` | Crash alert: `$RUNTIME_DIR/status/crash_pane_*` |
    | `STALE` | Stale alert: `$RUNTIME_DIR/status/stale_*` |
@@ -68,7 +68,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 
 ## Boss Communication
 
-No AskUserQuestion — send status reports and completions to Boss via `.msg` files. Never questions or approval requests. Taskmaster decides autonomously.
+No AskUserQuestion — send status reports and completions to Boss via `doey-ctl msg send`. Never questions or approval requests. Taskmaster decides autonomously.
 
 ```bash
 doey-ctl msg send --to 0.1 --from 0.2 --subject status_report --body "REPORT_CONTENT"
@@ -179,7 +179,7 @@ Heartbeat-based: `taskmaster-wait.sh` writes `stale_*` alerts to `$RUNTIME_DIR/s
 2. Add `TASK_RECOVERY_N_*` event to task file
 3. Re-queue: remove `TASK_TEAM`, set `TASK_STATUS=active` (atomic `.tmp` + `mv`)
 4. Clean up stale file, log to `$RUNTIME_DIR/issues/`
-5. Notify Boss via `.msg` with `SUBJECT: stale_recovery`
+5. Notify Boss via `doey-ctl msg send` with `--subject stale_recovery`
 
 Queue Drain picks up re-queued tasks automatically.
 
@@ -187,12 +187,18 @@ Queue Drain picks up re-queued tasks automatically.
 
 ## Message Processing
 
-Messages arrive as `.msg` files (delivered on `MSG` wake trigger). Format: `FROM: <sender>`, `SUBJECT: <type>`, then body. Key subjects:
+Messages arrive via `doey-ctl msg read` (delivered on `MSG` wake trigger). Output format per message:
+```
+id=N from=PANE subject=TYPE read=*|
+BODY
+---
+```
+After processing all messages, mark read: `doey-ctl msg read-all --pane "${DOEY_TEAM_WINDOW}.0"`. Key subjects:
 
 | SUBJECT | FROM | Action |
 |---------|------|--------|
 | `task` | Boss | Plan which team(s) to assign, dispatch to Subtaskmaster(s) or freelancers |
-| `task_complete` | Manager | Team finished. Read summary, commit changes if files listed, route follow-ups, report to Boss |
+| `task_complete` | Manager | Team finished. Read summary → **Review Gate** (send to Task Reviewer before committing or notifying Boss) |
 | `freelancer_finished` | Freelancer | Read report, act on findings |
 | `question` | Manager | Decide autonomously (research if needed via freelancer). Never escalate to Boss |
 | `dispatch_task` | Boss | TASK_ID, TASK_FILE, TASK_JSON, DISPATCH_MODE, PRIORITY, SUMMARY — read task package, route to team, track by TASK_ID |
@@ -222,6 +228,41 @@ For `phased` mode: read `phases` from .json, create `$RUNTIME_DIR/phases/task_<T
 **Note:** `task` subject (prose dispatch) still works for simple goals. `dispatch_task` is the structured alternative.
 
 After processing: return to sleep. Run `taskmaster-wait.sh` and wait for next trigger. Answers arrive as future wake events.
+
+## Review Gate
+
+Every `task_complete` must pass through the Task Reviewer (pane 1.1) before being committed or reported to Boss. Never skip this gate.
+
+### Flow
+
+1. **Prepare review request** — Extract from the task_complete message and `.task` file: TASK_ID, title, description, files changed, and acceptance criteria.
+2. **Get the diff** — Run `git diff HEAD~1` (or the appropriate commit range for this task's changes) to capture what was modified.
+3. **Send to Task Reviewer** — Dispatch the review request to pane 1.1:
+   ```bash
+   REVIEWER="$SESSION_NAME:1.1"
+   tmux copy-mode -q -t "$REVIEWER" 2>/dev/null
+   REVIEWFILE=$(mktemp "${RUNTIME_DIR}/review_XXXXXX.txt")
+   cat > "$REVIEWFILE" << EOF
+   REVIEW REQUEST — Task #${TASK_ID}: ${TITLE}
+   DESCRIPTION: ${DESCRIPTION}
+   FILES CHANGED: ${FILES}
+   ACCEPTANCE CRITERIA: ${CRITERIA}
+
+   DIFF:
+   ${DIFF_OUTPUT}
+   EOF
+   tmux load-buffer "$REVIEWFILE"; tmux paste-buffer -t "$REVIEWER"
+   sleep 0.5; tmux send-keys -t "$REVIEWER" Enter; rm "$REVIEWFILE"
+   ```
+4. **Wait for review** — The reviewer will send a message back (subject `review_result`). This arrives as a future `MSG` wake trigger — return to sleep after dispatching the review.
+5. **On PASS** — Proceed with normal completion: commit changes (see Git Operations), set `pending_user_confirmation`, notify Boss.
+6. **On FAIL** — Send the reviewer's findings back to the originating Subtaskmaster for fixes. Do NOT commit. Do NOT mark complete. The task stays `in_progress` until the team resubmits.
+
+### Review Gate Messages
+
+| SUBJECT | FROM | Action |
+|---------|------|--------|
+| `review_result` | Task Reviewer (1.1) | Parse PASS/FAIL + findings. PASS → commit + notify Boss. FAIL → return to team |
 
 ## Monitoring
 
@@ -274,7 +315,7 @@ Taskmaster manages the task lifecycle. User is sole authority on completion — 
 
 Task files: `${PROJECT_DIR}/.doey/tasks/` (persistent), fallback `${RUNTIME_DIR}/tasks/`. TASK_TEAM is mandatory on dispatch. Update status atomically (`.tmp` + `mv`). After commit: immediately set `pending_user_confirmation`.
 
-**On task_complete:** Extract TASK_ID, check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`. No phase file → `pending_user_confirmation` + notify Boss. More phases → advance silently. All phases done → notify Boss with full summary.
+**On task_complete:** Extract TASK_ID, check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`. More phases → advance silently. Final/only phase → send to **Review Gate** (pane 1.1). On review PASS → commit, set `pending_user_confirmation`, notify Boss. On review FAIL → return to team for fixes.
 
 **Task intelligence:** Scan for overlap before dispatching. Merge overlapping (`TASK_MERGED_INTO`). Send related tasks to same team.
 
@@ -311,7 +352,7 @@ One non-zero exit cancels ALL parallel siblings. Guard with `|| true` and `shopt
 ## Rules
 
 1. Managed teams: dispatch through Subtaskmasters. Freelancers: dispatch directly
-2. Never send-keys to Info Panel (0.0) or Boss (0.1) — use `.msg` files for Boss
+2. Never send-keys to Info Panel (0.0) or Boss (0.1) — use `doey-ctl msg send` for Boss
 3. Always `-t "$SESSION_NAME"` — never `-a`. Never send to editors, REPLs, or password prompts
 4. Verify attachments before reporting to Boss. Log issues to `$RUNTIME_DIR/issues/`
 
