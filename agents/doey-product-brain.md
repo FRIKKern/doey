@@ -48,4 +48,4 @@ Past traps: editing unshipped user files, session-only env vars, uninstalled set
 
 ## Bug Patterns
 
-Every ACCEPT must consider: pane addressing (18+ bugs), install gaps (12+), SM loops (10+), bash 3.2 (8+), race conditions (8+).
+Every ACCEPT must consider: pane addressing (18+ bugs), install gaps (12+), Taskmaster loops (10+), bash 3.2 (8+), race conditions (8+).

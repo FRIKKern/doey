@@ -7,7 +7,7 @@ PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
 case "$PROMPT" in
-  /compact*)        write_pane_status "$STATUS_FILE" "READY"; notify_sm "READY" "compact"; exit 0 ;;
+  /compact*)        write_pane_status "$STATUS_FILE" "READY"; notify_taskmaster "READY" "compact"; exit 0 ;;
   /simplify*|/loop*|/rename*|/exit*|/help*|/status*|/doey*) exit 0 ;;
 esac
 
@@ -20,7 +20,7 @@ _prompt_safe=$(printf '%s' "${PROMPT:0:120}" | tr '"\\' '__')
 write_activity "status_change" '{"status":"BUSY"}'
 write_activity "task_assigned" "{\"task\":\"${_prompt_safe}\"}"
 
-notify_sm "BUSY" "${PROMPT:0:60}"
+notify_taskmaster "BUSY" "${PROMPT:0:60}"
 _log "task started: $(echo "$PROMPT" | head -c 80)"
 
 # Persist task ID for stop hooks — extract Task #N from dispatch prompts
@@ -32,8 +32,8 @@ if is_worker; then
   fi
 fi
 
-if is_session_manager; then
-  touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+if is_taskmaster; then
+  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
   touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
 fi
 

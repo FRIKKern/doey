@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Session Manager wait — checks for pending work, sleeps briefly if idle.
+# Taskmaster wait — checks for pending work, sleeps briefly if idle.
 set -euo pipefail
 
 if [ -n "${DOEY_RUNTIME:-}" ]; then RUNTIME_DIR="$DOEY_RUNTIME"
@@ -10,29 +10,29 @@ source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 trap 'exit 0' ERR
 source "$(dirname "$0")/common.sh" 2>/dev/null || true
 
-SM_PANE="${SM_PANE:-0.2}"
-SM_SAFE="${SESSION_NAME//[-:.]/_}_${SM_PANE//[-:.]/_}"
-PANE="${SESSION_NAME}:${SM_PANE}"; PANE_SAFE="$SM_SAFE"
-_SM_STATUS_FILE="${RUNTIME_DIR}/status/${SM_SAFE}.status"
-trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); write_pane_status "$_SM_STATUS_FILE" "BUSY" "SM idle — listening" 2>/dev/null || true' EXIT
+TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
+TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_${TASKMASTER_PANE//[-:.]/_}"
+PANE="${SESSION_NAME}:${TASKMASTER_PANE}"; PANE_SAFE="$TASKMASTER_SAFE"
+_TASKMASTER_STATUS_FILE="${RUNTIME_DIR}/status/${TASKMASTER_SAFE}.status"
+trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); write_pane_status "$_TASKMASTER_STATUS_FILE" "BUSY" "SM idle — listening" 2>/dev/null || true' EXIT
 MSG_DIR="${RUNTIME_DIR}/messages"
-TRIGGER="${RUNTIME_DIR}/status/session_manager_trigger"
-TRIGGER2="${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger"
-TRIGGER3="${RUNTIME_DIR}/status/sm_trigger"
+TRIGGER="${RUNTIME_DIR}/status/taskmaster_trigger"
+TRIGGER2="${RUNTIME_DIR}/triggers/${TASKMASTER_SAFE}.trigger"
+TRIGGER3="${RUNTIME_DIR}/status/taskmaster_trigger"
 
-_SM_DBG=false; [ -f "${RUNTIME_DIR}/debug.conf" ] && _SM_DBG=true
-_SM_DBG_FILE="${RUNTIME_DIR}/debug/session_manager.jsonl"
+_TASKMASTER_DBG=false; [ -f "${RUNTIME_DIR}/debug.conf" ] && _TASKMASTER_DBG=true
+_TASKMASTER_DBG_FILE="${RUNTIME_DIR}/debug/taskmaster.jsonl"
 
-_sm_dbg_wake() {
-  [ "$_SM_DBG" = "true" ] || return 0
-  mkdir -p "$(dirname "$_SM_DBG_FILE")" 2>/dev/null
-  printf '{"ts":%s,"cat":"sm","msg":"sm_wake","reason":"%s","wait_s":%s}\n' \
-    "$(date +%s)" "$1" "${2:-0}" >> "$_SM_DBG_FILE" 2>/dev/null
+_taskmaster_dbg_wake() {
+  [ "$_TASKMASTER_DBG" = "true" ] || return 0
+  mkdir -p "$(dirname "$_TASKMASTER_DBG_FILE")" 2>/dev/null
+  printf '{"ts":%s,"cat":"taskmaster","msg":"taskmaster_wake","reason":"%s","wait_s":%s}\n' \
+    "$(date +%s)" "$1" "${2:-0}" >> "$_TASKMASTER_DBG_FILE" 2>/dev/null
 }
 
-_wake() { _sm_bump_cycle; _sm_dbg_wake "$1" "${2:-0}"; echo "$1"; exit 0; }
+_wake() { _taskmaster_bump_cycle; _taskmaster_dbg_wake "$1" "${2:-0}"; echo "$1"; exit 0; }
 
-SEEN_FILE="${RUNTIME_DIR}/status/sm_seen_results"
+SEEN_FILE="${RUNTIME_DIR}/status/taskmaster_seen_results"
 _seen_results=""
 [ -f "$SEEN_FILE" ] && _seen_results=$(cat "$SEEN_FILE" 2>/dev/null || true)
 
@@ -72,14 +72,14 @@ _check_stale_heartbeats() {
   [ "$_found" = true ]
 }
 
-CYCLE_FILE="${RUNTIME_DIR}/status/sm_cycle_count"
-COMPACT_INTERVAL="${DOEY_SM_COMPACT_INTERVAL:-20}"
-_sm_cycle=0
-[ -f "$CYCLE_FILE" ] && _sm_cycle=$(cat "$CYCLE_FILE" 2>/dev/null || echo 0)
+CYCLE_FILE="${RUNTIME_DIR}/status/taskmaster_cycle_count"
+COMPACT_INTERVAL="${DOEY_TASKMASTER_COMPACT_INTERVAL:-20}"
+_taskmaster_cycle=0
+[ -f "$CYCLE_FILE" ] && _taskmaster_cycle=$(cat "$CYCLE_FILE" 2>/dev/null || echo 0)
 
-_sm_bump_cycle() {
-  _sm_cycle=$((_sm_cycle + 1))
-  echo "$_sm_cycle" > "$CYCLE_FILE"
+_taskmaster_bump_cycle() {
+  _taskmaster_cycle=$((_taskmaster_cycle + 1))
+  echo "$_taskmaster_cycle" > "$CYCLE_FILE"
 }
 
 _check_work() {  # Exits script if work found, returns 1 otherwise
@@ -87,7 +87,7 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
     rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null; _wake "TRIGGERED" "$elapsed"
   fi
-  set -- "$MSG_DIR"/${SM_SAFE}_*.msg
+  set -- "$MSG_DIR"/${TASKMASTER_SAFE}_*.msg
   [ -f "${1:-}" ] && _wake "NEW_MESSAGES" "$elapsed"
   if _has_new_results; then _mark_results_seen; _wake "NEW_RESULTS" "$elapsed"; fi
   set -- "$RUNTIME_DIR/status"/crash_pane_*
@@ -117,26 +117,26 @@ if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
   done
 fi
 
-if [ "$((_sm_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
+if [ "$((_taskmaster_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
   echo "0" > "$CYCLE_FILE"; _wake "COMPACT_CYCLE"
 fi
 
 _check_work "0" || true
 
 if [ "$_has_active" = "true" ]; then
-  _sm_bump_cycle
+  _taskmaster_bump_cycle
   sleep 5
   _check_work "5" || true
-  _sm_dbg_wake "active_tasks_idle" "5"
+  _taskmaster_dbg_wake "active_tasks_idle" "5"
   printf 'ACTIVE_TASKS %b' "$_active_list"
-  rm -f "${RUNTIME_DIR}/status/sm_sleep_reported" 2>/dev/null
+  rm -f "${RUNTIME_DIR}/status/taskmaster_sleep_reported" 2>/dev/null
   exit 0
 fi
 
-_sleep_flag="${RUNTIME_DIR}/status/sm_sleep_reported"
+_sleep_flag="${RUNTIME_DIR}/status/taskmaster_sleep_reported"
 if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
   _boss_safe="${SESSION_NAME//[-:.]/_}_0_1"
-  printf 'FROM: SessionManager\nSUBJECT: sleep_report\nAll tasks resolved. SM entering sleep.\n' \
+  printf 'FROM: Taskmaster\nSUBJECT: sleep_report\nAll tasks resolved. Taskmaster entering sleep.\n' \
     > "${RUNTIME_DIR}/messages/${_boss_safe}_$(date +%s)_$$.msg"
   touch "$_sleep_flag"
 fi
@@ -144,5 +144,5 @@ fi
 _sleep_dur=10
 sleep "$_sleep_dur"
 _check_work "$_sleep_dur" || true
-_sm_dbg_wake "idle" "$_sleep_dur"
+_taskmaster_dbg_wake "idle" "$_sleep_dur"
 echo "IDLE"

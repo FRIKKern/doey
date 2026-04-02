@@ -161,4 +161,4 @@ if [ "$STATUS" = "error" ] && [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ]; 
   fi
 fi
 
-touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null || true
+touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true

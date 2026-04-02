@@ -27,8 +27,8 @@ fi
 
 ROLE_LABEL="a Doey worker"
 is_boss && ROLE_LABEL="the Doey Boss"
-is_manager && ROLE_LABEL="the Doey Window Manager"
-is_session_manager && ROLE_LABEL="the Doey Session Manager"
+is_manager && ROLE_LABEL="the Doey Subtaskmaster"
+is_taskmaster && ROLE_LABEL="the Doey Taskmaster"
 
 cat <<CONTEXT
 ## Context Preservation (Pre-Compaction)
@@ -105,15 +105,15 @@ ${COMPLETION_FILES:-None}
 ${CRASH_FILES:-None}
 
 ## ⚠ CORE LOOP — RESUME ACTIVE MONITORING AFTER COMPACTION
-You are a Window Manager. You MUST stay active while ANY worker is BUSY.
+You are a Subtaskmaster. You MUST stay active while ANY worker is BUSY.
 After compaction, resume your active monitoring loop IMMEDIATELY:
 1. Drain message queue — read all .msg files for completion reports
 2. Check worker status files — who is BUSY, FINISHED, ERROR, or crashed?
 3. Collect and validate result files for finished workers
 4. Update context log with consolidated outcomes
 5. If workers still BUSY → brief pause (10-15s) → go to step 1
-6. If all workers FINISHED/ERROR → consolidate, report to SM, dispatch next wave
-Do NOT go idle. Do NOT wait for SM instructions. You drive the loop.
+6. If all workers FINISHED/ERROR → consolidate, report to Taskmaster, dispatch next wave
+Do NOT go idle. Do NOT wait for Taskmaster instructions. You drive the loop.
 MGRSTATE
 
   _MGR_SAFE="${SESSION_NAME//[-:.]/_}_${_TEAM_W}_0"
@@ -131,11 +131,11 @@ CTXLOG
   fi
 fi
 
-if is_session_manager; then
-  SM_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+if is_taskmaster; then
+  TASKMASTER_TEAMS=$(grep '^TEAM_WINDOWS=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
 
-  SM_SAFE="${SESSION_NAME//[-:.]/_}_0_${PANE_INDEX}"
-  SM_PENDING_MSGS=$(_gather_msgs "$SM_SAFE")
+  TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_0_${PANE_INDEX}"
+  TASKMASTER_PENDING_MSGS=$(_gather_msgs "$TASKMASTER_SAFE")
 
   _TASK_PROJECT="${DOEY_PROJECT_DIR:-${PROJECT_DIR:-}}"
   [ -z "$_TASK_PROJECT" ] && _TASK_PROJECT=$(git rev-parse --show-toplevel 2>/dev/null || true)
@@ -144,23 +144,23 @@ if is_session_manager; then
     _TASK_SRC="${_TASK_PROJECT}/.doey/tasks"
   fi
 
-  SM_ACTIVE_TASKS=""
+  TASKMASTER_ACTIVE_TASKS=""
   for _tf in "${_TASK_SRC}"/*.task; do
     [ -f "$_tf" ] || continue
     grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$_tf" && continue
-    SM_ACTIVE_TASKS="${SM_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"
+    TASKMASTER_ACTIVE_TASKS="${TASKMASTER_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"
   done
 
   cat <<SMSTATE
 
 ## SESSION MANAGER ORCHESTRATION STATE (restore after compaction)
-**Team Windows:** ${SM_TEAMS:-None}
+**Team Windows:** ${TASKMASTER_TEAMS:-None}
 
 **Active Tasks:**
-${SM_ACTIVE_TASKS:-None}
+${TASKMASTER_ACTIVE_TASKS:-None}
 
 ## ⚠ CORE LOOP — RESUME IMMEDIATELY AFTER COMPACTION
-You are the Session Manager. Your job is an autonomous, permanent ACTIVE loop.
+You are the Taskmaster. Your job is an autonomous, permanent ACTIVE loop.
 Do NOT wait for instructions. Do NOT depend on the wait hook to tell you what to do.
 YOU drive the loop — the wait hook is just a brief pause.
 
@@ -168,17 +168,17 @@ YOU drive the loop — the wait hook is just a brief pause.
 2. **Check pane status** — read \$RUNTIME_DIR/status/*.status for FINISHED, ERROR, crashes
 3. **Check results** — read \$RUNTIME_DIR/results/ for new result files
 4. **Act** — route tasks, process completions, escalate errors, handle git
-5. **Brief pause** — call session-manager-wait.sh (3s max), then go to step 1
+5. **Brief pause** — call taskmaster-wait.sh (3s max), then go to step 1
 
 You are the ONLY role that commits/pushes — do it directly, no delegation needed.
 Do NOT wait for instructions. Do NOT escalate to Boss for approval. Resume this loop NOW.
 SMSTATE
 
-  if [ -f "$RUNTIME_DIR/status/sm_seen_results" ]; then
-    echo "SM_SEEN_RESULTS=$(cat "$RUNTIME_DIR/status/sm_seen_results")"
+  if [ -f "$RUNTIME_DIR/status/taskmaster_seen_results" ]; then
+    echo "SM_SEEN_RESULTS=$(cat "$RUNTIME_DIR/status/taskmaster_seen_results")"
   fi
 
-  _print_pending_msgs "$SM_SAFE" "$SM_PENDING_MSGS"
+  _print_pending_msgs "$TASKMASTER_SAFE" "$TASKMASTER_PENDING_MSGS"
 fi
 
 if is_boss; then
@@ -186,7 +186,7 @@ if is_boss; then
 
 ## BOSS STATE (restore after compaction)
 **You are Boss** — user-facing Project Manager at pane 0.1
-**SM is at:** pane 0.2
+**Taskmaster is at:** pane 0.2
 BOSSSTATE
   BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
   BOSS_MSGS=$(_gather_msgs "$BOSS_SAFE")
