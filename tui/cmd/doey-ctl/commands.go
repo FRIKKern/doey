@@ -30,7 +30,11 @@ func tryOpenStore(dir string) *store.Store {
 // runTaskCmd dispatches task sub-subcommands.
 func runTaskCmd(args []string) {
 	if len(args) == 0 {
-		fatal("task: missing subcommand (create, update, list, get, delete, subtask, log, decision)")
+		fatal("task: missing subcommand: create, update, list, get, delete, subtask, log, decision\nRun 'doey-ctl task -h' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printTaskHelp()
+		return
 	}
 	switch args[0] {
 	case "create":
@@ -50,7 +54,11 @@ func runTaskCmd(args []string) {
 	case "decision":
 		runTaskDecision(args[1:])
 	default:
-		fatal("task: unknown subcommand %q", args[0])
+		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision"}
+		if suggestion := suggestSubcommand(args[0], validTaskSubs); suggestion != "" {
+			fatal("task: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task -h' for usage.\n", args[0], suggestion)
+		}
+		fatal("task: unknown subcommand: %s. Valid: create, update, list, get, delete, subtask, log, decision\nRun 'doey-ctl task -h' for usage.\n", args[0])
 	}
 }
 
@@ -283,15 +291,19 @@ func runTaskList(args []string) {
 
 func runTaskGet(args []string) {
 	fs := flag.NewFlagSet("task get", flag.ExitOnError)
+	idFlag := fs.String("id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task get: missing task ID")
+	taskIDStr := *idFlag
+	if taskIDStr == "" && fs.NArg() > 0 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task get: missing task ID\nRun 'doey-ctl task get -h' for usage.\n")
 	}
 
 	pd := projectDir(*dir)
-	taskIDStr := fs.Arg(0)
 	s := tryOpenStore(pd)
 
 	if s != nil {
@@ -384,15 +396,19 @@ func runTaskGet(args []string) {
 
 func runTaskDelete(args []string) {
 	fs := flag.NewFlagSet("task delete", flag.ExitOnError)
+	idFlag := fs.String("id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task delete: missing task ID")
+	taskIDStr := *idFlag
+	if taskIDStr == "" && fs.NArg() > 0 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task delete: missing task ID\nRun 'doey-ctl task delete -h' for usage.\n")
 	}
 
 	pd := projectDir(*dir)
-	taskIDStr := fs.Arg(0)
 	s := tryOpenStore(pd)
 
 	if s == nil {
@@ -418,7 +434,11 @@ func runTaskDelete(args []string) {
 
 func runTaskSubtask(args []string) {
 	if len(args) == 0 {
-		fatal("task subtask: missing subcommand (add, update, list)")
+		fatal("task subtask: missing subcommand: add, update, list\nRun 'doey-ctl task subtask -h' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printTaskSubtaskHelp()
+		return
 	}
 	switch args[0] {
 	case "add":
@@ -428,22 +448,35 @@ func runTaskSubtask(args []string) {
 	case "list":
 		runSubtaskList(args[1:])
 	default:
-		fatal("task subtask: unknown subcommand %q", args[0])
+		validSubs := []string{"add", "update", "list"}
+		if suggestion := suggestSubcommand(args[0], validSubs); suggestion != "" {
+			fatal("task subtask: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task subtask -h' for usage.\n", args[0], suggestion)
+		}
+		fatal("task subtask: unknown subcommand: %s. Valid: add, update, list\nRun 'doey-ctl task subtask -h' for usage.\n", args[0])
 	}
 }
 
 func runSubtaskAdd(args []string) {
 	fs := flag.NewFlagSet("task subtask add", flag.ExitOnError)
+	taskIDFlag := fs.String("task-id", "", "task ID")
 	title := fs.String("title", "", "subtask title (DB mode; positional desc used for file mode)")
+	desc := fs.String("description", "", "description (alias for --title)")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task subtask add: missing task ID")
+	if *title == "" && *desc != "" {
+		*title = *desc
+	}
+
+	taskIDStr := *taskIDFlag
+	if taskIDStr == "" && fs.NArg() > 0 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task subtask add: task ID required (positional or --task-id)\nRun 'doey-ctl task subtask add -h' for usage.\n")
 	}
 
 	pd := projectDir(*dir)
-	taskIDStr := fs.Arg(0)
 	s := tryOpenStore(pd)
 
 	if s != nil {
@@ -451,11 +484,19 @@ func runSubtaskAdd(args []string) {
 		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
 		if err == nil {
 			subtaskTitle := *title
-			if subtaskTitle == "" && fs.NArg() >= 2 {
-				subtaskTitle = strings.Join(fs.Args()[1:], " ")
+			if subtaskTitle == "" {
+				// Positional args: if --task-id was used, all positional args are the description.
+				// Otherwise, args after the first (task ID) are the description.
+				descStart := 1
+				if *taskIDFlag != "" {
+					descStart = 0
+				}
+				if fs.NArg() > descStart {
+					subtaskTitle = strings.Join(fs.Args()[descStart:], " ")
+				}
 			}
 			if subtaskTitle == "" {
-				fatal("task subtask add: --title or positional description required")
+				fatal("task subtask add: --title or positional description required\nRun 'doey-ctl task subtask add -h' for usage.\n")
 			}
 
 			st := &store.Subtask{
@@ -481,12 +522,19 @@ func runSubtaskAdd(args []string) {
 	}
 
 	// File-only fallback.
-	if fs.NArg() < 2 {
-		fatal("task subtask add: usage: <task-id> <description>")
+	descStart := 1
+	if *taskIDFlag != "" {
+		descStart = 0
 	}
-	desc := strings.Join(fs.Args()[1:], " ")
+	fallbackDesc := *title
+	if fallbackDesc == "" && fs.NArg() > descStart {
+		fallbackDesc = strings.Join(fs.Args()[descStart:], " ")
+	}
+	if fallbackDesc == "" {
+		fatal("task subtask add: usage: <task-id> <description>\nRun 'doey-ctl task subtask add -h' for usage.\n")
+	}
 
-	idx, err := ctl.AddSubtask(pd, taskIDStr, desc)
+	idx, err := ctl.AddSubtask(pd, taskIDStr, fallbackDesc)
 	if err != nil {
 		fatal("task subtask add: %v", err)
 	}
@@ -616,15 +664,19 @@ func runSubtaskUpdate(args []string) {
 
 func runSubtaskList(args []string) {
 	fs := flag.NewFlagSet("task subtask list", flag.ExitOnError)
+	taskIDFlag := fs.String("task-id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task subtask list: missing task ID")
+	taskIDStr := *taskIDFlag
+	if taskIDStr == "" && fs.NArg() > 0 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task subtask list: task ID required (positional or --task-id)\nRun 'doey-ctl task subtask list -h' for usage.\n")
 	}
 
 	pd := projectDir(*dir)
-	taskIDStr := fs.Arg(0)
 	s := tryOpenStore(pd)
 
 	if s != nil {
@@ -668,7 +720,11 @@ func runSubtaskList(args []string) {
 // runTaskLog dispatches task log sub-subcommands.
 func runTaskLog(args []string) {
 	if len(args) == 0 {
-		fatal("task log: missing subcommand (add, list)")
+		fatal("task log: missing subcommand: add, list\nRun 'doey-ctl task log -h' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printTaskLogHelp()
+		return
 	}
 	switch args[0] {
 	case "add":
@@ -676,12 +732,17 @@ func runTaskLog(args []string) {
 	case "list":
 		runTaskLogList(args[1:])
 	default:
-		fatal("task log: unknown subcommand %q", args[0])
+		validSubs := []string{"add", "list"}
+		if suggestion := suggestSubcommand(args[0], validSubs); suggestion != "" {
+			fatal("task log: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task log -h' for usage.\n", args[0], suggestion)
+		}
+		fatal("task log: unknown subcommand: %s. Valid: add, list\nRun 'doey-ctl task log -h' for usage.\n", args[0])
 	}
 }
 
 func runTaskLogAdd(args []string) {
 	fs := flag.NewFlagSet("task log add", flag.ExitOnError)
+	taskIDFlag := fs.String("task-id", "", "task ID")
 	logType := fs.String("type", "note", "log entry type")
 	author := fs.String("author", "", "author name")
 	title := fs.String("title", "", "log entry title")
@@ -689,12 +750,15 @@ func runTaskLogAdd(args []string) {
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task log add: missing task ID")
+	taskIDStr := *taskIDFlag
+	if taskIDStr == "" && fs.NArg() > 0 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task log add: task ID required (positional or --task-id)\nRun 'doey-ctl task log add -h' for usage.\n")
 	}
 
 	pd := projectDir(*dir)
-	taskIDStr := fs.Arg(0)
 	s := tryOpenStore(pd)
 
 	if s != nil {
@@ -702,8 +766,12 @@ func runTaskLogAdd(args []string) {
 		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
 		if err == nil {
 			entryTitle := *title
-			if entryTitle == "" && fs.NArg() >= 2 {
-				entryTitle = strings.Join(fs.Args()[1:], " ")
+			titleStart := 1
+			if *taskIDFlag != "" {
+				titleStart = 0
+			}
+			if entryTitle == "" && fs.NArg() > titleStart {
+				entryTitle = strings.Join(fs.Args()[titleStart:], " ")
 			}
 			entry := &store.TaskLogEntry{
 				TaskID: taskID,
@@ -731,8 +799,12 @@ func runTaskLogAdd(args []string) {
 
 	// File-only fallback: append to DECISION_LOG.
 	text := *title
-	if text == "" && fs.NArg() >= 2 {
-		text = strings.Join(fs.Args()[1:], " ")
+	textStart := 1
+	if *taskIDFlag != "" {
+		textStart = 0
+	}
+	if text == "" && fs.NArg() > textStart {
+		text = strings.Join(fs.Args()[textStart:], " ")
 	}
 	if text == "" {
 		fatal("task log add: --title or positional text required")
@@ -745,15 +817,19 @@ func runTaskLogAdd(args []string) {
 
 func runTaskLogList(args []string) {
 	fs := flag.NewFlagSet("task log list", flag.ExitOnError)
+	taskIDFlag := fs.String("task-id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task log list: missing task ID")
+	taskIDStr := *taskIDFlag
+	if taskIDStr == "" && fs.NArg() > 0 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task log list: task ID required (positional or --task-id)\nRun 'doey-ctl task log list -h' for usage.\n")
 	}
 
 	pd := projectDir(*dir)
-	taskIDStr := fs.Arg(0)
 	s := tryOpenStore(pd)
 
 	if s != nil {
@@ -808,15 +884,41 @@ func runTaskLogList(args []string) {
 func runTaskDecision(args []string) {
 	// Alias for: task log add --type=decision <task-id> <text>
 	fs := flag.NewFlagSet("task decision", flag.ExitOnError)
+	taskIDFlag := fs.String("task-id", "", "task ID")
+	titleFlag := fs.String("title", "", "decision title")
+	bodyFlag := fs.String("body", "", "decision body")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
-	if fs.NArg() < 2 {
-		fatal("task decision: usage: <task-id> <text>")
+	taskIDStr := *taskIDFlag
+	if taskIDStr == "" && fs.NArg() > 0 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task decision: task ID required (positional or --task-id)\nRun 'doey-ctl task decision -h' for usage.\n")
 	}
 
-	taskIDStr := fs.Arg(0)
-	text := strings.Join(fs.Args()[1:], " ")
+	// Build decision text from --title/--body flags or positional args.
+	text := *titleFlag
+	if *bodyFlag != "" {
+		if text != "" {
+			text = text + ": " + *bodyFlag
+		} else {
+			text = *bodyFlag
+		}
+	}
+	if text == "" {
+		textStart := 1
+		if *taskIDFlag != "" {
+			textStart = 0
+		}
+		if fs.NArg() > textStart {
+			text = strings.Join(fs.Args()[textStart:], " ")
+		}
+	}
+	if text == "" {
+		fatal("task decision: decision text required (--title/--body or positional)\nRun 'doey-ctl task decision -h' for usage.\n")
+	}
 
 	pd := projectDir(*dir)
 	s := tryOpenStore(pd)
@@ -844,6 +946,21 @@ func runTaskDecision(args []string) {
 	if err := ctl.AddDecision(pd, taskIDStr, text); err != nil {
 		fatal("task decision: %v", err)
 	}
+}
+
+// suggestSubcommand returns the closest valid subcommand if within edit distance 3.
+func suggestSubcommand(input string, valid []string) string {
+	best, bestDist := "", 999
+	for _, v := range valid {
+		if d := editDistance(input, v); d < bestDist {
+			bestDist = d
+			best = v
+		}
+	}
+	if bestDist <= 3 {
+		return best
+	}
+	return ""
 }
 
 // normalizeFieldName strips TASK_ prefix and lowercases the field name.
@@ -1074,7 +1191,7 @@ func safeToPaneID(safe string) string {
 // runTmuxCmd dispatches tmux sub-subcommands.
 func runTmuxCmd(args []string) {
 	if len(args) == 0 {
-		fatal("tmux: missing subcommand (panes, send, capture, env)")
+		fatal("tmux: missing subcommand: panes, send, capture, env")
 	}
 	switch args[0] {
 	case "panes":
@@ -1086,7 +1203,7 @@ func runTmuxCmd(args []string) {
 	case "env":
 		runTmuxEnv(args[1:])
 	default:
-		fatal("tmux: unknown subcommand %q", args[0])
+		fatal("tmux: unknown subcommand: %s", args[0])
 	}
 }
 
@@ -1181,4 +1298,44 @@ func runTmuxEnv(args []string) {
 	} else {
 		fmt.Println(val)
 	}
+}
+
+func printTaskHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl task <subcommand> [flags]
+
+Subcommands:
+  create    Create a new task
+  update    Update task fields
+  list      List tasks
+  get       Show task details
+  delete    Delete a task
+  subtask   Manage subtasks (add, update, list)
+  log       Manage task log entries (add, list)
+  decision  Add a decision log entry
+
+Run 'doey-ctl task <subcommand> -h' for help.
+`)
+}
+
+func printTaskSubtaskHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl task subtask <subcommand> [flags]
+
+Subcommands:
+  add       Add a subtask to a task
+  update    Update a subtask's status or title
+  list      List subtasks for a task
+
+Run 'doey-ctl task subtask <subcommand> -h' for help.
+`)
+}
+
+func printTaskLogHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl task log <subcommand> [flags]
+
+Subcommands:
+  add       Add a log entry to a task
+  list      List log entries for a task
+
+Run 'doey-ctl task log <subcommand> -h' for help.
+`)
 }
