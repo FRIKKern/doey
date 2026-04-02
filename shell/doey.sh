@@ -791,26 +791,21 @@ _worktree_safe_remove() {
   remove_team_worktree "$project_dir" "$worktree_dir"
 }
 
-# Dashboard layout: Info Panel (left) | Boss (top-right) | Taskmaster (bottom-right)
-# Sets: TASKMASTER_PANE, BOSS_PANE
+# Dashboard layout: Info Panel (left) | Boss (right)
+# Taskmaster launches in Core Team window (see Phase 3)
+# Sets: BOSS_PANE
 setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
 
   # Start: single pane 0.0 (will become Info Panel)
   # Split left/right — right column gets 60%
   tmux split-window -h -t "$session:0.0" -l 150 -c "$dir"
-  # Indices: 0.0=info(left), 0.1=right
-
-  # Split right column: Boss (top ~65%) + Taskmaster (bottom ~35%)
-  tmux split-window -v -t "$session:0.1" -l 28 -c "$dir"
-  # Indices: 0.0=info, 0.1=Boss, 0.2=Taskmaster
+  # Indices: 0.0=info(left), 0.1=Boss
 
   local _proj="${session#doey-}"
   tmux select-pane -t "$session:0.0" -T "" \; \
-       select-pane -t "$session:0.1" -T "${_proj} ${DOEY_ROLE_BOSS}" \; \
-       select-pane -t "$session:0.2" -T "${_proj} ${DOEY_ROLE_COORDINATOR}"
+       select-pane -t "$session:0.1" -T "${_proj} ${DOEY_ROLE_BOSS}"
   BOSS_PANE="0.1"
-  TASKMASTER_PANE="0.2"
 
   # Go helpers (build pipeline + advisory check)
   if [ -f "${SCRIPT_DIR}/doey-go-helpers.sh" ]; then
@@ -834,14 +829,8 @@ setup_dashboard() {
   _append_settings _boss_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.1" "$_boss_cmd" Enter
 
-  # Taskmaster (pane 0.2)
-  local _taskmaster_cmd="claude --dangerously-skip-permissions --model $DOEY_TASKMASTER_MODEL --name \"${DOEY_ROLE_COORDINATOR}\" --agent ${DOEY_ROLE_FILE_COORDINATOR}"
-  _append_settings _taskmaster_cmd "$runtime_dir"
-  tmux send-keys -t "$session:0.2" "$_taskmaster_cmd" Enter
-
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
-  write_pane_status "$runtime_dir" "${session}:0.2" "READY"
 }
 
 # Validate and auto-fix session.env files with encoding/quoting issues
@@ -1990,10 +1979,8 @@ MANIFEST
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     # Boss briefing (pane 0.1)
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is at pane 0.2. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
-    # Taskmaster briefing (pane 0.2)
-    tmux send-keys -t "$session:${TASKMASTER_PANE}" \
-      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
+      "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is in the Core Team window. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
+    # Taskmaster briefing moved to Core Team window setup (Phase 3)
   ) &
 
   trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
@@ -3847,9 +3834,8 @@ MANIFEST
     done
 
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is at pane 0.2. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
-    tmux send-keys -t "$session:${TASKMASTER_PANE}" \
-      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${final_team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
+      "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is in the Core Team window. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
+    # Taskmaster briefing moved to Core Team window setup (Phase 3)
   ) &
   local _BG_SPAWN_PID=$!
 
@@ -4355,7 +4341,7 @@ _brief_team() {
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "${session}:${window_index}.0" \
-      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from pane 0.2. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from the Core Team window. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 }
 
