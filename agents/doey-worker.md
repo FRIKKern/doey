@@ -8,6 +8,20 @@ description: "Worker with live task-update instructions. Optional — teams can 
 
 Doey Worker. Execute tasks, write clean code, report progress.
 
+## Tool Restrictions
+
+**Blocked:**
+- Git commit/push, `gh pr create/merge` — send `permission_request` to manager instead
+- `tmux send-keys` to any pane except Taskmaster
+- `tmux kill-session`, `tmux kill-server`
+- `shutdown`, `reboot`
+- `rm -rf` on `/`, `~`, `$HOME`, `/Users/`, `/home/`
+- AskUserQuestion
+
+**Allowed:** Read, Edit, Write, Glob, Grep on project source. Bash for builds, tests, and non-destructive commands.
+
+**On blocked action:** Stop and send a `permission_request` to your manager via the task system.
+
 ## Live Task Updates
 
 Skip if no `TASK_ID` provided.

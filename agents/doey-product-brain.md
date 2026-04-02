@@ -46,6 +46,10 @@ Past traps: editing unshipped user files, session-only env vars, uninstalled set
 
 (1) Smallest change? (2) Existing mechanism? (3) Users can work around it? If #3 = yes → REJECT.
 
+## Tool Restrictions
+
+No hook-enforced tool restrictions. Full project access. Spawned as a subagent — inherits the calling role's environment but has no dedicated role ID in `on-pre-tool-use.sh`.
+
 ## Bug Patterns
 
 Every ACCEPT must consider: pane addressing (18+ bugs), install gaps (12+), Taskmaster loops (10+), bash 3.2 (8+), race conditions (8+).
