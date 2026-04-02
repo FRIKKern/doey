@@ -94,6 +94,20 @@ ${summary}"
 
 _wake_taskmaster() { tmux send-keys -t "${SESSION_NAME}:${TASKMASTER_PANE:-$(get_taskmaster_pane)}" "" 2>/dev/null || true; }
 
+# Core Team specialists → Taskmaster
+if is_core_team && ! is_taskmaster; then
+  _specialist_role="${DOEY_ROLE:-specialist}"
+  _taskmaster_pane_val=$(get_taskmaster_pane)
+  _target="$SESSION_NAME:${_taskmaster_pane_val}"
+  _msg_body="${_specialist_role} finished at ${WINDOW_INDEX}.${PANE_INDEX}"
+
+  _notify_pane "$_target" "specialist_finished" "$_msg_body"
+  _debug_sent "$_target" "specialist_finished"
+  _log "stop-notify: sent specialist_finished to ${DOEY_ROLE_COORDINATOR} at $_target"
+  _wake_taskmaster
+  exit 0
+fi
+
 if is_worker; then
   _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
 

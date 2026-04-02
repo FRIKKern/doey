@@ -45,14 +45,27 @@ WINDOW_INDEX="${_WP%.*}"
 ROLE="$DOEY_ROLE_ID_WORKER"
 TEAM_WINDOW="$WINDOW_INDEX"
 
+# Extract Core Team window from TASKMASTER_PANE
+_core_team_window=""
+_tm_pane_val=$(_read_team_key "$SESSION_ENV" TASKMASTER_PANE)
+[ -n "$_tm_pane_val" ] && _core_team_window="${_tm_pane_val%%.*}"
+
 if [ "$WINDOW_INDEX" = "0" ]; then
-  sm_val=$(_read_team_key "$SESSION_ENV" TASKMASTER_PANE)
+  # Dashboard window
   case "$PANE_INDEX" in
     0) ROLE="info_panel" ;;
     1) ROLE="$DOEY_ROLE_ID_BOSS" ;;
-    *) [ "0.${PANE_INDEX}" = "${sm_val:-$(get_taskmaster_pane)}" ] && ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+  esac
+elif [ -n "$_core_team_window" ] && [ "$WINDOW_INDEX" = "$_core_team_window" ]; then
+  # Core Team window
+  case "$PANE_INDEX" in
+    0) ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+    1) ROLE="$DOEY_ROLE_ID_TASK_REVIEWER" ;;
+    2) ROLE="$DOEY_ROLE_ID_DEPLOYMENT" ;;
+    3) ROLE="$DOEY_ROLE_ID_DOEY_EXPERT" ;;
   esac
 else
+  # Worker team window
   _team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   _team_type=""; [ -f "$_team_file" ] && _team_type=$(_read_team_key "$_team_file" TEAM_TYPE)
   if [ "$_team_type" != "$DOEY_ROLE_ID_FREELANCER" ]; then
@@ -68,6 +81,9 @@ case "$ROLE" in
   "$DOEY_ROLE_ID_BOSS")            PANE_ID="boss" ;;
   "$DOEY_ROLE_ID_COORDINATOR") PANE_ID="taskmaster" ;;
   info_panel)      PANE_ID="info" ;;
+  "$DOEY_ROLE_ID_TASK_REVIEWER") PANE_ID="task-reviewer" ;;
+  "$DOEY_ROLE_ID_DEPLOYMENT")    PANE_ID="deployment" ;;
+  "$DOEY_ROLE_ID_DOEY_EXPERT")   PANE_ID="doey-expert" ;;
   "$DOEY_ROLE_ID_TEAM_LEAD")         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
   "$DOEY_ROLE_ID_WORKER")
     if [ "${_team_type:-}" = "$DOEY_ROLE_ID_FREELANCER" ]; then
@@ -159,6 +175,9 @@ case "$ROLE" in
   "$DOEY_ROLE_ID_BOSS")            _TITLE="${PROJECT_NAME} ${DOEY_ROLE_BOSS}" ;;
   "$DOEY_ROLE_ID_TEAM_LEAD")         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} ${DOEY_ROLE_TEAM_LEAD}" ;;
   "$DOEY_ROLE_ID_COORDINATOR") _TITLE="${PROJECT_NAME} ${DOEY_ROLE_COORDINATOR}" ;;
+  "$DOEY_ROLE_ID_TASK_REVIEWER") _TITLE="${PROJECT_NAME} ${DOEY_ROLE_TASK_REVIEWER}" ;;
+  "$DOEY_ROLE_ID_DEPLOYMENT")    _TITLE="${PROJECT_NAME} ${DOEY_ROLE_DEPLOYMENT}" ;;
+  "$DOEY_ROLE_ID_DOEY_EXPERT")   _TITLE="${PROJECT_NAME} ${DOEY_ROLE_DOEY_EXPERT}" ;;
   "$DOEY_ROLE_ID_WORKER")          _TITLE=$([ "${_team_type:-}" = "$DOEY_ROLE_ID_FREELANCER" ] && echo "$DOEY_ROLE_FREELANCER" || echo "$DOEY_ROLE_WORKER") ;;
 esac
 [ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} | ${_TITLE}" 2>/dev/null || true
