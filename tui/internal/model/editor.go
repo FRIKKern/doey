@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/doey-cli/doey/tui/internal/keys"
+	"github.com/doey-cli/doey/tui/internal/roles"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -129,8 +130,8 @@ func (m *EditorModel) NewTeam() {
 		ManagerModel: "opus",
 		WorkerModel:  "opus",
 		Panes: []runtime.TeamDefPane{
-			{Index: 0, Role: "manager", Agent: "doey-manager", Name: "Manager", Model: "opus"},
-			{Index: 1, Role: "worker", Agent: "-", Name: "Worker 1", Model: "opus"},
+			{Index: 0, Role: "manager", Agent: "doey-manager", Name: roles.TeamLead, Model: "opus"},
+			{Index: 1, Role: "worker", Agent: "-", Name: roles.Worker + " 1", Model: "opus"},
 		},
 	}
 	m.active = true

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/doey-cli/doey/tui/internal/roles"
 )
 
 // Reader polls Doey runtime files
@@ -1276,9 +1278,9 @@ func decodePaneSafe(safe string) string {
 		case 0:
 			return "Dashboard (" + paneID + ")"
 		case 1:
-			return "Boss (" + paneID + ")"
+			return roles.Boss + " (" + paneID + ")"
 		case 2:
-			return "Taskmaster (" + paneID + ")"
+			return roles.Coordinator + " (" + paneID + ")"
 		default:
 			return fmt.Sprintf("WD (%s)", paneID)
 		}
@@ -1286,7 +1288,7 @@ func decodePaneSafe(safe string) string {
 
 	// Team windows: pane 0 = manager, others = workers
 	if pInt == 0 {
-		return fmt.Sprintf("Subtaskmaster (%s)", paneID)
+		return fmt.Sprintf("%s (%s)", roles.TeamLead, paneID)
 	}
 	return fmt.Sprintf("W%d (%s)", pInt, paneID)
 }

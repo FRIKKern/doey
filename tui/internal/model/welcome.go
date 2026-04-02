@@ -11,6 +11,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/doey-cli/doey/tui/internal/keys"
+	"github.com/doey-cli/doey/tui/internal/roles"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -272,11 +273,12 @@ func (m WelcomeModel) renderHowToUse() string {
 	steps := []string{
 		fmt.Sprintf("  %s Talk to the %s (right pane\n     in this window) %s describe your task and\n     it routes work to the right team.",
 			numStyle.Render("1."),
-			cyanStyle.Render("Boss"),
+			cyanStyle.Render(roles.Boss),
 			dimStyle.Render("—")),
-		fmt.Sprintf("  %s Switch to a team window (%s) and\n     talk to the Subtaskmaster directly.",
+		fmt.Sprintf("  %s Switch to a team window (%s) and\n     talk to the %s directly.",
 			numStyle.Render("2."),
-			yellowStyle.Render("Ctrl-b 1")),
+			yellowStyle.Render("Ctrl-b 1"),
+			roles.TeamLead),
 		fmt.Sprintf("  %s Click any worker pane and run %s\n     to claim it for yourself.",
 			numStyle.Render("3."),
 			greenStyle.Render("/doey-reserve")),

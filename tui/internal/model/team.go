@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/doey-cli/doey/tui/internal/keys"
+	"github.com/doey-cli/doey/tui/internal/roles"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 	zone "github.com/lrstanley/bubblezone"
@@ -1021,12 +1022,12 @@ func (m TeamModel) renderWorkerPanel(entry runtime.TeamEntry, w int) string {
 
 	// Manager
 	if tc.ManagerPane != "" {
-		lines = append(lines, m.renderPaneStatus(entry.WindowIdx, tc.ManagerPane, "Manager", w))
+		lines = append(lines, m.renderPaneStatus(entry.WindowIdx, tc.ManagerPane, roles.TeamLead, w))
 	}
 
 	// Workers
 	for i, pi := range tc.WorkerPanes {
-		workerLine := m.renderPaneStatus(entry.WindowIdx, fmt.Sprintf("%d", pi), "Worker", w)
+		workerLine := m.renderPaneStatus(entry.WindowIdx, fmt.Sprintf("%d", pi), roles.Worker, w)
 		lines = append(lines, zone.Mark(fmt.Sprintf("team-worker-%d", i), workerLine))
 	}
 
