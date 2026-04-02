@@ -1250,8 +1250,8 @@ func parseMessageContent(content string) (from, subject, body string) {
 }
 
 // decodePaneSafe converts a pane safe name to a human-readable label.
-// e.g. "doey_doey_0_1" → "Boss (0.1)", "doey_doey_0_2" → "SM (0.2)",
-// "doey_doey_2_0" → "WM (2.0)", "doey_doey_2_3" → "W3 (2.3)"
+// e.g. "doey_doey_0_1" → "Boss (0.1)", "doey_doey_0_2" → "Taskmaster (0.2)",
+// "doey_doey_2_0" → "Subtaskmaster (2.0)", "doey_doey_2_3" → "W3 (2.3)"
 func decodePaneSafe(safe string) string {
 	parts := strings.Split(safe, "_")
 	if len(parts) < 2 {
@@ -1278,7 +1278,7 @@ func decodePaneSafe(safe string) string {
 		case 1:
 			return "Boss (" + paneID + ")"
 		case 2:
-			return "SM (" + paneID + ")"
+			return "Taskmaster (" + paneID + ")"
 		default:
 			return fmt.Sprintf("WD (%s)", paneID)
 		}
@@ -1286,7 +1286,7 @@ func decodePaneSafe(safe string) string {
 
 	// Team windows: pane 0 = manager, others = workers
 	if pInt == 0 {
-		return fmt.Sprintf("WM (%s)", paneID)
+		return fmt.Sprintf("Subtaskmaster (%s)", paneID)
 	}
 	return fmt.Sprintf("W%d (%s)", pInt, paneID)
 }

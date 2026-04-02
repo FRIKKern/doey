@@ -67,7 +67,7 @@ shell/
 
 func TestParseFlow(t *testing.T) {
 	input := `:::flow
-Boss -> SM -> Manager -> Workers
+Boss -> Taskmaster -> Subtaskmaster -> Workers
 :::`
 
 	blocks := Parse(input)
@@ -88,9 +88,9 @@ Boss -> SM -> Manager -> Workers
 
 func TestParseDiagram(t *testing.T) {
 	input := `:::diagram
-[Boss] ----> [SM] ----> [Manager]
-                          |
-                     [W.1]  [W.2]
+[Boss] ----> [Taskmaster] ----> [Subtaskmaster]
+                                    |
+                            [W.1]  [W.2]
 :::`
 
 	blocks := Parse(input)
@@ -106,7 +106,7 @@ func TestParseDiagram(t *testing.T) {
 	for _, b := range result.Boxes {
 		labels[b.Label] = true
 	}
-	for _, want := range []string{"Boss", "SM", "Manager", "W.1", "W.2"} {
+	for _, want := range []string{"Boss", "Taskmaster", "Subtaskmaster", "W.1", "W.2"} {
 		if !labels[want] {
 			t.Errorf("missing box: %s", want)
 		}

@@ -274,7 +274,7 @@ func (m WelcomeModel) renderHowToUse() string {
 			numStyle.Render("1."),
 			cyanStyle.Render("Boss"),
 			dimStyle.Render("—")),
-		fmt.Sprintf("  %s Switch to a team window (%s) and\n     talk to the Window Manager directly.",
+		fmt.Sprintf("  %s Switch to a team window (%s) and\n     talk to the Subtaskmaster directly.",
 			numStyle.Render("2."),
 			yellowStyle.Render("Ctrl-b 1")),
 		fmt.Sprintf("  %s Click any worker pane and run %s\n     to claim it for yourself.",

@@ -38,10 +38,10 @@
 # Seconds between launching each team window
 # DOEY_TEAM_LAUNCH_DELAY=15
 
-# Seconds to wait before launching the Window Manager in a new team
+# Seconds to wait before launching the Subtaskmaster in a new team
 # DOEY_MANAGER_LAUNCH_DELAY=3
 
-# Seconds the Window Manager waits after launch before accepting tasks
+# Seconds the Subtaskmaster waits after launch before accepting tasks
 # DOEY_MANAGER_BRIEF_DELAY=15
 
 # =============================================================================
@@ -68,14 +68,14 @@
 # Models
 # =============================================================================
 
-# Model for Window Manager instances (orchestrator — needs strong reasoning)
+# Model for Subtaskmaster instances (orchestrator — needs strong reasoning)
 # DOEY_MANAGER_MODEL=opus
 
 # Model for Worker instances (task execution)
 # DOEY_WORKER_MODEL=opus
 
-# Model for Session Manager (cross-team orchestration)
-# DOEY_SESSION_MANAGER_MODEL=opus
+# Model for Taskmaster (cross-team orchestration)
+# DOEY_TASKMASTER_MODEL=opus
 
 # =============================================================================
 # Team Definitions (Advanced)

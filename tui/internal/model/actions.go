@@ -64,8 +64,8 @@ type SnapshotRefreshMsg struct{}
 // GetStatusResultMsg is returned after sending a status request to Boss.
 type GetStatusResultMsg struct{ Err error }
 
-// CompactSMResultMsg is returned after sending a compact-SM command to Boss.
-type CompactSMResultMsg struct{ Err error }
+// CompactTaskmasterResultMsg is returned after sending a compact-Taskmaster command to Boss.
+type CompactTaskmasterResultMsg struct{ Err error }
 
 // BossNewTaskResultMsg is returned after sending a new-task command to Boss.
 type BossNewTaskResultMsg struct{ Err error }
@@ -158,10 +158,10 @@ type DispatchTeamResultMsg struct {
 	Err       error
 }
 
-// DispatchTeamCmd writes a .msg file to the Session Manager's message inbox.
+// DispatchTeamCmd writes a .msg file to the Taskmaster's message inbox.
 func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task string) tea.Cmd {
 	return func() tea.Msg {
-		// Target: Session Manager at pane 0.2
+		// Target: Taskmaster at pane 0.2
 		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_0_2"
 		msgDir := filepath.Join(runtimeDir, "messages")
 		os.MkdirAll(msgDir, 0755)
@@ -174,7 +174,7 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 			return DispatchTeamResultMsg{WindowIdx: windowIdx, Err: err}
 		}
 
-		// Touch trigger file to wake the Session Manager
+		// Touch trigger file to wake the Taskmaster
 		triggerDir := filepath.Join(runtimeDir, "triggers")
 		os.MkdirAll(triggerDir, 0755)
 		os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644)
@@ -254,10 +254,10 @@ func GetStatusCmd() tea.Cmd {
 	}
 }
 
-// CompactSMCmd sends a compact-SM command to Boss.
-func CompactSMCmd() tea.Cmd {
+// CompactTaskmasterCmd sends a compact-Taskmaster command to Boss.
+func CompactTaskmasterCmd() tea.Cmd {
 	return func() tea.Msg {
-		return CompactSMResultMsg{Err: sendToBoss("/doey-sm-compact")}
+		return CompactTaskmasterResultMsg{Err: sendToBoss("/doey-taskmaster-compact")}
 	}
 }
 
@@ -360,7 +360,7 @@ func SetStatusTaskCmd(id, status string) tea.Cmd {
 	}
 }
 
-// DispatchTaskMsg is emitted when the user dispatches a task to SM.
+// DispatchTaskMsg is emitted when the user dispatches a task to the Taskmaster.
 type DispatchTaskMsg struct {
 	ID    string
 	Title string
@@ -418,7 +418,7 @@ func CancelTaskCmd(id string) tea.Cmd {
 	}
 }
 
-// DispatchTaskCmd dispatches a task to Session Manager via .msg file.
+// DispatchTaskCmd dispatches a task to Taskmaster via .msg file.
 func DispatchTaskCmd(runtimeDir, sessionName, id, title string) tea.Cmd {
 	return func() tea.Msg {
 		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_0_2"

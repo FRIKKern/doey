@@ -61,23 +61,23 @@ Line 10 says "Manager (+ 2 for Workers)" in the precedence table. Line 76 lists 
   Current: `Manager (+ 2 for Workers)`
   Suggested: `Manager (+ 3 for Workers)`
 
-**[HIGH] context-reference.md:106-108 — Session Manager missing from CLI Launch Flags table**
-The table documents Manager, Watchdog, and Workers but omits the Session Manager. The actual launch command (doey.sh:312) is:
+**[HIGH] context-reference.md:106-108 — Taskmaster missing from CLI Launch Flags table**
+The table documents Manager, Watchdog, and Workers but omits the Taskmaster. The actual launch command (doey.sh:312) is:
 ```
-claude --dangerously-skip-permissions --agent doey-session-manager
+claude --dangerously-skip-permissions --agent doey-taskmaster
 ```
 Notably, it does NOT pass `--model opus` or `--name` — the model comes from agent frontmatter only.
-  Suggested: Add a Session Manager row:
-  `| Session Mgr | claude --dangerously-skip-permissions --agent doey-session-manager |`
+  Suggested: Add a Taskmaster row:
+  `| Taskmaster | claude --dangerously-skip-permissions --agent doey-taskmaster |`
 
 **[MEDIUM] context-reference.md:71-76 — Two skills undocumented**
 `/doey-rd-team` and `/unknown-task` exist as skill directories but are not listed under any role.
-  Suggested: Add `/doey-rd-team` to Manager or Session Manager skills. Document `/unknown-task` as a fallback skill.
+  Suggested: Add `/doey-rd-team` to Manager or Taskmaster skills. Document `/unknown-task` as a fallback skill.
 
 **[MEDIUM] context-reference.md:112 — Note about `_launch_team_manager()` passing `--model opus` is outdated**
 The note reads as a TODO: "_launch_team_manager() in doey.sh should pass --model opus explicitly". The code already does this (doey.sh:1671):
 ```
-claude --dangerously-skip-permissions --model opus --name "T${tw} Window Manager" --agent "$mgr_agent"
+claude --dangerously-skip-permissions --model opus --name "T${tw} Subtaskmaster" --agent "$mgr_agent"
 ```
   Suggested: Remove the note or reword to confirm it was implemented.
 
@@ -86,7 +86,7 @@ Claims "Manager briefing 8s; workers ready ~15s". Commit `ed1f877` ("10x faster 
   Suggested: Re-measure and update, or remove specific numbers.
 
 **[MEDIUM] context-reference.md:93 — session.env variable annotations incomplete**
-`ROWS`, `MAX_WORKERS`, `CURRENT_COLS` are annotated as "(dynamic only)" and `TOTAL_PANES` as "(static only)" — this is correct. However, `WDG_SLOT_1..WDG_SLOT_6` and `SM_PANE` are listed without noting that the number of WDG_SLOT entries varies (1 per team, up to 6).
+`ROWS`, `MAX_WORKERS`, `CURRENT_COLS` are annotated as "(dynamic only)" and `TOTAL_PANES` as "(static only)" — this is correct. However, `WDG_SLOT_1..WDG_SLOT_6` and `TASKMASTER_PANE` are listed without noting that the number of WDG_SLOT entries varies (1 per team, up to 6).
   Suggested: Note `WDG_SLOT_1..WDG_SLOT_N` where N = number of team windows (max 6).
 
 **[MEDIUM] context-reference.md:162 — Status values may be incomplete**
@@ -160,7 +160,7 @@ No issues found. Test procedures reference correct paths and commands. Internall
 ## Top Priority Fixes
 
 1. **Worker skill count** — docs say 2, actual is 3 (`/doey-status`, `/doey-reserve`, `/doey-stop`)
-2. **Session Manager CLI flags** — undocumented in launch flags table
+2. **Taskmaster CLI flags** — undocumented in launch flags table
 3. **Outdated `_launch_team_manager` TODO note** — already resolved in code
 4. **Startup timing** — likely invalidated by performance optimization commit
 5. **fnm PATH in systemd** — wrong directory in linux-server.md

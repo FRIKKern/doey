@@ -55,7 +55,7 @@ type ConversationEntry struct {
 
 // QAHop represents one step in a Q&A relay chain.
 type QAHop struct {
-	Role      string // "Boss", "SessionManager", "Manager_W1", "Worker_W1.2"
+	Role      string // "Boss", "Taskmaster", "Subtaskmaster_W1", "Worker_W1.2"
 	Pane      string // "0.1", "0.2", "1.0", "1.2"
 	Action    string // "received", "routing", "forwarded", "answering", "answered"
 	Timestamp int64

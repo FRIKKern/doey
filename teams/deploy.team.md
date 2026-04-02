@@ -180,7 +180,7 @@ Pipeline Lead collects all worker results and writes:
 
 Reports must include full worker findings, not just pass/fail. The task file should contain enough detail for someone to understand exactly what happened without re-running the pipeline.
 
-Notify Session Manager when the pipeline completes.
+Notify Taskmaster when the pipeline completes.
 
 ### Failure Handling
 

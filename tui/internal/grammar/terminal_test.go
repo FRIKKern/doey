@@ -84,12 +84,12 @@ func TestRenderTreeEmpty(t *testing.T) {
 func TestRenderFlow(t *testing.T) {
 	steps := []FlowStep{
 		{Label: "Boss", Arrow: "->"},
-		{Label: "SM", Arrow: "->"},
-		{Label: "Manager", Arrow: "->"},
+		{Label: "Taskmaster", Arrow: "->"},
+		{Label: "Subtaskmaster", Arrow: "->"},
 		{Label: "Workers", Arrow: ""},
 	}
 	out := renderFlow(steps)
-	if out != "Boss → SM → Manager → Workers" {
+	if out != "Boss → Taskmaster → Subtaskmaster → Workers" {
 		t.Errorf("unexpected flow output: %q", out)
 	}
 }
@@ -103,10 +103,10 @@ func TestRenderFlowEmpty(t *testing.T) {
 func TestRenderDiagram(t *testing.T) {
 	boxes := []DiagramBox{
 		{Label: "Boss"},
-		{Label: "SM"},
+		{Label: "Taskmaster"},
 	}
 	edges := []DiagramEdge{
-		{From: "Boss", To: "SM", Label: "relay"},
+		{From: "Boss", To: "Taskmaster", Label: "relay"},
 	}
 	out := renderDiagram(boxes, edges)
 	if !strings.Contains(out, "┌") || !strings.Contains(out, "┘") {
@@ -115,7 +115,7 @@ func TestRenderDiagram(t *testing.T) {
 	if !strings.Contains(out, "│ Boss │") {
 		t.Error("should contain boxed label")
 	}
-	if !strings.Contains(out, "Boss ─(relay)→ SM") {
+	if !strings.Contains(out, "Boss ─(relay)→ Taskmaster") {
 		t.Error("should render labeled edge")
 	}
 }

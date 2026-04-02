@@ -294,7 +294,7 @@ DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
 # Models
 DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
 DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-opus}"
-DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
+DOEY_TASKMASTER_MODEL="${DOEY_TASKMASTER_MODEL:-opus}"
 
 # Remote Access & Tunneling
 DOEY_TUNNEL_ENABLED="${DOEY_TUNNEL_ENABLED:-false}"
@@ -776,8 +776,8 @@ _worktree_safe_remove() {
   remove_team_worktree "$project_dir" "$worktree_dir"
 }
 
-# Dashboard layout: Info Panel (left) | Boss (top-right) | Session Manager (bottom-right)
-# Sets: SM_PANE, BOSS_PANE
+# Dashboard layout: Info Panel (left) | Boss (top-right) | Taskmaster (bottom-right)
+# Sets: TASKMASTER_PANE, BOSS_PANE
 setup_dashboard() {
   local session="$1" dir="$2" runtime_dir="$3"
 
@@ -786,16 +786,16 @@ setup_dashboard() {
   tmux split-window -h -t "$session:0.0" -l 150 -c "$dir"
   # Indices: 0.0=info(left), 0.1=right
 
-  # Split right column: Boss (top ~65%) + SM (bottom ~35%)
+  # Split right column: Boss (top ~65%) + Taskmaster (bottom ~35%)
   tmux split-window -v -t "$session:0.1" -l 28 -c "$dir"
-  # Indices: 0.0=info, 0.1=Boss, 0.2=SM
+  # Indices: 0.0=info, 0.1=Boss, 0.2=Taskmaster
 
   local _proj="${session#doey-}"
   tmux select-pane -t "$session:0.0" -T ""
   tmux select-pane -t "$session:0.1" -T "${_proj} Boss"
-  tmux select-pane -t "$session:0.2" -T "${_proj} SM"
+  tmux select-pane -t "$session:0.2" -T "${_proj} Taskmaster"
   BOSS_PANE="0.1"
-  SM_PANE="0.2"
+  TASKMASTER_PANE="0.2"
 
   # Go helpers (build pipeline + advisory check)
   if [ -f "${SCRIPT_DIR}/doey-go-helpers.sh" ]; then
@@ -815,14 +815,14 @@ setup_dashboard() {
   fi
 
   # Boss (pane 0.1)
-  local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_SESSION_MANAGER_MODEL} --name \"Boss\" --agent doey-boss"
+  local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name \"Boss\" --agent doey-boss"
   _append_settings _boss_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.1" "$_boss_cmd" Enter
 
-  # Session Manager (pane 0.2)
-  local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --name \"Session Manager\" --agent doey-session-manager"
-  _append_settings _sm_cmd "$runtime_dir"
-  tmux send-keys -t "$session:0.2" "$_sm_cmd" Enter
+  # Taskmaster (pane 0.2)
+  local _taskmaster_cmd="claude --dangerously-skip-permissions --model $DOEY_TASKMASTER_MODEL --name \"Taskmaster\" --agent doey-taskmaster"
+  _append_settings _taskmaster_cmd "$runtime_dir"
+  tmux send-keys -t "$session:0.2" "$_taskmaster_cmd" Enter
 
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
@@ -1285,15 +1285,15 @@ write_worker_system_prompt() {
   cat > "${runtime_dir}/worker-system-prompt.md" << 'WORKER_PROMPT'
 # Doey Worker
 
-You are a **Worker** on the Doey team, coordinated by a Window Manager in pane 0 of your team window. You receive tasks via this chat and execute them independently.
+You are a **Worker** on the Doey team, coordinated by a Subtaskmaster in pane 0 of your team window. You receive tasks via this chat and execute them independently.
 
 ## Rules
 1. **Absolute paths only** — Always use absolute file paths. Never use relative paths.
 2. **Stay in scope** — Only make changes within the scope of your assigned task. Do not refactor, clean up, or "improve" code outside your task.
 3. **Concurrent awareness** — Other workers are editing other files in this codebase simultaneously. Avoid broad sweeping changes (global renames, config modifications, formatter runs) unless your task explicitly requires it.
-4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Window Manager will check your output.
+4. **When done, stop** — Complete your task and stop. Do not ask follow-up questions unless you are genuinely blocked. The Subtaskmaster will check your output.
 5. **If blocked, describe and stop** — If you encounter an unrecoverable error, describe it clearly and stop.
-6. **No git commits** — Do not create git commits unless your task explicitly says to. The Window Manager coordinates commits.
+6. **No git commits** — Do not create git commits unless your task explicitly says to. The Subtaskmaster coordinates commits.
 7. **No tmux interaction** — Do not try to communicate with other panes. Just do your work.
 WORKER_PROMPT
 
@@ -1883,7 +1883,7 @@ IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
 BOSS_PANE="0.1"
-SM_PANE="0.2"
+TASKMASTER_PANE="0.2"
 REMOTE="$(_detect_remote)"
 MANIFEST
 
@@ -1941,7 +1941,7 @@ MANIFEST
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Manager --
-  _step_msg 5 "Launching Window Manager..." "$headless"
+  _step_msg 5 "Launching Subtaskmaster..." "$headless"
 
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
 
@@ -1952,9 +1952,9 @@ MANIFEST
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     # Boss briefing (pane 0.1)
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. SM is at pane 0.2. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
-    # SM briefing (pane 0.2)
-    tmux send-keys -t "$session:${SM_PANE}" \
+      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. Taskmaster is at pane 0.2. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
+    # Taskmaster briefing (pane 0.2)
+    tmux send-keys -t "$session:${TASKMASTER_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
   ) &
 
@@ -3017,7 +3017,7 @@ reload_session() {
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
-      local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Window Manager\" --agent \"$mgr_agent\""
+      local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Subtaskmaster\" --agent \"$mgr_agent\""
       _append_settings _rl_mgr_cmd "$runtime_dir"
       tmux send-keys -t "$mgr_ref" "$_rl_mgr_cmd" Enter
       printf " ${SUCCESS}✓${RESET}\n"
@@ -3572,7 +3572,7 @@ IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="1"
 BOSS_PANE="0.1"
-SM_PANE="0.2"
+TASKMASTER_PANE="0.2"
 REMOTE="$(_detect_remote)"
 MANIFEST
 
@@ -3604,7 +3604,7 @@ MANIFEST
     # Default dynamic grid path for team 1
     write_team_env "$runtime_dir" "1" "dynamic" "" "0" "0" "" ""
 
-    # Dashboard launches after session.env exists (info-panel + Session Manager need it)
+    # Dashboard launches after session.env exists (info-panel + Taskmaster need it)
     setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
     tmux new-window -t "$session" -c "$dir"
     tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
@@ -3612,7 +3612,7 @@ MANIFEST
 
     step_done
 
-    step_start 4 "Launching Window Manager..."
+    step_start 4 "Launching Subtaskmaster..."
     _launch_team_manager "$session" "$runtime_dir" "$team_window"
     _brief_team "$session" "$team_window" "" "" "0" \
       "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
@@ -3768,8 +3768,8 @@ MANIFEST
     done
 
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. SM is at pane 0.2. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
-    tmux send-keys -t "$session:${SM_PANE}" \
+      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. Taskmaster is at pane 0.2. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
+    tmux send-keys -t "$session:${TASKMASTER_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${final_team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
   ) &
   local _BG_SPAWN_PID=$!
@@ -4234,7 +4234,7 @@ _launch_team_manager() {
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   local _proj="${session#doey-}"
-  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Window Manager\" --agent \"$mgr_agent\""
+  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Subtaskmaster\" --agent \"$mgr_agent\""
   _append_settings _mgr_cmd "$runtime_dir"
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
@@ -4250,7 +4250,7 @@ _brief_team() {
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "${session}:${window_index}.0" \
-      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. SM monitors all teams from pane 0.2. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. Taskmaster monitors all teams from pane 0.2. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 }
 
@@ -5573,7 +5573,7 @@ case "${1:-}" in
     test       Run E2E integration test (--keep, --open, --grid NxM)
     dynamic    Launch with dynamic grid (add workers on demand)
     add        Add a worker column (2 workers) to a dynamic grid session
-    add-team   Add a team window with its own Window Manager+Workers
+    add-team   Add a team window with its own Subtaskmaster+Workers
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions

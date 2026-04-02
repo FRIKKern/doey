@@ -20,4 +20,4 @@ worker_model: opus
 
 ## Team Briefing
 
-Managerless pool of 6 independent workers. No coordinator — each freelancer receives tasks directly from the Session Manager or other team managers. Use for parallel, independent work that doesn't need cross-worker coordination.
+Managerless pool of 6 independent workers. No coordinator — each freelancer receives tasks directly from the Taskmaster or other Subtaskmasters. Use for parallel, independent work that doesn't need cross-worker coordination.

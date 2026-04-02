@@ -33,7 +33,7 @@ val=$(grep "^$2=" "$1" | cut -d= -f2)
 val=$(grep "^$2=" "$1" | cut -d= -f2-)
 ```
 
-This function is called by `is_watchdog`, `is_manager`, `get_sm_pane`, and `stop-notify.sh`. Any env value with `=` causes silent data corruption.
+This function is called by `is_watchdog`, `is_manager`, `get_taskmaster_pane`, and `stop-notify.sh`. Any env value with `=` causes silent data corruption.
 
 ---
 
@@ -105,7 +105,7 @@ The non-`timeout` fallback creates `_tmpfile=$(mktemp)` for git diff output. If 
 
 ---
 
-### [MEDIUM] session-manager-wait.sh line:6 — Sourcing session.env as executable shell code
+### [MEDIUM] taskmaster-wait.sh line:6 — Sourcing session.env as executable shell code
 
 `source "${RUNTIME_DIR}/session.env"` executes file contents as shell commands. If corrupted or tampered with, arbitrary code runs. The file is doey-generated so risk is low, but `on-session-start.sh` correctly uses `while IFS='=' read` for the same file — inconsistent patterns.
 
@@ -115,7 +115,7 @@ while IFS='=' read -r key value; do
   value="${value%\"}"; value="${value#\"}"
   case "$key" in
     SESSION_NAME) SESSION_NAME="$value" ;;
-    SM_PANE) SM_PANE="$value" ;;
+    TASKMASTER_PANE) TASKMASTER_PANE="$value" ;;
   esac
 done < "${RUNTIME_DIR}/session.env"
 ```
@@ -190,7 +190,7 @@ Counting tool calls by pattern-matching captured output (looking for `Read(`, `E
 
 ### [LOW] on-pre-tool-use.sh line:57 — Worker tmux error message is misleading
 
-Error says "Only the Window Manager can do this" but Watchdog can also use limited send-keys. Minor UX issue.
+Error says "Only the Subtaskmaster can do this" but Watchdog can also use limited send-keys. Minor UX issue.
 
 ---
 
@@ -226,7 +226,7 @@ Features verified absent:
 | on-prompt-submit.sh | 0 (always) | 0 | Yes |
 | on-session-start.sh | 0 (always) | 0 | Yes |
 | post-tool-lint.sh | 0 + JSON decision | 0 | Yes |
-| session-manager-wait.sh | 0 (always) | 0 | Yes |
+| taskmaster-wait.sh | 0 (always) | 0 | Yes |
 | stop-notify.sh | 0 (always) | 0 | Yes |
 | stop-results.sh | 0 (always) | 0 | Yes |
 | stop-status.sh | 0 or 2 (research block) | 0 or 2 | Yes |
@@ -241,7 +241,7 @@ Features verified absent:
 |---------|---------|------------|
 | Atomic write (tmp+mv) | stop-results, stop-status, on-prompt-submit, watchdog-scan | Correct |
 | Directory lock (mkdir) | on-session-start (skill sync) | Correct, minor stale-lock risk on kill |
-| File-based triggers | watchdog-wait, session-manager-wait | Correct, TOCTOU gap is benign |
+| File-based triggers | watchdog-wait, taskmaster-wait | Correct, TOCTOU gap is benign |
 | Status file reads without locking | All hooks reading `.status` files | Acceptable — atomic writes ensure no partial reads |
 | Session-level tmux env | on-session-start DOEY_ROLE | Race exists but mitigated by per-process env |
 

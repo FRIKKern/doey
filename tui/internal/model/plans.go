@@ -548,8 +548,8 @@ func resolveSessionName() string {
 	return "doey-doey"
 }
 
-// sendToSM sends a message to the Session Manager pane via tmux send-keys.
-func sendToSM(message string) error {
+// sendToTaskmaster sends a message to the Taskmaster pane via tmux send-keys.
+func sendToTaskmaster(message string) error {
 	smPane := resolveSessionName() + ":0.2"
 	cmd := exec.Command("tmux", "send-keys", "-t", smPane, message, "Enter")
 	return cmd.Run()
@@ -594,10 +594,10 @@ func (m PlansModel) buildPlan() (PlansModel, tea.Cmd) {
 		return m, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return planAcceptedMsg{} })
 	}
 
-	// Send to Session Manager
+	// Send to Taskmaster
 	smMsg := fmt.Sprintf("Plan #%s '%s' — dispatch all unchecked tasks to workers. Read the plan at %s and dispatch each unchecked item as a worker task.",
 		m.selectedPlan.ID, m.selectedPlan.Title, m.selectedPlan.FilePath)
-	sendToSM(smMsg)
+	sendToTaskmaster(smMsg)
 
 	m.building = true
 	m.buildingPlanID = m.selectedPlan.ID
@@ -620,10 +620,10 @@ func (m PlansModel) setBacklog() (PlansModel, tea.Cmd) {
 	m.entries[idx].Status = "backlog"
 	m.entries[idx].Updated = time.Now().Unix()
 
-	// Send to Session Manager
+	// Send to Taskmaster
 	smMsg := fmt.Sprintf("Plan #%s '%s' — set to backlog. Update the plan frontmatter status to 'backlog' in %s.",
 		m.entries[idx].ID, m.entries[idx].Title, m.entries[idx].FilePath)
-	sendToSM(smMsg)
+	sendToTaskmaster(smMsg)
 
 	// Rebuild list items
 	items := make([]list.Item, len(m.entries))
@@ -681,10 +681,10 @@ func (m PlansModel) createTasksFromPlan() (PlansModel, tea.Cmd) {
 		return m, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return planAcceptedMsg{} })
 	}
 
-	// Send to Session Manager
+	// Send to Taskmaster
 	smMsg := fmt.Sprintf("Plan #%s '%s' — create .task files for all unchecked items. Read the plan at %s and use plan_create_tasks() from shell/doey-plan-helpers.sh.",
 		m.selectedPlan.ID, m.selectedPlan.Title, m.selectedPlan.FilePath)
-	sendToSM(smMsg)
+	sendToTaskmaster(smMsg)
 
 	m.statusMsg = fmt.Sprintf("Creating %d tasks from plan", len(items))
 	return m, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return planAcceptedMsg{} })

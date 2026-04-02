@@ -61,7 +61,7 @@ type TreeNode struct {
 
 // FlowStep represents one node in a :::flow chain.
 type FlowStep struct {
-	Label string // e.g. "Boss", "SM"
+	Label string // e.g. "Boss", "Taskmaster"
 	Arrow string // e.g. "->", ""; empty for the last step
 }
 
