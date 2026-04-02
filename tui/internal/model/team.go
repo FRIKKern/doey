@@ -49,7 +49,7 @@ type TeamModel struct {
 	theme   styles.Theme
 
 	// Navigation
-	summaryMode bool // kept for root.go isDetailView() — synced with leftFocused
+	summaryMode bool // synced with leftFocused
 	leftFocused bool
 	cursor      int
 	keyMap      keys.KeyMap
