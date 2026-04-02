@@ -30,7 +30,7 @@ _taskmaster_dbg_wake() {
     "$(date +%s)" "$1" "${2:-0}" >> "$_TASKMASTER_DBG_FILE" 2>/dev/null
 }
 
-_wake() { _taskmaster_bump_cycle; _taskmaster_dbg_wake "$1" "${2:-0}"; echo "$1"; exit 0; }
+_wake() { _taskmaster_bump_cycle; _taskmaster_dbg_wake "$1" "${2:-0}"; echo "WAKE_REASON=$1"; exit 0; }
 
 SEEN_FILE="${RUNTIME_DIR}/status/taskmaster_seen_results"
 _seen_results=""
@@ -90,16 +90,16 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   # Check SQLite store for unread messages (fast path)
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
     _unread=$(doey-ctl db-msg count --to "$TASKMASTER_SAFE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
-    [ "${_unread:-0}" -gt 0 ] && _wake "NEW_MESSAGES" "$elapsed"
+    [ "${_unread:-0}" -gt 0 ] && _wake "MSG" "$elapsed"
   fi
   # File-based message check (fallback)
   set -- "$MSG_DIR"/${TASKMASTER_SAFE}_*.msg
-  [ -f "${1:-}" ] && _wake "NEW_MESSAGES" "$elapsed"
-  if _has_new_results; then _mark_results_seen; _wake "NEW_RESULTS" "$elapsed"; fi
+  [ -f "${1:-}" ] && _wake "MSG" "$elapsed"
+  if _has_new_results; then _mark_results_seen; _wake "FINISHED" "$elapsed"; fi
   set -- "$RUNTIME_DIR/status"/crash_pane_*
-  [ -f "${1:-}" ] && _wake "CRASH_ALERT" "$elapsed"
-  _check_stale_heartbeats && _wake "STALE_HEARTBEAT" "$elapsed"
-  [ "$_has_queued" = true ] && _wake "QUEUED_TASKS" "$elapsed"
+  [ -f "${1:-}" ] && _wake "CRASH" "$elapsed"
+  _check_stale_heartbeats && _wake "STALE" "$elapsed"
+  [ "$_has_queued" = true ] && _wake "QUEUED" "$elapsed"
   return 1
 }
 
@@ -127,7 +127,7 @@ if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
 fi
 
 if [ "$((_taskmaster_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
-  echo "0" > "$CYCLE_FILE"; _wake "COMPACT_CYCLE"
+  echo "0" > "$CYCLE_FILE"; _wake "TRIGGERED"
 fi
 
 _check_work "0" || true
@@ -137,6 +137,7 @@ if [ "$_has_active" = "true" ]; then
   sleep 5
   _check_work "5" || true
   _taskmaster_dbg_wake "active_tasks_idle" "5"
+  echo "WAKE_REASON=QUEUED"
   printf 'ACTIVE_TASKS %b' "$_active_list"
   rm -f "${RUNTIME_DIR}/status/taskmaster_sleep_reported" 2>/dev/null
   exit 0
@@ -154,4 +155,4 @@ _sleep_dur=10
 sleep "$_sleep_dur"
 _check_work "$_sleep_dur" || true
 _taskmaster_dbg_wake "idle" "$_sleep_dur"
-echo "IDLE"
+echo "WAKE_REASON=TIMEOUT"
