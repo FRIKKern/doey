@@ -1,6 +1,6 @@
 TASK_ID=80
 TASK_TITLE=Plan Mode — Cursor-inspired planning system with Go TUI
-TASK_STATUS=in_progress
+TASK_STATUS=pending_user_confirmation
 TASK_CREATED=1775023510
 TASK_TYPE=feature
 TASK_DESCRIPTION=Build a first-class planning system into Doey. Inspired by Cursor's plan mode — large markdown documents with tasks, subtasks, and architecture visualizations. Plans are linked to tasks. Key features: (1) Plans tab in Go TUI with 2-pane layout (plan list left, plan content right), matching the existing Tasks/Agents/Teams tab pattern. (2) Plan format — rich markdown with sections for intent, tasks/subtasks with checkboxes, architecture diagrams/visualizations, constraints, success criteria. (3) Task-plan linkage — when a plan exists for a task, the task shows a prominent visual indicator. Opening it navigates to the plan. (4) Plan lifecycle — plans can be created during task compilation, updated as work progresses, subtasks checked off as completed. (5) Markdown rendering in TUI — glamour or similar for rich markdown display. This is a large initiative requiring research into current TUI architecture, plan storage format design, and phased implementation.
