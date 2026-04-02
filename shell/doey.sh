@@ -1060,183 +1060,170 @@ show_menu() {
     session_exists "doey-${names[$i]}" && running_count=$((running_count + 1))
   done
 
-  if [ "$HAS_GUM" = true ] && [[ ${#names[@]} -gt 0 ]]; then
-    # ── Gum path: build gum choose options ──
-    local _gum_opts=()
-    for i in "${!names[@]}"; do
-      local _sp="${paths[$i]/#$HOME/\~}"
-      local _status_icon="○"
-      [ "${status_plain[$i]}" = "running" ] && _status_icon="●"
-      _gum_opts+=("${_status_icon} ${names[$i]}  ${_sp}")
+  if [[ ${#names[@]} -gt 0 ]]; then
+    # ── Interactive picker (works with or without gum) ──
+    local _cursor=0
+    local _total=${#names[@]}
+    local _msg=""
+    local _old_tty_settings
+
+    # Refresh status arrays (after kill/restart)
+    _picker_refresh() {
+      statuses=(); status_plain=()
+      running_count=0
+      for i in "${!names[@]}"; do
+        if session_exists "doey-${names[$i]}"; then
+          statuses+=("running")
+          status_plain+=("running")
+          running_count=$((running_count + 1))
+        else
+          statuses+=("stopped")
+          status_plain+=("stopped")
+        fi
+      done
+    }
+
+    # Render the picker list
+    _picker_render() {
+      # Move to top of picker area and clear below
+      printf '\033[%dA' $((_total + 4))  # move up past list + hints + msg + blank
+      printf '\033[J'                     # clear from cursor to end
+
+      local i
+      for i in "${!names[@]}"; do
+        local _sp="${paths[$i]/#$HOME/\~}"
+        local _icon="○"
+        [ "${status_plain[$i]}" = "running" ] && _icon="●"
+
+        if [ "$i" -eq "$_cursor" ]; then
+          # Focused: bold cyan with cursor
+          printf '  \033[1;36m▸ %s %-18s\033[0;90m %s\033[0m\n' "$_icon" "${names[$i]}" "$_sp"
+        else
+          # Unfocused: dim
+          printf '    \033[0;90m%s %-18s %s\033[0m\n' "$_icon" "${names[$i]}" "$_sp"
+        fi
+      done
+
+      printf '\n'
+      printf '  \033[0;90menter\033[0m open  \033[0;90m·\033[0m  \033[0;90mr\033[0m restart  \033[0;90m·\033[0m  \033[0;90mx\033[0m kill  \033[0;90m·\033[0m  \033[0;90mi\033[0m init  \033[0;90m·\033[0m  \033[0;90mq\033[0m quit\n'
+
+      # Status message line (or blank)
+      if [ -n "$_msg" ]; then
+        printf '  %b\n' "$_msg"
+      else
+        printf '\n'
+      fi
+    }
+
+    # Print initial blank lines to reserve space, then render
+    local _line
+    for _line in $(seq 1 $((_total + 4))); do
+      printf '\n'
     done
-    _gum_opts+=("+ Init current directory")
-    if [[ $running_count -gt 0 ]]; then
-      _gum_opts+=("✗ Kill sessions...")
-    fi
-    _gum_opts+=("  Quit")
+    _picker_render
 
-    local _gum_pick
-    _gum_pick=$(gum choose --cursor "▸ " --cursor.foreground 6 --header "Select a project:" "${_gum_opts[@]}") || { return 0; }
+    # Save terminal state & hide cursor
+    _old_tty_settings=$(stty -g 2>/dev/null || true)
+    tput civis 2>/dev/null || true
 
-    case "$_gum_pick" in
-      "  Quit") return 0 ;;
-      "+ Init current directory")
-        register_project "$(pwd)"
-        local init_name
-        init_name="$(find_project "$(pwd)")"
-        if [[ -n "$init_name" ]]; then
-          launch_with_grid "$init_name" "$(pwd)" "$grid"
-        fi
-        ;;
-      "✗ Kill sessions..."*)
-        # ── Per-session kill picker (gum multi-select) ──
-        local _kill_opts=()
-        for i in "${!names[@]}"; do
-          if [ "${status_plain[$i]}" = "running" ]; then
-            local _ksp="${paths[$i]/#$HOME/\~}"
-            _kill_opts+=("● ${names[$i]}  ${_ksp}")
-          fi
-        done
-        _kill_opts+=("✗ Kill all (${running_count} sessions)")
-        _kill_opts+=("← Back")
+    _picker_cleanup() {
+      tput cnorm 2>/dev/null || true
+      [ -n "$_old_tty_settings" ] && stty "$_old_tty_settings" 2>/dev/null || true
+    }
+    trap '_picker_cleanup' INT TERM EXIT
 
-        local _kill_picks
-        _kill_picks=$(gum choose --cursor "▸ " --cursor.foreground 1 \
-          --header "Select session to kill:" "${_kill_opts[@]}") || { show_menu "$grid"; return $?; }
+    # ── Input loop ──
+    local _done=false
+    while [ "$_done" = false ]; do
+      _msg=""
+      local _key
+      IFS= read -rsn1 _key 2>/dev/null || true
 
-        if [ -z "$_kill_picks" ]; then
-          show_menu "$grid"; return $?
-        fi
-
-        # Check for "Back" or "Kill all"
-        local _do_kill_all=false _did_kill=false
-        if printf '%s\n' "$_kill_picks" | grep -q "^← Back$"; then
-          show_menu "$grid"; return $?
-        fi
-        if printf '%s\n' "$_kill_picks" | grep -q "^✗ Kill all"; then
-          _do_kill_all=true
-        fi
-
-        if [ "$_do_kill_all" = true ]; then
-          for i in "${!names[@]}"; do
-            local sess="doey-${names[$i]}"
-            if session_exists "$sess"; then
-              _kill_doey_session "$sess"
-              doey_ok "Killed ${names[$i]}"
-              _did_kill=true
-            fi
-          done
-        else
-          # Kill individually selected sessions
-          while IFS= read -r _kline; do
-            [ -z "$_kline" ] && continue
-            local _kname
-            _kname=$(printf '%s' "$_kline" | sed 's/^● *//; s/  .*//')
-            for i in "${!names[@]}"; do
-              if [ "${names[$i]}" = "$_kname" ]; then
-                local _ks="doey-${_kname}"
-                if session_exists "$_ks"; then
-                  _kill_doey_session "$_ks"
-                  doey_ok "Killed ${_kname}"
-                  _did_kill=true
-                fi
-                break
-              fi
-            done
-          done << EOF_KILLS
-${_kill_picks}
-EOF_KILLS
-        fi
-
-        [ "$_did_kill" = true ] && doey_success "Done"
-        ;;
-      *)
-        # Extract project name from "● name  path" or "○ name  path"
-        local _pick_name
-        _pick_name=$(printf '%s' "$_gum_pick" | sed 's/^[●○] *//; s/  .*//')
-        local _pick_idx=-1
-        for i in "${!names[@]}"; do
-          if [ "${names[$i]}" = "$_pick_name" ]; then _pick_idx=$i; break; fi
-        done
-        if [ "$_pick_idx" -ge 0 ]; then
-          local _pick_session="doey-${names[$_pick_idx]}"
-          if session_exists "$_pick_session"; then
-            attach_or_switch "$_pick_session"
+      case "$_key" in
+        # Enter key
+        "")
+          _picker_cleanup
+          trap - INT TERM EXIT
+          local _sel_name="${names[$_cursor]}"
+          local _sel_path="${paths[$_cursor]}"
+          local _sel_session="doey-${_sel_name}"
+          if session_exists "$_sel_session"; then
+            attach_or_switch "$_sel_session"
           else
-            launch_with_grid "${names[$_pick_idx]}" "${paths[$_pick_idx]}" "$grid"
+            launch_with_grid "$_sel_name" "$_sel_path" "$grid"
           fi
-        else
-          doey_error "Could not find project: ${_pick_name}"
-        fi
-        ;;
-    esac
+          return 0
+          ;;
+        # Escape sequence (arrow keys)
+        $'\033')
+          local _seq
+          IFS= read -rsn2 -t 0.1 _seq 2>/dev/null || true
+          case "$_seq" in
+            '[A') [ "$_cursor" -gt 0 ] && _cursor=$((_cursor - 1)) ;;   # Up
+            '[B') [ "$_cursor" -lt $((_total - 1)) ] && _cursor=$((_cursor + 1)) ;; # Down
+          esac
+          ;;
+        j|J) [ "$_cursor" -lt $((_total - 1)) ] && _cursor=$((_cursor + 1)) ;;
+        k|K) [ "$_cursor" -gt 0 ] && _cursor=$((_cursor - 1)) ;;
+        r|R)
+          local _rname="${names[$_cursor]}"
+          local _rpath="${paths[$_cursor]}"
+          local _rsess="doey-${_rname}"
+          if session_exists "$_rsess"; then
+            _msg="${WARN}Restarting ${_rname}...${RESET}"
+            _picker_render
+            _kill_doey_session "$_rsess"
+          fi
+          _picker_cleanup
+          trap - INT TERM EXIT
+          launch_with_grid "$_rname" "$_rpath" "$grid"
+          return 0
+          ;;
+        x|X|d|D)
+          local _xname="${names[$_cursor]}"
+          local _xsess="doey-${_xname}"
+          if session_exists "$_xsess"; then
+            _msg="${WARN}Killing ${_xname}...${RESET}"
+            _picker_render
+            _kill_doey_session "$_xsess"
+            _picker_refresh
+            _msg="${SUCCESS}Killed ${_xname}${RESET}"
+          else
+            _msg="${DIM}${_xname} is not running${RESET}"
+          fi
+          ;;
+        i|I)
+          _picker_cleanup
+          trap - INT TERM EXIT
+          register_project "$(pwd)"
+          local init_name
+          init_name="$(find_project "$(pwd)")"
+          if [[ -n "$init_name" ]]; then
+            launch_with_grid "$init_name" "$(pwd)" "$grid"
+          fi
+          return 0
+          ;;
+        q|Q)
+          _done=true
+          ;;
+      esac
+
+      [ "$_done" = false ] && _picker_render
+    done
+
+    _picker_cleanup
+    trap - INT TERM EXIT
     return 0
   fi
 
-  # ── Non-gum fallback ──
-  if [[ ${#names[@]} -gt 0 ]]; then
-    printf "  ${BOLD}Known projects:${RESET}\n"
-    for i in "${!names[@]}"; do
-      local short_path="${paths[$i]/#$HOME/\~}"
-      printf "    ${BOLD}%d)${RESET} %-20s ${DIM}%s${RESET}  %b\n" $((i+1)) "${names[$i]}" "${short_path}" "${statuses[$i]}"
-    done
-    printf '\n'
-  fi
-
-  printf "  ${DIM}Options:${RESET}\n"
-  printf "    ${BOLD}#${RESET})    Enter number to open a project\n"
-  printf "    ${BOLD}k#${RESET})   Kill a specific session ${DIM}(e.g. k1, k2)${RESET}\n"
-  printf "    ${BOLD}r#${RESET})   Restart a session ${DIM}(e.g. r1, r2)${RESET}\n"
-  printf "    ${BOLD}i${RESET})    Init current directory as new project\n"
-  if [[ $running_count -gt 0 ]]; then
-    printf "    ${BOLD}k${RESET})    Kill all running sessions ${DIM}(%d active)${RESET}\n" "$running_count"
-  fi
-  printf "    ${BOLD}q${RESET})    Quit\n"
+  # ── Non-gum fallback (no projects registered) ──
+  printf "  ${DIM}No projects registered.${RESET}\n\n"
+  printf "  ${BOLD}i${RESET})  Init current directory as new project\n"
+  printf "  ${BOLD}q${RESET})  Quit\n"
   printf '\n'
 
   read -rp "  > " choice
-
-  # Helper: parse number from choice, validate index, set _sel_name/_sel_path/_sel_session
-  local _sel_idx _sel_name _sel_path _sel_session
-  _menu_select() {
-    local num="$1"
-    _sel_idx=$((num - 1))
-    if [[ $_sel_idx -lt 0 || $_sel_idx -ge ${#names[@]} ]]; then
-      doey_error "Invalid selection"; return 1
-    fi
-    _sel_name="${names[$_sel_idx]}"
-    _sel_path="${paths[$_sel_idx]}"
-    _sel_session="doey-${_sel_name}"
-  }
-
   case "$choice" in
-    [rR][0-9]*)
-      _menu_select "${choice#[rR]}" || return 1
-      if session_exists "$_sel_session"; then
-        doey_info "Restarting ${_sel_session}..."
-        _kill_doey_session "$_sel_session"
-        doey_ok "Killed ${_sel_session}"
-      fi
-      doey_info "Launching ${_sel_name}..."
-      launch_with_grid "$_sel_name" "$_sel_path" "$grid"
-      ;;
-    [kK][0-9]*)
-      _menu_select "${choice#[kK]}" || return 1
-      if session_exists "$_sel_session"; then
-        _kill_doey_session "$_sel_session"
-        doey_success "Killed ${_sel_name}"
-      else
-        doey_info "${_sel_name} is not running"
-      fi
-      ;;
-    [0-9]*)
-      _menu_select "$choice" || return 1
-      if session_exists "$_sel_session"; then
-        attach_or_switch "$_sel_session"
-      else
-        launch_with_grid "$_sel_name" "$_sel_path" "$grid"
-      fi
-      ;;
     i|I|init)
       register_project "$(pwd)"
       local init_name
@@ -1245,30 +1232,8 @@ EOF_KILLS
         launch_with_grid "$init_name" "$(pwd)" "$grid"
       fi
       ;;
-    k|K|kill)
-      if [[ $running_count -eq 0 ]]; then
-        doey_info "No running sessions to kill"
-        return 0
-      fi
-      printf '\n'
-      if doey_confirm "Kill all ${running_count} running session(s)?"; then
-        for i in "${!names[@]}"; do
-          local sess="doey-${names[$i]}"
-          if session_exists "$sess"; then
-            _kill_doey_session "$sess"
-            doey_ok "Killed ${sess}"
-          fi
-        done
-        doey_success "All sessions killed"
-      else
-        doey_info "Cancelled"
-      fi
-      ;;
     q|Q) return 0 ;;
-    *)
-      doey_error "Invalid option"
-      return 1
-      ;;
+    *) doey_error "Invalid option"; return 1 ;;
   esac
 }
 
