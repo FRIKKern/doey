@@ -16,7 +16,7 @@ import (
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
-// TickMsg triggers a full runtime snapshot re-read (every 5s).
+// TickMsg triggers a full runtime snapshot re-read (every 2s).
 type TickMsg time.Time
 
 // HeartbeatTickMsg triggers a lightweight heartbeat recompute (every 2s).
@@ -45,7 +45,7 @@ type ReservedFreelancerResultMsg struct {
 }
 
 const (
-	snapshotInterval  = 5 * time.Second
+	snapshotInterval  = 2 * time.Second
 	heartbeatInterval = 2 * time.Second
 )
 
@@ -536,7 +536,7 @@ func (m *Model) updateFocus() {
 	m.files.SetFocused(m.focusIndex == 7)
 }
 
-// snapshotTickCmd triggers a full snapshot re-read every 5s.
+// snapshotTickCmd triggers a full snapshot re-read every 2s.
 func snapshotTickCmd() tea.Cmd {
 	return tea.Tick(snapshotInterval, func(t time.Time) tea.Msg {
 		return TickMsg(t)
