@@ -10,11 +10,29 @@ description: Delegate a task to an idle Claude instance (no kill/restart). Use w
 
 1. Identify idle panes from context. 2. Get target + task from user if needed. 3. Validate: no `.reserved`, has `❯` prompt.
 
-### 4. Rename + dispatch
+### 4. Task Assignment Files (before dispatch)
+```bash
+# Pre-write task assignment so on-prompt-submit can enforce accountability
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+TARGET_PANE_SAFE=$(echo "$TARGET_PANE" | tr ':-.' '_')
+if [ -n "${TASK_ID:-}" ]; then
+  printf '%s\n' "$TASK_ID" > "${RD}/status/${TARGET_PANE_SAFE}.task_id"
+fi
+if [ -n "${SUBTASK_NUM:-}" ]; then
+  printf '%s\n' "$SUBTASK_NUM" > "${RD}/status/${TARGET_PANE_SAFE}.subtask_id"
+fi
+```
+
+### 5. Rename + dispatch
+
+Include `Task #${TASK_ID}` in the prompt header so hooks can track it.
+
 ```bash
 tmux select-pane -t "$TARGET_PANE" -T "<short-task-label>_$(date +%m%d)"
 TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
 cat > "$TASKFILE" << 'TASK'
+**TASK_ID:** ${TASK_ID}
+
 <task prompt here>
 TASK
 tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
@@ -24,6 +42,6 @@ if [ "$TASK_LINES" -gt 200 ]; then sleep 2; elif [ "$TASK_LINES" -gt 100 ]; then
 tmux send-keys -t "$TARGET_PANE" Enter && rm "$TASKFILE"
 ```
 
-### 5. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)
+### 6. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)
 
 Rules: Always tmpfile/load-buffer. Never delegate to own pane. Never kill/restart.

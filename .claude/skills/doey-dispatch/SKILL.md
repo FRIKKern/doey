@@ -78,6 +78,21 @@ fi
 
 Include `Task #${TASK_ID}` in the prompt header so hooks can track it.
 
+### Task Assignment Files (before dispatch)
+
+```bash
+# Pre-write task assignment so on-prompt-submit can enforce accountability
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+W="${DOEY_WINDOW_INDEX:-0}"; PANE="${SESSION_NAME}:${W}.X"
+PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+if [ -n "${TASK_ID:-}" ]; then
+  printf '%s\n' "$TASK_ID" > "${RD}/status/${PANE_SAFE}.task_id"
+fi
+if [ -n "${SUBTASK_NUM:-}" ]; then
+  printf '%s\n' "$SUBTASK_NUM" > "${RD}/status/${PANE_SAFE}.subtask_id"
+fi
+```
+
 ### Dispatch Sequence
 
 ```bash
@@ -112,9 +127,10 @@ fi
 tmux select-pane -t "$PANE" -T "task-name_$(date +%m%d)"
 TASKFILE=$(mktemp "${RD}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
-You are a worker on Doey for project: ${PROJECT_NAME}
+You are Worker on the Doey team for project: ${PROJECT_NAME}
 Project directory: ${PROJECT_DIR}
-All file paths should be absolute.
+
+**TASK_ID:** ${TASK_ID}
 
 Your detailed task prompt here.
 TASK
