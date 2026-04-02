@@ -4,6 +4,30 @@
 set -euo pipefail
 trap 'exit 0' ERR
 
+# Source centralized role definitions — resolve via multiple fallbacks
+_DOEY_ROLES_FILE=""
+# Method 1: Relative to this hook file (works inside Doey repo)
+_doey_hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ -f "${_doey_hook_dir}/../../shell/doey-roles.sh" ]; then
+    _DOEY_ROLES_FILE="$(cd "${_doey_hook_dir}/../../shell" && pwd)/doey-roles.sh"
+fi
+# Method 2: Installed copy in ~/.local/bin
+if [ -z "$_DOEY_ROLES_FILE" ] && [ -f "$HOME/.local/bin/doey-roles.sh" ]; then
+    _DOEY_ROLES_FILE="$HOME/.local/bin/doey-roles.sh"
+fi
+# Method 3: Repo path from install config
+if [ -z "$_DOEY_ROLES_FILE" ] && [ -f "$HOME/.claude/doey/repo-path" ]; then
+    _doey_repo="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null)" || _doey_repo=""
+    if [ -n "$_doey_repo" ] && [ -f "${_doey_repo}/shell/doey-roles.sh" ]; then
+        _DOEY_ROLES_FILE="${_doey_repo}/shell/doey-roles.sh"
+    fi
+    unset _doey_repo
+fi
+unset _doey_hook_dir
+if [ -n "$_DOEY_ROLES_FILE" ]; then
+    source "$_DOEY_ROLES_FILE"
+fi
+
 INPUT=$(cat)
 
 _log_block() {
