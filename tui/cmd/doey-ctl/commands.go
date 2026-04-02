@@ -118,21 +118,56 @@ func runTaskCreate(args []string) {
 }
 
 func runTaskUpdate(args []string) {
-	fs := flag.NewFlagSet("task update", flag.ExitOnError)
-	field := fs.String("field", "", "field name (required)")
-	value := fs.String("value", "", "field value (required)")
+	fs := flag.NewFlagSet("task update", flag.ContinueOnError)
+	field := fs.String("field", "", "field name")
+	value := fs.String("value", "", "field value")
+	idFlag := fs.String("id", "", "task ID (convenience)")
+	statusFlag := fs.String("status", "", "set status (convenience shorthand)")
 	dir := fs.String("project-dir", "", "project directory")
-	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task update: missing task ID")
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: doey-ctl task update [flags] [task-id]\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl task update -field status -value done 142\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl task update --id 142 --status done    (convenience shorthand)\n\n")
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		fs.PrintDefaults()
 	}
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		}
+		suggestTaskUpdateFlag(args)
+		os.Exit(1)
+	}
+
+	// Resolve task ID: --id flag takes priority over positional arg.
+	taskIDStr := *idFlag
+	if taskIDStr == "" && fs.NArg() >= 1 {
+		taskIDStr = fs.Arg(0)
+	}
+	if taskIDStr == "" {
+		fatal("task update: missing task ID\nTry: doey-ctl task update --id <ID> --status <value>\n")
+	}
+
+	// Convenience: --status maps to field=status, value=<status>.
+	if *statusFlag != "" {
+		if *field != "" && *field != "status" {
+			fatal("task update: cannot use --status with -field %q (conflicting)\n", *field)
+		}
+		*field = "status"
+		*value = *statusFlag
+	}
+
 	if *field == "" {
-		fatal("task update: --field is required")
+		fatal("task update: --field or --status is required\nTry: doey-ctl task update -field status -value done <ID>\n")
 	}
+
+	// Auto-strip TASK_ prefix (e.g. TASK_STATUS → status).
+	*field = normalizeFieldName(*field)
 
 	pd := projectDir(*dir)
-	taskIDStr := fs.Arg(0)
 	s := tryOpenStore(pd)
 
 	if s != nil {
@@ -171,7 +206,7 @@ func runTaskUpdate(args []string) {
 					}
 					t.TotalPhases = n
 				default:
-					fatal("task update: unknown DB field %q", *field)
+					fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases\n", *field)
 				}
 
 				if err := s.UpdateTask(t); err != nil {
@@ -465,13 +500,47 @@ func runSubtaskAdd(args []string) {
 
 func runSubtaskUpdate(args []string) {
 	fs := flag.NewFlagSet("task subtask update", flag.ExitOnError)
-	status := fs.String("status", "", "new status (required for DB mode)")
+	statusFlag := fs.String("status", "", "new status")
 	stTitle := fs.String("title", "", "new title (DB mode)")
+	taskIDFlag := fs.String("task-id", "", "parent task ID")
+	subtaskIDFlag := fs.String("subtask-id", "", "subtask seq number or DB ID")
 	dir := fs.String("project-dir", "", "project directory")
+
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: doey-ctl task subtask update [flags] [task-id] [seq] [status]\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl task subtask update --task-id 142 --subtask-id 1 --status done\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl task subtask update 142 1 done    (positional shorthand)\n\n")
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		fs.PrintDefaults()
+	}
+
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		fatal("task subtask update: missing ID")
+	// Resolve task ID and subtask ID from flags or positional args.
+	taskIDStr := *taskIDFlag
+	subtaskIDStr := *subtaskIDFlag
+	statusVal := *statusFlag
+
+	// Positional fallback: <task-id> <seq> [status]
+	if taskIDStr == "" && fs.NArg() >= 1 {
+		taskIDStr = fs.Arg(0)
+	}
+	if subtaskIDStr == "" && fs.NArg() >= 2 {
+		subtaskIDStr = fs.Arg(1)
+	}
+	if statusVal == "" && fs.NArg() >= 3 {
+		statusVal = fs.Arg(2)
+	}
+
+	if taskIDStr == "" {
+		fatal("task subtask update: missing task ID\nTry: doey-ctl task subtask update --task-id <TASK> --subtask-id <SEQ> --status <STATUS>\n")
+	}
+	if subtaskIDStr == "" {
+		fatal("task subtask update: missing subtask ID\nTry: doey-ctl task subtask update --task-id %s --subtask-id <SEQ> --status <STATUS>\n", taskIDStr)
+	}
+	if statusVal == "" && *stTitle == "" {
+		fatal("task subtask update: --status or --title is required\nTry: doey-ctl task subtask update --task-id %s --subtask-id %s --status <STATUS>\n", taskIDStr, subtaskIDStr)
 	}
 
 	pd := projectDir(*dir)
@@ -479,43 +548,68 @@ func runSubtaskUpdate(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		// DB mode: first arg is subtask ID.
-		subtaskIDStr := fs.Arg(0)
-		id, err := strconv.ParseInt(subtaskIDStr, 10, 64)
-		if err == nil && *status != "" {
-			st := &store.Subtask{
-				ID:     id,
-				Status: *status,
-			}
-			if *stTitle != "" {
-				st.Title = *stTitle
-			}
-			if err := s.UpdateSubtask(st); err != nil {
-				fatal("task subtask update: %v", err)
-			}
-
-			if jsonOutput {
-				printJSON(map[string]string{"status": "updated"})
-			} else {
-				fmt.Println("updated")
-			}
-			return
+		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			fatal("task subtask update: invalid task ID %q\n", taskIDStr)
 		}
+		subtaskNum, err := strconv.ParseInt(subtaskIDStr, 10, 64)
+		if err != nil {
+			fatal("task subtask update: invalid subtask ID %q\n", subtaskIDStr)
+		}
+
+		// Try to resolve: first as seq number, then as DB ID.
+		resolved, err := s.GetSubtaskBySeq(taskID, int(subtaskNum))
+		if err != nil {
+			// Not a valid seq — try as DB ID.
+			resolved, err = s.GetSubtaskByID(subtaskNum)
+			if err != nil || resolved.TaskID != taskID {
+				// Neither matched — build helpful error.
+				subtasks, _ := s.ListSubtasks(taskID)
+				if len(subtasks) > 0 {
+					var seqs []string
+					for _, st := range subtasks {
+						seqs = append(seqs, fmt.Sprintf("%d", st.Seq))
+					}
+					fatal("task subtask update: subtask %s not found for task %s\nValid seq numbers: %s\nTry: doey-ctl task subtask update --task-id %s --subtask-id <SEQ> --status <STATUS>\n",
+						subtaskIDStr, taskIDStr, strings.Join(seqs, ", "), taskIDStr)
+				}
+				fatal("task subtask update: subtask %s not found for task %s (task may have no subtasks)\n", subtaskIDStr, taskIDStr)
+			}
+		}
+
+		if statusVal != "" {
+			resolved.Status = statusVal
+		}
+		if *stTitle != "" {
+			resolved.Title = *stTitle
+		}
+		if err := s.UpdateSubtask(resolved); err != nil {
+			fatal("task subtask update: %v", err)
+		}
+
+		// Write-through to .task file (best-effort).
+		if statusVal != "" {
+			_ = ctl.UpdateSubtaskStatus(pd, taskIDStr, resolved.Seq, statusVal)
+		}
+
+		if jsonOutput {
+			printJSON(map[string]string{"status": "updated", "seq": strconv.Itoa(resolved.Seq)})
+		} else {
+			fmt.Println("updated")
+		}
+		return
 	}
 
-	// File-only fallback: <task-id> <index> <status>.
-	if fs.NArg() < 3 {
-		fatal("task subtask update: usage: <task-id> <index> <status>")
-	}
-
-	taskID := fs.Arg(0)
-	idx, err := strconv.Atoi(fs.Arg(1))
+	// File-only fallback: uses seq number (index).
+	idx, err := strconv.Atoi(subtaskIDStr)
 	if err != nil {
-		fatal("task subtask update: invalid index %q", fs.Arg(1))
+		fatal("task subtask update: invalid seq number %q\n", subtaskIDStr)
 	}
-	fileStatus := fs.Arg(2)
+	if statusVal == "" {
+		fatal("task subtask update: status is required in file mode\n")
+	}
 
-	if err := ctl.UpdateSubtaskStatus(pd, taskID, idx, fileStatus); err != nil {
+	if err := ctl.UpdateSubtaskStatus(pd, taskIDStr, idx, statusVal); err != nil {
 		fatal("task subtask update: %v", err)
 	}
 }
@@ -546,9 +640,9 @@ func runSubtaskList(args []string) {
 				printJSON(subtasks)
 				return
 			}
-			fmt.Printf("%-6s %-4s %-12s %s\n", "ID", "SEQ", "STATUS", "TITLE")
+			fmt.Printf("%-4s %-12s %-6s %s\n", "SEQ", "STATUS", "DB_ID", "TITLE")
 			for _, st := range subtasks {
-				fmt.Printf("%-6d %-4d %-12s %s\n", st.ID, st.Seq, st.Status, st.Title)
+				fmt.Printf("%-4d %-12s %-6d %s\n", st.Seq, st.Status, st.ID, st.Title)
 			}
 			return
 		}
@@ -750,6 +844,90 @@ func runTaskDecision(args []string) {
 	if err := ctl.AddDecision(pd, taskIDStr, text); err != nil {
 		fatal("task decision: %v", err)
 	}
+}
+
+// normalizeFieldName strips TASK_ prefix and lowercases the field name.
+func normalizeFieldName(field string) string {
+	upper := strings.ToUpper(field)
+	if strings.HasPrefix(upper, "TASK_") {
+		field = field[5:]
+	}
+	return strings.ToLower(field)
+}
+
+// suggestTaskUpdateFlag scans raw args for unknown flags and suggests corrections.
+func suggestTaskUpdateFlag(args []string) {
+	known := []string{"field", "value", "id", "status", "project-dir"}
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+		name := strings.TrimLeft(arg, "-")
+		if idx := strings.Index(name, "="); idx >= 0 {
+			name = name[:idx]
+		}
+		if name == "" {
+			continue
+		}
+		isKnown := false
+		for _, k := range known {
+			if name == k {
+				isKnown = true
+				break
+			}
+		}
+		if !isKnown {
+			best, bestDist := "", 999
+			for _, k := range known {
+				if d := editDistance(name, k); d < bestDist {
+					bestDist = d
+					best = k
+				}
+			}
+			if bestDist <= 3 && best != "" {
+				fmt.Fprintf(os.Stderr, "doey-ctl: unknown flag '--%s'. Did you mean '--%s'?\n", name, best)
+			}
+		}
+	}
+	fmt.Fprintf(os.Stderr, "Try: doey-ctl task update -field status -value done <ID>\n")
+}
+
+// editDistance computes Levenshtein distance between two strings.
+func editDistance(a, b string) int {
+	la, lb := len(a), len(b)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	prev := make([]int, lb+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr := make([]int, lb+1)
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			del := prev[j] + 1
+			ins := curr[j-1] + 1
+			sub := prev[j-1] + cost
+			min := del
+			if ins < min {
+				min = ins
+			}
+			if sub < min {
+				min = sub
+			}
+			curr[j] = min
+		}
+		prev = curr
+	}
+	return prev[lb]
 }
 
 // runTmuxCmd dispatches tmux sub-subcommands.

@@ -178,6 +178,28 @@ func (s *Store) UpdateSubtask(st *Subtask) error {
 	return err
 }
 
+// GetSubtaskBySeq returns the subtask for a given task and sequence number.
+func (s *Store) GetSubtaskBySeq(taskID int64, seq int) (*Subtask, error) {
+	var st Subtask
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status FROM subtasks WHERE task_id = ? AND seq = ?`, taskID, seq).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status)
+	if err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// GetSubtaskByID returns the subtask by its DB primary key.
+func (s *Store) GetSubtaskByID(id int64) (*Subtask, error) {
+	var st Subtask
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status FROM subtasks WHERE id = ?`, id).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status)
+	if err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
 func (s *Store) AddTaskLog(entry *TaskLogEntry) (int64, error) {
 	entry.CreatedAt = time.Now().Unix()
 	res, err := s.db.Exec(`INSERT INTO task_log (task_id, type, author, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
