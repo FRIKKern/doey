@@ -128,7 +128,7 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
       1) _DOEY_ROLE="$DOEY_ROLE_ID_BOSS" ;;
       0) _DOEY_ROLE="info_panel" ;;
       *) _taskmaster_p=$(_rk TASKMASTER_PANE "${_RD}/session.env")
-         [ "0.${_di_pi}" = "${_taskmaster_p:-0.2}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+         [ "0.${_di_pi}" = "${_taskmaster_p:-$(get_taskmaster_pane)}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
     esac
   else
     _di_tt=$(_rk TEAM_TYPE "${_RD}/team_${_di_wi}.env")
@@ -165,16 +165,18 @@ _dbg_write() {
 
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD="$_BASH_CMD"
+  _boss_tm_pane=$(get_taskmaster_pane)
+  _boss_tm_safe=$(echo "$_boss_tm_pane" | tr '.' '_')
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
     _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
     case "$_boss_target" in
-      *:0.2|*_0_2*|0.2)
+      *:${_boss_tm_pane}|*_${_boss_tm_safe}*|${_boss_tm_pane})
         _dbg_write "allow_boss_sendkeys_coordinator"
         ;; # fall through to boss exit 0
       *)
         _log_block "TOOL_BLOCKED" "${DOEY_ROLE_BOSS} send-keys to non-${DOEY_ROLE_COORDINATOR} pane blocked" "$_BOSS_CMD"
         _dbg_write "block_boss_sendkeys_${_boss_target}"
-        echo "BLOCKED: ${DOEY_ROLE_BOSS} may only send-keys to ${DOEY_ROLE_COORDINATOR} pane (0.2)" >&2
+        echo "BLOCKED: ${DOEY_ROLE_BOSS} may only send-keys to ${DOEY_ROLE_COORDINATOR} pane (${_boss_tm_pane})" >&2
         exit 2 ;;
     esac
   ;; esac
@@ -369,7 +371,7 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
     if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
-      _taskmaster_pane=$(_rk TASKMASTER_PANE "${_rtd}/session.env"); [ -z "$_taskmaster_pane" ] && _taskmaster_pane="0.2"
+      _taskmaster_pane=$(_rk TASKMASTER_PANE "${_rtd}/session.env"); [ -z "$_taskmaster_pane" ] && _taskmaster_pane="$(get_taskmaster_pane)"
       _sn="${SESSION_NAME:-}"; [ -z "$_sn" ] && _sn=$(_rk SESSION_NAME "${_rtd}/session.env")
       case "$TOOL_COMMAND" in
         *"-t"*"${_sn}:${_taskmaster_pane}"*|*"-t"*"${_taskmaster_pane}"*)

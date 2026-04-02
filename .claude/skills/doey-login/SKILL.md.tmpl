@@ -75,7 +75,8 @@ restart_team() {
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep '^SESSION_NAME=' "${RD}/session.env" | cut -d= -f2 | tr -d '"')
-MY_PANE="${SESSION_NAME}:0.2"
+TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
+MY_PANE="${SESSION_NAME}:${TASKMASTER_PANE:-0.2}"
 TEAM_WINDOWS=$(grep '^TEAM_WINDOWS=' "${RD}/session.env" | cut -d= -f2 | tr -d '"')
 case "$TARGET_SCOPE" in
 [0-9]|[0-9][0-9]) restart_team "$SESSION_NAME" "$RD" "$TARGET_SCOPE" "$MY_PANE" ;;

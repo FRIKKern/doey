@@ -10,7 +10,7 @@ source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
 trap 'exit 0' ERR
 source "$(dirname "$0")/common.sh" 2>/dev/null || true
 
-TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
+TASKMASTER_PANE="${TASKMASTER_PANE:-$(get_taskmaster_pane)}"
 TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_${TASKMASTER_PANE//[-:.]/_}"
 PANE="${SESSION_NAME}:${TASKMASTER_PANE}"; PANE_SAFE="$TASKMASTER_SAFE"
 _TASKMASTER_STATUS_FILE="${RUNTIME_DIR}/status/${TASKMASTER_SAFE}.status"

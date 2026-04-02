@@ -186,7 +186,7 @@ if is_boss; then
 
 ## BOSS STATE (restore after compaction)
 **You are ${DOEY_ROLE_BOSS}** — user-facing Project Manager at pane 0.1
-**${DOEY_ROLE_COORDINATOR} is at:** pane 0.2
+**${DOEY_ROLE_COORDINATOR} is at:** pane $(get_taskmaster_pane)
 BOSSSTATE
   BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
   BOSS_MSGS=$(_gather_msgs "$BOSS_SAFE")

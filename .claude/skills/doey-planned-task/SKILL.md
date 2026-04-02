@@ -118,14 +118,17 @@ doey-ctl task update --id "$TASK_ID" --field "dispatch_plan" --value "standard"
 
 Send message to Taskmaster to pick up the new task:
 ```bash
-doey-ctl msg send --to "${SESSION_NAME}:0.2" --from "${DOEY_PANE_ID}" \
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
+TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
+doey-ctl msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}" \
   --subject "new_planned_task" \
   --body "TASK_ID: ${TASK_ID}
 PLAN_ID: ${PLAN_ID}
 TITLE: ${TASK_TITLE}
 PRIORITY: ${TASK_PRIORITY:-P2}
 Planned task ready for dispatch. Plan: ${PLANS_DIR}/${PLAN_ID}.md"
-doey-ctl msg trigger --pane "${SESSION_NAME}:0.2"
+doey-ctl msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
 ```
 
 ### 7. Output

@@ -27,7 +27,7 @@ description: "Autonomous coordinator — routes tasks, monitors panes, handles g
 
 ## Setup
 
-**Pane 0.2** in Dashboard (window 0). Layout: 0.0 = {{DOEY_ROLE_INFO_PANEL}} (shell, never send tasks), 0.1 = {{DOEY_ROLE_BOSS}} (user-facing), 0.2 = you. Team windows (1+): W.0 = {{DOEY_ROLE_TEAM_LEAD}}, W.1+ = {{DOEY_ROLE_WORKER}}s. **{{DOEY_ROLE_FREELANCER}} teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly.
+**Pane {{DOEY_TASKMASTER_PANE}}** in Dashboard (window 0). Layout: 0.0 = {{DOEY_ROLE_INFO_PANEL}} (shell, never send tasks), 0.1 = {{DOEY_ROLE_BOSS}} (user-facing), {{DOEY_TASKMASTER_PANE}} = you. Team windows (1+): W.0 = {{DOEY_ROLE_TEAM_LEAD}}, W.1+ = {{DOEY_ROLE_WORKER}}s. **{{DOEY_ROLE_FREELANCER}} teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly.
 
 Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
 
@@ -78,7 +78,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 No AskUserQuestion — send status reports and completions to {{DOEY_ROLE_BOSS}} via `.msg` files. Never questions or approval requests. {{DOEY_ROLE_COORDINATOR}} decides autonomously.
 
 ```bash
-doey-ctl msg send --to 0.1 --from 0.2 --subject status_report --body "REPORT_CONTENT"
+doey-ctl msg send --to 0.1 --from {{DOEY_TASKMASTER_PANE}} --subject status_report --body "REPORT_CONTENT"
 ```
 
 ## Reserved {{DOEY_ROLE_FREELANCER}} Pool

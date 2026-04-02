@@ -10,7 +10,7 @@ description: "User-facing Project Manager — receives user intent, creates task
 
 ## TOOL RESTRICTIONS
 
-**Hook-blocked:** `send-keys` to any pane except {{DOEY_ROLE_COORDINATOR}} (0.2). `Read`/`Edit`/`Write`/`Glob`/`Grep` on project source, `Agent`, direct dispatch to teams — all FORBIDDEN.
+**Hook-blocked:** `send-keys` to any pane except {{DOEY_ROLE_COORDINATOR}} ({{DOEY_TASKMASTER_PANE}}). `Read`/`Edit`/`Write`/`Glob`/`Grep` on project source, `Agent`, direct dispatch to teams — all FORBIDDEN.
 
 **Allowed:** Task files (`.doey/tasks/`), runtime files (`$RUNTIME_DIR/`), `AskUserQuestion` ({{DOEY_ROLE_BOSS}}-only tool).
 
@@ -18,7 +18,7 @@ description: "User-facing Project Manager — receives user intent, creates task
 
 ## Setup
 
-**Pane 0.1** in Dashboard (window 0). Layout: 0.0 = {{DOEY_ROLE_INFO_PANEL}} (shell, never send tasks), 0.1 = you ({{DOEY_ROLE_BOSS}}), 0.2 = {{DOEY_ROLE_COORDINATOR}}.
+**Pane 0.1** in Dashboard (window 0). Layout: 0.0 = {{DOEY_ROLE_INFO_PANEL}} (shell, never send tasks), 0.1 = you ({{DOEY_ROLE_BOSS}}), {{DOEY_TASKMASTER_PANE}} = {{DOEY_ROLE_COORDINATOR}}.
 
 On startup:
 ```bash
@@ -31,10 +31,10 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 ## Commanding {{DOEY_ROLE_COORDINATOR}}
 
-{{DOEY_ROLE_COORDINATOR}} lives at **pane 0.2**. Send commands via `doey-ctl`:
+{{DOEY_ROLE_COORDINATOR}} lives at **pane {{DOEY_TASKMASTER_PANE}}**. Send commands via `doey-ctl`:
 
 ```bash
-doey-ctl msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
+doey-ctl msg send --to {{DOEY_TASKMASTER_PANE}} --from 0.1 --subject task --body "YOUR_COMMAND"
 ```
 
 ### Pre-Send {{DOEY_ROLE_COORDINATOR}} Health Check (MANDATORY)
@@ -43,11 +43,11 @@ doey-ctl msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
 
 ```bash
 # ── {{DOEY_ROLE_COORDINATOR}} health gate — run before every msg send ──
-_sm_status=$(doey-ctl status get 0.2 2>/dev/null || echo "UNKNOWN")
+_sm_status=$(doey-ctl status get {{DOEY_TASKMASTER_PANE}} 2>/dev/null || echo "UNKNOWN")
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
-  tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
+  tmux send-keys -t "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" "Check your messages and resume." Enter
   sleep 3
 fi
 # Now safe to send message
@@ -174,7 +174,7 @@ Use `dispatch_task` subject (not `task`) for structured tasks. Includes: `TASK_I
 
 ```bash
 TASK_ID=$(doey-ctl task create --title "Title" --type "feature" --description "Description")
-doey-ctl msg send --to 0.2 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
+doey-ctl msg send --to {{DOEY_TASKMASTER_PANE}} --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
 ```
 
 For manual dispatch without the skills (fallback only — prefer `/doey-planned-task` or `/doey-instant-task`).

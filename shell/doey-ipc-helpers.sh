@@ -6,7 +6,12 @@ set -euo pipefail
 # Returns: 0 = Taskmaster alive, 1 = Taskmaster woken (caller should retry), 2 = Taskmaster unreachable
 ensure_taskmaster_alive() {
   local runtime_dir="$1" session_name="$2"
-  local taskmaster_pane="0.2" taskmaster_safe="${session_name//[-:.]/_}_0_2"
+  local taskmaster_pane
+  if [ -f "${runtime_dir}/session.env" ]; then
+    taskmaster_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2-)
+  fi
+  taskmaster_pane="${taskmaster_pane:-0.2}"
+  local taskmaster_safe="${session_name//[-:.]/_}_${taskmaster_pane//[-.:]/_}"
   local status_file="${runtime_dir}/status/${taskmaster_safe}.status"
 
   tmux display-message -t "${session_name}:${taskmaster_pane}" -p '#{pane_pid}' >/dev/null 2>&1 || return 2
@@ -59,7 +64,12 @@ ensure_taskmaster_alive() {
 send_msg_to_taskmaster() {
   local runtime_dir="$1" session_name="$2" subject="$3" body="$4"
   local sender="${5:-${DOEY_PANE_ID:-unknown}}"
-  local taskmaster_safe="${session_name//[-:.]/_}_0_2"
+  local taskmaster_pane
+  if [ -f "${runtime_dir}/session.env" ]; then
+    taskmaster_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2-)
+  fi
+  taskmaster_pane="${taskmaster_pane:-0.2}"
+  local taskmaster_safe="${session_name//[-:.]/_}_${taskmaster_pane//[-.:]/_}"
 
   local rc=0; ensure_taskmaster_alive "$runtime_dir" "$session_name" || rc=$?
   [ "$rc" -eq 2 ] && return 1

@@ -50,7 +50,7 @@ if [ "$WINDOW_INDEX" = "0" ]; then
   case "$PANE_INDEX" in
     0) ROLE="info_panel" ;;
     1) ROLE="$DOEY_ROLE_ID_BOSS" ;;
-    *) [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ] && ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+    *) [ "0.${PANE_INDEX}" = "${sm_val:-$(get_taskmaster_pane)}" ] && ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
   esac
 else
   _team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
