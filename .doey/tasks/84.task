@@ -1,8 +1,0 @@
-TASK_ID=84
-TASK_TITLE=Add "No Dispatch Without Task" rule to SM agent prompt
-TASK_STATUS=done
-TASK_CREATED=1775028300
-TASK_TYPE=bugfix
-TASK_DESCRIPTION=Edit agents/doey-session-manager.md — add Hard Rule section requiring .task file before any dispatch. Explains that session-manager-wait.sh checks .doey/tasks/ for active tasks to keep SM awake.
-TASK_TAGS=agent,sm,dispatch,hook
-TASK_TEAM=W1
