@@ -178,6 +178,12 @@ func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatSta
 		parts = append(parts, ti.Task.Team)
 	}
 
+	// Last updated
+	if ti.Task.Updated > 0 {
+		updatedTime := time.Unix(ti.Task.Updated, 0)
+		parts = append(parts, updatedTime.Format("Jan 2 15:04"))
+	}
+
 	return strings.Join(parts, " · ")
 }
 
@@ -349,7 +355,10 @@ func (e *ExpandedCard) Render() string {
 	sections = append(sections, metaStyle.Render(strings.Join(metaParts, " · ")))
 
 	if task.Created > 0 {
-		sections = append(sections, metaStyle.Faint(true).Render(time.Unix(task.Created, 0).Format("2006-01-02 15:04")))
+		sections = append(sections, metaStyle.Faint(true).Render("Created: "+time.Unix(task.Created, 0).Format("2006-01-02 15:04")))
+	}
+	if task.Updated > 0 && task.Updated != task.Created {
+		sections = append(sections, metaStyle.Faint(true).Render("Updated: "+time.Unix(task.Updated, 0).Format("2006-01-02 15:04")))
 	}
 	if task.Phase != "" {
 		sections = append(sections, styles.TaskPhaseBadge(e.Theme, task.Phase))
