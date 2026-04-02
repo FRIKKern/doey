@@ -133,7 +133,7 @@ if is_worker; then
 
   LAST_MSG=$(parse_field "last_assistant_message")
 
-  if [ "$_team_type" = "freelancer" ]; then
+  if [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ]; then
     _taskmaster_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" TASKMASTER_PANE)
     _target="$SESSION_NAME:${_taskmaster_pane:-0.2}"
     _subject="freelancer_finished"
@@ -160,7 +160,7 @@ if is_worker; then
 </task-notification>"
   _notify_pane "$_target" "$_subject" "$MSG"
   _debug_sent "$_target" "$_subject"
-  { [ "$_team_type" = "freelancer" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
+  { [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
   _log "stop-notify: sent ${_subject} to ${_target}"
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
   _wake_taskmaster
@@ -195,9 +195,9 @@ if is_taskmaster; then
   BOSS_TARGET="$SESSION_NAME:0.1"
   if _pane_alive "$BOSS_TARGET"; then
     SUMMARY=$(sanitize_message "$LAST_MSG" 150)
-    _notify_pane "$BOSS_TARGET" "taskmaster_update" "Taskmaster update: ${SUMMARY}"
+    _notify_pane "$BOSS_TARGET" "taskmaster_update" "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}"
     _debug_sent "$BOSS_TARGET" "taskmaster_update"
-    _log "stop-notify: sent taskmaster_update to Boss at $BOSS_TARGET"
+    _log "stop-notify: sent taskmaster_update to ${DOEY_ROLE_BOSS} at $BOSS_TARGET"
   fi
 fi
 
@@ -206,7 +206,7 @@ if is_boss; then
   [ -z "$LAST_MSG" ] && exit 0
   _is_spam "$LAST_MSG" && exit 0
 
-  send_notification "Doey — Boss" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
+  send_notification "Doey — ${DOEY_ROLE_BOSS}" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
   _debug_sent "desktop" "desktop_notification" "osascript"
   _log "stop-notify: sent desktop notification"
 fi

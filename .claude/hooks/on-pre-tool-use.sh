@@ -87,7 +87,7 @@ _check_blocked() {
   cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
   case "$cmd" in
     *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
-      MSG="git write operations (git commit/push, gh pr). Send a message to Taskmaster with what you need committed" ;;
+      MSG="git write operations (git commit/push, gh pr). Send a message to ${DOEY_ROLE_COORDINATOR} with what you need committed" ;;
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
     *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
@@ -125,18 +125,18 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
   _di_pi="${_WP##*.}"
   if [ "$_di_wi" = "0" ]; then
     case "$_di_pi" in
-      1) _DOEY_ROLE="boss" ;;
+      1) _DOEY_ROLE="$DOEY_ROLE_ID_BOSS" ;;
       0) _DOEY_ROLE="info_panel" ;;
       *) _taskmaster_p=$(_rk TASKMASTER_PANE "${_RD}/session.env")
-         [ "0.${_di_pi}" = "${_taskmaster_p:-0.2}" ] && _DOEY_ROLE="taskmaster" ;;
+         [ "0.${_di_pi}" = "${_taskmaster_p:-0.2}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
     esac
   else
     _di_tt=$(_rk TEAM_TYPE "${_RD}/team_${_di_wi}.env")
-    if [ "$_di_tt" != "freelancer" ]; then
+    if [ "$_di_tt" != "$DOEY_ROLE_ID_FREELANCER" ]; then
       _di_mp=$(_rk MANAGER_PANE "${_RD}/team_${_di_wi}.env")
-      [ "$_di_pi" = "${_di_mp:-0}" ] && _DOEY_ROLE="manager"
+      [ "$_di_pi" = "${_di_mp:-0}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_TEAM_LEAD"
     fi
-    [ -z "$_DOEY_ROLE" ] && _DOEY_ROLE="worker"
+    [ -z "$_DOEY_ROLE" ] && _DOEY_ROLE="$DOEY_ROLE_ID_WORKER"
   fi
 fi
 
@@ -163,18 +163,18 @@ _dbg_write() {
     >> "$_pdir/hooks.jsonl" 2>/dev/null
 }
 
-if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD="$_BASH_CMD"
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
     _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
     case "$_boss_target" in
       *:0.2|*_0_2*|0.2)
-        _dbg_write "allow_boss_sendkeys_taskmaster"
+        _dbg_write "allow_boss_sendkeys_coordinator"
         ;; # fall through to boss exit 0
       *)
-        _log_block "TOOL_BLOCKED" "Boss send-keys to non-Taskmaster pane blocked" "$_BOSS_CMD"
+        _log_block "TOOL_BLOCKED" "${DOEY_ROLE_BOSS} send-keys to non-${DOEY_ROLE_COORDINATOR} pane blocked" "$_BOSS_CMD"
         _dbg_write "block_boss_sendkeys_${_boss_target}"
-        echo "BLOCKED: Boss may only send-keys to Taskmaster pane (0.2)" >&2
+        echo "BLOCKED: ${DOEY_ROLE_BOSS} may only send-keys to ${DOEY_ROLE_COORDINATOR} pane (0.2)" >&2
         exit 2 ;;
     esac
   ;; esac
@@ -196,20 +196,20 @@ if [ -n "${_RD:-}" ]; then
   esac
 fi
 
-if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
+if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Agent)
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
       _dbg_write "block_${_DOEY_ROLE}_agent"
       case "$_DOEY_ROLE" in
-        boss) echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Taskmaster instead." >&2 ;;
+        "$DOEY_ROLE_ID_BOSS") echo "BLOCKED: ${DOEY_ROLE_BOSS} cannot spawn agents. Relay tasks to ${DOEY_ROLE_COORDINATOR} instead." >&2 ;;
         *)    echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2 ;;
       esac
       exit 2 ;;
     Read|Edit|Write|Glob|Grep)
       _CHK_PATH=$(_json_str tool_input.file_path)
       [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.path)
-      [ "$_DOEY_ROLE" = "boss" ] && [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.pattern)
+      [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.pattern)
       case "${_CHK_PATH:-}" in
         */.doey/tasks/*|*/.doey/tasks|\
         "${_RD:-__none__}"/*|*/tmp/doey/*)
@@ -218,8 +218,8 @@ if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_RO
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} $TOOL_NAME on project source blocked" "${_CHK_PATH:-project root}"
       _dbg_write "block_${_DOEY_ROLE}_source_${TOOL_NAME}"
       case "$_DOEY_ROLE" in
-        boss)            _advice="Relay file operations to Taskmaster" ;;
-        taskmaster) _advice="Coordinate workers to handle file operations" ;;
+        "$DOEY_ROLE_ID_BOSS")            _advice="Relay file operations to ${DOEY_ROLE_COORDINATOR}" ;;
+        "$DOEY_ROLE_ID_COORDINATOR") _advice="Coordinate workers to handle file operations" ;;
         *)               _advice="Delegate file operations to workers" ;;
       esac
       echo "BLOCKED: Cannot $TOOL_NAME project source files. ${_advice}." >&2
@@ -227,17 +227,17 @@ if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_RO
   esac
 fi
 
-if [ "$_DOEY_ROLE" = "boss" ]; then
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ]; then
   _dbg_write "allow_boss"
   exit 0
 fi
 
 if [ "$TOOL_NAME" != "Bash" ]; then
   if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ -n "$_DOEY_ROLE" ]; then
-    _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only Boss asks the user"
+    _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only ${DOEY_ROLE_BOSS} asks the user"
     _dbg_write "block_ask_user_${_DOEY_ROLE}"
-    echo "BLOCKED: Only Boss can ask the user questions directly." >&2
-    echo "Send a message to Boss with your question instead:" >&2
+    echo "BLOCKED: Only ${DOEY_ROLE_BOSS} can ask the user questions directly." >&2
+    echo "Send a message to ${DOEY_ROLE_BOSS} with your question instead:" >&2
     echo '  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"' >&2
     echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_$(date +%s)_$$.msg"' >&2
     exit 2
@@ -255,7 +255,7 @@ case "${_BASH_CMD:-}" in
 esac
 
 # Manager tmux dispatch (must run BEFORE git check — payloads may contain git strings)
-if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" = "Bash" ]; then
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _tmux_stripped=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
   case "$_tmux_stripped" in
     "tmux kill-session"*|"tmux kill-server"*|"tmux kill-window"*)
@@ -271,24 +271,24 @@ if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" = "Bash" ]; then
   esac
 fi
 
-if [ "$_DOEY_ROLE" != "taskmaster" ]; then
+if [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_COORDINATOR" ]; then
   if [ -n "$_BASH_CMD" ] && [ "$_BASH_CMD" != "__PARSE_FAILED__" ]; then
     case "$_BASH_CMD" in
       *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
         _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_BASH_CMD"
         _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
-        if [ "$_DOEY_ROLE" = "worker" ]; then
+        if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
           _escalate_permission "Bash" "$_BASH_CMD" "git write operations blocked for workers"
-          echo "BLOCKED: Git operations are handled by Taskmaster. Send a task_complete message to your Manager. Manager notified — it may approve this for you." >&2
+          echo "BLOCKED: Git operations are handled by ${DOEY_ROLE_COORDINATOR}. Send a task_complete message to your ${DOEY_ROLE_TEAM_LEAD}. ${DOEY_ROLE_TEAM_LEAD} notified — it may approve this for you." >&2
         else
-          echo "BLOCKED: Git operations are handled by Taskmaster. Send a task_complete message to your Manager." >&2
+          echo "BLOCKED: Git operations are handled by ${DOEY_ROLE_COORDINATOR}. Send a task_complete message to your ${DOEY_ROLE_TEAM_LEAD}." >&2
         fi
         exit 2 ;;
     esac
   fi
 fi
 
-if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; then
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; then
   _CMD=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
   case "$_CMD" in
     "tmux send-keys"*"/rename"*|*"&& tmux send-keys"*"/rename"*|*"; tmux send-keys"*"/rename"*)
@@ -331,7 +331,7 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; then
     fi
   ;; esac
 
-  if [ "$_DOEY_ROLE" = "taskmaster" ]; then
+  if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; then
     case "$_CMD" in
       "tmux send-keys"*|"tmux paste-buffer"*|"tmux load-buffer"*)
         _tgt_window=""
@@ -348,9 +348,9 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; then
             done
           fi
           if [ "$_has_active" = false ]; then
-            _log_block "TOOL_BLOCKED" "Taskmaster dispatch without active .task file" "$_CMD"
-            _dbg_write "block_taskmaster_no_task"
-            echo "BLOCKED: Create a .task file before dispatching work. Without active tasks in .doey/tasks/, Taskmaster will be put to sleep by the wait hook." >&2
+            _log_block "TOOL_BLOCKED" "${DOEY_ROLE_COORDINATOR} dispatch without active .task file" "$_CMD"
+            _dbg_write "block_coordinator_no_task"
+            echo "BLOCKED: Create a .task file before dispatching work. Without active tasks in .doey/tasks/, ${DOEY_ROLE_COORDINATOR} will be put to sleep by the wait hook." >&2
             exit 2
           fi
         fi ;;
@@ -361,11 +361,11 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; then
   exit 0
 fi
 
-if [ "$_DOEY_ROLE" = "worker" ]; then
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
   TOOL_COMMAND="$_BASH_CMD"
   [ -z "$TOOL_COMMAND" ] && exit 0
   [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
-  # Exception: workers may send-keys to the Taskmaster pane
+  # Exception: workers may send-keys to the coordinator pane
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
     if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
@@ -378,10 +378,10 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
     fi
   ;; esac
   if _check_blocked "$TOOL_COMMAND"; then
-    _log_block "TOOL_BLOCKED" "Worker $MSG blocked" "$TOOL_COMMAND"
+    _log_block "TOOL_BLOCKED" "${DOEY_ROLE_WORKER} $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
-    _escalate_permission "Bash" "$TOOL_COMMAND" "Worker blocked: $MSG"
-    echo "BLOCKED: Workers cannot run ${MSG}. Only the Subtaskmaster can do this. Manager notified — it may approve this for you." >&2
+    _escalate_permission "Bash" "$TOOL_COMMAND" "${DOEY_ROLE_WORKER} blocked: $MSG"
+    echo "BLOCKED: Workers cannot run ${MSG}. Only the ${DOEY_ROLE_TEAM_LEAD} can do this. ${DOEY_ROLE_TEAM_LEAD} notified — it may approve this for you." >&2
     exit 2
   fi
   _dbg_write "allow_worker"

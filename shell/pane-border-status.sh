@@ -2,6 +2,11 @@
 set -uo pipefail
 # No -e: tmux callbacks must not crash on transient failures
 
+# Source role definitions
+_ROLES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=doey-roles.sh
+source "${_ROLES_DIR}/doey-roles.sh" 2>/dev/null || true
+
 PANE_REF="${1:-}"
 [ -z "$PANE_REF" ] && exit 0
 
@@ -36,7 +41,7 @@ if [ "$WINDOW_IDX" = "0" ]; then
   if [ -f "$SESSION_ENV" ]; then
     PROJ_NAME=$(env_val "$SESSION_ENV" PROJECT_NAME)
     TASKMASTER_PANE=$(env_val "$SESSION_ENV" TASKMASTER_PANE)
-    [ -n "$TASKMASTER_PANE" ] && [ "0.${PANE_IDX}" = "$TASKMASTER_PANE" ] && { _prefix_id "${PROJ_NAME} Taskmaster"; exit 0; }
+    [ -n "$TASKMASTER_PANE" ] && [ "0.${PANE_IDX}" = "$TASKMASTER_PANE" ] && { _prefix_id "${PROJ_NAME} ${DOEY_ROLE_COORDINATOR}"; exit 0; }
   fi
 
   for team_file in "${RUNTIME_DIR}"/team_*.env; do

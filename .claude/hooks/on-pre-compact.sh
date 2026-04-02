@@ -25,10 +25,10 @@ if [ -n "$SEARCH_DIR" ] && [ -d "$SEARCH_DIR" ]; then
     awk -v cutoff="$(( $(date +%s) - 600 ))" "$CUTOFF_AWK" | head -10 || true)
 fi
 
-ROLE_LABEL="a Doey worker"
-is_boss && ROLE_LABEL="the Doey Boss"
-is_manager && ROLE_LABEL="the Doey Subtaskmaster"
-is_taskmaster && ROLE_LABEL="the Doey Taskmaster"
+ROLE_LABEL="a Doey ${DOEY_ROLE_WORKER}"
+is_boss && ROLE_LABEL="the Doey ${DOEY_ROLE_BOSS}"
+is_manager && ROLE_LABEL="the Doey ${DOEY_ROLE_TEAM_LEAD}"
+is_taskmaster && ROLE_LABEL="the Doey ${DOEY_ROLE_COORDINATOR}"
 
 cat <<CONTEXT
 ## Context Preservation (Pre-Compaction)
@@ -91,8 +91,8 @@ if is_manager; then
   CRASH_FILES=$(_list_files "$RUNTIME_DIR"/status/crash_pane_${_TEAM_W}_*)
   cat <<MGRSTATE
 
-## WINDOW MANAGER ORCHESTRATION STATE (restore after compaction)
-**Worker Assignments (pane_index title):**
+## SUBTASKMASTER ORCHESTRATION STATE (restore after compaction)
+**${DOEY_ROLE_WORKER} Assignments (pane_index title):**
 ${WORKER_ASSIGNMENTS:-No panes found}
 
 **Pending Result Files:**
@@ -105,15 +105,15 @@ ${COMPLETION_FILES:-None}
 ${CRASH_FILES:-None}
 
 ## ⚠ CORE LOOP — RESUME ACTIVE MONITORING AFTER COMPACTION
-You are a Subtaskmaster. You MUST stay active while ANY worker is BUSY.
+You are a ${DOEY_ROLE_TEAM_LEAD}. You MUST stay active while ANY worker is BUSY.
 After compaction, resume your active monitoring loop IMMEDIATELY:
 1. Drain message queue — read all .msg files for completion reports
 2. Check worker status files — who is BUSY, FINISHED, ERROR, or crashed?
 3. Collect and validate result files for finished workers
 4. Update context log with consolidated outcomes
 5. If workers still BUSY → brief pause (10-15s) → go to step 1
-6. If all workers FINISHED/ERROR → consolidate, report to Taskmaster, dispatch next wave
-Do NOT go idle. Do NOT wait for Taskmaster instructions. You drive the loop.
+6. If all workers FINISHED/ERROR → consolidate, report to ${DOEY_ROLE_COORDINATOR}, dispatch next wave
+Do NOT go idle. Do NOT wait for ${DOEY_ROLE_COORDINATOR} instructions. You drive the loop.
 MGRSTATE
 
   _MGR_SAFE="${SESSION_NAME//[-:.]/_}_${_TEAM_W}_0"
@@ -153,14 +153,14 @@ if is_taskmaster; then
 
   cat <<SMSTATE
 
-## SESSION MANAGER ORCHESTRATION STATE (restore after compaction)
+## TASKMASTER ORCHESTRATION STATE (restore after compaction)
 **Team Windows:** ${TASKMASTER_TEAMS:-None}
 
 **Active Tasks:**
 ${TASKMASTER_ACTIVE_TASKS:-None}
 
 ## ⚠ CORE LOOP — RESUME IMMEDIATELY AFTER COMPACTION
-You are the Taskmaster. Your job is an autonomous, permanent ACTIVE loop.
+You are the ${DOEY_ROLE_COORDINATOR}. Your job is an autonomous, permanent ACTIVE loop.
 Do NOT wait for instructions. Do NOT depend on the wait hook to tell you what to do.
 YOU drive the loop — the wait hook is just a brief pause.
 
@@ -171,7 +171,7 @@ YOU drive the loop — the wait hook is just a brief pause.
 5. **Brief pause** — call taskmaster-wait.sh (3s max), then go to step 1
 
 You are the ONLY role that commits/pushes — do it directly, no delegation needed.
-Do NOT wait for instructions. Do NOT escalate to Boss for approval. Resume this loop NOW.
+Do NOT wait for instructions. Do NOT escalate to ${DOEY_ROLE_BOSS} for approval. Resume this loop NOW.
 SMSTATE
 
   if [ -f "$RUNTIME_DIR/status/taskmaster_seen_results" ]; then
@@ -185,8 +185,8 @@ if is_boss; then
   cat <<BOSSSTATE
 
 ## BOSS STATE (restore after compaction)
-**You are Boss** — user-facing Project Manager at pane 0.1
-**Taskmaster is at:** pane 0.2
+**You are ${DOEY_ROLE_BOSS}** — user-facing Project Manager at pane 0.1
+**${DOEY_ROLE_COORDINATOR} is at:** pane 0.2
 BOSSSTATE
   BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"
   BOSS_MSGS=$(_gather_msgs "$BOSS_SAFE")
