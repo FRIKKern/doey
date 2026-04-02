@@ -1,9 +1,0 @@
-TASK_ID=44
-TASK_TITLE=Activity log entries ordered chronologically in Go TUI
-TASK_STATUS=done
-TASK_CREATED=1774901618
-TASK_TYPE=bugfix
-TASK_DESCRIPTION=In the Go TUI (tui/ directory), the activity log should display entries in chronological order — oldest at the top, newest at the bottom (natural reading order, like a terminal scrollback). Check wherever activity log entries are rendered and ensure they are sorted by timestamp ascending. Must compile: cd tui/ && go build ./...
-TASK_TAGS=tui,ux,activitylog
-TASK_TEAM=W1
-TASK_RESULT=Committed as 43b4135

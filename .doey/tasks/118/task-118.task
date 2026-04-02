@@ -1,8 +1,0 @@
-TASK_ID=118
-TASK_TITLE=Verify TUI reads from SQLite
-TASK_STATUS=pending_user_confirmation
-TASK_TYPE=audit
-TASK_PRIORITY=P1
-TASK_TEAM=2
-TASK_CREATED=2026-04-02
-TASK_DESCRIPTION=Verify: (1) .doey/doey.db exists with data, (2) go build passes in tui/, (3) store_reader.go is wired into ReadSnapshot, (4) TUI binary uses store_reader. Report findings only.
