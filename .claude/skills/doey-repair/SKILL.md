@@ -5,7 +5,7 @@ description: Diagnose and repair Doey Dashboard (window 0). Use when you need to
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
-Window 0: 0.0=InfoPanel, 0.1=Boss, 0.2=SM.
+Window 0: 0.0=InfoPanel, 0.1=Boss, 0.2=Taskmaster.
 
 ### Diagnose
 ```bash

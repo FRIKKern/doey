@@ -369,7 +369,7 @@ task_todo_progress() {
 #### TodoList Usage Patterns
 
 - **Workers** should update checklist items as they work — mark `in_progress` when starting an item, `done` when complete
-- **SM/Manager** can monitor todo progress to gauge completion percentage via `task_todo_progress`
+- **Taskmaster/Subtaskmaster** can monitor todo progress to gauge completion percentage via `task_todo_progress`
 - **TodoList is the plan made concrete** — each item is a verifiable step toward task completion
 - **Progress percentage:** `done_count / total_count * 100` — available via `task_todo_progress` which returns `[###--] 3/5` format
 - Tasks without a todoList work unchanged — the field is optional and all existing behavior is preserved

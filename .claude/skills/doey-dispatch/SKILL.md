@@ -71,7 +71,7 @@ fi
 # Create persistent .task file so TUI tracks it
 source "${PROJECT_DIR}/shell/doey-task-helpers.sh" 2>/dev/null || true
 if type task_create >/dev/null 2>&1; then
-  TASK_ID=$(task_create "$PROJECT_DIR" "$TASK_TITLE" "${TASK_TYPE:-feature}" "SM" "$TASK_DESCRIPTION")
+  TASK_ID=$(task_create "$PROJECT_DIR" "$TASK_TITLE" "${TASK_TYPE:-feature}" "Taskmaster" "$TASK_DESCRIPTION")
   echo "Created task #${TASK_ID}"
 fi
 ```
