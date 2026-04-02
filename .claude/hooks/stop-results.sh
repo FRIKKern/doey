@@ -44,6 +44,7 @@ fi
 FILTERED=""
 STATUS="done"
 TOOL_COUNT=0
+# Pass 1: build FILTERED output and count tools (no error detection here)
 while IFS= read -r line; do
   case "$line" in
     *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
@@ -52,14 +53,38 @@ while IFS= read -r line; do
     *"❯"*|*"───"*|*"Ctx █"*|*"bypass permissions"*|*"shift+tab"*|*"MCP server"*|*/doctor*) continue ;;
   esac
   FILTERED="${FILTERED}${line}${NL}"
-  if [ "$STATUS" = "done" ]; then
-    case "$line" in
-      *[Ee]rror*|*ERROR*|*[Ff]ailed*|*FAILED*|*[Ee]xception*|*EXCEPTION*) STATUS="error" ;;
-    esac
-  fi
 done <<HEREDOC_EOF
 $OUTPUT
 HEREDOC_EOF
+
+# Pass 2: check only last 8 lines for genuine errors (avoids false positives
+# from session-start messages, error mentions in code discussion, file names, etc.)
+_tail_lines=$(printf '%s' "$FILTERED" | tail -8)
+_found_error=""
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  # Skip known false-positive patterns
+  case "$line" in
+    *"startup hook"*|*"SessionStart"*|*"hook error"*) continue ;;
+    *"_log_error"*|*"log_error"*) continue ;;
+    *"ErrorBoundary"*|*"error.go"*|*"errors.ts"*|*"error.ts"*) continue ;;
+    *"0 "*[Ff]ailed*|*"no "[Ee]rror*) continue ;;
+    *"stop hooks"*) continue ;;
+  esac
+  case "$line" in
+    *[Ee]rror*|*ERROR*|*[Ff]ailed*|*FAILED*|*[Ee]xception*|*EXCEPTION*) _found_error="true"; break ;;
+  esac
+done <<HEREDOC_TAIL
+$_tail_lines
+HEREDOC_TAIL
+
+# Positive completion signals override incidental error mentions
+if [ "$_found_error" = "true" ]; then
+  case "$_tail_lines" in
+    *"completed"*|*"successfully"*|*"All tests passed"*|*"Done"*|*"Finished"*) _found_error="" ;;
+  esac
+fi
+[ "$_found_error" = "true" ] && STATUS="error"
 
 PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
 LAST_JSON=$(printf '%s' "$FILTERED" | jq -Rs '.' 2>/dev/null) || \

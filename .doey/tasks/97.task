@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=97
 TASK_TITLE=Centralized Role Definitions — single source of truth for all role names
-TASK_STATUS=done
+TASK_STATUS=cancelled
 TASK_TYPE=infrastructure
 TASK_TAGS=
 TASK_CREATED_BY=Boss
