@@ -79,6 +79,8 @@ local_task_id="${DOEY_TASK_ID:-}"
 if [ -z "$local_task_id" ]; then
   local_task_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id" 2>/dev/null) || local_task_id=""
 fi
+local_subtask_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id" 2>/dev/null) || local_subtask_id=""
+# Note: task_id/subtask_id files preserved for parallel async hooks
 local_summary="${DOEY_SUMMARY:-}"
 local_summary_escaped=$(printf '%s' "$local_summary" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g' -e 's/	/\\t/g')
 
@@ -133,6 +135,17 @@ ${FILTERED}
 ATTACH_EOF
     _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}/attachments/${_ATTACH_TS}_completion_${_PANE_SAFE}.md" 2>/dev/null || true
   fi
+
+  # Add completion report to task (Task Accountability)
+  if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
+    (
+      source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
+      _rpt_body="${local_summary:-Worker ${WINDOW_INDEX}.${PANE_INDEX} completed with ${TOOL_COUNT} tool calls, ${_FILES_COUNT:-0} files changed}"
+      doey_task_add_report "$PROJECT_DIR" "$local_task_id" "completion" \
+        "Worker ${WINDOW_INDEX}.${PANE_INDEX} ${STATUS}" "$_rpt_body" \
+        "worker_${WINDOW_INDEX}_${PANE_INDEX}"
+    ) 2>/dev/null || true
+  fi
 fi
 
 _FILES_COUNT=0
@@ -157,6 +170,9 @@ if [ "$STATUS" = "error" ] && [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ]; 
       source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
       _task_file="${PROJECT_DIR}/.doey/tasks/${local_task_id}.task"
       [ -f "$_task_file" ] && task_update_field "$_task_file" "TASK_STATUS" "error"
+      if [ -n "$local_subtask_id" ]; then
+        doey_task_update_subtask "$PROJECT_DIR" "$local_task_id" "$local_subtask_id" "failed"
+      fi
     ) 2>/dev/null || true
   fi
 fi

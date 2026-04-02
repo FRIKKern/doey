@@ -23,6 +23,8 @@ task_id="${DOEY_TASK_ID:-}"
 if [ -z "$task_id" ]; then
   task_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id" 2>/dev/null) || task_id=""
 fi
+subtask_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id" 2>/dev/null) || subtask_id=""
+# Note: task_id/subtask_id files NOT deleted — needed by async stop hooks
 
 PROJECT_DIR=$(_resolve_project_dir)
 
@@ -79,6 +81,10 @@ if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/task
     (
       source "${PROJECT_DIR}/shell/doey-task-helpers.sh"
       task_update_status "$PROJECT_DIR" "$task_id" "done"
+      # Auto-update subtask status (Task Accountability)
+      if [ -n "$subtask_id" ]; then
+        doey_task_update_subtask "$PROJECT_DIR" "$task_id" "$subtask_id" "done"
+      fi
     ) 2>/dev/null || true
   fi
 fi
