@@ -110,16 +110,32 @@ _escalate_permission() {
   touch "${_rtd}/triggers/${_mgr_safe}.trigger" 2>/dev/null || true
 }
 
+_is_direct_vcs_cmd() {
+  local cmd="$1"
+  # Collapse to single line for segment splitting
+  local flat
+  flat=$(printf '%s' "$cmd" | tr '\n' ' ')
+  # Split on chain operators, check if any segment starts with a VCS command
+  local result=""
+  result=$(printf '%s\n' "$flat" | sed 's/&&/\n/g; s/||/\n/g; s/;/\n/g' | while IFS= read -r seg; do
+    # Strip leading whitespace and env var assignments
+    seg=$(printf '%s' "$seg" | sed 's/^[[:space:]]*//; s/^[A-Z_][A-Z_0-9]*=[^[:space:]]* *//')
+    case "$seg" in
+      git\ commit*|git\ push*|gh\ pr\ create*|gh\ pr\ merge*) printf 'Y'; break ;;
+    esac
+  done)
+  [ "$result" = "Y" ]
+}
+
 _check_blocked() {
   local cmd="$1"
   cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
-  # Strip quoted strings so VCS keywords inside payloads don't trigger false positives
-  # e.g. echo "fix git commit" or tmux send-keys "task mentions git push" Enter
-  local cmd_noquote
-  cmd_noquote=$(printf '%s' "$cmd" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
-  case "$cmd_noquote" in
-    *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
-      MSG="git write operations (git commit/push, gh pr). Send a message to ${DOEY_ROLE_COORDINATOR} with what you need committed" ;;
+  # Use segment-based check for VCS commands (avoids false positives from heredocs/payloads)
+  if _is_direct_vcs_cmd "$cmd"; then
+    MSG="git write operations (git commit/push, gh pr). Send a message to ${DOEY_ROLE_COORDINATOR} with what you need committed"
+    return 0
+  fi
+  case "$cmd" in
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
     *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
@@ -392,31 +408,25 @@ fi
 
 if [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
   if [ -n "$_BASH_CMD" ] && [ "$_BASH_CMD" != "__PARSE_FAILED__" ]; then
-    # Skip VCS check for TEAM_LEAD/COORDINATOR tmux dispatch — task descriptions in
-    # send-keys payloads contain git keywords that trigger false positives (task #141)
+    # Fast-path: skip VCS check for TEAM_LEAD/COORDINATOR tmux dispatch
     _skip_vcs=false
     if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; then
       case "$_BASH_CMD" in
         *"tmux send-keys"*|*"tmux load-buffer"*|*"tmux paste-buffer"*) _skip_vcs=true ;;
       esac
     fi
-    if [ "$_skip_vcs" = "false" ]; then
-      # Strip quoted strings so VCS keywords in payloads don't false-positive
-      _bash_cmd_noquote=$(printf '%s' "$_BASH_CMD" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
-      case "$_bash_cmd_noquote" in
-        *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
-          _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_BASH_CMD"
-          _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
-          if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
-            _escalate_permission "Bash" "$_BASH_CMD" "git write operations blocked for workers"
-            echo "BLOCKED: VCS operations are handled by ${DOEY_ROLE_DEPLOYMENT}. Send a task_complete message to your ${DOEY_ROLE_TEAM_LEAD}. ${DOEY_ROLE_TEAM_LEAD} notified — it may approve this for you." >&2
-          else
-            echo "BLOCKED: VCS operations are handled by ${DOEY_ROLE_DEPLOYMENT}. Send a message to ${DOEY_ROLE_COORDINATOR} to request deployment." >&2
-          fi
-          exit 2 ;;
-      esac
-    else
+    if [ "$_skip_vcs" = "true" ]; then
       _dbg_write "skip_vcs_team_lead_tmux_dispatch"
+    elif _is_direct_vcs_cmd "$_BASH_CMD"; then
+      _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_BASH_CMD"
+      _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
+      if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
+        _escalate_permission "Bash" "$_BASH_CMD" "git write operations blocked for workers"
+        echo "BLOCKED: VCS operations are handled by ${DOEY_ROLE_DEPLOYMENT}. Send a task_complete message to your ${DOEY_ROLE_TEAM_LEAD}. ${DOEY_ROLE_TEAM_LEAD} notified — it may approve this for you." >&2
+      else
+        echo "BLOCKED: VCS operations are handled by ${DOEY_ROLE_DEPLOYMENT}. Send a message to ${DOEY_ROLE_COORDINATOR} to request deployment." >&2
+      fi
+      exit 2
     fi
   fi
 fi
