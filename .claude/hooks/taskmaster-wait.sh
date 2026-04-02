@@ -87,9 +87,9 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
     rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null; _wake "TRIGGERED" "$elapsed"
   fi
-  # Check SQLite store for unread messages (fast path)
+  # Check for unread messages via unified msg command (fast path)
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    _unread=$(doey-ctl db-msg count --to "$TASKMASTER_SAFE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
+    _unread=$(doey-ctl msg count --to "$TASKMASTER_SAFE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
     [ "${_unread:-0}" -gt 0 ] && _wake "MSG" "$elapsed"
   fi
   # File-based message check (fallback)

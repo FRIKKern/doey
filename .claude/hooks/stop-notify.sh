@@ -158,15 +158,15 @@ if is_worker; then
   <tool-count>${_TOOL_COUNT}</tool-count>
   <duration>${_DURATION}</duration>
 </task-notification>"
-  # Write to SQLite store (parallel to file-based message)
+  # Write to DB + file via unified msg command (auto-detects DB)
   if command -v doey-ctl >/dev/null 2>&1; then
     _project_dir=$(_resolve_project_dir)
     if [ -n "${_project_dir:-}" ]; then
-      doey-ctl db-msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" --to "$_target" \
+      doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" --to "$_target" \
         --subject "$_subject" --body "$MSG" --project-dir "$_project_dir" 2>/dev/null || true
     fi
   fi
-  # File-based message (backward compat)
+  # File-based message (fallback if doey-ctl unavailable)
   _notify_pane "$_target" "$_subject" "$MSG"
   _debug_sent "$_target" "$_subject"
   { [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
@@ -188,11 +188,11 @@ if is_manager; then
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
-  # Write to SQLite store (parallel to file-based message)
+  # Write to DB + file via unified msg command (auto-detects DB)
   if command -v doey-ctl >/dev/null 2>&1; then
     _project_dir=$(_resolve_project_dir)
     if [ -n "${_project_dir:-}" ]; then
-      doey-ctl db-msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
+      doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
         --to "$SESSION_NAME:${TASKMASTER_PANE}" --subject "task_complete" \
         --body "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}" \
         --project-dir "$_project_dir" 2>/dev/null || true
@@ -215,11 +215,11 @@ if is_taskmaster; then
   BOSS_TARGET="$SESSION_NAME:0.1"
   if _pane_alive "$BOSS_TARGET"; then
     SUMMARY=$(sanitize_message "$LAST_MSG" 150)
-    # Write to SQLite store (parallel to file-based message)
+    # Write to DB + file via unified msg command (auto-detects DB)
     if command -v doey-ctl >/dev/null 2>&1; then
       _project_dir=$(_resolve_project_dir)
       if [ -n "${_project_dir:-}" ]; then
-        doey-ctl db-msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
+        doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
           --to "$BOSS_TARGET" --subject "taskmaster_update" \
           --body "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}" \
           --project-dir "$_project_dir" 2>/dev/null || true
