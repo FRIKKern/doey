@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=108
 TASK_TITLE=Verify Task 107 — startup and install integrity check
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_TYPE=audit
 TASK_TAGS=
 TASK_CREATED_BY=Boss

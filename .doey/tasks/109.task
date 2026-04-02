@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=109
 TASK_TITLE=Audit agents/skills/hooks for stale file-based state refs
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_TYPE=audit
 TASK_TAGS=
 TASK_CREATED_BY=Boss

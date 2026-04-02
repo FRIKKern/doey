@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=114
 TASK_TITLE=TUI SQLite full integration — teams, events, config store readers + subtask fix
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_TYPE=feature
 TASK_TAGS=tui,go,sqlite,store
 TASK_CREATED_BY=Boss
