@@ -51,14 +51,28 @@ Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WI
 
 Run ALL in order:
 
-1. **Drain inbox** — `bash -c 'shopt -s nullglob; for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done' _ "$RUNTIME_DIR" "$SM_SAFE"` (where `SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"`)
-2. **Read status files** — `bash -c 'shopt -s nullglob; for f in "$1"/status/*.status; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — look for FINISHED, ERROR, LOGGED_OUT, stale BOOTING
-3. **Check stale alerts** — `bash -c 'shopt -s nullglob; for f in "$1"/status/stale_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — run recovery for each (see Stale Task Detection section)
-4. **Check results** — `bash -c 'shopt -s nullglob; for f in "$1"/results/*.json; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — route follow-ups, commit if files changed, report to Boss
-5. **Check crashes** — `bash -c 'shopt -s nullglob; for f in "$1"/status/crash_pane_*; do cat "$f"; echo "---"; done' _ "$RUNTIME_DIR"` — escalate to Boss
-6. **Act** — dispatch follow-ups, commit changes, report to Boss, handle anomalies
-7. **Pause** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (3-5s throttle, not a blocking wait)
-8. **Loop** — go to step 1
+1. **Scan all state (ONE bash call)** — Collect messages, status, results, crashes, and stale alerts in a single command (where `SM_SAFE="${SESSION_NAME//[-:.]/_}_0_2"`):
+```bash
+bash -c '
+  shopt -s nullglob
+  echo "=== MESSAGES ==="
+  for f in "$1"/messages/"$2"_*.msg; do cat "$f"; echo "---"; rm -f "$f"; done
+  echo "=== STATUS ==="
+  for f in "$1"/status/*.status; do cat "$f"; echo "---"; done
+  echo "=== RESULTS ==="
+  for f in "$1"/results/*.json; do cat "$f"; echo "---"; done
+  echo "=== CRASHES ==="
+  for f in "$1"/status/crash_pane_*; do cat "$f"; echo "---"; done
+  echo "=== STALE ==="
+  for f in "$1"/status/stale_*; do cat "$f"; echo "---"; done
+' _ "$RUNTIME_DIR" "$SM_SAFE"
+```
+   Parse the output by section headers. If a section is empty (no entries between `===` markers), skip processing for that category. Look for: FINISHED, ERROR, LOGGED_OUT in STATUS; route follow-ups from RESULTS; escalate CRASHES to Boss; run recovery for STALE alerts.
+2. **Act** — dispatch follow-ups, commit changes, report to Boss, handle anomalies
+3. **Pause** — `bash "$PROJECT_DIR/.claude/hooks/session-manager-wait.sh"` (5s throttle during active tasks, 10s when idle — not a blocking wait)
+4. **Loop** — go to step 1
+
+**Delta-based optimization:** Track which status and result files you've already processed. Skip files whose content hasn't changed since last cycle — messages are self-cleaning (deleted after read), but status files persist. If a status section shows the same content as last cycle, note "no status changes" and skip to the next section. Use `sm_seen_results` (in `$RUNTIME_DIR/status/`) to avoid re-processing result files — this file persists across compaction.
 
 **NEVER return to the prompt.** Only exits: `/exit`, `/compact`, or user message. After `/compact`: re-source `session.env` if needed, resume at step 1.
 

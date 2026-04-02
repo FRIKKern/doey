@@ -93,36 +93,29 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   set -- "$RUNTIME_DIR/status"/crash_pane_*
   [ -f "${1:-}" ] && _wake "CRASH_ALERT" "$elapsed"
   _check_stale_heartbeats && _wake "STALE_HEARTBEAT" "$elapsed"
-  if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
-    local _tf
-    for _tf in "${PROJECT_DIR:-.}/.doey/tasks"/*.task; do
-      [ -f "$_tf" ] || continue
-      grep -q 'TASK_STATUS=active' "$_tf" 2>/dev/null || continue
-      grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null && continue
-      _wake "QUEUED_TASKS" "$elapsed"
-    done
-  fi
+  [ "$_has_queued" = true ] && _wake "QUEUED_TASKS" "$elapsed"
   return 1
 }
 
-_all_idle() {
-  local _td="${PROJECT_DIR:-.}/.doey/tasks"
-  if [ -d "$_td" ]; then
-    local _tf
-    for _tf in "$_td"/*.task; do
-      [ -f "$_tf" ] || continue
-      case "$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | cut -d= -f2-)" in
-        active|in_progress) return 1 ;;
-      esac
-    done
-  fi
-  local _sf
-  for _sf in "$RUNTIME_DIR/status"/*.status; do
-    [ -f "$_sf" ] || continue
-    grep -q '^STATUS: BUSY' "$_sf" 2>/dev/null && return 1
+# Combined task scan — single pass sets _has_queued and _has_active
+_has_queued=false; _has_active=false; _active_list=""
+if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+  for _tf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
+    [ -f "$_tf" ] || continue
+    _status=$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
+    case "$_status" in
+      active)
+        if ! grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null; then
+          _has_queued=true
+        fi
+        _has_active=true; _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
+        ;;
+      in_progress)
+        _has_active=true; _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
+        ;;
+    esac
   done
-  return 0
-}
+fi
 
 if [ "$((_sm_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
   echo "0" > "$CYCLE_FILE"; _wake "COMPACT_CYCLE"
@@ -130,18 +123,11 @@ fi
 
 _check_work "0" || true
 
-_has_active=false; _active_list=""
-if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
-  for _tf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
-    [ -f "$_tf" ] || continue
-    _status=$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
-    case "$_status" in active|in_progress)
-      _has_active=true; _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n" ;;
-    esac
-  done
-fi
 if [ "$_has_active" = "true" ]; then
-  _sm_bump_cycle; _sm_dbg_wake "active_tasks" "0"
+  _sm_bump_cycle
+  sleep 5
+  _check_work "5" || true
+  _sm_dbg_wake "active_tasks_idle" "5"
   printf 'ACTIVE_TASKS %b' "$_active_list"
   rm -f "${RUNTIME_DIR}/status/sm_sleep_reported" 2>/dev/null
   exit 0
@@ -155,7 +141,7 @@ if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
   touch "$_sleep_flag"
 fi
 
-_sleep_dur=3; _all_idle && _sleep_dur=10
+_sleep_dur=10
 sleep "$_sleep_dur"
 _check_work "$_sleep_dur" || true
 _sm_dbg_wake "idle" "$_sleep_dur"
