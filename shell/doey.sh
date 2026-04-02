@@ -855,6 +855,9 @@ _create_core_team() {
        select-pane -t "$session:1.2" -T "Deployment" \;\
        select-pane -t "$session:1.3" -T "Doey Expert"
 
+  # Apply border theme (same as regular teams)
+  _apply_team_border_theme "$session" "1"
+
   # Write Core Team env
   write_team_env "$runtime_dir" "1" "2x2" "1,2,3" "3" "0" "" "" \
                  "Core Team" "core" "" ""
@@ -862,11 +865,13 @@ _create_core_team() {
   # Set TASKMASTER_PANE in session.env
   _set_session_env "$runtime_dir" "TASKMASTER_PANE" "1.0"
 
-  # Launch Taskmaster in pane 1.0
-  local _tm_cmd="claude --dangerously-skip-permissions --model ${DOEY_TASKMASTER_MODEL} --name \"${DOEY_ROLE_COORDINATOR}\" --agent ${DOEY_ROLE_FILE_COORDINATOR}"
-  _append_settings _tm_cmd "$runtime_dir"
-  tmux send-keys -t "$session:1.0" "$_tm_cmd" Enter
-  write_pane_status "$runtime_dir" "${session}:1.0" "READY"
+  # Launch Taskmaster in pane 1.0 via shared helper
+  _launch_team_manager "$session" "$runtime_dir" "1" \
+    "$DOEY_TASKMASTER_MODEL" "$DOEY_ROLE_FILE_COORDINATOR" \
+    "$DOEY_ROLE_COORDINATOR" "${_proj} ${DOEY_ROLE_COORDINATOR}"
+
+  # Brief Taskmaster about its Core Team window
+  _brief_team "$session" "1" "1.1, 1.2, 1.3" "3" "2x2 grid" "" "Core Team" "core"
 
   # Panes 1.1-1.3 stay empty for now (specialist agents defined in Phase 4)
   # Mark as RESERVED so workers don't get dispatched there
@@ -3737,7 +3742,7 @@ MANIFEST
     step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
     local _col_i
     for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
-      doey_add_column "$session" "$runtime_dir" "$dir"
+      doey_add_column "$session" "$runtime_dir" "$dir" "$team_window"
   
     done
     step_done
@@ -4374,16 +4379,23 @@ _ensure_worker_prompt() {
 
 _launch_team_manager() {
   local session="$1" runtime_dir="$2" window_index="$3"
-  local mgr_model="${4:-}"
+  local mgr_model="${4:-}" mgr_agent_override="${5:-}"
+  local mgr_name_override="${6:-}" mgr_pane_title_override="${7:-}"
   [ -z "$mgr_model" ] && mgr_model=$(_env_val "${runtime_dir}/team_${window_index}.env" MANAGER_MODEL)
   [ -z "$mgr_model" ] && mgr_model="$DOEY_MANAGER_MODEL"
   local mgr_agent
-  mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
+  if [ -n "$mgr_agent_override" ]; then
+    mgr_agent="$mgr_agent_override"
+  else
+    mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
+  fi
   local _proj="${session#doey-}"
-  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
+  local _mgr_name="${mgr_name_override:-T${window_index} ${DOEY_ROLE_TEAM_LEAD}}"
+  local _mgr_pane_title="${mgr_pane_title_override:-${_proj} T${window_index} Mgr}"
+  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"${_mgr_name}\" --agent \"$mgr_agent\""
   _append_settings _mgr_cmd "$runtime_dir"
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
-  tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
+  tmux select-pane -t "${session}:${window_index}.0" -T "$_mgr_pane_title"
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 }
 
