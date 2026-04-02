@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=107
+TASK_TITLE=Unified SQLite Data Layer — single source of truth for all Doey state
+TASK_STATUS=draft
+TASK_TYPE=infrastructure
+TASK_TAGS=
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=
+TASK_DESCRIPTION=Replace all scattered data stores with single SQLite DB at .doey/doey.db. Go store package (internal/store/) manages all CRUD. doey-ctl becomes universal CLI. Shell helpers, hooks, TUI, and router all use one DB. Big bang migration. Plan: .doey/plans/6.md
+TASK_ACCEPTANCE_CRITERIA=
+TASK_HYPOTHESES=
+TASK_DECISION_LOG=1775129724:Created task
+TASK_SUBTASKS=1:Create internal/store/ — schema, migrations, CRUD for all tables:pending\n2:Extend doey-ctl — store subcommands for task/plan/team/status/msg/event/config:pending\n3:Migration tool — doey-ctl migrate reads existing files into SQLite:pending\n4:Replace shell helpers — doey-task-helpers.sh + doey-ipc-helpers.sh call doey-ctl only:pending\n5:Replace hook file operations — status/msg through doey-ctl:pending\n6:TUI reads from SQLite — reader.go queries doey.db:pending\n7:doey-router uses store directly — Go import, no file I/O:pending\n8:Agent registry — populate agents table from agents/*.md on session start:pending\n9:Verification — full lifecycle, go test, bash compat, TUI renders:pending
+TASK_RELATED_FILES=
+TASK_BLOCKERS=
+TASK_TIMESTAMPS=created=1775129724
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_NOTES=
+TASK_UPDATED=1775129724
+TASK_PLAN_ID=6
