@@ -1043,6 +1043,11 @@ _kill_doey_session() {
     done
     git -C "$_proj_dir" worktree prune 2>/dev/null || true
   fi
+  # Stop doey-router
+  if [ -f "$_rt/doey-router.pid" ]; then
+    kill "$(cat "$_rt/doey-router.pid")" 2>/dev/null || true
+    rm -f "$_rt/doey-router.pid"
+  fi
   rm -rf "$_rt" 2>/dev/null || true
 }
 
@@ -1907,6 +1912,20 @@ MANIFEST
   _write_project_type_env "$runtime_dir"
   _maybe_start_tunnel "$runtime_dir" "$(_detect_remote)"
 
+  # Launch doey-router daemon
+  if [ "${DOEY_ROUTER_ENABLED:-true}" != "false" ]; then
+    _router_bin=""
+    if command -v doey-router >/dev/null 2>&1; then
+      _router_bin="doey-router"
+    elif [ -x "${HOME}/.local/bin/doey-router" ]; then
+      _router_bin="${HOME}/.local/bin/doey-router"
+    fi
+    if [ -n "$_router_bin" ]; then
+      "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" &
+      echo $! > "$runtime_dir/doey-router.pid"
+    fi
+  fi
+
   write_team_env "$runtime_dir" "1" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
 
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
@@ -2087,6 +2106,11 @@ DOG
 _cleanup_old_session() {
   local session="$1" runtime_dir="$2"
   tmux kill-session -t "$session" 2>/dev/null || true
+  # Stop doey-router
+  if [ -f "$runtime_dir/doey-router.pid" ]; then
+    kill "$(cat "$runtime_dir/doey-router.pid")" 2>/dev/null || true
+    rm -f "$runtime_dir/doey-router.pid"
+  fi
   rm -rf "$runtime_dir"
   git worktree prune 2>/dev/null || true
   # Delete doey/team-* branches whose worktrees no longer exist
@@ -3618,6 +3642,20 @@ MANIFEST
   _write_project_type_env "$runtime_dir"
 
   _maybe_start_tunnel "$runtime_dir" "$(_detect_remote)"
+
+  # Launch doey-router daemon
+  if [ "${DOEY_ROUTER_ENABLED:-true}" != "false" ]; then
+    _router_bin=""
+    if command -v doey-router >/dev/null 2>&1; then
+      _router_bin="doey-router"
+    elif [ -x "${HOME}/.local/bin/doey-router" ]; then
+      _router_bin="${HOME}/.local/bin/doey-router"
+    fi
+    if [ -n "$_router_bin" ]; then
+      "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" &
+      echo $! > "$runtime_dir/doey-router.pid"
+    fi
+  fi
 
   # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
   local _team1_def=""
