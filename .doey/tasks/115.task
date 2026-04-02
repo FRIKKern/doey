@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=115
 TASK_TITLE=Passive Taskmaster — replace polling loop with reactive sleep-wake model
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_TYPE=infrastructure
 TASK_TAGS=shell,hooks,agents,infrastructure
 TASK_CREATED_BY=Boss

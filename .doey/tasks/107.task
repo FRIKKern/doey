@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=107
 TASK_TITLE=Unified SQLite Data Layer — single source of truth for all Doey state
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_TYPE=infrastructure
 TASK_TAGS=
 TASK_CREATED_BY=Boss

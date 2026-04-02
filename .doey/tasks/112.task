@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=112
 TASK_TITLE=Normalize doey-ctl flag API — consistent flags across all subcommands
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=$(date +%s)
 TASK_TYPE=refactor
 TASK_TAGS=tui,go,doey-ctl,infrastructure
