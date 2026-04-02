@@ -32,18 +32,18 @@ For tasks with obvious sub-parts, add subtasks:
 task_subtask_add "$PD" "$TASK_ID" "Subtask title"
 ```
 
-### 3. Dispatch to Session Manager
+### 3. Dispatch to Taskmaster
 
 Send message to SM for routing:
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep '^SESSION_NAME=' "$RD/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
-SM_SAFE=$(printf '%s' "${SESSION_NAME}:0.2" | tr ':.-' '_')
+TASKMASTER_SAFE=$(printf '%s' "${SESSION_NAME}:0.2" | tr ':.-' '_')
 mkdir -p "${RD}/messages" "${RD}/triggers"
 printf 'FROM: Boss\nSUBJECT: new_task\nTASK_ID: %s\nTITLE: %s\nTYPE: %s\nPRIORITY: %s\nInstant task — ready for immediate dispatch.\n' \
   "$TASK_ID" "$TASK_TITLE" "${TASK_TYPE:-feature}" "${TASK_PRIORITY:-P2}" \
-  > "${RD}/messages/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RD}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+  > "${RD}/messages/${TASKMASTER_SAFE}_$(date +%s)_$$.msg"
+touch "${RD}/triggers/${TASKMASTER_SAFE}.trigger" 2>/dev/null || true
 ```
 
 ### 4. Output

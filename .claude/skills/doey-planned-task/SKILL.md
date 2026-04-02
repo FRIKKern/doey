@@ -127,18 +127,18 @@ with open(os.path.join(td, '${TASK_ID}.json'), 'w') as f: json.dump(data, f, ind
 " 2>/dev/null || true
 ```
 
-### 6. Dispatch to Session Manager
+### 6. Dispatch to Taskmaster
 
 Send message to SM to pick up the new task:
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep '^SESSION_NAME=' "$RD/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
-SM_SAFE=$(printf '%s' "${SESSION_NAME}:0.2" | tr ':.-' '_')
+TASKMASTER_SAFE=$(printf '%s' "${SESSION_NAME}:0.2" | tr ':.-' '_')
 mkdir -p "${RD}/messages"
 printf 'FROM: Boss\nSUBJECT: new_planned_task\nTASK_ID: %s\nPLAN_ID: %s\nTITLE: %s\nPRIORITY: %s\nPlanned task ready for dispatch. Plan: %s/%s.md\n' \
   "$TASK_ID" "$PLAN_ID" "$TASK_TITLE" "${TASK_PRIORITY:-P2}" "$PLANS_DIR" "$PLAN_ID" \
-  > "${RD}/messages/${SM_SAFE}_$(date +%s)_$$.msg"
-touch "${RD}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
+  > "${RD}/messages/${TASKMASTER_SAFE}_$(date +%s)_$$.msg"
+touch "${RD}/triggers/${TASKMASTER_SAFE}.trigger" 2>/dev/null || true
 ```
 
 ### 7. Output
