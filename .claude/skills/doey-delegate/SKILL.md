@@ -10,7 +10,18 @@ description: Delegate a task to an idle Claude instance (no kill/restart). Use w
 
 1. Identify idle panes from context. 2. Get target + task from user if needed. 3. Validate: no `.reserved`, has `❯` prompt.
 
-### 4. Task Assignment Files (before dispatch)
+### 4. Task Contract Validation
+
+Before delegating, verify task assignment:
+
+```bash
+if [ -z "${TASK_ID:-}" ]; then
+  echo "ERROR: Cannot delegate without TASK_ID. Create or assign a task first."
+  exit 1
+fi
+```
+
+### 5. Task Assignment Files (before dispatch)
 ```bash
 # Pre-write task assignment so on-prompt-submit can enforce accountability
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -23,7 +34,7 @@ if [ -n "${SUBTASK_NUM:-}" ]; then
 fi
 ```
 
-### 5. Rename + dispatch
+### 6. Rename + dispatch
 
 Include `Task #${TASK_ID}` in the prompt header so hooks can track it.
 
@@ -42,6 +53,6 @@ if [ "$TASK_LINES" -gt 200 ]; then sleep 2; elif [ "$TASK_LINES" -gt 100 ]; then
 tmux send-keys -t "$TARGET_PANE" Enter && rm "$TASKFILE"
 ```
 
-### 6. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)
+### 7. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)
 
 Rules: Always tmpfile/load-buffer. Never delegate to own pane. Never kill/restart.

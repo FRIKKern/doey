@@ -409,6 +409,22 @@ Report types: `progress`, `decision`, `completion`, `error`. Never dispatch Wave
 
 Every prompt: TASK_ID + title, subtask number + description, success criteria, "When done: Just finish normally."
 
+## Dispatch Contract — Task Accountability
+
+**Before dispatching to ANY worker, you MUST complete ALL of these steps:**
+
+1. **Have a TASK_ID** — Every worker task must be tracked. If you don't have a TASK_ID, create one via `task_create` or receive one from {{DOEY_ROLE_COORDINATOR}}.
+2. **Write the task_id file** — Before send-keys:
+   ```bash
+   PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+   printf '%s\n' "$TASK_ID" > "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id"
+   # Also write subtask if applicable:
+   printf '%s\n' "$SUBTASK_NUM" > "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id"
+   ```
+3. **Include Task #ID in the prompt** — Add `**TASK_ID:** ${TASK_ID}` and `Subtask: ${SUBTASK_NUM}` in the worker prompt header so hooks can track it.
+
+Workers without task assignment will be **blocked by on-prompt-submit.sh**. Stop hooks will **auto-update subtask status** on completion.
+
 ## Conversation & Q&A Trail
 
 Log all messages, decisions, and Q&A to the `.task` file (survives compaction). Use `task_add_report`, `task_add_decision`, `task_update_field`. After compaction, read context log AND task file. Q&A: log receipt, answer, and relay back to {{DOEY_ROLE_COORDINATOR}} via `.msg`.

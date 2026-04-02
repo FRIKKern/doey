@@ -78,6 +78,18 @@ fi
 
 Include `Task #${TASK_ID}` in the prompt header so hooks can track it.
 
+### Task Contract Validation
+
+Before dispatching, verify task assignment exists:
+
+```bash
+# Gate: block dispatch without task assignment
+if [ -z "${TASK_ID:-}" ]; then
+  echo "ERROR: Cannot dispatch without TASK_ID. Create or assign a task first."
+  exit 1
+fi
+```
+
 ### Task Assignment Files (before dispatch)
 
 ```bash
