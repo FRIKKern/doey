@@ -356,6 +356,23 @@ _build_tui() {
     return $rc
   fi
 
+  # Build doey-ctl
+  printf "         ${DIM}→ building doey-ctl...${RESET}"
+  set +e
+  if type _build_go_binary >/dev/null 2>&1; then
+    _build_go_binary "tui" ./cmd/doey-ctl/ "$HOME/.local/bin/doey-ctl" 2>/dev/null
+  else
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-ctl" ./cmd/doey-ctl/) 2>/dev/null
+  fi
+  local ctl_rc=$?
+  set -e
+  if [ $ctl_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-ctl" ]; then
+    printf " ${SUCCESS}✓${RESET}\n"
+    detail "~/.local/bin/doey-ctl (built from source)"
+  else
+    printf " ${DIM}skipped (shell fallbacks will be used)${RESET}\n"
+  fi
+
   # Build doey-remote-setup
   printf "         ${DIM}→ building doey-remote-setup...${RESET}"
   set +e

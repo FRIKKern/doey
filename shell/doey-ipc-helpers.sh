@@ -49,11 +49,22 @@ send_msg_to_taskmaster() {
   local runtime_dir="$1" session_name="$2" subject="$3" body="$4"
   local sender="${5:-${DOEY_PANE_ID:-unknown}}"
   local taskmaster_safe="${session_name//[-:.]/_}_0_2"
-  local msg_dir="${runtime_dir}/messages" trig_dir="${runtime_dir}/triggers"
-  mkdir -p "$msg_dir" "$trig_dir" 2>/dev/null || true
 
   local rc=0; ensure_taskmaster_alive "$runtime_dir" "$session_name" || rc=$?
   [ "$rc" -eq 2 ] && return 1
+
+  # Fast path: use doey-ctl if available
+  if command -v doey-ctl >/dev/null 2>&1; then
+    if doey-ctl msg send --to "$taskmaster_safe" --from "$sender" --subject "$subject" --body "$body" --runtime "$runtime_dir" 2>/dev/null; then
+      doey-ctl msg trigger --pane "$taskmaster_safe" --runtime "$runtime_dir" 2>/dev/null || true
+      touch "${runtime_dir}/status/taskmaster_trigger" 2>/dev/null || true
+      return 0
+    fi
+  fi
+
+  # Fallback: shell implementation
+  local msg_dir="${runtime_dir}/messages" trig_dir="${runtime_dir}/triggers"
+  mkdir -p "$msg_dir" "$trig_dir" 2>/dev/null || true
 
   local msg_file="${msg_dir}/${taskmaster_safe}_$(date +%s)_$$.msg"
   local tmp_file="${msg_file}.tmp"
