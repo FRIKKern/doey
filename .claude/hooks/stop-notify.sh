@@ -158,16 +158,19 @@ if is_worker; then
   <tool-count>${_TOOL_COUNT}</tool-count>
   <duration>${_DURATION}</duration>
 </task-notification>"
-  # Write to DB + file via unified msg command (auto-detects DB)
+  # Notify: doey-ctl primary, _notify_pane fallback only
   if command -v doey-ctl >/dev/null 2>&1; then
     _project_dir=$(_resolve_project_dir)
     if [ -n "${_project_dir:-}" ]; then
       doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" --to "$_target" \
-        --subject "$_subject" --body "$MSG" --project-dir "$_project_dir" 2>/dev/null || true
+        --subject "$_subject" --body "$MSG" --project-dir "$_project_dir" 2>/dev/null \
+        || _notify_pane "$_target" "$_subject" "$MSG"
+    else
+      _notify_pane "$_target" "$_subject" "$MSG"
     fi
+  else
+    _notify_pane "$_target" "$_subject" "$MSG"
   fi
-  # File-based message (fallback if doey-ctl unavailable)
-  _notify_pane "$_target" "$_subject" "$MSG"
   _debug_sent "$_target" "$_subject"
   { [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
   _log "stop-notify: sent ${_subject} to ${_target}"
@@ -188,20 +191,22 @@ if is_manager; then
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
-  # Write to DB + file via unified msg command (auto-detects DB)
+  # Notify: doey-ctl primary, _notify_pane fallback only
   if command -v doey-ctl >/dev/null 2>&1; then
     _project_dir=$(_resolve_project_dir)
     if [ -n "${_project_dir:-}" ]; then
       doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
         --to "$SESSION_NAME:${TASKMASTER_PANE}" --subject "task_complete" \
         --body "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}" \
-        --project-dir "$_project_dir" 2>/dev/null || true
+        --project-dir "$_project_dir" 2>/dev/null \
+        || _notify_pane "$SESSION_NAME:${TASKMASTER_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
+    else
+      _notify_pane "$SESSION_NAME:${TASKMASTER_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
     fi
+  else
+    _notify_pane "$SESSION_NAME:${TASKMASTER_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
   fi
-  # File-based message (backward compat)
-  _notify_pane "$SESSION_NAME:${TASKMASTER_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
   _debug_sent "$SESSION_NAME:${TASKMASTER_PANE}" "task_complete"
-  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
   _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${TASKMASTER_PANE}"
   _wake_taskmaster
   exit 0
@@ -215,18 +220,21 @@ if is_taskmaster; then
   BOSS_TARGET="$SESSION_NAME:0.1"
   if _pane_alive "$BOSS_TARGET"; then
     SUMMARY=$(sanitize_message "$LAST_MSG" 150)
-    # Write to DB + file via unified msg command (auto-detects DB)
+    # Notify: doey-ctl primary, _notify_pane fallback only
     if command -v doey-ctl >/dev/null 2>&1; then
       _project_dir=$(_resolve_project_dir)
       if [ -n "${_project_dir:-}" ]; then
         doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
           --to "$BOSS_TARGET" --subject "taskmaster_update" \
           --body "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}" \
-          --project-dir "$_project_dir" 2>/dev/null || true
+          --project-dir "$_project_dir" 2>/dev/null \
+          || _notify_pane "$BOSS_TARGET" "taskmaster_update" "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}"
+      else
+        _notify_pane "$BOSS_TARGET" "taskmaster_update" "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}"
       fi
+    else
+      _notify_pane "$BOSS_TARGET" "taskmaster_update" "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}"
     fi
-    # File-based message (backward compat)
-    _notify_pane "$BOSS_TARGET" "taskmaster_update" "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}"
     _debug_sent "$BOSS_TARGET" "taskmaster_update"
     _log "stop-notify: sent taskmaster_update to ${DOEY_ROLE_BOSS} at $BOSS_TARGET"
   fi

@@ -99,16 +99,7 @@ Repeat until all done:
 
 ## Notify {{DOEY_ROLE_COORDINATOR}} When Done
 
-When your task (or wave sequence) is complete, notify the {{DOEY_ROLE_COORDINATOR}} so it can route follow-ups:
-
-```bash
-doey-ctl msg send --to {{DOEY_TASKMASTER_PANE}} --from "${DOEY_TEAM_WINDOW}.0" --subject task_complete --body "Team ${DOEY_TEAM_WINDOW} finished: SUMMARY_HERE"
-```
-
-**Always notify the {{DOEY_ROLE_COORDINATOR}}** when:
-- All waves for a task are complete
-- A critical error requires escalation
-- You need cross-team coordination
+When your task is complete, just finish normally. The stop hook will automatically notify the {{DOEY_ROLE_COORDINATOR}}.
 
 ## Permission Requests
 

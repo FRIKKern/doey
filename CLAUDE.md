@@ -36,12 +36,16 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
 | Boss | `0.1` | User-facing Project Manager. Receives user intent, manages tasks, reports results |
-| Taskmaster | `0.2` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work. Not user-facing — users interact via Boss |
-| ~~Watchdog~~ | `0.3+` | DEPRECATED — inactive, hook files retained for reference |
+| Taskmaster | `C.0` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work. Not user-facing — users interact via Boss |
+| Task Reviewer | `C.1` | Reviews completed work for quality and correctness |
+| Deployment | `C.2` | Handles deployment, CI/CD, and release operations |
+| Doey Expert | `C.3` | Doey codebase specialist for self-improvement tasks |
 | Subtaskmaster | `W.0` | Plans, delegates, validates all context. Never writes code |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
 | Test Driver | external | E2E test runner via `doey test` |
+
+**Window layout:** `0` = Dashboard (Info Panel + Boss), `1` = Core Team (Taskmaster + specialists), `2+` = Worker teams (Subtaskmaster + Workers)
 
 **Communication:** User → Boss → Taskmaster (relay) | Taskmaster → Subtaskmaster → Workers (dispatch) | Workers → Subtaskmaster (stop hooks) | Subtaskmaster → Taskmaster (cross-team)
 

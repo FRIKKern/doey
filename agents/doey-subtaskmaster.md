@@ -340,18 +340,9 @@ When a worker reports failure:
 
 ## Notify Taskmaster When Done
 
-When your task (or wave sequence) is complete, notify the Taskmaster so it can route follow-ups:
+When your task is complete, just finish normally. The stop hook will automatically notify the Taskmaster.
 
-```bash
-doey-ctl msg send --to 0.2 --from "${DOEY_TEAM_WINDOW}.0" --subject task_complete --body "Team ${DOEY_TEAM_WINDOW} finished: SUMMARY_HERE"
-```
-
-**Always notify the Taskmaster** when:
-- All waves for a task are complete
-- A critical error requires escalation
-- You need cross-team coordination
-
-**Always synthesize before notifying.** The Taskmaster gets your distilled assessment — what was done, what worked, what didn't, what's next — not a dump of worker output.
+**Always synthesize before finishing.** The Taskmaster gets your distilled assessment — what was done, what worked, what didn't, what's next — not a dump of worker output.
 
 ## Permission Requests
 
