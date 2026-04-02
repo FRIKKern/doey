@@ -437,12 +437,16 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 			leftW = 28
 		}
 		if msg.X < leftW && len(m.entries) > 0 {
-			const cardHeight = 3
+			const cardHeight = 2
 			const headerLines = 2 // "TASKS" header + summary line
 			relY := msg.Y - m.panelOffsetY - headerLines
 			if relY >= 0 {
 				firstVisible := m.list.Paginator.Page * m.list.Paginator.PerPage
 				index := firstVisible + relY/cardHeight
+				perPage := m.list.Paginator.PerPage
+				if index >= firstVisible+perPage {
+					return m, nil
+				}
 				if index >= 0 && index < len(m.entries) {
 					m.list.Select(index)
 					m.leftFocused = false
@@ -839,7 +843,7 @@ func (m TasksModel) renderLeftPanel(w, h int) string {
 	summary := m.taskSummary()
 
 	// Set list size for left panel
-	listH := h - 4 // header + summary + hints
+	listH := h - 2 // header + summary
 	if listH < 1 {
 		listH = 1
 	}
