@@ -1,0 +1,113 @@
+---
+name: doey-rd-team
+description: Spawn a Doey R&D product team — Brain, Platform Expert, Claude Expert, Critic. Works on the live codebase so it sees all changes in real time.
+---
+
+- Session config: !`cat /tmp/doey/*/session.env 2>/dev/null | head -20 || true`
+- Current windows: !`tmux list-windows -F '#{window_index} #{window_name}' 2>/dev/null || true`
+
+Spawn R&D team on **live project directory** (no worktree). **No confirmation.** Modes: default (audit+improve) | `audit` (read-only).
+
+### 1. Load session + create 2×2 grid
+
+```bash
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RD}/session.env"
+echo "Project: $PROJECT_DIR (branch: $(git -C "$PROJECT_DIR" branch --show-current 2>/dev/null))"
+
+tmux new-window -t "$SESSION_NAME" -n "RD" -c "$PROJECT_DIR"; sleep 0.5
+NEW_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
+tmux split-window -h -t "$SESSION_NAME:$NEW_WIN.0" -c "$PROJECT_DIR"; sleep 0.1
+tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.0" -c "$PROJECT_DIR"; sleep 0.1
+tmux split-window -v -t "$SESSION_NAME:$NEW_WIN.1" -c "$PROJECT_DIR"; sleep 0.3
+for i in 0:Brain 1:Platform 2:Claude 3:Critic; do
+  tmux select-pane -t "${SESSION_NAME}:${NEW_WIN}.${i%%:*}" -T "${i#*:}"
+done
+```
+
+### 2. Write team env + update TEAM_WINDOWS
+
+```bash
+cat > "${RD}/team_${NEW_WIN}.env.tmp" << TEAM_EOF
+SESSION_NAME=${SESSION_NAME}
+PROJECT_DIR=${PROJECT_DIR}
+PROJECT_NAME=${PROJECT_NAME}
+WINDOW_INDEX=${NEW_WIN}
+GRID=dynamic
+TOTAL_PANES=4
+MANAGER_PANE=0
+WORKER_PANES=1,2,3
+WORKER_COUNT=3
+WORKTREE_DIR=
+WORKTREE_BRANCH=
+RD_TEAM=true
+TEAM_EOF
+mv "${RD}/team_${NEW_WIN}.env.tmp" "${RD}/team_${NEW_WIN}.env"
+
+CUR=$(grep '^TEAM_WINDOWS=' "${RD}/session.env" 2>/dev/null | cut -d= -f2 | tr -d '"')
+[ -n "$CUR" ] && NW="${CUR},${NEW_WIN}" || NW="${NEW_WIN}"
+TMPENV=$(mktemp "${RD}/session.env.tmp_XXXXXX")
+if grep -q '^TEAM_WINDOWS=' "${RD}/session.env"; then
+  sed "s/^TEAM_WINDOWS=.*/TEAM_WINDOWS=${NW}/" "${RD}/session.env" > "$TMPENV"
+else
+  cat "${RD}/session.env" > "$TMPENV"; echo "TEAM_WINDOWS=${NW}" >> "$TMPENV"
+fi
+mv "$TMPENV" "${RD}/session.env"
+```
+
+### 3. Write R&D worker system prompt
+
+```bash
+cat > "${RD}/rd-worker-prompt.md" << 'RDPROMPT'
+# Doey R&D Product Team Member
+Working on the **live project directory** — same codebase other teams are editing.
+## Rules
+1. Coordinate edits — other workers may edit concurrently
+2. Check `$RUNTIME_DIR/errors/errors.log` for runtime issues
+3. Check `git diff`/`git log` for recent changes
+4. No remote push without Brain approval
+## Workflow
+Read current state → check recent changes → analyze → propose/fix → verify (`bash -n` for .sh)
+RDPROMPT
+```
+
+### 4. Launch Claude instances (3s stagger)
+
+```bash
+RD_PROMPT="${RD}/rd-worker-prompt.md"
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" \
+  "claude --dangerously-skip-permissions --model opus --name \"Brain\" --agent \"doey-product-brain\"" Enter; sleep 3
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.1" \
+  "claude --dangerously-skip-permissions --model opus --name \"Platform\" --agent \"doey-platform-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter; sleep 3
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.2" \
+  "claude --dangerously-skip-permissions --model opus --name \"Claude\" --agent \"doey-claude-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter; sleep 3
+tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.3" \
+  "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
+```
+
+### 5. Verify boot + dispatch audit
+
+```bash
+sleep 8; NOT_READY=0; DOWN_PANES=""
+for i in 0 1 2 3; do
+  CHILD_PID=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null)
+  OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null)
+  if [ -z "$CHILD_PID" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then
+    NOT_READY=$((NOT_READY + 1)); DOWN_PANES="$DOWN_PANES ${NEW_WIN}.$i"
+  fi
+done
+[ "$NOT_READY" -eq 0 ] && echo "All panes booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN_PANES}"
+```
+
+Dispatch audit to Brain via `load-buffer`/`paste-buffer`:
+```
+Run a Doey R&D audit on the live codebase. 3 specialist workers:
+- Pane 1 (Platform): shell/*.sh, .claude/hooks/* — tmux races, bash 3.2 violations
+- Pane 2 (Claude): hooks, agents/*.md, skills — semantics, exit codes, correctness
+- Pane 3 (Critic): bash -n, frontmatter, tests/, docs accuracy
+Phase 1: Dispatch in parallel. Check errors.log + `git log --oneline -10`.
+Phase 2: Consolidate. Each specialist proposes fixes. Critic reviews.
+Phase 3: Implement (one file per specialist). Report to {{DOEY_ROLE_COORDINATOR}}.
+```
+
+Output: window, layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`.

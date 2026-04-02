@@ -1,0 +1,29 @@
+---
+name: doey-reserve
+description: Reserve/unreserve the current pane to prevent {{DOEY_ROLE_TEAM_LEAD}} dispatch. Use when you need to "reserve this pane", "prevent dispatch to my pane", or "unreserve a worker".
+---
+
+`/doey-reserve` (reserve) | `off` (unreserve) | `list` (show all)
+
+- Current pane: !`tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null|| true`
+- Reservations: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; for f in "$RD"/status/*.reserved; do [ -f "$f" ] && echo "RESERVED: $(basename $f .reserved)"; done 2>/dev/null || true`
+
+No confirmation. `list` → show injected data above.
+
+```bash
+RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
+MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
+SAFE=$(echo "$MY_PANE" | tr ':-.' '_')
+mkdir -p "${RD}/status"
+ACTION="${1:-reserve}"
+case "$ACTION" in off|unreserve) ACTION="unreserve" ;; *) ACTION="reserve" ;; esac
+if [ "$ACTION" = "reserve" ]; then
+  echo "permanent" > "${RD}/status/${SAFE}.reserved"; STATUS="RESERVED"
+else
+  rm -f "${RD}/status/${SAFE}.reserved"; STATUS="READY"
+fi
+printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK:\n' "$MY_PANE" "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$STATUS" > "${RD}/status/${SAFE}.status"
+echo "Pane ${MY_PANE} ${ACTION}d"
+```
+
+Always targets THIS pane — never ask which.

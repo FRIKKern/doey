@@ -274,6 +274,11 @@ date=$INSTALLED_DATE
 repo=$SCRIPT_DIR
 VEOF
 
+# Expand role templates before installing agents
+if [ -x "$SCRIPT_DIR/shell/expand-templates.sh" ]; then
+  bash "$SCRIPT_DIR/shell/expand-templates.sh" >/dev/null 2>&1 || true
+fi
+
 install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/7" "agent definitions"
 AGENT_COUNT=$_COUNT
 for f in "${_files[@]}"; do detail "$(basename "$f" .md)"; done

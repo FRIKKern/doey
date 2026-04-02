@@ -1,0 +1,28 @@
+---
+name: doey-repair
+description: Diagnose and repair Doey Dashboard (window 0). Use when you need to "fix the dashboard", "repair window 0", or "dashboard panes are broken".
+---
+
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+
+Window 0: 0.0=InfoPanel, 0.1={{DOEY_ROLE_BOSS}}, 0.2={{DOEY_ROLE_COORDINATOR}}.
+
+### Diagnose
+```bash
+RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+for IDX in 0 1 2; do
+  SHELL_PID=$(tmux display-message -t "$SESSION_NAME:0.${IDX}" -p '#{pane_pid}' 2>/dev/null) || { echo "0.${IDX}: MISSING"; continue; }
+  CHILD_PID=$(pgrep -P "$SHELL_PID" 2>/dev/null) || CHILD_PID=""
+  echo "0.${IDX}: child=${CHILD_PID:-none}"
+done
+```
+MISSING → "Run `doey reload`" and STOP. HEALTHY = has child. IDLE = no child → repair:
+
+### Repair IDLE panes
+| Pane | Command |
+|------|---------|
+| 0.0 | `clear && info-panel.sh '${RUNTIME_DIR}'` |
+| 0.1 | `claude --dangerously-skip-permissions --agent {{DOEY_ROLE_FILE_BOSS}}` |
+| 0.2 | `claude --dangerously-skip-permissions --agent {{DOEY_ROLE_FILE_COORDINATOR}}` |
+
+Verify child processes after repair. NEVER kill — only send commands to idle shells. Skip running panes.
