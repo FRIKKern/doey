@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=56
+TASK_TITLE=Dashboard TUI — reduce actions to 3, rename to Spawn Teams
+TASK_STATUS=done
+TASK_CREATED=1774910065
+TASK_TYPE=feature
+TASK_DESCRIPTION=The Go TUI dashboard front page has 5 Quick Actions — too cluttered. Reduce to 3 and rename the section. New actions: "Reserved Freelancers", "Regular Team", "Specialized Team". Section title: "Spawn Teams" instead of "Quick Actions". Keep it clean and minimal. Code is in tui/ directory.
+TASK_TAGS=tui,dashboard
+TASK_TEAM=W2
+TASK_LOG_1774910139=DISPATCHED: Already sent to W2 as part of task #55 TUI scope
+TASK_RESULT=Committed d3bd746
+TASK_FILES=tui/internal/model/dashboard.go,tui/internal/model/actions.go,tui/internal/model/root.go,tui/internal/runtime/reader.go

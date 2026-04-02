@@ -1,0 +1,60 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=146
+TASK_TITLE=doey-ctl fuzzy input tolerance — test suite + fixes for every wrong-syntax scenario
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_ASSIGNED_TO=W2
+TASK_DESCRIPTION=Create a comprehensive test suite of wrong/ambiguous doey-ctl inputs that agents commonly produce, then make ALL of them work. This is the core of the MCP-style API — 100% hit rate means tolerating every reasonable variation.
+
+PHASE 1 — RESEARCH: Enumerate every wrong-syntax pattern we've seen or can predict. Categories:
+
+A) Flag variations:
+  - --id vs -id vs positional ID
+  - --status vs -status vs -s
+  - --field vs -field
+  - --title vs -title vs -t
+  - --project-dir vs -project-dir vs --dir vs -dir
+  - Double-dash vs single-dash for all flags
+
+B) Field name confusion:
+  - TASK_STATUS vs status vs Status vs STATUS
+  - TASK_TITLE vs title vs Title
+  - TASK_DESCRIPTION vs description vs desc
+  - TASK_TYPE vs type
+
+C) Identifier confusion:
+  - Subtask DB ID vs sequence number
+  - Pane ID formats: 1.0 vs 1_0 vs doey_doey_1_0 vs doey-doey:1.0
+  - Task ID with # prefix: #142 vs 142
+
+D) Subcommand typos/aliases:
+  - 'task update 142 --status done' (convenience) vs 'task update -field status -value done 142' (canonical)
+  - 'task list --status in_progress' vs 'task list --filter status=in_progress'
+  - 'msg send' with --to/--from vs -to/-from
+  - 'status set' with positional vs flags
+
+E) Argument ordering:
+  - Flags before positional args vs after
+  - Mixed ordering
+
+F) Common agent mistakes:
+  - Extra quotes around values
+  - Missing required flags (should show example, not just 'missing X')
+  - Wrong subcommand name (should suggest closest match)
+
+PHASE 2 — IMPLEMENTATION: For each scenario, either:
+  a) Add flag aliases so the input works directly, OR
+  b) Add normalization/stripping logic, OR
+  c) Add a helpful error with 'did you mean' and correct example
+
+PHASE 3 — TEST FILE: Create tests/test-doeyctl-fuzzy.sh that runs every scenario and asserts success or correct error message. This becomes the regression suite.
+
+Target: every scenario in the list passes.
+TASK_DECISION_LOG=1775167509:Created task
+TASK_TIMESTAMPS=created=1775167509
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_REVIEW_VERDICT=PASS
+TASK_REVIEW_FINDINGS=Phase 2+3 PASS. All dispatchers have help/suggest/flag-aliases, backward compatible. Hook fix correct. Test suite: 22/22 pass, bash 3.2 clean (47 files, 0 violations). WARN: no tests for log/decision/nudge aliases — extensible later.
+TASK_REVIEW_TIMESTAMP=2026-04-02T17:25:00Z
+TASK_UPDATED=1775167509

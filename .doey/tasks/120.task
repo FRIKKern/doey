@@ -1,0 +1,24 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=120
+TASK_TITLE=Fix doey-ctl API unification gaps — remove db-*, add missing msg subs, normalize flags
+TASK_STATUS=cancelled
+TASK_TYPE=bugfix
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=Three issues from task 119 Phase 1: (1) db-* commands still exist in switch — remove db-status, db-msg, db-task, db-subtask, db-log. (2) msg missing list/read-all/count subcommands from db-msg merge. (3) status list uses --runtime not --project-dir — normalize to --project-dir. Files: tui/cmd/doey-ctl/main.go, tui/cmd/doey-ctl/commands.go. go build must pass.
+TASK_DECISION_LOG=1775144863:Created task
+TASK_SUBTASKS=1:Phase 1: Core daemon — trigger watcher, msg reader, classifier (Go):pending\n2:Phase 2: Routine handlers — task_complete, phase_complete, status (Go):pending\n3:Phase 3: Taskmaster wake — pre-digested context via send-keys (Go):pending\n4:Phase 4: Session integration — doey.sh launch, trace log, build targets (Go+Bash):pending\n5:Phase 5: Verification — full lifecycle, token reduction, fallback (testing):pending
+TASK_TIMESTAMPS=created=1775144863
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775144863
+TASK_SUBTASK_1_TITLE=Dispatch to Team 1
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_ASSIGNEE=Manager_W1
+TASK_SUBTASK_1_CREATED_AT=1775144947
+TASK_SUBTASK_1_COMPLETED_AT=1775145082
+TASK_REPORT_1_TIMESTAMP=1775145082
+TASK_REPORT_1_AUTHOR=Taskmaster
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Already resolved
+TASK_REPORT_1_BODY=All 3 gaps verified as already handled in Phase 1 merge. No code changes needed. go build clean.
+TASK_PLAN_ID=12

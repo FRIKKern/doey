@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=127
+TASK_TITLE=TUI task list — sort by TASK_UPDATED descending
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_ASSIGNED_TO=W2
+TASK_DESCRIPTION=Tasks in the Go TUI task list should be ordered by TASK_UPDATED timestamp (most recently updated first), not by ID or status category. This ensures actively worked-on tasks appear at the top. The TASK_UPDATED field is already present in .task files — the TUI just needs to sort by it.
+TASK_DECISION_LOG=1775148915:Created task\n1775149105:-type completion -title Task 127 Complete -body Removed statusPriority grouping from sortEntries() in tui/internal/model/tasks.go. Tasks now sort by TASK_UPDATED descending. Zero timestamps sort to bottom. Go build passes. -author Manager_W2
+TASK_TIMESTAMPS=created=1775148915
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775148915
+TASK_TEAM=W2

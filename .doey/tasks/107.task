@@ -1,0 +1,36 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=107
+TASK_TITLE=Unified SQLite Data Layer — single source of truth for all Doey state
+TASK_STATUS=done
+TASK_TYPE=infrastructure
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=W1
+TASK_DESCRIPTION=Replace all scattered data stores with single SQLite DB at .doey/doey.db. Go store package (internal/store/) manages all CRUD. doey-ctl becomes universal CLI. Shell helpers, hooks, TUI, and router all use one DB. Big bang migration. Plan: .doey/plans/6.md
+TASK_DECISION_LOG=1775129724:Created task\n1775130179:Wave 1: 4 workers on store pkg. W1=store.go+schema.go+go-get, W2=tasks.go, W3=plans+teams+config, W4=messages+events+agents
+TASK_SUBTASKS=1:Create internal/store/ — schema, migrations, CRUD for all tables:done\n2:Extend doey-ctl — store subcommands for task/plan/team/status/msg/event/config:pending\n3:Migration tool — doey-ctl migrate reads existing files into SQLite:pending\n4:Replace shell helpers — doey-task-helpers.sh + doey-ipc-helpers.sh call doey-ctl only:pending\n5:Replace hook file operations — status/msg through doey-ctl:pending\n6:TUI reads from SQLite — reader.go queries doey.db:pending\n7:doey-router uses store directly — Go import, no file I/O:pending\n8:Agent registry — populate agents table from agents/*.md on session start:pending\n9:Verification — full lifecycle, go test, bash compat, TUI renders:pending
+TASK_TIMESTAMPS=created=1775129724
+TASK_CURRENT_PHASE=4
+TASK_TOTAL_PHASES=4
+TASK_UPDATED=1775132207
+TASK_PLAN_ID=6
+TASK_SUBTASK_1_TITLE=Phase 1 dispatched to Team W1
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_ASSIGNEE=Taskmaster
+TASK_SUBTASK_1_CREATED_AT=1775130135
+TASK_UPDATE_1_TIMESTAMP=1775130135
+TASK_UPDATE_1_AUTHOR=Taskmaster
+TASK_UPDATE_1_TEXT=Dispatched Phase 1 (store pkg + doey-ctl) to Team 1. Phase 2 queued pending Phase 1 completion.
+TASK_UPDATE_2_TIMESTAMP=1775130713
+TASK_UPDATE_2_AUTHOR=Taskmaster
+TASK_UPDATE_2_TEXT=Phase 1 committed (aa6b315). Phase 2 dispatched to Team W1: migration tool + shell helper + hook replacement.
+TASK_UPDATE_3_TIMESTAMP=1775131361
+TASK_UPDATE_3_AUTHOR=Taskmaster
+TASK_UPDATE_3_TEXT=Phase 2 committed (9dedffe). Advancing to Phase 3.
+TASK_UPDATE_4_TIMESTAMP=1775131904
+TASK_UPDATE_4_AUTHOR=Taskmaster
+TASK_UPDATE_4_TEXT=Phase 3 committed (2dbb0a6). Advancing to Phase 4 — final verification.
+TASK_REPORT_1_TIMESTAMP=1775132235
+TASK_REPORT_1_AUTHOR=Taskmaster
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Task 107 Complete
+TASK_REPORT_1_BODY=All 4 phases delivered. 8/8 verification checks pass. ~4400 lines, 25 files, 4 commits.

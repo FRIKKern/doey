@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=124
+TASK_TITLE=Verify all latest functionality works e2e
+TASK_STATUS=done
+TASK_TYPE=audit
+TASK_ASSIGNED_TO=W2
+TASK_DESCRIPTION=Run 7 verification checks on latest Doey: (1) Go builds pass — cd tui && go build ./... for doey-ctl, doey-router, gen-constants, (2) Bash 3.2 compat — bash tests/test-bash-compat.sh, (3) doey-router binary runs — ./tui/doey-router --help, (4) doey-ctl commands work — task list, status get, msg send/read, (5) Templates current — bash shell/expand-templates.sh produces no git diff, (6) Fresh-install check — doey doctor passes, (7) SQLite migration integrity — no leftover db-task/db-msg refs in shell/ or .claude/. Report pass/fail for each.
+TASK_DECISION_LOG=1775147331:Created task\n1775147458:Status changed to done\n1775147618:-type progress -title All 7 checks complete: 6 PASS, 1 FAIL -body Check 7 FAIL: 2 stale db-task TODO comments in shell/doey-task-helpers.sh (lines 111, 298). All other checks pass. -author Manager_W2\n1775148158:-type progress -title Task 126 received -body Received Task 126: Fix doey-router stdout pollution. Planning dispatch. -author Manager_W2\n1775148214:Status changed to done\n1775149091:Status changed to done
+TASK_SUBTASKS=1:-title W2.1: Go builds + doey-router binary (checks 1,3):pending\n2:-title W2.2: Bash 3.2 compat + doey doctor (checks 2,6):pending\n3:-title W2.3: doey-ctl commands + SQLite migration refs (checks 4,7):pending\n4:-title W2.4: Templates current (check 5):pending
+TASK_TIMESTAMPS=created=1775147331|completed=1775149091
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775147331
+TASK_TEAM=W2
+TASK_ATTACHMENTS=.doey/tasks/124.result.json

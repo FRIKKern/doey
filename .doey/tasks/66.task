@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=66
+TASK_TITLE=Worker reports as task attachments — visible in Go TUI
+TASK_STATUS=done
+TASK_CREATED=1774960420
+TASK_TYPE=feature
+TASK_DESCRIPTION=When workers produce reports (research findings, build results, test output, code review, any structured output), these must be stored as attachments on the task — not lost in ephemeral worker context. Requirements: (1) ATTACHMENT STORAGE: Each task gets an attachments directory (.doey/tasks/<id>/attachments/) or an attachments section in the task file. Workers write their reports there with metadata (author pane+role, timestamp, type: research|build|test|review|error). (2) STOP HOOK INTEGRATION: The existing stop-results.sh hook captures worker output — this output must be written as a task attachment, linked to the correct task ID and subtask ID. (3) AGENT DEF INSTRUCTIONS: SM, Manager, and Worker agent defs must instruct workers to write reports to the task attachment path, not just inline in chat. Managers must verify attachments exist before marking subtasks complete. (4) GO TUI DISPLAY: Task detail view must show an Attachments section — list of reports with author, timestamp, type badge. Clicking/selecting an attachment expands to show full content. Should be visually distinct from Q&A threads and subtask lists — these are deliverables, not conversation. (5) REPORT TYPES: Support multiple attachment types with visual badges — Research (magnifying glass), Build (hammer), Test (checkmark), Review (eye), Error (warning). Each renders appropriately in the TUI.
+TASK_TAGS=task-system,hooks,agent-defs,tui,go
+TASK_TEAM=W1
+TASK_LOG_1774960440=DISPATCHED to W1 by SM
+TASK_RESULT=Attachment storage, stop hook integration, agent def updates, TUI with type badges + expandable content. 10 files, +408 lines. Committed 54331b2.
+TASK_LOG_1774960831=COMMITTED 54331b2, status→pending_user_confirmation

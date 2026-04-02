@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=98
+TASK_TITLE=Fix broken doey — missing doey-roles.sh install + Go build failure
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TAGS=shell,install,go,critical
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=W1
+TASK_TEAM=W1
+TASK_DESCRIPTION=CRITICAL P0 — doey cannot start. (1) install.sh does not copy shell/doey-roles.sh to ~/.local/bin/. doey.sh sources it but file is missing after install. (2) Go build failing in tui/ — likely roles code from task 97. Verify: install.sh clean, doey doctor passes, go build ./... passes, doey launches.
+TASK_ACCEPTANCE_CRITERIA=install.sh copies doey-roles.sh|doey doctor passes|go build ./... passes in tui/|doey launches successfully
+TASK_RELATED_FILES=install.sh|shell/doey-roles.sh|tui/
+TASK_TIMESTAMPS=created=$(date +%s)
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=$(date +%s)

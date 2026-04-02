@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=12
+TASK_TITLE=Beautify activity log and task descriptions in Go TUI dashboard
+TASK_STATUS=done
+TASK_CREATED=1774821329
+TASK_TYPE=feature
+TASK_DESCRIPTION=The Go TUI dashboard (info panel, pane 0.0) currently displays the activity log and task descriptions in a plain/utilitarian way. Make them significantly more beautiful — better formatting, visual hierarchy, use of color, spacing, and Charmbracelet/Lipgloss styling. The activity log entries and task description text should be easy to scan, visually appealing, and feel polished. Focus on typography, color palette, alignment, and whitespace. Do NOT change functionality — purely visual enhancement.
+TASK_TAGS=tui,dashboard
+TASK_TEAM=W2
+TASK_LOG_1774821367=DISPATCHED: Sent to W2 Manager for visual beautification
+TASK_LOG_1774822177=COMPLETE: 5 files changed, committed a931934. Go build passes.
+TASK_RESULT=Beautified TUI: 4 new theme colors, 6 text styles, 8 rendering helpers. Full visual overhaul of logview and taskcard.
+TASK_FILES=tui/internal/styles/theme.go,tui/internal/styles/status.go,tui/internal/styles/cards.go,tui/internal/model/logview.go,tui/internal/taskcard/taskcard.go

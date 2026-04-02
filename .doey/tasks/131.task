@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=131
+TASK_TITLE=Fix Taskmaster busy-loop — must sleep when no work pending
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_ASSIGNED_TO=W1
+TASK_DESCRIPTION=Taskmaster goes into a repetitive loop instead of sleeping when idle. It should dispatch then sleep via taskmaster-wait.sh, only waking on: new messages, worker results, or crash alerts. Investigate why taskmaster-wait.sh is not blocking properly — likely the wake trigger fires too aggressively or the Taskmaster agent prompt causes it to self-wake by checking status repeatedly. The Taskmaster agent must be truly passive: dispatch work, then go to bed. Related feedback: SM sleeps when idle, Taskmaster should be passive.
+TASK_DECISION_LOG=1775151465:Created task
+TASK_TIMESTAMPS=created=1775151465|completed=1775152623
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775152868
+TASK_PRIORITY=P1
+TASK_TEAM=W1
+TASK_ATTACHMENTS=.doey/tasks/131.result.json

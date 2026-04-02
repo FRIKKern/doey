@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=140
+TASK_TITLE=Task Completion Pipeline — Review Gate + Deployment Separation
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TAGS=shell,hooks,agents
+TASK_ASSIGNED_TO=W2
+TASK_DESCRIPTION=Redesign task completion flow: (1) Block git commit/push for Subtaskmasters and Taskmaster in on-pre-tool-use.sh — only Deployment allowed. (2) Update Task Reviewer agent to MUST write TASK_REVIEW_VERDICT/FINDINGS/TIMESTAMP to .task file, then send deployment_request to Deployment on PASS or review_failed to Taskmaster on FAIL. (3) Update Deployment agent to receive deployment_request, verify review passed in .task, run pre-deploy checks, git commit/push, send deployment_complete to Taskmaster. (4) Update Taskmaster agent to route task_complete through Task Reviewer instead of committing directly — receive deployment_complete and report to Boss. (5) Expand templates and run tests. Plan: .doey/plans/12.md
+TASK_DECISION_LOG=1775162013:Created task
+TASK_SUBTASKS=1:W2.1: Block VCS ops for COORDINATOR and TEAM_LEAD in on-pre-tool-use.sh:pending\n2:W2.2: Update Task Reviewer agent — write TASK_REVIEW fields to .task, route pass/fail:pending\n3:W2.3: Update Deployment agent — handle deployment_request, VCS workflow:pending\n4:W2.4: Update Taskmaster agent — route completions through Task Reviewer:pending\n5:W2.5: Expand templates + run bash compat tests:pending
+TASK_TIMESTAMPS=created=1775162013|completed=1775163879
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775162013
+TASK_PLAN_ID=12
+
+TASK_ATTACHMENTS=.doey/tasks/140/attachments/1775163128_completion_2_2.md
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_COMPLETED_AT=1775163879
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_COMPLETED_AT=1775163613
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_COMPLETED_AT=1775163613
+TASK_SUBTASK_1_STATUS=failed
+TASK_SUBTASK_1_COMPLETED_AT=1775163838

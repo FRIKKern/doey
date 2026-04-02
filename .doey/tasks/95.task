@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=95
+TASK_TITLE=TUI task inspect — remove left padding and vertical line
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=In the Go TUI task detail/inspect view (tui/ directory), there's too much whitespace on the left side and an unnecessary vertical line. Remove the vertical separator line and reduce the left padding/margin to make better use of horizontal space. The content should sit closer to the left edge. Build with go build after changes to verify.
+TASK_DECISION_LOG=1775115899:Created task
+TASK_SUBTASKS=1:W1.2: Research TUI task detail view:done\n2:W1.3: Implement padding/border removal:done
+TASK_TIMESTAMPS=created=1775115899
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775116242
+TASK_TEAM=W1
+TASK_REPORT_1_TIMESTAMP=1775116592
+TASK_REPORT_1_AUTHOR=Manager_W1
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Task 95 Complete
+TASK_REPORT_1_BODY=Removed vertical separator and BorderLeft, reduced padding. Build passes.

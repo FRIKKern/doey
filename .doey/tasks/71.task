@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=71
+TASK_TITLE=Go binaries must auto-build on commit, push, and install
+TASK_STATUS=done
+TASK_CREATED=1774966781
+TASK_TYPE=infrastructure
+TASK_DESCRIPTION=Every .go file in the project must be compiled into its binary as part of the standard workflow. The user must NEVER end up with stale Go binaries. This means: (1) Pre-commit or pre-push hook must detect changed .go files and rebuild affected binaries. (2) install.sh must build all Go binaries as part of the install process. (3) doey update/reinstall must rebuild all Go binaries. (4) Inventory ALL .go files in the project, identify what they build and where binaries go. (5) Ensure go build commands are correct and binaries land in the right install paths. The goal: a fresh install or any push always ships working, up-to-date Go binaries. No manual go build steps ever required by the user.
+TASK_TAGS=infrastructure,install,hooks,shell
+TASK_PRIORITY=P1
+TASK_TEAM=W2
+TASK_LOG_1774966817=PROGRESS: Dispatched to Team 2
+TASK_DECISION_LOG=1774966849:W2 received Task #71. Starting Phase 1: research with 1 worker to catalog all .go files, existing build steps, and gaps.
+1774967098:Phase 1 research complete. 55 Go files, 2 build targets (doey-tui, doey-remote-setup), all under tui/. Key gaps: no freshness check, inconsistent Go discovery (4 variants), no doey build command, uninstall misses Go binaries, no doey-remote-setup in doctor. Planning Phase 2: 4 workers parallel — (1) install.sh fixes, (2) doey.sh build/doctor/uninstall, (3) unified Go discovery helper, (4) pre-push freshness check.
+1774967120:Phase 2 dispatch: W2.3 creates shared helper first (foundation), then W2.1/W2.2/W2.4 consume it. BUT — W2.3 is a new file (no conflicts), so all 4 can run parallel. Workers 1,2,4 will source the helper once W2.3 is done. Dispatching all 4 parallel — W2.3's file won't conflict since it's new.
+1774967582:Wave 2: W2.3 and W2.4 succeeded (3 files changed). W2.1 (install.sh) and W2.2 (doey.sh) reported done but produced NO file changes. Dispatching Wave 3 to fix.
+1774967948:Phase 2 complete after 2 retry waves. All 5 files changed, all pass bash -n and bash compat tests.
+TASK_UPDATED=1774967948
+TASK_SUBTASKS=1:W2.1: Phase 1 research — inventory all .go files, build targets, existing build steps in install/hooks/doctor:pending
+2:W2.3: Create shell/doey-go-helpers.sh shared Go helper library:pending
+3:W2.1: Update install.sh to use shared Go helpers:pending
+4:W2.2: Add doey build command, fix doctor, fix uninstall in doey.sh:pending
+5:W2.4: Update hooks to use unified Go discovery:pending
+TASK_REPORT_1_TIMESTAMP=1774967948
+TASK_REPORT_1_AUTHOR=Manager_W2
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Task 71 Complete
+TASK_REPORT_1_BODY=Go Binary Build Pipeline implemented. 5 files changed: (1) NEW shell/doey-go-helpers.sh — unified Go discovery, freshness check, build functions. (2) install.sh — uses shared helpers, builds both binaries explicitly. (3) doey.sh — source line added, build command exists, uninstall uses trash, doctor checks present. (4) pre-commit-go.sh — uses unified Go discovery. (5) on-pre-tool-use.sh — uses unified Go discovery. All pass bash -n and bash 3.2 compat (38 files, 0 violations). Success criteria: catalog done, install builds both, hooks use unified discovery, uninstall cleans up, doctor checks present.

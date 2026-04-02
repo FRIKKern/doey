@@ -1,0 +1,10 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=133
+TASK_TITLE=Core Team startup spawn — optimized like regular teams
+TASK_STATUS=done
+TASK_CREATED=1775155200
+TASK_TYPE=infrastructure
+TASK_PRIORITY=P1
+TASK_TAGS=shell,startup,doey.sh,optimization
+TASK_TEAM=2
+TASK_RESULT=No changes needed — _create_core_team() already uses optimized pattern (_launch_team_manager with overrides, _brief_team). Bash 3.2 compat verified (45 files, 0 violations).

@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=111
+TASK_TITLE=Fix common.sh relative path crash on non-Doey projects
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=W1
+TASK_DESCRIPTION=common.sh line 7 does cd ../../shell which only works in the Doey repo. On any other project (e.g. claude-harness) ALL hooks crash. Fix: resolve shell/ via DOEY_INSTALL_DIR or ~/.local/share/doey/ or wherever install.sh places scripts. Must work on fresh install. Bash 3.2 compatible.
+TASK_DECISION_LOG=1775134643:Created task
+TASK_TIMESTAMPS=created=1775134643
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775134643

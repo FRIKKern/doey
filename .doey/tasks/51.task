@@ -1,0 +1,69 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=51
+TASK_TITLE=Live task reports in Go TUI — real-time updates, expandable detail
+TASK_STATUS=done
+TASK_CREATED=1774935000
+TASK_TYPE=feature
+TASK_DESCRIPTION=Reports are a core part of Doey. Every task must accumulate reports as work progresses, and the Go TUI must show these reports in real time — updated live, expandable, rich.
+
+WHAT ARE REPORTS:
+- Reports are structured updates written by workers, managers, and SM as they work on a task
+- Each report has: timestamp, author (role + pane), type (research, progress, decision, completion, error), and body (markdown-like text)
+- Reports live alongside the task — either as TASK_REPORT_N fields in the .task file, or as separate .report files in a task-specific directory (e.g., .doey/tasks/51/ directory with 1.report, 2.report, etc.)
+- Reports are append-only — new reports get added, never overwritten
+
+REPORT TYPES:
+1. Research Report — worker investigated something, found results
+2. Progress Report — milestone hit, file created, test passed
+3. Decision Report — manager/SM made a routing or architectural decision
+4. Completion Report — task phase or full task finished, summary of what was done
+5. Error Report — something failed, what went wrong, what was tried
+
+REPORT FORMAT (in .task file or separate files):
+TASK_REPORT_1_TIME=1774935000
+TASK_REPORT_1_AUTHOR=W2.1 (Worker)
+TASK_REPORT_1_TYPE=progress
+TASK_REPORT_1_TITLE=Dashboard rewrite complete
+TASK_REPORT_1_BODY=Rewrote dashboard.go with Lip Gloss heartbeat cards. Added progress bars, type-colored borders, health dots. Build passes.
+
+GO TUI IMPLEMENTATION (tui/internal/):
+
+1. TASK LIST VIEW — Each task in the list should show a report count badge (e.g., "3 reports") and a freshness indicator (dot/pulse if updated in last 30s)
+
+2. TASK DETAIL VIEW — When you open a task, reports are the main content:
+   - Report feed: chronological list of all reports, styled by type
+   - Each report is a card: colored header (type + author + time), body text below
+   - Research reports: blue accent
+   - Progress reports: green accent
+   - Decision reports: purple accent
+   - Completion reports: gold accent
+   - Error reports: red accent
+   - Reports are collapsible — show title/header by default, expand on Enter/click to see full body
+   - Auto-scroll to newest report, but user can scroll up
+
+3. REAL-TIME UPDATES — The task detail view must poll for new reports every 2-3s. When new reports appear, they slide in at the bottom. The report count badge in the list updates too.
+
+4. REPORT PARSING — Add report parsing to the runtime reader (tui/internal/runtime/). Parse TASK_REPORT_N_* fields from .task files. If we go with separate .report files, scan the task subdirectory.
+
+SHELL HELPERS (shell/doey-task-helpers.sh):
+- Add task_add_report() function that agents can call:
+  task_add_report "$RUNTIME_DIR" "$TASK_ID" "$TYPE" "$TITLE" "$BODY" "$AUTHOR"
+- This must be trivial for workers/managers to call from hooks or inline
+- Auto-generates timestamp, auto-increments report number
+
+AGENT INTEGRATION:
+- Worker agent def should instruct workers to write reports at key milestones
+- Manager agent def should instruct managers to write decision/routing reports
+- SM should write dispatch and completion reports
+- This builds on task 45's live update work but makes it report-centric
+
+CONSTRAINTS:
+- Must compile: cd tui/ && go build ./...
+- Reports must be human-readable in .task files (not binary/encoded)
+- Must work with existing task parsing — don't break what's there
+- Scrolling must work correctly in report detail view
+- Test by creating sample reports and verifying they render in TUI
+TASK_TAGS=tui,tasks,reports,ux,shell,agents,infrastructure
+TASK_TEAM=W1
+TASK_SUBTASKS=1:W1.1: Research doey-task-helpers.sh:done\n2:W1.2: Research tasks_config.go + types:done\n3:W1.3: Research model/tasks.go + taskcard:done\n4:W1.4: Research agent defs:done\n5:W1.1: Implement task_add_report shell helper:done\n6:W1.2: Add Report struct + parsing in Go runtime:done\n7:W1.3: Add report rendering in TUI task views:done\n8:W1.4: Update agent defs with report instructions:done
+TASK_DECISION_LOG=1774906686:Wave 1 research complete. Wave 2: parallel impl across 4 files (no overlap).\n1774906973:All 3 phases implemented and verified. Build clean, vet clean, bash compat clean, integration test passes.

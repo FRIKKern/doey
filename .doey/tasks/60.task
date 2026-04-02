@@ -1,0 +1,7 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=60
+TASK_TITLE=Deployment team task-obsessed + detailed task reports in Go TUI
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_OWNER=Boss
+TASK_TEAM=W2

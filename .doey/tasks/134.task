@@ -1,0 +1,10 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=134
+TASK_TITLE=Fix on-pre-tool-use.sh missing doey-roles.sh source — all workers treated as Boss
+TASK_STATUS=done
+TASK_CREATED=1775155800
+TASK_TYPE=bugfix
+TASK_PRIORITY=P0
+TASK_TAGS=hooks,shell,bugfix,on-pre-tool-use
+TASK_TEAM=3
+TASK_RESULT=Fixed both hooks (on-pre-tool-use.sh + on-prompt-submit.sh) by adding doey-roles.sh sourcing with 3-method fallback. Bash 3.2 compat verified (45 files, 0 violations). Committed: 9e59cf9.

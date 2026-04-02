@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=110
+TASK_TITLE=Fix critical doey-ctl flag mismatches from audit #108
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=W1
+TASK_DESCRIPTION=Fix 3 doey-ctl bugs found in audit #108: (1) CRITICAL: doey-ctl status set expects positional args but hooks pass --pane/--status flags — crashes under set -euo pipefail, kills stop hook chain. (2) HIGH: store_status_cmds.go uses --dir but shell passes --project-dir — SQLite never receives data. (3) LOW: add doey-ctl check to doey doctor. Audit reports at /tmp/doey/doey/reports/audit_108_*.md. go build must pass.
+TASK_DECISION_LOG=1775134065:Created task
+TASK_TIMESTAMPS=created=1775134065
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775134065
