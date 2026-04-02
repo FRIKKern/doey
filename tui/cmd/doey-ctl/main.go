@@ -5,11 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/ctl"
-
+	"github.com/doey-cli/doey/tui/internal/store"
 )
 
 // jsonOutput controls whether output is JSON or human-readable.
@@ -44,16 +45,6 @@ func main() {
 		runEventCmd(os.Args[2:])
 	case "migrate":
 		runMigrateCmd(os.Args[2:])
-	case "db-task":
-		runDBTaskCmd(os.Args[2:])
-	case "db-subtask":
-		runDBSubtaskCmd(os.Args[2:])
-	case "db-msg":
-		runDBMsgCmd(os.Args[2:])
-	case "db-status":
-		runDBStatusCmd(os.Args[2:])
-	case "db-log":
-		runDBLogCmd(os.Args[2:])
 	case "--help", "-h":
 		printUsage()
 	default:
@@ -67,8 +58,8 @@ func printUsage() {
 Usage: doey-ctl <command> [options]
 
 Commands:
-  msg      Send, read, and manage IPC messages
-  status   Get, set, and list pane statuses
+  msg      Send, read, and manage IPC messages (auto-detects DB)
+  status   Get, set, and list pane statuses (auto-detects DB)
   health   Check pane liveness
   task     Manage project tasks
   tmux     Tmux session operations
@@ -78,11 +69,6 @@ Commands:
   agent    Manage agents (list, get, set, delete)
   event    Log and list events
   migrate  Run database migrations
-  db-task     Store-backed task CRUD
-  db-subtask  Store-backed subtask CRUD
-  db-msg      Store-backed messaging
-  db-status   Store-backed pane status (get, set, list)
-  db-log      Store-backed task log (add, list)
 
 Environment:
   DOEY_RUNTIME   Runtime directory (default: /tmp/doey/<project>/)
@@ -94,17 +80,33 @@ Flags:
 `)
 }
 
+// openStoreIfExists opens .doey/doey.db if it exists under dir.
+// Returns (nil, nil) if the DB file does not exist — callers should fall back to file mode.
+func openStoreIfExists(dir string) (*store.Store, error) {
+	dbPath := filepath.Join(dir, ".doey", "doey.db")
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil, nil
+	}
+	return store.Open(dbPath)
+}
+
 // --- msg subcommand ---
 
 func runMsgCmd(args []string) {
 	if len(args) < 1 {
-		fatal("msg: expected sub-command: send, read, clean, trigger\n")
+		fatal("msg: expected sub-command: send, read, list, read-all, count, clean, trigger\n")
 	}
 	switch args[0] {
 	case "send":
 		msgSend(args[1:])
 	case "read":
 		msgRead(args[1:])
+	case "list":
+		msgList(args[1:])
+	case "read-all":
+		msgReadAll(args[1:])
+	case "count":
+		msgCount(args[1:])
 	case "clean":
 		msgClean(args[1:])
 	case "trigger":
@@ -120,17 +122,49 @@ func msgSend(args []string) {
 	from := fs.String("from", "", "Sender identifier")
 	subject := fs.String("subject", "", "Message subject")
 	body := fs.String("body", "", "Message body")
+	taskID := fs.Int64("task-id", 0, "Associated task ID (DB mode)")
 	rt := fs.String("runtime", "", "Runtime directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if *to == "" || *from == "" || *subject == "" {
 		fatal("msg send: --to, --from, and --subject are required\n")
 	}
-	dir := runtimeDir(*rt)
-	if err := ctl.WriteMsg(dir, *to, *from, *subject, *body); err != nil {
-		fatal("msg send: %v\n", err)
+
+	sentViaDB := false
+	// Try DB first
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err == nil && s != nil {
+		defer s.Close()
+		m := &store.Message{
+			FromPane: *from,
+			ToPane:   *to,
+			Subject:  *subject,
+			Body:     *body,
+		}
+		if *taskID != 0 {
+			m.TaskID = taskID
+		}
+		if _, err := s.SendMessage(m); err != nil {
+			fatal("msg send: db: %v\n", err)
+		}
+		sentViaDB = true
 	}
+
+	// Fall back to file if no DB
+	if !sentViaDB {
+		rtDir := runtimeDir(*rt)
+		if err := ctl.WriteMsg(rtDir, *to, *from, *subject, *body); err != nil {
+			fatal("msg send: %v\n", err)
+		}
+	}
+
+	// Always fire trigger (wake mechanism) — best-effort
+	if rtDir := runtimeDirOpt(*rt); rtDir != "" {
+		_ = ctl.FireTrigger(rtDir, *to)
+	}
+
 	if jsonOutput {
 		printJSON(map[string]string{"status": "sent", "to": *to})
 	} else {
@@ -142,12 +176,37 @@ func msgRead(args []string) {
 	fs := flag.NewFlagSet("msg read", flag.ExitOnError)
 	pane := fs.String("pane", "", "Pane safe name")
 	rt := fs.String("runtime", "", "Runtime directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if *pane == "" {
 		fatal("msg read: --pane is required\n")
 	}
+
+	// Try DB first
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err == nil && s != nil {
+		defer s.Close()
+		msgs, err := s.ListMessages(*pane, false)
+		if err != nil {
+			fatal("msg read: db: %v\n", err)
+		}
+		if jsonOutput {
+			printJSON(msgs)
+			return
+		}
+		for _, m := range msgs {
+			read := " "
+			if m.Read {
+				read = "*"
+			}
+			fmt.Printf("id=%d from=%s subject=%s read=%s\n%s\n---\n", m.ID, m.FromPane, m.Subject, read, m.Body)
+		}
+		return
+	}
+
+	// Fall back to file
 	msgs, err := ctl.ReadMsgs(runtimeDir(*rt), *pane)
 	if err != nil {
 		fatal("msg read: %v\n", err)
@@ -158,6 +217,93 @@ func msgRead(args []string) {
 	}
 	for _, m := range msgs {
 		fmt.Printf("from=%s subject=%s file=%s\n%s\n---\n", m.From, m.Subject, m.Filename, m.Body)
+	}
+}
+
+func msgList(args []string) {
+	fs := flag.NewFlagSet("msg list", flag.ExitOnError)
+	to := fs.String("to", "", "Recipient pane (optional)")
+	unread := fs.Bool("unread", false, "Only unread messages")
+	dir := fs.String("project-dir", "", "Project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err != nil || s == nil {
+		fatal("msg list: requires DB (.doey/doey.db)\n")
+	}
+	defer s.Close()
+
+	msgs, err := s.ListMessages(*to, *unread)
+	if err != nil {
+		fatal("msg list: %v\n", err)
+	}
+	if jsonOutput {
+		printJSON(msgs)
+		return
+	}
+	fmt.Printf("%-6s %-12s %-12s %-5s %s\n", "ID", "FROM", "TO", "READ", "SUBJECT")
+	for _, m := range msgs {
+		read := " "
+		if m.Read {
+			read = "*"
+		}
+		fmt.Printf("%-6d %-12s %-12s %-5s %s\n", m.ID, m.FromPane, m.ToPane, read, m.Subject)
+	}
+}
+
+func msgReadAll(args []string) {
+	fs := flag.NewFlagSet("msg read-all", flag.ExitOnError)
+	to := fs.String("to", "", "Recipient pane (required)")
+	dir := fs.String("project-dir", "", "Project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	if *to == "" {
+		fatal("msg read-all: --to is required\n")
+	}
+
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err != nil || s == nil {
+		fatal("msg read-all: requires DB (.doey/doey.db)\n")
+	}
+	defer s.Close()
+
+	if err := s.MarkAllRead(*to); err != nil {
+		fatal("msg read-all: %v\n", err)
+	}
+	if jsonOutput {
+		printJSON(map[string]string{"status": "read-all", "to": *to})
+	} else {
+		fmt.Println("read-all")
+	}
+}
+
+func msgCount(args []string) {
+	fs := flag.NewFlagSet("msg count", flag.ExitOnError)
+	to := fs.String("to", "", "Recipient pane (required)")
+	dir := fs.String("project-dir", "", "Project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	if *to == "" {
+		fatal("msg count: --to is required\n")
+	}
+
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err != nil || s == nil {
+		fatal("msg count: requires DB (.doey/doey.db)\n")
+	}
+	defer s.Close()
+
+	count, err := s.CountUnread(*to)
+	if err != nil {
+		fatal("msg count: %v\n", err)
+	}
+	if jsonOutput {
+		printJSON(map[string]int{"unread": count})
+	} else {
+		fmt.Println(count)
 	}
 }
 
@@ -222,14 +368,34 @@ func runStatusCmd(args []string) {
 func statusGet(args []string) {
 	fs := flag.NewFlagSet("status get", flag.ExitOnError)
 	rt := fs.String("runtime", "", "Runtime directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("status get: <pane_safe> argument required\n")
+		fatal("status get: <pane> argument required\n")
 	}
-	paneSafe := fs.Arg(0)
-	entry, err := ctl.ReadStatus(runtimeDir(*rt), paneSafe)
+	pane := fs.Arg(0)
+
+	// Try DB first
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err == nil && s != nil {
+		defer s.Close()
+		ps, err := s.GetPaneStatus(pane)
+		if err == nil {
+			if jsonOutput {
+				printJSON(ps)
+			} else {
+				fmt.Printf("pane_id=%s window_id=%s role=%s status=%s agent=%s updated_at=%d\n",
+					ps.PaneID, ps.WindowID, ps.Role, ps.Status, ps.Agent, ps.UpdatedAt)
+			}
+			return
+		}
+		// DB didn't have this pane — fall through to file
+	}
+
+	// Fall back to file
+	entry, err := ctl.ReadStatus(runtimeDir(*rt), pane)
 	if err != nil {
 		fatal("status get: %v\n", err)
 	}
@@ -244,11 +410,28 @@ func statusGet(args []string) {
 func statusSet(args []string) {
 	fs := flag.NewFlagSet("status set", flag.ExitOnError)
 	pane := fs.String("pane", "", "Pane ID (e.g. W1.2)")
+	// Also accept --pane-id for backward compat with db-status callers
+	paneID := fs.String("pane-id", "", "Pane ID (alias for --pane)")
 	status := fs.String("status", "", "Status value")
 	task := fs.String("task", "", "Current task description")
+	taskTitle := fs.String("task-title", "", "Task title (alias for --task)")
+	role := fs.String("role", "", "Pane role (DB mode)")
+	agent := fs.String("agent", "", "Agent name (DB mode)")
+	windowID := fs.String("window-id", "", "Window ID (DB mode)")
+	taskIDFlag := fs.Int64("task-id", 0, "Task ID (DB mode)")
 	rt := fs.String("runtime", "", "Runtime directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
+
+	// Merge --pane-id into --pane for backward compat
+	if *pane == "" && *paneID != "" {
+		*pane = *paneID
+	}
+	// Merge --task-title into --task
+	if *task == "" && *taskTitle != "" {
+		*task = *taskTitle
+	}
 
 	// Accept positional args as fallback: status set <pane> <status>
 	if *pane == "" && fs.NArg() >= 1 {
@@ -261,7 +444,32 @@ func statusSet(args []string) {
 	if *pane == "" || *status == "" {
 		fatal("status set: --pane and --status are required\n")
 	}
-	// Derive paneSafe from pane ID — callers should provide the safe name via --pane
+
+	// Try DB
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err == nil && s != nil {
+		defer s.Close()
+		wid := *windowID
+		if wid == "" {
+			wid = windowFromPaneID(*pane)
+		}
+		ps := &store.PaneStatus{
+			PaneID:    *pane,
+			WindowID:  wid,
+			Role:      *role,
+			Status:    *status,
+			TaskTitle: *task,
+			Agent:     *agent,
+		}
+		if *taskIDFlag != 0 {
+			ps.TaskID = taskIDFlag
+		}
+		if err := s.UpsertPaneStatus(ps); err != nil {
+			fatal("status set: db: %v\n", err)
+		}
+	}
+
+	// Always write-through to file (tmux border scripts depend on this)
 	if err := ctl.WriteStatus(runtimeDir(*rt), *pane, *pane, *status, *task); err != nil {
 		fatal("status set: %v\n", err)
 	}
@@ -275,10 +483,36 @@ func statusSet(args []string) {
 func statusList(args []string) {
 	fs := flag.NewFlagSet("status list", flag.ExitOnError)
 	window := fs.Int("window", -1, "Window index")
+	windowIDFlag := fs.String("window-id", "", "Window ID (DB mode, overrides --window)")
 	rt := fs.String("runtime", "", "Runtime directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
+	// Try DB first
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err == nil && s != nil {
+		defer s.Close()
+		wid := *windowIDFlag
+		if wid == "" && *window >= 0 {
+			wid = strconv.Itoa(*window)
+		}
+		statuses, err := s.ListPaneStatuses(wid)
+		if err != nil {
+			fatal("status list: db: %v\n", err)
+		}
+		if jsonOutput {
+			printJSON(statuses)
+			return
+		}
+		for _, ps := range statuses {
+			fmt.Printf("%-12s %-10s %-10s %-30s %d\n",
+				ps.PaneID, ps.Role, ps.Status, ps.TaskTitle, ps.UpdatedAt)
+		}
+		return
+	}
+
+	// Fall back to file
 	if *window < 0 {
 		fatal("status list: --window is required\n")
 	}
@@ -356,6 +590,14 @@ func runtimeDir(flagVal string) string {
 	}
 	fatal("runtime dir not set: use --runtime or DOEY_RUNTIME env\n")
 	return ""
+}
+
+// runtimeDirOpt returns the runtime directory or empty string if not available (no fatal).
+func runtimeDirOpt(flagVal string) string {
+	if flagVal != "" {
+		return flagVal
+	}
+	return os.Getenv("DOEY_RUNTIME")
 }
 
 // sessionName returns the tmux session name from a flag value or SESSION_NAME env.
