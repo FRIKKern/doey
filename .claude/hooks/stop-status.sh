@@ -59,16 +59,6 @@ for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
     printf 'LAST_TASK_TAGS: %s\nLAST_TASK_TYPE: %s\nLAST_FILES: %s\n' "$_last_task_tags" "$_last_task_type" "$_last_files" >> "$_status_file"
 done
 
-# Write to SQLite store (parallel to file-based status)
-if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-  doey-ctl db-status set --pane-id "$PANE_SAFE" --window-id "W${WINDOW_INDEX}" \
-    --role "${DOEY_ROLE:-worker}" --status "$STOP_STATUS" \
-    --task-id "${task_id:-0}" --task-title "${_last_task_tags:-}" \
-    --dir "$PROJECT_DIR" 2>/dev/null || true
-  doey-ctl event log --type "worker_stop" --source "$PANE_SAFE" \
-    --project-dir "$PROJECT_DIR" 2>/dev/null || true
-fi
-
 rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.heartbeat" 2>/dev/null || true
 { [ -n "${DOEY_PANE_ID:-}" ] && rm -f "${RUNTIME_DIR}/status/${DOEY_PANE_ID//[-:.]/_}.heartbeat" 2>/dev/null; } || true
 

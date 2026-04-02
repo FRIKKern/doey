@@ -287,15 +287,7 @@ _pane_healthy() {
 # Outputs: status string (e.g., "BUSY", "READY", "FINISHED")
 _read_pane_status() {
   local pane_safe="$1"
-  # Prefer SQLite DB read
-  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    local _db_status
-    _db_status=$(doey-ctl db-status get "$pane_safe" --project-dir "$PROJECT_DIR" --json 2>/dev/null) && {
-      echo "$_db_status" | grep -o '"status":"[^"]*"' | cut -d'"' -f4
-      return 0
-    }
-  fi
-  # File-based doey-ctl read
+  # Unified doey-ctl status get (auto-detects DB vs file)
   if command -v doey-ctl >/dev/null 2>&1; then
     doey-ctl status get --runtime "$RUNTIME_DIR" "$pane_safe" 2>/dev/null | grep '^status=' | cut -d= -f2-
   else
@@ -309,9 +301,9 @@ atomic_write() { printf '%s\n' "$2" > "$1.tmp" && mv "$1.tmp" "$1"; }
 
 write_pane_status() {
   local target="$1" status="$2" task="${3:-}"
-  # Try SQLite store first (db-status writes to .doey/doey.db)
+  # Try unified status command (writes DB + file)
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    doey-ctl db-status set \
+    doey-ctl status set \
       --pane-id "${DOEY_PANE_SAFE:-${PANE_SAFE:-}}" \
       --window-id "W${DOEY_WINDOW_INDEX:-${WINDOW_INDEX:-0}}" \
       --role "${DOEY_ROLE:-worker}" \
