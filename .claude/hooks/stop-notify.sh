@@ -92,7 +92,7 @@ ${summary}"
   done
 }
 
-_wake_taskmaster() { tmux send-keys -t "${SESSION_NAME}:${TASKMASTER_PANE:-0.2}" "" 2>/dev/null || true; }
+_wake_taskmaster() { tmux send-keys -t "${SESSION_NAME}:${TASKMASTER_PANE:-$(get_taskmaster_pane)}" "" 2>/dev/null || true; }
 
 if is_worker; then
   _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
@@ -135,7 +135,7 @@ if is_worker; then
 
   if [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ]; then
     _taskmaster_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" TASKMASTER_PANE)
-    _target="$SESSION_NAME:${_taskmaster_pane:-0.2}"
+    _target="$SESSION_NAME:${_taskmaster_pane:-$(get_taskmaster_pane)}"
     _subject="freelancer_finished"
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)

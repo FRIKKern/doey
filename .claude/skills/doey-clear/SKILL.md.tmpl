@@ -46,4 +46,4 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
 done
 ```
 
-Skip reserved unless `--force`. Skip {{DOEY_ROLE_TEAM_LEAD}} if WORKERS_ONLY. Never clear 0.0/0.1/0.2.
+Skip reserved unless `--force`. Skip {{DOEY_ROLE_TEAM_LEAD}} if WORKERS_ONLY. Never clear dashboard panes (0.0, 0.1) or {{DOEY_ROLE_COORDINATOR}} ({{DOEY_TASKMASTER_PANE}}).

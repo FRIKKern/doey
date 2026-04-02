@@ -10,7 +10,8 @@ Subtaskmaster/Boss only. Send `/compact` to Taskmaster (0.2), verify, retry once
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 source "$RD/session.env"
-TASKMASTER_PANE="${SESSION_NAME}:0.2"
+_TM_PANE=$(grep '^TASKMASTER_PANE=' "$RD/session.env" 2>/dev/null | cut -d= -f2-)
+TASKMASTER_PANE="${SESSION_NAME}:${_TM_PANE:-0.2}"
 tmux copy-mode -q -t "$TASKMASTER_PANE" 2>/dev/null
 tmux send-keys -t "$TASKMASTER_PANE" "/compact" Enter
 ```

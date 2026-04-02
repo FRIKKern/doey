@@ -36,6 +36,15 @@ if [ -z "$SED_EXPR" ]; then
   exit 1
 fi
 
+# Add DOEY_TASKMASTER_PANE substitution (env var > session.env > default "0.2")
+DOEY_TASKMASTER_PANE="${DOEY_TASKMASTER_PANE:-0.2}"
+if [ "$DOEY_TASKMASTER_PANE" = "0.2" ] && [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+  _val=$(grep '^DOEY_TASKMASTER_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+  [ -n "$_val" ] && DOEY_TASKMASTER_PANE="$_val"
+fi
+safe_value=$(printf '%s' "$DOEY_TASKMASTER_PANE" | sed 's/[&/\]/\\&/g')
+SED_EXPR="${SED_EXPR}s/{{DOEY_TASKMASTER_PANE}}/${safe_value}/g;"
+
 # Find all .md.tmpl files
 STALE=0
 EXPANDED=0
