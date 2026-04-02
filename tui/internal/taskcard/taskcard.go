@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
@@ -48,327 +49,123 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 	return CardDelegate{Theme: t}
 }
 
-// Height returns the fixed card height (title + status + heartbeat + 2 desc lines + bottom padding).
-func (d CardDelegate) Height() int { return 8 }
+// Height returns the fixed card height (icon+title line, description line, padding).
+func (d CardDelegate) Height() int { return 3 }
 
 // Spacing returns the gap between cards.
-func (d CardDelegate) Spacing() int { return 1 }
+func (d CardDelegate) Spacing() int { return 0 }
 
 // Update is a no-op; the delegate does not handle messages.
 func (d CardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
-// Render draws a single task card into w.
+// Render draws a single task card as a compact 3-line entry (matching Plans pattern).
 func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	ti, ok := item.(TaskItem)
 	if !ok {
 		return
 	}
 
-	selected := index == m.Index()
-	cardWidth := m.Width() - 4
-	if cardWidth < 20 {
-		cardWidth = 20
+	isSelected := index == m.Index()
+
+	// Health-based icon color
+	icon := taskHealthIcon(ti, d.Theme, d.Heartbeats)
+
+	// Title
+	titleStyle := lipgloss.NewStyle().Bold(isSelected)
+	if isSelected {
+		titleStyle = titleStyle.Foreground(d.Theme.Primary)
+	} else {
+		titleStyle = titleStyle.Foreground(d.Theme.Text)
 	}
-	if cardWidth > styles.MaxCardWidth {
-		cardWidth = styles.MaxCardWidth
+	title := titleStyle.Render(ti.Task.Title)
+
+	// Description line: status · workerID · N/M subtasks · type
+	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(taskCardDescription(ti, d.Heartbeats))
+
+	// Compose card: 2 content lines
+	card := fmt.Sprintf(" %s %s\n   %s", icon, title, desc)
+
+	// Selected: left border only
+	if isSelected {
+		card = lipgloss.NewStyle().
+			BorderLeft(true).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(d.Theme.Primary).
+			Render(card)
 	}
 
-	task := ti.Task
-	status := task.Status
-
-	t := d.Theme
-	hs, hasHB := d.Heartbeats[task.ID]
-	health := ""
-	if hasHB {
-		health = hs.Health
-	}
-	isDone := status == "done" || status == "cancelled"
-	isBlocked := status == "blocked" || task.Blockers != ""
-
-	// Health-aware card style
-	cardStyle := d.healthCardStyle(health, selected, isBlocked, isDone, cardWidth)
-
-	contentWidth := cardWidth - 2
-	if contentWidth < 10 {
-		contentWidth = 10
-	}
-	dimText := isDone || health == "stale"
-
-	// --- Line 1: icon/spinner + #ID + [priority] + [type] + title ---
-	icon := statusIcon(status, t)
-	if hasHB && hs.SpinnerActive {
-		icon = lipgloss.NewStyle().Foreground(t.Primary).Render("⠋")
-	}
-	idStr := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("#" + task.ID)
-	prioBadge := ""
-	if task.Priority >= 0 && task.Priority <= 2 {
-		prioBadge = " " + styles.PriorityBadge(t, task.Priority)
-	}
-	typeBadge := ""
-	if task.Type != "" {
-		typeBadge = styles.TypeTagCard(task.Type, t) + " "
-	}
-	prefix := icon + " " + idStr + prioBadge + " " + typeBadge
-	prefixWidth := lipgloss.Width(prefix)
-	titleMaxW := contentWidth - prefixWidth
-	if titleMaxW < 4 {
-		titleMaxW = 4
-	}
-	titleText := task.Title
-	if lipgloss.Width(titleText) > titleMaxW {
-		titleText = titleText[:titleMaxW-3] + "..."
-	}
-	titleFg := t.Text
-	if selected {
-		titleFg = t.Primary
-	}
-	if dimText {
-		titleFg = t.Muted
-	}
-	line1 := prefix + lipgloss.NewStyle().Foreground(titleFg).Bold(true).Render(titleText)
-
-	// --- Line 2: status label + team badge + tags + Q&A ---
-	statusClr := styles.StatusAccentColor(t, status)
-	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(styles.StatusLabel(status))
-	teamBadge := ""
-	if task.Team != "" {
-		teamBadge = "  " + lipgloss.NewStyle().Foreground(t.Accent).Faint(dimText).Render("["+task.Team+"]")
-	}
-	tagStr := ""
-	for i, tag := range task.Tags {
-		if i >= 3 {
-			tagStr += " +"
-			break
-		}
-		tagStr += " " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render("#"+tag)
-	}
-	qaBadge := ""
-	for _, qa := range ti.Task.QAThread {
-		if qa.Status != "answered" {
-			qaBadge = "  " + lipgloss.NewStyle().
-				Foreground(lipgloss.AdaptiveColor{Light: "#0891B2", Dark: "#22D3EE"}).
-				Render("❓")
-			break
-		}
-	}
-	phaseBadge := ""
-	if task.Phase != "" {
-		phaseBadge = "  " + styles.TaskPhaseBadge(t, task.Phase)
-	}
-	planBadge := ""
-	if task.PlanID != "" {
-		planBadge = "  " + lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A78BFA"}).
-			Render("📋 Plan")
-	}
-	line2 := statusLabel + phaseBadge + planBadge + teamBadge + tagStr + qaBadge
-
-	// --- Line 3: workers + health + activity ---
-	line3 := ""
-	if hasHB && hs.ActiveWorkers > 0 {
-		var dot string
-		switch health {
-		case "healthy":
-			dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
-		case "degraded":
-			dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-		default:
-			dot = lipgloss.NewStyle().Foreground(t.Muted).Render("●")
-		}
-		names := strings.Join(hs.ActiveWorkerNames, ", ")
-		if names == "" {
-			names = fmt.Sprintf("%d worker", hs.ActiveWorkers)
-			if hs.ActiveWorkers != 1 {
-				names += "s"
-			}
-		}
-		line3 = dot + " " + lipgloss.NewStyle().Foreground(t.Text).Render(names)
-		if hs.ActivityText != "" {
-			line3 += t.DotSeparator() + styles.CardMetaStyle(t).Render(hs.ActivityText)
-		}
-		if !hs.LastActivity.IsZero() {
-			elapsed := time.Since(hs.LastActivity)
-			if elapsed < 5*time.Second {
-				line3 += lipgloss.NewStyle().Foreground(t.Success).Render("  now")
-			} else {
-				line3 += styles.CardMetaStyle(t).Render("  " + formatAge(elapsed) + " ago")
-			}
-		}
-		// Stale badge with duration
-		if health == "stale" && !hs.HealthSince.IsZero() {
-			staleDur := formatAge(time.Since(hs.HealthSince))
-			line3 += "  " + styles.StaleTimeBadge(t, staleDur)
-		}
-	} else if isBlocked && task.Blockers != "" {
-		bl := strings.SplitN(task.Blockers, "\n", 2)[0]
-		if len(bl) > contentWidth-4 {
-			bl = bl[:contentWidth-7] + "..."
-		}
-		line3 = lipgloss.NewStyle().Foreground(t.Danger).Render("⚠ " + bl)
-	} else if status == "in_progress" && len(ti.Task.RecoveryLog) > 0 {
-		line3 = styles.StaleBadge(t)
-	}
-
-	// --- Line 4: progress bar + reports ---
-	line4 := ""
-	if ti.SubtaskTotal > 0 {
-		barW := contentWidth / 2
-		if barW > 30 {
-			barW = 30
-		}
-		line4 = styles.ExpandedProgressBar(t, ti.SubtaskDone, ti.SubtaskTotal, barW)
-	}
-	if len(task.Reports) > 0 {
-		line4 += "  " + lipgloss.NewStyle().Foreground(t.Info).Render(fmt.Sprintf("%dR", len(task.Reports)))
-	}
-	if len(task.TaskAttachments) > 0 {
-		line4 += "  " + lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("📎%d", len(task.TaskAttachments)))
-	}
-	if hasHB && hs.ProgressText != "" && ti.SubtaskTotal == 0 {
-		line4 += styles.CardMetaStyle(t).Render(hs.ProgressText)
-	}
-
-	// --- Line 5: description preview (1 line) ---
-	descStyle := styles.CardDescStyle(t)
-	if dimText {
-		descStyle = descStyle.Faint(true)
-	}
-	line5 := descStyle.Render(truncateDesc(task.Description, 1, contentWidth))
-
-	// --- Line 6: tool hint / finding + updates + age ---
-	var metaParts []string
-	if hasHB && hs.LastToolCall != "" {
-		hint := hs.LastToolCall
-		if len(hint) > 30 {
-			hint = hint[:27] + "..."
-		}
-		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(hint))
-	} else if hasHB && hs.LatestFinding != "" {
-		finding := hs.LatestFinding
-		if len(finding) > 30 {
-			finding = finding[:27] + "..."
-		}
-		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(finding))
-	}
-	if len(task.Updates) > 0 {
-		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
-			fmt.Sprintf("%d updates", len(task.Updates))))
-	}
-	if len(task.QAThread) > 0 {
-		metaParts = append(metaParts, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
-			fmt.Sprintf("Q&A: %d", len(task.QAThread))))
-	}
-	if task.Created > 0 {
-		elapsed := time.Since(time.Unix(task.Created, 0))
-		metaParts = append(metaParts, styles.CardMetaStyle(t).Render(formatAge(elapsed)))
-	}
-	line6 := strings.Join(metaParts, "  ")
-
-	content := lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3, line4, line5, line6)
-	marked := zone.Mark(fmt.Sprintf("task-card-%d", index), cardStyle.Render(content))
-	fmt.Fprint(w, marked)
+	fmt.Fprint(w, zone.Mark(fmt.Sprintf("task-card-%d", index), card))
 }
 
-// taskStatusColor returns the accent color for a given task status.
-func (d CardDelegate) taskStatusColor(status string) lipgloss.AdaptiveColor {
-	switch status {
-	case "done":
-		return d.Theme.Success
-	case "in_progress":
-		return d.Theme.Warning
-	case "active":
-		return d.Theme.Primary
-	case "failed":
-		return d.Theme.Danger
-	case "blocked":
-		return d.Theme.Danger
-	case "paused":
-		return d.Theme.Accent
-	case "pending_user_confirmation":
-		return d.Theme.Warning
-	default:
-		return d.Theme.Muted
-	}
-}
+// taskHealthIcon returns a colored status icon reflecting both task status and health.
+func taskHealthIcon(ti TaskItem, t styles.Theme, heartbeats map[string]runtime.HeartbeatState) string {
+	status := ti.Task.Status
+	isBlocked := status == "blocked" || ti.Task.Blockers != ""
 
-// healthCardStyle returns a card style with border color reflecting health state.
-// Active tasks glow (green/yellow left accent), stale/idle tasks dim, blocked tasks warn.
-func (d CardDelegate) healthCardStyle(health string, selected, isBlocked, isDone bool, width int) lipgloss.Style {
-	t := d.Theme
-	border := lipgloss.RoundedBorder()
-	border.Left = "│"
-	border.TopLeft = "│"
-	border.BottomLeft = "│"
-
-	borderFg := t.Separator
-	leftFg := t.Separator
-
-	switch {
-	case isDone:
-		borderFg = t.Muted
-		leftFg = t.Muted
-	case isBlocked:
-		leftFg = t.Danger
-	case health == "healthy":
-		leftFg = t.Success
-	case health == "degraded":
-		leftFg = t.Warning
-	case health == "stale":
-		leftFg = t.Muted
-	}
-
-	s := lipgloss.NewStyle().
-		Border(border).
-		BorderForeground(borderFg).
-		BorderLeftForeground(leftFg).
-		Width(width).
-		Padding(0, 1)
-
-	if selected {
-		s = s.BorderForeground(t.Primary).
-			Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"})
-		// Preserve health accent on left border when selected
-		switch {
-		case isBlocked:
-			s = s.BorderLeftForeground(t.Danger)
-		case health == "healthy":
-			s = s.BorderLeftForeground(t.Success)
-		case health == "degraded":
-			s = s.BorderLeftForeground(t.Warning)
-		}
-	}
-
-	return s
-}
-
-// statusIcon returns a subtle colored status icon for the given task status.
-func statusIcon(status string, t styles.Theme) string {
-	dim := func(c lipgloss.AdaptiveColor) lipgloss.Style {
-		return lipgloss.NewStyle().Foreground(c).Faint(true)
-	}
+	// Done/cancelled tasks use status icons
 	switch status {
 	case "done", "complete":
-		return dim(t.Success).Render("✓")
-	case "in_progress":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-	case "active":
-		return dim(t.Muted).Render("○")
+		return lipgloss.NewStyle().Foreground(t.Success).Faint(true).Render("✓")
+	case "cancelled":
+		return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
 	case "failed":
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
-	case "blocked":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("○")
 	case "pending_user_confirmation":
-		return lipgloss.NewStyle().Foreground(styles.StatusAccentColor(t, status)).Render("◉")
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
 	case "awaiting_user_review":
 		return lipgloss.NewStyle().Foreground(styles.StatusAccentColor(t, status)).Render("◈")
 	case "research":
 		return lipgloss.NewStyle().Foreground(t.Info).Render("◇")
-	case "cancelled":
-		return dim(t.Muted).Render("○")
-	default:
-		return dim(t.Muted).Render("○")
 	}
+
+	if isBlocked {
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("◆")
+	}
+
+	// Health-based diamond for active/in_progress tasks
+	if hs, ok := heartbeats[ti.Task.ID]; ok {
+		switch hs.Health {
+		case "healthy":
+			return lipgloss.NewStyle().Foreground(t.Success).Render("◆")
+		case "degraded":
+			return lipgloss.NewStyle().Foreground(t.Warning).Render("◆")
+		case "stale":
+			return lipgloss.NewStyle().Foreground(t.Muted).Render("◆")
+		}
+	}
+
+	// Default: muted diamond
+	return lipgloss.NewStyle().Foreground(t.Muted).Render("◆")
+}
+
+// taskCardDescription builds "status · worker · N/M subtasks · type" for the card.
+func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatState) string {
+	var parts []string
+
+	if ti.Task.Status != "" {
+		parts = append(parts, styles.StatusLabel(ti.Task.Status))
+	}
+
+	// Active worker names from heartbeat
+	if hs, ok := heartbeats[ti.Task.ID]; ok && hs.ActiveWorkers > 0 {
+		names := strings.Join(hs.ActiveWorkerNames, ", ")
+		if names == "" {
+			names = fmt.Sprintf("%d workers", hs.ActiveWorkers)
+		}
+		parts = append(parts, names)
+	}
+
+	// Subtask progress
+	if ti.SubtaskTotal > 0 {
+		parts = append(parts, fmt.Sprintf("%d/%d subtasks", ti.SubtaskDone, ti.SubtaskTotal))
+	}
+
+	// Type badge
+	if ti.Task.Type != "" {
+		parts = append(parts, ti.Task.Type)
+	}
+
+	return strings.Join(parts, " \u00b7 ")
 }
 
 // truncateDesc truncates a description string to at most maxLines lines,
@@ -445,6 +242,13 @@ func truncateDesc(s string, maxLines int, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
+// markdownCache caches glamour-rendered markdown to avoid re-rendering on every frame.
+type markdownCache struct {
+	lastBody  string
+	lastWidth int
+	rendered  string
+}
+
 // ExpandedCard renders the expanded detail view for a single task card.
 type ExpandedCard struct {
 	Item          TaskItem     // the task being expanded
@@ -472,6 +276,9 @@ type ExpandedCard struct {
 	// Expandable attachment tracking
 	ExpandedAttachments map[int]bool // which attachments are expanded (by index)
 	AttachmentCursor    int          // focused attachment index (-1 = none)
+
+	// Glamour markdown rendering cache
+	mdCache markdownCache
 }
 
 // loadSidecar lazily loads sidecar and result data on first call.
@@ -506,24 +313,40 @@ func (e *ExpandedCard) Render() string {
 
 	var sections []string
 
-	// --- Header: icon + title + status text + type tag ---
-	icon := statusIcon(task.Status, e.Theme)
+	// --- Header: title + Plans-style metadata ---
 	title := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text).Render(task.Title)
+	sections = append(sections, title)
+
+	metaStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted)
 	statusClr := styles.StatusAccentColor(e.Theme, task.Status)
-	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(task.Status)
-	typeTag := ""
-	if task.Type != "" {
-		typeTag = lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("[" + task.Type + "]")
+	stIcon := lipgloss.NewStyle().Foreground(statusClr).Render("◆")
+	sections = append(sections, fmt.Sprintf("%s %s", stIcon, metaStyle.Render("Status: "+task.Status)))
+
+	if task.Team != "" {
+		sections = append(sections, metaStyle.Render("Team: "+task.Team))
 	}
 
-	header := icon + " " + title + "  " + statusLabel
-	if typeTag != "" {
-		header += " " + typeTag
+	priType := ""
+	if task.Priority >= 0 && task.Priority <= 2 {
+		priNames := []string{"high", "medium", "low"}
+		priType = "Priority: " + priNames[task.Priority]
+	}
+	if task.Type != "" {
+		if priType != "" {
+			priType += " · "
+		}
+		priType += "Type: " + task.Type
+	}
+	if priType != "" {
+		sections = append(sections, metaStyle.Render(priType))
+	}
+
+	if task.Created > 0 {
+		sections = append(sections, metaStyle.Render("Created: "+time.Unix(task.Created, 0).Format("2006-01-02 15:04")))
 	}
 	if task.Phase != "" {
-		header += "  " + styles.TaskPhaseBadge(e.Theme, task.Phase)
+		sections = append(sections, styles.TaskPhaseBadge(e.Theme, task.Phase))
 	}
-	sections = append(sections, header)
 
 	// --- Phase banner (prominent for review phase) ---
 	if phaseBanner := styles.TaskPhaseBanner(e.Theme, task.Phase, contentWidth); phaseBanner != "" {
@@ -547,10 +370,6 @@ func (e *ExpandedCard) Render() string {
 	}
 
 	// --- Meta ---
-	if task.Created > 0 {
-		created := time.Unix(task.Created, 0).Format("2006-01-02 15:04")
-		sections = append(sections, styles.MetaLine(e.Theme, "Created", created))
-	}
 	if task.PlanID != "" {
 		originText := "Plan #" + task.PlanID
 		if task.PlanTitle != "" {
@@ -559,11 +378,24 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, styles.MetaLine(e.Theme, "Origin", originText))
 	}
 
-	// --- Description ---
-	if task.Description != "" {
-		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(e.Theme, "Description"))
-		sections = append(sections, styles.DescriptionBlock(e.Theme, task.Description, contentWidth))
+	// --- Description + Notes + Decisions (combined glamour markdown) ---
+	{
+		var mdParts []string
+		if task.Description != "" {
+			mdParts = append(mdParts, task.Description)
+		}
+		if task.Notes != "" {
+			mdParts = append(mdParts, "## Notes\n"+task.Notes)
+		}
+		if task.DecisionLog != "" {
+			mdParts = append(mdParts, "## Decisions\n"+task.DecisionLog)
+		}
+		if len(mdParts) > 0 {
+			combinedMD := strings.Join(mdParts, "\n\n")
+			rendered := renderMarkdown(combinedMD, contentWidth, &e.mdCache)
+			sections = append(sections, "")
+			sections = append(sections, rendered)
+		}
 	}
 
 	// --- Planning (from JSON sidecar) ---
@@ -576,12 +408,6 @@ func (e *ExpandedCard) Render() string {
 	if execution := e.renderExecutionSection(contentWidth); execution != "" {
 		sections = append(sections, "")
 		sections = append(sections, execution)
-	}
-
-	// --- Semantic (from JSON sidecar) ---
-	if semantic := e.renderSemanticSection(contentWidth); semantic != "" {
-		sections = append(sections, "")
-		sections = append(sections, semantic)
 	}
 
 	// --- Result Details (from .result.json) ---
@@ -730,32 +556,6 @@ func (e *ExpandedCard) Render() string {
 		}
 	}
 
-	// --- Decision Log ---
-	if task.DecisionLog != "" {
-		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(e.Theme, "Decisions"))
-		for _, line := range strings.Split(strings.TrimSpace(task.DecisionLog), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			// Try to split "timestamp: text" format
-			ts, text := "", line
-			if idx := strings.Index(line, ": "); idx > 0 && idx < 24 {
-				ts = line[:idx]
-				text = line[idx+2:]
-			}
-			sections = append(sections, styles.ActivityEntry(e.Theme, ts, "decision", text, contentWidth))
-		}
-	}
-
-	// --- Notes ---
-	if task.Notes != "" {
-		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(e.Theme, "Notes"))
-		sections = append(sections, styles.NoteBlock(e.Theme, task.Notes, contentWidth))
-	}
-
 	// --- Activity Log ---
 	if len(task.Logs) > 0 {
 		sections = append(sections, "")
@@ -796,12 +596,6 @@ func (e *ExpandedCard) Render() string {
 				}
 			}
 		}
-	}
-
-	// --- Conversation Trail ---
-	if trail := e.renderConversationTrail(contentWidth); trail != "" {
-		sections = append(sections, "")
-		sections = append(sections, trail)
 	}
 
 	// --- Q&A Relay Chain ---
@@ -886,33 +680,34 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, fileRows...)
 	}
 
-	// --- Legacy Attachments (string paths) ---
-	if len(e.Item.Task.Attachments) > 0 && len(e.Item.Task.TaskAttachments) == 0 {
-		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(e.Theme, "Attachments"))
-		for _, att := range e.Item.Task.Attachments {
-			name := filepath.Base(att)
-			badge := "file"
-			if strings.HasSuffix(name, ".result.json") {
-				badge = "result"
-			} else if strings.HasSuffix(name, ".report") {
-				badge = "report"
-			} else if strings.HasSuffix(name, ".plan") {
-				badge = "plan"
-			}
-			sections = append(sections, fmt.Sprintf("  [%s] %s",
-				badge, lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render(name)))
+	// --- Action Buttons ---
+	{
+		t := e.Theme
+		status := task.Status
+		var buttons []string
+
+		if status != "done" && status != "cancelled" {
+			moveStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Primary).Padding(0, 2)
+			buttons = append(buttons, zone.Mark("task-move-btn", moveStyle.Render("Move (m)")))
+		}
+
+		if status == "in_progress" || status == "active" || status == "draft" || status == "pending" {
+			dispatchStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Accent).Padding(0, 2)
+			buttons = append(buttons, zone.Mark("task-dispatch-btn", dispatchStyle.Render("Dispatch (d)")))
+		}
+
+		if status != "cancelled" {
+			cancelStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Danger).Padding(0, 2)
+			buttons = append(buttons, zone.Mark("task-cancel-btn", cancelStyle.Render("Cancel (x)")))
+		}
+
+		if len(buttons) > 0 {
+			sections = append(sections, "")
+			row := strings.Join(buttons, "  ")
+			centered := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(row)
+			sections = append(sections, centered)
 		}
 	}
-
-	// --- Footer hint ---
-	sections = append(sections, "")
-	closeBtn := zone.Mark("detail-close",
-		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("[Enter] collapse"))
-	hint := closeBtn + "  " +
-		lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
-			Render("[Tab] next subtask  [r] toggle report  [↑↓] scroll")
-	sections = append(sections, hint)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	expandedWidth := e.Width
@@ -922,6 +717,30 @@ func (e *ExpandedCard) Render() string {
 	return styles.ExpandedCardStyle(e.Theme, task.Status, expandedWidth).Render(content)
 }
 
+// renderMarkdown renders markdown through glamour with caching.
+func renderMarkdown(body string, width int, cache *markdownCache) string {
+	if width < 20 {
+		width = 20
+	}
+	if body == cache.lastBody && width == cache.lastWidth && cache.rendered != "" {
+		return cache.rendered
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return body
+	}
+	rendered, err := renderer.Render(body)
+	if err != nil {
+		return body
+	}
+	cache.rendered = rendered
+	cache.lastBody = body
+	cache.lastWidth = width
+	return rendered
+}
 
 // attachmentTypeEmoji returns an emoji badge for the attachment type.
 func attachmentTypeEmoji(t string) string {
@@ -1074,29 +893,6 @@ func splitLogPrefix(entry string) (string, string) {
 		}
 	}
 	return "", trimmed
-}
-
-// logPrefixStyle returns a styled prefix badge for log entries.
-func logPrefixStyle(prefix string, theme styles.Theme) string {
-	if prefix == "" {
-		return ""
-	}
-	var clr lipgloss.AdaptiveColor
-	switch prefix {
-	case "PLAN":
-		clr = theme.Primary // blue
-	case "RESEARCH":
-		clr = theme.Success // green
-	case "REPORT":
-		clr = theme.Warning // gold/amber
-	case "DISPATCH":
-		clr = theme.Accent
-	case "DECISION":
-		clr = theme.Text
-	default:
-		clr = theme.Muted
-	}
-	return lipgloss.NewStyle().Foreground(clr).Bold(true).Render("[" + prefix + "]")
 }
 
 // formatAge formats a duration into a human-readable short string.
@@ -1580,37 +1376,6 @@ func (e *ExpandedCard) renderExecutionSection(w int) string {
 	return strings.Join(sections, "\n")
 }
 
-// renderSemanticSection renders concepts, bridge problem, representation layer.
-func (e *ExpandedCard) renderSemanticSection(w int) string {
-	if e.Sidecar == nil {
-		return ""
-	}
-	s := e.Sidecar
-	t := e.Theme
-	var sections []string
-
-	if len(s.Concepts) > 0 {
-		sections = append(sections, styles.SectionTitle(t, "Concepts"))
-		var names []string
-		for _, c := range s.Concepts {
-			names = append(names, c.Name)
-		}
-		sections = append(sections, styles.BulletList(t, names, w))
-	}
-	if s.BridgeProblem != "" {
-		sections = append(sections, styles.SectionTitle(t, "Bridge Problem"))
-		sections = append(sections, styles.DescriptionBlock(t, s.BridgeProblem, w))
-	}
-	if len(s.RepresentationLayer) > 0 {
-		sections = append(sections, styles.SectionTitle(t, "Representation"))
-		sections = append(sections, styles.BulletList(t, s.RepresentationLayer, w))
-	}
-	if len(sections) == 0 {
-		return ""
-	}
-	return strings.Join(sections, "\n")
-}
-
 // renderResultSection renders hypothesis updates, evidence, follow-up, tool calls.
 func (e *ExpandedCard) renderResultSection(w int) string {
 	if e.TaskResult == nil {
@@ -1808,148 +1573,6 @@ func extractStatusName(s string) string {
 		}
 	}
 	return ""
-}
-
-// conversationEntry represents a parsed user/AI message from activity logs.
-type conversationEntry struct {
-	Role      string // "user" or "ai"
-	Text      string
-	Timestamp int64
-}
-
-// parseConversationEntries extracts conversation-style entries from task logs.
-// Looks for entries prefixed with "USER:", "AI:", or "CONVERSATION:".
-// Also checks reports with type "conversation".
-func (e *ExpandedCard) parseConversationEntries() []conversationEntry {
-	var entries []conversationEntry
-
-	// Parse from activity logs
-	for _, log := range e.Item.Task.Logs {
-		entry := strings.TrimSpace(log.Entry)
-		upper := strings.ToUpper(entry)
-
-		if strings.HasPrefix(upper, "USER:") {
-			text := strings.TrimSpace(entry[5:])
-			entries = append(entries, conversationEntry{Role: "user", Text: text, Timestamp: log.Timestamp})
-		} else if strings.HasPrefix(upper, "AI:") {
-			text := strings.TrimSpace(entry[3:])
-			entries = append(entries, conversationEntry{Role: "ai", Text: text, Timestamp: log.Timestamp})
-		} else if strings.HasPrefix(upper, "CONVERSATION:") {
-			text := strings.TrimSpace(entry[13:])
-			// Detect role from content
-			role := "ai"
-			if strings.HasPrefix(strings.ToUpper(text), "USER:") {
-				role = "user"
-				text = strings.TrimSpace(text[5:])
-			} else if strings.HasPrefix(strings.ToUpper(text), "AI:") {
-				text = strings.TrimSpace(text[3:])
-			}
-			entries = append(entries, conversationEntry{Role: role, Text: text, Timestamp: log.Timestamp})
-		}
-	}
-
-	// Parse from reports with type "conversation"
-	for _, report := range e.Item.Task.Reports {
-		if report.Type != "conversation" {
-			continue
-		}
-		for _, line := range strings.Split(report.Body, "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			upper := strings.ToUpper(line)
-			if strings.HasPrefix(upper, "USER:") {
-				entries = append(entries, conversationEntry{
-					Role: "user", Text: strings.TrimSpace(line[5:]), Timestamp: report.Created,
-				})
-			} else if strings.HasPrefix(upper, "AI:") {
-				entries = append(entries, conversationEntry{
-					Role: "ai", Text: strings.TrimSpace(line[3:]), Timestamp: report.Created,
-				})
-			}
-		}
-	}
-
-	// Sort by timestamp ascending
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Timestamp < entries[j].Timestamp
-	})
-
-	// Cap at last 20 messages
-	if len(entries) > 20 {
-		entries = entries[len(entries)-20:]
-	}
-
-	return entries
-}
-
-// countConversationEntries returns the number of conversation entries for height estimation.
-func (e *ExpandedCard) countConversationEntries() int {
-	return len(e.parseConversationEntries())
-}
-
-// renderConversationTrail renders a conversation trail section with user/AI messages.
-func (e *ExpandedCard) renderConversationTrail(width int) string {
-	entries := e.parseConversationEntries()
-	if len(entries) == 0 {
-		return ""
-	}
-
-	t := e.Theme
-	var lines []string
-	lines = append(lines, styles.SectionTitle(t, "Conversation"))
-
-	userBg := lipgloss.AdaptiveColor{Light: "#E8F4FD", Dark: "#1E3A5F"}
-	aiBg := lipgloss.AdaptiveColor{Light: "#F0F4E8", Dark: "#2D3A1E"}
-
-	bodyWidth := width - 8
-	if bodyWidth < 20 {
-		bodyWidth = 20
-	}
-
-	for i, entry := range entries {
-		// Timestamp
-		ts := ""
-		if entry.Timestamp > 0 {
-			ts = time.Unix(entry.Timestamp, 0).Format("15:04")
-		}
-		styledTs := lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(ts)
-
-		// Role label and message styling
-		var roleLabel string
-		var msgStyle lipgloss.Style
-
-		if entry.Role == "user" {
-			roleLabel = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("USER")
-			msgStyle = lipgloss.NewStyle().
-				Background(userBg).
-				Foreground(t.Text).
-				Width(bodyWidth).
-				Padding(0, 1)
-		} else {
-			roleLabel = lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("AI")
-			msgStyle = lipgloss.NewStyle().
-				Background(aiBg).
-				Foreground(t.Text).
-				Width(bodyWidth).
-				Padding(0, 1)
-		}
-
-		// Header: timestamp + role
-		lines = append(lines, fmt.Sprintf("  %s  %s", styledTs, roleLabel))
-
-		// Message body (wrapped)
-		wrapped := wordWrap(entry.Text, bodyWidth-2)
-		lines = append(lines, "  "+msgStyle.Render(wrapped))
-
-		// Spacing between messages (not after last)
-		if i < len(entries)-1 {
-			lines = append(lines, "")
-		}
-	}
-
-	return strings.Join(lines, "\n")
 }
 
 // renderQARelayChain renders the Q&A relay chain section for the expanded card.

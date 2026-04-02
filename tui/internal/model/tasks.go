@@ -24,6 +24,14 @@ import (
 // SwitchToPlanMsg requests the root model to switch to the Plans tab for a specific plan.
 type SwitchToPlanMsg struct{ PlanID string }
 
+// taskStatusClearMsg clears the status message after a delay.
+type taskStatusClearMsg struct{}
+
+// taskStatusClearCmd returns a command that clears the status message after 2 seconds.
+func taskStatusClearCmd() tea.Cmd {
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return taskStatusClearMsg{} })
+}
+
 // sectionOfStatus derives a display section from a canonical task status.
 func sectionOfStatus(status string) string {
 	switch status {
@@ -95,6 +103,9 @@ type TasksModel struct {
 
 	// Expanded card (used for subtask nav in right panel)
 	expanded *taskcard.ExpandedCard
+
+	// Status feedback
+	statusMsg string
 
 	// Sidecar/result for detail view
 	detailSidecar *runtime.TaskSidecar
@@ -330,6 +341,12 @@ func (m TasksModel) Update(msg tea.Msg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
+	switch msg.(type) {
+	case taskStatusClearMsg:
+		m.statusMsg = ""
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
@@ -371,8 +388,46 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Click release — check list item zones
+	// Click release — check zones
 	if msg.Action == tea.MouseActionRelease {
+		// Action button clicks (zone-based)
+		if !m.leftFocused && len(m.entries) > 0 {
+			idx := m.list.Index()
+			if idx >= 0 && idx < len(m.entries) {
+				task := m.entries[idx]
+				if zone.Get("move-task-btn").InBounds(msg) {
+					next := nextMoveStatus(task.Status)
+					m.statusMsg = "Task moved"
+					moveCmd := func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: next} }
+					if next == "done" {
+						bossCmd := func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} }
+						return m, tea.Batch(moveCmd, bossCmd, taskStatusClearCmd())
+					}
+					return m, tea.Batch(moveCmd, taskStatusClearCmd())
+				}
+				if zone.Get("dispatch-task-btn").InBounds(msg) {
+					m.statusMsg = "Task dispatched"
+					return m, tea.Batch(func() tea.Msg {
+						return DispatchTaskMsg{ID: task.ID, Title: task.Title}
+					}, taskStatusClearCmd())
+				}
+				if zone.Get("status-task-btn").InBounds(msg) {
+					next := nextStatus(task.Status)
+					m.statusMsg = "Status updated"
+					return m, tea.Batch(func() tea.Msg {
+						return SetStatusTaskMsg{ID: task.ID, Status: next}
+					}, taskStatusClearCmd())
+				}
+				if zone.Get("cancel-task-btn").InBounds(msg) {
+					m.statusMsg = "Task cancelled"
+					cancelCmd := func() tea.Msg { return CancelTaskMsg{ID: task.ID} }
+					bossCmd := func() tea.Msg { return BossCancelTaskBossMsg{ID: task.ID} }
+					return m, tea.Batch(cancelCmd, bossCmd, taskStatusClearCmd())
+				}
+			}
+		}
+
+		// Card clicks in list
 		for i := range m.entries {
 			if zone.Get(fmt.Sprintf("task-card-%d", i)).InBounds(msg) {
 				m.list.Select(i)
@@ -477,12 +532,13 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
 		next := nextMoveStatus(task.Status)
+		m.statusMsg = "Task moved"
 		moveCmd := func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: next} }
 		if next == "done" {
 			bossCmd := func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} }
-			return m, tea.Batch(moveCmd, bossCmd)
+			return m, tea.Batch(moveCmd, bossCmd, taskStatusClearCmd())
 		}
-		return m, moveCmd
+		return m, tea.Batch(moveCmd, taskStatusClearCmd())
 	case "d":
 		item := m.list.SelectedItem()
 		if item == nil {
@@ -490,9 +546,10 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		}
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
-		return m, func() tea.Msg {
+		m.statusMsg = "Task dispatched"
+		return m, tea.Batch(func() tea.Msg {
 			return DispatchTaskMsg{ID: task.ID, Title: task.Title}
-		}
+		}, taskStatusClearCmd())
 	case "s":
 		item := m.list.SelectedItem()
 		if item == nil {
@@ -501,9 +558,10 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
 		next := nextStatus(task.Status)
-		return m, func() tea.Msg {
+		m.statusMsg = "Status updated"
+		return m, tea.Batch(func() tea.Msg {
 			return SetStatusTaskMsg{ID: task.ID, Status: next}
-		}
+		}, taskStatusClearCmd())
 	case "p":
 		item := m.list.SelectedItem()
 		if item == nil {
@@ -522,9 +580,10 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		}
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
+		m.statusMsg = "Task cancelled"
 		cancelCmd := func() tea.Msg { return CancelTaskMsg{ID: task.ID} }
 		bossCmd := func() tea.Msg { return BossCancelTaskBossMsg{ID: task.ID} }
-		return m, tea.Batch(cancelCmd, bossCmd)
+		return m, tea.Batch(cancelCmd, bossCmd, taskStatusClearCmd())
 	}
 
 	// Delegate everything else (j/k/scroll) to the list model
@@ -582,37 +641,41 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
 			next := nextMoveStatus(task.Status)
+			m.statusMsg = "Task moved"
 			moveCmd := func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: next} }
 			if next == "done" {
 				bossCmd := func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} }
-				return m, tea.Batch(moveCmd, bossCmd)
+				return m, tea.Batch(moveCmd, bossCmd, taskStatusClearCmd())
 			}
-			return m, moveCmd
+			return m, tea.Batch(moveCmd, taskStatusClearCmd())
 		}
 	case "s":
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
 			next := nextStatus(task.Status)
-			return m, func() tea.Msg {
+			m.statusMsg = "Status updated"
+			return m, tea.Batch(func() tea.Msg {
 				return SetStatusTaskMsg{ID: task.ID, Status: next}
-			}
+			}, taskStatusClearCmd())
 		}
 	case "d":
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
-			return m, func() tea.Msg {
+			m.statusMsg = "Task dispatched"
+			return m, tea.Batch(func() tea.Msg {
 				return DispatchTaskMsg{ID: task.ID, Title: task.Title}
-			}
+			}, taskStatusClearCmd())
 		}
 	case "x":
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
+			m.statusMsg = "Task cancelled"
 			cancelCmd := func() tea.Msg { return CancelTaskMsg{ID: task.ID} }
 			bossCmd := func() tea.Msg { return BossCancelTaskBossMsg{ID: task.ID} }
-			return m, tea.Batch(cancelCmd, bossCmd)
+			return m, tea.Batch(cancelCmd, bossCmd, taskStatusClearCmd())
 		}
 	}
 
@@ -770,13 +833,12 @@ func (m TasksModel) renderLeftPanel(w, h int) string {
 	l.SetSize(w, listH)
 	listView := l.View()
 
-	hint := ""
-	if m.focused && m.leftFocused && !m.creating {
-		hint = styles.FooterHintBarStyle(t).
-			Render("j/k nav  enter/→ detail  n new  m move  ? help")
+	content := header + "\n" + summary + "\n" + listView
+
+	if m.statusMsg != "" {
+		content += "\n" + lipgloss.NewStyle().Foreground(t.Success).PaddingLeft(1).Render(m.statusMsg)
 	}
 
-	content := header + "\n" + summary + "\n" + listView + "\n" + hint
 	if m.creating {
 		content += "\n" + m.renderInputBar()
 	}
@@ -1361,11 +1423,47 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 
 	displayed := m.detailViewport.View()
 
-	// Hint bar
-	if m.focused && !m.leftFocused {
-		hint := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
-			Render("← back  m move  s status  d dispatch  x cancel  ↑↓ scroll  tab subtask")
-		displayed += "\n" + hint
+	// Scroll hint
+	pct := m.detailViewport.ScrollPercent()
+	scrollHint := lipgloss.NewStyle().Foreground(t.Muted).Align(lipgloss.Right).Width(renderW - 2).
+		Render(fmt.Sprintf("%.0f%%", pct*100))
+	displayed += "\n" + scrollHint
+
+	// Action buttons (only when detail focused and task selected)
+	if !m.leftFocused && len(m.entries) > 0 {
+		idx := m.list.Index()
+		if idx >= 0 && idx < len(m.entries) {
+			task := m.entries[idx]
+			var buttons []string
+			status := task.Status
+
+			// Move (m) — shown when status != done/cancelled
+			if status != "done" && status != "cancelled" {
+				moveStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Primary).Padding(0, 2)
+				buttons = append(buttons, zone.Mark("move-task-btn", moveStyle.Render("Move (m)")))
+			}
+
+			// Dispatch (d) — shown when status is active
+			if status == "in_progress" || status == "active" || status == "pending" || status == "ready" {
+				dispatchStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Accent).Padding(0, 2)
+				buttons = append(buttons, zone.Mark("dispatch-task-btn", dispatchStyle.Render("Dispatch (d)")))
+			}
+
+			// Status (s) — always shown
+			statusStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Muted).Padding(0, 2)
+			buttons = append(buttons, zone.Mark("status-task-btn", statusStyle.Render("Status (s)")))
+
+			// Cancel (x) — shown when status != cancelled
+			if status != "cancelled" {
+				cancelStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Danger).Padding(0, 2)
+				buttons = append(buttons, zone.Mark("cancel-task-btn", cancelStyle.Render("Cancel (x)")))
+			}
+
+			if len(buttons) > 0 {
+				row := lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(buttons, "  "))
+				displayed += "\n" + lipgloss.NewStyle().Width(renderW).Align(lipgloss.Center).Render(row)
+			}
+		}
 	}
 
 	panelStyle := lipgloss.NewStyle().

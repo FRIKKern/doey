@@ -17,6 +17,7 @@ Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. Run `d
 - **Use `set -euo pipefail`** — Every shell script. No exceptions
 - **Use `trash` not `rm`** — For file deletion (recoverable)
 - **Use AskUserQuestion for questions** — When asking the user questions, always use the AskUserQuestion tool (native Claude Code question UI) — never put questions inline in text responses. This applies to all user-facing roles (especially Boss)
+- **Never add Co-Authored-By lines** — Do not append "Co-Authored-By" trailers or any AI attribution to git commit messages. Commits should contain only the commit message itself
 
 ## The End-User Test
 

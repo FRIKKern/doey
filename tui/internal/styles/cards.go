@@ -118,42 +118,6 @@ func accentBorder() lipgloss.Border {
 	return r
 }
 
-// CardStyle returns a bordered card style for task cards.
-// The left border uses the status accent color; when selected the entire
-// border switches to Primary and the background gets a subtle highlight.
-func CardStyle(t Theme, status string, selected bool, width int) lipgloss.Style {
-	border := accentBorder()
-
-	if selected {
-		return lipgloss.NewStyle().
-			Border(border).
-			BorderForeground(t.Separator).
-			BorderLeftForeground(t.Muted).
-			Background(lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#1E293B"}).
-			Width(width).
-			Padding(0, 1)
-	}
-
-	return lipgloss.NewStyle().
-		Border(border).
-		BorderForeground(t.Separator).
-		BorderLeftForeground(t.Separator).
-		Width(width).
-		Padding(0, 1)
-}
-
-// CardTitleStyle returns the style for a card's title line.
-// Bold text in the default color, switching to Primary when selected.
-func CardTitleStyle(t Theme, selected bool) lipgloss.Style {
-	fg := t.Text
-	if selected {
-		fg = t.Primary
-	}
-	return lipgloss.NewStyle().
-		Foreground(fg).
-		Bold(true)
-}
-
 // CardDescStyle returns the style for a card's description preview (1-2 lines).
 func CardDescStyle(t Theme) lipgloss.Style {
 	return lipgloss.NewStyle().
