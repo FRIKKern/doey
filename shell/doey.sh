@@ -3248,6 +3248,13 @@ check_doctor() {
     _doc_check skip "doey-remote-setup not installed" "optional — run: doey build"
   fi
 
+  # Orchestration CLI (doey-ctl)
+  if command -v doey-ctl >/dev/null 2>&1; then
+    _doc_check ok "doey-ctl" "found at $(command -v doey-ctl)"
+  else
+    _doc_check warn "doey-ctl not installed" "shell fallbacks will be used — run: doey build"
+  fi
+
   # Go binary freshness
   if [[ -n "$repo_dir" ]] && type _go_binary_stale >/dev/null 2>&1; then
     local _stale_bins=""
@@ -3256,6 +3263,9 @@ check_doctor() {
     fi
     if _go_binary_stale "$HOME/.local/bin/doey-remote-setup" "$repo_dir/tui" 2>/dev/null; then
       _stale_bins="${_stale_bins:+${_stale_bins}, }doey-remote-setup"
+    fi
+    if _go_binary_stale "$HOME/.local/bin/doey-ctl" "$repo_dir/tui" 2>/dev/null; then
+      _stale_bins="${_stale_bins:+${_stale_bins}, }doey-ctl"
     fi
     if [[ -n "$_stale_bins" ]]; then
       _doc_check warn "Go binaries may be stale: ${_stale_bins}" "run: doey build"

@@ -250,6 +250,14 @@ func statusSet(args []string) {
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
+	// Accept positional args as fallback: status set <pane> <status>
+	if *pane == "" && fs.NArg() >= 1 {
+		*pane = fs.Arg(0)
+	}
+	if *status == "" && fs.NArg() >= 2 {
+		*status = fs.Arg(1)
+	}
+
 	if *pane == "" || *status == "" {
 		fatal("status set: --pane and --status are required\n")
 	}
