@@ -19,6 +19,18 @@ type Task struct {
 	AcceptanceCriteria string `json:"acceptance_criteria,omitempty"`
 	CurrentPhase       int    `json:"current_phase"`
 	TotalPhases        int    `json:"total_phases"`
+	Notes              string `json:"notes,omitempty"`
+	Blockers           string `json:"blockers,omitempty"`
+	RelatedFiles       string `json:"related_files,omitempty"`
+	Hypotheses         string `json:"hypotheses,omitempty"`
+	DecisionLog        string `json:"decision_log,omitempty"`
+	Result             string `json:"result,omitempty"`
+	Files              string `json:"files,omitempty"`
+	Commits            string `json:"commits,omitempty"`
+	SchemaVersion      int    `json:"schema_version"`
+	ReviewVerdict      string `json:"review_verdict,omitempty"`
+	ReviewFindings     string `json:"review_findings,omitempty"`
+	ReviewTimestamp    string `json:"review_timestamp,omitempty"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
 }
@@ -48,11 +60,15 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 	res, err := s.db.Exec(`INSERT INTO tasks
 		(title, status, type, description, created_by, assigned_to, team,
 		 plan_id, tags, acceptance_criteria, current_phase, total_phases,
-		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 notes, blockers, related_files, hypotheses, decision_log, result,
+		 files, commits, schema_version, review_verdict, review_findings,
+		 review_timestamp, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 		t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
-		t.CreatedAt, t.UpdatedAt,
+		t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
+		t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
+		t.ReviewTimestamp, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -65,11 +81,15 @@ func (s *Store) GetTask(id int64) (*Task, error) {
 	err := s.db.QueryRow(`SELECT
 		id, title, status, type, description, created_by, assigned_to, team,
 		plan_id, tags, acceptance_criteria, current_phase, total_phases,
-		created_at, updated_at
+		notes, blockers, related_files, hypotheses, decision_log, result,
+		files, commits, schema_version, review_verdict, review_findings,
+		review_timestamp, created_at, updated_at
 		FROM tasks WHERE id = ?`, id).Scan(
 		&t.ID, &t.Title, &t.Status, &t.Type, &t.Description, &t.CreatedBy, &t.AssignedTo, &t.Team,
 		&t.PlanID, &t.Tags, &t.AcceptanceCriteria, &t.CurrentPhase, &t.TotalPhases,
-		&t.CreatedAt, &t.UpdatedAt,
+		&t.Notes, &t.Blockers, &t.RelatedFiles, &t.Hypotheses, &t.DecisionLog, &t.Result,
+		&t.Files, &t.Commits, &t.SchemaVersion, &t.ReviewVerdict, &t.ReviewFindings,
+		&t.ReviewTimestamp, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -84,13 +104,17 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 		rows, err = s.db.Query(`SELECT
 			id, title, status, type, description, created_by, assigned_to, team,
 			plan_id, tags, acceptance_criteria, current_phase, total_phases,
-			created_at, updated_at
+			notes, blockers, related_files, hypotheses, decision_log, result,
+			files, commits, schema_version, review_verdict, review_findings,
+			review_timestamp, created_at, updated_at
 			FROM tasks ORDER BY created_at DESC`)
 	} else {
 		rows, err = s.db.Query(`SELECT
 			id, title, status, type, description, created_by, assigned_to, team,
 			plan_id, tags, acceptance_criteria, current_phase, total_phases,
-			created_at, updated_at
+			notes, blockers, related_files, hypotheses, decision_log, result,
+			files, commits, schema_version, review_verdict, review_findings,
+			review_timestamp, created_at, updated_at
 			FROM tasks WHERE status = ? ORDER BY created_at DESC`, status)
 	}
 	if err != nil {
@@ -104,7 +128,9 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 		if err := rows.Scan(
 			&t.ID, &t.Title, &t.Status, &t.Type, &t.Description, &t.CreatedBy, &t.AssignedTo, &t.Team,
 			&t.PlanID, &t.Tags, &t.AcceptanceCriteria, &t.CurrentPhase, &t.TotalPhases,
-			&t.CreatedAt, &t.UpdatedAt,
+			&t.Notes, &t.Blockers, &t.RelatedFiles, &t.Hypotheses, &t.DecisionLog, &t.Result,
+			&t.Files, &t.Commits, &t.SchemaVersion, &t.ReviewVerdict, &t.ReviewFindings,
+			&t.ReviewTimestamp, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -118,11 +144,17 @@ func (s *Store) UpdateTask(t *Task) error {
 	_, err := s.db.Exec(`UPDATE tasks SET
 		title = ?, status = ?, type = ?, description = ?, created_by = ?,
 		assigned_to = ?, team = ?, plan_id = ?, tags = ?, acceptance_criteria = ?,
-		current_phase = ?, total_phases = ?, updated_at = ?
+		current_phase = ?, total_phases = ?, notes = ?, blockers = ?,
+		related_files = ?, hypotheses = ?, decision_log = ?, result = ?,
+		files = ?, commits = ?, schema_version = ?, review_verdict = ?,
+		review_findings = ?, review_timestamp = ?, updated_at = ?
 		WHERE id = ?`,
 		t.Title, t.Status, t.Type, t.Description, t.CreatedBy,
 		t.AssignedTo, t.Team, t.PlanID, t.Tags, t.AcceptanceCriteria,
-		t.CurrentPhase, t.TotalPhases, t.UpdatedAt,
+		t.CurrentPhase, t.TotalPhases, t.Notes, t.Blockers,
+		t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
+		t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict,
+		t.ReviewFindings, t.ReviewTimestamp, t.UpdatedAt,
 		t.ID,
 	)
 	return err
