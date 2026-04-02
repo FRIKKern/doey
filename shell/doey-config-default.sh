@@ -18,8 +18,8 @@
 # Grid & Teams
 # ─────────────────────────────────────────────
 
-# Number of worker columns in the initial grid layout (workers = cols × 2)
-# DOEY_INITIAL_WORKER_COLS=2
+# Number of worker columns in the initial grid layout (workers = cols × 2, default: 3)
+# DOEY_INITIAL_WORKER_COLS=3
 
 # Number of team windows to create at startup
 # DOEY_INITIAL_TEAMS=2
