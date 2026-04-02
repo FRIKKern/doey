@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/ctl"
+
 )
 
 // jsonOutput controls whether output is JSON or human-readable.
@@ -31,6 +32,28 @@ func main() {
 		runTaskCmd(os.Args[2:])
 	case "tmux":
 		runTmuxCmd(os.Args[2:])
+	case "plan":
+		runPlanCmd(os.Args[2:])
+	case "team":
+		runTeamCmd(os.Args[2:])
+	case "config":
+		runConfigCmd(os.Args[2:])
+	case "agent":
+		runAgentCmd(os.Args[2:])
+	case "event":
+		runEventCmd(os.Args[2:])
+	case "migrate":
+		runMigrateCmd(os.Args[2:])
+	case "db-task":
+		runDBTaskCmd(os.Args[2:])
+	case "db-subtask":
+		runDBSubtaskCmd(os.Args[2:])
+	case "db-msg":
+		runDBMsgCmd(os.Args[2:])
+	case "db-status":
+		runDBStatusCmd(os.Args[2:])
+	case "db-log":
+		runDBLogCmd(os.Args[2:])
 	case "--help", "-h":
 		printUsage()
 	default:
@@ -49,6 +72,17 @@ Commands:
   health   Check pane liveness
   task     Manage project tasks
   tmux     Tmux session operations
+  plan     Manage plans (list, get, create, update, delete)
+  team     Manage teams (list, get, set)
+  config   Manage config (get, set, list, delete)
+  agent    Manage agents (list, get, set, delete)
+  event    Log and list events
+  migrate  Run database migrations
+  db-task     Store-backed task CRUD
+  db-subtask  Store-backed subtask CRUD
+  db-msg      Store-backed messaging
+  db-status   Store-backed pane status (get, set, list)
+  db-log      Store-backed task log (add, list)
 
 Environment:
   DOEY_RUNTIME   Runtime directory (default: /tmp/doey/<project>/)
