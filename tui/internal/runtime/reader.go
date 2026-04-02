@@ -82,12 +82,18 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 		r.sr = openStore(session.ProjectDir)
 	}
 
-	for _, w := range session.TeamWindows {
-		tc, err := r.parseTeamConfig(w)
-		if err != nil {
-			continue // team file might not exist yet
+	// Teams: try store, fall back to files
+	if r.sr != nil {
+		snap.Teams = r.sr.readTeams()
+	}
+	if len(snap.Teams) == 0 {
+		for _, w := range session.TeamWindows {
+			tc, err := r.parseTeamConfig(w)
+			if err != nil {
+				continue // team file might not exist yet
+			}
+			snap.Teams[w] = tc
 		}
-		snap.Teams[w] = tc
 	}
 
 	// Pane statuses: try store, fall back to files
@@ -99,22 +105,41 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	}
 
 	// Tasks: try store, fall back to files
+	tasksFromStore := false
 	if r.sr != nil {
 		snap.Tasks = r.sr.readTasks()
+		tasksFromStore = len(snap.Tasks) > 0
 	}
 	if len(snap.Tasks) == 0 {
 		snap.Tasks = r.ParseTasks()
 	}
 
-	snap.Subtasks = r.parseSubtasks()
-
-	// Attach subtasks to their parent tasks
-	subtasksByTask := make(map[string][]Subtask)
-	for _, st := range snap.Subtasks {
-		subtasksByTask[st.TaskID] = append(subtasksByTask[st.TaskID], st)
+	// Subtasks: skip file-based parsing when store already populated them.
+	// Store-loaded tasks have subtasks inline; only fall back to files when
+	// tasks came from files or store tasks have no subtasks at all.
+	storeHasSubtasks := false
+	if tasksFromStore {
+		for _, t := range snap.Tasks {
+			if len(t.Subtasks) > 0 {
+				storeHasSubtasks = true
+				break
+			}
+		}
 	}
-	for i := range snap.Tasks {
-		snap.Tasks[i].Subtasks = subtasksByTask[snap.Tasks[i].ID]
+	if !storeHasSubtasks {
+		snap.Subtasks = r.parseSubtasks()
+		subtasksByTask := make(map[string][]Subtask)
+		for _, st := range snap.Subtasks {
+			subtasksByTask[st.TaskID] = append(subtasksByTask[st.TaskID], st)
+		}
+		for i := range snap.Tasks {
+			snap.Tasks[i].Subtasks = subtasksByTask[snap.Tasks[i].ID]
+		}
+	} else {
+		// Collect subtasks from store-loaded tasks for snap.Subtasks
+		for _, t := range snap.Tasks {
+			snap.Subtasks = append(snap.Subtasks, t.Subtasks...)
+		}
 	}
 
 	snap.Results = r.parseResults()

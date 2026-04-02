@@ -201,6 +201,29 @@ func (sr *storeReader) readMessages() []Message {
 	return msgs
 }
 
+// readTeams converts store teams to runtime TeamConfigs keyed by window index.
+func (sr *storeReader) readTeams() map[int]TeamConfig {
+	storeTeams, err := sr.s.ListTeams()
+	if err != nil {
+		return nil
+	}
+	teams := make(map[int]TeamConfig, len(storeTeams))
+	for _, st := range storeTeams {
+		winIdx, err := strconv.Atoi(st.WindowID)
+		if err != nil {
+			continue
+		}
+		teams[winIdx] = TeamConfig{
+			WindowIndex: winIdx,
+			TeamName:    st.Name,
+			TeamType:    st.Type,
+			WorktreeDir: st.WorktreePath,
+			WorkerCount: st.PaneCount,
+		}
+	}
+	return teams
+}
+
 // readAgents converts store agents to runtime AgentDefs.
 func (sr *storeReader) readAgents() []AgentDef {
 	storeAgents, err := sr.s.ListAgents()
