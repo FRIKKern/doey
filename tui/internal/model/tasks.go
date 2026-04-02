@@ -163,14 +163,14 @@ func (m *TasksModel) SetSize(w, h int) {
 	if rightW < 24 {
 		rightW = 24
 	}
-	vpH := h - 4
+	vpH := h - 2
 	if vpH < 1 {
 		vpH = 1
 	}
-	m.detailViewport.Width = rightW - 4 // account for panel padding
+	m.detailViewport.Width = rightW - 3 // account for panel padding + border
 	m.detailViewport.Height = vpH - 1   // leave room for hint bar
 	if m.expanded != nil {
-		m.expanded.Width = rightW
+		m.expanded.Width = rightW - 3
 		m.expanded.Height = vpH
 	}
 }
@@ -322,8 +322,8 @@ func (m *TasksModel) loadSelectedDetail() {
 	m.expanded = &taskcard.ExpandedCard{
 		Item:          ti,
 		Theme:         m.theme,
-		Width:         rightW,
-		Height:        m.height - 4,
+		Width:         rightW - 3,
+		Height:        m.height - 2,
 		SubtaskCursor: prevCursor,
 		Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
 		PaneStatuses:  paneStatusSlice(m.paneStatuses),
@@ -399,7 +399,7 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.entries) {
 				task := m.entries[idx]
-				if zone.Get("move-task-btn").InBounds(msg) {
+				if zone.Get("task-move-btn").InBounds(msg) {
 					next := nextMoveStatus(task.Status)
 					m.statusMsg = "Task moved"
 					moveCmd := func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: next} }
@@ -409,20 +409,20 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 					}
 					return m, tea.Batch(moveCmd, taskStatusClearCmd())
 				}
-				if zone.Get("dispatch-task-btn").InBounds(msg) {
+				if zone.Get("task-dispatch-btn").InBounds(msg) {
 					m.statusMsg = "Task dispatched"
 					return m, tea.Batch(func() tea.Msg {
 						return DispatchTaskMsg{ID: task.ID, Title: task.Title}
 					}, taskStatusClearCmd())
 				}
-				if zone.Get("status-task-btn").InBounds(msg) {
+				if zone.Get("task-status-btn").InBounds(msg) {
 					next := nextStatus(task.Status)
 					m.statusMsg = "Status updated"
 					return m, tea.Batch(func() tea.Msg {
 						return SetStatusTaskMsg{ID: task.ID, Status: next}
 					}, taskStatusClearCmd())
 				}
-				if zone.Get("cancel-task-btn").InBounds(msg) {
+				if zone.Get("task-cancel-btn").InBounds(msg) {
 					m.statusMsg = "Task cancelled"
 					cancelCmd := func() tea.Msg { return CancelTaskMsg{ID: task.ID} }
 					bossCmd := func() tea.Msg { return BossCancelTaskBossMsg{ID: task.ID} }
@@ -1412,8 +1412,8 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		expanded = &taskcard.ExpandedCard{
 			Item:          ti,
 			Theme:         m.theme,
-			Width:         w - 4,
-			Height:        h - 4,
+			Width:         w - 3,
+			Height:        h - 2,
 			SubtaskCursor: -1,
 			Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
 			PaneStatuses:  paneStatusSlice(m.paneStatuses),
@@ -1423,12 +1423,12 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	}
 
 	// Sync dimensions to current layout
-	renderW := w - 4
+	renderW := w - 3
 	if renderW < 20 {
 		renderW = 20
 	}
 	expanded.Width = renderW
-	vpH := h - 4
+	vpH := h - 2
 	if vpH < 1 {
 		vpH = 1
 	}
@@ -1442,11 +1442,14 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 
 	displayed := m.detailViewport.View()
 
-	// Scroll hint
-	pct := m.detailViewport.ScrollPercent()
-	scrollHint := lipgloss.NewStyle().Foreground(t.Muted).Align(lipgloss.Right).Width(renderW - 2).
-		Render(fmt.Sprintf("%.0f%%", pct*100))
-	displayed += "\n" + scrollHint
+	// Scroll hint — only show when content overflows
+	if m.detailViewport.TotalLineCount() > m.detailViewport.Height {
+		pct := m.detailViewport.ScrollPercent()
+		scrollHint := lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).
+			Align(lipgloss.Right).Width(renderW).
+			Render(fmt.Sprintf("%.0f%%", pct*100))
+		displayed += "\n" + scrollHint
+	}
 
 	// Action buttons (only when detail focused and task selected)
 	if !m.leftFocused && len(m.entries) > 0 {
@@ -1455,31 +1458,23 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 			task := m.entries[idx]
 			var buttons []string
 			status := task.Status
+			btnStyle := func(bg lipgloss.AdaptiveColor) lipgloss.Style {
+				return lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(bg).Padding(0, 2)
+			}
 
-			// Move (m) — shown when status != done/cancelled
 			if status != "done" && status != "cancelled" {
-				moveStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Primary).Padding(0, 2)
-				buttons = append(buttons, zone.Mark("move-task-btn", moveStyle.Render("Move (m)")))
+				buttons = append(buttons, zone.Mark("task-move-btn", btnStyle(t.Primary).Render("Move (m)")))
 			}
-
-			// Dispatch (d) — shown when status is active
 			if status == "in_progress" || status == "active" || status == "pending" || status == "ready" {
-				dispatchStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Accent).Padding(0, 2)
-				buttons = append(buttons, zone.Mark("dispatch-task-btn", dispatchStyle.Render("Dispatch (d)")))
+				buttons = append(buttons, zone.Mark("task-dispatch-btn", btnStyle(t.Accent).Render("Dispatch (d)")))
 			}
-
-			// Status (s) — always shown
-			statusStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Muted).Padding(0, 2)
-			buttons = append(buttons, zone.Mark("status-task-btn", statusStyle.Render("Status (s)")))
-
-			// Cancel (x) — shown when status != cancelled
+			buttons = append(buttons, zone.Mark("task-status-btn", btnStyle(t.Muted).Render("Status (s)")))
 			if status != "cancelled" {
-				cancelStyle := lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(t.Danger).Padding(0, 2)
-				buttons = append(buttons, zone.Mark("cancel-task-btn", cancelStyle.Render("Cancel (x)")))
+				buttons = append(buttons, zone.Mark("task-cancel-btn", btnStyle(t.Danger).Render("Cancel (x)")))
 			}
 
 			if len(buttons) > 0 {
-				row := lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(buttons, "  "))
+				row := strings.Join(buttons, " ")
 				displayed += "\n" + lipgloss.NewStyle().Width(renderW).Align(lipgloss.Center).Render(row)
 			}
 		}
@@ -1488,7 +1483,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(h).
-		Padding(1, 2).
+		Padding(0, 1).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(borderColor)
