@@ -360,8 +360,6 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, phaseBanner)
 	}
 
-	sections = append(sections, styles.ThinSeparator(e.Theme, contentWidth))
-
 	// --- Status Timeline ---
 	if timeline := e.renderStatusTimeline(contentWidth); timeline != "" {
 		sections = append(sections, timeline)

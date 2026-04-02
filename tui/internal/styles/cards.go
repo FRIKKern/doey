@@ -155,15 +155,10 @@ func TypeTagCard(taskType string, t Theme) string {
 		Render("[" + taskType + "]")
 }
 
-// ExpandedCardStyle returns a full-width card frame for the expanded task view.
-// Uses a rounded border with status-colored left accent and subtle background.
+// ExpandedCardStyle returns a minimal frame for the expanded task view.
+// No border — the panel already has structural borders from the layout.
 func ExpandedCardStyle(theme Theme, status string, width int) lipgloss.Style {
-	border := accentBorder()
-
 	return lipgloss.NewStyle().
-		Border(border).
-		BorderForeground(theme.Separator).
-		BorderLeftForeground(theme.Separator).
 		Width(width).
 		Padding(0, 1)
 }
@@ -312,14 +307,13 @@ func ExpandedProgressBar(theme Theme, done int, total int, width int) string {
 	return fmt.Sprintf("%s %s", labelStyled, bar)
 }
 
-// DescriptionBlock renders task description text as calm body text with a
-// thin dim left border and slightly muted text color.
+// DescriptionBlock renders task description text with a faint dim left border.
 func DescriptionBlock(theme Theme, text string, width int) string {
 	if text == "" {
 		return ""
 	}
-	accent := lipgloss.NewStyle().Foreground(theme.Separator).Render("│")
-	contentWidth := width - 3 // accent + space + margin
+	accent := lipgloss.NewStyle().Foreground(theme.Subtle).Faint(true).Render("│")
+	contentWidth := width - 3
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
@@ -333,22 +327,16 @@ func DescriptionBlock(theme Theme, text string, width int) string {
 	for _, line := range strings.Split(wrapped, "\n") {
 		lines = append(lines, accent+" "+line)
 	}
-	return "\n" + strings.Join(lines, "\n")
+	return strings.Join(lines, "\n")
 }
 
-// SectionTitle renders a section header with a diamond prefix and bold label.
-// Clean typographic style — no background, no box.
+// SectionTitle renders a section header as bold muted label.
+// Clean typographic style — no prefix, no trailing newline.
 func SectionTitle(theme Theme, label string) string {
-	diamond := lipgloss.NewStyle().
+	return lipgloss.NewStyle().
 		Foreground(theme.Muted).
-		Render("◆")
-
-	title := lipgloss.NewStyle().
-		Foreground(theme.Text).
 		Bold(true).
 		Render(label)
-
-	return diamond + " " + title + "\n"
 }
 
 // ActivityEntry renders a single activity log entry: dim timestamp,
@@ -402,13 +390,12 @@ func MetaLine(theme Theme, label, value string) string {
 	return l + v
 }
 
-// NoteBlock renders notes text in a very subtle style with a dim left border
-// and muted italic text — clearly secondary information.
+// NoteBlock renders notes text with a very faint left border and muted italic text.
 func NoteBlock(theme Theme, text string, width int) string {
 	if text == "" {
 		return ""
 	}
-	accent := lipgloss.NewStyle().Foreground(theme.Separator).Render("│")
+	accent := lipgloss.NewStyle().Foreground(theme.Subtle).Faint(true).Render("│")
 	contentWidth := width - 3
 	if contentWidth < 10 {
 		contentWidth = 10

@@ -1,8 +1,6 @@
 package styles
 
 import (
-	"strings"
-
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -37,18 +35,12 @@ func HeaderStyle(t Theme) lipgloss.Style {
 		MarginBottom(1)
 }
 
-// ThickSeparator returns a "═" line of the given width, rendered in the Faint style.
+// ThickSeparator returns a subtle thin line, rendered in the Faint style.
 func ThickSeparator(t Theme, width int) string {
-	if width < 1 {
-		width = 1
-	}
-	return t.Faint.Render(strings.Repeat("═", width))
+	return ""
 }
 
-// ThinSeparator returns a "─" line of the given width, rendered in the Faint style.
+// ThinSeparator returns a blank line for minimal spacing.
 func ThinSeparator(t Theme, width int) string {
-	if width < 1 {
-		width = 1
-	}
-	return t.Faint.Render(strings.Repeat("─", width))
+	return ""
 }
