@@ -11,6 +11,9 @@ const (
 	Freelancer = "Freelancer"
 	InfoPanel = "Info Panel"
 	TestDriver = "Test Driver"
+	TaskReviewer = "Task Reviewer"
+	Deployment = "Deployment"
+	DoeyExpert = "Doey Expert"
 )
 
 // Internal IDs (stable, used in status files and logic)
@@ -22,6 +25,9 @@ const (
 	IDFreelancer = "freelancer"
 	IDInfoPanel = "info_panel"
 	IDTestDriver = "test_driver"
+	IDTaskReviewer = "task_reviewer"
+	IDDeployment = "deployment"
+	IDDoeyExpert = "doey_expert"
 )
 
 // File naming patterns (agent files, skill dirs)
@@ -31,4 +37,7 @@ const (
 	FileBoss = "doey-boss"
 	FileWorker = "doey-worker"
 	FileFreelancer = "doey-freelancer"
+	FileTaskReviewer = "doey-task-reviewer"
+	FileDeployment = "doey-deployment"
+	FileDoeyExpert = "doey-doey-expert"
 )

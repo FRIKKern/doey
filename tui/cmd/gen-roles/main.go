@@ -24,8 +24,11 @@ var shellKeyToGo = map[string]string{
 	"BOSS":        "Boss",
 	"WORKER":      "Worker",
 	"FREELANCER":  "Freelancer",
-	"INFO_PANEL":  "InfoPanel",
-	"TEST_DRIVER": "TestDriver",
+	"INFO_PANEL":    "InfoPanel",
+	"TEST_DRIVER":   "TestDriver",
+	"TASK_REVIEWER": "TaskReviewer",
+	"DEPLOYMENT":    "Deployment",
+	"DOEY_EXPERT":   "DoeyExpert",
 }
 
 // Ordered keys so output is deterministic.
@@ -37,6 +40,9 @@ var keyOrder = []string{
 	"FREELANCER",
 	"INFO_PANEL",
 	"TEST_DRIVER",
+	"TASK_REVIEWER",
+	"DEPLOYMENT",
+	"DOEY_EXPERT",
 }
 
 func main() {
