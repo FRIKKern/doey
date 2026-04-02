@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -102,6 +103,7 @@ func touchTrigger(runtimeDir, paneSafe string) {
 func main() {
 	runtimeDir := flag.String("runtime", "", "Runtime directory (required)")
 	projectDir := flag.String("project-dir", "", "Project directory (required)")
+	sessionName := flag.String("session", "", "Tmux session name (required for judgment escalation)")
 	bossPaneSafe := flag.String("boss-pane", "", "Boss pane safe name (default: derived from session)")
 	pollInterval := flag.Duration("poll-interval", 2*time.Second, "Polling interval for trigger dir")
 	flag.Parse()
@@ -111,12 +113,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Derive session name from runtime dir if not provided
+	if *sessionName == "" {
+		// Convention: runtime dir base is project name, session is "doey-<project>"
+		base := filepath.Base(*runtimeDir)
+		*sessionName = "doey-" + base
+	}
+
 	// Derive boss pane safe name if not provided
 	if *bossPaneSafe == "" {
-		// Convention: session name is the runtime dir's base name with dashes replaced
-		// Boss is always pane 0.1 → safe name = session_0_1
-		base := filepath.Base(*runtimeDir)
-		safe := strings.ReplaceAll(base, "-", "_")
+		safe := strings.ReplaceAll(*sessionName, "-", "_")
 		safe = strings.ReplaceAll(safe, ".", "_")
 		*bossPaneSafe = safe + "_0_1"
 	}
@@ -169,12 +175,12 @@ func main() {
 			log.Printf("doey-router: shutdown complete")
 			return
 		case <-ticker.C:
-			processTriggers(triggerDir, dbPath, *runtimeDir, *bossPaneSafe, traceFile)
+			processTriggers(triggerDir, dbPath, *runtimeDir, *bossPaneSafe, *sessionName, traceFile)
 		}
 	}
 }
 
-func processTriggers(triggerDir, dbPath, runtimeDir, bossPaneSafe string, traceFile *os.File) {
+func processTriggers(triggerDir, dbPath, runtimeDir, bossPaneSafe, sessionName string, traceFile *os.File) {
 	entries, err := os.ReadDir(triggerDir)
 	if err != nil {
 		// Trigger dir might not exist yet — not an error
@@ -193,7 +199,7 @@ func processTriggers(triggerDir, dbPath, runtimeDir, bossPaneSafe string, traceF
 		log.Printf("doey-router: trigger for pane=%s", paneSafe)
 
 		// Process messages from DB
-		processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe, traceFile)
+		processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe, sessionName, traceFile)
 
 		// Delete trigger file after processing
 		if err := os.Remove(triggerPath); err != nil {
@@ -202,7 +208,7 @@ func processTriggers(triggerDir, dbPath, runtimeDir, bossPaneSafe string, traceF
 	}
 }
 
-func processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe string, traceFile *os.File) {
+func processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe, sessionName string, traceFile *os.File) {
 	// Check DB exists
 	if _, err := os.Stat(dbPath); err != nil {
 		log.Printf("doey-router: no DB at %s, skipping message read", dbPath)
@@ -234,10 +240,7 @@ func processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe string, traceFil
 		if class == classRoutine {
 			handleRoutine(s, &m, runtimeDir, bossPaneSafe, traceFile)
 		} else {
-			writeTrace(traceFile, traceEntry{
-				Event: "judgment", From: m.FromPane, Subject: m.Subject,
-				Action: "pending", Detail: "escalated to " + bossPaneSafe,
-			})
+			handleJudgment(s, &m, runtimeDir, sessionName, traceFile)
 		}
 
 		if err := s.MarkRead(m.ID); err != nil {
@@ -389,6 +392,95 @@ func handlePhaseComplete(s *store.Store, m *store.Message, runtimeDir string, tr
 		log.Printf("doey-router: phase_complete task=%d final phase %d/%d done",
 			taskID, t.CurrentPhase, t.TotalPhases)
 	}
+}
+
+// decisionNeeded maps subject keywords to concise action descriptions.
+func decisionNeeded(subject string) string {
+	lower := strings.ToLower(subject)
+	switch {
+	case strings.Contains(lower, "error"):
+		return "resolve error and decide retry/skip/escalate"
+	case strings.Contains(lower, "question"):
+		return "answer question from worker"
+	case strings.Contains(lower, "permission_request"):
+		return "grant or deny permission"
+	case strings.Contains(lower, "conflict"):
+		return "resolve file/resource conflict"
+	case strings.Contains(lower, "blocked"):
+		return "unblock worker — dependency or resource issue"
+	case strings.Contains(lower, "escalation"):
+		return "handle escalation from team"
+	case strings.Contains(lower, "new_task"):
+		return "review and approve new task"
+	default:
+		return "review and decide next action"
+	}
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
+}
+
+func handleJudgment(s *store.Store, m *store.Message, runtimeDir, sessionName string, traceFile *os.File) {
+	taskID, hasTask := parseTaskID(m.Body)
+	if !hasTask {
+		taskID, hasTask = parseTaskID(m.Subject)
+	}
+
+	// Log event
+	var taskIDPtr *int64
+	if hasTask {
+		taskIDPtr = &taskID
+	}
+	s.LogEvent(&store.Event{
+		Type:   "judgment_escalation",
+		Source: m.FromPane,
+		Target: "taskmaster",
+		TaskID: taskIDPtr,
+		Data:   m.Subject,
+	})
+
+	// Build escalation text
+	decision := decisionNeeded(m.Subject)
+	bodySnippet := truncate(strings.ReplaceAll(m.Body, "\n", " "), 200)
+
+	var sb strings.Builder
+	if hasTask {
+		fmt.Fprintf(&sb, "ROUTER ESCALATION: [%s] for task %d", m.Subject, taskID)
+	} else {
+		fmt.Fprintf(&sb, "ROUTER ESCALATION: [%s]", m.Subject)
+	}
+	fmt.Fprintf(&sb, " | From: %s", m.FromPane)
+
+	if hasTask {
+		t, err := s.GetTask(taskID)
+		if err == nil {
+			fmt.Fprintf(&sb, " | Context: %s | status=%s | team=%s | phase=%d/%d",
+				t.Title, t.Status, t.Team, t.CurrentPhase, t.TotalPhases)
+		}
+	}
+
+	fmt.Fprintf(&sb, " | Message: %s", bodySnippet)
+	fmt.Fprintf(&sb, " | Decision needed: %s", decision)
+
+	escalationText := sb.String()
+
+	// Wake Taskmaster via tmux send-keys (pane 0.2)
+	target := sessionName + ":0.2"
+	cmd := exec.Command("tmux", "send-keys", "-t", target, escalationText, "Enter")
+	if err := cmd.Run(); err != nil {
+		log.Printf("doey-router: tmux send-keys to %s failed: %v", target, err)
+	}
+
+	writeTrace(traceFile, traceEntry{
+		Event: "judgment_escalation", From: m.FromPane, Subject: m.Subject,
+		TaskID: taskID, Action: "escalate", Detail: decision,
+	})
+	log.Printf("doey-router: judgment escalated to Taskmaster subject=%q from=%s task=%d",
+		m.Subject, m.FromPane, taskID)
 }
 
 func handleStatusReport(s *store.Store, m *store.Message, traceFile *os.File) {
