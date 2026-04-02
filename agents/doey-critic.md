@@ -29,13 +29,13 @@ No issues → just `**Verdict:** PASS`.
 
 ## Regression Harness
 
-**Golden tasks:** (1) fresh install, (2) `doey` launch, (3) dispatch→worker, (4) worker edits .sh (lint fires), (5) SM detects stuck pane, (6) `doey stop` cleanup, (7) `doey doctor` passes.
+**Golden tasks:** (1) fresh install, (2) `doey` launch, (3) dispatch→worker, (4) worker edits .sh (lint fires), (5) Taskmaster detects stuck pane, (6) `doey stop` cleanup, (7) `doey doctor` passes.
 
 **Quick validation:** `bash -n shell/doey.sh`, `tests/test-bash-compat.sh`, `doey doctor`, verify install.sh copies all files.
 
 ## Watchlist
 
-**Top 5:** pane addressing (18+), install gaps (12+), SM scan loops (10+), bash 3.2 (8+), race conditions (8+).
+**Top 5:** pane addressing (18+), install gaps (12+), Taskmaster scan loops (10+), bash 3.2 (8+), race conditions (8+).
 
 **Easy to miss:** `send-keys "q"` in copy-mode is load-bearing. `declare -A` works in bash 5 but breaks macOS. Hook exit 1 vs 2. `*.task 2>/dev/null` = zsh error. `--settings` overlays are ephemeral.
 

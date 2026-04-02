@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. Run `doey` in any project directory to get a coordinated grid — Boss (user intent), Session Manager (coordination), Managers (planning), Workers (execution). Starts small, grows on demand. Entry point: `shell/doey.sh` → `~/.local/bin/doey`.
+Doey is a CLI tool that creates tmux-based multi-agent Claude Code teams. Run `doey` in any project directory to get a coordinated grid — Boss (user intent), Taskmaster (coordination), Subtaskmasters (planning), Workers (execution). Starts small, grows on demand. Entry point: `shell/doey.sh` → `~/.local/bin/doey`.
 
 ## ALWAYS DO THESE THINGS
 
@@ -36,14 +36,14 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
 | Boss | `0.1` | User-facing Project Manager. Receives user intent, manages tasks, reports results |
-| Session Manager | `0.2` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work. Not user-facing — users interact via Boss |
+| Taskmaster | `0.2` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work. Not user-facing — users interact via Boss |
 | ~~Watchdog~~ | `0.3+` | DEPRECATED — inactive, hook files retained for reference |
-| Window Manager | `W.0` | Plans, delegates, validates all context. Never writes code |
+| Subtaskmaster | `W.0` | Plans, delegates, validates all context. Never writes code |
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
 | Test Driver | external | E2E test runner via `doey test` |
 
-**Communication:** User → Boss → SM (relay) | SM → Manager → Workers (dispatch) | Workers → Manager (stop hooks) | Manager → SM (cross-team)
+**Communication:** User → Boss → Taskmaster (relay) | Taskmaster → Subtaskmaster → Workers (dispatch) | Workers → Subtaskmaster (stop hooks) | Subtaskmaster → Taskmaster (cross-team)
 
 **Runtime:** `/tmp/doey/<project>/` — ephemeral, clears on reboot
 
@@ -51,8 +51,8 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 
 | Role | Blocked |
 |------|---------|
-| Window Manager | Read/Edit/Write/Glob/Grep on project source; Agent; implementation work (send-keys allowed) |
-| Session Manager | Read/Edit/Write/Glob/Grep on project source; Agent |
+| Subtaskmaster | Read/Edit/Write/Glob/Grep on project source; Agent; implementation work (send-keys allowed) |
+| Taskmaster | Read/Edit/Write/Glob/Grep on project source; Agent |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
 | Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
 
@@ -61,6 +61,7 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 - **Strategic utilization over brute-force parallelism.** Fewer workers used well beat many used carelessly
 - **The Manager is the bastion.** Workers produce raw output — Manager validates, distills, and decides what becomes knowledge
 - **Force multipliers over headcount:** ultrathink, `/batch`, `/doey-research`, agent swarms. Scale only when parallelism genuinely helps
+- **Task-obsessed naming.** Our coordinator is the Taskmaster, not a manager. Teams are led by Subtaskmasters. Never abbreviate — always use the full name
 
 ## Project Layout
 
@@ -87,10 +88,10 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 | `post-tool-lint.sh` | After Write/Edit on .sh | Bash 3.2 compatibility lint (catches violations automatically) |
 | `stop-status.sh` | On stop (sync) | Sets FINISHED/RESERVED status, blocks incomplete research |
 | `stop-results.sh` | On stop (async) | Captures output, files changed, tool counts → JSON result |
-| `stop-notify.sh` | On stop (async) | Notification chain: Worker → Manager → Session Manager → desktop |
+| `stop-notify.sh` | On stop (async) | Notification chain: Worker → Subtaskmaster → Taskmaster → desktop |
 | ~~`watchdog-scan.sh`~~ | Watchdog cycle | DEPRECATED |
 | ~~`watchdog-wait.sh`~~ | Watchdog idle | DEPRECATED |
-| `session-manager-wait.sh` | SM idle | Multi-trigger sleep: messages, results, crash alerts |
+| `taskmaster-wait.sh` | Taskmaster idle | Multi-trigger sleep: messages, results, crash alerts |
 
 Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 
@@ -98,7 +99,7 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 
 - **Agents:** YAML frontmatter in `agents/` (name, model, color, memory, description)
 - **Skills:** YAML frontmatter in `.claude/skills/<name>/SKILL.md`
-- **Naming:** sessions `doey-<project>`, runtime `/tmp/doey/<project>/`
+- **Naming:** sessions `doey-<project>`, runtime `/tmp/doey/<project>/`. Always "Taskmaster" and "Subtaskmaster" — never SM, TM, WM, or other abbreviations
 
 ## Testing Changes
 

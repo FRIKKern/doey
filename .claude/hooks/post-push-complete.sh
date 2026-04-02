@@ -4,7 +4,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_named_hook "post-push-complete"
 
-[ "${DOEY_ROLE:-}" = "session_manager" ] || exit 0
+[ "${DOEY_ROLE:-}" = "taskmaster" ] || exit 0
 
 case "$(_parse_tool_field tool_name)" in Bash) ;; *) exit 0 ;; esac
 

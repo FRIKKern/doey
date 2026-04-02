@@ -46,11 +46,11 @@ ROLE="worker"
 TEAM_WINDOW="$WINDOW_INDEX"
 
 if [ "$WINDOW_INDEX" = "0" ]; then
-  sm_val=$(_read_team_key "$SESSION_ENV" SM_PANE)
+  sm_val=$(_read_team_key "$SESSION_ENV" TASKMASTER_PANE)
   case "$PANE_INDEX" in
     0) ROLE="info_panel" ;;
     1) ROLE="boss" ;;
-    *) [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ] && ROLE="session_manager" ;;
+    *) [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ] && ROLE="taskmaster" ;;
   esac
 else
   _team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
@@ -66,7 +66,7 @@ PROJECT_ACRONYM=$(_read_team_key "$SESSION_ENV" PROJECT_ACRONYM)
 
 case "$ROLE" in
   boss)            PANE_ID="boss" ;;
-  session_manager) PANE_ID="sm" ;;
+  taskmaster) PANE_ID="taskmaster" ;;
   info_panel)      PANE_ID="info" ;;
   manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
   worker)
@@ -149,7 +149,7 @@ _TITLE=""
 case "$ROLE" in
   boss)            _TITLE="${PROJECT_NAME} Boss" ;;
   manager)         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} Mgr" ;;
-  session_manager) _TITLE="${PROJECT_NAME} SM" ;;
+  taskmaster) _TITLE="${PROJECT_NAME} Taskmaster" ;;
   worker)          _TITLE=$([ "${_team_type:-}" = "freelancer" ] && echo "Freelancer" || echo "Worker") ;;
 esac
 [ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} | ${_TITLE}"

@@ -72,18 +72,18 @@ fi
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
 write_activity "status_change" "{\"status\":\"${STOP_STATUS}\"}"
 
-notify_sm "$STOP_STATUS"
+notify_taskmaster "$STOP_STATUS"
 
-if is_session_manager; then
+if is_taskmaster; then
   (
     sleep 3
-    _sm_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-    if [ -f "$_sm_status_file" ]; then
-      case "$(head -1 "$_sm_status_file" 2>/dev/null || true)" in
+    _taskmaster_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+    if [ -f "$_taskmaster_status_file" ]; then
+      case "$(head -1 "$_taskmaster_status_file" 2>/dev/null || true)" in
         *BUSY*) exit 0 ;;
       esac
     fi
-    touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
+    touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
     touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
   ) &
 fi

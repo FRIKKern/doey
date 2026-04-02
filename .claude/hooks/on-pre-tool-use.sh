@@ -87,7 +87,7 @@ _check_blocked() {
   cmd=$(echo "$cmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -s ' ')
   case "$cmd" in
     *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
-      MSG="git write operations (git commit/push, gh pr). Send a message to Session Manager with what you need committed" ;;
+      MSG="git write operations (git commit/push, gh pr). Send a message to Taskmaster with what you need committed" ;;
     *"shutdown"*|*"reboot"*)
       MSG="system commands" ;;
     *"tmux kill-session"*|*"tmux kill-server"*|*"tmux send-keys"*)
@@ -127,8 +127,8 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
     case "$_di_pi" in
       1) _DOEY_ROLE="boss" ;;
       0) _DOEY_ROLE="info_panel" ;;
-      *) _sm_p=$(_rk SM_PANE "${_RD}/session.env")
-         [ "0.${_di_pi}" = "${_sm_p:-0.2}" ] && _DOEY_ROLE="session_manager" ;;
+      *) _taskmaster_p=$(_rk TASKMASTER_PANE "${_RD}/session.env")
+         [ "0.${_di_pi}" = "${_taskmaster_p:-0.2}" ] && _DOEY_ROLE="taskmaster" ;;
     esac
   else
     _di_tt=$(_rk TEAM_TYPE "${_RD}/team_${_di_wi}.env")
@@ -169,12 +169,12 @@ if [ "$_DOEY_ROLE" = "boss" ] && [ "$TOOL_NAME" = "Bash" ]; then
     _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
     case "$_boss_target" in
       *:0.2|*_0_2*|0.2)
-        _dbg_write "allow_boss_sendkeys_sm"
+        _dbg_write "allow_boss_sendkeys_taskmaster"
         ;; # fall through to boss exit 0
       *)
-        _log_block "TOOL_BLOCKED" "Boss send-keys to non-SM pane blocked" "$_BOSS_CMD"
+        _log_block "TOOL_BLOCKED" "Boss send-keys to non-Taskmaster pane blocked" "$_BOSS_CMD"
         _dbg_write "block_boss_sendkeys_${_boss_target}"
-        echo "BLOCKED: Boss may only send-keys to SM pane (0.2)" >&2
+        echo "BLOCKED: Boss may only send-keys to Taskmaster pane (0.2)" >&2
         exit 2 ;;
     esac
   ;; esac
@@ -196,13 +196,13 @@ if [ -n "${_RD:-}" ]; then
   esac
 fi
 
-if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
+if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Agent)
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
       _dbg_write "block_${_DOEY_ROLE}_agent"
       case "$_DOEY_ROLE" in
-        boss) echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Session Manager instead." >&2 ;;
+        boss) echo "BLOCKED: Boss cannot spawn agents. Relay tasks to Taskmaster instead." >&2 ;;
         *)    echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2 ;;
       esac
       exit 2 ;;
@@ -218,8 +218,8 @@ if { [ "$_DOEY_ROLE" = "boss" ] || [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_RO
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} $TOOL_NAME on project source blocked" "${_CHK_PATH:-project root}"
       _dbg_write "block_${_DOEY_ROLE}_source_${TOOL_NAME}"
       case "$_DOEY_ROLE" in
-        boss)            _advice="Relay file operations to Session Manager" ;;
-        session_manager) _advice="Coordinate workers to handle file operations" ;;
+        boss)            _advice="Relay file operations to Taskmaster" ;;
+        taskmaster) _advice="Coordinate workers to handle file operations" ;;
         *)               _advice="Delegate file operations to workers" ;;
       esac
       echo "BLOCKED: Cannot $TOOL_NAME project source files. ${_advice}." >&2
@@ -271,7 +271,7 @@ if [ "$_DOEY_ROLE" = "manager" ] && [ "$TOOL_NAME" = "Bash" ]; then
   esac
 fi
 
-if [ "$_DOEY_ROLE" != "session_manager" ]; then
+if [ "$_DOEY_ROLE" != "taskmaster" ]; then
   if [ -n "$_BASH_CMD" ] && [ "$_BASH_CMD" != "__PARSE_FAILED__" ]; then
     case "$_BASH_CMD" in
       *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
@@ -279,16 +279,16 @@ if [ "$_DOEY_ROLE" != "session_manager" ]; then
         _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
         if [ "$_DOEY_ROLE" = "worker" ]; then
           _escalate_permission "Bash" "$_BASH_CMD" "git write operations blocked for workers"
-          echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager. Manager notified — it may approve this for you." >&2
+          echo "BLOCKED: Git operations are handled by Taskmaster. Send a task_complete message to your Manager. Manager notified — it may approve this for you." >&2
         else
-          echo "BLOCKED: Git operations are handled by Session Manager. Send a task_complete message to your Manager." >&2
+          echo "BLOCKED: Git operations are handled by Taskmaster. Send a task_complete message to your Manager." >&2
         fi
         exit 2 ;;
     esac
   fi
 fi
 
-if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
+if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "taskmaster" ]; then
   _CMD=$(echo "$_BASH_CMD" | sed 's/^[[:space:]]*//')
   case "$_CMD" in
     "tmux send-keys"*"/rename"*|*"&& tmux send-keys"*"/rename"*|*"; tmux send-keys"*"/rename"*)
@@ -331,7 +331,7 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
     fi
   ;; esac
 
-  if [ "$_DOEY_ROLE" = "session_manager" ]; then
+  if [ "$_DOEY_ROLE" = "taskmaster" ]; then
     case "$_CMD" in
       "tmux send-keys"*|"tmux paste-buffer"*|"tmux load-buffer"*)
         _tgt_window=""
@@ -348,9 +348,9 @@ if [ "$_DOEY_ROLE" = "manager" ] || [ "$_DOEY_ROLE" = "session_manager" ]; then
             done
           fi
           if [ "$_has_active" = false ]; then
-            _log_block "TOOL_BLOCKED" "SM dispatch without active .task file" "$_CMD"
-            _dbg_write "block_sm_no_task"
-            echo "BLOCKED: Create a .task file before dispatching work. Without active tasks in .doey/tasks/, SM will be put to sleep by the wait hook." >&2
+            _log_block "TOOL_BLOCKED" "Taskmaster dispatch without active .task file" "$_CMD"
+            _dbg_write "block_taskmaster_no_task"
+            echo "BLOCKED: Create a .task file before dispatching work. Without active tasks in .doey/tasks/, Taskmaster will be put to sleep by the wait hook." >&2
             exit 2
           fi
         fi ;;
@@ -365,15 +365,15 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
   TOOL_COMMAND="$_BASH_CMD"
   [ -z "$TOOL_COMMAND" ] && exit 0
   [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
-  # Exception: workers may send-keys to the Session Manager pane
+  # Exception: workers may send-keys to the Taskmaster pane
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
     if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
-      _sm_pane=$(_rk SM_PANE "${_rtd}/session.env"); [ -z "$_sm_pane" ] && _sm_pane="0.2"
+      _taskmaster_pane=$(_rk TASKMASTER_PANE "${_rtd}/session.env"); [ -z "$_taskmaster_pane" ] && _taskmaster_pane="0.2"
       _sn="${SESSION_NAME:-}"; [ -z "$_sn" ] && _sn=$(_rk SESSION_NAME "${_rtd}/session.env")
       case "$TOOL_COMMAND" in
-        *"-t"*"${_sn}:${_sm_pane}"*|*"-t"*"${_sm_pane}"*)
-          _dbg_write "allow_worker_sendkeys_sm"; exit 0 ;;
+        *"-t"*"${_sn}:${_taskmaster_pane}"*|*"-t"*"${_taskmaster_pane}"*)
+          _dbg_write "allow_worker_sendkeys_taskmaster"; exit 0 ;;
       esac
     fi
   ;; esac
@@ -381,7 +381,7 @@ if [ "$_DOEY_ROLE" = "worker" ]; then
     _log_block "TOOL_BLOCKED" "Worker $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
     _escalate_permission "Bash" "$TOOL_COMMAND" "Worker blocked: $MSG"
-    echo "BLOCKED: Workers cannot run ${MSG}. Only the Window Manager can do this. Manager notified — it may approve this for you." >&2
+    echo "BLOCKED: Workers cannot run ${MSG}. Only the Subtaskmaster can do this. Manager notified — it may approve this for you." >&2
     exit 2
   fi
   _dbg_write "allow_worker"

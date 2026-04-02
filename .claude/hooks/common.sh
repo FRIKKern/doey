@@ -188,9 +188,9 @@ is_manager() {
   return "$_DOEY_IS_MGR"
 }
 
-is_session_manager() {
+is_taskmaster() {
   [ "$WINDOW_INDEX" != "0" ] && return 1
-  [ "${PANE#*:}" = "$(get_sm_pane)" ]
+  [ "${PANE#*:}" = "$(get_taskmaster_pane)" ]
 }
 
 is_boss() {
@@ -202,10 +202,10 @@ is_worker() {
   ! is_manager
 }
 
-get_sm_pane() {
+get_taskmaster_pane() {
   if [ -f "${RUNTIME_DIR}/session.env" ]; then
     local val
-    val=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
+    val=$(_read_team_key "${RUNTIME_DIR}/session.env" TASKMASTER_PANE)
     [ -n "$val" ] && { echo "$val"; return; }
   fi
   echo "0.2"
@@ -255,7 +255,7 @@ write_activity() {  # Append JSONL activity event: write_activity <event> <data_
     >> "${activity_dir}/${pane_safe}.jsonl" 2>/dev/null
 }
 
-notify_sm() {  # Lifecycle event -> SM wake trigger
+notify_taskmaster() {  # Lifecycle event -> Taskmaster wake trigger
   local status="${1:-}" detail="${2:-}"
   local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
   [ -z "$team_w" ] && return 0
@@ -263,7 +263,7 @@ notify_sm() {  # Lifecycle event -> SM wake trigger
   mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0
   printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" \
     > "${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt" 2>/dev/null
-  touch "${RUNTIME_DIR}/status/sm_trigger" 2>/dev/null
+  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null
 }
 
 _send_desktop_notification() {  # Low-level, no role check, no cooldown

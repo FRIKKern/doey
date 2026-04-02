@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop hook: unified notification dispatch (async)
-# Worker→Manager, Manager→SM, SM→Boss, Boss→desktop
+# Worker→Subtaskmaster, Subtaskmaster→Taskmaster, Taskmaster→Boss, Boss→desktop
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_named_hook "stop-notify"
@@ -92,7 +92,7 @@ ${summary}"
   done
 }
 
-_wake_sm() { tmux send-keys -t "${SESSION_NAME}:${SM_PANE:-0.2}" "" 2>/dev/null || true; }
+_wake_taskmaster() { tmux send-keys -t "${SESSION_NAME}:${TASKMASTER_PANE:-0.2}" "" 2>/dev/null || true; }
 
 if is_worker; then
   _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
@@ -134,8 +134,8 @@ if is_worker; then
   LAST_MSG=$(parse_field "last_assistant_message")
 
   if [ "$_team_type" = "freelancer" ]; then
-    _sm_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" SM_PANE)
-    _target="$SESSION_NAME:${_sm_pane:-0.2}"
+    _taskmaster_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" TASKMASTER_PANE)
+    _target="$SESSION_NAME:${_taskmaster_pane:-0.2}"
     _subject="freelancer_finished"
   else
     _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
@@ -160,10 +160,10 @@ if is_worker; then
 </task-notification>"
   _notify_pane "$_target" "$_subject" "$MSG"
   _debug_sent "$_target" "$_subject"
-  { [ "$_team_type" = "freelancer" ] && touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null; } || true
+  { [ "$_team_type" = "freelancer" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
   _log "stop-notify: sent ${_subject} to ${_target}"
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"
-  _wake_sm
+  _wake_taskmaster
   exit 0
 fi
 
@@ -173,21 +173,21 @@ if is_manager; then
   _cur=$(grep '^STATUS:' "$STATUS_FILE" 2>/dev/null | head -1)
   [ "${_cur#STATUS: }" = "BUSY" ] || exit 0
 
-  SM_PANE=$(get_sm_pane)
-  _pane_alive "$SESSION_NAME:${SM_PANE}" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$SESSION_NAME:${SM_PANE}"; exit 0; }
+  TASKMASTER_PANE=$(get_taskmaster_pane)
+  _pane_alive "$SESSION_NAME:${TASKMASTER_PANE}" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$SESSION_NAME:${TASKMASTER_PANE}"; exit 0; }
 
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
-  _notify_pane "$SESSION_NAME:${SM_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
-  _debug_sent "$SESSION_NAME:${SM_PANE}" "task_complete"
-  touch "${RUNTIME_DIR}/status/session_manager_trigger" 2>/dev/null || true
-  _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${SM_PANE}"
-  _wake_sm
+  _notify_pane "$SESSION_NAME:${TASKMASTER_PANE}" "task_complete" "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}"
+  _debug_sent "$SESSION_NAME:${TASKMASTER_PANE}" "task_complete"
+  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
+  _log "stop-notify: sent task_complete to session manager at $SESSION_NAME:${TASKMASTER_PANE}"
+  _wake_taskmaster
   exit 0
 fi
 
-if is_session_manager; then
+if is_taskmaster; then
   LAST_MSG=$(parse_field "last_assistant_message")
   [ -z "$LAST_MSG" ] && exit 0
   _is_spam "$LAST_MSG" && exit 0
@@ -195,9 +195,9 @@ if is_session_manager; then
   BOSS_TARGET="$SESSION_NAME:0.1"
   if _pane_alive "$BOSS_TARGET"; then
     SUMMARY=$(sanitize_message "$LAST_MSG" 150)
-    _notify_pane "$BOSS_TARGET" "sm_update" "SM update: ${SUMMARY}"
-    _debug_sent "$BOSS_TARGET" "sm_update"
-    _log "stop-notify: sent sm_update to Boss at $BOSS_TARGET"
+    _notify_pane "$BOSS_TARGET" "taskmaster_update" "Taskmaster update: ${SUMMARY}"
+    _debug_sent "$BOSS_TARGET" "taskmaster_update"
+    _log "stop-notify: sent taskmaster_update to Boss at $BOSS_TARGET"
   fi
 fi
 
