@@ -11,7 +11,7 @@ description: Spawn a team from a .team.md definition file. Usage: /doey-add-team
 
 ## Prompt
 
-Spawn a team from a `.team.md` file. **No confirmation. SM/Manager only.**
+Spawn a team from a `.team.md` file. **No confirmation. Taskmaster/Subtaskmaster only.**
 
 ### .team.md Format
 

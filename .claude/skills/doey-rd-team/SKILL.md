@@ -107,7 +107,7 @@ Run a Doey R&D audit on the live codebase. 3 specialist workers:
 - Pane 3 (Critic): bash -n, frontmatter, tests/, docs accuracy
 Phase 1: Dispatch in parallel. Check errors.log + `git log --oneline -10`.
 Phase 2: Consolidate. Each specialist proposes fixes. Critic reviews.
-Phase 3: Implement (one file per specialist). Report to SM.
+Phase 3: Implement (one file per specialist). Report to Taskmaster.
 ```
 
 Output: window, layout, boot status. Teardown: `/doey-kill-window ${NEW_WIN}`.

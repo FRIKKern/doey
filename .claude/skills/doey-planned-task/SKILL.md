@@ -129,7 +129,7 @@ with open(os.path.join(td, '${TASK_ID}.json'), 'w') as f: json.dump(data, f, ind
 
 ### 6. Dispatch to Taskmaster
 
-Send message to SM to pick up the new task:
+Send message to Taskmaster to pick up the new task:
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep '^SESSION_NAME=' "$RD/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')

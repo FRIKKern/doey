@@ -34,7 +34,7 @@ task_subtask_add "$PD" "$TASK_ID" "Subtask title"
 
 ### 3. Dispatch to Taskmaster
 
-Send message to SM for routing:
+Send message to Taskmaster for routing:
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(grep '^SESSION_NAME=' "$RD/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
