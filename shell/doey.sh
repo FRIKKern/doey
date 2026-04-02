@@ -283,9 +283,9 @@ DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
 # Defaults are conservative to avoid Claude API rate-limit errors on session start.
 # Lower only if your account has high rate limits and you need faster boots.
 DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-1}"
-DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-5}"
-DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
-DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-8}"
+DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-2}"
+DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-1}"
+DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-2}"
 
 # Dynamic Grid Behavior
 DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
@@ -326,14 +326,26 @@ _maybe_start_tunnel() {
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
-# Read a key=value from an env file, stripping quotes.
-# Usage: _env_val <file> <KEY>
+# Read a key=value from an env file, stripping quotes.  Pure bash — no forks.
+# Usage: _env_val <file> <KEY> [default]
 _env_val() {
-  local v default="${3:-}"
-  v=$(grep "^${2}=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true
-  v="${v//\"/}"
-  [ -z "$v" ] && [ -n "$default" ] && v="$default"
-  echo "$v"
+  local _ev_file="$1" _ev_key="$2" _ev_default="${3:-}" _ev_line
+  if [ ! -f "$_ev_file" ]; then
+    [ -n "$_ev_default" ] && printf '%s\n' "$_ev_default"
+    return 0
+  fi
+  while IFS= read -r _ev_line || [ -n "$_ev_line" ]; do
+    case "$_ev_line" in
+      "${_ev_key}="*)
+        _ev_line="${_ev_line#*=}"
+        _ev_line="${_ev_line//\"/}"
+        printf '%s\n' "$_ev_line"
+        return 0
+        ;;
+    esac
+  done < "$_ev_file"
+  [ -n "$_ev_default" ] && printf '%s\n' "$_ev_default"
+  return 0
 }
 
 # Read per-team config: _read_team_config <team_num> <property> <default>
@@ -1014,7 +1026,7 @@ _kill_doey_session() {
       kill -- -"$pane_pid" 2>/dev/null || true
     fi
   done
-  sleep 1
+  sleep 0.3
   # Kill the tmux session
   tmux kill-session -t "$session" < /dev/null 2>/dev/null || true
   # Clean up worktrees + runtime dir
@@ -1921,7 +1933,7 @@ MANIFEST
     done
   done
 
-  sleep 0.5
+  sleep 0.1
   local actual
   actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
   [[ "$actual" -ne "$total" ]] && \
@@ -2105,12 +2117,12 @@ _kill_pane_child() {
   child=$(pgrep -P "$shell_pid" 2>/dev/null || true)
   [ -z "$child" ] && return 0
   kill "$child" 2>/dev/null || true
-  sleep 2
+  sleep 0.5
   for (( attempt=0; attempt<max; attempt++ )); do
     child=$(pgrep -P "$shell_pid" 2>/dev/null || true)
     [ -z "$child" ] && return 0
     kill -9 "$child" 2>/dev/null || true
-    sleep 1
+    sleep 0.1
   done
   return 0
 }
@@ -3018,7 +3030,7 @@ reload_session() {
     if _kill_pane_child "$mgr_ref"; then
       tmux copy-mode -q -t "$mgr_ref" 2>/dev/null || true
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
-      sleep 0.5
+      sleep 0.2
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
       local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
       _append_settings _rl_mgr_cmd "$runtime_dir"
@@ -3061,7 +3073,7 @@ reload_session() {
         _kill_pane_child "$pane_ref" 1 || true
         tmux copy-mode -q -t "$pane_ref" 2>/dev/null || true
         tmux send-keys -t "$pane_ref" "clear" Enter 2>/dev/null || true
-        sleep 0.5
+        sleep 0.2
 
         local w_name
         w_name=$(tmux display-message -t "$pane_ref" -p '#{pane_title}' 2>/dev/null || echo "T${tw} W${wp}")
@@ -3693,7 +3705,7 @@ MANIFEST
 
   # Background subshell: spawn remaining teams + send briefings
   (
-    sleep 1  # Let attach happen first
+    sleep 0.3  # Let attach happen first
 
     # ── Spawn remaining teams (T2+) ──
     if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
@@ -4146,7 +4158,7 @@ doey_remove_column() {
     pane_pid=$(tmux display-message -t "$session:$team_window.${pane_idx}" -p '#{pane_pid}' 2>/dev/null || true)
     [ -n "$pane_pid" ] && pkill -P "$pane_pid" 2>/dev/null || true
   done
-  sleep 0.5  # reduced from 1s — tmux is fast
+  sleep 0.2  # Wait for process termination
 
   # Kill higher index first to avoid index shift
   if (( remove_top > remove_bottom )); then
@@ -4156,7 +4168,7 @@ doey_remove_column() {
     tmux kill-pane -t "$session:$team_window.${remove_bottom}" 2>/dev/null || true
     tmux kill-pane -t "$session:$team_window.${remove_top}" 2>/dev/null || true
   fi
-  sleep 0.5
+  sleep 0.2
 
   local _rps_include_p0="false"
   [ "$_ts_team_type" = "freelancer" ] && _rps_include_p0="true"
@@ -4485,16 +4497,18 @@ add_team_from_def() {
     done
     _brief_text=$(printf '%b\n\n%s' "$_layout" "$(cat "$td_briefing")")
 
-    sleep 3
-    local _bf
-    _bf=$(mktemp "${runtime_dir}/brief_XXXXXX.txt")
-    printf '%s' "$_brief_text" > "$_bf"
-    tmux copy-mode -q -t "${session}:${window_index}.0" 2>/dev/null
-    tmux load-buffer "$_bf"
-    tmux paste-buffer -t "${session}:${window_index}.0"
-    sleep 1
-    tmux send-keys -t "${session}:${window_index}.0" Enter
-    rm -f "$_bf"
+    (
+      sleep "$DOEY_MANAGER_BRIEF_DELAY"
+      local _bf
+      _bf=$(mktemp "${runtime_dir}/brief_XXXXXX.txt")
+      printf '%s' "$_brief_text" > "$_bf"
+      tmux copy-mode -q -t "${session}:${window_index}.0" 2>/dev/null
+      tmux load-buffer "$_bf"
+      tmux paste-buffer -t "${session}:${window_index}.0"
+      sleep 0.3
+      tmux send-keys -t "${session}:${window_index}.0" Enter
+      rm -f "$_bf"
+    ) &
   fi
 
   printf "  \033[0;32mTeam '%s' created in window %s (%s workers)\033[0m\n" \
@@ -4685,7 +4699,7 @@ kill_team_window() {
     pkill -P "$pane_pid" 2>/dev/null || true
     kill -- -"$pane_pid" 2>/dev/null || true
   done
-  sleep 1
+  sleep 0.3
   tmux kill-window -t "${session}:${window}" 2>/dev/null || true
 
   local _wt_dir
@@ -4788,8 +4802,24 @@ run_test() {
 
   doey_step "3/6" "Launching team..."
   launch_session_headless "$test_project_name" "$project_dir" "$grid"
-  doey_step "4/6" "Waiting for boot (30s)..."
-  sleep 30
+  doey_step "4/6" "Waiting for Taskmaster boot..."
+  local _wait_count=0
+  local _safe_session="${session//[-:.]/_}"
+  local _tm_status="/tmp/doey/${test_project_name}/status/${_safe_session}_0_2.status"
+  while [ "$_wait_count" -lt 30 ]; do
+    if [ -f "$_tm_status" ]; then
+      local _tm_state
+      _tm_state="$(cat "$_tm_status" 2>/dev/null || true)"
+      case "$_tm_state" in
+        BUSY|READY) break ;;
+      esac
+    fi
+    sleep 2
+    _wait_count=$((_wait_count + 1))
+  done
+  if [ "$_wait_count" -ge 30 ]; then
+    doey_warn "Taskmaster did not report ready within 60s — continuing anyway"
+  fi
   doey_ok "Boot complete"
 
   doey_step "5/6" "Launching test driver..."
