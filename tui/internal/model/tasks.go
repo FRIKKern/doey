@@ -307,6 +307,7 @@ func (m *TasksModel) loadSelectedDetail() {
 		m.detailSidecar = nil
 		m.detailResult = nil
 		m.expanded = nil
+		m.detailViewport.SetContent("")
 		return
 	}
 	task := m.entries[idx]
@@ -346,6 +347,10 @@ func (m *TasksModel) loadSelectedDetail() {
 		m.expanded.Sidecar = m.detailSidecar
 		m.expanded.TaskResult = m.detailResult
 	}
+
+	// Pre-render content into the viewport so Update() can process scroll events.
+	// Without this, the viewport has 0 lines and ignores all scroll input.
+	m.detailViewport.SetContent(m.expanded.Render())
 }
 
 // Update handles input modes, detail, and list navigation.
