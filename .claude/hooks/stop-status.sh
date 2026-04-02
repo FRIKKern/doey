@@ -46,7 +46,11 @@ fi
 for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   [ -z "$_sf" ] && continue
   _status_file="${RUNTIME_DIR}/status/${_sf}.status"
-  write_pane_status "$_status_file" "$STOP_STATUS"
+  if command -v doey-ctl >/dev/null 2>&1; then
+    doey-ctl status set "$_sf" "$STOP_STATUS"
+  else
+    write_pane_status "$_status_file" "$STOP_STATUS"
+  fi
   [ ! -f "$_status_file" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$_sf status=$STOP_STATUS"
   [ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "$_status_file"
   [ "$STOP_STATUS" = "FINISHED" ] && \
@@ -78,11 +82,14 @@ if is_taskmaster; then
   (
     sleep 3
     _taskmaster_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
-    if [ -f "$_taskmaster_status_file" ]; then
-      case "$(head -1 "$_taskmaster_status_file" 2>/dev/null || true)" in
-        *BUSY*) exit 0 ;;
-      esac
+    if command -v doey-ctl >/dev/null 2>&1; then
+      _tm_cur=$(doey-ctl status get "$PANE_SAFE")
+    else
+      _tm_cur=$(head -1 "$_taskmaster_status_file" 2>/dev/null || true)
     fi
+    case "$_tm_cur" in
+      *BUSY*) exit 0 ;;
+    esac
     touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
     touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
   ) &

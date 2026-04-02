@@ -14,7 +14,7 @@ TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
 TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_${TASKMASTER_PANE//[-:.]/_}"
 PANE="${SESSION_NAME}:${TASKMASTER_PANE}"; PANE_SAFE="$TASKMASTER_SAFE"
 _TASKMASTER_STATUS_FILE="${RUNTIME_DIR}/status/${TASKMASTER_SAFE}.status"
-trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); write_pane_status "$_TASKMASTER_STATUS_FILE" "BUSY" "${DOEY_ROLE_COORDINATOR} idle — listening" 2>/dev/null || true' EXIT
+trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); if command -v doey-ctl >/dev/null 2>&1; then doey-ctl status set "$TASKMASTER_SAFE" "BUSY" 2>/dev/null || true; else write_pane_status "$_TASKMASTER_STATUS_FILE" "BUSY" "${DOEY_ROLE_COORDINATOR} idle — listening" 2>/dev/null || true; fi' EXIT
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/taskmaster_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${TASKMASTER_SAFE}.trigger"
