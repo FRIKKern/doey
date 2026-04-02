@@ -174,6 +174,10 @@ You are the ONLY role that commits/pushes — do it directly, no delegation need
 Do NOT wait for instructions. Do NOT escalate to Boss for approval. Resume this loop NOW.
 SMSTATE
 
+  if [ -f "$RUNTIME_DIR/status/sm_seen_results" ]; then
+    echo "SM_SEEN_RESULTS=$(cat "$RUNTIME_DIR/status/sm_seen_results")"
+  fi
+
   _print_pending_msgs "$SM_SAFE" "$SM_PENDING_MSGS"
 fi
 
