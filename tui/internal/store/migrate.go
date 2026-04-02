@@ -187,7 +187,8 @@ func (s *Store) migrateOnePlan(path string, r *MigrateResult) error {
 	}
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		return fmt.Errorf("cannot determine plan ID: %w", err)
+		r.Errors = append(r.Errors, fmt.Sprintf("plan %s: skipping non-numeric plan ID %q", filepath.Base(path), idStr))
+		return nil
 	}
 
 	var exists int
