@@ -2,18 +2,32 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/store"
 )
+
+// traceEntry is a single JSON line in the trace log.
+type traceEntry struct {
+	Ts     string `json:"ts"`
+	Event  string `json:"event"`
+	From   string `json:"from"`
+	Subject string `json:"subject"`
+	TaskID int64  `json:"task_id"`
+	Action string `json:"action"`
+	Detail string `json:"detail"`
+}
 
 // Message classification categories.
 const (
@@ -56,15 +70,55 @@ func classify(subject string) string {
 	return classJudgment
 }
 
+// taskIDPattern matches TASK_ID: 123, Task #123, task_id=123 in message bodies.
+var taskIDPattern = regexp.MustCompile(`(?i)(?:TASK_ID:\s*|Task\s*#|task_id=)(\d+)`)
+
+// parseTaskID extracts a task ID from message body text.
+func parseTaskID(body string) (int64, bool) {
+	m := taskIDPattern.FindStringSubmatch(body)
+	if m == nil {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+// touchTrigger creates/touches a trigger file for the given pane.
+func touchTrigger(runtimeDir, paneSafe string) {
+	trigDir := filepath.Join(runtimeDir, "triggers")
+	os.MkdirAll(trigDir, 0755)
+	path := filepath.Join(trigDir, paneSafe+".trigger")
+	f, err := os.Create(path)
+	if err != nil {
+		log.Printf("doey-router: touch trigger %s: %v", paneSafe, err)
+		return
+	}
+	f.Close()
+}
+
 func main() {
 	runtimeDir := flag.String("runtime", "", "Runtime directory (required)")
 	projectDir := flag.String("project-dir", "", "Project directory (required)")
+	bossPaneSafe := flag.String("boss-pane", "", "Boss pane safe name (default: derived from session)")
 	pollInterval := flag.Duration("poll-interval", 2*time.Second, "Polling interval for trigger dir")
 	flag.Parse()
 
 	if *runtimeDir == "" || *projectDir == "" {
 		fmt.Fprintf(os.Stderr, "doey-router: --runtime and --project-dir are required\n")
 		os.Exit(1)
+	}
+
+	// Derive boss pane safe name if not provided
+	if *bossPaneSafe == "" {
+		// Convention: session name is the runtime dir's base name with dashes replaced
+		// Boss is always pane 0.1 → safe name = session_0_1
+		base := filepath.Base(*runtimeDir)
+		safe := strings.ReplaceAll(base, "-", "_")
+		safe = strings.ReplaceAll(safe, ".", "_")
+		*bossPaneSafe = safe + "_0_1"
 	}
 
 	triggerDir := filepath.Join(*runtimeDir, "triggers")
@@ -91,6 +145,14 @@ func main() {
 		cancel()
 	}()
 
+	// Open trace log (append-only)
+	tracePath := filepath.Join(*runtimeDir, "trace.jsonl")
+	traceFile, err := os.OpenFile(tracePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("doey-router: open trace log: %v", err)
+	}
+	defer traceFile.Close()
+
 	log.Printf("doey-router: started (pid=%d, runtime=%s, project=%s, poll=%s)",
 		os.Getpid(), *runtimeDir, *projectDir, *pollInterval)
 
@@ -107,12 +169,12 @@ func main() {
 			log.Printf("doey-router: shutdown complete")
 			return
 		case <-ticker.C:
-			processTriggers(triggerDir, dbPath)
+			processTriggers(triggerDir, dbPath, *runtimeDir, *bossPaneSafe, traceFile)
 		}
 	}
 }
 
-func processTriggers(triggerDir, dbPath string) {
+func processTriggers(triggerDir, dbPath, runtimeDir, bossPaneSafe string, traceFile *os.File) {
 	entries, err := os.ReadDir(triggerDir)
 	if err != nil {
 		// Trigger dir might not exist yet — not an error
@@ -131,7 +193,7 @@ func processTriggers(triggerDir, dbPath string) {
 		log.Printf("doey-router: trigger for pane=%s", paneSafe)
 
 		// Process messages from DB
-		processMessages(dbPath, paneSafe)
+		processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe, traceFile)
 
 		// Delete trigger file after processing
 		if err := os.Remove(triggerPath); err != nil {
@@ -140,7 +202,7 @@ func processTriggers(triggerDir, dbPath string) {
 	}
 }
 
-func processMessages(dbPath, paneSafe string) {
+func processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe string, traceFile *os.File) {
 	// Check DB exists
 	if _, err := os.Stat(dbPath); err != nil {
 		log.Printf("doey-router: no DB at %s, skipping message read", dbPath)
@@ -161,7 +223,6 @@ func processMessages(dbPath, paneSafe string) {
 	}
 
 	if len(msgs) == 0 {
-		log.Printf("doey-router: no unread messages for pane=%s", paneSafe)
 		return
 	}
 
@@ -170,10 +231,181 @@ func processMessages(dbPath, paneSafe string) {
 		log.Printf("doey-router: msg id=%d from=%s to=%s subject=%q class=%s",
 			m.ID, m.FromPane, m.ToPane, m.Subject, class)
 
+		if class == classRoutine {
+			handleRoutine(s, &m, runtimeDir, bossPaneSafe, traceFile)
+		} else {
+			writeTrace(traceFile, traceEntry{
+				Event: "judgment", From: m.FromPane, Subject: m.Subject,
+				Action: "pending", Detail: "escalated to " + bossPaneSafe,
+			})
+		}
+
 		if err := s.MarkRead(m.ID); err != nil {
 			log.Printf("doey-router: mark read id=%d: %v", m.ID, err)
 		}
 	}
 
 	log.Printf("doey-router: processed %d messages for pane=%s", len(msgs), paneSafe)
+}
+
+func writeTrace(traceFile *os.File, e traceEntry) {
+	e.Ts = time.Now().UTC().Format(time.RFC3339)
+	b, err := json.Marshal(e)
+	if err != nil {
+		return
+	}
+	traceFile.Write(append(b, '\n'))
+}
+
+func handleRoutine(s *store.Store, m *store.Message, runtimeDir, bossPaneSafe string, traceFile *os.File) {
+	lower := strings.ToLower(m.Subject)
+	switch {
+	case strings.Contains(lower, "task_complete"):
+		handleTaskComplete(s, m, runtimeDir, bossPaneSafe, traceFile)
+	case strings.Contains(lower, "phase_complete"):
+		handlePhaseComplete(s, m, runtimeDir, traceFile)
+	case strings.Contains(lower, "status_report"):
+		handleStatusReport(s, m, traceFile)
+	default:
+		// worker_finished, freelancer_finished, sleep_report — ack only
+		writeTrace(traceFile, traceEntry{
+			Event: "routine_ack", From: m.FromPane, Subject: m.Subject,
+			Action: "ack",
+		})
+		log.Printf("doey-router: routine ack id=%d subject=%q", m.ID, m.Subject)
+	}
+}
+
+func handleTaskComplete(s *store.Store, m *store.Message, runtimeDir, bossPaneSafe string, traceFile *os.File) {
+	taskID, ok := parseTaskID(m.Body)
+	if !ok {
+		taskID, ok = parseTaskID(m.Subject)
+	}
+	if !ok {
+		log.Printf("doey-router: task_complete msg id=%d has no parseable task ID", m.ID)
+		writeTrace(traceFile, traceEntry{
+			Event: "task_complete", From: m.FromPane, Subject: m.Subject,
+			Action: "skip", Detail: "no task ID found",
+		})
+		return
+	}
+
+	// Update task status to pending_user_confirmation
+	t, err := s.GetTask(taskID)
+	if err != nil {
+		log.Printf("doey-router: get task %d: %v", taskID, err)
+	} else {
+		t.Status = "pending_user_confirmation"
+		if err := s.UpdateTask(t); err != nil {
+			log.Printf("doey-router: update task %d: %v", taskID, err)
+		}
+	}
+
+	// Log event
+	s.LogEvent(&store.Event{
+		Type:   "task_complete",
+		Source: m.FromPane,
+		Target: m.ToPane,
+		TaskID: &taskID,
+		Data:   m.Body,
+	})
+
+	// Notify Boss
+	summary := fmt.Sprintf("Task #%d completed by %s.\n%s", taskID, m.FromPane, m.Body)
+	if _, err := s.SendMessage(&store.Message{
+		FromPane: "router",
+		ToPane:   bossPaneSafe,
+		Subject:  "task_complete",
+		Body:     summary,
+		TaskID:   &taskID,
+	}); err != nil {
+		log.Printf("doey-router: send to boss: %v", err)
+	}
+	touchTrigger(runtimeDir, bossPaneSafe)
+
+	writeTrace(traceFile, traceEntry{
+		Event: "task_complete", From: m.FromPane, Subject: m.Subject,
+		TaskID: taskID, Action: "notify_boss", Detail: bossPaneSafe,
+	})
+	log.Printf("doey-router: task_complete task=%d notified boss=%s", taskID, bossPaneSafe)
+}
+
+func handlePhaseComplete(s *store.Store, m *store.Message, runtimeDir string, traceFile *os.File) {
+	taskID, ok := parseTaskID(m.Body)
+	if !ok {
+		taskID, ok = parseTaskID(m.Subject)
+	}
+	if !ok {
+		log.Printf("doey-router: phase_complete msg id=%d has no parseable task ID", m.ID)
+		writeTrace(traceFile, traceEntry{
+			Event: "phase_complete", From: m.FromPane, Subject: m.Subject,
+			Action: "skip", Detail: "no task ID found",
+		})
+		return
+	}
+
+	t, err := s.GetTask(taskID)
+	if err != nil {
+		log.Printf("doey-router: get task %d: %v", taskID, err)
+		return
+	}
+
+	s.LogEvent(&store.Event{
+		Type:   "phase_complete",
+		Source: m.FromPane,
+		Target: m.ToPane,
+		TaskID: &taskID,
+		Data:   fmt.Sprintf("phase %d/%d", t.CurrentPhase, t.TotalPhases),
+	})
+
+	if t.CurrentPhase < t.TotalPhases {
+		nextPhase := t.CurrentPhase + 1
+		body := fmt.Sprintf("Task #%d: Phase %d of %d is ready to begin.\n%s",
+			taskID, nextPhase, t.TotalPhases, m.Body)
+		if _, err := s.SendMessage(&store.Message{
+			FromPane: "router",
+			ToPane:   m.FromPane,
+			Subject:  "phase_ready",
+			Body:     body,
+			TaskID:   &taskID,
+		}); err != nil {
+			log.Printf("doey-router: send phase_ready to %s: %v", m.FromPane, err)
+		}
+		touchTrigger(runtimeDir, m.FromPane)
+
+		writeTrace(traceFile, traceEntry{
+			Event: "phase_complete", From: m.FromPane, Subject: m.Subject,
+			TaskID: taskID, Action: "next_phase",
+			Detail: fmt.Sprintf("phase %d→%d of %d", t.CurrentPhase, nextPhase, t.TotalPhases),
+		})
+		log.Printf("doey-router: phase_complete task=%d phase=%d/%d → next phase sent to %s",
+			taskID, t.CurrentPhase, t.TotalPhases, m.FromPane)
+	} else {
+		writeTrace(traceFile, traceEntry{
+			Event: "phase_complete", From: m.FromPane, Subject: m.Subject,
+			TaskID: taskID, Action: "final_phase",
+			Detail: fmt.Sprintf("phase %d/%d done", t.CurrentPhase, t.TotalPhases),
+		})
+		log.Printf("doey-router: phase_complete task=%d final phase %d/%d done",
+			taskID, t.CurrentPhase, t.TotalPhases)
+	}
+}
+
+func handleStatusReport(s *store.Store, m *store.Message, traceFile *os.File) {
+	var taskID *int64
+	if id, ok := parseTaskID(m.Body); ok {
+		taskID = &id
+	}
+	s.LogEvent(&store.Event{
+		Type:   "status_report",
+		Source: m.FromPane,
+		Target: m.ToPane,
+		TaskID: taskID,
+		Data:   m.Body,
+	})
+	writeTrace(traceFile, traceEntry{
+		Event: "status_report", From: m.FromPane, Subject: m.Subject,
+		Action: "logged",
+	})
+	log.Printf("doey-router: status_report from=%s logged", m.FromPane)
 }
