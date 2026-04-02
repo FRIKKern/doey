@@ -101,6 +101,34 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 - **Skills:** YAML frontmatter in `.claude/skills/<name>/SKILL.md`
 - **Naming:** sessions `doey-<project>`, runtime `/tmp/doey/<project>/`. Always "Taskmaster" and "Subtaskmaster" — never SM, TM, WM, or other abbreviations
 
+## Role Naming System
+
+All role names are centralized in `shell/doey-roles.sh` — the single source of truth. Three tiers:
+
+| Tier | Variable prefix | Purpose | Example |
+|------|----------------|---------|---------|
+| Display | `DOEY_ROLE_*` | User-facing names | `DOEY_ROLE_COORDINATOR="Taskmaster"` |
+| Internal ID | `DOEY_ROLE_ID_*` | Stable identifiers for logic/status files | `DOEY_ROLE_ID_COORDINATOR="coordinator"` |
+| File pattern | `DOEY_ROLE_FILE_*` | Agent/skill filenames | `DOEY_ROLE_FILE_COORDINATOR="doey-taskmaster"` |
+
+**How it flows:**
+
+| Layer | Mechanism | Generated from |
+|-------|-----------|---------------|
+| Shell hooks | `source doey-roles.sh` via `common.sh` | Direct sourcing |
+| Agent/skill `.md` files | `shell/expand-templates.sh` | `.md.tmpl` templates with `{{DOEY_ROLE_*}}` placeholders |
+| Go TUI | `go generate ./internal/roles/` | `tui/cmd/gen-roles/main.go` reads `doey-roles.sh` |
+
+**Rename procedure:**
+
+1. Edit `shell/doey-roles.sh` — change the display name(s)
+2. Run `bash shell/expand-templates.sh` — regenerates all `.md` from `.md.tmpl`
+3. Run `cd tui && go generate ./internal/roles/` — regenerates Go constants
+4. Run `cd tui && go build ./...` — verify Go compiles
+5. Run `bash tests/test-bash-compat.sh` — verify shell compatibility
+
+Never edit generated `.md` files directly — edit the `.md.tmpl` template instead.
+
 ## Testing Changes
 
 | Changed | Action |
