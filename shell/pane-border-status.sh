@@ -29,14 +29,14 @@ env_val() {
   v="${v#\"}"; echo "${v%\"}"
 }
 
-# Window 0: identify Session Manager panes
+# Window 0: identify Taskmaster panes
 if [ "$WINDOW_IDX" = "0" ]; then
   SESSION_ENV="${RUNTIME_DIR}/session.env"
   PROJ_NAME=""
   if [ -f "$SESSION_ENV" ]; then
     PROJ_NAME=$(env_val "$SESSION_ENV" PROJECT_NAME)
-    SM_PANE=$(env_val "$SESSION_ENV" SM_PANE)
-    [ -n "$SM_PANE" ] && [ "0.${PANE_IDX}" = "$SM_PANE" ] && { _prefix_id "${PROJ_NAME} SM"; exit 0; }
+    TASKMASTER_PANE=$(env_val "$SESSION_ENV" TASKMASTER_PANE)
+    [ -n "$TASKMASTER_PANE" ] && [ "0.${PANE_IDX}" = "$TASKMASTER_PANE" ] && { _prefix_id "${PROJ_NAME} Taskmaster"; exit 0; }
   fi
 
   for team_file in "${RUNTIME_DIR}"/team_*.env; do

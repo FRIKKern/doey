@@ -70,9 +70,9 @@ Window 0 is the dashboard; team windows (1+) each have a Manager + Workers.
 | Role | Pane | Description |
 |------|------|-------------|
 | Info Panel | `0.0` | Live dashboard — tasks and team stats |
-| Boss | `0.1` | User-facing relay → Session Manager |
-| Session Manager | `0.2` | Routes tasks, monitors panes, handles git |
-| Window Manager | `W.0` | Plans, delegates, validates context |
+| Boss | `0.1` | User-facing relay → Taskmaster |
+| Taskmaster | `0.2` | Routes tasks, monitors panes, handles git |
+| Subtaskmaster | `W.0` | Plans, delegates, validates context |
 | Workers | `W.1+` | Execute tasks in parallel |
 | Freelancers | `F.0+` | Independent workers, no manager |
 
@@ -84,14 +84,14 @@ Out of the box, `doey` launches:
 Window 0 — Dashboard
   ├── Info Panel (live stats, tasks)
   ├── Boss (user-facing relay)
-  └── Session Manager (internal coordinator)
+  └── Taskmaster (internal coordinator)
 
 Window 1 — Team 1 (local)
-  ├── Window Manager
+  ├── Subtaskmaster
   └── 4 Workers (2x2 dynamic grid)
 
 Window 2 — Team 2 (local)
-  ├── Window Manager
+  ├── Subtaskmaster
   └── 4 Workers (2x2 dynamic grid)
 
 Window 3 — Freelancers
@@ -126,7 +126,7 @@ EOF
 | `DOEY_INITIAL_FREELANCER_TEAMS` | `1` | Freelancer pools (managerless) |
 | `DOEY_INITIAL_WORKTREE_TEAMS` | `0` | Teams on isolated git branches |
 | `DOEY_MAX_WORKERS` | `20` | Max worker panes across all teams |
-| `DOEY_MANAGER_MODEL` | `opus` | Model for Window Managers |
+| `DOEY_MANAGER_MODEL` | `opus` | Model for Subtaskmasters |
 | `DOEY_WORKER_MODEL` | `opus` | Model for Workers |
 | `DOEY_WORKER_LAUNCH_DELAY` | `3` | Seconds between worker launches (auth stagger) |
 | `DOEY_TEAM_LAUNCH_DELAY` | `15` | Seconds between team launches |

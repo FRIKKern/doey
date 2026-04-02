@@ -141,7 +141,7 @@ _validate_int_range() {
 _validate_setting() {
   local var="$1" val="$2"
   case "$var" in
-    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_SESSION_MANAGER_MODEL)
+    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_TASKMASTER_MODEL)
       case "$val" in opus|sonnet|haiku) return 0 ;; esac
       printf 'Must be: opus, sonnet, or haiku'; return 1
       ;;
@@ -160,7 +160,7 @@ _validate_setting() {
 _validation_hint() {
   local var="$1"
   case "$var" in
-    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_SESSION_MANAGER_MODEL)
+    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_TASKMASTER_MODEL)
       printf '(opus/sonnet/haiku)' ;;
     DOEY_INITIAL_WORKER_COLS) printf '(1-6)' ;;
     DOEY_INITIAL_TEAMS) printf '(1-10)' ;;
@@ -338,7 +338,7 @@ _render_settings_view() {
   _add_setting "DOEY_MANAGER_MODEL"          "opus"
   _add_setting "DOEY_WORKER_MODEL"           "opus"
   _add_setting "DOEY_WATCHDOG_MODEL"         "sonnet"
-  _add_setting "DOEY_SESSION_MANAGER_MODEL"  "opus"
+  _add_setting "DOEY_TASKMASTER_MODEL"  "opus"
   printf '\n'
 
   printf '  %b Auth & Launch Timing%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
@@ -1028,7 +1028,7 @@ while true; do
   DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
   DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-opus}"
   DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-sonnet}"
-  DOEY_SESSION_MANAGER_MODEL="${DOEY_SESSION_MANAGER_MODEL:-opus}"
+  DOEY_TASKMASTER_MODEL="${DOEY_TASKMASTER_MODEL:-opus}"
 
   _view_file="${RUNTIME_DIR}/status/settings_view"
   _CURRENT_VIEW="settings"

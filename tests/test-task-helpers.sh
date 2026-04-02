@@ -103,7 +103,7 @@ echo "=== Test: task_read ==="
 rm -rf "${TEST_DIR}/.doey/tasks"
 mkdir -p "${TEST_DIR}/.doey/tasks"
 
-READ_ID=$(task_create "$TEST_DIR" "Read me" "bug" "SM" "Desc here")
+READ_ID=$(task_create "$TEST_DIR" "Read me" "bug" "Taskmaster" "Desc here")
 task_read "${TEST_DIR}/.doey/tasks/${READ_ID}.task"
 
 _test "TASK_ID set" test "$TASK_ID" = "$READ_ID"

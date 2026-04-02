@@ -4,11 +4,11 @@ Precedence for Claude Code instances (lowest → highest):
 
 | Precedence | Source | Applies To |
 |------------|--------|------------|
-| Lowest | Agent definitions (`agents/`) | Boss, Manager, Session Mgr |
+| Lowest | Agent definitions (`agents/`) | Boss, Subtaskmaster, Taskmaster |
 | | Settings (4-file merge) | All |
 | | Hooks (`.claude/hooks/`) | All |
 | | Skills (`.claude/skills/`) | Manager (+ 3 for Workers) |
-| | Persistent memory | Boss, Manager, Session Mgr |
+| | Persistent memory | Boss, Subtaskmaster, Taskmaster |
 | | Environment vars (`session.env`) | All |
 | | CLI launch flags | Per-instance |
 | | tmux layout | All |
@@ -20,7 +20,7 @@ Precedence for Claude Code instances (lowest → highest):
 
 Files in `agents/` → `~/.claude/agents/`. Body = system prompt. Precedence: CLI `--model` > frontmatter > settings.
 
-| Field | Boss | Manager | Session Mgr | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
+| Field | Boss | Subtaskmaster | Taskmaster | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
 |-------|------|---------|-------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
 | `model` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
 | `color` | `#E74C3C` | `green` | `#FF6B35` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
@@ -55,17 +55,17 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback. H
 | `post-tool-lint.sh` | PostToolUse | Bash 3.2 compatibility lint |
 | `stop-status.sh` | Stop | FINISHED/RESERVED/READY; blocks research without reports |
 | `stop-results.sh` | Stop | Result JSON and completion events |
-| `stop-notify.sh` | Stop | Stop notifications: Worker→Manager→SM→desktop |
+| `stop-notify.sh` | Stop | Stop notifications: Worker→Subtaskmaster→Taskmaster→desktop |
 | `on-notification.sh` | Notification | Desktop notification for SM permission requests (30s cooldown) |
-| `session-manager-wait.sh` | — | SM sleep/wake between cycles (trigger, message, result, crash) |
+| `taskmaster-wait.sh` | — | Taskmaster sleep/wake between cycles (trigger, message, result, crash) |
 
 
 ## Skills
 
 In `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
-- **Manager:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-sm-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
-- **Session Manager:** `/doey-worktree` (also Manager), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
+- **Subtaskmaster:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-taskmaster-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
+- **Taskmaster:** `/doey-worktree` (also Subtaskmaster), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
 - **Worker:** `/doey-status`, `/doey-reserve`, `/doey-stop`
 
 
@@ -74,15 +74,15 @@ In `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand
 Auto-loaded at startup; lines after 200 truncated.
 
 - Boss: `~/.claude/agent-memory/doey-boss/MEMORY.md`
-- Manager: `~/.claude/agent-memory/doey-manager/MEMORY.md`
-- Session Mgr: `~/.claude/agent-memory/doey-session-manager/MEMORY.md`
+- Subtaskmaster: `~/.claude/agent-memory/doey-subtaskmaster/MEMORY.md`
+- Taskmaster: `~/.claude/agent-memory/doey-taskmaster/MEMORY.md`
 
 
 ## Environment Variables
 
 Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → `session.env`.
 
-**Session-level (`session.env`):** `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS`/`MAX_WORKERS`/`CURRENT_COLS` (dynamic), `TOTAL_PANES` (static), `WORKER_COUNT`, `WORKER_PANES`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `SM_PANE`
+**Session-level (`session.env`):** `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `GRID`, `ROWS`/`MAX_WORKERS`/`CURRENT_COLS` (dynamic), `TOTAL_PANES` (static), `WORKER_COUNT`, `WORKER_PANES`, `RUNTIME_DIR`, `PASTE_SETTLE_MS`, `IDLE_COLLAPSE_AFTER`, `IDLE_REMOVE_AFTER`, `TEAM_WINDOWS`, `TASKMASTER_PANE`
 
 **tmux/Claude Code:** `TMUX_PANE`, `CLAUDE_PROJECT_DIR`
 
@@ -96,8 +96,8 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → `session.env`.
 | Instance | Command |
 |----------|---------|
 | Boss | `claude --dangerously-skip-permissions --agent doey-boss` |
-| Session Manager | `claude --dangerously-skip-permissions --agent doey-session-manager` |
-| Manager | `claude --dangerously-skip-permissions --model opus --name "T<N> Window Manager" --agent doey-manager` |
+| Taskmaster | `claude --dangerously-skip-permissions --agent doey-taskmaster` |
+| Subtaskmaster | `claude --dangerously-skip-permissions --model opus --name "T<N> Subtaskmaster" --agent doey-subtaskmaster` |
 | Workers | `claude --dangerously-skip-permissions --model opus --name "T<N> W<P>" --append-system-prompt-file <prompt>.md` |
 
 Workers use `--append-system-prompt-file` (not `--agent`) for per-worker identity. Precedence: CLI > frontmatter > settings.
@@ -126,7 +126,7 @@ All in `shell/` → `~/.local/bin/`.
 ## tmux Layout
 
 ```
-Dashboard: [0.0 Info] [0.1 Boss] [0.2 Session Mgr]
+Dashboard: [0.0 Info] [0.1 Boss] [0.2 Taskmaster]
 Team W:    [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
 ```
 
@@ -135,7 +135,7 @@ Dynamic grid auto-expands when all workers are busy.
 **Pane IPC:** `send-keys` (< 200 chars) · `load-buffer` + `paste-buffer` (long) · `capture-pane` (read)
 
 - **PANE_SAFE:** `${PANE//[-:.]/_}` — `doey-project:0.5` → `doey_project_0_5`
-- **Titles:** `"<pane_id> | <role>"` — `"d-t1-mgr | doey T1 Mgr"`, `"d-sm | doey SM"`
+- **Titles:** `"<pane_id> | <role>"` — `"d-t1-mgr | doey T1 Mgr"`, `"d-tm | doey TM"`
 - **Timing:** Manager briefing 8s; workers ready ~15s
 - **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript`
 
@@ -172,7 +172,7 @@ Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 | `debug/` | Debug flight-recorder JSONL (created by `/doey-debug on`) |
 | `context_log_W<N>.md` | **Golden Context Log** — Manager's accumulated knowledge (survives compaction) |
 | `status/state_since_<W>_<idx>` | Duration tracking (epoch when pane entered current state) |
-| `status/session_manager_trigger` | SM-specific fast-wake trigger |
+| `status/taskmaster_trigger` | Taskmaster-specific fast-wake trigger |
 | `status/notif_cooldown_*` | Desktop notification cooldown timestamps |
 
 **Persistent tasks:** `${PROJECT_DIR}/.doey/tasks/` (source of truth, survives reboots). Runtime `tasks/` is a cache synced on start. Agents read `.doey/tasks/` first, fall back to runtime.

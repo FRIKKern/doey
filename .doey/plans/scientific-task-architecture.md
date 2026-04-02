@@ -5,8 +5,8 @@
 Implement a scientific, intent-first task architecture in Doey so that tasks are not passed around as vague prose, but as structured objects with explicit intent, bridge problems, representation layers, hypotheses, constraints, success criteria, and evidence plans. The end state is a system where:
 
 - **Boss / Project Manager** compiles user intent into structured tasks.
-- **Session Manager** routes and synthesizes from structured tasks instead of reconstructing intent from scratch.
-- **Window Managers** execute scoped hypothesis-driven briefs.
+- **Taskmaster** routes and synthesizes from structured tasks instead of reconstructing intent from scratch.
+- **Subtaskmasters** execute scoped hypothesis-driven briefs.
 - **Workers** return evidence, confidence updates, and implementation results.
 - **Info Panel** renders advanced terminal-safe visualizations without left/right borders.
 
@@ -40,8 +40,8 @@ Legacy tasks must continue working while structured tasks are introduced increme
 
 - **Info Panel**: dashboard rendering only
 - **Boss / Project Manager**: user-facing intent compilation and task creation
-- **Session Manager**: cross-team routing, synthesis, observatory rendering
-- **Window Manager**: team-local planning and delegation
+- **Taskmaster**: cross-team routing, synthesis, observatory rendering
+- **Subtaskmaster**: team-local planning and delegation
 - **Workers**: investigation, implementation, validation, reporting
 - **Freelancers**: research, validation, specialized synthesis, overflow
 
@@ -51,7 +51,7 @@ Watchdogs are deprecated and must not appear in the target architecture.
 
 - `0.0` Info Panel
 - `0.1` Boss / Project Manager
-- `0.2` Session Manager
+- `0.2` Taskmaster
 
 ---
 
@@ -64,7 +64,7 @@ Remove architectural ambiguity before building new task infrastructure.
 Identify every prompt, script, status label, dashboard element, and documentation reference that still assumes Watchdogs are active runtime roles. Classify each as: remove entirely, migrate to SM, migrate to team-local handling, or keep as legacy with deprecation note.
 
 ### Files to inspect and update
-- README.md, docs/context-reference.md, agents/doey-boss.md, agents/doey-session-manager.md, shell/info-panel.sh, any tmux/dashboard label scripts
+- README.md, docs/context-reference.md, agents/doey-boss.md, agents/doey-taskmaster.md, shell/info-panel.sh, any tmux/dashboard label scripts
 
 ### Required actions
 1. Find all places that describe dashboard pane mapping
@@ -144,12 +144,12 @@ TASK_SCHEMA_VERSION=2
 2. Boss becomes Project Manager Compiler
 3. Task Compiler Skill (`/doey-create-task`)
 4. Structured Dispatch Protocol (`dispatch_task` subject)
-5. Window Manager Brief Format
+5. Subtaskmaster Brief Format
 6. Worker Result Schema Upgrade (hypothesis_updates, evidence, confidence)
 7. Scientific Visualization Grammar (symbols, confidence bars, flow diagrams)
 8. Central Rendering Script (`shell/doey-render-task.sh`)
 9. Info Panel Upgrade (scientific task rendering)
-10. Session Manager Observatory Upgrade (delta-based output)
+10. Taskmaster Observatory Upgrade (delta-based output)
 11. Backward Compatibility and Migration
 
 ---

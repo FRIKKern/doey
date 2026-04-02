@@ -47,9 +47,9 @@ Defaults are conservative to avoid Claude API rate-limit errors on session start
 
 | Variable | Default | Type | Description | Line |
 |---|---|---|---|---|
-| `DOEY_MANAGER_MODEL` | `opus` | string | Claude model for Window Managers | 295 |
+| `DOEY_MANAGER_MODEL` | `opus` | string | Claude model for Subtaskmasters | 295 |
 | `DOEY_WORKER_MODEL` | `opus` | string | Claude model for Workers | 296 |
-| `DOEY_SESSION_MANAGER_MODEL` | `opus` | string | Claude model for the Session Manager | 297 |
+| `DOEY_TASKMASTER_MODEL` | `opus` | string | Claude model for the Taskmaster | 297 |
 
 ### Idle Management
 

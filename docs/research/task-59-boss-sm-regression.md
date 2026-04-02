@@ -1,4 +1,4 @@
-# Task #59: Boss & Session Manager Role Identity Regression
+# Task #59: Boss & Taskmaster Role Identity Regression
 
 **Date:** 2026-03-31
 **Status:** Investigation complete
@@ -17,7 +17,7 @@ The Boss pane (0.1) has wrong tmux pane names, does implementation work itself, 
 
 ```
 **Hook-enforced (will error if violated):**
-- tmux send-keys to ANY pane except Session Manager (0.2) — BLOCKED.
+- tmux send-keys to ANY pane except Taskmaster (0.2) — BLOCKED.
 
 **Agent-level rules (critical policy — violating wastes irreplaceable context):**
 - Read, Edit, Write, Glob, Grep on project source files — FORBIDDEN.
@@ -27,17 +27,17 @@ The Boss pane (0.1) has wrong tmux pane names, does implementation work itself, 
 
 The source code and Agent tool blocks are classified as **agent-level** (voluntary compliance), NOT hook-enforced. The Boss model may violate them when the task seems simple enough to do directly.
 
-**`agents/doey-session-manager.md`** — Correct. SM role is clearly defined as autonomous coordinator. Tool restrictions are also agent-level for source code tools, but SM has additional hook enforcement (AskUserQuestion blocked, `/rename` via send-keys blocked).
+**`agents/doey-taskmaster.md`** — Correct. SM role is clearly defined as autonomous coordinator. Tool restrictions are also agent-level for source code tools, but SM has additional hook enforcement (AskUserQuestion blocked, `/rename` via send-keys blocked).
 
 ### 2. `on-session-start.sh` — Role Assignment
 
 **Role detection is CORRECT.** Lines 51-59:
 - Window 0, pane 1 → `boss`
-- Window 0, pane matching `SM_PANE` (default 0.2) → `session_manager`
+- Window 0, pane matching `TASKMASTER_PANE` (default 0.2) → `taskmaster`
 
 **Runtime role files confirm correct assignment:**
 - `/tmp/doey/doey/status/doey_doey_0_1.role` = `boss`
-- `/tmp/doey/doey/status/doey_doey_0_2.role` = `session_manager`
+- `/tmp/doey/doey/status/doey_doey_0_2.role` = `taskmaster`
 
 **Pane titles are set correctly** at session start (lines 156-163):
 - Boss: `${FULL_PANE_ID} | ${PROJECT_NAME} Boss` (e.g., `d-boss | doey Boss`)
@@ -83,11 +83,11 @@ These are Claude Code's auto-generated task descriptions, NOT the titles set by 
 
 `shell/doey.sh` line 600:
 ```bash
-local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_SESSION_MANAGER_MODEL} --agent doey-boss"
+local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --agent doey-boss"
 ```
 
 No `--name` flag. Compare with Worker/Manager launches which include `--name`:
-- Manager (line 2504): `--name "T${tw} Window Manager"`
+- Manager (line 2504): `--name "T${tw} Subtaskmaster"`
 - Worker (line 2548): `--name "${w_name}"`
 
 Without `--name`, Claude Code generates its own name from the first prompt content.
@@ -100,7 +100,7 @@ Without `--name`, Claude Code generates its own name from the first prompt conte
 
 ### 6. System Prompt Injection
 
-**No Boss or SM system prompt files exist.** Worker system prompts are generated per-pane (`worker-system-prompt-w*.md`), but Boss and SM rely entirely on their agent definitions (`--agent doey-boss`, `--agent doey-session-manager`). This is fine — the agent files ARE the system prompts.
+**No Boss or SM system prompt files exist.** Worker system prompts are generated per-pane (`worker-system-prompt-w*.md`), but Boss and SM rely entirely on their agent definitions (`--agent doey-boss`, `--agent doey-taskmaster`). This is fine — the agent files ARE the system prompts.
 
 ### 7. Defense-in-Depth Role Inference
 
@@ -161,12 +161,12 @@ Model the implementation on the existing Manager restrictions at lines 180-203.
 **File:** `shell/doey.sh`
 **Line 600:** Add `--name "Boss"`:
 ```bash
-local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_SESSION_MANAGER_MODEL} --name \"Boss\" --agent doey-boss"
+local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name \"Boss\" --agent doey-boss"
 ```
 
-**Line 605:** Add `--name "Session Manager"`:
+**Line 605:** Add `--name "Taskmaster"`:
 ```bash
-local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_SESSION_MANAGER_MODEL --name \"Session Manager\" --agent doey-session-manager"
+local _sm_cmd="claude --dangerously-skip-permissions --model $DOEY_TASKMASTER_MODEL --name \"Taskmaster\" --agent doey-taskmaster"
 ```
 
 ### Fix 3: Update CLAUDE.md tool restrictions table

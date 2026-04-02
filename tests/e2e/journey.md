@@ -1,6 +1,6 @@
 # E2E Journey: Build a Doey Marketing Website
 
-Test driver sends a website-building task to the Window Manager and monitors the full team. Exercises delegation, parallel work, file creation, mid-journey interaction, and coordination.
+Test driver sends a website-building task to the Subtaskmaster and monitors the full team. Exercises delegation, parallel work, file creation, mid-journey interaction, and coordination.
 
 ## Initial Task Prompt
 
@@ -14,7 +14,7 @@ Requirements:
 4. Navigation bar on all pages linking to each page
 5. Content should cover:
    - Hero section: what Doey is and why it matters
-   - Features: Window Manager orchestration, parallel workers, Watchdog monitoring, slash commands
+   - Features: Subtaskmaster orchestration, parallel workers, Watchdog monitoring, slash commands
    - How it works: tmux grid layout, task dispatch, status monitoring, worker lifecycle
    - Get Started: installation steps (git clone, ./install.sh, cd project, doey)
 6. Responsive design (mobile-friendly)
@@ -44,7 +44,7 @@ Great work! Two additions:
 
 ### Content
 - index.html mentions "Claude" (case-insensitive)
-- At least one page mentions "worker", "dispatch", or "Window Manager"
+- At least one page mentions "worker", "dispatch", or "Subtaskmaster"
 - CSS has color definitions (#00d2ff or similar)
 - HTML files have `<nav>` and link to styles.css
 

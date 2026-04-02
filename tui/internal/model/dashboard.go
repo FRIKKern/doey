@@ -374,8 +374,8 @@ func (m DashboardModel) updateMouse(msg tea.MouseMsg) (DashboardModel, tea.Cmd) 
 		if zone.Get("dash-view-tasks").InBounds(msg) {
 			return m, func() tea.Msg { return ViewTasksMsg{} }
 		}
-		if zone.Get("dash-compact-sm").InBounds(msg) {
-			return m, func() tea.Msg { return CompactSMMsg{} }
+		if zone.Get("dash-compact-taskmaster").InBounds(msg) {
+			return m, func() tea.Msg { return CompactTaskmasterMsg{} }
 		}
 	}
 

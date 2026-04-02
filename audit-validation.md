@@ -18,7 +18,7 @@
 | `.claude/hooks/on-prompt-submit.sh` | PASS |
 | `.claude/hooks/on-session-start.sh` | PASS |
 | `.claude/hooks/post-tool-lint.sh` | PASS |
-| `.claude/hooks/session-manager-wait.sh` | PASS |
+| `.claude/hooks/taskmaster-wait.sh` | PASS |
 | `.claude/hooks/stop-notify.sh` | PASS |
 | `.claude/hooks/stop-results.sh` | PASS |
 | `.claude/hooks/stop-status.sh` | PASS |
@@ -40,7 +40,7 @@ All 4 agents checked. Every agent definition has valid YAML frontmatter with req
 | Agent | name | model | description |
 |-------|------|-------|-------------|
 | doey-manager | doey-manager | opus | present |
-| doey-session-manager | doey-session-manager | opus | present |
+| doey-taskmaster | doey-taskmaster | opus | present |
 | doey-watchdog | doey-watchdog | haiku | present |
 | test-driver | test-driver | opus | present |
 

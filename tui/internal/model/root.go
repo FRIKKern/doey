@@ -33,7 +33,7 @@ type saveTeamDoneMsg struct {
 }
 
 // Boss action messages from sub-models.
-type CompactSMMsg struct{}
+type CompactTaskmasterMsg struct{}
 type BossMarkDoneMsg struct{ ID string }
 type BossCancelTaskBossMsg struct{ ID string }
 type BossKillTeamMsg struct{ WindowIdx int }
@@ -263,10 +263,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case GetStatusResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
-	case CompactSMMsg:
-		return m, CompactSMCmd()
+	case CompactTaskmasterMsg:
+		return m, CompactTaskmasterCmd()
 
-	case CompactSMResultMsg:
+	case CompactTaskmasterResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case BossMarkDoneMsg:
