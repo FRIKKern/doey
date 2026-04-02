@@ -160,6 +160,35 @@ done
 
 **Auto-spawn:** `/doey-add-window` → wait 15s → re-source `session.env` → dispatch → log to `$RUNTIME_DIR/spawn.log`.
 
+### Team Selection
+
+When a `.task` file arrives, score existing idle teams before dispatching:
+
+1. **Read task metadata** — extract `TASK_TYPE`, `TASK_TAGS`, and file paths from the `.task` file.
+2. **Score each idle team** — for each team in `IDLE_TEAMS`, read `$RUNTIME_DIR/status/pane_${W}_*.status` for `LAST_TASK_TAGS`, `LAST_TASK_TYPE`, `LAST_FILES`. Compute overlap:
+   - +1 per matching tag, +1 for matching type, +1 per shared file-path prefix (first two directory components)
+   - Normalize to 0–100% of maximum possible score
+3. **Select best-fit team** — pick the team with the highest overlap score.
+
+**Tag-to-team mapping** (for auto-spawn when no good fit exists):
+
+| Tags / Keywords | Team Definition |
+|-----------------|-----------------|
+| tui, go, dashboard, bubble, lipgloss | `.doey/go-tui.team.md` |
+| shell, hooks, skills, bash, scripts | `.doey/shell.team.md` |
+| infrastructure, install, config, ci, deploy | `.doey/infra.team.md` |
+| (no match) | generic (built-in via `/doey-add-window`) |
+
+**Dispatch decision:**
+
+| Condition | Action |
+|-----------|--------|
+| Best overlap ≥ 30% | Dispatch to that team |
+| Best overlap < 30% AND a `.team.md` matches task tags | Run `/doey-add-team <name>` to spawn specialized team, then dispatch |
+| Best overlap < 30% AND no `.team.md` matches | Dispatch to any idle generic team |
+
+**Integration:** Team Selection runs AFTER Capacity Check confirms idle capacity exists. If no capacity, Capacity Check handles queuing/spawning first. Team Selection only chooses *which* idle team gets the task.
+
 ### Queue Drain
 
 Scan `.doey/tasks/` for `TASK_STATUS=active` with no `TASK_TEAM`. Sort by priority (P0→P3, default P2). `session-manager-wait.sh` wakes SM via `QUEUED_TASKS` trigger when new tasks arrive.
