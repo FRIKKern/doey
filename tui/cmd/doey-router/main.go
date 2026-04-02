@@ -106,7 +106,21 @@ func main() {
 	sessionName := flag.String("session", "", "Tmux session name (required for judgment escalation)")
 	bossPaneSafe := flag.String("boss-pane", "", "Boss pane safe name (default: derived from session)")
 	pollInterval := flag.Duration("poll-interval", 2*time.Second, "Polling interval for trigger dir")
+	logFile := flag.String("log-file", "", "Log file path (if set, all output redirected here)")
 	flag.Parse()
+
+	// Redirect all output to log file if specified
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "doey-router: open log file %s: %v\n", *logFile, err)
+			os.Exit(1)
+		}
+		log.SetOutput(f)
+		// Redirect stdout and stderr to the log file
+		syscall.Dup2(int(f.Fd()), int(os.Stdout.Fd()))
+		syscall.Dup2(int(f.Fd()), int(os.Stderr.Fd()))
+	}
 
 	if *runtimeDir == "" || *projectDir == "" {
 		fmt.Fprintf(os.Stderr, "doey-router: --runtime and --project-dir are required\n")

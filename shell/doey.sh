@@ -1921,7 +1921,8 @@ MANIFEST
       _router_bin="${HOME}/.local/bin/doey-router"
     fi
     if [ -n "$_router_bin" ]; then
-      "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" &
+      mkdir -p "${runtime_dir}/logs"
+      "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" -log-file "${runtime_dir}/logs/doey-router.log" >/dev/null 2>&1 &
       echo $! > "$runtime_dir/doey-router.pid"
     fi
   fi
@@ -2121,7 +2122,8 @@ _cleanup_old_session() {
     fi
     git branch -D "$b" 2>/dev/null || true
   done
-  mkdir -p "${runtime_dir}"/{messages,broadcasts,status}
+  mkdir -p "${runtime_dir}"/{messages,broadcasts,status,logs}
+  : > "${runtime_dir}/logs/doey-router.log" 2>/dev/null
 }
 
 # Build comma-separated worker pane indices "1,2,3,...,N"
@@ -3652,7 +3654,8 @@ MANIFEST
       _router_bin="${HOME}/.local/bin/doey-router"
     fi
     if [ -n "$_router_bin" ]; then
-      "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" &
+      mkdir -p "${runtime_dir}/logs"
+      "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" -log-file "${runtime_dir}/logs/doey-router.log" >/dev/null 2>&1 &
       echo $! > "$runtime_dir/doey-router.pid"
     fi
   fi
