@@ -28,15 +28,15 @@ func runDBStatusCmd(args []string) {
 }
 
 func dbStatusGet(args []string) {
-	fs := flag.NewFlagSet("db-status get", flag.ExitOnError)
-	dir := fs.String("dir", "", "Project directory")
-	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
-	fs.Parse(args)
-
-	if fs.NArg() < 1 {
+	if len(args) < 1 {
 		fatal("db-status get: <pane-id> argument required\n")
 	}
-	paneID := fs.Arg(0)
+	paneID := args[0]
+
+	fs := flag.NewFlagSet("db-status get", flag.ExitOnError)
+	dir := fs.String("project-dir", "", "Project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args[1:])
 
 	s := openStore(*dir)
 	defer s.Close()
@@ -62,7 +62,7 @@ func dbStatusSet(args []string) {
 	taskID := fs.Int64("task-id", 0, "Task ID (0 = none)")
 	taskTitle := fs.String("task-title", "", "Task title")
 	agent := fs.String("agent", "", "Agent name")
-	dir := fs.String("dir", "", "Project directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
@@ -98,7 +98,7 @@ func dbStatusSet(args []string) {
 func dbStatusList(args []string) {
 	fs := flag.NewFlagSet("db-status list", flag.ExitOnError)
 	windowID := fs.String("window-id", "", "Window ID")
-	dir := fs.String("dir", "", "Project directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
@@ -146,7 +146,7 @@ func dbLogAdd(args []string) {
 	author := fs.String("author", "", "Author")
 	title := fs.String("title", "", "Log title")
 	body := fs.String("body", "", "Log body")
-	dir := fs.String("dir", "", "Project directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
@@ -179,7 +179,7 @@ func dbLogAdd(args []string) {
 func dbLogList(args []string) {
 	fs := flag.NewFlagSet("db-log list", flag.ExitOnError)
 	taskID := fs.Int64("task-id", 0, "Task ID")
-	dir := fs.String("dir", "", "Project directory")
+	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
