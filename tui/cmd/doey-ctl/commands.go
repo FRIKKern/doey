@@ -213,8 +213,45 @@ func runTaskUpdate(args []string) {
 						fatal("task update: invalid integer for total_phases: %q", *value)
 					}
 					t.TotalPhases = n
+				case "notes":
+					t.Notes = *value
+				case "blockers":
+					t.Blockers = *value
+				case "related_files":
+					t.RelatedFiles = *value
+				case "hypotheses":
+					t.Hypotheses = *value
+				case "decision_log":
+					t.DecisionLog = *value
+				case "result":
+					t.Result = *value
+				case "files":
+					t.Files = *value
+				case "commits":
+					t.Commits = *value
+				case "schema_version":
+					n, err := strconv.Atoi(*value)
+					if err != nil {
+						fatal("task update: invalid integer for schema_version: %q", *value)
+					}
+					t.SchemaVersion = n
+				case "created_by":
+					t.CreatedBy = *value
+				case "plan_id":
+					n, err := strconv.ParseInt(*value, 10, 64)
+					if err != nil {
+						fatal("task update: invalid integer for plan_id: %q", *value)
+					}
+					v := int64(n)
+					t.PlanID = &v
+				case "review_verdict":
+					t.ReviewVerdict = *value
+				case "review_findings":
+					t.ReviewFindings = *value
+				case "review_timestamp":
+					t.ReviewTimestamp = *value
 				default:
-					fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases\n", *field)
+					fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp\n", *field)
 				}
 
 				if err := s.UpdateTask(t); err != nil {
