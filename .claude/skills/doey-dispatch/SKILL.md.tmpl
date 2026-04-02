@@ -45,12 +45,12 @@ tmux capture-pane -t "${SESSION_NAME}:${W}.X" -p -S -3
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="${DOEY_WINDOW_INDEX:-0}"; PANE="${SESSION_NAME}:${W}.X"
 PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
-STATUS_FILE="${RD}/status/${PANE_SAFE}.status"
 USE_DELEGATE=false
-if [ "${FORCE_RESTART:-0}" != "1" ] && [ -f "$STATUS_FILE" ]; then
-  LAST_TAGS=$(grep '^LAST_TASK_TAGS: ' "$STATUS_FILE" 2>/dev/null | cut -d' ' -f2-) || LAST_TAGS=""
-  LAST_TYPE=$(grep '^LAST_TASK_TYPE: ' "$STATUS_FILE" 2>/dev/null | cut -d' ' -f2-) || LAST_TYPE=""
-  LAST_FILES=$(grep '^LAST_FILES: ' "$STATUS_FILE" 2>/dev/null | cut -d' ' -f2-) || LAST_FILES=""
+if [ "${FORCE_RESTART:-0}" != "1" ]; then
+  STATUS_OUT=$(doey-ctl status get "$PANE_SAFE" 2>/dev/null) || STATUS_OUT=""
+  LAST_TAGS=$(echo "$STATUS_OUT" | grep '^LAST_TASK_TAGS: ' | cut -d' ' -f2-) || LAST_TAGS=""
+  LAST_TYPE=$(echo "$STATUS_OUT" | grep '^LAST_TASK_TYPE: ' | cut -d' ' -f2-) || LAST_TYPE=""
+  LAST_FILES=$(echo "$STATUS_OUT" | grep '^LAST_FILES: ' | cut -d' ' -f2-) || LAST_FILES=""
   if [ -n "$LAST_TAGS" ] || [ -n "$LAST_TYPE" ] || [ -n "$LAST_FILES" ]; then
     source "${PROJECT_DIR}/shell/doey-task-helpers.sh" 2>/dev/null || true
     if type task_should_restart >/dev/null 2>&1; then
@@ -68,12 +68,9 @@ fi
 ### Task Registration (before dispatch)
 
 ```bash
-# Create persistent .task file so TUI tracks it
-source "${PROJECT_DIR}/shell/doey-task-helpers.sh" 2>/dev/null || true
-if type task_create >/dev/null 2>&1; then
-  TASK_ID=$(task_create "$PROJECT_DIR" "$TASK_TITLE" "${TASK_TYPE:-feature}" "{{DOEY_ROLE_COORDINATOR}}" "$TASK_DESCRIPTION")
-  echo "Created task #${TASK_ID}"
-fi
+# Create persistent task so TUI tracks it
+TASK_ID=$(doey-ctl task create --title "$TASK_TITLE" --type "${TASK_TYPE:-feature}" --description "$TASK_DESCRIPTION")
+echo "Created task #${TASK_ID}"
 ```
 
 Include `Task #${TASK_ID}` in the prompt header so hooks can track it.

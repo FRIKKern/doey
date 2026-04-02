@@ -45,12 +45,12 @@ tmux capture-pane -t "${SESSION_NAME}:${W}.X" -p -S -3
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="${DOEY_WINDOW_INDEX:-0}"; PANE="${SESSION_NAME}:${W}.X"
 PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
-STATUS_FILE="${RD}/status/${PANE_SAFE}.status"
 USE_DELEGATE=false
-if [ "${FORCE_RESTART:-0}" != "1" ] && [ -f "$STATUS_FILE" ]; then
-  LAST_TAGS=$(grep '^LAST_TASK_TAGS: ' "$STATUS_FILE" 2>/dev/null | cut -d' ' -f2-) || LAST_TAGS=""
-  LAST_TYPE=$(grep '^LAST_TASK_TYPE: ' "$STATUS_FILE" 2>/dev/null | cut -d' ' -f2-) || LAST_TYPE=""
-  LAST_FILES=$(grep '^LAST_FILES: ' "$STATUS_FILE" 2>/dev/null | cut -d' ' -f2-) || LAST_FILES=""
+if [ "${FORCE_RESTART:-0}" != "1" ]; then
+  STATUS_OUT=$(doey-ctl status get "$PANE_SAFE" 2>/dev/null) || STATUS_OUT=""
+  LAST_TAGS=$(echo "$STATUS_OUT" | grep '^LAST_TASK_TAGS: ' | cut -d' ' -f2-) || LAST_TAGS=""
+  LAST_TYPE=$(echo "$STATUS_OUT" | grep '^LAST_TASK_TYPE: ' | cut -d' ' -f2-) || LAST_TYPE=""
+  LAST_FILES=$(echo "$STATUS_OUT" | grep '^LAST_FILES: ' | cut -d' ' -f2-) || LAST_FILES=""
   if [ -n "$LAST_TAGS" ] || [ -n "$LAST_TYPE" ] || [ -n "$LAST_FILES" ]; then
     source "${PROJECT_DIR}/shell/doey-task-helpers.sh" 2>/dev/null || true
     if type task_should_restart >/dev/null 2>&1; then
@@ -68,42 +68,12 @@ fi
 ### Task Registration (before dispatch)
 
 ```bash
-# Create persistent .task file so TUI tracks it
-source "${PROJECT_DIR}/shell/doey-task-helpers.sh" 2>/dev/null || true
-if type task_create >/dev/null 2>&1; then
-  TASK_ID=$(task_create "$PROJECT_DIR" "$TASK_TITLE" "${TASK_TYPE:-feature}" "Taskmaster" "$TASK_DESCRIPTION")
-  echo "Created task #${TASK_ID}"
-fi
+# Create persistent task so TUI tracks it
+TASK_ID=$(doey-ctl task create --title "$TASK_TITLE" --type "${TASK_TYPE:-feature}" --description "$TASK_DESCRIPTION")
+echo "Created task #${TASK_ID}"
 ```
 
 Include `Task #${TASK_ID}` in the prompt header so hooks can track it.
-
-### Task Contract Validation
-
-Before dispatching, verify task assignment exists:
-
-```bash
-# Gate: block dispatch without task assignment
-if [ -z "${TASK_ID:-}" ]; then
-  echo "ERROR: Cannot dispatch without TASK_ID. Create or assign a task first."
-  exit 1
-fi
-```
-
-### Task Assignment Files (before dispatch)
-
-```bash
-# Pre-write task assignment so on-prompt-submit can enforce accountability
-RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-W="${DOEY_WINDOW_INDEX:-0}"; PANE="${SESSION_NAME}:${W}.X"
-PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
-if [ -n "${TASK_ID:-}" ]; then
-  printf '%s\n' "$TASK_ID" > "${RD}/status/${PANE_SAFE}.task_id"
-fi
-if [ -n "${SUBTASK_NUM:-}" ]; then
-  printf '%s\n' "$SUBTASK_NUM" > "${RD}/status/${PANE_SAFE}.subtask_id"
-fi
-```
 
 ### Dispatch Sequence
 
@@ -139,10 +109,9 @@ fi
 tmux select-pane -t "$PANE" -T "task-name_$(date +%m%d)"
 TASKFILE=$(mktemp "${RD}/task_XXXXXX.txt")
 cat > "$TASKFILE" << TASK
-You are Worker on the Doey team for project: ${PROJECT_NAME}
+You are a worker on Doey for project: ${PROJECT_NAME}
 Project directory: ${PROJECT_DIR}
-
-**TASK_ID:** ${TASK_ID}
+All file paths should be absolute.
 
 Your detailed task prompt here.
 TASK

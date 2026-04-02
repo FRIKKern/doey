@@ -37,7 +37,7 @@ Skills: `.claude/skills/<name>/SKILL.md` with YAML frontmatter, loaded on demand
 
 **Dispatch:** {{DOEY_ROLE_WORKER}} prompts must include: project dir, goal, files, steps, constraints, budget, "when done." {{DOEY_ROLE_WORKER}}s have zero team context.
 
-**Notification chain:** {{DOEY_ROLE_WORKER}} → Manager → {{DOEY_ROLE_COORDINATOR}} → {{DOEY_ROLE_BOSS}}. Each hop: `.msg` file + `.trigger` touch. Golden context log survives compaction.
+**Notification chain:** {{DOEY_ROLE_WORKER}} → Manager → {{DOEY_ROLE_COORDINATOR}} → {{DOEY_ROLE_BOSS}}. Each hop: `doey-ctl msg send` + `doey-ctl msg trigger`. Golden context log survives compaction.
 
 ## Role Detection
 
