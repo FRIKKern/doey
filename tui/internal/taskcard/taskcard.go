@@ -322,12 +322,12 @@ func (e *ExpandedCard) loadSidecar() {
 func (e *ExpandedCard) Render() string {
 	e.loadSidecar()
 	task := e.Item.Task
-	contentWidth := e.Width - 6
+	contentWidth := e.Width - 2
 	if contentWidth < 20 {
 		contentWidth = 20
 	}
-	if contentWidth > styles.MaxCardWidth-6 {
-		contentWidth = styles.MaxCardWidth - 6
+	if contentWidth > styles.MaxCardWidth-2 {
+		contentWidth = styles.MaxCardWidth - 2
 	}
 
 	var sections []string
@@ -1064,12 +1064,12 @@ func (e *ExpandedCard) renderFilesChanged() []string {
 // Displays a warning if proof is missing for completed tasks.
 func (e *ExpandedCard) renderProofSection() []string {
 	task := e.Item.Task
-	contentWidth := e.Width - 6
+	contentWidth := e.Width - 2
 	if contentWidth < 20 {
 		contentWidth = 20
 	}
-	if contentWidth > styles.MaxCardWidth-6 {
-		contentWidth = styles.MaxCardWidth - 6
+	if contentWidth > styles.MaxCardWidth-2 {
+		contentWidth = styles.MaxCardWidth - 2
 	}
 
 	isComplete := task.Status == "done" || task.Status == "pending_user_confirmation"

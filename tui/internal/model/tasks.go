@@ -159,7 +159,7 @@ func (m *TasksModel) SetSize(w, h int) {
 		leftW = 28
 	}
 	m.list.SetSize(leftW, h-2) // header + summary = 2 lines above list
-	rightW := w - leftW - 1
+	rightW := w - leftW
 	if rightW < 24 {
 		rightW = 24
 	}
@@ -777,7 +777,6 @@ func (m TasksModel) View() string {
 		return m.viewHelp()
 	}
 
-	t := m.theme
 	w := m.width
 	if w < 52 {
 		w = 52
@@ -787,12 +786,12 @@ func (m TasksModel) View() string {
 		h = 10
 	}
 
-	// Panel widths: 40% left, 60% right, minus separator
+	// Panel widths: 40% left, 60% right
 	leftW := w * 40 / 100
 	if leftW < 28 {
 		leftW = 28
 	}
-	rightW := w - leftW - 1
+	rightW := w - leftW
 	if rightW < 24 {
 		rightW = 24
 	}
@@ -800,13 +799,7 @@ func (m TasksModel) View() string {
 	leftPanel := m.renderLeftPanel(leftW, h)
 	rightPanel := m.renderExpandedRightPanel(rightW, h)
 
-	// Separator
-	sepColor := t.Separator
-	sep := lipgloss.NewStyle().
-		Foreground(sepColor).
-		Render(strings.Repeat("│\n", h-1) + "│")
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sep, rightPanel)
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 }
 
 // renderLeftPanel renders the task list.
@@ -1384,11 +1377,6 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	t := m.theme
 
-	borderColor := t.Separator
-	if m.focused && !m.leftFocused {
-		borderColor = t.Primary
-	}
-
 	idx := m.list.Index()
 	if len(m.entries) == 0 || idx < 0 || idx >= len(m.entries) {
 		empty := lipgloss.NewStyle().
@@ -1412,7 +1400,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		expanded = &taskcard.ExpandedCard{
 			Item:          ti,
 			Theme:         m.theme,
-			Width:         w - 3,
+			Width:         w - 1,
 			Height:        h - 2,
 			SubtaskCursor: -1,
 			Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
@@ -1423,7 +1411,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	}
 
 	// Sync dimensions to current layout
-	renderW := w - 3
+	renderW := w - 1
 	if renderW < 20 {
 		renderW = 20
 	}
@@ -1483,10 +1471,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(h).
-		Padding(0, 1).
-		BorderLeft(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(borderColor)
+		PaddingRight(1)
 
 	return panelStyle.Render(displayed)
 }
