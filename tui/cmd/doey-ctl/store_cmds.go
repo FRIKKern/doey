@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/doey-cli/doey/tui/internal/store"
 )
@@ -592,5 +593,39 @@ func eventList(args []string) {
 // --- migrate subcommand ---
 
 func runMigrateCmd(args []string) {
-	fmt.Println("migrate: not yet implemented (Phase 2)")
+	fs := flag.NewFlagSet("migrate", flag.ExitOnError)
+	dir := fs.String("project-dir", "", "Project directory")
+	rt := fs.String("runtime", "", "Runtime directory (optional)")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	pd := projectDir(*dir)
+	s := openStore(*dir)
+	defer s.Close()
+
+	rtDir := ""
+	if *rt != "" {
+		rtDir = *rt
+	} else if v := os.Getenv("DOEY_RUNTIME"); v != "" {
+		rtDir = v
+	}
+
+	result, err := s.Migrate(pd, rtDir)
+	if err != nil {
+		fatal("migrate: %v\n", err)
+	}
+
+	if jsonOutput {
+		printJSON(result)
+		return
+	}
+
+	fmt.Printf("Migrated: %d tasks, %d plans, %d agents, %d statuses, %d messages, %d config\n",
+		result.Tasks, result.Plans, result.Agents, result.Statuses, result.Messages, result.Config)
+	if len(result.Errors) > 0 {
+		fmt.Printf("Errors (%d):\n", len(result.Errors))
+		for _, e := range result.Errors {
+			fmt.Printf("  - %s\n", e)
+		}
+	}
 }

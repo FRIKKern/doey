@@ -13,6 +13,12 @@ case "$PROMPT" in
     else
       write_pane_status "$STATUS_FILE" "READY"
     fi
+    # Write to SQLite store
+    _project_dir=$(_resolve_project_dir)
+    if command -v doey-ctl >/dev/null 2>&1 && [ -n "${_project_dir:-}" ]; then
+      doey-ctl db-status set --pane-id "$PANE_SAFE" --window-id "W${WINDOW_INDEX}" \
+        --role "${DOEY_ROLE:-worker}" --status "READY" --dir "$_project_dir" 2>/dev/null || true
+    fi
     notify_taskmaster "READY" "compact"; exit 0 ;;
   /simplify*|/loop*|/rename*|/exit*|/help*|/status*|/doey*) exit 0 ;;
 esac
@@ -29,6 +35,13 @@ if [ -n "${DOEY_PANE_ID:-}" ]; then
   else
     write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "BUSY" "${PROMPT:0:80}"
   fi
+fi
+
+# Write to SQLite store
+_project_dir=$(_resolve_project_dir)
+if command -v doey-ctl >/dev/null 2>&1 && [ -n "${_project_dir:-}" ]; then
+  doey-ctl db-status set --pane-id "$PANE_SAFE" --window-id "W${WINDOW_INDEX}" \
+    --role "${DOEY_ROLE:-worker}" --status "BUSY" --dir "$_project_dir" 2>/dev/null || true
 fi
 
 # Activity logging
