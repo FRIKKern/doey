@@ -88,12 +88,14 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   fi
   # Check for unread messages via unified msg command (fast path)
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    _unread=$(doey-ctl msg count --to "$TASKMASTER_SAFE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
+    _unread=$(doey-ctl msg count --to "$TASKMASTER_PANE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
     [ "${_unread:-0}" -gt 0 ] && _wake "MSG" "$elapsed"
   fi
-  # File-based message check (fallback)
-  set -- "$MSG_DIR"/${TASKMASTER_SAFE}_*.msg
-  [ -f "${1:-}" ] && _wake "MSG" "$elapsed"
+  # File-based message check (fallback) — match both full and short pane safe prefixes
+  local _mf _pane_safe="${TASKMASTER_PANE//[-:.]/_}"
+  for _mf in "$MSG_DIR"/${TASKMASTER_SAFE}_*.msg "$MSG_DIR"/"${_pane_safe}"_*.msg; do
+    [ -f "$_mf" ] && _wake "MSG" "$elapsed"
+  done
   if _has_new_results; then _mark_results_seen; _wake "FINISHED" "$elapsed"; fi
   set -- "$RUNTIME_DIR/status"/crash_pane_*
   [ -f "${1:-}" ] && _wake "CRASH" "$elapsed"
