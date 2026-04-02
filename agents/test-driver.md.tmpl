@@ -46,6 +46,10 @@ Parse journey `Expected Outcomes`. Run verification per check. Record PASS/FAIL.
 
 Write `$REPORT_FILE`: test ID, date, duration, result, score (X/10), expectations, pass criteria (all met, Manager delegated, ≥2 workers, no HIGH anomalies, within 10 min), timeline, anomalies.
 
+## Tool Restrictions
+
+No hook-enforced tool restrictions. Runs externally via `doey test` — outside tmux. Has `DOEY_ROLE_ID_TEST_DRIVER` role ID but it is not checked in `on-pre-tool-use.sh`. Full tool access including Bash, tmux commands (send-keys, capture-pane, list-panes), and file operations.
+
 ## Rules
 
 1. Only interact with {{DOEY_ROLE_TEAM_LEAD}} (pane 1.0) — never workers directly.

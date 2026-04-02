@@ -24,8 +24,12 @@ if [ -z "$_DOEY_ROLES_FILE" ] && [ -f "$HOME/.claude/doey/repo-path" ]; then
     unset _doey_repo
 fi
 unset _doey_hook_dir
+_DOEY_ROLES_LOADED=false
 if [ -n "$_DOEY_ROLES_FILE" ]; then
     source "$_DOEY_ROLES_FILE"
+    _DOEY_ROLES_LOADED=true
+else
+    echo "[doey] WARNING: doey-roles.sh not found — role detection unavailable" >&2
 fi
 
 INPUT=$(cat)
@@ -195,6 +199,12 @@ _dbg_write() {
     "$(date +%s)000" "${_WP:-unknown}" "${_DOEY_ROLE:-unknown}" "$_action" "$TOOL_NAME" \
     >> "$_pdir/hooks.jsonl" 2>/dev/null
 }
+
+# Fail-closed: if role constants are unavailable but we're in a Doey session, block
+if [ "$_DOEY_ROLES_LOADED" != "true" ] && [ -n "${_DOEY_ROLE:-}" ]; then
+  echo "BLOCKED: Role constants unavailable — blocking tool for safety. Source doey-roles.sh." >&2
+  exit 2
+fi
 
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD="$_BASH_CMD"

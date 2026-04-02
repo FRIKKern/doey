@@ -80,6 +80,10 @@ Sources: `~/.local/share/doey/teams/*.team.md` (installed), `$PROJECT_DIR/teams/
 
 **Remove:** Delete `DOEY_TEAM_<N>_*` lines, reindex remaining teams, update count, touch trigger.
 
+## Tool Restrictions
+
+No hook-enforced tool restrictions. Full project access. Runs in a dedicated settings window with no dedicated role ID in `on-pre-tool-use.sh`. Has Read and Edit access to all config and agent files.
+
 ## Applying Changes
 
 | What changed | Command |

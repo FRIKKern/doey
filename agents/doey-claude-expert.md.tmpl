@@ -39,6 +39,12 @@ Skills: `.claude/skills/<name>/SKILL.md` with YAML frontmatter, loaded on demand
 
 **Notification chain:** {{DOEY_ROLE_WORKER}} → Manager → {{DOEY_ROLE_COORDINATOR}} → {{DOEY_ROLE_BOSS}}. Each hop: `doey-ctl msg send` + `doey-ctl msg trigger`. Golden context log survives compaction.
 
+## Tool Restrictions
+
+No hook-enforced tool restrictions specific to this role. Spawned as a subagent — inherits the calling role's environment but has no dedicated role ID in `on-pre-tool-use.sh`. Full project access when spawned directly.
+
+Note: The restriction table above documents the **system-wide** role restrictions that `on-pre-tool-use.sh` enforces on other roles — it is reference material for this agent's advisory function, not restrictions on this agent itself.
+
 ## Role Detection
 
 **Recurring bug:** `DOEY_ROLE` env var can be stale (session-wide, last writer wins). Per-pane `.role` files in `$RUNTIME_DIR/status/` are authoritative.

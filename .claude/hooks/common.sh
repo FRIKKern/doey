@@ -23,8 +23,12 @@ if [ -z "$_DOEY_ROLES_FILE" ] && [ -f "$HOME/.claude/doey/repo-path" ]; then
     unset _doey_repo
 fi
 unset _doey_hook_dir
+_DOEY_ROLES_LOADED=false
 if [ -n "$_DOEY_ROLES_FILE" ]; then
     source "$_DOEY_ROLES_FILE"
+    _DOEY_ROLES_LOADED=true
+else
+    echo "[doey] WARNING: doey-roles.sh not found — role detection unavailable" >&2
 fi
 
 # ERR trap: report failing command to stderr so Claude Code shows it instead of "No stderr output"
