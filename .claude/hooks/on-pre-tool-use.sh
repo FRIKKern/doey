@@ -134,10 +134,10 @@ _is_direct_vcs_cmd() {
           }
         }
         {print}
-      ' | tr '\n' ' ')
+      ' | tr '\n' ';')
       ;;
     *)
-      cleaned=$(printf '%s' "$cmd" | tr '\n' ' ')
+      cleaned=$(printf '%s' "$cmd" | tr '\n' ';')
       ;;
   esac
   # Strip quoted strings
