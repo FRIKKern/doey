@@ -3488,7 +3488,7 @@ SJSON
 
   # Populate SQLite store from existing files (one-shot, idempotent)
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl migrate --project-dir "$dir" --runtime "$runtime_dir" 2>/dev/null || true
+    doey-ctl migrate --project-dir "$dir" 2>/dev/null || true
   fi
 }
 

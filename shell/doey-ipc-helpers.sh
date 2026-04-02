@@ -81,8 +81,8 @@ send_msg_to_taskmaster() {
 
   # Fast path: file-based doey-ctl
   if command -v doey-ctl >/dev/null 2>&1; then
-    if doey-ctl msg send --to "$taskmaster_safe" --from "$sender" --subject "$subject" --body "$body" --runtime "$runtime_dir" 2>/dev/null; then
-      doey-ctl msg trigger --pane "$taskmaster_safe" --runtime "$runtime_dir" 2>/dev/null || true
+    if doey-ctl msg send --to "$taskmaster_safe" --from "$sender" --subject "$subject" --body "$body" --project-dir "$runtime_dir" 2>/dev/null; then
+      doey-ctl msg trigger --pane "$taskmaster_safe" --project-dir "$runtime_dir" 2>/dev/null || true
       touch "${runtime_dir}/status/taskmaster_trigger" 2>/dev/null || true
       return 0
     fi

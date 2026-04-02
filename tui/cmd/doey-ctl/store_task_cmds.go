@@ -457,15 +457,11 @@ func dbMsgSend(args []string) {
 
 func dbMsgList(args []string) {
 	fs := flag.NewFlagSet("db-msg list", flag.ExitOnError)
-	to := fs.String("to", "", "recipient pane (required)")
+	to := fs.String("to", "", "recipient pane (optional, lists all if omitted)")
 	unread := fs.Bool("unread", false, "only unread messages")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
-
-	if *to == "" {
-		fatal("db-msg list: --to is required\n")
-	}
 
 	s := openStore(*dir)
 	defer s.Close()
