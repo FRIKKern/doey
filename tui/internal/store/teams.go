@@ -99,9 +99,15 @@ func (s *Store) GetPaneStatus(paneID string) (*PaneStatus, error) {
 }
 
 func (s *Store) ListPaneStatuses(windowID string) ([]PaneStatus, error) {
-	rows, err := s.db.Query(
-		`SELECT pane_id, window_id, role, status, task_id, task_title, agent, updated_at FROM pane_status WHERE window_id = ? ORDER BY pane_id`, windowID,
-	)
+	var rows *sql.Rows
+	var err error
+	if windowID == "" {
+		rows, err = s.db.Query(
+			`SELECT pane_id, window_id, role, status, task_id, task_title, agent, updated_at FROM pane_status ORDER BY window_id, pane_id`)
+	} else {
+		rows, err = s.db.Query(
+			`SELECT pane_id, window_id, role, status, task_id, task_title, agent, updated_at FROM pane_status WHERE window_id = ? ORDER BY pane_id`, windowID)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -35,12 +35,23 @@ func (s *Store) SendMessage(m *Message) (int64, error) {
 }
 
 // ListMessages returns messages for a pane, optionally only unread, newest first.
+// If toPane is empty, returns all messages.
 func (s *Store) ListMessages(toPane string, unreadOnly bool) ([]Message, error) {
-	query := `SELECT id, from_pane, to_pane, subject, body, task_id, read, created_at
-	          FROM messages WHERE to_pane = ?`
-	args := []any{toPane}
-	if unreadOnly {
-		query += ` AND read = 0`
+	var query string
+	var args []any
+	if toPane == "" {
+		query = `SELECT id, from_pane, to_pane, subject, body, task_id, read, created_at
+		          FROM messages`
+		if unreadOnly {
+			query += ` WHERE read = 0`
+		}
+	} else {
+		query = `SELECT id, from_pane, to_pane, subject, body, task_id, read, created_at
+		          FROM messages WHERE to_pane = ?`
+		args = append(args, toPane)
+		if unreadOnly {
+			query += ` AND read = 0`
+		}
 	}
 	query += ` ORDER BY created_at DESC`
 
