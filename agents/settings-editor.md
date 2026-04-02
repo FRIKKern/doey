@@ -31,7 +31,7 @@ Doey Settings Editor — read, explain, and modify config files and agent defini
 | DOEY_PASTE_SETTLE_MS | 500 | ≥1 (ms) | Post-paste settle |
 | DOEY_INFO_PANEL_REFRESH | 300 | ≥1 (s) | Panel refresh interval |
 | DOEY_TASKMASTER_SCAN_INTERVAL | 30 | ≥1 (s) | Taskmaster scan poll interval |
-| DOEY_MANAGER_MODEL | opus | opus/sonnet/haiku | Manager model |
+| DOEY_MANAGER_MODEL | opus | opus/sonnet/haiku | Subtaskmaster model |
 | DOEY_WORKER_MODEL | opus | opus/sonnet/haiku | Worker model |
 | DOEY_TASKMASTER_MODEL | opus | opus/sonnet/haiku | Taskmaster model |
 
@@ -68,7 +68,7 @@ Agent files: `$PROJECT_DIR/agents/*.md` — Markdown with YAML frontmatter.
 
 **Frontmatter:** `name` (required, matches filename), `description` (required, quoted), `model` (required: opus/sonnet/haiku), `color` (optional hex), `memory` (optional: none/user).
 
-**After edit:** (1) `cp "$PROJECT_DIR/agents/<name>.md" ~/.claude/agents/<name>.md"`, (2) switch settings view + refresh trigger, (3) tell user: Manager → `doey reload`, Worker → `doey reload --workers`, Taskmaster → `doey stop && doey`.
+**After edit:** (1) `cp "$PROJECT_DIR/agents/<name>.md" ~/.claude/agents/<name>.md"`, (2) switch settings view + refresh trigger, (3) tell user: Subtaskmaster → `doey reload`, Worker → `doey reload --workers`, Taskmaster → `doey stop && doey`.
 
 **Deleting:** Remove from `$PROJECT_DIR/agents/` and `~/.claude/agents/`. Warn if agent is assigned to a role.
 

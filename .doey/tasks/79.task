@@ -1,6 +1,6 @@
 TASK_ID=79
 TASK_TITLE=Full codebase simplification
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774990676
 TASK_TYPE=refactor
 TASK_DESCRIPTION=Full simplification pass across the entire Doey codebase. Goal: reduce cognitive load, cut ceremony, DRY repeated logic, align patterns. Two teams working in parallel on non-overlapping domains. Team 1: shell core + hooks. Team 2: skills + agents + docs. Constraints: bash 3.2 compat, Edit not Write, Read before editing, preserve all behavior, bash -n all .sh files after. Each team writes a report to RUNTIME_DIR/reports/simplify_team_W.md with per-file before/after line counts.

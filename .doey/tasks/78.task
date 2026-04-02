@@ -1,6 +1,6 @@
 TASK_ID=78
 TASK_TITLE=Go TUI task detail view needs scrolling support
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774980644
 TASK_TYPE=bug
 TASK_DESCRIPTION=When viewing a task with long content (description, subtasks, decision log, reports) in the Go TUI Tasks tab, the rendered detail view takes up more vertical space than the terminal. The viewport is stuck at the bottom with no way to scroll up — the user cannot see the top of the task (title, status, description). Fix: the task detail view must support vertical scrolling (arrow keys, j/k, page up/down, mouse wheel). The content amount is correct and should NOT be reduced — the TUI must handle it. Look at how Bubble Tea viewport component works — likely need to wrap the task detail content in a viewport model with proper keybindings. Files likely involved: tui/internal/taskcard/taskcard.go and whatever renders the task detail/expanded view.

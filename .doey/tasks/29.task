@@ -1,6 +1,6 @@
 TASK_ID=29
 TASK_TITLE=Task proof-of-completion — capture and display in TUI
-TASK_STATUS=error
+TASK_STATUS=done
 TASK_CREATED=1774860817
 TASK_TYPE=feature
 TASK_DESCRIPTION=Every task needs verifiable proof that it was actually completed. When a user opens a task in the Go TUI, they must see concrete evidence — not just "status: done".

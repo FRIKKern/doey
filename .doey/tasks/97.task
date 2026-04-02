@@ -1,0 +1,34 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=97
+TASK_TITLE=Centralized Role Definitions — single source of truth for all role names
+TASK_STATUS=done
+TASK_TYPE=infrastructure
+TASK_TAGS=
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=W1
+TASK_TEAM=W1
+TASK_DESCRIPTION=One file (shell/doey-roles.sh) defines all role names. Shell sources it, Go generates from it, agents/skills use templates expanded on install. A rename = edit 1 file + run 1 command. Plan: .doey/plans/3.md. 4 phases: (1) Create doey-roles.sh + refactor shell/hooks to use variables, (2) Go generate for TUI constants, (3) Agent/skill .md.tmpl templates, (4) Verify + document rename workflow.
+TASK_ACCEPTANCE_CRITERIA=
+TASK_HYPOTHESES=
+TASK_DECISION_LOG=1775119213:Created task\n1775120665:Status changed to done\n1775120674:Status changed to done\n1775120819:Status changed to done\n1775122460:Status changed to done\n1775122530:Status changed to done
+TASK_SUBTASKS=1:Phase 1 - Create doey-roles.sh + refactor all shell/hooks to use role variables:pending|2:Phase 2 - Go generate script reads roles.sh and produces tui/internal/roles/generated.go:pending|3:Phase 3 - Agent/skill .md.tmpl templates with ROLE placeholders expanded on install:pending|4:Phase 4 - Verify mock rename + document workflow in CLAUDE.md:pending\n2:W2.1: Create generator + doc.go + run go generate:pending\n3:W2.2: Refactor reader.go + team.go with roles constants:pending\n4:W2.3: Refactor editor.go + welcome.go + actions.go:pending\n5:W2.4: Final verification — go build + grep check:pending
+TASK_RELATED_FILES=
+TASK_BLOCKERS=
+TASK_TIMESTAMPS=created=1775119213|completed=1775120665|completed=1775120674|completed=1775120819|completed=1775122460|completed=1775122530
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_NOTES=
+TASK_UPDATED=1775119213
+TASK_PLAN_ID=3
+TASK_SUBTASKS=1:Phase 1 - Create doey-roles.sh + refactor all shell/hooks to use role variables:pending|2:Phase 2 - Go generate script reads roles.sh and produces tui/internal/roles/generated.go:pending|3:Phase 3 - Agent/skill .md.tmpl templates with ROLE placeholders expanded on install:pending|4:Phase 4 - Verify mock rename + document workflow in CLAUDE.md:pending\n2:W2.1: Create generator + doc.go + run go generate:pending\n3:W2.2: Refactor reader.go + team.go with roles constants:pending\n4:W2.3: Refactor editor.go + welcome.go + actions.go:pending\n5:W2.4: Final verification — go build + grep check:pending
+TASK_REPORT_1_TIMESTAMP=1775120393
+TASK_REPORT_1_AUTHOR=Manager_W1
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Phase 1 Complete
+TASK_REPORT_1_BODY=Created doey-roles.sh, sourced from common.sh, refactored all shell/hooks. Zero hardcoded role strings remain. All tests pass.
+TASK_ATTACHMENTS=.doey/tasks/97.result.json
+TASK_REPORT_2_TIMESTAMP=1775122267
+TASK_REPORT_2_AUTHOR=Manager_W1
+TASK_REPORT_2_TYPE=completion
+TASK_REPORT_2_TITLE=Phase 3 Complete
+TASK_REPORT_2_BODY=26 .md.tmpl templates created (10 agents, 16 skills). expand-templates.sh works correctly with --check and --dry-run. All tests pass.
