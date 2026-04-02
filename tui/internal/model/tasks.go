@@ -281,16 +281,13 @@ func (m *TasksModel) taskActivityTime(t runtime.PersistentTask) time.Time {
 func (m *TasksModel) sortEntries() {
 	sort.SliceStable(m.entries, func(i, j int) bool {
 		a, b := m.entries[i], m.entries[j]
-		pa, pb := statusPriority(a.Status), statusPriority(b.Status)
-		if pa != pb {
-			return pa < pb
-		}
-		// Within the same status group, sort by activity (most recent first).
+		// Sort by most recently updated first (TASK_UPDATED descending).
+		// Tasks with no update timestamp sort to the bottom.
 		ta, tb := m.taskActivityTime(a), m.taskActivityTime(b)
 		if !ta.Equal(tb) {
 			return ta.After(tb)
 		}
-		// Final tiebreaker: task ID descending (newest first).
+		// Tiebreaker: task ID descending (newest first).
 		ai, errA := strconv.Atoi(a.ID)
 		bi, errB := strconv.Atoi(b.ID)
 		if errA == nil && errB == nil {
