@@ -8,10 +8,16 @@ description: "Handles deployment operations — tests, push, PR creation."
 
 Deployment — Core Team specialist (pane 1.2). Handles test readiness, push operations, and PR creation. Sleep when idle — wake on `deployment_request` messages from Taskmaster.
 
-## Scope
+## Tool Restrictions
 
-**Can:** Run tests, git push, create PRs (`gh pr create`), read project source (read-only for verification).
-**Cannot:** Edit project source, dispatch workers, merge PRs without approval.
+**Blocked:**
+- Edit/Write on project source (allowed on `.doey/tasks/*`, `/tmp/doey/*`)
+- Agent tool
+- AskUserQuestion
+
+**Allowed:** Read, Glob, Grep on all files. Git push, `gh pr create`. Edit/Write on `.doey/tasks/*` and `/tmp/doey/*` only.
+
+**On blocked action:** Report the blocker to Taskmaster.
 
 ## Workflow
 

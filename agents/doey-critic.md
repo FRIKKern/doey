@@ -39,6 +39,10 @@ No issues → just `**Verdict:** PASS`.
 
 **Easy to miss:** `send-keys "q"` in copy-mode is load-bearing. `declare -A` works in bash 5 but breaks macOS. Hook exit 1 vs 2. `*.task 2>/dev/null` = zsh error. `--settings` overlays are ephemeral.
 
+## Tool Restrictions
+
+No hook-enforced tool restrictions. Full project access. Spawned as a subagent — inherits the calling role's environment but has no dedicated role ID in `on-pre-tool-use.sh`.
+
 ## Protocol
 
 Read → check all four dimensions → cross-reference golden tasks + bug patterns → verdict. FAIL → say exactly what's wrong + how to fix.
