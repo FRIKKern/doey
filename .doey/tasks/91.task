@@ -1,0 +1,32 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=91
+TASK_TITLE=Go TUI task list readability — compact cards, cleaner layout
+TASK_STATUS=cancelled
+TASK_TYPE=bugfix
+TASK_TAGS=
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=
+TASK_DESCRIPTION=The task list in the Go TUI is hard to scan. Cards are too tall, lines everywhere, titles too large, IDs too prominent. Clean it up:
+
+1. Reposition task ID — make it subtle (right-aligned or small prefix), not the dominant element
+2. Make task titles more compact — less visual space per card
+3. Reduce excessive lines/borders — the list has too many separator lines, make it cleaner
+4. Improve visual hierarchy: status + title primary, ID + metadata secondary
+5. Overall: fewer lines, more compact cards, easier to scan
+
+Also clean up the task detail/inspect view — too many lines and visual noise there too. Make it clean and nice.
+
+Reference screenshot: /home/doey/.claude/projects/-home-doey-doey/c38e11ff-bafe-4c3c-87d4-240f480fc8de/tool-results/webfetch-1775111570127-xztay3.png
+
+Go TUI code is in tui/ directory.
+TASK_ACCEPTANCE_CRITERIA=
+TASK_HYPOTHESES=
+TASK_DECISION_LOG=1775111613:Created task
+TASK_SUBTASKS=
+TASK_RELATED_FILES=
+TASK_BLOCKERS=
+TASK_TIMESTAMPS=created=1775111613
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_NOTES=
+TASK_UPDATED=1775111613
