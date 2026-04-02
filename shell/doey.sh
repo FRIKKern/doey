@@ -409,7 +409,7 @@ EOF
 
 project_name_from_dir() {
   local raw
-  if [ -f "$1/.doey-name" ]; then raw=$(head -1 "$1/.doey-name"); else raw=$(basename "$1"); fi
+  if [ -f "$1/.doey-name" ]; then raw=$(head -1 "$1/.doey-name"); else raw="${1##*/}"; fi
   echo "$raw" | tr '[:upper:] .' '[:lower:]--' | sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//;s/-$//'
 }
 
@@ -551,7 +551,7 @@ _find_team_def() {
   fi
   # 5. Doey repo shipped defaults (for non-doey projects using doey)
   local repo_path=""
-  [ -f "$HOME/.claude/doey/repo-path" ] && repo_path=$(cat "$HOME/.claude/doey/repo-path")
+  [ -f "$HOME/.claude/doey/repo-path" ] && repo_path=$(<"$HOME/.claude/doey/repo-path")
   if [ -n "$repo_path" ] && [ -f "${repo_path}/teams/${fname}" ]; then
     _FTD_RESULT="${repo_path}/teams/${fname}"; return 0
   fi
@@ -806,9 +806,9 @@ setup_dashboard() {
   # Indices: 0.0=info, 0.1=Boss, 0.2=Taskmaster
 
   local _proj="${session#doey-}"
-  tmux select-pane -t "$session:0.0" -T ""
-  tmux select-pane -t "$session:0.1" -T "${_proj} ${DOEY_ROLE_BOSS}"
-  tmux select-pane -t "$session:0.2" -T "${_proj} ${DOEY_ROLE_COORDINATOR}"
+  tmux select-pane -t "$session:0.0" -T "" \; \
+       select-pane -t "$session:0.1" -T "${_proj} ${DOEY_ROLE_BOSS}" \; \
+       select-pane -t "$session:0.2" -T "${_proj} ${DOEY_ROLE_COORDINATOR}"
   BOSS_PANE="0.1"
   TASKMASTER_PANE="0.2"
 
@@ -1730,7 +1730,8 @@ doey_purge() {
   if session_exists "$session"; then
     session_active=true
     local tmux_rt
-    tmux_rt="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
+    tmux_rt="$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null)" || true
+    tmux_rt="${tmux_rt#*=}"
     [[ -n "$tmux_rt" ]] && runtime_dir="$tmux_rt"
   fi
 
@@ -1935,7 +1936,8 @@ MANIFEST
 
   sleep 0.1
   local actual
-  actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l | tr -d ' ')
+  actual=$(tmux list-panes -t "$session:${team_window}" 2>/dev/null | wc -l)
+  actual="${actual// /}"
   [[ "$actual" -ne "$total" ]] && \
     printf "\n   ${WARN}⚠ Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total" "$actual"
 
@@ -1947,10 +1949,11 @@ MANIFEST
   # -- Name panes --
   _step_msg 4 "Naming panes..." "$headless"
 
-  tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
+  local _name_cmd="tmux select-pane -t \"$session:${team_window}.0\" -T \"${name} T${team_window} Mgr\""
   for (( i=1; i<total; i++ )); do
-    tmux select-pane -t "$session:${team_window}.$i" -T "T${team_window} W${i}"
+    _name_cmd="${_name_cmd} \\; select-pane -t \"$session:${team_window}.$i\" -T \"T${team_window} W${i}\""
   done
+  eval "$_name_cmd"
   tmux rename-window -t "$session:${team_window}" "Local Team"
 
   [[ "$headless" -eq 0 ]] && step_done
@@ -2292,7 +2295,8 @@ _task_persistent_dir() {
   _name="$(find_project "$_dir" 2>/dev/null)"
   [ -z "$_name" ] && { printf '  %s✗ No doey project for %s%s\n' "$ERROR" "$_dir" "$RESET" >&2; return 1; }
   _session="doey-${_name}"
-  _runtime=$(tmux show-environment -t "$_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  _runtime=$(tmux show-environment -t "$_session" DOEY_RUNTIME 2>/dev/null) || true
+  _runtime="${_runtime#*=}"
   [ -z "$_runtime" ] && { printf '  %s✗ Session not running: %s%s\n' "$ERROR" "$_session" "$RESET" >&2; return 1; }
   mkdir -p "${_runtime}/tasks"
   echo "${_runtime}/tasks"
@@ -2305,7 +2309,8 @@ _task_runtime_dir() {
   _name="$(find_project "$_dir" 2>/dev/null)" || true
   [ -z "$_name" ] && return 1
   _session="doey-${_name}"
-  _runtime=$(tmux show-environment -t "$_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  _runtime=$(tmux show-environment -t "$_session" DOEY_RUNTIME 2>/dev/null) || true
+  _runtime="${_runtime#*=}"
   [ -z "$_runtime" ] && return 1
   echo "$_runtime"
 }
@@ -3444,9 +3449,6 @@ _init_doey_session() {
   _cleanup_old_session "$session" "$runtime_dir"
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
   tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
-  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}"
-  # Export config values so hooks (running in subshells) can read them
-  tmux set-environment -t "$session" DOEY_INFO_PANEL_REFRESH "$DOEY_INFO_PANEL_REFRESH"
 
   # Sync persistent tasks (.doey/tasks/) → runtime cache for hooks/TUI
   if [ -d "${dir}/.doey/tasks" ]; then
@@ -3454,19 +3456,25 @@ _init_doey_session() {
   fi
 
   # Generate settings overlay with Doey statusline (ships with Doey, not user config)
+  local _doey_settings=""
   local _statusline_cmd="$HOME/.local/bin/doey-statusline.sh"
   if [ -f "$_statusline_cmd" ]; then
     cat > "${runtime_dir}/doey-settings.json" << SJSON
 {"statusLine":{"type":"command","command":"bash ${_statusline_cmd}"}}
 SJSON
-    tmux set-environment -t "$session" DOEY_SETTINGS "${runtime_dir}/doey-settings.json"
+    _doey_settings="${runtime_dir}/doey-settings.json"
   fi
 
   # Remote detection — expose to hooks and info-panel
   local is_remote
   is_remote=$(_detect_remote)
-  tmux set-environment -t "$session" DOEY_REMOTE "$is_remote"
-  tmux set-environment -t "$session" DOEY_TUNNEL_URL ""
+
+  # Batch all tmux set-environment calls (saves 4 forks)
+  tmux set-environment -t "$session" DOEY_RUNTIME "${runtime_dir}" \; \
+       set-environment -t "$session" DOEY_INFO_PANEL_REFRESH "$DOEY_INFO_PANEL_REFRESH" \; \
+       set-environment -t "$session" DOEY_SETTINGS "$_doey_settings" \; \
+       set-environment -t "$session" DOEY_REMOTE "$is_remote" \; \
+       set-environment -t "$session" DOEY_TUNNEL_URL ""
 }
 
 launch_session_headless() {
@@ -3821,9 +3829,10 @@ _layout_checksum() {
 rebalance_grid_layout() {
   local session="$1" team_window="${2:-1}" runtime_dir="${3:-}" mgr_width=90
 
-  local win_w win_h
-  win_w="$(tmux display-message -t "$session:${team_window}" -p '#{window_width}')"
-  win_h="$(tmux display-message -t "$session:${team_window}" -p '#{window_height}')"
+  local win_w win_h dims
+  dims="$(tmux display-message -t "$session:${team_window}" -p '#{window_width} #{window_height}')"
+  win_w="${dims%% *}"
+  win_h="${dims##* }"
 
   local pane_ids=()
   while IFS=$'\t' read -r _idx _pid; do
@@ -3913,6 +3922,32 @@ rebuild_pane_state() {
   done < <(tmux list-panes -t "$session" -F '#{pane_index}')
 }
 
+# Bulk-read all team env keys in a single pass.  Sets _ts_* variables.
+# Usage: _read_team_env_bulk <env_file>
+_read_team_env_bulk() {
+  local _reb_file="$1" _reb_line _reb_val
+  _ts_worker_count="" _ts_grid="" _ts_worker_panes=""
+  _ts_wt_dir="" _ts_wt_branch="" _ts_team_type=""
+  _ts_team_name="" _ts_team_role="" _ts_worker_model="" _ts_manager_model=""
+  [ ! -f "$_reb_file" ] && return 0
+  while IFS= read -r _reb_line || [ -n "$_reb_line" ]; do
+    _reb_val="${_reb_line#*=}"
+    _reb_val="${_reb_val//\"/}"
+    case "$_reb_line" in
+      WORKER_COUNT=*)   _ts_worker_count="$_reb_val" ;;
+      GRID=*)           _ts_grid="$_reb_val" ;;
+      WORKER_PANES=*)   _ts_worker_panes="$_reb_val" ;;
+      WORKTREE_DIR=*)   _ts_wt_dir="$_reb_val" ;;
+      WORKTREE_BRANCH=*) _ts_wt_branch="$_reb_val" ;;
+      TEAM_TYPE=*)      _ts_team_type="$_reb_val" ;;
+      TEAM_NAME=*)      _ts_team_name="$_reb_val" ;;
+      TEAM_ROLE=*)      _ts_team_role="$_reb_val" ;;
+      WORKER_MODEL=*)   _ts_worker_model="$_reb_val" ;;
+      MANAGER_MODEL=*)  _ts_manager_model="$_reb_val" ;;
+    esac
+  done < "$_reb_file"
+}
+
 _read_team_state() {
   local session="$1" runtime_dir="$2" dir="$3" team_window="$4"
   local team_env="${runtime_dir}/team_${team_window}.env"
@@ -3925,19 +3960,13 @@ _read_team_state() {
     return 0
   fi
 
-  _ts_worker_count=$(_env_val "$team_env" WORKER_COUNT); _ts_worker_count="${_ts_worker_count:-0}"
-  _ts_grid=$(_env_val "$team_env" GRID); _ts_grid="${_ts_grid:-dynamic}"
-  _ts_worker_panes=$(_env_val "$team_env" WORKER_PANES)
-  _ts_wt_dir=$(_env_val "$team_env" WORKTREE_DIR)
-  _ts_wt_branch=$(_env_val "$team_env" WORKTREE_BRANCH)
-  _ts_team_type=$(_env_val "$team_env" TEAM_TYPE)
-  _ts_team_name=$(_env_val "$team_env" TEAM_NAME)
-  _ts_team_role=$(_env_val "$team_env" TEAM_ROLE)
-  _ts_worker_model=$(_env_val "$team_env" WORKER_MODEL)
-  _ts_manager_model=$(_env_val "$team_env" MANAGER_MODEL)
+  _read_team_env_bulk "$team_env"
+  _ts_worker_count="${_ts_worker_count:-0}"
+  _ts_grid="${_ts_grid:-dynamic}"
 
   local _pane_count
-  _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')
+  _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l)
+  _pane_count="${_pane_count// /}"
   _ts_cols=$(( (_pane_count - 1) / 2 ))
   [ "$_ts_cols" -lt 1 ] && _ts_cols=1
 
@@ -3952,20 +3981,31 @@ _batch_boot_workers() {
   local session="$1" runtime_dir="$2" team_window="$3"
   shift 3
 
-  local _bbw_acronym=""
-  [ -f "${runtime_dir}/session.env" ] && _bbw_acronym=$(_env_val "${runtime_dir}/session.env" PROJECT_ACRONYM)
-
-  local _bbw_worker_model
-  _bbw_worker_model=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_MODEL)
+  # Bulk-read env values (avoids ~12 forks from _env_val calls)
+  local _bbw_acronym="" _bbw_worker_model="" _bbw_team_type=""
+  local _bbw_env_key _bbw_env_raw
+  if [ -f "${runtime_dir}/session.env" ]; then
+    while IFS='=' read -r _bbw_env_key _bbw_env_raw; do
+      case "$_bbw_env_key" in
+        PROJECT_ACRONYM) _bbw_acronym="${_bbw_env_raw//\"/}" ;;
+      esac
+    done < "${runtime_dir}/session.env"
+  fi
+  local _bbw_team_env="${runtime_dir}/team_${team_window}.env"
+  if [ -f "$_bbw_team_env" ]; then
+    while IFS='=' read -r _bbw_env_key _bbw_env_raw; do
+      case "$_bbw_env_key" in
+        WORKER_MODEL) _bbw_worker_model="${_bbw_env_raw//\"/}" ;;
+        TEAM_TYPE) _bbw_team_type="${_bbw_env_raw//\"/}" ;;
+      esac
+    done < "$_bbw_team_env"
+  fi
   [ -z "$_bbw_worker_model" ] && _bbw_worker_model="$DOEY_WORKER_MODEL"
-
-  local _bbw_team_type
-  _bbw_team_type=$(_env_val "${runtime_dir}/team_${team_window}.env" TEAM_TYPE)
   local _bbw_is_freelancer="false"
   [ "$_bbw_team_type" = "freelancer" ] && _bbw_is_freelancer="true"
 
   # Phase 1: Prepare all workers — build prompt files and command strings
-  local _bbw_pane_idxs="" _bbw_cmds="" _bbw_count=0
+  local _bbw_pane_arr=() _bbw_cmd_arr=() _bbw_count=0
   local pair pane_idx worker_num
   for pair in "$@"; do
     pane_idx="${pair%%:*}"
@@ -3991,16 +4031,9 @@ _batch_boot_workers() {
     _append_settings cmd "$runtime_dir"
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
 
-    # Store pane index and command for phase 2 (newline-delimited)
-    if [ "$_bbw_count" -eq 0 ]; then
-      _bbw_pane_idxs="$pane_idx"
-      _bbw_cmds="$cmd"
-    else
-      _bbw_pane_idxs="${_bbw_pane_idxs}
-${pane_idx}"
-      _bbw_cmds="${_bbw_cmds}
-${cmd}"
-    fi
+    # Store pane index and command for phase 2
+    _bbw_pane_arr+=("$pane_idx")
+    _bbw_cmd_arr+=("$cmd")
     _bbw_count=$(( _bbw_count + 1 ))
   done
 
@@ -4008,8 +4041,8 @@ ${cmd}"
   local _bbw_i=0
   while [ "$_bbw_i" -lt "$_bbw_count" ]; do
     local _bbw_cur_pane _bbw_cur_cmd
-    _bbw_cur_pane="$(printf '%s\n' "$_bbw_pane_idxs" | sed -n "$(( _bbw_i + 1 ))p")"
-    _bbw_cur_cmd="$(printf '%s\n' "$_bbw_cmds" | sed -n "$(( _bbw_i + 1 ))p")"
+    _bbw_cur_pane="${_bbw_pane_arr[$_bbw_i]}"
+    _bbw_cur_cmd="${_bbw_cmd_arr[$_bbw_i]}"
     tmux send-keys -t "$session:${team_window}.${_bbw_cur_pane}" "$_bbw_cur_cmd" Enter
     if [ "$_bbw_is_freelancer" = "true" ]; then
       write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "RESERVED"
@@ -4048,7 +4081,8 @@ doey_add_column() {
   _dac_win_w="$(tmux display-message -t "$session:$team_window" -p '#{window_width}' 2>/dev/null)" || true
   if [ -n "$_dac_win_w" ]; then
     local _dac_pane_count
-    _dac_pane_count="$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l | tr -d ' ')"
+    _dac_pane_count="$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l)"
+    _dac_pane_count="${_dac_pane_count// /}"
     local _dac_min_col_w=40
     # Calculate width per column with current panes
     local _dac_cols_now=$(( (_dac_pane_count + 1) / 2 ))  # rough: 2 panes per column
@@ -4275,7 +4309,8 @@ _build_worker_pane_list() {
   # For freelancer teams, pane 0 is also a worker (no manager)
   local _wpl_skip_pane0="true"
   local _wpl_runtime
-  _wpl_runtime=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
+  _wpl_runtime=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null) || true
+  _wpl_runtime="${_wpl_runtime#*=}"
   if [ -n "$_wpl_runtime" ] && [ -f "${_wpl_runtime}/team_${window_index}.env" ]; then
     local _wpl_tt
     _wpl_tt=$(_env_val "${_wpl_runtime}/team_${window_index}.env" TEAM_TYPE)
@@ -4652,7 +4687,8 @@ add_team_window() {
   done
 
   local actual
-  actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l | tr -d ' ')
+  actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l)
+  actual="${actual// /}"
   [ "$actual" -eq "$total_panes" ] || printf "  ${WARN}Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total_panes" "$actual"
 
   # Apply manager-left layout: pane 0 full-height left, workers in 2-row columns
