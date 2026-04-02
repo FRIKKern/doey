@@ -71,9 +71,9 @@ After producing your verdict, you MUST complete these steps in order:
 Use `doey-ctl` to record your verdict in the task file so it persists:
 
 ```bash
-doey-ctl task update --task-id $TASK_ID --field TASK_REVIEW_VERDICT --value "PASS"  # or "FAIL"
-doey-ctl task update --task-id $TASK_ID --field TASK_REVIEW_FINDINGS --value "<summary of findings>"
-doey-ctl task update --task-id $TASK_ID --field TASK_REVIEW_TIMESTAMP --value "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+doey-ctl task update --id $TASK_ID --field TASK_REVIEW_VERDICT --value "PASS"  # or "FAIL"
+doey-ctl task update --id $TASK_ID --field TASK_REVIEW_FINDINGS --value "<summary of findings>"
+doey-ctl task update --id $TASK_ID --field TASK_REVIEW_TIMESTAMP --value "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
 ### 2. Route the result
