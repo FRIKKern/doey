@@ -565,6 +565,7 @@ func (m *Model) propagateSizes() {
 
 	// All panels get full width — only one shown at a time
 	m.dashboard = m.dashboard.SetSize(m.width, bodyH)
+	m.tasks.SetPanelOffset(bannerH + menuH)
 	m.tasks.SetSize(m.width, bodyH)
 	m.plans.SetPanelOffset(bannerH + menuH)
 	m.plans.SetSize(m.width, bodyH)
