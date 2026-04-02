@@ -1,0 +1,43 @@
+---
+name: doey-simplify-everything
+description: Full codebase simplification across all teams. {{DOEY_ROLE_COORDINATOR}} inventories capacity, assigns domains, dispatches to {{DOEY_ROLE_TEAM_LEAD}}s. Use when you need to "simplify the whole codebase", "reduce complexity everywhere", or "run a codebase-wide cleanup".
+---
+
+- Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
+- Teams: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_*.env; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done || true`
+
+Route through {{DOEY_ROLE_TEAM_LEAD}}s only. **Confirm before dispatching.**
+
+### Inventory
+```bash
+RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+source "${RD}/session.env"
+[ -n "$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | head -1)" ] && { echo "ERROR: Uncommitted changes"; exit 1; }
+for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
+  [ -f "${RD}/team_${W}.env" ] && echo "Team $W: $(grep '^WORKER_COUNT=' "${RD}/team_${W}.env" | cut -d= -f2) workers"
+done
+mkdir -p "${RD}/reports"
+wc -l "$PROJECT_DIR"/{agents/*.md,CLAUDE.md,.claude/skills/*/SKILL.md,docs/*.md,.claude/hooks/*.sh,shell/*.sh,README.md,install.sh} 2>/dev/null | sort -rn | tee "${RD}/reports/simplify_before.txt"
+```
+
+### Domains
+D1: Shell core (`doey.sh`, `install.sh`) | D2: Hooks | D3: Skills | D4: Agents+CLAUDE.md | D5: Docs+README | D6: Shell support+tests
+
+**By team count:** 4+: D1, D2, D3+D4, D5+D6 | 3: D1+D6, D2+D4, D3+D5 | 2: D1+D2+D6, D3+D4+D5 | 1: all
+Worktree for low-conflict (docs, agents). Local for hooks/shell.
+
+### Task template (load-buffer/paste-buffer)
+```
+Run a full simplification of [DOMAIN]. N workers — use /doey-dispatch.
+Project directory: PROJECT_DIR
+Goal: Reduce cognitive load, cut ceremony, DRY, align patterns.
+Files: [LIST with line counts]
+Constraints: No Agent. bash 3.2 (bash -n after). Edit not Write. Read first. Preserve behavior.
+Assignment: 1-3 files/worker. Largest = dedicated.
+When done: bash -n .sh, write RUNTIME_DIR/reports/simplify_team_W.md (before/after).
+```
+
+### Monitor
+Poll 60s for reports. Re-run `wc -l`, diff vs before, `bash -n` all .sh, `context-audit.sh --repo`.
+
+No file conflicts — each team owns distinct files.
