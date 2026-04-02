@@ -18,7 +18,6 @@ trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); if command -v doey-ctl >/dev/null 2>&1
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/taskmaster_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${TASKMASTER_SAFE}.trigger"
-TRIGGER3="${RUNTIME_DIR}/status/taskmaster_trigger"
 
 _TASKMASTER_DBG=false; [ -f "${RUNTIME_DIR}/debug.conf" ] && _TASKMASTER_DBG=true
 _TASKMASTER_DBG_FILE="${RUNTIME_DIR}/debug/taskmaster.jsonl"
@@ -84,8 +83,8 @@ _taskmaster_bump_cycle() {
 
 _check_work() {  # Exits script if work found, returns 1 otherwise
   local elapsed="$1"
-  if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ] || [ -f "$TRIGGER3" ]; then
-    rm -f "$TRIGGER" "$TRIGGER2" "$TRIGGER3" 2>/dev/null; _wake "TRIGGERED" "$elapsed"
+  if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
+    rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null; _wake "TRIGGERED" "$elapsed"
   fi
   # Check for unread messages via unified msg command (fast path)
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
@@ -112,7 +111,17 @@ if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
     case "$_status" in
       active)
         if ! grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null; then
-          _has_queued=true; _has_active=true
+          # Only flag as queued if task has been in this state for >30s
+          _task_updated=$(grep '^TASK_UPDATED=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2-) || _task_updated=""
+          _task_ts=0
+          if [ -n "$_task_updated" ]; then
+            _task_ts=$(date -d "$_task_updated" +%s 2>/dev/null) || _task_ts=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$_task_updated" +%s 2>/dev/null) || _task_ts=0
+          fi
+          _now_ts=$(date +%s)
+          if [ "$_task_ts" -eq 0 ] || [ $((_now_ts - _task_ts)) -ge 30 ]; then
+            _has_queued=true
+          fi
+          _has_active=true
           _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
         fi
         ;;
@@ -134,9 +143,9 @@ _check_work "0" || true
 
 if [ "$_has_active" = "true" ]; then
   _taskmaster_bump_cycle
-  sleep 5
-  _check_work "5" || true
-  _taskmaster_dbg_wake "active_tasks_idle" "5"
+  sleep 15
+  _check_work "15" || true
+  _taskmaster_dbg_wake "active_tasks_idle" "15"
   echo "WAKE_REASON=QUEUED"
   printf 'ACTIVE_TASKS %b' "$_active_list"
   rm -f "${RUNTIME_DIR}/status/taskmaster_sleep_reported" 2>/dev/null
@@ -151,8 +160,16 @@ if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
   touch "$_sleep_flag"
 fi
 
-_sleep_dur=10
-sleep "$_sleep_dur"
+_sleep_dur=30
+# Use inotifywait for event-driven blocking if available
+if command -v inotifywait >/dev/null 2>&1; then
+  inotifywait -qq -t "$_sleep_dur" -e create,modify \
+    "${RUNTIME_DIR}/status/" \
+    "${RUNTIME_DIR}/results/" \
+    "${MSG_DIR}/" 2>/dev/null || true
+else
+  sleep "$_sleep_dur"
+fi
 _check_work "$_sleep_dur" || true
 _taskmaster_dbg_wake "idle" "$_sleep_dur"
 echo "WAKE_REASON=TIMEOUT"

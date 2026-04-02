@@ -338,6 +338,8 @@ write_activity() {  # Append JSONL activity event: write_activity <event> <data_
 }
 
 notify_taskmaster() {  # Lifecycle event -> Taskmaster wake trigger
+  # Don't self-notify
+  if is_taskmaster; then return 0; fi
   local status="${1:-}" detail="${2:-}"
   local team_w="${DOEY_TEAM_WINDOW:-${WINDOW_INDEX:-}}"
   [ -z "$team_w" ] && return 0

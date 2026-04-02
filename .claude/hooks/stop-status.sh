@@ -82,9 +82,12 @@ fi
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
 write_activity "status_change" "{\"status\":\"${STOP_STATUS}\"}"
 
-notify_taskmaster "$STOP_STATUS"
+if ! is_taskmaster; then
+  notify_taskmaster "$STOP_STATUS"
+fi
 
 if is_taskmaster; then
+  # Taskmaster self-trigger: re-wake after cooldown if not already busy
   (
     sleep 3
     _taskmaster_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
