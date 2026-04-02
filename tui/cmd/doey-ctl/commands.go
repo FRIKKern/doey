@@ -930,6 +930,147 @@ func editDistance(a, b string) int {
 	return prev[lb]
 }
 
+// runNudgeCmd sends Escape + re-prompt to unstick Claude instances.
+func runNudgeCmd(args []string) {
+	fs := flag.NewFlagSet("nudge", flag.ExitOnError)
+	all := fs.Bool("all", false, "nudge all stuck panes (skips READY and RESERVED)")
+	session := fs.String("session", "", "tmux session name")
+	rt := fs.String("runtime", "", "runtime directory")
+	prompt := fs.String("prompt", "Check your messages and resume.", "re-prompt text")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: doey-ctl nudge [flags] [pane]\n\n")
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl nudge doey-doey:3.1    Nudge a single pane\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl nudge 3.1              Nudge pane (uses session from env)\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl nudge --all            Nudge all stuck panes\n\n")
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		fs.PrintDefaults()
+	}
+
+	fs.Parse(args)
+
+	sess := sessionName(*session)
+	client := ctl.NewTmuxClient(sess)
+
+	if *all {
+		nudgeAll(client, runtimeDir(*rt), *prompt)
+		return
+	}
+
+	if fs.NArg() < 1 {
+		fatal("nudge: missing pane target\nTry: doey-ctl nudge <pane> or doey-ctl nudge --all\n")
+	}
+
+	pane := fs.Arg(0)
+	// Strip session prefix if included (e.g. "doey-doey:3.1" → "3.1")
+	if idx := strings.LastIndex(pane, ":"); idx >= 0 {
+		pane = pane[idx+1:]
+	}
+	// Convert safe name format (doey_doey_3_1 → 3.1) if no dot present
+	if !strings.Contains(pane, ".") {
+		if converted := safeToPaneID(pane); converted != "" {
+			pane = converted
+		}
+	}
+
+	if err := nudgePane(client, pane, *prompt, true); err != nil {
+		fatal("nudge: %v\n", err)
+	}
+}
+
+func nudgePane(client *ctl.TmuxClient, pane, prompt string, verbose bool) error {
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Nudging %s... sending Escape... ", pane)
+	}
+
+	// Exit copy-mode / cancel current input
+	if err := client.SendKeys(pane, "Escape"); err != nil {
+		return fmt.Errorf("send Escape to %s: %w", pane, err)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "waiting 1s... ")
+	}
+	time.Sleep(1 * time.Second)
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "sending prompt... ")
+	}
+	if err := client.SendKeys(pane, prompt, "Enter"); err != nil {
+		return fmt.Errorf("send prompt to %s: %w", pane, err)
+	}
+
+	if verbose {
+		fmt.Fprintln(os.Stderr, "done")
+	}
+	return nil
+}
+
+func nudgeAll(client *ctl.TmuxClient, rtDir, prompt string) {
+	statusDir := filepath.Join(rtDir, ctl.StatusSubdir)
+	pattern := filepath.Join(statusDir, "*"+ctl.StatusExt)
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		fatal("nudge --all: glob: %v\n", err)
+	}
+
+	var nudged []string
+	for _, path := range matches {
+		base := strings.TrimSuffix(filepath.Base(path), ctl.StatusExt)
+		entry, err := ctl.ReadStatus(rtDir, base)
+		if err != nil {
+			continue
+		}
+		// Skip panes that don't need nudging
+		switch entry.Status {
+		case ctl.StatusReady, ctl.StatusReserved:
+			continue
+		}
+
+		paneTarget := safeToPaneID(base)
+		if paneTarget == "" {
+			continue
+		}
+
+		if err := nudgePane(client, paneTarget, prompt, true); err != nil {
+			fmt.Fprintf(os.Stderr, "nudge: skipping %s: %v\n", paneTarget, err)
+			continue
+		}
+		nudged = append(nudged, paneTarget)
+	}
+
+	if jsonOutput {
+		printJSON(map[string]any{"nudged": nudged, "count": len(nudged)})
+	} else {
+		if len(nudged) == 0 {
+			fmt.Println("No panes needed nudging")
+		} else {
+			fmt.Printf("Nudged %d panes: %s\n", len(nudged), strings.Join(nudged, ", "))
+		}
+	}
+}
+
+// safeToPaneID converts a safe pane name like "doey_doey_3_1" to tmux pane
+// format "3.1" by extracting the last two numeric underscore-separated segments.
+func safeToPaneID(safe string) string {
+	parts := strings.Split(safe, "_")
+	if len(parts) < 2 {
+		return ""
+	}
+	win := parts[len(parts)-2]
+	pane := parts[len(parts)-1]
+	// Verify both are numeric
+	if _, err := strconv.Atoi(win); err != nil {
+		return ""
+	}
+	if _, err := strconv.Atoi(pane); err != nil {
+		return ""
+	}
+	return win + "." + pane
+}
+
 // runTmuxCmd dispatches tmux sub-subcommands.
 func runTmuxCmd(args []string) {
 	if len(args) == 0 {

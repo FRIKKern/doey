@@ -12,7 +12,12 @@ import (
 
 func runPlanCmd(args []string) {
 	if len(args) < 1 {
-		fatal("plan: expected sub-command: list, get, create, update, delete\n")
+		printPlanHelp()
+		fatal("plan: missing subcommand: list, get, create, update, delete\nRun 'doey-ctl plan --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printPlanHelp()
+		return
 	}
 	switch args[0] {
 	case "list":
@@ -26,8 +31,22 @@ func runPlanCmd(args []string) {
 	case "delete":
 		planDelete(args[1:])
 	default:
-		fatal("plan: unknown sub-command: %s\n", args[0])
+		fatal("plan: unknown subcommand: %q. Valid: list, get, create, update, delete\n", args[0])
 	}
+}
+
+func printPlanHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl plan <subcommand> [flags]
+
+Subcommands:
+  list      List plans
+  get       Show plan details
+  create    Create a new plan
+  update    Update plan fields
+  delete    Delete a plan
+
+Run 'doey-ctl plan <subcommand> -h' for help.
+`)
 }
 
 func planList(args []string) {
@@ -59,7 +78,7 @@ func planGet(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("plan get: <id> argument required\n")
+		fatal("plan get: <id> argument required\nRun 'doey-ctl plan get -h' for usage.\n")
 	}
 	id := int64(atoiOrFatal(fs.Arg(0), "plan get"))
 
@@ -87,7 +106,7 @@ func planCreate(args []string) {
 	fs.Parse(args)
 
 	if *title == "" {
-		fatal("plan create: --title is required\n")
+		fatal("plan create: --title is required\nRun 'doey-ctl plan create -h' for usage.\n")
 	}
 
 	s := openStore(*dir)
@@ -115,7 +134,7 @@ func planUpdate(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("plan update: <id> argument required\n")
+		fatal("plan update: <id> argument required\nRun 'doey-ctl plan update -h' for usage.\n")
 	}
 	id := int64(atoiOrFatal(fs.Arg(0), "plan update"))
 
@@ -152,7 +171,7 @@ func planDelete(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("plan delete: <id> argument required\n")
+		fatal("plan delete: <id> argument required\nRun 'doey-ctl plan delete -h' for usage.\n")
 	}
 	id := int64(atoiOrFatal(fs.Arg(0), "plan delete"))
 
@@ -173,7 +192,12 @@ func planDelete(args []string) {
 
 func runTeamCmd(args []string) {
 	if len(args) < 1 {
-		fatal("team: expected sub-command: list, get, set\n")
+		printTeamHelp()
+		fatal("team: missing subcommand: list, get, set\nRun 'doey-ctl team --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printTeamHelp()
+		return
 	}
 	switch args[0] {
 	case "list":
@@ -183,8 +207,20 @@ func runTeamCmd(args []string) {
 	case "set":
 		teamSet(args[1:])
 	default:
-		fatal("team: unknown sub-command: %s\n", args[0])
+		fatal("team: unknown subcommand: %q. Valid: list, get, set\n", args[0])
 	}
+}
+
+func printTeamHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl team <subcommand> [flags]
+
+Subcommands:
+  list      List teams
+  get       Show team details
+  set       Create or update a team
+
+Run 'doey-ctl team <subcommand> -h' for help.
+`)
 }
 
 func teamList(args []string) {
@@ -216,7 +252,7 @@ func teamGet(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("team get: <window-id> argument required\n")
+		fatal("team get: <window-id> argument required\nRun 'doey-ctl team get -h' for usage.\n")
 	}
 	windowID := fs.Arg(0)
 
@@ -246,7 +282,7 @@ func teamSet(args []string) {
 	fs.Parse(args)
 
 	if *windowID == "" {
-		fatal("team set: --window-id is required\n")
+		fatal("team set: --window-id is required\nRun 'doey-ctl team set -h' for usage.\n")
 	}
 
 	s := openStore(*dir)
@@ -273,7 +309,12 @@ func teamSet(args []string) {
 
 func runConfigCmd(args []string) {
 	if len(args) < 1 {
-		fatal("config: expected sub-command: get, set, list, delete\n")
+		printConfigHelp()
+		fatal("config: missing subcommand: get, set, list, delete\nRun 'doey-ctl config --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printConfigHelp()
+		return
 	}
 	switch args[0] {
 	case "get":
@@ -285,8 +326,21 @@ func runConfigCmd(args []string) {
 	case "delete":
 		configDelete(args[1:])
 	default:
-		fatal("config: unknown sub-command: %s\n", args[0])
+		fatal("config: unknown subcommand: %q. Valid: get, set, list, delete\n", args[0])
 	}
+}
+
+func printConfigHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl config <subcommand> [flags]
+
+Subcommands:
+  get       Get a config value
+  set       Set a config value
+  list      List all config entries
+  delete    Delete a config key
+
+Run 'doey-ctl config <subcommand> -h' for help.
+`)
 }
 
 func configGet(args []string) {
@@ -296,7 +350,7 @@ func configGet(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("config get: <key> argument required\n")
+		fatal("config get: <key> argument required\nRun 'doey-ctl config get -h' for usage.\n")
 	}
 	key := fs.Arg(0)
 
@@ -322,7 +376,7 @@ func configSet(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 2 {
-		fatal("config set: <key> <value> arguments required\n")
+		fatal("config set: <key> <value> arguments required\nRun 'doey-ctl config set -h' for usage.\n")
 	}
 	key := fs.Arg(0)
 	val := fs.Arg(1)
@@ -369,7 +423,7 @@ func configDelete(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("config delete: <key> argument required\n")
+		fatal("config delete: <key> argument required\nRun 'doey-ctl config delete -h' for usage.\n")
 	}
 	key := fs.Arg(0)
 
@@ -390,7 +444,12 @@ func configDelete(args []string) {
 
 func runAgentCmd(args []string) {
 	if len(args) < 1 {
-		fatal("agent: expected sub-command: list, get, set, delete\n")
+		printAgentHelp()
+		fatal("agent: missing subcommand: list, get, set, delete\nRun 'doey-ctl agent --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printAgentHelp()
+		return
 	}
 	switch args[0] {
 	case "list":
@@ -402,8 +461,21 @@ func runAgentCmd(args []string) {
 	case "delete":
 		agentDelete(args[1:])
 	default:
-		fatal("agent: unknown sub-command: %s\n", args[0])
+		fatal("agent: unknown subcommand: %q. Valid: list, get, set, delete\n", args[0])
 	}
+}
+
+func printAgentHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl agent <subcommand> [flags]
+
+Subcommands:
+  list      List agents
+  get       Show agent details
+  set       Create or update an agent
+  delete    Delete an agent
+
+Run 'doey-ctl agent <subcommand> -h' for help.
+`)
 }
 
 func agentList(args []string) {
@@ -435,7 +507,7 @@ func agentGet(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("agent get: <name> argument required\n")
+		fatal("agent get: <name> argument required\nRun 'doey-ctl agent get -h' for usage.\n")
 	}
 	name := fs.Arg(0)
 
@@ -465,7 +537,7 @@ func agentSet(args []string) {
 	fs.Parse(args)
 
 	if *name == "" {
-		fatal("agent set: --name is required\n")
+		fatal("agent set: --name is required\nRun 'doey-ctl agent set -h' for usage.\n")
 	}
 
 	s := openStore(*dir)
@@ -495,7 +567,7 @@ func agentDelete(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("agent delete: <name> argument required\n")
+		fatal("agent delete: <name> argument required\nRun 'doey-ctl agent delete -h' for usage.\n")
 	}
 	name := fs.Arg(0)
 
@@ -516,7 +588,12 @@ func agentDelete(args []string) {
 
 func runEventCmd(args []string) {
 	if len(args) < 1 {
-		fatal("event: expected sub-command: log, list\n")
+		printEventHelp()
+		fatal("event: missing subcommand: log, list\nRun 'doey-ctl event --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printEventHelp()
+		return
 	}
 	switch args[0] {
 	case "log":
@@ -524,8 +601,19 @@ func runEventCmd(args []string) {
 	case "list":
 		eventList(args[1:])
 	default:
-		fatal("event: unknown sub-command: %s\n", args[0])
+		fatal("event: unknown subcommand: %q. Valid: log, list\n", args[0])
 	}
+}
+
+func printEventHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl event <subcommand> [flags]
+
+Subcommands:
+  log       Log an event
+  list      List events
+
+Run 'doey-ctl event <subcommand> -h' for help.
+`)
 }
 
 func eventLog(args []string) {
@@ -540,7 +628,7 @@ func eventLog(args []string) {
 	fs.Parse(args)
 
 	if *typ == "" {
-		fatal("event log: --type is required\n")
+		fatal("event log: --type is required\nRun 'doey-ctl event log -h' for usage.\n")
 	}
 
 	s := openStore(*dir)

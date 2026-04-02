@@ -32,6 +32,10 @@ func main() {
 	case "task":
 		runTaskCmd(os.Args[2:])
 	case "tmux":
+		if len(os.Args) >= 3 && isHelp(os.Args[2]) {
+			printTmuxHelp()
+			return
+		}
 		runTmuxCmd(os.Args[2:])
 	case "plan":
 		runPlanCmd(os.Args[2:])
@@ -43,12 +47,14 @@ func main() {
 		runAgentCmd(os.Args[2:])
 	case "event":
 		runEventCmd(os.Args[2:])
+	case "nudge":
+		runNudgeCmd(os.Args[2:])
 	case "migrate":
 		runMigrateCmd(os.Args[2:])
-	case "--help", "-h":
+	case "--help", "-h", "help":
 		printUsage()
 	default:
-		fatal("unknown command: %s\n", os.Args[1])
+		fatal("unknown command: %q. Valid: msg, status, health, task, tmux, plan, team, config, agent, event, nudge, migrate\nRun 'doey-ctl --help' for usage.\n", os.Args[1])
 	}
 }
 
@@ -68,6 +74,7 @@ Commands:
   config   Manage config (get, set, list, delete)
   agent    Manage agents (list, get, set, delete)
   event    Log and list events
+  nudge    Unstick Claude instances (Escape + re-prompt)
   migrate  Run database migrations
 
 Environment:
@@ -94,7 +101,12 @@ func openStoreIfExists(dir string) (*store.Store, error) {
 
 func runMsgCmd(args []string) {
 	if len(args) < 1 {
-		fatal("msg: expected sub-command: send, read, list, read-all, count, clean, trigger\n")
+		printMsgHelp()
+		fatal("msg: missing subcommand: send, read, read-all, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printMsgHelp()
+		return
 	}
 	switch args[0] {
 	case "send":
@@ -112,7 +124,7 @@ func runMsgCmd(args []string) {
 	case "trigger":
 		msgTrigger(args[1:])
 	default:
-		fatal("msg: unknown sub-command: %s\n", args[0])
+		fatal("msg: unknown subcommand: %q. Valid: send, read, read-all, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n", args[0])
 	}
 }
 
@@ -129,7 +141,7 @@ func msgSend(args []string) {
 	fs.Parse(args)
 
 	if *to == "" || *from == "" || *subject == "" {
-		fatal("msg send: --to, --from, and --subject are required\n")
+		fatal("msg send: --to, --from, and --subject are required\nRun 'doey-ctl msg send -h' for usage.\n")
 	}
 
 	sentViaDB := false
@@ -181,7 +193,7 @@ func msgRead(args []string) {
 	fs.Parse(args)
 
 	if *pane == "" {
-		fatal("msg read: --pane is required\n")
+		fatal("msg read: --pane is required\nRun 'doey-ctl msg read -h' for usage.\n")
 	}
 
 	// Try DB first
@@ -255,12 +267,18 @@ func msgList(args []string) {
 func msgReadAll(args []string) {
 	fs := flag.NewFlagSet("msg read-all", flag.ExitOnError)
 	to := fs.String("to", "", "Recipient pane (required)")
+	pane := fs.String("pane", "", "Recipient pane (alias for --to)")
 	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
+	// --pane is an alias for --to
+	if *to == "" && *pane != "" {
+		*to = *pane
+	}
+
 	if *to == "" {
-		fatal("msg read-all: --to is required\n")
+		fatal("msg read-all: --to (or --pane) is required\nRun 'doey-ctl msg read-all -h' for usage.\n")
 	}
 
 	s, err := openStoreIfExists(projectDir(*dir))
@@ -287,7 +305,7 @@ func msgCount(args []string) {
 	fs.Parse(args)
 
 	if *to == "" {
-		fatal("msg count: --to is required\n")
+		fatal("msg count: --to is required\nRun 'doey-ctl msg count -h' for usage.\n")
 	}
 
 	s, err := openStoreIfExists(projectDir(*dir))
@@ -315,7 +333,7 @@ func msgClean(args []string) {
 	fs.Parse(args)
 
 	if *pane == "" {
-		fatal("msg clean: --pane is required\n")
+		fatal("msg clean: --pane is required\nRun 'doey-ctl msg clean -h' for usage.\n")
 	}
 	if err := ctl.CleanupMsgs(runtimeDir(*rt), *pane); err != nil {
 		fatal("msg clean: %v\n", err)
@@ -335,7 +353,7 @@ func msgTrigger(args []string) {
 	fs.Parse(args)
 
 	if *pane == "" {
-		fatal("msg trigger: --pane is required\n")
+		fatal("msg trigger: --pane is required\nRun 'doey-ctl msg trigger -h' for usage.\n")
 	}
 	if err := ctl.FireTrigger(runtimeDir(*rt), *pane); err != nil {
 		fatal("msg trigger: %v\n", err)
@@ -351,7 +369,12 @@ func msgTrigger(args []string) {
 
 func runStatusCmd(args []string) {
 	if len(args) < 1 {
-		fatal("status: expected sub-command: get, set, list\n")
+		printStatusHelp()
+		fatal("status: missing subcommand: get, set, list\nRun 'doey-ctl status --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printStatusHelp()
+		return
 	}
 	switch args[0] {
 	case "get":
@@ -361,7 +384,7 @@ func runStatusCmd(args []string) {
 	case "list":
 		statusList(args[1:])
 	default:
-		fatal("status: unknown sub-command: %s\n", args[0])
+		fatal("status: unknown subcommand: %q. Valid: get, set, list\nRun 'doey-ctl status --help' for usage.\n", args[0])
 	}
 }
 
@@ -373,7 +396,7 @@ func statusGet(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("status get: <pane> argument required\n")
+		fatal("status get: <pane> argument required\nRun 'doey-ctl status get -h' for usage.\n")
 	}
 	pane := fs.Arg(0)
 
@@ -442,7 +465,7 @@ func statusSet(args []string) {
 	}
 
 	if *pane == "" || *status == "" {
-		fatal("status set: --pane and --status are required\n")
+		fatal("status set: --pane and --status are required\nRun 'doey-ctl status set -h' for usage.\n")
 	}
 
 	// Try DB
@@ -514,7 +537,7 @@ func statusList(args []string) {
 
 	// Fall back to file
 	if *window < 0 {
-		fatal("status list: --window is required\n")
+		fatal("status list: --window is required\nRun 'doey-ctl status list -h' for usage.\n")
 	}
 	entries, err := ctl.ListStatuses(runtimeDir(*rt), *window)
 	if err != nil {
@@ -533,13 +556,18 @@ func statusList(args []string) {
 
 func runHealthCmd(args []string) {
 	if len(args) < 1 {
-		fatal("health: expected sub-command: check\n")
+		printHealthHelp()
+		fatal("health: missing subcommand: check\nRun 'doey-ctl health --help' for usage.\n")
+	}
+	if isHelp(args[0]) {
+		printHealthHelp()
+		return
 	}
 	switch args[0] {
 	case "check":
 		healthCheck(args[1:])
 	default:
-		fatal("health: unknown sub-command: %s\n", args[0])
+		fatal("health: unknown subcommand: %q. Valid: check\nRun 'doey-ctl health --help' for usage.\n", args[0])
 	}
 }
 
@@ -551,7 +579,7 @@ func healthCheck(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fatal("health check: <pane_safe> argument required\n")
+		fatal("health check: <pane_safe> argument required\nRun 'doey-ctl health check -h' for usage.\n")
 	}
 	paneSafe := fs.Arg(0)
 
@@ -646,4 +674,61 @@ func atoiOrFatal(s, label string) int {
 		fatal("%s: invalid integer %q\n", label, s)
 	}
 	return n
+}
+
+// isHelp returns true if the argument is a help flag or the word "help".
+func isHelp(arg string) bool {
+	return arg == "--help" || arg == "-h" || arg == "-help" || arg == "help"
+}
+
+// printTmuxHelp prints help for the tmux subcommand.
+func printTmuxHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl tmux <subcommand> [options]
+
+Subcommands:
+  panes    List panes in a window
+  send     Send keys to a pane
+  capture  Capture pane output
+  env      Read tmux environment variable
+
+Run 'doey-ctl tmux <subcommand> -h' for help.
+`)
+}
+
+func printMsgHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl msg <subcommand> [flags]
+
+Subcommands:
+  send      Send a message between panes
+  read      Read messages for a pane
+  read-all  Read all messages for a pane (mark as read)
+  list      List messages (DB mode)
+  count     Count unread messages
+  clean     Clean processed messages
+  trigger   Touch trigger file for pane
+
+Run 'doey-ctl msg <subcommand> -h' for help.
+`)
+}
+
+func printStatusHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl status <subcommand> [flags]
+
+Subcommands:
+  get   Get status for a pane
+  set   Set status for a pane
+  list  List statuses for a window
+
+Run 'doey-ctl status <subcommand> -h' for help.
+`)
+}
+
+func printHealthHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl health <subcommand> [flags]
+
+Subcommands:
+  check  Check if a pane is alive (not stale)
+
+Run 'doey-ctl health <subcommand> -h' for help.
+`)
 }
