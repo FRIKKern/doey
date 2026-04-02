@@ -30,7 +30,34 @@ func Open(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := ensureMigrations(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db, path: dbPath}, nil
+}
+
+// ensureMigrations adds columns that may be missing from older databases.
+func ensureMigrations(db *sql.DB) error {
+	cols := []string{
+		"notes TEXT",
+		"blockers TEXT",
+		"related_files TEXT",
+		"hypotheses TEXT",
+		"decision_log TEXT",
+		"result TEXT",
+		"files TEXT",
+		"commits TEXT",
+		"schema_version INTEGER DEFAULT 3",
+		"review_verdict TEXT",
+		"review_findings TEXT",
+		"review_timestamp TEXT",
+	}
+	for _, col := range cols {
+		// Ignore errors — column may already exist.
+		db.Exec("ALTER TABLE tasks ADD COLUMN " + col)
+	}
+	return nil
 }
 
 // Close closes the database connection.
