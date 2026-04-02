@@ -112,13 +112,39 @@ _escalate_permission() {
 
 _is_direct_vcs_cmd() {
   local cmd="$1"
-  # Collapse to single line for segment splitting
-  local flat
-  flat=$(printf '%s' "$cmd" | tr '\n' ' ')
+  # Strip heredoc bodies so VCS keywords in data content don't false-positive.
+  # e.g. cat <<'EOF'\nrun git push && deploy\nEOF  (task #141)
+  local cleaned
+  case "$cmd" in
+    *"<<"*)
+      cleaned=$(printf '%s\n' "$cmd" | awk '
+        BEGIN{s=0;d=""}
+        s{t=$0;gsub(/^[[:space:]]+/,"",t);if(t==d)s=0;next}
+        /<</{
+          i=index($0,"<<")
+          if(i>0){
+            r=substr($0,i+2);gsub(/^-?[[:space:]]*/,"",r)
+            rc=r;gsub(/^["'"'"'\\]?/,"",rc)
+            if(match(rc,/^[A-Za-z_][A-Za-z_0-9]*/)){
+              d=substr(rc,RSTART,RLENGTH);s=1
+              tail=substr(rc,RSTART+RLENGTH)
+              sub(/^["'"'"'\\]?/,"",tail)
+              print substr($0,1,i-1) tail;next
+            }
+          }
+        }
+        {print}
+      ' | tr '\n' ' ')
+      ;;
+    *)
+      cleaned=$(printf '%s' "$cmd" | tr '\n' ' ')
+      ;;
+  esac
+  # Strip quoted strings
+  cleaned=$(printf '%s' "$cleaned" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
   # Split on chain operators, check if any segment starts with a VCS command
   local result=""
-  result=$(printf '%s\n' "$flat" | sed 's/&&/\n/g; s/||/\n/g; s/;/\n/g' | while IFS= read -r seg; do
-    # Strip leading whitespace and env var assignments
+  result=$(printf '%s\n' "$cleaned" | sed 's/&&/\n/g; s/||/\n/g; s/;/\n/g' | while IFS= read -r seg; do
     seg=$(printf '%s' "$seg" | sed 's/^[[:space:]]*//; s/^[A-Z_][A-Z_0-9]*=[^[:space:]]* *//')
     case "$seg" in
       git\ commit*|git\ push*|gh\ pr\ create*|gh\ pr\ merge*) printf 'Y'; break ;;

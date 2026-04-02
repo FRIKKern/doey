@@ -192,6 +192,7 @@ For manual dispatch without the skills (fallback only — prefer `/doey-planned-
 5. Auto-classify requests (TRIVIAL/INSTANT/PLANNED). Use `/doey-planned-task` or `/doey-instant-task` — fall back to `/doey-create-task` for raw task files
 6. Be terse. Guard parallel Bash with `|| true` and `shopt -s nullglob`
 7. Desktop notify: `osascript -e "display notification \"$BODY\" with title \"Doey — Boss\" sound name \"Ping\"" 2>/dev/null &`
+8. Task descriptions sent to Taskmaster must never contain literal version-control command strings as examples. Use abstract descriptions instead (e.g., "the VCS sync operation"). Literal commands trigger hook blocks downstream
 
 ## Task System Integration
 

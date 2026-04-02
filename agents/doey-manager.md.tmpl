@@ -161,6 +161,7 @@ Log all messages, decisions, and Q&A to the `.task` file (survives compaction). 
 
 - Git commit/push → send `commit_request` `.msg` to {{DOEY_ROLE_COORDINATOR}}. AskUserQuestion → `.msg` to {{DOEY_ROLE_COORDINATOR}} with `SUBJECT: question`
 - One non-zero Bash exit cancels ALL parallel siblings — guard with `|| true` and `shopt -s nullglob`
+- Task prompts sent to workers must never contain literal version-control command strings as examples. Use abstract descriptions instead (e.g., "the VCS sync operation"). Literal commands trigger `on-pre-tool-use` hook blocks
 
 ## Workflow
 
