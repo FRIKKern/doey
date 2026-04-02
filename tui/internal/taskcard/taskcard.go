@@ -70,20 +70,31 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	// Health-based icon color
 	icon := taskHealthIcon(ti, d.Theme, d.Heartbeats)
 
-	// Title
+	// Task ID prefix
+	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render("#" + ti.Task.ID)
+
+	// Title — truncate to fit panel width (icon + id + padding ~ 10 chars)
+	titleText := ti.Task.Title
+	maxTitleW := m.Width() - 10
+	if maxTitleW < 12 {
+		maxTitleW = 12
+	}
+	if len(titleText) > maxTitleW {
+		titleText = titleText[:maxTitleW-1] + "…"
+	}
 	titleStyle := lipgloss.NewStyle().Bold(isSelected)
 	if isSelected {
 		titleStyle = titleStyle.Foreground(d.Theme.Primary)
 	} else {
 		titleStyle = titleStyle.Foreground(d.Theme.Text)
 	}
-	title := titleStyle.Render(ti.Task.Title)
+	title := titleStyle.Render(titleText)
 
-	// Description line: status · workerID · N/M subtasks · type
+	// Description line: compact — workers · subtask progress · type
 	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Render(taskCardDescription(ti, d.Heartbeats))
 
-	// Compose card: 2 content lines
-	card := fmt.Sprintf(" %s %s\n   %s", icon, title, desc)
+	// Compose card: ID + icon + title, then description
+	card := fmt.Sprintf(" %s %s %s\n   %s", idStr, icon, title, desc)
 
 	// Selected: left border only
 	if isSelected {
@@ -138,26 +149,23 @@ func taskHealthIcon(ti TaskItem, t styles.Theme, heartbeats map[string]runtime.H
 	return lipgloss.NewStyle().Foreground(t.Muted).Render("◆")
 }
 
-// taskCardDescription builds "status · worker · N/M subtasks · type" for the card.
+// taskCardDescription builds a compact "workers · N/M · type" line for the card.
+// Status is conveyed by the icon, so omitted from the description to save space.
 func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatState) string {
 	var parts []string
-
-	if ti.Task.Status != "" {
-		parts = append(parts, styles.StatusLabel(ti.Task.Status))
-	}
 
 	// Active worker names from heartbeat
 	if hs, ok := heartbeats[ti.Task.ID]; ok && hs.ActiveWorkers > 0 {
 		names := strings.Join(hs.ActiveWorkerNames, ", ")
 		if names == "" {
-			names = fmt.Sprintf("%d workers", hs.ActiveWorkers)
+			names = fmt.Sprintf("%dw", hs.ActiveWorkers)
 		}
 		parts = append(parts, names)
 	}
 
-	// Subtask progress
+	// Subtask progress (compact)
 	if ti.SubtaskTotal > 0 {
-		parts = append(parts, fmt.Sprintf("%d/%d subtasks", ti.SubtaskDone, ti.SubtaskTotal))
+		parts = append(parts, fmt.Sprintf("%d/%d", ti.SubtaskDone, ti.SubtaskTotal))
 	}
 
 	// Type badge
@@ -165,7 +173,12 @@ func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatSta
 		parts = append(parts, ti.Task.Type)
 	}
 
-	return strings.Join(parts, " \u00b7 ")
+	// Team
+	if ti.Task.Team != "" {
+		parts = append(parts, ti.Task.Team)
+	}
+
+	return strings.Join(parts, " · ")
 }
 
 // truncateDesc truncates a description string to at most maxLines lines,

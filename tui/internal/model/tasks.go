@@ -113,10 +113,11 @@ type TasksModel struct {
 	projectDir    string
 
 	// Layout
-	width    int
-	height   int
-	focused  bool
-	showHelp bool
+	width        int
+	height       int
+	focused      bool
+	showHelp     bool
+	panelOffsetY int // absolute Y of panel top in terminal
 }
 
 // NewTasksModel creates a tasks panel starting with left panel focused.
@@ -176,6 +177,9 @@ func (m *TasksModel) SetSize(w, h int) {
 
 // SetFocused toggles focus state.
 func (m *TasksModel) SetFocused(focused bool) { m.focused = focused }
+
+// SetPanelOffset sets the absolute Y offset of the panel top in the terminal.
+func (m *TasksModel) SetPanelOffset(y int) { m.panelOffsetY = y }
 
 // SetSnapshot merges persistent + runtime tasks and rebuilds the view.
 func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
@@ -427,14 +431,25 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 			}
 		}
 
-		// Card clicks in list
-		for i := range m.entries {
-			if zone.Get(fmt.Sprintf("task-card-%d", i)).InBounds(msg) {
-				m.list.Select(i)
-				m.leftFocused = false
-				m.detailViewport.GotoTop()
-				m.loadSelectedDetail()
-				return m, nil
+		// Card clicks in left panel — Y-coordinate math
+		leftW := m.width * 40 / 100
+		if leftW < 28 {
+			leftW = 28
+		}
+		if msg.X < leftW && len(m.entries) > 0 {
+			const cardHeight = 3
+			const headerLines = 2 // "TASKS" header + summary line
+			relY := msg.Y - m.panelOffsetY - headerLines
+			if relY >= 0 {
+				firstVisible := m.list.Paginator.Page * m.list.Paginator.PerPage
+				index := firstVisible + relY/cardHeight
+				if index >= 0 && index < len(m.entries) {
+					m.list.Select(index)
+					m.leftFocused = false
+					m.detailViewport.GotoTop()
+					m.loadSelectedDetail()
+					return m, nil
+				}
 			}
 		}
 		// Subtask clicks in right panel
