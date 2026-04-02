@@ -1,0 +1,48 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=100
+TASK_TITLE=doey-ctl — Go CLI for fast, safe orchestration
+TASK_STATUS=error
+TASK_TYPE=infrastructure
+TASK_TAGS=
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=
+TASK_DESCRIPTION=Build a compiled Go CLI (doey-ctl) that replaces shell-based orchestration with atomic, race-free operations. Currently IPC (msg files), status management, health checks, task CRUD, and tmux interaction are all bash — slow, race-prone, fragile. Go foundation already exists in tui/internal/runtime/ (Reader, SessionConfig, PaneStatus types).
+
+PHASE 1 — Core Library (tui/internal/ctl/):
+  • ipc.go: Atomic msg write (tmp+rename), msg read+cleanup, trigger fire
+  • status.go: Status read/write with proper time parsing, liveness checks
+  • tmux.go: Tmux wrapper — exec commands, parse output, cache pane lists
+  • task.go: Task CRUD with file locking, schema v3 compliant
+
+PHASE 2 — CLI Binary (tui/cmd/doey-ctl/main.go):
+  • Subcommands: msg send/read, status get/set, health check, task create/update/list/subtask, tmux panes/send
+  • JSON + human-readable output (--json flag)
+
+PHASE 3 — Shell Integration:
+  • Replace send_msg_to_taskmaster() with doey-ctl msg send
+  • Replace health check blocks with doey-ctl health check
+  • Replace task_create/task_subtask_add with doey-ctl task create
+  • Replace status reads/writes in hooks with doey-ctl status set/get
+
+PHASE 4 — Verification:
+  • Go tests for internal/ctl/ packages
+  • Parallel write stress test
+  • install.sh builds doey-ctl
+  • E2E full session with Go IPC
+
+RISKS: macOS flock unavailable (use rename pattern), tmux version diffs (parse defensively), binary needs Go toolchain to build.
+
+ARCHITECTURE: New binary tui/cmd/doey-ctl/ — shares internal/ with TUI, separate concerns. Go module already at tui/go.mod.
+TASK_ACCEPTANCE_CRITERIA=
+TASK_HYPOTHESES=
+TASK_DECISION_LOG=1775125357:Created task\n1775125744:Phase 0 Wave 1: constants.go (W3.1) + gen-constants (W3.2) in parallel. Non-overlapping files.\n1775125871:Status changed to done\n1775125931:Status changed to done\n1775126108:Status changed to done\n1775126159:Status changed to done\n1775126330:Status changed to done\n1775126377:Status changed to done\n1775126516:Status changed to done\n1775126528:Status changed to done\n1775126761:Status changed to done\n1775126777:Status changed to done
+TASK_SUBTASKS=2:Phase 0 - Centralize hardcoded strings (status values, msg subjects, path conventions, pane layout, task fields) into Go constants + generate doey-constants.sh:pending\n3:W3.1: Create internal/ctl/constants.go — status, msg subjects, paths, pane layout, task fields:pending\n4:W3.2: Create cmd/gen-constants/main.go + doey-constants.sh generation (gen-roles pattern):pending
+TASK_RELATED_FILES=
+TASK_BLOCKERS=
+TASK_TIMESTAMPS=created=1775125357|completed=1775125871|completed=1775125931|completed=1775126108|completed=1775126159|completed=1775126330|completed=1775126377|completed=1775126516|completed=1775126528|completed=1775126761|completed=1775126777
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_NOTES=
+TASK_UPDATED=1775125357
+TASK_SUBTASKS=2:Phase 0 - Centralize hardcoded strings (status values, msg subjects, path conventions, pane layout, task fields) into Go constants + generate doey-constants.sh:pending\n3:W3.1: Create internal/ctl/constants.go — status, msg subjects, paths, pane layout, task fields:pending\n4:W3.2: Create cmd/gen-constants/main.go + doey-constants.sh generation (gen-roles pattern):pending
+TASK_ATTACHMENTS=.doey/tasks/100.result.json
