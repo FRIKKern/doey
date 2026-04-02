@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=112
+TASK_TITLE=Normalize doey-ctl flag API — consistent flags across all subcommands
+TASK_STATUS=pending_user_confirmation
+TASK_CREATED=$(date +%s)
+TASK_TYPE=refactor
+TASK_TAGS=tui,go,doey-ctl,infrastructure
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=doey-ctl subcommands use inconsistent flag names. Three different flags for project directory (--runtime, -dir, -project-dir). db-status set requires 4 fields when callers usually only have pane+status. List commands require filters with no "show all" option. Fix: (1) Normalize to -project-dir everywhere for db-* commands, (2) Make db-status set work with just -pane-id + -status (derive window from pane ID format W.P), (3) Make list commands work without required filters, (4) Update shell helpers. Plan: .doey/plans/7.md. Go is at /usr/local/go/bin/go. go build must pass.
+TASK_ACCEPTANCE_CRITERIA=all db-* commands accept -project-dir|db-status set works with just pane-id + status|list commands work without filters|go build passes|shell helpers updated
+TASK_RELATED_FILES=tui/cmd/doey-ctl/store_status_cmds.go,tui/cmd/doey-ctl/store_task_cmds.go,tui/cmd/doey-ctl/store_msg_cmds.go,shell/doey-task-helpers.sh,shell/doey-ipc-helpers.sh
+TASK_PLAN_ID=7
+TASK_TEAM=1
+TASK_COMMIT=655197f

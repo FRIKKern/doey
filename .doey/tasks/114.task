@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=114
+TASK_TITLE=TUI SQLite full integration — teams, events, config store readers + subtask fix
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_TAGS=tui,go,sqlite,store
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=Migrated remaining TUI file reads to SQLite store. readTeams(), readEvents(), readConfig() added. Subtask double-read fixed. ReadSnapshot wired with fallback.
+TASK_ACCEPTANCE_CRITERIA=readTeams() reads from SQLite|ReadSnapshot wired with fallback|subtask double-read fixed|readEvents() added|readConfig() added|go build passes
+TASK_RELATED_FILES=tui/internal/runtime/store_reader.go,tui/internal/runtime/reader.go,tui/internal/runtime/store_reader_extras.go
+TASK_TEAM=1
+TASK_PLAN_ID=8
+TASK_COMMIT=7e51f8a
+TASK_DECISION_LOG=1775136944:Created task
+TASK_TIMESTAMPS=created=1775136944
+TASK_UPDATED=1775137200
