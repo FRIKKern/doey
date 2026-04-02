@@ -202,7 +202,7 @@ func (m *PlansModel) SetSize(w, h int) {
 	if leftW < 28 {
 		leftW = 28
 	}
-	m.list.SetSize(leftW, h-4)
+	m.list.SetSize(leftW, h-1) // header = 1 line above list
 	rightW := w - leftW - 1
 	if rightW < 24 {
 		rightW = 24
