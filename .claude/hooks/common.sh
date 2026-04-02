@@ -206,6 +206,7 @@ is_manager() {
   [ -n "${_DOEY_IS_MGR+x}" ] && return "$_DOEY_IS_MGR"
   _DOEY_IS_MGR=1
   [ "$WINDOW_INDEX" = "0" ] && return 1
+  is_core_team && return 1
   local team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   [ -f "$team_file" ] || return 1
   [ "$PANE_INDEX" = "$(_read_team_key "$team_file" MANAGER_PANE)" ] && _DOEY_IS_MGR=0
@@ -213,8 +214,11 @@ is_manager() {
 }
 
 is_taskmaster() {
-  [ "$WINDOW_INDEX" != "0" ] && return 1
-  [ "${PANE#*:}" = "$(get_taskmaster_pane)" ]
+  local _tm_pane _tm_win
+  _tm_pane=$(get_taskmaster_pane)
+  _tm_win="${_tm_pane%%.*}"
+  [ "$WINDOW_INDEX" != "$_tm_win" ] && return 1
+  [ "${WINDOW_INDEX}.${PANE_INDEX}" = "$_tm_pane" ]
 }
 
 is_boss() {
@@ -223,6 +227,7 @@ is_boss() {
 
 is_worker() {
   [ "$WINDOW_INDEX" = "0" ] && return 1
+  is_core_team && return 1
   ! is_manager
 }
 
@@ -232,7 +237,33 @@ get_taskmaster_pane() {
     val=$(_read_team_key "${RUNTIME_DIR}/session.env" TASKMASTER_PANE)
     [ -n "$val" ] && { echo "$val"; return; }
   fi
-  echo "0.2"
+  echo "1.0"
+}
+
+# Extract Core Team window index from TASKMASTER_PANE (e.g., "1.0" → "1")
+get_core_team_window() {
+  local tm_pane
+  tm_pane=$(get_taskmaster_pane)
+  echo "${tm_pane%%.*}"
+}
+
+# True if this pane is in the Core Team window
+is_core_team() {
+  local _ctw
+  _ctw=$(get_core_team_window)
+  [ "$WINDOW_INDEX" = "$_ctw" ]
+}
+
+is_task_reviewer() {
+  is_core_team && [ "$PANE_INDEX" = "1" ]
+}
+
+is_deployment() {
+  is_core_team && [ "$PANE_INDEX" = "2" ]
+}
+
+is_doey_expert() {
+  is_core_team && [ "$PANE_INDEX" = "3" ]
 }
 
 send_to_pane() {

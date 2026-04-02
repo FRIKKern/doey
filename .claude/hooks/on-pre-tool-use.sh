@@ -123,12 +123,21 @@ fi
 if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
   _di_wi="${_WP#*:}"; _di_wi="${_di_wi%.*}"
   _di_pi="${_WP##*.}"
+  _di_tp=$(_rk TASKMASTER_PANE "${_RD}/session.env")
+  _di_ct_win="${_di_tp%%.*}"
   if [ "$_di_wi" = "0" ]; then
     case "$_di_pi" in
       1) _DOEY_ROLE="$DOEY_ROLE_ID_BOSS" ;;
       0) _DOEY_ROLE="info_panel" ;;
-      *) _taskmaster_p=$(_rk TASKMASTER_PANE "${_RD}/session.env")
-         [ "0.${_di_pi}" = "${_taskmaster_p:-$(get_taskmaster_pane)}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+      *) [ "0.${_di_pi}" = "${_di_tp:-0.2}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+    esac
+  elif [ -n "$_di_ct_win" ] && [ "$_di_wi" = "$_di_ct_win" ]; then
+    # Core Team window
+    case "$_di_pi" in
+      0) _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+      1) _DOEY_ROLE="$DOEY_ROLE_ID_TASK_REVIEWER" ;;
+      2) _DOEY_ROLE="$DOEY_ROLE_ID_DEPLOYMENT" ;;
+      3) _DOEY_ROLE="$DOEY_ROLE_ID_DOEY_EXPERT" ;;
     esac
   else
     _di_tt=$(_rk TEAM_TYPE "${_RD}/team_${_di_wi}.env")
@@ -229,6 +238,76 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
   esac
 fi
 
+# Core Team specialists — Agent blocked for all three
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TASK_REVIEWER" ] || \
+   [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DEPLOYMENT" ] || \
+   [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DOEY_EXPERT" ]; then
+  if [ "$TOOL_NAME" = "Agent" ]; then
+    _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent" ""
+    _dbg_write "block_${_DOEY_ROLE}_agent"
+    echo "BLOCKED: Core Team specialists cannot spawn agents." >&2
+    exit 2
+  fi
+fi
+
+# Task Reviewer: read-only project source + task file updates
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TASK_REVIEWER" ]; then
+  case "$TOOL_NAME" in
+    Edit|Write)
+      _CHK_PATH=$(_json_str tool_input.file_path)
+      case "${_CHK_PATH:-}" in
+        */.doey/tasks/*|"${_RD:-__none__}"/*|*/tmp/doey/*) ;; # allow task/runtime files
+        *)
+          _log_block "TOOL_BLOCKED" "Task Reviewer write blocked" "${_CHK_PATH:-}"
+          _dbg_write "block_task_reviewer_write"
+          echo "BLOCKED: Task Reviewer is read-only for project source. Only task files can be updated." >&2
+          exit 2 ;;
+      esac ;;
+    Bash)
+      case "${_BASH_CMD:-}" in *"tmux send-keys"*)
+        _log_block "TOOL_BLOCKED" "Task Reviewer send-keys blocked" "$_BASH_CMD"
+        _dbg_write "block_task_reviewer_sendkeys"
+        echo "BLOCKED: Task Reviewer cannot use send-keys. Report results via task files." >&2
+        exit 2 ;;
+      esac ;;
+  esac
+fi
+
+# Deployment: read-only project source, can run tests + git push/pr
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
+  case "$TOOL_NAME" in
+    Edit|Write)
+      _CHK_PATH=$(_json_str tool_input.file_path)
+      case "${_CHK_PATH:-}" in
+        */.doey/tasks/*|"${_RD:-__none__}"/*|*/tmp/doey/*) ;; # allow task/runtime files
+        *)
+          _log_block "TOOL_BLOCKED" "Deployment write blocked" "${_CHK_PATH:-}"
+          _dbg_write "block_deployment_write"
+          echo "BLOCKED: Deployment cannot edit project source. Run tests and create PRs instead." >&2
+          exit 2 ;;
+      esac ;;
+  esac
+fi
+
+# Doey Expert: can only access Doey source files (shell/, agents/, .claude/, docs/, tests/)
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DOEY_EXPERT" ]; then
+  case "$TOOL_NAME" in
+    Read|Edit|Write|Glob|Grep)
+      _CHK_PATH=$(_json_str tool_input.file_path)
+      [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.path)
+      [ "$TOOL_NAME" = "Glob" ] && [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.pattern)
+      case "${_CHK_PATH:-}" in
+        */shell/*|*/agents/*|*/.claude/*|*/docs/*|*/tests/*|*/install.sh|\
+        */.doey/*|"${_RD:-__none__}"/*|*/tmp/doey/*|*CLAUDE.md*) ;; # allow Doey source + task/runtime
+        *)
+          _log_block "TOOL_BLOCKED" "Doey Expert non-Doey access blocked" "${_CHK_PATH:-}"
+          _dbg_write "block_doey_expert_${TOOL_NAME}"
+          echo "BLOCKED: Doey Expert can only access Doey source files (shell/, agents/, .claude/, docs/, tests/)." >&2
+          exit 2 ;;
+      esac ;;
+  esac
+fi
+
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ]; then
   _dbg_write "allow_boss"
   exit 0
@@ -273,7 +352,7 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] && [ "$TOOL_NAME" = "Bash" ]; t
   esac
 fi
 
-if [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_COORDINATOR" ]; then
+if [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_COORDINATOR" ] && [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
   if [ -n "$_BASH_CMD" ] && [ "$_BASH_CMD" != "__PARSE_FAILED__" ]; then
     case "$_BASH_CMD" in
       *"git commit"*|*"git push"*|*"gh pr create"*|*"gh pr merge"*)
