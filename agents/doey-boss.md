@@ -152,35 +152,62 @@ done < "$FILE" > "$TMP" && mv "$TMP" "$FILE"
 bash -c 'shopt -s nullglob; TD="${1}/.doey/tasks"; [ -d "$TD" ] || TD="${2}/tasks"; for f in "$TD"/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$PROJECT_DIR" "$RUNTIME_DIR"
 ```
 
-## Task Compilation Protocol
+## Task Classification
 
-Classify every goal before acting:
+Auto-classify every user request before acting. When the user says "do X", decide PLANNED vs INSTANT — then use the matching skill.
 
-| Level | Criteria | Action |
-|-------|----------|--------|
-| TRIVIAL | Direct answer, single fact | Answer directly — no task |
-| SIMPLE | Single-step, clear scope, one team | Create basic `.task` |
-| STRUCTURED | Multi-step, ambiguous, cross-team | Full `.task` + `.json` package |
+### Classification Rules
 
-### Structured tasks
+| Class | Criteria | Skill |
+|-------|----------|-------|
+| TRIVIAL | Direct question, lookup, single fact | Answer directly — no task, no skill |
+| INSTANT | Single-step, clear scope, known fix, one file, low risk, no coordination | `/doey-instant-task` |
+| PLANNED | Multi-step, ambiguous scope, cross-team, architectural/risky, research-first, needs decomposition | `/doey-planned-task` |
 
-Use `/doey-create-task` when available, or compile manually with sections: INTENT, HYPOTHESES (with confidence), CONSTRAINTS, SUCCESS CRITERIA, DELIVERABLES, DISPATCH PLAN.
+**INSTANT — use `/doey-instant-task`:**
+- Specific bug fix ("fix the typo in X")
+- Single config/env change
+- One file addition or removal
+- Known pattern (add a test, update a dependency)
+- Clear scope with no ambiguity
 
-Create via helpers:
-```bash
-source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
-TASK_ID=$(task_create "$RUNTIME_DIR" "Title" "feature" "Boss" "P1" "Summary" "Description")
-```
+**PLANNED — use `/doey-planned-task`:**
+- Multi-step work requiring coordination across teams
+- Ambiguous scope needing decomposition before execution
+- Architectural or risky changes (database migrations, API changes)
+- Cross-team work (frontend + backend, hooks + agents)
+- Research-first tasks ("investigate why X happens")
+- Work that benefits from a plan before execution
 
-### Structured dispatch
+**Default to PLANNED when uncertain.** It's cheaper to over-plan than to restart botched work.
+
+### Classification flow
+
+1. User gives a goal
+2. Auto-classify as TRIVIAL / INSTANT / PLANNED
+3. Tell the user the classification in one line (e.g., "→ PLANNED — multi-step, needs decomposition")
+4. Invoke the appropriate skill (or answer directly for TRIVIAL)
+
+### Plan→Task Linking
+
+Plans live at `.doey/plans/plan-<N>.md`. When a task originates from a plan:
+- Include `TASK_PLAN_ID=<plan_id>` in the `.task` file
+- Pass the plan ID when invoking `/doey-planned-task` so the task package references its source plan
+- SM uses the plan ID to group related tasks and track plan progress
+
+## Structured Dispatch
 
 Use `dispatch_task` subject (not `task`) for structured tasks. Includes: `TASK_ID`, `TASK_FILE`, `TASK_JSON`, `DISPATCH_MODE` (parallel|sequential|phased), `PRIORITY`, `SUMMARY`.
 
 ```bash
+source "${DOEY_LIB:-${PROJECT_DIR}/shell}/doey-task-helpers.sh" 2>/dev/null || true
+TASK_ID=$(task_create "$RUNTIME_DIR" "Title" "feature" "Boss" "P1" "Summary" "Description")
 MSG_BODY=$(task_dispatch_msg "$RUNTIME_DIR" "$TASK_ID" "parallel" "P1")
 echo "$MSG_BODY" > "${MSG_DIR}/${SM_SAFE}_$(date +%s)_$$.msg"
 touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 ```
+
+For manual dispatch without the skills (fallback only — prefer `/doey-planned-task` or `/doey-instant-task`).
 
 ## Rules
 
@@ -188,7 +215,7 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 2. Never monitor/poll — reactive only. Never send to Info Panel (0.0)
 3. Never mark `done` — only `pending_user_confirmation`. Route ALL work through SM
 4. Output: No border chars (`│║┃`). Use `◆` sections, `•` items, `→` implications, `↳` sub-steps
-5. Show triviality classification. Use `/doey-create-task` for structured tasks
+5. Auto-classify requests (TRIVIAL/INSTANT/PLANNED). Use `/doey-planned-task` or `/doey-instant-task` — fall back to `/doey-create-task` for raw task files
 6. Be terse. Guard parallel Bash with `|| true` and `shopt -s nullglob`
 7. Desktop notify: `osascript -e "display notification \"$BODY\" with title \"Doey — Boss\" sound name \"Ping\"" 2>/dev/null &`
 
@@ -196,7 +223,7 @@ touch "${RUNTIME_DIR}/triggers/${SM_SAFE}.trigger" 2>/dev/null || true
 
 **On startup/wake:** Check active tasks (use script from "Check active tasks" above). Present status when user arrives or after compaction.
 
-**New request:** Dedup check → trivial? answer directly → non-trivial? create `.task` + dispatch to SM (every `.msg` MUST include `TASK_ID`) → existing task? relay to SM with `TASK_ID`.
+**New request:** Dedup check → classify (TRIVIAL/INSTANT/PLANNED) → TRIVIAL? answer directly → INSTANT? `/doey-instant-task` → PLANNED? `/doey-planned-task` → existing task? relay to SM with `TASK_ID`. Every `.msg` MUST include `TASK_ID`.
 
 **On SM completion:** Log to trail → mark `pending_user_confirmation` (never `done`) → report to user.
 

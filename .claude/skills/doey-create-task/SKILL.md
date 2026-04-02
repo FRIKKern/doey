@@ -6,6 +6,8 @@ description: Compile a natural-language goal into a structured task package (.ta
 - Current tasks: !`bash -c 'RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); source "$RUNTIME_DIR/../doey/shell/doey-task-helpers.sh" 2>/dev/null && task_list "$RUNTIME_DIR" 2>/dev/null || echo "No tasks"'`
 - Tasks dir: !`bash -c 'RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); PD=$(grep "^PROJECT_DIR=" "$RD/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); if [ -n "$PD" ] && [ -d "$PD/.doey/tasks" ]; then echo "$PD/.doey/tasks"; else echo "$RD/tasks"; fi'`
 
+**Prefer `/doey-planned-task` for multi-step work and `/doey-instant-task` for simple tasks.** This skill creates raw task files without planning — use it as a fallback only.
+
 Compile a natural-language goal into a task package. Goal from ARGUMENTS (if empty, ask and stop).
 
 ### 1. Triviality Check
