@@ -90,6 +90,15 @@ _repo_path=""
 [ -f "$HOME/.claude/doey/repo-path" ] && _repo_path=$(cat "$HOME/.claude/doey/repo-path")
 if [ -n "$_repo_path" ] && [ -d "$_repo_path/.claude/skills" ]; then
   _skill_target="${wt_dir:-$PROJECT_DIR}"
+  # Skip sync when source and target are the same directory (e.g. running inside the Doey repo)
+  _src_canon="$(cd "$_repo_path" 2>/dev/null && pwd)" || _src_canon="$_repo_path"
+  _tgt_canon="$(cd "$_skill_target" 2>/dev/null && pwd)" || _tgt_canon="$_skill_target"
+  if [ "$_src_canon" = "$_tgt_canon" ]; then
+    _repo_path=""
+  fi
+fi
+if [ -n "$_repo_path" ] && [ -d "$_repo_path/.claude/skills" ]; then
+  _skill_target="${wt_dir:-$PROJECT_DIR}"
   mkdir -p "$_skill_target/.claude/skills"
   LOCK_DIR="${RUNTIME_DIR}/.skill_sync_lock"
   if mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -152,7 +161,7 @@ case "$ROLE" in
   "$DOEY_ROLE_ID_COORDINATOR") _TITLE="${PROJECT_NAME} ${DOEY_ROLE_COORDINATOR}" ;;
   "$DOEY_ROLE_ID_WORKER")          _TITLE=$([ "${_team_type:-}" = "$DOEY_ROLE_ID_FREELANCER" ] && echo "$DOEY_ROLE_FREELANCER" || echo "$DOEY_ROLE_WORKER") ;;
 esac
-[ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} | ${_TITLE}"
+[ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} | ${_TITLE}" 2>/dev/null || true
 
 type _debug_log >/dev/null 2>&1 && \
   _debug_log lifecycle "session_start" "role=${ROLE:-unknown}" "team_window=${WINDOW_INDEX:-0}" "project=${PROJECT_NAME:-unknown}"
@@ -164,3 +173,5 @@ if [ "${PANE_INDEX:-0}" = "0" ] && [ "${WINDOW_INDEX:-0}" = "0" ]; then
     doey-ctl migrate --project-dir "$PROJECT_DIR" --runtime "${RUNTIME_DIR:-}" 2>/dev/null &
   fi
 fi
+
+exit 0

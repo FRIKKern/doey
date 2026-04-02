@@ -28,7 +28,7 @@ if [ -n "$_DOEY_ROLES_FILE" ]; then
 fi
 
 # ERR trap: report failing command to stderr so Claude Code shows it instead of "No stderr output"
-trap '_doey_hook_err=$?; if [ -n "${RUNTIME_DIR:-}" ]; then printf "[%s] [%s] ERR at line %s: exit %s\n" "$(date +%Y-%m-%dT%H:%M:%S)" "${_DOEY_HOOK_NAME:-hook}" "${LINENO:-?}" "$_doey_hook_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; fi; exit 0' ERR
+trap '_doey_hook_err=$?; if [ -n "${RUNTIME_DIR:-}" ]; then printf "[%s] [%s] ERR at line %s: exit %s\n" "$(date +%Y-%m-%dT%H:%M:%S)" "${_DOEY_HOOK_NAME:-hook}" "${LINENO:-?}" "$_doey_hook_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; fi; trap - EXIT; exit 0' ERR
 
 init_hook() {
   if [ -z "${INPUT:-}" ]; then INPUT=$(cat); fi
@@ -148,7 +148,7 @@ _debug_hook_entry() {  # Log hook entry + set EXIT trap for timing
   [ "${_DOEY_DEBUG_HOOKS:-}" = "true" ] || return 0
   _HOOK_START_MS=$(_ms_now)
   _debug_log hooks "entry" "hook=${_DOEY_HOOK_NAME:-unknown}"
-  trap '_debug_hook_exit $?' EXIT
+  trap '_debug_hook_exit $? || true' EXIT
 }
 
 _debug_hook_exit() {
