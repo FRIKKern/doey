@@ -289,6 +289,21 @@ func parsePriority(s string) int {
 	}
 }
 
+// mapSubtaskStatus converts runtime subtask status to persistent status.
+// Runtime uses "active"/"done"/"failed"; persistent uses "pending"/"in_progress"/"done"/"failed".
+func mapSubtaskStatus(status string) string {
+	switch status {
+	case "active":
+		return "in_progress"
+	case "done":
+		return "done"
+	case "failed":
+		return "failed"
+	default:
+		return "pending"
+	}
+}
+
 // mergeLogs appends new log entries from runtime that aren't already in the persistent store.
 // Comparison is by timestamp to avoid duplicates.
 func mergeLogs(existing []PersistentTaskLog, incoming []TaskLog) []PersistentTaskLog {
@@ -392,6 +407,21 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 			})
 		}
 	}
+	// Merge subtasks: only when runtime has more than persistent (don't overwrite richer data)
+	if len(rt.Subtasks) > 0 && len(rt.Subtasks) > len(pt.Subtasks) {
+		pt.Subtasks = make([]PersistentSubtask, len(rt.Subtasks))
+		for i, st := range rt.Subtasks {
+			pt.Subtasks[i] = PersistentSubtask{
+				Index:       i + 1,
+				Title:       st.Title,
+				Status:      mapSubtaskStatus(st.Status),
+				Worker:      st.Worker,
+				Assignee:    st.Worker,
+				CreatedAt:   st.Created,
+				CompletedAt: st.CompletedAt,
+			}
+		}
+	}
 	pt.Logs = mergeLogs(pt.Logs, rt.Logs)
 	if rt.Updated != 0 {
 		pt.Updated = rt.Updated
@@ -446,6 +476,20 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 			Commits:            rt.Commits,
 		}
 		pt.Logs = mergeLogs(nil, rt.Logs)
+		if len(rt.Subtasks) > 0 {
+			pt.Subtasks = make([]PersistentSubtask, len(rt.Subtasks))
+			for i, st := range rt.Subtasks {
+				pt.Subtasks[i] = PersistentSubtask{
+					Index:       i + 1,
+					Title:       st.Title,
+					Status:      mapSubtaskStatus(st.Status),
+					Worker:      st.Worker,
+					Assignee:    st.Worker,
+					CreatedAt:   st.Created,
+					CompletedAt: st.CompletedAt,
+				}
+			}
+		}
 		index[rt.ID] = len(s.Tasks)
 		s.Tasks = append(s.Tasks, pt)
 	}

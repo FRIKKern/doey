@@ -220,6 +220,15 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 				}
 			}
 		}
+		// Fallback: if no runtime subtasks but persistent task has them, use persistent counts
+		if ti.SubtaskTotal == 0 && len(entry.Subtasks) > 0 {
+			ti.SubtaskTotal = len(entry.Subtasks)
+			for _, ps := range entry.Subtasks {
+				if ps.Status == "done" {
+					ti.SubtaskDone++
+				}
+			}
+		}
 		items[i] = ti
 	}
 	m.list.SetItems(items)
