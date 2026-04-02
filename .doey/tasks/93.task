@@ -1,0 +1,26 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=93
+TASK_TITLE=Session picker UX — keybind actions on focused project
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TAGS=
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=
+TASK_TEAM=W1
+TASK_DESCRIPTION=Redesign the Doey session picker in shell/doey.sh. Current: project list + separate 'kill session' option below. New: single project list where keybinds on the focused item decide the action. Enter=attach/open session, r=restart session, x/d=kill session. Show keybind hints at the bottom (e.g. 'enter: open · r: restart · x: kill'). Remove the separate kill session menu item. Uses gum (charmbracelet TUI tool) — check how the current picker works and adapt. Must work with bash 3.2.
+TASK_ACCEPTANCE_CRITERIA=
+TASK_HYPOTHESES=
+TASK_DECISION_LOG=1775115817:Created task\n1775116195:Worker implemented custom terminal picker replacing gum choose. Bash 3.2 verified inline. All acceptance criteria met.
+TASK_SUBTASKS=1:W1.1: Research current session picker implementation:done\n2:W1.1: Implement new keybind-based session picker:done\n3:W1.2: Verify bash 3.2 compatibility:done
+TASK_RELATED_FILES=
+TASK_BLOCKERS=
+TASK_TIMESTAMPS=created=1775115817
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_NOTES=
+TASK_UPDATED=1775115853
+TASK_REPORT_1_TIMESTAMP=1775116195
+TASK_REPORT_1_AUTHOR=Manager_W1
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Task 93 Complete
+TASK_REPORT_1_BODY=Replaced gum choose picker with custom keybind-based terminal UI. Enter=open, r=restart, x/d=kill. Keybind hints shown. Kill sub-menu removed. Bash 3.2 clean.

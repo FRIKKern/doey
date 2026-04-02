@@ -1,6 +1,6 @@
 TASK_ID=81
 TASK_TITLE=Worker observability — task labels, activity streaming, dashboard logs
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1775024445
 TASK_TYPE=feature
 TASK_DESCRIPTION=Three-part observability initiative: (1) WORKER TASK LABELS — Every worker pane should visibly show which task ID and title it is currently working on. This could be in pane borders, tmux status, or the TUI. (2) ACTIVITY STREAMING — Capture structured output (JSON) from each Claude Code instance — tool calls, file edits, conversation turns, status changes. Claude Code may already emit JSON logs or have a streaming API. Research what's available. (3) DASHBOARD LOG VIEWER — Aggregate the activity streams and display them on the dashboard or in a new TUI tab, so the user can see what every instance is doing in real-time without switching panes. Like a unified activity feed. Research first — we need to understand what Claude Code exposes (conversation logs, JSON output, streaming hooks) before designing the capture mechanism.

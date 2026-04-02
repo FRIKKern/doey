@@ -1,6 +1,6 @@
 TASK_ID=72
 TASK_TITLE=Subtask-driven work tracking with Go TUI display
-TASK_STATUS=pending_user_confirmation
+TASK_STATUS=done
 TASK_CREATED=1774966862
 TASK_TYPE=feature
 TASK_DESCRIPTION=Two-part initiative: (1) SYSTEM — Every worker assignment must create a subtask on the parent task. When a Manager dispatches work to a worker, that dispatch becomes a subtask with its own status (pending/in_progress/done/failed), worker pane ID, and description. The subtask lifecycle tracks the worker lifecycle — starts when dispatched, updates when the worker is busy, completes when the worker finishes. This gives full visibility into what every worker is doing and how it maps to the parent goal. (2) TUI — The Go TUI Tasks tab must display subtasks nested under their parent task. Users should see the parent task, then indented subtasks with status indicators, assigned worker, and progress. This is the primary way users track granular work progress. The subtask format in .task files (TASK_SUBTASKS field) already exists but needs to be richer — each subtask needs: ID, title, status, assigned_worker, created_at, completed_at.

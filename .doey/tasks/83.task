@@ -1,7 +1,7 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=83
 TASK_TITLE=Go TUI task list readability — compact cards, cleaner layout
-TASK_STATUS=error
+TASK_STATUS=done
 TASK_TYPE=bugfix
 TASK_TAGS=
 TASK_CREATED_BY=Boss

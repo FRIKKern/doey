@@ -54,7 +54,7 @@ restart_team() {
   echo "=== Team $W ==="
   [ "${SESS}:${W}.0" != "$SKIP_PANE" ] && {
     kill_and_relaunch "${SESS}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Subtaskmaster\" --agent \"t${W}-manager\""
-    echo "  ${W}.0 Manager ✓"; }
+    echo "  ${W}.0 Subtaskmaster ✓"; }
   for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
     local PANE="${SESS}:${W}.${wp}" PANE_SAFE=$(echo "${SESS}:${W}.${wp}" | tr ':-.' '_')
     [ "$PANE" = "$SKIP_PANE" ] && continue

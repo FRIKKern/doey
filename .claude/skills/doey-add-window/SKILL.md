@@ -1,6 +1,6 @@
 ---
 name: doey-add-window
-description: Add a new team window (Manager + Workers), optionally in a git worktree or as a reserved freelancer pool.
+description: Add a new team window (Subtaskmaster + Workers), optionally in a git worktree or as a reserved freelancer pool.
 ---
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
@@ -44,4 +44,4 @@ bash: if [ "$WORKTREE_MODE" = "true" ]; then WT_BRANCH="doey/team-${NEW_WIN}-$(d
 ### 7. Verify boot
 bash: sleep 8 && NOT_READY=0 && DOWN="" && for i in 0 $(echo "$WORKER_PANES_LIST" | tr ',' ' '); do CHILD=$(pgrep -P "$(tmux display-message -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p '#{pane_pid}')" 2>/dev/null); OUTPUT=$(tmux capture-pane -t "${SESSION_NAME}:${NEW_WIN}.${i}" -p 2>/dev/null); if [ -z "$CHILD" ] || ! echo "$OUTPUT" | grep -q "bypass permissions"; then NOT_READY=$((NOT_READY + 1)); DOWN="$DOWN ${NEW_WIN}.$i"; fi; done; [ "$NOT_READY" -eq 0 ] && echo "All booted" || echo "WARNING: ${NOT_READY} not ready:${DOWN}"
 
-Pane 0 = Manager (freelancer: all workers). Write team env before launch. Copy `.claude/settings.local.json` into worktrees.
+Pane 0 = Subtaskmaster (freelancer: all workers). Write team env before launch. Copy `.claude/settings.local.json` into worktrees.
