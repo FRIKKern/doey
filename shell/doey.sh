@@ -833,6 +833,48 @@ setup_dashboard() {
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
 }
 
+# Create Core Team window (window 1): Taskmaster + specialists
+# Panes: 1.0=Taskmaster, 1.1=Task Reviewer, 1.2=Deployment, 1.3=Doey Expert
+_create_core_team() {
+  local session="$1" runtime_dir="$2" dir="$3"
+
+  # Create window 1
+  tmux new-window -t "$session" -c "$dir"
+  tmux rename-window -t "$session:1" "Core Team"
+
+  # Split into 4 panes (2x2 grid)
+  # Start with 1.0
+  tmux split-window -v -t "$session:1.0" -c "$dir"   # 1.0=top, 1.1=bottom
+  tmux split-window -h -t "$session:1.0" -c "$dir"   # 1.0=top-left, 1.1=top-right, 1.2=bottom
+  tmux split-window -h -t "$session:1.2" -c "$dir"   # 1.2=bottom-left(old bottom), 1.3=bottom-right
+
+  # Name panes
+  local _proj="${session#doey-}"
+  tmux select-pane -t "$session:1.0" -T "${_proj} ${DOEY_ROLE_COORDINATOR}" \;\
+       select-pane -t "$session:1.1" -T "Task Reviewer" \;\
+       select-pane -t "$session:1.2" -T "Deployment" \;\
+       select-pane -t "$session:1.3" -T "Doey Expert"
+
+  # Write Core Team env
+  write_team_env "$runtime_dir" "1" "2x2" "1,2,3" "3" "0" "" "" \
+                 "Core Team" "core" "" ""
+
+  # Set TASKMASTER_PANE in session.env
+  _set_session_env "$runtime_dir" "TASKMASTER_PANE" "1.0"
+
+  # Launch Taskmaster in pane 1.0
+  local _tm_cmd="claude --dangerously-skip-permissions --model ${DOEY_TASKMASTER_MODEL} --name \"${DOEY_ROLE_COORDINATOR}\" --agent ${DOEY_ROLE_FILE_COORDINATOR}"
+  _append_settings _tm_cmd "$runtime_dir"
+  tmux send-keys -t "$session:1.0" "$_tm_cmd" Enter
+  write_pane_status "$runtime_dir" "${session}:1.0" "READY"
+
+  # Panes 1.1-1.3 stay empty for now (specialist agents defined in Phase 4)
+  # Mark as RESERVED so workers don't get dispatched there
+  write_pane_status "$runtime_dir" "${session}:1.1" "RESERVED"
+  write_pane_status "$runtime_dir" "${session}:1.2" "RESERVED"
+  write_pane_status "$runtime_dir" "${session}:1.3" "RESERVED"
+}
+
 # Validate and auto-fix session.env files with encoding/quoting issues
 # This catches any files created with unquoted variables (spaces in paths)
 validate_session_env() {
@@ -1858,7 +1900,7 @@ _launch_session_core() {
   local worker_count=$(( total - 1 ))
   local session="doey-${name}"
   local runtime_dir="/tmp/doey/${name}"
-  local team_window=1
+  local team_window=2
 
   cd "$dir"
   _doey_load_config  # Reload config now that we're in the project dir
@@ -1891,9 +1933,9 @@ RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="1"
+TEAM_WINDOWS="2"
 BOSS_PANE="0.1"
-TASKMASTER_PANE="0.2"
+TASKMASTER_PANE="1.0"
 REMOTE="$(_detect_remote)"
 MANIFEST
 
@@ -1916,9 +1958,10 @@ MANIFEST
     fi
   fi
 
-  write_team_env "$runtime_dir" "1" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
+  write_team_env "$runtime_dir" "$team_window" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
 
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
+  _create_core_team "$session" "$runtime_dir" "$dir"
   tmux new-window -t "$session" -c "$dir"
 
   [[ "$headless" -eq 0 ]] && step_done
@@ -1980,7 +2023,12 @@ MANIFEST
     # Boss briefing (pane 0.1)
     tmux send-keys -t "$session:0.1" \
       "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is in the Core Team window. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
-    # Taskmaster briefing moved to Core Team window setup (Phase 3)
+    # Taskmaster briefing (Core Team pane 1.0)
+    local _tm_pane
+    _tm_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    _tm_pane="${_tm_pane:-1.0}"
+    tmux send-keys -t "$session:${_tm_pane}" \
+      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. You are ${DOEY_ROLE_COORDINATOR} at pane ${_tm_pane} in Core Team window. Worker team windows: ${team_window}. Awaiting ${DOEY_ROLE_BOSS} instructions." Enter
   ) &
 
   trap 'jobs -p | xargs kill 2>/dev/null; git worktree prune 2>/dev/null' EXIT INT TERM
@@ -3519,7 +3567,7 @@ launch_session_dynamic() {
   local name="$1" dir="$2"
   local session="doey-${name}" runtime_dir="/tmp/doey/${name}"
   local short_dir="${dir/#$HOME/~}"
-  local team_window=1
+  local team_window=2
 
   cd "$dir"
   _doey_load_config  # Reload config now that we're in the project dir
@@ -3621,9 +3669,9 @@ RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="500"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="1"
+TEAM_WINDOWS="2"
 BOSS_PANE="0.1"
-TASKMASTER_PANE="0.2"
+TASKMASTER_PANE="1.0"
 REMOTE="$(_detect_remote)"
 MANIFEST
 
@@ -3654,24 +3702,26 @@ MANIFEST
   [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_type=$(_read_team_config "1" "TYPE" "")
 
   if [ -n "$_team1_def" ]; then
-    # Team 1 uses a .team.md definition — dashboard first, then spawn from def
-    write_team_env "$runtime_dir" "1" "dynamic" "" "0" "0" "" ""
+    # First worker team uses a .team.md definition — dashboard + core team first, then spawn from def
+    write_team_env "$runtime_dir" "$team_window" "dynamic" "" "0" "0" "" ""
     setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
+    _create_core_team "$session" "$runtime_dir" "$dir"
     step_done
 
-    step_start 4 "Launching team 1 from definition '${_team1_def}'..."
+    step_start 4 "Launching team ${team_window} from definition '${_team1_def}'..."
     if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_team1_def" "$_team1_type" ); then
-      doey_error "Failed to launch team 1 from definition '${_team1_def}'"
+      doey_error "Failed to launch team ${team_window} from definition '${_team1_def}'"
     fi
     step_done
 
     STEP_TOTAL=6  # Skip step 5 (worker columns) — add_team_from_def handles workers
   else
-    # Default dynamic grid path for team 1
-    write_team_env "$runtime_dir" "1" "dynamic" "" "0" "0" "" ""
+    # Default dynamic grid path for first worker team
+    write_team_env "$runtime_dir" "$team_window" "dynamic" "" "0" "0" "" ""
 
     # Dashboard launches after session.env exists (info-panel + Taskmaster need it)
     setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
+    _create_core_team "$session" "$runtime_dir" "$dir"
     tmux new-window -t "$session" -c "$dir"
     tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
     tmux rename-window -t "$session:${team_window}" "Local Team"
@@ -3698,7 +3748,7 @@ MANIFEST
   # worktrees) and briefings in a background subshell so the user gets
   # attached to tmux immediately instead of waiting for all teams.
 
-  # Update team 1's env with per-team config if specified (quick, no tmux ops)
+  # Update first worker team's env with per-team config if specified (quick, no tmux ops)
   if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
     if [ -z "$_team1_def" ]; then
       local _ptc1_name _ptc1_role _ptc1_wm _ptc1_mm
@@ -3708,10 +3758,10 @@ MANIFEST
       _ptc1_mm=$(_read_team_config "1" "MANAGER_MODEL" "")
       if [ -n "$_ptc1_name" ] || [ -n "$_ptc1_role" ] || [ -n "$_ptc1_wm" ] || [ -n "$_ptc1_mm" ]; then
         local _ptc1_wp _ptc1_wc
-        _ptc1_wp=$(_env_val "${runtime_dir}/team_1.env" WORKER_PANES)
-        _ptc1_wc=$(_env_val "${runtime_dir}/team_1.env" WORKER_COUNT)
-        write_team_env "$runtime_dir" "1" "dynamic" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
-        [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:1" "$_ptc1_name"
+        _ptc1_wp=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_PANES)
+        _ptc1_wc=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_COUNT)
+        write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
+        [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:${team_window}" "$_ptc1_name"
       fi
     fi
   fi
@@ -3835,7 +3885,12 @@ MANIFEST
 
     tmux send-keys -t "$session:0.1" \
       "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is in the Core Team window. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
-    # Taskmaster briefing moved to Core Team window setup (Phase 3)
+    # Taskmaster briefing (Core Team pane 1.0)
+    local _tm_pane
+    _tm_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    _tm_pane="${_tm_pane:-1.0}"
+    tmux send-keys -t "$session:${_tm_pane}" \
+      "Session online. Project: ${name}, dir: ${dir}, session: ${session}. You are ${DOEY_ROLE_COORDINATOR} at pane ${_tm_pane} in Core Team window. Worker team windows: ${final_team_windows}. Awaiting ${DOEY_ROLE_BOSS} instructions." Enter
   ) &
   local _BG_SPAWN_PID=$!
 
