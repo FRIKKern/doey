@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=129
+TASK_TITLE=Fix plan migration — handle non-numeric plan filenames gracefully
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TAGS=
+TASK_CREATED_BY=
+TASK_ASSIGNED_TO=W1
+TASK_DESCRIPTION=Migration code in tui/ does ParseInt on plan filename stem. Crashes on 'scientific-task-architecture.md' with: cannot determine plan ID: strconv.ParseInt. Should skip non-numeric filenames with a warning instead of erroring. Check tui/ migration code that reads .doey/plans/*.md files.
+TASK_ACCEPTANCE_CRITERIA=
+TASK_HYPOTHESES=
+TASK_DECISION_LOG=1775150365:Created task\n1775150543:Status changed to done
+TASK_SUBTASKS=
+TASK_RELATED_FILES=
+TASK_BLOCKERS=
+TASK_TIMESTAMPS=created=1775150365|completed=1775150543
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_NOTES=
+TASK_UPDATED=1775150578
+TASK_TEAM=W1
+TASK_ATTACHMENTS=.doey/tasks/129.result.json
+TASK_REPORT_1_TIMESTAMP=1775150543
+TASK_REPORT_1_AUTHOR=worker_1_1
+TASK_REPORT_1_TYPE=completion
+TASK_REPORT_1_TITLE=Worker 1.1 done
+TASK_REPORT_1_BODY=Worker 1.1 completed with 2 tool calls, 0 files changed
