@@ -14,10 +14,13 @@ import (
 	"github.com/doey-cli/doey/tui/internal/roles"
 )
 
-// Reader polls Doey runtime files
+// Reader polls Doey runtime files. When a SQLite store exists at
+// .doey/doey.db it reads core data from there, falling back to
+// file parsing when the DB is absent or a query fails.
 type Reader struct {
 	runtimeDir string
-	projectDir string // resolved lazily from session.env
+	projectDir string       // resolved lazily from session.env
+	sr         *storeReader // nil when DB not available
 }
 
 // NewReader creates a Reader for the given runtime directory
@@ -31,8 +34,20 @@ func (r *Reader) RuntimeDir() string {
 }
 
 // SetProjectDir sets the project directory used for resolving .doey/tasks/.
+// If a SQLite store exists at .doey/doey.db, it is opened for fast reads.
 func (r *Reader) SetProjectDir(dir string) {
 	r.projectDir = dir
+	if r.sr == nil {
+		r.sr = openStore(dir)
+	}
+}
+
+// Close releases resources held by the Reader (e.g. the SQLite store).
+func (r *Reader) Close() {
+	if r.sr != nil {
+		r.sr.close()
+		r.sr = nil
+	}
 }
 
 // taskDir returns the primary task directory (.doey/tasks/ if it exists, else runtimeDir/tasks/)
@@ -62,6 +77,11 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	snap.Session = session
 	r.projectDir = session.ProjectDir
 
+	// Open store lazily on first snapshot if not yet opened
+	if r.sr == nil && session.ProjectDir != "" {
+		r.sr = openStore(session.ProjectDir)
+	}
+
 	for _, w := range session.TeamWindows {
 		tc, err := r.parseTeamConfig(w)
 		if err != nil {
@@ -70,8 +90,22 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 		snap.Teams[w] = tc
 	}
 
-	snap.Panes = r.parsePaneStatuses()
-	snap.Tasks = r.ParseTasks()
+	// Pane statuses: try store, fall back to files
+	if r.sr != nil {
+		snap.Panes = r.sr.readPaneStatuses()
+	}
+	if len(snap.Panes) == 0 {
+		snap.Panes = r.parsePaneStatuses()
+	}
+
+	// Tasks: try store, fall back to files
+	if r.sr != nil {
+		snap.Tasks = r.sr.readTasks()
+	}
+	if len(snap.Tasks) == 0 {
+		snap.Tasks = r.ParseTasks()
+	}
+
 	snap.Subtasks = r.parseSubtasks()
 
 	// Attach subtasks to their parent tasks
@@ -88,16 +122,37 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	snap.Uptime = r.calculateUptime()
 
 	if session.ProjectDir != "" {
-		snap.AgentDefs = r.readAgentDefs(session.ProjectDir)
+		// Agents: try store, fall back to files
+		if r.sr != nil {
+			snap.AgentDefs = r.sr.readAgents()
+		}
+		if len(snap.AgentDefs) == 0 {
+			snap.AgentDefs = r.readAgentDefs(session.ProjectDir)
+		}
+
 		snap.TeamDefs = r.readTeamDefs(session.ProjectDir)
-		snap.Plans = ReadPlans(session.ProjectDir)
+
+		// Plans: try store, fall back to files
+		if r.sr != nil {
+			snap.Plans = r.sr.readPlans()
+		}
+		if len(snap.Plans) == 0 {
+			snap.Plans = ReadPlans(session.ProjectDir)
+		}
 	}
 
 	snap.TeamUserCfg, _ = ReadTeamUserConfig()
 	snap.TeamEntries = buildTeamEntries(snap.TeamDefs, snap.Teams, snap.TeamUserCfg)
 	snap.Connections = r.parseConnections()
 	snap.DebugEntries = r.parseDebugEntries()
-	snap.Messages = r.parseMessages()
+
+	// Messages: try store, fall back to files
+	if r.sr != nil {
+		snap.Messages = r.sr.readMessages()
+	}
+	if len(snap.Messages) == 0 {
+		snap.Messages = r.parseMessages()
+	}
 
 	return snap, nil
 }

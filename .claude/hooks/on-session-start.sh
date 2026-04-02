@@ -156,3 +156,11 @@ esac
 
 type _debug_log >/dev/null 2>&1 && \
   _debug_log lifecycle "session_start" "role=${ROLE:-unknown}" "team_window=${WINDOW_INDEX:-0}" "project=${PROJECT_NAME:-unknown}"
+
+# Refresh agent registry in SQLite (fast, idempotent)
+# Only run for first pane in session to avoid redundant work
+if [ "${PANE_INDEX:-0}" = "0" ] && [ "${WINDOW_INDEX:-0}" = "0" ]; then
+  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+    doey-ctl migrate --project-dir "$PROJECT_DIR" --runtime "${RUNTIME_DIR:-}" 2>/dev/null &
+  fi
+fi

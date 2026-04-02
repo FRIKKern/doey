@@ -3475,6 +3475,11 @@ SJSON
        set-environment -t "$session" DOEY_SETTINGS "$_doey_settings" \; \
        set-environment -t "$session" DOEY_REMOTE "$is_remote" \; \
        set-environment -t "$session" DOEY_TUNNEL_URL ""
+
+  # Populate SQLite store from existing files (one-shot, idempotent)
+  if command -v doey-ctl >/dev/null 2>&1; then
+    doey-ctl migrate --project-dir "$dir" --runtime "$runtime_dir" 2>/dev/null || true
+  fi
 }
 
 launch_session_headless() {
