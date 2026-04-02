@@ -213,4 +213,6 @@ case "$FILES_LIST" in
     ;;
 esac
 
-touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
+if ! is_taskmaster; then
+  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
+fi

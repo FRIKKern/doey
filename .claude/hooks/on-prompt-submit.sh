@@ -89,11 +89,6 @@ if is_worker; then
   fi
 fi
 
-if is_taskmaster; then
-  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
-  touch "${RUNTIME_DIR}/triggers/${PANE_SAFE}.trigger" 2>/dev/null || true
-fi
-
 if is_worker && [ "$PANE_INDEX" -gt 0 ]; then
   collapsed="${RUNTIME_DIR}/status/col_$(( (PANE_INDEX - 1) / 2 )).collapsed"
   if [ -f "$collapsed" ]; then
