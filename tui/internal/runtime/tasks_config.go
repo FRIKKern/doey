@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/doey-cli/doey/tui/internal/store"
 )
 
 const taskConfigFile = "tasks.json"
@@ -166,36 +168,91 @@ func taskConfigPath() string {
 	return filepath.Join(dir, "doey", taskConfigFile)
 }
 
-// ReadTaskStore reads the persistent task store (project .doey/tasks/ or ~/.config/doey/ fallback).
-// Returns empty store if file does not exist.
+// ReadTaskStore reads the persistent task store. Tries SQLite first, then falls back
+// to the JSON file (project .doey/tasks/ or ~/.config/doey/ fallback).
+// Returns empty store if neither source has data.
 func ReadTaskStore() (TaskStore, error) {
-	var store TaskStore
+	var ts TaskStore
 
-	data, err := os.ReadFile(taskConfigPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return store, nil
+	// Try SQLite store first
+	if pd := resolveProjectDir(); pd != "" {
+		dbPath := filepath.Join(pd, ".doey", "doey.db")
+		if s, err := store.Open(dbPath); err == nil {
+			defer s.Close()
+			if storeTasks, err := s.ListTasks(""); err == nil && len(storeTasks) > 0 {
+				ts.Tasks = make([]PersistentTask, 0, len(storeTasks))
+				for _, st := range storeTasks {
+					pt := storeTaskToPersistent(st)
+					ts.Tasks = append(ts.Tasks, pt)
+					if id, _ := strconv.Atoi(pt.ID); id >= ts.NextID {
+						ts.NextID = id + 1
+					}
+				}
+				return ts, nil
+			}
 		}
-		return store, nil // graceful: treat any read error as empty
 	}
 
-	if err := json.Unmarshal(data, &store); err != nil {
+	// Fall back to JSON file
+	data, err := os.ReadFile(taskConfigPath())
+	if err != nil {
+		return ts, nil // graceful: treat any read error as empty
+	}
+
+	if err := json.Unmarshal(data, &ts); err != nil {
 		return TaskStore{}, nil // graceful: malformed file = empty store
 	}
 
-	return store, nil
+	return ts, nil
 }
 
-// WriteTaskStore writes the persistent task store (project .doey/tasks/ or ~/.config/doey/ fallback).
+// resolveProjectDir returns the project directory from the package var or env.
+func resolveProjectDir() string {
+	if configProjectDir != "" {
+		return configProjectDir
+	}
+	if pd := os.Getenv("DOEY_PROJECT_DIR"); pd != "" {
+		return pd
+	}
+	return ""
+}
+
+// storeTaskToPersistent converts a store.Task to a PersistentTask.
+func storeTaskToPersistent(st store.Task) PersistentTask {
+	pt := PersistentTask{
+		ID:                 strconv.FormatInt(st.ID, 10),
+		Title:              st.Title,
+		Status:             st.Status,
+		Type:               st.Type,
+		Category:           st.Type,
+		Description:        st.Description,
+		CreatedBy:          st.CreatedBy,
+		AssignedTo:         st.AssignedTo,
+		Team:               st.Team,
+		Tags:               splitTags(st.Tags),
+		AcceptanceCriteria: st.AcceptanceCriteria,
+		Created:            st.CreatedAt,
+		Updated:            st.UpdatedAt,
+	}
+	if st.PlanID != nil {
+		pt.PlanID = strconv.FormatInt(*st.PlanID, 10)
+	}
+	return pt
+}
+
+// splitTags is defined in store_reader.go (shared within the runtime package).
+
+// WriteTaskStore writes the persistent task store to JSON and also syncs to SQLite
+// when the DB is available (dual-write for transition period).
 // Creates the directory if it does not exist. Uses atomic write via .tmp + rename.
-func WriteTaskStore(store TaskStore) error {
+func WriteTaskStore(ts TaskStore) error {
 	path := taskConfigPath()
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
-	data, err := json.MarshalIndent(store, "", "  ")
+	data, err := json.MarshalIndent(ts, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -205,7 +262,70 @@ func WriteTaskStore(store TaskStore) error {
 	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+
+	// Dual-write: sync core task fields to SQLite (best-effort, don't fail the JSON write)
+	// TODO(phase4): subtasks, reports, recovery events, QA threads need separate store migration
+	if pd := resolveProjectDir(); pd != "" {
+		syncTaskStoreToSQLite(pd, ts)
+	}
+
+	return nil
+}
+
+// syncTaskStoreToSQLite upserts core task fields to the SQLite store (best-effort).
+func syncTaskStoreToSQLite(projectDir string, ts TaskStore) {
+	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
+	s, err := store.Open(dbPath)
+	if err != nil {
+		return
+	}
+	defer s.Close()
+
+	for _, pt := range ts.Tasks {
+		id, err := strconv.ParseInt(pt.ID, 10, 64)
+		if err != nil {
+			continue
+		}
+		var planID *int64
+		if pt.PlanID != "" {
+			if pid, err := strconv.ParseInt(pt.PlanID, 10, 64); err == nil {
+				planID = &pid
+			}
+		}
+		tagsStr := ""
+		if len(pt.Tags) > 0 {
+			for i, t := range pt.Tags {
+				if i > 0 {
+					tagsStr += ","
+				}
+				tagsStr += t
+			}
+		}
+		st := &store.Task{
+			ID:                 id,
+			Title:              pt.Title,
+			Status:             pt.Status,
+			Type:               pt.Type,
+			Description:        pt.Description,
+			CreatedBy:          pt.CreatedBy,
+			AssignedTo:         pt.AssignedTo,
+			Team:               pt.Team,
+			PlanID:             planID,
+			Tags:               tagsStr,
+			AcceptanceCriteria: pt.AcceptanceCriteria,
+			CreatedAt:          pt.Created,
+			UpdatedAt:          pt.Updated,
+		}
+		// Try update first; if task doesn't exist in DB, create it
+		if existing, err := s.GetTask(id); err == nil && existing != nil {
+			_ = s.UpdateTask(st)
+		} else {
+			_, _ = s.CreateTask(st)
+		}
+	}
 }
 
 // AddTask creates a new task and returns its ID.

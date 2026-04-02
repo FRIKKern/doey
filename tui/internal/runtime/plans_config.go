@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/doey-cli/doey/tui/internal/store"
 )
 
 // Plan represents a plan stored as a markdown file with YAML-like frontmatter.
@@ -20,12 +23,37 @@ type Plan struct {
 	FilePath string // absolute path to the plan file
 }
 
-// ReadPlans scans .doey/plans/*.md and returns parsed plans sorted by ID descending.
-// Returns an empty slice if the directory does not exist.
+// ReadPlans tries the SQLite store first, then falls back to scanning .doey/plans/*.md.
+// Returns parsed plans sorted by ID descending, or an empty slice if nothing found.
 func ReadPlans(projectDir string) []Plan {
 	if projectDir == "" {
 		return nil
 	}
+
+	// Try SQLite store first
+	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
+	if s, err := store.Open(dbPath); err == nil {
+		defer s.Close()
+		if storePlans, err := s.ListPlans(); err == nil && len(storePlans) > 0 {
+			plans := make([]Plan, 0, len(storePlans))
+			for _, sp := range storePlans {
+				plans = append(plans, Plan{
+					ID:      int(sp.ID),
+					Title:   sp.Title,
+					Status:  sp.Status,
+					Content: sp.Body,
+					Created: time.Unix(sp.CreatedAt, 0).Format(time.RFC3339),
+					Updated: time.Unix(sp.UpdatedAt, 0).Format(time.RFC3339),
+				})
+			}
+			sort.Slice(plans, func(i, j int) bool {
+				return plans[i].ID > plans[j].ID
+			})
+			return plans
+		}
+	}
+
+	// Fall back to file parsing
 	plansDir := filepath.Join(projectDir, ".doey", "plans")
 	entries, err := os.ReadDir(plansDir)
 	if err != nil {

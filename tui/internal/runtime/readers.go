@@ -3,16 +3,72 @@ package runtime
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/doey-cli/doey/tui/internal/store"
 )
 
-// ReadPaneStatuses reads all .status files from runtimeDir/status/.
-// Parses STATUS:, TASK:, UPDATED: fields. Extracts window/pane indices from filename.
-func ReadPaneStatuses(runtimeDir string) []PaneStatus {
+// ReadPaneStatuses reads pane statuses. If projectDir is provided, tries the
+// SQLite store first and falls back to file-based parsing.
+func ReadPaneStatuses(runtimeDir string, projectDir ...string) []PaneStatus {
+	// Try store first
+	if len(projectDir) > 0 && projectDir[0] != "" {
+		if statuses, ok := readPaneStatusesFromStore(projectDir[0]); ok {
+			return statuses
+		}
+	}
+
+	// Fall back to file parsing
+	return readPaneStatusesFromFiles(runtimeDir)
+}
+
+func readPaneStatusesFromStore(projectDir string) ([]PaneStatus, bool) {
+	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
+	s, err := store.Open(dbPath)
+	if err != nil {
+		return nil, false
+	}
+	defer s.Close()
+
+	// List all pane statuses across all windows
+	rows, err := s.DB().Query(
+		`SELECT pane_id, window_id, role, status, task_id, task_title, agent, updated_at FROM pane_status ORDER BY pane_id`,
+	)
+	if err != nil {
+		return nil, false
+	}
+	defer rows.Close()
+
+	var result []PaneStatus
+	for rows.Next() {
+		var sp store.PaneStatus
+		if err := rows.Scan(&sp.PaneID, &sp.WindowID, &sp.Role, &sp.Status, &sp.TaskID, &sp.TaskTitle, &sp.Agent, &sp.UpdatedAt); err != nil {
+			return nil, false
+		}
+		ps := PaneStatus{
+			Pane:    sp.PaneID,
+			Status:  sp.Status,
+			Task:    sp.TaskTitle,
+			Updated: fmt.Sprintf("%d", sp.UpdatedAt),
+		}
+		if dotIdx := strings.IndexByte(ps.Pane, '.'); dotIdx >= 0 {
+			ps.WindowIdx, _ = strconv.Atoi(ps.Pane[:dotIdx])
+			ps.PaneIdx, _ = strconv.Atoi(ps.Pane[dotIdx+1:])
+		}
+		result = append(result, ps)
+	}
+	if rows.Err() != nil || len(result) == 0 {
+		return nil, false
+	}
+	return result, true
+}
+
+func readPaneStatusesFromFiles(runtimeDir string) []PaneStatus {
 	var result []PaneStatus
 	statusDir := filepath.Join(runtimeDir, "status")
 
@@ -89,10 +145,66 @@ func ReadResults(runtimeDir string) []WorkerResult {
 	return results
 }
 
-// ReadRecentMessages reads .msg files from runtimeDir/messages/.
-// Parses FROM:, SUBJECT: headers; rest is body. Extracts timestamp from filename.
+// ReadRecentMessages reads messages. If projectDir is provided, tries the
+// SQLite store first and falls back to file-based parsing.
 // Returns most recent `limit` messages, sorted newest first.
-func ReadRecentMessages(runtimeDir string, limit int) []Message {
+func ReadRecentMessages(runtimeDir string, limit int, projectDir ...string) []Message {
+	// Try store first
+	if len(projectDir) > 0 && projectDir[0] != "" {
+		if msgs, ok := readRecentMessagesFromStore(projectDir[0], limit); ok {
+			return msgs
+		}
+	}
+
+	// Fall back to file parsing
+	return readRecentMessagesFromFiles(runtimeDir, limit)
+}
+
+func readRecentMessagesFromStore(projectDir string, limit int) ([]Message, bool) {
+	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
+	s, err := store.Open(dbPath)
+	if err != nil {
+		return nil, false
+	}
+	defer s.Close()
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	// Query recent messages across all panes
+	rows, err := s.DB().Query(
+		`SELECT id, from_pane, to_pane, subject, body, created_at FROM messages ORDER BY created_at DESC LIMIT ?`, limit,
+	)
+	if err != nil {
+		return nil, false
+	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		var id int64
+		var from, to, subject, body string
+		var createdAt int64
+		if err := rows.Scan(&id, &from, &to, &subject, &body, &createdAt); err != nil {
+			return nil, false
+		}
+		msgs = append(msgs, Message{
+			ID:        fmt.Sprintf("%d", id),
+			From:      from,
+			To:        to,
+			Subject:   subject,
+			Body:      body,
+			Timestamp: createdAt,
+		})
+	}
+	if rows.Err() != nil || len(msgs) == 0 {
+		return nil, false
+	}
+	return msgs, true
+}
+
+func readRecentMessagesFromFiles(runtimeDir string, limit int) []Message {
 	var msgs []Message
 
 	matches, _ := filepath.Glob(filepath.Join(runtimeDir, "messages", "*.msg"))
@@ -146,9 +258,51 @@ func ReadRecentMessages(runtimeDir string, limit int) []Message {
 	return msgs
 }
 
-// ReadTaskLogs parses TASK_LOG_* entries from a .task file.
-// Format: TASK_LOG_N=timestamp|action|detail (or just text)
-func ReadTaskLogs(taskFile string) []LogEntry {
+// ReadTaskLogs parses task log entries. If projectDir and taskID are provided,
+// tries the SQLite store first and falls back to .task file parsing.
+// taskFile is always the path to the .task file (used for file fallback).
+func ReadTaskLogs(taskFile string, storeArgs ...string) []LogEntry {
+	// Try store: storeArgs[0]=projectDir, storeArgs[1]=taskID
+	if len(storeArgs) >= 2 && storeArgs[0] != "" && storeArgs[1] != "" {
+		if logs, ok := readTaskLogsFromStore(storeArgs[0], storeArgs[1]); ok {
+			return logs
+		}
+	}
+
+	// Fall back to file parsing
+	return readTaskLogsFromFile(taskFile)
+}
+
+func readTaskLogsFromStore(projectDir, taskIDStr string) ([]LogEntry, bool) {
+	taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+	if err != nil {
+		return nil, false
+	}
+
+	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
+	s, err := store.Open(dbPath)
+	if err != nil {
+		return nil, false
+	}
+	defer s.Close()
+
+	entries, err := s.ListTaskLog(taskID)
+	if err != nil || len(entries) == 0 {
+		return nil, false
+	}
+
+	var logs []LogEntry
+	for _, e := range entries {
+		logs = append(logs, LogEntry{
+			Timestamp: fmt.Sprintf("%d", e.CreatedAt),
+			Action:    e.Type,
+			Detail:    e.Title,
+		})
+	}
+	return logs, true
+}
+
+func readTaskLogsFromFile(taskFile string) []LogEntry {
 	var logs []LogEntry
 
 	env, err := parseEnvFile(taskFile)
