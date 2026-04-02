@@ -158,7 +158,7 @@ func (m *TasksModel) SetSize(w, h int) {
 	if leftW < 28 {
 		leftW = 28
 	}
-	m.list.SetSize(leftW, h-4)
+	m.list.SetSize(leftW, h-2) // header + summary = 2 lines above list
 	rightW := w - leftW - 1
 	if rightW < 24 {
 		rightW = 24
