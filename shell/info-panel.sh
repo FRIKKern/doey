@@ -2,6 +2,11 @@
 # Doey Info Panel — dashboard for window 0, refreshes every 5 minutes.
 set -uo pipefail
 
+# Source role definitions
+_ROLES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=doey-roles.sh
+source "${_ROLES_DIR}/doey-roles.sh" 2>/dev/null || true
+
 RUNTIME_DIR="${1:-${DOEY_RUNTIME:-}}"
 if [ -z "$RUNTIME_DIR" ]; then
   RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
@@ -315,22 +320,22 @@ while true; do
   add_left "$(gum_header 'HOW TO USE DOEY')"
   add_left ""
   if [ "$HAS_GUM" = true ]; then
-    add_left "  $(gum style --foreground 15 --bold '1.') Talk to the $(gum style --foreground 6 'Boss') (pane 0.1, right side"
+    add_left "  $(gum style --foreground 15 --bold '1.') Talk to the $(gum style --foreground 6 "${DOEY_ROLE_BOSS}") (pane 0.1, right side"
     add_left "     of this window) $(gum style --foreground 8 '—') describe your task and"
     add_left "     it coordinates with the team for you."
     add_left ""
     add_left "  $(gum style --foreground 15 --bold '2.') Switch to a team window ($(gum style --foreground 3 'Ctrl-b 1')) and"
-    add_left "     talk to the Subtaskmaster directly."
+    add_left "     talk to the ${DOEY_ROLE_TEAM_LEAD} directly."
     add_left ""
     add_left "  $(gum style --foreground 15 --bold '3.') Click any worker pane and run $(gum style --foreground 2 '/doey-reserve')"
     add_left "     to claim it for yourself."
   else
-    add_left "$(printf '%b  1.%b Talk to the %bBoss%b (pane 0.1, right side' "${C_BOLD_WHITE}" "${C_RESET}" "${C_CYAN}" "${C_RESET}")"
+    add_left "$(printf '%b  1.%b Talk to the %b%s%b (pane 0.1, right side' "${C_BOLD_WHITE}" "${C_RESET}" "${C_CYAN}" "${DOEY_ROLE_BOSS}" "${C_RESET}")"
     add_left "$(printf '     of this window) %b—%b describe your task and' "${C_DIM}" "${C_RESET}")"
     add_left "     it coordinates with the team for you."
     add_left ""
     add_left "$(printf '%b  2.%b Switch to a team window (%bCtrl-b 1%b) and' "${C_BOLD_WHITE}" "${C_RESET}" "${C_YELLOW}" "${C_RESET}")"
-    add_left "     talk to the Subtaskmaster directly."
+    add_left "     talk to the ${DOEY_ROLE_TEAM_LEAD} directly."
     add_left ""
     add_left "$(printf '%b  3.%b Click any worker pane and run %b/doey-reserve%b' "${C_BOLD_WHITE}" "${C_RESET}" "${C_GREEN}" "${C_RESET}")"
     add_left "     to claim it for yourself."

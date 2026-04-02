@@ -249,6 +249,9 @@ if [ -f "$_go_helpers" ]; then
   source "$_go_helpers"
 fi
 
+# shellcheck source=doey-roles.sh
+source "${SCRIPT_DIR}/doey-roles.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 # Load user config (optional), then apply defaults for any unset variables.
 # Hierarchy: project .doey/config.sh > global ~/.config/doey/config.sh > defaults
@@ -792,8 +795,8 @@ setup_dashboard() {
 
   local _proj="${session#doey-}"
   tmux select-pane -t "$session:0.0" -T ""
-  tmux select-pane -t "$session:0.1" -T "${_proj} Boss"
-  tmux select-pane -t "$session:0.2" -T "${_proj} Taskmaster"
+  tmux select-pane -t "$session:0.1" -T "${_proj} ${DOEY_ROLE_BOSS}"
+  tmux select-pane -t "$session:0.2" -T "${_proj} ${DOEY_ROLE_COORDINATOR}"
   BOSS_PANE="0.1"
   TASKMASTER_PANE="0.2"
 
@@ -815,12 +818,12 @@ setup_dashboard() {
   fi
 
   # Boss (pane 0.1)
-  local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name \"Boss\" --agent doey-boss"
+  local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name \"${DOEY_ROLE_BOSS}\" --agent ${DOEY_ROLE_FILE_BOSS}"
   _append_settings _boss_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.1" "$_boss_cmd" Enter
 
   # Taskmaster (pane 0.2)
-  local _taskmaster_cmd="claude --dangerously-skip-permissions --model $DOEY_TASKMASTER_MODEL --name \"Taskmaster\" --agent doey-taskmaster"
+  local _taskmaster_cmd="claude --dangerously-skip-permissions --model $DOEY_TASKMASTER_MODEL --name \"${DOEY_ROLE_COORDINATOR}\" --agent ${DOEY_ROLE_FILE_COORDINATOR}"
   _append_settings _taskmaster_cmd "$runtime_dir"
   tmux send-keys -t "$session:0.2" "$_taskmaster_cmd" Enter
 
@@ -1941,7 +1944,7 @@ MANIFEST
   [[ "$headless" -eq 0 ]] && step_done
 
   # -- Manager --
-  _step_msg 5 "Launching Subtaskmaster..." "$headless"
+  _step_msg 5 "Launching ${DOEY_ROLE_TEAM_LEAD}..." "$headless"
 
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
 
@@ -1952,7 +1955,7 @@ MANIFEST
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     # Boss briefing (pane 0.1)
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. Taskmaster is at pane 0.2. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
+      "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is at pane 0.2. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
     # Taskmaster briefing (pane 0.2)
     tmux send-keys -t "$session:${TASKMASTER_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. Team window ${team_window} has ${worker_count} workers. You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
@@ -3017,7 +3020,7 @@ reload_session() {
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.5
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
-      local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} Subtaskmaster\" --agent \"$mgr_agent\""
+      local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
       _append_settings _rl_mgr_cmd "$runtime_dir"
       tmux send-keys -t "$mgr_ref" "$_rl_mgr_cmd" Enter
       printf " ${SUCCESS}✓${RESET}\n"
@@ -3612,7 +3615,7 @@ MANIFEST
 
     step_done
 
-    step_start 4 "Launching Subtaskmaster..."
+    step_start 4 "Launching ${DOEY_ROLE_TEAM_LEAD}..."
     _launch_team_manager "$session" "$runtime_dir" "$team_window"
     _brief_team "$session" "$team_window" "" "" "0" \
       "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
@@ -3661,7 +3664,7 @@ MANIFEST
   if [ "$HAS_GUM" = true ]; then
     printf '%s\n' "$(gum style --foreground 2 --bold '✓ Doey is ready  (dynamic grid)')"
     gum style --border rounded --border-foreground 6 --padding "1 2" --margin "0 1" \
-      "$(gum style --foreground 6 --bold 'Dashboard')  win 0  Info panel + Boss" \
+      "$(gum style --foreground 6 --bold 'Dashboard')  win 0  Info panel + ${DOEY_ROLE_BOSS}" \
       "$(gum style --foreground 6 --bold 'Teams')      ${_t1_team_count} windows (${_t1_team_windows})" \
       "$(gum style --foreground 6 --bold 'Workers')    T1: ${initial_workers} (auto-expands)" \
       "" \
@@ -3674,7 +3677,7 @@ MANIFEST
     doey_success "Doey is ready  (dynamic grid)"
     doey_divider 50
     printf "\n"
-    doey_info "Dashboard  win 0  Info panel + Boss"
+    doey_info "Dashboard  win 0  Info panel + ${DOEY_ROLE_BOSS}"
     doey_info "Teams      ${_t1_team_count} windows (${_t1_team_windows})"
     doey_info "Workers    T1: ${initial_workers} (auto-expands, doey add)"
     printf "\n"
@@ -3768,7 +3771,7 @@ MANIFEST
     done
 
     tmux send-keys -t "$session:0.1" \
-      "Session online. You are Boss. Project: ${name}, dir: ${dir}, session: ${session}. Taskmaster is at pane 0.2. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
+      "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is at pane 0.2. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
     tmux send-keys -t "$session:${TASKMASTER_PANE}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. ${final_team_count} team windows (${final_team_windows}). Team 1 has ${initial_workers} workers (dynamic grid, auto-expands). You handle monitoring and cross-team coordination. Use /doey-add-window to create new team windows." Enter
   ) &
@@ -3958,9 +3961,9 @@ _batch_boot_workers() {
     local prompt_suffix="w${team_window}-${worker_num}"
     local prompt_file="${runtime_dir}/worker-system-prompt-${prompt_suffix}.md"
     cp "${runtime_dir}/worker-system-prompt.md" "$prompt_file"
-    local _bbw_role_label="Worker" _bbw_id_prefix="w"
+    local _bbw_role_label="$DOEY_ROLE_WORKER" _bbw_id_prefix="w"
     if [ "$_bbw_is_freelancer" = "true" ]; then
-      _bbw_role_label="Freelancer" _bbw_id_prefix="f"
+      _bbw_role_label="$DOEY_ROLE_FREELANCER" _bbw_id_prefix="f"
     fi
     local _bbw_pane_id="t${team_window}-${_bbw_id_prefix}${worker_num}"
     [ -n "$_bbw_acronym" ] && _bbw_pane_id="${_bbw_acronym}-${_bbw_pane_id}"
@@ -4234,7 +4237,7 @@ _launch_team_manager() {
   local mgr_agent
   mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
   local _proj="${session#doey-}"
-  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} Subtaskmaster\" --agent \"$mgr_agent\""
+  local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"T${window_index} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
   _append_settings _mgr_cmd "$runtime_dir"
   tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "${_proj} T${window_index} Mgr"
@@ -4250,7 +4253,7 @@ _brief_team() {
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     tmux send-keys -t "${session}:${window_index}.0" \
-      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. Taskmaster monitors all teams from pane 0.2. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
+      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from pane 0.2. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
 }
 
@@ -5573,7 +5576,7 @@ case "${1:-}" in
     test       Run E2E integration test (--keep, --open, --grid NxM)
     dynamic    Launch with dynamic grid (add workers on demand)
     add        Add a worker column (2 workers) to a dynamic grid session
-    add-team   Add a team window with its own Subtaskmaster+Workers
+    add-team   Add a team window with its own ${DOEY_ROLE_TEAM_LEAD}+Workers
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions

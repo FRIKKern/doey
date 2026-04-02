@@ -14,7 +14,7 @@ TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
 TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_${TASKMASTER_PANE//[-:.]/_}"
 PANE="${SESSION_NAME}:${TASKMASTER_PANE}"; PANE_SAFE="$TASKMASTER_SAFE"
 _TASKMASTER_STATUS_FILE="${RUNTIME_DIR}/status/${TASKMASTER_SAFE}.status"
-trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); write_pane_status "$_TASKMASTER_STATUS_FILE" "BUSY" "SM idle — listening" 2>/dev/null || true' EXIT
+trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); write_pane_status "$_TASKMASTER_STATUS_FILE" "BUSY" "${DOEY_ROLE_COORDINATOR} idle — listening" 2>/dev/null || true' EXIT
 MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/taskmaster_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${TASKMASTER_SAFE}.trigger"
@@ -136,7 +136,7 @@ fi
 _sleep_flag="${RUNTIME_DIR}/status/taskmaster_sleep_reported"
 if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
   _boss_safe="${SESSION_NAME//[-:.]/_}_0_1"
-  printf 'FROM: Taskmaster\nSUBJECT: sleep_report\nAll tasks resolved. Taskmaster entering sleep.\n' \
+  printf "FROM: ${DOEY_ROLE_COORDINATOR}\nSUBJECT: sleep_report\nAll tasks resolved. ${DOEY_ROLE_COORDINATOR} entering sleep.\n" \
     > "${RUNTIME_DIR}/messages/${_boss_safe}_$(date +%s)_$$.msg"
   touch "$_sleep_flag"
 fi

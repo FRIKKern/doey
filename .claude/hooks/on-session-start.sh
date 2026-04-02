@@ -42,22 +42,22 @@ PANE_INDEX="${PANE##*.}"
 _WP="${PANE#*:}"
 WINDOW_INDEX="${_WP%.*}"
 
-ROLE="worker"
+ROLE="$DOEY_ROLE_ID_WORKER"
 TEAM_WINDOW="$WINDOW_INDEX"
 
 if [ "$WINDOW_INDEX" = "0" ]; then
   sm_val=$(_read_team_key "$SESSION_ENV" TASKMASTER_PANE)
   case "$PANE_INDEX" in
     0) ROLE="info_panel" ;;
-    1) ROLE="boss" ;;
-    *) [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ] && ROLE="taskmaster" ;;
+    1) ROLE="$DOEY_ROLE_ID_BOSS" ;;
+    *) [ "0.${PANE_INDEX}" = "${sm_val:-0.2}" ] && ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
   esac
 else
   _team_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
   _team_type=""; [ -f "$_team_file" ] && _team_type=$(_read_team_key "$_team_file" TEAM_TYPE)
-  if [ "$_team_type" != "freelancer" ]; then
+  if [ "$_team_type" != "$DOEY_ROLE_ID_FREELANCER" ]; then
     mgr_pane=""; [ -f "$_team_file" ] && mgr_pane=$(_read_team_key "$_team_file" MANAGER_PANE)
-    [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="manager"
+    [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="$DOEY_ROLE_ID_TEAM_LEAD"
   fi
 fi
 
@@ -65,12 +65,12 @@ PROJECT_ACRONYM=$(_read_team_key "$SESSION_ENV" PROJECT_ACRONYM)
 [ -z "$PROJECT_ACRONYM" ] && PROJECT_ACRONYM=$(echo "$PROJECT_NAME" | awk -F- '{for(i=1;i<=NF;i++) printf substr($i,1,1)}' | cut -c1-4)
 
 case "$ROLE" in
-  boss)            PANE_ID="boss" ;;
-  taskmaster) PANE_ID="taskmaster" ;;
+  "$DOEY_ROLE_ID_BOSS")            PANE_ID="boss" ;;
+  "$DOEY_ROLE_ID_COORDINATOR") PANE_ID="taskmaster" ;;
   info_panel)      PANE_ID="info" ;;
-  manager)         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
-  worker)
-    if [ "${_team_type:-}" = "freelancer" ]; then
+  "$DOEY_ROLE_ID_TEAM_LEAD")         PANE_ID="t${WINDOW_INDEX}-mgr" ;;
+  "$DOEY_ROLE_ID_WORKER")
+    if [ "${_team_type:-}" = "$DOEY_ROLE_ID_FREELANCER" ]; then
       PANE_ID="t${WINDOW_INDEX}-f${PANE_INDEX}"
     else
       PANE_ID="t${WINDOW_INDEX}-w${PANE_INDEX}"
@@ -147,10 +147,10 @@ fi
 
 _TITLE=""
 case "$ROLE" in
-  boss)            _TITLE="${PROJECT_NAME} Boss" ;;
-  manager)         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} Mgr" ;;
-  taskmaster) _TITLE="${PROJECT_NAME} Taskmaster" ;;
-  worker)          _TITLE=$([ "${_team_type:-}" = "freelancer" ] && echo "Freelancer" || echo "Worker") ;;
+  "$DOEY_ROLE_ID_BOSS")            _TITLE="${PROJECT_NAME} ${DOEY_ROLE_BOSS}" ;;
+  "$DOEY_ROLE_ID_TEAM_LEAD")         _TITLE="${PROJECT_NAME} T${WINDOW_INDEX} ${DOEY_ROLE_TEAM_LEAD}" ;;
+  "$DOEY_ROLE_ID_COORDINATOR") _TITLE="${PROJECT_NAME} ${DOEY_ROLE_COORDINATOR}" ;;
+  "$DOEY_ROLE_ID_WORKER")          _TITLE=$([ "${_team_type:-}" = "$DOEY_ROLE_ID_FREELANCER" ] && echo "$DOEY_ROLE_FREELANCER" || echo "$DOEY_ROLE_WORKER") ;;
 esac
 [ -n "$_TITLE" ] && tmux select-pane -t "${TMUX_PANE}" -T "${FULL_PANE_ID} | ${_TITLE}"
 

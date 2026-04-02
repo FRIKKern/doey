@@ -5,6 +5,11 @@
 # Guard parallel Bash calls: bash -c 'source helpers.sh; func ... || true'
 set -euo pipefail
 
+# Source role definitions
+_ROLES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=doey-roles.sh
+source "${_ROLES_DIR}/doey-roles.sh" 2>/dev/null || true
+
 HAS_GUM=false
 command -v gum >/dev/null 2>&1 && HAS_GUM=true
 
@@ -701,7 +706,8 @@ task_dispatch_msg() { # project_dir task_id [mode] [priority] → echo dispatch 
   title="$(_task_read_field "$task_file" "TASK_TITLE")"
   summary="$(_task_read_field "$task_file" "TASK_DESCRIPTION")"
 
-  printf 'FROM: Boss\nSUBJECT: dispatch_task\nTASK_ID=%s\nTASK_FILE=%s\nTASK_JSON=%s\nDISPATCH_MODE=%s\nPRIORITY=%s\nSUMMARY=%s\n' \
+  printf 'FROM: %s\nSUBJECT: dispatch_task\nTASK_ID=%s\nTASK_FILE=%s\nTASK_JSON=%s\nDISPATCH_MODE=%s\nPRIORITY=%s\nSUMMARY=%s\n' \
+    "${DOEY_ROLE_BOSS}" \
     "$task_id" "$task_file" "$json_file" "$mode" "$priority" "${summary:-$title}"
 }
 

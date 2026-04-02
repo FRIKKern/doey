@@ -123,8 +123,8 @@ if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doe
     cat > "${_ATTACH_DIR}/${_ATTACH_TS}_completion_${_PANE_SAFE}.md" 2>/dev/null <<ATTACH_EOF
 ---
 type: completion
-title: Worker ${WINDOW_INDEX}.${PANE_INDEX} output
-author: Worker_${_PANE_SAFE}
+title: ${DOEY_ROLE_WORKER} ${WINDOW_INDEX}.${PANE_INDEX} output
+author: ${DOEY_ROLE_WORKER}_${_PANE_SAFE}
 timestamp: ${_ATTACH_TS}
 task_id: ${local_task_id}
 ---

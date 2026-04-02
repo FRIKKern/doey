@@ -3,6 +3,12 @@
 
 set -euo pipefail
 
+# Source centralized role definitions
+_DOEY_ROLES_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../shell" && pwd)/doey-roles.sh"
+if [[ -f "$_DOEY_ROLES_FILE" ]]; then
+    source "$_DOEY_ROLES_FILE"
+fi
+
 # ERR trap: report failing command to stderr so Claude Code shows it instead of "No stderr output"
 trap '_doey_hook_err=$?; if [ -n "${RUNTIME_DIR:-}" ]; then printf "[%s] [%s] ERR at line %s: exit %s\n" "$(date +%Y-%m-%dT%H:%M:%S)" "${_DOEY_HOOK_NAME:-hook}" "${LINENO:-?}" "$_doey_hook_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; fi; exit 0' ERR
 
