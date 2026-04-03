@@ -13,7 +13,8 @@ import (
 
 // storeReader wraps a store.Store and converts store types to runtime types.
 type storeReader struct {
-	s *store.Store
+	s            *store.Store
+	lastTaskSync time.Time // throttle file-to-DB sync
 }
 
 // openStore tries to open .doey/doey.db. Returns nil if DB doesn't exist or can't be opened.
@@ -36,6 +37,17 @@ func (sr *storeReader) close() {
 	if sr != nil && sr.s != nil {
 		sr.s.Close()
 	}
+}
+
+// syncTaskFiles upserts all .task files into the SQLite store.
+// Throttled to run at most once every 30 seconds.
+func (sr *storeReader) syncTaskFiles(projectDir string) {
+	if time.Since(sr.lastTaskSync) < 30*time.Second {
+		return
+	}
+	tasksDir := filepath.Join(projectDir, ".doey", "tasks")
+	sr.s.SyncTaskFiles(tasksDir)
+	sr.lastTaskSync = time.Now()
 }
 
 // readTasks converts store tasks to runtime tasks, including subtasks and logs.
