@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/doey-cli/doey/tui/internal/store"
 )
@@ -729,5 +734,202 @@ func runMigrateCmd(args []string) {
 		for _, e := range result.Errors {
 			fmt.Printf("  - %s\n", e)
 		}
+	}
+}
+
+// --- briefing subcommand ---
+
+func runBriefingCmd(args []string) {
+	fs := flag.NewFlagSet("briefing", flag.ExitOnError)
+	dir := fs.String("project-dir", "", "Project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	pd := projectDir(*dir)
+	s := tryOpenStore(pd)
+	if s == nil {
+		fmt.Fprintln(os.Stderr, "briefing: no database found")
+		return
+	}
+	defer s.Close()
+
+	briefingActiveTasks(s)
+	fmt.Println()
+	briefingWorkerGrid()
+	fmt.Println()
+	briefingRecentActivity(s)
+}
+
+func briefingActiveTasks(s *store.Store) {
+	fmt.Println("=== Active Tasks ===")
+
+	tasks, err := s.ListTasks("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  error: %v\n", err)
+		return
+	}
+
+	count := 0
+	for _, t := range tasks {
+		if t.Status != "active" && t.Status != "in_progress" {
+			continue
+		}
+		subs, _ := s.ListSubtasks(t.ID)
+		done := 0
+		for _, st := range subs {
+			if st.Status == "done" {
+				done++
+			}
+		}
+		team := ""
+		if t.Team != "" {
+			team = fmt.Sprintf(" (team:%s)", t.Team)
+		}
+		subtaskInfo := ""
+		if len(subs) > 0 {
+			subtaskInfo = fmt.Sprintf(" — %d/%d subtasks done", done, len(subs))
+		}
+		fmt.Printf("#%d [%s] %s%s%s\n", t.ID, t.Status, t.Title, team, subtaskInfo)
+		count++
+	}
+	if count == 0 {
+		fmt.Println("  (none)")
+	}
+}
+
+func briefingWorkerGrid() {
+	fmt.Println("=== Worker Grid ===")
+
+	runtimeDir := os.Getenv("DOEY_RUNTIME")
+	if runtimeDir == "" {
+		fmt.Println("  (DOEY_RUNTIME not set)")
+		return
+	}
+	statusDir := filepath.Join(runtimeDir, "status")
+	entries, err := os.ReadDir(statusDir)
+	if err != nil {
+		fmt.Println("  (no status directory)")
+		return
+	}
+
+	// Parse status files: filename is {session}_{W}_{P}.status
+	type paneInfo struct {
+		window int
+		pane   int
+		status string
+	}
+	var panes []paneInfo
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".status") {
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), ".status")
+		// Extract last two underscore-separated parts as window and pane
+		parts := strings.Split(name, "_")
+		if len(parts) < 2 {
+			continue
+		}
+		wStr := parts[len(parts)-2]
+		pStr := parts[len(parts)-1]
+		var w, p int
+		if _, err := fmt.Sscanf(wStr, "%d", &w); err != nil {
+			continue
+		}
+		if _, err := fmt.Sscanf(pStr, "%d", &p); err != nil {
+			continue
+		}
+		// Skip window 0 (dashboard) and window 1 (core team) and pane 0 (managers)
+		if w <= 1 || p == 0 {
+			continue
+		}
+
+		status := readStatusFromFile(filepath.Join(statusDir, e.Name()))
+		panes = append(panes, paneInfo{window: w, pane: p, status: status})
+	}
+
+	// Group by window
+	windows := make(map[int][]paneInfo)
+	for _, pi := range panes {
+		windows[pi.window] = append(windows[pi.window], pi)
+	}
+	winKeys := make([]int, 0, len(windows))
+	for k := range windows {
+		winKeys = append(winKeys, k)
+	}
+	sort.Ints(winKeys)
+
+	if len(winKeys) == 0 {
+		fmt.Println("  (no workers)")
+		return
+	}
+
+	for _, w := range winKeys {
+		wPanes := windows[w]
+		sort.Slice(wPanes, func(i, j int) bool { return wPanes[i].pane < wPanes[j].pane })
+
+		// Count statuses
+		counts := make(map[string]int)
+		for _, pi := range wPanes {
+			counts[pi.status]++
+		}
+		var summary []string
+		for _, s := range []string{"BUSY", "READY", "FINISHED", "ERROR", "RESERVED"} {
+			if c := counts[s]; c > 0 {
+				summary = append(summary, fmt.Sprintf("%s:%d", s, c))
+			}
+		}
+		fmt.Printf("Window %d: %s\n", w, strings.Join(summary, " "))
+
+		// Pane detail line
+		var paneStrs []string
+		for _, pi := range wPanes {
+			paneStrs = append(paneStrs, fmt.Sprintf("%d.%d %s", pi.window, pi.pane, pi.status))
+		}
+		fmt.Printf("  %s\n", strings.Join(paneStrs, "  "))
+	}
+}
+
+func readStatusFromFile(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return "UNKNOWN"
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "STATUS: ") {
+			return strings.TrimPrefix(line, "STATUS: ")
+		}
+	}
+	return "UNKNOWN"
+}
+
+func briefingRecentActivity(s *store.Store) {
+	fmt.Println("=== Recent Activity (last 10) ===")
+
+	events, err := s.ListEvents("", 10)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  error: %v\n", err)
+		return
+	}
+	if len(events) == 0 {
+		fmt.Println("  (none)")
+		return
+	}
+
+	for _, ev := range events {
+		ts := time.Unix(ev.CreatedAt, 0).Format("2006-01-02 15:04")
+		taskRef := ""
+		if ev.TaskID != nil {
+			taskRef = fmt.Sprintf("Task #%d", *ev.TaskID)
+		}
+		source := ev.Source
+		data := ev.Data
+		if len(data) > 60 {
+			data = data[:57] + "..."
+		}
+		fmt.Printf("%s  %-10s  %-12s  %s: %s\n", ts, taskRef, ev.Type, source, data)
 	}
 }

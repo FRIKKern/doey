@@ -127,10 +127,12 @@ func main() {
 		runNudgeCmd(os.Args[2:])
 	case "migrate":
 		runMigrateCmd(os.Args[2:])
+	case "briefing":
+		runBriefingCmd(os.Args[2:])
 	case "--help", "-h", "help":
 		printUsage()
 	default:
-		fatal("unknown command: %q. Valid: msg, status, health, task, tmux, plan, team, config, agent, event, nudge, migrate\nRun 'doey-ctl --help' for usage.\n", os.Args[1])
+		fatal("unknown command: %q. Valid: msg, status, health, task, tmux, plan, team, config, agent, event, nudge, migrate, briefing\nRun 'doey-ctl --help' for usage.\n", os.Args[1])
 	}
 }
 
@@ -152,6 +154,7 @@ Commands:
   event    Log and list events
   nudge    Unstick Claude instances (Escape + re-prompt)
   migrate  Run database migrations
+  briefing Live state dashboard (tasks, workers, activity)
 
 Environment:
   DOEY_RUNTIME   Runtime directory (default: /tmp/doey/<project>/)
