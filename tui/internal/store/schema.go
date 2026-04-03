@@ -89,6 +89,7 @@ func ensureSchema(db *sql.DB) error {
 			body TEXT,
 			task_id INTEGER,
 			read INTEGER DEFAULT 0,
+			routed INTEGER DEFAULT 0,
 			created_at INTEGER
 		)`,
 		`CREATE TABLE IF NOT EXISTS events (

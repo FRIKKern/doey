@@ -92,7 +92,14 @@ ${summary}"
   done
 }
 
-_wake_taskmaster() { tmux send-keys -t "${SESSION_NAME}:${TASKMASTER_PANE:-$(get_taskmaster_pane)}" "" 2>/dev/null || true; }
+_wake_taskmaster() {
+  if command -v doey-ctl >/dev/null 2>&1; then
+    doey-ctl nudge --on-finish "${WINDOW_INDEX}.${PANE_INDEX}" 2>/dev/null || true
+  else
+    # Fallback: direct send-keys wake
+    tmux send-keys -t "${SESSION_NAME}:${TASKMASTER_PANE:-$(get_taskmaster_pane)}" "" 2>/dev/null || true
+  fi
+}
 
 # Core Team specialists → Taskmaster
 if is_core_team && ! is_taskmaster; then

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -98,6 +99,10 @@ func main() {
 	case "event":
 		runEventCmd(os.Args[2:])
 	case "nudge":
+		// Intercept auto-trigger flags before passing to runNudgeCmd
+		if nudgeAutoTrigger(os.Args[2:]) {
+			return
+		}
 		runNudgeCmd(os.Args[2:])
 	case "migrate":
 		runMigrateCmd(os.Args[2:])
@@ -891,4 +896,220 @@ Subcommands:
 
 Run 'doey-ctl health <subcommand> -h' for help.
 `)
+}
+
+// --- nudge auto-trigger flags ---
+
+// nudgeAutoTrigger checks for --on-finish and --all-finished flags.
+// Returns true if one was handled (caller should return), false to fall through.
+func nudgeAutoTrigger(args []string) bool {
+	fs := flag.NewFlagSet("nudge-auto", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // suppress help/error output from pre-parser
+	onFinish := fs.String("on-finish", "", "Nudge Subtaskmaster when worker W.P finishes (e.g. 3.2)")
+	allFinished := fs.String("all-finished", "", "Nudge Subtaskmaster if all workers in window W are finished (e.g. 3)")
+	fs.String("session", "", "tmux session name")
+	fs.String("runtime", "", "runtime directory")
+	fs.Bool("json", false, "JSON output")
+
+	// ContinueOnError so unknown flags don't kill us — we just fall through
+	if err := fs.Parse(args); err != nil {
+		return false
+	}
+
+	if *onFinish != "" {
+		nudgeOnFinish(*onFinish, fs)
+		return true
+	}
+	if *allFinished != "" {
+		nudgeAllFinished(*allFinished, fs)
+		return true
+	}
+	return false
+}
+
+// nudgeOnFinish nudges the Subtaskmaster at W.0 when a worker finishes.
+// Expects paneID in W.P format (e.g. "3.2").
+func nudgeOnFinish(workerPane string, fs *flag.FlagSet) {
+	sess := resolveSession(fs)
+	rtDir := resolveRuntime(fs)
+
+	// Normalize pane ID
+	paneID := workerPane
+	if idx := strings.LastIndex(paneID, ":"); idx >= 0 {
+		paneID = paneID[idx+1:]
+	}
+	if !strings.Contains(paneID, ".") {
+		if converted := safeToPaneID(paneID); converted != "" {
+			paneID = converted
+		} else {
+			fatal("nudge --on-finish: cannot resolve pane %q\n", workerPane)
+		}
+	}
+
+	// Verify the worker is actually FINISHED
+	if rtDir != "" {
+		paneSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(sess + ":" + paneID)
+		entry, err := ctl.ReadStatus(rtDir, paneSafe)
+		if err != nil || entry.Status != ctl.StatusFinished {
+			// Worker not finished — skip silently (best-effort)
+			if jsonOutput {
+				printJSON(map[string]string{"status": "skipped", "reason": "worker not FINISHED", "pane": paneID})
+			}
+			return
+		}
+	}
+
+	// Determine Subtaskmaster pane: W.0
+	dot := strings.Index(paneID, ".")
+	if dot < 0 {
+		fatal("nudge --on-finish: invalid pane format %q\n", paneID)
+	}
+	windowIdx := paneID[:dot]
+	mgrPane := windowIdx + ".0"
+
+	// Check if Subtaskmaster is BUSY — skip if so
+	if rtDir != "" {
+		mgrSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(sess + ":" + mgrPane)
+		entry, err := ctl.ReadStatus(rtDir, mgrSafe)
+		if err == nil && entry.Status == ctl.StatusBusy {
+			if jsonOutput {
+				printJSON(map[string]string{"status": "skipped", "reason": "manager BUSY", "pane": mgrPane})
+			}
+			return
+		}
+	}
+
+	client := ctl.NewTmuxClient(sess)
+	prompt := fmt.Sprintf("Worker %s has finished. Check results.", paneID)
+	if err := nudgePane(client, mgrPane, prompt, false); err != nil {
+		fatal("nudge --on-finish: %v\n", err)
+	}
+	if jsonOutput {
+		printJSON(map[string]string{"status": "nudged", "target": mgrPane, "trigger": paneID})
+	} else {
+		fmt.Printf("Nudged %s (worker %s finished)\n", mgrPane, paneID)
+	}
+}
+
+// nudgeAllFinished checks if all workers in a window are FINISHED.
+// If so, nudges the Subtaskmaster at W.0.
+func nudgeAllFinished(window string, fs *flag.FlagSet) {
+	sess := resolveSession(fs)
+	rtDir := resolveRuntime(fs)
+
+	// Parse window index
+	windowIdx, err := strconv.Atoi(window)
+	if err != nil {
+		fatal("nudge --all-finished: invalid window %q\n", window)
+	}
+
+	// List all statuses for this window
+	entries, err := ctl.ListStatuses(rtDir, windowIdx)
+	if err != nil {
+		fatal("nudge --all-finished: %v\n", err)
+	}
+
+	// Check each worker pane (skip pane 0 = Subtaskmaster)
+	workerCount := 0
+	finishedCount := 0
+	for _, e := range entries {
+		// e.Pane is the display name (e.g. "W2.1") — extract pane index
+		paneStr := e.Pane
+		dotIdx := strings.LastIndex(paneStr, ".")
+		if dotIdx < 0 {
+			continue
+		}
+		paneNum, parseErr := strconv.Atoi(paneStr[dotIdx+1:])
+		if parseErr != nil {
+			continue
+		}
+		if paneNum == 0 {
+			continue // skip Subtaskmaster
+		}
+		workerCount++
+		if e.Status == ctl.StatusFinished {
+			finishedCount++
+		}
+	}
+
+	if workerCount == 0 {
+		if jsonOutput {
+			printJSON(map[string]string{"status": "skipped", "reason": "no workers found", "window": window})
+		}
+		return
+	}
+
+	allDone := finishedCount == workerCount
+
+	if !allDone {
+		if jsonOutput {
+			printJSON(map[string]any{
+				"status":   "skipped",
+				"reason":   "not all finished",
+				"window":   window,
+				"finished": finishedCount,
+				"total":    workerCount,
+			})
+		} else {
+			fmt.Printf("Window %s: %d/%d workers finished (not all done)\n", window, finishedCount, workerCount)
+		}
+		return
+	}
+
+	// All workers finished — nudge Subtaskmaster
+	mgrPane := fmt.Sprintf("%d.0", windowIdx)
+
+	// Check if Subtaskmaster is BUSY — skip if so
+	mgrSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(sess + ":" + mgrPane)
+	entry, readErr := ctl.ReadStatus(rtDir, mgrSafe)
+	if readErr == nil && entry.Status == ctl.StatusBusy {
+		if jsonOutput {
+			printJSON(map[string]string{"status": "skipped", "reason": "manager BUSY", "pane": mgrPane})
+		}
+		return
+	}
+
+	client := ctl.NewTmuxClient(sess)
+	prompt := "All workers finished. Review results and report to the Taskmaster."
+	if err := nudgePane(client, mgrPane, prompt, false); err != nil {
+		fatal("nudge --all-finished: %v\n", err)
+	}
+	if jsonOutput {
+		printJSON(map[string]any{
+			"status":   "nudged",
+			"target":   mgrPane,
+			"window":   window,
+			"finished": finishedCount,
+			"total":    workerCount,
+		})
+	} else {
+		fmt.Printf("All %d workers in window %s finished — nudged %s\n", workerCount, window, mgrPane)
+	}
+}
+
+// resolveSession gets the tmux session name from flag or env.
+func resolveSession(fs *flag.FlagSet) string {
+	if v := fs.Lookup("session"); v != nil && v.Value.String() != "" {
+		return v.Value.String()
+	}
+	if v := os.Getenv("DOEY_SESSION"); v != "" {
+		return v
+	}
+	if v := os.Getenv("SESSION_NAME"); v != "" {
+		return v
+	}
+	fatal("nudge: session name not set — use --session or SESSION_NAME env\n")
+	return ""
+}
+
+// resolveRuntime gets the runtime directory from flag or env.
+func resolveRuntime(fs *flag.FlagSet) string {
+	if v := fs.Lookup("runtime"); v != nil && v.Value.String() != "" {
+		return v.Value.String()
+	}
+	if v := os.Getenv("DOEY_RUNTIME"); v != "" {
+		return v
+	}
+	fatal("nudge: runtime dir not set — use --runtime or DOEY_RUNTIME env\n")
+	return ""
 }

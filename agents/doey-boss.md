@@ -49,8 +49,13 @@ _sm_status=$(doey status get 0.2 2>/dev/null || echo "UNKNOWN")
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
-  tmux send-keys -t "${SESSION_NAME}:0.2" Escape
-  tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
+  if command -v doey-ctl >/dev/null 2>&1; then
+    doey-ctl nudge "0.2" 2>/dev/null || true
+  else
+    # Fallback: direct send-keys wake
+    tmux send-keys -t "${SESSION_NAME}:0.2" Escape
+    tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
+  fi
   sleep 3
 fi
 # Now safe to send message

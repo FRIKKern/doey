@@ -236,7 +236,7 @@ func processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe, sessionName str
 	}
 	defer s.Close()
 
-	msgs, err := s.ListMessages(paneSafe, true)
+	msgs, err := s.ListUnrouted(paneSafe)
 	if err != nil {
 		log.Printf("doey-router: list messages for %s: %v", paneSafe, err)
 		return
@@ -257,8 +257,8 @@ func processMessages(dbPath, paneSafe, runtimeDir, bossPaneSafe, sessionName str
 			handleJudgment(s, &m, runtimeDir, sessionName, traceFile)
 		}
 
-		if err := s.MarkRead(m.ID); err != nil {
-			log.Printf("doey-router: mark read id=%d: %v", m.ID, err)
+		if err := s.MarkRouted(m.ID); err != nil {
+			log.Printf("doey-router: mark routed id=%d: %v", m.ID, err)
 		}
 	}
 
@@ -307,8 +307,21 @@ func handleTaskComplete(s *store.Store, m *store.Message, runtimeDir, bossPaneSa
 		return
 	}
 
-	// Update task status to pending_user_confirmation
+	// Dedup: skip if task is already completed or pending confirmation
 	t, err := s.GetTask(taskID)
+	if err == nil {
+		switch t.Status {
+		case "done", "cancelled", "pending_user_confirmation":
+			writeTrace(traceFile, traceEntry{
+				Event: "task_complete", From: m.FromPane, Subject: m.Subject,
+				TaskID: taskID, Action: "skip_dup", Detail: "task already " + t.Status,
+			})
+			log.Printf("doey-router: task_complete task=%d skipped (already %s)", taskID, t.Status)
+			return
+		}
+	}
+
+	// Update task status to pending_user_confirmation
 	if err != nil {
 		log.Printf("doey-router: get task %d: %v", taskID, err)
 	} else {
