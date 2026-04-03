@@ -369,10 +369,22 @@ func ActivityEntry(theme Theme, timestamp, entryType, text string, width int) st
 	if bodyWidth < 10 {
 		bodyWidth = 10
 	}
+	// Collapse newlines and truncate to single line with ellipsis
+	flat := strings.Join(strings.Fields(text), " ")
+	if lipgloss.Width(flat) > bodyWidth {
+		runes := []rune(flat)
+		if bodyWidth <= 1 {
+			flat = "…"
+		} else {
+			for len(runes) > 0 && lipgloss.Width(string(runes)) > bodyWidth-1 {
+				runes = runes[:len(runes)-1]
+			}
+			flat = strings.TrimSpace(string(runes)) + "…"
+		}
+	}
 	body := lipgloss.NewStyle().
 		Foreground(theme.Text).
-		Width(bodyWidth).
-		Render(text)
+		Render(flat)
 
 	return fmt.Sprintf("%s %s %s", ts, typeLabel, body)
 }
