@@ -314,7 +314,7 @@ cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task description here.
 TASK
 tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
-sleep 0.5; tmux send-keys -t "$PANE" Escape; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
+sleep 0.5; tmux send-keys -t "$PANE" Escape; sleep 0.3; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
 ```
 
 Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$PANE" -p -S -5`. Not started -> exit copy-mode, re-send Enter. **Stuck:** `C-c` -> `C-u` -> `Enter` (0.5s between each). Wait for prompt before re-dispatching.
