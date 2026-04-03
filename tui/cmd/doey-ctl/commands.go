@@ -222,6 +222,20 @@ func runTaskUpdate(args []string) {
 			case "title":
 				t.Title = *value
 			case "status":
+				validStatuses := []string{"pending", "active", "in_progress", "done", "paused", "blocked", "cancelled", "failed", "pending_user_confirmation"}
+				isValid := false
+				for _, vs := range validStatuses {
+					if *value == vs {
+						isValid = true
+						break
+					}
+				}
+				if !isValid {
+					if suggestion, ok := fuzzyMatch(*value, validStatuses); ok {
+						fatal("task update: unknown status '%s'. Did you mean '%s'?\n", *value, suggestion)
+					}
+					fatal("task update: unknown status %q\nValid statuses: %s\n", *value, strings.Join(validStatuses, ", "))
+				}
 				t.Status = *value
 			case "type":
 				t.Type = *value
@@ -285,6 +299,10 @@ func runTaskUpdate(args []string) {
 			case "review_timestamp":
 				t.ReviewTimestamp = *value
 			default:
+				validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp"}
+				if suggestion, ok := fuzzyMatch(*field, validFields); ok {
+					fatal("task update: unknown field '%s'. Did you mean '%s'?\n", *field, suggestion)
+				}
 				fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp\n", *field)
 			}
 
@@ -924,6 +942,20 @@ func runTaskLogAdd(args []string) {
 			if entryTitle == "" && fs.NArg() > titleStart {
 				entryTitle = strings.Join(fs.Args()[titleStart:], " ")
 			}
+			validLogTypes := []string{"note", "progress", "decision", "completion", "error", "blocker", "research"}
+			isValidType := false
+			for _, vt := range validLogTypes {
+				if *logType == vt {
+					isValidType = true
+					break
+				}
+			}
+			if !isValidType {
+				if suggestion, ok := fuzzyMatch(*logType, validLogTypes); ok {
+					fatal("task log add: unknown type '%s'. Did you mean '%s'?\n", *logType, suggestion)
+				}
+				fatal("task log add: unknown type %q\nValid types: %s\n", *logType, strings.Join(validLogTypes, ", "))
+			}
 			entry := &store.TaskLogEntry{
 				TaskID: taskID,
 				Type:   *logType,
@@ -1115,6 +1147,16 @@ func runTaskDecision(args []string) {
 
 // suggestSubcommand returns the closest valid subcommand if within edit distance 3.
 func suggestSubcommand(input string, valid []string) string {
+	match, ok := fuzzyMatch(input, valid)
+	if ok {
+		return match
+	}
+	return ""
+}
+
+// fuzzyMatch returns the closest match from valid if the Levenshtein distance
+// is <= 3 and <= half the input length. Returns ("", false) if no close match.
+func fuzzyMatch(input string, valid []string) (string, bool) {
 	best, bestDist := "", 999
 	for _, v := range valid {
 		if d := editDistance(input, v); d < bestDist {
@@ -1122,10 +1164,17 @@ func suggestSubcommand(input string, valid []string) string {
 			best = v
 		}
 	}
-	if bestDist <= 3 {
-		return best
+	maxDist := len(input) / 2
+	if maxDist < 1 {
+		maxDist = 1
 	}
-	return ""
+	if maxDist > 3 {
+		maxDist = 3
+	}
+	if bestDist <= maxDist {
+		return best, true
+	}
+	return "", false
 }
 
 // normalizeFieldName strips TASK_ prefix and lowercases the field name.
@@ -1159,15 +1208,8 @@ func suggestTaskUpdateFlag(args []string) {
 			}
 		}
 		if !isKnown {
-			best, bestDist := "", 999
-			for _, k := range known {
-				if d := editDistance(name, k); d < bestDist {
-					bestDist = d
-					best = k
-				}
-			}
-			if bestDist <= 3 && best != "" {
-				fmt.Fprintf(os.Stderr, "doey-ctl: unknown flag '--%s'. Did you mean '--%s'?\n", name, best)
+			if suggestion, ok := fuzzyMatch(name, known); ok {
+				fmt.Fprintf(os.Stderr, "doey-ctl: unknown flag '--%s'. Did you mean '--%s'?\n", name, suggestion)
 			}
 		}
 	}
