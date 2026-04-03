@@ -228,8 +228,10 @@ Coordinate your team. Dispatch initial tasks to workers based on the team defini
 BRIEF_EOF
 
   tmux copy-mode -q -t "$MGR_PANE" 2>/dev/null
+  tmux send-keys -t "$MGR_PANE" Escape
   tmux load-buffer "$BRIEFING" && tmux paste-buffer -t "$MGR_PANE"
   sleep 1
+  tmux send-keys -t "$MGR_PANE" Escape
   tmux send-keys -t "$MGR_PANE" Enter
   rm "$BRIEFING"
   echo "Manager briefed"

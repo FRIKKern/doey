@@ -1145,9 +1145,9 @@ func nudgePane(client *ctl.TmuxClient, pane, prompt string, verbose bool) error 
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "waiting 1s... ")
+		fmt.Fprintf(os.Stderr, "waiting... ")
 	}
-	time.Sleep(1 * time.Second)
+	time.Sleep(200 * time.Millisecond)
 
 	if verbose {
 		fmt.Fprintf(os.Stderr, "sending prompt... ")
@@ -1287,6 +1287,9 @@ func runTmuxSend(args []string) {
 	text := strings.Join(fs.Args()[1:], " ")
 
 	client := ctl.NewTmuxClient(sessionName(*session))
+	// Clear copy-mode before sending text
+	_ = client.SendKeys(pane, "Escape")
+	time.Sleep(200 * time.Millisecond)
 	if err := client.SendKeys(pane, text, "Enter"); err != nil {
 		fatal("tmux send: %v", err)
 	}

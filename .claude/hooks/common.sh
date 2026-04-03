@@ -273,6 +273,7 @@ is_doey_expert() {
 send_to_pane() {
   local target="$1" msg="$2"
   tmux copy-mode -q -t "$target" 2>/dev/null
+  tmux send-keys -t "$target" Escape 2>/dev/null
   tmux send-keys -t "$target" "$msg" Enter 2>/dev/null
 }
 

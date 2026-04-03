@@ -49,6 +49,7 @@ _sm_status=$(doey status get 0.2 2>/dev/null || echo "UNKNOWN")
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
+  tmux send-keys -t "${SESSION_NAME}:0.2" Escape
   tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
   sleep 3
 fi
