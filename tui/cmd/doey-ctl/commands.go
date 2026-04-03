@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -80,13 +81,15 @@ func runTaskCmd(args []string) {
 		runTaskLog(args[1:])
 	case "decision":
 		runTaskDecision(args[1:])
+	case "export":
+		runTaskExport(args[1:])
 	default:
-		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision",
+		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision", "export",
 			"done", "start", "pause", "block", "confirm", "pending", "ready", "activate", "failed", "cancel"}
 		if suggestion := suggestSubcommand(args[0], validTaskSubs); suggestion != "" {
 			fatal("task: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task -h' for usage.\n", args[0], suggestion)
 		}
-		fatal("task: unknown subcommand: %s. Valid: create, update, list, get, delete, subtask, log, decision, done, start, pause, block, cancel, failed\nRun 'doey-ctl task -h' for usage.\n", args[0])
+		fatal("task: unknown subcommand: %s. Valid: create, update, list, get, delete, subtask, log, decision, export, done, start, pause, block, cancel, failed\nRun 'doey-ctl task -h' for usage.\n", args[0])
 	}
 }
 
@@ -1812,4 +1815,204 @@ Subcommands:
 
 Run 'doey-ctl task log <subcommand> -h' for help.
 `)
+}
+
+// --- task export subcommand ---
+
+func runTaskExport(args []string) {
+	fs := flag.NewFlagSet("task export", flag.ExitOnError)
+	idFlag := fs.Int64("id", 0, "task ID to export")
+	allFlag := fs.Bool("all", false, "export all tasks")
+	stdoutFlag := fs.Bool("stdout", false, "print to stdout instead of file")
+	dir := fs.String("project-dir", "", "project directory")
+	fs.Parse(args)
+
+	if *idFlag == 0 && !*allFlag {
+		fatal("task export: --id or --all is required\nUsage: doey-ctl task export --id 181 [--stdout]\n       doey-ctl task export --all\n")
+	}
+
+	pd := projectDir(*dir)
+	s := tryOpenStore(pd)
+	if s == nil {
+		fatal("task export: no database found")
+	}
+	defer s.Close()
+
+	var tasks []store.Task
+	if *allFlag {
+		var err error
+		tasks, err = s.ListTasks("")
+		if err != nil {
+			fatal("task export: %v", err)
+		}
+	} else {
+		t, err := s.GetTask(*idFlag)
+		if err != nil {
+			fatal("task export: task %d not found: %v", *idFlag, err)
+		}
+		tasks = []store.Task{*t}
+	}
+
+	tasksDir := filepath.Join(pd, ".doey", "tasks")
+	if !*stdoutFlag {
+		if err := os.MkdirAll(tasksDir, 0755); err != nil {
+			fatal("task export: %v", err)
+		}
+	}
+
+	for _, t := range tasks {
+		content := exportTask(s, t)
+		if *stdoutFlag {
+			fmt.Print(content)
+			if len(tasks) > 1 {
+				fmt.Println("---")
+			}
+		} else {
+			path := filepath.Join(tasksDir, fmt.Sprintf("%d.task", t.ID))
+			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+				fatal("task export: writing %s: %v", path, err)
+			}
+			fmt.Printf("exported %d → %s\n", t.ID, path)
+		}
+	}
+}
+
+// exportTask renders a single store.Task as .task file content.
+func exportTask(s *store.Store, t store.Task) string {
+	var buf bytes.Buffer
+
+	// Helper: write field if non-empty string
+	writeStr := func(key, val string) {
+		if val != "" {
+			fmt.Fprintf(&buf, "%s=%s\n", key, val)
+		}
+	}
+	// Helper: write field unconditionally
+	writeAlways := func(key, val string) {
+		fmt.Fprintf(&buf, "%s=%s\n", key, val)
+	}
+	// Helper: write int field if non-zero
+	writeInt := func(key string, val int) {
+		fmt.Fprintf(&buf, "%s=%d\n", key, val)
+	}
+
+	// Core fields (always written)
+	sv := t.SchemaVersion
+	if sv == 0 {
+		sv = 3
+	}
+	writeInt("TASK_SCHEMA_VERSION", sv)
+	fmt.Fprintf(&buf, "TASK_ID=%d\n", t.ID)
+	writeAlways("TASK_TITLE", t.Title)
+	writeAlways("TASK_STATUS", t.Status)
+	writeStr("TASK_TYPE", t.Type)
+	writeStr("TASK_TAGS", t.Tags)
+	writeStr("TASK_CREATED_BY", t.CreatedBy)
+	writeStr("TASK_ASSIGNED_TO", t.AssignedTo)
+	writeStr("TASK_TEAM", t.Team)
+	writeStr("TASK_DESCRIPTION", t.Description)
+	writeStr("TASK_ACCEPTANCE_CRITERIA", t.AcceptanceCriteria)
+	writeStr("TASK_HYPOTHESES", t.Hypotheses)
+	writeStr("TASK_DECISION_LOG", t.DecisionLog)
+
+	// Build inline subtask string from DB subtasks
+	subtasks, _ := s.ListSubtasks(t.ID)
+	if len(subtasks) > 0 {
+		var parts []string
+		for _, st := range subtasks {
+			parts = append(parts, fmt.Sprintf("%d:%s:%s", st.Seq, st.Title, st.Status))
+		}
+		writeAlways("TASK_SUBTASKS", strings.Join(parts, `\n`))
+	} else {
+		writeAlways("TASK_SUBTASKS", "")
+	}
+
+	writeStr("TASK_RELATED_FILES", t.RelatedFiles)
+	writeStr("TASK_BLOCKERS", t.Blockers)
+
+	// Timestamps
+	var tsParts []string
+	if t.CreatedAt > 0 {
+		tsParts = append(tsParts, fmt.Sprintf("created=%d", t.CreatedAt))
+	}
+	if len(tsParts) > 0 {
+		writeAlways("TASK_TIMESTAMPS", strings.Join(tsParts, "|"))
+	}
+
+	writeInt("TASK_CURRENT_PHASE", t.CurrentPhase)
+	writeInt("TASK_TOTAL_PHASES", t.TotalPhases)
+	writeStr("TASK_NOTES", t.Notes)
+	fmt.Fprintf(&buf, "TASK_UPDATED=%d\n", t.UpdatedAt)
+
+	// Plan ID
+	if t.PlanID != nil {
+		fmt.Fprintf(&buf, "TASK_PLAN_ID=%d\n", *t.PlanID)
+	}
+
+	// New Phase 1 fields
+	writeStr("TASK_ATTACHMENTS", t.Attachments)
+	if t.Priority != 0 {
+		writeInt("TASK_PRIORITY", t.Priority)
+	}
+	writeStr("TASK_DEPENDS_ON", t.DependsOn)
+	writeStr("TASK_MERGED_INTO", t.MergedInto)
+	writeStr("TASK_DISPATCH_MODE", t.DispatchMode)
+	writeStr("TASK_SUMMARY", t.Summary)
+	writeStr("TASK_PHASE", t.Phase)
+
+	// Result / files / commits
+	writeStr("TASK_RESULT", t.Result)
+	writeStr("TASK_FILES", t.Files)
+	writeStr("TASK_COMMITS", t.Commits)
+
+	// Review fields
+	writeStr("TASK_REVIEW_VERDICT", t.ReviewVerdict)
+	writeStr("TASK_REVIEW_FINDINGS", t.ReviewFindings)
+	writeStr("TASK_REVIEW_TIMESTAMP", t.ReviewTimestamp)
+
+	// Extension fields: TASK_SUBTASK_N_*
+	for _, st := range subtasks {
+		n := st.Seq
+		fmt.Fprintf(&buf, "TASK_SUBTASK_%d_TITLE=%s\n", n, st.Title)
+		fmt.Fprintf(&buf, "TASK_SUBTASK_%d_STATUS=%s\n", n, st.Status)
+		if st.Assignee != "" {
+			fmt.Fprintf(&buf, "TASK_SUBTASK_%d_ASSIGNEE=%s\n", n, st.Assignee)
+		}
+		if st.Worker != "" {
+			fmt.Fprintf(&buf, "TASK_SUBTASK_%d_WORKER=%s\n", n, st.Worker)
+		}
+		if st.CreatedAt > 0 {
+			fmt.Fprintf(&buf, "TASK_SUBTASK_%d_CREATED_AT=%d\n", n, st.CreatedAt)
+		}
+		if st.CompletedAt > 0 {
+			fmt.Fprintf(&buf, "TASK_SUBTASK_%d_COMPLETED_AT=%d\n", n, st.CompletedAt)
+		}
+	}
+
+	// Extension fields: TASK_REPORT_N_* from task_log
+	logs, _ := s.ListTaskLog(t.ID)
+	reportIdx := 0
+	for _, l := range logs {
+		if !strings.HasPrefix(l.Type, "report") {
+			continue
+		}
+		reportIdx++
+		fmt.Fprintf(&buf, "TASK_REPORT_%d_TIMESTAMP=%d\n", reportIdx, l.CreatedAt)
+		if l.Author != "" {
+			fmt.Fprintf(&buf, "TASK_REPORT_%d_AUTHOR=%s\n", reportIdx, l.Author)
+		}
+		typ := l.Type
+		if strings.HasPrefix(typ, "report:") {
+			typ = strings.TrimPrefix(typ, "report:")
+		}
+		fmt.Fprintf(&buf, "TASK_REPORT_%d_TYPE=%s\n", reportIdx, typ)
+		if l.Title != "" {
+			fmt.Fprintf(&buf, "TASK_REPORT_%d_TITLE=%s\n", reportIdx, l.Title)
+		}
+		if l.Body != "" {
+			fmt.Fprintf(&buf, "TASK_REPORT_%d_BODY=%s\n", reportIdx, l.Body)
+		}
+	}
+
+	return buf.String()
 }

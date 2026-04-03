@@ -42,21 +42,9 @@ func (s *Store) Migrate(projectDir, runtimeDir string) (*MigrateResult, error) {
 
 // --- Tasks ---
 
+// migrateTasks is a no-op. Disabled in Phase 4: DB is now the primary store.
+// .task files are no longer imported during migration.
 func (s *Store) migrateTasks(projectDir string, r *MigrateResult) {
-	tasksDir := filepath.Join(projectDir, ".doey", "tasks")
-	entries, err := os.ReadDir(tasksDir)
-	if err != nil {
-		return // directory doesn't exist — skip silently
-	}
-
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".task") {
-			continue
-		}
-		if err := s.migrateOneTask(filepath.Join(tasksDir, e.Name()), r); err != nil {
-			r.Errors = append(r.Errors, fmt.Sprintf("task %s: %v", e.Name(), err))
-		}
-	}
 }
 
 func (s *Store) migrateOneTask(path string, r *MigrateResult) error {
@@ -301,44 +289,11 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 	return nil
 }
 
-// SyncTaskFiles reads all .task files from the given directory and upserts them
-// into the database. Idempotent — safe to call on every snapshot tick.
-// Returns the number of tasks synced and any errors encountered.
+// SyncTaskFiles is a no-op. Disabled in Phase 4: DB is now the primary store.
+// .task files are no longer synced into the DB. Use 'doey-ctl task export' for
+// .task file generation from the DB.
 func (s *Store) SyncTaskFiles(tasksDir string) (int, []string) {
-	entries, err := os.ReadDir(tasksDir)
-	if err != nil {
-		return 0, nil
-	}
-
-	synced := 0
-	var errs []string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".task") {
-			continue
-		}
-		path := filepath.Join(tasksDir, e.Name())
-		fields, err := parseKeyValue(path)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", e.Name(), err))
-			continue
-		}
-		idStr := fields["TASK_ID"]
-		if idStr == "" {
-			errs = append(errs, fmt.Sprintf("%s: missing TASK_ID", e.Name()))
-			continue
-		}
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s: bad TASK_ID %q", e.Name(), idStr))
-			continue
-		}
-		if err := s.upsertTaskFromFields(id, fields); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", e.Name(), err))
-			continue
-		}
-		synced++
-	}
-	return synced, errs
+	return 0, nil
 }
 
 // --- Plans ---
