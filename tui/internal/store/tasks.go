@@ -36,11 +36,15 @@ type Task struct {
 }
 
 type Subtask struct {
-	ID     int64  `json:"id"`
-	TaskID int64  `json:"task_id"`
-	Seq    int    `json:"seq"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
+	ID          int64  `json:"id"`
+	TaskID      int64  `json:"task_id"`
+	Seq         int    `json:"seq"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`
+	Assignee    string `json:"assignee,omitempty"`
+	Worker      string `json:"worker,omitempty"`
+	CreatedAt   int64  `json:"created_at,omitempty"`
+	CompletedAt int64  `json:"completed_at,omitempty"`
 }
 
 type TaskLogEntry struct {
@@ -228,8 +232,8 @@ func (s *Store) CreateSubtask(st *Subtask) (int64, error) {
 	} else {
 		st.Seq = 1
 	}
-	res, err := s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status) VALUES (?, ?, ?, ?)`,
-		st.TaskID, st.Seq, st.Title, st.Status,
+	res, err := s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		st.TaskID, st.Seq, st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -238,7 +242,7 @@ func (s *Store) CreateSubtask(st *Subtask) (int64, error) {
 }
 
 func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
-	rows, err := s.db.Query(`SELECT id, task_id, seq, title, status FROM subtasks WHERE task_id = ? ORDER BY seq`, taskID)
+	rows, err := s.db.Query(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at FROM subtasks WHERE task_id = ? ORDER BY seq`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +251,7 @@ func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
 	var subtasks []Subtask
 	for rows.Next() {
 		var st Subtask
-		if err := rows.Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status); err != nil {
+		if err := rows.Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt); err != nil {
 			return nil, err
 		}
 		subtasks = append(subtasks, st)
@@ -256,8 +260,8 @@ func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
 }
 
 func (s *Store) UpdateSubtask(st *Subtask) error {
-	_, err := s.db.Exec(`UPDATE subtasks SET title = ?, status = ? WHERE id = ?`,
-		st.Title, st.Status, st.ID,
+	_, err := s.db.Exec(`UPDATE subtasks SET title = ?, status = ?, assignee = ?, worker = ?, created_at = ?, completed_at = ? WHERE id = ?`,
+		st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ID,
 	)
 	return err
 }
@@ -265,8 +269,8 @@ func (s *Store) UpdateSubtask(st *Subtask) error {
 // GetSubtaskBySeq returns the subtask for a given task and sequence number.
 func (s *Store) GetSubtaskBySeq(taskID int64, seq int) (*Subtask, error) {
 	var st Subtask
-	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status FROM subtasks WHERE task_id = ? AND seq = ?`, taskID, seq).
-		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status)
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at FROM subtasks WHERE task_id = ? AND seq = ?`, taskID, seq).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +280,8 @@ func (s *Store) GetSubtaskBySeq(taskID int64, seq int) (*Subtask, error) {
 // GetSubtaskByID returns the subtask by its DB primary key.
 func (s *Store) GetSubtaskByID(id int64) (*Subtask, error) {
 	var st Subtask
-	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status FROM subtasks WHERE id = ?`, id).
-		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status)
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at FROM subtasks WHERE id = ?`, id).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt)
 	if err != nil {
 		return nil, err
 	}

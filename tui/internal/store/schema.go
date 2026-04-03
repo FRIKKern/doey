@@ -129,5 +129,16 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	// Migrations — ALTER TABLE ADD COLUMN errors are ignored (column may already exist).
+	migrations := []string{
+		`ALTER TABLE subtasks ADD COLUMN assignee TEXT DEFAULT ''`,
+		`ALTER TABLE subtasks ADD COLUMN worker TEXT DEFAULT ''`,
+		`ALTER TABLE subtasks ADD COLUMN created_at INTEGER DEFAULT 0`,
+		`ALTER TABLE subtasks ADD COLUMN completed_at INTEGER DEFAULT 0`,
+	}
+	for _, stmt := range migrations {
+		tx.Exec(stmt) // ignore "duplicate column" errors
+	}
+
 	return tx.Commit()
 }

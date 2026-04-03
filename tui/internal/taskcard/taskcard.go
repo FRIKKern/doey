@@ -315,6 +315,9 @@ type ExpandedCard struct {
 	ExpandedAttachments map[int]bool // which attachments are expanded (by index)
 	AttachmentCursor    int          // focused attachment index (-1 = none)
 
+	// Expandable subtask tracking
+	ExpandedSubtasks map[int]bool // which subtasks are expanded (by index)
+
 	// Glamour markdown rendering cache
 	mdCache markdownCache
 }
@@ -541,9 +544,14 @@ func (e *ExpandedCard) Render() string {
 			}
 		}
 		sections = append(sections, styles.ExpandedProgressBar(e.Theme, pDone, len(task.Subtasks), contentWidth))
+		if e.ExpandedSubtasks == nil {
+			e.ExpandedSubtasks = make(map[int]bool)
+		}
 		for i, ps := range task.Subtasks {
 			selected := i == e.SubtaskCursor
-			row := persistentSubtaskRow(e.Theme, ps, selected)
+			matched := matchReportsToSubtask(task.Reports, ps)
+			expanded := e.ExpandedSubtasks[i]
+			row := persistentSubtaskRow(e.Theme, ps, selected, matched, expanded)
 			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), row))
 		}
 	} else if len(e.Item.Subtasks) > 0 {
@@ -999,18 +1007,51 @@ func formatAge(d time.Duration) string {
 	}
 }
 
-// persistentSubtaskRow renders a single persistent subtask with status icon, worker pane, and timing.
-func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, selected bool) string {
+// matchReportsToSubtask finds reports whose author matches the subtask's worker or assignee pane.
+func matchReportsToSubtask(reports []runtime.PersistentReport, ps runtime.PersistentSubtask) []runtime.PersistentReport {
+	if len(reports) == 0 {
+		return nil
+	}
+	// Build pane identifiers to match against (e.g. "3.2" matches "worker_3_2")
+	var paneIDs []string
+	if ps.Worker != "" {
+		paneIDs = append(paneIDs, ps.Worker)
+		// Convert "3.2" → "3_2" for matching "worker_3_2" author format
+		paneIDs = append(paneIDs, strings.ReplaceAll(ps.Worker, ".", "_"))
+	}
+	if ps.Assignee != "" && ps.Assignee != ps.Worker {
+		paneIDs = append(paneIDs, ps.Assignee)
+		paneIDs = append(paneIDs, strings.ReplaceAll(ps.Assignee, ".", "_"))
+	}
+	if len(paneIDs) == 0 {
+		return nil
+	}
+	var matched []runtime.PersistentReport
+	for _, r := range reports {
+		author := strings.ToLower(r.Author)
+		for _, pid := range paneIDs {
+			if strings.Contains(author, strings.ToLower(pid)) {
+				matched = append(matched, r)
+				break
+			}
+		}
+	}
+	return matched
+}
+
+// persistentSubtaskRow renders a single persistent subtask with status icon, worker pane,
+// timing, and optionally matched report summary and expanded detail.
+func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, selected bool, matchedReports []runtime.PersistentReport, expanded bool) string {
 	var icon string
 	switch ps.Status {
 	case "done":
-		icon = lipgloss.NewStyle().Foreground(theme.Success).Render("●")
+		icon = lipgloss.NewStyle().Foreground(theme.Success).Render("✓")
 	case "in_progress":
-		icon = lipgloss.NewStyle().Foreground(theme.Warning).Render("◑")
+		icon = lipgloss.NewStyle().Foreground(theme.Info).Render("◉")
 	case "failed":
 		icon = lipgloss.NewStyle().Foreground(theme.Danger).Render("✗")
 	default: // pending
-		icon = lipgloss.NewStyle().Foreground(theme.Muted).Render("○")
+		icon = lipgloss.NewStyle().Foreground(theme.Warning).Render("◯")
 	}
 
 	title := ps.Title
@@ -1048,7 +1089,80 @@ func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, sele
 		}
 	}
 
-	return row
+	// Show timestamps when available
+	if ps.CreatedAt > 0 || ps.CompletedAt > 0 {
+		var tsInfo []string
+		if ps.CreatedAt > 0 {
+			tsInfo = append(tsInfo, "started "+time.Unix(ps.CreatedAt, 0).Format("15:04"))
+		}
+		if ps.CompletedAt > 0 {
+			tsInfo = append(tsInfo, "ended "+time.Unix(ps.CompletedAt, 0).Format("15:04"))
+		}
+		row += " " + dimStyle.Render("("+strings.Join(tsInfo, ", ")+")")
+	}
+
+	// Report count indicator
+	if len(matchedReports) > 0 {
+		countText := fmt.Sprintf(" 📋%d", len(matchedReports))
+		row += dimStyle.Render(countText)
+	}
+
+	var lines []string
+	lines = append(lines, row)
+
+	// One-line report summary (always shown if report exists)
+	if len(matchedReports) > 0 && !expanded {
+		latest := matchedReports[len(matchedReports)-1]
+		summary := latest.Body
+		if len(summary) > 80 {
+			summary = summary[:77] + "..."
+		}
+		summaryLine := "      " + dimStyle.Render("└ "+summary)
+		lines = append(lines, summaryLine)
+	}
+
+	// Expanded detail: full reports, timestamps, all matched reports
+	if expanded && len(matchedReports) > 0 {
+		detailStyle := lipgloss.NewStyle().Foreground(theme.Muted).PaddingLeft(6)
+		accentStyle := lipgloss.NewStyle().Foreground(theme.Accent).Faint(true)
+		for _, r := range matchedReports {
+			var typeColor lipgloss.AdaptiveColor
+			switch r.Type {
+			case "completion":
+				typeColor = theme.Success
+			case "progress":
+				typeColor = theme.Info
+			case "error":
+				typeColor = theme.Danger
+			default:
+				typeColor = theme.Muted
+			}
+			badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render("[" + r.Type + "]")
+			ts := ""
+			if r.Created > 0 {
+				ts = " " + dimStyle.Render(time.Unix(r.Created, 0).Format("15:04:05"))
+			}
+			lines = append(lines, detailStyle.Render(badge+" "+r.Title+ts))
+			if r.Body != "" {
+				for _, bodyLine := range strings.Split(r.Body, "\n") {
+					lines = append(lines, detailStyle.Render("  "+bodyLine))
+				}
+			}
+		}
+		lines = append(lines, "      "+accentStyle.Render("[-] collapse"))
+	} else if expanded && len(matchedReports) == 0 {
+		lines = append(lines, "      "+dimStyle.Render("(no reports for this subtask)"))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// ToggleSubtaskExpand toggles the expansion state of the subtask at the given index.
+func (e *ExpandedCard) ToggleSubtaskExpand(index int) {
+	if e.ExpandedSubtasks == nil {
+		e.ExpandedSubtasks = make(map[int]bool)
+	}
+	e.ExpandedSubtasks[index] = !e.ExpandedSubtasks[index]
 }
 
 // relativeTime converts a unix epoch timestamp to a relative time string.
