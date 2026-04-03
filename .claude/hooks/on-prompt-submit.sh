@@ -20,22 +20,28 @@ case "$PROMPT" in
 esac
 
 # Block workers without task assignment (Task Accountability)
+# Skip if worker is already BUSY — task was validated on initial dispatch
 if is_worker && ! is_reserved; then
-  _task_id_file="${RUNTIME_DIR}/status/${PANE_SAFE}.task_id"
-  _has_task=""
-  # Primary: check pre-written task_id file
-  if [ -f "$_task_id_file" ] && [ -s "$_task_id_file" ]; then
-    _has_task="true"
-  fi
-  # Fallback: check prompt for Task #N pattern
-  if [ -z "$_has_task" ]; then
-    _prompt_task=$(printf '%s' "$PROMPT" | grep -oE 'Task #[0-9]+' | head -1) || _prompt_task=""
-    [ -n "$_prompt_task" ] && _has_task="true"
-  fi
-  if [ -z "$_has_task" ]; then
-    _log "BLOCKED: no task assigned to pane ${PANE_SAFE}"
-    printf '{"decision":"block","message":"No task assigned to this pane. Dispatch via Subtaskmaster."}\n'
-    exit 2
+  _current_status=$(_read_pane_status "$PANE_SAFE") || _current_status=""
+  if [ "$_current_status" = "BUSY" ]; then
+    _log "task accountability: already BUSY, skipping check"
+  else
+    _task_id_file="${RUNTIME_DIR}/status/${PANE_SAFE}.task_id"
+    _has_task=""
+    # Primary: check pre-written task_id file
+    if [ -f "$_task_id_file" ] && [ -s "$_task_id_file" ]; then
+      _has_task="true"
+    fi
+    # Fallback: check prompt for task reference (case-insensitive, flexible format)
+    if [ -z "$_has_task" ]; then
+      _prompt_task=$(printf '%s' "$PROMPT" | grep -oEi 'task[[:space:]]*#?[[:space:]]*[0-9]+' | head -1) || _prompt_task=""
+      [ -n "$_prompt_task" ] && _has_task="true"
+    fi
+    if [ -z "$_has_task" ]; then
+      _log "BLOCKED: no task assigned to pane ${PANE_SAFE} (status=${_current_status:-UNKNOWN})"
+      printf '{"decision":"block","message":"No task assigned to this pane. Dispatch via Subtaskmaster."}\n'
+      exit 2
+    fi
   fi
 fi
 
@@ -71,7 +77,7 @@ if is_worker; then
   fi
   # Fallback: extract Task #N from prompt text
   if [ -z "$_task_num" ]; then
-    _task_num=$(printf '%s' "$PROMPT" | grep -oE 'Task #[0-9]+' | head -1 | sed 's/Task #//') || _task_num=""
+    _task_num=$(printf '%s' "$PROMPT" | grep -oEi 'task[[:space:]]*#?[[:space:]]*[0-9]+' | head -1 | grep -oE '[0-9]+' | tail -1) || _task_num=""
     # Write to file so stop hooks find it
     if [ -n "$_task_num" ]; then
       printf '%s\n' "$_task_num" > "$_task_id_file"
