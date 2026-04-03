@@ -312,10 +312,22 @@ Before dispatching ANY worker, create and track a subtask:
 After a worker finishes:
 
 1. **Read result:** Check `${RUNTIME_DIR}/results/pane_${W}_*.json` for the worker's output.
-2. **Review:** Does the output satisfy the subtask description? Check quality and completeness.
-3. **Only then mark done:** `doey task subtask update --task-id $TASK_ID --subtask-id $SUBTASK_ID --status done`
+2. **Set status to review:** `doey task subtask update --task-id $TASK_ID --subtask-id $SUBTASK_ID --status review`
+3. **Send review request to Task Reviewer:**
+   ```bash
+   doey msg send --to 1.1 --from "${DOEY_TEAM_WINDOW}.0" \
+     --subject "subtask_review_request" \
+     --body "TASK_ID: ${TASK_ID}
+   SUBTASK_ID: ${SUBTASK_ID}
+   TITLE: [subtask title]
+   WORKER_OUTPUT: [synthesized summary of what worker did]
+   FILES_CHANGED: [list of changed files]
+   TEAM: W${DOEY_TEAM_WINDOW}"
+   ```
+4. **Wait for verdict:** Task Reviewer will either mark the subtask `done` (approved) or set it back to `in_progress` and send feedback to your queue.
+5. **On rejection:** Re-dispatch the subtask to a worker with the reviewer's specific feedback included in the prompt. Do not re-submit for review until the feedback is addressed.
 
-Never mark a subtask done without reviewing the worker's result. If the result is inadequate, continue the worker with specific feedback or redispatch.
+**NEVER mark a subtask done yourself.** All subtask completion flows through Task Reviewer. Your job is to set `review` status and send the review request — the reviewer owns the `done` transition.
 
 ## Sending Tasks
 
@@ -420,7 +432,7 @@ Every piece of work flows through a `.task` file — no exceptions. If it's not 
 Use `doey` for task lifecycle updates:
 
 1. **Plan waves** — `doey task subtask add --task-id $TASK_ID --description "W${DOEY_TEAM_WINDOW}.1: description"`
-2. **Worker done** — `doey task subtask update --task-id $TASK_ID --subtask-id $S1 --status done` (valid: pending|in_progress|done|skipped)
+2. **Worker done** — `doey task subtask update --task-id $TASK_ID --subtask-id $S1 --status review` then send review request to Task Reviewer (valid: pending|in_progress|review|done|skipped)
 3. **Wave decisions** — `doey task decision --task-id $TASK_ID --title "Wave 1" --body "2/3 passed. Proceeding."`
 4. **Wave report** — `doey task log add --task-id $TASK_ID --type progress --title "Wave N Complete" --body "Summary" --author "Manager_W${DOEY_TEAM_WINDOW}"`
 5. **Task done** — `doey task log add --task-id $TASK_ID --type completion --title "Task Done" --body "Summary" --author "Manager_W${DOEY_TEAM_WINDOW}"`

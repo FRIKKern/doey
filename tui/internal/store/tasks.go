@@ -42,6 +42,19 @@ type Task struct {
 	UpdatedAt          int64  `json:"updated_at"`
 }
 
+// ValidSubtaskStatuses lists all allowed subtask status values.
+var ValidSubtaskStatuses = []string{"pending", "in_progress", "done", "skipped", "failed", "review"}
+
+// IsValidSubtaskStatus reports whether status is an allowed subtask status.
+func IsValidSubtaskStatus(status string) bool {
+	for _, s := range ValidSubtaskStatuses {
+		if s == status {
+			return true
+		}
+	}
+	return false
+}
+
 type Subtask struct {
 	ID          int64  `json:"id"`
 	TaskID      int64  `json:"task_id"`

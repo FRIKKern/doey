@@ -34,7 +34,7 @@ type PersistentTaskLog struct {
 type PersistentSubtask struct {
 	Index       int    `json:"index"`
 	Title       string `json:"title"`
-	Status      string `json:"status"`                // pending, in_progress, done, failed
+	Status      string `json:"status"`                // pending, in_progress, done, failed, review
 	Assignee    string `json:"assignee,omitempty"`
 	Worker      string `json:"worker,omitempty"`       // pane ID doing the work (e.g. "3.2")
 	CreatedAt   int64  `json:"created_at,omitempty"`   // unix epoch
@@ -410,7 +410,7 @@ func parsePriority(s string) int {
 }
 
 // mapSubtaskStatus converts runtime subtask status to persistent status.
-// Runtime uses "active"/"done"/"failed"; persistent uses "pending"/"in_progress"/"done"/"failed".
+// Runtime uses "active"/"done"/"failed"; persistent uses "pending"/"in_progress"/"done"/"failed"/"review".
 func mapSubtaskStatus(status string) string {
 	switch status {
 	case "active":
