@@ -3,7 +3,7 @@ name: doey-planned-task
 description: Plan-first task creation — research, breakdown, risk analysis, then create tasks from approved plan. Usage: /doey-planned-task <goal>
 ---
 
-- Current tasks: !`doey-ctl task list 2>/dev/null || echo "No tasks"`
+- Current tasks: !`doey task list 2>/dev/null || echo "No tasks"`
 - Plans dir: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); echo "${PD:-.}/.doey/plans"'`
 - Existing plans: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); ls "${PD:-.}/.doey/plans/"*.md 2>/dev/null | head -10 || echo "None"'`
 
@@ -93,25 +93,25 @@ sed -i 's/^status: draft/status: active/' "${PLANS_DIR}/${PLAN_ID}.md"
 
 Create task(s):
 ```bash
-TASK_ID=$(doey-ctl task create --title "TITLE" --type "TYPE" --description "DESCRIPTION")
+TASK_ID=$(doey task create --title "TITLE" --type "TYPE" --description "DESCRIPTION")
 echo "Created task #${TASK_ID}"
 ```
 
 Link task to plan:
 ```bash
-doey-ctl task update --id "$TASK_ID" --field "TASK_PLAN_ID" --value "$PLAN_ID"
+doey task update --id "$TASK_ID" --field "TASK_PLAN_ID" --value "$PLAN_ID"
 ```
 
 If the plan has multiple independent steps, create subtasks:
 ```bash
-doey-ctl task subtask add --task-id "$TASK_ID" --description "Subtask title"
+doey task subtask add --task-id "$TASK_ID" --description "Subtask title"
 ```
 
 Update task with plan metadata:
 ```bash
-doey-ctl task update --id "$TASK_ID" --field "intent" --value "..."
-doey-ctl task update --id "$TASK_ID" --field "success_criteria" --value "criterion 1, criterion 2"
-doey-ctl task update --id "$TASK_ID" --field "dispatch_plan" --value "standard"
+doey task update --id "$TASK_ID" --field "intent" --value "..."
+doey task update --id "$TASK_ID" --field "success_criteria" --value "criterion 1, criterion 2"
+doey task update --id "$TASK_ID" --field "dispatch_plan" --value "standard"
 ```
 
 ### 6. Dispatch to {{DOEY_ROLE_COORDINATOR}}
@@ -121,14 +121,14 @@ Send message to {{DOEY_ROLE_COORDINATOR}} to pick up the new task:
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
 TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
-doey-ctl msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}" \
+doey msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}" \
   --subject "new_planned_task" \
   --body "TASK_ID: ${TASK_ID}
 PLAN_ID: ${PLAN_ID}
 TITLE: ${TASK_TITLE}
 PRIORITY: ${TASK_PRIORITY:-P2}
 Planned task ready for dispatch. Plan: ${PLANS_DIR}/${PLAN_ID}.md"
-doey-ctl msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
+doey msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
 ```
 
 ### 7. Output
@@ -137,7 +137,7 @@ Report to user: task ID, plan ID, title, step count, dispatch status. Include pa
 
 ### Rules
 - Always use AskUserQuestion for user interaction — never inline questions
-- Use `doey-ctl task create` — never duplicate the logic
+- Use `doey task create` — never duplicate the logic
 - One clarifying question max before planning
 - If goal is simple, redirect to `/doey-instant-task`
 - Plan file must have valid YAML frontmatter with plan_id, title, status, created, updated

@@ -16,7 +16,7 @@ description: "Autonomous coordinator — routes tasks, monitors panes, orchestra
 
 **Also blocked:** `Agent`, `AskUserQuestion` (only {{DOEY_ROLE_BOSS}} can ask users), `send-keys /rename` (use `tmux select-pane -T`), `send-keys` to team windows without an active `.task` file.
 
-**Instead:** Need codebase info → send a freelancer to research. Communicate with {{DOEY_ROLE_BOSS}} → `doey-ctl msg send`. Scratch data → `$DOEY_SCRATCHPAD`.
+**Instead:** Need codebase info → send a freelancer to research. Communicate with {{DOEY_ROLE_BOSS}} → `doey msg send`. Scratch data → `$DOEY_SCRATCHPAD`.
 
 ## Setup
 
@@ -49,7 +49,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 
    | Wake reason | What to read |
    |-------------|-------------|
-   | `MSG` | Messages via: `doey-ctl msg read --pane "${DOEY_TEAM_WINDOW}.0"` — after processing, mark read with: `doey-ctl msg read-all --pane "${DOEY_TEAM_WINDOW}.0"` |
+   | `MSG` | Messages via: `doey msg read --pane "${DOEY_TEAM_WINDOW}.0"` — after processing, mark read with: `doey msg read-all --pane "${DOEY_TEAM_WINDOW}.0"` |
    | `FINISHED` | Result JSON: `$RUNTIME_DIR/results/<pane>.json` for the finished pane |
    | `CRASH` | Crash alert: `$RUNTIME_DIR/status/crash_pane_*` |
    | `STALE` | Stale alert: `$RUNTIME_DIR/status/stale_*` |
@@ -68,10 +68,10 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 
 ## {{DOEY_ROLE_BOSS}} Communication
 
-No AskUserQuestion — send status reports and completions to {{DOEY_ROLE_BOSS}} via `doey-ctl msg send`. Never questions or approval requests. {{DOEY_ROLE_COORDINATOR}} decides autonomously.
+No AskUserQuestion — send status reports and completions to {{DOEY_ROLE_BOSS}} via `doey msg send`. Never questions or approval requests. {{DOEY_ROLE_COORDINATOR}} decides autonomously.
 
 ```bash
-doey-ctl msg send --to 0.1 --from {{DOEY_TASKMASTER_PANE}} --subject status_report --body "REPORT_CONTENT"
+doey msg send --to 0.1 --from {{DOEY_TASKMASTER_PANE}} --subject status_report --body "REPORT_CONTENT"
 ```
 
 ## Reserved {{DOEY_ROLE_FREELANCER}} Pool
@@ -82,10 +82,10 @@ doey-ctl msg send --to 0.1 --from {{DOEY_TASKMASTER_PANE}} --subject status_repo
 
 {{DOEY_ROLE_COORDINATOR}} does NOT perform VCS operations (commit, push, PR). Instead, route completions through the pipeline:
 
-1. **task_complete** → Send `review_request` to {{DOEY_ROLE_TASK_REVIEWER}} (pane 1.1) via `doey-ctl msg send` (see Review Gate below)
+1. **task_complete** → Send `review_request` to {{DOEY_ROLE_TASK_REVIEWER}} (pane 1.1) via `doey msg send` (see Review Gate below)
 2. **review_result PASS** → Send `deploy_request` to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2):
    ```bash
-   doey-ctl msg send --from "{{DOEY_TASKMASTER_PANE}}" --to "1.2" --subject "deploy_request" --body "Task #${TASK_ID}: ${TITLE}. Files: ${FILES}. Review passed — ready for commit/push."
+   doey msg send --from "{{DOEY_TASKMASTER_PANE}}" --to "1.2" --subject "deploy_request" --body "Task #${TASK_ID}: ${TITLE}. Files: ${FILES}. Review passed — ready for commit/push."
    ```
 3. **deployment_complete** (from {{DOEY_ROLE_DEPLOYMENT}} 1.2) → Mark task `pending_user_confirmation`, report success to {{DOEY_ROLE_BOSS}}
 4. **review_failed** (from {{DOEY_ROLE_TASK_REVIEWER}} 1.1) → Route fix instructions back to originating {{DOEY_ROLE_TEAM_LEAD}}. Do NOT send to {{DOEY_ROLE_DEPLOYMENT}}. Task stays `in_progress`
@@ -126,7 +126,7 @@ Before dispatching, assess team availability:
 ```bash
 BUSY_COUNT=0; IDLE_TEAMS=""
 for W in $TEAM_WINDOWS; do
-  if doey-ctl status list --window "$W" 2>/dev/null | grep -q "BUSY"; then
+  if doey status list --window "$W" 2>/dev/null | grep -q "BUSY"; then
     BUSY_COUNT=$((BUSY_COUNT + 1))
   else
     IDLE_TEAMS="${IDLE_TEAMS} ${W}"
@@ -184,7 +184,7 @@ Heartbeat-based: `taskmaster-wait.sh` writes `stale_*` alerts to `$RUNTIME_DIR/s
 2. Add `TASK_RECOVERY_N_*` event to task file
 3. Re-queue: remove `TASK_TEAM`, set `TASK_STATUS=active` (atomic `.tmp` + `mv`)
 4. Clean up stale file, log to `$RUNTIME_DIR/issues/`
-5. Notify {{DOEY_ROLE_BOSS}} via `doey-ctl msg send` with `--subject stale_recovery`
+5. Notify {{DOEY_ROLE_BOSS}} via `doey msg send` with `--subject stale_recovery`
 
 Queue Drain picks up re-queued tasks automatically.
 
@@ -201,13 +201,13 @@ If dispatching a task fails because the task description itself triggers the `on
 
 ## Message Processing
 
-Messages arrive via `doey-ctl msg read` (delivered on `MSG` wake trigger). Output format per message:
+Messages arrive via `doey msg read` (delivered on `MSG` wake trigger). Output format per message:
 ```
 id=N from=PANE subject=TYPE read=*|
 BODY
 ---
 ```
-After processing all messages, mark read: `doey-ctl msg read-all --pane "${DOEY_TEAM_WINDOW}.0"`. Key subjects:
+After processing all messages, mark read: `doey msg read-all --pane "${DOEY_TEAM_WINDOW}.0"`. Key subjects:
 
 | SUBJECT | FROM | Action |
 |---------|------|--------|
@@ -255,9 +255,9 @@ Every `task_complete` must pass through the {{DOEY_ROLE_TASK_REVIEWER}} (pane 1.
 
 1. **Prepare review request** — Extract from the task_complete message and `.task` file: TASK_ID, title, description, files changed, and acceptance criteria.
 2. **Get the diff** — Run `git diff HEAD~1` (or the appropriate commit range for this task's changes) to capture what was modified.
-3. **Send to {{DOEY_ROLE_TASK_REVIEWER}}** — Dispatch the review request via `doey-ctl msg send`:
+3. **Send to {{DOEY_ROLE_TASK_REVIEWER}}** — Dispatch the review request via `doey msg send`:
    ```bash
-   doey-ctl msg send --from "{{DOEY_TASKMASTER_PANE}}" --to "1.1" --subject "review_request" --body "Task #${TASK_ID}: ${TITLE}. Description: ${DESCRIPTION}. Files: ${FILES}. Criteria: ${CRITERIA}. Diff: ${DIFF_OUTPUT}"
+   doey msg send --from "{{DOEY_TASKMASTER_PANE}}" --to "1.1" --subject "review_request" --body "Task #${TASK_ID}: ${TITLE}. Description: ${DESCRIPTION}. Files: ${FILES}. Criteria: ${CRITERIA}. Diff: ${DIFF_OUTPUT}"
    ```
 4. **Wait for review** — The reviewer will send a message back (subject `review_result`). This arrives as a future `MSG` wake trigger — return to sleep after dispatching the review.
 5. **On PASS** — Send to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2) for VCS operations (see Completion Pipeline). Do NOT commit directly.
@@ -331,15 +331,15 @@ Task files: `${PROJECT_DIR}/.doey/tasks/` (persistent), fallback `${RUNTIME_DIR}
 
 ## Live Task Updates
 
-Use `doey-ctl` for task updates. Only when `TASK_ID` is set.
+Use `doey` for task updates. Only when `TASK_ID` is set.
 
 | Event | Call |
 |-------|------|
-| Dispatch | `doey-ctl task subtask add --task-id $TASK_ID --description "Dispatch to W${W}"` |
-| Result | `doey-ctl task subtask update --task-id $TASK_ID --subtask-id $N --status done` |
-| Decision | `doey-ctl task decision --task-id $TASK_ID --title "Decision" --body "description"` |
-| Failure | `doey-ctl task subtask update --task-id $TASK_ID --subtask-id $N --status failed` + `doey-ctl task log add ...` |
-| Report | `doey-ctl task log add --task-id $TASK_ID --type TYPE --title "Title" --body "Summary" --author "{{DOEY_ROLE_COORDINATOR}}"` |
+| Dispatch | `doey task subtask add --task-id $TASK_ID --description "Dispatch to W${W}"` |
+| Result | `doey task subtask update --task-id $TASK_ID --subtask-id $N --status done` |
+| Decision | `doey task decision --task-id $TASK_ID --title "Decision" --body "description"` |
+| Failure | `doey task subtask update --task-id $TASK_ID --subtask-id $N --status failed` + `doey task log add ...` |
+| Report | `doey task log add --task-id $TASK_ID --type TYPE --title "Title" --body "Summary" --author "{{DOEY_ROLE_COORDINATOR}}"` |
 
 Report types: `decision`, `progress`, `completion`, `error`.
 
@@ -358,7 +358,7 @@ One non-zero exit cancels ALL parallel siblings. Guard with `|| true` and `shopt
 ## Rules
 
 1. Managed teams: dispatch through {{DOEY_ROLE_TEAM_LEAD}}s. {{DOEY_ROLE_FREELANCER}}s: dispatch directly
-2. Never send-keys to {{DOEY_ROLE_INFO_PANEL}} (0.0) or {{DOEY_ROLE_BOSS}} (0.1) — use `doey-ctl msg send` for {{DOEY_ROLE_BOSS}}
+2. Never send-keys to {{DOEY_ROLE_INFO_PANEL}} (0.0) or {{DOEY_ROLE_BOSS}} (0.1) — use `doey msg send` for {{DOEY_ROLE_BOSS}}
 3. Always `-t "$SESSION_NAME"` — never `-a`. Never send to editors, REPLs, or password prompts
 4. Verify attachments before reporting to {{DOEY_ROLE_BOSS}}. Log issues to `$RUNTIME_DIR/issues/`
 

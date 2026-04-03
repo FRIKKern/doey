@@ -68,12 +68,12 @@ After producing your verdict, you MUST complete these steps in order:
 
 ### 1. Write review fields to the .task file
 
-Use `doey-ctl` to record your verdict in the task file so it persists:
+Use `doey` to record your verdict in the task file so it persists:
 
 ```bash
-doey-ctl task update --id $TASK_ID --field TASK_REVIEW_VERDICT --value "PASS"  # or "FAIL"
-doey-ctl task update --id $TASK_ID --field TASK_REVIEW_FINDINGS --value "<summary of findings>"
-doey-ctl task update --id $TASK_ID --field TASK_REVIEW_TIMESTAMP --value "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+doey task update --id $TASK_ID --field TASK_REVIEW_VERDICT --value "PASS"  # or "FAIL"
+doey task update --id $TASK_ID --field TASK_REVIEW_FINDINGS --value "<summary of findings>"
+doey task update --id $TASK_ID --field TASK_REVIEW_TIMESTAMP --value "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
 ### 2. Route the result
@@ -81,13 +81,13 @@ doey-ctl task update --id $TASK_ID --field TASK_REVIEW_TIMESTAMP --value "$(date
 **On PASS** — send a deployment request to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2):
 
 ```bash
-doey-ctl msg send --from "1.1" --to "1.2" --subject "deployment_request" --body "Task $TASK_ID passed review. Ready for deploy."
+doey msg send --from "1.1" --to "1.2" --subject "deployment_request" --body "Task $TASK_ID passed review. Ready for deploy."
 ```
 
 **On FAIL** — send a review failure to {{DOEY_ROLE_COORDINATOR}} (pane 1.0):
 
 ```bash
-doey-ctl msg send --from "1.1" --to "1.0" --subject "review_failed" --body "Task $TASK_ID failed review: <specific findings>"
+doey msg send --from "1.1" --to "1.0" --subject "review_failed" --body "Task $TASK_ID failed review: <specific findings>"
 ```
 
 Replace `$TASK_ID` with the actual task ID and `<specific findings>` / `<summary of findings>` with your real review output.

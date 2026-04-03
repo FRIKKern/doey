@@ -64,7 +64,7 @@ restart_team() {
     local CMD="claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\""
     [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
     kill_and_relaunch "$PANE" "$CMD"
-    doey-ctl status set --pane "$PANE" --status READY --task "login-restart"
+    doey status set --pane "$PANE" --status READY --task "login-restart"
     echo "  ${W}.${wp} ✓"
   done
 }

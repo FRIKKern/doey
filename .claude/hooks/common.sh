@@ -289,7 +289,7 @@ is_reserved() {
   [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ]
 }
 
-# --- Health check utilities (doey-ctl fast-path with bash fallback) ---
+# --- Health check utilities (doey fast-path with bash fallback) ---
 
 # _pane_alive checks if a tmux pane exists and has a running process.
 # Usage: _pane_alive <pane_id>  (e.g., "doey-foo:1.2")
@@ -303,7 +303,7 @@ _pane_alive() {
 _pane_healthy() {
   local pane_safe="$1"
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl health check --runtime "$RUNTIME_DIR" "$pane_safe" >/dev/null 2>&1
+    doey health check --runtime "$RUNTIME_DIR" "$pane_safe" >/dev/null 2>&1
   else
     # Bash fallback: check status file modification time
     local status_file="${RUNTIME_DIR}/status/${pane_safe}.status"
@@ -322,9 +322,9 @@ _pane_healthy() {
 # Outputs: status string (e.g., "BUSY", "READY", "FINISHED")
 _read_pane_status() {
   local pane_safe="$1"
-  # Unified doey-ctl status get (auto-detects DB vs file)
+  # Unified doey status get (auto-detects DB vs file)
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl status get --runtime "$RUNTIME_DIR" "$pane_safe" 2>/dev/null | grep '^status=' | cut -d= -f2-
+    doey status get --runtime "$RUNTIME_DIR" "$pane_safe" 2>/dev/null | grep '^status=' | cut -d= -f2-
   else
     # Bash fallback: grep status file directly
     local status_file="${RUNTIME_DIR}/status/${pane_safe}.status"
@@ -338,7 +338,7 @@ write_pane_status() {
   local target="$1" status="$2" task="${3:-}"
   # Try unified status command (writes DB + file)
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    doey-ctl status set \
+    doey status set \
       --pane-id "${DOEY_PANE_SAFE:-${PANE_SAFE:-}}" \
       --window-id "W${DOEY_WINDOW_INDEX:-${WINDOW_INDEX:-0}}" \
       --role "${DOEY_ROLE:-worker}" \
@@ -359,7 +359,7 @@ write_activity() {  # Append JSONL activity event: write_activity <event> <data_
   local pane_safe="${PANE_SAFE:-${DOEY_PANE_SAFE:-unknown}}"
   # Try SQLite event log first
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    doey-ctl event log --type "activity_${event}" --source "${pane_safe}" --data "$data" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+    doey event log --type "activity_${event}" --source "${pane_safe}" --data "$data" --project-dir "$PROJECT_DIR" 2>/dev/null || true
   fi
   # Still write jsonl file for backward compat
   local ts pane_label activity_dir
@@ -381,7 +381,7 @@ notify_taskmaster() {  # Lifecycle event -> Taskmaster wake trigger
   local pane_id="${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}"
   # Try SQLite event log
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    doey-ctl event log --type "lifecycle_${status}" --source "${pane_id}" --target "taskmaster" --data "{\"team\":\"W${team_w}\",\"detail\":\"${detail}\"}" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+    doey event log --type "lifecycle_${status}" --source "${pane_id}" --target "taskmaster" --data "{\"team\":\"W${team_w}\",\"detail\":\"${detail}\"}" --project-dir "$PROJECT_DIR" 2>/dev/null || true
   fi
   # Still write file-based lifecycle event for backward compat
   mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0

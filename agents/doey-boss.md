@@ -33,10 +33,10 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 ## Commanding Taskmaster
 
-Taskmaster lives at **pane 0.2**. Send commands via `doey-ctl`:
+Taskmaster lives at **pane 0.2**. Send commands via `doey`:
 
 ```bash
-doey-ctl msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
+doey msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
 ```
 
 ### Pre-Send Taskmaster Health Check (MANDATORY)
@@ -45,7 +45,7 @@ doey-ctl msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
 
 ```bash
 # ── Taskmaster health gate — run before every msg send ──
-_sm_status=$(doey-ctl status get 0.2 2>/dev/null || echo "UNKNOWN")
+_sm_status=$(doey status get 0.2 2>/dev/null || echo "UNKNOWN")
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
@@ -72,7 +72,7 @@ fi
 On each turn, check for messages from Taskmaster:
 
 ```bash
-doey-ctl msg read --pane 0.1
+doey msg read --pane 0.1
 ```
 
 ### Message types from Taskmaster
@@ -105,7 +105,7 @@ Clarify via `AskUserQuestion` if scope, priority, or acceptance criteria are amb
 Create `.task` file and dispatch to Taskmaster. For multi-step/ambiguous goals, use Task Compilation Protocol instead.
 
 ```bash
-TASK_ID=$(doey-ctl task create --title "TITLE HERE" --type "feature" --description "Full context — what and why")
+TASK_ID=$(doey task create --title "TITLE HERE" --type "feature" --description "Full context — what and why")
 ```
 
 ### When work appears complete
@@ -114,9 +114,9 @@ Mark `pending_user_confirmation` and tell the user:
 > "Task [N] looks complete — run `doey task done N` to confirm."
 
 ```bash
-doey-ctl task update -field status -value pending_user_confirmation N
+doey task update -field status -value pending_user_confirmation N
 # Or convenience shorthand:
-doey-ctl task update --id N --status pending_user_confirmation
+doey task update --id N --status pending_user_confirmation
 ```
 
 ### Never do this
@@ -177,8 +177,8 @@ Plans live at `.doey/plans/plan-<N>.md`. When a task originates from a plan:
 Use `dispatch_task` subject (not `task`) for structured tasks. Includes: `TASK_ID`, `TASK_FILE`, `TASK_JSON`, `DISPATCH_MODE` (parallel|sequential|phased), `PRIORITY`, `SUMMARY`.
 
 ```bash
-TASK_ID=$(doey-ctl task create --title "Title" --type "feature" --description "Description")
-doey-ctl msg send --to 0.2 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
+TASK_ID=$(doey task create --title "Title" --type "feature" --description "Description")
+doey msg send --to 0.2 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
 ```
 
 For manual dispatch without the skills (fallback only — prefer `/doey-planned-task` or `/doey-instant-task`).

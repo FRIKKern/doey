@@ -24,7 +24,7 @@ description: "Handles deployment operations — tests, push, PR creation."
 Poll for incoming messages:
 
 ```bash
-doey-ctl msg read --pane "1.2"
+doey msg read --pane "1.2"
 ```
 
 When you receive a `deployment_request` message, begin the **Task Deployment Workflow** below. When idle with no messages, sleep and poll again.
@@ -40,7 +40,7 @@ When a `deployment_request` arrives from {{DOEY_ROLE_TASK_REVIEWER}}:
 3. Verify `TASK_REVIEW_VERDICT=PASS` exists in the task file
 4. **If review not passed** — reject immediately:
    ```bash
-   doey-ctl msg send --from "1.2" --to "1.0" --subject "deployment_failed" --body "Task $TASK_ID rejected: review verdict is not PASS."
+   doey msg send --from "1.2" --to "1.0" --subject "deployment_failed" --body "Task $TASK_ID rejected: review verdict is not PASS."
    ```
    Stop processing this request.
 
@@ -52,7 +52,7 @@ When a `deployment_request` arrives from {{DOEY_ROLE_TASK_REVIEWER}}:
 4. Check for uncommitted changes (`git status`)
 5. If any check fails, send failure notification and stop:
    ```bash
-   doey-ctl msg send --from "1.2" --to "1.0" --subject "deployment_failed" --body "Task $TASK_ID pre-deploy checks failed: <details>"
+   doey msg send --from "1.2" --to "1.0" --subject "deployment_failed" --body "Task $TASK_ID pre-deploy checks failed: <details>"
    ```
 
 ### 3. Commit and push
@@ -62,11 +62,11 @@ When a `deployment_request` arrives from {{DOEY_ROLE_TASK_REVIEWER}}:
 3. Push branch with `-u` flag
 4. On success, notify {{DOEY_ROLE_COORDINATOR}}:
    ```bash
-   doey-ctl msg send --from "1.2" --to "1.0" --subject "deployment_complete" --body "Task $TASK_ID committed and pushed."
+   doey msg send --from "1.2" --to "1.0" --subject "deployment_complete" --body "Task $TASK_ID committed and pushed."
    ```
 5. On failure, notify {{DOEY_ROLE_COORDINATOR}}:
    ```bash
-   doey-ctl msg send --from "1.2" --to "1.0" --subject "deployment_failed" --body "Task $TASK_ID push failed: <details>"
+   doey msg send --from "1.2" --to "1.0" --subject "deployment_failed" --body "Task $TASK_ID push failed: <details>"
    ```
 
 ## PR Creation

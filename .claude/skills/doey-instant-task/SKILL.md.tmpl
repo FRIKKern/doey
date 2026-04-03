@@ -3,7 +3,7 @@ name: doey-instant-task
 description: Quick task creation without planning — create and dispatch immediately. Usage: /doey-instant-task <goal>
 ---
 
-- Current tasks: !`doey-ctl task list 2>/dev/null || echo "No tasks"`
+- Current tasks: !`doey task list 2>/dev/null || echo "No tasks"`
 
 Create and dispatch a task immediately from a natural-language goal. No planning step. Goal from ARGUMENTS (if empty, use AskUserQuestion to ask, then stop).
 
@@ -20,13 +20,13 @@ Infer from keywords: "fix"/"bug"/"broken" → bugfix, "add"/"new"/"create" → f
 ### 2. Create Task
 
 ```bash
-TASK_ID=$(doey-ctl task create --title "TITLE" --type "TYPE" --description "DESCRIPTION")
+TASK_ID=$(doey task create --title "TITLE" --type "TYPE" --description "DESCRIPTION")
 echo "Created task #${TASK_ID}"
 ```
 
 For tasks with obvious sub-parts, add subtasks:
 ```bash
-doey-ctl task subtask add --task-id "$TASK_ID" --description "Subtask title"
+doey task subtask add --task-id "$TASK_ID" --description "Subtask title"
 ```
 
 ### 3. Dispatch to {{DOEY_ROLE_COORDINATOR}}
@@ -36,14 +36,14 @@ Send message to {{DOEY_ROLE_COORDINATOR}} for routing:
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
 TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
-doey-ctl msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}" \
+doey msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}" \
   --subject "new_task" \
   --body "TASK_ID: ${TASK_ID}
 TITLE: ${TASK_TITLE}
 TYPE: ${TASK_TYPE:-feature}
 PRIORITY: ${TASK_PRIORITY:-P2}
 Instant task — ready for immediate dispatch."
-doey-ctl msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
+doey msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
 ```
 
 ### 4. Output
@@ -52,7 +52,7 @@ Report: task ID, title, type, priority, dispatch status. Keep it brief — this 
 
 ### Rules
 - Use AskUserQuestion if goal is empty — never inline questions
-- Use `doey-ctl task create` — never duplicate
+- Use `doey task create` — never duplicate
 - No planning, no approval gate — create and dispatch immediately
 - If goal looks complex (multiple independent tracks, high risk, cross-team), suggest `/doey-planned-task` instead
 - Zero clarifying questions for obvious goals; one max for ambiguous ones

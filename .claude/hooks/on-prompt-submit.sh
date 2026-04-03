@@ -11,7 +11,7 @@ STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 case "$PROMPT" in
   /compact*)
     if command -v doey-ctl >/dev/null 2>&1; then
-      doey-ctl status set "$PANE_SAFE" "READY"
+      doey status set "$PANE_SAFE" "READY"
     else
       write_pane_status "$STATUS_FILE" "READY"
     fi
@@ -46,14 +46,14 @@ if is_worker && ! is_reserved; then
 fi
 
 if command -v doey-ctl >/dev/null 2>&1; then
-  doey-ctl status set "$PANE_SAFE" "BUSY"
+  doey status set "$PANE_SAFE" "BUSY"
 else
   write_pane_status "$STATUS_FILE" "BUSY" "${PROMPT:0:80}"
 fi
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=READY" "to=BUSY" "trigger=prompt-submit"
 if [ -n "${DOEY_PANE_ID:-}" ]; then
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl status set "${DOEY_PANE_ID}" "BUSY"
+    doey status set "${DOEY_PANE_ID}" "BUSY"
   else
     write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "BUSY" "${PROMPT:0:80}"
   fi

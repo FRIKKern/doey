@@ -79,10 +79,10 @@ task_next_id() { # tasks_dir → echo next ID (auto-increments)
 }
 
 task_create() { # project_dir title [type] [created_by] [description] → echo task ID
-  # Fast path: use doey-ctl if available
+  # Fast path: use doey if available
   if command -v doey-ctl >/dev/null 2>&1; then
     local _result
-    _result=$(doey-ctl task create --title "$2" --type "${3:-feature}" --created-by "${4:-Boss}" --description "${5:-}" --project-dir "$1" 2>/dev/null) && {
+    _result=$(doey task create --title "$2" --type "${3:-feature}" --created-by "${4:-Boss}" --description "${5:-}" --project-dir "$1" 2>/dev/null) && {
       echo "$_result"
       return 0
     }
@@ -108,7 +108,7 @@ task_create() { # project_dir title [type] [created_by] [description] → echo t
 }
 
 task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
-  # TODO(phase3): migrate to doey-ctl db-task get (requires JSON→shell var mapping)
+  # TODO(phase3): migrate to doey db-task get (requires JSON→shell var mapping)
   local file="$1"
   [ -s "$file" ] || return 1
 
@@ -176,7 +176,7 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
 
 task_update_field() { # task_file field_name new_value → atomic upsert
   local task_file="$1" field_name="$2" new_value="$3"
-  # Fast path: doey-ctl task update (field names map TASK_X → x)
+  # Fast path: doey task update (field names map TASK_X → x)
   if command -v doey-ctl >/dev/null 2>&1; then
     local _id _pd _dbfield
     _id=$(basename "$task_file" .task)
@@ -184,7 +184,7 @@ task_update_field() { # task_file field_name new_value → atomic upsert
     # Map TASK_STATUS → status, TASK_TITLE → title, etc.
     _dbfield="${field_name#TASK_}"
     _dbfield=$(printf '%s' "$_dbfield" | tr '[:upper:]' '[:lower:]')
-    doey-ctl task update "$_id" --field "$_dbfield" --value "$new_value" --project-dir "$_pd" 2>/dev/null && {
+    doey task update "$_id" --field "$_dbfield" --value "$new_value" --project-dir "$_pd" 2>/dev/null && {
       _touch_task_updated "$task_file"; return 0
     }
   fi
@@ -263,9 +263,9 @@ _task_append_timestamp() { # task_file key epoch
 }
 
 task_update_status() { # project_dir task_id new_status
-  # Fast path: use doey-ctl if available
+  # Fast path: use doey if available
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl task update "$2" --field TASK_STATUS --value "$3" --project-dir "$1" 2>/dev/null && return 0
+    doey task update "$2" --field TASK_STATUS --value "$3" --project-dir "$1" 2>/dev/null && return 0
   fi
   # Fallback: shell implementation continues below
   local project_dir="$1" task_id="$2" new_status="$3"
@@ -295,7 +295,7 @@ _task_age_str() { # epoch → echo human-readable age (e.g., "3h")
   else echo "$((elapsed / 86400))d"; fi
 }
 
-task_list() { # TODO(phase3): migrate to doey-ctl db-task list (output format differs)
+task_list() { # TODO(phase3): migrate to doey db-task list (output format differs)
   # project_dir [--status filter] [--all]
   local project_dir="$1"; shift
   local status_filter="" show_all=0
@@ -369,7 +369,7 @@ task_list() { # TODO(phase3): migrate to doey-ctl db-task list (output format di
   fi
 }
 
-task_sync_runtime() { # TODO(phase3): migrate to doey-ctl when available
+task_sync_runtime() { # TODO(phase3): migrate to doey when available
   # project_dir runtime_dir → copy active tasks to runtime cache
   local project_dir="$1" runtime_dir="$2"
   local src="${project_dir}/.doey/tasks" dst="${runtime_dir}/tasks"
@@ -395,7 +395,7 @@ task_add_decision() { # task_file entry_text → append timestamped decision
     local _id _pd
     _id=$(basename "$1" .task)
     _pd=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
-    doey-ctl task log add "$_id" --type decision --author "${DOEY_ROLE:-unknown}" --title "$2" --project-dir "$_pd" 2>/dev/null && return 0
+    doey task log add "$_id" --type decision --author "${DOEY_ROLE:-unknown}" --title "$2" --project-dir "$_pd" 2>/dev/null && return 0
   fi
   local now; now=$(date +%s); _task_append_to_field "$1" "TASK_DECISION_LOG" "${now}:${2}"
 }
@@ -405,18 +405,18 @@ task_add_note() { # task_file note_text
     local _id _pd
     _id=$(basename "$1" .task)
     _pd=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
-    doey-ctl task log add "$_id" --type note --author "${DOEY_ROLE:-unknown}" --title "$2" --project-dir "$_pd" 2>/dev/null && return 0
+    doey task log add "$_id" --type note --author "${DOEY_ROLE:-unknown}" --title "$2" --project-dir "$_pd" 2>/dev/null && return 0
   fi
   _task_append_to_field "$1" "TASK_NOTES" "$2"
 }
 
 task_update_subtask() { # task_file subtask_id new_status (format: id:title:status\\n...)
   local task_file="$1" subtask_id="$2" new_status="$3"
-  # Fast path: doey-ctl task subtask update
+  # Fast path: doey task subtask update
   if command -v doey-ctl >/dev/null 2>&1; then
     local _pd
     _pd=$(cd "$(dirname "$task_file")/../.." 2>/dev/null && pwd)
-    doey-ctl task subtask update "$subtask_id" --status "$new_status" --project-dir "$_pd" 2>/dev/null && return 0
+    doey task subtask update "$subtask_id" --status "$new_status" --project-dir "$_pd" 2>/dev/null && return 0
   fi
 
   _validate_subtask_status "$new_status" || return 1
@@ -475,12 +475,12 @@ task_update_subtask() { # task_file subtask_id new_status (format: id:title:stat
 }
 
 task_add_subtask() { # task_file title → echo new subtask ID
-  # Fast path: use doey-ctl if available
+  # Fast path: use doey if available
   if command -v doey-ctl >/dev/null 2>&1; then
     local _task_id _project_dir _result
     _task_id=$(basename "$1" .task)
     _project_dir=$(cd "$(dirname "$1")/../.." && pwd)
-    _result=$(doey-ctl task subtask add "$_task_id" "$2" --project-dir "$_project_dir" 2>/dev/null) && {
+    _result=$(doey task subtask add "$_task_id" "$2" --project-dir "$_project_dir" 2>/dev/null) && {
       echo "$_result"
       return 0
     }
@@ -888,12 +888,12 @@ doey_task_add_update() { # project_dir task_id author text → echo update N
 
 task_add_report() { # task_file report_type title body [author] → echo report N
   local task_file="$1" report_type="$2" title="$3" body="$4" author="${5:-unknown}"
-  # Fast path: doey-ctl task log add --type report
+  # Fast path: doey task log add --type report
   if command -v doey-ctl >/dev/null 2>&1; then
     local _id _pd
     _id=$(basename "$task_file" .task)
     _pd=$(cd "$(dirname "$task_file")/../.." 2>/dev/null && pwd)
-    doey-ctl task log add "$_id" --type "report:${report_type}" --author "$author" --title "$title" --body "$body" --project-dir "$_pd" 2>/dev/null && return 0
+    doey task log add "$_id" --type "report:${report_type}" --author "$author" --title "$title" --body "$body" --project-dir "$_pd" 2>/dev/null && return 0
   fi
   [ ! -f "$task_file" ] && return 1
   local n; n=$(($(_count_field_lines "$task_file" "TASK_REPORT_*_TIMESTAMP=*") + 1))
@@ -915,12 +915,12 @@ doey_task_add_report() { # project_dir task_id report_type title body [author] �
 
 task_add_recovery_event() { # task_file event_type failed_agent new_agent description → echo N
   local task_file="$1" event_type="$2" failed_agent="$3" new_agent="$4" description="$5"
-  # Fast path: doey-ctl task log add --type recovery
+  # Fast path: doey task log add --type recovery
   if command -v doey-ctl >/dev/null 2>&1; then
     local _id _pd
     _id=$(basename "$task_file" .task)
     _pd=$(cd "$(dirname "$task_file")/../.." 2>/dev/null && pwd)
-    doey-ctl task log add "$_id" --type "recovery:${event_type}" --author "$failed_agent" --title "recovery → ${new_agent}" --body "$description" --project-dir "$_pd" 2>/dev/null && return 0
+    doey task log add "$_id" --type "recovery:${event_type}" --author "$failed_agent" --title "recovery → ${new_agent}" --body "$description" --project-dir "$_pd" 2>/dev/null && return 0
   fi
   [ ! -f "$task_file" ] && return 1
   local n; n=$(($(_count_field_lines "$task_file" "TASK_RECOVERY_*_TIMESTAMP=*") + 1))
