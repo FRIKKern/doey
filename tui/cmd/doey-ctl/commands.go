@@ -189,89 +189,93 @@ func runTaskUpdate(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		id, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err == nil {
-			t, err := s.GetTask(id)
-			if err == nil {
-				switch *field {
-				case "title":
-					t.Title = *value
-				case "status":
-					t.Status = *value
-				case "type":
-					t.Type = *value
-				case "description":
-					t.Description = *value
-				case "assigned_to":
-					t.AssignedTo = *value
-				case "team":
-					t.Team = *value
-				case "tags":
-					t.Tags = *value
-				case "acceptance_criteria":
-					t.AcceptanceCriteria = *value
-				case "current_phase":
-					n, err := strconv.Atoi(*value)
-					if err != nil {
-						fatal("task update: invalid integer for current_phase: %q", *value)
-					}
-					t.CurrentPhase = n
-				case "total_phases":
-					n, err := strconv.Atoi(*value)
-					if err != nil {
-						fatal("task update: invalid integer for total_phases: %q", *value)
-					}
-					t.TotalPhases = n
-				case "notes":
-					t.Notes = *value
-				case "blockers":
-					t.Blockers = *value
-				case "related_files":
-					t.RelatedFiles = *value
-				case "hypotheses":
-					t.Hypotheses = *value
-				case "decision_log":
-					t.DecisionLog = *value
-				case "result":
-					t.Result = *value
-				case "files":
-					t.Files = *value
-				case "commits":
-					t.Commits = *value
-				case "schema_version":
-					n, err := strconv.Atoi(*value)
-					if err != nil {
-						fatal("task update: invalid integer for schema_version: %q", *value)
-					}
-					t.SchemaVersion = n
-				case "created_by":
-					t.CreatedBy = *value
-				case "plan_id":
-					n, err := strconv.ParseInt(*value, 10, 64)
-					if err != nil {
-						fatal("task update: invalid integer for plan_id: %q", *value)
-					}
-					v := int64(n)
-					t.PlanID = &v
-				case "review_verdict":
-					t.ReviewVerdict = *value
-				case "review_findings":
-					t.ReviewFindings = *value
-				case "review_timestamp":
-					t.ReviewTimestamp = *value
-				default:
-					fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp\n", *field)
-				}
-
-				if err := s.UpdateTask(t); err != nil {
-					fatal("task update: %v", err)
-				}
-				s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: *field + "=" + *value})
-
-				// Write-through to .task file (best-effort).
-				_ = ctl.UpdateTaskField(pd, taskIDStr, *field, *value)
-				return
+		t, resolveErr := resolveTask(s, taskIDStr)
+		if resolveErr != nil {
+			// Non-numeric input can't fall through to file mode.
+			if _, numErr := strconv.ParseInt(taskIDStr, 10, 64); numErr != nil {
+				fatal("task update: %v\n", resolveErr)
 			}
+		}
+		if t != nil {
+			id := t.ID
+			switch *field {
+			case "title":
+				t.Title = *value
+			case "status":
+				t.Status = *value
+			case "type":
+				t.Type = *value
+			case "description":
+				t.Description = *value
+			case "assigned_to":
+				t.AssignedTo = *value
+			case "team":
+				t.Team = *value
+			case "tags":
+				t.Tags = *value
+			case "acceptance_criteria":
+				t.AcceptanceCriteria = *value
+			case "current_phase":
+				n, err := strconv.Atoi(*value)
+				if err != nil {
+					fatal("task update: invalid integer for current_phase: %q", *value)
+				}
+				t.CurrentPhase = n
+			case "total_phases":
+				n, err := strconv.Atoi(*value)
+				if err != nil {
+					fatal("task update: invalid integer for total_phases: %q", *value)
+				}
+				t.TotalPhases = n
+			case "notes":
+				t.Notes = *value
+			case "blockers":
+				t.Blockers = *value
+			case "related_files":
+				t.RelatedFiles = *value
+			case "hypotheses":
+				t.Hypotheses = *value
+			case "decision_log":
+				t.DecisionLog = *value
+			case "result":
+				t.Result = *value
+			case "files":
+				t.Files = *value
+			case "commits":
+				t.Commits = *value
+			case "schema_version":
+				n, err := strconv.Atoi(*value)
+				if err != nil {
+					fatal("task update: invalid integer for schema_version: %q", *value)
+				}
+				t.SchemaVersion = n
+			case "created_by":
+				t.CreatedBy = *value
+			case "plan_id":
+				n, err := strconv.ParseInt(*value, 10, 64)
+				if err != nil {
+					fatal("task update: invalid integer for plan_id: %q", *value)
+				}
+				v := int64(n)
+				t.PlanID = &v
+			case "review_verdict":
+				t.ReviewVerdict = *value
+			case "review_findings":
+				t.ReviewFindings = *value
+			case "review_timestamp":
+				t.ReviewTimestamp = *value
+			default:
+				fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp\n", *field)
+			}
+
+			if err := s.UpdateTask(t); err != nil {
+				fatal("task update: %v", err)
+			}
+			s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: *field + "=" + *value})
+
+			// Write-through to .task file (best-effort).
+			_ = ctl.UpdateTaskField(pd, strconv.FormatInt(id, 10), *field, *value)
+			return
 		}
 	}
 
@@ -355,53 +359,58 @@ func runTaskGet(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		id, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err == nil {
-			t, err := s.GetTask(id)
-			if err == nil {
-				subtasks, _ := s.ListSubtasks(id)
-				logEntries, _ := s.ListTaskLog(id)
+		t, err := resolveTask(s, taskIDStr)
+		if err != nil {
+			// Fall through to file-only if DB lookup fails for numeric IDs.
+			if _, numErr := strconv.ParseInt(taskIDStr, 10, 64); numErr != nil {
+				// Non-numeric input: no file fallback possible.
+				fatal("task get: %v\n", err)
+			}
+		}
+		if t != nil {
+			id := t.ID
+			subtasks, _ := s.ListSubtasks(id)
+			logEntries, _ := s.ListTaskLog(id)
 
-				if jsonOutput {
-					printJSON(map[string]any{
-						"task":     t,
-						"subtasks": subtasks,
-						"log":      logEntries,
-					})
-					return
-				}
-
-				fmt.Printf("ID:          %d\n", t.ID)
-				fmt.Printf("Title:       %s\n", t.Title)
-				fmt.Printf("Status:      %s\n", t.Status)
-				fmt.Printf("Type:        %s\n", t.Type)
-				fmt.Printf("CreatedBy:   %s\n", t.CreatedBy)
-				fmt.Printf("AssignedTo:  %s\n", t.AssignedTo)
-				fmt.Printf("Team:        %s\n", t.Team)
-				if t.PlanID != nil {
-					fmt.Printf("PlanID:      %d\n", *t.PlanID)
-				}
-				if t.Description != "" {
-					fmt.Printf("Description: %s\n", t.Description)
-				}
-				fmt.Printf("Phase:       %d/%d\n", t.CurrentPhase, t.TotalPhases)
-				fmt.Printf("Created:     %s\n", time.Unix(t.CreatedAt, 0).Format(time.RFC3339))
-
-				if len(subtasks) > 0 {
-					fmt.Println("\nSubtasks:")
-					for _, st := range subtasks {
-						fmt.Printf("  %d. [%s] %s\n", st.Seq, st.Status, st.Title)
-					}
-				}
-				if len(logEntries) > 0 {
-					fmt.Println("\nLog:")
-					for _, e := range logEntries {
-						ts := time.Unix(e.CreatedAt, 0).Format("15:04:05")
-						fmt.Printf("  %s %s (%s): %s\n", ts, e.Author, e.Type, e.Title)
-					}
-				}
+			if jsonOutput {
+				printJSON(map[string]any{
+					"task":     t,
+					"subtasks": subtasks,
+					"log":      logEntries,
+				})
 				return
 			}
+
+			fmt.Printf("ID:          %d\n", t.ID)
+			fmt.Printf("Title:       %s\n", t.Title)
+			fmt.Printf("Status:      %s\n", t.Status)
+			fmt.Printf("Type:        %s\n", t.Type)
+			fmt.Printf("CreatedBy:   %s\n", t.CreatedBy)
+			fmt.Printf("AssignedTo:  %s\n", t.AssignedTo)
+			fmt.Printf("Team:        %s\n", t.Team)
+			if t.PlanID != nil {
+				fmt.Printf("PlanID:      %d\n", *t.PlanID)
+			}
+			if t.Description != "" {
+				fmt.Printf("Description: %s\n", t.Description)
+			}
+			fmt.Printf("Phase:       %d/%d\n", t.CurrentPhase, t.TotalPhases)
+			fmt.Printf("Created:     %s\n", time.Unix(t.CreatedAt, 0).Format(time.RFC3339))
+
+			if len(subtasks) > 0 {
+				fmt.Println("\nSubtasks:")
+				for _, st := range subtasks {
+					fmt.Printf("  %d. [%s] %s\n", st.Seq, st.Status, st.Title)
+				}
+			}
+			if len(logEntries) > 0 {
+				fmt.Println("\nLog:")
+				for _, e := range logEntries {
+					ts := time.Unix(e.CreatedAt, 0).Format("15:04:05")
+					fmt.Printf("  %s %s (%s): %s\n", ts, e.Author, e.Type, e.Title)
+				}
+			}
+			return
 		}
 	}
 
@@ -463,10 +472,7 @@ func runTaskDelete(args []string) {
 	}
 	defer s.Close()
 
-	id, err := strconv.ParseInt(taskIDStr, 10, 64)
-	if err != nil {
-		fatal("task delete: invalid task ID %q", taskIDStr)
-	}
+	id := resolveTaskID(s, taskIDStr, "task delete")
 
 	if err := s.DeleteTask(id); err != nil {
 		fatal("task delete: %v", err)
@@ -528,45 +534,45 @@ func runSubtaskAdd(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err == nil {
-			subtaskTitle := *title
-			if subtaskTitle == "" {
-				// Positional args: if --task-id was used, all positional args are the description.
-				// Otherwise, args after the first (task ID) are the description.
-				descStart := 1
-				if *taskIDFlag != "" {
-					descStart = 0
-				}
-				if fs.NArg() > descStart {
-					subtaskTitle = strings.Join(fs.Args()[descStart:], " ")
-				}
-			}
-			if subtaskTitle == "" {
-				fatal("task subtask add: --title or positional description required\nRun 'doey-ctl task subtask add -h' for usage.\n")
-			}
+		taskID := resolveTaskID(s, taskIDStr, "task subtask add")
 
-			st := &store.Subtask{
-				TaskID: taskID,
-				Title:  subtaskTitle,
-				Status: "pending",
+		subtaskTitle := *title
+		if subtaskTitle == "" {
+			// Positional args: if --task-id was used, all positional args are the description.
+			// Otherwise, args after the first (task ID) are the description.
+			descStart := 1
+			if *taskIDFlag != "" {
+				descStart = 0
 			}
-			id, err := s.CreateSubtask(st)
-			if err != nil {
-				fatal("task subtask add: %v", err)
+			if fs.NArg() > descStart {
+				subtaskTitle = strings.Join(fs.Args()[descStart:], " ")
 			}
-			s.LogEvent(&store.Event{Type: "subtask_added", Source: eventSource(), TaskID: &taskID, Data: subtaskTitle})
-
-			// Write-through to .task file (best-effort).
-			_, _ = ctl.AddSubtask(pd, taskIDStr, subtaskTitle)
-
-			if jsonOutput {
-				printJSON(map[string]int64{"id": id})
-			} else {
-				fmt.Println(id)
-			}
-			return
 		}
+		if subtaskTitle == "" {
+			fatal("task subtask add: --title or positional description required\nRun 'doey-ctl task subtask add -h' for usage.\n")
+		}
+
+		st := &store.Subtask{
+			TaskID: taskID,
+			Title:  subtaskTitle,
+			Status: "pending",
+		}
+		id, err := s.CreateSubtask(st)
+		if err != nil {
+			fatal("task subtask add: %v", err)
+		}
+		s.LogEvent(&store.Event{Type: "subtask_added", Source: eventSource(), TaskID: &taskID, Data: subtaskTitle})
+
+		taskIDNumStr := strconv.FormatInt(taskID, 10)
+		// Write-through to .task file (best-effort).
+		_, _ = ctl.AddSubtask(pd, taskIDNumStr, subtaskTitle)
+
+		if jsonOutput {
+			printJSON(map[string]int64{"id": id})
+		} else {
+			fmt.Println(id)
+		}
+		return
 	}
 
 	// File-only fallback.
@@ -644,33 +650,11 @@ func runSubtaskUpdate(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err != nil {
-			fatal("task subtask update: invalid task ID %q\n", taskIDStr)
-		}
-		subtaskNum, err := strconv.ParseInt(subtaskIDStr, 10, 64)
-		if err != nil {
-			fatal("task subtask update: invalid subtask ID %q\n", subtaskIDStr)
-		}
+		taskID := resolveTaskID(s, taskIDStr, "task subtask update")
 
-		// Try to resolve: first as seq number, then as DB ID.
-		resolved, err := s.GetSubtaskBySeq(taskID, int(subtaskNum))
+		resolved, err := resolveSubtask(s, taskID, subtaskIDStr)
 		if err != nil {
-			// Not a valid seq — try as DB ID.
-			resolved, err = s.GetSubtaskByID(subtaskNum)
-			if err != nil || resolved.TaskID != taskID {
-				// Neither matched — build helpful error.
-				subtasks, _ := s.ListSubtasks(taskID)
-				if len(subtasks) > 0 {
-					var seqs []string
-					for _, st := range subtasks {
-						seqs = append(seqs, fmt.Sprintf("%d", st.Seq))
-					}
-					fatal("task subtask update: subtask %s not found for task %s\nValid seq numbers: %s\nTry: doey-ctl task subtask update --task-id %s --subtask-id <SEQ> --status <STATUS>\n",
-						subtaskIDStr, taskIDStr, strings.Join(seqs, ", "), taskIDStr)
-				}
-				fatal("task subtask update: subtask %s not found for task %s (task may have no subtasks)\n", subtaskIDStr, taskIDStr)
-			}
+			fatal("task subtask update: %v\n", err)
 		}
 
 		if statusVal != "" {
@@ -737,8 +721,14 @@ func runSubtaskList(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err == nil {
+		resolved, resolveErr := resolveTask(s, taskIDStr)
+		if resolveErr != nil {
+			if _, numErr := strconv.ParseInt(taskIDStr, 10, 64); numErr != nil {
+				fatal("task subtask list: %v\n", resolveErr)
+			}
+		}
+		if resolved != nil {
+			taskID := resolved.ID
 			subtasks, err := s.ListSubtasks(taskID)
 			if err != nil {
 				fatal("task subtask list: %v", err)
@@ -819,8 +809,14 @@ func runTaskLogAdd(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err == nil {
+		resolved, resolveErr := resolveTask(s, taskIDStr)
+		if resolveErr != nil {
+			if _, numErr := strconv.ParseInt(taskIDStr, 10, 64); numErr != nil {
+				fatal("task log add: %v\n", resolveErr)
+			}
+		}
+		if resolved != nil {
+			taskID := resolved.ID
 			entryTitle := *title
 			titleStart := 1
 			if *taskIDFlag != "" {
@@ -841,8 +837,9 @@ func runTaskLogAdd(args []string) {
 				fatal("task log add: %v", err)
 			}
 
+			taskIDNumStr := strconv.FormatInt(taskID, 10)
 			// Write-through: append to decision log in .task file (best-effort).
-			_ = ctl.AddDecision(pd, taskIDStr, entryTitle)
+			_ = ctl.AddDecision(pd, taskIDNumStr, entryTitle)
 
 			if jsonOutput {
 				printJSON(map[string]int64{"id": id})
@@ -890,8 +887,14 @@ func runTaskLogList(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err == nil {
+		resolved, resolveErr := resolveTask(s, taskIDStr)
+		if resolveErr != nil {
+			if _, numErr := strconv.ParseInt(taskIDStr, 10, 64); numErr != nil {
+				fatal("task log list: %v\n", resolveErr)
+			}
+		}
+		if resolved != nil {
+			taskID := resolved.ID
 			entries, err := s.ListTaskLog(taskID)
 			if err != nil {
 				fatal("task log list: %v", err)
@@ -981,8 +984,14 @@ func runTaskDecision(args []string) {
 
 	if s != nil {
 		defer s.Close()
-		taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-		if err == nil {
+		resolved, resolveErr := resolveTask(s, taskIDStr)
+		if resolveErr != nil {
+			if _, numErr := strconv.ParseInt(taskIDStr, 10, 64); numErr != nil {
+				fatal("task decision: %v\n", resolveErr)
+			}
+		}
+		if resolved != nil {
+			taskID := resolved.ID
 			entry := &store.TaskLogEntry{
 				TaskID: taskID,
 				Type:   "decision",
@@ -992,8 +1001,9 @@ func runTaskDecision(args []string) {
 			if err != nil {
 				fatal("task decision: %v", err)
 			}
+			taskIDNumStr := strconv.FormatInt(taskID, 10)
 			// Write-through to .task file.
-			_ = ctl.AddDecision(pd, taskIDStr, text)
+			_ = ctl.AddDecision(pd, taskIDNumStr, text)
 			return
 		}
 	}
@@ -1101,6 +1111,128 @@ func editDistance(a, b string) int {
 		prev = curr
 	}
 	return prev[lb]
+}
+
+// resolveTask looks up a task by DB ID or title substring.
+// Returns the task, or nil with a helpful error including suggestions.
+func resolveTask(s *store.Store, input string) (*store.Task, error) {
+	// Try as DB ID first.
+	if id, err := strconv.ParseInt(input, 10, 64); err == nil {
+		if t, err := s.GetTask(id); err == nil {
+			return t, nil
+		}
+	}
+
+	// Try case-insensitive title substring match.
+	tasks, err := s.ListTasks("")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tasks: %v", err)
+	}
+	lower := strings.ToLower(input)
+	var matches []store.Task
+	for _, t := range tasks {
+		if strings.Contains(strings.ToLower(t.Title), lower) {
+			matches = append(matches, t)
+		}
+	}
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+	if len(matches) > 1 {
+		hint := fmt.Sprintf("multiple tasks match %q:\n", input)
+		for _, t := range matches {
+			hint += fmt.Sprintf("  #%d [%s] %s\n", t.ID, t.Status, t.Title)
+		}
+		hint += "Specify a unique ID or more specific title substring."
+		return nil, fmt.Errorf("%s", hint)
+	}
+
+	return nil, fmt.Errorf("task %q not found\n%s", input, suggestTasks(s))
+}
+
+// resolveSubtask looks up a subtask by DB ID, seq number, or title substring.
+func resolveSubtask(s *store.Store, taskID int64, input string) (*store.Subtask, error) {
+	// Try as integer: first seq, then DB ID.
+	if num, err := strconv.ParseInt(input, 10, 64); err == nil {
+		if st, err := s.GetSubtaskBySeq(taskID, int(num)); err == nil {
+			return st, nil
+		}
+		if st, err := s.GetSubtaskByID(num); err == nil && st.TaskID == taskID {
+			return st, nil
+		}
+	}
+
+	// Try case-insensitive title substring match.
+	subtasks, err := s.ListSubtasks(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list subtasks: %v", err)
+	}
+	lower := strings.ToLower(input)
+	var matches []store.Subtask
+	for _, st := range subtasks {
+		if strings.Contains(strings.ToLower(st.Title), lower) {
+			matches = append(matches, st)
+		}
+	}
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+	if len(matches) > 1 {
+		hint := fmt.Sprintf("multiple subtasks match %q:\n", input)
+		for _, st := range matches {
+			hint += fmt.Sprintf("  #%d (seq %d) [%s] %s\n", st.ID, st.Seq, st.Status, st.Title)
+		}
+		hint += "Specify a unique seq number or more specific title substring."
+		return nil, fmt.Errorf("%s", hint)
+	}
+
+	return nil, fmt.Errorf("subtask %q not found for task #%d\n%s", input, taskID, suggestSubtasks(s, taskID))
+}
+
+// suggestTasks returns a formatted list of recent tasks for error messages.
+func suggestTasks(s *store.Store) string {
+	tasks, err := s.ListTasks("")
+	if err != nil || len(tasks) == 0 {
+		return "No tasks found. Create one with: doey task create --title \"...\""
+	}
+	limit := 10
+	if len(tasks) < limit {
+		limit = len(tasks)
+	}
+	var b strings.Builder
+	b.WriteString("Recent tasks:\n")
+	for _, t := range tasks[:limit] {
+		fmt.Fprintf(&b, "  #%-6d [%-10s] %s\n", t.ID, t.Status, t.Title)
+	}
+	if len(tasks) > limit {
+		fmt.Fprintf(&b, "  ... and %d more\n", len(tasks)-limit)
+	}
+	return b.String()
+}
+
+// suggestSubtasks returns a formatted list of subtasks for a task.
+func suggestSubtasks(s *store.Store, taskID int64) string {
+	subtasks, err := s.ListSubtasks(taskID)
+	if err != nil || len(subtasks) == 0 {
+		return fmt.Sprintf("Task #%d has no subtasks.", taskID)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Available subtasks for task #%d:\n", taskID)
+	for _, st := range subtasks {
+		fmt.Fprintf(&b, "  #%-6d (seq %d) [%-10s] %s\n", st.ID, st.Seq, st.Status, st.Title)
+	}
+	fmt.Fprintf(&b, "\nTry: doey task subtask update --task-id %d --subtask-id <SEQ>", taskID)
+	return b.String()
+}
+
+// resolveTaskID parses a task ID string via resolveTask and returns the int64 ID.
+// On failure, fatals with helpful suggestions.
+func resolveTaskID(s *store.Store, input, cmdName string) int64 {
+	t, err := resolveTask(s, input)
+	if err != nil {
+		fatal("%s: %v\n", cmdName, err)
+	}
+	return t.ID
 }
 
 // runNudgeCmd sends Escape + re-prompt to unstick Claude instances.
