@@ -20,40 +20,51 @@ import (
 // wpFormat matches W.P pane ID format (e.g., "2.1", "0.0", "10.3").
 var wpFormat = regexp.MustCompile(`^\d+\.\d+$`)
 
-// resolvePaneID converts a W.P format pane ID (e.g., "2.1") to the safe name
-// format used by status files (e.g., "doey_doey_2_1"). If the input already
-// contains underscores (session_W_P format), it is returned unchanged.
-func resolvePaneID(input string) string {
+// normalizePaneID converts any pane ID format to the canonical underscore-delimited
+// form used by status files and the message DB: session_W_P (e.g., "doey_doey_1_0").
+//
+// Handled formats:
+//   - "1.0"             → "doey_doey_1_0"  (W.P, session from env/tmux)
+//   - "doey-doey:1.0"   → "doey_doey_1_0"  (session:W.P)
+//   - "doey_doey_1_0"   → "doey_doey_1_0"  (already canonical)
+//   - "doey-doey_1_0"   → "doey_doey_1_0"  (mixed — hyphens normalized)
+func normalizePaneID(input string) string {
 	if input == "" {
 		return input
 	}
-	// Already in safe name format (contains underscores) — pass through
-	if strings.Contains(input, "_") {
-		return input
-	}
-	// session:W.P format (e.g. "doey-doey:3.0") — normalize to safe name
+	// session:W.P format (e.g. "doey-doey:3.0") — split and normalize
 	if idx := strings.LastIndex(input, ":"); idx >= 0 {
+		session := input[:idx]
 		wp := input[idx+1:]
 		if wpFormat.MatchString(wp) {
-			session := input[:idx]
 			safe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(session)
 			wpSafe := strings.Replace(wp, ".", "_", 1)
 			return safe + "_" + wpSafe
 		}
 	}
-	// W.P format — convert to session_W_P
+	// W.P format — prepend session, normalize
 	if wpFormat.MatchString(input) {
+		wp := strings.Replace(input, ".", "_", 1)
 		session := getSessionName()
 		if session == "" {
-			return input
+			// No session available — return partial canonical form.
+			// Both sender and reader will produce the same result.
+			return wp
 		}
 		safe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(session)
-		wp := strings.Replace(input, ".", "_", 1)
 		return safe + "_" + wp
+	}
+	// Already underscore-based — normalize any remaining hyphens in session portion
+	// (catches mixed formats like "doey-doey_1_0")
+	if strings.Contains(input, "_") {
+		return strings.ReplaceAll(input, "-", "_")
 	}
 	// Unknown format — return as-is
 	return input
 }
+
+// resolvePaneID is an alias for normalizePaneID for backward compatibility.
+var resolvePaneID = normalizePaneID
 
 // getSessionName returns the tmux session name from env or tmux query.
 func getSessionName() string {
@@ -231,6 +242,8 @@ func msgSend(args []string) {
 		if _, err := s.SendMessage(m); err != nil {
 			fatal("msg send: db: %v\n", err)
 		}
+		// Best-effort cleanup: remove messages older than 1 hour
+		_, _ = s.CleanOldMessages(time.Hour)
 		sentViaDB = true
 	}
 

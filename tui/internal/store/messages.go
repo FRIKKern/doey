@@ -127,3 +127,13 @@ func (s *Store) CountUnread(toPane string) (int, error) {
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE to_pane = ? AND read = 0`, toPane).Scan(&count)
 	return count, err
 }
+
+// CleanOldMessages deletes messages older than the given duration.
+func (s *Store) CleanOldMessages(maxAge time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-maxAge).Unix()
+	res, err := s.db.Exec(`DELETE FROM messages WHERE created_at < ? AND read = 1`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
