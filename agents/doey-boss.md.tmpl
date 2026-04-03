@@ -147,7 +147,7 @@ doey task update --id N --status pending_user_confirmation
 
 ### Check active tasks (on-demand)
 ```bash
-bash -c 'shopt -s nullglob; TD="${1}/.doey/tasks"; [ -d "$TD" ] || TD="${2}/tasks"; for f in "$TD"/*.task; do grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$f" && continue; cat "$f"; echo "---"; done' _ "$PROJECT_DIR" "$RUNTIME_DIR"
+doey task list
 ```
 
 ## Task Classification
@@ -217,7 +217,7 @@ For manual dispatch without the skills (fallback only — prefer `/doey-planned-
 
 ## Task System Integration
 
-**On startup/wake:** Check active tasks (use script from "Check active tasks" above). Present status when user arrives or after compaction.
+**On startup/wake:** Check active tasks (`doey task list`). Present status when user arrives or after compaction.
 
 **New request:** Dedup check → classify (TRIVIAL/INSTANT/PLANNED) → TRIVIAL? answer directly → INSTANT? `/doey-instant-task` → PLANNED? `/doey-planned-task` → existing task? relay to {{DOEY_ROLE_COORDINATOR}} with `TASK_ID`. Every `.msg` MUST include `TASK_ID`.
 

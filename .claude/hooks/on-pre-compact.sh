@@ -145,11 +145,29 @@ if is_taskmaster; then
   fi
 
   TASKMASTER_ACTIVE_TASKS=""
-  for _tf in "${_TASK_SRC}"/*.task; do
-    [ -f "$_tf" ] || continue
-    grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$_tf" && continue
-    TASKMASTER_ACTIVE_TASKS="${TASKMASTER_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"
-  done
+  _compact_task_scan_done=false
+  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${_TASK_PROJECT:-}" ]; then
+    local _ct_line _ct_id _ct_info _ct_title _ct_status
+    while IFS= read -r _ct_line; do
+      _ct_id=$(echo "$_ct_line" | awk '{print $1}')
+      [ -z "$_ct_id" ] && continue
+      case "$_ct_line" in *" done "*|*" cancelled "*) continue ;; esac
+      _ct_info=$(doey-ctl task get --id "$_ct_id" --project-dir "$_TASK_PROJECT" 2>/dev/null) || continue
+      _ct_title=$(echo "$_ct_info" | sed -n 's/^Title:[[:space:]]*//p')
+      _ct_status=$(echo "$_ct_info" | sed -n 's/^Status:[[:space:]]*//p')
+      TASKMASTER_ACTIVE_TASKS="${TASKMASTER_ACTIVE_TASKS}  ${_ct_id}: ${_ct_title} [${_ct_status}]${NL}"
+    done <<EOF
+$(doey-ctl task list --project-dir "$_TASK_PROJECT" 2>/dev/null | tail -n +2)
+EOF
+    _compact_task_scan_done=true
+  fi
+  if [ "$_compact_task_scan_done" = false ]; then
+    for _tf in "${_TASK_SRC}"/*.task; do
+      [ -f "$_tf" ] || continue
+      grep -q "TASK_STATUS=done\|TASK_STATUS=cancelled" "$_tf" && continue
+      TASKMASTER_ACTIVE_TASKS="${TASKMASTER_ACTIVE_TASKS}  $(basename "$_tf"): $(grep 'TASK_TITLE=' "$_tf" 2>/dev/null | cut -d= -f2-)${NL}"
+    done
+  fi
 
   cat <<SMSTATE
 

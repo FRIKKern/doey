@@ -140,8 +140,19 @@ _taskmaster_context_check() {
     # Wait for Claude to boot, then re-brief with active tasks
     sleep 8
     local _brief="You were auto-restarted due to high context usage (${_ctx_pct}%). Session: ${SESSION_NAME}."
-    if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
-      local _atf _aid _atitle _astatus _task_summary=""
+    local _task_summary=""
+    if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+      local _tl_line
+      for _tl_line in $({ doey-ctl task list --status active --project-dir "$PROJECT_DIR" 2>/dev/null; doey-ctl task list --status in_progress --project-dir "$PROJECT_DIR" 2>/dev/null; } | awk 'NR>1 && /^[0-9]/{print $1}'); do
+        local _tinfo _atitle _astatus
+        _tinfo=$(doey-ctl task get --id "$_tl_line" --project-dir "$PROJECT_DIR" 2>/dev/null) || continue
+        _atitle=$(echo "$_tinfo" | sed -n 's/^Title:[[:space:]]*//p')
+        _astatus=$(echo "$_tinfo" | sed -n 's/^Status:[[:space:]]*//p')
+        [ -n "$_atitle" ] && _task_summary="${_task_summary} #${_tl_line} ${_atitle} (${_astatus}),"
+      done
+    fi
+    if [ -z "$_task_summary" ] && [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+      local _atf _aid _atitle _astatus
       for _atf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
         [ -f "$_atf" ] || continue
         _astatus=$(grep '^TASK_STATUS=' "$_atf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
@@ -151,8 +162,8 @@ _taskmaster_context_check() {
           _task_summary="${_task_summary} #${_aid} ${_atitle} (${_astatus}),"
         ;; esac
       done
-      [ -n "$_task_summary" ] && _brief="${_brief} Active tasks:${_task_summary%,}."
     fi
+    [ -n "$_task_summary" ] && _brief="${_brief} Active tasks:${_task_summary%,}."
     tmux copy-mode -q -t "$_full_pane" 2>/dev/null
     tmux send-keys -t "$_full_pane" Escape 2>/dev/null
     tmux send-keys -t "$_full_pane" "$_brief" Enter
@@ -196,20 +207,47 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
 
 # Combined task scan — single pass sets _has_queued and _has_active
 _has_queued=false; _has_active=false; _active_list=""
-if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+_task_scan_done=false
+
+# DB fast path: use doey-ctl task list + task get for team/updated checks
+if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+  _now_ts=$(date +%s)
+  for _tl_st in active in_progress; do
+    for _tid in $(doey-ctl task list --status "$_tl_st" --project-dir "$PROJECT_DIR" 2>/dev/null | awk 'NR>1 && /^[0-9]/{print $1}'); do
+      _tinfo=$(doey-ctl task get --id "$_tid" --project-dir "$PROJECT_DIR" 2>/dev/null) || continue
+      _tteam=$(echo "$_tinfo" | sed -n 's/^Team:[[:space:]]*//p')
+      [ -n "$_tteam" ] && continue  # assigned to a team — skip
+      _has_active=true
+      _active_list="${_active_list}${_tid}: ${_tl_st}\n"
+      if [ "$_tl_st" = "active" ]; then
+        _task_updated=$(echo "$_tinfo" | sed -n 's/^Created:[[:space:]]*//p')
+        _task_ts=0
+        if [ -n "$_task_updated" ]; then
+          _task_ts=$(date -d "$_task_updated" +%s 2>/dev/null) || _task_ts=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${_task_updated%%Z*}" +%s 2>/dev/null) || _task_ts=0
+        fi
+        if [ "$_task_ts" -eq 0 ] || [ $((_now_ts - _task_ts)) -ge 30 ]; then
+          _has_queued=true
+        fi
+      fi
+    done
+  done
+  _task_scan_done=true
+fi
+
+# File fallback
+if [ "$_task_scan_done" = false ] && [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+  _now_ts=$(date +%s)
   for _tf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
     [ -f "$_tf" ] || continue
     _status=$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
     case "$_status" in
       active)
         if ! grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null; then
-          # Only flag as queued if task has been in this state for >30s
           _task_updated=$(grep '^TASK_UPDATED=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2-) || _task_updated=""
           _task_ts=0
           if [ -n "$_task_updated" ]; then
             _task_ts=$(date -d "$_task_updated" +%s 2>/dev/null) || _task_ts=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$_task_updated" +%s 2>/dev/null) || _task_ts=0
           fi
-          _now_ts=$(date +%s)
           if [ "$_task_ts" -eq 0 ] || [ $((_now_ts - _task_ts)) -ge 30 ]; then
             _has_queued=true
           fi

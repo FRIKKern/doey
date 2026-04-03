@@ -36,7 +36,7 @@ When a `deployment_request` arrives from Task Reviewer:
 ### 1. Extract and verify review
 
 1. Extract `TASK_ID` from the message body (format: `Task $TASK_ID passed review...`)
-2. Read the task file: `.doey/tasks/$TASK_ID.task`
+2. Read the task details: `doey task get --id $TASK_ID`
 3. Verify `TASK_REVIEW_VERDICT=PASS` exists in the task file
 4. **If review not passed** — reject immediately:
    ```bash

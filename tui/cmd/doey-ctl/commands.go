@@ -115,10 +115,7 @@ func runTaskCreate(args []string) {
 	if s != nil {
 		defer s.Close()
 
-		// Create .task file first to get the canonical user-facing ID,
-		// then use the same ID for the DB to keep them in sync.
-		fileID, _ := ctl.CreateTask(pd, *title, *typ, *createdBy, *desc)
-
+		// DB is the write authority — let it generate the ID.
 		t := &store.Task{
 			Title:        *title,
 			Status:       "pending",
@@ -133,9 +130,6 @@ func runTaskCreate(args []string) {
 		}
 		if *planID != 0 {
 			t.PlanID = planID
-		}
-		if fid, parseErr := strconv.ParseInt(fileID, 10, 64); parseErr == nil {
-			t.ID = fid
 		}
 
 		dbID, err := s.CreateTask(t)
@@ -339,9 +333,6 @@ func runTaskUpdate(args []string) {
 				fatal("task update: %v", err)
 			}
 			s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: *field + "=" + *value})
-
-			// Write-through to .task file (best-effort).
-			_ = ctl.UpdateTaskField(pd, strconv.FormatInt(id, 10), *field, *value)
 			return
 		}
 	}
@@ -403,8 +394,6 @@ func runTaskTransition(subcmd, status string, args []string) {
 				}
 				id := t.ID
 				s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: "status=" + status})
-				// Write-through to .task file (best-effort).
-				_ = ctl.UpdateTaskField(pd, strconv.FormatInt(id, 10), "status", status)
 				continue
 			}
 		}
@@ -712,10 +701,6 @@ func runSubtaskAdd(args []string) {
 		}
 		s.LogEvent(&store.Event{Type: "subtask_added", Source: eventSource(), TaskID: &taskID, Data: subtaskTitle})
 
-		taskIDNumStr := strconv.FormatInt(taskID, 10)
-		// Write-through to .task file (best-effort).
-		_, _ = ctl.AddSubtask(pd, taskIDNumStr, subtaskTitle)
-
 		if jsonOutput {
 			printJSON(map[string]int64{"id": id})
 		} else {
@@ -823,11 +808,6 @@ func runSubtaskUpdate(args []string) {
 			evData += ",title=" + *stTitle
 		}
 		s.LogEvent(&store.Event{Type: "subtask_updated", Source: eventSource(), TaskID: &taskID, Data: evData})
-
-		// Write-through to .task file (best-effort).
-		if statusVal != "" {
-			_ = ctl.UpdateSubtaskStatus(pd, taskIDStr, resolved.Seq, statusVal)
-		}
 
 		if jsonOutput {
 			printJSON(map[string]string{"status": "updated", "seq": strconv.Itoa(resolved.Seq)})
@@ -1000,10 +980,6 @@ func runTaskLogAdd(args []string) {
 				fatal("task log add: %v", err)
 			}
 
-			taskIDNumStr := strconv.FormatInt(taskID, 10)
-			// Write-through: append to decision log in .task file (best-effort).
-			_ = ctl.AddDecision(pd, taskIDNumStr, entryTitle)
-
 			if jsonOutput {
 				printJSON(map[string]int64{"id": id})
 			} else {
@@ -1164,9 +1140,6 @@ func runTaskDecision(args []string) {
 			if err != nil {
 				fatal("task decision: %v", err)
 			}
-			taskIDNumStr := strconv.FormatInt(taskID, 10)
-			// Write-through to .task file.
-			_ = ctl.AddDecision(pd, taskIDNumStr, text)
 			return
 		}
 	}

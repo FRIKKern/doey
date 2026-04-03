@@ -113,8 +113,9 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		 plan_id, tags, acceptance_criteria, current_phase, total_phases,
 		 notes, blockers, related_files, hypotheses, decision_log, result,
 		 files, commits, schema_version, review_verdict, review_findings,
-		 review_timestamp, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 review_timestamp, attachments, priority, depends_on, merged_into,
+		 dispatch_mode, summary, phase, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 		 title=excluded.title, status=excluded.status, type=excluded.type,
 		 description=excluded.description, created_by=excluded.created_by,
@@ -125,7 +126,10 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		 hypotheses=excluded.hypotheses, decision_log=excluded.decision_log, result=excluded.result,
 		 files=excluded.files, commits=excluded.commits, schema_version=excluded.schema_version,
 		 review_verdict=excluded.review_verdict, review_findings=excluded.review_findings,
-		 review_timestamp=excluded.review_timestamp, updated_at=excluded.updated_at`,
+		 review_timestamp=excluded.review_timestamp, attachments=excluded.attachments,
+		 priority=excluded.priority, depends_on=excluded.depends_on,
+		 merged_into=excluded.merged_into, dispatch_mode=excluded.dispatch_mode,
+		 summary=excluded.summary, phase=excluded.phase, updated_at=excluded.updated_at`,
 		id, fields["TASK_TITLE"], fields["TASK_STATUS"], fields["TASK_TYPE"],
 		fields["TASK_DESCRIPTION"], fields["TASK_CREATED_BY"], fields["TASK_ASSIGNED_TO"],
 		fields["TASK_TEAM"], planID, fields["TASK_TAGS"],
@@ -137,6 +141,9 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		atoi(fields["TASK_SCHEMA_VERSION"]),
 		fields["TASK_REVIEW_VERDICT"], fields["TASK_REVIEW_FINDINGS"],
 		fields["TASK_REVIEW_TIMESTAMP"],
+		fields["TASK_ATTACHMENTS"], atoi(fields["TASK_PRIORITY"]),
+		fields["TASK_DEPENDS_ON"], fields["TASK_MERGED_INTO"],
+		fields["TASK_DISPATCH_MODE"], fields["TASK_SUMMARY"], fields["TASK_PHASE"],
 		createdAt, updatedAt,
 	)
 	if err != nil {
@@ -232,6 +239,63 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		s.db.Exec(`DELETE FROM task_log WHERE task_id = ? AND type = 'note'`, id)
 		s.db.Exec(`INSERT INTO task_log (task_id, type, author, title, body, created_at) VALUES (?, 'note', '', 'note', ?, ?)`,
 			id, raw, createdAt)
+	}
+
+	// Reports — TASK_REPORT_N_TIMESTAMP/AUTHOR/TYPE/TITLE/BODY
+	type reportEntry struct {
+		timestamp int64
+		author    string
+		typ       string
+		title     string
+		body      string
+	}
+	reportMap := make(map[int]*reportEntry)
+	for key, val := range fields {
+		if !strings.HasPrefix(key, "TASK_REPORT_") {
+			continue
+		}
+		rest := strings.TrimPrefix(key, "TASK_REPORT_")
+		parts := strings.SplitN(rest, "_", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		idx, err := strconv.Atoi(parts[0])
+		if err != nil {
+			continue
+		}
+		if reportMap[idx] == nil {
+			reportMap[idx] = &reportEntry{}
+		}
+		switch parts[1] {
+		case "TIMESTAMP":
+			reportMap[idx].timestamp = atoi64(val)
+		case "AUTHOR":
+			reportMap[idx].author = val
+		case "TYPE":
+			reportMap[idx].typ = val
+		case "TITLE":
+			reportMap[idx].title = val
+		case "BODY":
+			reportMap[idx].body = val
+		}
+	}
+	if len(reportMap) > 0 {
+		s.db.Exec(`DELETE FROM task_log WHERE task_id = ? AND type LIKE 'report:%'`, id)
+		for _, r := range reportMap {
+			typ := r.typ
+			if typ == "" {
+				typ = "report"
+			}
+			if !strings.HasPrefix(typ, "report") {
+				typ = "report:" + typ
+			}
+			ts := r.timestamp
+			if ts == 0 {
+				ts = createdAt
+			}
+			s.db.Exec(`INSERT INTO task_log (task_id, type, author, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+				id, typ, r.author, r.title, r.body, ts)
+		}
 	}
 
 	return nil
