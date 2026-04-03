@@ -5745,6 +5745,20 @@ while [ $# -gt 0 ]; do
 done
 set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 
+# ── Unified CLI routing — forward ctl subcommands to doey-ctl binary ──
+# Phase 1 of doey-ctl merge: `doey msg send` works like `doey-ctl msg send`.
+# Placed before main dispatch so ctl commands take priority.
+case "${1:-}" in
+  msg|status|health|task|tmux|plan|team|config|agent|event|nudge|migrate)
+    if command -v doey-ctl >/dev/null 2>&1; then
+      exec doey-ctl "$@"
+    else
+      printf 'Error: doey-ctl binary not found. Run "doey doctor" or reinstall.\n' >&2
+      exit 1
+    fi
+    ;;
+esac
+
 case "${1:-}" in
   --help|-h)
     doey_header "Doey"
