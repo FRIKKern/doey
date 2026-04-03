@@ -117,7 +117,7 @@ cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task for Team 2.
 TASK
 tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$TARGET"
-sleep 0.5; tmux send-keys -t "$TARGET" Escape; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
+sleep 0.5; tmux send-keys -t "$TARGET" Escape; sleep 0.3; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
 ```
 
 **Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.

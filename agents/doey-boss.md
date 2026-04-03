@@ -53,6 +53,7 @@ if [ "$_sm_alive" = false ]; then
     doey-ctl nudge "0.2" 2>/dev/null || true
   else
     # Fallback: direct send-keys wake
+    tmux copy-mode -q -t "${SESSION_NAME}:0.2" 2>/dev/null
     tmux send-keys -t "${SESSION_NAME}:0.2" Escape
     tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
   fi

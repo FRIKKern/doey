@@ -4673,8 +4673,9 @@ add_team_from_def() {
       tmux send-keys -t "${session}:${window_index}.0" Escape 2>/dev/null
       tmux load-buffer "$_bf"
       tmux paste-buffer -t "${session}:${window_index}.0"
-      sleep 0.3
+      sleep 0.5
       tmux send-keys -t "${session}:${window_index}.0" Escape 2>/dev/null
+      sleep 0.3
       tmux send-keys -t "${session}:${window_index}.0" Enter
       rm -f "$_bf"
     ) &

@@ -133,6 +133,7 @@ _taskmaster_context_check() {
     _proj="${SESSION_NAME#doey-}"
     local _relaunch="claude --dangerously-skip-permissions --model ${_tm_model} --name \"${DOEY_ROLE_COORDINATOR:-Taskmaster}\" --agent \"${_tm_agent}\""
     [ -f "${RUNTIME_DIR}/doey-settings.json" ] && _relaunch="${_relaunch} --settings \"${RUNTIME_DIR}/doey-settings.json\""
+    tmux copy-mode -q -t "$_full_pane" 2>/dev/null
     tmux send-keys -t "$_full_pane" Escape 2>/dev/null
     tmux send-keys -t "$_full_pane" "$_relaunch" Enter
 
@@ -152,6 +153,7 @@ _taskmaster_context_check() {
       done
       [ -n "$_task_summary" ] && _brief="${_brief} Active tasks:${_task_summary%,}."
     fi
+    tmux copy-mode -q -t "$_full_pane" 2>/dev/null
     tmux send-keys -t "$_full_pane" Escape 2>/dev/null
     tmux send-keys -t "$_full_pane" "$_brief" Enter
     _taskmaster_ctx_log "relaunch complete — briefed with active tasks"
@@ -162,6 +164,7 @@ _taskmaster_context_check() {
   if [ "$_ctx_pct" -ge 70 ] && _taskmaster_cooldown_ok "$_CTX_COMPACT_COOLDOWN"; then
     _taskmaster_ctx_log "context at ${_ctx_pct}% — sending /compact"
     date +%s > "$_CTX_COMPACT_COOLDOWN"
+    tmux copy-mode -q -t "$_full_pane" 2>/dev/null
     tmux send-keys -t "$_full_pane" Escape 2>/dev/null
     tmux send-keys -t "$_full_pane" "/compact" Enter
     return 0

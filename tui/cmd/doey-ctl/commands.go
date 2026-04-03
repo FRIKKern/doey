@@ -416,6 +416,9 @@ func runTaskList(args []string) {
 
 	if s != nil {
 		defer s.Close()
+		// Sync .task files into the DB before listing so CLI always sees the full set.
+		tasksDir := filepath.Join(pd, ".doey", "tasks")
+		s.SyncTaskFiles(tasksDir)
 		tasks, err := s.ListTasks(*status)
 		if err != nil {
 			fatal("task list: %v", err)
