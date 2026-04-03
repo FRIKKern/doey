@@ -578,7 +578,7 @@ func resolveSessionName() string {
 
 // sendToTaskmaster sends a message to the Taskmaster pane via tmux send-keys.
 func sendToTaskmaster(message string) error {
-	smPane := resolveSessionName() + ":0.2"
+	smPane := resolveSessionName() + ":1.0"
 	// Clear copy-mode and send Escape to ensure clean input state.
 	exec.Command("tmux", "copy-mode", "-q", "-t", smPane).Run()
 	exec.Command("tmux", "send-keys", "-t", smPane, "Escape").Run()

@@ -47,4 +47,4 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
 done
 ```
 
-Skip reserved unless `--force`. Skip Subtaskmaster if WORKERS_ONLY. Never clear dashboard panes (0.0, 0.1) or Taskmaster (0.2).
+Skip reserved unless `--force`. Skip Subtaskmaster if WORKERS_ONLY. Never clear dashboard panes (0.0, 0.1) or Taskmaster (1.0).

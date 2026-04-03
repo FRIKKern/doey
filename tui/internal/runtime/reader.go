@@ -1350,7 +1350,7 @@ func parseMessageContent(content string) (from, subject, body string) {
 }
 
 // decodePaneSafe converts a pane safe name to a human-readable label.
-// e.g. "doey_doey_0_1" → "Boss (0.1)", "doey_doey_0_2" → "Taskmaster (0.2)",
+// e.g. "doey_doey_0_1" → "Boss (0.1)", "doey_doey_1_0" → "Taskmaster (1.0)",
 // "doey_doey_2_0" → "Subtaskmaster (2.0)", "doey_doey_2_3" → "W3 (2.3)"
 func decodePaneSafe(safe string) string {
 	parts := strings.Split(safe, "_")
@@ -1377,11 +1377,14 @@ func decodePaneSafe(safe string) string {
 			return "Dashboard (" + paneID + ")"
 		case 1:
 			return roles.Boss + " (" + paneID + ")"
-		case 2:
-			return roles.Coordinator + " (" + paneID + ")"
 		default:
 			return fmt.Sprintf("WD (%s)", paneID)
 		}
+	}
+
+	// Core Team window: pane 0 = Taskmaster
+	if wInt == 1 && pInt == 0 {
+		return roles.Coordinator + " (" + paneID + ")"
 	}
 
 	// Team windows: pane 0 = manager, others = workers

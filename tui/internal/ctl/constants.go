@@ -62,9 +62,10 @@ const (
 const (
 	PaneInfoPanel     = 0 // W0.0
 	PaneBoss          = 1 // W0.1
-	PaneTaskmaster    = 2 // W0.2
+	PaneTaskmaster    = 0 // W1.0 — Core Team window
 	PaneSubtaskmaster = 0 // W.0 (team windows)
 	DashboardWindow   = 0
+	CoreTeamWindow    = 1
 )
 
 // Task field names (parsed from .task files by reader.go).

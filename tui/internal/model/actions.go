@@ -161,8 +161,8 @@ type DispatchTeamResultMsg struct {
 // DispatchTeamCmd writes a .msg file to the Taskmaster's message inbox.
 func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task string) tea.Cmd {
 	return func() tea.Msg {
-		// Target: Taskmaster at pane 0.2
-		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_0_2"
+		// Target: Taskmaster at pane 1.0 (Core Team window)
+		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_1_0"
 		msgDir := filepath.Join(runtimeDir, "messages")
 		os.MkdirAll(msgDir, 0755)
 
@@ -426,7 +426,7 @@ func CancelTaskCmd(id string) tea.Cmd {
 // DispatchTaskCmd dispatches a task to Taskmaster via .msg file.
 func DispatchTaskCmd(runtimeDir, sessionName, id, title string) tea.Cmd {
 	return func() tea.Msg {
-		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_0_2"
+		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_1_0"
 		msgDir := filepath.Join(runtimeDir, "messages")
 		os.MkdirAll(msgDir, 0755)
 

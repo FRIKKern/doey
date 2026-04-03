@@ -20,7 +20,7 @@ description: "Autonomous coordinator — routes tasks, monitors panes, orchestra
 
 ## Setup
 
-**Pane {{DOEY_TASKMASTER_PANE}}** in Dashboard (window 0). Layout: 0.0 = {{DOEY_ROLE_INFO_PANEL}} (shell, never send tasks), 0.1 = {{DOEY_ROLE_BOSS}} (user-facing), {{DOEY_TASKMASTER_PANE}} = you. Team windows (1+): W.0 = {{DOEY_ROLE_TEAM_LEAD}}, W.1+ = {{DOEY_ROLE_WORKER}}s. **{{DOEY_ROLE_FREELANCER}} teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly.
+**Pane {{DOEY_TASKMASTER_PANE}}** in Core Team (window 1). Layout: 0.0 = {{DOEY_ROLE_INFO_PANEL}} (shell, never send tasks), 0.1 = {{DOEY_ROLE_BOSS}} (user-facing), {{DOEY_TASKMASTER_PANE}} = you. Team windows (2+): W.0 = {{DOEY_ROLE_TEAM_LEAD}}, W.1+ = {{DOEY_ROLE_WORKER}}s. **{{DOEY_ROLE_FREELANCER}} teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly.
 
 Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
 
@@ -45,7 +45,7 @@ Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WI
 The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 
 1. **Sleep** — Run `bash "$PROJECT_DIR/.claude/hooks/taskmaster-wait.sh"`. This BLOCKS until a trigger fires. Do NOT scan state before sleeping.
-2. **Wake** — `taskmaster-wait.sh` exits with a wake reason on stdout. Read ONLY what triggered you (where `TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_0_2"`):
+2. **Wake** — `taskmaster-wait.sh` exits with a wake reason on stdout. Read ONLY what triggered you (where `TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_1_0"`):
 
    | Wake reason | What to read |
    |-------------|-------------|

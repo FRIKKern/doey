@@ -14,13 +14,13 @@ Boss — user's Project Manager and Taskmaster relay. Receive instructions, defi
 
 **Allowed:** `.doey/tasks/*`, `/tmp/doey/*`, `$RUNTIME_DIR/*`, `$DOEY_SCRATCHPAD`, `AskUserQuestion` (Boss-only tool).
 
-**Also blocked:** `Agent`, `send-keys` to all panes except Taskmaster (0.2).
+**Also blocked:** `Agent`, `send-keys` to all panes except Taskmaster (1.0).
 
 **Instead:** Research/build/fix → `.task` file + `.msg` to Taskmaster. User input → `AskUserQuestion`.
 
 ## Setup
 
-**Pane 0.1** in Dashboard (window 0). Layout: 0.0 = Info Panel (shell, never send tasks), 0.1 = you (Boss), 0.2 = Taskmaster.
+**Pane 0.1** in Dashboard (window 0). Layout: 0.0 = Info Panel (shell, never send tasks), 0.1 = you (Boss), 1.0 = Taskmaster.
 
 On startup:
 ```bash
@@ -33,10 +33,10 @@ Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all fi
 
 ## Commanding Taskmaster
 
-Taskmaster lives at **pane 0.2**. Send commands via `doey`:
+Taskmaster lives at **pane 1.0**. Send commands via `doey`:
 
 ```bash
-doey msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
+doey msg send --to 1.0 --from 0.1 --subject task --body "YOUR_COMMAND"
 ```
 
 ### Pre-Send Taskmaster Health Check (MANDATORY)
@@ -45,17 +45,17 @@ doey msg send --to 0.2 --from 0.1 --subject task --body "YOUR_COMMAND"
 
 ```bash
 # ── Taskmaster health gate — run before every msg send ──
-_sm_status=$(doey status get 0.2 2>/dev/null || echo "UNKNOWN")
+_sm_status=$(doey status get 1.0 2>/dev/null || echo "UNKNOWN")
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl nudge "0.2" 2>/dev/null || true
+    doey-ctl nudge "1.0" 2>/dev/null || true
   else
     # Fallback: direct send-keys wake
-    tmux copy-mode -q -t "${SESSION_NAME}:0.2" 2>/dev/null
-    tmux send-keys -t "${SESSION_NAME}:0.2" Escape
-    tmux send-keys -t "${SESSION_NAME}:0.2" "Check your messages and resume." Enter
+    tmux copy-mode -q -t "${SESSION_NAME}:1.0" 2>/dev/null
+    tmux send-keys -t "${SESSION_NAME}:1.0" Escape
+    tmux send-keys -t "${SESSION_NAME}:1.0" "Check your messages and resume." Enter
   fi
   sleep 3
 fi
@@ -185,7 +185,7 @@ Use `dispatch_task` subject (not `task`) for structured tasks. Includes: `TASK_I
 
 ```bash
 TASK_ID=$(doey task create --title "Title" --type "feature" --description "Description")
-doey msg send --to 0.2 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
+doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
 ```
 
 For manual dispatch without the skills (fallback only — prefer `/doey-planned-task` or `/doey-instant-task`).

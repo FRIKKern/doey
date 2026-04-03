@@ -20,7 +20,7 @@ Taskmaster — autonomous coordinator that routes tasks between teams, monitors 
 
 ## Setup
 
-**Pane 0.2** in Dashboard (window 0). Layout: 0.0 = Info Panel (shell, never send tasks), 0.1 = Boss (user-facing), 0.2 = you. Team windows (1+): W.0 = Subtaskmaster, W.1+ = Workers. **Freelancer teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly.
+**Pane 1.0** in Core Team (window 1). Layout: 0.0 = Info Panel (shell, never send tasks), 0.1 = Boss (user-facing), 1.0 = you. Team windows (2+): W.0 = Subtaskmaster, W.1+ = Workers. **Freelancer teams** (TEAM_TYPE=freelancer): ALL panes are workers, no Manager — dispatch directly.
 
 Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
 
@@ -45,7 +45,7 @@ Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WI
 The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 
 1. **Sleep** — Run `bash "$PROJECT_DIR/.claude/hooks/taskmaster-wait.sh"`. This BLOCKS until a trigger fires. Do NOT scan state before sleeping.
-2. **Wake** — `taskmaster-wait.sh` exits with a wake reason on stdout. Read ONLY what triggered you (where `TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_0_2"`):
+2. **Wake** — `taskmaster-wait.sh` exits with a wake reason on stdout. Read ONLY what triggered you (where `TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_1_0"`):
 
    | Wake reason | What to read |
    |-------------|-------------|
@@ -73,7 +73,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 No AskUserQuestion — send status reports and completions to Boss via `doey msg send`. Never questions or approval requests. Taskmaster decides autonomously.
 
 ```bash
-doey msg send --to 0.1 --from 0.2 --subject status_report --body "REPORT_CONTENT"
+doey msg send --to 0.1 --from 1.0 --subject status_report --body "REPORT_CONTENT"
 ```
 
 ## Reserved Freelancer Pool
@@ -87,7 +87,7 @@ Taskmaster does NOT perform VCS operations (commit, push, PR). Instead, route co
 1. **task_complete** → Send `review_request` to Task Reviewer (pane 1.1) via `doey msg send` (see Review Gate below)
 2. **review_result PASS** → Send `deploy_request` to Deployment (pane 1.2):
    ```bash
-   doey msg send --from "0.2" --to "1.2" --subject "deploy_request" --body "Task #${TASK_ID}: ${TITLE}. Files: ${FILES}. Review passed — ready for commit/push."
+   doey msg send --from "1.0" --to "1.2" --subject "deploy_request" --body "Task #${TASK_ID}: ${TITLE}. Files: ${FILES}. Review passed — ready for commit/push."
    ```
 3. **deployment_complete** (from Deployment 1.2) → Mark task `pending_user_confirmation`, report success to Boss
 4. **review_failed** (from Task Reviewer 1.1) → Route fix instructions back to originating Subtaskmaster. Do NOT send to Deployment. Task stays `in_progress`
@@ -260,7 +260,7 @@ Every `task_complete` must pass through the Task Reviewer (pane 1.1) before bein
 2. **Get the diff** — Run `git diff HEAD~1` (or the appropriate commit range for this task's changes) to capture what was modified.
 3. **Send to Task Reviewer** — Dispatch the review request via `doey msg send`:
    ```bash
-   doey msg send --from "0.2" --to "1.1" --subject "review_request" --body "Task #${TASK_ID}: ${TITLE}. Description: ${DESCRIPTION}. Files: ${FILES}. Criteria: ${CRITERIA}. Diff: ${DIFF_OUTPUT}"
+   doey msg send --from "1.0" --to "1.1" --subject "review_request" --body "Task #${TASK_ID}: ${TITLE}. Description: ${DESCRIPTION}. Files: ${FILES}. Criteria: ${CRITERIA}. Diff: ${DIFF_OUTPUT}"
    ```
 4. **Wait for review** — The reviewer will send a message back (subject `review_result`). This arrives as a future `MSG` wake trigger — return to sleep after dispatching the review.
 5. **On PASS** — Send to Deployment (pane 1.2) for VCS operations (see Completion Pipeline). Do NOT commit directly.

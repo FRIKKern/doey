@@ -5,7 +5,7 @@ description: Diagnose and repair Doey Dashboard (window 0). Use when you need to
 
 - Session config: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env 2>/dev/null || true`
 
-Window 0: 0.0=InfoPanel, 0.1=Boss, 0.2=Taskmaster.
+Window 0: 0.0=InfoPanel, 0.1=Boss, 1.0=Taskmaster.
 
 ### Diagnose
 ```bash
@@ -23,6 +23,6 @@ MISSING → "Run `doey reload`" and STOP. HEALTHY = has child. IDLE = no child �
 |------|---------|
 | 0.0 | `clear && info-panel.sh '${RUNTIME_DIR}'` |
 | 0.1 | `claude --dangerously-skip-permissions --agent doey-boss` |
-| 0.2 | `claude --dangerously-skip-permissions --agent doey-taskmaster` |
+| 1.0 | `claude --dangerously-skip-permissions --agent doey-taskmaster` |
 
 Verify child processes after repair. NEVER kill — only send commands to idle shells. Skip running panes.

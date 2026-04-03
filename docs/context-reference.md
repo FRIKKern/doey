@@ -126,8 +126,9 @@ All in `shell/` → `~/.local/bin/`.
 ## tmux Layout
 
 ```
-Dashboard: [0.0 Info] [0.1 Boss] [0.2 Taskmaster]
-Team W:    [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
+Dashboard:  [0.0 Info] [0.1 Boss]
+Core Team:  [1.0 Taskmaster] [1.1 Reviewer] [1.2 Deployment] [1.3 Expert]
+Team W:     [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
 ```
 
 Dynamic grid auto-expands when all workers are busy.
