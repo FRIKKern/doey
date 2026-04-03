@@ -165,7 +165,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
 			review_timestamp, created_at, updated_at
-			FROM tasks ORDER BY created_at DESC`)
+			FROM tasks ORDER BY updated_at DESC`)
 	} else {
 		rows, err = s.db.Query(`SELECT
 			id, title, status, type, description, created_by, assigned_to, team,
@@ -173,7 +173,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
 			review_timestamp, created_at, updated_at
-			FROM tasks WHERE status = ? ORDER BY created_at DESC`, status)
+			FROM tasks WHERE status = ? ORDER BY updated_at DESC`, status)
 	}
 	if err != nil {
 		return nil, err
