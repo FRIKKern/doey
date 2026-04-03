@@ -131,10 +131,19 @@ func ensureSchema(db *sql.DB) error {
 
 	// Migrations — ALTER TABLE ADD COLUMN errors are ignored (column may already exist).
 	migrations := []string{
+		// subtasks enrichment (task #181)
 		`ALTER TABLE subtasks ADD COLUMN assignee TEXT DEFAULT ''`,
 		`ALTER TABLE subtasks ADD COLUMN worker TEXT DEFAULT ''`,
 		`ALTER TABLE subtasks ADD COLUMN created_at INTEGER DEFAULT 0`,
 		`ALTER TABLE subtasks ADD COLUMN completed_at INTEGER DEFAULT 0`,
+		// tasks schema parity (task #185)
+		`ALTER TABLE tasks ADD COLUMN attachments TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN priority INTEGER DEFAULT 0`,
+		`ALTER TABLE tasks ADD COLUMN depends_on TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN merged_into TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN dispatch_mode TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN summary TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN phase TEXT DEFAULT ''`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors
