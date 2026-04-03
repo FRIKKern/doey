@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/ctl"
@@ -137,6 +138,7 @@ func msgSend(args []string) {
 	taskID := fs.Int64("task-id", 0, "Associated task ID (DB mode)")
 	rt := fs.String("runtime", "", "Runtime directory")
 	dir := fs.String("project-dir", "", "Project directory")
+	noNudge := fs.Bool("no-nudge", false, "Skip tmux send-keys nudge to target pane")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
@@ -175,6 +177,11 @@ func msgSend(args []string) {
 	// Always fire trigger (wake mechanism) — best-effort
 	if rtDir := runtimeDirOpt(*rt); rtDir != "" {
 		_ = ctl.FireTrigger(rtDir, *to)
+	}
+
+	// Nudge target pane via tmux send-keys unless --no-nudge
+	if !*noNudge {
+		msgNudgePane(*to, runtimeDirOpt(*rt))
 	}
 
 	if jsonOutput {
@@ -355,14 +362,60 @@ func msgTrigger(args []string) {
 	if *pane == "" {
 		fatal("msg trigger: --pane is required\nRun 'doey-ctl msg trigger -h' for usage.\n")
 	}
-	if err := ctl.FireTrigger(runtimeDir(*rt), *pane); err != nil {
+	rtDir := runtimeDir(*rt)
+	if err := ctl.FireTrigger(rtDir, *pane); err != nil {
 		fatal("msg trigger: %v\n", err)
 	}
+	// Also nudge via send-keys
+	msgNudgePane(*pane, rtDir)
 	if jsonOutput {
 		printJSON(map[string]string{"status": "triggered", "pane": *pane})
 	} else {
 		fmt.Println("triggered")
 	}
+}
+
+// msgNudgePane resolves the target pane and sends a tmux send-keys nudge
+// so the recipient processes the message immediately. Skips if BUSY.
+// Best-effort: errors are silently ignored.
+func msgNudgePane(targetPane, rtDir string) {
+	// Resolve session name
+	session := os.Getenv("DOEY_SESSION")
+	if session == "" {
+		session = os.Getenv("SESSION_NAME")
+	}
+	if session == "" {
+		return // can't nudge without a session
+	}
+
+	// Resolve pane ID: convert safe name (doey_doey_3_1) to W.P format if needed
+	paneID := targetPane
+	if strings.Contains(paneID, ":") {
+		// Strip session prefix (e.g. "doey-doey:3.1" → "3.1")
+		paneID = paneID[strings.LastIndex(paneID, ":")+1:]
+	}
+	if !strings.Contains(paneID, ".") {
+		if converted := safeToPaneID(paneID); converted != "" {
+			paneID = converted
+		} else {
+			return // can't resolve pane
+		}
+	}
+
+	// Check if BUSY — skip nudge if so
+	if rtDir != "" {
+		// Build safe name for status file lookup
+		paneSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(session + ":" + paneID)
+		entry, err := ctl.ReadStatus(rtDir, paneSafe)
+		if err == nil && entry.Status == ctl.StatusBusy {
+			return
+		}
+	}
+
+	// Nudge via existing nudgePane (uses TmuxClient send-keys)
+	client := ctl.NewTmuxClient(session)
+	prompt := fmt.Sprintf("Check your messages — run: doey-ctl msg read --pane %s", targetPane)
+	_ = nudgePane(client, paneID, prompt, false)
 }
 
 // --- status subcommand ---
