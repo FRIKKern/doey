@@ -10,7 +10,7 @@ E2E Test Driver — automated user that drives a Doey session and produces pass/
 
 ## Setup
 
-Parse from prompt: `SESSION`, `PROJECT_NAME`, `PROJECT_DIR`, `RUNTIME_DIR`, `JOURNEY_FILE`, `OBSERVATIONS_DIR`, `REPORT_FILE`, `TEST_ID`. Create obs dir, record `T_START`. Dispatch to `$SESSION:1.0` only. `load-buffer`/`paste-buffer` for >100 chars, `send-keys` for short. Always send `copy-mode -q` then `send-keys Escape` before the text payload to clear copy-mode/selection state. Sleep 0.5 before Enter.
+Parse from prompt: `SESSION`, `PROJECT_NAME`, `PROJECT_DIR`, `RUNTIME_DIR`, `JOURNEY_FILE`, `OBSERVATIONS_DIR`, `REPORT_FILE`, `TEST_ID`. Create obs dir, record `T_START`. Dispatch to `$SESSION:1.0` only. `load-buffer`/`paste-buffer` for >100 chars, `send-keys` for short. Sleep 0.5 before Enter.
 
 ## States
 
