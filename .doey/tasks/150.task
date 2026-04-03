@@ -19,4 +19,4 @@ TASK_REPORT_1_TYPE=completion
 TASK_REPORT_1_TITLE=Worker 3.2 error
 TASK_REPORT_1_BODY=Worker 3.2 completed with 2 tool calls, 0 files changed
 
-status=pending_user_confirmation
+status=done

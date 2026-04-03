@@ -79,11 +79,18 @@ func (sr *storeReader) readTasks() []Task {
 		// Subtasks
 		storeSubs, _ := sr.s.ListSubtasks(st.ID)
 		for _, ss := range storeSubs {
+			pane := ss.Assignee
+			if pane == "" {
+				pane = strconv.Itoa(ss.Seq)
+			}
 			t.Subtasks = append(t.Subtasks, Subtask{
-				TaskID: t.ID,
-				Pane:   strconv.Itoa(ss.Seq),
-				Title:  ss.Title,
-				Status: ss.Status,
+				TaskID:      t.ID,
+				Pane:        pane,
+				Title:       ss.Title,
+				Status:      ss.Status,
+				Worker:      ss.Worker,
+				Created:     ss.CreatedAt,
+				CompletedAt: ss.CompletedAt,
 			})
 		}
 

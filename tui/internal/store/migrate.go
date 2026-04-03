@@ -143,9 +143,62 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		return err
 	}
 
-	// Subtasks — format: "idx:title:status\nidx:title:status"
-	if raw := fields["TASK_SUBTASKS"]; raw != "" {
-		// Clear existing subtasks for this task and rewrite
+	// Subtasks — prefer TASK_SUBTASK_N_* extension fields over inline TASK_SUBTASKS.
+	// Extension format: TASK_SUBTASK_1_TITLE=..., TASK_SUBTASK_1_STATUS=..., etc.
+	type subtaskExt struct {
+		title       string
+		status      string
+		assignee    string
+		worker      string
+		createdAt   int64
+		completedAt int64
+	}
+	extMap := make(map[int]*subtaskExt)
+	for key, val := range fields {
+		if !strings.HasPrefix(key, "TASK_SUBTASK_") {
+			continue
+		}
+		rest := strings.TrimPrefix(key, "TASK_SUBTASK_")
+		parts := strings.SplitN(rest, "_", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		idx, err := strconv.Atoi(parts[0])
+		if err != nil {
+			continue
+		}
+		if extMap[idx] == nil {
+			extMap[idx] = &subtaskExt{}
+		}
+		switch parts[1] {
+		case "TITLE":
+			extMap[idx].title = val
+		case "STATUS":
+			extMap[idx].status = val
+		case "ASSIGNEE":
+			extMap[idx].assignee = val
+		case "WORKER":
+			extMap[idx].worker = val
+		case "CREATED_AT":
+			extMap[idx].createdAt = atoi64(val)
+		case "COMPLETED_AT":
+			extMap[idx].completedAt = atoi64(val)
+		}
+	}
+
+	if len(extMap) > 0 {
+		// Use extension fields (richer data)
+		s.db.Exec(`DELETE FROM subtasks WHERE task_id = ?`, id)
+		for seq, ext := range extMap {
+			status := ext.status
+			if status == "" {
+				status = "pending"
+			}
+			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				id, seq, ext.title, status, ext.assignee, ext.worker, ext.createdAt, ext.completedAt)
+		}
+	} else if raw := fields["TASK_SUBTASKS"]; raw != "" {
+		// Fallback: inline format "idx:title:status\nidx:title:status"
 		s.db.Exec(`DELETE FROM subtasks WHERE task_id = ?`, id)
 		for seq, entry := range splitLiteralNewlines(raw) {
 			parts := strings.SplitN(entry, ":", 3)
@@ -154,7 +207,7 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 			}
 			title := parts[1]
 			status := parts[2]
-			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status) VALUES (?, ?, ?, ?)`,
+			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at) VALUES (?, ?, ?, ?, '', '', 0, 0)`,
 				id, seq+1, title, status)
 		}
 	}
