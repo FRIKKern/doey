@@ -86,6 +86,35 @@ func (s *Store) MarkAllRead(toPane string) error {
 	return err
 }
 
+// ListUnrouted returns unrouted messages for a pane (used by doey-router).
+func (s *Store) ListUnrouted(toPane string) ([]Message, error) {
+	query := `SELECT id, from_pane, to_pane, subject, body, task_id, read, created_at
+	          FROM messages WHERE to_pane = ? AND routed = 0 ORDER BY created_at DESC`
+	rows, err := s.db.Query(query, toPane)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		var m Message
+		var readInt int
+		if err := rows.Scan(&m.ID, &m.FromPane, &m.ToPane, &m.Subject, &m.Body, &m.TaskID, &readInt, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		m.Read = readInt != 0
+		msgs = append(msgs, m)
+	}
+	return msgs, rows.Err()
+}
+
+// MarkRouted marks a message as processed by the router (without affecting read status).
+func (s *Store) MarkRouted(id int64) error {
+	_, err := s.db.Exec(`UPDATE messages SET routed = 1 WHERE id = ?`, id)
+	return err
+}
+
 // DeleteMessage removes a message by ID.
 func (s *Store) DeleteMessage(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM messages WHERE id = ?`, id)

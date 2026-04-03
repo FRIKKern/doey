@@ -57,6 +57,8 @@ func ensureMigrations(db *sql.DB) error {
 		// Ignore errors — column may already exist.
 		db.Exec("ALTER TABLE tasks ADD COLUMN " + col)
 	}
+	// Add routed column to messages (may already exist).
+	db.Exec("ALTER TABLE messages ADD COLUMN routed INTEGER DEFAULT 0")
 	return nil
 }
 

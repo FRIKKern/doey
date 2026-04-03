@@ -1088,6 +1088,7 @@ func editDistance(a, b string) int {
 func runNudgeCmd(args []string) {
 	fs := flag.NewFlagSet("nudge", flag.ExitOnError)
 	all := fs.Bool("all", false, "nudge all stuck panes (skips READY and RESERVED)")
+	cascade := fs.Bool("cascade", false, "after nudging target, also nudge Subtaskmaster (W.0) and Taskmaster")
 	session := fs.String("session", "", "tmux session name")
 	rt := fs.String("runtime", "", "runtime directory")
 	prompt := fs.String("prompt", "Check your messages and resume.", "re-prompt text")
@@ -1098,6 +1099,7 @@ func runNudgeCmd(args []string) {
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  doey-ctl nudge doey-doey:3.1    Nudge a single pane\n")
 		fmt.Fprintf(os.Stderr, "  doey-ctl nudge 3.1              Nudge pane (uses session from env)\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl nudge --cascade 3.1    Nudge pane, then Subtaskmaster, then Taskmaster\n")
 		fmt.Fprintf(os.Stderr, "  doey-ctl nudge --all            Nudge all stuck panes\n\n")
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		fs.PrintDefaults()
@@ -1107,6 +1109,7 @@ func runNudgeCmd(args []string) {
 
 	sess := sessionName(*session)
 	client := ctl.NewTmuxClient(sess)
+	rtDir := runtimeDirOpt(*rt)
 
 	if *all {
 		nudgeAll(client, runtimeDir(*rt), *prompt)
@@ -1117,20 +1120,134 @@ func runNudgeCmd(args []string) {
 		fatal("nudge: missing pane target\nTry: doey-ctl nudge <pane> or doey-ctl nudge --all\n")
 	}
 
-	pane := fs.Arg(0)
-	// Strip session prefix if included (e.g. "doey-doey:3.1" → "3.1")
+	pane := resolvePane(fs.Arg(0))
+
+	nudgePaneStateAware(client, sess, rtDir, pane, *prompt, true)
+
+	if *cascade {
+		// Nudge the Subtaskmaster (pane 0 of the target's window)
+		win := pane[:strings.Index(pane, ".")]
+		sm := win + ".0"
+		if sm != pane {
+			nudgePaneStateAware(client, sess, rtDir, sm, *prompt, true)
+		}
+		// Nudge the Taskmaster (from session.env or default 1.0)
+		tm := readTaskmasterPane(rtDir)
+		if tm != pane && tm != sm {
+			nudgePaneStateAware(client, sess, rtDir, tm, *prompt, true)
+		}
+	}
+}
+
+// resolvePane normalizes a pane argument to W.P format.
+func resolvePane(raw string) string {
+	pane := raw
 	if idx := strings.LastIndex(pane, ":"); idx >= 0 {
 		pane = pane[idx+1:]
 	}
-	// Convert safe name format (doey_doey_3_1 → 3.1) if no dot present
 	if !strings.Contains(pane, ".") {
 		if converted := safeToPaneID(pane); converted != "" {
 			pane = converted
 		}
 	}
+	return pane
+}
 
-	if err := nudgePane(client, pane, *prompt, true); err != nil {
-		fatal("nudge: %v\n", err)
+// isUserPane returns true if the pane is in the DOEY_USER_PANES list (default: Boss 0.1).
+func isUserPane(pane string) bool {
+	userPanes := os.Getenv("DOEY_USER_PANES")
+	if userPanes == "" {
+		userPanes = "0.1"
+	}
+	for _, up := range strings.Split(userPanes, ",") {
+		if strings.TrimSpace(up) == pane {
+			return true
+		}
+	}
+	return false
+}
+
+// readContextPct reads context % from the statusline-written file for a pane.
+func readContextPct(rtDir, pane string) int {
+	if rtDir == "" {
+		return 0
+	}
+	// pane is "W.P" — file is context_pct_W_P
+	safe := strings.ReplaceAll(pane, ".", "_")
+	data, err := os.ReadFile(filepath.Join(rtDir, ctl.StatusSubdir, "context_pct_"+safe))
+	if err != nil {
+		return 0
+	}
+	s := strings.TrimSpace(string(data))
+	// Strip any non-digit suffix (e.g. "72%")
+	for i, c := range s {
+		if c < '0' || c > '9' {
+			s = s[:i]
+			break
+		}
+	}
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
+// readTaskmasterPane reads TASKMASTER_PANE from session.env (default 1.0).
+func readTaskmasterPane(rtDir string) string {
+	if rtDir == "" {
+		return "1.0"
+	}
+	data, err := os.ReadFile(filepath.Join(rtDir, "session.env"))
+	if err != nil {
+		return "1.0"
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "TASKMASTER_PANE=") {
+			v := strings.TrimPrefix(line, "TASKMASTER_PANE=")
+			v = strings.Trim(v, "\"' ")
+			if v != "" {
+				return v
+			}
+		}
+	}
+	return "1.0"
+}
+
+// nudgePaneStateAware checks pane state before nudging. Skips user panes and
+// BUSY panes. If context > 70%, sends /compact instead of the nudge text.
+func nudgePaneStateAware(client *ctl.TmuxClient, sess, rtDir, pane, prompt string, verbose bool) {
+	// Never nudge user-facing panes
+	if isUserPane(pane) {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "nudge: %s is a user pane — skipping\n", pane)
+		}
+		return
+	}
+
+	// Check status — skip BUSY panes
+	if rtDir != "" {
+		paneSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(sess + ":" + pane)
+		entry, err := ctl.ReadStatus(rtDir, paneSafe)
+		if err == nil && entry.Status == ctl.StatusBusy {
+			if verbose {
+				fmt.Fprintf(os.Stderr, "nudge: %s is BUSY — skipping\n", pane)
+			}
+			return
+		}
+	}
+
+	// Check context % — send /compact instead if > 70%
+	ctxPct := readContextPct(rtDir, pane)
+	if ctxPct > 70 {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "nudge: %s context at %d%% — sending /compact instead\n", pane, ctxPct)
+		}
+		_ = nudgePane(client, pane, "/compact", verbose)
+		return
+	}
+
+	if err := nudgePane(client, pane, prompt, verbose); err != nil {
+		if verbose {
+			fmt.Fprintf(os.Stderr, "nudge: %s: %v\n", pane, err)
+		}
 	}
 }
 
@@ -1187,8 +1304,18 @@ func nudgeAll(client *ctl.TmuxClient, rtDir, prompt string) {
 		if paneTarget == "" {
 			continue
 		}
+		if isUserPane(paneTarget) {
+			continue
+		}
 
-		if err := nudgePane(client, paneTarget, prompt, true); err != nil {
+		// Context-aware: send /compact if context > 70%
+		actualPrompt := prompt
+		if ctxPct := readContextPct(rtDir, paneTarget); ctxPct > 70 {
+			fmt.Fprintf(os.Stderr, "nudge: %s context at %d%% — sending /compact\n", paneTarget, ctxPct)
+			actualPrompt = "/compact"
+		}
+
+		if err := nudgePane(client, paneTarget, actualPrompt, true); err != nil {
 			fmt.Fprintf(os.Stderr, "nudge: skipping %s: %v\n", paneTarget, err)
 			continue
 		}
