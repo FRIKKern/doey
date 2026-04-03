@@ -370,7 +370,6 @@ func (m PlansModel) updateMouse(msg tea.MouseMsg) (PlansModel, tea.Cmd) {
 				if index >= 0 && index < len(m.entries) {
 					m.list.Select(index)
 					m.leftFocused = false
-					m.detailViewport.GotoTop()
 					m.loadSelectedDetail()
 					return m, nil
 				}
@@ -415,12 +414,10 @@ func (m PlansModel) updateList(msg tea.KeyMsg) (PlansModel, tea.Cmd) {
 			return m.acceptSelectedPlan()
 		}
 		m.leftFocused = false
-		m.detailViewport.GotoTop()
 		m.loadSelectedDetail()
 		return m, nil
 	case key.Matches(msg, m.keyMap.RightPanel):
 		m.leftFocused = false
-		m.detailViewport.GotoTop()
 		m.loadSelectedDetail()
 		return m, nil
 	}
@@ -735,6 +732,7 @@ func (m *PlansModel) loadSelectedDetail() {
 
 	content := m.renderPlanDetail(&plan)
 	m.detailViewport.SetContent(content)
+	m.detailViewport.GotoTop()
 }
 
 // renderPlanDetail renders the plan detail for the right panel.
@@ -886,6 +884,16 @@ func (m PlansModel) renderRightPanel(w, h int) string {
 			Render("Select a plan to view details")
 		return lipgloss.NewStyle().Width(w).Height(h).Render(header + "\n" + hint)
 	}
+
+	// Re-render content and feed to viewport each frame so scroll state stays in sync.
+	detail := m.renderPlanDetail(m.selectedPlan)
+	vpH := h - 7
+	if vpH < 1 {
+		vpH = 1
+	}
+	m.detailViewport.Width = w - 4
+	m.detailViewport.Height = vpH
+	m.detailViewport.SetContent(detail)
 
 	vpView := m.detailViewport.View()
 
