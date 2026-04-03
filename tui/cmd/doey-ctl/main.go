@@ -837,6 +837,14 @@ func projectDir(flagVal string) string {
 	if err != nil {
 		fatal("project dir: %v\n", err)
 	}
+	// Walk up to find the nearest directory containing .doey/
+	d := dir
+	for d != "/" {
+		if info, err := os.Stat(filepath.Join(d, ".doey")); err == nil && info.IsDir() {
+			return d
+		}
+		d = filepath.Dir(d)
+	}
 	return dir
 }
 
