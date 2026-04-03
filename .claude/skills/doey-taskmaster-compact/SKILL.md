@@ -13,7 +13,7 @@ source "$RD/session.env"
 _TM_PANE=$(grep '^TASKMASTER_PANE=' "$RD/session.env" 2>/dev/null | cut -d= -f2-)
 TASKMASTER_PANE="${SESSION_NAME}:${_TM_PANE:-1.0}"
 tmux copy-mode -q -t "$TASKMASTER_PANE" 2>/dev/null
-tmux send-keys -t "$TASKMASTER_PANE" Escape
+tmux send-keys -t "$TASKMASTER_PANE" Escape; sleep 0.1
 tmux send-keys -t "$TASKMASTER_PANE" "/compact" Enter
 ```
 
@@ -27,7 +27,7 @@ for attempt in 1 2; do
     echo "FAILED: Taskmaster not responding"
   else
     tmux copy-mode -q -t "$TASKMASTER_PANE" 2>/dev/null
-    tmux send-keys -t "$TASKMASTER_PANE" Escape
+    tmux send-keys -t "$TASKMASTER_PANE" Escape; sleep 0.1
     tmux send-keys -t "$TASKMASTER_PANE" "/compact" Enter
   fi
 done

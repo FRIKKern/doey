@@ -108,7 +108,7 @@ Send task to a Subtaskmaster:
 W=2; MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
 TARGET="$SESSION_NAME:${W}.${MGR_PANE}"
 tmux copy-mode -q -t "$TARGET" 2>/dev/null
-tmux send-keys -t "$TARGET" Escape
+tmux send-keys -t "$TARGET" Escape; sleep 0.1
 # Short (< ~200 chars):
 tmux send-keys -t "$TARGET" "Your task description here" Enter
 # Long — use load-buffer:

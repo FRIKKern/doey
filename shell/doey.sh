@@ -2041,14 +2041,14 @@ MANIFEST
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
     # Boss briefing (pane 0.1)
-    tmux send-keys -t "$session:0.1" Escape 2>/dev/null
+    tmux copy-mode -q -t "$session:0.1" 2>/dev/null
     tmux send-keys -t "$session:0.1" \
       "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is in the Core Team window. Team window ${team_window} has ${worker_count} workers. Awaiting instructions." Enter
     # Taskmaster briefing (Core Team pane 1.0)
     local _tm_pane
     _tm_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
     _tm_pane="${_tm_pane:-1.0}"
-    tmux send-keys -t "$session:${_tm_pane}" Escape 2>/dev/null
+    tmux copy-mode -q -t "$session:${_tm_pane}" 2>/dev/null
     tmux send-keys -t "$session:${_tm_pane}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. You are ${DOEY_ROLE_COORDINATOR} at pane ${_tm_pane} in Core Team window. Worker team windows: ${team_window}. Awaiting ${DOEY_ROLE_BOSS} instructions." Enter
   ) &
@@ -3134,7 +3134,6 @@ reload_session() {
     printf "    Manager %s..." "$mgr_ref"
     if _kill_pane_child "$mgr_ref"; then
       tmux copy-mode -q -t "$mgr_ref" 2>/dev/null || true
-      tmux send-keys -t "$mgr_ref" Escape 2>/dev/null || true
       tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
       sleep 0.2
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
@@ -3144,7 +3143,7 @@ reload_session() {
       printf " ${SUCCESS}✓${RESET}\n"
       (
         sleep "$DOEY_MANAGER_BRIEF_DELAY"
-        tmux send-keys -t "$mgr_ref" Escape 2>/dev/null
+        tmux copy-mode -q -t "$mgr_ref" 2>/dev/null
         tmux send-keys -t "$mgr_ref" \
           "Team is online (project: ${name}, dir: $dir). You have ${worker_count_tw:-0} workers in panes ${wp_list}. Your workers are in window ${tw}. Session: $session. All workers are idle and awaiting tasks. What should we work on?" Enter
       ) &
@@ -3179,7 +3178,6 @@ reload_session() {
 
         _kill_pane_child "$pane_ref" 1 || true
         tmux copy-mode -q -t "$pane_ref" 2>/dev/null || true
-        tmux send-keys -t "$pane_ref" Escape 2>/dev/null || true
         tmux send-keys -t "$pane_ref" "clear" Enter 2>/dev/null || true
         sleep 0.2
 
@@ -3563,6 +3561,9 @@ _init_doey_session() {
   write_worker_system_prompt "$runtime_dir" "$name" "$dir"
   tmux new-session -d -s "$session" -x 250 -y 80 -c "$dir" >/dev/null
 
+  # Prevent tmux from eating first character after Escape in send-keys
+  tmux set-option -s -t "$session" escape-time 0
+
   # Sync persistent tasks (.doey/tasks/) → runtime cache for hooks/TUI
   if [ -d "${dir}/.doey/tasks" ]; then
     _task_sync_to_runtime "${dir}/.doey/tasks" "${runtime_dir}/tasks"
@@ -3925,14 +3926,14 @@ MANIFEST
       final_team_count=$((final_team_count + 1))
     done
 
-    tmux send-keys -t "$session:0.1" Escape 2>/dev/null
+    tmux copy-mode -q -t "$session:0.1" 2>/dev/null
     tmux send-keys -t "$session:0.1" \
       "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is in the Core Team window. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." Enter
     # Taskmaster briefing (Core Team pane 1.0)
     local _tm_pane
     _tm_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
     _tm_pane="${_tm_pane:-1.0}"
-    tmux send-keys -t "$session:${_tm_pane}" Escape 2>/dev/null
+    tmux copy-mode -q -t "$session:${_tm_pane}" 2>/dev/null
     tmux send-keys -t "$session:${_tm_pane}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. You are ${DOEY_ROLE_COORDINATOR} at pane ${_tm_pane} in Core Team window. Worker team windows: ${final_team_windows}. Awaiting ${DOEY_ROLE_BOSS} instructions." Enter
   ) &
@@ -4446,7 +4447,7 @@ _brief_team() {
   [ -n "$team_role" ] && _role_brief=" Team role: ${team_role}."
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
-    tmux send-keys -t "${session}:${window_index}.0" Escape 2>/dev/null
+    tmux copy-mode -q -t "${session}:${window_index}.0" 2>/dev/null
     tmux send-keys -t "${session}:${window_index}.0" \
       "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from the Core Team window. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" Enter
   ) &
@@ -4687,7 +4688,6 @@ add_team_from_def() {
       _bf=$(mktemp "${runtime_dir}/brief_XXXXXX.txt")
       printf '%s' "$_brief_text" > "$_bf"
       tmux copy-mode -q -t "${session}:${window_index}.0" 2>/dev/null
-      tmux send-keys -t "${session}:${window_index}.0" Escape 2>/dev/null
       tmux load-buffer "$_bf"
       tmux paste-buffer -t "${session}:${window_index}.0"
       sleep 0.5
