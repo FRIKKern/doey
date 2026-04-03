@@ -110,6 +110,11 @@ func runTaskCreate(args []string) {
 
 	if s != nil {
 		defer s.Close()
+
+		// Create .task file first to get the canonical user-facing ID,
+		// then use the same ID for the DB to keep them in sync.
+		fileID, _ := ctl.CreateTask(pd, *title, *typ, *createdBy, *desc)
+
 		t := &store.Task{
 			Title:       *title,
 			Status:      "pending",
@@ -121,17 +126,15 @@ func runTaskCreate(args []string) {
 		if *planID != 0 {
 			t.PlanID = planID
 		}
+		if fid, parseErr := strconv.ParseInt(fileID, 10, 64); parseErr == nil {
+			t.ID = fid
+		}
 
 		dbID, err := s.CreateTask(t)
 		if err != nil {
 			fatal("task create: %v", err)
 		}
 		s.LogEvent(&store.Event{Type: "task_created", Source: eventSource(), TaskID: &dbID, Data: *title})
-
-		// Write-through: also create .task file for hook compatibility.
-		fileID, _ := ctl.CreateTask(pd, *title, *typ, *createdBy, *desc)
-		// Best-effort: if file write fails, DB is still authoritative.
-		_ = fileID
 
 		if jsonOutput {
 			printJSON(map[string]int64{"id": dbID})

@@ -57,6 +57,29 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 	now := time.Now().Unix()
 	t.CreatedAt = now
 	t.UpdatedAt = now
+
+	// When t.ID is set, preserve it (e.g., syncing from file-based tasks).
+	// SQLite allows explicit INTEGER PRIMARY KEY values with AUTOINCREMENT.
+	if t.ID != 0 {
+		_, err := s.db.Exec(`INSERT INTO tasks
+			(id, title, status, type, description, created_by, assigned_to, team,
+			 plan_id, tags, acceptance_criteria, current_phase, total_phases,
+			 notes, blockers, related_files, hypotheses, decision_log, result,
+			 files, commits, schema_version, review_verdict, review_findings,
+			 review_timestamp, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			t.ID, t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
+			t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
+			t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
+			t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
+			t.ReviewTimestamp, t.CreatedAt, t.UpdatedAt,
+		)
+		if err != nil {
+			return 0, err
+		}
+		return t.ID, nil
+	}
+
 	res, err := s.db.Exec(`INSERT INTO tasks
 		(title, status, type, description, created_by, assigned_to, team,
 		 plan_id, tags, acceptance_criteria, current_phase, total_phases,
