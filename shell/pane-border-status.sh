@@ -67,10 +67,18 @@ if [ -f "$_status_file" ]; then
     _task_id=$(echo "$_task_field" | sed -n 's/.*#\([0-9][0-9]*\).*/\1/p' | head -1)
     if [ -n "$_task_id" ]; then
       _task_title=""
-      for _td in "$RUNTIME_DIR" "$(env_val "${RUNTIME_DIR}/session.env" PROJECT_DIR 2>/dev/null)/.doey/tasks"; do
-        _tf="${_td}/tasks/${_task_id}.task"; [ -f "$_tf" ] || _tf="${_td}/${_task_id}.task"
-        [ -f "$_tf" ] && { _task_title=$(grep '^TASK_TITLE=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'); break; }
-      done
+      _pbs_proj_dir=$(env_val "${RUNTIME_DIR}/session.env" PROJECT_DIR 2>/dev/null) || _pbs_proj_dir=""
+      # DB-first: try doey-ctl
+      if [ -n "$_pbs_proj_dir" ]; then
+        _task_title=$(doey-ctl task get --id "$_task_id" --project-dir "$_pbs_proj_dir" 2>/dev/null | sed -n 's/^Title:[[:space:]]*//p')
+      fi
+      # File fallback
+      if [ -z "$_task_title" ]; then
+        for _td in "$RUNTIME_DIR" "${_pbs_proj_dir}/.doey/tasks"; do
+          _tf="${_td}/tasks/${_task_id}.task"; [ -f "$_tf" ] || _tf="${_td}/${_task_id}.task"
+          [ -f "$_tf" ] && { _task_title=$(grep '^TASK_TITLE=' "$_tf" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^"//;s/"$//'); break; }
+        done
+      fi
       if [ -n "$_task_title" ]; then
         _short_title=$(printf '%.20s' "$_task_title")
         [ ${#_task_title} -gt 20 ] && _short_title="${_short_title}.."

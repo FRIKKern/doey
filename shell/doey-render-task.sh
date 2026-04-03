@@ -101,11 +101,37 @@ for item in arr:
 # ── Parse .task file ───────────────────────────────────────────────────
 parse_task() {
   local file="$1" line
-  [ -s "$file" ] || return 1
   TASK_ID=""; TASK_TITLE=""; TASK_STATUS=""; TASK_CREATED=""
   TASK_TYPE=""; TASK_OWNER=""; TASK_PRIORITY=""; TASK_SUMMARY=""
   TASK_DESCRIPTION=""; TASK_SCHEMA_VERSION=""
 
+  # DB-first path: extract task ID from filename if possible
+  local _db_tid=""
+  _db_tid=$(basename "$file" .task 2>/dev/null) || true
+  if [ -n "$_db_tid" ] && echo "$_db_tid" | grep -qE '^[0-9]+$'; then
+    local _db_proj=""
+    _db_proj=$(echo "$file" | sed -n 's|^\(.*\)/\.doey/tasks/.*|@\1|p;s|^\(.*\)/tasks/.*|@\1|p' | head -1 | tr -d '@') || true
+    if [ -n "$_db_proj" ]; then
+      local _db_out=""
+      _db_out=$(doey-ctl task get --id "$_db_tid" --project-dir "$_db_proj" 2>/dev/null) || true
+      if [ -n "$_db_out" ]; then
+        TASK_ID=$(echo "$_db_out" | sed -n 's/^ID:[[:space:]]*//p')
+        TASK_TITLE=$(echo "$_db_out" | sed -n 's/^Title:[[:space:]]*//p')
+        TASK_STATUS=$(echo "$_db_out" | sed -n 's/^Status:[[:space:]]*//p')
+        TASK_TYPE=$(echo "$_db_out" | sed -n 's/^Type:[[:space:]]*//p')
+        if [ -n "${TASK_ID:-}" ]; then
+          TASK_TYPE="${TASK_TYPE:-feature}"
+          TASK_OWNER="${TASK_OWNER:-Boss}"
+          TASK_PRIORITY="${TASK_PRIORITY:-P2}"
+          TASK_SUMMARY="${TASK_SUMMARY:-$TASK_TITLE}"
+          return 0
+        fi
+      fi
+    fi
+  fi
+
+  # File fallback
+  [ -s "$file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
       TASK_ID)             TASK_ID="${line#*=}" ;;

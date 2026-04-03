@@ -46,9 +46,16 @@ COMPLETED_COUNT=0
 while IFS= read -r task_id; do
   [ -n "$task_id" ] || continue
   TASK_FILE="${TASKS_DIR}/${task_id}.task"
-  [ -f "$TASK_FILE" ] || continue
 
-  CURRENT_STATUS=$(grep '^TASK_STATUS=' "$TASK_FILE" | head -1 | cut -d= -f2-) || continue
+  # DB fast path for status lookup, file fallback
+  CURRENT_STATUS=""
+  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+    CURRENT_STATUS=$(doey-ctl task get --id "$task_id" --project-dir "$PROJECT_DIR" 2>/dev/null | sed -n 's/^Status:[[:space:]]*//p')
+  fi
+  if [ -z "$CURRENT_STATUS" ]; then
+    [ -f "$TASK_FILE" ] || continue
+    CURRENT_STATUS=$(grep '^TASK_STATUS=' "$TASK_FILE" | head -1 | cut -d= -f2-) || continue
+  fi
   CURRENT_STATUS="${CURRENT_STATUS%\"}"; CURRENT_STATUS="${CURRENT_STATUS#\"}"
   case "$CURRENT_STATUS" in
     active|in_progress|pending_user_confirmation) ;;

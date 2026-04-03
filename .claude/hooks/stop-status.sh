@@ -31,10 +31,18 @@ PROJECT_DIR=$(_resolve_project_dir)
 _last_task_tags="" _last_task_type="" _last_files=""
 if [ "$STOP_STATUS" = "FINISHED" ]; then
   if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ]; then
-    _taskfile="${PROJECT_DIR}/.doey/tasks/${task_id}.task"
-    if [ -f "$_taskfile" ]; then
-      _last_task_tags=$(grep "^TASK_TAGS=" "$_taskfile" 2>/dev/null | cut -d= -f2-) || _last_task_tags=""
-      _last_task_type=$(grep "^TASK_TYPE=" "$_taskfile" 2>/dev/null | cut -d= -f2-) || _last_task_type=""
+    if command -v doey-ctl >/dev/null 2>&1; then
+      _tinfo=$(doey-ctl task get --id "$task_id" --project-dir "$PROJECT_DIR" 2>/dev/null) || _tinfo=""
+      _last_task_type=$(echo "$_tinfo" | sed -n 's/^Type:[[:space:]]*//p')
+      # Tags not in doey-ctl task get output — fall back to file
+      _last_task_tags=""
+    fi
+    if [ -z "$_last_task_type" ]; then
+      _taskfile="${PROJECT_DIR}/.doey/tasks/${task_id}.task"
+      if [ -f "$_taskfile" ]; then
+        _last_task_tags=$(grep "^TASK_TAGS=" "$_taskfile" 2>/dev/null | cut -d= -f2-) || _last_task_tags=""
+        _last_task_type=$(grep "^TASK_TYPE=" "$_taskfile" 2>/dev/null | cut -d= -f2-) || _last_task_type=""
+      fi
     fi
   fi
   _result_file="${RUNTIME_DIR}/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"

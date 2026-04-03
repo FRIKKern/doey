@@ -108,10 +108,37 @@ task_create() { # project_dir title [type] [created_by] [description] → echo t
 }
 
 task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
-  # TODO(phase3): migrate to doey db-task get (requires JSON→shell var mapping)
   local file="$1"
   [ -s "$file" ] || return 1
 
+  # DB fast path: try doey-ctl first
+  if command -v doey-ctl >/dev/null 2>&1; then
+    local _tr_id _tr_pd _tr_out
+    _tr_id=$(basename "$file" .task)
+    _tr_pd=$(cd "$(dirname "$file")/../.." 2>/dev/null && pwd)
+    _tr_out=$(doey-ctl task get --id "$_tr_id" --project-dir "$_tr_pd" 2>/dev/null) && [ -n "$_tr_out" ] && {
+      TASK_SCHEMA_VERSION="" TASK_ID="" TASK_TITLE="" TASK_STATUS="" TASK_TYPE=""
+      TASK_TAGS="" TASK_CREATED_BY="" TASK_ASSIGNED_TO="" TASK_DESCRIPTION=""
+      TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES="" TASK_DECISION_LOG=""
+      TASK_SUBTASKS="" TASK_RELATED_FILES="" TASK_BLOCKERS="" TASK_TIMESTAMPS=""
+      TASK_CURRENT_PHASE="" TASK_TOTAL_PHASES="" TASK_NOTES="" TASK_CREATED=""
+      TASK_ID=$(printf '%s' "$_tr_out" | sed -n 's/^ID:[[:space:]]*//p')
+      TASK_TITLE=$(printf '%s' "$_tr_out" | sed -n 's/^Title:[[:space:]]*//p')
+      TASK_STATUS=$(printf '%s' "$_tr_out" | sed -n 's/^Status:[[:space:]]*//p')
+      TASK_TYPE=$(printf '%s' "$_tr_out" | sed -n 's/^Type:[[:space:]]*//p')
+      TASK_TEAM=$(printf '%s' "$_tr_out" | sed -n 's/^Team:[[:space:]]*//p')
+      TASK_TAGS=$(printf '%s' "$_tr_out" | sed -n 's/^Tags:[[:space:]]*//p')
+      TASK_CREATED_BY=$(printf '%s' "$_tr_out" | sed -n 's/^Created-By:[[:space:]]*//p')
+      TASK_ASSIGNED_TO=$(printf '%s' "$_tr_out" | sed -n 's/^Assigned-To:[[:space:]]*//p')
+      TASK_DESCRIPTION=$(printf '%s' "$_tr_out" | sed -n 's/^Description:[[:space:]]*//p')
+      TASK_CREATED=$(printf '%s' "$_tr_out" | sed -n 's/^Created:[[:space:]]*//p')
+      [ -n "${TASK_ID:-}" ] || return 1
+      : "${TASK_TYPE:=feature}" "${TASK_CREATED_BY:=Boss}"
+      return 0
+    }
+  fi
+
+  # File fallback
   TASK_SCHEMA_VERSION="" TASK_ID="" TASK_TITLE="" TASK_STATUS="" TASK_TYPE=""
   TASK_TAGS="" TASK_CREATED_BY="" TASK_ASSIGNED_TO="" TASK_DESCRIPTION=""
   TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES="" TASK_DECISION_LOG=""
@@ -216,6 +243,25 @@ task_update_field() { # task_file field_name new_value → atomic upsert
 }
 
 _task_read_field() { # task_file field_name → echo field value
+  # DB fast path: map field name to doey-ctl output key
+  if command -v doey-ctl >/dev/null 2>&1; then
+    local _trf_key=""
+    case "$2" in
+      TASK_STATUS) _trf_key="Status" ;; TASK_TITLE) _trf_key="Title" ;;
+      TASK_TYPE) _trf_key="Type" ;; TASK_TEAM) _trf_key="Team" ;;
+      TASK_ID) _trf_key="ID" ;; TASK_TAGS) _trf_key="Tags" ;;
+      TASK_CREATED_BY) _trf_key="Created-By" ;; TASK_DESCRIPTION) _trf_key="Description" ;;
+    esac
+    if [ -n "$_trf_key" ]; then
+      local _trf_id _trf_pd _trf_val
+      _trf_id=$(basename "$1" .task)
+      _trf_pd=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
+      _trf_val=$(doey-ctl task get --id "$_trf_id" --project-dir "$_trf_pd" 2>/dev/null | sed -n "s/^${_trf_key}:[[:space:]]*//p")
+      [ -n "$_trf_val" ] && { printf '%s' "$_trf_val"; return 0; }
+    fi
+  fi
+
+  # File fallback
   local _trf_result="" _trf_line
   while IFS= read -r _trf_line || [ -n "$_trf_line" ]; do
     case "${_trf_line%%=*}" in
@@ -295,9 +341,17 @@ _task_age_str() { # epoch → echo human-readable age (e.g., "3h")
   else echo "$((elapsed / 86400))d"; fi
 }
 
-task_list() { # TODO(phase3): migrate to doey db-task list (output format differs)
-  # project_dir [--status filter] [--all]
+task_list() { # project_dir [--status filter] [--all]
   local project_dir="$1"; shift
+
+  # DB fast path: try doey-ctl first (no --status/--all filtering support yet)
+  if command -v doey-ctl >/dev/null 2>&1 && [ $# -eq 0 ]; then
+    local _tl_out
+    _tl_out=$(doey-ctl task list --project-dir "$project_dir" 2>/dev/null) && [ -n "$_tl_out" ] && {
+      printf '%s\n' "$_tl_out"
+      return 0
+    }
+  fi
   local status_filter="" show_all=0
 
   while [ $# -gt 0 ]; do
@@ -991,6 +1045,20 @@ _tokenize() { # text stop_words → sets _TKN_KEYS and _TKN_COUNT in caller
 
 task_find_similar() { # project_dir title_string → echo matching TASK_ID or empty
   local project_dir="$1" title_string="$2"
+
+  # DB fast path: grep doey-ctl task list output
+  if command -v doey-ctl >/dev/null 2>&1; then
+    local _tfs_out _tfs_match
+    _tfs_out=$(doey-ctl task list --project-dir "$project_dir" 2>/dev/null) && [ -n "$_tfs_out" ] && {
+      _tfs_match=$(printf '%s\n' "$_tfs_out" | grep -i "$title_string" | head -1) && [ -n "$_tfs_match" ] && {
+        # Extract first field (ID) from tabular output
+        printf '%s' "$_tfs_match" | awk '{print $1}'
+        return 0
+      }
+    }
+  fi
+
+  # File fallback
   local tasks_dir="${project_dir}/.doey/tasks"
   [ -d "$tasks_dir" ] || return 0
 

@@ -507,9 +507,13 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROL
         case "$_CMD" in *":0."*) ;; *":"[0-9]*"."*) _tgt_window="team" ;; esac
         if [ -n "$_tgt_window" ]; then
           _has_active=false
-          _task_dir="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}/.doey/tasks"
-          if [ -d "$_task_dir" ]; then
-            for _tf in "$_task_dir"/*.task; do
+          _task_pd="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+          if command -v doey-ctl >/dev/null 2>&1 && [ -n "$_task_pd" ]; then
+            _ac=$(doey-ctl task list --status active --project-dir "$_task_pd" 2>/dev/null | awk 'NR>1 && /^[0-9]/{found=1} END{print found+0}')
+            _ic=$(doey-ctl task list --status in_progress --project-dir "$_task_pd" 2>/dev/null | awk 'NR>1 && /^[0-9]/{found=1} END{print found+0}')
+            [ "$((_ac + _ic))" -gt 0 ] && _has_active=true
+          elif [ -d "${_task_pd}/.doey/tasks" ]; then
+            for _tf in "${_task_pd}"/.doey/tasks/*.task; do
               [ -f "$_tf" ] || continue
               case "$(grep '^TASK_STATUS=' "$_tf" 2>/dev/null | head -1)" in
                 *=active|*=in_progress) _has_active=true; break ;;
