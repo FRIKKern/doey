@@ -370,6 +370,7 @@ func (m PlansModel) updateMouse(msg tea.MouseMsg) (PlansModel, tea.Cmd) {
 				if index >= 0 && index < len(m.entries) {
 					m.list.Select(index)
 					m.leftFocused = false
+					m.detailViewport.YOffset = 0
 					m.loadSelectedDetail()
 					return m, nil
 				}
@@ -414,10 +415,12 @@ func (m PlansModel) updateList(msg tea.KeyMsg) (PlansModel, tea.Cmd) {
 			return m.acceptSelectedPlan()
 		}
 		m.leftFocused = false
+		m.detailViewport.YOffset = 0
 		m.loadSelectedDetail()
 		return m, nil
 	case key.Matches(msg, m.keyMap.RightPanel):
 		m.leftFocused = false
+		m.detailViewport.YOffset = 0
 		m.loadSelectedDetail()
 		return m, nil
 	}
@@ -731,8 +734,8 @@ func (m *PlansModel) loadSelectedDetail() {
 	m.selectedPlan = &plan
 
 	content := m.renderPlanDetail(&plan)
+	m.detailViewport.YOffset = 0
 	m.detailViewport.SetContent(content)
-	m.detailViewport.GotoTop()
 }
 
 // renderPlanDetail renders the plan detail for the right panel.
