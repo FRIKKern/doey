@@ -76,25 +76,60 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 	return res.LastInsertId()
 }
 
+// scanTask scans a task row into a Task struct, handling NULL text columns
+// via sql.NullString so that NULL becomes "".
+func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
+	var t Task
+	var (
+		typ, desc, createdBy, assignedTo, team          sql.NullString
+		tags, acceptCrit, notes, blockers, relFiles     sql.NullString
+		hypotheses, decisionLog, result, files, commits sql.NullString
+		reviewVerdict, reviewFindings, reviewTimestamp   sql.NullString
+	)
+	err := scanner.Scan(
+		&t.ID, &t.Title, &t.Status, &typ, &desc, &createdBy, &assignedTo, &team,
+		&t.PlanID, &tags, &acceptCrit, &t.CurrentPhase, &t.TotalPhases,
+		&notes, &blockers, &relFiles, &hypotheses, &decisionLog, &result,
+		&files, &commits, &t.SchemaVersion, &reviewVerdict, &reviewFindings,
+		&reviewTimestamp, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		return t, err
+	}
+	t.Type = typ.String
+	t.Description = desc.String
+	t.CreatedBy = createdBy.String
+	t.AssignedTo = assignedTo.String
+	t.Team = team.String
+	t.Tags = tags.String
+	t.AcceptanceCriteria = acceptCrit.String
+	t.Notes = notes.String
+	t.Blockers = blockers.String
+	t.RelatedFiles = relFiles.String
+	t.Hypotheses = hypotheses.String
+	t.DecisionLog = decisionLog.String
+	t.Result = result.String
+	t.Files = files.String
+	t.Commits = commits.String
+	t.ReviewVerdict = reviewVerdict.String
+	t.ReviewFindings = reviewFindings.String
+	t.ReviewTimestamp = reviewTimestamp.String
+	return t, nil
+}
+
 func (s *Store) GetTask(id int64) (*Task, error) {
-	t := &Task{}
-	err := s.db.QueryRow(`SELECT
+	row := s.db.QueryRow(`SELECT
 		id, title, status, type, description, created_by, assigned_to, team,
 		plan_id, tags, acceptance_criteria, current_phase, total_phases,
 		notes, blockers, related_files, hypotheses, decision_log, result,
 		files, commits, schema_version, review_verdict, review_findings,
 		review_timestamp, created_at, updated_at
-		FROM tasks WHERE id = ?`, id).Scan(
-		&t.ID, &t.Title, &t.Status, &t.Type, &t.Description, &t.CreatedBy, &t.AssignedTo, &t.Team,
-		&t.PlanID, &t.Tags, &t.AcceptanceCriteria, &t.CurrentPhase, &t.TotalPhases,
-		&t.Notes, &t.Blockers, &t.RelatedFiles, &t.Hypotheses, &t.DecisionLog, &t.Result,
-		&t.Files, &t.Commits, &t.SchemaVersion, &t.ReviewVerdict, &t.ReviewFindings,
-		&t.ReviewTimestamp, &t.CreatedAt, &t.UpdatedAt,
-	)
+		FROM tasks WHERE id = ?`, id)
+	t, err := scanTask(row)
 	if err != nil {
 		return nil, err
 	}
-	return t, nil
+	return &t, nil
 }
 
 func (s *Store) ListTasks(status string) ([]Task, error) {
@@ -124,14 +159,8 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 
 	var tasks []Task
 	for rows.Next() {
-		var t Task
-		if err := rows.Scan(
-			&t.ID, &t.Title, &t.Status, &t.Type, &t.Description, &t.CreatedBy, &t.AssignedTo, &t.Team,
-			&t.PlanID, &t.Tags, &t.AcceptanceCriteria, &t.CurrentPhase, &t.TotalPhases,
-			&t.Notes, &t.Blockers, &t.RelatedFiles, &t.Hypotheses, &t.DecisionLog, &t.Result,
-			&t.Files, &t.Commits, &t.SchemaVersion, &t.ReviewVerdict, &t.ReviewFindings,
-			&t.ReviewTimestamp, &t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
+		t, err := scanTask(rows)
+		if err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, t)
