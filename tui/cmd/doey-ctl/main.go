@@ -525,13 +525,17 @@ func msgNudgePane(targetPane, rtDir string) {
 		}
 	}
 
-	// Skip user-facing panes — injecting send-keys corrupts input
+	// Skip user-facing panes — injecting send-keys corrupts input.
+	// Still fire a trigger file so the recipient can detect new messages via polling.
 	userPanes := os.Getenv("DOEY_USER_PANES")
 	if userPanes == "" {
 		userPanes = "0.1" // default: Boss pane
 	}
 	for _, up := range strings.Split(userPanes, ",") {
 		if strings.TrimSpace(up) == paneID {
+			if rtDir != "" {
+				_ = ctl.FireTrigger(rtDir, targetPane)
+			}
 			return
 		}
 	}

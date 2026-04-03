@@ -358,7 +358,7 @@ Types: `worker_finished (done)` -> read result, synthesize, update log. `worker_
 **Stay active while ANY worker is BUSY.** You drive this loop — don't go idle or wait for user input.
 
 Repeat until all done:
-1. **Drain messages** from your queue
+1. **Drain messages** — `doey msg read --pane "${DOEY_TEAM_WINDOW}.0"` (run this EVERY iteration — messages pile up silently if you skip it)
 2. **Check status** — `${RUNTIME_DIR}/status/*_${W}_*.status`
 3. **Collect results** — `${RUNTIME_DIR}/results/pane_${W}_*.json` for FINISHED workers
 4. **Synthesize** — distill results, don't just log them raw

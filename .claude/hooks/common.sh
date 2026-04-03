@@ -42,7 +42,7 @@ init_hook() {
   [ -z "$RUNTIME_DIR" ] && exit 0
 
   PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{session_name}:#{window_index}.#{pane_index}') || exit 0
-  PANE_SAFE=${PANE//[-:.]/_}
+  PANE_SAFE=$(printf '%s' "$PANE" | tr ':.-' '_')
   SESSION_NAME="${PANE%%:*}"
   PANE_INDEX="${PANE##*.}"
   local wp="${PANE#*:}"

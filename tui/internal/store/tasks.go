@@ -59,8 +59,12 @@ type TaskLogEntry struct {
 
 func (s *Store) CreateTask(t *Task) (int64, error) {
 	now := time.Now().Unix()
-	t.CreatedAt = now
-	t.UpdatedAt = now
+	if t.CreatedAt == 0 {
+		t.CreatedAt = now
+	}
+	if t.UpdatedAt == 0 {
+		t.UpdatedAt = now
+	}
 
 	// When t.ID is set, preserve it (e.g., syncing from file-based tasks).
 	// SQLite allows explicit INTEGER PRIMARY KEY values with AUTOINCREMENT.
@@ -196,7 +200,9 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 }
 
 func (s *Store) UpdateTask(t *Task) error {
-	t.UpdatedAt = time.Now().Unix()
+	if t.UpdatedAt == 0 {
+		t.UpdatedAt = time.Now().Unix()
+	}
 	_, err := s.db.Exec(`UPDATE tasks SET
 		title = ?, status = ?, type = ?, description = ?, created_by = ?,
 		assigned_to = ?, team = ?, plan_id = ?, tags = ?, acceptance_criteria = ?,

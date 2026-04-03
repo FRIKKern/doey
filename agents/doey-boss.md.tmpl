@@ -76,11 +76,25 @@ fi
 
 ## Reading {{DOEY_ROLE_COORDINATOR}} Messages
 
-On each turn, check for messages from {{DOEY_ROLE_COORDINATOR}}:
+**Check messages on EVERY turn** — after completing any action, after dispatching, after waking from compaction. Unread messages pile up silently.
 
 ```bash
 doey msg read --pane 0.1
 ```
+
+### Trigger-file fast path
+
+{{DOEY_ROLE_COORDINATOR}} writes a trigger file when it sends you a message. Check for it and drain immediately:
+
+```bash
+TRIGGER="${RUNTIME_DIR}/triggers/doey_doey_0_1.trigger"
+if [ -f "$TRIGGER" ]; then
+  doey msg read --pane 0.1
+  rm -f "$TRIGGER"
+fi
+```
+
+**When to check:** After every task dispatch, after every `AskUserQuestion` response, after compaction recovery, and at the start of every turn. If in doubt, check — reading an empty queue is cheap; missing a message is not.
 
 ### Message types from {{DOEY_ROLE_COORDINATOR}}
 
