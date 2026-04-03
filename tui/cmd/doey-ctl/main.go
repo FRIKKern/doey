@@ -543,12 +543,14 @@ func msgNudgePane(targetPane, rtDir string) {
 		}
 	}
 
-	// Check if BUSY — skip nudge if so
+	// Check if BUSY — skip send-keys (would interfere) but still fire trigger
+	// so taskmaster-wait.sh picks up the message on next check cycle.
 	if rtDir != "" {
-		// Build safe name for status file lookup
 		paneSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(session + ":" + paneID)
 		entry, err := ctl.ReadStatus(rtDir, paneSafe)
 		if err == nil && entry.Status == ctl.StatusBusy {
+			_ = ctl.FireTrigger(rtDir, targetPane)
+			fmt.Fprintf(os.Stderr, "doey-ctl: nudge: Taskmaster BUSY, trigger file written for deferred wake\n")
 			return
 		}
 	}

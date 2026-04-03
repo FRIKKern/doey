@@ -294,15 +294,24 @@ if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
   touch "$_sleep_flag"
 fi
 
-_sleep_dur=30
+_sleep_dur=15
 # Use inotifywait for event-driven blocking if available
 if command -v inotifywait >/dev/null 2>&1; then
+  mkdir -p "${RUNTIME_DIR}/triggers" 2>/dev/null
   inotifywait -qq -t "$_sleep_dur" -e create,modify \
     "${RUNTIME_DIR}/status/" \
     "${RUNTIME_DIR}/results/" \
-    "${MSG_DIR}/" 2>/dev/null || true
+    "${MSG_DIR}/" \
+    "${RUNTIME_DIR}/triggers/" 2>/dev/null || true
 else
   sleep "$_sleep_dur"
+fi
+# Consume trigger files written during sleep/inotifywait (race edge case)
+if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
+  rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
+  _taskmaster_dbg_wake "trigger_post_sleep" "$_sleep_dur"
+  echo "WAKE_REASON=TRIGGERED"
+  exit 0
 fi
 # One-shot: return control immediately after sleep/inotifywait.
 # Do NOT re-check — Claude must reach its prompt to process paste-buffer input.

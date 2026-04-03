@@ -102,6 +102,8 @@ func CleanupMsgs(runtimeDir, paneSafe string) error {
 }
 
 // FireTrigger touches a trigger file for the given pane in the triggers directory.
+// Also touches the legacy status/taskmaster_trigger path so taskmaster-wait.sh
+// detects the wake signal regardless of which path inotifywait monitors.
 func FireTrigger(runtimeDir, paneSafe string) error {
 	dir := filepath.Join(runtimeDir, TriggersSubdir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -112,7 +114,18 @@ func FireTrigger(runtimeDir, paneSafe string) error {
 	if err != nil {
 		return fmt.Errorf("ctl: fire trigger create: %w", err)
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	// Redundant legacy trigger for taskmaster-wait.sh compatibility
+	legacyDir := filepath.Join(runtimeDir, StatusSubdir)
+	_ = os.MkdirAll(legacyDir, 0755)
+	legacyPath := filepath.Join(legacyDir, "taskmaster_trigger")
+	if lf, lerr := os.Create(legacyPath); lerr == nil {
+		_ = lf.Close()
+	}
+	return nil
 }
 
 // parseMsg reads a single .msg file and extracts headers and body.

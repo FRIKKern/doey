@@ -100,6 +100,14 @@ PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.-' '_')
 mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/scratchpad"
 atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
 
+# Write BOOTING status so other components know this pane exists but isn't ready yet
+if [ "$ROLE" != "info_panel" ]; then
+  _boot_now=$(date '+%Y-%m-%dT%H:%M:%S%z')
+  printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$_boot_now" "BOOTING" "startup" \
+    > "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" \
+    && mv "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+fi
+
 wt_dir=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 
 _repo_path=""
