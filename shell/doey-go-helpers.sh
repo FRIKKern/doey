@@ -17,7 +17,6 @@ _GO_HELPERS_PROJECT_DIR="$(cd "$_GO_HELPERS_SCRIPT_DIR/.." && pwd)"
 # Format: name|module_dir|build_target|output_path
 _DOEY_GO_TARGETS="doey-tui|tui|./cmd/doey-tui/|${HOME}/.local/bin/doey-tui
 doey-ctl|tui|./cmd/doey-ctl/|${HOME}/.local/bin/doey-ctl
-# ↑ Internal binary — user-facing CLI is 'doey'
 doey-router|tui|./cmd/doey-router/|${HOME}/.local/bin/doey-router
 doey-remote-setup|tui|./cmd/doey-remote-setup/|${HOME}/.local/bin/doey-remote-setup"
 

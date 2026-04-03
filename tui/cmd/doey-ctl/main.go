@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +15,53 @@ import (
 	"github.com/doey-cli/doey/tui/internal/ctl"
 	"github.com/doey-cli/doey/tui/internal/store"
 )
+
+// wpFormat matches W.P pane ID format (e.g., "2.1", "0.0", "10.3").
+var wpFormat = regexp.MustCompile(`^\d+\.\d+$`)
+
+// resolvePaneID converts a W.P format pane ID (e.g., "2.1") to the safe name
+// format used by status files (e.g., "doey_doey_2_1"). If the input already
+// contains underscores (session_W_P format), it is returned unchanged.
+func resolvePaneID(input string) string {
+	if input == "" {
+		return input
+	}
+	// Already in safe name format (contains underscores) — pass through
+	if strings.Contains(input, "_") {
+		return input
+	}
+	// W.P format — convert to session_W_P
+	if wpFormat.MatchString(input) {
+		session := getSessionName()
+		if session == "" {
+			return input
+		}
+		safe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(session)
+		wp := strings.Replace(input, ".", "_", 1)
+		return safe + "_" + wp
+	}
+	// Unknown format — return as-is
+	return input
+}
+
+// getSessionName returns the tmux session name from env or tmux query.
+func getSessionName() string {
+	if v := os.Getenv("DOEY_SESSION"); v != "" {
+		return v
+	}
+	if v := os.Getenv("SESSION_NAME"); v != "" {
+		return v
+	}
+	// Try tmux
+	out, err := exec.Command("tmux", "display-message", "-p", "#S").Output()
+	if err == nil {
+		s := strings.TrimSpace(string(out))
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
 
 // jsonOutput controls whether output is JSON or human-readable.
 var jsonOutput bool
@@ -103,7 +152,7 @@ func openStoreIfExists(dir string) (*store.Store, error) {
 func runMsgCmd(args []string) {
 	if len(args) < 1 {
 		printMsgHelp()
-		fatal("msg: missing subcommand: send, read, read-all, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n")
+		fatal("msg: missing subcommand: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n")
 	}
 	if isHelp(args[0]) {
 		printMsgHelp()
@@ -118,6 +167,8 @@ func runMsgCmd(args []string) {
 		msgList(args[1:])
 	case "read-all":
 		msgReadAll(args[1:])
+	case "mark-read":
+		msgMarkRead(args[1:])
 	case "count":
 		msgCount(args[1:])
 	case "clean":
@@ -125,7 +176,7 @@ func runMsgCmd(args []string) {
 	case "trigger":
 		msgTrigger(args[1:])
 	default:
-		fatal("msg: unknown subcommand: %q. Valid: send, read, read-all, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n", args[0])
+		fatal("msg: unknown subcommand: %q. Valid: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n", args[0])
 	}
 }
 
@@ -145,6 +196,8 @@ func msgSend(args []string) {
 	if *to == "" || *from == "" || *subject == "" {
 		fatal("msg send: --to, --from, and --subject are required\nRun 'doey-ctl msg send -h' for usage.\n")
 	}
+	*to = resolvePaneID(*to)
+	*from = resolvePaneID(*from)
 
 	sentViaDB := false
 	// Try DB first
@@ -194,6 +247,7 @@ func msgSend(args []string) {
 func msgRead(args []string) {
 	fs := flag.NewFlagSet("msg read", flag.ExitOnError)
 	pane := fs.String("pane", "", "Pane safe name")
+	unread := fs.Bool("unread", false, "Only return unread messages (marks them as read after)")
 	rt := fs.String("runtime", "", "Runtime directory")
 	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
@@ -202,14 +256,21 @@ func msgRead(args []string) {
 	if *pane == "" {
 		fatal("msg read: --pane is required\nRun 'doey-ctl msg read -h' for usage.\n")
 	}
+	*pane = resolvePaneID(*pane)
 
 	// Try DB first
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err == nil && s != nil {
 		defer s.Close()
-		msgs, err := s.ListMessages(*pane, false)
+		msgs, err := s.ListMessages(*pane, *unread)
 		if err != nil {
 			fatal("msg read: db: %v\n", err)
+		}
+		// When --unread, mark returned messages as read
+		if *unread && len(msgs) > 0 {
+			for _, m := range msgs {
+				_ = s.MarkRead(m.ID)
+			}
 		}
 		if jsonOutput {
 			printJSON(msgs)
@@ -225,7 +286,7 @@ func msgRead(args []string) {
 		return
 	}
 
-	// Fall back to file
+	// Fall back to file (--unread not supported in file mode)
 	msgs, err := ctl.ReadMsgs(runtimeDir(*rt), *pane)
 	if err != nil {
 		fatal("msg read: %v\n", err)
@@ -246,6 +307,8 @@ func msgList(args []string) {
 	dir := fs.String("project-dir", "", "Project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
+
+	*to = resolvePaneID(*to)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
@@ -287,6 +350,7 @@ func msgReadAll(args []string) {
 	if *to == "" {
 		fatal("msg read-all: --to (or --pane) is required\nRun 'doey-ctl msg read-all -h' for usage.\n")
 	}
+	*to = resolvePaneID(*to)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
@@ -304,6 +368,33 @@ func msgReadAll(args []string) {
 	}
 }
 
+func msgMarkRead(args []string) {
+	fs := flag.NewFlagSet("msg mark-read", flag.ExitOnError)
+	pane := fs.String("pane", "", "Pane safe name (required)")
+	dir := fs.String("project-dir", "", "Project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	if *pane == "" {
+		fatal("msg mark-read: --pane is required\nRun 'doey-ctl msg mark-read -h' for usage.\n")
+	}
+
+	s, err := openStoreIfExists(projectDir(*dir))
+	if err != nil || s == nil {
+		fatal("msg mark-read: requires DB (.doey/doey.db)\n")
+	}
+	defer s.Close()
+
+	if err := s.MarkAllRead(*pane); err != nil {
+		fatal("msg mark-read: %v\n", err)
+	}
+	if jsonOutput {
+		printJSON(map[string]string{"status": "marked-read", "pane": *pane})
+	} else {
+		fmt.Println("marked-read")
+	}
+}
+
 func msgCount(args []string) {
 	fs := flag.NewFlagSet("msg count", flag.ExitOnError)
 	to := fs.String("to", "", "Recipient pane (required)")
@@ -314,6 +405,7 @@ func msgCount(args []string) {
 	if *to == "" {
 		fatal("msg count: --to is required\nRun 'doey-ctl msg count -h' for usage.\n")
 	}
+	*to = resolvePaneID(*to)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
@@ -342,6 +434,7 @@ func msgClean(args []string) {
 	if *pane == "" {
 		fatal("msg clean: --pane is required\nRun 'doey-ctl msg clean -h' for usage.\n")
 	}
+	*pane = resolvePaneID(*pane)
 	if err := ctl.CleanupMsgs(runtimeDir(*rt), *pane); err != nil {
 		fatal("msg clean: %v\n", err)
 	}
@@ -362,6 +455,7 @@ func msgTrigger(args []string) {
 	if *pane == "" {
 		fatal("msg trigger: --pane is required\nRun 'doey-ctl msg trigger -h' for usage.\n")
 	}
+	*pane = resolvePaneID(*pane)
 	rtDir := runtimeDir(*rt)
 	if err := ctl.FireTrigger(rtDir, *pane); err != nil {
 		fatal("msg trigger: %v\n", err)
@@ -402,9 +496,15 @@ func msgNudgePane(targetPane, rtDir string) {
 		}
 	}
 
-	// Skip Boss pane (0.1) — it's user-facing, injecting send-keys corrupts input
-	if paneID == "0.1" {
-		return
+	// Skip user-facing panes — injecting send-keys corrupts input
+	userPanes := os.Getenv("DOEY_USER_PANES")
+	if userPanes == "" {
+		userPanes = "0.1" // default: Boss pane
+	}
+	for _, up := range strings.Split(userPanes, ",") {
+		if strings.TrimSpace(up) == paneID {
+			return
+		}
 	}
 
 	// Check if BUSY — skip nudge if so
@@ -456,7 +556,7 @@ func statusGet(args []string) {
 	if fs.NArg() < 1 {
 		fatal("status get: <pane> argument required\nRun 'doey-ctl status get -h' for usage.\n")
 	}
-	pane := fs.Arg(0)
+	pane := resolvePaneID(fs.Arg(0))
 
 	// Try DB first
 	s, err := openStoreIfExists(projectDir(*dir))
@@ -525,6 +625,7 @@ func statusSet(args []string) {
 	if *pane == "" || *status == "" {
 		fatal("status set: --pane and --status are required\nRun 'doey-ctl status set -h' for usage.\n")
 	}
+	*pane = resolvePaneID(*pane)
 
 	// Try DB
 	s, err := openStoreIfExists(projectDir(*dir))
@@ -639,7 +740,7 @@ func healthCheck(args []string) {
 	if fs.NArg() < 1 {
 		fatal("health check: <pane_safe> argument required\nRun 'doey-ctl health check -h' for usage.\n")
 	}
-	paneSafe := fs.Arg(0)
+	paneSafe := resolvePaneID(fs.Arg(0))
 
 	dur, err := time.ParseDuration(*staleness)
 	if err != nil {
@@ -757,13 +858,14 @@ func printMsgHelp() {
 	fmt.Fprintf(os.Stderr, `Usage: doey-ctl msg <subcommand> [flags]
 
 Subcommands:
-  send      Send a message between panes
-  read      Read messages for a pane
-  read-all  Read all messages for a pane (mark as read)
-  list      List messages (DB mode)
-  count     Count unread messages
-  clean     Clean processed messages
-  trigger   Touch trigger file for pane
+  send       Send a message between panes
+  read       Read messages for a pane (--unread for new only)
+  read-all   Read all messages for a pane (mark as read)
+  mark-read  Mark all messages for a pane as read (no output)
+  list       List messages (DB mode)
+  count      Count unread messages
+  clean      Clean processed messages
+  trigger    Touch trigger file for pane
 
 Run 'doey-ctl msg <subcommand> -h' for help.
 `)

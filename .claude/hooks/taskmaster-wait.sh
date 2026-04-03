@@ -81,6 +81,90 @@ _taskmaster_bump_cycle() {
   echo "$_taskmaster_cycle" > "$CYCLE_FILE"
 }
 
+# ── Context % monitoring — auto-compact at 70%, restart at 85% ──────
+_CTX_COMPACT_COOLDOWN="${RUNTIME_DIR}/status/taskmaster_compact_ts"
+_CTX_RESTART_COOLDOWN="${RUNTIME_DIR}/status/taskmaster_restart_ts"
+_CTX_LOG="${RUNTIME_DIR}/logs/taskmaster-context.log"
+_CTX_COOLDOWN_SECS=300  # 5 minutes
+
+_taskmaster_ctx_log() {
+  mkdir -p "$(dirname "$_CTX_LOG")" 2>/dev/null
+  printf '%s [ctx] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1" >> "$_CTX_LOG" 2>/dev/null
+}
+
+_taskmaster_cooldown_ok() {
+  local _ts_file="$1" _now _last
+  [ ! -f "$_ts_file" ] && return 0
+  _last=$(cat "$_ts_file" 2>/dev/null) || _last=0
+  _now=$(date +%s)
+  [ $((_now - _last)) -ge "$_CTX_COOLDOWN_SECS" ]
+}
+
+_taskmaster_context_check() {
+  # Read context % from statusline-written file
+  local _tm_win="${TASKMASTER_PANE%%.*}"
+  local _tm_idx="${TASKMASTER_PANE#*.}"
+  local _ctx_file="${RUNTIME_DIR}/status/context_pct_${_tm_win}_${_tm_idx}"
+  local _ctx_pct=0
+  [ -f "$_ctx_file" ] && _ctx_pct=$(cat "$_ctx_file" 2>/dev/null) || _ctx_pct=0
+  _ctx_pct="${_ctx_pct%%[!0-9]*}"  # strip non-numeric
+  [ -z "$_ctx_pct" ] && _ctx_pct=0
+
+  local _full_pane="${SESSION_NAME}:${TASKMASTER_PANE}"
+
+  # At 85%+: kill and relaunch with fresh context
+  if [ "$_ctx_pct" -ge 85 ] && _taskmaster_cooldown_ok "$_CTX_RESTART_COOLDOWN"; then
+    _taskmaster_ctx_log "context at ${_ctx_pct}% — restarting Taskmaster"
+    date +%s > "$_CTX_RESTART_COOLDOWN"
+
+    # Kill the Claude process in the Taskmaster pane
+    local _pane_pid _child_pid
+    _pane_pid=$(tmux display-message -t "$_full_pane" -p '#{pane_pid}' 2>/dev/null) || true
+    if [ -n "$_pane_pid" ]; then
+      _child_pid=$(pgrep -P "$_pane_pid" 2>/dev/null | head -1) || true
+      [ -n "$_child_pid" ] && kill "$_child_pid" 2>/dev/null || true
+    fi
+    sleep 3
+
+    # Rebuild launch command from session env
+    local _tm_model _tm_agent _proj
+    _tm_model="${DOEY_TASKMASTER_MODEL:-opus}"
+    _tm_agent="${DOEY_ROLE_FILE_COORDINATOR:-doey-taskmaster}"
+    _proj="${SESSION_NAME#doey-}"
+    local _relaunch="claude --dangerously-skip-permissions --model ${_tm_model} --name \"${DOEY_ROLE_COORDINATOR:-Taskmaster}\" --agent \"${_tm_agent}\""
+    [ -f "${RUNTIME_DIR}/doey-settings.json" ] && _relaunch="${_relaunch} --settings \"${RUNTIME_DIR}/doey-settings.json\""
+    tmux send-keys -t "$_full_pane" "$_relaunch" Enter
+
+    # Wait for Claude to boot, then re-brief with active tasks
+    sleep 8
+    local _brief="You were auto-restarted due to high context usage (${_ctx_pct}%). Session: ${SESSION_NAME}."
+    if [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+      local _atf _aid _atitle _astatus _task_summary=""
+      for _atf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
+        [ -f "$_atf" ] || continue
+        _astatus=$(grep '^TASK_STATUS=' "$_atf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
+        case "$_astatus" in active|in_progress)
+          _aid=$(grep '^TASK_ID=' "$_atf" 2>/dev/null | head -1 | cut -d= -f2-) || _aid="?"
+          _atitle=$(grep '^TASK_TITLE=' "$_atf" 2>/dev/null | head -1 | cut -d= -f2-) || _atitle=""
+          _task_summary="${_task_summary} #${_aid} ${_atitle} (${_astatus}),"
+        ;; esac
+      done
+      [ -n "$_task_summary" ] && _brief="${_brief} Active tasks:${_task_summary%,}."
+    fi
+    tmux send-keys -t "$_full_pane" "$_brief" Enter
+    _taskmaster_ctx_log "relaunch complete — briefed with active tasks"
+    return 0
+  fi
+
+  # At 70%+: auto-compact
+  if [ "$_ctx_pct" -ge 70 ] && _taskmaster_cooldown_ok "$_CTX_COMPACT_COOLDOWN"; then
+    _taskmaster_ctx_log "context at ${_ctx_pct}% — sending /compact"
+    date +%s > "$_CTX_COMPACT_COOLDOWN"
+    tmux send-keys -t "$_full_pane" "/compact" Enter
+    return 0
+  fi
+}
+
 _check_work() {  # Exits script if work found, returns 1 otherwise
   local elapsed="$1"
   if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
@@ -142,6 +226,9 @@ if [ "$((_taskmaster_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
 fi
 
 _check_work "0" || true
+
+# Check context % and auto-compact/restart if needed
+_taskmaster_context_check || true
 
 if [ "$_has_active" = "true" ]; then
   _taskmaster_bump_cycle
