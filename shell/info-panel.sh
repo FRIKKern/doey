@@ -449,7 +449,62 @@ while true; do
   if [ -n "$_CACHED_PROJECT_DIR" ] && [ -d "${_CACHED_PROJECT_DIR}/.doey/tasks" ]; then
     _tasks_dir="${_CACHED_PROJECT_DIR}/.doey/tasks"
   fi
-  if [ -d "$_tasks_dir" ]; then
+
+  # DB-first path: try doey-ctl task list
+  _db_tasks_done=false
+  if [ -n "$_CACHED_PROJECT_DIR" ] && _db_task_out=$(doey-ctl task list --project-dir "$_CACHED_PROJECT_DIR" 2>/dev/null) && [ -n "$_db_task_out" ]; then
+    _has_render=false
+    [ -x "${SCRIPT_DIR}/doey-render-task.sh" ] && _has_render=true
+    _task_header_printed=false
+    while IFS= read -r _dbline; do
+      case "$_dbline" in ID*|"") continue ;; esac
+      _tid=$(echo "$_dbline" | awk '{print $1}')
+      _tstatus=$(echo "$_dbline" | awk '{print $2}')
+      _tteam=$(echo "$_dbline" | awk '{print $3}')
+      _ttitle=$(echo "$_dbline" | awk '{for(i=4;i<=NF;i++){if(i>4)printf " ";printf "%s",$i}print ""}')
+      [ -n "${_tid:-}" ] || continue
+      [ "$_tstatus" = "done" ] && continue
+      [ "$_tstatus" = "cancelled" ] && continue
+
+      if [ "$_task_header_printed" = false ]; then
+        gum_header 'TASKS'; printf '\n\n'
+        _task_header_printed=true
+      fi
+      case "$_tstatus" in
+        active|in_progress)        _tcol="${C_YELLOW}"; _ticon="●" ;;
+        pending_user_confirmation) _tcol="${C_CYAN}";   _ticon="⬤" ;;
+        *)                         _tcol="${C_DIM}";    _ticon="○" ;;
+      esac
+      _tmeta=""
+      [ -n "$_tteam" ] && _tmeta="${_tmeta} [${_tteam}]"
+      printf '  %b%s%b %b#%s%b  %s  %b%s%b\n' \
+        "$_tcol" "$_ticon" "${C_RESET}" \
+        "${C_BOLD_WHITE}" "$_tid" "${C_RESET}" \
+        "$_ttitle" \
+        "${C_DIM}" "$_tmeta" "${C_RESET}"
+      if [ "$_has_render" = true ]; then
+        _tjson="${_tasks_dir}/${_tid}.json"
+        _tf="${_tasks_dir}/${_tid}.task"
+        if [ -f "$_tjson" ]; then
+          _trendered=""
+          _trendered=$(DOEY_VISUALIZATION_DENSITY=compact DOEY_ASCII_ONLY="${DOEY_ASCII_ONLY:-}" "${SCRIPT_DIR}/doey-render-task.sh" "$_tf" "$_tjson" 2>/dev/null) || _trendered=""
+          if [ -n "$_trendered" ]; then
+            while IFS= read -r _trline; do
+              printf '  %s\n' "$_trline"
+            done <<< "$_trendered"
+          fi
+          _tintent=""
+          _tintent=$(python3 -c "import json; d=json.load(open('$_tjson')); print(d.get('intent','')[:60])" 2>/dev/null) || _tintent=""
+          [ -n "$_tintent" ] && printf '    %b→%b %s\n' "${C_DIM}" "${C_RESET}" "$_tintent"
+        fi
+      fi
+    done <<< "$_db_task_out"
+    [ "$_task_header_printed" = true ] && printf '\n'
+    _db_tasks_done=true
+  fi
+
+  # File-scan fallback
+  if [ "$_db_tasks_done" = false ] && [ -d "$_tasks_dir" ]; then
     _has_render=false
     [ -x "${SCRIPT_DIR}/doey-render-task.sh" ] && _has_render=true
     _task_header_printed=false

@@ -2461,6 +2461,15 @@ task_command() {
     list|ls|"")
       doey_header "Doey Tasks"
       printf '\n'
+      # DB fast path: try doey-ctl first
+      if command -v doey-ctl >/dev/null 2>&1; then
+        local _db_list
+        _db_list=$(doey-ctl task list --project-dir "$PROJECT_DIR" 2>/dev/null) && [ -n "$_db_list" ] && {
+          printf '%s\n' "$_db_list"
+          printf '\n'
+          break
+        }
+      fi
       local _count=0
       for _f in "${_tasks_dir}"/*.task; do
         [ -f "$_f" ] || continue
@@ -2521,6 +2530,14 @@ task_command() {
     show)
       local _id="${1:-}"
       [ -z "$_id" ] && { printf '  Usage: doey task show <id>\n'; exit 1; }
+      # DB fast path: try doey-ctl first
+      if command -v doey-ctl >/dev/null 2>&1; then
+        local _db_show
+        _db_show=$(doey-ctl task get --id "$_id" --project-dir "$PROJECT_DIR" 2>/dev/null) && [ -n "$_db_show" ] && {
+          printf '%s\n' "$_db_show"
+          break
+        }
+      fi
       local _file="${_tasks_dir}/${_id}.task"
       [ -f "$_file" ] || { printf '  %s✗ Task %s not found%s\n' "$ERROR" "$_id" "$RESET"; exit 1; }
       _task_show "$_file"

@@ -17,11 +17,14 @@ PLAN_HELPERS="${PROJECT_DIR}/shell/doey-plan-helpers.sh"
 [ -f "$PLAN_HELPERS" ] || exit 0
 source "$PLAN_HELPERS"
 
-# Get task title from .task file
+# Get task title — DB fast path, file fallback
 task_title=""
-task_file="${PROJECT_DIR}/.doey/tasks/${task_id}.task"
-if [ -f "$task_file" ]; then
-  task_title=$(grep '^TASK_TITLE=' "$task_file" 2>/dev/null | head -1 | cut -d= -f2-) || task_title=""
+if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+  task_title=$(doey-ctl task get --id "$task_id" --project-dir "$PROJECT_DIR" 2>/dev/null | sed -n 's/^Title:[[:space:]]*//p')
+fi
+if [ -z "$task_title" ]; then
+  task_file="${PROJECT_DIR}/.doey/tasks/${task_id}.task"
+  [ -f "$task_file" ] && task_title=$(grep '^TASK_TITLE=' "$task_file" 2>/dev/null | head -1 | cut -d= -f2-) || task_title=""
 fi
 [ -n "$task_title" ] || exit 0
 
