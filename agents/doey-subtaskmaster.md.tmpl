@@ -341,7 +341,7 @@ After a worker finishes:
 ```bash
 PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
-tmux send-keys -t "$PANE" Escape
+tmux send-keys -t "$PANE" Escape; sleep 0.1
 # Short (< ~200 chars):
 tmux send-keys -t "$PANE" "Your task here" Enter
 # Long — use load-buffer:

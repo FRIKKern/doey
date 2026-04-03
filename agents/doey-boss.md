@@ -54,7 +54,7 @@ if [ "$_sm_alive" = false ]; then
   else
     # Fallback: direct send-keys wake
     tmux copy-mode -q -t "${SESSION_NAME}:1.0" 2>/dev/null
-    tmux send-keys -t "${SESSION_NAME}:1.0" Escape
+    tmux send-keys -t "${SESSION_NAME}:1.0" Escape; sleep 0.1
     tmux send-keys -t "${SESSION_NAME}:1.0" "Check your messages and resume." Enter
   fi
   sleep 3

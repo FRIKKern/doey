@@ -111,7 +111,7 @@ if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
   tmux copy-mode -q -t "$PANE" 2>/dev/null
-  tmux send-keys -t "$PANE" Escape
+  tmux send-keys -t "$PANE" Escape; sleep 0.1
   PANE_IDX="${PANE##*.}"
   WORKER_PROMPT=$(grep -l "pane ${W}\.${PANE_IDX} " "${RD}/worker-system-prompt-"*.md 2>/dev/null | head -1)
   CMD="claude --dangerously-skip-permissions --model ${DOEY_WORKER_MODEL:-opus}"
