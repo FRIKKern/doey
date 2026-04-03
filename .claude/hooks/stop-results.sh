@@ -202,13 +202,13 @@ if [ "$STATUS" = "error" ] && [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ]; 
   fi
 fi
 
-# Auto-install doey-ctl if Go sources changed
+# Auto-rebuild doey CLI tools if Go sources changed
 case "$FILES_LIST" in
   *tui/cmd/doey-ctl/*.go*|*tui/internal/store/*.go*)
     if [ -x /usr/local/go/bin/go ] && [ -d "${PROJECT_DIR}/tui" ]; then
       mkdir -p "$HOME/.local/bin"
       (cd "${PROJECT_DIR}/tui" && /usr/local/go/bin/go build -o "$HOME/.local/bin/doey-ctl" ./cmd/doey-ctl/) 2>/dev/null \
-        || echo "doey-ctl auto-build failed" >&2
+        || echo "doey CLI tools auto-build failed" >&2
     fi
     ;;
 esac

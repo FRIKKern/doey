@@ -3329,11 +3329,11 @@ check_doctor() {
     _doc_check skip "doey-remote-setup not installed" "optional — run: doey build"
   fi
 
-  # Orchestration CLI (doey-ctl)
+  # Orchestration CLI (internal doey-ctl binary powers 'doey' subcommands)
   if command -v doey-ctl >/dev/null 2>&1; then
-    _doc_check ok "doey-ctl" "found at $(command -v doey-ctl)"
+    _doc_check ok "doey CLI tools" "found at $(command -v doey-ctl)"
   else
-    _doc_check warn "doey-ctl not installed" "shell fallbacks will be used — run: doey build"
+    _doc_check warn "doey CLI tools not installed" "shell fallbacks will be used — run: doey build"
   fi
 
   # Go binary freshness
@@ -5745,15 +5745,15 @@ while [ $# -gt 0 ]; do
 done
 set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 
-# ── Unified CLI routing — forward ctl subcommands to doey-ctl binary ──
-# Phase 1 of doey-ctl merge: `doey msg send` works like `doey-ctl msg send`.
-# Placed before main dispatch so ctl commands take priority.
+# ── Unified CLI routing ──────────────────────────────────────────────
+# 'doey' is the user-facing CLI. Subcommands like msg/status/task are
+# handled by the internal doey-ctl binary, forwarded transparently here.
 case "${1:-}" in
   msg|status|health|task|tmux|plan|team|config|agent|event|nudge|migrate)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else
-      printf 'Error: doey-ctl binary not found. Run "doey doctor" or reinstall.\n' >&2
+      printf 'Error: doey CLI tools not installed. Run "doey doctor" or reinstall.\n' >&2
       exit 1
     fi
     ;;
