@@ -166,6 +166,11 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 		}
 	}
 
+	// Events: from store only
+	if r.sr != nil {
+		snap.Events = r.sr.readEvents(200)
+	}
+
 	snap.TeamUserCfg, _ = ReadTeamUserConfig()
 	snap.TeamEntries = buildTeamEntries(snap.TeamDefs, snap.Teams, snap.TeamUserCfg)
 	snap.Connections = r.parseConnections()

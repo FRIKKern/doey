@@ -314,6 +314,7 @@ type Snapshot struct {
 	TeamUserCfg TeamUserConfig // persisted preferences
 	Connections []Connection   // external service integrations
 	Plans       []Plan         // plan documents from .doey/plans/
+	Events      []Event        // recent event log entries from store
 }
 
 // TaskSidecar holds structured planning data from the JSON companion file (.doey/tasks/<id>.json).

@@ -82,6 +82,18 @@ fi
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=BUSY" "to=${STOP_STATUS}" "trigger=stop-status"
 write_activity "status_change" "{\"status\":\"${STOP_STATUS}\"}"
 
+# Emit task lifecycle events (fire-and-forget, non-blocking)
+if [ -n "$task_id" ] && command -v doey-ctl >/dev/null 2>&1; then
+  case "$STOP_STATUS" in
+    FINISHED)
+      (doey event log --type task_completed --source "$PANE_SAFE" --task-id "$task_id" --message "Worker finished task" &) 2>/dev/null
+      ;;
+    ERROR)
+      (doey event log --type task_failed --source "$PANE_SAFE" --task-id "$task_id" --message "Worker encountered error" &) 2>/dev/null
+      ;;
+  esac
+fi
+
 if ! is_taskmaster; then
   notify_taskmaster "$STOP_STATUS"
 fi
