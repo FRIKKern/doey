@@ -5929,7 +5929,7 @@ HELP
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
         "$_aw_cols" "$_aw_wt_spec"
     else
-      add_team_window "$session" "$runtime_dir" "$dir" "4x2"
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir"
     fi
     exit 0
     ;;
