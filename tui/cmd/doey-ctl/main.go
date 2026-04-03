@@ -31,6 +31,16 @@ func resolvePaneID(input string) string {
 	if strings.Contains(input, "_") {
 		return input
 	}
+	// session:W.P format (e.g. "doey-doey:3.0") — normalize to safe name
+	if idx := strings.LastIndex(input, ":"); idx >= 0 {
+		wp := input[idx+1:]
+		if wpFormat.MatchString(wp) {
+			session := input[:idx]
+			safe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(session)
+			wpSafe := strings.Replace(wp, ".", "_", 1)
+			return safe + "_" + wpSafe
+		}
+	}
 	// W.P format — convert to session_W_P
 	if wpFormat.MatchString(input) {
 		session := getSessionName()
@@ -383,6 +393,7 @@ func msgMarkRead(args []string) {
 	if *pane == "" {
 		fatal("msg mark-read: --pane is required\nRun 'doey-ctl msg mark-read -h' for usage.\n")
 	}
+	*pane = resolvePaneID(*pane)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
