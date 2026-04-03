@@ -152,6 +152,7 @@ export DOEY_REMOTE="${REMOTE:-false}"
 export DOEY_TUNNEL_URL="${TUNNEL_URL:-}"
 export DOEY_LIB="${DOEY_LIB}"
 export DOEY_SCRATCHPAD="${RUNTIME_DIR}/scratchpad"
+export DOEY_USER_PANES="0.1"
 EOF
 fi
 

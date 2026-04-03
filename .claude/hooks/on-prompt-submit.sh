@@ -5,6 +5,14 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_named_hook "on-prompt-submit"
 
+# Suppress stderr from leaking to user terminal — redirect to log file
+# (stdout stays intact for JSON hook protocol; exit codes unaffected)
+if [ -n "${RUNTIME_DIR:-}" ]; then
+  exec 2>>"${RUNTIME_DIR}/logs/hook-prompt-submit.log"
+else
+  exec 2>/dev/null
+fi
+
 PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
@@ -38,9 +46,9 @@ if is_worker && ! is_reserved; then
       [ -n "$_prompt_task" ] && _has_task="true"
     fi
     if [ -z "$_has_task" ]; then
-      _log "BLOCKED: no task assigned to pane ${PANE_SAFE} (status=${_current_status:-UNKNOWN})"
-      printf '{"decision":"block","message":"No task assigned to this pane. Dispatch via Subtaskmaster."}\n'
-      exit 2
+      # Fail-open: warn but don't block (tasks #134, #136, #156)
+      echo "WARN: worker ${PANE_SAFE} has no task assignment" >> "${RUNTIME_DIR}/logs/hook-prompt-submit.log" 2>/dev/null || true
+      _log "WARN: no task assigned to pane ${PANE_SAFE} (status=${_current_status:-UNKNOWN}) — allowing (fail-open)"
     fi
   fi
 fi
