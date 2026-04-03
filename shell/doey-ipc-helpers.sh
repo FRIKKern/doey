@@ -10,7 +10,7 @@ ensure_taskmaster_alive() {
   if [ -f "${runtime_dir}/session.env" ]; then
     taskmaster_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2-)
   fi
-  taskmaster_pane="${taskmaster_pane:-0.2}"
+  taskmaster_pane="${taskmaster_pane:-1.0}"
   local taskmaster_safe="${session_name//[-:.]/_}_${taskmaster_pane//[-.:]/_}"
   local status_file="${runtime_dir}/status/${taskmaster_safe}.status"
 
@@ -68,7 +68,7 @@ send_msg_to_taskmaster() {
   if [ -f "${runtime_dir}/session.env" ]; then
     taskmaster_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2-)
   fi
-  taskmaster_pane="${taskmaster_pane:-0.2}"
+  taskmaster_pane="${taskmaster_pane:-1.0}"
   local taskmaster_safe="${session_name//[-:.]/_}_${taskmaster_pane//[-.:]/_}"
 
   local rc=0; ensure_taskmaster_alive "$runtime_dir" "$session_name" || rc=$?

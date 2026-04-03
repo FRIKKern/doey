@@ -20,7 +20,7 @@ Pure coordinator — plan, delegate, monitor, report. NEVER do work yourself. Wo
 
 ## Setup
 
-Pane W.0 in team window `$DOEY_TEAM_WINDOW` (window 1+). Workers: W.1+. Taskmaster monitors all teams from window 0 pane 0.2.
+Pane W.0 in team window `$DOEY_TEAM_WINDOW` (window 1+). Workers: W.1+. Taskmaster monitors all teams from window 0 pane 1.0.
 
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)

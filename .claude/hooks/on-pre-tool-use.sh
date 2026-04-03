@@ -203,7 +203,7 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
     case "$_di_pi" in
       1) _DOEY_ROLE="$DOEY_ROLE_ID_BOSS" ;;
       0) _DOEY_ROLE="info_panel" ;;
-      *) [ "0.${_di_pi}" = "${_di_tp:-0.2}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+      *) [ "${_di_wi}.${_di_pi}" = "${_di_tp:-1.0}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
     esac
   elif [ -n "$_di_ct_win" ] && [ "$_di_wi" = "$_di_ct_win" ]; then
     # Core Team window

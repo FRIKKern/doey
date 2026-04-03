@@ -35,7 +35,7 @@ Send message to {{DOEY_ROLE_COORDINATOR}} for routing:
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
-TASKMASTER_PANE="${TASKMASTER_PANE:-0.2}"
+TASKMASTER_PANE="${TASKMASTER_PANE:-1.0}"
 doey msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}" \
   --subject "new_task" \
   --body "TASK_ID: ${TASK_ID}

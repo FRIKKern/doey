@@ -37,8 +37,8 @@ if [ -z "$SED_EXPR" ]; then
 fi
 
 # Add DOEY_TASKMASTER_PANE substitution (env var > session.env > default "0.2")
-DOEY_TASKMASTER_PANE="${DOEY_TASKMASTER_PANE:-0.2}"
-if [ "$DOEY_TASKMASTER_PANE" = "0.2" ] && [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
+DOEY_TASKMASTER_PANE="${DOEY_TASKMASTER_PANE:-1.0}"
+if [ "$DOEY_TASKMASTER_PANE" = "1.0" ] && [ -n "${RUNTIME_DIR:-}" ] && [ -f "${RUNTIME_DIR}/session.env" ]; then
   _val=$(grep '^DOEY_TASKMASTER_PANE=' "${RUNTIME_DIR}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
   [ -n "$_val" ] && DOEY_TASKMASTER_PANE="$_val"
 fi
