@@ -104,6 +104,11 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 		snap.Panes = r.parsePaneStatuses()
 	}
 
+	// Sync .task files into SQLite on every snapshot tick
+	if r.sr != nil && r.projectDir != "" {
+		r.sr.syncTaskFiles(r.projectDir)
+	}
+
 	// Tasks: try store, fall back to files
 	tasksFromStore := false
 	if r.sr != nil {

@@ -81,6 +81,16 @@ func (s *Store) migrateOneTask(path string, r *MigrateResult) error {
 		return nil
 	}
 
+	if err := s.upsertTaskFromFields(id, fields); err != nil {
+		return err
+	}
+	r.Tasks++
+	return nil
+}
+
+// upsertTaskFromFields inserts or replaces a task row from parsed .task file fields.
+// Also syncs subtasks, decision log, and notes.
+func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 	createdAt := parseTimestampField(fields["TASK_TIMESTAMPS"], "created")
 	if createdAt == 0 {
 		createdAt = time.Now().Unix()
@@ -98,25 +108,45 @@ func (s *Store) migrateOneTask(path string, r *MigrateResult) error {
 		}
 	}
 
-	_, err = s.db.Exec(`INSERT OR IGNORE INTO tasks
+	_, err := s.db.Exec(`INSERT INTO tasks
 		(id, title, status, type, description, created_by, assigned_to, team,
 		 plan_id, tags, acceptance_criteria, current_phase, total_phases,
-		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 notes, blockers, related_files, hypotheses, decision_log, result,
+		 files, commits, schema_version, review_verdict, review_findings,
+		 review_timestamp, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+		 title=excluded.title, status=excluded.status, type=excluded.type,
+		 description=excluded.description, created_by=excluded.created_by,
+		 assigned_to=excluded.assigned_to, team=excluded.team, plan_id=excluded.plan_id,
+		 tags=excluded.tags, acceptance_criteria=excluded.acceptance_criteria,
+		 current_phase=excluded.current_phase, total_phases=excluded.total_phases,
+		 notes=excluded.notes, blockers=excluded.blockers, related_files=excluded.related_files,
+		 hypotheses=excluded.hypotheses, decision_log=excluded.decision_log, result=excluded.result,
+		 files=excluded.files, commits=excluded.commits, schema_version=excluded.schema_version,
+		 review_verdict=excluded.review_verdict, review_findings=excluded.review_findings,
+		 review_timestamp=excluded.review_timestamp, updated_at=excluded.updated_at`,
 		id, fields["TASK_TITLE"], fields["TASK_STATUS"], fields["TASK_TYPE"],
 		fields["TASK_DESCRIPTION"], fields["TASK_CREATED_BY"], fields["TASK_ASSIGNED_TO"],
 		fields["TASK_TEAM"], planID, fields["TASK_TAGS"],
 		fields["TASK_ACCEPTANCE_CRITERIA"],
 		atoi(fields["TASK_CURRENT_PHASE"]), atoi(fields["TASK_TOTAL_PHASES"]),
+		fields["TASK_NOTES"], fields["TASK_BLOCKERS"], fields["TASK_RELATED_FILES"],
+		fields["TASK_HYPOTHESES"], fields["TASK_DECISION_LOG"], fields["TASK_RESULT"],
+		fields["TASK_FILES"], fields["TASK_COMMITS"],
+		atoi(fields["TASK_SCHEMA_VERSION"]),
+		fields["TASK_REVIEW_VERDICT"], fields["TASK_REVIEW_FINDINGS"],
+		fields["TASK_REVIEW_TIMESTAMP"],
 		createdAt, updatedAt,
 	)
 	if err != nil {
 		return err
 	}
-	r.Tasks++
 
 	// Subtasks — format: "idx:title:status\nidx:title:status"
 	if raw := fields["TASK_SUBTASKS"]; raw != "" {
+		// Clear existing subtasks for this task and rewrite
+		s.db.Exec(`DELETE FROM subtasks WHERE task_id = ?`, id)
 		for seq, entry := range splitLiteralNewlines(raw) {
 			parts := strings.SplitN(entry, ":", 3)
 			if len(parts) < 3 {
@@ -124,13 +154,15 @@ func (s *Store) migrateOneTask(path string, r *MigrateResult) error {
 			}
 			title := parts[1]
 			status := parts[2]
-			s.db.Exec(`INSERT OR IGNORE INTO subtasks (task_id, seq, title, status) VALUES (?, ?, ?, ?)`,
+			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status) VALUES (?, ?, ?, ?)`,
 				id, seq+1, title, status)
 		}
 	}
 
 	// Decision log — format: "timestamp:text\ntimestamp:text"
+	// Clear existing decision entries for this task and rewrite
 	if raw := fields["TASK_DECISION_LOG"]; raw != "" {
+		s.db.Exec(`DELETE FROM task_log WHERE task_id = ? AND type = 'decision'`, id)
 		for _, entry := range splitLiteralNewlines(raw) {
 			ts, text := splitFirst(entry, ':')
 			tsInt := atoi64(ts)
@@ -144,11 +176,52 @@ func (s *Store) migrateOneTask(path string, r *MigrateResult) error {
 
 	// Notes
 	if raw := fields["TASK_NOTES"]; raw != "" {
+		s.db.Exec(`DELETE FROM task_log WHERE task_id = ? AND type = 'note'`, id)
 		s.db.Exec(`INSERT INTO task_log (task_id, type, author, title, body, created_at) VALUES (?, 'note', '', 'note', ?, ?)`,
 			id, raw, createdAt)
 	}
 
 	return nil
+}
+
+// SyncTaskFiles reads all .task files from the given directory and upserts them
+// into the database. Idempotent — safe to call on every snapshot tick.
+// Returns the number of tasks synced and any errors encountered.
+func (s *Store) SyncTaskFiles(tasksDir string) (int, []string) {
+	entries, err := os.ReadDir(tasksDir)
+	if err != nil {
+		return 0, nil
+	}
+
+	synced := 0
+	var errs []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".task") {
+			continue
+		}
+		path := filepath.Join(tasksDir, e.Name())
+		fields, err := parseKeyValue(path)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", e.Name(), err))
+			continue
+		}
+		idStr := fields["TASK_ID"]
+		if idStr == "" {
+			errs = append(errs, fmt.Sprintf("%s: missing TASK_ID", e.Name()))
+			continue
+		}
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: bad TASK_ID %q", e.Name(), idStr))
+			continue
+		}
+		if err := s.upsertTaskFromFields(id, fields); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", e.Name(), err))
+			continue
+		}
+		synced++
+	}
+	return synced, errs
 }
 
 // --- Plans ---
