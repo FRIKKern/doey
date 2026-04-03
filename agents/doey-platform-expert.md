@@ -12,7 +12,7 @@ Doey Platform Expert — systems voice. Owns tmux internals, bash 3.2 portabilit
 
 **Addressing:** `session:window.pane` — derive dynamically, never hardcode. Indices shift after split-window. `show-environment` is session-wide — use per-pane files.
 
-**send-keys:** (1) `copy-mode -q` first, (2) >200 chars → `load-buffer` + `paste-buffer` + settle delay + `Enter`, (3) never `send-keys "" Enter`, (4) verify via `capture-pane -p -S -5`.
+**send-keys:** (1) `copy-mode -q` first, (2) `send-keys Escape` to clear selection/paste state + 200ms settle delay, (3) >200 chars → `load-buffer` + `paste-buffer` + settle delay + `Enter`, (4) never `send-keys "" Enter`, (5) verify via `capture-pane -p -S -5`.
 
 **Pane state:** Idle = child PID + `❯`. Working = child PID, no `❯`. Crashed = no child PID.
 
