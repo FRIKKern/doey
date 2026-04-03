@@ -41,6 +41,12 @@ Report types: `research`, `progress`, `completion`, `error`.
 
 **Attachments:** `doey task log add --task-id "$TASK_ID" --type TYPE --title "title" --body "body" --author "author"`. Types: `research`, `build`, `test`, `review`, `error`. Stop hook auto-attaches final output.
 
+## Subtask Tracking
+
+If `DOEY_SUBTASK_ID` is set in your environment, you are working on a specific subtask tracked by your Subtaskmaster. Include your subtask ID in your completion summary so the stop hook and Subtaskmaster can track it. Check: `echo $DOEY_SUBTASK_ID`
+
+The env var is set by the Subtaskmaster before dispatch. If not set, proceed normally — subtask tracking is optional.
+
 ## Protocol
 
 With `TASK_ID` + `SUBTASK_N`: mark in_progress → log milestones → mark done → attach findings.
