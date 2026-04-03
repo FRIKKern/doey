@@ -189,7 +189,12 @@ func sendToBoss(text string) error {
 	if sessionName == "" {
 		sessionName = "doey-doey"
 	}
-	cmd := exec.Command("tmux", "send-keys", "-t", sessionName+":0.1", text, "Enter")
+	pane := sessionName + ":0.1"
+	// Clear copy-mode and send Escape to ensure clean input state.
+	exec.Command("tmux", "copy-mode", "-q", "-t", pane).Run()
+	exec.Command("tmux", "send-keys", "-t", pane, "Escape").Run()
+	time.Sleep(200 * time.Millisecond)
+	cmd := exec.Command("tmux", "send-keys", "-t", pane, text, "Enter")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, out)

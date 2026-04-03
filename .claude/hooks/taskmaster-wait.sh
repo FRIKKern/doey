@@ -236,7 +236,8 @@ _taskmaster_context_check || true
 if [ "$_has_active" = "true" ]; then
   _taskmaster_bump_cycle
   sleep 15
-  _check_work "15" || true
+  # One-shot: return control immediately after sleep — do NOT re-check.
+  # Claude will process any pending input (paste-buffer, messages, etc.)
   _taskmaster_dbg_wake "active_tasks_idle" "15"
   echo "WAKE_REASON=QUEUED"
   printf 'ACTIVE_TASKS %b' "$_active_list"
@@ -262,6 +263,7 @@ if command -v inotifywait >/dev/null 2>&1; then
 else
   sleep "$_sleep_dur"
 fi
-_check_work "$_sleep_dur" || true
+# One-shot: return control immediately after sleep/inotifywait.
+# Do NOT re-check — Claude must reach its prompt to process paste-buffer input.
 _taskmaster_dbg_wake "idle" "$_sleep_dur"
 echo "WAKE_REASON=TIMEOUT"

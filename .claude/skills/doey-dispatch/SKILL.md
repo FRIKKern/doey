@@ -123,7 +123,10 @@ tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
 SETTLE_S=0.5; [ "$TASK_LINES" -gt 100 ] && SETTLE_S=1.5; [ "$TASK_LINES" -gt 200 ] && SETTLE_S=2
-sleep $SETTLE_S; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
+sleep $SETTLE_S
+tmux send-keys -t "$PANE" Escape 2>/dev/null
+sleep 0.3
+tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
 
 # Verify (retry once if no activity)
 sleep 5; OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)

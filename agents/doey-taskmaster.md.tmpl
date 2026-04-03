@@ -54,13 +54,15 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
    | `CRASH` | Crash alert: `$RUNTIME_DIR/status/crash_pane_*` |
    | `STALE` | Stale alert: `$RUNTIME_DIR/status/stale_*` |
    | `QUEUED` | Task files: `.doey/tasks/` with `TASK_STATUS=active` and no `TASK_TEAM` |
+   | `TIMEOUT` | No specific trigger — check your prompt for any pending input before re-sleeping |
 
 3. **Act** — Handle ONLY the trigger event. Dispatch, commit, report, recover — whatever the trigger requires. Do NOT scan unchanged state.
-4. **Sleep** — After acting, immediately run `taskmaster-wait.sh` again. Do NOT scan "everything else while you're awake."
+4. **Return to prompt** — After acting, stop and return to your prompt. This is critical: input delivered via paste-buffer or send-keys sits in your input box and can only be read when you reach your prompt. If you immediately re-run `taskmaster-wait.sh` without returning to the prompt, that input is never processed.
+5. **Re-sleep** — If your prompt is empty (no pending input) and you have finished acting, THEN run `taskmaster-wait.sh` again.
 
 **NO scanning unchanged state.** If nothing triggered, nothing happens. Each wake cycle handles exactly one trigger category.
 
-**NEVER return to the prompt.** Only exits: `/exit`, `/compact`, or user message. After `/compact`: re-source `session.env` if needed, then go to sleep.
+**Prompt-first rule:** Always return to your prompt between sleep cycles. Input from {{DOEY_ROLE_BOSS}} or other panes may be waiting in your input buffer. Only re-sleep after confirming your prompt is empty. After `/compact`: re-source `session.env` if needed, then go to sleep.
 
 ## Hard Rule: No Dispatch Without Task
 
@@ -246,7 +248,7 @@ For `phased` mode: read `phases` from .json, create `$RUNTIME_DIR/phases/task_<T
 
 **Note:** `task` subject (prose dispatch) still works for simple goals. `dispatch_task` is the structured alternative.
 
-After processing: return to sleep. Run `taskmaster-wait.sh` and wait for next trigger. Answers arrive as future wake events.
+After processing: return to your prompt. If no more input is pending, then run `taskmaster-wait.sh` to sleep. Answers arrive as future wake events.
 
 ## Review Gate
 
