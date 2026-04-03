@@ -94,14 +94,27 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(!isSelected).Render(taskCardDescription(ti, d.Heartbeats))
 
 	// Compose card: icon + title + dim ID on line 1, metadata on line 2
-	card := fmt.Sprintf(" %s %s %s\n   %s", icon, title, idStr, desc)
+	// Indent child tasks under their parent
+	indent := " "
+	descIndent := "   "
+	if ti.Task.ParentTaskID != "" {
+		indent = "   ↳ "
+		descIndent = "      "
+	}
+	card := fmt.Sprintf("%s%s %s %s\n%s%s", indent, icon, title, idStr, descIndent, desc)
 
-	// Selected: left border only
+	// Selected: left border — accent color if recently active (<30s)
 	if isSelected {
+		borderColor := d.Theme.Primary
+		if hs, ok := d.Heartbeats[ti.Task.ID]; ok && !hs.LastActivity.IsZero() {
+			if time.Since(hs.LastActivity).Seconds() < 30 {
+				borderColor = d.Theme.Accent
+			}
+		}
 		card = lipgloss.NewStyle().
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(d.Theme.Primary).
+			BorderForeground(borderColor).
 			Render(card)
 	}
 
@@ -178,8 +191,11 @@ func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatSta
 		parts = append(parts, ti.Task.Team)
 	}
 
-	// Last updated
-	if ti.Task.Updated > 0 {
+	// Activity time badge from heartbeat (replaces static date for active tasks)
+	if hs, ok := heartbeats[ti.Task.ID]; ok && !hs.LastActivity.IsZero() {
+		secondsAgo := int(time.Since(hs.LastActivity).Seconds())
+		parts = append(parts, styles.ActivityTimeBadge(styles.DefaultTheme(), secondsAgo))
+	} else if ti.Task.Updated > 0 {
 		updatedTime := time.Unix(ti.Task.Updated, 0)
 		parts = append(parts, updatedTime.Format("Jan 2 15:04"))
 	}
@@ -276,6 +292,9 @@ type ExpandedCard struct {
 	Height        int // available height
 	SubtaskCursor int               // which subtask is highlighted (-1 = none)
 	Messages      []runtime.Message // IPC messages related to this task
+
+	// Events from store (for timeline rendering)
+	Events []runtime.Event
 
 	// Live activity feed data (populated by parent from snapshot)
 	RuntimeDir   string                       // path to runtime directory
@@ -539,9 +558,23 @@ func (e *ExpandedCard) Render() string {
 			if pane == "" {
 				pane = st.Worker
 			}
+			// Parse worker pane from description prefix ("W2.1: description" format)
+			if pane == "" {
+				if ci := strings.Index(title, ": "); ci > 0 && ci < 8 {
+					prefix := title[:ci]
+					if strings.HasPrefix(prefix, "W") || strings.HasPrefix(prefix, "w") {
+						pane = strings.TrimPrefix(strings.TrimPrefix(prefix, "W"), "w")
+						title = title[ci+2:]
+					}
+				}
+			}
 			if pane != "" {
 				paneTag := lipgloss.NewStyle().Foreground(e.Theme.Accent).Render("[W" + pane + "]")
 				title = paneTag + " " + title
+			}
+			// Status badge for non-trivial statuses
+			if st.Status != "" && st.Status != "pending" {
+				title = styles.StatusBadgeCard(st.Status, e.Theme) + " " + title
 			}
 			row := styles.SubtaskRow(e.Theme, title, st.Status, done, selected, 0)
 			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), row))
@@ -609,6 +642,12 @@ func (e *ExpandedCard) Render() string {
 				}
 			}
 		}
+	}
+
+	// --- Events Timeline ---
+	if timelineSection := e.renderEventsTimeline(contentWidth); timelineSection != "" {
+		sections = append(sections, "")
+		sections = append(sections, timelineSection)
 	}
 
 	// --- Q&A Relay Chain ---
@@ -699,6 +738,72 @@ func (e *ExpandedCard) Render() string {
 		expandedWidth = styles.MaxCardWidth
 	}
 	return styles.ExpandedCardStyle(e.Theme, task.Status, expandedWidth).Render(content)
+}
+
+// renderEventsTimeline renders store events filtered by this task's ID.
+func (e *ExpandedCard) renderEventsTimeline(width int) string {
+	if len(e.Events) == 0 {
+		return ""
+	}
+	taskID := e.Item.Task.ID
+	if taskID == "" {
+		return ""
+	}
+
+	// Filter events for this task
+	var matched []runtime.Event
+	for _, ev := range e.Events {
+		if ev.TaskID == taskID {
+			matched = append(matched, ev)
+		}
+	}
+	if len(matched) == 0 {
+		return ""
+	}
+	if len(matched) > 20 {
+		matched = matched[:20]
+	}
+
+	var lines []string
+	lines = append(lines, styles.SectionTitle(e.Theme, "Events Timeline"))
+	for _, ev := range matched {
+		ts := ""
+		if ev.Timestamp > 0 {
+			ts = time.Unix(ev.Timestamp, 0).Format("15:04")
+		}
+		eventType := ev.Type
+		if eventType == "" {
+			eventType = "info"
+		}
+
+		// Color the dot by event type
+		var dotColor lipgloss.AdaptiveColor
+		switch eventType {
+		case "error":
+			dotColor = e.Theme.Danger
+		case "warn", "warning":
+			dotColor = e.Theme.Warning
+		default:
+			dotColor = e.Theme.Primary
+		}
+
+		dot := styles.TimelineDot(dotColor)
+		badge := styles.LogEventBadge(e.Theme, eventType)
+		tsStr := styles.LogTimestamp(e.Theme, ts)
+
+		detail := ev.Data
+		if ev.Source != "" {
+			detail = ev.Source + " " + detail
+		}
+		if len(detail) > width-30 && width > 30 {
+			detail = detail[:width-30]
+		}
+
+		line := fmt.Sprintf("%s %s %s %s", dot, tsStr, badge, strings.TrimSpace(detail))
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // renderMarkdown renders markdown through glamour with caching.
@@ -913,7 +1018,13 @@ func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, sele
 		title = lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render(title)
 	}
 
-	row := "  " + icon + " " + title
+	// Colored status badge for non-pending statuses
+	statusBadge := ""
+	if ps.Status != "" && ps.Status != "pending" {
+		statusBadge = " " + styles.StatusBadgeCard(ps.Status, theme)
+	}
+
+	row := "  " + icon + " " + title + statusBadge
 
 	dimStyle := lipgloss.NewStyle().Foreground(theme.Muted).Faint(true)
 

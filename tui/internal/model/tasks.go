@@ -87,6 +87,7 @@ type TasksModel struct {
 	messages     []runtime.Message
 	paneStatuses map[string]runtime.PaneStatus
 	paneResults  map[string]runtime.PaneResult
+	events       []runtime.Event
 	theme        styles.Theme
 
 	// Card-based list
@@ -102,7 +103,8 @@ type TasksModel struct {
 	inputText string
 
 	// Expanded card (used for subtask nav in right panel)
-	expanded *taskcard.ExpandedCard
+	expanded         *taskcard.ExpandedCard
+	expandedSubtasks map[int]bool // tracks which subtasks are toggled open in detail view
 
 	// Status feedback
 	statusMsg string
@@ -206,6 +208,7 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	// Cache live pane data for worker assignment indicators
 	m.paneStatuses = snap.Panes
 	m.paneResults = snap.Results
+	m.events = snap.Events
 
 	// Convert entries to list items
 	items := make([]list.Item, len(m.entries))
@@ -295,6 +298,54 @@ func (m *TasksModel) sortEntries() {
 		}
 		return a.ID > b.ID
 	})
+
+	// Group child tasks immediately after their parent for hierarchy display.
+	m.groupChildrenUnderParents()
+}
+
+// groupChildrenUnderParents reorders entries so child tasks appear directly
+// after their parent task, preserving relative order within each group.
+func (m *TasksModel) groupChildrenUnderParents() {
+	// Build index of parent positions
+	parentIdx := make(map[string]int, len(m.entries))
+	hasChildren := false
+	for i, e := range m.entries {
+		if e.ParentTaskID == "" {
+			parentIdx[e.ID] = i
+		} else {
+			hasChildren = true
+		}
+	}
+	if !hasChildren {
+		return
+	}
+
+	// Collect parents (in order) and their children
+	var result []runtime.PersistentTask
+	childrenOf := make(map[string][]runtime.PersistentTask)
+	for _, e := range m.entries {
+		if e.ParentTaskID != "" {
+			childrenOf[e.ParentTaskID] = append(childrenOf[e.ParentTaskID], e)
+		}
+	}
+	for _, e := range m.entries {
+		if e.ParentTaskID != "" {
+			continue // skip children; they'll be inserted after parent
+		}
+		result = append(result, e)
+		if children, ok := childrenOf[e.ID]; ok {
+			result = append(result, children...)
+		}
+	}
+	// Append orphaned children (parent not in list)
+	for _, e := range m.entries {
+		if e.ParentTaskID != "" {
+			if _, ok := parentIdx[e.ParentTaskID]; !ok {
+				result = append(result, e)
+			}
+		}
+	}
+	m.entries = result
 }
 
 // loadSelectedDetail loads sidecar/result data for the currently selected task.
@@ -321,10 +372,12 @@ func (m *TasksModel) loadSelectedDetail() {
 	if rightW < 24 {
 		rightW = 24
 	}
-	// Preserve subtask cursor if refreshing the same task
+	// Preserve subtask cursor if refreshing the same task; reset expanded state on task switch
 	prevCursor := -1
 	if m.expanded != nil && m.expanded.Item.Task.ID == task.ID {
 		prevCursor = m.expanded.SubtaskCursor
+	} else {
+		m.expandedSubtasks = nil
 	}
 	m.expanded = &taskcard.ExpandedCard{
 		Item:          ti,
@@ -333,6 +386,7 @@ func (m *TasksModel) loadSelectedDetail() {
 		Height:        m.height - 2,
 		SubtaskCursor: prevCursor,
 		Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
+		Events:        m.events,
 		PaneStatuses:  paneStatusSlice(m.paneStatuses),
 		Results:       m.paneResults,
 		ProjectDir:    m.projectDir,
@@ -467,11 +521,29 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 				}
 			}
 		}
-		// Subtask clicks in right panel
+		// Subtask clicks in right panel — toggle expanded details
 		if !m.leftFocused && m.expanded != nil {
 			for i := range m.expanded.Item.Subtasks {
 				if zone.Get(fmt.Sprintf("subtask-%d", i)).InBounds(msg) {
 					m.expanded.SubtaskCursor = i
+					if m.expandedSubtasks == nil {
+						m.expandedSubtasks = make(map[int]bool)
+					}
+					m.expandedSubtasks[i] = !m.expandedSubtasks[i]
+					// Re-render detail with updated expanded state
+					m.detailViewport.SetContent(m.expanded.Render())
+					return m, nil
+				}
+			}
+			// Also check persistent subtask zones
+			for i := range m.expanded.Item.Task.Subtasks {
+				if zone.Get(fmt.Sprintf("subtask-%d", i)).InBounds(msg) {
+					m.expanded.SubtaskCursor = i
+					if m.expandedSubtasks == nil {
+						m.expandedSubtasks = make(map[int]bool)
+					}
+					m.expandedSubtasks[i] = !m.expandedSubtasks[i]
+					m.detailViewport.SetContent(m.expanded.Render())
 					return m, nil
 				}
 			}

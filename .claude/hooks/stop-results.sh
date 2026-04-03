@@ -178,6 +178,11 @@ _FILES_COUNT=0
 type _debug_log >/dev/null 2>&1 && _debug_log lifecycle "result_captured" "files_changed=${_FILES_COUNT}" "tool_calls=${TOOL_COUNT}"
 write_activity "task_completed" "{\"status\":\"${STATUS}\",\"tools\":${TOOL_COUNT},\"files\":${_FILES_COUNT}}"
 
+# Emit result_captured event to TUI event log (fire-and-forget)
+if command -v doey >/dev/null 2>&1; then
+  (doey event log --type result_captured --source "$PANE" --message "Result: ${_FILES_COUNT} files, ${TOOL_COUNT} tools" &) 2>/dev/null
+fi
+
 COMPLETION="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"
 cat > "${COMPLETION}.tmp" <<COMPLETE
 PANE_INDEX="$PANE_INDEX"

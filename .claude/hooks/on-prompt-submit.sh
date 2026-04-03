@@ -95,6 +95,10 @@ if is_worker; then
   if [ -n "$_task_num" ]; then
     tmux set-environment -t "$SESSION_NAME" "DOEY_TASK_ID_${PANE_SAFE}" "$_task_num" 2>/dev/null || true
     _log "task_id: ${_task_num}"
+    # Emit task_started event (fire-and-forget, non-blocking)
+    if command -v doey-ctl >/dev/null 2>&1; then
+      (doey event log --type task_started --source "$PANE_SAFE" --task-id "$_task_num" --message "Worker started on task" &) 2>/dev/null
+    fi
     # Extract subtask number if present
     _subtask_num=$(printf '%s' "$PROMPT" | grep -oEi '(Subtask|subtask:)[[:space:]]*[0-9]+' | head -1 | grep -oE '[0-9]+' | tail -1) || _subtask_num=""
     if [ -n "$_subtask_num" ]; then

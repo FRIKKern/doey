@@ -624,6 +624,7 @@ func eventLog(args []string) {
 	target := fs.String("target", "", "Event target")
 	taskID := fs.Int64("task-id", 0, "Associated task ID")
 	data := fs.String("data", "", "Event data (JSON)")
+	message := fs.String("message", "", "Event message (alias for --data)")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
@@ -631,7 +632,20 @@ func eventLog(args []string) {
 		fatal("event log: --type is required\nRun 'doey-ctl event log -h' for usage.\n")
 	}
 
-	s := openStore(*dir)
+	// --message is an alias for --data
+	if *data == "" && *message != "" {
+		*data = *message
+	}
+
+	pd := projectDir(*dir)
+	s := tryOpenStore(pd)
+	if s == nil {
+		// No DB yet (fresh install) — silently succeed
+		if jsonOutput {
+			printJSON(map[string]string{"status": "skipped", "reason": "no database"})
+		}
+		return
+	}
 	defer s.Close()
 
 	e := &store.Event{

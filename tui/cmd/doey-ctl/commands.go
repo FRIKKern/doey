@@ -27,6 +27,14 @@ func tryOpenStore(dir string) *store.Store {
 	return s
 }
 
+// eventSource returns the pane identifier from env, or "cli" as fallback.
+func eventSource() string {
+	if p := os.Getenv("DOEY_PANE"); p != "" {
+		return p
+	}
+	return "cli"
+}
+
 // runTaskCmd dispatches task sub-subcommands.
 func runTaskCmd(args []string) {
 	if len(args) == 0 {
@@ -98,6 +106,7 @@ func runTaskCreate(args []string) {
 		if err != nil {
 			fatal("task create: %v", err)
 		}
+		s.LogEvent(&store.Event{Type: "task_created", Source: eventSource(), TaskID: &dbID, Data: *title})
 
 		// Write-through: also create .task file for hook compatibility.
 		fileID, _ := ctl.CreateTask(pd, *title, *typ, *createdBy, *desc)
@@ -257,6 +266,7 @@ func runTaskUpdate(args []string) {
 				if err := s.UpdateTask(t); err != nil {
 					fatal("task update: %v", err)
 				}
+				s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: *field + "=" + *value})
 
 				// Write-through to .task file (best-effort).
 				_ = ctl.UpdateTaskField(pd, taskIDStr, *field, *value)
@@ -545,6 +555,7 @@ func runSubtaskAdd(args []string) {
 			if err != nil {
 				fatal("task subtask add: %v", err)
 			}
+			s.LogEvent(&store.Event{Type: "subtask_added", Source: eventSource(), TaskID: &taskID, Data: subtaskTitle})
 
 			// Write-through to .task file (best-effort).
 			_, _ = ctl.AddSubtask(pd, taskIDStr, subtaskTitle)
@@ -671,6 +682,14 @@ func runSubtaskUpdate(args []string) {
 		if err := s.UpdateSubtask(resolved); err != nil {
 			fatal("task subtask update: %v", err)
 		}
+		evData := "seq=" + strconv.Itoa(resolved.Seq)
+		if statusVal != "" {
+			evData += ",status=" + statusVal
+		}
+		if *stTitle != "" {
+			evData += ",title=" + *stTitle
+		}
+		s.LogEvent(&store.Event{Type: "subtask_updated", Source: eventSource(), TaskID: &taskID, Data: evData})
 
 		// Write-through to .task file (best-effort).
 		if statusVal != "" {

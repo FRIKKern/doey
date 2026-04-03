@@ -16,6 +16,7 @@ type KeyMap struct {
 	PanelSix   key.Binding
 	PanelSeven key.Binding
 	PanelEight key.Binding
+	PanelNine  key.Binding
 	Up         key.Binding
 	Down       key.Binding
 	Select     key.Binding
@@ -79,6 +80,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("8"),
 			key.WithHelp("8", "files"),
 		),
+		PanelNine: key.NewBinding(
+			key.WithKeys("9"),
+			key.WithHelp("9", "activity"),
+		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
 			key.WithHelp("↑/k", "up"),
@@ -132,7 +137,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Select, k.Back},
 		{k.NextPanel, k.PrevPanel, k.LeftPanel, k.RightPanel},
-		{k.PanelOne, k.PanelTwo, k.PanelThree, k.PanelFour, k.PanelFive, k.PanelSix, k.PanelSeven, k.PanelEight, k.Filter},
+		{k.PanelOne, k.PanelTwo, k.PanelThree, k.PanelFour, k.PanelFive, k.PanelSix, k.PanelSeven, k.PanelEight, k.PanelNine, k.Filter},
 		{k.Refresh, k.Help, k.Quit, k.ForceQuit},
 	}
 }
