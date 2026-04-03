@@ -3,9 +3,9 @@ name: doey-task
 description: Manage persistent project tasks — list, add, transition, show, subtasks, decisions, notes. Tasks stored in .doey/tasks/ (survives reboot). Use when you need to "show tasks", "add a task", "mark a task done", "what are we working on", or "create a task".
 ---
 
-- Active tasks: !`doey-ctl task list --json 2>/dev/null || echo "(none)"`
+- Active tasks: !`doey task list --json 2>/dev/null || echo "(none)"`
 
-Persistent task management via `doey-ctl`.
+Persistent task management via `doey`.
 
 ### Schema v3
 
@@ -30,31 +30,31 @@ Plan phase is optional — not all tasks need one. Only change phase when explic
 
 ```bash
 # List (--status in_progress | --json)
-doey-ctl task list
-doey-ctl task list --status in_progress
-doey-ctl task list --json
+doey task list
+doey task list --status in_progress
+doey task list --json
 
 # Create
-TASK_ID=$(doey-ctl task create --title "TITLE" --type "feature" --description "DESCRIPTION")
+TASK_ID=$(doey task create --title "TITLE" --type "feature" --description "DESCRIPTION")
 
 # Get task details
-doey-ctl task get --id "$TASK_ID"
+doey task get --id "$TASK_ID"
 
 # Transition: start/pause/block/confirm/done/cancel
-doey-ctl task update --id "$TASK_ID" --status "in_progress"
+doey task update --id "$TASK_ID" --status "in_progress"
 
 # Update any field
-doey-ctl task update --id "$TASK_ID" --field "TASK_DESCRIPTION" --value "New value"
+doey task update --id "$TASK_ID" --field "TASK_DESCRIPTION" --value "New value"
 
 # Subtasks
-doey-ctl task subtask add --task-id "$TASK_ID" --description "Title"
-doey-ctl task subtask update --task-id "$TASK_ID" --subtask-id "1" --status "done"  # pending|in_progress|done|skipped
-doey-ctl task subtask list --task-id "$TASK_ID"
+doey task subtask add --task-id "$TASK_ID" --description "Title"
+doey task subtask update --task-id "$TASK_ID" --subtask-id "1" --status "done"  # pending|in_progress|done|skipped
+doey task subtask list --task-id "$TASK_ID"
 
 # Decision log / Notes / Related files
-doey-ctl task decision --task-id "$TASK_ID" --title "Decision title" --body "Decision text"
-doey-ctl task log add --task-id "$TASK_ID" --type "note" --title "Note title" --body "Note text"
-doey-ctl task update --id "$TASK_ID" --field "TASK_RELATED_FILES" --value "path/to/file.sh|path/to/other.sh"
+doey task decision --task-id "$TASK_ID" --title "Decision title" --body "Decision text"
+doey task log add --task-id "$TASK_ID" --type "note" --title "Note title" --body "Note text"
+doey task update --id "$TASK_ID" --field "TASK_RELATED_FILES" --value "path/to/file.sh|path/to/other.sh"
 ```
 
 ### Dependencies
@@ -63,10 +63,10 @@ doey-ctl task update --id "$TASK_ID" --field "TASK_RELATED_FILES" --value "path/
 
 ```bash
 # Set "task A blocks tasks B and C" (auto-syncs BLOCKED_BY on B and C)
-doey-ctl task update --id "A" --field "TASK_BLOCKS" --value "B,C"
+doey task update --id "A" --field "TASK_BLOCKS" --value "B,C"
 
 # Check if a task is blocked
-doey-ctl task get --id "$TASK_ID"  # inspect TASK_BLOCKED_BY and TASK_PLAN_PHASE
+doey task get --id "$TASK_ID"  # inspect TASK_BLOCKED_BY and TASK_PLAN_PHASE
 ```
 
 - Setting `blocks` on task A with value `B,C` automatically adds A to `blockedBy` on tasks B and C
@@ -77,7 +77,7 @@ doey-ctl task get --id "$TASK_ID"  # inspect TASK_BLOCKED_BY and TASK_PLAN_PHASE
 
 **When transitioning a task to `done`:**
 ```bash
-doey-ctl task update --id "$TASK_ID" --status "done"
+doey task update --id "$TASK_ID" --status "done"
 ```
 
 ### Plan Phases
@@ -85,7 +85,7 @@ doey-ctl task update --id "$TASK_ID" --status "done"
 `TASK_PLAN_PHASE` is optional and orthogonal to `TASK_STATUS`. Allowed values: `gathering`, `drafted`, `approved`, `executing`, `reviewing`, `done`.
 
 ```bash
-doey-ctl task update --id "$TASK_ID" --field "TASK_PLAN_PHASE" --value "approved"
+doey task update --id "$TASK_ID" --field "TASK_PLAN_PHASE" --value "approved"
 ```
 
 **Dispatch guard:** Tasks in `gathering` or `drafted` phase should NOT be dispatched for implementation.
@@ -100,14 +100,14 @@ Example value: `1:pending:Read the coordinator source\n2:in_progress:Adapt promp
 
 ```bash
 # Read current todolist
-doey-ctl task get --id "$TASK_ID"  # inspect TASK_TODOLIST field
+doey task get --id "$TASK_ID"  # inspect TASK_TODOLIST field
 
 # Add a pending item (append to existing value with new auto-incremented ID)
-doey-ctl task update --id "$TASK_ID" --field "TASK_TODOLIST" \
+doey task update --id "$TASK_ID" --field "TASK_TODOLIST" \
   --value "1:pending:Read source\n2:pending:New item"
 
 # Update item status (rewrite full value with updated status)
-doey-ctl task update --id "$TASK_ID" --field "TASK_TODOLIST" \
+doey task update --id "$TASK_ID" --field "TASK_TODOLIST" \
   --value "1:done:Read source\n2:in_progress:New item"
 ```
 
@@ -121,7 +121,7 @@ doey-ctl task update --id "$TASK_ID" --field "TASK_TODOLIST" \
 
 ### Listing Enhancements
 
-When listing tasks (`doey-ctl task list --json`), the output includes dependency and phase info:
+When listing tasks (`doey task list --json`), the output includes dependency and phase info:
 
 - **Blocked tasks:** `TASK_BLOCKED_BY` field shows blocking task IDs
 - **Plan phase:** `TASK_PLAN_PHASE` shown when set

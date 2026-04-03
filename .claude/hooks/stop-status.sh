@@ -49,7 +49,7 @@ for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   [ -z "$_sf" ] && continue
   _status_file="${RUNTIME_DIR}/status/${_sf}.status"
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl status set "$_sf" "$STOP_STATUS"
+    doey status set "$_sf" "$STOP_STATUS"
   else
     write_pane_status "$_status_file" "$STOP_STATUS"
   fi
@@ -92,7 +92,7 @@ if is_taskmaster; then
     sleep 3
     _taskmaster_status_file="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
     if command -v doey-ctl >/dev/null 2>&1; then
-      _tm_cur=$(doey-ctl status get "$PANE_SAFE")
+      _tm_cur=$(doey status get "$PANE_SAFE")
     else
       _tm_cur=$(head -1 "$_taskmaster_status_file" 2>/dev/null || true)
     fi

@@ -323,7 +323,7 @@ Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s)
 Workers report via `${RUNTIME_DIR}/messages/`. **Read often — if you don't, you won't know workers are done.**
 
 ```bash
-doey-ctl msg read --pane "${DOEY_TEAM_WINDOW}.0"
+doey msg read --pane "${DOEY_TEAM_WINDOW}.0"
 ```
 
 Types: `worker_finished (done)` -> read result, synthesize, update log. `worker_finished (error)` -> investigate/retry. `freelancer_finished` -> research complete. No messages + all idle -> wave complete.
@@ -392,13 +392,13 @@ Every piece of work flows through a `.task` file — no exceptions. If it's not 
 
 ### Task Lifecycle
 
-Use `doey-ctl` for task lifecycle updates:
+Use `doey` for task lifecycle updates:
 
-1. **Plan waves** — `doey-ctl task subtask add --task-id $TASK_ID --description "W${DOEY_TEAM_WINDOW}.1: description"`
-2. **Worker done** — `doey-ctl task subtask update --task-id $TASK_ID --subtask-id $S1 --status done` (valid: pending|in_progress|done|skipped)
-3. **Wave decisions** — `doey-ctl task decision --task-id $TASK_ID --title "Wave 1" --body "2/3 passed. Proceeding."`
-4. **Wave report** — `doey-ctl task log add --task-id $TASK_ID --type progress --title "Wave N Complete" --body "Summary" --author "Manager_W${DOEY_TEAM_WINDOW}"`
-5. **Task done** — `doey-ctl task log add --task-id $TASK_ID --type completion --title "Task Done" --body "Summary" --author "Manager_W${DOEY_TEAM_WINDOW}"`
+1. **Plan waves** — `doey task subtask add --task-id $TASK_ID --description "W${DOEY_TEAM_WINDOW}.1: description"`
+2. **Worker done** — `doey task subtask update --task-id $TASK_ID --subtask-id $S1 --status done` (valid: pending|in_progress|done|skipped)
+3. **Wave decisions** — `doey task decision --task-id $TASK_ID --title "Wave 1" --body "2/3 passed. Proceeding."`
+4. **Wave report** — `doey task log add --task-id $TASK_ID --type progress --title "Wave N Complete" --body "Summary" --author "Manager_W${DOEY_TEAM_WINDOW}"`
+5. **Task done** — `doey task log add --task-id $TASK_ID --type completion --title "Task Done" --body "Summary" --author "Manager_W${DOEY_TEAM_WINDOW}"`
 
 Report types: `progress`, `decision`, `completion`, `error`. Never dispatch Wave N+1 until N is fully complete.
 

@@ -28,18 +28,18 @@ Skip if no `TASK_ID` provided.
 
 | When | Call |
 |------|------|
-| Start | `doey-ctl task subtask update --task-id "$TASK_ID" --subtask-id "$SUBTASK_N" --status in_progress` |
-| Milestone | `doey-ctl task log add --task-id "$TASK_ID" --type progress --title "description" --author "W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"` |
-| Done | `doey-ctl task subtask update --task-id "$TASK_ID" --subtask-id "$SUBTASK_N" --status done` |
-| Report | `doey-ctl task log add --task-id "$TASK_ID" --type TYPE --title "Title" --body "Summary" --author "W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"` |
+| Start | `doey task subtask update --task-id "$TASK_ID" --subtask-id "$SUBTASK_N" --status in_progress` |
+| Milestone | `doey task log add --task-id "$TASK_ID" --type progress --title "description" --author "W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"` |
+| Done | `doey task subtask update --task-id "$TASK_ID" --subtask-id "$SUBTASK_N" --status done` |
+| Report | `doey task log add --task-id "$TASK_ID" --type TYPE --title "Title" --body "Summary" --author "W${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"` |
 
 Report types: `research`, `progress`, `completion`, `error`.
 
 ## Q&A & Attachments
 
-**Q&A:** When dispatch includes `QA_TIMESTAMP`, log receipt (`Q:`) and answer (`A:`) via `doey-ctl task log add` with `--type qa_thread`.
+**Q&A:** When dispatch includes `QA_TIMESTAMP`, log receipt (`Q:`) and answer (`A:`) via `doey task log add` with `--type qa_thread`.
 
-**Attachments:** `doey-ctl task log add --task-id "$TASK_ID" --type TYPE --title "title" --body "body" --author "author"`. Types: `research`, `build`, `test`, `review`, `error`. Stop hook auto-attaches final output.
+**Attachments:** `doey task log add --task-id "$TASK_ID" --type TYPE --title "title" --body "body" --author "author"`. Types: `research`, `build`, `test`, `review`, `error`. Stop hook auto-attaches final output.
 
 ## Protocol
 

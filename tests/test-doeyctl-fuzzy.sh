@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Regression tests for doey-ctl fuzzy input tolerance (task 146).
+# Regression tests for doey fuzzy input tolerance (task 146).
 # Bash 3.2 compatible — no associative arrays, no bash 4+ features.
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CTL="/tmp/doey-ctl"
+CTL="/tmp/doey-ctl-test"
 PASS=0
 FAIL=0
 TOTAL=0
 
 # --- Build ---
-echo "Building doey-ctl..."
+echo "Building doey-ctl for testing..."
 export PATH="/usr/local/go/bin:$PATH"
 (cd "$PROJECT_ROOT/tui" && go build -o "$CTL" ./cmd/doey-ctl/) || {
-    echo "FATAL: failed to build doey-ctl"
+    echo "FATAL: failed to build doey-ctl binary"
     exit 1
 }
 

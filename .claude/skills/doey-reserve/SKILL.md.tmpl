@@ -22,7 +22,7 @@ if [ "$ACTION" = "reserve" ]; then
 else
   rm -f "${RD}/status/${SAFE}.reserved"; STATUS="READY"
 fi
-doey-ctl status set --pane "$MY_PANE" --status "$STATUS"
+doey status set --pane "$MY_PANE" --status "$STATUS"
 echo "Pane ${MY_PANE} ${ACTION}d"
 ```
 

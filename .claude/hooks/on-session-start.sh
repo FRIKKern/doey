@@ -189,7 +189,7 @@ type _debug_log >/dev/null 2>&1 && \
 # Only run for first pane in session to avoid redundant work
 if [ "${PANE_INDEX:-0}" = "0" ] && [ "${WINDOW_INDEX:-0}" = "0" ]; then
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    doey-ctl migrate --project-dir "$PROJECT_DIR" --runtime "${RUNTIME_DIR:-}" 2>/dev/null &
+    doey migrate --project-dir "$PROJECT_DIR" --runtime "${RUNTIME_DIR:-}" 2>/dev/null &
   fi
 fi
 

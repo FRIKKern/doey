@@ -47,7 +47,7 @@ W="${DOEY_WINDOW_INDEX:-0}"; PANE="${SESSION_NAME}:${W}.X"
 PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
 USE_DELEGATE=false
 if [ "${FORCE_RESTART:-0}" != "1" ]; then
-  STATUS_OUT=$(doey-ctl status get "$PANE_SAFE" 2>/dev/null) || STATUS_OUT=""
+  STATUS_OUT=$(doey status get "$PANE_SAFE" 2>/dev/null) || STATUS_OUT=""
   LAST_TAGS=$(echo "$STATUS_OUT" | grep '^LAST_TASK_TAGS: ' | cut -d' ' -f2-) || LAST_TAGS=""
   LAST_TYPE=$(echo "$STATUS_OUT" | grep '^LAST_TASK_TYPE: ' | cut -d' ' -f2-) || LAST_TYPE=""
   LAST_FILES=$(echo "$STATUS_OUT" | grep '^LAST_FILES: ' | cut -d' ' -f2-) || LAST_FILES=""
@@ -69,7 +69,7 @@ fi
 
 ```bash
 # Create persistent task so TUI tracks it
-TASK_ID=$(doey-ctl task create --title "$TASK_TITLE" --type "${TASK_TYPE:-feature}" --description "$TASK_DESCRIPTION")
+TASK_ID=$(doey task create --title "$TASK_TITLE" --type "${TASK_TYPE:-feature}" --description "$TASK_DESCRIPTION")
 echo "Created task #${TASK_ID}"
 ```
 

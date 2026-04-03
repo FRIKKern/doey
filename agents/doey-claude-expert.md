@@ -37,7 +37,7 @@ Skills: `.claude/skills/<name>/SKILL.md` with YAML frontmatter, loaded on demand
 
 **Dispatch:** Worker prompts must include: project dir, goal, files, steps, constraints, budget, "when done." Workers have zero team context.
 
-**Notification chain:** Worker → Manager → Taskmaster → Boss. Each hop: `doey-ctl msg send` + `doey-ctl msg trigger`. Golden context log survives compaction.
+**Notification chain:** Worker → Manager → Taskmaster → Boss. Each hop: `doey msg send` + `doey msg trigger`. Golden context log survives compaction.
 
 ## Tool Restrictions
 

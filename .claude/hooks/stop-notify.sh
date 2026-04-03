@@ -172,11 +172,11 @@ if is_worker; then
   <tool-count>${_TOOL_COUNT}</tool-count>
   <duration>${_DURATION}</duration>
 </task-notification>"
-  # Notify: doey-ctl primary, _notify_pane fallback only
+  # Notify: doey primary, _notify_pane fallback only
   if command -v doey-ctl >/dev/null 2>&1; then
     _project_dir=$(_resolve_project_dir)
     if [ -n "${_project_dir:-}" ]; then
-      doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" --to "$_target" \
+      doey msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" --to "$_target" \
         --subject "$_subject" --body "$MSG" --project-dir "$_project_dir" 2>/dev/null \
         || _notify_pane "$_target" "$_subject" "$MSG"
     else
@@ -205,11 +205,11 @@ if is_manager; then
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"
 
-  # Notify: doey-ctl primary, _notify_pane fallback only
+  # Notify: doey primary, _notify_pane fallback only
   if command -v doey-ctl >/dev/null 2>&1; then
     _project_dir=$(_resolve_project_dir)
     if [ -n "${_project_dir:-}" ]; then
-      doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
+      doey msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
         --to "$SESSION_NAME:${TASKMASTER_PANE}" --subject "task_complete" \
         --body "Team ${WINDOW_INDEX} Manager finished: ${SUMMARY}" \
         --project-dir "$_project_dir" 2>/dev/null \
@@ -234,11 +234,11 @@ if is_taskmaster; then
   BOSS_TARGET="$SESSION_NAME:0.1"
   if _pane_alive "$BOSS_TARGET"; then
     SUMMARY=$(sanitize_message "$LAST_MSG" 150)
-    # Notify: doey-ctl primary, _notify_pane fallback only
+    # Notify: doey primary, _notify_pane fallback only
     if command -v doey-ctl >/dev/null 2>&1; then
       _project_dir=$(_resolve_project_dir)
       if [ -n "${_project_dir:-}" ]; then
-        doey-ctl msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
+        doey msg send --from "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" \
           --to "$BOSS_TARGET" --subject "taskmaster_update" \
           --body "${DOEY_ROLE_COORDINATOR} update: ${SUMMARY}" \
           --project-dir "$_project_dir" 2>/dev/null \

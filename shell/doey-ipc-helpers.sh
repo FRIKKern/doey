@@ -16,11 +16,11 @@ ensure_taskmaster_alive() {
 
   tmux display-message -t "${session_name}:${taskmaster_pane}" -p '#{pane_pid}' >/dev/null 2>&1 || return 2
 
-  # Try doey-ctl status (auto-detects DB)
+  # Try doey status (auto-detects DB)
   local _project_dir="${DOEY_PROJECT_DIR:-${PROJECT_DIR:-}}"
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "$_project_dir" ]; then
     local _db_status
-    _db_status=$(doey-ctl status get "$taskmaster_safe" --project-dir "$_project_dir" --json 2>/dev/null) && {
+    _db_status=$(doey status get "$taskmaster_safe" --project-dir "$_project_dir" --json 2>/dev/null) && {
       local _db_st
       _db_st=$(echo "$_db_status" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
       [ -n "$_db_st" ] && [ "$_db_st" != "FINISHED" ] && return 0
@@ -74,10 +74,10 @@ send_msg_to_taskmaster() {
   local rc=0; ensure_taskmaster_alive "$runtime_dir" "$session_name" || rc=$?
   [ "$rc" -eq 2 ] && return 1
 
-  # Fast path: doey-ctl msg send (auto-detects DB, fires trigger internally)
+  # Fast path: doey msg send (auto-detects DB, fires trigger internally)
   local _project_dir="${DOEY_PROJECT_DIR:-${PROJECT_DIR:-}}"
   if command -v doey-ctl >/dev/null 2>&1; then
-    if doey-ctl msg send \
+    if doey msg send \
         --from "$sender" \
         --to "$taskmaster_safe" \
         --subject "$subject" \
