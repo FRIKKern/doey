@@ -749,7 +749,8 @@ func runSubtaskUpdate(args []string) {
 		fmt.Fprintf(os.Stderr, "Usage: doey-ctl task subtask update [flags] [task-id] [seq] [status]\n\n")
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  doey-ctl task subtask update --task-id 142 --subtask-id 1 --status done\n")
-		fmt.Fprintf(os.Stderr, "  doey-ctl task subtask update 142 1 done    (positional shorthand)\n\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl task subtask update 142 1 done    (positional shorthand)\n")
+		fmt.Fprintf(os.Stderr, "\nValid statuses: pending, in_progress, done, skipped, failed, review\n\n")
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		fs.PrintDefaults()
 	}
@@ -780,6 +781,9 @@ func runSubtaskUpdate(args []string) {
 	}
 	if statusVal == "" && *stTitle == "" {
 		fatal("task subtask update: --status or --title is required\nTry: doey-ctl task subtask update --task-id %s --subtask-id %s --status <STATUS>\n", taskIDStr, subtaskIDStr)
+	}
+	if statusVal != "" && !store.IsValidSubtaskStatus(statusVal) {
+		fatal("task subtask update: invalid status %q. Valid: %v\n", statusVal, store.ValidSubtaskStatuses)
 	}
 
 	pd := projectDir(*dir)
