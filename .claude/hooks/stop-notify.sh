@@ -123,6 +123,7 @@ if is_worker; then
   RESULT_FILE="$RUNTIME_DIR/results/pane_${WINDOW_INDEX}_${PANE_INDEX}.json"
   STATUS="done"
   _SUMMARY="" _TOOL_COUNT="0" _FILES_COUNT="0" _RESULT_TS="0"
+  local_subtask_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id" 2>/dev/null) || local_subtask_id=""
   if [ -f "$RESULT_FILE" ]; then
     if command -v jq >/dev/null 2>&1; then
       STATUS=$(jq -r '.status // "done"' "$RESULT_FILE" 2>/dev/null) || STATUS="done"
@@ -178,6 +179,7 @@ if is_worker; then
   <files-changed>${_FILES_COUNT}</files-changed>
   <tool-count>${_TOOL_COUNT}</tool-count>
   <duration>${_DURATION}</duration>
+  <subtask-id>${local_subtask_id}</subtask-id>
 </task-notification>"
   # Notify: doey primary, _notify_pane fallback only
   if command -v doey-ctl >/dev/null 2>&1; then

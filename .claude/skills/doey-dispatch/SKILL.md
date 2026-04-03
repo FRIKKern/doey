@@ -75,6 +75,20 @@ echo "Created task #${TASK_ID}"
 
 Include `Task #${TASK_ID}` in the prompt header so hooks can track it.
 
+### Subtask ID (optional)
+
+If a subtask ID is provided, set it as an env var on the target pane before sending the task. This lets the worker and stop hook track which subtask is being executed.
+
+```bash
+# Set DOEY_SUBTASK_ID on worker pane (skip if not provided)
+if [ -n "${SUBTASK_ID:-}" ]; then
+  tmux send-keys -t "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}" Enter
+  sleep 0.3
+fi
+```
+
+Insert this step after the worker is ready (post kill+restart or delegate check) but before pasting the task.
+
 ### Dispatch Sequence
 
 ```bash
@@ -104,6 +118,12 @@ if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
   tmux send-keys -t "$PANE" "$CMD" Enter; sleep 8
   tmux copy-mode -q -t "$PANE" 2>/dev/null
+fi
+
+# Set subtask ID env var if provided
+if [ -n "${SUBTASK_ID:-}" ]; then
+  tmux send-keys -t "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}" Enter
+  sleep 0.3
 fi
 
 # Rename + paste task

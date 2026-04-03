@@ -293,6 +293,30 @@ When a worker reports being blocked by `on-pre-tool-use` on prompt submission, t
 
 When workers finish and files have changed, send a `commit_request` `.msg` to {{DOEY_ROLE_COORDINATOR}} with WHAT, WHY, FILES, and PUSH fields. {{DOEY_ROLE_COORDINATOR}} handles the commit directly.
 
+## Subtask Accountability
+
+Before dispatching ANY worker, create and track a subtask:
+
+1. **Create subtask:** `doey task subtask add --task-id $TASK_ID --description "W${DOEY_TEAM_WINDOW}.N: description"`
+2. **Write subtask ID:** Write the subtask ID to the runtime status dir and include it in the worker prompt:
+   ```bash
+   PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+   printf '%s\n' "$SUBTASK_ID" > "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id"
+   ```
+3. **Set env var on target pane:** Before sending the task, export `DOEY_SUBTASK_ID` on the worker pane:
+   ```bash
+   tmux send-keys -t "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}" Enter
+   ```
+4. **Include in prompt:** Add `SUBTASK_ID: ${SUBTASK_ID}` in the worker's prompt header.
+
+After a worker finishes:
+
+1. **Read result:** Check `${RUNTIME_DIR}/results/pane_${W}_*.json` for the worker's output.
+2. **Review:** Does the output satisfy the subtask description? Check quality and completeness.
+3. **Only then mark done:** `doey task subtask update --task-id $TASK_ID --subtask-id $SUBTASK_ID --status done`
+
+Never mark a subtask done without reviewing the worker's result. If the result is inadequate, continue the worker with specific feedback or redispatch.
+
 ## Sending Tasks
 
 **Before every send:** `tmux copy-mode -q -t "$PANE" 2>/dev/null`

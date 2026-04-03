@@ -121,6 +121,7 @@ cat > "$TMPFILE" <<EOF
   "tool_calls": $TOOL_COUNT,
   "last_output": $LAST_JSON,
   "task_id": "$local_task_id",
+  "subtask_id": "$local_subtask_id",
   "hypothesis_updates": ${DOEY_HYPOTHESIS_UPDATES:-[]},
   "evidence": ${DOEY_EVIDENCE:-[]},
   "needs_follow_up": ${DOEY_NEEDS_FOLLOW_UP:-false},
