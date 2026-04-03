@@ -402,6 +402,11 @@ func msgNudgePane(targetPane, rtDir string) {
 		}
 	}
 
+	// Skip Boss pane (0.1) — it's user-facing, injecting send-keys corrupts input
+	if paneID == "0.1" {
+		return
+	}
+
 	// Check if BUSY — skip nudge if so
 	if rtDir != "" {
 		// Build safe name for status file lookup
