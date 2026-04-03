@@ -23,6 +23,7 @@ rm -f "$TMPFILE"
 tmux copy-mode -q -t "$TASKMASTER_PANE" 2>/dev/null || true
 tmux paste-buffer -b doey_nudge -t "$TASKMASTER_PANE" 2>/dev/null || true
 tmux copy-mode -q -t "$TASKMASTER_PANE" 2>/dev/null || true
+tmux send-keys -t "$TASKMASTER_PANE" Escape 2>/dev/null || true
 tmux send-keys -t "$TASKMASTER_PANE" Enter 2>/dev/null || true
 tmux delete-buffer -b doey_nudge 2>/dev/null || true
 echo "Nudge sent to {{DOEY_ROLE_COORDINATOR}} (${TASKMASTER_PANE})"

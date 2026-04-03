@@ -97,6 +97,7 @@ if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
   tmux copy-mode -q -t "$PANE" 2>/dev/null
+  tmux send-keys -t "$PANE" Escape
   PANE_IDX="${PANE##*.}"
   WORKER_PROMPT=$(grep -l "pane ${W}\.${PANE_IDX} " "${RD}/worker-system-prompt-"*.md 2>/dev/null | head -1)
   CMD="claude --dangerously-skip-permissions --model ${DOEY_WORKER_MODEL:-opus}"
@@ -129,7 +130,7 @@ sleep 5; OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
 if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
   echo "✓ Worker ${W}.X started"
 else
-  tmux copy-mode -q -t "$PANE" 2>/dev/null; tmux send-keys -t "$PANE" Enter; sleep 3
+  tmux copy-mode -q -t "$PANE" 2>/dev/null; tmux send-keys -t "$PANE" Escape; tmux send-keys -t "$PANE" Enter; sleep 3
   OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
   if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
     echo "✓ Started after retry"

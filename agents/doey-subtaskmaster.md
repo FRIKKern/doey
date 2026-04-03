@@ -305,6 +305,7 @@ When workers finish and files have changed, send a `commit_request` `.msg` to Ta
 ```bash
 PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
 tmux copy-mode -q -t "$PANE" 2>/dev/null
+tmux send-keys -t "$PANE" Escape
 # Short (< ~200 chars):
 tmux send-keys -t "$PANE" "Your task here" Enter
 # Long — use load-buffer:
@@ -313,7 +314,7 @@ cat > "$TASKFILE" << 'TASK'
 Detailed multi-line task description here.
 TASK
 tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
-sleep 0.5; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
+sleep 0.5; tmux send-keys -t "$PANE" Escape; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
 ```
 
 Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$PANE" -p -S -5`. Not started -> exit copy-mode, re-send Enter. **Stuck:** `C-c` -> `C-u` -> `Enter` (0.5s between each). Wait for prompt before re-dispatching.

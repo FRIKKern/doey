@@ -49,6 +49,7 @@ _sm_status=$(doey status get {{DOEY_TASKMASTER_PANE}} 2>/dev/null || echo "UNKNO
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
+  tmux send-keys -t "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" Escape
   tmux send-keys -t "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" "Check your messages and resume." Enter
   sleep 3
 fi
