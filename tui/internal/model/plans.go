@@ -138,7 +138,8 @@ type PlansModel struct {
 	selectedPlan *Plan
 
 	// Card-based list
-	list list.Model
+	list            list.Model
+	listInitialized bool // true after first population — prevents Select(0) on every tick
 
 	// Navigation — split-pane
 	leftFocused    bool
@@ -272,6 +273,13 @@ func (m *PlansModel) SetSnapshot(snap runtime.Snapshot) {
 		items[i] = planItem{plan: p}
 	}
 	m.list.SetItems(items)
+
+	// On first population, ensure the list starts at the top with the first plan selected.
+	// Subsequent snapshot ticks preserve the user's current selection.
+	if len(items) > 0 && !m.listInitialized {
+		m.list.Select(0)
+		m.listInitialized = true
+	}
 
 	// Reset building state when the plan's checkboxes change or plan switches
 	if m.building {
