@@ -38,12 +38,31 @@ func eventSource() string {
 // runTaskCmd dispatches task sub-subcommands.
 func runTaskCmd(args []string) {
 	if len(args) == 0 {
-		fatal("task: missing subcommand: create, update, list, get, delete, subtask, log, decision\nRun 'doey-ctl task -h' for usage.\n")
+		fatal("task: missing subcommand\nRun 'doey-ctl task -h' for usage.\n")
 	}
 	if isHelp(args[0]) {
 		printTaskHelp()
 		return
 	}
+	// Map transition shorthand subcommands to status values.
+	transitionStatuses := map[string]string{
+		"done":    "done",
+		"start":   "in_progress",
+		"pause":   "paused",
+		"block":   "blocked",
+		"confirm": "pending_user_confirmation",
+		"pending": "pending_user_confirmation",
+		"ready":   "active",
+		"activate": "active",
+		"failed":  "failed",
+		"cancel":  "cancelled",
+	}
+
+	if status, ok := transitionStatuses[args[0]]; ok {
+		runTaskTransition(args[0], status, args[1:])
+		return
+	}
+
 	switch args[0] {
 	case "create":
 		runTaskCreate(args[1:])
@@ -62,11 +81,12 @@ func runTaskCmd(args []string) {
 	case "decision":
 		runTaskDecision(args[1:])
 	default:
-		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision"}
+		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision",
+			"done", "start", "pause", "block", "confirm", "pending", "ready", "activate", "failed", "cancel"}
 		if suggestion := suggestSubcommand(args[0], validTaskSubs); suggestion != "" {
 			fatal("task: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task -h' for usage.\n", args[0], suggestion)
 		}
-		fatal("task: unknown subcommand: %s. Valid: create, update, list, get, delete, subtask, log, decision\nRun 'doey-ctl task -h' for usage.\n", args[0])
+		fatal("task: unknown subcommand: %s. Valid: create, update, list, get, delete, subtask, log, decision, done, start, pause, block, cancel, failed\nRun 'doey-ctl task -h' for usage.\n", args[0])
 	}
 }
 
@@ -282,6 +302,85 @@ func runTaskUpdate(args []string) {
 	// File-only fallback.
 	if err := ctl.UpdateTaskField(pd, taskIDStr, *field, *value); err != nil {
 		fatal("task update: %v", err)
+	}
+}
+
+// runTaskTransition handles transition shorthand subcommands (done, start, block, etc.)
+// that accept one or more task IDs as positional arguments.
+func runTaskTransition(subcmd, status string, args []string) {
+	fs := flag.NewFlagSet("task "+subcmd, flag.ContinueOnError)
+	dir := fs.String("project-dir", "", "project directory")
+
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: doey-ctl task %s [flags] <id> [id...]\n\n", subcmd)
+		fmt.Fprintf(os.Stderr, "Set one or more tasks to '%s' status.\n\n", status)
+		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  doey-ctl task %s 142\n", subcmd)
+		fmt.Fprintf(os.Stderr, "  doey-ctl task %s 142 143 144\n\n", subcmd)
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		fs.PrintDefaults()
+	}
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			os.Exit(0)
+		}
+		os.Exit(1)
+	}
+
+	if fs.NArg() == 0 {
+		fatal("task %s: at least one task ID is required\nUsage: doey-ctl task %s <id> [id...]\n", subcmd, subcmd)
+	}
+
+	pd := projectDir(*dir)
+	s := tryOpenStore(pd)
+	if s != nil {
+		defer s.Close()
+	}
+
+	var errCount int
+	for _, idStr := range fs.Args() {
+		if s != nil {
+			t, resolveErr := resolveTask(s, idStr)
+			if resolveErr != nil {
+				fmt.Fprintf(os.Stderr, "task %s: %s: %v\n", subcmd, idStr, resolveErr)
+				errCount++
+				continue
+			}
+			if t != nil {
+				t.Status = status
+				if err := s.UpdateTask(t); err != nil {
+					fmt.Fprintf(os.Stderr, "task %s: %s: %v\n", subcmd, idStr, err)
+					errCount++
+					continue
+				}
+				id := t.ID
+				s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: "status=" + status})
+				// Write-through to .task file (best-effort).
+				_ = ctl.UpdateTaskField(pd, strconv.FormatInt(id, 10), "status", status)
+				continue
+			}
+		}
+
+		// File-only fallback.
+		if err := ctl.UpdateTaskField(pd, idStr, "status", status); err != nil {
+			fmt.Fprintf(os.Stderr, "task %s: %s: %v\n", subcmd, idStr, err)
+			errCount++
+			continue
+		}
+	}
+
+	okCount := fs.NArg() - errCount
+	if fs.NArg() > 1 {
+		fmt.Fprintf(os.Stderr, "Marked %d task(s) %s", okCount, status)
+		if errCount > 0 {
+			fmt.Fprintf(os.Stderr, ", %d error(s)", errCount)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+
+	if errCount > 0 && okCount == 0 {
+		os.Exit(1)
 	}
 }
 
@@ -1630,6 +1729,16 @@ Subcommands:
   subtask   Manage subtasks (add, update, list)
   log       Manage task log entries (add, list)
   decision  Add a decision log entry
+
+Transitions (accept multiple IDs):
+  done      Mark tasks done
+  start     Mark tasks in_progress
+  pause     Mark tasks paused
+  block     Mark tasks blocked
+  ready     Mark tasks active
+  failed    Mark tasks failed
+  cancel    Mark tasks cancelled
+  confirm   Mark tasks pending_user_confirmation
 
 Run 'doey-ctl task <subcommand> -h' for help.
 `)
