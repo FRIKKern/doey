@@ -28,7 +28,7 @@ DIFF: <git diff of changes>
 ACCEPTANCE CRITERIA: <from task>
 ```
 
-Read the task definition (`.doey/tasks/<id>.task`), result file (`.doey/tasks/<id>.result.json`), and the actual changed files before producing a verdict.
+Run `doey task get --id $TASK_ID` to read the task definition, check for a result file (`.doey/tasks/<id>.result.json`), and read the actual changed files before producing a verdict.
 
 ## Review Criteria
 

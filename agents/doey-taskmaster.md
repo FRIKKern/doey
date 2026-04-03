@@ -53,7 +53,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
    | `FINISHED` | Result JSON: `$RUNTIME_DIR/results/<pane>.json` for the finished pane |
    | `CRASH` | Crash alert: `$RUNTIME_DIR/status/crash_pane_*` |
    | `STALE` | Stale alert: `$RUNTIME_DIR/status/stale_*` |
-   | `QUEUED` | Task files: `.doey/tasks/` with `TASK_STATUS=active` and no `TASK_TEAM` |
+   | `QUEUED` | Queued tasks: `doey task list --status active` — look for empty TEAM column |
    | `TIMEOUT` | No specific trigger — check your prompt for any pending input before re-sleeping |
 
 3. **Act** — Handle ONLY the trigger event. Dispatch, commit, report, recover — whatever the trigger requires. Do NOT scan unchanged state.
@@ -149,7 +149,7 @@ done
 
 When a `.task` file arrives, score existing idle teams before dispatching:
 
-1. **Read task metadata** — extract `TASK_TYPE`, `TASK_TAGS`, and file paths from the `.task` file.
+1. **Read task metadata** — run `doey task get --id $TASK_ID` to extract `TASK_TYPE`, `TASK_TAGS`, and file paths.
 2. **Score each idle team** — for each team in `IDLE_TEAMS`, read `$RUNTIME_DIR/status/pane_${W}_*.status` for `LAST_TASK_TAGS`, `LAST_TASK_TYPE`, `LAST_FILES`. Compute overlap:
    - +1 per matching tag, +1 for matching type, +1 per shared file-path prefix (first two directory components)
    - Normalize to 0–100% of maximum possible score
@@ -176,7 +176,7 @@ When a `.task` file arrives, score existing idle teams before dispatching:
 
 ### Queue Drain
 
-On `QUEUED` wake: read `.doey/tasks/` for `TASK_STATUS=active` with no `TASK_TEAM`. Sort by priority (P0→P3, default P2). Dispatch, then return to sleep.
+On `QUEUED` wake: run `doey task list --status active` and look for tasks with empty TEAM column. Sort by priority (P0→P3, default P2). Dispatch, then return to sleep.
 
 ### Crash & Stale Recovery
 
@@ -226,7 +226,7 @@ After processing all messages, mark read: `doey msg read-all --pane "${DOEY_TEAM
 
 ### Processing dispatch_task
 
-1. **Read metadata** from .task file (TASK_ID, TITLE, STATUS, TYPE, PRIORITY) and .json file (intent, hypotheses, constraints, success_criteria, deliverables, dispatch_plan).
+1. **Read metadata** via `doey task get --id $TASK_ID` (TASK_ID, TITLE, STATUS, TYPE, PRIORITY) and .json file (intent, hypotheses, constraints, success_criteria, deliverables, dispatch_plan).
 
 2. **Duplicate check (REQUIRED gate):** Run `task_find_similar "$PROJECT_DIR" "$TASK_TITLE"`. Match found → log decision, notify Boss (`SUBJECT: duplicate_detected`), STOP. No match → proceed. Skip gate only if Boss explicitly says "intentionally separate."
 

@@ -405,13 +405,13 @@ Every piece of work flows through a `.task` file — no exceptions. If it's not 
 ### On Startup / Wake / Compaction
 
 1. Read context log (`cat "$LOG"`)
-2. Load active tasks from `.doey/tasks/` (scan for `TASK_STATUS=active|in_progress`)
+2. Load active tasks: `doey task list` (look for `active` or `in_progress` status)
 3. If `TASK_ID` was provided, load that task file immediately
 
 ### When Receiving Work from Taskmaster
 
 - **TASK_ID provided** -> use it, load the task file
-- **No TASK_ID** -> search `.doey/tasks/` for matching task by title/keywords
+- **No TASK_ID** -> search via `doey task list` for matching task by title/keywords
 - **Not found** -> create via `/doey-create-task` or `task_create`
 - **NEVER dispatch without a tracked `.task` file**
 
