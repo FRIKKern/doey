@@ -3987,26 +3987,11 @@ rebalance_grid_layout() {
 
   local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
 
-  # Both freelancer and regular teams use the same layout: pane 0 full-height left, workers in 2-row columns
-  # Exception: freelancer teams get 3 rows in the last column
-  local _rgl_is_freelancer="false"
-  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${team_window}.env" ]; then
-    local _rgl_tt
-    _rgl_tt=$(_env_val "${runtime_dir}/team_${team_window}.env" TEAM_TYPE)
-    [ "$_rgl_tt" = "freelancer" ] && _rgl_is_freelancer="true"
-  fi
-
   local max_mgr=$((win_w / 3))
   (( mgr_width > max_mgr )) && mgr_width=$max_mgr
 
   local num_workers=$((num_panes - 1))
-  local worker_cols
-  if [ "$_rgl_is_freelancer" = "true" ] && (( num_workers >= 3 )); then
-    # Last column gets 3 rows; reserve 3 for it, rest get 2 each
-    worker_cols=$(( (num_workers - 2) / 2 + 1 ))
-  else
-    worker_cols=$(( (num_workers + 1) / 2 ))
-  fi
+  local worker_cols=$(( (num_workers + 1) / 2 ))
   local worker_area=$((win_w - mgr_width - 1))
   local body="" x=0
   body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
@@ -4021,22 +4006,11 @@ rebalance_grid_layout() {
     fi
     local tp="${pane_ids[$wi]}"
     body+=","
-    # Determine panes in this column: 3 for freelancer last column, otherwise 2 (or 1 if remainder)
+    # Determine panes in this column: 2 (or 1 if remainder)
     local _rgl_col_panes=2
-    if [ "$_rgl_is_freelancer" = "true" ] && (( c == worker_cols - 1 )) && (( num_workers >= 3 )); then
-      _rgl_col_panes=3
-    fi
     local _rgl_remaining=$((num_panes - wi))
     (( _rgl_col_panes > _rgl_remaining )) && _rgl_col_panes=$_rgl_remaining
-    if (( _rgl_col_panes == 3 )); then
-      local _rgl_h1=$(( (win_h - 2) / 3 ))
-      local _rgl_h2=$(( (win_h - 2) / 3 ))
-      local _rgl_h3=$(( win_h - 2 - _rgl_h1 - _rgl_h2 ))
-      local _rgl_y2=$(( _rgl_h1 + 1 )) _rgl_y3=$(( _rgl_h1 + 1 + _rgl_h2 + 1 ))
-      local mp="${pane_ids[$((wi + 1))]}"
-      local bp="${pane_ids[$((wi + 2))]}"
-      body+="${w}x${win_h},${x},0[${w}x${_rgl_h1},${x},0,${tp},${w}x${_rgl_h2},${x},${_rgl_y2},${mp},${w}x${_rgl_h3},${x},${_rgl_y3},${bp}]"
-    elif (( _rgl_col_panes == 2 )); then
+    if (( _rgl_col_panes == 2 )); then
       local bp="${pane_ids[$((wi + 1))]}"
       body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
     else
@@ -4247,22 +4221,7 @@ doey_add_column() {
   local _pane_prefix="W"
   [ "$_ts_team_type" = "freelancer" ] && _pane_prefix="F"
 
-  # Freelancer teams: add extra rows beyond 2 based on _DOEY_GRID_ROWS
-  local _dac_grid_rows="${_DOEY_GRID_ROWS:-2}"
-  local _dac_extra_panes=""
   local _dac_panes_added=2
-  if [ "$_ts_team_type" = "freelancer" ] && [ "$_dac_grid_rows" -gt 2 ] 2>/dev/null; then
-    local _dac_last_pane="$new_pane_bottom"
-    local _dac_row_i=2
-    while [ "$_dac_row_i" -lt "$_dac_grid_rows" ]; do
-      local _dac_extra
-      _dac_extra="$(tmux split-window -v -t "$session:$team_window.${_dac_last_pane}" -c "$_ts_dir" -P -F '#{pane_index}')"
-      _dac_extra_panes="${_dac_extra_panes} ${_dac_extra}"
-      _dac_panes_added=$((_dac_panes_added + 1))
-      _dac_last_pane="$_dac_extra"
-      _dac_row_i=$((_dac_row_i + 1))
-    done
-  fi
 
   # Name panes sequentially
   local _dac_w_i=1
@@ -4274,13 +4233,6 @@ doey_add_column() {
   tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "T${team_window} ${_pane_prefix}${w2_num}"
   _dac_w_i=$((_dac_w_i + 1))
 
-  local _dac_ep
-  for _dac_ep in $_dac_extra_panes; do
-    local _dac_ep_num=$(( _ts_worker_count + _dac_w_i ))
-    tmux select-pane -t "$session:$team_window.${_dac_ep}" -T "T${team_window} ${_pane_prefix}${_dac_ep_num}"
-    _dac_w_i=$((_dac_w_i + 1))
-  done
-
   local _rps_include_p0="false"
   [ "$_ts_team_type" = "freelancer" ] && _rps_include_p0="true"
   rebuild_pane_state "$session:$team_window" "$_rps_include_p0"
@@ -4288,18 +4240,10 @@ doey_add_column() {
   local new_worker_count=$(( _ts_worker_count + _dac_panes_added ))
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type" "" "$_ts_reserved"
 
-  # Build boot args for all panes in this column
-  local _dac_boot_args="${new_pane_top}:${w1_num} ${new_pane_bottom}:${w2_num}"
-  local _dac_boot_ep _dac_boot_i=3
-  for _dac_boot_ep in $_dac_extra_panes; do
-    local _dac_boot_num=$(( _ts_worker_count + _dac_boot_i ))
-    _dac_boot_args="${_dac_boot_args} ${_dac_boot_ep}:${_dac_boot_num}"
-    _dac_boot_i=$((_dac_boot_i + 1))
-  done
-  _batch_boot_workers "$session" "$runtime_dir" "$team_window" $_dac_boot_args
+  _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${new_pane_bottom}:${w2_num}"
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
-  doey_ok "Added ${_dac_panes_added} workers — ${new_worker_count} workers in $((_ts_cols + 1)) columns"
+  doey_ok "Added ${_pane_prefix}${w1_num} and ${_pane_prefix}${w2_num} — ${new_worker_count} workers in $((_ts_cols + 1)) columns"
 }
 
 doey_remove_column() {
