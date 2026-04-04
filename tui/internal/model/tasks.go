@@ -78,6 +78,32 @@ func formatAge(d time.Duration) string {
 	return fmt.Sprintf("%dm", m)
 }
 
+// attachmentEmoji returns an emoji for the attachment type.
+func attachmentEmoji(t string) string {
+	switch t {
+	case "research":
+		return "🔍"
+	case "build":
+		return "🔨"
+	case "test":
+		return "✅"
+	case "review":
+		return "👁"
+	case "error":
+		return "⚠️"
+	case "progress":
+		return "📊"
+	case "completion":
+		return "🏁"
+	case "decision":
+		return "⚖️"
+	case "report":
+		return "📋"
+	default:
+		return "📄"
+	}
+}
+
 // TasksModel displays tasks in a split-pane layout with list left, detail right.
 type TasksModel struct {
 	// Data
@@ -1066,6 +1092,21 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		sections = append(sections, styles.MetaLine(t, "Result", task.Result))
 	}
 
+	// Plan link
+	if task.PlanID != "" {
+		planTitle := task.PlanTitle
+		if planTitle == "" {
+			planTitle = "Plan"
+		}
+		planLink := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).
+			Render(fmt.Sprintf("#%s — %s", task.PlanID, planTitle))
+		sections = append(sections, "")
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Separator).Render("╭ ")+
+			lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render("Plan"))
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Separator).Render("│ ")+planLink)
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Separator).Render("╰"))
+	}
+
 	// Blockers — highlighted red
 	if task.Blockers != "" {
 		sections = append(sections, "")
@@ -1194,8 +1235,56 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		}
 	}
 
-	// Attachments
-	if len(task.Attachments) > 0 {
+	// Attachments — structured TaskAttachments with fallback to plain Attachments
+	if len(task.TaskAttachments) > 0 {
+		display := task.TaskAttachments
+		if len(display) > 20 {
+			display = display[:20]
+		}
+		sections = append(sections, "")
+		sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("ATTACHMENTS (%d)", len(task.TaskAttachments))))
+		now := time.Now()
+		bodyStyle := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(4)
+		for _, att := range display {
+			emoji := attachmentEmoji(att.Type)
+			typeColor := styles.AttachmentTypeColor(t, att.Type)
+			badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
+
+			titleText := att.Title
+			if titleText == "" {
+				titleText = att.Filename
+			}
+			title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
+
+			meta := ""
+			if att.Author != "" {
+				meta += " — " + lipgloss.NewStyle().Foreground(t.Muted).Render(att.Author)
+			}
+			if att.Timestamp > 0 {
+				elapsed := now.Sub(time.Unix(att.Timestamp, 0))
+				meta += ", " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+			}
+			sections = append(sections, fmt.Sprintf("  %s %s%s", badge, title, meta))
+
+			// Body preview — first 4 non-empty lines
+			if att.Body != "" {
+				lines := strings.Split(att.Body, "\n")
+				shown := 0
+				for _, line := range lines {
+					if strings.TrimSpace(line) == "" {
+						continue
+					}
+					if shown >= 4 {
+						sections = append(sections, bodyStyle.Render(
+							lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", len(lines)-shown))))
+						break
+					}
+					sections = append(sections, bodyStyle.Render(line))
+					shown++
+				}
+			}
+		}
+	} else if len(task.Attachments) > 0 {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(t, "LINKS & ATTACHMENTS"))
 		for _, att := range task.Attachments {
