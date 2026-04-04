@@ -2126,20 +2126,25 @@ launch_session() {
 
   ensure_project_trusted "$dir"
 
+  # Redirect step output to log — splash stays visible on terminal
+  mkdir -p "${runtime_dir}/logs"
+  exec 3>&1 4>&2
+  exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
+
   _launch_session_core "$name" "$dir" "$grid" 0
 
-  # Start loading screen in background (session created)
+  # Start loading screen on real terminal (stdout is redirected to log)
   local _loading_pid=""
-  mkdir -p "${runtime_dir}/logs"
   if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
     _loading_pid=$!
   elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
     _loading_pid=$!
   fi
 
   # Restore stdout, wait for loading screen
+  exec 1>&3 2>&4 3>&- 4>&-
   if [ -n "$_loading_pid" ]; then
     wait "$_loading_pid" 2>/dev/null || true
   fi
@@ -3662,7 +3667,9 @@ launch_session_dynamic() {
   fi
 
   # Run startup wizard if not skipped
+  local _wizard_ran=false
   if [ "$DOEY_SKIP_WIZARD" != "true" ] && command -v doey-tui >/dev/null 2>&1; then
+    _wizard_ran=true
     local _wizard_out=""
     local _wizard_tmpfile
     _wizard_tmpfile="$(mktemp "${TMPDIR:-/tmp}/doey-wizard-XXXXXX.json")"
@@ -3711,10 +3718,20 @@ launch_session_dynamic() {
     fi
   fi
 
+  # Wizard TUI overwrites splash — redisplay so splash persists through setup
+  if [ "$_wizard_ran" = true ]; then
+    doey_splash
+  fi
+
   local initial_workers=$(( DOEY_INITIAL_WORKER_COLS * 2 ))
 
   ensure_project_trusted "$dir"
   install_doey_hooks "$dir" "   "
+
+  # Redirect step output to log — splash stays visible on terminal
+  mkdir -p "${runtime_dir}/logs"
+  exec 3>&1 4>&2
+  exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
 
   STEP_TOTAL=7
   step_start 1 "Creating session for ${name}..."
@@ -3722,19 +3739,15 @@ launch_session_dynamic() {
 
   step_done
 
-  # Start loading screen in background (session.env now exists)
+  # Start loading screen on real terminal (stdout is redirected to log)
   local _loading_pid=""
-  mkdir -p "${runtime_dir}/logs"
   if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
     _loading_pid=$!
   elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
     _loading_pid=$!
   fi
-  # Redirect step output to log (loading screen is now visible)
-  exec 3>&1 4>&2
-  exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
 
   step_start 2 "Applying theme..."
   local border_fmt=' #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#{pane_title} #[default]'
