@@ -404,7 +404,8 @@ func (m *TeamModel) SetSnapshot(snap runtime.Snapshot) {
 
 	m.sortEntries()
 
-	// Clamp cursor
+	// Reset viewport to top
+	m.scrollOffset = 0
 	if m.cursor >= len(m.entries) {
 		m.cursor = max(0, len(m.entries)-1)
 	}

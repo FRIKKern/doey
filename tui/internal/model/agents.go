@@ -207,10 +207,10 @@ func (m *AgentsModel) SetSnapshot(snap runtime.Snapshot) {
 	m.agents = snap.AgentDefs
 	m.rebuildGroups()
 
-	// Clamp cursor
-	if m.cursor >= len(m.agents) {
-		m.cursor = max(0, len(m.agents)-1)
-	}
+	// Reset viewport to top
+	m.cursor = 0
+	m.scrollOffset = 0
+	m.rightScroll = 0
 }
 
 // rebuildGroups organizes agents into domain groups.
