@@ -102,8 +102,8 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		 notes, blockers, related_files, hypotheses, decision_log, result,
 		 files, commits, schema_version, review_verdict, review_findings,
 		 review_timestamp, attachments, priority, depends_on, merged_into,
-		 dispatch_mode, summary, phase, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 dispatch_mode, summary, phase, intent, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 		 title=excluded.title, status=excluded.status, type=excluded.type,
 		 description=excluded.description, created_by=excluded.created_by,
@@ -117,7 +117,8 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		 review_timestamp=excluded.review_timestamp, attachments=excluded.attachments,
 		 priority=excluded.priority, depends_on=excluded.depends_on,
 		 merged_into=excluded.merged_into, dispatch_mode=excluded.dispatch_mode,
-		 summary=excluded.summary, phase=excluded.phase, updated_at=excluded.updated_at`,
+		 summary=excluded.summary, phase=excluded.phase, intent=excluded.intent,
+		 updated_at=excluded.updated_at`,
 		id, fields["TASK_TITLE"], fields["TASK_STATUS"], fields["TASK_TYPE"],
 		fields["TASK_DESCRIPTION"], fields["TASK_CREATED_BY"], fields["TASK_ASSIGNED_TO"],
 		fields["TASK_TEAM"], planID, fields["TASK_TAGS"],
@@ -132,6 +133,7 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		fields["TASK_ATTACHMENTS"], atoi(fields["TASK_PRIORITY"]),
 		fields["TASK_DEPENDS_ON"], fields["TASK_MERGED_INTO"],
 		fields["TASK_DISPATCH_MODE"], fields["TASK_SUMMARY"], fields["TASK_PHASE"],
+		fields["TASK_INTENT"],
 		createdAt, updatedAt,
 	)
 	if err != nil {

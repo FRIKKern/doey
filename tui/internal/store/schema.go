@@ -144,6 +144,7 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE tasks ADD COLUMN dispatch_mode TEXT DEFAULT ''`,
 		`ALTER TABLE tasks ADD COLUMN summary TEXT DEFAULT ''`,
 		`ALTER TABLE tasks ADD COLUMN phase TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN intent TEXT DEFAULT ''`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors

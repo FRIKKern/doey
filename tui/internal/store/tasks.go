@@ -38,6 +38,7 @@ type Task struct {
 	DispatchMode       string `json:"dispatch_mode,omitempty"`
 	Summary            string `json:"summary,omitempty"`
 	Phase              string `json:"phase,omitempty"`
+	Intent             string `json:"intent,omitempty"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
 }
@@ -95,14 +96,14 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 			 notes, blockers, related_files, hypotheses, decision_log, result,
 			 files, commits, schema_version, review_verdict, review_findings,
 			 review_timestamp, attachments, priority, depends_on, merged_into,
-			 dispatch_mode, summary, phase, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 dispatch_mode, summary, phase, intent, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			t.ID, t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 			t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 			t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
 			t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
 			t.ReviewTimestamp, t.Attachments, t.Priority, t.DependsOn, t.MergedInto,
-			t.DispatchMode, t.Summary, t.Phase, t.CreatedAt, t.UpdatedAt,
+			t.DispatchMode, t.Summary, t.Phase, t.Intent, t.CreatedAt, t.UpdatedAt,
 		)
 		if err != nil {
 			return 0, err
@@ -116,14 +117,14 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		 notes, blockers, related_files, hypotheses, decision_log, result,
 		 files, commits, schema_version, review_verdict, review_findings,
 		 review_timestamp, attachments, priority, depends_on, merged_into,
-		 dispatch_mode, summary, phase, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 dispatch_mode, summary, phase, intent, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 		t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 		t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
 		t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
 		t.ReviewTimestamp, t.Attachments, t.Priority, t.DependsOn, t.MergedInto,
-		t.DispatchMode, t.Summary, t.Phase, t.CreatedAt, t.UpdatedAt,
+		t.DispatchMode, t.Summary, t.Phase, t.Intent, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -141,7 +142,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		hypotheses, decisionLog, result, files, commits sql.NullString
 		reviewVerdict, reviewFindings, reviewTimestamp   sql.NullString
 		attachments, dependsOn, mergedInto              sql.NullString
-		dispatchMode, summary, phase                    sql.NullString
+		dispatchMode, summary, phase, intent             sql.NullString
 	)
 	err := scanner.Scan(
 		&t.ID, &t.Title, &t.Status, &typ, &desc, &createdBy, &assignedTo, &team,
@@ -149,7 +150,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		&notes, &blockers, &relFiles, &hypotheses, &decisionLog, &result,
 		&files, &commits, &t.SchemaVersion, &reviewVerdict, &reviewFindings,
 		&reviewTimestamp, &attachments, &t.Priority, &dependsOn, &mergedInto,
-		&dispatchMode, &summary, &phase, &t.CreatedAt, &t.UpdatedAt,
+		&dispatchMode, &summary, &phase, &intent, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return t, err
@@ -178,6 +179,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 	t.DispatchMode = dispatchMode.String
 	t.Summary = summary.String
 	t.Phase = phase.String
+	t.Intent = intent.String
 	return t, nil
 }
 
@@ -188,7 +190,7 @@ func (s *Store) GetTask(id int64) (*Task, error) {
 		notes, blockers, related_files, hypotheses, decision_log, result,
 		files, commits, schema_version, review_verdict, review_findings,
 		review_timestamp, attachments, priority, depends_on, merged_into,
-		dispatch_mode, summary, phase, created_at, updated_at
+		dispatch_mode, summary, phase, intent, created_at, updated_at
 		FROM tasks WHERE id = ?`, id)
 	t, err := scanTask(row)
 	if err != nil {
@@ -207,7 +209,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
 			review_timestamp, attachments, priority, depends_on, merged_into,
-			dispatch_mode, summary, phase, created_at, updated_at
+			dispatch_mode, summary, phase, intent, created_at, updated_at
 			FROM tasks ORDER BY updated_at DESC`)
 	} else {
 		rows, err = s.db.Query(`SELECT
@@ -216,7 +218,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
 			review_timestamp, attachments, priority, depends_on, merged_into,
-			dispatch_mode, summary, phase, created_at, updated_at
+			dispatch_mode, summary, phase, intent, created_at, updated_at
 			FROM tasks WHERE status = ? ORDER BY updated_at DESC`, status)
 	}
 	if err != nil {
@@ -247,7 +249,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		files = ?, commits = ?, schema_version = ?, review_verdict = ?,
 		review_findings = ?, review_timestamp = ?, attachments = ?,
 		priority = ?, depends_on = ?, merged_into = ?, dispatch_mode = ?,
-		summary = ?, phase = ?, updated_at = ?
+		summary = ?, phase = ?, intent = ?, updated_at = ?
 		WHERE id = ?`,
 		t.Title, t.Status, t.Type, t.Description, t.CreatedBy,
 		t.AssignedTo, t.Team, t.PlanID, t.Tags, t.AcceptanceCriteria,
@@ -256,7 +258,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict,
 		t.ReviewFindings, t.ReviewTimestamp, t.Attachments,
 		t.Priority, t.DependsOn, t.MergedInto, t.DispatchMode,
-		t.Summary, t.Phase, t.UpdatedAt,
+		t.Summary, t.Phase, t.Intent, t.UpdatedAt,
 		t.ID,
 	)
 	return err
