@@ -172,6 +172,16 @@ if is_worker; then
   [ -z "$_NOTIFY_SUMMARY" ] && [ -n "$LAST_MSG" ] && _NOTIFY_SUMMARY=$(sanitize_message "$LAST_MSG" 100)
   _STATUS_LABEL="FINISHED"
   [ "$STATUS" = "error" ] && _STATUS_LABEL="ERROR"
+  # Extract proof type from result JSON
+  _PROOF_TYPE=""
+  if [ -f "$RESULT_FILE" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      _PROOF_TYPE=$(jq -r '.proof_type // ""' "$RESULT_FILE" 2>/dev/null) || _PROOF_TYPE=""
+    elif command -v python3 >/dev/null 2>&1; then
+      _PROOF_TYPE=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('proof_type',''))" "$RESULT_FILE" 2>/dev/null) || _PROOF_TYPE=""
+    fi
+  fi
+
   MSG="<task-notification>
   <pane>${WINDOW_INDEX}.${PANE_INDEX}</pane>
   <status>${_STATUS_LABEL}</status>
@@ -180,6 +190,7 @@ if is_worker; then
   <tool-count>${_TOOL_COUNT}</tool-count>
   <duration>${_DURATION}</duration>
   <subtask-id>${local_subtask_id}</subtask-id>
+  <proof-type>$(_xml_escape "${_PROOF_TYPE}")</proof-type>
 </task-notification>"
   # Notify: doey primary, _notify_pane fallback only
   if command -v doey-ctl >/dev/null 2>&1; then
