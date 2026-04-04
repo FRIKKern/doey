@@ -354,6 +354,10 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 		items[i] = ti
 	}
 	m.list.SetItems(items)
+	if len(items) > 0 {
+		m.list.Select(0)
+	}
+	m.detailViewport.GotoTop()
 
 	// Update delegate with current heartbeat data
 	delegate := taskcard.NewCardDelegate(m.theme)

@@ -107,6 +107,9 @@ func (m *FilesModel) SetProjectDir(dir string) {
 	m.projectDir = dir
 	m.initialized = true
 	m.rebuildTree()
+	// Reset viewport to top after initial load
+	m.cursor = 0
+	m.offset = 0
 }
 
 // rebuildTree scans the project directory and refreshes git status.

@@ -217,10 +217,9 @@ func (m ConnectionsModel) updateKey(msg tea.KeyMsg) (ConnectionsModel, tea.Cmd) 
 // SetSnapshot updates connection list from fresh snapshot.
 func (m *ConnectionsModel) SetSnapshot(snap runtime.Snapshot) {
 	m.connections = snap.Connections
-	conns := m.effectiveConnections()
-	if m.cursor >= len(conns) {
-		m.cursor = max(0, len(conns)-1)
-	}
+	// Reset viewport to top
+	m.cursor = 0
+	m.rightScroll = 0
 }
 
 // SetSize updates the panel dimensions.
