@@ -2122,6 +2122,7 @@ launch_session() {
   local runtime_dir="/tmp/doey/${name}"
 
   doey_splash
+  _splash_wait_minimum 6
 
   ensure_project_trusted "$dir"
 
@@ -2143,7 +2144,6 @@ launch_session() {
     wait "$_loading_pid" 2>/dev/null || true
   fi
 
-  _splash_wait_minimum 6
   attach_or_switch "$session"
 }
 
@@ -3649,6 +3649,7 @@ launch_session_dynamic() {
   local team_window=2
 
   doey_splash
+  _splash_wait_minimum 6
 
   cd "$dir"
   _doey_load_config  # Reload config now that we're in the project dir
@@ -3956,7 +3957,6 @@ MANIFEST
     wait "$_loading_pid" 2>/dev/null || true
   fi
 
-  _splash_wait_minimum 6
   attach_or_switch "$session"
 
   # After detach, wait for background spawner to finish
