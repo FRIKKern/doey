@@ -500,6 +500,7 @@ write_team_env() {
   session_name=$(_env_val "${runtime_dir}/session.env" SESSION_NAME)
   local team_type="${13:-}"
   local team_def="${14:-}"
+  local reserved="${15:-}"
   local _tmp="${runtime_dir}/team_${window_index}.env.tmp.$$"
   cat > "$_tmp" << TEAMEOF
 WINDOW_INDEX="${window_index}"
@@ -516,6 +517,7 @@ WORKER_MODEL="${worker_model}"
 MANAGER_MODEL="${manager_model}"
 TEAM_TYPE="${team_type}"
 TEAM_DEF="${team_def}"
+RESERVED="${reserved}"
 TEAMEOF
   mv "$_tmp" "${runtime_dir}/team_${window_index}.env"
 }
@@ -4089,6 +4091,7 @@ _read_team_env_bulk() {
   _ts_worker_count="" _ts_grid="" _ts_worker_panes=""
   _ts_wt_dir="" _ts_wt_branch="" _ts_team_type=""
   _ts_team_name="" _ts_team_role="" _ts_worker_model="" _ts_manager_model=""
+  _ts_reserved=""
   [ ! -f "$_reb_file" ] && return 0
   while IFS= read -r _reb_line || [ -n "$_reb_line" ]; do
     _reb_val="${_reb_line#*=}"
@@ -4104,6 +4107,7 @@ _read_team_env_bulk() {
       TEAM_ROLE=*)      _ts_team_role="$_reb_val" ;;
       WORKER_MODEL=*)   _ts_worker_model="$_reb_val" ;;
       MANAGER_MODEL=*)  _ts_manager_model="$_reb_val" ;;
+      RESERVED=*)       _ts_reserved="$_reb_val" ;;
     esac
   done < "$_reb_file"
 }
@@ -4142,7 +4146,7 @@ _batch_boot_workers() {
   shift 3
 
   # Bulk-read env values (avoids ~12 forks from _env_val calls)
-  local _bbw_acronym="" _bbw_worker_model="" _bbw_team_type=""
+  local _bbw_acronym="" _bbw_worker_model="" _bbw_team_type="" _bbw_reserved=""
   local _bbw_env_key _bbw_env_raw
   if [ -f "${runtime_dir}/session.env" ]; then
     while IFS='=' read -r _bbw_env_key _bbw_env_raw; do
@@ -4157,6 +4161,7 @@ _batch_boot_workers() {
       case "$_bbw_env_key" in
         WORKER_MODEL) _bbw_worker_model="${_bbw_env_raw//\"/}" ;;
         TEAM_TYPE) _bbw_team_type="${_bbw_env_raw//\"/}" ;;
+        RESERVED) _bbw_reserved="${_bbw_env_raw//\"/}" ;;
       esac
     done < "$_bbw_team_env"
   fi
@@ -4204,7 +4209,7 @@ _batch_boot_workers() {
     _bbw_cur_pane="${_bbw_pane_arr[$_bbw_i]}"
     _bbw_cur_cmd="${_bbw_cmd_arr[$_bbw_i]}"
     tmux send-keys -t "$session:${team_window}.${_bbw_cur_pane}" "${_DRAIN_STDIN}${_bbw_cur_cmd}" Enter
-    if [ "$_bbw_is_freelancer" = "true" ]; then
+    if [ "$_bbw_reserved" = "true" ] || [ "$_bbw_is_freelancer" = "true" ]; then
       write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "RESERVED"
       local _bbw_safe="${session}:${team_window}.${_bbw_cur_pane}"
       _bbw_safe="${_bbw_safe//[-:.]/_}"
@@ -4289,7 +4294,7 @@ doey_add_column() {
   rebuild_pane_state "$session:$team_window" "$_rps_include_p0"
 
   local new_worker_count=$(( _ts_worker_count + _dac_panes_added ))
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
+  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type" "" "$_ts_reserved"
 
   if [ "$_ts_team_type" = "freelancer" ]; then
     _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${_dac_new_pane_mid}:${w2_num}" "${new_pane_bottom}:${w3_num}"
@@ -4714,6 +4719,11 @@ add_dynamic_team_window() {
   local worktree_spec="${5:-}"
   local team_name="${6:-}" team_role="${7:-}" worker_model="${8:-}" manager_model="${9:-}"
   local team_type="${10:-}"
+  local reserved="${11:-false}"
+  # --reserved implies freelancer team type if not already set
+  if [ "$reserved" = "true" ] && [ -z "$team_type" ]; then
+    team_type="freelancer"
+  fi
   local team_dir="$dir" worktree_branch="" wt_dir_for_env=""
   local is_freelancer="false"
   [ "$team_type" = "freelancer" ] && is_freelancer="true"
@@ -4757,7 +4767,7 @@ add_dynamic_team_window() {
   local mgr_pane="0"
   [ "$is_freelancer" = "true" ] && mgr_pane=""
 
-  write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
+  write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved"
   _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
@@ -4779,7 +4789,7 @@ add_dynamic_team_window() {
 
     # Update worker count: F0 is uncounted (like manager pane), F1 adds 1
     # so doey_add_column numbering continues sequentially (F2, F3, ...)
-    write_team_env "$runtime_dir" "$window_index" "dynamic" "" "1" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type"
+    write_team_env "$runtime_dir" "$window_index" "dynamic" "" "1" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved"
   else
     _launch_team_manager "$session" "$runtime_dir" "$window_index"
   fi
@@ -4799,6 +4809,22 @@ add_dynamic_team_window() {
   done
 
   _build_worker_pane_list "$session" "$window_index"
+
+  # Mark all worker panes as reserved if --reserved was passed
+  if [ "$reserved" = "true" ] && [ -n "$_WPL_RESULT" ]; then
+    local _rv_pane _rv_safe
+    local _rv_old_ifs="$IFS"
+    IFS=', '
+    for _rv_pane in $_WPL_RESULT; do
+      [ -z "$_rv_pane" ] && continue
+      write_pane_status "$runtime_dir" "${session}:${_rv_pane}" "RESERVED"
+      _rv_safe="${session}:${_rv_pane}"
+      _rv_safe="${_rv_safe//[-:.]/_}"
+      echo "permanent" > "${runtime_dir}/status/${_rv_safe}.reserved"
+    done
+    IFS="$_rv_old_ifs"
+  fi
+
   local worker_count wt_brief
   worker_count=$(_env_val "${runtime_dir}/team_${window_index}.env" WORKER_COUNT)
   wt_brief=$(_worktree_brief "$wt_dir_for_env" "$worktree_branch")
@@ -5979,13 +6005,14 @@ HELP
     if [ "$_aw_team_type" = "freelancer" ]; then
       _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
-        "$_aw_cols" "$_aw_wt_spec" "Freelancers" "" "" "" "freelancer"
+        "$_aw_cols" "$_aw_wt_spec" "Freelancers" "" "" "" "freelancer" "$_aw_reserved"
     elif [ -n "$_aw_wt_spec" ] || [ -n "$_aw_grid_cols" ]; then
       _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
-        "$_aw_cols" "$_aw_wt_spec"
+        "$_aw_cols" "$_aw_wt_spec" "" "" "" "" "" "$_aw_reserved"
     else
-      add_dynamic_team_window "$session" "$runtime_dir" "$dir"
+      add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
+        "" "" "" "" "" "" "" "$_aw_reserved"
     fi
     exit 0
     ;;
