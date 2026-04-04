@@ -86,11 +86,25 @@ if [ "$_found_error" = "true" ]; then
 fi
 [ "$_found_error" = "true" ] && STATUS="error"
 
+# Extract proof fields from captured output
+PROOF_TYPE=""
+PROOF_CONTENT=""
+_proof_line=$(printf '%s' "$FILTERED" | grep '^PROOF_TYPE:' | tail -1) || true
+if [ -n "$_proof_line" ]; then
+  PROOF_TYPE=$(printf '%s' "$_proof_line" | sed 's/^PROOF_TYPE:[[:space:]]*//')
+fi
+_proof_body=$(printf '%s' "$FILTERED" | grep '^PROOF:' | tail -1) || true
+if [ -n "$_proof_body" ]; then
+  PROOF_CONTENT=$(printf '%s' "$_proof_body" | sed 's/^PROOF:[[:space:]]*//')
+fi
+
 PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
 LAST_JSON=$(printf '%s' "$FILTERED" | jq -Rs '.' 2>/dev/null) || \
   LAST_JSON=$(printf '%s' "$FILTERED" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
   LAST_JSON='""'
 TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='"worker-'"$PANE_INDEX"'"'
+PROOF_TYPE_JSON=$(printf '%s' "$PROOF_TYPE" | jq -Rs '.' 2>/dev/null) || PROOF_TYPE_JSON='""'
+PROOF_CONTENT_JSON=$(printf '%s' "$PROOF_CONTENT" | jq -Rs '.' 2>/dev/null) || PROOF_CONTENT_JSON='""'
 
 TMPFILE=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null)
 if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
@@ -125,7 +139,9 @@ cat > "$TMPFILE" <<EOF
   "hypothesis_updates": ${DOEY_HYPOTHESIS_UPDATES:-[]},
   "evidence": ${DOEY_EVIDENCE:-[]},
   "needs_follow_up": ${DOEY_NEEDS_FOLLOW_UP:-false},
-  "summary": "$local_summary_escaped"
+  "summary": "$local_summary_escaped",
+  "proof_type": $PROOF_TYPE_JSON,
+  "proof_content": $PROOF_CONTENT_JSON
 }
 EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"

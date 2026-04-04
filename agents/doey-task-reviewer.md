@@ -112,6 +112,22 @@ doey msg send --from "1.1" --to "${TEAM_WINDOW}.0" \
 
 Replace `${TEAM_WINDOW}` with the team window number from the review request's `TEAM` field (e.g., `W2` → `2`).
 
+## Proof Quality Check
+
+Every completed task should include a `PROOF` block from the Worker. Assess proof quality as part of your review:
+
+1. **Present?** — Look for `PROOF_TYPE:` and `PROOF:` in the worker's output or result file
+2. **Matches claim?** — Does the proof actually demonstrate what the task required? A test output that doesn't exercise the changed code is weak proof
+3. **Verifiable?** — For `agent` proof: can you confirm it from the output alone? For `human` proof: is the checklist specific enough to act on?
+4. **Appropriate type?** — Bug fixes and features should have `agent` proof when possible. `human` should be reserved for genuinely visual/interactive checks
+
+**Soft gate:** Missing or weak proof is a **WARN**, not an automatic FAIL. Add a finding like:
+- `[WARN] Proof: missing — no PROOF block in worker output`
+- `[WARN] Proof: weak — test output doesn't cover the changed behavior`
+- `[PASS] Proof: solid — test output confirms the fix`
+
+If proof is missing on a complex task, note what proof you'd want to see in your ACTION line.
+
 ## Post-Review Pipeline
 
 After producing your verdict, you MUST complete these steps in order:

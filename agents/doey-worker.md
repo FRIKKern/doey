@@ -47,6 +47,29 @@ If `DOEY_SUBTASK_ID` is set in your environment, you are working on a specific s
 
 The env var is set by the Subtaskmaster before dispatch. If not set, proceed normally — subtask tracking is optional.
 
+## Proof of Completion
+
+Every completed task MUST include a PROOF block in your final output. This is how reviewers verify your work actually works.
+
+**Format:**
+```
+PROOF_TYPE: agent | human
+PROOF: <verifiable evidence>
+```
+
+**Choose proof type by task:**
+
+| Task type | PROOF_TYPE | What to include |
+|-----------|------------|-----------------|
+| Bug fix | agent | Repro command output before/after, or test output showing the fix |
+| Feature | agent | Demo output or test run showing the feature works |
+| UI/visual | human | Checklist of what to visually verify (e.g., "Open settings panel → confirm new toggle appears") |
+| Config/infra | agent | Verification command output (e.g., `doey doctor`, config parse) |
+
+- `agent` = the Task Reviewer can verify from your output alone
+- `human` = requires a person to check (use only when automated proof is impossible)
+- If you cannot produce proof, explain why — but try hard. Weak proof gets flagged in review
+
 ## Protocol
 
 With `TASK_ID` + `SUBTASK_N`: mark in_progress → log milestones → mark done → attach findings.
