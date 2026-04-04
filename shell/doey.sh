@@ -208,6 +208,21 @@ DOEY_ART
   fi
 }
 
+doey_splash() {
+  printf '\033[2J\033[H'  # Clear screen, cursor top
+  printf '\033[36m'       # Cyan
+  cat << 'SPLASH'
+   ██████╗  ██████╗ ███████╗██╗   ██╗
+   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
+   ██║  ██║██║   ██║█████╗   ╚████╔╝
+   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
+   ██████╔╝╚██████╔╝███████╗   ██║
+   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
+SPLASH
+  printf '\033[0m'
+  printf '\n   \033[2mStarting...\033[0m\n\n'
+}
+
 doey_divider() {
   local width="${1:-50}"
   local line; line="$(printf '%*s' "$width" '' | tr ' ' '─')"
@@ -2087,39 +2102,28 @@ launch_session() {
   local worker_count=$(( cols * rows - 1 ))
   local session="doey-${name}"
   local short_dir="${dir/#$HOME/~}"
+  local runtime_dir="/tmp/doey/${name}"
 
-  doey_banner
-  doey_info "Project ${name}  Grid ${grid}  Workers ${worker_count}"
-  doey_info "Dir ${short_dir}  Session ${session}"
-  printf '\n'
+  doey_splash
 
   ensure_project_trusted "$dir"
 
   _launch_session_core "$name" "$dir" "$grid" 0
 
-  printf '\n'
-  if [ "$HAS_GUM" = true ]; then
-    printf '%s\n' "$(gum style --foreground 2 --bold '✓ Doey is ready')"
-    gum style --border rounded --border-foreground 6 --padding "1 2" --margin "0 1" \
-      "$(gum style --foreground 6 --bold 'Project')  ${name}   $(gum style --foreground 6 --bold 'Grid')  ${grid}   $(gum style --foreground 6 --bold 'Workers')  ${worker_count}" \
-      "$(gum style --foreground 6 --bold 'Session')  ${session}" \
-      "$(gum style --foreground 6 --bold 'Dir')      ${short_dir}" \
-      "" \
-      "$(gum style --foreground 240 'Tip: Workers ready in ~15s')"
-  else
-    doey_success "Doey is ready"
-    doey_info "Project ${name}  Grid ${grid}  Workers ${worker_count}"
-    doey_info "Session ${session}  Dir ${short_dir}"
-    doey_info "Manager 1.0  Dashboard win 0"
-    doey_info "Tip: Workers ready in ~15s"
-  fi
-  printf '\n'
-
-  # Loading screen (optional — graceful fallback if binary not found)
+  # Start loading screen in background (session created)
+  local _loading_pid=""
+  mkdir -p "${runtime_dir}/logs"
   if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 30 || true
+    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    _loading_pid=$!
   elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 30 || true
+    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    _loading_pid=$!
+  fi
+
+  # Restore stdout, wait for loading screen
+  if [ -n "$_loading_pid" ]; then
+    wait "$_loading_pid" 2>/dev/null || true
   fi
 
   attach_or_switch "$session"
@@ -3626,6 +3630,8 @@ launch_session_dynamic() {
   local short_dir="${dir/#$HOME/~}"
   local team_window=2
 
+  doey_splash
+
   cd "$dir"
   _doey_load_config  # Reload config now that we're in the project dir
 
@@ -3686,11 +3692,7 @@ launch_session_dynamic() {
     fi
   fi
 
-  doey_banner
   local initial_workers=$(( DOEY_INITIAL_WORKER_COLS * 2 ))
-  doey_info "Project ${name}  Grid dynamic  Workers ${initial_workers} (auto-expands)"
-  doey_info "Dir ${short_dir}  Session ${session}"
-  printf '\n'
 
   ensure_project_trusted "$dir"
   install_doey_hooks "$dir" "   "
@@ -3700,6 +3702,20 @@ launch_session_dynamic() {
   _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
 
   step_done
+
+  # Start loading screen in background (session.env now exists)
+  local _loading_pid=""
+  mkdir -p "${runtime_dir}/logs"
+  if command -v doey-loading >/dev/null 2>&1; then
+    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    _loading_pid=$!
+  elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
+    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 &
+    _loading_pid=$!
+  fi
+  # Redirect step output to log (loading screen is now visible)
+  exec 3>&1 4>&2
+  exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
 
   step_start 2 "Applying theme..."
   local border_fmt=' #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#{pane_title} #[default]'
@@ -3823,44 +3839,6 @@ MANIFEST
     fi
   fi
 
-  # Count T1 for the initial summary (remaining teams update session.env when done)
-  local _t1_team_windows _t1_team_count=0 _t1_tw
-  _t1_team_windows=$(read_team_windows "$runtime_dir")
-  for _t1_tw in $(echo "$_t1_team_windows" | tr ',' ' '); do
-    _t1_team_count=$((_t1_team_count + 1))
-  done
-
-  printf '\n'
-  if [ "$HAS_GUM" = true ]; then
-    printf '%s\n' "$(gum style --foreground 2 --bold '✓ Doey is ready  (dynamic grid)')"
-    gum style --border rounded --border-foreground 6 --padding "1 2" --margin "0 1" \
-      "$(gum style --foreground 6 --bold 'Dashboard')  win 0  Info panel + ${DOEY_ROLE_BOSS}" \
-      "$(gum style --foreground 6 --bold 'Teams')      ${_t1_team_count} windows (${_t1_team_windows})" \
-      "$(gum style --foreground 6 --bold 'Workers')    T1: ${initial_workers} (auto-expands)" \
-      "" \
-      "$(gum style --foreground 6 --bold 'Project')   ${name}" \
-      "$(gum style --foreground 6 --bold 'Grid')      dynamic  Max workers  ${DOEY_MAX_WORKERS}" \
-      "$(gum style --foreground 6 --bold 'Session')   ${session}" \
-      "" \
-      "$(gum style --foreground 240 'Tip: doey add — adds 2 more workers')"
-  else
-    doey_success "Doey is ready  (dynamic grid)"
-    doey_divider 50
-    printf "\n"
-    doey_info "Dashboard  win 0  Info panel + ${DOEY_ROLE_BOSS}"
-    doey_info "Teams      ${_t1_team_count} windows (${_t1_team_windows})"
-    doey_info "Workers    T1: ${initial_workers} (auto-expands, doey add)"
-    printf "\n"
-    doey_info "Project   ${name}"
-    doey_info "Grid      dynamic  Max workers  ${DOEY_MAX_WORKERS}"
-    doey_info "Session   ${session}"
-    doey_info "Manifest  ${runtime_dir}/session.env"
-    printf "\n"
-    doey_info "Tip: doey add — adds 2 more workers"
-    doey_divider 50
-  fi
-  printf '\n'
-
   # Background subshell: spawn remaining teams + send briefings
   (
     sleep 0.3  # Let attach happen first
@@ -3954,11 +3932,10 @@ MANIFEST
   # Attach immediately — user sees dashboard + T1 while remaining teams spawn behind
   tmux select-window -t "$session:0"
 
-  # Loading screen (optional — graceful fallback if binary not found)
-  if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 30 || true
-  elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 30 || true
+  # Restore stdout, wait for loading screen
+  exec 1>&3 2>&4 3>&- 4>&-
+  if [ -n "$_loading_pid" ]; then
+    wait "$_loading_pid" 2>/dev/null || true
   fi
 
   attach_or_switch "$session"
@@ -4270,24 +4247,39 @@ doey_add_column() {
   local _pane_prefix="W"
   [ "$_ts_team_type" = "freelancer" ] && _pane_prefix="F"
 
-  # Freelancer teams get 3 rows in the last column
-  local _dac_new_pane_mid=""
+  # Freelancer teams: add extra rows beyond 2 based on _DOEY_GRID_ROWS
+  local _dac_grid_rows="${_DOEY_GRID_ROWS:-2}"
+  local _dac_extra_panes=""
   local _dac_panes_added=2
-  if [ "$_ts_team_type" = "freelancer" ]; then
-    _dac_new_pane_mid="$new_pane_bottom"
-    new_pane_bottom="$(tmux split-window -v -t "$session:$team_window.${_dac_new_pane_mid}" -c "$_ts_dir" -P -F '#{pane_index}')"
-    _dac_panes_added=3
+  if [ "$_ts_team_type" = "freelancer" ] && [ "$_dac_grid_rows" -gt 2 ] 2>/dev/null; then
+    local _dac_last_pane="$new_pane_bottom"
+    local _dac_row_i=2
+    while [ "$_dac_row_i" -lt "$_dac_grid_rows" ]; do
+      local _dac_extra
+      _dac_extra="$(tmux split-window -v -t "$session:$team_window.${_dac_last_pane}" -c "$_ts_dir" -P -F '#{pane_index}')"
+      _dac_extra_panes="${_dac_extra_panes} ${_dac_extra}"
+      _dac_panes_added=$((_dac_panes_added + 1))
+      _dac_last_pane="$_dac_extra"
+      _dac_row_i=$((_dac_row_i + 1))
+    done
   fi
 
-  local w1_num=$(( _ts_worker_count + 1 )) w2_num=$(( _ts_worker_count + 2 ))
+  # Name panes sequentially
+  local _dac_w_i=1
+  local w1_num=$(( _ts_worker_count + _dac_w_i ))
   tmux select-pane -t "$session:$team_window.${new_pane_top}" -T "T${team_window} ${_pane_prefix}${w1_num}"
-  if [ "$_ts_team_type" = "freelancer" ]; then
-    local w3_num=$(( _ts_worker_count + 3 ))
-    tmux select-pane -t "$session:$team_window.${_dac_new_pane_mid}" -T "T${team_window} ${_pane_prefix}${w2_num}"
-    tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "T${team_window} ${_pane_prefix}${w3_num}"
-  else
-    tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "T${team_window} ${_pane_prefix}${w2_num}"
-  fi
+  _dac_w_i=$((_dac_w_i + 1))
+
+  local w2_num=$(( _ts_worker_count + _dac_w_i ))
+  tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "T${team_window} ${_pane_prefix}${w2_num}"
+  _dac_w_i=$((_dac_w_i + 1))
+
+  local _dac_ep
+  for _dac_ep in $_dac_extra_panes; do
+    local _dac_ep_num=$(( _ts_worker_count + _dac_w_i ))
+    tmux select-pane -t "$session:$team_window.${_dac_ep}" -T "T${team_window} ${_pane_prefix}${_dac_ep_num}"
+    _dac_w_i=$((_dac_w_i + 1))
+  done
 
   local _rps_include_p0="false"
   [ "$_ts_team_type" = "freelancer" ] && _rps_include_p0="true"
@@ -4296,18 +4288,18 @@ doey_add_column() {
   local new_worker_count=$(( _ts_worker_count + _dac_panes_added ))
   write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type" "" "$_ts_reserved"
 
-  if [ "$_ts_team_type" = "freelancer" ]; then
-    _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${_dac_new_pane_mid}:${w2_num}" "${new_pane_bottom}:${w3_num}"
-  else
-    _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${new_pane_bottom}:${w2_num}"
-  fi
+  # Build boot args for all panes in this column
+  local _dac_boot_args="${new_pane_top}:${w1_num} ${new_pane_bottom}:${w2_num}"
+  local _dac_boot_ep _dac_boot_i=3
+  for _dac_boot_ep in $_dac_extra_panes; do
+    local _dac_boot_num=$(( _ts_worker_count + _dac_boot_i ))
+    _dac_boot_args="${_dac_boot_args} ${_dac_boot_ep}:${_dac_boot_num}"
+    _dac_boot_i=$((_dac_boot_i + 1))
+  done
+  _batch_boot_workers "$session" "$runtime_dir" "$team_window" $_dac_boot_args
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
-  if [ "$_ts_team_type" = "freelancer" ]; then
-    doey_ok "Added ${_pane_prefix}${w1_num}, ${_pane_prefix}${w2_num}, and ${_pane_prefix}${w3_num} — ${new_worker_count} workers in $((_ts_cols + 1)) columns"
-  else
-    doey_ok "Added W${w1_num} and W${w2_num} — ${new_worker_count} workers in $((_ts_cols + 1)) columns"
-  fi
+  doey_ok "Added ${_dac_panes_added} workers — ${new_worker_count} workers in $((_ts_cols + 1)) columns"
 }
 
 doey_remove_column() {
@@ -4774,22 +4766,39 @@ add_dynamic_team_window() {
 
   # Only launch manager for non-freelancer teams
   if [ "$is_freelancer" = "true" ]; then
-    # Freelancer: pane 0 is F0, split vertically for pane 1 (F1) — two rows in first column
-    # Split first, then batch-boot both workers in one call (single DOEY_WORKER_LAUNCH_DELAY)
+    # Freelancer: pane 0 is F0, split vertically for additional rows based on _DOEY_GRID_ROWS
+    local _fl_grid_rows="${_DOEY_GRID_ROWS:-2}"
+    [ "$_fl_grid_rows" -lt 1 ] 2>/dev/null && _fl_grid_rows=2
+
+    # First split: F0 + F1
     tmux split-window -v -t "$session:${window_index}.0" -c "$team_dir"
     local _fl_p1
     _fl_p1="$(tmux list-panes -t "$session:$window_index" -F '#{pane_index}' | tail -1)"
 
-    # Name panes before boot
+    # Name base panes
     tmux select-pane -t "$session:${window_index}.0" -T "T${window_index} F0"
     tmux select-pane -t "$session:${window_index}.${_fl_p1}" -T "T${window_index} F1"
 
-    # Batch-boot both freelancers — handles prompt files, commands, status, and RESERVED flags
-    _batch_boot_workers "$session" "$runtime_dir" "$window_index" "0:0" "${_fl_p1}:1"
+    local _fl_boot_args="0:0 ${_fl_p1}:1"
+    local _fl_worker_count=1
+    local _fl_row_i=2
 
-    # Update worker count: F0 is uncounted (like manager pane), F1 adds 1
-    # so doey_add_column numbering continues sequentially (F2, F3, ...)
-    write_team_env "$runtime_dir" "$window_index" "dynamic" "" "1" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved"
+    # Add extra rows beyond 2 if _fl_grid_rows > 2
+    while [ "$_fl_row_i" -lt "$_fl_grid_rows" ]; do
+      local _fl_extra
+      _fl_extra="$(tmux split-window -v -t "$session:${window_index}.${_fl_p1}" -c "$team_dir" -P -F '#{pane_index}')"
+      tmux select-pane -t "$session:${window_index}.${_fl_extra}" -T "T${window_index} F${_fl_row_i}"
+      _fl_boot_args="${_fl_boot_args} ${_fl_extra}:${_fl_row_i}"
+      _fl_worker_count=$((_fl_worker_count + 1))
+      _fl_p1="$_fl_extra"
+      _fl_row_i=$((_fl_row_i + 1))
+    done
+
+    # Batch-boot all freelancers in base column
+    _batch_boot_workers "$session" "$runtime_dir" "$window_index" $_fl_boot_args
+
+    # Update worker count: F0 is uncounted (like manager pane), others add to count
+    write_team_env "$runtime_dir" "$window_index" "dynamic" "" "$_fl_worker_count" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved"
   else
     _launch_team_manager "$session" "$runtime_dir" "$window_index"
   fi
@@ -5990,13 +5999,13 @@ HELP
     ;;
   add-window)
     require_running_session
-    _aw_wt_spec="" _aw_team_type="" _aw_reserved="" _aw_grid_cols=""
+    _aw_wt_spec="" _aw_team_type="" _aw_reserved="" _aw_grid_cols="" _aw_grid_rows=""
     shift
     while [ $# -gt 0 ]; do
       case "$1" in
         --worktree) _aw_wt_spec="auto" ;;
         --type) shift; _aw_team_type="${1:-}" ;;
-        --grid) shift; _aw_grid_cols="${1%%x*}" ;;
+        --grid) shift; _aw_grid_cols="${1%%x*}"; _aw_grid_rows="${1#*x}" ;;
         --reserved) _aw_reserved="true" ;;
         *) ;; # ignore unknown
       esac
@@ -6004,6 +6013,8 @@ HELP
     done
     if [ "$_aw_team_type" = "freelancer" ]; then
       _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
+      # Pass grid rows to add_dynamic_team_window and doey_add_column via env var
+      export _DOEY_GRID_ROWS="${_aw_grid_rows:-2}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
         "$_aw_cols" "$_aw_wt_spec" "Freelancers" "" "" "" "freelancer" "$_aw_reserved"
     elif [ -n "$_aw_wt_spec" ] || [ -n "$_aw_grid_cols" ]; then
