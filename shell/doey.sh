@@ -2115,9 +2115,9 @@ launch_session() {
 
   # Loading screen (optional — graceful fallback if binary not found)
   if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 120 || true
+    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 30 || true
   elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 120 || true
+    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 30 || true
   fi
 
   attach_or_switch "$session"
@@ -3954,9 +3954,9 @@ MANIFEST
 
   # Loading screen (optional — graceful fallback if binary not found)
   if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 120 || true
+    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 30 || true
   elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 120 || true
+    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 30 || true
   fi
 
   attach_or_switch "$session"
