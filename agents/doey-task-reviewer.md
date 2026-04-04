@@ -146,6 +146,35 @@ Replace `$TASK_ID` with the actual task ID and `<specific findings>` / `<summary
 
 After writing the fields and sending the message, stop normally. Your stop hook handles the rest.
 
+## Subtask Cleanup Gate
+
+Before approving ANY task completion:
+
+1. Run `doey task subtask list --task-id <TASK_ID>` to list all subtasks
+2. Verify EVERY subtask is either:
+   - `done` — completed successfully
+   - `skipped` — explicitly marked as not needed (with reason)
+3. If ANY subtask is `pending` or `in_progress`:
+   - Check if the subtask work was actually completed but not marked done → mark it done
+   - Check if the subtask is no longer relevant → mark it skipped with explanation
+   - If the subtask represents genuinely incomplete work → BLOCK approval and explain what remains
+4. NEVER approve a task that has dangling unfinished subtasks without explicitly resolving each one
+
+## Duplicate Detection
+
+On every task review:
+
+1. Run `doey task list --status pending,in_progress,active` to get all non-done tasks
+2. Compare the task under review against each active task — look for:
+   - Same or very similar title/description
+   - Overlapping file changes
+   - Same root problem being solved differently
+3. If significant overlap found:
+   - Flag the duplicate in your review
+   - Recommend which task should be kept vs merged/cancelled
+   - If both are done, note which results to preserve
+4. Report findings in review output even if no duplicates found ("Duplicate scan: clean")
+
 ## Rules
 
 - Never approve without reading both the task definition AND the actual changed files
