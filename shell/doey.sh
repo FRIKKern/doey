@@ -209,6 +209,7 @@ DOEY_ART
 }
 
 doey_splash() {
+  _DOEY_SPLASH_START="$(date +%s)"
   printf '\033[2J\033[H'  # Clear screen, cursor top
   printf '\033[36m'       # Cyan
   cat << 'SPLASH'
@@ -221,6 +222,20 @@ doey_splash() {
 SPLASH
   printf '\033[0m'
   printf '\n   \033[2mStarting...\033[0m\n\n'
+}
+
+# Ensure the splash screen stays visible for at least 6 seconds
+_splash_wait_minimum() {
+  local min_seconds="${1:-6}"
+  if [ -n "${_DOEY_SPLASH_START:-}" ]; then
+    local now elapsed remaining
+    now="$(date +%s)"
+    elapsed=$(( now - _DOEY_SPLASH_START ))
+    remaining=$(( min_seconds - elapsed ))
+    if [ "$remaining" -gt 0 ]; then
+      sleep "$remaining"
+    fi
+  fi
 }
 
 doey_divider() {
@@ -2128,6 +2143,7 @@ launch_session() {
     wait "$_loading_pid" 2>/dev/null || true
   fi
 
+  _splash_wait_minimum 6
   attach_or_switch "$session"
 }
 
@@ -3940,6 +3956,7 @@ MANIFEST
     wait "$_loading_pid" 2>/dev/null || true
   fi
 
+  _splash_wait_minimum 6
   attach_or_switch "$session"
 
   # After detach, wait for background spawner to finish
@@ -3987,19 +4004,33 @@ rebalance_grid_layout() {
     runtime_dir=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
   fi
 
+  local _rgl_has_manager="true"
+  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${team_window}.env" ]; then
+    local _rgl_tt
+    _rgl_tt="$(_env_val "${runtime_dir}/team_${team_window}.env" TEAM_TYPE)" || true
+    [ "$_rgl_tt" = "freelancer" ] && _rgl_has_manager="false"
+  fi
+
   local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
 
-  local max_mgr=$((win_w / 3))
-  (( mgr_width > max_mgr )) && mgr_width=$max_mgr
+  local num_workers worker_cols worker_area body="" x=0
 
-  local num_workers=$((num_panes - 1))
-  local worker_cols=$(( (num_workers + 1) / 2 ))
-  local worker_area=$((win_w - mgr_width - 1))
-  local body="" x=0
-  body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
-  x=$((mgr_width + 1))
+  if [ "$_rgl_has_manager" = "true" ]; then
+    local max_mgr=$((win_w / 3))
+    (( mgr_width > max_mgr )) && mgr_width=$max_mgr
+    num_workers=$((num_panes - 1))
+    worker_cols=$(( (num_workers + 1) / 2 ))
+    worker_area=$((win_w - mgr_width - 1))
+    body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
+    x=$((mgr_width + 1))
+  else
+    num_workers=$num_panes
+    worker_cols=$(( (num_workers + 1) / 2 ))
+    worker_area=$win_w
+  fi
 
-  local c w wi=1
+  local c w wi
+  if [ "$_rgl_has_manager" = "true" ]; then wi=1; else wi=0; fi
   for ((c=0; c<worker_cols; c++)); do
     if ((c == worker_cols - 1)); then
       w=$((win_w - x))
