@@ -116,7 +116,10 @@ if is_core_team && ! is_taskmaster; then
 fi
 
 if is_worker; then
-  _team_type=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" TEAM_TYPE)
+  _team_env_file="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  _team_env_exists=true
+  [ -f "$_team_env_file" ] || _team_env_exists=false
+  _team_type=$(_read_team_key "$_team_env_file" TEAM_TYPE)
 
   PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="W${PANE_INDEX}"
 
@@ -155,12 +158,18 @@ if is_worker; then
 
   LAST_MSG=$(parse_field "last_assistant_message")
 
-  if [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ]; then
+  if [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] || [ "$_team_env_exists" = "false" ]; then
+    # Freelancer teams or despawned ephemeral teams: notify Taskmaster directly
     _taskmaster_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" TASKMASTER_PANE)
     _target="$SESSION_NAME:${_taskmaster_pane:-$(get_taskmaster_pane)}"
-    _subject="freelancer_finished"
+    if [ "$_team_env_exists" = "false" ]; then
+      _subject="worker_finished"
+      _log "stop-notify: team env missing for window ${WINDOW_INDEX} (ephemeral team despawned?) — falling back to ${DOEY_ROLE_COORDINATOR}"
+    else
+      _subject="freelancer_finished"
+    fi
   else
-    _mgr_idx=$(_read_team_key "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" MANAGER_PANE)
+    _mgr_idx=$(_read_team_key "$_team_env_file" MANAGER_PANE)
     _target="$SESSION_NAME:$WINDOW_INDEX.${_mgr_idx:-0}"
     _subject="worker_finished"
   fi

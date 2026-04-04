@@ -148,7 +148,7 @@ Commands:
   task     Manage project tasks
   tmux     Tmux session operations
   plan     Manage plans (list, get, create, update, delete)
-  team     Manage teams (list, get, set)
+  team     Manage teams (list, get, set, delete)
   config   Manage config (get, set, list, delete)
   agent    Manage agents (list, get, set, delete)
   event    Log and list events
