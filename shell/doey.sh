@@ -238,6 +238,60 @@ _splash_wait_minimum() {
   fi
 }
 
+# ── Progress-file startup display ────────────────────────────────────
+# Foreground: show startup progress from a file written by the background setup.
+# Prefers doey-tui startup (rich TUI); falls back to simple terminal output.
+_show_startup_progress() {
+  local progress_file="$1"
+  local timeout_sec="${2:-60}"
+  if command -v doey-tui >/dev/null 2>&1; then
+    if doey-tui startup --progress "$progress_file" --timeout "$timeout_sec" </dev/tty >/dev/tty 2>/dev/null; then
+      return 0
+    fi
+  fi
+  _startup_progress_fallback "$progress_file" "$timeout_sec"
+}
+
+_startup_progress_fallback() {
+  local progress_file="$1"
+  local timeout_sec="${2:-60}"
+  local start_time last_step=""
+  start_time="$(date +%s)"
+  printf '\033[2J\033[H'
+  printf '\033[36m'
+  cat << 'SPLASH'
+   ██████╗  ██████╗ ███████╗██╗   ██╗
+   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
+   ██║  ██║██║   ██║█████╗   ╚████╔╝
+   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
+   ██████╔╝╚██████╔╝███████╗   ██║
+   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
+SPLASH
+  printf '\033[0m\n'
+  while true; do
+    if [ -f "$progress_file" ]; then
+      local current
+      current="$(tail -1 "$progress_file" 2>/dev/null)" || true
+      if [ -n "$current" ] && [ "$current" != "$last_step" ]; then
+        local msg="${current#STEP: }"
+        if [ "$msg" = "Ready" ]; then
+          printf "   \033[32m%s\033[0m\n" "$msg"
+          return 0
+        fi
+        printf "   \033[2m%s\033[0m\n" "$msg"
+        last_step="$current"
+      fi
+    fi
+    local now elapsed
+    now="$(date +%s)"
+    elapsed=$(( now - start_time ))
+    if [ "$elapsed" -ge "$timeout_sec" ]; then
+      return 0
+    fi
+    sleep 0.3
+  done
+}
+
 doey_divider() {
   local width="${1:-50}"
   local line; line="$(printf '%*s' "$width" '' | tr ' ' '─')"
@@ -3695,9 +3749,6 @@ launch_session_dynamic() {
   local short_dir="${dir/#$HOME/~}"
   local team_window=2
 
-  doey_splash
-  _splash_wait_minimum 6
-
   cd "$dir"
   _doey_load_config  # Reload config now that we're in the project dir
 
@@ -3708,10 +3759,8 @@ launch_session_dynamic() {
     : "${DOEY_INITIAL_FREELANCER_TEAMS:=0}"
   fi
 
-  # Run startup wizard if not skipped
-  local _wizard_ran=false
+  # Run startup wizard if not skipped (needs TTY — runs before background fork)
   if [ "$DOEY_SKIP_WIZARD" != "true" ] && command -v doey-tui >/dev/null 2>&1; then
-    _wizard_ran=true
     local _wizard_out=""
     local _wizard_tmpfile
     _wizard_tmpfile="$(mktemp "${TMPDIR:-/tmp}/doey-wizard-XXXXXX.json")"
@@ -3760,48 +3809,40 @@ launch_session_dynamic() {
     fi
   fi
 
-  # Wizard TUI overwrites splash — redisplay so splash persists through setup
-  if [ "$_wizard_ran" = true ]; then
-    doey_splash
-  fi
-
   local initial_workers=$(( DOEY_INITIAL_WORKER_COLS * 2 ))
 
   ensure_project_trusted "$dir"
   install_doey_hooks "$dir" "   "
 
-  # Redirect step output to log — splash stays visible on terminal
+  # ── Progress-file startup ────────────────────────────────────────────
   mkdir -p "${runtime_dir}/logs"
-  exec 3>&1 4>&2
-  exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
+  local progress_file="${runtime_dir}/startup-progress"
+  rm -f "$progress_file"
+  : > "$progress_file"
 
-  STEP_TOTAL=7
-  step_start 1 "Creating session for ${name}..."
-  _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
+  # Fork actual setup into background — writes STEP lines to progress file
+  (
+    exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
 
-  step_done
+    echo "STEP: Creating session" >> "$progress_file"
+    STEP_TOTAL=7
+    step_start 1 "Creating session for ${name}..."
+    _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
+    step_done
 
-  # Start loading screen on real terminal (stdout is redirected to log)
-  local _loading_pid=""
-  if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
-    _loading_pid=$!
-  elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
-    _loading_pid=$!
-  fi
+    echo "STEP: Applying theme" >> "$progress_file"
+    step_start 2 "Applying theme..."
+    local border_fmt=' #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#{pane_title} #[default]'
+    apply_doey_theme "$session" "$name" "$border_fmt" 5
+    step_done
 
-  step_start 2 "Applying theme..."
-  local border_fmt=' #{?pane_active,#[fg=cyan bold],#[fg=colour245]}#{pane_title} #[default]'
-  apply_doey_theme "$session" "$name" "$border_fmt" 5
-  step_done
+    echo "STEP: Setting up grid" >> "$progress_file"
+    step_start 3 "Setting up grid..."
 
-  step_start 3 "Setting up grid..."
+    local acronym
+    acronym=$(project_acronym "$name")
 
-  local acronym
-  acronym=$(project_acronym "$name")
-
-  cat > "${runtime_dir}/session.env" << MANIFEST
+    cat > "${runtime_dir}/session.env" << MANIFEST
 PROJECT_DIR="$dir"
 PROJECT_NAME="$name"
 PROJECT_ACRONYM="$acronym"
@@ -3822,102 +3863,101 @@ TASKMASTER_PANE="1.0"
 REMOTE="$(_detect_remote)"
 MANIFEST
 
-  _detect_project_type "$dir"
-  _write_project_type_env "$runtime_dir"
+    _detect_project_type "$dir"
+    _write_project_type_env "$runtime_dir"
 
-  _maybe_start_tunnel "$runtime_dir" "$(_detect_remote)"
+    _maybe_start_tunnel "$runtime_dir" "$(_detect_remote)"
 
-  # Launch doey-router daemon
-  if [ "${DOEY_ROUTER_ENABLED:-true}" != "false" ]; then
-    _router_bin=""
-    if command -v doey-router >/dev/null 2>&1; then
-      _router_bin="doey-router"
-    elif [ -x "${HOME}/.local/bin/doey-router" ]; then
-      _router_bin="${HOME}/.local/bin/doey-router"
-    fi
-    if [ -n "$_router_bin" ]; then
-      mkdir -p "${runtime_dir}/logs"
-      "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" -log-file "${runtime_dir}/logs/doey-router.log" >/dev/null 2>&1 &
-      echo $! > "$runtime_dir/doey-router.pid"
-    fi
-  fi
-
-  # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
-  local _team1_def=""
-  [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_def=$(_read_team_config "1" "DEF" "")
-  local _team1_type=""
-  [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_type=$(_read_team_config "1" "TYPE" "")
-
-  if [ -n "$_team1_def" ]; then
-    # First worker team uses a .team.md definition — dashboard + core team first, then spawn from def
-    write_team_env "$runtime_dir" "$team_window" "dynamic" "" "0" "0" "" ""
-    setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
-    _create_core_team "$session" "$runtime_dir" "$dir"
-    step_done
-
-    step_start 4 "Launching team ${team_window} from definition '${_team1_def}'..."
-    if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_team1_def" "$_team1_type" ); then
-      doey_error "Failed to launch team ${team_window} from definition '${_team1_def}'"
-    fi
-    step_done
-
-    STEP_TOTAL=6  # Skip step 5 (worker columns) — add_team_from_def handles workers
-  else
-    # Default dynamic grid path for first worker team
-    write_team_env "$runtime_dir" "$team_window" "dynamic" "" "0" "0" "" ""
-
-    # Dashboard launches after session.env exists (info-panel + Taskmaster need it)
-    setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
-    _create_core_team "$session" "$runtime_dir" "$dir"
-    tmux new-window -t "$session" -c "$dir"
-    tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
-    tmux rename-window -t "$session:${team_window}" "Local Team"
-
-    step_done
-
-    step_start 4 "Launching ${DOEY_ROLE_TEAM_LEAD}..."
-    _launch_team_manager "$session" "$runtime_dir" "$team_window"
-    _brief_team "$session" "$team_window" "" "" "0" \
-      "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
-    step_done
-
-    step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
-    local _col_i
-    for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
-      doey_add_column "$session" "$runtime_dir" "$dir" "$team_window"
-  
-    done
-    step_done
-  fi
-
-  # ── Attach early, build remaining teams in background ────────────────
-  # Team 1 + dashboard are ready. Spawn remaining teams (T2+, freelancers,
-  # worktrees) and briefings in a background subshell so the user gets
-  # attached to tmux immediately instead of waiting for all teams.
-
-  # Update first worker team's env with per-team config if specified (quick, no tmux ops)
-  if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
-    if [ -z "$_team1_def" ]; then
-      local _ptc1_name _ptc1_role _ptc1_wm _ptc1_mm
-      _ptc1_name=$(_read_team_config "1" "NAME" "")
-      _ptc1_role=$(_read_team_config "1" "ROLE" "")
-      _ptc1_wm=$(_read_team_config "1" "WORKER_MODEL" "")
-      _ptc1_mm=$(_read_team_config "1" "MANAGER_MODEL" "")
-      if [ -n "$_ptc1_name" ] || [ -n "$_ptc1_role" ] || [ -n "$_ptc1_wm" ] || [ -n "$_ptc1_mm" ]; then
-        local _ptc1_wp _ptc1_wc
-        _ptc1_wp=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_PANES)
-        _ptc1_wc=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_COUNT)
-        write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
-        [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:${team_window}" "$_ptc1_name"
+    # Launch doey-router daemon
+    if [ "${DOEY_ROUTER_ENABLED:-true}" != "false" ]; then
+      _router_bin=""
+      if command -v doey-router >/dev/null 2>&1; then
+        _router_bin="doey-router"
+      elif [ -x "${HOME}/.local/bin/doey-router" ]; then
+        _router_bin="${HOME}/.local/bin/doey-router"
+      fi
+      if [ -n "$_router_bin" ]; then
+        mkdir -p "${runtime_dir}/logs"
+        "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" -log-file "${runtime_dir}/logs/doey-router.log" >/dev/null 2>&1 &
+        echo $! > "$runtime_dir/doey-router.pid"
       fi
     fi
-  fi
 
-  # Background subshell: spawn remaining teams + send briefings
-  (
-    sleep 0.3  # Let attach happen first
+    # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
+    local _team1_def=""
+    [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_def=$(_read_team_config "1" "DEF" "")
+    local _team1_type=""
+    [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_type=$(_read_team_config "1" "TYPE" "")
 
-    # ── Spawn remaining teams (T2+) ──
+    if [ -n "$_team1_def" ]; then
+      # First worker team uses a .team.md definition — dashboard + core team first, then spawn from def
+      write_team_env "$runtime_dir" "$team_window" "dynamic" "" "0" "0" "" ""
+      setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
+      _create_core_team "$session" "$runtime_dir" "$dir"
+      step_done
+
+      echo "STEP: Launching team from definition" >> "$progress_file"
+      step_start 4 "Launching team ${team_window} from definition '${_team1_def}'..."
+      if ! ( add_team_from_def "$session" "$runtime_dir" "$dir" "$_team1_def" "$_team1_type" ); then
+        doey_error "Failed to launch team ${team_window} from definition '${_team1_def}'"
+      fi
+      step_done
+
+      STEP_TOTAL=6  # Skip step 5 (worker columns) — add_team_from_def handles workers
+    else
+      # Default dynamic grid path for first worker team
+      write_team_env "$runtime_dir" "$team_window" "dynamic" "" "0" "0" "" ""
+
+      # Dashboard launches after session.env exists (info-panel + Taskmaster need it)
+      setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
+      _create_core_team "$session" "$runtime_dir" "$dir"
+      tmux new-window -t "$session" -c "$dir"
+      tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
+      tmux rename-window -t "$session:${team_window}" "Local Team"
+
+      step_done
+
+      echo "STEP: Launching ${DOEY_ROLE_TEAM_LEAD}" >> "$progress_file"
+      step_start 4 "Launching ${DOEY_ROLE_TEAM_LEAD}..."
+      _launch_team_manager "$session" "$runtime_dir" "$team_window"
+      _brief_team "$session" "$team_window" "" "" "0" \
+        "Dynamic grid — ${initial_workers} initial workers, auto-expands when all are busy"
+      step_done
+
+      echo "STEP: Adding workers" >> "$progress_file"
+      step_start 5 "Adding ${DOEY_INITIAL_WORKER_COLS} worker columns (${initial_workers} workers)..."
+      local _col_i
+      for (( _col_i=0; _col_i<DOEY_INITIAL_WORKER_COLS; _col_i++ )); do
+        doey_add_column "$session" "$runtime_dir" "$dir" "$team_window"
+      done
+      step_done
+    fi
+
+    # Update first worker team's env with per-team config if specified
+    if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
+      if [ -z "$_team1_def" ]; then
+        local _ptc1_name _ptc1_role _ptc1_wm _ptc1_mm
+        _ptc1_name=$(_read_team_config "1" "NAME" "")
+        _ptc1_role=$(_read_team_config "1" "ROLE" "")
+        _ptc1_wm=$(_read_team_config "1" "WORKER_MODEL" "")
+        _ptc1_mm=$(_read_team_config "1" "MANAGER_MODEL" "")
+        if [ -n "$_ptc1_name" ] || [ -n "$_ptc1_role" ] || [ -n "$_ptc1_wm" ] || [ -n "$_ptc1_mm" ]; then
+          local _ptc1_wp _ptc1_wc
+          _ptc1_wp=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_PANES)
+          _ptc1_wc=$(_env_val "${runtime_dir}/team_${team_window}.env" WORKER_COUNT)
+          write_team_env "$runtime_dir" "$team_window" "dynamic" "$_ptc1_wp" "$_ptc1_wc" "0" "" "" "$_ptc1_name" "$_ptc1_role" "$_ptc1_wm" "$_ptc1_mm"
+          [ -n "$_ptc1_name" ] && tmux rename-window -t "$session:${team_window}" "$_ptc1_name"
+        fi
+      fi
+    fi
+
+    # Signal foreground that first team is ready — triggers progress display to exit
+    echo "STEP: Ready" >> "$progress_file"
+
+    # ── Spawn remaining teams + briefings (post-attach) ──────────────
+    sleep 0.3
+
+    # Spawn remaining teams (T2+)
     if [ -n "${DOEY_TEAM_COUNT:-}" ] && [ "${DOEY_TEAM_COUNT:-0}" -gt 0 ]; then
       local _ptc_total="${DOEY_TEAM_COUNT}"
       local _ptc_remaining=$((_ptc_total - 1))
@@ -3994,28 +4034,23 @@ MANIFEST
 
     doey_send_verified "$session:0.1" \
       "Session online. You are ${DOEY_ROLE_BOSS}. Project: ${name}, dir: ${dir}, session: ${session}. ${DOEY_ROLE_COORDINATOR} is in the Core Team window. ${final_team_count} team windows (${final_team_windows}). Awaiting instructions." || true
-    # Taskmaster briefing (Core Team pane 1.0)
     local _tm_pane
     _tm_pane=$(grep '^TASKMASTER_PANE=' "${runtime_dir}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
     _tm_pane="${_tm_pane:-1.0}"
     doey_send_verified "$session:${_tm_pane}" \
       "Session online. Project: ${name}, dir: ${dir}, session: ${session}. You are ${DOEY_ROLE_COORDINATOR} at pane ${_tm_pane} in Core Team window. Worker team windows: ${final_team_windows}. Awaiting ${DOEY_ROLE_BOSS} instructions." || true
   ) &
-  local _BG_SPAWN_PID=$!
+  local _bg_setup_pid=$!
 
-  # Attach immediately — user sees dashboard + T1 while remaining teams spawn behind
+  # Foreground: display startup progress (doey-tui or text fallback)
+  _show_startup_progress "$progress_file" 60
+
+  # Attach — session and first team are ready
   tmux select-window -t "$session:0"
-
-  # Restore stdout, wait for loading screen
-  exec 1>&3 2>&4 3>&- 4>&-
-  if [ -n "$_loading_pid" ]; then
-    wait "$_loading_pid" 2>/dev/null || true
-  fi
-
   attach_or_switch "$session"
 
   # After detach, wait for background spawner to finish
-  wait "$_BG_SPAWN_PID" 2>/dev/null || true
+  wait "$_bg_setup_pid" 2>/dev/null || true
 }
 
 _check_grid_feasibility() {
