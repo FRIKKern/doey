@@ -276,11 +276,11 @@ func (m *model) applyStatuses(statuses map[string]string) {
 }
 
 // allKeyPanesReady checks if the minimum set of panes are alive.
-// Key panes: Boss (0.1), Taskmaster (1.0), and at least one worker.
+// Key panes: Boss (0.1) and Taskmaster (1.0) only — workers come online
+// asynchronously after the loading screen exits and should not gate startup.
 func (m *model) allKeyPanesReady() bool {
 	bossReady := false
 	taskmasterReady := false
-	anyWorkerReady := false
 	bossSuffix := "_0_1"
 	tmSuffix := "_1_0"
 
@@ -294,11 +294,8 @@ func (m *model) allKeyPanesReady() bool {
 		if strings.HasSuffix(p.paneID, tmSuffix) {
 			taskmasterReady = true
 		}
-		if strings.Contains(p.name, "Worker") || p.name == "Subtaskmaster" {
-			anyWorkerReady = true
-		}
 	}
-	return bossReady && taskmasterReady && anyWorkerReady
+	return bossReady && taskmasterReady
 }
 
 // ── View ───────────────────────────────────────────────────────────────
@@ -553,7 +550,7 @@ func (m model) layoutGrid(boxes []string) string {
 func main() {
 	session := flag.String("session", "", "tmux session name (e.g., doey-myproject)")
 	runtimeDir := flag.String("runtime", "", "runtime directory (e.g., /tmp/doey/myproject)")
-	timeout := flag.Int("timeout", 120, "max wait time in seconds")
+	timeout := flag.Int("timeout", 30, "max wait time in seconds")
 	flag.Parse()
 
 	if *session == "" || *runtimeDir == "" {
