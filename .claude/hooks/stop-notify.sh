@@ -96,8 +96,10 @@ _wake_taskmaster() {
   if command -v doey-ctl >/dev/null 2>&1; then
     doey-ctl nudge --on-finish "${WINDOW_INDEX}.${PANE_INDEX}" 2>/dev/null || true
   else
-    # Fallback: direct send-keys wake
-    tmux send-keys -t "${SESSION_NAME}:${TASKMASTER_PANE:-$(get_taskmaster_pane)}" "" 2>/dev/null || true
+    # Fallback: copy-mode exit + empty nudge
+    local _tm_target="${SESSION_NAME}:${TASKMASTER_PANE:-$(get_taskmaster_pane)}"
+    tmux copy-mode -q -t "$_tm_target" 2>/dev/null || true
+    tmux send-keys -t "$_tm_target" "" 2>/dev/null || true
   fi
 }
 

@@ -75,13 +75,14 @@ for i in $WPL; do
 done; sleep 1
 for i in $WPL; do
   tmux copy-mode -q -t "${SESSION_NAME}:${TARGET_WIN}.${i}" 2>/dev/null
-  tmux send-keys -t "${SESSION_NAME}:${TARGET_WIN}.${i}" "clear" Enter 2>/dev/null
+  source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+  doey_send_command "${SESSION_NAME}:${TARGET_WIN}.${i}" "clear"
 done; sleep 1
 for i in $WPL; do
   WP=$(grep -l "pane ${TARGET_WIN}\.${i} " "${RD}/worker-system-prompt-"*.md 2>/dev/null | head -1 || true)
   CMD="cd \"${TARGET_DIR}\" && claude --dangerously-skip-permissions --model opus --name \"T${TARGET_WIN} W${i}\""
   [ -n "$WP" ] && CMD="${CMD} --append-system-prompt-file \"${WP}\""
-  tmux send-keys -t "${SESSION_NAME}:${TARGET_WIN}.${i}" "$CMD" Enter; sleep 0.5
+  doey_send_command "${SESSION_NAME}:${TARGET_WIN}.${i}" "$CMD"; sleep 0.5
 done
 ```
 

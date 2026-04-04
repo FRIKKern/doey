@@ -163,10 +163,7 @@ _taskmaster_context_check() {
     _proj="${SESSION_NAME#doey-}"
     local _relaunch="claude --dangerously-skip-permissions --model ${_tm_model} --name \"${DOEY_ROLE_COORDINATOR:-Taskmaster}\" --agent \"${_tm_agent}\""
     [ -f "${RUNTIME_DIR}/doey-settings.json" ] && _relaunch="${_relaunch} --settings \"${RUNTIME_DIR}/doey-settings.json\""
-    tmux copy-mode -q -t "$_full_pane" 2>/dev/null
-    tmux send-keys -t "$_full_pane" Escape 2>/dev/null
-    sleep 0.1
-    tmux send-keys -t "$_full_pane" "$_relaunch" Enter
+    doey_send_command "$_full_pane" "$_relaunch"
 
     # Wait for Claude to boot, then re-brief with active tasks
     sleep 8

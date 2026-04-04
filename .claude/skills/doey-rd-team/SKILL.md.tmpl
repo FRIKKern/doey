@@ -75,14 +75,15 @@ RDPROMPT
 
 ```bash
 RD_PROMPT="${RD}/rd-worker-prompt.md"
-tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.0" \
-  "claude --dangerously-skip-permissions --model opus --name \"Brain\" --agent \"doey-product-brain\"" Enter; sleep 3
-tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.1" \
-  "claude --dangerously-skip-permissions --model opus --name \"Platform\" --agent \"doey-platform-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter; sleep 3
-tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.2" \
-  "claude --dangerously-skip-permissions --model opus --name \"Claude\" --agent \"doey-claude-expert\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter; sleep 3
-tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.3" \
-  "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\"" Enter
+source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+doey_send_command "${SESSION_NAME}:${NEW_WIN}.0" \
+  "claude --dangerously-skip-permissions --model opus --name \"Brain\" --agent \"doey-product-brain\""; sleep 3
+doey_send_command "${SESSION_NAME}:${NEW_WIN}.1" \
+  "claude --dangerously-skip-permissions --model opus --name \"Platform\" --agent \"doey-platform-expert\" --append-system-prompt-file \"${RD_PROMPT}\""; sleep 3
+doey_send_command "${SESSION_NAME}:${NEW_WIN}.2" \
+  "claude --dangerously-skip-permissions --model opus --name \"Claude\" --agent \"doey-claude-expert\" --append-system-prompt-file \"${RD_PROMPT}\""; sleep 3
+doey_send_command "${SESSION_NAME}:${NEW_WIN}.3" \
+  "claude --dangerously-skip-permissions --model opus --name \"Critic\" --agent \"doey-critic\" --append-system-prompt-file \"${RD_PROMPT}\""
 ```
 
 ### 5. Verify boot + dispatch audit

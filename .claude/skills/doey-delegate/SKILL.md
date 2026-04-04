@@ -46,13 +46,9 @@ cat > "$TASKFILE" << 'TASK'
 
 <task prompt here>
 TASK
-tmux copy-mode -q -t "$TARGET_PANE" 2>/dev/null
-tmux load-buffer "$TASKFILE" && tmux paste-buffer -t "$TARGET_PANE"
-TASK_LINES=$(wc -l < "$TASKFILE" | tr -d ' ')
-if [ "$TASK_LINES" -gt 200 ]; then sleep 2; elif [ "$TASK_LINES" -gt 100 ]; then sleep 1.5; else sleep 0.5; fi
-tmux send-keys -t "$TARGET_PANE" Escape 2>/dev/null
-sleep 0.3
-tmux send-keys -t "$TARGET_PANE" Enter && rm "$TASKFILE"
+source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+TASK_CONTENT=$(cat "$TASKFILE")
+doey_send_verified "$TARGET_PANE" "$TASK_CONTENT" && rm -f "$TASKFILE" || echo "Delivery failed"
 ```
 
 ### 7. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)

@@ -10,11 +10,10 @@ Subtaskmaster/Boss only. Send `/compact` to Taskmaster (1.0), verify, retry once
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 source "$RD/session.env"
+source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
 _TM_PANE=$(grep '^TASKMASTER_PANE=' "$RD/session.env" 2>/dev/null | cut -d= -f2-)
 TASKMASTER_PANE="${SESSION_NAME}:${_TM_PANE:-1.0}"
-tmux copy-mode -q -t "$TASKMASTER_PANE" 2>/dev/null
-tmux send-keys -t "$TASKMASTER_PANE" Escape; sleep 0.1
-tmux send-keys -t "$TASKMASTER_PANE" "/compact" Enter
+doey_send_verified "$TASKMASTER_PANE" "/compact"
 ```
 
 ```bash
@@ -26,9 +25,7 @@ for attempt in 1 2; do
   elif [ "$attempt" -eq 2 ]; then
     echo "FAILED: Taskmaster not responding"
   else
-    tmux copy-mode -q -t "$TASKMASTER_PANE" 2>/dev/null
-    tmux send-keys -t "$TASKMASTER_PANE" Escape; sleep 0.1
-    tmux send-keys -t "$TASKMASTER_PANE" "/compact" Enter
+    doey_send_verified "$TASKMASTER_PANE" "/compact"
   fi
 done
 ```

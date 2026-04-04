@@ -82,7 +82,7 @@ If a subtask ID is provided, set it as an env var on the target pane before send
 ```bash
 # Set DOEY_SUBTASK_ID on worker pane (skip if not provided)
 if [ -n "${SUBTASK_ID:-}" ]; then
-  tmux send-keys -t "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}" Enter
+  doey_send_command "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}"
   sleep 0.3
 fi
 ```
@@ -110,19 +110,19 @@ if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
   [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null; sleep 3
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
   [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
-  tmux copy-mode -q -t "$PANE" 2>/dev/null
-  tmux send-keys -t "$PANE" Escape; sleep 0.1
+  tmux copy-mode -q -t "$PANE" 2>/dev/null || true
   PANE_IDX="${PANE##*.}"
   WORKER_PROMPT=$(grep -l "pane ${W}\.${PANE_IDX} " "${RD}/worker-system-prompt-"*.md 2>/dev/null | head -1)
   CMD="claude --dangerously-skip-permissions --model ${DOEY_WORKER_MODEL:-opus}"
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
-  tmux send-keys -t "$PANE" "$CMD" Enter; sleep 8
+  source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+  doey_send_command "$PANE" "$CMD"; sleep 8
   tmux copy-mode -q -t "$PANE" 2>/dev/null
 fi
 
 # Set subtask ID env var if provided
 if [ -n "${SUBTASK_ID:-}" ]; then
-  tmux send-keys -t "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}" Enter
+  doey_send_command "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}"
   sleep 0.3
 fi
 
@@ -136,29 +136,9 @@ All file paths should be absolute.
 
 Your detailed task prompt here.
 TASK
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
-
-# Settle + submit (>200L=2s, >100L=1.5s, else 0.5s)
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-TASK_LINES=$(wc -l < "$TASKFILE" 2>/dev/null | tr -d ' ') || TASK_LINES=0
-SETTLE_S=0.5; [ "$TASK_LINES" -gt 100 ] && SETTLE_S=1.5; [ "$TASK_LINES" -gt 200 ] && SETTLE_S=2
-sleep $SETTLE_S
-tmux send-keys -t "$PANE" Escape 2>/dev/null
-sleep 0.3
-tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
-
-# Verify (retry once if no activity)
-sleep 5; OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
-if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-  echo "✓ Worker ${W}.X started"
-else
-  tmux copy-mode -q -t "$PANE" 2>/dev/null; tmux send-keys -t "$PANE" Escape; tmux send-keys -t "$PANE" Enter; sleep 3
-  OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -5)
-  if echo "$OUTPUT" | grep -q -E '(thinking|working|Read|Edit|Bash|Grep|Glob|Write|Agent)'; then
-    echo "✓ Started after retry"
-  else echo "✗ FAILED — run unstick sequence"; fi
-fi
+TASK_CONTENT=$(cat "$TASKFILE")
+doey_send_verified "$PANE" "$TASK_CONTENT" && echo "✓ Worker ${W}.X started" || echo "✗ FAILED — run unstick sequence"
+rm -f "$TASKFILE"
 ```
 
 ### Variants

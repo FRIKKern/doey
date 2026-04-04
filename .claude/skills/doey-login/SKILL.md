@@ -42,9 +42,9 @@ kill_and_relaunch() {
   CHILD_PID=$(pgrep -P "$SHELL_PID" 2>/dev/null || true)
   [ -n "$CHILD_PID" ] && { kill -9 "$CHILD_PID" 2>/dev/null || true; sleep 0.5; }
   tmux copy-mode -q -t "$PANE" 2>/dev/null || true
-  tmux send-keys -t "$PANE" Escape 2>/dev/null || true; sleep 0.1
-  tmux send-keys -t "$PANE" "clear" Enter 2>/dev/null || true; sleep 0.5
-  tmux send-keys -t "$PANE" "$CMD" Enter; sleep 0.5
+  source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+  doey_send_command "$PANE" "clear"; sleep 0.5
+  doey_send_command "$PANE" "$CMD"; sleep 0.5
 }
 
 restart_team() {

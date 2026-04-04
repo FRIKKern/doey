@@ -916,15 +916,15 @@ setup_dashboard() {
 
   # Info Panel
   if command -v doey-tui >/dev/null 2>&1; then
-    tmux send-keys -t "$session:0.0" "clear && doey-tui '${runtime_dir}'" Enter
+    doey_send_command "$session:0.0" "clear && doey-tui '${runtime_dir}'"
   else
-    tmux send-keys -t "$session:0.0" "clear && info-panel.sh '${runtime_dir}'" Enter
+    doey_send_command "$session:0.0" "clear && info-panel.sh '${runtime_dir}'"
   fi
 
   # Boss (pane 0.1)
   local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name \"${DOEY_ROLE_BOSS}\" --agent ${DOEY_ROLE_FILE_BOSS}"
   _append_settings _boss_cmd "$runtime_dir"
-  tmux send-keys -t "$session:0.1" "${_DRAIN_STDIN}${_boss_cmd}" Enter
+  doey_send_command "$session:0.1" "${_DRAIN_STDIN}${_boss_cmd}"
 
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
@@ -976,19 +976,19 @@ _create_core_team() {
   # Task Reviewer (pane 1.1)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Task Reviewer\" --agent doey-task-reviewer"
   _append_settings _spec_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:1.1" "${_DRAIN_STDIN}${_spec_cmd}" Enter
+  doey_send_command "${session}:1.1" "${_DRAIN_STDIN}${_spec_cmd}"
   write_pane_status "$runtime_dir" "${session}:1.1" "READY"
 
   # Deployment (pane 1.2)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Deployment\" --agent doey-deployment"
   _append_settings _spec_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:1.2" "${_DRAIN_STDIN}${_spec_cmd}" Enter
+  doey_send_command "${session}:1.2" "${_DRAIN_STDIN}${_spec_cmd}"
   write_pane_status "$runtime_dir" "${session}:1.2" "READY"
 
   # Doey Expert (pane 1.3)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Doey Expert\" --agent doey-doey-expert"
   _append_settings _spec_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:1.3" "${_DRAIN_STDIN}${_spec_cmd}" Enter
+  doey_send_command "${session}:1.3" "${_DRAIN_STDIN}${_spec_cmd}"
   write_pane_status "$runtime_dir" "${session}:1.3" "READY"
 }
 
@@ -3231,12 +3231,12 @@ reload_session() {
     printf "    Manager %s..." "$mgr_ref"
     if _kill_pane_child "$mgr_ref"; then
       tmux copy-mode -q -t "$mgr_ref" 2>/dev/null || true
-      tmux send-keys -t "$mgr_ref" "clear" Enter 2>/dev/null || true
+      doey_send_command "$mgr_ref" "clear"
       sleep 0.2
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
       local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
       _append_settings _rl_mgr_cmd "$runtime_dir"
-      tmux send-keys -t "$mgr_ref" "${_DRAIN_STDIN}${_rl_mgr_cmd}" Enter
+      doey_send_command "$mgr_ref" "${_DRAIN_STDIN}${_rl_mgr_cmd}"
       printf " ${SUCCESS}✓${RESET}\n"
       (
         sleep "$DOEY_MANAGER_BRIEF_DELAY"
@@ -3274,7 +3274,7 @@ reload_session() {
 
         _kill_pane_child "$pane_ref" 1 || true
         tmux copy-mode -q -t "$pane_ref" 2>/dev/null || true
-        tmux send-keys -t "$pane_ref" "clear" Enter 2>/dev/null || true
+        doey_send_command "$pane_ref" "clear"
         sleep 0.2
 
         local w_name
@@ -3284,7 +3284,7 @@ reload_session() {
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
-        tmux send-keys -t "$pane_ref" "${_DRAIN_STDIN}${worker_cmd}" Enter
+        doey_send_command "$pane_ref" "${_DRAIN_STDIN}${worker_cmd}"
         printf "    %s.%s ${SUCCESS}✓${RESET}\n" "$tw" "$wp"
         sleep "$DOEY_WORKER_LAUNCH_DELAY"
       done
@@ -4326,7 +4326,7 @@ _batch_boot_workers() {
     local _bbw_cur_pane _bbw_cur_cmd
     _bbw_cur_pane="${_bbw_pane_arr[$_bbw_i]}"
     _bbw_cur_cmd="${_bbw_cmd_arr[$_bbw_i]}"
-    tmux send-keys -t "$session:${team_window}.${_bbw_cur_pane}" "${_DRAIN_STDIN}${_bbw_cur_cmd}" Enter
+    doey_send_command "$session:${team_window}.${_bbw_cur_pane}" "${_DRAIN_STDIN}${_bbw_cur_cmd}"
     if [ "$_bbw_reserved" = "true" ] || [ "$_bbw_is_freelancer" = "true" ]; then
       write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "RESERVED"
       local _bbw_safe="${session}:${team_window}.${_bbw_cur_pane}"
@@ -4568,7 +4568,7 @@ _launch_team_manager() {
   local _mgr_pane_title="${mgr_pane_title_override:-${_proj} T${window_index} Mgr}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"${_mgr_name}\" --agent \"$mgr_agent\""
   _append_settings _mgr_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}" Enter
+  doey_send_command "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}"
   tmux select-pane -t "${session}:${window_index}.0" -T "$_mgr_pane_title"
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 
@@ -4775,7 +4775,7 @@ add_team_from_def() {
   local mgr_model="${td_manager_model:-$DOEY_MANAGER_MODEL}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --agent \"$mgr_agent_name\" --name \"${mgr_name}\""
   _append_settings _mgr_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}" Enter
+  doey_send_command "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}"
   tmux select-pane -t "${session}:${window_index}.0" -T "$mgr_name"
 
   # Launch workers (panes 1+)
@@ -4797,7 +4797,7 @@ add_team_from_def() {
     _append_settings _w_cmd "$runtime_dir"
 
     sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
-    tmux send-keys -t "${session}:${window_index}.${_w_i}" "${_DRAIN_STDIN}${_w_cmd}" Enter
+    doey_send_command "${session}:${window_index}.${_w_i}" "${_DRAIN_STDIN}${_w_cmd}"
     tmux select-pane -t "${session}:${window_index}.${_w_i}" -T "$w_name"
     # Write READY status so Taskmaster/Subtaskmaster can dispatch immediately
     write_pane_status "$runtime_dir" "${session}:${window_index}.${_w_i}" "READY"
@@ -5404,11 +5404,11 @@ doey_settings() {
   settings_win=$(tmux display-message -t "$session" -p '#{window_index}')
 
   # Left pane (pane 0): run settings panel with live refresh
-  tmux send-keys -t "$session:${settings_win}.0" "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\"" Enter
+  doey_send_command "$session:${settings_win}.0" "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\""
 
   # Split right — pane 1 becomes the Claude config editor
   tmux split-window -h -t "$session:${settings_win}.0"
-  tmux send-keys -t "$session:${settings_win}.1" "claude --agent settings-editor" Enter
+  doey_send_command "$session:${settings_win}.1" "claude --agent settings-editor"
 
   # Focus the right pane (editor)
   tmux select-pane -t "$session:${settings_win}.1"
