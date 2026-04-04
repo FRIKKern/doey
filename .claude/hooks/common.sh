@@ -284,14 +284,14 @@ send_to_pane() {
     return
   fi
   # Fallback: pre-clear + send-keys + settle + Enter
-  tmux copy-mode -q -t "$target" 2>/dev/null
-  tmux send-keys -t "$target" Escape 2>/dev/null
+  tmux copy-mode -q -t "$target" 2>/dev/null || true
+  tmux send-keys -t "$target" Escape 2>/dev/null || true
   sleep 0.1
-  tmux send-keys -t "$target" C-u 2>/dev/null
+  tmux send-keys -t "$target" C-u 2>/dev/null || true
   sleep 0.1
-  tmux send-keys -t "$target" -- "$msg" 2>/dev/null
+  tmux send-keys -t "$target" -- "$msg" 2>/dev/null || true
   sleep 0.15
-  tmux send-keys -t "$target" Enter 2>/dev/null
+  tmux send-keys -t "$target" Enter 2>/dev/null || true
 }
 
 sanitize_message() {

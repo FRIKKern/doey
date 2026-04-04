@@ -12,8 +12,9 @@ SETTINGS_WIN=$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window
 if [ -n "$SETTINGS_WIN" ]; then tmux select-window -t "$SESSION_NAME:$SETTINGS_WIN"; exit 0; fi
 tmux new-window -t "$SESSION_NAME" -n "Settings"
 SETTINGS_WIN=$(tmux display-message -t "$SESSION_NAME" -p '#{window_index}')
-tmux send-keys -t "$SESSION_NAME:$SETTINGS_WIN.0" "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\"" Enter
+source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+doey_send_command "$SESSION_NAME:$SETTINGS_WIN.0" "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\""
 tmux split-window -h -t "$SESSION_NAME:$SETTINGS_WIN.0"
-tmux send-keys -t "$SESSION_NAME:$SETTINGS_WIN.1" "claude --dangerously-skip-permissions --agent settings-editor" Enter
+doey_send_command "$SESSION_NAME:$SETTINGS_WIN.1" "claude --dangerously-skip-permissions --agent settings-editor"
 tmux select-pane -t "$SESSION_NAME:$SETTINGS_WIN.1"
 ```

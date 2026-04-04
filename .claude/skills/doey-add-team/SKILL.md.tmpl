@@ -193,7 +193,8 @@ while IFS='|' read -r _pane _role _agent _name _model; do
   _agent_flag=""
   [ -n "$_agent" ] && _agent_flag="--agent \"$_agent\""
   _cmd="claude --dangerously-skip-permissions ${_model_flag} --name \"T${NEW_WIN} ${_name}\" ${_agent_flag}"
-  tmux send-keys -t "${SESSION_NAME}:${NEW_WIN}.${_pane}" "$_cmd" Enter
+  source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+  doey_send_command "${SESSION_NAME}:${NEW_WIN}.${_pane}" "$_cmd"
   sleep 3
 done << LAUNCH_INPUT
 $(echo "$PANE_DEFS")
@@ -227,14 +228,10 @@ $(echo "$WORKFLOWS" | while IFS='|' read -r _t _f _to _s; do [ -n "$_t" ] && ech
 Coordinate your team. Dispatch initial tasks to workers based on the team definition.
 BRIEF_EOF
 
-  tmux copy-mode -q -t "$MGR_PANE" 2>/dev/null
-  tmux send-keys -t "$MGR_PANE" Escape
-  tmux load-buffer "$BRIEFING" && tmux paste-buffer -t "$MGR_PANE"
-  sleep 1
-  tmux send-keys -t "$MGR_PANE" Escape
-  tmux send-keys -t "$MGR_PANE" Enter
-  rm "$BRIEFING"
-  echo "Manager briefed"
+  source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+  BRIEFING_CONTENT=$(cat "$BRIEFING")
+  doey_send_verified "$MGR_PANE" "$BRIEFING_CONTENT" && echo "Manager briefed" || echo "Manager briefing delivery failed"
+  rm -f "$BRIEFING"
 fi
 ```
 
