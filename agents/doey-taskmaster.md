@@ -138,11 +138,82 @@ tmux send-keys -t "$TARGET" -- "Your task description here" Enter
 
 `doey_send_verified` handles retry (3x exponential backoff) and delivery verification automatically.
 
+### Dispatch Verification Protocol
+
+**After every dispatch to a Subtaskmaster, you MUST verify delivery.** `doey_send_verified` catches immediate failures, but the target pane may silently drop the message (menu open, auth prompt, stuck state). Run this verification block after every dispatch:
+
+```bash
+# --- Post-dispatch verification (MANDATORY after every doey_send_verified) ---
+# TARGET and W must be set from the dispatch above
+sleep 10
+CAPTURED=$(tmux capture-pane -t "$TARGET" -p -S -20 2>/dev/null) || CAPTURED=""
+# Check for signs of active processing
+if printf '%s' "$CAPTURED" | grep -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent|TASK)'; then
+  echo "✓ Dispatch verified — target $TARGET is active"
+else
+  # Also check status file
+  TARGET_SAFE=$(printf '%s' "$TARGET" | tr ':.-' '_')
+  CUR_STATUS=$(grep '^STATUS:' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
+  if [ "$CUR_STATUS" = "BUSY" ]; then
+    echo "✓ Dispatch verified — target $TARGET status is BUSY"
+  else
+    echo "⚠ Dispatch NOT confirmed — retrying with Escape prefix"
+    tmux send-keys -t "$TARGET" Escape 2>/dev/null || true
+    sleep 0.3
+    source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+    doey_send_verified "$TARGET" "$DISPATCH_MSG"
+    sleep 10
+    CUR_STATUS=$(grep '^STATUS:' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
+    CAPTURED=$(tmux capture-pane -t "$TARGET" -p -S -20 2>/dev/null) || CAPTURED=""
+    if [ "$CUR_STATUS" = "BUSY" ] || printf '%s' "$CAPTURED" | grep -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running)'; then
+      echo "✓ Dispatch verified on retry"
+    else
+      echo "⚠ Dispatch FAILED after retry — escalating to Boss"
+      doey msg send --from "1.0" --to "0.1" --subject "dispatch_failed" --body "Failed to deliver task to ${TARGET} after 2 attempts. Pane may be stuck/unresponsive. Status: ${CUR_STATUS:-unknown}. Manual intervention needed."
+    fi
+  fi
+fi
+```
+
+**Rules:**
+- Store the dispatch message in `DISPATCH_MSG` before calling `doey_send_verified` so retries can resend the same content
+- The 10-second wait gives Claude Code time to parse input and begin tool calls — do not reduce this
+- On 2nd failure, escalate to Boss via `doey msg send` with subject `dispatch_failed` — do NOT retry a 3rd time (avoid spam loops)
+- Log every verification failure to `$RUNTIME_DIR/issues/`
+
 ### Per-Task Team Spawn
 
 Each task gets its own ephemeral team, right-sized to the work. Do NOT search for idle teams — spawn fresh.
 
 1. **Count deliverables** — Read the task's subtasks/deliverables from `doey task get --id $TASK_ID`. If Boss included `WORKERS_NEEDED` in the dispatch, use that count. Otherwise: `WORKERS = max(subtask_count, 1)`, capped at 6.
+
+#### Direct Dispatch (WORKERS_NEEDED=1)
+
+When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), **skip the Subtaskmaster** and dispatch directly to a worker. This eliminates the Subtaskmaster hop — the chain becomes Boss → Taskmaster → Worker instead of Boss → Taskmaster → Subtaskmaster → Worker.
+
+1. **Spawn a 1-worker freelancer team:**
+   ```bash
+   /doey-add-window --workers 1 --freelancer --name "Task $TASK_ID" --task-id $TASK_ID
+   ```
+2. **Wait for the worker** (not a Subtaskmaster) to be READY:
+   ```bash
+   source "${RUNTIME_DIR}/session.env"
+   for i in 1 2 3 4 5; do
+     STATUS=$(grep 'STATUS=' "$RUNTIME_DIR/status/pane_${NEW_W}_0.status" 2>/dev/null | cut -d= -f2)
+     [ "$STATUS" = "READY" ] && break; sleep 3
+   done
+   ```
+3. **Write a self-contained prompt** — Since there is no Subtaskmaster to synthesize, your prompt must include: task goal, file paths, specific instructions, constraints, and success criteria. Same quality standard as Freelancer dispatches.
+4. **Dispatch directly** to the worker pane (`${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
+5. **On `freelancer_finished`** — Read the worker's result JSON, then route through the normal Review Gate (Task Reviewer at 1.1).
+
+**When NOT to use direct dispatch** (use a managed team even for 1 worker):
+- Task requires research before implementation (unknown file paths, unclear root cause)
+- Task is part of a phased sequence where the Subtaskmaster manages phase transitions
+- Specialized team definition applies (go-tui, shell, infra — these have custom roles)
+
+#### Managed Team Spawn (WORKERS_NEEDED >= 2, or complex single-worker tasks)
+
 2. **Spawn team** — Create a team sized to the task:
    ```bash
    /doey-add-window --workers $WORKERS --name "Task $TASK_ID" --task-id $TASK_ID

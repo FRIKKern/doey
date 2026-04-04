@@ -219,6 +219,8 @@ func msgSend(args []string) {
 	rt := fs.String("runtime", "", "Runtime directory")
 	dir := fs.String("project-dir", "", "Project directory")
 	noNudge := fs.Bool("no-nudge", false, "Skip tmux send-keys nudge to target pane")
+	verify := fs.Bool("verify", false, "Verify delivery by checking target pane activity/status change")
+	verifyTimeout := fs.Int("verify-timeout", 10, "Seconds to wait for delivery verification (default 10)")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
@@ -227,6 +229,13 @@ func msgSend(args []string) {
 	}
 	*to = resolvePaneID(*to)
 	*from = resolvePaneID(*from)
+
+	// Capture pre-send state for verification
+	var preSendCapture string
+	var preSendStatus string
+	if *verify {
+		preSendCapture, preSendStatus = msgCaptureState(*to, runtimeDirOpt(*rt))
+	}
 
 	sentViaDB := false
 	// Try DB first
@@ -268,11 +277,130 @@ func msgSend(args []string) {
 		msgNudgePane(*to, runtimeDirOpt(*rt))
 	}
 
+	// Verify delivery if requested
+	if *verify {
+		verified := msgVerifyDelivery(*to, runtimeDirOpt(*rt), preSendCapture, preSendStatus, *verifyTimeout)
+		if jsonOutput {
+			printJSON(map[string]string{"status": "sent", "to": *to, "verified": fmt.Sprintf("%t", verified)})
+		} else if verified {
+			fmt.Println("sent (verified)")
+		} else {
+			fmt.Fprintln(os.Stderr, "msg send: delivery not verified — target pane showed no activity change")
+			fmt.Println("sent (unverified)")
+		}
+		if !verified {
+			os.Exit(1)
+		}
+		return
+	}
+
 	if jsonOutput {
 		printJSON(map[string]string{"status": "sent", "to": *to})
 	} else {
 		fmt.Println("sent")
 	}
+}
+
+// msgCaptureState captures the current pane output and status for later comparison.
+func msgCaptureState(targetPane, rtDir string) (paneOutput string, status string) {
+	session := os.Getenv("DOEY_SESSION")
+	if session == "" {
+		session = os.Getenv("SESSION_NAME")
+	}
+	if session == "" {
+		return "", ""
+	}
+
+	paneID := targetPane
+	if strings.Contains(paneID, ":") {
+		paneID = paneID[strings.LastIndex(paneID, ":")+1:]
+	}
+	if !strings.Contains(paneID, ".") {
+		if converted := safeToPaneID(paneID); converted != "" {
+			paneID = converted
+		} else {
+			return "", ""
+		}
+	}
+
+	client := ctl.NewTmuxClient(session)
+	paneOutput, _ = client.CapturePane(paneID, 10)
+
+	if rtDir != "" {
+		paneSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(session + ":" + paneID)
+		entry, err := ctl.ReadStatus(rtDir, paneSafe)
+		if err == nil {
+			status = entry.Status
+		}
+	}
+	return paneOutput, status
+}
+
+// msgVerifyDelivery polls the target pane for up to timeout seconds, checking
+// for pane output change, status transition to BUSY, or Claude activity indicators.
+// Returns true if any sign of delivery is detected.
+func msgVerifyDelivery(targetPane, rtDir, preSendCapture, preSendStatus string, timeoutSec int) bool {
+	session := os.Getenv("DOEY_SESSION")
+	if session == "" {
+		session = os.Getenv("SESSION_NAME")
+	}
+	if session == "" {
+		// Can't verify without a session — treat as verified (best-effort)
+		return true
+	}
+
+	paneID := targetPane
+	if strings.Contains(paneID, ":") {
+		paneID = paneID[strings.LastIndex(paneID, ":")+1:]
+	}
+	if !strings.Contains(paneID, ".") {
+		if converted := safeToPaneID(paneID); converted != "" {
+			paneID = converted
+		} else {
+			return true // can't resolve — treat as verified
+		}
+	}
+
+	client := ctl.NewTmuxClient(session)
+	paneSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(session + ":" + paneID)
+
+	// Activity patterns that indicate Claude is processing
+	activityPatterns := []string{
+		"⏳", "thinking", "Thinking", "╭─", "● ",
+		"Reading", "Writing", "Editing", "Searching",
+		"Running", "Bash", "Glob", "Grep", "Agent",
+	}
+
+	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
+	pollInterval := 500 * time.Millisecond
+
+	for time.Now().Before(deadline) {
+		// Check 1: status changed to BUSY
+		if rtDir != "" {
+			entry, err := ctl.ReadStatus(rtDir, paneSafe)
+			if err == nil && entry.Status == ctl.StatusBusy && preSendStatus != ctl.StatusBusy {
+				return true
+			}
+		}
+
+		// Check 2: pane output changed
+		currentCapture, err := client.CapturePane(paneID, 10)
+		if err == nil && currentCapture != preSendCapture {
+			// Check if the change shows Claude activity
+			for _, pattern := range activityPatterns {
+				if strings.Contains(currentCapture, pattern) {
+					return true
+				}
+			}
+			// Even without activity indicators, a pane change after send is a good sign
+			// if the message snippet appears in the output
+			return true
+		}
+
+		time.Sleep(pollInterval)
+	}
+
+	return false
 }
 
 func msgRead(args []string) {

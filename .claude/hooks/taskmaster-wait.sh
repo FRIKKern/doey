@@ -71,6 +71,36 @@ _check_stale_heartbeats() {
   [ "$_found" = true ]
 }
 
+_check_stale_booting() {
+  local _sf _line _status _updated _now _boot_ts _age _pane_id _found=false
+  local _timeout="${DOEY_BOOT_TIMEOUT:-60}"
+  _now=$(date +%s)
+  for _sf in "$RUNTIME_DIR/status"/*.status; do
+    [ -f "$_sf" ] || continue
+    _status=""; _updated=""
+    while IFS= read -r _line; do
+      case "$_line" in
+        "STATUS: "*) _status="${_line#STATUS: }" ;;
+        STATUS=*)    _status="${_line#STATUS=}" ;;
+        "UPDATED: "*) _updated="${_line#UPDATED: }" ;;
+        UPDATED=*)    _updated="${_line#UPDATED=}" ;;
+      esac
+    done < "$_sf"
+    [ "$_status" = "BOOTING" ] || continue
+    [ -n "$_updated" ] || continue
+    _boot_ts=$(date -d "$_updated" +%s 2>/dev/null) \
+      || _boot_ts=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${_updated%%[+-]*}" +%s 2>/dev/null) \
+      || continue
+    _age=$(( _now - _boot_ts ))
+    [ "$_age" -ge "$_timeout" ] || continue
+    _pane_id=$(basename "$_sf" .status)
+    printf 'BOOT_STUCK %s age=%ss timeout=%ss\n' "$_pane_id" "$_age" "$_timeout" \
+      > "${RUNTIME_DIR}/status/crash_pane_${_pane_id}" 2>/dev/null || true
+    _found=true
+  done
+  [ "$_found" = true ]
+}
+
 CYCLE_FILE="${RUNTIME_DIR}/status/taskmaster_cycle_count"
 COMPACT_INTERVAL="${DOEY_TASKMASTER_COMPACT_INTERVAL:-20}"
 _taskmaster_cycle=0
@@ -202,6 +232,7 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   set -- "$RUNTIME_DIR/status"/crash_pane_*
   [ -f "${1:-}" ] && _wake "CRASH" "$elapsed"
   _check_stale_heartbeats && _wake "STALE" "$elapsed"
+  _check_stale_booting && _wake "BOOT_STUCK" "$elapsed"
   [ "$_has_queued" = true ] && _wake "QUEUED" "$elapsed"
   return 1
 }
