@@ -107,20 +107,16 @@ Send task to a {{DOEY_ROLE_TEAM_LEAD}}:
 ```bash
 W=2; MGR_PANE=$(grep '^MANAGER_PANE=' "${RUNTIME_DIR}/team_${W}.env" | cut -d= -f2- | tr -d '"')
 TARGET="$SESSION_NAME:${W}.${MGR_PANE}"
+# Canonical helper (source doey-send.sh if not already loaded):
+source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+# Short or long — doey_send_verified handles both with retry + verification:
+doey_send_verified "$TARGET" "Your task description here"
+# Manual fallback (if helper unavailable):
 tmux copy-mode -q -t "$TARGET" 2>/dev/null
-tmux send-keys -t "$TARGET" Escape; sleep 0.1
-# Short (< ~200 chars):
-tmux send-keys -t "$TARGET" "Your task description here" Enter
-# Long — use load-buffer:
-TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
-cat > "$TASKFILE" << 'TASK'
-Detailed multi-line task for Team 2.
-TASK
-tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$TARGET"
-sleep 0.5; tmux send-keys -t "$TARGET" Escape; sleep 0.3; tmux send-keys -t "$TARGET" Enter; rm "$TASKFILE"
+tmux send-keys -t "$TARGET" -- "Your task description here" Enter
 ```
 
-**Verify** (wait 5s): `tmux capture-pane -t "$TARGET" -p -S -5`. Not started → exit copy-mode, re-send Enter.
+`doey_send_verified` handles retry (3x exponential backoff) and delivery verification automatically.
 
 ### Capacity Check
 
