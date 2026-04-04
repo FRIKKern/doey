@@ -220,9 +220,9 @@ if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
       [ -n "$_tteam" ] && continue  # assigned to a team — skip
       _tstatus=$(echo "$_tinfo" | sed -n 's/^Status:[[:space:]]*//p')
       case "$_tstatus" in active|in_progress) ;; *) continue ;; esac
-      _has_active=true
       _active_list="${_active_list}${_tid}: ${_tl_st}\n"
       if [ "$_tl_st" = "active" ]; then
+        _has_active=true
         _task_updated=$(echo "$_tinfo" | sed -n 's/^Created:[[:space:]]*//p')
         _task_ts=0
         if [ -n "$_task_updated" ]; then
@@ -260,7 +260,6 @@ if [ "$_task_scan_done" = false ] && [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; the
         ;;
       in_progress)
         if ! grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null; then
-          _has_active=true
           _active_list="${_active_list}$(basename "$_tf" .task): ${_status}\n"
         fi
         ;;
@@ -280,8 +279,8 @@ _taskmaster_context_check || true
 if [ "$_has_active" = "true" ]; then
   _taskmaster_bump_cycle
   sleep 15
-  # One-shot: return control immediately after sleep — do NOT re-check.
-  # Claude will process any pending input (paste-buffer, messages, etc.)
+  # Re-check for urgent work (messages, crashes, triggers) that arrived during sleep
+  _check_work "15" || true
   _taskmaster_dbg_wake "active_tasks_idle" "15"
   echo "WAKE_REASON=QUEUED"
   printf 'ACTIVE_TASKS %b' "$_active_list"
@@ -296,6 +295,9 @@ if [ ! -f "$_sleep_flag" ] && [ -d "${RUNTIME_DIR}/messages" ]; then
     > "${RUNTIME_DIR}/messages/${_boss_safe}_$(date +%s)_$$.msg"
   touch "$_sleep_flag"
 fi
+
+# Pre-sleep guard: final check before entering blocking wait
+_check_work "0" || true
 
 _sleep_dur=15
 # Use inotifywait for event-driven blocking if available
@@ -319,7 +321,7 @@ if [ "$_trig_found" = true ]; then
   echo "WAKE_REASON=TRIGGERED"
   exit 0
 fi
-# One-shot: return control immediately after sleep/inotifywait.
-# Do NOT re-check — Claude must reach its prompt to process paste-buffer input.
+# Re-check for messages/tasks that arrived during sleep
+_check_work "$_sleep_dur" || true
 _taskmaster_dbg_wake "idle" "$_sleep_dur"
 echo "WAKE_REASON=TIMEOUT"
