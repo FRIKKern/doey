@@ -165,10 +165,7 @@ _taskmaster_context_check() {
       done
     fi
     [ -n "$_task_summary" ] && _brief="${_brief} Active tasks:${_task_summary%,}."
-    tmux copy-mode -q -t "$_full_pane" 2>/dev/null
-    tmux send-keys -t "$_full_pane" Escape 2>/dev/null
-    sleep 0.1
-    tmux send-keys -t "$_full_pane" "$_brief" Enter
+    doey_send_verified "$_full_pane" "$_brief" || true
     _taskmaster_ctx_log "relaunch complete — briefed with active tasks"
     return 0
   fi
@@ -177,10 +174,7 @@ _taskmaster_context_check() {
   if [ "$_ctx_pct" -ge 70 ] && _taskmaster_cooldown_ok "$_CTX_COMPACT_COOLDOWN"; then
     _taskmaster_ctx_log "context at ${_ctx_pct}% — sending /compact"
     date +%s > "$_CTX_COMPACT_COOLDOWN"
-    tmux copy-mode -q -t "$_full_pane" 2>/dev/null
-    tmux send-keys -t "$_full_pane" Escape 2>/dev/null
-    sleep 0.1
-    tmux send-keys -t "$_full_pane" "/compact" Enter
+    doey_send_verified "$_full_pane" "/compact" || true
     return 0
   fi
 }

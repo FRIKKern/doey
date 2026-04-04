@@ -62,20 +62,16 @@ When workers finish and files have changed, send a `commit_request` `.msg` to {{
 
 ```bash
 PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
+# Canonical helper (source doey-send.sh if not already loaded):
+source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+# Short or long — doey_send_verified handles both with retry + verification:
+doey_send_verified "$PANE" "Your task here"
+# Manual fallback (if helper unavailable):
 tmux copy-mode -q -t "$PANE" 2>/dev/null
-tmux send-keys -t "$PANE" Escape; sleep 0.1
-# Short (< ~200 chars):
-tmux send-keys -t "$PANE" "Your task here" Enter
-# Long — use load-buffer:
-TASKFILE=$(mktemp "${RUNTIME_DIR}/task_XXXXXX.txt")
-cat > "$TASKFILE" << 'TASK'
-Detailed multi-line task description here.
-TASK
-tmux load-buffer "$TASKFILE"; tmux paste-buffer -t "$PANE"
-sleep 0.5; tmux send-keys -t "$PANE" Escape; sleep 0.3; tmux send-keys -t "$PANE" Enter; rm "$TASKFILE"
+tmux send-keys -t "$PANE" -- "Your task here" Enter
 ```
 
-Never `send-keys "" Enter` — empty string swallows Enter. **Verify** (wait 5s): `tmux capture-pane -t "$PANE" -p -S -5`. Not started → exit copy-mode, re-send Enter. **Stuck:** `C-c` → `C-u` → `Enter` (0.5s between each). Wait for `❯` before re-dispatching.
+Never `send-keys "" Enter` — empty string swallows Enter. `doey_send_verified` handles retry and verification automatically. **Stuck:** `C-c` -> `C-u` -> `Enter` (0.5s between each). Wait for `❯` before re-dispatching.
 
 ## Messages
 
