@@ -283,11 +283,15 @@ send_to_pane() {
     doey_send_verified "$target" "$msg" 2>/dev/null || true
     return
   fi
-  # Fallback: direct send-keys
+  # Fallback: pre-clear + send-keys + settle + Enter
   tmux copy-mode -q -t "$target" 2>/dev/null
   tmux send-keys -t "$target" Escape 2>/dev/null
   sleep 0.1
-  tmux send-keys -t "$target" "$msg" Enter 2>/dev/null
+  tmux send-keys -t "$target" C-u 2>/dev/null
+  sleep 0.1
+  tmux send-keys -t "$target" -- "$msg" 2>/dev/null
+  sleep 0.15
+  tmux send-keys -t "$target" Enter 2>/dev/null
 }
 
 sanitize_message() {

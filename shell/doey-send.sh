@@ -35,11 +35,12 @@ _doey_send_check_busy() {
 # doey_send_verified <target_pane> <message>
 #
 # Sends a message to a target tmux pane with delivery verification and retry.
-#   - Exits copy-mode first; clears stuck input on retries
-#   - Short messages (<500 chars, single line): send-keys with -- flag + safety-net Enter
-#   - Long/multi-line messages: tmpfile → load-buffer → paste-buffer → Enter + safety-net Enter
+#   - Pre-clears on EVERY attempt: copy-mode -q → Escape → C-u (ensures clean input)
+#   - On retries: also sends C-c to cancel any stuck operation
+#   - Short messages (<500 chars, single line): send-keys with -- flag, settle, Enter
+#   - Long/multi-line messages: tmpfile → load-buffer → paste-buffer → Escape → Enter
 #   - Verifies delivery via activity detection, snippet match, or BUSY status
-#   - If text appears stuck, attempts copy-mode -q → Escape → Enter recovery
+#   - If text appears stuck, attempts Escape → Enter recovery
 #   - Retries up to 3x with exponential backoff (0.5s, 1s, 2s)
 #
 # Returns: 0 on success, 1 on failure after all retries
@@ -52,11 +53,18 @@ doey_send_verified() {
   while [ "$attempt" -lt "$max_retries" ]; do
     attempt=$((attempt + 1))
 
-    # Exit copy-mode
+    # --- Pre-clear: ensure clean input state on EVERY attempt ---
+    # Exit tmux copy-mode, dismiss Claude Code modal/prompt, clear leftover input
     tmux copy-mode -q -t "$target" 2>/dev/null || true
+    tmux send-keys -t "$target" Escape 2>/dev/null || true
+    sleep 0.1
+    tmux send-keys -t "$target" C-u 2>/dev/null || true
+    sleep 0.1
 
-    # On retries, clear any stuck input from previous attempt
+    # On retries, aggressively cancel any stuck operation
     if [ "$attempt" -gt 1 ]; then
+      tmux send-keys -t "$target" C-c 2>/dev/null || true
+      sleep 0.3
       tmux send-keys -t "$target" Escape 2>/dev/null || true
       sleep 0.1
       tmux send-keys -t "$target" C-u 2>/dev/null || true
@@ -71,11 +79,10 @@ doey_send_verified() {
     local msg_len=${#message}
 
     if [ "$has_newline" = "false" ] && [ "$msg_len" -lt 500 ]; then
-      # Short single-line: direct send-keys + safety-net Enter
-      if tmux send-keys -t "$target" -- "$message" Enter 2>/dev/null; then
-        sleep 0.2
-        tmux send-keys -t "$target" Enter 2>/dev/null || true
-      fi
+      # Short single-line: type text, settle, then Enter
+      tmux send-keys -t "$target" -- "$message" 2>/dev/null || true
+      sleep 0.15
+      tmux send-keys -t "$target" Enter 2>/dev/null || true
     else
       # Long/multi-line: tmpfile + load-buffer + paste-buffer
       local tmpfile
@@ -91,8 +98,8 @@ doey_send_verified() {
       fi
       rm -f "$tmpfile"
       sleep 0.3
-      tmux send-keys -t "$target" Enter 2>/dev/null || true
-      # Safety-net Enter
+      # Escape ensures cursor is in submit position after paste
+      tmux send-keys -t "$target" Escape 2>/dev/null || true
       sleep 0.2
       tmux send-keys -t "$target" Enter 2>/dev/null || true
     fi
@@ -133,11 +140,10 @@ doey_send_verified() {
     fi
 
     # --- Stuck-text recovery ---
-    # Text may be typed but not submitted; try copy-mode -q → Escape → Enter
+    # Text may be typed but not submitted; exit modal + resubmit
     tmux copy-mode -q -t "$target" 2>/dev/null || true
-    sleep 0.1
     tmux send-keys -t "$target" Escape 2>/dev/null || true
-    sleep 0.1
+    sleep 0.15
     tmux send-keys -t "$target" Enter 2>/dev/null || true
     sleep 0.5
 
