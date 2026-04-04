@@ -199,8 +199,16 @@ Use `dispatch_task` subject (not `task`) for structured tasks. Includes: `TASK_I
 
 ```bash
 TASK_ID=$(doey task create --title "Title" --type "feature" --description "Description")
-doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 SUMMARY=Summary"
+doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 WORKERS_NEEDED=${N} SUMMARY=Summary"
 ```
+
+**WORKERS_NEEDED estimation** — Include `WORKERS_NEEDED=N` in every dispatch to help Taskmaster right-size the ephemeral team:
+
+| Scope | WORKERS_NEEDED | Examples |
+|-------|----------------|----------|
+| Simple / single-file | 1 | Bug fix, config change, one-file edit |
+| Multi-file feature | 2–3 | New feature touching 2-4 files, API + tests |
+| Large refactor / multi-component | 4–6 | Cross-cutting changes, multi-package work |
 
 For manual dispatch without the skills (fallback only — prefer `/doey-planned-task` or `/doey-instant-task`).
 

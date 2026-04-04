@@ -99,6 +99,22 @@ doey msg send --to 0.1 --from {{DOEY_TASKMASTER_PANE}} --subject status_report -
 
 **Rules:** Never run `git commit`, `git push`, or `gh pr create` directly. All VCS goes through {{DOEY_ROLE_DEPLOYMENT}}.
 
+### Team Despawn
+
+After `deployment_complete` (or task cancellation), despawn the ephemeral team that worked on the task:
+
+1. **Identify team window** — Read `TASK_TEAM` from the task file to find the window index.
+2. **Verify all workers finished** — Check `$RUNTIME_DIR/status/pane_${W}_*.status` — all must be `FINISHED` or `READY`.
+3. **Guard protected teams** — **Never despawn Core Team (window 1) or Reserved {{DOEY_ROLE_FREELANCER}} teams** (`TEAM_TYPE=freelancer` with `RESERVED` status). Only despawn ephemeral task teams (window 2+, non-reserved).
+4. **Kill the window:**
+   ```bash
+   /doey-kill-window $WINDOW_INDEX
+   source "${RUNTIME_DIR}/session.env"  # re-source to update TEAM_WINDOWS
+   ```
+5. **Log the despawn** — `doey task decision --task-id $TASK_ID --title "Team despawned" --body "Window $W despawned after task completion"`.
+
+**On task cancellation:** Same despawn flow — verify workers idle, kill window, log.
+
 ## Dispatch
 
 **ALWAYS check capacity before dispatching.** Before sending ANY task to a team:
@@ -122,57 +138,36 @@ tmux send-keys -t "$TARGET" -- "Your task description here" Enter
 
 `doey_send_verified` handles retry (3x exponential backoff) and delivery verification automatically.
 
-### Capacity Check
+### Per-Task Team Spawn
 
-Before dispatching, assess team availability:
+Each task gets its own ephemeral team, right-sized to the work. Do NOT search for idle teams — spawn fresh.
 
-```bash
-BUSY_COUNT=0; IDLE_TEAMS=""
-for W in $TEAM_WINDOWS; do
-  if doey status list --window "$W" 2>/dev/null | grep -q "BUSY"; then
-    BUSY_COUNT=$((BUSY_COUNT + 1))
-  else
-    IDLE_TEAMS="${IDLE_TEAMS} ${W}"
-  fi
-done
-```
-
-| Condition | Action |
-|-----------|--------|
-| Idle team exists (`IDLE_TEAMS` non-empty) | Dispatch to first idle team |
-| All busy, under `DOEY_MAX_TEAMS` (default 5) | Auto-spawn new team, then dispatch |
-| All busy, at max teams | Implicit queue — leave `TASK_STATUS=active` with no `TASK_TEAM` |
-
-**Auto-spawn:** `/doey-add-window` → wait 15s → re-source `session.env` → dispatch → log to `$RUNTIME_DIR/spawn.log`.
-
-### Team Selection
-
-When a `.task` file arrives, score existing idle teams before dispatching:
-
-1. **Read task metadata** — run `doey task get --id $TASK_ID` to extract `TASK_TYPE`, `TASK_TAGS`, and file paths.
-2. **Score each idle team** — for each team in `IDLE_TEAMS`, read `$RUNTIME_DIR/status/pane_${W}_*.status` for `LAST_TASK_TAGS`, `LAST_TASK_TYPE`, `LAST_FILES`. Compute overlap:
-   - +1 per matching tag, +1 for matching type, +1 per shared file-path prefix (first two directory components)
-   - Normalize to 0–100% of maximum possible score
-3. **Select best-fit team** — pick the team with the highest overlap score.
-
-**Tag-to-team mapping** (for auto-spawn when no good fit exists):
-
-| Tags / Keywords | Team Definition |
-|-----------------|-----------------|
-| tui, go, dashboard, bubble, lipgloss | `.doey/go-tui.team.md` |
-| shell, hooks, skills, bash, scripts | `.doey/shell.team.md` |
-| infrastructure, install, config, ci, deploy | `.doey/infra.team.md` |
-| (no match) | generic (built-in via `/doey-add-window`) |
-
-**Dispatch decision:**
+1. **Count deliverables** — Read the task's subtasks/deliverables from `doey task get --id $TASK_ID`. If {{DOEY_ROLE_BOSS}} included `WORKERS_NEEDED` in the dispatch, use that count. Otherwise: `WORKERS = max(subtask_count, 1)`, capped at 6.
+2. **Spawn team** — Create a team sized to the task:
+   ```bash
+   /doey-add-window --workers $WORKERS --name "Task $TASK_ID" --task-id $TASK_ID
+   ```
+   For specialized tasks, use tag-to-team mapping:
+   | Tags / Keywords | Spawn Command |
+   |-----------------|---------------|
+   | tui, go, dashboard, bubble, lipgloss | `/doey-add-team go-tui` |
+   | shell, hooks, skills, bash, scripts | `/doey-add-team shell` |
+   | infrastructure, install, config, ci, deploy | `/doey-add-team infra` |
+   | (no match) | `/doey-add-window --workers $WORKERS` |
+3. **Wait for ready** — Re-source `session.env` to pick up the new window, then poll until the {{DOEY_ROLE_TEAM_LEAD}} is READY:
+   ```bash
+   source "${RUNTIME_DIR}/session.env"
+   for i in 1 2 3 4 5; do
+     STATUS=$(grep 'STATUS=' "$RUNTIME_DIR/status/pane_${NEW_W}_0.status" 2>/dev/null | cut -d= -f2)
+     [ "$STATUS" = "READY" ] && break; sleep 3
+   done
+   ```
+4. **Dispatch** — Send the task to the new team's {{DOEY_ROLE_TEAM_LEAD}} (pane `${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
 
 | Condition | Action |
 |-----------|--------|
-| Best overlap ≥ 30% | Dispatch to that team |
-| Best overlap < 30% AND a `.team.md` matches task tags | Run `/doey-add-team <name>` to spawn specialized team, then dispatch |
-| Best overlap < 30% AND no `.team.md` matches | Dispatch to any idle generic team |
-
-**Integration:** Team Selection runs AFTER Capacity Check confirms idle capacity exists. If no capacity, Capacity Check handles queuing/spawning first. Team Selection only chooses *which* idle team gets the task.
+| Under `DOEY_MAX_TEAMS` (default 5) | Spawn per-task team, dispatch |
+| At max teams | Implicit queue — leave `TASK_STATUS=active` with no `TASK_TEAM`, dispatch when a team despawns |
 
 ### Queue Drain
 
@@ -324,7 +319,7 @@ API errors are transient — retry after 15-30s, note after 3 consecutive failur
 
 Task files: `${PROJECT_DIR}/.doey/tasks/` (persistent), fallback `${RUNTIME_DIR}/tasks/`. TASK_TEAM is mandatory on dispatch. Update status atomically (`.tmp` + `mv`). After commit: immediately set `pending_user_confirmation`.
 
-**On task_complete:** Extract TASK_ID, check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`. More phases → advance silently. Final/only phase → send to **Review Gate** (pane 1.1). On review PASS → forward to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2). On `deployment_complete` → set `pending_user_confirmation`, notify {{DOEY_ROLE_BOSS}}. On review FAIL → return to team for fixes.
+**On task_complete:** Extract TASK_ID, check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`. More phases → advance silently. Final/only phase → send to **Review Gate** (pane 1.1). On review PASS → forward to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2). On `deployment_complete` → set `pending_user_confirmation`, notify {{DOEY_ROLE_BOSS}}, then **despawn the task's ephemeral team** (see Team Despawn). On review FAIL → return to team for fixes.
 
 **Task intelligence:** Scan for overlap before dispatching. Merge overlapping (`TASK_MERGED_INTO`). Send related tasks to same team.
 

@@ -293,7 +293,7 @@ _doey_load_config
 
 # Grid & Teams
 DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-3}"
-DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-1}"
+DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-0}"
 DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
 DOEY_INITIAL_FREELANCER_TEAMS="${DOEY_INITIAL_FREELANCER_TEAMS:-0}"
 DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
@@ -516,6 +516,7 @@ write_team_env() {
   local team_type="${13:-}"
   local team_def="${14:-}"
   local reserved="${15:-}"
+  local task_id="${16:-}"
   local _tmp="${runtime_dir}/team_${window_index}.env.tmp.$$"
   cat > "$_tmp" << TEAMEOF
 WINDOW_INDEX="${window_index}"
@@ -533,6 +534,7 @@ MANAGER_MODEL="${manager_model}"
 TEAM_TYPE="${team_type}"
 TEAM_DEF="${team_def}"
 RESERVED="${reserved}"
+TASK_ID="${task_id}"
 TEAMEOF
   mv "$_tmp" "${runtime_dir}/team_${window_index}.env"
 }
@@ -3637,7 +3639,7 @@ launch_session_dynamic() {
 
   # Quick mode: minimal defaults, skip wizard
   if [ "$DOEY_QUICK" = "true" ]; then
-    : "${DOEY_INITIAL_TEAMS:=1}"
+    : "${DOEY_INITIAL_TEAMS:=0}"
     : "${DOEY_INITIAL_WORKER_COLS:=1}"
     : "${DOEY_INITIAL_FREELANCER_TEAMS:=0}"
   fi
@@ -4656,6 +4658,7 @@ add_dynamic_team_window() {
   local team_name="${6:-}" team_role="${7:-}" worker_model="${8:-}" manager_model="${9:-}"
   local team_type="${10:-}"
   local reserved="${11:-false}"
+  local task_id="${12:-}"
   # --reserved implies freelancer team type if not already set
   if [ "$reserved" = "true" ] && [ -z "$team_type" ]; then
     team_type="freelancer"
@@ -4703,7 +4706,7 @@ add_dynamic_team_window() {
   local mgr_pane="0"
   [ "$is_freelancer" = "true" ] && mgr_pane=""
 
-  write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved"
+  write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved" "$task_id"
   _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
@@ -4742,7 +4745,7 @@ add_dynamic_team_window() {
     _batch_boot_workers "$session" "$runtime_dir" "$window_index" $_fl_boot_args
 
     # Update worker count: F0 is uncounted (like manager pane), others add to count
-    write_team_env "$runtime_dir" "$window_index" "dynamic" "" "$_fl_worker_count" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved"
+    write_team_env "$runtime_dir" "$window_index" "dynamic" "" "$_fl_worker_count" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved" "$task_id"
   else
     _launch_team_manager "$session" "$runtime_dir" "$window_index"
   fi
@@ -5944,6 +5947,7 @@ HELP
   add-window)
     require_running_session
     _aw_wt_spec="" _aw_team_type="" _aw_reserved="" _aw_grid_cols="" _aw_grid_rows=""
+    _aw_workers="" _aw_name="" _aw_task_id=""
     shift
     while [ $# -gt 0 ]; do
       case "$1" in
@@ -5951,23 +5955,31 @@ HELP
         --type) shift; _aw_team_type="${1:-}" ;;
         --grid) shift; _aw_grid_cols="${1%%x*}"; _aw_grid_rows="${1#*x}" ;;
         --reserved) _aw_reserved="true" ;;
+        --workers) shift; _aw_workers="${1:-}" ;;
+        --name) shift; _aw_name="${1:-}" ;;
+        --task-id) shift; _aw_task_id="${1:-}" ;;
         *) ;; # ignore unknown
       esac
       shift
     done
+    # --workers N → compute column count (ceil(N/2))
+    if [ -n "$_aw_workers" ]; then
+      _aw_grid_cols="$(( (_aw_workers + 1) / 2 ))"
+      [ "$_aw_grid_cols" -lt 1 ] && _aw_grid_cols=1
+    fi
     if [ "$_aw_team_type" = "freelancer" ]; then
       _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
       # Pass grid rows to add_dynamic_team_window and doey_add_column via env var
       export _DOEY_GRID_ROWS="${_aw_grid_rows:-2}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
-        "$_aw_cols" "$_aw_wt_spec" "Freelancers" "" "" "" "freelancer" "$_aw_reserved"
+        "$_aw_cols" "$_aw_wt_spec" "${_aw_name:-Freelancers}" "" "" "" "freelancer" "$_aw_reserved" "$_aw_task_id"
     elif [ -n "$_aw_wt_spec" ] || [ -n "$_aw_grid_cols" ]; then
       _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
-        "$_aw_cols" "$_aw_wt_spec" "" "" "" "" "" "$_aw_reserved"
+        "$_aw_cols" "$_aw_wt_spec" "$_aw_name" "" "" "" "" "$_aw_reserved" "$_aw_task_id"
     else
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
-        "" "" "" "" "" "" "" "$_aw_reserved"
+        "" "" "$_aw_name" "" "" "" "" "$_aw_reserved" "$_aw_task_id"
     fi
     exit 0
     ;;
