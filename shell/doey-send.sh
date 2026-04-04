@@ -10,13 +10,36 @@
 # Bash 3.2 compatible — no associative arrays, no mapfile, no pipe-ampersand.
 set -euo pipefail
 
+# _doey_send_check_activity <captured_output>
+# Returns 0 if the pane output shows signs of Claude processing.
+_doey_send_check_activity() {
+  local captured="$1"
+  printf '%s' "$captured" | grep -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent)' 2>/dev/null
+}
+
+# _doey_send_check_busy <target>
+# Returns 0 if the target pane's status file shows BUSY.
+_doey_send_check_busy() {
+  local target="$1"
+  local runtime_dir="${DOEY_RUNTIME:-${RUNTIME_DIR:-}}"
+  [ -n "$runtime_dir" ] || return 1
+  local target_safe
+  target_safe=$(printf '%s' "$target" | tr ':.-' '_')
+  local status_file="${runtime_dir}/status/${target_safe}.status"
+  [ -f "$status_file" ] || return 1
+  local cur_status
+  cur_status=$(grep '^STATUS:' "$status_file" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
+  [ "$cur_status" = "BUSY" ]
+}
+
 # doey_send_verified <target_pane> <message>
 #
 # Sends a message to a target tmux pane with delivery verification and retry.
-#   - Exits copy-mode first
-#   - Short messages (<200 chars, single line): send-keys with -- flag
-#   - Long/multi-line messages: tmpfile → load-buffer → paste-buffer → Enter
-#   - Verifies delivery via capture-pane or BUSY status check
+#   - Exits copy-mode first; clears stuck input on retries
+#   - Short messages (<500 chars, single line): send-keys with -- flag + safety-net Enter
+#   - Long/multi-line messages: tmpfile → load-buffer → paste-buffer → Enter + safety-net Enter
+#   - Verifies delivery via activity detection, snippet match, or BUSY status
+#   - If text appears stuck, attempts copy-mode -q → Escape → Enter recovery
 #   - Retries up to 3x with exponential backoff (0.5s, 1s, 2s)
 #
 # Returns: 0 on success, 1 on failure after all retries
@@ -32,6 +55,14 @@ doey_send_verified() {
     # Exit copy-mode
     tmux copy-mode -q -t "$target" 2>/dev/null || true
 
+    # On retries, clear any stuck input from previous attempt
+    if [ "$attempt" -gt 1 ]; then
+      tmux send-keys -t "$target" Escape 2>/dev/null || true
+      sleep 0.1
+      tmux send-keys -t "$target" C-u 2>/dev/null || true
+      sleep 0.1
+    fi
+
     # Detect multi-line or long message
     local has_newline=false
     case "$message" in
@@ -39,21 +70,31 @@ doey_send_verified() {
     esac
     local msg_len=${#message}
 
-    if [ "$has_newline" = "false" ] && [ "$msg_len" -lt 200 ]; then
-      # Short single-line: direct send-keys
-      tmux send-keys -t "$target" -- "$message" Enter 2>/dev/null || true
+    if [ "$has_newline" = "false" ] && [ "$msg_len" -lt 500 ]; then
+      # Short single-line: direct send-keys + safety-net Enter
+      if tmux send-keys -t "$target" -- "$message" Enter 2>/dev/null; then
+        sleep 0.2
+        tmux send-keys -t "$target" Enter 2>/dev/null || true
+      fi
     else
       # Long/multi-line: tmpfile + load-buffer + paste-buffer
       local tmpfile
       tmpfile=$(mktemp "${TMPDIR:-/tmp}/doey_send_XXXXXX.txt")
       printf '%s' "$message" > "$tmpfile"
-      tmux load-buffer "$tmpfile" 2>/dev/null || { rm -f "$tmpfile"; continue; }
-      tmux paste-buffer -t "$target" 2>/dev/null || { rm -f "$tmpfile"; continue; }
-      sleep 0.5
-      tmux send-keys -t "$target" Escape 2>/dev/null || true
+      if ! tmux load-buffer "$tmpfile" 2>/dev/null; then
+        rm -f "$tmpfile"
+        continue
+      fi
+      if ! tmux paste-buffer -t "$target" 2>/dev/null; then
+        rm -f "$tmpfile"
+        continue
+      fi
+      rm -f "$tmpfile"
       sleep 0.3
       tmux send-keys -t "$target" Enter 2>/dev/null || true
-      rm -f "$tmpfile"
+      # Safety-net Enter
+      sleep 0.2
+      tmux send-keys -t "$target" Enter 2>/dev/null || true
     fi
 
     # Verify delivery with exponential backoff
@@ -65,40 +106,51 @@ doey_send_verified() {
     esac
     sleep "$verify_delay"
 
-    # Check 1: message text visible in last 5 lines of pane
+    # --- Verification checks ---
     local captured
     captured=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || captured=""
 
-    # Use first 40 chars (or full message if shorter) as verification snippet
+    # Check 1: pane shows Claude activity (thinking, tool use, etc.)
+    if _doey_send_check_activity "$captured"; then
+      return 0
+    fi
+
+    # Check 2: message snippet visible in pane output
     local snippet
     if [ "$msg_len" -gt 40 ]; then
       snippet="${message:0:40}"
     else
       snippet="$message"
     fi
-    # Strip newlines from snippet for grep matching
     snippet=$(printf '%s' "$snippet" | tr '\n' ' ')
-
     if printf '%s' "$captured" | grep -qF "$snippet" 2>/dev/null; then
       return 0
     fi
 
-    # Check 2: target pane status changed to BUSY
-    local runtime_dir="${DOEY_RUNTIME:-${RUNTIME_DIR:-}}"
-    if [ -n "$runtime_dir" ]; then
-      local target_safe
-      target_safe=$(printf '%s' "$target" | tr ':.-' '_')
-      local status_file="${runtime_dir}/status/${target_safe}.status"
-      if [ -f "$status_file" ]; then
-        local cur_status
-        cur_status=$(grep '^STATUS:' "$status_file" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
-        if [ "$cur_status" = "BUSY" ]; then
-          return 0
-        fi
-      fi
+    # Check 3: BUSY status
+    if _doey_send_check_busy "$target"; then
+      return 0
     fi
 
-    # Last attempt — fail
+    # --- Stuck-text recovery ---
+    # Text may be typed but not submitted; try copy-mode -q → Escape → Enter
+    tmux copy-mode -q -t "$target" 2>/dev/null || true
+    sleep 0.1
+    tmux send-keys -t "$target" Escape 2>/dev/null || true
+    sleep 0.1
+    tmux send-keys -t "$target" Enter 2>/dev/null || true
+    sleep 0.5
+
+    # Re-verify after recovery attempt
+    captured=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || captured=""
+    if _doey_send_check_activity "$captured"; then
+      return 0
+    fi
+    if _doey_send_check_busy "$target"; then
+      return 0
+    fi
+
+    # Retry or fail
     if [ "$attempt" -ge "$max_retries" ]; then
       echo "doey_send_verified: delivery failed after $max_retries attempts to $target" >&2
       return 1
