@@ -221,13 +221,9 @@ func (m *PlansModel) SetSize(w, h int) {
 	}
 }
 
-// SetFocused toggles focus state. Resets to list view when gaining focus
-// so the user sees the plan list rather than a stale detail inspection.
+// SetFocused toggles focus state.
 func (m *PlansModel) SetFocused(focused bool) {
 	m.focused = focused
-	if focused {
-		m.leftFocused = true
-	}
 }
 
 // SetPanelOffset sets the absolute Y offset of the panel top in the terminal.
@@ -280,6 +276,11 @@ func (m *PlansModel) SetSnapshot(snap runtime.Snapshot) {
 		m.list.Select(0)
 	}
 	m.detailViewport.GotoTop()
+
+	// Refresh detail content for the newly-selected item (mirrors tasks.go)
+	if m.selectedPlan != nil {
+		m.loadSelectedDetail()
+	}
 
 	// Reset building state when the plan's checkboxes change or plan switches
 	if m.building {
@@ -923,15 +924,14 @@ func (m PlansModel) renderRightPanel(w, h int) string {
 		return lipgloss.NewStyle().Width(w).Height(h).Render(header + "\n" + hint)
 	}
 
-	// Re-render content and feed to viewport each frame so scroll state stays in sync.
-	detail := m.renderPlanDetail(m.selectedPlan)
+	// Viewport content is set by loadSelectedDetail() in SetSnapshot (pointer receiver).
+	// Do NOT call SetContent here — View() is a value receiver so changes are discarded.
 	vpH := h - 7
 	if vpH < 1 {
 		vpH = 1
 	}
 	m.detailViewport.Width = w - 4
 	m.detailViewport.Height = vpH
-	m.detailViewport.SetContent(detail)
 
 	vpView := m.detailViewport.View()
 
