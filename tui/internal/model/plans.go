@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -267,6 +268,9 @@ func (m *PlansModel) SetSnapshot(snap runtime.Snapshot) {
 		m.entries[i].TaskDone = taskDoneByPlan[m.entries[i].ID]
 	}
 
+	// Sort newest first — mirrors Tasks tab sort order.
+	m.sortEntries()
+
 	// Capture currently selected plan ID before rebuilding the list.
 	prevSelectedID := ""
 	if idx := m.list.Index(); idx >= 0 && idx < len(m.entries) {
@@ -312,6 +316,33 @@ func (m *PlansModel) SetSnapshot(snap runtime.Snapshot) {
 			m.buildingPlanID = ""
 		}
 	}
+}
+
+// sortEntries sorts plans by most recently updated first (descending),
+// mirroring the Tasks tab sort order so newest plans appear at the top.
+func (m *PlansModel) sortEntries() {
+	sort.SliceStable(m.entries, func(i, j int) bool {
+		a, b := m.entries[i], m.entries[j]
+		// Sort by Updated descending; fall back to Created.
+		ta := a.Updated
+		if ta == 0 {
+			ta = a.Created
+		}
+		tb := b.Updated
+		if tb == 0 {
+			tb = b.Created
+		}
+		if ta != tb {
+			return ta > tb
+		}
+		// Tiebreaker: plan ID descending (newest first).
+		ai, errA := strconv.Atoi(a.ID)
+		bi, errB := strconv.Atoi(b.ID)
+		if errA == nil && errB == nil {
+			return ai > bi
+		}
+		return a.ID > b.ID
+	})
 }
 
 // parseTimeString tries common time formats and returns a unix timestamp, or 0 on failure.
