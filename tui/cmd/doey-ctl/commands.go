@@ -105,6 +105,7 @@ func runTaskCreate(args []string) {
 	phase := fs.String("phase", "", "task phase (research, review, implementation)")
 	dependsOn := fs.String("depends-on", "", "comma-separated task IDs this depends on")
 	dispatchMode := fs.String("dispatch-mode", "", "dispatch mode")
+	intent := fs.String("intent", "", "task intent / user goal")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.Parse(args)
 
@@ -130,6 +131,7 @@ func runTaskCreate(args []string) {
 			Phase:        *phase,
 			DependsOn:    *dependsOn,
 			DispatchMode: *dispatchMode,
+			Intent:       *intent,
 		}
 		if *planID != 0 {
 			t.PlanID = planID
@@ -324,12 +326,14 @@ func runTaskUpdate(args []string) {
 				t.Summary = *value
 			case "phase":
 				t.Phase = *value
+			case "intent":
+				t.Intent = *value
 			default:
-				validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority", "depends_on", "merged_into", "dispatch_mode", "summary", "phase"}
+				validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority", "depends_on", "merged_into", "dispatch_mode", "summary", "phase", "intent"}
 				if suggestion, ok := fuzzyMatch(*field, validFields); ok {
 					fatal("task update: unknown field '%s'. Did you mean '%s'?\n", *field, suggestion)
 				}
-				fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp, attachments, priority, depends_on, merged_into, dispatch_mode, summary, phase\n", *field)
+				fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp, attachments, priority, depends_on, merged_into, dispatch_mode, summary, phase, intent\n", *field)
 			}
 
 			if err := s.UpdateTask(t); err != nil {
@@ -534,6 +538,9 @@ func runTaskGet(args []string) {
 			}
 			if t.Description != "" {
 				fmt.Printf("Description: %s\n", t.Description)
+			}
+			if t.Intent != "" {
+				fmt.Printf("Intent:      %s\n", t.Intent)
 			}
 			fmt.Printf("Phase:       %d/%d\n", t.CurrentPhase, t.TotalPhases)
 			fmt.Printf("Created:     %s\n", time.Unix(t.CreatedAt, 0).Format(time.RFC3339))
