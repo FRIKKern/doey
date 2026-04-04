@@ -187,19 +187,23 @@ _taskmaster_context_check() {
 
 _check_work() {  # Exits script if work found, returns 1 otherwise
   local elapsed="$1"
-  if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
-    rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null; _wake "TRIGGERED" "$elapsed"
+  local _trig_found=false _tf
+  [ -f "$TRIGGER" ] && _trig_found=true
+  for _tf in "${RUNTIME_DIR}/triggers/"*; do [ -f "$_tf" ] && { _trig_found=true; break; }; done
+  if [ "$_trig_found" = true ]; then
+    rm -f "$TRIGGER" "${RUNTIME_DIR}/triggers/"* 2>/dev/null; _wake "TRIGGERED" "$elapsed"
   fi
   # Check for unread messages via unified msg command (fast path)
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
     _unread=$(doey msg count --to "$TASKMASTER_PANE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
     [ "${_unread:-0}" -gt 0 ] && _wake "MSG" "$elapsed"
+  else
+    # File-based message check (fallback) — match both full and short pane safe prefixes
+    local _mf _pane_safe="${TASKMASTER_PANE//[-:.]/_}"
+    for _mf in "$MSG_DIR"/${TASKMASTER_SAFE}_*.msg "$MSG_DIR"/"${_pane_safe}"_*.msg; do
+      [ -f "$_mf" ] && _wake "MSG" "$elapsed"
+    done
   fi
-  # File-based message check (fallback) — match both full and short pane safe prefixes
-  local _mf _pane_safe="${TASKMASTER_PANE//[-:.]/_}"
-  for _mf in "$MSG_DIR"/${TASKMASTER_SAFE}_*.msg "$MSG_DIR"/"${_pane_safe}"_*.msg; do
-    [ -f "$_mf" ] && _wake "MSG" "$elapsed"
-  done
   if _has_new_results; then _mark_results_seen; _wake "FINISHED" "$elapsed"; fi
   set -- "$RUNTIME_DIR/status"/crash_pane_*
   [ -f "${1:-}" ] && _wake "CRASH" "$elapsed"
@@ -220,6 +224,8 @@ if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
       _tinfo=$(doey-ctl task get --id "$_tid" --project-dir "$PROJECT_DIR" 2>/dev/null) || continue
       _tteam=$(echo "$_tinfo" | sed -n 's/^Team:[[:space:]]*//p')
       [ -n "$_tteam" ] && continue  # assigned to a team — skip
+      _tstatus=$(echo "$_tinfo" | sed -n 's/^Status:[[:space:]]*//p')
+      case "$_tstatus" in active|in_progress) ;; *) continue ;; esac
       _has_active=true
       _active_list="${_active_list}${_tid}: ${_tl_st}\n"
       if [ "$_tl_st" = "active" ]; then
@@ -310,8 +316,11 @@ else
   sleep "$_sleep_dur"
 fi
 # Consume trigger files written during sleep/inotifywait (race edge case)
-if [ -f "$TRIGGER" ] || [ -f "$TRIGGER2" ]; then
-  rm -f "$TRIGGER" "$TRIGGER2" 2>/dev/null
+_trig_found=false
+[ -f "$TRIGGER" ] && _trig_found=true
+for _tf in "${RUNTIME_DIR}/triggers/"*; do [ -f "$_tf" ] && { _trig_found=true; break; }; done
+if [ "$_trig_found" = true ]; then
+  rm -f "$TRIGGER" "${RUNTIME_DIR}/triggers/"* 2>/dev/null
   _taskmaster_dbg_wake "trigger_post_sleep" "$_sleep_dur"
   echo "WAKE_REASON=TRIGGERED"
   exit 0
