@@ -3474,7 +3474,7 @@ check_doctor() {
     local _doc_tm_status="${_doc_rt}/status/${_doc_tm_safe}.status"
     if [[ -f "$_doc_tm_status" ]]; then
       local _doc_tm_state
-      _doc_tm_state="$(grep '^STATUS=' "$_doc_tm_status" 2>/dev/null | cut -d= -f2- || true)"
+      _doc_tm_state="$(grep '^STATUS' "$_doc_tm_status" 2>/dev/null | head -1 | sed 's/^STATUS[=: ]*//; s/^ *//' || true)"
       case "$_doc_tm_state" in
         BUSY|READY|WORKING)
           # Also check staleness via doey-ctl if available
