@@ -74,7 +74,7 @@ send_msg_to_taskmaster() {
   local rc=0; ensure_taskmaster_alive "$runtime_dir" "$session_name" || rc=$?
   [ "$rc" -eq 2 ] && return 1
 
-  # Fast path: doey msg send (auto-detects DB, fires trigger internally)
+  # Fast path: doey msg send with delivery verification
   local _project_dir="${DOEY_PROJECT_DIR:-${PROJECT_DIR:-}}"
   if command -v doey-ctl >/dev/null 2>&1; then
     if doey msg send \
@@ -83,10 +83,12 @@ send_msg_to_taskmaster() {
         --subject "$subject" \
         --body "$body" \
         --runtime "$runtime_dir" \
+        --verify \
         ${_project_dir:+--project-dir "$_project_dir"} 2>/dev/null; then
       touch "${runtime_dir}/status/taskmaster_trigger" 2>/dev/null || true
       return 0
     fi
+    # Verification failed or send failed — fall through to shell implementation
   fi
 
   # Fallback: shell implementation

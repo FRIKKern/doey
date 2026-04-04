@@ -324,6 +324,7 @@ DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-2}"
 DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
 DOEY_IDLE_REMOVE_AFTER="${DOEY_IDLE_REMOVE_AFTER:-300}"
 DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
+DOEY_BOOT_TIMEOUT="${DOEY_BOOT_TIMEOUT:-60}"
 
 # Drain pending terminal escape responses (OSC 11, CPR) from pane stdin before Claude launch.
 # With allow-passthrough on, the outer terminal may respond to escape queries from other panes,
@@ -3460,6 +3461,47 @@ check_doctor() {
     _doc_check skip "Task counter" ".doey/tasks/ exists but no .next_id yet"
   fi
 
+  # Taskmaster responsiveness — only when a session is running
+  local _doc_name _doc_session
+  _doc_name="$(find_project "$PROJECT_DIR" 2>/dev/null || true)"
+  _doc_session="doey-${_doc_name}"
+  if [[ -n "$_doc_name" ]] && session_exists "$_doc_session" 2>/dev/null; then
+    local _doc_rt
+    _doc_rt="$(tmux show-environment -t "$_doc_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2- || true)"
+    if [[ -z "$_doc_rt" ]]; then _doc_rt="/tmp/doey/${_doc_name}"; fi
+    local _doc_tm_safe
+    _doc_tm_safe="$(printf '%s' "${_doc_session}:1.0" | tr ':-.' '___')"
+    local _doc_tm_status="${_doc_rt}/status/${_doc_tm_safe}.status"
+    if [[ -f "$_doc_tm_status" ]]; then
+      local _doc_tm_state
+      _doc_tm_state="$(grep '^STATUS=' "$_doc_tm_status" 2>/dev/null | cut -d= -f2- || true)"
+      case "$_doc_tm_state" in
+        BUSY|READY|WORKING)
+          # Also check staleness via doey-ctl if available
+          if command -v doey-ctl >/dev/null 2>&1; then
+            if doey-ctl health check --runtime "$_doc_rt" "$_doc_tm_safe" >/dev/null 2>&1; then
+              _doc_check ok "Taskmaster alive" "${_doc_tm_state} (responsive)"
+            else
+              _doc_check warn "Taskmaster stale" "${_doc_tm_state} but not updated recently"
+            fi
+          else
+            _doc_check ok "Taskmaster alive" "$_doc_tm_state"
+          fi
+          ;;
+        FINISHED|RESERVED)
+          _doc_check warn "Taskmaster idle" "$_doc_tm_state"
+          ;;
+        *)
+          _doc_check warn "Taskmaster status" "${_doc_tm_state:-unknown}"
+          ;;
+      esac
+    else
+      _doc_check warn "Taskmaster status" "no status file (session running but Taskmaster not reporting)"
+    fi
+  else
+    _doc_check skip "Taskmaster alive" "no running session for $(pwd)"
+  fi
+
   # ── Summary footer ──
   printf '\n'
   local _doc_total=$((_DOC_OK + _DOC_WARN + _DOC_FAIL))
@@ -4135,6 +4177,50 @@ _read_team_state() {
   return 0
 }
 
+# Check for workers stuck in BOOTING state past the timeout.
+# Runs as a background watchdog after _batch_boot_workers. For each status file
+# still showing BOOTING after DOEY_BOOT_TIMEOUT seconds, transitions it to READY
+# and logs a warning so the Taskmaster/Subtaskmaster can detect the issue.
+# Usage: _check_boot_timeouts <runtime_dir> <session> <team_window> <pane_idx:worker_num> ...
+_check_boot_timeouts() {
+  local runtime_dir="$1" session="$2" team_window="$3"
+  shift 3
+
+  local timeout="${DOEY_BOOT_TIMEOUT:-60}"
+  local now pair pane_idx safe status_file status updated_str updated_epoch age
+  now=$(date '+%s')
+
+  for pair in "$@"; do
+    pane_idx="${pair%%:*}"
+    safe="${session}:${team_window}.${pane_idx}"
+    safe="${safe//[-:.]/_}"
+    status_file="${runtime_dir}/status/${safe}.status"
+
+    [ -f "$status_file" ] || continue
+    status=$(grep '^STATUS: ' "$status_file" 2>/dev/null | head -1 | cut -d' ' -f2-) || continue
+    [ "$status" = "BOOTING" ] || continue
+
+    # Parse the UPDATED timestamp
+    updated_str=$(grep '^UPDATED: ' "$status_file" 2>/dev/null | head -1 | cut -d' ' -f2-) || continue
+    [ -n "$updated_str" ] || continue
+    # Cross-platform: GNU date -d, BSD date -j, python3 fallback
+    updated_epoch=$(date -d "$updated_str" '+%s' 2>/dev/null) \
+      || updated_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S' "$updated_str" '+%s' 2>/dev/null) \
+      || updated_epoch=$(python3 -c "import datetime,sys; print(int(datetime.datetime.fromisoformat(sys.argv[1]).timestamp()))" "$updated_str" 2>/dev/null) \
+      || updated_epoch=""
+    [ -n "$updated_epoch" ] || continue
+
+    age=$(( now - updated_epoch ))
+    if [ "$age" -ge "$timeout" ]; then
+      mkdir -p "${runtime_dir}/logs"
+      printf '%s WARN: pane %s:%s.%s stuck in BOOTING for %ds (timeout=%ds) — forcing READY\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$session" "$team_window" "$pane_idx" "$age" "$timeout" \
+        >> "${runtime_dir}/logs/boot-timeout.log"
+      write_pane_status "$runtime_dir" "${session}:${team_window}.${pane_idx}" "READY"
+    fi
+  done
+}
+
 # Boot multiple workers in parallel: send all launch commands, then wait once.
 # Usage: _batch_boot_workers <session> <runtime_dir> <team_window> <pane_idx:worker_num> ...
 # Each trailing arg is a pane_idx:worker_num pair (e.g. "1:1" "2:2" "5:3").
@@ -4220,6 +4306,14 @@ _batch_boot_workers() {
   # Phase 3: Single sleep for auth stagger (O(1) instead of O(N))
   if [ "$_bbw_count" -gt 0 ]; then
     sleep $DOEY_WORKER_LAUNCH_DELAY
+  fi
+
+  # Phase 4: Schedule background boot-timeout watchdog
+  if [ "$_bbw_count" -gt 0 ]; then
+    (
+      sleep "${DOEY_BOOT_TIMEOUT:-60}"
+      _check_boot_timeouts "$runtime_dir" "$session" "$team_window" "$@"
+    ) &
   fi
 }
 
@@ -4442,6 +4536,12 @@ _launch_team_manager() {
   tmux send-keys -t "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "$_mgr_pane_title"
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
+
+  # Background boot-timeout watchdog for manager pane
+  (
+    sleep "${DOEY_BOOT_TIMEOUT:-60}"
+    _check_boot_timeouts "$runtime_dir" "$session" "$window_index" "0:0"
+  ) &
 }
 
 _brief_team() {
@@ -4664,8 +4764,26 @@ add_team_from_def() {
     sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
     tmux send-keys -t "${session}:${window_index}.${_w_i}" "${_DRAIN_STDIN}${_w_cmd}" Enter
     tmux select-pane -t "${session}:${window_index}.${_w_i}" -T "$w_name"
+    # Write READY status so Taskmaster/Subtaskmaster can dispatch immediately
+    write_pane_status "$runtime_dir" "${session}:${window_index}.${_w_i}" "READY"
     _w_i=$((_w_i + 1))
   done
+
+  # Write READY for manager pane (matches _launch_team_manager pattern)
+  write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
+
+  # Schedule background boot-timeout watchdog (matches _batch_boot_workers Phase 4)
+  if [ "$max_pane" -gt 0 ]; then
+    local _atd_pairs="" _atd_k=1
+    while [ "$_atd_k" -le "$max_pane" ]; do
+      _atd_pairs="${_atd_pairs} ${_atd_k}:${_atd_k}"
+      _atd_k=$((_atd_k + 1))
+    done
+    (
+      sleep "${DOEY_BOOT_TIMEOUT:-60}"
+      _check_boot_timeouts "$runtime_dir" "$session" "$window_index" $_atd_pairs
+    ) &
+  fi
 
   # Build worker pane list, apply manager-left layout, and name window
   _build_worker_pane_list "$session" "$window_index"
@@ -4987,6 +5105,20 @@ list_team_windows() {
 # ── E2E Test Runner ───────────────────────────────────────────────────
 
 run_test() {
+  # Route named test suites before processing E2E flags
+  case "${1:-}" in
+    dispatch)
+      local _repo_dir
+      _repo_dir="$(resolve_repo_dir)"
+      local _test_script="${_repo_dir}/tests/test-dispatch-chain.sh"
+      if [[ ! -f "$_test_script" ]]; then
+        doey_error "Test script not found: $_test_script"
+        return 1
+      fi
+      exec bash "$_test_script"
+      ;;
+  esac
+
   local keep=false open=false grid="3x2"
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -5186,6 +5318,7 @@ doey_config() {
       printf "    DOEY_WORKER_MODEL         = %s\n" "${DOEY_WORKER_MODEL}"
       printf "    DOEY_WORKER_LAUNCH_DELAY  = %s\n" "${DOEY_WORKER_LAUNCH_DELAY}"
       printf "    DOEY_TEAM_LAUNCH_DELAY    = %s\n" "${DOEY_TEAM_LAUNCH_DELAY}"
+      printf "    DOEY_BOOT_TIMEOUT         = %s\n" "${DOEY_BOOT_TIMEOUT}"
       printf "\n"
       ;;
     --global|"")
@@ -5846,6 +5979,7 @@ case "${1:-}" in
     remove     Unregister a project (by name) or worker column (by number)
     uninstall  Remove all Doey files (keeps git repo and agent-memory)
     test       Run E2E integration test (--keep, --open, --grid NxM)
+    test dispatch  Test dispatch chain reliability (requires running session)
     dynamic    Launch with dynamic grid (add workers on demand)
     add        Add a worker column (2 workers) to a dynamic grid session
     add-team   Add a team window with its own ${DOEY_ROLE_TEAM_LEAD}+Workers
