@@ -131,9 +131,6 @@ TARGET="$SESSION_NAME:${W}.${MGR_PANE}"
 source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
 # Short or long — doey_send_verified handles both with retry + verification:
 doey_send_verified "$TARGET" "Your task description here"
-# Manual fallback (if helper unavailable):
-tmux copy-mode -q -t "$TARGET" 2>/dev/null
-tmux send-keys -t "$TARGET" -- "Your task description here" Enter
 ```
 
 `doey_send_verified` handles retry (3x exponential backoff) and delivery verification automatically.
@@ -157,9 +154,7 @@ else
   if [ "$CUR_STATUS" = "BUSY" ]; then
     echo "✓ Dispatch verified — target $TARGET status is BUSY"
   else
-    echo "⚠ Dispatch NOT confirmed — retrying with Escape prefix"
-    tmux send-keys -t "$TARGET" Escape 2>/dev/null || true
-    sleep 0.3
+    echo "⚠ Dispatch NOT confirmed — retrying via doey_send_verified"
     source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
     doey_send_verified "$TARGET" "$DISPATCH_MSG"
     sleep 10

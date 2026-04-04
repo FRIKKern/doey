@@ -45,7 +45,9 @@ ensure_taskmaster_alive() {
   fi
 
   # Stale or missing — wake Taskmaster
-  tmux send-keys -t "${session_name}:${taskmaster_pane}" "" 2>/dev/null || true
+  if command -v doey-ctl >/dev/null 2>&1; then
+    doey-ctl nudge "${session_name}:${taskmaster_pane}" 2>/dev/null || true
+  fi
   touch "${runtime_dir}/status/taskmaster_trigger" 2>/dev/null || true
   sleep 3
 

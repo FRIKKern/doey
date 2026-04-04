@@ -52,10 +52,9 @@ if [ "$_sm_alive" = false ]; then
   if command -v doey-ctl >/dev/null 2>&1; then
     doey-ctl nudge "{{DOEY_TASKMASTER_PANE}}" 2>/dev/null || true
   else
-    # Fallback: direct send-keys wake
-    tmux copy-mode -q -t "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" 2>/dev/null
-    tmux send-keys -t "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" Escape; sleep 0.1
-    tmux send-keys -t "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" "Check your messages and resume." Enter
+    # Fallback: doey_send_verified wake
+    source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+    doey_send_verified "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" "Check your messages and resume."
   fi
   sleep 3
 fi
