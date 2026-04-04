@@ -4718,9 +4718,16 @@ add_dynamic_team_window() {
   local is_freelancer="false"
   [ "$team_type" = "freelancer" ] && is_freelancer="true"
 
-  # Freelancer teams: panes 0+1 form the base (F0, F1), no extra columns by default
+  # Freelancer teams: panes 0+1 form the base column (F0, F1).
+  # Extra columns beyond the base are added by the loop below.
+  # If caller specified columns (e.g. --grid 3x2 → initial_cols=3), subtract 1
+  # for the base column. If no columns specified, default to 0 extra.
   if [ "$is_freelancer" = "true" ]; then
-    initial_cols=0
+    if [ -n "${4:-}" ] && [ "$initial_cols" -gt 0 ] 2>/dev/null; then
+      initial_cols=$((initial_cols - 1))
+    else
+      initial_cols=0
+    fi
   fi
 
   local window_index
