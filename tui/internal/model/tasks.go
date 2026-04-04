@@ -104,6 +104,99 @@ func attachmentEmoji(t string) string {
 	}
 }
 
+// renderFileTree builds a directory-grouped file tree from task and result file lists.
+func renderFileTree(t styles.Theme, taskFiles []string, result *runtime.TaskResult) string {
+	// Merge and dedup
+	seen := make(map[string]bool)
+	var allFiles []string
+	for _, f := range taskFiles {
+		if f != "" && !seen[f] {
+			seen[f] = true
+			allFiles = append(allFiles, f)
+		}
+	}
+	if result != nil {
+		for _, f := range result.FilesChanged {
+			if f != "" && !seen[f] {
+				seen[f] = true
+				allFiles = append(allFiles, f)
+			}
+		}
+	}
+	if len(allFiles) == 0 {
+		return ""
+	}
+
+	// Group by directory
+	dirFiles := make(map[string][]string)
+	for _, f := range allFiles {
+		dir := filepath.Dir(f)
+		if dir == "." {
+			dir = ""
+		}
+		base := filepath.Base(f)
+		dirFiles[dir] = append(dirFiles[dir], base)
+	}
+
+	// Sort directories and files within each
+	var dirs []string
+	for d := range dirFiles {
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
+	for _, d := range dirs {
+		sort.Strings(dirFiles[d])
+	}
+
+	totalFiles := len(allFiles)
+	cap := 20
+	overflow := 0
+	if totalFiles > cap {
+		overflow = totalFiles - cap
+	}
+
+	sep := lipgloss.NewStyle().Foreground(t.Separator)
+	dirStyle := lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
+	fileStyle := lipgloss.NewStyle().Foreground(t.Text)
+
+	var lines []string
+	lines = append(lines, sep.Render("╭ ")+lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(fmt.Sprintf("Files Changed (%d)", totalFiles)))
+
+	remaining := cap
+	for _, dir := range dirs {
+		if remaining <= 0 {
+			break
+		}
+		displayDir := dir
+		if displayDir == "" {
+			displayDir = "./"
+		} else {
+			displayDir += "/"
+		}
+		lines = append(lines, sep.Render("│  ")+dirStyle.Render(displayDir))
+
+		files := dirFiles[dir]
+		if len(files) > remaining {
+			files = files[:remaining]
+		}
+		for i, f := range files {
+			connector := "├─"
+			if i == len(files)-1 {
+				connector = "└─"
+			}
+			lines = append(lines, sep.Render("│    ")+sep.Render(connector+" ")+fileStyle.Render(f))
+			remaining--
+		}
+	}
+
+	if overflow > 0 {
+		lines = append(lines, sep.Render("│  ")+lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(fmt.Sprintf("... and %d more", overflow)))
+	}
+	lines = append(lines, sep.Render("╰"))
+
+	return strings.Join(lines, "\n")
+}
+
 // TasksModel displays tasks in a split-pane layout with list left, detail right.
 type TasksModel struct {
 	// Data
@@ -1425,6 +1518,12 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		if res.ToolCalls > 0 {
 			sections = append(sections, styles.MetaLine(t, "Tool Calls", fmt.Sprintf("%d", res.ToolCalls)))
 		}
+	}
+
+	// Files Changed — directory-grouped tree
+	if fileTree := renderFileTree(t, task.FilesChanged, m.detailResult); fileTree != "" {
+		sections = append(sections, "")
+		sections = append(sections, fileTree)
 	}
 
 	// Decision Log (last 3 entries)
