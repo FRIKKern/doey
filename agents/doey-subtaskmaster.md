@@ -385,7 +385,13 @@ When a worker reports failure:
 
 ## Notify Taskmaster When Done
 
-When your task is complete, just finish normally. The stop hook will automatically notify the Taskmaster.
+When your task is complete, **first bulk-close any remaining subtasks** so the TUI shows correct counts, then finish normally. The stop hook will automatically notify the Taskmaster.
+
+```bash
+# Before finishing: mark all pending/in_progress subtasks as done
+doey task subtask list --task-id $TASK_ID  # check STATUS column for non-done entries
+doey task subtask update --task-id $TASK_ID --subtask-id $SEQ --status done  # for each pending subtask
+```
 
 **Always synthesize before finishing.** The Taskmaster gets your distilled assessment — what was done, what worked, what didn't, what's next — not a dump of worker output.
 

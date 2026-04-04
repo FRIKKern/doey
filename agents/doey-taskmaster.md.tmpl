@@ -319,7 +319,14 @@ API errors are transient — retry after 15-30s, note after 3 consecutive failur
 
 Task files: `${PROJECT_DIR}/.doey/tasks/` (persistent), fallback `${RUNTIME_DIR}/tasks/`. TASK_TEAM is mandatory on dispatch. Update status atomically (`.tmp` + `mv`). After commit: immediately set `pending_user_confirmation`.
 
-**On task_complete:** Extract TASK_ID, check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`. More phases → advance silently. Final/only phase → send to **Review Gate** (pane 1.1). On review PASS → forward to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2). On `deployment_complete` → set `pending_user_confirmation`, notify {{DOEY_ROLE_BOSS}}, then **despawn the task's ephemeral team** (see Team Despawn). On review FAIL → return to team for fixes.
+**On task_complete:** Extract TASK_ID, check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`. More phases → advance silently. Final/only phase → **bulk-mark all pending subtasks done** (see below), then send to **Review Gate** (pane 1.1). On review PASS → forward to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2). On `deployment_complete` → set `pending_user_confirmation`, notify {{DOEY_ROLE_BOSS}}, then **despawn the task's ephemeral team** (see Team Despawn). On review FAIL → return to team for fixes.
+
+**Bulk-close subtasks on completion:** When a task completes its final phase, mark all remaining non-done subtasks as done so the TUI count reflects reality:
+```bash
+# List subtasks, find pending/in_progress/review ones, mark each done
+doey task subtask list --task-id $TASK_ID  # check STATUS column
+doey task subtask update --task-id $TASK_ID --subtask-id $SEQ --status done  # for each pending subtask
+```
 
 **Task intelligence:** Scan for overlap before dispatching. Merge overlapping (`TASK_MERGED_INTO`). Send related tasks to same team.
 
