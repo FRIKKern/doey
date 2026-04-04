@@ -7,5 +7,6 @@
 !.doey/plans/
 !.doey/plans/*.md
 tui/doey-ctl
+tui/doey-loading
 tui/doey-router
 tui/gen-constants
