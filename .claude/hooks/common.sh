@@ -27,6 +27,12 @@ _DOEY_ROLES_LOADED=false
 if [ -n "$_DOEY_ROLES_FILE" ]; then
     source "$_DOEY_ROLES_FILE"
     _DOEY_ROLES_LOADED=true
+    # Source canonical send-keys helper (lives alongside doey-roles.sh)
+    _doey_send_file="$(dirname "$_DOEY_ROLES_FILE")/doey-send.sh"
+    if [ -f "$_doey_send_file" ]; then
+        source "$_doey_send_file"
+    fi
+    unset _doey_send_file
 else
     echo "[doey] WARNING: doey-roles.sh not found — role detection unavailable" >&2
 fi
@@ -272,6 +278,12 @@ is_doey_expert() {
 
 send_to_pane() {
   local target="$1" msg="$2"
+  # Delegate to canonical helper if available
+  if type doey_send_verified >/dev/null 2>&1; then
+    doey_send_verified "$target" "$msg" 2>/dev/null || true
+    return
+  fi
+  # Fallback: direct send-keys
   tmux copy-mode -q -t "$target" 2>/dev/null
   tmux send-keys -t "$target" Escape 2>/dev/null
   sleep 0.1

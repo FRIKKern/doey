@@ -390,6 +390,23 @@ _build_tui() {
     printf " ${DIM}skipped${RESET}\n"
   fi
 
+  # Build doey-loading (startup loading screen — optional)
+  printf "         ${DIM}→ building doey-loading...${RESET}"
+  set +e
+  if type _build_go_binary >/dev/null 2>&1; then
+    _build_go_binary "tui" ./cmd/doey-loading/ "$HOME/.local/bin/doey-loading" 2>/dev/null
+  else
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-loading" ./cmd/doey-loading/) 2>/dev/null
+  fi
+  local ld_rc=$?
+  set -e
+  if [ $ld_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-loading" ]; then
+    printf " ${SUCCESS}✓${RESET}\n"
+    detail "~/.local/bin/doey-loading (built from source)"
+  else
+    printf " ${DIM}skipped${RESET}\n"
+  fi
+
   return $rc
 }
 

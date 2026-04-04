@@ -18,7 +18,8 @@ _GO_HELPERS_PROJECT_DIR="$(cd "$_GO_HELPERS_SCRIPT_DIR/.." && pwd)"
 _DOEY_GO_TARGETS="doey-tui|tui|./cmd/doey-tui/|${HOME}/.local/bin/doey-tui
 doey-ctl|tui|./cmd/doey-ctl/|${HOME}/.local/bin/doey-ctl
 doey-router|tui|./cmd/doey-router/|${HOME}/.local/bin/doey-router
-doey-remote-setup|tui|./cmd/doey-remote-setup/|${HOME}/.local/bin/doey-remote-setup"
+doey-remote-setup|tui|./cmd/doey-remote-setup/|${HOME}/.local/bin/doey-remote-setup
+doey-loading|tui|./cmd/doey-loading/|${HOME}/.local/bin/doey-loading"
 
 # ── _find_go_bin ─────────────────────────────────────────────────────
 # Find the Go binary across common install locations.
