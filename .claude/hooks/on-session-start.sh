@@ -100,12 +100,21 @@ PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.-' '_')
 mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/scratchpad"
 atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
 
-# Write BOOTING status so other components know this pane exists but isn't ready yet
+# Write BOOTING status so other components know this pane exists but isn't ready yet.
+# Skip if status is already READY — doey.sh pre-writes READY for key panes so the
+# loading screen can detect them immediately. Overwriting would create a race where
+# the loading screen sees BOOTING and hangs until a briefing flips it back.
 if [ "$ROLE" != "info_panel" ]; then
-  _boot_now=$(date '+%Y-%m-%dT%H:%M:%S%z')
-  printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$_boot_now" "BOOTING" "startup" \
-    > "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" \
-    && mv "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+  _existing_status=""
+  if [ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.status" ]; then
+    _existing_status=$(grep '^STATUS: ' "${RUNTIME_DIR}/status/${PANE_SAFE}.status" 2>/dev/null | head -1 | cut -d' ' -f2-) || _existing_status=""
+  fi
+  if [ "$_existing_status" != "READY" ]; then
+    _boot_now=$(date '+%Y-%m-%dT%H:%M:%S%z')
+    printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$_boot_now" "BOOTING" "startup" \
+      > "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" \
+      && mv "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+  fi
 fi
 
 wt_dir=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
