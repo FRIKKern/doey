@@ -4038,7 +4038,7 @@ rebalance_grid_layout() {
       w=$((worker_area / worker_cols))
     fi
     local tp="${pane_ids[$wi]}"
-    body+=","
+    [ -n "$body" ] && body+=","
     # Determine panes in this column: 2 (or 1 if remainder)
     local _rgl_col_panes=2
     local _rgl_remaining=$((num_panes - wi))
