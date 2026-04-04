@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/doey-cli/doey/tui/internal/ctl"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 )
 
@@ -183,23 +184,14 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 	}
 }
 
-// sendToBoss sends a text command to the Boss pane (0.1) via tmux send-keys.
+// sendToBoss sends a text command to the Boss pane (0.1) via verified delivery.
 func sendToBoss(text string) error {
 	sessionName := os.Getenv("SESSION_NAME")
 	if sessionName == "" {
 		sessionName = "doey-doey"
 	}
-	pane := sessionName + ":0.1"
-	// Clear copy-mode and send Escape to ensure clean input state.
-	exec.Command("tmux", "copy-mode", "-q", "-t", pane).Run()
-	exec.Command("tmux", "send-keys", "-t", pane, "Escape").Run()
-	time.Sleep(200 * time.Millisecond)
-	cmd := exec.Command("tmux", "send-keys", "-t", pane, text, "Enter")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", err, out)
-	}
-	return nil
+	c := ctl.NewTmuxClient(sessionName)
+	return c.SendVerified("0.1", text)
 }
 
 // SpawnFreelancerCmd sends a "/doey-add-team freelancer" command to the Boss pane.

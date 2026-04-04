@@ -1564,24 +1564,11 @@ func nudgePaneStateAware(client *ctl.TmuxClient, sess, rtDir, pane, prompt strin
 
 func nudgePane(client *ctl.TmuxClient, pane, prompt string, verbose bool) error {
 	if verbose {
-		fmt.Fprintf(os.Stderr, "Nudging %s... sending Escape... ", pane)
+		fmt.Fprintf(os.Stderr, "Nudging %s via SendVerified... ", pane)
 	}
 
-	// Exit copy-mode / cancel current input
-	if err := client.SendKeys(pane, "Escape"); err != nil {
-		return fmt.Errorf("send Escape to %s: %w", pane, err)
-	}
-
-	if verbose {
-		fmt.Fprintf(os.Stderr, "waiting... ")
-	}
-	time.Sleep(200 * time.Millisecond)
-
-	if verbose {
-		fmt.Fprintf(os.Stderr, "sending prompt... ")
-	}
-	if err := client.SendKeys(pane, prompt, "Enter"); err != nil {
-		return fmt.Errorf("send prompt to %s: %w", pane, err)
+	if err := client.SendVerified(pane, prompt); err != nil {
+		return fmt.Errorf("nudge %s: %w", pane, err)
 	}
 
 	if verbose {

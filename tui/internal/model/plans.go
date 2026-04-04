@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -21,6 +20,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/doey-cli/doey/tui/internal/ctl"
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
@@ -591,15 +591,10 @@ func resolveSessionName() string {
 	return "doey-doey"
 }
 
-// sendToTaskmaster sends a message to the Taskmaster pane via tmux send-keys.
+// sendToTaskmaster sends a message to the Taskmaster pane via verified delivery.
 func sendToTaskmaster(message string) error {
-	smPane := resolveSessionName() + ":1.0"
-	// Clear copy-mode and send Escape to ensure clean input state.
-	exec.Command("tmux", "copy-mode", "-q", "-t", smPane).Run()
-	exec.Command("tmux", "send-keys", "-t", smPane, "Escape").Run()
-	time.Sleep(200 * time.Millisecond)
-	cmd := exec.Command("tmux", "send-keys", "-t", smPane, message, "Enter")
-	return cmd.Run()
+	c := ctl.NewTmuxClient(resolveSessionName())
+	return c.SendVerified("1.0", message)
 }
 
 // buildPlan collects unchecked items from the selected plan and writes a trigger file.

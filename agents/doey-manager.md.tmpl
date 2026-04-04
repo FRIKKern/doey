@@ -88,9 +88,6 @@ PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
 source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
 # Short or long — doey_send_verified handles both with retry + verification:
 doey_send_verified "$PANE" "Your task here"
-# Manual fallback (if helper unavailable):
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-tmux send-keys -t "$PANE" -- "Your task here" Enter
 ```
 
 Never `send-keys "" Enter` — empty string swallows Enter. `doey_send_verified` handles retry and verification automatically. **Stuck:** `C-c` -> `C-u` -> `Enter` (0.5s between each). Wait for `❯` before re-dispatching.

@@ -327,7 +327,7 @@ Before dispatching ANY worker, create and track a subtask:
    ```
 3. **Set env var on target pane:** Before sending the task, export `DOEY_SUBTASK_ID` on the worker pane:
    ```bash
-   tmux send-keys -t "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}" Enter
+   doey_send_command "$PANE" "export DOEY_SUBTASK_ID=${SUBTASK_ID}"
    ```
 4. **Include in prompt:** Add `SUBTASK_ID: ${SUBTASK_ID}` in the worker's prompt header.
 
@@ -366,9 +366,6 @@ PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.4"
 source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
 # Short or long — doey_send_verified handles both with retry + verification:
 doey_send_verified "$PANE" "Your task here"
-# Manual fallback (if helper unavailable):
-tmux copy-mode -q -t "$PANE" 2>/dev/null
-tmux send-keys -t "$PANE" -- "Your task here" Enter
 ```
 
 Never `send-keys "" Enter` — empty string swallows Enter. `doey_send_verified` handles retry and verification automatically. **Stuck:** `C-c` -> `C-u` -> `Enter` (0.5s between each). Wait for prompt before re-dispatching.

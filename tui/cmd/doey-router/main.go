@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -16,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/doey-cli/doey/tui/internal/ctl"
 	"github.com/doey-cli/doey/tui/internal/store"
 )
 
@@ -495,11 +495,10 @@ func handleJudgment(s *store.Store, m *store.Message, runtimeDir, sessionName st
 
 	escalationText := sb.String()
 
-	// Wake Taskmaster via tmux send-keys (pane 0.2)
-	target := sessionName + ":0.2"
-	cmd := exec.Command("tmux", "send-keys", "-t", target, escalationText, "Enter")
-	if err := cmd.Run(); err != nil {
-		log.Printf("doey-router: tmux send-keys to %s failed: %v", target, err)
+	// Wake Taskmaster via verified delivery (pane 1.0)
+	c := ctl.NewTmuxClient(sessionName)
+	if err := c.SendVerified("1.0", escalationText); err != nil {
+		log.Printf("doey-router: SendVerified to 1.0 failed: %v", err)
 	}
 
 	writeTrace(traceFile, traceEntry{
