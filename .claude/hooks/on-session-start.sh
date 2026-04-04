@@ -118,6 +118,7 @@ if [ "$ROLE" != "info_panel" ]; then
 fi
 
 wt_dir=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
+_team_task_id=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" TASK_ID)
 
 _repo_path=""
 [ -f "$HOME/.claude/doey/repo-path" ] && _repo_path=$(cat "$HOME/.claude/doey/repo-path")
@@ -171,6 +172,10 @@ export DOEY_LIB="${DOEY_LIB}"
 export DOEY_SCRATCHPAD="${RUNTIME_DIR}/scratchpad"
 export DOEY_USER_PANES="0.1"
 EOF
+  # Propagate TASK_ID from ephemeral team env to worker
+  if [ -n "${_team_task_id:-}" ]; then
+    echo "export DOEY_TASK_ID=\"${_team_task_id}\"" >> "$CLAUDE_ENV_FILE"
+  fi
 fi
 
 _team_def=$(grep '^TEAM_DEF=' "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" 2>/dev/null | cut -d= -f2- | tr -d '"') || true

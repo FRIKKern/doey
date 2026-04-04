@@ -271,16 +271,17 @@ while true; do
   TOTAL_WORKERS=0; TOTAL_IDLE=0; TOTAL_BUSY=0; TOTAL_RESERVED=0
   TEAM_COUNT=0; TEAM_LINE_COUNT=0
 
-  [ -z "$TEAM_WINDOWS" ] && TEAM_WINDOWS="0"
-
-  for W in $(echo "$TEAM_WINDOWS" | tr ',' ' '); do
-    TEAM_COUNT=$((TEAM_COUNT + 1))
+  for W in $(echo "${TEAM_WINDOWS:-}" | tr ',' ' '); do
+    [ -z "$W" ] && continue
 
     if [ "$W" = "0" ] && [ ! -f "${RUNTIME_DIR}/team_0.env" ]; then
       TEAM_FILE="$SESSION_ENV"
     else
       TEAM_FILE="${RUNTIME_DIR}/team_${W}.env"
+      # Skip despawned teams whose env file was already removed
+      [ -f "$TEAM_FILE" ] || continue
     fi
+    TEAM_COUNT=$((TEAM_COUNT + 1))
 
     read_env_file "$TEAM_FILE" WORKER_PANES WORKER_COUNT WORKTREE_DIR WORKTREE_BRANCH TEAM_TYPE TEAM_NAME
     WORKER_PANES="$_ENV_WORKER_PANES"

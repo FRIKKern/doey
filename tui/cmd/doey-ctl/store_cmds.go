@@ -198,7 +198,7 @@ func planDelete(args []string) {
 func runTeamCmd(args []string) {
 	if len(args) < 1 {
 		printTeamHelp()
-		fatal("team: missing subcommand: list, get, set\nRun 'doey-ctl team --help' for usage.\n")
+		fatal("team: missing subcommand: list, get, set, delete\nRun 'doey-ctl team --help' for usage.\n")
 	}
 	if isHelp(args[0]) {
 		printTeamHelp()
@@ -211,8 +211,10 @@ func runTeamCmd(args []string) {
 		teamGet(args[1:])
 	case "set":
 		teamSet(args[1:])
+	case "delete":
+		teamDelete(args[1:])
 	default:
-		fatal("team: unknown subcommand: %q. Valid: list, get, set\n", args[0])
+		fatal("team: unknown subcommand: %q. Valid: list, get, set, delete\n", args[0])
 	}
 }
 
@@ -223,6 +225,7 @@ Subcommands:
   list      List teams
   get       Show team details
   set       Create or update a team
+  delete    Delete a team record
 
 Run 'doey-ctl team <subcommand> -h' for help.
 `)
@@ -308,6 +311,25 @@ func teamSet(args []string) {
 		return
 	}
 	fmt.Printf("set team %s\n", *windowID)
+}
+
+func teamDelete(args []string) {
+	fs := flag.NewFlagSet("team delete", flag.ExitOnError)
+	dir := fs.String("project-dir", "", "Project directory")
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		fatal("team delete: <window-id> argument required\nRun 'doey-ctl team delete -h' for usage.\n")
+	}
+	windowID := fs.Arg(0)
+
+	s := openStore(*dir)
+	defer s.Close()
+
+	if err := s.DeleteTeam(windowID); err != nil {
+		fatal("team delete: %v\n", err)
+	}
+	fmt.Printf("deleted team %s\n", windowID)
 }
 
 // --- config subcommand ---
