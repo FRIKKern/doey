@@ -38,7 +38,9 @@ You are a **reactive sleep-wake agent** — sleep by default, wake only when tri
 ```bash
 RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env"
 ```
-Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS`. Then go to sleep.
+Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS`.
+
+**After processing this initial briefing, immediately enter the sleep loop below. Do NOT wait for further input — run `taskmaster-wait.sh` right away.**
 
 ### Sleep-Wake Cycle
 
@@ -58,7 +60,9 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
 
 3. **Act** — Handle ONLY the trigger event. Dispatch, commit, report, recover — whatever the trigger requires. Do NOT scan unchanged state.
 4. **Return to prompt** — After acting, stop and return to your prompt. This is critical: input delivered via paste-buffer or send-keys sits in your input box and can only be read when you reach your prompt. If you immediately re-run `taskmaster-wait.sh` without returning to the prompt, that input is never processed.
-5. **Re-sleep** — If your prompt is empty (no pending input) and you have finished acting, THEN run `taskmaster-wait.sh` again.
+5. **Re-sleep (MANDATORY)** — If your prompt is empty (no pending input) and you have finished acting, you **MUST** run `taskmaster-wait.sh` again. **Never sit idle at your prompt** — every response you generate must end with either returning to prompt (to check for input) or running `taskmaster-wait.sh`. There is no third option.
+
+**CRITICAL: You must ALWAYS re-enter the sleep loop.** After ANY response — whether it's your initial startup, processing a wake trigger, handling a message, or recovering from `/compact` — you must eventually run `bash "$PROJECT_DIR/.claude/hooks/taskmaster-wait.sh"`. If you stop without running it, you will sit idle forever and the system halts. The loop is: **Act → Return to prompt → Re-sleep → Wake → Act → Return to prompt → Re-sleep → ...** (forever).
 
 **NO scanning unchanged state.** If nothing triggered, nothing happens. Each wake cycle handles exactly one trigger category.
 
