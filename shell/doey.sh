@@ -292,6 +292,11 @@ DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
 DOEY_IDLE_REMOVE_AFTER="${DOEY_IDLE_REMOVE_AFTER:-300}"
 DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
 
+# Drain pending terminal escape responses (OSC 11, CPR) from pane stdin before Claude launch.
+# With allow-passthrough on, the outer terminal may respond to escape queries from other panes,
+# and those responses land on the active pane's stdin. This flushes them.
+_DRAIN_STDIN='read -t 1 -n 10000 _ 2>/dev/null || true; '
+
 # Panel & Monitoring
 DOEY_INFO_PANEL_REFRESH="${DOEY_INFO_PANEL_REFRESH:-300}"
 # Models
@@ -827,7 +832,7 @@ setup_dashboard() {
   # Boss (pane 0.1)
   local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name \"${DOEY_ROLE_BOSS}\" --agent ${DOEY_ROLE_FILE_BOSS}"
   _append_settings _boss_cmd "$runtime_dir"
-  tmux send-keys -t "$session:0.1" "$_boss_cmd" Enter
+  tmux send-keys -t "$session:0.1" "${_DRAIN_STDIN}${_boss_cmd}" Enter
 
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
@@ -879,19 +884,19 @@ _create_core_team() {
   # Task Reviewer (pane 1.1)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Task Reviewer\" --agent doey-task-reviewer"
   _append_settings _spec_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:1.1" "$_spec_cmd" Enter
+  tmux send-keys -t "${session}:1.1" "${_DRAIN_STDIN}${_spec_cmd}" Enter
   write_pane_status "$runtime_dir" "${session}:1.1" "READY"
 
   # Deployment (pane 1.2)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Deployment\" --agent doey-deployment"
   _append_settings _spec_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:1.2" "$_spec_cmd" Enter
+  tmux send-keys -t "${session}:1.2" "${_DRAIN_STDIN}${_spec_cmd}" Enter
   write_pane_status "$runtime_dir" "${session}:1.2" "READY"
 
   # Doey Expert (pane 1.3)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Doey Expert\" --agent doey-doey-expert"
   _append_settings _spec_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:1.3" "$_spec_cmd" Enter
+  tmux send-keys -t "${session}:1.3" "${_DRAIN_STDIN}${_spec_cmd}" Enter
   write_pane_status "$runtime_dir" "${session}:1.3" "READY"
 }
 
@@ -3139,7 +3144,7 @@ reload_session() {
       mgr_agent=$(generate_team_agent "doey-manager" "$tw")
       local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
       _append_settings _rl_mgr_cmd "$runtime_dir"
-      tmux send-keys -t "$mgr_ref" "$_rl_mgr_cmd" Enter
+      tmux send-keys -t "$mgr_ref" "${_DRAIN_STDIN}${_rl_mgr_cmd}" Enter
       printf " ${SUCCESS}✓${RESET}\n"
       (
         sleep "$DOEY_MANAGER_BRIEF_DELAY"
@@ -3188,7 +3193,7 @@ reload_session() {
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
-        tmux send-keys -t "$pane_ref" "$worker_cmd" Enter
+        tmux send-keys -t "$pane_ref" "${_DRAIN_STDIN}${worker_cmd}" Enter
         printf "    %s.%s ${SUCCESS}✓${RESET}\n" "$tw" "$wp"
         sleep "$DOEY_WORKER_LAUNCH_DELAY"
       done
@@ -4185,7 +4190,7 @@ _batch_boot_workers() {
     local _bbw_cur_pane _bbw_cur_cmd
     _bbw_cur_pane="${_bbw_pane_arr[$_bbw_i]}"
     _bbw_cur_cmd="${_bbw_cmd_arr[$_bbw_i]}"
-    tmux send-keys -t "$session:${team_window}.${_bbw_cur_pane}" "$_bbw_cur_cmd" Enter
+    tmux send-keys -t "$session:${team_window}.${_bbw_cur_pane}" "${_DRAIN_STDIN}${_bbw_cur_cmd}" Enter
     if [ "$_bbw_is_freelancer" = "true" ]; then
       write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "RESERVED"
       local _bbw_safe="${session}:${team_window}.${_bbw_cur_pane}"
@@ -4434,7 +4439,7 @@ _launch_team_manager() {
   local _mgr_pane_title="${mgr_pane_title_override:-${_proj} T${window_index} Mgr}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"${_mgr_name}\" --agent \"$mgr_agent\""
   _append_settings _mgr_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
+  tmux send-keys -t "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "$_mgr_pane_title"
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 }
@@ -4636,7 +4641,7 @@ add_team_from_def() {
   local mgr_model="${td_manager_model:-$DOEY_MANAGER_MODEL}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --agent \"$mgr_agent_name\" --name \"${mgr_name}\""
   _append_settings _mgr_cmd "$runtime_dir"
-  tmux send-keys -t "${session}:${window_index}.0" "$_mgr_cmd" Enter
+  tmux send-keys -t "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}" Enter
   tmux select-pane -t "${session}:${window_index}.0" -T "$mgr_name"
 
   # Launch workers (panes 1+)
@@ -4658,7 +4663,7 @@ add_team_from_def() {
     _append_settings _w_cmd "$runtime_dir"
 
     sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
-    tmux send-keys -t "${session}:${window_index}.${_w_i}" "$_w_cmd" Enter
+    tmux send-keys -t "${session}:${window_index}.${_w_i}" "${_DRAIN_STDIN}${_w_cmd}" Enter
     tmux select-pane -t "${session}:${window_index}.${_w_i}" -T "$w_name"
     _w_i=$((_w_i + 1))
   done

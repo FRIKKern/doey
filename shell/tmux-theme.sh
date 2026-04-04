@@ -44,10 +44,10 @@ set-option -t $session set-titles-string "🤖 #{session_name} — #{pane_title}
 set-option -t $session mouse on
 set-option -t $session set-clipboard on
 $_clip_lines
-set-option -t $session allow-passthrough on
+set-option -t $session allow-passthrough off
 set-option -t $session bell-action none
 set-option -t $session visual-bell off
-set-option -s escape-time 10
+# escape-time is set in doey.sh (_init_doey_session) — do not override here
 THEME_EOF
 
 tmux source-file "$_theme_file" 2>/dev/null
