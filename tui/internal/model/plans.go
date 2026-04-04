@@ -271,32 +271,15 @@ func (m *PlansModel) SetSnapshot(snap runtime.Snapshot) {
 	// Sort newest first — mirrors Tasks tab sort order.
 	m.sortEntries()
 
-	// Capture currently selected plan ID before rebuilding the list.
-	prevSelectedID := ""
-	if idx := m.list.Index(); idx >= 0 && idx < len(m.entries) {
-		prevSelectedID = m.entries[idx].ID
-	}
-
 	items := make([]list.Item, len(m.entries))
 	for i, p := range m.entries {
 		items[i] = planItem{plan: p}
 	}
 	m.list.SetItems(items)
-
-	// Restore selection by ID, or default to first item.
-	restored := false
-	if prevSelectedID != "" {
-		for i, p := range m.entries {
-			if p.ID == prevSelectedID {
-				m.list.Select(i)
-				restored = true
-				break
-			}
-		}
-	}
-	if !restored && len(items) > 0 {
+	if len(items) > 0 {
 		m.list.Select(0)
 	}
+	m.detailViewport.GotoTop()
 
 	// Reset building state when the plan's checkboxes change or plan switches
 	if m.building {
