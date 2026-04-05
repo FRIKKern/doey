@@ -28,6 +28,7 @@ Project directory: ${PROJECT_DIR}  |  Absolute paths.
 Phase 1: Spawn subagents in parallel. Second wave if gaps.
 Phase 2: Option A (recommended) + B. Include dispatch-ready prompts.
 Phase 3: Write report to ${REPORT_PATH} — Summary, Findings, Key Files, Plan (A+B), Risks.
+Phase 4: Persist report — run: mkdir -p ${PROJECT_DIR}/.doey/tasks/${TASK_ID}/attachments && cp ${REPORT_PATH} ${PROJECT_DIR}/.doey/tasks/${TASK_ID}/attachments/$(date +%s)_research_$(basename ${REPORT_PATH})
 Stop hook blocks until report exists.
 ```
 Settle by line count (>200: 2s, >100: 1.5s, else 0.5s).

@@ -72,7 +72,11 @@ func planList(args []string) {
 		return
 	}
 	for _, p := range plans {
-		fmt.Printf("%-4d %-10s %s\n", p.ID, p.Status, p.Title)
+		taskCol := "-"
+		if p.TaskID != nil {
+			taskCol = fmt.Sprintf("#%d", *p.TaskID)
+		}
+		fmt.Printf("%-4d %-6s %-10s %s\n", p.ID, taskCol, p.Status, p.Title)
 	}
 }
 
@@ -107,21 +111,37 @@ func planCreate(args []string) {
 	title := fs.String("title", "", "Plan title")
 	status := fs.String("status", "draft", "Plan status")
 	body := fs.String("body", "", "Plan body")
+	taskID := fs.Int64("task-id", 0, "Associated task ID (required)")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if *title == "" {
 		fatal("plan create: --title is required\nRun 'doey-ctl plan create -h' for usage.\n")
 	}
+	if *taskID == 0 {
+		fatal("plan create: --task-id is required\nRun 'doey-ctl plan create -h' for usage.\n")
+	}
 
 	s := openStore(*dir)
 	defer s.Close()
 
-	p := &store.Plan{Title: *title, Status: *status, Body: *body}
+	p := &store.Plan{TaskID: taskID, Title: *title, Status: *status, Body: *body}
 	id, err := s.CreatePlan(p)
 	if err != nil {
 		fatal("plan create: %v\n", err)
 	}
+
+	// Link task back to this plan
+	task, err := s.GetTask(*taskID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "plan create: warning: could not fetch task %d to set plan_id: %v\n", *taskID, err)
+	} else {
+		task.PlanID = &id
+		if err := s.UpdateTask(task); err != nil {
+			fmt.Fprintf(os.Stderr, "plan create: warning: could not update task %d plan_id: %v\n", *taskID, err)
+		}
+	}
+
 	if jsonOutput {
 		printJSON(p)
 		return

@@ -37,14 +37,18 @@ func ReadPlans(projectDir string) []Plan {
 		if storePlans, err := s.ListPlans(); err == nil && len(storePlans) > 0 {
 			plans := make([]Plan, 0, len(storePlans))
 			for _, sp := range storePlans {
-				plans = append(plans, Plan{
+				plan := Plan{
 					ID:      int(sp.ID),
 					Title:   sp.Title,
 					Status:  sp.Status,
 					Content: sp.Body,
 					Created: time.Unix(sp.CreatedAt, 0).Format(time.RFC3339),
 					Updated: time.Unix(sp.UpdatedAt, 0).Format(time.RFC3339),
-				})
+				}
+				if sp.TaskID != nil {
+					plan.TaskID = int(*sp.TaskID)
+				}
+				plans = append(plans, plan)
 			}
 			sort.Slice(plans, func(i, j int) bool {
 				return plans[i].ID > plans[j].ID
@@ -139,4 +143,39 @@ func parsePlanFile(path string) (Plan, bool) {
 	}
 
 	return plan, true
+}
+
+// ReadPlan fetches a single plan by ID, trying SQLite first, then file scan.
+func ReadPlan(projectDir string, planID int) *Plan {
+	if projectDir == "" || planID <= 0 {
+		return nil
+	}
+
+	// Try SQLite store first
+	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
+	if s, err := store.Open(dbPath); err == nil {
+		defer s.Close()
+		if sp, err := s.GetPlan(int64(planID)); err == nil {
+			p := Plan{
+				ID:      int(sp.ID),
+				Title:   sp.Title,
+				Status:  sp.Status,
+				Content: sp.Body,
+				Created: time.Unix(sp.CreatedAt, 0).Format(time.RFC3339),
+				Updated: time.Unix(sp.UpdatedAt, 0).Format(time.RFC3339),
+			}
+			if sp.TaskID != nil {
+				p.TaskID = int(*sp.TaskID)
+			}
+			return &p
+		}
+	}
+
+	// Fall back to scanning plan files
+	for _, p := range ReadPlans(projectDir) {
+		if p.ID == planID {
+			return &p
+		}
+	}
+	return nil
 }
