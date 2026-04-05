@@ -86,10 +86,13 @@ func runTaskCmd(args []string) {
 	default:
 		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision", "export",
 			"done", "start", "pause", "block", "confirm", "pending", "ready", "activate", "failed", "cancel"}
-		if suggestion := suggestSubcommand(args[0], validTaskSubs); suggestion != "" {
-			fatal("task: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task -h' for usage.\n", args[0], suggestion)
+		corrected, err := suggestSubcommand(args[0], validTaskSubs)
+		if err != nil {
+			fatal("task: unknown subcommand: %s (%v)\nRun 'doey-ctl task -h' for usage.\n", args[0], err)
 		}
-		fatal("task: unknown subcommand: %s. Valid: create, update, list, get, delete, subtask, log, decision, export, done, start, pause, block, cancel, failed\nRun 'doey-ctl task -h' for usage.\n", args[0])
+		// Re-dispatch with corrected subcommand.
+		args[0] = corrected
+		runTaskCmd(args)
 	}
 }
 
@@ -266,10 +269,16 @@ func runTaskUpdate(args []string) {
 					}
 				}
 				if !isValid {
-					if suggestion, ok := fuzzyMatch(*value, validStatuses); ok {
-						fatal("task update: unknown status '%s'. Did you mean '%s'?\n", *value, suggestion)
+					matches := fuzzyMatchAll(*value, validStatuses)
+					switch len(matches) {
+					case 1:
+						fmt.Fprintf(os.Stderr, "auto-correcting status %q to %q\n", *value, matches[0])
+						*value = matches[0]
+					case 0:
+						fatal("task update: unknown status %q\nValid statuses: %s\n", *value, strings.Join(validStatuses, ", "))
+					default:
+						fatal("task update: ambiguous status %q, did you mean: %s?\n", *value, strings.Join(matches, ", "))
 					}
-					fatal("task update: unknown status %q\nValid statuses: %s\n", *value, strings.Join(validStatuses, ", "))
 				}
 				t.Status = *value
 			case "type":
@@ -693,10 +702,12 @@ func runTaskSubtask(args []string) {
 		runSubtaskList(args[1:])
 	default:
 		validSubs := []string{"add", "update", "list"}
-		if suggestion := suggestSubcommand(args[0], validSubs); suggestion != "" {
-			fatal("task subtask: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task subtask -h' for usage.\n", args[0], suggestion)
+		corrected, err := suggestSubcommand(args[0], validSubs)
+		if err != nil {
+			fatal("task subtask: unknown subcommand: %s (%v)\nRun 'doey-ctl task subtask -h' for usage.\n", args[0], err)
 		}
-		fatal("task subtask: unknown subcommand: %s. Valid: add, update, list\nRun 'doey-ctl task subtask -h' for usage.\n", args[0])
+		args[0] = corrected
+		runTaskSubtask(args)
 	}
 }
 
@@ -835,7 +846,16 @@ func runSubtaskUpdate(args []string) {
 		fatal("task subtask update: --status or --title is required\nTry: doey-ctl task subtask update --task-id %s --subtask-id %s --status <STATUS>\n", taskIDStr, subtaskIDStr)
 	}
 	if statusVal != "" && !store.IsValidSubtaskStatus(statusVal) {
-		fatal("task subtask update: invalid status %q. Valid: %v\n", statusVal, store.ValidSubtaskStatuses)
+		matches := fuzzyMatchAll(statusVal, store.ValidSubtaskStatuses)
+		switch len(matches) {
+		case 1:
+			fmt.Fprintf(os.Stderr, "auto-correcting status %q to %q\n", statusVal, matches[0])
+			statusVal = matches[0]
+		case 0:
+			fatal("task subtask update: unknown status %q\nValid: %v\n", statusVal, store.ValidSubtaskStatuses)
+		default:
+			fatal("task subtask update: ambiguous status %q, did you mean: %s?\n", statusVal, strings.Join(matches, ", "))
+		}
 	}
 
 	pd := projectDir(*dir)
@@ -968,10 +988,12 @@ func runTaskLog(args []string) {
 		runTaskLogList(args[1:])
 	default:
 		validSubs := []string{"add", "list"}
-		if suggestion := suggestSubcommand(args[0], validSubs); suggestion != "" {
-			fatal("task log: unknown subcommand: %s. Did you mean '%s'?\nRun 'doey-ctl task log -h' for usage.\n", args[0], suggestion)
+		corrected, err := suggestSubcommand(args[0], validSubs)
+		if err != nil {
+			fatal("task log: unknown subcommand: %s (%v)\nRun 'doey-ctl task log -h' for usage.\n", args[0], err)
 		}
-		fatal("task log: unknown subcommand: %s. Valid: add, list\nRun 'doey-ctl task log -h' for usage.\n", args[0])
+		args[0] = corrected
+		runTaskLog(args)
 	}
 }
 
@@ -1025,9 +1047,11 @@ func runTaskLogAdd(args []string) {
 			}
 			if !isValidType {
 				if suggestion, ok := fuzzyMatch(*logType, validLogTypes); ok {
-					fatal("task log add: unknown type '%s'. Did you mean '%s'?\n", *logType, suggestion)
+					fmt.Fprintf(os.Stderr, "task log add: auto-correcting type %q → %q\n", *logType, suggestion)
+					*logType = suggestion
+				} else {
+					fatal("task log add: unknown type %q\nValid types: %s\n", *logType, strings.Join(validLogTypes, ", "))
 				}
-				fatal("task log add: unknown type %q\nValid types: %s\n", *logType, strings.Join(validLogTypes, ", "))
 			}
 			entry := &store.TaskLogEntry{
 				TaskID: taskID,
@@ -1222,13 +1246,20 @@ func runTaskDecision(args []string) {
 	}
 }
 
-// suggestSubcommand returns the closest valid subcommand if within edit distance 3.
-func suggestSubcommand(input string, valid []string) string {
-	match, ok := fuzzyMatch(input, valid)
-	if ok {
-		return match
+// suggestSubcommand auto-corrects input if exactly one match is within
+// Levenshtein distance threshold. Returns (corrected, nil) on single match
+// with a stderr warning, or ("", error) on zero/multiple matches.
+func suggestSubcommand(input string, valid []string) (string, error) {
+	matches := fuzzyMatchAll(input, valid)
+	switch len(matches) {
+	case 1:
+		fmt.Fprintf(os.Stderr, "auto-correcting %q to %q\n", input, matches[0])
+		return matches[0], nil
+	case 0:
+		return "", fmt.Errorf("no close match for %q", input)
+	default:
+		return "", fmt.Errorf("did you mean: %s?", strings.Join(matches, ", "))
 	}
-	return ""
 }
 
 // fuzzyMatch returns the closest match from valid if the Levenshtein distance

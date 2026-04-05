@@ -132,7 +132,13 @@ func main() {
 	case "--help", "-h", "help":
 		printUsage()
 	default:
-		fatal("unknown command: %q. Valid: msg, status, health, task, tmux, plan, team, config, agent, event, nudge, migrate, briefing\nRun 'doey-ctl --help' for usage.\n", os.Args[1])
+		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "interaction", "nudge", "migrate", "briefing"}
+		corrected, err := suggestSubcommand(os.Args[1], knownCmds)
+		if err != nil {
+			fatal("unknown command: %q (%v)\nRun 'doey-ctl --help' for usage.\n", os.Args[1], err)
+		}
+		os.Args[1] = corrected
+		main()
 	}
 }
 
