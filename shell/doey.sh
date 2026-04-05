@@ -260,33 +260,32 @@ generate_team_agent() {
 }
 
 # Search hierarchy for team definition file
-# Returns path via _FTD_RESULT, empty if not found
+# Prints path to stdout on success, returns 1 if not found
 _find_team_def() {
   local name="$1"
-  _FTD_RESULT=""
   local fname="${name}.team.md"
 
   # 1. Project-level teams/ (repo-shipped definitions)
   if [ -f "teams/${fname}" ]; then
-    _FTD_RESULT="teams/${fname}"; return 0
+    echo "teams/${fname}"; return 0
   fi
   # 2. Project-level .doey/teams/
   if [ -f ".doey/teams/${fname}" ]; then
-    _FTD_RESULT=".doey/teams/${fname}"; return 0
+    echo ".doey/teams/${fname}"; return 0
   fi
   # 3. Installed premade teams
   if [ -f "$HOME/.local/share/doey/teams/${fname}" ]; then
-    _FTD_RESULT="$HOME/.local/share/doey/teams/${fname}"; return 0
+    echo "$HOME/.local/share/doey/teams/${fname}"; return 0
   fi
   # 4. Legacy user config
   if [ -f "$HOME/.config/doey/teams/${fname}" ]; then
-    _FTD_RESULT="$HOME/.config/doey/teams/${fname}"; return 0
+    echo "$HOME/.config/doey/teams/${fname}"; return 0
   fi
   # 5. Doey repo shipped defaults (for non-doey projects using doey)
   local repo_path=""
   [ -f "$HOME/.claude/doey/repo-path" ] && repo_path=$(<"$HOME/.claude/doey/repo-path")
   if [ -n "$repo_path" ] && [ -f "${repo_path}/teams/${fname}" ]; then
-    _FTD_RESULT="${repo_path}/teams/${fname}"; return 0
+    echo "${repo_path}/teams/${fname}"; return 0
   fi
   return 1
 }
@@ -842,14 +841,19 @@ _step_msg() {
 }
 
 # Parse claude auth status into _AUTH_OK, _AUTH_METHOD, _AUTH_EMAIL, _AUTH_SUB.
+# Parse claude auth status. Prints "ok|method|email|sub" on success, "fail" on failure.
 _parse_auth_status() {
-  _AUTH_JSON=$(claude auth status 2>&1) || _AUTH_JSON=""
-  _AUTH_OK=false
-  if echo "$_AUTH_JSON" | grep -q '"loggedIn": true'; then
-    _AUTH_OK=true
-    _AUTH_METHOD=$(echo "$_AUTH_JSON" | grep '"authMethod"' | sed 's/.*: *"//;s/".*//')
-    _AUTH_EMAIL=$(echo "$_AUTH_JSON" | grep '"email"' | sed 's/.*: *"//;s/".*//')
-    _AUTH_SUB=$(echo "$_AUTH_JSON" | grep '"subscriptionType"' | sed 's/.*: *"//;s/".*//')
+  local _auth_json
+  _auth_json=$(claude auth status 2>&1) || _auth_json=""
+  if echo "$_auth_json" | grep -q '"loggedIn": true'; then
+    local _method _email _sub
+    _method=$(echo "$_auth_json" | grep '"authMethod"' | sed 's/.*: *"//;s/".*//')
+    _email=$(echo "$_auth_json" | grep '"email"' | sed 's/.*: *"//;s/".*//')
+    _sub=$(echo "$_auth_json" | grep '"subscriptionType"' | sed 's/.*: *"//;s/".*//')
+    echo "ok|${_method}|${_email}|${_sub}"
+  else
+    echo "fail"
+    return 1
   fi
 }
 
@@ -956,9 +960,14 @@ check_claude_auth() {
     doey_error "claude CLI not found"
     return 1
   fi
-  _parse_auth_status
-  if [ "$_AUTH_OK" = true ]; then
-    doey_success "Authenticated (${_AUTH_METHOD} · ${_AUTH_EMAIL} · ${_AUTH_SUB})"
+  local _auth_result
+  if _auth_result=$(_parse_auth_status); then
+    local _auth_method _auth_email _auth_sub
+    local _old_ifs="$IFS"; IFS='|'
+    set -- $_auth_result; IFS="$_old_ifs"
+    # $1=ok, $2=method, $3=email, $4=sub
+    _auth_method="${2:-}" _auth_email="${3:-}" _auth_sub="${4:-}"
+    doey_success "Authenticated (${_auth_method} · ${_auth_email} · ${_auth_sub})"
     return 0
   else
     printf '\n'
@@ -991,7 +1000,7 @@ _launch_session_core() {
   local team_window=2
 
   cd "$dir"
-  _doey_load_config  # Reload config now that we're in the project dir
+  _doey_reload_config
 
   local hook_indent="   "
   [[ "$headless" -eq 1 ]] && hook_indent="  "
@@ -1103,8 +1112,9 @@ MANIFEST
 
   _launch_team_manager "$session" "$runtime_dir" "$team_window"
 
-  _build_worker_pane_list "$session" "$team_window"
-  _brief_team "$session" "$team_window" "" "$_WPL_RESULT" "$worker_count" "Grid ${grid}"
+  local _wpl_result
+  _wpl_result=$(_build_worker_pane_list "$session" "$team_window")
+  _brief_team "$session" "$team_window" "" "$_wpl_result" "$worker_count" "Grid ${grid}"
 
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
@@ -1488,7 +1498,7 @@ launch_session_dynamic() {
   local team_window=2
 
   cd "$dir"
-  _doey_load_config  # Reload config now that we're in the project dir
+  _doey_reload_config
 
   # Quick mode: minimal defaults, skip wizard
   if [ "$DOEY_QUICK" = "true" ]; then
@@ -1947,13 +1957,21 @@ doey_add_column() {
   local session="$1" runtime_dir="$2" dir="$3" team_window="${4:-1}"
 
   safe_source_session_env "${runtime_dir}/session.env"
-  _read_team_state "$session" "$runtime_dir" "$dir" "$team_window"
 
-  if [[ "$_ts_grid" != "dynamic" ]]; then
+  # Read team state via accessors (no _ts_* globals)
+  local grid worker_count team_type work_dir wt_dir
+  grid="$(team_state_get "$runtime_dir" "$team_window" "GRID" "dynamic")"
+  worker_count="$(team_state_get "$runtime_dir" "$team_window" "WORKER_COUNT" "0")"
+  team_type="$(team_state_get "$runtime_dir" "$team_window" "TEAM_TYPE")"
+  wt_dir="$(team_state_get "$runtime_dir" "$team_window" "WORKTREE_DIR")"
+  work_dir="$dir"
+  [ -n "$wt_dir" ] && [ -d "$wt_dir" ] && work_dir="$wt_dir"
+
+  if [[ "$grid" != "dynamic" ]]; then
     doey_error "Team window $team_window is not using dynamic grid mode"
     return 1
   fi
-  if (( _ts_worker_count >= DOEY_MAX_WORKERS )); then
+  if (( worker_count >= DOEY_MAX_WORKERS )); then
     doey_error "Max workers reached ($DOEY_MAX_WORKERS)"
     return 1
   fi
@@ -1981,48 +1999,62 @@ doey_add_column() {
   local last_pane new_pane_top new_pane_bottom
   last_pane="$(tmux list-panes -t "$session:$team_window" -F '#{pane_index}' | tail -1)"
   # Use -P -F to atomically capture new pane index (avoids sleep + list-panes race)
-  new_pane_top="$(tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$_ts_dir" -P -F '#{pane_index}')"
-  new_pane_bottom="$(tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$_ts_dir" -P -F '#{pane_index}')"
+  new_pane_top="$(tmux split-window -h -t "$session:$team_window.${last_pane}" -c "$work_dir" -P -F '#{pane_index}')"
+  new_pane_bottom="$(tmux split-window -v -t "$session:$team_window.${new_pane_top}" -c "$work_dir" -P -F '#{pane_index}')"
 
   local _pane_prefix="W"
-  [ "$_ts_team_type" = "freelancer" ] && _pane_prefix="F"
+  [ "$team_type" = "freelancer" ] && _pane_prefix="F"
 
   local _dac_panes_added=2
 
   # Name panes sequentially
   local _dac_w_i=1
-  local w1_num=$(( _ts_worker_count + _dac_w_i ))
+  local w1_num=$(( worker_count + _dac_w_i ))
   tmux select-pane -t "$session:$team_window.${new_pane_top}" -T "T${team_window} ${_pane_prefix}${w1_num}"
   _dac_w_i=$((_dac_w_i + 1))
 
-  local w2_num=$(( _ts_worker_count + _dac_w_i ))
+  local w2_num=$(( worker_count + _dac_w_i ))
   tmux select-pane -t "$session:$team_window.${new_pane_bottom}" -T "T${team_window} ${_pane_prefix}${w2_num}"
   _dac_w_i=$((_dac_w_i + 1))
 
   local _rps_include_p0="false"
-  [ "$_ts_team_type" = "freelancer" ] && _rps_include_p0="true"
+  [ "$team_type" = "freelancer" ] && _rps_include_p0="true"
   rebuild_pane_state "$session:$team_window" "$_rps_include_p0"
 
-  local new_worker_count=$(( _ts_worker_count + _dac_panes_added ))
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type" "" "$_ts_reserved"
+  local new_worker_count=$(( worker_count + _dac_panes_added ))
+  team_state_set "$runtime_dir" "$team_window" "WORKER_PANES" "$_worker_panes"
+  team_state_set "$runtime_dir" "$team_window" "WORKER_COUNT" "$new_worker_count"
 
   _batch_boot_workers "$session" "$runtime_dir" "$team_window" "${new_pane_top}:${w1_num}" "${new_pane_bottom}:${w2_num}"
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
-  doey_ok "Added ${_pane_prefix}${w1_num} and ${_pane_prefix}${w2_num} — ${new_worker_count} workers in $((_ts_cols + 1)) columns"
+  # Compute current column count for status message
+  local _dac_pane_total
+  _dac_pane_total="$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l)"
+  _dac_pane_total="${_dac_pane_total// /}"
+  local _dac_cols_final=$(( (_dac_pane_total - 1) / 2 ))
+  [ "$_dac_cols_final" -lt 1 ] && _dac_cols_final=1
+
+  doey_ok "Added ${_pane_prefix}${w1_num} and ${_pane_prefix}${w2_num} — ${new_worker_count} workers in ${_dac_cols_final} columns"
 }
 
 doey_remove_column() {
   local session="$1" runtime_dir="$2" col_index="${3:-}" team_window="${4:-1}"
 
   safe_source_session_env "${runtime_dir}/session.env"
-  _read_team_state "$session" "$runtime_dir" "${PROJECT_DIR}" "$team_window"
 
-  if [[ "$_ts_grid" != "dynamic" ]]; then
+  # Read team state via accessors (no _ts_* globals)
+  local grid worker_count worker_panes team_type
+  grid="$(team_state_get "$runtime_dir" "$team_window" "GRID" "dynamic")"
+  worker_count="$(team_state_get "$runtime_dir" "$team_window" "WORKER_COUNT" "0")"
+  worker_panes="$(team_state_get "$runtime_dir" "$team_window" "WORKER_PANES")"
+  team_type="$(team_state_get "$runtime_dir" "$team_window" "TEAM_TYPE")"
+
+  if [[ "$grid" != "dynamic" ]]; then
     doey_error "Team window $team_window is not using dynamic grid mode"
     return 1
   fi
-  if (( _ts_worker_count == 0 )); then
+  if (( worker_count == 0 )); then
     doey_error "No worker columns to remove"
     return 1
   fi
@@ -2030,7 +2062,7 @@ doey_remove_column() {
   [[ -z "$col_index" ]] && col_index="last"
 
   # Parse worker panes into positional params (bash 3.2 safe)
-  local _old_ifs="$IFS"; IFS=','; set -- $_ts_worker_panes; IFS="$_old_ifs"
+  local _old_ifs="$IFS"; IFS=','; set -- $worker_panes; IFS="$_old_ifs"
   if [ "$#" -lt 2 ]; then
     doey_error "Not enough worker panes to remove a column"
     return 1
@@ -2042,8 +2074,8 @@ doey_remove_column() {
     eval "remove_bottom=\${$#}"
   else
     local ci=$(( col_index ))
-    if [ "$ci" -lt 1 ] || [ "$ci" -gt $(( _ts_worker_count / 2 )) ]; then
-      doey_error "Invalid column: $col_index (valid: 1-$(( _ts_worker_count / 2 )))"
+    if [ "$ci" -lt 1 ] || [ "$ci" -gt $(( worker_count / 2 )) ]; then
+      doey_error "Invalid column: $col_index (valid: 1-$(( worker_count / 2 )))"
       return 1
     fi
     local pair_start=$(( (ci - 1) * 2 + 1 ))
@@ -2073,11 +2105,12 @@ doey_remove_column() {
   sleep 0.2
 
   local _rps_include_p0="false"
-  [ "$_ts_team_type" = "freelancer" ] && _rps_include_p0="true"
+  [ "$team_type" = "freelancer" ] && _rps_include_p0="true"
   rebuild_pane_state "$session:$team_window" "$_rps_include_p0"
 
-  local new_worker_count=$(( _ts_worker_count - 2 ))
-  write_team_env "$runtime_dir" "$team_window" "dynamic" "$_worker_panes" "$new_worker_count" "" "$_ts_wt_dir" "$_ts_wt_branch" "$_ts_team_name" "$_ts_team_role" "$_ts_worker_model" "$_ts_manager_model" "$_ts_team_type"
+  local new_worker_count=$(( worker_count - 2 ))
+  team_state_set "$runtime_dir" "$team_window" "WORKER_PANES" "$_worker_panes"
+  team_state_set "$runtime_dir" "$team_window" "WORKER_COUNT" "$new_worker_count"
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
   doey_ok "Removed worker column — ${new_worker_count} workers remaining"
@@ -2231,12 +2264,12 @@ add_team_from_def() {
   local session="$1" runtime_dir="$2" dir="$3" team_name="$4" type_override="${5:-}"
 
   # Find and parse definition
-  if ! _find_team_def "$team_name"; then
+  local def_file
+  if ! def_file=$(_find_team_def "$team_name"); then
     printf "  ${ERROR}Team definition '%s' not found${RESET}\n" "$team_name" >&2
     printf "  Searched: .doey/teams/ → teams/ → ~/.config/doey/teams/ → repo teams/\n" >&2
     return 1
   fi
-  local def_file="$_FTD_RESULT"
   printf "  ${DIM}Loading team definition: %s${RESET}\n" "$def_file"
 
   local env_file
@@ -2311,7 +2344,6 @@ add_team_from_def() {
     done
     _batch_boot_workers "$session" "$runtime_dir" "$window_index" $_fp_pairs
 
-    _build_worker_pane_list "$session" "$window_index"
     rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
     _name_team_window "$session" "$window_index" "" "$runtime_dir"
 
@@ -2397,8 +2429,7 @@ add_team_from_def() {
     ) &
   fi
 
-  # Build worker pane list, apply manager-left layout, and name window
-  _build_worker_pane_list "$session" "$window_index"
+  # Apply manager-left layout and name window
   rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
   _name_team_window "$session" "$window_index" "" "$runtime_dir"
 
@@ -2525,11 +2556,14 @@ add_dynamic_team_window() {
   fi
 
   # Calculate max feasible columns
-  _check_grid_feasibility "$session" "$window_index" 40 8 2>/dev/null || true
-  if [ "${_FEASIBLE_MAX_COLS:-99}" -lt "$initial_cols" ]; then
+  local _feasibility _feasible_max_cols=99
+  if _feasibility=$(_check_grid_feasibility "$session" "$window_index" 40 8 2>/dev/null); then
+    _feasible_max_cols="${_feasibility%% *}"
+  fi
+  if [ "$_feasible_max_cols" -lt "$initial_cols" ]; then
     printf "  %s Requested %s worker columns but only %s fit — reducing%s\n" \
-      "${WARN:-}" "$initial_cols" "$_FEASIBLE_MAX_COLS" "${RESET:-}" >&2
-    initial_cols="$_FEASIBLE_MAX_COLS"
+      "${WARN:-}" "$initial_cols" "$_feasible_max_cols" "${RESET:-}" >&2
+    initial_cols="$_feasible_max_cols"
   fi
 
   local _col_i
@@ -2538,14 +2572,15 @@ add_dynamic_team_window() {
 
   done
 
-  _build_worker_pane_list "$session" "$window_index"
+  local _wpl_result
+  _wpl_result=$(_build_worker_pane_list "$session" "$window_index")
 
   # Mark all worker panes as reserved if --reserved was passed
-  if [ "$reserved" = "true" ] && [ -n "$_WPL_RESULT" ]; then
+  if [ "$reserved" = "true" ] && [ -n "$_wpl_result" ]; then
     local _rv_pane _rv_safe
     local _rv_old_ifs="$IFS"
     IFS=', '
-    for _rv_pane in $_WPL_RESULT; do
+    for _rv_pane in $_wpl_result; do
       [ -z "$_rv_pane" ] && continue
       write_pane_status "$runtime_dir" "${session}:${_rv_pane}" "RESERVED"
       _rv_safe="${session}:${_rv_pane}"
@@ -2562,7 +2597,7 @@ add_dynamic_team_window() {
   if [ "$is_freelancer" = "true" ]; then
     _print_team_created "$window_index" "freelancer pool" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
   else
-    _brief_team "$session" "$window_index" "$_WPL_RESULT" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role"
+    _brief_team "$session" "$window_index" "$_wpl_result" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role"
     _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
   fi
 }

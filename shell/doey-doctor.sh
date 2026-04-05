@@ -83,9 +83,13 @@ check_doctor() {
   fi
 
   # Auth check
-  _parse_auth_status
-  if [ "$_AUTH_OK" = true ]; then
-    _doc_check ok "Claude auth" "${_AUTH_METHOD} · ${_AUTH_EMAIL} · ${_AUTH_SUB}"
+  local _auth_result
+  if _auth_result=$(_parse_auth_status); then
+    local _auth_method _auth_email _auth_sub
+    local _old_ifs="$IFS"; IFS='|'
+    set -- $_auth_result; IFS="$_old_ifs"
+    _auth_method="${2:-}" _auth_email="${3:-}" _auth_sub="${4:-}"
+    _doc_check ok "Claude auth" "${_auth_method} · ${_auth_email} · ${_auth_sub}"
   else
     _doc_check fail "Claude auth" "Not logged in — run 'claude' to authenticate"
   fi

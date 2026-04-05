@@ -99,3 +99,49 @@ session_exists() {
 read_team_windows() {
   _env_val "$1/session.env" TEAM_WINDOWS
 }
+
+# ── Team State Accessors ────────────────────────────────────────────
+# Read a single key from a team env file.
+# Usage: val=$(team_state_get <runtime_dir> <window_index> <KEY> [default])
+team_state_get() {
+  _env_val "${1}/team_${2}.env" "$3" "${4:-}"
+}
+
+# Atomically update a single key in a team env file.
+# Preserves all other keys.  Creates the key if not found.
+# Usage: team_state_set <runtime_dir> <window_index> <KEY> <VALUE>
+team_state_set() {
+  local _tss_file="${1}/team_${2}.env"
+  local _tss_key="$3" _tss_val="$4"
+  local _tss_tmp="${_tss_file}.tmp.$$"
+  local _tss_found=0 _tss_line
+  {
+    if [ -f "$_tss_file" ]; then
+      while IFS= read -r _tss_line || [ -n "$_tss_line" ]; do
+        case "$_tss_line" in
+          "${_tss_key}="*)
+            printf '%s="%s"\n' "$_tss_key" "$_tss_val"
+            _tss_found=1
+            ;;
+          *) printf '%s\n' "$_tss_line" ;;
+        esac
+      done < "$_tss_file"
+    fi
+    [ "$_tss_found" -eq 0 ] && printf '%s="%s"\n' "$_tss_key" "$_tss_val"
+  } > "$_tss_tmp"
+  mv "$_tss_tmp" "$_tss_file"
+}
+
+# ── Config Reload ───────────────────────────────────────────────────
+# Reload configuration after changing to a project directory.
+# Called in launch functions after cd'ing to the project dir so that
+# project-local .doey/config.sh overrides take effect.
+#
+# Idempotent — safe to call multiple times.  Config files are sourced
+# in hierarchy order (global → project-local); last assignment wins.
+#
+# Before: config reflects only previously-loaded sources
+# After:  config includes project-local overrides from cwd's .doey/config.sh
+_doey_reload_config() {
+  _doey_load_config
+}
