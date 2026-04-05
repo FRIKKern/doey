@@ -231,11 +231,17 @@ func (m *PlansModel) SetSnapshot(snap runtime.Snapshot) {
 	for i, p := range m.entries {
 		items[i] = planItem{plan: p}
 	}
+	prevIdx := m.list.Index()
 	m.list.SetItems(items)
 	if len(items) > 0 {
-		m.list.Select(0)
+		if prevIdx >= len(items) {
+			prevIdx = len(items) - 1
+		}
+		if prevIdx < 0 {
+			prevIdx = 0
+		}
+		m.list.Select(prevIdx)
 	}
-	m.detailViewport.GotoTop()
 
 	// Refresh detail content for the newly-selected item (mirrors tasks.go)
 	if m.selectedPlan != nil {
