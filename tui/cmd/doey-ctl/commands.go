@@ -45,6 +45,35 @@ func eventSource() string {
 	return "cli"
 }
 
+// checkSubtasksComplete returns subtasks that are NOT in a terminal state (done, deferred).
+// Returns nil if all subtasks are terminal or none exist.
+func checkSubtasksComplete(s *store.Store, taskID int64) ([]store.Subtask, error) {
+	subs, err := s.ListSubtasks(taskID)
+	if err != nil {
+		return nil, err
+	}
+	var blockers []store.Subtask
+	for _, st := range subs {
+		if st.Status != "done" && st.Status != "deferred" {
+			blockers = append(blockers, st)
+		}
+	}
+	return blockers, nil
+}
+
+// printSubtaskBlockers prints a human-readable error table of blocking subtasks and exits.
+func printSubtaskBlockers(taskID int64, blockers []store.Subtask) {
+	fmt.Fprintf(os.Stderr, "Cannot complete task %d — %d subtask(s) need resolution:\n", taskID, len(blockers))
+	for _, b := range blockers {
+		title := b.Title
+		if len(title) > 60 {
+			title = title[:57] + "..."
+		}
+		fmt.Fprintf(os.Stderr, "  #%d  %-12s  %s\n", b.Seq, b.Status, title)
+	}
+	os.Exit(ExitConflict)
+}
+
 // runTaskCmd dispatches task sub-subcommands.
 func runTaskCmd(args []string) {
 	if len(args) == 0 {
@@ -289,6 +318,16 @@ func runTaskUpdate(args []string) {
 						fatalCode(ExitUsage, "task update: ambiguous status %q, did you mean: %s?\n", *value, strings.Join(matches, ", "))
 					}
 				}
+				// Gate: block done/pending_user_confirmation if non-terminal subtasks exist.
+				if *value == "done" || *value == "pending_user_confirmation" {
+					blockers, err := checkSubtasksComplete(s, id)
+					if err != nil {
+						fatal("task update: checking subtasks: %v", err)
+					}
+					if len(blockers) > 0 {
+						printSubtaskBlockers(id, blockers)
+					}
+				}
 				t.Status = *value
 			case "type":
 				t.Type = *value
@@ -449,6 +488,27 @@ func runTaskTransition(subcmd, status string, args []string) {
 				continue
 			}
 			if t != nil {
+				// Gate: block done/pending_user_confirmation if non-terminal subtasks exist.
+				if status == "done" || status == "pending_user_confirmation" {
+					blockers, err := checkSubtasksComplete(s, t.ID)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "task %s: %s: checking subtasks: %v\n", subcmd, idStr, err)
+						errCount++
+						continue
+					}
+					if len(blockers) > 0 {
+						fmt.Fprintf(os.Stderr, "Cannot complete task %d — %d subtask(s) need resolution:\n", t.ID, len(blockers))
+						for _, b := range blockers {
+							title := b.Title
+							if len(title) > 60 {
+								title = title[:57] + "..."
+							}
+							fmt.Fprintf(os.Stderr, "  #%d  %-12s  %s\n", b.Seq, b.Status, title)
+						}
+						errCount++
+						continue
+					}
+				}
 				t.Status = status
 				if err := s.UpdateTask(t); err != nil {
 					fmt.Fprintf(os.Stderr, "task %s: %s: %v\n", subcmd, idStr, err)
