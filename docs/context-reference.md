@@ -7,7 +7,7 @@ Precedence for Claude Code instances (lowest → highest):
 | Lowest | Agent definitions (`agents/`) | Boss, Subtaskmaster, Taskmaster |
 | | Settings (4-file merge) | All |
 | | Hooks (`.claude/hooks/`) | All |
-| | Skills (`.claude/skills/`) | Manager (+ 3 for Workers) |
+| | Skills (`.claude/skills/`) | Subtaskmaster (+ 3 for Workers) |
 | | Persistent memory | Boss, Subtaskmaster, Taskmaster |
 | | Environment vars (`session.env`) | All |
 | | CLI launch flags | Per-instance |
@@ -20,11 +20,11 @@ Precedence for Claude Code instances (lowest → highest):
 
 Files in `agents/` → `~/.claude/agents/`. Body = system prompt. Precedence: CLI `--model` > frontmatter > settings.
 
-| Field | Boss | Subtaskmaster | Taskmaster | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic |
-|-------|------|---------|-------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|
-| `model` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` |
-| `color` | `#E74C3C` | `green` | `#FF6B35` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` |
-| `memory` | `user` | `user` | `user` | `none` | `none` | `none` | `user` | `user` | `user` | `user` |
+| Field | Boss | Subtaskmaster | Taskmaster | Tmux UI | Settings Editor | Test Driver | Product Brain | Claude Expert | Platform Expert | Critic | Deployment | Doey Expert | Task Reviewer | Worker |
+|-------|------|---------|-------------|---------|-----------------|-------------|---------------|---------------|-----------------|--------|------------|-------------|---------------|--------|
+| `model` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `opus` | `sonnet` | `opus` | `sonnet` | `opus` |
+| `color` | `#E74C3C` | `green` | `#FF6B35` | `#E5C07B` | `#4A90D9` | `red` | `#FFD700` | `magenta` | `cyan` | `red` | `#2196F3` | `#9C27B0` | `#4CAF50` | `#3498DB` |
+| `memory` | `user` | `user` | `user` | `none` | `none` | `none` | `user` | `user` | `user` | `user` | `user` | `user` | `user` | `none` |
 
 Specialist agents (SEO, Visual) loaded only when those teams are spawned.
 
@@ -64,9 +64,9 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback. H
 
 In `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
-- **Subtaskmaster:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-taskmaster-compact`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/unknown-task`
-- **Taskmaster:** `/doey-worktree` (also Subtaskmaster), `/doey-add-window`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`
-- **Worker:** `/doey-status`, `/doey-reserve`, `/doey-stop`
+- **Subtaskmaster:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/doey-debug`, `/doey-nudge`, `/doey-reset`, `/doey-task`, `/unknown-task`
+- **Taskmaster:** `/doey-worktree` (also Subtaskmaster), `/doey-add-window`, `/doey-add-team`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`, `/doey-create-task`, `/doey-instant-task`, `/doey-planned-task`, `/doey-masterplan`, `/doey-task`
+- **Worker:** `/doey-status`, `/doey-reserve`, `/doey-stop`, `/doey-task`
 
 
 ## Persistent Memory
@@ -114,13 +114,26 @@ All in `shell/` → `~/.local/bin/`.
 | `settings-panel.sh` | Settings TUI |
 | `doey-statusline.sh` | Claude Code statusline |
 | `doey-config-default.sh` | Default config template |
+| `doey-constants.sh` | Generated constants from Go (DO NOT EDIT) |
 | `doey-go-check.sh` | Go TUI check |
+| `doey-go-helpers.sh` | Shared Go build functions |
+| `doey-ipc-helpers.sh` | IPC helpers for Taskmaster messaging |
+| `doey-plan-helpers.sh` | Plan CRUD helpers |
+| `doey-remote-provision.sh` | Remote server provisioning |
+| `doey-render-task.sh` | Task file terminal renderer |
+| `doey-roles.sh` | Centralized role definitions |
+| `doey-send.sh` | Send-keys helper with delivery verification |
+| `doey-task-helpers.sh` | Persistent task management library |
+| `doey-tunnel.sh` | Tunnel lifecycle for remote sessions |
+| `expand-templates.sh` | Template expansion for `{{DOEY_ROLE_*}}` placeholders |
 | `pane-border-status.sh` | Pane border formatting |
 | `tmux-statusbar.sh` | Status bar content |
 | `tmux-theme.sh` | Color theme |
 | `tmux-settings-btn.sh` | Settings button |
+| `tmux-window-workers.sh` | Per-window worker dot indicator |
 | `context-audit.sh` | Context rot auditor |
 | `pre-commit-go.sh` | Go pre-commit hook |
+| `pre-push-gate.sh` | Pre-push quality gate |
 
 
 ## tmux Layout
@@ -128,7 +141,7 @@ All in `shell/` → `~/.local/bin/`.
 ```
 Dashboard:  [0.0 Info] [0.1 Boss]
 Core Team:  [1.0 Taskmaster] [1.1 Reviewer] [1.2 Deployment] [1.3 Expert]
-Team W:     [W.0 Mgr] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
+Team W:     [W.0 Subtaskmaster] [W.1 W1 | W.2 W2] [W.3 W3 | W.4 W4] ...
 ```
 
 Dynamic grid auto-expands when all workers are busy.
@@ -136,8 +149,8 @@ Dynamic grid auto-expands when all workers are busy.
 **Pane IPC:** `send-keys` (< 200 chars) · `load-buffer` + `paste-buffer` (long) · `capture-pane` (read)
 
 - **PANE_SAFE:** `${PANE//[-:.]/_}` — `doey-project:0.5` → `doey_project_0_5`
-- **Titles:** `"<pane_id> | <role>"` — `"d-t1-mgr | doey T1 Mgr"`, `"d-tm | doey TM"`
-- **Timing:** Manager briefing 8s; workers ready ~15s
+- **Titles:** `"<pane_id> | <role>"` — `"d-t1-mgr | doey T1 Subtaskmaster"`, `"d-tm | doey TM"`
+- **Timing:** Subtaskmaster briefing 8s; workers ready ~15s
 - **Notifications:** `bell-action none`, `visual-bell off`; uses `osascript`
 
 
@@ -157,7 +170,7 @@ Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 | `status/unchanged_count_<W>_<index>` | Stuck-detection counter |
 | `status/completion_pane_<W>_<index>` | Worker completion event |
 | `status/crash_pane_<W>_<index>` | Crash alert |
-| `status/manager_crashed_W<N>` | Manager crash marker |
+| `status/manager_crashed_W<N>` | Subtaskmaster crash marker |
 | `status/col_*.collapsed` | Collapsed column markers |
 | `research/<pane_safe>.task` | Research task marker |
 | `reports/<pane_safe>.report` | Research report |
@@ -167,11 +180,11 @@ Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 | `triggers/` | Wake triggers (`.trigger` files touched to wake wait hooks) |
 | `lifecycle/` | Lifecycle events from `notify_sm()` (`.evt` files) |
 | `tasks/` | Runtime task cache (synced from `${PROJECT_DIR}/.doey/tasks/` on session start) |
-| `issues/` | Issue reports from Manager (`.issue` files) |
+| `issues/` | Issue reports from Subtaskmaster (`.issue` files) |
 | `logs/` | Per-pane runtime logs |
 | `errors/` | Structured error log (`errors.log`) and individual `.err` files |
 | `debug/` | Debug flight-recorder JSONL (created by `/doey-debug on`) |
-| `context_log_W<N>.md` | **Golden Context Log** — Manager's accumulated knowledge (survives compaction) |
+| `context_log_W<N>.md` | **Golden Context Log** — Subtaskmaster's accumulated knowledge (survives compaction) |
 | `status/state_since_<W>_<idx>` | Duration tracking (epoch when pane entered current state) |
 | `status/taskmaster_trigger` | Taskmaster-specific fast-wake trigger |
 | `status/notif_cooldown_*` | Desktop notification cooldown timestamps |
@@ -180,17 +193,17 @@ Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 
 **Status values:** READY, BUSY, BOOTING, FINISHED, RESERVED, LOGGED_OUT.
 
-**Research lifecycle:** dispatch → `.task` → worker investigates → Stop hook blocks until `.report` → Manager reads.
+**Research lifecycle:** dispatch → `.task` → worker investigates → Stop hook blocks until `.report` → Subtaskmaster reads.
 
 
 ## Debugging
 
 | Symptom | Check |
 |---------|-------|
-| Manager writes code | Memory lacks delegation-first rules |
+| Subtaskmaster writes code | Memory lacks delegation-first rules |
 | Invalid pane dispatch | Check `WORKER_PANES` in session.env |
 | Empty tasks dispatched | Task text empty before Enter |
-| All panes = Manager | Hook missing `-t "$TMUX_PANE"` |
+| All panes = Subtaskmaster | Hook missing `-t "$TMUX_PANE"` |
 | Hooks not firing | Missing `settings.local.json` → `doey init` |
 | Research stops early | Check exit 2 in `stop-status.sh`; verify `.task` exists |
 | Hook changes ignored | Restart workers: `/doey-clear workers` |
