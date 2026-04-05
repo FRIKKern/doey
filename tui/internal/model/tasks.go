@@ -104,6 +104,44 @@ func attachmentEmoji(t string) string {
 	}
 }
 
+// extractPlanSteps parses markdown content and extracts numbered/bulleted items or heading lines.
+// If limit > 0, returns at most that many lines. If limit == 0, returns all.
+func extractPlanSteps(content string, limit int) []string {
+	var steps []string
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Match numbered items (1. ..., 1) ...), bullets (- ..., * ...), or headings (## ...)
+		isStep := false
+		if len(trimmed) > 2 {
+			if trimmed[0] >= '0' && trimmed[0] <= '9' {
+				// Numbered: "1. text" or "1) text"
+				for i := 1; i < len(trimmed); i++ {
+					if trimmed[i] == '.' || trimmed[i] == ')' {
+						isStep = true
+						break
+					}
+					if trimmed[i] < '0' || trimmed[i] > '9' {
+						break
+					}
+				}
+			}
+			if trimmed[0] == '-' || trimmed[0] == '*' || strings.HasPrefix(trimmed, "##") {
+				isStep = true
+			}
+		}
+		if isStep {
+			steps = append(steps, trimmed)
+			if limit > 0 && len(steps) >= limit {
+				break
+			}
+		}
+	}
+	return steps
+}
+
 // renderFileTree builds a directory-grouped file tree from task and result file lists.
 func renderFileTree(t styles.Theme, taskFiles []string, result *runtime.TaskResult) string {
 	// Merge and dedup
@@ -231,6 +269,7 @@ type TasksModel struct {
 	// Sidecar/result for detail view
 	detailSidecar *runtime.TaskSidecar
 	detailResult  *runtime.TaskResult
+	detailPlan    *runtime.Plan
 	projectDir    string
 
 	// Layout
@@ -520,6 +559,13 @@ func (m *TasksModel) loadSelectedDetail() {
 		m.detailResult = runtime.ReadTaskResult(tasksDir, task.ID)
 		m.expanded.Sidecar = m.detailSidecar
 		m.expanded.TaskResult = m.detailResult
+	}
+	// Fetch linked plan if task has a plan_id
+	m.detailPlan = nil
+	if task.PlanID != "" {
+		if pid, err := strconv.Atoi(task.PlanID); err == nil {
+			m.detailPlan = runtime.ReadPlan(m.projectDir, pid)
+		}
 	}
 
 	// Pre-render content into the viewport so Update() can process scroll events.
@@ -1189,19 +1235,36 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		sections = append(sections, styles.MetaLine(t, "Result", task.Result))
 	}
 
-	// Plan link
+	// Plan section — show linked plan with steps preview
 	if task.PlanID != "" {
 		planTitle := task.PlanTitle
 		if planTitle == "" {
 			planTitle = "Plan"
 		}
+		sep := lipgloss.NewStyle().Foreground(t.Separator)
 		planLink := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).
 			Render(fmt.Sprintf("#%s — %s", task.PlanID, planTitle))
 		sections = append(sections, "")
-		sections = append(sections, lipgloss.NewStyle().Foreground(t.Separator).Render("╭ ")+
+		sections = append(sections, sep.Render("╭ ")+
 			lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render("Plan"))
-		sections = append(sections, lipgloss.NewStyle().Foreground(t.Separator).Render("│ ")+planLink)
-		sections = append(sections, lipgloss.NewStyle().Foreground(t.Separator).Render("╰"))
+		sections = append(sections, sep.Render("│ ")+planLink)
+
+		// Render plan body steps if we have the full plan data
+		if p := m.detailPlan; p != nil && p.Content != "" {
+			steps := extractPlanSteps(p.Content, 8)
+			stepStyle := lipgloss.NewStyle().Foreground(t.Muted)
+			for _, step := range steps {
+				sections = append(sections, sep.Render("│   ")+stepStyle.Render(step))
+			}
+			// Count total lines to show overflow
+			allSteps := extractPlanSteps(p.Content, 0)
+			if len(allSteps) > 8 {
+				sections = append(sections, sep.Render("│   ")+
+					lipgloss.NewStyle().Faint(true).Foreground(t.Muted).
+						Render(fmt.Sprintf("… +%d more", len(allSteps)-8)))
+			}
+		}
+		sections = append(sections, sep.Render("╰"))
 	}
 
 	// Blockers — highlighted red
@@ -1332,52 +1395,106 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		}
 	}
 
-	// Attachments — structured TaskAttachments with fallback to plain Attachments
+	// Split attachments into research and other
 	if len(task.TaskAttachments) > 0 {
-		display := task.TaskAttachments
-		if len(display) > 20 {
-			display = display[:20]
+		var research, other []runtime.PersistentAttachment
+		for _, att := range task.TaskAttachments {
+			if att.Type == "research" {
+				research = append(research, att)
+			} else {
+				other = append(other, att)
+			}
 		}
-		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("ATTACHMENTS (%d)", len(task.TaskAttachments))))
+
 		now := time.Now()
 		bodyStyle := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(4)
-		for _, att := range display {
-			emoji := attachmentEmoji(att.Type)
-			typeColor := styles.AttachmentTypeColor(t, att.Type)
-			badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
 
-			titleText := att.Title
-			if titleText == "" {
-				titleText = att.Filename
-			}
-			title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
+		// Research section — shown first with extended preview
+		if len(research) > 0 {
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("RESEARCH (%d)", len(research))))
+			for _, att := range research {
+				titleText := att.Title
+				if titleText == "" {
+					titleText = att.Filename
+				}
+				title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
+				meta := ""
+				if att.Author != "" {
+					meta += " — " + lipgloss.NewStyle().Foreground(t.Muted).Render(att.Author)
+				}
+				if att.Timestamp > 0 {
+					elapsed := now.Sub(time.Unix(att.Timestamp, 0))
+					meta += ", " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+				}
+				sections = append(sections, fmt.Sprintf("  %s %s%s", attachmentEmoji("research"), title, meta))
 
-			meta := ""
-			if att.Author != "" {
-				meta += " — " + lipgloss.NewStyle().Foreground(t.Muted).Render(att.Author)
-			}
-			if att.Timestamp > 0 {
-				elapsed := now.Sub(time.Unix(att.Timestamp, 0))
-				meta += ", " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
-			}
-			sections = append(sections, fmt.Sprintf("  %s %s%s", badge, title, meta))
-
-			// Body preview — first 4 non-empty lines
-			if att.Body != "" {
-				lines := strings.Split(att.Body, "\n")
-				shown := 0
-				for _, line := range lines {
-					if strings.TrimSpace(line) == "" {
-						continue
+				// Body preview — first 5 non-empty lines for research
+				if att.Body != "" {
+					lines := strings.Split(att.Body, "\n")
+					shown := 0
+					for _, line := range lines {
+						if strings.TrimSpace(line) == "" {
+							continue
+						}
+						if shown >= 5 {
+							sections = append(sections, bodyStyle.Render(
+								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", len(lines)-shown))))
+							break
+						}
+						sections = append(sections, bodyStyle.Render(line))
+						shown++
 					}
-					if shown >= 4 {
-						sections = append(sections, bodyStyle.Render(
-							lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", len(lines)-shown))))
-						break
+				}
+				sections = append(sections, "")
+			}
+		}
+
+		// Other attachments
+		if len(other) > 0 {
+			display := other
+			if len(display) > 20 {
+				display = display[:20]
+			}
+			sections = append(sections, "")
+			sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("ATTACHMENTS (%d)", len(other))))
+			for _, att := range display {
+				emoji := attachmentEmoji(att.Type)
+				typeColor := styles.AttachmentTypeColor(t, att.Type)
+				badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
+
+				titleText := att.Title
+				if titleText == "" {
+					titleText = att.Filename
+				}
+				title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
+
+				meta := ""
+				if att.Author != "" {
+					meta += " — " + lipgloss.NewStyle().Foreground(t.Muted).Render(att.Author)
+				}
+				if att.Timestamp > 0 {
+					elapsed := now.Sub(time.Unix(att.Timestamp, 0))
+					meta += ", " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+				}
+				sections = append(sections, fmt.Sprintf("  %s %s%s", badge, title, meta))
+
+				// Body preview — first 4 non-empty lines
+				if att.Body != "" {
+					lines := strings.Split(att.Body, "\n")
+					shown := 0
+					for _, line := range lines {
+						if strings.TrimSpace(line) == "" {
+							continue
+						}
+						if shown >= 4 {
+							sections = append(sections, bodyStyle.Render(
+								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", len(lines)-shown))))
+							break
+						}
+						sections = append(sections, bodyStyle.Render(line))
+						shown++
 					}
-					sections = append(sections, bodyStyle.Render(line))
-					shown++
 				}
 			}
 		}

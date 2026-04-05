@@ -8,6 +8,7 @@ import (
 // Plan represents a saved plan in the store.
 type Plan struct {
 	ID        int64  `json:"id"`
+	TaskID    *int64 `json:"task_id,omitempty"`
 	Title     string `json:"title"`
 	Status    string `json:"status"`
 	Body      string `json:"body,omitempty"`
@@ -20,8 +21,8 @@ func (s *Store) CreatePlan(p *Plan) (int64, error) {
 	p.CreatedAt = now
 	p.UpdatedAt = now
 	res, err := s.db.Exec(
-		`INSERT INTO plans (title, status, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-		p.Title, p.Status, p.Body, p.CreatedAt, p.UpdatedAt,
+		`INSERT INTO plans (task_id, title, status, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		p.TaskID, p.Title, p.Status, p.Body, p.CreatedAt, p.UpdatedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -37,8 +38,8 @@ func (s *Store) CreatePlan(p *Plan) (int64, error) {
 func (s *Store) GetPlan(id int64) (*Plan, error) {
 	p := &Plan{}
 	err := s.db.QueryRow(
-		`SELECT id, title, status, body, created_at, updated_at FROM plans WHERE id = ?`, id,
-	).Scan(&p.ID, &p.Title, &p.Status, &p.Body, &p.CreatedAt, &p.UpdatedAt)
+		`SELECT id, task_id, title, status, body, created_at, updated_at FROM plans WHERE id = ?`, id,
+	).Scan(&p.ID, &p.TaskID, &p.Title, &p.Status, &p.Body, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, sql.ErrNoRows
 	}
@@ -49,7 +50,7 @@ func (s *Store) GetPlan(id int64) (*Plan, error) {
 }
 
 func (s *Store) ListPlans() ([]Plan, error) {
-	rows, err := s.db.Query(`SELECT id, title, status, body, created_at, updated_at FROM plans ORDER BY id`)
+	rows, err := s.db.Query(`SELECT id, task_id, title, status, body, created_at, updated_at FROM plans ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +59,7 @@ func (s *Store) ListPlans() ([]Plan, error) {
 	var plans []Plan
 	for rows.Next() {
 		var p Plan
-		if err := rows.Scan(&p.ID, &p.Title, &p.Status, &p.Body, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.TaskID, &p.Title, &p.Status, &p.Body, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		plans = append(plans, p)
@@ -69,8 +70,8 @@ func (s *Store) ListPlans() ([]Plan, error) {
 func (s *Store) UpdatePlan(p *Plan) error {
 	p.UpdatedAt = time.Now().Unix()
 	_, err := s.db.Exec(
-		`UPDATE plans SET title = ?, status = ?, body = ?, updated_at = ? WHERE id = ?`,
-		p.Title, p.Status, p.Body, p.UpdatedAt, p.ID,
+		`UPDATE plans SET task_id = ?, title = ?, status = ?, body = ?, updated_at = ? WHERE id = ?`,
+		p.TaskID, p.Title, p.Status, p.Body, p.UpdatedAt, p.ID,
 	)
 	return err
 }

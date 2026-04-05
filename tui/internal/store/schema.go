@@ -145,6 +145,8 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE tasks ADD COLUMN summary TEXT DEFAULT ''`,
 		`ALTER TABLE tasks ADD COLUMN phase TEXT DEFAULT ''`,
 		`ALTER TABLE tasks ADD COLUMN intent TEXT DEFAULT ''`,
+		// plans: add task_id for plan-task linkage (task #263)
+		`ALTER TABLE plans ADD COLUMN task_id INTEGER`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors

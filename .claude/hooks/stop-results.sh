@@ -181,6 +181,35 @@ ATTACH_EOF
     _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}/attachments/${_ATTACH_TS}_completion_${_PANE_SAFE}.md" 2>/dev/null || true
   fi
 
+  # Copy research reports to persistent task attachments
+  _RES_DIR="${RUNTIME_DIR}/research"
+  if [ -d "$_RES_DIR" ]; then
+    _RES_PANE="${WINDOW_INDEX}_${PANE_INDEX}"
+    _RES_ATTACH_DIR="${PROJECT_DIR}/.doey/tasks/${local_task_id}/attachments"
+    mkdir -p "$_RES_ATTACH_DIR" 2>/dev/null || true
+    _RES_TS=$(date +%s)
+    for _rfile in "${_RES_DIR}/task_${local_task_id}"*.md "${_RES_DIR}/${_RES_PANE}"*.md "${_RES_DIR}/pane_${_RES_PANE}"*.md; do
+      [ -f "$_rfile" ] || continue
+      _rbase=$(basename "$_rfile")
+      _rdest_name="${_RES_TS}_research_${_rbase}"
+      _rdest="${_RES_ATTACH_DIR}/${_rdest_name}"
+      [ -f "$_rdest" ] && continue
+      {
+        printf '%s\n' "---"
+        printf '%s\n' "type: research"
+        printf 'title: Research report from %s %s.%s\n' "${DOEY_ROLE_WORKER:-Worker}" "$WINDOW_INDEX" "$PANE_INDEX"
+        printf 'author: %s_%s\n' "${DOEY_ROLE_WORKER:-Worker}" "$_RES_PANE"
+        printf 'timestamp: %s\n' "$_RES_TS"
+        printf 'task_id: %s\n' "$local_task_id"
+        printf 'source: %s\n' "$_rbase"
+        printf '%s\n' "---"
+        printf '\n'
+        cat "$_rfile"
+      } > "$_rdest" 2>/dev/null || true
+      _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}/attachments/${_rdest_name}" 2>/dev/null || true
+    done
+  fi
+
   # Compute files changed count before subshell (value would be lost inside)
   _FILES_COUNT=0
   [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
