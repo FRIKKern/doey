@@ -145,7 +145,7 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 # 'doey' is the user-facing CLI. Subcommands like msg/status/task are
 # handled by the internal doey-ctl binary, forwarded transparently here.
 case "${1:-}" in
-  msg|status|health|task|tmux|plan|team|config|agent|event|nudge|migrate)
+  msg|status|health|task|tmux|plan|team|config|agent|event|nudge|migrate|interaction|briefing)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else
