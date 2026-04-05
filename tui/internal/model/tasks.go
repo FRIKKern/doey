@@ -10,12 +10,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
-	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 	"github.com/doey-cli/doey/tui/internal/taskcard"
@@ -237,6 +235,8 @@ func renderFileTree(t styles.Theme, taskFiles []string, result *runtime.TaskResu
 
 // TasksModel displays tasks in a split-pane layout with list left, detail right.
 type TasksModel struct {
+	SplitPaneModel
+
 	// Data
 	entries      []runtime.PersistentTask
 	subtaskMap   map[string][]runtime.Subtask
@@ -245,15 +245,6 @@ type TasksModel struct {
 	paneStatuses map[string]runtime.PaneStatus
 	paneResults  map[string]runtime.PaneResult
 	events       []runtime.Event
-	theme        styles.Theme
-
-	// Card-based list
-	list list.Model
-
-	// Navigation — split-pane
-	leftFocused    bool           // true = list panel focused, false = detail panel focused
-	detailViewport viewport.Model // viewport for right detail panel scrolling
-	keyMap         keys.KeyMap
 
 	// Input modes
 	creating  bool
@@ -263,46 +254,29 @@ type TasksModel struct {
 	expanded         *taskcard.ExpandedCard
 	expandedSubtasks map[int]bool // tracks which subtasks are toggled open in detail view
 
-	// Status feedback
-	statusMsg string
-
 	// Sidecar/result for detail view
 	detailSidecar *runtime.TaskSidecar
 	detailResult  *runtime.TaskResult
 	detailPlan    *runtime.Plan
 	projectDir    string
 
-	// Layout
-	width        int
-	height       int
-	focused      bool
-	showHelp     bool
-	panelOffsetY int // absolute Y of panel top in terminal
+	// UI state
+	showHelp bool
 }
 
 // NewTasksModel creates a tasks panel starting with left panel focused.
 func NewTasksModel() TasksModel {
 	theme := styles.DefaultTheme()
 	delegate := taskcard.NewCardDelegate(theme)
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowStatusBar(false)
-	l.SetShowFilter(false)
-	l.SetShowHelp(false)
-	l.SetShowPagination(true)
-	l.KeyMap.CursorUp = key.NewBinding(key.WithKeys("k", "up"))
-	l.KeyMap.CursorDown = key.NewBinding(key.WithKeys("j", "down"))
-
-	vp := viewport.New(0, 0)
-	vp.MouseWheelEnabled = true
-
 	return TasksModel{
-		theme:          theme,
-		leftFocused:    true,
-		detailViewport: vp,
-		keyMap:         keys.DefaultKeyMap(),
-		subtaskMap:     make(map[string][]runtime.Subtask),
-		list:           l,
+		SplitPaneModel: NewSplitPane(theme, delegate, SplitPaneConfig{
+			CardHeight:     2,
+			HeaderLines:    2,
+			HasSeparator:   false,
+			VPHeightOffset: 3,
+			VPWidthPad:     3,
+		}),
+		subtaskMap: make(map[string][]runtime.Subtask),
 	}
 }
 
@@ -311,35 +285,17 @@ func (m TasksModel) Init() tea.Cmd { return nil }
 
 // SetSize updates the panel dimensions.
 func (m *TasksModel) SetSize(w, h int) {
-	m.width = w
-	m.height = h
-	// Size the list for the left panel width
-	leftW := w * 40 / 100
-	if leftW < 28 {
-		leftW = 28
-	}
-	m.list.SetSize(leftW, h-2) // header + summary = 2 lines above list
-	rightW := w - leftW
-	if rightW < 24 {
-		rightW = 24
-	}
-	vpH := h - 2
+	m.SplitPaneModel.SetSize(w, h)
+	rightW := m.RightWidth()
+	vpH := h - m.config.VPHeightOffset
 	if vpH < 1 {
 		vpH = 1
 	}
-	m.detailViewport.Width = rightW - 3 // account for panel padding + border
-	m.detailViewport.Height = vpH - 1   // leave room for hint bar
 	if m.expanded != nil {
-		m.expanded.Width = rightW - 3
+		m.expanded.Width = rightW - m.config.VPWidthPad
 		m.expanded.Height = vpH
 	}
 }
-
-// SetFocused toggles focus state.
-func (m *TasksModel) SetFocused(focused bool) { m.focused = focused }
-
-// SetPanelOffset sets the absolute Y offset of the panel top in the terminal.
-func (m *TasksModel) SetPanelOffset(y int) { m.panelOffsetY = y }
 
 // SetSnapshot merges persistent + runtime tasks and rebuilds the view.
 func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
@@ -1051,7 +1007,7 @@ func (m TasksModel) View() string {
 	leftPanel := m.renderLeftPanel(leftW, h)
 	rightPanel := m.renderExpandedRightPanel(rightW, h)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+	return m.RenderPanels(leftPanel, rightPanel)
 }
 
 // renderLeftPanel renders the task list.

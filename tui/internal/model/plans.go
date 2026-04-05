@@ -14,14 +14,12 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/doey-cli/doey/tui/internal/ctl"
-	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
@@ -133,32 +131,16 @@ func planStatusIcon(status string, t styles.Theme) string {
 
 // PlansModel displays plans in a split-pane layout with list left, detail right.
 type PlansModel struct {
+	SplitPaneModel
+
 	// Data
 	entries      []Plan
-	theme        styles.Theme
 	selectedPlan *Plan
 
-	// Card-based list
-	list list.Model
-
-	// Navigation — split-pane
-	leftFocused    bool
-	detailViewport viewport.Model
-	keyMap         keys.KeyMap
-
 	// Glamour rendering cache
-	lastRenderedBody  string // raw body that was last rendered
-	lastRenderWidth   int    // viewport width used for last render
-	glamourCache      string // cached glamour output
-
-	// Layout
-	width        int
-	height       int
-	focused      bool
-	panelOffsetY int // absolute Y of panel top in terminal
-
-	// Status feedback
-	statusMsg string
+	lastRenderedBody string // raw body that was last rendered
+	lastRenderWidth  int   // viewport width used for last render
+	glamourCache     string // cached glamour output
 
 	// Build state
 	building       bool
@@ -168,24 +150,14 @@ type PlansModel struct {
 // NewPlansModel creates a plans panel starting with left panel focused.
 func NewPlansModel(theme styles.Theme) PlansModel {
 	delegate := planCardDelegate{theme: theme}
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowStatusBar(false)
-	l.SetShowFilter(false)
-	l.SetShowHelp(false)
-	l.SetShowPagination(true)
-	l.KeyMap.CursorUp = key.NewBinding(key.WithKeys("k", "up"))
-	l.KeyMap.CursorDown = key.NewBinding(key.WithKeys("j", "down"))
-
-	vp := viewport.New(0, 0)
-	vp.MouseWheelEnabled = true
-
 	return PlansModel{
-		theme:          theme,
-		leftFocused:    true,
-		detailViewport: vp,
-		keyMap:         keys.DefaultKeyMap(),
-		list:           l,
+		SplitPaneModel: NewSplitPane(theme, delegate, SplitPaneConfig{
+			CardHeight:     3,
+			HeaderLines:    1,
+			HasSeparator:   true,
+			VPHeightOffset: 3,
+			VPWidthPad:     4,
+		}),
 	}
 }
 
@@ -197,37 +169,12 @@ func (m PlansModel) Init() tea.Cmd { return nil }
 
 // SetSize updates the panel dimensions.
 func (m *PlansModel) SetSize(w, h int) {
-	m.width = w
-	m.height = h
-	leftW := w * 40 / 100
-	if leftW < 28 {
-		leftW = 28
-	}
-	m.list.SetSize(leftW, h-1) // header = 1 line above list
-	rightW := w - leftW - 1
-	if rightW < 24 {
-		rightW = 24
-	}
-	vpH := h - 3 // account for header, scroll hint, button row, and parent chrome
-	if vpH < 1 {
-		vpH = 1
-	}
-	m.detailViewport.Width = rightW - 4
-	m.detailViewport.Height = vpH
-
+	m.SplitPaneModel.SetSize(w, h)
 	// Re-render glamour content if width changed
 	if m.detailViewport.Width != m.lastRenderWidth && m.selectedPlan != nil {
 		m.loadSelectedDetail()
 	}
 }
-
-// SetFocused toggles focus state.
-func (m *PlansModel) SetFocused(focused bool) {
-	m.focused = focused
-}
-
-// SetPanelOffset sets the absolute Y offset of the panel top in the terminal.
-func (m *PlansModel) SetPanelOffset(y int) { m.panelOffsetY = y }
 
 // SetSnapshot reads plans from the snapshot and rebuilds the view.
 func (m *PlansModel) SetSnapshot(snap runtime.Snapshot) {
@@ -842,7 +789,6 @@ func (m *PlansModel) renderMarkdown(body string) string {
 
 // View renders the split-pane layout.
 func (m PlansModel) View() string {
-	t := m.theme
 	w := m.width
 	if w < 52 {
 		w = 52
@@ -864,12 +810,7 @@ func (m PlansModel) View() string {
 	leftPanel := m.renderLeftPanel(leftW, h)
 	rightPanel := m.renderRightPanel(rightW, h)
 
-	sepColor := t.Separator
-	sep := lipgloss.NewStyle().
-		Foreground(sepColor).
-		Render(strings.Repeat("│\n", h-1) + "│")
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sep, rightPanel)
+	return m.RenderPanels(leftPanel, rightPanel)
 }
 
 // renderLeftPanel renders the plan list.
