@@ -538,7 +538,13 @@ func (m *TasksModel) loadSelectedDetail() {
 
 	// Pre-render content into the viewport so Update() can process scroll events.
 	// Without this, the viewport has 0 lines and ignores all scroll input.
+	savedYOffset := m.detailViewport.YOffset
 	m.detailViewport.SetContent(m.expanded.Render())
+	// Restore scroll position after content refresh (prevents jump-to-top on tick)
+	maxY := m.detailViewport.TotalLineCount() - m.detailViewport.Height
+	if maxY < 0 { maxY = 0 }
+	if savedYOffset > maxY { savedYOffset = maxY }
+	m.detailViewport.SetYOffset(savedYOffset)
 }
 
 // Update handles input modes, detail, and list navigation.
@@ -1792,9 +1798,14 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 
 	// Render full content and feed to viewport
 	content := expanded.Render()
+	savedYOffset := m.detailViewport.YOffset
 	m.detailViewport.Width = renderW
 	m.detailViewport.Height = vpH - 1 // leave room for hint bar
 	m.detailViewport.SetContent(content)
+	maxY := m.detailViewport.TotalLineCount() - m.detailViewport.Height
+	if maxY < 0 { maxY = 0 }
+	if savedYOffset > maxY { savedYOffset = maxY }
+	m.detailViewport.SetYOffset(savedYOffset)
 
 	displayed := m.detailViewport.View()
 
