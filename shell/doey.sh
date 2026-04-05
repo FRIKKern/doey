@@ -42,96 +42,6 @@ command -v gum >/dev/null 2>&1 && HAS_GUM=true
 
 # ── Charmbracelet wrappers (gum with plain-text fallback) ────────────
 
-doey_style() {
-  # Usage: doey_style "text" [--foreground N] [--bold] [--border rounded] etc.
-  if [ "$HAS_GUM" = true ]; then
-    gum style "$@"
-  else
-    local text=""
-    local arg
-    for arg in "$@"; do
-      case "$arg" in --*) ;; *) text="$arg"; break ;; esac
-    done
-    printf '%s\n' "$text"
-  fi
-}
-
-doey_header() {
-  # Styled section header — e.g., "Doey — System Check"
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 6 --bold --padding "0 1" --margin "1 0 0 0" "◆ $1"
-  else
-    printf "\n  ${BRAND}${BOLD}%s${RESET}\n" "$1"
-  fi
-}
-
-doey_confirm() {
-  # Usage: doey_confirm "Delete session?" — returns 0=yes, 1=no
-  if [ "$HAS_GUM" = true ]; then
-    gum confirm "$1"
-  else
-    printf "  %s [y/N] " "$1"
-    read -r reply
-    case "$reply" in [Yy]*) return 0 ;; *) return 1 ;; esac
-  fi
-}
-
-doey_confirm_default_yes() {
-  # Same but default is Yes
-  if [ "$HAS_GUM" = true ]; then
-    gum confirm --default=yes "$1"
-  else
-    printf "  %s [Y/n] " "$1"
-    read -r reply
-    case "$reply" in [Nn]*) return 1 ;; *) return 0 ;; esac
-  fi
-}
-
-doey_choose() {
-  # Usage: selected=$(doey_choose "option1" "option2" "option3")
-  if [ "$HAS_GUM" = true ]; then
-    gum choose "$@"
-  else
-    local i=1
-    local item
-    for item in "$@"; do printf "  %d) %s\n" "$i" "$item"; i=$((i + 1)); done
-    printf "  Choice: "
-    read -r choice
-    local j=1
-    for item in "$@"; do
-      if [ "$j" = "$choice" ]; then echo "$item"; return 0; fi
-      j=$((j + 1))
-    done
-    return 1
-  fi
-}
-
-doey_input() {
-  # Usage: value=$(doey_input "Prompt text" "placeholder" "default")
-  if [ "$HAS_GUM" = true ]; then
-    gum input --prompt "$1: " --placeholder "${2:-}" --value "${3:-}"
-  else
-    printf "  %s" "$1: "
-    if [ -n "${3:-}" ]; then printf "[%s] " "$3"; fi
-    local value
-    read -r value
-    if [ -z "$value" ] && [ -n "${3:-}" ]; then value="$3"; fi
-    echo "$value"
-  fi
-}
-
-doey_spin() {
-  # Usage: doey_spin "Installing..." command arg1 arg2
-  local title="$1"; shift
-  if [ "$HAS_GUM" = true ]; then
-    gum spin --spinner dot --title "$title" -- "$@"
-  else
-    printf "  %s" "$title"
-    "$@" >/dev/null 2>&1
-    printf " done\n"
-  fi
-}
-
 doey_success() {
   if [ "$HAS_GUM" = true ]; then
     gum style --foreground 2 "✓ $1"
@@ -3233,7 +3143,7 @@ reload_session() {
       tmux copy-mode -q -t "$mgr_ref" 2>/dev/null || true
       doey_send_command "$mgr_ref" "clear"
       sleep 0.2
-      mgr_agent=$(generate_team_agent "doey-manager" "$tw")
+      mgr_agent=$(generate_team_agent "doey-subtaskmaster" "$tw")
       local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
       _append_settings _rl_mgr_cmd "$runtime_dir"
       doey_send_command "$mgr_ref" "${_DRAIN_STDIN}${_rl_mgr_cmd}"
@@ -3390,7 +3300,7 @@ check_doctor() {
   # Installed files
   local _f _label _doey_repo
   _doey_repo="$(resolve_repo_dir)"
-  for _f in "$HOME/.claude/agents/doey-manager.md:Agents" \
+  for _f in "$HOME/.claude/agents/doey-subtaskmaster.md:Agents" \
             "$_doey_repo/.claude/skills/doey-dispatch/SKILL.md:Skills" \
             "$HOME/.local/bin/doey:CLI"; do
     _label="${_f##*:}"; _f="${_f%:*}"
@@ -4561,7 +4471,7 @@ _launch_team_manager() {
   if [ -n "$mgr_agent_override" ]; then
     mgr_agent="$mgr_agent_override"
   else
-    mgr_agent=$(generate_team_agent "doey-manager" "$window_index")
+    mgr_agent=$(generate_team_agent "doey-subtaskmaster" "$window_index")
   fi
   local _proj="${session#doey-}"
   local _mgr_name="${mgr_name_override:-T${window_index} ${DOEY_ROLE_TEAM_LEAD}}"
@@ -4768,7 +4678,7 @@ add_team_from_def() {
 
   # Launch manager (pane 0)
   local mgr_agent="" mgr_name=""
-  mgr_agent=$(_env_val "$env_file" PANE_0_AGENT "doey-manager")
+  mgr_agent=$(_env_val "$env_file" PANE_0_AGENT "doey-subtaskmaster")
   mgr_name=$(_env_val "$env_file" PANE_0_NAME "Manager")
   local mgr_agent_name
   mgr_agent_name=$(generate_team_agent "$mgr_agent" "$window_index")
@@ -4988,80 +4898,6 @@ add_dynamic_team_window() {
     _brief_team "$session" "$window_index" "$_WPL_RESULT" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role"
     _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
   fi
-}
-
-add_team_window() {
-  local session="$1" runtime_dir="$2" dir="$3" grid="${4:-4x2}"
-  local worktree_spec="${5:-}"
-  local team_name="${6:-}" team_role="${7:-}" worker_model="${8:-}" manager_model="${9:-}"
-  local cols rows total_panes
-  cols="${grid%x*}"; rows="${grid#*x}"; total_panes=$((cols * rows))
-
-  if [ "$total_panes" -lt 3 ]; then
-    printf "  ${ERROR}Grid %s too small — need at least 3 panes${RESET}\n" "$grid"
-    return 1
-  fi
-
-  local window_index
-  window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
-
-  local team_dir="$dir" worktree_branch="" wt_dir_for_env=""
-  if [ -n "$worktree_spec" ]; then
-    team_dir=$(create_team_worktree "$dir" "$window_index" "$worktree_spec") || {
-      printf "  ${ERROR}Failed to create worktree for team %s${RESET}\n" "$window_index" >&2
-      tmux kill-window -t "${session}:${window_index}" 2>/dev/null
-      return 1
-    }
-    worktree_branch=$(git -C "$team_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$worktree_spec")
-    wt_dir_for_env="$team_dir"
-    install_doey_hooks "$team_dir" "  "
-  fi
-
-  printf "  ${DIM}Creating team window %s (%s grid, %s panes)...${RESET}\n" "$window_index" "$grid" "$total_panes"
-  _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
-
-  local r c
-  for (( r=1; r<rows; r++ )); do
-    tmux split-window -v -t "${session}:${window_index}.0" -c "$team_dir"
-  done
-  [ "$rows" -le 1 ] || tmux select-layout -t "${session}:${window_index}" even-vertical
-  for (( r=0; r<rows; r++ )); do
-    for (( c=1; c<cols; c++ )); do
-      tmux split-window -h -t "${session}:${window_index}.$((r * cols))" -c "$team_dir"
-    done
-  done
-
-  local actual
-  actual=$(tmux list-panes -t "${session}:${window_index}" 2>/dev/null | wc -l)
-  actual="${actual// /}"
-  [ "$actual" -eq "$total_panes" ] || printf "  ${WARN}Expected %s panes but got %s — terminal may be too small${RESET}\n" "$total_panes" "$actual"
-
-  # Apply manager-left layout: pane 0 full-height left, workers in 2-row columns
-  rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
-
-  local worker_panes worker_count
-  worker_panes=$(_build_worker_csv "$total_panes")
-  worker_count=$((total_panes - 1))
-
-  local i
-  for (( i=1; i<total_panes; i++ )); do
-    tmux select-pane -t "${session}:${window_index}.${i}" -T "T${window_index} W${i}"
-  done
-
-  write_team_env "$runtime_dir" "$window_index" "$grid" "$worker_panes" "$worker_count" "0" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model"
-  _register_team_window "$runtime_dir" "$window_index"
-  _ensure_worker_prompt "$runtime_dir" "$team_dir"
-  _launch_team_manager "$session" "$runtime_dir" "$window_index"
-
-  local _aw_pairs=()
-  for (( i=1; i<total_panes; i++ )); do
-    _aw_pairs+=("${i}:${i}")
-  done
-  _batch_boot_workers "$session" "$runtime_dir" "$window_index" "${_aw_pairs[@]}"
-
-  _build_worker_pane_list "$session" "$window_index"
-  _brief_team "$session" "$window_index" "$_WPL_RESULT" "$worker_count" "Grid ${grid}" "" "$team_name" "$team_role"
-  _print_team_created "$window_index" "grid ${grid}" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
 }
 
 kill_team_window() {

@@ -86,7 +86,7 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 |------|-------|---------|
 | `common.sh` | — | Shared library: `init_hook()`, `parse_field()`, role checks, `send_notification()` |
 | `on-session-start.sh` | Session start | Injects DOEY_* env vars (ROLE, PANE_INDEX, WINDOW_INDEX, RUNTIME, etc.) |
-| `on-prompt-submit.sh` | Before prompt | Sets BUSY status, READY on /compact, restores collapsed columns |
+| `on-prompt-submit.sh` | Before prompt | Sets BUSY status, restores collapsed columns |
 | `on-pre-tool-use.sh` | Before each tool | Role-based safety guards |
 | `on-pre-compact.sh` | Before compaction | Preserves task context, role identity, recent file list |
 | `post-tool-lint.sh` | After Write/Edit on .sh | Bash 3.2 compatibility lint (catches violations automatically) |

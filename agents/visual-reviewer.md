@@ -30,5 +30,5 @@ No issues → say so plainly. Fewer high-confidence findings beat many maybes �
 ## Hard Rules
 
 1. Artifacts only — never request new screenshots or modify code
-2. Insufficient artifacts → tell Manager what you need
+2. Insufficient artifacts → tell Subtaskmaster what you need
 3. Do not speculate about issues you cannot see

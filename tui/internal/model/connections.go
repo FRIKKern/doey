@@ -163,7 +163,7 @@ func (m ConnectionsModel) updateKey(msg tea.KeyMsg) (ConnectionsModel, tea.Cmd) 
 
 	switch {
 	// Focus right panel
-	case key.Matches(msg, m.keyMap.RightPanel) || (!m.leftFocused && false) || (m.leftFocused && key.Matches(msg, m.keyMap.Select)):
+	case key.Matches(msg, m.keyMap.RightPanel) || (m.leftFocused && key.Matches(msg, m.keyMap.Select)):
 		if m.leftFocused && total > 0 {
 			m.leftFocused = false
 			m.rightScroll = 0
