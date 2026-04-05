@@ -27,7 +27,7 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 
 **Shippable pattern:** `shell/` → `install.sh` → `_init_doey_session()` → `--settings` on launch. Never edit `~/.claude/settings.json`.
 
-**Ships:** `shell/`, `agents/`, `.claude/hooks/`, `.claude/skills/`, `docs/`, `install.sh`, `web-install.sh`
+**Ships:** `shell/`, `agents/`, `.claude/hooks/`, `.claude/skills/`, `docs/`, `teams/`, `tui/`, `tests/`, `install.sh`, `web-install.sh`
 **Local only:** `~/.claude/settings.json`, `~/.config/doey/config.sh`, `/tmp/doey/`
 
 ## Architecture
@@ -63,7 +63,7 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 ## Philosophy
 
 - **Strategic utilization over brute-force parallelism.** Fewer workers used well beat many used carelessly
-- **The Manager is the bastion.** Workers produce raw output — Manager validates, distills, and decides what becomes knowledge
+- **The Subtaskmaster is the bastion.** Workers produce raw output — Subtaskmaster validates, distills, and decides what becomes knowledge
 - **Force multipliers over headcount:** ultrathink, `/batch`, `/doey-research`, agent swarms. Scale only when parallelism genuinely helps
 - **Task-obsessed naming.** Our coordinator is the Taskmaster, not a manager. Teams are led by Subtaskmasters. Never abbreviate — always use the full name
 
@@ -93,6 +93,9 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 | `stop-status.sh` | On stop (sync) | Sets FINISHED/RESERVED status, blocks incomplete research |
 | `stop-results.sh` | On stop (async) | Captures output, files changed, tool counts → JSON result |
 | `stop-notify.sh` | On stop (async) | Notification chain: Worker → Subtaskmaster → Taskmaster → desktop |
+| `stop-plan-tracking.sh` | On stop (async) | Plan tracking on stop |
+| `on-notification.sh` | Notification | Notification routing |
+| `post-push-complete.sh` | After git push | Post-push operations |
 | ~~`watchdog-scan.sh`~~ | Watchdog cycle | DEPRECATED |
 | ~~`watchdog-wait.sh`~~ | Watchdog idle | DEPRECATED |
 | `taskmaster-wait.sh` | Taskmaster idle | Multi-trigger sleep: messages, results, crash alerts |
@@ -137,7 +140,7 @@ Never edit generated `.md` files directly — edit the `.md.tmpl` template inste
 
 | Changed | Action |
 |---------|--------|
-| Agents | Restart Manager |
+| Agents | Restart Subtaskmaster |
 | Hooks | Restart ALL workers (`doey reload --workers`) — hooks load at startup |
 | Skills | No restart needed (loaded on-demand) |
 | Shell scripts | Run `tests/test-bash-compat.sh` |
@@ -146,6 +149,6 @@ Never edit generated `.md` files directly — edit the `.md.tmpl` template inste
 
 ## Important Files
 
-**Shell:** `shell/doey.sh` (CLI entry ~3000 lines), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor), `shell/pane-border-status.sh` (pane borders), `shell/tmux-statusbar.sh` (status bar)
+**Shell:** `shell/doey.sh` (CLI entry ~6100 lines), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor), `shell/pane-border-status.sh` (pane borders), `shell/tmux-statusbar.sh` (status bar)
 
 **Docs:** `docs/context-reference.md` (authoritative architecture reference)
