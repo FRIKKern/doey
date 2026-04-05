@@ -23,10 +23,11 @@ import (
 // TaskItem wraps a PersistentTask for use in a bubbles list.
 // It implements list.Item and list.DefaultItem.
 type TaskItem struct {
-	Task         runtime.PersistentTask
-	Subtasks     []runtime.Subtask
-	SubtaskDone  int
-	SubtaskTotal int
+	Task            runtime.PersistentTask
+	Subtasks        []runtime.Subtask
+	SubtaskDone     int
+	SubtaskTotal    int
+	SubtaskDeferred int
 }
 
 // Title returns the task title for the list.
@@ -186,7 +187,7 @@ func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatSta
 
 	// Subtask progress (compact)
 	if ti.SubtaskTotal > 0 {
-		parts = append(parts, styles.SubtaskProgress(ti.SubtaskDone, ti.SubtaskTotal))
+		parts = append(parts, styles.SubtaskProgress(ti.SubtaskDone, ti.SubtaskTotal, ti.SubtaskDeferred))
 	}
 
 	// Type badge

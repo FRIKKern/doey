@@ -336,6 +336,8 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 			for _, s := range subs {
 				if s.Status == "done" {
 					ti.SubtaskDone++
+				} else if s.Status == "deferred" {
+					ti.SubtaskDeferred++
 				}
 			}
 		}
@@ -345,6 +347,8 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 			for _, ps := range entry.Subtasks {
 				if ps.Status == "done" {
 					ti.SubtaskDone++
+				} else if ps.Status == "deferred" {
+					ti.SubtaskDeferred++
 				}
 			}
 		}
