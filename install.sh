@@ -322,6 +322,8 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   cp "$SCRIPT_DIR/shell/doey-render-task.sh" "$HOME/.local/bin/doey-render-task.sh"
   cp "$SCRIPT_DIR/shell/doey-roles.sh" "$HOME/.local/bin/doey-roles.sh"
   cp "$SCRIPT_DIR/shell/doey-send.sh" "$HOME/.local/bin/doey-send.sh"
+  cp "$SCRIPT_DIR/shell/doey-helpers.sh" "$HOME/.local/bin/doey-helpers.sh"
+  cp "$SCRIPT_DIR/shell/doey-ui.sh" "$HOME/.local/bin/doey-ui.sh"
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
