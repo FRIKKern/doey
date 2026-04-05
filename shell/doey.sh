@@ -377,7 +377,7 @@ DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-2}"
 # Dynamic Grid Behavior
 DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
 DOEY_IDLE_REMOVE_AFTER="${DOEY_IDLE_REMOVE_AFTER:-300}"
-DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
+DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-800}"
 DOEY_BOOT_TIMEOUT="${DOEY_BOOT_TIMEOUT:-60}"
 
 # Drain pending terminal escape responses (OSC 11, CPR) from pane stdin before Claude launch.
@@ -2047,7 +2047,7 @@ TOTAL_PANES="$total"
 WORKER_COUNT="$worker_count"
 WORKER_PANES="$worker_panes_csv"
 RUNTIME_DIR="${runtime_dir}"
-PASTE_SETTLE_MS="500"
+PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-800}"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="2"
@@ -3701,6 +3701,10 @@ _init_doey_session() {
   # Prevent tmux from eating first character after Escape in send-keys
   tmux set-option -s -t "$session" escape-time 0
 
+  # Group rapid keystrokes as paste (50ms threshold) to prevent
+  # character-by-character delivery that races with TUI redraws
+  tmux set-option -g assume-paste-time 50
+
   # Sync persistent tasks (.doey/tasks/) → runtime cache for hooks/TUI
   if [ -d "${dir}/.doey/tasks" ]; then
     _task_sync_to_runtime "${dir}/.doey/tasks" "${runtime_dir}/tasks"
@@ -3854,7 +3858,7 @@ WORKER_PANES=""
 WORKER_COUNT="0"
 CURRENT_COLS="1"
 RUNTIME_DIR="${runtime_dir}"
-PASTE_SETTLE_MS="500"
+PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-800}"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
 TEAM_WINDOWS="2"

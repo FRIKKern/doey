@@ -5,12 +5,22 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // activityPattern matches Claude activity indicators in captured pane output.
 var activityPattern = regexp.MustCompile(`(?:⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent)`)
+
+// pasteSettleTime returns the post-paste settle duration, read from
+// DOEY_PASTE_SETTLE_MS (default 800ms).
+func pasteSettleTime() time.Duration {
+	if v, err := strconv.Atoi(os.Getenv("DOEY_PASTE_SETTLE_MS")); err == nil && v > 0 {
+		return time.Duration(v) * time.Millisecond
+	}
+	return 800 * time.Millisecond
+}
 
 // SendVerified sends a message to a Claude pane with verification and retry.
 // Pre-clears (Escape, C-u), sends content, verifies delivery via activity detection.
@@ -52,12 +62,11 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 		}
 
 		// --- Send the message ---
+		settle := pasteSettleTime()
 		hasNewline := strings.Contains(message, "\n")
 		if !hasNewline && len(message) < 500 {
-			// Short single-line: type text, settle, then Enter
+			// Short single-line: type text via send-keys
 			t.SendKeys(pane, "--", message)
-			time.Sleep(300 * time.Millisecond)
-			t.SendKeys(pane, "Enter")
 		} else {
 			// Long/multi-line: tmpfile → load-buffer → paste-buffer
 			tmpfile, err := os.CreateTemp("", "doey_send_*.txt")
@@ -81,10 +90,33 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 				continue
 			}
 			os.Remove(tmpPath)
-
-			time.Sleep(300 * time.Millisecond)
-			t.SendKeys(pane, "Enter")
 		}
+
+		// --- Verify text appeared before pressing Enter ---
+		snippet := message
+		if len(snippet) > 40 {
+			snippet = snippet[:40]
+		}
+		snippet = strings.ReplaceAll(snippet, "\n", " ")
+
+		textVisible := false
+		for vi := 0; vi < 3; vi++ {
+			time.Sleep(settle)
+			captured, _ := t.CapturePane(pane, 10)
+			if snippet != "" && strings.Contains(captured, snippet) {
+				textVisible = true
+				break
+			}
+			// Widen settle on each retry
+			settle = settle * 3 / 2
+		}
+		if !textVisible {
+			// Text never appeared — skip Enter, let outer retry loop handle it
+			continue
+		}
+
+		// Text confirmed visible — send Enter
+		t.SendKeys(pane, "Enter")
 
 		// --- Verify delivery ---
 		time.Sleep(backoffs[attempt])
@@ -97,12 +129,12 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 		}
 
 		// Check 2: message snippet visible in pane output
-		snippet := message
-		if len(snippet) > 40 {
-			snippet = snippet[:40]
+		postSnippet := message
+		if len(postSnippet) > 40 {
+			postSnippet = postSnippet[:40]
 		}
-		snippet = strings.ReplaceAll(snippet, "\n", " ")
-		if snippet != "" && strings.Contains(captured, snippet) {
+		postSnippet = strings.ReplaceAll(postSnippet, "\n", " ")
+		if postSnippet != "" && strings.Contains(captured, postSnippet) {
 			return nil
 		}
 
