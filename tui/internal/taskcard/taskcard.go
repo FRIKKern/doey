@@ -1,6 +1,7 @@
 package taskcard
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -1431,6 +1432,22 @@ func (e *ExpandedCard) renderProofSection() []string {
 		}
 	}
 
+	// Verification Steps (from pane results)
+	verSteps := e.collectVerificationSteps()
+	if len(verSteps) > 0 {
+		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Verification Steps")
+		rows = append(rows, label)
+		for i, step := range verSteps {
+			num := lipgloss.NewStyle().Foreground(e.Theme.Success).Render(fmt.Sprintf("    %d.", i+1))
+			text := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + step)
+			rows = append(rows, num+text)
+		}
+	} else if isComplete {
+		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Verification Steps")
+		rows = append(rows, label)
+		rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("No verification steps provided"))
+	}
+
 	// Worker Summary (from Result field)
 	if hasResult {
 		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Summary")
@@ -1490,6 +1507,36 @@ func (e *ExpandedCard) collectProofFiles() []string {
 	}
 	sort.Strings(files)
 	return files
+}
+
+// collectVerificationSteps gathers verification steps from pane results associated with this task.
+// VerificationSteps is stored as a JSON-encoded []string in the PaneResult.
+func (e *ExpandedCard) collectVerificationSteps() []string {
+	if len(e.Results) == 0 {
+		return nil
+	}
+	task := e.Item.Task
+	taskID := task.ID
+	taskTitle := strings.ToLower(task.Title)
+
+	var steps []string
+	for _, result := range e.Results {
+		if result.VerificationSteps == "" {
+			continue
+		}
+		resultTitle := strings.ToLower(result.Title)
+		if resultTitle != "" &&
+			!strings.Contains(resultTitle, taskID) &&
+			!strings.Contains(resultTitle, taskTitle) {
+			continue
+		}
+		var parsed []string
+		if err := json.Unmarshal([]byte(result.VerificationSteps), &parsed); err != nil {
+			continue
+		}
+		steps = append(steps, parsed...)
+	}
+	return steps
 }
 
 // extractLogCommits parses commit references from task activity logs.

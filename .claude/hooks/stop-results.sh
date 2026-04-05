@@ -120,6 +120,15 @@ TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='
 PROOF_TYPE_JSON=$(printf '%s' "$PROOF_TYPE" | jq -Rs '.' 2>/dev/null) || PROOF_TYPE_JSON='""'
 PROOF_CONTENT_JSON=$(printf '%s' "$PROOF_CONTENT" | jq -Rs '.' 2>/dev/null) || PROOF_CONTENT_JSON='""'
 
+# Extract verification steps from VERIFICATION_STEP: lines into JSON array
+VERIFICATION_STEPS_JSON="[]"
+_vsteps=$(printf '%s' "$FILTERED" | grep '^VERIFICATION_STEP:' | sed 's/^VERIFICATION_STEP:[[:space:]]*//' ) || true
+if [ -n "$_vsteps" ]; then
+  VERIFICATION_STEPS_JSON=$(printf '%s\n' "$_vsteps" | jq -Rsc '[.]' 2>/dev/null) || true
+  # jq -Rsc with single input gives ["all\nlines"] — split properly
+  VERIFICATION_STEPS_JSON=$(printf '%s\n' "$_vsteps" | jq -Rs 'split("\n") | map(select(length > 0))' 2>/dev/null) || VERIFICATION_STEPS_JSON="[]"
+fi
+
 TMPFILE=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null)
 if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
   echo "[WARN] mktemp failed in $(basename "$0") — writing non-atomically" >> "${RUNTIME_DIR}/doey-warnings.log" 2>/dev/null
@@ -155,7 +164,8 @@ cat > "$TMPFILE" <<EOF
   "needs_follow_up": ${DOEY_NEEDS_FOLLOW_UP:-false},
   "summary": "$local_summary_escaped",
   "proof_type": $PROOF_TYPE_JSON,
-  "proof_content": $PROOF_CONTENT_JSON
+  "proof_content": $PROOF_CONTENT_JSON,
+  "verification_steps": $VERIFICATION_STEPS_JSON
 }
 EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"
@@ -241,6 +251,7 @@ ATTACH_EOF
     (
       [ -n "$PROOF_TYPE" ] && doey-ctl task update --id "$local_task_id" --field proof_type --value "$PROOF_TYPE" --project-dir "$PROJECT_DIR" 2>/dev/null || true
       [ -n "$PROOF_CONTENT" ] && doey-ctl task update --id "$local_task_id" --field proof_content --value "$PROOF_CONTENT" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+      [ "$VERIFICATION_STEPS_JSON" != "[]" ] && doey-ctl task update --id "$local_task_id" --field verification_steps --value "$VERIFICATION_STEPS_JSON" --project-dir "$PROJECT_DIR" 2>/dev/null || true
       if [ -n "$FILES_LIST" ]; then
         _files_csv=$(printf '%s' "$FILES_LIST" | tr '\n' ',' | sed 's/,$//')
         doey-ctl task update --id "$local_task_id" --field files --value "$_files_csv" --project-dir "$PROJECT_DIR" 2>/dev/null || true

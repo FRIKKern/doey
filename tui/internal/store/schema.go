@@ -114,7 +114,21 @@ func ensureSchema(db *sql.DB) error {
 			source TEXT
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS interaction_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_name TEXT,
+			task_id INTEGER,
+			message_text TEXT NOT NULL,
+			message_type TEXT DEFAULT 'other',
+			source TEXT DEFAULT 'user',
+			context TEXT,
+			created_at INTEGER
+		)`,
+
 		// Indexes
+		`CREATE INDEX IF NOT EXISTS idx_interaction_log_session ON interaction_log(session_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_interaction_log_task ON interaction_log(task_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_interaction_log_type ON interaction_log(message_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_log_task_id ON task_log(task_id)`,
@@ -152,6 +166,8 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE tasks ADD COLUMN proof_content TEXT DEFAULT ''`,
 		`ALTER TABLE tasks ADD COLUMN verification_status TEXT DEFAULT 'unverified'`,
 		`ALTER TABLE tasks ADD COLUMN build_status TEXT DEFAULT ''`,
+		// verification steps column (task #278)
+		`ALTER TABLE tasks ADD COLUMN verification_steps TEXT DEFAULT ''`,
 		// subtask review columns (task #275)
 		`ALTER TABLE subtasks ADD COLUMN review_verdict TEXT DEFAULT ''`,
 		`ALTER TABLE subtasks ADD COLUMN review_evidence TEXT DEFAULT ''`,
