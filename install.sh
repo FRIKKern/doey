@@ -252,7 +252,7 @@ echo ""
 
 printf "  ${BRAND}[1/7]${RESET} Creating directories..."
 {
-  mkdir -p ~/.claude/{agents,doey,agent-memory/doey-manager} ~/.local/bin ~/.config/doey ~/.config/doey/teams ~/.config/doey/remotes ~/.local/share/doey/teams
+  mkdir -p ~/.claude/{agents,doey,agent-memory} ~/.local/bin ~/.config/doey ~/.config/doey/teams ~/.config/doey/remotes ~/.local/share/doey/teams
 } && step_ok || { step_fail; die "Failed to create directories."; }
 
 # Clean up old commands that are now project-level skills

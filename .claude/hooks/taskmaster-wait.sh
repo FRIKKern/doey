@@ -6,7 +6,18 @@ if [ -n "${DOEY_RUNTIME:-}" ]; then RUNTIME_DIR="$DOEY_RUNTIME"
 elif [ -n "${1:-}" ] && [ -d "${1}" ]; then RUNTIME_DIR="$1"
 else RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || { sleep 5; exit 0; }
 fi
-source "${RUNTIME_DIR}/session.env" 2>/dev/null || true
+if [ -f "${RUNTIME_DIR}/session.env" ]; then
+  while IFS='=' read -r _key _value; do
+    _value="${_value%\"}"; _value="${_value#\"}"
+    case "$_key" in
+      SESSION_NAME) SESSION_NAME="$_value" ;;
+      PROJECT_DIR)  PROJECT_DIR="$_value" ;;
+      PROJECT_NAME) PROJECT_NAME="$_value" ;;
+      GRID)         GRID="$_value" ;;
+      TEAM_WINDOWS) TEAM_WINDOWS="$_value" ;;
+    esac
+  done < "${RUNTIME_DIR}/session.env"
+fi
 trap 'exit 0' ERR
 source "$(dirname "$0")/common.sh" 2>/dev/null || true
 
