@@ -93,6 +93,13 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	// Description line: compact metadata
 	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(!isSelected).Render(taskCardDescription(ti, d.Heartbeats))
 
+	// Unverified indicator for completed tasks lacking proof
+	unverifiedBadge := ""
+	if (ti.Task.Status == "done" || ti.Task.Status == "pending_user_confirmation") &&
+		(ti.Task.VerificationStatus == "" || ti.Task.VerificationStatus == "unverified") {
+		unverifiedBadge = lipgloss.NewStyle().Foreground(d.Theme.Warning).Render(" ⚠")
+	}
+
 	// Compose card: icon + title + dim ID on line 1, metadata on line 2
 	// Indent child tasks under their parent
 	indent := " "
@@ -101,7 +108,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		indent = "   ↳ "
 		descIndent = "      "
 	}
-	card := fmt.Sprintf("%s%s %s %s\n%s%s", indent, icon, title, idStr, descIndent, desc)
+	card := fmt.Sprintf("%s%s %s %s%s\n%s%s", indent, icon, title, idStr, unverifiedBadge, descIndent, desc)
 
 	// Selected: left border — accent color if recently active (<30s)
 	if isSelected {
@@ -1342,6 +1349,37 @@ func (e *ExpandedCard) renderProofSection() []string {
 	}
 	rows = append(rows, styles.ThinSeparator(e.Theme, contentWidth))
 
+	// Verification status badge
+	vs := task.VerificationStatus
+	badgeStyle := lipgloss.NewStyle().Padding(0, 1)
+	switch vs {
+	case "verified":
+		badge := badgeStyle.Background(e.Theme.Success).Foreground(e.Theme.BgText).Render("✓ Verified")
+		rows = append(rows, "  "+badge)
+	case "failed":
+		badge := badgeStyle.Background(e.Theme.Danger).Foreground(e.Theme.BgText).Render("✗ Failed")
+		rows = append(rows, "  "+badge)
+	default:
+		if isComplete {
+			badge := badgeStyle.Background(e.Theme.Warning).Foreground(e.Theme.BgText).Render("⚠ Unverified")
+			rows = append(rows, "  "+badge)
+		}
+	}
+
+	// Proof details (type, build status, content)
+	if task.ProofType != "" {
+		rows = append(rows, styles.MetaLine(e.Theme, "Proof Type", task.ProofType))
+	}
+	if task.BuildStatus != "" {
+		rows = append(rows, styles.MetaLine(e.Theme, "Build Status", task.BuildStatus))
+	}
+	if task.ProofContent != "" && task.ProofContent != "Task completed — no summary available" {
+		wrapped := wordWrap(task.ProofContent, contentWidth-4)
+		for _, line := range strings.Split(wrapped, "\n") {
+			rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(line))
+		}
+	}
+
 	// Warning if proof is missing for completed tasks
 	if isComplete && !hasAnyProof {
 		warn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("  No proof captured")
@@ -1403,8 +1441,8 @@ func (e *ExpandedCard) renderProofSection() []string {
 		}
 	}
 
-	// Incomplete evidence warning
-	if isComplete {
+	// Incomplete evidence warning (skip if already verified)
+	if isComplete && task.VerificationStatus != "verified" {
 		missing := []string{}
 		if !hasCommits {
 			missing = append(missing, "commits")
