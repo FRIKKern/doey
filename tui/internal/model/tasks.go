@@ -348,11 +348,17 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 		}
 		items[i] = ti
 	}
+	prevIdx := m.list.Index()
 	m.list.SetItems(items)
 	if len(items) > 0 {
-		m.list.Select(0)
+		if prevIdx >= len(items) {
+			prevIdx = len(items) - 1
+		}
+		if prevIdx < 0 {
+			prevIdx = 0
+		}
+		m.list.Select(prevIdx)
 	}
-	m.detailViewport.GotoTop()
 
 	// Update delegate with current heartbeat data
 	delegate := taskcard.NewCardDelegate(m.theme)
