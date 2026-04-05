@@ -802,7 +802,7 @@ func (m PlansModel) View() string {
 	if leftW < 28 {
 		leftW = 28
 	}
-	rightW := w - leftW - 1
+	rightW := w - leftW
 	if rightW < 24 {
 		rightW = 24
 	}
@@ -868,14 +868,16 @@ func (m PlansModel) renderRightPanel(w, h int) string {
 		return lipgloss.NewStyle().Width(w).Height(h).Render(header + "\n" + hint)
 	}
 
-	// Viewport content is set by loadSelectedDetail() in SetSnapshot (pointer receiver).
-	// Do NOT call SetContent here — View() is a value receiver so changes are discarded.
 	vpH := h - 3
 	if vpH < 1 {
 		vpH = 1
 	}
 	m.detailViewport.Width = w - 4
 	m.detailViewport.Height = vpH
+
+	// Re-set content each frame to keep viewport in sync (matches Tasks pattern at tasks.go:1777)
+	detailContent := m.renderPlanDetail(m.selectedPlan)
+	m.detailViewport.SetContent(detailContent)
 
 	vpView := m.detailViewport.View()
 
