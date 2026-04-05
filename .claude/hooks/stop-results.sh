@@ -101,6 +101,17 @@ if [ -n "$_proof_body" ]; then
   PROOF_CONTENT=$(printf '%s' "$_proof_body" | sed 's/^PROOF:[[:space:]]*//')
 fi
 
+# Fallback: auto-generate proof if worker didn't emit one
+if [ -z "$PROOF_TYPE" ]; then
+  PROOF_TYPE="agent"
+  _fallback_summary="${DOEY_SUMMARY:-}"
+  if [ -n "$_fallback_summary" ]; then
+    PROOF_CONTENT="Task completed — $_fallback_summary"
+  else
+    PROOF_CONTENT="Task completed — no summary available"
+  fi
+fi
+
 PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
 LAST_JSON=$(printf '%s' "$FILTERED" | jq -Rs '.' 2>/dev/null) || \
   LAST_JSON=$(printf '%s' "$FILTERED" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
@@ -223,6 +234,18 @@ ATTACH_EOF
         "Worker ${WINDOW_INDEX}.${PANE_INDEX} ${STATUS}" "$_rpt_body" \
         "worker_${WINDOW_INDEX}_${PANE_INDEX}"
     ) 2>/dev/null || true
+  fi
+
+  # Import proof fields into SQLite (task #275)
+  if command -v doey-ctl >/dev/null 2>&1; then
+    (
+      [ -n "$PROOF_TYPE" ] && doey-ctl task update --id "$local_task_id" --field proof_type --value "$PROOF_TYPE" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+      [ -n "$PROOF_CONTENT" ] && doey-ctl task update --id "$local_task_id" --field proof_content --value "$PROOF_CONTENT" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+      if [ -n "$FILES_LIST" ]; then
+        _files_csv=$(printf '%s' "$FILES_LIST" | tr '\n' ',' | sed 's/,$//')
+        doey-ctl task update --id "$local_task_id" --field files --value "$_files_csv" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+      fi
+    ) &
   fi
 fi
 

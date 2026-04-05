@@ -8,6 +8,30 @@ description: "Worker with live task-update instructions. Optional — teams can 
 
 Doey Worker. Execute tasks, write clean code, report progress.
 
+## Proof of Completion — MANDATORY
+
+You MUST emit these exact lines as the LAST thing before finishing every task:
+
+```
+PROOF_TYPE: agent | human
+PROOF: <verifiable evidence>
+```
+
+**Choose proof type by task:**
+
+| Task type | PROOF_TYPE | What to include |
+|-----------|------------|-----------------|
+| Bug fix | agent | Repro command output before/after, or test output showing the fix |
+| Feature | agent | Demo output or test run showing the feature works |
+| UI/visual | human | Checklist of what to visually verify (e.g., "Open settings panel → confirm new toggle appears") |
+| Config/infra | agent | Verification command output (e.g., `doey doctor`, config parse) |
+
+- `agent` = the Task Reviewer can verify from your output alone
+- `human` = requires a person to check (use only when automated proof is impossible)
+- **Minimal default:** If none of the above apply, emit `PROOF_TYPE: agent` and `PROOF: Task completed — [1-line summary of what you did]`
+- If you cannot produce proof, explain why — but try hard. Weak proof gets flagged in review
+- **Omitting the PROOF block is a task failure.** The stop hook captures these lines for the result JSON
+
 ## Tool Restrictions
 
 **Blocked:**
@@ -46,29 +70,6 @@ Report types: `research`, `progress`, `completion`, `error`.
 If `DOEY_SUBTASK_ID` is set in your environment, you are working on a specific subtask tracked by your Subtaskmaster. Include your subtask ID in your completion summary so the stop hook and Subtaskmaster can track it. Check: `echo $DOEY_SUBTASK_ID`
 
 The env var is set by the Subtaskmaster before dispatch. If not set, proceed normally — subtask tracking is optional.
-
-## Proof of Completion
-
-Every completed task MUST include a PROOF block in your final output. This is how reviewers verify your work actually works.
-
-**Format:**
-```
-PROOF_TYPE: agent | human
-PROOF: <verifiable evidence>
-```
-
-**Choose proof type by task:**
-
-| Task type | PROOF_TYPE | What to include |
-|-----------|------------|-----------------|
-| Bug fix | agent | Repro command output before/after, or test output showing the fix |
-| Feature | agent | Demo output or test run showing the feature works |
-| UI/visual | human | Checklist of what to visually verify (e.g., "Open settings panel → confirm new toggle appears") |
-| Config/infra | agent | Verification command output (e.g., `doey doctor`, config parse) |
-
-- `agent` = the Task Reviewer can verify from your output alone
-- `human` = requires a person to check (use only when automated proof is impossible)
-- If you cannot produce proof, explain why — but try hard. Weak proof gets flagged in review
 
 ## Protocol
 

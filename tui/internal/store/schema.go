@@ -147,6 +147,15 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE tasks ADD COLUMN intent TEXT DEFAULT ''`,
 		// plans: add task_id for plan-task linkage (task #263)
 		`ALTER TABLE plans ADD COLUMN task_id INTEGER`,
+		// proof-of-completion columns (task #275)
+		`ALTER TABLE tasks ADD COLUMN proof_type TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN proof_content TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN verification_status TEXT DEFAULT 'unverified'`,
+		`ALTER TABLE tasks ADD COLUMN build_status TEXT DEFAULT ''`,
+		// subtask review columns (task #275)
+		`ALTER TABLE subtasks ADD COLUMN review_verdict TEXT DEFAULT ''`,
+		`ALTER TABLE subtasks ADD COLUMN review_evidence TEXT DEFAULT ''`,
+		`ALTER TABLE subtasks ADD COLUMN reviewer TEXT DEFAULT ''`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors
