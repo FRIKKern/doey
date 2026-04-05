@@ -57,6 +57,25 @@ func ensureMigrations(db *sql.DB) error {
 		// Ignore errors — column may already exist.
 		db.Exec("ALTER TABLE tasks ADD COLUMN " + col)
 	}
+	// Proof-of-completion columns (task #275).
+	proofCols := []string{
+		"proof_type TEXT DEFAULT ''",
+		"proof_content TEXT DEFAULT ''",
+		"verification_status TEXT DEFAULT 'unverified'",
+		"build_status TEXT DEFAULT ''",
+	}
+	for _, col := range proofCols {
+		db.Exec("ALTER TABLE tasks ADD COLUMN " + col)
+	}
+	// Subtask review columns (task #275).
+	subtaskReviewCols := []string{
+		"review_verdict TEXT DEFAULT ''",
+		"review_evidence TEXT DEFAULT ''",
+		"reviewer TEXT DEFAULT ''",
+	}
+	for _, col := range subtaskReviewCols {
+		db.Exec("ALTER TABLE subtasks ADD COLUMN " + col)
+	}
 	// Add routed column to messages (may already exist).
 	db.Exec("ALTER TABLE messages ADD COLUMN routed INTEGER DEFAULT 0")
 	return nil

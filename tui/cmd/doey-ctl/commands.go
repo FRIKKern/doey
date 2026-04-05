@@ -328,12 +328,20 @@ func runTaskUpdate(args []string) {
 				t.Phase = *value
 			case "intent":
 				t.Intent = *value
+			case "proof_type":
+				t.ProofType = *value
+			case "proof_content":
+				t.ProofContent = *value
+			case "verification_status":
+				t.VerificationStatus = *value
+			case "build_status":
+				t.BuildStatus = *value
 			default:
-				validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority", "depends_on", "merged_into", "dispatch_mode", "summary", "phase", "intent"}
+				validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority", "depends_on", "merged_into", "dispatch_mode", "summary", "phase", "intent", "proof_type", "proof_content", "verification_status", "build_status"}
 				if suggestion, ok := fuzzyMatch(*field, validFields); ok {
 					fatal("task update: unknown field '%s'. Did you mean '%s'?\n", *field, suggestion)
 				}
-				fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp, attachments, priority, depends_on, merged_into, dispatch_mode, summary, phase, intent\n", *field)
+				fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp, attachments, priority, depends_on, merged_into, dispatch_mode, summary, phase, intent, proof_type, proof_content, verification_status, build_status\n", *field)
 			}
 
 			if err := s.UpdateTask(t); err != nil {

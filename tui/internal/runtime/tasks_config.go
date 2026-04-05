@@ -129,8 +129,12 @@ type PersistentTask struct {
 	PlanID    string `json:"plan_id,omitempty"`    // links task to a plan
 	PlanTitle string `json:"plan_title,omitempty"` // plan title for display
 	// Proof-of-completion fields
-	FilesChanged []string `json:"files_changed,omitempty"` // files modified by task workers
-	Commits      string   `json:"commits,omitempty"`       // commit hashes with one-line messages
+	FilesChanged       []string `json:"files_changed,omitempty"`       // files modified by task workers
+	Commits            string   `json:"commits,omitempty"`             // commit hashes with one-line messages
+	ProofType          string   `json:"proof_type,omitempty"`          // type of proof (build, test, diff, etc.)
+	ProofContent       string   `json:"proof_content,omitempty"`       // proof content/output
+	VerificationStatus string   `json:"verification_status,omitempty"` // unverified, verified, failed
+	BuildStatus        string   `json:"build_status,omitempty"`        // build result (pass, fail, skip)
 	// Live tracking fields
 	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
 	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log

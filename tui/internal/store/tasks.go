@@ -39,6 +39,10 @@ type Task struct {
 	Summary            string `json:"summary,omitempty"`
 	Phase              string `json:"phase,omitempty"`
 	Intent             string `json:"intent,omitempty"`
+	ProofType          string `json:"proof_type,omitempty"`
+	ProofContent       string `json:"proof_content,omitempty"`
+	VerificationStatus string `json:"verification_status,omitempty"`
+	BuildStatus        string `json:"build_status,omitempty"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
 }
@@ -57,15 +61,18 @@ func IsValidSubtaskStatus(status string) bool {
 }
 
 type Subtask struct {
-	ID          int64  `json:"id"`
-	TaskID      int64  `json:"task_id"`
-	Seq         int    `json:"seq"`
-	Title       string `json:"title"`
-	Status      string `json:"status"`
-	Assignee    string `json:"assignee,omitempty"`
-	Worker      string `json:"worker,omitempty"`
-	CreatedAt   int64  `json:"created_at,omitempty"`
-	CompletedAt int64  `json:"completed_at,omitempty"`
+	ID             int64  `json:"id"`
+	TaskID         int64  `json:"task_id"`
+	Seq            int    `json:"seq"`
+	Title          string `json:"title"`
+	Status         string `json:"status"`
+	Assignee       string `json:"assignee,omitempty"`
+	Worker         string `json:"worker,omitempty"`
+	CreatedAt      int64  `json:"created_at,omitempty"`
+	CompletedAt    int64  `json:"completed_at,omitempty"`
+	ReviewVerdict  string `json:"review_verdict,omitempty"`
+	ReviewEvidence string `json:"review_evidence,omitempty"`
+	Reviewer       string `json:"reviewer,omitempty"`
 }
 
 type TaskLogEntry struct {
@@ -96,14 +103,18 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 			 notes, blockers, related_files, hypotheses, decision_log, result,
 			 files, commits, schema_version, review_verdict, review_findings,
 			 review_timestamp, attachments, priority, depends_on, merged_into,
-			 dispatch_mode, summary, phase, intent, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 dispatch_mode, summary, phase, intent,
+			 proof_type, proof_content, verification_status, build_status,
+			 created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			t.ID, t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 			t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 			t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
 			t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
 			t.ReviewTimestamp, t.Attachments, t.Priority, t.DependsOn, t.MergedInto,
-			t.DispatchMode, t.Summary, t.Phase, t.Intent, t.CreatedAt, t.UpdatedAt,
+			t.DispatchMode, t.Summary, t.Phase, t.Intent,
+			t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
+			t.CreatedAt, t.UpdatedAt,
 		)
 		if err != nil {
 			return 0, err
@@ -117,14 +128,18 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		 notes, blockers, related_files, hypotheses, decision_log, result,
 		 files, commits, schema_version, review_verdict, review_findings,
 		 review_timestamp, attachments, priority, depends_on, merged_into,
-		 dispatch_mode, summary, phase, intent, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 dispatch_mode, summary, phase, intent,
+		 proof_type, proof_content, verification_status, build_status,
+		 created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 		t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 		t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
 		t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
 		t.ReviewTimestamp, t.Attachments, t.Priority, t.DependsOn, t.MergedInto,
-		t.DispatchMode, t.Summary, t.Phase, t.Intent, t.CreatedAt, t.UpdatedAt,
+		t.DispatchMode, t.Summary, t.Phase, t.Intent,
+		t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
+		t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -142,7 +157,8 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		hypotheses, decisionLog, result, files, commits sql.NullString
 		reviewVerdict, reviewFindings, reviewTimestamp   sql.NullString
 		attachments, dependsOn, mergedInto              sql.NullString
-		dispatchMode, summary, phase, intent             sql.NullString
+		dispatchMode, summary, phase, intent            sql.NullString
+		proofType, proofContent, verificationStatus, buildStatus sql.NullString
 	)
 	err := scanner.Scan(
 		&t.ID, &t.Title, &t.Status, &typ, &desc, &createdBy, &assignedTo, &team,
@@ -150,7 +166,9 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		&notes, &blockers, &relFiles, &hypotheses, &decisionLog, &result,
 		&files, &commits, &t.SchemaVersion, &reviewVerdict, &reviewFindings,
 		&reviewTimestamp, &attachments, &t.Priority, &dependsOn, &mergedInto,
-		&dispatchMode, &summary, &phase, &intent, &t.CreatedAt, &t.UpdatedAt,
+		&dispatchMode, &summary, &phase, &intent,
+		&proofType, &proofContent, &verificationStatus, &buildStatus,
+		&t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return t, err
@@ -180,6 +198,10 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 	t.Summary = summary.String
 	t.Phase = phase.String
 	t.Intent = intent.String
+	t.ProofType = proofType.String
+	t.ProofContent = proofContent.String
+	t.VerificationStatus = verificationStatus.String
+	t.BuildStatus = buildStatus.String
 	return t, nil
 }
 
@@ -190,7 +212,9 @@ func (s *Store) GetTask(id int64) (*Task, error) {
 		notes, blockers, related_files, hypotheses, decision_log, result,
 		files, commits, schema_version, review_verdict, review_findings,
 		review_timestamp, attachments, priority, depends_on, merged_into,
-		dispatch_mode, summary, phase, intent, created_at, updated_at
+		dispatch_mode, summary, phase, intent,
+		proof_type, proof_content, verification_status, build_status,
+		created_at, updated_at
 		FROM tasks WHERE id = ?`, id)
 	t, err := scanTask(row)
 	if err != nil {
@@ -209,7 +233,9 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
 			review_timestamp, attachments, priority, depends_on, merged_into,
-			dispatch_mode, summary, phase, intent, created_at, updated_at
+			dispatch_mode, summary, phase, intent,
+			proof_type, proof_content, verification_status, build_status,
+			created_at, updated_at
 			FROM tasks ORDER BY updated_at DESC`)
 	} else {
 		rows, err = s.db.Query(`SELECT
@@ -218,7 +244,9 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
 			review_timestamp, attachments, priority, depends_on, merged_into,
-			dispatch_mode, summary, phase, intent, created_at, updated_at
+			dispatch_mode, summary, phase, intent,
+			proof_type, proof_content, verification_status, build_status,
+			created_at, updated_at
 			FROM tasks WHERE status = ? ORDER BY updated_at DESC`, status)
 	}
 	if err != nil {
@@ -249,7 +277,9 @@ func (s *Store) UpdateTask(t *Task) error {
 		files = ?, commits = ?, schema_version = ?, review_verdict = ?,
 		review_findings = ?, review_timestamp = ?, attachments = ?,
 		priority = ?, depends_on = ?, merged_into = ?, dispatch_mode = ?,
-		summary = ?, phase = ?, intent = ?, updated_at = ?
+		summary = ?, phase = ?, intent = ?,
+		proof_type = ?, proof_content = ?, verification_status = ?, build_status = ?,
+		updated_at = ?
 		WHERE id = ?`,
 		t.Title, t.Status, t.Type, t.Description, t.CreatedBy,
 		t.AssignedTo, t.Team, t.PlanID, t.Tags, t.AcceptanceCriteria,
@@ -258,7 +288,9 @@ func (s *Store) UpdateTask(t *Task) error {
 		t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict,
 		t.ReviewFindings, t.ReviewTimestamp, t.Attachments,
 		t.Priority, t.DependsOn, t.MergedInto, t.DispatchMode,
-		t.Summary, t.Phase, t.Intent, t.UpdatedAt,
+		t.Summary, t.Phase, t.Intent,
+		t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
+		t.UpdatedAt,
 		t.ID,
 	)
 	return err
@@ -280,8 +312,8 @@ func (s *Store) CreateSubtask(st *Subtask) (int64, error) {
 	} else {
 		st.Seq = 1
 	}
-	res, err := s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		st.TaskID, st.Seq, st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt,
+	res, err := s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		st.TaskID, st.Seq, st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ReviewVerdict, st.ReviewEvidence, st.Reviewer,
 	)
 	if err != nil {
 		return 0, err
@@ -290,7 +322,7 @@ func (s *Store) CreateSubtask(st *Subtask) (int64, error) {
 }
 
 func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
-	rows, err := s.db.Query(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at FROM subtasks WHERE task_id = ? ORDER BY seq`, taskID)
+	rows, err := s.db.Query(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer FROM subtasks WHERE task_id = ? ORDER BY seq`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -299,17 +331,21 @@ func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
 	var subtasks []Subtask
 	for rows.Next() {
 		var st Subtask
-		if err := rows.Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt); err != nil {
+		var reviewVerdict, reviewEvidence, reviewer sql.NullString
+		if err := rows.Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer); err != nil {
 			return nil, err
 		}
+		st.ReviewVerdict = reviewVerdict.String
+		st.ReviewEvidence = reviewEvidence.String
+		st.Reviewer = reviewer.String
 		subtasks = append(subtasks, st)
 	}
 	return subtasks, rows.Err()
 }
 
 func (s *Store) UpdateSubtask(st *Subtask) error {
-	_, err := s.db.Exec(`UPDATE subtasks SET title = ?, status = ?, assignee = ?, worker = ?, created_at = ?, completed_at = ? WHERE id = ?`,
-		st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ID,
+	_, err := s.db.Exec(`UPDATE subtasks SET title = ?, status = ?, assignee = ?, worker = ?, created_at = ?, completed_at = ?, review_verdict = ?, review_evidence = ?, reviewer = ? WHERE id = ?`,
+		st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ReviewVerdict, st.ReviewEvidence, st.Reviewer, st.ID,
 	)
 	return err
 }
@@ -317,8 +353,12 @@ func (s *Store) UpdateSubtask(st *Subtask) error {
 // GetSubtaskBySeq returns the subtask for a given task and sequence number.
 func (s *Store) GetSubtaskBySeq(taskID int64, seq int) (*Subtask, error) {
 	var st Subtask
-	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at FROM subtasks WHERE task_id = ? AND seq = ?`, taskID, seq).
-		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt)
+	var reviewVerdict, reviewEvidence, reviewer sql.NullString
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer FROM subtasks WHERE task_id = ? AND seq = ?`, taskID, seq).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer)
+	st.ReviewVerdict = reviewVerdict.String
+	st.ReviewEvidence = reviewEvidence.String
+	st.Reviewer = reviewer.String
 	if err != nil {
 		return nil, err
 	}
@@ -328,8 +368,12 @@ func (s *Store) GetSubtaskBySeq(taskID int64, seq int) (*Subtask, error) {
 // GetSubtaskByID returns the subtask by its DB primary key.
 func (s *Store) GetSubtaskByID(id int64) (*Subtask, error) {
 	var st Subtask
-	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at FROM subtasks WHERE id = ?`, id).
-		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt)
+	var reviewVerdict, reviewEvidence, reviewer sql.NullString
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer FROM subtasks WHERE id = ?`, id).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer)
+	st.ReviewVerdict = reviewVerdict.String
+	st.ReviewEvidence = reviewEvidence.String
+	st.Reviewer = reviewer.String
 	if err != nil {
 		return nil, err
 	}

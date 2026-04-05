@@ -208,6 +208,10 @@ type PaneResult struct {
 	FilesChanged []string `json:"files_changed"`
 	ToolCalls    int      `json:"tool_calls"`
 	LastOutput   string   `json:"last_output"`
+	ProofType    string   `json:"proof_type,omitempty"`
+	ProofContent string   `json:"proof_content,omitempty"`
+	TaskID       string   `json:"task_id,omitempty"`
+	SubtaskID    string   `json:"subtask_id,omitempty"`
 }
 
 // AgentDef represents a parsed agent definition from agents/*.md

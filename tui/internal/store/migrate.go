@@ -102,8 +102,10 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		 notes, blockers, related_files, hypotheses, decision_log, result,
 		 files, commits, schema_version, review_verdict, review_findings,
 		 review_timestamp, attachments, priority, depends_on, merged_into,
-		 dispatch_mode, summary, phase, intent, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 dispatch_mode, summary, phase, intent,
+		 proof_type, proof_content, verification_status, build_status,
+		 created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 		 title=excluded.title, status=excluded.status, type=excluded.type,
 		 description=excluded.description, created_by=excluded.created_by,
@@ -118,6 +120,8 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		 priority=excluded.priority, depends_on=excluded.depends_on,
 		 merged_into=excluded.merged_into, dispatch_mode=excluded.dispatch_mode,
 		 summary=excluded.summary, phase=excluded.phase, intent=excluded.intent,
+		 proof_type=excluded.proof_type, proof_content=excluded.proof_content,
+		 verification_status=excluded.verification_status, build_status=excluded.build_status,
 		 updated_at=excluded.updated_at`,
 		id, fields["TASK_TITLE"], fields["TASK_STATUS"], fields["TASK_TYPE"],
 		fields["TASK_DESCRIPTION"], fields["TASK_CREATED_BY"], fields["TASK_ASSIGNED_TO"],
@@ -134,6 +138,8 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 		fields["TASK_DEPENDS_ON"], fields["TASK_MERGED_INTO"],
 		fields["TASK_DISPATCH_MODE"], fields["TASK_SUMMARY"], fields["TASK_PHASE"],
 		fields["TASK_INTENT"],
+		fields["TASK_PROOF_TYPE"], fields["TASK_PROOF_CONTENT"],
+		fields["TASK_VERIFICATION_STATUS"], fields["TASK_BUILD_STATUS"],
 		createdAt, updatedAt,
 	)
 	if err != nil {
@@ -191,7 +197,7 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 			if status == "" {
 				status = "pending"
 			}
-			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', '')`,
 				id, seq, ext.title, status, ext.assignee, ext.worker, ext.createdAt, ext.completedAt)
 		}
 	} else if raw := fields["TASK_SUBTASKS"]; raw != "" {
@@ -204,7 +210,7 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 			}
 			title := parts[1]
 			status := parts[2]
-			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at) VALUES (?, ?, ?, ?, '', '', 0, 0)`,
+			s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer) VALUES (?, ?, ?, ?, '', '', 0, 0, '', '', '')`,
 				id, seq+1, title, status)
 		}
 	}
