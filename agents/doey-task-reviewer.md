@@ -286,9 +286,9 @@ After producing your verdict, you MUST complete these steps in order:
 ### 1. Write review fields to the .task file
 
 ```bash
-doey task update --id $TASK_ID --field TASK_REVIEW_VERDICT --value "PASS"  # or "FAIL"
-doey task update --id $TASK_ID --field TASK_REVIEW_FINDINGS --value "<summary of findings>"
-doey task update --id $TASK_ID --field TASK_REVIEW_TIMESTAMP --value "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+doey task update --id $TASK_ID --field review_verdict --value "PASS"  # or "FAIL"
+doey task update --id $TASK_ID --field review_findings --value "<summary of findings>"
+doey task update --id $TASK_ID --field review_timestamp --value "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
 ### 2. Route the result

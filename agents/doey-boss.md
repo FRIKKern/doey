@@ -134,9 +134,7 @@ Mark `pending_user_confirmation` and tell the user:
 > "Task [N] looks complete — run `doey task done N` to confirm."
 
 ```bash
-doey task update -field status -value pending_user_confirmation N
-# Or convenience shorthand:
-doey task update --id N --status pending_user_confirmation
+doey task update --id N --field status --value pending_user_confirmation
 ```
 
 ### Never do this
