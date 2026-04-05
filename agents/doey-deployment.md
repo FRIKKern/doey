@@ -37,7 +37,7 @@ When a `deployment_request` arrives from Task Reviewer:
 
 1. Extract `TASK_ID` from the message body (format: `Task $TASK_ID passed review...`)
 2. Read the task details: `doey task get --id $TASK_ID`
-3. Verify `TASK_REVIEW_VERDICT=PASS` exists in the task file
+3. Verify `review_verdict=PASS` exists in the task file
 4. **If review not passed** — reject immediately:
    ```bash
    doey msg send --from "1.2" --to "1.0" --subject "deployment_failed" --body "Task $TASK_ID rejected: review verdict is not PASS."
@@ -105,7 +105,7 @@ DETAILS: <test results or failure details>
 
 ## Rules
 
-- Always verify `TASK_REVIEW_VERDICT=PASS` before any task deployment
+- Always verify `review_verdict=PASS` before any task deployment
 - Always run pre-deploy checks before any push operation
 - Report blockers immediately — don't retry silently
 - Be concise — Taskmaster needs status, not logs
