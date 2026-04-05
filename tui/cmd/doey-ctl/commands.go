@@ -14,6 +14,15 @@ import (
 	"github.com/doey-cli/doey/tui/internal/store"
 )
 
+// Semantic exit codes for doey-ctl.
+const (
+	ExitSuccess  = 0
+	ExitGeneral  = 1
+	ExitUsage    = 2
+	ExitNotFound = 3
+	ExitConflict = 4
+)
+
 // tryOpenStore opens the project's SQLite store if .doey/doey.db exists.
 // Returns nil if the DB file is absent (file-only mode).
 func tryOpenStore(dir string) *store.Store {
@@ -39,7 +48,7 @@ func eventSource() string {
 // runTaskCmd dispatches task sub-subcommands.
 func runTaskCmd(args []string) {
 	if len(args) == 0 {
-		fatal("task: missing subcommand\nRun 'doey-ctl task -h' for usage.\n")
+		fatalCode(ExitUsage, "task: missing subcommand\nRun 'doey-ctl task -h' for usage.\n")
 	}
 	if isHelp(args[0]) {
 		printTaskHelp()
@@ -88,7 +97,7 @@ func runTaskCmd(args []string) {
 			"done", "start", "pause", "block", "confirm", "pending", "ready", "activate", "failed", "cancel"}
 		corrected, err := suggestSubcommand(args[0], validTaskSubs)
 		if err != nil {
-			fatal("task: unknown subcommand: %s (%v)\nRun 'doey-ctl task -h' for usage.\n", args[0], err)
+			fatalCode(ExitUsage, "task: unknown subcommand: %s (%v)\nRun 'doey-ctl task -h' for usage.\n", args[0], err)
 		}
 		// Re-dispatch with corrected subcommand.
 		args[0] = corrected
@@ -188,10 +197,10 @@ func runTaskUpdate(args []string) {
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
-			os.Exit(0)
+			os.Exit(ExitSuccess)
 		}
 		suggestTaskUpdateFlag(args)
-		os.Exit(1)
+		os.Exit(ExitUsage)
 	}
 
 	// Resolve task ID: --id flag takes priority over positional arg.
@@ -200,7 +209,7 @@ func runTaskUpdate(args []string) {
 		taskIDStr = fs.Arg(0)
 	}
 	if taskIDStr == "" {
-		fatal("task update: missing task ID\nTry: doey-ctl task update --id <ID> --status <value>\n")
+		fatalCode(ExitUsage, "task update: missing task ID\nTry: doey-ctl task update --id <ID> --status <value>\n")
 	}
 
 	// Convenience: --status maps to field=status, value=<status>.
@@ -250,9 +259,9 @@ func runTaskUpdate(args []string) {
 					fmt.Fprintf(os.Stderr, "Warning: unknown field %q, using %q\n", *field, matches[0])
 					*field = matches[0]
 				case 0:
-					fatal("task update: unknown field %q\nValid fields: %s\n", *field, strings.Join(validFields, ", "))
+					fatalCode(ExitUsage, "task update: unknown field %q\nValid fields: %s\n", *field, strings.Join(validFields, ", "))
 				default:
-					fatal("task update: unknown field %q. Did you mean: %s?\n", *field, strings.Join(matches, ", "))
+					fatalCode(ExitUsage, "task update: unknown field %q. Did you mean: %s?\n", *field, strings.Join(matches, ", "))
 				}
 			}
 
@@ -275,9 +284,9 @@ func runTaskUpdate(args []string) {
 						fmt.Fprintf(os.Stderr, "auto-correcting status %q to %q\n", *value, matches[0])
 						*value = matches[0]
 					case 0:
-						fatal("task update: unknown status %q\nValid statuses: %s\n", *value, strings.Join(validStatuses, ", "))
+						fatalCode(ExitUsage, "task update: unknown status %q\nValid statuses: %s\n", *value, strings.Join(validStatuses, ", "))
 					default:
-						fatal("task update: ambiguous status %q, did you mean: %s?\n", *value, strings.Join(matches, ", "))
+						fatalCode(ExitUsage, "task update: ambiguous status %q, did you mean: %s?\n", *value, strings.Join(matches, ", "))
 					}
 				}
 				t.Status = *value
@@ -373,7 +382,7 @@ func runTaskUpdate(args []string) {
 			case "verification_steps":
 				t.VerificationSteps = *value
 			default:
-				fatal("task update: unknown field %q\nValid fields: %s\n", *field, strings.Join(validFields, ", "))
+				fatalCode(ExitUsage, "task update: unknown field %q\nValid fields: %s\n", *field, strings.Join(validFields, ", "))
 			}
 
 			if err := s.UpdateTask(t); err != nil {
@@ -415,13 +424,13 @@ func runTaskTransition(subcmd, status string, args []string) {
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
-			os.Exit(0)
+			os.Exit(ExitSuccess)
 		}
-		os.Exit(1)
+		os.Exit(ExitUsage)
 	}
 
 	if fs.NArg() == 0 {
-		fatal("task %s: at least one task ID is required\nUsage: doey-ctl task %s <id> [id...]\n", subcmd, subcmd)
+		fatalCode(ExitUsage, "task %s: at least one task ID is required\nUsage: doey-ctl task %s <id> [id...]\n", subcmd, subcmd)
 	}
 
 	pd := projectDir(*dir)
@@ -472,7 +481,7 @@ func runTaskTransition(subcmd, status string, args []string) {
 	}
 
 	if errCount > 0 && okCount == 0 {
-		os.Exit(1)
+		os.Exit(ExitGeneral)
 	}
 }
 
@@ -704,7 +713,7 @@ func runTaskSubtask(args []string) {
 		validSubs := []string{"add", "update", "list"}
 		corrected, err := suggestSubcommand(args[0], validSubs)
 		if err != nil {
-			fatal("task subtask: unknown subcommand: %s (%v)\nRun 'doey-ctl task subtask -h' for usage.\n", args[0], err)
+			fatalCode(ExitUsage, "task subtask: unknown subcommand: %s (%v)\nRun 'doey-ctl task subtask -h' for usage.\n", args[0], err)
 		}
 		args[0] = corrected
 		runTaskSubtask(args)
@@ -852,9 +861,9 @@ func runSubtaskUpdate(args []string) {
 			fmt.Fprintf(os.Stderr, "auto-correcting status %q to %q\n", statusVal, matches[0])
 			statusVal = matches[0]
 		case 0:
-			fatal("task subtask update: unknown status %q\nValid: %v\n", statusVal, store.ValidSubtaskStatuses)
+			fatalCode(ExitUsage, "task subtask update: unknown status %q\nValid: %v\n", statusVal, store.ValidSubtaskStatuses)
 		default:
-			fatal("task subtask update: ambiguous status %q, did you mean: %s?\n", statusVal, strings.Join(matches, ", "))
+			fatalCode(ExitUsage, "task subtask update: ambiguous status %q, did you mean: %s?\n", statusVal, strings.Join(matches, ", "))
 		}
 	}
 
@@ -990,7 +999,7 @@ func runTaskLog(args []string) {
 		validSubs := []string{"add", "list"}
 		corrected, err := suggestSubcommand(args[0], validSubs)
 		if err != nil {
-			fatal("task log: unknown subcommand: %s (%v)\nRun 'doey-ctl task log -h' for usage.\n", args[0], err)
+			fatalCode(ExitUsage, "task log: unknown subcommand: %s (%v)\nRun 'doey-ctl task log -h' for usage.\n", args[0], err)
 		}
 		args[0] = corrected
 		runTaskLog(args)
@@ -1050,7 +1059,7 @@ func runTaskLogAdd(args []string) {
 					fmt.Fprintf(os.Stderr, "task log add: auto-correcting type %q → %q\n", *logType, suggestion)
 					*logType = suggestion
 				} else {
-					fatal("task log add: unknown type %q\nValid types: %s\n", *logType, strings.Join(validLogTypes, ", "))
+					fatalCode(ExitUsage, "task log add: unknown type %q\nValid types: %s\n", *logType, strings.Join(validLogTypes, ", "))
 				}
 			}
 			entry := &store.TaskLogEntry{
@@ -1773,7 +1782,7 @@ func runTmuxCmd(args []string) {
 	case "env":
 		runTmuxEnv(args[1:])
 	default:
-		fatal("tmux: unknown subcommand: %s", args[0])
+		fatalCode(ExitUsage, "tmux: unknown subcommand: %s", args[0])
 	}
 }
 

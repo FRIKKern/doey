@@ -89,7 +89,7 @@ var jsonOutput bool
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
-		os.Exit(1)
+		os.Exit(ExitUsage)
 	}
 
 	switch os.Args[1] {
@@ -135,7 +135,7 @@ func main() {
 		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "interaction", "nudge", "migrate", "briefing"}
 		corrected, err := suggestSubcommand(os.Args[1], knownCmds)
 		if err != nil {
-			fatal("unknown command: %q (%v)\nRun 'doey-ctl --help' for usage.\n", os.Args[1], err)
+			fatalCode(ExitUsage, "unknown command: %q (%v)\nRun 'doey-ctl --help' for usage.\n", os.Args[1], err)
 		}
 		os.Args[1] = corrected
 		main()
@@ -187,7 +187,7 @@ func openStoreIfExists(dir string) (*store.Store, error) {
 func runMsgCmd(args []string) {
 	if len(args) < 1 {
 		printMsgHelp()
-		fatal("msg: missing subcommand: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n")
+		fatalCode(ExitUsage, "msg: missing subcommand: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n")
 	}
 	if isHelp(args[0]) {
 		printMsgHelp()
@@ -211,7 +211,7 @@ func runMsgCmd(args []string) {
 	case "trigger":
 		msgTrigger(args[1:])
 	default:
-		fatal("msg: unknown subcommand: %q. Valid: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n", args[0])
+		fatalCode(ExitUsage, "msg: unknown subcommand: %q. Valid: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n", args[0])
 	}
 }
 
@@ -231,7 +231,7 @@ func msgSend(args []string) {
 	fs.Parse(args)
 
 	if *to == "" || *from == "" || *subject == "" {
-		fatal("msg send: --to, --from, and --subject are required\nRun 'doey-ctl msg send -h' for usage.\n")
+		fatalCode(ExitUsage, "msg send: --to, --from, and --subject are required\nRun 'doey-ctl msg send -h' for usage.\n")
 	}
 	*to = normalizePaneID(*to)
 	*from = normalizePaneID(*from)
@@ -295,7 +295,7 @@ func msgSend(args []string) {
 			fmt.Println("sent (unverified)")
 		}
 		if !verified {
-			os.Exit(1)
+			os.Exit(ExitGeneral)
 		}
 		return
 	}
@@ -728,7 +728,7 @@ func runStatusCmd(args []string) {
 	case "list":
 		statusList(args[1:])
 	default:
-		fatal("status: unknown subcommand: %q. Valid: get, set, list\nRun 'doey-ctl status --help' for usage.\n", args[0])
+		fatalCode(ExitUsage, "status: unknown subcommand: %q. Valid: get, set, list\nRun 'doey-ctl status --help' for usage.\n", args[0])
 	}
 }
 
@@ -912,7 +912,7 @@ func runHealthCmd(args []string) {
 	case "check":
 		healthCheck(args[1:])
 	default:
-		fatal("health: unknown subcommand: %q. Valid: check\nRun 'doey-ctl health --help' for usage.\n", args[0])
+		fatalCode(ExitUsage, "health: unknown subcommand: %q. Valid: check\nRun 'doey-ctl health --help' for usage.\n", args[0])
 	}
 }
 
@@ -947,7 +947,7 @@ func healthCheck(args []string) {
 	}
 
 	if !alive {
-		os.Exit(1)
+		os.Exit(ExitNotFound)
 	}
 }
 
@@ -1005,10 +1005,16 @@ func projectDir(flagVal string) string {
 	return dir
 }
 
-// fatal prints an error to stderr and exits with code 1.
+// fatal prints an error to stderr and exits with ExitGeneral (1).
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "doey-ctl: "+format, args...)
-	os.Exit(1)
+	os.Exit(ExitGeneral)
+}
+
+// fatalCode prints an error to stderr and exits with the given code.
+func fatalCode(code int, format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "doey-ctl: "+format, args...)
+	os.Exit(code)
 }
 
 // printJSON marshals v to JSON and prints to stdout.
