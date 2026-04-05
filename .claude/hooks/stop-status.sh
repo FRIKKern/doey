@@ -13,6 +13,28 @@ if is_worker && ! is_reserved; then
     echo '{"decision": "block", "reason": "Research task requires a report. Write your report to '"${REPORT_FILE}"' using the Write tool before stopping."}'
     exit 2
   fi
+
+  # Proof gate: workers must emit PROOF_TYPE before finishing
+  if [ "${DOEY_PROOF_EXEMPT:-0}" != "1" ]; then
+    _proof_found=""
+    # Check 1: file-based proof (written by worker via bash echo > file)
+    _proof_file="${RUNTIME_DIR}/proof/${PANE_SAFE}.proof"
+    if [ -f "$_proof_file" ]; then
+      _proof_found=$(grep '^PROOF_TYPE:' "$_proof_file" | tail -1) || _proof_found=""
+    fi
+    # Check 2: terminal output fallback
+    if [ -z "$_proof_found" ]; then
+      _proof_target="${DOEY_SESSION:-doey-doey}:${WINDOW_INDEX}.${PANE_INDEX}"
+      _proof_buf=$(tmux capture-pane -t "$_proof_target" -p -S -80 2>/dev/null) || _proof_buf=""
+      if [ -n "$_proof_buf" ]; then
+        _proof_found=$(printf '%s\n' "$_proof_buf" | grep '^PROOF_TYPE:' | tail -1) || _proof_found=""
+      fi
+    fi
+    if [ -z "$_proof_found" ]; then
+      echo '{"decision": "block", "reason": "Workers must emit PROOF_TYPE: <type> and PROOF: <summary> before stopping. Write proof via: mkdir -p '${RUNTIME_DIR}/proof' && echo PROOF_TYPE:... > '${RUNTIME_DIR}/proof/${PANE_SAFE}.proof'. Or set DOEY_PROOF_EXEMPT=1 for research/docs."}'
+      exit 2
+    fi
+  fi
 fi
 
 STOP_STATUS="READY"
