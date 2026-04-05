@@ -25,17 +25,18 @@ _build_worker_csv() {
 
 # ── Grid Feasibility ───────────────────────────────────────────────────
 # Check how many columns/rows fit in the terminal window.
-# Sets: _FEASIBLE_MAX_COLS, _FEASIBLE_MAX_ROWS
+# Prints: "max_cols max_rows" to stdout.
 _check_grid_feasibility() {
   local session="$1" window="$2" min_col_w="${3:-40}" min_row_h="${4:-8}"
   local win_dims
   win_dims="$(tmux display-message -t "$session:$window" -p '#{window_width} #{window_height}' 2>/dev/null)" || return 1
   local win_w="${win_dims%% *}"
   local win_h="${win_dims##* }"
-  _FEASIBLE_MAX_COLS=$(( (win_w - 1) / (min_col_w + 1) ))
-  _FEASIBLE_MAX_ROWS=$(( win_h / (min_row_h + 1) ))
-  [ "$_FEASIBLE_MAX_COLS" -lt 1 ] && _FEASIBLE_MAX_COLS=1
-  [ "$_FEASIBLE_MAX_ROWS" -lt 1 ] && _FEASIBLE_MAX_ROWS=1
+  local max_cols=$(( (win_w - 1) / (min_col_w + 1) ))
+  local max_rows=$(( win_h / (min_row_h + 1) ))
+  [ "$max_cols" -lt 1 ] && max_cols=1
+  [ "$max_rows" -lt 1 ] && max_rows=1
+  echo "$max_cols $max_rows"
 }
 
 # ── Layout Checksum ────────────────────────────────────────────────────
@@ -141,10 +142,10 @@ rebuild_pane_state() {
 # ── Build Worker Pane List ─────────────────────────────────────────────
 # Build a display-friendly list of worker panes (e.g. "2.1, 2.2, 2.3").
 # Skips pane 0 unless team is freelancer type.
-# Sets: _WPL_RESULT
+# Prints result to stdout.
 _build_worker_pane_list() {
   local session="$1" window_index="$2"
-  _WPL_RESULT=""
+  local _wpl_result=""
   # For freelancer teams, pane 0 is also a worker (no manager)
   local _wpl_skip_pane0="true"
   local _wpl_runtime
@@ -158,9 +159,10 @@ _build_worker_pane_list() {
   local _pi
   for _pi in $(tmux list-panes -t "${session}:${window_index}" -F '#{pane_index}'); do
     [ "$_pi" = "0" ] && [ "$_wpl_skip_pane0" = "true" ] && continue
-    [ -n "$_WPL_RESULT" ] && _WPL_RESULT="${_WPL_RESULT}, "
-    _WPL_RESULT="${_WPL_RESULT}${window_index}.${_pi}"
+    [ -n "$_wpl_result" ] && _wpl_result="${_wpl_result}, "
+    _wpl_result="${_wpl_result}${window_index}.${_pi}"
   done
+  echo "$_wpl_result"
 }
 
 # ── Bulk Read Team Env ─────────────────────────────────────────────────
