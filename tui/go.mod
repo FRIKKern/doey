@@ -11,6 +11,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/hetznercloud/hcloud-go/v2 v2.37.0
 	github.com/lrstanley/bubblezone v1.0.0
+	modernc.org/sqlite v1.48.0
 )
 
 require (
@@ -65,5 +66,4 @@ require (
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.48.0 // indirect
 )

@@ -147,7 +147,6 @@ if is_taskmaster; then
   TASKMASTER_ACTIVE_TASKS=""
   _compact_task_scan_done=false
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${_TASK_PROJECT:-}" ]; then
-    local _ct_line _ct_id _ct_info _ct_title _ct_status
     while IFS= read -r _ct_line; do
       _ct_id=$(echo "$_ct_line" | awk '{print $1}')
       [ -z "$_ct_id" ] && continue

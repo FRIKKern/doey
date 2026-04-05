@@ -37,6 +37,8 @@ const (
 	FileBoss = "doey-boss"
 	FileWorker = "doey-worker"
 	FileFreelancer = "doey-freelancer"
+	FileInfoPanel = "doey-info-panel"
+	FileTestDriver = "test-driver"
 	FileTaskReviewer = "doey-task-reviewer"
 	FileDeployment = "doey-deployment"
 	FileDoeyExpert = "doey-doey-expert"

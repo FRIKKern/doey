@@ -14,19 +14,19 @@
 </div>
 
 ```
-┌──────────┬──────────────┬──────────────┐
-│ MANAGER  │ Worker 1     │ Worker 3     │
-│ plans &  │  ┌─agent─┐   │  ┌─agent─┐   │  scales →
-│ delegates│  │ ↓ ↓ ↓ │   │  │ ↓ ↓ ↓ │   │
-├──────────┼──────────────┼──────────────┤
-│          │ Worker 2     │ Worker 4     │  workers spawn
-│          │  ┌─agent─┐   │  ┌─agent─┐   │  their own agents
-│          │  │ ↓ ↓ ↓ │   │  │ ↓ ↓ ↓ │   │
-└──────────┴──────────────┴──────────────┘
+┌──────────────┬──────────────┬──────────────┐
+│ SUBTASKMASTER│  Worker 1    │  Worker 3    │
+│  plans &     │  ┌─agent─┐   │  ┌─agent─┐   │  scales →
+│  delegates   │  │ ↓ ↓ ↓ │   │  │ ↓ ↓ ↓ │   │
+├──────────────┼──────────────┼──────────────┤
+│              │  Worker 2    │  Worker 4    │  workers spawn
+│              │  ┌─agent─┐   │  ┌─agent─┐   │  their own agents
+│              │  │ ↓ ↓ ↓ │   │  │ ↓ ↓ ↓ │   │
+└──────────────┴──────────────┴──────────────┘
  Boss relays user intent from Dashboard (window 0)
 ```
 
-Manager plans, workers execute in parallel. Dynamic grid — scale with `doey add`.
+Subtaskmaster plans, workers execute in parallel. Dynamic grid — scale with `doey add`.
 
 ## Quick Start
 
@@ -52,7 +52,7 @@ Tell the Boss your task — teams plan and execute in parallel, results are cons
 | `doey init` | Register current directory as a project |
 | `doey add` / `remove` | Add/remove worker columns |
 | `doey stop` | Stop the team |
-| `doey reload` | Hot-reload (Manager; `--workers` for all) |
+| `doey reload` | Hot-reload (Subtaskmaster; `--workers` for all) |
 | `doey add-team [--worktree]` / `kill-team <N>` | Add/kill team windows (worktree = isolated branch) |
 | `doey list` / `list-teams` | List projects / team windows |
 | `doey purge` | Clean runtime files, audit context |
@@ -65,16 +65,20 @@ Tell the Boss your task — teams plan and execute in parallel, results are cons
 
 ## Architecture
 
-Window 0 is the dashboard; team windows (1+) each have a Manager + Workers.
+Window 0 is the dashboard; window 1 is the Core Team; team windows (2+) each have a Subtaskmaster + Workers.
 
 | Role | Pane | Description |
 |------|------|-------------|
-| Info Panel | `0.0` | Live dashboard — tasks and team stats |
-| Boss | `0.1` | User-facing relay → Taskmaster |
-| Taskmaster | `0.2` | Routes tasks, monitors panes, handles git |
-| Subtaskmaster | `W.0` | Plans, delegates, validates context |
-| Workers | `W.1+` | Execute tasks in parallel |
-| Freelancers | `F.0+` | Independent workers, no manager |
+| Info Panel | `0.0` | Live dashboard (shell script). User lands here on attach |
+| Boss | `0.1` | User-facing Project Manager. Receives user intent, manages tasks, reports results |
+| Taskmaster | `C.0` | Sole executor/coordinator. Routes tasks, spawns teams, manages git, dispatches work |
+| Task Reviewer | `C.1` | Reviews completed work for quality and correctness |
+| Deployment | `C.2` | Handles deployment, CI/CD, and release operations |
+| Doey Expert | `C.3` | Doey codebase specialist for self-improvement tasks |
+| Subtaskmaster | `W.0` | Plans, delegates, validates all context. Never writes code |
+| Workers | `W.1+` | Execute tasks. Skipped if reserved |
+| Freelancers | `F.0+` | Independent workers, no Subtaskmaster |
+| Test Driver | external | E2E test runner via `doey test` |
 
 ### Default Setup
 
@@ -83,19 +87,17 @@ Out of the box, `doey` launches:
 ```
 Window 0 — Dashboard
   ├── Info Panel (live stats, tasks)
-  ├── Boss (user-facing relay)
-  └── Taskmaster (internal coordinator)
+  └── Boss (user-facing Project Manager)
 
-Window 1 — Team 1 (local)
+Window 1 — Core Team
+  ├── Taskmaster (internal coordinator)
+  ├── Task Reviewer
+  ├── Deployment
+  └── Doey Expert
+
+Window 2 — Worker Team (local)
   ├── Subtaskmaster
-  └── 4 Workers (2x2 dynamic grid)
-
-Window 2 — Team 2 (local)
-  ├── Subtaskmaster
-  └── 4 Workers (2x2 dynamic grid)
-
-Window 3 — Freelancers
-  └── 6 independent workers
+  └── 6 Workers (3x2 dynamic grid)
 ```
 
 Scale with `doey add` (columns) or `doey add-team` (teams). See [Context Reference](docs/context-reference.md).
@@ -111,7 +113,7 @@ mkdir -p .doey
 cat > .doey/config.sh << 'EOF'
 # Smaller team for a simple project
 DOEY_INITIAL_WORKER_COLS=1
-DOEY_INITIAL_TEAMS=1
+DOEY_INITIAL_TEAMS=0
 DOEY_WORKER_MODEL=sonnet
 EOF
 ```
@@ -121,15 +123,15 @@ EOF
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DOEY_INITIAL_WORKER_COLS` | `2` | Worker columns per team (workers = cols x 2) |
-| `DOEY_INITIAL_TEAMS` | `2` | Team windows at startup |
-| `DOEY_INITIAL_FREELANCER_TEAMS` | `1` | Freelancer pools (managerless) |
+| `DOEY_INITIAL_WORKER_COLS` | `3` | Worker columns per team (workers = cols x 2) |
+| `DOEY_INITIAL_TEAMS` | `0` | Extra team windows at startup |
+| `DOEY_INITIAL_FREELANCER_TEAMS` | `0` | Freelancer pools (no Subtaskmaster) |
 | `DOEY_INITIAL_WORKTREE_TEAMS` | `0` | Teams on isolated git branches |
 | `DOEY_MAX_WORKERS` | `20` | Max worker panes across all teams |
 | `DOEY_MANAGER_MODEL` | `opus` | Model for Subtaskmasters |
 | `DOEY_WORKER_MODEL` | `opus` | Model for Workers |
-| `DOEY_WORKER_LAUNCH_DELAY` | `3` | Seconds between worker launches (auth stagger) |
-| `DOEY_TEAM_LAUNCH_DELAY` | `15` | Seconds between team launches |
+| `DOEY_WORKER_LAUNCH_DELAY` | `1` | Seconds between worker launches (auth stagger) |
+| `DOEY_TEAM_LAUNCH_DELAY` | `2` | Seconds between team launches |
 
 **Advanced: named teams** — define teams with specific roles, models, and types:
 
@@ -150,7 +152,7 @@ DOEY_TEAM_2_WORKER_MODEL=sonnet
 
 ### Interactive Settings
 
-`/doey-settings` or the **⚙ Settings** button opens a split-screen editor with live config values.
+`/doey-settings` or the **Settings** button opens a split-screen editor with live config values.
 
 ## Task Tracking
 
@@ -188,10 +190,11 @@ cat /tmp/doey/*/debug/*/hooks.jsonl | sort -t'"' -k4   # view chronologically
 <details>
 <summary><strong>Slash Commands</strong></summary>
 
+**Planning:** `/doey-masterplan`, `/doey-create-task`, `/doey-instant-task`, `/doey-planned-task`
 **Tasks:** `/doey-task`, `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
-**Monitor:** `/doey-monitor`, `/doey-status`, `/doey-sm-compact`, `/doey-debug`
-**Infra:** `/doey-add-window`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
-**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-login`, `/doey-simplify-everything`
+**Monitor:** `/doey-monitor`, `/doey-status`, `/doey-taskmaster-compact`, `/doey-nudge`, `/doey-debug`
+**Infra:** `/doey-add-window`, `/doey-add-team`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
+**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-login`, `/doey-reset`, `/doey-simplify-everything`
 **Config:** `/doey-settings`
 **Session:** `/doey-kill-session`, `/doey-kill-all-sessions`
 **R&D:** `/doey-rd-team`
