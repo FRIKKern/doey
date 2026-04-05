@@ -254,7 +254,7 @@ fi
 
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD="$_BASH_CMD"
-  _boss_tm_pane=$(get_taskmaster_pane)
+  _boss_tm_pane="${DOEY_TASKMASTER_PANE:-1.0}"
   _boss_tm_safe=$(echo "$_boss_tm_pane" | tr '.' '_')
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
     _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
@@ -542,7 +542,7 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
   case "$TOOL_COMMAND" in *"tmux send-keys"*)
     _rtd="${_RD:-${DOEY_RUNTIME:-}}"
     if [ -n "$_rtd" ] && [ -f "${_rtd}/session.env" ]; then
-      _taskmaster_pane=$(_rk TASKMASTER_PANE "${_rtd}/session.env"); [ -z "$_taskmaster_pane" ] && _taskmaster_pane="$(get_taskmaster_pane)"
+      _taskmaster_pane=$(_rk TASKMASTER_PANE "${_rtd}/session.env"); [ -z "$_taskmaster_pane" ] && _taskmaster_pane="${DOEY_TASKMASTER_PANE:-1.0}"
       _sn="${SESSION_NAME:-}"; [ -z "$_sn" ] && _sn=$(_rk SESSION_NAME "${_rtd}/session.env")
       case "$TOOL_COMMAND" in
         *"-t"*"${_sn}:${_taskmaster_pane}"*|*"-t"*"${_taskmaster_pane}"*)

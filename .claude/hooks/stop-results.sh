@@ -4,6 +4,9 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 init_named_hook "stop-results"
 
+mkdir -p "${RUNTIME_DIR}/errors" 2>/dev/null || true
+trap '_err=$?; printf "[%s] ERR in stop-results at line %s (exit %s)\n" "$(date +%H:%M:%S)" "$LINENO" "$_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; exit 0' ERR
+
 is_worker || exit 0
 
 mkdir -p "$RUNTIME_DIR/tasks" 2>/dev/null || true
