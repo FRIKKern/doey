@@ -194,6 +194,9 @@ func (m DashboardModel) View() string {
 		sections = append(sections, m.renderTeamPicker(w))
 	}
 	sections = append(sections, m.renderActiveTasks(w))
+	if grid := m.renderTeamGrid(w); grid != "" {
+		sections = append(sections, grid)
+	}
 	sections = append(sections, m.renderQuickActions(w))
 
 	content := strings.Join(sections, "\n")
@@ -239,6 +242,9 @@ func (m DashboardModel) maxScrollOffset() int {
 		w = 40
 	}
 	sections = append(sections, m.renderActiveTasks(w))
+	if grid := m.renderTeamGrid(w); grid != "" {
+		sections = append(sections, grid)
+	}
 	sections = append(sections, m.renderQuickActions(w))
 	totalLines := len(strings.Split(strings.Join(sections, "\n"), "\n"))
 	maxOff := totalLines - m.height
@@ -483,6 +489,99 @@ func categoryAccentColor(category string, t styles.Theme) lipgloss.AdaptiveColor
 	default:
 		return t.Primary
 	}
+}
+
+func (m DashboardModel) renderTeamGrid(w int) string {
+	if len(m.snapshot.Teams) == 0 {
+		return ""
+	}
+	t := m.theme
+
+	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TEAMS")
+	rule := t.Faint.Render(strings.Repeat("─", w))
+
+	// Sort teams by window index
+	var indices []int
+	for idx := range m.snapshot.Teams {
+		indices = append(indices, idx)
+	}
+	sort.Ints(indices)
+
+	var cards []string
+	for _, winIdx := range indices {
+		team := m.snapshot.Teams[winIdx]
+
+		// Collect pane statuses for this team
+		// Pane 0 = Subtaskmaster, rest = Workers
+		allPanes := []int{0}
+		allPanes = append(allPanes, team.WorkerPanes...)
+
+		// Determine border color: green if any BUSY, blue if all FINISHED, gray otherwise
+		hasBusy := false
+		allFinished := len(allPanes) > 0
+		for _, pIdx := range allPanes {
+			key := fmt.Sprintf("%s:%d.%d", m.snapshot.Session.SessionName, winIdx, pIdx)
+			if ps, ok := m.snapshot.Panes[key]; ok {
+				if ps.Status == "BUSY" || ps.Status == "WORKING" {
+					hasBusy = true
+				}
+				if ps.Status != "FINISHED" {
+					allFinished = false
+				}
+			} else {
+				allFinished = false
+			}
+		}
+		borderColor := t.Muted
+		if hasBusy {
+			borderColor = t.Success
+		} else if allFinished {
+			borderColor = t.Info
+		}
+
+		// Title: team name + W{idx} badge + optional [F] badge
+		title := team.TeamName
+		if title == "" {
+			title = fmt.Sprintf("Team %d", winIdx)
+		}
+		badge := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf(" W%d", winIdx))
+		freelancerBadge := ""
+		if team.TeamType == "freelancer" {
+			freelancerBadge = lipgloss.NewStyle().Foreground(t.Accent).Render(" [F]")
+		}
+		titleLine := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(title) + badge + freelancerBadge
+
+		// Render a row per pane: colored dot + role label + status text
+		var paneLines []string
+		for _, pIdx := range allPanes {
+			key := fmt.Sprintf("%s:%d.%d", m.snapshot.Session.SessionName, winIdx, pIdx)
+			status := "—"
+			if ps, ok := m.snapshot.Panes[key]; ok {
+				status = ps.Status
+			}
+			dot := lipgloss.NewStyle().Foreground(styles.StatusColor(status)).Render("●")
+			role := "SM"
+			if pIdx > 0 {
+				role = fmt.Sprintf("W%d", pIdx)
+			}
+			roleLabel := lipgloss.NewStyle().Foreground(t.Muted).Width(4).Render(role)
+			statusText := styles.StatusText(status)
+			paneLines = append(paneLines, fmt.Sprintf("  %s %s %s", dot, roleLabel, statusText))
+		}
+
+		content := titleLine + "\n" + strings.Join(paneLines, "\n")
+
+		cardStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
+			Padding(0, 1)
+
+		cards = append(cards, cardStyle.Render(content))
+	}
+
+	grid := styles.CardGrid(cards, 2, w)
+	body := lipgloss.NewStyle().Padding(1, 1).Render(grid)
+	return "\n" + header + "\n" + rule + "\n" + body
 }
 
 func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) string {
