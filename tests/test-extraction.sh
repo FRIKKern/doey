@@ -37,7 +37,7 @@ skip_modules="doey-config-default.sh doey-remote-provision.sh doey-render-task.s
 # ── Collect all sourced .sh files to extract functions from
 sourced_files="${SHELL_DIR}/doey.sh"
 # Modules auto-sourced by doey.sh
-for mod in doey-go-helpers.sh doey-helpers.sh doey-ui.sh doey-remote.sh doey-purge.sh doey-update.sh doey-doctor.sh doey-task-cli.sh doey-test-runner.sh doey-grid.sh doey-menu.sh doey-roles.sh doey-send.sh; do
+for mod in doey-go-helpers.sh doey-helpers.sh doey-ui.sh doey-remote.sh doey-purge.sh doey-update.sh doey-doctor.sh doey-task-cli.sh doey-test-runner.sh doey-grid.sh doey-menu.sh doey-team-mgmt.sh doey-roles.sh doey-send.sh; do
   [ -f "${SHELL_DIR}/${mod}" ] && sourced_files="${sourced_files} ${SHELL_DIR}/${mod}"
 done
 # Manually sourced safe modules
