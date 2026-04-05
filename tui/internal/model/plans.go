@@ -892,7 +892,15 @@ func (m PlansModel) renderLeftPanel(w, h int) string {
 		return lipgloss.NewStyle().Width(w).Height(h).Render(header + "\n" + emptyBox)
 	}
 
-	listView := m.list.View()
+	// Set list size for left panel
+	listH := h - 1 // header
+	if listH < 1 {
+		listH = 1
+	}
+	// Create a temporary copy for rendering at correct size
+	l := m.list
+	l.SetSize(w, listH)
+	listView := l.View()
 	content := header + "\n" + listView
 
 	if m.statusMsg != "" {
