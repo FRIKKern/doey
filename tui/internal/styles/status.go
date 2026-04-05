@@ -148,16 +148,25 @@ func SectionPill(label string, bg lipgloss.AdaptiveColor) string {
 }
 
 // SubtaskProgress renders a subtask progress indicator in muted style.
-// Shows "(done/total)" — dim unless fully complete.
-func SubtaskProgress(done, total int) string {
+// Shows "(done/total)" — dim unless fully complete. If deferred > 0,
+// appends an amber-colored deferred indicator: "(done/active ⏸N)".
+func SubtaskProgress(done, total, deferred int) string {
 	if total == 0 {
 		return ""
 	}
-	label := fmt.Sprintf("(%d/%d)", done, total)
-	if done == total {
-		return lipgloss.NewStyle().Foreground(defaultTheme.Success).Faint(true).Render(label)
+	active := total - deferred
+	label := fmt.Sprintf("(%d/%d)", done, active)
+	var ratio string
+	if active > 0 && done == active {
+		ratio = lipgloss.NewStyle().Foreground(defaultTheme.Success).Faint(true).Render(label)
+	} else {
+		ratio = lipgloss.NewStyle().Foreground(defaultTheme.Muted).Render(label)
 	}
-	return lipgloss.NewStyle().Foreground(defaultTheme.Muted).Render(label)
+	if deferred > 0 {
+		deferredLabel := fmt.Sprintf(" ⏸%d", deferred)
+		ratio += lipgloss.NewStyle().Foreground(defaultTheme.Warning).Render(deferredLabel)
+	}
+	return ratio
 }
 
 // LogEventBadge returns a subtle colored label for a log event type.
