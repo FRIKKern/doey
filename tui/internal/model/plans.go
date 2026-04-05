@@ -208,7 +208,7 @@ func (m *PlansModel) SetSize(w, h int) {
 	if rightW < 24 {
 		rightW = 24
 	}
-	vpH := h - 7 // account for header, scroll hint, button row, and parent chrome
+	vpH := h - 3 // account for header, scroll hint, button row, and parent chrome
 	if vpH < 1 {
 		vpH = 1
 	}
@@ -406,7 +406,7 @@ func (m PlansModel) updateMouse(msg tea.MouseMsg) (PlansModel, tea.Cmd) {
 				if index >= 0 && index < len(m.entries) {
 					m.list.Select(index)
 					m.leftFocused = false
-					m.detailViewport.YOffset = 0
+					m.detailViewport.GotoTop()
 					m.loadSelectedDetail()
 					return m, nil
 				}
@@ -451,12 +451,12 @@ func (m PlansModel) updateList(msg tea.KeyMsg) (PlansModel, tea.Cmd) {
 			return m.acceptSelectedPlan()
 		}
 		m.leftFocused = false
-		m.detailViewport.YOffset = 0
+		m.detailViewport.GotoTop()
 		m.loadSelectedDetail()
 		return m, nil
 	case key.Matches(msg, m.keyMap.RightPanel):
 		m.leftFocused = false
-		m.detailViewport.YOffset = 0
+		m.detailViewport.GotoTop()
 		m.loadSelectedDetail()
 		return m, nil
 	}
@@ -765,7 +765,7 @@ func (m *PlansModel) loadSelectedDetail() {
 	m.selectedPlan = &plan
 
 	content := m.renderPlanDetail(&plan)
-	m.detailViewport.YOffset = 0
+	m.detailViewport.GotoTop()
 	m.detailViewport.SetContent(content)
 }
 
@@ -929,7 +929,7 @@ func (m PlansModel) renderRightPanel(w, h int) string {
 
 	// Viewport content is set by loadSelectedDetail() in SetSnapshot (pointer receiver).
 	// Do NOT call SetContent here — View() is a value receiver so changes are discarded.
-	vpH := h - 7
+	vpH := h - 3
 	if vpH < 1 {
 		vpH = 1
 	}
@@ -991,9 +991,5 @@ func (m PlansModel) renderRightPanel(w, h int) string {
 	}
 
 	rendered := lipgloss.NewStyle().Width(w).Height(h).Render(content)
-	// Clip to h lines to prevent content overflowing past terminal bounds
-	if rl := strings.Split(rendered, "\n"); len(rl) > h {
-		rendered = strings.Join(rl[:h], "\n")
-	}
 	return rendered
 }
