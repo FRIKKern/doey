@@ -172,6 +172,8 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE subtasks ADD COLUMN review_verdict TEXT DEFAULT ''`,
 		`ALTER TABLE subtasks ADD COLUMN review_evidence TEXT DEFAULT ''`,
 		`ALTER TABLE subtasks ADD COLUMN reviewer TEXT DEFAULT ''`,
+		// deferred status reason column (task #301)
+		`ALTER TABLE subtasks ADD COLUMN reason TEXT DEFAULT ''`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors

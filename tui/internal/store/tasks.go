@@ -49,7 +49,7 @@ type Task struct {
 }
 
 // ValidSubtaskStatuses lists all allowed subtask status values.
-var ValidSubtaskStatuses = []string{"pending", "in_progress", "done", "skipped", "failed", "review"}
+var ValidSubtaskStatuses = []string{"pending", "in_progress", "done", "skipped", "failed", "review", "deferred"}
 
 // IsValidSubtaskStatus reports whether status is an allowed subtask status.
 func IsValidSubtaskStatus(status string) bool {
@@ -74,6 +74,7 @@ type Subtask struct {
 	ReviewVerdict  string `json:"review_verdict,omitempty"`
 	ReviewEvidence string `json:"review_evidence,omitempty"`
 	Reviewer       string `json:"reviewer,omitempty"`
+	Reason         string `json:"reason,omitempty"`
 }
 
 type TaskLogEntry struct {
@@ -325,8 +326,8 @@ func (s *Store) CreateSubtask(st *Subtask) (int64, error) {
 	} else {
 		st.Seq = 1
 	}
-	res, err := s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		st.TaskID, st.Seq, st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ReviewVerdict, st.ReviewEvidence, st.Reviewer,
+	res, err := s.db.Exec(`INSERT INTO subtasks (task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		st.TaskID, st.Seq, st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ReviewVerdict, st.ReviewEvidence, st.Reviewer, st.Reason,
 	)
 	if err != nil {
 		return 0, err
@@ -335,7 +336,7 @@ func (s *Store) CreateSubtask(st *Subtask) (int64, error) {
 }
 
 func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
-	rows, err := s.db.Query(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer FROM subtasks WHERE task_id = ? ORDER BY seq`, taskID)
+	rows, err := s.db.Query(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer, reason FROM subtasks WHERE task_id = ? ORDER BY seq`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -344,21 +345,22 @@ func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
 	var subtasks []Subtask
 	for rows.Next() {
 		var st Subtask
-		var reviewVerdict, reviewEvidence, reviewer sql.NullString
-		if err := rows.Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer); err != nil {
+		var reviewVerdict, reviewEvidence, reviewer, reason sql.NullString
+		if err := rows.Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer, &reason); err != nil {
 			return nil, err
 		}
 		st.ReviewVerdict = reviewVerdict.String
 		st.ReviewEvidence = reviewEvidence.String
 		st.Reviewer = reviewer.String
+		st.Reason = reason.String
 		subtasks = append(subtasks, st)
 	}
 	return subtasks, rows.Err()
 }
 
 func (s *Store) UpdateSubtask(st *Subtask) error {
-	_, err := s.db.Exec(`UPDATE subtasks SET title = ?, status = ?, assignee = ?, worker = ?, created_at = ?, completed_at = ?, review_verdict = ?, review_evidence = ?, reviewer = ? WHERE id = ?`,
-		st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ReviewVerdict, st.ReviewEvidence, st.Reviewer, st.ID,
+	_, err := s.db.Exec(`UPDATE subtasks SET title = ?, status = ?, assignee = ?, worker = ?, created_at = ?, completed_at = ?, review_verdict = ?, review_evidence = ?, reviewer = ?, reason = ? WHERE id = ?`,
+		st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ReviewVerdict, st.ReviewEvidence, st.Reviewer, st.Reason, st.ID,
 	)
 	return err
 }
@@ -367,11 +369,13 @@ func (s *Store) UpdateSubtask(st *Subtask) error {
 func (s *Store) GetSubtaskBySeq(taskID int64, seq int) (*Subtask, error) {
 	var st Subtask
 	var reviewVerdict, reviewEvidence, reviewer sql.NullString
-	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer FROM subtasks WHERE task_id = ? AND seq = ?`, taskID, seq).
-		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer)
+	var reason sql.NullString
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer, reason FROM subtasks WHERE task_id = ? AND seq = ?`, taskID, seq).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer, &reason)
 	st.ReviewVerdict = reviewVerdict.String
 	st.ReviewEvidence = reviewEvidence.String
 	st.Reviewer = reviewer.String
+	st.Reason = reason.String
 	if err != nil {
 		return nil, err
 	}
@@ -381,12 +385,13 @@ func (s *Store) GetSubtaskBySeq(taskID int64, seq int) (*Subtask, error) {
 // GetSubtaskByID returns the subtask by its DB primary key.
 func (s *Store) GetSubtaskByID(id int64) (*Subtask, error) {
 	var st Subtask
-	var reviewVerdict, reviewEvidence, reviewer sql.NullString
-	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer FROM subtasks WHERE id = ?`, id).
-		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer)
+	var reviewVerdict, reviewEvidence, reviewer, reason sql.NullString
+	err := s.db.QueryRow(`SELECT id, task_id, seq, title, status, assignee, worker, created_at, completed_at, review_verdict, review_evidence, reviewer, reason FROM subtasks WHERE id = ?`, id).
+		Scan(&st.ID, &st.TaskID, &st.Seq, &st.Title, &st.Status, &st.Assignee, &st.Worker, &st.CreatedAt, &st.CompletedAt, &reviewVerdict, &reviewEvidence, &reviewer, &reason)
 	st.ReviewVerdict = reviewVerdict.String
 	st.ReviewEvidence = reviewEvidence.String
 	st.Reviewer = reviewer.String
+	st.Reason = reason.String
 	if err != nil {
 		return nil, err
 	}
