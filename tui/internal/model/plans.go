@@ -92,7 +92,16 @@ func (d planCardDelegate) Render(w io.Writer, m list.Model, index int, item list
 	} else {
 		titleStyle = titleStyle.Foreground(d.theme.Text)
 	}
-	title := titleStyle.Render(pi.plan.Title)
+	// Title — truncate to fit panel width (icon + border + padding ~ 6 chars)
+	titleText := pi.plan.Title
+	maxTitleW := m.Width() - 6
+	if maxTitleW < 12 {
+		maxTitleW = 12
+	}
+	if len(titleText) > maxTitleW {
+		titleText = titleText[:maxTitleW-1] + "…"
+	}
+	title := titleStyle.Render(titleText)
 
 	// Description line
 	desc := lipgloss.NewStyle().Foreground(d.theme.Muted).Render(pi.planDescription())
