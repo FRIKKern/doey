@@ -62,6 +62,10 @@ func (p planItem) planDescription() string {
 	if p.plan.Author != "" {
 		parts = append(parts, p.plan.Author)
 	}
+	if p.plan.Updated > 0 {
+		updatedTime := time.Unix(p.plan.Updated, 0)
+		parts = append(parts, updatedTime.Format("Jan 2 15:04"))
+	}
 	return strings.Join(parts, " · ")
 }
 
@@ -70,7 +74,7 @@ type planCardDelegate struct {
 	theme styles.Theme
 }
 
-func (d planCardDelegate) Height() int                             { return 3 }
+func (d planCardDelegate) Height() int                             { return 2 }
 func (d planCardDelegate) Spacing() int                            { return 0 }
 func (d planCardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
@@ -161,7 +165,7 @@ func NewPlansModel(theme styles.Theme) PlansModel {
 	delegate := planCardDelegate{theme: theme}
 	return PlansModel{
 		SplitPaneModel: NewSplitPane(theme, delegate, SplitPaneConfig{
-			CardHeight:     3,
+			CardHeight:     2,
 			HeaderLines:    1,
 			HasSeparator:   true,
 			VPHeightOffset: 3,
@@ -349,7 +353,7 @@ func (m PlansModel) updateMouse(msg tea.MouseMsg) (PlansModel, tea.Cmd) {
 			leftW = 28
 		}
 		if msg.X < leftW && len(m.entries) > 0 {
-			const cardHeight = 3
+			const cardHeight = 2
 			const headerLines = 1
 			relY := msg.Y - m.panelOffsetY - headerLines
 			if relY >= 0 {
@@ -745,6 +749,12 @@ func (m *PlansModel) renderPlanDetail(plan *Plan) string {
 	}
 	if len(plan.Tags) > 0 {
 		b.WriteString(metaStyle.Render("Tags: "+strings.Join(plan.Tags, ", ")) + "\n")
+	}
+	if plan.Created > 0 {
+		b.WriteString(metaStyle.Faint(true).Render("Created: "+time.Unix(plan.Created, 0).Format("2006-01-02 15:04")) + "\n")
+	}
+	if plan.Updated > 0 && plan.Updated != plan.Created {
+		b.WriteString(metaStyle.Faint(true).Render("Updated: "+time.Unix(plan.Updated, 0).Format("2006-01-02 15:04")) + "\n")
 	}
 
 	// Body — render through glamour with caching
