@@ -1058,6 +1058,8 @@ func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, sele
 		icon = lipgloss.NewStyle().Foreground(theme.Info).Render("◉")
 	case "failed":
 		icon = lipgloss.NewStyle().Foreground(theme.Danger).Render("✗")
+	case "deferred":
+		icon = lipgloss.NewStyle().Foreground(theme.Warning).Render("⏸")
 	default: // pending
 		icon = lipgloss.NewStyle().Foreground(theme.Warning).Render("◯")
 	}

@@ -57,6 +57,8 @@ func statusIcon(status string, t styles.Theme) string {
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("—")
 	case "failed":
 		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
+	case "deferred":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("⏸")
 	default:
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
 	}
@@ -1119,6 +1121,8 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		statusColor = t.Muted
 	case "failed":
 		statusColor = t.Danger
+	case "deferred":
+		statusColor = t.Warning
 	}
 	sections = append(sections, styles.MetaLine(t, "Status", lipgloss.NewStyle().Foreground(statusColor).Render(task.Status)))
 
@@ -1340,6 +1344,8 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
 			case "failed":
 				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
+			case "deferred":
+				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("⏸")
 			}
 			pane := lipgloss.NewStyle().Foreground(t.Accent).Render(st.Pane)
 			stTitle := t.Body.Render(st.Title)
@@ -1347,9 +1353,13 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			if st.Created > 0 {
 				age = t.Faint.Render(formatAge(now.Sub(time.Unix(st.Created, 0))))
 			}
+			reason := ""
+			if st.Reason != "" {
+				reason = t.Faint.Render(" (" + st.Reason + ")")
+			}
 
 			// Highlight selected subtask
-			line := fmt.Sprintf("%s %-6s %s  %s", dot, pane, stTitle, age)
+			line := fmt.Sprintf("%s %-6s %s%s  %s", dot, pane, stTitle, reason, age)
 			if m.expanded != nil && m.expanded.SubtaskCursor == i {
 				line = lipgloss.NewStyle().Bold(true).Render(line)
 			}

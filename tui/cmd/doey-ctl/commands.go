@@ -812,6 +812,7 @@ func runSubtaskUpdate(args []string) {
 	fs := flag.NewFlagSet("task subtask update", flag.ExitOnError)
 	statusFlag := fs.String("status", "", "new status")
 	stTitle := fs.String("title", "", "new title (DB mode)")
+	reasonFlag := fs.String("reason", "", "reason for status change (e.g. why deferred)")
 	taskIDFlag := fs.String("task-id", "", "parent task ID")
 	subtaskIDFlag := fs.String("subtask-id", "", "subtask seq number or DB ID")
 	dir := fs.String("project-dir", "", "project directory")
@@ -822,7 +823,7 @@ func runSubtaskUpdate(args []string) {
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  doey-ctl task subtask update --task-id 142 --subtask-id 1 --status done\n")
 		fmt.Fprintf(os.Stderr, "  doey-ctl task subtask update 142 1 done    (positional shorthand)\n")
-		fmt.Fprintf(os.Stderr, "\nValid statuses: pending, in_progress, done, skipped, failed, review\n\n")
+		fmt.Fprintf(os.Stderr, "\nValid statuses: pending, in_progress, done, skipped, failed, review, deferred\n\n")
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		fs.PrintDefaults()
 	}
@@ -885,6 +886,9 @@ func runSubtaskUpdate(args []string) {
 		if *stTitle != "" {
 			resolved.Title = *stTitle
 		}
+		if *reasonFlag != "" {
+			resolved.Reason = *reasonFlag
+		}
 		if err := s.UpdateSubtask(resolved); err != nil {
 			fatal("task subtask update: %v", err)
 		}
@@ -894,6 +898,9 @@ func runSubtaskUpdate(args []string) {
 		}
 		if *stTitle != "" {
 			evData += ",title=" + *stTitle
+		}
+		if *reasonFlag != "" {
+			evData += ",reason=" + *reasonFlag
 		}
 		s.LogEvent(&store.Event{Type: "subtask_updated", Source: eventSource(), TaskID: &taskID, Data: evData})
 

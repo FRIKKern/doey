@@ -91,6 +91,7 @@ func (sr *storeReader) readTasks() []Task {
 				Worker:      ss.Worker,
 				Created:     ss.CreatedAt,
 				CompletedAt: ss.CompletedAt,
+				Reason:      ss.Reason,
 			})
 		}
 

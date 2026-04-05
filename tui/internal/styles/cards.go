@@ -53,6 +53,8 @@ func StatusAccentColor(t Theme, status string) lipgloss.AdaptiveColor {
 		return lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#C4B5FD"}
 	case "research":
 		return t.Info
+	case "deferred":
+		return t.Warning
 	default:
 		return t.Muted
 	}
@@ -77,6 +79,8 @@ func StatusLabel(status string) string {
 		return "Blocked"
 	case "paused":
 		return "Paused"
+	case "deferred":
+		return "Deferred"
 	case "failed":
 		return "Failed"
 	case "draft":
