@@ -93,7 +93,7 @@ ${summary}"
 
 _wake_taskmaster() {
   if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl nudge --on-finish "${WINDOW_INDEX}.${PANE_INDEX}" 2>/dev/null || true
+    doey-ctl nudge --cascade "${WINDOW_INDEX}.${PANE_INDEX}" 2>/dev/null || true
   else
     # Fallback: touch trigger file (taskmaster-wait.sh monitors this)
     touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true

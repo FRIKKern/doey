@@ -107,6 +107,7 @@ func runTaskCreate(args []string) {
 	dispatchMode := fs.String("dispatch-mode", "", "dispatch mode")
 	intent := fs.String("intent", "", "task intent / user goal")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if *title == "" {
@@ -171,6 +172,7 @@ func runTaskUpdate(args []string) {
 	idFlag := fs.String("id", "", "task ID (convenience)")
 	statusFlag := fs.String("status", "", "set status (convenience shorthand)")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: doey-ctl task update [flags] [task-id]\n\n")
@@ -369,6 +371,9 @@ func runTaskUpdate(args []string) {
 				fatal("task update: %v", err)
 			}
 			s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: *field + "=" + *value})
+			if jsonOutput {
+				printJSON(map[string]any{"id": id, "field": *field, "value": *value, "status": "updated"})
+			}
 			return
 		}
 	}
@@ -377,6 +382,9 @@ func runTaskUpdate(args []string) {
 	if err := ctl.UpdateTaskField(pd, taskIDStr, *field, *value); err != nil {
 		fatal("task update: %v", err)
 	}
+	if jsonOutput {
+		printJSON(map[string]any{"id": taskIDStr, "field": *field, "value": *value, "status": "updated"})
+	}
 }
 
 // runTaskTransition handles transition shorthand subcommands (done, start, block, etc.)
@@ -384,6 +392,7 @@ func runTaskUpdate(args []string) {
 func runTaskTransition(subcmd, status string, args []string) {
 	fs := flag.NewFlagSet("task "+subcmd, flag.ContinueOnError)
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: doey-ctl task %s [flags] <id> [id...]\n\n", subcmd)
@@ -443,7 +452,9 @@ func runTaskTransition(subcmd, status string, args []string) {
 	}
 
 	okCount := fs.NArg() - errCount
-	if fs.NArg() > 1 {
+	if jsonOutput {
+		printJSON(map[string]any{"status": status, "ok": okCount, "errors": errCount})
+	} else if fs.NArg() > 1 {
 		fmt.Fprintf(os.Stderr, "Marked %d task(s) %s", okCount, status)
 		if errCount > 0 {
 			fmt.Fprintf(os.Stderr, ", %d error(s)", errCount)
@@ -460,6 +471,7 @@ func runTaskList(args []string) {
 	fs := flag.NewFlagSet("task list", flag.ExitOnError)
 	status := fs.String("status", "", "filter by status")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	pd := projectDir(*dir)
@@ -518,6 +530,7 @@ func runTaskGet(args []string) {
 	fs := flag.NewFlagSet("task get", flag.ExitOnError)
 	idFlag := fs.String("id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	taskIDStr := *idFlag
@@ -631,6 +644,7 @@ func runTaskDelete(args []string) {
 	fs := flag.NewFlagSet("task delete", flag.ExitOnError)
 	idFlag := fs.String("id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	taskIDStr := *idFlag
@@ -692,6 +706,7 @@ func runSubtaskAdd(args []string) {
 	title := fs.String("title", "", "subtask title (DB mode; positional desc used for file mode)")
 	desc := fs.String("description", "", "description (alias for --title)")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if *title == "" && *desc != "" {
@@ -780,6 +795,7 @@ func runSubtaskUpdate(args []string) {
 	taskIDFlag := fs.String("task-id", "", "parent task ID")
 	subtaskIDFlag := fs.String("subtask-id", "", "subtask seq number or DB ID")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: doey-ctl task subtask update [flags] [task-id] [seq] [status]\n\n")
@@ -878,6 +894,7 @@ func runSubtaskList(args []string) {
 	fs := flag.NewFlagSet("task subtask list", flag.ExitOnError)
 	taskIDFlag := fs.String("task-id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	taskIDStr := *taskIDFlag
@@ -966,6 +983,7 @@ func runTaskLogAdd(args []string) {
 	title := fs.String("title", "", "log entry title")
 	body := fs.String("body", "", "log entry body")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	taskIDStr := *taskIDFlag
@@ -1048,12 +1066,16 @@ func runTaskLogAdd(args []string) {
 	if err := ctl.AddDecision(pd, taskIDStr, text); err != nil {
 		fatal("task log add: %v", err)
 	}
+	if jsonOutput {
+		printJSON(map[string]string{"status": "added"})
+	}
 }
 
 func runTaskLogList(args []string) {
 	fs := flag.NewFlagSet("task log list", flag.ExitOnError)
 	taskIDFlag := fs.String("task-id", "", "task ID")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	taskIDStr := *taskIDFlag
@@ -1129,6 +1151,7 @@ func runTaskDecision(args []string) {
 	titleFlag := fs.String("title", "", "decision title")
 	bodyFlag := fs.String("body", "", "decision body")
 	dir := fs.String("project-dir", "", "project directory")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	taskIDStr := *taskIDFlag
@@ -1179,9 +1202,12 @@ func runTaskDecision(args []string) {
 				Type:   "decision",
 				Title:  text,
 			}
-			_, err := s.AddTaskLog(entry)
+			id, err := s.AddTaskLog(entry)
 			if err != nil {
 				fatal("task decision: %v", err)
+			}
+			if jsonOutput {
+				printJSON(map[string]int64{"id": id})
 			}
 			return
 		}
@@ -1190,6 +1216,9 @@ func runTaskDecision(args []string) {
 	// File-only fallback.
 	if err := ctl.AddDecision(pd, taskIDStr, text); err != nil {
 		fatal("task decision: %v", err)
+	}
+	if jsonOutput {
+		printJSON(map[string]string{"status": "added"})
 	}
 }
 
@@ -1720,6 +1749,7 @@ func runTmuxCmd(args []string) {
 func runTmuxPanes(args []string) {
 	fs := flag.NewFlagSet("tmux panes", flag.ExitOnError)
 	session := fs.String("session", "", "tmux session name")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -1772,6 +1802,7 @@ func runTmuxCapture(args []string) {
 	fs := flag.NewFlagSet("tmux capture", flag.ExitOnError)
 	session := fs.String("session", "", "tmux session name")
 	lines := fs.Int("lines", 50, "number of lines to capture")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -1794,6 +1825,7 @@ func runTmuxCapture(args []string) {
 func runTmuxEnv(args []string) {
 	fs := flag.NewFlagSet("tmux env", flag.ExitOnError)
 	session := fs.String("session", "", "tmux session name")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
