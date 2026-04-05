@@ -178,6 +178,10 @@ ATTACH_EOF
     _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}/attachments/${_ATTACH_TS}_completion_${_PANE_SAFE}.md" 2>/dev/null || true
   fi
 
+  # Compute files changed count before subshell (value would be lost inside)
+  _FILES_COUNT=0
+  [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
+
   # Add completion report to task (Task Accountability)
   if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
     (

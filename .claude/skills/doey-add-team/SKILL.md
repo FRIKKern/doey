@@ -209,7 +209,7 @@ bash -c "
 "
 ```
 
-### Step 6: Brief the manager with team context
+### Step 6: Brief the Subtaskmaster with team context
 
 ```bash
 if [ -n "$MANAGER_PANE_IDX" ]; then
@@ -230,7 +230,7 @@ BRIEF_EOF
 
   source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
   BRIEFING_CONTENT=$(cat "$BRIEFING")
-  doey_send_verified "$MGR_PANE" "$BRIEFING_CONTENT" && echo "Manager briefed" || echo "Manager briefing delivery failed"
+  doey_send_verified "$MGR_PANE" "$BRIEFING_CONTENT" && echo "Subtaskmaster briefed" || echo "Subtaskmaster briefing delivery failed"
   rm -f "$BRIEFING"
 fi
 ```

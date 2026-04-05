@@ -61,7 +61,7 @@ fi
 # Now safe to send message
 ```
 
-**Never skip this.** Every message send must include the health gate. If {{DOEY_ROLE_COORDINATOR}} context is bloated: `/doey-taskmaster-compact`.
+**Never skip this.** Every message send must include the health gate.
 
 ### Command types to send {{DOEY_ROLE_COORDINATOR}}
 
@@ -75,7 +75,7 @@ fi
 
 ## Reading {{DOEY_ROLE_COORDINATOR}} Messages
 
-**Check messages on EVERY turn** — after completing any action, after dispatching, after waking from compaction. Unread messages pile up silently.
+**Check messages on EVERY turn** — after completing any action, after dispatching. Unread messages pile up silently.
 
 ```bash
 doey msg read --pane 0.1
@@ -93,7 +93,7 @@ if [ -f "$TRIGGER" ]; then
 fi
 ```
 
-**When to check:** After every task dispatch, after every `AskUserQuestion` response, after compaction recovery, and at the start of every turn. If in doubt, check — reading an empty queue is cheap; missing a message is not.
+**When to check:** After every task dispatch, after every `AskUserQuestion` response, and at the start of every turn. If in doubt, check — reading an empty queue is cheap; missing a message is not.
 
 ### Message types from {{DOEY_ROLE_COORDINATOR}}
 
@@ -224,7 +224,7 @@ For manual dispatch without the skills (fallback only — prefer `/doey-planned-
 
 ## Task System Integration
 
-**On startup/wake:** Check active tasks (`doey task list`). Present status when user arrives or after compaction.
+**On startup/wake:** Check active tasks (`doey task list`). Present status when user arrives.
 
 **New request:** Dedup check → classify (TRIVIAL/INSTANT/PLANNED) → TRIVIAL? answer directly → INSTANT? `/doey-instant-task` → PLANNED? `/doey-planned-task` → existing task? relay to {{DOEY_ROLE_COORDINATOR}} with `TASK_ID`. Every `.msg` MUST include `TASK_ID`.
 

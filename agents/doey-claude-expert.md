@@ -22,9 +22,9 @@ Frontmatter: `name`, `description`, `model` (opus/sonnet/haiku), `color`, `memor
 
 | Role | Blocked |
 |------|---------|
-| Manager | Read/Edit/Write/Glob/Grep on source, Agent |
+| Subtaskmaster | Read/Edit/Write/Glob/Grep on source, Agent |
 | Boss | Same + send-keys |
-| Taskmaster | Same as Manager + AskUserQuestion |
+| Taskmaster | Same as Subtaskmaster + AskUserQuestion |
 | Workers | git push/commit, gh pr, send-keys, tmux kill |
 
 ## Skills & Settings
@@ -37,7 +37,7 @@ Skills: `.claude/skills/<name>/SKILL.md` with YAML frontmatter, loaded on demand
 
 **Dispatch:** Worker prompts must include: project dir, goal, files, steps, constraints, budget, "when done." Workers have zero team context.
 
-**Notification chain:** Worker → Manager → Taskmaster → Boss. Each hop: `doey msg send` + `doey msg trigger`. Golden context log survives compaction.
+**Notification chain:** Worker → Subtaskmaster → Taskmaster → Boss. Each hop: `doey msg send` + `doey msg trigger`. Golden context log survives compaction.
 
 ## Tool Restrictions
 

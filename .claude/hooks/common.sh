@@ -315,26 +315,6 @@ _pane_alive() {
   tmux display-message -t "$1" -p '#{pane_pid}' >/dev/null 2>&1
 }
 
-# _pane_healthy checks if a pane's status file is fresh (not stale).
-# Usage: _pane_healthy <pane_safe>
-# Returns: 0 if healthy, 1 if stale or missing.
-_pane_healthy() {
-  local pane_safe="$1"
-  if command -v doey-ctl >/dev/null 2>&1; then
-    doey health check --runtime "$RUNTIME_DIR" "$pane_safe" >/dev/null 2>&1
-  else
-    # Bash fallback: check status file modification time
-    local status_file="${RUNTIME_DIR}/status/${pane_safe}.status"
-    [ -f "$status_file" ] || return 1
-    local now mod_time age
-    now=$(date +%s)
-    # stat -f %m for macOS, stat -c %Y for Linux
-    mod_time=$(stat -f '%m' "$status_file" 2>/dev/null || stat -c '%Y' "$status_file" 2>/dev/null) || return 1
-    age=$(( now - mod_time ))
-    [ "$age" -le 120 ]
-  fi
-}
-
 # _read_pane_status reads the STATUS field from a pane's status file.
 # Usage: _read_pane_status <pane_safe>
 # Outputs: status string (e.g., "BUSY", "READY", "FINISHED")

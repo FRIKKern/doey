@@ -12,7 +12,6 @@ if [ -f "${RUNTIME_DIR}/debug.conf" ] && [ -d "${RUNTIME_DIR}/debug" ]; then
 fi
 
 # Helpers for repeated patterns
-_pane_alive() { tmux display-message -t "$1" -p '#{pane_pid}' >/dev/null 2>&1; }
 _is_spam() { echo "$1" | grep -qiE "bypass permissions|permissions on|shift\+tab|press enter|─{3,}|❯"; }
 _debug_sent() {
   type _debug_log >/dev/null 2>&1 && _debug_log messages "sent" "from=${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "to=$1" "type=$2" "delivery=${3:-file}" "success=true"

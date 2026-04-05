@@ -63,8 +63,6 @@ func normalizePaneID(input string) string {
 	return input
 }
 
-// resolvePaneID is an alias for normalizePaneID for backward compatibility.
-var resolvePaneID = normalizePaneID
 
 // getSessionName returns the tmux session name from env or tmux query.
 func getSessionName() string {
@@ -227,8 +225,8 @@ func msgSend(args []string) {
 	if *to == "" || *from == "" || *subject == "" {
 		fatal("msg send: --to, --from, and --subject are required\nRun 'doey-ctl msg send -h' for usage.\n")
 	}
-	*to = resolvePaneID(*to)
-	*from = resolvePaneID(*from)
+	*to = normalizePaneID(*to)
+	*from = normalizePaneID(*from)
 
 	// Capture pre-send state for verification
 	var preSendCapture string
@@ -415,7 +413,7 @@ func msgRead(args []string) {
 	if *pane == "" {
 		fatal("msg read: --pane is required\nRun 'doey-ctl msg read -h' for usage.\n")
 	}
-	*pane = resolvePaneID(*pane)
+	*pane = normalizePaneID(*pane)
 
 	// Try DB first
 	s, err := openStoreIfExists(projectDir(*dir))
@@ -467,7 +465,7 @@ func msgList(args []string) {
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
-	*to = resolvePaneID(*to)
+	*to = normalizePaneID(*to)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
@@ -509,7 +507,7 @@ func msgReadAll(args []string) {
 	if *to == "" {
 		fatal("msg read-all: --to (or --pane) is required\nRun 'doey-ctl msg read-all -h' for usage.\n")
 	}
-	*to = resolvePaneID(*to)
+	*to = normalizePaneID(*to)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
@@ -537,7 +535,7 @@ func msgMarkRead(args []string) {
 	if *pane == "" {
 		fatal("msg mark-read: --pane is required\nRun 'doey-ctl msg mark-read -h' for usage.\n")
 	}
-	*pane = resolvePaneID(*pane)
+	*pane = normalizePaneID(*pane)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
@@ -565,7 +563,7 @@ func msgCount(args []string) {
 	if *to == "" {
 		fatal("msg count: --to is required\nRun 'doey-ctl msg count -h' for usage.\n")
 	}
-	*to = resolvePaneID(*to)
+	*to = normalizePaneID(*to)
 
 	s, err := openStoreIfExists(projectDir(*dir))
 	if err != nil || s == nil {
@@ -594,7 +592,7 @@ func msgClean(args []string) {
 	if *pane == "" {
 		fatal("msg clean: --pane is required\nRun 'doey-ctl msg clean -h' for usage.\n")
 	}
-	*pane = resolvePaneID(*pane)
+	*pane = normalizePaneID(*pane)
 	if err := ctl.CleanupMsgs(runtimeDir(*rt), *pane); err != nil {
 		fatal("msg clean: %v\n", err)
 	}
@@ -615,7 +613,7 @@ func msgTrigger(args []string) {
 	if *pane == "" {
 		fatal("msg trigger: --pane is required\nRun 'doey-ctl msg trigger -h' for usage.\n")
 	}
-	*pane = resolvePaneID(*pane)
+	*pane = normalizePaneID(*pane)
 	rtDir := runtimeDir(*rt)
 	if err := ctl.FireTrigger(rtDir, *pane); err != nil {
 		fatal("msg trigger: %v\n", err)
@@ -736,7 +734,7 @@ func statusGet(args []string) {
 	if fs.NArg() < 1 {
 		fatal("status get: <pane> argument required\nRun 'doey-ctl status get -h' for usage.\n")
 	}
-	pane := resolvePaneID(fs.Arg(0))
+	pane := normalizePaneID(fs.Arg(0))
 
 	// Try DB first
 	s, err := openStoreIfExists(projectDir(*dir))
@@ -805,7 +803,7 @@ func statusSet(args []string) {
 	if *pane == "" || *status == "" {
 		fatal("status set: --pane and --status are required\nRun 'doey-ctl status set -h' for usage.\n")
 	}
-	*pane = resolvePaneID(*pane)
+	*pane = normalizePaneID(*pane)
 
 	// Try DB
 	s, err := openStoreIfExists(projectDir(*dir))
@@ -920,7 +918,7 @@ func healthCheck(args []string) {
 	if fs.NArg() < 1 {
 		fatal("health check: <pane_safe> argument required\nRun 'doey-ctl health check -h' for usage.\n")
 	}
-	paneSafe := resolvePaneID(fs.Arg(0))
+	paneSafe := normalizePaneID(fs.Arg(0))
 
 	dur, err := time.ParseDuration(*staleness)
 	if err != nil {
