@@ -228,6 +228,29 @@ func runTaskUpdate(args []string) {
 		}
 		if t != nil {
 			id := t.ID
+
+			// Fuzzy field-name matching: auto-correct typos before the switch.
+			validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority", "depends_on", "merged_into", "dispatch_mode", "summary", "phase", "intent", "proof_type", "proof_content", "verification_status", "build_status", "verification_steps"}
+			isExact := false
+			for _, vf := range validFields {
+				if *field == vf {
+					isExact = true
+					break
+				}
+			}
+			if !isExact {
+				matches := fuzzyMatchAll(*field, validFields)
+				switch len(matches) {
+				case 1:
+					fmt.Fprintf(os.Stderr, "Warning: unknown field %q, using %q\n", *field, matches[0])
+					*field = matches[0]
+				case 0:
+					fatal("task update: unknown field %q\nValid fields: %s\n", *field, strings.Join(validFields, ", "))
+				default:
+					fatal("task update: unknown field %q. Did you mean: %s?\n", *field, strings.Join(matches, ", "))
+				}
+			}
+
 			switch *field {
 			case "title":
 				t.Title = *value
@@ -339,11 +362,7 @@ func runTaskUpdate(args []string) {
 			case "verification_steps":
 				t.VerificationSteps = *value
 			default:
-				validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority", "depends_on", "merged_into", "dispatch_mode", "summary", "phase", "intent", "proof_type", "proof_content", "verification_status", "build_status", "verification_steps"}
-				if suggestion, ok := fuzzyMatch(*field, validFields); ok {
-					fatal("task update: unknown field '%s'. Did you mean '%s'?\n", *field, suggestion)
-				}
-				fatal("task update: unknown DB field %q\nValid fields: title, status, type, description, assigned_to, team, tags, acceptance_criteria, current_phase, total_phases, notes, blockers, related_files, hypotheses, decision_log, result, files, commits, schema_version, created_by, plan_id, review_verdict, review_findings, review_timestamp, attachments, priority, depends_on, merged_into, dispatch_mode, summary, phase, intent, proof_type, proof_content, verification_status, build_status, verification_steps\n", *field)
+				fatal("task update: unknown field %q\nValid fields: %s\n", *field, strings.Join(validFields, ", "))
 			}
 
 			if err := s.UpdateTask(t); err != nil {
@@ -1204,6 +1223,25 @@ func fuzzyMatch(input string, valid []string) (string, bool) {
 		return best, true
 	}
 	return "", false
+}
+
+// fuzzyMatchAll returns all valid strings within Levenshtein distance threshold of input.
+// The threshold is min(len(input)/2, 3) but at least 1.
+func fuzzyMatchAll(input string, valid []string) []string {
+	maxDist := len(input) / 2
+	if maxDist < 1 {
+		maxDist = 1
+	}
+	if maxDist > 3 {
+		maxDist = 3
+	}
+	var matches []string
+	for _, v := range valid {
+		if editDistance(input, v) <= maxDist {
+			matches = append(matches, v)
+		}
+	}
+	return matches
 }
 
 // normalizeFieldName strips TASK_ prefix and lowercases the field name.
