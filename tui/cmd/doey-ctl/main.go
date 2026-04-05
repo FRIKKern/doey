@@ -117,6 +117,8 @@ func main() {
 		runAgentCmd(os.Args[2:])
 	case "event":
 		runEventCmd(os.Args[2:])
+	case "interaction":
+		runInteractionCmd(os.Args[2:])
 	case "nudge":
 		// Intercept auto-trigger flags before passing to runNudgeCmd
 		if nudgeAutoTrigger(os.Args[2:]) {
