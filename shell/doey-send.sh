@@ -161,8 +161,6 @@ doey_send_verified() {
     pre_submit=$(tmux capture-pane -t "$target" -p -S -3 2>/dev/null) || pre_submit=""
 
     # ── Step 5: Send Enter to submit ──
-    tmux send-keys -t "$target" Escape 2>/dev/null || true
-    sleep 0.15
     tmux send-keys -t "$target" Enter 2>/dev/null || true
 
     # ── Step 6: Verify prompt changed (submission happened) ──

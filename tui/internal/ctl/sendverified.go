@@ -19,6 +19,20 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 	const maxRetries = 3
 	backoffs := []time.Duration{500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
 
+	// Readiness gate: wait for the Claude prompt to appear before sending
+	promptReady := false
+	for i := 0; i < 60; i++ { // 60 × 500ms = 30s
+		captured, _ := t.CapturePane(pane, 3)
+		if strings.Contains(captured, "\u276f") || strings.Contains(captured, ">") {
+			promptReady = true
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if !promptReady {
+		return fmt.Errorf("ctl: SendVerified: prompt not ready after 30s in pane %s", pane)
+	}
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		// --- Pre-clear: ensure clean input state ---
 		t.runQuiet("copy-mode", "-q", "-t", t.paneTarget(pane))
@@ -42,7 +56,7 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 		if !hasNewline && len(message) < 500 {
 			// Short single-line: type text, settle, then Enter
 			t.SendKeys(pane, "--", message)
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 			t.SendKeys(pane, "Enter")
 		} else {
 			// Long/multi-line: tmpfile → load-buffer → paste-buffer
@@ -69,8 +83,6 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 			os.Remove(tmpPath)
 
 			time.Sleep(300 * time.Millisecond)
-			t.SendKeys(pane, "Escape")
-			time.Sleep(200 * time.Millisecond)
 			t.SendKeys(pane, "Enter")
 		}
 
