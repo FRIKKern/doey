@@ -186,6 +186,18 @@ type DebugEntry struct {
 	Detail   string    // full content (shown in detail view)
 }
 
+// Interaction represents a Boss interaction log entry.
+type Interaction struct {
+	ID          int64
+	SessionName string
+	TaskID      *int64
+	MessageText string
+	MessageType string
+	Source      string
+	Context     string
+	CreatedAt   time.Time
+}
+
 // Message represents a single IPC message from the runtime message queue.
 type Message struct {
 	ID        string // derived from filename (unique)
@@ -208,10 +220,11 @@ type PaneResult struct {
 	FilesChanged []string `json:"files_changed"`
 	ToolCalls    int      `json:"tool_calls"`
 	LastOutput   string   `json:"last_output"`
-	ProofType    string   `json:"proof_type,omitempty"`
-	ProofContent string   `json:"proof_content,omitempty"`
-	TaskID       string   `json:"task_id,omitempty"`
-	SubtaskID    string   `json:"subtask_id,omitempty"`
+	ProofType          string   `json:"proof_type,omitempty"`
+	ProofContent       string   `json:"proof_content,omitempty"`
+	VerificationSteps  string   `json:"verification_steps,omitempty"`
+	TaskID             string   `json:"task_id,omitempty"`
+	SubtaskID          string   `json:"subtask_id,omitempty"`
 }
 
 // AgentDef represents a parsed agent definition from agents/*.md
@@ -318,7 +331,8 @@ type Snapshot struct {
 	TeamUserCfg TeamUserConfig // persisted preferences
 	Connections []Connection   // external service integrations
 	Plans       []Plan         // plan documents from .doey/plans/
-	Events      []Event        // recent event log entries from store
+	Events       []Event        // recent event log entries from store
+	Interactions []Interaction  // Boss interaction log entries from store
 }
 
 // TaskSidecar holds structured planning data from the JSON companion file (.doey/tasks/<id>.json).

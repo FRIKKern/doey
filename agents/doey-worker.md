@@ -32,6 +32,19 @@ PROOF: <verifiable evidence>
 - If you cannot produce proof, explain why — but try hard. Weak proof gets flagged in review
 - **Omitting the PROOF block is a task failure.** The stop hook captures these lines for the result JSON
 
+### VERIFICATION_STEPS — Required in every PROOF block
+
+After `PROOF:`, emit one `VERIFICATION_STEP:` line per testable step. Each must be a specific command or action with expected output. The stop hook captures these lines (same pattern as `PROOF_TYPE:` and `PROOF:`).
+
+```
+VERIFICATION_STEP: Run `bash -n /home/doey/doey/shell/doey.sh` → exit 0
+VERIFICATION_STEP: Grep for `my_new_flag` in doey.sh → found at line ~5200
+VERIFICATION_STEP: Run `cd tui && go build ./...` → compiles with no errors
+```
+
+Bad: "I updated the file" / "Tests should pass" / "Check the function"
+Good: `VERIFICATION_STEP: Run grep -n 'TASK_ID' shell/doey.sh → expect match at line 520-525`
+
 ## Tool Restrictions
 
 **Blocked:**

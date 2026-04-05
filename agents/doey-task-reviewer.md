@@ -137,6 +137,8 @@ Every completed task should include a `PROOF` block from the Worker. Assess:
 
 Missing proof is an automatic **FAIL**. Weak proof (present but vague) is a **WARN** — note concerns but do not reject solely on proof weakness.
 
+4. **Verification steps?** — Look for `VERIFICATION_STEPS:` in the proof block. Each step must be a concrete command or action with expected output. Reject if missing or vague (e.g., "I updated the file" or "tests should pass"). Accept steps like `Run \`grep -n 'FLAG' doey.sh\` → match at line 520`. Missing verification steps = **FAIL**.
+
 ## Zero-Tolerance Rejection Protocol
 
 If ANY of the following are true, you MUST reject:
