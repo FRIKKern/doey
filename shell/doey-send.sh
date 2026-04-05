@@ -105,19 +105,17 @@ doey_send_verified() {
       continue
     fi
 
-    # ── Step 2: Pre-clear input (skip on retry — avoids destroying residual text) ──
-    if [ "$attempt" -eq 1 ]; then
-      tmux copy-mode -q -t "$target" 2>/dev/null || true
-      tmux send-keys -t "$target" Escape 2>/dev/null || true
-      sleep 0.1
-      tmux send-keys -t "$target" C-u 2>/dev/null || true
-      sleep 0.1
-    fi
+    # ── Step 2: Pre-clear input (every attempt — clears residual text from failed retries) ──
+    tmux copy-mode -q -t "$target" 2>/dev/null || true
+    tmux send-keys -t "$target" Escape 2>/dev/null || true
+    sleep 0.1
+    tmux send-keys -t "$target" C-u 2>/dev/null || true
+    sleep 0.1
 
     # ── Step 3: Inject text ──
     local msg_len=${#message}
-    if [ "$msg_len" -lt 4096 ]; then
-      # Short messages: send-keys -l avoids set-buffer/paste-buffer race
+    if [ "$msg_len" -lt 500 ]; then
+      # Short single-line messages: send-keys -l (threshold matches Go TUI)
       if ! tmux send-keys -t "$target" -l -- "$message" 2>/dev/null; then
         echo "doey_send_verified: send-keys -l failed (attempt $attempt)" >&2
         continue
@@ -129,7 +127,7 @@ doey_send_verified() {
         echo "doey_send_verified: set-buffer failed (attempt $attempt)" >&2
         continue
       fi
-      if ! tmux paste-buffer -b "$buf_name" -t "$target" -d 2>/dev/null; then
+      if ! tmux paste-buffer -b "$buf_name" -t "$target" -dpr 2>/dev/null; then
         tmux delete-buffer -b "$buf_name" 2>/dev/null || true
         echo "doey_send_verified: paste-buffer failed (attempt $attempt)" >&2
         continue
