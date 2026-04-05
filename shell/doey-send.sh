@@ -105,36 +105,48 @@ doey_send_verified() {
       continue
     fi
 
-    # ── Step 2: Pre-clear input ──
-    tmux copy-mode -q -t "$target" 2>/dev/null || true
-    tmux send-keys -t "$target" Escape 2>/dev/null || true
-    sleep 0.1
-    tmux send-keys -t "$target" C-u 2>/dev/null || true
-    sleep 0.1
-
-    if [ "$attempt" -gt 1 ]; then
-      tmux send-keys -t "$target" C-c 2>/dev/null || true
-      sleep 0.3
+    # ── Step 2: Pre-clear input (skip on retry — avoids destroying residual text) ──
+    if [ "$attempt" -eq 1 ]; then
+      tmux copy-mode -q -t "$target" 2>/dev/null || true
       tmux send-keys -t "$target" Escape 2>/dev/null || true
       sleep 0.1
       tmux send-keys -t "$target" C-u 2>/dev/null || true
       sleep 0.1
     fi
 
-    # ── Step 3: Inject text via set-buffer + paste-buffer ──
-    local buf_name="doey_send_$$_${attempt}"
-    if ! tmux set-buffer -b "$buf_name" -- "$message" 2>/dev/null; then
-      echo "doey_send_verified: set-buffer failed (attempt $attempt)" >&2
-      continue
-    fi
-    if ! tmux paste-buffer -b "$buf_name" -t "$target" -d 2>/dev/null; then
-      tmux delete-buffer -b "$buf_name" 2>/dev/null || true
-      echo "doey_send_verified: paste-buffer failed (attempt $attempt)" >&2
-      continue
+    # ── Step 3: Inject text ──
+    local msg_len=${#message}
+    if [ "$msg_len" -lt 4096 ]; then
+      # Short messages: send-keys -l avoids set-buffer/paste-buffer race
+      if ! tmux send-keys -t "$target" -l -- "$message" 2>/dev/null; then
+        echo "doey_send_verified: send-keys -l failed (attempt $attempt)" >&2
+        continue
+      fi
+    else
+      # Long messages: paste-buffer pipeline
+      local buf_name="doey_send_$$_${attempt}"
+      if ! tmux set-buffer -b "$buf_name" -- "$message" 2>/dev/null; then
+        echo "doey_send_verified: set-buffer failed (attempt $attempt)" >&2
+        continue
+      fi
+      if ! tmux paste-buffer -b "$buf_name" -t "$target" -d 2>/dev/null; then
+        tmux delete-buffer -b "$buf_name" 2>/dev/null || true
+        echo "doey_send_verified: paste-buffer failed (attempt $attempt)" >&2
+        continue
+      fi
     fi
 
     # ── Step 4: Verify text appeared in pane ──
-    sleep 0.3
+    # Exponential backoff: 800ms, 1200ms, 2000ms
+    local settle_ms
+    case "$attempt" in
+      1) settle_ms="${DOEY_PASTE_SETTLE_MS:-800}" ;;
+      2) settle_ms=1200 ;;
+      *) settle_ms=2000 ;;
+    esac
+    local settle_s
+    settle_s=$(awk "BEGIN {printf \"%.2f\", ${settle_ms}/1000}")
+    sleep "$settle_s"
     local captured
     captured=$(tmux capture-pane -t "$target" -p -S -10 2>/dev/null) || captured=""
     local snippet
