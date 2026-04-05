@@ -42,6 +42,96 @@ command -v gum >/dev/null 2>&1 && HAS_GUM=true
 
 # ── Charmbracelet wrappers (gum with plain-text fallback) ────────────
 
+doey_style() {
+  # Usage: doey_style "text" [--foreground N] [--bold] [--border rounded] etc.
+  if [ "$HAS_GUM" = true ]; then
+    gum style "$@"
+  else
+    local text=""
+    local arg
+    for arg in "$@"; do
+      case "$arg" in --*) ;; *) text="$arg"; break ;; esac
+    done
+    printf '%s\n' "$text"
+  fi
+}
+
+doey_header() {
+  # Styled section header — e.g., "Doey — System Check"
+  if [ "$HAS_GUM" = true ]; then
+    gum style --foreground 6 --bold --padding "0 1" --margin "1 0 0 0" "◆ $1"
+  else
+    printf "\n  ${BRAND}${BOLD}%s${RESET}\n" "$1"
+  fi
+}
+
+doey_confirm() {
+  # Usage: doey_confirm "Delete session?" — returns 0=yes, 1=no
+  if [ "$HAS_GUM" = true ]; then
+    gum confirm "$1"
+  else
+    printf "  %s [y/N] " "$1"
+    read -r reply
+    case "$reply" in [Yy]*) return 0 ;; *) return 1 ;; esac
+  fi
+}
+
+doey_confirm_default_yes() {
+  # Same but default is Yes
+  if [ "$HAS_GUM" = true ]; then
+    gum confirm --default=yes "$1"
+  else
+    printf "  %s [Y/n] " "$1"
+    read -r reply
+    case "$reply" in [Nn]*) return 1 ;; *) return 0 ;; esac
+  fi
+}
+
+doey_choose() {
+  # Usage: selected=$(doey_choose "option1" "option2" "option3")
+  if [ "$HAS_GUM" = true ]; then
+    gum choose "$@"
+  else
+    local i=1
+    local item
+    for item in "$@"; do printf "  %d) %s\n" "$i" "$item"; i=$((i + 1)); done
+    printf "  Choice: "
+    read -r choice
+    local j=1
+    for item in "$@"; do
+      if [ "$j" = "$choice" ]; then echo "$item"; return 0; fi
+      j=$((j + 1))
+    done
+    return 1
+  fi
+}
+
+doey_input() {
+  # Usage: value=$(doey_input "Prompt text" "placeholder" "default")
+  if [ "$HAS_GUM" = true ]; then
+    gum input --prompt "$1: " --placeholder "${2:-}" --value "${3:-}"
+  else
+    printf "  %s" "$1: "
+    if [ -n "${3:-}" ]; then printf "[%s] " "$3"; fi
+    local value
+    read -r value
+    if [ -z "$value" ] && [ -n "${3:-}" ]; then value="$3"; fi
+    echo "$value"
+  fi
+}
+
+doey_spin() {
+  # Usage: doey_spin "Installing..." command arg1 arg2
+  local title="$1"; shift
+  if [ "$HAS_GUM" = true ]; then
+    gum spin --spinner dot --title "$title" -- "$@"
+  else
+    printf "  %s" "$title"
+    "$@" >/dev/null 2>&1
+    printf " done\n"
+  fi
+}
+
 doey_success() {
   if [ "$HAS_GUM" = true ]; then
     gum style --foreground 2 "✓ $1"
