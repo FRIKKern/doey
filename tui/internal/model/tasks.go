@@ -1784,8 +1784,8 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		}
 	}
 
-	// Sync dimensions to current layout
-	renderW := w - 1
+	// Sync dimensions to current layout (account for left border + right padding)
+	renderW := w - 2
 	if renderW < 20 {
 		renderW = 20
 	}
@@ -1847,10 +1847,17 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		}
 	}
 
+	borderColor := t.Separator
+	if m.focused && !m.leftFocused {
+		borderColor = t.Primary
+	}
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(h).
-		PaddingRight(1)
+		PaddingRight(1).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor)
 
 	return panelStyle.Render(displayed)
 }
