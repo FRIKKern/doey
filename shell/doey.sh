@@ -360,8 +360,8 @@ _doey_load_config() {
 }
 _doey_load_config
 
-# Grid & Teams
-DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-3}"
+# Grid & Teams — default: no worker teams at startup, spawn on-demand via Dashboard
+DOEY_INITIAL_WORKER_COLS="${DOEY_INITIAL_WORKER_COLS:-1}"
 DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-0}"
 DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
 DOEY_INITIAL_FREELANCER_TEAMS="${DOEY_INITIAL_FREELANCER_TEAMS:-0}"
@@ -566,9 +566,7 @@ session_exists() {
 }
 
 read_team_windows() {
-  local tw
-  tw=$(_env_val "$1/session.env" TEAM_WINDOWS)
-  echo "${tw:-0}"
+  _env_val "$1/session.env" TEAM_WINDOWS
 }
 
 write_team_env() {
@@ -3861,7 +3859,7 @@ RUNTIME_DIR="${runtime_dir}"
 PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-800}"
 IDLE_COLLAPSE_AFTER="60"
 IDLE_REMOVE_AFTER="300"
-TEAM_WINDOWS="2"
+TEAM_WINDOWS=""
 BOSS_PANE="0.1"
 TASKMASTER_PANE="1.0"
 REMOTE="$(_detect_remote)"
@@ -3893,7 +3891,18 @@ MANIFEST
     local _team1_type=""
     [ -n "${DOEY_TEAM_COUNT:-}" ] && _team1_type=$(_read_team_config "1" "TYPE" "")
 
-    if [ -n "$_team1_def" ]; then
+    # Determine if any worker teams should be created
+    local _want_first_team="true"
+    if [ -z "${DOEY_TEAM_COUNT:-}" ] || [ "${DOEY_TEAM_COUNT:-0}" -eq 0 ]; then
+      [ "${DOEY_INITIAL_TEAMS:-0}" -le 0 ] && _want_first_team="false"
+    fi
+
+    if [ "$_want_first_team" = "false" ]; then
+      # No worker teams — Dashboard + Core Team only
+      setup_dashboard "$session" "$dir" "$runtime_dir" "0"
+      _create_core_team "$session" "$runtime_dir" "$dir"
+      step_done
+    elif [ -n "$_team1_def" ]; then
       # First worker team uses a .team.md definition — dashboard + core team first, then spawn from def
       write_team_env "$runtime_dir" "$team_window" "dynamic" "" "0" "0" "" ""
       setup_dashboard "$session" "$dir" "$runtime_dir" "$DOEY_INITIAL_TEAMS"
@@ -3918,6 +3927,7 @@ MANIFEST
       tmux new-window -t "$session" -c "$dir"
       tmux select-pane -t "$session:${team_window}.0" -T "${name} T${team_window} Mgr"
       tmux rename-window -t "$session:${team_window}" "Local Team"
+      _register_team_window "$runtime_dir" "$team_window"
 
       step_done
 
@@ -4530,7 +4540,13 @@ _set_session_env() {
 
 _register_team_window() {
   local runtime_dir="$1" window_index="$2"
-  _set_session_env "$runtime_dir" TEAM_WINDOWS "$(read_team_windows "$runtime_dir"),${window_index}"
+  local current
+  current=$(read_team_windows "$runtime_dir")
+  if [ -z "$current" ]; then
+    _set_session_env "$runtime_dir" TEAM_WINDOWS "$window_index"
+  else
+    _set_session_env "$runtime_dir" TEAM_WINDOWS "${current},${window_index}"
+  fi
 }
 
 _unregister_team_window() {
@@ -5040,7 +5056,7 @@ list_team_windows() {
   local team_windows
   team_windows=$(read_team_windows "$runtime_dir")
 
-  if [ "$team_windows" = "0" ] && [ ! -f "${runtime_dir}/team_0.env" ]; then
+  if [ -z "$team_windows" ] || { [ "$team_windows" = "0" ] && [ ! -f "${runtime_dir}/team_0.env" ]; }; then
     printf "  ${DIM}(no team windows — single-window mode)${RESET}\n\n"
     return 0
   fi
@@ -5900,7 +5916,7 @@ grid="dynamic"
 
 # Parse global flags
 DOEY_QUICK="${DOEY_QUICK:-false}"
-DOEY_SKIP_WIZARD="${DOEY_SKIP_WIZARD:-false}"
+DOEY_SKIP_WIZARD="${DOEY_SKIP_WIZARD:-true}"
 _doey_parsed_args=()
 while [ $# -gt 0 ]; do
   case "$1" in
