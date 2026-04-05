@@ -18,17 +18,20 @@
 # Grid & Teams
 # ─────────────────────────────────────────────
 
-# Number of worker columns in the initial grid layout (workers = cols × 2, default: 3)
-# DOEY_INITIAL_WORKER_COLS=3
+# Default: no worker teams at startup. Users spawn teams on-demand via
+# Dashboard buttons. Set DOEY_INITIAL_TEAMS=N in config.sh to auto-spawn.
 
-# Number of team windows to create at startup
-# DOEY_INITIAL_TEAMS=2
+# Number of worker columns in the initial grid layout (workers = cols × 2, default: 1)
+# DOEY_INITIAL_WORKER_COLS=1
+
+# Number of team windows to create at startup (default: 0 — spawn on-demand)
+# DOEY_INITIAL_TEAMS=0
 
 # Number of teams that start in isolated git worktrees
 # DOEY_INITIAL_WORKTREE_TEAMS=0
 
 # Number of reserved freelancer teams (no manager, born-reserved workers available to all teams)
-# DOEY_INITIAL_FREELANCER_TEAMS=1
+# DOEY_INITIAL_FREELANCER_TEAMS=0
 
 # Maximum number of worker panes across all teams
 # DOEY_MAX_WORKERS=20
