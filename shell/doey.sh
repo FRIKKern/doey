@@ -27,298 +27,7 @@ set -euo pipefail
 # CLI command: "doey" is installed to ~/.local/bin/doey.
 # ──────────────────────────────────────────────────────────────────────
 
-# ── Color palette ─────────────────────────────────────────────────────
-BRAND='\033[1;36m'    # Bold cyan
-SUCCESS='\033[0;32m'  # Green
-DIM='\033[0;90m'      # Gray
-WARN='\033[0;33m'     # Yellow
-ERROR='\033[0;31m'    # Red
-BOLD='\033[1m'        # Bold
-RESET='\033[0m'       # Reset
-
-# Charmbracelet gum (optional — luxury CLI experience)
-HAS_GUM=false
-command -v gum >/dev/null 2>&1 && HAS_GUM=true
-
-# ── Charmbracelet wrappers (gum with plain-text fallback) ────────────
-
-doey_style() {
-  # Usage: doey_style "text" [--foreground N] [--bold] [--border rounded] etc.
-  if [ "$HAS_GUM" = true ]; then
-    gum style "$@"
-  else
-    local text=""
-    local arg
-    for arg in "$@"; do
-      case "$arg" in --*) ;; *) text="$arg"; break ;; esac
-    done
-    printf '%s\n' "$text"
-  fi
-}
-
-doey_header() {
-  # Styled section header — e.g., "Doey — System Check"
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 6 --bold --padding "0 1" --margin "1 0 0 0" "◆ $1"
-  else
-    printf "\n  ${BRAND}${BOLD}%s${RESET}\n" "$1"
-  fi
-}
-
-doey_confirm() {
-  # Usage: doey_confirm "Delete session?" — returns 0=yes, 1=no
-  if [ "$HAS_GUM" = true ]; then
-    gum confirm "$1"
-  else
-    printf "  %s [y/N] " "$1"
-    read -r reply
-    case "$reply" in [Yy]*) return 0 ;; *) return 1 ;; esac
-  fi
-}
-
-doey_confirm_default_yes() {
-  # Same but default is Yes
-  if [ "$HAS_GUM" = true ]; then
-    gum confirm --default=yes "$1"
-  else
-    printf "  %s [Y/n] " "$1"
-    read -r reply
-    case "$reply" in [Nn]*) return 1 ;; *) return 0 ;; esac
-  fi
-}
-
-doey_choose() {
-  # Usage: selected=$(doey_choose "option1" "option2" "option3")
-  if [ "$HAS_GUM" = true ]; then
-    gum choose "$@"
-  else
-    local i=1
-    local item
-    for item in "$@"; do printf "  %d) %s\n" "$i" "$item"; i=$((i + 1)); done
-    printf "  Choice: "
-    read -r choice
-    local j=1
-    for item in "$@"; do
-      if [ "$j" = "$choice" ]; then echo "$item"; return 0; fi
-      j=$((j + 1))
-    done
-    return 1
-  fi
-}
-
-doey_input() {
-  # Usage: value=$(doey_input "Prompt text" "placeholder" "default")
-  if [ "$HAS_GUM" = true ]; then
-    gum input --prompt "$1: " --placeholder "${2:-}" --value "${3:-}"
-  else
-    printf "  %s" "$1: "
-    if [ -n "${3:-}" ]; then printf "[%s] " "$3"; fi
-    local value
-    read -r value
-    if [ -z "$value" ] && [ -n "${3:-}" ]; then value="$3"; fi
-    echo "$value"
-  fi
-}
-
-doey_spin() {
-  # Usage: doey_spin "Installing..." command arg1 arg2
-  local title="$1"; shift
-  if [ "$HAS_GUM" = true ]; then
-    gum spin --spinner dot --title "$title" -- "$@"
-  else
-    printf "  %s" "$title"
-    "$@" >/dev/null 2>&1
-    printf " done\n"
-  fi
-}
-
-doey_success() {
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 2 "✓ $1"
-  else
-    printf "  ${SUCCESS}✓ %s${RESET}\n" "$1"
-  fi
-}
-
-doey_warn() {
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 3 "⚠ $1"
-  else
-    printf "  ${WARN}⚠ %s${RESET}\n" "$1"
-  fi
-}
-
-doey_error() {
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 1 --bold "✗ $1"
-  else
-    printf "  ${ERROR}✗ %s${RESET}\n" "$1"
-  fi
-}
-
-doey_info() {
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 8 "$1"
-  else
-    printf "  ${DIM}%s${RESET}\n" "$1"
-  fi
-}
-
-doey_banner() {
-  # Render the doey banner with luxury styling
-  if [ "$HAS_GUM" = true ]; then
-    cat << 'DOEY_ART' | gum style --foreground 6 --bold --border rounded --border-foreground 6 --padding "1 3" --margin "1 0"
-
-            .
-           ...      :-=++++==--:
-               .-***=-:.   ..:=+#%*:
-    .     :=----=.               .=%*=:
-    ..   -=-                     .::. :#*:
-      .+=    := .-+**+:        :#@%%@%- :*%=
-      *+.    @.*@**@@@@#.      %@=  *@@= :*=
-    :*:     .@=@=  *@@@@%      #@%+#@%#@  :-+
-   .%++      #*@@#%@@#%@@      :@@@@@*+@  :%#
-    %#       ==%@@@@@=+@+       :*%@@@#: :=*
-   .@--     -+=.+%@@@@*:            :.:--:-.
-   .@%#    ##*  ...:.:                 +=
-    .-@- .#*.   . ..                   :%
-      :+++%.:       .=.                 #+
-          =**        .*=                :@.
-       .   .@:+.       +#:               =%
-            :*:+:--.   =+%*.              *+
-                .- :-=:-+:+%=              #:
-                           .*%-            .%.
-                             :%#:        ...-#
-                               =%*.   =#@%@@@@*
-                                 =%+.-@@#=%@@@@-
-                                   -#*@@@@@@@@@.
-                                     .=#@@@@%+.
-
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-
-   Let me Doey for you
-DOEY_ART
-  else
-    _print_full_banner
-  fi
-}
-
-doey_splash() {
-  _DOEY_SPLASH_START="$(date +%s)"
-  printf '\033[2J\033[H'  # Clear screen, cursor top
-  printf '\033[36m'       # Cyan
-  cat << 'SPLASH'
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-SPLASH
-  printf '\033[0m'
-  printf '\n   \033[2mStarting...\033[0m\n\n'
-}
-
-# Ensure the splash screen stays visible for at least 6 seconds
-_splash_wait_minimum() {
-  local min_seconds="${1:-6}"
-  if [ -n "${_DOEY_SPLASH_START:-}" ]; then
-    local now elapsed remaining
-    now="$(date +%s)"
-    elapsed=$(( now - _DOEY_SPLASH_START ))
-    remaining=$(( min_seconds - elapsed ))
-    if [ "$remaining" -gt 0 ]; then
-      sleep "$remaining"
-    fi
-  fi
-}
-
-# ── Progress-file startup display ────────────────────────────────────
-# Foreground: show startup progress from a file written by the background setup.
-# Prefers doey-tui startup (rich TUI); falls back to simple terminal output.
-_show_startup_progress() {
-  local progress_file="$1"
-  local timeout_sec="${2:-60}"
-  if command -v doey-tui >/dev/null 2>&1; then
-    if doey-tui startup --progress "$progress_file" --timeout "$timeout_sec" </dev/tty >/dev/tty 2>/dev/null; then
-      return 0
-    fi
-  fi
-  _startup_progress_fallback "$progress_file" "$timeout_sec"
-}
-
-_startup_progress_fallback() {
-  local progress_file="$1"
-  local timeout_sec="${2:-60}"
-  local start_time last_step=""
-  start_time="$(date +%s)"
-  printf '\033[2J\033[H'
-  printf '\033[36m'
-  cat << 'SPLASH'
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-SPLASH
-  printf '\033[0m\n'
-  while true; do
-    if [ -f "$progress_file" ]; then
-      local current
-      current="$(tail -1 "$progress_file" 2>/dev/null)" || true
-      if [ -n "$current" ] && [ "$current" != "$last_step" ]; then
-        local msg="${current#STEP: }"
-        if [ "$msg" = "Ready" ]; then
-          printf "   \033[32m%s\033[0m\n" "$msg"
-          return 0
-        fi
-        printf "   \033[2m%s\033[0m\n" "$msg"
-        last_step="$current"
-      fi
-    fi
-    local now elapsed
-    now="$(date +%s)"
-    elapsed=$(( now - start_time ))
-    if [ "$elapsed" -ge "$timeout_sec" ]; then
-      return 0
-    fi
-    sleep 0.3
-  done
-}
-
-doey_divider() {
-  local width="${1:-50}"
-  local line; line="$(printf '%*s' "$width" '' | tr ' ' '─')"
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 240 --margin "0 1" "$line"
-  else
-    printf "  ${DIM}%s${RESET}\n" "$line"
-  fi
-}
-
-doey_ok() {
-  # Green text, no icon — for action results like "Registered", "Stopped"
-  if [ "$HAS_GUM" = true ]; then
-    gum style --foreground 2 "$1"
-  else
-    printf "  ${SUCCESS}%s${RESET}\n" "$1"
-  fi
-}
-
-doey_step() {
-  # Numbered step: doey_step "1/6" "Creating sandbox..."
-  if [ "$HAS_GUM" = true ]; then
-    printf "  %s %s\n" "$(gum style --foreground 8 "[$1]")" "$2"
-  else
-    printf "  ${DIM}[%s]${RESET} %s\n" "$1" "$2"
-  fi
-}
+# Color palette, gum detection, and all UI/display functions → doey-ui.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECTS_FILE="$HOME/.claude/doey/projects"
@@ -339,25 +48,13 @@ source "${SCRIPT_DIR}/doey-roles.sh"
 # shellcheck source=doey-send.sh
 source "${SCRIPT_DIR}/doey-send.sh"
 
+# shellcheck source=doey-helpers.sh
+source "${SCRIPT_DIR}/doey-helpers.sh"
+
+# shellcheck source=doey-ui.sh
+source "${SCRIPT_DIR}/doey-ui.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
-# Load user config (optional), then apply defaults for any unset variables.
-# Hierarchy: project .doey/config.sh > global ~/.config/doey/config.sh > defaults
-_doey_load_config() {
-  local global_config="${DOEY_CONFIG:-${HOME}/.config/doey/config.sh}"
-  # shellcheck source=/dev/null
-  [ -f "$global_config" ] && source "$global_config"
-  # Project config — walk up from cwd to find .doey/config.sh
-  local search_dir
-  search_dir="$(pwd)"
-  while [ "$search_dir" != "/" ]; do
-    if [ -f "${search_dir}/.doey/config.sh" ]; then
-      # shellcheck source=/dev/null
-      source "${search_dir}/.doey/config.sh"
-      break
-    fi
-    search_dir="$(dirname "$search_dir")"
-  done
-}
 _doey_load_config
 
 # Grid & Teams — default: no worker teams at startup, spawn on-demand via Dashboard
@@ -419,42 +116,7 @@ _maybe_start_tunnel() {
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
-# Read a key=value from an env file, stripping quotes.  Pure bash — no forks.
-# Usage: _env_val <file> <KEY> [default]
-_env_val() {
-  local _ev_file="$1" _ev_key="$2" _ev_default="${3:-}" _ev_line
-  if [ ! -f "$_ev_file" ]; then
-    [ -n "$_ev_default" ] && printf '%s\n' "$_ev_default"
-    return 0
-  fi
-  while IFS= read -r _ev_line || [ -n "$_ev_line" ]; do
-    case "$_ev_line" in
-      "${_ev_key}="*)
-        _ev_line="${_ev_line#*=}"
-        _ev_line="${_ev_line//\"/}"
-        printf '%s\n' "$_ev_line"
-        return 0
-        ;;
-    esac
-  done < "$_ev_file"
-  [ -n "$_ev_default" ] && printf '%s\n' "$_ev_default"
-  return 0
-}
-
-# Read per-team config: _read_team_config <team_num> <property> <default>
-# Reads DOEY_TEAM_<N>_<PROPERTY>, falls back to <default>
-_read_team_config() {
-  local n="$1" prop="$2" default="$3"
-  eval "echo \"\${DOEY_TEAM_${n}_${prop}:-${default}}\""
-}
-
-resolve_repo_dir() {
-  if [ -f "$HOME/.claude/doey/repo-path" ]; then
-    cat "$HOME/.claude/doey/repo-path"
-  else
-    (cd "$SCRIPT_DIR/.." && pwd)
-  fi
-}
+# _env_val, _read_team_config, resolve_repo_dir → doey-helpers.sh
 
 install_doey_hooks() {
   local target_dir="$1"
@@ -492,36 +154,18 @@ install_doey_hooks() {
 write_pane_status() {
   local rt_dir="$1" pane_id="$2" status="$3" task="${4:-}"
   local safe="${pane_id//[-:.]/_}"
-  cat > "${rt_dir}/status/${safe}.status" <<EOF
+  local target="${rt_dir}/status/${safe}.status"
+  local tmp="${target}.tmp.$$"
+  cat > "$tmp" <<EOF
 PANE: ${pane_id}
 UPDATED: $(date '+%Y-%m-%dT%H:%M:%S%z')
 STATUS: ${status}
 TASK: ${task}
 EOF
+  mv -f "$tmp" "$target"
 }
 
-project_name_from_dir() {
-  local raw
-  if [ -f "$1/.doey-name" ]; then raw=$(head -1 "$1/.doey-name"); else raw="${1##*/}"; fi
-  echo "$raw" | tr '[:upper:] .' '[:lower:]--' | sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//;s/-$//'
-}
-
-# Generate a short project acronym from a hyphenated name (max 4 chars).
-# e.g. "claude-code-tmux-team" → "cctm", "gyldendal-no" → "gn", "my-app" → "ma"
-project_acronym() {
-  local name="$1" acr="" seg
-  local old_ifs="$IFS"; IFS='-'
-  for seg in $name; do
-    [ -n "$seg" ] && acr="${acr}$(printf '%s' "$seg" | cut -c1)"
-  done
-  IFS="$old_ifs"
-  printf '%s' "$acr" | cut -c1-4
-}
-
-find_project() {
-  local dir="$1"
-  grep -m1 ":${dir}$" "$PROJECTS_FILE" 2>/dev/null | cut -d: -f1 || true
-}
+# project_name_from_dir, project_acronym, find_project → doey-helpers.sh
 
 # Detect project language/type from marker files and write to session.env
 _detect_project_type() {
@@ -560,14 +204,7 @@ _write_project_type_env() {
     >> "${runtime_dir}/session.env"
 }
 
-# < /dev/null prevents tmux from consuming stdin in read loops
-session_exists() {
-  tmux has-session -t "$1" < /dev/null 2>/dev/null
-}
-
-read_team_windows() {
-  _env_val "$1/session.env" TEAM_WINDOWS
-}
+# session_exists, read_team_windows → doey-helpers.sh
 
 write_team_env() {
   local runtime_dir="$1" window_index="$2" grid="$3"
@@ -817,7 +454,7 @@ create_team_worktree() {
   fi
   local project_name
   project_name="$(basename "$project_dir")"
-  local wt_path="/tmp/doey/${project_name}/worktrees/team-${team_window}"
+  local wt_path="${TMPDIR:-/tmp}/doey/${project_name}/worktrees/team-${team_window}"
 
   # Clean up stale worktree state from prior runs
   git -C "$project_dir" worktree prune 2>/dev/null || true
@@ -1177,7 +814,7 @@ _kill_doey_session() {
   tmux kill-session -t "$session" < /dev/null 2>/dev/null || true
   # Clean up worktrees + runtime dir
   local project_name="${session#doey-}"
-  local _rt="/tmp/doey/${project_name}"
+  local _rt="${TMPDIR:-/tmp}/doey/${project_name}"
   local _proj_dir=""
   [ -f "$_rt/session.env" ] && _proj_dir=$(_env_val "$_rt/session.env" PROJECT_DIR)
   if [ -n "$_proj_dir" ]; then
@@ -1875,7 +1512,7 @@ doey_purge() {
   fi
 
   session="doey-${name}"
-  runtime_dir="/tmp/doey/${name}"
+  runtime_dir="${TMPDIR:-/tmp}/doey/${name}"
   session_active=false
 
   if session_exists "$session"; then
@@ -2014,7 +1651,7 @@ _launch_session_core() {
   local total=$(( cols * rows ))
   local worker_count=$(( total - 1 ))
   local session="doey-${name}"
-  local runtime_dir="/tmp/doey/${name}"
+  local runtime_dir="${TMPDIR:-/tmp}/doey/${name}"
   local team_window=2
 
   cd "$dir"
@@ -2172,7 +1809,7 @@ launch_session() {
   local worker_count=$(( cols * rows - 1 ))
   local session="doey-${name}"
   local short_dir="${dir/#$HOME/~}"
-  local runtime_dir="/tmp/doey/${name}"
+  local runtime_dir="${TMPDIR:-/tmp}/doey/${name}"
 
   doey_splash
   _splash_wait_minimum 6
@@ -2205,55 +1842,7 @@ launch_session() {
   attach_or_switch "$session"
 }
 
-# ── Shared helpers (used by update, reload, etc.) ─────────────────────
-_print_doey_banner() {
-  printf "${BRAND}"
-  cat << 'BANNER'
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-BANNER
-  printf "${RESET}"
-}
-
-_print_full_banner() {
-  local tagline="${1:-Let me Doey for you}"
-  printf '\n'
-  printf "${BRAND}"
-  cat << 'DOG'
-            .
-           ...      :-=++++==--:
-               .-***=-:.   ..:=+#%*:
-    .     :=----=.               .=%*=:
-    ..   -=-                     .::. :#*:
-      .+=    := .-+**+:        :#@%%@%- :*%=
-      *+.    @.*@**@@@@#.      %@=  *@@= :*=
-    :*:     .@=@=  *@@@@%      #@%+#@%#@  :-+
-   .%++      #*@@#%@@#%@@      :@@@@@*+@  :%#
-    %#       ==%@@@@@=+@+       :*%@@@#: :=*
-   .@--     -+=.+%@@@@*:            :.:--:-.
-   .@%#    ##*  ...:.:                 +=
-    .-@- .#*.   . ..                   :%
-      :+++%.:       .=.                 #+
-          =**        .*=                :@.
-       .   .@:+.       +#:               =%
-            :*:+:--.   =+%*.              *+
-                .- :-=:-+:+%=              #:
-                           .*%-            .%.
-                             :%#:        ...-#
-                               =%*.   =#@%@@@@*
-                                 =%+.-@@#=%@@@@-
-                                   -#*@@@@@@@@@.
-                                     .=#@@@@%+.
-DOG
-  printf '\n'
-  _print_doey_banner
-  printf "   ${DIM}${tagline}${RESET}\n"
-  printf '\n'
-}
+# _print_doey_banner, _print_full_banner → doey-ui.sh
 
 # Clean up old session, runtime dir, and stale worktree branches
 _cleanup_old_session() {
@@ -3165,7 +2754,7 @@ reload_session() {
   name="$(find_project "$dir")"
   [ -z "$name" ] && { doey_error "No doey project for $dir"; exit 1; }
   session="doey-${name}"
-  runtime_dir="/tmp/doey/${name}"
+  runtime_dir="${TMPDIR:-/tmp}/doey/${name}"
   session_exists "$session" || { doey_error "No running session: ${session}"; exit 1; }
   [ -f "${runtime_dir}/session.env" ] || { doey_error "session.env not found"; exit 1; }
 
@@ -3520,7 +3109,7 @@ check_doctor() {
   if [[ -n "$_doc_name" ]] && session_exists "$_doc_session" 2>/dev/null; then
     local _doc_rt
     _doc_rt="$(tmux show-environment -t "$_doc_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2- || true)"
-    if [[ -z "$_doc_rt" ]]; then _doc_rt="/tmp/doey/${_doc_name}"; fi
+    if [[ -z "$_doc_rt" ]]; then _doc_rt="${TMPDIR:-/tmp}/doey/${_doc_name}"; fi
     local _doc_tm_safe
     _doc_tm_safe="$(printf '%s' "${_doc_session}:1.0" | tr ':-.' '___')"
     local _doc_tm_status="${_doc_rt}/status/${_doc_tm_safe}.status"
@@ -3747,7 +3336,7 @@ launch_session_headless() {
 
 launch_session_dynamic() {
   local name="$1" dir="$2"
-  local session="doey-${name}" runtime_dir="/tmp/doey/${name}"
+  local session="doey-${name}" runtime_dir="${TMPDIR:-/tmp}/doey/${name}"
   local short_dir="${dir/#$HOME/~}"
   local team_window=2
 
@@ -4476,22 +4065,23 @@ doey_remove_column() {
 
   doey_info "Removing panes ${team_window}.${remove_top} and ${team_window}.${remove_bottom}..."
 
-  # Stop processes in both panes
-  local pane_idx pane_pid
-  for pane_idx in "$remove_top" "$remove_bottom"; do
-    pane_pid=$(tmux display-message -t "$session:$team_window.${pane_idx}" -p '#{pane_pid}' 2>/dev/null || true)
-    [ -n "$pane_pid" ] && pkill -P "$pane_pid" 2>/dev/null || true
+  # Resolve pane indices to stable pane IDs before killing
+  local remove_top_id remove_bottom_id
+  remove_top_id=$(tmux display-message -t "$session:$team_window.${remove_top}" -p '#{pane_id}' 2>/dev/null || true)
+  remove_bottom_id=$(tmux display-message -t "$session:$team_window.${remove_bottom}" -p '#{pane_id}' 2>/dev/null || true)
+
+  # Stop processes in both panes (using stable pane IDs)
+  local _rc_pid _rc_ppid
+  for _rc_pid in "$remove_top_id" "$remove_bottom_id"; do
+    [ -z "$_rc_pid" ] && continue
+    _rc_ppid=$(tmux display-message -t "$_rc_pid" -p '#{pane_pid}' 2>/dev/null || true)
+    [ -n "$_rc_ppid" ] && pkill -P "$_rc_ppid" 2>/dev/null || true
   done
   sleep 0.2  # Wait for process termination
 
-  # Kill higher index first to avoid index shift
-  if (( remove_top > remove_bottom )); then
-    tmux kill-pane -t "$session:$team_window.${remove_top}" 2>/dev/null || true
-    tmux kill-pane -t "$session:$team_window.${remove_bottom}" 2>/dev/null || true
-  else
-    tmux kill-pane -t "$session:$team_window.${remove_bottom}" 2>/dev/null || true
-    tmux kill-pane -t "$session:$team_window.${remove_top}" 2>/dev/null || true
-  fi
+  # Kill using stable pane IDs (no index shift issues)
+  [ -n "$remove_top_id" ] && tmux kill-pane -t "$remove_top_id" 2>/dev/null || true
+  [ -n "$remove_bottom_id" ] && tmux kill-pane -t "$remove_bottom_id" 2>/dev/null || true
   sleep 0.2
 
   local _rps_include_p0="false"
@@ -5146,7 +4736,7 @@ run_test() {
   doey_step "4/6" "Waiting for Taskmaster boot..."
   local _wait_count=0
   local _safe_session="${session//[-:.]/_}"
-  local _tm_status="/tmp/doey/${test_project_name}/status/${_safe_session}_0_2.status"
+  local _tm_status="${TMPDIR:-/tmp}/doey/${test_project_name}/status/${_safe_session}_0_2.status"
   while [ "$_wait_count" -lt 30 ]; do
     if [ -f "$_tm_status" ]; then
       local _tm_state
@@ -5176,7 +4766,7 @@ run_test() {
   printf '\n'
 
   claude --dangerously-skip-permissions --agent test-driver --model opus \
-    "Run the E2E test. Session: ${session}. Project name: ${test_project_name}. Project dir: ${project_dir}. Runtime dir: /tmp/doey/${test_project_name}. Journey file: ${journey_file}. Observations dir: ${test_root}/observations. Report file: ${report_file}. Test ID: ${test_id}"
+    "Run the E2E test. Session: ${session}. Project name: ${test_project_name}. Project dir: ${project_dir}. Runtime dir: ${TMPDIR:-/tmp}/doey/${test_project_name}. Journey file: ${journey_file}. Observations dir: ${test_root}/observations. Report file: ${report_file}. Test ID: ${test_id}"
 
   printf '\n'
   doey_step "6/6" "Results"
@@ -5201,7 +4791,7 @@ run_test() {
     printf '\n  %sKept for inspection:%s\n' "$BOLD" "$RESET"
     printf "    ${DIM}Session${RESET}   tmux attach -t ${session}\n"
     printf "    ${DIM}Sandbox${RESET}   ${project_dir}\n"
-    printf "    ${DIM}Runtime${RESET}   /tmp/doey/${test_project_name}\n"
+    printf "    ${DIM}Runtime${RESET}   ${TMPDIR:-/tmp}/doey/${test_project_name}\n"
     printf "    ${DIM}Report${RESET}    ${report_file}\n\n"
   fi
 }
