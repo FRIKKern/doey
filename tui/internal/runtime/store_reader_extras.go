@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/doey-cli/doey/tui/internal/store"
 )
@@ -76,4 +77,27 @@ func (sr *storeReader) readConfig() []ConfigEntry {
 		})
 	}
 	return entries
+}
+
+// readInteractions returns recent interactions from the store, newest first.
+func (sr *storeReader) readInteractions(limit int) []Interaction {
+	storeInteractions, err := sr.s.ListInteractions(limit)
+	if err != nil {
+		return nil
+	}
+	interactions := make([]Interaction, 0, len(storeInteractions))
+	for _, si := range storeInteractions {
+		i := Interaction{
+			ID:          si.ID,
+			SessionName: si.SessionName,
+			TaskID:      si.TaskID,
+			MessageText: si.MessageText,
+			MessageType: si.MessageType,
+			Source:      si.Source,
+			Context:     si.Context,
+			CreatedAt:   time.Unix(si.CreatedAt, 0),
+		}
+		interactions = append(interactions, i)
+	}
+	return interactions
 }

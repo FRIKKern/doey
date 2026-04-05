@@ -67,6 +67,34 @@ if [ -n "${DOEY_PANE_ID:-}" ]; then
   fi
 fi
 
+# Boss interaction capture — log every user message to SQLite
+if is_boss && command -v doey-ctl >/dev/null 2>&1; then
+  _msg_type="other"
+  case "$PROMPT" in
+    "?"*|*"?"*[.!]?) _msg_type="question" ;;
+    "/"*) _msg_type="command" ;;
+    *"#"[0-9]*|*"task "*|*"Task "*) _msg_type="task_reference" ;;
+    *"status"*|*"progress"*|*"update"*) _msg_type="status" ;;
+    *"fix"*|*"bug"*|*"error"*|*"broken"*) _msg_type="feedback" ;;
+  esac
+  # Find active task ID if any
+  _active_task=""
+  if [ -n "${DOEY_TASK_ID:-}" ]; then
+    _active_task="--task-id ${DOEY_TASK_ID}"
+  fi
+  # Non-blocking capture (background subshell)
+  (
+    doey-ctl interaction log \
+      --session "${SESSION_NAME}" \
+      ${_active_task} \
+      --message "$PROMPT" \
+      --type "$_msg_type" \
+      --source "user" \
+      --context "boss_prompt" \
+      --project-dir "${PROJECT_DIR:-$(pwd)}" 2>/dev/null
+  ) &
+fi
+
 # Activity logging
 _prompt_safe=$(printf '%s' "${PROMPT:0:120}" | tr '"\\' '__')
 write_activity "status_change" '{"status":"BUSY"}'
