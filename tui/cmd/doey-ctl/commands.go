@@ -1777,6 +1777,7 @@ Subcommands:
   subtask   Manage subtasks (add, update, list)
   log       Manage task log entries (add, list)
   decision  Add a decision log entry
+  export    Export tasks to JSON
 
 Transitions (accept multiple IDs):
   done      Mark tasks done
