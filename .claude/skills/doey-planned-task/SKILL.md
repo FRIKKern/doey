@@ -4,7 +4,8 @@ description: Plan-first task creation — research, breakdown, risk analysis, th
 ---
 
 - Current tasks: !`doey task list 2>/dev/null || echo "No tasks"`
-- Existing plans: !`doey-ctl plan list 2>/dev/null || echo "None"`
+- Plans dir: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); echo "${PD:-.}/.doey/plans"'`
+- Existing plans: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); ls "${PD:-.}/.doey/plans/"*.md 2>/dev/null | head -10 || echo "None"'`
 
 Create a plan-first task from a natural-language goal. Goal from ARGUMENTS (if empty, use AskUserQuestion to ask, then stop).
 
@@ -29,20 +30,29 @@ Structure findings into a plan with:
 - **Scope**: Files affected, teams needed, estimated worker count
 - **Acceptance criteria**: How to verify the work is done correctly
 
-### 3. Create the Task First
+### 3. Save Plan
 
-A plan requires an associated task. Create one:
+Determine next plan ID:
 ```bash
-TASK_ID=$(doey task create --title "TITLE" --type "TYPE" --description "DESCRIPTION")
-echo "Created task #${TASK_ID}"
+PD=$(grep '^PROJECT_DIR=' "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
+PLANS_DIR="${PD:-.}/.doey/plans"
+mkdir -p "$PLANS_DIR"
+PLAN_ID=$(( $(ls "$PLANS_DIR"/*.md 2>/dev/null | sed 's/.*\///' | grep -E '^[0-9]+\.md$' | sed 's/\.md//' | sort -n | tail -1) + 1 )) 2>/dev/null || PLAN_ID=1
+echo "Next plan ID: $PLAN_ID"
 ```
 
-### 4. Save Plan via doey-ctl
+Write the plan file using the Write tool to `${PLANS_DIR}/${PLAN_ID}.md`:
 
-Create the plan in SQLite using `doey-ctl plan create` with the task ID:
+```markdown
+---
+plan_id: <PLAN_ID>
+title: "<Plan Title>"
+status: draft
+created: <ISO 8601 timestamp>
+updated: <ISO 8601 timestamp>
+---
 
-```bash
-PLAN_BODY="# Plan Title
+# <Plan Title>
 
 ## Goal
 <Original goal from user>
@@ -50,9 +60,11 @@ PLAN_BODY="# Plan Title
 ## Steps
 - [ ] Step 1: <description> (complexity: low/medium/high)
 - [ ] Step 2: <description> (complexity: low/medium/high)
+...
 
 ## Risks
 - <Risk 1>: <mitigation>
+- <Risk 2>: <mitigation>
 
 ## Scope
 - **Files**: <list of files affected>
@@ -61,30 +73,33 @@ PLAN_BODY="# Plan Title
 
 ## Acceptance Criteria
 - <criterion 1>
-- <criterion 2>"
-
-PLAN_ID=$(doey-ctl plan create --task-id "$TASK_ID" --title "Plan Title" --body "$PLAN_BODY" | grep -oE '[0-9]+')
-echo "Created plan #${PLAN_ID} linked to task #${TASK_ID}"
+- <criterion 2>
 ```
 
-To update the plan status later:
-```bash
-doey-ctl plan update --status active "$PLAN_ID"
-```
-
-### 5. Present Plan for Approval
+### 4. Present Plan for Approval
 
 Use AskUserQuestion to present the plan summary and ask the user to approve, modify, or reject:
 - Show: title, step count, risks, scope estimate
-- Options: "Approve and dispatch", "Modify plan", "Cancel"
+- Options: "Approve and create tasks", "Modify plan", "Cancel"
 
-If rejected or modified, iterate. Do NOT proceed to dispatch without approval.
+If rejected or modified, iterate. Do NOT proceed to task creation without approval.
 
-### 6. On Approval — Activate and Enrich Task
+### 5. Create Tasks from Approved Plan
 
-Update plan status to active:
+On approval, update plan status to `active`:
 ```bash
-doey-ctl plan update --status active "$PLAN_ID"
+sed -i 's/^status: draft/status: active/' "${PLANS_DIR}/${PLAN_ID}.md"
+```
+
+Create task(s):
+```bash
+TASK_ID=$(doey task create --title "TITLE" --type "TYPE" --description "DESCRIPTION")
+echo "Created task #${TASK_ID}"
+```
+
+Link task to plan:
+```bash
+doey task update --id "$TASK_ID" --field "TASK_PLAN_ID" --value "$PLAN_ID"
 ```
 
 If the plan has multiple independent steps, create subtasks:
@@ -99,7 +114,7 @@ doey task update --id "$TASK_ID" --field "success_criteria" --value "criterion 1
 doey task update --id "$TASK_ID" --field "dispatch_plan" --value "standard"
 ```
 
-### 7. Dispatch to Taskmaster
+### 6. Dispatch to Taskmaster
 
 Send message to Taskmaster to pick up the new task:
 ```bash
@@ -112,18 +127,17 @@ doey msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}"
 PLAN_ID: ${PLAN_ID}
 TITLE: ${TASK_TITLE}
 PRIORITY: ${TASK_PRIORITY:-P2}
-Planned task ready for dispatch."
+Planned task ready for dispatch. Plan: ${PLANS_DIR}/${PLAN_ID}.md"
 doey msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
 ```
 
-### 8. Output
+### 7. Output
 
-Report to user: task ID, plan ID, title, step count, dispatch status.
+Report to user: task ID, plan ID, title, step count, dispatch status. Include paths to both plan and task files.
 
 ### Rules
 - Always use AskUserQuestion for user interaction — never inline questions
-- Use `doey task create` for tasks — never duplicate the logic
-- Use `doey-ctl plan create --task-id` for plans — never write plan .md files directly
-- Every plan must have a `--task-id` — plans without tasks are not allowed
+- Use `doey task create` — never duplicate the logic
 - One clarifying question max before planning
 - If goal is simple, redirect to `/doey-instant-task`
+- Plan file must have valid YAML frontmatter with plan_id, title, status, created, updated
