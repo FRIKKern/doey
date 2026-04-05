@@ -42,7 +42,7 @@ _touch_task_updated() { # task_file → upsert TASK_UPDATED=epoch
   [ -f "$task_file" ] || return 0
   local _ts; _ts=$(date +%s)
   if grep -q '^TASK_UPDATED=' "$task_file" 2>/dev/null; then
-    sed -i '' "s/^TASK_UPDATED=.*/TASK_UPDATED=${_ts}/" "$task_file"
+    sed "s/^TASK_UPDATED=.*/TASK_UPDATED=${_ts}/" "$task_file" > "${task_file}.tmp" && mv "${task_file}.tmp" "$task_file"
   else
     echo "TASK_UPDATED=${_ts}" >> "$task_file"
   fi
@@ -132,8 +132,22 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
       TASK_ASSIGNED_TO=$(printf '%s' "$_tr_out" | sed -n 's/^Assigned-To:[[:space:]]*//p')
       TASK_DESCRIPTION=$(printf '%s' "$_tr_out" | sed -n 's/^Description:[[:space:]]*//p')
       TASK_CREATED=$(printf '%s' "$_tr_out" | sed -n 's/^Created:[[:space:]]*//p')
+      TASK_DECISION_LOG=$(printf '%s' "$_tr_out" | sed -n 's/^DecisionLog:[[:space:]]*//p')
       [ -n "${TASK_ID:-}" ] || return 1
       : "${TASK_TYPE:=feature}" "${TASK_CREATED_BY:=Boss}"
+      # doey-ctl doesn't expose all fields yet — supplement from the task file
+      if [ -s "$file" ]; then
+        local _line
+        while IFS= read -r _line || [ -n "$_line" ]; do
+          case "${_line%%=*}" in
+            TASK_TIMESTAMPS)      TASK_TIMESTAMPS="${_line#*=}" ;;
+            TASK_CURRENT_PHASE)   TASK_CURRENT_PHASE="${_line#*=}" ;;
+            TASK_TOTAL_PHASES)    TASK_TOTAL_PHASES="${_line#*=}" ;;
+            TASK_SCHEMA_VERSION)  TASK_SCHEMA_VERSION="${_line#*=}" ;;
+            TASK_UPDATED)         TASK_UPDATED="${_line#*=}" ;;
+          esac
+        done < "$file"
+      fi
       return 0
     }
   fi
