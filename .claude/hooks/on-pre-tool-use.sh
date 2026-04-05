@@ -550,6 +550,10 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
       esac
     fi
   ;; esac
+  # Freelancers (managerless workers) have direct VCS access — no Subtaskmaster to handle it
+  if [ "${DOEY_TEAM_TYPE:-}" = "freelancer" ] && _is_direct_vcs_cmd "$TOOL_COMMAND"; then
+    _dbg_write "allow_freelancer_vcs"; exit 0
+  fi
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "${DOEY_ROLE_WORKER} $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
