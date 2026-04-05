@@ -607,6 +607,37 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.entries) {
 				task := m.entries[idx]
+
+				// Review decision buttons (pending_user_confirmation only)
+				if task.Status == "pending_user_confirmation" {
+					if zone.Get("task-deny-btn").InBounds(msg) {
+						m.statusMsg = "Task denied — sent back"
+						return m, tea.Batch(
+							func() tea.Msg { return SetStatusTaskMsg{ID: task.ID, Status: "in_progress"} },
+							func() tea.Msg { return ReviewVerdictMsg{ID: task.ID, Verdict: "rejected"} },
+							taskStatusClearCmd(),
+						)
+					}
+					if zone.Get("task-skip-btn").InBounds(msg) {
+						m.statusMsg = "Review skipped — marked done"
+						return m, tea.Batch(
+							func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: "done"} },
+							func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} },
+							taskStatusClearCmd(),
+						)
+					}
+					if zone.Get("task-accept-btn").InBounds(msg) {
+						m.statusMsg = "Task accepted"
+						return m, tea.Batch(
+							func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: "done"} },
+							func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} },
+							func() tea.Msg { return ReviewVerdictMsg{ID: task.ID, Verdict: "accepted"} },
+							taskStatusClearCmd(),
+						)
+					}
+				}
+
+				// Standard action buttons (non-review statuses)
 				if zone.Get("task-move-btn").InBounds(msg) {
 					next := nextMoveStatus(task.Status)
 					m.statusMsg = "Task moved"
@@ -769,6 +800,24 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		m.creating = true
 		m.inputText = ""
 		return m, nil
+	case "a":
+		// Accept (pending_user_confirmation only)
+		item := m.list.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		ti := item.(taskcard.TaskItem)
+		task := ti.Task
+		if task.Status == "pending_user_confirmation" {
+			m.statusMsg = "Task accepted"
+			return m, tea.Batch(
+				func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: "done"} },
+				func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} },
+				func() tea.Msg { return ReviewVerdictMsg{ID: task.ID, Verdict: "accepted"} },
+				taskStatusClearCmd(),
+			)
+		}
+		return m, nil
 	case "m":
 		item := m.list.SelectedItem()
 		if item == nil {
@@ -791,6 +840,15 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		}
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
+		if task.Status == "pending_user_confirmation" {
+			// Deny — send back to in_progress
+			m.statusMsg = "Task denied — sent back"
+			return m, tea.Batch(
+				func() tea.Msg { return SetStatusTaskMsg{ID: task.ID, Status: "in_progress"} },
+				func() tea.Msg { return ReviewVerdictMsg{ID: task.ID, Verdict: "rejected"} },
+				taskStatusClearCmd(),
+			)
+		}
 		m.statusMsg = "Task dispatched"
 		return m, tea.Batch(func() tea.Msg {
 			return DispatchTaskMsg{ID: task.ID, Title: task.Title}
@@ -802,6 +860,15 @@ func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		}
 		ti := item.(taskcard.TaskItem)
 		task := ti.Task
+		if task.Status == "pending_user_confirmation" {
+			// Skip Review — mark done without human review
+			m.statusMsg = "Review skipped — marked done"
+			return m, tea.Batch(
+				func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: "done"} },
+				func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} },
+				taskStatusClearCmd(),
+			)
+		}
 		next := nextStatus(task.Status)
 		m.statusMsg = "Status updated"
 		return m, tea.Batch(func() tea.Msg {
@@ -881,6 +948,20 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "a":
+		idx := m.list.Index()
+		if idx >= 0 && idx < total {
+			task := m.entries[idx]
+			if task.Status == "pending_user_confirmation" {
+				m.statusMsg = "Task accepted"
+				return m, tea.Batch(
+					func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: "done"} },
+					func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} },
+					func() tea.Msg { return ReviewVerdictMsg{ID: task.ID, Verdict: "accepted"} },
+					taskStatusClearCmd(),
+				)
+			}
+		}
 	case "m":
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
@@ -898,6 +979,14 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
+			if task.Status == "pending_user_confirmation" {
+				m.statusMsg = "Review skipped — marked done"
+				return m, tea.Batch(
+					func() tea.Msg { return MoveTaskMsg{ID: task.ID, Status: "done"} },
+					func() tea.Msg { return BossMarkDoneMsg{ID: task.ID} },
+					taskStatusClearCmd(),
+				)
+			}
 			next := nextStatus(task.Status)
 			m.statusMsg = "Status updated"
 			return m, tea.Batch(func() tea.Msg {
@@ -908,6 +997,14 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
 			task := m.entries[idx]
+			if task.Status == "pending_user_confirmation" {
+				m.statusMsg = "Task denied — sent back"
+				return m, tea.Batch(
+					func() tea.Msg { return SetStatusTaskMsg{ID: task.ID, Status: "in_progress"} },
+					func() tea.Msg { return ReviewVerdictMsg{ID: task.ID, Verdict: "rejected"} },
+					taskStatusClearCmd(),
+				)
+			}
 			m.statusMsg = "Task dispatched"
 			return m, tea.Batch(func() tea.Msg {
 				return DispatchTaskMsg{ID: task.ID, Title: task.Title}
@@ -1702,7 +1799,13 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		if m.leftFocused {
 			hint = "→ or enter for details"
 		} else {
-			hint += "  m move  s status  d dispatch  x cancel  tab subtask"
+			// Show review actions for pending tasks, standard actions otherwise
+			idx := m.list.Index()
+			if idx >= 0 && idx < len(m.entries) && m.entries[idx].Status == "pending_user_confirmation" {
+				hint += "  d deny  s skip  a accept  tab subtask"
+			} else {
+				hint += "  m move  s status  d dispatch  x cancel  tab subtask"
+			}
 		}
 		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
 	}
@@ -1829,15 +1932,23 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 				return lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(bg).Padding(0, 2)
 			}
 
-			if status != "done" && status != "cancelled" {
-				buttons = append(buttons, zone.Mark("task-move-btn", btnStyle(t.Primary).Render("Move (m)")))
-			}
-			if status == "in_progress" || status == "active" || status == "pending" || status == "ready" {
-				buttons = append(buttons, zone.Mark("task-dispatch-btn", btnStyle(t.Accent).Render("Dispatch (d)")))
-			}
-			buttons = append(buttons, zone.Mark("task-status-btn", btnStyle(t.Muted).Render("Status (s)")))
-			if status != "cancelled" {
-				buttons = append(buttons, zone.Mark("task-cancel-btn", btnStyle(t.Danger).Render("Cancel (x)")))
+			if status == "pending_user_confirmation" {
+				// Review decision buttons
+				buttons = append(buttons, zone.Mark("task-deny-btn", btnStyle(t.Danger).Render("Deny (d)")))
+				buttons = append(buttons, zone.Mark("task-skip-btn", btnStyle(t.Muted).Render("Skip Review (s)")))
+				buttons = append(buttons, zone.Mark("task-accept-btn", btnStyle(t.Success).Render("Accept (a)")))
+			} else {
+				// Standard action buttons
+				if status != "done" && status != "cancelled" {
+					buttons = append(buttons, zone.Mark("task-move-btn", btnStyle(t.Primary).Render("Move (m)")))
+				}
+				if status == "in_progress" || status == "active" || status == "pending" || status == "ready" {
+					buttons = append(buttons, zone.Mark("task-dispatch-btn", btnStyle(t.Accent).Render("Dispatch (d)")))
+				}
+				buttons = append(buttons, zone.Mark("task-status-btn", btnStyle(t.Muted).Render("Status (s)")))
+				if status != "cancelled" {
+					buttons = append(buttons, zone.Mark("task-cancel-btn", btnStyle(t.Danger).Render("Cancel (x)")))
+				}
 			}
 
 			if len(buttons) > 0 {
@@ -1884,8 +1995,9 @@ func (m TasksModel) viewHelp() string {
 		{"↑ / ↓", "Scroll detail panel"},
 		{"n", "Create new task"},
 		{"m", "Move task (active → in_progress → done)"},
-		{"s", "Cycle through all statuses"},
-		{"d", "Dispatch task to a team"},
+		{"s", "Cycle statuses / Skip Review (pending)"},
+		{"d", "Dispatch task / Deny (pending)"},
+		{"a", "Accept task (pending confirmation)"},
 		{"p", "View linked plan"},
 		{"x", "Cancel task"},
 		{"Tab", "Next subtask (detail panel)"},

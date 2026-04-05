@@ -141,7 +141,8 @@ type PersistentTask struct {
 	Reports         []PersistentReport         `json:"reports,omitempty"`          // worker reports
 	TaskAttachments []PersistentAttachment     `json:"task_attachments,omitempty"` // file attachments from .doey/tasks/<id>/attachments/
 	RecoveryLog     []PersistentRecoveryEvent  `json:"recovery_log,omitempty"`     // stale detection / auto-recovery events
-	QAThread []PersistentQAEntry `json:"qa_thread,omitempty"` // Q&A relay chain entries
+	QAThread      []PersistentQAEntry `json:"qa_thread,omitempty"`      // Q&A relay chain entries
+	ReviewVerdict string               `json:"review_verdict,omitempty"` // accepted, rejected
 }
 
 // TaskStore holds all persistent tasks.
