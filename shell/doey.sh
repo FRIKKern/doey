@@ -72,6 +72,12 @@ source "${SCRIPT_DIR}/doey-task-cli.sh"
 # shellcheck source=doey-test-runner.sh
 source "${SCRIPT_DIR}/doey-test-runner.sh"
 
+# shellcheck source=doey-grid.sh
+source "${SCRIPT_DIR}/doey-grid.sh"
+
+# shellcheck source=doey-menu.sh
+source "${SCRIPT_DIR}/doey-menu.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 _doey_load_config
 
@@ -687,28 +693,6 @@ register_project() {
 }
 
 # List all projects with running status
-list_projects() {
-  doey_header "Doey — Projects"
-  printf '\n'
-  local has_projects=false
-  while IFS=: read -r name path; do
-    [[ -z "$name" ]] && continue
-    has_projects=true
-    local short_path="${path/#$HOME/\~}"
-    if session_exists "doey-${name}"; then
-      printf "  ${SUCCESS}●${RESET} ${BOLD}%-20s${RESET} %s\n" "$name" "$short_path"
-    else
-      printf "  ${DIM}○${RESET} %-20s ${DIM}%s${RESET}\n" "$name" "$short_path"
-    fi
-  done < "$PROJECTS_FILE"
-  if [[ "$has_projects" == false ]]; then
-    doey_info "(no projects registered)"
-  fi
-  printf '\n'
-  printf "  ${SUCCESS}●${RESET} running  ${DIM}○${RESET} stopped\n"
-  printf '\n'
-}
-
 # Stop session for current directory's project
 stop_project() {
   # 1) If inside a doey tmux session, stop it directly
@@ -830,211 +814,6 @@ _kill_doey_session() {
 }
 
 # Show interactive project picker menu
-show_menu() {
-  local grid="$1"
-
-  doey_header "Doey"
-  doey_warn "No project registered for $(pwd)"
-  printf '\n'
-
-  # Read projects into arrays
-  local names paths statuses status_plain; names=() paths=() statuses=() status_plain=()
-  while IFS=: read -r name path; do
-    [[ -z "$name" ]] && continue
-    names+=("$name")
-    paths+=("$path")
-    if session_exists "doey-${name}"; then
-      statuses+=("${SUCCESS}● running${RESET}")
-      status_plain+=("running")
-    else
-      statuses+=("${DIM}○ stopped${RESET}")
-      status_plain+=("stopped")
-    fi
-  done < "$PROJECTS_FILE"
-
-  # Count running sessions for the kill-all option
-  local running_count=0
-  for i in "${!names[@]}"; do
-    session_exists "doey-${names[$i]}" && running_count=$((running_count + 1))
-  done
-
-  if [[ ${#names[@]} -gt 0 ]]; then
-    # ── Interactive picker (works with or without gum) ──
-    local _cursor=0
-    local _total=${#names[@]}
-    local _msg=""
-    local _old_tty_settings
-
-    # Refresh status arrays (after kill/restart)
-    _picker_refresh() {
-      statuses=(); status_plain=()
-      running_count=0
-      for i in "${!names[@]}"; do
-        if session_exists "doey-${names[$i]}"; then
-          statuses+=("running")
-          status_plain+=("running")
-          running_count=$((running_count + 1))
-        else
-          statuses+=("stopped")
-          status_plain+=("stopped")
-        fi
-      done
-    }
-
-    # Render the picker list
-    _picker_render() {
-      # Move to top of picker area and clear below
-      printf '\033[%dA' $((_total + 4))  # move up past list + hints + msg + blank
-      printf '\033[J'                     # clear from cursor to end
-
-      local i
-      for i in "${!names[@]}"; do
-        local _sp="${paths[$i]/#$HOME/\~}"
-        local _icon="○"
-        [ "${status_plain[$i]}" = "running" ] && _icon="●"
-
-        if [ "$i" -eq "$_cursor" ]; then
-          # Focused: bold cyan with cursor
-          printf '  \033[1;36m▸ %s %-18s\033[0;90m %s\033[0m\n' "$_icon" "${names[$i]}" "$_sp"
-        else
-          # Unfocused: dim
-          printf '    \033[0;90m%s %-18s %s\033[0m\n' "$_icon" "${names[$i]}" "$_sp"
-        fi
-      done
-
-      printf '\n'
-      printf '  \033[0;90menter\033[0m open  \033[0;90m·\033[0m  \033[0;90mr\033[0m restart  \033[0;90m·\033[0m  \033[0;90mx\033[0m kill  \033[0;90m·\033[0m  \033[0;90mi\033[0m init  \033[0;90m·\033[0m  \033[0;90mq\033[0m quit\n'
-
-      # Status message line (or blank)
-      if [ -n "$_msg" ]; then
-        printf '  %b\n' "$_msg"
-      else
-        printf '\n'
-      fi
-    }
-
-    # Print initial blank lines to reserve space, then render
-    local _line
-    for _line in $(seq 1 $((_total + 4))); do
-      printf '\n'
-    done
-    _picker_render
-
-    # Save terminal state & hide cursor
-    _old_tty_settings=$(stty -g 2>/dev/null || true)
-    tput civis 2>/dev/null || true
-
-    _picker_cleanup() {
-      tput cnorm 2>/dev/null || true
-      [ -n "$_old_tty_settings" ] && stty "$_old_tty_settings" 2>/dev/null || true
-    }
-    trap '_picker_cleanup' INT TERM EXIT
-
-    # ── Input loop ──
-    local _done=false
-    while [ "$_done" = false ]; do
-      _msg=""
-      local _key
-      IFS= read -rsn1 _key 2>/dev/null || true
-
-      case "$_key" in
-        # Enter key
-        "")
-          _picker_cleanup
-          trap - INT TERM EXIT
-          local _sel_name="${names[$_cursor]}"
-          local _sel_path="${paths[$_cursor]}"
-          local _sel_session="doey-${_sel_name}"
-          if session_exists "$_sel_session"; then
-            attach_or_switch "$_sel_session"
-          else
-            launch_with_grid "$_sel_name" "$_sel_path" "$grid"
-          fi
-          return 0
-          ;;
-        # Escape sequence (arrow keys)
-        $'\033')
-          local _seq
-          IFS= read -rsn2 -t 0.1 _seq 2>/dev/null || true
-          case "$_seq" in
-            '[A') [ "$_cursor" -gt 0 ] && _cursor=$((_cursor - 1)) ;;   # Up
-            '[B') [ "$_cursor" -lt $((_total - 1)) ] && _cursor=$((_cursor + 1)) ;; # Down
-          esac
-          ;;
-        j|J) [ "$_cursor" -lt $((_total - 1)) ] && _cursor=$((_cursor + 1)) ;;
-        k|K) [ "$_cursor" -gt 0 ] && _cursor=$((_cursor - 1)) ;;
-        r|R)
-          local _rname="${names[$_cursor]}"
-          local _rpath="${paths[$_cursor]}"
-          local _rsess="doey-${_rname}"
-          if session_exists "$_rsess"; then
-            _msg="${WARN}Restarting ${_rname}...${RESET}"
-            _picker_render
-            _kill_doey_session "$_rsess"
-          fi
-          _picker_cleanup
-          trap - INT TERM EXIT
-          launch_with_grid "$_rname" "$_rpath" "$grid"
-          return 0
-          ;;
-        x|X|d|D)
-          local _xname="${names[$_cursor]}"
-          local _xsess="doey-${_xname}"
-          if session_exists "$_xsess"; then
-            _msg="${WARN}Killing ${_xname}...${RESET}"
-            _picker_render
-            _kill_doey_session "$_xsess"
-            _picker_refresh
-            _msg="${SUCCESS}Killed ${_xname}${RESET}"
-          else
-            _msg="${DIM}${_xname} is not running${RESET}"
-          fi
-          ;;
-        i|I)
-          _picker_cleanup
-          trap - INT TERM EXIT
-          register_project "$(pwd)"
-          local init_name
-          init_name="$(find_project "$(pwd)")"
-          if [[ -n "$init_name" ]]; then
-            launch_with_grid "$init_name" "$(pwd)" "$grid"
-          fi
-          return 0
-          ;;
-        q|Q)
-          _done=true
-          ;;
-      esac
-
-      [ "$_done" = false ] && _picker_render
-    done
-
-    _picker_cleanup
-    trap - INT TERM EXIT
-    return 0
-  fi
-
-  # ── Non-gum fallback (no projects registered) ──
-  printf "  ${DIM}No projects registered.${RESET}\n\n"
-  printf "  ${BOLD}i${RESET})  Init current directory as new project\n"
-  printf "  ${BOLD}q${RESET})  Quit\n"
-  printf '\n'
-
-  read -rp "  > " choice
-  case "$choice" in
-    i|I|init)
-      register_project "$(pwd)"
-      local init_name
-      init_name="$(find_project "$(pwd)")"
-      if [[ -n "$init_name" ]]; then
-        launch_with_grid "$init_name" "$(pwd)" "$grid"
-      fi
-      ;;
-    q|Q) return 0 ;;
-    *) doey_error "Invalid option"; return 1 ;;
-  esac
-}
-
 # ── Step printer helpers ──────────────────────────────────────────────
 STEP_TOTAL=6
 
@@ -1425,15 +1204,6 @@ _cleanup_old_session() {
 }
 
 # Build comma-separated worker pane indices "1,2,3,...,N"
-_build_worker_csv() {
-  local total="$1" csv="" i
-  for (( i=1; i<total; i++ )); do
-    [ -n "$csv" ] && csv+=","
-    csv+="$i"
-  done
-  echo "$csv"
-}
-
 # Kill the child process in a tmux pane (SIGTERM → retry SIGKILL).
 # Usage: _kill_pane_child <pane_ref> [retries=3]
 _kill_pane_child() {
@@ -2033,165 +1803,6 @@ MANIFEST
   wait "$_bg_setup_pid" 2>/dev/null || true
 }
 
-_check_grid_feasibility() {
-  local session="$1" window="$2" min_col_w="${3:-40}" min_row_h="${4:-8}"
-  local win_dims
-  win_dims="$(tmux display-message -t "$session:$window" -p '#{window_width} #{window_height}' 2>/dev/null)" || return 1
-  local win_w="${win_dims%% *}"
-  local win_h="${win_dims##* }"
-  _FEASIBLE_MAX_COLS=$(( (win_w - 1) / (min_col_w + 1) ))
-  _FEASIBLE_MAX_ROWS=$(( win_h / (min_row_h + 1) ))
-  [ "$_FEASIBLE_MAX_COLS" -lt 1 ] && _FEASIBLE_MAX_COLS=1
-  [ "$_FEASIBLE_MAX_ROWS" -lt 1 ] && _FEASIBLE_MAX_ROWS=1
-}
-
-_layout_checksum() {
-  local s="$1" csum=0 i c
-  for ((i=0; i<${#s}; i++)); do
-    c=$(printf '%d' "'${s:$i:1}")
-    csum=$(( ((csum >> 1) + ((csum & 1) << 15) + c) & 0xffff ))
-  done
-  printf '%04x' "$csum"
-}
-
-rebalance_grid_layout() {
-  local session="$1" team_window="${2:-1}" runtime_dir="${3:-}" mgr_width=90
-
-  local win_w win_h dims
-  dims="$(tmux display-message -t "$session:${team_window}" -p '#{window_width} #{window_height}')"
-  win_w="${dims%% *}"
-  win_h="${dims##* }"
-
-  local pane_ids=()
-  while IFS=$'\t' read -r _idx _pid; do
-    pane_ids+=("${_pid#%}")
-  done < <(tmux list-panes -t "$session:${team_window}" -F '#{pane_index}	#{pane_id}')
-
-  local num_panes=${#pane_ids[@]}
-  if (( num_panes < 3 )); then return 0; fi
-
-  if [ -z "$runtime_dir" ]; then
-    runtime_dir=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
-  fi
-
-  local _rgl_has_manager="true"
-  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${team_window}.env" ]; then
-    local _rgl_tt
-    _rgl_tt="$(_env_val "${runtime_dir}/team_${team_window}.env" TEAM_TYPE)" || true
-    [ "$_rgl_tt" = "freelancer" ] && _rgl_has_manager="false"
-  fi
-
-  local top_h=$((win_h / 2)) bot_h=$((win_h - win_h / 2 - 1))
-
-  local num_workers worker_cols worker_area body="" x=0
-
-  if [ "$_rgl_has_manager" = "true" ]; then
-    local max_mgr=$((win_w / 3))
-    (( mgr_width > max_mgr )) && mgr_width=$max_mgr
-    num_workers=$((num_panes - 1))
-    worker_cols=$(( (num_workers + 1) / 2 ))
-    worker_area=$((win_w - mgr_width - 1))
-    body="${mgr_width}x${win_h},${x},0,${pane_ids[0]}"
-    x=$((mgr_width + 1))
-  else
-    num_workers=$num_panes
-    worker_cols=$(( (num_workers + 1) / 2 ))
-    worker_area=$win_w
-  fi
-
-  local c w wi
-  if [ "$_rgl_has_manager" = "true" ]; then wi=1; else wi=0; fi
-  for ((c=0; c<worker_cols; c++)); do
-    if ((c == worker_cols - 1)); then
-      w=$((win_w - x))
-    else
-      w=$((worker_area / worker_cols))
-    fi
-    local tp="${pane_ids[$wi]}"
-    [ -n "$body" ] && body+=","
-    # Determine panes in this column: 2 (or 1 if remainder)
-    local _rgl_col_panes=2
-    local _rgl_remaining=$((num_panes - wi))
-    (( _rgl_col_panes > _rgl_remaining )) && _rgl_col_panes=$_rgl_remaining
-    if (( _rgl_col_panes == 2 )); then
-      local bp="${pane_ids[$((wi + 1))]}"
-      body+="${w}x${win_h},${x},0[${w}x${top_h},${x},0,${tp},${w}x${bot_h},${x},$((top_h+1)),${bp}]"
-    else
-      body+="${w}x${win_h},${x},0,${tp}"
-    fi
-    wi=$((wi + _rgl_col_panes))
-    x=$((x + w + 1))
-  done
-
-  local layout_str="${win_w}x${win_h},0,0{${body}}"
-  tmux select-layout -t "$session:${team_window}" "$(_layout_checksum "$layout_str"),${layout_str}" 2>/dev/null || true
-}
-
-rebuild_pane_state() {
-  local session="$1" include_pane0="${2:-false}"
-  _worker_panes=""
-  local pidx
-  while IFS='' read -r pidx; do
-    [ "$pidx" = "0" ] && [ "$include_pane0" != "true" ] && continue
-    [ -n "$_worker_panes" ] && _worker_panes+=","
-    _worker_panes+="$pidx"
-  done < <(tmux list-panes -t "$session" -F '#{pane_index}')
-}
-
-# Bulk-read all team env keys in a single pass.  Sets _ts_* variables.
-# Usage: _read_team_env_bulk <env_file>
-_read_team_env_bulk() {
-  local _reb_file="$1" _reb_line _reb_val
-  _ts_worker_count="" _ts_grid="" _ts_worker_panes=""
-  _ts_wt_dir="" _ts_wt_branch="" _ts_team_type=""
-  _ts_team_name="" _ts_team_role="" _ts_worker_model="" _ts_manager_model=""
-  _ts_reserved=""
-  [ ! -f "$_reb_file" ] && return 0
-  while IFS= read -r _reb_line || [ -n "$_reb_line" ]; do
-    _reb_val="${_reb_line#*=}"
-    _reb_val="${_reb_val//\"/}"
-    case "$_reb_line" in
-      WORKER_COUNT=*)   _ts_worker_count="$_reb_val" ;;
-      GRID=*)           _ts_grid="$_reb_val" ;;
-      WORKER_PANES=*)   _ts_worker_panes="$_reb_val" ;;
-      WORKTREE_DIR=*)   _ts_wt_dir="$_reb_val" ;;
-      WORKTREE_BRANCH=*) _ts_wt_branch="$_reb_val" ;;
-      TEAM_TYPE=*)      _ts_team_type="$_reb_val" ;;
-      TEAM_NAME=*)      _ts_team_name="$_reb_val" ;;
-      TEAM_ROLE=*)      _ts_team_role="$_reb_val" ;;
-      WORKER_MODEL=*)   _ts_worker_model="$_reb_val" ;;
-      MANAGER_MODEL=*)  _ts_manager_model="$_reb_val" ;;
-      RESERVED=*)       _ts_reserved="$_reb_val" ;;
-    esac
-  done < "$_reb_file"
-}
-
-_read_team_state() {
-  local session="$1" runtime_dir="$2" dir="$3" team_window="$4"
-  local team_env="${runtime_dir}/team_${team_window}.env"
-
-  _ts_dir="$dir" _ts_wt_dir="" _ts_wt_branch=""
-
-  if [ ! -f "$team_env" ]; then
-    _ts_worker_count=0
-    _ts_grid="${GRID:-dynamic}" _ts_cols=1 _ts_worker_panes=""
-    return 0
-  fi
-
-  _read_team_env_bulk "$team_env"
-  _ts_worker_count="${_ts_worker_count:-0}"
-  _ts_grid="${_ts_grid:-dynamic}"
-
-  local _pane_count
-  _pane_count=$(tmux list-panes -t "$session:$team_window" 2>/dev/null | wc -l)
-  _pane_count="${_pane_count// /}"
-  _ts_cols=$(( (_pane_count - 1) / 2 ))
-  [ "$_ts_cols" -lt 1 ] && _ts_cols=1
-
-  [ -n "$_ts_wt_dir" ] && [ -d "$_ts_wt_dir" ] && _ts_dir="$_ts_wt_dir"
-  return 0
-}
-
 # Check for workers stuck in BOOTING state past the timeout.
 # Runs as a background watchdog after _batch_boot_workers. For each status file
 # still showing BOOTING after DOEY_BOOT_TIMEOUT seconds, transitions it to READY
@@ -2577,27 +2188,6 @@ _brief_team() {
     doey_send_verified "${session}:${window_index}.0" \
       "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from the Core Team window. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" || true
   ) &
-}
-
-_build_worker_pane_list() {
-  local session="$1" window_index="$2"
-  _WPL_RESULT=""
-  # For freelancer teams, pane 0 is also a worker (no manager)
-  local _wpl_skip_pane0="true"
-  local _wpl_runtime
-  _wpl_runtime=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null) || true
-  _wpl_runtime="${_wpl_runtime#*=}"
-  if [ -n "$_wpl_runtime" ] && [ -f "${_wpl_runtime}/team_${window_index}.env" ]; then
-    local _wpl_tt
-    _wpl_tt=$(_env_val "${_wpl_runtime}/team_${window_index}.env" TEAM_TYPE)
-    [ "$_wpl_tt" = "freelancer" ] && _wpl_skip_pane0="false"
-  fi
-  local _pi
-  for _pi in $(tmux list-panes -t "${session}:${window_index}" -F '#{pane_index}'); do
-    [ "$_pi" = "0" ] && [ "$_wpl_skip_pane0" = "true" ] && continue
-    [ -n "$_WPL_RESULT" ] && _WPL_RESULT="${_WPL_RESULT}, "
-    _WPL_RESULT="${_WPL_RESULT}${window_index}.${_pi}"
-  done
 }
 
 _name_team_window() {
