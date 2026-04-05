@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -165,7 +166,9 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 		// Target: Taskmaster at pane 1.0 (Core Team window)
 		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_1_0"
 		msgDir := filepath.Join(runtimeDir, "messages")
-		os.MkdirAll(msgDir, 0755)
+		if err := os.MkdirAll(msgDir, 0755); err != nil {
+			return DispatchTeamResultMsg{WindowIdx: windowIdx, Err: fmt.Errorf("create message dir: %w", err)}
+		}
 
 		content := fmt.Sprintf("FROM: TUI\nSUBJECT: task\nTARGET_TEAM: %d\n%s\n", windowIdx, task)
 		filename := fmt.Sprintf("%s_%d_%d.msg", smSafe, time.Now().Unix(), os.Getpid())
@@ -177,8 +180,12 @@ func DispatchTeamCmd(runtimeDir string, sessionName string, windowIdx int, task 
 
 		// Touch trigger file to wake the Taskmaster
 		triggerDir := filepath.Join(runtimeDir, "triggers")
-		os.MkdirAll(triggerDir, 0755)
-		os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644)
+		if err := os.MkdirAll(triggerDir, 0755); err != nil {
+			log.Printf("ipc: trigger mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644); err != nil {
+			log.Printf("ipc: trigger write: %v", err)
+		}
 
 		return DispatchTeamResultMsg{WindowIdx: windowIdx, Err: nil}
 	}
@@ -420,7 +427,9 @@ func DispatchTaskCmd(runtimeDir, sessionName, id, title string) tea.Cmd {
 	return func() tea.Msg {
 		smSafe := strings.NewReplacer("-", "_", ":", "_", ".", "_").Replace(sessionName) + "_1_0"
 		msgDir := filepath.Join(runtimeDir, "messages")
-		os.MkdirAll(msgDir, 0755)
+		if err := os.MkdirAll(msgDir, 0755); err != nil {
+			return DispatchTaskResultMsg{Err: fmt.Errorf("create message dir: %w", err)}
+		}
 
 		content := fmt.Sprintf("FROM: TUI\nSUBJECT: task\nTASK_ID: %s\n%s\n", id, title)
 		filename := fmt.Sprintf("%s_%d_%d.msg", smSafe, time.Now().Unix(), os.Getpid())
@@ -432,16 +441,26 @@ func DispatchTaskCmd(runtimeDir, sessionName, id, title string) tea.Cmd {
 
 		// Touch trigger
 		triggerDir := filepath.Join(runtimeDir, "triggers")
-		os.MkdirAll(triggerDir, 0755)
-		os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644)
+		if err := os.MkdirAll(triggerDir, 0755); err != nil {
+			log.Printf("ipc: trigger mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(triggerDir, smSafe+".trigger"), []byte{}, 0644); err != nil {
+			log.Printf("ipc: trigger write: %v", err)
+		}
 
 		// Mark task as in_progress
-		store, _ := runtime.ReadTaskStore()
-		if t := store.FindTask(id); t != nil {
-			t.Status = "in_progress"
-			t.Updated = time.Now().Unix()
+		store, err := runtime.ReadTaskStore()
+		if err != nil {
+			log.Printf("ipc: read task store: %v", err)
+		} else {
+			if t := store.FindTask(id); t != nil {
+				t.Status = "in_progress"
+				t.Updated = time.Now().Unix()
+			}
+			if err := runtime.WriteTaskStore(store); err != nil {
+				log.Printf("ipc: write task store: %v", err)
+			}
 		}
-		runtime.WriteTaskStore(store)
 
 		return DispatchTaskResultMsg{}
 	}
