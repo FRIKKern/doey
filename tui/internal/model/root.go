@@ -289,6 +289,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case BossCancelTaskResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
+	case ReviewVerdictMsg:
+		return m, ReviewVerdictCmd(msg.ID, msg.Verdict)
+
+	case ReviewVerdictResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
+	case SetStatusTaskMsg:
+		return m, SetStatusTaskCmd(msg.ID, msg.Status)
+
+	case SetStatusTaskResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
 	case BossKillTeamMsg:
 		return m, BossKillTeamCmd(msg.WindowIdx)
 

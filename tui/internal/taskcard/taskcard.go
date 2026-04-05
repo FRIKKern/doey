@@ -1373,20 +1373,6 @@ func (e *ExpandedCard) renderProofSection() []string {
 		}
 	}
 
-	// Proof details (type, build status, content)
-	if task.ProofType != "" {
-		rows = append(rows, styles.MetaLine(e.Theme, "Proof Type", task.ProofType))
-	}
-	if task.BuildStatus != "" {
-		rows = append(rows, styles.MetaLine(e.Theme, "Build Status", task.BuildStatus))
-	}
-	if task.ProofContent != "" && task.ProofContent != "Task completed — no summary available" {
-		wrapped := wordWrap(task.ProofContent, contentWidth-4)
-		for _, line := range strings.Split(wrapped, "\n") {
-			rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(line))
-		}
-	}
-
 	// Warning if proof is missing for completed tasks
 	if isComplete && !hasAnyProof {
 		warn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("  No proof captured")
@@ -1394,96 +1380,190 @@ func (e *ExpandedCard) renderProofSection() []string {
 		return rows
 	}
 
-	// Commits
-	if hasCommits || len(logCommits) > 0 {
-		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Commits")
-		rows = append(rows, label)
-		if task.Commits != "" {
-			for _, line := range strings.Split(task.Commits, "|") {
-				line = strings.TrimSpace(line)
-				if line == "" {
-					continue
-				}
-				commitIcon := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("    ●")
-				commitText := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + line)
-				rows = append(rows, commitIcon+commitText)
-			}
-		}
-		for _, c := range logCommits {
-			commitIcon := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("    ●")
-			commitText := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + c)
-			rows = append(rows, commitIcon+commitText)
-		}
-	}
-
-	// Files Changed
-	if hasFiles {
-		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Files Changed")
-		rows = append(rows, label)
-		files := task.FilesChanged
-		if len(files) == 0 {
-			files = paneFiles
-		}
-		maxShow := 10
-		for i, f := range files {
-			if i >= maxShow {
-				more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
-					Render(fmt.Sprintf("    … and %d more", len(files)-maxShow))
-				rows = append(rows, more)
-				break
-			}
-			bullet := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("    •")
-			file := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + f)
-			rows = append(rows, bullet+file)
-		}
-	}
-
-	// Verification Steps (from pane results)
-	verSteps := e.collectVerificationSteps()
-	if len(verSteps) > 0 {
-		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Verification Steps")
-		rows = append(rows, label)
-		for i, step := range verSteps {
-			num := lipgloss.NewStyle().Foreground(e.Theme.Success).Render(fmt.Sprintf("    %d.", i+1))
-			text := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + step)
-			rows = append(rows, num+text)
-		}
-	} else if isComplete {
-		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Verification Steps")
-		rows = append(rows, label)
-		rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("No verification steps provided"))
-	}
-
-	// Worker Summary (from Result field)
+	// Worker Summary (from Result field) — shown before verification guide
 	if hasResult {
-		label := lipgloss.NewStyle().Foreground(e.Theme.Muted).Bold(true).Render("  Summary")
-		rows = append(rows, label)
 		wrapped := wordWrap(task.Result, contentWidth-4)
 		for _, line := range strings.Split(wrapped, "\n") {
 			rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Text).Render(line))
 		}
 	}
 
-	// Incomplete evidence warning (skip if already verified)
-	if isComplete && task.VerificationStatus != "verified" {
-		missing := []string{}
-		if !hasCommits {
-			missing = append(missing, "commits")
+	// ── Section 1: AI Verification ──
+	// Auto-generated checklist from proof data collected by stop hooks.
+	rows = append(rows, "")
+	aiHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Success).Render("  ◇ AI Verification")
+	rows = append(rows, aiHeader)
+
+	checkOK := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("    ✓")
+	checkWarn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("    ○")
+	itemText := func(s string) string {
+		return lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + s)
+	}
+
+	if task.BuildStatus != "" {
+		rows = append(rows, checkOK+itemText("Build: "+task.BuildStatus))
+	}
+	if task.ProofType != "" {
+		rows = append(rows, checkOK+itemText("Proof type: "+task.ProofType))
+	}
+	if task.ProofContent != "" && task.ProofContent != "Task completed — no summary available" {
+		summary := task.ProofContent
+		if len(summary) > 80 {
+			summary = summary[:77] + "..."
 		}
-		if !hasFiles {
-			missing = append(missing, "files")
+		rows = append(rows, checkOK+itemText("Proof: "+summary))
+	}
+
+	// Gather all files (task-level or from pane results)
+	allFiles := task.FilesChanged
+	if len(allFiles) == 0 {
+		allFiles = paneFiles
+	}
+	if len(allFiles) > 0 {
+		rows = append(rows, checkOK+itemText(fmt.Sprintf("Files changed: %d files", len(allFiles))))
+	} else if isComplete {
+		rows = append(rows, checkWarn+itemText("Files changed: none detected"))
+	}
+
+	// Tool call count from pane results
+	totalTools := e.collectToolCallCount()
+	if totalTools > 0 {
+		rows = append(rows, checkOK+itemText(fmt.Sprintf("Tool calls: %d", totalTools)))
+	}
+
+	// Commits
+	commitLines := e.collectCommitLines(logCommits)
+	if len(commitLines) > 0 {
+		rows = append(rows, checkOK+itemText(fmt.Sprintf("Commits: %d", len(commitLines))))
+		for _, c := range commitLines {
+			cIcon := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("      ●")
+			cText := lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(" " + c)
+			rows = append(rows, cIcon+cText)
 		}
-		if !hasResult {
-			missing = append(missing, "summary")
-		}
-		if len(missing) > 0 {
-			warn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Faint(true).
-				Render("  Incomplete evidence: missing " + strings.Join(missing, ", "))
-			rows = append(rows, warn)
+	} else if isComplete {
+		rows = append(rows, checkWarn+itemText("Commits: none recorded"))
+	}
+
+	// Files list (collapsed under AI section)
+	if len(allFiles) > 0 {
+		maxShow := 8
+		for i, f := range allFiles {
+			if i >= maxShow {
+				more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
+					Render(fmt.Sprintf("      … and %d more", len(allFiles)-maxShow))
+				rows = append(rows, more)
+				break
+			}
+			bullet := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("      •")
+			file := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + f)
+			rows = append(rows, bullet+file)
 		}
 	}
 
+	// ── Section 2: Human Verification ──
+	// Actionable steps for the user based on file types and worker-provided steps.
+	rows = append(rows, "")
+	humanHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Accent).Render("  ◈ Human Verification")
+	rows = append(rows, humanHeader)
+
+	stepNum := 1
+	numStyle := func(n int) string {
+		return lipgloss.NewStyle().Foreground(e.Theme.Accent).Render(fmt.Sprintf("    %d.", n))
+	}
+	stepText := func(s string) string {
+		return lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + s)
+	}
+
+	// Worker-provided verification steps get priority
+	verSteps := e.collectVerificationSteps()
+	for _, step := range verSteps {
+		rows = append(rows, numStyle(stepNum)+stepText(step))
+		stepNum++
+	}
+
+	// Auto-generated suggestions based on file extensions
+	hasGo, hasSh, hasMD := false, false, false
+	for _, f := range allFiles {
+		ext := filepath.Ext(f)
+		switch ext {
+		case ".go":
+			hasGo = true
+		case ".sh":
+			hasSh = true
+		case ".md":
+			hasMD = true
+		}
+	}
+	if hasGo {
+		rows = append(rows, numStyle(stepNum)+stepText("Run: go build ./... && go test ./..."))
+		stepNum++
+	}
+	if hasSh {
+		rows = append(rows, numStyle(stepNum)+stepText("Run: bash tests/test-bash-compat.sh"))
+		stepNum++
+	}
+	if hasMD {
+		rows = append(rows, numStyle(stepNum)+stepText("Review documentation changes"))
+		stepNum++
+	}
+
+	// Always suggest reviewing the diff
+	if len(allFiles) > 0 {
+		rows = append(rows, numStyle(stepNum)+stepText("Review the diff of changed files"))
+		stepNum++
+	}
+
+	// If no steps at all, show a gentle note
+	if stepNum == 1 {
+		rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("No verification steps available"))
+	}
+
 	return rows
+}
+
+// collectToolCallCount sums tool call counts from pane results associated with this task.
+func (e *ExpandedCard) collectToolCallCount() int {
+	if len(e.Results) == 0 {
+		return 0
+	}
+	task := e.Item.Task
+	taskID := task.ID
+	taskTitle := strings.ToLower(task.Title)
+
+	total := 0
+	for _, result := range e.Results {
+		resultTitle := strings.ToLower(result.Title)
+		if resultTitle != "" &&
+			!strings.Contains(resultTitle, taskID) &&
+			!strings.Contains(resultTitle, taskTitle) {
+			continue
+		}
+		total += result.ToolCalls
+	}
+	return total
+}
+
+// collectCommitLines gathers unique commit lines from task data and activity logs.
+func (e *ExpandedCard) collectCommitLines(logCommits []string) []string {
+	task := e.Item.Task
+	seen := make(map[string]bool)
+	var lines []string
+	if task.Commits != "" {
+		for _, line := range strings.Split(task.Commits, "|") {
+			line = strings.TrimSpace(line)
+			if line != "" && !seen[line] {
+				seen[line] = true
+				lines = append(lines, line)
+			}
+		}
+	}
+	for _, c := range logCommits {
+		if !seen[c] {
+			seen[c] = true
+			lines = append(lines, c)
+		}
+	}
+	return lines
 }
 
 // collectProofFiles gathers unique files from pane results associated with this task.

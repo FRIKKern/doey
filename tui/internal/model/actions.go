@@ -364,6 +364,36 @@ func SetStatusTaskCmd(id, status string) tea.Cmd {
 	}
 }
 
+// ReviewVerdictMsg is emitted when the user accepts or denies a task review.
+type ReviewVerdictMsg struct {
+	ID      string
+	Verdict string // "accepted" or "rejected"
+}
+
+// ReviewVerdictResultMsg is returned after setting the review verdict.
+type ReviewVerdictResultMsg struct {
+	Err error
+}
+
+// ReviewVerdictCmd updates the review_verdict field on a task in the DB store.
+func ReviewVerdictCmd(id, verdict string) tea.Cmd {
+	return func() tea.Msg {
+		store, err := runtime.ReadTaskStore()
+		if err != nil {
+			return ReviewVerdictResultMsg{Err: err}
+		}
+		t := store.FindTask(id)
+		if t != nil {
+			t.ReviewVerdict = verdict
+			t.Updated = time.Now().Unix()
+		}
+		if err := runtime.WriteTaskStore(store); err != nil {
+			return ReviewVerdictResultMsg{Err: err}
+		}
+		return ReviewVerdictResultMsg{}
+	}
+}
+
 // DispatchTaskMsg is emitted when the user dispatches a task to the Taskmaster.
 type DispatchTaskMsg struct {
 	ID    string
