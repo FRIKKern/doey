@@ -44,19 +44,6 @@ type ReservedFreelancerResultMsg struct {
 	Err error
 }
 
-// CloseTabMsg requests closing a tab and killing the associated team.
-type CloseTabMsg struct {
-	Index     int
-	WindowIdx int
-	Name      string
-}
-
-// CloseTabResultMsg is returned after a tab close operation completes.
-type CloseTabResultMsg struct {
-	Err        error
-	SpawnedNew bool
-}
-
 const (
 	snapshotInterval  = 2 * time.Second
 	heartbeatInterval = 2 * time.Second
@@ -197,7 +184,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logsGroup.SetSnapshot(m.snapshot)
 		m.connections.SetSnapshot(m.snapshot)
 		m.files.SetProjectDir(m.snapshot.Session.ProjectDir)
-		m.syncTeamTabs(m.snapshot)
 
 	case SnapshotRefreshMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
@@ -223,24 +209,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, StopTeamCmd(msg.Name, msg.WindowIdx)
 
 	case StopTeamResultMsg:
-		cmds = append(cmds, m.readSnapshotCmd())
-
-	case CloseTabMsg:
-		m.tabBar.RemoveTab(msg.Index)
-		if m.focusIndex >= len(m.tabBar.tabs) {
-			m.focusIndex = len(m.tabBar.tabs) - 1
-		}
-		if m.focusIndex < 0 {
-			m.focusIndex = 0
-		}
-		m.updateFocus()
-		closeCmds := []tea.Cmd{StopTeamCmd(msg.Name, msg.WindowIdx)}
-		if m.tabBar.CloseableCount() == 0 {
-			closeCmds = append(closeCmds, CreateTeamCmd())
-		}
-		return m, tea.Batch(closeCmds...)
-
-	case CloseTabResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
 	case ToggleStarMsg:
@@ -364,25 +332,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		// Tab bar clicks — check on release to avoid double-fire
 		if msg.Action == tea.MouseActionRelease {
-			// Check close zones BEFORE tab-switch zones so clicking × doesn't also switch tabs
-			for i := range m.tabBar.tabs {
-				if m.tabBar.tabs[i].Closeable && zone.Get(fmt.Sprintf("tab-close-%d", i)).InBounds(msg) {
-					tab := m.tabBar.tabs[i]
-					return m, func() tea.Msg {
-						return CloseTabMsg{Index: i, WindowIdx: tab.WindowIdx, Name: tab.Name}
-					}
-				}
-			}
 			for i := range m.tabBar.tabs {
 				if zone.Get(fmt.Sprintf("tab-%d", i)).InBounds(msg) {
 					m.focusIndex = i
 					m.updateFocus()
 					return m, nil
 				}
-			}
-			// "+" button — add team window
-			if zone.Get("tab-add").InBounds(msg) {
-				return m, CreateTeamCmd()
 			}
 		}
 
@@ -405,8 +360,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connections, cmd = m.connections.Update(msg)
 		case 7:
 			m.files, cmd = m.files.Update(msg)
-		default:
-			// Dynamic team tabs — no sub-model to route to
 		}
 		cmds = append(cmds, cmd)
 
@@ -421,20 +374,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel) {
-			n := len(m.tabBar.tabs)
-			if n < 1 {
-				n = 1
-			}
-			m.focusIndex = (m.focusIndex + 1) % n
+			m.focusIndex = (m.focusIndex + 1) % 8
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel) {
-			n := len(m.tabBar.tabs)
-			if n < 1 {
-				n = 1
-			}
-			m.focusIndex = (m.focusIndex - 1 + n) % n
+			m.focusIndex = (m.focusIndex + 7) % 8 // +7 mod 8 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -497,8 +442,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connections, cmd = m.connections.Update(msg)
 		case 7:
 			m.files, cmd = m.files.Update(msg)
-		default:
-			// Dynamic team tabs — no sub-model to route to
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -558,12 +501,6 @@ func (m Model) View() string {
 	case 7:
 		m.files.SetSize(m.width, bodyH)
 		body = m.files.View()
-	default:
-		// Dynamic team tab — show team name placeholder
-		if m.focusIndex < len(m.tabBar.tabs) {
-			tab := m.tabBar.tabs[m.focusIndex]
-			body = fmt.Sprintf("  Team: %s (Window %d)", tab.Name, tab.WindowIdx)
-		}
 	}
 
 	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, body, footer))
@@ -608,54 +545,6 @@ func (m *Model) updateFocus() {
 	m.logsGroup.SetFocused(m.focusIndex == 5)
 	m.connections.SetFocused(m.focusIndex == 6)
 	m.files.SetFocused(m.focusIndex == 7)
-}
-
-// syncTeamTabs adds/removes dynamic team tabs to match the snapshot.
-func (m *Model) syncTeamTabs(snap runtime.Snapshot) {
-	// Build set of window indices currently in tab bar (closeable = dynamic team tabs)
-	currentWindows := make(map[int]bool)
-	for _, tab := range m.tabBar.tabs {
-		if tab.Closeable {
-			currentWindows[tab.WindowIdx] = true
-		}
-	}
-
-	// Build set of window indices from snapshot teams
-	snapshotWindows := make(map[int]bool)
-	for winIdx := range snap.Teams {
-		snapshotWindows[winIdx] = true
-	}
-
-	// Add tabs for teams not yet in the tab bar
-	for winIdx, team := range snap.Teams {
-		if !currentWindows[winIdx] {
-			name := team.TeamName
-			if name == "" {
-				name = fmt.Sprintf("Team %d", winIdx)
-			}
-			m.tabBar.AddTab(TabItem{
-				Name:      name,
-				Closeable: true,
-				WindowIdx: winIdx,
-			})
-		}
-	}
-
-	// Remove tabs for teams no longer in snapshot (iterate backwards)
-	for i := len(m.tabBar.tabs) - 1; i >= 0; i-- {
-		tab := m.tabBar.tabs[i]
-		if tab.Closeable && !snapshotWindows[tab.WindowIdx] {
-			m.tabBar.RemoveTab(i)
-		}
-	}
-
-	// Clamp focusIndex
-	if m.focusIndex >= len(m.tabBar.tabs) {
-		m.focusIndex = len(m.tabBar.tabs) - 1
-	}
-	if m.focusIndex < 0 {
-		m.focusIndex = 0
-	}
 }
 
 // snapshotTickCmd triggers a full snapshot re-read every 2s.
