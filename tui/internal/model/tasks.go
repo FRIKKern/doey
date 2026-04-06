@@ -99,6 +99,8 @@ func attachmentEmoji(t string) string {
 		return "⚖️"
 	case "report":
 		return "📋"
+	case "screenshot":
+		return "📸"
 	default:
 		return "📄"
 	}

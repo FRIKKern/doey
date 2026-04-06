@@ -787,6 +787,8 @@ func (r *Reader) parseAttachments(taskID string) []Attachment {
 				a.Timestamp, _ = strconv.ParseInt(val, 10, 64)
 			case "task_id":
 				a.TaskID = val
+			case "image_path":
+				a.ImagePath = val
 			}
 		}
 

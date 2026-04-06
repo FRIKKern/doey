@@ -865,6 +865,8 @@ func AttachmentTypeColor(t Theme, attachType string) lipgloss.AdaptiveColor {
 		return t.Muted
 	case "completion":
 		return t.Success
+	case "screenshot":
+		return lipgloss.AdaptiveColor{Light: "#E88D67", Dark: "#E88D67"}
 	default:
 		return t.Muted
 	}
