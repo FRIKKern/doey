@@ -4,6 +4,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/doey-cli/doey/tui/internal/bubbleterm/emulator"
@@ -215,8 +216,66 @@ func (m *Model) View() tea.View {
 		return tea.NewView("Terminal error: " + m.err.Error())
 	}
 
-	// Return cached view for maximum performance
-	return tea.NewView(m.cachedView)
+	// Overlay cursor on cached view
+	pos, visible := m.emulator.Cursor()
+	if !visible || pos.Y < 0 || pos.Y >= len(m.frame.Rows) {
+		return tea.NewView(m.cachedView)
+	}
+
+	rows := m.frame.Rows
+	row := rows[pos.Y]
+	cursorRow := insertCursor(row, pos.X)
+
+	var b strings.Builder
+	for i, r := range rows {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		if i == pos.Y {
+			b.WriteString(cursorRow)
+		} else {
+			b.WriteString(r)
+		}
+	}
+	return tea.NewView(b.String())
+}
+
+// insertCursor inserts reverse-video around the character at visible column col,
+// skipping over ANSI escape sequences when counting columns.
+func insertCursor(row string, col int) string {
+	if col < 0 {
+		return row
+	}
+	visibleCol := 0
+	inEscape := false
+	byteIdx := -1
+
+	for i, r := range row {
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '~' {
+				inEscape = false
+			}
+			continue
+		}
+		if visibleCol == col {
+			byteIdx = i
+			break
+		}
+		visibleCol++
+	}
+
+	if byteIdx < 0 {
+		// Cursor is past the end of the row content — append a block cursor on a space
+		return row + "\x1b[7m \x1b[27m"
+	}
+
+	// Find the byte length of the rune at byteIdx
+	_, size := utf8.DecodeRuneInString(row[byteIdx:])
+	return row[:byteIdx] + "\x1b[7m" + row[byteIdx:byteIdx+size] + "\x1b[27m" + row[byteIdx+size:]
 }
 
 // Focus sets the bubble as focused (receives keyboard input)
