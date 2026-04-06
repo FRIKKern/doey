@@ -693,7 +693,11 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 
 			// Line 2: subtask title (for workers) or task reference
 			if subtaskTitle != "" {
-				stLine := lipgloss.NewStyle().Foreground(t.Muted).Render("    " + truncateStr(subtaskTitle, 28))
+				label := subtaskTitle
+				if ps != nil && ps.SubtaskID != "" {
+					label = "#" + ps.SubtaskID + " " + subtaskTitle
+				}
+				stLine := lipgloss.NewStyle().Foreground(t.Muted).Render("    " + truncateStr(label, 28))
 				paneLines = append(paneLines, stLine)
 			} else if ps != nil && ps.Task != "" && winIdx >= 2 {
 				taskLine := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("    Task #%s", ps.Task))
