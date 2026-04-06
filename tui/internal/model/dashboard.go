@@ -551,22 +551,43 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 		}
 		titleLine := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(title) + badge + freelancerBadge
 
-		// Render a row per pane: colored dot + role label + status text
+		// Render each pane: role icon + name + status badge, task ID, context bar
 		var paneLines []string
-		for _, pIdx := range allPanes {
-			key := fmt.Sprintf("%s:%d.%d", m.snapshot.Session.SessionName, winIdx, pIdx)
+		for i, pIdx := range allPanes {
+			sessionKey := fmt.Sprintf("%s:%d.%d", m.snapshot.Session.SessionName, winIdx, pIdx)
+			shortKey := fmt.Sprintf("%d.%d", winIdx, pIdx)
 			status := "—"
-			if ps, ok := m.snapshot.Panes[key]; ok {
+			taskID := ""
+			if ps, ok := m.snapshot.Panes[sessionKey]; ok {
 				status = ps.Status
+				taskID = ps.Task
 			}
-			dot := lipgloss.NewStyle().Foreground(styles.StatusColor(status)).Render("●")
-			role := "SM"
-			if pIdx > 0 {
-				role = fmt.Sprintf("W%d", pIdx)
+
+			// Separator between panes
+			if i > 0 {
+				sep := lipgloss.NewStyle().Foreground(t.Separator).Faint(true).Render("  " + strings.Repeat("┄", 18))
+				paneLines = append(paneLines, sep)
 			}
-			roleLabel := lipgloss.NewStyle().Foreground(t.Muted).Width(4).Render(role)
-			statusText := styles.StatusText(status)
-			paneLines = append(paneLines, fmt.Sprintf("  %s %s %s", dot, roleLabel, statusText))
+
+			// Line 1: role icon + role name + status badge
+			icon := paneRoleIcon(pIdx, team.TeamType)
+			roleName := paneRoleName(pIdx, team.TeamType)
+			iconStyled := lipgloss.NewStyle().Foreground(styles.StatusColor(status)).Render(icon)
+			nameStyled := lipgloss.NewStyle().Foreground(t.Text).Render(roleName)
+			statusBadge := styles.StatusBadge(status)
+			paneLines = append(paneLines, fmt.Sprintf("  %s %s  %s", iconStyled, nameStyled, statusBadge))
+
+			// Line 2: task ID (if available)
+			if taskID != "" {
+				taskLine := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("    Task #%s", taskID))
+				paneLines = append(paneLines, taskLine)
+			}
+
+			// Line 3: context usage bar
+			if ctxPct, ok := m.snapshot.ContextPct[shortKey]; ok && ctxPct > 0 {
+				bar := renderContextBar(ctxPct, 10, t)
+				paneLines = append(paneLines, "    "+bar)
+			}
 		}
 
 		content := titleLine + "\n" + strings.Join(paneLines, "\n")
@@ -582,6 +603,58 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 	grid := styles.CardGrid(cards, 2, w)
 	body := lipgloss.NewStyle().Padding(1, 1).Render(grid)
 	return "\n" + header + "\n" + rule + "\n" + body
+}
+
+// paneRoleIcon returns a Unicode icon for the pane's role.
+func paneRoleIcon(paneIdx int, teamType string) string {
+	if teamType == "freelancer" {
+		return "◇"
+	}
+	if paneIdx == 0 {
+		return "◆"
+	}
+	return "●"
+}
+
+// paneRoleName returns a human-readable role name for the pane.
+func paneRoleName(paneIdx int, teamType string) string {
+	if teamType == "freelancer" {
+		return fmt.Sprintf("Freelancer %d", paneIdx)
+	}
+	if paneIdx == 0 {
+		return "Subtaskmaster"
+	}
+	return fmt.Sprintf("Worker %d", paneIdx)
+}
+
+// renderContextBar renders a mini progress bar for context percentage.
+func renderContextBar(pct int, barWidth int, t styles.Theme) string {
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	filled := pct * barWidth / 100
+	if filled > barWidth {
+		filled = barWidth
+	}
+
+	// Color: green (<50%), yellow (50-75%), red (>75%)
+	var barColor lipgloss.AdaptiveColor
+	switch {
+	case pct >= 75:
+		barColor = t.Danger
+	case pct >= 50:
+		barColor = t.Warning
+	default:
+		barColor = t.Success
+	}
+
+	filledStr := lipgloss.NewStyle().Foreground(barColor).Render(strings.Repeat("▓", filled))
+	emptyStr := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(strings.Repeat("░", barWidth-filled))
+	pctStr := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" %d%%", pct))
+	return filledStr + emptyStr + pctStr
 }
 
 func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) string {
