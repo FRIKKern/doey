@@ -45,7 +45,8 @@ func eventSource() string {
 	return "cli"
 }
 
-// checkSubtasksComplete returns subtasks that are NOT in a terminal state (done, deferred).
+// checkSubtasksComplete returns subtasks that are NOT in a terminal state.
+// Terminal states: done, deferred, cancelled, failed, skipped.
 // Returns nil if all subtasks are terminal or none exist.
 func checkSubtasksComplete(s *store.Store, taskID int64) ([]store.Subtask, error) {
 	subs, err := s.ListSubtasks(taskID)
@@ -54,7 +55,10 @@ func checkSubtasksComplete(s *store.Store, taskID int64) ([]store.Subtask, error
 	}
 	var blockers []store.Subtask
 	for _, st := range subs {
-		if st.Status != "done" && st.Status != "deferred" {
+		switch st.Status {
+		case "done", "deferred", "cancelled", "failed", "skipped":
+			// terminal — not a blocker
+		default:
 			blockers = append(blockers, st)
 		}
 	}
@@ -213,6 +217,7 @@ func runTaskUpdate(args []string) {
 	idFlag := fs.String("id", "", "task ID (convenience)")
 	statusFlag := fs.String("status", "", "set status (convenience shorthand)")
 	dir := fs.String("project-dir", "", "project directory")
+	force := fs.Bool("force", false, "skip subtask completion check")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 
 	fs.Usage = func() {
@@ -319,7 +324,7 @@ func runTaskUpdate(args []string) {
 					}
 				}
 				// Gate: block done/pending_user_confirmation if non-terminal subtasks exist.
-				if *value == "done" || *value == "pending_user_confirmation" {
+				if !*force && (*value == "done" || *value == "pending_user_confirmation") {
 					blockers, err := checkSubtasksComplete(s, id)
 					if err != nil {
 						fatal("task update: checking subtasks: %v", err)
@@ -453,6 +458,7 @@ func runTaskUpdate(args []string) {
 func runTaskTransition(subcmd, status string, args []string) {
 	fs := flag.NewFlagSet("task "+subcmd, flag.ContinueOnError)
 	dir := fs.String("project-dir", "", "project directory")
+	force := fs.Bool("force", false, "skip subtask completion check")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 
 	fs.Usage = func() {
@@ -493,7 +499,7 @@ func runTaskTransition(subcmd, status string, args []string) {
 			}
 			if t != nil {
 				// Gate: block done/pending_user_confirmation if non-terminal subtasks exist.
-				if status == "done" || status == "pending_user_confirmation" {
+				if !*force && (status == "done" || status == "pending_user_confirmation") {
 					blockers, err := checkSubtasksComplete(s, t.ID)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "task %s: %s: checking subtasks: %v\n", subcmd, idStr, err)
