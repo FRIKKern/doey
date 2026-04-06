@@ -171,13 +171,6 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	// Description line: compact metadata
 	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(!isSelected).Render(taskCardDescription(ti, d.Heartbeats))
 
-	// Unverified indicator for completed tasks lacking proof
-	unverifiedBadge := ""
-	if (ti.Task.Status == "done" || ti.Task.Status == "pending_user_confirmation") &&
-		(ti.Task.VerificationStatus == "" || ti.Task.VerificationStatus == "unverified") {
-		unverifiedBadge = lipgloss.NewStyle().Foreground(d.Theme.Warning).Render(" ⚠")
-	}
-
 	// Compose card: icon + title + dim ID on line 1, metadata on line 2
 	// Indent child tasks under their parent
 	indent := " "
@@ -186,7 +179,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		indent = "   ↳ "
 		descIndent = "      "
 	}
-	card := fmt.Sprintf("%s%s %s %s%s\n%s%s", indent, icon, title, idStr, unverifiedBadge, descIndent, desc)
+	card := fmt.Sprintf("%s%s %s %s\n%s%s", indent, icon, title, idStr, descIndent, desc)
 
 	// Selected: left border + background highlight
 	if isSelected {
@@ -1445,10 +1438,7 @@ func (e *ExpandedCard) renderProofSection() []string {
 		badge := badgeStyle.Background(e.Theme.Danger).Foreground(e.Theme.BgText).Render("✗ Failed")
 		rows = append(rows, "  "+badge)
 	default:
-		if isComplete {
-			badge := badgeStyle.Background(e.Theme.Warning).Foreground(e.Theme.BgText).Render("⚠ Unverified")
-			rows = append(rows, "  "+badge)
-		}
+		// No badge for unverified tasks
 	}
 
 	// User verification badge for done tasks (accepted by user)
@@ -1567,9 +1557,11 @@ func (e *ExpandedCard) renderProofSection() []string {
 			case "agent":
 				proofBadge = proofBadgeStyle.Background(e.Theme.Accent).Foreground(e.Theme.BgText).Render("Agent-verified")
 			default:
-				proofBadge = proofBadgeStyle.Background(e.Theme.Warning).Foreground(e.Theme.BgText).Render("Unverified")
+				// No badge for unknown proof types
 			}
-			rows = append(rows, "    "+proofBadge)
+			if proofBadge != "" {
+				rows = append(rows, "    "+proofBadge)
+			}
 		}
 
 		// Proof content: show actual build output / verification results
