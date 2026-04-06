@@ -358,6 +358,33 @@ func truncateDesc(s string, maxLines int, maxWidth int) string {
 	return strings.Join(lines, "\n")
 }
 
+// TimelineEntryKind identifies the source type of a unified timeline entry.
+type TimelineEntryKind string
+
+const (
+	TimelineLog      TimelineEntryKind = "log"
+	TimelineEvent    TimelineEntryKind = "event"
+	TimelineMessage  TimelineEntryKind = "message"
+	TimelineUpdate   TimelineEntryKind = "update"
+	TimelineQA       TimelineEntryKind = "qa"
+	TimelineReport   TimelineEntryKind = "report"
+	TimelineRecovery TimelineEntryKind = "recovery"
+)
+
+// TimelineEntry is a single entry in the unified chronological timeline.
+// Exactly one of the pointer fields is set per entry.
+type TimelineEntry struct {
+	Timestamp int64
+	Kind      TimelineEntryKind
+	Log       *runtime.PersistentTaskLog
+	Event     *runtime.Event
+	Message   *runtime.Message
+	Update    *runtime.PersistentUpdate
+	QA        *runtime.PersistentQAEntry
+	Report    *runtime.PersistentReport
+	Recovery  *runtime.PersistentRecoveryEvent
+}
+
 // markdownCache caches glamour-rendered markdown to avoid re-rendering on every frame.
 type markdownCache struct {
 	lastBody  string
@@ -398,6 +425,9 @@ type ExpandedCard struct {
 
 	// Expandable subtask tracking
 	ExpandedSubtasks map[int]bool // which subtasks are expanded (by index)
+
+	// Timeline type filtering (if any key is true, only those kinds are shown)
+	TimelineFilter map[TimelineEntryKind]bool
 
 	// Glamour markdown rendering cache
 	mdCache markdownCache
@@ -674,141 +704,10 @@ func (e *ExpandedCard) Render() string {
 		}
 	}
 
-	// --- Live Updates ---
-	if len(task.Updates) > 0 {
+	// --- Unified Timeline ---
+	if timelineRows := e.renderUnifiedTimeline(contentWidth); len(timelineRows) > 0 {
 		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(e.Theme, "Live Updates"))
-		for _, upd := range task.Updates {
-			ts := relativeTime(upd.Timestamp)
-			styledTs := lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(ts)
-			author := ""
-			if upd.Author != "" {
-				author = lipgloss.NewStyle().Foreground(e.Theme.Accent).Bold(true).Render(upd.Author)
-			}
-			text := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(upd.Text)
-			line := "  " + styledTs
-			if author != "" {
-				line += "  " + author
-			}
-			line += "  " + text
-			sections = append(sections, line)
-		}
-	}
-
-	// --- Activity Log ---
-	if len(task.Logs) > 0 {
-		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(e.Theme, "Activity Log"))
-		for _, log := range task.Logs {
-			ts := ""
-			if log.Timestamp > 0 {
-				ts = time.Unix(log.Timestamp, 0).Format("15:04")
-			}
-			prefix, body := splitLogPrefix(log.Entry)
-
-			// Parse visualization blocks from the entry.
-			blocks := grammar.Parse(body)
-			if len(blocks) > 0 {
-				rendered := grammar.RenderTerminal(blocks)
-				// Show prefix header with event badge, then rendered blocks.
-				eventType := strings.ToLower(prefix)
-				if eventType == "" {
-					eventType = "info"
-				}
-				header := styles.LogEventBadge(e.Theme, eventType)
-				if ts != "" {
-					header = styles.LogTimestamp(e.Theme, ts) + " " + header
-				}
-				sections = append(sections, header)
-				sections = append(sections, rendered)
-			} else {
-				// Plain text entry — render with styled timestamp and event badge.
-				eventType := strings.ToLower(prefix)
-				if eventType != "" {
-					sections = append(sections, styles.ActivityEntry(e.Theme, ts, eventType, body, contentWidth))
-				} else {
-					line := wordWrap(body, contentWidth-8)
-					if ts != "" {
-						line = styles.LogTimestamp(e.Theme, ts) + " " + line
-					}
-					sections = append(sections, line)
-				}
-			}
-		}
-	}
-
-	// --- Events Timeline ---
-	if timelineSection := e.renderEventsTimeline(contentWidth); timelineSection != "" {
-		sections = append(sections, "")
-		sections = append(sections, timelineSection)
-	}
-
-	// --- Q&A Relay Chain ---
-	if qaSection := e.renderQARelayChain(contentWidth); qaSection != "" {
-		sections = append(sections, "")
-		sections = append(sections, qaSection)
-	}
-
-	// --- Messages ---
-	if len(e.Messages) > 0 {
-		sections = append(sections, "")
-		sections = append(sections, styles.SectionTitle(e.Theme, "Messages"))
-
-		// Sort by timestamp descending (most recent first), limit to 20.
-		msgs := make([]runtime.Message, len(e.Messages))
-		copy(msgs, e.Messages)
-		sort.Slice(msgs, func(i, j int) bool {
-			return msgs[i].Timestamp > msgs[j].Timestamp
-		})
-		if len(msgs) > 20 {
-			msgs = msgs[:20]
-		}
-
-		for i, msg := range msgs {
-			ts := time.Unix(msg.Timestamp, 0).Format("Jan 02 15:04")
-			styledTs := styles.LogTimestamp(e.Theme, ts)
-
-			// Map subject to event type for badge.
-			eventType := msg.Subject
-			switch msg.Subject {
-			case "worker_finished":
-				eventType = "done"
-			case "task_complete":
-				eventType = "task"
-			case "commit_request":
-				eventType = "commit"
-			case "status_report":
-				eventType = "info"
-			case "question":
-				eventType = "warn"
-			case "error":
-				eventType = "error"
-			}
-			badge := styles.LogEventBadge(e.Theme, eventType)
-
-			from := e.Theme.Dim.Render("From: " + msg.From)
-			sections = append(sections, styledTs+" "+badge+" "+from)
-
-			// Body preview: first non-empty line, truncated.
-			bodyPreview := ""
-			for _, line := range strings.Split(msg.Body, "\n") {
-				trimmed := strings.TrimSpace(line)
-				if trimmed != "" {
-					bodyPreview = trimmed
-					break
-				}
-			}
-			maxBody := contentWidth - 4
-			if maxBody > 0 && len(bodyPreview) > maxBody {
-				bodyPreview = bodyPreview[:maxBody-1] + "\u2026"
-			}
-			sections = append(sections, "  "+e.Theme.LogEntry.Render(bodyPreview))
-
-			// Blank line between messages (but not after last).
-			if i < len(msgs)-1 {
-				sections = append(sections, "")
-			}
-		}
+		sections = append(sections, timelineRows...)
 	}
 
 	// --- Worker Status ---
@@ -833,70 +732,389 @@ func (e *ExpandedCard) Render() string {
 	return styles.ExpandedCardStyle(e.Theme, task.Status, expandedWidth).Render(content)
 }
 
-// renderEventsTimeline renders store events filtered by this task's ID.
-func (e *ExpandedCard) renderEventsTimeline(width int) string {
-	if len(e.Events) == 0 {
-		return ""
-	}
-	taskID := e.Item.Task.ID
-	if taskID == "" {
-		return ""
+// buildTimeline collects all timestamped entries for the current task into a
+// single sorted slice. Entries from every source are merged chronologically.
+func (e *ExpandedCard) buildTimeline() []TimelineEntry {
+	task := e.Item.Task
+
+	// Pre-size: rough upper bound to avoid repeated growth.
+	cap := len(task.Logs) + len(task.Updates) + len(e.Events) + len(e.Messages) +
+		len(task.QAThread) + len(task.Reports) + len(task.RecoveryLog)
+	entries := make([]TimelineEntry, 0, cap)
+
+	// Updates
+	for i := range task.Updates {
+		entries = append(entries, TimelineEntry{
+			Timestamp: task.Updates[i].Timestamp,
+			Kind:      TimelineUpdate,
+			Update:    &task.Updates[i],
+		})
 	}
 
-	// Filter events for this task
-	var matched []runtime.Event
-	for _, ev := range e.Events {
-		if ev.TaskID == taskID {
-			matched = append(matched, ev)
+	// Activity logs
+	for i := range task.Logs {
+		entries = append(entries, TimelineEntry{
+			Timestamp: task.Logs[i].Timestamp,
+			Kind:      TimelineLog,
+			Log:       &task.Logs[i],
+		})
+	}
+
+	// Store events filtered by task ID
+	taskID := task.ID
+	for i := range e.Events {
+		if e.Events[i].TaskID == taskID {
+			entries = append(entries, TimelineEntry{
+				Timestamp: e.Events[i].Timestamp,
+				Kind:      TimelineEvent,
+				Event:     &e.Events[i],
+			})
 		}
 	}
-	if len(matched) == 0 {
-		return ""
-	}
-	if len(matched) > 20 {
-		matched = matched[:20]
+
+	// IPC messages (already filtered for this task by parent)
+	for i := range e.Messages {
+		entries = append(entries, TimelineEntry{
+			Timestamp: e.Messages[i].Timestamp,
+			Kind:      TimelineMessage,
+			Message:   &e.Messages[i],
+		})
 	}
 
+	// Q&A entries
+	for i := range task.QAThread {
+		entries = append(entries, TimelineEntry{
+			Timestamp: task.QAThread[i].Created,
+			Kind:      TimelineQA,
+			QA:        &task.QAThread[i],
+		})
+	}
+
+	// Reports
+	for i := range task.Reports {
+		entries = append(entries, TimelineEntry{
+			Timestamp: task.Reports[i].Created,
+			Kind:      TimelineReport,
+			Report:    &task.Reports[i],
+		})
+	}
+
+	// Recovery events
+	for i := range task.RecoveryLog {
+		entries = append(entries, TimelineEntry{
+			Timestamp: task.RecoveryLog[i].Timestamp,
+			Kind:      TimelineRecovery,
+			Recovery:  &task.RecoveryLog[i],
+		})
+	}
+
+	// Apply optional type filter
+	if len(e.TimelineFilter) > 0 {
+		filtered := entries[:0]
+		for _, ent := range entries {
+			if e.TimelineFilter[ent.Kind] {
+				filtered = append(filtered, ent)
+			}
+		}
+		entries = filtered
+	}
+
+	// Sort chronologically (oldest first)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Timestamp < entries[j].Timestamp
+	})
+
+	// Cap total entries to prevent massive renders
+	if len(entries) > 100 {
+		entries = entries[len(entries)-100:]
+	}
+
+	return entries
+}
+
+// renderUnifiedTimeline builds and renders the unified chronological timeline.
+func (e *ExpandedCard) renderUnifiedTimeline(contentWidth int) []string {
+	entries := e.buildTimeline()
+	if len(entries) == 0 {
+		return nil
+	}
+
+	t := e.Theme
 	var lines []string
-	lines = append(lines, styles.SectionTitle(e.Theme, "Events Timeline"))
-	for _, ev := range matched {
-		ts := ""
-		if ev.Timestamp > 0 {
-			ts = time.Unix(ev.Timestamp, 0).Format("15:04")
+	lines = append(lines, styles.SectionTitle(t, fmt.Sprintf("Timeline (%d)", len(entries))))
+
+	for _, ent := range entries {
+		switch ent.Kind {
+		case TimelineLog:
+			lines = append(lines, e.renderTimelineLog(ent.Log, contentWidth)...)
+		case TimelineEvent:
+			lines = append(lines, e.renderTimelineEvent(ent.Event, contentWidth))
+		case TimelineMessage:
+			lines = append(lines, e.renderTimelineMessage(ent.Message, contentWidth)...)
+		case TimelineUpdate:
+			lines = append(lines, e.renderTimelineUpdate(ent.Update))
+		case TimelineQA:
+			lines = append(lines, e.renderTimelineQA(ent.QA, contentWidth)...)
+		case TimelineReport:
+			lines = append(lines, e.renderTimelineReport(ent.Report))
+		case TimelineRecovery:
+			lines = append(lines, e.renderTimelineRecovery(ent.Recovery))
 		}
-		eventType := ev.Type
+	}
+	return lines
+}
+
+// renderTimelineLog renders a single activity log entry for the unified timeline.
+func (e *ExpandedCard) renderTimelineLog(log *runtime.PersistentTaskLog, width int) []string {
+	ts := ""
+	if log.Timestamp > 0 {
+		ts = time.Unix(log.Timestamp, 0).Format("15:04")
+	}
+	prefix, body := splitLogPrefix(log.Entry)
+
+	// Parse visualization blocks from the entry.
+	blocks := grammar.Parse(body)
+	if len(blocks) > 0 {
+		rendered := grammar.RenderTerminal(blocks)
+		eventType := strings.ToLower(prefix)
 		if eventType == "" {
 			eventType = "info"
 		}
-
-		// Color the dot by event type
-		var dotColor lipgloss.AdaptiveColor
-		switch eventType {
-		case "error":
-			dotColor = e.Theme.Danger
-		case "warn", "warning":
-			dotColor = e.Theme.Warning
-		default:
-			dotColor = e.Theme.Primary
+		header := styles.LogEventBadge(e.Theme, eventType)
+		if ts != "" {
+			header = styles.LogTimestamp(e.Theme, ts) + " " + header
 		}
-
-		dot := styles.TimelineDot(dotColor)
-		badge := styles.LogEventBadge(e.Theme, eventType)
-		tsStr := styles.LogTimestamp(e.Theme, ts)
-
-		detail := ev.Data
-		if ev.Source != "" {
-			detail = ev.Source + " " + detail
-		}
-		if len(detail) > width-30 && width > 30 {
-			detail = detail[:width-30]
-		}
-
-		line := fmt.Sprintf("%s %s %s %s", dot, tsStr, badge, strings.TrimSpace(detail))
-		lines = append(lines, line)
+		return []string{header, rendered}
 	}
 
-	return strings.Join(lines, "\n")
+	// Plain text entry.
+	eventType := strings.ToLower(prefix)
+	if eventType != "" {
+		return []string{styles.ActivityEntry(e.Theme, ts, eventType, body, width)}
+	}
+	line := wordWrap(body, width-8)
+	if ts != "" {
+		line = styles.LogTimestamp(e.Theme, ts) + " " + line
+	}
+	return []string{line}
+}
+
+// renderTimelineEvent renders a single store event for the unified timeline.
+func (e *ExpandedCard) renderTimelineEvent(ev *runtime.Event, width int) string {
+	ts := ""
+	if ev.Timestamp > 0 {
+		ts = time.Unix(ev.Timestamp, 0).Format("15:04")
+	}
+	eventType := ev.Type
+	if eventType == "" {
+		eventType = "info"
+	}
+
+	var dotColor lipgloss.AdaptiveColor
+	switch eventType {
+	case "error":
+		dotColor = e.Theme.Danger
+	case "warn", "warning":
+		dotColor = e.Theme.Warning
+	default:
+		dotColor = e.Theme.Primary
+	}
+
+	dot := styles.TimelineDot(dotColor)
+	badge := styles.LogEventBadge(e.Theme, eventType)
+	tsStr := styles.LogTimestamp(e.Theme, ts)
+
+	detail := ev.Data
+	if ev.Source != "" {
+		detail = ev.Source + " " + detail
+	}
+	if len(detail) > width-30 && width > 30 {
+		detail = detail[:width-30]
+	}
+
+	return fmt.Sprintf("%s %s %s %s", dot, tsStr, badge, strings.TrimSpace(detail))
+}
+
+// renderTimelineMessage renders a single IPC message for the unified timeline.
+func (e *ExpandedCard) renderTimelineMessage(msg *runtime.Message, contentWidth int) []string {
+	ts := time.Unix(msg.Timestamp, 0).Format("Jan 02 15:04")
+	styledTs := styles.LogTimestamp(e.Theme, ts)
+
+	eventType := msg.Subject
+	switch msg.Subject {
+	case "worker_finished":
+		eventType = "done"
+	case "task_complete":
+		eventType = "task"
+	case "commit_request":
+		eventType = "commit"
+	case "status_report":
+		eventType = "info"
+	case "question":
+		eventType = "warn"
+	case "error":
+		eventType = "error"
+	}
+	badge := styles.LogEventBadge(e.Theme, eventType)
+
+	from := e.Theme.Dim.Render("From: " + msg.From)
+	header := styledTs + " " + badge + " " + from
+
+	// Body preview: first non-empty line, truncated.
+	bodyPreview := ""
+	for _, line := range strings.Split(msg.Body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			bodyPreview = trimmed
+			break
+		}
+	}
+	maxBody := contentWidth - 4
+	if maxBody > 0 && len(bodyPreview) > maxBody {
+		bodyPreview = bodyPreview[:maxBody-1] + "\u2026"
+	}
+
+	return []string{header, "  " + e.Theme.LogEntry.Render(bodyPreview)}
+}
+
+// renderTimelineUpdate renders a single live update for the unified timeline.
+func (e *ExpandedCard) renderTimelineUpdate(upd *runtime.PersistentUpdate) string {
+	ts := relativeTime(upd.Timestamp)
+	styledTs := lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(ts)
+	author := ""
+	if upd.Author != "" {
+		author = lipgloss.NewStyle().Foreground(e.Theme.Accent).Bold(true).Render(upd.Author)
+	}
+	text := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(upd.Text)
+	line := "  " + styledTs
+	if author != "" {
+		line += "  " + author
+	}
+	line += "  " + text
+	return line
+}
+
+// renderTimelineQA renders a single Q&A entry for the unified timeline.
+func (e *ExpandedCard) renderTimelineQA(qa *runtime.PersistentQAEntry, width int) []string {
+	t := e.Theme
+
+	var icon string
+	var chainColor lipgloss.AdaptiveColor
+	switch qa.Status {
+	case "answered":
+		icon = "✓"
+		chainColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
+	case "answering":
+		icon = "●"
+		chainColor = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"}
+	case "routing", "forwarded":
+		icon = "→"
+		chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
+	default:
+		icon = "○"
+		chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
+	}
+
+	question := qa.Question
+	maxQ := width - 8
+	if maxQ > 0 && len(question) > maxQ {
+		question = question[:maxQ-1] + "\u2026"
+	}
+	qLine := icon + " Q: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+question+"\"")
+
+	var lines []string
+	lines = append(lines, qLine)
+
+	// Hop chain
+	if len(qa.Hops) > 0 {
+		var hopParts []string
+		for _, hop := range qa.Hops {
+			role := hop.Role
+			if role == "" {
+				role = hop.Pane
+			}
+			hopParts = append(hopParts, role)
+		}
+		chain := strings.Join(hopParts, " → ")
+		lastAction := qa.Hops[len(qa.Hops)-1].Action
+		if qa.Status != "answered" {
+			chain += " (" + lastAction + "...)"
+		}
+		lines = append(lines, "   "+lipgloss.NewStyle().Foreground(chainColor).Render(chain))
+	}
+
+	// Answer
+	if qa.Status == "answered" && qa.Answer != "" {
+		answer := qa.Answer
+		maxA := width - 12
+		if maxA > 0 && len(answer) > maxA {
+			answer = answer[:maxA-1] + "\u2026"
+		}
+		answerer := ""
+		if len(qa.Hops) > 0 {
+			last := qa.Hops[len(qa.Hops)-1]
+			if last.Role != "" {
+				answerer = last.Role
+			} else {
+				answerer = last.Pane
+			}
+		}
+		aText := "✓ A: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+answer+"\"")
+		if answerer != "" {
+			aText += lipgloss.NewStyle().Foreground(t.Muted).Render(" — " + answerer)
+		}
+		lines = append(lines, "   "+aText)
+	}
+
+	return lines
+}
+
+// renderTimelineReport renders a single report entry for the unified timeline.
+func (e *ExpandedCard) renderTimelineReport(report *runtime.PersistentReport) string {
+	var typeColor lipgloss.AdaptiveColor
+	switch report.Type {
+	case "research":
+		typeColor = e.Theme.Info
+	case "progress":
+		typeColor = e.Theme.Success
+	case "decision":
+		typeColor = e.Theme.Accent
+	case "completion":
+		typeColor = e.Theme.Warning
+	case "error":
+		typeColor = e.Theme.Danger
+	default:
+		typeColor = e.Theme.Muted
+	}
+	badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render("[" + report.Type + "]")
+	title := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true).Render(report.Title)
+	author := ""
+	if report.Author != "" {
+		author = "  " + lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(report.Author)
+	}
+	ts := ""
+	if report.Created > 0 {
+		ts = "  " + styles.LogTimestamp(e.Theme, time.Unix(report.Created, 0).Format("15:04"))
+	}
+	return fmt.Sprintf("  %s %s%s%s", badge, title, author, ts)
+}
+
+// renderTimelineRecovery renders a single recovery event for the unified timeline.
+func (e *ExpandedCard) renderTimelineRecovery(ev *runtime.PersistentRecoveryEvent) string {
+	dot := styles.TimelineDot(e.Theme.Warning)
+	desc := ev.Description
+	if desc == "" {
+		desc = ev.Event
+	}
+	ts := ""
+	if ev.Timestamp > 0 {
+		ts = styles.LogTimestamp(e.Theme, time.Unix(ev.Timestamp, 0).Format("15:04")) + " "
+	}
+	line := dot + " " + ts + lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("recovery") + " " + desc
+	if ev.NewAgent != "" {
+		line += " → " + ev.NewAgent
+	}
+	return line
 }
 
 // renderMarkdown renders markdown through glamour with caching.
