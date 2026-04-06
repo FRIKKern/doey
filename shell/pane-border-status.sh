@@ -88,4 +88,41 @@ if [ -f "$_status_file" ]; then
   ;; esac
 fi
 
+# Subtask label — read subtask_id file, look up title via doey-ctl JSON
+_subtask_file="${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id"
+if [ -f "$_subtask_file" ]; then
+  _subtask_id=$(head -1 "$_subtask_file" 2>/dev/null) || _subtask_id=""
+  if [ -n "$_subtask_id" ]; then
+    _st_task_id="${_task_id:-}"
+    if [ -z "$_st_task_id" ]; then
+      _task_id_file="${RUNTIME_DIR}/status/${PANE_SAFE}.task_id"
+      [ -f "$_task_id_file" ] && _st_task_id=$(head -1 "$_task_id_file" 2>/dev/null) || true
+    fi
+    _subtask_title=""
+    if [ -n "$_st_task_id" ]; then
+      _st_proj_dir="${_pbs_proj_dir:-}"
+      if [ -z "$_st_proj_dir" ]; then
+        _st_proj_dir=$(env_val "${RUNTIME_DIR}/session.env" PROJECT_DIR 2>/dev/null) || _st_proj_dir=""
+      fi
+      if [ -n "$_st_proj_dir" ]; then
+        _st_json=$(doey-ctl task get --id "$_st_task_id" --project-dir "$_st_proj_dir" --json 2>/dev/null) || _st_json=""
+        if [ -n "$_st_json" ]; then
+          _subtask_title=$(printf '%s\n' "$_st_json" | grep -A3 "\"id\": ${_subtask_id}," | sed -n 's/.*"title": "\(.*\)".*/\1/p' | head -1) || _subtask_title=""
+        fi
+      fi
+    fi
+    if [ -n "$_subtask_title" ]; then
+      # Strip "W#.#: " prefix if present
+      _subtask_title=$(printf '%s' "$_subtask_title" | sed 's/^W[0-9]*\.[0-9]*: //')
+      _subtask_short="${_subtask_title:0:30}"
+      [ ${#_subtask_title} -gt 30 ] && _subtask_short="${_subtask_short}.."
+      if [ -n "$_task_label" ]; then
+        _task_label="${_task_label} → ${_subtask_short}"
+      else
+        _task_label="${_subtask_short}"
+      fi
+    fi
+  fi
+fi
+
 [ -n "$_task_label" ] && _prefix_id "${TITLE} [${_task_label}]" || _prefix_id "$TITLE"
