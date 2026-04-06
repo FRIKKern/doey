@@ -148,7 +148,7 @@ setup_dashboard() {
 }
 
 # Create Core Team window (window 1): Taskmaster + specialists
-# Panes: 1.0=Taskmaster, 1.1=Task Reviewer, 1.2=Deployment, 1.3=Doey Expert
+# Panes: 1.0=Taskmaster, 1.1=Task Reviewer, 1.2=Deployment, 1.3=Terminal
 _create_core_team() {
   local session="$1" runtime_dir="$2" dir="$3"
 
@@ -167,13 +167,13 @@ _create_core_team() {
   tmux select-pane -t "$session:1.0" -T "${_proj} ${DOEY_ROLE_COORDINATOR}" \;\
        select-pane -t "$session:1.1" -T "Task Reviewer" \;\
        select-pane -t "$session:1.2" -T "Deployment" \;\
-       select-pane -t "$session:1.3" -T "Doey Expert"
+       select-pane -t "$session:1.3" -T "Terminal"
 
   # Apply border theme (same as regular teams)
   _apply_team_border_theme "$session" "1"
 
   # Write Core Team env
-  write_team_env "$runtime_dir" "1" "2x2" "1,2,3" "3" "0" "" "" \
+  write_team_env "$runtime_dir" "1" "2x2" "1,2" "2" "0" "" "" \
                  "Core Team" "core" "" ""
 
   # Set TASKMASTER_PANE in session.env
@@ -185,9 +185,9 @@ _create_core_team() {
     "$DOEY_ROLE_COORDINATOR" "${_proj} ${DOEY_ROLE_COORDINATOR}"
 
   # Brief Taskmaster about its Core Team window
-  _brief_team "$session" "1" "1.1, 1.2, 1.3" "3" "2x2 grid" "" "Core Team" "core"
+  _brief_team "$session" "1" "1.1, 1.2" "2" "2x2 grid" "" "Core Team" "core"
 
-  # Launch specialist agents in panes 1.1-1.3
+  # Launch specialist agents in panes 1.1-1.2
   local _spec_cmd
 
   # Task Reviewer (pane 1.1)
@@ -202,11 +202,8 @@ _create_core_team() {
   doey_send_command "${session}:1.2" "${_DRAIN_STDIN}${_spec_cmd}"
   write_pane_status "$runtime_dir" "${session}:1.2" "READY"
 
-  # Doey Expert (pane 1.3)
-  _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Doey Expert\" --agent doey-doey-expert"
-  _append_settings _spec_cmd "$runtime_dir"
-  doey_send_command "${session}:1.3" "${_DRAIN_STDIN}${_spec_cmd}"
-  write_pane_status "$runtime_dir" "${session}:1.3" "READY"
+  # Terminal (pane 1.3) — doey-term Bubble Tea container, not a Claude agent
+  doey_send_command "${session}:1.3" "${_DRAIN_STDIN}${dir}/tui/doey-term"
 }
 
 # Validate and auto-fix session.env files with encoding/quoting issues
