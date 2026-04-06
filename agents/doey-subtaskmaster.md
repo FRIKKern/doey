@@ -430,9 +430,18 @@ Every piece of work flows through a `.task` file — no exceptions. If it's not 
 
 ### On Startup / Wake
 
+**Auto-claim pre-assigned task:** If this team was spawned for a specific task, `DOEY_TASK_ID` will be set as an env var.
+
+1. Run: `echo $DOEY_TASK_ID` — if non-empty, this team has a pre-assigned task
+2. Load it: `doey task get --id $DOEY_TASK_ID`
+3. Set `TASK_ID=$DOEY_TASK_ID` and begin work immediately — skip waiting for Taskmaster dispatch
+4. The briefing message from Taskmaster may also arrive — use whichever comes first
+
+If `DOEY_TASK_ID` is empty or unset, fall through to normal startup:
+
 1. Read context log (`cat "$LOG"`)
 2. Load active tasks: `doey task list` (look for `active` or `in_progress` status)
-3. If `TASK_ID` was provided, load that task file immediately
+3. If `TASK_ID` was provided in a message, load that task file immediately
 4. **Check for undispatched work** — A task in your context that has no worker assignments is a dropped task. Dispatch NOW.
 
 ### When Receiving Work from Taskmaster
