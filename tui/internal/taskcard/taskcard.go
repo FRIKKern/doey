@@ -668,8 +668,8 @@ func (e *ExpandedCard) Render() string {
 				paneTag := lipgloss.NewStyle().Foreground(e.Theme.Accent).Render("[W" + pane + "]")
 				title = paneTag + " " + title
 			}
-			// Status badge for non-trivial statuses
-			if st.Status != "" && st.Status != "pending" {
+			// Status badge for non-trivial statuses (skip "done" — checkmark is sufficient)
+			if st.Status != "" && st.Status != "pending" && st.Status != "done" {
 				title = styles.StatusBadgeCard(st.Status, e.Theme) + " " + title
 			}
 			row := styles.SubtaskRow(e.Theme, title, st.Status, done, selected, 0)
