@@ -103,6 +103,11 @@ created: <ISO 8601 timestamp>
 - <any risks or concerns that must be addressed before proceeding>
 ```
 
+   **Quality requirements for intent.md:**
+   - The Intent Statement MUST name the specific system, module, or component being changed. Generic statements like "improve the system" fail the quality gate.
+   - Each success criterion in Definition of Success MUST be testable — describe an observable behavior change or a command that produces specific output. "Tests pass" is not specific enough; "Running tests/test-auth.sh returns 0 exit code with OAuth2 flow exercised" is.
+   - For each major constraint in Key Constraints, document the decision: what was chosen, what alternatives were considered, and why. At least one explicit "chose X over Y because Z" must appear.
+
 6. After writing intent.md, present the Intent Statement and Red Flags to the user via AskUserQuestion. Ask them to confirm the intent is correct before proceeding to Phase 1. Options: "Correct, proceed to research", "Adjust intent", "Cancel".
 
 If the user adjusts, revise the intent document and re-confirm. Do NOT proceed to Phase 1 without confirmed intent.
@@ -240,6 +245,9 @@ Spawn Agent (ultrathink):
   5. Identify blind spots — important areas no agent covered adequately
   6. Resolve each contradiction with a reasoned judgment: which side is right, why, and what's the risk if wrong
   7. Rank all findings by impact on the original intent (from Phase 0)
+  8. Every finding MUST reference concrete file paths or system names — not abstractions like "the auth module" but specific paths like "shell/doey.sh:482"
+  9. Each risk MUST name a specific failure scenario with impact — not "things might break" but "if the regex in on-pre-tool-use.sh:115 is too broad, it blocks legitimate worker writes to /tmp/doey/"
+  10. Create an explicit "Open Questions" section listing every unresolved item. Do not bury unknowns in prose — surface them
 ```
 
 #### 2.2 Produce Synthesis Document
@@ -313,6 +321,9 @@ Spawn Agent (ultrathink):
   3. Valuable alone — a user would notice or benefit from this phase, even if nothing else ships
   4. Small enough to verify — a single Subtaskmaster + workers can complete and verify it
   5. No phase is just "scaffolding" or "setup" — if it doesn't produce visible value, merge it into the phase that does
+  6. Each phase's changes list MUST reference concrete file paths, not abstractions
+  7. Each verification gate MUST contain at least one exact command to run OR a specific observable behavior — not "verify it works" but "run 'bash tests/test-bash-compat.sh' and confirm 0 failures"
+  8. Each subtask/todo MUST start with an action verb and name a specific deliverable — not "handle edge cases" but "add null check in parse_field() at common.sh:45 for empty DOEY_ROLE input"
 
   Rules for phase ordering:
   1. Most valuable / highest-risk first — validate assumptions early
@@ -399,6 +410,65 @@ For the overall sequence:
 
 If any phase fails the checklist, redesign it — split it, merge it, or reorder it. Do not proceed with phases that violate these rules.
 
+### 3.5 — Quality Gate: 9-Criteria Validation
+
+Before presenting the plan to the user, validate it against ALL 9 quality criteria. This is a hard gate — do NOT proceed to Phase 4 until all criteria pass.
+
+**Run this validation on the combined output of intent.md, synthesis.md, and phases.md.**
+
+For each criterion, evaluate PASS or FAIL with specific evidence:
+
+| # | Criterion | How to check | FAIL examples |
+|---|-----------|-------------|---------------|
+| 1 | **Specific title** | Title names the system/component being changed | "Infrastructure improvements", "Auth updates" |
+| 2 | **Outcome-based goal** | Definition of Success contains observable/measurable outcomes | "Tests pass", "System works better" |
+| 3 | **Explicit decisions** | At least one "chose X over Y because Z" appears | No alternatives discussed, decisions assumed |
+| 4 | **Concrete files/systems** | Phases reference real file paths or component names | "The auth module", "relevant files", "key systems" |
+| 5 | **Ordered implementation** | Phases are in dependency order with deps stated | No dependency mentions, arbitrary ordering |
+| 6 | **Testable validation** | Every verification gate has a command or observable behavior | "Verify it works", "Confirm correctness" |
+| 7 | **Honest risks** | Risks name specific failure scenarios with impact | "Things might break", "Performance could degrade" |
+| 8 | **Visible open questions** | Unknowns are listed explicitly, not buried in prose | No open questions section, or it says "None" |
+| 9 | **Actionable todos** | Subtasks start with verb + name deliverable | "Handle edge cases", "Deal with errors" |
+
+**Validation procedure:**
+
+1. Read intent.md, synthesis.md, and phases.md
+2. For each of the 9 criteria, write: `[PASS]` or `[FAIL]: <specific reason what's wrong and which section>`
+3. If ANY criterion fails:
+   - List all failures with specific, actionable feedback
+   - Identify which phase produced the failing content (Phase 0, 2, or 3)
+   - Re-run ONLY the failing phase's agent with tightened instructions that address the specific failure
+   - Re-validate after regeneration
+   - Maximum 2 retry cycles — if still failing after 2 retries, proceed to Phase 4 but include a "Quality Warnings" section in the plan presentation listing remaining failures
+4. If all 9 criteria pass: proceed to Phase 4
+
+**Write validation results to `${MP_DIR}/quality-gate.md`** with format:
+
+```markdown
+## Quality Gate Results — [PASS/FAIL]
+Date: [timestamp]
+Attempt: [1/2/3]
+
+| # | Criterion | Result | Evidence |
+|---|-----------|--------|----------|
+| 1 | Specific title | [PASS/FAIL] | [quote or reference] |
+| 2 | Outcome-based goal | [PASS/FAIL] | [quote or reference] |
+| 3 | Explicit decisions | [PASS/FAIL] | [quote or reference] |
+| 4 | Concrete files/systems | [PASS/FAIL] | [quote or reference] |
+| 5 | Ordered implementation | [PASS/FAIL] | [quote or reference] |
+| 6 | Testable validation | [PASS/FAIL] | [quote or reference] |
+| 7 | Honest risks | [PASS/FAIL] | [quote or reference] |
+| 8 | Visible open questions | [PASS/FAIL] | [quote or reference] |
+| 9 | Actionable todos | [PASS/FAIL] | [quote or reference] |
+
+### Failures (if any)
+- Criterion N: [what's wrong] → [which phase to fix] → [specific instruction for fix]
+
+### Retry History (if applicable)
+- Attempt 1: N/9 passed. Failures: [list]. Action: re-ran Phase X.
+- Attempt 2: ...
+```
+
 ### Phase 4: Plan Presentation & Approval
 
 Present the complete masterplan to the user. This is the decision gate — nothing becomes a task without explicit approval. Show the full picture: intent, phases, risks, unresolved questions.
@@ -412,6 +482,7 @@ Read:
 - ${MP_DIR}/intent.md (Phase 0)
 - ${MP_DIR}/synthesis.md (Phase 2)
 - ${MP_DIR}/phases.md (Phase 3)
+- ${MP_DIR}/quality-gate.md (Phase 3.5 validation results)
 ```
 
 Build a concise summary covering:
@@ -450,6 +521,9 @@ These need your input before we can proceed:
 
 ### What's excluded (by design)
 - <Simplification 1> — <why it's safe to skip>
+
+### ⚠️ Quality Warnings (if any)
+<If quality-gate.md shows criteria that failed after 2 retries, list them here with the specific caveats. Omit this section entirely if all 9 criteria passed.>
 
 ---
 Options:
