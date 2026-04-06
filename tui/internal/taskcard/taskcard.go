@@ -1366,7 +1366,7 @@ func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, sele
 
 	// Colored status badge for non-pending statuses
 	statusBadge := ""
-	if ps.Status != "" && ps.Status != "pending" {
+	if ps.Status != "" && ps.Status != "pending" && ps.Status != "done" {
 		statusBadge = " " + styles.StatusBadgeCard(ps.Status, theme)
 	}
 
