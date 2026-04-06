@@ -1925,13 +1925,13 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		}
 	}
 
-	// Sync dimensions to current layout (account for left border + right padding)
-	renderW := w - 2
+	// Sync dimensions to current layout
+	renderW := w - 4
 	if renderW < 20 {
 		renderW = 20
 	}
 	expanded.Width = renderW
-	vpH := h - 2
+	vpH := h - 3 // header + scroll hint
 	if vpH < 1 {
 		vpH = 1
 	}
@@ -1941,23 +1941,23 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	content := expanded.Render()
 	savedYOffset := m.detailViewport.YOffset
 	m.detailViewport.Width = renderW
-	m.detailViewport.Height = vpH - 1 // leave room for hint bar
+	m.detailViewport.Height = vpH
 	m.detailViewport.SetContent(content)
 	maxY := m.detailViewport.TotalLineCount() - m.detailViewport.Height
 	if maxY < 0 { maxY = 0 }
 	if savedYOffset > maxY { savedYOffset = maxY }
 	m.detailViewport.SetYOffset(savedYOffset)
 
-	displayed := m.detailViewport.View()
+	header := t.SectionHeader.Copy().Width(w).PaddingLeft(1).Render("DETAIL")
 
-	// Scroll hint — only show when content overflows
-	if m.detailViewport.TotalLineCount() > m.detailViewport.Height {
-		pct := m.detailViewport.ScrollPercent()
-		scrollHint := lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).
-			Align(lipgloss.Right).Width(renderW).
-			Render(fmt.Sprintf("%.0f%%", pct*100))
-		displayed += "\n" + scrollHint
-	}
+	vpView := m.detailViewport.View()
+
+	// Scroll hint
+	pct := m.detailViewport.ScrollPercent()
+	hintStyle := lipgloss.NewStyle().Foreground(t.Muted).Align(lipgloss.Right).Width(w - 2)
+	scrollHint := hintStyle.Render(fmt.Sprintf("%.0f%%", pct*100))
+
+	displayed := header + "\n" + vpView + "\n" + scrollHint
 
 	// Action hints (only when detail focused and task selected)
 	if !m.leftFocused && len(m.entries) > 0 {
@@ -1987,33 +1987,13 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 			}
 
 			if len(parts) > 0 {
-				displayed += "\n\n" + strings.Join(parts, "  ")
+				displayed += "\n" + lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(
+					lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(parts, "  ")))
 			}
 		}
 	}
 
-	// Navigation hint
-	if m.focused {
-		hint := "← back to list"
-		if m.leftFocused {
-			hint = "→ or enter for details"
-		}
-		displayed += "\n" + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint)
-	}
-
-	borderColor := t.Separator
-	if m.focused && !m.leftFocused {
-		borderColor = t.Primary
-	}
-	panelStyle := lipgloss.NewStyle().
-		Width(w).
-		Height(h).
-		Padding(1, 2).
-		BorderLeft(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(borderColor)
-
-	return panelStyle.Render(displayed)
+	return lipgloss.NewStyle().Width(w).Height(h).Render(displayed)
 }
 
 // viewHelp renders a floating keyboard help overlay.
