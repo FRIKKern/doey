@@ -277,6 +277,7 @@ func NewTasksModel() TasksModel {
 			HasSeparator:   false,
 			VPHeightOffset: 3,
 			VPWidthPad:     3,
+			LeftPct:        33,
 		}),
 		subtaskMap: make(map[string][]runtime.Subtask),
 	}
@@ -494,10 +495,7 @@ func (m *TasksModel) loadSelectedDetail() {
 		return
 	}
 	ti := item.(taskcard.TaskItem)
-	leftW := m.width * 40 / 100
-	if leftW < 28 {
-		leftW = 28
-	}
+	leftW := m.LeftWidth()
 	rightW := m.width - leftW - 1
 	if rightW < 24 {
 		rightW = 24
@@ -681,10 +679,7 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 		}
 
 		// Card clicks in left panel — Y-coordinate math
-		leftW := m.width * 40 / 100
-		if leftW < 28 {
-			leftW = 28
-		}
+		leftW := m.LeftWidth()
 		if msg.X < leftW && len(m.entries) > 0 {
 			const cardHeight = 3
 			const headerLines = 2 // "TASKS" header + summary line
@@ -737,10 +732,7 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 	// Mouse wheel — route based on cursor position, not focus state
 	if msg.Action == tea.MouseActionPress {
 		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
-			leftW := m.width * 40 / 100
-			if leftW < 28 {
-				leftW = 28
-			}
+			leftW := m.LeftWidth()
 			if msg.X < leftW {
 				var cmd tea.Cmd
 				m.list, cmd = m.list.Update(msg)
@@ -1130,11 +1122,8 @@ func (m TasksModel) View() string {
 		h = 10
 	}
 
-	// Panel widths: 40% left, 60% right
-	leftW := w * 40 / 100
-	if leftW < 28 {
-		leftW = 28
-	}
+	// Panel widths: configurable left%, rest right
+	leftW := m.LeftWidth()
 	rightW := w - leftW
 	if rightW < 24 {
 		rightW = 24
