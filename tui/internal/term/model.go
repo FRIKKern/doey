@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/taigrr/bubbleterm"
+	"github.com/doey-cli/doey/tui/internal/bubbleterm"
 )
 
 // tickMsg is sent by the centralized ticker for terminal polling.
