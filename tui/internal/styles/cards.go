@@ -882,18 +882,18 @@ func TaskPhaseBadge(t Theme, phase string) string {
 	case "research":
 		return lipgloss.NewStyle().
 			Foreground(ResearchPhaseColor()).
-			Render("🔬 Research")
+			Render("◇ Research")
 	case "review":
 		return lipgloss.NewStyle().
 			Foreground(t.BgText).
 			Background(ReviewPhaseColor()).
 			Bold(true).
 			Padding(0, 1).
-			Render("📋 Awaiting Review")
+			Render("◈ Awaiting Review")
 	case "implementation":
 		return lipgloss.NewStyle().
 			Foreground(ImplementationPhaseColor()).
-			Render("🔨 Implementing")
+			Render("◆ Implementing")
 	default:
 		return ""
 	}
@@ -911,16 +911,16 @@ func TaskPhaseBanner(t Theme, phase string, width int) string {
 			Width(width).
 			Align(lipgloss.Center).
 			Padding(0, 1).
-			Render("⚡ Research Complete — Awaiting Your Review")
+			Render("◈ Research Complete — Awaiting Your Review")
 	case "research":
 		return lipgloss.NewStyle().
 			Foreground(ResearchPhaseColor()).
 			Bold(true).
-			Render("🔬 Research In Progress")
+			Render("◇ Research In Progress")
 	case "implementation":
 		return lipgloss.NewStyle().
 			Foreground(ImplementationPhaseColor()).
-			Render("🔨 Implementation In Progress")
+			Render("◆ Implementation In Progress")
 	default:
 		return ""
 	}
