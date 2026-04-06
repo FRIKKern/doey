@@ -44,6 +44,19 @@ type ReservedFreelancerResultMsg struct {
 	Err error
 }
 
+// CloseTabMsg requests closing a tab and killing the associated team.
+type CloseTabMsg struct {
+	Index     int
+	WindowIdx int
+	Name      string
+}
+
+// CloseTabResultMsg is returned after a tab close operation completes.
+type CloseTabResultMsg struct {
+	Err        error
+	SpawnedNew bool
+}
+
 const (
 	snapshotInterval  = 2 * time.Second
 	heartbeatInterval = 2 * time.Second
@@ -211,6 +224,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StopTeamResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
+	case CloseTabMsg:
+		m.tabBar.RemoveTab(msg.Index)
+		if m.focusIndex >= len(m.tabBar.tabs) {
+			m.focusIndex = len(m.tabBar.tabs) - 1
+		}
+		if m.focusIndex < 0 {
+			m.focusIndex = 0
+		}
+		m.updateFocus()
+		closeCmds := []tea.Cmd{StopTeamCmd(msg.Name, msg.WindowIdx)}
+		if m.tabBar.CloseableCount() == 0 {
+			closeCmds = append(closeCmds, CreateTeamCmd())
+		}
+		return m, tea.Batch(closeCmds...)
+
+	case CloseTabResultMsg:
+		cmds = append(cmds, m.readSnapshotCmd())
+
 	case ToggleStarMsg:
 		return m, ToggleStarCmd(msg.Name)
 
@@ -332,12 +363,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		// Tab bar clicks — check on release to avoid double-fire
 		if msg.Action == tea.MouseActionRelease {
+			// Check close zones BEFORE tab-switch zones so clicking × doesn't also switch tabs
+			for i := range m.tabBar.tabs {
+				if m.tabBar.tabs[i].Closeable && zone.Get(fmt.Sprintf("tab-close-%d", i)).InBounds(msg) {
+					tab := m.tabBar.tabs[i]
+					return m, func() tea.Msg {
+						return CloseTabMsg{Index: i, WindowIdx: tab.WindowIdx, Name: tab.Name}
+					}
+				}
+			}
 			for i := range m.tabBar.tabs {
 				if zone.Get(fmt.Sprintf("tab-%d", i)).InBounds(msg) {
 					m.focusIndex = i
 					m.updateFocus()
 					return m, nil
 				}
+			}
+			// "+" button — add team window
+			if zone.Get("tab-add").InBounds(msg) {
+				return m, CreateTeamCmd()
 			}
 		}
 
