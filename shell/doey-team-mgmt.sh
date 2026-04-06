@@ -752,13 +752,39 @@ _launch_team_manager() {
 _brief_team() {
   local session="$1" window_index="$2" wp_list="$3"
   local worker_count="$4" grid_desc="$5" wt_brief="${6:-}"
-  local team_name="${7:-}" team_role="${8:-}"
+  local team_name="${7:-}" team_role="${8:-}" runtime_dir="${9:-}"
   local _role_brief=""
   [ -n "$team_role" ] && _role_brief=" Team role: ${team_role}."
+
+  # Check if a task is pre-assigned to this team
+  local _bt_task_brief=""
+  local _bt_team_env="${runtime_dir:+${runtime_dir}/team_${window_index}.env}"
+  if [ -n "$_bt_team_env" ] && [ -f "$_bt_team_env" ]; then
+    local _bt_task_id
+    _bt_task_id=$(grep '^TASK_ID=' "$_bt_team_env" 2>/dev/null | cut -d'"' -f2)
+    if [ -n "$_bt_task_id" ]; then
+      local _bt_task_out _bt_title _bt_desc _bt_status _bt_type _bt_priority
+      _bt_task_out=$(doey task get --id "$_bt_task_id" 2>/dev/null) || true
+      if [ -n "$_bt_task_out" ]; then
+        _bt_title=$(echo "$_bt_task_out" | grep '^Title:' | sed 's/^Title: *//')
+        _bt_desc=$(echo "$_bt_task_out" | grep '^Description:' | sed 's/^Description: *//')
+        _bt_status=$(echo "$_bt_task_out" | grep '^Status:' | sed 's/^Status: *//')
+        _bt_type=$(echo "$_bt_task_out" | grep '^Type:' | sed 's/^Type: *//')
+        _bt_priority=$(echo "$_bt_task_out" | grep '^Priority:' | sed 's/^Priority: *//')
+        _bt_task_brief=" TASK_ID ${_bt_task_id} is pre-assigned to this team. Title: ${_bt_title}. Description: ${_bt_desc}. Status: ${_bt_status}. Type: ${_bt_type}. Priority: ${_bt_priority}. Claim it and begin work immediately."
+      fi
+    fi
+  fi
+
   (
     sleep "$DOEY_MANAGER_BRIEF_DELAY"
-    doey_send_verified "${session}:${window_index}.0" \
-      "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from the Core Team window. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" || true
+    if [ -n "$_bt_task_brief" ]; then
+      doey_send_verified "${session}:${window_index}.0" \
+        "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from the Core Team window. Session: ${session}.${wt_brief}${_role_brief}${_bt_task_brief}" || true
+    else
+      doey_send_verified "${session}:${window_index}.0" \
+        "Team is online in window ${window_index}. ${grid_desc} — ${worker_count} workers. Your workers are in panes ${wp_list}. ${DOEY_ROLE_COORDINATOR} monitors all teams from the Core Team window. Session: ${session}.${wt_brief}${_role_brief} All workers are idle and awaiting tasks. What should we work on?" || true
+    fi
   ) &
 }
 
@@ -1137,7 +1163,7 @@ add_dynamic_team_window() {
   if [ "$is_freelancer" = "true" ]; then
     _print_team_created "$window_index" "freelancer pool" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
   else
-    _brief_team "$session" "$window_index" "$_wpl_result" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role"
+    _brief_team "$session" "$window_index" "$_wpl_result" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role" "$runtime_dir"
     _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
   fi
 }
