@@ -76,7 +76,7 @@ what stop-status.sh writes."
 
 **Also blocked:** `Agent`, `AskUserQuestion`, `send-keys /rename`, `tmux kill-session/server/window`, `git commit/push`, `gh pr create/merge`.
 
-**Instead:** `/doey-research` (research), `/doey-dispatch` (implementation), `send-keys` (follow-ups), `/doey-clear` (restart workers), `/doey-delegate` (delegate without restart).
+**Instead:** `/doey-research` (research), `/doey-dispatch` (implementation), `send-keys` (follow-ups), `/doey-clear` (restart workers).
 
 ## Setup
 
@@ -165,10 +165,10 @@ A verifier that rubber-stamps weak work undermines everything. Never report "ver
 After synthesis, decide whether a worker's existing context helps or hurts. This choice directly affects output quality.
 
 **Two mechanisms:**
-- **Continue** → `send-keys` follow-up or `/doey-delegate` (worker keeps its loaded context)
+- **Continue** → `send-keys` follow-up (worker keeps its loaded context)
 - **Fresh** → `/doey-dispatch` (worker starts clean with your synthesized prompt)
 
-### When to continue (send-keys / /doey-delegate)
+### When to continue (send-keys)
 
 | Situation | Why | Example |
 |-----------|-----|---------|

@@ -64,7 +64,7 @@ All in `.claude/hooks/`. Exit codes: 0=allow, 1=block+error, 2=block+feedback. H
 
 In `.claude/skills/<name>/SKILL.md`, invoked via `/skill-name`, loaded on-demand.
 
-- **Subtaskmaster:** `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-broadcast`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-login`, `/doey-settings`, `/doey-debug`, `/doey-nudge`, `/doey-reset`, `/doey-task`, `/unknown-task`
+- **Subtaskmaster:** `/doey-dispatch`, `/doey-research`, `/doey-monitor`, `/doey-status`, `/doey-reload`, `/doey-reinstall`, `/doey-repair`, `/doey-reserve`, `/doey-purge`, `/doey-simplify-everything`, `/doey-stop`, `/doey-clear`, `/doey-rd-team`, `/doey-settings`, `/doey-debug`, `/doey-nudge`, `/doey-reset`, `/doey-task`, `/unknown-task`
 - **Taskmaster:** `/doey-worktree` (also Subtaskmaster), `/doey-add-window`, `/doey-add-team`, `/doey-kill-window`, `/doey-kill-session`, `/doey-kill-all-sessions`, `/doey-list-windows`, `/doey-create-task`, `/doey-instant-task`, `/doey-planned-task`, `/doey-masterplan`, `/doey-task`
 - **Worker:** `/doey-status`, `/doey-reserve`, `/doey-stop`, `/doey-task`
 
@@ -175,7 +175,7 @@ Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 | `research/<pane_safe>.task` | Research task marker |
 | `reports/<pane_safe>.report` | Research report |
 | `results/` | Structured result JSON |
-| `broadcasts/` | Broadcast messages (created on-demand by `/doey-broadcast`) |
+| `broadcasts/` | Broadcast messages |
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
 | `triggers/` | Wake triggers (`.trigger` files touched to wake wait hooks) |
 | `lifecycle/` | Lifecycle events from `notify_sm()` (`.evt` files) |

@@ -145,7 +145,7 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 # 'doey' is the user-facing CLI. Subcommands like msg/status/task are
 # handled by the internal doey-ctl binary, forwarded transparently here.
 case "${1:-}" in
-  msg|status|health|task|plan|tmux|team|config|agent|event|error|nudge|migrate|interaction|briefing)
+  msg|status|health|task|tmux|team|config|agent|event|error|nudge|migrate|interaction|briefing)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else
@@ -244,8 +244,6 @@ HELP
       printf "  %b✗ Go helpers not loaded%b\n" "$ERROR" "$RESET"; exit 1
     fi
     ;;
-  config)       shift; doey_config "$@"; exit 0 ;;
-  task|tasks)   shift; task_command "$@"; exit 0 ;;
   remote)       shift; doey_remote "$@"; exit 0 ;;
   # Everything below requires tmux + claude — check prerequisites:
   init)

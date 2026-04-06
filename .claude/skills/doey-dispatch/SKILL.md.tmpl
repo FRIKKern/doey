@@ -144,7 +144,7 @@ rm -f "$TASKFILE"
 ### Variants
 - **Batch:** Parallel Bash per worker | **Short (<200 chars):** `send-keys` (verify still required)
 - **File conflicts:** One file per worker | **Unstick:** `copy-mode -q` → `C-c` → `C-u` → Enter, 3s. 2 fails: `kill -9`, relaunch
-- **Force restart:** `FORCE_RESTART=1` | **Force delegate:** `/doey-delegate`
+- **Force restart:** `FORCE_RESTART=1`
 
 ### Rules
 Re-check `.reserved` before dispatch; verify after. One task/worker/cycle. Include `PROJECT_NAME`, `PROJECT_DIR`, absolute paths.
