@@ -148,12 +148,9 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	// Health-based icon color — primary visual element
 	icon := taskHealthIcon(ti, d.Theme, d.Heartbeats)
 
-	// Subtle dim ID
-	idStr := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(true).Render("#" + ti.Task.ID)
-
-	// Title — truncate to fit panel width (icon + id + padding ~ 10 chars)
+	// Title — truncate to fit panel width (icon + padding ~ 6 chars)
 	titleText := ti.Task.Title
-	maxTitleW := m.Width() - 10
+	maxTitleW := m.Width() - 6
 	if maxTitleW < 12 {
 		maxTitleW = 12
 	}
@@ -171,7 +168,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	// Description line: compact metadata
 	desc := lipgloss.NewStyle().Foreground(d.Theme.Muted).Faint(!isSelected).Render(taskCardDescription(ti, d.Heartbeats))
 
-	// Compose card: icon + title + dim ID on line 1, metadata on line 2
+	// Compose card: icon + title on line 1, metadata on line 2
 	// Indent child tasks under their parent
 	indent := " "
 	descIndent := "   "
@@ -179,7 +176,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		indent = "   ↳ "
 		descIndent = "      "
 	}
-	card := fmt.Sprintf("%s%s %s %s\n%s%s", indent, icon, title, idStr, descIndent, desc)
+	card := fmt.Sprintf("%s%s %s\n%s%s", indent, icon, title, descIndent, desc)
 
 	// Selected: left border + background highlight
 	if isSelected {
