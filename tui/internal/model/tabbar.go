@@ -14,8 +14,6 @@ import (
 type TabItem struct {
 	Name        string
 	HasActivity bool
-	Closeable   bool
-	WindowIdx   int // tmux window index for team tabs, -1 for static panels
 }
 
 // TabBarModel renders a horizontal tab bar with active/inactive styling.
@@ -68,41 +66,6 @@ func (m *TabBarModel) Prev() {
 	m.activeIndex = (m.activeIndex + len(m.tabs) - 1) % len(m.tabs)
 }
 
-// AddTab appends a tab to the bar.
-func (m *TabBarModel) AddTab(tab TabItem) {
-	m.tabs = append(m.tabs, tab)
-}
-
-// RemoveTab removes the tab at index and clamps the active index.
-func (m *TabBarModel) RemoveTab(index int) {
-	if index < 0 || index >= len(m.tabs) {
-		return
-	}
-	m.tabs = append(m.tabs[:index], m.tabs[index+1:]...)
-	if m.activeIndex >= len(m.tabs) {
-		m.activeIndex = len(m.tabs) - 1
-	}
-	if m.activeIndex < 0 {
-		m.activeIndex = 0
-	}
-}
-
-// CloseableCount returns the number of closeable tabs.
-func (m TabBarModel) CloseableCount() int {
-	n := 0
-	for _, t := range m.tabs {
-		if t.Closeable {
-			n++
-		}
-	}
-	return n
-}
-
-// TabCount returns the total number of tabs.
-func (m TabBarModel) TabCount() int {
-	return len(m.tabs)
-}
-
 // View renders the tab bar as pill-shaped cards.
 func (m TabBarModel) View() string {
 	if len(m.tabs) == 0 {
@@ -125,14 +88,6 @@ func (m TabBarModel) View() string {
 
 	activityDot := lipgloss.NewStyle().Foreground(t.Warning).Render("*")
 
-	closeStyle := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Faint(true)
-
-	closeActiveStyle := lipgloss.NewStyle().
-		Foreground(t.Danger).
-		Faint(true)
-
 	var parts []string
 	for i, tab := range m.tabs {
 		label := tab.Name
@@ -140,30 +95,13 @@ func (m TabBarModel) View() string {
 			label = activityDot + " " + label
 		}
 
-		var closeBtn string
-		if tab.Closeable {
-			closeZoneID := fmt.Sprintf("tab-close-%d", i)
-			cs := closeStyle
-			if i == m.activeIndex {
-				cs = closeActiveStyle
-			}
-			closeBtn = zone.Mark(closeZoneID, cs.Render(" ×"))
-		}
-
 		zoneID := fmt.Sprintf("tab-%d", i)
 		if i == m.activeIndex {
-			parts = append(parts, zone.Mark(zoneID, activeStyle.Render(label))+closeBtn)
+			parts = append(parts, zone.Mark(zoneID, activeStyle.Render(label)))
 		} else {
-			parts = append(parts, zone.Mark(zoneID, inactiveStyle.Render(label))+closeBtn)
+			parts = append(parts, zone.Mark(zoneID, inactiveStyle.Render(label)))
 		}
 	}
-
-	// "+" button for adding a team window
-	addStyle := lipgloss.NewStyle().
-		Foreground(t.Muted).
-		Padding(0, 1).
-		MarginLeft(1)
-	parts = append(parts, zone.Mark("tab-add", addStyle.Render("+")))
 
 	menu := "  " + strings.Join(parts, "")
 
