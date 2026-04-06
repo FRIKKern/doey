@@ -270,8 +270,65 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			}
+			// Click landed on the tab bar but outside any interactive zone —
+			// swallow it rather than forwarding to the terminal.
+			return m, nil
 		}
-		// Forward non-tab-bar mouse clicks to active terminal.
+		// Forward non-tab-bar mouse clicks to the active terminal. The tab
+		// bar occupies row 0, so subtract it from Y so the terminal sees
+		// content-relative coordinates (0-based from the top of its content).
+		msg.Y--
+		if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
+			termModel, cmd := m.tabs[m.activeTab].Term.Update(msg)
+			m.tabs[m.activeTab].Term = termModel.(*bubbleterm.Model)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
+
+	case tea.MouseReleaseMsg:
+		// Release events on the tab bar row (Y==0) are swallowed to mirror
+		// the click handling. All other releases are forwarded with Y
+		// translated to terminal content coordinates.
+		if msg.Y == 0 {
+			return m, nil
+		}
+		msg.Y--
+		if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
+			termModel, cmd := m.tabs[m.activeTab].Term.Update(msg)
+			m.tabs[m.activeTab].Term = termModel.(*bubbleterm.Model)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
+
+	case tea.MouseMotionMsg:
+		// Forward mouse motion to the active terminal so guest apps that
+		// track hover (htop, mc, …) see continuous updates. Motion on the
+		// tab bar row is ignored.
+		if msg.Y == 0 {
+			return m, nil
+		}
+		msg.Y--
+		if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
+			termModel, cmd := m.tabs[m.activeTab].Term.Update(msg)
+			m.tabs[m.activeTab].Term = termModel.(*bubbleterm.Model)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
+
+	case tea.MouseWheelMsg:
+		// Forward wheel events to the active terminal. The vt emulator only
+		// writes the SGR sequence if the guest app has mouse tracking
+		// enabled, so this is a no-op when the app doesn't care.
+		if msg.Y == 0 {
+			return m, nil
+		}
+		msg.Y--
 		if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
 			termModel, cmd := m.tabs[m.activeTab].Term.Update(msg)
 			m.tabs[m.activeTab].Term = termModel.(*bubbleterm.Model)

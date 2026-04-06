@@ -17,6 +17,25 @@ type translatedMouseMsg struct {
 	X, Y        int
 }
 
+// bubbleteaButtonToEmulator translates a bubbletea MouseButton into the
+// integer code expected by emulator.SendMouse. bubbletea/ultraviolet uses
+// 1-based button codes (MouseLeft=1, MouseMiddle=2, MouseRight=3, MouseWheelUp=4,
+// MouseWheelDown=5, ...) while emulator.SendMouse expects 0 for left, 1 for
+// middle, 2 for right, and the raw vt.MouseButton value for everything else
+// (wheels, back/forward, extra buttons — these happen to share values with
+// bubbletea's codes because both alias the same ansi.MouseButton constants).
+func bubbleteaButtonToEmulator(b tea.MouseButton) int {
+	switch b {
+	case tea.MouseLeft:
+		return 0
+	case tea.MouseMiddle:
+		return 1
+	case tea.MouseRight:
+		return 2
+	}
+	return int(b)
+}
+
 // Model represents the terminal bubble state
 type Model struct {
 	emulator   *emulator.Emulator
@@ -122,21 +141,35 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Send mouse click to terminal
-		return m, sendMouseEvent(m.emulator, msg.Mouse().X, msg.Mouse().Y, int(msg.Mouse().Button), true)
+		return m, sendMouseEvent(m.emulator, msg.Mouse().X, msg.Mouse().Y, bubbleteaButtonToEmulator(msg.Mouse().Button), true)
 
 	case tea.MouseReleaseMsg:
 		if !m.focused {
 			return m, nil
 		}
 		// Send mouse release to terminal
-		return m, sendMouseEvent(m.emulator, msg.Mouse().X, msg.Mouse().Y, int(msg.Mouse().Button), false)
+		return m, sendMouseEvent(m.emulator, msg.Mouse().X, msg.Mouse().Y, bubbleteaButtonToEmulator(msg.Mouse().Button), false)
 
 	case tea.MouseMotionMsg:
 		if !m.focused {
 			return m, nil
 		}
-		// Send mouse motion to terminal (button -1 indicates motion without button)
+		// Send mouse motion to terminal. The current emulator.SendMouse API
+		// only expresses "motion without button" (button=-1) — drag motion
+		// with a held button cannot be encoded through this path and the
+		// held-button info is dropped. Fixing this would require extending
+		// the emulator's SendMouse signature.
 		return m, sendMouseEvent(m.emulator, msg.Mouse().X, msg.Mouse().Y, -1, false)
+
+	case tea.MouseWheelMsg:
+		if !m.focused {
+			return m, nil
+		}
+		// Wheel events are encoded as a single "press" — SGR wheel sequences
+		// do not have a corresponding release. The vt emulator's
+		// ansi.EncodeMouseButton recognises the wheel buttons by value and
+		// sets the wheel bit automatically.
+		return m, sendMouseEvent(m.emulator, msg.Mouse().X, msg.Mouse().Y, bubbleteaButtonToEmulator(msg.Mouse().Button), true)
 
 	case translatedMouseMsg:
 		if !m.focused {
@@ -148,11 +181,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle translated mouse events with proper coordinates
 		switch originalMsg := msg.OriginalMsg.(type) {
 		case tea.MouseClickMsg:
-			return m, sendMouseEvent(m.emulator, msg.X, msg.Y, int(originalMsg.Mouse().Button), true)
+			return m, sendMouseEvent(m.emulator, msg.X, msg.Y, bubbleteaButtonToEmulator(originalMsg.Mouse().Button), true)
 		case tea.MouseReleaseMsg:
-			return m, sendMouseEvent(m.emulator, msg.X, msg.Y, int(originalMsg.Mouse().Button), false)
+			return m, sendMouseEvent(m.emulator, msg.X, msg.Y, bubbleteaButtonToEmulator(originalMsg.Mouse().Button), false)
 		case tea.MouseMotionMsg:
 			return m, sendMouseEvent(m.emulator, msg.X, msg.Y, -1, false)
+		case tea.MouseWheelMsg:
+			return m, sendMouseEvent(m.emulator, msg.X, msg.Y, bubbleteaButtonToEmulator(originalMsg.Mouse().Button), true)
 		}
 
 	case tea.WindowSizeMsg:
