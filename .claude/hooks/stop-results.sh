@@ -303,6 +303,4 @@ case "$FILES_LIST" in
     ;;
 esac
 
-if ! is_taskmaster; then
-  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null || true
-fi
+# Taskmaster wake trigger removed — stop-notify.sh is the sole wake source

@@ -385,7 +385,7 @@ notify_taskmaster() {  # Lifecycle event -> Taskmaster wake trigger
   mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0
   printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" \
     > "${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt" 2>/dev/null
-  touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null
+  # Taskmaster wake trigger removed — stop-notify.sh is the sole wake source
 }
 
 _send_desktop_notification() {  # Low-level, no role check, no cooldown

@@ -677,26 +677,12 @@ func msgNudgePane(targetPane, rtDir string) {
 		}
 	}
 
-	// Check if BUSY — skip send-keys for non-Taskmaster panes (would interfere)
-	// but still fire trigger so taskmaster-wait.sh picks up the message on next check cycle.
-	// For the Taskmaster pane, always send-keys even when BUSY — tmux buffers the
-	// input safely and Claude processes it when it returns to its prompt.
-	taskmasterPane := "1.0"
-	if envFile := filepath.Join(rtDir, "session.env"); rtDir != "" {
-		if data, err := os.ReadFile(envFile); err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
-				if strings.HasPrefix(line, "TASKMASTER_PANE=") {
-					if v := strings.Trim(strings.TrimPrefix(line, "TASKMASTER_PANE="), "\""); v != "" {
-						taskmasterPane = v
-					}
-				}
-			}
-		}
-	}
+	// Check if BUSY — skip send-keys nudge and rely on trigger file instead.
+	// taskmaster-wait.sh picks up the trigger on its next idle cycle.
 	if rtDir != "" {
 		paneSafe := strings.NewReplacer(":", "_", "-", "_", ".", "_").Replace(session + ":" + paneID)
 		entry, err := ctl.ReadStatus(rtDir, paneSafe)
-		if err == nil && entry.Status == ctl.StatusBusy && paneID != taskmasterPane {
+		if err == nil && entry.Status == ctl.StatusBusy {
 			_ = ctl.FireTrigger(rtDir, targetPane)
 			fmt.Fprintf(os.Stderr, "doey-ctl: nudge: pane %s BUSY, trigger file written for deferred wake\n", paneID)
 			return
