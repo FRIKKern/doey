@@ -717,7 +717,7 @@ func (m TeamModel) renderLeftItem(e runtime.TeamEntry, idx int, w int, selected 
 	rowStyle := lipgloss.NewStyle().Width(w - 2).PaddingLeft(1)
 	if selected {
 		rowStyle = rowStyle.
-			Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1E293B"}).
+			Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1A1D27"}).
 			Foreground(t.Text)
 	}
 

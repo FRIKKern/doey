@@ -369,7 +369,7 @@ func (m ConnectionsModel) renderLeftPanel(w, h int) string {
 		rowStyle := lipgloss.NewStyle().Width(w - 2).PaddingLeft(1)
 		if selected {
 			rowStyle = rowStyle.
-				Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1E293B"}).
+				Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1A1D27"}).
 				Foreground(t.Text)
 		}
 
