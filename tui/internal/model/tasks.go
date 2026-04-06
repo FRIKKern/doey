@@ -1202,18 +1202,17 @@ func (m TasksModel) renderLeftPanel(w, h int) string {
 
 	// Set list size for left panel — account for section header overhead.
 	// CardDelegate.Render() emits extra lines for section headers not included
-	// in Height(), causing overflow that lipgloss.Height() does not truncate.
-	sectionOverhead := 0
-	lastSection := ""
+	// in Height(). Only count unique sections (not per-entry transitions),
+	// since the list paginates and at most one header per section appears per page.
+	seenSections := make(map[string]bool)
 	for _, entry := range m.entries {
-		section := taskcard.TaskSection(entry.Status)
-		if section != lastSection {
-			if lastSection == "" {
-				sectionOverhead += taskcard.SectionHeaderLines
-			} else {
-				sectionOverhead += taskcard.SectionGapLines + taskcard.SectionHeaderLines
-			}
-			lastSection = section
+		seenSections[taskcard.TaskSection(entry.Status)] = true
+	}
+	sectionOverhead := 0
+	if n := len(seenSections); n > 0 {
+		sectionOverhead = taskcard.SectionHeaderLines
+		if n > 1 {
+			sectionOverhead += (n - 1) * (taskcard.SectionGapLines + taskcard.SectionHeaderLines)
 		}
 	}
 	listH := h - 2 - sectionOverhead // header + summary + section headers
