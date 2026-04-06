@@ -7,6 +7,12 @@ init_named_hook "stop-status"
 mkdir -p "${RUNTIME_DIR}/errors" 2>/dev/null || true
 trap '_err=$?; printf "[%s] ERR in stop-status at line %s (exit %s)\n" "$(date +%H:%M:%S)" "$LINENO" "$_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; printf "ERROR" > "${RUNTIME_DIR}/panes/${PANE_SAFE}/status" 2>/dev/null; exit 0' ERR
 
+# Check for respawn request
+_respawning=false
+if [ -f "${RUNTIME_DIR}/respawn/${PANE_SAFE}.request" ]; then
+  _respawning=true
+fi
+
 if is_worker && ! is_reserved; then
   REPORT_FILE="${RUNTIME_DIR}/reports/${PANE_SAFE}.report"
   if [ -f "${RUNTIME_DIR}/research/${PANE_SAFE}.task" ] && [ ! -f "$REPORT_FILE" ]; then
@@ -14,8 +20,8 @@ if is_worker && ! is_reserved; then
     exit 2
   fi
 
-  # Proof gate: workers must emit PROOF_TYPE before finishing
-  if [ "${DOEY_PROOF_EXEMPT:-0}" != "1" ]; then
+  # Proof gate: workers must emit PROOF_TYPE before finishing (skip when respawning)
+  if [ "$_respawning" != "true" ] && [ "${DOEY_PROOF_EXEMPT:-0}" != "1" ]; then
     _proof_found=""
     # Check 1: file-based proof (written by worker via bash echo > file)
     _proof_file="${RUNTIME_DIR}/proof/${PANE_SAFE}.proof"
@@ -40,6 +46,7 @@ fi
 STOP_STATUS="READY"
 is_worker && STOP_STATUS="FINISHED"
 is_reserved && STOP_STATUS="RESERVED"
+[ "$_respawning" = "true" ] && STOP_STATUS="RESPAWNING"
 
 _log "stop-status: $PANE_SAFE -> $STOP_STATUS"
 
