@@ -60,11 +60,40 @@ func (d CardDelegate) Spacing() int { return 1 }
 // Update is a no-op; the delegate does not handle messages.
 func (d CardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
+// taskSection returns a grouping key for section headers.
+func taskSection(status string) string {
+	switch status {
+	case "active", "in_progress":
+		return "IN PROGRESS"
+	case "pending_user_confirmation":
+		return "NEEDS REVIEW"
+	case "done":
+		return "DONE"
+	case "cancelled", "failed":
+		return "CLOSED"
+	default:
+		return "OTHER"
+	}
+}
+
 // Render draws a single task card as a compact 2-line entry.
 func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	ti, ok := item.(TaskItem)
 	if !ok {
 		return
+	}
+
+	// Section header at group boundaries
+	section := taskSection(ti.Task.Status)
+	showHeader := index == 0
+	if !showHeader && index > 0 {
+		if prev, ok := m.Items()[index-1].(TaskItem); ok {
+			showHeader = taskSection(prev.Task.Status) != section
+		}
+	}
+	if showHeader {
+		hdr := lipgloss.NewStyle().Bold(true).Foreground(d.Theme.Muted).Faint(true).PaddingLeft(1).Render(section)
+		fmt.Fprintln(w, hdr)
 	}
 
 	isSelected := index == m.Index()
@@ -112,7 +141,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 	card := fmt.Sprintf("%s%s %s %s%s\n%s%s", indent, icon, title, idStr, unverifiedBadge, descIndent, desc)
 
-	// Selected: left border — accent color if recently active (<30s)
+	// Selected: left border + background highlight
 	if isSelected {
 		borderColor := d.Theme.Primary
 		if hs, ok := d.Heartbeats[ti.Task.ID]; ok && !hs.LastActivity.IsZero() {
@@ -124,6 +153,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(borderColor).
+			Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1E293B"}).
 			Render(card)
 	}
 

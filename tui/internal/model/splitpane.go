@@ -21,6 +21,7 @@ type SplitPaneConfig struct {
 	HasSeparator   bool // render vertical separator between panels
 	VPHeightOffset int  // viewport height = h - this
 	VPWidthPad     int  // viewport width  = rightW - this
+	LeftPct        int  // left panel width percentage (0 = default 40%)
 }
 
 // MouseResult describes what the shared mouse handler detected.
@@ -94,9 +95,13 @@ func (m *SplitPaneModel) SetFocused(focused bool) { m.focused = focused }
 // SetPanelOffset sets the absolute Y offset of the panel top in the terminal.
 func (m *SplitPaneModel) SetPanelOffset(y int) { m.panelOffsetY = y }
 
-// LeftWidth returns the left panel width (40%, min 28).
+// LeftWidth returns the left panel width (configurable %, min 28).
 func (m *SplitPaneModel) LeftWidth() int {
-	leftW := m.width * 40 / 100
+	pct := m.config.LeftPct
+	if pct <= 0 {
+		pct = 40
+	}
+	leftW := m.width * pct / 100
 	if leftW < 28 {
 		leftW = 28
 	}
