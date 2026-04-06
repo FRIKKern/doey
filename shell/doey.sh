@@ -145,7 +145,7 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 # 'doey' is the user-facing CLI. Subcommands like msg/status/task are
 # handled by the internal doey-ctl binary, forwarded transparently here.
 case "${1:-}" in
-  msg|status|health|task|tmux|plan|team|config|agent|event|nudge|migrate|interaction|briefing)
+  msg|status|health|task|tmux|team|config|agent|event|nudge|migrate|interaction|briefing)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else
@@ -181,6 +181,7 @@ case "${1:-}" in
     kill-team  Kill a team window by window index
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions
+    masterplan Start a masterplan team for a goal (alias: plan)
     deploy     Deploy validation pipeline (start/status/gate)
     remote     Manage remote Hetzner servers (list/provision/stop/status)
     settings   Open interactive settings editor window
@@ -316,6 +317,38 @@ HELP
     fi
     add_team_from_def "$session" "$runtime_dir" "$dir" "$_at_name"
     exit 0
+    ;;
+  masterplan|plan)
+    local goal="${2:-}"
+    [ -z "$goal" ] && { doey_error "Usage: doey masterplan \"goal text\""; exit 1; }
+    require_running_session
+    local plan_id="masterplan-$(date +%Y%m%d-%H%M%S)"
+    local plan_dir="${runtime_dir}/${plan_id}"
+    mkdir -p "$plan_dir"
+    local plan_file="${plan_dir}/plan.md"
+    touch "$plan_file"
+    printf '%s\n' "$goal" > "${plan_dir}/goal.md"
+
+    # Create task
+    local task_id
+    task_id=$(doey task create --title "Masterplan: ${goal}" --type feature --description "$goal" --project-dir "$dir" 2>/dev/null) || true
+
+    # Export for add_team_from_def
+    export PLAN_FILE="$plan_file"
+    export DOEY_TASK_ID="${task_id:-}"
+
+    # Write masterplan env
+    cat > "${runtime_dir}/${plan_id}.env" << MPEOF
+PLAN_FILE=${plan_file}
+MASTERPLAN_ID=${plan_id}
+TASK_ID=${task_id:-}
+GOAL_FILE=${plan_dir}/goal.md
+MPEOF
+
+    # Spawn team
+    add_team_from_def "$session" "$runtime_dir" "$dir" "masterplan"
+
+    printf '  %bMasterplan window created for:%b %s\n' "$SUCCESS" "$RESET" "$goal"
     ;;
   add-window)
     require_running_session
