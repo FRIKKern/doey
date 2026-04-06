@@ -306,6 +306,10 @@ func (m *TasksModel) SetSnapshot(snap runtime.Snapshot) {
 	m.projectDir = snap.Session.ProjectDir
 	store, _ := runtime.ReadTaskStore()
 	store.MergeRuntimeTasks(snap.Tasks)
+	store.MergePaneResults(snap.Results)
+
+	// Ingest pane result proof data into SQLite (best-effort)
+	runtime.IngestPaneResultsToDB(snap.Session.ProjectDir, snap.Results)
 
 	m.entries = store.Tasks
 

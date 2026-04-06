@@ -102,13 +102,82 @@ if [ -n "$_proof_body" ]; then
 fi
 
 # Fallback: auto-generate proof if worker didn't emit one
+_verification_status=""
 if [ -z "$PROOF_TYPE" ]; then
-  PROOF_TYPE="agent"
-  _fallback_summary="${DOEY_SUMMARY:-}"
-  if [ -n "$_fallback_summary" ]; then
-    PROOF_CONTENT="Task completed — $_fallback_summary"
+  _auto_verified=""
+  _auto_steps=""
+  _auto_output=""
+  _auto_all_passed="true"
+
+  if [ -n "$PROJECT_DIR" ] && [ -n "$FILES_LIST" ]; then
+    _tmo=""
+    command -v timeout >/dev/null 2>&1 && _tmo="timeout 10"
+    command -v gtimeout >/dev/null 2>&1 && _tmo="gtimeout 10"
+
+    # Go build/vet if .go files changed or go.mod exists
+    _has_go=""
+    case "$FILES_LIST" in *.go*) _has_go="true" ;; esac
+    [ -z "$_has_go" ] && [ -f "${PROJECT_DIR}/go.mod" ] && _has_go="true"
+
+    if [ "$_has_go" = "true" ] && command -v go >/dev/null 2>&1; then
+      _go_build_out=$(cd "$PROJECT_DIR" && ${_tmo} go build ./... 2>&1) && _go_build_rc=0 || _go_build_rc=$?
+      _auto_output="${_auto_output}[go build] exit ${_go_build_rc}${NL}${_go_build_out}${NL}"
+      _auto_steps="${_auto_steps}go build ./... exit ${_go_build_rc}${NL}"
+      [ "$_go_build_rc" != "0" ] && _auto_all_passed="false"
+      _auto_verified="true"
+
+      _go_vet_out=$(cd "$PROJECT_DIR" && ${_tmo} go vet ./... 2>&1) && _go_vet_rc=0 || _go_vet_rc=$?
+      _auto_output="${_auto_output}[go vet] exit ${_go_vet_rc}${NL}${_go_vet_out}${NL}"
+      _auto_steps="${_auto_steps}go vet ./... exit ${_go_vet_rc}${NL}"
+      [ "$_go_vet_rc" != "0" ] && _auto_all_passed="false"
+    fi
+
+    # Bash syntax check on changed .sh files
+    _has_sh=""
+    case "$FILES_LIST" in *.sh*) _has_sh="true" ;; esac
+
+    if [ "$_has_sh" = "true" ]; then
+      while IFS= read -r _shfile; do
+        case "$_shfile" in *.sh) ;; *) continue ;; esac
+        [ -f "${PROJECT_DIR}/${_shfile}" ] || continue
+        _sh_out=$(bash -n "${PROJECT_DIR}/${_shfile}" 2>&1) && _sh_rc=0 || _sh_rc=$?
+        _auto_output="${_auto_output}[bash -n ${_shfile}] exit ${_sh_rc}${NL}${_sh_out}${NL}"
+        _auto_steps="${_auto_steps}bash -n ${_shfile} exit ${_sh_rc}${NL}"
+        [ "$_sh_rc" != "0" ] && _auto_all_passed="false"
+        _auto_verified="true"
+      done <<SHFILES_EOF
+$FILES_LIST
+SHFILES_EOF
+    fi
+
+    # Always capture diff stat
+    _diff_stat=$(cd "$PROJECT_DIR" && git diff --stat HEAD 2>&1) || _diff_stat=""
+    if [ -n "$_diff_stat" ]; then
+      _auto_output="${_auto_output}[git diff --stat]${NL}${_diff_stat}${NL}"
+      _auto_verified="true"
+    fi
+  fi
+
+  if [ "$_auto_verified" = "true" ]; then
+    PROOF_TYPE="auto_build"
+    PROOF_CONTENT="$_auto_output"
+    if [ "$_auto_all_passed" = "true" ]; then
+      _verification_status="passed"
+    else
+      _verification_status="failed"
+    fi
+    # Build verification_steps JSON from newline-separated steps
+    if [ -n "$_auto_steps" ]; then
+      VERIFICATION_STEPS_JSON=$(printf '%s' "$_auto_steps" | jq -Rs 'split("\n") | map(select(length > 0))' 2>/dev/null) || VERIFICATION_STEPS_JSON="[]"
+    fi
   else
-    PROOF_CONTENT="Task completed — no summary available"
+    PROOF_TYPE="unverified"
+    _fallback_summary="${DOEY_SUMMARY:-}"
+    if [ -n "$_fallback_summary" ]; then
+      PROOF_CONTENT="Task completed — $_fallback_summary"
+    else
+      PROOF_CONTENT="Task completed — no summary available"
+    fi
   fi
 fi
 
@@ -121,12 +190,14 @@ PROOF_TYPE_JSON=$(printf '%s' "$PROOF_TYPE" | jq -Rs '.' 2>/dev/null) || PROOF_T
 PROOF_CONTENT_JSON=$(printf '%s' "$PROOF_CONTENT" | jq -Rs '.' 2>/dev/null) || PROOF_CONTENT_JSON='""'
 
 # Extract verification steps from VERIFICATION_STEP: lines into JSON array
-VERIFICATION_STEPS_JSON="[]"
+# Only reset if auto-verification didn't already populate it
 _vsteps=$(printf '%s' "$FILTERED" | grep '^VERIFICATION_STEP:' | sed 's/^VERIFICATION_STEP:[[:space:]]*//' ) || true
 if [ -n "$_vsteps" ]; then
   VERIFICATION_STEPS_JSON=$(printf '%s\n' "$_vsteps" | jq -Rsc '[.]' 2>/dev/null) || true
   # jq -Rsc with single input gives ["all\nlines"] — split properly
   VERIFICATION_STEPS_JSON=$(printf '%s\n' "$_vsteps" | jq -Rs 'split("\n") | map(select(length > 0))' 2>/dev/null) || VERIFICATION_STEPS_JSON="[]"
+elif [ "$_verification_status" = "" ]; then
+  VERIFICATION_STEPS_JSON="[]"
 fi
 
 TMPFILE=$(mktemp "${RUNTIME_DIR}/results/.tmp_XXXXXX" 2>/dev/null)
@@ -165,7 +236,8 @@ cat > "$TMPFILE" <<EOF
   "summary": "$local_summary_escaped",
   "proof_type": $PROOF_TYPE_JSON,
   "proof_content": $PROOF_CONTENT_JSON,
-  "verification_steps": $VERIFICATION_STEPS_JSON
+  "verification_steps": $VERIFICATION_STEPS_JSON,
+  "verification_status": "$_verification_status"
 }
 EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"

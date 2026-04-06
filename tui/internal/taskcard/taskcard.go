@@ -1445,6 +1445,7 @@ func (e *ExpandedCard) renderProofSection() []string {
 	rows = append(rows, aiHeader)
 
 	checkOK := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("    ✓")
+	checkFail := lipgloss.NewStyle().Foreground(e.Theme.Danger).Render("    ✗")
 	checkWarn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("    ○")
 	itemText := func(s string) string {
 		return lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + s)
@@ -1453,15 +1454,51 @@ func (e *ExpandedCard) renderProofSection() []string {
 	if task.BuildStatus != "" {
 		rows = append(rows, checkOK+itemText("Build: "+task.BuildStatus))
 	}
+
+	// Proof type badge: Auto-verified / Agent-verified / Unverified
 	if task.ProofType != "" {
-		rows = append(rows, checkOK+itemText("Proof type: "+task.ProofType))
-	}
-	if task.ProofContent != "" && task.ProofContent != "Task completed — no summary available" {
-		summary := task.ProofContent
-		if len(summary) > 80 {
-			summary = summary[:77] + "..."
+		proofBadgeStyle := lipgloss.NewStyle().Padding(0, 1)
+		var proofBadge string
+		switch task.ProofType {
+		case "auto_build":
+			proofBadge = proofBadgeStyle.Background(e.Theme.Success).Foreground(e.Theme.BgText).Render("Auto-verified")
+		case "agent":
+			proofBadge = proofBadgeStyle.Background(e.Theme.Accent).Foreground(e.Theme.BgText).Render("Agent-verified")
+		default:
+			proofBadge = proofBadgeStyle.Background(e.Theme.Warning).Foreground(e.Theme.BgText).Render("Unverified")
 		}
-		rows = append(rows, checkOK+itemText("Proof: "+summary))
+		rows = append(rows, "    "+proofBadge)
+	}
+
+	// Proof content: show actual build output / verification results
+	if task.ProofContent != "" && task.ProofContent != "Task completed — no summary available" {
+		wrapped := wordWrap(task.ProofContent, contentWidth-6)
+		lines := strings.Split(wrapped, "\n")
+		maxLines := 5
+		for i, line := range lines {
+			if i >= maxLines {
+				more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
+					Render(fmt.Sprintf("      … %d more lines", len(lines)-maxLines))
+				rows = append(rows, more)
+				break
+			}
+			rows = append(rows, "      "+lipgloss.NewStyle().Foreground(e.Theme.Text).Render(line))
+		}
+	}
+
+	// Verification steps checklist (from task-level data)
+	if task.VerificationSteps != "" {
+		var steps []string
+		if err := json.Unmarshal([]byte(task.VerificationSteps), &steps); err == nil {
+			for _, step := range steps {
+				lower := strings.ToLower(step)
+				if strings.Contains(lower, "fail") || strings.Contains(lower, "error") {
+					rows = append(rows, checkFail+itemText(step))
+				} else {
+					rows = append(rows, checkOK+itemText(step))
+				}
+			}
+		}
 	}
 
 	// Gather all files (task-level or from pane results)

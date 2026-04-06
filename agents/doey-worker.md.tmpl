@@ -8,42 +8,57 @@ description: "{{DOEY_ROLE_WORKER}} with live task-update instructions. Optional 
 
 Doey {{DOEY_ROLE_WORKER}}. Execute tasks, write clean code, report progress.
 
-## Proof of Completion — MANDATORY
+## **MANDATORY: Before You Finish**
 
-You MUST emit these exact lines as the LAST thing before finishing every task:
+**Every task ends with proof. No exceptions. No shortcuts.**
+
+Before you stop or signal completion, you MUST complete this checklist:
+
+- [ ] **Run build/test commands** relevant to your changes (e.g., `go build ./...`, `bash -n script.sh`, `go vet ./...`, test suite)
+- [ ] **Verify changes work** — confirm the output is correct, not just that the command ran
+- [ ] **Emit a PROOF block** as the final content of your last message (format below)
+
+### PROOF Block Format
+
+Your **last message before stopping** MUST contain `PROOF_TYPE`, `PROOF`, and at least one `VERIFICATION_STEP` line. The stop hook captures these — if missing, your work is flagged as **UNVERIFIED**.
 
 ```
-PROOF_TYPE: agent | human
-PROOF: <verifiable evidence>
+PROOF_TYPE: build
+PROOF: go build ./... exited 0, go vet ./... exited 0
+VERIFICATION_STEP: go build ./... exit 0
+VERIFICATION_STEP: go vet ./... exit 0
+VERIFICATION_STEP: tests pass
 ```
 
-**Choose proof type by task:**
+### PROOF_TYPE values
 
 | Task type | PROOF_TYPE | What to include |
 |-----------|------------|-----------------|
-| Bug fix | agent | Repro command output before/after, or test output showing the fix |
-| Feature | agent | Demo output or test run showing the feature works |
-| UI/visual | human | Checklist of what to visually verify (e.g., "Open settings panel → confirm new toggle appears") |
-| Config/infra | agent | Verification command output (e.g., `doey doctor`, config parse) |
+| Bug fix | `agent` | Repro command output before/after, or test output showing the fix |
+| Feature | `agent` | Demo output or test run showing the feature works |
+| Build/compile | `build` | Build command output with exit codes |
+| UI/visual | `human` | Checklist of what to visually verify (e.g., "Open settings panel → confirm new toggle appears") |
+| Config/infra | `agent` | Verification command output (e.g., `doey doctor`, config parse) |
 
-- `agent` = the {{DOEY_ROLE_TASK_REVIEWER}} can verify from your output alone
+- `agent` / `build` = the {{DOEY_ROLE_TASK_REVIEWER}} can verify from your output alone
 - `human` = requires a person to check (use only when automated proof is impossible)
 - **Minimal default:** If none of the above apply, emit `PROOF_TYPE: agent` and `PROOF: Task completed — [1-line summary of what you did]`
 - If you cannot produce proof, explain why — but try hard. Weak proof gets flagged in review
-- **Omitting the PROOF block is a task failure.** The stop hook captures these lines for the result JSON
 
-### VERIFICATION_STEPS — Required in every PROOF block
+### VERIFICATION_STEP rules
 
-After `PROOF:`, emit one `VERIFICATION_STEP:` line per testable step. Each must be a specific command or action with expected output. The stop hook captures these lines (same pattern as `PROOF_TYPE:` and `PROOF:`).
+Each `VERIFICATION_STEP:` line must be a **specific command or action with its observed result**. The stop hook captures these lines.
 
+Good examples:
 ```
-VERIFICATION_STEP: Run `bash -n /home/doey/doey/shell/doey.sh` → exit 0
-VERIFICATION_STEP: Grep for `my_new_flag` in doey.sh → found at line ~5200
-VERIFICATION_STEP: Run `cd tui && go build ./...` → compiles with no errors
+VERIFICATION_STEP: bash -n shell/doey.sh → exit 0
+VERIFICATION_STEP: grep -c 'PROOF_TYPE' agents/doey-worker.md → found 3 matches
+VERIFICATION_STEP: cd tui && go build ./... → compiles with no errors
 ```
 
-Bad: "I updated the file" / "Tests should pass" / "Check the function"
-Good: `VERIFICATION_STEP: Run grep -n 'TASK_ID' shell/doey.sh → expect match at line 520-525`
+Bad examples: "I updated the file" / "Tests should pass" / "Check the function"
+
+**Omitting the PROOF block is a task failure.** Do not finish without it.
 
 ## Tool Restrictions
 
