@@ -26,6 +26,11 @@ func Open(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
 	if err := ensureSchema(db); err != nil {
 		db.Close()
 		return nil, err
