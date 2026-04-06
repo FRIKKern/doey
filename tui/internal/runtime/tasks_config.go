@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/store"
@@ -135,6 +136,7 @@ type PersistentTask struct {
 	ProofContent       string   `json:"proof_content,omitempty"`       // proof content/output
 	VerificationStatus string   `json:"verification_status,omitempty"` // unverified, verified, failed
 	BuildStatus        string   `json:"build_status,omitempty"`        // build result (pass, fail, skip)
+	VerificationSteps  string   `json:"verification_steps,omitempty"`  // JSON-encoded verification steps
 	// Live tracking fields
 	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
 	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log
@@ -236,11 +238,25 @@ func storeTaskToPersistent(st store.Task) PersistentTask {
 		Team:               st.Team,
 		Tags:               splitTags(st.Tags),
 		AcceptanceCriteria: st.AcceptanceCriteria,
+		Result:             st.Result,
+		Commits:            st.Commits,
+		Notes:              st.Notes,
+		DecisionLog:        st.DecisionLog,
+		Blockers:           st.Blockers,
+		ProofType:          st.ProofType,
+		ProofContent:       st.ProofContent,
+		VerificationStatus: st.VerificationStatus,
+		BuildStatus:        st.BuildStatus,
+		VerificationSteps:  st.VerificationSteps,
+		ReviewVerdict:      st.ReviewVerdict,
 		Created:            st.CreatedAt,
 		Updated:            st.UpdatedAt,
 	}
 	if st.PlanID != nil {
 		pt.PlanID = strconv.FormatInt(*st.PlanID, 10)
+	}
+	if st.Files != "" {
+		pt.FilesChanged = strings.Split(st.Files, "\n")
 	}
 	return pt
 }
@@ -309,6 +325,10 @@ func syncTaskStoreToSQLite(projectDir string, ts TaskStore) {
 				tagsStr += t
 			}
 		}
+		filesStr := ""
+		if len(pt.FilesChanged) > 0 {
+			filesStr = strings.Join(pt.FilesChanged, "\n")
+		}
 		st := &store.Task{
 			ID:                 id,
 			Title:              pt.Title,
@@ -321,6 +341,18 @@ func syncTaskStoreToSQLite(projectDir string, ts TaskStore) {
 			PlanID:             planID,
 			Tags:               tagsStr,
 			AcceptanceCriteria: pt.AcceptanceCriteria,
+			Result:             pt.Result,
+			Files:              filesStr,
+			Commits:            pt.Commits,
+			Notes:              pt.Notes,
+			DecisionLog:        pt.DecisionLog,
+			Blockers:           pt.Blockers,
+			ProofType:          pt.ProofType,
+			ProofContent:       pt.ProofContent,
+			VerificationStatus: pt.VerificationStatus,
+			BuildStatus:        pt.BuildStatus,
+			VerificationSteps:  pt.VerificationSteps,
+			ReviewVerdict:      pt.ReviewVerdict,
 			CreatedAt:          pt.Created,
 			UpdatedAt:          pt.Updated,
 		}
@@ -617,5 +649,98 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 		}
 		index[rt.ID] = len(s.Tasks)
 		s.Tasks = append(s.Tasks, pt)
+	}
+}
+
+// MergePaneResults merges proof data from pane result files into matching persistent tasks.
+// Updates task proof fields only when the task field is empty and the result has data.
+func (s *TaskStore) MergePaneResults(results map[string]PaneResult) {
+	for _, res := range results {
+		if res.TaskID == "" {
+			continue
+		}
+		for i := range s.Tasks {
+			if s.Tasks[i].ID != res.TaskID {
+				continue
+			}
+			pt := &s.Tasks[i]
+			if pt.ProofType == "" && res.ProofType != "" {
+				pt.ProofType = res.ProofType
+			}
+			if pt.ProofContent == "" && res.ProofContent != "" {
+				pt.ProofContent = res.ProofContent
+			}
+			if pt.VerificationSteps == "" && res.VerificationSteps != "" {
+				pt.VerificationSteps = res.VerificationSteps
+			}
+			if len(pt.FilesChanged) == 0 && len(res.FilesChanged) > 0 {
+				pt.FilesChanged = res.FilesChanged
+			}
+			break
+		}
+	}
+}
+
+// IngestPaneResultsToDB reads pane result data and updates matching task rows in the SQLite DB.
+// Only updates proof fields that are currently empty on the task.
+func IngestPaneResultsToDB(projectDir string, results map[string]PaneResult) {
+	if projectDir == "" || len(results) == 0 {
+		return
+	}
+
+	// Quick check: any results with a task ID?
+	hasTaskResults := false
+	for _, res := range results {
+		if res.TaskID != "" && (res.ProofType != "" || res.ProofContent != "" || res.VerificationSteps != "" || len(res.FilesChanged) > 0) {
+			hasTaskResults = true
+			break
+		}
+	}
+	if !hasTaskResults {
+		return
+	}
+
+	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
+	s, err := store.Open(dbPath)
+	if err != nil {
+		return
+	}
+	defer s.Close()
+
+	for _, res := range results {
+		if res.TaskID == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(res.TaskID, 10, 64)
+		if err != nil {
+			continue
+		}
+		task, err := s.GetTask(id)
+		if err != nil || task == nil {
+			continue
+		}
+
+		updated := false
+		if task.ProofType == "" && res.ProofType != "" {
+			task.ProofType = res.ProofType
+			updated = true
+		}
+		if task.ProofContent == "" && res.ProofContent != "" {
+			task.ProofContent = res.ProofContent
+			updated = true
+		}
+		if task.VerificationSteps == "" && res.VerificationSteps != "" {
+			task.VerificationSteps = res.VerificationSteps
+			updated = true
+		}
+		if task.Files == "" && len(res.FilesChanged) > 0 {
+			task.Files = strings.Join(res.FilesChanged, "\n")
+			updated = true
+		}
+
+		if updated {
+			task.UpdatedAt = time.Now().Unix()
+			_ = s.UpdateTask(task)
+		}
 	}
 }
