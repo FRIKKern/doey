@@ -355,7 +355,7 @@ Status files: `RUNTIME_DIR/status/<pane_safe>.status` with fields `PANE`, `UPDAT
 ### LOGGED_OUT Recovery
 
 1. Send Escape to every logged-out pane, sleep 2s, re-scan.
-2. If still logged out, escalate to Boss with pane list and action needed (`/login` then `/doey-login`).
+2. If still logged out, escalate to Boss with pane list and action needed (user must run `claude` to re-authenticate).
 3. Rules: Escape first always. Never `/login` while menu visible. Max once per pane per cycle.
 
 ### Anomaly Handling

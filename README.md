@@ -191,10 +191,10 @@ cat /tmp/doey/*/debug/*/hooks.jsonl | sort -t'"' -k4   # view chronologically
 <summary><strong>Slash Commands</strong></summary>
 
 **Planning:** `/doey-masterplan`, `/doey-create-task`, `/doey-instant-task`, `/doey-planned-task`
-**Tasks:** `/doey-task`, `/doey-dispatch`, `/doey-delegate`, `/doey-research`, `/doey-broadcast`
+**Tasks:** `/doey-task`, `/doey-dispatch`, `/doey-research`
 **Monitor:** `/doey-monitor`, `/doey-status`, `/doey-nudge`, `/doey-debug`
 **Infra:** `/doey-add-window`, `/doey-add-team`, `/doey-kill-window`, `/doey-list-windows`, `/doey-worktree`
-**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-login`, `/doey-reset`, `/doey-simplify-everything`
+**Lifecycle:** `/doey-stop`, `/doey-clear`, `/doey-reload`, `/doey-reinstall`, `/doey-reserve`, `/doey-repair`, `/doey-purge`, `/doey-reset`, `/doey-simplify-everything`
 **Config:** `/doey-settings`
 **Session:** `/doey-kill-session`, `/doey-kill-all-sessions`
 **R&D:** `/doey-rd-team`

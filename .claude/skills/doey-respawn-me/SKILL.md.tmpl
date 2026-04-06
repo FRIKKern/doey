@@ -1,6 +1,6 @@
 ---
 name: doey-respawn-me
-description: Request a respawn of the current worker pane. Use when you need to "respawn me", "restart myself", "fresh context", or "reset my pane". Writes an atomic respawn request for the watchdog to pick up, then stops.
+description: Request a respawn of the current worker pane. Use when you need to "respawn me", "restart myself", "fresh context", or "reset my pane". Writes an atomic respawn request that kills the current Claude process and relaunches with a fresh context.
 ---
 
 - Env: !`echo "ROLE=${DOEY_ROLE:-unset} PANE=${DOEY_PANE_INDEX:-unset} WINDOW=${DOEY_WINDOW_INDEX:-unset} SESSION=${DOEY_SESSION_NAME:-unset} RUNTIME=${DOEY_RUNTIME:-unset}"`

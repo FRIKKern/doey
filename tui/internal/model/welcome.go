@@ -326,8 +326,6 @@ func (m WelcomeModel) renderSlashCommands(w int) string {
 			cmds: []cmdEntry{
 				{greenStyle.Render("/doey-task"), "Manage tasks"},
 				{greenStyle.Render("/doey-dispatch"), "Send tasks"},
-				{greenStyle.Render("/doey-delegate"), "Delegate task"},
-				{greenStyle.Render("/doey-broadcast"), "Broadcast"},
 				{greenStyle.Render("/doey-research"), "Research task"},
 				{greenStyle.Render("/doey-reserve"), "Reserve pane"},
 			},

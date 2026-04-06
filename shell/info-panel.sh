@@ -350,8 +350,7 @@ while true; do
   COL_W=$((CMD_W / 2 - 1))
 
   add_left "$(gum_header ' Tasks' 2 "${C_BOLD_GREEN}")"
-  add_cmd_pair "${C_GREEN}" "/doey-dispatch" "Send tasks" "${C_GREEN}" "/doey-delegate" "Delegate task"
-  add_cmd_pair "${C_GREEN}" "/doey-broadcast" "Broadcast" "${C_GREEN}" "/doey-research" "Research task"
+  add_cmd_pair "${C_GREEN}" "/doey-dispatch" "Send tasks" "${C_GREEN}" "/doey-research" "Research task"
   add_cmd_pair "${C_GREEN}" "/doey-task" "Manage tasks" "${C_GREEN}" "/doey-reserve" "Reserve pane"
   add_left ""
   add_left "$(gum_header ' Monitoring' 6 "${C_BOLD_CYAN}")"
