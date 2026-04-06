@@ -54,7 +54,7 @@ _write_v3_fields() { # output_file → write all v3 TASK_* fields from caller va
   for _f in ID TITLE STATUS TYPE TAGS CREATED_BY ASSIGNED_TO DESCRIPTION \
             ACCEPTANCE_CRITERIA HYPOTHESES DECISION_LOG SUBTASKS \
             RELATED_FILES BLOCKERS TIMESTAMPS CURRENT_PHASE TOTAL_PHASES \
-            NOTES UPDATED; do
+            NOTES UPDATED SUCCESS_CRITERIA; do
     eval "_val=\"\${TASK_${_f}:-}\""
     printf 'TASK_%s=%s\n' "$_f" "$_val"
   done >> "$_out"
@@ -100,7 +100,7 @@ task_create() { # project_dir title [type] [created_by] [description] → echo t
   TASK_DESCRIPTION="$description" TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES=""
   TASK_DECISION_LOG="${now}:Created task" TASK_SUBTASKS="" TASK_RELATED_FILES=""
   TASK_BLOCKERS="" TASK_TIMESTAMPS="created=${now}" TASK_CURRENT_PHASE="0"
-  TASK_TOTAL_PHASES="0" TASK_NOTES="" TASK_UPDATED="$now"
+  TASK_TOTAL_PHASES="0" TASK_NOTES="" TASK_UPDATED="$now" TASK_SUCCESS_CRITERIA=""
 
   _write_v3_fields "${task_file}.tmp"
   mv "${task_file}.tmp" "$task_file"
@@ -158,6 +158,7 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
   TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES="" TASK_DECISION_LOG=""
   TASK_SUBTASKS="" TASK_RELATED_FILES="" TASK_BLOCKERS="" TASK_TIMESTAMPS=""
   TASK_CURRENT_PHASE="" TASK_TOTAL_PHASES="" TASK_NOTES="" TASK_CREATED=""
+  TASK_SUCCESS_CRITERIA=""
 
   local line
   while IFS= read -r line || [ -n "$line" ]; do
@@ -181,6 +182,7 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
       TASK_CURRENT_PHASE)       TASK_CURRENT_PHASE="${line#*=}" ;;
       TASK_TOTAL_PHASES)        TASK_TOTAL_PHASES="${line#*=}" ;;
       TASK_NOTES)               TASK_NOTES="${line#*=}" ;;
+      TASK_SUCCESS_CRITERIA)    TASK_SUCCESS_CRITERIA="${line#*=}" ;;
     esac
   done < "$file" || true
 
