@@ -246,6 +246,11 @@ func taskHealthIcon(ti TaskItem, t styles.Theme, heartbeats map[string]runtime.H
 func taskCardDescription(ti TaskItem, heartbeats map[string]runtime.HeartbeatState) string {
 	var parts []string
 
+	// Task ID
+	if ti.Task.ID != "" {
+		parts = append(parts, "#"+ti.Task.ID)
+	}
+
 	// Active worker names from heartbeat
 	if hs, ok := heartbeats[ti.Task.ID]; ok && hs.ActiveWorkers > 0 {
 		names := strings.Join(hs.ActiveWorkerNames, ", ")
@@ -1391,7 +1396,6 @@ func (e *ExpandedCard) renderProofSection() []string {
 		contentWidth = styles.MaxCardWidth - 2
 	}
 
-	isComplete := task.Status == "done" || task.Status == "pending_user_confirmation"
 	hasResult := task.Result != ""
 	hasFiles := len(task.FilesChanged) > 0
 	hasCommits := task.Commits != ""
@@ -1410,8 +1414,8 @@ func (e *ExpandedCard) renderProofSection() []string {
 
 	hasAnyProof := hasResult || hasFiles || hasCommits
 
-	// Skip section entirely for non-complete tasks with no proof
-	if !isComplete && !hasAnyProof {
+	// Skip section entirely when there is no proof to display
+	if !hasAnyProof {
 		return nil
 	}
 
@@ -1419,12 +1423,7 @@ func (e *ExpandedCard) renderProofSection() []string {
 
 	// Section header with proof icon
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text)
-	if hasAnyProof {
-		rows = append(rows, headerStyle.Render("◆ Proof of Completion"))
-	} else {
-		warnStyle := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Warning)
-		rows = append(rows, warnStyle.Render("◆ Proof of Completion"))
-	}
+	rows = append(rows, headerStyle.Render("◆ Proof of Completion"))
 	rows = append(rows, styles.ThinSeparator(e.Theme, contentWidth))
 
 	// Verification status badge
@@ -1445,13 +1444,6 @@ func (e *ExpandedCard) renderProofSection() []string {
 	if task.Status == "done" {
 		userBadge := lipgloss.NewStyle().Foreground(e.Theme.Success).Bold(true).Render("  ✓ Verified by User")
 		rows = append(rows, userBadge)
-	}
-
-	// Warning if proof is missing for completed tasks
-	if isComplete && !hasAnyProof {
-		warn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("  No proof captured")
-		rows = append(rows, warn)
-		return rows
 	}
 
 	// Worker Summary (from Result field) — shown before verification guide
@@ -1547,7 +1539,7 @@ func (e *ExpandedCard) renderProofSection() []string {
 			rows = append(rows, checkOK+itemText("Build: "+task.BuildStatus))
 		}
 
-		// Proof type badge: Auto-verified / Agent-verified / Unverified
+		// Proof type badge: Auto-verified / Agent-verified
 		if task.ProofType != "" {
 			proofBadgeStyle := lipgloss.NewStyle().Padding(0, 1)
 			var proofBadge string
@@ -1602,8 +1594,6 @@ func (e *ExpandedCard) renderProofSection() []string {
 		}
 		if len(allFiles) > 0 {
 			rows = append(rows, checkOK+itemText(fmt.Sprintf("Files changed: %d files", len(allFiles))))
-		} else if isComplete {
-			rows = append(rows, checkWarn+itemText("Files changed: none detected"))
 		}
 
 		// Tool call count from pane results
@@ -1621,8 +1611,6 @@ func (e *ExpandedCard) renderProofSection() []string {
 				cText := lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(" " + c)
 				rows = append(rows, cIcon+cText)
 			}
-		} else if isComplete {
-			rows = append(rows, checkWarn+itemText("Commits: none recorded"))
 		}
 
 		// Files list (collapsed under AI section)
