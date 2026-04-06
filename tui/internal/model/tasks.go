@@ -972,6 +972,17 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 				)
 			}
 		}
+	case "u":
+		idx := m.list.Index()
+		if idx >= 0 && idx < total {
+			task := m.entries[idx]
+			if task.Status == "done" {
+				m.statusMsg = "Completion undone"
+				return m, tea.Batch(func() tea.Msg {
+					return SetStatusTaskMsg{ID: task.ID, Status: "pending_user_confirmation"}
+				}, taskStatusClearCmd())
+			}
+		}
 	case "m":
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
@@ -2011,6 +2022,7 @@ func (m TasksModel) viewHelp() string {
 		{"s", "Cycle statuses / Skip Review (pending)"},
 		{"d", "Dispatch task / Deny (pending)"},
 		{"a", "Accept task (pending confirmation)"},
+		{"u", "Undo completion (done tasks)"},
 		{"p", "View linked plan"},
 		{"x", "Cancel task"},
 		{"Tab", "Next subtask (detail panel)"},

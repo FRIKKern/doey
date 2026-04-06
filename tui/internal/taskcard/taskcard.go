@@ -1373,6 +1373,12 @@ func (e *ExpandedCard) renderProofSection() []string {
 		}
 	}
 
+	// User verification badge for done tasks (accepted by user)
+	if task.Status == "done" {
+		userBadge := lipgloss.NewStyle().Foreground(e.Theme.Success).Bold(true).Render("  ✓ Verified by User")
+		rows = append(rows, userBadge)
+	}
+
 	// Warning if proof is missing for completed tasks
 	if isComplete && !hasAnyProof {
 		warn := lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("  No proof captured")
