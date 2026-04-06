@@ -43,6 +43,15 @@ var routineSubjects = []string{
 	"worker_finished",
 	"status_report",
 	"freelancer_finished",
+	"specialist_finished",
+	"taskmaster_update",
+	"sleep_report",
+	"subtask_review_passed",
+	"subtask_review_failed",
+	"subtask_review_request",
+	"review_request",
+	"review_failed",
+	"workflow:",
 }
 
 // judgmentSubjects are substrings that mark a message as requiring judgment.
