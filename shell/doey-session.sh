@@ -391,6 +391,11 @@ _kill_doey_session() {
     kill "$(cat "$_rt/doey-router.pid")" 2>/dev/null || true
     rm -f "$_rt/doey-router.pid"
   fi
+  # Stop doey-daemon
+  if [ -f "$_rt/doey-daemon.pid" ]; then
+    kill "$(cat "$_rt/doey-daemon.pid")" 2>/dev/null || true
+    rm -f "$_rt/doey-daemon.pid"
+  fi
   rm -rf "$_rt" 2>/dev/null || true
 }
 
@@ -637,6 +642,17 @@ MANIFEST
     fi
   fi
 
+  # Launch doey-daemon (observability)
+  local _daemon_bin
+  _daemon_bin=$(command -v doey-daemon 2>/dev/null || echo "${HOME}/.local/bin/doey-daemon")
+  if [ -x "$_daemon_bin" ]; then
+    mkdir -p "${runtime_dir}/daemon"
+    "$_daemon_bin" --runtime "$runtime_dir" --project-dir "$dir" \
+      --log-file "${runtime_dir}/logs/doey-daemon.log" \
+      --stats-file "${runtime_dir}/daemon/stats.json" >/dev/null 2>&1 &
+    echo $! > "${runtime_dir}/doey-daemon.pid"
+  fi
+
   write_team_env "$runtime_dir" "$team_window" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
 
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
@@ -781,6 +797,11 @@ _cleanup_old_session() {
     kill "$(cat "$runtime_dir/doey-router.pid")" 2>/dev/null || true
     rm -f "$runtime_dir/doey-router.pid"
   fi
+  # Stop doey-daemon
+  if [ -f "$runtime_dir/doey-daemon.pid" ]; then
+    kill "$(cat "$runtime_dir/doey-daemon.pid")" 2>/dev/null || true
+    rm -f "$runtime_dir/doey-daemon.pid"
+  fi
   rm -rf "$runtime_dir"
   git worktree prune 2>/dev/null || true
   # Delete doey/team-* branches whose worktrees no longer exist
@@ -793,6 +814,7 @@ _cleanup_old_session() {
   done
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status,logs}
   : > "${runtime_dir}/logs/doey-router.log" 2>/dev/null
+  : > "${runtime_dir}/logs/doey-daemon.log" 2>/dev/null
 }
 
 # Build comma-separated worker pane indices "1,2,3,...,N"
@@ -1211,6 +1233,17 @@ MANIFEST
         "$_router_bin" --runtime "$runtime_dir" --project-dir "$dir" -log-file "${runtime_dir}/logs/doey-router.log" >/dev/null 2>&1 &
         echo $! > "$runtime_dir/doey-router.pid"
       fi
+    fi
+
+    # Launch doey-daemon (observability)
+    local _daemon_bin
+    _daemon_bin=$(command -v doey-daemon 2>/dev/null || echo "${HOME}/.local/bin/doey-daemon")
+    if [ -x "$_daemon_bin" ]; then
+      mkdir -p "${runtime_dir}/daemon"
+      "$_daemon_bin" --runtime "$runtime_dir" --project-dir "$dir" \
+        --log-file "${runtime_dir}/logs/doey-daemon.log" \
+        --stats-file "${runtime_dir}/daemon/stats.json" >/dev/null 2>&1 &
+      echo $! > "${runtime_dir}/doey-daemon.pid"
     fi
 
     # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
