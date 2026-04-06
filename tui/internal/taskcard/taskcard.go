@@ -83,6 +83,40 @@ func TaskSection(status string) string {
 	}
 }
 
+// CriteriaResult represents a single criterion's verification result.
+type CriteriaResult struct {
+	Criterion string `json:"criterion"`
+	Status    string `json:"status"`   // "pass", "fail", "needs_human"
+	Evidence  string `json:"evidence"` // for pass/fail
+	Guide     string `json:"guide"`    // for needs_human
+	Details   string `json:"details"`  // for fail
+}
+
+// ParsedProofOfSuccess represents the structured proof-of-success JSON blob.
+type ParsedProofOfSuccess struct {
+	CriteriaResults        []CriteriaResult `json:"criteria_results"`
+	HumanVerificationGuide string           `json:"human_verification_guide"`
+	AutoVerifiedCount      int              `json:"auto_verified_count"`
+	NeedsHumanCount        int              `json:"needs_human_count"`
+}
+
+// parseProofOfSuccess defensively parses the proof_of_success JSON string.
+// Returns nil if empty, malformed, or not valid JSON.
+func parseProofOfSuccess(raw string) *ParsedProofOfSuccess {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var p ParsedProofOfSuccess
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return nil
+	}
+	if len(p.CriteriaResults) == 0 {
+		return nil
+	}
+	return &p
+}
+
 // Render draws a single task card as a compact 2-line entry.
 func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	ti, ok := item.(TaskItem)
@@ -1438,11 +1472,10 @@ func (e *ExpandedCard) renderProofSection() []string {
 		}
 	}
 
-	// ── Section 1: AI Verification ──
-	// Auto-generated checklist from proof data collected by stop hooks.
+	// ── Success Criteria Checklist ──
+	// If structured proof_of_success is available, render criteria checklist.
+	// Falls back to legacy proof_type/proof_content display.
 	rows = append(rows, "")
-	aiHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Success).Render("  ◇ AI Verification")
-	rows = append(rows, aiHeader)
 
 	checkOK := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("    ✓")
 	checkFail := lipgloss.NewStyle().Foreground(e.Theme.Danger).Render("    ✗")
@@ -1450,159 +1483,229 @@ func (e *ExpandedCard) renderProofSection() []string {
 	itemText := func(s string) string {
 		return lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + s)
 	}
-
-	if task.BuildStatus != "" {
-		rows = append(rows, checkOK+itemText("Build: "+task.BuildStatus))
+	evidenceText := func(s string) string {
+		return lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("      " + s)
 	}
 
-	// Proof type badge: Auto-verified / Agent-verified / Unverified
-	if task.ProofType != "" {
-		proofBadgeStyle := lipgloss.NewStyle().Padding(0, 1)
-		var proofBadge string
-		switch task.ProofType {
-		case "auto_build":
-			proofBadge = proofBadgeStyle.Background(e.Theme.Success).Foreground(e.Theme.BgText).Render("Auto-verified")
-		case "agent":
-			proofBadge = proofBadgeStyle.Background(e.Theme.Accent).Foreground(e.Theme.BgText).Render("Agent-verified")
-		default:
-			proofBadge = proofBadgeStyle.Background(e.Theme.Warning).Foreground(e.Theme.BgText).Render("Unverified")
-		}
-		rows = append(rows, "    "+proofBadge)
-	}
+	parsedProof := parseProofOfSuccess(task.ProofOfSuccess)
 
-	// Proof content: show actual build output / verification results
-	if task.ProofContent != "" && task.ProofContent != "Task completed — no summary available" {
-		wrapped := wordWrap(task.ProofContent, contentWidth-6)
-		lines := strings.Split(wrapped, "\n")
-		maxLines := 5
-		for i, line := range lines {
-			if i >= maxLines {
-				more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
-					Render(fmt.Sprintf("      … %d more lines", len(lines)-maxLines))
-				rows = append(rows, more)
-				break
+	if parsedProof != nil {
+		// ── Structured criteria checklist ──
+		criteriaHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Success).Render("  ◇ Success Criteria")
+		rows = append(rows, criteriaHeader)
+
+		for _, cr := range parsedProof.CriteriaResults {
+			switch cr.Status {
+			case "pass":
+				rows = append(rows, checkOK+itemText(cr.Criterion))
+				if cr.Evidence != "" {
+					rows = append(rows, evidenceText(cr.Evidence))
+				}
+			case "needs_human":
+				rows = append(rows, checkWarn+itemText(cr.Criterion))
+				if cr.Guide != "" {
+					guideStyle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Render("      → " + cr.Guide)
+					rows = append(rows, guideStyle)
+				}
+			case "fail":
+				rows = append(rows, checkFail+itemText(cr.Criterion))
+				detail := cr.Details
+				if detail == "" {
+					detail = cr.Evidence
+				}
+				if detail != "" {
+					rows = append(rows, evidenceText(detail))
+				}
+			default:
+				rows = append(rows, checkWarn+itemText(cr.Criterion))
 			}
-			rows = append(rows, "      "+lipgloss.NewStyle().Foreground(e.Theme.Text).Render(line))
 		}
-	}
 
-	// Verification steps checklist (from task-level data)
-	if task.VerificationSteps != "" {
-		var steps []string
-		if err := json.Unmarshal([]byte(task.VerificationSteps), &steps); err == nil {
-			for _, step := range steps {
-				lower := strings.ToLower(step)
-				if strings.Contains(lower, "fail") || strings.Contains(lower, "error") {
-					rows = append(rows, checkFail+itemText(step))
-				} else {
-					rows = append(rows, checkOK+itemText(step))
+		// Summary counts
+		if parsedProof.AutoVerifiedCount > 0 || parsedProof.NeedsHumanCount > 0 {
+			summary := fmt.Sprintf("  %d auto-verified", parsedProof.AutoVerifiedCount)
+			if parsedProof.NeedsHumanCount > 0 {
+				summary += fmt.Sprintf(", %d needs human review", parsedProof.NeedsHumanCount)
+			}
+			rows = append(rows, lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render(summary))
+		}
+
+		// Human verification guide
+		if parsedProof.HumanVerificationGuide != "" {
+			rows = append(rows, "")
+			guideHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Accent).Render("  ◈ Human Verification Guide")
+			rows = append(rows, guideHeader)
+			wrapped := wordWrap(parsedProof.HumanVerificationGuide, contentWidth-6)
+			for _, line := range strings.Split(wrapped, "\n") {
+				rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Text).Render(line))
+			}
+		}
+
+		// Accept / Review Later hint for pending tasks
+		if task.Status == "pending_user_confirmation" {
+			rows = append(rows, "")
+			acceptStyle := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Success)
+			laterStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted)
+			rows = append(rows, "  "+acceptStyle.Render("[a] Accept")+"  "+laterStyle.Render("[Esc] Review Later"))
+		}
+	} else {
+		// ── Legacy AI Verification display ──
+		aiHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Success).Render("  ◇ AI Verification")
+		rows = append(rows, aiHeader)
+
+		if task.BuildStatus != "" {
+			rows = append(rows, checkOK+itemText("Build: "+task.BuildStatus))
+		}
+
+		// Proof type badge: Auto-verified / Agent-verified / Unverified
+		if task.ProofType != "" {
+			proofBadgeStyle := lipgloss.NewStyle().Padding(0, 1)
+			var proofBadge string
+			switch task.ProofType {
+			case "auto_build":
+				proofBadge = proofBadgeStyle.Background(e.Theme.Success).Foreground(e.Theme.BgText).Render("Auto-verified")
+			case "agent":
+				proofBadge = proofBadgeStyle.Background(e.Theme.Accent).Foreground(e.Theme.BgText).Render("Agent-verified")
+			default:
+				proofBadge = proofBadgeStyle.Background(e.Theme.Warning).Foreground(e.Theme.BgText).Render("Unverified")
+			}
+			rows = append(rows, "    "+proofBadge)
+		}
+
+		// Proof content: show actual build output / verification results
+		if task.ProofContent != "" && task.ProofContent != "Task completed — no summary available" {
+			wrapped := wordWrap(task.ProofContent, contentWidth-6)
+			lines := strings.Split(wrapped, "\n")
+			maxLines := 5
+			for i, line := range lines {
+				if i >= maxLines {
+					more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
+						Render(fmt.Sprintf("      … %d more lines", len(lines)-maxLines))
+					rows = append(rows, more)
+					break
+			}
+				rows = append(rows, "      "+lipgloss.NewStyle().Foreground(e.Theme.Text).Render(line))
+			}
+		}
+
+		// Verification steps checklist (from task-level data)
+		if task.VerificationSteps != "" {
+			var steps []string
+			if err := json.Unmarshal([]byte(task.VerificationSteps), &steps); err == nil {
+				for _, step := range steps {
+					lower := strings.ToLower(step)
+					if strings.Contains(lower, "fail") || strings.Contains(lower, "error") {
+						rows = append(rows, checkFail+itemText(step))
+					} else {
+						rows = append(rows, checkOK+itemText(step))
+					}
 				}
 			}
 		}
-	}
 
-	// Gather all files (task-level or from pane results)
-	allFiles := task.FilesChanged
-	if len(allFiles) == 0 {
-		allFiles = paneFiles
-	}
-	if len(allFiles) > 0 {
-		rows = append(rows, checkOK+itemText(fmt.Sprintf("Files changed: %d files", len(allFiles))))
-	} else if isComplete {
-		rows = append(rows, checkWarn+itemText("Files changed: none detected"))
-	}
-
-	// Tool call count from pane results
-	totalTools := e.collectToolCallCount()
-	if totalTools > 0 {
-		rows = append(rows, checkOK+itemText(fmt.Sprintf("Tool calls: %d", totalTools)))
-	}
-
-	// Commits
-	commitLines := e.collectCommitLines(logCommits)
-	if len(commitLines) > 0 {
-		rows = append(rows, checkOK+itemText(fmt.Sprintf("Commits: %d", len(commitLines))))
-		for _, c := range commitLines {
-			cIcon := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("      ●")
-			cText := lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(" " + c)
-			rows = append(rows, cIcon+cText)
+		// Gather all files (task-level or from pane results)
+		allFiles := task.FilesChanged
+		if len(allFiles) == 0 {
+			allFiles = paneFiles
 		}
-	} else if isComplete {
-		rows = append(rows, checkWarn+itemText("Commits: none recorded"))
-	}
+		if len(allFiles) > 0 {
+			rows = append(rows, checkOK+itemText(fmt.Sprintf("Files changed: %d files", len(allFiles))))
+		} else if isComplete {
+			rows = append(rows, checkWarn+itemText("Files changed: none detected"))
+		}
 
-	// Files list (collapsed under AI section)
-	if len(allFiles) > 0 {
-		maxShow := 8
-		for i, f := range allFiles {
-			if i >= maxShow {
-				more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
-					Render(fmt.Sprintf("      … and %d more", len(allFiles)-maxShow))
-				rows = append(rows, more)
-				break
+		// Tool call count from pane results
+		totalTools := e.collectToolCallCount()
+		if totalTools > 0 {
+			rows = append(rows, checkOK+itemText(fmt.Sprintf("Tool calls: %d", totalTools)))
+		}
+
+		// Commits
+		commitLines := e.collectCommitLines(logCommits)
+		if len(commitLines) > 0 {
+			rows = append(rows, checkOK+itemText(fmt.Sprintf("Commits: %d", len(commitLines))))
+			for _, c := range commitLines {
+				cIcon := lipgloss.NewStyle().Foreground(e.Theme.Success).Render("      ●")
+				cText := lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(" " + c)
+				rows = append(rows, cIcon+cText)
 			}
-			bullet := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("      •")
-			file := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + f)
-			rows = append(rows, bullet+file)
+		} else if isComplete {
+			rows = append(rows, checkWarn+itemText("Commits: none recorded"))
 		}
-	}
 
-	// ── Section 2: Human Verification ──
-	// Actionable steps for the user based on file types and worker-provided steps.
-	rows = append(rows, "")
-	humanHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Accent).Render("  ◈ Human Verification")
-	rows = append(rows, humanHeader)
-
-	stepNum := 1
-	numStyle := func(n int) string {
-		return lipgloss.NewStyle().Foreground(e.Theme.Accent).Render(fmt.Sprintf("    %d.", n))
-	}
-	stepText := func(s string) string {
-		return lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + s)
-	}
-
-	// Worker-provided verification steps get priority
-	verSteps := e.collectVerificationSteps()
-	for _, step := range verSteps {
-		rows = append(rows, numStyle(stepNum)+stepText(step))
-		stepNum++
-	}
-
-	// Auto-generated suggestions based on file extensions
-	hasGo, hasSh, hasMD := false, false, false
-	for _, f := range allFiles {
-		ext := filepath.Ext(f)
-		switch ext {
-		case ".go":
-			hasGo = true
-		case ".sh":
-			hasSh = true
-		case ".md":
-			hasMD = true
+		// Files list (collapsed under AI section)
+		if len(allFiles) > 0 {
+			maxShow := 8
+			for i, f := range allFiles {
+				if i >= maxShow {
+					more := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).
+						Render(fmt.Sprintf("      … and %d more", len(allFiles)-maxShow))
+					rows = append(rows, more)
+					break
+				}
+				bullet := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("      •")
+				file := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + f)
+				rows = append(rows, bullet+file)
+			}
 		}
-	}
-	if hasGo {
-		rows = append(rows, numStyle(stepNum)+stepText("Run: go build ./... && go test ./..."))
-		stepNum++
-	}
-	if hasSh {
-		rows = append(rows, numStyle(stepNum)+stepText("Run: bash tests/test-bash-compat.sh"))
-		stepNum++
-	}
-	if hasMD {
-		rows = append(rows, numStyle(stepNum)+stepText("Review documentation changes"))
-		stepNum++
-	}
 
-	// Always suggest reviewing the diff
-	if len(allFiles) > 0 {
-		rows = append(rows, numStyle(stepNum)+stepText("Review the diff of changed files"))
-		stepNum++
-	}
+		// ── Section 2: Human Verification ──
+		// Actionable steps for the user based on file types and worker-provided steps.
+		rows = append(rows, "")
+		humanHeader := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Accent).Render("  ◈ Human Verification")
+		rows = append(rows, humanHeader)
 
-	// If no steps at all, show a gentle note
-	if stepNum == 1 {
-		rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("No verification steps available"))
+		stepNum := 1
+		numStyle := func(n int) string {
+			return lipgloss.NewStyle().Foreground(e.Theme.Accent).Render(fmt.Sprintf("    %d.", n))
+		}
+		stepText := func(s string) string {
+			return lipgloss.NewStyle().Foreground(e.Theme.Text).Render(" " + s)
+		}
+
+		// Worker-provided verification steps get priority
+		verSteps := e.collectVerificationSteps()
+		for _, step := range verSteps {
+			rows = append(rows, numStyle(stepNum)+stepText(step))
+			stepNum++
+		}
+
+		// Auto-generated suggestions based on file extensions
+		hasGo, hasSh, hasMD := false, false, false
+		for _, f := range allFiles {
+			ext := filepath.Ext(f)
+			switch ext {
+			case ".go":
+				hasGo = true
+			case ".sh":
+				hasSh = true
+			case ".md":
+				hasMD = true
+			}
+		}
+		if hasGo {
+			rows = append(rows, numStyle(stepNum)+stepText("Run: go build ./... && go test ./..."))
+			stepNum++
+		}
+		if hasSh {
+			rows = append(rows, numStyle(stepNum)+stepText("Run: bash tests/test-bash-compat.sh"))
+			stepNum++
+		}
+		if hasMD {
+			rows = append(rows, numStyle(stepNum)+stepText("Review documentation changes"))
+			stepNum++
+		}
+
+		// Always suggest reviewing the diff
+		if len(allFiles) > 0 {
+			rows = append(rows, numStyle(stepNum)+stepText("Review the diff of changed files"))
+			stepNum++
+		}
+
+		// If no steps at all, show a gentle note
+		if stepNum == 1 {
+			rows = append(rows, "    "+lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("No verification steps available"))
+		}
 	}
 
 	return rows

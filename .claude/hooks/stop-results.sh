@@ -89,7 +89,7 @@ if [ "$_found_error" = "true" ]; then
 fi
 [ "$_found_error" = "true" ] && STATUS="error"
 
-# Extract proof fields from captured output
+# Extract proof fields from captured output (legacy compat)
 PROOF_TYPE=""
 PROOF_CONTENT=""
 _proof_line=$(printf '%s' "$FILTERED" | grep '^PROOF_TYPE:' | tail -1) || true
@@ -101,74 +101,164 @@ if [ -n "$_proof_body" ]; then
   PROOF_CONTENT=$(printf '%s' "$_proof_body" | sed 's/^PROOF:[[:space:]]*//')
 fi
 
-# Fallback: auto-generate proof if worker didn't emit one
+# ── Structured proof-of-success (v2) ──────────────────────────────
+# Resolve task ID early for criteria lookup
+_early_task_id="${DOEY_TASK_ID:-}"
+[ -z "$_early_task_id" ] && _early_task_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id" 2>/dev/null) || true
+
+# Read success criteria from .task file if available
+_CRITERIA=""
 _verification_status=""
-if [ -z "$PROOF_TYPE" ]; then
-  _auto_verified=""
-  _auto_steps=""
-  _auto_output=""
-  _auto_all_passed="true"
+if [ -n "$_early_task_id" ] && [ -n "$PROJECT_DIR" ]; then
+  _task_file="${PROJECT_DIR}/.doey/tasks/${_early_task_id}.task"
+  if [ -f "$_task_file" ]; then
+    _CRITERIA=$(grep '^TASK_SUCCESS_CRITERIA=' "$_task_file" 2>/dev/null | head -1 | cut -d= -f2-) || _CRITERIA=""
+  fi
+fi
 
-  if [ -n "$PROJECT_DIR" ] && [ -n "$FILES_LIST" ]; then
-    _tmo=""
-    command -v timeout >/dev/null 2>&1 && _tmo="timeout 10"
-    command -v gtimeout >/dev/null 2>&1 && _tmo="gtimeout 10"
+# Build structured proof_of_success with per-criterion results
+_criteria_json_arr=""
+_auto_count=0
+_human_count=0
+_fail_count=0
+_human_guides=""
+_auto_output=""
 
-    # Go build/vet if .go files changed or go.mod exists
-    _has_go=""
-    case "$FILES_LIST" in *.go*) _has_go="true" ;; esac
-    [ -z "$_has_go" ] && [ -f "${PROJECT_DIR}/go.mod" ] && _has_go="true"
+# Timeout helper
+_tmo=""
+command -v timeout >/dev/null 2>&1 && _tmo="timeout 10"
+command -v gtimeout >/dev/null 2>&1 && _tmo="gtimeout 10"
 
-    if [ "$_has_go" = "true" ] && command -v go >/dev/null 2>&1; then
-      _go_build_out=$(cd "$PROJECT_DIR" && ${_tmo} go build ./... 2>&1) && _go_build_rc=0 || _go_build_rc=$?
-      _auto_output="${_auto_output}[go build] exit ${_go_build_rc}${NL}${_go_build_out}${NL}"
-      _auto_steps="${_auto_steps}go build ./... exit ${_go_build_rc}${NL}"
-      [ "$_go_build_rc" != "0" ] && _auto_all_passed="false"
-      _auto_verified="true"
+_add_criterion() {
+  local crit="$1" stat="$2" evidence="$3" guide="${4:-}"
+  local crit_esc; crit_esc=$(printf '%s' "$crit" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  local ev_esc; ev_esc=$(printf '%s' "$evidence" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' ' | head -c 500)
+  local guide_esc; guide_esc=$(printf '%s' "$guide" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  local entry="{\"criterion\":\"${crit_esc}\",\"status\":\"${stat}\",\"evidence\":\"${ev_esc}\""
+  [ -n "$guide_esc" ] && entry="${entry},\"guide\":\"${guide_esc}\""
+  entry="${entry}}"
+  if [ -n "$_criteria_json_arr" ]; then
+    _criteria_json_arr="${_criteria_json_arr},${entry}"
+  else
+    _criteria_json_arr="${entry}"
+  fi
+  case "$stat" in
+    pass) _auto_count=$((_auto_count + 1)) ;;
+    fail) _fail_count=$((_fail_count + 1)) ;;
+    needs_human) _human_count=$((_human_count + 1))
+      [ -n "$guide" ] && _human_guides="${_human_guides}${guide}${NL}" ;;
+  esac
+}
 
-      _go_vet_out=$(cd "$PROJECT_DIR" && ${_tmo} go vet ./... 2>&1) && _go_vet_rc=0 || _go_vet_rc=$?
-      _auto_output="${_auto_output}[go vet] exit ${_go_vet_rc}${NL}${_go_vet_out}${NL}"
-      _auto_steps="${_auto_steps}go vet ./... exit ${_go_vet_rc}${NL}"
-      [ "$_go_vet_rc" != "0" ] && _auto_all_passed="false"
+# Auto-verify built-in criteria from changed files
+if [ -n "$PROJECT_DIR" ] && [ -n "$FILES_LIST" ]; then
+  _has_go=""
+  case "$FILES_LIST" in *.go*) _has_go="true" ;; esac
+  [ -z "$_has_go" ] && [ -f "${PROJECT_DIR}/go.mod" ] && _has_go="true"
+
+  if [ "$_has_go" = "true" ] && command -v go >/dev/null 2>&1; then
+    _go_build_out=$(cd "$PROJECT_DIR" && ${_tmo} go build ./... 2>&1) && _go_build_rc=0 || _go_build_rc=$?
+    _auto_output="${_auto_output}[go build] exit ${_go_build_rc}${NL}${_go_build_out}${NL}"
+    if [ "$_go_build_rc" = "0" ]; then
+      _add_criterion "go build passes" "pass" "exit 0"
+    else
+      _add_criterion "go build passes" "fail" "exit ${_go_build_rc}: ${_go_build_out}"
     fi
 
-    # Bash syntax check on changed .sh files
-    _has_sh=""
-    case "$FILES_LIST" in *.sh*) _has_sh="true" ;; esac
-
-    if [ "$_has_sh" = "true" ]; then
-      while IFS= read -r _shfile; do
-        case "$_shfile" in *.sh) ;; *) continue ;; esac
-        [ -f "${PROJECT_DIR}/${_shfile}" ] || continue
-        _sh_out=$(bash -n "${PROJECT_DIR}/${_shfile}" 2>&1) && _sh_rc=0 || _sh_rc=$?
-        _auto_output="${_auto_output}[bash -n ${_shfile}] exit ${_sh_rc}${NL}${_sh_out}${NL}"
-        _auto_steps="${_auto_steps}bash -n ${_shfile} exit ${_sh_rc}${NL}"
-        [ "$_sh_rc" != "0" ] && _auto_all_passed="false"
-        _auto_verified="true"
-      done <<SHFILES_EOF
-$FILES_LIST
-SHFILES_EOF
-    fi
-
-    # Always capture diff stat
-    _diff_stat=$(cd "$PROJECT_DIR" && git diff --stat HEAD 2>&1) || _diff_stat=""
-    if [ -n "$_diff_stat" ]; then
-      _auto_output="${_auto_output}[git diff --stat]${NL}${_diff_stat}${NL}"
-      _auto_verified="true"
+    _go_vet_out=$(cd "$PROJECT_DIR" && ${_tmo} go vet ./... 2>&1) && _go_vet_rc=0 || _go_vet_rc=$?
+    _auto_output="${_auto_output}[go vet] exit ${_go_vet_rc}${NL}${_go_vet_out}${NL}"
+    if [ "$_go_vet_rc" = "0" ]; then
+      _add_criterion "go vet passes" "pass" "exit 0"
+    else
+      _add_criterion "go vet passes" "fail" "exit ${_go_vet_rc}: ${_go_vet_out}"
     fi
   fi
 
-  if [ "$_auto_verified" = "true" ]; then
+  _has_sh=""
+  case "$FILES_LIST" in *.sh*) _has_sh="true" ;; esac
+
+  if [ "$_has_sh" = "true" ]; then
+    while IFS= read -r _shfile; do
+      case "$_shfile" in *.sh) ;; *) continue ;; esac
+      [ -f "${PROJECT_DIR}/${_shfile}" ] || continue
+      _sh_out=$(bash -n "${PROJECT_DIR}/${_shfile}" 2>&1) && _sh_rc=0 || _sh_rc=$?
+      _auto_output="${_auto_output}[bash -n ${_shfile}] exit ${_sh_rc}${NL}${_sh_out}${NL}"
+      if [ "$_sh_rc" = "0" ]; then
+        _add_criterion "bash -n ${_shfile}" "pass" "exit 0"
+      else
+        _add_criterion "bash -n ${_shfile}" "fail" "exit ${_sh_rc}: ${_sh_out}"
+      fi
+    done <<SHFILES_EOF
+$FILES_LIST
+SHFILES_EOF
+  fi
+fi
+
+# Process task-defined success criteria (pipe-separated: "criterion1|criterion2|...")
+if [ -n "$_CRITERIA" ]; then
+  _remaining="$_CRITERIA"
+  while [ -n "$_remaining" ]; do
+    case "$_remaining" in
+      *\|*)
+        _crit="${_remaining%%|*}"
+        _remaining="${_remaining#*|}"
+        ;;
+      *)
+        _crit="$_remaining"
+        _remaining=""
+        ;;
+    esac
+    [ -z "$_crit" ] && continue
+
+    # Try to auto-verify known patterns
+    _matched=""
+    case "$_crit" in
+      *"go build"*|*"go vet"*)
+        # Already handled above — skip duplicates
+        _matched="true"
+        ;;
+      *"bash -n"*)
+        _matched="true"
+        ;;
+      *"test"*|*"Test"*)
+        if [ -n "$PROJECT_DIR" ]; then
+          _test_out=$(cd "$PROJECT_DIR" && ${_tmo} go test ./... 2>&1) && _test_rc=0 || _test_rc=$?
+          if [ "$_test_rc" = "0" ]; then
+            _add_criterion "$_crit" "pass" "go test exit 0"
+          else
+            _add_criterion "$_crit" "fail" "go test exit ${_test_rc}"
+          fi
+          _matched="true"
+        fi
+        ;;
+    esac
+
+    if [ "$_matched" != "true" ]; then
+      _add_criterion "$_crit" "needs_human" "" "Verify manually: ${_crit}"
+    fi
+  done
+fi
+
+# Diff stat as evidence (not a criterion)
+_diff_stat=$(cd "$PROJECT_DIR" 2>/dev/null && git diff --stat HEAD 2>&1) || _diff_stat=""
+if [ -n "$_diff_stat" ]; then
+  _auto_output="${_auto_output}[git diff --stat]${NL}${_diff_stat}${NL}"
+fi
+
+# Build the structured proof_of_success JSON
+_human_guide_esc=$(printf '%s' "$_human_guides" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' ')
+PROOF_OF_SUCCESS_JSON=$(printf '{"criteria_results":[%s],"human_verification_guide":"%s","auto_verified_count":%d,"needs_human_count":%d,"failed_count":%d}' \
+  "$_criteria_json_arr" "$_human_guide_esc" "$_auto_count" "$_human_count" "$_fail_count")
+
+# Set legacy fields for backward compat
+if [ -z "$PROOF_TYPE" ]; then
+  if [ "$_auto_count" -gt 0 ] || [ "$_fail_count" -gt 0 ]; then
     PROOF_TYPE="auto_build"
     PROOF_CONTENT="$_auto_output"
-    if [ "$_auto_all_passed" = "true" ]; then
+    if [ "$_fail_count" = "0" ]; then
       _verification_status="passed"
     else
       _verification_status="failed"
-    fi
-    # Build verification_steps JSON from newline-separated steps
-    if [ -n "$_auto_steps" ]; then
-      VERIFICATION_STEPS_JSON=$(printf '%s' "$_auto_steps" | jq -Rs 'split("\n") | map(select(length > 0))' 2>/dev/null) || VERIFICATION_STEPS_JSON="[]"
     fi
   else
     PROOF_TYPE="unverified"
@@ -179,6 +269,12 @@ SHFILES_EOF
       PROOF_CONTENT="Task completed — no summary available"
     fi
   fi
+fi
+
+# Build verification_steps JSON from auto output
+VERIFICATION_STEPS_JSON="[]"
+if [ -n "$_auto_output" ]; then
+  VERIFICATION_STEPS_JSON=$(printf '%s' "$_auto_output" | jq -Rs 'split("\n") | map(select(length > 0))' 2>/dev/null) || VERIFICATION_STEPS_JSON="[]"
 fi
 
 PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
@@ -237,12 +333,17 @@ cat > "$TMPFILE" <<EOF
   "proof_type": $PROOF_TYPE_JSON,
   "proof_content": $PROOF_CONTENT_JSON,
   "verification_steps": $VERIFICATION_STEPS_JSON,
-  "verification_status": "$_verification_status"
+  "verification_status": "$_verification_status",
+  "proof_of_success": $PROOF_OF_SUCCESS_JSON
 }
 EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"
 TMPFILE=""
 _log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_COUNT)"
+
+# Compute files changed count (used outside the task block below)
+_FILES_COUNT=0
+[ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
 
 if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
   cp "$RESULT_FILE" "${PROJECT_DIR}/.doey/tasks/${local_task_id}.result.json" 2>/dev/null || true
@@ -303,10 +404,6 @@ ATTACH_EOF
     done
   fi
 
-  # Compute files changed count before subshell (value would be lost inside)
-  _FILES_COUNT=0
-  [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
-
   # Add completion report to task (Task Accountability)
   if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
     (
@@ -324,6 +421,7 @@ ATTACH_EOF
       [ -n "$PROOF_TYPE" ] && doey-ctl task update --id "$local_task_id" --field proof_type --value "$PROOF_TYPE" --project-dir "$PROJECT_DIR" 2>/dev/null || true
       [ -n "$PROOF_CONTENT" ] && doey-ctl task update --id "$local_task_id" --field proof_content --value "$PROOF_CONTENT" --project-dir "$PROJECT_DIR" 2>/dev/null || true
       [ "$VERIFICATION_STEPS_JSON" != "[]" ] && doey-ctl task update --id "$local_task_id" --field verification_steps --value "$VERIFICATION_STEPS_JSON" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+      [ -n "$PROOF_OF_SUCCESS_JSON" ] && doey-ctl task update --id "$local_task_id" --field proof_of_success --value "$PROOF_OF_SUCCESS_JSON" --project-dir "$PROJECT_DIR" 2>/dev/null || true
       if [ -n "$FILES_LIST" ]; then
         _files_csv=$(printf '%s' "$FILES_LIST" | tr '\n' ',' | sed 's/,$//')
         doey-ctl task update --id "$local_task_id" --field files --value "$_files_csv" --project-dir "$PROJECT_DIR" 2>/dev/null || true

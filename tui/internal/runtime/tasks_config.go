@@ -137,6 +137,8 @@ type PersistentTask struct {
 	VerificationStatus string   `json:"verification_status,omitempty"` // unverified, verified, failed
 	BuildStatus        string   `json:"build_status,omitempty"`        // build result (pass, fail, skip)
 	VerificationSteps  string   `json:"verification_steps,omitempty"`  // JSON-encoded verification steps
+	SuccessCriteria    string   `json:"success_criteria,omitempty"`    // newline-separated criteria strings
+	ProofOfSuccess     string   `json:"proof_of_success,omitempty"`   // JSON blob with criteria_results
 	// Live tracking fields
 	Subtasks []PersistentSubtask `json:"subtasks,omitempty"` // subtask breakdown
 	Updates  []PersistentUpdate  `json:"updates,omitempty"`  // live update log
@@ -248,6 +250,8 @@ func storeTaskToPersistent(st store.Task) PersistentTask {
 		VerificationStatus: st.VerificationStatus,
 		BuildStatus:        st.BuildStatus,
 		VerificationSteps:  st.VerificationSteps,
+		SuccessCriteria:    st.SuccessCriteria,
+		ProofOfSuccess:     st.ProofOfSuccess,
 		ReviewVerdict:      st.ReviewVerdict,
 		Created:            st.CreatedAt,
 		Updated:            st.UpdatedAt,
@@ -352,6 +356,8 @@ func syncTaskStoreToSQLite(projectDir string, ts TaskStore) {
 			VerificationStatus: pt.VerificationStatus,
 			BuildStatus:        pt.BuildStatus,
 			VerificationSteps:  pt.VerificationSteps,
+			SuccessCriteria:    pt.SuccessCriteria,
+			ProofOfSuccess:     pt.ProofOfSuccess,
 			ReviewVerdict:      pt.ReviewVerdict,
 			CreatedAt:          pt.Created,
 			UpdatedAt:          pt.Updated,
