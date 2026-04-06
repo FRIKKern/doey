@@ -30,10 +30,11 @@ func ReadPlans(projectDir string) []Plan {
 		return nil
 	}
 
-	// Try SQLite store first
+	// Try SQLite store first — sync .md files before reading
 	dbPath := filepath.Join(projectDir, ".doey", "doey.db")
 	if s, err := store.Open(dbPath); err == nil {
 		defer s.Close()
+		s.SyncPlansFromFiles(projectDir)
 		if storePlans, err := s.ListPlans(); err == nil && len(storePlans) > 0 {
 			plans := make([]Plan, 0, len(storePlans))
 			for _, sp := range storePlans {

@@ -47,12 +47,31 @@ Write the plan file path so the Planner and viewer share the same file:
 
 ```bash
 PLAN_FILE="${PLANS_DIR}/${PLAN_ID}.md"
+GOAL=$(head -1 "${MP_DIR}/goal.md")
+
+# Create tracked task
+DOEY_TASK_ID=$(doey task create --title "Masterplan: ${GOAL}" --type feature --description "Masterplan: ${GOAL}" 2>/dev/null) || true
+echo "Task ID: ${DOEY_TASK_ID:-none}"
+
+# Create plan in DB for TUI display
+PLAN_DB_ID=""
+if [ -n "${DOEY_TASK_ID:-}" ]; then
+  PLAN_DB_ID=$(doey-ctl plan create --task-id "$DOEY_TASK_ID" --title "Masterplan: ${GOAL}" --status active 2>/dev/null | grep -o '[0-9][0-9]*$') || true
+  echo "Plan DB ID: ${PLAN_DB_ID:-none}"
+fi
+
+# Export to tmux session environment so spawned panes inherit
+tmux set-environment -t "$SESSION_NAME" DOEY_TASK_ID "${DOEY_TASK_ID:-}" 2>/dev/null || true
+[ -n "${PLAN_DB_ID:-}" ] && tmux set-environment -t "$SESSION_NAME" PLAN_DB_ID "$PLAN_DB_ID" 2>/dev/null || true
+
 cat > "${MP_DIR}/masterplan.env" << ENV_EOF
 PLAN_ID=${PLAN_ID}
 PLAN_FILE=${PLAN_FILE}
 GOAL_FILE=${MP_DIR}/goal.md
 MP_DIR=${MP_DIR}
 PLANS_DIR=${PLANS_DIR}
+DOEY_TASK_ID=${DOEY_TASK_ID:-}
+PLAN_DB_ID=${PLAN_DB_ID:-}
 ENV_EOF
 echo "Masterplan env written to ${MP_DIR}/masterplan.env"
 ```
@@ -100,8 +119,14 @@ $(cat "${MP_DIR}/goal.md")
 - Working directory: ${MP_DIR}
 - Research directory: ${MP_DIR}/research/
 - Plans directory: ${PLANS_DIR}
+- Task ID: ${DOEY_TASK_ID:-none}
+- Plan DB ID: ${PLAN_DB_ID:-none}
 
-Read the goal file and begin the masterplan process. Use your workers (panes 2-5) for parallel research. Write the plan to the plan file path above — the viewer (pane 1) will auto-render changes."
+Read the goal file and begin the masterplan process. Use your workers (panes 2-5) for parallel research. Write the plan to the plan file path above — the TUI (pane 1) will display it.
+
+IMPORTANT: After each major update to the plan file, sync it to the DB so the TUI Plans tab stays current:
+doey-ctl plan update --id ${PLAN_DB_ID:-0} --body \"\$(cat ${PLAN_FILE})\"
+Skip this step if Plan DB ID is 'none' or '0'."
 
 doey_send_verified "$PLANNER_PANE" "$BRIEFING" && echo "Planner briefed successfully" || echo "WARNING: Planner briefing delivery failed — the Planner will still discover the goal from ${MP_DIR}/goal.md on its own"
 ```
@@ -119,6 +144,8 @@ doey msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}"
   --body "MASTERPLAN_ID: ${PLAN_ID}
 PLAN_FILE: ${PLAN_FILE}
 GOAL_FILE: ${MP_DIR}/goal.md
+TASK_ID: ${DOEY_TASK_ID:-}
+PLAN_DB_ID: ${PLAN_DB_ID:-}
 DISPATCH_MODE: dedicated-window
 WINDOW: ${MP_WIN}
 
@@ -137,6 +164,8 @@ Output the final summary:
 ## Masterplan Spawned
 
 **Plan ID:** ${PLAN_ID}
+**Task ID:** ${DOEY_TASK_ID:-none}
+**Plan DB ID:** ${PLAN_DB_ID:-none}
 **Window:** ${MP_WIN} (masterplan)
 **Goal file:** ${MP_DIR}/goal.md
 **Plan file:** ${PLAN_FILE}
@@ -144,7 +173,7 @@ Output the final summary:
 
 The Masterplanner team is now running in window ${MP_WIN}:
 - **Pane 0** — Planner (orchestrates research and plan writing)
-- **Pane 1** — Plan Viewer (live rendering of plan file)
+- **Pane 1** — TUI (Plans tab — live plan display)
 - **Panes 2-5** — Workers (research swarm, then implementation)
 
 The Planner will:
