@@ -22,6 +22,7 @@ import (
 
 type planReadMsg struct{ content string }
 type statusReadMsg struct{ workers []workerStatus }
+type researchReadMsg struct{ reports []researchReport }
 type tickMsg time.Time
 
 // ── Worker status ─────────────────────────────────────────────────────
@@ -30,6 +31,13 @@ type workerStatus struct {
 	paneIdx int
 	status  string
 	task    string
+}
+
+// ── Research report ──────────────────────────────────────────────────
+
+type researchReport struct {
+	filename string
+	summary  string
 }
 
 // ── Model ─────────────────────────────────────────────────────────────
@@ -41,13 +49,14 @@ type model struct {
 	teamWindow  int
 	theme       styles.Theme
 	viewport    viewport.Model
-	planContent string
+	planContent  string
 	renderedPlan string
-	lastRenderW int
-	workers     []workerStatus
-	width       int
-	height      int
-	ready       bool
+	lastRenderW  int
+	workers      []workerStatus
+	reports      []researchReport
+	width        int
+	height       int
+	ready        bool
 }
 
 func initialModel(planPath, runtimeDir, goal string, teamWindow int) model {
@@ -96,6 +105,33 @@ func readStatusCmd(runtimeDir string, teamWindow int) tea.Cmd {
 	}
 }
 
+func readResearchCmd(runtimeDir string) tea.Cmd {
+	return func() tea.Msg {
+		var reports []researchReport
+		dirs, _ := filepath.Glob(filepath.Join(runtimeDir, "masterplan-*", "research"))
+		for _, dir := range dirs {
+			files, _ := filepath.Glob(filepath.Join(dir, "worker-*.md"))
+			for _, f := range files {
+				summary := ""
+				data, err := os.ReadFile(f)
+				if err == nil {
+					lines := strings.SplitN(string(data), "\n", 2)
+					if len(lines) > 0 {
+						summary = strings.TrimSpace(lines[0])
+						// Strip leading markdown heading markers
+						summary = strings.TrimLeft(summary, "# ")
+					}
+				}
+				reports = append(reports, researchReport{
+					filename: filepath.Base(f),
+					summary:  summary,
+				})
+			}
+		}
+		return researchReadMsg{reports: reports}
+	}
+}
+
 func nextTickCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
@@ -108,6 +144,7 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		readPlanCmd(m.planPath),
 		readStatusCmd(m.runtimeDir, m.teamWindow),
+		readResearchCmd(m.runtimeDir),
 		nextTickCmd(),
 	)
 }
@@ -178,10 +215,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workers = msg.workers
 		return m, nil
 
+	case researchReadMsg:
+		m.reports = msg.reports
+		return m, nil
+
 	case tickMsg:
 		return m, tea.Batch(
 			readPlanCmd(m.planPath),
 			readStatusCmd(m.runtimeDir, m.teamWindow),
+			readResearchCmd(m.runtimeDir),
 			nextTickCmd(),
 		)
 	}
@@ -232,16 +274,27 @@ func (m model) renderHeader() string {
 // ── Status bar ────────────────────────────────────────────────────────
 
 func (m model) statusBarHeight() int {
-	if len(m.workers) == 0 {
-		return 1
+	if len(m.workers) == 0 && len(m.reports) == 0 {
+		return 1 // "No workers detected"
 	}
-	return 3
+	h := 2 // separator + worker status line
+	// Research reports
+	rCount := len(m.reports)
+	if rCount > 0 {
+		h++ // "Research (N reports)" header
+		if rCount > 5 {
+			h += 5 + 1 // 5 shown + overflow line
+		} else {
+			h += rCount
+		}
+	}
+	return h
 }
 
 func (m model) renderStatusBar() string {
 	th := m.theme
 
-	if len(m.workers) == 0 {
+	if len(m.workers) == 0 && len(m.reports) == 0 {
 		return th.Faint.Render("No workers detected")
 	}
 
@@ -249,22 +302,55 @@ func (m model) renderStatusBar() string {
 		Foreground(th.Separator).
 		Render(strings.Repeat("─", m.width))
 
-	var parts []string
-	for _, w := range m.workers {
-		label := fmt.Sprintf("W%d", w.paneIdx)
-		st := w.status
-		if st == "" {
-			st = "?"
+	var out strings.Builder
+	out.WriteString(border)
+	out.WriteByte('\n')
+
+	// Worker status line
+	if len(m.workers) > 0 {
+		var parts []string
+		for _, w := range m.workers {
+			label := fmt.Sprintf("W%d", w.paneIdx)
+			st := w.status
+			if st == "" {
+				st = "?"
+			}
+			styled := colorStatus(st, th)
+			entry := th.Dim.Render(label+": ") + styled
+			if w.task != "" {
+				entry += th.Faint.Render(" "+truncate(w.task, 20))
+			}
+			parts = append(parts, entry)
 		}
-		styled := colorStatus(st, th)
-		entry := th.Dim.Render(label+": ") + styled
-		if w.task != "" {
-			entry += th.Faint.Render(" "+truncate(w.task, 20))
-		}
-		parts = append(parts, entry)
+		out.WriteString(strings.Join(parts, th.Faint.Render(" | ")))
+		out.WriteByte('\n')
+	} else {
+		out.WriteString(th.Faint.Render("No workers detected"))
+		out.WriteByte('\n')
 	}
 
-	return border + "\n" + strings.Join(parts, th.Faint.Render(" │ ")) + "\n"
+	// Research reports section
+	if len(m.reports) > 0 {
+		out.WriteString(th.Tag.Render("Research") + th.Faint.Render(fmt.Sprintf(" (%d reports)", len(m.reports))))
+		out.WriteByte('\n')
+		shown := len(m.reports)
+		if shown > 5 {
+			shown = 5
+		}
+		for i := 0; i < shown; i++ {
+			r := m.reports[i]
+			name := strings.TrimSuffix(r.filename, ".md")
+			line := th.Dim.Render("  "+name+": ") + th.Body.Render(truncate(r.summary, m.width-len(name)-6))
+			out.WriteString(line)
+			out.WriteByte('\n')
+		}
+		if len(m.reports) > 5 {
+			out.WriteString(th.Faint.Render(fmt.Sprintf("  … and %d more", len(m.reports)-5)))
+			out.WriteByte('\n')
+		}
+	}
+
+	return out.String()
 }
 
 func colorStatus(status string, th styles.Theme) string {
