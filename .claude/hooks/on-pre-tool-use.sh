@@ -176,6 +176,80 @@ _check_blocked() {
   esac
 }
 
+_save_screenshot_attachment() {
+  local file_path="$1"
+  [ -z "$file_path" ] && return 0
+  # Check image extension (case-insensitive via both cases)
+  local ext="${file_path##*.}"
+  case "$ext" in
+    png|jpg|jpeg|gif|webp|bmp|PNG|JPG|JPEG|GIF|WEBP|BMP) ;;
+    *) return 0 ;;
+  esac
+  # Need runtime dir and project dir
+  local runtime_dir="${_RD:-${DOEY_RUNTIME:-}}"
+  [ -z "$runtime_dir" ] && return 0
+  local project_dir="${DOEY_PROJECT_DIR:-}"
+  if [ -z "$project_dir" ]; then
+    project_dir=$(git rev-parse --show-toplevel 2>/dev/null) || true
+  fi
+  [ -z "$project_dir" ] && return 0
+  # File must exist
+  [ -f "$file_path" ] || return 0
+  # Look up active task ID
+  local pane_safe="${_PS:-}"
+  [ -z "$pane_safe" ] && return 0
+  local task_id=""
+  if [ -f "${runtime_dir}/status/${pane_safe}.task_id" ]; then
+    task_id=$(cat "${runtime_dir}/status/${pane_safe}.task_id" 2>/dev/null) || true
+  fi
+  [ -z "$task_id" ] && return 0
+  # Create attachments dir
+  local attach_dir="${project_dir}/.doey/tasks/${task_id}/attachments"
+  mkdir -p "$attach_dir" 2>/dev/null || return 0
+  local basename="${file_path##*/}"
+  local name_no_ext="${basename%.*}"
+  local timestamp
+  timestamp=$(date +%s)
+  # Skip if same basename already exists in attachments
+  if ls "$attach_dir"/*"_screenshot_${basename}" >/dev/null 2>&1; then
+    return 0
+  fi
+  # Copy image
+  cp "$file_path" "${attach_dir}/${timestamp}_screenshot_${basename}" 2>/dev/null || return 0
+  # Create sidecar .md file
+  local sidecar="${attach_dir}/${timestamp}_screenshot_${name_no_ext}.md"
+  local author="${DOEY_ROLE:-${_DOEY_ROLE:-user}}"
+  cat > "$sidecar" <<SIDECAR_EOF
+---
+type: screenshot
+title: ${name_no_ext}
+author: ${author}
+timestamp: ${timestamp}
+task_id: ${task_id}
+image_path: attachments/${timestamp}_screenshot_${basename}
+---
+
+Screenshot captured from: ${file_path}
+SIDECAR_EOF
+  # Update TASK_ATTACHMENTS in .task file
+  local task_file="${project_dir}/.doey/tasks/${task_id}.task"
+  if [ -f "$task_file" ]; then
+    local current
+    current=$(grep '^TASK_ATTACHMENTS=' "$task_file" 2>/dev/null | head -1 | cut -d= -f2-) || current=""
+    # Skip if already recorded
+    case "|${current}|" in *"|${sidecar}|"*) return 0 ;; esac
+    local new_val="${sidecar}"
+    [ -n "$current" ] && new_val="${current}|${sidecar}"
+    local tmp_task="${task_file}.tmp.$$"
+    if grep -q '^TASK_ATTACHMENTS=' "$task_file" 2>/dev/null; then
+      sed "s|^TASK_ATTACHMENTS=.*|TASK_ATTACHMENTS=${new_val}|" "$task_file" > "$tmp_task" && mv "$tmp_task" "$task_file"
+    else
+      cp "$task_file" "$tmp_task" && printf 'TASK_ATTACHMENTS=%s\n' "$new_val" >> "$tmp_task" && mv "$tmp_task" "$task_file"
+    fi
+  fi
+  return 0
+}
+
 _HAS_JQ=0; command -v jq >/dev/null 2>&1 && _HAS_JQ=1
 TOOL_NAME=$(_json_str tool_name)
 _BASH_CMD=""
@@ -285,6 +359,12 @@ if [ -n "${_RD:-}" ]; then
       esac
       ;;
   esac
+fi
+
+# Screenshot auto-save — capture image reads as task attachments (side-effect only, never blocks)
+if [ "$TOOL_NAME" = "Read" ]; then
+  _ss_fp="${_SP_PATH:-$(_json_str tool_input.file_path)}"
+  _save_screenshot_attachment "${_ss_fp:-}" || true
 fi
 
 if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; } && [ "$TOOL_NAME" != "Bash" ]; then

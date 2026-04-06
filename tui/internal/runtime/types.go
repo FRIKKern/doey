@@ -122,6 +122,7 @@ type Attachment struct {
 	TaskID    string
 	Body      string // full content after frontmatter
 	FilePath  string // absolute path to the file
+	ImagePath string // path to binary image file (from sidecar frontmatter)
 }
 
 // Task from tasks/*.task (v3 schema)

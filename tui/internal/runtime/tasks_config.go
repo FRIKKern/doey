@@ -69,6 +69,7 @@ type PersistentAttachment struct {
 	Timestamp int64  `json:"timestamp"`
 	Body      string `json:"body,omitempty"`
 	FilePath  string `json:"filepath,omitempty"`
+	ImagePath string `json:"image_path,omitempty"`
 }
 
 // PersistentRecoveryEvent represents a stale detection or auto-recovery event (persistent store).
