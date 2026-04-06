@@ -1191,15 +1191,30 @@ func (m TasksModel) renderLeftPanel(w, h int) string {
 		if m.creating {
 			content += "\n" + m.renderInputBar()
 		}
-		return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+		return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
 	}
 
 	summary := m.taskSummary()
 
-	// Set list size for left panel
-	listH := h - 2 // header + summary
-	if listH < 1 {
-		listH = 1
+	// Set list size for left panel — account for section header overhead.
+	// CardDelegate.Render() emits extra lines for section headers not included
+	// in Height(), causing overflow that lipgloss.Height() does not truncate.
+	sectionOverhead := 0
+	lastSection := ""
+	for _, entry := range m.entries {
+		section := taskcard.TaskSection(entry.Status)
+		if section != lastSection {
+			if lastSection == "" {
+				sectionOverhead += taskcard.SectionHeaderLines
+			} else {
+				sectionOverhead += taskcard.SectionGapLines + taskcard.SectionHeaderLines
+			}
+			lastSection = section
+		}
+	}
+	listH := h - 2 - sectionOverhead // header + summary + section headers
+	if listH < 4 {
+		listH = 4
 	}
 	// Create a temporary copy for rendering at correct size
 	l := m.list
@@ -1215,7 +1230,7 @@ func (m TasksModel) renderLeftPanel(w, h int) string {
 	if m.creating {
 		content += "\n" + m.renderInputBar()
 	}
-	return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+	return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
 }
 
 // renderRightPanel renders the detail pane for the selected task.
