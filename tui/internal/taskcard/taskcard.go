@@ -54,8 +54,8 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 // Height returns the fixed card height (icon+title line, description line).
 func (d CardDelegate) Height() int { return 2 }
 
-// Spacing returns the gap between cards.
-func (d CardDelegate) Spacing() int { return 1 }
+// Spacing returns the gap between cards (0 = dense, tight items within sections).
+func (d CardDelegate) Spacing() int { return 0 }
 
 // Update is a no-op; the delegate does not handle messages.
 func (d CardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
@@ -92,6 +92,11 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		}
 	}
 	if showHeader {
+		// Extra breathing room before section headers (except the first)
+		if index > 0 {
+			fmt.Fprintln(w)
+			fmt.Fprintln(w)
+		}
 		hdr := lipgloss.NewStyle().Bold(true).Foreground(d.Theme.Muted).Faint(true).PaddingLeft(1).Render(section)
 		fmt.Fprintln(w, hdr)
 	}
@@ -489,6 +494,7 @@ func (e *ExpandedCard) Render() string {
 	// --- Proof of Completion ---
 	proofRows := e.renderProofSection()
 	if len(proofRows) > 0 {
+		sections = append(sections, "")
 		sections = append(sections, proofRows...)
 	}
 

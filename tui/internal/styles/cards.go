@@ -399,6 +399,7 @@ func MetaLine(theme Theme, label, value string) string {
 	l := lipgloss.NewStyle().
 		Foreground(theme.Subtle).
 		Bold(true).
+		Width(14).
 		Render(label + ":")
 	v := lipgloss.NewStyle().
 		Foreground(theme.Text).

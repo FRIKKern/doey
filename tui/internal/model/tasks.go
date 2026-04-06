@@ -274,7 +274,7 @@ func NewTasksModel() TasksModel {
 		SplitPaneModel: NewSplitPane(theme, delegate, SplitPaneConfig{
 			CardHeight:     2,
 			HeaderLines:    2,
-			HasSeparator:   false,
+			HasSeparator:   true,
 			VPHeightOffset: 3,
 			VPWidthPad:     3,
 			LeftPct:        33,
@@ -1931,44 +1931,46 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		displayed += "\n" + scrollHint
 	}
 
-	// Action buttons (only when detail focused and task selected)
+	// Action hints (only when detail focused and task selected)
 	if !m.leftFocused && len(m.entries) > 0 {
 		idx := m.list.Index()
 		if idx >= 0 && idx < len(m.entries) {
 			task := m.entries[idx]
-			var buttons []string
+			var parts []string
 			status := task.Status
-			btnStyle := func(bg lipgloss.AdaptiveColor) lipgloss.Style {
-				return lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(bg).Padding(0, 2)
-			}
 
 			if status == "done" {
-				// Done tasks: only show undo button
-				buttons = append(buttons, zone.Mark("task-undo-btn", btnStyle(t.Warning).Render("Undo Completion (u)")))
+				parts = append(parts, zone.Mark("task-undo-btn", lipgloss.NewStyle().Foreground(t.Warning).Render("u = undo")))
 			} else if status == "pending_user_confirmation" {
-				// Review decision buttons
-				buttons = append(buttons, zone.Mark("task-deny-btn", btnStyle(t.Danger).Render("Deny (d)")))
-				buttons = append(buttons, zone.Mark("task-skip-btn", btnStyle(t.Muted).Render("Skip Review (s)")))
-				buttons = append(buttons, zone.Mark("task-accept-btn", btnStyle(t.Success).Render("Accept (a)")))
+				parts = append(parts, zone.Mark("task-accept-btn", lipgloss.NewStyle().Foreground(t.Success).Render("a = accept")))
+				parts = append(parts, zone.Mark("task-deny-btn", lipgloss.NewStyle().Foreground(t.Danger).Render("d = deny")))
+				parts = append(parts, zone.Mark("task-skip-btn", lipgloss.NewStyle().Foreground(t.Muted).Render("s = skip")))
 			} else {
-				// Standard action buttons
 				if status != "done" && status != "cancelled" {
-					buttons = append(buttons, zone.Mark("task-move-btn", btnStyle(t.Primary).Render("Move (m)")))
+					parts = append(parts, zone.Mark("task-move-btn", lipgloss.NewStyle().Foreground(t.Primary).Render("m = move")))
 				}
 				if status == "in_progress" || status == "active" || status == "pending" || status == "ready" {
-					buttons = append(buttons, zone.Mark("task-dispatch-btn", btnStyle(t.Accent).Render("Dispatch (d)")))
+					parts = append(parts, zone.Mark("task-dispatch-btn", lipgloss.NewStyle().Foreground(t.Accent).Render("d = dispatch")))
 				}
-				buttons = append(buttons, zone.Mark("task-status-btn", btnStyle(t.Muted).Render("Status (s)")))
+				parts = append(parts, zone.Mark("task-status-btn", lipgloss.NewStyle().Foreground(t.Muted).Render("s = status")))
 				if status != "cancelled" {
-					buttons = append(buttons, zone.Mark("task-cancel-btn", btnStyle(t.Danger).Render("Cancel (x)")))
+					parts = append(parts, zone.Mark("task-cancel-btn", lipgloss.NewStyle().Foreground(t.Danger).Render("x = cancel")))
 				}
 			}
 
-			if len(buttons) > 0 {
-				row := strings.Join(buttons, " ")
-				displayed += "\n" + lipgloss.NewStyle().Width(renderW).Align(lipgloss.Center).Render(row)
+			if len(parts) > 0 {
+				displayed += "\n\n" + strings.Join(parts, "  ")
 			}
 		}
+	}
+
+	// Navigation hint
+	if m.focused {
+		hint := "← back to list"
+		if m.leftFocused {
+			hint = "→ or enter for details"
+		}
+		displayed += "\n" + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint)
 	}
 
 	borderColor := t.Separator
@@ -1978,7 +1980,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(h).
-		PaddingRight(1).
+		Padding(1, 2).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(borderColor)
@@ -2056,15 +2058,14 @@ func (m TasksModel) taskSummary() string {
 		}
 	}
 
-	total := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(1).
-		Render(fmt.Sprintf("%d tasks", len(m.entries)))
-
-	var parts []string
+	countParts := []string{fmt.Sprintf("%d total", len(m.entries))}
 	if active > 0 {
-		parts = append(parts, styles.SectionPill(fmt.Sprintf("%d active", active), t.Primary))
+		countParts = append(countParts,
+			lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d active", active)))
 	}
 	if complete > 0 {
-		parts = append(parts, styles.SectionPill(fmt.Sprintf("%d complete", complete), t.Success))
+		countParts = append(countParts,
+			lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("%d done", complete)))
 	}
 
 	busyWorkers := 0
@@ -2076,13 +2077,12 @@ func (m TasksModel) taskSummary() string {
 		if busyWorkers != 1 {
 			label += "s"
 		}
-		parts = append(parts, styles.SectionPill(label+" active", t.Warning))
+		countParts = append(countParts,
+			lipgloss.NewStyle().Foreground(t.Warning).Render(label+" active"))
 	}
 
-	if len(parts) > 0 {
-		return total + "  " + strings.Join(parts, " ")
-	}
-	return total
+	return lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(1).
+		Render(strings.Join(countParts, ", "))
 }
 
 // workerSummaryForTask returns a compact live status string for a task.
