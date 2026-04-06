@@ -234,7 +234,7 @@ HELP
   build)
     printf "  %bBuilding Go binaries...%b\n" "$BRAND" "$RESET"
     if type _build_all_go_binaries >/dev/null 2>&1; then
-      local repo_dir; repo_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+      repo_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
       if _build_all_go_binaries "$repo_dir"; then
         printf "  %b✓ Go binaries built%b\n" "$SUCCESS" "$RESET"
       else
@@ -319,18 +319,17 @@ HELP
     exit 0
     ;;
   masterplan|plan)
-    local goal="${2:-}"
+    goal="${2:-}"
     [ -z "$goal" ] && { doey_error "Usage: doey masterplan \"goal text\""; exit 1; }
     require_running_session
-    local plan_id="masterplan-$(date +%Y%m%d-%H%M%S)"
-    local plan_dir="${runtime_dir}/${plan_id}"
+    plan_id="masterplan-$(date +%Y%m%d-%H%M%S)"
+    plan_dir="${runtime_dir}/${plan_id}"
     mkdir -p "$plan_dir"
-    local plan_file="${plan_dir}/plan.md"
+    plan_file="${plan_dir}/plan.md"
     touch "$plan_file"
     printf '%s\n' "$goal" > "${plan_dir}/goal.md"
 
     # Create task
-    local task_id
     task_id=$(doey task create --title "Masterplan: ${goal}" --type feature --description "$goal" --project-dir "$dir" 2>/dev/null) || true
 
     # Export for add_team_from_def (shell scope) and tmux (pane scope)
