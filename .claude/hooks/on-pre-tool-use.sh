@@ -45,6 +45,15 @@ _log_block() {
   printf '[%s] %s | %s | %s | on-pre-tool-use | %s | %s | %s\n' \
     "$_now" "$cat" "$_pid" "$_role" "${TOOL_NAME:-n/a}" "${detail:-n/a}" "$msg" \
     >> "${_rt}/errors/errors.log" 2>/dev/null
+  # Bridge to SQLite event system
+  if command -v doey-ctl >/dev/null 2>&1; then
+    local _proj="${DOEY_PROJECT_DIR:-}"
+    [ -z "$_proj" ] && _proj=$(git rev-parse --show-toplevel 2>/dev/null) || true
+    if [ -n "$_proj" ]; then
+      local _evt_data="role=${_role}|tool=${TOOL_NAME:-n/a}|${detail:-}"
+      (doey event log --type "error_hook_block" --source "$_pid" --data "${msg} | ${_evt_data}" --project-dir "$_proj" &) 2>/dev/null
+    fi
+  fi
 }
 
 _json_str() {
@@ -94,20 +103,74 @@ _is_destructive_rm() {
   return 1
 }
 
-_escalate_permission() {
-  local _tool="$1" _cmd="$2" _reason="$3"
+_forward_action() {
+  local _tool="$1" _cmd="$2" _reason="$3" _target_override="${4:-}"
   local _rtd="${_RD:-${DOEY_RUNTIME:-}}"
-  [ -z "$_rtd" ] && return 0
+  [ -z "$_rtd" ] && return 1
   local _sn="${SESSION_NAME:-}"; [ -z "$_sn" ] && _sn=$(_rk SESSION_NAME "${_rtd}/session.env")
-  [ -z "$_sn" ] && return 0
+  [ -z "$_sn" ] && return 1
   local _wi="${DOEY_WINDOW_INDEX:-}"; [ -z "$_wi" ] && _wi=$(_rk DOEY_WINDOW_INDEX "${_rtd}/session.env")
-  [ -z "$_wi" ] && return 0
-  local _mgr_safe; _mgr_safe=$(printf '%s_%s_0' "$_sn" "$_wi" | tr ':.-' '_')
-  mkdir -p "${_rtd}/messages" 2>/dev/null || return 0
-  printf 'FROM: %s\nSUBJECT: permission_request\nTOOL: %s\nCOMMAND: %.200s\nREASON: %s\nPANE: %s\n' \
-    "${_PS:-unknown}" "$_tool" "$_cmd" "$_reason" "${_WP:-unknown}" \
-    > "${_rtd}/messages/${_mgr_safe}_$(date +%s)_$$.msg" 2>/dev/null || true
-  touch "${_rtd}/triggers/${_mgr_safe}.trigger" 2>/dev/null || true
+
+  # Determine target pane
+  local _target_safe=""
+  if [ -n "$_target_override" ]; then
+    _target_safe="$_target_override"
+  else
+    local _sn_safe; _sn_safe=$(printf '%s' "$_sn" | tr ':.-' '_')
+    case "$_DOEY_ROLE" in
+      "$DOEY_ROLE_ID_BOSS")
+        _target_safe=$(printf '%s_1_0' "$_sn_safe") ;;
+      "$DOEY_ROLE_ID_WORKER")
+        [ -z "$_wi" ] && return 1
+        _target_safe=$(printf '%s_%s_0' "$_sn_safe" "$_wi") ;;
+      "$DOEY_ROLE_ID_COORDINATOR")
+        _target_safe=$(printf '%s_2_0' "$_sn_safe") ;;
+      "$DOEY_ROLE_ID_TEAM_LEAD")
+        _target_safe=$(printf '%s_1_0' "$_sn_safe") ;;
+      *)
+        [ -z "$_wi" ] && return 1
+        _target_safe=$(printf '%s_%s_0' "$_sn_safe" "$_wi") ;;
+    esac
+  fi
+  [ -z "$_target_safe" ] && return 1
+
+  # Check target status — skip if ERROR or RESPAWNING
+  if [ -f "${_rtd}/status/${_target_safe}.status" ]; then
+    local _tgt_status; _tgt_status=$(cat "${_rtd}/status/${_target_safe}.status" 2>/dev/null) || _tgt_status=""
+    case "$_tgt_status" in
+      ERROR|RESPAWNING) return 1 ;;
+    esac
+  fi
+
+  # Build body with structured fields
+  local _cmd_trunc; _cmd_trunc=$(printf '%.500s' "$_cmd")
+  local _body; _body=$(printf 'ACTION_TYPE: %s\nTOOL: %s\nCOMMAND: %s\nREQUESTER_PANE: %s\nREASON: %s' \
+    "$_reason" "$_tool" "$_cmd_trunc" "${_WP:-unknown}" "$_reason")
+  if [ -n "${DOEY_TASK_ID:-}" ]; then
+    _body=$(printf '%s\nTASK_ID: %s' "$_body" "$DOEY_TASK_ID")
+  fi
+
+  # Try doey-ctl msg send first
+  if command -v doey-ctl >/dev/null 2>&1; then
+    if doey-ctl msg send \
+      --from "${_PS:-unknown}" \
+      --to "$_target_safe" \
+      --subject "action_request" \
+      --body "$_body" \
+      --runtime "$_rtd" \
+      --no-nudge 2>/dev/null; then
+      touch "${_rtd}/triggers/${_target_safe}.trigger" 2>/dev/null || true
+      return 0
+    fi
+  fi
+
+  # Fallback: file-based IPC
+  mkdir -p "${_rtd}/messages" 2>/dev/null || return 1
+  printf 'FROM: %s\nSUBJECT: action_request\n%s\n' \
+    "${_PS:-unknown}" "$_body" \
+    > "${_rtd}/messages/${_target_safe}_$(date +%s)_$$.msg" 2>/dev/null || return 1
+  touch "${_rtd}/triggers/${_target_safe}.trigger" 2>/dev/null || true
+  return 0
 }
 
 _is_direct_vcs_cmd() {
@@ -339,7 +402,8 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
       *)
         _log_block "TOOL_BLOCKED" "${DOEY_ROLE_BOSS} send-keys to non-${DOEY_ROLE_COORDINATOR} pane blocked" "$_BOSS_CMD"
         _dbg_write "block_boss_sendkeys_${_boss_target}"
-        echo "BLOCKED: ${DOEY_ROLE_BOSS} may only send-keys to ${DOEY_ROLE_COORDINATOR} pane (${_boss_tm_pane})" >&2
+        _forward_action "Bash" "$_BOSS_CMD" "send-keys relay" || true
+        echo "FORWARDED: Command relay request sent to ${DOEY_ROLE_COORDINATOR}." >&2
         exit 2 ;;
     esac
   ;; esac
@@ -372,10 +436,8 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
     Agent)
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
       _dbg_write "block_${_DOEY_ROLE}_agent"
-      case "$_DOEY_ROLE" in
-        "$DOEY_ROLE_ID_BOSS") echo "BLOCKED: ${DOEY_ROLE_BOSS} cannot spawn agents. Relay tasks to ${DOEY_ROLE_COORDINATOR} instead." >&2 ;;
-        *)    echo "BLOCKED: Managers coordinate — they don't spawn agents. Dispatch to workers instead." >&2 ;;
-      esac
+      _forward_action "Agent" "" "agent spawn" || true
+      echo "FORWARDED: Agent spawn request sent to ${DOEY_ROLE_COORDINATOR}." >&2
       exit 2 ;;
     Read|Edit|Write|Glob|Grep)
       _CHK_PATH=$(_json_str tool_input.file_path)
@@ -388,12 +450,8 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
       esac
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} $TOOL_NAME on project source blocked" "${_CHK_PATH:-project root}"
       _dbg_write "block_${_DOEY_ROLE}_source_${TOOL_NAME}"
-      case "$_DOEY_ROLE" in
-        "$DOEY_ROLE_ID_BOSS")            _advice="Relay file operations to ${DOEY_ROLE_COORDINATOR}" ;;
-        "$DOEY_ROLE_ID_COORDINATOR") _advice="Coordinate workers to handle file operations" ;;
-        *)               _advice="Delegate file operations to workers" ;;
-      esac
-      echo "BLOCKED: Cannot $TOOL_NAME project source files. ${_advice}." >&2
+      _forward_action "$TOOL_NAME" "${_CHK_PATH:-}" "source access" || true
+      echo "FORWARDED: Source access request sent to ${DOEY_ROLE_COORDINATOR}. Continue with other work." >&2
       exit 2 ;;
   esac
 fi
@@ -477,10 +535,10 @@ if [ "$TOOL_NAME" != "Bash" ]; then
   if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ -n "$_DOEY_ROLE" ]; then
     _log_block "TOOL_BLOCKED" "$_DOEY_ROLE cannot use AskUserQuestion" "only ${DOEY_ROLE_BOSS} asks the user"
     _dbg_write "block_ask_user_${_DOEY_ROLE}"
-    echo "BLOCKED: Only ${DOEY_ROLE_BOSS} can ask the user questions directly." >&2
-    echo "Send a message to ${DOEY_ROLE_BOSS} with your question instead:" >&2
-    echo '  BOSS_SAFE="${SESSION_NAME//[-:.]/_}_0_1"' >&2
-    echo '  printf "FROM: ...\nSUBJECT: question\nQUESTION: ...\n" > "${RUNTIME_DIR}/messages/${BOSS_SAFE}_$(date +%s)_$$.msg"' >&2
+    _sn_ask="${SESSION_NAME:-}"; [ -z "$_sn_ask" ] && _sn_ask=$(_rk SESSION_NAME "${_RD:-}/session.env")
+    _boss_safe=$(printf '%s_0_1' "$(printf '%s' "$_sn_ask" | tr ':.-' '_')")
+    _forward_action "AskUserQuestion" "" "user question" "$_boss_safe" || true
+    echo "FORWARDED: Question forwarded to Boss for user interaction." >&2
     exit 2
   fi
   _dbg_write "allow_non_bash"
@@ -527,10 +585,11 @@ if [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE:-unknown} git write operation blocked" "$_BASH_CMD"
       _dbg_write "block_git_write_${_DOEY_ROLE:-unknown}"
       if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
-        _escalate_permission "Bash" "$_BASH_CMD" "git write operations blocked for workers"
-        echo "BLOCKED: VCS operations are handled by ${DOEY_ROLE_DEPLOYMENT}. Send a task_complete message to your ${DOEY_ROLE_TEAM_LEAD}. ${DOEY_ROLE_TEAM_LEAD} notified — it may approve this for you." >&2
+        _forward_action "Bash" "$_BASH_CMD" "git write operations blocked for workers" || true
+        echo "FORWARDED: VCS request sent to ${DOEY_ROLE_TEAM_LEAD}. Continue with other work." >&2
       else
-        echo "BLOCKED: VCS operations are handled by ${DOEY_ROLE_DEPLOYMENT}. Send a message to ${DOEY_ROLE_COORDINATOR} to request deployment." >&2
+        _forward_action "Bash" "$_BASH_CMD" "VCS operations" || true
+        echo "FORWARDED: VCS request sent to ${DOEY_ROLE_COORDINATOR}. Continue with other work." >&2
       fi
       exit 2
     fi
@@ -637,8 +696,8 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
   if _check_blocked "$TOOL_COMMAND"; then
     _log_block "TOOL_BLOCKED" "${DOEY_ROLE_WORKER} $MSG blocked" "$TOOL_COMMAND"
     _dbg_write "block_worker"
-    _escalate_permission "Bash" "$TOOL_COMMAND" "${DOEY_ROLE_WORKER} blocked: $MSG"
-    echo "BLOCKED: Workers cannot run ${MSG}. Only the ${DOEY_ROLE_TEAM_LEAD} can do this. ${DOEY_ROLE_TEAM_LEAD} notified — it may approve this for you." >&2
+    _forward_action "Bash" "$TOOL_COMMAND" "${DOEY_ROLE_WORKER} blocked: $MSG" || true
+    echo "FORWARDED: Request sent to ${DOEY_ROLE_TEAM_LEAD}. Continue with other work." >&2
     exit 2
   fi
   _dbg_write "allow_worker"

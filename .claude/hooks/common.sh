@@ -188,6 +188,25 @@ _log_error() {
   _rotate_log "${RUNTIME_DIR}/errors/errors.log"
 }
 
+# Bridge errors into SQLite event system — call after _log_error for DB persistence
+doey_log_error() {
+  local error_type="${1:-unknown}" source="${2:-${DOEY_PANE_ID:-unknown}}"
+  local message="${3:-}" task_id="${4:-}" data="${5:-}"
+  # Flat-file backward compat
+  _log_error "${error_type}" "$message" "$data"
+  # SQLite event (backgrounded, never blocks)
+  if command -v doey-ctl >/dev/null 2>&1; then
+    local _proj; _proj=$(_resolve_project_dir)
+    if [ -n "$_proj" ]; then
+      local _evt_args="--type error_${error_type} --source ${source}"
+      [ -n "$task_id" ] && _evt_args="${_evt_args} --task-id ${task_id}"
+      local _evt_data="${message}"
+      [ -n "$data" ] && _evt_data="${_evt_data} | ${data}"
+      (doey event log $_evt_args --data "$_evt_data" --project-dir "$_proj" &) 2>/dev/null
+    fi
+  fi
+}
+
 parse_field() {
   local field="$1"
   if command -v jq >/dev/null 2>&1; then

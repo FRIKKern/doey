@@ -41,6 +41,7 @@ _notify_pane() {
   if ! _send_message_file "$target_pane" "$subject" "$body" 2>/dev/null; then
     if ! send_to_pane "$target_pane" "$body" 2>/dev/null; then
       _log_error "DELIVERY_FAILED" "Both file and send-keys delivery failed" "target=$target_pane subject=$subject"
+      doey_log_error "delivery" "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "Both file and send-keys delivery failed" "${DOEY_TASK_ID:-}" "target=$target_pane subject=$subject"
       return 1
     fi
   fi
@@ -180,7 +181,7 @@ if is_worker; then
     _respawn_reason=$(grep '^REASON=' "$_respawn_request" 2>/dev/null | cut -d= -f2-) || _respawn_reason="respawn requested"
   fi
 
-  _pane_alive "$_target" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$_target"; exit 0; }
+  _pane_alive "$_target" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$_target"; doey_log_error "delivery" "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "Target pane not found" "${DOEY_TASK_ID:-}" "target=$_target"; exit 0; }
 
   # Build summary: prefer result summary, fall back to last message
   _NOTIFY_SUMMARY="${_SUMMARY}"
@@ -238,7 +239,7 @@ if is_manager; then
   [ "${_cur#STATUS: }" = "BUSY" ] || exit 0
 
   TASKMASTER_PANE=$(get_taskmaster_pane)
-  _pane_alive "$SESSION_NAME:${TASKMASTER_PANE}" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$SESSION_NAME:${TASKMASTER_PANE}"; exit 0; }
+  _pane_alive "$SESSION_NAME:${TASKMASTER_PANE}" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$SESSION_NAME:${TASKMASTER_PANE}"; doey_log_error "delivery" "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "Target pane not found" "${DOEY_TASK_ID:-}" "target=$SESSION_NAME:${TASKMASTER_PANE}"; exit 0; }
 
   SUMMARY=$(sanitize_message "$(parse_field "last_assistant_message")" 150)
   [ -z "$SUMMARY" ] && SUMMARY="(no summary)"

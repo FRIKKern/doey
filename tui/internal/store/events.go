@@ -61,6 +61,43 @@ func (s *Store) ListEvents(eventType string, limit int) ([]Event, error) {
 	return events, rows.Err()
 }
 
+// ListErrorEvents returns error events (type LIKE 'error_%'), newest first.
+// Optional filters: errorType (exact type match), source, taskID (>0), limit.
+func (s *Store) ListErrorEvents(errorType string, source string, taskID int64, limit int) ([]Event, error) {
+	query := `SELECT id, type, source, target, task_id, data, created_at FROM events WHERE type LIKE 'error_%'`
+	var args []any
+	if errorType != "" {
+		query += ` AND type = ?`
+		args = append(args, errorType)
+	}
+	if source != "" {
+		query += ` AND source = ?`
+		args = append(args, source)
+	}
+	if taskID > 0 {
+		query += ` AND task_id = ?`
+		args = append(args, taskID)
+	}
+	query += ` ORDER BY created_at DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.Type, &e.Source, &e.Target, &e.TaskID, &e.Data, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
+}
+
 // ListEventsByTask returns all events for a given task, oldest first.
 func (s *Store) ListEventsByTask(taskID int64) ([]Event, error) {
 	rows, err := s.db.Query(
