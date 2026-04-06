@@ -146,20 +146,21 @@ doey_send_verified() {
     settle_s=$(awk "BEGIN {printf \"%.2f\", ${settle_ms}/1000}")
     sleep "$settle_s"
     local captured
-    captured=$(tmux capture-pane -t "$target" -p -S -10 2>/dev/null) || captured=""
+    captured=$(tmux capture-pane -t "$target" -p -S -30 2>/dev/null) || captured=""
     local snippet
-    if [ ${#message} -gt 40 ]; then
-      snippet="${message:0:40}"
+    local msg_nolf
+    msg_nolf=$(printf '%s' "$message" | tr '\n' ' ')
+    if [ ${#msg_nolf} -gt 40 ]; then
+      snippet="${msg_nolf:$((${#msg_nolf} - 40)):40}"
     else
-      snippet="$message"
+      snippet="$msg_nolf"
     fi
-    snippet=$(printf '%s' "$snippet" | tr '\n' ' ')
 
     if ! printf '%s' "$captured" | grep -qF "$snippet" 2>/dev/null; then
       # Text didn't appear — Escape to ensure focus, re-check
       tmux send-keys -t "$target" Escape 2>/dev/null || true
       sleep 0.2
-      captured=$(tmux capture-pane -t "$target" -p -S -10 2>/dev/null) || captured=""
+      captured=$(tmux capture-pane -t "$target" -p -S -30 2>/dev/null) || captured=""
       if ! printf '%s' "$captured" | grep -qF "$snippet" 2>/dev/null; then
         echo "doey_send_verified: text not visible (attempt $attempt)" >&2
         continue
