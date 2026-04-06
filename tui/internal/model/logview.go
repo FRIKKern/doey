@@ -26,6 +26,10 @@ type logEntry struct {
 	ToolCalls int
 	Output    string // first 2 lines of LastOutput
 	Files     string // comma-joined changed files (truncated)
+	TaskID    string
+	SubtaskID string
+	Summary   string
+	ProofType string
 }
 
 // LogViewModel displays a streaming log of worker results with auto-scroll.
@@ -80,6 +84,10 @@ func (m *LogViewModel) SetSnapshot(snap runtime.Snapshot) {
 			ToolCalls: res.ToolCalls,
 			Output:    output,
 			Files:     files,
+			TaskID:    res.TaskID,
+			SubtaskID: res.SubtaskID,
+			Summary:   res.Summary,
+			ProofType: res.ProofType,
 		})
 	}
 	sort.Slice(m.entries, func(i, j int) bool {
@@ -281,19 +289,22 @@ func (m LogViewModel) viewList() string {
 		Render(fmt.Sprintf("%d results", len(m.entries)))
 	var counts []string
 	if finished > 0 {
-		counts = append(counts, lipgloss.NewStyle().Foreground(t.Success).Bold(true).
-			Render(fmt.Sprintf("\u2714 %d done", finished)))
+		counts = append(counts, lipgloss.NewStyle().
+			Background(t.Success).Foreground(t.BgText).Padding(0, 1).Bold(true).
+			Render(fmt.Sprintf("✓ %d done", finished)))
 	}
 	if busy > 0 {
-		counts = append(counts, lipgloss.NewStyle().Foreground(t.Warning).Bold(true).
-			Render(fmt.Sprintf("\u25CF %d busy", busy)))
+		counts = append(counts, lipgloss.NewStyle().
+			Background(t.Warning).Foreground(t.BgText).Padding(0, 1).Bold(true).
+			Render(fmt.Sprintf("● %d busy", busy)))
 	}
 	if errored > 0 {
-		counts = append(counts, lipgloss.NewStyle().Foreground(t.Danger).Bold(true).
-			Render(fmt.Sprintf("\u2717 %d error", errored)))
+		counts = append(counts, lipgloss.NewStyle().
+			Background(t.Danger).Foreground(t.BgText).Padding(0, 1).Bold(true).
+			Render(fmt.Sprintf("✗ %d error", errored)))
 	}
 	if len(counts) > 0 {
-		summary += "  " + strings.Join(counts, t.Faint.Render(" \u00b7 "))
+		summary += "  " + strings.Join(counts, " ")
 	}
 
 	scrollInd := ""
@@ -348,27 +359,52 @@ func (m LogViewModel) viewList() string {
 func (m LogViewModel) renderLine(e logEntry, maxW int) string {
 	t := m.theme
 
+	// Status icon — colored indicator
+	icon := m.statusIcon(e.Status)
+
 	// Timestamp — subtle, non-distracting
 	ts := styles.LogTimestamp(t, time.Unix(e.Timestamp, 0).Format("15:04:05"))
 
-	// Status — colored text badge
+	// Status — pill badge with background color
+	accentColor := styles.StatusAccentColor(t, e.Status)
+	statusLabel := e.Status
+	if statusLabel == "WORKING" {
+		statusLabel = "BUSY"
+	}
 	badge := lipgloss.NewStyle().
-		Foreground(m.statusColor(e.Status)).
+		Background(accentColor).
+		Foreground(t.BgText).
+		Padding(0, 1).
 		Bold(true).
-		Width(9).
-		Render(e.Status)
+		Render(statusLabel)
+
+	// Task ID badge — accent pill if present
+	taskBadge := ""
+	if e.TaskID != "" {
+		taskBadge = lipgloss.NewStyle().
+			Background(t.Accent).
+			Foreground(t.BgText).
+			Padding(0, 1).
+			Bold(true).
+			Render("#" + e.TaskID)
+	}
 
 	// Pane ID — muted label with padding
 	pane := styles.LogPaneLabel(t, e.Pane)
 
 	// Tool calls — faint metadata
-	tools := t.Faint.Render(fmt.Sprintf("%dt", e.ToolCalls))
+	tools := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(fmt.Sprintf("%dt", e.ToolCalls))
 
-	prefix := ts + " " + badge + " " + pane + " " + tools + " "
+	// Build prefix
+	prefix := icon + " " + ts + " " + badge + " "
+	if taskBadge != "" {
+		prefix += taskBadge + " "
+	}
+	prefix += pane + " " + tools + " "
 	prefixW := lipgloss.Width(prefix)
 
 	// Body text — title or first output line
-	maxBody := maxW - prefixW - 6
+	maxBody := maxW - prefixW - 2
 	body := firstLogLine(e.Output)
 	if e.Title != "" {
 		body = e.Title
@@ -380,17 +416,17 @@ func (m LogViewModel) renderLine(e logEntry, maxW int) string {
 	return prefix + t.LogEntry.Render(body)
 }
 
-func (m LogViewModel) statusColor(status string) lipgloss.AdaptiveColor {
+func (m LogViewModel) statusIcon(status string) string {
 	t := m.theme
 	switch status {
-	case "BUSY":
-		return t.Primary
+	case "BUSY", "WORKING":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
 	case "FINISHED":
-		return t.Success
+		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
 	case "ERROR":
-		return t.Danger
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
 	default:
-		return t.Muted
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
 	}
 }
 
@@ -407,28 +443,83 @@ func (m LogViewModel) viewDetail() string {
 
 	e := m.entries[m.cursor]
 
-	// Header with pane label
-	header := t.SectionHeader.Copy().PaddingLeft(2).
+	// Header with status icon + pane label
+	icon := m.statusIcon(e.Status)
+	header := icon + " " + t.SectionHeader.Copy().PaddingLeft(1).
 		Render("WORKER LOGS") +
-		t.Faint.Render(" \u2014 ") +
+		t.Faint.Render(" — ") +
 		styles.LogPaneLabel(t, e.Pane)
 	rule := styles.ThinSeparator(t, w)
 	backHint := zone.Mark("log-back", t.Faint.Copy().PaddingLeft(3).
-		Render("\u2190 esc to go back"))
+		Render("← esc to go back"))
 
 	// Detail fields with section header styling
-	labelStyle := t.SectionHeader.Copy().Width(12)
+	labelStyle := t.SectionHeader.Copy().Width(14)
 	valueStyle := t.Body
 
 	var fields []string
+
+	// Time — dimmed
 	fields = append(fields, labelStyle.Render("Time")+
 		styles.LogTimestamp(t, time.Unix(e.Timestamp, 0).Format("2006-01-02 15:04:05")))
+
 	fields = append(fields, labelStyle.Render("Pane")+valueStyle.Render(e.Pane))
 	fields = append(fields, labelStyle.Render("Title")+t.LogEntry.Render(e.Title))
-	fields = append(fields, labelStyle.Render("Status")+
-		styles.StatusText(e.Status))
+
+	// Status — icon + pill badge
+	accentColor := styles.StatusAccentColor(t, e.Status)
+	statusPill := lipgloss.NewStyle().
+		Background(accentColor).
+		Foreground(t.BgText).
+		Padding(0, 1).
+		Bold(true).
+		Render(e.Status)
+	fields = append(fields, labelStyle.Render("Status")+statusPill)
+
+	// Task ID — accent pill badge if present
+	if e.TaskID != "" {
+		taskPill := lipgloss.NewStyle().
+			Background(t.Accent).
+			Foreground(t.BgText).
+			Padding(0, 1).
+			Bold(true).
+			Render("#" + e.TaskID)
+		label := "Task"
+		if e.SubtaskID != "" {
+			label = "Task"
+			taskPill += " " + lipgloss.NewStyle().
+				Foreground(t.Muted).
+				Render("subtask:" + e.SubtaskID)
+		}
+		fields = append(fields, labelStyle.Render(label)+taskPill)
+	}
+
 	fields = append(fields, labelStyle.Render("Tool Calls")+t.Dim.Render(
 		fmt.Sprintf("%d", e.ToolCalls)))
+
+	// Summary — if present
+	if e.Summary != "" {
+		fields = append(fields, "")
+		fields = append(fields, labelStyle.Render("Summary")+
+			lipgloss.NewStyle().Foreground(t.Text).Render(e.Summary))
+	}
+
+	// ProofType — with emoji if present
+	if e.ProofType != "" {
+		proofIcon := "📎"
+		switch e.ProofType {
+		case "test":
+			proofIcon = "🧪"
+		case "build":
+			proofIcon = "🔨"
+		case "visual":
+			proofIcon = "👁"
+		case "manual":
+			proofIcon = "✋"
+		}
+		fields = append(fields, labelStyle.Render("Proof")+
+			lipgloss.NewStyle().Foreground(t.Info).Render(proofIcon+" "+e.ProofType))
+	}
 
 	// Files as bullet list
 	if e.Files != "" {
@@ -437,7 +528,7 @@ func (m LogViewModel) viewDetail() string {
 		for _, f := range strings.Split(e.Files, ", ") {
 			f = strings.TrimSpace(f)
 			if f != "" {
-				fields = append(fields, "   "+t.Faint.Render("\u2022")+" "+t.Dim.Render(f))
+				fields = append(fields, "   "+t.Faint.Render("•")+" "+t.Dim.Render(f))
 			}
 		}
 	}
@@ -452,7 +543,7 @@ func (m LogViewModel) viewDetail() string {
 	if output == "" {
 		output = t.Faint.Render("(no output captured)")
 	}
-	maxBodyH := m.height - 14
+	maxBodyH := m.height - 18
 	if maxBodyH < 3 {
 		maxBodyH = 3
 	}
@@ -461,17 +552,17 @@ func (m LogViewModel) viewDetail() string {
 		totalLines := len(outputLines)
 		outputLines = outputLines[:maxBodyH]
 		outputLines = append(outputLines,
-			t.Faint.Render(fmt.Sprintf("\u2026 (%d more lines)", totalLines-maxBodyH)))
+			t.Faint.Render(fmt.Sprintf("… (%d more lines)", totalLines-maxBodyH)))
 	}
 
-	// Render output with left border accent
+	// Render output with left border accent colored by status
 	outputContent := strings.Join(outputLines, "\n")
 	outputBlock := lipgloss.NewStyle().
 		Padding(0, 3).
 		Foreground(t.Text).
 		BorderLeft(true).
-		BorderStyle(lipgloss.Border{Left: "\u2502"}).
-		BorderForeground(t.Muted).
+		BorderStyle(lipgloss.Border{Left: "│"}).
+		BorderForeground(accentColor).
 		MarginLeft(3).
 		Render(outputContent)
 

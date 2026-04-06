@@ -202,6 +202,61 @@ func LogEventBadge(theme Theme, eventType string) string {
 		Render(label)
 }
 
+// LogStatusIcon returns a colored icon character for a pane status.
+func LogStatusIcon(status string, t Theme) string {
+	switch status {
+	case "BUSY", "WORKING":
+		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
+	case "FINISHED":
+		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
+	case "ERROR":
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
+	default:
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+	}
+}
+
+// LogTaskBadge renders a task ID as a colored pill badge.
+// Returns empty string if taskID is empty.
+func LogTaskBadge(taskID string, t Theme) string {
+	if taskID == "" {
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Background(t.Accent).
+		Foreground(t.BgText).
+		Padding(0, 1).
+		Bold(true).
+		Render("#" + taskID)
+}
+
+// LogStatusBadge renders a status string as a background-colored pill badge.
+func LogStatusBadge(status string, t Theme) string {
+	color := StatusAccentColor(t, strings.ToLower(status))
+	return lipgloss.NewStyle().
+		Background(color).
+		Foreground(t.BgText).
+		Padding(0, 1).
+		Bold(true).
+		Render(strings.ToUpper(status))
+}
+
+// LogEntryIcon returns an icon for a proof/entry type.
+func LogEntryIcon(proofType string, t Theme) string {
+	switch proofType {
+	case "agent":
+		return "🤖"
+	case "test":
+		return "🧪"
+	case "build":
+		return "🔨"
+	case "manual":
+		return "👤"
+	default:
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("◆")
+	}
+}
+
 // LogTimestamp renders a timestamp in a very dim, barely-visible style.
 func LogTimestamp(theme Theme, ts string) string {
 	color := theme.Subtle
