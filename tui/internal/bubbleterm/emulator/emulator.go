@@ -36,6 +36,7 @@ type Emulator struct {
 	cmd           *exec.Cmd
 	processExited bool
 	onExit        func(string) // Callback when process exits, receives emulator ID
+	onData        func()       // Callback when new PTY data arrives
 
 	// Framerate control
 	frameRate time.Duration
@@ -271,6 +272,14 @@ func (e *Emulator) SetOnExit(callback func(string)) {
 	e.onExit = callback
 }
 
+// SetOnData sets a callback function that will be called when new PTY data arrives.
+// The callback must be non-blocking.
+func (e *Emulator) SetOnData(callback func()) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onData = callback
+}
+
 // IsProcessExited returns true if the process has exited
 func (e *Emulator) IsProcessExited() bool {
 	e.mu.RLock()
@@ -474,7 +483,12 @@ func (e *Emulator) ptyReadLoop() {
 			e.mu.Lock()
 			e.vt.Write(buf[:n])
 			e.damaged = true
+			onData := e.onData
 			e.mu.Unlock()
+
+			if onData != nil {
+				onData()
+			}
 		}
 	}
 }

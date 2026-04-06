@@ -10,8 +10,11 @@ import (
 	"github.com/doey-cli/doey/tui/internal/bubbleterm"
 )
 
-// tickMsg is sent by the centralized ticker for terminal polling.
+// tickMsg is sent by the centralized ticker as a fallback for resize/status updates.
 type tickMsg struct{}
+
+// ptyDataMsg signals that new data arrived from a PTY read loop.
+type ptyDataMsg struct{}
 
 // Tab represents a single terminal tab.
 type Tab struct {
@@ -29,6 +32,7 @@ type Model struct {
 	ready     bool
 	tabCount  int
 	tabLayout tabBarLayout // click zones from last render
+	ptyNotify chan struct{} // event-driven PTY data notifications
 }
 
 const tabBarHeight = 1
@@ -37,7 +41,8 @@ const tabBarHeight = 1
 // terminal size is known (on the first WindowSizeMsg).
 func New(shell string) *Model {
 	return &Model{
-		shell: shell,
+		shell:     shell,
+		ptyNotify: make(chan struct{}, 1),
 	}
 }
 
@@ -69,6 +74,15 @@ func (m *Model) createTab() (*Tab, tea.Cmd) {
 	terminal.SetAutoPoll(false)
 	terminal.Focus()
 
+	// Set up event-driven PTY notification (non-blocking write to channel).
+	notify := m.ptyNotify
+	terminal.GetEmulator().SetOnData(func() {
+		select {
+		case notify <- struct{}{}:
+		default:
+		}
+	})
+
 	tab := &Tab{
 		Name: fmt.Sprintf("Tab %d", m.tabCount),
 		Term: terminal,
@@ -96,6 +110,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			cmds = append(cmds, m.scheduleTick())
+			cmds = append(cmds, m.waitForPtyData())
 			return m, tea.Batch(cmds...)
 		}
 
@@ -164,7 +179,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case ptyDataMsg:
+		// New PTY data arrived — poll all terminals for updated frames.
+		for i := range m.tabs {
+			cmd := m.tabs[i].Term.UpdateTerminal()
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		cmds = append(cmds, m.waitForPtyData())
+		return m, tea.Batch(cmds...)
+
 	case tickMsg:
+		// Fallback tick for resize events, status bar, and process exit checks.
 		for i := range m.tabs {
 			cmd := m.tabs[i].Term.UpdateTerminal()
 			if cmd != nil {
@@ -270,9 +297,18 @@ func (m *Model) switchTab(idx int) {
 }
 
 func (m *Model) scheduleTick() tea.Cmd {
-	return tea.Tick(33*time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg {
 		return tickMsg{}
 	})
+}
+
+// waitForPtyData returns a command that blocks until PTY data arrives.
+func (m *Model) waitForPtyData() tea.Cmd {
+	ch := m.ptyNotify
+	return func() tea.Msg {
+		<-ch
+		return ptyDataMsg{}
+	}
 }
 
 // View renders the tab bar and the active terminal.
