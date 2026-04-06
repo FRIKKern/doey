@@ -18,7 +18,7 @@ func keyToTerminalInput(msg tea.KeyMsg) string {
 	case "backspace":
 		return "\x7f"
 	case "delete":
-		return "\x7f"
+		return "\x1b[3~"
 	case "esc":
 		return "\x1b"
 	case "space", " ":
@@ -35,9 +35,9 @@ func keyToTerminalInput(msg tea.KeyMsg) string {
 		return "\x1b[H"
 	case "end":
 		return "\x1b[F"
-	case "pageup":
+	case "pgup":
 		return "\x1b[5~"
-	case "pagedown":
+	case "pgdown":
 		return "\x1b[6~"
 	case "insert":
 		return "\x1b[2~"
@@ -73,10 +73,42 @@ func keyToTerminalInput(msg tea.KeyMsg) string {
 		return "\x1a"
 	case "ctrl+l":
 		return "\x0c"
+	// Shift+arrow keys
+	case "shift+up":
+		return "\x1b[1;2A"
+	case "shift+down":
+		return "\x1b[1;2B"
+	case "shift+right":
+		return "\x1b[1;2C"
+	case "shift+left":
+		return "\x1b[1;2D"
+	// Ctrl+arrow keys
+	case "ctrl+up":
+		return "\x1b[1;5A"
+	case "ctrl+down":
+		return "\x1b[1;5B"
+	case "ctrl+right":
+		return "\x1b[1;5C"
+	case "ctrl+left":
+		return "\x1b[1;5D"
 	default:
+		str := msg.String()
+		// Generic ctrl+letter handler (ctrl+a through ctrl+z)
+		if len(str) == 6 && strings.HasPrefix(str, "ctrl+") {
+			ch := str[5]
+			if ch >= 'a' && ch <= 'z' {
+				return string(rune(ch - 'a' + 1))
+			}
+		}
+		// Alt+key combos: send ESC followed by the character
+		if strings.HasPrefix(str, "alt+") {
+			rest := str[4:]
+			if len(rest) == 1 {
+				return "\x1b" + rest
+			}
+		}
 		// For regular characters, return the string as-is
 		// This handles letters, numbers, symbols, and multi-byte unicode (ø, æ, å, etc.)
-		str := msg.String()
 		if utf8.RuneCountInString(str) >= 1 && !strings.Contains(str, "+") {
 			return str
 		}
