@@ -637,6 +637,16 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 					}
 				}
 
+				// Undo completion button (done tasks only)
+				if task.Status == "done" {
+					if zone.Get("task-undo-btn").InBounds(msg) {
+						m.statusMsg = "Completion undone"
+						return m, tea.Batch(func() tea.Msg {
+							return SetStatusTaskMsg{ID: task.ID, Status: "pending_user_confirmation"}
+						}, taskStatusClearCmd())
+					}
+				}
+
 				// Standard action buttons (non-review statuses)
 				if zone.Get("task-move-btn").InBounds(msg) {
 					next := nextMoveStatus(task.Status)
@@ -676,7 +686,7 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 			leftW = 28
 		}
 		if msg.X < leftW && len(m.entries) > 0 {
-			const cardHeight = 4
+			const cardHeight = 3
 			const headerLines = 2 // "TASKS" header + summary line
 			relY := msg.Y - m.panelOffsetY - headerLines
 			if relY >= 0 {
@@ -1932,7 +1942,10 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 				return lipgloss.NewStyle().Bold(true).Foreground(t.BgText).Background(bg).Padding(0, 2)
 			}
 
-			if status == "pending_user_confirmation" {
+			if status == "done" {
+				// Done tasks: only show undo button
+				buttons = append(buttons, zone.Mark("task-undo-btn", btnStyle(t.Warning).Render("Undo Completion (u)")))
+			} else if status == "pending_user_confirmation" {
 				// Review decision buttons
 				buttons = append(buttons, zone.Mark("task-deny-btn", btnStyle(t.Danger).Render("Deny (d)")))
 				buttons = append(buttons, zone.Mark("task-skip-btn", btnStyle(t.Muted).Render("Skip Review (s)")))

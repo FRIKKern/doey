@@ -55,7 +55,7 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 func (d CardDelegate) Height() int { return 2 }
 
 // Spacing returns the gap between cards.
-func (d CardDelegate) Spacing() int { return 2 }
+func (d CardDelegate) Spacing() int { return 1 }
 
 // Update is a no-op; the delegate does not handle messages.
 func (d CardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
