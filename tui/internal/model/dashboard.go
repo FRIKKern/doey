@@ -717,7 +717,35 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 		cards = append(cards, cardStyle.Render(content))
 	}
 
-	grid := styles.CardGrid(cards, 2, w)
+	// Flex-wrap grid: calculate columns dynamically from available width
+	const cardW = 36 // fixed card render width (content + border + padding)
+	const gapH = 2   // horizontal gap between cards (spaces)
+
+	availW := w - 2 // account for body padding
+	cols := (availW + gapH) / (cardW + gapH)
+	if cols < 1 {
+		cols = 1
+	}
+
+	spacer := strings.Repeat(" ", gapH)
+	var rows []string
+	for i := 0; i < len(cards); i += cols {
+		end := i + cols
+		if end > len(cards) {
+			end = len(cards)
+		}
+		// Size each card to fixed width and interleave spacers
+		var parts []string
+		for j, c := range cards[i:end] {
+			if j > 0 {
+				parts = append(parts, spacer)
+			}
+			parts = append(parts, lipgloss.NewStyle().Width(cardW).Render(c))
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, parts...))
+	}
+
+	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
 	body := lipgloss.NewStyle().Padding(1, 1).Render(grid)
 	spawnRow := m.renderSpawnCards(w)
 	return "\n" + header + "\n" + rule + "\n" + body + "\n" + spawnRow
