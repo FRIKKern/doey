@@ -131,6 +131,9 @@ if [ -n "$task_id" ] && command -v doey-ctl >/dev/null 2>&1; then
     ERROR)
       (doey event log --type task_failed --source "$PANE_SAFE" --task-id "$task_id" --message "Worker encountered error" &) 2>/dev/null
       ;;
+    RESPAWNING)
+      (doey event log --type worker_respawning --source "$PANE_SAFE" --task-id "$task_id" --message "Worker respawning" &) 2>/dev/null
+      ;;
   esac
 fi
 

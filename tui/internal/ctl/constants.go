@@ -11,7 +11,9 @@ const (
 	StatusFinished = "FINISHED"
 	StatusReserved = "RESERVED"
 	StatusError    = "ERROR"
-	StatusWorking  = "WORKING"
+	StatusWorking    = "WORKING"
+	StatusBooting    = "BOOTING"
+	StatusRespawning = "RESPAWNING"
 )
 
 // Message subjects (IPC .msg files, model/messages.go, model/actions.go).

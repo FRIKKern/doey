@@ -213,6 +213,35 @@ check_doctor() {
     _doc_check warn "Task helpers not found" "doey-task-helpers.sh missing from repo and PATH"
   fi
 
+  # Respawn subsystem — skill + hook + syntax
+  if [[ -n "$repo_dir" ]]; then
+    local _respawn_skill="$repo_dir/.claude/skills/doey-respawn-me/SKILL.md"
+    local _respawn_hook="$repo_dir/.claude/hooks/stop-respawn.sh"
+    local _respawn_ok=true
+    if [[ -f "$_respawn_skill" ]]; then
+      _doc_check ok "Respawn skill" "${_respawn_skill/#$HOME/~}"
+    else
+      _doc_check fail "Respawn skill missing" "${_respawn_skill/#$HOME/~}"
+      _respawn_ok=false
+    fi
+    if [[ -f "$_respawn_hook" ]]; then
+      if [[ -x "$_respawn_hook" ]]; then
+        if bash -n "$_respawn_hook" 2>/dev/null; then
+          _doc_check ok "Respawn hook" "executable, syntax OK"
+        else
+          _doc_check fail "Respawn hook" "bash -n failed"
+          _respawn_ok=false
+        fi
+      else
+        _doc_check fail "Respawn hook" "not executable"
+        _respawn_ok=false
+      fi
+    else
+      _doc_check fail "Respawn hook missing" "${_respawn_hook/#$HOME/~}"
+      _respawn_ok=false
+    fi
+  fi
+
   # Task counter — validate .next_id if .doey/tasks/ exists
   local _tasks_dir="${PROJECT_DIR}/.doey/tasks"
   if [[ -d "$_tasks_dir" ]] && [[ -f "${_tasks_dir}/.next_id" ]]; then
