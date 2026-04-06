@@ -485,6 +485,63 @@ func categoryAccentColor(category string, t styles.Theme) lipgloss.AdaptiveColor
 	}
 }
 
+// roleDisplayNames maps PaneStatus.Role values to human-readable names.
+var roleDisplayNames = map[string]string{
+	"boss":            "Boss",
+	"coordinator":     "Taskmaster",
+	"task_reviewer":   "Task Reviewer",
+	"deployment":      "Deployment",
+	"doey_expert":     "Doey Expert",
+	"subtaskmaster":   "Subtaskmaster",
+	"worker":          "Worker",
+	"freelancer":      "Freelancer",
+}
+
+// roleIcons maps PaneStatus.Role values to Unicode icons.
+var roleIcons = map[string]string{
+	"boss":            "★",
+	"coordinator":     "◈",
+	"task_reviewer":   "○",
+	"deployment":      "○",
+	"doey_expert":     "○",
+	"subtaskmaster":   "◆",
+	"worker":          "●",
+	"freelancer":      "◇",
+}
+
+// taskTitleByID finds a task title by its ID in the snapshot.
+func (m DashboardModel) taskTitleByID(id string) string {
+	for _, t := range m.snapshot.Tasks {
+		if t.ID == id {
+			return t.Title
+		}
+	}
+	return ""
+}
+
+// subtaskForPane finds a subtask assigned to the given pane key (e.g. "2.1")
+// within the given task.
+func (m DashboardModel) subtaskForPane(taskID, paneKey string) *runtime.Subtask {
+	for i, st := range m.snapshot.Subtasks {
+		if st.TaskID == taskID && (st.Pane == paneKey || st.Worker == paneKey) {
+			return &m.snapshot.Subtasks[i]
+		}
+	}
+	return nil
+}
+
+// truncateStr truncates s to maxLen runes, adding "…" if truncated.
+func truncateStr(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	if maxLen <= 1 {
+		return "…"
+	}
+	return string(runes[:maxLen-1]) + "…"
+}
+
 func (m DashboardModel) renderTeamGrid(w int) string {
 	t := m.theme
 
@@ -507,12 +564,22 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 	for _, winIdx := range indices {
 		team := m.snapshot.Teams[winIdx]
 
-		// Collect pane statuses for this team
-		// Pane 0 = Subtaskmaster, rest = Workers
-		allPanes := []int{0}
-		allPanes = append(allPanes, team.WorkerPanes...)
+		// Determine pane list based on window type
+		var allPanes []int
+		switch winIdx {
+		case 0:
+			// Boss window: pane 1 is Boss (pane 0 is info panel, not an agent)
+			allPanes = []int{1}
+		case 1:
+			// Core Team: panes 0-3 (Taskmaster, Task Reviewer, Deployment, Doey Expert)
+			allPanes = []int{0, 1, 2, 3}
+		default:
+			// Worker teams: pane 0 = Subtaskmaster, rest = Workers
+			allPanes = []int{0}
+			allPanes = append(allPanes, team.WorkerPanes...)
+		}
 
-		// Determine border color: green if any BUSY, blue if all FINISHED, gray otherwise
+		// Determine border color based on activity
 		hasBusy := false
 		allFinished := len(allPanes) > 0
 		for _, pIdx := range allPanes {
@@ -528,35 +595,74 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 				allFinished = false
 			}
 		}
+
+		// Border color: special accents for Boss/Core Team, standard for workers
 		borderColor := t.Muted
-		if hasBusy {
+		switch {
+		case winIdx == 0 && hasBusy:
+			borderColor = t.Warning // amber for active Boss
+		case winIdx == 0:
+			borderColor = t.Highlight // warm gold for idle Boss
+		case winIdx == 1 && hasBusy:
+			borderColor = t.Info // cyan for active Core Team
+		case winIdx == 1:
+			borderColor = t.Primary // blue for idle Core Team
+		case hasBusy:
 			borderColor = t.Success
-		} else if allFinished {
+		case allFinished:
 			borderColor = t.Info
 		}
 
-		// Title: team name + W{idx} badge + optional [F] badge
-		title := team.TeamName
-		if title == "" {
-			title = fmt.Sprintf("Team %d", winIdx)
-		}
-		badge := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf(" W%d", winIdx))
-		freelancerBadge := ""
-		if team.TeamType == "freelancer" {
-			freelancerBadge = lipgloss.NewStyle().Foreground(t.Accent).Render(" [F]")
-		}
-		titleLine := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(title) + badge + freelancerBadge
+		// Build card title line
+		var titleLine string
+		switch winIdx {
+		case 0:
+			// Boss card
+			titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Warning).Render("★ Boss") +
+				lipgloss.NewStyle().Foreground(t.Muted).Render(" W0")
+		case 1:
+			// Core Team card
+			titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Info).Render("◈ Core Team") +
+				lipgloss.NewStyle().Foreground(t.Muted).Render(" W1")
+		default:
+			// Worker team: task-centric header
+			badge := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf(" W%d", winIdx))
+			freelancerBadge := ""
+			if team.TeamType == "freelancer" {
+				freelancerBadge = lipgloss.NewStyle().Foreground(t.Accent).Render(" [F]")
+			}
 
-		// Render each pane: role icon + name + status badge, task ID, context bar
+			// Try to show task title + ID in header
+			if team.TaskID != "" {
+				taskTitle := m.taskTitleByID(team.TaskID)
+				if taskTitle != "" {
+					taskTitle = truncateStr(taskTitle, 30)
+					titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(
+						fmt.Sprintf("Task #%s", team.TaskID)) + badge + freelancerBadge + "\n" +
+						lipgloss.NewStyle().Foreground(t.Muted).Render("  "+taskTitle)
+				} else {
+					titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(
+						fmt.Sprintf("Task #%s", team.TaskID)) + badge + freelancerBadge
+				}
+			} else {
+				title := team.TeamName
+				if title == "" {
+					title = fmt.Sprintf("Team %d", winIdx)
+				}
+				titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(title) + badge + freelancerBadge
+			}
+		}
+
+		// Render pane lines
 		var paneLines []string
 		for i, pIdx := range allPanes {
 			sessionKey := fmt.Sprintf("%s:%d.%d", m.snapshot.Session.SessionName, winIdx, pIdx)
 			shortKey := fmt.Sprintf("%d.%d", winIdx, pIdx)
 			status := "—"
-			taskID := ""
-			if ps, ok := m.snapshot.Panes[sessionKey]; ok {
-				status = ps.Status
-				taskID = ps.Task
+			var ps *runtime.PaneStatus
+			if p, ok := m.snapshot.Panes[sessionKey]; ok {
+				status = p.Status
+				ps = &p
 			}
 
 			// Separator between panes
@@ -565,21 +671,36 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 				paneLines = append(paneLines, sep)
 			}
 
-			// Line 1: role icon + role name + status badge
-			icon := paneRoleIcon(pIdx, team.TeamType)
-			roleName := paneRoleName(pIdx, team.TeamType)
+			// Resolve role icon and name from PaneStatus.Role, fallback to pane index
+			icon := paneRoleIcon(pIdx, team.TeamType, ps)
+			roleName := paneRoleName(pIdx, team.TeamType, ps)
+
+			// For worker panes (window 2+, pane > 0): show subtask title instead of "Worker N"
+			subtaskTitle := ""
+			if winIdx >= 2 && pIdx > 0 && team.TaskID != "" {
+				if st := m.subtaskForPane(team.TaskID, shortKey); st != nil {
+					subtaskTitle = st.Title
+					if st.Status == "done" || st.Status == "failed" {
+						subtaskTitle += " [" + st.Status + "]"
+					}
+				}
+			}
+
 			iconStyled := lipgloss.NewStyle().Foreground(styles.StatusColor(status)).Render(icon)
 			nameStyled := lipgloss.NewStyle().Foreground(t.Text).Render(roleName)
 			statusBadge := styles.StatusBadge(status)
 			paneLines = append(paneLines, fmt.Sprintf("  %s %s  %s", iconStyled, nameStyled, statusBadge))
 
-			// Line 2: task ID (if available)
-			if taskID != "" {
-				taskLine := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("    Task #%s", taskID))
+			// Line 2: subtask title (for workers) or task reference
+			if subtaskTitle != "" {
+				stLine := lipgloss.NewStyle().Foreground(t.Muted).Render("    " + truncateStr(subtaskTitle, 28))
+				paneLines = append(paneLines, stLine)
+			} else if ps != nil && ps.Task != "" && winIdx >= 2 {
+				taskLine := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("    Task #%s", ps.Task))
 				paneLines = append(paneLines, taskLine)
 			}
 
-			// Line 3: context usage bar
+			// Context usage bar
 			if ctxPct, ok := m.snapshot.ContextPct[shortKey]; ok && ctxPct > 0 {
 				bar := renderContextBar(ctxPct, 10, t)
 				paneLines = append(paneLines, "    "+bar)
@@ -603,7 +724,13 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 }
 
 // paneRoleIcon returns a Unicode icon for the pane's role.
-func paneRoleIcon(paneIdx int, teamType string) string {
+// Uses PaneStatus.Role when available, falls back to pane index heuristics.
+func paneRoleIcon(paneIdx int, teamType string, ps *runtime.PaneStatus) string {
+	if ps != nil && ps.Role != "" {
+		if icon, ok := roleIcons[ps.Role]; ok {
+			return icon
+		}
+	}
 	if teamType == "freelancer" {
 		return "◇"
 	}
@@ -614,7 +741,16 @@ func paneRoleIcon(paneIdx int, teamType string) string {
 }
 
 // paneRoleName returns a human-readable role name for the pane.
-func paneRoleName(paneIdx int, teamType string) string {
+// Uses PaneStatus.Role when available, falls back to pane index heuristics.
+func paneRoleName(paneIdx int, teamType string, ps *runtime.PaneStatus) string {
+	if ps != nil && ps.Role != "" {
+		if name, ok := roleDisplayNames[ps.Role]; ok {
+			if ps.Role == "worker" || ps.Role == "freelancer" {
+				return fmt.Sprintf("%s %d", name, paneIdx)
+			}
+			return name
+		}
+	}
 	if teamType == "freelancer" {
 		return fmt.Sprintf("Freelancer %d", paneIdx)
 	}

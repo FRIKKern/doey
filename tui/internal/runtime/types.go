@@ -23,6 +23,7 @@ type TeamConfig struct {
 	TeamDef        string // which .team.md definition this instance uses
 	WorktreeDir    string
 	WorktreeBranch string
+	TaskID         string // from TASK_ID in team_N.env
 }
 
 // PaneStatus from status/<session>_<W>_<P>.status
@@ -33,6 +34,9 @@ type PaneStatus struct {
 	Updated   string
 	WindowIdx int
 	PaneIdx   int
+	Role      string // e.g. "coordinator", "boss", "worker", "subtaskmaster"
+	TaskID    string // numeric task ID, e.g. "313"
+	SubtaskID string // numeric subtask ID, e.g. "261055"
 }
 
 // WorkerResult is an alias for PaneResult used by the dashboard.
