@@ -72,6 +72,16 @@ rebalance_grid_layout() {
     runtime_dir=$(tmux show-environment -t "$session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) || true
   fi
 
+  # Dispatch by grid type — non-dynamic layouts have their own functions
+  if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${team_window}.env" ]; then
+    local _rgl_grid
+    _rgl_grid="$(_env_val "${runtime_dir}/team_${team_window}.env" GRID)" || true
+    if [ "$_rgl_grid" = "masterplan" ]; then
+      apply_masterplan_layout "$session" "$team_window"
+      return $?
+    fi
+  fi
+
   local _rgl_has_manager="true"
   if [ -n "$runtime_dir" ] && [ -f "${runtime_dir}/team_${team_window}.env" ]; then
     local _rgl_tt
@@ -120,6 +130,63 @@ rebalance_grid_layout() {
     wi=$((wi + _rgl_col_panes))
     x=$((x + w + 1))
   done
+
+  local layout_str="${win_w}x${win_h},0,0{${body}}"
+  tmux select-layout -t "$session:${team_window}" "$(_layout_checksum "$layout_str"),${layout_str}" 2>/dev/null || true
+}
+
+# ── Masterplan Layout ──────────────────────────────────────────────────
+# 3-zone layout: Planner (left, full height), Viewer (top-right),
+# 4 Workers (bottom-right horizontal strip). Requires exactly 6 panes.
+#
+# +--Planner---+--Plan Viewer---------+
+# |            |                      |
+# |            |                      |
+# |            +-----+-----+----+----+
+# |            | W1  | W2  | W3 | W4 |
+# +------------+-----+-----+----+----+
+apply_masterplan_layout() {
+  local session="$1" team_window="$2"
+
+  local dims win_w win_h
+  dims="$(tmux display-message -t "$session:${team_window}" -p '#{window_width} #{window_height}')"
+  win_w="${dims%% *}"
+  win_h="${dims##* }"
+
+  local pane_ids=()
+  while IFS=$'\t' read -r _aml_idx _aml_pid; do
+    pane_ids+=("${_aml_pid#%}")
+  done < <(tmux list-panes -t "$session:${team_window}" -F '#{pane_index}	#{pane_id}')
+
+  local num_panes=${#pane_ids[@]}
+  if (( num_panes != 6 )); then return 0; fi
+
+  # Zone dimensions: planner ~35% width, viewer ~65% height
+  local left_w=$(( win_w * 35 / 100 ))
+  local right_w=$(( win_w - left_w - 1 ))
+  local left_x=$(( left_w + 1 ))
+  local top_h=$(( win_h * 65 / 100 ))
+  local bot_h=$(( win_h - top_h - 1 ))
+  local top_y=$(( top_h + 1 ))
+
+  # Worker strip: 4 equal-width panes in the bottom-right
+  local worker_body="" wx="$left_x" wi ww
+  for (( wi=0; wi<4; wi++ )); do
+    if (( wi == 3 )); then
+      ww=$(( win_w - wx ))
+    else
+      ww=$(( right_w / 4 ))
+    fi
+    [ -n "$worker_body" ] && worker_body+=","
+    worker_body+="${ww}x${bot_h},${wx},${top_y},${pane_ids[$((wi + 2))]}"
+    wx=$(( wx + ww + 1 ))
+  done
+
+  # Layout: left{planner}, right[viewer, workers{w1..w4}]
+  local body="${left_w}x${win_h},0,0,${pane_ids[0]},"
+  body+="${right_w}x${win_h},${left_x},0"
+  body+="[${right_w}x${top_h},${left_x},0,${pane_ids[1]},"
+  body+="${right_w}x${bot_h},${left_x},${top_y}{${worker_body}}]"
 
   local layout_str="${win_w}x${win_h},0,0{${body}}"
   tmux select-layout -t "$session:${team_window}" "$(_layout_checksum "$layout_str"),${layout_str}" 2>/dev/null || true

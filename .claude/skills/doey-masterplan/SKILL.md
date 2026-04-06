@@ -595,9 +595,59 @@ doey task update --id "$TASK_1" --field "masterplan_next_task" --value "$TASK_2"
 
 Set the chain: each task's `masterplan_next_task` points to the next phase's task ID. The last phase has no `masterplan_next_task`.
 
-#### 5.4 Dispatch First Phase to Taskmaster
+#### 5.4 Dispatch: Dedicated Masterplan Window (Recommended) or Taskmaster
 
-Only dispatch Phase 1 — later phases are dispatched by Taskmaster after verification gates pass.
+Choose a dispatch mode. The dedicated masterplan window is recommended — it gives the plan its own workspace with a live viewer. Fall back to Taskmaster dispatch if the masterplan team definition is unavailable.
+
+**Option A — Dedicated masterplan window (recommended):**
+
+Spawn a dedicated team window from the `masterplan` team definition. The planner and viewer share the plan file via `PLAN_FILE` env var.
+
+```bash
+# Write the plan file path to runtime so the masterplan team can pick it up
+PLAN_FILE="${PLANS_DIR}/${NUMERIC_PLAN_ID}.md"
+echo "PLAN_FILE=${PLAN_FILE}" > "${RD}/masterplan-${NUMERIC_PLAN_ID}.env"
+echo "MASTERPLAN_ID=${PLAN_ID}" >> "${RD}/masterplan-${NUMERIC_PLAN_ID}.env"
+echo "TASK_ID=${TASK_1}" >> "${RD}/masterplan-${NUMERIC_PLAN_ID}.env"
+echo "TOTAL_PHASES=<total phase count>" >> "${RD}/masterplan-${NUMERIC_PLAN_ID}.env"
+
+# Export PLAN_FILE so the masterplan team's viewer and planner can access it
+export PLAN_FILE
+
+# Spawn the dedicated masterplan window
+doey add-team masterplan
+```
+
+After the window spawns:
+- The **Planner** pane (pane 0) reads `PLAN_FILE` from the environment and orchestrates phase execution
+- The **Viewer** pane runs `masterplan-viewer.sh` watching the plan file for live rendering
+- **Worker** panes are initially idle, waiting for the Planner to dispatch subtasks
+
+The plan file at `${PLANS_DIR}/${NUMERIC_PLAN_ID}.md` is the integration point — the Planner updates phase statuses in the file, and the Viewer re-renders on each change.
+
+Then notify Taskmaster that a masterplan window was spawned (informational, not a dispatch request):
+
+```bash
+TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
+TASKMASTER_PANE="${TASKMASTER_PANE:-1.0}"
+
+doey msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID}" \
+  --subject "masterplan_spawned" \
+  --body "MASTERPLAN_ID: ${PLAN_ID}
+PLAN_FILE: ${PLAN_FILE}
+TASK_ID: ${TASK_1}
+PHASES: <total>
+DISPATCH_MODE: dedicated-window
+
+Masterplan '${PLAN_ID}' has its own dedicated window.
+Plan file: ${PLAN_FILE}
+The masterplan team handles phase sequencing and verification gates internally."
+doey msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
+```
+
+**Option B — Fallback to Taskmaster dispatch:**
+
+Use this if `doey add-team masterplan` fails (e.g., team definition not found). Falls back to the standard dispatch-to-Taskmaster path.
 
 ```bash
 TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
@@ -627,16 +677,41 @@ Verification gates for Phase 1:
 doey msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}"
 ```
 
+**Decision logic:** Try Option A first. If `doey add-team masterplan` exits non-zero (definition not found), fall back to Option B automatically.
+
 #### 5.5 Report to User
 
-Output a final summary:
+Output a final summary. Adjust the dispatch mode line based on which option was used.
+
+**If dedicated window (Option A):**
+
+```
+## Masterplan Dispatched — Dedicated Window
+
+**Plan:** ${PLANS_DIR}/${NUMERIC_PLAN_ID}.md
+**Phases:** <count>
+**Dispatch mode:** Dedicated masterplan window (plan viewer + phased execution)
+
+| Phase | Task | Title | Status |
+|-------|------|-------|--------|
+| 1 | #${TASK_1} | <Title> | Active (in masterplan window) |
+| 2 | #${TASK_2} | <Title> | Waiting (after Phase 1 gate) |
+| 3 | #${TASK_3} | <Title> | Waiting (after Phase 2 gate) |
+...
+
+The masterplan has its own window with a live plan viewer.
+The Planner manages phase sequencing — each phase is verified before the next starts.
+Research artifacts: ${MP_DIR}/
+```
+
+**If Taskmaster fallback (Option B):**
 
 ```
 ## Masterplan Dispatched
 
 **Plan:** ${PLANS_DIR}/${NUMERIC_PLAN_ID}.md
 **Phases:** <count>
-**Dispatch mode:** Sequential-phased (each phase verified before next starts)
+**Dispatch mode:** Sequential-phased via Taskmaster (each phase verified before next starts)
 
 | Phase | Task | Title | Status |
 |-------|------|-------|--------|
@@ -656,8 +731,9 @@ After dispatch, confirm:
 - [ ] Every task is linked to the plan via `TASK_PLAN_ID`
 - [ ] Tasks form a chain via `masterplan_next_task`
 - [ ] Only Phase 1 was dispatched — remaining phases are queued
-- [ ] The dispatch message includes verification gate criteria and sequential-phased instructions
-- [ ] User received the summary with all task IDs and plan path
+- [ ] If dedicated window: masterplan team window exists and viewer is watching the plan file
+- [ ] If Taskmaster fallback: dispatch message includes verification gate criteria and sequential-phased instructions
+- [ ] User received the summary with all task IDs, plan path, and dispatch mode
 
 ### Rules
 - Always use AskUserQuestion for user interaction — never inline questions
@@ -672,4 +748,5 @@ After dispatch, confirm:
 - All file paths must be absolute
 - If the goal is simple, redirect to `/doey-planned-task` or `/doey-instant-task`
 - Use `doey task create` for task generation — never duplicate the logic
-- Only dispatch Phase 1 — Taskmaster handles subsequent phase dispatch after verification
+- Prefer dedicated masterplan window (`doey add-team masterplan`) — fall back to Taskmaster dispatch only if the team definition is unavailable
+- The plan file at `${PLANS_DIR}/<id>.md` is the integration point between planner and viewer — ensure Phase 4 writes the final plan before Phase 5 spawns the window
