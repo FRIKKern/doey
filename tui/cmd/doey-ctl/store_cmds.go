@@ -739,6 +739,82 @@ func eventList(args []string) {
 	}
 }
 
+// --- error subcommand ---
+
+func runErrorCmd(args []string) {
+	// Default to "list" when no subcommand given
+	if len(args) < 1 || args[0] == "list" {
+		if len(args) > 0 {
+			args = args[1:]
+		}
+		errorList(args)
+		return
+	}
+	if isHelp(args[0]) {
+		printErrorHelp()
+		return
+	}
+	fatal("error: unknown subcommand: %q. Valid: list\n", args[0])
+}
+
+func printErrorHelp() {
+	fmt.Fprintf(os.Stderr, `Usage: doey-ctl error [list] [flags]
+
+Subcommands:
+  list      List error events (default)
+
+Flags:
+  --type      Filter by error subtype (e.g. "hook_block" queries "error_hook_block")
+  --source    Filter by source pane
+  --task-id   Filter by task ID
+  --limit     Max results (default 50)
+  --json      JSON output
+
+Run 'doey-ctl error list -h' for help.
+`)
+}
+
+func errorList(args []string) {
+	fs := flag.NewFlagSet("error list", flag.ExitOnError)
+	dir := fs.String("project-dir", "", "Project directory")
+	typ := fs.String("type", "", "Filter by error subtype (e.g. hook_block)")
+	source := fs.String("source", "", "Filter by source pane")
+	taskID := fs.Int64("task-id", 0, "Filter by task ID")
+	limit := fs.Int("limit", 50, "Max errors to return")
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	s := openStore(*dir)
+	defer s.Close()
+
+	// Prepend "error_" prefix if user supplied a subtype
+	errorType := ""
+	if *typ != "" {
+		errorType = "error_" + *typ
+	}
+
+	events, err := s.ListErrorEvents(errorType, *source, *taskID, *limit)
+	if err != nil {
+		fatal("error list: %v\n", err)
+	}
+	if jsonOutput {
+		printJSON(events)
+		return
+	}
+	if len(events) == 0 {
+		fmt.Println("No errors found.")
+		return
+	}
+	for _, e := range events {
+		ts := time.Unix(e.CreatedAt, 0).Format("15:04:05")
+		taskStr := ""
+		if e.TaskID != nil {
+			taskStr = fmt.Sprintf("%d", *e.TaskID)
+		}
+		fmt.Printf("%-6d %-20s %-14s %-6s %-8s %s\n", e.ID, e.Type, e.Source, taskStr, ts, e.Data)
+	}
+}
+
 // --- migrate subcommand ---
 
 func runMigrateCmd(args []string) {

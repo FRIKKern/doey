@@ -5,7 +5,7 @@ source "$(dirname "$0")/common.sh"
 init_named_hook "stop-status"
 
 mkdir -p "${RUNTIME_DIR}/errors" 2>/dev/null || true
-trap '_err=$?; printf "[%s] ERR in stop-status at line %s (exit %s)\n" "$(date +%H:%M:%S)" "$LINENO" "$_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; printf "ERROR" > "${RUNTIME_DIR}/panes/${PANE_SAFE}/status" 2>/dev/null; exit 0' ERR
+trap '_err=$?; printf "[%s] ERR in stop-status at line %s (exit %s)\n" "$(date +%H:%M:%S)" "$LINENO" "$_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; printf "ERROR" > "${RUNTIME_DIR}/panes/${PANE_SAFE}/status" 2>/dev/null; if command -v doey-ctl >/dev/null 2>&1; then _proj="${DOEY_PROJECT_DIR:-}"; [ -z "$_proj" ] && _proj=$(git rev-parse --show-toplevel 2>/dev/null) || true; [ -n "$_proj" ] && (doey event log --type error_crash --source "${PANE_SAFE:-unknown}" --data "stop-status ERR line=${LINENO} exit=${_err}" --project-dir "$_proj" &) 2>/dev/null; fi; exit 0' ERR
 
 # Check for respawn request
 _respawning=false

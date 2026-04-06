@@ -117,6 +117,8 @@ func main() {
 		runAgentCmd(os.Args[2:])
 	case "event":
 		runEventCmd(os.Args[2:])
+	case "error":
+		runErrorCmd(os.Args[2:])
 	case "interaction":
 		runInteractionCmd(os.Args[2:])
 	case "nudge":
@@ -132,7 +134,7 @@ func main() {
 	case "--help", "-h", "help":
 		printUsage()
 	default:
-		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "interaction", "nudge", "migrate", "briefing"}
+		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "error", "interaction", "nudge", "migrate", "briefing"}
 		corrected, err := suggestSubcommand(os.Args[1], knownCmds)
 		if err != nil {
 			fatalCode(ExitUsage, "unknown command: %q (%v)\nRun 'doey-ctl --help' for usage.\n", os.Args[1], err)
@@ -158,6 +160,7 @@ Commands:
   config   Manage config (get, set, list, delete)
   agent    Manage agents (list, get, set, delete)
   event    Log and list events
+  error    List and search error events
   nudge    Unstick Claude instances (Escape + re-prompt)
   migrate  Run database migrations
   briefing Live state dashboard (tasks, workers, activity)
