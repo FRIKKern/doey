@@ -125,6 +125,11 @@ if [ -f "/proc/$PPID/cmdline" ]; then
           "${RUNTIME_DIR}/status/${PANE_SAFE}.launch_cmd"
 fi
 
+# Clean up stale respawn request files (orphaned from dead agents)
+if [ -d "${RUNTIME_DIR}/respawn" ]; then
+  find "${RUNTIME_DIR}/respawn" -name "*.request" -mmin +1 -delete 2>/dev/null || true
+fi
+
 wt_dir=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 _team_task_id=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" TASK_ID)
 
