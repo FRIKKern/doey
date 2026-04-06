@@ -16,6 +16,8 @@ func StatusColor(status string) lipgloss.AdaptiveColor {
 		return defaultTheme.Success
 	case "BUSY", "WORKING":
 		return defaultTheme.Warning
+	case "BOOTING", "RESPAWNING":
+		return defaultTheme.Warning
 	case "FINISHED":
 		return lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#3B82F6"}
 	case "ERROR":
@@ -207,6 +209,8 @@ func LogStatusIcon(status string, t Theme) string {
 	switch status {
 	case "BUSY", "WORKING":
 		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
+	case "BOOTING", "RESPAWNING":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("◌")
 	case "FINISHED":
 		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
 	case "ERROR":

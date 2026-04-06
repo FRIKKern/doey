@@ -177,7 +177,7 @@ if is_worker; then
   _respawn_request="${RUNTIME_DIR}/respawn/${PANE_SAFE}.request"
   if [ -f "$_respawn_request" ]; then
     _subject="worker_respawning"
-    _respawn_reason=$(head -1 "$_respawn_request" 2>/dev/null) || _respawn_reason="respawn requested"
+    _respawn_reason=$(grep '^REASON=' "$_respawn_request" 2>/dev/null | cut -d= -f2-) || _respawn_reason="respawn requested"
   fi
 
   _pane_alive "$_target" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$_target"; exit 0; }
