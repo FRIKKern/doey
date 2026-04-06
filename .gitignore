@@ -10,4 +10,5 @@ tui/doey-ctl
 tui/cmd/doey-ctl/doey-ctl
 tui/doey-loading
 tui/doey-router
+tui/doey-term
 tui/gen-constants
