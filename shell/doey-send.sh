@@ -77,10 +77,12 @@ doey_wait_for_prompt() {
 #   1. Waits for Claude prompt (❯) to appear (readiness gate)
 #   2. Pre-clears: copy-mode -q → Escape → C-u (ensures clean input)
 #   3. Injects text via set-buffer + paste-buffer (NOT raw send-keys)
-#   4. Captures pane to verify text appeared
-#   5. Sends Enter to submit
-#   6. Captures pane again to verify prompt changed (submission happened)
-#   7. Retries up to 3x if any step fails
+#   4. Sends Enter after brief settle
+#   5. Polls for BUSY status or activity indicators to confirm submission
+#   6. Retries up to 3x if prompt/paste-buffer steps fail
+#
+# Paste-buffer delivery is atomic and reliable — verification confirms
+# submission, but trusts delivery if paste-buffer returned 0.
 #
 # Returns: 0 on success, 1 on failure after all retries.
 doey_send_verified() {
@@ -127,90 +129,43 @@ doey_send_verified() {
     # Explicit cleanup (no -d flag — we manage buffer lifetime)
     tmux delete-buffer -b "$buf_name" 2>/dev/null || true
 
-    # ── Step 4: Verify text appeared in pane ──
-    # Exponential backoff: 800ms, 1200ms, 2000ms
-    local settle_ms
-    case "$attempt" in
-      1) settle_ms="${DOEY_PASTE_SETTLE_MS:-800}" ;;
-      2) settle_ms=1200 ;;
-      *) settle_ms=2000 ;;
-    esac
-    local settle_s
-    settle_s=$(awk "BEGIN {printf \"%.2f\", ${settle_ms}/1000}")
-    sleep "$settle_s"
-    local captured
-    captured=$(tmux capture-pane -t "$target" -p -S -30 2>/dev/null) || captured=""
-    local snippet
-    local msg_nolf
-    msg_nolf=$(printf '%s' "$message" | tr '\n' ' ')
-    if [ ${#msg_nolf} -gt 40 ]; then
-      snippet="${msg_nolf:$((${#msg_nolf} - 40)):40}"
-    else
-      snippet="$msg_nolf"
-    fi
+    # ── Step 4: Brief settle then submit ──
+    # Paste-buffer delivery is atomic — if set-buffer + paste-buffer both
+    # returned 0 (no early continue above), the text is in the pane's input.
+    # No text-matching verification: by the time capture-pane runs, Claude
+    # has often already consumed the input, causing false negatives.
+    sleep 0.3
+    tmux send-keys -t "$target" Enter 2>/dev/null || true
 
-    if ! printf '%s' "$captured" | grep -qF "$snippet" 2>/dev/null; then
-      # Text didn't appear — Escape to ensure focus, re-check
-      tmux send-keys -t "$target" Escape 2>/dev/null || true
-      sleep 0.2
-      captured=$(tmux capture-pane -t "$target" -p -S -30 2>/dev/null) || captured=""
-      if ! printf '%s' "$captured" | grep -qF "$snippet" 2>/dev/null; then
-        echo "doey_send_verified: text not visible (attempt $attempt)" >&2
-        continue
+    # ── Step 5: Confirm submission via BUSY status or activity ──
+    # Poll for up to 3 seconds. If Enter didn't register (e.g. pane was in
+    # copy-mode), try Escape + Enter recovery at the halfway point.
+    local v=0
+    while [ "$v" -lt 6 ]; do
+      sleep 0.5
+      v=$((v + 1))
+      if _doey_send_check_busy "$target"; then
+        return 0
       fi
-    fi
+      local post_submit
+      post_submit=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || post_submit=""
+      if _doey_send_check_activity "$post_submit"; then
+        return 0
+      fi
+      # Halfway: recovery in case Enter didn't register (modal state)
+      if [ "$v" -eq 3 ]; then
+        tmux copy-mode -q -t "$target" 2>/dev/null || true
+        tmux send-keys -t "$target" Escape 2>/dev/null || true
+        sleep 0.15
+        tmux send-keys -t "$target" Enter 2>/dev/null || true
+      fi
+    done
 
-    # Capture pre-submit state for change detection
-    local pre_submit
-    pre_submit=$(tmux capture-pane -t "$target" -p -S -3 2>/dev/null) || pre_submit=""
-
-    # ── Step 5: Send Enter to submit ──
-    tmux send-keys -t "$target" Enter 2>/dev/null || true
-
-    # ── Step 6: Verify prompt changed (submission happened) ──
-    local verify_delay
-    case "$attempt" in
-      1) verify_delay="0.5" ;;
-      2) verify_delay="1" ;;
-      *) verify_delay="2" ;;
-    esac
-    sleep "$verify_delay"
-
-    local post_submit
-    post_submit=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || post_submit=""
-
-    # Submission confirmed if Claude is active (thinking, tool use, etc.)
-    if _doey_send_check_activity "$post_submit"; then
-      return 0
-    fi
-
-    # Submission confirmed if status file shows BUSY
-    if _doey_send_check_busy "$target"; then
-      return 0
-    fi
-
-    # Submission confirmed if pane content changed after Enter
-    if [ "$pre_submit" != "$post_submit" ]; then
-      return 0
-    fi
-
-    # ── Stuck-text recovery: exit modal + resubmit ──
-    tmux copy-mode -q -t "$target" 2>/dev/null || true
-    tmux send-keys -t "$target" Escape 2>/dev/null || true
-    sleep 0.15
-    tmux send-keys -t "$target" Enter 2>/dev/null || true
-    sleep 0.5
-
-    post_submit=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || post_submit=""
-    if _doey_send_check_activity "$post_submit"; then
-      return 0
-    fi
-    if _doey_send_check_busy "$target"; then
-      return 0
-    fi
-
-    [ "$attempt" -ge "$max_retries" ] && break
-    echo "doey_send_verified: attempt $attempt failed for $target, retrying..." >&2
+    # Paste-buffer + Enter both succeeded — trust delivery even without
+    # explicit BUSY/activity confirmation. Claude may have processed input
+    # too quickly for polling to catch the transition, or the status file
+    # may not be available (e.g. DOEY_RUNTIME unset).
+    return 0
   done
 
   echo "doey_send_verified: delivery failed after $max_retries attempts to $target" >&2

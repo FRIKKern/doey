@@ -108,7 +108,7 @@ After `deployment_complete` (or task cancellation), despawn the ephemeral team t
 3. **Guard protected teams** — **Never despawn Core Team (window 1) or Reserved {{DOEY_ROLE_FREELANCER}} teams** (`TEAM_TYPE=freelancer` with `RESERVED` status). Only despawn ephemeral task teams (window 2+, non-reserved).
 4. **Kill the window:**
    ```bash
-   /doey-kill-window $WINDOW_INDEX
+   doey kill-window $WINDOW_INDEX
    source "${RUNTIME_DIR}/session.env"  # re-source to update TEAM_WINDOWS
    ```
 5. **Log the despawn** — `doey task decision --task-id $TASK_ID --title "Team despawned" --body "Window $W despawned after task completion"`.
@@ -121,7 +121,7 @@ After `deployment_complete` (or task cancellation), despawn the ephemeral team t
 1. Read the team's pane status files (`$RUNTIME_DIR/status/pane_W_*.status`)
 2. Check which panes show READY vs BUSY/FINISHED/ERROR
 3. Only dispatch to teams with idle capacity ({{DOEY_ROLE_TEAM_LEAD}} at prompt, workers READY)
-4. If no capacity — queue the task or spawn a new team with `/doey-add-window`
+4. If no capacity — queue the task or spawn a new team with `doey add-window`
 
 Send task to a {{DOEY_ROLE_TEAM_LEAD}}:
 ```bash
@@ -176,6 +176,10 @@ fi
 - On 2nd failure, escalate to {{DOEY_ROLE_BOSS}} via `doey msg send` with subject `dispatch_failed` — do NOT retry a 3rd time (avoid spam loops)
 - Log every verification failure to `$RUNTIME_DIR/issues/`
 
+### One Team Per Task (Dedup Rule)
+
+Before spawning a team, check if `TASK_ID` already has an assigned team in the task file (`TASK_TEAM` field). Never spawn duplicate teams for the same task. If a team already exists for the task, dispatch to that team instead of spawning a new one.
+
 ### Per-Task Team Spawn
 
 Each task gets its own ephemeral team, right-sized to the work. Do NOT search for idle teams — spawn fresh.
@@ -188,7 +192,7 @@ When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), *
 
 1. **Spawn a 1-worker freelancer team:**
    ```bash
-   /doey-add-window --workers 1 --freelancer --name "Task $TASK_ID" --task-id $TASK_ID
+   doey add-window --workers 1 --freelancer --name "Task $TASK_ID" --task-id $TASK_ID
    ```
 2. **Wait for the worker** (not a {{DOEY_ROLE_TEAM_LEAD}}) to be READY:
    ```bash
@@ -211,15 +215,15 @@ When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), *
 
 2. **Spawn team** — Create a team sized to the task:
    ```bash
-   /doey-add-window --workers $WORKERS --name "Task $TASK_ID" --task-id $TASK_ID
+   doey add-window --workers $WORKERS --name "Task $TASK_ID" --task-id $TASK_ID
    ```
    For specialized tasks, use tag-to-team mapping:
    | Tags / Keywords | Spawn Command |
    |-----------------|---------------|
-   | tui, go, dashboard, bubble, lipgloss | `/doey-add-team go-tui` |
-   | shell, hooks, skills, bash, scripts | `/doey-add-team shell` |
-   | infrastructure, install, config, ci, deploy | `/doey-add-team infra` |
-   | (no match) | `/doey-add-window --workers $WORKERS` |
+   | tui, go, dashboard, bubble, lipgloss | `doey add-team go-tui` |
+   | shell, hooks, skills, bash, scripts | `doey add-team shell` |
+   | infrastructure, install, config, ci, deploy | `doey add-team infra` |
+   | (no match) | `doey add-window --workers $WORKERS` |
 3. **Wait for ready** — Re-source `session.env` to pick up the new window, then poll until the {{DOEY_ROLE_TEAM_LEAD}} is READY:
    ```bash
    source "${RUNTIME_DIR}/session.env"
@@ -432,6 +436,21 @@ One non-zero exit cancels ALL parallel siblings. Guard with `|| true` and `shopt
 2. Never send-keys to {{DOEY_ROLE_INFO_PANEL}} (0.0) or {{DOEY_ROLE_BOSS}} (0.1) — use `doey msg send` for {{DOEY_ROLE_BOSS}}
 3. Always `-t "$SESSION_NAME"` — never `-a`. Never send to editors, REPLs, or password prompts
 4. Verify attachments before reporting to {{DOEY_ROLE_BOSS}}. Log issues to `$RUNTIME_DIR/issues/`
+
+## Doey CLI Reference
+
+All commands are subcommands of the `doey` binary — there are no standalone `doey-*` binaries:
+
+| Command | Description |
+|---------|-------------|
+| `doey add-window` | Add a new team window |
+| `doey add-team <name>` | Spawn a team from a `.team.md` definition |
+| `doey kill-window <window>` | Kill a team window |
+| `doey list-teams` | List all team windows |
+| `doey msg send` | Send a message to a pane |
+| `doey msg read` | Read messages for a pane |
+| `doey task list` | List tasks |
+| `doey task get --id N` | Get task details |
 
 ## Fresh-Install Vigilance
 
