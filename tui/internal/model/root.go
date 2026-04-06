@@ -62,12 +62,10 @@ type Model struct {
 	logsGroup  LogsGroupModel
 	connections ConnectionsModel
 	files       FilesModel
-	activity      ActivityModel
-	interactions  InteractionsModel
 	tabBar        TabBarModel
 	footer     FooterModel
 	heartbeats map[string]runtime.HeartbeatState
-	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=plans, 4=agents, 5=logs(group), 6=connections, 7=files, 8=activity, 9=interactions
+	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=plans, 4=agents, 5=logs(group), 6=connections, 7=files
 	width      int
 	height     int
 	ready      bool
@@ -85,8 +83,6 @@ func New(runtimeDir string) Model {
 		{Name: "Logs"},
 		{Name: "Connections"},
 		{Name: "Files"},
-		{Name: "Activity"},
-		{Name: "Interactions"},
 	}
 	return Model{
 		runtime:   runtime.NewReader(runtimeDir),
@@ -99,8 +95,6 @@ func New(runtimeDir string) Model {
 		logsGroup:   NewLogsGroupModel(theme),
 		connections: NewConnectionsModel(theme),
 		files:       NewFilesModel(theme),
-		activity:     NewActivityModel(theme),
-		interactions: NewInteractionsModel(theme),
 		tabBar:       NewTabBarModel(tabs),
 		footer:    NewFooterModel(),
 	}
@@ -190,8 +184,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logsGroup.SetSnapshot(m.snapshot)
 		m.connections.SetSnapshot(m.snapshot)
 		m.files.SetProjectDir(m.snapshot.Session.ProjectDir)
-		m.activity.SetSnapshot(m.snapshot)
-		m.interactions.SetSnapshot(m.snapshot)
 
 	case SnapshotRefreshMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
@@ -368,10 +360,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connections, cmd = m.connections.Update(msg)
 		case 7:
 			m.files, cmd = m.files.Update(msg)
-		case 8:
-			m.activity, cmd = m.activity.Update(msg)
-		case 9:
-			m.interactions, cmd = m.interactions.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 
@@ -386,12 +374,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel) {
-			m.focusIndex = (m.focusIndex + 1) % 10
+			m.focusIndex = (m.focusIndex + 1) % 8
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel) {
-			m.focusIndex = (m.focusIndex + 9) % 10 // +9 mod 10 == -1 with wrap
+			m.focusIndex = (m.focusIndex + 7) % 8 // +7 mod 8 == -1 with wrap
 			m.updateFocus()
 			return m, nil
 		}
@@ -435,12 +423,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateFocus()
 			return m, nil
 		}
-		if key.Matches(msg, m.footer.keyMap.PanelNine) {
-			m.focusIndex = 8
-			m.updateFocus()
-			return m, nil
-		}
-
 		// Route to focused sub-model
 		var cmd tea.Cmd
 		switch m.focusIndex {
@@ -460,10 +442,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connections, cmd = m.connections.Update(msg)
 		case 7:
 			m.files, cmd = m.files.Update(msg)
-		case 8:
-			m.activity, cmd = m.activity.Update(msg)
-		case 9:
-			m.interactions, cmd = m.interactions.Update(msg)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -523,12 +501,6 @@ func (m Model) View() string {
 	case 7:
 		m.files.SetSize(m.width, bodyH)
 		body = m.files.View()
-	case 8:
-		m.activity.SetSize(m.width, bodyH)
-		body = m.activity.View()
-	case 9:
-		m.interactions.SetSize(m.width, bodyH)
-		body = m.interactions.View()
 	}
 
 	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, banner, tabBar, body, footer))
@@ -559,8 +531,6 @@ func (m *Model) propagateSizes() {
 	m.connections.SetSize(m.width, bodyH)
 	m.files.SetPanelOffset(bannerH + menuH)
 	m.files.SetSize(m.width, bodyH)
-	m.activity.SetSize(m.width, bodyH)
-	m.interactions.SetSize(m.width, bodyH)
 	m.updateFocus()
 }
 
@@ -575,8 +545,6 @@ func (m *Model) updateFocus() {
 	m.logsGroup.SetFocused(m.focusIndex == 5)
 	m.connections.SetFocused(m.focusIndex == 6)
 	m.files.SetFocused(m.focusIndex == 7)
-	m.activity.SetFocused(m.focusIndex == 8)
-	m.interactions.SetFocused(m.focusIndex == 9)
 }
 
 // snapshotTickCmd triggers a full snapshot re-read every 2s.

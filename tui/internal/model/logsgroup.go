@@ -26,15 +26,19 @@ var logsGroupItems = []logsGroupEntry{
 	{icon: "→", name: "Messages", desc: "IPC messages"},
 	{icon: "•", name: "Debug", desc: "Flight recorder"},
 	{icon: "›", name: "Info", desc: "Session overview"},
+	{icon: "⚡", name: "Activity", desc: "Event feed"},
+	{icon: "◇", name: "Interactions", desc: "Boss interactions"},
 }
 
 // LogsGroupModel groups Logs, Messages, Debug, and Info sub-models under
 // a single split-pane tab with a left selector and right content panel.
 type LogsGroupModel struct {
-	logs     LogViewModel
-	messages MessagesModel
-	debug    DebugModel
-	info     WelcomeModel
+	logs         LogViewModel
+	messages     MessagesModel
+	debug        DebugModel
+	info         WelcomeModel
+	activity     ActivityModel
+	interactions InteractionsModel
 
 	theme       styles.Theme
 	cursor      int
@@ -48,13 +52,15 @@ type LogsGroupModel struct {
 // NewLogsGroupModel creates a logs group panel with the left selector focused.
 func NewLogsGroupModel(theme styles.Theme) LogsGroupModel {
 	return LogsGroupModel{
-		logs:        NewLogViewModel(theme),
-		messages:    NewMessagesModel(theme),
-		debug:       NewDebugModel(theme),
-		info:        NewWelcomeModel(),
-		theme:       theme,
-		leftFocused: true,
-		keyMap:      keys.DefaultKeyMap(),
+		logs:         NewLogViewModel(theme),
+		messages:     NewMessagesModel(theme),
+		debug:        NewDebugModel(theme),
+		info:         NewWelcomeModel(),
+		activity:     NewActivityModel(theme),
+		interactions: NewInteractionsModel(theme),
+		theme:        theme,
+		leftFocused:  true,
+		keyMap:       keys.DefaultKeyMap(),
 	}
 }
 
@@ -168,16 +174,22 @@ func (m LogsGroupModel) delegateUpdate(msg tea.Msg) (LogsGroupModel, tea.Cmd) {
 		m.debug, cmd = m.debug.Update(msg)
 	case 3:
 		m.info, cmd = m.info.Update(msg)
+	case 4:
+		m.activity, cmd = m.activity.Update(msg)
+	case 5:
+		m.interactions, cmd = m.interactions.Update(msg)
 	}
 	return m, cmd
 }
 
-// SetSnapshot propagates snapshot data to all 4 sub-models.
+// SetSnapshot propagates snapshot data to all sub-models.
 func (m *LogsGroupModel) SetSnapshot(snap runtime.Snapshot) {
 	m.logs.SetSnapshot(snap)
 	m.messages.SetSnapshot(snap)
 	m.debug.SetSnapshot(snap)
 	m.info.SetSnapshot(snap)
+	m.activity.SetSnapshot(snap)
+	m.interactions.SetSnapshot(snap)
 }
 
 // SetSize stores dimensions and propagates to the active sub-model.
@@ -201,6 +213,8 @@ func (m *LogsGroupModel) updateSubFocus() {
 	m.messages.SetFocused(rightActive && m.cursor == 1)
 	m.debug.SetFocused(rightActive && m.cursor == 2)
 	m.info.SetFocused(rightActive && m.cursor == 3)
+	m.activity.SetFocused(rightActive && m.cursor == 4)
+	m.interactions.SetFocused(rightActive && m.cursor == 5)
 }
 
 // propagateSizeToActive calculates the right-panel dimensions and sets them
@@ -233,6 +247,10 @@ func (m *LogsGroupModel) propagateSizeToActive() {
 		m.debug.SetSize(rightW, h)
 	case 3:
 		m.info.SetSize(rightW, h)
+	case 4:
+		m.activity.SetSize(rightW, h)
+	case 5:
+		m.interactions.SetSize(rightW, h)
 	}
 }
 
@@ -346,6 +364,12 @@ func (m LogsGroupModel) renderRightPanel(w, h int) string {
 	case 3:
 		m.info.SetSize(w, h)
 		return m.info.View()
+	case 4:
+		m.activity.SetSize(w, h)
+		return m.activity.View()
+	case 5:
+		m.interactions.SetSize(w, h)
+		return m.interactions.View()
 	}
 
 	// Fallback (shouldn't happen)
