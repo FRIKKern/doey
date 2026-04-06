@@ -24,15 +24,16 @@ type Tab struct {
 
 // Model is the root model for the tabbed terminal container.
 type Model struct {
-	tabs      []Tab
-	activeTab int
-	width     int
-	height    int
-	shell     string
-	ready     bool
-	tabCount  int
-	tabLayout tabBarLayout // click zones from last render
-	ptyNotify chan struct{} // event-driven PTY data notifications
+	tabs           []Tab
+	activeTab      int
+	width          int
+	height         int
+	shell          string
+	ready          bool
+	tabCount       int
+	tabLayout      tabBarLayout  // click zones from last render
+	ptyNotify      chan struct{} // event-driven PTY data notifications
+	viewportOffset int           // 0 = live bottom, >0 = scrolled back N lines
 }
 
 const tabBarHeight = 1
@@ -167,10 +168,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.switchTab((m.activeTab - 1 + len(m.tabs)) % len(m.tabs))
 			}
 			return m, nil
+
+		case "shift+pgup":
+			if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
+				page := m.pageSize()
+				maxOffset := m.tabs[m.activeTab].Term.ScrollbackLen()
+				m.viewportOffset += page
+				if m.viewportOffset > maxOffset {
+					m.viewportOffset = maxOffset
+				}
+			}
+			return m, nil
+
+		case "shift+pgdown":
+			page := m.pageSize()
+			m.viewportOffset -= page
+			if m.viewportOffset < 0 {
+				m.viewportOffset = 0
+			}
+			return m, nil
 		}
 
-		// Forward all other keys to the active tab.
+		// Forward all other keys to the active tab. Any key that reaches the
+		// terminal snaps the viewport back to the live bottom.
 		if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
+			m.viewportOffset = 0
 			termModel, cmd := m.tabs[m.activeTab].Term.Update(msg)
 			m.tabs[m.activeTab].Term = termModel.(*bubbleterm.Model)
 			if cmd != nil {
@@ -259,6 +281,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case tea.PasteMsg:
+		// Forward pasted content to the active terminal as a single bracketed
+		// paste sequence. Apps with bracketed paste mode enabled (vim, fish,
+		// etc.) will recognize the markers and treat it as one paste; apps
+		// without it ignore or strip the markers.
+		if len(m.tabs) > 0 && m.activeTab < len(m.tabs) {
+			seq := "\x1b[200~" + msg.Content + "\x1b[201~"
+			if cmd := m.tabs[m.activeTab].Term.SendInput(seq); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
+
 	default:
 		// Forward other messages to all terminals.
 		for i := range m.tabs {
@@ -319,13 +354,24 @@ func (m *Model) View() tea.View {
 
 	bar, layout := renderTabBar(m.tabs, m.activeTab, m.width)
 	m.tabLayout = layout
-	content := m.tabs[m.activeTab].Term.View()
+	content := m.tabs[m.activeTab].Term.ViewAt(m.viewportOffset)
 
 	var v tea.View
 	v.SetContent(bar + "\n" + content.Content)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeAllMotion
 	return v
+}
+
+// pageSize returns the number of lines a single Shift+PageUp/Down step
+// scrolls — one less than the visible terminal height so the user keeps a
+// row of context across pages.
+func (m *Model) pageSize() int {
+	page := m.height - tabBarHeight - 1
+	if page < 1 {
+		page = 1
+	}
+	return page
 }
 
 // SetSize updates the stored dimensions.

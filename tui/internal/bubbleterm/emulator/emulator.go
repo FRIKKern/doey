@@ -280,6 +280,37 @@ func (e *Emulator) SetOnData(callback func()) {
 	e.onData = callback
 }
 
+// ScrollbackLen returns the number of lines currently in the main screen's
+// scrollback buffer. Returns 0 if scrollback is unavailable.
+func (e *Emulator) ScrollbackLen() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.vt == nil {
+		return 0
+	}
+	return e.vt.ScrollbackLen()
+}
+
+// ScrollbackLine returns the rendered ANSI string for the scrollback line at
+// the given index (0 = oldest line). Returns "" if the index is out of bounds
+// or scrollback is unavailable.
+func (e *Emulator) ScrollbackLine(idx int) string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.vt == nil {
+		return ""
+	}
+	sb := e.vt.Scrollback()
+	if sb == nil {
+		return ""
+	}
+	line := sb.Line(idx)
+	if line == nil {
+		return ""
+	}
+	return line.Render()
+}
+
 // IsProcessExited returns true if the process has exited
 func (e *Emulator) IsProcessExited() bool {
 	e.mu.RLock()
