@@ -403,6 +403,23 @@ _build_tui() {
     printf " ${DIM}skipped${RESET}\n"
   fi
 
+  # Build doey-masterplan-tui (masterplan plan viewer)
+  printf "         ${DIM}→ building doey-masterplan-tui...${RESET}"
+  set +e
+  if type _build_go_binary >/dev/null 2>&1; then
+    _build_go_binary "tui" ./cmd/doey-masterplan-tui/ "$HOME/.local/bin/doey-masterplan-tui" 2>/dev/null
+  else
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-masterplan-tui" ./cmd/doey-masterplan-tui/) 2>/dev/null
+  fi
+  local mp_rc=$?
+  set -e
+  if [ $mp_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-masterplan-tui" ]; then
+    printf " ${SUCCESS}✓${RESET}\n"
+    detail "~/.local/bin/doey-masterplan-tui (built from source)"
+  else
+    printf " ${DIM}skipped${RESET}\n"
+  fi
+
   # Build doey-loading (startup loading screen — optional)
   printf "         ${DIM}→ building doey-loading...${RESET}"
   set +e
