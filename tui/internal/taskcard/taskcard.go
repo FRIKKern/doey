@@ -57,11 +57,18 @@ func (d CardDelegate) Height() int { return 2 }
 // Spacing returns the gap between cards (0 = dense, tight items within sections).
 func (d CardDelegate) Spacing() int { return 0 }
 
+const (
+	// SectionHeaderLines is the number of lines a section header occupies.
+	SectionHeaderLines = 1
+	// SectionGapLines is the number of blank lines before a non-first section header.
+	SectionGapLines = 2
+)
+
 // Update is a no-op; the delegate does not handle messages.
 func (d CardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 
-// taskSection returns a grouping key for section headers.
-func taskSection(status string) string {
+// TaskSection returns a grouping key for section headers.
+func TaskSection(status string) string {
 	switch status {
 	case "active", "in_progress":
 		return "IN PROGRESS"
@@ -84,18 +91,19 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	}
 
 	// Section header at group boundaries
-	section := taskSection(ti.Task.Status)
+	section := TaskSection(ti.Task.Status)
 	showHeader := index == 0
 	if !showHeader && index > 0 {
 		if prev, ok := m.Items()[index-1].(TaskItem); ok {
-			showHeader = taskSection(prev.Task.Status) != section
+			showHeader = TaskSection(prev.Task.Status) != section
 		}
 	}
 	if showHeader {
 		// Extra breathing room before section headers (except the first)
 		if index > 0 {
-			fmt.Fprintln(w)
-			fmt.Fprintln(w)
+			for i := 0; i < SectionGapLines; i++ {
+				fmt.Fprintln(w)
+			}
 		}
 		hdr := lipgloss.NewStyle().Bold(true).Foreground(d.Theme.Muted).Faint(true).PaddingLeft(1).Render(section)
 		fmt.Fprintln(w, hdr)

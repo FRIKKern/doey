@@ -681,18 +681,46 @@ func (m TasksModel) updateMouse(msg tea.MouseMsg) (TasksModel, tea.Cmd) {
 		// Card clicks in left panel — Y-coordinate math
 		leftW := m.LeftWidth()
 		if msg.X < leftW && len(m.entries) > 0 {
-			const cardHeight = 3
+			const cardHeight = 2 // matches CardDelegate.Height()
 			const headerLines = 2 // "TASKS" header + summary line
 			relY := msg.Y - m.panelOffsetY - headerLines
 			if relY >= 0 {
 				firstVisible := m.list.Paginator.Page * m.list.Paginator.PerPage
-				index := firstVisible + relY/cardHeight
 				perPage := m.list.Paginator.PerPage
-				if index >= firstVisible+perPage {
-					return m, nil
+				items := m.list.Items()
+				lastVisible := firstVisible + perPage
+				if lastVisible > len(items) {
+					lastVisible = len(items)
 				}
-				if index >= 0 && index < len(m.entries) {
-					m.list.Select(index)
+
+				// Walk visible items, accumulating Y positions including section headers
+				yOffset := 0
+				clickedIndex := -1
+				for i := firstVisible; i < lastVisible; i++ {
+					ti, ok := items[i].(taskcard.TaskItem)
+					if ok {
+						isNewSection := i == 0
+						if !isNewSection && i > 0 {
+							if prev, pok := items[i-1].(taskcard.TaskItem); pok {
+								isNewSection = taskcard.TaskSection(prev.Task.Status) != taskcard.TaskSection(ti.Task.Status)
+							}
+						}
+						if isNewSection && i > 0 {
+							yOffset += taskcard.SectionGapLines
+						}
+						if isNewSection {
+							yOffset += taskcard.SectionHeaderLines
+						}
+					}
+					if relY >= yOffset && relY < yOffset+cardHeight {
+						clickedIndex = i
+						break
+					}
+					yOffset += cardHeight
+				}
+
+				if clickedIndex >= 0 && clickedIndex < len(m.entries) {
+					m.list.Select(clickedIndex)
 					m.leftFocused = false
 					m.detailViewport.GotoTop()
 					m.loadSelectedDetail()
