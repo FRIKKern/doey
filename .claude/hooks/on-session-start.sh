@@ -117,6 +117,14 @@ if [ "$ROLE" != "info_panel" ]; then
   fi
 fi
 
+# Save launch command for respawn replay (stop-respawn.sh reads this)
+if [ -f "/proc/$PPID/cmdline" ]; then
+  tr '\0' ' ' < "/proc/$PPID/cmdline" \
+    > "${RUNTIME_DIR}/status/${PANE_SAFE}.launch_cmd.tmp" \
+    && mv "${RUNTIME_DIR}/status/${PANE_SAFE}.launch_cmd.tmp" \
+          "${RUNTIME_DIR}/status/${PANE_SAFE}.launch_cmd"
+fi
+
 wt_dir=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" WORKTREE_DIR)
 _team_task_id=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" TASK_ID)
 
