@@ -190,7 +190,7 @@ func (d CardDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(borderColor).
-			Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1E293B"}).
+			Background(lipgloss.AdaptiveColor{Light: "#EEF2FF", Dark: "#1A1D27"}).
 			Render(card)
 	}
 
