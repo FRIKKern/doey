@@ -995,9 +995,15 @@ add_team_from_def() {
       w_agent_name=$(generate_team_agent "$w_agent" "$window_index")
       _w_cmd+=" --agent \"$w_agent_name\""
     fi
-    local _w_prompt
-    _w_prompt=$(ls "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
-    [ -n "$_w_prompt" ] && _w_cmd+=" --append-system-prompt-file \"$_w_prompt\""
+    local _w_prompt_suffix="w${window_index}-${_w_i}"
+    local _w_prompt="${runtime_dir}/worker-system-prompt-${_w_prompt_suffix}.md"
+    if [ -f "${runtime_dir}/worker-system-prompt.md" ]; then
+      cp "${runtime_dir}/worker-system-prompt.md" "$_w_prompt"
+      local _w_pane_id="d-t${window_index}-w${_w_i}"
+      printf '\n\n## Identity\nYou are %s %s (%s) in pane %s.%s of session %s.\n' \
+        "$DOEY_ROLE_WORKER" "$_w_i" "$_w_pane_id" "$window_index" "$_w_i" "$session" >> "$_w_prompt"
+      _w_cmd+=" --append-system-prompt-file \"$_w_prompt\""
+    fi
     _append_settings _w_cmd "$runtime_dir"
 
     sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
