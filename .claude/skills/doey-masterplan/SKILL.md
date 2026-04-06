@@ -266,6 +266,33 @@ The Agent writes the synthesis to `${MP_DIR}/synthesis.md`:
   - **Sources**: <which agents found this>
   - **Impact**: <how this affects the plan>
 
+## Architecture Impact
+
+Draw an ASCII block diagram showing which subsystems and
+modules are affected by this plan. Mark each box with its
+change status and show data/control flow between them.
+
+Example format (adapt to actual subsystems):
+
+```
+  +-------------+       +-------------+
+  |   Hooks     |<----->|   Shell     |
+  | (modified)  |       | (modified)  |
+  +-------------+       +-------------+
+        |                      |
+        v                      v
+  +-------------+       +-------------+
+  |   Agents    |       |   TUI       |
+  | (unchanged) |       | (new file)  |
+  +-------------+       +-------------+
+```
+
+Rules:
+- One box per affected subsystem or module
+- Mark each box: (modified), (new file), (unchanged), (removed)
+- Arrows show data flow (`--->`) or control flow (`<--->`)
+- Keep diagram within 80 columns
+
 ## Resolved Contradictions
 <Where agents disagreed, with resolution>
 - **Contradiction**: <Agent X says A, Agent Y says B>
@@ -284,6 +311,27 @@ The Agent writes the synthesis to `${MP_DIR}/synthesis.md`:
 
 ## Constraints Discovered
 <Hard constraints that emerged from research — these bound the solution space>
+
+## Risk Matrix
+
+Place each identified risk into the appropriate cell of this
+likelihood-vs-impact grid. Risks in the top-right cells
+(high likelihood + high impact) require mitigation plans.
+
+```
+                  | Low Impact  | Med Impact  | High Impact |
+  ----------------+-------------+-------------+-------------+
+  High Likelihood |             |             |             |
+  Med Likelihood  |             |             |             |
+  Low Likelihood  |             |             |             |
+```
+
+Rules:
+- Each risk is a short label (1-5 words) placed in a cell
+- Multiple risks per cell are comma-separated
+- Top-right cells (High Likelihood + High/Med Impact) need
+  a mitigation plan listed below the grid
+- Keep grid within 80 columns
 
 ## Simplification Opportunities
 <Things we can skip or defer without losing core value — from Agent 6 especially>
@@ -352,8 +400,29 @@ The Agent writes to `${MP_DIR}/phases.md`:
 <One paragraph: what a user can see, do, or verify after this phase ships>
 
 ### Changes
-- <file or component>: <what changes and why>
-- <file or component>: <what changes and why>
+
+#### File Tree
+Show affected files as an ASCII tree. Mark each file with
+its change type. Example:
+
+```
+src/
+|-- hooks/
+|   |-- on-pre-tool-use.sh  (modified)
+|   +-- common.sh           (modified)
++-- shell/
+    +-- doey.sh             (modified)
+```
+
+Rules:
+- Use `|--` for sibling entries, `+--` for last entry
+- Use `|   ` for vertical continuation
+- Mark each file: (modified), (new), or (removed)
+- Group by directory, only show affected paths
+
+#### Details
+- <file path>: <what changes and why>
+- <file path>: <what changes and why>
 
 ### Verification Gate
 Before Phase 2 can start, ALL of these must pass:
@@ -385,8 +454,40 @@ Before Phase 2 can start, ALL of these must pass:
 (repeat for each phase)
 
 ## Phase Dependencies
-<Diagram or ordered list showing which phases depend on which>
-<Call out any phases that could run in parallel>
+
+Draw an ASCII flow chart showing phase execution order. Use
+boxes for phases connected by arrows. Mark parallel phases.
+Label arrows with gate conditions where applicable.
+
+Example format (adapt to actual phases):
+
+```
+  +------------------+     +------------------+
+  | Phase 1: Setup   |---->| Phase 2: Core    |
+  +------------------+     +------------------+
+                                   |
+                            +------+------+
+                            |             |
+                            v             v
+                     +-----------+  +-----------+
+                     | Phase 3a  |  | Phase 3b  |
+                     | (parallel)|  | (parallel)|
+                     +-----------+  +-----------+
+                            |             |
+                            +------+------+
+                                   |
+                                   v
+                          +------------------+
+                          | Phase 4: Verify  |
+                          +------------------+
+```
+
+Rules:
+- Each box is a phase with its title
+- Arrows (`---->`, `|`, `v`) show execution order
+- Tag phases that can run concurrently with "(parallel)"
+- Label arrows with gate conditions if any (e.g. `--[gate]--->`)
+- Keep diagram within 80 columns
 
 ## Unresolved Questions for User
 <Questions from the synthesis that affect phase design — present these in Phase 4>
