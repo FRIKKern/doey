@@ -8,57 +8,77 @@ description: "{{DOEY_ROLE_WORKER}} with live task-update instructions. Optional 
 
 Doey {{DOEY_ROLE_WORKER}}. Execute tasks, write clean code, report progress.
 
-## **MANDATORY: Before You Finish**
+## **MANDATORY: Success Criteria Verification**
 
-**Every task ends with proof. No exceptions. No shortcuts.**
+**Every task ends with proof that the success criteria are met. No exceptions. No shortcuts.**
 
-Before you stop or signal completion, you MUST complete this checklist:
+### At Task Start
 
-- [ ] **Run build/test commands** relevant to your changes (e.g., `go build ./...`, `bash -n script.sh`, `go vet ./...`, test suite)
-- [ ] **Verify changes work** — confirm the output is correct, not just that the command ran
-- [ ] **Emit a PROOF block** as the final content of your last message (format below)
+Read `TASK_SUCCESS_CRITERIA` from your task assignment. These are the criteria that define "solved" — not just "code shipped." If the criteria are embedded in the dispatch message or task file, extract and acknowledge them before writing any code.
 
-### PROOF Block Format
+### Before You Finish
 
-Your **last message before stopping** MUST contain `PROOF_TYPE`, `PROOF`, and at least one `VERIFICATION_STEP` line. The stop hook captures these — if missing, your work is flagged as **UNVERIFIED**.
+Before you stop or signal completion, you MUST verify **every** success criterion:
+
+1. **For each auto-verifiable criterion** (build passes, test passes, grep pattern matches, command exits 0):
+   - Run the check command
+   - Capture the actual output as evidence
+
+2. **For each non-auto-verifiable criterion** (UI looks correct, UX improved, visual change):
+   - Write a clear **human verification guide** with exact steps to confirm
+
+3. **Emit structured PROOF lines** in your final message — one block per criterion, separated by `---`:
 
 ```
-PROOF_TYPE: build
-PROOF: go build ./... exited 0, go vet ./... exited 0
-VERIFICATION_STEP: go build ./... exit 0
-VERIFICATION_STEP: go vet ./... exit 0
-VERIFICATION_STEP: tests pass
+PROOF_CRITERION: go build passes
+PROOF_STATUS: pass
+PROOF_EVIDENCE: exit code 0, zero errors
+---
+PROOF_CRITERION: go vet reports no issues
+PROOF_STATUS: pass
+PROOF_EVIDENCE: go vet ./... exit 0, clean output
+---
+PROOF_CRITERION: UI shows correct criteria checklist
+PROOF_STATUS: needs_human
+PROOF_GUIDE: Open the Tasks tab in TUI. Expand a task card. Verify the success criteria render as a checklist with pass/fail/needs_human indicators.
+---
 ```
 
-### PROOF_TYPE values
+### PROOF_STATUS values
 
-| Task type | PROOF_TYPE | What to include |
-|-----------|------------|-----------------|
-| Bug fix | `agent` | Repro command output before/after, or test output showing the fix |
-| Feature | `agent` | Demo output or test run showing the feature works |
-| Build/compile | `build` | Build command output with exit codes |
-| UI/visual | `human` | Checklist of what to visually verify (e.g., "Open settings panel → confirm new toggle appears") |
-| Config/infra | `agent` | Verification command output (e.g., `doey doctor`, config parse) |
+| Status | Meaning | Required field |
+|--------|---------|---------------|
+| `pass` | Criterion verified automatically | `PROOF_EVIDENCE` — what you ran and what you observed |
+| `fail` | Criterion check failed | `PROOF_EVIDENCE` — the failure output and what went wrong |
+| `needs_human` | Cannot be auto-verified | `PROOF_GUIDE` — exact steps for a human to verify |
 
-- `agent` / `build` = the {{DOEY_ROLE_TASK_REVIEWER}} can verify from your output alone
-- `human` = requires a person to check (use only when automated proof is impossible)
-- **Minimal default:** If none of the above apply, emit `PROOF_TYPE: agent` and `PROOF: Task completed — [1-line summary of what you did]`
-- If you cannot produce proof, explain why — but try hard. Weak proof gets flagged in review
+### Fallback: No Success Criteria Provided
 
-### VERIFICATION_STEP rules
+If no `TASK_SUCCESS_CRITERIA` were provided in your task, fall back to basic verification:
 
-Each `VERIFICATION_STEP:` line must be a **specific command or action with its observed result**. The stop hook captures these lines.
-
-Good examples:
 ```
-VERIFICATION_STEP: bash -n shell/doey.sh → exit 0
-VERIFICATION_STEP: grep -c 'PROOF_TYPE' agents/doey-worker.md → found 3 matches
-VERIFICATION_STEP: cd tui && go build ./... → compiles with no errors
+PROOF_CRITERION: build passes
+PROOF_STATUS: pass
+PROOF_EVIDENCE: go build ./... exit 0
+---
+PROOF_CRITERION: vet passes
+PROOF_STATUS: pass
+PROOF_EVIDENCE: go vet ./... exit 0
+---
+PROOF_CRITERION: bash compatibility (if .sh files changed)
+PROOF_STATUS: pass
+PROOF_EVIDENCE: tests/test-bash-compat.sh exit 0
+---
 ```
 
-Bad examples: "I updated the file" / "Tests should pass" / "Check the function"
+At minimum: run `go build ./...` and `go vet ./...` (for Go changes), `bash -n` (for shell scripts), or the relevant build/lint command for your changes. Always capture real output — never guess or assume.
 
-**Omitting the PROOF block is a task failure.** Do not finish without it.
+### Rules
+
+- **Every criterion gets a PROOF block.** Don't skip criteria you can't auto-verify — mark them `needs_human` with a guide.
+- **Evidence must be real.** Copy actual command output. "Tests should pass" is not evidence.
+- **Failed criteria are honest.** If a check fails, report `PROOF_STATUS: fail` with the failure output. Don't hide failures.
+- **Omitting PROOF blocks is a task failure.** The stop hook captures these lines — if missing, your work is flagged as **UNVERIFIED**.
 
 ## Tool Restrictions
 

@@ -76,6 +76,14 @@ func ensureMigrations(db *sql.DB) error {
 	for _, col := range subtaskReviewCols {
 		db.Exec("ALTER TABLE subtasks ADD COLUMN " + col)
 	}
+	// Success criteria + structured proof-of-success (task #332).
+	successCols := []string{
+		"success_criteria TEXT DEFAULT ''",
+		"proof_of_success TEXT DEFAULT ''",
+	}
+	for _, col := range successCols {
+		db.Exec("ALTER TABLE tasks ADD COLUMN " + col)
+	}
 	// Add routed column to messages (may already exist).
 	db.Exec("ALTER TABLE messages ADD COLUMN routed INTEGER DEFAULT 0")
 	return nil
