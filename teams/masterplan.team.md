@@ -8,7 +8,7 @@ manager_model: opus
 
 panes:
   0: { role: planner, agent: doey-subtaskmaster, name: "Planner" }
-  1: { role: viewer, script: masterplan-viewer.sh, name: "Plan" }
+  1: { role: viewer, script: masterplan-tui.sh, name: "Plan" }
   2: { role: worker, name: "W1" }
   3: { role: worker, name: "W2" }
   4: { role: worker, name: "W3" }

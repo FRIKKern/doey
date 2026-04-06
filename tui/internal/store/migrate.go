@@ -344,12 +344,6 @@ func (s *Store) migrateOnePlan(path string, r *MigrateResult) error {
 		return nil
 	}
 
-	var exists int
-	s.db.QueryRow(`SELECT 1 FROM plans WHERE id = ?`, id).Scan(&exists)
-	if exists == 1 {
-		return nil
-	}
-
 	title := fm["title"]
 	status := fm["status"]
 	if status == "" {
@@ -365,13 +359,52 @@ func (s *Store) migrateOnePlan(path string, r *MigrateResult) error {
 		updatedAt = createdAt
 	}
 
-	_, err = s.db.Exec(`INSERT OR IGNORE INTO plans (id, title, status, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		id, title, status, body, createdAt, updatedAt)
+	// Check if plan already exists in DB
+	var existingBody string
+	err = s.db.QueryRow(`SELECT body FROM plans WHERE id = ?`, id).Scan(&existingBody)
 	if err != nil {
-		return err
+		// Plan doesn't exist — insert it
+		_, err = s.db.Exec(`INSERT INTO plans (id, title, status, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			id, title, status, body, createdAt, updatedAt)
+		if err != nil {
+			return err
+		}
+		r.Plans++
+		return nil
 	}
-	r.Plans++
+
+	// Plan exists — update if file content differs (preserves task_id, created_at)
+	if existingBody != body {
+		_, err = s.db.Exec(`UPDATE plans SET title = ?, status = ?, body = ?, updated_at = ? WHERE id = ?`,
+			title, status, body, updatedAt, id)
+		if err != nil {
+			return err
+		}
+		r.Plans++
+	}
 	return nil
+}
+
+// SyncPlansFromFiles scans .doey/plans/*.md and upserts any plans whose
+// content differs from the DB. Lightweight — safe to call on every read cycle.
+func (s *Store) SyncPlansFromFiles(projectDir string) int {
+	plansDir := filepath.Join(projectDir, ".doey", "plans")
+	entries, err := os.ReadDir(plansDir)
+	if err != nil {
+		return 0
+	}
+
+	synced := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		r := &MigrateResult{}
+		if err := s.migrateOnePlan(filepath.Join(plansDir, e.Name()), r); err == nil {
+			synced += r.Plans
+		}
+	}
+	return synced
 }
 
 // --- Agents ---
