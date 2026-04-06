@@ -49,11 +49,11 @@ type quickAction struct {
 	zoneID      string
 }
 
-// quickActions is the ordered list of dashboard action cards.
+// quickActions is the ordered list of dashboard spawn cards.
 var quickActions = []quickAction{
-	{"◆", "Reserved Freelancers", "Reserve independent workers", "dash-spawn-freelancer"},
-	{"⟫", "Regular Team", "Manager + workers team", "dash-create-team"},
-	{"◈", "Specialized Team", "Team from definition file", "dash-create-specialized"},
+	{"◇", "Freelancer", "Independent, no manager", "dash-spawn-freelancer"},
+	{"◆", "Team", "Subtaskmaster + Workers", "dash-create-team"},
+	{"◈", "Specialized", "R&D, Deployment, etc.", "dash-create-specialized"},
 }
 
 // DashboardModel is the primary landing tab (command center).
@@ -194,10 +194,7 @@ func (m DashboardModel) View() string {
 		sections = append(sections, m.renderTeamPicker(w))
 	}
 	sections = append(sections, m.renderActiveTasks(w))
-	if grid := m.renderTeamGrid(w); grid != "" {
-		sections = append(sections, grid)
-	}
-	sections = append(sections, m.renderQuickActions(w))
+	sections = append(sections, m.renderTeamGrid(w))
 
 	content := strings.Join(sections, "\n")
 
@@ -242,10 +239,7 @@ func (m DashboardModel) maxScrollOffset() int {
 		w = 40
 	}
 	sections = append(sections, m.renderActiveTasks(w))
-	if grid := m.renderTeamGrid(w); grid != "" {
-		sections = append(sections, grid)
-	}
-	sections = append(sections, m.renderQuickActions(w))
+	sections = append(sections, m.renderTeamGrid(w))
 	totalLines := len(strings.Split(strings.Join(sections, "\n"), "\n"))
 	maxOff := totalLines - m.height
 	if maxOff < 0 {
@@ -492,13 +486,15 @@ func categoryAccentColor(category string, t styles.Theme) lipgloss.AdaptiveColor
 }
 
 func (m DashboardModel) renderTeamGrid(w int) string {
-	if len(m.snapshot.Teams) == 0 {
-		return ""
-	}
 	t := m.theme
 
 	header := t.SectionHeader.Copy().PaddingLeft(2).Render("TEAMS")
 	rule := t.Faint.Render(strings.Repeat("─", w))
+
+	if len(m.snapshot.Teams) == 0 {
+		spawnRow := m.renderSpawnCards(w)
+		return "\n" + header + "\n" + rule + "\n\n" + spawnRow + "\n"
+	}
 
 	// Sort teams by window index
 	var indices []int
@@ -602,7 +598,8 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 
 	grid := styles.CardGrid(cards, 2, w)
 	body := lipgloss.NewStyle().Padding(1, 1).Render(grid)
-	return "\n" + header + "\n" + rule + "\n" + body
+	spawnRow := m.renderSpawnCards(w)
+	return "\n" + header + "\n" + rule + "\n" + body + "\n" + spawnRow
 }
 
 // paneRoleIcon returns a Unicode icon for the pane's role.
@@ -1000,33 +997,29 @@ func (m DashboardModel) renderTeamPicker(w int) string {
 	return "\n" + header + "\n" + rule + "\n" + body + "\n" + hint + "\n"
 }
 
-func (m DashboardModel) renderQuickActions(w int) string {
+func (m DashboardModel) renderSpawnCards(w int) string {
 	t := m.theme
-
-	header := t.SectionHeader.Copy().PaddingLeft(2).Render("SPAWN TEAMS")
-	rule := t.Faint.Render(strings.Repeat("─", w))
 
 	numCards := len(quickActions)
 	if numCards == 0 {
-		return "\n" + header + "\n" + rule + "\n"
+		return ""
 	}
 
-	// Card sizing — responsive to terminal width
-	usableW := w - 8 // outer padding
-	gap := 2
+	// Compact card sizing — small and subtle
+	usableW := w - 4
+	gap := 1
 	cardW := (usableW - gap*(numCards-1)) / numCards
 	if cardW < 16 {
 		cardW = 16
 	}
-	if cardW > 30 {
-		cardW = 30
+	if cardW > 22 {
+		cardW = 22
 	}
 
-	// Render each card using the QuickActionCard style function
 	var cards []string
 	for i, action := range quickActions {
 		selected := m.focused && i == m.actionCursor
-		cardStr := styles.QuickActionCard(t, action.icon, action.label, action.description, cardW, selected)
+		cardStr := styles.TeamSpawnCard(t, action.icon, action.label, action.description, cardW, selected)
 		cards = append(cards, zone.Mark(action.zoneID, cardStr))
 	}
 
@@ -1035,17 +1028,6 @@ func (m DashboardModel) renderQuickActions(w int) string {
 		row = lipgloss.JoinHorizontal(lipgloss.Top, row, strings.Repeat(" ", gap), cards[i])
 	}
 
-	hint := ""
-	if m.focused {
-		hint = lipgloss.NewStyle().
-			Foreground(t.Muted).Faint(true).PaddingLeft(3).
-			Render("h/l = navigate  enter = activate")
-	}
-
-	body := lipgloss.NewStyle().
-		Padding(1, 3).
-		Render(row)
-
-	return "\n" + header + "\n" + rule + "\n" + body + "\n" + hint + "\n"
+	return lipgloss.NewStyle().PaddingLeft(1).Render(row)
 }
 

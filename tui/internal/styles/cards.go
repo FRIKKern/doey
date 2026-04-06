@@ -690,6 +690,37 @@ func QuickActionCard(t Theme, icon, title, description string, width int, select
 	return cardStyle.Render(content)
 }
 
+// TeamSpawnCard renders a compact, subtle team-type card for the dashboard.
+// Two lines: "icon Title" and "  subtitle". Muted rounded border.
+// selected highlights the border with Accent color.
+func TeamSpawnCard(t Theme, icon, title, subtitle string, width int, selected bool) string {
+	borderColor := t.Separator
+	iconColor := t.Muted
+	titleColor := t.Muted
+	if selected {
+		borderColor = t.Accent
+		iconColor = t.Accent
+		titleColor = t.Text
+	}
+
+	cardStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Width(width)
+
+	iconStr := lipgloss.NewStyle().Foreground(iconColor).Render(icon)
+	titleStr := lipgloss.NewStyle().Foreground(titleColor).Bold(selected).Render(title)
+	line1 := iconStr + " " + titleStr
+
+	line2 := lipgloss.NewStyle().
+		Foreground(t.Subtle).
+		Faint(true).
+		Render("  " + subtitle)
+
+	return cardStyle.Render(line1 + "\n" + line2)
+}
+
 // TimelineDot renders a colored dot for the status timeline display.
 func TimelineDot(color lipgloss.AdaptiveColor) string {
 	return lipgloss.NewStyle().
