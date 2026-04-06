@@ -245,13 +245,13 @@ func LogStatusBadge(status string, t Theme) string {
 func LogEntryIcon(proofType string, t Theme) string {
 	switch proofType {
 	case "agent":
-		return "🤖"
+		return "◆"
 	case "test":
-		return "🧪"
+		return "◇"
 	case "build":
-		return "🔨"
+		return "◆"
 	case "manual":
-		return "👤"
+		return "○"
 	default:
 		return lipgloss.NewStyle().Foreground(t.Muted).Render("◆")
 	}

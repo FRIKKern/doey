@@ -55,7 +55,7 @@ func NewCardDelegate(t styles.Theme) CardDelegate {
 func (d CardDelegate) Height() int { return 2 }
 
 // Spacing returns the gap between cards.
-func (d CardDelegate) Spacing() int { return 1 }
+func (d CardDelegate) Spacing() int { return 2 }
 
 // Update is a no-op; the delegate does not handle messages.
 func (d CardDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
@@ -855,21 +855,21 @@ func renderMarkdown(body string, width int, cache *markdownCache) string {
 func attachmentTypeEmoji(t string) string {
 	switch t {
 	case "research":
-		return "🔍"
+		return "◇"
 	case "build":
-		return "🔨"
+		return "◆"
 	case "test":
-		return "✅"
+		return "✓"
 	case "review":
-		return "👁"
+		return "◈"
 	case "error":
-		return "⚠️"
+		return "⚠"
 	case "progress":
-		return "📊"
+		return "●"
 	case "completion":
-		return "🏁"
+		return "✓"
 	default:
-		return "📄"
+		return "◆"
 	}
 }
 
@@ -891,7 +891,7 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 	}
 
 	var sections []string
-	sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("📎 Attachments (%d)", len(attachments))))
+	sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("◆ Attachments (%d)", len(attachments))))
 
 	for i, att := range display {
 		emoji := attachmentTypeEmoji(att.Type)
@@ -1117,7 +1117,7 @@ func persistentSubtaskRow(theme styles.Theme, ps runtime.PersistentSubtask, sele
 
 	// Report count indicator
 	if len(matchedReports) > 0 {
-		countText := fmt.Sprintf(" 📋%d", len(matchedReports))
+		countText := fmt.Sprintf(" ◆%d", len(matchedReports))
 		row += dimStyle.Render(countText)
 	}
 
@@ -1979,16 +1979,16 @@ func (e *ExpandedCard) renderQARelayChain(width int) string {
 		var chainColor lipgloss.AdaptiveColor
 		switch qa.Status {
 		case "answered":
-			icon = "✅"
+			icon = "✓"
 			chainColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"} // green
 		case "answering":
-			icon = "⏳"
+			icon = "●"
 			chainColor = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"} // blue
 		case "routing", "forwarded":
-			icon = "🔀"
+			icon = "→"
 			chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // yellow
 		default:
-			icon = "❓"
+			icon = "○"
 			chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"} // yellow
 		}
 
@@ -2038,7 +2038,7 @@ func (e *ExpandedCard) renderQARelayChain(width int) string {
 					answerer = last.Pane
 				}
 			}
-			aText := "✅ A: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+answer+"\"")
+			aText := "✓ A: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+answer+"\"")
 			if answerer != "" {
 				aText += lipgloss.NewStyle().Foreground(t.Muted).Render(" — "+answerer)
 			}
