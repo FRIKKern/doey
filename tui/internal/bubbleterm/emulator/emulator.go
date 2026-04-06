@@ -42,9 +42,14 @@ type Emulator struct {
 	frameRate time.Duration
 	stopChan  chan struct{}
 
-	// Damage tracking for change detection
-	lastRender string
-	damaged    bool
+	// Damage tracking for change detection.
+	// lastRows is the previous frame's rendered rows; nil before the first
+	// render and after a resize, which both force a full-screen damage emit.
+	// damaged is a fast-path flag set whenever new PTY data has been written
+	// to the vt emulator since the last GetScreen call — when false we can
+	// skip the (relatively expensive) Render+diff entirely.
+	lastRows []string
+	damaged  bool
 
 	// Screen dimensions
 	width, height int
@@ -143,6 +148,9 @@ func (e *Emulator) resize(cols, rows int) error {
 	e.width = cols
 	e.height = rows
 	e.damaged = true
+	// Drop the previous-frame snapshot so the next GetScreen call emits a
+	// full-screen damage region for the new dimensions.
+	e.lastRows = nil
 
 	return nil
 }
@@ -154,21 +162,52 @@ func (e *Emulator) SetFrameRate(fps int) {
 	e.frameRate = time.Second / time.Duration(fps)
 }
 
-// GetScreen returns the current rendered screen as ANSI strings.
-// It also returns damage information about which lines changed since
-// the last call.
+// GetScreen returns the current rendered screen as ANSI strings together
+// with per-line damage describing which rows (and, when possible, which
+// cell range within those rows) changed since the previous GetScreen call.
+//
+// Damage detection is two-tiered:
+//
+//  1. The fast path: if no PTY data has arrived since the last call (the
+//     damaged flag is false) and we already have a previous-frame snapshot,
+//     we return the cached rows with empty damage and skip the renderer
+//     entirely.
+//  2. The slow path: render the current screen, split it into rows, and
+//     diff each row against the previous-frame snapshot. Rows that differ
+//     get a damage entry. The cell range (X1, X2) is refined using the
+//     vt emulator's per-line Touched() data when its FirstCell/LastCell
+//     range is sane; otherwise we fall back to the full row width.
+//
+// Note on the vt damage API: github.com/charmbracelet/x/vt exposes per-line
+// damage via Emulator.Touched() (returning []*uv.LineData with FirstCell /
+// LastCell cell indices) but does NOT expose ClearTouched() on the Emulator
+// type — only on the inner Screen. Because of that we cannot reset touched
+// state from outside the package, which means Touched() entries accumulate
+// over time and cannot be used on their own as a reliable per-frame delta.
+// We therefore use the previous-frame row snapshot as the authoritative
+// "this row actually changed since last frame" signal and treat Touched()
+// purely as a cell-range hint.
 func (e *Emulator) GetScreen() EmittedFrame {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	// Render the current screen
-	rendered := e.vt.Render()
+	// Fast path: nothing has been written to the vt emulator since the
+	// last GetScreen call, so the screen contents cannot have changed.
+	// Return the cached snapshot with empty damage so the consumer can
+	// skip its rerender.
+	if !e.damaged && e.lastRows != nil {
+		return EmittedFrame{Rows: e.lastRows, Damage: nil}
+	}
 
-	// Check for changes
+	rendered := e.vt.Render()
+	rows := splitIntoRows(rendered, e.height, e.width)
+
 	var damage []LineDamage
-	if rendered != e.lastRender || e.damaged {
-		// Mark all lines as damaged for simplicity
-		// (the vt package tracks touched lines but we simplify here)
+
+	if e.lastRows == nil || len(e.lastRows) != len(rows) {
+		// Initial render or post-resize: emit full-screen damage. We
+		// can't trust per-line diffing yet because lastRows is either
+		// missing or describes a different geometry.
 		for y := 0; y < e.height; y++ {
 			damage = append(damage, LineDamage{
 				Row:    y,
@@ -177,12 +216,36 @@ func (e *Emulator) GetScreen() EmittedFrame {
 				Reason: CRText,
 			})
 		}
-		e.lastRender = rendered
-		e.damaged = false
+	} else {
+		// Per-line diff against the previous frame. Touched() supplies
+		// optional cell-range hints; we still emit one damage entry per
+		// changed row.
+		touched := e.vt.Touched()
+		for y := 0; y < len(rows); y++ {
+			if rows[y] == e.lastRows[y] {
+				continue
+			}
+			x1, x2 := 0, e.width
+			if y < len(touched) && touched[y] != nil {
+				first := touched[y].FirstCell
+				last := touched[y].LastCell
+				// Only trust the hint if it describes a valid,
+				// non-empty range that fits within the row.
+				if first >= 0 && last > first && last <= e.width {
+					x1, x2 = first, last
+				}
+			}
+			damage = append(damage, LineDamage{
+				Row:    y,
+				X1:     x1,
+				X2:     x2,
+				Reason: CRText,
+			})
+		}
 	}
 
-	// Split rendered output into rows
-	rows := splitIntoRows(rendered, e.height, e.width)
+	e.lastRows = rows
+	e.damaged = false
 
 	return EmittedFrame{Rows: rows, Damage: damage}
 }
