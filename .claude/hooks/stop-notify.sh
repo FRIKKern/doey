@@ -173,6 +173,13 @@ if is_worker; then
     _subject="worker_finished"
   fi
 
+  # Override for respawning workers
+  _respawn_request="${RUNTIME_DIR}/respawn/${PANE_SAFE}.request"
+  if [ -f "$_respawn_request" ]; then
+    _subject="worker_respawning"
+    _respawn_reason=$(head -1 "$_respawn_request" 2>/dev/null) || _respawn_reason="respawn requested"
+  fi
+
   _pane_alive "$_target" || { _log_error "DELIVERY_FAILED" "Target pane not found" "target=$_target"; exit 0; }
 
   # Build summary: prefer result summary, fall back to last message
@@ -180,6 +187,7 @@ if is_worker; then
   [ -z "$_NOTIFY_SUMMARY" ] && [ -n "$LAST_MSG" ] && _NOTIFY_SUMMARY=$(sanitize_message "$LAST_MSG" 100)
   _STATUS_LABEL="FINISHED"
   [ "$STATUS" = "error" ] && _STATUS_LABEL="ERROR"
+  [ -f "${RUNTIME_DIR}/respawn/${PANE_SAFE}.request" ] && _STATUS_LABEL="RESPAWNING"
   # Extract proof type from result JSON
   _PROOF_TYPE=""
   if [ -f "$RESULT_FILE" ]; then
@@ -192,7 +200,9 @@ if is_worker; then
 
   MSG="<task-notification>
   <pane>${WINDOW_INDEX}.${PANE_INDEX}</pane>
+  <pane-id>${DOEY_PANE_ID:-${PANE_SAFE}}</pane-id>
   <status>${_STATUS_LABEL}</status>
+  <respawn-reason>$(_xml_escape "${_respawn_reason:-}")</respawn-reason>
   <summary>$(_xml_escape "${_NOTIFY_SUMMARY}")</summary>
   <files-changed>${_FILES_COUNT}</files-changed>
   <tool-count>${_TOOL_COUNT}</tool-count>

@@ -1,0 +1,52 @@
+---
+name: doey-respawn-me
+description: Request a respawn of the current worker pane. Use when you need to "respawn me", "restart myself", "fresh context", or "reset my pane". Writes an atomic respawn request for the watchdog to pick up, then stops.
+---
+
+- Env: !`echo "ROLE=${DOEY_ROLE:-unset} PANE=${DOEY_PANE_INDEX:-unset} WINDOW=${DOEY_WINDOW_INDEX:-unset} SESSION=${DOEY_SESSION_NAME:-unset} RUNTIME=${DOEY_RUNTIME:-unset}"`
+
+### Validate caller is a worker
+
+```bash
+ROLE="${DOEY_ROLE:-}"
+PANE_INDEX="${DOEY_PANE_INDEX:-0}"
+if [[ "$ROLE" != *worker* ]] && [ "$PANE_INDEX" -le 0 ] 2>/dev/null; then
+  echo "ERROR: /doey-respawn-me can only be called by workers (role=$ROLE, pane=$PANE_INDEX)"
+  exit 2
+fi
+```
+
+### Build safe pane ID and runtime paths
+
+```bash
+SESSION_NAME="${DOEY_SESSION_NAME:?missing DOEY_SESSION_NAME}"
+WINDOW_INDEX="${DOEY_WINDOW_INDEX:?missing DOEY_WINDOW_INDEX}"
+PANE_INDEX="${DOEY_PANE_INDEX:?missing DOEY_PANE_INDEX}"
+RUNTIME_DIR="${DOEY_RUNTIME:?missing DOEY_RUNTIME}"
+SAFE="${SESSION_NAME//[-:.]/_}_${WINDOW_INDEX}_${PANE_INDEX}"
+```
+
+### Write atomic respawn request
+
+```bash
+mkdir -p "$RUNTIME_DIR/respawn"
+TASK_ID="${DOEY_SUBTASK_ID:-${DOEY_TASK_ID:-none}}"
+cat > "$RUNTIME_DIR/respawn/${SAFE}.request.tmp" <<REQEOF
+PANE=${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}
+REASON=self-requested via /doey-respawn-me
+TASK_ID=${TASK_ID}
+TIMESTAMP=$(date +%s)
+REQEOF
+mv "$RUNTIME_DIR/respawn/${SAFE}.request.tmp" "$RUNTIME_DIR/respawn/${SAFE}.request"
+```
+
+### Write proof file
+
+```bash
+mkdir -p "$RUNTIME_DIR/proof"
+echo "PROOF_TYPE: respawn" > "$RUNTIME_DIR/proof/${SAFE}.proof"
+```
+
+### Stop
+
+You have requested a respawn. Stop now.
