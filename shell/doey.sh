@@ -145,7 +145,7 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 # 'doey' is the user-facing CLI. Subcommands like msg/status/task are
 # handled by the internal doey-ctl binary, forwarded transparently here.
 case "${1:-}" in
-  msg|status|health|task|tmux|team|config|agent|event|nudge|migrate|interaction|briefing)
+  msg|status|health|task|plan|tmux|team|config|agent|event|nudge|migrate|interaction|briefing)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else
@@ -333,11 +333,19 @@ HELP
     local task_id
     task_id=$(doey task create --title "Masterplan: ${goal}" --type feature --description "$goal" --project-dir "$dir" 2>/dev/null) || true
 
-    # Export for add_team_from_def
+    # Export for add_team_from_def (shell scope) and tmux (pane scope)
     export PLAN_FILE="$plan_file"
+    export GOAL_FILE="${plan_dir}/goal.md"
+    export MASTERPLAN_ID="$plan_id"
     export DOEY_TASK_ID="${task_id:-}"
 
-    # Write masterplan env
+    # Set tmux session env so spawned panes inherit these vars
+    tmux set-environment -t "$session" PLAN_FILE "$plan_file"
+    tmux set-environment -t "$session" GOAL_FILE "${plan_dir}/goal.md"
+    tmux set-environment -t "$session" MASTERPLAN_ID "$plan_id"
+    [ -n "${task_id:-}" ] && tmux set-environment -t "$session" DOEY_TASK_ID "$task_id"
+
+    # Write masterplan env (persistent reference for hooks/scripts)
     cat > "${runtime_dir}/${plan_id}.env" << MPEOF
 PLAN_FILE=${plan_file}
 MASTERPLAN_ID=${plan_id}
@@ -345,7 +353,7 @@ TASK_ID=${task_id:-}
 GOAL_FILE=${plan_dir}/goal.md
 MPEOF
 
-    # Spawn team
+    # Spawn team via team definition (teams/masterplan.team.md)
     add_team_from_def "$session" "$runtime_dir" "$dir" "masterplan"
 
     printf '  %bMasterplan window created for:%b %s\n' "$SUCCESS" "$RESET" "$goal"
