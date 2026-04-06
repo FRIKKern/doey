@@ -240,6 +240,92 @@ func (m *Model) View() tea.View {
 	return tea.NewView(b.String())
 }
 
+// ScrollbackLen returns the number of lines currently held in the underlying
+// emulator's scrollback buffer.
+func (m *Model) ScrollbackLen() int {
+	return m.emulator.ScrollbackLen()
+}
+
+// ViewAt renders the terminal scrolled back by `offset` lines from the live
+// bottom. offset == 0 returns the live view (identical to View). When the
+// offset moves the viewport into scrollback, the cursor is hidden and lines
+// above the live screen are pulled from the emulator's scrollback buffer.
+// The offset is silently clamped to the available scrollback length.
+func (m *Model) ViewAt(offset int) tea.View {
+	if offset <= 0 {
+		return m.View()
+	}
+	if m.err != nil {
+		return tea.NewView("Terminal error: " + m.err.Error())
+	}
+
+	sbLen := m.emulator.ScrollbackLen()
+	if offset > sbLen {
+		offset = sbLen
+	}
+	if offset == 0 {
+		return m.View()
+	}
+
+	rows := m.frame.Rows
+	h := m.height
+	if h <= 0 {
+		return m.View()
+	}
+
+	// Combined stream: scrollback[0..sbLen) followed by live rows[0..h).
+	// With offset == 0 the viewport top is at index sbLen (first live row).
+	// As offset grows the top moves up by `offset` lines.
+	top := sbLen - offset
+
+	var b strings.Builder
+	for i := 0; i < h; i++ {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		idx := top + i
+		if idx < 0 {
+			b.WriteString(strings.Repeat(" ", m.width))
+			continue
+		}
+		if idx < sbLen {
+			b.WriteString(padVisibleWidth(m.emulator.ScrollbackLine(idx), m.width))
+			continue
+		}
+		r := idx - sbLen
+		if r >= 0 && r < len(rows) {
+			b.WriteString(rows[r])
+		} else {
+			b.WriteString(strings.Repeat(" ", m.width))
+		}
+	}
+	return tea.NewView(b.String())
+}
+
+// padVisibleWidth pads s with spaces so its visible width (ignoring ANSI
+// escape sequences) is at least width.
+func padVisibleWidth(s string, width int) string {
+	visible := 0
+	inEscape := false
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '~' {
+				inEscape = false
+			}
+			continue
+		}
+		visible++
+	}
+	if visible < width {
+		return s + strings.Repeat(" ", width-visible)
+	}
+	return s
+}
+
 // insertCursor inserts reverse-video around the character at visible column col,
 // skipping over ANSI escape sequences when counting columns.
 func insertCursor(row string, col int) string {
