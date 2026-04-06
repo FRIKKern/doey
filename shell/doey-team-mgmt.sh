@@ -216,13 +216,15 @@ _parse_team_def() {
       if [ "$in_panes" -eq 1 ]; then
         case "$line" in
           *"{"*"}"*)
-            local pane_num role="" agent="" pane_name=""
+            local pane_num role="" agent="" pane_name="" pane_script=""
             pane_num=$(echo "$line" | sed 's/^[[:space:]]*//' | cut -d: -f1)
             role=$(echo "$line" | sed -n 's/.*role:[[:space:]]*\([^,}]*\).*/\1/p' | tr -d ' ')
             agent=$(echo "$line" | sed -n 's/.*agent:[[:space:]]*\([^,}]*\).*/\1/p' | tr -d ' ')
+            pane_script=$(echo "$line" | sed -n 's/.*script:[[:space:]]*\([^,}]*\).*/\1/p' | tr -d ' ')
             pane_name=$(echo "$line" | sed -n 's/.*name:[[:space:]]*"\([^"]*\)".*/\1/p')
             [ -n "$role" ] && printf 'PANE_%s_ROLE=%s\n' "$pane_num" "$role" >> "$env_file"
             [ -n "$agent" ] && printf 'PANE_%s_AGENT=%s\n' "$pane_num" "$agent" >> "$env_file"
+            [ -n "$pane_script" ] && printf 'PANE_%s_SCRIPT=%s\n' "$pane_num" "$pane_script" >> "$env_file"
             [ -n "$pane_name" ] && printf 'PANE_%s_NAME=%s\n' "$pane_num" "$pane_name" >> "$env_file"
             ;;
           *) [ -z "$(echo "$line" | tr -d '[:space:]')" ] || { in_panes=0; } ;;
@@ -956,9 +958,26 @@ add_team_from_def() {
   # Launch workers (panes 1+)
   local _w_i=1
   while [ "$_w_i" -le "$max_pane" ]; do
-    local w_agent w_name w_model w_agent_name
-    w_agent=$(_env_val "$env_file" "PANE_${_w_i}_AGENT" "")
+    local w_name w_script
     w_name=$(_env_val "$env_file" "PANE_${_w_i}_NAME" "Worker ${_w_i}")
+    w_script=$(_env_val "$env_file" "PANE_${_w_i}_SCRIPT" "")
+
+    # Script panes: run a shell script instead of launching claude
+    if [ -n "$w_script" ]; then
+      local _script_path="${dir}/shell/${w_script}"
+      local _script_cmd="$_script_path"
+      [ -n "${PLAN_FILE:-}" ] && _script_cmd="$_script_cmd $PLAN_FILE"
+      sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
+      doey_send_command "${session}:${window_index}.${_w_i}" "$_script_cmd"
+      tmux select-pane -t "${session}:${window_index}.${_w_i}" -T "$w_name"
+      write_pane_status "$runtime_dir" "${session}:${window_index}.${_w_i}" "READY"
+      _w_i=$((_w_i + 1))
+      continue
+    fi
+
+    # Agent panes: launch claude
+    local w_agent w_model w_agent_name
+    w_agent=$(_env_val "$env_file" "PANE_${_w_i}_AGENT" "")
     w_model="${td_worker_model:-$DOEY_WORKER_MODEL}"
 
     local _w_cmd="claude --dangerously-skip-permissions --effort high --model $w_model --name \"${w_name}\""
