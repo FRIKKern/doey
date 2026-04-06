@@ -112,27 +112,20 @@ doey_send_verified() {
     tmux send-keys -t "$target" C-u 2>/dev/null || true
     sleep 0.1
 
-    # ── Step 3: Inject text ──
-    local msg_len=${#message}
-    if [ "$msg_len" -lt 500 ]; then
-      # Short single-line messages: send-keys -l (threshold matches Go TUI)
-      if ! tmux send-keys -t "$target" -l -- "$message" 2>/dev/null; then
-        echo "doey_send_verified: send-keys -l failed (attempt $attempt)" >&2
-        continue
-      fi
-    else
-      # Long messages: paste-buffer pipeline
-      local buf_name="doey_send_$$_${attempt}"
-      if ! tmux set-buffer -b "$buf_name" -- "$message" 2>/dev/null; then
-        echo "doey_send_verified: set-buffer failed (attempt $attempt)" >&2
-        continue
-      fi
-      if ! tmux paste-buffer -b "$buf_name" -t "$target" -dpr 2>/dev/null; then
-        tmux delete-buffer -b "$buf_name" 2>/dev/null || true
-        echo "doey_send_verified: paste-buffer failed (attempt $attempt)" >&2
-        continue
-      fi
+    # ── Step 3: Inject text via paste-buffer (all messages, any length) ──
+    local buf_name="doey_send_$$_$(date +%s)_${attempt}"
+    if ! tmux set-buffer -b "$buf_name" -- "$message" 2>/dev/null; then
+      echo "doey_send_verified: set-buffer failed (attempt $attempt)" >&2
+      continue
     fi
+    tmux copy-mode -q -t "$target" 2>/dev/null || true
+    if ! tmux paste-buffer -t "$target" -b "$buf_name" 2>/dev/null; then
+      tmux delete-buffer -b "$buf_name" 2>/dev/null || true
+      echo "doey_send_verified: paste-buffer failed (attempt $attempt)" >&2
+      continue
+    fi
+    # Explicit cleanup (no -d flag — we manage buffer lifetime)
+    tmux delete-buffer -b "$buf_name" 2>/dev/null || true
 
     # ── Step 4: Verify text appeared in pane ──
     # Exponential backoff: 800ms, 1200ms, 2000ms
