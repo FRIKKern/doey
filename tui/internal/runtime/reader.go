@@ -96,6 +96,24 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 		}
 	}
 
+	// Add Boss (window 0) as synthetic team if not already present
+	if _, ok := snap.Teams[0]; !ok {
+		snap.Teams[0] = TeamConfig{
+			WindowIndex: 0,
+			TeamName:    "Boss",
+			TeamType:    "dashboard",
+		}
+	}
+	// Add Core Team (window 1) if not already present
+	if _, ok := snap.Teams[1]; !ok {
+		if tc, err := r.parseTeamConfig(1); err == nil {
+			if tc.TeamName == "" {
+				tc.TeamName = "Core Team"
+			}
+			snap.Teams[1] = tc
+		}
+	}
+
 	// Pane statuses: try store, fall back to files
 	if r.sr != nil {
 		snap.Panes = r.sr.readPaneStatuses()
@@ -291,6 +309,8 @@ func (r *Reader) parseTeamConfig(windowIndex int) (TeamConfig, error) {
 		WorktreeBranch: env["WORKTREE_BRANCH"],
 	}
 
+	tc.TaskID = env["TASK_ID"]
+
 	if wc := env["WORKER_COUNT"]; wc != "" {
 		tc.WorkerCount, _ = strconv.Atoi(wc)
 	}
@@ -341,6 +361,17 @@ func (r *Reader) parsePaneStatuses() map[string]PaneStatus {
 			}
 		}
 		f.Close()
+
+		// Read optional .role, .task_id, .subtask_id files
+		if b, err := os.ReadFile(filepath.Join(statusDir, base+".role")); err == nil {
+			ps.Role = strings.TrimSpace(string(b))
+		}
+		if b, err := os.ReadFile(filepath.Join(statusDir, base+".task_id")); err == nil {
+			ps.TaskID = strings.TrimSpace(string(b))
+		}
+		if b, err := os.ReadFile(filepath.Join(statusDir, base+".subtask_id")); err == nil {
+			ps.SubtaskID = strings.TrimSpace(string(b))
+		}
 
 		statuses[ps.Pane] = ps
 	}

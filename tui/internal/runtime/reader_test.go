@@ -275,9 +275,19 @@ TASK_CREATED=1711443600
 		t.Errorf("TeamWindows = %v, want [1 2]", snap.Session.TeamWindows)
 	}
 
-	// Teams
-	if len(snap.Teams) != 2 {
-		t.Errorf("got %d teams, want 2", len(snap.Teams))
+	// Teams (window 0 = synthetic Boss, plus file-based teams)
+	if len(snap.Teams) != 3 {
+		t.Errorf("got %d teams, want 3", len(snap.Teams))
+	}
+	if boss, ok := snap.Teams[0]; !ok {
+		t.Errorf("snap.Teams[0] (Boss) missing")
+	} else {
+		if boss.TeamName != "Boss" {
+			t.Errorf("team 0 name = %q, want Boss", boss.TeamName)
+		}
+		if boss.TeamType != "dashboard" {
+			t.Errorf("team 0 type = %q, want dashboard", boss.TeamType)
+		}
 	}
 	if snap.Teams[1].TeamName != "charm-ui" {
 		t.Errorf("team 1 name = %q, want charm-ui", snap.Teams[1].TeamName)
