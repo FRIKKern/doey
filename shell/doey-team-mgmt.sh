@@ -878,7 +878,8 @@ add_team_from_def() {
 
   # ── Fast-path: managerless (freelancer) teams ─────────────────────────
   # All panes are workers — no manager launch, no briefing delay.
-  if [ "$_has_manager" = "false" ]; then
+  # Use explicit type=freelancer, or fall back to role scan if type is empty
+  if [ "$td_type" = "freelancer" ] || { [ -z "$td_type" ] && [ "$_has_manager" = "false" ]; }; then
     # Pre-split all panes at once (pane 0 already exists from new-window)
     local _fp_i=1
     while [ "$_fp_i" -le "$max_pane" ]; do
@@ -900,7 +901,8 @@ add_team_from_def() {
     # Write team env: MANAGER_PANE="" and TEAM_TYPE="freelancer"
     write_team_env "$runtime_dir" "$window_index" "$td_grid" \
       "$_fp_pane_list" "$_fp_count" "" "" "" "$td_name" "" \
-      "$td_worker_model" "$td_manager_model" "freelancer" "$td_name"
+      "$td_worker_model" "$td_manager_model" "freelancer" "$td_name" \
+      "" "${DOEY_TASK_ID:-}"
     _register_team_window "$runtime_dir" "$window_index"
     _ensure_worker_prompt "$runtime_dir" "$dir"
 
@@ -939,7 +941,8 @@ add_team_from_def() {
   # Write team env with TEAM_DEF field
   write_team_env "$runtime_dir" "$window_index" "$td_grid" \
     "$worker_pane_list" "$worker_count" "0" "" "" "$td_name" "" \
-    "$td_worker_model" "$td_manager_model" "$td_type" "$td_name"
+    "$td_worker_model" "$td_manager_model" "$td_type" "$td_name" \
+    "" "${DOEY_TASK_ID:-}"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$dir"
 
@@ -966,6 +969,13 @@ add_team_from_def() {
     if [ -n "$w_script" ]; then
       local _script_path="${dir}/shell/${w_script}"
       local _script_cmd="$_script_path"
+      # Try to load PLAN_FILE from masterplan env if not in shell env
+      if [ -z "${PLAN_FILE:-}" ]; then
+        local _mp_env
+        for _mp_env in "${runtime_dir}"/masterplan-*.env; do
+          [ -f "$_mp_env" ] && PLAN_FILE=$(grep '^PLAN_FILE=' "$_mp_env" 2>/dev/null | head -1 | cut -d= -f2-) && break
+        done
+      fi
       [ -n "${PLAN_FILE:-}" ] && _script_cmd="$_script_cmd $PLAN_FILE"
       sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
       doey_send_command "${session}:${window_index}.${_w_i}" "$_script_cmd"
