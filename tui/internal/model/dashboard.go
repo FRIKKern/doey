@@ -495,6 +495,7 @@ var roleDisplayNames = map[string]string{
 	"subtaskmaster":   "Subtaskmaster",
 	"worker":          "Worker",
 	"freelancer":      "Freelancer",
+	"info_panel":      "Info Panel",
 }
 
 // roleIcons maps PaneStatus.Role values to Unicode icons.
@@ -507,6 +508,7 @@ var roleIcons = map[string]string{
 	"subtaskmaster":   "◆",
 	"worker":          "●",
 	"freelancer":      "◇",
+	"info_panel":      "ℹ",
 }
 
 // taskTitleByID finds a task title by its ID in the snapshot.
@@ -583,7 +585,7 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 		hasBusy := false
 		allFinished := len(allPanes) > 0
 		for _, pIdx := range allPanes {
-			key := fmt.Sprintf("%s:%d.%d", m.snapshot.Session.SessionName, winIdx, pIdx)
+			key := fmt.Sprintf("%d.%d", winIdx, pIdx)
 			if ps, ok := m.snapshot.Panes[key]; ok {
 				if ps.Status == "BUSY" || ps.Status == "WORKING" {
 					hasBusy = true
@@ -656,11 +658,10 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 		// Render pane lines
 		var paneLines []string
 		for i, pIdx := range allPanes {
-			sessionKey := fmt.Sprintf("%s:%d.%d", m.snapshot.Session.SessionName, winIdx, pIdx)
 			shortKey := fmt.Sprintf("%d.%d", winIdx, pIdx)
 			status := "—"
 			var ps *runtime.PaneStatus
-			if p, ok := m.snapshot.Panes[sessionKey]; ok {
+			if p, ok := m.snapshot.Panes[shortKey]; ok {
 				status = p.Status
 				ps = &p
 			}
@@ -671,9 +672,9 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 				paneLines = append(paneLines, sep)
 			}
 
-			// Resolve role icon and name from PaneStatus.Role, fallback to pane index
-			icon := paneRoleIcon(pIdx, team.TeamType, ps)
-			roleName := paneRoleName(pIdx, team.TeamType, ps)
+			// Resolve role icon and name from PaneStatus.Role, fallback to window/pane index
+			icon := paneRoleIcon(winIdx, pIdx, team.TeamType, ps)
+			roleName := paneRoleName(winIdx, pIdx, team.TeamType, ps)
 
 			// For worker panes (window 2+, pane > 0): show subtask title instead of "Worker N"
 			subtaskTitle := ""
@@ -756,8 +757,8 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 }
 
 // paneRoleIcon returns a Unicode icon for the pane's role.
-// Uses PaneStatus.Role when available, falls back to pane index heuristics.
-func paneRoleIcon(paneIdx int, teamType string, ps *runtime.PaneStatus) string {
+// Uses PaneStatus.Role when available, falls back to window/pane index heuristics.
+func paneRoleIcon(winIdx, paneIdx int, teamType string, ps *runtime.PaneStatus) string {
 	if ps != nil && ps.Role != "" {
 		if icon, ok := roleIcons[ps.Role]; ok {
 			return icon
@@ -766,15 +767,28 @@ func paneRoleIcon(paneIdx int, teamType string, ps *runtime.PaneStatus) string {
 	if teamType == "freelancer" {
 		return "◇"
 	}
-	if paneIdx == 0 {
-		return "◆"
+	switch winIdx {
+	case 0:
+		if paneIdx == 0 {
+			return "ℹ"
+		}
+		return "★"
+	case 1:
+		if paneIdx == 0 {
+			return "◈"
+		}
+		return "○"
+	default:
+		if paneIdx == 0 {
+			return "◆"
+		}
+		return "●"
 	}
-	return "●"
 }
 
 // paneRoleName returns a human-readable role name for the pane.
-// Uses PaneStatus.Role when available, falls back to pane index heuristics.
-func paneRoleName(paneIdx int, teamType string, ps *runtime.PaneStatus) string {
+// Uses PaneStatus.Role when available, falls back to window/pane index heuristics.
+func paneRoleName(winIdx, paneIdx int, teamType string, ps *runtime.PaneStatus) string {
 	if ps != nil && ps.Role != "" {
 		if name, ok := roleDisplayNames[ps.Role]; ok {
 			if ps.Role == "worker" || ps.Role == "freelancer" {
@@ -786,10 +800,24 @@ func paneRoleName(paneIdx int, teamType string, ps *runtime.PaneStatus) string {
 	if teamType == "freelancer" {
 		return fmt.Sprintf("Freelancer %d", paneIdx)
 	}
-	if paneIdx == 0 {
-		return "Subtaskmaster"
+	switch winIdx {
+	case 0:
+		if paneIdx == 0 {
+			return "Info Panel"
+		}
+		return "Boss"
+	case 1:
+		coreRoles := []string{"Taskmaster", "Task Reviewer", "Deployment", "Doey Expert"}
+		if paneIdx < len(coreRoles) {
+			return coreRoles[paneIdx]
+		}
+		return fmt.Sprintf("Worker %d", paneIdx)
+	default:
+		if paneIdx == 0 {
+			return "Subtaskmaster"
+		}
+		return fmt.Sprintf("Worker %d", paneIdx)
 	}
-	return fmt.Sprintf("Worker %d", paneIdx)
 }
 
 // renderContextBar renders a mini progress bar for context percentage.
