@@ -104,9 +104,9 @@ show_menu() {
 
     # Render the picker list
     _picker_render() {
-      # Move to top of picker area and clear below
-      printf '\033[%dA' $((_total + 4))  # move up past list + hints + msg + blank
-      printf '\033[J'                     # clear from cursor to end
+      # Restore cursor to saved position, then clear below
+      printf '\033[u'   # restore saved cursor position
+      printf '\033[J'   # clear from cursor to end
 
       local i
       for i in "${!names[@]}"; do
@@ -134,15 +134,16 @@ show_menu() {
       fi
     }
 
-    # Print initial blank lines to reserve space, then render
-    local _line
-    for _line in $(seq 1 $((_total + 4))); do
-      printf '\n'
-    done
+    # Save cursor position, then do initial render
+    printf '\033[s'   # save cursor position (anchor for all re-renders)
     _picker_render
 
-    # Save terminal state & hide cursor
+    # Save terminal state, disable canonical mode so keys are read immediately
+    # -icanon: no line buffering (keys available instantly)
+    # -echo: don't echo typed characters
+    # min 1 time 0: read returns after 1 byte, no timeout
     _old_tty_settings=$(stty -g 2>/dev/null || true)
+    stty -icanon -echo min 1 time 0 2>/dev/null || true
     tput civis 2>/dev/null || true
 
     _picker_cleanup() {
