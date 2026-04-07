@@ -437,6 +437,57 @@ _build_tui() {
     printf " ${DIM}skipped${RESET}\n"
   fi
 
+  # Build doey-term (terminal emulator for embedded panes)
+  printf "         ${DIM}→ building doey-term...${RESET}"
+  set +e
+  if type _build_go_binary >/dev/null 2>&1; then
+    _build_go_binary "tui" ./cmd/doey-term/ "$HOME/.local/bin/doey-term" 2>/dev/null
+  else
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-term" ./cmd/doey-term/) 2>/dev/null
+  fi
+  local dt_rc=$?
+  set -e
+  if [ $dt_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-term" ]; then
+    printf " ${SUCCESS}✓${RESET}\n"
+    detail "~/.local/bin/doey-term (built from source)"
+  else
+    printf " ${DIM}skipped${RESET}\n"
+  fi
+
+  # Build doey-daemon (background process manager)
+  printf "         ${DIM}→ building doey-daemon...${RESET}"
+  set +e
+  if type _build_go_binary >/dev/null 2>&1; then
+    _build_go_binary "tui" ./cmd/doey-daemon/ "$HOME/.local/bin/doey-daemon" 2>/dev/null
+  else
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-daemon" ./cmd/doey-daemon/) 2>/dev/null
+  fi
+  local dd_rc=$?
+  set -e
+  if [ $dd_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-daemon" ]; then
+    printf " ${SUCCESS}✓${RESET}\n"
+    detail "~/.local/bin/doey-daemon (built from source)"
+  else
+    printf " ${DIM}skipped${RESET}\n"
+  fi
+
+  # Build doey-router (message routing service)
+  printf "         ${DIM}→ building doey-router...${RESET}"
+  set +e
+  if type _build_go_binary >/dev/null 2>&1; then
+    _build_go_binary "tui" ./cmd/doey-router/ "$HOME/.local/bin/doey-router" 2>/dev/null
+  else
+    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-router" ./cmd/doey-router/) 2>/dev/null
+  fi
+  local dr_rc=$?
+  set -e
+  if [ $dr_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-router" ]; then
+    printf " ${SUCCESS}✓${RESET}\n"
+    detail "~/.local/bin/doey-router (built from source)"
+  else
+    printf " ${DIM}skipped${RESET}\n"
+  fi
+
   return $rc
 }
 
