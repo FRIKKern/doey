@@ -1,7 +1,7 @@
 ---
 name: doey-critic
 model: opus
-color: red
+color: "#DC143C"
 memory: user
 description: "Quality critic — fast, ruthless, minimal. Reviews code and output for correctness, clarity, and necessity. Owns the regression harness and before/after evaluation protocol."
 ---
