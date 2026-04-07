@@ -20,7 +20,9 @@ doey-ctl|tui|./cmd/doey-ctl/|${HOME}/.local/bin/doey-ctl
 doey-router|tui|./cmd/doey-router/|${HOME}/.local/bin/doey-router
 doey-remote-setup|tui|./cmd/doey-remote-setup/|${HOME}/.local/bin/doey-remote-setup
 doey-loading|tui|./cmd/doey-loading/|${HOME}/.local/bin/doey-loading
-doey-daemon|tui|./cmd/doey-daemon/|${HOME}/.local/bin/doey-daemon"
+doey-daemon|tui|./cmd/doey-daemon/|${HOME}/.local/bin/doey-daemon
+doey-term|tui|./cmd/doey-term/|${HOME}/.local/bin/doey-term
+doey-masterplan-tui|tui|./cmd/doey-masterplan-tui/|${HOME}/.local/bin/doey-masterplan-tui"
 
 # ── _find_go_bin ─────────────────────────────────────────────────────
 # Find the Go binary across common install locations.

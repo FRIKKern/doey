@@ -346,149 +346,63 @@ if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-con
   detail "installed default config"
 fi
 
-# Build doey-tui (and doey-remote-setup). Returns 0 on success.
+# Build all Go binaries from the centralized target list in doey-go-helpers.sh.
+# Returns 0 on success (doey-tui built), non-zero if doey-tui fails.
 _build_tui() {
-  local rc=0
+  # Source the shared helper for the targets list
+  source "$SCRIPT_DIR/shell/doey-go-helpers.sh" 2>/dev/null || true
 
-  # Build doey-tui — prefer shared helper, inline fallback
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-tui/ "$HOME/.local/bin/doey-tui"
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$HOME/.local/bin/doey-tui" ./cmd/doey-tui/)
-  fi
-  rc=$?
-  set -e
+  local tui_rc=0 line name module_dir build_target output_path first=true
 
-  if [ $rc -eq 0 ]; then
-    step_ok
-    detail "~/.local/bin/doey-tui (built from source)"
-  else
-    step_fail
-    warn_msg "doey-tui build failed — info-panel.sh will be used as fallback"
-    return $rc
-  fi
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    name="${line%%|*}"; line="${line#*|}"
+    module_dir="${line%%|*}"; line="${line#*|}"
+    build_target="${line%%|*}"; line="${line#*|}"
+    output_path="$line"
 
-  # Build doey-ctl (internal binary powering `doey` subcommands)
-  printf "         ${DIM}→ building CLI tools...${RESET}"
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-ctl/ "$HOME/.local/bin/doey-ctl" 2>/dev/null
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-ctl" ./cmd/doey-ctl/) 2>/dev/null
-  fi
-  local ctl_rc=$?
-  set -e
-  if [ $ctl_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-ctl" ]; then
-    printf " ${SUCCESS}✓${RESET}\n"
-    detail "~/.local/bin/doey-ctl (internal — use 'doey' CLI)"
-  else
-    printf " ${DIM}skipped (shell fallbacks will be used)${RESET}\n"
-  fi
+    if [ "$first" = true ]; then
+      # First target (doey-tui) — its failure is fatal
+      first=false
+      set +e
+      if type _build_go_binary >/dev/null 2>&1; then
+        _build_go_binary "$module_dir" "$build_target" "$output_path"
+      else
+        (cd "$SCRIPT_DIR/$module_dir" && "$GO_BIN" mod tidy 2>/dev/null && "$GO_BIN" build -o "$output_path" "$build_target")
+      fi
+      tui_rc=$?
+      set -e
+      if [ $tui_rc -eq 0 ]; then
+        step_ok
+        detail "~/.local/bin/${name} (built from source)"
+      else
+        step_fail
+        warn_msg "${name} build failed — info-panel.sh will be used as fallback"
+        return $tui_rc
+      fi
+    else
+      # Remaining targets — optional, don't fail the install
+      printf "         ${DIM}→ building ${name}...${RESET}"
+      set +e
+      if type _build_go_binary >/dev/null 2>&1; then
+        _build_go_binary "$module_dir" "$build_target" "$output_path" 2>/dev/null
+      else
+        (cd "$SCRIPT_DIR/$module_dir" && "$GO_BIN" build -o "$output_path" "$build_target") 2>/dev/null
+      fi
+      local _brc=$?
+      set -e
+      if [ $_brc -eq 0 ] && [ -x "$output_path" ]; then
+        printf " ${SUCCESS}✓${RESET}\n"
+        detail "~/.local/bin/${name} (built from source)"
+      else
+        printf " ${DIM}skipped${RESET}\n"
+      fi
+    fi
+  done <<EOF
+${_DOEY_GO_TARGETS}
+EOF
 
-  # Build doey-remote-setup
-  printf "         ${DIM}→ building doey-remote-setup...${RESET}"
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-remote-setup/ "$HOME/.local/bin/doey-remote-setup" 2>/dev/null
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-remote-setup" ./cmd/doey-remote-setup/) 2>/dev/null
-  fi
-  local rs_rc=$?
-  set -e
-  if [ $rs_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-remote-setup" ]; then
-    printf " ${SUCCESS}✓${RESET}\n"
-    detail "~/.local/bin/doey-remote-setup (built from source)"
-  else
-    printf " ${DIM}skipped${RESET}\n"
-  fi
-
-  # Build doey-masterplan-tui (masterplan plan viewer)
-  printf "         ${DIM}→ building doey-masterplan-tui...${RESET}"
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-masterplan-tui/ "$HOME/.local/bin/doey-masterplan-tui" 2>/dev/null
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-masterplan-tui" ./cmd/doey-masterplan-tui/) 2>/dev/null
-  fi
-  local mp_rc=$?
-  set -e
-  if [ $mp_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-masterplan-tui" ]; then
-    printf " ${SUCCESS}✓${RESET}\n"
-    detail "~/.local/bin/doey-masterplan-tui (built from source)"
-  else
-    printf " ${DIM}skipped${RESET}\n"
-  fi
-
-  # Build doey-loading (startup loading screen — optional)
-  printf "         ${DIM}→ building doey-loading...${RESET}"
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-loading/ "$HOME/.local/bin/doey-loading" 2>/dev/null
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-loading" ./cmd/doey-loading/) 2>/dev/null
-  fi
-  local ld_rc=$?
-  set -e
-  if [ $ld_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-loading" ]; then
-    printf " ${SUCCESS}✓${RESET}\n"
-    detail "~/.local/bin/doey-loading (built from source)"
-  else
-    printf " ${DIM}skipped${RESET}\n"
-  fi
-
-  # Build doey-term (terminal emulator for embedded panes)
-  printf "         ${DIM}→ building doey-term...${RESET}"
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-term/ "$HOME/.local/bin/doey-term" 2>/dev/null
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-term" ./cmd/doey-term/) 2>/dev/null
-  fi
-  local dt_rc=$?
-  set -e
-  if [ $dt_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-term" ]; then
-    printf " ${SUCCESS}✓${RESET}\n"
-    detail "~/.local/bin/doey-term (built from source)"
-  else
-    printf " ${DIM}skipped${RESET}\n"
-  fi
-
-  # Build doey-daemon (background process manager)
-  printf "         ${DIM}→ building doey-daemon...${RESET}"
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-daemon/ "$HOME/.local/bin/doey-daemon" 2>/dev/null
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-daemon" ./cmd/doey-daemon/) 2>/dev/null
-  fi
-  local dd_rc=$?
-  set -e
-  if [ $dd_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-daemon" ]; then
-    printf " ${SUCCESS}✓${RESET}\n"
-    detail "~/.local/bin/doey-daemon (built from source)"
-  else
-    printf " ${DIM}skipped${RESET}\n"
-  fi
-
-  # Build doey-router (message routing service)
-  printf "         ${DIM}→ building doey-router...${RESET}"
-  set +e
-  if type _build_go_binary >/dev/null 2>&1; then
-    _build_go_binary "tui" ./cmd/doey-router/ "$HOME/.local/bin/doey-router" 2>/dev/null
-  else
-    (cd "$SCRIPT_DIR/tui" && "$GO_BIN" build -o "$HOME/.local/bin/doey-router" ./cmd/doey-router/) 2>/dev/null
-  fi
-  local dr_rc=$?
-  set -e
-  if [ $dr_rc -eq 0 ] && [ -x "$HOME/.local/bin/doey-router" ]; then
-    printf " ${SUCCESS}✓${RESET}\n"
-    detail "~/.local/bin/doey-router (built from source)"
-  else
-    printf " ${DIM}skipped${RESET}\n"
-  fi
-
-  return $rc
+  return $tui_rc
 }
 
 printf "  ${BRAND}[6/7]${RESET} Installing doey-tui..."
