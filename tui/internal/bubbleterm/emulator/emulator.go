@@ -85,8 +85,16 @@ func New(cols, rows int) (*Emulator, error) {
 		return nil, err
 	}
 
-	// Start the PTY read loop
+	// Start the PTY read loop and the vt response drain loop. The drain
+	// loop forwards bytes the vt emulator writes to its internal input
+	// pipe (DSR replies, in-band-resize notifications, bracketed-paste
+	// markers, …) back to the PTY so the guest process can read them.
+	// Without this drain, programs that issue queries like ESC[6n (vim,
+	// less, htop, modern bash prompts) deadlock the entire emulator: the
+	// CSI handler blocks writing the reply, holding the wrapper's mutex,
+	// which freezes ptyReadLoop and the rendering pipeline.
 	go e.ptyReadLoop()
+	go e.vtResponseLoop()
 
 	return e, nil
 }
@@ -109,8 +117,10 @@ func NewFromPipes(cols, rows int, r io.Reader, w io.WriteCloser) (*Emulator, err
 		damaged:   true,
 	}
 
-	// Start the read loop using the provided reader
+	// Start the read loop using the provided reader and the vt response
+	// drain loop (see the New() comment for why the drain is required).
 	go e.ptyReadLoop()
+	go e.vtResponseLoop()
 
 	return e, nil
 }
@@ -549,6 +559,42 @@ func (e *Emulator) Close() error {
 	}
 
 	return e.vt.Close()
+}
+
+// vtResponseLoop drains bytes the vt emulator writes to its internal input
+// pipe and forwards them to the PTY (or to the user-supplied writer in the
+// pipe-based case). vt handlers use this pipe to deliver query responses
+// (ESC[6n cursor reports, ESC[5n status, in-band resize notifications, …)
+// that the guest process expects to read on its stdin. The forward path
+// deliberately does NOT take e.mu — ptyReadLoop already holds the wrapper
+// lock while a CSI handler is generating a response, so taking it here would
+// deadlock. The vt package's io.Pipe and the PTY syscall both have their
+// own internal synchronisation, so a lock-free forward is safe.
+func (e *Emulator) vtResponseLoop() {
+	buf := make([]byte, 1024)
+	for {
+		n, err := e.vt.Read(buf)
+		if err != nil {
+			return
+		}
+		if n == 0 {
+			continue
+		}
+		select {
+		case <-e.stopChan:
+			return
+		default:
+		}
+		if e.isPipe {
+			if e.writer != nil {
+				_, _ = e.writer.Write(buf[:n])
+			}
+		} else {
+			if e.pty != nil {
+				_, _ = e.pty.Write(buf[:n])
+			}
+		}
+	}
 }
 
 // ptyReadLoop reads from PTY/pipe and writes to the vt emulator
