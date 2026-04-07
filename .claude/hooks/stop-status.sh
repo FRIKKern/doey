@@ -116,6 +116,17 @@ if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/task
         doey_task_update_subtask "$PROJECT_DIR" "$task_id" "$subtask_id" "done"
       fi
     ) 2>/dev/null || true
+    # Sync to DB via doey-ctl (file update above is the fallback)
+    if command -v doey-ctl >/dev/null 2>&1; then
+      doey-ctl task update --id "$task_id" --status done --project-dir "$PROJECT_DIR" 2>/dev/null || true
+      if [ -n "$subtask_id" ]; then
+        doey-ctl task subtask update --task-id "$task_id" --subtask-id "$subtask_id" \
+          --status done --worker "${PANE_SAFE:-}" --project-dir "$PROJECT_DIR" 2>/dev/null || true
+      fi
+      doey-ctl task log add --task-id "$task_id" --type "completion" \
+        --author "${PANE_SAFE:-worker}" --title "Worker completed task" \
+        --project-dir "$PROJECT_DIR" 2>/dev/null || true
+    fi
   fi
 fi
 

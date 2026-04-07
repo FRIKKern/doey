@@ -47,6 +47,13 @@ updated: ${now}
 ## Success Criteria
 EOF
 
+  # Sync to DB (requires task_id for the foreign key)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -n "$task_id" ]; then
+    local _body; _body=$(cat "${plans_dir}/${new_id}.md")
+    doey-ctl plan create --title "$title" --task-id "$task_id" \
+      --body "$_body" --project-dir "$project_dir" 2>/dev/null || true
+  fi
+
   echo "$new_id"
 }
 
