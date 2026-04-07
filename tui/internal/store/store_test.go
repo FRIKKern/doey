@@ -777,6 +777,79 @@ func TestListPaneStatusesTmuxFailure(t *testing.T) {
 	}
 }
 
+// seedPaneStatusWithState is a sibling of seedPaneStatus that lets the caller
+// control the Status field. Used by the BUSY-specific regression tests.
+func seedPaneStatusWithState(t *testing.T, s *Store, paneID, windowID, status string, ts int64) {
+	t.Helper()
+	if err := s.UpsertPaneStatus(&PaneStatus{
+		PaneID: paneID, WindowID: windowID, Role: "worker", Status: status,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(
+		`UPDATE pane_status SET updated_at = ? WHERE pane_id = ?`, ts, paneID,
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestListPaneStatusesBusyOrphanAndStale is the regression test for task 428.
+// It verifies that ListPaneStatuses hides BUSY rows in the two ways a worker
+// pane can be "dead without a Stop hook":
+//
+//  1. Orphan BUSY — the pane no longer exists in tmux list-panes (crashed or
+//     killed), so the fresh BUSY row was never cleared.
+//  2. Stale BUSY — the pane still shows in tmux but the row is so old
+//     (> DefaultPaneStalenessThreshold) that the worker must have died
+//     without emitting its Stop event.
+//
+// Both rows must be filtered AND lazily deleted. A fresh READY row for a
+// live pane is included as a control to prove the filter does not overreach.
+func TestListPaneStatusesBusyOrphanAndStale(t *testing.T) {
+	s := testStore(t)
+	now := time.Unix(2_100_000_000, 0)
+
+	// (1) Fresh BUSY row for a pane that no longer exists in tmux.
+	seedPaneStatusWithState(t, s, "orphan_busy_1_0", "1", "BUSY", now.Add(-10*time.Second).Unix())
+	// (2) Stale BUSY row (>120s old) for a pane that is still in tmux.
+	seedPaneStatusWithState(t, s, "stale_busy_1_1", "1", "BUSY", now.Add(-10*time.Minute).Unix())
+	// Control: fresh READY row for a live pane — must survive the GC.
+	seedPaneStatusWithState(t, s, "live_ready_1_2", "1", "READY", now.Add(-5*time.Second).Unix())
+
+	live := map[string]bool{
+		"stale_busy_1_1":  true, // still in tmux, but UpdatedAt is stale
+		"live_ready_1_2":  true,
+		// "orphan_busy_1_0" deliberately omitted: pane is gone.
+	}
+
+	got, err := s.ListPaneStatuses("", ListPaneStatusesOptions{
+		LivePaneSet: live,
+		Now:         func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d rows, want 1 (both BUSY rows must be filtered): %+v", len(got), got)
+	}
+	if got[0].PaneID != "live_ready_1_2" {
+		t.Errorf("surviving row = %q, want live_ready_1_2", got[0].PaneID)
+	}
+
+	// Both orphan-BUSY and stale-BUSY rows must be lazily deleted so the
+	// pane_status table does not grow unbounded across crash/kill cycles.
+	var remaining int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM pane_status WHERE pane_id IN (?, ?)`,
+		"orphan_busy_1_0", "stale_busy_1_1",
+	).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 0 {
+		t.Errorf("orphan-BUSY + stale-BUSY rows not lazily deleted: count=%d", remaining)
+	}
+}
+
 // TestNormalizeTmuxPaneID verifies the tmux → canonical pane ID transform
 // matches the form produced by normalizePaneID in doey-ctl.
 func TestNormalizeTmuxPaneID(t *testing.T) {
