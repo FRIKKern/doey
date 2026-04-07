@@ -6,6 +6,8 @@
 !.doey/tasks/*.task
 !.doey/plans/
 !.doey/plans/*.md
+!.doey/context/
+!.doey/context/*.md
 tui/doey-ctl
 tui/cmd/doey-ctl/doey-ctl
 tui/doey-loading

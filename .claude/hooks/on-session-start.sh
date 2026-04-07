@@ -206,6 +206,28 @@ if [ -n "$_team_def" ]; then
   fi
 fi
 
+# --- Context overlay injection ---
+# Project-specific per-role context files from .doey/context/
+_overlay_base="${wt_dir:-$PROJECT_DIR}/.doey/context"
+_overlay_role=""
+_overlay_all=""
+# Priority 1: team-specific role overlay (e.g., seo-technical.md)
+if [ -n "${_team_role:-}" ] && [ -f "${_overlay_base}/${_team_role}.md" ]; then
+  _overlay_role="${_overlay_base}/${_team_role}.md"
+# Priority 2: base role overlay (e.g., worker.md, coordinator.md)
+elif [ -f "${_overlay_base}/${ROLE}.md" ]; then
+  _overlay_role="${_overlay_base}/${ROLE}.md"
+fi
+# Always check for all.md (shared context across all roles)
+if [ -f "${_overlay_base}/all.md" ]; then
+  _overlay_all="${_overlay_base}/all.md"
+fi
+# Export paths via CLAUDE_ENV_FILE so agents/hooks can read them
+if [ -w "${CLAUDE_ENV_FILE:-/dev/null}" ]; then
+  [ -n "$_overlay_role" ] && echo "export DOEY_CONTEXT_OVERLAY=\"${_overlay_role}\"" >> "$CLAUDE_ENV_FILE"
+  [ -n "$_overlay_all" ] && echo "export DOEY_CONTEXT_OVERLAY_ALL=\"${_overlay_all}\"" >> "$CLAUDE_ENV_FILE"
+fi
+
 _TITLE=""
 case "$ROLE" in
   "$DOEY_ROLE_ID_BOSS")            _TITLE="${PROJECT_NAME} ${DOEY_ROLE_BOSS}" ;;
