@@ -334,6 +334,7 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   cp "$SCRIPT_DIR/shell/doey-menu.sh" "$HOME/.local/bin/doey-menu.sh"
   cp "$SCRIPT_DIR/shell/doey-team-mgmt.sh" "$HOME/.local/bin/doey-team-mgmt.sh"
   cp "$SCRIPT_DIR/shell/doey-session.sh" "$HOME/.local/bin/doey-session.sh"
+  cp "$SCRIPT_DIR/shell/masterplan-tui.sh" "$HOME/.local/bin/masterplan-tui.sh"
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
