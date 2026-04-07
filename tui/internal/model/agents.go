@@ -22,6 +22,50 @@ var domainOrder = []string{
 	"Utility",
 }
 
+// namedColorFallback maps human-readable ANSI color names to hex equivalents
+// so agent frontmatter like `color: red` still renders. termenv's
+// Profile.Color() only accepts hex (`#RRGGBB`) or numeric ANSI codes — any
+// bare name returns nil and the text renders uncolored. Keep this list small;
+// the primary fix is real hex colors in the frontmatter.
+var namedColorFallback = map[string]string{
+	"black":   "#000000",
+	"red":     "#E74C3C",
+	"green":   "#2ECC71",
+	"yellow":  "#F1C40F",
+	"blue":    "#3498DB",
+	"magenta": "#D946EF",
+	"cyan":    "#06B6D4",
+	"white":   "#FFFFFF",
+	"gray":    "#95A5A6",
+	"grey":    "#95A5A6",
+	"orange":  "#E67E22",
+	"purple":  "#9B59B6",
+	"pink":    "#FF69B4",
+}
+
+// resolveAgentColor normalizes a frontmatter color string into a value lipgloss
+// can render. Hex (`#RRGGBB`) and numeric ANSI codes pass through; bare names
+// like "red" map to hex via namedColorFallback. An empty or unknown value
+// returns a sensible default so no agent row renders uncolored.
+func resolveAgentColor(raw string) lipgloss.Color {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return lipgloss.Color("#95A5A6") // muted gray default
+	}
+	if s[0] == '#' {
+		return lipgloss.Color(s)
+	}
+	// numeric ANSI code? pass through
+	if s[0] >= '0' && s[0] <= '9' {
+		return lipgloss.Color(s)
+	}
+	lower := strings.ToLower(s)
+	if hex, ok := namedColorFallback[lower]; ok {
+		return lipgloss.Color(hex)
+	}
+	return lipgloss.Color("#95A5A6")
+}
+
 // agentGroup holds agents grouped under a domain header.
 type agentGroup struct {
 	domain string
@@ -388,7 +432,7 @@ func (m AgentsModel) renderLeftPanel(w, h int) string {
 			selected := m.focused && m.leftFocused && flatIdx == m.cursor
 
 			// Agent row: colored dot + name
-			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("◆")
+			dot := lipgloss.NewStyle().Foreground(resolveAgentColor(a.Color)).Render("◆")
 			nameStyle := lipgloss.NewStyle().Foreground(t.Text)
 			if selected {
 				nameStyle = nameStyle.Bold(true)
@@ -498,7 +542,7 @@ func (m AgentsModel) renderDetailContent(w int) string {
 	fields = append(fields, labelStyle.Render("Domain")+"  "+valueStyle.Render(agent.Domain))
 
 	if agent.Color != "" {
-		colorDot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+		colorDot := lipgloss.NewStyle().Foreground(resolveAgentColor(agent.Color)).Render("◆")
 		fields = append(fields, labelStyle.Render("Color")+"  "+colorDot+" "+t.Dim.Render(agent.Color))
 	}
 
@@ -553,7 +597,7 @@ func (m AgentsModel) maxRightScroll() int {
 
 	// Replicate the section-building logic from renderRightPanel
 	var sections []string
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+	dot := lipgloss.NewStyle().Foreground(resolveAgentColor(agent.Color)).Render("◆")
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Render(agent.Name)
 	sections = append(sections, dot+" "+title)
 	if agent.Model != "" {
@@ -615,7 +659,7 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 	var sections []string
 
 	// Title
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+	dot := lipgloss.NewStyle().Foreground(resolveAgentColor(agent.Color)).Render("◆")
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(agent.Name)
 	sections = append(sections, dot+" "+title)
 

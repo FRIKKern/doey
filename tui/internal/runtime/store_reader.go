@@ -245,6 +245,11 @@ func (sr *storeReader) readTeams() map[int]TeamConfig {
 }
 
 // readAgents converts store agents to runtime AgentDefs.
+//
+// The store schema does not carry Color/Memory — those live only in the agent
+// .md frontmatter. We parse each file on read so every row in the TUI renders
+// with its declared color. This is cheap: there are typically <50 agents and
+// snapshots aren't built on every frame.
 func (sr *storeReader) readAgents() []AgentDef {
 	storeAgents, err := sr.s.ListAgents()
 	if err != nil {
@@ -252,13 +257,26 @@ func (sr *storeReader) readAgents() []AgentDef {
 	}
 	agents := make([]AgentDef, 0, len(storeAgents))
 	for _, sa := range storeAgents {
-		agents = append(agents, AgentDef{
+		def := AgentDef{
 			Name:        sa.Name,
 			Description: sa.Description,
 			Model:       sa.Model,
 			FilePath:    sa.FilePath,
 			Domain:      agentDomain(sa.Name),
-		})
+		}
+		if sa.FilePath != "" {
+			if fm := parseFrontmatter(sa.FilePath); fm != nil {
+				def.Color = fm["color"]
+				def.Memory = fm["memory"]
+				if def.Description == "" {
+					def.Description = fm["description"]
+				}
+				if def.Model == "" {
+					def.Model = fm["model"]
+				}
+			}
+		}
+		agents = append(agents, def)
 	}
 	return agents
 }
