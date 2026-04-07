@@ -8,6 +8,9 @@
 !.doey/plans/*.md
 !.doey/context/
 !.doey/context/*.md
+!.doey/config.sh
+!.doey/cleanup-tasks.sh
+!.doey/*.team.md
 tui/doey-ctl
 tui/cmd/doey-ctl/doey-ctl
 tui/doey-loading
