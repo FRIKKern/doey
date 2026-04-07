@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func testStore(t *testing.T) *Store {
@@ -349,7 +350,7 @@ func TestTeamCRUD(t *testing.T) {
 
 	// Add second pane to same window and list
 	s.UpsertPaneStatus(&PaneStatus{PaneID: "w2.0", WindowID: "w2", Role: "subtaskmaster", Status: "READY"})
-	statuses, err := s.ListPaneStatuses("w2")
+	statuses, err := s.ListPaneStatuses("w2", ListPaneStatusesOptions{SkipOrphanGC: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -632,5 +633,163 @@ func TestSchemaIdempotent(t *testing.T) {
 	}
 	if val != "val" {
 		t.Errorf("value after reopen = %q, want %q", val, "val")
+	}
+}
+
+// seedPaneStatus inserts a pane_status row with a controlled updated_at
+// timestamp. UpsertPaneStatus normally stamps updated_at to time.Now(), so we
+// rewrite it after the insert.
+func seedPaneStatus(t *testing.T, s *Store, paneID, windowID string, ts int64) {
+	t.Helper()
+	if err := s.UpsertPaneStatus(&PaneStatus{
+		PaneID: paneID, WindowID: windowID, Role: "worker", Status: "READY",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(
+		`UPDATE pane_status SET updated_at = ? WHERE pane_id = ?`, ts, paneID,
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestListPaneStatusesStaleness verifies fresh rows are returned and stale
+// rows (older than the configured threshold) are filtered out and lazily
+// deleted.
+func TestListPaneStatusesStaleness(t *testing.T) {
+	s := testStore(t)
+
+	now := time.Unix(2_000_000_000, 0)
+
+	// Fresh row: 30s old.
+	seedPaneStatus(t, s, "doey_p_1_1", "1", now.Add(-30*time.Second).Unix())
+	// Stale row: 5 minutes old, well past the 120s default.
+	seedPaneStatus(t, s, "doey_p_1_2", "1", now.Add(-5*time.Minute).Unix())
+
+	got, err := s.ListPaneStatuses("", ListPaneStatusesOptions{
+		SkipOrphanGC: true,
+		Now:          func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d rows, want 1 (stale row should be filtered)", len(got))
+	}
+	if got[0].PaneID != "doey_p_1_1" {
+		t.Errorf("got pane %q, want fresh pane doey_p_1_1", got[0].PaneID)
+	}
+
+	// Lazy delete should have removed the stale row from the table entirely.
+	var remaining int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM pane_status`).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 1 {
+		t.Errorf("after lazy GC: %d rows in pane_status, want 1", remaining)
+	}
+
+	// Negative threshold disables filtering — re-insert the stale row and
+	// verify it comes back.
+	seedPaneStatus(t, s, "doey_p_1_2", "1", now.Add(-5*time.Minute).Unix())
+	all, err := s.ListPaneStatuses("", ListPaneStatusesOptions{
+		SkipOrphanGC:       true,
+		StalenessThreshold: -1,
+		Now:                func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Errorf("with negative threshold: got %d rows, want 2", len(all))
+	}
+}
+
+// TestListPaneStatusesOrphanGC verifies orphan rows (panes not present in the
+// live tmux pane set) are filtered and lazily deleted.
+func TestListPaneStatusesOrphanGC(t *testing.T) {
+	s := testStore(t)
+
+	now := time.Unix(2_000_000_000, 0)
+	fresh := now.Add(-10 * time.Second).Unix()
+
+	for _, pid := range []string{"doey_p_1_0", "doey_p_1_1", "doey_p_2_0"} {
+		seedPaneStatus(t, s, pid, "1", fresh)
+	}
+
+	// Live set excludes doey_p_2_0 — it's an orphan.
+	live := map[string]bool{
+		"doey_p_1_0": true,
+		"doey_p_1_1": true,
+	}
+
+	got, err := s.ListPaneStatuses("", ListPaneStatusesOptions{
+		LivePaneSet: live,
+		Now:         func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d rows, want 2 (orphan should be filtered)", len(got))
+	}
+	for _, ps := range got {
+		if ps.PaneID == "doey_p_2_0" {
+			t.Errorf("orphan pane %q should not be in result", ps.PaneID)
+		}
+	}
+
+	// Orphan should be physically deleted by the lazy cleanup.
+	var count int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM pane_status WHERE pane_id = ?`, "doey_p_2_0",
+	).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("orphan row not lazily deleted: count = %d", count)
+	}
+}
+
+// TestListPaneStatusesTmuxFailure verifies that a tmux failure during orphan
+// GC is logged and skipped — the call must not error, and rows must be
+// returned (subject only to staleness filtering).
+func TestListPaneStatusesTmuxFailure(t *testing.T) {
+	s := testStore(t)
+
+	now := time.Unix(2_000_000_000, 0)
+	fresh := now.Add(-10 * time.Second).Unix()
+	seedPaneStatus(t, s, "doey_p_1_0", "1", fresh)
+
+	// Force a tmux failure: point PATH at an empty dir so `tmux` cannot be
+	// found. The call must succeed and return the row regardless.
+	emptyDir := t.TempDir()
+	t.Setenv("PATH", emptyDir)
+
+	got, err := s.ListPaneStatuses("", ListPaneStatusesOptions{
+		Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("ListPaneStatuses returned error on tmux failure: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("got %d rows after tmux failure, want 1", len(got))
+	}
+}
+
+// TestNormalizeTmuxPaneID verifies the tmux → canonical pane ID transform
+// matches the form produced by normalizePaneID in doey-ctl.
+func TestNormalizeTmuxPaneID(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"doey-doey:1.0", "doey_doey_1_0"},
+		{"doey-foo-bar:3.2", "doey_foo_bar_3_2"},
+		{"plain:0.0", "plain_0_0"},
+	}
+	for _, c := range cases {
+		if got := normalizeTmuxPaneID(c.in); got != c.want {
+			t.Errorf("normalizeTmuxPaneID(%q) = %q, want %q", c.in, got, c.want)
+		}
 	}
 }
