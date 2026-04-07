@@ -203,7 +203,7 @@ _create_core_team() {
   write_pane_status "$runtime_dir" "${session}:1.2" "READY"
 
   # Terminal (pane 1.3) — doey-term Bubble Tea container, not a Claude agent
-  doey_send_command "${session}:1.3" "${_DRAIN_STDIN}${dir}/tui/doey-term"
+  doey_send_command "${session}:1.3" "${_DRAIN_STDIN}doey-term"
 }
 
 # Validate and auto-fix session.env files with encoding/quoting issues
