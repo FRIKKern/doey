@@ -159,6 +159,20 @@ func runTaskCreate(args []string) {
 		fatal("task create: --title is required")
 	}
 
+	// Auto-populate from env when not explicitly provided
+	if *createdBy == "" {
+		if role := os.Getenv("DOEY_ROLE"); role != "" {
+			*createdBy = role
+		} else {
+			*createdBy = eventSource()
+		}
+	}
+	if *team == "" {
+		if tw := os.Getenv("DOEY_WINDOW_INDEX"); tw != "" {
+			*team = tw
+		}
+	}
+
 	pd := projectDir(*dir)
 	s := tryOpenStore(pd)
 
@@ -795,6 +809,8 @@ func runSubtaskAdd(args []string) {
 	taskIDFlag := fs.String("task-id", "", "task ID")
 	title := fs.String("title", "", "subtask title (DB mode; positional desc used for file mode)")
 	desc := fs.String("description", "", "description (alias for --title)")
+	assignee := fs.String("assignee", "", "assigned role/agent")
+	worker := fs.String("worker", "", "worker pane identifier")
 	dir := fs.String("project-dir", "", "project directory")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
@@ -835,9 +851,12 @@ func runSubtaskAdd(args []string) {
 		}
 
 		st := &store.Subtask{
-			TaskID: taskID,
-			Title:  subtaskTitle,
-			Status: "pending",
+			TaskID:    taskID,
+			Title:     subtaskTitle,
+			Status:    "pending",
+			Assignee:  *assignee,
+			Worker:    *worker,
+			CreatedAt: time.Now().Unix(),
 		}
 		id, err := s.CreateSubtask(st)
 		if err != nil {
@@ -883,6 +902,11 @@ func runSubtaskUpdate(args []string) {
 	statusFlag := fs.String("status", "", "new status")
 	stTitle := fs.String("title", "", "new title (DB mode)")
 	reasonFlag := fs.String("reason", "", "reason for status change (e.g. why deferred)")
+	assigneeFlag := fs.String("assignee", "", "assigned role/agent")
+	workerFlag := fs.String("worker", "", "worker pane identifier")
+	reviewVerdictFlag := fs.String("review-verdict", "", "review verdict (pass/fail/partial)")
+	reviewEvidenceFlag := fs.String("review-evidence", "", "review evidence/notes")
+	reviewerFlag := fs.String("reviewer", "", "who reviewed this subtask")
 	taskIDFlag := fs.String("task-id", "", "parent task ID")
 	subtaskIDFlag := fs.String("subtask-id", "", "subtask seq number or DB ID")
 	dir := fs.String("project-dir", "", "project directory")
@@ -952,12 +976,31 @@ func runSubtaskUpdate(args []string) {
 
 		if statusVal != "" {
 			resolved.Status = statusVal
+			// Auto-set completed_at when transitioning to done
+			if statusVal == "done" && resolved.CompletedAt == 0 {
+				resolved.CompletedAt = time.Now().Unix()
+			}
 		}
 		if *stTitle != "" {
 			resolved.Title = *stTitle
 		}
 		if *reasonFlag != "" {
 			resolved.Reason = *reasonFlag
+		}
+		if *assigneeFlag != "" {
+			resolved.Assignee = *assigneeFlag
+		}
+		if *workerFlag != "" {
+			resolved.Worker = *workerFlag
+		}
+		if *reviewVerdictFlag != "" {
+			resolved.ReviewVerdict = *reviewVerdictFlag
+		}
+		if *reviewEvidenceFlag != "" {
+			resolved.ReviewEvidence = *reviewEvidenceFlag
+		}
+		if *reviewerFlag != "" {
+			resolved.Reviewer = *reviewerFlag
 		}
 		if err := s.UpdateSubtask(resolved); err != nil {
 			fatal("task subtask update: %v", err)
