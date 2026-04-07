@@ -50,8 +50,70 @@ list_projects() {
 }
 
 # ── Interactive Project Picker ──────────────────────────────────────
-# Show interactive project picker menu with keyboard navigation
+# Show interactive project picker — Go TUI (huh) primary, shell fallback.
 show_menu() {
+  local grid="$1"
+
+  # Primary: Go TUI picker (Charmbracelet huh — proper terminal handling)
+  if command -v doey-tui >/dev/null 2>&1; then
+    local _menu_out _menu_tmpfile
+    _menu_tmpfile=$(mktemp "${TMPDIR:-/tmp}/doey-menu.XXXXXX")
+    if doey-tui menu --projects-file "$PROJECTS_FILE" --cwd "$(pwd)" --grid "$grid" \
+         > "$_menu_tmpfile" </dev/tty 2>/dev/tty; then
+      _menu_out=$(cat "$_menu_tmpfile")
+      rm -f "$_menu_tmpfile"
+      [ -z "$_menu_out" ] && return 0
+
+      local _action _name _path
+      if command -v jq >/dev/null 2>&1; then
+        _action=$(printf '%s' "$_menu_out" | jq -r '.action // empty') || _action=""
+        _name=$(printf '%s' "$_menu_out" | jq -r '.name // empty') || _name=""
+        _path=$(printf '%s' "$_menu_out" | jq -r '.path // empty') || _path=""
+      else
+        _action=$(printf '%s' "$_menu_out" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('action',''))" 2>/dev/null) || _action=""
+        _name=$(printf '%s' "$_menu_out" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('name',''))" 2>/dev/null) || _name=""
+        _path=$(printf '%s' "$_menu_out" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('path',''))" 2>/dev/null) || _path=""
+      fi
+
+      case "$_action" in
+        open)
+          local _session="doey-${_name}"
+          if session_exists "$_session"; then
+            attach_or_switch "$_session"
+          else
+            launch_with_grid "$_name" "$_path" "$grid"
+          fi
+          ;;
+        restart)
+          local _session="doey-${_name}"
+          session_exists "$_session" && _kill_doey_session "$_session"
+          launch_with_grid "$_name" "$_path" "$grid"
+          ;;
+        kill)
+          local _session="doey-${_name}"
+          session_exists "$_session" && _kill_doey_session "$_session"
+          # Re-show menu after kill
+          show_menu "$grid"
+          ;;
+        init)
+          register_project "$(pwd)"
+          local init_name
+          init_name="$(find_project "$(pwd)")"
+          [[ -n "$init_name" ]] && launch_with_grid "$init_name" "$(pwd)" "$grid"
+          ;;
+        quit) return 0 ;;
+      esac
+      return 0
+    fi
+    rm -f "$_menu_tmpfile"
+    # Fall through to shell picker on TUI failure
+  fi
+
+  _show_menu_shell "$grid"
+}
+
+# Shell fallback picker (used when doey-tui is not available)
+_show_menu_shell() {
   local grid="$1"
 
   doey_header "Doey"

@@ -11,6 +11,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/doey-cli/doey/tui/internal/model"
+	"github.com/doey-cli/doey/tui/internal/picker"
 	"github.com/doey-cli/doey/tui/internal/setup"
 	"github.com/doey-cli/doey/tui/internal/startup"
 )
@@ -24,7 +25,7 @@ func main() {
 			fmt.Println(version)
 			return
 		case "--help", "-h":
-			fmt.Fprintf(os.Stderr, "Usage: doey-tui <runtime-dir>\n       doey-tui setup\n       doey-tui startup --progress-file <path> [flags]\n       doey-tui --version\n")
+			fmt.Fprintf(os.Stderr, "Usage: doey-tui <runtime-dir>\n       doey-tui setup\n       doey-tui menu --projects-file <path> [--cwd <dir>] [--grid <layout>]\n       doey-tui startup --progress-file <path> [flags]\n       doey-tui --version\n")
 			return
 		case "setup":
 			result, err := setup.Run()
@@ -36,6 +37,34 @@ func main() {
 				os.Exit(1)
 			}
 			if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+				fmt.Fprintf(os.Stderr, "Error writing result: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "menu":
+			fs := flag.NewFlagSet("menu", flag.ExitOnError)
+			projectsFile := fs.String("projects-file", "", "path to projects registry file")
+			cwd := fs.String("cwd", "", "current working directory")
+			grid := fs.String("grid", "", "grid layout to pass through")
+			fs.Parse(os.Args[2:])
+
+			if *projectsFile == "" {
+				fmt.Fprintf(os.Stderr, "Usage: doey-tui menu --projects-file <path> [--cwd <dir>] [--grid <layout>]\n")
+				os.Exit(1)
+			}
+			if *cwd == "" {
+				*cwd, _ = os.Getwd()
+			}
+
+			result, err := picker.Run(*projectsFile, *cwd, *grid)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if result.Action == "quit" {
+				os.Exit(0)
+			}
+			if err := picker.PrintJSON(result); err != nil {
 				fmt.Fprintf(os.Stderr, "Error writing result: %v\n", err)
 				os.Exit(1)
 			}
