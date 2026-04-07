@@ -2,6 +2,16 @@
 set -euo pipefail
 # Functional test for _is_direct_vcs_cmd heredoc-awareness (task #141)
 
+_check_vcs_segments() {
+  while IFS= read -r seg; do
+    seg=$(printf '%s' "$seg" | sed 's/^[[:space:]]*//; s/^[A-Z_][A-Z_0-9]*=[^[:space:]]* *//')
+    case "$seg" in
+      git\ commit*|git\ push*|gh\ pr\ create*|gh\ pr\ merge*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 _is_direct_vcs_cmd() {
   local cmd="$1"
   local cleaned
@@ -31,14 +41,7 @@ _is_direct_vcs_cmd() {
       ;;
   esac
   cleaned=$(printf '%s' "$cleaned" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
-  local result=""
-  result=$(printf '%s\n' "$cleaned" | sed 's/&&/\n/g; s/||/\n/g; s/;/\n/g' | while IFS= read -r seg; do
-    seg=$(printf '%s' "$seg" | sed 's/^[[:space:]]*//; s/^[A-Z_][A-Z_0-9]*=[^[:space:]]* *//')
-    case "$seg" in
-      git\ commit*|git\ push*|gh\ pr\ create*|gh\ pr\ merge*) printf 'Y'; break ;;
-    esac
-  done)
-  [ "$result" = "Y" ]
+  printf '%s\n' "$cleaned" | sed 's/&&/\n/g; s/||/\n/g; s/;/\n/g' | _check_vcs_segments
 }
 
 pass=0 fail=0
