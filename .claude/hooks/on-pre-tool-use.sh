@@ -4,10 +4,25 @@
 set -euo pipefail
 trap 'exit 0' ERR
 
+# Self-repair: if hooks were deleted (e.g. gitignored + branch switch), re-copy from Doey repo.
+# Fast path: skip if common.sh exists (most hooks depend on it, so it's a good canary).
+_doey_hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+if [ ! -f "${_doey_hook_dir}/common.sh" ]; then
+  _doey_repo=""
+  if [ -f "${_doey_hook_dir}/../../shell/doey-roles.sh" ]; then
+    _doey_repo="$(cd "${_doey_hook_dir}/../.." && pwd)"
+  elif [ -f "$HOME/.claude/doey/repo-path" ]; then
+    _doey_repo="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null)" || _doey_repo=""
+  fi
+  if [ -n "$_doey_repo" ] && [ -d "${_doey_repo}/.claude/hooks" ]; then
+    cp "${_doey_repo}"/.claude/hooks/*.sh "${_doey_hook_dir}/" 2>/dev/null || true
+    chmod +x "${_doey_hook_dir}"/*.sh 2>/dev/null || true
+  fi
+fi
+
 # Source centralized role definitions — resolve via multiple fallbacks
 _DOEY_ROLES_FILE=""
 # Method 1: Relative to this hook file (works inside Doey repo)
-_doey_hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 if [ -f "${_doey_hook_dir}/../../shell/doey-roles.sh" ]; then
     _DOEY_ROLES_FILE="$(cd "${_doey_hook_dir}/../../shell" && pwd)/doey-roles.sh"
 fi
