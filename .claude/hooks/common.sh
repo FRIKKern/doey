@@ -343,9 +343,10 @@ _read_pane_status() {
   if command -v doey-ctl >/dev/null 2>&1; then
     doey status get --runtime "$RUNTIME_DIR" "$pane_safe" 2>/dev/null | grep '^status=' | cut -d= -f2-
   else
-    # Bash fallback: grep status file directly
+    # Bash fallback: grep status file directly. Tolerate both "STATUS=value"
+    # (canonical KEY=VALUE format) and legacy "STATUS: value" files.
     local status_file="${RUNTIME_DIR}/status/${pane_safe}.status"
-    grep '^STATUS:' "$status_file" 2>/dev/null | head -1 | sed 's/^STATUS: //'
+    grep -E '^STATUS[=:]' "$status_file" 2>/dev/null | head -1 | sed -e 's/^STATUS[[:space:]]*[=:][[:space:]]*//'
   fi
 }
 
@@ -363,6 +364,8 @@ write_pane_status() {
       --project-dir "$PROJECT_DIR" 2>/dev/null || true
     # Still write file for backward compat during transition
   fi
+  # Canonical "KEY: VALUE" (colon+space) format — matches Go ctl.WriteStatus in
+  # tui/internal/ctl/status.go and every shell reader that greps '^STATUS: '.
   printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$NOW" "$status" "$task" > "$target.tmp" && mv "$target.tmp" "$target"
 }
 
