@@ -42,6 +42,18 @@ ${RECENT_FILES:-None detected}
 You are ${ROLE_LABEL}. Continue from this preserved state.${RESEARCH_TOPIC:+ Research report required: ${REPORT_PATH}}
 CONTEXT
 
+# Include context overlay content if available (survives compaction)
+if [ -n "${DOEY_CONTEXT_OVERLAY:-}" ] && [ -f "$DOEY_CONTEXT_OVERLAY" ]; then
+  echo ""
+  echo "## Project Context Overlay (role-specific)"
+  head -200 "$DOEY_CONTEXT_OVERLAY"
+fi
+if [ -n "${DOEY_CONTEXT_OVERLAY_ALL:-}" ] && [ -f "$DOEY_CONTEXT_OVERLAY_ALL" ]; then
+  echo ""
+  echo "## Project Context Overlay (shared)"
+  head -200 "$DOEY_CONTEXT_OVERLAY_ALL"
+fi
+
 _list_files() {
   local result=""
   for f in "$@"; do
