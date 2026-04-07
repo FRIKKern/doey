@@ -53,6 +53,9 @@ if is_worker && ! is_reserved; then
   fi
 fi
 
+# Orphaned BUSY rows (pane killed/crashed without firing stop-status.sh) are
+# filtered out by store.ListPaneStatuses' staleness + orphan GC — see
+# tui/internal/store/teams.go (tasks 427/428). No cleanup is needed here.
 if command -v doey-ctl >/dev/null 2>&1; then
   doey status set "$PANE_SAFE" "BUSY"
 else
