@@ -154,6 +154,10 @@ DOEY_TEAM_2_WORKER_MODEL=sonnet
 
 `/doey-settings` or the **Settings** button opens a split-screen editor with live config values.
 
+### Intent Fallback
+
+Mistyped a command? Doey routes unknown `doey` commands through Claude Haiku, which suggests or auto-runs the right one. Uses your existing `ANTHROPIC_API_KEY`, refuses destructive corrections without a `[y/N]` prompt, and opts out with `DOEY_NO_INTENT_FALLBACK=1`. See [docs/intent-fallback.md](docs/intent-fallback.md).
+
 ## Task Tracking
 
 Built-in task system — tasks show on the dashboard.
