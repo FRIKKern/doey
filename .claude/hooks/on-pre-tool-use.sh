@@ -173,6 +173,19 @@ _forward_action() {
   return 0
 }
 
+_check_vcs_segments() {
+  # Helper: reads newline-delimited segments from stdin, returns 0 if any is a VCS write command.
+  # Extracted to work around bash 3.2 parser bug: case-in-while-in-$() fails because
+  # the parser confuses case pattern ')' with the command substitution closing ')'.
+  while IFS= read -r seg; do
+    seg=$(printf '%s' "$seg" | sed 's/^[[:space:]]*//; s/^[A-Z_][A-Z_0-9]*=[^[:space:]]* *//')
+    case "$seg" in
+      git\ commit*|git\ push*|gh\ pr\ create*|gh\ pr\ merge*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 _is_direct_vcs_cmd() {
   local cmd="$1"
   # Strip heredoc bodies so VCS keywords in data content don't false-positive.
@@ -206,14 +219,7 @@ _is_direct_vcs_cmd() {
   # Strip quoted strings
   cleaned=$(printf '%s' "$cleaned" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
   # Split on chain operators, check if any segment starts with a VCS command
-  local result=""
-  result=$(printf '%s\n' "$cleaned" | sed 's/&&/\n/g; s/||/\n/g; s/;/\n/g' | while IFS= read -r seg; do
-    seg=$(printf '%s' "$seg" | sed 's/^[[:space:]]*//; s/^[A-Z_][A-Z_0-9]*=[^[:space:]]* *//')
-    case "$seg" in
-      git\ commit*|git\ push*|gh\ pr\ create*|gh\ pr\ merge*) printf 'Y'; break ;;
-    esac
-  done)
-  [ "$result" = "Y" ]
+  printf '%s\n' "$cleaned" | sed 's/&&/\n/g; s/||/\n/g; s/;/\n/g' | _check_vcs_segments
 }
 
 _check_blocked() {
