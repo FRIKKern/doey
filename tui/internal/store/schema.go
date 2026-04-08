@@ -179,6 +179,8 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE tasks ADD COLUMN proof_of_success TEXT DEFAULT ''`,
 		// shortname field (task #8)
 		`ALTER TABLE tasks ADD COLUMN shortname TEXT DEFAULT ''`,
+		// origin_prompt field (task #24)
+		`ALTER TABLE tasks ADD COLUMN origin_prompt TEXT DEFAULT ''`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors

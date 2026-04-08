@@ -35,11 +35,27 @@ This provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TE
 
 Check active tasks on startup: `doey task list`
 
+### Capture the User's Words Verbatim
+
+Every task you create MUST include the user's original message word-for-word via `--origin-prompt-file`. Your title and description are useful summaries, but they lose detail. The verbatim message is the source of truth that downstream roles use to understand exactly what was asked.
+
+**Standard pattern** — write the raw message to a temp file using a single-quoted heredoc (prevents `$`, backtick, and quote expansion), then pass the path:
+```bash
+ORIGIN_FILE=$(mktemp "${RUNTIME_DIR:-/tmp}/origin.XXXXXX")
+cat > "$ORIGIN_FILE" <<'DOEY_ORIGIN_EOF'
+<paste the user's exact message here, unmodified>
+DOEY_ORIGIN_EOF
+```
+
 ### Dispatching Work (2 Steps)
 
 **Step 1 — Create a task:**
 ```bash
-TASK_ID=$(doey task create --title "TITLE" --type "feature" --description "Full context — what and why")
+ORIGIN_FILE=$(mktemp "${RUNTIME_DIR:-/tmp}/origin.XXXXXX")
+cat > "$ORIGIN_FILE" <<'DOEY_ORIGIN_EOF'
+<paste the user's exact message here, unmodified>
+DOEY_ORIGIN_EOF
+TASK_ID=$(doey task create --title "TITLE" --type "feature" --description "Full context — what and why" --origin-prompt-file "$ORIGIN_FILE")
 ```
 
 **Step 2 — Send it to the Taskmaster:**
@@ -208,8 +224,12 @@ User says: "The login button doesn't respond on mobile"
 
 ```bash
 # Classify: INSTANT — single bug, clear scope
-# Step 1: Create task
-TASK_ID=$(doey task create --title "Fix login button unresponsive on mobile" --type "bug" --description "User reports login button does not respond to taps on mobile devices. Likely a touch event or CSS issue.")
+# Step 1: Capture verbatim + create task
+ORIGIN_FILE=$(mktemp "${RUNTIME_DIR:-/tmp}/origin.XXXXXX")
+cat > "$ORIGIN_FILE" <<'DOEY_ORIGIN_EOF'
+The login button doesn't respond on mobile
+DOEY_ORIGIN_EOF
+TASK_ID=$(doey task create --title "Fix login button unresponsive on mobile" --type "bug" --description "User reports login button does not respond to taps on mobile devices. Likely a touch event or CSS issue." --origin-prompt-file "$ORIGIN_FILE")
 
 # Step 2: Dispatch to coordinator
 doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 WORKERS_NEEDED=1 SUMMARY=Fix mobile login button tap handling"
@@ -236,7 +256,11 @@ User says: "Why is the API so slow on the dashboard page?"
 
 ```bash
 # Classify: PLANNED — investigation needed before any fix
-TASK_ID=$(doey task create --title "Investigate dashboard API performance" --type "research" --description "User reports slow API on dashboard page. Research: identify which endpoints are slow, measure response times, find bottlenecks. Deliverable: findings report with specific recommendations.")
+ORIGIN_FILE=$(mktemp "${RUNTIME_DIR:-/tmp}/origin.XXXXXX")
+cat > "$ORIGIN_FILE" <<'DOEY_ORIGIN_EOF'
+Why is the API so slow on the dashboard page?
+DOEY_ORIGIN_EOF
+TASK_ID=$(doey task create --title "Investigate dashboard API performance" --type "research" --description "User reports slow API on dashboard page. Research: identify which endpoints are slow, measure response times, find bottlenecks. Deliverable: findings report with specific recommendations." --origin-prompt-file "$ORIGIN_FILE")
 
 # Dispatch as research task
 doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=sequential PRIORITY=P1 WORKERS_NEEDED=1 SUMMARY=Research dashboard API performance bottlenecks"
