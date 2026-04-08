@@ -99,6 +99,16 @@ for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
     printf 'LAST_TASK_TAGS: %s\nLAST_TASK_TYPE: %s\nLAST_FILES: %s\n' "$_last_task_tags" "$_last_task_type" "$_last_files" >> "$_status_file"
 done
 
+# Strip runtime fields from status files (no longer relevant after stop)
+for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
+  [ -z "$_sf" ] && continue
+  _status_file="${RUNTIME_DIR}/status/${_sf}.status"
+  if [ -f "$_status_file" ]; then
+    grep -v '^TOOL: \|^ACTIVITY: \|^SINCE: \|^LAST_ACTIVITY: ' "$_status_file" > "${_status_file}.tmp" 2>/dev/null || cp "$_status_file" "${_status_file}.tmp"
+    mv "${_status_file}.tmp" "$_status_file"
+  fi
+done
+
 rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.heartbeat" 2>/dev/null || true
 { [ -n "${DOEY_PANE_ID:-}" ] && rm -f "${RUNTIME_DIR}/status/${DOEY_PANE_ID//[-:.]/_}.heartbeat" 2>/dev/null; } || true
 

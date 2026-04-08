@@ -245,6 +245,20 @@ When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), *
 | Under `DOEY_MAX_TEAMS` (default 5) | Spawn per-task team, dispatch |
 | At max teams | Implicit queue — leave `TASK_STATUS=active` with no `TASK_TEAM`, dispatch when a team despawns |
 
+### Verify Task Binding After Spawn
+
+After spawning a team with `doey add-window --task-id $TASK_ID`:
+1. **Verify team env** — check that the team env file contains TASK_ID:
+   ```bash
+   TEAM_ENV="${RUNTIME_DIR}/team_${NEW_W}.env"
+   grep -q "TASK_ID=" "$TEAM_ENV" || echo "WARNING: TASK_ID not in team env"
+   ```
+2. **Never spawn without TASK_ID** — if you don't have a TASK_ID for the work, create one first via `doey task create` before spawning
+3. **Log the binding** — record which task is bound to which team:
+   ```bash
+   doey task update --id $TASK_ID --field "team" --value "W${NEW_W}"
+   ```
+
 ### Queue Drain
 
 On `QUEUED` wake: run `doey task list --status active` and look for tasks with empty TEAM column. Sort by priority (P0→P3, default P2). Dispatch, then return to sleep.
@@ -394,6 +408,8 @@ API errors are transient — retry after 15-30s, note after 3 consecutive failur
 **Status flow:** `active` → `in_progress` → `pending_user_confirmation` → `done` (user only) | `cancelled`
 
 Task files: `${PROJECT_DIR}/.doey/tasks/` (persistent), fallback `${RUNTIME_DIR}/tasks/`. TASK_TEAM is mandatory on dispatch. Update status atomically (`.tmp` + `mv`). After commit: immediately set `pending_user_confirmation`.
+
+**NEVER dispatch work to a team without a TASK_ID.** Every `dispatch_task` message must include a valid TASK_ID field. If a task request arrives without an ID, create one first via `doey task create` before spawning a team or dispatching work.
 
 **On task_complete:** Extract TASK_ID, check `$RUNTIME_DIR/phases/task_<TASK_ID>.json`. More phases → advance silently. Final/only phase → **bulk-mark all pending subtasks done** (see below), then send to **Review Gate** (pane 1.1). On review PASS → forward to {{DOEY_ROLE_DEPLOYMENT}} (pane 1.2). On `deployment_complete` → set `pending_user_confirmation`, notify {{DOEY_ROLE_BOSS}}, then **despawn the task's ephemeral team** (see Team Despawn). On review FAIL → return to team for fixes.
 

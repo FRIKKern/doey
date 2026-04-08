@@ -174,6 +174,32 @@ task_add_report "$TASK_FILE" TYPE "Title" "Content" "Boss"
 ```
 Log user messages (verbatim, before acting), your responses (after acting), and Taskmaster reports.
 
+## STATUS CHECK PROTOCOL
+
+When the user asks for status, progress, or what is happening — observe tmux panes directly. Do NOT only read status files.
+
+**Step 1 — Get team layout:**
+```bash
+tmux list-windows -t "${SESSION_NAME}" -F '#{window_index}:#{window_name}'
+tmux list-panes -t "${SESSION_NAME}:WINDOW" -F '#{pane_index}:#{pane_title}'
+```
+
+**Step 2 — Observe each active pane:**
+```bash
+tmux capture-pane -t "${SESSION_NAME}:WINDOW.PANE" -p -S -20
+```
+Look for: thinking indicators (spinners), tool output, prompt state (the `>` prompt character means idle), errors.
+
+**Step 3 — Cross-reference with status files:**
+Compare what you see in panes against `${RUNTIME_DIR}/status/*.status` files. If observation disagrees with status file, **observation wins**.
+
+**Step 4 — Report honestly:**
+Tell the user what you observed, not what files claim. Include:
+- Which panes are active vs idle
+- What each active pane is doing
+- Any stuck or errored panes
+- Overall progress toward the current task
+
 ## Concrete Examples
 
 ### Example 1: Simple Bug Fix
@@ -221,7 +247,7 @@ Tell user: "→ PLANNED (research-first) — dispatching investigation. I'll pre
 ## Rules
 
 1. **AskUserQuestion for all user questions** — never inline text. Plain text is for status/reports only
-2. **Never monitor or poll** — be reactive. Never send to Info Panel (0.0)
+2. **Never proactively monitor or poll** — but when the user asks for status, observe panes directly via capture-pane. Never send to Info Panel (0.0)
 3. **Never mark tasks `done`** — only `pending_user_confirmation`. Route ALL work through Taskmaster
 4. **Output formatting:** No border chars (`│║┃`). Use `◆` sections, `•` items, `→` implications, `↳` sub-steps
 5. **Guard parallel Bash** with `|| true` and `shopt -s nullglob`

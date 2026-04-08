@@ -503,6 +503,16 @@ if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
   fi
   [ "$_hb_write" = "true" ] && \
     printf '%s %s %s\n' "$(date +%s)" "${DOEY_TASK_ID:-}" "${DOEY_PANE_ID:-${_PS}}" > "${_HB_FILE}.tmp" && mv "${_HB_FILE}.tmp" "$_HB_FILE"
+  # Update status file with LAST_ACTIVITY and TOOL for live monitoring
+  if [ "$_hb_write" = "true" ]; then
+    _sf="${_RD}/status/${_PS}.status"
+    if [ -f "$_sf" ]; then
+      _now=$(date +%s)
+      grep -v '^LAST_ACTIVITY: \|^TOOL: ' "$_sf" > "${_sf}.tmp" 2>/dev/null || cp "$_sf" "${_sf}.tmp"
+      printf 'LAST_ACTIVITY: %s\nTOOL: %s\n' "$_now" "$TOOL_NAME" >> "${_sf}.tmp"
+      mv "${_sf}.tmp" "$_sf"
+    fi
+  fi
 fi
 
 # Universal credential check — applies to ALL roles, no exceptions
@@ -550,20 +560,11 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
         exit 2 ;;
     esac
   ;; esac
-  # Boss capture-pane restriction — only Taskmaster pane allowed
-  case "$_BOSS_CMD" in *"capture-pane"*"-t"*)
-    _boss_cp_target=$(echo "$_BOSS_CMD" | sed 's/.*capture-pane.*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
-    case "$_boss_cp_target" in
-      *:${_boss_tm_pane}|*_${_boss_tm_safe}*|${_boss_tm_pane})
-        _dbg_write "allow_boss_capturepane_coordinator"
-        ;;
-      *)
-        _log_block "TOOL_BLOCKED" "${DOEY_ROLE_BOSS} capture-pane non-${DOEY_ROLE_COORDINATOR} pane blocked" "$_BOSS_CMD"
-        _dbg_write "block_boss_capturepane_${_boss_cp_target}"
-        echo "BLOCKED: ${DOEY_ROLE_BOSS} can only capture-pane the ${DOEY_ROLE_COORDINATOR} pane." >&2
-        exit 2 ;;
-    esac
-  ;; esac
+  # capture-pane: allow ALL panes (read-only observation)
+  case "$_BOSS_CMD" in *"capture-pane"*)
+    _dbg_write "allow_boss_capturepane"
+    ;; # fall through to boss exit 0
+  esac
 fi
 
 # Scratchpad bypass — all roles may Read/Edit/Write/Glob/Grep inside scratchpad
