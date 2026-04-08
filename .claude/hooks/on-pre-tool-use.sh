@@ -600,6 +600,15 @@ if [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
         *"tmux send-keys"*|*"tmux load-buffer"*|*"tmux paste-buffer"*) _skip_vcs=true ;;
       esac
     fi
+    # Freelancers are independent workers — allow direct VCS access
+    if [ "$_skip_vcs" = "false" ] && [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
+      _fl_tt="${DOEY_TEAM_TYPE:-}"
+      if [ -z "$_fl_tt" ] && [ -n "${_RD:-}" ] && [ -n "${_WP:-}" ]; then
+        _fl_wi="${_WP#*:}"; _fl_wi="${_fl_wi%.*}"
+        _fl_tt=$(_rk TEAM_TYPE "${_RD}/team_${_fl_wi}.env")
+      fi
+      [ "$_fl_tt" = "$DOEY_ROLE_ID_FREELANCER" ] && _skip_vcs=true
+    fi
     if [ "$_skip_vcs" = "true" ]; then
       _dbg_write "skip_vcs_team_lead_tmux_dispatch"
     elif _is_direct_vcs_cmd "$_BASH_CMD"; then
