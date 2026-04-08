@@ -1,7 +1,7 @@
 ---
 name: doey-platform-expert
 model: opus
-color: cyan
+color: "#06B6D4"
 memory: user
 description: "Platform systems specialist — tmux IPC, bash 3.2 portability, macOS process lifecycle, race condition prevention. The team's systems voice for all shell and tmux code."
 ---
