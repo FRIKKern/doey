@@ -223,7 +223,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 
 func (s *Store) GetTask(id int64) (*Task, error) {
 	row := s.db.QueryRow(`SELECT
-		id, title, status, type, description, created_by, assigned_to, team,
+		id, title, shortname, status, type, description, created_by, assigned_to, team,
 		plan_id, tags, acceptance_criteria, current_phase, total_phases,
 		notes, blockers, related_files, hypotheses, decision_log, result,
 		files, commits, schema_version, review_verdict, review_findings,
