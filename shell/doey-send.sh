@@ -35,6 +35,94 @@ _doey_send_check_busy() {
   [ "$cur_status" = "BUSY" ]
 }
 
+# _doey_send_lock <pane_safe>
+# Acquires an atomic file-based lock for the target pane.
+# Uses mkdir (POSIX atomic). Stale locks (PID dead or >30s) are cleaned.
+# Returns 0 on success, 1 on timeout (30s).
+_doey_send_lock() {
+  local pane_safe="$1"
+  local runtime="${DOEY_RUNTIME:-${RUNTIME_DIR:-/tmp/doey}}"
+  local lock_dir="${runtime}/locks"
+  local lock_path="${lock_dir}/${pane_safe}.lock"
+
+  mkdir -p "$lock_dir" 2>/dev/null || true
+
+  local attempts=0
+  while [ "$attempts" -lt 60 ]; do
+    if mkdir "$lock_path" 2>/dev/null; then
+      echo "$$:$(date +%s)" > "${lock_path}/pid" 2>/dev/null || true
+      return 0
+    fi
+    # Check for stale lock
+    local lock_content lock_pid lock_time
+    lock_content=$(cat "${lock_path}/pid" 2>/dev/null) || lock_content=""
+    lock_pid="${lock_content%%:*}"
+    lock_time="${lock_content##*:}"
+    local is_stale=false
+    if [ -n "$lock_pid" ] && ! kill -0 "$lock_pid" 2>/dev/null; then
+      is_stale=true
+    fi
+    if [ -n "$lock_time" ]; then
+      local now_epoch
+      now_epoch=$(date +%s)
+      if [ $((now_epoch - lock_time)) -gt 30 ]; then
+        is_stale=true
+      fi
+    fi
+    if [ "$is_stale" = true ]; then
+      rm -rf "$lock_path" 2>/dev/null || true
+      continue
+    fi
+    sleep 0.5
+    attempts=$((attempts + 1))
+  done
+  echo "_doey_send_lock: timeout acquiring lock for $pane_safe" >&2
+  return 1
+}
+
+# _doey_send_unlock <pane_safe>
+# Releases the file-based lock for the target pane.
+_doey_send_unlock() {
+  local pane_safe="$1"
+  local runtime="${DOEY_RUNTIME:-${RUNTIME_DIR:-/tmp/doey}}"
+  local lock_path="${runtime}/locks/${pane_safe}.lock"
+  rm -rf "$lock_path" 2>/dev/null || true
+}
+
+# _doey_send_precheck <target> <message>
+# Checks if the target pane is BUSY. If so, queues the message for later delivery.
+# Returns: 0 = proceed with send, 2 = message queued (caller should not send).
+_doey_send_precheck() {
+  local target="$1"
+  local message="$2"
+  local runtime="${DOEY_RUNTIME:-${RUNTIME_DIR:-/tmp/doey}}"
+  [ -n "$runtime" ] || return 0
+
+  local target_safe
+  target_safe=$(printf '%s' "$target" | tr ':.-' '_')
+  local status_file="${runtime}/status/${target_safe}.status"
+  [ -f "$status_file" ] || return 0
+
+  local cur_status
+  cur_status=$(grep '^STATUS:' "$status_file" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
+
+  if [ "$cur_status" = "BUSY" ]; then
+    local pending_dir="${runtime}/pending"
+    mkdir -p "$pending_dir" 2>/dev/null || true
+    local msg_file="${pending_dir}/${target_safe}_$(date +%s)_$$.msg"
+    {
+      echo "FROM=${PANE:-unknown}"
+      echo "TO=${target}"
+      echo "TIMESTAMP=$(date +%s)"
+      echo "---"
+      printf '%s' "$message"
+    } > "$msg_file"
+    return 2
+  fi
+
+  return 0
+}
+
 # doey_wait_for_prompt <target_pane> [timeout_seconds]
 #
 # Waits for a Claude prompt (❯ character) to appear in the target pane.
@@ -88,11 +176,52 @@ doey_wait_for_prompt() {
 doey_send_verified() {
   local target="$1"
   local message="$2"
-  local max_retries=3
+  local skip_precheck="${3:-}"
+  local target_safe
+  target_safe=$(printf '%s' "$target" | tr ':.-' '_')
+
+  # Pre-send BUSY check with queue fallback
+  if [ "$skip_precheck" != "1" ]; then
+    _doey_send_precheck "$target" "$message"
+    local pc=$?
+    if [ "$pc" -eq 2 ]; then return 2; fi
+  fi
+
+  # Acquire per-pane lock to prevent concurrent sends
+  if ! _doey_send_lock "$target_safe"; then
+    echo "doey_send_verified: could not acquire lock for $target" >&2
+    return 1
+  fi
+
+  _doey_send_verified_inner "$target" "$message"
+  local rc=$?
+
+  _doey_send_unlock "$target_safe"
+  return $rc
+}
+
+# _doey_send_verified_inner <target_pane> <message>
+# Internal: performs the actual send with readiness gating, paste-buffer delivery,
+# and submission verification. Called by doey_send_verified after lock acquisition.
+_doey_send_verified_inner() {
+  local target="$1"
+  local message="$2"
+  local max_retries=4
   local attempt=0
 
   while [ "$attempt" -lt "$max_retries" ]; do
     attempt=$((attempt + 1))
+
+    # Exponential backoff on retries
+    if [ "$attempt" -gt 1 ]; then
+      local backoff_s
+      case "$attempt" in
+        2) backoff_s="0.5" ;;
+        3) backoff_s="1.0" ;;
+        *) backoff_s="2.0" ;;
+      esac
+      sleep "$backoff_s"
+    fi
 
     # ── Step 1: Wait for visible Claude prompt (❯) ──
     local prompt_timeout=30
@@ -134,7 +263,9 @@ doey_send_verified() {
     # returned 0 (no early continue above), the text is in the pane's input.
     # No text-matching verification: by the time capture-pane runs, Claude
     # has often already consumed the input, causing false negatives.
-    sleep 0.3
+    local settle_s
+    settle_s=$(awk "BEGIN {printf \"%.3f\", ${PASTE_SETTLE_MS:-800}/1000}")
+    sleep "$settle_s"
     tmux send-keys -t "$target" Enter 2>/dev/null || true
 
     # ── Step 5: Confirm submission via BUSY status or activity ──
@@ -170,6 +301,42 @@ doey_send_verified() {
 
   echo "doey_send_verified: delivery failed after $max_retries attempts to $target" >&2
   return 1
+}
+
+# doey_deliver_pending <target_pane>
+#
+# Delivers queued messages for the target pane (oldest first).
+# Called when a pane becomes READY (e.g. from on-prompt-submit.sh).
+# Stops on first delivery failure; remaining messages stay queued.
+doey_deliver_pending() {
+  local target="$1"
+  local runtime="${DOEY_RUNTIME:-${RUNTIME_DIR:-/tmp/doey}}"
+  local target_safe
+  target_safe=$(printf '%s' "$target" | tr ':.-' '_')
+  local pending_dir="${runtime}/pending"
+  [ -d "$pending_dir" ] || return 0
+
+  local msg_files
+  msg_files=$(ls "${pending_dir}/${target_safe}_"*.msg 2>/dev/null | sort) || msg_files=""
+  [ -n "$msg_files" ] || return 0
+
+  local f
+  printf '%s\n' "$msg_files" | while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    # Extract message content (everything after --- line)
+    local msg
+    msg=$(sed '1,/^---$/d' "$f" 2>/dev/null) || msg=""
+    if [ -z "$msg" ]; then
+      rm -f "$f" 2>/dev/null || true
+      continue
+    fi
+    # skip_precheck=1 to avoid re-queuing
+    if doey_send_verified "$target" "$msg" 1; then
+      rm -f "$f" 2>/dev/null || true
+    else
+      break
+    fi
+  done
 }
 
 # doey_send_command <target_pane> <command>
