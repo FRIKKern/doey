@@ -732,9 +732,34 @@ func (e *ExpandedCard) Render() string {
 	return styles.ExpandedCardStyle(e.Theme, task.Status, expandedWidth).Render(content)
 }
 
+// isNoisyLogEntry returns true if the log entry should be hidden from the
+// default timeline view (verbose research dumps, auto-complete duplicates).
+func isNoisyLogEntry(entry string) bool {
+	prefix, body := splitLogPrefix(entry)
+
+	// Skip verbose research entries: >300 chars with ALL_CAPS prefix
+	// but preserve known meaningful prefixes.
+	if len(body) > 300 && prefix == strings.ToUpper(prefix) {
+		switch prefix {
+		case "COMPLETE", "PROGRESS", "REPORT", "DISPATCHED", "ERROR", "DECISION":
+			return false
+		default:
+			return true
+		}
+	}
+
+	// Skip auto-complete duplicates from post-push hook.
+	if strings.HasPrefix(entry, "AUTO_COMPLETE:") {
+		return true
+	}
+
+	return false
+}
+
 // buildTimeline collects all timestamped entries for the current task into a
 // single sorted slice. Entries from every source are merged chronologically.
-func (e *ExpandedCard) buildTimeline() []TimelineEntry {
+// Returns the filtered entries and the total count before noise filtering.
+func (e *ExpandedCard) buildTimeline() ([]TimelineEntry, int) {
 	task := e.Item.Task
 
 	// Pre-size: rough upper bound to avoid repeated growth.
@@ -824,24 +849,41 @@ func (e *ExpandedCard) buildTimeline() []TimelineEntry {
 		return entries[i].Timestamp < entries[j].Timestamp
 	})
 
+	// Content-level noise filter for log entries
+	total := len(entries)
+	{
+		filtered := entries[:0]
+		for _, ent := range entries {
+			if ent.Kind == TimelineLog && ent.Log != nil && isNoisyLogEntry(ent.Log.Entry) {
+				continue
+			}
+			filtered = append(filtered, ent)
+		}
+		entries = filtered
+	}
+
 	// Cap total entries to prevent massive renders
 	if len(entries) > 100 {
 		entries = entries[len(entries)-100:]
 	}
 
-	return entries
+	return entries, total
 }
 
 // renderUnifiedTimeline builds and renders the unified chronological timeline.
 func (e *ExpandedCard) renderUnifiedTimeline(contentWidth int) []string {
-	entries := e.buildTimeline()
+	entries, total := e.buildTimeline()
 	if len(entries) == 0 {
 		return nil
 	}
 
 	t := e.Theme
 	var lines []string
-	lines = append(lines, styles.SectionTitle(t, fmt.Sprintf("Timeline (%d)", len(entries))))
+	title := fmt.Sprintf("Timeline (%d)", len(entries))
+	if total > len(entries) {
+		title = fmt.Sprintf("Timeline (%d of %d)", len(entries), total)
+	}
+	lines = append(lines, styles.SectionTitle(t, title))
 
 	for _, ent := range entries {
 		switch ent.Kind {
