@@ -39,7 +39,7 @@ cat <<CONTEXT
 **Recently Modified Files:**
 ${RECENT_FILES:-None detected}
 
-You are ${ROLE_LABEL}. Continue from this preserved state.${RESEARCH_TOPIC:+ Research report required: ${REPORT_PATH}}
+$(if is_manager; then echo "You ARE the ${DOEY_ROLE_TEAM_LEAD}. You plan, delegate, and synthesize. You never write code or read source files. ${DOEY_ROLE_COORDINATOR} sends you tasks. You dispatch to ${DOEY_ROLE_WORKER}s. Continue from this preserved state."; elif is_taskmaster; then echo "You ARE the ${DOEY_ROLE_COORDINATOR}. You route tasks between teams and orchestrate completion. You never write code or read source files. You report to ${DOEY_ROLE_BOSS}. Continue from this preserved state."; else echo "You are ${ROLE_LABEL}. Continue from this preserved state."; fi)${RESEARCH_TOPIC:+ Research report required: ${REPORT_PATH}}
 CONTEXT
 
 # Include context overlay content if available (survives compaction)
