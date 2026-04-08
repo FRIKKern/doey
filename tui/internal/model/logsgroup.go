@@ -40,16 +40,15 @@ type LogsGroupModel struct {
 	activity     ActivityModel
 	interactions InteractionsModel
 
-	theme       styles.Theme
-	cursor      int
-	keyMap      keys.KeyMap
-	width       int
-	height      int
-	focused     bool
-	leftFocused bool
+	theme   styles.Theme
+	cursor  int
+	keyMap  keys.KeyMap
+	width   int
+	height  int
+	focused bool
 }
 
-// NewLogsGroupModel creates a logs group panel with the left selector focused.
+// NewLogsGroupModel creates a logs group panel with the first sub-view selected.
 func NewLogsGroupModel(theme styles.Theme) LogsGroupModel {
 	return LogsGroupModel{
 		logs:         NewLogViewModel(theme),
@@ -59,7 +58,6 @@ func NewLogsGroupModel(theme styles.Theme) LogsGroupModel {
 		activity:     NewActivityModel(theme),
 		interactions: NewInteractionsModel(theme),
 		theme:        theme,
-		leftFocused:  true,
 		keyMap:       keys.DefaultKeyMap(),
 	}
 }
@@ -86,79 +84,40 @@ func (m LogsGroupModel) Update(msg tea.Msg) (LogsGroupModel, tea.Cmd) {
 	return m, nil
 }
 
-// updateMouse handles mouse interactions for both panels.
+// updateMouse handles mouse interactions. A click on a left-list item selects
+// that sub-view; every other mouse event (wheel, drag, click in the right
+// pane) is delegated to the currently active sub-model so scroll input always
+// lands on the feed.
 func (m LogsGroupModel) updateMouse(msg tea.MouseMsg) (LogsGroupModel, tea.Cmd) {
-	// Click on left-panel items
 	if msg.Action == tea.MouseActionRelease {
 		for i := range logsGroupItems {
 			if zone.Get(fmt.Sprintf("logsgrp-%d", i)).InBounds(msg) {
 				m.cursor = i
-				m.leftFocused = true
 				m.updateSubFocus()
+				m.propagateSizeToActive()
 				return m, nil
 			}
 		}
 	}
-
-	// Delegate to active sub-model when right panel is focused
-	if !m.leftFocused {
-		return m.delegateUpdate(msg)
-	}
-
-	// Mouse wheel on left panel
-	if msg.Action == tea.MouseActionPress {
-		if msg.Button == tea.MouseButtonWheelUp {
-			if m.cursor > 0 {
-				m.cursor--
-			}
-			return m, nil
-		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			if m.cursor < len(logsGroupItems)-1 {
-				m.cursor++
-			}
-			return m, nil
-		}
-	}
-
-	return m, nil
+	return m.delegateUpdate(msg)
 }
 
-// updateKey handles keyboard navigation for both panels.
+// updateKey cycles the left list selection on Tab/Shift-Tab; everything else
+// (arrows, j/k, Enter, Esc, filters, etc.) flows through to the active
+// sub-model on the right.
 func (m LogsGroupModel) updateKey(msg tea.KeyMsg) (LogsGroupModel, tea.Cmd) {
-	if m.leftFocused {
-		switch {
-		case key.Matches(msg, m.keyMap.Up):
-			m.cursor--
-			if m.cursor < 0 {
-				m.cursor = len(logsGroupItems) - 1
-			}
-			return m, nil
-
-		case key.Matches(msg, m.keyMap.Down):
-			m.cursor++
-			if m.cursor >= len(logsGroupItems) {
-				m.cursor = 0
-			}
-			return m, nil
-
-		case key.Matches(msg, m.keyMap.RightPanel), key.Matches(msg, m.keyMap.Select):
-			m.leftFocused = false
-			m.updateSubFocus()
-			m.propagateSizeToActive()
-			return m, nil
-		}
-		return m, nil
-	}
-
-	// Right panel focused — check for back navigation first
-	if key.Matches(msg, m.keyMap.LeftPanel) || key.Matches(msg, m.keyMap.Back) {
-		m.leftFocused = true
+	switch {
+	case key.Matches(msg, m.keyMap.NextPanel):
+		m.cursor = (m.cursor + 1) % len(logsGroupItems)
 		m.updateSubFocus()
+		m.propagateSizeToActive()
+		return m, nil
+	case key.Matches(msg, m.keyMap.PrevPanel):
+		m.cursor = (m.cursor - 1 + len(logsGroupItems)) % len(logsGroupItems)
+		m.updateSubFocus()
+		m.propagateSizeToActive()
 		return m, nil
 	}
-
-	// Delegate everything else to the active sub-model
 	return m.delegateUpdate(msg)
 }
 
@@ -205,16 +164,16 @@ func (m *LogsGroupModel) SetFocused(focused bool) {
 	m.updateSubFocus()
 }
 
-// updateSubFocus sets the focused state on all sub-models so only the active
-// one (when the right panel has focus) receives input.
+// updateSubFocus sets the focused state on all sub-models so only the
+// currently selected one receives delegated input.
 func (m *LogsGroupModel) updateSubFocus() {
-	rightActive := m.focused && !m.leftFocused
-	m.logs.SetFocused(rightActive && m.cursor == 0)
-	m.messages.SetFocused(rightActive && m.cursor == 1)
-	m.debug.SetFocused(rightActive && m.cursor == 2)
-	m.info.SetFocused(rightActive && m.cursor == 3)
-	m.activity.SetFocused(rightActive && m.cursor == 4)
-	m.interactions.SetFocused(rightActive && m.cursor == 5)
+	active := m.focused
+	m.logs.SetFocused(active && m.cursor == 0)
+	m.messages.SetFocused(active && m.cursor == 1)
+	m.debug.SetFocused(active && m.cursor == 2)
+	m.info.SetFocused(active && m.cursor == 3)
+	m.activity.SetFocused(active && m.cursor == 4)
+	m.interactions.SetFocused(active && m.cursor == 5)
 }
 
 // propagateSizeToActive calculates the right-panel dimensions and sets them
@@ -297,15 +256,14 @@ func (m LogsGroupModel) renderLeftPanel(w, h int) string {
 	header := headerStyle.Render("◆ LOGS & DEBUG")
 
 	borderColor := t.Separator
-	if m.focused && m.leftFocused {
+	if m.focused {
 		borderColor = t.Primary
 	}
-	_ = borderColor // used in panel style below
 
 	// List items
 	var items []string
 	for i, entry := range logsGroupItems {
-		selected := m.focused && m.leftFocused && i == m.cursor
+		selected := m.focused && i == m.cursor
 
 		icon := lipgloss.NewStyle().Foreground(t.Accent).Render(entry.icon)
 		nameStyle := lipgloss.NewStyle().Foreground(t.Text)
@@ -329,17 +287,7 @@ func (m LogsGroupModel) renderLeftPanel(w, h int) string {
 
 	body := strings.Join(items, "\n")
 
-	// Nav hint
-	hint := ""
-	if m.focused && m.leftFocused {
-		hint = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).PaddingLeft(1).
-			Render("→ or enter for details")
-	}
-
 	content := header + "\n\n" + body
-	if hint != "" {
-		content += "\n\n" + hint
-	}
 
 	return lipgloss.NewStyle().
 		Width(w).

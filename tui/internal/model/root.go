@@ -374,11 +374,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.NextPanel) {
+			// Logs tab consumes Tab/Shift-Tab to cycle its own sub-views.
+			if m.focusIndex == 5 {
+				var cmd tea.Cmd
+				m.logsGroup, cmd = m.logsGroup.Update(msg)
+				return m, cmd
+			}
 			m.focusIndex = (m.focusIndex + 1) % 8
 			m.updateFocus()
 			return m, nil
 		}
 		if key.Matches(msg, m.footer.keyMap.PrevPanel) {
+			// Logs tab consumes Tab/Shift-Tab to cycle its own sub-views.
+			if m.focusIndex == 5 {
+				var cmd tea.Cmd
+				m.logsGroup, cmd = m.logsGroup.Update(msg)
+				return m, cmd
+			}
 			m.focusIndex = (m.focusIndex + 7) % 8 // +7 mod 8 == -1 with wrap
 			m.updateFocus()
 			return m, nil
