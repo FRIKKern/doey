@@ -40,7 +40,7 @@ _taskmaster_dbg_wake() {
     "$(date +%s)" "$1" "${2:-0}" >> "$_TASKMASTER_DBG_FILE" 2>/dev/null
 }
 
-_wake() { _taskmaster_bump_cycle; _taskmaster_dbg_wake "$1" "${2:-0}"; echo "WAKE_REASON=$1"; exit 0; }
+_wake() { _taskmaster_dbg_wake "$1" "${2:-0}"; echo "WAKE_REASON=$1"; exit 0; }
 
 SEEN_FILE="${RUNTIME_DIR}/status/taskmaster_seen_results"
 _seen_results=""
@@ -307,6 +307,7 @@ if [ "$_task_scan_done" = false ] && [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; the
 fi
 
 if [ "$((_taskmaster_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
+  _taskmaster_cycle=-1
   echo "0" > "$CYCLE_FILE"; _wake "TRIGGERED"
 fi
 
@@ -338,7 +339,7 @@ fi
 # Pre-sleep guard: final check before entering blocking wait
 _check_work "0" || true
 
-_sleep_dur=15
+_sleep_dur=60
 # Use inotifywait for event-driven blocking if available
 if command -v inotifywait >/dev/null 2>&1; then
   mkdir -p "${RUNTIME_DIR}/triggers" 2>/dev/null
@@ -362,5 +363,6 @@ if [ "$_trig_found" = true ]; then
 fi
 # Re-check for messages/tasks that arrived during sleep
 _check_work "$_sleep_dur" || true
+_taskmaster_bump_cycle
 _taskmaster_dbg_wake "idle" "$_sleep_dur"
 echo "WAKE_REASON=TIMEOUT"
