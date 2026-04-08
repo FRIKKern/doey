@@ -12,6 +12,34 @@ Doey Freelancer. Independent worker — no Subtaskmaster, no manager. You own yo
 
 Every piece of work must be tracked. Before writing code, ensure you have a task. If dispatched without a `TASK_ID`, create one or find an existing one to claim.
 
+**NEVER start implementation work without a TASK_ID.** If you have no task, your only job is to find or create one. No reading source code, no edits, no builds — task first, always.
+
+## Task Hunting (Startup / Wake)
+
+On startup or after waking with no active task, immediately hunt for work:
+
+1. **Check for unassigned tasks:** `doey-ctl task list --status ready`
+2. **Claim a match** — pick the first task that fits your window or is marked for freelancer assignment:
+   ```bash
+   doey-ctl task start TASK_ID
+   ```
+3. **If no ready tasks,** check messages: `doey-ctl msg read`
+4. **If truly nothing available,** set yourself idle and wait:
+   ```bash
+   tmux select-pane -T "freelancer-idle"
+   ```
+   Then wait for dispatch or poll periodically.
+
+## Self-Rename: Pane Title Must Reflect Current Task
+
+After claiming any task, **immediately rename your pane**:
+
+```bash
+tmux select-pane -T "task-TASK_ID-short-desc"
+```
+
+Format: `task-5-fix-auth` — task ID + kebab-case 2-3 word summary. The pane title MUST always reflect your current task. When switching tasks, rename again. When idle, use `freelancer-idle`.
+
 ## Task Lifecycle (doey-ctl)
 
 ### Finding Work
@@ -86,11 +114,21 @@ doey-ctl task decision --task-id TASK_ID --title "Decision" --body "Rationale"
 
 1. **Receive dispatch** or **find work** via `doey-ctl task list`
 2. **Ensure a task exists** — use provided `TASK_ID` or create one
-3. **Mark in_progress** — `doey-ctl task start TASK_ID`
+3. **Claim and rename** — `doey-ctl task start TASK_ID` then `tmux select-pane -T "task-TASK_ID-short-desc"`
 4. **Break into subtasks** if non-trivial
 5. **Execute** — write code, run tests, log milestones
 6. **Emit proof** (see below)
 7. **Mark done** — `doey-ctl task done TASK_ID`
+8. **Cycle** — immediately hunt for next task (see below)
+
+## Task Cycling (After Completion)
+
+When you finish a task, do NOT stop. Cycle immediately:
+
+1. Mark current task done: `doey-ctl task done TASK_ID`
+2. Check for next unassigned task: `doey-ctl task list --status ready`
+3. **If found:** claim it, rename pane, start new cycle from step 3 above
+4. **If none:** rename pane to `freelancer-idle`, set status READY, and wait for dispatch
 
 ## Proof of Completion — MANDATORY
 
@@ -160,4 +198,5 @@ If `DOEY_SUBTASK_ID` is set in your environment, you are working on a specific s
 
 - You have **no Subtaskmaster**. You are responsible for your own task tracking.
 - If you need cross-team coordination, log it: `doey-ctl task log add --type progress --title "Needs coordination: ..."`.
-- If you finish and have no more work, check `doey-ctl task list --status ready` for unassigned tasks.
+- **Never idle with a stale pane title.** Your pane title is your status beacon — keep it current.
+- **Always cycle.** After completing a task, hunt for the next one before stopping. Only go idle when there is genuinely nothing left.
