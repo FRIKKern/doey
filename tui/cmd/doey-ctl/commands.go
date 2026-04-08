@@ -594,9 +594,9 @@ func runTaskList(args []string) {
 			return
 		}
 
-		fmt.Printf("%-6s %-14s %-12s %s\n", "ID", "STATUS", "TEAM", "TITLE")
+		fmt.Printf("%-6s %-14s %-18s %-12s %s\n", "ID", "STATUS", "SHORTNAME", "TEAM", "TITLE")
 		for _, t := range tasks {
-			fmt.Printf("%-6d %-14s %-12s %s\n", t.ID, t.Status, t.Team, t.Title)
+			fmt.Printf("%-6d %-14s %-18s %-12s %s\n", t.ID, t.Status, t.Shortname, t.Team, t.Title)
 		}
 		return
 	}
@@ -622,9 +622,9 @@ func runTaskList(args []string) {
 		return
 	}
 
-	fmt.Printf("%-6s %-14s %s\n", "ID", "STATUS", "TITLE")
+	fmt.Printf("%-6s %-14s %-18s %s\n", "ID", "STATUS", "SHORTNAME", "TITLE")
 	for _, t := range tasks {
-		fmt.Printf("%-6s %-14s %s\n", t.ID, t.Status, t.Title)
+		fmt.Printf("%-6s %-14s %-18s %s\n", t.ID, t.Status, t.Shortname, t.Title)
 	}
 }
 
@@ -672,6 +672,7 @@ func runTaskGet(args []string) {
 
 			fmt.Printf("ID:          %d\n", t.ID)
 			fmt.Printf("Title:       %s\n", t.Title)
+			fmt.Printf("Shortname:   %s\n", t.Shortname)
 			fmt.Printf("Status:      %s\n", t.Status)
 			fmt.Printf("Type:        %s\n", t.Type)
 			fmt.Printf("CreatedBy:   %s\n", t.CreatedBy)
@@ -719,6 +720,7 @@ func runTaskGet(args []string) {
 
 	fmt.Printf("ID:            %s\n", t.ID)
 	fmt.Printf("Title:         %s\n", t.Title)
+	fmt.Printf("Shortname:     %s\n", t.Shortname)
 	fmt.Printf("Status:        %s\n", t.Status)
 	fmt.Printf("Type:          %s\n", t.Type)
 	fmt.Printf("Schema:        %d\n", t.SchemaVersion)

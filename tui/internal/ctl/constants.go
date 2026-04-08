@@ -74,6 +74,7 @@ const (
 const (
 	FieldTaskID            = "TASK_ID"
 	FieldTaskTitle         = "TASK_TITLE"
+	FieldTaskShortname     = "TASK_SHORTNAME"
 	FieldTaskStatus        = "TASK_STATUS"
 	FieldTaskSchemaVersion = "TASK_SCHEMA_VERSION"
 	FieldTaskType          = "TASK_TYPE"

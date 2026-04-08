@@ -13,6 +13,7 @@ import (
 type TaskEntry struct {
 	ID            string
 	Title         string
+	Shortname     string
 	Status        string
 	Type          string
 	Description   string
@@ -67,6 +68,7 @@ func parseTask(content string) (*TaskEntry, error) {
 	t := &TaskEntry{
 		ID:          fields[FieldTaskID],
 		Title:       fields[FieldTaskTitle],
+		Shortname:   fields[FieldTaskShortname],
 		Status:      fields[FieldTaskStatus],
 		Type:        fields[FieldTaskType],
 		Description: fields[FieldTaskDescription],
@@ -149,6 +151,7 @@ func CreateTask(projectDir, title, taskType, createdBy, description string) (str
 	b.WriteString(FieldTaskSchemaVersion + "=3\n")
 	b.WriteString(FieldTaskID + "=" + taskID + "\n")
 	b.WriteString(FieldTaskTitle + "=" + title + "\n")
+	b.WriteString(FieldTaskShortname + "=" + generateShortname(title) + "\n")
 	b.WriteString(FieldTaskStatus + "=" + TaskStatusDraft + "\n")
 	b.WriteString(FieldTaskType + "=" + taskType + "\n")
 	b.WriteString(FieldTaskTags + "=\n")
@@ -315,6 +318,32 @@ func replaceField(content, field, value string) string {
 		lines = append(lines, prefix+value)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// generateShortname derives a URL-friendly short name from a task title.
+func generateShortname(title string) string {
+	s := strings.ToLower(title)
+	s = strings.ReplaceAll(s, " ", "-")
+	s = strings.ReplaceAll(s, "_", "-")
+	var buf strings.Builder
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' {
+			buf.WriteRune(c)
+		}
+	}
+	s = buf.String()
+	for _, w := range []string{"-the-", "-a-", "-an-", "-to-", "-for-", "-and-", "-in-", "-of-", "-with-"} {
+		s = strings.ReplaceAll(s, w, "-")
+	}
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-")
+	if len(s) > 16 {
+		s = s[:16]
+	}
+	s = strings.TrimRight(s, "-")
+	return s
 }
 
 // atomicWrite writes data to a temp file then renames it into place.

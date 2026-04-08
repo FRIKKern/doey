@@ -511,7 +511,7 @@ while true; do
     for _tf in "${_tasks_dir}"/*.task; do
       [ -f "$_tf" ] || continue
       [ -s "$_tf" ] || continue  # skip empty files
-      _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""; _tteam=""; _tpri=""
+      _tid=""; _ttitle=""; _tstatus=""; _tcreated=""; _tmerged=""; _tteam=""; _tpri=""; _tsn=""
       while IFS= read -r _tl; do
         case "${_tl%%=*}" in
           TASK_ID)          _tid="${_tl#*=}" ;;
@@ -521,6 +521,7 @@ while true; do
           TASK_MERGED_INTO) _tmerged="${_tl#*=}" ;;
           TASK_TEAM)        _tteam="${_tl#*=}" ;;
           TASK_PRIORITY)    _tpri="${_tl#*=}" ;;
+          TASK_SHORTNAME)   _tsn="${_tl#*=}" ;;
         esac
       done < "$_tf" || true
       [ -n "${_tid:-}" ] || continue  # skip files missing TASK_ID
