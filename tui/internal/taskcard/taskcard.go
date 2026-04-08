@@ -524,6 +524,12 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, styles.MetaLine(e.Theme, "Origin", originText))
 	}
 
+	// --- Origin Prompt (verbatim user message) ---
+	if task.OriginPrompt != "" {
+		sections = append(sections, styles.SectionTitle(e.Theme, "Origin"))
+		sections = append(sections, styles.DescriptionBlock(e.Theme, task.OriginPrompt, contentWidth))
+	}
+
 	// --- Description + Notes + Decisions (combined glamour markdown) ---
 	{
 		var mdParts []string

@@ -40,6 +40,7 @@ type Task struct {
 	Summary            string `json:"summary,omitempty"`
 	Phase              string `json:"phase,omitempty"`
 	Intent             string `json:"intent,omitempty"`
+	OriginPrompt       string `json:"origin_prompt,omitempty"`
 	ProofType          string `json:"proof_type,omitempty"`
 	ProofContent       string `json:"proof_content,omitempty"`
 	VerificationStatus string `json:"verification_status,omitempty"`
@@ -111,8 +112,8 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 			 dispatch_mode, summary, phase, intent,
 			 proof_type, proof_content, verification_status, build_status,
 			 verification_steps, success_criteria, proof_of_success,
-			 created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 origin_prompt, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			t.ID, t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 			t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 			t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
@@ -121,7 +122,7 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 			t.DispatchMode, t.Summary, t.Phase, t.Intent,
 			t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
 			t.VerificationSteps, t.SuccessCriteria, t.ProofOfSuccess,
-			t.CreatedAt, t.UpdatedAt,
+			t.OriginPrompt, t.CreatedAt, t.UpdatedAt,
 		)
 		if err != nil {
 			return 0, err
@@ -138,8 +139,8 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		 dispatch_mode, summary, phase, intent,
 		 proof_type, proof_content, verification_status, build_status,
 		 verification_steps, success_criteria, proof_of_success,
-		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 origin_prompt, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 		t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 		t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
@@ -148,7 +149,7 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		t.DispatchMode, t.Summary, t.Phase, t.Intent,
 		t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
 		t.VerificationSteps, t.SuccessCriteria, t.ProofOfSuccess,
-		t.CreatedAt, t.UpdatedAt,
+		t.OriginPrompt, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return 0, err
@@ -170,6 +171,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		dispatchMode, summary, phase, intent            sql.NullString
 		proofType, proofContent, verificationStatus, buildStatus sql.NullString
 		verificationSteps, successCriteria, proofOfSuccess      sql.NullString
+		originPrompt                                            sql.NullString
 	)
 	err := scanner.Scan(
 		&t.ID, &t.Title, &shortname, &t.Status, &typ, &desc, &createdBy, &assignedTo, &team,
@@ -180,7 +182,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		&dispatchMode, &summary, &phase, &intent,
 		&proofType, &proofContent, &verificationStatus, &buildStatus,
 		&verificationSteps, &successCriteria, &proofOfSuccess,
-		&t.CreatedAt, &t.UpdatedAt,
+		&originPrompt, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return t, err
@@ -218,6 +220,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 	t.VerificationSteps = verificationSteps.String
 	t.SuccessCriteria = successCriteria.String
 	t.ProofOfSuccess = proofOfSuccess.String
+	t.OriginPrompt = originPrompt.String
 	return t, nil
 }
 
@@ -231,7 +234,7 @@ func (s *Store) GetTask(id int64) (*Task, error) {
 		dispatch_mode, summary, phase, intent,
 		proof_type, proof_content, verification_status, build_status,
 		verification_steps, success_criteria, proof_of_success,
-		created_at, updated_at
+		origin_prompt, created_at, updated_at
 		FROM tasks WHERE id = ?`, id)
 	t, err := scanTask(row)
 	if err != nil {
@@ -253,7 +256,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			dispatch_mode, summary, phase, intent,
 			proof_type, proof_content, verification_status, build_status,
 			verification_steps, success_criteria, proof_of_success,
-			created_at, updated_at
+			origin_prompt, created_at, updated_at
 			FROM tasks ORDER BY updated_at DESC`)
 	} else {
 		rows, err = s.db.Query(`SELECT
@@ -265,7 +268,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			dispatch_mode, summary, phase, intent,
 			proof_type, proof_content, verification_status, build_status,
 			verification_steps, success_criteria, proof_of_success,
-			created_at, updated_at
+			origin_prompt, created_at, updated_at
 			FROM tasks WHERE status = ? ORDER BY updated_at DESC`, status)
 	}
 	if err != nil {
@@ -299,6 +302,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		summary = ?, phase = ?, intent = ?,
 		proof_type = ?, proof_content = ?, verification_status = ?, build_status = ?,
 		verification_steps = ?, success_criteria = ?, proof_of_success = ?,
+		origin_prompt = ?,
 		updated_at = ?
 		WHERE id = ?`,
 		t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy,
@@ -311,6 +315,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		t.Summary, t.Phase, t.Intent,
 		t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
 		t.VerificationSteps, t.SuccessCriteria, t.ProofOfSuccess,
+		t.OriginPrompt,
 		t.UpdatedAt,
 		t.ID,
 	)
