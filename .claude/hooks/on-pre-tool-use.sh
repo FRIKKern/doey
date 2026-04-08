@@ -550,6 +550,20 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
         exit 2 ;;
     esac
   ;; esac
+  # Boss capture-pane restriction — only Taskmaster pane allowed
+  case "$_BOSS_CMD" in *"capture-pane"*"-t"*)
+    _boss_cp_target=$(echo "$_BOSS_CMD" | sed 's/.*capture-pane.*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
+    case "$_boss_cp_target" in
+      *:${_boss_tm_pane}|*_${_boss_tm_safe}*|${_boss_tm_pane})
+        _dbg_write "allow_boss_capturepane_coordinator"
+        ;;
+      *)
+        _log_block "TOOL_BLOCKED" "${DOEY_ROLE_BOSS} capture-pane non-${DOEY_ROLE_COORDINATOR} pane blocked" "$_BOSS_CMD"
+        _dbg_write "block_boss_capturepane_${_boss_cp_target}"
+        echo "BLOCKED: ${DOEY_ROLE_BOSS} can only capture-pane the ${DOEY_ROLE_COORDINATOR} pane." >&2
+        exit 2 ;;
+    esac
+  ;; esac
 fi
 
 # Scratchpad bypass — all roles may Read/Edit/Write/Glob/Grep inside scratchpad

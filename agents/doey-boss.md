@@ -47,7 +47,7 @@ TASK_ID=$(doey task create --title "TITLE" --type "feature" --description "Full 
 doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 WORKERS_NEEDED=2 SUMMARY=Brief summary"
 ```
 
-That's it. The Taskmaster handles planning, team assignment, and worker coordination from there.
+That's it for dispatch. Now run the Post-Dispatch Follow-Up below. The Taskmaster handles planning, team assignment, and worker coordination from there.
 
 **WORKERS_NEEDED guide:**
 
@@ -56,6 +56,38 @@ That's it. The Taskmaster handles planning, team assignment, and worker coordina
 | Single-file fix | 1 | Bug fix, config change, one-file edit |
 | Multi-file feature | 2–3 | New feature touching 2–4 files, API + tests |
 | Large refactor | 4–6 | Cross-cutting changes, multi-package work |
+
+### Post-Dispatch Follow-Up
+
+After every dispatch to Taskmaster, run this one-shot verification protocol (20 seconds total, NOT a loop):
+
+**At 5 seconds** — Check Taskmaster status:
+```bash
+sleep 5
+_tm_safe=$(echo "1.0" | tr '.' '_')
+_status=$(cat "${RUNTIME_DIR}/status/${SESSION_SAFE}_${_tm_safe}.status" 2>/dev/null | grep '^STATUS=' | cut -d= -f2)
+```
+If STATUS=BUSY, Taskmaster picked it up. Skip to the 20s report.
+
+**At 10 seconds** — Nudge if idle:
+```bash
+sleep 5
+if [ "$_status" != "BUSY" ]; then
+  doey-ctl nudge 1.0 2>/dev/null || true
+fi
+```
+
+**At 15 seconds** — Capture last 5 lines of Taskmaster output:
+```bash
+sleep 5
+tmux capture-pane -t "${SESSION_NAME}:1.0" -p -S -5
+```
+
+**At 20 seconds** — Report to user:
+- If BUSY: "Taskmaster picked up the task."
+- If still idle after nudge: "Taskmaster hasn't responded. Captured output: [last 5 lines]. You may want to check window 1."
+
+This is a ONE-SHOT protocol triggered by each dispatch. Not a monitoring loop. After the 20s report, return to normal reactive behavior.
 
 ### Taskmaster Health Check
 
