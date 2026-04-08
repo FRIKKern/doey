@@ -96,7 +96,7 @@ At minimum: run `go build ./...` and `go vet ./...` (for Go changes), `bash -n` 
 
 ## Live Task Updates
 
-Skip if no `TASK_ID` provided.
+TASK_ID is mandatory. If not available, stop and request re-dispatch from {{DOEY_ROLE_TEAM_LEAD}}.
 
 | When | Call |
 |------|------|
@@ -113,11 +113,15 @@ Report types: `research`, `progress`, `completion`, `error`.
 
 **Attachments:** `doey task log add --task-id "$TASK_ID" --type TYPE --title "title" --body "body" --author "author"`. Types: `research`, `build`, `test`, `review`, `error`. Stop hook auto-attaches final output.
 
-## Subtask Tracking
+## Task Binding (Mandatory)
 
-If `DOEY_SUBTASK_ID` is set in your environment, you are working on a specific subtask tracked by your {{DOEY_ROLE_TEAM_LEAD}}. Include your subtask ID in your completion summary so the stop hook and {{DOEY_ROLE_TEAM_LEAD}} can track it. Check: `echo $DOEY_SUBTASK_ID`
+On receiving ANY task, verify you have task binding:
 
-The env var is set by the {{DOEY_ROLE_TEAM_LEAD}} before dispatch. If not set, proceed normally — subtask tracking is optional.
+1. **Check SUBTASK_ID** — run `echo $DOEY_SUBTASK_ID`. If empty, check the prompt for `Subtask:` or `SUBTASK_ID:`.
+2. **If no SUBTASK_ID found** — STOP. Do not begin work. Report to {{DOEY_ROLE_TEAM_LEAD}}:
+   "Missing SUBTASK_ID — cannot proceed without subtask binding. Please re-dispatch with SUBTASK_ID."
+3. **Check TASK_ID** — should be in prompt header or `$DOEY_TASK_ID`. If missing, also STOP and report.
+4. **Reference both IDs** — include TASK_ID and SUBTASK_ID in all status updates, output, and completion messages.
 
 ## Protocol
 

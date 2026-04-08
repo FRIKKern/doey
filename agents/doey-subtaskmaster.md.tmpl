@@ -456,6 +456,19 @@ If `DOEY_TASK_ID` is empty or unset, fall through to normal startup:
 3. If `TASK_ID` was provided in a message, load that task file immediately
 4. **Check for undispatched work** — A task in your context that has no worker assignments is a dropped task. Dispatch NOW.
 
+### No Task = No Work
+
+If after startup checks you have NO TASK_ID (env var empty, no task in messages, no active task in `doey task list`), you MUST:
+1. **Refuse to proceed** — do not dispatch any workers
+2. **Message {{DOEY_ROLE_COORDINATOR}}** requesting a task assignment:
+   ```bash
+   doey msg send --to 1.0 --from "${DOEY_TEAM_WINDOW}.0" \
+     --subject "task_request" \
+     --body "TEAM: W${DOEY_TEAM_WINDOW} — No TASK_ID assigned. Awaiting task assignment before proceeding."
+   ```
+3. **Wait** for {{DOEY_ROLE_COORDINATOR}} to respond with a task assignment
+4. Once TASK_ID received, set it and proceed normally
+
 ### When Receiving Work from {{DOEY_ROLE_COORDINATOR}}
 
 - **TASK_ID provided** -> use it, load the task file
@@ -492,6 +505,7 @@ Every prompt: TASK_ID + title, subtask number + description, success criteria, "
    printf '%s\n' "$SUBTASK_NUM" > "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id"
    ```
 3. **Include Task #ID in the prompt** — Add `**TASK_ID:** ${TASK_ID}` and `Subtask: ${SUBTASK_NUM}` in the worker prompt header so hooks can track it.
+4. **Verify binding before send-keys** — Never send work to a worker without BOTH task_id and subtask_id files written. If either is missing, the dispatch is invalid.
 
 Workers without task assignment will be **blocked by on-prompt-submit.sh**. Stop hooks will **auto-update subtask status** on completion.
 

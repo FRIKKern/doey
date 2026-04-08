@@ -67,6 +67,15 @@ if [ -n "${DOEY_PANE_ID:-}" ]; then
   fi
 fi
 
+# Append ACTIVITY and SINCE to status file for live monitoring
+_activity_summary=$(printf '%s' "$PROMPT" | tr '\n' ' ')
+_activity_summary="${_activity_summary:0:50}"
+_since_ts=$(date +%s)
+printf 'ACTIVITY: %s\nSINCE: %s\n' "$_activity_summary" "$_since_ts" >> "$STATUS_FILE"
+if [ -n "${DOEY_PANE_ID:-}" ]; then
+  printf 'ACTIVITY: %s\nSINCE: %s\n' "$_activity_summary" "$_since_ts" >> "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status"
+fi
+
 # Boss interaction capture — log every user message to SQLite
 if is_boss && command -v doey-ctl >/dev/null 2>&1; then
   _msg_type="other"
