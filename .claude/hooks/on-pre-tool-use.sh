@@ -260,6 +260,119 @@ _check_blocked() {
   esac
 }
 
+# Check staged files for credentials/secrets before git commit.
+# Universal — applies to ALL roles with no exceptions.
+_check_staged_credentials() {
+  local staged_files
+  staged_files=$(git diff --cached --name-only 2>/dev/null) || return 0
+  [ -z "$staged_files" ] && return 0
+
+  local found_issue=false
+  local matched_file="" matched_desc="" matched_line=""
+
+  # Check filenames for dangerous patterns
+  local fname base_name
+  while IFS= read -r fname; do
+    [ -z "$fname" ] && continue
+    base_name="${fname##*/}"
+    case "$base_name" in
+      .env|credentials.json|id_rsa|id_ed25519|id_dsa)
+        matched_file="$fname"; matched_desc="sensitive filename ($base_name)"; found_issue=true; break ;;
+      *.key|*_key.pem)
+        matched_file="$fname"; matched_desc="private key file ($base_name)"; found_issue=true; break ;;
+      .env.*)
+        # Allow safe templates
+        case "$base_name" in
+          .env.example|.env.sample|.env.template) ;;
+          *) matched_file="$fname"; matched_desc="environment file ($base_name)"; found_issue=true; break ;;
+        esac ;;
+    esac
+  done <<EOF
+$staged_files
+EOF
+
+  if [ "$found_issue" = "true" ]; then
+    echo "BLOCKED: Potential secret detected in staged files" >&2
+    echo "  File: $matched_file" >&2
+    echo "  Match: $matched_desc" >&2
+    echo "Remove the secret or add the file to .gitignore." >&2
+    return 1
+  fi
+
+  # Check staged content for secret patterns
+  local diff_content
+  diff_content=$(git diff --cached 2>/dev/null) || return 0
+  [ -z "$diff_content" ] && return 0
+
+  # Filter to added lines only, skip safe files and comments
+  local added_lines
+  added_lines=$(echo "$diff_content" | grep '^+[^+]' | grep -v '^+++' || true)
+  [ -z "$added_lines" ] && return 0
+
+  # Remove comment lines
+  added_lines=$(echo "$added_lines" | grep -v '^+[[:space:]]*#' || true)
+  [ -z "$added_lines" ] && return 0
+
+  # Check each secret pattern
+  local patterns
+  patterns="sk-ant-[a-zA-Z0-9]"
+  patterns="${patterns}|sk-[a-zA-Z0-9]{20,}"
+  patterns="${patterns}|ANTHROPIC_API_KEY=.+"
+  patterns="${patterns}|OPENAI_API_KEY=.+"
+  patterns="${patterns}|AKIA[0-9A-Z]{16}"
+  patterns="${patterns}|aws_secret_access_key"
+  patterns="${patterns}|BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY"
+  patterns="${patterns}|(token|TOKEN|bearer|Bearer)[=: ]+[a-zA-Z0-9+/]{20,}"
+  patterns="${patterns}|(password|passwd|PASSWORD)=[^\$[:space:]]{4,}"
+  patterns="${patterns}|(secret|SECRET|client_secret)=[^\$[:space:]]{4,}"
+
+  local hit
+  hit=$(echo "$added_lines" | grep -E "$patterns" | head -1 || true)
+  [ -z "$hit" ] && return 0
+
+  # Strip leading + from diff
+  hit="${hit##+}"
+
+  # Check for placeholder values — skip if found
+  local lower_hit
+  lower_hit=$(echo "$hit" | tr '[:upper:]' '[:lower:]')
+  case "$lower_hit" in
+    *"placeholder"*|*"xxx"*|*"changeme"*|*"your-key-here"*|*"todo"*|*"replace_me"*) return 0 ;;
+  esac
+  # Skip template variable references
+  case "$hit" in
+    *'${'*|*'<'*) return 0 ;;
+  esac
+
+  # Check that the match is not in a safe file (test/docs/example files)
+  local safe_file=false diff_file
+  diff_file=$(echo "$diff_content" | grep '^+++ b/' | tail -1 || true)
+  diff_file="${diff_file##+++ b/}"
+  case "$diff_file" in
+    test/*|tests/*|docs/*|*.md|*.env.example|*.env.sample|*.env.template)
+      safe_file=true ;;
+  esac
+
+  if [ "$safe_file" = "true" ]; then
+    return 0
+  fi
+
+  # Truncate the match for display
+  local display_hit
+  if [ "${#hit}" -gt 80 ]; then
+    display_hit="${hit:0:77}..."
+  else
+    display_hit="$hit"
+  fi
+
+  echo "BLOCKED: Potential secret detected in staged files" >&2
+  echo "  File: ${diff_file:-unknown}" >&2
+  echo "  Match: secret pattern in content" >&2
+  echo "  Line: $display_hit" >&2
+  echo "Remove the secret or add the file to .gitignore." >&2
+  return 1
+}
+
 _save_screenshot_attachment() {
   local file_path="$1"
   [ -z "$file_path" ] && return 0
@@ -390,6 +503,15 @@ if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
   fi
   [ "$_hb_write" = "true" ] && \
     printf '%s %s %s\n' "$(date +%s)" "${DOEY_TASK_ID:-}" "${DOEY_PANE_ID:-${_PS}}" > "${_HB_FILE}.tmp" && mv "${_HB_FILE}.tmp" "$_HB_FILE"
+fi
+
+# Universal credential check — applies to ALL roles, no exceptions
+if [ "$TOOL_NAME" = "Bash" ] && echo "$_BASH_CMD" | grep -q "git commit"; then
+  if _check_staged_credentials; then
+    : # clean, continue
+  else
+    exit 2
+  fi
 fi
 
 _DBG=false
