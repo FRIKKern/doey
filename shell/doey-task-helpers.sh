@@ -54,7 +54,7 @@ _write_v3_fields() { # output_file → write all v3 TASK_* fields from caller va
   for _f in ID TITLE STATUS TYPE TAGS CREATED_BY ASSIGNED_TO DESCRIPTION \
             ACCEPTANCE_CRITERIA HYPOTHESES DECISION_LOG SUBTASKS \
             RELATED_FILES BLOCKERS TIMESTAMPS CURRENT_PHASE TOTAL_PHASES \
-            NOTES UPDATED SUCCESS_CRITERIA; do
+            NOTES UPDATED SUCCESS_CRITERIA SHORTNAME; do
     eval "_val=\"\${TASK_${_f}:-}\""
     printf 'TASK_%s=%s\n' "$_f" "$_val"
   done >> "$_out"
@@ -78,6 +78,19 @@ task_next_id() { # tasks_dir → echo next ID (auto-increments)
   echo "$id"
 }
 
+_generate_shortname() { # title → echo slug (max 16 chars, lowercase, no stop words)
+  local title="$1"
+  local short
+  short=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')
+  short=$(printf '%s' "$short" | tr ' _' '-')
+  short=$(printf '%s' "$short" | tr -cd 'a-z0-9-')
+  short=$(printf '%s' "$short" | sed 's/-the-/-/g; s/-a-/-/g; s/-an-/-/g; s/-to-/-/g; s/-for-/-/g; s/-and-/-/g; s/-in-/-/g; s/-of-/-/g; s/-with-/-/g')
+  short=$(printf '%s' "$short" | sed 's/--*/-/g; s/^-//; s/-$//')
+  short=$(printf '%.16s' "$short")
+  short="${short%-}"
+  printf '%s' "$short"
+}
+
 task_create() { # project_dir title [type] [created_by] [description] → echo task ID
   # Fast path: use doey if available
   if command -v doey-ctl >/dev/null 2>&1; then
@@ -95,12 +108,14 @@ task_create() { # project_dir title [type] [created_by] [description] → echo t
   local now; now=$(date +%s)
   local task_file="${tasks_dir}/${id}.task"
 
+  local shortname; shortname="$(_generate_shortname "$title")"
   TASK_ID="$id" TASK_TITLE="$title" TASK_STATUS="active" TASK_TYPE="$task_type"
   TASK_TAGS="" TASK_CREATED_BY="$created_by" TASK_ASSIGNED_TO=""
   TASK_DESCRIPTION="$description" TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES=""
   TASK_DECISION_LOG="${now}:Created task" TASK_SUBTASKS="" TASK_RELATED_FILES=""
   TASK_BLOCKERS="" TASK_TIMESTAMPS="created=${now}" TASK_CURRENT_PHASE="0"
   TASK_TOTAL_PHASES="0" TASK_NOTES="" TASK_UPDATED="$now" TASK_SUCCESS_CRITERIA=""
+  TASK_SHORTNAME="$shortname"
 
   _write_v3_fields "${task_file}.tmp"
   mv "${task_file}.tmp" "$task_file"
@@ -122,6 +137,7 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
       TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES="" TASK_DECISION_LOG=""
       TASK_SUBTASKS="" TASK_RELATED_FILES="" TASK_BLOCKERS="" TASK_TIMESTAMPS=""
       TASK_CURRENT_PHASE="" TASK_TOTAL_PHASES="" TASK_NOTES="" TASK_CREATED=""
+      TASK_SHORTNAME=""
       TASK_ID=$(printf '%s' "$_tr_out" | sed -n 's/^ID:[[:space:]]*//p')
       TASK_TITLE=$(printf '%s' "$_tr_out" | sed -n 's/^Title:[[:space:]]*//p')
       TASK_STATUS=$(printf '%s' "$_tr_out" | sed -n 's/^Status:[[:space:]]*//p')
@@ -145,6 +161,7 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
             TASK_TOTAL_PHASES)    TASK_TOTAL_PHASES="${_line#*=}" ;;
             TASK_SCHEMA_VERSION)  TASK_SCHEMA_VERSION="${_line#*=}" ;;
             TASK_UPDATED)         TASK_UPDATED="${_line#*=}" ;;
+            TASK_SHORTNAME)       TASK_SHORTNAME="${_line#*=}" ;;
           esac
         done < "$file"
       fi
@@ -158,7 +175,7 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
   TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES="" TASK_DECISION_LOG=""
   TASK_SUBTASKS="" TASK_RELATED_FILES="" TASK_BLOCKERS="" TASK_TIMESTAMPS=""
   TASK_CURRENT_PHASE="" TASK_TOTAL_PHASES="" TASK_NOTES="" TASK_CREATED=""
-  TASK_SUCCESS_CRITERIA=""
+  TASK_SUCCESS_CRITERIA="" TASK_SHORTNAME=""
 
   local line
   while IFS= read -r line || [ -n "$line" ]; do
@@ -183,6 +200,7 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
       TASK_TOTAL_PHASES)        TASK_TOTAL_PHASES="${line#*=}" ;;
       TASK_NOTES)               TASK_NOTES="${line#*=}" ;;
       TASK_SUCCESS_CRITERIA)    TASK_SUCCESS_CRITERIA="${line#*=}" ;;
+      TASK_SHORTNAME)           TASK_SHORTNAME="${line#*=}" ;;
     esac
   done < "$file" || true
 

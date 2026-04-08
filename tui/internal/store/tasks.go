@@ -8,6 +8,7 @@ import (
 type Task struct {
 	ID                 int64  `json:"id"`
 	Title              string `json:"title"`
+	Shortname          string `json:"shortname,omitempty"`
 	Status             string `json:"status"`
 	Type               string `json:"type,omitempty"`
 	Description        string `json:"description,omitempty"`
@@ -102,7 +103,7 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 	// SQLite allows explicit INTEGER PRIMARY KEY values with AUTOINCREMENT.
 	if t.ID != 0 {
 		_, err := s.db.Exec(`INSERT INTO tasks
-			(id, title, status, type, description, created_by, assigned_to, team,
+			(id, title, shortname, status, type, description, created_by, assigned_to, team,
 			 plan_id, tags, acceptance_criteria, current_phase, total_phases,
 			 notes, blockers, related_files, hypotheses, decision_log, result,
 			 files, commits, schema_version, review_verdict, review_findings,
@@ -111,8 +112,8 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 			 proof_type, proof_content, verification_status, build_status,
 			 verification_steps, success_criteria, proof_of_success,
 			 created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			t.ID, t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			t.ID, t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 			t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 			t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
 			t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
@@ -129,7 +130,7 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 	}
 
 	res, err := s.db.Exec(`INSERT INTO tasks
-		(title, status, type, description, created_by, assigned_to, team,
+		(title, shortname, status, type, description, created_by, assigned_to, team,
 		 plan_id, tags, acceptance_criteria, current_phase, total_phases,
 		 notes, blockers, related_files, hypotheses, decision_log, result,
 		 files, commits, schema_version, review_verdict, review_findings,
@@ -138,8 +139,8 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		 proof_type, proof_content, verification_status, build_status,
 		 verification_steps, success_criteria, proof_of_success,
 		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.Title, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 		t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 		t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
 		t.Files, t.Commits, t.SchemaVersion, t.ReviewVerdict, t.ReviewFindings,
@@ -160,6 +161,7 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 	var t Task
 	var (
+		shortname                                       sql.NullString
 		typ, desc, createdBy, assignedTo, team          sql.NullString
 		tags, acceptCrit, notes, blockers, relFiles     sql.NullString
 		hypotheses, decisionLog, result, files, commits sql.NullString
@@ -170,7 +172,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		verificationSteps, successCriteria, proofOfSuccess      sql.NullString
 	)
 	err := scanner.Scan(
-		&t.ID, &t.Title, &t.Status, &typ, &desc, &createdBy, &assignedTo, &team,
+		&t.ID, &t.Title, &shortname, &t.Status, &typ, &desc, &createdBy, &assignedTo, &team,
 		&t.PlanID, &tags, &acceptCrit, &t.CurrentPhase, &t.TotalPhases,
 		&notes, &blockers, &relFiles, &hypotheses, &decisionLog, &result,
 		&files, &commits, &t.SchemaVersion, &reviewVerdict, &reviewFindings,
@@ -183,6 +185,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 	if err != nil {
 		return t, err
 	}
+	t.Shortname = shortname.String
 	t.Type = typ.String
 	t.Description = desc.String
 	t.CreatedBy = createdBy.String
@@ -242,7 +245,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 	var err error
 	if status == "" {
 		rows, err = s.db.Query(`SELECT
-			id, title, status, type, description, created_by, assigned_to, team,
+			id, title, shortname, status, type, description, created_by, assigned_to, team,
 			plan_id, tags, acceptance_criteria, current_phase, total_phases,
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
@@ -254,7 +257,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			FROM tasks ORDER BY updated_at DESC`)
 	} else {
 		rows, err = s.db.Query(`SELECT
-			id, title, status, type, description, created_by, assigned_to, team,
+			id, title, shortname, status, type, description, created_by, assigned_to, team,
 			plan_id, tags, acceptance_criteria, current_phase, total_phases,
 			notes, blockers, related_files, hypotheses, decision_log, result,
 			files, commits, schema_version, review_verdict, review_findings,
@@ -286,7 +289,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		t.UpdatedAt = time.Now().Unix()
 	}
 	_, err := s.db.Exec(`UPDATE tasks SET
-		title = ?, status = ?, type = ?, description = ?, created_by = ?,
+		title = ?, shortname = ?, status = ?, type = ?, description = ?, created_by = ?,
 		assigned_to = ?, team = ?, plan_id = ?, tags = ?, acceptance_criteria = ?,
 		current_phase = ?, total_phases = ?, notes = ?, blockers = ?,
 		related_files = ?, hypotheses = ?, decision_log = ?, result = ?,
@@ -298,7 +301,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		verification_steps = ?, success_criteria = ?, proof_of_success = ?,
 		updated_at = ?
 		WHERE id = ?`,
-		t.Title, t.Status, t.Type, t.Description, t.CreatedBy,
+		t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy,
 		t.AssignedTo, t.Team, t.PlanID, t.Tags, t.AcceptanceCriteria,
 		t.CurrentPhase, t.TotalPhases, t.Notes, t.Blockers,
 		t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,

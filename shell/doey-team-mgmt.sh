@@ -800,6 +800,23 @@ _name_team_window() {
     label=$(_env_val "$_te" TEAM_NAME)
     [ "$label" = "generic" ] && label=""
     if [ -z "$label" ]; then
+      # Check for task assignment — use shortname for window label
+      local _ntw_tid _ntw_sn=""
+      _ntw_tid=$(_env_val "$_te" TASK_ID)
+      if [ -n "$_ntw_tid" ]; then
+        local _ntw_tf="${_proj:+$(pwd)/.doey/tasks/${_ntw_tid}.task}"
+        if [ -n "$_ntw_tf" ] && [ -f "$_ntw_tf" ]; then
+          _ntw_sn=$(grep '^TASK_SHORTNAME=' "$_ntw_tf" 2>/dev/null | head -1)
+          _ntw_sn="${_ntw_sn#TASK_SHORTNAME=}"
+        fi
+        if [ -n "$_ntw_sn" ]; then
+          label="Task ${_ntw_tid}: ${_ntw_sn}"
+        else
+          label="Task ${_ntw_tid}"
+        fi
+      fi
+    fi
+    if [ -z "$label" ]; then
       local _ntw_tt
       _ntw_tt=$(_env_val "$_te" TEAM_TYPE)
       if [ "$_ntw_tt" = "freelancer" ]; then label="Freelancers"

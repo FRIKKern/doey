@@ -195,6 +195,7 @@ _task_show() {
   printf '\n'
   printf '  %b━━━ Task #%s ━━━%b\n' "$BRAND" "$TASK_ID" "$RESET"
   printf '  %b%-16s%b %s\n' "$BOLD" "Title:" "$RESET" "$TASK_TITLE"
+  _tsf "Shortname:" "${TASK_SHORTNAME:-}"
   printf '  %b%-16s%b %s\n' "$BOLD" "Status:" "$RESET" "$TASK_STATUS"
   _tsf "Type:" "$TASK_TYPE"
   _tsf "Tags:" "$TASK_TAGS"
