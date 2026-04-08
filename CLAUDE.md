@@ -151,4 +151,4 @@ Never edit generated `.md` files directly — edit the `.md.tmpl` template inste
 
 **Shell:** `shell/doey.sh` (CLI entry ~6100 lines), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor), `shell/pane-border-status.sh` (pane borders), `shell/tmux-statusbar.sh` (status bar)
 
-**Docs:** `docs/context-reference.md` (authoritative architecture reference)
+**Docs:** `docs/context-reference.md` (authoritative architecture reference), `docs/improving-agents.md` (agent customization guide)
