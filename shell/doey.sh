@@ -260,9 +260,21 @@ HELP
       up)     doey_tunnel_up ;;
       down)   doey_tunnel_down ;;
       status) doey_tunnel_status ;;
+      --help|-h|help)
+        printf 'Usage: doey tunnel {setup|up|down|status|--help}\n'
+        printf '\n'
+        printf '  setup    One-time: install tailscale and authenticate the host\n'
+        printf '  up       Start the port-watcher daemon (detects dev servers)\n'
+        printf '  down     Stop the port-watcher daemon (tailscale stays up)\n'
+        printf '  status   Show provider, hostname, watcher PID, and detected URLs\n'
+        printf '  --help   Show this help (aliases: -h, help)\n'
+        printf '\n'
+        printf '  Running `doey tunnel` with no subcommand is equivalent to `doey tunnel status`.\n'
+        exit 0
+        ;;
       *)
         printf 'doey tunnel: unknown subcommand "%s"\n' "$_tunnel_sub" >&2
-        printf 'Usage: doey tunnel {setup|up|down|status}\n' >&2
+        printf 'Usage: doey tunnel {setup|up|down|status|--help}\n' >&2
         exit 1
         ;;
     esac
