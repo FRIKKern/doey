@@ -229,7 +229,8 @@ _doey_intent_lookup() {
   # and bump --max-turns so claude doesn't bail with "Reached max turns (1)".
   local resp
   resp=$(cd /tmp && doey_headless "The user typed: doey ${typed}" \
-    --model haiku \
+    --model opus \
+    --reasoning-effort low \
     --no-tools \
     --max-turns 20 \
     --timeout 20 \
@@ -261,7 +262,7 @@ _doey_intent_lookup() {
   return 0
 }
 
-# Chat response via Haiku — used by the conversational REPL
+# Chat response via Opus — used by the conversational REPL
 # Args: $1 = user message, $2 = conversation context (optional, for follow-ups)
 _doey_chat_respond() {
   local msg="$1"
@@ -281,7 +282,8 @@ User: ${msg}"
 
   local resp
   resp=$(cd /tmp && doey_headless "$full_msg" \
-    --model haiku \
+    --model opus \
+    --reasoning-effort low \
     --no-tools \
     --max-turns 1 \
     --timeout 15 \
