@@ -8,6 +8,12 @@
 # Returns 0 on success, 1 on failure (empty stdout).
 # Silent fallthrough on all failures — never makes the CLI worse.
 #
+# Performance layers (checked in order):
+#   1. Local chatter blocklist — instant (<1ms)
+#   2. Local command pattern matcher — instant (<1ms)
+#   3. Persistent disk cache — instant (<5ms)
+#   4. Claude (Haiku) — slow path (~3-6s, result cached)
+#
 # Bash 3.2 compatible. No jq dependency.
 
 set -uo pipefail
@@ -21,6 +27,144 @@ source "${BASH_SOURCE[0]%/*}/doey-headless.sh"
 
 # Commands that must ALWAYS prompt for confirmation, even at HIGH confidence.
 _INTENT_FB_DESTRUCTIVE="uninstall stop kill purge reset"
+
+# ── Cache layer ───────────────────────────────────────────────────────
+
+_intent_fb_cache_file() {
+  local base="${XDG_CACHE_HOME:-$HOME/.cache}"
+  printf '%s/doey/intent-cache.tsv' "$base"
+}
+
+_intent_fb_cache_get() {
+  local key="$1"
+  local f
+  f=$(_intent_fb_cache_file)
+  [ -f "$f" ] || return 1
+  local tab
+  tab="$(printf '\t')"
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      "${key}${tab}"*)
+        printf '%s' "${line#*${tab}}"
+        return 0
+        ;;
+    esac
+  done < "$f"
+  return 1
+}
+
+_intent_fb_cache_put() {
+  local key="$1"
+  local value="$2"
+  local f
+  f=$(_intent_fb_cache_file)
+  local d="${f%/*}"
+  [ -d "$d" ] || mkdir -p "$d" 2>/dev/null || return 1
+  # Skip if already cached
+  _intent_fb_cache_get "$key" >/dev/null 2>&1 && return 0
+  local tab
+  tab="$(printf '\t')"
+  printf '%s%s%s\n' "$key" "$tab" "$value" >> "$f" 2>/dev/null || return 1
+  # Cap at 200 entries
+  if [ "$(wc -l < "$f" 2>/dev/null)" -gt 200 ]; then
+    tail -100 "$f" > "${f}.tmp" 2>/dev/null && mv "${f}.tmp" "$f" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# ── Normalize input for matching ──────────────────────────────────────
+
+_intent_fb_normalize() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ' | sed 's/^ //;s/ $//'
+}
+
+# ── Local fast-path matcher ───────────────────────────────────────────
+# Returns 0 with result on stdout if matched locally, 1 for fall-through.
+
+_INTENT_FB_CHATTER="yo hi hello hey sup wtf wth lol ok"
+
+_intent_fb_local_match() {
+  local key="$1"  # already normalized
+
+  # 1) Chatter/greetings — no need to call Claude
+  local word
+  for word in $_INTENT_FB_CHATTER; do
+    if [ "$key" = "$word" ]; then
+      printf 'NONE||Not a doey command. Try: doey help'
+      return 0
+    fi
+  done
+
+  # 2) Common natural-language → doey command patterns
+  case "$key" in
+    "show task"*|"list task"*|"tasks"|"tsk"|"task")
+      printf 'HIGH|doey task list|Matches task list' ; return 0 ;;
+    "add task "*)
+      local title="${key#add task }"
+      printf 'HIGH|doey task add %s|Matches task add' "$title" ; return 0 ;;
+    "start tunnel"|"open tunnel"|"tunnel start"|"tunnel open"|"tunnel on"|"tunnel up")
+      printf 'HIGH|doey tunnel up|Matches tunnel up' ; return 0 ;;
+    "stop tunnel"|"close tunnel"|"tunnel stop"|"tunnel close"|"tunnel off"|"end tunnel"|"tunnel down")
+      printf 'HIGH|doey tunnel down|Matches tunnel down' ; return 0 ;;
+    "show tunnel"*|"tunnel stat"*|"tunnel"|"tunnels")
+      printf 'HIGH|doey tunnel status|Matches tunnel status' ; return 0 ;;
+    "show team"*|"list team"*|"show window"*|"list window"*)
+      printf 'HIGH|doey list-teams|Matches list-teams' ; return 0 ;;
+    "show project"*|"list project"*|"projects")
+      printf 'HIGH|doey list|Matches list' ; return 0 ;;
+    "show status"|"show state"|"state")
+      printf 'HIGH|doey status|Matches status' ; return 0 ;;
+    "show config"*|"configuration"|"conf")
+      printf 'HIGH|doey config|Matches config' ; return 0 ;;
+    "check health"|"health check"|"healthcheck"|"diag"|"diagnose")
+      printf 'HIGH|doey doctor|Matches doctor' ; return 0 ;;
+    "show version"|"ver")
+      printf 'HIGH|doey version|Matches version' ; return 0 ;;
+    "reinstall"|"upgrade")
+      printf 'HIGH|doey update|Matches update' ; return 0 ;;
+    "plan "*)
+      local goal="${key#plan }"
+      printf 'HIGH|doey masterplan %s|Matches masterplan' "$goal" ; return 0 ;;
+  esac
+
+  # 3) Single-word prefix match against known top-level commands
+  case "$key" in
+    *" "*) ;;  # multi-word — skip prefix matching
+    *)
+      local matched="" match_count=0
+      local cmd
+      for cmd in help init list doctor version update build stop reload purge \
+                 uninstall settings test add remove status msg config health \
+                 agent team teams dynamic masterplan open; do
+        case "$cmd" in
+          "${key}"*)
+            matched="$cmd"
+            match_count=$((match_count + 1))
+            ;;
+        esac
+      done
+      if [ "$match_count" -eq 1 ]; then
+        printf 'HIGH|doey %s|Prefix match' "$matched"
+        return 0
+      elif [ "$match_count" -gt 1 ]; then
+        # Ambiguous prefix — check for exact match first
+        for cmd in help init list doctor version update build stop reload purge \
+                   uninstall settings test add remove status msg config health \
+                   agent team teams dynamic masterplan open; do
+          if [ "$key" = "$cmd" ]; then
+            printf 'HIGH|doey %s|Exact match' "$cmd"
+            return 0
+          fi
+        done
+      fi
+      ;;
+  esac
+
+  return 1  # no local match — fall through
+}
+
+# ── System prompt (used only for Claude slow path) ────────────────────
 
 _intent_fb_system_prompt() {
   cat <<'SYSPROMPT'
@@ -62,6 +206,7 @@ COMPLETE COMMAND REFERENCE:
   doey tunnel up                Start localhost tunnel
   doey tunnel down              Stop localhost tunnel
   doey tunnel status            Show tunnel status
+  doey open <name>              Open/attach to a registered project by name
   doey dynamic                  Launch with dynamic grid (alias: d)
   doey <NxM>                    Launch with grid (e.g. 4x3, 6x2)
   doey task list                List tasks
@@ -90,19 +235,45 @@ Rules:
 SYSPROMPT
 }
 
-# Main lookup: takes the user's typed args, returns structured result.
+# ── Main lookup ───────────────────────────────────────────────────────
+# Takes the user's typed args, returns structured result.
 # Usage: _doey_intent_lookup "show tasks"
 # Stdout: HIGH|doey task list|'show tasks' maps to 'task list'
+
 _doey_intent_lookup() {
   local typed="$1"
 
+  # Normalize for matching and cache keying
+  local key
+  key=$(_intent_fb_normalize "$typed")
+
+  [ -z "$key" ] && return 1
+
+  # Fast path 1: local heuristic match (chatter, patterns, prefix)
+  local local_result
+  if local_result=$(_intent_fb_local_match "$key"); then
+    printf '%s' "$local_result"
+    return 0
+  fi
+
+  # Fast path 2: persistent cache
+  local cached
+  if cached=$(_intent_fb_cache_get "$key" 2>/dev/null) && [ -n "$cached" ]; then
+    printf '%s' "$cached"
+    return 0
+  fi
+
+  # Slow path: Claude (Haiku)
   local sys_prompt
   sys_prompt=$(_intent_fb_system_prompt)
 
+  # Run from /tmp to avoid loading heavy project context (CLAUDE.md scans).
+  # --max-turns 1: no tools, single inference pass.
   local resp
-  resp=$(doey_headless "The user typed: doey ${typed}" \
+  resp=$(cd /tmp && doey_headless "The user typed: doey ${typed}" \
     --model haiku \
     --no-tools \
+    --max-turns 1 \
     --timeout 15 \
     --append-system "$sys_prompt" \
     2>/dev/null) || true
@@ -119,9 +290,11 @@ _doey_intent_lookup() {
     # Claude didn't follow format — treat as no match with its text as explanation
     local oneline
     oneline=$(printf '%s' "$resp" | tr '\n' ' ' | head -c 200)
-    printf 'NONE||%s' "$oneline"
-    return 0
+    line="NONE||${oneline}"
   fi
+
+  # Cache the result for next time
+  _intent_fb_cache_put "$key" "$line" 2>/dev/null || true
 
   printf '%s' "$line"
   return 0
