@@ -61,16 +61,24 @@ _check_work() {
   fi
 
   # 3. Active in_progress tasks worth observing
-  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    _active=$(doey-ctl task list --status in_progress --project-dir "$PROJECT_DIR" 2>/dev/null | awk 'NR>1 && /^[0-9]/{n++} END{print n+0}') || _active=0
-    [ "${_active:-0}" -gt 0 ] && _wake "ACTIVE_TASKS"
-  elif [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
-    local _atf _astatus
-    for _atf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
-      [ -f "$_atf" ] || continue
-      _astatus=$(grep '^TASK_STATUS=' "$_atf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
-      [ "$_astatus" = "in_progress" ] && _wake "ACTIVE_TASKS"
-    done
+  #    IMPORTANT: only emit ACTIVE_TASKS AFTER the sleep has elapsed.
+  #    If we emit it on the pre-sleep fast path, the reviewer agent enters
+  #    a tight spin loop (wake → observe → re-enter wait → instant ACTIVE_TASKS)
+  #    because there's almost always an in_progress task in the project.
+  #    Gating on elapsed>0 enforces a minimum 60s cadence between observation
+  #    wakes while still allowing msgs/triggers (checks 1 and 2) to fast-path.
+  if [ "${elapsed:-0}" -gt 0 ]; then
+    if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+      _active=$(doey-ctl task list --status in_progress --project-dir "$PROJECT_DIR" 2>/dev/null | awk 'NR>1 && /^[0-9]/{n++} END{print n+0}') || _active=0
+      [ "${_active:-0}" -gt 0 ] && _wake "ACTIVE_TASKS"
+    elif [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+      local _atf _astatus
+      for _atf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
+        [ -f "$_atf" ] || continue
+        _astatus=$(grep '^TASK_STATUS=' "$_atf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
+        [ "$_astatus" = "in_progress" ] && _wake "ACTIVE_TASKS"
+      done
+    fi
   fi
 
   return 1
