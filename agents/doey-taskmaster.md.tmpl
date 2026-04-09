@@ -236,32 +236,7 @@ Each task gets its own ephemeral team, right-sized to the work. Do NOT search fo
 
 1. **Count deliverables** — Read the task's subtasks/deliverables from `doey task get --id $TASK_ID`. If {{DOEY_ROLE_BOSS}} included `WORKERS_NEEDED` in the dispatch, use that count. Otherwise: `WORKERS = max(subtask_count, 1)`, capped at 6.
 
-#### Direct Dispatch (WORKERS_NEEDED=1)
-
-When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), **skip the {{DOEY_ROLE_TEAM_LEAD}}** and dispatch directly to a worker. This eliminates the {{DOEY_ROLE_TEAM_LEAD}} hop — the chain becomes {{DOEY_ROLE_BOSS}} → {{DOEY_ROLE_COORDINATOR}} → {{DOEY_ROLE_WORKER}} instead of {{DOEY_ROLE_BOSS}} → {{DOEY_ROLE_COORDINATOR}} → {{DOEY_ROLE_TEAM_LEAD}} → {{DOEY_ROLE_WORKER}}.
-
-1. **Spawn a 1-worker team:**
-   ```bash
-   doey add-window --workers 1 --name "Task $TASK_ID" --task-id $TASK_ID
-   ```
-2. **Wait for the worker** to be READY:
-   ```bash
-   source "${RUNTIME_DIR}/session.env"
-   for i in 1 2 3 4 5; do
-     STATUS=$(grep 'STATUS=' "$RUNTIME_DIR/status/pane_${NEW_W}_0.status" 2>/dev/null | cut -d= -f2)
-     [ "$STATUS" = "READY" ] && break; sleep 3
-   done
-   ```
-3. **Write a self-contained prompt** — Since there is no {{DOEY_ROLE_TEAM_LEAD}} to synthesize, your prompt must include: task goal, file paths, specific instructions, constraints, and success criteria.
-4. **Dispatch directly** to the worker pane (`${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
-5. **On `worker_finished`** — Read the worker's result JSON, then route through the normal Review Gate ({{DOEY_ROLE_TASK_REVIEWER}} at 1.1).
-
-**When NOT to use direct dispatch** (use a managed team even for 1 worker):
-- Task requires research before implementation (unknown file paths, unclear root cause)
-- Task is part of a phased sequence where the {{DOEY_ROLE_TEAM_LEAD}} manages phase transitions
-- Specialized team definition applies (go-tui, shell, infra — these have custom roles)
-
-#### Managed Team Spawn (WORKERS_NEEDED >= 2, or complex single-worker tasks)
+#### Team Spawn
 
 2. **Spawn team** — Create a team sized to the task:
    ```bash
@@ -284,9 +259,11 @@ When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), *
    ```
 4. **Dispatch** — Send the task to the new team's {{DOEY_ROLE_TEAM_LEAD}} (pane `${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
 
+**CRITICAL: ALWAYS dispatch to pane ${NEW_W}.0 ({{DOEY_ROLE_TEAM_LEAD}}).** NEVER dispatch directly to W.1+ ({{DOEY_ROLE_WORKER}}s). Only the {{DOEY_ROLE_TEAM_LEAD}} delegates work to {{DOEY_ROLE_WORKER}}s.
+
 | Condition | Action |
 |-----------|--------|
-| Under `DOEY_MAX_TEAMS` (default 5) | Spawn per-task team, dispatch |
+| Under `DOEY_MAX_TEAMS` (default 5) | Spawn per-task team, dispatch to {{DOEY_ROLE_TEAM_LEAD}} (W.0) |
 | At max teams | Implicit queue — leave `TASK_STATUS=active` with no `TASK_TEAM`, dispatch when a team despawns |
 
 ### Verify Task Binding After Spawn
