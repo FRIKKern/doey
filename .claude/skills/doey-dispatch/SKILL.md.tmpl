@@ -116,6 +116,8 @@ if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
   PANE_IDX="${PANE##*.}"
   WORKER_PROMPT=$(grep -l "pane ${W}\.${PANE_IDX} " "${RD}/worker-system-prompt-"*.md 2>/dev/null | head -1)
   CMD="claude --dangerously-skip-permissions --model ${DOEY_WORKER_MODEL:-opus}"
+  WORKER_AGENT="${DOEY_WORKER_AGENT:-}"
+  [ -n "$WORKER_AGENT" ] && CMD="${CMD} --agent \"${WORKER_AGENT}\""
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
   source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
   doey_send_command "$PANE" "$CMD"; sleep 8
