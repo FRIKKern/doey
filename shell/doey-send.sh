@@ -120,6 +120,12 @@ _doey_send_precheck() {
     return 2
   fi
 
+  # Check reservation status — reserved panes cannot receive dispatched work
+  if [ -f "${runtime}/status/${target_safe}.reserved" ]; then
+    echo "doey_send_verified: target $target is RESERVED — skipping" >&2
+    return 2
+  fi
+
   return 0
 }
 

@@ -807,6 +807,13 @@ _cleanup_old_session() {
     if git worktree list --porcelain 2>/dev/null | grep -q "branch refs/heads/${b}$"; then
       continue
     fi
+    # Check for unmerged commits before deleting
+    local unmerged
+    unmerged=$(git rev-list --count "HEAD..${b}" 2>/dev/null || echo 0)
+    if [ "$unmerged" -gt 0 ] 2>/dev/null; then
+      printf 'WARNING: Branch %s has %s unmerged commit(s). Creating safety ref.\n' "$b" "$unmerged" >&2
+      git tag "doey/safety/${b}_$(date +%s)" "$b" 2>/dev/null || true
+    fi
     git branch -D "$b" 2>/dev/null || true
   done
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status,logs}
