@@ -366,6 +366,62 @@ write_pane_status() {
   printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$NOW" "$status" "$task" > "$target.tmp" && mv "$target.tmp" "$target"
 }
 
+transition_state() {  # Validate and execute a pane status transition against the state machine
+  local pane_id="${1:-}" target_state="${2:-}"
+  [ -z "$pane_id" ] || [ -z "$target_state" ] && return 1
+
+  # Read current state from status file
+  local status_file="${RUNTIME_DIR}/status/${pane_id}.status"
+  local current_state=""
+  if [ -f "$status_file" ]; then
+    current_state=$(grep '^STATUS:' "$status_file" 2>/dev/null | head -1 | sed 's/^STATUS: //')
+  fi
+
+  # If no status file exists, allow any transition (new/uninitialized pane)
+  if [ -z "$current_state" ]; then
+    write_pane_status "$status_file" "$target_state"
+    return 0
+  fi
+
+  # Validate transition against state machine using case statements (bash 3.2 safe)
+  local valid=false
+  case "$current_state" in
+    BOOTING)
+      case "$target_state" in READY) valid=true ;; esac
+      ;;
+    READY)
+      case "$target_state" in BUSY) valid=true ;; esac
+      ;;
+    BUSY)
+      case "$target_state" in FINISHED|ERROR|RESERVED|RESPAWNING) valid=true ;; esac
+      ;;
+    FINISHED)
+      case "$target_state" in READY) valid=true ;; esac
+      ;;
+    ERROR)
+      case "$target_state" in READY) valid=true ;; esac
+      ;;
+  esac
+
+  if [ "$valid" = "true" ]; then
+    write_pane_status "$status_file" "$target_state"
+    return 0
+  fi
+
+  # Invalid transition — log warning to issues directory
+  local issues_dir="${RUNTIME_DIR}/issues"
+  mkdir -p "$issues_dir" 2>/dev/null || true
+  local ts
+  ts=$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo "unknown")
+  local w_idx="${WINDOW_INDEX:-${DOEY_WINDOW_INDEX:-0}}"
+  local p_idx="${PANE_INDEX:-${DOEY_PANE_INDEX:-0}}"
+  printf 'WINDOW: %s | PANE: %s | SEVERITY: HIGH\nCATEGORY: state_transition\nInvalid transition: %s -> %s at %s\nPane: %s\n' \
+    "$w_idx" "$p_idx" "$current_state" "$target_state" "$ts" "$pane_id" \
+    >> "${issues_dir}/state_transitions.log" 2>/dev/null
+  _debug_log "state" "invalid_transition" "from=$current_state" "to=$target_state" "pane=$pane_id"
+  return 1
+}
+
 NL='
 '
 

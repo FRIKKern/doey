@@ -91,7 +91,7 @@ for _sf in "$PANE_SAFE" "${DOEY_PANE_ID:-}"; do
   if command -v doey-ctl >/dev/null 2>&1; then
     doey status set "$_sf" "$STOP_STATUS"
   else
-    write_pane_status "$_status_file" "$STOP_STATUS"
+    transition_state "$_sf" "$STOP_STATUS"
   fi
   [ ! -f "$_status_file" ] && _log_error "HOOK_ERROR" "Failed to write status file" "pane=$_sf status=$STOP_STATUS"
   [ -n "$task_id" ] && printf 'TASK_ID: %s\n' "$task_id" >> "$_status_file"
