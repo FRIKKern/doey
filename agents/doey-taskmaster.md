@@ -187,43 +187,37 @@ doey_send_verified "$TARGET" "Your task description here"
 
 ### Dispatch Verification Protocol
 
+**NEVER use sleep in Bash tool commands.** The sandbox blocks sleep >= 2 seconds, and any sleep wastes context. Check pane status and capture output immediately — no delays needed.
+
 **After every dispatch to a Subtaskmaster, you MUST verify delivery.** `doey_send_verified` catches immediate failures, but the target pane may silently drop the message (menu open, auth prompt, stuck state). Run this verification block after every dispatch:
 
 ```bash
 # --- Post-dispatch verification (MANDATORY after every doey_send_verified) ---
-# TARGET and W must be set from the dispatch above
-sleep 10
+# TARGET and TARGET_SAFE must be set from the dispatch above
+CUR_STATUS=$(awk '/^STATUS:/{print $2; exit}' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null || true)
 CAPTURED=$(tmux capture-pane -t "$TARGET" -p -S -20 2>/dev/null) || CAPTURED=""
-# Check for signs of active processing
-if printf '%s' "$CAPTURED" | grep -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent|TASK)'; then
-  echo "✓ Dispatch verified — target $TARGET is active"
+if [ "$CUR_STATUS" = "BUSY" ] || printf '%s' "$CAPTURED" | grep -qE '(thinking|Thinking|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent|TASK)'; then
+  echo "Dispatch verified — target $TARGET is active (status: ${CUR_STATUS:-unknown})"
 else
-  # Also check status file
-  TARGET_SAFE=$(printf '%s' "$TARGET" | tr ':.-' '_')
-  CUR_STATUS=$(grep '^STATUS:' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
-  if [ "$CUR_STATUS" = "BUSY" ]; then
-    echo "✓ Dispatch verified — target $TARGET status is BUSY"
+  echo "Dispatch NOT confirmed — retrying via doey_send_verified"
+  source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+  doey_send_verified "$TARGET" "$DISPATCH_MSG"
+  CUR_STATUS=$(awk '/^STATUS:/{print $2; exit}' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null || true)
+  CAPTURED=$(tmux capture-pane -t "$TARGET" -p -S -20 2>/dev/null) || CAPTURED=""
+  if [ "$CUR_STATUS" = "BUSY" ] || printf '%s' "$CAPTURED" | grep -qE '(thinking|Thinking|● |Reading|Writing|Editing|Searching|Running)'; then
+    echo "Dispatch verified on retry"
   else
-    echo "⚠ Dispatch NOT confirmed — retrying via doey_send_verified"
-    source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
-    doey_send_verified "$TARGET" "$DISPATCH_MSG"
-    sleep 10
-    CUR_STATUS=$(grep '^STATUS:' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
-    CAPTURED=$(tmux capture-pane -t "$TARGET" -p -S -20 2>/dev/null) || CAPTURED=""
-    if [ "$CUR_STATUS" = "BUSY" ] || printf '%s' "$CAPTURED" | grep -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running)'; then
-      echo "✓ Dispatch verified on retry"
-    else
-      echo "⚠ Dispatch FAILED after retry — escalating to Boss"
-      doey msg send --from "1.0" --to "0.1" --subject "dispatch_failed" --body "Failed to deliver task to ${TARGET} after 2 attempts. Pane may be stuck/unresponsive. Status: ${CUR_STATUS:-unknown}. Manual intervention needed."
-    fi
+    echo "Dispatch FAILED after retry — escalating to Boss"
+    doey msg send --from "1.0" --to "0.1" --subject "dispatch_failed" --body "Failed to deliver task to ${TARGET} after 2 attempts. Pane may be stuck/unresponsive. Status: ${CUR_STATUS:-unknown}. Manual intervention needed."
   fi
 fi
 ```
 
 **Rules:**
+- NEVER use sleep in Bash commands — sandbox blocks sleep >= 2s and any sleep wastes tool calls. Check status immediately after dispatch
 - Store the dispatch message in `DISPATCH_MSG` before calling `doey_send_verified` so retries can resend the same content
-- The 10-second wait gives Claude Code time to parse input and begin tool calls — do not reduce this
-- On 2nd failure, escalate to Boss via `doey msg send` with subject `dispatch_failed` — do NOT retry a 3rd time (avoid spam loops)
+- Use awk to read status files — they use KEY: VALUE format (space after colon). Pattern: `awk '/^STATUS:/{print $2; exit}'`
+- On 2nd failure, escalate to Boss via `doey msg send` with subject `dispatch_failed` — do NOT retry a 3rd time
 - Log every verification failure to `$RUNTIME_DIR/issues/`
 
 ### One Team Per Task (Dedup Rule)
@@ -254,7 +248,7 @@ Each task gets its own ephemeral team, right-sized to the work. Do NOT search fo
    source "${RUNTIME_DIR}/session.env"
    for i in 1 2 3 4 5; do
      STATUS=$(grep 'STATUS=' "$RUNTIME_DIR/status/pane_${NEW_W}_0.status" 2>/dev/null | cut -d= -f2)
-     [ "$STATUS" = "READY" ] && break; sleep 3
+     [ "$STATUS" = "READY" ] && break
    done
    ```
 4. **Dispatch** — Send the task to the new team's Subtaskmaster (pane `${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
@@ -395,7 +389,7 @@ Status files: `RUNTIME_DIR/status/<pane_safe>.status` with fields `PANE`, `UPDAT
 
 ### LOGGED_OUT Recovery
 
-1. Send Escape to every logged-out pane, sleep 2s, re-scan.
+1. Send Escape to every logged-out pane, then re-scan immediately.
 2. If still logged out, escalate to Boss with pane list and action needed (user must run `claude` to re-authenticate).
 3. Rules: Escape first always. Never `/login` while menu visible. Max once per pane per cycle.
 
