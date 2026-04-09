@@ -82,9 +82,6 @@ source "${SCRIPT_DIR}/doey-team-mgmt.sh"
 # shellcheck source=doey-session.sh
 source "${SCRIPT_DIR}/doey-session.sh"
 
-# shellcheck source=doey-status-reconcile.sh
-source "${SCRIPT_DIR}/doey-status-reconcile.sh"
-
 # Haiku Intent Fallback (Masterplan 402). intent-fallback.sh defines the
 # Anthropic helper; doey-intent-dispatch.sh wires it to the unknown-command
 # case below. Both are best-effort — the source guards make double-loading

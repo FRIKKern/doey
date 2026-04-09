@@ -43,7 +43,7 @@ _fail() {
 # Unique project namespace so parallel runs can't collide.
 export PROJECT_NAME="test-intent-log-$$"
 LOG_DIR="/tmp/doey/${PROJECT_NAME}"
-LOG_FILE="${LOG_DIR}/intent-log.jsonl"
+LOG_FILE="${LOG_DIR}/intent-fallback.log"
 
 # ── Install mock claude on PATH ─────────────────────────────────────
 MOCK_BIN_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t intent-fb-log-mock)
@@ -274,9 +274,9 @@ export MOCK_CLAUDE_FIXTURE="${FIXTURES}/success.json"
 result=$(intent_fallback "doey ls" "err" "ls" "")
 
 if [ -f "${LOG_FILE}.1" ]; then
-  _ok "intent-log.jsonl.1 created by rotation"
+  _ok "intent-fallback.log.1 created by rotation"
 else
-  _fail "intent-log.jsonl.1 created by rotation" "pre_size=$pre_size"
+  _fail "intent-fallback.log.1 created by rotation" "pre_size=$pre_size"
 fi
 
 if [ -f "$LOG_FILE" ]; then

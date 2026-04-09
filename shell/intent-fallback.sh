@@ -37,7 +37,7 @@
 #     in log lines (both `--flag=value` and `--flag value` forms).
 #
 # Log format: one JSON line per successful call, appended to
-#   /tmp/doey/${PROJECT_NAME:-doey}/intent-log.jsonl
+#   /tmp/doey/${PROJECT_NAME:-doey}/intent-fallback.log
 # with fields {ts, pane, role, project, typed, err, action, command,
 # latency_ms, http_status, accepted, reason}. The http_status field is
 # preserved for backward compatibility with the REST-era schema and is
@@ -47,7 +47,7 @@
 # by `doey stop` (shell/doey-session.sh). No separate cleanup hook.
 #
 # Log rotation: when the file exceeds 1 MB the appender rotates it to
-# intent-log.jsonl.{1,2,3}. The oldest rotation (.3) is discarded.
+# intent-fallback.log.{1,2,3}. The oldest rotation (.3) is discarded.
 #
 # Concurrency: appends are serialized via an mkdir-based lock so parallel
 # invocations from multiple panes cannot interleave partial lines.
@@ -113,7 +113,7 @@ _intent_fb_lock_release() {
 }
 
 # Rotate log file if it has grown past 1 MB. Keeps at most
-# intent-log.jsonl.{1,2,3}; anything older is discarded.
+# intent-fallback.log.{1,2,3}; anything older is discarded.
 _intent_fb_rotate_if_large() {
   local f="$1"
   [ -f "$f" ] || return 0
@@ -284,7 +284,7 @@ ${recent}"
   err_red=$(_intent_fb_redact "$err_msg")
 
   local log_dir="/tmp/doey/${project}"
-  local log_file="${log_dir}/intent-log.jsonl"
+  local log_file="${log_dir}/intent-fallback.log"
   mkdir -p "$log_dir" 2>/dev/null || true
 
   # http_status is a REST-era field. Always null in the CLI path — but

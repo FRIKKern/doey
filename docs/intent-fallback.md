@@ -70,12 +70,12 @@ The same check runs on `suggest` choices before exec'ing them.
 Successful calls are appended as JSON Lines to:
 
 ```
-/tmp/doey/<project>/intent-log.jsonl
+/tmp/doey/<project>/intent-fallback.log
 ```
 
 Each line records `ts`, `pane`, `role`, `project`, `typed`, `err`, `action`, `command`, `latency_ms`, `http_status`, `accepted`, and `reason`. Sensitive flag values (`--body`, `--token`, `--key`, `--password`, `--secret`, `--auth`) are redacted to `***` before the line is written, and a literal `ANTHROPIC_API_KEY` match in the rendered line is replaced with `{"error":"api_key_leak_prevented"}`.
 
-The log rotates at 1 MB into `intent-log.jsonl.{1,2,3}` and the runtime dir is wiped by `doey stop`, so nothing accumulates across sessions.
+The log rotates at 1 MB into `intent-fallback.log.{1,2,3}` and the runtime dir is wiped by `doey stop`, so nothing accumulates across sessions.
 
 ## Disabling per project
 
