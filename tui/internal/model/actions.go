@@ -208,14 +208,24 @@ func SpawnFreelancerCmd() tea.Cmd {
 	}
 }
 
-// CreateTeamCmd runs "doey add-window" to spawn a new regular team (Manager + Workers).
+// CreateTeamCmd runs "doey add-window" to spawn a reserved team with
+// 1 Subtaskmaster (W.0) + 6 Workers (W.1..W.6). The team env file gets
+// RESERVED="true" so the Taskmaster won't dispatch work to it until the
+// user explicitly assigns a task.
+//
+// --type team keeps it a regular team (Subtaskmaster + Workers) — without
+// it, the shell's "--reserved implies freelancer" shortcut would turn this
+// into a managerless freelancer pool instead.
+//
+// Runs in a bubbletea Cmd goroutine so the dashboard UI stays responsive
+// while the spawn is in progress.
 func CreateTeamCmd() tea.Cmd {
 	return func() tea.Msg {
 		path, err := exec.LookPath("doey")
 		if err != nil {
 			return CreateTeamResultMsg{Err: fmt.Errorf("doey not found in PATH: %w", err)}
 		}
-		cmd := exec.Command(path, "add-window")
+		cmd := exec.Command(path, "add-window", "--workers", "6", "--reserved", "--type", "team")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return CreateTeamResultMsg{Err: fmt.Errorf("%w: %s", err, out)}

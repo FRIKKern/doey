@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	"github.com/doey-cli/doey/tui/internal/intentselect"
 	"github.com/doey-cli/doey/tui/internal/model"
 	"github.com/doey-cli/doey/tui/internal/picker"
 	"github.com/doey-cli/doey/tui/internal/setup"
@@ -69,6 +70,8 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "intent-select":
+			os.Exit(intentselect.Run())
 		case "startup":
 			fs := flag.NewFlagSet("startup", flag.ExitOnError)
 			session := fs.String("session", "", "tmux session name")

@@ -91,6 +91,59 @@ find_project() {
   grep -m1 ":${dir}$" "$PROJECTS_FILE" 2>/dev/null | cut -d: -f1 || true
 }
 
+# Fuzzy project lookup by name query. Returns "name:path" on stdout, exit 0 on match.
+# Search order: exact → prefix → substring → multi-word fuzzy.
+find_project_by_name() {
+  local query="$1"
+  local pfile="$PROJECTS_FILE"
+  [ -f "$pfile" ] || return 1
+
+  # Normalize: lowercase, spaces to hyphens
+  local normalized
+  normalized="$(printf '%s' "$query" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
+  [ -z "$normalized" ] && return 1
+
+  local match=""
+
+  # 1. Exact name match (case-insensitive)
+  match="$(grep -i "^${normalized}:" "$pfile" | head -1)" || true
+  if [ -n "$match" ]; then printf '%s' "$match"; return 0; fi
+
+  # 2. Prefix match
+  match="$(grep -i "^${normalized}" "$pfile" | head -1)" || true
+  if [ -n "$match" ]; then printf '%s' "$match"; return 0; fi
+
+  # 3. Substring match on name field
+  match="$(awk -F: -v q="$normalized" 'tolower($1) ~ q {print; exit}' "$pfile")" || true
+  if [ -n "$match" ]; then printf '%s' "$match"; return 0; fi
+
+  # 4. Multi-word fuzzy: all hyphen-delimited words must appear in project name
+  local words=""
+  local old_ifs="$IFS"
+  IFS='-'
+  # shellcheck disable=SC2086
+  set -- $normalized
+  IFS="$old_ifs"
+  local _fpbn_all_matched _fpbn_word _fpbn_pname _fpbn_line
+  while IFS= read -r _fpbn_line || [ -n "$_fpbn_line" ]; do
+    [ -z "$_fpbn_line" ] && continue
+    _fpbn_pname="$(printf '%s' "$_fpbn_line" | cut -d: -f1 | tr '[:upper:]' '[:lower:]')"
+    _fpbn_all_matched=true
+    for _fpbn_word in "$@"; do
+      case "$_fpbn_pname" in
+        *"$_fpbn_word"*) ;;
+        *) _fpbn_all_matched=false; break ;;
+      esac
+    done
+    if [ "$_fpbn_all_matched" = true ]; then
+      printf '%s' "$_fpbn_line"
+      return 0
+    fi
+  done < "$pfile"
+
+  return 1
+}
+
 # < /dev/null prevents tmux from consuming stdin in read loops
 session_exists() {
   tmux has-session -t "$1" < /dev/null 2>/dev/null
