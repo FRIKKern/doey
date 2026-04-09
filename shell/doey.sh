@@ -432,67 +432,61 @@ MPEOF
     printf "\n  Usage: ${BOLD}doey add-team <name>${RESET}\n\n"
     exit 0
     ;;
+  tunnel)
+    require_running_session
+    shift
+    _tunnel_env="${runtime_dir}/tunnel.env"
+    case "${1:-}" in
+      up|start)
+        bash "${SCRIPT_DIR}/doey-tunnel.sh" "$runtime_dir" &
+        printf '  %bTunnel starting in background...%b\n' "$SUCCESS" "$RESET"
+        ;;
+      down|stop)
+        if [ -f "$_tunnel_env" ]; then
+          _tpid="$(grep '^TUNNEL_PID=' "$_tunnel_env" 2>/dev/null | head -1 | cut -d= -f2-)"
+          if [ -n "$_tpid" ] && kill -0 "$_tpid" 2>/dev/null; then
+            kill "$_tpid" 2>/dev/null || true
+            rm -f "$_tunnel_env"
+            printf '  %bTunnel stopped.%b\n' "$SUCCESS" "$RESET"
+          else
+            rm -f "$_tunnel_env"
+            printf '  Tunnel was not running (stale env cleaned).\n'
+          fi
+        else
+          printf '  No tunnel running.\n'
+        fi
+        ;;
+      status)
+        if [ -f "$_tunnel_env" ]; then
+          printf '  %bTunnel active:%b\n' "$SUCCESS" "$RESET"
+          sed 's/^/    /' "$_tunnel_env"
+        else
+          printf '  No tunnel running.\n'
+        fi
+        ;;
+      *)
+        printf '  Usage: doey tunnel <up|down|status>\n'
+        printf '\n'
+        printf '  Commands:\n'
+        printf '    up       Start a tunnel for the current session\n'
+        printf '    down     Stop the running tunnel\n'
+        printf '    status   Show tunnel status\n'
+        ;;
+    esac
+    exit 0
+    ;;
   [0-9]*x[0-9]*)
     _check_prereqs
     grid="$1"
     ;;
   "") ;;
   *)
-    # Opt-out: DOEY_NO_INTENT_FALLBACK=1 preserves old error behavior
-    if [ "${DOEY_NO_INTENT_FALLBACK:-0}" = "1" ] || [ "${DOEY_INTENT_FALLBACK:-1}" = "0" ]; then
-      doey_error "Unknown command: $1"
-      printf "  Run ${BOLD}doey --help${RESET} for usage\n"
-      exit 1
-    fi
-
-    # Build system context for Claude
-    _headless_sys_prompt="You are doey's CLI assistant. The user typed: doey $*
-
-Available doey commands: list, doctor, version, update, build, remote, init, purge, stop, reload, test, settings, deploy, add, remove, add-team, masterplan, add-window, kill-team, list-teams, teams, task, msg, status, health, config, agent
-
-If the user's intent maps to a doey command, respond with ONLY the exact command to run (e.g. 'doey task list'). Prefix with CMD: so the caller can detect it.
-If the user is asking a question or chatting, respond conversationally.
-If the user's intent is destructive (stop, kill, purge, uninstall), respond with CONFIRM: followed by what will happen.
-Keep responses concise (1-3 lines max)."
-
-    _headless_response=$(doey_headless "$*" --model haiku --no-tools --timeout 15 --append-system "$_headless_sys_prompt" 2>/dev/null) || true
-
-    if [ -z "$_headless_response" ]; then
-      # Headless failed silently — fall back to error
-      doey_error "Unknown command: $1"
-      printf "  Run ${BOLD}doey --help${RESET} for usage\n"
-      exit 1
-    fi
-
-    # Parse response
-    case "$_headless_response" in
-      CMD:*)
-        _suggested_cmd="${_headless_response#CMD:}"
-        _suggested_cmd="$(printf '%s' "$_suggested_cmd" | sed 's/^[[:space:]]*//')"
-        printf '  → %s\n' "$_suggested_cmd"
-        printf '  Run? [Y/n] '
-        read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
-        case "$_confirm" in
-          ""|[Yy]*) eval "$_suggested_cmd" ;;
-          *) printf '  Cancelled.\n' ;;
-        esac
-        ;;
-      CONFIRM:*)
-        _confirm_msg="${_headless_response#CONFIRM:}"
-        printf '  ⚠  %s\n' "$_confirm_msg"
-        printf '  Proceed? [y/N] '
-        read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
-        case "$_confirm" in
-          [Yy]*) printf '  (not auto-executing destructive commands)\n' ;;
-          *) printf '  Cancelled.\n' ;;
-        esac
-        ;;
-      *)
-        # Conversational response
-        printf '%s\n' "$_headless_response"
-        ;;
-    esac
-    exit 0
+    # Intent fallback — maps unknown commands to the closest doey command
+    # using a Claude-powered command expert (Haiku, ~2s).
+    # shellcheck source=doey-intent-dispatch.sh
+    source "${SCRIPT_DIR}/doey-intent-dispatch.sh"
+    _doey_intent_dispatch "$@"
+    exit $?
     ;;
 esac
 
