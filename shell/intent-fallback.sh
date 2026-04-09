@@ -43,7 +43,7 @@ _intent_fb_spinner_start() {
   { tput civis 2>/dev/null || true; } >&2
   (
     _chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    _words="Doeying Snootling Waggening Snorfeling Cozymaxxing Ruffling Floofing Scampering Sniffvestigating Recombobulating"
+    _words="Bibetibop Bobetibip Bibitibopp Babbetibobb Bippetibapp Bobbetibipp Bubetiboop Bibbitibabba Boppetibup Babbidibubb Bippitibobbi Bobbitibapp Bubbetibipp Bippidibopp Babbitiboop Bibbetibobb Boppitibapp Bubbitibepp Bibidibupp Babbetibipp Bobbidibupp Bippetibepp Bubbidibobbi Babbitibipp Bibbidibopp"
     set -- $_words
     _wcount=$#
     _wi=0
@@ -107,7 +107,7 @@ _intent_fb_spinner_start() {
   { tput civis 2>/dev/null || true; } >&2
   (
     _chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    _words=(Doeying Snootling Waggening Snorfeling Cozymaxxing Ruffling Floofing Scampering Sniffvestigating Recombobulating)
+    _words=(Bibetibop Bobetibip Bibitibopp Babbetibobb Bippetibapp Bobbetibipp Bubetiboop Bibbitibabba Boppetibup Babbidibubb Bippitibobbi Bobbitibapp Bubbetibipp Bippidibopp Babbitiboop Bibbetibobb Boppitibapp Bubbitibepp Bibidibupp Babbetibipp Bobbidibupp Bippetibepp Bubbidibobbi Babbitibipp Bibbidibopp)
     _wcount=${#_words[@]}
     _wi=0
     _di=1
