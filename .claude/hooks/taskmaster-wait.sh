@@ -30,6 +30,71 @@ MSG_DIR="${RUNTIME_DIR}/messages"
 TRIGGER="${RUNTIME_DIR}/status/taskmaster_trigger"
 TRIGGER2="${RUNTIME_DIR}/triggers/${TASKMASTER_SAFE}.trigger"
 
+# ── Passive role fast path ────────────────────────────────────────────
+# Core Team specialists (Task Reviewer 1.1, Deployment 1.2, Doey Expert 1.3)
+# reuse this wait hook but should ONLY wake on messages/triggers for their
+# own pane. They must NOT wake on ACTIVE_TASKS, QUEUED, FINISHED, STALE,
+# or other Taskmaster-specific signals — doing so creates a tight spin loop.
+_CALLER_PANE=""
+_IS_PASSIVE=false
+if [ -n "${TMUX_PANE:-}" ]; then
+  _CALLER_PANE=$(tmux display-message -t "${TMUX_PANE}" -p '#{window_index}.#{pane_index}' 2>/dev/null) || _CALLER_PANE=""
+  if [ -n "$_CALLER_PANE" ] && [ "$_CALLER_PANE" != "$TASKMASTER_PANE" ]; then
+    _IS_PASSIVE=true
+  fi
+fi
+
+if [ "$_IS_PASSIVE" = true ]; then
+  _CALLER_SAFE="${SESSION_NAME//[-:.]/_}_${_CALLER_PANE//[-:.]/_}"
+  # Override EXIT trap — passive roles must not touch Taskmaster status
+  trap '' EXIT
+  _passive_wake() { echo "WAKE_REASON=$1"; exit 0; }
+
+  # Check for triggers
+  [ -f "$TRIGGER" ] && { rm -f "$TRIGGER" 2>/dev/null; _passive_wake "TRIGGERED"; }
+  for _tf in "${RUNTIME_DIR}/triggers/"*; do
+    [ -f "$_tf" ] && { rm -f "${RUNTIME_DIR}/triggers/"* 2>/dev/null; _passive_wake "TRIGGERED"; }
+  done
+
+  # Check for messages to this pane (doey-ctl or file-based)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+    _unread=$(doey msg count --to "$_CALLER_PANE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
+    [ "${_unread:-0}" -gt 0 ] && _passive_wake "MSG"
+  else
+    for _mf in "$MSG_DIR"/${_CALLER_SAFE}_*.msg "$MSG_DIR"/"${_CALLER_PANE//[-:.]/_}"_*.msg; do
+      [ -f "$_mf" ] && _passive_wake "MSG"
+    done
+  fi
+
+  # No work — block-wait (longer interval than Taskmaster's 15s)
+  _passive_sleep=30
+  if command -v inotifywait >/dev/null 2>&1; then
+    mkdir -p "${RUNTIME_DIR}/triggers" 2>/dev/null
+    inotifywait -qq -t "$_passive_sleep" -e create,modify \
+      "${MSG_DIR}/" \
+      "${RUNTIME_DIR}/triggers/" 2>/dev/null || true
+  else
+    sleep "$_passive_sleep"
+  fi
+
+  # Re-check after sleep
+  for _tf in "${RUNTIME_DIR}/triggers/"*; do
+    [ -f "$_tf" ] && { rm -f "${RUNTIME_DIR}/triggers/"* 2>/dev/null; _passive_wake "TRIGGERED"; }
+  done
+  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+    _unread=$(doey msg count --to "$_CALLER_PANE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
+    [ "${_unread:-0}" -gt 0 ] && _passive_wake "MSG"
+  else
+    for _mf in "$MSG_DIR"/${_CALLER_SAFE}_*.msg "$MSG_DIR"/"${_CALLER_PANE//[-:.]/_}"_*.msg; do
+      [ -f "$_mf" ] && _passive_wake "MSG"
+    done
+  fi
+
+  echo "WAKE_REASON=TIMEOUT"
+  exit 0
+fi
+# ── End passive role fast path ────────────────────────────────────────
+
 _TASKMASTER_DBG=false; [ -f "${RUNTIME_DIR}/debug.conf" ] && _TASKMASTER_DBG=true
 _TASKMASTER_DBG_FILE="${RUNTIME_DIR}/debug/taskmaster.jsonl"
 
