@@ -26,7 +26,7 @@ PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RD}/session.env" 2>/dev/null | head -1 | c
 PROJECT_NAME=$(grep '^PROJECT_NAME=' "${RD}/session.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')
 _tv() { grep "^$1=" "$TEAM_ENV" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
 WORKER_PANES=$(_tv WORKER_PANES); WORKTREE_DIR=$(_tv WORKTREE_DIR); WORKTREE_BRANCH=$(_tv WORKTREE_BRANCH)
-WPL=$(echo "$WORKER_PANES" | tr ',' ' '); SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':-.' '_')
+WPL=$(echo "$WORKER_PANES" | tr ',' ' '); SESSION_SAFE=$(echo "$SESSION_NAME" | tr ':.-' '_')
 BUSY=""
 for i in $WPL; do
   SF="${RD}/status/${SESSION_SAFE}_${TARGET_WIN}_${i}.status"

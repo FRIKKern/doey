@@ -7,7 +7,7 @@ description: Dispatch a research task to a worker. Stop hook blocks until report
 - Team env: !`cat $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/team_${DOEY_WINDOW_INDEX:-0}.env 2>/dev/null || true`
 - Statuses: !`for f in $(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/status/*.status; do [ -f "$f" ] && echo "--- $(basename $f) ---" && cat "$f"; done 2>/dev/null || true`
 
-Research with guaranteed report. `PANE_SAFE` = pane ID via `tr ':-.' '_'`.
+Research with guaranteed report. `PANE_SAFE` = pane ID via `tr ':.-' '_'`.
 
 ### 1. Pick idle unreserved worker (❯ prompt)
 

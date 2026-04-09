@@ -278,8 +278,8 @@ func NewTasksModel() TasksModel {
 			HeaderLines:    2,
 			HasSeparator:   true,
 			VPHeightOffset: 3,
-			VPWidthPad:     3,
-			LeftPct:        33,
+			VPWidthPad:     1,
+			LeftPct:        40,
 		}),
 		subtaskMap: make(map[string][]runtime.Subtask),
 	}
@@ -1898,7 +1898,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(h).
-		Padding(1, 2).
+		Padding(0, 1).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(borderColor)
@@ -1945,8 +1945,8 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		}
 	}
 
-	// Sync dimensions to current layout
-	renderW := w - 4
+	// Sync dimensions to current layout (panel already has Padding(1,2) = 4 chars)
+	renderW := w - 1
 	if renderW < 20 {
 		renderW = 20
 	}

@@ -327,7 +327,7 @@ Before dispatching ANY worker, create and track a subtask:
 1. **Create subtask:** `doey task subtask add --task-id $TASK_ID --description "W${DOEY_TEAM_WINDOW}.N: description"`
 2. **Write subtask ID:** Write the subtask ID to the runtime status dir and include it in the worker prompt:
    ```bash
-   PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+   PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
    printf '%s\n' "$SUBTASK_ID" > "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id"
    ```
 3. **Set env var on target pane:** Before sending the task, export `DOEY_SUBTASK_ID` on the worker pane:
@@ -499,7 +499,7 @@ Every prompt: TASK_ID + title, subtask number + description, success criteria, "
 1. **Have a TASK_ID** — Every worker task must be tracked. If you don't have a TASK_ID, create one via `task_create` or receive one from Taskmaster.
 2. **Write the task_id file** — Before send-keys:
    ```bash
-   PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+   PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
    printf '%s\n' "$TASK_ID" > "${RUNTIME_DIR}/status/${PANE_SAFE}.task_id"
    # Also write subtask if applicable:
    printf '%s\n' "$SUBTASK_NUM" > "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id"
