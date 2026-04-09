@@ -56,14 +56,14 @@ fi
 if command -v doey-ctl >/dev/null 2>&1; then
   doey status set "$PANE_SAFE" "BUSY"
 else
-  write_pane_status "$STATUS_FILE" "BUSY" "${PROMPT:0:80}"
+  transition_state "$PANE_SAFE" "BUSY"
 fi
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=READY" "to=BUSY" "trigger=prompt-submit"
 if [ -n "${DOEY_PANE_ID:-}" ]; then
   if command -v doey-ctl >/dev/null 2>&1; then
     doey status set "${DOEY_PANE_ID}" "BUSY"
   else
-    write_pane_status "${RUNTIME_DIR}/status/${DOEY_PANE_ID}.status" "BUSY" "${PROMPT:0:80}"
+    transition_state "${DOEY_PANE_ID}" "BUSY"
   fi
 fi
 

@@ -110,10 +110,7 @@ if [ "$ROLE" != "info_panel" ]; then
     _existing_status=$(grep '^STATUS: ' "${RUNTIME_DIR}/status/${PANE_SAFE}.status" 2>/dev/null | head -1 | cut -d' ' -f2-) || _existing_status=""
   fi
   if [ "$_existing_status" != "READY" ]; then
-    _boot_now=$(date '+%Y-%m-%dT%H:%M:%S%z')
-    printf 'PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n' "$PANE" "$_boot_now" "BOOTING" "startup" \
-      > "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" \
-      && mv "${RUNTIME_DIR}/status/${PANE_SAFE}.status.tmp" "${RUNTIME_DIR}/status/${PANE_SAFE}.status"
+    transition_state "$PANE_SAFE" "BOOTING"
   fi
 fi
 
