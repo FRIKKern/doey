@@ -159,7 +159,7 @@ case "${1:-}" in
 esac
 
 case "${1:-}" in
-  --help|-h)
+  help|--help|-h)
     doey_header "Doey"
     printf '\n'
     cat << 'HELP'
@@ -390,10 +390,10 @@ MPEOF
     elif [ -n "$_aw_wt_spec" ] || [ -n "$_aw_grid_cols" ]; then
       _aw_cols="${_aw_grid_cols:-$DOEY_INITIAL_WORKER_COLS}"
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
-        "$_aw_cols" "$_aw_wt_spec" "$_aw_name" "" "" "" "" "$_aw_reserved" "$_aw_task_id"
+        "$_aw_cols" "$_aw_wt_spec" "$_aw_name" "" "" "" "$_aw_team_type" "$_aw_reserved" "$_aw_task_id"
     else
       add_dynamic_team_window "$session" "$runtime_dir" "$dir" \
-        "" "" "$_aw_name" "" "" "" "" "$_aw_reserved" "$_aw_task_id"
+        "" "" "$_aw_name" "" "" "" "$_aw_team_type" "$_aw_reserved" "$_aw_task_id"
     fi
     exit 0
     ;;
@@ -464,13 +464,19 @@ MPEOF
           printf '  No tunnel running.\n'
         fi
         ;;
+      detect)
+        # shellcheck disable=SC1091
+        source "${SCRIPT_DIR}/doey-tunnel-detect.sh"
+        _detect_ports_all "$(pwd)"
+        ;;
       *)
-        printf '  Usage: doey tunnel <up|down|status>\n'
+        printf '  Usage: doey tunnel <up|down|status|detect>\n'
         printf '\n'
         printf '  Commands:\n'
         printf '    up       Start a tunnel for the current session\n'
         printf '    down     Stop the running tunnel\n'
         printf '    status   Show tunnel status\n'
+        printf '    detect   Auto-detect project ports\n'
         ;;
     esac
     exit 0
@@ -480,6 +486,30 @@ MPEOF
     grid="$1"
     ;;
   "") ;;
+  open|switch)
+    shift
+    if [ $# -eq 0 ]; then
+      show_menu "${grid}"
+      exit 0
+    fi
+    _open_query="$*"
+    _open_match=""
+    _open_match="$(find_project_by_name "$_open_query")" || true
+    if [ -n "$_open_match" ]; then
+      _open_pname="${_open_match%%:*}"
+      _open_ppath="${_open_match#*:}"
+      if session_exists "doey-${_open_pname}"; then
+        _attach_session "doey-${_open_pname}"
+      else
+        cd "$_open_ppath" && launch_with_grid "$_open_pname" "$_open_ppath" "${grid}"
+      fi
+    else
+      printf '  \033[31m✗\033[0m No project matching "%s"\n' "$_open_query" >&2
+      printf '  Registered projects:\n' >&2
+      list_projects
+    fi
+    exit 0
+    ;;
   *)
     # Intent fallback — maps unknown commands to the closest doey command
     # using a Claude-powered command expert (Haiku, ~2s).
