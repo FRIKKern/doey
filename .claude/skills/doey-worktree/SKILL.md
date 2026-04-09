@@ -42,7 +42,13 @@ else [ -n "$WORKTREE_DIR" ] && { echo "ERROR: Already in worktree — use --back
 ```bash
 BRANCH="doey/team-${TARGET_WIN}-$(date +%m%d-%H%M)"
 WT_DIR="/tmp/doey/${PROJECT_NAME}/worktrees/team-${TARGET_WIN}"
-[ -d "$WT_DIR" ] && git -C "$PROJECT_DIR" worktree remove "$WT_DIR" --force 2>/dev/null || true
+if [ -d "$WT_DIR" ]; then
+  if git -C "$WT_DIR" status --porcelain 2>/dev/null | grep -q '^'; then
+    echo "ERROR: Worktree $WT_DIR has uncommitted changes. Commit or stash first."
+    exit 1
+  fi
+  git -C "$PROJECT_DIR" worktree remove "$WT_DIR" --force 2>/dev/null || true
+fi
 mkdir -p "/tmp/doey/${PROJECT_NAME}/worktrees"
 WT_OUTPUT=$(git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$BRANCH" 2>&1) || { echo "ERROR: $WT_OUTPUT"; exit 1; }
 [ -f "${PROJECT_DIR}/.claude/settings.local.json" ] && mkdir -p "${WT_DIR}/.claude" && cp "${PROJECT_DIR}/.claude/settings.local.json" "${WT_DIR}/.claude/"
@@ -54,7 +60,20 @@ mv "$TMPENV" "$TEAM_ENV"; TARGET_DIR="$WT_DIR"
 ### 3b. Remove worktree (auto-commit dirty, log, remove, strip env)
 ```bash
 DIRTY=$(git -C "$WORKTREE_DIR" status --porcelain 2>/dev/null)
-[ -n "$DIRTY" ] && git -C "$WORKTREE_DIR" add -A && git -C "$WORKTREE_DIR" commit -m "doey: WIP from team ${TARGET_WIN} worktree"
+if [ -n "$DIRTY" ]; then
+  # Write auto-save audit log
+  AUTO_SAVE_DIR="${RD}/auto-saves"
+  mkdir -p "$AUTO_SAVE_DIR"
+  WT_BRANCH=$(git -C "$WORKTREE_DIR" branch --show-current 2>/dev/null || echo "unknown")
+  {
+    printf 'AUTO-SAVE: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'WORKTREE: %s\n' "$WORKTREE_DIR"
+    printf 'BRANCH: %s\n' "$WT_BRANCH"
+    printf 'FILES:\n'
+    git -C "$WORKTREE_DIR" status --porcelain 2>/dev/null || true
+  } > "${AUTO_SAVE_DIR}/${WT_BRANCH}_$(date +%s).log" 2>/dev/null || true
+  git -C "$WORKTREE_DIR" add -A && git -C "$WORKTREE_DIR" commit -m "doey: WIP from team ${TARGET_WIN} worktree"
+fi
 echo "Commits on branch ${WORKTREE_BRANCH}:"
 git -C "$WORKTREE_DIR" log --oneline "$(git -C "$PROJECT_DIR" rev-parse HEAD)..HEAD" 2>/dev/null || echo "  (none)"
 git -C "$PROJECT_DIR" worktree remove "$WORKTREE_DIR" --force 2>&1 || echo "WARNING: Manual removal needed"

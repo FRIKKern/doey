@@ -76,15 +76,8 @@ _update_contributor() {
   doey_step "1/6" "Checking working tree..."
   local current_branch dirty=false stashed=false
   current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || true)
-  if [[ -z "$current_branch" ]]; then
-    doey_warn "Detached HEAD — checking out main"
-    git -C "$repo_dir" checkout main 2>/dev/null || \
-      git -C "$repo_dir" checkout -b main origin/main 2>/dev/null || true
-  elif [[ "$current_branch" != "main" ]]; then
-    doey_warn "On branch '$current_branch' — switching to main"
-    git -C "$repo_dir" checkout main 2>/dev/null || true
-  fi
   # Check for tracked-file changes only (untracked files don't block pull --ff-only)
+  # Must run BEFORE checkout — checkout can fail or discard changes on dirty trees
   if ! git -C "$repo_dir" diff --quiet HEAD 2>/dev/null || \
      ! git -C "$repo_dir" diff --cached --quiet HEAD 2>/dev/null; then
     dirty=true
@@ -103,6 +96,14 @@ _update_contributor() {
     fi
   else
     doey_success "Working tree clean"
+  fi
+  if [[ -z "$current_branch" ]]; then
+    doey_warn "Detached HEAD — checking out main"
+    git -C "$repo_dir" checkout main 2>/dev/null || \
+      git -C "$repo_dir" checkout -b main origin/main 2>/dev/null || true
+  elif [[ "$current_branch" != "main" ]]; then
+    doey_warn "On branch '$current_branch' — switching to main"
+    git -C "$repo_dir" checkout main 2>/dev/null || true
   fi
 
   # Step 2: Pull latest
