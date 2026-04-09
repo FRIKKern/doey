@@ -1257,7 +1257,11 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 		if i == e.AttachmentCursor {
 			focusIndicator = lipgloss.NewStyle().Foreground(e.Theme.Primary).Render("> ")
 		}
-		sections = append(sections, fmt.Sprintf("%s%s %s%s", focusIndicator, badge, title, meta))
+		line := fmt.Sprintf("%s%s %s%s", focusIndicator, badge, title, meta)
+		if i == e.AttachmentCursor && att.FilePath != "" {
+			line += lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("  Enter to view")
+		}
+		sections = append(sections, line)
 
 		// Expandable body
 		if att.Body != "" {

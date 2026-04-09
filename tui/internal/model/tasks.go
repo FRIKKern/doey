@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -28,6 +29,20 @@ type taskStatusClearMsg struct{}
 // taskStatusClearCmd returns a command that clears the status message after 2 seconds.
 func taskStatusClearCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return taskStatusClearMsg{} })
+}
+
+// openAttachmentPopupCmd opens a tmux display-popup to view an attachment file.
+func openAttachmentPopupCmd(filePath, title string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("tmux", "display-popup",
+			"-w", "85%", "-h", "85%",
+			"-T", " "+title+" ",
+			"-E",
+			"less", "-R", filePath,
+		)
+		_ = cmd.Run()
+		return nil
+	}
 }
 
 // sectionOfStatus derives a display section from a canonical task status.
@@ -984,6 +999,47 @@ func (m TasksModel) updateDetail(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "]":
+		// Next attachment
+		if m.expanded != nil {
+			n := len(m.expanded.Item.Task.TaskAttachments)
+			if n > 0 {
+				if m.expanded.AttachmentCursor >= n-1 {
+					m.expanded.AttachmentCursor = -1
+				} else {
+					m.expanded.AttachmentCursor++
+				}
+			}
+		}
+		return m, nil
+	case "[":
+		// Previous attachment
+		if m.expanded != nil {
+			n := len(m.expanded.Item.Task.TaskAttachments)
+			if n > 0 {
+				if m.expanded.AttachmentCursor <= -1 {
+					m.expanded.AttachmentCursor = n - 1
+				} else {
+					m.expanded.AttachmentCursor--
+				}
+			}
+		}
+		return m, nil
+	case "enter":
+		// Open focused attachment in tmux popup viewer
+		if m.expanded != nil && m.expanded.AttachmentCursor >= 0 {
+			attachments := m.expanded.Item.Task.TaskAttachments
+			ci := m.expanded.AttachmentCursor
+			if ci < len(attachments) && attachments[ci].FilePath != "" {
+				att := attachments[ci]
+				title := att.Title
+				if title == "" {
+					title = att.Filename
+				}
+				return m, openAttachmentPopupCmd(att.FilePath, title)
+			}
+		}
+		return m, nil
 	case "a":
 		idx := m.list.Index()
 		if idx >= 0 && idx < total {
@@ -1860,9 +1916,9 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			// Show review actions for pending tasks, standard actions otherwise
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.entries) && m.entries[idx].Status == "pending_user_confirmation" {
-				hint += "  d deny  s skip  a accept  tab subtask"
+				hint += "  d deny  s skip  a accept  tab subtask  ]/[ attach"
 			} else {
-				hint += "  m move  s status  d dispatch  x cancel  tab subtask"
+				hint += "  m move  s status  d dispatch  x cancel  tab subtask  ]/[ attach"
 			}
 		}
 		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
@@ -2046,6 +2102,8 @@ func (m TasksModel) viewHelp() string {
 		{"x", "Cancel task"},
 		{"Tab", "Next subtask (detail panel)"},
 		{"Shift+Tab", "Previous subtask (detail panel)"},
+		{"] / [", "Next / prev attachment"},
+		{"Enter", "Open focused attachment in popup"},
 		{"?", "Toggle this help"},
 	}
 

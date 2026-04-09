@@ -407,6 +407,136 @@ When a worker reports failure:
 - If a correction attempt also fails, try a different approach or escalate
 - If the approach itself was wrong, dispatch a fresh worker to avoid anchoring on the failed path
 
+## Auto-Nudge Protocol
+
+{{DOEY_ROLE_WORKER}}s sometimes stall by asking for permission instead of acting. They were told to proceed, but habit or caution makes them pause with confirmation questions. Detect this and nudge them automatically.
+
+### Stall Patterns
+
+During your monitoring loop, check the last few lines of worker pane output for these patterns:
+
+| Pattern | Meaning |
+|---------|---------|
+| "Would you like me to" | Asking permission to act |
+| "Shall I" | Seeking confirmation |
+| "Should I proceed" | Waiting for go-ahead |
+| "Ready to proceed" | Paused, expecting a green light |
+| "Do you want" | Offering options instead of executing |
+| "Do you want me to" | Same — seeking approval |
+| "Let me know if" | Handing control back |
+| "Want me to" | Abbreviated permission request |
+| "I can proceed with" | Stating capability instead of doing |
+
+**How to check:**
+
+```bash
+# Capture last 20 lines of worker pane output
+PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.$WORKER_INDEX"
+LAST_OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || true)
+
+# Check for stall patterns (case-insensitive)
+if echo "$LAST_OUTPUT" | grep -qiE \
+  'would you like me to|shall i |should i proceed|ready to proceed|do you want|let me know if|want me to |i can proceed with'; then
+  # Worker is stalled — nudge it
+fi
+```
+
+### Nudge Action
+
+When a stall is detected:
+
+1. **Send the nudge** — Auto-send "Yes, proceed." to the stalled worker:
+   ```bash
+   doey_send_verified "$PANE" "Yes, proceed."
+   ```
+
+2. **Log the nudge** — Record it on the task for visibility:
+   ```bash
+   doey task log add --task-id $TASK_ID --type progress \
+     --title "Auto-nudge W${DOEY_TEAM_WINDOW}.${WORKER_INDEX}" \
+     --body "Worker stalled with confirmation prompt. Sent auto-nudge." \
+     --author "{{DOEY_ROLE_TEAM_LEAD}}_W${DOEY_TEAM_WINDOW}"
+   ```
+
+3. **Track the count** — Maintain a nudge counter per worker per task:
+   ```bash
+   NUDGE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.nudge_count"
+   NUDGE_COUNT=$(cat "$NUDGE_FILE" 2>/dev/null || echo 0)
+   NUDGE_COUNT=$((NUDGE_COUNT + 1))
+   printf '%s\n' "$NUDGE_COUNT" > "$NUDGE_FILE"
+   ```
+
+### Rate Limiting
+
+**Maximum 3 nudges per worker per task.** After 3 nudges without the worker resuming autonomous work:
+
+- The worker is likely stuck in a loop, not just being polite
+- **Stop nudging** — further nudges will not help
+- **Escalate to {{DOEY_ROLE_COORDINATOR}}:**
+  ```bash
+  doey msg send --to 1.0 --from "${DOEY_TEAM_WINDOW}.0" \
+    --subject "worker_stuck" \
+    --body "TASK_ID: ${TASK_ID}
+  WORKER: W${DOEY_TEAM_WINDOW}.${WORKER_INDEX}
+  ISSUE: Worker stalled 3+ times asking for confirmation despite auto-nudges.
+  ACTION_NEEDED: May need fresh dispatch or task restructuring.
+  TEAM: W${DOEY_TEAM_WINDOW}"
+  ```
+
+### Integration with Monitoring Loop
+
+Add nudge detection to step 5 of your Active Monitoring Loop ("Detect problems"):
+
+```bash
+# After checking for STUCK/ERROR/crash — also check for stalled workers
+for WORKER_INDEX in $WORKER_PANES; do
+  PANE="$SESSION_NAME:$DOEY_TEAM_WINDOW.$WORKER_INDEX"
+  PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
+
+  # Skip if worker is not BUSY
+  STATUS=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.status" 2>/dev/null || echo "UNKNOWN")
+  [ "$STATUS" != "BUSY" ] && continue
+
+  # Check nudge count — skip if already at limit
+  NUDGE_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.nudge_count"
+  NUDGE_COUNT=$(cat "$NUDGE_FILE" 2>/dev/null || echo 0)
+  if [ "$NUDGE_COUNT" -ge 3 ]; then
+    # Already escalated or will escalate — don't nudge again
+    continue
+  fi
+
+  # Capture and check for stall patterns
+  LAST_OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || true)
+  if echo "$LAST_OUTPUT" | grep -qiE \
+    'would you like me to|shall i |should i proceed|ready to proceed|do you want|let me know if|want me to |i can proceed with'; then
+    # Nudge the worker
+    doey_send_verified "$PANE" "Yes, proceed."
+    NUDGE_COUNT=$((NUDGE_COUNT + 1))
+    printf '%s\n' "$NUDGE_COUNT" > "$NUDGE_FILE"
+
+    doey task log add --task-id $TASK_ID --type progress \
+      --title "Auto-nudge W${DOEY_TEAM_WINDOW}.${WORKER_INDEX} (${NUDGE_COUNT}/3)" \
+      --body "Worker stalled with confirmation prompt. Sent auto-nudge." \
+      --author "{{DOEY_ROLE_TEAM_LEAD}}_W${DOEY_TEAM_WINDOW}"
+
+    # If this was the 3rd nudge, escalate
+    if [ "$NUDGE_COUNT" -ge 3 ]; then
+      doey msg send --to 1.0 --from "${DOEY_TEAM_WINDOW}.0" \
+        --subject "worker_stuck" \
+        --body "TASK_ID: ${TASK_ID}
+  WORKER: W${DOEY_TEAM_WINDOW}.${WORKER_INDEX}
+  ISSUE: Worker stalled 3 times asking for confirmation despite auto-nudges.
+  ACTION_NEEDED: May need fresh dispatch or task restructuring.
+  TEAM: W${DOEY_TEAM_WINDOW}"
+    fi
+  fi
+done
+```
+
+### Reset
+
+Nudge counters reset when a worker receives a new task (new dispatch via `/doey-dispatch` or new `task_id` file written). Do NOT reset counters on send-keys follow-ups — those are continuations, not new tasks.
+
 ## Notify {{DOEY_ROLE_COORDINATOR}} When Done
 
 When your task is complete, **first bulk-close any remaining subtasks** so the TUI shows correct counts, then finish normally. The stop hook will automatically notify the {{DOEY_ROLE_COORDINATOR}}.

@@ -573,6 +573,16 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 			})
 		}
 	}
+	if len(rt.TaskAttachments) > 0 {
+		pt.TaskAttachments = nil
+		for _, a := range rt.TaskAttachments {
+			pt.TaskAttachments = append(pt.TaskAttachments, PersistentAttachment{
+				Filename: a.Filename, Type: a.Type, Title: a.Title,
+				Author: a.Author, Timestamp: a.Timestamp,
+				Body: a.Body, FilePath: a.FilePath, ImagePath: a.ImagePath,
+			})
+		}
+	}
 	// Merge subtasks: only when runtime has more than persistent (don't overwrite richer data)
 	if len(rt.Subtasks) > 0 && len(rt.Subtasks) > len(pt.Subtasks) {
 		pt.Subtasks = make([]PersistentSubtask, len(rt.Subtasks))
