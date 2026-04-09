@@ -1,41 +1,53 @@
 ---
 name: doey-respawn-me
-description: Request a respawn of the current worker pane. Use when you need to "respawn me", "restart myself", "fresh context", or "reset my pane". Writes an atomic respawn request that kills the current Claude process and relaunches with a fresh context.
+description: Restart this Claude instance with fresh context. Use when you need to "respawn me", "restart myself", "fresh context", or "reset my pane". Kills the current Claude process and relaunches in the same tmux pane.
 ---
 
-- Env: !`echo "ROLE=${DOEY_ROLE:-unset} PANE=${DOEY_PANE_INDEX:-unset} WINDOW=${DOEY_WINDOW_INDEX:-unset} SESSION=${DOEY_SESSION_NAME:-unset} RUNTIME=${DOEY_RUNTIME:-unset}"`
+# doey-respawn-me
 
-### Build safe pane ID and runtime paths
-
-```bash
-SESSION_NAME="${DOEY_SESSION_NAME:?missing DOEY_SESSION_NAME}"
-WINDOW_INDEX="${DOEY_WINDOW_INDEX:?missing DOEY_WINDOW_INDEX}"
-PANE_INDEX="${DOEY_PANE_INDEX:?missing DOEY_PANE_INDEX}"
-RUNTIME_DIR="${DOEY_RUNTIME:?missing DOEY_RUNTIME}"
-SAFE="${SESSION_NAME//[-:.]/_}_${WINDOW_INDEX}_${PANE_INDEX}"
-```
-
-### Write atomic respawn request
+Run all of the following as a **single** Bash tool call. If any step fails, report the error and stop.
 
 ```bash
-mkdir -p "$RUNTIME_DIR/respawn"
-TASK_ID="${DOEY_SUBTASK_ID:-${DOEY_TASK_ID:-none}}"
-cat > "$RUNTIME_DIR/respawn/${SAFE}.request.tmp" <<REQEOF
-PANE=${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}
-REASON=self-requested via /doey-respawn-me
-TASK_ID=${TASK_ID}
-TIMESTAMP=$(date +%s)
-REQEOF
-mv "$RUNTIME_DIR/respawn/${SAFE}.request.tmp" "$RUNTIME_DIR/respawn/${SAFE}.request"
+# ── 1. Derive pane identity from tmux (no env vars needed) ──
+SESSION=$(tmux display-message -p '#{session_name}')
+WINDOW=$(tmux display-message -p '#{window_index}')
+PANE_IDX=$(tmux display-message -p '#{pane_index}')
+PANE_TARGET="${SESSION}:${WINDOW}.${PANE_IDX}"
+
+# ── 2. Compute safe name and runtime dir ──
+SAFE=$(printf '%s_%s_%s' "$SESSION" "$WINDOW" "$PANE_IDX" | tr ':-.' '___')
+RUNTIME_DIR="${DOEY_RUNTIME:-}"
+if [ -z "$RUNTIME_DIR" ]; then
+  RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | sed 's/^DOEY_RUNTIME=//')
+fi
+if [ -z "$RUNTIME_DIR" ]; then
+  RUNTIME_DIR="/tmp/doey/${SESSION#doey-}"
+fi
+
+# ── 3. Read launch command ──
+LAUNCH_FILE="${RUNTIME_DIR}/status/${SAFE}.launch_cmd"
+if [ -f "$LAUNCH_FILE" ]; then
+  LAUNCH_CMD=$(cat "$LAUNCH_FILE")
+else
+  LAUNCH_CMD='claude --dangerously-skip-permissions'
+fi
+
+# ── 4. Write respawn script that runs after Claude exits ──
+RESPAWN_SCRIPT=$(mktemp "${TMPDIR:-/tmp}/doey_respawn_XXXXXX.sh")
+cat > "$RESPAWN_SCRIPT" <<'INNER_EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+PANE_TARGET="$1"; shift
+LAUNCH_CMD="$*"
+sleep 2
+tmux send-keys -t "$PANE_TARGET" "$LAUNCH_CMD" Enter
+rm -f "$0"
+INNER_EOF
+chmod +x "$RESPAWN_SCRIPT"
+
+# ── 5. Launch respawn in background ──
+nohup bash "$RESPAWN_SCRIPT" "$PANE_TARGET" "$LAUNCH_CMD" >/dev/null 2>&1 &
+echo "Respawn scheduled for ${PANE_TARGET} — exiting now."
 ```
 
-### Write proof file
-
-```bash
-mkdir -p "$RUNTIME_DIR/proof"
-echo "PROOF_TYPE: respawn" > "$RUNTIME_DIR/proof/${SAFE}.proof"
-```
-
-### Stop
-
-You have requested a respawn. Stop now.
+After the bash command succeeds, **immediately run `/exit`** to quit Claude. The background script will relaunch this pane in ~2 seconds.
