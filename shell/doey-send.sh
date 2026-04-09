@@ -143,6 +143,7 @@ doey_wait_for_prompt() {
   local interval=1
 
   # Fast path: check immediately before any sleep
+  # capture-pane kept: visual ❯ prompt is the only reliable way to confirm Claude CLI is at input
   local captured
   captured=$(tmux capture-pane -t "$target" -p -S -10 2>/dev/null) || captured=""
   if printf '%s' "$captured" | grep -qF '❯' 2>/dev/null; then
@@ -284,6 +285,7 @@ _doey_send_verified_inner() {
       if _doey_send_check_busy "$target"; then
         return 0
       fi
+      # capture-pane kept: activity indicators (⏳, tool names) appear before status file updates
       local post_submit
       post_submit=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || post_submit=""
       if _doey_send_check_activity "$post_submit"; then
