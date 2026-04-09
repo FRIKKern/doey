@@ -17,17 +17,81 @@ __doey_intent_dispatch_sourced=1
 # shellcheck source=intent-fallback.sh
 source "${BASH_SOURCE[0]%/*}/intent-fallback.sh"
 
+# Conversational chat mode — warm, cozy interaction
+_doey_chat_mode() {
+  local initial_input="$1"
+  local first_response="$2"
+
+  # Color setup — respect NO_COLOR
+  local _chat_reset="" _chat_accent="" _chat_dim=""
+  if [ -z "${NO_COLOR:-}" ] && _intent_fb_is_tty; then
+    _chat_reset=$'\033[0m'
+    _chat_accent=$'\033[38;5;222m'   # warm gold
+    _chat_dim=$'\033[38;5;245m'      # soft gray
+  fi
+
+  # Ctrl-C exits cleanly
+  trap 'printf "\n" >&2; return 0' INT
+
+  # Print first response (from the classification)
+  if [ -n "$first_response" ]; then
+    printf '\n  %s%s%s\n' "$_chat_accent" "$first_response" "$_chat_reset" >&2
+  fi
+
+  # Non-TTY: single response only, no REPL
+  if ! _intent_fb_is_tty; then
+    return 0
+  fi
+
+  # Interactive REPL loop
+  local context="User: ${initial_input}
+Assistant: ${first_response}"
+  local user_input=""
+
+  while true; do
+    printf '\n  %s> %s' "$_chat_dim" "$_chat_reset" >&2
+    if ! read -r user_input; then
+      # EOF / Ctrl-D
+      printf '\n' >&2
+      break
+    fi
+
+    # Empty input exits
+    if [ -z "$user_input" ]; then
+      printf '  %s~ see you around! ~%s\n\n' "$_chat_dim" "$_chat_reset" >&2
+      break
+    fi
+
+    # Get response from Haiku via the chat function in intent-fallback.sh
+    local resp
+    resp=$(_doey_chat_respond "$user_input" "$context") || true
+
+    if [ -n "$resp" ]; then
+      printf '\n  %s%s%s\n' "$_chat_accent" "$resp" "$_chat_reset" >&2
+      context="${context}
+User: ${user_input}
+Assistant: ${resp}"
+    else
+      printf '\n  %s(doey got tongue-tied — try again?)%s\n' "$_chat_dim" "$_chat_reset" >&2
+    fi
+  done
+
+  return 0
+}
+
 # Main entry point called from doey.sh
 _doey_intent_dispatch() {
   local typed="$*"
+  _intent_fb_init_color
+  trap 'printf "\n" >&2; exit 130' INT
 
   # Strip politeness prefixes
   typed="$(printf '%s' "$typed" | sed -E 's/^(please|pls|can you|could you|would you|kindly)[[:space:]]+//i')"
 
   # Opt-out gates
   if [ "${DOEY_NO_INTENT_FALLBACK:-0}" = "1" ] || [ "${DOEY_INTENT_FALLBACK:-1}" = "0" ]; then
-    printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
-    printf '  Run \033[1mdoey --help\033[0m for usage\n' >&2
+    printf "  ${_IFB_RED}✗${_IFB_RST} Unknown command: %s\n" "$typed" >&2
+    printf "  Run ${_IFB_BLD}doey --help${_IFB_RST} for usage\n" >&2
     return 1
   fi
 
@@ -55,8 +119,8 @@ _doey_intent_dispatch() {
 
     if [ -z "$result" ]; then
       # Headless call failed silently — fall back to plain error
-      printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
-      printf '  Run \033[1mdoey --help\033[0m for usage\n' >&2
+      printf "  ${_IFB_RED}✗${_IFB_RST} Unknown command: %s\n" "$typed" >&2
+      printf "  Run ${_IFB_BLD}doey --help${_IFB_RST} for usage\n" >&2
       return 1
     fi
 
@@ -71,26 +135,27 @@ _doey_intent_dispatch() {
     HIGH)
       if _intent_fb_is_destructive "$command"; then
         # Destructive commands always require explicit confirmation
-        printf '  Did you mean: \033[1m%s\033[0m?\n' "$command"
-        printf '  \033[33m⚠\033[0m  This is a destructive command.\n'
-        printf '  Run? [y/N] '
+        printf "  Did you mean: ${_IFB_BLD}%s${_IFB_RST}?\n" "$command" >&2
+        printf "  ${_IFB_YLW}⚠${_IFB_RST}  This is a destructive command.\n" >&2
+        printf '  Run? [y/N] ' >&2
         read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
         case "$_confirm" in
           [Yy]*) eval "$command" ;;
-          *) printf '  Cancelled.\n' ;;
+          *) printf '  Cancelled.\n' >&2 ;;
         esac
-      elif [ -t 0 ] || [ -t 2 ]; then
+      elif _intent_fb_is_tty; then
         # Interactive TTY — auto-execute
-        printf '  Running: \033[1m%s\033[0m\n' "$command"
+        printf "  Running: ${_IFB_BLD}%s${_IFB_RST}\n" "$command" >&2
+        printf "  (%s)\n" "$explanation" >&2
         eval "$command"
       else
         # Non-interactive — just suggest
-        printf '  → %s\n' "$command"
-        printf '  (%s)\n' "$explanation"
+        printf '  → %s\n' "$command" >&2
+        printf '  (%s)\n' "$explanation" >&2
       fi
       ;;
     MEDIUM)
-      if [ -t 0 ] || [ -t 2 ]; then
+      if _intent_fb_is_tty; then
         # Try interactive TUI if available
         if command -v doey-tui >/dev/null 2>&1; then
           local _tui_json _tui_result _selected
@@ -111,7 +176,7 @@ _doey_intent_dispatch() {
           fi
         else
           # Fallback: simple y/N prompt
-          printf '  Did you mean: \033[1m%s\033[0m? [y/N] ' "$command" >&2
+          printf "  Did you mean: ${_IFB_BLD}%s${_IFB_RST}? [y/N] " "$command" >&2
           read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
           case "$_confirm" in
             [Yy]*) eval "$command" ;;
@@ -120,12 +185,16 @@ _doey_intent_dispatch() {
         fi
       else
         # Non-interactive — just print suggestion
-        printf '  Did you mean: %s\n' "$command"
-        printf '  (%s)\n' "$explanation"
+        printf '  Did you mean: %s\n' "$command" >&2
+        printf '  (%s)\n' "$explanation" >&2
       fi
       ;;
+    CHAT)
+      # Conversational mode — doey is a friendly companion
+      _doey_chat_mode "$typed" "$explanation"
+      ;;
     NONE|*)
-      if [ -t 0 ] || [ -t 2 ] && command -v doey-tui >/dev/null 2>&1; then
+      if _intent_fb_is_tty && command -v doey-tui >/dev/null 2>&1; then
         printf '{"action":"info","message":"%s","suggestions":[]}' \
           "$(printf '%s' "$explanation" | sed 's/"/\\"/g')" \
           | doey-tui intent-select 2>/dev/tty || true
@@ -135,6 +204,7 @@ _doey_intent_dispatch() {
       ;;
   esac
 
+  trap - INT
   return 0
 }
 

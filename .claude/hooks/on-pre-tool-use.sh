@@ -665,6 +665,56 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
   esac
 fi
 
+# ── Universal git safety: force-push, main-branch push, --no-verify ──────
+# Applies to ALL roles before any early exits
+if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__PARSE_FAILED__" ]; then
+  # Clean command: strip heredoc bodies + quoted strings (mirrors _is_direct_vcs_cmd)
+  _gsafe="${_BASH_CMD}"
+  case "$_gsafe" in
+    *"<<"*)
+      _gsafe=$(printf '%s\n' "$_gsafe" | awk '
+        BEGIN{s=0;d=""}
+        s{t=$0;gsub(/^[[:space:]]+/,"",t);if(t==d)s=0;next}
+        /<</{
+          i=index($0,"<<")
+          if(i>0){
+            r=substr($0,i+2);gsub(/^-?[[:space:]]*/,"",r)
+            rc=r;gsub(/^["'"'"'\\]?/,"",rc)
+            if(match(rc,/^[A-Za-z_][A-Za-z_0-9]*/)){
+              d=substr(rc,RSTART,RLENGTH);s=1
+              print substr($0,1,i-1);next
+            }
+          }
+        }
+        {print}
+      ' | tr '\n' ';') ;;
+    *)
+      _gsafe=$(printf '%s' "$_gsafe" | tr '\n' ';') ;;
+  esac
+  _gsafe=$(printf '%s' "$_gsafe" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
+  case "$_gsafe" in
+    *"git push"*"--force"*|*"git push"*"--force-with-lease"*)
+      _log_block "TOOL_BLOCKED" "Force push blocked" "$_BASH_CMD"
+      _dbg_write "block_force_push"
+      echo "Force push blocked. Use normal push." >&2
+      exit 2 ;;
+  esac
+  case "$_gsafe" in
+    *"git push"*" main"*|*"git push"*" master"*|*"git push"*":main"*|*"git push"*":master"*)
+      _log_block "TOOL_BLOCKED" "Direct push to main/master blocked" "$_BASH_CMD"
+      _dbg_write "block_push_main"
+      echo "Direct push to main/master blocked. Use a feature branch." >&2
+      exit 2 ;;
+  esac
+  case "$_gsafe" in
+    *"git "*"--no-verify"*)
+      _log_block "TOOL_BLOCKED" "--no-verify flag blocked" "$_BASH_CMD"
+      _dbg_write "block_no_verify"
+      echo "The --no-verify flag is not allowed." >&2
+      exit 2 ;;
+  esac
+fi
+
 # Doey Expert: can only access Doey source files (shell/, agents/, .claude/, docs/, tests/)
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DOEY_EXPERT" ]; then
   case "$TOOL_NAME" in
@@ -723,6 +773,52 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] && [ "$TOOL_NAME" = "Bash" ]; t
     "tmux send-keys"*|"tmux load-buffer"*|"tmux paste-buffer"*|\
     "tmux select-pane"*|"tmux list-panes"*|"tmux capture-pane"*|\
     "tmux display-message"*|"tmux copy-mode"*)
+      # --- Team-boundary guard: Subtaskmaster can only target own window, Dashboard, or Coordinator ---
+      _tl_target=$(echo "$_tmux_stripped" | sed 's/.*[[:space:]]-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
+      if [ -n "$_tl_target" ] && [ "$_tl_target" != "$_tmux_stripped" ]; then
+        # Extract target window index (handle session:W.P or W.P)
+        _tl_tgt_wp="$_tl_target"
+        case "$_tl_tgt_wp" in *:*) _tl_tgt_wp="${_tl_tgt_wp#*:}" ;; esac
+        _tl_tgt_wi="${_tl_tgt_wp%%.*}"
+        # Sender window index
+        _tl_my_wi="${DOEY_WINDOW_INDEX:-}"
+        if [ -z "$_tl_my_wi" ] && [ -n "${_WP:-}" ]; then
+          _tl_my_wp="${_WP#*:}"; _tl_my_wi="${_tl_my_wp%%.*}"
+        fi
+        # Coordinator window
+        _tl_coord_pane="${DOEY_TASKMASTER_PANE:-1.0}"
+        _tl_coord_wi="${_tl_coord_pane%%.*}"
+        # Check boundary: own window, Dashboard (0), or Coordinator window
+        if [ -n "$_tl_my_wi" ] && [ "$_tl_tgt_wi" != "$_tl_my_wi" ] && [ "$_tl_tgt_wi" != "0" ] && [ "$_tl_tgt_wi" != "$_tl_coord_wi" ]; then
+          # Extract tmux subcommand
+          _tl_subcmd="${_tmux_stripped#tmux }"; _tl_subcmd="${_tl_subcmd%% *}"
+          case "$_tl_subcmd" in
+            send-keys|paste-buffer|load-buffer)
+              _log_block "TOOL_BLOCKED" "${DOEY_ROLE_TEAM_LEAD} cross-team dispatch to window ${_tl_tgt_wi} blocked (own: ${_tl_my_wi})" "$_tmux_stripped"
+              _dbg_write "block_team_lead_cross_team_${_tl_tgt_wi}"
+              echo "BLOCKED: ${DOEY_ROLE_TEAM_LEAD} cannot send-keys/dispatch outside own team window ${_tl_my_wi}. Target window ${_tl_tgt_wi} is out of scope. Route through ${DOEY_ROLE_COORDINATOR}." >&2
+              exit 2 ;;
+            *) _dbg_write "allow_team_lead_readonly_cross_team_${_tl_subcmd}" ;;
+          esac
+        fi
+        # Check reserved pane
+        _tl_tgt_safe=$(echo "$_tl_target" | tr ':.-' '___')
+        # Prepend session name if target does not include one
+        case "$_tl_target" in *:*) ;; *)
+          _tl_sn="${SESSION_NAME:-}"; [ -z "$_tl_sn" ] && _tl_sn=$(_rk SESSION_NAME "${_RD:-}/session.env")
+          [ -n "$_tl_sn" ] && _tl_tgt_safe=$(echo "${_tl_sn}:${_tl_target}" | tr ':.-' '___')
+        ;; esac
+        if [ -f "${_RD:-}/status/${_tl_tgt_safe}.reserved" ]; then
+          _tl_subcmd2="${_tmux_stripped#tmux }"; _tl_subcmd2="${_tl_subcmd2%% *}"
+          case "$_tl_subcmd2" in
+            send-keys|paste-buffer|load-buffer)
+              _log_block "TOOL_BLOCKED" "${DOEY_ROLE_TEAM_LEAD} dispatch to reserved pane ${_tl_target} blocked" "$_tmux_stripped"
+              _dbg_write "block_team_lead_reserved_pane_${_tl_tgt_safe}"
+              echo "BLOCKED: Target pane ${_tl_target} is reserved. Cannot dispatch to reserved panes." >&2
+              exit 2 ;;
+          esac
+        fi
+      fi
       _dbg_write "allow_manager_tmux_dispatch"
       exit 0 ;;
   esac
@@ -811,6 +907,24 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROL
       "tmux send-keys"*|"tmux paste-buffer"*|"tmux load-buffer"*)
         _tgt_window=""
         case "$_CMD" in *":0."*) ;; *":"[0-9]*"."*) _tgt_window="team" ;; esac
+        # --- Reserved-team guard: Coordinator cannot dispatch to reserved team worker panes ---
+        if [ "$_tgt_window" = "team" ]; then
+          _coord_tgt=$(echo "$_CMD" | sed 's/.*[[:space:]]-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
+          _coord_tgt_wp="$_coord_tgt"
+          case "$_coord_tgt_wp" in *:*) _coord_tgt_wp="${_coord_tgt_wp#*:}" ;; esac
+          _coord_tgt_wi="${_coord_tgt_wp%%.*}"
+          _coord_tgt_pi="${_coord_tgt_wp#*.}"
+          _coord_team_env="${_RD:-}/team_${_coord_tgt_wi}.env"
+          if [ -f "$_coord_team_env" ]; then
+            _coord_reserved=$(_rk RESERVED "$_coord_team_env")
+            if [ "$_coord_reserved" = "true" ] && [ "$_coord_tgt_pi" != "0" ]; then
+              _log_block "TOOL_BLOCKED" "${DOEY_ROLE_COORDINATOR} dispatch to reserved team window ${_coord_tgt_wi} blocked" "$_CMD"
+              _dbg_write "block_coordinator_reserved_team_${_coord_tgt_wi}"
+              echo "BLOCKED: Team window ${_coord_tgt_wi} is reserved. Cannot dispatch to reserved worker panes. Route through the team ${DOEY_ROLE_TEAM_LEAD}." >&2
+              exit 2
+            fi
+          fi
+        fi
         if [ -n "$_tgt_window" ]; then
           _has_active=false
           _task_pd="${DOEY_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
