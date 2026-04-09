@@ -201,3 +201,21 @@
 
 # Custom domain for tunnel (provider-specific, optional)
 # DOEY_TUNNEL_DOMAIN=
+
+# Tunnel: provider preference (auto-detected if unset; valid: tailscale, cloudflared)
+TUNNEL_PROVIDER="${TUNNEL_PROVIDER:-}"
+
+# Tunnel: port watcher poll interval in seconds
+TUNNEL_WATCHER_INTERVAL="${TUNNEL_WATCHER_INTERVAL:-2}"
+
+# Tunnel: dev-server process allowlist (space-separated). Watcher matches these against the listening process name.
+TUNNEL_PORT_ALLOWLIST="${TUNNEL_PORT_ALLOWLIST:-vite next remix webpack esbuild parcel astro nuxt rollup turbo pnpm npm node bun deno rails django flask uvicorn gunicorn rackup puma jekyll hugo}"
+
+# Tunnel: process blocklist (space-separated). Always excluded even if in the allowlist range.
+TUNNEL_PORT_BLOCKLIST="${TUNNEL_PORT_BLOCKLIST:-sshd systemd-resolved systemd-resolve dnsmasq postgres postgresql mysql mysqld redis-server redis docker-proxy containerd dockerd cupsd avahi-daemon chronyd ntpd}"
+
+# Tunnel: minimum port for dev-server detection
+TUNNEL_MIN_PORT="${TUNNEL_MIN_PORT:-1024}"
+
+# Tunnel: maximum port for dev-server detection
+TUNNEL_MAX_PORT="${TUNNEL_MAX_PORT:-65535}"

@@ -307,11 +307,14 @@ while true; do
     TEAM_LINE_COUNT=$((TEAM_LINE_COUNT + 1))
   done
 
-  # Tunnel status
-  read_env_file "${RUNTIME_DIR}/tunnel.env" TUNNEL_URL TUNNEL_PROVIDER TUNNEL_ERROR
+  # Tunnel status (multi-port aware — TUNNEL_PORTS_LIST + TUNNEL_HOSTNAME
+  # are written by doey-port-watcher.sh and the tailscale provider)
+  read_env_file "${RUNTIME_DIR}/tunnel.env" TUNNEL_URL TUNNEL_PROVIDER TUNNEL_ERROR TUNNEL_PORTS_LIST TUNNEL_HOSTNAME
   _tunnel_url="$_ENV_TUNNEL_URL"
   _tunnel_provider="$_ENV_TUNNEL_PROVIDER"
   _tunnel_error="$_ENV_TUNNEL_ERROR"
+  _tunnel_ports_list="$_ENV_TUNNEL_PORTS_LIST"
+  _tunnel_hostname="$_ENV_TUNNEL_HOSTNAME"
 
   # Remote mode
   _is_remote=$(tmux show-environment DOEY_REMOTE 2>/dev/null | cut -d= -f2-) || _is_remote=""
@@ -429,14 +432,48 @@ while true; do
     "$(_stat_item TEAMS "$TEAM_COUNT")"
   gum_divider "$HR_THICK"
 
-  # Tunnel URL (only shown when tunnel is active or errored)
-  if [ -n "$_tunnel_url" ]; then
+  # Tunnels — multi-port aware. Order of preference:
+  #   1. TUNNEL_PORTS_LIST present → header + one row per detected dev server
+  #   2. TUNNEL_URL present        → legacy single-URL render (cloudflared etc.)
+  #   3. TUNNEL_ERROR              → error indicator
+  #   4. tunnel.env exists         → empty state ("watcher active, no servers")
+  #   5. SSH session w/ no tunnel  → bare [REMOTE] marker
+  if [ -n "$_tunnel_ports_list" ]; then
+    # Multi-port header
+    printf '  %b TUNNELS%b' "${C_BOLD_GREEN}" "${C_RESET}"
+    [ -n "$_tunnel_hostname" ] && printf '  %s' "$_tunnel_hostname"
+    [ -n "$_tunnel_provider" ] && printf '  %b(%s)%b' "${C_DIM}" "$_tunnel_provider" "${C_RESET}"
+    [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
+    printf '\n'
+    # One row per "port:proc" pair, comma-separated
+    _tp_old_ifs="$IFS"
+    IFS=','
+    for _tp_entry in $_tunnel_ports_list; do
+      _tp_port="${_tp_entry%%:*}"
+      _tp_proc="${_tp_entry#*:}"
+      [ "$_tp_proc" = "$_tp_entry" ] && _tp_proc="?"
+      [ -n "$_tp_port" ] || continue
+      if [ -n "$_tunnel_hostname" ]; then
+        _tp_url="http://${_tunnel_hostname}:${_tp_port}"
+      else
+        _tp_url="localhost:${_tp_port}"
+      fi
+      printf '    %b→%b %s  %b(%s)%b\n' "${C_DIM}" "${C_RESET}" "$_tp_url" "${C_DIM}" "$_tp_proc" "${C_RESET}"
+    done
+    IFS="$_tp_old_ifs"
+  elif [ -n "$_tunnel_url" ]; then
+    # Legacy single-URL render — preserved verbatim for non-watcher modes
     printf '  %b TUNNEL%b  %s' "${C_BOLD_GREEN}" "${C_RESET}" "$_tunnel_url"
     [ -n "$_tunnel_provider" ] && printf '  %b(%s)%b' "${C_DIM}" "$_tunnel_provider" "${C_RESET}"
     [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
     printf '\n'
   elif [ -n "$_tunnel_error" ]; then
     printf '  %b TUNNEL%b  %b%s%b\n' "${C_BOLD_YELLOW}" "${C_RESET}" "${C_DIM}" "$_tunnel_error" "${C_RESET}"
+  elif [ -f "${RUNTIME_DIR}/tunnel.env" ]; then
+    # Watcher active but no dev servers detected yet — keep section visible
+    printf '  %b TUNNELS%b  %b(no dev servers detected)%b' "${C_BOLD_GREEN}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
+    [ "$_is_remote" = "true" ] && printf '  %b[REMOTE]%b' "${C_BOLD_CYAN}" "${C_RESET}"
+    printf '\n'
   elif [ "$_is_remote" = "true" ]; then
     printf '  %b[REMOTE]%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
   fi

@@ -393,6 +393,21 @@ _kill_doey_session() {
     kill "$(cat "$_rt/doey-daemon.pid")" 2>/dev/null || true
     rm -f "$_rt/doey-daemon.pid"
   fi
+  # Stop port watcher daemon (Q5: tailscale itself stays up across `doey stop`)
+  if [ -f "$_rt/port-watcher.pid" ]; then
+    local _watcher_pid _grace
+    _watcher_pid=$(cat "$_rt/port-watcher.pid" 2>/dev/null || true)
+    if [ -n "$_watcher_pid" ] && kill -0 "$_watcher_pid" 2>/dev/null; then
+      kill "$_watcher_pid" 2>/dev/null || true
+      # 2-second grace period before SIGKILL fallback
+      for _grace in 1 2 3 4; do
+        kill -0 "$_watcher_pid" 2>/dev/null || break
+        sleep 0.5
+      done
+      kill -9 "$_watcher_pid" 2>/dev/null || true
+    fi
+    rm -f "$_rt/port-watcher.pid" 2>/dev/null || true
+  fi
   rm -rf "$_rt" 2>/dev/null || true
 }
 
