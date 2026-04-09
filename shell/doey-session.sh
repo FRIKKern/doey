@@ -15,6 +15,7 @@ source "${SESSION_SCRIPT_DIR}/doey-roles.sh"
 source "${SESSION_SCRIPT_DIR}/doey-send.sh"
 source "${SESSION_SCRIPT_DIR}/doey-grid.sh"
 source "${SESSION_SCRIPT_DIR}/doey-team-mgmt.sh"
+source "${SESSION_SCRIPT_DIR}/doey-mcp.sh" 2>/dev/null || true
 
 # project_name_from_dir, project_acronym, find_project → doey-helpers.sh
 
@@ -393,6 +394,8 @@ _kill_doey_session() {
     kill "$(cat "$_rt/doey-daemon.pid")" 2>/dev/null || true
     rm -f "$_rt/doey-daemon.pid"
   fi
+  # Clean up all MCP servers and configs
+  doey_mcp_cleanup_session "$_rt" || true
   rm -rf "$_rt" 2>/dev/null || true
 }
 
@@ -799,6 +802,8 @@ _cleanup_old_session() {
     kill "$(cat "$runtime_dir/doey-daemon.pid")" 2>/dev/null || true
     rm -f "$runtime_dir/doey-daemon.pid"
   fi
+  # Clean up all MCP servers and configs
+  doey_mcp_cleanup_session "$runtime_dir" || true
   rm -rf "$runtime_dir"
   git worktree prune 2>/dev/null || true
   # Delete doey/team-* branches whose worktrees no longer exist
@@ -816,7 +821,7 @@ _cleanup_old_session() {
     fi
     git branch -D "$b" 2>/dev/null || true
   done
-  mkdir -p "${runtime_dir}"/{messages,broadcasts,status,logs}
+  mkdir -p "${runtime_dir}"/{messages,broadcasts,status,logs,mcp,mcp/pids}
   : > "${runtime_dir}/logs/doey-router.log" 2>/dev/null
   : > "${runtime_dir}/logs/doey-daemon.log" 2>/dev/null
 }
