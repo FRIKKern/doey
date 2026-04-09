@@ -16,7 +16,20 @@ SESSION_NAME="${SESSION_NAME:-doey}"
 
 # Tunnel config from environment
 TUNNEL_PROVIDER="${DOEY_TUNNEL_PROVIDER:-auto}"
-TUNNEL_PORTS="${DOEY_TUNNEL_PORTS:-3000}"
+if [ -n "${DOEY_TUNNEL_PORTS:-}" ]; then
+  TUNNEL_PORTS="$DOEY_TUNNEL_PORTS"
+else
+  # Auto-detect ports using 3-tier system
+  _td_script="${BASH_SOURCE[0]%/*}/doey-tunnel-detect.sh"
+  if [ -f "$_td_script" ]; then
+    # shellcheck disable=SC1090
+    source "$_td_script"
+    TUNNEL_PORTS="$(_detect_ports_all "$(dirname "${RUNTIME_DIR}")" 2>/dev/null)" || TUNNEL_PORTS="3000"
+    [ -n "$TUNNEL_PORTS" ] || TUNNEL_PORTS="3000"
+  else
+    TUNNEL_PORTS="3000"
+  fi
+fi
 TUNNEL_DOMAIN="${DOEY_TUNNEL_DOMAIN:-}"
 
 TUNNEL_ENV="${RUNTIME_DIR}/tunnel.env"

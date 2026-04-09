@@ -62,6 +62,7 @@ COMPLETE COMMAND REFERENCE:
   doey tunnel up                Start localhost tunnel
   doey tunnel down              Stop localhost tunnel
   doey tunnel status            Show tunnel status
+  doey open <name>              Open/attach to a registered project by name
   doey dynamic                  Launch with dynamic grid (alias: d)
   doey <NxM>                    Launch with grid (e.g. 4x3, 6x2)
   doey task list                List tasks
@@ -99,11 +100,14 @@ _doey_intent_lookup() {
   local sys_prompt
   sys_prompt=$(_intent_fb_system_prompt)
 
+  # Run from /tmp to avoid loading heavy project context (CLAUDE.md scans),
+  # and bump --max-turns so claude doesn't bail with "Reached max turns (1)".
   local resp
-  resp=$(doey_headless "The user typed: doey ${typed}" \
+  resp=$(cd /tmp && doey_headless "The user typed: doey ${typed}" \
     --model haiku \
     --no-tools \
-    --timeout 15 \
+    --max-turns 20 \
+    --timeout 20 \
     --append-system "$sys_prompt" \
     2>/dev/null) || true
 
