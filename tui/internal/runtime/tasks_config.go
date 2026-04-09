@@ -108,6 +108,7 @@ type PersistentTask struct {
 	Status       string              `json:"status"`                  // draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled
 	Phase        string              `json:"phase,omitempty"`         // research, review, implementation
 	Description  string              `json:"description"`             // optional detail text
+	OriginPrompt string              `json:"origin_prompt,omitempty"` // verbatim user message that originated the task
 	Attachments  []string            `json:"attachments,omitempty"`   // list of URLs/file paths
 	Team         string              `json:"team"`                    // assigned team name (optional)
 	Created      int64               `json:"created"`                 // unix epoch
@@ -236,6 +237,7 @@ func storeTaskToPersistent(st store.Task) PersistentTask {
 		Type:               st.Type,
 		Category:           st.Type,
 		Description:        st.Description,
+		OriginPrompt:       st.OriginPrompt,
 		CreatedBy:          st.CreatedBy,
 		AssignedTo:         st.AssignedTo,
 		Team:               st.Team,
