@@ -283,7 +283,7 @@ User: ${msg}"
   resp=$(cd /tmp && doey_headless "$full_msg" \
     --model opus \
     --no-tools \
-    --max-turns 1 \
+    --max-turns 5 \
     --timeout 15 \
     --append-system "$chat_prompt" \
     2>/dev/null) || true
