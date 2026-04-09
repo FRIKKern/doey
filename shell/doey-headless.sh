@@ -6,7 +6,7 @@ set -euo pipefail
 __doey_headless_sourced=1
 
 # Usage: doey_headless <message> [--model haiku|sonnet|opus|<full-name>] [--max-turns N]
-#        [--no-tools] [--json] [--timeout N] [--system FILE] [--append-system PROMPT_STRING]
+#        [--no-tools] [--json] [--stream] [--timeout N] [--system FILE] [--append-system PROMPT_STRING]
 
 doey_headless() {
   local message=""
@@ -14,6 +14,7 @@ doey_headless() {
   local max_turns="1"
   local no_tools=0
   local json_mode=0
+  local stream_mode=0
   local timeout_secs="${DOEY_HEADLESS_TIMEOUT:-30}"
   local system_file=""
   local append_system=""
@@ -33,6 +34,9 @@ doey_headless() {
         ;;
       --json)
         json_mode=1
+        ;;
+      --stream)
+        stream_mode=1
         ;;
       --timeout)
         shift
@@ -69,7 +73,7 @@ doey_headless() {
   fi
 
   if [ -z "$message" ]; then
-    echo "Usage: doey-headless <message> [--model haiku|sonnet|opus] [--max-turns N] [--no-tools] [--json] [--timeout N] [--system FILE] [--append-system PROMPT]" >&2
+    echo "Usage: doey-headless <message> [--model haiku|sonnet|opus] [--max-turns N] [--no-tools] [--json] [--stream] [--timeout N] [--system FILE] [--append-system PROMPT]" >&2
     return 1
   fi
 
@@ -127,6 +131,49 @@ doey_headless() {
   if [ -n "$append_system" ]; then
     claude_args="$claude_args --append-system-prompt \"$append_system\""
   fi
+
+  # Stream mode: pipe claude output directly to stdout, no capture
+  if [ "$stream_mode" -eq 1 ]; then
+    if [ "$json_mode" -eq 1 ]; then
+      echo "doey-headless: --stream and --json are mutually exclusive" >&2
+      return 1
+    fi
+
+    local start_ts
+    start_ts="$(date +%s)"
+
+    local exit_code=0
+    if [ -n "$timeout_bin" ]; then
+      printf '%s' "$message" | eval "$timeout_bin" "$timeout_secs" claude $claude_args 2>/dev/null || exit_code=$?
+    else
+      printf '%s' "$message" | eval claude $claude_args 2>/dev/null || exit_code=$?
+    fi
+
+    if [ "$exit_code" -eq 124 ]; then exit_code=4; fi
+
+    local end_ts
+    end_ts="$(date +%s)"
+    local latency_ms=$(( (end_ts - start_ts) * 1000 ))
+
+    local caller="direct"
+    if [ "${#FUNCNAME[@]}" -gt 1 ] 2>/dev/null; then
+      caller="${FUNCNAME[1]:-direct}"
+    elif [ -n "${0:-}" ]; then
+      caller="$(basename "$0")"
+    fi
+
+    local log_dir="${DOEY_RUNTIME:-/tmp/doey/${PROJECT_NAME:-unknown}}"
+    [ -d "$log_dir" ] || mkdir -p "$log_dir" 2>/dev/null || true
+    local log_file="$log_dir/headless.log"
+    local iso_ts
+    iso_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)"
+    local msg_preview="${message:0:80}"
+    msg_preview="$(echo "$msg_preview" | tr '\n' ' ')"
+    echo "$iso_ts $model \$0 ${latency_ms}ms $exit_code $caller [stream] $msg_preview" >> "$log_file" 2>/dev/null || true
+
+    return "$exit_code"
+  fi
+
   # Record start time
   local start_ts
   start_ts="$(date +%s)"
