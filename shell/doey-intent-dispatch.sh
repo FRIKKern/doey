@@ -82,7 +82,6 @@ Assistant: ${resp}"
 # Main entry point called from doey.sh
 _doey_intent_dispatch() {
   local typed="$*"
-
   _intent_fb_init_color
   trap 'printf "\n" >&2; exit 130' INT
 
@@ -147,7 +146,7 @@ _doey_intent_dispatch() {
       elif _intent_fb_is_tty; then
         # Interactive TTY — auto-execute
         printf "  Running: ${_IFB_BLD}%s${_IFB_RST}\n" "$command" >&2
-        printf '  (%s)\n' "$explanation" >&2
+        printf "  (%s)\n" "$explanation" >&2
         eval "$command"
       else
         # Non-interactive — just suggest
