@@ -494,6 +494,12 @@ if [ -z "$_DOEY_ROLE" ] && [ -n "${_WP:-}" ] && [ -n "${_RD:-}" ]; then
   fi
 fi
 
+# Read custom team role for fine-grained whitelisting
+_DOEY_TEAM_ROLE="${DOEY_TEAM_ROLE:-}"
+if [ -z "$_DOEY_TEAM_ROLE" ] && [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
+  [ -f "${_RD}/status/${_PS}.team_role" ] && _DOEY_TEAM_ROLE=$(cat "${_RD}/status/${_PS}.team_role" 2>/dev/null) || true
+fi
+
 if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
   _HB_FILE="${_RD}/status/${_PS}.heartbeat"
   _hb_write=true
@@ -592,6 +598,11 @@ fi
 if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
   case "$TOOL_NAME" in
     Agent)
+      # Interviewer (team_lead with team_role=interviewer) may spawn agents for research
+      if [ "${_DOEY_TEAM_ROLE:-}" = "interviewer" ]; then
+        _dbg_write "allow_interviewer_agent"
+        exit 0
+      fi
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
       _dbg_write "block_${_DOEY_ROLE}_agent"
       _forward_action "Agent" "" "agent spawn" || true
@@ -747,6 +758,12 @@ fi
 
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ]; then
   _dbg_write "allow_boss"
+  exit 0
+fi
+
+# Interviewer role can ask user questions directly (interview protocol requires it)
+if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ "${_DOEY_TEAM_ROLE:-}" = "interviewer" ]; then
+  _dbg_write "allow_interviewer_ask_user"
   exit 0
 fi
 

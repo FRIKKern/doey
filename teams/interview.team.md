@@ -12,7 +12,7 @@ manager_model: opus
 | Pane | Name | Role | Agent | Model | Script |
 |------|------|------|-------|-------|--------|
 | 0 | Interviewer | interviewer | doey-interviewer | opus | |
-| 1 | Researcher | researcher | | sonnet | |
+| 1 | Researcher | researcher | doey-interview-researcher | sonnet | |
 | 2 | Brief | viewer | | | interview-brief-watcher.sh |
 
 ---
