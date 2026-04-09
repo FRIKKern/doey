@@ -102,6 +102,8 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 
 Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 
+**Intent Fallback:** Unknown `doey` commands are routed through a Haiku-powered correction layer (`shell/intent-fallback.sh` + `shell/doey-intent-dispatch.sh`). Silent on failure, refuses destructive auto-corrects without a tty `[y/N]`, opt out with `DOEY_NO_INTENT_FALLBACK=1`. See `docs/intent-fallback.md`.
+
 ## Conventions
 
 - **Agents:** YAML frontmatter in `agents/` (name, model, color, memory, description)
