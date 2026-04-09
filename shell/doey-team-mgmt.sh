@@ -14,6 +14,8 @@ source "${TEAM_MGMT_SCRIPT_DIR}/doey-ui.sh"
 source "${TEAM_MGMT_SCRIPT_DIR}/doey-grid.sh"
 source "${TEAM_MGMT_SCRIPT_DIR}/doey-roles.sh"
 source "${TEAM_MGMT_SCRIPT_DIR}/doey-send.sh"
+# shellcheck source=doey-mcp.sh
+source "${TEAM_MGMT_SCRIPT_DIR}/doey-mcp.sh" 2>/dev/null || true
 
 # ── Team Env ──────────────────────────────────────────────────────────
 
@@ -473,6 +475,12 @@ _batch_boot_workers() {
     _append_settings cmd "$runtime_dir"
     cmd+=" --append-system-prompt-file \"${prompt_file}\""
 
+    # Attach MCP config if generated for this pane or team
+    local _bbw_mcp_pane="${runtime_dir}/mcp/pane_${team_window}_${pane_idx}.mcp.json"
+    local _bbw_mcp_team="${runtime_dir}/mcp/team_${team_window}.mcp.json"
+    [ -f "$_bbw_mcp_pane" ] && cmd+=" --mcp-config \"${_bbw_mcp_pane}\""
+    [ -f "$_bbw_mcp_team" ] && cmd+=" --mcp-config \"${_bbw_mcp_team}\""
+
     # Store pane index and command for phase 2
     _bbw_pane_arr+=("$pane_idx")
     _bbw_cmd_arr+=("$cmd")
@@ -767,6 +775,11 @@ _launch_team_manager() {
   local _mgr_pane_title="${mgr_pane_title_override:-${_proj} T${window_index} Mgr}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --name \"${_mgr_name}\" --agent \"$mgr_agent\""
   _append_settings _mgr_cmd "$runtime_dir"
+
+  # Attach team-level MCP config if generated
+  local _mgr_mcp_team="${runtime_dir}/mcp/team_${window_index}.mcp.json"
+  [ -f "$_mgr_mcp_team" ] && _mgr_cmd+=" --mcp-config \"${_mgr_mcp_team}\""
+
   doey_send_command "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}"
   tmux select-pane -t "${session}:${window_index}.0" -T "$_mgr_pane_title"
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
@@ -1052,6 +1065,12 @@ add_team_from_def() {
     fi
     _append_settings _w_cmd "$runtime_dir"
 
+    # Attach MCP config if generated for this pane or team
+    local _w_mcp_pane="${runtime_dir}/mcp/pane_${window_index}_${_w_i}.mcp.json"
+    local _w_mcp_team="${runtime_dir}/mcp/team_${window_index}.mcp.json"
+    [ -f "$_w_mcp_pane" ] && _w_cmd+=" --mcp-config \"${_w_mcp_pane}\""
+    [ -f "$_w_mcp_team" ] && _w_cmd+=" --mcp-config \"${_w_mcp_team}\""
+
     sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
     doey_send_command "${session}:${window_index}.${_w_i}" "${_DRAIN_STDIN}${_w_cmd}"
     tmux select-pane -t "${session}:${window_index}.${_w_i}" -T "$w_name"
@@ -1159,6 +1178,12 @@ add_dynamic_team_window() {
   [ "$is_freelancer" = "true" ] && mgr_pane=""
 
   write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved" "$task_id"
+
+  # Generate team-level MCP config if team definition has mcps: section
+  if type doey_mcp_generate_team_config >/dev/null 2>&1; then
+    doey_mcp_generate_team_config "$runtime_dir" "$window_index" "${runtime_dir}/team_${window_index}.env" || true
+  fi
+
   _name_team_window "$session" "$window_index" "$wt_dir_for_env" "$runtime_dir"
   _register_team_window "$runtime_dir" "$window_index"
   _ensure_worker_prompt "$runtime_dir" "$team_dir"
@@ -1259,6 +1284,11 @@ kill_team_window() {
   [ "$window" != "0" ] || { printf "  ${ERROR}Cannot kill window 0 — use 'doey stop'${RESET}\n"; return 1; }
 
   printf "  ${DIM}Killing team window %s...${RESET}\n" "$window"
+
+  # Clean up MCP servers and configs for this team
+  if type doey_mcp_cleanup_team >/dev/null 2>&1; then
+    doey_mcp_cleanup_team "$runtime_dir" "$window" || true
+  fi
 
   local pane_id pane_pid
   for pane_id in $(tmux list-panes -t "${session}:${window}" -F '#{pane_id}' 2>/dev/null); do
