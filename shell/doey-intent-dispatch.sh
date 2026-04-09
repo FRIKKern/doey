@@ -62,7 +62,7 @@ Assistant: ${first_response}"
       break
     fi
 
-    # Get response from Haiku via the chat function in intent-fallback.sh
+    # Get response from Opus via the chat function in intent-fallback.sh
     local resp
     resp=$(_doey_chat_respond "$user_input" "$context") || true
 
