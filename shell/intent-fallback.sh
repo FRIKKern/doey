@@ -2,8 +2,10 @@
 # shell/intent-fallback.sh — CLI command expert fallback
 #
 # Provides: _doey_intent_lookup "<typed_args>"
+#           _doey_chat_respond "<message>" ["<context>"]
 # Output on stdout: HIGH|<command>|<explanation>
 #                   MEDIUM|<command>|<explanation>
+#                   CHAT||<response>
 #                   NONE||<explanation>
 # Returns 0 on success, 1 on failure (empty stdout).
 # Silent fallthrough on all failures — never makes the CLI worse.
@@ -18,6 +20,64 @@ __doey_intent_fallback_sourced=1
 
 # shellcheck source=doey-headless.sh
 source "${BASH_SOURCE[0]%/*}/doey-headless.sh"
+
+# --- TTY detection (cached) ---
+_intent_fb_is_tty() {
+  [ "${_INTENT_FB_TTY_CACHED:-}" ] && { [ "$_INTENT_FB_TTY_CACHED" = "1" ]; return; }
+  if [ -t 0 ] && [ -t 2 ]; then
+    _INTENT_FB_TTY_CACHED=1; return 0
+  else
+    _INTENT_FB_TTY_CACHED=0; return 1
+  fi
+}
+
+# --- NO_COLOR-aware color init ---
+_intent_fb_init_color() {
+  if [ -n "${NO_COLOR:-}" ] || ! _intent_fb_is_tty; then
+    _IFB_RED="" _IFB_YLW="" _IFB_BLD="" _IFB_RST=""
+  else
+    _IFB_RED=$'\033[31m' _IFB_YLW=$'\033[33m' _IFB_BLD=$'\033[1m' _IFB_RST=$'\033[0m'
+  fi
+}
+
+# --- Spinner (stderr only, Bash 3.2 safe) ---
+_intent_fb_spinner_start() {
+  _intent_fb_is_tty || return 0
+  [ -n "${NO_COLOR:-}" ] && return 0
+  _IFB_SPINNER_PID=""
+  { tput civis 2>/dev/null || true; } >&2
+  (
+    _chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    _words=(Doeying Snootling Waggening Snorfeling Cozymaxxing Ruffling Floofing Scampering Sniffvestigating Recombobulating)
+    _wcount=${#_words[@]}
+    _wi=0
+    _di=1
+    _ci=0
+    while true; do
+      _dots=""
+      _d=0
+      while [ "$_d" -lt "$_di" ]; do _dots="${_dots}."; _d=$((_d + 1)); done
+      printf '\r\033[K  %s %s%s' "${_chars:$_ci:1}" "${_words[$_wi]}" "$_dots" >&2
+      _ci=$(( (_ci + 1) % ${#_chars} ))
+      _di=$((_di + 1))
+      if [ "$_di" -gt 3 ]; then
+        _di=1
+        _wi=$(( (_wi + 1) % _wcount ))
+      fi
+      sleep 0.08
+    done
+  ) &
+  _IFB_SPINNER_PID=$!
+}
+
+_intent_fb_spinner_stop() {
+  [ -n "${_IFB_SPINNER_PID:-}" ] && kill "$_IFB_SPINNER_PID" 2>/dev/null && wait "$_IFB_SPINNER_PID" 2>/dev/null
+  _IFB_SPINNER_PID=""
+  if _intent_fb_is_tty; then
+    printf '\r\033[K' >&2
+    { tput cnorm 2>/dev/null || true; } >&2
+  fi
+}
 
 # Commands that must ALWAYS prompt for confirmation, even at HIGH confidence.
 _INTENT_FB_DESTRUCTIVE="uninstall stop kill purge reset"
@@ -79,14 +139,16 @@ COMPLETE COMMAND REFERENCE:
 RESPONSE FORMAT — respond with EXACTLY one line:
   HIGH|<full command>|<brief explanation>
   MEDIUM|<full command>|<brief explanation>
+  CHAT||<warm friendly response to the user>
   NONE||<brief explanation suggesting closest commands>
 
 Rules:
 - HIGH: confident single match. Command MUST exist in the reference.
 - MEDIUM: probable but ambiguous. Still a real command.
+- CHAT: the input is clearly conversational — a greeting, question about doey, casual chat, or anything that is NOT a mistyped command. Respond warmly as doey's friendly companion personality. Keep responses concise (under 200 chars).
 - NONE: no match. Suggest the closest commands from the reference.
 - Never invent commands not in the reference.
-- Explanation under 80 characters.
+- Explanation under 80 characters (except CHAT, which can be up to 200).
 - Output EXACTLY one line. No preamble, no markdown, no extra text.
 SYSPROMPT
 }
@@ -100,6 +162,10 @@ _doey_intent_lookup() {
   local sys_prompt
   sys_prompt=$(_intent_fb_system_prompt)
 
+  _intent_fb_init_color
+  trap '_intent_fb_spinner_stop; exit 130' INT
+  _intent_fb_spinner_start
+
   # Run from /tmp to avoid loading heavy project context (CLAUDE.md scans),
   # and bump --max-turns so claude doesn't bail with "Reached max turns (1)".
   local resp
@@ -111,13 +177,16 @@ _doey_intent_lookup() {
     --append-system "$sys_prompt" \
     2>/dev/null) || true
 
+  _intent_fb_spinner_stop
+  trap - INT
+
   if [ -z "$resp" ]; then
     return 1
   fi
 
   # Extract the first line matching our format
   local line
-  line=$(printf '%s\n' "$resp" | grep -E '^(HIGH|MEDIUM|NONE)\|' | head -1)
+  line=$(printf '%s\n' "$resp" | grep -E '^(HIGH|MEDIUM|NONE|CHAT)\|' | head -1)
 
   if [ -z "$line" ]; then
     # Claude didn't follow format — treat as no match with its text as explanation
@@ -129,6 +198,41 @@ _doey_intent_lookup() {
 
   printf '%s' "$line"
   return 0
+}
+
+# Chat response via Haiku — used by the conversational REPL
+# Args: $1 = user message, $2 = conversation context (optional, for follow-ups)
+_doey_chat_respond() {
+  local msg="$1"
+  local context="${2:-}"
+  local chat_prompt
+  chat_prompt="You are doey, a friendly CLI companion. You help users with the doey multi-agent CLI tool. You're warm, helpful, a bit playful — cozy campfire vibes. Keep responses concise (2-3 sentences max). You know doey creates tmux-based multi-agent Claude Code teams for any project."
+
+  local full_msg="$msg"
+  if [ -n "$context" ]; then
+    full_msg="${context}
+User: ${msg}"
+  fi
+
+  _intent_fb_init_color
+  trap '_intent_fb_spinner_stop; exit 130' INT
+  _intent_fb_spinner_start
+
+  local resp
+  resp=$(cd /tmp && doey_headless "$full_msg" \
+    --model haiku \
+    --no-tools \
+    --max-turns 1 \
+    --timeout 15 \
+    --append-system "$chat_prompt" \
+    2>/dev/null) || true
+
+  _intent_fb_spinner_stop
+  trap - INT
+
+  if [ -n "$resp" ]; then
+    printf '%s' "$resp"
+  fi
 }
 
 # Check if a command contains a destructive keyword.
