@@ -727,15 +727,34 @@ func (r *Reader) ParseTasks() []Task {
 	return tasks
 }
 
-// parseAttachments reads .doey/tasks/<id>/attachments/*.md and returns parsed Attachment structs.
+// parseAttachments reads attachment *.md files from both known directory patterns:
+//   .doey/tasks/<id>/attachments/
+//   .doey/tasks/task-<id>-attachments/
 // Each file has YAML-like frontmatter (type, title, author, timestamp, task_id) delimited by ---.
 func (r *Reader) parseAttachments(taskID string) []Attachment {
 	if r.projectDir == "" {
 		return nil
 	}
-	dir := filepath.Join(r.projectDir, ".doey", "tasks", taskID, "attachments")
-	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
-	if err != nil || len(matches) == 0 {
+	tasksBase := filepath.Join(r.projectDir, ".doey", "tasks")
+	dirs := []string{
+		filepath.Join(tasksBase, taskID, "attachments"),
+		filepath.Join(tasksBase, "task-"+taskID+"-attachments"),
+	}
+	var matches []string
+	seen := make(map[string]bool)
+	for _, dir := range dirs {
+		m, err := filepath.Glob(filepath.Join(dir, "*.md"))
+		if err != nil || len(m) == 0 {
+			continue
+		}
+		for _, p := range m {
+			if !seen[p] {
+				seen[p] = true
+				matches = append(matches, p)
+			}
+		}
+	}
+	if len(matches) == 0 {
 		return nil
 	}
 
