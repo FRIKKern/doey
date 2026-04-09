@@ -761,9 +761,23 @@ func (e *ExpandedCard) Render() string {
 }
 
 // isNoisyLogEntry returns true if the log entry should be hidden from the
-// default timeline view (verbose research dumps, auto-complete duplicates).
+// default timeline view. Filters verbose research dumps, raw field dumps,
+// auto-complete duplicates, and low-signal technical noise.
 func isNoisyLogEntry(entry string) bool {
+	trimmed := strings.TrimSpace(entry)
+	if trimmed == "" {
+		return true
+	}
 	prefix, body := splitLogPrefix(entry)
+	lowerBody := strings.ToLower(body)
+
+	// Raw field dumps — hide any entry whose body starts with a key:value shape
+	// of an internal field name (cli_file:, pane_id:, tool_name:, etc).
+	for _, p := range noisyFieldPrefixes {
+		if strings.HasPrefix(lowerBody, p) {
+			return true
+		}
+	}
 
 	// Skip verbose research entries: >300 chars with ALL_CAPS prefix
 	// but preserve known meaningful prefixes.
@@ -782,6 +796,97 @@ func isNoisyLogEntry(entry string) bool {
 	}
 
 	return false
+}
+
+// noisyFieldPrefixes matches log/event bodies that begin with a raw
+// internal field name — these are field-dump leftovers, not human content.
+var noisyFieldPrefixes = []string{
+	"cli_file:",
+	"pane_id:",
+	"tool_name:",
+	"tool_input:",
+	"hook_event:",
+	"transcript_path:",
+	"session_id:",
+}
+
+// noisyEventTypes is the set of store event types that are too fine-grained
+// for the task timeline (tool-level telemetry, raw hook pings, etc.).
+var noisyEventTypes = map[string]bool{
+	"tool_stream":  true,
+	"tool_optout":  true,
+	"tool_pre":     true,
+	"tool_post":    true,
+	"hook_ping":    true,
+	"heartbeat":    true,
+	"status_tick":  true,
+	"context_pct":  true,
+	"prompt_start": true,
+}
+
+// isNoisyEvent returns true if a store event should be hidden from the
+// unified timeline as low-signal telemetry.
+func isNoisyEvent(ev *runtime.Event) bool {
+	if ev == nil {
+		return true
+	}
+	if noisyEventTypes[strings.ToLower(ev.Type)] {
+		return true
+	}
+	body := strings.ToLower(strings.TrimSpace(ev.Data))
+	for _, p := range noisyFieldPrefixes {
+		if strings.HasPrefix(body, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// humanizePane converts a raw pane identifier like "doey_doey_2_1" or
+// "doey-doey:2.1" into a compact role label like "W2.1". Returns the
+// original string unchanged when no pattern matches.
+func humanizePane(s string) string {
+	if s == "" {
+		return ""
+	}
+	// Strip session prefix: "doey-doey:2.1" -> "2.1"
+	if idx := strings.IndexByte(s, ':'); idx >= 0 {
+		s = s[idx+1:]
+	}
+	// Convert underscore form: "doey_doey_2_1" -> "2.1"
+	if strings.Contains(s, "_") {
+		parts := strings.Split(s, "_")
+		if len(parts) >= 2 {
+			// Take the last two numeric components if they exist.
+			n := len(parts)
+			last := parts[n-1]
+			prev := parts[n-2]
+			if isAllDigits(last) && isAllDigits(prev) {
+				s = prev + "." + last
+			}
+		}
+	}
+	// Wrap as worker label if it looks like W.P
+	if dot := strings.IndexByte(s, '.'); dot >= 0 {
+		w := s[:dot]
+		p := s[dot+1:]
+		if isAllDigits(w) && isAllDigits(p) {
+			return "W" + w + "." + p
+		}
+	}
+	return s
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // buildTimeline collects all timestamped entries for the current task into a
@@ -877,12 +982,15 @@ func (e *ExpandedCard) buildTimeline() ([]TimelineEntry, int) {
 		return entries[i].Timestamp < entries[j].Timestamp
 	})
 
-	// Content-level noise filter for log entries
+	// Content-level noise filter for log entries and store events.
 	total := len(entries)
 	{
 		filtered := entries[:0]
 		for _, ent := range entries {
 			if ent.Kind == TimelineLog && ent.Log != nil && isNoisyLogEntry(ent.Log.Entry) {
+				continue
+			}
+			if ent.Kind == TimelineEvent && isNoisyEvent(ent.Event) {
 				continue
 			}
 			filtered = append(filtered, ent)
@@ -898,7 +1006,9 @@ func (e *ExpandedCard) buildTimeline() ([]TimelineEntry, int) {
 	return entries, total
 }
 
-// renderUnifiedTimeline builds and renders the unified chronological timeline.
+// renderUnifiedTimeline builds and renders the unified chronological timeline
+// using a single compact row format. Adjacent entries of different kinds are
+// separated by a blank line for visual grouping.
 func (e *ExpandedCard) renderUnifiedTimeline(contentWidth int) []string {
 	entries, total := e.buildTimeline()
 	if len(entries) == 0 {
@@ -913,124 +1023,176 @@ func (e *ExpandedCard) renderUnifiedTimeline(contentWidth int) []string {
 	}
 	lines = append(lines, styles.SectionTitle(t, title))
 
-	for _, ent := range entries {
+	var prevKind TimelineEntryKind
+	for i, ent := range entries {
+		// Insert a blank line between entries of different kinds (after the first).
+		if i > 0 && ent.Kind != prevKind {
+			lines = append(lines, "")
+		}
+		prevKind = ent.Kind
+
 		switch ent.Kind {
 		case TimelineLog:
 			lines = append(lines, e.renderTimelineLog(ent.Log, contentWidth)...)
 		case TimelineEvent:
-			lines = append(lines, e.renderTimelineEvent(ent.Event, contentWidth))
+			lines = append(lines, e.renderTimelineEvent(ent.Event, contentWidth)...)
 		case TimelineMessage:
 			lines = append(lines, e.renderTimelineMessage(ent.Message, contentWidth)...)
 		case TimelineUpdate:
-			lines = append(lines, e.renderTimelineUpdate(ent.Update))
+			lines = append(lines, e.renderTimelineUpdate(ent.Update, contentWidth)...)
 		case TimelineQA:
 			lines = append(lines, e.renderTimelineQA(ent.QA, contentWidth)...)
 		case TimelineReport:
-			lines = append(lines, e.renderTimelineReport(ent.Report))
+			lines = append(lines, e.renderTimelineReport(ent.Report, contentWidth)...)
 		case TimelineRecovery:
-			lines = append(lines, e.renderTimelineRecovery(ent.Recovery))
+			lines = append(lines, e.renderTimelineRecovery(ent.Recovery, contentWidth)...)
 		}
 	}
 	return lines
 }
 
-// renderTimelineLog renders a single activity log entry for the unified timeline.
-func (e *ExpandedCard) renderTimelineLog(log *runtime.PersistentTaskLog, width int) []string {
-	ts := ""
-	if log.Timestamp > 0 {
-		ts = time.Unix(log.Timestamp, 0).Format("15:04")
+// humanizeLogPrefix converts an uppercase log prefix into a human-readable
+// title fragment, e.g. "DECISION" -> "Decision", "DISPATCHED" -> "Dispatched".
+func humanizeLogPrefix(p string) string {
+	if p == "" {
+		return ""
 	}
-	prefix, body := splitLogPrefix(log.Entry)
-
-	// Parse visualization blocks from the entry.
-	blocks := grammar.Parse(body)
-	if len(blocks) > 0 {
-		rendered := grammar.RenderTerminal(blocks)
-		eventType := strings.ToLower(prefix)
-		if eventType == "" {
-			eventType = "info"
-		}
-		header := styles.LogEventBadge(e.Theme, eventType)
-		if ts != "" {
-			header = styles.LogTimestamp(e.Theme, ts) + " " + header
-		}
-		return []string{header, rendered}
-	}
-
-	// Plain text entry.
-	eventType := strings.ToLower(prefix)
-	if eventType != "" {
-		return []string{styles.ActivityEntry(e.Theme, ts, eventType, body, width)}
-	}
-	line := wordWrap(body, width-8)
-	if ts != "" {
-		line = styles.LogTimestamp(e.Theme, ts) + " " + line
-	}
-	return []string{line}
+	lower := strings.ToLower(p)
+	return strings.ToUpper(lower[:1]) + lower[1:]
 }
 
-// renderTimelineEvent renders a single store event for the unified timeline.
-func (e *ExpandedCard) renderTimelineEvent(ev *runtime.Event, width int) string {
-	ts := ""
-	if ev.Timestamp > 0 {
-		ts = time.Unix(ev.Timestamp, 0).Format("15:04")
+// kindForLogPrefix maps a log prefix to a styled TimelineKind so the row
+// icon and color reflect the semantic meaning of the entry.
+func kindForLogPrefix(prefix string) styles.TimelineKind {
+	switch strings.ToUpper(prefix) {
+	case "ERROR":
+		return styles.TimelineKindError
+	case "COMPLETE", "DONE":
+		return styles.TimelineKindDone
+	case "DECISION":
+		return styles.TimelineKindReport
+	case "DISPATCH", "DISPATCHED":
+		return styles.TimelineKindEvent
+	case "REPORT", "RESEARCH":
+		return styles.TimelineKindReport
+	case "PROGRESS", "STATUS":
+		return styles.TimelineKindStatus
+	case "NOTE":
+		return styles.TimelineKindUpdate
+	default:
+		return styles.TimelineKindLog
 	}
+}
+
+// renderTimelineLog renders a single activity log entry as one or two rows:
+// a header row (timestamp + icon + title) and an optional indented detail.
+func (e *ExpandedCard) renderTimelineLog(log *runtime.PersistentTaskLog, width int) []string {
+	ts := styles.FormatTimelineTime(log.Timestamp)
+	prefix, body := splitLogPrefix(log.Entry)
+	kind := kindForLogPrefix(prefix)
+
+	// Grammar-rendered visualization blocks: keep the rich block, but
+	// prefix it with a clean header row.
+	blocks := grammar.Parse(body)
+	if len(blocks) > 0 {
+		label := humanizeLogPrefix(prefix)
+		if label == "" {
+			label = "Log"
+		}
+		header := styles.TimelineRow(e.Theme, ts, kind, label, "", width)
+		return []string{header, grammar.RenderTerminal(blocks)}
+	}
+
+	// Plain text entry: title = prefix (or first few words), detail = rest.
+	title := humanizeLogPrefix(prefix)
+	detail := body
+	if title == "" {
+		// No prefix — promote first sentence to title.
+		title, detail = splitTitleDetail(body, 60)
+	}
+	if title == "" {
+		return nil
+	}
+
+	row := styles.TimelineRow(e.Theme, ts, kind, title, "", width)
+	if detail != "" && detail != title {
+		return []string{row, styles.TimelineDetail(e.Theme, detail, width)}
+	}
+	return []string{row}
+}
+
+// renderTimelineEvent renders a single store event as a unified timeline row.
+// Event type becomes the title, source becomes the subtitle, data is the detail.
+func (e *ExpandedCard) renderTimelineEvent(ev *runtime.Event, width int) []string {
+	ts := styles.FormatTimelineTime(ev.Timestamp)
 	eventType := ev.Type
 	if eventType == "" {
 		eventType = "info"
 	}
 
-	var dotColor lipgloss.AdaptiveColor
-	switch eventType {
+	kind := styles.TimelineKindEvent
+	switch strings.ToLower(eventType) {
 	case "error":
-		dotColor = e.Theme.Danger
+		kind = styles.TimelineKindError
 	case "warn", "warning":
-		dotColor = e.Theme.Warning
-	default:
-		dotColor = e.Theme.Primary
+		kind = styles.TimelineKindRecovery
+	case "done", "completion", "task_complete", "worker_finished":
+		kind = styles.TimelineKindDone
+	case "dispatch", "dispatched":
+		kind = styles.TimelineKindEvent
+	case "message", "notification":
+		kind = styles.TimelineKindMessage
 	}
 
-	dot := styles.TimelineDot(dotColor)
-	badge := styles.LogEventBadge(e.Theme, eventType)
-	tsStr := styles.LogTimestamp(e.Theme, ts)
+	title := humanizeEventType(eventType)
+	subtitle := humanizePane(ev.Source)
+	row := styles.TimelineRow(e.Theme, ts, kind, title, subtitle, width)
 
-	detail := ev.Data
-	if ev.Source != "" {
-		detail = ev.Source + " " + detail
+	detail := strings.TrimSpace(ev.Data)
+	if detail != "" {
+		return []string{row, styles.TimelineDetail(e.Theme, detail, width)}
 	}
-	if len(detail) > width-30 && width > 30 {
-		detail = detail[:width-30]
-	}
-
-	return fmt.Sprintf("%s %s %s %s", dot, tsStr, badge, strings.TrimSpace(detail))
+	return []string{row}
 }
 
-// renderTimelineMessage renders a single IPC message for the unified timeline.
-func (e *ExpandedCard) renderTimelineMessage(msg *runtime.Message, contentWidth int) []string {
-	ts := time.Unix(msg.Timestamp, 0).Format("Jan 02 15:04")
-	styledTs := styles.LogTimestamp(e.Theme, ts)
-
-	eventType := msg.Subject
-	switch msg.Subject {
-	case "worker_finished":
-		eventType = "done"
-	case "task_complete":
-		eventType = "task"
-	case "commit_request":
-		eventType = "commit"
-	case "status_report":
-		eventType = "info"
-	case "question":
-		eventType = "warn"
-	case "error":
-		eventType = "error"
+// humanizeEventType turns snake_case event types into Title Case labels.
+func humanizeEventType(t string) string {
+	if t == "" {
+		return "Event"
 	}
-	badge := styles.LogEventBadge(e.Theme, eventType)
+	parts := strings.Split(t, "_")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + strings.ToLower(p[1:])
+	}
+	return strings.Join(parts, " ")
+}
 
-	from := e.Theme.Dim.Render("From: " + msg.From)
-	header := styledTs + " " + badge + " " + from
+// renderTimelineMessage renders a single IPC message as one or two rows.
+func (e *ExpandedCard) renderTimelineMessage(msg *runtime.Message, width int) []string {
+	ts := styles.FormatTimelineTime(msg.Timestamp)
 
-	// Body preview: first non-empty line, truncated.
+	kind := styles.TimelineKindMessage
+	switch msg.Subject {
+	case "worker_finished", "task_complete":
+		kind = styles.TimelineKindDone
+	case "question":
+		kind = styles.TimelineKindQA
+	case "error":
+		kind = styles.TimelineKindError
+	}
+
+	title := humanizeEventType(msg.Subject)
+	if title == "" {
+		title = "Message"
+	}
+	subtitle := "from " + humanizePane(msg.From)
+
+	row := styles.TimelineRow(e.Theme, ts, kind, title, subtitle, width)
+
+	// Body preview: first non-empty line.
 	bodyPreview := ""
 	for _, line := range strings.Split(msg.Body, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -1039,152 +1201,130 @@ func (e *ExpandedCard) renderTimelineMessage(msg *runtime.Message, contentWidth 
 			break
 		}
 	}
-	maxBody := contentWidth - 4
-	if maxBody > 0 && len(bodyPreview) > maxBody {
-		bodyPreview = bodyPreview[:maxBody-1] + "\u2026"
+	if bodyPreview != "" {
+		return []string{row, styles.TimelineDetail(e.Theme, bodyPreview, width)}
 	}
-
-	return []string{header, "  " + e.Theme.LogEntry.Render(bodyPreview)}
+	return []string{row}
 }
 
-// renderTimelineUpdate renders a single live update for the unified timeline.
-func (e *ExpandedCard) renderTimelineUpdate(upd *runtime.PersistentUpdate) string {
-	ts := relativeTime(upd.Timestamp)
-	styledTs := lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(ts)
-	author := ""
+// renderTimelineUpdate renders a single live update as a unified timeline row.
+func (e *ExpandedCard) renderTimelineUpdate(upd *runtime.PersistentUpdate, width int) []string {
+	ts := styles.FormatTimelineTime(upd.Timestamp)
+	title, detail := splitTitleDetail(upd.Text, 60)
+	if title == "" {
+		return nil
+	}
+	subtitle := ""
 	if upd.Author != "" {
-		author = lipgloss.NewStyle().Foreground(e.Theme.Accent).Bold(true).Render(upd.Author)
+		subtitle = humanizePane(upd.Author)
 	}
-	text := lipgloss.NewStyle().Foreground(e.Theme.Text).Render(upd.Text)
-	line := "  " + styledTs
-	if author != "" {
-		line += "  " + author
+	row := styles.TimelineRow(e.Theme, ts, styles.TimelineKindUpdate, title, subtitle, width)
+	if detail != "" {
+		return []string{row, styles.TimelineDetail(e.Theme, detail, width)}
 	}
-	line += "  " + text
-	return line
+	return []string{row}
 }
 
-// renderTimelineQA renders a single Q&A entry for the unified timeline.
+// renderTimelineQA renders a single Q&A entry as 1–3 rows (row + detail + answer).
 func (e *ExpandedCard) renderTimelineQA(qa *runtime.PersistentQAEntry, width int) []string {
-	t := e.Theme
+	ts := styles.FormatTimelineTime(qa.Created)
 
-	var icon string
-	var chainColor lipgloss.AdaptiveColor
-	switch qa.Status {
-	case "answered":
-		icon = "✓"
-		chainColor = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
-	case "answering":
-		icon = "●"
-		chainColor = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"}
-	case "routing", "forwarded":
-		icon = "→"
-		chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
-	default:
-		icon = "○"
-		chainColor = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
+	kind := styles.TimelineKindQA
+	if qa.Status == "answered" {
+		kind = styles.TimelineKindDone
 	}
 
-	question := qa.Question
-	maxQ := width - 8
-	if maxQ > 0 && len(question) > maxQ {
-		question = question[:maxQ-1] + "\u2026"
-	}
-	qLine := icon + " Q: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+question+"\"")
-
-	var lines []string
-	lines = append(lines, qLine)
-
-	// Hop chain
+	title := "Q: " + qa.Question
+	subtitle := qa.Status
 	if len(qa.Hops) > 0 {
-		var hopParts []string
-		for _, hop := range qa.Hops {
-			role := hop.Role
-			if role == "" {
-				role = hop.Pane
-			}
-			hopParts = append(hopParts, role)
+		lastHop := qa.Hops[len(qa.Hops)-1]
+		role := lastHop.Role
+		if role == "" {
+			role = humanizePane(lastHop.Pane)
 		}
-		chain := strings.Join(hopParts, " → ")
-		lastAction := qa.Hops[len(qa.Hops)-1].Action
-		if qa.Status != "answered" {
-			chain += " (" + lastAction + "...)"
+		if role != "" {
+			subtitle = role + " · " + qa.Status
 		}
-		lines = append(lines, "   "+lipgloss.NewStyle().Foreground(chainColor).Render(chain))
 	}
 
-	// Answer
+	lines := []string{styles.TimelineRow(e.Theme, ts, kind, title, subtitle, width)}
+
 	if qa.Status == "answered" && qa.Answer != "" {
-		answer := qa.Answer
-		maxA := width - 12
-		if maxA > 0 && len(answer) > maxA {
-			answer = answer[:maxA-1] + "\u2026"
-		}
-		answerer := ""
-		if len(qa.Hops) > 0 {
-			last := qa.Hops[len(qa.Hops)-1]
-			if last.Role != "" {
-				answerer = last.Role
-			} else {
-				answerer = last.Pane
-			}
-		}
-		aText := "✓ A: " + lipgloss.NewStyle().Foreground(t.Text).Render("\""+answer+"\"")
-		if answerer != "" {
-			aText += lipgloss.NewStyle().Foreground(t.Muted).Render(" — " + answerer)
-		}
-		lines = append(lines, "   "+aText)
+		lines = append(lines, styles.TimelineDetail(e.Theme, "A: "+qa.Answer, width))
 	}
-
 	return lines
 }
 
-// renderTimelineReport renders a single report entry for the unified timeline.
-func (e *ExpandedCard) renderTimelineReport(report *runtime.PersistentReport) string {
-	var typeColor lipgloss.AdaptiveColor
+// renderTimelineReport renders a single worker report as a unified timeline row.
+func (e *ExpandedCard) renderTimelineReport(report *runtime.PersistentReport, width int) []string {
+	ts := styles.FormatTimelineTime(report.Created)
+
+	kind := styles.TimelineKindReport
 	switch report.Type {
-	case "research":
-		typeColor = e.Theme.Info
-	case "progress":
-		typeColor = e.Theme.Success
-	case "decision":
-		typeColor = e.Theme.Accent
 	case "completion":
-		typeColor = e.Theme.Warning
+		kind = styles.TimelineKindDone
 	case "error":
-		typeColor = e.Theme.Danger
-	default:
-		typeColor = e.Theme.Muted
+		kind = styles.TimelineKindError
+	case "progress":
+		kind = styles.TimelineKindUpdate
 	}
-	badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render("[" + report.Type + "]")
-	title := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true).Render(report.Title)
-	author := ""
+
+	title := report.Title
+	if title == "" {
+		title = humanizeEventType(report.Type) + " report"
+	}
+	subtitle := ""
 	if report.Author != "" {
-		author = "  " + lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(report.Author)
+		subtitle = humanizePane(report.Author)
 	}
-	ts := ""
-	if report.Created > 0 {
-		ts = "  " + styles.LogTimestamp(e.Theme, time.Unix(report.Created, 0).Format("15:04"))
-	}
-	return fmt.Sprintf("  %s %s%s%s", badge, title, author, ts)
+	return []string{styles.TimelineRow(e.Theme, ts, kind, title, subtitle, width)}
 }
 
-// renderTimelineRecovery renders a single recovery event for the unified timeline.
-func (e *ExpandedCard) renderTimelineRecovery(ev *runtime.PersistentRecoveryEvent) string {
-	dot := styles.TimelineDot(e.Theme.Warning)
+// renderTimelineRecovery renders a single recovery event as a unified row.
+func (e *ExpandedCard) renderTimelineRecovery(ev *runtime.PersistentRecoveryEvent, width int) []string {
+	ts := styles.FormatTimelineTime(ev.Timestamp)
+
 	desc := ev.Description
 	if desc == "" {
-		desc = ev.Event
+		desc = humanizeEventType(ev.Event)
 	}
-	ts := ""
-	if ev.Timestamp > 0 {
-		ts = styles.LogTimestamp(e.Theme, time.Unix(ev.Timestamp, 0).Format("15:04")) + " "
+
+	subtitle := ""
+	if ev.FailedAgent != "" && ev.NewAgent != "" {
+		subtitle = humanizePane(ev.FailedAgent) + " → " + humanizePane(ev.NewAgent)
+	} else if ev.NewAgent != "" {
+		subtitle = "→ " + humanizePane(ev.NewAgent)
+	} else if ev.FailedAgent != "" {
+		subtitle = humanizePane(ev.FailedAgent)
 	}
-	line := dot + " " + ts + lipgloss.NewStyle().Foreground(e.Theme.Warning).Render("recovery") + " " + desc
-	if ev.NewAgent != "" {
-		line += " → " + ev.NewAgent
+
+	return []string{styles.TimelineRow(e.Theme, ts, styles.TimelineKindRecovery, desc, subtitle, width)}
+}
+
+// splitTitleDetail splits a free-form body into a short title and an optional
+// detail. If the body fits within maxTitleLen, it becomes the title and
+// detail is empty. Otherwise the first sentence (or truncated head) is the
+// title and the remainder is the detail.
+func splitTitleDetail(body string, maxTitleLen int) (title, detail string) {
+	flat := strings.Join(strings.Fields(body), " ")
+	if flat == "" {
+		return "", ""
 	}
-	return line
+	if len(flat) <= maxTitleLen {
+		return flat, ""
+	}
+	// Look for a sentence boundary within the title window.
+	for _, sep := range []string{". ", "? ", "! ", " — ", " – ", ": "} {
+		if idx := strings.Index(flat, sep); idx > 0 && idx <= maxTitleLen {
+			return strings.TrimSpace(flat[:idx]), strings.TrimSpace(flat[idx+len(sep):])
+		}
+	}
+	// Fall back to word-boundary truncation.
+	cut := maxTitleLen
+	if space := strings.LastIndexByte(flat[:cut], ' '); space > maxTitleLen/2 {
+		cut = space
+	}
+	return strings.TrimSpace(flat[:cut]), strings.TrimSpace(flat[cut:])
 }
 
 // renderMarkdown renders markdown through glamour with caching.
@@ -1542,24 +1682,6 @@ func (e *ExpandedCard) ToggleSubtaskExpand(index int) {
 		e.ExpandedSubtasks = make(map[int]bool)
 	}
 	e.ExpandedSubtasks[index] = !e.ExpandedSubtasks[index]
-}
-
-// relativeTime converts a unix epoch timestamp to a relative time string.
-func relativeTime(epoch int64) string {
-	if epoch <= 0 {
-		return ""
-	}
-	d := time.Since(time.Unix(epoch, 0))
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	}
 }
 
 // renderWorkerStatus returns styled rows for panes assigned to this task.
