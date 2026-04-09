@@ -11,6 +11,11 @@ local _clip_lines=""
 if [ -n "$_clip_cmd" ]; then
   _clip_lines="bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel \"$_clip_cmd\"
 bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel \"$_clip_cmd\""
+else
+  # No local clipboard tool — copy-pipe-and-cancel without args still copies
+  # to tmux buffer and OSC 52 (set-clipboard on) sends it to the terminal
+  _clip_lines="bind-key -T copy-mode    MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel
+bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel"
 fi
 
 local _theme_file
@@ -44,6 +49,13 @@ set-option -t $session set-titles-string "🤖 #{session_name} — #{pane_title}
 set-option -t $session mouse on
 set-option -t $session set-clipboard on
 $_clip_lines
+# ── Word / line selection (double / triple click) ──
+bind-key -T copy-mode    DoubleClick1Pane select-pane \; send-keys -X select-word
+bind-key -T copy-mode-vi DoubleClick1Pane select-pane \; send-keys -X select-word
+bind-key -T copy-mode    TripleClick1Pane select-pane \; send-keys -X select-line
+bind-key -T copy-mode-vi TripleClick1Pane select-pane \; send-keys -X select-line
+bind-key -T root DoubleClick1Pane select-pane -t = \; if-shell -F "#{?pane_in_mode,0,1}" "copy-mode" \; send-keys -X select-word
+bind-key -T root TripleClick1Pane select-pane -t = \; if-shell -F "#{?pane_in_mode,0,1}" "copy-mode" \; send-keys -X select-line
 set-option -t $session allow-passthrough off
 set-option -t $session bell-action none
 set-option -t $session visual-bell off

@@ -82,6 +82,9 @@ source "${SCRIPT_DIR}/doey-team-mgmt.sh"
 # shellcheck source=doey-session.sh
 source "${SCRIPT_DIR}/doey-session.sh"
 
+# shellcheck source=doey-headless.sh
+source "${SCRIPT_DIR}/doey-headless.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 _doey_load_config
 
@@ -429,15 +432,61 @@ MPEOF
     printf "\n  Usage: ${BOLD}doey add-team <name>${RESET}\n\n"
     exit 0
     ;;
+  tunnel)
+    require_running_session
+    shift
+    _tunnel_env="${runtime_dir}/tunnel.env"
+    case "${1:-}" in
+      up|start)
+        bash "${SCRIPT_DIR}/doey-tunnel.sh" "$runtime_dir" &
+        printf '  %bTunnel starting in background...%b\n' "$SUCCESS" "$RESET"
+        ;;
+      down|stop)
+        if [ -f "$_tunnel_env" ]; then
+          _tpid="$(grep '^TUNNEL_PID=' "$_tunnel_env" 2>/dev/null | head -1 | cut -d= -f2-)"
+          if [ -n "$_tpid" ] && kill -0 "$_tpid" 2>/dev/null; then
+            kill "$_tpid" 2>/dev/null || true
+            rm -f "$_tunnel_env"
+            printf '  %bTunnel stopped.%b\n' "$SUCCESS" "$RESET"
+          else
+            rm -f "$_tunnel_env"
+            printf '  Tunnel was not running (stale env cleaned).\n'
+          fi
+        else
+          printf '  No tunnel running.\n'
+        fi
+        ;;
+      status)
+        if [ -f "$_tunnel_env" ]; then
+          printf '  %bTunnel active:%b\n' "$SUCCESS" "$RESET"
+          sed 's/^/    /' "$_tunnel_env"
+        else
+          printf '  No tunnel running.\n'
+        fi
+        ;;
+      *)
+        printf '  Usage: doey tunnel <up|down|status>\n'
+        printf '\n'
+        printf '  Commands:\n'
+        printf '    up       Start a tunnel for the current session\n'
+        printf '    down     Stop the running tunnel\n'
+        printf '    status   Show tunnel status\n'
+        ;;
+    esac
+    exit 0
+    ;;
   [0-9]*x[0-9]*)
     _check_prereqs
     grid="$1"
     ;;
   "") ;;
   *)
-    doey_error "Unknown command: $1"
-    printf "  Run ${BOLD}doey --help${RESET} for usage\n"
-    exit 1
+    # Intent fallback — maps unknown commands to the closest doey command
+    # using a Claude-powered command expert (Haiku, ~2s).
+    # shellcheck source=doey-intent-dispatch.sh
+    source "${SCRIPT_DIR}/doey-intent-dispatch.sh"
+    _doey_intent_dispatch "$@"
+    exit $?
     ;;
 esac
 
