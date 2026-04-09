@@ -159,7 +159,7 @@ case "${1:-}" in
 esac
 
 case "${1:-}" in
-  --help|-h)
+  help|--help|-h)
     doey_header "Doey"
     printf '\n'
     cat << 'HELP'
