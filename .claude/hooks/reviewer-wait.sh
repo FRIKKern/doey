@@ -60,19 +60,6 @@ _check_work() {
     done
   fi
 
-  # 3. Active in_progress tasks worth observing
-  if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
-    _active=$(doey-ctl task list --status in_progress --project-dir "$PROJECT_DIR" 2>/dev/null | awk 'NR>1 && /^[0-9]/{n++} END{print n+0}') || _active=0
-    [ "${_active:-0}" -gt 0 ] && _wake "ACTIVE_TASKS"
-  elif [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
-    local _atf _astatus
-    for _atf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
-      [ -f "$_atf" ] || continue
-      _astatus=$(grep '^TASK_STATUS=' "$_atf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
-      [ "$_astatus" = "in_progress" ] && _wake "ACTIVE_TASKS"
-    done
-  fi
-
   return 1
 }
 
