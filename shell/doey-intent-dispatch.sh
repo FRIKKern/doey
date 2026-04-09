@@ -62,17 +62,21 @@ Assistant: ${first_response}"
       break
     fi
 
-    # Get response from Opus via the chat function in intent-fallback.sh
-    local resp
-    resp=$(_doey_chat_respond "$user_input" "$context") || true
+    # Stream response from Opus — tee captures for context while streaming to terminal
+    local resp _tmp_resp
+    _tmp_resp="$(mktemp)"
+    printf '\n' >&2
+    _doey_chat_respond "$user_input" "$context" | tee "$_tmp_resp" >&2
+    resp="$(cat "$_tmp_resp")"
+    rm -f "$_tmp_resp"
 
     if [ -n "$resp" ]; then
-      printf '\n  %s%s%s\n' "$_chat_accent" "$resp" "$_chat_reset" >&2
+      printf '\n' >&2
       context="${context}
 User: ${user_input}
 Assistant: ${resp}"
     else
-      printf '\n  %s(doey got tongue-tied — try again?)%s\n' "$_chat_dim" "$_chat_reset" >&2
+      printf '  %s(doey got tongue-tied — try again?)%s\n' "$_chat_dim" "$_chat_reset" >&2
     fi
   done
 
