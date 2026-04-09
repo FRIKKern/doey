@@ -13,7 +13,7 @@ Table: `PANE | STATUS | RESERVED | TASK | UPDATED`. Enrich FINISHED from `.json`
 
 ### Deep Inspect
 ```bash
-PANE="${SESSION_NAME}:${DOEY_WINDOW_INDEX:-0}.X"; PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+PANE="${SESSION_NAME}:${DOEY_WINDOW_INDEX:-0}.X"; PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
 cat "${DOEY_RUNTIME}/status/${PANE_SAFE}.status" 2>/dev/null || echo "(no status)"
 tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || echo "(not found)"
 ```

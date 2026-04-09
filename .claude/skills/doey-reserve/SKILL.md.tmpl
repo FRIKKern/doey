@@ -13,7 +13,7 @@ No confirmation. `list` → show injected data above.
 ```bash
 RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
 MY_PANE=$(tmux display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}')
-SAFE=$(echo "$MY_PANE" | tr ':-.' '_')
+SAFE=$(echo "$MY_PANE" | tr ':.-' '_')
 mkdir -p "${RD}/status"
 ACTION="${1:-reserve}"
 case "$ACTION" in off|unreserve) ACTION="unreserve" ;; *) ACTION="reserve" ;; esac
