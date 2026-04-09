@@ -296,6 +296,19 @@ check_doctor() {
     _doc_check skip "Taskmaster alive" "no running session for $(pwd)"
   fi
 
+  # Tailscale tunnel — only when DOEY_TUNNEL_ENABLED=1
+  if [ "${DOEY_TUNNEL_ENABLED:-0}" = "1" ]; then
+    if command -v tailscale >/dev/null 2>&1; then
+      if tailscale status >/dev/null 2>&1; then
+        _doc_check ok "tailscale" "connected"
+      else
+        _doc_check warn "tailscale" "installed but not connected — run: doey tunnel setup"
+      fi
+    else
+      _doc_check warn "tailscale" "not installed — run: doey tunnel setup"
+    fi
+  fi
+
   # ── Summary footer ──
   printf '\n'
   local _doc_total=$((_DOC_OK + _DOC_WARN + _DOC_FAIL))

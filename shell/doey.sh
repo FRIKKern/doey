@@ -82,6 +82,9 @@ source "${SCRIPT_DIR}/doey-team-mgmt.sh"
 # shellcheck source=doey-session.sh
 source "${SCRIPT_DIR}/doey-session.sh"
 
+# shellcheck source=doey-tunnel-cli.sh
+source "${SCRIPT_DIR}/doey-tunnel-cli.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 _doey_load_config
 
@@ -184,6 +187,7 @@ case "${1:-}" in
     masterplan Start a masterplan team for a goal (alias: plan)
     deploy     Deploy validation pipeline (start/status/gate)
     remote     Manage remote Hetzner servers (list/provision/stop/status)
+    tunnel     Auto-expose localhost dev servers (setup/up/down/status)
     settings   Open interactive settings editor window
     version    Show version and installation info
     --help     Show this help
@@ -220,6 +224,10 @@ case "${1:-}" in
     doey remote myapp # provision + attach to remote
     doey remote stop myapp  # destroy remote server
     doey remote status myapp # show server status
+    doey tunnel setup # one-time tailscale install + connect host
+    doey tunnel up    # start port watcher (auto-detects dev servers)
+    doey tunnel status # show detected dev-server URLs
+    doey tunnel down  # stop port watcher (tailscale stays up)
 HELP
     printf '\n'
     exit 0
@@ -245,6 +253,21 @@ HELP
     fi
     ;;
   remote)       shift; doey_remote "$@"; exit 0 ;;
+  tunnel)
+    _tunnel_sub="${2:-status}"
+    case "$_tunnel_sub" in
+      setup)  doey_tunnel_setup ;;
+      up)     doey_tunnel_up ;;
+      down)   doey_tunnel_down ;;
+      status) doey_tunnel_status ;;
+      *)
+        printf 'doey tunnel: unknown subcommand "%s"\n' "$_tunnel_sub" >&2
+        printf 'Usage: doey tunnel {setup|up|down|status}\n' >&2
+        exit 1
+        ;;
+    esac
+    exit $?
+    ;;
   # Everything below requires tmux + claude — check prerequisites:
   init)
     _check_prereqs
@@ -255,7 +278,18 @@ HELP
     ;;
   purge)        shift; doey_purge "$@"; exit $? ;;
   stop)         stop_project; exit $? ;;
-  reload)       shift; reload_session "$@"; exit 0 ;;
+  reload)
+    shift
+    reload_session "$@"
+    # Re-spawn tunnel port watcher if it was running before reload (Q4)
+    _reload_rt=""
+    _reload_rt="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)" || _reload_rt=""
+    if [ -n "$_reload_rt" ] && [ -f "${_reload_rt}/port-watcher.pid" ]; then
+      doey_tunnel_down >/dev/null 2>&1 || true
+      doey_tunnel_up >/dev/null 2>&1 || true
+    fi
+    exit 0
+    ;;
   test)         shift; run_test "$@"; exit $? ;;
   settings)     doey_settings; exit 0 ;;
   deploy)
