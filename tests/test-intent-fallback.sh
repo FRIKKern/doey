@@ -41,7 +41,7 @@ _fail() {
 # can't step on each other.
 export PROJECT_NAME="test-intent-fallback-$$"
 LOG_DIR="/tmp/doey/${PROJECT_NAME}"
-LOG_FILE="${LOG_DIR}/intent-log.jsonl"
+LOG_FILE="${LOG_DIR}/intent-fallback.log"
 
 # ── Install mock claude on PATH ─────────────────────────────────────
 MOCK_BIN_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t intent-fb-mock)
