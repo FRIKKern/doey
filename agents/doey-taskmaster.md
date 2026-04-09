@@ -236,32 +236,7 @@ Each task gets its own ephemeral team, right-sized to the work. Do NOT search fo
 
 1. **Count deliverables** — Read the task's subtasks/deliverables from `doey task get --id $TASK_ID`. If Boss included `WORKERS_NEEDED` in the dispatch, use that count. Otherwise: `WORKERS = max(subtask_count, 1)`, capped at 6.
 
-#### Direct Dispatch (WORKERS_NEEDED=1)
-
-When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), **skip the Subtaskmaster** and dispatch directly to a worker. This eliminates the Subtaskmaster hop — the chain becomes Boss → Taskmaster → Worker instead of Boss → Taskmaster → Subtaskmaster → Worker.
-
-1. **Spawn a 1-worker team:**
-   ```bash
-   doey add-window --workers 1 --name "Task $TASK_ID" --task-id $TASK_ID
-   ```
-2. **Wait for the worker** to be READY:
-   ```bash
-   source "${RUNTIME_DIR}/session.env"
-   for i in 1 2 3 4 5; do
-     STATUS=$(grep 'STATUS=' "$RUNTIME_DIR/status/pane_${NEW_W}_0.status" 2>/dev/null | cut -d= -f2)
-     [ "$STATUS" = "READY" ] && break; sleep 3
-   done
-   ```
-3. **Write a self-contained prompt** — Since there is no Subtaskmaster to synthesize, your prompt must include: task goal, file paths, specific instructions, constraints, and success criteria.
-4. **Dispatch directly** to the worker pane (`${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
-5. **On `worker_finished`** — Read the worker's result JSON, then route through the normal Review Gate (Task Reviewer at 1.1).
-
-**When NOT to use direct dispatch** (use a managed team even for 1 worker):
-- Task requires research before implementation (unknown file paths, unclear root cause)
-- Task is part of a phased sequence where the Subtaskmaster manages phase transitions
-- Specialized team definition applies (go-tui, shell, infra — these have custom roles)
-
-#### Managed Team Spawn (WORKERS_NEEDED >= 2, or complex single-worker tasks)
+#### Team Spawn
 
 2. **Spawn team** — Create a team sized to the task:
    ```bash
@@ -284,9 +259,11 @@ When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), *
    ```
 4. **Dispatch** — Send the task to the new team's Subtaskmaster (pane `${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
 
+**CRITICAL: ALWAYS dispatch to pane ${NEW_W}.0 (Subtaskmaster).** NEVER dispatch directly to W.1+ (Workers). Only the Subtaskmaster delegates work to Workers.
+
 | Condition | Action |
 |-----------|--------|
-| Under `DOEY_MAX_TEAMS` (default 5) | Spawn per-task team, dispatch |
+| Under `DOEY_MAX_TEAMS` (default 5) | Spawn per-task team, dispatch to Subtaskmaster (W.0) |
 | At max teams | Implicit queue — leave `TASK_STATUS=active` with no `TASK_TEAM`, dispatch when a team despawns |
 
 ### Verify Task Binding After Spawn
