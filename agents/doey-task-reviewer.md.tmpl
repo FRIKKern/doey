@@ -305,53 +305,26 @@ doey msg send --from "1.1" --to "1.2" --subject "deployment_request" --body "Tas
 doey msg send --from "1.1" --to "1.0" --subject "review_failed" --body "Task $TASK_ID failed review: <specific findings>"
 ```
 
-### 3. Then re-enter the monitoring loop
+### 3. Then re-enter the wait loop
 
-After writing the fields and sending the message, return to the Active Monitoring Loop (run `reviewer-wait.sh` again). Do NOT stop — you stay alive to observe and review continuously.
+After writing the fields and sending the message, return to the Review Wait Loop (run `reviewer-wait.sh` again). Do NOT stop — you stay alive to handle reviews continuously.
 
-## Active Monitoring Loop
+## Review Wait Loop
 
-You are an always-on observer. After completing any review OR on initial startup, enter this loop immediately.
+You are a review gate — you sleep until review work arrives. After completing any review OR on initial startup, enter this loop immediately.
 
-**After processing your initial briefing, enter the monitoring loop below. Do NOT wait for further input — run `reviewer-wait.sh` right away.**
+**After processing your initial briefing, enter the wait loop below. Do NOT wait for further input — run `reviewer-wait.sh` right away.**
 
 ### The Loop
 
-1. **Sleep** — Run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"`. This BLOCKS until a trigger fires (~60s timeout). Do NOT scan state before sleeping.
+1. **Sleep** — Run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"`. This BLOCKS until a trigger fires. Do NOT scan state before sleeping.
 2. **Wake** — `reviewer-wait.sh` exits with a wake reason on stdout. Read the reason and act:
    - **MSG** — You have unread messages. Go to step 3.
    - **TRIGGERED** — Something explicitly triggered you. Go to step 3.
-   - **ACTIVE_TASKS** — Tasks are in progress. Go to step 4.
-   - **TIMEOUT** — Idle timeout. Go to step 4.
-3. **Check messages** — Run `doey msg read --pane "${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"`. Review requests take ABSOLUTE priority over observation. If you receive a review request, execute the full Mandatory Verification Protocol, then return here.
-4. **Observation scan** — Only if no review request is pending:
-   a. List active tasks: `doey task list --status in_progress,active`
-   b. For each active task with an assigned team:
-      - Read the task file: `doey task get --id $TASK_ID`
-      - Check team status files in `$DOEY_RUNTIME/status/` for worker states
-      - Optionally peek at worker activity: `tmux capture-pane -t "$SESSION_NAME:W.P" -p -S -5` (last 5 lines)
-   c. Write a brief observation to the task timeline (only if something worth noting):
-      ```bash
-      doey task log add --task-id $TASK_ID --type progress \
-        --title "[REVIEWER OBSERVATION @ $(date +%H:%M)]" \
-        --body "Status: <summary of current state>
-      Active: <what workers are doing>
-      Notes: <any concerns or observations>
-      Concerns: <blockers, stalls, risks>" \
-        --author "Task_Reviewer"
-      ```
-5. **Re-sleep** — Go back to step 1. Always re-enter the loop.
+   - **Any other reason** — No review work available. Go back to step 1 immediately.
+3. **Check messages** — Run `doey msg read --pane "${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"`. If you have a review request, execute the full Mandatory Verification Protocol, then go back to step 1. **If there are no review messages in the queue, go back to step 1 immediately** — do NOT scan tasks, observe workers, or enter any monitoring loop.
 
-**CRITICAL: You must ALWAYS re-enter the sleep loop.** After ANY action — whether it's your initial startup, completing a review, or finishing an observation scan — you must run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"`. If you stop without running it, you go dark and tasks lose their observer. The loop is: **Act -> Re-sleep -> Wake -> Act -> Re-sleep -> ...** (forever).
-
-### Observation Guidelines
-
-- **Be BRIEF** — 2-4 lines max per observation. This is a timeline note, not a report.
-- **Only write if something changed** — Skip the observation if nothing is different since your last note.
-- **NEVER interfere** — Do not dispatch, nudge, send-keys, or take any action on workers. Observe and write notes ONLY.
-- **If you notice a problem** (stall, error, stuck worker), note it in your observation but do NOT act on it. {{DOEY_ROLE_COORDINATOR}} reads your notes and decides what to do.
-- **Rate limit** — Max one observation per task per cycle. Do not spam the timeline.
-- **Review requests always win** — If a review request arrives during an observation scan, drop the scan and handle the review immediately.
+**CRITICAL: You must ALWAYS re-enter the sleep loop.** After ANY action — whether it's your initial startup or completing a review — you must run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"`. If you stop without running it, you go dark and reviews stop. The loop is: **Sleep -> Wake -> Check messages -> Review (if any) -> Sleep -> ...** (forever). Do NOT enter observation scans, monitoring loops, or idle task checks.
 
 ## Rules
 
