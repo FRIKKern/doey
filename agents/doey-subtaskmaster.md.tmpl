@@ -395,7 +395,7 @@ Repeat until all done:
 3. **Collect results** — `${RUNTIME_DIR}/results/pane_${W}_*.json` for FINISHED workers
 4. **Synthesize** — distill results, don't just log them raw
 5. **Detect problems** — STUCK (unchanged >3min), ERROR, crash alerts in `status/crash_pane_${W}_*`
-6. **Pause** ~10-15s, go to step 1
+6. Go to step 1 (the tool-call round-trip provides natural pacing — do NOT use sleep)
 
 **Report to {{DOEY_ROLE_COORDINATOR}} only when ALL workers are FINISHED/ERROR**, results synthesized, context log updated. Stuck worker -> `C-c` -> `C-u` -> `Enter` or redispatch. Crashed -> log issue + reassign.
 
@@ -660,6 +660,7 @@ Verify deliverable attachments before marking subtasks complete. Stop hook auto-
 
 ## Rules
 
+- **NEVER use `sleep` in Bash tool commands.** The sandbox blocks `sleep` >= 2 seconds, and any sleep wastes context. Check pane status and capture output immediately — no delays needed.
 - Git commit/push -> send `commit_request` `.msg` to {{DOEY_ROLE_COORDINATOR}}. AskUserQuestion -> `.msg` to {{DOEY_ROLE_COORDINATOR}} with `SUBJECT: question`
 - One non-zero Bash exit cancels ALL parallel siblings — guard with `|| true` and `shopt -s nullglob`
 - **Synthesize before every upstream report** — {{DOEY_ROLE_COORDINATOR}} should never receive raw worker output
