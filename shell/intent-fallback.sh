@@ -230,7 +230,6 @@ _doey_intent_lookup() {
   local resp
   resp=$(cd /tmp && doey_headless "The user typed: doey ${typed}" \
     --model opus \
-    --reasoning-effort low \
     --no-tools \
     --max-turns 20 \
     --timeout 20 \
@@ -283,7 +282,6 @@ User: ${msg}"
   local resp
   resp=$(cd /tmp && doey_headless "$full_msg" \
     --model opus \
-    --reasoning-effort low \
     --no-tools \
     --max-turns 1 \
     --timeout 15 \

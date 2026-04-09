@@ -17,8 +17,6 @@ doey_headless() {
   local timeout_secs="${DOEY_HEADLESS_TIMEOUT:-30}"
   local system_file=""
   local append_system=""
-  local reasoning_effort=""
-
   # Parse arguments
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -47,10 +45,6 @@ doey_headless() {
       --append-system)
         shift
         append_system="$1"
-        ;;
-      --reasoning-effort)
-        shift
-        reasoning_effort="$1"
         ;;
       --)
         shift
@@ -133,10 +127,6 @@ doey_headless() {
   if [ -n "$append_system" ]; then
     claude_args="$claude_args --append-system-prompt \"$append_system\""
   fi
-  if [ -n "$reasoning_effort" ]; then
-    claude_args="$claude_args --reasoning-effort $reasoning_effort"
-  fi
-
   # Record start time
   local start_ts
   start_ts="$(date +%s)"
