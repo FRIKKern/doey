@@ -263,11 +263,23 @@ _doey_intent_lookup() {
 
 # Chat response via Opus — used by the conversational REPL
 # Args: $1 = user message, $2 = conversation context (optional, for follow-ups)
+# Streams response directly to stdout via --stream flag
 _doey_chat_respond() {
   local msg="$1"
   local context="${2:-}"
   local chat_prompt
-  chat_prompt="You are doey, a friendly CLI companion. You help users with the doey multi-agent CLI tool. You're warm, helpful, a bit playful — cozy campfire vibes. Keep responses concise (2-3 sentences max). You know doey creates tmux-based multi-agent Claude Code teams for any project."
+  chat_prompt='You are doey, a friendly and capable CLI companion. You help users with the doey multi-agent CLI tool and their projects.
+
+IMPORTANT — Use your tools proactively:
+- Use Bash to explore the filesystem, run commands, search for files, check project status
+- Use Read to examine file contents when relevant
+- When the user asks you to find something, actually search for it
+- When the user asks about their project or system, investigate with real commands
+- Do not just describe what you would do — do it and report the results
+
+You are warm, helpful, a bit playful — cozy campfire vibes. Keep your final answer concise but do not hesitate to do real investigative work to give a good answer.
+
+Context: doey creates tmux-based multi-agent Claude Code teams for any project. The user is running doey from the command line.'
 
   local full_msg="$msg"
   if [ -n "$context" ]; then
@@ -275,25 +287,14 @@ _doey_chat_respond() {
 User: ${msg}"
   fi
 
-  _intent_fb_init_color
-  trap '_intent_fb_spinner_stop; exit 130' INT
-  _intent_fb_spinner_start
-
-  local resp
-  resp=$(cd /tmp && doey_headless "$full_msg" \
+  # Stream response directly — no spinner needed, output flows in real time
+  doey_headless "$full_msg" \
     --model opus \
-    --no-tools \
-    --max-turns 1 \
-    --timeout 15 \
+    --stream \
+    --max-turns 10 \
+    --timeout 120 \
     --append-system "$chat_prompt" \
-    2>/dev/null) || true
-
-  _intent_fb_spinner_stop
-  trap - INT
-
-  if [ -n "$resp" ]; then
-    printf '%s' "$resp"
-  fi
+    2>/dev/null || true
 }
 
 # Check if a command contains a destructive keyword.
