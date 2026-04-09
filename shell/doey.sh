@@ -82,6 +82,18 @@ source "${SCRIPT_DIR}/doey-team-mgmt.sh"
 # shellcheck source=doey-session.sh
 source "${SCRIPT_DIR}/doey-session.sh"
 
+# shellcheck source=doey-status-reconcile.sh
+source "${SCRIPT_DIR}/doey-status-reconcile.sh"
+
+# Haiku Intent Fallback (Masterplan 402). intent-fallback.sh defines the
+# Anthropic helper; doey-intent-dispatch.sh wires it to the unknown-command
+# case below. Both are best-effort — the source guards make double-loading
+# safe and missing files would fail loud (they ship in shell/ with doey).
+# shellcheck source=intent-fallback.sh
+source "${SCRIPT_DIR}/intent-fallback.sh"
+# shellcheck source=doey-intent-dispatch.sh
+source "${SCRIPT_DIR}/doey-intent-dispatch.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 _doey_load_config
 
@@ -144,6 +156,13 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 # ── Unified CLI routing ──────────────────────────────────────────────
 # 'doey' is the user-facing CLI. Subcommands like msg/status/task are
 # handled by the internal doey-ctl binary, forwarded transparently here.
+# Special case: `doey status reconcile` is implemented in shell and must NOT
+# be forwarded to doey-ctl (which has no reconcile subcommand).
+if [ "${1:-}" = "status" ] && [ "${2:-}" = "reconcile" ]; then
+  shift 2
+  doey_status_reconcile "$@"
+  exit $?
+fi
 case "${1:-}" in
   msg|status|health|task|tmux|team|config|agent|event|error|nudge|migrate|interaction|briefing)
     if command -v doey-ctl >/dev/null 2>&1; then
@@ -220,6 +239,8 @@ case "${1:-}" in
     doey remote myapp # provision + attach to remote
     doey remote stop myapp  # destroy remote server
     doey remote status myapp # show server status
+    doey status reconcile    # fix stale BUSY panes (safety net)
+    doey status reconcile --dry-run  # preview corrections only
 HELP
     printf '\n'
     exit 0
@@ -318,7 +339,6 @@ HELP
     ;;
   masterplan|plan)
     goal="${2:-}"
-    [ -z "$goal" ] && { doey_error "Usage: doey masterplan \"goal text\""; exit 1; }
     require_running_session
     plan_id="masterplan-$(date +%Y%m%d-%H%M%S)"
     plan_dir="${runtime_dir}/${plan_id}"
@@ -328,7 +348,9 @@ HELP
     printf '%s\n' "$goal" > "${plan_dir}/goal.md"
 
     # Create task
-    task_id=$(doey task create --title "Masterplan: ${goal}" --type feature --description "$goal" --project-dir "$dir" 2>/dev/null) || true
+    _mp_task_title="Masterplan: ${goal:-<interactive>}"
+    _mp_task_desc="${goal:-Interactive masterplan session (no goal supplied at launch)}"
+    task_id=$(doey task create --title "$_mp_task_title" --type feature --description "$_mp_task_desc" --project-dir "$dir" 2>/dev/null) || true
 
     # Export for add_team_from_def (shell scope) and tmux (pane scope)
     export PLAN_FILE="$plan_file"
@@ -350,10 +372,64 @@ TASK_ID=${task_id:-}
 GOAL_FILE=${plan_dir}/goal.md
 MPEOF
 
+    # Snapshot window ids BEFORE spawn so we can identify the new window
+    # afterward. tmux indices can fill gaps (e.g. 0,1,3 → new is 2, not 4),
+    # so highest-index heuristics are unreliable — a set diff is bulletproof.
+    _mp_pre_wids=$(tmux list-windows -t "$session" -F '#{window_id}' 2>/dev/null | tr '\n' ' ')
+
     # Spawn team via team definition (teams/masterplan.team.md)
     add_team_from_def "$session" "$runtime_dir" "$dir" "masterplan"
 
-    printf '  %bMasterplan window created for:%b %s\n' "$SUCCESS" "$RESET" "$goal"
+    # Brief the Planner with the user's goal (only when goal is supplied).
+    # add_team_from_def already sends a generic team-layout + team-def-body
+    # briefing; we ADD a goal-specific message so the Planner has the actual
+    # goal text (not just a $GOAL_FILE env-var reference). Empty goal
+    # intentionally skips this: the Planner still discovers the goal file
+    # from $GOAL_FILE env on its own.
+    if [ -n "$goal" ]; then
+      # Find the new window_id by diffing post vs pre snapshot.
+      _mp_new_wid=""
+      for _mp_wid in $(tmux list-windows -t "$session" -F '#{window_id}' 2>/dev/null); do
+        case " $_mp_pre_wids " in
+          *" $_mp_wid "*) ;;
+          *) _mp_new_wid="$_mp_wid"; break ;;
+        esac
+      done
+      # Resolve window_id -> window_index
+      _mp_window_index=""
+      if [ -n "$_mp_new_wid" ]; then
+        _mp_window_index=$(tmux list-windows -t "$session" -F '#{window_id} #{window_index}' 2>/dev/null | awk -v w="$_mp_new_wid" '$1==w {print $2; exit}')
+      fi
+      if [ -n "$_mp_window_index" ]; then
+        _mp_planner_pane="${session}:${_mp_window_index}.0"
+        _mp_plan_db_id="${PLAN_DB_ID:-none}"
+        _mp_briefing="You are the Masterplanner for plan ${plan_id}.
+
+## Goal
+${goal}
+
+## Context
+- Plan ID: ${plan_id}
+- Goal file: ${plan_dir}/goal.md
+- Plan file: ${plan_file}
+- Working directory: ${plan_dir}
+- Research directory: ${plan_dir}/research/
+- Task ID: ${task_id:-none}
+- Plan DB ID: ${_mp_plan_db_id}
+
+Read the goal above and begin the masterplan process. Greet the user, restate the goal clearly, and ask 2-3 clarifying questions before dispatching research to your workers (panes 2-5). Write the plan to the plan file path above — the viewer (pane 1) will auto-render changes."
+        (
+          sleep "${DOEY_MANAGER_BRIEF_DELAY:-2}"
+          doey_send_verified "$_mp_planner_pane" "$_mp_briefing" || true
+        ) &
+      fi
+    fi
+
+    if [ -n "$goal" ]; then
+      printf '  %bMasterplan window created for:%b %s\n' "$SUCCESS" "$RESET" "$goal"
+    else
+      printf '  %bMasterplan window created%b (no goal supplied — Planner will start idle)\n' "$SUCCESS" "$RESET"
+    fi
     ;;
   add-window)
     require_running_session
@@ -435,6 +511,11 @@ MPEOF
     ;;
   "") ;;
   *)
+    # Haiku Intent Fallback (Masterplan 402): give the unknown command one
+    # shot at being understood by Haiku before we error out. The dispatcher
+    # exec()s a corrected command on success and returns non-zero on any
+    # failure path so we fall through to the original error+help message.
+    doey_intent_dispatch "$*" "Unknown command: $1" || true
     doey_error "Unknown command: $1"
     printf "  Run ${BOLD}doey --help${RESET} for usage\n"
     exit 1

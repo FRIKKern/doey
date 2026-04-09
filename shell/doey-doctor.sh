@@ -123,6 +123,24 @@ check_doctor() {
   if command -v jq >/dev/null 2>&1; then _doc_check ok "jq" "$(jq --version 2>/dev/null || echo 'unknown')"
   else _doc_check warn "jq not found — auto-trust skipped"; fi
 
+  # Haiku intent fallback (Masterplan 402) — surfaces whether the fallback
+  # is enabled, disabled by opt-out, missing an API key, or broken by a
+  # missing dependency/schema cache.
+  local _if_schema="$HOME/.config/doey/cli-schema.json"
+  if ! command -v jq >/dev/null 2>&1; then
+    _doc_check fail "Haiku intent fallback" "broken (jq not installed)"
+    printf "\n         ${DIM}Fix: ${RESET}${BRAND}brew install jq${RESET} ${DIM}or ${RESET}${BRAND}apt install jq${RESET}\n"
+  elif [ "${DOEY_NO_INTENT_FALLBACK:-}" = "1" ]; then
+    _doc_check warn "Haiku intent fallback" "opt-out (DOEY_NO_INTENT_FALLBACK=1)"
+  elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+    _doc_check warn "Haiku intent fallback" "disabled (no ANTHROPIC_API_KEY)"
+  else
+    _doc_check ok "Haiku intent fallback" "enabled"
+  fi
+  if [ ! -f "$_if_schema" ] && command -v jq >/dev/null 2>&1 && [ "${DOEY_NO_INTENT_FALLBACK:-}" != "1" ]; then
+    printf "         ${DIM}(schema cache missing — run: ${RESET}${BRAND}doey-ctl schema dump > ~/.config/doey/cli-schema.json${DIM})${RESET}\n"
+  fi
+
   # gum (optional luxury CLI)
   if command -v gum >/dev/null 2>&1; then
     _doc_check ok "gum" "$(gum --version 2>/dev/null || echo 'unknown')"
