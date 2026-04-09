@@ -139,7 +139,13 @@ _check_stale_heartbeats() {
     read -r _hb_time _task_id _pane_id < "$_hb" 2>/dev/null || continue
     [ -z "$_hb_time" ] && continue
     _age=$(( _now - _hb_time ))
-    [ "$_age" -ge 90 ] || continue
+    # Managers (pane index 0) get a longer timeout than workers
+    local _threshold
+    case "$_pane_id" in
+      *_0) _threshold="${DOEY_STALE_MANAGER_TIMEOUT:-600}" ;;
+      *)   _threshold="${DOEY_STALE_WORKER_TIMEOUT:-300}" ;;
+    esac
+    [ "$_age" -ge "$_threshold" ] || continue
     printf '%s %s %s %s\n' "$_pane_id" "$_task_id" "$_hb_time" "$_age" \
       > "${RUNTIME_DIR}/status/stale_${_pane_id}" 2>/dev/null || true
     _found=true
@@ -175,6 +181,107 @@ _check_stale_booting() {
     _found=true
   done
   [ "$_found" = true ]
+}
+
+_log_restart() {
+  local _pane_id="${1:-}" _action="${2:-}" _details="${3:-}"
+  local _log_file="${RUNTIME_DIR}/issues/auto_restart.log"
+  local _ts
+  _ts=$(date +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo "unknown")
+  mkdir -p "$(dirname "$_log_file")" 2>/dev/null || true
+  printf '[%s] PANE=%s ACTION=%s %s\n' "$_ts" "$_pane_id" "$_action" "$_details" \
+    >> "$_log_file" 2>/dev/null
+}
+
+_enforce_stale_restart() {
+  local _stale_dir="${RUNTIME_DIR}/status"
+  local _restart_count_dir="${RUNTIME_DIR}/recovery"
+  local _max_restarts="${DOEY_STALE_MAX_RESTARTS:-2}"
+  local _any_restarted=false
+
+  mkdir -p "$_restart_count_dir" 2>/dev/null || true
+
+  for _marker in "$_stale_dir"/stale_*; do
+    [ -f "$_marker" ] || continue
+
+    local _pane_id
+    _pane_id=$(basename "$_marker" | sed 's/^stale_//')
+
+    # Read stale marker for details
+    local _stale_info
+    _stale_info=$(cat "$_marker" 2>/dev/null) || continue
+
+    # Check restart count
+    local _count_file="${_restart_count_dir}/${_pane_id}.auto_restart_count"
+    local _count
+    _count=$(cat "$_count_file" 2>/dev/null) || _count=0
+
+    if [ "$_count" -ge "$_max_restarts" ]; then
+      # Escalate — write crash file, don't restart
+      printf 'STALE_EXHAUSTED %s restarts=%s max=%s\n' "$_pane_id" "$_count" "$_max_restarts" \
+        > "${_stale_dir}/crash_pane_${_pane_id}"
+      _log_restart "$_pane_id" "escalated" "Max $_max_restarts restarts reached"
+      rm -f "$_marker"
+      continue
+    fi
+
+    # Check if launch command exists
+    local _launch_cmd_file="${_stale_dir}/${_pane_id}.launch_cmd"
+    if [ ! -f "$_launch_cmd_file" ]; then
+      _log_restart "$_pane_id" "skipped" "No .launch_cmd file found"
+      rm -f "$_marker"
+      continue
+    fi
+
+    # Resolve tmux target pane from pane_id (format: session_name_W_P)
+    local _w_idx _p_idx _tmux_target
+    _w_idx=$(echo "$_pane_id" | awk -F'_' '{print $(NF-1)}')
+    _p_idx=$(echo "$_pane_id" | awk -F'_' '{print $NF}')
+    _tmux_target="${SESSION_NAME}:${_w_idx}.${_p_idx}"
+
+    # Kill existing Claude process
+    local _pane_pid _child_pid
+    _pane_pid=$(tmux display-message -t "$_tmux_target" -p '#{pane_pid}' 2>/dev/null) || {
+      _log_restart "$_pane_id" "skipped" "Cannot resolve tmux pane"
+      rm -f "$_marker"
+      continue
+    }
+    _child_pid=$(pgrep -P "$_pane_pid" 2>/dev/null) || true
+    if [ -n "$_child_pid" ]; then
+      kill "$_child_pid" 2>/dev/null || true
+    fi
+
+    # Transition state: BUSY -> ERROR -> READY
+    transition_state "$_pane_id" "ERROR" || true
+    transition_state "$_pane_id" "READY" || {
+      _log_restart "$_pane_id" "skipped" "State transition to READY failed"
+      rm -f "$_marker"
+      continue
+    }
+
+    # Increment restart count
+    printf '%s\n' "$((_count + 1))" > "$_count_file"
+
+    # Read saved launch command and relaunch
+    local _launch_cmd
+    _launch_cmd=$(cat "$_launch_cmd_file" 2>/dev/null) || {
+      _log_restart "$_pane_id" "failed" "Cannot read launch_cmd"
+      rm -f "$_marker"
+      continue
+    }
+
+    tmux send-keys -t "$_tmux_target" "$_launch_cmd" Enter 2>/dev/null || {
+      _log_restart "$_pane_id" "failed" "tmux send-keys failed"
+      rm -f "$_marker"
+      continue
+    }
+
+    _log_restart "$_pane_id" "restarted" "Auto-restart #$((_count + 1))/$_max_restarts"
+    _any_restarted=true
+    rm -f "$_marker"
+  done
+
+  [ "$_any_restarted" = "true" ]
 }
 
 CYCLE_FILE="${RUNTIME_DIR}/status/taskmaster_cycle_count"
@@ -305,6 +412,7 @@ _check_work() {  # Exits script if work found, returns 1 otherwise
   set -- "$RUNTIME_DIR/status"/crash_pane_*
   [ -f "${1:-}" ] && _wake "CRASH" "$elapsed"
   _check_stale_heartbeats && _wake "STALE" "$elapsed"
+  _enforce_stale_restart && _wake "RESTART" "$elapsed"
   _check_stale_booting && _wake "BOOT_STUCK" "$elapsed"
   [ "$_has_queued" = true ] && _wake "QUEUED" "$elapsed"
   return 1
