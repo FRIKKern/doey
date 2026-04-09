@@ -983,6 +983,20 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROL
 fi
 
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_WORKER" ]; then
+  # Block Write on existing report files (append-only)
+  case "$TOOL_NAME" in
+    Write)
+      _CHK_PATH=$(_json_str tool_input.file_path)
+      case "${_CHK_PATH:-}" in
+        */reports/*.report)
+          if [ -f "$_CHK_PATH" ]; then
+            _dbg_write "block_worker_write_existing_report"
+            _log_block "TOOL_BLOCKED" "Write to existing report file" "${_CHK_PATH:-}"
+            echo "Report files are append-only. Use the Edit tool to append new sections instead of Write, which overwrites the entire file." >&2
+            exit 2
+          fi ;;
+      esac ;;
+  esac
   TOOL_COMMAND="$_BASH_CMD"
   [ -z "$TOOL_COMMAND" ] && exit 0
   [ "$TOOL_COMMAND" = "__PARSE_FAILED__" ] && { echo "BLOCKED: Install jq or python3 — cannot verify Bash command safety." >&2; exit 2; }
