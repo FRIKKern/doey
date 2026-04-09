@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -540,7 +541,28 @@ func (e *ExpandedCard) Render() string {
 			mdParts = append(mdParts, "## Notes\n"+task.Notes)
 		}
 		if task.DecisionLog != "" {
-			mdParts = append(mdParts, "## Decisions\n"+task.DecisionLog)
+			decLines := strings.Split(strings.TrimSpace(task.DecisionLog), "\n")
+			now := time.Now()
+			var decFormatted []string
+			for _, dl := range decLines {
+				dl = strings.TrimSpace(dl)
+				if dl == "" {
+					continue
+				}
+				if idx := strings.Index(dl, ":"); idx >= 0 {
+					epochStr := strings.TrimSpace(dl[:idx])
+					text := strings.TrimSpace(dl[idx+1:])
+					if epoch, err := strconv.ParseInt(epochStr, 10, 64); err == nil {
+						age := formatAge(now.Sub(time.Unix(epoch, 0)))
+						decFormatted = append(decFormatted, fmt.Sprintf("- **%s ago** — %s", age, text))
+						continue
+					}
+				}
+				decFormatted = append(decFormatted, "- "+dl)
+			}
+			if len(decFormatted) > 0 {
+				mdParts = append(mdParts, "## Decisions\n"+strings.Join(decFormatted, "\n"))
+			}
 		}
 		if len(mdParts) > 0 {
 			combinedMD := strings.Join(mdParts, "\n\n")

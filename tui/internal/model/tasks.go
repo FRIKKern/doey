@@ -1847,19 +1847,30 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		if len(lines) > 3 {
 			start = len(lines) - 3
 		}
-		var dlLines []string
+		now := time.Now()
+		var dlRendered []string
 		for _, line := range lines[start:] {
 			line = strings.TrimSpace(line)
-			if line != "" {
-				dlLines = append(dlLines, line)
+			if line == "" {
+				continue
 			}
+			if idx := strings.Index(line, ":"); idx >= 0 {
+				epochStr := strings.TrimSpace(line[:idx])
+				text := strings.TrimSpace(line[idx+1:])
+				if epoch, err := strconv.ParseInt(epochStr, 10, 64); err == nil {
+					age := formatAge(now.Sub(time.Unix(epoch, 0)))
+					dlRendered = append(dlRendered, styles.DecisionLogEntry(t, text, age+" ago"))
+					continue
+				}
+			}
+			dlRendered = append(dlRendered, styles.DecisionLogEntry(t, line, ""))
 		}
-		if len(dlLines) > 0 {
+		if len(dlRendered) > 0 {
 			sections = append(sections, "")
 			sections = append(sections, styles.SectionTitle(t, "DECISIONS"))
-			sections = append(sections, styles.BulletList(t, dlLines, contentW))
+			sections = append(sections, strings.Join(dlRendered, "\n"))
 			if start > 0 {
-				sections = append(sections, t.Faint.Render(fmt.Sprintf("(%d more)", start)))
+				sections = append(sections, t.Faint.Render(fmt.Sprintf("(+%d more)", start)))
 			}
 		}
 	}
