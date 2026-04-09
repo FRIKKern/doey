@@ -17,6 +17,35 @@ __doey_intent_dispatch_sourced=1
 # shellcheck source=intent-fallback.sh
 source "${BASH_SOURCE[0]%/*}/intent-fallback.sh"
 
+# Extract and offer to run a [RUN: doey <cmd>] command from a chat response.
+# Returns 0 if a command was found, 1 if not.
+_doey_chat_try_run() {
+  local resp="$1"
+  local _run_match=""
+
+  _run_match=$(printf '%s' "$resp" | grep -oE '\[RUN: doey [^]]+\]' | head -1) || true
+  [ -z "$_run_match" ] && return 1
+
+  local _run_cmd=""
+  _run_cmd=$(printf '%s' "$_run_match" | sed 's/\[RUN: doey //;s/\]//')
+  [ -z "$_run_cmd" ] && return 1
+
+  if _intent_fb_is_tty; then
+    printf '  %s→ doey %s%s\n' "${_IFB_BLD}" "$_run_cmd" "${_IFB_RST}" >&2
+    printf '  Run it? [Y/n] ' >&2
+    local _confirm=""
+    read -r _confirm < /dev/tty 2>/dev/null || _confirm="y"
+    case "$_confirm" in
+      [Nn]*) printf '  Skipped.\n' >&2 ;;
+      *) printf '\n' >&2; eval "doey $_run_cmd" ;;
+    esac
+  else
+    printf '  → doey %s\n' "$_run_cmd" >&2
+  fi
+
+  return 0
+}
+
 # Conversational chat mode — warm, cozy interaction
 _doey_chat_mode() {
   local initial_input="$1"
@@ -35,7 +64,10 @@ _doey_chat_mode() {
 
   # Print first response (from the classification)
   if [ -n "$first_response" ]; then
-    printf '\n  %s%s%s\n' "$_chat_accent" "$first_response" "$_chat_reset" >&2
+    local _first_display
+    _first_display=$(printf '%s' "$first_response" | sed 's/\[RUN: doey [^]]*\]//g;s/[[:space:]]*$//')
+    printf '\n  %s%s%s\n' "$_chat_accent" "$_first_display" "$_chat_reset" >&2
+    _doey_chat_try_run "$first_response" || true
   fi
 
   # Non-TTY: single response only, no REPL
@@ -67,7 +99,11 @@ Assistant: ${first_response}"
     resp=$(_doey_chat_respond "$user_input" "$context") || true
 
     if [ -n "$resp" ]; then
-      printf '\n  %s%s%s\n' "$_chat_accent" "$resp" "$_chat_reset" >&2
+      # Strip [RUN: doey ...] tags for display, show command separately
+      local _display_resp
+      _display_resp=$(printf '%s' "$resp" | sed 's/\[RUN: doey [^]]*\]//g;s/[[:space:]]*$//')
+      printf '\n  %s%s%s\n' "$_chat_accent" "$_display_resp" "$_chat_reset" >&2
+      _doey_chat_try_run "$resp" || true
       context="${context}
 User: ${user_input}
 Assistant: ${resp}"
