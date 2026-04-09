@@ -537,6 +537,56 @@ done
 
 Nudge counters reset when a worker receives a new task (new dispatch via `/doey-dispatch` or new `task_id` file written). Do NOT reset counters on send-keys follow-ups — those are continuations, not new tasks.
 
+## Completion Verification Loop
+
+Before reporting done, verify the task's success criteria are actually met. This is a holistic gate — not per-worker verification (which happens in Phase 4), but a final check that all deliverables match what was asked.
+
+### When to Run
+
+After ALL workers are FINISHED/ERROR, results synthesized, and context log updated — but BEFORE notifying {{DOEY_ROLE_COORDINATOR}}.
+
+### Procedure
+
+1. **Load success criteria** — Read the task brief: `doey task get --id $TASK_ID`. Extract the success criteria, deliverables, and any evidence requested.
+
+2. **Check each criterion** — For each success criterion, verify against worker results:
+   - Did the worker output confirm this criterion was met?
+   - Does the result JSON show the expected files changed?
+   - Were tests run and did they pass for the relevant areas?
+
+3. **Score the result** — Mark each criterion as PASS, FAIL, or UNCLEAR:
+   ```bash
+   doey task log add --task-id $TASK_ID --type progress \
+     --title "Completion Verification" \
+     --body "Criteria: N/M passed. [details per criterion]" \
+     --author "{{DOEY_ROLE_TEAM_LEAD}}_W${DOEY_TEAM_WINDOW}"
+   ```
+
+4. **On failure (max 1 retry):**
+   - Identify the specific failed criterion and root cause
+   - Dispatch ONE worker with a targeted fix prompt (include the criterion, what failed, and what to change)
+   - Track the retry: `doey task decision --task-id $TASK_ID --title "Verification retry" --body "Criterion X failed: [reason]. Redispatching W${DOEY_TEAM_WINDOW}.N."`
+   - After retry completes, re-verify ONLY the failed criteria
+   - **Do not retry more than once** — a second failure means the task is partially complete
+
+5. **On partial completion (retry also failed):**
+   - Report to {{DOEY_ROLE_COORDINATOR}} with explicit pass/fail breakdown:
+     ```bash
+     doey task log add --task-id $TASK_ID --type completion \
+       --title "Partial Completion" \
+       --body "PASSED: [list]. FAILED: [list with reasons]. Retry attempted and failed." \
+       --author "{{DOEY_ROLE_TEAM_LEAD}}_W${DOEY_TEAM_WINDOW}"
+     ```
+   - Proceed to "Notify {{DOEY_ROLE_COORDINATOR}} When Done" — do not loop further
+
+6. **On full pass:** Proceed directly to "Notify {{DOEY_ROLE_COORDINATOR}} When Done".
+
+### Verification Scope
+
+- Only verify criteria from the current task — not general test suites or pre-existing issues
+- If the task brief has no explicit success criteria, verify that the stated deliverables exist and worker output confirms completion
+- Skip verification for pure research tasks (no deliverables to verify)
+
 ## Notify {{DOEY_ROLE_COORDINATOR}} When Done
 
 When your task is complete, **first bulk-close any remaining subtasks** so the TUI shows correct counts, then finish normally. The stop hook will automatically notify the {{DOEY_ROLE_COORDINATOR}}.
