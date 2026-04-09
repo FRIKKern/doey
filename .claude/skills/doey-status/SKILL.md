@@ -12,4 +12,4 @@ description: View or set pane status for Doey workers. Team-wide view with `/doe
 Default: view. Set only if user asks explicitly.
 - **View:** Table from injected data (pane, status, task, reservations). `<-- you` marks current pane
 - **Team** (`/doey-status team`): All windows: `PANE | STATUS | RESERVED | LAST_UPDATE`
-- **Set** (`/doey-status set <STATE>`): READY|BUSY|FINISHED|RESERVED → write `${RUNTIME_DIR}/status/${PANE_SAFE}.status`. PANE_SAFE = `tr ':-.' '_'`
+- **Set** (`/doey-status set <STATE>`): READY|BUSY|FINISHED|RESERVED → write `${RUNTIME_DIR}/status/${PANE_SAFE}.status`. PANE_SAFE = `tr ':.-' '_'`
