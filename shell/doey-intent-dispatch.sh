@@ -21,6 +21,9 @@ source "${BASH_SOURCE[0]%/*}/intent-fallback.sh"
 _doey_intent_dispatch() {
   local typed="$*"
 
+  # Strip politeness prefixes
+  typed="$(printf '%s' "$typed" | sed -E 's/^(please|pls|can you|could you|would you|kindly)[[:space:]]+//i')"
+
   # Opt-out gates
   if [ "${DOEY_NO_INTENT_FALLBACK:-0}" = "1" ] || [ "${DOEY_INTENT_FALLBACK:-1}" = "0" ]; then
     printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
@@ -28,23 +31,41 @@ _doey_intent_dispatch() {
     return 1
   fi
 
-  # Call the lookup
-  local result
-  result=$(_doey_intent_lookup "$typed") || true
+  # Project open fast-path — resolve locally, skip API
+  local confidence="" command="" explanation=""
+  local _fast_verb="${typed%% *}"
+  local _fast_rest="${typed#* }"
+  case "$_fast_verb" in
+    open|switch|attach)
+      local _fast_result=""
+      _fast_result="$(find_project_by_name "$_fast_rest" 2>/dev/null)" || _fast_result=""
+      if [ -n "$_fast_result" ]; then
+        local _fast_name="${_fast_result%%:*}"
+        confidence="HIGH"
+        command="doey open ${_fast_name}"
+        explanation="Opening project '${_fast_name}'"
+      fi
+      ;;
+  esac
 
-  if [ -z "$result" ]; then
-    # Headless call failed silently — fall back to plain error
-    printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
-    printf '  Run \033[1mdoey --help\033[0m for usage\n' >&2
-    return 1
+  if [ -z "$confidence" ]; then
+    # Call the lookup
+    local result
+    result=$(_doey_intent_lookup "$typed") || true
+
+    if [ -z "$result" ]; then
+      # Headless call failed silently — fall back to plain error
+      printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
+      printf '  Run \033[1mdoey --help\033[0m for usage\n' >&2
+      return 1
+    fi
+
+    # Parse CONFIDENCE|COMMAND|EXPLANATION
+    confidence="${result%%|*}"
+    local rest="${result#*|}"
+    command="${rest%%|*}"
+    explanation="${rest#*|}"
   fi
-
-  # Parse CONFIDENCE|COMMAND|EXPLANATION
-  local confidence command explanation
-  confidence="${result%%|*}"
-  local rest="${result#*|}"
-  command="${rest%%|*}"
-  explanation="${rest#*|}"
 
   case "$confidence" in
     HIGH)
@@ -70,13 +91,33 @@ _doey_intent_dispatch() {
       ;;
     MEDIUM)
       if [ -t 0 ] || [ -t 2 ]; then
-        # Interactive — suggest and confirm
-        printf '  Did you mean: \033[1m%s\033[0m? [y/N] ' "$command"
-        read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
-        case "$_confirm" in
-          [Yy]*) eval "$command" ;;
-          *) printf '  Cancelled.\n' ;;
-        esac
+        # Try interactive TUI if available
+        if command -v doey-tui >/dev/null 2>&1; then
+          local _tui_json _tui_result _selected
+          _tui_json=$(printf '{"action":"confirm","command":"%s","explanation":"%s","typed":"doey %s"}' \
+            "$(printf '%s' "$command" | sed 's/"/\\"/g')" \
+            "$(printf '%s' "$explanation" | sed 's/"/\\"/g')" \
+            "$(printf '%s' "$typed" | sed 's/"/\\"/g')")
+          _tui_result=$(printf '%s' "$_tui_json" | doey-tui intent-select 2>/dev/tty) || true
+          if [ -n "$_tui_result" ]; then
+            _selected=$(printf '%s' "$_tui_result" | sed -n 's/.*"selected":"\([^"]*\)".*/\1/p')
+            if [ -n "$_selected" ]; then
+              eval "$_selected"
+            else
+              printf '  Cancelled.\n' >&2
+            fi
+          else
+            printf '  Cancelled.\n' >&2
+          fi
+        else
+          # Fallback: simple y/N prompt
+          printf '  Did you mean: \033[1m%s\033[0m? [y/N] ' "$command" >&2
+          read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
+          case "$_confirm" in
+            [Yy]*) eval "$command" ;;
+            *) printf '  Cancelled.\n' >&2 ;;
+          esac
+        fi
       else
         # Non-interactive — just print suggestion
         printf '  Did you mean: %s\n' "$command"
@@ -84,8 +125,13 @@ _doey_intent_dispatch() {
       fi
       ;;
     NONE|*)
-      # No match — print explanation (which should suggest closest commands)
-      printf '  %s\n' "$explanation"
+      if [ -t 0 ] || [ -t 2 ] && command -v doey-tui >/dev/null 2>&1; then
+        printf '{"action":"info","message":"%s","suggestions":[]}' \
+          "$(printf '%s' "$explanation" | sed 's/"/\\"/g')" \
+          | doey-tui intent-select 2>/dev/tty || true
+      else
+        printf '  %s\n' "$explanation" >&2
+      fi
       ;;
   esac
 

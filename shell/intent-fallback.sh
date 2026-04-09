@@ -62,6 +62,7 @@ COMPLETE COMMAND REFERENCE:
   doey tunnel up                Start localhost tunnel
   doey tunnel down              Stop localhost tunnel
   doey tunnel status            Show tunnel status
+  doey open <name>              Open/attach to a registered project by name
   doey dynamic                  Launch with dynamic grid (alias: d)
   doey <NxM>                    Launch with grid (e.g. 4x3, 6x2)
   doey task list                List tasks
