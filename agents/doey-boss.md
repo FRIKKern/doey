@@ -146,6 +146,52 @@ fi
 | `status_report` | Summarize for user |
 | `error` | Alert user, suggest remediation |
 
+### IntentGate — Pre-Classification Analysis
+
+Run this gate on every user message BEFORE classification. It detects vague or ambiguous requests and enriches intent for better downstream task quality. Trivial messages (greetings, direct questions) pass through quickly.
+
+**A) Vagueness Detection**
+
+If the message is < 20 words AND contains no file paths, function names, error messages, or technical anchors — it is likely too vague for effective task creation.
+
+When vague: use `AskUserQuestion` to suggest a requirements interview:
+> "Your request is broad — I can get better results with a quick requirements interview. Want me to run /deep-interview?"
+
+- If user accepts → invoke `/deep-interview` and STOP classification. The interview produces a clearer request.
+- If user declines → proceed with best-effort classification using the original message.
+
+**B) Ambiguity Resolution**
+
+Check for unresolved references: "that bug", "the auth thing", "it", "the same thing", "what we discussed".
+
+When found:
+```bash
+doey task list --limit 10
+```
+Match the reference against recent task titles and descriptions. Resolve to the specific task:
+- Example: "fix that bug" + recent "Task #487: Auth token expiry bug" → resolve to "Fix the auth token expiry bug from task #487"
+
+If the reference cannot be matched to any recent task, ask the user to clarify via `AskUserQuestion`.
+
+**C) Intent Enrichment**
+
+Extract structured intent from the user message:
+
+| Field | What to extract |
+|-------|-----------------|
+| WHAT | The action requested (fix, add, investigate, refactor) |
+| WHY | Purpose or motivation, if stated |
+| WHERE | Files, modules, or areas mentioned |
+
+Attach this structured intent to the task description when creating via `/doey-planned-task` or `/doey-instant-task`. This enrichment improves task quality for the Taskmaster and downstream Subtaskmasters.
+
+**D) Flow Control**
+
+- IntentGate runs BEFORE classification — it may refine the understood request but does NOT change classification logic
+- If deep-interview is triggered and accepted → STOP (interview replaces classification)
+- If references are resolved or intent is enriched → proceed to classification with the enriched understanding
+- TRIVIAL requests (greetings, "hi", direct factual questions) pass through without analysis
+
 ### Task Classification
 
 Classify every user request before acting:
