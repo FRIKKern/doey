@@ -665,6 +665,56 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
   esac
 fi
 
+# ── Universal git safety: force-push, main-branch push, --no-verify ──────
+# Applies to ALL roles before any early exits
+if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__PARSE_FAILED__" ]; then
+  # Clean command: strip heredoc bodies + quoted strings (mirrors _is_direct_vcs_cmd)
+  _gsafe="${_BASH_CMD}"
+  case "$_gsafe" in
+    *"<<"*)
+      _gsafe=$(printf '%s\n' "$_gsafe" | awk '
+        BEGIN{s=0;d=""}
+        s{t=$0;gsub(/^[[:space:]]+/,"",t);if(t==d)s=0;next}
+        /<</{
+          i=index($0,"<<")
+          if(i>0){
+            r=substr($0,i+2);gsub(/^-?[[:space:]]*/,"",r)
+            rc=r;gsub(/^["'"'"'\\]?/,"",rc)
+            if(match(rc,/^[A-Za-z_][A-Za-z_0-9]*/)){
+              d=substr(rc,RSTART,RLENGTH);s=1
+              print substr($0,1,i-1);next
+            }
+          }
+        }
+        {print}
+      ' | tr '\n' ';') ;;
+    *)
+      _gsafe=$(printf '%s' "$_gsafe" | tr '\n' ';') ;;
+  esac
+  _gsafe=$(printf '%s' "$_gsafe" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
+  case "$_gsafe" in
+    *"git push"*"--force"*|*"git push"*"--force-with-lease"*)
+      _log_block "TOOL_BLOCKED" "Force push blocked" "$_BASH_CMD"
+      _dbg_write "block_force_push"
+      echo "Force push blocked. Use normal push." >&2
+      exit 2 ;;
+  esac
+  case "$_gsafe" in
+    *"git push"*" main"*|*"git push"*" master"*|*"git push"*":main"*|*"git push"*":master"*)
+      _log_block "TOOL_BLOCKED" "Direct push to main/master blocked" "$_BASH_CMD"
+      _dbg_write "block_push_main"
+      echo "Direct push to main/master blocked. Use a feature branch." >&2
+      exit 2 ;;
+  esac
+  case "$_gsafe" in
+    *"git "*"--no-verify"*)
+      _log_block "TOOL_BLOCKED" "--no-verify flag blocked" "$_BASH_CMD"
+      _dbg_write "block_no_verify"
+      echo "The --no-verify flag is not allowed." >&2
+      exit 2 ;;
+  esac
+fi
+
 # Doey Expert: can only access Doey source files (shell/, agents/, .claude/, docs/, tests/)
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DOEY_EXPERT" ]; then
   case "$TOOL_NAME" in

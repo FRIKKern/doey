@@ -280,12 +280,22 @@ create_team_worktree() {
   git -C "$project_dir" worktree prune 2>/dev/null || true
   # If a stale worktree dir exists at the target path, remove it properly
   if [ -d "$wt_path" ]; then
-    git -C "$project_dir" worktree remove "$wt_path" --force 2>/dev/null || true
+    if git -C "$wt_path" status --porcelain 2>/dev/null | grep -q '^'; then
+      _worktree_safe_remove "$project_dir" "$wt_path"
+    else
+      git -C "$project_dir" worktree remove "$wt_path" --force 2>/dev/null || true
+    fi
     git -C "$project_dir" worktree prune 2>/dev/null || true
     # Last resort: nuke the directory if git couldn't clean it
     [ -d "$wt_path" ] && rm -rf "$wt_path"
   fi
-  # Remove stale branch if it exists from a prior run
+  # Remove stale branch if it exists from a prior run — check for unmerged commits first
+  local unmerged
+  unmerged=$(git -C "$project_dir" rev-list --count "HEAD..${branch_name}" 2>/dev/null || echo 0)
+  if [ "$unmerged" -gt 0 ] 2>/dev/null; then
+    printf 'WARNING: Branch %s has %s unmerged commit(s). Creating safety ref.\n' "$branch_name" "$unmerged" >&2
+    git -C "$project_dir" tag "doey/safety/${branch_name}_$(date +%s)" "$branch_name" 2>/dev/null || true
+  fi
   git -C "$project_dir" branch -D "$branch_name" 2>/dev/null || true
 
   mkdir -p "$(dirname "$wt_path")"
@@ -309,8 +319,7 @@ remove_team_worktree() {
   local project_dir="$1" worktree_dir="$2"
   [ -z "$worktree_dir" ] && return 0
   [ -d "$worktree_dir" ] || return 0
-  git -C "$project_dir" worktree remove "$worktree_dir" --force 2>/dev/null || true
-  git -C "$project_dir" worktree prune 2>/dev/null || true
+  _worktree_safe_remove "$project_dir" "$worktree_dir"
 }
 
 _worktree_safe_remove() {
@@ -325,6 +334,25 @@ _worktree_safe_remove() {
     local dirty=""
     dirty=$(git -C "$worktree_dir" status --porcelain 2>/dev/null) || true
     if [ -n "$dirty" ]; then
+      # Write auto-save audit log
+      local auto_save_dir="${DOEY_RUNTIME:-/tmp/doey}/auto-saves"
+      mkdir -p "$auto_save_dir"
+      {
+        printf 'AUTO-SAVE: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        printf 'WORKTREE: %s\n' "$worktree_dir"
+        printf 'BRANCH: %s\n' "$branch_name"
+        printf 'FILES:\n'
+        git -C "$worktree_dir" status --porcelain 2>/dev/null || true
+      } > "${auto_save_dir}/${branch_name}_$(date +%s).log" 2>/dev/null || true
+
+      # Prompt if interactive terminal is available
+      if [ -t 0 ]; then
+        printf 'Worktree %s has uncommitted changes. Auto-save and remove? [Y/n] ' "$worktree_dir"
+        local answer=""
+        read -r answer
+        case "$answer" in [nN]*) return 1 ;; esac
+      fi
+
       git -C "$worktree_dir" add -A 2>/dev/null || true
       git -C "$worktree_dir" commit -m "doey: auto-save before teardown $(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null || true
       printf '  Worktree had uncommitted changes — auto-saved to branch: %s\n' "$branch_name"
@@ -340,7 +368,8 @@ _worktree_safe_remove() {
     fi
   fi
 
-  remove_team_worktree "$project_dir" "$worktree_dir"
+  git -C "$project_dir" worktree remove "$worktree_dir" --force 2>/dev/null || true
+  git -C "$project_dir" worktree prune 2>/dev/null || true
 }
 
 # ── Boot Timeout Watchdog ────────────────────────────────────���────────
