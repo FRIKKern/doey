@@ -735,6 +735,14 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DOEY_EXPERT" ]; then
 fi
 
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ]; then
+  # Desktop notification when Boss asks user a question
+  if [ "$TOOL_NAME" = "AskUserQuestion" ]; then
+    if command -v osascript >/dev/null 2>&1; then
+      osascript -e 'display notification "Boss has a question for you" with title "Doey — Question" sound name "Ping"' 2>/dev/null &
+    elif command -v notify-send >/dev/null 2>&1; then
+      notify-send "Doey — Question" "Boss has a question for you" 2>/dev/null &
+    fi
+  fi
   _dbg_write "allow_boss"
   exit 0
 fi
