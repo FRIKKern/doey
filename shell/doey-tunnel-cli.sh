@@ -307,6 +307,15 @@ doey_tunnel_up() {
     return 2
   fi
 
+  # Invoking `doey tunnel up` IS the opt-in. Export the guard so the child
+  # watcher (which honors DOEY_TUNNEL_ENABLED as an auto-start gate) runs.
+  export DOEY_TUNNEL_ENABLED=1
+  # The watcher hard-requires PROJECT_NAME for its runtime-dir derivation.
+  # Export both so the spawned child inherits them regardless of how the
+  # CLI was invoked (in-tmux pane with env, or a bare shell outside a session).
+  export PROJECT_NAME="${PROJECT_NAME:-$(_t_project_name)}"
+  export PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
+
   # Spawn the watcher detached from the current shell.
   # nohup + & keeps it running after the CLI exits.
   nohup bash "$_watcher" "$_runtime" >"$_log_file" 2>&1 &
