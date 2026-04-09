@@ -35,7 +35,7 @@ doey_send_command "${SESSION_NAME}:${W}.0" "claude --dangerously-skip-permission
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
-  PANE="${SESSION_NAME}:${W}.${wp}"; PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+  PANE="${SESSION_NAME}:${W}.${wp}"; PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
   [ "$FORCE" != "true" ] && [ -f "${RD}/status/${PANE_SAFE}.reserved" ] && { echo "  ${W}.${wp} — reserved"; continue; }
   kill_pane_process "$PANE" || { echo "  ${W}.${wp} — not found"; continue; }
   W_NAME=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null || echo "T${W} W${wp}")

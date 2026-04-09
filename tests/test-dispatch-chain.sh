@@ -94,7 +94,7 @@ detect_session() {
 # Convert session:W.P to safe name (replace -.:  with _)
 pane_safe_name() {
   local ref="$1"
-  printf '%s' "$ref" | tr ':-.' '___'
+  printf '%s' "$ref" | tr ':.-' '___'
 }
 
 # ── Test 1: IPC msg send/read round-trip ���────────────────────────────

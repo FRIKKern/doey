@@ -264,7 +264,7 @@ check_doctor() {
     _doc_rt="$(tmux show-environment -t "$_doc_session" DOEY_RUNTIME 2>/dev/null | cut -d= -f2- || true)"
     if [[ -z "$_doc_rt" ]]; then _doc_rt="${TMPDIR:-/tmp}/doey/${_doc_name}"; fi
     local _doc_tm_safe
-    _doc_tm_safe="$(printf '%s' "${_doc_session}:1.0" | tr ':-.' '___')"
+    _doc_tm_safe="$(printf '%s' "${_doc_session}:1.0" | tr ':.-' '___')"
     local _doc_tm_status="${_doc_rt}/status/${_doc_tm_safe}.status"
     if [[ -f "$_doc_tm_status" ]]; then
       local _doc_tm_state

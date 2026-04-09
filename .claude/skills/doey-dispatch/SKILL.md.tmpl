@@ -17,7 +17,7 @@ W="${DOEY_WINDOW_INDEX:-0}"
 if [ "$(grep '^GRID=' "${RD}/session.env" 2>/dev/null | cut -d= -f2)" = "dynamic" ]; then
   HAS_IDLE=false
   for WIDX in $(echo "$WORKER_PANES" | tr ',' ' '); do
-    W_SAFE=$(echo "${SESSION_NAME}:${W}.${WIDX}" | tr ':-.' '_')
+    W_SAFE=$(echo "${SESSION_NAME}:${W}.${WIDX}" | tr ':.-' '_')
     [ -f "${RD}/status/${W_SAFE}.reserved" ] && continue
     case "$(tmux capture-pane -t "${SESSION_NAME}:${W}.${WIDX}" -p -S -3 2>/dev/null)" in *'❯'*) HAS_IDLE=true; break ;; esac
   done
@@ -33,7 +33,7 @@ fi
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="${DOEY_WINDOW_INDEX:-0}"
-PANE_SAFE=$(echo "${SESSION_NAME}:${W}.X" | tr ':-.' '_')
+PANE_SAFE=$(echo "${SESSION_NAME}:${W}.X" | tr ':.-' '_')
 [ -f "${RD}/status/${PANE_SAFE}.reserved" ] && echo "Reserved — skip"
 tmux copy-mode -q -t "${SESSION_NAME}:${W}.X" 2>/dev/null
 tmux capture-pane -t "${SESSION_NAME}:${W}.X" -p -S -3
@@ -44,7 +44,7 @@ tmux capture-pane -t "${SESSION_NAME}:${W}.X" -p -S -3
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="${DOEY_WINDOW_INDEX:-0}"; PANE="${SESSION_NAME}:${W}.X"
-PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
 USE_DELEGATE=false
 if [ "${FORCE_RESTART:-0}" != "1" ]; then
   STATUS_OUT=$(doey status get "$PANE_SAFE" 2>/dev/null) || STATUS_OUT=""
@@ -94,7 +94,7 @@ Insert this step after the worker is ready (post kill+restart or delegate check)
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="${DOEY_WINDOW_INDEX:-0}"; PANE="${SESSION_NAME}:${W}.X"
-PANE_SAFE=$(echo "$PANE" | tr ':-.' '_')
+PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
 [ -f "${RD}/status/${PANE_SAFE}.reserved" ] && { echo "Reserved — skip"; exit 0; }
 
 # Check if Claude is at prompt
