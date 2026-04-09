@@ -12,21 +12,25 @@ set -euo pipefail
 # Quick: single-file changes, typos, small fixes
 export DOEY_CATEGORY_QUICK="quick"
 export DOEY_CATEGORY_MODEL_QUICK="sonnet"
+export DOEY_CATEGORY_AGENT_QUICK="doey-worker-quick"
 export DOEY_CATEGORY_DESC_QUICK="Single-file changes, typos, small fixes"
 
 # Deep: multi-file architecture, research, complex refactoring
 export DOEY_CATEGORY_DEEP="deep"
 export DOEY_CATEGORY_MODEL_DEEP="opus"
+export DOEY_CATEGORY_AGENT_DEEP="doey-worker-deep"
 export DOEY_CATEGORY_DESC_DEEP="Multi-file architecture, research, complex refactoring"
 
 # Visual: UI/frontend work
 export DOEY_CATEGORY_VISUAL="visual"
 export DOEY_CATEGORY_MODEL_VISUAL="opus"
+export DOEY_CATEGORY_AGENT_VISUAL="doey-worker"
 export DOEY_CATEGORY_DESC_VISUAL="UI/frontend work"
 
 # Infrastructure: CI/CD, config, build tooling
 export DOEY_CATEGORY_INFRA="infrastructure"
 export DOEY_CATEGORY_MODEL_INFRA="sonnet"
+export DOEY_CATEGORY_AGENT_INFRA="doey-worker"
 export DOEY_CATEGORY_DESC_INFRA="CI/CD, config, build tooling"
 
 # All categories (space-separated for iteration)
@@ -42,3 +46,14 @@ doey_category_model() {
     eval "printf '%s\n' \"\${${var_name}:-opus}\""
 }
 export -f doey_category_model
+
+# Agent variant lookup: get worker agent name for a category
+# Usage: doey_category_agent "quick" -> prints "doey-worker-quick"
+doey_category_agent() {
+    local cat_input="${1:-}"
+    local cat_upper
+    cat_upper=$(printf '%s' "$cat_input" | tr '[:lower:]' '[:upper:]')
+    local var_name="DOEY_CATEGORY_AGENT_${cat_upper}"
+    eval "printf '%s\n' \"\${${var_name}:-doey-worker}\""
+}
+export -f doey_category_agent
