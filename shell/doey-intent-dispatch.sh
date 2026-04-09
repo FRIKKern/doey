@@ -21,6 +21,9 @@ source "${BASH_SOURCE[0]%/*}/intent-fallback.sh"
 _doey_intent_dispatch() {
   local typed="$*"
 
+  # Strip politeness prefixes
+  typed="$(printf '%s' "$typed" | sed -E 's/^(please|pls|can you|could you|would you|kindly)[[:space:]]+//i')"
+
   # Opt-out gates
   if [ "${DOEY_NO_INTENT_FALLBACK:-0}" = "1" ] || [ "${DOEY_INTENT_FALLBACK:-1}" = "0" ]; then
     printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
@@ -28,23 +31,41 @@ _doey_intent_dispatch() {
     return 1
   fi
 
-  # Call the lookup
-  local result
-  result=$(_doey_intent_lookup "$typed") || true
+  # Project open fast-path — resolve locally, skip API
+  local confidence="" command="" explanation=""
+  local _fast_verb="${typed%% *}"
+  local _fast_rest="${typed#* }"
+  case "$_fast_verb" in
+    open|switch|attach)
+      local _fast_result=""
+      _fast_result="$(find_project_by_name "$_fast_rest" 2>/dev/null)" || _fast_result=""
+      if [ -n "$_fast_result" ]; then
+        local _fast_name="${_fast_result%%:*}"
+        confidence="HIGH"
+        command="doey open ${_fast_name}"
+        explanation="Opening project '${_fast_name}'"
+      fi
+      ;;
+  esac
 
-  if [ -z "$result" ]; then
-    # Headless call failed silently — fall back to plain error
-    printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
-    printf '  Run \033[1mdoey --help\033[0m for usage\n' >&2
-    return 1
+  if [ -z "$confidence" ]; then
+    # Call the lookup
+    local result
+    result=$(_doey_intent_lookup "$typed") || true
+
+    if [ -z "$result" ]; then
+      # Headless call failed silently — fall back to plain error
+      printf '  \033[31m✗\033[0m Unknown command: %s\n' "$typed" >&2
+      printf '  Run \033[1mdoey --help\033[0m for usage\n' >&2
+      return 1
+    fi
+
+    # Parse CONFIDENCE|COMMAND|EXPLANATION
+    confidence="${result%%|*}"
+    local rest="${result#*|}"
+    command="${rest%%|*}"
+    explanation="${rest#*|}"
   fi
-
-  # Parse CONFIDENCE|COMMAND|EXPLANATION
-  local confidence command explanation
-  confidence="${result%%|*}"
-  local rest="${result#*|}"
-  command="${rest%%|*}"
-  explanation="${rest#*|}"
 
   case "$confidence" in
     HIGH)

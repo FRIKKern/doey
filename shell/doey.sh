@@ -480,6 +480,30 @@ MPEOF
     grid="$1"
     ;;
   "") ;;
+  open|switch)
+    shift
+    if [ $# -eq 0 ]; then
+      show_menu "${grid}"
+      exit 0
+    fi
+    _open_query="$*"
+    _open_match=""
+    _open_match="$(find_project_by_name "$_open_query")" || true
+    if [ -n "$_open_match" ]; then
+      _open_pname="${_open_match%%:*}"
+      _open_ppath="${_open_match#*:}"
+      if session_exists "doey-${_open_pname}"; then
+        _attach_session "doey-${_open_pname}"
+      else
+        cd "$_open_ppath" && launch_with_grid "$_open_pname" "$_open_ppath" "${grid}"
+      fi
+    else
+      printf '  \033[31m✗\033[0m No project matching "%s"\n' "$_open_query" >&2
+      printf '  Registered projects:\n' >&2
+      list_projects
+    fi
+    exit 0
+    ;;
   *)
     # Intent fallback — maps unknown commands to the closest doey command
     # using a Claude-powered command expert (Haiku, ~2s).
