@@ -204,6 +204,36 @@ Classify every user request before acting:
 
 **Default to PLANNED when uncertain.** Over-planning is cheaper than restarting botched work.
 
+### Task Category Classification
+
+After determining classification (TRIVIAL/INSTANT/PLANNED), assign a **category** that determines the model tier for worker teams:
+
+| Category | Criteria | Model |
+|----------|----------|-------|
+| quick | Single-file change, typo fix, small config edit, < 3 files affected | sonnet |
+| deep | Multi-file refactor, architecture, research, complex logic, new features | opus |
+| visual | UI/frontend, CSS, layout, component work | opus |
+| infrastructure | CI/CD, build config, deployment, tooling | sonnet |
+
+Default: **deep** when uncertain (prefer quality over speed).
+
+### INSTANT Fast-Path
+
+When ALL of these are true:
+- Classification: INSTANT
+- Category: quick
+- Fewer than 3 files affected
+- Clear, unambiguous scope
+
+Use `/doey-instant-task` with `CATEGORY: quick` and `MODEL: sonnet` in the task description. This tells the Taskmaster to spawn a sonnet worker team for fast execution.
+
+For all other INSTANT tasks (category deep/visual/infrastructure), use `/doey-instant-task` normally — the Taskmaster will use the default opus model.
+
+Include category and model in dispatch messages:
+```bash
+doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 WORKERS_NEEDED=1 CATEGORY=quick MODEL=sonnet SUMMARY=Brief summary"
+```
+
 ### Task Deduplication
 
 Before creating any task, check for duplicates:
@@ -264,24 +294,27 @@ Tell the user what you observed, not what files claim. Include:
 
 ## Concrete Examples
 
-### Example 1: Simple Bug Fix
+### Example 1: Simple Bug Fix (INSTANT + quick)
 
 User says: "The login button doesn't respond on mobile"
 
 ```bash
 # Classify: INSTANT — single bug, clear scope
+# Category: quick — likely 1-2 files (CSS/JS touch handler)
 # Step 1: Capture verbatim + create task
 ORIGIN_FILE=$(mktemp "${RUNTIME_DIR:-/tmp}/origin.XXXXXX")
 cat > "$ORIGIN_FILE" <<'DOEY_ORIGIN_EOF'
 The login button doesn't respond on mobile
 DOEY_ORIGIN_EOF
-TASK_ID=$(doey task create --title "Fix login button unresponsive on mobile" --type "bug" --description "User reports login button does not respond to taps on mobile devices. Likely a touch event or CSS issue." --origin-prompt-file "$ORIGIN_FILE")
+TASK_ID=$(doey task create --title "Fix login button unresponsive on mobile" --type "bug" --description "CATEGORY: quick
+MODEL: sonnet
+User reports login button does not respond to taps on mobile devices. Likely a touch event or CSS issue." --origin-prompt-file "$ORIGIN_FILE")
 
-# Step 2: Dispatch to coordinator
-doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 WORKERS_NEEDED=1 SUMMARY=Fix mobile login button tap handling"
+# Step 2: Dispatch to coordinator with category/model
+doey msg send --to 1.0 --from 0.1 --subject dispatch_task --body "TASK_ID=${TASK_ID} DISPATCH_MODE=parallel PRIORITY=P1 WORKERS_NEEDED=1 CATEGORY=quick MODEL=sonnet SUMMARY=Fix mobile login button tap handling"
 ```
 
-Tell user: "→ INSTANT — dispatched bug fix to the team. I'll report back when it's done."
+Tell user: "→ INSTANT (quick/sonnet) — dispatched bug fix to the team. I'll report back when it's done."
 
 ### Example 2: Planned Feature
 

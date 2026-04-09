@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# expand-templates.sh — Expand {{DOEY_ROLE_*}} placeholders in .md.tmpl files
+# expand-templates.sh — Expand {{DOEY_ROLE_*}} and {{DOEY_CATEGORY_*}} placeholders in .md.tmpl files
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,6 +7,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # shellcheck source=doey-roles.sh
 source "$SCRIPT_DIR/doey-roles.sh"
+# shellcheck source=doey-categories.sh
+source "$SCRIPT_DIR/doey-categories.sh"
 
 # Flags
 CHECK=false
@@ -20,7 +22,7 @@ for arg in "$@"; do
   esac
 done
 
-# Build sed expression from all DOEY_ROLE_* env vars
+# Build sed expression from all DOEY_ROLE_* and DOEY_CATEGORY_* env vars
 SED_EXPR=""
 while IFS='=' read -r name value; do
   [ -z "$name" ] && continue
@@ -28,11 +30,11 @@ while IFS='=' read -r name value; do
   safe_value=$(printf '%s' "$value" | sed 's/[&/\]/\\&/g')
   SED_EXPR="${SED_EXPR}s/{{${name}}}/${safe_value}/g;"
 done <<EOF
-$(env | grep '^DOEY_ROLE_' | sort)
+$(env | grep '^DOEY_ROLE_\|^DOEY_CATEGORY_' | sort)
 EOF
 
 if [ -z "$SED_EXPR" ]; then
-  echo "ERROR: No DOEY_ROLE_* variables found" >&2
+  echo "ERROR: No DOEY_ROLE_* or DOEY_CATEGORY_* variables found" >&2
   exit 1
 fi
 
