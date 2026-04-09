@@ -701,10 +701,13 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__
   esac
   case "$_gsafe" in
     *"git push"*" main"*|*"git push"*" master"*|*"git push"*":main"*|*"git push"*":master"*)
-      _log_block "TOOL_BLOCKED" "Direct push to main/master blocked" "$_BASH_CMD"
-      _dbg_write "block_push_main"
-      echo "Direct push to main/master blocked. Use a feature branch." >&2
-      exit 2 ;;
+      if [ "${_DOEY_ROLE:-}" != "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
+        _log_block "TOOL_BLOCKED" "Direct push to main/master blocked" "$_BASH_CMD"
+        _dbg_write "block_push_main"
+        echo "Direct push to main/master blocked. Use a feature branch." >&2
+        exit 2
+      fi
+      _dbg_write "allow_deployment_push_main" ;;
   esac
   case "$_gsafe" in
     *"git "*"--no-verify"*)
