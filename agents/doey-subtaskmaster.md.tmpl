@@ -161,6 +161,7 @@ Verification means **proving the code works**, not confirming it exists. You —
 - Try edge cases and error paths — don't just re-run what the implementer ran
 - Check that the fix actually addresses the root cause, not just the symptom
 - Verify file changes match the spec — did the worker do what you asked, or something adjacent?
+- When writing verification results to a report file, **append** — never overwrite. Prior research in the report is valuable; verification results go at the end
 
 **What verification is NOT:**
 - Reading the diff and saying "looks good" — that's review, not verification
