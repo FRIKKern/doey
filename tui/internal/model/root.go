@@ -51,24 +51,25 @@ const (
 
 // Model is the root dashboard model composing all sub-models.
 type Model struct {
-	runtime    *runtime.Reader
-	snapshot   runtime.Snapshot
-	header     HeaderModel
-	dashboard  DashboardModel
-	tasks      TasksModel
-	plans      PlansModel
-	team       TeamModel
-	agents     AgentsModel
-	logsGroup  LogsGroupModel
+	runtime     *runtime.Reader
+	snapshot    runtime.Snapshot
+	sysInfo     *SysInfo
+	header      HeaderModel
+	dashboard   DashboardModel
+	tasks       TasksModel
+	plans       PlansModel
+	team        TeamModel
+	agents      AgentsModel
+	logsGroup   LogsGroupModel
 	connections ConnectionsModel
 	files       FilesModel
-	tabBar        TabBarModel
-	footer     FooterModel
-	heartbeats map[string]runtime.HeartbeatState
-	focusIndex int // 0=dashboard, 1=teams, 2=tasks, 3=plans, 4=agents, 5=logs(group), 6=connections, 7=files
-	width      int
-	height     int
-	ready      bool
+	tabBar      TabBarModel
+	footer      FooterModel
+	heartbeats  map[string]runtime.HeartbeatState
+	focusIndex  int // 0=dashboard, 1=teams, 2=tasks, 3=plans, 4=agents, 5=logs(group), 6=connections, 7=files
+	width       int
+	height      int
+	ready       bool
 }
 
 // New creates a root model that reads from the given runtime directory.
@@ -85,9 +86,10 @@ func New(runtimeDir string) Model {
 		{Name: "Files"},
 	}
 	return Model{
-		runtime:   runtime.NewReader(runtimeDir),
-		header:    NewHeaderModel(),
-		dashboard: NewDashboardModel(runtimeDir, "", 0, 0, theme),
+		runtime:     runtime.NewReader(runtimeDir),
+		sysInfo:     NewSysInfo(),
+		header:      NewHeaderModel(),
+		dashboard:   NewDashboardModel(runtimeDir, "", 0, 0, theme),
 		tasks:       NewTasksModel(),
 		plans:       NewPlansModel(theme),
 		team:        NewTeamModel(theme),
@@ -95,8 +97,8 @@ func New(runtimeDir string) Model {
 		logsGroup:   NewLogsGroupModel(theme),
 		connections: NewConnectionsModel(theme),
 		files:       NewFilesModel(theme),
-		tabBar:       NewTabBarModel(tabs),
-		footer:    NewFooterModel(),
+		tabBar:      NewTabBarModel(tabs),
+		footer:      NewFooterModel(),
 	}
 }
 
@@ -117,6 +119,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.propagateSizes()
 
 	case TickMsg:
+		// Reuse the existing 2s snapshot tick to refresh CPU% and git branch
+		// — no new goroutines, no new tickers.
+		if m.sysInfo != nil {
+			m.sysInfo.Update()
+		}
 		cmds = append(cmds, snapshotTickCmd())
 		cmds = append(cmds, m.readSnapshotCmd())
 
@@ -173,6 +180,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SnapshotMsg:
 		m.snapshot = runtime.Snapshot(msg)
+		if m.sysInfo != nil {
+			m.sysInfo.SetProjectDir(m.snapshot.Session.ProjectDir)
+		}
 		m.heartbeats = runtime.AggregateHeartbeats(m.snapshot)
 		m.dashboard.SetHeartbeats(m.heartbeats)
 		m.header.SetSnapshot(m.snapshot)
@@ -461,10 +471,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-
 // renderTabBar returns the tab bar view, synced to focusIndex.
 func (m Model) renderTabBar() string {
 	return m.tabBar.View()
+}
+
+// bannerExtras builds the top-right banner overlay from cached SysInfo.
+// Returns zero-value (hidden) if SysInfo is not yet initialized.
+func (m Model) bannerExtras() BannerExtras {
+	if m.sysInfo == nil {
+		return BannerExtras{CPUPct: -1}
+	}
+	return BannerExtras{
+		CPUPct:   m.sysInfo.CPUPct(),
+		Branch:   m.sysInfo.Branch(),
+		DiskFree: m.sysInfo.DiskFree(),
+	}
 }
 
 // View composes the full dashboard layout.
@@ -473,7 +495,7 @@ func (m Model) View() string {
 		return "\n  Loading…"
 	}
 
-	banner := RenderBanner(m.snapshot.Session.ProjectName, m.width)
+	banner := RenderBanner(m.snapshot.Session.ProjectName, m.width, m.bannerExtras())
 	tabBar := m.renderTabBar()
 	footer := m.footer.View()
 
@@ -523,7 +545,7 @@ func (m *Model) propagateSizes() {
 	m.footer.SetWidth(m.width)
 
 	m.tabBar.SetWidth(m.width)
-	bannerH := lipgloss.Height(RenderBanner(m.snapshot.Session.ProjectName, m.width))
+	bannerH := lipgloss.Height(RenderBanner(m.snapshot.Session.ProjectName, m.width, m.bannerExtras()))
 	menuH := lipgloss.Height(m.renderTabBar())
 	footerH := lipgloss.Height(m.footer.View())
 	bodyH := m.height - bannerH - menuH - footerH
