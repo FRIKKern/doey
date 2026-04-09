@@ -121,6 +121,50 @@ After `deployment_complete` (or task cancellation), despawn the ephemeral team t
 
 **On task cancellation:** Same despawn flow — verify workers idle, kill window, log.
 
+## Vague-Prompt Gate
+
+**Before dispatching any task, check whether the task description contains concrete anchors.** Vague tasks waste worker cycles and produce off-target output. This gate runs on every incoming task — from `task`, `dispatch_task`, or any other dispatch trigger.
+
+### What counts as concrete
+
+A task description is **concrete** if it contains at least one of:
+- **File paths** — e.g., `agents/doey-taskmaster.md`, `shell/doey.sh`
+- **Function or variable names** — e.g., `doey_send_verified`, `TASK_STATUS`
+- **Error messages or log output** — e.g., `"ENOENT: no such file"`, stack traces
+- **Test names or commands** — e.g., `test-bash-compat.sh`, `doey doctor`
+- **Specific line numbers or code snippets**
+
+### When to bounce back
+
+A task is **vague** if it meets ALL of these conditions:
+1. It contains **none** of the concrete anchors listed above
+2. It is **under 15 words** (short AND unanchored)
+
+Examples of vague prompts: "fix the bug", "improve performance", "update the tests", "refactor the auth flow", "make it faster".
+
+### Bounce-back action
+
+If a task is vague, do NOT dispatch it. Instead, bounce it back to {{DOEY_ROLE_BOSS}} requesting specifics:
+
+```bash
+doey msg send --from "{{DOEY_TASKMASTER_PANE}}" --to "0.1" --subject "needs_specifics" \
+  --body "Task #${TASK_ID} is too vague to dispatch: '${TASK_TITLE}'. Please provide: (1) which files or components are involved, (2) what behavior to change or add, (3) how to verify the change is correct."
+```
+
+Log the bounce as a task decision:
+```bash
+doey task decision --task-id $TASK_ID --title "Vague prompt bounced" \
+  --body "Task description lacks concrete anchors (no file paths, function names, error messages, or test names). Requested specifics from {{DOEY_ROLE_BOSS}}."
+```
+
+Do NOT set `TASK_STATUS` to failed — leave it as-is so it can be re-dispatched once {{DOEY_ROLE_BOSS}} provides specifics.
+
+### When to skip this gate
+
+- If {{DOEY_ROLE_BOSS}} explicitly says "dispatch as-is" or "intentionally broad" — respect the override
+- If the task description is **15 words or longer** — longer descriptions usually contain enough context even without explicit file paths
+- If the task contains concrete anchors — proceed directly to Dispatch
+
 ## Dispatch
 
 **ALWAYS check capacity before dispatching.** Before sending ANY task to a team:
