@@ -19,7 +19,8 @@ if [ "$(grep '^GRID=' "${RD}/session.env" 2>/dev/null | cut -d= -f2)" = "dynamic
   for WIDX in $(echo "$WORKER_PANES" | tr ',' ' '); do
     W_SAFE=$(echo "${SESSION_NAME}:${W}.${WIDX}" | tr ':.-' '_')
     [ -f "${RD}/status/${W_SAFE}.reserved" ] && continue
-    case "$(tmux capture-pane -t "${SESSION_NAME}:${W}.${WIDX}" -p -S -3 2>/dev/null)" in *'❯'*) HAS_IDLE=true; break ;; esac
+    _W_STATUS=$(grep '^STATUS: ' "${RD}/status/${W_SAFE}.status" 2>/dev/null | head -1 | cut -d' ' -f2-) || _W_STATUS=""
+    case "$_W_STATUS" in READY|FINISHED) HAS_IDLE=true; break ;; esac
   done
   if [ "$HAS_IDLE" = "false" ] && [ "${WORKER_COUNT:-0}" -lt "${MAX_WORKERS:-20}" ]; then
     doey add 2>/dev/null; sleep 10
@@ -35,8 +36,8 @@ RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 W="${DOEY_WINDOW_INDEX:-0}"
 PANE_SAFE=$(echo "${SESSION_NAME}:${W}.X" | tr ':.-' '_')
 [ -f "${RD}/status/${PANE_SAFE}.reserved" ] && echo "Reserved — skip"
-tmux copy-mode -q -t "${SESSION_NAME}:${W}.X" 2>/dev/null
-tmux capture-pane -t "${SESSION_NAME}:${W}.X" -p -S -3
+_STATUS=$(grep '^STATUS: ' "${RD}/status/${PANE_SAFE}.status" 2>/dev/null | head -1 | cut -d' ' -f2-) || _STATUS=""
+echo "Status: $_STATUS"  # READY or FINISHED = idle
 ```
 
 ### Smart Context Check (≥30% overlap → delegate, else restart)
@@ -101,6 +102,7 @@ PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
 tmux copy-mode -q -t "$PANE" 2>/dev/null
 PANE_PID=$(tmux display-message -t "$PANE" -p '#{pane_pid}')
 CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
+# capture-pane kept: dispatch verification requires visual ❯ + "bypass permissions" process-health check
 OUTPUT=$(tmux capture-pane -t "$PANE" -p 2>/dev/null)
 ALREADY_READY=false
 [ -n "$CHILD_PID" ] && echo "$OUTPUT" | grep -q "bypass permissions" && echo "$OUTPUT" | grep -q '❯' && ALREADY_READY=true || true

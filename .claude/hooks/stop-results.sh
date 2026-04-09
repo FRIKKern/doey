@@ -29,6 +29,8 @@ _append_attachment() {
   fi
 }
 
+# capture-pane required: output archive, completion attachments, VERIFICATION_STEP lines,
+# and heuristic tool counting have no structured alternative for full session output
 OUTPUT=$(tmux capture-pane -t "$PANE" -p -S -80 2>/dev/null) || OUTPUT=""
 [ -z "$OUTPUT" ] && _log_error "HOOK_ERROR" "tmux capture-pane returned empty" "pane=$PANE"
 
@@ -48,6 +50,7 @@ FILTERED=""
 STATUS="done"
 TOOL_COUNT=0
 # Pass 1: build FILTERED output and count tools (no error detection here)
+# No structured tool count exists — on-pre-tool-use.sh only tracks last tool name, not a count
 while IFS= read -r line; do
   case "$line" in
     *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
@@ -60,8 +63,14 @@ done <<HEREDOC_EOF
 $OUTPUT
 HEREDOC_EOF
 
-# Pass 2: check only last 8 lines for genuine errors (avoids false positives
-# from session-start messages, error mentions in code discussion, file names, etc.)
+# Structured error check: read status file written by synchronous stop-status.sh
+_status_from_file=$(_read_pane_status "$PANE_SAFE") || _status_from_file=""
+if [ "$_status_from_file" = "ERROR" ]; then
+  STATUS="error"
+fi
+
+# Pass 2: heuristic fallback — check last 8 lines for errors not caught by structured status
+# (captures cases where worker "finished" but output contains error signals)
 _tail_lines=$(printf '%s' "$FILTERED" | tail -8)
 _found_error=""
 while IFS= read -r line; do
@@ -89,16 +98,15 @@ if [ "$_found_error" = "true" ]; then
 fi
 [ "$_found_error" = "true" ] && STATUS="error"
 
-# Extract proof fields from captured output (legacy compat)
+# Read proof from structured proof file (workers write to $RUNTIME_DIR/proof/)
 PROOF_TYPE=""
 PROOF_CONTENT=""
-_proof_line=$(printf '%s' "$FILTERED" | grep '^PROOF_TYPE:' | tail -1) || true
-if [ -n "$_proof_line" ]; then
-  PROOF_TYPE=$(printf '%s' "$_proof_line" | sed 's/^PROOF_TYPE:[[:space:]]*//')
-fi
-_proof_body=$(printf '%s' "$FILTERED" | grep '^PROOF:' | tail -1) || true
-if [ -n "$_proof_body" ]; then
-  PROOF_CONTENT=$(printf '%s' "$_proof_body" | sed 's/^PROOF:[[:space:]]*//')
+_proof_file="${RUNTIME_DIR}/proof/${PANE_SAFE}.proof"
+if [ -f "$_proof_file" ]; then
+  _proof_line=$(grep '^PROOF_TYPE:' "$_proof_file" | tail -1) || true
+  [ -n "$_proof_line" ] && PROOF_TYPE=$(printf '%s' "$_proof_line" | sed 's/^PROOF_TYPE:[[:space:]]*//')
+  _proof_body=$(grep '^PROOF:' "$_proof_file" | tail -1) || true
+  [ -n "$_proof_body" ] && PROOF_CONTENT=$(printf '%s' "$_proof_body" | sed 's/^PROOF:[[:space:]]*//')
 fi
 
 # ── Structured proof-of-success (v2) ──────────────────────────────
