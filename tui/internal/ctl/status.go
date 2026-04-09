@@ -26,6 +26,8 @@ type PaneStatusEntry struct {
 }
 
 // ReadStatus reads and parses a pane status file from the status directory.
+// Canonical format is "KEY: VALUE" (colon+space). Legacy "KEY=VALUE" files
+// are still accepted for backward compatibility during the format transition.
 func ReadStatus(runtimeDir, paneSafe string) (*PaneStatusEntry, error) {
 	path := filepath.Join(runtimeDir, StatusSubdir, paneSafe+StatusExt)
 	f, err := os.Open(path)
@@ -38,8 +40,17 @@ func ReadStatus(runtimeDir, paneSafe string) (*PaneStatusEntry, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		k, v, ok := strings.Cut(line, "=")
-		if !ok {
+		var k, v string
+		if idx := strings.Index(line, ": "); idx > 0 {
+			// Canonical colon+space format. Split only on the FIRST ": " so
+			// values like "UPDATED: 2026-04-07T20:28:37+0000" parse correctly.
+			k = line[:idx]
+			v = line[idx+2:]
+		} else if eq := strings.IndexByte(line, '='); eq > 0 {
+			// Legacy key=value fallback.
+			k = line[:eq]
+			v = line[eq+1:]
+		} else {
 			continue
 		}
 		switch k {
@@ -79,7 +90,12 @@ func WriteStatus(runtimeDir, paneSafe, paneID, status, task string) error {
 	tmpPath := tmp.Name()
 
 	now := time.Now().Format(timeFormat)
-	content := fmt.Sprintf("PANE=%s\nUPDATED=%s\nSTATUS=%s\nTASK=%s\n", paneID, now, status, task)
+	// Canonical "KEY: VALUE" format — matches shell readers that grep '^STATUS: '
+	// (info-panel.sh, pane-border-status.sh, tmux-statusbar.sh, doey-team-mgmt.sh,
+	// taskmaster-wait.sh, stop-notify.sh, etc.) and Go readers in
+	// tui/internal/runtime/reader.go. Do NOT emit "KEY=VALUE" — shell readers
+	// that grep '^STATUS: ' will silently miss it.
+	content := fmt.Sprintf("PANE: %s\nUPDATED: %s\nSTATUS: %s\nTASK: %s\n", paneID, now, status, task)
 
 	if _, err := tmp.WriteString(content); err != nil {
 		tmp.Close()
