@@ -6,7 +6,7 @@
 # an unknown command. Sources intent-fallback.sh for the Claude lookup,
 # then acts on the result: auto-execute, confirm, or print explanation.
 #
-# Bash 3.2 compatible. No jq dependency.
+# Bash 3.2 compatible. Requires jq.
 
 set -uo pipefail
 
@@ -28,6 +28,13 @@ _doey_intent_dispatch() {
     return 1
   fi
 
+  # jq is required for JSON parsing
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '  \033[31m✗\033[0m Unknown command: %s (jq required for suggestions)\n' "$typed" >&2
+    printf '  Run \033[1mdoey --help\033[0m for usage\n' >&2
+    return 1
+  fi
+
   # Call the lookup
   local result
   result=$(_doey_intent_lookup "$typed") || true
@@ -39,51 +46,62 @@ _doey_intent_dispatch() {
     return 1
   fi
 
-  # Parse CONFIDENCE|COMMAND|EXPLANATION
-  local confidence command explanation
-  confidence="${result%%|*}"
-  local rest="${result#*|}"
-  command="${rest%%|*}"
-  explanation="${rest#*|}"
+  # Parse JSON fields
+  local action command confidence explanation destructive
+  action="$(printf '%s' "$result" | jq -r '.action // "none"')"
+  command="$(printf '%s' "$result" | jq -r '.command // ""')"
+  confidence="$(printf '%s' "$result" | jq -r '.confidence // "low"')"
+  explanation="$(printf '%s' "$result" | jq -r '.explanation // ""')"
+  destructive="$(printf '%s' "$result" | jq -r '.destructive // false')"
 
-  case "$confidence" in
-    HIGH)
-      if _intent_fb_is_destructive "$command"; then
-        # Destructive commands always require explicit confirmation
-        printf '  Did you mean: \033[1m%s\033[0m?\n' "$command"
-        printf '  \033[33m⚠\033[0m  This is a destructive command.\n'
-        printf '  Run? [y/N] '
-        read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
-        case "$_confirm" in
-          [Yy]*) eval "$command" ;;
-          *) printf '  Cancelled.\n' ;;
-        esac
-      elif [ -t 0 ] || [ -t 2 ]; then
-        # Interactive TTY — auto-execute
-        printf '  Running: \033[1m%s\033[0m\n' "$command"
-        eval "$command"
+  case "$action" in
+    run_command)
+      if [ -z "$command" ]; then
+        printf '  %s\n' "$explanation"
+        return 0
+      fi
+
+      if [ "$confidence" = "high" ]; then
+        if [ "$destructive" = "true" ]; then
+          # Destructive commands always require explicit confirmation
+          printf '  Did you mean: \033[1m%s\033[0m?\n' "$command"
+          printf '  \033[33m⚠\033[0m  This is a destructive command.\n'
+          printf '  Run? [y/N] '
+          read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
+          case "$_confirm" in
+            [Yy]*) eval "$command" ;;
+            *) printf '  Cancelled.\n' ;;
+          esac
+        elif [ -t 0 ] || [ -t 2 ]; then
+          # Interactive TTY — auto-execute
+          printf '  Running: \033[1m%s\033[0m\n' "$command"
+          eval "$command"
+        else
+          # Non-interactive — just suggest
+          printf '  → %s\n' "$command"
+          printf '  (%s)\n' "$explanation"
+        fi
+      elif [ "$confidence" = "medium" ]; then
+        if [ -t 0 ] || [ -t 2 ]; then
+          # Interactive — suggest and confirm
+          printf '  Did you mean: \033[1m%s\033[0m? [y/N] ' "$command"
+          read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
+          case "$_confirm" in
+            [Yy]*) eval "$command" ;;
+            *) printf '  Cancelled.\n' ;;
+          esac
+        else
+          # Non-interactive — just print suggestion
+          printf '  Did you mean: %s\n' "$command"
+          printf '  (%s)\n' "$explanation"
+        fi
       else
-        # Non-interactive — just suggest
-        printf '  → %s\n' "$command"
+        # Low confidence — just suggest
+        printf '  Did you mean: %s?\n' "$command"
         printf '  (%s)\n' "$explanation"
       fi
       ;;
-    MEDIUM)
-      if [ -t 0 ] || [ -t 2 ]; then
-        # Interactive — suggest and confirm
-        printf '  Did you mean: \033[1m%s\033[0m? [y/N] ' "$command"
-        read -r _confirm < /dev/tty 2>/dev/null || _confirm="n"
-        case "$_confirm" in
-          [Yy]*) eval "$command" ;;
-          *) printf '  Cancelled.\n' ;;
-        esac
-      else
-        # Non-interactive — just print suggestion
-        printf '  Did you mean: %s\n' "$command"
-        printf '  (%s)\n' "$explanation"
-      fi
-      ;;
-    NONE|*)
+    conversational|none|*)
       # No match — print explanation (which should suggest closest commands)
       printf '  %s\n' "$explanation"
       ;;

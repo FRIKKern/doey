@@ -5,18 +5,19 @@ set -euo pipefail
 [ "${__doey_headless_sourced:-}" = "1" ] && return 0 2>/dev/null || true
 __doey_headless_sourced=1
 
-# Usage: doey_headless <message> [--model haiku|sonnet|opus|<full-name>] [--max-turns N]
+# Usage: doey_headless <message> [--model haiku|sonnet|opus|<full-name>]
 #        [--no-tools] [--json] [--timeout N] [--system FILE] [--append-system PROMPT_STRING]
+#        [--schema FILE]
 
 doey_headless() {
   local message=""
   local model="${DOEY_HEADLESS_MODEL:-opus}"
-  local max_turns="1"
   local no_tools=0
   local json_mode=0
   local timeout_secs="${DOEY_HEADLESS_TIMEOUT:-30}"
   local system_file=""
   local append_system=""
+  local schema_file=""
 
   # Parse arguments
   while [ $# -gt 0 ]; do
@@ -24,10 +25,6 @@ doey_headless() {
       --model)
         shift
         model="$1"
-        ;;
-      --max-turns)
-        shift
-        max_turns="$1"
         ;;
       --no-tools)
         no_tools=1
@@ -46,6 +43,10 @@ doey_headless() {
       --append-system)
         shift
         append_system="$1"
+        ;;
+      --schema)
+        shift
+        schema_file="$1"
         ;;
       --)
         shift
@@ -70,7 +71,7 @@ doey_headless() {
   fi
 
   if [ -z "$message" ]; then
-    echo "Usage: doey-headless <message> [--model haiku|sonnet|opus] [--max-turns N] [--no-tools] [--json] [--timeout N] [--system FILE] [--append-system PROMPT]" >&2
+    echo "Usage: doey-headless <message> [--model haiku|sonnet|opus] [--no-tools] [--json] [--timeout N] [--system FILE] [--append-system PROMPT] [--schema FILE]" >&2
     return 1
   fi
 
@@ -101,20 +102,27 @@ doey_headless() {
     timeout_bin="gtimeout"
   fi
 
-  # Build claude -p command args
-  local claude_args=""
-  claude_args="-p --model $model --no-session-persistence --max-turns $max_turns"
+  # Build claude command as an array (no eval)
+  claude_cmd=(claude -p --bare --model "$model" --no-session-persistence)
 
-  # Output format
-  if [ "$json_mode" -eq 1 ]; then
-    claude_args="$claude_args --output-format json"
+  # Output format: --schema forces json output
+  if [ -n "$schema_file" ]; then
+    if [ ! -f "$schema_file" ]; then
+      echo "doey-headless: schema file not found: $schema_file" >&2
+      return 1
+    fi
+    local schema_content
+    schema_content="$(cat "$schema_file")"
+    claude_cmd=("${claude_cmd[@]}" --output-format json --json-schema "$schema_content")
+  elif [ "$json_mode" -eq 1 ]; then
+    claude_cmd=("${claude_cmd[@]}" --output-format json)
   else
-    claude_args="$claude_args --output-format text"
+    claude_cmd=("${claude_cmd[@]}" --output-format text)
   fi
 
   # Tool restriction
   if [ "$no_tools" -eq 1 ]; then
-    claude_args="$claude_args --allowed-tools \"\""
+    claude_cmd=("${claude_cmd[@]}" --allowed-tools "")
   fi
 
   # System prompt options
@@ -123,10 +131,12 @@ doey_headless() {
       echo "doey-headless: system file not found: $system_file" >&2
       return 1
     fi
-    claude_args="$claude_args --system-prompt-file \"$system_file\""
+    local system_content
+    system_content="$(cat "$system_file")"
+    claude_cmd=("${claude_cmd[@]}" --system-prompt "$system_content")
   fi
   if [ -n "$append_system" ]; then
-    claude_args="$claude_args --append-system-prompt \"$append_system\""
+    claude_cmd=("${claude_cmd[@]}" --append-system-prompt "$append_system")
   fi
 
   # Record start time
@@ -138,9 +148,9 @@ doey_headless() {
   local exit_code=0
 
   if [ -n "$timeout_bin" ]; then
-    raw_output="$(printf '%s' "$message" | eval "$timeout_bin" "$timeout_secs" claude $claude_args 2>&1)" || exit_code=$?
+    raw_output="$(printf '%s' "$message" | "$timeout_bin" "$timeout_secs" "${claude_cmd[@]}" 2>&1)" || exit_code=$?
   else
-    raw_output="$(printf '%s' "$message" | eval claude $claude_args 2>&1)" || exit_code=$?
+    raw_output="$(printf '%s' "$message" | "${claude_cmd[@]}" 2>&1)" || exit_code=$?
   fi
 
   # Map timeout exit code
@@ -160,7 +170,7 @@ doey_headless() {
   local parsed_turns="0"
   local parsed_cost="0"
 
-  if [ "$json_mode" -eq 1 ]; then
+  if [ "$json_mode" -eq 1 ] || [ -n "$schema_file" ]; then
     # claude -p --output-format json returns a JSON object
     # Extract fields with jq if available, otherwise basic sed parsing
     if command -v jq >/dev/null 2>&1; then

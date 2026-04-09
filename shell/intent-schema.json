@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["run_command", "conversational", "none"],
+      "description": "What to do: run_command if a doey command matches, conversational if user is chatting, none if cannot help"
+    },
+    "command": {
+      "type": "string",
+      "description": "The exact doey command to run (empty if action is not run_command)"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "How confident in the match"
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Brief explanation of why this command was chosen"
+    },
+    "destructive": {
+      "type": "boolean",
+      "description": "Whether this command could cause data loss"
+    }
+  },
+  "required": ["action", "command", "confidence", "explanation", "destructive"],
+  "additionalProperties": false
+}
