@@ -18,65 +18,6 @@ set -uo pipefail
 [ "${__doey_intent_fallback_sourced:-}" = "1" ] && return 0 2>/dev/null || true
 __doey_intent_fallback_sourced=1
 
-_intent_fb_is_tty() {
-  [ "${_INTENT_FB_TTY_CACHED:-}" ] && { [ "$_INTENT_FB_TTY_CACHED" = "1" ]; return; }
-  if [ -t 0 ] && [ -t 2 ]; then
-    _INTENT_FB_TTY_CACHED=1; return 0
-  else
-    _INTENT_FB_TTY_CACHED=0; return 1
-  fi
-}
-
-_intent_fb_init_color() {
-  if [ -n "${NO_COLOR:-}" ] || ! _intent_fb_is_tty; then
-    _IFB_RED="" _IFB_GREEN="" _IFB_YLW="" _IFB_CYAN="" _IFB_DIM="" _IFB_BLD="" _IFB_RST=""
-  else
-    _IFB_RED=$'\033[31m' _IFB_GREEN=$'\033[32m' _IFB_YLW=$'\033[33m'
-    _IFB_CYAN=$'\033[36m' _IFB_DIM=$'\033[2m' _IFB_BLD=$'\033[1m' _IFB_RST=$'\033[0m'
-  fi
-}
-
-_intent_fb_spinner_start() {
-  _intent_fb_is_tty || return 0
-  [ -n "${NO_COLOR:-}" ] && return 0
-  _IFB_SPINNER_PID=""
-  { tput civis 2>/dev/null || true; } >&2
-  (
-    _chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    _words="Doeying Snootling Waggening Snorfeling Cozymaxxing Ruffling Floofing Scampering Sniffvestigating Recombobulating"
-    set -- $_words
-    _wcount=$#
-    _wi=0
-    _ci=0
-    _di=1
-    _tick=0
-    while true; do
-      _wi=$(( (_tick / 12) % _wcount + 1 ))
-      eval "_w=\${$_wi}"
-      _di=$(( (_tick / 4) % 3 + 1 ))
-      case $_di in
-        1) _dots="." ;;
-        2) _dots=".." ;;
-        3) _dots="..." ;;
-      esac
-      printf '\r\033[K  %s %s%s' "${_chars:$_ci:1}" "$_w" "$_dots" >&2
-      _ci=$(( (_ci + 1) % ${#_chars} ))
-      _tick=$(( _tick + 1 ))
-      sleep 0.08
-    done
-  ) &
-  _IFB_SPINNER_PID=$!
-}
-
-_intent_fb_spinner_stop() {
-  [ -n "${_IFB_SPINNER_PID:-}" ] && kill "$_IFB_SPINNER_PID" 2>/dev/null && wait "$_IFB_SPINNER_PID" 2>/dev/null
-  _IFB_SPINNER_PID=""
-  if _intent_fb_is_tty; then
-    printf '\r\033[K' >&2
-    { tput cnorm 2>/dev/null || true; } >&2
-  fi
-}
-
 # shellcheck source=doey-headless.sh
 source "${BASH_SOURCE[0]%/*}/doey-headless.sh"
 
@@ -141,10 +82,8 @@ _intent_fb_spinner_stop() {
 # Commands that must ALWAYS prompt for confirmation, even at HIGH confidence.
 _INTENT_FB_DESTRUCTIVE="uninstall stop kill purge reset"
 
-_intent_fb_system_prompt() {
-  cat <<'SYSPROMPT'
-You are a doey CLI command expert. Your ONLY job is to identify which doey command the user intended.
-
+_intent_fb_command_reference() {
+  cat <<'CMDREF'
 COMPLETE COMMAND REFERENCE:
   doey                          Start/attach session (smart launch)
   doey help                     Show help
@@ -194,6 +133,14 @@ COMPLETE COMMAND REFERENCE:
   doey health                   System health check
   doey agent                    Agent management
   doey team                     Team management
+CMDREF
+}
+
+_intent_fb_system_prompt() {
+  printf '%s\n' "You are a doey CLI command expert. Your ONLY job is to identify which doey command the user intended."
+  printf '\n'
+  _intent_fb_command_reference
+  cat <<'SYSPROMPT'
 
 RESPONSE FORMAT — respond with EXACTLY one line:
   HIGH|<full command>|<brief explanation>
@@ -210,6 +157,32 @@ Rules:
 - Explanation under 80 characters (except CHAT, which can be up to 200).
 - Output EXACTLY one line. No preamble, no markdown, no extra text.
 SYSPROMPT
+}
+
+_intent_fb_chat_system_prompt() {
+  cat <<'CHATPERSONALITY'
+You are doey, a friendly CLI companion. You help users with the doey multi-agent CLI tool. You're warm, helpful, a bit playful — cozy campfire vibes. Keep responses concise (2-4 sentences max unless the user asks for detail). You know doey creates tmux-based multi-agent Claude Code teams for any project.
+CHATPERSONALITY
+
+  printf '\n'
+  _intent_fb_command_reference
+
+  local _project="${DOEY_PROJECT_NAME:-${PROJECT_NAME:-}}"
+  local _session="${SESSION_NAME:-}"
+  local _branch=""
+  _branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || _branch=""
+
+  if [ -n "$_project" ] || [ -n "$_session" ] || [ -n "$_branch" ]; then
+    printf '\nCURRENT CONTEXT:\n'
+    [ -n "$_project" ] && printf '  Project: %s\n' "$_project"
+    [ -n "$_session" ] && printf '  Session: %s\n' "$_session"
+    [ -n "$_branch" ] && printf '  Git branch: %s\n' "$_branch"
+  fi
+
+  cat <<'CHATINSTR'
+
+When the user asks to do something doey can do, suggest the exact command. Format actionable commands as: [RUN: doey <command>]. Example: [RUN: doey status]. Only suggest commands from the reference above.
+CHATINSTR
 }
 
 # Main lookup: takes the user's typed args, returns structured result.
@@ -266,14 +239,15 @@ _doey_intent_lookup() {
 _doey_chat_respond() {
   local msg="$1"
   local context="${2:-}"
-  local chat_prompt
-  chat_prompt="You are doey, a friendly CLI companion. You help users with the doey multi-agent CLI tool. You're warm, helpful, a bit playful — cozy campfire vibes. Keep responses concise (2-3 sentences max). You know doey creates tmux-based multi-agent Claude Code teams for any project."
 
   local full_msg="$msg"
   if [ -n "$context" ]; then
     full_msg="${context}
 User: ${msg}"
   fi
+
+  local chat_prompt
+  chat_prompt=$(_intent_fb_chat_system_prompt)
 
   _intent_fb_init_color
   trap '_intent_fb_spinner_stop; exit 130' INT
@@ -283,7 +257,7 @@ User: ${msg}"
   resp=$(cd /tmp && doey_headless "$full_msg" \
     --model haiku \
     --no-tools \
-    --max-turns 1 \
+    --max-turns 5 \
     --timeout 15 \
     --append-system "$chat_prompt" \
     2>/dev/null) || true
