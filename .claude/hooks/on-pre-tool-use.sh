@@ -601,6 +601,14 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
       _CHK_PATH=$(_json_str tool_input.file_path)
       [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.path)
       [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ -z "$_CHK_PATH" ] && _CHK_PATH=$(_json_str tool_input.pattern)
+      # Boss can Read image files at any path (screenshots, attachments)
+      if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Read" ]; then
+        case "${_CHK_PATH:-}" in
+          *.png|*.jpg|*.jpeg|*.gif|*.webp|*.svg|*.bmp|*.ico|*.pdf)
+            _dbg_write "allow_boss_read_image"
+            exit 0 ;;
+        esac
+      fi
       case "${_CHK_PATH:-}" in
         */.doey/tasks/*|*/.doey/tasks|\
         "${_RD:-__none__}"/*|*/tmp/doey/*)
