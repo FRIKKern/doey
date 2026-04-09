@@ -7,6 +7,13 @@ init_named_hook "stop-notify"
 
 [ "$WINDOW_INDEX" = "0" ] && [ "$PANE_INDEX" = "0" ] && exit 0  # info panel
 
+# Skip notification if recovery is in progress
+RECOVERY_MARKER="${RUNTIME_DIR}/recovery/${PANE_SAFE}.recovering"
+if [ -f "$RECOVERY_MARKER" ]; then
+  # Recovery hook is handling this error — skip notification
+  exit 0
+fi
+
 if [ -f "${RUNTIME_DIR}/debug.conf" ] && [ -d "${RUNTIME_DIR}/debug" ]; then
   echo "$INPUT" > "${RUNTIME_DIR}/debug/last_stop_input_${PANE_SAFE:-unknown}.json" 2>/dev/null || true
 fi
