@@ -141,6 +141,7 @@ func runTaskCmd(args []string) {
 func runTaskCreate(args []string) {
 	fs := flag.NewFlagSet("task create", flag.ExitOnError)
 	title := fs.String("title", "", "task title (required)")
+	shortname := fs.String("shortname", "", "task shortname (auto-generated from title if empty)")
 	typ := fs.String("type", "task", "task type")
 	createdBy := fs.String("created-by", "", "creator name")
 	desc := fs.String("description", "", "task description")
@@ -193,6 +194,7 @@ func runTaskCreate(args []string) {
 		// DB is the write authority — let it generate the ID.
 		t := &store.Task{
 			Title:        *title,
+			Shortname:    *shortname,
 			Status:       "pending",
 			Type:         *typ,
 			CreatedBy:    *createdBy,
@@ -224,7 +226,7 @@ func runTaskCreate(args []string) {
 	}
 
 	// File-only fallback.
-	id, err := ctl.CreateTask(pd, *title, *typ, *createdBy, *desc)
+	id, err := ctl.CreateTask(pd, *title, *typ, *createdBy, *desc, *shortname)
 	if err != nil {
 		fatal("task create: %v", err)
 	}

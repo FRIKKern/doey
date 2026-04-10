@@ -846,13 +846,15 @@ _name_team_window() {
       local _ntw_tid _ntw_sn=""
       _ntw_tid=$(_env_val "$_te" TASK_ID)
       if [ -n "$_ntw_tid" ]; then
-        local _ntw_tf="${_proj:+$(pwd)/.doey/tasks/${_ntw_tid}.task}"
+        local _ntw_pdir
+        _ntw_pdir=$(_env_val "${runtime_dir}/session.env" PROJECT_DIR)
+        local _ntw_tf="${_ntw_pdir:+${_ntw_pdir}/.doey/tasks/${_ntw_tid}.task}"
         if [ -n "$_ntw_tf" ] && [ -f "$_ntw_tf" ]; then
           _ntw_sn=$(grep '^TASK_SHORTNAME=' "$_ntw_tf" 2>/dev/null | head -1)
           _ntw_sn="${_ntw_sn#TASK_SHORTNAME=}"
         fi
         if [ -n "$_ntw_sn" ]; then
-          label="Task ${_ntw_tid}: ${_ntw_sn}"
+          label="${_ntw_sn}"
         else
           label="Task ${_ntw_tid}"
         fi
@@ -1178,6 +1180,12 @@ add_dynamic_team_window() {
   [ "$is_freelancer" = "true" ] && mgr_pane=""
 
   write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" "$worker_model" "$manager_model" "$team_type" "" "$reserved" "$task_id"
+
+  # Auto-bind task to team window
+  if [ -n "$task_id" ] && command -v doey-ctl >/dev/null 2>&1; then
+    doey-ctl task update -field team -value "W${window_index}" "$task_id" \
+      --project-dir "$dir" 2>/dev/null || true
+  fi
 
   # Generate team-level MCP config if team definition has mcps: section
   if type doey_mcp_generate_team_config >/dev/null 2>&1; then

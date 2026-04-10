@@ -127,7 +127,7 @@ func formatSubtasks(subs []SubtaskEntry) string {
 
 // CreateTask creates a new task file with an auto-incremented ID.
 // Returns the new task ID.
-func CreateTask(projectDir, title, taskType, createdBy, description string) (string, error) {
+func CreateTask(projectDir, title, taskType, createdBy, description string, shortname ...string) (string, error) {
 	dir := taskDir(projectDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("ctl: create task dir: %w", err)
@@ -147,11 +147,18 @@ func CreateTask(projectDir, title, taskType, createdBy, description string) (str
 	taskID := strconv.Itoa(id)
 	now := strconv.FormatInt(time.Now().Unix(), 10)
 
+	sn := ""
+	if len(shortname) > 0 && shortname[0] != "" {
+		sn = shortname[0]
+	} else {
+		sn = generateShortname(title)
+	}
+
 	var b strings.Builder
 	b.WriteString(FieldTaskSchemaVersion + "=3\n")
 	b.WriteString(FieldTaskID + "=" + taskID + "\n")
 	b.WriteString(FieldTaskTitle + "=" + title + "\n")
-	b.WriteString(FieldTaskShortname + "=" + generateShortname(title) + "\n")
+	b.WriteString(FieldTaskShortname + "=" + sn + "\n")
 	b.WriteString(FieldTaskStatus + "=" + TaskStatusDraft + "\n")
 	b.WriteString(FieldTaskType + "=" + taskType + "\n")
 	b.WriteString(FieldTaskTags + "=\n")
