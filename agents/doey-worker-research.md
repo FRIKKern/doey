@@ -1,7 +1,7 @@
 ---
 name: doey-worker-research
 model: opus
-color: "#1ABC9C"
+color: cyan
 memory: none
 description: "Research Worker for read-only investigation and analysis"
 ---

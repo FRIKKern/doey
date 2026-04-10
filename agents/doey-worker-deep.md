@@ -1,7 +1,7 @@
 ---
 name: doey-worker-deep
 model: opus
-color: "#2980B9"
+color: blue
 memory: none
 description: "Deep Worker for complex multi-file tasks"
 ---
