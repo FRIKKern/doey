@@ -6,26 +6,22 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/doey-cli/doey/tui/internal/scaffy/dsl"
 	"github.com/doey-cli/doey/tui/internal/scaffy/engine"
+	"github.com/doey-cli/doey/tui/internal/scaffy/output"
 )
 
 // JSONReporter is the function used to render an engine.ExecuteReport
-// as JSON for `--json` output. It is a package-level variable so
-// internal/scaffy/output (W3, in flight) can replace it with its
-// canonical NewJSONReport implementation by adding a small init() in
-// main once that package lands:
-//
-//	import "…/scaffy/output"
-//	func init() { cli.JSONReporter = output.NewJSONReport }
-//
-// Until then defaultJSONReporter produces a structurally compatible
-// payload so the rest of the CLI is exercisable end-to-end.
-var JSONReporter = defaultJSONReporter
+// as JSON for `--json` output. It is a package-level variable so tests
+// (and any external embedder of this CLI) can swap in an alternative
+// reporter without going through the cobra layer. It points at the
+// canonical output.NewJSONReport implementation by default.
+var JSONReporter = output.NewJSONReport
 
 // runFlags is a struct rather than free package vars so the test
 // scaffolding (added in Round 4) can construct an isolated runFlags
@@ -95,6 +91,16 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Snapshot target files before execution so --diff can build a
+	// real before/after Plan after Execute returns. We do this even
+	// for --dry-run; for dry-run the after-snapshot equals the
+	// before-snapshot and the diff comes out empty (a known limitation
+	// pending the W2 in-memory planner).
+	var beforeSnaps map[string][]byte
+	if runOpts.Diff {
+		beforeSnaps = snapshotTargetFiles(spec, vars, cwd)
+	}
+
 	report, execErr := engine.Execute(spec, engine.ExecuteOptions{
 		Vars:   vars,
 		CWD:    cwd,
@@ -104,17 +110,103 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	finalErr := classifyReport(report, execErr)
 
-	if runOpts.JSON {
-		out := JSONReporter(report, finalErr)
-		_, _ = cmd.OutOrStdout().Write(out)
-		if !strings.HasSuffix(string(out), "\n") {
-			_, _ = cmd.OutOrStdout().Write([]byte{'\n'})
+	out := cmd.OutOrStdout()
+	switch {
+	case runOpts.JSON:
+		payload := JSONReporter(report, finalErr)
+		_, _ = out.Write(payload)
+		if !strings.HasSuffix(string(payload), "\n") {
+			_, _ = out.Write([]byte{'\n'})
 		}
-	} else {
-		writeHumanReport(cmd.OutOrStdout(), report, finalErr)
+	case runOpts.Diff:
+		plan := buildOutputPlan(report, beforeSnaps)
+		_, _ = io.WriteString(out, output.FormatPlan(plan))
+		if plan == nil || (len(plan.Created) == 0 && len(plan.Modified) == 0) {
+			_, _ = io.WriteString(out, "(no changes)\n")
+		}
+	default:
+		// --human is the default whether the flag is explicit or absent.
+		_, _ = io.WriteString(out, output.HumanReport(report, finalErr))
 	}
 
 	return finalErr
+}
+
+// snapshotTargetFiles reads every file referenced by a CREATE/INSERT/
+// REPLACE op in spec into memory before Execute mutates the working
+// tree. The returned map is keyed by the substituted absolute path.
+// Files that do not yet exist (CREATE targets) are recorded with a nil
+// value so the diff renderer can use /dev/null on the old side.
+//
+// We pre-substitute the path-bearing fields here ourselves rather than
+// reaching into engine.substituteOperations because that helper is
+// unexported. The work is small and only runs when --diff is set.
+func snapshotTargetFiles(spec *dsl.TemplateSpec, vars map[string]string, cwd string) map[string][]byte {
+	snaps := make(map[string][]byte)
+	record := func(rawPath string) {
+		resolved, err := dsl.Substitute(rawPath, vars)
+		if err != nil || resolved == "" {
+			return
+		}
+		abs := absoluteUnder(cwd, resolved)
+		if _, seen := snaps[abs]; seen {
+			return
+		}
+		if data, err := os.ReadFile(abs); err == nil {
+			snaps[abs] = data
+		} else {
+			snaps[abs] = nil
+		}
+	}
+	for _, op := range spec.Operations {
+		switch o := op.(type) {
+		case dsl.CreateOp:
+			record(o.Path)
+		case dsl.InsertOp:
+			record(o.File)
+		case dsl.ReplaceOp:
+			record(o.File)
+		}
+	}
+	return snaps
+}
+
+// buildOutputPlan walks the report's FilesCreated and FilesModified
+// lists, reads each file's current (post-Execute) content, and pairs
+// it with the matching pre-Execute snapshot to produce an output.Plan.
+// Read errors are tolerated — they collapse to nil bytes, which the
+// diff renderer turns into "/dev/null" or an empty diff as appropriate.
+func buildOutputPlan(report *engine.ExecuteReport, before map[string][]byte) *output.Plan {
+	if report == nil {
+		return nil
+	}
+	plan := &output.Plan{}
+	for _, p := range report.FilesCreated {
+		after, _ := os.ReadFile(p)
+		plan.Created = append(plan.Created, output.FileDelta{
+			Path:   p,
+			Before: before[p], // typically nil for CREATE
+			After:  after,
+		})
+	}
+	for _, p := range report.FilesModified {
+		after, _ := os.ReadFile(p)
+		plan.Modified = append(plan.Modified, output.FileDelta{
+			Path:   p,
+			Before: before[p],
+			After:  after,
+		})
+	}
+	return plan
+}
+
+// absoluteUnder mirrors engine.absPath without exporting that helper —
+// it joins p under cwd and passes absolute paths through unchanged.
+func absoluteUnder(cwd, p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(cwd, p)
 }
 
 // resolveVariables produces a final {Name: Value} map for the template
@@ -256,61 +348,3 @@ func classifyReport(report *engine.ExecuteReport, execErr error) error {
 	return nil
 }
 
-// writeHumanReport prints a six-line summary of an ExecuteReport plus
-// any per-op error lines and a final result line if err is non-nil.
-// The format is intentionally trivial — the full picture is in the
-// JSON report; this is just a quick visual cue.
-func writeHumanReport(w io.Writer, report *engine.ExecuteReport, err error) {
-	if report == nil {
-		if err != nil {
-			fmt.Fprintf(w, "scaffy: %v\n", err)
-		}
-		return
-	}
-	fmt.Fprintf(w, "files created : %d\n", len(report.FilesCreated))
-	fmt.Fprintf(w, "files modified: %d\n", len(report.FilesModified))
-	fmt.Fprintf(w, "ops applied   : %d\n", report.OpsApplied)
-	fmt.Fprintf(w, "ops skipped   : %d\n", len(report.OpsSkipped))
-	fmt.Fprintf(w, "ops blocked   : %d\n", len(report.OpsBlocked))
-	if len(report.Errors) > 0 {
-		fmt.Fprintf(w, "errors        : %d\n", len(report.Errors))
-		for _, e := range report.Errors {
-			fmt.Fprintf(w, "  - %s\n", e)
-		}
-	}
-	if err != nil {
-		fmt.Fprintf(w, "result        : %v\n", err)
-	}
-}
-
-// defaultJSONReporter is a stand-in for output.NewJSONReport. It
-// produces a stable, indent-formatted payload that is structurally
-// compatible with the canonical reporter so callers (and tests) see
-// the same shape regardless of which implementation is wired in. The
-// real implementation will be supplied by the output package once it
-// merges; see JSONReporter above for the wiring point.
-func defaultJSONReporter(report *engine.ExecuteReport, err error) []byte {
-	type payload struct {
-		FilesCreated  []string             `json:"files_created"`
-		FilesModified []string             `json:"files_modified"`
-		OpsApplied    int                  `json:"ops_applied"`
-		OpsSkipped    []engine.SkipRecord  `json:"ops_skipped"`
-		OpsBlocked    []engine.BlockRecord `json:"ops_blocked"`
-		Errors        []string             `json:"errors"`
-		Error         string               `json:"error,omitempty"`
-	}
-	out := payload{}
-	if report != nil {
-		out.FilesCreated = report.FilesCreated
-		out.FilesModified = report.FilesModified
-		out.OpsApplied = report.OpsApplied
-		out.OpsSkipped = report.OpsSkipped
-		out.OpsBlocked = report.OpsBlocked
-		out.Errors = report.Errors
-	}
-	if err != nil {
-		out.Error = err.Error()
-	}
-	b, _ := json.MarshalIndent(out, "", "  ")
-	return b
-}
