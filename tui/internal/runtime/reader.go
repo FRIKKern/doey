@@ -996,7 +996,7 @@ func (r *Reader) readAgentDefs(projectDir string) []AgentDef {
 			Name:        name,
 			Description: fm["description"],
 			Model:       fm["model"],
-			Color:       fm["color"],
+			Color:       validatedHexColor(fm["color"]),
 			Memory:      fm["memory"],
 			Domain:      agentDomain(name),
 			FilePath:    path,
@@ -1227,6 +1227,20 @@ func parseFrontmatter(path string) map[string]string {
 	}
 
 	return nil // never found closing ---
+}
+
+// validatedHexColor returns color if it is a valid 7-char hex color (e.g. "#A1B2C3"),
+// otherwise returns empty string.
+func validatedHexColor(color string) string {
+	if len(color) != 7 || color[0] != '#' {
+		return ""
+	}
+	for _, c := range color[1:] {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return ""
+		}
+	}
+	return color
 }
 
 // buildTeamEntries merges team definitions with running state and user preferences.
