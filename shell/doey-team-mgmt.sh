@@ -15,7 +15,7 @@ source "${TEAM_MGMT_SCRIPT_DIR}/doey-grid.sh"
 source "${TEAM_MGMT_SCRIPT_DIR}/doey-roles.sh"
 source "${TEAM_MGMT_SCRIPT_DIR}/doey-send.sh"
 # shellcheck source=doey-mcp.sh
-source "${TEAM_MGMT_SCRIPT_DIR}/doey-mcp.sh" 2>/dev/null || true
+[ -f "${TEAM_MGMT_SCRIPT_DIR}/doey-mcp.sh" ] && source "${TEAM_MGMT_SCRIPT_DIR}/doey-mcp.sh"
 
 # ── Team Env ──────────────────────────────────────────────────────────
 

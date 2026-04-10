@@ -15,7 +15,7 @@ source "${SESSION_SCRIPT_DIR}/doey-roles.sh"
 source "${SESSION_SCRIPT_DIR}/doey-send.sh"
 source "${SESSION_SCRIPT_DIR}/doey-grid.sh"
 source "${SESSION_SCRIPT_DIR}/doey-team-mgmt.sh"
-source "${SESSION_SCRIPT_DIR}/doey-mcp.sh" 2>/dev/null || true
+[ -f "${SESSION_SCRIPT_DIR}/doey-mcp.sh" ] && source "${SESSION_SCRIPT_DIR}/doey-mcp.sh"
 
 # project_name_from_dir, project_acronym, find_project → doey-helpers.sh
 
