@@ -22,7 +22,8 @@ doey-remote-setup|tui|./cmd/doey-remote-setup/|${HOME}/.local/bin/doey-remote-se
 doey-loading|tui|./cmd/doey-loading/|${HOME}/.local/bin/doey-loading
 doey-daemon|tui|./cmd/doey-daemon/|${HOME}/.local/bin/doey-daemon
 doey-term|tui|./cmd/doey-term/|${HOME}/.local/bin/doey-term
-doey-masterplan-tui|tui|./cmd/doey-masterplan-tui/|${HOME}/.local/bin/doey-masterplan-tui"
+doey-masterplan-tui|tui|./cmd/doey-masterplan-tui/|${HOME}/.local/bin/doey-masterplan-tui
+doey-scaffy|tui|./cmd/scaffy/|${HOME}/.local/bin/doey-scaffy"
 
 # ── _find_go_bin ─────────────────────────────────────────────────────
 # Find the Go binary across common install locations.

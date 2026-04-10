@@ -187,6 +187,7 @@ case "${1:-}" in
     masterplan Start a masterplan team for a goal (alias: plan)
     deploy     Deploy validation pipeline (start/status/gate)
     remote     Manage remote Hetzner servers (list/provision/stop/status)
+    scaffy     Run scaffy template engine subcommands
     settings   Open interactive settings editor window
     version    Show version and installation info
     --help     Show this help
@@ -248,6 +249,15 @@ HELP
     fi
     ;;
   remote)       shift; doey_remote "$@"; exit 0 ;;
+  scaffy)
+    shift
+    if command -v doey-scaffy >/dev/null 2>&1; then
+      exec doey-scaffy "$@"
+    else
+      printf 'Error: doey-scaffy not installed. Run "doey doctor" or reinstall.\n' >&2
+      exit 1
+    fi
+    ;;
   # Everything below requires tmux + claude — check prerequisites:
   init)
     _check_prereqs

@@ -77,6 +77,7 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 | `.claude/skills/` | Slash commands (loaded on-demand) | (in-repo) |
 | `docs/` | Guides & context reference | — |
 | `tests/` | Bash compat & E2E tests | — |
+| `tui/cmd/scaffy/` + `tui/internal/scaffy/` | Scaffy template engine (sub-package of tui) | `~/.local/bin/doey-scaffy` |
 
 **Config hierarchy (last wins):** Hardcoded defaults → `~/.config/doey/config.sh` (global) → `.doey/config.sh` (project). Only the default config is created by install — user config is optional.
 
