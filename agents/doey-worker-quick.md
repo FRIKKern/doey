@@ -1,7 +1,7 @@
 ---
 name: doey-worker-quick
 model: sonnet
-color: green
+color: "#27AE60"
 memory: none
 description: "Quick Worker for fast, lightweight tasks"
 ---
