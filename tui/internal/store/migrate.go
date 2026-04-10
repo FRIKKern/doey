@@ -438,7 +438,7 @@ func (s *Store) migrateOneAgent(path string, r *MigrateResult) error {
 	}
 
 	_, err = s.db.Exec(`INSERT OR IGNORE INTO agents (name, display_name, model, description, color, file_path) VALUES (?, ?, ?, ?, ?, ?)`,
-		name, fm["display_name"], fm["model"], fm["description"], fm["color"], path)
+		name, fm["display_name"], fm["model"], fm["description"], validatedHexColor(fm["color"]), path)
 	if err != nil {
 		return err
 	}
@@ -711,6 +711,20 @@ func splitFirst(s string, sep byte) (string, string) {
 		return s, ""
 	}
 	return s[:i], s[i+1:]
+}
+
+// validatedHexColor returns color if it is a valid 7-char hex color (e.g. "#A1B2C3"),
+// otherwise returns empty string.
+func validatedHexColor(color string) string {
+	if len(color) != 7 || color[0] != '#' {
+		return ""
+	}
+	for _, c := range color[1:] {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return ""
+		}
+	}
+	return color
 }
 
 // splitLiteralNewlines splits on literal "\n" (two-char escape, not actual newline).

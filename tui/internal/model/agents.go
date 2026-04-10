@@ -388,7 +388,11 @@ func (m AgentsModel) renderLeftPanel(w, h int) string {
 			selected := m.focused && m.leftFocused && flatIdx == m.cursor
 
 			// Agent row: colored dot + name
-			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("◆")
+			var dotColor lipgloss.TerminalColor = lipgloss.Color(a.Color)
+			if a.Color == "" {
+				dotColor = t.Muted
+			}
+			dot := lipgloss.NewStyle().Foreground(dotColor).Render("◆")
 			nameStyle := lipgloss.NewStyle().Foreground(t.Text)
 			if selected {
 				nameStyle = nameStyle.Bold(true)
@@ -553,7 +557,11 @@ func (m AgentsModel) maxRightScroll() int {
 
 	// Replicate the section-building logic from renderRightPanel
 	var sections []string
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+	var dotColor lipgloss.TerminalColor = lipgloss.Color(agent.Color)
+	if agent.Color == "" {
+		dotColor = m.theme.Muted
+	}
+	dot := lipgloss.NewStyle().Foreground(dotColor).Render("◆")
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Render(agent.Name)
 	sections = append(sections, dot+" "+title)
 	if agent.Model != "" {
@@ -615,7 +623,11 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 	var sections []string
 
 	// Title
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+	var dotColor lipgloss.TerminalColor = lipgloss.Color(agent.Color)
+	if agent.Color == "" {
+		dotColor = t.Muted
+	}
+	dot := lipgloss.NewStyle().Foreground(dotColor).Render("◆")
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(agent.Name)
 	sections = append(sections, dot+" "+title)
 
