@@ -1,0 +1,56 @@
+name: scaffy-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tui/cmd/scaffy/**'
+      - 'tui/internal/scaffy/**'
+      - '.github/workflows/scaffy-ci.yml'
+  pull_request:
+    paths:
+      - 'tui/cmd/scaffy/**'
+      - 'tui/internal/scaffy/**'
+      - '.github/workflows/scaffy-ci.yml'
+
+jobs:
+  scaffy:
+    name: build, test, vet, lint, fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: tui/go.sum
+
+      - name: Build
+        working-directory: tui
+        run: go build ./...
+
+      - name: Test (race)
+        working-directory: tui
+        run: go test -race ./internal/scaffy/...
+
+      - name: Vet
+        working-directory: tui
+        run: go vet ./internal/scaffy/...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: tui
+          args: ./internal/scaffy/... ./cmd/scaffy/...
+
+      - name: Fuzz Parse (push only)
+        if: github.event_name == 'push'
+        working-directory: tui
+        run: go test -run=^$ -fuzz=FuzzParse -fuzztime=30s ./internal/scaffy/dsl/
+
+      - name: Bash compatibility
+        run: bash tests/test-bash-compat.sh

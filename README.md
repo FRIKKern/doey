@@ -102,6 +102,17 @@ Window 2 — Worker Team (local)
 
 Scale with `doey add` (columns) or `doey add-team` (teams). See [Context Reference](docs/context-reference.md).
 
+## Scaffy
+
+Scaffy is a declarative template engine that ships inside Doey. Author `.scaffy` templates under `.doey/scaffy/templates/` and apply them idempotently with `doey scaffy run`. Built-in template auditor catches drift, pattern discoverer suggests new templates from your git history, and an MCP server exposes the engine to Claude sessions.
+
+```bash
+doey scaffy init
+doey scaffy run example-handler --var Name=Order --dry-run --diff
+```
+
+See [docs/scaffy.md](docs/scaffy.md) for the full guide — DSL reference, CLI commands, MCP tools, and the 5-agent team.
+
 ## Configuration
 
 All optional. Hierarchy (last wins): hardcoded defaults → `~/.config/doey/config.sh` → `<project>/.doey/config.sh`.
