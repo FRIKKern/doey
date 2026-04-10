@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -14,15 +13,17 @@ import (
 // ExecuteOptions configures a single Execute run.
 //
 // Vars supplies values for variable tokens in the template. CWD is the
-// working directory all relative file paths resolve against. DryRun, when
-// true, reports what would happen without touching the filesystem. Force
-// is reserved for Phase 2 behaviors (overwrite on CREATE, ignore guards)
-// and is currently unused.
+// working directory all relative file paths resolve against. TemplateDir
+// is the base directory used to resolve INCLUDE references; when empty
+// it defaults to CWD. DryRun, when true, reports what would happen
+// without touching the filesystem. Force is reserved for Phase 2
+// behaviors (overwrite on CREATE, ignore guards) and is currently unused.
 type ExecuteOptions struct {
-	Vars   map[string]string
-	CWD    string
-	DryRun bool
-	Force  bool
+	Vars        map[string]string
+	CWD         string
+	TemplateDir string
+	DryRun      bool
+	Force       bool
 }
 
 // ExecuteReport summarizes the outcome of an Execute call.
@@ -62,11 +63,14 @@ type BlockRecord struct {
 // Execute runs the Scaffy 7-stage pipeline against an already-parsed
 // template spec.
 //
-// Phase 1 stages:
+// Phase 2 stages:
 //
 //  1. Parse — assumed complete; caller passes *dsl.TemplateSpec.
-//  2. Resolve INCLUDE — not implemented; any IncludeOp returns an error.
-//  3. Expand FOREACH — not implemented; any ForeachOp returns an error.
+//  2. Resolve INCLUDE — IncludeOps are replaced with the operations of
+//     the referenced templates, with VarOverrides applied as a partial
+//     substitution.
+//  3. Expand FOREACH — ForeachOps are replaced with one copy of their
+//     body per element of the resolved list source.
 //  4. Substitute Variables — every string field of every op is passed
 //     through dsl.Substitute with opts.Vars.
 //  5. Phase A — apply CREATE ops against the filesystem (or record them
@@ -76,26 +80,44 @@ type BlockRecord struct {
 //  7. Produce report.
 //
 // Per-op failures (bad anchors, failed writes) are accumulated into
-// report.Errors and execution continues. Only INCLUDE, FOREACH, and
+// report.Errors and execution continues. INCLUDE, FOREACH, and
 // substitution failures are returned as the top-level error.
 func Execute(spec *dsl.TemplateSpec, opts ExecuteOptions) (*ExecuteReport, error) {
+	return executeWithFS(spec, opts, realFS{})
+}
+
+// executeWithFS is the parameterized pipeline body. Plan() reuses it
+// with a *MemFS overlay so dry-run planning never touches disk; the
+// public Execute pins it to realFS{}. Keeping the implementation in
+// one place means the planner cannot drift away from the executor's
+// semantics over time.
+func executeWithFS(spec *dsl.TemplateSpec, opts ExecuteOptions, fsys FS) (*ExecuteReport, error) {
 	report := &ExecuteReport{}
 
-	// Stage 2 + 3: reject Phase-2-only operations up front. The walk is
-	// cheap and failing early means we never start touching the
-	// filesystem for a template that cannot run to completion.
-	for _, op := range spec.Operations {
-		switch op.(type) {
-		case dsl.IncludeOp:
-			return nil, fmt.Errorf("INCLUDE not yet supported (Phase 2)")
-		case dsl.ForeachOp:
-			return nil, fmt.Errorf("FOREACH not yet supported (Phase 2)")
-		}
+	// Stage 2: resolve INCLUDE operations against the template
+	// directory. INCLUDE references default to relative paths under
+	// TemplateDir; when no TemplateDir is supplied, CWD is used so
+	// templates can still resolve siblings without extra wiring.
+	templateDir := opts.TemplateDir
+	if templateDir == "" {
+		templateDir = opts.CWD
+	}
+	resolved, err := ResolveIncludes(spec, templateDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stage 3: expand FOREACH operations. The list source is read from
+	// opts.Vars, so this stage runs before the per-op substitution stage
+	// but after INCLUDE so an included template's loops also expand.
+	expanded, err := ExpandForeach(resolved, opts.Vars)
+	if err != nil {
+		return nil, err
 	}
 
 	// Stage 4: substitute every variable token in every op. The returned
 	// slice holds copies so spec.Operations is not mutated in place.
-	ops, err := substituteOperations(spec.Operations, opts.Vars)
+	ops, err := substituteOperations(expanded.Operations, opts.Vars)
 	if err != nil {
 		return nil, fmt.Errorf("variable substitution failed: %w", err)
 	}
@@ -109,7 +131,7 @@ func Execute(spec *dsl.TemplateSpec, opts ExecuteOptions) (*ExecuteReport, error
 		}
 		abs := absPath(opts.CWD, create.Path)
 
-		if ShouldSkipCreate(abs) {
+		if shouldSkipCreateFS(fsys, abs) {
 			report.OpsSkipped = append(report.OpsSkipped, SkipRecord{
 				Op:     fmt.Sprintf("CREATE %s", create.Path),
 				Reason: "file already exists",
@@ -123,11 +145,7 @@ func Execute(spec *dsl.TemplateSpec, opts ExecuteOptions) (*ExecuteReport, error
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-			report.Errors = append(report.Errors, fmt.Sprintf("mkdir %s: %v", abs, err))
-			continue
-		}
-		if err := os.WriteFile(abs, []byte(create.Content), 0o644); err != nil {
+		if err := fsys.WriteFile(abs, []byte(create.Content)); err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("write %s: %v", abs, err))
 			continue
 		}
@@ -146,7 +164,7 @@ func Execute(spec *dsl.TemplateSpec, opts ExecuteOptions) (*ExecuteReport, error
 
 	for _, file := range files {
 		abs := absPath(opts.CWD, file)
-		contentBytes, err := os.ReadFile(abs)
+		contentBytes, err := fsys.ReadFile(abs)
 		if err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("read %s: %v", abs, err))
 			continue
@@ -253,7 +271,7 @@ func Execute(spec *dsl.TemplateSpec, opts ExecuteOptions) (*ExecuteReport, error
 
 		if modified {
 			if !opts.DryRun {
-				if err := os.WriteFile(abs, []byte(working), 0o644); err != nil {
+				if err := fsys.WriteFile(abs, []byte(working)); err != nil {
 					report.Errors = append(report.Errors, fmt.Sprintf("write %s: %v", abs, err))
 					continue
 				}

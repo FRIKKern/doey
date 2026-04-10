@@ -238,33 +238,86 @@ func TestExecute_UnlessContainsBlocks(t *testing.T) {
 	}
 }
 
-func TestExecute_IncludeReturnsError(t *testing.T) {
+func TestExecute_IncludeExpands(t *testing.T) {
+	dir := t.TempDir()
+
+	// Inner template creates "inner.txt" — we INCLUDE it from a parent
+	// spec and verify the file lands in cwd via the resolved op.
+	innerPath := filepath.Join(dir, "child.scaffy")
+	innerContent := `TEMPLATE "child"
+CREATE "inner.txt"
+CONTENT
+:::
+hello from child
+:::
+`
+	if err := os.WriteFile(innerPath, []byte(innerContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	spec := &dsl.TemplateSpec{
 		Operations: []dsl.Operation{
-			dsl.IncludeOp{Template: "other"},
+			dsl.IncludeOp{Template: "child"},
 		},
 	}
-	_, err := Execute(spec, ExecuteOptions{CWD: t.TempDir()})
-	if err == nil {
-		t.Fatal("expected INCLUDE error, got nil")
+	report, err := Execute(spec, ExecuteOptions{CWD: dir, TemplateDir: dir})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
 	}
-	if !strings.Contains(err.Error(), "INCLUDE") {
-		t.Errorf("error = %q, want contains %q", err.Error(), "INCLUDE")
+	if len(report.Errors) != 0 {
+		t.Fatalf("unexpected errors: %v", report.Errors)
+	}
+	if report.OpsApplied != 1 {
+		t.Errorf("OpsApplied = %d, want 1", report.OpsApplied)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "inner.txt"))
+	if err != nil {
+		t.Fatalf("read created file: %v", err)
+	}
+	if string(got) != "hello from child" {
+		t.Errorf("inner.txt = %q, want %q", got, "hello from child")
 	}
 }
 
-func TestExecute_ForeachReturnsError(t *testing.T) {
+func TestExecute_ForeachExpands(t *testing.T) {
+	cwd := t.TempDir()
 	spec := &dsl.TemplateSpec{
 		Operations: []dsl.Operation{
-			dsl.ForeachOp{Var: "x", List: "a,b"},
+			dsl.ForeachOp{
+				Var:  "name",
+				List: "names",
+				Body: []dsl.Operation{
+					dsl.CreateOp{
+						Path:    "{{ .name }}.txt",
+						Content: "hi {{ .name }}",
+					},
+				},
+			},
 		},
 	}
-	_, err := Execute(spec, ExecuteOptions{CWD: t.TempDir()})
-	if err == nil {
-		t.Fatal("expected FOREACH error, got nil")
+	report, err := Execute(spec, ExecuteOptions{
+		CWD:  cwd,
+		Vars: map[string]string{"names": "alice,bob,carol"},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
 	}
-	if !strings.Contains(err.Error(), "FOREACH") {
-		t.Errorf("error = %q, want contains %q", err.Error(), "FOREACH")
+	if len(report.Errors) != 0 {
+		t.Fatalf("unexpected errors: %v", report.Errors)
+	}
+	if report.OpsApplied != 3 {
+		t.Errorf("OpsApplied = %d, want 3", report.OpsApplied)
+	}
+	for _, name := range []string{"alice", "bob", "carol"} {
+		got, err := os.ReadFile(filepath.Join(cwd, name+".txt"))
+		if err != nil {
+			t.Errorf("read %s.txt: %v", name, err)
+			continue
+		}
+		want := "hi " + name
+		if string(got) != want {
+			t.Errorf("%s.txt = %q, want %q", name, got, want)
+		}
 	}
 }
 
