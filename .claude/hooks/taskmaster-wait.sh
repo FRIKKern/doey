@@ -537,5 +537,30 @@ fi
 # Re-check for messages/tasks that arrived during sleep
 _check_work "$_sleep_dur" || true
 _taskmaster_bump_cycle
+
+# ── Late task re-scan: catch tasks queued during sleep ────────────────
+_late_queued=false
+if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+  _late_now=$(date +%s)
+  for _late_tid in $(doey-ctl task list --status active --project-dir "$PROJECT_DIR" 2>/dev/null | awk 'NR>1 && /^[0-9]/{print $1}'); do
+    _late_info=$(doey-ctl task get --id "$_late_tid" --project-dir "$PROJECT_DIR" 2>/dev/null) || continue
+    _late_team=$(echo "$_late_info" | sed -n 's/^Team:[[:space:]]*//p')
+    [ -n "$_late_team" ] && continue
+    _late_queued=true; break
+  done
+fi
+if [ "$_late_queued" = false ] && [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+  for _late_tf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
+    [ -f "$_late_tf" ] || continue
+    _late_st=$(grep '^TASK_STATUS=' "$_late_tf" 2>/dev/null | head -1 | cut -d= -f2-) || continue
+    [ "$_late_st" = "active" ] || continue
+    grep -q 'TASK_TEAM=' "$_late_tf" 2>/dev/null && continue
+    _late_queued=true; break
+  done
+fi
+if [ "$_late_queued" = true ]; then
+  _wake "QUEUED" "$_sleep_dur"
+fi
+
 _taskmaster_dbg_wake "idle" "$_sleep_dur"
 echo "WAKE_REASON=TIMEOUT"

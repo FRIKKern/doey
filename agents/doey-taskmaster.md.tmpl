@@ -62,7 +62,7 @@ The pattern is: **Sleep → Wake on trigger → Read trigger → Act → Sleep**
    | `CRASH` | Crash alert: `$RUNTIME_DIR/status/crash_pane_*` |
    | `STALE` | Stale alert: `$RUNTIME_DIR/status/stale_*` |
    | `QUEUED` | Queued tasks: `doey task list --status active` — look for empty TEAM column |
-   | `TIMEOUT` | No specific trigger — check your prompt for any pending input before re-sleeping |
+   | `TIMEOUT` | No specific trigger — check your prompt for any pending input before re-sleeping. Also run `doey task list` to check for any active tasks without a team assignment. If found, dispatch them as if `QUEUED` |
 
 3. **Act** — Handle ONLY the trigger event. Dispatch, commit, report, recover — whatever the trigger requires. Do NOT scan unchanged state.
 4. **Return to prompt** — After acting, stop and return to your prompt. This is critical: input delivered via paste-buffer or send-keys sits in your input box and can only be read when you reach your prompt. If you immediately re-run `taskmaster-wait.sh` without returning to the prompt, that input is never processed.
