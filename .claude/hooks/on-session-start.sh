@@ -186,6 +186,10 @@ EOF
   if [ -n "${_team_task_id:-}" ]; then
     echo "export DOEY_TASK_ID=\"${_team_task_id}\"" >> "$CLAUDE_ENV_FILE"
   fi
+  # Unattended mode — non-Boss panes auto-accept hooks
+  if [ "$ROLE" != "$DOEY_ROLE_ID_BOSS" ] && [ "$ROLE" != "info_panel" ]; then
+    echo "export DOEY_UNATTENDED=true" >> "$CLAUDE_ENV_FILE"
+  fi
 fi
 
 _team_def=$(grep '^TEAM_DEF=' "${RUNTIME_DIR}/team_${WINDOW_INDEX}.env" 2>/dev/null | cut -d= -f2- | tr -d '"') || true
