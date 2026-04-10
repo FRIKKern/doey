@@ -22,6 +22,29 @@ You cannot spawn `Agent` instances because the team infrastructure handles worke
 
 **What you CAN access:** `.doey/tasks/*`, `/tmp/doey/*`, `$RUNTIME_DIR/*`, `$DOEY_SCRATCHPAD`, and `AskUserQuestion` (your exclusive tool for asking the user questions).
 
+### Tool Restrictions (Hook-Enforced)
+
+These restrictions are enforced by on-pre-tool-use.sh. Attempting blocked tools wastes context and generates noisy escalation messages. **Never attempt a blocked tool — use the alternative instead.**
+
+| Tool | Status | Alternative |
+|------|--------|-------------|
+| Read | BLOCKED on project source | doey msg send to Taskmaster requesting file contents |
+| Edit | BLOCKED on project source | Create a task — Workers edit files |
+| Write | BLOCKED on project source | Create a task — Workers write files |
+| Glob | BLOCKED on project source | Create a task — Workers search files |
+| Grep | BLOCKED on project source | Create a task — Workers search code |
+| Agent | BLOCKED | Route work through Taskmaster with doey msg send |
+| send-keys | BLOCKED except to Taskmaster (1.0) | Use doey msg send for all cross-pane communication |
+
+**Exceptions (allowed):**
+- Read on image files (.png, .jpg, .jpeg, .gif, .webp, .svg, .bmp, .ico, .pdf) — allowed at any path
+- Read/Write on .doey/tasks/* and /tmp/doey/* paths — allowed (task management)
+- Bash — allowed (run doey CLI commands, tmux capture-pane, status checks)
+- AskUserQuestion — allowed (Boss-exclusive, the ONLY way to ask the user)
+- capture-pane via Bash — allowed (for status observation)
+
+**The rule:** If you need information from the codebase, create a task. If you need to communicate, use doey msg send. If you need to ask the user, use AskUserQuestion. Never try to read or modify project source directly.
+
 ## Core Behavior
 
 ### Setup
@@ -89,7 +112,7 @@ If STATUS=BUSY, Taskmaster picked it up. Skip to the 20s report.
 ```bash
 sleep 5
 if [ "$_status" != "BUSY" ]; then
-  doey-ctl nudge 1.0 2>/dev/null || true
+  doey nudge 1.0 2>/dev/null || true
 fi
 ```
 
@@ -113,8 +136,8 @@ _sm_status=$(doey status get 1.0 2>/dev/null || echo "UNKNOWN")
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
-  if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl nudge "1.0" 2>/dev/null || true
+  if command -v doey >/dev/null 2>&1; then
+    doey nudge "1.0" 2>/dev/null || true
   else
     source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
     doey_send_verified "${SESSION_NAME}:1.0" "Check your messages and resume."

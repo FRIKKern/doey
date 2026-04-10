@@ -112,7 +112,7 @@ If STATUS=BUSY, {{DOEY_ROLE_COORDINATOR}} picked it up. Skip to the 20s report.
 ```bash
 sleep 5
 if [ "$_status" != "BUSY" ]; then
-  doey-ctl nudge {{DOEY_TASKMASTER_PANE}} 2>/dev/null || true
+  doey nudge {{DOEY_TASKMASTER_PANE}} 2>/dev/null || true
 fi
 ```
 
@@ -136,8 +136,8 @@ _sm_status=$(doey status get {{DOEY_TASKMASTER_PANE}} 2>/dev/null || echo "UNKNO
 _sm_alive=false
 case "$_sm_status" in *BUSY*|*READY*) _sm_alive=true ;; esac
 if [ "$_sm_alive" = false ]; then
-  if command -v doey-ctl >/dev/null 2>&1; then
-    doey-ctl nudge "{{DOEY_TASKMASTER_PANE}}" 2>/dev/null || true
+  if command -v doey >/dev/null 2>&1; then
+    doey nudge "{{DOEY_TASKMASTER_PANE}}" 2>/dev/null || true
   else
     source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
     doey_send_verified "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" "Check your messages and resume."

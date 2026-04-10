@@ -56,7 +56,7 @@ echo "Task ID: ${DOEY_TASK_ID:-none}"
 # Create plan in DB for TUI display
 PLAN_DB_ID=""
 if [ -n "${DOEY_TASK_ID:-}" ]; then
-  PLAN_DB_ID=$(doey-ctl plan create --task-id "$DOEY_TASK_ID" --title "Masterplan: ${GOAL}" --status active 2>/dev/null | grep -o '[0-9][0-9]*$') || true
+  PLAN_DB_ID=$(doey plan create --task-id "$DOEY_TASK_ID" --title "Masterplan: ${GOAL}" --status active 2>/dev/null | grep -o '[0-9][0-9]*$') || true
   echo "Plan DB ID: ${PLAN_DB_ID:-none}"
 fi
 
@@ -125,7 +125,7 @@ $(cat "${MP_DIR}/goal.md")
 Read the goal file and begin the masterplan process. Use your workers (panes 2-5) for parallel research. Write the plan to the plan file path above — the TUI (pane 1) will display it.
 
 IMPORTANT: After each major update to the plan file, sync it to the DB so the TUI Plans tab stays current:
-doey-ctl plan update --id ${PLAN_DB_ID:-0} --body \"\$(cat ${PLAN_FILE})\"
+doey plan update --id ${PLAN_DB_ID:-0} --body \"\$(cat ${PLAN_FILE})\"
 Skip this step if Plan DB ID is 'none' or '0'."
 
 doey_send_verified "$PLANNER_PANE" "$BRIEFING" && echo "Planner briefed successfully" || echo "WARNING: Planner briefing delivery failed — the Planner will still discover the goal from ${MP_DIR}/goal.md on its own"

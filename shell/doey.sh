@@ -145,10 +145,17 @@ done
 set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 
 # ── Unified CLI routing ──────────────────────────────────────────────
-# 'doey' is the user-facing CLI. Subcommands like msg/status/task are
-# handled by the internal doey-ctl binary, forwarded transparently here.
+# 'doey' is the user-facing CLI. Subcommands below are handled by the
+# doey-ctl binary and forwarded transparently.
+# Direct passthrough: msg status health task tmux team agent event error
+#                     nudge migrate interaction briefing
+# Smart routing (handled in main case block with disambiguation):
+#   plan   — subcommands (list/get/create/update/delete) → doey-ctl,
+#            bare goal string → masterplan
+#   config — subcommands (get/set/list/delete) → doey-ctl,
+#            flags (--show/--global/--reset) or bare → local editor
 case "${1:-}" in
-  msg|status|health|task|tmux|team|config|agent|event|error|nudge|migrate|interaction|briefing)
+  msg|status|health|task|tmux|team|agent|event|error|nudge|migrate|interaction|briefing)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else
@@ -271,6 +278,25 @@ HELP
   reload)       shift; reload_session "$@"; exit 0 ;;
   test)         shift; run_test "$@"; exit $? ;;
   settings)     doey_settings; exit 0 ;;
+  config)
+    # 'doey config <subcommand>' routes to doey-ctl for DB config management;
+    # bare 'doey config' or flags (--show/--global/--reset) → local editor
+    case "${2:-}" in
+      get|set|list|delete)
+        if command -v doey-ctl >/dev/null 2>&1; then
+          exec doey-ctl "$@"
+        else
+          printf 'Error: doey CLI tools not installed. Run "doey doctor" or reinstall.\n' >&2
+          exit 1
+        fi
+        ;;
+      *)
+        shift
+        doey_config "$@"
+        exit 0
+        ;;
+    esac
+    ;;
   deploy)
     require_running_session
     shift
@@ -330,6 +356,20 @@ HELP
     exit 0
     ;;
   masterplan|plan)
+    # 'doey plan <subcommand>' routes to doey-ctl for plan management;
+    # 'doey plan "goal text"' keeps masterplan behavior
+    if [ "${1:-}" = "plan" ]; then
+      case "${2:-}" in
+        list|get|create|update|delete)
+          if command -v doey-ctl >/dev/null 2>&1; then
+            exec doey-ctl "$@"
+          else
+            printf 'Error: doey CLI tools not installed. Run "doey doctor" or reinstall.\n' >&2
+            exit 1
+          fi
+          ;;
+      esac
+    fi
     goal="${2:-}"
     [ -z "$goal" ] && { doey_error "Usage: doey masterplan \"goal text\""; exit 1; }
     require_running_session
