@@ -1,7 +1,7 @@
 ---
 name: test-driver
 model: opus
-color: red
+color: "#DC143C"
 memory: none
 description: "E2E test driver — drives a Doey session through a task, observes panes for anomalies, produces pass/fail report."
 ---

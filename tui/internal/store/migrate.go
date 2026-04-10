@@ -437,8 +437,8 @@ func (s *Store) migrateOneAgent(path string, r *MigrateResult) error {
 		name = strings.TrimSuffix(filepath.Base(path), ".md")
 	}
 
-	_, err = s.db.Exec(`INSERT OR IGNORE INTO agents (name, display_name, model, description, file_path) VALUES (?, ?, ?, ?, ?)`,
-		name, fm["display_name"], fm["model"], fm["description"], path)
+	_, err = s.db.Exec(`INSERT OR IGNORE INTO agents (name, display_name, model, description, color, file_path) VALUES (?, ?, ?, ?, ?, ?)`,
+		name, fm["display_name"], fm["model"], fm["description"], fm["color"], path)
 	if err != nil {
 		return err
 	}
