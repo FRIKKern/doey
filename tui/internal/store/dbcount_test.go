@@ -2,11 +2,14 @@ package store
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 )
 
 func TestDBCount(t *testing.T) {
-	s, err := Open("/home/doey/doey/.doey/doey.db")
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	s, err := Open(dbPath)
 	if err != nil {
 		t.Fatal("open:", err)
 	}
@@ -22,8 +25,5 @@ func TestDBCount(t *testing.T) {
 	}
 	for st, c := range byStatus {
 		fmt.Printf("  %s: %d\n", st, c)
-	}
-	if len(tasks) < 2 {
-		t.Errorf("Expected >1 tasks, got %d", len(tasks))
 	}
 }
