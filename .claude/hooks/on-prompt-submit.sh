@@ -27,6 +27,9 @@ case "$PROMPT" in
   /simplify*|/loop*|/rename*|/exit*|/help*|/status*|/doey*) exit 0 ;;
 esac
 
+# Hook is non-blocking (always exits 0). DOEY_UNATTENDED=true is set for
+# all non-Boss panes — available for future conditional logic if needed.
+
 # Block workers without task assignment (Task Accountability)
 # Skip if worker is already BUSY — task was validated on initial dispatch
 if is_worker && ! is_reserved; then
