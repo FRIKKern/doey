@@ -232,17 +232,18 @@ Each task gets its own ephemeral team, right-sized to the work. Do NOT search fo
 
 #### Team Spawn
 
-2. **Spawn team** — Create a team sized to the task:
+2. **Spawn team** — Create a team sized to the task. Use the task shortname from `doey task get --id $TASK_ID` (the `TASK_SHORTNAME` field) as the `--name` so the tmux window tab shows a meaningful label (e.g., `agent-audit` instead of `Task 30`):
    ```bash
-   doey add-window --workers $WORKERS --name "Task $TASK_ID" --task-id $TASK_ID
+   SHORTNAME=$(doey task get --id $TASK_ID 2>/dev/null | grep '^TASK_SHORTNAME=' | cut -d= -f2-)
+   doey add-window --workers $WORKERS --name "${SHORTNAME:-Task $TASK_ID}" --task-id $TASK_ID
    ```
-   For specialized tasks, use tag-to-team mapping:
+   For specialized tasks, use tag-to-team mapping (always include `--name` and `--task-id`):
    | Tags / Keywords | Spawn Command |
    |-----------------|---------------|
    | tui, go, dashboard, bubble, lipgloss | `doey add-team go-tui` |
    | shell, hooks, skills, bash, scripts | `doey add-team shell` |
    | infrastructure, install, config, ci, deploy | `doey add-team infra` |
-   | (no match) | `doey add-window --workers $WORKERS` |
+   | (no match) | `doey add-window --workers $WORKERS --name "${SHORTNAME:-Task $TASK_ID}" --task-id $TASK_ID` |
 3. **Wait for ready** — Re-source `session.env` to pick up the new window, then poll until the {{DOEY_ROLE_TEAM_LEAD}} is READY:
    ```bash
    source "${RUNTIME_DIR}/session.env"
