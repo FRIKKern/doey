@@ -37,3 +37,10 @@ TASK_COMMITS=5acb40d
 TASK_FILES=tui/internal/model/dashboard.go
 TASK_RESULT=Redesigned Quick Actions as premium vertical card buttons with icon+label, rounded borders, h/l navigation, responsive sizing.
 TASK_LOG_1774861361=COMPLETE: Committed 5acb40d, pending user confirmation
+TASK_ATTACHMENTS=.doey/tasks/31.result.json
+TASK_UPDATED=1775826744
+TASK_TIMESTAMPS=completed=1775826498|completed=1775826507|completed=1775826600|completed=1775826743
+TASK_SUBTASK_61_STATUS=done
+TASK_SUBTASK_61_COMPLETED_AT=1775826499
+TASK_SUBTASK_64_STATUS=done
+TASK_SUBTASK_64_COMPLETED_AT=1775826744
