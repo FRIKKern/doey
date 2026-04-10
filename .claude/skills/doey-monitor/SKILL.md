@@ -21,7 +21,7 @@ tmux capture-pane -t "$PANE" -p -S -20 2>/dev/null || echo "(not found)"
 ### Watch: poll 15s, break when all non-reserved = FINISHED/READY
 
 ### Error Recovery
-- **Unstick:** copy-mode -q → C-c (0.5s) → C-u (0.5s) → Enter (3s) → check ❯. 2 fails → `/doey-dispatch` Unstick
+- **Unstick (READY/FINISHED only):** copy-mode -q → C-c (0.5s) → C-u (0.5s) → Enter (3s) → check ❯. 2 fails → `/doey-dispatch` Unstick
 - **Nudge idle:** copy-mode -q → Enter (5s) → grep activity → unstick/re-dispatch
 
-Never interrupt BUSY. Status from files only. Min 15s poll.
+**Kill protection:** NEVER kill or unstick a BUSY worker. A worker can appear idle while thinking or processing tool results. Before any kill/restart, follow the Worker Kill Protection protocol: 2-3 checks 30+ seconds apart with identical pane content, no worker_finished message, status not FINISHED/RESERVED. Status from files only. Min 15s poll.

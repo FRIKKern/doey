@@ -395,10 +395,63 @@ Repeat until all done:
 2. **Check status** — `${RUNTIME_DIR}/status/*_${W}_*.status`
 3. **Collect results** — `${RUNTIME_DIR}/results/pane_${W}_*.json` for FINISHED workers
 4. **Synthesize** — distill results, don't just log them raw
-5. **Detect problems** — STUCK (unchanged >3min), ERROR, crash alerts in `status/crash_pane_${W}_*`
+5. **Detect problems** — ERROR, crash alerts in `status/crash_pane_${W}_*`, and potential STUCK workers. **For STUCK detection, follow the Worker Kill Protection protocol below** — a single idle observation is NEVER sufficient to declare a worker stuck or kill it. You must complete the full multi-check protocol before any kill/relaunch action.
 6. Go to step 1 (the tool-call round-trip provides natural pacing — do NOT use sleep)
 
-**Report to Taskmaster only when ALL workers are FINISHED/ERROR**, results synthesized, context log updated. Stuck worker -> `C-c` -> `C-u` -> `Enter` or redispatch. Crashed -> log issue + reassign.
+**Report to Taskmaster only when ALL workers are FINISHED/ERROR**, results synthesized, context log updated. Stuck worker -> follow Worker Kill Protection protocol. Crashed -> log issue + reassign.
+
+## Worker Kill Protection — Strong Proof Required
+
+**Killing a worker destroys all its in-progress work.** A premature kill is far worse than waiting an extra minute. Workers can appear idle while thinking, processing tool results, or preparing their next action. You MUST have ALL of the following proof before killing ANY worker:
+
+### Required checks (ALL must pass)
+
+**a) Multiple idle checks over time** — At minimum 2-3 checks spaced 30+ seconds apart, all showing the same idle state (same pane content). A single snapshot is NEVER sufficient to justify a kill.
+
+**b) No completion message sent** — Check if the worker sent a `worker_finished` message. If yes, the worker completed normally — do NOT kill it:
+```bash
+# Check messages directory for worker_finished from that pane
+ls "${RUNTIME_DIR}/messages/" 2>/dev/null | grep -q "worker_finished.*${WORKER_INDEX}" && echo "COMPLETED — do not kill"
+```
+
+**c) Status file check** — If the worker's status file shows FINISHED or RESERVED, respect it. Do not kill finished or reserved workers:
+```bash
+PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
+STATUS=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.status" 2>/dev/null || echo "UNKNOWN")
+if [ "$STATUS" = "FINISHED" ] || [ "$STATUS" = "RESERVED" ]; then
+  # Worker is finished or reserved — do NOT kill
+  echo "Status is $STATUS — do not kill"
+fi
+```
+
+**d) No output change** — Compare pane content between checks. If ANY text changed (tool output, thinking indicators, new lines), the worker is alive and working. Only proceed if content is IDENTICAL across all checks:
+```bash
+# Capture pane content on each check
+SNAP_1=$(tmux capture-pane -t "$PANE" -p 2>/dev/null || true)
+# ... wait 30+ seconds, then capture again ...
+SNAP_2=$(tmux capture-pane -t "$PANE" -p 2>/dev/null || true)
+if [ "$SNAP_1" != "$SNAP_2" ]; then
+  # Content changed — worker is ALIVE, do not kill
+  echo "Output changed between checks — worker is active"
+fi
+```
+
+**e) Bias: KEEP ALIVE** — When in doubt, keep the worker alive. A premature kill destroys work. An extra minute of waiting costs nothing. If any check is ambiguous, resolve it in favor of keeping the worker running.
+
+**f) Never kill on first observation** — Even if the pane looks completely idle with a bare prompt, the first observation only starts the timer. A kill requires confirmation from at least 2 subsequent checks showing identical content.
+
+### Kill decision checklist
+
+Before executing a kill, confirm ALL of the following:
+
+- [ ] At least 3 pane captures taken, spaced 30+ seconds apart
+- [ ] All captures show IDENTICAL content (no output change whatsoever)
+- [ ] No `worker_finished` message exists for this worker
+- [ ] Status file does NOT show FINISHED or RESERVED
+- [ ] Worker is not in the middle of a tool call (check for tool output patterns)
+- [ ] You have exhausted nudge attempts first (see Auto-Nudge Protocol)
+
+**If ANY box is unchecked, do NOT kill.** Wait and check again. The cost of patience is near zero; the cost of a premature kill is lost work, wasted context, and re-dispatch overhead.
 
 ## Handling Worker Failures
 
