@@ -30,7 +30,7 @@ while IFS='=' read -r name value; do
   safe_value=$(printf '%s' "$value" | sed 's/[&/\]/\\&/g')
   SED_EXPR="${SED_EXPR}s/{{${name}}}/${safe_value}/g;"
 done <<EOF
-$(env | grep '^DOEY_ROLE_\|^DOEY_CATEGORY_' | sort)
+$(printenv | grep '^DOEY_ROLE_\|^DOEY_CATEGORY_' | sort)
 EOF
 
 if [ -z "$SED_EXPR" ]; then
