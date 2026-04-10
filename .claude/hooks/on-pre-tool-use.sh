@@ -605,7 +605,10 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
       fi
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
       _dbg_write "block_${_DOEY_ROLE}_agent"
-      _forward_action "Agent" "" "agent spawn" || true
+      _agent_desc=$(_json_str tool_input.description)
+      _agent_prompt=$(_json_str tool_input.prompt)
+      _agent_cmd="${_agent_desc:+[${_agent_desc}] }${_agent_prompt:-}"
+      _forward_action "Agent" "$_agent_cmd" "agent spawn" || true
       echo "FORWARDED: Agent spawn request sent to ${DOEY_ROLE_COORDINATOR}." >&2
       exit 2 ;;
     Read|Edit|Write|Glob|Grep)
@@ -627,7 +630,12 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
       esac
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} $TOOL_NAME on project source blocked" "${_CHK_PATH:-project root}"
       _dbg_write "block_${_DOEY_ROLE}_source_${TOOL_NAME}"
-      _forward_action "$TOOL_NAME" "${_CHK_PATH:-}" "source access" || true
+      _fwd_detail="${_CHK_PATH:-}"
+      if [ "$TOOL_NAME" = "Grep" ]; then
+        _grep_pat=$(_json_str tool_input.pattern)
+        [ -n "$_grep_pat" ] && _fwd_detail="${_CHK_PATH:-} (pattern: ${_grep_pat})"
+      fi
+      _forward_action "$TOOL_NAME" "$_fwd_detail" "source access" || true
       echo "FORWARDED: Source access request sent to ${DOEY_ROLE_COORDINATOR}. Continue with other work." >&2
       exit 2 ;;
   esac
@@ -773,7 +781,8 @@ if [ "$TOOL_NAME" != "Bash" ]; then
     _dbg_write "block_ask_user_${_DOEY_ROLE}"
     _sn_ask="${SESSION_NAME:-}"; [ -z "$_sn_ask" ] && _sn_ask=$(_rk SESSION_NAME "${_RD:-}/session.env")
     _boss_safe=$(printf '%s_0_1' "$(printf '%s' "$_sn_ask" | tr ':.-' '_')")
-    _forward_action "AskUserQuestion" "" "user question" "$_boss_safe" || true
+    _ask_question=$(_json_str tool_input.question)
+    _forward_action "AskUserQuestion" "$_ask_question" "user question" "$_boss_safe" || true
     echo "FORWARDED: Question forwarded to Boss for user interaction." >&2
     exit 2
   fi
