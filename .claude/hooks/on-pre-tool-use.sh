@@ -500,6 +500,12 @@ if [ -z "$_DOEY_TEAM_ROLE" ] && [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
   [ -f "${_RD}/status/${_PS}.team_role" ] && _DOEY_TEAM_ROLE=$(cat "${_RD}/status/${_PS}.team_role" 2>/dev/null) || true
 fi
 
+# Planner sub-role detection (team_role-based, mirrors interviewer pattern)
+_IS_PLANNER=false
+case "${_DOEY_TEAM_ROLE:-}" in
+  *planner*|*masterplan*) _IS_PLANNER=true ;;
+esac
+
 if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
   _HB_FILE="${_RD}/status/${_PS}.heartbeat"
   _hb_write=true
@@ -625,6 +631,7 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
       fi
       case "${_CHK_PATH:-}" in
         */.doey/tasks/*|*/.doey/tasks|\
+        */.doey/plans/*|*/.doey/plans|\
         "${_RD:-__none__}"/*|*/tmp/doey/*)
           _dbg_write "allow_${_DOEY_ROLE}_taskfile_${TOOL_NAME}"; exit 0 ;;
       esac

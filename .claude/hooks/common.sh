@@ -260,6 +260,13 @@ is_worker() {
   ! is_manager
 }
 
+is_planner() {
+  case "$(team_role)" in
+    "$DOEY_ROLE_ID_PLANNER") return 0 ;;
+  esac
+  return 1
+}
+
 get_taskmaster_pane() {
   if [ -f "${RUNTIME_DIR}/session.env" ]; then
     local val
