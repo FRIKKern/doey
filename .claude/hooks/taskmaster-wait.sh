@@ -146,6 +146,13 @@ _check_stale_heartbeats() {
       *)   _threshold="${DOEY_STALE_WORKER_TIMEOUT:-300}" ;;
     esac
     [ "$_age" -ge "$_threshold" ] || continue
+    # Skip FINISHED/RESERVED workers — they are done, not stale
+    local _hb_status_file="${RUNTIME_DIR}/status/${_pane_id}.status"
+    if [ -f "$_hb_status_file" ]; then
+      local _hb_cur_st
+      _hb_cur_st=$(grep '^STATUS: ' "$_hb_status_file" 2>/dev/null | head -1 | sed 's/^STATUS: //') || _hb_cur_st=""
+      case "$_hb_cur_st" in FINISHED|RESERVED) continue ;; esac
+    fi
     printf '%s %s %s %s\n' "$_pane_id" "$_task_id" "$_hb_time" "$_age" \
       > "${RUNTIME_DIR}/status/stale_${_pane_id}" 2>/dev/null || true
     _found=true
@@ -210,6 +217,53 @@ _enforce_stale_restart() {
     # Read stale marker for details
     local _stale_info
     _stale_info=$(cat "$_marker" 2>/dev/null) || continue
+
+    # ── Strong-proof gate: require 2 consecutive stale observations ──
+    # First observation writes a .stale_pending file; only on second
+    # observation (marker still present on next cycle) do we proceed.
+    local _pending_file="${_restart_count_dir}/${_pane_id}.stale_pending"
+    if [ ! -f "$_pending_file" ]; then
+      # First observation — record timestamp, skip restart this cycle
+      date +%s > "$_pending_file" 2>/dev/null || true
+      _log_restart "$_pane_id" "pending" "First stale observation — waiting for confirmation"
+      continue
+    fi
+
+    # Re-verify heartbeat is STILL stale (worker may have resumed)
+    local _hb_file="${_stale_dir}/${_pane_id}.heartbeat"
+    if [ -f "$_hb_file" ]; then
+      local _hb_now _hb_time_now _hb_age_now _hb_threshold_now
+      _hb_now=$(date +%s)
+      read -r _hb_time_now _ _ < "$_hb_file" 2>/dev/null || _hb_time_now=0
+      _hb_age_now=$(( _hb_now - _hb_time_now ))
+      case "$_pane_id" in
+        *_0) _hb_threshold_now="${DOEY_STALE_MANAGER_TIMEOUT:-600}" ;;
+        *)   _hb_threshold_now="${DOEY_STALE_WORKER_TIMEOUT:-300}" ;;
+      esac
+      if [ "$_hb_age_now" -lt "$_hb_threshold_now" ]; then
+        # Heartbeat refreshed since first observation — worker recovered
+        _log_restart "$_pane_id" "cleared" "Heartbeat refreshed (age=${_hb_age_now}s) — not stale"
+        rm -f "$_marker" "$_pending_file"
+        continue
+      fi
+    fi
+
+    # Check status file — do NOT restart FINISHED or RESERVED workers
+    local _status_file="${_stale_dir}/${_pane_id}.status"
+    if [ -f "$_status_file" ]; then
+      local _cur_st
+      _cur_st=$(grep '^STATUS: ' "$_status_file" 2>/dev/null | head -1 | sed 's/^STATUS: //') || _cur_st=""
+      case "$_cur_st" in
+        FINISHED|RESERVED)
+          _log_restart "$_pane_id" "skipped" "Status is ${_cur_st} — not restarting"
+          rm -f "$_marker" "$_pending_file"
+          continue
+          ;;
+      esac
+    fi
+
+    # Confirmed stale — clean up pending file
+    rm -f "$_pending_file"
 
     # Check restart count
     local _count_file="${_restart_count_dir}/${_pane_id}.auto_restart_count"
