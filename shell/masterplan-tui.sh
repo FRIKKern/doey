@@ -10,8 +10,8 @@ if [ -z "$RD" ]; then
 fi
 RD="${RD:-/tmp/doey}"
 
-# 2. Find plan file
-PLAN_FILE="${PLAN_FILE:-}"
+# 2. Find plan file (CLI arg wins, then env var, then auto-discover)
+PLAN_FILE="${1:-${PLAN_FILE:-}}"
 if [ -z "$PLAN_FILE" ]; then
   shopt -s nullglob
   plans=("$RD"/masterplan-*/plan.md)

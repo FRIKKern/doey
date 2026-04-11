@@ -1028,12 +1028,22 @@ add_team_from_def() {
 
     # Script panes: run a shell script instead of launching claude
     if [ -n "$w_script" ]; then
-      local _script_path="${dir}/shell/${w_script}"
+      # Resolve script path: prefer installed copy in ~/.local/bin (fresh-install
+      # safe), fall back to the current repo's shell/ dir for in-tree development.
+      local _script_path=""
+      if [ -x "$HOME/.local/bin/${w_script}" ]; then
+        _script_path="$HOME/.local/bin/${w_script}"
+      elif [ -x "${dir}/shell/${w_script}" ]; then
+        _script_path="${dir}/shell/${w_script}"
+      else
+        _script_path="${dir}/shell/${w_script}"
+      fi
       local _script_cmd="$_script_path"
-      # Try to load PLAN_FILE from masterplan env if not in shell env
+      # Try to load PLAN_FILE from masterplan env if not in shell env.
+      # Plan dirs live at ${runtime_dir}/masterplan-<id>/masterplan.env.
       if [ -z "${PLAN_FILE:-}" ]; then
         local _mp_env
-        for _mp_env in "${runtime_dir}"/masterplan-*.env; do
+        for _mp_env in "${runtime_dir}"/masterplan-*/masterplan.env; do
           [ -f "$_mp_env" ] && PLAN_FILE=$(grep '^PLAN_FILE=' "$_mp_env" 2>/dev/null | head -1 | cut -d= -f2-) && break
         done
       fi
