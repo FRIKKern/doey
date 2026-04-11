@@ -39,6 +39,17 @@ else
     echo "[doey] WARNING: doey-roles.sh not found — role detection unavailable" >&2
 fi
 
+# Enforcement mode for AskUserQuestion hook (shadow|block|off).
+# shadow = log violations, never block. block = log + deny. off = disabled.
+DOEY_ENFORCE_QUESTIONS="${DOEY_ENFORCE_QUESTIONS:-shadow}"
+case "$DOEY_ENFORCE_QUESTIONS" in
+  shadow|block|off) ;;
+  *)
+    printf '[%s] enforce-askuserquestion: unknown DOEY_ENFORCE_QUESTIONS=%s, using shadow\n' "$(date +%H:%M:%S)" "$DOEY_ENFORCE_QUESTIONS" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null || true
+    DOEY_ENFORCE_QUESTIONS=shadow
+    ;;
+esac
+
 # ERR trap: report failing command to stderr so Claude Code shows it instead of "No stderr output"
 trap '_doey_hook_err=$?; if [ -n "${RUNTIME_DIR:-}" ]; then printf "[%s] [%s] ERR at line %s: exit %s\n" "$(date +%Y-%m-%dT%H:%M:%S)" "${_DOEY_HOOK_NAME:-hook}" "${LINENO:-?}" "$_doey_hook_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; fi; trap - EXIT; exit 0' ERR
 
@@ -71,6 +82,12 @@ _resolve_project_dir() {
   local dir="${DOEY_PROJECT_DIR:-${DOEY_TEAM_DIR:-}}"
   [ -z "$dir" ] && dir=$(git rev-parse --show-toplevel 2>/dev/null) || true
   echo "${dir:-}"
+}
+
+_violations_dir() {
+  local pd
+  pd=$(_resolve_project_dir) || return 1
+  printf '%s/.doey/violations' "$pd"
 }
 
 _check_cooldown() {  # Returns 1 if within cooldown period
@@ -218,6 +235,13 @@ parse_field() {
   fi
 }
 
+# _strip_excerpt: stdin → JSON-safe single-line excerpt, ≤200 bytes.
+# NOTE: byte-based truncation may split a multi-byte UTF-8 character.
+# Local audit logs tolerate this; transport-critical callers should re-encode.
+_strip_excerpt() {
+  tr '\n\r\t' '   ' | sed 's/  */ /g' | cut -c1-200 | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
 _read_team_key() {
   local val
   val=$(grep "^$2=" "$1" 2>/dev/null | head -1 | cut -d= -f2-) || true
@@ -263,11 +287,14 @@ is_worker() {
 }
 
 is_planner() {
-  case "$(team_role)" in
-    "$DOEY_ROLE_ID_PLANNER") return 0 ;;
-  esac
-  return 1
+  local tr="${DOEY_TEAM_ROLE:-}"
+  if [ -z "$tr" ] && [ -n "${RUNTIME_DIR:-}" ] && [ -n "${PANE_SAFE:-}" ]; then
+    tr=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.team_role" 2>/dev/null) || tr=""
+  fi
+  [ "$tr" = "$DOEY_ROLE_ID_PLANNER" ]
 }
+
+is_boss_or_planner() { is_boss || is_planner; }
 
 get_taskmaster_pane() {
   if [ -f "${RUNTIME_DIR}/session.env" ]; then
