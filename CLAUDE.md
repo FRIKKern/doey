@@ -58,7 +58,9 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 | Subtaskmaster | Read/Edit/Write/Glob/Grep on project source; Agent; implementation work (send-keys allowed) |
 | Taskmaster | Read/Edit/Write/Glob/Grep on project source; Agent |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
-| Workers | git push, gh pr create/merge, ALL send-keys, tmux kill, rm -rf /, ~, $HOME, shutdown |
+| Workers | git push, gh pr create/merge, ALL send-keys¹, tmux kill, rm -rf /, ~, $HOME, shutdown |
+
+¹ Workers may send-keys to their coordinator (Subtaskmaster) pane — this is the one allowed exception, enforced in `.claude/hooks/on-pre-tool-use.sh`.
 
 ## Philosophy
 
@@ -152,6 +154,6 @@ Never edit generated `.md` files directly — edit the `.md.tmpl` template inste
 
 ## Important Files
 
-**Shell:** `shell/doey.sh` (CLI entry ~6100 lines), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor), `shell/pane-border-status.sh` (pane borders), `shell/tmux-statusbar.sh` (status bar)
+**Shell:** `shell/doey.sh` (CLI entry — most logic lives in `shell/doey-*.sh` modules), `shell/info-panel.sh` (dashboard), `shell/context-audit.sh` (context auditor), `shell/pane-border-status.sh` (pane borders), `shell/tmux-statusbar.sh` (status bar)
 
 **Docs:** `docs/context-reference.md` (authoritative architecture reference), `docs/improving-agents.md` (agent customization guide)
