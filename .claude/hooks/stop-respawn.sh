@@ -101,4 +101,9 @@ echo "stop-respawn: successfully relaunched ${TARGET_PANE}" >&2
 _log "stop-respawn: respawn complete for ${PANE_SAFE}"
 type _debug_log >/dev/null 2>&1 && _debug_log lifecycle "respawn" "pane=$PANE_SAFE" "target=$TARGET_PANE"
 
+# Stats emit (task #521 Phase 2) — additive, silent-fail
+if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+  (doey-stats-emit.sh worker worker_respawned "role=${DOEY_ROLE:-unknown}" "reason=respawn_request" &) 2>/dev/null || true
+fi
+
 exit 0

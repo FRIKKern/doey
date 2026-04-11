@@ -211,4 +211,9 @@ fi
 
 type _debug_log >/dev/null 2>&1 && _debug_log lifecycle "recovery" "pane=$PANE_SAFE" "error_type=$_error_type" "retry=$_retry_count"
 
+# Stats emit (task #521 Phase 2) — additive, silent-fail
+if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+  (doey-stats-emit.sh worker worker_recovery "role=${DOEY_ROLE:-unknown}" "reason=${_error_type:-unknown}" "retry=${_retry_count:-0}" &) 2>/dev/null || true
+fi
+
 exit 0

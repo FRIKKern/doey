@@ -252,4 +252,34 @@ if [ "${PANE_INDEX:-0}" = "0" ] && [ "${WINDOW_INDEX:-0}" = "0" ]; then
   fi
 fi
 
+# ── Stats system (task #521 Phase 1) ──────────────────────────────────
+# 1) Atomic per-session UUID: first-writer-wins. All subsequent panes in
+#    the same runtime dir read the same DOEY_SESSION_ID so emitted events
+#    can be grouped by launch.
+export DOEY_RUNTIME="${RUNTIME_DIR}"
+_sf="${DOEY_RUNTIME%/}/doey_session_id"
+if [ ! -f "$_sf" ]; then
+  _tmp="$_sf.tmp.$$"
+  _id="$(uuidgen 2>/dev/null || echo "s$(date +%s)-$$-${RANDOM:-0}")"
+  printf 'DOEY_SESSION_ID=%s\n' "$_id" > "$_tmp" 2>/dev/null || true
+  mv -n "$_tmp" "$_sf" 2>/dev/null || rm -f "$_tmp" 2>/dev/null || true
+fi
+if [ -r "$_sf" ]; then
+  # shellcheck disable=SC1090
+  . "$_sf" 2>/dev/null || true
+  export DOEY_SESSION_ID
+fi
+unset _sf _tmp _id
+
+# 2) First-run install_run sentinel — emits once per runtime dir.
+_installseen="${DOEY_RUNTIME%/}/.install-seen"
+if [ ! -f "$_installseen" ]; then
+  : > "$_installseen" 2>/dev/null || true
+  (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill install_run "version=${DOEY_VERSION:-unknown}" "origin=${DOEY_INSTALL_ORIGIN:-local}" &) 2>/dev/null || true
+fi
+unset _installseen
+
+# 3) session_start emit — one per pane/session attach, silent-fail.
+(command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh session session_start "role=${ROLE:-unknown}" "window=${WINDOW_INDEX:-0}" "pane=${PANE_INDEX:-0}" &) 2>/dev/null || true
+
 exit 0

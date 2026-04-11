@@ -446,6 +446,11 @@ if command -v doey >/dev/null 2>&1; then
   (doey event log --type result_captured --source "$PANE" --message "Result: ${_FILES_COUNT} files, ${TOOL_COUNT} tools" &) 2>/dev/null
 fi
 
+# Stats emit (task #521 Phase 2) — additive, silent-fail
+if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+  (doey-stats-emit.sh task result_captured "task_id=${DOEY_TASK_ID:-}" "files_changed=${_FILES_COUNT:-0}" "tool_count=${TOOL_COUNT:-0}" &) 2>/dev/null || true
+fi
+
 COMPLETION="${RUNTIME_DIR}/status/completion_pane_${WINDOW_INDEX}_${PANE_INDEX}"
 cat > "${COMPLETION}.tmp" <<COMPLETE
 PANE_INDEX="$PANE_INDEX"

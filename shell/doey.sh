@@ -238,11 +238,27 @@ HELP
     ;;
   # Commands that don't need tmux/claude running:
   list)         list_projects; exit 0 ;;
-  doctor)       check_doctor; exit 0 ;;
+  doctor)
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill doctor_run &) 2>/dev/null || true
+    shift
+    check_doctor "$@"
+    exit 0
+    ;;
   version|--version|-v) show_version; exit 0 ;;
-  uninstall)    uninstall_system; exit 0 ;;
+  uninstall)
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill uninstall_run &) 2>/dev/null || true
+    uninstall_system
+    exit 0
+    ;;
   --post-update) _post_update "$2"; exit 0 ;;
-  update|reinstall) update_system; exit 0 ;;
+  update|reinstall)
+    _doey_stats_ver=""
+    [ -f "$HOME/.claude/doey/version" ] && _doey_stats_ver=$(sed -n 's/^version=//p' "$HOME/.claude/doey/version" 2>/dev/null | head -1)
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill update_run "version=${_doey_stats_ver}" &) 2>/dev/null || true
+    unset _doey_stats_ver
+    update_system
+    exit 0
+    ;;
   build)
     printf "  %bBuilding Go binaries...%b\n" "$BRAND" "$RESET"
     if type _build_all_go_binaries >/dev/null 2>&1; then
@@ -256,7 +272,14 @@ HELP
       printf "  %b✗ Go helpers not loaded%b\n" "$ERROR" "$RESET"; exit 1
     fi
     ;;
-  remote)       shift; doey_remote "$@"; exit 0 ;;
+  remote)
+    _remote_sub="${2:-list}"
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill "remote_${_remote_sub}" &) 2>/dev/null || true
+    unset _remote_sub
+    shift
+    doey_remote "$@"
+    exit 0
+    ;;
   scaffy)
     shift
     if command -v doey-scaffy >/dev/null 2>&1; then
@@ -269,17 +292,39 @@ HELP
   # Everything below requires tmux + claude — check prerequisites:
   init)
     _check_prereqs
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill project_registered &) 2>/dev/null || true
     register_project "$(pwd)"
     dir="$(pwd)"; name="$(find_project "$dir")"
     [[ -n "$name" ]] && launch_with_grid "$name" "$dir" "$grid"
     exit 0
     ;;
-  purge)        shift; doey_purge "$@"; exit $? ;;
-  stop)         stop_project; exit $? ;;
+  purge)
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill purge_run &) 2>/dev/null || true
+    shift
+    doey_purge "$@"
+    exit $?
+    ;;
+  stop)
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh session session_stopped &) 2>/dev/null || true
+    stop_project
+    exit $?
+    ;;
   reload)       shift; reload_session "$@"; exit 0 ;;
-  test)         shift; run_test "$@"; exit $? ;;
+  test)
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill test_run &) 2>/dev/null || true
+    shift
+    run_test "$@"
+    exit $?
+    ;;
   settings)     doey_settings; exit 0 ;;
   config)
+    _cfg_sub="${2:-bare}"
+    case "$_cfg_sub" in
+      --*|"") _cfg_sub="${_cfg_sub#--}" ;;
+    esac
+    [ -z "$_cfg_sub" ] && _cfg_sub="bare"
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill config_edited "cmd=${_cfg_sub}" &) 2>/dev/null || true
+    unset _cfg_sub
     # 'doey config <subcommand>' routes to doey-ctl for DB config management;
     # bare 'doey config' or flags (--show/--global/--reset) → local editor
     case "${2:-}" in
@@ -301,6 +346,12 @@ HELP
   deploy)
     require_running_session
     shift
+    _deploy_sub="${1:-start}"
+    case "$_deploy_sub" in
+      start) (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill deploy_start &) 2>/dev/null || true ;;
+      gate)  (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill deploy_gate  &) 2>/dev/null || true ;;
+    esac
+    unset _deploy_sub
     doey_deploy "$session" "$runtime_dir" "$dir" "$@"
     exit 0
     ;;
@@ -316,6 +367,7 @@ HELP
         launch_session_dynamic "$name" "$dir"
       fi
     fi
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh session session_launched mode=dynamic &) 2>/dev/null || true
     exit 0
     ;;
   add)
@@ -370,6 +422,7 @@ HELP
           fi
           ;;
         to-tasks)
+          (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill plan_to_tasks_run &) 2>/dev/null || true
           shift 2
           _p2t=""
           if [ -x "${DOEY_LIB_DIR:-}/plan-to-tasks.sh" ]; then
@@ -553,9 +606,11 @@ MPEOF
   [0-9]*x[0-9]*)
     _check_prereqs
     grid="$1"
+    _doey_launch_mode="grid"
     ;;
   "") ;;
   open|switch)
+    _doey_open_verb="$1"
     shift
     if [ $# -eq 0 ]; then
       show_menu "${grid}"
@@ -572,6 +627,7 @@ MPEOF
       else
         cd "$_open_ppath" && launch_with_grid "$_open_pname" "$_open_ppath" "${grid}"
       fi
+      (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh session session_launched "mode=${_doey_open_verb}" &) 2>/dev/null || true
     else
       printf '  \033[31m✗\033[0m No project matching "%s"\n' "$_open_query" >&2
       printf '  Registered projects:\n' >&2
@@ -604,6 +660,7 @@ if [[ -n "$name" ]]; then
   else
     launch_with_grid "$name" "$dir" "$grid"
   fi
+  (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh session session_launched "mode=${_doey_launch_mode:-bare}" &) 2>/dev/null || true
 else
   show_menu "${grid}"
 fi

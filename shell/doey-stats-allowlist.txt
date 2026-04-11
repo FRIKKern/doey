@@ -1,0 +1,27 @@
+# doey stats payload allow-list — single source of truth.
+# Consumed by shell/doey-stats.sh (grep -v '^#') and by Go
+# via tui/cmd/doey-ctl/doey-stats-allowlist.txt (embedded mirror,
+# must be kept identical).
+#
+# Any emitter key outside this list is dropped silently before insert.
+# See docs/stats.md for the event catalog and privacy contract.
+role
+window
+pane
+mode
+status
+task_id
+files_changed
+tool_count
+version
+origin
+cmd
+dep
+mapped_cmd
+team
+team_type
+worker_count
+reason
+duration_ms
+exit_code
+retry
