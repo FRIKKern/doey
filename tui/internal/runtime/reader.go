@@ -170,12 +170,11 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	snap.Uptime = r.calculateUptime()
 
 	if session.ProjectDir != "" {
-		// Agents: try store, fall back to files
-		if r.sr != nil {
+		// Agents: files are source of truth (frontmatter has color);
+		// store is legacy fallback — its color column isn't populated.
+		snap.AgentDefs = r.readAgentDefs(session.ProjectDir)
+		if len(snap.AgentDefs) == 0 && r.sr != nil {
 			snap.AgentDefs = r.sr.readAgents()
-		}
-		if len(snap.AgentDefs) == 0 {
-			snap.AgentDefs = r.readAgentDefs(session.ProjectDir)
 		}
 
 		snap.TeamDefs = r.readTeamDefs(session.ProjectDir)
