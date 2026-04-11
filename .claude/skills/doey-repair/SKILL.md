@@ -22,7 +22,7 @@ MISSING → "Run `doey reload`" and STOP. HEALTHY = has child. IDLE = no child �
 | Pane | Command |
 |------|---------|
 | 0.0 | `clear && info-panel.sh '${RUNTIME_DIR}'` |
-| 0.1 | `claude --dangerously-skip-permissions --agent doey-boss` |
-| 1.0 | `claude --dangerously-skip-permissions --agent doey-taskmaster` |
+| 0.1 | `claude --dangerously-skip-permissions --settings "$HOME/.claude/settings.json" --agent doey-boss` |
+| 1.0 | `claude --dangerously-skip-permissions --settings "$HOME/.claude/settings.json" --agent doey-taskmaster` |
 
 Verify child processes after repair. NEVER kill — only send commands to idle shells. Skip running panes.
