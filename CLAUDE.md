@@ -141,6 +141,16 @@ All role names are centralized in `shell/doey-roles.sh` — the single source of
 
 Never edit generated `.md` files directly — edit the `.md.tmpl` template instead.
 
+## STATUS CHECK PROTOCOL
+
+Rules for observing whether a pane is active or idle. Apply before telling the user "X is working" or "X is stuck".
+
+- **ctx% is NOT an activity signal** — ignore it for activity determination. Idle panes at the `❯ ` prompt can display any ctx%
+- **Preferred tool:** `doey-ctl status observe <pane>` — returns canonical JSON with `active`, `indicator`, and `ages`
+- **Minimum capture depth:** `tmux capture-pane -p -S -20` (20 lines, never 4)
+- **Spinner indicators** (glyphs `✻` `●` `⎿` paired with verbs): Sketching, Running, Cogitated, Baked, Sautéed, Brewed, Cooked, Thinking, Frolicking, Crystallizing, Pondering, Mulling, Ruminating, Contemplating, Musing
+- **Idle signature:** pane ends with `❯ ` prompt on the last non-empty line AND no trailing spinner glyph
+
 ## Testing Changes
 
 | Changed | Action |
