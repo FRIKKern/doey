@@ -100,23 +100,27 @@ type Plan struct {
 }
 
 // HasStructure reports whether the parsed plan carries any structured
-// content that the viewer can render beyond raw markdown.
+// content that the viewer can render beyond raw markdown. A title alone
+// is not enough — the structured renderer would drop the body. Require
+// at least one real section (goal, context, phases, deliverables,
+// risks, success criteria) before returning true.
 func (p *Plan) HasStructure() bool {
 	if p == nil {
 		return false
 	}
-	return p.Title != "" || p.Goal != "" || len(p.Phases) > 0 ||
+	return p.Goal != "" || p.Context != "" || len(p.Phases) > 0 ||
 		len(p.Deliverables) > 0 || len(p.Risks) > 0 || len(p.SuccessCriteria) > 0
 }
 
 var (
-	checkboxRe   = regexp.MustCompile(`^\s*[-*]\s*\[([ xX])\]\s*(.*)$`)
-	bulletRe     = regexp.MustCompile(`^\s*[-*]\s+(.*)$`)
-	statusLineRe = regexp.MustCompile(`(?i)^\s*\*\*\s*status\s*:?\s*\*\*\s*:?\s*(.+?)\s*$`)
-	phaseTitleRe = regexp.MustCompile(`^###\s+(.*)$`)
-	h1Re         = regexp.MustCompile(`^#\s+(.*)$`)
-	h2Re         = regexp.MustCompile(`^##\s+(.*)$`)
-	whitespaceRe = regexp.MustCompile(`\s+`)
+	checkboxRe    = regexp.MustCompile(`^\s*[-*]\s*\[([ xX])\]\s*(.*)$`)
+	bulletRe      = regexp.MustCompile(`^\s*[-*]\s+(.*)$`)
+	statusLineRe  = regexp.MustCompile(`(?i)^\s*\*\*\s*status\s*:?\s*\*\*\s*:?\s*(.+?)\s*$`)
+	phaseTitleRe  = regexp.MustCompile(`^###\s+(.*)$`)
+	h1Re          = regexp.MustCompile(`^#\s+(.*)$`)
+	h2Re          = regexp.MustCompile(`^##\s+(.*)$`)
+	whitespaceRe  = regexp.MustCompile(`\s+`)
+	phasePrefixRe = regexp.MustCompile(`(?i)^phase\s*\d+\s*[:\-–—]\s*`)
 )
 
 var emojiStatuses = map[string]PhaseStatus{
@@ -268,15 +272,24 @@ func parsePhaseTitle(raw string) (title string, status PhaseStatus, haveStatus b
 	title = raw
 	for emoji, s := range emojiStatuses {
 		if strings.HasPrefix(title, emoji) {
-			return strings.TrimSpace(strings.TrimPrefix(title, emoji)), s, true
+			stripped := strings.TrimSpace(strings.TrimPrefix(title, emoji))
+			return stripPhasePrefix(stripped), s, true
 		}
 	}
 	for emoji, s := range emojiStatuses {
 		if strings.HasSuffix(title, emoji) {
-			return strings.TrimSpace(strings.TrimSuffix(title, emoji)), s, true
+			stripped := strings.TrimSpace(strings.TrimSuffix(title, emoji))
+			return stripPhasePrefix(stripped), s, true
 		}
 	}
-	return title, StatusPlanned, false
+	return stripPhasePrefix(title), StatusPlanned, false
+}
+
+// stripPhasePrefix removes a leading "Phase N:" marker from a phase
+// title so renderers that prepend their own "Phase N —" don't emit a
+// duplicated prefix.
+func stripPhasePrefix(title string) string {
+	return strings.TrimSpace(phasePrefixRe.ReplaceAllString(title, ""))
 }
 
 func handlePhaseLine(phase *Phase, line string) {

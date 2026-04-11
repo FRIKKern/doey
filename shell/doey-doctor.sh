@@ -109,6 +109,25 @@ check_doctor() {
     else _doc_check fail "$_label missing" "${_f/#$HOME/~}"; fi
   done
 
+  # Masterplan spawn helper — wired by install.sh but missing on systems that
+  # haven't reinstalled since it was added. Required for /doey-masterplan.
+  local _mp_spawn="$HOME/.local/bin/doey-masterplan-spawn.sh"
+  if [[ -x "$_mp_spawn" ]]; then
+    _doc_check ok "Masterplan spawn" "${_mp_spawn/#$HOME/~}"
+  elif [[ -f "$_mp_spawn" ]]; then
+    _doc_check fail "Masterplan spawn" "exists but not executable — run: cd ${_doey_repo} && ./install.sh"
+  else
+    _doc_check fail "Masterplan spawn missing" "run: cd ${_doey_repo} && ./install.sh"
+  fi
+
+  # Masterplan ambiguity helper — sourced by the /doey-masterplan skill.
+  local _mp_amb="$HOME/.local/bin/doey-masterplan-ambiguity.sh"
+  if [[ -f "$_mp_amb" ]]; then
+    _doc_check ok "Masterplan ambiguity" "${_mp_amb/#$HOME/~}"
+  else
+    _doc_check fail "Masterplan ambiguity missing" "run: cd ${_doey_repo} && ./install.sh"
+  fi
+
   # Repo path
   local repo_dir=""
   repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
