@@ -344,6 +344,8 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   cp "$SCRIPT_DIR/shell/masterplan-tui.sh" "$HOME/.local/bin/masterplan-tui.sh"
   install_script "$SCRIPT_DIR/shell/doey-masterplan-spawn.sh" "$HOME/.local/bin/doey-masterplan-spawn.sh"
   install_script "$SCRIPT_DIR/shell/doey-masterplan-ambiguity.sh" "$HOME/.local/bin/doey-masterplan-ambiguity.sh"
+  install_script "$SCRIPT_DIR/shell/plan-to-tasks.sh" "$HOME/.local/bin/plan-to-tasks.sh"
+  ln -sf "$HOME/.local/bin/plan-to-tasks.sh" "$HOME/.local/bin/doey-plan-to-tasks" 2>/dev/null || true
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done

@@ -192,6 +192,7 @@ case "${1:-}" in
     list-teams Show all team windows and their status
     teams      List available premade and project team definitions
     masterplan Start a masterplan team for a goal (alias: plan)
+    plan to-tasks   Convert a CONSENSUS masterplan file into tasks+subtasks
     deploy     Deploy validation pipeline (start/status/gate)
     remote     Manage remote Hetzner servers (list/provision/stop/status)
     scaffy     Run scaffy template engine subcommands
@@ -367,6 +368,24 @@ HELP
             printf 'Error: doey CLI tools not installed. Run "doey doctor" or reinstall.\n' >&2
             exit 1
           fi
+          ;;
+        to-tasks)
+          shift 2
+          _p2t=""
+          if [ -x "${DOEY_LIB_DIR:-}/plan-to-tasks.sh" ]; then
+            _p2t="${DOEY_LIB_DIR}/plan-to-tasks.sh"
+          elif [ -x "${SCRIPT_DIR:-}/plan-to-tasks.sh" ]; then
+            _p2t="${SCRIPT_DIR}/plan-to-tasks.sh"
+          elif [ -x "$HOME/.local/bin/doey-plan-to-tasks" ]; then
+            _p2t="$HOME/.local/bin/doey-plan-to-tasks"
+          elif [ -x "$(dirname "$0")/plan-to-tasks.sh" ]; then
+            _p2t="$(dirname "$0")/plan-to-tasks.sh"
+          fi
+          if [ -z "$_p2t" ]; then
+            printf 'Error: plan-to-tasks helper not found. Reinstall doey.\n' >&2
+            exit 1
+          fi
+          exec "$_p2t" "$@"
           ;;
       esac
     fi

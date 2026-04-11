@@ -1,6 +1,10 @@
 package planparse
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -318,6 +322,196 @@ func TestParsePhaseTitleStripsPrefix(t *testing.T) {
 		if ph.Title != want[i] {
 			t.Errorf("phase %d title = %q, want %q", i, ph.Title, want[i])
 		}
+	}
+}
+
+func TestMarshalRoundtrip(t *testing.T) {
+	md := `# Plan: Ship real-time plan viewer
+
+## Goal
+Render the plan file in real time as it streams from the Planner.
+
+## Context
+The current viewer only re-renders on save. Users want Cursor-like streaming.
+
+## Phases
+
+### Phase 1: Wire the file watcher
+**Status:** done
+- [x] Research fsnotify
+- [x] Hook into viewer pane
+
+### Phase 2: Structured format
+**Status:** in-progress
+- [x] Define schema
+- [ ] Implement parser
+- [ ] Update Planner prompt
+
+### Phase 3: Ship
+**Status:** planned
+- [ ] Docs
+- [ ] Release notes
+
+## Deliverables
+- Parser package
+- Updated planner prompt
+
+## Risks
+- Partial writes cause parse errors
+- Unicode emoji may not render in older terminals
+
+## Success Criteria
+- Plan renders within 200ms of write
+- All existing plans still parse
+`
+	p1, err := Parse([]byte(md))
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+
+	out, err := p1.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal error = %v", err)
+	}
+	if len(out) == 0 {
+		t.Fatal("Marshal produced empty output")
+	}
+
+	p2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Re-parse error = %v", err)
+	}
+
+	// Raw reflects the bytes passed to each Parse call, so it differs
+	// between the original and marshaled forms — drop before comparing.
+	p1.Raw = ""
+	p2.Raw = ""
+	if !reflect.DeepEqual(p1, p2) {
+		t.Errorf("roundtrip mismatch:\noriginal: %#v\nafter:    %#v", p1, p2)
+	}
+
+	// Marshal must also be a fixed point: re-marshaling after a
+	// roundtrip must produce byte-identical output.
+	out2, err := p2.Marshal()
+	if err != nil {
+		t.Fatalf("second Marshal error = %v", err)
+	}
+	if !bytes.Equal(out, out2) {
+		t.Errorf("marshal not deterministic across roundtrip:\nfirst:\n%s\nsecond:\n%s", out, out2)
+	}
+}
+
+func TestMarshalStepMutation(t *testing.T) {
+	md := `# Plan: Mutate a step
+
+## Phases
+
+### Phase 1: Work
+- [ ] First step
+- [ ] Second step
+`
+	p, err := Parse([]byte(md))
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+	if len(p.Phases) != 1 || len(p.Phases[0].Steps) != 2 {
+		t.Fatalf("unexpected parse: %#v", p.Phases)
+	}
+	if p.Phases[0].Steps[0].Done {
+		t.Fatal("step 0 should start pending")
+	}
+
+	p.Phases[0].Steps[0].Done = true
+
+	out, err := p.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal error = %v", err)
+	}
+
+	p2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Re-parse error = %v", err)
+	}
+	if !p2.Phases[0].Steps[0].Done {
+		t.Errorf("after mutation, step 0 should be done in re-parsed plan; got %#v", p2.Phases[0].Steps)
+	}
+	if p2.Phases[0].Steps[1].Done {
+		t.Errorf("step 1 should still be pending; got %#v", p2.Phases[0].Steps)
+	}
+}
+
+func TestWriteFileAtomic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plan.md")
+
+	p := &Plan{
+		Title:   "Write test",
+		Goal:    "Check atomic write",
+		Context: "A tiny plan exercised by the unit test.",
+		Phases: []Phase{{
+			Title:  "Only phase",
+			Status: StatusInProgress,
+			Steps: []Step{
+				{Title: "first", Done: true},
+				{Title: "second", Done: false},
+			},
+		}},
+		Deliverables:    []string{"plan.md on disk"},
+		Risks:           []string{"partial write"},
+		SuccessCriteria: []string{"readers never observe .tmp"},
+	}
+
+	if err := p.WriteFile(path); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf(".tmp sidecar should be gone after WriteFile; stat err = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+	got, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+
+	if got.Title != "Write test" {
+		t.Errorf("Title = %q", got.Title)
+	}
+	if got.Goal != "Check atomic write" {
+		t.Errorf("Goal = %q", got.Goal)
+	}
+	if len(got.Phases) != 1 || got.Phases[0].Title != "Only phase" || got.Phases[0].Status != StatusInProgress {
+		t.Errorf("phases = %#v", got.Phases)
+	}
+	if len(got.Phases[0].Steps) != 2 || !got.Phases[0].Steps[0].Done || got.Phases[0].Steps[1].Done {
+		t.Errorf("steps = %#v", got.Phases[0].Steps)
+	}
+	if len(got.Deliverables) != 1 || got.Deliverables[0] != "plan.md on disk" {
+		t.Errorf("deliverables = %#v", got.Deliverables)
+	}
+}
+
+func TestMarshalNilAndEmpty(t *testing.T) {
+	var nilPlan *Plan
+	out, err := nilPlan.Marshal()
+	if err != nil {
+		t.Fatalf("nil Marshal error = %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("nil Marshal should be empty, got %q", out)
+	}
+
+	empty := &Plan{}
+	out, err = empty.Marshal()
+	if err != nil {
+		t.Fatalf("empty Marshal error = %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("empty Marshal should be empty, got %q", out)
 	}
 }
 
