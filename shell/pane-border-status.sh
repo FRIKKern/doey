@@ -44,14 +44,6 @@ if [ "$WINDOW_IDX" = "0" ]; then
     [ -n "$TASKMASTER_PANE" ] && [ "0.${PANE_IDX}" = "$TASKMASTER_PANE" ] && { _prefix_id "${PROJ_NAME} ${DOEY_ROLE_COORDINATOR}"; exit 0; }
   fi
 
-  for team_file in "${RUNTIME_DIR}"/team_*.env; do
-    [ -f "$team_file" ] || continue
-    WDG_PANE=$(env_val "$team_file" WATCHDOG_PANE)
-    if [ -n "$WDG_PANE" ] && [ "0.${PANE_IDX}" = "$WDG_PANE" ]; then
-      _prefix_id "${PROJ_NAME} T$(env_val "$team_file" WINDOW_INDEX) WD"; exit 0
-    fi
-  done
-
   _prefix_id "$TITLE"; exit 0
 fi
 

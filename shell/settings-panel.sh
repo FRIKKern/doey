@@ -141,11 +141,11 @@ _validate_int_range() {
 _validate_setting() {
   local var="$1" val="$2"
   case "$var" in
-    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_TASKMASTER_MODEL)
+    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_TASKMASTER_MODEL)
       case "$val" in opus|sonnet|haiku) return 0 ;; esac
       printf 'Must be: opus, sonnet, or haiku'; return 1
       ;;
-    DOEY_INITIAL_WORKER_COLS|DOEY_MAX_WATCHDOG_SLOTS) _validate_int_range "$val" 1 6 ;;
+    DOEY_INITIAL_WORKER_COLS) _validate_int_range "$val" 1 6 ;;
     DOEY_INITIAL_TEAMS) _validate_int_range "$val" 1 10 ;;
     DOEY_INITIAL_WORKTREE_TEAMS|DOEY_INITIAL_FREELANCER_TEAMS) _validate_int_range "$val" 0 10 ;;
     DOEY_MAX_WORKERS) _validate_int_range "$val" 1 50 ;;
@@ -160,24 +160,32 @@ _validate_setting() {
 _validation_hint() {
   local var="$1"
   case "$var" in
-    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_WATCHDOG_MODEL|DOEY_TASKMASTER_MODEL)
+    DOEY_MANAGER_MODEL|DOEY_WORKER_MODEL|DOEY_TASKMASTER_MODEL)
       printf '(opus/sonnet/haiku)' ;;
     DOEY_INITIAL_WORKER_COLS) printf '(1-6)' ;;
     DOEY_INITIAL_TEAMS) printf '(1-10)' ;;
     DOEY_INITIAL_WORKTREE_TEAMS|DOEY_INITIAL_FREELANCER_TEAMS) printf '(0-10)' ;;
     DOEY_MAX_WORKERS) printf '(1-50)' ;;
-    DOEY_MAX_WATCHDOG_SLOTS) printf '(1-6)' ;;
     *) printf '(number >= 1)' ;;
   esac
 }
 
+_get_repo_dir() {
+  if [ -f "$HOME/.claude/doey/repo-path" ]; then
+    head -1 "$HOME/.claude/doey/repo-path"
+  else
+    (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+  fi
+}
+
 _ensure_config_file() {
-  local proj_dir config_file
+  local proj_dir repo_dir config_file
   proj_dir=$(_get_proj_dir)
+  repo_dir=$(_get_repo_dir)
   config_file="${proj_dir}/.doey/config.sh"
   if [ ! -f "$config_file" ]; then
     mkdir -p "$(dirname "$config_file")"
-    cp "${proj_dir}/shell/doey-config-default.sh" "$config_file" 2>/dev/null || {
+    cp "${repo_dir}/shell/doey-config-default.sh" "$config_file" 2>/dev/null || {
       printf '#!/usr/bin/env bash\n# Doey project config\n' > "$config_file"
     }
   fi
@@ -331,13 +339,11 @@ _render_settings_view() {
   _add_setting "DOEY_INITIAL_TEAMS"          "2"
   _add_setting "DOEY_INITIAL_WORKTREE_TEAMS" "0"
   _add_setting "DOEY_MAX_WORKERS"            "20"
-  _add_setting "DOEY_MAX_WATCHDOG_SLOTS"     "6"
   printf '\n'
 
   printf '  %b Models%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
   _add_setting "DOEY_MANAGER_MODEL"          "opus"
   _add_setting "DOEY_WORKER_MODEL"           "opus"
-  _add_setting "DOEY_WATCHDOG_MODEL"         "sonnet"
   _add_setting "DOEY_TASKMASTER_MODEL"  "opus"
   printf '\n'
 
@@ -345,10 +351,7 @@ _render_settings_view() {
   _add_setting "DOEY_WORKER_LAUNCH_DELAY"    "3"
   _add_setting "DOEY_TEAM_LAUNCH_DELAY"      "15"
   _add_setting "DOEY_MANAGER_LAUNCH_DELAY"   "3"
-  _add_setting "DOEY_WATCHDOG_LAUNCH_DELAY"  "3"
   _add_setting "DOEY_MANAGER_BRIEF_DELAY"    "15"
-  _add_setting "DOEY_WATCHDOG_BRIEF_DELAY"   "20"
-  _add_setting "DOEY_WATCHDOG_LOOP_DELAY"    "25"
   printf '\n'
 
   printf '  %b Dynamic Grid Behavior%b\n' "${C_BOLD_WHITE}" "${C_RESET}"
@@ -1014,20 +1017,15 @@ while true; do
   DOEY_INITIAL_TEAMS="${DOEY_INITIAL_TEAMS:-2}"
   DOEY_INITIAL_WORKTREE_TEAMS="${DOEY_INITIAL_WORKTREE_TEAMS:-0}"
   DOEY_MAX_WORKERS="${DOEY_MAX_WORKERS:-20}"
-  DOEY_MAX_WATCHDOG_SLOTS="${DOEY_MAX_WATCHDOG_SLOTS:-6}"
   DOEY_WORKER_LAUNCH_DELAY="${DOEY_WORKER_LAUNCH_DELAY:-3}"
   DOEY_TEAM_LAUNCH_DELAY="${DOEY_TEAM_LAUNCH_DELAY:-15}"
   DOEY_MANAGER_LAUNCH_DELAY="${DOEY_MANAGER_LAUNCH_DELAY:-3}"
-  DOEY_WATCHDOG_LAUNCH_DELAY="${DOEY_WATCHDOG_LAUNCH_DELAY:-3}"
   DOEY_MANAGER_BRIEF_DELAY="${DOEY_MANAGER_BRIEF_DELAY:-15}"
-  DOEY_WATCHDOG_BRIEF_DELAY="${DOEY_WATCHDOG_BRIEF_DELAY:-20}"
-  DOEY_WATCHDOG_LOOP_DELAY="${DOEY_WATCHDOG_LOOP_DELAY:-25}"
   DOEY_IDLE_COLLAPSE_AFTER="${DOEY_IDLE_COLLAPSE_AFTER:-60}"
   DOEY_IDLE_REMOVE_AFTER="${DOEY_IDLE_REMOVE_AFTER:-300}"
   DOEY_PASTE_SETTLE_MS="${DOEY_PASTE_SETTLE_MS:-500}"
   DOEY_MANAGER_MODEL="${DOEY_MANAGER_MODEL:-opus}"
   DOEY_WORKER_MODEL="${DOEY_WORKER_MODEL:-opus}"
-  DOEY_WATCHDOG_MODEL="${DOEY_WATCHDOG_MODEL:-sonnet}"
   DOEY_TASKMASTER_MODEL="${DOEY_TASKMASTER_MODEL:-opus}"
 
   _view_file="${RUNTIME_DIR}/status/settings_view"
