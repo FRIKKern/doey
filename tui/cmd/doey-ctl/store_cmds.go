@@ -670,17 +670,35 @@ Run 'doey-ctl event <subcommand> -h' for help.
 func eventLog(args []string) {
 	fs := flag.NewFlagSet("event log", flag.ExitOnError)
 	dir := fs.String("project-dir", "", "Project directory")
-	typ := fs.String("type", "", "Event type")
+	typ := fs.String("type", "", "Event type (legacy)")
 	source := fs.String("source", "", "Event source")
 	target := fs.String("target", "", "Event target")
 	taskID := fs.Int64("task-id", 0, "Associated task ID")
 	data := fs.String("data", "", "Event data (JSON)")
 	message := fs.String("message", "", "Event message (alias for --data)")
+	// task #525 violation-schema fields. Pre-flight audit confirmed no
+	// collision with existing flags (--project-dir/--type/--source/--target/
+	// --task-id/--data/--message/--json).
+	class := fs.String("class", "", "Event class discriminator (e.g. violation_polling)")
+	severity := fs.String("severity", "", "Severity: warn|breaker|info|debug")
+	session := fs.String("session", "", "Doey session name")
+	role := fs.String("role", "", "Originating role (subtaskmaster, reviewer, deployment, ...)")
+	windowID := fs.String("window-id", "", "Team window ID (e.g. W2)")
+	wakeReason := fs.String("wake-reason", "", "Wait-hook wake reason (MSG, FINISHED, TRIGGERED, ...)")
+	consecutive := fs.Int64("consecutive", 0, "Consecutive zero-tool wake count")
+	windowSec := fs.Int64("window-sec", 0, "Detection window duration in seconds")
+	unreadMsgIDs := fs.String("unread-msg-ids", "", "Comma-separated list of unread message IDs (no spaces, e.g. 1,2,3)")
+	extraJSON := fs.String("extra-json", "", "Extra JSON metadata blob")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
 
+	// --class can substitute for --type when --type is empty (525 emitters
+	// pass --class as the discriminator and don't need to duplicate it).
+	if *typ == "" && *class != "" {
+		*typ = *class
+	}
 	if *typ == "" {
-		fatal("event log: --type is required\nRun 'doey-ctl event log -h' for usage.\n")
+		fatal("event log: --type (or --class) is required\nRun 'doey-ctl event log -h' for usage.\n")
 	}
 
 	// --message is an alias for --data
@@ -700,10 +718,20 @@ func eventLog(args []string) {
 	defer s.Close()
 
 	e := &store.Event{
-		Type:   *typ,
-		Source: *source,
-		Target: *target,
-		Data:   *data,
+		Type:             *typ,
+		Source:           *source,
+		Target:           *target,
+		Data:             *data,
+		Class:            *class,
+		Severity:         *severity,
+		Session:          *session,
+		Role:             *role,
+		WindowID:         *windowID,
+		WakeReason:       *wakeReason,
+		UnreadMsgIDs:     *unreadMsgIDs,
+		ExtraJSON:        *extraJSON,
+		ConsecutiveCount: *consecutive,
+		WindowSec:        *windowSec,
 	}
 	if *taskID != 0 {
 		e.TaskID = taskID
