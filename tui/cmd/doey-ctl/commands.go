@@ -216,6 +216,7 @@ func runTaskCreate(args []string) {
 			fatal("task create: %v", err)
 		}
 		s.LogEvent(&store.Event{Type: "task_created", Source: eventSource(), TaskID: &dbID, Data: *title})
+		emitTaskStat(pd, "task_created", strconv.FormatInt(dbID, 10), map[string]string{"status": "pending"})
 
 		if jsonOutput {
 			printJSON(map[string]int64{"id": dbID})
@@ -467,6 +468,7 @@ func runTaskUpdate(args []string) {
 				fatal("task update: %v", err)
 			}
 			s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: *field + "=" + *value})
+			emitTaskStat(pd, "task_updated", strconv.FormatInt(id, 10), nil)
 			if jsonOutput {
 				printJSON(map[string]any{"id": id, "field": *field, "value": *value, "status": "updated"})
 			}
@@ -557,6 +559,7 @@ func runTaskTransition(subcmd, status string, args []string) {
 				}
 				id := t.ID
 				s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: "status=" + status})
+				emitTaskStat(pd, "task_updated", strconv.FormatInt(id, 10), map[string]string{"status": status})
 				continue
 			}
 		}
@@ -881,6 +884,7 @@ func runSubtaskAdd(args []string) {
 			fatal("task subtask add: %v", err)
 		}
 		s.LogEvent(&store.Event{Type: "subtask_added", Source: eventSource(), TaskID: &taskID, Data: subtaskTitle})
+		emitTaskStat(pd, "subtask_added", strconv.FormatInt(taskID, 10), nil)
 
 		if jsonOutput {
 			printJSON(map[string]int64{"id": id})
@@ -1034,6 +1038,14 @@ func runSubtaskUpdate(args []string) {
 			evData += ",reason=" + *reasonFlag
 		}
 		s.LogEvent(&store.Event{Type: "subtask_updated", Source: eventSource(), TaskID: &taskID, Data: evData})
+		_subStatPayload := map[string]string{}
+		if statusVal != "" {
+			_subStatPayload["status"] = statusVal
+		}
+		if *reasonFlag != "" {
+			_subStatPayload["reason"] = *reasonFlag
+		}
+		emitTaskStat(pd, "subtask_updated", strconv.FormatInt(taskID, 10), _subStatPayload)
 
 		if jsonOutput {
 			printJSON(map[string]string{"status": "updated", "seq": strconv.Itoa(resolved.Seq)})

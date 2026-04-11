@@ -1,0 +1,24 @@
+# doey stats payload allow-list — MIRROR of shell/doey-stats-allowlist.txt.
+# Embedded by tui/cmd/doey-ctl/stats.go via go:embed.
+# This file must be kept byte-identical to shell/doey-stats-allowlist.txt;
+# a future privacy test asserts equality. See docs/stats.md.
+role
+window
+pane
+mode
+status
+task_id
+files_changed
+tool_count
+version
+origin
+cmd
+dep
+mapped_cmd
+team
+team_type
+worker_count
+reason
+duration_ms
+exit_code
+retry

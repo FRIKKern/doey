@@ -23,6 +23,8 @@ if [ -z "$_DOEY_ROLES_FILE" ] && [ -f "$HOME/.claude/doey/repo-path" ]; then
     unset _doey_repo
 fi
 unset _doey_hook_dir
+# Source stats emitter library (alongside doey-roles.sh). One-liner: silent-fail, idempotent.
+if [ -n "${_DOEY_ROLES_FILE:-}" ] && [ -f "$(dirname "$_DOEY_ROLES_FILE")/doey-stats.sh" ]; then . "$(dirname "$_DOEY_ROLES_FILE")/doey-stats.sh" 2>/dev/null || true; fi
 _DOEY_ROLES_LOADED=false
 if [ -n "$_DOEY_ROLES_FILE" ]; then
     source "$_DOEY_ROLES_FILE"

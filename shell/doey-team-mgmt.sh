@@ -604,6 +604,12 @@ doey_add_column() {
   [ "$_dac_cols_final" -lt 1 ] && _dac_cols_final=1
 
   doey_ok "Added ${_pane_prefix}${w1_num} and ${_pane_prefix}${w2_num} — ${new_worker_count} workers in ${_dac_cols_final} columns"
+
+  # Stats emit (task #521 Phase 2) — two new workers spawned
+  if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+    (doey-stats-emit.sh worker worker_spawn "window=${team_window:-0}" "pane=${w1_num:-0}" &) 2>/dev/null || true
+    (doey-stats-emit.sh worker worker_spawn "window=${team_window:-0}" "pane=${w2_num:-0}" &) 2>/dev/null || true
+  fi
 }
 
 doey_remove_column() {
@@ -682,6 +688,11 @@ doey_remove_column() {
   rebalance_grid_layout "$session" "$team_window" "$runtime_dir"
 
   doey_ok "Removed worker column — ${new_worker_count} workers remaining"
+
+  # Stats emit (task #521 Phase 2) — worker column removed
+  if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+    (doey-stats-emit.sh worker worker_stop "window=${team_window:-0}" "worker_count=${new_worker_count:-0}" &) 2>/dev/null || true
+  fi
 }
 
 # ── Team Border Theme ────────────────────────────────────────────────
@@ -1133,6 +1144,11 @@ add_team_from_def() {
 
   printf "  \033[0;32mTeam '%s' created in window %s (%s workers)\033[0m\n" \
     "$td_name" "$window_index" "$worker_count"
+
+  # Stats emit (task #521 Phase 2) — team spawned from def
+  if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+    (doey-stats-emit.sh worker team_spawned "team=${td_name:-unknown}" "team_type=${td_type:-def}" "worker_count=${worker_count:-0}" "window=${window_index:-0}" &) 2>/dev/null || true
+  fi
 }
 
 add_dynamic_team_window() {
@@ -1289,6 +1305,11 @@ add_dynamic_team_window() {
   else
     _brief_team "$session" "$window_index" "$_wpl_result" "$worker_count" "Dynamic grid, auto-expands when all are busy" "$wt_brief" "$team_name" "$team_role" "$runtime_dir"
     _print_team_created "$window_index" "dynamic grid" "$worker_count" "$wt_dir_for_env" "$worktree_branch"
+  fi
+
+  # Stats emit (task #521 Phase 2) — dynamic team window spawned
+  if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+    (doey-stats-emit.sh worker team_spawned "team=${team_name:-dynamic}" "team_type=${team_type:-dynamic}" "worker_count=${worker_count:-0}" "window=${window_index:-0}" &) 2>/dev/null || true
   fi
 }
 

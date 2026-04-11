@@ -151,6 +151,31 @@ if [ -n "$task_id" ] && command -v doey-ctl >/dev/null 2>&1; then
   esac
 fi
 
+# --- Stats emits (task #521 Phase 2) — additive, silent-fail, non-blocking ---
+_dur_ms=""
+_start_ms_file="${RUNTIME_DIR}/status/${PANE_SAFE}.busy_started_ms"
+if [ -f "$_start_ms_file" ]; then
+  _start_ms=$(cat "$_start_ms_file" 2>/dev/null) || _start_ms=""
+  if [ -n "$_start_ms" ]; then
+    _now_ms=$(_ms_now 2>/dev/null) || _now_ms=""
+    if [ -n "$_now_ms" ]; then
+      _dur_ms=$(( _now_ms - _start_ms ))
+      [ "$_dur_ms" -lt 0 ] && _dur_ms=""
+    fi
+  fi
+fi
+if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+  case "$STOP_STATUS" in
+    FINISHED)
+      (doey-stats-emit.sh task task_completed "status=completed" "task_id=${task_id}" "duration_ms=${_dur_ms}" "exit_code=0" &) 2>/dev/null || true
+      ;;
+    ERROR)
+      (doey-stats-emit.sh task task_failed "status=failed" "task_id=${task_id}" "exit_code=1" &) 2>/dev/null || true
+      ;;
+  esac
+fi
+unset _dur_ms _start_ms_file _start_ms _now_ms
+
 if ! is_taskmaster; then
   notify_taskmaster "$STOP_STATUS"
 fi
