@@ -192,6 +192,9 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	if r.sr != nil {
 		snap.Events = r.sr.readEvents(200)
 		snap.Interactions = r.sr.readInteractions(200)
+		// Violations (task 525): polling-loop offenders surfaced in the
+		// Logs > Violations sub-view. Empty slice on pre-migration DB.
+		snap.Violations = r.sr.readViolations(100)
 	}
 
 	snap.TeamUserCfg, _ = ReadTeamUserConfig()

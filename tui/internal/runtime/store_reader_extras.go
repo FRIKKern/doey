@@ -43,6 +43,22 @@ func (sr *storeReader) readEventsByType(eventType string, limit int) []Event {
 	return convertEvents(storeEvents)
 }
 
+// readViolations returns recent polling-loop violation events (task 525)
+// newest first. On a pre-migration DB the store returns an empty slice
+// because the class column is absent; on any other error the result is a
+// nil slice — the dashboard renders "No violations recorded." either way
+// and never aborts the snapshot.
+func (sr *storeReader) readViolations(limit int) []store.Event {
+	events, err := sr.s.ListEventsByClass(store.ViolationPolling, limit)
+	if err != nil {
+		// Defense-in-depth: a stray "no such column" from a mid-migration
+		// race or older DB should surface as an empty slice, not a failed
+		// snapshot tick. The dashboard shows the empty-state placeholder.
+		return nil
+	}
+	return events
+}
+
 func convertEvents(storeEvents []store.Event) []Event {
 	events := make([]Event, 0, len(storeEvents))
 	for _, se := range storeEvents {
