@@ -2,7 +2,7 @@
 name: doey-interview-researcher
 model: sonnet
 color: "#4ECDC4"
-memory: false
+memory: none
 description: "Codebase researcher for Deep Interview — investigates files, architecture, and dependencies on demand from the Interviewer."
 ---
 

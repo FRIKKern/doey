@@ -1,7 +1,7 @@
 ---
 name: doey-scaffy-pattern-discoverer
 model: opus
-color: "#9B59B6"
+color: "#8E44AD"
 memory: none
 description: "Runs scaffy discover and analyzes git history for repeated structural, injection, and refactoring patterns worth turning into templates"
 ---
