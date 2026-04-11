@@ -23,7 +23,7 @@ description: What this team does
 ## Panes
 | Pane | Role | Agent | Name | Model |
 |------|------|-------|------|-------|
-| 0 | manager | doey-manager | Team Lead | opus |
+| 0 | manager | doey-subtaskmaster | Subtaskmaster | opus |
 | 1 | reviewer | - | Reviewer | opus |
 
 ## Workflows
@@ -114,8 +114,8 @@ TEAM_DEF_NAME=${TEAM_NAME}
 TEAM_DEF_DESC=${TEAM_DESC}
 TEAM_DEF_FILE=${TEAM_DEF}
 TEAM_DEF_PANE_COUNT=${PANE_COUNT}
-TEAM_DEF_PANES=$(echo "$PANE_DEFS" | head -c -1 | tr '\n' ';')
-TEAM_DEF_WORKFLOWS=$(echo "$WORKFLOWS" | head -c -1 | tr '\n' ';')
+TEAM_DEF_PANES=$(printf '%s' "$PANE_DEFS" | sed '$d' | tr '\n' ';')
+TEAM_DEF_WORKFLOWS=$(printf '%s' "$WORKFLOWS" | sed '$d' | tr '\n' ';')
 TDEF_EOF
 mv "${TEAMDEF_FILE}.tmp" "$TEAMDEF_FILE"
 echo "Teamdef written to $TEAMDEF_FILE"

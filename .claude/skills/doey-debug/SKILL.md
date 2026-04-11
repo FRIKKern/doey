@@ -15,7 +15,6 @@ mkdir -p "$RD/debug"
 cat > "$RD/debug.conf" <<'CONF'
 DOEY_DEBUG=true
 DOEY_DEBUG_HOOKS=true
-DOEY_DEBUG_SM=true
 DOEY_DEBUG_LIFECYCLE=true
 DOEY_DEBUG_MESSAGES=true
 DOEY_DEBUG_STATE=true
@@ -37,7 +36,7 @@ if [ -d "$RD/debug" ]; then
   find "$RD/debug" -name '*.jsonl' 2>/dev/null | sort | while IFS= read -r f; do
     echo "  $(echo "$f" | sed "s|$RD/debug/||"): $(wc -l < "$f" | tr -d ' ') lines"
   done
-  for c in hooks lifecycle state messages sm; do
+  for c in hooks lifecycle state messages; do
     f=$(find "$RD/debug" -name "${c}.jsonl" 2>/dev/null | tail -1)
     [ -f "$f" ] && echo "  ${c}: $(tail -1 "$f")"
   done

@@ -22,6 +22,12 @@ for sig in TERM 9; do
   sleep 2
 done
 for SESSION in $SESSIONS; do tmux kill-session -t "$SESSION" 2>/dev/null; echo "  ${SESSION} killed"; done
-rm -rf /tmp/doey/*/
+# Prefer trash per CLAUDE.md. /tmp is a volatile scratch dir so rm -rf is the accepted fallback
+# when trash is not installed — there is nothing to recover from /tmp across reboots anyway.
+if command -v trash >/dev/null 2>&1; then
+  trash /tmp/doey/*/ 2>/dev/null || true
+else
+  rm -rf /tmp/doey/*/
+fi
 echo "Runtime removed: /tmp/doey/*/"
 ```
