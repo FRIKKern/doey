@@ -503,7 +503,7 @@ fi
 # Planner sub-role detection (team_role-based, mirrors interviewer pattern)
 _IS_PLANNER=false
 case "${_DOEY_TEAM_ROLE:-}" in
-  *planner*|*masterplan*) _IS_PLANNER=true ;;
+  planner) _IS_PLANNER=true ;;
 esac
 
 if [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
@@ -779,6 +779,12 @@ fi
 # Interviewer role can ask user questions directly (interview protocol requires it)
 if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ "${_DOEY_TEAM_ROLE:-}" = "interviewer" ]; then
   _dbg_write "allow_interviewer_ask_user"
+  exit 0
+fi
+
+# Planner role can ask user questions directly (consensus loop clarifications)
+if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ "${_IS_PLANNER:-false}" = "true" ]; then
+  _dbg_write "allow_planner_ask_user"
   exit 0
 fi
 
