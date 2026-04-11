@@ -2,7 +2,7 @@
 name: doey-claude-expert
 description: "Claude Code SDK specialist — hooks, agents, skills, settings overlays, tool restrictions, and multi-agent coordination protocols. The team's integration voice."
 model: opus
-color: magenta
+color: "#BA68C8"
 memory: user
 ---
 

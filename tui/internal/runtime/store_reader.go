@@ -257,6 +257,7 @@ func (sr *storeReader) readAgents() []AgentDef {
 			Description: sa.Description,
 			Model:       sa.Model,
 			Color:       sa.Color,
+			Memory:      sa.Memory,
 			FilePath:    sa.FilePath,
 			Domain:      agentDomain(sa.Name),
 		})

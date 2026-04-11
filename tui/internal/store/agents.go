@@ -7,15 +7,16 @@ type Agent struct {
 	Model       string `json:"model,omitempty"`
 	Description string `json:"description,omitempty"`
 	Color       string `json:"color,omitempty"`
+	Memory      string `json:"memory,omitempty"`
 	FilePath    string `json:"file_path,omitempty"`
 }
 
 // UpsertAgent inserts or replaces an agent by name.
 func (s *Store) UpsertAgent(a *Agent) error {
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO agents (name, display_name, model, description, color, file_path)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		a.Name, a.DisplayName, a.Model, a.Description, a.Color, a.FilePath,
+		`INSERT OR REPLACE INTO agents (name, display_name, model, description, color, memory, file_path)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		a.Name, a.DisplayName, a.Model, a.Description, a.Color, a.Memory, a.FilePath,
 	)
 	return err
 }
@@ -24,9 +25,9 @@ func (s *Store) UpsertAgent(a *Agent) error {
 func (s *Store) GetAgent(name string) (*Agent, error) {
 	var a Agent
 	err := s.db.QueryRow(
-		`SELECT name, display_name, model, description, color, file_path FROM agents WHERE name = ?`,
+		`SELECT name, display_name, model, description, color, memory, file_path FROM agents WHERE name = ?`,
 		name,
-	).Scan(&a.Name, &a.DisplayName, &a.Model, &a.Description, &a.Color, &a.FilePath)
+	).Scan(&a.Name, &a.DisplayName, &a.Model, &a.Description, &a.Color, &a.Memory, &a.FilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +37,7 @@ func (s *Store) GetAgent(name string) (*Agent, error) {
 // ListAgents returns all agents ordered by name.
 func (s *Store) ListAgents() ([]Agent, error) {
 	rows, err := s.db.Query(
-		`SELECT name, display_name, model, description, color, file_path FROM agents ORDER BY name`,
+		`SELECT name, display_name, model, description, color, memory, file_path FROM agents ORDER BY name`,
 	)
 	if err != nil {
 		return nil, err
@@ -46,7 +47,7 @@ func (s *Store) ListAgents() ([]Agent, error) {
 	var agents []Agent
 	for rows.Next() {
 		var a Agent
-		if err := rows.Scan(&a.Name, &a.DisplayName, &a.Model, &a.Description, &a.Color, &a.FilePath); err != nil {
+		if err := rows.Scan(&a.Name, &a.DisplayName, &a.Model, &a.Description, &a.Color, &a.Memory, &a.FilePath); err != nil {
 			return nil, err
 		}
 		agents = append(agents, a)

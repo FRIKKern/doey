@@ -1,7 +1,7 @@
 ---
 name: doey-scaffy-template-creator
 model: opus
-color: "#3498DB"
+color: "#7D3C98"
 memory: none
 description: "Authors new .scaffy templates from inferred patterns or example files, using scaffy new --from-files and the 24-keyword DSL"
 ---

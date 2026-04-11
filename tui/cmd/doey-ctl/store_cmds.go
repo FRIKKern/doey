@@ -579,6 +579,8 @@ func agentSet(args []string) {
 	displayName := fs.String("display-name", "", "Display name")
 	model := fs.String("model", "", "Model")
 	description := fs.String("description", "", "Description")
+	color := fs.String("color", "", "Color")
+	memory := fs.String("memory", "", "Memory")
 	filePath := fs.String("file-path", "", "File path")
 	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
 	fs.Parse(args)
@@ -595,6 +597,8 @@ func agentSet(args []string) {
 		DisplayName: *displayName,
 		Model:       *model,
 		Description: *description,
+		Color:       *color,
+		Memory:      *memory,
 		FilePath:    *filePath,
 	}
 	if err := s.UpsertAgent(a); err != nil {

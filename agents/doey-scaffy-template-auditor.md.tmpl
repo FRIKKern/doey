@@ -1,7 +1,7 @@
 ---
 name: doey-scaffy-template-auditor
 model: opus
-color: "#E74C3C"
+color: "#16A085"
 memory: none
 description: "Runs the 6 scaffy audit checks against existing templates, classifies them as healthy/needs_update/stale, and proposes fixes"
 ---

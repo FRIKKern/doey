@@ -1,7 +1,7 @@
 ---
 name: doey-scaffy-orchestrator
 model: opus
-color: "#E67E22"
+color: "#D35400"
 memory: session
 description: "REGISTRY.md custodian and router for scaffy template work — dispatches to other doey-scaffy-* specialists, tracks template inventory, decides when to discover/create/audit"
 ---

@@ -107,6 +107,7 @@ func ensureSchema(db *sql.DB) error {
 			model TEXT,
 			description TEXT,
 			color TEXT NOT NULL DEFAULT '',
+			memory TEXT NOT NULL DEFAULT '',
 			file_path TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS config (
@@ -184,6 +185,8 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE tasks ADD COLUMN origin_prompt TEXT DEFAULT ''`,
 		// agent color field (task #36)
 		`ALTER TABLE agents ADD COLUMN color TEXT DEFAULT ''`,
+		// agent memory field (task #511)
+		`ALTER TABLE agents ADD COLUMN memory TEXT DEFAULT ''`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors
