@@ -130,7 +130,7 @@ func (r *Reader) ReadSnapshot() (Snapshot, error) {
 	// Tasks: try store, fall back to files
 	tasksFromStore := false
 	if r.sr != nil {
-		snap.Tasks = r.sr.readTasks()
+		snap.Tasks = r.sr.readTasks(r)
 		tasksFromStore = len(snap.Tasks) > 0
 	}
 	if len(snap.Tasks) == 0 {

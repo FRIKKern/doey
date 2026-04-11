@@ -51,7 +51,9 @@ func (sr *storeReader) syncTaskFiles(projectDir string) {
 }
 
 // readTasks converts store tasks to runtime tasks, including subtasks and logs.
-func (sr *storeReader) readTasks() []Task {
+// The owning Reader is passed in so attachments can be resolved from disk via
+// r.parseAttachments — matching the file-based ParseTasks path.
+func (sr *storeReader) readTasks(r *Reader) []Task {
 	storeTasks, err := sr.s.ListTasks("")
 	if err != nil {
 		return nil
@@ -123,6 +125,13 @@ func (sr *storeReader) readTasks() []Task {
 		}
 		if len(decisions) > 0 {
 			t.DecisionLog = strings.Join(decisions, "\n")
+		}
+
+		// Parse file attachments from .doey/tasks/<id>/attachments/ — matches
+		// the file-based ParseTasks path so SQLite-backed projects render
+		// the ATTACHMENTS section too (bug #479).
+		if r != nil {
+			t.TaskAttachments = r.parseAttachments(t.ID)
 		}
 
 		tasks = append(tasks, t)
