@@ -342,6 +342,7 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   install_script "$SCRIPT_DIR/shell/doey-tunnel.sh" "$HOME/.local/bin/doey-tunnel.sh"
   install_script "$SCRIPT_DIR/shell/doey-tunnel-detect.sh" "$HOME/.local/bin/doey-tunnel-detect.sh"
   cp "$SCRIPT_DIR/shell/masterplan-tui.sh" "$HOME/.local/bin/masterplan-tui.sh"
+  install_script "$SCRIPT_DIR/shell/doey-masterplan-spawn.sh" "$HOME/.local/bin/doey-masterplan-spawn.sh"
   for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
