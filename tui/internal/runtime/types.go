@@ -1,6 +1,10 @@
 package runtime
 
-import "time"
+import (
+	"time"
+
+	"github.com/doey-cli/doey/tui/internal/store"
+)
 
 // SessionConfig from session.env
 type SessionConfig struct {
@@ -339,6 +343,7 @@ type Snapshot struct {
 	Plans       []Plan         // plan documents from .doey/plans/
 	Events       []Event        // recent event log entries from store
 	Interactions []Interaction  // Boss interaction log entries from store
+	Violations   []store.Event  // recent polling-loop violations (task 525); empty on pre-migration DB
 }
 
 // TaskSidecar holds structured planning data from the JSON companion file (.doey/tasks/<id>.json).
