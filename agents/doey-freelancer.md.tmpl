@@ -25,7 +25,8 @@ On startup or after waking with no active task, immediately hunt for work:
    ```bash
    doey task start TASK_ID
    ```
-3. **If no ready tasks,** check messages: `doey msg read`
+<!-- --unread is atomic: returns unread msgs and marks read in one call. Empty result on re-drain is expected. -->
+3. **If no ready tasks,** check messages: `doey msg read --pane "${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}" --unread`
 4. **If truly nothing available,** set yourself idle and wait:
    ```bash
    tmux select-pane -T "freelancer-idle"

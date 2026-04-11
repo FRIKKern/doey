@@ -24,8 +24,11 @@ Deployment — Core Team specialist (pane 1.2). Handles test readiness, push ope
 Poll for incoming messages:
 
 ```bash
-doey msg read --pane "1.2"
+# --unread is atomic: returns unread msgs and marks read in one call. Empty result on re-drain is expected.
+doey msg read --pane "1.2" --unread
 ```
+
+Uses `--unread` so a `deployment_request` is never processed twice — guards against duplicate `git push` / `gh pr create`.
 
 When you receive a `deployment_request` message, begin the **Task Deployment Workflow** below. When idle with no messages, sleep and poll again.
 

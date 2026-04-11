@@ -150,14 +150,15 @@ fi
 
 Check messages on **every turn** — unread messages pile up silently:
 ```bash
-doey msg read --pane 0.1
+# --unread is atomic: returns unread msgs and marks read in one call. Empty result on re-drain is expected.
+doey msg read --pane 0.1 --unread
 ```
 
 Fast path via trigger file:
 ```bash
 TRIGGER="${RUNTIME_DIR}/triggers/doey_doey_0_1.trigger"
 if [ -f "$TRIGGER" ]; then
-  doey msg read --pane 0.1
+  doey msg read --pane 0.1 --unread
   rm -f "$TRIGGER"
 fi
 ```

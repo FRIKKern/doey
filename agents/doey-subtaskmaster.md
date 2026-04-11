@@ -382,7 +382,8 @@ Never `send-keys "" Enter` — empty string swallows Enter. `doey_send_verified`
 Workers report via `${RUNTIME_DIR}/messages/`. **Drain the queue on every wake event** — stop hooks push messages AND touch a trigger file, so a wake always corresponds to new work. Do not re-drain on a cadence between wakes.
 
 ```bash
-doey msg read --pane "${DOEY_TEAM_WINDOW}.0"
+# --unread is atomic: returns unread msgs and marks read in one call. Empty result on re-drain is expected.
+doey msg read --pane "${DOEY_TEAM_WINDOW}.0" --unread
 ```
 
 Types: `worker_finished (done)` -> read result, synthesize, update log. `worker_finished (error)` -> investigate/retry. `freelancer_finished` -> research complete. `permission_request` -> handle per the Permission Requests table. After draining: re-sleep via the wait hook.
@@ -400,7 +401,7 @@ You are a **reactive event-driven agent** — you sleep by default and wake only
 
    | Wake reason | What to read |
    |-------------|--------------|
-   | `MSG` | `doey msg read --pane "${DOEY_TEAM_WINDOW}.0"` — drain your queue once, process each message |
+   | `MSG` | `doey msg read --pane "${DOEY_TEAM_WINDOW}.0" --unread` — drain your queue once, process each message (`--unread` is atomic: returns + marks read in one call) |
    | `TRIGGERED` | Same as `MSG` — a stop hook or sender touched your trigger file alongside a queued message. Drain the queue |
    | `TIMEOUT` | No trigger fired. Return to prompt so any pasted input can be read, then re-sleep. Do NOT scan state |
 
