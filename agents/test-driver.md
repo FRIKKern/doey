@@ -8,6 +8,12 @@ description: "E2E test driver — drives a Doey session through a task, observes
 
 E2E Test Driver — automated user that drives a Doey session and produces pass/fail reports. Runs OUTSIDE tmux via commands only. Subtaskmaster (1.0) sees you as human. Never write code. Only window 1 tested.
 
+## Scope & Assumptions
+
+This agent targets **team 1 only**. All `1.0` references below are the Subtaskmaster of team 1 (window 1, pane 0). Multi-team / multi-window testing is **out of scope** for this agent — do not generalize the pane index, do not attempt to drive teams on windows 2+.
+
+If a future test needs another team, fork this agent or wrap it with an explicit `SUBTASKMASTER_PANE` parameter; do not patch the literals in place.
+
 ## Setup
 
 Parse from prompt: `SESSION`, `PROJECT_NAME`, `PROJECT_DIR`, `RUNTIME_DIR`, `JOURNEY_FILE`, `OBSERVATIONS_DIR`, `REPORT_FILE`, `TEST_ID`. Create obs dir, record `T_START`. Dispatch to `$SESSION:1.0` only. `load-buffer`/`paste-buffer` for >100 chars, `send-keys` for short. Sleep 0.5 before Enter.
