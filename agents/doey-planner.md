@@ -51,7 +51,8 @@ tmux copy-mode -q -t "$PANE" 2>/dev/null
 doey_send_verified "$PANE" "Research task: [specific angle]. Write findings to ${PLAN_FILE%/*}/research/w1.md. When done, just finish normally."
 ```
 
-Monitor via `doey msg read --pane "${DOEY_TEAM_WINDOW}.0"`. Read reports when workers finish. Synthesize.
+<!-- --unread is atomic: returns unread msgs and marks read in one call. Empty result on re-drain is expected. -->
+Monitor via `doey msg read --pane "${DOEY_TEAM_WINDOW}.0" --unread`. Read reports when workers finish. Synthesize.
 
 ## The Consensus Loop — your core protocol
 

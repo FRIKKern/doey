@@ -213,7 +213,8 @@ Subtaskmasters send subtask review requests when workers complete subtasks. Thes
 Check your message queue for subtask reviews:
 
 ```bash
-doey msg read --pane "1.1"
+# --unread is atomic: returns unread msgs and marks read in one call. Empty result on re-drain is expected.
+doey msg read --pane "1.1" --unread
 ```
 
 The message body contains: `TASK_ID`, `SUBTASK_ID`, `TITLE`, `WORKER_OUTPUT`, `FILES_CHANGED`, `TEAM`.
@@ -322,7 +323,7 @@ You are a review gate — you sleep until review work arrives. After completing 
    - **MSG** — You have unread messages. Go to step 3.
    - **TRIGGERED** — Something explicitly triggered you. Go to step 3.
    - **Any other reason** — No review work available. Go back to step 1 immediately.
-3. **Check messages** — Run `doey msg read --pane "${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}"`. If you have a review request, execute the full Mandatory Verification Protocol, then go back to step 1. **If there are no review messages in the queue, go back to step 1 immediately** — do NOT scan tasks, observe workers, or enter any monitoring loop.
+3. **Check messages** — Run `doey msg read --pane "${DOEY_TEAM_WINDOW}.${DOEY_PANE_INDEX}" --unread` (`--unread` is atomic: returns + marks read in one call; empty result on re-drain is expected). If you have a review request, execute the full Mandatory Verification Protocol, then go back to step 1. **If there are no review messages in the queue, go back to step 1 immediately** — do NOT scan tasks, observe workers, or enter any monitoring loop.
 
 **CRITICAL: You must ALWAYS re-enter the sleep loop.** After ANY action — whether it's your initial startup or completing a review — you must run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"`. If you stop without running it, you go dark and reviews stop. The loop is: **Sleep -> Wake -> Check messages -> Review (if any) -> Sleep -> ...** (forever). Do NOT enter observation scans, monitoring loops, or idle task checks.
 
