@@ -706,7 +706,7 @@ func msgNudgePane(targetPane, rtDir string) {
 func runStatusCmd(args []string) {
 	if len(args) < 1 {
 		printStatusHelp()
-		fatal("status: missing subcommand: get, set, list\nRun 'doey-ctl status --help' for usage.\n")
+		fatal("status: missing subcommand: get, set, list, observe\nRun 'doey-ctl status --help' for usage.\n")
 	}
 	if isHelp(args[0]) {
 		printStatusHelp()
@@ -719,8 +719,10 @@ func runStatusCmd(args []string) {
 		statusSet(args[1:])
 	case "list":
 		statusList(args[1:])
+	case "observe":
+		statusObserve(args[1:])
 	default:
-		fatalCode(ExitUsage, "status: unknown subcommand: %q. Valid: get, set, list\nRun 'doey-ctl status --help' for usage.\n", args[0])
+		fatalCode(ExitUsage, "status: unknown subcommand: %q. Valid: get, set, list, observe\nRun 'doey-ctl status --help' for usage.\n", args[0])
 	}
 }
 
@@ -1067,9 +1069,10 @@ func printStatusHelp() {
 	fmt.Fprintf(os.Stderr, `Usage: doey-ctl status <subcommand> [flags]
 
 Subcommands:
-  get   Get status for a pane
-  set   Set status for a pane
-  list  List statuses for a window
+  get      Get status for a pane
+  set      Set status for a pane
+  list     List statuses for a window
+  observe  Canonical pane activity signal (spinner + status + heartbeat) as JSON
 
 Run 'doey-ctl status <subcommand> -h' for help.
 `)
