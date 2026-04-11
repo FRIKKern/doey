@@ -294,25 +294,49 @@ Log user messages (verbatim, before acting), your responses (after acting), and 
 
 When the user asks for status, progress, or what is happening — observe tmux panes directly. Do NOT only read status files.
 
+### Observing panes — the five rules
+
+**Before telling the user a pane is active, you MUST:**
+
+1. **Ignore `ctx%` as an activity signal.** An idle pane at the `❯ ` prompt can display any ctx% value. Context percent measures conversation size, not work in progress
+2. **Prefer `doey-ctl status observe <pane>`** — canonical JSON with `active`, `indicator`, and age fields. This is the authoritative tool; use it first
+3. **Minimum capture depth is 20 lines** — `tmux capture-pane -p -S -20`. Never use `-S -4` or raw `capture-pane` without scrollback; short captures miss the spinner line
+4. **Look for spinner glyphs** — `✻` `●` `⎿` paired with verbs: Sketching, Running, Cogitated, Baked, Sautéed, Brewed, Cooked, Thinking, Frolicking, Crystallizing, Pondering, Mulling, Ruminating, Contemplating, Musing. Any of these on a trailing line = active
+5. **Idle signature:** last non-empty line is `❯ ` (prompt) AND no trailing spinner glyph → the pane is idle, regardless of ctx%
+
+### Example — observing a worker
+
+```bash
+# Authoritative check first
+doey-ctl status observe "${SESSION_NAME}:2.1"
+# Returns JSON: {"active": false, "indicator": "", "age_seconds": 47, ...}
+
+# Fallback / cross-check (20-line capture, never 4)
+tmux capture-pane -t "${SESSION_NAME}:2.1" -p -S -20
+```
+
+### Step-by-step
+
 **Step 1 — Get team layout:**
 ```bash
 tmux list-windows -t "${SESSION_NAME}" -F '#{window_index}:#{window_name}'
 tmux list-panes -t "${SESSION_NAME}:WINDOW" -F '#{pane_index}:#{pane_title}'
 ```
 
-**Step 2 — Observe each active pane:**
+**Step 2 — Observe each active pane with `doey-ctl status observe` or a 20-line capture:**
 ```bash
+doey-ctl status observe "${SESSION_NAME}:WINDOW.PANE"
+# or
 tmux capture-pane -t "${SESSION_NAME}:WINDOW.PANE" -p -S -20
 ```
-Look for: thinking indicators (spinners), tool output, prompt state (the `>` prompt character means idle), errors.
 
 **Step 3 — Cross-reference with status files:**
 Compare what you see in panes against `${RUNTIME_DIR}/status/*.status` files. If observation disagrees with status file, **observation wins**.
 
 **Step 4 — Report honestly:**
 Tell the user what you observed, not what files claim. Include:
-- Which panes are active vs idle
-- What each active pane is doing
+- Which panes are active vs idle (by the rules above — never by ctx%)
+- What each active pane is doing (quote the spinner verb if present)
 - Any stuck or errored panes
 - Overall progress toward the current task
 
