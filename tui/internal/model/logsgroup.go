@@ -28,6 +28,7 @@ var logsGroupItems = []logsGroupEntry{
 	{icon: "›", name: "Info", desc: "Session overview"},
 	{icon: "⚡", name: "Activity", desc: "Event feed"},
 	{icon: "◇", name: "Interactions", desc: "Boss interactions"},
+	{icon: "⛔", name: "Violations", desc: "Polling-loop offenders"},
 }
 
 // LogsGroupModel groups Logs, Messages, Debug, and Info sub-models under
@@ -39,6 +40,7 @@ type LogsGroupModel struct {
 	info         WelcomeModel
 	activity     ActivityModel
 	interactions InteractionsModel
+	violations   ViolationsModel
 
 	theme   styles.Theme
 	cursor  int
@@ -57,6 +59,7 @@ func NewLogsGroupModel(theme styles.Theme) LogsGroupModel {
 		info:         NewWelcomeModel(),
 		activity:     NewActivityModel(theme),
 		interactions: NewInteractionsModel(theme),
+		violations:   NewViolationsModel(theme),
 		theme:        theme,
 		keyMap:       keys.DefaultKeyMap(),
 	}
@@ -137,6 +140,8 @@ func (m LogsGroupModel) delegateUpdate(msg tea.Msg) (LogsGroupModel, tea.Cmd) {
 		m.activity, cmd = m.activity.Update(msg)
 	case 5:
 		m.interactions, cmd = m.interactions.Update(msg)
+	case 6:
+		m.violations, cmd = m.violations.Update(msg)
 	}
 	return m, cmd
 }
@@ -149,6 +154,7 @@ func (m *LogsGroupModel) SetSnapshot(snap runtime.Snapshot) {
 	m.info.SetSnapshot(snap)
 	m.activity.SetSnapshot(snap)
 	m.interactions.SetSnapshot(snap)
+	m.violations.SetSnapshot(snap)
 }
 
 // SetSize stores dimensions and propagates to the active sub-model.
@@ -174,6 +180,7 @@ func (m *LogsGroupModel) updateSubFocus() {
 	m.info.SetFocused(active && m.cursor == 3)
 	m.activity.SetFocused(active && m.cursor == 4)
 	m.interactions.SetFocused(active && m.cursor == 5)
+	m.violations.SetFocused(active && m.cursor == 6)
 }
 
 // propagateSizeToActive calculates the right-panel dimensions and sets them
@@ -210,6 +217,8 @@ func (m *LogsGroupModel) propagateSizeToActive() {
 		m.activity.SetSize(rightW, h)
 	case 5:
 		m.interactions.SetSize(rightW, h)
+	case 6:
+		m.violations.SetSize(rightW, h)
 	}
 }
 
@@ -318,6 +327,9 @@ func (m LogsGroupModel) renderRightPanel(w, h int) string {
 	case 5:
 		m.interactions.SetSize(w, h)
 		return m.interactions.View()
+	case 6:
+		m.violations.SetSize(w, h)
+		return m.violations.View()
 	}
 
 	// Fallback (shouldn't happen)
