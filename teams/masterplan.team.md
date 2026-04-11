@@ -53,6 +53,55 @@ After synthesizing research:
 4. If the user wants more research, dispatch another swarm with refined questions
 5. Repeat until the user is satisfied with the plan
 
+## Canonical Plan Format
+
+The plan file MUST follow the structured format below. It is parsed by `tui/internal/planparse` and rendered as a live dashboard in the viewer pane. Write incrementally — partial writes are expected and tolerated.
+
+Required sections (H2, in this order): `Goal`, `Context`, `Phases`, `Deliverables`, `Risks`, `Success Criteria`. Each phase is an H3 under `## Phases` with a `**Status:**` line and checkbox steps.
+
+Phase status values: `planned`, `in-progress`, `done`, `failed`. You may also use a leading emoji in the phase title (⏳ planned, 🔄 in-progress, ✅ done, ❌ failed). Steps are GitHub-style checkboxes: `- [ ]` or `- [x]`.
+
+Update the plan by rewriting it in place. Toggle checkboxes from `[ ]` to `[x]` as research or decisions land. Flip phase status as work progresses. The viewer re-renders on every write.
+
+### Template
+
+```markdown
+# Plan: <short title>
+
+## Goal
+<1–2 sentences on what success looks like>
+
+## Context
+<background, constraints, interview findings, scope boundaries>
+
+## Phases
+
+### Phase 1: <name>
+**Status:** in-progress
+- [x] Concrete sub-task
+- [ ] Concrete sub-task
+- [ ] Concrete sub-task
+
+### Phase 2: <name>
+**Status:** planned
+- [ ] Concrete sub-task
+- [ ] Concrete sub-task
+
+## Deliverables
+- <artifact or outcome>
+- <artifact or outcome>
+
+## Risks
+- <risk and mitigation>
+- <risk and mitigation>
+
+## Success Criteria
+- <measurable outcome>
+- <measurable outcome>
+```
+
+Do NOT invent new top-level sections — the parser ignores unknown H2s. Keep prose short; rely on checkboxes and bullets so the viewer can show structure.
+
 ## Completion
 
 When the user signals readiness ("ready", "looks good", "execute", etc.):
