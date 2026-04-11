@@ -1,6 +1,9 @@
 package store
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 func ensureSchema(db *sql.DB) error {
 	tx, err := db.Begin()
@@ -192,5 +195,60 @@ func ensureSchema(db *sql.DB) error {
 		tx.Exec(stmt) // ignore "duplicate column" errors
 	}
 
+	// 525: transactional migration — atomic batch, NOT per-statement-ignored
+	// like older entries. Ships as a logical BEGIN ... COMMIT batch: statements
+	// execute within the enclosing ensureSchema transaction, so any non-"duplicate
+	// column" error on any statement rolls back the entire schema+migration
+	// transaction (partial-migration state is impossible). Coordinated with task
+	// #521 — class discriminator is additive; either task may land first.
+	//
+	// Logical SQL (runs via the enclosing tx):
+	//   BEGIN;
+	//   ALTER TABLE events ADD COLUMN class TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN severity TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN session TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN role TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN window_id TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN wake_reason TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN unread_msg_ids TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN extra_json TEXT DEFAULT '';
+	//   ALTER TABLE events ADD COLUMN consecutive_count INTEGER DEFAULT 0;
+	//   ALTER TABLE events ADD COLUMN window_sec INTEGER DEFAULT 0;
+	//   CREATE INDEX IF NOT EXISTS idx_events_class_created ON events(class, created_at DESC);
+	//   CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
+	//   COMMIT;
+	events525 := []string{
+		`ALTER TABLE events ADD COLUMN class TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN severity TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN session TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN role TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN window_id TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN wake_reason TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN unread_msg_ids TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN extra_json TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN consecutive_count INTEGER DEFAULT 0`,
+		`ALTER TABLE events ADD COLUMN window_sec INTEGER DEFAULT 0`,
+		`CREATE INDEX IF NOT EXISTS idx_events_class_created ON events(class, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity)`,
+	}
+	for _, stmt := range events525 {
+		if _, err := tx.Exec(stmt); err != nil && !isDuplicateColumnErr(err) {
+			return err
+		}
+	}
+
 	return tx.Commit()
+}
+
+// isDuplicateColumnErr returns true for the benign "duplicate column" error
+// returned when an ALTER TABLE ADD COLUMN runs against a schema that already
+// contains the column. Every other error (syntax, constraint, I/O) is
+// propagated so the enclosing transaction rolls back — that is the difference
+// between the transactional 525 migration block and the older error-ignored
+// migrations above.
+func isDuplicateColumnErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "duplicate column")
 }

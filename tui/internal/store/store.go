@@ -10,6 +10,12 @@ import (
 type Store struct {
 	db   *sql.DB
 	path string
+	// eventsCols is a snapshot of the events-table columns present at Open
+	// time. Read by the events.go SELECT/INSERT builders so that pre-migration
+	// or rollback databases yield zero-value Event fields instead of crashing
+	// with "no such column" (task 525). Populated once in Open(); read-only
+	// thereafter — no lock required.
+	eventsCols map[string]bool
 }
 
 // Open opens a SQLite database at dbPath, enables WAL mode, and ensures the schema exists.
@@ -39,7 +45,38 @@ func Open(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db, path: dbPath}, nil
+	s := &Store{db: db, path: dbPath}
+	if err := s.loadEventsColumns(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+// loadEventsColumns reads PRAGMA table_info(events) and caches the set of
+// present column names on the Store. Defense-in-depth against partial
+// migrations and against an older binary opening a newer DB or vice versa
+// (task 525).
+func (s *Store) loadEventsColumns() error {
+	cols := make(map[string]bool)
+	rows, err := s.db.Query("PRAGMA table_info(events)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		cols[name] = true
+	}
+	s.eventsCols = cols
+	return rows.Err()
 }
 
 // ensureMigrations adds columns that may be missing from older databases.
