@@ -4,6 +4,17 @@
 set -euo pipefail
 trap 'exit 0' ERR
 
+# Stats emit (task #521 Phase 2) — fire tool_blocked ONLY when the hook
+# exits with 2 (DENY). Allow path (exit 0) triggers no emit, ensuring a
+# tool-call storm creates zero writes.
+_doey_stats_on_exit() {
+  _doey_exit_code=$?
+  if [ "$_doey_exit_code" = "2" ] && command -v doey-stats-emit.sh >/dev/null 2>&1; then
+    (doey-stats-emit.sh worker tool_blocked "reason=${_DOEY_BLOCK_REASON:-deny}" &) 2>/dev/null || true
+  fi
+}
+trap '_doey_stats_on_exit' EXIT
+
 # Self-repair: if hooks were deleted (e.g. gitignored + branch switch), re-copy from Doey repo.
 # Fast path: skip if common.sh exists (most hooks depend on it, so it's a good canary).
 _doey_hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
@@ -552,6 +563,13 @@ _dbg_write() {
 if [ "$_DOEY_ROLES_LOADED" != "true" ] && [ -n "${_DOEY_ROLE:-}" ]; then
   echo "BLOCKED: Role constants unavailable — blocking tool for safety. Source doey-roles.sh." >&2
   exit 2
+fi
+
+# Info Panel (pane 0.0) runs shell scripts only — no role-based guards apply.
+# Early exit prevents fall-through to worker guards at the bottom of this file.
+if [ "$_DOEY_ROLE" = "info_panel" ]; then
+  _dbg_write "allow_info_panel"
+  exit 0
 fi
 
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then

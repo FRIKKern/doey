@@ -188,7 +188,7 @@ if is_taskmaster; then
     if command -v doey-ctl >/dev/null 2>&1; then
       _tm_cur=$(doey status get "$PANE_SAFE")
     else
-      _tm_cur=$(head -1 "$_taskmaster_status_file" 2>/dev/null || true)
+      _tm_cur=$(grep '^STATUS: ' "$_taskmaster_status_file" 2>/dev/null | head -1 | sed 's/^STATUS: //' || true)
     fi
     case "$_tm_cur" in
       *BUSY*) exit 0 ;;
