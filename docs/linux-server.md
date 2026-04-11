@@ -30,7 +30,7 @@ Reconnect: `ssh user@server && cd ~/your-project && doey`
 <details>
 <summary><strong>systemd Service</strong></summary>
 
-Create `~/.config/systemd/user/doey.service`:
+Create `~/.config/systemd/user/doey.service`. Replace `your-project` with your project directory name in **both** `WorkingDirectory` and `ExecStop` — Doey derives the tmux session name from the project directory basename, so `~/your-project` always becomes session `doey-your-project`.
 
 ```ini
 [Unit]
@@ -44,7 +44,7 @@ Environment=HOME=%h
 Environment=PATH=%h/.local/bin:%h/.fnm/aliases/default/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/your-project
 ExecStart=%h/.local/bin/doey
-ExecStop=/usr/bin/tmux kill-session -t doey-myproject
+ExecStop=/usr/bin/tmux kill-session -t doey-your-project
 Restart=on-failure
 RestartSec=10
 

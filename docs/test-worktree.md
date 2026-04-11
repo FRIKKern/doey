@@ -7,22 +7,9 @@ RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 SESSION=$(grep SESSION_NAME= "$RUNTIME_DIR/session.env" | cut -d= -f2)
 ```
 
-## Test 1: Fresh Launch (auto-isolated team 4)
+> A bare `doey` launch creates only the dashboard + core team — no auto-worktreed teams. Use `doey add-team --worktree` (Test 1) or `/doey-add-window --worktree` (Test 3) to create one.
 
-```bash
-doey stop 2>/dev/null; doey
-```
-
-| Check | Command | Expected |
-|-------|---------|----------|
-| 5 windows | `tmux list-windows -t "$SESSION" -F '#{window_index} #{window_name}'` | Window 4 has `[wt]` |
-| Worktree branch | `git worktree list` | `team-4` on `doey/team-4-MMDD-HHMM` |
-| Team env | `cat "$RUNTIME_DIR/team_4.env"` | Has `WORKTREE_DIR`, `WORKTREE_BRANCH` |
-| Settings copied | `ls /tmp/doey/*/worktrees/team-4/.claude/settings.local.json` | Exists |
-| Worker CWD | `tmux display-message -t "$SESSION:4.1" -p '#{pane_current_path}'` | Worktree path |
-| Info panel badge | `tmux capture-pane -t "$SESSION:0.0" -p \| grep -i "team.*wt\|worktree"` | Team 4 `[wt]` |
-
-## Test 2: `doey add-team --worktree`
+## Test 1: `doey add-team --worktree`
 
 ```bash
 doey add-team --worktree
@@ -35,7 +22,7 @@ doey add-team --worktree
 | Team env | `cat "$RUNTIME_DIR/team_5.env" \| grep WORKTREE` | Has worktree vars |
 | Session updated | `grep TEAM_WINDOWS "$RUNTIME_DIR/session.env"` | Includes new window |
 
-## Test 3: `doey add-team` (no worktree)
+## Test 2: `doey add-team` (no worktree)
 
 ```bash
 doey add-team 3x2
@@ -43,11 +30,11 @@ doey add-team 3x2
 
 Verify: No `[wt]` in name. `team_N.env` has empty `WORKTREE_DIR`. Workers CWD = main project dir.
 
-## Test 4: `/doey-add-window --worktree`
+## Test 3: `/doey-add-window --worktree`
 
-Run inside any Claude Code pane. Same checks as Test 2.
+Run inside any Claude Code pane. Same checks as Test 1.
 
-## Test 5: `/doey-worktree W` (transform existing team)
+## Test 4: `/doey-worktree W` (transform existing team)
 
 Requires all workers idle.
 
@@ -62,9 +49,9 @@ Requires all workers idle.
 | Team env | `cat "$RUNTIME_DIR/team_1.env" \| grep WORKTREE` | Has worktree vars |
 | Worker CWD | `tmux display-message -t "$SESSION:1.1" -p '#{pane_current_path}'` | Worktree path |
 
-## Test 6: `/doey-worktree W --back` (return to main)
+## Test 5: `/doey-worktree W --back` (return to main)
 
-Run after Test 5. Optional setup: create a test file in `$WT_DIR/worktree-test.txt`.
+Run after Test 4. Optional setup: create a test file in `$WT_DIR/worktree-test.txt`.
 
 ```
 /doey-worktree 1 --back
@@ -79,54 +66,53 @@ Run after Test 5. Optional setup: create a test file in `$WT_DIR/worktree-test.t
 | Worker CWD | `tmux display-message -t "$SESSION:1.1" -p '#{pane_current_path}'` | Main project dir |
 | Branch preserved | `git branch \| grep doey/team-1` | Exists |
 
-## Test 7: `/doey-list-windows`
+## Test 6: `/doey-list-windows`
 
 Verify: `[worktree]` badge + branch for worktree teams; nothing extra for normal teams.
 
-## Test 8: `/doey-kill-window W` (kill worktree team)
+## Test 7: `/doey-kill-window W` (kill worktree team)
 
-Setup: commit a file in team 4's worktree, then `/doey-kill-window 4`.
+Setup: First create a worktree team via Test 1 (`doey add-team --worktree`); note its window number `N`. Commit a file inside its worktree, then run `/doey-kill-window N`.
 
 | Check | Command | Expected |
 |-------|---------|----------|
-| Worktree removed | `ls /tmp/doey/*/worktrees/team-4 2>/dev/null` | No such dir |
-| Git pruned | `git worktree list \| grep team-4` | No match |
-| Branch preserved | `git branch \| grep doey/team-4` | Exists (had commits) |
-| Runtime cleaned | `ls "$RUNTIME_DIR/team_4.env" 2>/dev/null` | No such file |
-| Window gone | `tmux list-windows ... \| grep "^4$"` | No match |
+| Worktree removed | `ls /tmp/doey/*/worktrees/team-N 2>/dev/null` | No such dir |
+| Git pruned | `git worktree list \| grep team-N` | No match |
+| Branch preserved | `git branch \| grep doey/team-N` | Exists (had commits) |
+| Runtime cleaned | `ls "$RUNTIME_DIR/team_N.env" 2>/dev/null` | No such file |
+| Window gone | `tmux list-windows ... \| grep "^N "` | No match |
 
-## Tests 9–12: Quick Checks
+## Tests 8–11: Quick Checks
 
 | Test | Action | Verify |
 |------|--------|--------|
-| 9: `doey stop` | Full teardown | `git worktree list` shows only main. Branches with commits preserved. Session gone. |
-| 10: `doey add` | Column expansion in worktree team | New workers have worktree dir as CWD |
-| 11: `doey reload` | Hook refresh | `ls "$WT_DIR/.claude/hooks/"` shows hooks in worktree dir |
-| 12: `DOEY_TEAM_DIR` | `echo $DOEY_TEAM_DIR` on idle workers | Worktree worker → worktree path; normal worker → main path |
+| 8: `doey stop` | Full teardown | `git worktree list` shows only main. Branches with commits preserved. Session gone. |
+| 9: `doey add` | Column expansion in worktree team | New workers have worktree dir as CWD |
+| 10: `doey reload` | Hook refresh | `ls "$WT_DIR/.claude/hooks/"` shows hooks in worktree dir |
+| 11: `DOEY_TEAM_DIR` | `echo $DOEY_TEAM_DIR` on idle workers | Worktree worker → worktree path; normal worker → main path |
 
-## Tests 13–15: Edge Cases
+## Tests 12–14: Edge Cases
 
 | Test | Command | Expected |
 |------|---------|----------|
-| 13: Busy team | `/doey-worktree 1` (busy workers) | Error: busy workers |
-| 14: Already isolated | `/doey-worktree 4` (worktree team) | Error: already in worktree |
-| 15: --back on normal | `/doey-worktree 1 --back` (not isolated) | Error: not in worktree |
+| 12: Busy team | `/doey-worktree 1` (busy workers) | Error: busy workers |
+| 13: Already isolated | `/doey-worktree N` (worktree team N) | Error: already in worktree |
+| 14: --back on normal | `/doey-worktree 1 --back` (not isolated) | Error: not in worktree |
 
-## Test 16: Info Panel
+## Test 15: Info Panel
 
 `tmux capture-pane -t "$SESSION:0.0" -p -S -40 | grep -A 20 "TEAM STATUS"` — expect `[wt]` badge in cyan for worktree teams, branch name dimmed.
 
 ## Quick Smoke Test
 
 ```bash
-doey stop 2>/dev/null; doey        # 1. Fresh launch (wait ~30s)
-git worktree list | grep team-4 && echo "PASS" || echo "FAIL"  # 2. Worktree created?
-doey list-teams                    # 3. Badge visible?
-doey kill-team 4                   # 4. Kill worktree team
-git worktree list | grep team-4 && echo "FAIL" || echo "PASS"
-doey add-team --worktree           # 5. Add worktree team
+doey stop 2>/dev/null; doey        # 1. Fresh launch (dashboard + core team only)
+doey add-team --worktree           # 2. Add worktree team (note its window number, e.g. 2)
 git worktree list | grep -c "worktrees/team-" | xargs -I{} test {} -ge 1 && echo "PASS" || echo "FAIL"
-doey stop                          # 6. Full stop
+doey list-teams                    # 3. Badge visible?
+doey kill-team 2                   # 4. Kill worktree team (use the number from step 2)
+git worktree list | grep team-2 && echo "FAIL" || echo "PASS"
+doey stop                          # 5. Full stop
 git worktree list | grep -c "worktrees" | xargs -I{} test {} -eq 0 && echo "PASS" || echo "FAIL"
 ```
 
