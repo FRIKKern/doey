@@ -202,15 +202,47 @@ func (m AgentsModel) updateKey(msg tea.KeyMsg) (AgentsModel, tea.Cmd) {
 	return m, nil
 }
 
-// SetSnapshot updates agent list from fresh snapshot.
+// SetSnapshot updates agent list from fresh snapshot. Preserves the
+// user's selection across refreshes by matching on agent Name — only
+// resets the cursor when the previously selected agent is gone (or on
+// first load).
 func (m *AgentsModel) SetSnapshot(snap runtime.Snapshot) {
+	var selectedName string
+	if prev, ok := m.selectedAgent(); ok {
+		selectedName = prev.Name
+	}
+
 	m.agents = snap.AgentDefs
 	m.rebuildGroups()
 
-	// Reset viewport to top
-	m.cursor = 0
-	m.scrollOffset = 0
-	m.rightScroll = 0
+	if selectedName == "" {
+		m.cursor = 0
+		m.scrollOffset = 0
+		m.rightScroll = 0
+		return
+	}
+
+	// Re-seek cursor to the previously selected agent in the new flat order.
+	found := false
+	idx := 0
+	for _, g := range m.groups {
+		for _, a := range g.agents {
+			if a.Name == selectedName {
+				m.cursor = idx
+				found = true
+				break
+			}
+			idx++
+		}
+		if found {
+			break
+		}
+	}
+	if !found {
+		m.cursor = 0
+		m.scrollOffset = 0
+		m.rightScroll = 0
+	}
 }
 
 // rebuildGroups organizes agents into domain groups.
