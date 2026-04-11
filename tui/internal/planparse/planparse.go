@@ -45,6 +45,8 @@ package planparse
 import (
 	"bufio"
 	"bytes"
+	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -311,6 +313,88 @@ func handlePhaseLine(phase *Phase, line string) {
 	} else {
 		phase.Body += "\n" + trimmed
 	}
+}
+
+// Marshal serializes the Plan as canonical masterplan markdown. Output
+// is deterministic (stable phase order, no map iteration) and re-parses
+// to an equal Plan — modulo the Raw field, which always reflects the
+// bytes passed to a given Parse call. Sections that are zero-valued in
+// the source are omitted so round-tripping does not invent structure
+// the original lacked.
+func (p *Plan) Marshal() ([]byte, error) {
+	if p == nil {
+		return []byte{}, nil
+	}
+	var buf bytes.Buffer
+	if p.Title != "" {
+		fmt.Fprintf(&buf, "# Plan: %s\n", p.Title)
+	}
+	if p.Goal != "" {
+		buf.WriteString("\n## Goal\n")
+		buf.WriteString(p.Goal)
+		buf.WriteString("\n")
+	}
+	if p.Context != "" {
+		buf.WriteString("\n## Context\n")
+		buf.WriteString(p.Context)
+		buf.WriteString("\n")
+	}
+	if len(p.Phases) > 0 {
+		buf.WriteString("\n## Phases\n")
+		for i, ph := range p.Phases {
+			fmt.Fprintf(&buf, "\n### Phase %d: %s\n", i+1, ph.Title)
+			fmt.Fprintf(&buf, "**Status:** %s\n", ph.Status.String())
+			if ph.Body != "" {
+				buf.WriteString(ph.Body)
+				buf.WriteString("\n")
+			}
+			for _, s := range ph.Steps {
+				mark := " "
+				if s.Done {
+					mark = "x"
+				}
+				fmt.Fprintf(&buf, "- [%s] %s\n", mark, s.Title)
+			}
+		}
+	}
+	if len(p.Deliverables) > 0 {
+		buf.WriteString("\n## Deliverables\n")
+		for _, d := range p.Deliverables {
+			fmt.Fprintf(&buf, "- %s\n", d)
+		}
+	}
+	if len(p.Risks) > 0 {
+		buf.WriteString("\n## Risks\n")
+		for _, r := range p.Risks {
+			fmt.Fprintf(&buf, "- %s\n", r)
+		}
+	}
+	if len(p.SuccessCriteria) > 0 {
+		buf.WriteString("\n## Success Criteria\n")
+		for _, s := range p.SuccessCriteria {
+			fmt.Fprintf(&buf, "- %s\n", s)
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+// WriteFile writes the Marshal output to path atomically: bytes go to
+// a sibling "<path>.tmp" file first and then rename into place so a
+// concurrent reader never observes a partial write.
+func (p *Plan) WriteFile(path string) error {
+	data, err := p.Marshal()
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func canonicalStatus(s string) PhaseStatus {

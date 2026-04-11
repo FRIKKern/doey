@@ -112,6 +112,29 @@ When both reviewers finish, read `${PLAN_FILE%/*}/${PLAN_ID}.architect.md` and `
 
 The plan is **ready-for-execution** if and only if `CONSENSUS_STATE=CONSENSUS` in `${PLAN_FILE%/*}/consensus.state`. If a user says "ship it" but the state file says otherwise, refuse and name which reviewer is still blocking.
 
+## Interactive Controls
+
+The viewer pane (pane 1) runs `doey-masterplan-tui`, an interactive Bubble Tea
+app. It is not read-only — the user can drive plan state from the keyboard and
+mouse while the Planner writes.
+
+| Key         | Action |
+|-------------|--------|
+| `↑` / `↓`   | Move the cursor between phases and steps |
+| `space`     | Toggle the focused step's checkbox |
+| `enter`     | Expand or collapse the focused phase |
+| `J` / `K`   | Reorder the focused phase down / up |
+| `s`         | Send the plan to Tasks (creates one task per phase) |
+| `q`         | Quit |
+
+Mouse: clicking on a `[ ]` / `[x]` checkbox toggles it. Clicking a phase header
+expands or collapses its step list.
+
+**Hard gate on "Send to Tasks":** pressing `s` is refused unless
+`CONSENSUS_STATE=CONSENSUS` in `${PLAN_FILE%/*}/consensus.state`. The viewer
+shows the current consensus badge in the header; if it is not `✓ CONSENSUS`,
+the action is a no-op and a short reason is flashed in the help strip.
+
 ## Canonical Plan Format
 
 The plan file MUST follow the structured format below. It is parsed by `tui/internal/planparse` and rendered as a live dashboard in the viewer pane. Write incrementally — partial writes are expected and tolerated.

@@ -1,192 +1,494 @@
+// doey-masterplan-tui — interactive Bubble Tea viewer/editor for a
+// Doey masterplan markdown file. Lets the user navigate phases and
+// steps, toggle checkboxes, reorder phases, and dispatch the plan into
+// the task system once consensus has been reached.
 package main
 
 import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/doey-cli/doey/tui/internal/planparse"
-	"github.com/doey-cli/doey/tui/internal/runtime"
-	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
 // ── Messages ──────────────────────────────────────────────────────────
 
-type planReadMsg struct {
-	content string
-	mtime   time.Time
-}
-type statusReadMsg struct{ workers []workerStatus }
-type researchReadMsg struct{ reports []researchReport }
-type consensusReadMsg struct {
-	present bool
-	state   consensusState
-	mtime   time.Time
-}
-type planTickMsg time.Time
-type slowTickMsg time.Time
+type clearFlashMsg struct{}
 
-// ── Consensus state ───────────────────────────────────────────────────
-
-// consensusState mirrors the key=value fields written to
-// <plan-dir>/consensus.state by shell/masterplan-consensus.sh.
-type consensusState struct {
-	State            string // DRAFT | UNDER_REVIEW | REVISIONS_NEEDED | CONSENSUS | ESCALATED
-	Round            string
-	ArchitectVerdict string
-	CriticVerdict    string
+type sendResultMsg struct {
+	ok      bool
+	message string
 }
 
-// ── Worker status ─────────────────────────────────────────────────────
+// ── Hit regions ───────────────────────────────────────────────────────
 
-type workerStatus struct {
-	paneIdx int
-	status  string
-	task    string
-}
-
-// ── Research report ──────────────────────────────────────────────────
-
-type researchReport struct {
-	filename string
-	summary  string
+// hitRegion records what was rendered on a given y row so the next
+// mouse click can translate (y, x) into a (phase, step, checkbox?)
+// triple. stepIdx == -1 means the row is the phase header itself.
+type hitRegion struct {
+	phaseIdx    int
+	stepIdx     int
+	cbStart     int // inclusive column where the [ ]/[x] checkbox begins
+	cbEnd       int // exclusive column where the checkbox ends
 }
 
 // ── Model ─────────────────────────────────────────────────────────────
 
 type model struct {
-	planPath         string
-	runtimeDir       string
-	goal             string
-	teamWindow       int
-	theme            styles.Theme
-	viewport         viewport.Model
-	planContent      string
-	plan             *planparse.Plan
-	renderedPlan     string
-	lastRenderW      int
-	lastChanged      time.Time
-	planMtime        time.Time
-	consensus        consensusState
-	consensusPresent bool
-	consensusMtime   time.Time
-	workers          []workerStatus
-	reports          []researchReport
-	width            int
-	height           int
-	ready            bool
-}
+	plan           *planparse.Plan
+	planPath       string
+	consensus      string // CONSENSUS / DRAFT / etc., loaded from <plan-dir>/consensus.state
+	focusPhase     int
+	focusStep      int // -1 = phase header
+	expandedPhases map[int]bool
+	lastErr        string
+	lastFlash      string
+	width          int
+	height         int
 
-func initialModel(planPath, runtimeDir, goal string, teamWindow int) model {
-	return model{
-		planPath:   planPath,
-		runtimeDir: runtimeDir,
-		goal:       goal,
-		teamWindow: teamWindow,
-		theme:      styles.DefaultTheme(),
-	}
+	// hitRows is a reference-typed map mutated in place by View()
+	// (which uses a value receiver). Pre-allocated in main().
+	hitRows map[int]hitRegion
 }
 
 // ── Commands ──────────────────────────────────────────────────────────
 
-func readPlanCmd(path string) tea.Cmd {
-	return func() tea.Msg {
-		info, err := os.Stat(path)
-		if err != nil {
-			return planReadMsg{content: fmt.Sprintf("*Error reading plan: %s*", err)}
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return planReadMsg{content: fmt.Sprintf("*Error reading plan: %s*", err), mtime: info.ModTime()}
-		}
-		return planReadMsg{content: string(data), mtime: info.ModTime()}
-	}
+func clearFlashAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return clearFlashMsg{} })
 }
 
-func readStatusCmd(runtimeDir string, teamWindow int) tea.Cmd {
+// runSendToTasks shells out to `doey plan to-tasks --plan <path>` and
+// reports a single sendResultMsg back to the model. The pipeline lives
+// in shell/plan-to-tasks.sh — we deliberately do not re-implement it.
+func runSendToTasks(planPath string) tea.Cmd {
 	return func() tea.Msg {
-		statuses := runtime.ReadPaneStatuses(runtimeDir)
-		var workers []workerStatus
-		for _, ps := range statuses {
-			if ps.WindowIdx != teamWindow {
-				continue
-			}
-			if ps.Role != "worker" {
-				continue
-			}
-			workers = append(workers, workerStatus{
-				paneIdx: ps.PaneIdx,
-				status:  ps.Status,
-				task:    ps.Task,
-			})
-		}
-		sort.Slice(workers, func(i, j int) bool {
-			return workers[i].paneIdx < workers[j].paneIdx
-		})
-		return statusReadMsg{workers: workers}
-	}
-}
-
-func readResearchCmd(runtimeDir string) tea.Cmd {
-	return func() tea.Msg {
-		var reports []researchReport
-		dirs, _ := filepath.Glob(filepath.Join(runtimeDir, "masterplan-*", "research"))
-		for _, dir := range dirs {
-			files, _ := filepath.Glob(filepath.Join(dir, "worker-*.md"))
-			for _, f := range files {
-				summary := ""
-				data, err := os.ReadFile(f)
-				if err == nil {
-					lines := strings.SplitN(string(data), "\n", 2)
-					if len(lines) > 0 {
-						summary = strings.TrimSpace(lines[0])
-						summary = strings.TrimLeft(summary, "# ")
-					}
-				}
-				reports = append(reports, researchReport{
-					filename: filepath.Base(f),
-					summary:  summary,
-				})
+		out, err := exec.Command("doey", "plan", "to-tasks", "--plan", planPath).CombinedOutput()
+		text := string(out)
+		if err != nil {
+			return sendResultMsg{
+				ok:      false,
+				message: "send failed: " + firstLine(text, err.Error()),
 			}
 		}
-		return researchReadMsg{reports: reports}
+		count := strings.Count(text, "task create")
+		if count == 0 {
+			count = strings.Count(text, "Created task")
+		}
+		msg := "sent — see `doey task list`"
+		if count > 0 {
+			msg = fmt.Sprintf("sent %d task(s) — see `doey task list`", count)
+		}
+		return sendResultMsg{ok: true, message: msg}
 	}
 }
 
-// readConsensusCmd reads <plan-dir>/consensus.state — a simple key=value
-// file written by shell/masterplan-consensus.sh. Missing file is not an
-// error; the badge is hidden until the file first appears.
-func readConsensusCmd(planPath string) tea.Cmd {
-	return func() tea.Msg {
-		statePath := filepath.Join(filepath.Dir(planPath), "consensus.state")
-		info, err := os.Stat(statePath)
-		if err != nil {
-			return consensusReadMsg{present: false}
+func firstLine(s, fallback string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return fallback
+	}
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// ── Tea interface ─────────────────────────────────────────────────────
+
+func (m model) Init() tea.Cmd { return nil }
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case clearFlashMsg:
+		m.lastFlash = ""
+		return m, nil
+
+	case sendResultMsg:
+		if msg.ok {
+			m.lastFlash = msg.message
+			m.lastErr = ""
+		} else {
+			m.lastErr = msg.message
 		}
-		data, err := os.ReadFile(statePath)
-		if err != nil {
-			return consensusReadMsg{present: false}
+		return m, clearFlashAfter(5 * time.Second)
+
+	case tea.MouseMsg:
+		if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+			return m, nil
 		}
-		cs := parseConsensusState(string(data))
-		return consensusReadMsg{present: true, state: cs, mtime: info.ModTime()}
+		region, ok := m.hitRows[msg.Y]
+		if !ok {
+			return m, nil
+		}
+		m.focusPhase = region.phaseIdx
+		m.focusStep = region.stepIdx
+		// Only toggle if the click landed inside the checkbox column.
+		if msg.X >= region.cbStart && msg.X < region.cbEnd {
+			m = m.toggleCurrent()
+		}
+		return m, nil
+
+	case tea.KeyMsg:
+		return m.handleKey(msg)
+	}
+
+	return m, nil
+}
+
+func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+
+	case "up", "k":
+		m = m.moveUp()
+		return m, nil
+
+	case "down", "j":
+		m = m.moveDown()
+		return m, nil
+
+	case "enter":
+		if m.plan != nil && len(m.plan.Phases) > 0 {
+			m.expandedPhases[m.focusPhase] = !m.expandedPhases[m.focusPhase]
+		}
+		return m, nil
+
+	case " ", "space":
+		m = m.toggleCurrent()
+		return m, nil
+
+	case "J":
+		m = m.movePhaseDown()
+		return m, nil
+
+	case "K":
+		m = m.movePhaseUp()
+		return m, nil
+
+	case "s":
+		return m.sendToTasks()
+	}
+	return m, nil
+}
+
+// ── Navigation helpers ────────────────────────────────────────────────
+
+func (m model) moveUp() model {
+	if m.plan == nil || len(m.plan.Phases) == 0 {
+		return m
+	}
+	if m.focusStep > 0 {
+		m.focusStep--
+		return m
+	}
+	if m.focusStep == 0 {
+		m.focusStep = -1
+		return m
+	}
+	// On phase header → previous phase (last visible row).
+	if m.focusPhase > 0 {
+		m.focusPhase--
+		if m.expandedPhases[m.focusPhase] && len(m.plan.Phases[m.focusPhase].Steps) > 0 {
+			m.focusStep = len(m.plan.Phases[m.focusPhase].Steps) - 1
+		} else {
+			m.focusStep = -1
+		}
+	}
+	return m
+}
+
+func (m model) moveDown() model {
+	if m.plan == nil || len(m.plan.Phases) == 0 {
+		return m
+	}
+	cur := m.plan.Phases[m.focusPhase]
+	if m.focusStep == -1 && m.expandedPhases[m.focusPhase] && len(cur.Steps) > 0 {
+		m.focusStep = 0
+		return m
+	}
+	if m.focusStep >= 0 && m.focusStep < len(cur.Steps)-1 {
+		m.focusStep++
+		return m
+	}
+	if m.focusPhase < len(m.plan.Phases)-1 {
+		m.focusPhase++
+		m.focusStep = -1
+	}
+	return m
+}
+
+func (m model) toggleCurrent() model {
+	if m.plan == nil || len(m.plan.Phases) == 0 {
+		return m
+	}
+	ph := &m.plan.Phases[m.focusPhase]
+	if m.focusStep == -1 {
+		// Phase header: flip every step. allDone toggles to all-pending,
+		// anything else (mixed or all-pending) becomes all-done. A phase
+		// with no steps simply flips between done/planned.
+		allDone := len(ph.Steps) > 0
+		for _, s := range ph.Steps {
+			if !s.Done {
+				allDone = false
+				break
+			}
+		}
+		newVal := !allDone
+		for i := range ph.Steps {
+			ph.Steps[i].Done = newVal
+		}
+		if newVal {
+			ph.Status = planparse.StatusDone
+		} else {
+			ph.Status = planparse.StatusPlanned
+		}
+	} else if m.focusStep < len(ph.Steps) {
+		ph.Steps[m.focusStep].Done = !ph.Steps[m.focusStep].Done
+		// Promote phase status to reflect the new step distribution.
+		ph.Status = derivePhaseStatus(*ph)
+	}
+	m.persist()
+	return m
+}
+
+func derivePhaseStatus(ph planparse.Phase) planparse.PhaseStatus {
+	if len(ph.Steps) == 0 {
+		return ph.Status
+	}
+	done := 0
+	for _, s := range ph.Steps {
+		if s.Done {
+			done++
+		}
+	}
+	switch {
+	case done == len(ph.Steps):
+		return planparse.StatusDone
+	case done == 0:
+		return planparse.StatusPlanned
+	default:
+		return planparse.StatusInProgress
 	}
 }
 
-// parseConsensusState parses the key=value format written by the shell
-// consensus helper. Unknown keys are ignored; values may be quoted.
-func parseConsensusState(content string) consensusState {
-	var cs consensusState
-	for _, raw := range strings.Split(content, "\n") {
-		line := strings.TrimSpace(raw)
+func (m model) movePhaseDown() model {
+	if m.plan == nil || m.focusPhase >= len(m.plan.Phases)-1 {
+		return m
+	}
+	ps := m.plan.Phases
+	ps[m.focusPhase], ps[m.focusPhase+1] = ps[m.focusPhase+1], ps[m.focusPhase]
+	m.focusPhase++
+	m.persist()
+	return m
+}
+
+func (m model) movePhaseUp() model {
+	if m.plan == nil || m.focusPhase <= 0 {
+		return m
+	}
+	ps := m.plan.Phases
+	ps[m.focusPhase], ps[m.focusPhase-1] = ps[m.focusPhase-1], ps[m.focusPhase]
+	m.focusPhase--
+	m.persist()
+	return m
+}
+
+// persist writes the in-memory plan back to disk. Errors are surfaced
+// via lastErr; the next render shows them in the help strip.
+func (m *model) persist() {
+	if m.plan == nil || m.planPath == "" {
+		return
+	}
+	if err := m.plan.WriteFile(m.planPath); err != nil {
+		m.lastErr = "save failed: " + err.Error()
+		return
+	}
+	m.lastErr = ""
+}
+
+// ── Send to Tasks ─────────────────────────────────────────────────────
+
+func (m model) sendToTasks() (tea.Model, tea.Cmd) {
+	if !strings.EqualFold(m.consensus, "CONSENSUS") {
+		state := m.consensus
+		if state == "" {
+			state = "DRAFT"
+		}
+		m.lastFlash = "refused: consensus is " + state + " — need CONSENSUS first"
+		return m, clearFlashAfter(5 * time.Second)
+	}
+	m.lastFlash = "dispatching to tasks…"
+	return m, runSendToTasks(m.planPath)
+}
+
+// ── View ──────────────────────────────────────────────────────────────
+
+func (m model) View() string {
+	// Reset hitRows for this render. Maps are reference types so
+	// mutating in place propagates back to the caller.
+	for k := range m.hitRows {
+		delete(m.hitRows, k)
+	}
+
+	if m.plan == nil {
+		return StyleHelp.Render("(no plan loaded)")
+	}
+
+	width := m.width
+	if width <= 0 {
+		width = 80
+	}
+
+	var b strings.Builder
+	y := 0
+
+	// Header line: title + consensus badge.
+	title := m.plan.Title
+	if title == "" {
+		title = filepath.Base(m.planPath)
+	}
+	header := StyleHeader.Render(title) + "  " + RenderConsensusBadge(m.consensus)
+	b.WriteString(header)
+	b.WriteByte('\n')
+	y++
+
+	// Progress bar.
+	done, _, total := ComputePlanProgress(m.plan)
+	barW := width - 6
+	if barW < 10 {
+		barW = 10
+	}
+	b.WriteString(RenderProgressBar(done, total, barW))
+	b.WriteByte('\n')
+	y++
+
+	b.WriteByte('\n')
+	y++
+
+	// Phase / step list.
+	for i, ph := range m.plan.Phases {
+		focused := (m.focusPhase == i && m.focusStep == -1)
+		marker := "  "
+		if focused {
+			marker = "▸ "
+		}
+		expanded := m.expandedPhases[i]
+		caret := "▸"
+		if expanded {
+			caret = "▾"
+		}
+		// Layout: "▸ ▾ [x] Phase title"
+		//          0 2  4
+		// Checkbox spans columns 4..7 (e.g. "[x] " — 4 chars incl. trailing space).
+		row := marker + caret + " " + RenderPhaseStatus(ph)
+		if focused {
+			row = StyleFocused.Render(stripStyleForFocus(marker+caret+" "+plainPhaseStatus(ph)))
+		}
+		b.WriteString(row)
+		b.WriteByte('\n')
+		m.hitRows[y] = hitRegion{phaseIdx: i, stepIdx: -1, cbStart: 4, cbEnd: 7}
+		y++
+
+		if !expanded {
+			continue
+		}
+		for j, st := range ph.Steps {
+			stepFocused := (m.focusPhase == i && m.focusStep == j)
+			pad := "      "
+			line := pad + RenderStepStatus(st)
+			if stepFocused {
+				line = StyleFocused.Render(pad + plainStepStatus(st))
+			}
+			b.WriteString(line)
+			b.WriteByte('\n')
+			// Checkbox under "      [x] …" → cols 6..9.
+			m.hitRows[y] = hitRegion{phaseIdx: i, stepIdx: j, cbStart: 6, cbEnd: 9}
+			y++
+		}
+	}
+
+	// Spacer + help strip.
+	b.WriteByte('\n')
+	help := "↑/↓ move · space toggle · enter expand · J/K reorder · s send · q quit"
+	b.WriteString(StyleHelp.Render(help))
+	b.WriteByte('\n')
+
+	if m.lastErr != "" {
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#b91c1c", Dark: "#f87171"}).
+			Bold(true).
+			Render("error: " + m.lastErr))
+		b.WriteByte('\n')
+	} else if m.lastFlash != "" {
+		b.WriteString(StyleConsensusOK.Render(m.lastFlash))
+		b.WriteByte('\n')
+	}
+
+	return b.String()
+}
+
+// plainPhaseStatus / plainStepStatus return the unstyled checkbox+title
+// text so that StyleFocused (which sets its own background) can wrap a
+// clean string without nested ANSI codes that confuse some terminals.
+func plainPhaseStatus(ph planparse.Phase) string {
+	done, total := 0, 0
+	for _, s := range ph.Steps {
+		total++
+		if s.Done {
+			done++
+		}
+	}
+	mark := "[ ]"
+	switch {
+	case ph.Status == planparse.StatusDone || (total > 0 && done == total):
+		mark = "[x]"
+	case ph.Status == planparse.StatusInProgress || (total > 0 && done > 0):
+		mark = "[~]"
+	}
+	return mark + " " + ph.Title
+}
+
+func plainStepStatus(s planparse.Step) string {
+	if s.Done {
+		return "[x] " + s.Title
+	}
+	return "[ ] " + s.Title
+}
+
+// stripStyleForFocus is a no-op kept for clarity at the call site:
+// the focus style replaces background/foreground anyway, so the
+// caller passes plain text in.
+func stripStyleForFocus(s string) string { return s }
+
+// ── Consensus loading ─────────────────────────────────────────────────
+
+// loadConsensus reads <plan-dir>/consensus.state and returns the
+// uppercased CONSENSUS_STATE value, or "" if the file is missing or
+// has no recognised state field.
+func loadConsensus(planPath string) string {
+	statePath := filepath.Join(filepath.Dir(planPath), "consensus.state")
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -195,580 +497,80 @@ func parseConsensusState(content string) consensusState {
 			continue
 		}
 		key := strings.TrimSpace(line[:eq])
-		val := strings.TrimSpace(line[eq+1:])
-		val = strings.Trim(val, `"'`)
-		switch key {
-		case "CONSENSUS_STATE", "STATE":
-			cs.State = strings.ToUpper(val)
-		case "ROUND":
-			cs.Round = val
-		case "ARCHITECT_VERDICT":
-			cs.ArchitectVerdict = strings.ToUpper(val)
-		case "CRITIC_VERDICT":
-			cs.CriticVerdict = strings.ToUpper(val)
+		val := strings.Trim(strings.TrimSpace(line[eq+1:]), `"'`)
+		if strings.EqualFold(key, "CONSENSUS_STATE") || strings.EqualFold(key, "STATE") {
+			return strings.ToUpper(val)
 		}
 	}
-	return cs
+	return ""
 }
 
-// planTick drives the streaming re-read of the plan file. 400ms is fast
-// enough to feel live for partial writes but cheap enough to avoid churn.
-func planTickCmd() tea.Cmd {
-	return tea.Tick(400*time.Millisecond, func(t time.Time) tea.Msg {
-		return planTickMsg(t)
-	})
-}
+// ── Plan discovery ────────────────────────────────────────────────────
 
-// slowTick refreshes worker status and research reports less often.
-func slowTickCmd() tea.Cmd {
-	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
-		return slowTickMsg(t)
-	})
-}
-
-// ── Tea interface ─────────────────────────────────────────────────────
-
-func (m model) Init() tea.Cmd {
-	return tea.Batch(
-		readPlanCmd(m.planPath),
-		readConsensusCmd(m.planPath),
-		readStatusCmd(m.runtimeDir, m.teamWindow),
-		readResearchCmd(m.runtimeDir),
-		planTickCmd(),
-		slowTickCmd(),
-	)
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-		headerH := m.headerHeight()
-		statusH := m.statusBarHeight()
-		vpH := m.height - headerH - statusH
-		if vpH < 1 {
-			vpH = 1
-		}
-
-		if !m.ready {
-			m.viewport = viewport.New(m.width, vpH)
-			m.viewport.SetContent(m.renderedPlan)
-			m.ready = true
-		} else {
-			m.viewport.Width = m.width
-			m.viewport.Height = vpH
-		}
-
-		if m.planContent != "" && m.width != m.lastRenderW {
-			m.renderedPlan = m.renderPlan(m.width - 2)
-			m.lastRenderW = m.width
-			m.viewport.SetContent(m.renderedPlan)
-		}
-
-		return m, nil
-
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "g":
-			m.viewport.GotoTop()
-			return m, nil
-		case "G":
-			m.viewport.GotoBottom()
-			return m, nil
-		}
-		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
-		return m, cmd
-
-	case planReadMsg:
-		if msg.content != m.planContent {
-			m.planContent = msg.content
-			m.lastChanged = time.Now()
-			m.planMtime = msg.mtime
-			if plan, err := planparse.Parse([]byte(msg.content)); err == nil {
-				m.plan = plan
-			} else {
-				m.plan = &planparse.Plan{Raw: msg.content}
-			}
-			m.renderedPlan = m.renderPlan(m.width - 2)
-			m.lastRenderW = m.width
-			if m.ready {
-				m.viewport.SetContent(m.renderedPlan)
-			}
-		}
-		return m, nil
-
-	case statusReadMsg:
-		m.workers = msg.workers
-		return m, nil
-
-	case researchReadMsg:
-		m.reports = msg.reports
-		return m, nil
-
-	case consensusReadMsg:
-		if !msg.present {
-			if m.consensusPresent {
-				m.consensusPresent = false
-				m.consensus = consensusState{}
-				m.consensusMtime = time.Time{}
-			}
-			return m, nil
-		}
-		if !msg.mtime.Equal(m.consensusMtime) {
-			m.consensusPresent = true
-			m.consensus = msg.state
-			m.consensusMtime = msg.mtime
-		}
-		return m, nil
-
-	case planTickMsg:
-		return m, tea.Batch(
-			readPlanCmd(m.planPath),
-			readConsensusCmd(m.planPath),
-			planTickCmd(),
-		)
-
-	case slowTickMsg:
-		return m, tea.Batch(
-			readStatusCmd(m.runtimeDir, m.teamWindow),
-			readResearchCmd(m.runtimeDir),
-			slowTickCmd(),
-		)
-	}
-
-	return m, nil
-}
-
-func (m model) View() string {
-	if !m.ready {
-		return "Loading..."
-	}
-
-	header := m.renderHeader()
-	statusBar := m.renderStatusBar()
-	return header + m.viewport.View() + "\n" + statusBar
-}
-
-// ── Header ────────────────────────────────────────────────────────────
-
-func (m model) headerHeight() int {
-	h := 2 // plan file + status line
-	if m.goal != "" {
-		h++
-	}
-	return h
-}
-
-func (m model) renderHeader() string {
-	th := m.theme
-	var lines []string
-
-	if m.goal != "" {
-		lines = append(lines, th.Bold.Render(m.goal))
-	}
-
-	basename := filepath.Base(m.planPath)
-	live := m.liveBadge()
-	headerLine := th.Dim.Render("Plan: "+basename) + "  " + live
-	if badge := m.consensusBadge(); badge != "" {
-		headerLine += "  " + badge
-	}
-	lines = append(lines, headerLine)
-
-	scrollPct := 0
-	if m.viewport.TotalLineCount() > 0 {
-		scrollPct = int(m.viewport.ScrollPercent() * 100)
-	}
-	lines = append(lines, th.Faint.Render(fmt.Sprintf("↑↓/j/k scroll · g/G top/bottom · q quit · %d%%", scrollPct)))
-
-	return strings.Join(lines, "\n") + "\n"
-}
-
-// consensusBadge renders a short colored tag reflecting the current
-// Planner/Architect/Critic review state. Returns "" when no consensus.state
-// file has been written yet — the badge is hidden rather than crashing.
-func (m model) consensusBadge() string {
-	if !m.consensusPresent {
+// newestMasterplan returns the lexicographically-greatest masterplan-*.md
+// file under .doey/plans/, which (because of the YYYYMMDD-HHMMSS naming)
+// is also the most recent. Returns "" if no plans exist.
+func newestMasterplan() string {
+	matches, _ := filepath.Glob(".doey/plans/masterplan-*.md")
+	if len(matches) == 0 {
 		return ""
 	}
-	th := m.theme
-	state := m.consensus.State
-	round := m.consensus.Round
-	if round == "" {
-		round = "1"
-	}
-	var fg lipgloss.AdaptiveColor
-	var text string
-	switch state {
-	case "DRAFT", "":
-		fg = th.Muted
-		text = "DRAFT"
-	case "UNDER_REVIEW":
-		fg = th.Warning
-		text = "REVIEW r" + round
-	case "REVISIONS_NEEDED":
-		fg = th.Highlight
-		text = "REVISING r" + round
-	case "CONSENSUS", "APPROVED":
-		fg = th.Success
-		text = "✓ CONSENSUS"
-	case "ESCALATED":
-		fg = th.Danger
-		text = "⚠ ESCALATED"
-	default:
-		fg = th.Muted
-		text = state
-	}
-	return lipgloss.NewStyle().Foreground(fg).Bold(true).Render(text)
-}
-
-// liveBadge returns a "● LIVE" pulse when the plan file was written in the
-// last 2 seconds, otherwise a dim "○ idle" marker.
-func (m model) liveBadge() string {
-	th := m.theme
-	if !m.lastChanged.IsZero() && time.Since(m.lastChanged) < 2*time.Second {
-		return lipgloss.NewStyle().Foreground(th.Success).Bold(true).Render("● LIVE")
-	}
-	return th.Faint.Render("○ idle")
-}
-
-// ── Status bar ────────────────────────────────────────────────────────
-
-func (m model) statusBarHeight() int {
-	if len(m.workers) == 0 && len(m.reports) == 0 {
-		return 1
-	}
-	h := 2
-	rCount := len(m.reports)
-	if rCount > 0 {
-		h++
-		if rCount > 5 {
-			h += 5 + 1
-		} else {
-			h += rCount
-		}
-	}
-	return h
-}
-
-func (m model) renderStatusBar() string {
-	th := m.theme
-
-	if len(m.workers) == 0 && len(m.reports) == 0 {
-		return th.Faint.Render("No workers detected")
-	}
-
-	border := lipgloss.NewStyle().
-		Foreground(th.Separator).
-		Render(strings.Repeat("─", m.width))
-
-	var out strings.Builder
-	out.WriteString(border)
-	out.WriteByte('\n')
-
-	if len(m.workers) > 0 {
-		var parts []string
-		for _, w := range m.workers {
-			label := fmt.Sprintf("W%d", w.paneIdx)
-			st := w.status
-			if st == "" {
-				st = "?"
-			}
-			styled := colorStatus(st, th)
-			entry := th.Dim.Render(label+": ") + styled
-			if w.task != "" {
-				entry += th.Faint.Render(" " + truncate(w.task, 20))
-			}
-			parts = append(parts, entry)
-		}
-		out.WriteString(strings.Join(parts, th.Faint.Render(" | ")))
-		out.WriteByte('\n')
-	} else {
-		out.WriteString(th.Faint.Render("No workers detected"))
-		out.WriteByte('\n')
-	}
-
-	if len(m.reports) > 0 {
-		out.WriteString(th.Tag.Render("Research") + th.Faint.Render(fmt.Sprintf(" (%d reports)", len(m.reports))))
-		out.WriteByte('\n')
-		shown := len(m.reports)
-		if shown > 5 {
-			shown = 5
-		}
-		for i := 0; i < shown; i++ {
-			r := m.reports[i]
-			name := strings.TrimSuffix(r.filename, ".md")
-			line := th.Dim.Render("  "+name+": ") + th.Body.Render(truncate(r.summary, m.width-len(name)-6))
-			out.WriteString(line)
-			out.WriteByte('\n')
-		}
-		if len(m.reports) > 5 {
-			out.WriteString(th.Faint.Render(fmt.Sprintf("  … and %d more", len(m.reports)-5)))
-			out.WriteByte('\n')
-		}
-	}
-
-	return out.String()
-}
-
-func colorStatus(status string, th styles.Theme) string {
-	upper := strings.ToUpper(status)
-	switch upper {
-	case "BUSY", "WORKING":
-		return lipgloss.NewStyle().Foreground(th.Warning).Bold(true).Render(upper)
-	case "READY":
-		return lipgloss.NewStyle().Foreground(th.Success).Render(upper)
-	case "FINISHED":
-		return lipgloss.NewStyle().Foreground(th.Info).Render(upper)
-	case "ERROR":
-		return lipgloss.NewStyle().Foreground(th.Danger).Bold(true).Render(upper)
-	case "RESERVED":
-		return lipgloss.NewStyle().Foreground(th.Muted).Render(upper)
-	default:
-		return lipgloss.NewStyle().Foreground(th.Muted).Render(upper)
-	}
-}
-
-func truncate(s string, max int) string {
-	if max <= 1 {
-		return ""
-	}
-	if len(s) <= max {
-		return s
-	}
-	return s[:max-1] + "…"
-}
-
-// ── Plan rendering ────────────────────────────────────────────────────
-
-// renderPlan chooses between the structured renderer and the glamour
-// markdown fallback. The structured renderer is used whenever the parser
-// gave us something to work with; otherwise we fall back to glamour so
-// raw markdown still looks reasonable.
-func (m model) renderPlan(width int) string {
-	if width < 20 {
-		width = 20
-	}
-	if m.plan != nil && m.plan.HasStructure() {
-		return m.renderStructured(m.plan, width)
-	}
-	return renderMarkdown(m.planContent, width)
-}
-
-func renderMarkdown(content string, width int) string {
-	if width < 20 {
-		width = 20
-	}
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		return content
-	}
-	out, err := renderer.Render(content)
-	if err != nil {
-		return content
-	}
-	return out
-}
-
-// renderStructured lays out a parsed plan using the Doey theme so it
-// visually matches the rest of the TUI. Sections: Title → Goal → Phases
-// → Deliverables → Risks → Success Criteria.
-func (m model) renderStructured(plan *planparse.Plan, width int) string {
-	th := m.theme
-	var b strings.Builder
-
-	if plan.Title != "" {
-		b.WriteString(th.Title.Render(plan.Title))
-		b.WriteString("\n")
-	}
-
-	if plan.Goal != "" {
-		b.WriteString(th.SectionHeader.Render("Goal"))
-		b.WriteString("\n")
-		b.WriteString(th.Body.Render(wrap(plan.Goal, width-2)))
-		b.WriteString("\n\n")
-	}
-
-	if plan.Context != "" {
-		b.WriteString(th.SectionHeader.Render("Context"))
-		b.WriteString("\n")
-		b.WriteString(th.Body.Render(wrap(plan.Context, width-2)))
-		b.WriteString("\n\n")
-	}
-
-	if len(plan.Phases) > 0 {
-		b.WriteString(th.SectionHeader.Render("Phases"))
-		b.WriteString("\n\n")
-		for i, ph := range plan.Phases {
-			b.WriteString(m.renderPhase(i+1, ph, width))
-			b.WriteString("\n")
-		}
-	}
-
-	if len(plan.Deliverables) > 0 {
-		b.WriteString(th.SectionHeader.Render("Deliverables"))
-		b.WriteString("\n")
-		for _, d := range plan.Deliverables {
-			b.WriteString("  ")
-			b.WriteString(th.Tag.Render("•"))
-			b.WriteString(" ")
-			b.WriteString(th.Body.Render(d))
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-	}
-
-	if len(plan.Risks) > 0 {
-		b.WriteString(th.SectionHeader.Render("Risks"))
-		b.WriteString("\n")
-		for _, r := range plan.Risks {
-			b.WriteString("  ")
-			b.WriteString(lipgloss.NewStyle().Foreground(th.Warning).Bold(true).Render("!"))
-			b.WriteString(" ")
-			b.WriteString(th.Body.Render(r))
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-	}
-
-	if len(plan.SuccessCriteria) > 0 {
-		b.WriteString(th.SectionHeader.Render("Success Criteria"))
-		b.WriteString("\n")
-		for _, s := range plan.SuccessCriteria {
-			b.WriteString("  ")
-			b.WriteString(lipgloss.NewStyle().Foreground(th.Success).Render("✓"))
-			b.WriteString(" ")
-			b.WriteString(th.Body.Render(s))
-			b.WriteString("\n")
-		}
-		b.WriteString("\n")
-	}
-
-	return b.String()
-}
-
-// renderPhase renders a single phase card with a status badge, the phase
-// title, optional prose body, and the step checklist.
-func (m model) renderPhase(num int, ph planparse.Phase, width int) string {
-	th := m.theme
-	var b strings.Builder
-
-	badge, titleStyle, bodyStyle := phaseStyles(ph.Status, th)
-
-	header := fmt.Sprintf("Phase %d — %s", num, ph.Title)
-	b.WriteString(titleStyle.Render(header))
-	b.WriteString("  ")
-	b.WriteString(badge)
-	b.WriteString("\n")
-
-	if ph.Body != "" {
-		for _, line := range strings.Split(strings.TrimSpace(ph.Body), "\n") {
-			b.WriteString("    ")
-			b.WriteString(bodyStyle.Render(line))
-			b.WriteString("\n")
-		}
-	}
-
-	for _, s := range ph.Steps {
-		var check string
-		var lineStyle lipgloss.Style
-		if s.Done {
-			check = lipgloss.NewStyle().Foreground(th.Success).Render("[✓]")
-			lineStyle = th.Dim
-		} else if ph.Status == planparse.StatusInProgress {
-			check = lipgloss.NewStyle().Foreground(th.Warning).Render("[•]")
-			lineStyle = th.Body
-		} else {
-			check = th.Faint.Render("[ ]")
-			lineStyle = bodyStyle
-		}
-		b.WriteString("    ")
-		b.WriteString(check)
-		b.WriteString(" ")
-		b.WriteString(lineStyle.Render(s.Title))
-		b.WriteString("\n")
-	}
-
-	return b.String()
-}
-
-// phaseStyles returns the badge, title style, and body style appropriate
-// for a given phase status. Done phases are dimmed, in-progress are bold
-// and foregrounded, planned are muted, failed are danger-colored.
-func phaseStyles(s planparse.PhaseStatus, th styles.Theme) (string, lipgloss.Style, lipgloss.Style) {
-	switch s {
-	case planparse.StatusDone:
-		badge := lipgloss.NewStyle().Foreground(th.Success).Bold(true).Render("✓ done")
-		return badge, th.Dim.Bold(true), th.Faint
-	case planparse.StatusInProgress:
-		badge := lipgloss.NewStyle().Foreground(th.Warning).Bold(true).Render("⟳ in-progress")
-		return badge, th.Bold, th.Body
-	case planparse.StatusFailed:
-		badge := lipgloss.NewStyle().Foreground(th.Danger).Bold(true).Render("✗ failed")
-		return badge, lipgloss.NewStyle().Foreground(th.Danger).Bold(true), th.Body
-	default:
-		badge := th.Faint.Render("○ planned")
-		return badge, th.Dim, th.Faint
-	}
-}
-
-// wrap performs naive word-wrap at the given width. Plan strings are
-// short so we prefer correctness + simplicity over fancy linebreaking.
-func wrap(s string, width int) string {
-	if width < 10 {
-		width = 10
-	}
-	var out strings.Builder
-	for i, para := range strings.Split(s, "\n") {
-		if i > 0 {
-			out.WriteByte('\n')
-		}
-		words := strings.Fields(para)
-		line := 0
-		for j, w := range words {
-			if j > 0 {
-				if line+1+len(w) > width {
-					out.WriteByte('\n')
-					line = 0
-				} else {
-					out.WriteByte(' ')
-					line++
-				}
-			}
-			out.WriteString(w)
-			line += len(w)
-		}
-	}
-	return out.String()
+	sort.Strings(matches)
+	return matches[len(matches)-1]
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
 
 func main() {
-	planFile := flag.String("plan-file", "", "Path to the masterplan markdown file (required)")
-	runtimeDir := flag.String("runtime-dir", "", "Doey runtime directory (required)")
-	goal := flag.String("goal", "", "Goal text to display at top")
-	teamWindow := flag.Int("team-window", 0, "Team window index for worker status")
+	planFlag := flag.String("plan", "", "Path to the masterplan markdown file (default: newest .doey/plans/masterplan-*.md)")
+	planFileFlag := flag.String("plan-file", "", "Alias for --plan (kept for the existing launcher script)")
+	// Accept and ignore legacy flags so the existing shell launcher
+	// keeps working without a coordinated rewrite.
+	_ = flag.String("runtime-dir", "", "(deprecated, ignored)")
+	_ = flag.String("goal", "", "(deprecated, ignored)")
+	_ = flag.Int("team-window", 0, "(deprecated, ignored)")
 	flag.Parse()
 
-	if *planFile == "" || *runtimeDir == "" {
-		fmt.Fprintf(os.Stderr, "Usage: doey-masterplan-tui --plan-file <path> --runtime-dir <path> [--goal <text>] [--team-window <int>]\n")
+	planPath := *planFlag
+	if planPath == "" {
+		planPath = *planFileFlag
+	}
+	if planPath == "" {
+		planPath = newestMasterplan()
+	}
+	if planPath == "" {
+		fmt.Fprintln(os.Stderr, "doey-masterplan-tui: no plan file given and no .doey/plans/masterplan-*.md found")
 		os.Exit(1)
 	}
 
-	m := initialModel(*planFile, *runtimeDir, *goal, *teamWindow)
+	data, err := os.ReadFile(planPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui: cannot read plan: %v\n", err)
+		os.Exit(1)
+	}
+	plan, err := planparse.Parse(data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui: parse error: %v\n", err)
+		os.Exit(1)
+	}
+	if !plan.HasStructure() {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui: plan %s has no structured sections — nothing to interact with\n", planPath)
+		os.Exit(0)
+	}
+
+	m := model{
+		plan:           plan,
+		planPath:       planPath,
+		consensus:      loadConsensus(planPath),
+		focusPhase:     0,
+		focusStep:      -1,
+		expandedPhases: map[int]bool{0: true},
+		hitRows:        make(map[int]hitRegion, 64),
+	}
+
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui: %v\n", err)
 		os.Exit(1)
 	}
 }
