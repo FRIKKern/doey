@@ -84,7 +84,7 @@ The current viewer only re-renders on save. Users want Cursor-like streaming.
 		t.Fatalf("Phases len = %d, want 3", len(p.Phases))
 	}
 
-	if p.Phases[0].Title != "Phase 1: Wire the file watcher" {
+	if p.Phases[0].Title != "Wire the file watcher" {
 		t.Errorf("Phase[0].Title = %q", p.Phases[0].Title)
 	}
 	if p.Phases[0].Status != StatusDone {
@@ -237,6 +237,86 @@ func TestPhaseStatusString(t *testing.T) {
 	for _, c := range cases {
 		if got := c.s.String(); got != c.want {
 			t.Errorf("%d.String() = %q, want %q", int(c.s), got, c.want)
+		}
+	}
+}
+
+func TestHasStructure(t *testing.T) {
+	// nil plan: no structure
+	var nilPlan *Plan
+	if nilPlan.HasStructure() {
+		t.Error("nil plan should not have structure")
+	}
+
+	// empty plan: no structure
+	empty := &Plan{}
+	if empty.HasStructure() {
+		t.Error("empty plan should not have structure")
+	}
+
+	// title-only plan: must NOT report structure — the structured
+	// renderer would discard the body and cause data loss.
+	titleOnly, err := Parse([]byte("# Plan: Just a title\n\nSome loose body text that is not in any section.\n"))
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+	if titleOnly.Title != "Just a title" {
+		t.Errorf("Title = %q", titleOnly.Title)
+	}
+	if titleOnly.HasStructure() {
+		t.Error("title-only plan must not report HasStructure() == true (would lose body)")
+	}
+
+	// one phase is enough to count as structured
+	withPhase, err := Parse([]byte("# Plan: T\n\n## Phases\n\n### Phase 1: Do the thing\n- [ ] Step\n"))
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+	if !withPhase.HasStructure() {
+		t.Error("plan with a phase should report HasStructure() == true")
+	}
+
+	// goal-only (no phases) is also structured enough to render
+	goalOnly, err := Parse([]byte("# Plan: T\n\n## Goal\nShip it.\n"))
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+	if !goalOnly.HasStructure() {
+		t.Error("plan with a goal should report HasStructure() == true")
+	}
+}
+
+func TestParsePhaseTitleStripsPrefix(t *testing.T) {
+	md := `## Phases
+
+### Phase 1: Wire the watcher
+- [ ] s
+
+### Phase 2 - Structured format
+- [ ] s
+
+### ⏳ Phase 3: Ship it
+- [ ] s
+
+### No prefix here
+- [ ] s
+`
+	p, err := Parse([]byte(md))
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+	want := []string{
+		"Wire the watcher",
+		"Structured format",
+		"Ship it",
+		"No prefix here",
+	}
+	if len(p.Phases) != len(want) {
+		t.Fatalf("phases = %d, want %d", len(p.Phases), len(want))
+	}
+	for i, ph := range p.Phases {
+		if ph.Title != want[i] {
+			t.Errorf("phase %d title = %q, want %q", i, ph.Title, want[i])
 		}
 	}
 }

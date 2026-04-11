@@ -16,6 +16,14 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
+_SPAWN_SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${_SPAWN_SELF_DIR}/masterplan-consensus.sh" ]; then
+  . "${_SPAWN_SELF_DIR}/masterplan-consensus.sh"
+elif [ -f "/home/doey/doey/shell/masterplan-consensus.sh" ]; then
+  . "/home/doey/doey/shell/masterplan-consensus.sh"
+fi
+
 PLAN_ID="${1:-}"
 if [ -z "$PLAN_ID" ]; then
   printf 'Usage: %s <plan-id>\n' "$(basename "$0")" >&2
@@ -58,6 +66,17 @@ PLAN_DB_ID="${PLAN_DB_ID:-}"
 if [ ! -f "$GOAL_FILE" ]; then
   printf 'ERROR: goal file missing: %s\n' "$GOAL_FILE" >&2
   exit 1
+fi
+
+# Initialize consensus state machine if the helper is available and state
+# doesn't already exist. Idempotent re-runs leave existing state intact.
+if command -v consensus_init >/dev/null 2>&1; then
+  if [ ! -f "${MP_DIR}/consensus.state" ]; then
+    consensus_init "$MP_DIR" "$PLAN_ID"
+    printf 'Consensus state initialized at %s/consensus.state\n' "$MP_DIR"
+  else
+    printf 'Consensus state already exists at %s/consensus.state\n' "$MP_DIR"
+  fi
 fi
 
 # Propagate env to session so panes inherit

@@ -38,28 +38,27 @@ printf 'Quick mode: %s\n' "$QUICK_MODE"
 
 ### Step 2: Ambiguity Detection
 
-Decide whether to run the interview. The interview is **mandatory by default** — it only gets skipped for `--quick` or goals that are clearly specific enough (long + contains concrete file paths).
+Decide whether to run the interview. The interview is **mandatory by default** — it only gets skipped for `--quick` or goals the helper classifies as `CLEAR`.
 
-Heuristic:
+Heuristic (implemented in `doey-masterplan-ambiguity.sh`):
 - `--quick` flag present → skip interview
-- Else if goal has ≥30 words AND contains at least one file-path-like token (`/`, `.sh`, `.go`, `.tmpl`, `.md`, `.ts`, `.tsx`, `.py`) → skip interview (goal already specific)
-- Else → run interview (default)
+- Else call `masterplan_ambiguity_score "$GOAL_TEXT"` — returns `CLEAR` or `AMBIGUOUS`
+- `CLEAR` → skip interview (goal already specific)
+- `AMBIGUOUS` → run interview (default)
 
 ```bash
+. "$HOME/.local/bin/doey-masterplan-ambiguity.sh"
 RUN_INTERVIEW=1
+CLASSIFICATION=quick
 if [ "$QUICK_MODE" = "1" ]; then
   RUN_INTERVIEW=0
 else
-  WORD_COUNT=$(printf '%s' "$GOAL_TEXT" | wc -w | tr -d ' ')
-  HAS_PATH=0
-  case "$GOAL_TEXT" in
-    *'/'*|*.sh*|*.go*|*.tmpl*|*.md*|*.ts*|*.tsx*|*.py*) HAS_PATH=1 ;;
-  esac
-  if [ "$WORD_COUNT" -ge 30 ] && [ "$HAS_PATH" = "1" ]; then
+  CLASSIFICATION=$(masterplan_ambiguity_score "$GOAL_TEXT")
+  if [ "$CLASSIFICATION" = "CLEAR" ]; then
     RUN_INTERVIEW=0
   fi
 fi
-printf 'Run interview: %s (words=%s has_path=%s)\n' "$RUN_INTERVIEW" "${WORD_COUNT:-0}" "${HAS_PATH:-0}"
+printf 'Run interview: %s (classification=%s)\n' "$RUN_INTERVIEW" "$CLASSIFICATION"
 ```
 
 ### Step 3: Setup Masterplan Working Directory (common to both modes)
@@ -239,6 +238,39 @@ bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${PLAN_ID}"
 
 The Masterplanner team is running in its own window. The Planner will clarify scope inline (no upfront interview was performed).
 ```
+
+### HARD GATE — Consensus Required Before Execution
+
+**This skill, the spawn helper, and any downstream caller MUST NOT transition a
+masterplan to execution/ready-for-dispatch until the consensus state machine
+reports `CONSENSUS`.** The state machine is implemented in:
+
+- `/home/doey/doey/shell/masterplan-consensus.sh` (helper library — sourceable)
+- `/home/doey/doey/shell/masterplan-review-loop.sh` (review round orchestrator)
+
+The state file lives at `${MP_DIR}/consensus.state` and is initialized by
+`doey-masterplan-spawn.sh` via `consensus_init`. Valid states:
+`DRAFT → UNDER_REVIEW → {CONSENSUS | REVISIONS_NEEDED} → UNDER_REVIEW …`,
+with `ESCALATED` as an escape hatch from any state.
+
+Before the plan can be handed to the Taskmaster for execution:
+
+```bash
+. /home/doey/doey/shell/masterplan-consensus.sh
+STATE="$(consensus_state "${MP_DIR}")"
+if [ "$STATE" != "CONSENSUS" ]; then
+  echo "HARD GATE: plan ${PLAN_ID} is in state '${STATE}' — execution refused." >&2
+  echo "Reviewer outputs (may or may not exist yet):" >&2
+  echo "  ${MP_DIR}/${PLAN_ID}.architect.md" >&2
+  echo "  ${MP_DIR}/${PLAN_ID}.critic.md" >&2
+  echo "Run the Planner/Architect/Critic review loop until both reviewers APPROVE." >&2
+  exit 1
+fi
+```
+
+Do NOT bypass this check. Do NOT manually set `CONSENSUS_STATE=CONSENSUS`. The
+only supported way to reach `CONSENSUS` is through `consensus_advance` after
+both the Architect and Critic reviewers have returned `**Verdict:** APPROVE`.
 
 ### Rules
 - Always use AskUserQuestion for user interaction — never inline questions

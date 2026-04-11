@@ -27,8 +27,24 @@ type planReadMsg struct {
 }
 type statusReadMsg struct{ workers []workerStatus }
 type researchReadMsg struct{ reports []researchReport }
+type consensusReadMsg struct {
+	present bool
+	state   consensusState
+	mtime   time.Time
+}
 type planTickMsg time.Time
 type slowTickMsg time.Time
+
+// ── Consensus state ───────────────────────────────────────────────────
+
+// consensusState mirrors the key=value fields written to
+// <plan-dir>/consensus.state by shell/masterplan-consensus.sh.
+type consensusState struct {
+	State            string // DRAFT | UNDER_REVIEW | REVISIONS_NEEDED | CONSENSUS | ESCALATED
+	Round            string
+	ArchitectVerdict string
+	CriticVerdict    string
+}
 
 // ── Worker status ─────────────────────────────────────────────────────
 
@@ -48,23 +64,26 @@ type researchReport struct {
 // ── Model ─────────────────────────────────────────────────────────────
 
 type model struct {
-	planPath     string
-	runtimeDir   string
-	goal         string
-	teamWindow   int
-	theme        styles.Theme
-	viewport     viewport.Model
-	planContent  string
-	plan         *planparse.Plan
-	renderedPlan string
-	lastRenderW  int
-	lastChanged  time.Time
-	planMtime    time.Time
-	workers      []workerStatus
-	reports      []researchReport
-	width        int
-	height       int
-	ready        bool
+	planPath         string
+	runtimeDir       string
+	goal             string
+	teamWindow       int
+	theme            styles.Theme
+	viewport         viewport.Model
+	planContent      string
+	plan             *planparse.Plan
+	renderedPlan     string
+	lastRenderW      int
+	lastChanged      time.Time
+	planMtime        time.Time
+	consensus        consensusState
+	consensusPresent bool
+	consensusMtime   time.Time
+	workers          []workerStatus
+	reports          []researchReport
+	width            int
+	height           int
+	ready            bool
 }
 
 func initialModel(planPath, runtimeDir, goal string, teamWindow int) model {
@@ -143,6 +162,55 @@ func readResearchCmd(runtimeDir string) tea.Cmd {
 	}
 }
 
+// readConsensusCmd reads <plan-dir>/consensus.state — a simple key=value
+// file written by shell/masterplan-consensus.sh. Missing file is not an
+// error; the badge is hidden until the file first appears.
+func readConsensusCmd(planPath string) tea.Cmd {
+	return func() tea.Msg {
+		statePath := filepath.Join(filepath.Dir(planPath), "consensus.state")
+		info, err := os.Stat(statePath)
+		if err != nil {
+			return consensusReadMsg{present: false}
+		}
+		data, err := os.ReadFile(statePath)
+		if err != nil {
+			return consensusReadMsg{present: false}
+		}
+		cs := parseConsensusState(string(data))
+		return consensusReadMsg{present: true, state: cs, mtime: info.ModTime()}
+	}
+}
+
+// parseConsensusState parses the key=value format written by the shell
+// consensus helper. Unknown keys are ignored; values may be quoted.
+func parseConsensusState(content string) consensusState {
+	var cs consensusState
+	for _, raw := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
+		val = strings.Trim(val, `"'`)
+		switch key {
+		case "CONSENSUS_STATE", "STATE":
+			cs.State = strings.ToUpper(val)
+		case "ROUND":
+			cs.Round = val
+		case "ARCHITECT_VERDICT":
+			cs.ArchitectVerdict = strings.ToUpper(val)
+		case "CRITIC_VERDICT":
+			cs.CriticVerdict = strings.ToUpper(val)
+		}
+	}
+	return cs
+}
+
 // planTick drives the streaming re-read of the plan file. 400ms is fast
 // enough to feel live for partial writes but cheap enough to avoid churn.
 func planTickCmd() tea.Cmd {
@@ -163,6 +231,7 @@ func slowTickCmd() tea.Cmd {
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		readPlanCmd(m.planPath),
+		readConsensusCmd(m.planPath),
 		readStatusCmd(m.runtimeDir, m.teamWindow),
 		readResearchCmd(m.runtimeDir),
 		planTickCmd(),
@@ -242,9 +311,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reports = msg.reports
 		return m, nil
 
+	case consensusReadMsg:
+		if !msg.present {
+			if m.consensusPresent {
+				m.consensusPresent = false
+				m.consensus = consensusState{}
+				m.consensusMtime = time.Time{}
+			}
+			return m, nil
+		}
+		if !msg.mtime.Equal(m.consensusMtime) {
+			m.consensusPresent = true
+			m.consensus = msg.state
+			m.consensusMtime = msg.mtime
+		}
+		return m, nil
+
 	case planTickMsg:
 		return m, tea.Batch(
 			readPlanCmd(m.planPath),
+			readConsensusCmd(m.planPath),
 			planTickCmd(),
 		)
 
@@ -289,7 +375,11 @@ func (m model) renderHeader() string {
 
 	basename := filepath.Base(m.planPath)
 	live := m.liveBadge()
-	lines = append(lines, th.Dim.Render("Plan: "+basename)+"  "+live)
+	headerLine := th.Dim.Render("Plan: "+basename) + "  " + live
+	if badge := m.consensusBadge(); badge != "" {
+		headerLine += "  " + badge
+	}
+	lines = append(lines, headerLine)
 
 	scrollPct := 0
 	if m.viewport.TotalLineCount() > 0 {
@@ -298,6 +388,44 @@ func (m model) renderHeader() string {
 	lines = append(lines, th.Faint.Render(fmt.Sprintf("↑↓/j/k scroll · g/G top/bottom · q quit · %d%%", scrollPct)))
 
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// consensusBadge renders a short colored tag reflecting the current
+// Planner/Architect/Critic review state. Returns "" when no consensus.state
+// file has been written yet — the badge is hidden rather than crashing.
+func (m model) consensusBadge() string {
+	if !m.consensusPresent {
+		return ""
+	}
+	th := m.theme
+	state := m.consensus.State
+	round := m.consensus.Round
+	if round == "" {
+		round = "1"
+	}
+	var fg lipgloss.AdaptiveColor
+	var text string
+	switch state {
+	case "DRAFT", "":
+		fg = th.Muted
+		text = "DRAFT"
+	case "UNDER_REVIEW":
+		fg = th.Warning
+		text = "REVIEW r" + round
+	case "REVISIONS_NEEDED":
+		fg = th.Highlight
+		text = "REVISING r" + round
+	case "CONSENSUS", "APPROVED":
+		fg = th.Success
+		text = "✓ CONSENSUS"
+	case "ESCALATED":
+		fg = th.Danger
+		text = "⚠ ESCALATED"
+	default:
+		fg = th.Muted
+		text = state
+	}
+	return lipgloss.NewStyle().Foreground(fg).Bold(true).Render(text)
 }
 
 // liveBadge returns a "● LIVE" pulse when the plan file was written in the
