@@ -341,7 +341,7 @@ doey_purge() {
 
   # Temp file for collecting stale file list
   local list_file now
-  list_file="$(mktemp /tmp/doey_purge_XXXXXX)"
+  list_file="$(mktemp "${TMPDIR:-/tmp}/doey_purge_XXXXXX")"
   trap "rm -f '$list_file'" RETURN
   now="$(date +%s)"
 
