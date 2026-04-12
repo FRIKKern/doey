@@ -105,7 +105,15 @@ _taskmaster_dbg_wake() {
     "$(date +%s)" "$1" "${2:-0}" >> "$_TASKMASTER_DBG_FILE" 2>/dev/null
 }
 
-_wake() { _taskmaster_dbg_wake "$1" "${2:-0}"; echo "WAKE_REASON=$1"; exit 0; }
+_wake() {
+  _taskmaster_dbg_wake "$1" "${2:-0}"
+  # Stats emit (task #521 Phase 2) — cooldown-gated so polling does NOT
+  # flood stats.db. Emit on state change (idle → wake) only.
+  if command -v doey-stats-emit.sh >/dev/null 2>&1 && _check_cooldown "taskmaster_wake" 30 2>/dev/null; then
+    (doey-stats-emit.sh worker taskmaster_wake "reason=${1:-unknown}" &) 2>/dev/null || true
+  fi
+  echo "WAKE_REASON=$1"; exit 0
+}
 
 SEEN_FILE="${RUNTIME_DIR}/status/taskmaster_seen_results"
 _seen_results=""
@@ -347,6 +355,14 @@ _taskmaster_bump_cycle() {
   _taskmaster_cycle=$((_taskmaster_cycle + 1))
   echo "$_taskmaster_cycle" > "$CYCLE_FILE"
 }
+
+# ── Polling-loop detector (task #525/#536) ────────────────────────────
+# Runs on every wake cycle. If this pane keeps waking without any real
+# tool work (no sentinel from on-pre-tool-use.sh), the counter bumps.
+# At 3 → warn event, at 5 → breaker + nudge + 30s backoff.
+violation_bump_counter "$PANE_SAFE" "TASKMASTER_WAIT" \
+  "${SESSION_NAME:-}" "${DOEY_ROLE:-coordinator}" \
+  "${TASKMASTER_PANE%%.*}" 2>/dev/null || true
 
 # ── Context % monitoring — auto-compact at 70%, restart at 85% ──────
 _CTX_COMPACT_COOLDOWN="${RUNTIME_DIR}/status/taskmaster_compact_ts"

@@ -7,10 +7,15 @@ trap 'exit 0' ERR
 # Stats emit (task #521 Phase 2) — fire tool_blocked ONLY when the hook
 # exits with 2 (DENY). Allow path (exit 0) triggers no emit, ensuring a
 # tool-call storm creates zero writes.
+# Polling-loop sentinel (task #525/#536) — on allow-path (exit 0), touch
+# the sentinel so violation_bump_counter knows real tool work happened.
 _doey_stats_on_exit() {
   _doey_exit_code=$?
   if [ "$_doey_exit_code" = "2" ] && command -v doey-stats-emit.sh >/dev/null 2>&1; then
     (doey-stats-emit.sh worker tool_blocked "reason=${_DOEY_BLOCK_REASON:-deny}" &) 2>/dev/null || true
+  fi
+  if [ "$_doey_exit_code" = "0" ] && [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
+    : > "${_RD}/status/${_PS}.tool_used_this_turn" 2>/dev/null || true
   fi
 }
 trap '_doey_stats_on_exit' EXIT
