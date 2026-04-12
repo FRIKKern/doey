@@ -61,6 +61,7 @@ func (m *InteractionsModel) SetSnapshot(snap runtime.Snapshot) {
 	if m.cursor >= len(m.interactions) {
 		m.cursor = max(0, len(m.interactions)-1)
 	}
+	m.clampOffset()
 }
 
 // SetSize updates the panel dimensions.
@@ -206,6 +207,21 @@ func (m *InteractionsModel) ensureVisible() {
 	if m.cursor >= m.offset+viewH {
 		m.offset = m.cursor - viewH + 1
 	}
+	m.clampOffset()
+}
+
+// clampOffset prevents the scroll offset from exceeding the content bounds.
+func (m *InteractionsModel) clampOffset() {
+	maxOffset := len(m.interactions) - m.viewportHeight()
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.offset > maxOffset {
+		m.offset = maxOffset
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
 }
 
 // viewportHeight returns the number of entry lines visible in the list.
@@ -243,7 +259,7 @@ func (m InteractionsModel) viewList() string {
 			PaddingTop(1).
 			Render("No interactions recorded yet")
 		content := header + "\n" + rule + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+		return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
 	}
 
 	// Count + live indicator
@@ -296,7 +312,7 @@ func (m InteractionsModel) viewList() string {
 	}
 
 	content := header + "\n" + rule + "\n" + count + scrollInd + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
 }
 
 // interactionTypeBadge returns a colored pill for the interaction type.
@@ -508,5 +524,5 @@ func (m InteractionsModel) viewDetail() string {
 
 	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + "\n" +
 		msgHeader + "\n" + msgRule + "\n" + msgBlock + ctxSection
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
 }
