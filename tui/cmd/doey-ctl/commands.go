@@ -218,6 +218,9 @@ func runTaskCreate(args []string) {
 		s.LogEvent(&store.Event{Type: "task_created", Source: eventSource(), TaskID: &dbID, Data: *title})
 		emitTaskStat(pd, "task_created", strconv.FormatInt(dbID, 10), map[string]string{"status": "pending"})
 
+		// Auto-export .task file so hooks always have it
+		autoExportTask(s, dbID, pd)
+
 		if jsonOutput {
 			printJSON(map[string]int64{"id": dbID})
 		} else {
@@ -469,6 +472,10 @@ func runTaskUpdate(args []string) {
 			}
 			s.LogEvent(&store.Event{Type: "task_updated", Source: eventSource(), TaskID: &id, Data: *field + "=" + *value})
 			emitTaskStat(pd, "task_updated", strconv.FormatInt(id, 10), nil)
+
+			// Auto-export .task file so hooks always have it
+			autoExportTask(s, id, pd)
+
 			if jsonOutput {
 				printJSON(map[string]any{"id": id, "field": *field, "value": *value, "status": "updated"})
 			}
@@ -2144,6 +2151,18 @@ func runTaskExport(args []string) {
 			fmt.Printf("exported %d → %s\n", t.ID, path)
 		}
 	}
+}
+
+// autoExportTask re-fetches a task by ID and writes its .task file.
+// Best-effort: errors are silently ignored since the DB write already succeeded.
+func autoExportTask(s *store.Store, id int64, projectDir string) {
+	t, err := s.GetTask(id)
+	if err != nil {
+		return
+	}
+	tasksDir := filepath.Join(projectDir, ".doey", "tasks")
+	_ = os.MkdirAll(tasksDir, 0755)
+	_ = s.ExportTaskToFile(*t, tasksDir)
 }
 
 // exportTask renders a single store.Task as .task file content.

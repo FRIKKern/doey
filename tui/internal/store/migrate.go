@@ -297,11 +297,137 @@ func (s *Store) upsertTaskFromFields(id int64, fields map[string]string) error {
 	return nil
 }
 
-// SyncTaskFiles is a no-op. Disabled in Phase 4: DB is now the primary store.
-// .task files are no longer synced into the DB. Use 'doey-ctl task export' for
-// .task file generation from the DB.
+// SyncTaskFiles exports all tasks from SQLite to .task files in tasksDir.
+// Returns count of files written and any warnings.
 func (s *Store) SyncTaskFiles(tasksDir string) (int, []string) {
-	return 0, nil
+	tasks, err := s.ListTasks("")
+	if err != nil {
+		return 0, []string{fmt.Sprintf("list tasks: %v", err)}
+	}
+	if len(tasks) == 0 {
+		return 0, nil
+	}
+	if err := os.MkdirAll(tasksDir, 0755); err != nil {
+		return 0, []string{fmt.Sprintf("mkdir %s: %v", tasksDir, err)}
+	}
+	var warnings []string
+	count := 0
+	for _, t := range tasks {
+		if err := s.ExportTaskToFile(t, tasksDir); err != nil {
+			warnings = append(warnings, fmt.Sprintf("task %d: %v", t.ID, err))
+			continue
+		}
+		count++
+	}
+	return count, warnings
+}
+
+// ExportTaskToFile writes a single task to a .task file in v3 format.
+func (s *Store) ExportTaskToFile(t Task, tasksDir string) error {
+	var b strings.Builder
+
+	writeStr := func(key, val string) {
+		if val != "" {
+			fmt.Fprintf(&b, "%s=%s\n", key, val)
+		}
+	}
+	writeAlways := func(key, val string) {
+		fmt.Fprintf(&b, "%s=%s\n", key, val)
+	}
+	writeInt := func(key string, val int) {
+		fmt.Fprintf(&b, "%s=%d\n", key, val)
+	}
+
+	sv := t.SchemaVersion
+	if sv == 0 {
+		sv = 3
+	}
+	writeInt("TASK_SCHEMA_VERSION", sv)
+	fmt.Fprintf(&b, "TASK_ID=%d\n", t.ID)
+	writeAlways("TASK_TITLE", t.Title)
+	writeAlways("TASK_STATUS", t.Status)
+	writeStr("TASK_TYPE", t.Type)
+	writeStr("TASK_TAGS", t.Tags)
+	writeStr("TASK_CREATED_BY", t.CreatedBy)
+	writeStr("TASK_ASSIGNED_TO", t.AssignedTo)
+	writeStr("TASK_TEAM", t.Team)
+	writeStr("TASK_DESCRIPTION", t.Description)
+	writeStr("TASK_ACCEPTANCE_CRITERIA", t.AcceptanceCriteria)
+	writeStr("TASK_HYPOTHESES", t.Hypotheses)
+	writeStr("TASK_DECISION_LOG", t.DecisionLog)
+
+	subtasks, _ := s.ListSubtasks(t.ID)
+	if len(subtasks) > 0 {
+		var parts []string
+		for _, st := range subtasks {
+			parts = append(parts, fmt.Sprintf("%d:%s:%s", st.Seq, st.Title, st.Status))
+		}
+		writeAlways("TASK_SUBTASKS", strings.Join(parts, `\n`))
+	} else {
+		writeAlways("TASK_SUBTASKS", "")
+	}
+
+	writeStr("TASK_RELATED_FILES", t.RelatedFiles)
+	writeStr("TASK_BLOCKERS", t.Blockers)
+
+	var tsParts []string
+	if t.CreatedAt > 0 {
+		tsParts = append(tsParts, fmt.Sprintf("created=%d", t.CreatedAt))
+	}
+	if len(tsParts) > 0 {
+		writeAlways("TASK_TIMESTAMPS", strings.Join(tsParts, "|"))
+	}
+
+	writeInt("TASK_CURRENT_PHASE", t.CurrentPhase)
+	writeInt("TASK_TOTAL_PHASES", t.TotalPhases)
+	writeStr("TASK_NOTES", t.Notes)
+	fmt.Fprintf(&b, "TASK_UPDATED=%d\n", t.UpdatedAt)
+
+	if t.PlanID != nil {
+		fmt.Fprintf(&b, "TASK_PLAN_ID=%d\n", *t.PlanID)
+	}
+
+	writeStr("TASK_ATTACHMENTS", t.Attachments)
+	if t.Priority != 0 {
+		writeInt("TASK_PRIORITY", t.Priority)
+	}
+	writeStr("TASK_DEPENDS_ON", t.DependsOn)
+	writeStr("TASK_MERGED_INTO", t.MergedInto)
+	writeStr("TASK_DISPATCH_MODE", t.DispatchMode)
+	writeStr("TASK_SUMMARY", t.Summary)
+	writeStr("TASK_PHASE", t.Phase)
+	writeStr("TASK_RESULT", t.Result)
+	writeStr("TASK_FILES", t.Files)
+	writeStr("TASK_COMMITS", t.Commits)
+	writeStr("TASK_REVIEW_VERDICT", t.ReviewVerdict)
+	writeStr("TASK_REVIEW_FINDINGS", t.ReviewFindings)
+	writeStr("TASK_REVIEW_TIMESTAMP", t.ReviewTimestamp)
+	writeStr("TASK_SHORTNAME", t.Shortname)
+
+	for _, st := range subtasks {
+		n := st.Seq
+		fmt.Fprintf(&b, "TASK_SUBTASK_%d_TITLE=%s\n", n, st.Title)
+		fmt.Fprintf(&b, "TASK_SUBTASK_%d_STATUS=%s\n", n, st.Status)
+		if st.Assignee != "" {
+			fmt.Fprintf(&b, "TASK_SUBTASK_%d_ASSIGNEE=%s\n", n, st.Assignee)
+		}
+		if st.Worker != "" {
+			fmt.Fprintf(&b, "TASK_SUBTASK_%d_WORKER=%s\n", n, st.Worker)
+		}
+		if st.CreatedAt > 0 {
+			fmt.Fprintf(&b, "TASK_SUBTASK_%d_CREATED_AT=%d\n", n, st.CreatedAt)
+		}
+		if st.CompletedAt > 0 {
+			fmt.Fprintf(&b, "TASK_SUBTASK_%d_COMPLETED_AT=%d\n", n, st.CompletedAt)
+		}
+	}
+
+	path := filepath.Join(tasksDir, fmt.Sprintf("%d.task", t.ID))
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(b.String()), 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // --- Plans ---

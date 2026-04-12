@@ -39,14 +39,13 @@ if [ -z "$SESSION_NAME" ]; then
   exit 1
 fi
 
-PROJECT="$(tmux show-environment "$SESSION_NAME" DOEY_PROJECT 2>/dev/null | cut -d= -f2- || true)"
-[ -z "$PROJECT" ] && PROJECT="$(tmux show-environment DOEY_PROJECT 2>/dev/null | cut -d= -f2- || true)"
-if [ -z "$PROJECT" ]; then
-  printf 'ERROR: DOEY_PROJECT not set in tmux session environment\n' >&2
+RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2- || true)"
+if [ -z "$RD" ]; then
+  printf 'ERROR: DOEY_RUNTIME not set in tmux session environment\n' >&2
   exit 1
 fi
 
-MP_DIR="/tmp/doey/${PROJECT}/${PLAN_ID}"
+MP_DIR="${RD}/${PLAN_ID}"
 ENV_FILE="${MP_DIR}/masterplan.env"
 if [ ! -f "$ENV_FILE" ]; then
   printf 'ERROR: masterplan env not found: %s\n' "$ENV_FILE" >&2

@@ -214,7 +214,7 @@ func statusObserve(args []string) {
 	statusBody, statusAge := readFileAndAge(statusFile)
 	statusVal := extractStatusField(statusBody)
 
-	heartbeatFile := filepath.Join(runtime, "heartbeat", paneSafe+".heartbeat")
+	heartbeatFile := filepath.Join(runtime, "status", paneSafe+".heartbeat")
 	var hbAgePtr *int
 	if fi, err := os.Stat(heartbeatFile); err == nil {
 		hb := int(time.Since(fi.ModTime()).Seconds())

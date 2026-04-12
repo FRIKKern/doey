@@ -222,7 +222,7 @@ case "${1:-}" in
     doey uninstall    # remove all installed files
     doey version      # show install info
     doey config       # edit config (project if .doey/ exists, else global)
-    doey config --show   # show current config values
+    doey config show  # show resolved config with source attribution
     doey config --global # edit global config
     doey config --reset  # reset config to defaults
     doey add-team 3x2 # add a team window (3x2 grid)
@@ -327,6 +327,7 @@ HELP
     unset _cfg_sub
     # 'doey config <subcommand>' routes to doey-ctl for DB config management;
     # bare 'doey config' or flags (--show/--global/--reset) → local editor
+    # 'doey config show' → resolved config with source attribution
     case "${2:-}" in
       get|set|list|delete)
         if command -v doey-ctl >/dev/null 2>&1; then
@@ -335,6 +336,11 @@ HELP
           printf 'Error: doey CLI tools not installed. Run "doey doctor" or reinstall.\n' >&2
           exit 1
         fi
+        ;;
+      show)
+        shift
+        doey_config "$@"
+        exit 0
         ;;
       *)
         shift

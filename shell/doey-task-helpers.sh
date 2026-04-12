@@ -457,27 +457,6 @@ task_list() { # project_dir [--status filter] [--all]
   fi
 }
 
-task_sync_runtime() { # TODO(phase3): migrate to doey when available
-  # project_dir runtime_dir → copy active tasks to runtime cache
-  local project_dir="$1" runtime_dir="$2"
-  local src="${project_dir}/.doey/tasks" dst="${runtime_dir}/tasks"
-  [ -d "$src" ] || return 0
-  mkdir -p "$dst"
-
-  local f line status
-  for f in "${src}"/*.task; do
-    [ -f "$f" ] || continue
-    [ -s "$f" ] || continue
-    status=""
-    while IFS= read -r line || [ -n "$line" ]; do
-      case "${line%%=*}" in TASK_STATUS) status="${line#*=}"; break ;; esac
-    done < "$f" || true
-    case "$status" in done|cancelled) continue ;; esac
-    cp "$f" "$dst/"
-  done
-  [ -f "${src}/.next_id" ] && cp "${src}/.next_id" "${dst}/.next_id"
-}
-
 task_add_decision() { # task_file entry_text → append timestamped decision
   if command -v doey-ctl >/dev/null 2>&1; then
     local _id _pd
