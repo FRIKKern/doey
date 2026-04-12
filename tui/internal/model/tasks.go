@@ -533,6 +533,7 @@ func (m *TasksModel) loadSelectedDetail() {
 		Theme:         m.theme,
 		Width:         rightW - 3,
 		Height:        m.height - 2,
+		Focused:       m.focused && !m.leftFocused,
 		SubtaskCursor: prevCursor,
 		Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
 		Events:        m.events,
@@ -1917,24 +1918,6 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		sections = append(sections, strings.Join(logLines, "\n"))
 	}
 
-	// Nav hint
-	sections = append(sections, "")
-	if m.focused {
-		hint := "← back to list"
-		if m.leftFocused {
-			hint = "→ or enter for details"
-		} else {
-			// Show review actions for pending tasks, standard actions otherwise
-			idx := m.list.Index()
-			if idx >= 0 && idx < len(m.entries) && m.entries[idx].Status == "pending_user_confirmation" {
-				hint += "  d deny  s skip  a accept  tab subtask  ]/[ attach"
-			} else {
-				hint += "  m move  s status  d dispatch  x cancel  tab subtask  ]/[ attach"
-			}
-		}
-		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
-	}
-
 	fullContent := strings.Join(sections, "\n")
 
 	// Apply scroll
@@ -1965,7 +1948,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(h).
-		Padding(0, 1).
+		Padding(1, 2).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(borderColor)
@@ -1978,6 +1961,11 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 // worker status, grammar-parsed activity log, and IPC messages.
 func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	t := m.theme
+
+	borderColor := t.Separator
+	if m.focused && !m.leftFocused {
+		borderColor = t.Primary
+	}
 
 	idx := m.list.Index()
 	if len(m.entries) == 0 || idx < 0 || idx >= len(m.entries) {
@@ -2004,6 +1992,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 			Theme:         m.theme,
 			Width:         w - 1,
 			Height:        h - 2,
+			Focused:       m.focused && !m.leftFocused,
 			SubtaskCursor: -1,
 			Messages:      FilterMessagesForTask(m.messages, task.ID, task.Team),
 			PaneStatuses:  paneStatusSlice(m.paneStatuses),
@@ -2018,6 +2007,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		renderW = 20
 	}
 	expanded.Width = renderW
+	expanded.Focused = m.focused && !m.leftFocused
 	vpH := h - 3 // header + scroll hint
 	if vpH < 1 {
 		vpH = 1
@@ -2080,7 +2070,14 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 		}
 	}
 
-	return lipgloss.NewStyle().Width(w).Height(h).Render(displayed)
+	return lipgloss.NewStyle().
+		Width(w).
+		Height(h).
+		Padding(1, 2).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(borderColor).
+		Render(displayed)
 }
 
 // viewHelp renders a floating keyboard help overlay.
