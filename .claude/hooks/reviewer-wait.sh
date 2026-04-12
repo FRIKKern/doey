@@ -31,7 +31,22 @@ MSG_DIR="${RUNTIME_DIR}/messages"
 trap 'NOW=$(date "+%Y-%m-%dT%H:%M:%S%z"); if command -v doey-ctl >/dev/null 2>&1; then doey status set "$REVIEWER_SAFE" "BUSY" 2>/dev/null || true; else write_pane_status "$_REVIEWER_STATUS_FILE" "BUSY" "Task Reviewer idle — listening" 2>/dev/null || true; fi' EXIT
 
 # ── Wake helper ───────────────────────────────────────────────────────
-_wake() { echo "WAKE_REASON=$1"; exit 0; }
+_wake() {
+  # Stats emit (task #521 Phase 2) — cooldown-gated so polling does NOT
+  # flood stats.db. Emit on state change (idle → wake) only.
+  if command -v doey-stats-emit.sh >/dev/null 2>&1 && _check_cooldown "reviewer_wake" 30 2>/dev/null; then
+    (doey-stats-emit.sh worker reviewer_wake "reason=${1:-unknown}" &) 2>/dev/null || true
+  fi
+  echo "WAKE_REASON=$1"; exit 0;
+}
+
+# ── Polling-loop detector (task #525/#536) ────────────────────────────
+# Runs on every wake cycle. If this pane keeps waking without any real
+# tool work (no sentinel from on-pre-tool-use.sh), the counter bumps.
+# At 3 → warn event, at 5 → breaker + nudge + 30s backoff.
+violation_bump_counter "$REVIEWER_SAFE" "REVIEWER_WAIT" \
+  "${SESSION_NAME:-}" "${DOEY_ROLE:-task_reviewer}" \
+  "${CORE_WINDOW}" 2>/dev/null || true
 
 # ── Check for actionable work ─────────────────────────────────────────
 _check_work() {
