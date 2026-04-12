@@ -67,12 +67,11 @@ Create the masterplan working directory, write the goal file, create the tracked
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-PROJECT=$(tmux show-environment DOEY_PROJECT 2>/dev/null | cut -d= -f2-)
 PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RD}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
 PROJECT_DIR="${PROJECT_DIR:-.}"
 PLANS_DIR="${PROJECT_DIR}/.doey/plans"
 PLAN_ID="masterplan-$(date +%Y%m%d-%H%M%S)"
-MP_DIR="/tmp/doey/${PROJECT}/${PLAN_ID}"
+MP_DIR="${RD}/${PLAN_ID}"
 SESSION_NAME=$(tmux display-message -p '#S' 2>/dev/null)
 mkdir -p "${MP_DIR}/research" "${PLANS_DIR}"
 echo "Masterplan ID: ${PLAN_ID}"

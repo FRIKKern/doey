@@ -21,10 +21,9 @@ Create the interview working directory and write the goal file so the Interviewe
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-PROJECT=$(tmux show-environment DOEY_PROJECT 2>/dev/null | cut -d= -f2-)
 SESSION_NAME=$(tmux display-message -p '#S' 2>/dev/null)
 INTERVIEW_ID="interview-$(date +%Y%m%d-%H%M%S)"
-INTERVIEW_DIR="/tmp/doey/${PROJECT}/${INTERVIEW_ID}"
+INTERVIEW_DIR="${RD}/${INTERVIEW_ID}"
 mkdir -p "${INTERVIEW_DIR}/research"
 echo "Interview ID: ${INTERVIEW_ID}"
 echo "Working directory: ${INTERVIEW_DIR}"
