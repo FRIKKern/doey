@@ -386,7 +386,7 @@ Never `send-keys "" Enter` — empty string swallows Enter. `doey_send_verified`
 doey msg read --pane "${DOEY_TEAM_WINDOW}.0" --unread
 ```
 
-Types: `worker_finished (done)` -> read result, synthesize, update log. `worker_finished (error)` -> investigate/retry. `freelancer_finished` -> research complete. `permission_request` -> handle per the Permission Requests table. After draining: re-sleep via the wait hook.
+Types: `worker_finished (done)` -> read result, synthesize, update log. `worker_finished (error)` -> investigate/retry. `freelancer_finished` -> research complete. `permission_request` -> handle per the Permission Requests table. `all_workers_done` -> all workers have FINISHED status — this is the completion signal. Compile results from `${RUNTIME_DIR}/results/pane_${W}_*.json` for each worker, run the Completion Verification Loop, then report to {{DOEY_ROLE_COORDINATOR}} and finish normally. Do NOT re-enter the sleep loop after this. After draining: re-sleep via the wait hook (unless `all_workers_done` was received).
 
 ## Reactive Sleep-Wake Loop
 
@@ -403,13 +403,14 @@ You are a **reactive event-driven agent** — you sleep by default and wake only
    |-------------|--------------|
    | `MSG` | `doey msg read --pane "${DOEY_TEAM_WINDOW}.0" --unread` — drain your queue once, process each message (`--unread` is atomic: returns + marks read in one call) |
    | `TRIGGERED` | Same as `MSG` — a stop hook or sender touched your trigger file alongside a queued message. Drain the queue |
-   | `TIMEOUT` | No trigger fired. Return to prompt so any pasted input can be read, then re-sleep. Do NOT scan state |
+   | `TIMEOUT` | Drain message queue once. If messages found, process them. If no messages and no dispatched workers pending, return to prompt and re-sleep. If TIMEOUT occurs repeatedly (3+) with no pending work, finish normally |
+   | `ALL_DONE` | All workers in team are FINISHED. Compile results and report completion via the Completion Verification Loop. Do NOT re-enter sleep loop |
 
 3. **Act** — Handle exactly what the wake event delivered. `worker_finished` → read `${RUNTIME_DIR}/results/pane_${W}_*.json`, synthesize, decide the next step. `permission_request` → respond per the Permission Requests table. `{{DOEY_ROLE_COORDINATOR}} message` → process and respond. One wake, one bundle of actions. Do NOT scan unchanged state.
 4. **Return to prompt** — After acting, stop and return to your prompt. Input delivered via paste-buffer or send-keys sits in your input box and is only read when you reach your prompt. If you re-sleep immediately without returning to the prompt, buffered input is lost.
 5. **Re-sleep (MANDATORY)** — Run `taskmaster-wait.sh` again. You must NEVER sit idle at an empty prompt. Every response must end with either returning to prompt (to accept pending input) or re-entering the sleep hook. There is no third option.
 
-**CRITICAL: you must ALWAYS re-enter the sleep loop.** After any response — startup briefing, wake handling, message reply — you must eventually run `taskmaster-wait.sh`. If you stop without running it, your team stalls: workers finish, stop hooks push messages into a queue nobody drains, and the task dies silently. The loop is forever: **Act → Return to prompt → Re-sleep → Wake → Act → ...**
+**CRITICAL: you must ALWAYS re-enter the sleep loop.** After any response — startup briefing, wake handling, message reply — you must eventually run `taskmaster-wait.sh`. If you stop without running it, your team stalls: workers finish, stop hooks push messages into a queue nobody drains, and the task dies silently. The loop is forever: **Act → Return to prompt → Re-sleep → Wake → Act → ...** **Exception:** After receiving `all_workers_done` or `ALL_DONE` wake, and completing the Completion Verification Loop, finish normally instead of re-entering the sleep loop. The stop hook will notify the {{DOEY_ROLE_COORDINATOR}}.
 
 ### Wake triggers in scope
 
@@ -417,6 +418,8 @@ All of the following arrive as `MSG` or `TRIGGERED` wakes on your pane — you d
 
 - `worker_finished` messages written by the worker stop hook (`stop-notify.sh`)
 - `worker_respawning` / `freelancer_finished` messages from the same hook
+- `all_workers_done` messages from `stop-notify.sh` when the last worker in the team finishes
+- `ALL_DONE` wake reason from `taskmaster-wait.sh` safety net when all worker status files show FINISHED
 - `permission_request` messages from workers blocked by `on-pre-tool-use.sh`
 - `review_result` messages from the {{DOEY_ROLE_TASK_REVIEWER}}
 - `workflow:*` messages dispatched by team workflow rules

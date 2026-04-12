@@ -90,6 +90,26 @@ if [ "$_IS_PASSIVE" = true ]; then
     done
   fi
 
+  # Safety net: check if all workers in team are done before TIMEOUT
+  _caller_window=$(echo "$_CALLER_PANE" | cut -d. -f1)
+  _team_env="${RUNTIME_DIR}/team_${_caller_window}.env"
+  if [ -f "$_team_env" ]; then
+    _all_fin=true
+    _w_list=$(grep '^WORKER_PANES=' "$_team_env" | sed 's/^WORKER_PANES=//;s/"//g')
+    for _wp in $(echo "$_w_list" | tr ',' ' '); do
+      _wp_safe=$(echo "${SESSION_NAME}:${_caller_window}.${_wp}" | tr ':.-' '_')
+      _wp_st=$(grep '^STATUS=' "${RUNTIME_DIR}/status/${_wp_safe}.status" 2>/dev/null | head -1 | cut -d= -f2)
+      case "$_wp_st" in
+        FINISHED|RESERVED) ;;
+        *) _all_fin=false; break ;;
+      esac
+    done
+    if [ "$_all_fin" = "true" ]; then
+      echo "WAKE_REASON=ALL_DONE"
+      exit 0
+    fi
+  fi
+
   echo "WAKE_REASON=TIMEOUT"
   exit 0
 fi
