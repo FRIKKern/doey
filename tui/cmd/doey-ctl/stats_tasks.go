@@ -20,7 +20,9 @@ var (
 )
 
 // statsResolvedSessionID returns the per-session UUID, read once from
-// $DOEY_SESSION_ID or ${DOEY_RUNTIME}/doey_session_id. Empty when unset.
+// $DOEY_SESSION_ID or ${DOEY_RUNTIME}/session_id (raw UUID, one line).
+// Empty when unset. Path/format matches the on-session-start.sh writer
+// and shell/doey-stats.sh fallback reader.
 func statsResolvedSessionID() string {
 	statsSessionOnce.Do(func() {
 		if id := os.Getenv("DOEY_SESSION_ID"); id != "" {
@@ -31,16 +33,17 @@ func statsResolvedSessionID() string {
 		if rt == "" {
 			return
 		}
-		data, err := os.ReadFile(filepath.Join(rt, "doey_session_id"))
+		data, err := os.ReadFile(filepath.Join(rt, "session_id"))
 		if err != nil {
 			return
 		}
 		for _, line := range strings.Split(string(data), "\n") {
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "DOEY_SESSION_ID=") {
-				statsSessionID = strings.TrimPrefix(line, "DOEY_SESSION_ID=")
-				return
+			if line == "" {
+				continue
 			}
+			statsSessionID = line
+			return
 		}
 	})
 	return statsSessionID
