@@ -129,6 +129,40 @@ check_stats() {
   fi
 }
 
+# ── Stats allowlist sync check ────────────────────────────────────────
+# The stats allowlist lives in two places: shell/ (source of truth) and
+# tui/cmd/doey-ctl/ (Go embed copy). If they diverge, events get dropped.
+check_stats_allowlist() {
+  local _repo="${1:-}"
+  if [ -z "$_repo" ]; then
+    _doc_check skip "allowlist sync" "repo dir unknown"
+    return 0
+  fi
+  local _shell_al="$_repo/shell/doey-stats-allowlist.txt"
+  local _go_al="$_repo/tui/cmd/doey-ctl/doey-stats-allowlist.txt"
+  if [ ! -f "$_shell_al" ]; then
+    _doc_check warn "allowlist sync" "shell copy missing: ${_shell_al/#$HOME/~}"
+    return 0
+  fi
+  if [ ! -f "$_go_al" ]; then
+    _doc_check warn "allowlist sync" "Go embed copy missing: ${_go_al/#$HOME/~}"
+    return 0
+  fi
+  if cmp -s "$_shell_al" "$_go_al"; then
+    _doc_check ok "allowlist sync" "shell ↔ Go embed identical"
+  else
+    _doc_check warn "allowlist sync" "files differ — run: cp ${_shell_al/#$HOME/~} ${_go_al/#$HOME/~}"
+    # Show which lines differ
+    local _diff_out
+    _diff_out="$(diff --label shell --label go-embed "$_shell_al" "$_go_al" 2>/dev/null | head -10 || true)"
+    if [ -n "$_diff_out" ]; then
+      printf '%s\n' "$_diff_out" | while IFS= read -r _line; do
+        printf '         %s\n' "$_line"
+      done
+    fi
+  fi
+}
+
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
@@ -423,6 +457,9 @@ check_doctor() {
 
   # ── Stats subsystem (Phase 3, task #521) ──
   check_stats
+
+  # ── Stats allowlist sync (shell ↔ Go embed) ──
+  check_stats_allowlist "$_doey_repo"
 
   # ── Summary footer ──
   printf '\n'

@@ -16,7 +16,7 @@ trap 'rm -rf "$TEST_TMP"' EXIT
 MOCK_BIN="${TEST_TMP}/bin"
 TEST_RUNTIME="${TEST_TMP}/runtime"
 TEST_PROJECT="${TEST_TMP}/project"
-mkdir -p "$MOCK_BIN" "${TEST_RUNTIME}"/{status,logs,errors,lifecycle,activity,research,reports,results,messages} "$TEST_PROJECT/.doey"
+mkdir -p "$MOCK_BIN" "${TEST_RUNTIME}"/{status,logs,errors,activity,research,reports,results,messages} "$TEST_PROJECT/.doey"
 touch "${TEST_RUNTIME}/.dirs_created"
 printf 'TASKMASTER_PANE=1.0\n' > "${TEST_RUNTIME}/session.env"
 

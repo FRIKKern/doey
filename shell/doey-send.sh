@@ -107,16 +107,6 @@ _doey_send_precheck() {
   cur_status=$(grep '^STATUS:' "$status_file" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
 
   if [ "$cur_status" = "BUSY" ]; then
-    local pending_dir="${runtime}/pending"
-    mkdir -p "$pending_dir" 2>/dev/null || true
-    local msg_file="${pending_dir}/${target_safe}_$(date +%s)_$$.msg"
-    {
-      echo "FROM=${PANE:-unknown}"
-      echo "TO=${target}"
-      echo "TIMESTAMP=$(date +%s)"
-      echo "---"
-      printf '%s' "$message"
-    } > "$msg_file"
     return 2
   fi
 
@@ -309,42 +299,6 @@ _doey_send_verified_inner() {
 
   echo "doey_send_verified: delivery failed after $max_retries attempts to $target" >&2
   return 1
-}
-
-# doey_deliver_pending <target_pane>
-#
-# Delivers queued messages for the target pane (oldest first).
-# Called when a pane becomes READY (e.g. from on-prompt-submit.sh).
-# Stops on first delivery failure; remaining messages stay queued.
-doey_deliver_pending() {
-  local target="$1"
-  local runtime="${DOEY_RUNTIME:-${RUNTIME_DIR:-/tmp/doey}}"
-  local target_safe
-  target_safe=$(printf '%s' "$target" | tr ':.-' '_')
-  local pending_dir="${runtime}/pending"
-  [ -d "$pending_dir" ] || return 0
-
-  local msg_files
-  msg_files=$(ls "${pending_dir}/${target_safe}_"*.msg 2>/dev/null | sort) || msg_files=""
-  [ -n "$msg_files" ] || return 0
-
-  local f
-  printf '%s\n' "$msg_files" | while IFS= read -r f; do
-    [ -f "$f" ] || continue
-    # Extract message content (everything after --- line)
-    local msg
-    msg=$(sed '1,/^---$/d' "$f" 2>/dev/null) || msg=""
-    if [ -z "$msg" ]; then
-      rm -f "$f" 2>/dev/null || true
-      continue
-    fi
-    # skip_precheck=1 to avoid re-queuing
-    if doey_send_verified "$target" "$msg" 1; then
-      rm -f "$f" 2>/dev/null || true
-    else
-      break
-    fi
-  done
 }
 
 # doey_send_command <target_pane> <command>

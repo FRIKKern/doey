@@ -1,17 +1,6 @@
 #!/usr/bin/env bash
-# PostToolUse: heartbeat (every tool call) + lint .sh files for bash 3.2 compatibility after Write/Edit
+# PostToolUse: lint .sh files for bash 3.2 compatibility after Write/Edit
 set -euo pipefail
-
-# Heartbeat — unconditional, zero-overhead mtime touch so observers can tell
-# a pane is actively calling tools even when STATUS: is stale. Must run before
-# any lint gating so every PostToolUse event refreshes mtime.
-_HB_DIR="${DOEY_RUNTIME:-/tmp/doey/doey}/heartbeat"
-mkdir -p "$_HB_DIR" 2>/dev/null || true
-_HB_PANE_SAFE="${DOEY_PANE_SAFE:-}"
-if [ -z "$_HB_PANE_SAFE" ]; then
-  _HB_PANE_SAFE=$(echo "${DOEY_PANE_ID:-${TMUX_PANE:-unknown}}" | tr ':.-' '_')
-fi
-touch "$_HB_DIR/${_HB_PANE_SAFE}.heartbeat" 2>/dev/null || true
 
 INPUT=$(cat)
 

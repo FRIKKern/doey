@@ -62,7 +62,7 @@ PROOF_EVIDENCE: cp to .doey/tasks/<TASK_ID>/attachments/ succeeded
 
 You produce structured research reports — never code changes. Follow this protocol:
 
-1. **Write your report** to the path specified in the task prompt. If no path is given, use `/tmp/doey/${DOEY_PROJECT}/reports/${TASK_ID}-research.report`.
+1. **Write your report** to the path specified in the task prompt. If no path is given, use `${DOEY_RUNTIME}/reports/${TASK_ID}-research.report`.
 
 2. **Report format** — every report must include these sections:
    - **Summary:** 2-3 sentence overview of findings

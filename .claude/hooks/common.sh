@@ -114,7 +114,7 @@ _parse_tool_field() {  # Parse field from tool hook JSON (jq preferred, grep fal
 
 _ensure_dirs() {
   [ -f "${RUNTIME_DIR}/.dirs_created" ] && return 0
-  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs,errors,lifecycle}
+  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs,errors}
   touch "${RUNTIME_DIR}/.dirs_created"
 }
 
@@ -492,10 +492,6 @@ notify_taskmaster() {  # Lifecycle event -> Taskmaster wake trigger
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
     doey event log --type "lifecycle_${status}" --source "${pane_id}" --target "taskmaster" --data "{\"team\":\"W${team_w}\",\"detail\":\"${detail}\"}" --project-dir "$PROJECT_DIR" 2>/dev/null || true
   fi
-  # Still write file-based lifecycle event for backward compat
-  mkdir -p "${RUNTIME_DIR}/lifecycle" 2>/dev/null || return 0
-  printf '%s|%s|%s|%s\n' "$pane_id" "$status" "$(date '+%H:%M:%S')" "$detail" \
-    > "${RUNTIME_DIR}/lifecycle/W${team_w}_${pane_id}_$(date +%s).evt" 2>/dev/null
   # Taskmaster wake trigger removed — stop-notify.sh is the sole wake source
 }
 

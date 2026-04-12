@@ -178,7 +178,6 @@ Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 | `broadcasts/` | Broadcast messages |
 | `messages/` | Inter-instance messages (created by `init_hook()`) |
 | `triggers/` | Wake triggers (`.trigger` files touched to wake wait hooks) |
-| `lifecycle/` | Lifecycle events from `notify_sm()` (`.evt` files) |
 | `tasks/` | Runtime task cache (synced from `${PROJECT_DIR}/.doey/tasks/` on session start) |
 | `issues/` | Issue reports from Subtaskmaster (`.issue` files) |
 | `logs/` | Per-pane runtime logs |

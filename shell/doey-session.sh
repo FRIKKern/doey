@@ -1513,27 +1513,110 @@ doey_config() {
   done
 
   case "${1:-}" in
-    --show)
+    show|--show)
+      # All known DOEY_ config variables with hardcoded defaults (mirrors doey.sh:88-121)
+      # Format: VAR=DEFAULT pairs, one per line, parsed below
+      local _cs_registry
+      _cs_registry="DOEY_INITIAL_WORKER_COLS=1
+DOEY_INITIAL_TEAMS=0
+DOEY_INITIAL_WORKTREE_TEAMS=0
+DOEY_INITIAL_FREELANCER_TEAMS=0
+DOEY_MAX_WORKERS=20
+DOEY_MAX_TEAMS=5
+DOEY_WORKER_LAUNCH_DELAY=1
+DOEY_TEAM_LAUNCH_DELAY=2
+DOEY_MANAGER_LAUNCH_DELAY=1
+DOEY_MANAGER_BRIEF_DELAY=2
+DOEY_IDLE_COLLAPSE_AFTER=60
+DOEY_IDLE_REMOVE_AFTER=300
+DOEY_PASTE_SETTLE_MS=800
+DOEY_BOOT_TIMEOUT=60
+DOEY_INFO_PANEL_REFRESH=300
+DOEY_MANAGER_MODEL=opus
+DOEY_WORKER_MODEL=opus
+DOEY_TASKMASTER_MODEL=opus
+DOEY_TUNNEL_ENABLED=false
+DOEY_TUNNEL_PROVIDER=auto
+DOEY_TUNNEL_PORTS=
+DOEY_TUNNEL_DOMAIN="
+
+      # Build ordered var list and apply defaults
+      local _cs_vars="" _cs_line _cs_v _cs_def
+      while IFS= read -r _cs_line || [ -n "$_cs_line" ]; do
+        [ -z "$_cs_line" ] && continue
+        _cs_v="${_cs_line%%=*}"
+        _cs_def="${_cs_line#*=}"
+        _cs_vars="${_cs_vars} ${_cs_v}"
+        eval "${_cs_v}='${_cs_def}'"
+        eval "_cs_src_${_cs_v}=default"
+      done <<EOF
+$_cs_registry
+EOF
+
+      # Layer 2: Snapshot before, source global, diff
+      if [ -f "$global_config" ]; then
+        # Capture pre-source values
+        local _cs_before
+        for _cs_v in $_cs_vars; do
+          eval "_cs_before_${_cs_v}=\${${_cs_v}}"
+        done
+        # shellcheck source=/dev/null
+        source "$global_config"
+        # Check what changed
+        for _cs_v in $_cs_vars; do
+          eval "_cs_before=\${_cs_before_${_cs_v}}"
+          eval "_cs_after=\${${_cs_v}}"
+          if [ "$_cs_before" != "$_cs_after" ]; then
+            eval "_cs_src_${_cs_v}=global"
+          fi
+        done
+      fi
+
+      # Layer 3: Snapshot before, source project, diff
+      if [ -n "$project_config" ] && [ -f "$project_config" ]; then
+        local _cs_before
+        for _cs_v in $_cs_vars; do
+          eval "_cs_before_${_cs_v}=\${${_cs_v}}"
+        done
+        # shellcheck source=/dev/null
+        source "$project_config"
+        for _cs_v in $_cs_vars; do
+          eval "_cs_before=\${_cs_before_${_cs_v}}"
+          eval "_cs_after=\${${_cs_v}}"
+          if [ "$_cs_before" != "$_cs_after" ]; then
+            eval "_cs_src_${_cs_v}=project"
+          fi
+        done
+      fi
+
+      # Print header
       doey_header "Doey Configuration"
       printf '\n'
+      printf "  ${DIM}Default:${RESET} %s\n" "$template"
       printf "  ${DIM}Global:${RESET}  %s" "$global_config"
       [ -f "$global_config" ] && printf " ${SUCCESS}(loaded)${RESET}\n" || printf " ${DIM}(not found)${RESET}\n"
       printf "  ${DIM}Project:${RESET} "
       if [ -n "$project_config" ]; then
-        printf "%s ${SUCCESS}(loaded — overrides global)${RESET}\n" "$project_config"
+        printf "%s ${SUCCESS}(loaded)${RESET}\n" "$project_config"
       else
         printf "${DIM}(no .doey/config.sh found)${RESET}\n"
       fi
-      printf "\n  ${BOLD}Current values:${RESET}\n"
-      printf "    DOEY_INITIAL_WORKER_COLS  = %s\n" "${DOEY_INITIAL_WORKER_COLS}"
-      printf "    DOEY_INITIAL_TEAMS        = %s\n" "${DOEY_INITIAL_TEAMS}"
-      printf "    DOEY_INITIAL_WORKTREE_TEAMS = %s\n" "${DOEY_INITIAL_WORKTREE_TEAMS}"
-      printf "    DOEY_MAX_WORKERS          = %s\n" "${DOEY_MAX_WORKERS}"
-      printf "    DOEY_MANAGER_MODEL        = %s\n" "${DOEY_MANAGER_MODEL}"
-      printf "    DOEY_WORKER_MODEL         = %s\n" "${DOEY_WORKER_MODEL}"
-      printf "    DOEY_WORKER_LAUNCH_DELAY  = %s\n" "${DOEY_WORKER_LAUNCH_DELAY}"
-      printf "    DOEY_TEAM_LAUNCH_DELAY    = %s\n" "${DOEY_TEAM_LAUNCH_DELAY}"
-      printf "    DOEY_BOOT_TIMEOUT         = %s\n" "${DOEY_BOOT_TIMEOUT}"
+
+      # Print table
+      printf "\n  ${BOLD}%-36s  %-10s  %s${RESET}\n" "VARIABLE" "VALUE" "SOURCE"
+      printf "  ${DIM}%-36s  %-10s  %s${RESET}\n" "------------------------------------" "----------" "-------"
+      local _cs_val _cs_src _cs_src_color
+      for _cs_v in $_cs_vars; do
+        eval "_cs_val=\${${_cs_v}}"
+        eval "_cs_src=\${_cs_src_${_cs_v}}"
+        case "$_cs_src" in
+          default) _cs_src_color="${DIM}" ;;
+          global)  _cs_src_color="${WARN}" ;;
+          project) _cs_src_color="${SUCCESS}" ;;
+          *)       _cs_src_color="${DIM}" ;;
+        esac
+        printf "  %-36s  %-10s  %b%s%b\n" "$_cs_v" "${_cs_val:-(unset)}" "$_cs_src_color" "$_cs_src" "$RESET"
+      done
       printf "\n"
       ;;
     --global|"")

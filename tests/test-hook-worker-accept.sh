@@ -11,7 +11,7 @@ PASS=0; FAIL=0
 TEST_TMP=$(mktemp -d)
 MOCK_BIN="${TEST_TMP}/bin"
 TEST_RUNTIME="${TEST_TMP}/runtime"
-mkdir -p "$MOCK_BIN" "${TEST_RUNTIME}"/{status,logs,errors,lifecycle,activity,research,reports,results,messages,debug}
+mkdir -p "$MOCK_BIN" "${TEST_RUNTIME}"/{status,logs,errors,activity,research,reports,results,messages,debug}
 touch "${TEST_RUNTIME}/.dirs_created"
 
 # session.env so get_taskmaster_pane returns "1.0" (core team = window 1)
