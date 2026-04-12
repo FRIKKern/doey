@@ -671,16 +671,6 @@ func (m AgentsModel) maxRightScroll() int {
 			sections = append(sections, "\n"+agent.Body)
 		}
 	}
-	// Nav hint
-	sections = append(sections, "")
-	if m.focused {
-		hint := "↳ back to list"
-		if m.leftFocused {
-			hint = "→ or enter for details"
-		}
-		sections = append(sections, ruleStyle.Render(hint))
-	}
-
 	lines := strings.Split(strings.Join(sections, "\n"), "\n")
 	viewport := h - 2
 	if viewport < 1 {
@@ -767,14 +757,19 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 		ruleW = 10
 	}
 
-	// Title
+	// Title with focus indicator
 	var dotColor lipgloss.TerminalColor = lipgloss.Color(agent.Color)
 	if agent.Color == "" {
 		dotColor = t.Muted
 	}
 	dot := lipgloss.NewStyle().Foreground(dotColor).Render("◆")
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(agent.Name)
-	sections = append(sections, dot+" "+title)
+	titleLine := dot + " " + title
+	if m.focused && !m.leftFocused {
+		focus := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("▸ ")
+		titleLine = focus + titleLine
+	}
+	sections = append(sections, titleLine)
 
 	// Model badge
 	if agent.Model != "" {
@@ -802,16 +797,6 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 		sections = append(sections, ruleStyle.Render(strings.Repeat("─", ruleW)))
 		sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render("Agent Instructions"))
 		sections = append(sections, m.renderMarkdown(agent.Body, w-4))
-	}
-
-	// Nav hint
-	sections = append(sections, "")
-	if m.focused {
-		hint := "↳ back to list"
-		if m.leftFocused {
-			hint = "→ or enter for details"
-		}
-		sections = append(sections, ruleStyle.Render(hint))
 	}
 
 	fullContent := strings.Join(sections, "\n")
