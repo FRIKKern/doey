@@ -87,6 +87,7 @@ func (m *MessagesModel) applyMsgFilters() {
 	if m.cursor >= len(m.filtered) {
 		m.cursor = max(0, len(m.filtered)-1)
 	}
+	m.clampMsgOffset()
 }
 
 // Update handles navigation, filter cycling, search input, and mouse events.
@@ -291,6 +292,21 @@ func (m *MessagesModel) ensureMsgVisible() {
 	if m.cursor >= m.offset+viewH {
 		m.offset = m.cursor - viewH + 1
 	}
+	m.clampMsgOffset()
+}
+
+// clampMsgOffset prevents the scroll offset from exceeding the content bounds.
+func (m *MessagesModel) clampMsgOffset() {
+	maxOffset := len(m.filtered) - m.msgViewportHeight()
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.offset > maxOffset {
+		m.offset = maxOffset
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
 }
 
 // msgViewportHeight returns the number of message lines visible in the list.
@@ -334,7 +350,7 @@ func (m MessagesModel) viewMsgList() string {
 			PaddingTop(1).
 			Render(emptyMsg)
 		content := header + "\n" + rule + "\n" + filterBar + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+		return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
 	}
 
 	// Summary bar with subject counts
@@ -385,7 +401,7 @@ func (m MessagesModel) viewMsgList() string {
 	}
 
 	content := header + "\n" + rule + "\n" + summaryBar + scrollInd + "\n" + filterBar + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
 }
 
 // renderSummaryBar shows message counts by subject type.
@@ -603,5 +619,5 @@ func (m MessagesModel) viewMsgDetail() string {
 
 	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + "\n" +
 		bodyHeader + "\n" + bodyRule + "\n" + bodyBlock
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
 }
