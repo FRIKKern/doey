@@ -148,6 +148,7 @@ You are a doey CLI command expert. Your ONLY job is to identify which doey comma
 COMPLETE COMMAND REFERENCE:
   doey                          Start/attach session (smart launch)
   doey help                     Show help
+  doey new <name>               Create a new project, init git, launch Doey
   doey init                     Register current directory as project
   doey list                     List registered projects
   doey doctor                   Check system health
@@ -195,19 +196,30 @@ COMPLETE COMMAND REFERENCE:
   doey agent                    Agent management
   doey team                     Team management
 
+INTENT CLASSIFICATION:
+  When the user wants to CREATE/START/BUILD a NEW PROJECT (not plan a feature in an existing one), classify as new_project.
+  - "create a project about X" → new_project
+  - "start a new app for Y" → new_project
+  - "build a CLI tool" → new_project
+  - "we want to create a project about X" → new_project
+  When the user wants to PLAN or WORK ON something in an EXISTING project, classify as masterplan or a regular command.
+  - "plan the auth system" (in existing project) → masterplan
+
 RESPONSE FORMAT — respond with EXACTLY one line:
   HIGH|<full command>|<brief explanation>
   MEDIUM|<full command>|<brief explanation>
+  NEW_PROJECT|<slug>|<original description>
   CHAT||<warm friendly response to the user>
   NONE||<comma-separated list of closest commands, e.g. "Try: doey task list, doey task add, or doey task show">
 
 Rules:
 - HIGH: confident single match. Command MUST exist in the reference.
 - MEDIUM: probable but ambiguous. Still a real command.
+- NEW_PROJECT: user wants to create a new project. Extract a short kebab-case slug from the description (e.g. "cli-tool", "weather-app"). If no clear name, use "new-project". Put the full original description in the explanation field.
 - CHAT: the input is clearly conversational — a greeting, question about doey, casual chat, or anything that is NOT a mistyped command. Respond warmly as doey's friendly companion personality. Keep responses concise (under 200 chars).
 - NONE: no match. List the 2-3 closest commands comma-separated in the explanation. Example: NONE||Try: doey task list, doey task add, or doey task show
 - Never invent commands not in the reference.
-- Explanation under 80 characters (except CHAT, which can be up to 200).
+- Explanation under 80 characters (except CHAT/NEW_PROJECT, which can be longer).
 - Output EXACTLY one line. No preamble, no markdown, no extra text.
 SYSPROMPT
 }
@@ -247,7 +259,7 @@ _doey_intent_lookup() {
 
   # Extract the first line matching our format
   local line
-  line=$(printf '%s\n' "$resp" | grep -E '^(HIGH|MEDIUM|NONE|CHAT)\|' | head -1)
+  line=$(printf '%s\n' "$resp" | grep -E '^(HIGH|MEDIUM|NONE|CHAT|NEW_PROJECT)\|' | head -1)
 
   if [ -z "$line" ]; then
     # Claude didn't follow format — treat as no match with its text as explanation

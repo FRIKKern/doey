@@ -12,6 +12,7 @@ When `doey <something>` fails because the command is unknown or the arguments do
 |--------|-----------|
 | `auto_correct` | Replaces this process with the corrected command via `exec` |
 | `suggest` | Prints up to 3 numbered options; you pick one with `1`/`2`/`3` |
+| `new_project` | Detects "create/start/build a project" intent and routes to `doey new <slug>` — works without an active session |
 | `clarify` | Prints one question and exits with status 1 |
 | `unknown` | Falls through to the original error message |
 
@@ -48,6 +49,17 @@ The fallback reuses your existing `ANTHROPIC_API_KEY` — the same key Claude Co
 ## Cost
 
 Each call sends a small system prompt plus your typed command, the CLI schema, and the last 5 shell history lines, capped at 200 output tokens. With Claude Haiku 4.5 pricing this works out to roughly **$0.0001 per call** — a rough estimate, but the right order of magnitude. You'd have to mistype thousands of commands to spend a cent.
+
+## New project detection
+
+When the user types something like `doey we want to create a project about X` or `doey build a CLI tool` without an active session, the fallback classifies this as a `new_project` intent instead of routing to `masterplan` (which requires a running session).
+
+The classifier extracts a kebab-case slug from the description (e.g. "cli-tool", "weather-app") and routes to `doey new <slug>`. If no clear name can be extracted, it prompts the user interactively (TTY) or falls back to "new-project".
+
+Examples:
+- `doey create a project about building a weather app` → `doey new weather-app`
+- `doey start a new CLI tool` → `doey new cli-tool`
+- `doey we want to build an API for tracking orders` → `doey new order-tracking-api`
 
 ## Destructive-action policy
 
