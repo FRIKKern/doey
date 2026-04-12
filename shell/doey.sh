@@ -444,6 +444,8 @@ HELP
     fi
     goal="${2:-}"
     [ -z "$goal" ] && { doey_error "Usage: doey masterplan \"goal text\""; exit 1; }
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill masterplan_started &) 2>/dev/null || true
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill skill_invoked cmd=masterplan &) 2>/dev/null || true
     require_running_session
     plan_id="masterplan-$(date +%Y%m%d-%H%M%S)"
     plan_dir="${runtime_dir}/${plan_id}"
@@ -557,6 +559,9 @@ MPEOF
   tunnel)
     require_running_session
     shift
+    _tunnel_state="${1:-help}"
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill "tunnel_${_tunnel_state}" &) 2>/dev/null || true
+    unset _tunnel_state
     _tunnel_env="${runtime_dir}/tunnel.env"
     case "${1:-}" in
       up|start)

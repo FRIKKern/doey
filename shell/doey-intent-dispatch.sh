@@ -135,6 +135,9 @@ _doey_intent_dispatch() {
     explanation="${rest#*|}"
   fi
 
+  # Stats: record intent-fallback classification (category=skill)
+  (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill intent_fallback "cmd=${typed}" "mapped_cmd=${command}" &) 2>/dev/null || true
+
   case "$confidence" in
     HIGH)
       if _intent_fb_is_destructive "$command"; then

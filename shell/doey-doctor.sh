@@ -43,10 +43,106 @@ _doc_check() {
   fi
 }
 
+# Stats schema version — must match tui/internal/statsdb/types.go::SchemaVersion.
+# Hardcoded here so doctor never needs doey-ctl to determine "what version
+# should the DB be at". Kept in sync manually with the Go constant.
+DOEY_STATSDB_SCHEMA_VERSION="${DOEY_STATSDB_SCHEMA_VERSION:-1}"
+
+# ── Stats health check ────────────────────────────────────────────────
+# Verifies stats.db reachability, schema version, kill-switch state, and
+# session ID presence. Gracefully handles fresh-install (no DB yet) and
+# missing doey-ctl. Never hard-fails — reports warn/skip instead so the
+# overall doctor exit code is not poisoned by stats.
+check_stats() {
+  printf "\n  ${BOLD}Stats:${RESET}\n"
+
+  # (d) DOEY_SESSION_ID presence — purely informational
+  if [ -n "${DOEY_SESSION_ID:-}" ]; then
+    _doc_check ok "session id" "set"
+  else
+    _doc_check skip "session id" "DOEY_SESSION_ID not set (outside doey session)"
+  fi
+
+  # (c) kill switch state
+  if [ "${DOEY_STATS:-}" = "0" ]; then
+    _doc_check warn "stats kill switch" "DOEY_STATS=0 (disabled)"
+  else
+    _doc_check ok "stats kill switch" "enabled"
+  fi
+
+  # (a) DB reachability — tolerate fresh install
+  local _stats_proj="${PROJECT_DIR:-$(pwd)}"
+  local _stats_db="${_stats_proj}/.doey/stats.db"
+  local _stats_parent="${_stats_proj}/.doey"
+  if [ -f "$_stats_db" ]; then
+    _doc_check ok "stats.db" "${_stats_db/#$HOME/~}"
+  elif [ -d "$_stats_parent" ] && [ -w "$_stats_parent" ]; then
+    _doc_check ok "stats.db" "absent but .doey/ writable (will create on first emit)"
+  elif [ -d "$_stats_proj" ] && [ -w "$_stats_proj" ]; then
+    _doc_check ok "stats.db" "absent; project dir writable (fresh install OK)"
+  else
+    _doc_check warn "stats.db" "no writable .doey/ under $_stats_proj"
+  fi
+
+  # (b) schema version match — requires doey-ctl + live DB; skip gracefully
+  if ! command -v doey-ctl >/dev/null 2>&1; then
+    _doc_check skip "stats schema" "doey-ctl not on PATH — deep check skipped"
+  elif [ ! -f "$_stats_db" ]; then
+    _doc_check skip "stats schema" "stats.db not yet created"
+  else
+    # Probe via doey-ctl query — Phase 1 stubs return empty JSON but the
+    # binary will still open the DB and run bootstrap. If that works, we
+    # treat schema as current. Deep version-pinning lands in Phase 4.
+    if doey-ctl stats query counters --project-dir "$_stats_proj" >/dev/null 2>&1; then
+      _doc_check ok "stats schema" "version ${DOEY_STATSDB_SCHEMA_VERSION}"
+    else
+      _doc_check warn "stats schema" "doey-ctl query counters failed"
+    fi
+  fi
+
+  # --stats-verbose: dump last 10 events and counters (Phase 1 stubs → empty)
+  if [ "${_DOC_STATS_VERBOSE:-0}" = "1" ]; then
+    printf "\n  ${BOLD}Stats — recent events (last 10):${RESET}\n"
+    if command -v doey-ctl >/dev/null 2>&1; then
+      local _stats_out
+      _stats_out=$(doey-ctl stats query recent --project-dir "$_stats_proj" --limit 10 2>/dev/null || true)
+      if [ -n "$_stats_out" ]; then
+        printf '    %s\n' "$_stats_out"
+      else
+        printf "    ${DIM}(no events returned)${RESET}\n"
+      fi
+    else
+      printf "    ${DIM}doey-ctl unavailable${RESET}\n"
+    fi
+    printf "\n  ${BOLD}Stats — counters:${RESET}\n"
+    if command -v doey-ctl >/dev/null 2>&1; then
+      local _stats_counts
+      _stats_counts=$(doey-ctl stats query counters --project-dir "$_stats_proj" 2>/dev/null || true)
+      if [ -n "$_stats_counts" ]; then
+        printf '    %s\n' "$_stats_counts"
+      else
+        printf "    ${DIM}(no counters returned)${RESET}\n"
+      fi
+    else
+      printf "    ${DIM}doey-ctl unavailable${RESET}\n"
+    fi
+  fi
+}
+
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
   _DOC_OK=0 _DOC_WARN=0 _DOC_FAIL=0 _DOC_SKIP=0
+
+  # Argument parsing — additive, does not alter any existing check.
+  _DOC_STATS_VERBOSE=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --stats-verbose) _DOC_STATS_VERBOSE=1; shift ;;
+      *) shift ;;
+    esac
+  done
+
   doey_header "Doey — System Check"
   printf '\n'
 
@@ -324,6 +420,9 @@ check_doctor() {
   else
     _doc_check skip "Taskmaster alive" "no running session for $(pwd)"
   fi
+
+  # ── Stats subsystem (Phase 3, task #521) ──
+  check_stats
 
   # ── Summary footer ──
   printf '\n'
