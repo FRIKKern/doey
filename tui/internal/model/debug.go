@@ -22,11 +22,12 @@ type DebugModel struct {
 	theme    styles.Theme
 
 	// Navigation
-	cursor     int  // selected entry index in filtered list
-	offset     int  // scroll offset for viewport
-	detailMode bool // true = showing detail for selected entry
-	autoScroll bool // true = follow newest entries (default on)
-	keyMap     keys.KeyMap
+	cursor             int  // selected entry index in filtered list
+	offset             int  // scroll offset for viewport
+	detailMode         bool // true = showing detail for selected entry
+	detailScrollOffset int  // scroll offset within the detail content
+	autoScroll         bool // true = follow newest entries (default on)
+	keyMap             keys.KeyMap
 
 	// Filters
 	severityFilter string // "" = all, "ERROR", "WARN", "INFO", "DEBUG"
@@ -118,10 +119,20 @@ func (m DebugModel) Update(msg tea.Msg) (DebugModel, tea.Cmd) {
 			return m.updateSearch(msg), nil
 		}
 
-		// Detail mode
+		// Detail mode — scroll or exit
 		if m.detailMode {
-			if key.Matches(msg, m.keyMap.Back) {
+			switch {
+			case key.Matches(msg, m.keyMap.Back):
 				m.detailMode = false
+				m.detailScrollOffset = 0
+			case key.Matches(msg, m.keyMap.Up):
+				if m.detailScrollOffset > 0 {
+					m.detailScrollOffset--
+				}
+			case key.Matches(msg, m.keyMap.Down):
+				if ms := m.maxDetailScroll(); m.detailScrollOffset < ms {
+					m.detailScrollOffset++
+				}
 			}
 			return m, nil
 		}
@@ -135,11 +146,26 @@ func (m DebugModel) Update(msg tea.Msg) (DebugModel, tea.Cmd) {
 
 // updateMouse handles all mouse interactions for the debug panel.
 func (m DebugModel) updateMouse(msg tea.MouseMsg) (DebugModel, tea.Cmd) {
-	// Detail mode — click back or scroll
+	// Detail mode — click back or scroll content
 	if m.detailMode {
 		if msg.Action == tea.MouseActionRelease {
 			if zone.Get("debug-back").InBounds(msg) {
 				m.detailMode = false
+				m.detailScrollOffset = 0
+				return m, nil
+			}
+		}
+		if msg.Action == tea.MouseActionPress {
+			if msg.Button == tea.MouseButtonWheelUp {
+				if m.detailScrollOffset > 0 {
+					m.detailScrollOffset--
+				}
+				return m, nil
+			}
+			if msg.Button == tea.MouseButtonWheelDown {
+				if ms := m.maxDetailScroll(); m.detailScrollOffset < ms {
+					m.detailScrollOffset++
+				}
 				return m, nil
 			}
 		}
@@ -195,6 +221,7 @@ func (m DebugModel) updateMouse(msg tea.MouseMsg) (DebugModel, tea.Cmd) {
 			if zone.Get(fmt.Sprintf("debug-entry-%d", i)).InBounds(msg) {
 				m.cursor = i
 				m.detailMode = true
+				m.detailScrollOffset = 0
 				return m, nil
 			}
 		}
@@ -269,6 +296,7 @@ func (m DebugModel) updateList(msg tea.KeyMsg) DebugModel {
 	case key.Matches(msg, m.keyMap.Select):
 		if total > 0 {
 			m.detailMode = true
+			m.detailScrollOffset = 0
 		}
 
 	case key.Matches(msg, m.keyMap.Filter):
@@ -346,6 +374,30 @@ func (m DebugModel) viewportHeight() int {
 		h = 1
 	}
 	return h
+}
+
+// detailViewportHeight returns the number of detail content lines visible.
+func (m DebugModel) detailViewportHeight() int {
+	// header(1) + rule(1) + backHint(1) + fields(7 with padding) + detailHeader(1) + detailRule(1) = ~12 overhead
+	h := m.height - 14
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
+
+// maxDetailScroll returns the max valid detailScrollOffset for current entry.
+func (m DebugModel) maxDetailScroll() int {
+	if m.cursor < 0 || m.cursor >= len(m.filtered) {
+		return 0
+	}
+	detail := m.filtered[m.cursor].Detail
+	totalLines := len(strings.Split(detail, "\n"))
+	viewH := m.detailViewportHeight()
+	if totalLines <= viewH {
+		return 0
+	}
+	return totalLines - viewH
 }
 
 // View renders the debug panel (list or detail mode).
@@ -603,19 +655,36 @@ func (m DebugModel) viewDetail() string {
 		Render(t.Faint.Render(strings.Repeat("\u2500", w-6)))
 
 	detail := e.Detail
-	maxDetailH := m.height - 14
-	if maxDetailH < 3 {
-		maxDetailH = 3
-	}
+	viewH := m.detailViewportHeight()
 	detailLines := strings.Split(detail, "\n")
-	if len(detailLines) > maxDetailH {
-		totalLines := len(detailLines)
-		detailLines = detailLines[:maxDetailH]
-		detailLines = append(detailLines,
-			t.Faint.Render(fmt.Sprintf("\u2026 (%d more lines)", totalLines-maxDetailH)))
+	totalLines := len(detailLines)
+
+	// Apply scroll offset
+	scrollOff := m.detailScrollOffset
+	if scrollOff > totalLines {
+		scrollOff = totalLines
 	}
+	detailLines = detailLines[scrollOff:]
+	if len(detailLines) > viewH {
+		detailLines = detailLines[:viewH]
+	}
+
+	// Scroll indicator
+	scrollHint := ""
+	if totalLines > viewH {
+		remaining := totalLines - scrollOff - viewH
+		if remaining < 0 {
+			remaining = 0
+		}
+		scrollHint = t.Faint.Render(fmt.Sprintf("  lines %d–%d of %d (↑/↓ to scroll)",
+			scrollOff+1, scrollOff+len(detailLines), totalLines))
+	}
+
 	detailBlock := lipgloss.NewStyle().Padding(0, 3).Foreground(t.Text).
 		Render(strings.Join(detailLines, "\n"))
+	if scrollHint != "" {
+		detailBlock += "\n" + lipgloss.NewStyle().PaddingLeft(3).Render(scrollHint)
+	}
 
 	content := header + "\n" + rule + "\n" + backHint + "\n" + fieldBlock + "\n" +
 		detailHeader + "\n" + detailRule + "\n" + detailBlock
