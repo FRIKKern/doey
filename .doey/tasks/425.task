@@ -1,0 +1,55 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=425
+TASK_TITLE=Status DB lies — investigate why hooks fail to update, build reconciler
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=GOAL: Find out why the Doey status DB lies about pane state, and fix it so Boss can trust it.
+
+OBSERVED SYMPTOM (today, doey-doey session):
+- `doey status list` showed many panes as BUSY (Planner 2.0, W1-W4 in 2.2-2.5, Taskmaster 1.0, Deployment 1.2)
+- Direct `tmux capture-pane` on each of those panes showed the IDLE Claude prompt ("new task? /clear to save Nk tokens")
+- Pane title on 1.0 was "Register stop-respawn.sh in Claude settings" — stale from a much older task
+- Net effect: Boss made decisions trusting the DB and the user immediately spotted that nothing was actually running
+
+KNOWN HOOK ARCHITECTURE (per CLAUDE.md):
+- on-prompt-submit.sh sets BUSY (sync, before prompt)
+- stop-status.sh sets FINISHED/READY/RESERVED (sync, on stop)
+- stop-results.sh / stop-notify.sh / stop-plan-tracking.sh fire async after stop
+
+INVESTIGATION QUESTIONS:
+1. Where does status get persisted? (sqlite? flat file? both?) Path?
+2. Does stop-status.sh actually overwrite the BUSY row, or only append? Confirm by reading the script.
+3. Does stop-status.sh exit 0 in all paths, or are there branches that early-return without writing?
+4. What happens to status when:
+   a. A worker is killed via `tmux kill-pane`
+   b. A worker is /clear'd
+   c. A worker is respawned by stop-respawn.sh
+   d. Claude crashes (segfault, OOM)
+   e. on-session-start.sh re-runs on an existing pane
+5. Is there a watchdog reconciling DB ↔ tmux reality? If not, why was it removed (CLAUDE.md mentions deprecated watchdog-scan.sh)?
+6. Are there race conditions between stop-status.sh and on-prompt-submit.sh on rapid prompt cycles?
+7. Does pane title reliably reflect current task? It clearly didn't on 1.0.
+
+FIX DELIVERABLES:
+A) Root-cause writeup: which scenarios produce stale BUSY rows, with reproducer steps.
+B) Patch to stop-status.sh (and on-prompt-submit.sh if needed) so transitions are reliable.
+C) NEW: `doey status reconcile` command — walks `tmux list-panes`, checks each pane's actual idle/busy state (e.g. via "new task?" prompt detection or last activity time), updates DB to match. Idempotent.
+D) NEW: lightweight reconciler hook — runs on a timer (every 30s? on info-panel refresh?) to keep DB honest. Lightweight, no polling storms.
+E) Tests: tests/test-status-reconcile.sh covering kill, /clear, respawn, crash, fresh-launch.
+
+CONSTRAINTS:
+- Bash 3.2 compatible (per CLAUDE.md).
+- Fresh-install safe — must work after `curl | bash` with no manual setup.
+- Don't break existing on-prompt-submit / stop-status contract.
+- No new daemons unless absolutely necessary.
+
+ROUTE TO: Doey Expert (Core Team specialist for Doey internals).
+TASK_SUBTASKS=1:W3.1: Root-cause investigation — why status DB lies (stop-status.sh chain + stale BUSY + no reconciler):done\n2:W3.2: Build 'doey status reconcile' command + lightweight reconciler hook + tests:done
+TASK_TIMESTAMPS=created=1775578357
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775578357
+TASK_SUBTASK_1_TITLE=W3.1: Root-cause investigation — why status DB lies (stop-status.sh chain + stale BUSY + no reconciler)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Build 'doey status reconcile' command + lightweight reconciler hook + tests
+TASK_SUBTASK_2_STATUS=done

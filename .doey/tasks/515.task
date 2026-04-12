@@ -1,0 +1,60 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=515
+TASK_TITLE=Masterplan Phase 3: Multi-Perspective Planning (Planner/Architect/Critic consensus)
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W4
+TASK_DESCRIPTION=CATEGORY: deep
+
+Reference plan: /home/doey/doey/.doey/plans/masterplan-20260410-212617.md (Phase 3 section)
+
+Implement the Planner/Architect/Critic consensus pattern from Oh My Codex (RALPLAN-DR) inside the masterplan flow. This is THE biggest quality lever in the masterplan upgrade.
+
+THE PATTERN:
+- PLANNER drafts an initial plan based on research findings
+- ARCHITECT reviews from a structural/feasibility lens — calls out missing pieces, integration risks, ordering issues, scope creep
+- CRITIC reviews from a 'what could go wrong' lens — finds unstated assumptions, edge cases, hidden complexity, premature optimization
+- All three must REACH CONSENSUS before the plan is finalized
+- HARD GATES between phases: nothing implements until consensus is achieved
+- Disagreements are SURFACED to the user, not silently resolved
+
+REQUIRED CHANGES:
+1. Define new agents: agents/doey-architect.md.tmpl and agents/doey-critic.md.tmpl (note: there's already a critic agent — rename or extend it for masterplan use). Use distinct colors and clear descriptions per the new agent beautification standards.
+2. Update teams/masterplan.team.md to spawn Planner, Architect, Critic in dedicated panes within the masterplan window (currently only Planner exists in pane 0)
+3. Update the masterplan team layout: Planner (0), Viewer (1), Architect (2), Critic (3), Workers (4-5) — adjust as needed
+4. Wire the consensus protocol: Planner writes draft → notifies Architect+Critic → both review in parallel → write reviews to .doey/plans/.architect.md and .critic.md → Planner reads both → revises plan → loop until all three sign off OR escalate disagreement to user
+5. Add a CONSENSUS_STATE field tracked somewhere (env file or new doey plan field) — DRAFT / UNDER_REVIEW / REVISIONS_NEEDED / CONSENSUS / ESCALATED
+6. Update the plan viewer to show consensus status (e.g. badge in header)
+7. Hard gate: skill must refuse to mark plan ready-for-execution unless CONSENSUS_STATE=CONSENSUS
+
+DELIVERABLES:
+- New/updated agent definitions (.md.tmpl) for Architect and Critic with distinct colors, rich descriptions
+- Updated teams/masterplan.team.md with new pane layout
+- Consensus protocol documented in agents/doey-planner.md.tmpl (or wherever the Planner instructions live)
+- Plan viewer shows consensus state
+- Test: run a small masterplan and verify Architect+Critic both produce reviews and Planner revises
+- Build, vet, test, format all green
+- Commit and push
+TASK_SUBTASKS=1:W4.1: Create doey-architect agent + doey-masterplan-critic agent (.md.tmpl, distinct colors, rich desc):done\n2:W4.2: Update teams/masterplan.team.md pane layout + create/update doey-planner agent with consensus protocol:done\n3:W4.3: Wire consensus protocol — state file, hard gate, review loop in skill + spawn scripts:done\n4:W4.4: Update doey-masterplan-tui to show CONSENSUS badge + run full verification (go build/vet/test, bash compat, live test):done
+TASK_TIMESTAMPS=created=1775894243
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775894243
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Create doey-architect agent + doey-masterplan-critic agent (.md.tmpl, distinct colors, rich desc)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775894483
+TASK_SUBTASK_1_COMPLETED_AT=1775895769
+TASK_SUBTASK_2_TITLE=W4.2: Update teams/masterplan.team.md pane layout + create/update doey-planner agent with consensus protocol
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775894483
+TASK_SUBTASK_2_COMPLETED_AT=1775895769
+TASK_SUBTASK_3_TITLE=W4.3: Wire consensus protocol — state file, hard gate, review loop in skill + spawn scripts
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775894483
+TASK_SUBTASK_3_COMPLETED_AT=1775895769
+TASK_SUBTASK_4_TITLE=W4.4: Update doey-masterplan-tui to show CONSENSUS badge + run full verification (go build/vet/test, bash compat, live test)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775894483
+TASK_SUBTASK_4_COMPLETED_AT=1775895769

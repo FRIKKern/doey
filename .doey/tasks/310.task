@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=310
+TASK_TITLE=Fix TUI task list — broken icons, tight vertical spacing, inconsistent padding
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=Screenshot shows three issues in the Go TUI Tasks tab list view: (1) BROKEN ICONS — some task items show garbled/mojibake characters instead of proper icons. Audit all icons used in task list items and replace any that don't render cleanly in standard terminal fonts. Stick to safe Unicode — no exotic emoji. (2) VERTICAL SPACING TOO TIGHT — tasks are crammed together with zero breathing room. Add 1 line of padding between task items in the list so they're visually distinct. (3) INCONSISTENT INTERNAL SPACING — some task cards have different padding/indentation than others. Standardize all task list items to use the same internal layout. Screenshot saved at /tmp/doey/screenshot-tui-tasks.png for reference.
+TASK_SUBTASKS=1:W3.1: Research — audit taskcard.go icons, spacing, list rendering in tasks.go:done\n2:W3.1: Replace 23 risky emoji with safe BMP chars + increase Spacing() 1→2 + normalize expanded card padding:done\n3:W3.2: Verify — no risky emoji remain, build+vet clean, Spacing()==2, click handler cardHeight updated:done
+TASK_TIMESTAMPS=created=1775433597
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775433597
+TASK_SUBTASK_1_TITLE=W3.1: Research — audit taskcard.go icons, spacing, list rendering in tasks.go
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Replace 23 risky emoji with safe BMP chars + increase Spacing() 1→2 + normalize expanded card padding
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Verify — no risky emoji remain, build+vet clean, Spacing()==2, click handler cardHeight updated
+TASK_SUBTASK_3_STATUS=done

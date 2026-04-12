@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=366
+TASK_TITLE=Wire doey-masterplan CLI and skill to spawn Masterplanner window (left planner, right plan+workers)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Both 'doey masterplan' CLI command and '/doey-masterplan' skill still use the old flow. Need to update both to spawn the dedicated Masterplanner team window with the correct layout: Masterplanner agent on left column, plan viewer top-right, 4 workers below. Task 358 (ce6c193) added the team definition but neither the CLI nor skill actually uses it properly. Research: (1) what does teams/masterplan.team.md currently define, (2) what does the doey masterplan CLI command in shell/doey.sh do now, (3) what does the /doey-masterplan skill do now, (4) wire both to spawn the masterplan team window with the interactive planning flow.
+TASK_SUBTASKS=1:W2.1: Wire CLI 'doey masterplan' command to spawn masterplan team window via teams/masterplan.team.md:review\n2:W2.2: Wire /doey-masterplan skill to spawn dedicated Masterplanner window instead of old generic flow:review\n3:Dispatched to W2 Subtaskmaster (2 workers):done\n4:Sent to Review Gate (Task Reviewer 1.1):done\n5:Review PASS, sent to Deployment (1.2):done
+TASK_TIMESTAMPS=created=1775503763
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775503763
+TASK_FILES=.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,shell/doey.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Wire CLI 'doey masterplan' command to spawn masterplan team window via teams/masterplan.team.md
+TASK_SUBTASK_1_STATUS=review
+TASK_SUBTASK_2_TITLE=W2.2: Wire /doey-masterplan skill to spawn dedicated Masterplanner window instead of old generic flow
+TASK_SUBTASK_2_STATUS=review
+TASK_SUBTASK_3_TITLE=Dispatched to W2 Subtaskmaster (2 workers)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Sent to Review Gate (Task Reviewer 1.1)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Review PASS, sent to Deployment (1.2)
+TASK_SUBTASK_5_STATUS=done

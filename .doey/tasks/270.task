@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=270
+TASK_TITLE=Truncate long plan titles with ellipsis — fix viewport height mismatch
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Plans tab viewport is STILL stuck at bottom. Root cause: plan titles wrap to 2+ lines when wider than available width, but the viewport height calculation assumes each item is 1 line. This mismatch means the viewport thinks the content is shorter than it really is, causing bottom-stuck behavior. Fix: truncate plan titles with '...' to fit available width, never allow line wrapping in the list. Look at how Tasks tab handles long titles — it likely truncates. Apply same pattern to Plans.
+TASK_SUBTASKS=1:Dispatch to W4 — truncate plan titles:done\n2:W4.1: Research title truncation patterns in tasks.go and plans.go:done\n3:W4.2: Research plans.go list rendering and viewport height calc:done\n4:W4.1: Implement title truncation in plans.go:95:done\n5:W4.2: Verify truncation fix — build, code review, edge cases:done
+TASK_TIMESTAMPS=created=1775390656
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775390656
+TASK_SUBTASK_1_TITLE=Dispatch to W4 — truncate plan titles
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Research title truncation patterns in tasks.go and plans.go
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W4.2: Research plans.go list rendering and viewport height calc
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W4.1: Implement title truncation in plans.go:95
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W4.2: Verify truncation fix — build, code review, edge cases
+TASK_SUBTASK_5_STATUS=done

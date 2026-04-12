@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=294
+TASK_TITLE=Fuzzy field-name matching in doey-ctl task update
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Add fuzzy field-name matching to doey-ctl task update. Currently --field with a typo (e.g. success_criteria) hard-fails. Should auto-correct to closest valid field (acceptance_criteria) with a warning if Levenshtein distance ≤ 3, or list suggestions otherwise. Makes the system resilient to agent typos.
+TASK_ACCEPTANCE_CRITERIA=doey task update --field success_criteria auto-corrects to acceptance_criteria with warning; unknown fields with no close match still error with suggestions; existing exact-match behavior unchanged
+TASK_SUBTASKS=1:W5.1: Research valid fields enum + task update handler location, then implement Levenshtein fuzzy matching:done\n2:W5.2: Verify fuzzy field matching implementation — build, test edge cases, code review:done
+TASK_TIMESTAMPS=created=1775421374
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775421374
+TASK_SUBTASK_1_TITLE=W5.1: Research valid fields enum + task update handler location, then implement Levenshtein fuzzy matching
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Verify fuzzy field matching implementation — build, test edge cases, code review
+TASK_SUBTASK_2_STATUS=done

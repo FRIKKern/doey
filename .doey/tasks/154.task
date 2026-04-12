@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=154
+TASK_TITLE=Research: Go TUI Dashboard spawn team mechanics
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Investigate how the Go TUI Dashboard spawns teams — the 'Spawn Teams' feature. Document the mechanics: how it launches Claude instances, configures agents, sets up tmux panes, passes context. The user considers this approach fast and effective and wants to adopt this pattern more broadly across Doey (replacing or augmenting current shell-based spawn logic in doey.sh). Deliverable: a clear summary of the spawn flow, what makes it fast, and where the same pattern could be reused.
+TASK_SUBTASKS=1:Dispatch research to W3 — TUI spawn mechanics:done
+TASK_TIMESTAMPS=created=1775200374
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775200374
+TASK_SUBTASK_1_TITLE=Dispatch research to W3 — TUI spawn mechanics
+TASK_SUBTASK_1_STATUS=done

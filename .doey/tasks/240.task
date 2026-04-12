@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=240
+TASK_TITLE=Add doey-ctl binary to .gitignore + commit plans.go fix
+TASK_STATUS=done
+TASK_TYPE=infrastructure
+TASK_DESCRIPTION=1) tui/cmd/doey-ctl/doey-ctl binary is untracked and NOT in .gitignore — add it. 2) tui/internal/model/plans.go has uncommitted changes from task #238 (Plans viewport fix). If the go build passes, commit both: the gitignore addition and the plans.go fix. Push to origin/main.
+TASK_SUBTASKS=1:Deploy request sent to Deployment (1.2) — gitignore + plans.go commit:done\n2:Deployed — commit a33623c pushed:done
+TASK_TIMESTAMPS=created=1775317525
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775317525
+TASK_SUBTASK_1_TITLE=Deploy request sent to Deployment (1.2) — gitignore + plans.go commit
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Deployed — commit a33623c pushed
+TASK_SUBTASK_2_STATUS=done

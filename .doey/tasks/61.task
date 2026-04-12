@@ -2,9 +2,11 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=61
 TASK_TITLE=Research: Huh wizard current state — what's broken, how it's wired
 TASK_STATUS=cancelled
-TASK_CREATED=1774961198
 TASK_TYPE=research
-TASK_DESCRIPTION=The user reports the Huh startup wizard is working badly. We need a research report before fixing anything. Questions to answer: (1) Where does the Huh wizard live in the codebase? Which files? (2) How is it triggered — is it part of a pre-commit hook, session start, or something else? (3) What is its current state — does it compile, does it run, what errors does it produce? (4) Tasks #41, #46, #48, #55 all touched the wizard — what's the cumulative state of those changes? Were they all merged? (5) What specifically is broken right now? Try to run it or inspect it. Deliver a structured report: findings, current wiring, what's broken, recommended fix approach.
 TASK_TAGS=wizard,huh,research
-TASK_MERGED_INTO=68
-TASK_LOG_1774961337=MERGED: Absorbed into Task #68 (same research scope)
+TASK_DESCRIPTION=The user reports the Huh startup wizard is working badly. We need a research report before fixing anything. Questions to answer: (1) Where does the Huh wizard live in the codebase? Which files? (2) How is it triggered — is it part of a pre-commit hook, session start, or something else? (3) What is its current state — does it compile, does it run, what errors does it produce? (4) Tasks #41, #46, #48, #55 all touched the wizard — what's the cumulative state of those changes? Were they all merged? (5) What specifically is broken right now? Try to run it or inspect it. Deliver a structured report: findings, current wiring, what's broken, recommended fix approach.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

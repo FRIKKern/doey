@@ -1,0 +1,84 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=551
+TASK_TITLE=Codebase cleanup: Watchdog ghost + doc drift + bugs (phased parallel)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=refactor
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=Large audit-driven cleanup. Full audit attached as audit.md. User wants parallel execution. See attachment for findings.
+
+CRITICAL CONTEXT:
+- Audit itself is stale in places: refs Manager/SM/doey-manager.md. Current system: Taskmaster/Subtaskmaster (renamed task #96).
+- watchdog-scan.sh, watchdog-wait.sh ALREADY marked DEPRECATED in current CLAUDE.md
+- on-notification.sh, taskmaster-wait.sh ALREADY in current CLAUDE.md hook table
+- Task 550 (tui/ popup fix) JUST SHIPPED — no more tui/ conflicts expected, but coordinate anyway
+
+PHASED EXECUTION (Taskmaster autonomous):
+
+Phase 1 — single worker, read-only validation:
+Go through audit.md line by line, grep/read HEAD, mark each finding STILL_REAL/ALREADY_FIXED/PARTIALLY_REAL/WRONG. Output: validation-report.md in attachments.
+
+Phase 2 — parallel fan-out, one worker per disjoint cluster, only for STILL_REAL findings:
+A. Real bugs: stop-status.sh BUSY guard, watchdog-scan.sh pane ID (if exists), on-pre-tool-use.sh info panel fallthrough
+B. doey.sh: watchdog ghost, dead funcs, help text, doey doctor pwd, /tmp mktemp, info-panel.sh PATH
+C. CLAUDE.md: tables (architecture/tools/hooks/testing), line count
+D. Config: doey-config-default.sh, settings-panel.sh, pane-border-status.sh
+E. Agents: surviving stale .md (after rename check)
+F. common.sh: is_watchdog/notify_watchdog cleanup
+G. Skills: doey-debug, doey-add-window, doey-add-team, doey-repair, doey-watchdog-compact rename, doey-kill-all-sessions trash, root SKILL.md dup
+H. Docs: context-reference, debug-mode-design, test-worktree, linux-server
+
+Phase 3 — integration:
+go build tui/... PASS, tests/test-bash-compat.sh PASS, doey doctor PASS, one commit per cluster, push.
+
+Rules:
+- No cross-cluster file edits
+- Skip clusters with zero still-real findings
+- NEVER touch tui/ (safety habit from 550)
+- Phase 2 launches autonomously after Phase 1, no Boss check-in
+- Summary report to Boss at Phase 3 completion
+TASK_SUBTASKS=1:W2.1: Phase 1 validate audit findings against HEAD → validation-report.md:done\n2:W2.1: Cluster A — stop-status.sh BUSY grep + on-pre-tool-use.sh info_panel branch:done\n3:W2.2: Cluster B — doey-purge.sh mktemp TMPDIR:done\n4:W2.3: Cluster C — CLAUDE.md send-keys note + line count:done\n5:W2.4: Cluster D — settings-panel.sh watchdog rows + default config path + pane-border WATCHDOG loop:done\n6:W2.5: Cluster E — agents/test-driver.md hardcoded pane 1.0:done\n7:W2.6: Cluster G — skills fixes (5 files):done\n8:W2.7: Cluster H — docs fixes (test-worktree, linux-server):done
+TASK_TIMESTAMPS=created=1775943526
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775943526
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/stop-status.sh,.claude/hooks/taskmaster-wait.sh,.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-debug/SKILL.md,.claude/skills/doey-kill-all-sessions/SKILL.md,.claude/skills/doey-repair/SKILL.md,CLAUDE.md,agents/test-driver.md,docs/linux-server.md,docs/test-worktree.md,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh
+TASK_SUBTASK_1_TITLE=W2.1: Phase 1 validate audit findings against HEAD → validation-report.md
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775943796
+TASK_SUBTASK_1_COMPLETED_AT=1775944512
+TASK_SUBTASK_2_TITLE=W2.1: Cluster A — stop-status.sh BUSY grep + on-pre-tool-use.sh info_panel branch
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775944657
+TASK_SUBTASK_2_COMPLETED_AT=1775945196
+TASK_SUBTASK_3_TITLE=W2.2: Cluster B — doey-purge.sh mktemp TMPDIR
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_8
+TASK_SUBTASK_3_CREATED_AT=1775944657
+TASK_SUBTASK_3_COMPLETED_AT=1775944760
+TASK_SUBTASK_4_TITLE=W2.3: Cluster C — CLAUDE.md send-keys note + line count
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_3
+TASK_SUBTASK_4_CREATED_AT=1775944657
+TASK_SUBTASK_4_COMPLETED_AT=1775944748
+TASK_SUBTASK_5_TITLE=W2.4: Cluster D — settings-panel.sh watchdog rows + default config path + pane-border WATCHDOG loop
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_2_4
+TASK_SUBTASK_5_CREATED_AT=1775944657
+TASK_SUBTASK_5_COMPLETED_AT=1775944860
+TASK_SUBTASK_6_TITLE=W2.5: Cluster E — agents/test-driver.md hardcoded pane 1.0
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_2_2
+TASK_SUBTASK_6_CREATED_AT=1775944657
+TASK_SUBTASK_6_COMPLETED_AT=1775944876
+TASK_SUBTASK_7_TITLE=W2.6: Cluster G — skills fixes (5 files)
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_WORKER=doey_doey_2_6
+TASK_SUBTASK_7_CREATED_AT=1775944657
+TASK_SUBTASK_7_COMPLETED_AT=1775945363
+TASK_SUBTASK_8_TITLE=W2.7: Cluster H — docs fixes (test-worktree, linux-server)
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_WORKER=doey_doey_2_5
+TASK_SUBTASK_8_CREATED_AT=1775944657
+TASK_SUBTASK_8_COMPLETED_AT=1775945328

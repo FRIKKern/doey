@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=437
+TASK_TITLE=Commit + PR the OriginPrompt regression fix (task 436)
+TASK_STATUS=cancelled
+TASK_TYPE=chore
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Working tree has the 2-line fix to tui/internal/runtime/tasks_config.go from task 436 (adds OriginPrompt field to runtime.PersistentTask). This unblocks main — upstream c8ea545 'feat: add origin_prompt field (task #24)' shipped taskcard.go references without adding the field.
+
+Route: Deployment 1.2.
+
+Actions:
+1. Stage only tui/internal/runtime/tasks_config.go (do NOT touch other files or stash@{0})
+2. Commit with: 'fix(tui): add missing OriginPrompt field to PersistentTask — unblocks main after c8ea545'
+3. Push fix branch, open PR against main citing the build break
+4. Report PR URL
+
+Do NOT push any other files. Do NOT pop stash@{0}.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775685699
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775685699

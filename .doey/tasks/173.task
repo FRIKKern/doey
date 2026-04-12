@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=173
+TASK_TITLE=Fix Plans tab scrolling — stuck at bottom, can't scroll up
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=W2
+TASK_DESCRIPTION=Plans tab in Go TUI is broken: user gets scrolled to bottom and is stuck (cannot scroll back up). The viewport/scrolling logic needs to be fixed so it behaves like other tabs. Look in tui/internal/ui/ for the plans tab/view component. Fix viewport initialization and scroll handling so the user starts at the top and can scroll freely.
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster for single-worker fix:done\n2:W2.1: Fix Plans tab viewport init and scroll handling in tui/internal/ui/:done
+TASK_TIMESTAMPS=created=1775218260
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775221146
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster for single-worker fix
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1
+TASK_SUBTASK_2_STATUS= Fix Plans tab viewport init and scroll handling in tui/internal/ui/:done

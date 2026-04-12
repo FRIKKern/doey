@@ -3,12 +3,10 @@ TASK_ID=136
 TASK_TITLE=Bulletproof hook permissions + agent self-awareness
 TASK_STATUS=done
 TASK_TYPE=infrastructure
+TASK_TEAM=W3
 TASK_DESCRIPTION=Systemically fix recurring hook/permission problems. Plan #11. Two-sided fix: (1) Harden hooks so role detection never fails — doey-roles.sh sourced with fallback in every hook, never default to Boss on failure. (2) Add explicit Tool Restrictions section to every agent .md.tmpl so agents know their limits upfront and never try blocked tools. Cross-reference hook enforcement with agent docs to ensure perfect match. Run expand-templates.sh + bash 3.2 compat after.
-TASK_DECISION_LOG=1775159387:Created task
-TASK_TIMESTAMPS=created=1775159387|completed=1775161082
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775159387
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775159387
-TASK_TEAM=W3
-TASK_ATTACHMENTS=.doey/tasks/136.result.json
-TASK_LOG_1775160035=COMMITTED: f07190e — 16 files changed, 104 insertions, 59 deletions. Hook hardening + agent tool restrictions.

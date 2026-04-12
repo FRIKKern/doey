@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=286
+TASK_TITLE=Masterplan Phase 2: Update/Install + Doctor extraction
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Extract doey-update.sh (~655L) and doey-doctor.sh (~265L). Handle --post-update re-exec backward compat. Gate: doey update + doey doctor work from new modules.
+TASK_SUBTASKS=1:Dispatched to W2 SM — 3 workers: update extraction, doctor extraction, doey.sh surgery + verification:done
+TASK_TIMESTAMPS=created=1775409734
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775409734
+TASK_PLAN_ID=28
+TASK_SUBTASK_1_TITLE=Dispatched to W2 SM — 3 workers: update extraction, doctor extraction, doey.sh surgery + verification
+TASK_SUBTASK_1_STATUS=done

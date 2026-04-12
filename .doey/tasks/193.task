@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=193
+TASK_TITLE=Fix Taskmaster infinite wake loop — trigger not consumed after read
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=W3
+TASK_DESCRIPTION=taskmaster-wait.sh triggers fire repeatedly when all tasks are pending_user_confirmation. Taskmaster wakes, reads the same already-read message, sleeps, immediately re-triggers — infinite loop burning context. Root cause: trigger file is not deleted after processing, and wake handler does not check for unread messages before acting. Fix requirements: (1) delete trigger file AFTER reading messages, (2) skip processing if no unread messages exist, (3) treat pending_user_confirmation as terminal — do not re-trigger for it. This has happened multiple times (see tasks 131, 102, 165). Permanent fix needed.
+TASK_SUBTASKS=1:W3.1: Fix taskmaster-wait.sh — delete triggers, skip no-unread, treat pending_user_confirmation as terminal:done\n2:W3.2: Verify fix — check all three changes are correct:done
+TASK_TIMESTAMPS=created=1775262218
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775262218
+TASK_SUBTASK_1_TITLE=W3.1: Fix taskmaster-wait.sh — delete triggers, skip no-unread, treat pending_user_confirmation as terminal
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Verify fix — check all three changes are correct
+TASK_SUBTASK_2_STATUS=done

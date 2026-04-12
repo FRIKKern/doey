@@ -1,0 +1,105 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=553
+TASK_TITLE=Masterplan: typed-Markdown tasks & plans — component system with live resolution
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=masterplan
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+User wants next-level design for task and plan files. Keep .md as the source of truth (portable, LLM-friendly, human-readable) but give it typed components — like Markdoc (Stripe) or Portable Text — that resolve against live SQLite state at render time.
+
+INVOKE /doey-masterplan — this is strategic design territory with many decisions to make. Mandatory interview phase, ultrathink research, vertical phase design.
+
+CORE VISION:
+- .md file = source of truth for tasks and plans
+- Thin typed-tag layer embedded in the Markdown: progress, phase, cluster, task-ref, file-ref, proof, decision, risk (starter set — design the full schema)
+- Parser produces an AST → pure-function renderers per consumer:
+  * Go TUI task detail view (rich blocks, progress bars, collapsible sections, clickable file refs)
+  * CLI doey task show (ANSI rendering)
+  * Raw .md viewer (tags degrade to literal text)
+  * Commit message composer (structured decisions + proofs footer)
+  * LLM context builder (resolves task-refs to live summaries, avoids dead IDs)
+  * Popup viewer from task 479 (now has more to render)
+- Tags resolve live: task-ref id=550 pulls current status/title/team from SQLite at render time — zero staleness
+- Queryable AST: all risks with severity=high across phase P2, all file-refs to path X, etc.
+- Bidirectional traceability: file-ref from a task creates a reverse index, code ↔ plan coupling
+
+RESEARCH QUESTIONS FOR PHASE 1 (masterplan interview + ultrathink):
+1. Syntax — Markdoc ({% tag %}), MyST directives (:::), CommonMark generic directives, or custom? Tradeoffs for LLM readability, git diff quality, parser complexity.
+2. Schema location — in-code registry, YAML file, JSON schema, or inline in tag definitions? How does it version?
+3. Renderer architecture — single Go package with visitor pattern, or plugin-per-consumer? How is TUI integration done without coupling taskdoc to bubble tea?
+4. Live resolution — at render time (always fresh, slower) or at write time (cached, can go stale)? Hybrid?
+5. Backward compatibility — existing tasks 1-552 must still work unchanged. Migration path: opt-in, auto-migrate, or deprecation?
+6. Plans vs tasks — do plans get a different tag set or the same one? How do plans embed tasks (by id, by include, by query)?
+7. Tag set MVP — which 6-10 tags ship first? Starter: progress, phase, cluster, task-ref, file-ref, proof, decision, risk. What else?
+8. LLM context builder integration — this is the highest leverage consumer. How do we shrink task-ref resolution from full task dump to optimal context?
+9. Query language — do we need one (e.g. taskdoc-query, JQ-like), or is the AST enough?
+10. Editing UX — can users still hand-edit tags in any .md editor? Do we need a linter/LSP?
+11. Storage — do rendered outputs get cached? Where?
+12. Testing — how do we unit-test tag resolution and renderers? Property tests on the AST?
+
+VERTICAL PHASES (rough — masterplan refines):
+P0. Design interview + ultrathink research — syntax choice, schema design, architecture sketch, risk list
+P1. MVP parser + schema registry + 4 starter tags (progress, task-ref, file-ref, proof)
+P2. CLI renderer (doey task show --rich) + raw .md fallback
+P3. TUI detail renderer (plugs into existing task detail view + popup from 479)
+P4. LLM context builder integration (Worker brief packs resolve task-refs live)
+P5. Full tag set (phase, cluster, decision, risk, + extras) + query API
+P6. Plans — plan.md files, phase composition, reverse index
+P7. Migration tooling + linter/LSP + docs
+P8. Fresh-install proof, doey doctor integration
+
+CONSTRAINTS:
+- Must not break any of the 552 existing tasks
+- Must work with fresh install (no local-only state)
+- Bash 3.2 / macOS portability rules apply
+- Go package lives in tui/internal/taskdoc/
+- No new heavy deps if avoidable — parse on top of existing Goldmark if already present, otherwise hand-rolled
+- LLM context quality is a KEY metric — must measurably shrink worker brief size while keeping information density
+
+DELIVERABLE:
+A masterplan document (plan.md) with:
+- Design decisions per research question above
+- Chosen syntax with rationale
+- Tag schema registry (initial set)
+- Renderer architecture diagram
+- Phased rollout plan (P0-P8 or refined)
+- Risk register
+- Success metrics (LLM context shrinkage, user adoption, zero breakage)
+- One hand-written example: a real existing task (e.g. 551) translated to the new format, rendered as CLI output
+
+The masterplan goes through Architect and Critic review loop before Boss sees it.
+TASK_SUBTASKS=1:W2.1: Codebase research — Goldmark presence, existing task render paths, popup #479, brief generation, hooks touching task files:done\n2:W2.2: Design research — Markdoc/MyST/CommonMark directives comparison + answer all 12 design questions:done\n3:W2.1: Draft plan.md from synthesized research (deliverable):done\n4:W2.2: Architect+Critic dual review of plan.md:done\n5:W2.1: Revise plan.md per Architect/Critic feedback:done
+TASK_TIMESTAMPS=created=1775954909
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775954909
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-compact.sh,.claude/hooks/on-session-start.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-repair/SKILL.md,agents/test-driver.md,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-stats-allowlist.txt,shell/doey-team-mgmt.sh,shell/doey.sh,tui/cmd/doey-ctl/doey-stats-allowlist.txt,tui/cmd/doey-ctl/stats_tasks.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Codebase research — Goldmark presence, existing task render paths, popup #479, brief generation, hooks touching task files
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775955119
+TASK_SUBTASK_1_COMPLETED_AT=1775955658
+TASK_SUBTASK_2_TITLE=W2.2: Design research — Markdoc/MyST/CommonMark directives comparison + answer all 12 design questions
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1775955119
+TASK_SUBTASK_2_COMPLETED_AT=1775955450
+TASK_SUBTASK_3_TITLE=W2.1: Draft plan.md from synthesized research (deliverable)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_1
+TASK_SUBTASK_3_CREATED_AT=1775955119
+TASK_SUBTASK_3_COMPLETED_AT=1775956261
+TASK_SUBTASK_4_TITLE=W2.2: Architect+Critic dual review of plan.md
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_2
+TASK_SUBTASK_4_CREATED_AT=1775955119
+TASK_SUBTASK_4_COMPLETED_AT=1775956683
+TASK_SUBTASK_5_TITLE=W2.1: Revise plan.md per Architect/Critic feedback
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_2_1
+TASK_SUBTASK_5_CREATED_AT=1775955119
+TASK_SUBTASK_5_COMPLETED_AT=1775957033

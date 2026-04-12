@@ -1,0 +1,26 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=220
+TASK_TITLE=Fix freelancer spawn layout — TUI button should produce 3x2 grid (3 cols, 2 workers each)
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=W5
+TASK_DESCRIPTION=When pressing the freelancer spawn button in the Go TUI Dashboard, the layout is wrong. User wants 2 workers per column across 3 columns (6 workers total) but gets a weird layout instead. Investigate the TUI Dashboard spawn button handler and the add_dynamic_team_window freelancer path to find why the grid dimensions are not respected.
+TASK_SUBTASKS=1:Dispatched to W3 Subtaskmaster:done\n2:W5.1: Research TUI dashboard freelancer spawn button handler — identify params passed for grid layout:done\n3:W5.2: Research shell/doey.sh add_dynamic_team_window freelancer path — how cols/rows are handled:done\n4:Dispatched to W5 Subtaskmaster (per Boss — use all teams):done\n5:W3.1: Shell — parse grid rows, thread through add_dynamic_team_window, conditional splits in doey_add_column:done\n6:W3.3: Verify — rebuild and test freelancer spawn produces 3x2=6 panes:done\n7:W5.3: Fix doey_add_column() and rebalance_grid_layout freelancer special cases in shell/doey.sh:done
+TASK_TIMESTAMPS=created=1775299336
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775299336
+TASK_SUBTASK_1_TITLE=Dispatched to W3 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.1: Research TUI dashboard freelancer spawn button handler — identify params passed for grid layout
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W5.2: Research shell/doey.sh add_dynamic_team_window freelancer path — how cols/rows are handled
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Dispatched to W5 Subtaskmaster (per Boss — use all teams)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.1: Shell — parse grid rows, thread through add_dynamic_team_window, conditional splits in doey_add_column
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.3: Verify — rebuild and test freelancer spawn produces 3x2=6 panes
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W5.3: Fix doey_add_column() and rebalance_grid_layout freelancer special cases in shell/doey.sh
+TASK_SUBTASK_7_STATUS=done

@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=192
+TASK_TITLE=Fix terminal escape sequence leakage on worker startup
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=W3
+TASK_DESCRIPTION=On Doey startup, multiple worker panes show garbled ANSI escape sequence responses in their Claude Code input prompts. Examples: ]11;rgb:0c0c/0c0c/0c0c3;1R and :0c0c/0c0c/0c0c41;187R. These are terminal capability query responses (OSC 11 background color, CSI cursor position reports) leaking into Claude stdin during pane creation. Research-first: identify what sends these queries (doey.sh pane spawn, pane-border-status.sh, tmux-statusbar.sh, tmux options like terminal-overrides/terminal-features), map the timing vs Claude launch, then fix by suppressing queries or draining stdin before Claude starts. Acceptance: fresh startup shows NO garbled text in any pane, borders and status bar still work, passes fresh-install test.
+TASK_SUBTASKS=1:Dispatched to W3 Subtaskmaster:done\n2:W3.1: Research doey.sh pane creation flow — identify terminal query sources and timing:done\n3:W3.2: Research pane-border-status.sh + tmux-statusbar.sh + tmux options for escape query sources:done\n4:W3.1: Fix tmux-theme.sh — disable allow-passthrough, fix escape-time conflict:done\n5:W3.2: Fix doey.sh _batch_boot_workers — add stdin drain before Claude launch:done\n6:W3.3: Verify — bash compat test + check no regressions:done
+TASK_TIMESTAMPS=created=1775260882
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775260882
+TASK_PLAN_ID=21
+TASK_SUBTASK_1_TITLE=Dispatched to W3 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Research doey.sh pane creation flow — identify terminal query sources and timing
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Research pane-border-status.sh + tmux-statusbar.sh + tmux options for escape query sources
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.1: Fix tmux-theme.sh — disable allow-passthrough, fix escape-time conflict
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.2: Fix doey.sh _batch_boot_workers — add stdin drain before Claude launch
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.3: Verify — bash compat test + check no regressions
+TASK_SUBTASK_6_STATUS=done

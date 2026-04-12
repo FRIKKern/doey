@@ -1,0 +1,44 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=341
+TASK_TITLE=Verify + fix masterplan skill uses dedicated masterplan window with 4 workers
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=The masterplan dedicated window system was built in task 335 (commit d1836c5): a Cursor-inspired layout with Planner on the left, live plan viewer top-right, and 4 workers bottom-right. The team definition is at teams/masterplan.team.md, layout builder in doey-grid.sh/doey-team-mgmt.sh, viewer at shell/masterplan-viewer.sh.
+
+PROBLEM: We need to verify that the /doey-masterplan skill (SKILL.md / SKILL.md.tmpl) actually uses this system correctly. Specifically:
+
+1. RESEARCH FIRST — Read these files and verify integration:
+   - .claude/skills/doey-masterplan/SKILL.md (or .tmpl) — does Phase 5 dispatch via 'doey add-team masterplan'?
+   - teams/masterplan.team.md — does it exist and define the correct layout (planner + viewer + 4 workers)?
+   - shell/masterplan-viewer.sh — does it exist and work?
+   - shell/doey-grid.sh and shell/doey-team-mgmt.sh — is the masterplan layout type implemented?
+
+2. VERIFY the dispatch flow: When SKILL.md Phase 5 runs, does it:
+   - Write the plan file to .doey/plans/<id>.md BEFORE spawning the window?
+   - Run 'doey add-team masterplan' to spawn the dedicated window?
+   - Pass PLAN_FILE env var so the viewer and planner can find the plan?
+   - Fall back to Taskmaster dispatch if the masterplan team is unavailable?
+
+3. FIX any gaps found — the skill must actually use the 4-worker masterplan window, not fall back to generic Taskmaster dispatch.
+
+Plan reference: .doey/plans/30.md
+Previous task: 335
+TASK_SUBTASKS=1:Dispatched to Team W3 (SM at 3.0, 2 workers):done\n2:W3.1: Research masterplan SKILL.md.tmpl Phase 5 dispatch flow and plan file handling:done\n3:W3.2: Research masterplan team definition, viewer, and grid layout implementation:done\n4:W3.1: Fix masterplan.team.md pane numbering — all-numeric keys:done\n5:W3.2: Add script: field handling in doey-team-mgmt.sh for viewer pane:done\n6:W3.1: Verify masterplan team def + spawner integration + template expansion + bash compat:done
+TASK_TIMESTAMPS=created=1775479594
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775479594
+TASK_FILES=.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,shell/doey-team-mgmt.sh,teams/masterplan.team.md
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to Team W3 (SM at 3.0, 2 workers)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Research masterplan SKILL.md.tmpl Phase 5 dispatch flow and plan file handling
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Research masterplan team definition, viewer, and grid layout implementation
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.1: Fix masterplan.team.md pane numbering — all-numeric keys
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.2: Add script: field handling in doey-team-mgmt.sh for viewer pane
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.1: Verify masterplan team def + spawner integration + template expansion + bash compat
+TASK_SUBTASK_6_STATUS=done

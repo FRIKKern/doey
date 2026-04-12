@@ -1,0 +1,51 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=245
+TASK_TITLE=Clean startup UX — one Go binary owns the terminal, eliminate Frankenstein loading
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=PROBLEM: Current startup has 4 separate visual phases fighting for the terminal — bash splash, hard sleep, Go loading binary, fd redirect hack, wizard interrupt/re-display. It has been patched 5+ times and keeps breaking.
+
+SOLUTION: One Go program (doey-tui startup) owns the entire terminal experience from launch to tmux attach. Shell does setup in background, reports progress via a simple file.
+
+DESIGN:
+1. Shell parses args, launches 'doey-tui startup --session X --dir Y --runtime Z' which takes the terminal
+2. Shell forks background setup: creates tmux session, teams, workers — writes progress lines to /tmp/doey/X/startup-progress
+3. Go binary: shows ASCII splash immediately, runs wizard inline if needed, shows animated progress by tailing the progress file, exits when it reads 'READY'
+4. Shell attaches to tmux after Go binary exits
+
+WHAT GETS ELIMINATED:
+- doey_splash() bash function
+- _splash_wait_minimum() hard sleep
+- doey-loading as a separate Go binary (merged into doey-tui startup)
+- The exec 1>>log 2>&1 stdout redirect hack
+- The fd 3/4 saved file descriptor plumbing
+- The re-display-splash-after-wizard hack
+- Separate loading screen timing/timeout
+- Two different launch paths having different loading UX
+
+PROGRESS PROTOCOL:
+Simple line-based file. Shell appends, Go tails.
+  STEP: Creating session
+  STEP: Setting up Dashboard
+  STEP: Launching Core Team
+  STEP: Spawning workers
+  STEP: Ready
+No IPC, no pipes, no sockets.
+
+CONSTRAINTS:
+- Must work on fresh install (no Go binary = graceful fallback to simple bash output)
+- Both dynamic and fixed grid paths must use the same loading experience
+- Wizard must be inline in the Go binary (already is via doey-tui setup)
+- Bash 3.2 compatible for all shell changes
+- Build must pass before commit
+
+PHASED APPROACH:
+Phase 1: Create doey-tui startup command with progress file reader + splash + progress display
+Phase 2: Refactor shell to write progress file and launch doey-tui startup instead of the current multi-phase hack  
+Phase 3: Remove dead code (doey_splash, _splash_wait_minimum, doey-loading binary, fd redirect)
+Phase 4: Unify both launch paths to use the same startup UX
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775340612
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775340612

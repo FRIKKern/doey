@@ -1,0 +1,34 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=519
+TASK_TITLE=Give every agent a color in YAML frontmatter
+TASK_STATUS=done
+TASK_TYPE=chore
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+
+User observation (screenshot attached at .doey/task-attachments/agents-need-color.png): in the TUI Agents tab, many agents render without a color swatch because their .md frontmatter lacks a 'color:' field. doey-architect has color: #0288D1 and renders properly; most others don't.
+
+Scope:
+- Audit every file in agents/*.md (and agents/*.md.tmpl where applicable — remember generated .md files should not be edited directly if a .tmpl exists; edit the template and regenerate via shell/expand-templates.sh).
+- Ensure each agent's YAML frontmatter has a 'color:' field with a hex value.
+- Assign sensible, distinct colors grouped by domain (Doey Infrastructure, SEO, Visual QA, Utility) so the TUI agent list is visually coherent.
+- Keep existing colors where already set; only fill in missing ones.
+- Verify TUI renders correctly after (all agents show a color swatch).
+
+Deliverable: PR/commit with frontmatter updates. Run expand-templates.sh if any .tmpl files were touched. Confirm bash compat test still passes if any shell touched (shouldn't be).
+TASK_SUBTASKS=1:Dispatched to W2 (T2 Subtaskmaster) — color frontmatter audit:done\n2:W2.1: Audit and add color: frontmatter to all agent files:done
+TASK_TIMESTAMPS=created=1775898367
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775898367
+TASK_SUBTASK_1_TITLE=Dispatched to W2 (T2 Subtaskmaster) — color frontmatter audit
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775898499
+TASK_SUBTASK_1_COMPLETED_AT=1775898639
+TASK_SUBTASK_2_TITLE=W2.1: Audit and add color: frontmatter to all agent files
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775898502
+TASK_SUBTASK_2_COMPLETED_AT=1775898528

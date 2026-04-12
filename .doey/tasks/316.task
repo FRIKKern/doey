@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=316
+TASK_TITLE=Task accepted state — hide actions, show Verified by User, add Undo
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=When a task is marked done (accepted by user):
+- Hide the Skip Review / Deny / Accept buttons entirely
+- Proof of Completion section shows 'Verified by User' with a positive/happy indicator
+- Add a single 'Undo Completion' button that reverts the task back to pending_user_confirmation
+This is the post-acceptance UX — clean, celebratory, with an escape hatch.
+TASK_SUBTASKS=1:Dispatched to W4 — done state UI update:done\n2:W4.1: Done state UI — hide action buttons for done tasks, show Verified badge in PoC, add Undo Completion button:done
+TASK_TIMESTAMPS=created=1775436772
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775436772
+TASK_FILES=.claude/hooks/stop-results.sh,agents/doey-worker.md,agents/doey-worker.md.tmpl,shell/doey-task-helpers.sh,tui/cmd/doey-ctl/commands.go,tui/internal/runtime/tasks_config.go,tui/internal/store/schema.go,tui/internal/store/store.go,tui/internal/store/tasks.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W4 — done state UI update
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Done state UI — hide action buttons for done tasks, show Verified badge in PoC, add Undo Completion button
+TASK_SUBTASK_2_STATUS=done

@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=298
+TASK_TITLE=Masterplan Phase 2: Extend Fuzzy Auto-Correction
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Phase 2 of AI-Friendly CLI masterplan. Change subcommand matching from suggest-and-die to auto-correct (single match). Auto-correct status values, log types, top-level commands. Same pattern as task 294 field-name matching. ~120 lines Go. Files: tui/cmd/doey-ctl/commands.go (suggestSubcommand and call sites), main.go (top-level dispatch). Research: /tmp/doey/doey/masterplan-20260405-205417/
+TASK_ACCEPTANCE_CRITERIA=doey-ctl tsak auto-corrects to task with warning; status and log type values auto-correct; top-level fuzzy matching works
+TASK_SUBTASKS=1:W3.1: Research fuzzy matching patterns in commands.go — find suggestSubcommand, all suggest-and-die call sites, status validation, log type validation:deferred\n2:W3.2: Research top-level command dispatch in main.go — find where unknown commands are handled, current error behavior:deferred\n3:W3.1: Subcommand + status auto-correct in commands.go — change suggestSubcommand to auto-correct on single match, add status/log-type fuzzy correction:done\n4:W3.2: Top-level dispatch auto-correct in main.go + log type fuzzy correction in commands.go:done
+TASK_TIMESTAMPS=created=1775423626
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775423626
+TASK_PLAN_ID=29
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research fuzzy matching patterns in commands.go — find suggestSubcommand, all suggest-and-die call sites, status validation, log type validation
+TASK_SUBTASK_1_STATUS=deferred
+TASK_SUBTASK_2_TITLE=W3.2: Research top-level command dispatch in main.go — find where unknown commands are handled, current error behavior
+TASK_SUBTASK_2_STATUS=deferred
+TASK_SUBTASK_3_TITLE=W3.1: Subcommand + status auto-correct in commands.go — change suggestSubcommand to auto-correct on single match, add status/log-type fuzzy correction
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Top-level dispatch auto-correct in main.go + log type fuzzy correction in commands.go
+TASK_SUBTASK_4_STATUS=done

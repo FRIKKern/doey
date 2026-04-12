@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=216
+TASK_TITLE=Task attachments in Go TUI — plans, reports, images in task detail
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Show linked plans, research reports, worker output, file references in task detail view. Research first, then implement.
+TASK_SUBTASKS=1:W3.1: Research — how plans/reports link to tasks, current detail view code, data model:done\n2:W3.2: Implement — add Attachments section to task detail view, rebuild binary:done
+TASK_TIMESTAMPS=created=1775296374
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775296374
+TASK_SUBTASK_1_TITLE=W3.1: Research — how plans/reports link to tasks, current detail view code, data model
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Implement — add Attachments section to task detail view, rebuild binary
+TASK_SUBTASK_2_STATUS=done

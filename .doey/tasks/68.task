@@ -1,21 +1,13 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=68
-TASK_UPDATED=1774961509
 TASK_TITLE=Research: Huh startup wizard — current state and breakage
 TASK_STATUS=done
 TASK_TYPE=research
-TASK_OWNER=Boss
 TASK_TEAM=W2
-TASK_PHASE=review
-TASK_PRIORITY=P1
-TASK_SUBTASK_1_TITLE=Research dispatch to Team W2
-TASK_SUBTASK_1_STATUS=pending
-TASK_SUBTASK_1_ASSIGNEE=Manager_W2
-TASK_UPDATE_1_TIMESTAMP=1774961261
-TASK_UPDATE_1_AUTHOR=SM
-TASK_UPDATE_1_TEXT=Dispatching research to Team W2 — single worker deep investigation
 TASK_SUBTASKS=1:W2.1: Deep research — Huh wizard current state & breakage:done
-TASK_UPDATE_2_TIMESTAMP=1774961472
-TASK_UPDATE_2_AUTHOR=SM
-TASK_UPDATE_2_TEXT=Research complete. W2 Worker investigated thoroughly.
-TASK_DECISION_LOG=1774961509:Wave 1 done. Wizard compiles clean. Key bug: teams not spawning (task 55 in_progress). Secondary: python3 dep, Go 1.25 req.
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1774961509
+TASK_SUBTASK_1_TITLE=W2.1
+TASK_SUBTASK_1_STATUS= Deep research — Huh wizard current state & breakage:done

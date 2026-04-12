@@ -2,38 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=25
 TASK_TITLE=Rich task detail — full task directory + TUI detail view
 TASK_STATUS=done
-TASK_CREATED=1743321600
 TASK_TYPE=feature
-TASK_DESCRIPTION=Tasks must be the single source of truth for everything that happened during execution. This is a two-part feature:
-
-STORAGE — Each task becomes a directory: .doey/tasks/<ID>/
-  - task.meta (the current .task metadata: id, title, status, type, tags, timestamps)
-  - plan.md (implementation plan produced by manager)
-  - hypotheses.md (hypotheses with confidence levels, outcomes)
-  - reports/ (research reports, audit results)
-  - messages/ (SM<->worker, manager<->worker comms captured during task)
-  - files-changed.log (list of files edited/created during task, with pane/worker attribution)
-  - attachments/ (arbitrary output artifacts — screenshots, logs, JSON results)
-  - decisions.md (key decisions and rationale logged during execution)
-  - notes.md (free-form notes)
-  
-The .task file in the root stays as a lightweight index/pointer. Stop hooks, manager validation, and worker output flows must write to the appropriate location in this directory structure. Migrate existing .task files gracefully (create dir, move metadata).
-
-TUI — In the Go TUI Tasks tab, selecting a task opens a rich detail view with tabbed/sectioned layout:
-  - Overview: status, type, tags, created/updated timestamps
-  - Plan: rendered plan.md content
-  - Hypotheses: hypothesis list with confidence + outcomes
-  - Reports: list of reports, select to view content
-  - Messages: chronological message log from task execution
-  - Files Changed: list of files touched, with worker attribution
-  - Attachments: arbitrary artifacts, viewable
-  - Decisions & Notes: decisions.md + notes.md content
-
-All sections must scroll correctly. Handle empty sections gracefully (show placeholder text). Navigation between sections via tab keys or left/right. This is the primary way users understand what happened during a task.
-
 TASK_TAGS=tui,task-system,hooks,dashboard,infrastructure
 TASK_TEAM=W2
-TASK_LOG_1774857284=SCOPE_EXPANDED: Boss expanded scope from narrow attachments to full task directory + rich TUI detail view. Re-dispatching to W2.
-TASK_LOG_1774857688=COMPLETE: Committed 51d42f5. 3 source files, Go build + bash compat pass. Note: this is Phase 1 (narrow scope). Full expanded scope (task directories, rich detail view) still needed.
-TASK_RESULT=Auto-attach worker results/reports to tasks. TUI attachments section with type badges. Fix empty Worker Status/Files Changed.
-TASK_FILES=.claude/hooks/stop-results.sh,tui/internal/taskcard/taskcard.go,tui/internal/model/tasks.go
+TASK_DESCRIPTION=Tasks must be the single source of truth for everything that happened during execution. This is a two-part feature:
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257535

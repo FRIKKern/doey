@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=262
+TASK_TITLE=Masterplan Phase 4 — Hardening
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_DESCRIPTION=Error handling, hook safety, IPC fixes, session-name unification
+TASK_SUBTASKS=1:WP-4A: W2.1 — Per-hook ERR trap overrides in stop-status.sh + stop-results.sh:done\n2:WP-4B: W2.2 — Fix on-pre-tool-use.sh get_taskmaster_pane() dependency:done\n3:WP-4C: W2.3 — Fix IPC error handling in tui/internal/model/actions.go:done\n4:WP-4D: W2.4 — Unify session-name resolution (optional, skip if unsafe):done\n5:VERIFY: Full Gate 4 verification suite:done
+TASK_TIMESTAMPS=created=1775359114
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775359114
+TASK_SUBTASK_1_TITLE=WP-4A: W2.1 — Per-hook ERR trap overrides in stop-status.sh + stop-results.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=WP-4B: W2.2 — Fix on-pre-tool-use.sh get_taskmaster_pane() dependency
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=WP-4C: W2.3 — Fix IPC error handling in tui/internal/model/actions.go
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=WP-4D: W2.4 — Unify session-name resolution (optional, skip if unsafe)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=VERIFY: Full Gate 4 verification suite
+TASK_SUBTASK_5_STATUS=done

@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=385
+TASK_TITLE=doey-term Phase 4: scrollback navigation + clipboard/paste
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Masterplan Phase 4 for doey-term. (1) Scrollback navigation in term/model.go: add Shift+PageUp/PageDown to scroll the VT emulator's scrollback buffer. Track viewport offset, render from scrollback when offset > 0. Auto-scroll to bottom when user types. (2) Clipboard/paste support: handle tea.PasteMsg from Bubble Tea v2, forward via emulator.Paste() with bracketed paste markers. Verify: seq 1000 then Shift+PageUp scrolls back; paste multi-line text into vim. Plan: .doey/plans/masterplan-20260406-222042.md Phase 4.
+TASK_SUBTASKS=1:Dispatched to window 3 (2 workers): W1 scrollback, W2 paste:skipped\n2:W3.1: Scrollback navigation (Shift+PgUp/PgDn) in doey-term:done\n3:W3.2: Clipboard paste (bracketed paste) in doey-term:done
+TASK_TIMESTAMPS=created=1775517053
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775517053
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to window 3 (2 workers): W1 scrollback, W2 paste
+TASK_SUBTASK_1_STATUS=skipped
+TASK_SUBTASK_2_TITLE=W3.1: Scrollback navigation (Shift+PgUp/PgDn) in doey-term
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Clipboard paste (bracketed paste) in doey-term
+TASK_SUBTASK_3_STATUS=done

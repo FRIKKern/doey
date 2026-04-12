@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=221
+TASK_TITLE=Add intent field to task schema — SQLite column + doey-ctl support
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TEAM=W3
+TASK_DESCRIPTION=Add an intent TEXT column to the tasks table in SQLite. Wire it through doey-ctl task update/create/get. Intent captures the user's why separately from the technical description.
+TASK_SUBTASKS=1:W3.1: Store layer — Task struct, SQL (INSERT x2, SELECT x3, UPDATE), scanTask, schema migration, migrate UPSERT:done\n2:W3.2: CLI layer — --intent flag on create, update switch case, get display, validFields:done\n3:W3.3: Build and verify — go build, doey task create --intent test, doey task get:done
+TASK_TIMESTAMPS=created=1775299381
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775299381
+TASK_SUBTASK_1_TITLE=W3.1: Store layer — Task struct, SQL (INSERT x2, SELECT x3, UPDATE), scanTask, schema migration, migrate UPSERT
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: CLI layer — --intent flag on create, update switch case, get display, validFields
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.3: Build and verify — go build, doey task create --intent test, doey task get
+TASK_SUBTASK_3_STATUS=done

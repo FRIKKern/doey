@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=386
+TASK_TITLE=doey-term Phase 5: damage tracking, mouse, bracketed paste polish
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Masterplan Phase 5 for doey-term. (1) Fine-grained damage tracking in bubbleterm/emulator/emulator.go:169-177 — use x/vt per-cell damage instead of marking all lines dirty every frame, big CPU win on fast output. (2) Mouse event refinement — verify scroll wheel, click positioning, drag selection (mouse mode already enabled). (3) Bracketed paste mode — ensure ESC[200~ ... ESC[201~ wrapping is sent. Plan: .doey/plans/masterplan-20260406-222042.md Phase 5.
+TASK_SUBTASKS=1:W2.1: Per-cell damage tracking in emulator.go using x/vt damage API:done\n2:W2.2: Mouse refinement + bracketed paste verification in model.go/bubbleterm.go:done
+TASK_TIMESTAMPS=created=1775517931
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775517931
+TASK_FILES=tui/internal/bubbleterm/bubbleterm.go,tui/internal/bubbleterm/emulator/emulator.go,tui/internal/term/model.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Per-cell damage tracking in emulator.go using x/vt damage API
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Mouse refinement + bracketed paste verification in model.go/bubbleterm.go
+TASK_SUBTASK_2_STATUS=done

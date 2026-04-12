@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=181
+TASK_TITLE=Rich subtask detail in Go TUI
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TAGS=tui,go,bubble,lipgloss
+TASK_TEAM=2
+TASK_DESCRIPTION=Each subtask in task detail view needs rich info: (1) status badge (colored) + assigned worker pane, (2) created_at/completed_at timestamps with duration, (3) brief worker output summary from completion report, (4) expandable detail on Enter/click showing attachments, logs, reports. Data sources: TASK_SUBTASK_N_* fields in .task files, subtasks column in SQLite. Must degrade gracefully for older tasks with minimal data. Plan: .doey/plans/18.md. 6 steps, 2 workers.
+TASK_SUBTASKS=1:W2.1: Research current subtask rendering — map data flow from SQLite/.task through Go structs to Bubble Tea view:done\n2:W2.2: Research .task file format — document TASK_SUBTASK_N_* and TASK_REPORT_N_* field inventory:done\n3:Dispatch to Team 2 (W2):done\n4:W2.1: Extend SQLite schema + sync — add assignee/worker/created_at/completed_at to subtasks table, sync TASK_SUBTASK_N_* fields, update store_reader.go:done\n5:W2.2: Report-subtask linkage + enhanced expanded detail in taskcard.go — link reports by author pane, show summary per subtask, rich expand content:done\n6:W2.3: Verification — go build, go vet, check all acceptance criteria, bash compat test:done
+TASK_TIMESTAMPS=created=1775251997
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775253800
+TASK_SUBTASK_1_TITLE=W2.1
+TASK_SUBTASK_1_STATUS= Research current subtask rendering — map data flow from SQLite/.task through Go structs to Bubble Tea view:done
+TASK_SUBTASK_2_TITLE=W2.2
+TASK_SUBTASK_2_STATUS= Research .task file format — document TASK_SUBTASK_N_* and TASK_REPORT_N_* field inventory:done
+TASK_SUBTASK_3_TITLE=Dispatch to Team 2 (W2)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.1
+TASK_SUBTASK_4_STATUS= Extend SQLite schema + sync — add assignee/worker/created_at/completed_at to subtasks table, sync TASK_SUBTASK_N_* fields, update store_reader.go:done
+TASK_SUBTASK_5_TITLE=W2.2
+TASK_SUBTASK_5_STATUS= Report-subtask linkage + enhanced expanded detail in taskcard.go — link reports by author pane, show summary per subtask, rich expand content:done
+TASK_SUBTASK_6_TITLE=W2.3
+TASK_SUBTASK_6_STATUS= Verification — go build, go vet, check all acceptance criteria, bash compat test:done

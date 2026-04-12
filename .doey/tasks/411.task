@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=411
+TASK_TITLE=Phase H: documentation
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=New file: docs/intent-fallback.md (what/when/opt-out/auth/cost/destructive-policy/log location). CLAUDE.md: add one-line mention under Hooks section. README.md: one-line feature bullet.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545546
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545546
+TASK_PLAN_ID=1003

@@ -4,15 +4,16 @@ TASK_TITLE=Fix hook false-positives — stop matching keywords in payload text
 TASK_STATUS=done
 TASK_TYPE=bugfix
 TASK_TAGS=hooks,shell,bugfix
+TASK_ASSIGNED_TO=W3
 TASK_DESCRIPTION=on-pre-tool-use.sh and on-prompt-submit.sh do naive string matching that catches VCS keywords (git commit, git push) in quoted payload text like task descriptions and tmux send-keys payloads. Workers get blocked from receiving tasks. Fix: hooks should only match actual commands, not quoted strings within send-keys or prompt payloads.
-TASK_DECISION_LOG=1775162353:Created task\n1775165879:--type completion --title Task Done --body Fixed VCS false-positives in on-pre-tool-use.sh. New _is_direct_vcs_cmd() function checks command segments instead of scanning full text. 10/10 unit tests pass. Live verification: worker accepted prompt with VCS keywords. Bash 3.2 compat: PASS. on-prompt-submit.sh had no VCS matching — only task accountability gate. --author Manager_W2\n1775169332:Status changed to done
-TASK_SUBTASKS=1:W2.1: Fix VCS false-positives in on-pre-tool-use.sh:--status\n2:W2.2: Run bash compat tests and verify fix:--status\n3:W3.3: Verify on-pre-tool-use.sh fix + audit on-prompt-submit.sh for false positives:pending
-TASK_TIMESTAMPS=created=1775162353|completed=1775169332
+TASK_SUBTASKS=1:W2.1: Fix VCS false-positives in on-pre-tool-use.sh:--status\n2:W2.2: Run bash compat tests and verify fix:--status\n3:W3.3:done
+TASK_TIMESTAMPS=created=1775162353
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775162353
-TASK_ASSIGNED_TO=W3
-TASK_REVIEW_VERDICT=PASS
-TASK_REVIEW_FINDINGS=Segment-based VCS detection fixes false positives. Clean refactor, no regressions. WARN: BSD sed on macOS won't split on &&/||/; (degrades permissively — not blocking).
-TASK_REVIEW_TIMESTAMP=2026-04-02T16:48:00Z
-TASK_ATTACHMENTS=.doey/tasks/141.result.json
+TASK_SUBTASK_1_TITLE=W2.1
+TASK_SUBTASK_1_STATUS= Fix VCS false-positives in on-pre-tool-use.sh:--status
+TASK_SUBTASK_2_TITLE=W2.2
+TASK_SUBTASK_2_STATUS= Run bash compat tests and verify fix:--status
+TASK_SUBTASK_3_TITLE=W3.3
+TASK_SUBTASK_3_STATUS=done

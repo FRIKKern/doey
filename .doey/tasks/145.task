@@ -5,13 +5,18 @@ TASK_STATUS=done
 TASK_TYPE=feature
 TASK_ASSIGNED_TO=W3
 TASK_DESCRIPTION=Add a 'nudge' subcommand to doey-ctl that unsticks Claude instances. When a pane is stuck (post-hook hang, waiting for input, stalled compact), 'doey-ctl nudge <pane>' should: (1) Send Escape key to the pane, (2) Wait 1 second, (3) Send a re-prompt message ('Check your messages and resume.') via send-keys, (4) Update status to BUSY. Also support 'doey-ctl nudge --all' to cascade across all non-READY/non-RESERVED panes. This replaces manual tmux send-keys Escape + send-keys Enter patterns that Boss currently does by hand. Should be Go code in tui/cmd/doey-ctl/. The nudge command calls tmux send-keys under the hood.
-TASK_DECISION_LOG=1775167392:Created task\n1775167805:Status changed to done\n1775168010:Status changed to done\n1775168241:Status changed to done\n1775168313:Status changed to done
-TASK_SUBTASKS=1:W3.1: Implement doey-ctl nudge command in Go:pending\n2:W2.1: Fix commands.go — task command aliases, --help, error improvements:pending\n3:W2.2: Fix main.go — msg/status/health/tmux aliases, --help, error standardization:pending\n4:W2.5: Fix store_cmds.go + store_status_cmds.go — --help, error standardization:pending\n5:W2.6: Build verification — go build ./...:pending
-TASK_TIMESTAMPS=created=1775167392|completed=1775168313
+TASK_SUBTASKS=1:W3.1:done\n2:W2.1:done\n3:W2.2:done\n4:W2.5:done\n5:W2.6:done
+TASK_TIMESTAMPS=created=1775167392
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775167392
-TASK_REVIEW_VERDICT=PASS
-TASK_REVIEW_FINDINGS=Nudge command clean — single + cascade modes, safe-name conversion, reuses ctl package. UX extras: help printers, better errors, --pane alias. Build + vet pass. WARN: no explicit BUSY status write (handled by on-prompt-submit hook).
-TASK_REVIEW_TIMESTAMP=2026-04-02T17:10:00Z
-TASK_ATTACHMENTS=.doey/tasks/145.result.json
+TASK_SUBTASK_1_TITLE=W3.1
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.5
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.6
+TASK_SUBTASK_5_STATUS=done

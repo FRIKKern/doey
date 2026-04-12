@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=436
+TASK_TITLE=Add OriginPrompt field to runtime.PersistentTask (unblock main build)
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_CREATED_BY=team_lead
+TASK_TEAM=5
+TASK_DESCRIPTION=Upstream commit c8ea545 added task.OriginPrompt refs in tui/internal/taskcard/taskcard.go:528,530 but forgot the field on runtime.PersistentTask. main is unbuildable. Add field + populate where a source exists.
+TASK_SUBTASKS=1:W5.1: Add OriginPrompt to PersistentTask + populate loaders + verify build:done
+TASK_TIMESTAMPS=created=1775685327
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775685327
+TASK_SUBTASK_1_TITLE=W5.1: Add OriginPrompt to PersistentTask + populate loaders + verify build
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775685331
+TASK_SUBTASK_1_COMPLETED_AT=1775685595

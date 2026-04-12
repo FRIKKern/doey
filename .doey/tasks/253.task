@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=253
+TASK_TITLE=Masterplan Research Swarm — 10-angle deep audit analysis
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Phase 1 of masterplan-20260405-013021. 10 parallel ultrathink research agents, each examining the audit findings from a distinct angle. Intent doc: /tmp/doey/doey/masterplan-20260405-013021/intent.md. Audit report: /tmp/doey/doey/audit/consolidated_report.md. Each agent writes to /tmp/doey/doey/masterplan-20260405-013021/research/agent-N-<angle>.md
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775352759
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775352759

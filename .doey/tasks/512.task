@@ -1,0 +1,59 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=512
+TASK_TITLE=Masterplan execution: Interview-First + Real-Time Rendering (Phases 1+2)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W4
+TASK_DESCRIPTION=CATEGORY: deep
+
+Reference plan: /home/doey/doey/.doey/plans/masterplan-20260410-212617.md
+
+Ship Phases 1 and 2 of the masterplan together as one coordinated effort.
+
+PHASE 1 — Interview-First:
+Wire /deep-interview as a mandatory first phase of the masterplan process. When /doey-masterplan is invoked with an ambiguous or broad goal, it should automatically spawn a deep-interview sub-flow to extract:
+- WHAT (concrete deliverable)
+- WHY (motivation/constraint)
+- WHERE (scope/files/areas)
+- SUCCESS CRITERIA (how we know it's done)
+Before any research workers are dispatched. The interview output becomes structured input to the Planner.
+
+PHASE 2 — Real-Time Rendering:
+Upgrade the plan viewer (pane 1 in masterplan windows) to feel like Cursor Plan:
+- Streaming markdown render as the Planner writes (already partially works via file watch)
+- Structured plan format: goal, phases, deliverables, checkboxes for steps, risks section
+- Visual distinction for completed vs in-progress phases
+- Live indicator when the plan file is being updated
+- Better typography/colors matching the rest of the TUI
+
+Refer to the masterplan file for full detail on both phases, including specific file paths, effort estimates, and OmX/Cursor Plan learnings.
+
+Deliverables:
+- /deep-interview integration into /doey-masterplan skill flow
+- Upgraded plan viewer binary/component
+- Tests passing: go build ./..., any shell tests
+- Commit and push
+- Update .doey/plans/masterplan-20260410-212617.md to mark Phases 1+2 as complete
+TASK_SUBTASKS=1:W4.1: Integrate /deep-interview as mandatory first phase of /doey-masterplan:done\n2:W4.2: Upgrade plan viewer with streaming markdown + structured rendering:done\n3:W4.3: Define structured plan format + markdown parser + Planner prompt updates:done\n4:W4.4: Integration + verification (go build, bash tests, end-to-end smoke, mark phases complete):done
+TASK_TIMESTAMPS=created=1775867534
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775867534
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Integrate /deep-interview as mandatory first phase of /doey-masterplan
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775867659
+TASK_SUBTASK_1_COMPLETED_AT=1775868384
+TASK_SUBTASK_2_TITLE=W4.2: Upgrade plan viewer with streaming markdown + structured rendering
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775867659
+TASK_SUBTASK_2_COMPLETED_AT=1775868385
+TASK_SUBTASK_3_TITLE=W4.3: Define structured plan format + markdown parser + Planner prompt updates
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775867659
+TASK_SUBTASK_3_COMPLETED_AT=1775868385
+TASK_SUBTASK_4_TITLE=W4.4: Integration + verification (go build, bash tests, end-to-end smoke, mark phases complete)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775867659
+TASK_SUBTASK_4_COMPLETED_AT=1775868385

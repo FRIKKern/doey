@@ -1,0 +1,50 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=558
+TASK_TITLE=Fix doey-ctl status observe: factor staleness into active detection
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+
+BUG: doey-ctl status observe reports active: true for panes that are clearly idle, because it trusts the spinner glyph without checking staleness.
+
+EVIDENCE: Worker at prompt (❯) for 7+ minutes. last_output_age_sec: 445, heartbeat_age_sec: null. But observe returned active: true because a 'Baked' glyph was still visible in the capture.
+
+FIX: Add staleness thresholds to the active determination logic in observe_cmd.go:
+- If last_output_age_sec > 60 AND (heartbeat_age_sec is null OR > 60) → active: false regardless of glyph
+- Add a 'stale' field to the JSON output when glyph is present but staleness thresholds are exceeded
+- The ❯ prompt check should take priority over glyph detection when both are present
+
+KEY FILE: tui/cmd/doey-ctl/observe_cmd.go
+
+This directly impacts the STATUS CHECK PROTOCOL used by Boss and all monitoring. False positives make status reports unreliable.
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster — 1 worker, quick fix:done\n2:W2.1: Fix staleness logic in observe_cmd.go — add stale field, staleness threshold, prompt priority over glyph:done\n3:W2.2: Verify task 558 fix — build, test, and code review of observe_cmd.go staleness changes:done\n4:Task complete — sent to Task Reviewer (1.1):done\n5:Review PASSED — forwarded to Deployment (1.2):pending
+TASK_TIMESTAMPS=created=1775984092
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775984092
+TASK_FILES=.claude/skills/deep-interview/SKILL.md,.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,.claude/skills/doey-repair/SKILL.md,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/100.task,.doey/tasks/101.task,.doey/tasks/102.task,.doey/tasks/103.task,.doey/tasks/104.task,.doey/tasks/105.task,.doey/tasks/106.task,.doey/tasks/107.task,.doey/tasks/108.task,.doey/tasks/109.task,.doey/tasks/11.task,.doey/tasks/110.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster — 1 worker, quick fix
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775984174
+TASK_SUBTASK_1_COMPLETED_AT=1775984712
+TASK_SUBTASK_2_TITLE=W2.1: Fix staleness logic in observe_cmd.go — add stale field, staleness threshold, prompt priority over glyph
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775984175
+TASK_SUBTASK_2_COMPLETED_AT=1775984193
+TASK_SUBTASK_3_TITLE=W2.2: Verify task 558 fix — build, test, and code review of observe_cmd.go staleness changes
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1775984383
+TASK_SUBTASK_3_COMPLETED_AT=1775984400
+TASK_SUBTASK_4_TITLE=Task complete — sent to Task Reviewer (1.1)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775984558
+TASK_SUBTASK_4_COMPLETED_AT=1775984606
+TASK_SUBTASK_5_TITLE=Review PASSED — forwarded to Deployment (1.2)
+TASK_SUBTASK_5_STATUS=pending
+TASK_SUBTASK_5_CREATED_AT=1775984647

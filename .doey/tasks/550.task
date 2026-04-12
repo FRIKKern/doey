@@ -1,0 +1,43 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=550
+TASK_TITLE=Fix 479: populate TaskAttachments in storeReader.readTasks()
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Root cause from task 549 verification:
+- tui/internal/runtime/store_reader.go:54 readTasks() never calls parseAttachments()
+- Only file-based tui/internal/runtime/reader.go:724 ParseTasks() populates t.TaskAttachments
+- SQLite-backed projects see TaskAttachments=nil → detail panel never renders ATTACHMENTS section → ]/[/Enter are no-ops
+- Popup code at tui/internal/model/tasks.go:35 openAttachmentPopupCmd, :1028 enter handler, :1002 ]/[ handlers is CORRECT and compiles — data path is the only break
+
+Fix:
+1. In tui/internal/runtime/store_reader.go, inside readTasks() (around line 54), call parseAttachments(taskID) for each task and assign to t.TaskAttachments. Match the pattern used in reader.go:724 ParseTasks().
+2. cd tui && go build ./... — must PASS
+3. Launch doey-tui in a test tmux session, navigate to a task with attachments on disk (task 548 has 2, task 477 has 1), verify:
+   a. ATTACHMENTS section appears in detail panel
+   b. ]/[ cycles selection
+   c. Enter opens tmux display-popup with rendered markdown
+4. Capture proof (pane capture showing popup content)
+5. Commit to main with message: 'fix(479): populate TaskAttachments on SQLite store path'
+6. Mark task 479 pending_user_confirmation (or done if auto-close applies)
+
+Constraints:
+- ONE file likely (store_reader.go), maybe a small helper move
+- Don't refactor parseAttachments itself unless necessary
+- Don't touch reader.go file-based path
+- Must not break go build
+- Single worker, quick fix
+TASK_SUBTASKS=1:W2.1: Fix SQLite readTasks to populate TaskAttachments via parseAttachments; verify go build + popup renders:done
+TASK_TIMESTAMPS=created=1775942632
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775942632
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Fix SQLite readTasks to populate TaskAttachments via parseAttachments; verify go build + popup renders
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775942774
+TASK_SUBTASK_1_COMPLETED_AT=1775943169

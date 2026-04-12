@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=312
+TASK_TITLE=Replace Spawn Teams buttons with subtle team-type cards on Dashboard ASCII grid
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Replace the current 'Spawn Teams' buttons on the Dashboard with subtle, cool controls integrated into the ASCII team grid area. Instead of generic spawn buttons, show three distinct options with clear identity: (1) Freelancer Team — independent workers, no manager, self-directed. (2) Regular Team — Subtaskmaster + Workers, managed workflow. (3) Specialized Team — domain-specific (R&D, Deployment, etc.). Each option should be a small, elegant card or inline button within the grid area — not a separate section. Think minimal, integrated, part of the visualization. Use subtle styling that fits the ASCII/mission-control aesthetic — not big loud buttons.
+TASK_SUBTASKS=1:W5.1: Research — find current Spawn Teams buttons, Quick Actions section, and grid area in dashboard.go:done\n2:W5.1: Implement — replace Spawn Teams buttons with subtle team-type cards in grid area:done
+TASK_TIMESTAMPS=created=1775434111
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775434111
+TASK_FILES=.doey/tasks/1.task,tui/internal/model/dashboard.go,tui/internal/styles/cards.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Research — find current Spawn Teams buttons, Quick Actions section, and grid area in dashboard.go
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.1: Implement — replace Spawn Teams buttons with subtle team-type cards in grid area
+TASK_SUBTASK_2_STATUS=done

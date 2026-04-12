@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=165
+TASK_TITLE=Fix Taskmaster wait-loop ignore pattern
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Taskmaster falls into a wake-check-sleep loop where it wakes from taskmaster-wait.sh, checks for messages (finds none because the input was displayed as output not entered as input), then sleeps again. Root causes: (1) taskmaster-wait.sh only checks doey msg read for unread messages but input sent via send-keys/paste-buffer bypasses the message system entirely. (2) After processing input from the prompt, Taskmaster immediately enters wait loop without checking if it needs to act on the response it just generated. Fix: Taskmaster should check its own generated output/pending actions before entering wait. The wait hook should also detect if there is pending text in the input buffer.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775208686
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775208750

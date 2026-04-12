@@ -1,0 +1,36 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=445
+TASK_TITLE=Fix /doey-respawn-me: missing env vars + no respawn watcher
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=User tried /doey-respawn-me on pane 1.1 (Task Reviewer). Two failures:
+
+BUG 1: DOEY_SESSION_NAME is not set. The skill runs 'DOEY_SESSION_NAME:?missing' and crashes with exit 127. The on-session-start.sh hook should inject DOEY_SESSION_NAME, DOEY_WINDOW_INDEX, DOEY_PANE_INDEX into every pane's environment, but it apparently did not for this pane. Either the hook didn't run, or the env vars were set at Claude start time but not persisted into the shell environment the skill's Bash calls inherit.
+
+BUG 2: Even after workaround (hardcoding values), the respawn request file is written to /tmp/doey/doey/respawn/doey_doey_1_1.request but NOTHING ACTUALLY RESPAWNS THE PROCESS. The file just sits there. There must be a watcher (loop, hook, or cron) that reads .request files and actually kills + relaunches the Claude instance in that pane — either it doesn't exist, isn't running, or is looking in the wrong directory.
+
+FIX PLAN:
+1. Diagnose why DOEY_SESSION_NAME is missing on pane 1.1. Check on-session-start.sh — does it set these as tmux environment vars (tmux set-environment) or process env vars (export)? The skill runs in a Bash subshell which may not inherit tmux-level env vars. May need to source session.env or read from tmux show-environment.
+2. Find or create the respawn watcher. Search for anything that reads from /tmp/doey/PROJECT/respawn/. If nothing exists, create a minimal watcher in the respawn skill itself — the skill should directly kill the Claude process and relaunch, not write a file and hope.
+3. Alternative: skip the file-based approach entirely. The skill should directly: (a) capture its own pane ID, (b) kill the Claude process in that pane, (c) relaunch Claude with the correct agent. This is simpler and more reliable than a two-phase file + watcher design.
+
+ACCEPTANCE:
+1. In any doey pane, run /doey-respawn-me
+2. The Claude process dies and relaunches with fresh context
+3. Works without manually setting env vars
+4. No orphaned .request files sitting unread
+
+Fresh-install safe: must work in any pane without prior env setup.
+TASK_SUBTASKS=1:W2.1: Research current respawn-me skill + rewrite for direct tmux self-respawn:done
+TASK_TIMESTAMPS=created=1775735529
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775735529
+TASK_FILES=.claude/skills/doey-respawn-me/SKILL.md,shell/tmux-theme.sh
+TASK_SUBTASK_1_TITLE=W2.1: Research current respawn-me skill + rewrite for direct tmux self-respawn
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775735584
+TASK_SUBTASK_1_COMPLETED_AT=1775735594

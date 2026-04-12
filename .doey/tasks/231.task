@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=231
+TASK_TITLE=Fix Plans tab viewport — still locked at bottom on small screens
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=5
+TASK_DESCRIPTION=The Go TUI Plans tab still locks the user at the bottom when the terminal is not large enough (width and height) to contain the full plan list. Multiple prior tasks (172-177, 212, 213) attempted fixes but the bug persists. The viewport must start at the top and allow scrolling regardless of terminal size. This is likely a max-height or viewport-reset issue in the Plans tab list component — similar to the Tasks tab fix in task 223 but not properly applied to Plans.
+TASK_SUBTASKS=1:Dispatched to W5 Subtaskmaster:done\n2:W5.1: Fix Plans tab viewport — mirror Tasks tab fix pattern from commit 9ef0cda:done
+TASK_TIMESTAMPS=created=1775302966
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775302966
+TASK_SUBTASK_1_TITLE=Dispatched to W5 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.1: Fix Plans tab viewport — mirror Tasks tab fix pattern from commit 9ef0cda
+TASK_SUBTASK_2_STATUS=done

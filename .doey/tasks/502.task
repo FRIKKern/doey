@@ -1,0 +1,52 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=502
+TASK_TITLE=Scaffy: DSL-driven scaffolding engine integrated into Doey
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+PHASED: yes
+
+MASSIVE multi-phase build. Create Scaffy — a scaffolding engine with a custom .scaffy DSL, pattern discovery, template auditing, and MCP server — AS PART OF DOEY, not a separate repo.
+
+THE USER'S CORE REQUIREMENT: 'MAKE THIS PLAN, BUT MAKE SCAFFY A PART OF DOEY — AND MAKE SCAFFY FIT DOEY.'
+
+Full 12-section plan in origin file: /tmp/doey/doey/scaffy-origin.md
+
+DOEY INTEGRATION RULES (non-negotiable):
+1. Location: scaffy/ directory inside the doey repo (alongside tui/, shell/, agents/)
+2. Go module: either workspace module (go.work with tui/) or subdirectory module — whichever fits doey's existing build
+3. Install: install.sh builds scaffy binary to ~/.local/bin/ alongside doey; doey doctor checks it
+4. CLI: 'doey scaffy <subcommand>' routes to the scaffy binary (dispatch via shell/doey.sh)
+5. Template storage: .doey/scaffy/templates/ (fits .doey/ convention)
+6. Agents: convert the 5 scaffy agents to DOEY agents (agents/doey-scaffy-*.md) — NOT .cursor/rules/, NOT .claude/scaffy-*.md. They must work inside Doey's team architecture: a Subtaskmaster can dispatch a scaffy template via a worker
+7. Skills: ship .claude/skills/doey-scaffy-*/SKILL.md for slash-command access
+8. MCP server: use the skill-embedded MCP lifecycle (task #499 infra) — declare scaffy MCP server in skill frontmatter, spawn per-pane on demand
+9. Fresh install: everything works after curl | bash — no manual setup. Run the End-User Test.
+10. Bash 3.2 compatibility: any shell glue follows doey's bash 3.2 rules; run tests/test-bash-compat.sh
+11. Dependencies: ONLY the 5 listed Go deps (cobra, BurntSushi/toml, fatih/color, sourcegraph/go-diff, mark3labs/mcp-go)
+12. Naming: follow doey's 'Taskmaster/Subtaskmaster' convention — no abbreviations
+
+PHASING (critical — do NOT try to ship everything at once):
+- Phase 0: Research + planning. Read doey architecture, decide go module layout, decide how doey CLI routes subcommands, decide agent integration pattern. Deliver a concrete plan BEFORE any code.
+- Phase 1: Core engine MVP — types, parser, serializer, transforms (all 11), anchor, guard, idempotency, executor, 'doey scaffy run' + 'doey scaffy validate' working end-to-end. Full unit tests. Install.sh updated. Fresh-install test passes.
+- Phase 2: Composability — INCLUDE, FOREACH, planner, diff, human output, fmt, --dry-run
+- Phase 3: Store, discovery, audit — config, pattern discovery engine, 6 audit checks, list/discover/audit/init/new subcommands
+- Phase 4: MCP server + Doey-native agent team — 5 agents as doey-scaffy-* in agents/, skill-embedded MCP lifecycle, 7 tools, 4 resources
+- Phase 5: Polish — CI, fuzz, docs, README section, install.sh hardening
+
+EACH phase must: build cleanly (go build), pass tests, pass bash-compat lint, be committed, and be verified before next phase begins. Subtaskmaster should NOT dispatch Phase N+1 until Phase N is verified and committed.
+
+Deliverable for THIS task creation: Taskmaster assigns Phase 0 (research + planning) to a team and reports back with concrete layout decisions before any Phase 1 code is written.
+TASK_SUBTASKS=1:Proof verification: go build, go test, doey-scaffy --help:pending
+TASK_TIMESTAMPS=created=1775777176
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775777176
+TASK_FILES=README.md,shell/doey-doctor.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Proof verification: go build, go test, doey-scaffy --help
+TASK_SUBTASK_1_STATUS=pending
+TASK_SUBTASK_1_CREATED_AT=1775806713

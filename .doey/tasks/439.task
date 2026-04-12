@@ -1,0 +1,84 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=439
+TASK_TITLE=Intent-aware doey CLI via Claude headless fallback (Claude Harness study)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=Goal: when a user types an invalid/misspelled doey CLI command, instead of failing, doey should use Claude in headless mode to infer intent and execute the command the user obviously meant.
+
+Example flows:
+- User types 'doey tsk lst' -> doey recognizes typo, runs 'doey task list'
+- User types 'doey show me active workers' -> doey recognizes natural language, runs appropriate status command
+- User types 'doey kil worker 3' -> doey runs 'doey worker kill 3' (or whatever the real command is)
+- Works silently and fast; if confidence high -> execute; if low -> print suggestion for user to confirm
+
+Research phase (Subtaskmaster must do first):
+1. LOCATE the Claude Harness repo. User says it's in '/GitHub' folder — check /home/doey/GitHub, /GitHub, ~/GitHub, /Users/*/GitHub, etc. Find it, read the README and key source files.
+2. Study how Claude Harness invokes Claude headlessly — what binary, what flags (--print / -p?), how it passes prompts, how it streams/collects output, how it handles JSON vs plain text output, error handling, timeouts, caching.
+3. Map which patterns from Claude Harness are reusable for doey's fallback-intent feature.
+4. Design the doey integration:
+   - Where does the hook sit? In shell/doey.sh's unknown-command handler? A new shell/doey-intent.sh?
+   - What command list does Claude see (the full 'doey --help' output? a curated registry?)
+   - Prompt template: system prompt + known commands + user's raw input -> JSON { command, args, confidence, explanation }
+   - Confidence threshold behavior: high -> auto-execute, medium -> 'Did you mean X? [Y/n]', low -> show suggestions
+   - Latency budget (must feel snappy; headless Claude call can be 2-5s — acceptable for an error path only)
+   - Caching: identical misspellings shouldn't re-call the model — cache mapping locally
+   - Cost/rate concerns: only triggered on CLI miss, not every command
+   - Fresh-install test: must not break when ANTHROPIC_API_KEY missing or claude binary not installed — degrade gracefully to current error message
+
+Deliverable: research report with (a) findings from Claude Harness, (b) concrete implementation plan for doey, (c) identified risks/fallbacks. NO CODE in research phase — plan only. Report back to Boss for approval before implementation phase.
+
+Fresh-install vigilance: the feature must be optional and degrade cleanly. A user without 'claude' binary on PATH should get the current error unchanged, not a crash.
+TASK_SUBTASKS=1:W3.1: Locate Claude Harness repo + study headless invocation patterns (binary, flags, prompt passing, output handling, errors):done\n2:W3.2: Audit existing doey intent-fallback work (shell/intent-fallback.sh, task 402/414 outputs) + write integration plan delta to .doey/research/task-439-intent-fallback-research.md:done\n3:Phase 1: Research dispatched to W3 Subtaskmaster (Claude Harness study + doey integration plan):done\n4:W3.1: Assemble synthesis report .doey/research/task-439-intent-fallback-research.md from W3.1 harness brief + W3.2 doey audit (no code edits, report only):done\n5:Phase 1 research COMPLETE — SM 3.0 reported task_complete:done\n6:W3.1: Phase 2 recovery — create feat/task-439-intent-fallback from main, cherry-pick docs + acceptance test, selectively apply stash@{0} (shell-only, no TUI, no install.sh):done\n7:W3.2: Phase 2 impl — rewrite shell/intent-fallback.sh to use 'claude -p' CLI (not REST), add confirmation prompt, wire dispatcher, run tests:done\n8:W3.1: Phase 2 FIX — debug intent-fallback unit tests (5/7 and 1/8), fix happy-path curl mock + log creation, rerun to 7/7 + 8/8:done\n9:Bug fix: intent-fallback wiring broken in shell/doey.sh unknown-command handler; DOEY_NO_INTENT_FALLBACK=1 no-op; log file /tmp/doey/doey/intent-fallback.log never created. Fix wiring + end-to-end validation with actual command runs before marking done.:done\n10:W3.1: Phase 2 BUG FIX — intent fallback non-functional (stale ~/.local/bin/doey or missing wiring). Verify shell/doey.sh wiring, reinstall, e2e validate with 6 pasted outputs:done
+TASK_TIMESTAMPS=created=1775721663
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775721663
+TASK_FILES=docs/intent-fallback.md,install.sh,shell/doey.sh,shell/intent-fallback.sh,tests/test-intent-fallback-log.sh,tests/test-intent-fallback.sh
+TASK_SUBTASK_1_TITLE=W3.1: Locate Claude Harness repo + study headless invocation patterns (binary, flags, prompt passing, output handling, errors)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_3_1
+TASK_SUBTASK_1_CREATED_AT=1775721834
+TASK_SUBTASK_1_COMPLETED_AT=1775722109
+TASK_SUBTASK_2_TITLE=W3.2: Audit existing doey intent-fallback work (shell/intent-fallback.sh, task 402/414 outputs) + write integration plan delta to .doey/research/task-439-intent-fallback-research.md
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_3_2
+TASK_SUBTASK_2_CREATED_AT=1775721835
+TASK_SUBTASK_2_COMPLETED_AT=1775722427
+TASK_SUBTASK_3_TITLE=Phase 1: Research dispatched to W3 Subtaskmaster (Claude Harness study + doey integration plan)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775721843
+TASK_SUBTASK_3_COMPLETED_AT=1775722995
+TASK_SUBTASK_4_TITLE=W3.1: Assemble synthesis report .doey/research/task-439-intent-fallback-research.md from W3.1 harness brief + W3.2 doey audit (no code edits, report only)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775722480
+TASK_SUBTASK_4_COMPLETED_AT=1775732686
+TASK_SUBTASK_5_TITLE=Phase 1 research COMPLETE — SM 3.0 reported task_complete
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_3_1
+TASK_SUBTASK_5_CREATED_AT=1775723028
+TASK_SUBTASK_5_COMPLETED_AT=1775728998
+TASK_SUBTASK_6_TITLE=W3.1: Phase 2 recovery — create feat/task-439-intent-fallback from main, cherry-pick docs + acceptance test, selectively apply stash@{0} (shell-only, no TUI, no install.sh)
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_3_2
+TASK_SUBTASK_6_CREATED_AT=1775728795
+TASK_SUBTASK_6_COMPLETED_AT=1775730075
+TASK_SUBTASK_7_TITLE=W3.2: Phase 2 impl — rewrite shell/intent-fallback.sh to use 'claude -p' CLI (not REST), add confirmation prompt, wire dispatcher, run tests
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_WORKER=doey_doey_3_1
+TASK_SUBTASK_7_CREATED_AT=1775728795
+TASK_SUBTASK_7_COMPLETED_AT=1775730056
+TASK_SUBTASK_8_TITLE=W3.1: Phase 2 FIX — debug intent-fallback unit tests (5/7 and 1/8), fix happy-path curl mock + log creation, rerun to 7/7 + 8/8
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_CREATED_AT=1775729496
+TASK_SUBTASK_8_COMPLETED_AT=1775730146
+TASK_SUBTASK_9_TITLE=Bug fix: intent-fallback wiring broken in shell/doey.sh unknown-command handler; DOEY_NO_INTENT_FALLBACK=1 no-op; log file /tmp/doey/doey/intent-fallback.log never created. Fix wiring + end-to-end validation with actual command runs before marking done.
+TASK_SUBTASK_9_STATUS=done
+TASK_SUBTASK_9_CREATED_AT=1775731349
+TASK_SUBTASK_9_COMPLETED_AT=1775732425
+TASK_SUBTASK_10_TITLE=W3.1: Phase 2 BUG FIX — intent fallback non-functional (stale ~/.local/bin/doey or missing wiring). Verify shell/doey.sh wiring, reinstall, e2e validate with 6 pasted outputs
+TASK_SUBTASK_10_STATUS=done
+TASK_SUBTASK_10_WORKER=doey_doey_3_1
+TASK_SUBTASK_10_CREATED_AT=1775731415
+TASK_SUBTASK_10_COMPLETED_AT=1775732312

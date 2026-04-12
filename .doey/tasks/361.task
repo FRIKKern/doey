@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=361
+TASK_TITLE=Move tab system (closeable tabs, + button) from Dashboard to Console terminal
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Revert tasks 356/357 (closeable tabs and + button on Dashboard team menu) and rebuild the tab system on the Console/Terminal component in Core Team window. The tabs are for managing multiple console/terminal instances, not team navigation. Scope: (1) revert dashboard tab changes from 356/357, (2) research Console terminal component in Go TUI, (3) add tab bar with closeable tabs and + button to Console for spawning new terminal instances.
+TASK_SUBTASKS=1:Dispatched to W4 Subtaskmaster (2 workers: revert + rebuild):done\n2:W4.1: Revert dashboard tab changes (commits cc475dc and 8110f06) and research Console terminal component architecture:done\n3:W4.2: Build tab system on Console terminal component (closeable tabs, + button, min-one guarantee):done\n4:Code complete — revert + build done. Sent to Task Reviewer.:done
+TASK_TIMESTAMPS=created=1775501054
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775501054
+TASK_FILES=tui/internal/model/root.go,tui/internal/model/tabbar.go,tui/internal/term/model.go,tui/internal/term/tabbar.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W4 Subtaskmaster (2 workers: revert + rebuild)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Revert dashboard tab changes (commits cc475dc and 8110f06) and research Console terminal component architecture
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W4.2: Build tab system on Console terminal component (closeable tabs, + button, min-one guarantee)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Code complete — revert + build done. Sent to Task Reviewer.
+TASK_SUBTASK_4_STATUS=done

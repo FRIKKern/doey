@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=315
+TASK_TITLE=Fix TUI task list height gap — match Teams tab consistent spacing
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=Task #310 overcorrected the task list vertical spacing — the height gap between tasks is now way too large. Need to match the consistent, tight spacing used on the Teams tab. Look at how Teams tab renders its list items and match that gap/padding in the Tasks tab. File likely: tui/internal/ui/ task list rendering code. Compare with teams tab spacing.
+TASK_SUBTASKS=1:Dispatched to W4 — fix task list spacing:done\n2:W4.1: Fix TUI task list vertical spacing — reduce padding from task 310 to match Teams tab, update cardHeight, verify go build:done
+TASK_TIMESTAMPS=created=1775436522
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775436522
+TASK_FILES=tui/internal/model/dashboard.go,tui/internal/model/tasks.go,tui/internal/runtime/reader.go,tui/internal/runtime/types.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W4 — fix task list spacing
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Fix TUI task list vertical spacing — reduce padding from task 310 to match Teams tab, update cardHeight, verify go build
+TASK_SUBTASK_2_STATUS=done

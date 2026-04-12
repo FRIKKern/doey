@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=403
+TASK_TITLE=Masterplanner questions must use Claude Code native AskUserQuestion TUI
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=When the Masterplanner (Planner agent) asks the user 1-3 intent or scope questions, it must use the Claude Code native AskUserQuestion tool — not inline text in the pane. Currently AskUserQuestion is Boss-only by hook restriction; other agents must escalate via .msg files to Boss. Two possible fixes: (A) grant Masterplanner AskUserQuestion tool access directly so it can prompt the user inline in its own pane via the native TUI, OR (B) keep the escalation flow but make it round-trip cleanly: Planner → msg(question) → Boss → AskUserQuestion → msg(answer) → Planner. Prefer (A) — it is a planning role with direct user contact, just like Boss. Update agents/doey-masterplanner.md (or wherever the Planner agent def lives) and the on-pre-tool-use.sh hook to permit AskUserQuestion for the Planner role. Acceptance: running doey-masterplan, the Planner asks intent questions via the native Claude Code question UI, not as plain text. Works on fresh install.
+TASK_SUBTASKS=1:W3.1: Research Planner agent def + on-pre-tool-use.sh AskUserQuestion handling:done\n2:W3.2: Add TEAM_DEF=masterplan bypass for AskUserQuestion in on-pre-tool-use.sh:done\n3:W3.1: Verify Planner AskUserQuestion bypass — JSON/syntax, direct invocation, regression:done
+TASK_TIMESTAMPS=created=1775542541
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775542541
+TASK_SUBTASK_1_TITLE=W3.1: Research Planner agent def + on-pre-tool-use.sh AskUserQuestion handling
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Add TEAM_DEF=masterplan bypass for AskUserQuestion in on-pre-tool-use.sh
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Verify Planner AskUserQuestion bypass — JSON/syntax, direct invocation, regression
+TASK_SUBTASK_3_STATUS=done

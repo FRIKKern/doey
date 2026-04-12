@@ -4,39 +4,22 @@ TASK_TITLE=Go TUI task list readability — compact cards, cleaner layout
 TASK_STATUS=done
 TASK_TYPE=bugfix
 TASK_CREATED_BY=Boss
+TASK_TEAM=W1
 TASK_DESCRIPTION=The task list in the Go TUI is hard to scan. Cards are too tall, lines everywhere, titles too large, IDs too prominent. Clean it up:
-
-1. Reposition task ID — make it subtle (right-aligned or small prefix), not the dominant element
-2. Make task titles more compact — less visual space per card
-3. Reduce excessive lines/borders — the list has too many separator lines, make it cleaner
-4. Improve visual hierarchy: status + title primary, ID + metadata secondary
-5. Overall: fewer lines, more compact cards, easier to scan
-
-Also clean up the task detail/inspect view — too many lines and visual noise there too. Make it clean and nice.
-
-Reference screenshot: /home/doey/.claude/projects/-home-doey-doey/c38e11ff-bafe-4c3c-87d4-240f480fc8de/tool-results/webfetch-1775111570127-xztay3.png
-
-Go TUI code is in tui/ directory.
-TASK_DECISION_LOG=1775111602:Created task\n1775111719:Added scope items 6+7 from user: dedup buttons, scroll in inspect view\n1775112004:Status changed to done\n1775112051:Status changed to done\n1775112108:Status changed to done\n1775112149:Status changed to done
 TASK_SUBTASKS=1:W1.1: Research TUI task list code — find rendering logic in tui/ for task cards and detail view:done\n2:W1.2: Redesign task card rendering — compact layout, subtle ID, better hierarchy:done\n3:W1.3: Clean up task detail/inspect view — reduce visual noise:done\n4:W1.4: Build verification — go build clean:done\n5:W1.x: Remove duplicate button — showing twice (card + bottom):done\n6:W1.x: Add scroll to task inspect view (reference Plans tab scroll):done
-TASK_TIMESTAMPS=created=1775111602|completed=1775112149
+TASK_TIMESTAMPS=created=1775111602
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_TEAM=W1
 TASK_UPDATED=1775111641
-TASK_UPDATE_1_TIMESTAMP=1775111665
-TASK_UPDATE_1_AUTHOR=SM
-TASK_UPDATE_1_TEXT=Dispatched to W1 Manager — Go TUI readability improvements
-TASK_SUBTASK_1_TITLE=Dispatch to W1 — compact cards, clean layout
-TASK_SUBTASK_1_STATUS=pending
-TASK_SUBTASK_1_ASSIGNEE=Manager_W1
-TASK_SUBTASK_1_CREATED_AT=1775111665
-TASK_UPDATE_2_TIMESTAMP=1775111686
-TASK_UPDATE_2_AUTHOR=SM
-TASK_UPDATE_2_TEXT=Merged Boss additions from #91: (6) Remove duplicate button in task GUI, (7) Add scroll to task inspect view (reference Plans tab impl)
-TASK_ATTACHMENTS=.doey/tasks/83.result.json
-TASK_REPORT_1_TIMESTAMP=1775112203
-TASK_REPORT_1_AUTHOR=Manager_W1
-TASK_REPORT_1_TYPE=completion
-TASK_REPORT_1_TITLE=Task 83 Complete
-TASK_REPORT_1_BODY=All scope items done. Build+vet pass. Commit request sent to SM.
+TASK_SUBTASK_1_TITLE=W1.1
+TASK_SUBTASK_1_STATUS= Research TUI task list code — find rendering logic in tui/ for task cards and detail view:done
+TASK_SUBTASK_2_TITLE=W1.2
+TASK_SUBTASK_2_STATUS= Redesign task card rendering — compact layout, subtle ID, better hierarchy:done
+TASK_SUBTASK_3_TITLE=W1.3
+TASK_SUBTASK_3_STATUS= Clean up task detail/inspect view — reduce visual noise:done
+TASK_SUBTASK_4_TITLE=W1.4
+TASK_SUBTASK_4_STATUS= Build verification — go build clean:done
+TASK_SUBTASK_5_TITLE=W1.x
+TASK_SUBTASK_5_STATUS= Remove duplicate button — showing twice (card + bottom):done
+TASK_SUBTASK_6_TITLE=W1.x
+TASK_SUBTASK_6_STATUS= Add scroll to task inspect view (reference Plans tab scroll):done

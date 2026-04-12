@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=465
+TASK_TITLE=Fix intent fallback: remove unsupported --reasoning-effort flag
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=Running any unknown doey command (e.g. 'doey wazzup?') triggers the intent fallback which crashes with 'error: unknown option --reasoning-effort'. This was introduced in task #463 which added --reasoning-effort low to the Opus call. The installed Claude CLI does not support this flag. Fix: remove the --reasoning-effort flag from intent-fallback.sh / doey-headless.sh. The fallback must work without it.
+TASK_SUBTASKS=1:Direct dispatch to W2.1 — remove --reasoning-effort flag:done
+TASK_TIMESTAMPS=created=1775755463
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775755463
+TASK_FILES=shell/doey-headless.sh,shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Direct dispatch to W2.1 — remove --reasoning-effort flag
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775755593
+TASK_SUBTASK_1_COMPLETED_AT=1775755631

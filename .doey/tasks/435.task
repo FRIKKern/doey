@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=435
+TASK_TITLE=Post-pull: rebuild doey-tui binary + reload updated agents
+TASK_STATUS=cancelled
+TASK_TYPE=chore
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=After task 434 pull (17 commits, 37 files). Required:
+1. cd /home/doey/doey/tui && go build ./... && install binary to ~/.local/bin/doey-ctl
+2. Verify tests: bash tests/test-bash-compat.sh + any go test relevant
+3. Reload Task Reviewer agent (pane 1.1) — agents/doey-task-reviewer.md rewritten
+4. Reload Boss agent (pane 0.1) — agents/doey-boss.md + .tmpl full rewrite (warn Boss first)
+5. Note: on-pre-tool-use.sh added +146 lines (universal credential guard + freelancer VCS) — hook reload needed for affected panes
+6. Report what was rebuilt, what reloaded, any failures
+
+Route: Deployment 1.2 for build, Taskmaster for reloads. Do not pop the stash — leave stash@{0} for user review.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775685005
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775685005

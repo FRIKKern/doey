@@ -1,0 +1,45 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=318
+TASK_TITLE=Tasks tab — match Teams tab quality: clean list, clear hierarchy, consistent spacing
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=The Teams tab looks significantly better than the Tasks tab. User wants Tasks to learn from Teams.
+
+TEAMS TAB (reference — what works well):
+- Clean two-panel layout: left sidebar list + right detail panel
+- Left list has clear categories (STARRED, RUNNING, AVAILABLE) with colored status dots
+- Each list item: icon + name + metadata, consistent height
+- Right panel: structured key-value fields (Status, Type, Workers, etc.)
+- Generous but consistent spacing throughout
+- Professional, easy to scan
+
+TASKS TAB (current problems):
+- Left list is cramped and dense, hard to scan
+- No clear visual categories/grouping
+- Inconsistent spacing between items
+- List items lack visual hierarchy
+- Overall feels cluttered compared to Teams
+
+DESIRED CHANGES:
+- Match the Teams tab two-panel proportions and spacing
+- Group tasks by status (in_progress, pending_user_confirmation, done) like Teams groups by Starred/Running/Available
+- Each task list item: status icon + task ID + title, consistent height with comfortable padding
+- Right detail panel: structured fields like Teams tab (Status, Type, Priority, Team, Created, etc.)
+- Same font sizing, gap rhythm, and visual polish as Teams
+
+Screenshots saved at /tmp/doey/screenshot-teams-tab.png and /tmp/doey/screenshot-tasks-tab.png for reference.
+TASK_SUBTASKS=1:Dispatched to W4 — Tasks tab quality upgrade:done\n2:W4.1: Research Teams tab layout patterns — proportions, grouping, list items, detail panel structure:done\n3:W4.2: Research Tasks tab current code — identify gaps vs Teams tab, map what needs changing:done\n4:W4.1: Implement Tasks tab quality upgrade — grouping headers, 33/67 split, selection highlight:done
+TASK_TIMESTAMPS=created=1775438003
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775438003
+TASK_FILES=tui/internal/model/splitpane.go,tui/internal/model/tasks.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W4 — Tasks tab quality upgrade
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Research Teams tab layout patterns — proportions, grouping, list items, detail panel structure
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W4.2: Research Tasks tab current code — identify gaps vs Teams tab, map what needs changing
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W4.1: Implement Tasks tab quality upgrade — grouping headers, 33/67 split, selection highlight
+TASK_SUBTASK_4_STATUS=done

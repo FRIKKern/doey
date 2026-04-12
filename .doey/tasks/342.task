@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=342
+TASK_TITLE=Remove 'Unverified' label from Proof of Completion in TUI
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=The TUI task detail view shows 'Unverified' next to Proof of Completion. This was added as part of the success_criteria/proof_of_success feature (task 332) but clutters the UI. Remove the 'Unverified' text — if there's no proof, just show nothing or leave the field empty. Check the Go TUI code in tui/ for where this label is rendered.
+TASK_SUBTASKS=1:W4.1: Find and remove 'Unverified' label from TUI task detail view, build and vet:done\n2:Dispatched to Team W4 (SM at 4.0):done
+TASK_TIMESTAMPS=created=1775479859
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775479859
+TASK_FILES=tui/internal/taskcard/taskcard.go
+TASK_SUBTASK_1_TITLE=W4.1: Find and remove 'Unverified' label from TUI task detail view, build and vet
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to Team W4 (SM at 4.0)
+TASK_SUBTASK_2_STATUS=done

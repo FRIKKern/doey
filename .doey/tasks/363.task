@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=363
+TASK_TITLE=Respawn Phase 2: Stop hook chain (status + notify + respawn)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Modify stop-status.sh to detect respawn flag file and set RESPAWNING status (skip proof gate). Modify stop-notify.sh to send worker_respawning subject instead of worker_finished when RESPAWNING. Create new stop-respawn.sh async hook that reads flag, checks cooldown, reconstructs launch command from RUNTIME/status/<pane>.launch_cmd, calls doey_send_command to relaunch, cleans up flag file. Reference: synthesis at /tmp/doey/doey/masterplan-20260406-183746/synthesis.md. Key files: stop-status.sh:40-42, stop-notify.sh:117-221, doey-send.sh:175-184. Gate: worker invokes skill, exits, new Claude boots in same pane within 15s.
+TASK_SUBTASKS=1:Phase 2 dispatched: W1=launch_cmd persistence, W2=hook review, W3=skill verification:done\n2:launch_cmd persistence added to on-session-start.sh. Sent to review.:done
+TASK_TIMESTAMPS=created=1775502302
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775502302
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Phase 2 dispatched: W1=launch_cmd persistence, W2=hook review, W3=skill verification
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=launch_cmd persistence added to on-session-start.sh. Sent to review.
+TASK_SUBTASK_2_STATUS=done

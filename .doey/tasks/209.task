@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=209
+TASK_TITLE=Agent prompt efficiency — audit all agents, reduce instructions, optimize context
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Research task: Audit all Doey agent prompts for efficiency. Key constraints: 1) Max 72 instructions per agent (ideally far fewer), 2) Every instruction must earn its place. Research areas: A) Audit every agent — count instructions, identify bloat, rank by severity. B) Identify patterns that can be extracted into shared utilities/skills instead of repeated in prompts. C) Design methods to make context more accessible without stuffing it into prompts (lazy-loaded skills, on-demand context injection, compact reference cards). D) Propose a system for keeping agents lean — maybe a linting rule, maybe a review gate. E) Look at how other multi-agent systems handle prompt efficiency. Deliverable: research report with findings, per-agent instruction counts, and concrete recommendations.
+TASK_SUBTASKS=1:Audit: count instructions in every agent prompt, identify bloat and redundancy:done\n2:Research: 72-instruction limit source — what does the research say about optimal prompt size?:done\n3:Identify: patterns repeated across agents that could become shared skills or lazy-loaded context:done\n4:Design: methods for on-demand context — skills, reference cards, context injection hooks:done\n5:Propose: concrete plan to slim every agent with before/after instruction counts:done\n6:Dispatch to W3 — parallel audit + research on agent prompt efficiency:done
+TASK_TIMESTAMPS=created=1775294667
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775294667
+TASK_SUBTASK_1_TITLE=Audit: count instructions in every agent prompt, identify bloat and redundancy
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Research: 72-instruction limit source — what does the research say about optimal prompt size?
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Identify: patterns repeated across agents that could become shared skills or lazy-loaded context
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Design: methods for on-demand context — skills, reference cards, context injection hooks
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Propose: concrete plan to slim every agent with before/after instruction counts
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=Dispatch to W3 — parallel audit + research on agent prompt efficiency
+TASK_SUBTASK_6_STATUS=done

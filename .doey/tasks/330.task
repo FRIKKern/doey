@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=330
+TASK_TITLE=Merge Activity and Interactions tabs into Logs tab
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=The Go TUI currently has separate Activity, Interactions, and Logs tabs. Consolidate Activity and Interactions into the Logs tab as sub-sections or filterable views. Remove the standalone Activity and Interactions tabs from the tab bar. The Logs tab should show all three data streams — logs, activity, and interactions — either as sub-tabs within Logs or as a single merged chronological view with type labels. Check tui/internal/model/ for the tab definitions and rendering code.
+TASK_SUBTASKS=1:W3.1: Research tab architecture — enum, tab list, switching logic in Go TUI:done\n2:W3.2: Research tab content rendering — Activity, Interactions, Logs data sources and render functions:done\n3:W3.1: Add Activity and Interactions as sub-views in LogsGroupModel (logsgroup.go):done\n4:W3.2: Remove standalone Activity/Interactions tabs from root.go, update all switch/case and arithmetic:done\n5:W3.1: Verify combined build, check for dead code, test TUI launches:done
+TASK_TIMESTAMPS=created=1775469695
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775469695
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/stop-results.sh,tui/cmd/doey-ctl/main.go,tui/cmd/doey-router/main.go,tui/go.mod,tui/go.sum,tui/internal/model/logsgroup.go,tui/internal/model/root.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research tab architecture — enum, tab list, switching logic in Go TUI
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research tab content rendering — Activity, Interactions, Logs data sources and render functions
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Add Activity and Interactions as sub-views in LogsGroupModel (logsgroup.go)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Remove standalone Activity/Interactions tabs from root.go, update all switch/case and arithmetic
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.1: Verify combined build, check for dead code, test TUI launches
+TASK_SUBTASK_5_STATUS=done

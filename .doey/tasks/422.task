@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=422
+TASK_TITLE=Pull latest doey from origin
+TASK_STATUS=in_progress
+TASK_TYPE=chore
+TASK_DESCRIPTION=User requested: pull latest changes from origin/main into the doey repo. Handle any local changes safely (stash if needed). Report what was pulled.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775576946
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775579303

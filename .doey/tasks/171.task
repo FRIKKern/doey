@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=171
+TASK_TITLE=Fix doey-ctl task done updating wrong task (always hits #41)
+TASK_STATUS=cancelled
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=All task done operations update task #41 instead of the specified ID. Likely a hardcoded ID or wrong variable in the SQL UPDATE/WHERE clause. Critical data integrity bug. Go CLI in tui/.
+TASK_SUBTASKS=1:W2.1: Fix SQLite NULL scan error in doey-ctl:done
+TASK_TIMESTAMPS=created=1775215769
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775216064
+TASK_SUBTASK_1_TITLE=W2.1: Fix SQLite NULL scan error in doey-ctl
+TASK_SUBTASK_1_STATUS=done

@@ -1,0 +1,24 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=195
+TASK_TITLE=Fix send-keys message delivery reliability — messages failing to submit
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=Send-keys to Taskmaster is unreliable. Multi-line messages get mangled. Escape before send-keys may eat the first character. Even single-line messages sometimes fail to land. This regressed recently — was more reliable before. Need to audit the full send-keys pipeline: Escape handling, C-c/C-u clearing, literal mode (-l flag), multi-line delivery, and timing. The fix in task 190 (3-layer fix for first-character eaten after Escape) may have introduced new issues or not fully resolved the problem.
+TASK_ACCEPTANCE_CRITERIA=Multi-line messages deliver correctly to Taskmaster; single-line messages never fail; no first-character eaten; Escape sequence does not interfere; reliable on every attempt
+TASK_SUBTASKS=1:Research: audit all send-keys call sites — hooks, skills, Boss agent, doey-ctl nudge. Map every pattern used (Escape, C-c, C-u, -l flag, sleep timings):done\n2:Reproduce the failures: multi-line mangling, first-char eaten after Escape, message not landing at all. Document exact conditions:done\n3:Fix: establish one canonical send-keys pattern that works reliably. Update all call sites to use it:done\n4:Test: verify message delivery works 10/10 times across Boss-to-Taskmaster, Taskmaster-to-Subtaskmaster, and nudge paths:done\n5:Build delivery confirmation into the canonical send-keys helper: after sending, capture target pane output and verify the message appeared in the prompt or the target status changed to BUSY. Retry if not confirmed within timeout. Every sender must confirm receipt before moving on.:done\n6:Implement doey_send_verified() — send + monitor + retry with confirmation:done
+TASK_TIMESTAMPS=created=1775264166
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775264166
+TASK_SUBTASK_1_TITLE=Research: audit all send-keys call sites — hooks, skills, Boss agent, doey-ctl nudge. Map every pattern used (Escape, C-c, C-u, -l flag, sleep timings)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Reproduce the failures: multi-line mangling, first-char eaten after Escape, message not landing at all. Document exact conditions
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Fix: establish one canonical send-keys pattern that works reliably. Update all call sites to use it
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Test: verify message delivery works 10/10 times across Boss-to-Taskmaster, Taskmaster-to-Subtaskmaster, and nudge paths
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Build delivery confirmation into the canonical send-keys helper: after sending, capture target pane output and verify the message appeared in the prompt or the target status changed to BUSY. Retry if not confirmed within timeout. Every sender must confirm receipt before moving on.
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=Implement doey_send_verified() — send + monitor + retry with confirmation
+TASK_SUBTASK_6_STATUS=done

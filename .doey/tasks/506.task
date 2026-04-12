@@ -1,0 +1,30 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=506
+TASK_TITLE=Research: audit all agent definitions for TUI agents tab quality
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+TASK_TYPE: research
+
+Audit every agent .md file in agents/ and their .md.tmpl templates. The Go TUI has an agents tab that displays a list and detail view. We need a complete picture of what's there now vs what it should look like.
+
+Research deliverables:
+1. List every agent file with its current frontmatter fields (name, model, color, memory, description, any others)
+2. Identify which agents are MISSING colors, descriptions, or other metadata
+3. Check what fields the Go TUI agents tab actually reads/displays (look at tui/ Go code that parses agent frontmatter)
+4. Note any inconsistencies in naming, description quality, or formatting
+5. Recommend a consistent standard for all agents — what fields should every agent have, color palette suggestions, description guidelines
+
+Output: a structured report we can use to plan the beautification pass.
+TASK_SUBTASKS=1:W2.1: Research — audit all agent .md files and TUI agents tab code, produce structured report:done
+TASK_TIMESTAMPS=created=1775855388
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775855388
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research — audit all agent .md files and TUI agents tab code, produce structured report
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775855455
+TASK_SUBTASK_1_COMPLETED_AT=1775855943

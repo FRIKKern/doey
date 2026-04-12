@@ -2,10 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=16
 TASK_TITLE=Smart worker dispatch: restart stale context, delegate relevant context
 TASK_STATUS=done
-TASK_CREATED=1774822621
 TASK_TYPE=feature
-TASK_DESCRIPTION=When a Manager dispatches a new task to a worker, the system must evaluate whether the worker's existing Claude context is relevant to the new task. If irrelevant — kill the Claude process and relaunch fresh (doey-clear / kill+relaunch). If relevant — delegate into existing context (doey-delegate / send-keys). Currently this is left to ad-hoc judgment. This must be codified in the shipped product so every Doey user gets this behavior out of the box. Update the dispatch skill (doey-dispatch), the Manager agent definition, and/or the relevant shell helpers so that context relevance evaluation is part of the standard dispatch flow. The default should bias toward restart for unrelated work — fresh context produces better results than stale assumptions.
 TASK_TAGS=agent-defs,skills,shell,dispatch
 TASK_TEAM=W3
-TASK_LOG_1774823814=DISPATCHED: Sent to W3 Manager (P2 smart dispatch)
-TASK_LOG_1774824807=COMPLETE: Committed 3099937. Context-aware dispatch with overlap scoring.
+TASK_DESCRIPTION=When a Manager dispatches a new task to a worker, the system must evaluate whether the worker's existing Claude context is relevant to the new task. If irrelevant — kill the Claude process and relaunch fresh (doey-clear / kill+relaunch). If relevant — delegate into existing context (doey-delegate / send-keys). Currently this is left to ad-hoc judgment. This must be codified in the shipped product so every Doey user gets this behavior out of the box. Update the dispatch skill (doey-dispatch), the Manager agent definition, and/or the relevant shell helpers so that context relevance evaluation is part of the standard dispatch flow. The default should bias toward restart for unrelated work — fresh context produces better results than stale assumptions.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257535

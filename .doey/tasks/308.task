@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=308
+TASK_TITLE=Extravagant log styling — colors, icons, TUI-grade rendering in Logs tab
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Upgrade the Go TUI Logs tab to be visually extravagant — matching the quality of the rest of the TUI. Currently logs are plain text. Make them beautiful: (1) Color-coded log levels — errors in red, warnings in amber, progress in green, info in blue, decisions in purple. (2) Role-colored agent names — each role gets its signature color (Boss=blue, Taskmaster=purple, Workers=green, etc.). (3) Styled icons per log type — progress, completion, error, decision, dispatch. (4) Timestamps in subtle dim style. (5) Task ID badges with background color. (6) Use lipgloss styles consistent with the rest of the TUI — same color palette, same elegance. The Logs tab should feel like a premium activity feed, not a raw terminal dump.
+TASK_SUBTASKS=1:W3.1: Research Logs tab rendering — current model, view, styles, data structures:done\n2:W3.2: Research style system — existing lipgloss styles, theme colors, role colors, icon patterns:done\n3:W3.1: Implement style helpers in styles/status.go — LogStatusIcon, LogTaskBadge, LogRoleBadge functions:done\n4:W3.2: Implement extravagant log rendering in logview.go — struct expansion, styled renderLine, detail view, dimmed timestamps:done
+TASK_TIMESTAMPS=created=1775432608
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775432608
+TASK_FILES=.doey/tasks/1.task,tui/internal/model/actions.go,tui/internal/model/logview.go,tui/internal/model/root.go,tui/internal/model/tasks.go,tui/internal/runtime/tasks_config.go,tui/internal/styles/status.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research Logs tab rendering — current model, view, styles, data structures
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research style system — existing lipgloss styles, theme colors, role colors, icon patterns
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Implement style helpers in styles/status.go — LogStatusIcon, LogTaskBadge, LogRoleBadge functions
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Implement extravagant log rendering in logview.go — struct expansion, styled renderLine, detail view, dimmed timestamps
+TASK_SUBTASK_4_STATUS=done

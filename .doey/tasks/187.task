@@ -1,0 +1,24 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=187
+TASK_TITLE=Review DB-primary task architecture — e2e verification
+TASK_STATUS=done
+TASK_TYPE=review
+TASK_TEAM=W3
+TASK_DESCRIPTION=Verify the DB-primary task architecture (tasks 185, 184, 183, 150, 149) is working correctly end-to-end. Check: (1) SQLite is sole source of truth — all reads go through doey-ctl, no direct .task file reads remain, (2) doey-ctl task export generates valid .task files from DB, (3) Go TUI reads from DB correctly, (4) Shell helpers use doey-ctl not file parsing, (5) Briefing command works for Taskmaster cold restart, (6) updated_at is not overwritten on bulk sync, (7) All schema columns present. Run go build, go vet, and bash compat tests. Report any gaps or regressions.
+TASK_SUBTASKS=1:W3.1: Audit shell/hooks/agents for direct .task file reads bypassing doey-ctl:done\n2:W3.2: Run doey-ctl commands — export, list, get, briefing:done\n3:W3.3: Schema audit — verify all required columns in schema.go:done\n4:W3.4: Go build/vet + bash compat tests:done\n5:W3.1: Verify updated_at preservation in migrate.go and tasks.go:deferred\n6:Dispatch to W3 — e2e verification review:done
+TASK_TIMESTAMPS=created=1775257647
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257647
+TASK_SUBTASK_1_TITLE=W3.1: Audit shell/hooks/agents for direct .task file reads bypassing doey-ctl
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Run doey-ctl commands — export, list, get, briefing
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.3: Schema audit — verify all required columns in schema.go
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.4: Go build/vet + bash compat tests
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.1: Verify updated_at preservation in migrate.go and tasks.go
+TASK_SUBTASK_5_STATUS=deferred
+TASK_SUBTASK_6_TITLE=Dispatch to W3 — e2e verification review
+TASK_SUBTASK_6_STATUS=done

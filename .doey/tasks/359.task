@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=359
+TASK_TITLE=Research doey-daemon and write comprehensive usage article
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_TEAM=W5
+TASK_DESCRIPTION=Research the doey-daemon (built in tasks 338-339) thoroughly: architecture, efficiency, observability features, configuration, how it works under the hood. Then write a comprehensive article/guide that explains: (1) what the daemon does and why it exists, (2) how efficient it is (resource usage, overhead, polling vs event-driven), (3) how to use it to its fullest potential — every feature, flag, and integration point, (4) practical examples and tips. The article should be written to /tmp/doey/doey/daemon-article.md. The user needs to deeply understand how to leverage it.
+TASK_SUBTASKS=1:W5.1: Research daemon source — architecture, event loop, process model, efficiency design:done\n2:W5.2: Research daemon CLI, config, observability, integration points, resource usage:done\n3:W5.1: Write comprehensive daemon article to /tmp/doey/doey/daemon-article.md:done
+TASK_TIMESTAMPS=created=1775498893
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775498893
+TASK_SUBTASK_1_TITLE=W5.1: Research daemon source — architecture, event loop, process model, efficiency design
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Research daemon CLI, config, observability, integration points, resource usage
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W5.1: Write comprehensive daemon article to /tmp/doey/doey/daemon-article.md
+TASK_SUBTASK_3_STATUS=done

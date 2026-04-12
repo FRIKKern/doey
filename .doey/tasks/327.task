@@ -1,0 +1,32 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=327
+TASK_TITLE=Go tabbed terminal container — Bubble Tea + PTY console
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Build a Go tabbed terminal container using Bubble Tea + creack/pty + bubbleterm. NOT a dashboard, NOT a tmux clone. One full terminal tab visible at a time, optimized for pnpm dev / next dev / regular CLI workflows.
+
+Project skeleton needed:
+- main.go — entry point, Bubble Tea program setup
+- Bubble Tea app model — top-level model with tab switching, resize handling
+- Tab structs — each tab owns a PTY-backed shell session via creack/pty + bubbleterm
+- Shell session scaffolding — spawn shell, pipe I/O through PTY, handle resize (SIGWINCH)
+- Config loader — tab definitions, default shell, working directory
+
+This replaces the Doey Expert pane (1.3) in the Core Team window — it becomes our console/runtime window. Users launch dev servers, run CLI commands, watch logs — each in its own tab within a single pane.
+
+Key deps: github.com/charmbracelet/bubbletea, github.com/creack/pty, github.com/nicholasgasior/bubbleterm (or similar terminal widget). Start with the skeleton — compiling, one tab with a working shell session. Build from there.
+TASK_SUBTASKS=1:W5.1: Research existing tui/ Go module structure, go.mod, build patterns, Bubble Tea conventions:done\n2:W5.2: Research existing Bubble Tea model/update/view patterns, terminal widget options, PTY integration patterns:done\n3:W5.1: Implement skeleton — main.go entry point, root model with tab bar, terminal tab using taigrr/bubbleterm:done\n4:W5.2: Verify skeleton compiles and runs — test one working shell tab:done
+TASK_TIMESTAMPS=created=1775468343
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775468343
+TASK_FILES=tui/go.mod,tui/go.sum,tui/internal/model/dashboard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Research existing tui/ Go module structure, go.mod, build patterns, Bubble Tea conventions
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Research existing Bubble Tea model/update/view patterns, terminal widget options, PTY integration patterns
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W5.1: Implement skeleton — main.go entry point, root model with tab bar, terminal tab using taigrr/bubbleterm
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W5.2: Verify skeleton compiles and runs — test one working shell tab
+TASK_SUBTASK_4_STATUS=done

@@ -1,0 +1,51 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=461
+TASK_TITLE=Intent fallback chat must be Doey-expert, multi-turn, and action-capable
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=The intent fallback conversational mode (doey hello, doey <natural language>) is broken in 3 critical ways:
+
+1. NO DOEY KNOWLEDGE — it doesn't know what Doey is, what commands exist, or how to use them. It asks the user where the Doey project is. It should be an expert on Doey CLI commands, setup, and usage.
+
+2. MAX TURNS = 1 — after one response it dies with 'Error: Reached max turns (1)'. A conversation needs at least 5-10 turns to be useful. The REPL loop or Haiku call needs higher turn limits.
+
+3. CAN'T DO ANYTHING — it can't actually run doey commands, open projects, or take action. It just gives generic advice. It should be able to suggest and execute doey commands when the user asks.
+
+FIX REQUIREMENTS:
+- Inject Doey context (available commands from doey help, current project, session state) into the Haiku system prompt
+- Increase max turns to at least 10 for chat mode
+- When user asks to do something doey can do, actually run it (or at minimum, show the exact command)
+- Keep it fast — this is Haiku, not Opus. Response time matters
+- The chat personality should be warm/cozy (matches Doey brand) but competent
+
+Files likely involved: shell/intent-fallback.sh, shell/doey-intent-dispatch.sh
+TASK_SUBTASKS=1:W2.1: Research intent-fallback.sh — current system prompt, max turns, chat mode flow:done\n2:W2.2: Research doey-intent-dispatch.sh — dispatch logic, command routing, how chat mode is entered:done\n3:W2.1: Implement intent-fallback.sh changes — delete dead code L21-78, enrich chat system prompt with command reference + project context, increase max-turns to 5:done\n4:W2.2: Implement doey-intent-dispatch.sh changes — add command execution detection in REPL, robust error handling:done\n5:W2.1: Verify implementation — run bash compat tests, check both files for correctness, verify no conflicts:done
+TASK_TIMESTAMPS=created=1775752662
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775752662
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,agents/doey-boss.md,agents/doey-boss.md.tmpl,shell/doey-intent-dispatch.sh,shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research intent-fallback.sh — current system prompt, max turns, chat mode flow
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775752874
+TASK_SUBTASK_1_COMPLETED_AT=1775753449
+TASK_SUBTASK_2_TITLE=W2.2: Research doey-intent-dispatch.sh — dispatch logic, command routing, how chat mode is entered
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775752875
+TASK_SUBTASK_2_COMPLETED_AT=1775753449
+TASK_SUBTASK_3_TITLE=W2.1: Implement intent-fallback.sh changes — delete dead code L21-78, enrich chat system prompt with command reference + project context, increase max-turns to 5
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775753086
+TASK_SUBTASK_3_COMPLETED_AT=1775753449
+TASK_SUBTASK_4_TITLE=W2.2: Implement doey-intent-dispatch.sh changes — add command execution detection in REPL, robust error handling
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775753086
+TASK_SUBTASK_4_COMPLETED_AT=1775753449
+TASK_SUBTASK_5_TITLE=W2.1: Verify implementation — run bash compat tests, check both files for correctness, verify no conflicts
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_2_1
+TASK_SUBTASK_5_CREATED_AT=1775753280
+TASK_SUBTASK_5_COMPLETED_AT=1775753390

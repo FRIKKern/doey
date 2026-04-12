@@ -1,0 +1,79 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=555
+TASK_TITLE=Agents tab: upgrade description layout + render agent markdown
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Upgrade the Agents tab description pane in the Go TUI:
+
+1. BETTER LAYOUT for existing agent info (name, model, color, memory, description from YAML frontmatter). Clean up spacing, alignment, visual hierarchy.
+
+2. RENDER FULL MARKDOWN CONTENT of the agent's .md file directly below the frontmatter description. Show the actual body content of the agent definition file in a readable, well-formatted way — use glamour or the existing markdown rendering approach in the TUI.
+
+3. SCROLL FOCUS FIX (applies to BOTH tabs): When the user is in the details/inspection sub-tab, scrolling (arrow keys, mouse wheel, j/k) must control the detail/inspection pane content — NOT the list. The list should only scroll when the list pane has focus. Applies to:
+   - Agents tab: detail pane must scroll, not agent list
+   - Logs & Debug tab: log inspection pane must scroll, not the log list
+   This is the same UX pattern — fix it consistently across both tabs.
+
+The agent .md files live in agents/ (YAML frontmatter + markdown body). The TUI reads them already for the list — this task extends the detail view to show the full content.
+
+Look at tui/internal/agents/ or similar for the Agents tab implementation. Check tui/internal/logs/ or similar for Logs & Debug.
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster — 2 workers, parallel mode:done\n2:W2.1: Improve frontmatter field layout — spacing, alignment, visual hierarchy in Agents tab detail view:done\n3:W2.2: Render full markdown body content below frontmatter in Agents tab detail view using glamour:done\n4:Sent to Task Reviewer (1.1) for review gate:done\n5:Review PASSED — forwarded to Deployment (1.2) for commit+push:done\n6:Requirement #3: scroll focus fix dispatched to W2:done\n7:W2.1: Fix scroll focus in Agents tab — route scroll input to detail pane when detail sub-tab is active:done\n8:W2.2: Fix scroll focus in Logs & Debug tab — route scroll input to inspection/detail pane when active:done\n9:W2.1: Verification — build check, conflict check on debug.go, test scroll behavior in both tabs:done\n10:Scroll fix complete — sent to Task Reviewer (1.1) for review gate:done\n11:Scroll fix review PASSED — forwarded to Deployment (1.2):pending
+TASK_TIMESTAMPS=created=1775977436
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775977436
+TASK_FILES=.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-repair/SKILL.md,tui/internal/model/agents.go,tui/internal/model/debug.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster — 2 workers, parallel mode
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775977518
+TASK_SUBTASK_1_COMPLETED_AT=1775978435
+TASK_SUBTASK_2_TITLE=W2.1: Improve frontmatter field layout — spacing, alignment, visual hierarchy in Agents tab detail view
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775977521
+TASK_SUBTASK_2_COMPLETED_AT=1775977732
+TASK_SUBTASK_3_TITLE=W2.2: Render full markdown body content below frontmatter in Agents tab detail view using glamour
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_1
+TASK_SUBTASK_3_CREATED_AT=1775977521
+TASK_SUBTASK_3_COMPLETED_AT=1775978012
+TASK_SUBTASK_4_TITLE=Sent to Task Reviewer (1.1) for review gate
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775978242
+TASK_SUBTASK_4_COMPLETED_AT=1775978321
+TASK_SUBTASK_5_TITLE=Review PASSED — forwarded to Deployment (1.2) for commit+push
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_CREATED_AT=1775978372
+TASK_SUBTASK_5_COMPLETED_AT=1775979391
+TASK_SUBTASK_6_TITLE=Requirement #3: scroll focus fix dispatched to W2
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_2_1
+TASK_SUBTASK_6_CREATED_AT=1775978680
+TASK_SUBTASK_6_COMPLETED_AT=1775978958
+TASK_SUBTASK_7_TITLE=W2.1: Fix scroll focus in Agents tab — route scroll input to detail pane when detail sub-tab is active
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_WORKER=doey_doey_2_2
+TASK_SUBTASK_7_CREATED_AT=1775978682
+TASK_SUBTASK_7_COMPLETED_AT=1775978803
+TASK_SUBTASK_8_TITLE=W2.2: Fix scroll focus in Logs & Debug tab — route scroll input to inspection/detail pane when active
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_WORKER=doey_doey_2_2
+TASK_SUBTASK_8_CREATED_AT=1775978718
+TASK_SUBTASK_8_COMPLETED_AT=1775979170
+TASK_SUBTASK_9_TITLE=W2.1: Verification — build check, conflict check on debug.go, test scroll behavior in both tabs
+TASK_SUBTASK_9_STATUS=done
+TASK_SUBTASK_9_CREATED_AT=1775979156
+TASK_SUBTASK_9_COMPLETED_AT=1775979278
+TASK_SUBTASK_10_TITLE=Scroll fix complete — sent to Task Reviewer (1.1) for review gate
+TASK_SUBTASK_10_STATUS=done
+TASK_SUBTASK_10_CREATED_AT=1775979267
+TASK_SUBTASK_10_COMPLETED_AT=1775979278
+TASK_SUBTASK_11_TITLE=Scroll fix review PASSED — forwarded to Deployment (1.2)
+TASK_SUBTASK_11_STATUS=pending
+TASK_SUBTASK_11_CREATED_AT=1775979341

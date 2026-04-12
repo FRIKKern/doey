@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=367
+TASK_TITLE=Masterplan: Doey Web Dashboard — TanStack Start + Go API
+TASK_STATUS=pending
+TASK_TYPE=feature
+TASK_DESCRIPTION=Design and build a real-time Doey Dashboard website using TanStack Start (React) that interfaces with this running Doey instance via a custom Go API. Full activity visibility — live pane output, tasks, teams, messages, worker status, plans. Like a glass panel into the tmux grid.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775505500
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775505500
+TASK_FILES=.gitignore

@@ -2,27 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=39
 TASK_TITLE=Fix viewport stuck at bottom — max height + scroll recovery in all TUI tabs
 TASK_STATUS=done
-TASK_CREATED=1743350400
 TASK_TYPE=bugfix
-TASK_DESCRIPTION=When content exceeds the visible area in TUI tabs, the viewport gets stuck at the bottom and the user cannot scroll back up. This affects all tabs with long content (task details, logs, agent lists, etc).
-
-TWO FIXES NEEDED:
-
-1. MAX HEIGHT CONSTRAINTS — All scrollable content areas must have a max visible height that fits within the terminal viewport. Content that exceeds it should be clipped and scrollable, not push the layout beyond the screen. Use lipgloss.MaxHeight() or viewport constraints. Every panel, list, and detail view needs this.
-
-2. SCROLL RECOVERY — Even when stuck at bottom, up/down/pgup/pgdn/k/j/mouse wheel must work to scroll back up. The viewport offset must track correctly in both directions. If the viewport is at the bottom and the user presses up/k/pgup, it must scroll up — never get trapped.
-
-AUDIT SCOPE: Every tab model file — dashboard.go, tasks.go, agents.go, teams.go, connections.go, and any new tabs (logs.go if it exists). Check each one for:
-- Does it set max height on content areas?
-- Does scrollOffset/viewport track correctly when content > visible height?
-- Can the user always scroll up from the bottom?
-- Does mouse wheel work in both directions?
-
-Fix all issues found. Follow patterns from task 23 fixes (ensureVisible + scrollOffset bounding). One worker per file.
 TASK_TAGS=tui,scrolling,bugfix
 TASK_TEAM=W2
-TASK_LOG_1774880714=DISPATCHED to W2 Manager
-TASK_LOG_1774881011=COMPLETED: Committed as 7d8fefa — rightScroll clamping in 4 files
-TASK_RESULT=Audit found no functional scroll bugs. Fixed code quality: clamped rightScroll in tasks.go, agents.go, connections.go, team.go
-TASK_FILES=tui/internal/model/tasks.go,tui/internal/model/agents.go,tui/internal/model/connections.go,tui/internal/model/team.go
-TASK_LOG_1774899720=COMPLETE: SM auto-sleep committed (95874fe)
+TASK_DESCRIPTION=When content exceeds the visible area in TUI tabs, the viewport gets stuck at the bottom and the user cannot scroll back up. This affects all tabs with long content (task details, logs, agent lists, etc).
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

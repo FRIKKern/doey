@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=329
+TASK_TITLE=Fix Taskmaster interrupt storm — router escalations break mid-action flow
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=The Taskmaster gets stuck in retry loops because router escalations arrive as notification interrupts while it is mid-Bash-call. Pattern: TM sends review request via Bash → router escalation arrives as notification → Bash gets interrupted ('What should Claude do instead?') → TM retries → another escalation arrives → interrupted again. This creates a noisy, repetitive output loop visible to the user. The router should not interrupt the Taskmaster mid-action. Options: (1) batch/debounce router escalations so they arrive after the current action completes, (2) queue escalations in the message DB instead of as notifications, (3) have the Taskmaster's on-notification hook suppress escalations when status is BUSY, (4) reduce what the router escalates — not every subtask review needs to interrupt the coordinator. The goal: Taskmaster completes its actions cleanly without being interrupted by its own downstream effects.
+TASK_SUBTASKS=1:W2.1: Research on-notification.sh hook — how router escalations reach Taskmaster, what triggers them, and where BUSY status is checked:done\n2:W2.2: Research router escalation flow — trace from subtask_review_passed through notification chain to Taskmaster interrupt:done\n3:W2.1: Fix router routineSubjects — add subtask_review_passed/failed/request, specialist_finished to prevent false escalations:done\n4:W2.2: Fix BUSY-gating in doey-ctl msgNudgePane — remove Taskmaster exemption from BUSY skip + deduplicate shell wake triggers:done\n5:W2.1: Verify all changes for task 329 — router subjects, BUSY gating, shell dedup — build, vet, bash compat, code review:done
+TASK_TIMESTAMPS=created=1775469555
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775469555
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/stop-results.sh,tui/cmd/doey-ctl/main.go,tui/cmd/doey-router/main.go,tui/go.mod,tui/go.sum,tui/internal/model/logsgroup.go,tui/internal/model/root.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research on-notification.sh hook — how router escalations reach Taskmaster, what triggers them, and where BUSY status is checked
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research router escalation flow — trace from subtask_review_passed through notification chain to Taskmaster interrupt
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Fix router routineSubjects — add subtask_review_passed/failed/request, specialist_finished to prevent false escalations
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Fix BUSY-gating in doey-ctl msgNudgePane — remove Taskmaster exemption from BUSY skip + deduplicate shell wake triggers
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.1: Verify all changes for task 329 — router subjects, BUSY gating, shell dedup — build, vet, bash compat, code review
+TASK_SUBTASK_5_STATUS=done

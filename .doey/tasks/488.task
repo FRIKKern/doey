@@ -1,0 +1,51 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=488
+TASK_TITLE=Fix interview team: agent names, AskUserQuestion, and Agent permissions
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=The interview team has 3 issues that must all be fixed:
+
+1. MISSING AGENT NAMES: Panes 1 (Researcher) and 2 (Brief) have no agent definitions. They need dedicated doey agents with proper names in teams/interview.team.md and corresponding agent definition files.
+
+2. AskUserQuestion BLOCKED: The Interviewer role MUST be allowed to use AskUserQuestion directly — it's an interview agent whose whole job is asking questions. The on-pre-tool-use.sh hook currently forwards AskUserQuestion calls to Boss, but the Interviewer should be whitelisted to ask directly.
+
+3. Agent BLOCKED: The Interviewer tried to use Agent (Explore) and got blocked. The Interviewer may need Agent for research during interviews. Either whitelist Interviewer for Agent, or ensure the Researcher pane handles lookups instead.
+
+Files likely involved:
+- teams/interview.team.md (team definition — add agent names for all panes)
+- agents/ (create agent definitions for Researcher and Brief if missing)
+- .claude/hooks/on-pre-tool-use.sh (whitelist Interviewer for AskUserQuestion)
+
+All 3 fixes are required. Test by verifying: interview team panes show proper agent names, Interviewer can call AskUserQuestion without hook error, and Researcher can do codebase lookups.
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster — 2 workers: W1=hook perms, W2=agent defs:done\n2:W2.1: Research on-pre-tool-use.sh — find AskUserQuestion and Agent blocking logic for Interviewer whitelist:done\n3:W2.2: Research interview team config — check teams/interview.team.md pane defs and agents/ for missing agent files:done\n4:W2.1: Implement hook changes — read DOEY_TEAM_ROLE in on-pre-tool-use.sh, whitelist interviewer for AskUserQuestion and Agent:done\n5:W2.2: Create doey-interview-researcher agent and update interview.team.md to reference it:done\n6:W2.2: Verify all 3 fixes — hook permissions, agent definition, team config:done
+TASK_TIMESTAMPS=created=1775767225
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775767225
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster — 2 workers: W1=hook perms, W2=agent defs
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775767367
+TASK_SUBTASK_1_COMPLETED_AT=1775768001
+TASK_SUBTASK_2_TITLE=W2.1: Research on-pre-tool-use.sh — find AskUserQuestion and Agent blocking logic for Interviewer whitelist
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775767383
+TASK_SUBTASK_2_COMPLETED_AT=1775767847
+TASK_SUBTASK_3_TITLE=W2.2: Research interview team config — check teams/interview.team.md pane defs and agents/ for missing agent files
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775767385
+TASK_SUBTASK_3_COMPLETED_AT=1775767847
+TASK_SUBTASK_4_TITLE=W2.1: Implement hook changes — read DOEY_TEAM_ROLE in on-pre-tool-use.sh, whitelist interviewer for AskUserQuestion and Agent
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775767586
+TASK_SUBTASK_4_COMPLETED_AT=1775767957
+TASK_SUBTASK_5_TITLE=W2.2: Create doey-interview-researcher agent and update interview.team.md to reference it
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_CREATED_AT=1775767587
+TASK_SUBTASK_5_COMPLETED_AT=1775767958
+TASK_SUBTASK_6_TITLE=W2.2: Verify all 3 fixes — hook permissions, agent definition, team config
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_CREATED_AT=1775767761
+TASK_SUBTASK_6_COMPLETED_AT=1775767847

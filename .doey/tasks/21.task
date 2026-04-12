@@ -2,12 +2,11 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=21
 TASK_TITLE=CRITICAL: Fix pre-tool-use hook blocking Manager tmux dispatch commands
 TASK_STATUS=done
-TASK_CREATED=1774824200
 TASK_TYPE=bugfix
-TASK_OWNER=Boss
-TASK_PRIORITY=critical
-TASK_SUMMARY=on-pre-tool-use.sh incorrectly blocks Manager send-keys/load-buffer/paste-buffer. Managers cannot dispatch workers.
 TASK_TAGS=hooks
 TASK_TEAM=W1-freelancer
-TASK_LOG_1774824126=DISPATCHED: P0 to W1.6 freelancer (hook fix)
-TASK_LOG_1774824419=COMPLETE: Committed 922c9ed. Manager tmux allowlist added to hook.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257535

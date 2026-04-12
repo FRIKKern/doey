@@ -1,0 +1,67 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=521
+TASK_TITLE=Local stats system for Doey with TUI Stats sub-tab
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2-masterplan
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Goal: Build a local, zero-dependency stats/telemetry system for Doey. NOT PostHog — all data stays on the user's machine in .doey/. Surfaced through a new Stats sub-tab under the Go TUI Logs view.
+
+User decisions (locked in via AskUserQuestion):
+- STORAGE: SQLite at .doey/stats.db (structured rows, indexed queries; already compatible with Go TUI).
+- EVENT CATEGORIES: All four — session lifecycle, task events, worker events, skill/command usage.
+- TUI SHAPE: New 'Stats' sub-tab under Logs (dedicated view, keeps raw logs clean).
+
+Required scope:
+1) Event schema — define a stable set of events across 4 categories:
+   - Session lifecycle: session_start, session_stop, doctor_run, install_run, reload
+   - Task events: task_create, task_dispatch, task_complete, task_fail, task_reopen
+   - Worker events: worker_spawn, worker_stop, worker_kill, worker_error, tool_call_count
+   - Skill/command usage: skill_invoked (with skill name)
+   Each event: timestamp, type, category, session_id, project, optional payload (JSON blob column).
+
+2) SQLite storage — .doey/stats.db, single events table + indexes on (timestamp, type, session_id). Schema migration on open. Bash 3.2 compatible writer (use sqlite3 CLI, not a bash lib). Handle concurrent writes with BEGIN IMMEDIATE or WAL mode.
+
+3) Shell emitter — shell/doey-stats.sh with one function: doey_stats_emit <category> <type> [key=value...]. Called from doey.sh, hooks (on-session-start, stop-*, on-prompt-submit), skills where sensible. Silent on failure. Respect DOEY_STATS=0 kill switch.
+
+4) TUI Stats sub-tab — under Logs, a new view that queries .doey/stats.db and shows:
+   - Counters: total tasks, workers spawned, top 5 skills used, session count
+   - Recent events table (last 50, filterable by category)
+   - Reads from SQLite directly (Go has sqlite support via modernc.org/sqlite, no cgo needed).
+
+5) Install path — .doey/ directory creation + schema init handled on first session_start. Fresh-install compatible (no manual setup). Add to 'doey doctor' checks.
+
+6) Privacy — no user prompts or task content stored. Only structured event metadata. Document in docs/.
+
+Deliverables:
+- shell/doey-stats.sh (emitter)
+- SQLite schema + init logic
+- Hooks wired to emit events (without adding noise to existing hook logs)
+- Go TUI: new Stats sub-tab under Logs tab
+- Fresh-install path verified
+- docs/stats.md explaining what's collected and how to opt out
+
+Constraints:
+- Plan first — this is a PLANNED task. Run interview/research phase, produce a masterplan, get Boss approval BEFORE implementation.
+- Must work on fresh install (curl | bash → doey → stats start recording with zero setup)
+- Bash 3.2 compatible emitter
+- Zero network I/O
+- Respect existing Doey TUI conventions in tui/internal/...
+- Verify: go build tui/, tests/test-bash-compat.sh, doey doctor passes
+TASK_SUBTASKS=1:Dispatched to masterplan team W2 (Planner→Architect→Critic consensus loop). Awaiting plan_ready before any implementation dispatch.:done\n2:Plan reached CONSENSUS after 2 rounds. Plan: /tmp/doey/doey/masterplan-task521-20260411-093040/plan.md. Awaiting Boss approval before implementation dispatch.:done
+TASK_TIMESTAMPS=created=1775899714
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775899714
+TASK_FILES=.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,.claude/settings.json,docs/enforce-ask-user-question.md,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-stats-allowlist.txt,shell/doey-team-mgmt.sh,shell/doey.sh,tui/cmd/doey-ctl/doey-stats-allowlist.txt,tui/cmd/doey-ctl/stats_tasks.go,tui/internal/model/logsgroup.go
+TASK_SUBTASK_1_TITLE=Dispatched to masterplan team W2 (Planner→Architect→Critic consensus loop). Awaiting plan_ready before any implementation dispatch.
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775899845
+TASK_SUBTASK_1_COMPLETED_AT=1775910805
+TASK_SUBTASK_2_TITLE=Plan reached CONSENSUS after 2 rounds. Plan: /tmp/doey/doey/masterplan-task521-20260411-093040/plan.md. Awaiting Boss approval before implementation dispatch.
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775901126
+TASK_SUBTASK_2_COMPLETED_AT=1775910805

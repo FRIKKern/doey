@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=336
+TASK_TITLE=Fix SQLite SQLITE_BUSY database locking errors (Plan 31)
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Eliminate SQLITE_BUSY errors when multiple Doey panes write to SQLite concurrently. Research current DB config (WAL, busy_timeout, retry), then apply: WAL journal mode, busy_timeout=5000ms, retry-with-backoff for writes. Files: tui/internal/store/store.go, schema.go. Acceptance: zero SQLITE_BUSY under 10+ concurrent writes, go build+test pass.
+TASK_SUBTASKS=1:W2.1: Research current SQLite config — WAL mode, busy_timeout, retry logic, connection pooling in store.go and schema.go:done\n2:W2.2: Implement busy_timeout + SetMaxOpenConns in store.go Open(), verify with go build/vet/test:done
+TASK_TIMESTAMPS=created=1775475401
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775475401
+TASK_PLAN_ID=31
+TASK_FILES=shell/doey-task-helpers.sh,tui/cmd/doey-ctl/commands.go,tui/internal/store/store.go
+TASK_SUBTASK_1_TITLE=W2.1: Research current SQLite config — WAL mode, busy_timeout, retry logic, connection pooling in store.go and schema.go
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Implement busy_timeout + SetMaxOpenConns in store.go Open(), verify with go build/vet/test
+TASK_SUBTASK_2_STATUS=done

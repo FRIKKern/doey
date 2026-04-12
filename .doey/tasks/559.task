@@ -1,0 +1,79 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=559
+TASK_TITLE=Fix Subtaskmaster: detect all-workers-done and report completion upstream
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+BUG: Subtaskmaster gets stuck in infinite wait-timeout loop after all workers finish. It never reports task completion to the Taskmaster and never despawns the team window.
+
+OBSERVED BEHAVIOR (task #557, window 3):
+- Both workers finished and idle at prompt for 16+ minutes
+- last_output_age: 968s (W3.1), 834s (W3.2), heartbeat: null for both
+- Subtaskmaster at 42% context, looping: taskmaster-wait.sh → TIMEOUT → drain empty queue → re-sleep
+- It even printed 'Task #557 is complete. Idle, waiting for next task' but then went right back to sleep loop
+- Never sent a completion message to Taskmaster (pane 1.0)
+- Never despawned the team window
+- Had to be manually killed
+
+EXPECTED BEHAVIOR:
+When all workers are FINISHED and work is complete, the Subtaskmaster should:
+1. Detect all workers are done (check status files for FINISHED state)
+2. Compile results from results/*.json for its workers
+3. Send completion report to Taskmaster via doey msg send
+4. Update task status
+5. Either despawn the team window or go to sleep (not poll forever)
+
+WHERE TO LOOK:
+- The Subtaskmaster agent definition (agents/doey-subtaskmaster.md or similar) — does it have instructions for completion reporting?
+- taskmaster-wait.sh — the wait loop should check worker status on each wake and break if all done
+- stop-notify.sh — worker stop hooks should trigger Subtaskmaster to check completion
+- The Subtaskmaster's on-wake logic — when it wakes from taskmaster-wait.sh, it should check if all workers are FINISHED before re-sleeping
+
+This is a critical coordination bug. Teams finish work but the system doesn't know.
+TASK_SUBTASKS=1:P0 dispatched to W2 — 2 workers, agent def + wait loop:done\n2:W2.1: Research agent definition + completion detection logic in SM agent template:done\n3:W2.2: Research wait loop (taskmaster-wait.sh) + stop notification chain (stop-notify.sh):done\n4:W2.1: Implement F1+F2+F3 — fix trigger touching in stop-notify.sh + add all-workers-done detection + add ALL_DONE check in taskmaster-wait.sh TIMEOUT path:done\n5:W2.2: Implement F4 — update SM agent template to handle all_workers_done message and ALL_DONE wake reason:done\n6:W2.1: Verify all fixes — bash compat, functional test of stop-notify trigger + all_workers_done + taskmaster-wait ALL_DONE:done\n7:Task complete — sent to Task Reviewer (1.1) for P0 review:done\n8:Review PASSED — forwarded to Deployment (1.2):pending
+TASK_TIMESTAMPS=created=1775984681
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775989966
+TASK_FILES=.claude/hooks/stop-notify.sh,.claude/hooks/taskmaster-wait.sh,.claude/skills/deep-interview/SKILL.md,.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,.claude/skills/doey-repair/SKILL.md,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/100.task,.doey/tasks/101.task,.doey/tasks/102.task,.doey/tasks/103.task,.doey/tasks/104.task,.doey/tasks/105.task,.doey/tasks/106.task,.doey/tasks/107.task,.doey/tasks/108.task,.doey/tasks/109.task
+TASK_REVIEW_VERDICT=accepted
+TASK_SUBTASK_1_TITLE=P0 dispatched to W2 — 2 workers, agent def + wait loop
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775984770
+TASK_SUBTASK_1_COMPLETED_AT=1775986345
+TASK_SUBTASK_2_TITLE=W2.1: Research agent definition + completion detection logic in SM agent template
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775984783
+TASK_SUBTASK_2_COMPLETED_AT=1775985074
+TASK_SUBTASK_3_TITLE=W2.2: Research wait loop (taskmaster-wait.sh) + stop notification chain (stop-notify.sh)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1775984784
+TASK_SUBTASK_3_COMPLETED_AT=1775985036
+TASK_SUBTASK_4_TITLE=W2.1: Implement F1+F2+F3 — fix trigger touching in stop-notify.sh + add all-workers-done detection + add ALL_DONE check in taskmaster-wait.sh TIMEOUT path
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_1
+TASK_SUBTASK_4_CREATED_AT=1775985127
+TASK_SUBTASK_4_COMPLETED_AT=1775985867
+TASK_SUBTASK_5_TITLE=W2.2: Implement F4 — update SM agent template to handle all_workers_done message and ALL_DONE wake reason
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_2_2
+TASK_SUBTASK_5_CREATED_AT=1775985127
+TASK_SUBTASK_5_COMPLETED_AT=1775985387
+TASK_SUBTASK_6_TITLE=W2.1: Verify all fixes — bash compat, functional test of stop-notify trigger + all_workers_done + taskmaster-wait ALL_DONE
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_2_1
+TASK_SUBTASK_6_CREATED_AT=1775985912
+TASK_SUBTASK_6_COMPLETED_AT=1775986051
+TASK_SUBTASK_7_TITLE=Task complete — sent to Task Reviewer (1.1) for P0 review
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_CREATED_AT=1775986154
+TASK_SUBTASK_7_COMPLETED_AT=1775986253
+TASK_SUBTASK_8_TITLE=Review PASSED — forwarded to Deployment (1.2)
+TASK_SUBTASK_8_STATUS=pending
+TASK_SUBTASK_8_CREATED_AT=1775986328

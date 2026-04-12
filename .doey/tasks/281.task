@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=281
+TASK_TITLE=Boss Interaction Log — capture, store, and organize every user message
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=Subtaskmaster_W3
+TASK_TEAM=W3
+TASK_SUBTASKS=1:W3.1: Research SQLite schema, doey-ctl task/msg commands, existing types:done\n2:W3.2: Research on-prompt-submit hook and Boss message flow:done\n3:W3.3: Research TUI structure — tabs, models, how to add a new view:done\n4:W3.1: Schema + Store + doey-ctl interaction commands:done\n5:W3.2: Hook capture in on-prompt-submit.sh:done\n6:W3.3: TUI Interactions tab + runtime types:done\n7:W3.3: Verification — full build, test, bash compat:done
+TASK_TIMESTAMPS=created=1775403150
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775403150
+TASK_PLAN_ID=27
+TASK_SUBTASK_1_TITLE=W3.1: Research SQLite schema, doey-ctl task/msg commands, existing types
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research on-prompt-submit hook and Boss message flow
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.3: Research TUI structure — tabs, models, how to add a new view
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.1: Schema + Store + doey-ctl interaction commands
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.2: Hook capture in on-prompt-submit.sh
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.3: TUI Interactions tab + runtime types
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W3.3: Verification — full build, test, bash compat
+TASK_SUBTASK_7_STATUS=done

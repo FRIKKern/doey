@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=447
+TASK_TITLE=Show CPU% and git branch on top-right of ASCII header in Go TUI
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=In the Go TUI (tui/), add a top-right display next to the ASCII header showing current CPU% and the current git branch. Needs to update live. Investigate existing header rendering in tui/ and integrate without breaking layout.
+TASK_SUBTASKS=1:W4.1: Investigate header render, add CPU% + git branch to top-right (reuse tick, cache values):done
+TASK_TIMESTAMPS=created=1775741567
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775741567
+TASK_FILES=shell/doey-tunnel.sh,shell/doey.sh,tui/internal/model/actions.go,tui/internal/model/banner.go,tui/internal/model/root.go
+TASK_SUBTASK_1_TITLE=W4.1: Investigate header render, add CPU% + git branch to top-right (reuse tick, cache values)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_4_1
+TASK_SUBTASK_1_CREATED_AT=1775741823
+TASK_SUBTASK_1_COMPLETED_AT=1775742639

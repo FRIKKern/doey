@@ -1,0 +1,30 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=347
+TASK_TITLE=Show assigned subtask on pane border status in tmux
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Each Claude pane in tmux should show which subtask it's currently working on. When a worker is assigned a subtask (e.g. 'W2.1: Research doey-term source...'), that subtask title should appear in the pane's border status line in tmux.
+
+This likely involves:
+1. The pane-border-status.sh script (shell/pane-border-status.sh) — this renders the pane border text
+2. Status files in /tmp/doey/<project>/status/ — may need a 'subtask' field or file
+3. The dispatch mechanism — when Subtaskmaster assigns a subtask to a worker, it should write the subtask info to a status file the border script reads
+
+Check how pane-border-status.sh currently works, what data it reads, and add the subtask display. Format: show the subtask title (truncated if needed) after the pane role/name.
+TASK_SUBTASKS=1:W4.1: Research pane-border-status.sh — how it renders, what data it reads, format template:done\n2:W4.2: Research status file structure — subtask_id files, status files, what dispatch writes:done\n3:Dispatched to Team W4:done\n4:W4.1: Implement subtask display in pane-border-status.sh:done\n5:W4.2: Verify subtask display implementation:done
+TASK_TIMESTAMPS=created=1775482001
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775482001
+TASK_FILES=shell/pane-border-status.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Research pane-border-status.sh — how it renders, what data it reads, format template
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.2: Research status file structure — subtask_id files, status files, what dispatch writes
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to Team W4
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W4.1: Implement subtask display in pane-border-status.sh
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W4.2: Verify subtask display implementation
+TASK_SUBTASK_5_STATUS=done

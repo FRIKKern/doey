@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=299
+TASK_TITLE=Masterplan Phase 3: Canonicalize Agent Prompts
+TASK_STATUS=done
+TASK_TYPE=refactor
+TASK_DESCRIPTION=Phase 3 of AI-Friendly CLI masterplan. Standardize Boss agent template (remove dual syntax). Fix Task Reviewer template (bare field names, not TASK_-prefixed). Audit all agent and skill templates for consistent doey-ctl syntax. Template edits only. Can run parallel with Phase 2. Research: /tmp/doey/doey/masterplan-20260405-205417/
+TASK_ACCEPTANCE_CRITERIA=No agent template uses dual syntax or TASK_-prefixed field names; expand-templates.sh regenerates cleanly
+TASK_SUBTASKS=1:W5.1: Research — read Boss template and Task Reviewer template, identify all dual-syntax and TASK_-prefixed field name locations:done\n2:W5.2: Research — audit all other agent and skill templates for inconsistent doey-ctl syntax:done
+TASK_TIMESTAMPS=created=1775423626
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775423626
+TASK_PLAN_ID=29
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Research — read Boss template and Task Reviewer template, identify all dual-syntax and TASK_-prefixed field name locations
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Research — audit all other agent and skill templates for inconsistent doey-ctl syntax
+TASK_SUBTASK_2_STATUS=done

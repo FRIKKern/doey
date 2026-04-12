@@ -6,14 +6,16 @@ TASK_TYPE=audit
 TASK_CREATED_BY=Boss
 TASK_ASSIGNED_TO=W2
 TASK_DESCRIPTION=After Task 107 (SQLite migration), audit ALL agents, skills, hooks, and docs for stale file-based state references. Check: (1) agents/*.md and *.md.tmpl for .task/.msg/.status/.trigger file I/O that should use doey-ctl, (2) .claude/skills/**/SKILL.md and .md.tmpl — same, (3) .claude/hooks/*.sh — direct file reads/writes that should use doey-ctl, (4) docs/context-reference.md — old architecture descriptions, (5) CLAUDE.md — old patterns. Report ONLY — do not fix. List every file and what's stale.
-TASK_DECISION_LOG=1775132848:Created task\n1775133315:W3/W4 hit rate limits but read all files before cutoff. W1/W2 produced comprehensive reports. Consolidating from all available data.
 TASK_SUBTASKS=1:W2.1: Audit agents/*.md and agents/*.md.tmpl for stale file-based state refs --project-dir /home/doey/doey:pending\n2:W2.2: Audit .claude/skills/**/SKILL.md and *.md.tmpl for stale file-based state refs --project-dir /home/doey/doey:pending\n3:W2.3: Audit .claude/hooks/*.sh for direct file reads/writes that should use doey-ctl --project-dir /home/doey/doey:pending\n4:W2.4: Audit docs/context-reference.md and CLAUDE.md for stale architecture descriptions --project-dir /home/doey/doey:pending
-TASK_TIMESTAMPS=created=1775132848
+TASK_TIMESTAMPS=created=1775132159
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775132848
-TASK_REPORT_1_TIMESTAMP=1775133376
-TASK_REPORT_1_AUTHOR=Manager_W2
-TASK_REPORT_1_TYPE=completion
-TASK_REPORT_1_TITLE=Audit Complete
-TASK_REPORT_1_BODY=Found ~73 stale sites across 8 agent templates, stale refs in 22+ skills across 11 categories, hooks already have intentional dual-write, docs/CLAUDE.md still describe file-based IPC exclusively. Full report sent to Taskmaster.
+TASK_SUBTASK_1_TITLE=W2.1
+TASK_SUBTASK_1_STATUS= Audit agents/*.md and agents/*.md.tmpl for stale file-based state refs --project-dir /home/doey/doey:pending
+TASK_SUBTASK_2_TITLE=W2.2
+TASK_SUBTASK_2_STATUS= Audit .claude/skills/**/SKILL.md and *.md.tmpl for stale file-based state refs --project-dir /home/doey/doey:pending
+TASK_SUBTASK_3_TITLE=W2.3
+TASK_SUBTASK_3_STATUS= Audit .claude/hooks/*.sh for direct file reads/writes that should use doey-ctl --project-dir /home/doey/doey:pending
+TASK_SUBTASK_4_TITLE=W2.4
+TASK_SUBTASK_4_STATUS= Audit docs/context-reference.md and CLAUDE.md for stale architecture descriptions --project-dir /home/doey/doey:pending

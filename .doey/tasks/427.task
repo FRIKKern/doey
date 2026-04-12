@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=427
+TASK_TITLE=Add staleness filter / orphan GC to store.ListPaneStatuses
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Doey Expert finding from 425. ListPaneStatuses returns orphaned rows for panes that no longer exist or haven't been updated in N minutes. Add a staleness filter (configurable threshold) and an orphan GC pass that drops rows for panes not in tmux list-panes.
+TASK_SUBTASKS=1:W3.1: Add staleness filter + orphan GC to ListPaneStatuses:done
+TASK_TIMESTAMPS=created=1775585113
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775585113
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.claude/settings.json,install.sh,shell/doey-doctor.sh,shell/doey.sh,shell/info-panel.sh,tui/cmd/doey-ctl/commands.go,tui/cmd/doey-ctl/main.go,tui/internal/store/store_test.go,tui/internal/store/teams.go
+TASK_SUBTASK_1_TITLE=W3.1: Add staleness filter + orphan GC to ListPaneStatuses
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_3_1
+TASK_SUBTASK_1_CREATED_AT=1775594780
+TASK_SUBTASK_1_COMPLETED_AT=1775594805

@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=184
+TASK_TITLE=doey-ctl briefing command — full active state dump for Taskmaster restart
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TAGS=go,infrastructure
+TASK_TEAM=2
+TASK_DESCRIPTION=New doey-ctl briefing command with 3 sections.
+TASK_SUBTASKS=1:Dispatch to Team 2 (W2):done\n2:W2.1:done
+TASK_TIMESTAMPS=created=1775254354
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775255500
+TASK_SUBTASK_1_TITLE=Dispatch to Team 2 (W2)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1
+TASK_SUBTASK_2_STATUS=done

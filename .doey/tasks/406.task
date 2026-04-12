@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=406
+TASK_TITLE=Phase C: shell/doey.sh:492 integration
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=Replace the *) case in shell/doey.sh:492 to call intent_fallback and dispatch on action. auto_correct: exec if safe, [y/N] if in destructive blocklist (uninstall|kill-*|purge|remote-destroy). suggest: print numbered 1-3, read choice. clarify: print question, exit with original status. unknown: fall through. Source shell/intent-fallback.sh at top. New helper: shell/doey-intent-dispatch.sh. Acceptance: 'doey tsk lst' auto-corrects with stderr notice.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545546
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545546
+TASK_PLAN_ID=1003

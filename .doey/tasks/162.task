@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=162
+TASK_TITLE=Fix messaging bugs — pre-marked read + router dedup
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TAGS=go,messaging,doey-ctl
+TASK_CREATED_BY=Boss
+TASK_ASSIGNED_TO=T3
+TASK_DESCRIPTION=Two messaging bugs: (1) Messages are pre-marked read=* on delivery — doey msg send sets read flag immediately. Should be unread on write, marked read only when recipient calls msg read. Breaks --unread filtering completely. (2) doey-router re-fires old task completions (tasks 128, 132, 137, 138) flooding message queue with spam — needs dedup guard. Both in Go code.
+TASK_ACCEPTANCE_CRITERIA=(1) New messages delivered with read=NULL/empty, (2) Only msg read marks them read, (3) Router does not re-fire completions for already-processed tasks
+TASK_SUBTASKS=5::done\n6::done
+TASK_TIMESTAMPS=created=1775206486
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257535
+TASK_SUBTASK_5_TITLE=
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_COMPLETED_AT=1775206730
+TASK_SUBTASK_6_TITLE=
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_COMPLETED_AT=1775207652

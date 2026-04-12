@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=494
+TASK_TITLE=Replace capture-pane scraping with structured data
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=Migrate from tmux capture-pane log scraping to typed structured data. Start with stop-results.sh (use parse_field last_assistant_message from hook JSON input instead of capture-pane for error detection and tool counting). Then stop-status.sh proof gate (use proof files, remove capture-pane fallback). Then dispatch idle detection (use status file checks instead of capture-pane prompt detection). Each site migrates independently. Research material: .doey/tasks/attachments/task-490-findings.md Area 3.
+TASK_SUBTASKS=1:W2.1: Research and replace capture-pane in stop-results.sh and stop-status.sh:done\n2:W2.2: Research and replace capture-pane in taskmaster-wait.sh and dispatch/idle detection:done
+TASK_TIMESTAMPS=created=1775770867
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775770867
+TASK_FILES=.claude/hooks/stop-results.sh,.claude/hooks/stop-status.sh,.claude/skills/doey-dispatch/SKILL.md,.claude/skills/doey-dispatch/SKILL.md.tmpl,shell/doey-send.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research and replace capture-pane in stop-results.sh and stop-status.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775771960
+TASK_SUBTASK_1_COMPLETED_AT=1775771975
+TASK_SUBTASK_2_TITLE=W2.2: Research and replace capture-pane in taskmaster-wait.sh and dispatch/idle detection
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1775771960
+TASK_SUBTASK_2_COMPLETED_AT=1775771974

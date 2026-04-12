@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=254
+TASK_TITLE=Masterplan Phase 2+3 — Synthesis + Vertical Phase Design
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Phase 2: Read all 10 research reports from .doey/masterplan-20260405-013021/research/ and intent.md. Synthesize into unified understanding — consensus, contradictions, blind spots, simplification opportunities. Write to .doey/masterplan-20260405-013021/synthesis.md. Phase 3: Design vertical implementation phases from the synthesis. Each phase independently deployable, testable, valuable. Verification gates between every phase. Write to .doey/masterplan-20260405-013021/phases.md.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775354989
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775354989

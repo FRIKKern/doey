@@ -1,0 +1,47 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=523
+TASK_TITLE=Bug: Plans tab (top-right) doesn't open when masterplan window is active
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W5
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+User report: After opening a masterplan window (via /doey-masterplan), clicking the 'Plan' / 'Plans' UI element in the top-right of the interface does not open.
+
+Likely location based on prior screenshot of the TUI Agents tab:
+- The top navigation bar shows: Dashboard | Teams | Tasks | Plans | Agents | Logs | Connections | Files
+- 'Plans' is one of the main TUI tabs in the Go TUI (tui/internal/...)
+- Bug may be: tab click/key binding broken, plan file not discoverable from .doey/plans/, Plans view not re-rendering when a masterplan is active, or a race where the plan file is still being written by the masterplan window when the user clicks
+
+INVESTIGATION SCOPE:
+1) Reproduce: open /doey-masterplan, start a masterplan flow, while it's running try to switch to the Plans tab (mouse click + keyboard shortcut). Confirm the failure mode — does the tab stay on current view? Does it blank out? Any error in logs?
+2) Diagnose: find the Plans tab handler in tui/internal/ (search for 'Plans' tab, plan viewer model, etc.)
+3) Identify whether:
+   - Key/mouse binding is broken
+   - Plan list is empty because masterplan writes to a non-standard path
+   - View fails to mount due to nil plan model
+   - Bubbletea state machine not transitioning
+4) Fix the root cause (not the symptom)
+5) Verify: cd tui && go build ./... passes
+6) Verify: manual reproduction — open masterplan, click Plans tab, see the in-progress plan
+
+DELIVERABLE:
+- Root-cause diagnosis (short note in the task)
+- Fix in tui/internal/...
+- Passing go build
+- Manual test confirmation
+
+Single worker, read-heavy investigation + small fix.
+TASK_SUBTASKS=1:W5.1: Reproduce, diagnose, fix Plans tab bug:done
+TASK_TIMESTAMPS=created=1775901704
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775901704
+TASK_FILES=shell/doey-team-mgmt.sh,shell/masterplan-tui.sh,teams/masterplan.team.md
+TASK_SUBTASK_1_TITLE=W5.1: Reproduce, diagnose, fix Plans tab bug
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_5_1
+TASK_SUBTASK_1_CREATED_AT=1775901838
+TASK_SUBTASK_1_COMPLETED_AT=1775902218

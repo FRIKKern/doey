@@ -1,0 +1,24 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=448
+TASK_TITLE=Intent fallback not triggering on unknown command (doey yo)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Running 'doey yo' prints 'Unknown command: yo' and exits without invoking the intent fallback (Haiku-powered correction via shell/intent-fallback.sh + shell/doey-intent-dispatch.sh). Unknown commands are supposed to route through the fallback so Claude can interpret intent. Investigate why the unknown-command path is not calling the fallback — possible broken wiring in shell/doey.sh dispatch, or DOEY_NO_INTENT_FALLBACK set, or fallback script erroring silently. See docs/intent-fallback.md.
+TASK_SUBTASKS=1:W3.1: Investigate intent fallback dispatch path in doey.sh + installed scripts:skipped\n2:W3.2: Locate Unknown command dispatch in doey.sh and fix routing to intent fallback:done
+TASK_TIMESTAMPS=created=1775741611
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775741611
+TASK_FILES=install.sh,shell/doey-tunnel-detect.sh,shell/doey-tunnel.sh,shell/doey.sh,shell/intent-fallback.sh,tui/internal/model/actions.go,tui/internal/model/banner.go,tui/internal/model/root.go
+TASK_SUBTASK_1_TITLE=W3.1: Investigate intent fallback dispatch path in doey.sh + installed scripts
+TASK_SUBTASK_1_STATUS=skipped
+TASK_SUBTASK_1_WORKER=doey_doey_3_1
+TASK_SUBTASK_1_CREATED_AT=1775741779
+TASK_SUBTASK_1_COMPLETED_AT=1775742031
+TASK_SUBTASK_2_TITLE=W3.2: Locate Unknown command dispatch in doey.sh and fix routing to intent fallback
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_3_2
+TASK_SUBTASK_2_CREATED_AT=1775742109
+TASK_SUBTASK_2_COMPLETED_AT=1775743523

@@ -1,0 +1,28 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=423
+TASK_TITLE=Research: DB-in-repo as source of truth with cross-machine continuity
+TASK_STATUS=pending
+TASK_TYPE=research
+TASK_DESCRIPTION=GOAL: Make the Doey runtime DB (SQLite — tasks, messages, status, results) the source of truth, checked into the repo, with task files / plans / etc generated from it on demand. Enable cross-machine continuity via git pull.
+
+KEY CONSTRAINTS:
+1. Repo must not become colossal — DB should stay small/compressed.
+2. Attachments (task-attachments/, screenshots, image refs) must travel WITH the DB consistently — orphan refs are unacceptable.
+3. Fresh-install invariant: a clean clone + install must still work.
+4. Concurrent writes from multiple agents must not corrupt the committed DB.
+
+QUESTIONS:
+- What is currently in the runtime DB? Schema, rough size, growth rate.
+- Compression: SQLite VACUUM, sqlar, zstd dump via git smudge/clean filters? Or SQL text dump (diffable, git-compressible)?
+- Where committed? (.doey/state.db.zst? .doey/state.sql?)
+- Attachments: git-lfs? content-addressed sha256 store referenced from DB? inline BLOBs? prune-on-commit policy?
+- Conflict strategy across machines: last-write-wins, merge by row, branch-per-machine?
+- Regeneration on checkout: hook? doey command?
+- on-session-start.sh post-pull rebuild of ephemeral state?
+
+DELIVERABLE: Short ~1-page report with recommended architecture + 2-3 alternatives with trade-offs. NO CODE — Boss reviews first.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775577133
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775577133

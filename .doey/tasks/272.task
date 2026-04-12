@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=272
+TASK_TITLE=Fix TUI list selection reset — cursor jumps to top on refresh
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=When user selects a task or plan in the Go TUI list, the selection jumps back to the top of the list after ~2 seconds. This happens because the live-refresh/tick cycle re-renders the list and resets the cursor index to 0. The fix must preserve the selected item index (or selected item ID) across data refreshes. When new data arrives, restore the cursor to the previously selected item. Check both tasks.go and plans.go — both tabs have this issue. Look for the tick/refresh handler that reloads data and find where it resets the list cursor.
+TASK_SUBTASKS=1:Dispatch to W3 — fix list selection reset:done\n2:W3.1: Research tasks.go refresh/tick handler — find where list items are set and cursor resets:done\n3:W3.2: Research plans.go refresh/tick handler — find where list items are set and cursor resets:done\n4:W3.1: Fix tasks.go SetSnapshot — save/restore cursor across refresh:done\n5:W3.2: Fix plans.go SetSnapshot — save/restore cursor across refresh:done\n6:W3.3: Verify cursor fix — check both files, run build, confirm fix pattern:done
+TASK_TIMESTAMPS=created=1775394030
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775394030
+TASK_SUBTASK_1_TITLE=Dispatch to W3 — fix list selection reset
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Research tasks.go refresh/tick handler — find where list items are set and cursor resets
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Research plans.go refresh/tick handler — find where list items are set and cursor resets
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.1: Fix tasks.go SetSnapshot — save/restore cursor across refresh
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.2: Fix plans.go SetSnapshot — save/restore cursor across refresh
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.3: Verify cursor fix — check both files, run build, confirm fix pattern
+TASK_SUBTASK_6_STATUS=done

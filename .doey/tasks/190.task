@@ -1,0 +1,32 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=190
+TASK_TITLE=Fix send-keys first-character eaten after Escape
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=W3
+TASK_DESCRIPTION=BUG: When Boss or any role sends tmux send-keys with Escape immediately before, the first character of the next send-keys is consumed by the Escape sequence. Example: send-keys Escape then send-keys '/compact' Enter → arrives as 'ompact'.
+
+ROOT CAUSE: tmux Escape key has a delay (escape-time setting, default 500ms). When send-keys fires the text immediately after Escape, tmux interprets the first character as part of the escape sequence.
+
+FIX OPTIONS:
+1. Add a small sleep (50-100ms) between Escape and the text send-keys
+2. Use tmux copy-mode -q instead of Escape to cancel current state
+3. Combine into a single send-keys call with proper escaping
+4. Set escape-time to 0 in the Doey session tmux config
+
+SCOPE: Fix everywhere we do Escape + send-keys — search all hooks, skills, agents, and shell scripts for this pattern. Must work on fresh install.
+TASK_SUBTASKS=1:Dispatch to W3 — fix send-keys first-char bug:done\n2:W3.1: Fix Escape+send-keys in shell/ (doey.sh + helpers):done\n3:W3.2: Fix Escape+send-keys in .claude/hooks/:done\n4:W3.3: Fix Escape+send-keys in .claude/skills/ + agents/*.md.tmpl:done\n5:W3.4: Add escape-time 0 to session config + run tests + expand templates:done
+TASK_TIMESTAMPS=created=1775259983
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775259983
+TASK_SUBTASK_1_TITLE=Dispatch to W3 — fix send-keys first-char bug
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Fix Escape+send-keys in shell/ (doey.sh + helpers)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Fix Escape+send-keys in .claude/hooks/
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.3: Fix Escape+send-keys in .claude/skills/ + agents/*.md.tmpl
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.4: Add escape-time 0 to session config + run tests + expand templates
+TASK_SUBTASK_5_STATUS=done

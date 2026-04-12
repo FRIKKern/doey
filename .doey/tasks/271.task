@@ -1,0 +1,28 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=271
+TASK_TITLE=Fix Plans tab mouse clicks + show created/updated timestamps
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Two issues in Plans tab list:
+1. Mouse click detection is wrong — each plan item renders as 2 lines but the click handler calculates item index assuming 1 line per item. Must account for 2-line items when converting mouse Y coordinate to list index (divide by 2 or use actual item height).
+2. Plans list must show created_at and updated_at timestamps — similar to how Tasks tab shows last-updated dates. Add these below or beside the plan title.
+Look at how Tasks tab handles both: (a) mouse click-to-item mapping with multi-line items, (b) timestamp display. Match those patterns.
+TASK_SUBTASKS=1:Dispatch to W4 — fix mouse clicks + timestamps:done\n2:W4.1: Research mouse click handling in Plans tab — find click-to-index calculation and item height:done\n3:W4.2: Research timestamp display in Tasks tab — find pattern for created/updated timestamps:done\n4:W4.1: Deep-dive mouse click offset — trace panelOffsetY, tab bar height, and actual click behavior:done\n5:W4.2: Implement timestamp display in Plans tab list + detail view:done\n6:W4.1: Implement mouse click fix — Height()=3→2 in 3 places in plans.go:done\n7:W4.2: Verify both fixes — mouse clicks (Height 3→2) + timestamps — build + code review:done
+TASK_TIMESTAMPS=created=1775392456
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775392456
+TASK_SUBTASK_1_TITLE=Dispatch to W4 — fix mouse clicks + timestamps
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Research mouse click handling in Plans tab — find click-to-index calculation and item height
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W4.2: Research timestamp display in Tasks tab — find pattern for created/updated timestamps
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W4.1: Deep-dive mouse click offset — trace panelOffsetY, tab bar height, and actual click behavior
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W4.2: Implement timestamp display in Plans tab list + detail view
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W4.1: Implement mouse click fix — Height()=3→2 in 3 places in plans.go
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W4.2: Verify both fixes — mouse clicks (Height 3→2) + timestamps — build + code review
+TASK_SUBTASK_7_STATUS=done

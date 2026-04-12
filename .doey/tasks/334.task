@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=334
+TASK_TITLE=Fix TUI Tasks tab showing only 1 task — should show all 324
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=W2
+TASK_DESCRIPTION=The SQLite DB has 324 tasks (175 done, 125 pending_user_confirmation, 2 in_progress, 22 cancelled) but the TUI Tasks tab only shows 1. This is a display/filter/query bug in the TUI. Either a broken filter, a LIMIT clause, or a viewport issue is hiding all but 1 task. Check tui/internal/model/tasks.go and tui/internal/store/tasks.go for the query and list population logic. The DB is confirmed healthy at .doey/doey.db with all 324 records present.
+TASK_SUBTASKS=1:Dispatch to W2 Subtaskmaster:done\n2:W2.2: Find and fix SQL/filter bug limiting Tasks tab to 1 result:skipped
+TASK_TIMESTAMPS=created=1775472337
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775472337
+TASK_FILES=.claude/hooks/stop-results.sh,agents/doey-worker.md,agents/doey-worker.md.tmpl,tui/go.mod,tui/go.sum,tui/internal/model/tasks.go,tui/internal/runtime/tasks_config.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatch to W2 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Find and fix SQL/filter bug limiting Tasks tab to 1 result
+TASK_SUBTASK_2_STATUS=skipped

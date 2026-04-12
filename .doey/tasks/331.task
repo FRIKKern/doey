@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=331
+TASK_TITLE=Fix Dashboard ASCII grid — wrong role labels (Subtaskmaster in Core, Worker in Boss)
+TASK_STATUS=cancelled
+TASK_TYPE=bug
+TASK_DESCRIPTION=Two bugs in the Go TUI Dashboard ASCII grid:
+
+1. Core Team window shows 'Subtaskmaster' instead of 'Taskmaster' — the Taskmaster pane (1.0) is being labeled with the wrong role name. The grid is likely reading the role from the wrong source or mapping window 1 panes incorrectly.
+
+2. Dashboard window (window 0) shows 'Boss' AND 'Worker 1' instead of 'Boss' and 'Info Panel'. Pane 0.0 is the Info Panel (shell script, not a Claude instance), pane 0.1 is Boss. The grid is misidentifying 0.0 as a Worker.
+
+The ASCII grid rendering is in tui/internal/model/dashboard.go. Check how it maps pane roles — it should use the actual role from status files or pane metadata, not guess based on pane index. Window 0 = Dashboard (Info Panel + Boss), Window 1 = Core Team (Taskmaster + Task Reviewer + Deployment + Doey Expert).
+TASK_SUBTASKS=1:W5.1: Research dashboard.go grid rendering — how pane roles are determined and displayed:done\n2:W5.2: Research status files and role mapping — how roles flow from hooks to TUI:done\n3:W5.1: Implement dashboard.go fixes — key mismatch, roleDisplayNames, window-aware fallbacks:done\n4:W5.2: Verify dashboard.go fixes — build, vet, review correctness:done
+TASK_TIMESTAMPS=created=1775470171
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775486006
+TASK_FILES=tui/internal/model/dashboard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Research dashboard.go grid rendering — how pane roles are determined and displayed
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Research status files and role mapping — how roles flow from hooks to TUI
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W5.1: Implement dashboard.go fixes — key mismatch, roleDisplayNames, window-aware fallbacks
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W5.2: Verify dashboard.go fixes — build, vet, review correctness
+TASK_SUBTASK_4_STATUS=done

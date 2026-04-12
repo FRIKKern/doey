@@ -1,0 +1,30 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=358
+TASK_TITLE=Redesign doey masterplan — interactive Masterplanner window with research swarms
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_TEAM=W2
+TASK_DESCRIPTION=Redesign the doey masterplan flow so it spawns a dedicated tmux window where the Masterplanner drives an interactive planning loop with the user directly. Boss opens the window and passes the goal, then steps back. The Masterplanner asks 2-3 clarifying questions, dispatches 4 workers into parallel research swarms, synthesizes findings, updates the live plan (visible in viewer pane), proposes next steps, and iterates until the user approves.
+
+Intent document: /tmp/doey/doey/masterplan-20260406-151325/intent.md
+TASK_SUBTASKS=1:W2.1: Research team spawner bug — teams/masterplan.team.md and doey add-team in shell/doey.sh:done\n2:W2.2: Research Masterplanner agent, masterplan-viewer.sh, and goal passing mechanism:done\n3:W2.3: Research worker dispatch patterns — send-keys, result flow, Subtaskmaster→Worker communication:done\n4:W2.1: Fix team spawner — change freelancer detection in doey-team-mgmt.sh to use td_type instead of _has_manager:done\n5:W2.2: Add doey masterplan CLI command and update team briefing:done\n6:W2.3: Wire PLAN_FILE and TASK_ID passthrough in add_team_from_def:done\n7:W2.4: Verify all changes — syntax, bash compat, go build, review diffs for correctness:done
+TASK_TIMESTAMPS=created=1775498182
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775498182
+TASK_FILES=shell/doey-team-mgmt.sh,shell/doey.sh,teams/masterplan.team.md
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research team spawner bug — teams/masterplan.team.md and doey add-team in shell/doey.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research Masterplanner agent, masterplan-viewer.sh, and goal passing mechanism
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.3: Research worker dispatch patterns — send-keys, result flow, Subtaskmaster→Worker communication
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.1: Fix team spawner — change freelancer detection in doey-team-mgmt.sh to use td_type instead of _has_manager
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.2: Add doey masterplan CLI command and update team briefing
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.3: Wire PLAN_FILE and TASK_ID passthrough in add_team_from_def
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W2.4: Verify all changes — syntax, bash compat, go build, review diffs for correctness
+TASK_SUBTASK_7_STATUS=done

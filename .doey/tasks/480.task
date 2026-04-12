@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=480
+TASK_TITLE=/deep-interview skill for Boss — structured clarification gate
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=coordinator
+TASK_TEAM=1
+TASK_DESCRIPTION=Create /deep-interview skill for Boss. Structured clarification before complex tasks. UX inspiration from /doey-masterplan (phased, professional). Must ask: intent, scope, non-goals, success criteria. Readiness gate before relay to Taskmaster. Output structured brief. In .claude/skills/.
+TASK_SUBTASKS=1:Direct dispatch to W2.1 — /deep-interview skill:done
+TASK_TIMESTAMPS=created=1775762197
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775762197
+TASK_SUBTASK_1_TITLE=Direct dispatch to W2.1 — /deep-interview skill
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775762279
+TASK_SUBTASK_1_COMPLETED_AT=1775763329

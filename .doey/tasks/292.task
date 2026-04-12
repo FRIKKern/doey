@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=292
+TASK_TITLE=Masterplan Phase 2: Update/Install + Doctor extraction
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_DESCRIPTION=Extract doey-update.sh (~655L) and doey-doctor.sh (~265L) from shell/doey.sh. ~920L reduction. Target: doey.sh from ~4965L to ~4045L.
+TASK_SUBTASKS=1:W2.1: Research — map update/install function line ranges in doey.sh:done\n2:W2.2: Research — map doctor function line ranges in doey.sh:done\n3:W2.3: Research — check install.sh patterns and source-order deps:done\n4:W2.4: Research — exact function boundaries for update and doctor blocks:done\n5:W2.1: Create shell/doey-update.sh — extract update/install functions:done\n6:W2.2: Create shell/doey-doctor.sh — extract doctor functions:done\n7:W2.3: doey.sh surgery + install.sh — remove extracted functions, add source lines:done
+TASK_TIMESTAMPS=created=1775412603
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775412603
+TASK_SUBTASK_1_TITLE=W2.1: Research — map update/install function line ranges in doey.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research — map doctor function line ranges in doey.sh
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.3: Research — check install.sh patterns and source-order deps
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.4: Research — exact function boundaries for update and doctor blocks
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.1: Create shell/doey-update.sh — extract update/install functions
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.2: Create shell/doey-doctor.sh — extract doctor functions
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W2.3: doey.sh surgery + install.sh — remove extracted functions, add source lines
+TASK_SUBTASK_7_STATUS=done

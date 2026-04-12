@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=175
+TASK_TITLE=Fix Boss→Taskmaster message delivery — pane ID mismatch
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=W2
+TASK_DESCRIPTION=Messages sent via doey msg send from Boss to Taskmaster never arrive. Root cause: pane ID format mismatch — Boss sends to '1.0' or 'doey-doey:1.0' but doey msg read on Taskmaster side uses 'doey_doey_1_0'. The pane ID normalization in doey-ctl msg send and msg read must be fixed so all formats resolve to the same canonical ID. Also: message DB has 16000+ entries from old duplicate bugs — needs pruning or rotation. This is the most critical communication path in the system.
+TASK_SUBTASKS=1:W2.2: Fix pane ID normalization in doey-ctl msg send/read + add message rotation:done\n2:Dispatched to W2 — pane ID normalization fix:done
+TASK_TIMESTAMPS=created=1775220353
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775227448
+TASK_SUBTASK_1_TITLE=W2.2
+TASK_SUBTASK_1_STATUS= Fix pane ID normalization in doey-ctl msg send/read + add message rotation:done
+TASK_SUBTASK_2_TITLE=Dispatched to W2 — pane ID normalization fix
+TASK_SUBTASK_2_STATUS=done

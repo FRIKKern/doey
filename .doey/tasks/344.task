@@ -1,0 +1,34 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=344
+TASK_TITLE=Wire Go terminal container (doey-term) into Core Team — replace Doey Expert pane
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Task 327 built a Go tabbed terminal container (Bubble Tea + PTY console) at tui/doey-term/ or similar. It should replace the Doey Expert agent at pane 1.3 in the Core Team window.
+
+RESEARCH FIRST:
+1. Find the doey-term binary/source in tui/ — what was actually built? Does it compile and run?
+2. Check how pane 1.3 (Doey Expert) is currently defined — look at teams/ definitions, shell/doey.sh session launch code, and the Core Team layout
+3. Check if there's a team definition or grid layout that includes doey-expert at 1.3
+
+THEN IMPLEMENT:
+1. Build the doey-term binary (go build in tui/)
+2. Update the Core Team layout so pane 1.3 launches doey-term instead of the Doey Expert Claude agent
+3. The terminal container should start with a shell session in the project directory
+4. Verify the session launches correctly with the new pane
+
+Reference: task 327 (Go tabbed terminal container), git log for related commits
+TASK_SUBTASKS=1:W2.1: Research doey-term source, Core Team layout, and pane 1.3 launch mechanism:done\n2:W2.2: Implement — update Core Team layout to launch doey-term at pane 1.3:done\n3:Dispatched to Team W2 (SM at 2.0, 2 workers):done\n4:W2.1: Verify doey-term wiring — check diff, build, vet, bash compat:done
+TASK_TIMESTAMPS=created=1775481033
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775481033
+TASK_FILES=shell/doey-session.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research doey-term source, Core Team layout, and pane 1.3 launch mechanism
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Implement — update Core Team layout to launch doey-term at pane 1.3
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to Team W2 (SM at 2.0, 2 workers)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.1: Verify doey-term wiring — check diff, build, vet, bash compat
+TASK_SUBTASK_4_STATUS=done

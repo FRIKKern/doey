@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=389
+TASK_TITLE=Masterplan: --help
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=--help
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775539308
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775539308
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.claude/settings.json,install.sh,shell/doey-doctor.sh,shell/doey.sh,shell/info-panel.sh,tui/cmd/doey-ctl/commands.go,tui/cmd/doey-ctl/main.go

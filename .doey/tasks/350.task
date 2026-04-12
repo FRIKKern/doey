@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=350
+TASK_TITLE=Fix blue highlight on in_progress tasks in TUI task list — too bright/jarring
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=In the TUI task list, tasks with 'in_progress' status have a bright blue background highlight that looks weird and out of place compared to the rest of the dark theme. It should be more subtle — either just use colored text (no background), a dimmer background, or match the style of other status indicators.
+
+See screenshot: /tmp/doey/doey/screenshot-blue-highlight.png — the in_progress items have a harsh blue background that stands out badly.
+
+Search Go TUI code for the task list item styling — look for in_progress status color/style definitions. Change to something more subtle (e.g., just blue text, or a very dim blue, or a subtle left-border indicator). Rebuild with go build.
+TASK_SUBTASKS=1:W2.1: Research — find where in_progress blue highlight is applied in taskcard.go, report exact lines and styling code:done\n2:W2.2: Fix blue highlight on in_progress tasks — view screenshot, find exact jarring styling, make subtle:done\n3:W2.1: Verify blue highlight fix — confirm color change, build+vet, check no other blue backgrounds:done
+TASK_TIMESTAMPS=created=1775483051
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775483051
+TASK_FILES=tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research — find where in_progress blue highlight is applied in taskcard.go, report exact lines and styling code
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Fix blue highlight on in_progress tasks — view screenshot, find exact jarring styling, make subtle
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Verify blue highlight fix — confirm color change, build+vet, check no other blue backgrounds
+TASK_SUBTASK_3_STATUS=done

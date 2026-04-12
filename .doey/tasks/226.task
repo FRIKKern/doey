@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=226
+TASK_TITLE=Fix subtask lifecycle — workers must mark original plan subtasks done
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=W3
+TASK_DESCRIPTION=Workers create their own subtasks (W2.1, W2.2) but never mark the original plan subtasks as done. Result: tasks show 1/3, 2/11 even when fully complete. Fix: when a Subtaskmaster completes a task, it should mark ALL subtasks as done (or the Taskmaster should do it on task_complete). Workers should update existing subtasks rather than only creating new ones.
+TASK_SUBTASKS=1:Dispatched to W3 Subtaskmaster:done\n2:Dispatched to W3 Subtaskmaster:done\n3:W3.1: Add subtask bulk-done instruction to Taskmaster and Subtaskmaster agent templates, run expand-templates.sh:done
+TASK_TIMESTAMPS=created=1775301293
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775301293
+TASK_SUBTASK_1_TITLE=Dispatched to W3 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to W3 Subtaskmaster
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Add subtask bulk-done instruction to Taskmaster and Subtaskmaster agent templates, run expand-templates.sh
+TASK_SUBTASK_3_STATUS=done

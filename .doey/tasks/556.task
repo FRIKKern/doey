@@ -1,0 +1,118 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=556
+TASK_TITLE=Storage architecture audit: execute all 8 decisions
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Execute ALL 8 decisions from the Doey storage architecture audit. This is a large cross-cutting refactor touching shell scripts, hooks, Go TUI, and runtime directories.
+
+PHASED EXECUTION ORDER (by dependency):
+
+PHASE 1 — Quick cleanups (independent, parallel-safe):
+- Decision 4: Remove dead lifecycle/ directory (common.sh writer + ensure_runtime_dirs entry + purge logic)
+- Decision 6: Clean up DOEY_PROJECT ghost references (audit skills/agents, replace with DOEY_PROJECT_DIR or PROJECT_DIR)
+- Decision 3: Add stats allowlist sync check to doey doctor
+
+PHASE 2 — Heartbeat merge:
+- Decision 2: Merge dual heartbeat into single status/<pane>.heartbeat. Update post-tool-lint.sh, doey-ctl observe, remove heartbeat/ dir.
+
+PHASE 3 — IPC cleanup:
+- Decision 5: Wire pending/ delivery into taskmaster-wait.sh OR remove pending/ queue entirely (prefer removal if not needed — simpler).
+
+PHASE 4 — SQLite as single source of truth (biggest change):
+- Decision 1: Rewire task pipeline. doey-ctl writes SQLite only + auto-exports .task. Shell helpers become read-only wrappers. SyncTaskFiles becomes one-way export. Eliminate tasks.json. Runtime cache from SQLite.
+
+PHASE 5 — New features:
+- Decision 7: doey config show command (full merge chain resolution)
+- Decision 8: Evaluate status/ fan-out — research + design only (consolidate to per-pane JSON). May produce a follow-up task.
+
+KEY FILES (from audit): See origin prompt for complete file references across shell/, hooks, and tui/.
+
+IMPORTANT: Each phase should be validated (go build, test-bash-compat.sh, doey doctor) before moving to the next. Decision 1 (Phase 4) is the riskiest — research current task flow thoroughly before touching it.
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster — 4 workers, sequential phases:done\n2:W2.1: Decision 4 — Remove dead lifecycle/ directory (common.sh writer + ensure_runtime_dirs + purge):done\n3:W2.2: Decision 6 — Clean up DOEY_PROJECT ghost references (replace with DOEY_PROJECT_DIR or PROJECT_DIR):done\n4:W2.3: Decision 3 — Add stats allowlist sync check to doey doctor:done\n5:W2.4: Phase 1 validation — go build, test-bash-compat, doey doctor:done\n6:W2.1: Decision 2 research — map both heartbeat mechanisms (status/*.heartbeat content vs heartbeat/*.heartbeat mtime):done\n7:W2.3: Decision 2 implementation — merge heartbeat into status/<pane>.heartbeat:done\n8:W2.4: Decision 5 — pending/ IPC research + implementation (remove if dead code):done\n9:W2.1: Decision 1 research — map current task pipeline: writers, readers, sync, export:done\n10:W2.3: Decision 1 Wave A+B — Re-enable SyncTaskFiles as export + auto-export after doey-ctl writes:done\n11:W2.4: Decision 1 Wave E — Remove task_sync_runtime shell function:done\n12:W2.1: Decision 7 — doey config show command (full merge chain resolution):done\n13:W2.2: Decision 8 — status/ fan-out research + design (consolidate to per-pane JSON):done\n14:W2.4: Final verification — go build, bash compat, doey doctor, grep for all removed code:done\n15:All phases complete — sent to Task Reviewer (1.1) for review gate:done\n16:Review PASSED — forwarded to Deployment (1.2):pending
+TASK_TIMESTAMPS=created=1775980457
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775980457
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/post-tool-lint.sh,.claude/skills/deep-interview/SKILL.md,.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,.claude/skills/doey-repair/SKILL.md,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/100.task,.doey/tasks/101.task,.doey/tasks/102.task,.doey/tasks/103.task,.doey/tasks/104.task,.doey/tasks/105.task,.doey/tasks/106.task,.doey/tasks/107.task,.doey/tasks/108.task,.doey/tasks/109.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster — 4 workers, sequential phases
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775980581
+TASK_SUBTASK_1_COMPLETED_AT=1775982668
+TASK_SUBTASK_2_TITLE=W2.1: Decision 4 — Remove dead lifecycle/ directory (common.sh writer + ensure_runtime_dirs + purge)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775980608
+TASK_SUBTASK_2_COMPLETED_AT=1775980741
+TASK_SUBTASK_3_TITLE=W2.2: Decision 6 — Clean up DOEY_PROJECT ghost references (replace with DOEY_PROJECT_DIR or PROJECT_DIR)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1775980609
+TASK_SUBTASK_3_COMPLETED_AT=1775980997
+TASK_SUBTASK_4_TITLE=W2.3: Decision 3 — Add stats allowlist sync check to doey doctor
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_3
+TASK_SUBTASK_4_CREATED_AT=1775980610
+TASK_SUBTASK_4_COMPLETED_AT=1775980784
+TASK_SUBTASK_5_TITLE=W2.4: Phase 1 validation — go build, test-bash-compat, doey doctor
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_2_4
+TASK_SUBTASK_5_CREATED_AT=1775981021
+TASK_SUBTASK_5_COMPLETED_AT=1775981116
+TASK_SUBTASK_6_TITLE=W2.1: Decision 2 research — map both heartbeat mechanisms (status/*.heartbeat content vs heartbeat/*.heartbeat mtime)
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_2_2
+TASK_SUBTASK_6_CREATED_AT=1775981220
+TASK_SUBTASK_6_COMPLETED_AT=1775981383
+TASK_SUBTASK_7_TITLE=W2.3: Decision 2 implementation — merge heartbeat into status/<pane>.heartbeat
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_WORKER=doey_doey_2_3
+TASK_SUBTASK_7_CREATED_AT=1775981423
+TASK_SUBTASK_7_COMPLETED_AT=1775981524
+TASK_SUBTASK_8_TITLE=W2.4: Decision 5 — pending/ IPC research + implementation (remove if dead code)
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_WORKER=doey_doey_2_4
+TASK_SUBTASK_8_CREATED_AT=1775981552
+TASK_SUBTASK_8_COMPLETED_AT=1775981661
+TASK_SUBTASK_9_TITLE=W2.1: Decision 1 research — map current task pipeline: writers, readers, sync, export
+TASK_SUBTASK_9_STATUS=done
+TASK_SUBTASK_9_WORKER=doey_doey_2_1
+TASK_SUBTASK_9_CREATED_AT=1775981668
+TASK_SUBTASK_9_COMPLETED_AT=1775982021
+TASK_SUBTASK_10_TITLE=W2.3: Decision 1 Wave A+B — Re-enable SyncTaskFiles as export + auto-export after doey-ctl writes
+TASK_SUBTASK_10_STATUS=done
+TASK_SUBTASK_10_WORKER=doey_doey_2_3
+TASK_SUBTASK_10_CREATED_AT=1775982071
+TASK_SUBTASK_10_COMPLETED_AT=1775982306
+TASK_SUBTASK_11_TITLE=W2.4: Decision 1 Wave E — Remove task_sync_runtime shell function
+TASK_SUBTASK_11_STATUS=done
+TASK_SUBTASK_11_WORKER=doey_doey_2_4
+TASK_SUBTASK_11_CREATED_AT=1775982071
+TASK_SUBTASK_11_COMPLETED_AT=1775982155
+TASK_SUBTASK_12_TITLE=W2.1: Decision 7 — doey config show command (full merge chain resolution)
+TASK_SUBTASK_12_STATUS=done
+TASK_SUBTASK_12_WORKER=doey_doey_2_1
+TASK_SUBTASK_12_CREATED_AT=1775982322
+TASK_SUBTASK_12_COMPLETED_AT=1775982568
+TASK_SUBTASK_13_TITLE=W2.2: Decision 8 — status/ fan-out research + design (consolidate to per-pane JSON)
+TASK_SUBTASK_13_STATUS=done
+TASK_SUBTASK_13_WORKER=doey_doey_2_2
+TASK_SUBTASK_13_CREATED_AT=1775982322
+TASK_SUBTASK_13_COMPLETED_AT=1775982468
+TASK_SUBTASK_14_TITLE=W2.4: Final verification — go build, bash compat, doey doctor, grep for all removed code
+TASK_SUBTASK_14_STATUS=done
+TASK_SUBTASK_14_WORKER=doey_doey_2_4
+TASK_SUBTASK_14_CREATED_AT=1775982580
+TASK_SUBTASK_14_COMPLETED_AT=1775982653
+TASK_SUBTASK_15_TITLE=All phases complete — sent to Task Reviewer (1.1) for review gate
+TASK_SUBTASK_15_STATUS=done
+TASK_SUBTASK_15_CREATED_AT=1775982722
+TASK_SUBTASK_15_COMPLETED_AT=1775982902
+TASK_SUBTASK_16_TITLE=Review PASSED — forwarded to Deployment (1.2)
+TASK_SUBTASK_16_STATUS=pending
+TASK_SUBTASK_16_CREATED_AT=1775982995

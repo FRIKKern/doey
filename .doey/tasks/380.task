@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=380
+TASK_TITLE=doey-term native terminal — full keyboard, unicode, terminal parity
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Masterplan: Make doey-term work like a native terminal. Currently broken: space key, international chars (ø æ å), and many other inputs. Goal is full parity with iTerm2/Alacritty — every keystroke, unicode, modifiers, escape sequences, copy/paste, mouse, signals, PTY resize, colors.
+TASK_SUBTASKS=1:Dispatched to masterplan team (window 2, 4 workers):done\n2:W2.1: Fork bubbleterm locally, fix space key (case 'space') and unicode (utf8.RuneCountInString):done\n3:W2.2: Audit bubbleterm key mappings against Bubble Tea v2, build test, bash compat test:done\n4:Implementation dispatched to window 2 (2 workers):done\n5:W2.1: Fix P1 key mapping bugs — delete key, pgup, pgdown in local bubbleterm fork:done
+TASK_TIMESTAMPS=created=1775514051
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775514051
+TASK_FILES=.gitignore,install.sh,shell/masterplan-tui.sh,tui/.gitignore,tui/go.mod,tui/go.sum,tui/internal/term/model.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to masterplan team (window 2, 4 workers)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Fork bubbleterm locally, fix space key (case 'space') and unicode (utf8.RuneCountInString)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Audit bubbleterm key mappings against Bubble Tea v2, build test, bash compat test
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Implementation dispatched to window 2 (2 workers)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.1: Fix P1 key mapping bugs — delete key, pgup, pgdown in local bubbleterm fork
+TASK_SUBTASK_5_STATUS=done

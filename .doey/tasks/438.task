@@ -1,0 +1,117 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=438
+TASK_TITLE=Auto-tunnel localhost from Hetzner via Tailscale + port detection
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=Add frictionless localhost tunneling from a remote Doey host (Hetzner) to the user's laptop. Goal: run any dev server on the server and see it live on laptop with HMR/hot-reload, zero per-port config, works for monorepos with multiple dev servers on different ports simultaneously.
+
+Recommended approach (needs research to validate):
+1. Tailscale as the transport — only option that exposes ALL ports transparently with one-time setup. Handles websockets natively.
+2. doey tunnel setup command — one-time: detects/installs Tailscale on host, runs tailscale up, prints laptop install link and magic DNS hostname to reach this box.
+3. Background port watcher — polls ss -tlnp (or /proc/net/tcp) for new localhost listeners, filters for likely dev servers (common ports, known process names: vite/next/remix/webpack/pnpm dev/etc.).
+4. Info Panel integration — live Tunnels section showing every detected local port as clickable http://<magicdns>:PORT URLs.
+5. Fallback modes — if Tailscale unavailable/blocked: fall back to cloudflared quick tunnels per-port, or print SSH -L one-liner.
+
+Research questions for Subtaskmaster to answer before implementation:
+- Is Tailscale install scriptable non-interactively on Linux? Any auth flow friction?
+- Best port-detection mechanism on Linux (ss vs lsof vs /proc/net)? Polling interval?
+- How to detect dev servers vs random listeners (port range? process name match? env heuristics?)
+- Where does this live in Info Panel? New section or reuse existing status rows?
+- What's the cleanup story when Doey stops — leave Tailscale up or tear down?
+- Does this require new shell commands in doey.sh, a new hook, or both?
+
+Fresh-install test: must work after curl | bash with no prior Tailscale/cloudflared state. Install should be opt-in via doey tunnel setup, not forced on every user.
+TASK_SUBTASKS=1:W2.1: Phase 1 research — Tailscale install/auth, port detection, dev-server heuristics, Info Panel integration, cleanup, command surface, cloudflared/SSH fallback, fresh-install opt-in:done\n2:Phase 1: Research — dispatched to W2 Subtaskmaster:done\n3:W2.2: Read research report, validate 6 open decisions, emit structured Phase-2 implementation plan (waves, file paths, risks):done\n4:Phase 1 research + Phase 2 plan delivered (W1+W2). Awaiting SM consolidation:done\n5:W2.1 Sub-wave 1A: CREATE shell/doey-tunnel-cli.sh — doey tunnel {setup,status,up,down} subcommand handlers:done\n6:W2.2 Sub-wave 1A: CREATE shell/doey-port-watcher.sh — long-running daemon polling ss -tlnp every 2s, writes TUNNEL_PORTS_LIST:done\n7:Phase 2 authorized — serialized 8-task plan dispatched to W2 SM (sub-waves 1A-2B):done\n8:W2.1 Sub-wave 1B: CREATE docs/tunnel.md — user guide for laptop install, magic-DNS, troubleshooting:done\n9:W2.2 Sub-wave 1B: EDIT shell/doey-tunnel.sh — add tailscale provider, update priority order tailscale > cloudflared > ssh-L (deferred):done\n10:W2.1 Sub-wave 1C: EDIT shell/doey-config-default.sh — extend tunnel config block (191-203) with TUNNEL_PROVIDER/TUNNEL_WATCHER_INTERVAL/TUNNEL_PORT_ALLOWLIST/BLOCKLIST defaults:done\n11:W2.2 Sub-wave 1C: pull-forward Wave 2 — EDIT shell/info-panel.sh (multi-line tunnel render at lines 432-442 from TUNNEL_PORTS_LIST):done\n12:W2.1 Sub-wave 2A: EDIT shell/doey.sh — source new files, dispatch tunnel subcommand at line 247, help heredoc 162-222, reload re-spawn for port watcher, doctor extension for tailscale (if doey doctor lives in doey.sh):done\n13:W2.2 Sub-wave 2A: EDIT shell/doey-session.sh — extend _kill_doey_session at lines 358-397 to call doey tunnel down (kill port watcher; leave tailscale up):done\n14:W2.1 Sub-wave 2B: EDIT shell/doey-doctor.sh — add tailscale presence/connection check when DOEY_TUNNEL_ENABLED=1 (deferred from 2A — separate file per one-worker-per-file rule):done\n15:W2.2 Ship sweep: run 6 validation checks (bash -n, bash-compat, help|grep tunnel, tunnel status, info-panel reader, go build):done\n16:W2.1 Fix stale install: EDIT install.sh to copy doey-tunnel-cli.sh and doey-port-watcher.sh; re-run ./install.sh; verify 4 runtime checks:done\n17:Bug fix: doey tunnel up requires DOEY_TUNNEL_ENABLED=1 workaround; doey tunnel --help prints unknown subcommand. Fix both + run end-to-end happy-path smoke test before reporting.:done\n18:W2.1 Bug fix: (1) doey tunnel up must auto-enable; (2) tunnel --help/-h alias; end-to-end validation steps A-K:done
+TASK_TIMESTAMPS=created=1775720443
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775720443
+TASK_FILES=shell/doey-tunnel-cli.sh,shell/doey.sh
+TASK_SUBTASK_1_TITLE=W2.1: Phase 1 research — Tailscale install/auth, port detection, dev-server heuristics, Info Panel integration, cleanup, command surface, cloudflared/SSH fallback, fresh-install opt-in
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775720651
+TASK_SUBTASK_1_COMPLETED_AT=1775720722
+TASK_SUBTASK_2_TITLE=Phase 1: Research — dispatched to W2 Subtaskmaster
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775720663
+TASK_SUBTASK_2_COMPLETED_AT=1775728588
+TASK_SUBTASK_3_TITLE=W2.2: Read research report, validate 6 open decisions, emit structured Phase-2 implementation plan (waves, file paths, risks)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1775721242
+TASK_SUBTASK_3_COMPLETED_AT=1775721605
+TASK_SUBTASK_4_TITLE=Phase 1 research + Phase 2 plan delivered (W1+W2). Awaiting SM consolidation
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775721671
+TASK_SUBTASK_4_COMPLETED_AT=1775728589
+TASK_SUBTASK_5_TITLE=W2.1 Sub-wave 1A: CREATE shell/doey-tunnel-cli.sh — doey tunnel {setup,status,up,down} subcommand handlers
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_2_1
+TASK_SUBTASK_5_CREATED_AT=1775721936
+TASK_SUBTASK_5_COMPLETED_AT=1775722136
+TASK_SUBTASK_6_TITLE=W2.2 Sub-wave 1A: CREATE shell/doey-port-watcher.sh — long-running daemon polling ss -tlnp every 2s, writes TUNNEL_PORTS_LIST
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_2_2
+TASK_SUBTASK_6_CREATED_AT=1775721938
+TASK_SUBTASK_6_COMPLETED_AT=1775722303
+TASK_SUBTASK_7_TITLE=Phase 2 authorized — serialized 8-task plan dispatched to W2 SM (sub-waves 1A-2B)
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_CREATED_AT=1775721942
+TASK_SUBTASK_7_COMPLETED_AT=1775728589
+TASK_SUBTASK_8_TITLE=W2.1 Sub-wave 1B: CREATE docs/tunnel.md — user guide for laptop install, magic-DNS, troubleshooting
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_WORKER=doey_doey_2_1
+TASK_SUBTASK_8_CREATED_AT=1775722311
+TASK_SUBTASK_8_COMPLETED_AT=1775722519
+TASK_SUBTASK_9_TITLE=W2.2 Sub-wave 1B: EDIT shell/doey-tunnel.sh — add tailscale provider, update priority order tailscale > cloudflared > ssh-L (deferred)
+TASK_SUBTASK_9_STATUS=done
+TASK_SUBTASK_9_WORKER=doey_doey_2_2
+TASK_SUBTASK_9_CREATED_AT=1775722311
+TASK_SUBTASK_9_COMPLETED_AT=1775722691
+TASK_SUBTASK_10_TITLE=W2.1 Sub-wave 1C: EDIT shell/doey-config-default.sh — extend tunnel config block (191-203) with TUNNEL_PROVIDER/TUNNEL_WATCHER_INTERVAL/TUNNEL_PORT_ALLOWLIST/BLOCKLIST defaults
+TASK_SUBTASK_10_STATUS=done
+TASK_SUBTASK_10_WORKER=doey_doey_2_1
+TASK_SUBTASK_10_CREATED_AT=1775722758
+TASK_SUBTASK_10_COMPLETED_AT=1775722866
+TASK_SUBTASK_11_TITLE=W2.2 Sub-wave 1C: pull-forward Wave 2 — EDIT shell/info-panel.sh (multi-line tunnel render at lines 432-442 from TUNNEL_PORTS_LIST)
+TASK_SUBTASK_11_STATUS=done
+TASK_SUBTASK_11_WORKER=doey_doey_2_2
+TASK_SUBTASK_11_CREATED_AT=1775722758
+TASK_SUBTASK_11_COMPLETED_AT=1775723065
+TASK_SUBTASK_12_TITLE=W2.1 Sub-wave 2A: EDIT shell/doey.sh — source new files, dispatch tunnel subcommand at line 247, help heredoc 162-222, reload re-spawn for port watcher, doctor extension for tailscale (if doey doctor lives in doey.sh)
+TASK_SUBTASK_12_STATUS=done
+TASK_SUBTASK_12_WORKER=doey_doey_2_1
+TASK_SUBTASK_12_CREATED_AT=1775723156
+TASK_SUBTASK_12_COMPLETED_AT=1775723433
+TASK_SUBTASK_13_TITLE=W2.2 Sub-wave 2A: EDIT shell/doey-session.sh — extend _kill_doey_session at lines 358-397 to call doey tunnel down (kill port watcher; leave tailscale up)
+TASK_SUBTASK_13_STATUS=done
+TASK_SUBTASK_13_WORKER=doey_doey_2_2
+TASK_SUBTASK_13_CREATED_AT=1775723157
+TASK_SUBTASK_13_COMPLETED_AT=1775723511
+TASK_SUBTASK_14_TITLE=W2.1 Sub-wave 2B: EDIT shell/doey-doctor.sh — add tailscale presence/connection check when DOEY_TUNNEL_ENABLED=1 (deferred from 2A — separate file per one-worker-per-file rule)
+TASK_SUBTASK_14_STATUS=done
+TASK_SUBTASK_14_WORKER=doey_doey_2_1
+TASK_SUBTASK_14_CREATED_AT=1775723740
+TASK_SUBTASK_14_COMPLETED_AT=1775724105
+TASK_SUBTASK_15_TITLE=W2.2 Ship sweep: run 6 validation checks (bash -n, bash-compat, help|grep tunnel, tunnel status, info-panel reader, go build)
+TASK_SUBTASK_15_STATUS=done
+TASK_SUBTASK_15_WORKER=doey_doey_2_2
+TASK_SUBTASK_15_CREATED_AT=1775727619
+TASK_SUBTASK_15_COMPLETED_AT=1775727756
+TASK_SUBTASK_16_TITLE=W2.1 Fix stale install: EDIT install.sh to copy doey-tunnel-cli.sh and doey-port-watcher.sh; re-run ./install.sh; verify 4 runtime checks
+TASK_SUBTASK_16_STATUS=done
+TASK_SUBTASK_16_WORKER=doey_doey_2_1
+TASK_SUBTASK_16_CREATED_AT=1775728314
+TASK_SUBTASK_16_COMPLETED_AT=1775728436
+TASK_SUBTASK_17_TITLE=Bug fix: doey tunnel up requires DOEY_TUNNEL_ENABLED=1 workaround; doey tunnel --help prints unknown subcommand. Fix both + run end-to-end happy-path smoke test before reporting.
+TASK_SUBTASK_17_STATUS=done
+TASK_SUBTASK_17_CREATED_AT=1775730989
+TASK_SUBTASK_17_COMPLETED_AT=1775731478
+TASK_SUBTASK_18_TITLE=W2.1 Bug fix: (1) doey tunnel up must auto-enable; (2) tunnel --help/-h alias; end-to-end validation steps A-K
+TASK_SUBTASK_18_STATUS=done
+TASK_SUBTASK_18_WORKER=doey_doey_2_1
+TASK_SUBTASK_18_CREATED_AT=1775731016
+TASK_SUBTASK_18_COMPLETED_AT=1775731276

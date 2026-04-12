@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=370
+TASK_TITLE=Upgrade doey-term: clickable tabs with + button and close (x)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=The Go TUI terminal in Core Team (pane 1.3) needs proper tab management. Currently shows only 'Tab 1' with no interactivity. Need: clickable tab bar, + button to add new tabs (each spawning a new bash shell), x to close tabs (minimum 1 tab), tab switching via click or keyboard. Build on existing tui/doey-term code. Prior tasks 356/357/361 attempted this but features aren't in the running build.
+TASK_SUBTASKS=1:W2.1: Research doey-term source (cmd/doey-term/main.go, internal/term/model.go, internal/term/tabbar.go) — map current tab infrastructure:done\n2:W2.2: Research internal/term/ for tab close/add code from task 361 — find reusable patterns:done\n3:W2.1: Verify doey-term builds clean (go build + go vet) and rebuild binary:done\n4:W2.2: Verify min-1-tab guard — if closeTab allows closing last tab, add guard:done
+TASK_TIMESTAMPS=created=1775508005
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775508005
+TASK_SUBTASK_1_TITLE=W2.1: Research doey-term source (cmd/doey-term/main.go, internal/term/model.go, internal/term/tabbar.go) — map current tab infrastructure
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research internal/term/ for tab close/add code from task 361 — find reusable patterns
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Verify doey-term builds clean (go build + go vet) and rebuild binary
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Verify min-1-tab guard — if closeTab allows closing last tab, add guard
+TASK_SUBTASK_4_STATUS=done

@@ -1,0 +1,51 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=464
+TASK_TITLE=CRITICAL: Fix Task Reviewer spin loop — burns tokens endlessly on ACTIVE_TASKS wake
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=The Task Reviewer (pane 1.1) is stuck in a devastating spin loop that burns tokens continuously:
+
+1. reviewer-wait.sh wakes with WAKE_REASON=ACTIVE_TASKS
+2. Reviewer checks messages — finds none
+3. Goes back to reviewer-wait.sh
+4. Immediately wakes again on ACTIVE_TASKS
+5. Repeat forever — 29+ minutes of token burn observed
+
+ROOT CAUSE: reviewer-wait.sh triggers on ACTIVE_TASKS existing, but the Reviewer has no work to do for those tasks (they need deployment, not review, or are already reviewed). The wake condition is too broad.
+
+FIX REQUIREMENTS:
+- reviewer-wait.sh must NOT wake on ACTIVE_TASKS alone — it should only wake when there's an actual review request message for the reviewer
+- When there are no review messages, the Reviewer must SLEEP indefinitely (not poll)
+- The Reviewer agent prompt should instruct: if no review messages found after waking, go back to sleep immediately without entering a monitoring loop
+- Kill the current spinning Reviewer process immediately
+- This is task #452 revisited — the previous fix (bfe7673) was insufficient
+
+Files: shell/reviewer-wait.sh (or hooks/reviewer-wait.sh), agents/doey-task-reviewer.md.tmpl
+TASK_SUBTASKS=1:W2.1: Research reviewer-wait.sh and doey-task-reviewer.md.tmpl — report full contents and wake logic:done\n2:W2.1: Fix reviewer-wait.sh — remove ACTIVE_TASKS wake condition from _check_work():done\n3:W2.2: Update doey-task-reviewer.md.tmpl — remove observation loop, sleep when no messages:done\n4:W2.2: Verify both fixes — reviewer-wait.sh and doey-task-reviewer.md.tmpl:done
+TASK_TIMESTAMPS=created=1775754206
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775754206
+TASK_FILES=.claude/hooks/reviewer-wait.sh,agents/doey-task-reviewer.md,agents/doey-task-reviewer.md.tmpl
+TASK_SUBTASK_1_TITLE=W2.1: Research reviewer-wait.sh and doey-task-reviewer.md.tmpl — report full contents and wake logic
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775754292
+TASK_SUBTASK_1_COMPLETED_AT=1775754407
+TASK_SUBTASK_2_TITLE=W2.1: Fix reviewer-wait.sh — remove ACTIVE_TASKS wake condition from _check_work()
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775754445
+TASK_SUBTASK_2_COMPLETED_AT=1775754646
+TASK_SUBTASK_3_TITLE=W2.2: Update doey-task-reviewer.md.tmpl — remove observation loop, sleep when no messages
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1775754445
+TASK_SUBTASK_3_COMPLETED_AT=1775754608
+TASK_SUBTASK_4_TITLE=W2.2: Verify both fixes — reviewer-wait.sh and doey-task-reviewer.md.tmpl
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_2
+TASK_SUBTASK_4_CREATED_AT=1775754686
+TASK_SUBTASK_4_COMPLETED_AT=1775754787

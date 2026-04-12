@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=279
+TASK_TITLE=Boss Interaction Log — capture, store, and organize every user message
+TASK_STATUS=cancelled
+TASK_TYPE=feature
+TASK_DESCRIPTION=Capture and persistently store every message sent to Boss with rich metadata: timestamp, session ID, task linkage, auto-classified type (command/question/feedback/status). SQLite storage via doey-ctl, TUI visibility, basic analytics. Foundation for knowing what Doey should automate. Plan 27.
+TASK_ACCEPTANCE_CRITERIA=Every Boss message persisted in SQLite with timestamp+session+task linkage, auto-classified by type, searchable via doey-ctl, visible in TUI, analytics-ready
+TASK_SUBTASKS=1:Dispatch to W3 Subtaskmaster:pending
+TASK_TIMESTAMPS=created=1775402876
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775402876
+TASK_PLAN_ID=27
+TASK_SUBTASK_1_TITLE=Dispatch to W3 Subtaskmaster
+TASK_SUBTASK_1_STATUS=pending

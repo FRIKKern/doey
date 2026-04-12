@@ -2,8 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=87
 TASK_TITLE=Fix gum auto-install not triggering during doey update
 TASK_STATUS=done
-TASK_CREATED=1775029110
 TASK_TYPE=bugfix
-TASK_DESCRIPTION=Gum auto-install code from task 82 is not executing during doey update. Doctor still shows gum missing after update on 375d4d5. Debug and fix.
 TASK_TAGS=gum,install,update,bugfix
 TASK_TEAM=SM
+TASK_DESCRIPTION=Gum auto-install code from task 82 is not executing during doey update. Doctor still shows gum missing after update on 375d4d5. Debug and fix.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

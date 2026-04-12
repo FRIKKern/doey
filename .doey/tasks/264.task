@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=264
+TASK_TITLE=Permanent fix for dispatch text vanishing
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=5
+TASK_DESCRIPTION=Dispatched text appears in target pane then instantly disappears before being submitted. Recurring issue across many past tasks. Need permanent root cause elimination.
+TASK_SUBTASKS=1:Dispatch to W5 Subtaskmaster — root cause + fix:done\n2:W5.1: Root cause investigation — examine doey-send.sh, paste-buffer race, prompt refresh clearing, hook interference, PASTE_SETTLE_MS timing:done\n3:W5.2: Implement shell fix — wire PASTE_SETTLE_MS, send-keys -l for <4KB, smarter retry in doey-send.sh:done\n4:W5.1: Implement Go fix — pre-Enter verification + configurable settle in sendverified.go:done\n5:W5.2: Verify — bash compat, Go compile, code review of all changes:done
+TASK_TIMESTAMPS=created=1775360574
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775360574
+TASK_SUBTASK_1_TITLE=Dispatch to W5 Subtaskmaster — root cause + fix
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.1: Root cause investigation — examine doey-send.sh, paste-buffer race, prompt refresh clearing, hook interference, PASTE_SETTLE_MS timing
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W5.2: Implement shell fix — wire PASTE_SETTLE_MS, send-keys -l for <4KB, smarter retry in doey-send.sh
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W5.1: Implement Go fix — pre-Enter verification + configurable settle in sendverified.go
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W5.2: Verify — bash compat, Go compile, code review of all changes
+TASK_SUBTASK_5_STATUS=done

@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=252
+TASK_TITLE=Fix send-keys delivery — paste-buffer fails on Claude CLI, direct send-keys with shorter messages
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Paste-buffer approach in doey_send_verified does not work reliably with Claude CLI instances. The pasted text is not visible in the prompt at all — tmux history shows only the idle prompt. Root cause from task 249 research: (1) Escape between paste and Enter clears input, (2) Go SendVerified has no readiness gate, (3) timing too fast. Fix: remove Escape before Enter in paste-buffer path (doey-send.sh:164, sendverified.go:72), add waitForPrompt() to Go SendVerified (sendverified.go:18), increase Go short-msg delay or use direct send-keys for all messages. Research report: /tmp/doey/doey/research/task_249_sendkeys_audit.md
+TASK_SUBTASKS=1:Dispatched to W4 Subtaskmaster (2 workers):done\n2:W4.1: Shell fix — remove Escape before Enter in doey-send.sh paste-buffer path:done\n3:W4.2: Go fix — remove Escape, add waitForPrompt, increase short-msg delay in sendverified.go:done
+TASK_TIMESTAMPS=created=1775351131
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775351131
+TASK_SUBTASK_1_TITLE=Dispatched to W4 Subtaskmaster (2 workers)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Shell fix — remove Escape before Enter in doey-send.sh paste-buffer path
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W4.2: Go fix — remove Escape, add waitForPrompt, increase short-msg delay in sendverified.go
+TASK_SUBTASK_3_STATUS=done

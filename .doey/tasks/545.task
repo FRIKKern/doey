@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=545
+TASK_TITLE=Task 521 Wave 2.5: session_id rename + allowlist header + dedup sentinel
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_CREATED_BY=doey-planner
+TASK_TEAM=W2
+TASK_DESCRIPTION=Follow-ups from Phase 1 Review Gate (msg 20818). (1) BLOCKER for Phase 4 reader: rename session_id writer in on-session-start.sh to match reader expectation. (2) Align shell/doey-stats-allowlist.txt header comment with Go mirror. (3) Remove duplicate install_run sentinel from on-session-start.sh. See /tmp/doey/doey/masterplan-task521-20260411-093040/wave2.5-followups.md
+TASK_SUBTASKS=1:W2.1: Wave 2.5 triple fix — session_id rename, allowlist header align, dedup install_run sentinel:review
+TASK_TIMESTAMPS=created=1775910681
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910681
+TASK_FILES=.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,agents/doey-boss.md,agents/doey-boss.md.tmpl,agents/doey-deployment.md,agents/doey-deployment.md.tmpl,agents/doey-freelancer.md,agents/doey-freelancer.md.tmpl,agents/doey-planner.md,agents/doey-planner.md.tmpl,agents/doey-subtaskmaster.md,agents/doey-subtaskmaster.md.tmpl,agents/doey-task-reviewer.md,agents/doey-task-reviewer.md.tmpl,docs/violations.md,shell/doey-doctor.sh
+TASK_SUBTASK_1_TITLE=W2.1: Wave 2.5 triple fix — session_id rename, allowlist header align, dedup install_run sentinel
+TASK_SUBTASK_1_STATUS=review
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775910812
+TASK_SUBTASK_1_COMPLETED_AT=1775911158

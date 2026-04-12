@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=293
+TASK_TITLE=Post-masterplan verification — fix 2 warnings
+TASK_STATUS=done
+TASK_TYPE=fix
+TASK_DESCRIPTION=Fix the two warnings found during post-masterplan system testing. (1) task-helpers test failure: TASK_TIMESTAMPS assertion fails in tests/test-task-helpers.sh. (2) 6 shell modules not installed to ~/.local/bin/: doey-config-default.sh, doey-constants.sh, doey-go-check.sh, doey-ipc-helpers.sh, doey-plan-helpers.sh, doey-tunnel.sh — audit each to determine if install.sh needs updating or if they are correctly sourced from repo only.
+TASK_ACCEPTANCE_CRITERIA=tests/test-task-helpers.sh passes with 0 failures; 6 uninstalled modules either added to install.sh or documented as repo-sourced; doey doctor still all green; all existing tests still pass
+TASK_SUBTASKS=1:W3.1: Fix TASK_TIMESTAMPS test failure in tests/test-task-helpers.sh:done\n2:W3.2: Audit 6 uninstalled shell modules — determine if install.sh needs updates:done\n3:Dispatched to T3 Subtaskmaster (W3.0):done
+TASK_TIMESTAMPS=created=1775420487
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775420487
+TASK_SUBTASK_1_TITLE=W3.1: Fix TASK_TIMESTAMPS test failure in tests/test-task-helpers.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Audit 6 uninstalled shell modules — determine if install.sh needs updates
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to T3 Subtaskmaster (W3.0)
+TASK_SUBTASK_3_STATUS=done

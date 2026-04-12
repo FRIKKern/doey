@@ -1,0 +1,24 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=277
+TASK_TITLE=Masterplan Phase 3: PoC Enforcement — review gate mandatory
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Phase 3 of masterplan #27. Make review gate FAIL not WARN. stop-status.sh blocks done without proof. Opt-out for research/docs tasks.
+TASK_SUBTASKS=1:stop-status.sh blocks done transition without proof:done\n2:Task Reviewer PoC check = FAIL not WARN:done\n3:Opt-out flag for research/docs tasks:done\n4:Verify: worker blocked without PROOF, reviewer rejects:done\n5:W5.1: stop-status.sh proof gate — block FINISHED without PROOF_TYPE, with DOEY_PROOF_EXEMPT opt-out for research/docs:deferred\n6:W5.2: Task Reviewer WARN→FAIL — missing proof is automatic FAIL in doey-task-reviewer.md.tmpl:deferred
+TASK_TIMESTAMPS=created=1775396647
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775396647
+TASK_PLAN_ID=27
+TASK_SUBTASK_1_TITLE=stop-status.sh blocks done transition without proof
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Task Reviewer PoC check = FAIL not WARN
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Opt-out flag for research/docs tasks
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Verify: worker blocked without PROOF, reviewer rejects
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W5.1: stop-status.sh proof gate — block FINISHED without PROOF_TYPE, with DOEY_PROOF_EXEMPT opt-out for research/docs
+TASK_SUBTASK_5_STATUS=deferred
+TASK_SUBTASK_6_TITLE=W5.2: Task Reviewer WARN→FAIL — missing proof is automatic FAIL in doey-task-reviewer.md.tmpl
+TASK_SUBTASK_6_STATUS=deferred

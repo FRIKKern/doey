@@ -2,10 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=36
 TASK_TITLE=Apply Connections split-pane UI pattern to Agents, Tasks, and Teams tabs
 TASK_STATUS=done
-TASK_CREATED=1743307200
 TASK_TYPE=feature
-TASK_DESCRIPTION=The Connections tab in the TUI has a split-pane layout (list on the left, detail view on the right). The Agents, Tasks, and Teams tabs should adopt this same split-pane UI pattern for consistency. Research how the Connections tab implements its split-pane layout (list + detail), then refactor the Agents, Tasks, and Teams tabs to follow the same pattern: scrollable list on the left side, selected item detail on the right side. Reuse components/patterns from Connections wherever possible rather than reimplementing from scratch.
 TASK_TAGS=tui,dashboard
 TASK_TEAM=W1
-TASK_LOG_1774873467=PROGRESS: Dispatched to W1
-TASK_LOG_1774874053=COMPLETE: Committed 5b450a4. 4 files, -344 net lines (refactored).
+TASK_DESCRIPTION=The Connections tab in the TUI has a split-pane layout (list on the left, detail view on the right). The Agents, Tasks, and Teams tabs should adopt this same split-pane UI pattern for consistency. Research how the Connections tab implements its split-pane layout (list + detail), then refactor the Agents, Tasks, and Teams tabs to follow the same pattern: scrollable list on the left side, selected item detail on the right side. Reuse components/patterns from Connections wherever possible rather than reimplementing from scratch.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

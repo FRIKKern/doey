@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=178
+TASK_TITLE=Fix hardcoded Taskmaster pane 0.2 — must always read from session.env
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=W3
+TASK_DESCRIPTION=Boss agent template and instant-task skill hardcode TASKMASTER_PANE fallback as 0.2, but Taskmaster moved to Core Team window at 1.0. This causes silent message delivery failures on every fresh session. All references to Taskmaster pane must read TASKMASTER_PANE from session.env with no hardcoded fallback. Audit: agent templates, skills, hooks, and shell scripts for any hardcoded 0.2 Taskmaster assumption.
+TASK_SUBTASKS=1:Dispatched to W3 Subtaskmaster — audit and fix hardcoded 0.2 pane refs:done\n2:W3.1: Fix 5 skill .md.tmpl files — change TASKMASTER_PANE fallback 0.2 to 1.0:done\n3:W3.2: Fix shell scripts (ipc-helpers, expand-templates) + regenerate all .md from templates:done\n4:W3.3: Fix on-pre-tool-use.sh Taskmaster detection — structural rework for window 1:done\n5:W3.4: Fix Go code (constants, actions, plans) + docs/context-reference.md:done
+TASK_TIMESTAMPS=created=1775231055
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775231055
+TASK_SUBTASK_1_TITLE=Dispatched to W3 Subtaskmaster — audit and fix hardcoded 0.2 pane refs
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1
+TASK_SUBTASK_2_STATUS= Fix 5 skill .md.tmpl files — change TASKMASTER_PANE fallback 0.2 to 1.0:done
+TASK_SUBTASK_3_TITLE=W3.2
+TASK_SUBTASK_3_STATUS= Fix shell scripts (ipc-helpers, expand-templates) + regenerate all .md from templates:done
+TASK_SUBTASK_4_TITLE=W3.3
+TASK_SUBTASK_4_STATUS= Fix on-pre-tool-use.sh Taskmaster detection — structural rework for window 1:done
+TASK_SUBTASK_5_TITLE=W3.4
+TASK_SUBTASK_5_STATUS= Fix Go code (constants, actions, plans) + docs/context-reference.md:done

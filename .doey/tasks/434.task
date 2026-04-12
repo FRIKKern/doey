@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=434
+TASK_TITLE=Stash everything and pull from origin
+TASK_STATUS=cancelled
+TASK_TYPE=chore
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=User request: stash all uncommitted changes in /home/doey/doey (modified + untracked) and fast-forward pull from origin/main. Then report what came in and what was stashed. Route to Deployment (1.2) — no worker team needed.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775684909
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775684909

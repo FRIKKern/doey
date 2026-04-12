@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=287
+TASK_TITLE=Masterplan Phase 3: Task CLI + Test Runner + dead code cleanup
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Extract doey-task-cli.sh (~335L) and doey-test-runner.sh (~120L). Consolidate 4x ASCII banner duplication. Remove dead code. Gate: doey task + doey test work.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775409734
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775409734
+TASK_PLAN_ID=28

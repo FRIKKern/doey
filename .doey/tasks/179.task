@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=179
+TASK_TITLE=Sort TUI task list by updated time descending
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=W2
+TASK_DESCRIPTION=The Go TUI task list must be ordered by TASK_UPDATED timestamp descending (most recently updated first). Ensure the task list in the TUI dashboard sorts by updated time, not by ID or other field.
+TASK_SUBTASKS=1:W2.4:done\n2:W2.5:done\n3:Dispatched to W2 Subtaskmaster — sort task list by updated time desc:done
+TASK_TIMESTAMPS=created=1775246290
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775246290
+TASK_SUBTASK_1_TITLE=W2.4
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.5
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to W2 Subtaskmaster — sort task list by updated time desc
+TASK_SUBTASK_3_STATUS=done

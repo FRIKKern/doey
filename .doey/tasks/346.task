@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=346
+TASK_TITLE=Show task ID (#N) at the start of task subtitle line in TUI task list
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=In the TUI task list view, the second line of each task card (the subtitle/detail line) should start with the task ID formatted as #N (e.g. #345). Currently the ID is not shown on that line. See screenshot at /tmp/doey/doey/screenshot-unverified.png for current layout.
+
+The task ID should appear at the LEFT START of the line below the task title. Format: #<number> followed by the rest of the subtitle content.
+
+Search the Go TUI code for the task list item rendering — likely in the tasks tab component. Add the task ID prefix. Rebuild with go build.
+TASK_SUBTASKS=1:Dispatched to Team W3:done\n2:W3.2: Implement task ID prefix on subtitle line in taskcard.go:done\n3:W3.1: Verify task ID prefix implementation — build, vet, code review:done
+TASK_TIMESTAMPS=created=1775481743
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775481743
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to Team W3
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Implement task ID prefix on subtitle line in taskcard.go
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Verify task ID prefix implementation — build, vet, code review
+TASK_SUBTASK_3_STATUS=done

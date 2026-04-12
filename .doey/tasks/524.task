@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=524
+TASK_TITLE=Subtaskmaster wait protocol bug — msg list never marks read
+TASK_STATUS=cancelled
+TASK_TYPE=bug
+TASK_CREATED_BY=taskmaster
+TASK_TEAM=1
+TASK_DESCRIPTION=ROOT CAUSE: agents/doey-subtaskmaster.md wait protocol uses msg list --unread (which does NOT consume) instead of msg read --pane X (which marks read). Every wake sees same unread queue, polls forever burning context. Observed in W5 SM during task #523: 14+ min polling loop on 3 unconsumed msgs. Boss force-cleared via msg read-all. FIX: rewrite wait/message-handling section in agents/doey-subtaskmaster.md to (a) call msg read --pane (consumes), (b) react to events not poll, (c) match Taskmaster pattern of taskmaster-wait.sh + msg read --pane in wake handler. Critical for polling-burn elimination work in 521/522.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775902872
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775902872

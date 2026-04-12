@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=284
+TASK_TITLE=Masterplan Phase 0: Foundation — test harness, perf baseline, helpers + UI extraction
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Create regression test harness (test-extraction.sh), performance baseline, extract doey-helpers.sh and doey-ui.sh (~430L). Bundled bugfixes: TMPDIR, pane_id, atomic writes. Gate: all 161 functions callable, doey doctor passes, baseline recorded.
+TASK_SUBTASKS=1:W2.1: Create tests/test-extraction.sh regression harness + tests/test-perf-baseline.sh:done\n2:W2.2: Extract doey-helpers.sh from doey.sh + update doey.sh source lines:done\n3:W2.3: Extract doey-ui.sh from doey.sh + update install.sh + bundled bugfixes:done\n4:W2.4: Verification gate — run all tests, install.sh, doey doctor, smoke test:done\n5:Dispatched to W2 SM — 3 workers: tests, helpers extraction, UI extraction:done
+TASK_TIMESTAMPS=created=1775409734
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775409734
+TASK_PLAN_ID=28
+TASK_SUBTASK_1_TITLE=W2.1: Create tests/test-extraction.sh regression harness + tests/test-perf-baseline.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Extract doey-helpers.sh from doey.sh + update doey.sh source lines
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.3: Extract doey-ui.sh from doey.sh + update install.sh + bundled bugfixes
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.4: Verification gate — run all tests, install.sh, doey doctor, smoke test
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Dispatched to W2 SM — 3 workers: tests, helpers extraction, UI extraction
+TASK_SUBTASK_5_STATUS=done

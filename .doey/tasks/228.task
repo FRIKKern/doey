@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=228
+TASK_TITLE=Integration audit — verify ephemeral team spawn works with entire codebase
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TEAM=W6
+TASK_DESCRIPTION=Task 225 added ephemeral team spawning (--workers, --name, --task-id flags, DOEY_INITIAL_TEAMS=0, auto-despawn). Must verify compatibility with: (1) All skills that spawn teams (/doey-add-window, /doey-add-team, /doey-rd-team, freelancer spawn), (2) TUI Dashboard spawn buttons, (3) Startup wizard (doey-tui setup), (4) Hooks that reference team state (stop-notify, stop-status, session-start), (5) doey-ctl team commands, (6) Info panel team display, (7) Kill/reload/repair flows, (8) The actual runtime — does doey start clean with just Core Team? Does Taskmaster actually spawn teams on first task? Does despawn work after task_complete? Full e2e verification needed.
+TASK_SUBTASKS=1:Dispatched to W6 Subtaskmaster — 3 workers: skills+TUI, hooks+shell, doey-ctl+info-panel:deferred\n2:W6.1: Skills + TUI — verify add-window, add-team, dashboard buttons, freelancer, setup wizard:done\n3:W6.2: Hooks + Shell — verify stop-notify, stop-status, session-start, kill/reload/repair flows:done\n4:W6.3: doey-ctl + Info Panel — verify team list/env, info-panel display, shell utilities:done\n5:Dispatched to W6 — 3 workers (skills/TUI, hooks/shell, ctl/panel):deferred
+TASK_TIMESTAMPS=created=1775301740
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775301740
+TASK_SUBTASK_1_TITLE=Dispatched to W6 Subtaskmaster — 3 workers: skills+TUI, hooks+shell, doey-ctl+info-panel
+TASK_SUBTASK_1_STATUS=deferred
+TASK_SUBTASK_2_TITLE=W6.1: Skills + TUI — verify add-window, add-team, dashboard buttons, freelancer, setup wizard
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W6.2: Hooks + Shell — verify stop-notify, stop-status, session-start, kill/reload/repair flows
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W6.3: doey-ctl + Info Panel — verify team list/env, info-panel display, shell utilities
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Dispatched to W6 — 3 workers (skills/TUI, hooks/shell, ctl/panel)
+TASK_SUBTASK_5_STATUS=deferred

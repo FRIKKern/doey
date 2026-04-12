@@ -1,0 +1,35 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=225
+TASK_TITLE=Ephemeral task-sized teams — spawn on demand, despawn on complete
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Teams spawn per-task sized to subtask count and despawn on completion. Only Core Team and Reserved Freelancers persist. Covers: add-window --workers/--name flags, Taskmaster spawn+despawn logic, startup with Core Team only, Boss worker estimates, team-task mapping.
+TASK_ACCEPTANCE_CRITERIA=New task spawns right-sized team, task complete despawns team, startup shows Core Team only, add-window --workers/--name works
+TASK_SUBTASKS=1:Add --workers N flag to doey add-window CLI:done\n2:Add --name flag to doey add-window for task-named teams:done\n3:Taskmaster: count subtasks, spawn right-sized team, dispatch:done\n4:Taskmaster: on task_complete, despawn the team window:done\n5:Startup: Core Team only, no pre-spawned worker teams:done\n6:Boss: include WORKERS_NEEDED estimate in dispatch messages:done\n7:Track team-task mapping in team_N.env (TASK_ID field):done\n8:Dispatched to W2 Subtaskmaster:done\n9:Dispatched to W2 Subtaskmaster — 2 workers (shell + agents):done\n10:W2.2: Shell changes — --workers N, --name flags, DOEY_INITIAL_TEAMS=0, TASK_ID in team env:done\n11:W2.3: Agent templates — Taskmaster spawn/despawn, Boss WORKERS_NEEDED:done
+TASK_TIMESTAMPS=created=1775300800
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775300800
+TASK_PLAN_ID=24
+TASK_SUBTASK_1_TITLE=Add --workers N flag to doey add-window CLI
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Add --name flag to doey add-window for task-named teams
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Taskmaster: count subtasks, spawn right-sized team, dispatch
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Taskmaster: on task_complete, despawn the team window
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Startup: Core Team only, no pre-spawned worker teams
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=Boss: include WORKERS_NEEDED estimate in dispatch messages
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=Track team-task mapping in team_N.env (TASK_ID field)
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_8_TITLE=Dispatched to W2 Subtaskmaster
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_9_TITLE=Dispatched to W2 Subtaskmaster — 2 workers (shell + agents)
+TASK_SUBTASK_9_STATUS=done
+TASK_SUBTASK_10_TITLE=W2.2: Shell changes — --workers N, --name flags, DOEY_INITIAL_TEAMS=0, TASK_ID in team env
+TASK_SUBTASK_10_STATUS=done
+TASK_SUBTASK_11_TITLE=W2.3: Agent templates — Taskmaster spawn/despawn, Boss WORKERS_NEEDED
+TASK_SUBTASK_11_STATUS=done

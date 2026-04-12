@@ -1,0 +1,30 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=432
+TASK_TITLE=Go TUI: every agent row must render with its agent color
+TASK_STATUS=cancelled
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=From user screenshot (gyazo 939f123e66d0e1658408a2fe07776d70): some agent rows in the Go TUI lack colors. Every agent should render with its declared color from agents/*.md frontmatter (color: field).
+
+Scope:
+- Audit how the TUI currently maps agent name -> color (likely tui/internal/roles or similar)
+- Ensure ALL roles (Boss, Taskmaster, Subtaskmaster, Workers, Reviewer, Deployment, Doey Expert, Freelancers, etc.) have a color defined and render
+- Fall back to a deterministic hash color only if frontmatter color missing — but prefer fixing the missing frontmatter
+- Verify in the live TUI by running doey and checking each pane row
+
+Deliverable: screenshot or pane capture showing every agent row colored. PR with the fix.
+TASK_SUBTASKS=1:W5.1: Audit TUI color mapping, fix missing agent frontmatter colors, verify with live TUI capture:done\n2:Dispatched to T5 SM (W5.1 worker):done
+TASK_TIMESTAMPS=created=1775598544
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775598544
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Audit TUI color mapping, fix missing agent frontmatter colors, verify with live TUI capture
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775598718
+TASK_SUBTASK_1_COMPLETED_AT=1775599808
+TASK_SUBTASK_2_TITLE=Dispatched to T5 SM (W5.1 worker)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775598726
+TASK_SUBTASK_2_COMPLETED_AT=1775599808

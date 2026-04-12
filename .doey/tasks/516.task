@@ -1,0 +1,48 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=516
+TASK_TITLE=Fix masterplan Phases 1+2 follow-ups: parser data-loss bug, header dup, test gaps
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W5
+TASK_DESCRIPTION=CATEGORY: deep
+
+Test report at /tmp/doey/doey/reports/task514_final.md found these issues to fix:
+
+BUG B (PRIORITY — data loss):
+File: tui/internal/planparse/planparse.go:104-110
+HasStructure() returns true for Title-only plans, routing them to renderStructured which then discards the body content. Fix: require at least one structural section beyond Title (a Phase, a Step, etc.) before returning true.
+
+BUG A (cosmetic):
+Files: tui/cmd/doey-masterplan-tui/main.go:539 + tui/internal/planparse/planparse.go:267-280
+Duplicated 'Phase N:' prefix in rendered header. Fix: strip the prefix in parsePhaseTitle.
+
+GAP 1 (install drift):
+shell/doey-masterplan-spawn.sh is wired in install.sh:345 but not present on the live system since commit 643f0f4. Add a doey doctor check that verifies the spawn helper exists at ~/.local/bin/doey-masterplan-spawn.sh.
+
+GAP 2 (test coverage):
+The Phase 1 ambiguity heuristic is currently inline bash inside SKILL.md (a markdown file), so it can't be tested. Extract to shell/doey-masterplan-ambiguity.sh as a callable function, update SKILL.md to source it, and add tests/test-masterplan-ambiguity.sh covering: vague short prompt, prompt with file paths, prompt with technical terms, very long prompt, edge cases.
+
+DELIVERABLES:
+- All 4 fixes implemented
+- Tests added for ambiguity heuristic
+- Existing tests still pass: go build/vet/test, bash compat, expand-templates
+- Commit and push
+
+Reports for reference:
+- /tmp/doey/doey/reports/task514_final.md
+- /tmp/doey/doey/reports/task514_w3_2.md
+TASK_SUBTASKS=1:W5.1: Fix Bug B (HasStructure data loss) + Bug A (Phase header dup) in tui/internal/planparse/planparse.go and tui/cmd/doey-masterplan-tui/main.go:done\n2:W5.2: Add doey doctor check for spawn helper; extract ambiguity heuristic to shell/doey-masterplan-ambiguity.sh with tests:done
+TASK_TIMESTAMPS=created=1775895254
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775895254
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Fix Bug B (HasStructure data loss) + Bug A (Phase header dup) in tui/internal/planparse/planparse.go and tui/cmd/doey-masterplan-tui/main.go
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775895385
+TASK_SUBTASK_1_COMPLETED_AT=1775896172
+TASK_SUBTASK_2_TITLE=W5.2: Add doey doctor check for spawn helper; extract ambiguity heuristic to shell/doey-masterplan-ambiguity.sh with tests
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775895385
+TASK_SUBTASK_2_COMPLETED_AT=1775896172

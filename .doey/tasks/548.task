@@ -1,0 +1,37 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=548
+TASK_TITLE=Triage: post-disruption state of open tasks
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Session was disrupted. Need pragmatic triage of current state.
+
+Open/relevant tasks:
+- 544 in_progress (#522 P5: docs/enforce-ask-user-question.md + Boss/Planner agent pointers) — orphaned, no team assigned
+- 536 pending (TASK_525 P4: Detection + circuit breaker in wait hooks)
+- 546 pending (Task 521 P4: TUI Stats sub-tab)
+- 547 pending (Task 521 P5: docs, privacy audit, fresh-install proof)
+- 525 pending (parent: polling-loop class fix)
+
+Investigate:
+1. For task 544: check git status / recent commits — was the work actually done and just not marked? Are docs/enforce-ask-user-question.md and the Boss/Planner agent pointers present? If so, mark complete. If partial, identify what remains.
+2. Check repo health: does go build pass in tui/? Does tests/test-bash-compat.sh pass? Any uncommitted changes from the modified files in git status?
+3. Identify the highest-value next task — which open task is closest to done, lowest risk, biggest unblocker?
+4. Flag anything broken or inconsistent.
+
+Deliverable: short report — what's done but unmarked, what's broken, what to do next.
+TASK_SUBTASKS=1:W2.1: Triage research — 544 state, repo health, next task:done
+TASK_TIMESTAMPS=created=1775923411
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775923411
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-stats-allowlist.txt,shell/doey-team-mgmt.sh,shell/doey.sh,tui/cmd/doey-ctl/doey-stats-allowlist.txt,tui/cmd/doey-ctl/stats_tasks.go,tui/internal/runtime/reader.go,tui/internal/runtime/store_reader.go
+TASK_SUBTASK_1_TITLE=W2.1: Triage research — 544 state, repo health, next task
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775923549
+TASK_SUBTASK_1_COMPLETED_AT=1775923644

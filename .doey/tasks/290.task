@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=290
+TASK_TITLE=Masterplan Phase 6: Team Management extraction
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Extract doey-team-mgmt.sh (~720L). Largest single extraction, touches session state. Depends on Phase 5 global cleanup. Gate: add/remove teams, concurrent registration safe, reload works.
+TASK_SUBTASKS=1:W2.1: Create doey-team-mgmt.sh (~720L):done\n2:W2.2: Surgery — remove from doey.sh, update install.sh, verify:done\n3:W2.1: Create doey-team-mgmt.sh (~720L):done\n4:W2.2: Surgery — remove from doey.sh, update install.sh, verify:done\n5:W2.2: Complete doey-team-mgmt.sh (append 17 remaining functions) + doey.sh surgery + install.sh + test updates + verification:done
+TASK_TIMESTAMPS=created=1775409735
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775409735
+TASK_PLAN_ID=28
+TASK_SUBTASK_1_TITLE=W2.1: Create doey-team-mgmt.sh (~720L)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Surgery — remove from doey.sh, update install.sh, verify
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Create doey-team-mgmt.sh (~720L)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Surgery — remove from doey.sh, update install.sh, verify
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.2: Complete doey-team-mgmt.sh (append 17 remaining functions) + doey.sh surgery + install.sh + test updates + verification
+TASK_SUBTASK_5_STATUS=done

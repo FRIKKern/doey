@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=365
+TASK_TITLE=Respawn Phase 4: Polish (TUI status, launch cmd persistence, doctor check)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Add RESPAWNING status color (yellow/transient) to TUI styles. Persist launch command to RUNTIME/status/<pane>.launch_cmd at worker boot in _batch_boot_workers so stop-respawn.sh can replay it. Add doey doctor check for respawn subsystem. Gate: go build and go vet clean, test-bash-compat.sh passes, doey doctor reports respawn checks. Reference: synthesis at /tmp/doey/doey/masterplan-20260406-183746/synthesis.md.
+TASK_SUBTASKS=1:Phase 4 dispatched: W1=TUI RESPAWNING status, W2=doctor check + bash compat:done
+TASK_TIMESTAMPS=created=1775502307
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775502307
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Phase 4 dispatched: W1=TUI RESPAWNING status, W2=doctor check + bash compat
+TASK_SUBTASK_1_STATUS=done

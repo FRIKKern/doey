@@ -1,0 +1,28 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=536
+TASK_TITLE=TASK_525 P4: Detection + circuit breaker in wait hooks
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=cli
+TASK_TEAM=W6
+TASK_DESCRIPTION=Add violation_bump_counter() helper to .claude/hooks/common.sh. Wake-state ledger /tmp/doey/<session>/wait-state-<pane_safe>.json. Reset signal: .claude/hooks/on-pre-tool-use.sh writes sentinel at ${RUNTIME_DIR}/status/<pane>.tool_used_this_turn (NOT on-prompt-submit — that fires on every wake-delivered turn). Logic: mkdir lock with stale-lock mtime recovery, DOEY_ENFORCE_VIOLATIONS on/shadow/off short-circuit, sentinel check, window-expiry at 120s, counter bump on same-reason zero-tool wake, warn at 3, breaker at 5 (latched via breaker_tripped), next_wake_earliest=now+30 NO blocking sleep, owner nudge (Boss if Taskmaster, else Taskmaster). Sanitize last_wake_reason via tr -cd A-Z_. Call helper from taskmaster-wait.sh AND reviewer-wait.sh at top (reason-agnostic). Standalone commit. Plan Phase 4.
+TASK_SUBTASKS=1:W4.1: Research existing hooks structure (common.sh, taskmaster-wait.sh, reviewer-wait.sh, on-pre-tool-use.sh):pending\n2:W6.1: Research — map common.sh, taskmaster-wait.sh, reviewer-wait.sh, on-pre-tool-use.sh; locate prior violation helpers from #525 P1-3:done\n3:W6.1 cont: Implement violation_bump_counter + wait hook calls + sentinel writer in on-pre-tool-use.sh:in_progress\n4:W6.2: Verify — bash 3.2 compat, sentinel flow, lock/ledger, latched breaker, nudge targeting:pending
+TASK_TIMESTAMPS=created=1775910172
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910172
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,.claude/settings.json,docs/enforce-ask-user-question.md,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-stats-allowlist.txt,shell/doey-team-mgmt.sh,shell/doey.sh,tui/cmd/doey-ctl/doey-stats-allowlist.txt,tui/cmd/doey-ctl/stats_tasks.go,tui/internal/model/logsgroup.go
+TASK_SUBTASK_1_TITLE=W4.1: Research existing hooks structure (common.sh, taskmaster-wait.sh, reviewer-wait.sh, on-pre-tool-use.sh)
+TASK_SUBTASK_1_STATUS=pending
+TASK_SUBTASK_1_CREATED_AT=1775912742
+TASK_SUBTASK_2_TITLE=W6.1: Research — map common.sh, taskmaster-wait.sh, reviewer-wait.sh, on-pre-tool-use.sh; locate prior violation helpers from #525 P1-3
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_6_1
+TASK_SUBTASK_2_CREATED_AT=1775912757
+TASK_SUBTASK_2_COMPLETED_AT=1775912984
+TASK_SUBTASK_3_TITLE=W6.1 cont: Implement violation_bump_counter + wait hook calls + sentinel writer in on-pre-tool-use.sh
+TASK_SUBTASK_3_STATUS=in_progress
+TASK_SUBTASK_3_CREATED_AT=1775912757
+TASK_SUBTASK_4_TITLE=W6.2: Verify — bash 3.2 compat, sentinel flow, lock/ledger, latched breaker, nudge targeting
+TASK_SUBTASK_4_STATUS=pending
+TASK_SUBTASK_4_CREATED_AT=1775912757

@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=280
+TASK_TITLE=Fix doey-send — text pastes but Enter never submits
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=doey_send_verified pastes text into target pane but Enter key does not register, causing 3 retry failures. Seen on pane 2.0. Recurring issue (prior tasks 249, 252, 195, 235). Need to research why tmux send-keys Enter fails after paste-buffer and fix reliably.
+TASK_SUBTASKS=1:W4.1: Research doey-send.sh current implementation and failure path:done\n2:W4.2: Research tmux send-keys semantics — paste-buffer vs direct, Enter signals:done\n3:W4.1: Implement fix — add -pr flags to paste-buffer, pre-clear on all attempts, lower threshold:done\n4:W4.2: Verify fix — review changes, test doey_send_verified works, check edge cases:done
+TASK_TIMESTAMPS=created=1775402985
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775402985
+TASK_SUBTASK_1_TITLE=W4.1: Research doey-send.sh current implementation and failure path
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.2: Research tmux send-keys semantics — paste-buffer vs direct, Enter signals
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W4.1: Implement fix — add -pr flags to paste-buffer, pre-clear on all attempts, lower threshold
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W4.2: Verify fix — review changes, test doey_send_verified works, check edge cases
+TASK_SUBTASK_4_STATUS=done

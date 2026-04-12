@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=419
+TASK_TITLE=Phase F: install.sh + doey doctor
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=install.sh: ensure jq in deps. shell/doey-doctor.sh: add row 'Haiku intent fallback: enabled/disabled (reason)'. Fresh-install test: uninstall && ./install.sh && key-set and key-unset variants.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545588
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545588
+TASK_PLAN_ID=1003

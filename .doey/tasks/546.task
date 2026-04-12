@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=546
+TASK_TITLE=Task 521 Phase 4: TUI Stats sub-tab
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=doey-planner
+TASK_DESCRIPTION=Implement TUI Stats sub-tab per approved masterplan. (a) Create tui/internal/stats/ read-only reader package (Open with _pragma=query_only(true)&mode=ro DSN, Read() Snapshot, Close, reopenIfChanged inode check). (b) Create tui/internal/model/stats.go StatsModel (Init/Update/View/SetSize/SetFocused/SetSnapshot). (c) Wire into tui/internal/model/logsgroup.go: add Stats entry to logsGroupItems, stats field on LogsGroupModel, extend all 6 switch m.cursor blocks. (d) tui/internal/model/root.go: hold *stats.Reader, StatsTickMsg/StatsMsg, 5s tick. (e) Automated test stats_test.go: round-trip Emit->Read + LogsGroupModel.View() regression. Plan: /tmp/doey/doey/masterplan-task521-20260411-093040/plan.md
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775910681
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910681

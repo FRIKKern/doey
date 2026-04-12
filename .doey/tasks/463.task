@@ -1,0 +1,42 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=463
+TASK_TITLE=Upgrade intent fallback CLI from Haiku to instant Opus
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=Replace Haiku with Opus in the intent fallback CLI. User wants INSTANT, low-effort Opus — meaning: use Opus model but with minimal/no extended thinking to keep it snappy. Stream tokens immediately.
+
+KEY: This is about using Opus's superior base intelligence without the latency of deep thinking. Fast Opus, not thoughtful Opus.
+
+REQUIREMENTS:
+- Switch model from Haiku to Opus in the headless claude CLI call
+- If claude CLI supports it: use low reasoning effort / no extended thinking flags
+- Streaming output — tokens appear immediately
+- Keep subprocess startup fast
+- Preserve chat mode, command routing, REPL loop
+- Test: doey hello should respond with Opus-quality answers instantly
+
+Files: shell/intent-fallback.sh, shell/doey-intent-dispatch.sh
+TASK_SUBTASKS=1:W2.1: Research current model flags and CLI invocation patterns in intent-fallback.sh and doey-intent-dispatch.sh:done\n2:W2.2: Implement Haiku-to-Opus upgrade in intent-fallback.sh, doey-headless.sh, doey-intent-dispatch.sh:done\n3:W2.1: Verify Opus upgrade — check all 3 files, run bash compat tests, grep for stale haiku refs:done
+TASK_TIMESTAMPS=created=1775753669
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775753669
+TASK_FILES=shell/doey-headless.sh,shell/doey-intent-dispatch.sh,shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research current model flags and CLI invocation patterns in intent-fallback.sh and doey-intent-dispatch.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775753733
+TASK_SUBTASK_1_COMPLETED_AT=1775753841
+TASK_SUBTASK_2_TITLE=W2.2: Implement Haiku-to-Opus upgrade in intent-fallback.sh, doey-headless.sh, doey-intent-dispatch.sh
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1775753845
+TASK_SUBTASK_2_COMPLETED_AT=1775753914
+TASK_SUBTASK_3_TITLE=W2.1: Verify Opus upgrade — check all 3 files, run bash compat tests, grep for stale haiku refs
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_1
+TASK_SUBTASK_3_CREATED_AT=1775753945
+TASK_SUBTASK_3_COMPLETED_AT=1775753992

@@ -1,0 +1,35 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=433
+TASK_TITLE=Research: Claude Harness (local) — architecture, CLI patterns, lessons for Doey Haiku Intent Fallback
+TASK_STATUS=cancelled
+TASK_TYPE=research
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=User wants a real research pass on Claude Harness, which lives locally (NOT a web search):
+
+Targets:
+- /home/doey/GitHub/claude-harness  (primary)
+- /home/doey/GitHub/claude-code-haha/go-harness  (secondary, if relevant)
+
+Questions to answer:
+1. Architecture: how is the harness laid out? Entry points, modules, language(s), packaging.
+2. CLI surface: how does it expose Claude as a CLI primitive? Commands, flags, subcommands, dispatch model.
+3. Intent handling: how does it route user input → intent → action? Any LLM-in-the-loop fallback for typos/unknown commands?
+4. Model selection: when does it call Haiku vs Sonnet vs Opus? Cost/latency trade-offs?
+5. Error handling: what happens on bad input, missing flags, network failure, no API key?
+6. Streaming, prompt construction, tool use patterns.
+7. Hooks / extensibility model — anything analogous to Doey's hooks?
+8. What is reusable for Doey's Haiku Intent Fallback (masterplan 402)? Specific files / functions to borrow or learn from.
+9. What should Doey explicitly NOT copy?
+
+Deliverable: research/claude-harness-report.md with findings, code references (file:line), and a 'Lessons for Doey' section that maps directly into masterplan 402 phases. Include diagrams or pseudo-code where useful.
+
+Constraints:
+- READ ONLY. Do not modify anything in /home/doey/GitHub/claude-harness.
+- Cite specific files and line numbers.
+- 1 worker, focused, no parallelism. Should take < 1 hour.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775599102
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775599102

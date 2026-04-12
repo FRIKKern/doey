@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=364
+TASK_TITLE=Respawn Phase 3: Rate limiting and safety (cooldown + stale cleanup)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Add 5-minute per-pane cooldown to stop-respawn.sh. On cooldown breach: set ERROR status, log warning, do not respawn. Cleanup stale request files older than 60s on session start. Reference: synthesis at /tmp/doey/doey/masterplan-20260406-183746/synthesis.md. Gate: rapid respawn attempts (more than 3 in 5 min) are blocked with warning logged.
+TASK_SUBTASKS=1:Phase 3 dispatched: W1=cooldown enhancement, W2=stale cleanup:done
+TASK_TIMESTAMPS=created=1775502305
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775502305
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Phase 3 dispatched: W1=cooldown enhancement, W2=stale cleanup
+TASK_SUBTASK_1_STATUS=done

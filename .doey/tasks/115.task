@@ -5,9 +5,11 @@ TASK_STATUS=done
 TASK_TYPE=infrastructure
 TASK_TAGS=shell,hooks,agents,infrastructure
 TASK_CREATED_BY=Boss
-TASK_DESCRIPTION=Rewrote Taskmaster from active polling to reactive event-driven.
 TASK_TEAM=2
-TASK_PLAN_ID=9
-TASK_COMMIT=505cdfa
+TASK_DESCRIPTION=Rewrote Taskmaster from active polling to reactive event-driven.
+TASK_SUBTASKS=
 TASK_TIMESTAMPS=created=1775137486
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775137900
+TASK_PLAN_ID=9

@@ -1,0 +1,31 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=189
+TASK_TITLE=Enforce subtask review gate — no subtask marked done without Task Reviewer sign-off
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TEAM=2
+TASK_DESCRIPTION=PROBLEM: Subtasks are marked done by Subtaskmasters without review. Task 180 tried to fix this but it's not enforced.
+
+REQUIREMENT: Every subtask must be reviewed by the Task Reviewer (pane 1.1) before its status transitions to done. The Subtaskmaster must route each completed subtask through the reviewer, not mark done directly.
+
+IMPLEMENTATION APPROACH:
+1. Update Subtaskmaster agent template — when a worker finishes a subtask, SM must send it to Task Reviewer before marking subtask done. SM sets subtask to 'review' status, not 'done'
+2. Update Task Reviewer agent — it should receive subtask review requests, verify the work, then mark the subtask done (or reject with feedback)
+3. Add 'review' as a valid subtask status in doey-ctl schema if not present
+4. Update the stop-notify chain — worker finish should trigger SM to route to reviewer
+5. This must work for fresh installs — no local config dependencies
+
+CONSTRAINT: Don't break the existing task-level review gate. This adds subtask-level review on top of it.
+TASK_SUBTASKS=1:Dispatch to W2 — subtask review gate enforcement:done\n2:W2.1: Add 'review' subtask status to Go schema + doey-ctl validation:done\n3:W2.2: Update SM + Task Reviewer agent templates for subtask review gate:done\n4:W2.3: Run expand-templates.sh + verify build + bash compat:done
+TASK_TIMESTAMPS=created=1775259277
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775259277
+TASK_SUBTASK_1_TITLE=Dispatch to W2 — subtask review gate enforcement
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Add 'review' subtask status to Go schema + doey-ctl validation
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Update SM + Task Reviewer agent templates for subtask review gate
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.3: Run expand-templates.sh + verify build + bash compat
+TASK_SUBTASK_4_STATUS=done

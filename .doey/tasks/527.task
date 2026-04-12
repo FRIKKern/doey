@@ -1,0 +1,156 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=527
+TASK_TITLE=New skill: doey-context-audit — multi-pane context bloat audit with auto-fix
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W7
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Create a new Doey skill at .claude/skills/doey-context-audit/SKILL.md that audits the FULL Doey session (grid of Claude panes) for token waste and context bloat, not just a single Claude instance.
+
+INSPIRATION: User provided a reference 'context-audit' skill design (single-instance, 4-step: gather /context → audit categories → score → fix). We are doing a FULL REWRITE tuned for Doey's multi-pane reality rather than adapting 1:1. Doey isn't one Claude; it's a coordinated team of ~10 instances, each with its own loaded skills, tool allowlist, agent definition, and context window. A proper audit must be pane-aware and aggregate across the team.
+
+LOCKED DECISIONS (from Boss via user):
+- SCOPE: Full rewrite tuned for multi-pane reality. Treat Doey's grid as the primary subject. Single global report showing total team token spend, per-role breakdown, coordination overhead, and multi-pane fixes.
+- AUTO-FIX: Auto-apply safe items (settings.json overrides, permissions.deny additions, 'doey msg clean' for stale messages). Diff-and-confirm for CLAUDE.md cuts, agent definition compressions, skill reductions.
+
+DESIGN — the skill should cover:
+
+STEP 1 — Pane Survey (Doey-unique):
+- Enumerate all active panes via tmux list-panes
+- For each pane with a Claude instance: capture role, current context %, status (BUSY/READY/FINISHED), worker assignments
+- Aggregate: total team context spend, how many panes are above 60% / 75% / 90%
+- Identify which panes need /compact soon
+
+STEP 2 — Shared Overhead Audit (loaded once per pane at startup):
+- Agent definitions: wc -l on every agents/*.md and agents/*.md.tmpl, flag top 5 heaviest, test each against 5 bloat filters (Default, Contradiction, Redundancy, Bandaid, Vague)
+- CLAUDE.md: project root + .claude/ + ~/.claude/ + agent-memory MEMORY.md
+- Skills: .claude/skills/*/SKILL.md, count lines, run bloat filters
+- Hooks: .claude/hooks/*.sh — flag hooks that return stderr on success (noise enters context), count hook invocations per event
+- settings.json: autocompact_percentage_override, BASH_MAX_OUTPUT_LENGTH env
+- shell/doey-roles.sh: check for unused roles
+- Role-specific tool restrictions in on-pre-tool-use.sh — flag any role loading tools it never uses
+
+STEP 3 — Msg Queue Pollution Audit (learned from this session):
+- Count unread messages per pane (doey msg count --to X)
+- Age distribution: how many are > 24h old, > 7d old
+- Router spam ratio: subjects=task_complete from router/ subjects that match known-stale patterns
+- Flag: panes with >100 unread get WARNING, >1000 get CRITICAL
+- Incident: this session found 15,491 unread on Boss pane — that level of pollution taxes every msg read call
+
+STEP 4 — Task File Bloat:
+- List .doey/tasks/ files, sort by size
+- Flag .task files > 50 KB
+- Count tasks in pending_user_confirmation backlog — they accrue forever
+- Recommend cleanup targets
+
+STEP 5 — Duplicate Rule Detection (shared rule text across agents):
+- Find identical paragraphs across agents/*.md (terse communication, role responsibilities, fresh-install invariant)
+- Flag clusters where same rule is copied N times when it could live in a single shared include
+- Example: 'terse communication' got baked into every agent in task #518 — that's N copies of the same ~30 lines. Each agent reload eats those tokens.
+
+STEP 6 — Scoring (team-aware):
+Start at 100. Per-issue deductions:
+
+| Issue | Points |
+|---|---|
+| Any pane > 75% context without compact scheduled | -10 |
+| Any pane > 90% context | -20 |
+| Agent definition > 300 lines | -5 each |
+| Agent definition > 600 lines | -10 each |
+| CLAUDE.md > 200 lines | -10 |
+| CLAUDE.md > 500 lines | -20 |
+| Contradictions between CLAUDE.md files | -10 |
+| Per 5 rules flagged by 5-filter test | -5 |
+| Missing autocompact override | -10 |
+| Missing bash output override | -5 |
+| Skill > 200 lines | -5 each |
+| Skill > 500 lines | -10 each |
+| No deny rules + bloat dirs exist | -10 |
+| Msg queue > 100 unread per pane | -5 |
+| Msg queue > 1000 unread per pane | -15 |
+| Router spam ratio > 50% of queue | -10 |
+| Duplicate rule text cluster across agents | -5 per cluster |
+| Hook returns stderr on success | -3 each |
+| .task file > 50 KB | -3 each |
+| pending_user_confirmation > 20 tasks | -5 |
+
+Floor at 0. Labels: 90-100 CLEAN, 70-89 NEEDS WORK, 50-69 BLOATED, 0-49 CRITICAL.
+
+STEP 7 — Report Format (Doey-shaped):
+
+
+STEP 8 — Auto-fix + Diff-confirm flow:
+- Auto-apply these without asking:
+  * settings.json overrides (autocompact_percentage_override, BASH_MAX_OUTPUT_LENGTH)
+  * permissions.deny entries for detected bloat dirs (node_modules, vendor, etc.)
+  * doey msg clean --older-than 24h (with dry-run shown first)
+  * .task file archival for files > 50 KB that are in terminal state
+- Diff-and-confirm these (show unified diff, ask via AskUserQuestion):
+  * CLAUDE.md rule cuts
+  * Agent definition compressions
+  * Skill reductions
+  * Duplicate rule extraction into shared includes
+
+STEP 9 — Trigger phrases (frontmatter 'description' field):
+'Audit Doey's multi-pane context for token waste and bloat. Use when user says: audit context, audit setup, audit session, why is doey slow, token waste, context bloat, audit the team, check bloat, why is taskmaster so heavy, or invokes /doey-context-audit. Scans all active panes, agent definitions, CLAUDE.md, skills, hooks, msg queue pollution, task file bloat, duplicate rule text. Returns a team-level health score with auto-fix and diff-confirm flow.'
+
+STEP 10 — Integration with existing infrastructure:
+- Reuse shell/context-audit.sh for mechanical work where it exists (wc, grep, file walking)
+- If that script lacks functionality, extend it (don't duplicate logic in the skill)
+- The skill is the Claude-facing interface that reads the script's output and produces the narrative report
+- Script-side: bash 3.2 compat, set -euo pipefail, proper error handling
+- Skill-side: clear instructions, the 5-filter test, scoring table, fix flow
+
+DELIVERABLES:
+- .claude/skills/doey-context-audit/SKILL.md (new)
+- shell/context-audit.sh extensions (Doey-aware checks: pane survey, agent weight, msg queue, duplicate rules)
+- Fresh-install compatible
+- Add to docs/ a short usage note
+- Test: run /doey-context-audit on this exact session, verify it catches:
+  * Boss msg queue pollution (15,491 unread)
+  * Any agents > 600 lines
+  * Duplicate 'terse communication' rule across agents
+  * Any pending_user_confirmation backlog (13+ tasks right now)
+
+CONSTRAINTS:
+- Bash 3.2 compatible
+- Fresh-install: first run on a new Doey session must work without manual setup
+- Zero network I/O
+- Must not itself become a bloat source (skill file under 400 lines)
+- Auto-fix actions must be reversible where possible (back up settings.json before edit, etc.)
+
+Plan-first: this is PLANNED because it touches skill system, shell script, and needs design for the fix-flow UX. Interview + masterplan phases, Boss approval, then implementation.
+TASK_SUBTASKS=1:W7.1: Research context-audit.sh + skill patterns:done\n2:W7.2: Research Doey mechanics (msg/tasks/agents/hooks):done\n3:W7.1: Build shell/doey-context-audit.sh:done\n4:W7.2: Build .claude/skills/doey-context-audit/SKILL.md:done\n5:W7.1: Verify audit script + skill against live session + fresh-install + bash-compat:done
+TASK_TIMESTAMPS=created=1775906940
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775906940
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-session-start.sh,.claude/hooks/stop-recovery.sh,.claude/hooks/stop-respawn.sh,.claude/hooks/stop-results.sh,.claude/hooks/stop-status.sh,install.sh,shell/doey.sh,tui/cmd/doey-ctl/main.go
+TASK_SUBTASK_1_TITLE=W7.1: Research context-audit.sh + skill patterns
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_7_1
+TASK_SUBTASK_1_CREATED_AT=1775907066
+TASK_SUBTASK_1_COMPLETED_AT=1775907353
+TASK_SUBTASK_2_TITLE=W7.2: Research Doey mechanics (msg/tasks/agents/hooks)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_7_2
+TASK_SUBTASK_2_CREATED_AT=1775907066
+TASK_SUBTASK_2_COMPLETED_AT=1775907452
+TASK_SUBTASK_3_TITLE=W7.1: Build shell/doey-context-audit.sh
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_7_1
+TASK_SUBTASK_3_CREATED_AT=1775907825
+TASK_SUBTASK_3_COMPLETED_AT=1775908419
+TASK_SUBTASK_4_TITLE=W7.2: Build .claude/skills/doey-context-audit/SKILL.md
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_7_2
+TASK_SUBTASK_4_CREATED_AT=1775907825
+TASK_SUBTASK_4_COMPLETED_AT=1775908448
+TASK_SUBTASK_5_TITLE=W7.1: Verify audit script + skill against live session + fresh-install + bash-compat
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_7_1
+TASK_SUBTASK_5_CREATED_AT=1775908461
+TASK_SUBTASK_5_COMPLETED_AT=1775908874

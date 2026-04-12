@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=283
+TASK_TITLE=Masterplan: doey.sh Refactor — Synthesis + Phase Design
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Phase 2+3 of doey.sh refactor masterplan. Read all 10 research reports, synthesize into unified understanding, then design vertical implementation phases with verification gates. Reports at /tmp/doey/doey/masterplan-20260405-160440/research/. Intent at /tmp/doey/doey/masterplan-20260405-160440/intent.md.
+TASK_SUBTASKS=1:W2.1: Synthesis — read all 10 research reports + intent, produce synthesis.md with traced findings:done\n2:W2.2: Vertical Phase Design — read synthesis.md + intent.md, produce phases.md with deployable slices:done\n3:Dispatched to W2 SM — sequential: Worker A (synthesis) then Worker B (phases):done
+TASK_TIMESTAMPS=created=1775408052
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775408052
+TASK_SUBTASK_1_TITLE=W2.1: Synthesis — read all 10 research reports + intent, produce synthesis.md with traced findings
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Vertical Phase Design — read synthesis.md + intent.md, produce phases.md with deployable slices
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to W2 SM — sequential: Worker A (synthesis) then Worker B (phases)
+TASK_SUBTASK_3_STATUS=done

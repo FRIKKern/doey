@@ -2,47 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=47
 TASK_TITLE=Beautiful heartbeat task cards on Go TUI Dashboard — active tasks only
 TASK_STATUS=done
-TASK_CREATED=1774929600
 TASK_TYPE=feature
-TASK_DESCRIPTION=Redesign the Dashboard tab in the Go TUI (tui/internal/model/dashboard.go) to feature beautiful, large, detailed "heartbeat" task cards for all ACTIVE tasks (status=active or in_progress only — exclude done, cancelled, pending_user_confirmation).
-
-WHAT "HEARTBEAT" MEANS:
-- Each active task gets a prominent card that feels alive — showing real-time progress, who's working on it, latest updates, subtask completion, and visual pulse indicators
-- Cards should be large and detailed — not compact list items. Think mission-control panels, not spreadsheet rows
-- Use Charmbracelet Lip Gloss extensively: rounded borders, accent colors per task type (feature=blue, bugfix=yellow, infrastructure=purple, etc.), bold titles, dimmed metadata, styled progress bars
-- Subtle animated feel via status indicators: spinning/pulsing dots for in-progress tasks, checkmarks for completed subtasks
-
-CARD CONTENT (per task):
-- Task ID + Title (large, bold, colored by type)
-- Status badge (styled pill: "● Active", "◆ In Progress")
-- Task type tag (colored)
-- Team assignment (e.g. "W1", "W2")
-- Description excerpt (first 2-3 lines, dimmed)
-- Subtask progress bar if subtasks exist (e.g. "▓▓▓░░ 3/5 subtasks")
-- Latest update/log entry with timestamp and author
-- Tags as styled pills
-- File list (if TASK_FILES exists, show as dimmed paths)
-
-LAYOUT:
-- Cards stack vertically, scrollable
-- Each card uses Lip Gloss borders (lipgloss.RoundedBorder() or similar)
-- Generous padding inside cards (1 horizontal, 0-1 vertical)
-- Cards should be full-width of the available panel
-- If no active tasks, show a centered "All clear — no active tasks" message with a subtle icon
-
-FILTERING:
-- ONLY show tasks where TASK_STATUS is "active" or "in_progress"
-- Parse from .doey/tasks/*.task files (use existing runtime reader patterns from tui/internal/runtime/)
-- Auto-refresh on interval (every 2-3s) to pick up new task updates
-
-TECHNICAL:
-- Modify dashboard.go (or create a dedicated widget file like taskheartbeat.go)
-- Use existing task parsing from tui/internal/runtime/tasks_config.go and taskcard/taskcard.go
-- Follow Lip Gloss patterns already in the codebase
-- Must leverage Charmbracelet ecosystem: Lip Gloss for styling, Bubbles viewport for scrolling
-- Must compile cleanly: cd tui/ && go build ./...
-
-The Dashboard should feel like a live command center — when tasks are active, you see them breathing. When everything is done, it's calm and clean.
 TASK_TAGS=tui,dashboard,lipgloss,charmbracelet,ux,tasks
 TASK_TEAM=W2
-TASK_RESULT=Dashboard redesigned with heartbeat cards, Lip Gloss styling, active task filtering, auto-refresh. Committed and pushed.
+TASK_DESCRIPTION=Redesign the Dashboard tab in the Go TUI (tui/internal/model/dashboard.go) to feature beautiful, large, detailed "heartbeat" task cards for all ACTIVE tasks (status=active or in_progress only — exclude done, cancelled, pending_user_confirmation).
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

@@ -1,24 +1,16 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=67
-TASK_UPDATED=1774962014
-TASK_TEAM=W1
 TASK_TITLE=Auto-complete tasks on git push
 TASK_STATUS=done
 TASK_TYPE=feature
 TASK_CREATED_BY=Boss
+TASK_TEAM=W1
 TASK_DESCRIPTION=When git push succeeds, scan pushed commits for task references (task-N, Task N, etc.) and set TASK_STATUS=done + TASK_UPDATED timestamp. Skip pending_user_confirmation — committed + pushed = done.
-TASK_DECISION_LOG=1774961181:Created task
-TASK_TIMESTAMPS=created=1774961181
+TASK_SUBTASKS=1:Dispatch to Team W1:done
+TASK_TIMESTAMPS=created=1775131090
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
+TASK_UPDATED=1774962014
 TASK_SUBTASK_1_TITLE=Dispatch to Team W1
-TASK_SUBTASK_1_STATUS=pending
+TASK_SUBTASK_1_STATUS=done
 TASK_SUBTASK_1_ASSIGNEE=Manager_W1
-TASK_UPDATE_1_TIMESTAMP=1774961216
-TASK_UPDATE_1_AUTHOR=SM
-TASK_UPDATE_1_TEXT=Routed task to Team W1 for implementation
-TASK_REPORT_1_TIMESTAMP=1774962014
-TASK_REPORT_1_AUTHOR=SM
-TASK_REPORT_1_TYPE=completion
-TASK_REPORT_1_TITLE=Task #67 committed
-TASK_REPORT_1_BODY=feat(task-67): auto-complete tasks on successful git push — 46cef70

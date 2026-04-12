@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=369
+TASK_TITLE=REDO: Fix masterplan team spawn — changes never applied
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=Task 368 reported complete but the source files were never actually modified. shell/doey.sh still has 'local' on lines 322/325/326. shell/doey-team-mgmt.sh worker launch was not changed. MUST verify git diff shows actual changes before reporting done.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775507696
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775507696

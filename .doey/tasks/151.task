@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=151
+TASK_TITLE=Enforce send-keys on every message delivery — Doey Core
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TEAM=W3
+TASK_DESCRIPTION=Make tmux send-keys a mandatory enforcement mechanism for all inter-pane communication in Doey. Currently doey-ctl msg send stores messages in SQLite but the recipient may never read them (pane ID mismatches, sleeping agents, stale context). Fix: every message delivery must be followed by a send-keys nudge to guarantee the recipient wakes up and processes it. Options: (1) Add send-keys to doey-ctl msg send itself — after writing to DB, exec tmux send-keys to the target pane with a short prompt like Check messages. (2) Add a --nudge flag to msg send that triggers send-keys automatically. (3) Create a wrapper shell function that all agent templates use. Preferred: option 1 or 2 — bake it into the Go binary so no agent can skip it. The msg trigger command already exists but is separate — consider merging trigger behavior into msg send by default. Also update doey-ctl msg trigger to use send-keys instead of just writing a trigger file.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775174012
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775174012

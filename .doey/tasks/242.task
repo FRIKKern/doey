@@ -1,0 +1,31 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=242
+TASK_TITLE=Fix startup reliability — workers stuck BOOTING, teams spawned but never dispatched
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=WHAT HAPPENED (just now, task 241 dispatch):
+1. Boss dispatched research task 241 to Taskmaster
+2. Taskmaster created a new team (window 4 'shell') with workers
+3. Workers got stuck at BOOTING status — never transitioned to READY
+4. Taskmaster went idle at its prompt — never sent work to the stuck workers
+5. No fallback — task sat unworked until Boss manually intervened
+
+THIS IS A REAL USER EXPERIENCE BUG. When the user asks for work and nothing happens silently, that's the worst possible UX.
+
+REQUIREMENTS:
+- Workers must reliably transition from BOOTING to READY (or fail loud)
+- If a team spawn fails or workers stay BOOTING too long, Taskmaster must detect and recover (retry on existing teams, alert Boss)
+- No silent failures — if dispatch fails, escalate immediately
+- Depends on findings from Task 241 (startup audit) — use those findings to inform the fix
+
+ACCEPTANCE CRITERIA:
+- Dispatching a task to Taskmaster results in workers actually doing the work within 60 seconds
+- If workers fail to boot, Taskmaster retries on available teams or escalates within 30 seconds
+- Zero silent failures in the dispatch chain
+TASK_SUBTASKS=1:Dispatched to Team 3 (Subtaskmaster 3.0):done
+TASK_TIMESTAMPS=created=1775337620
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775337620
+TASK_SUBTASK_1_TITLE=Dispatched to Team 3 (Subtaskmaster 3.0)
+TASK_SUBTASK_1_STATUS=done

@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=301
+TASK_TITLE=Add deferred subtask status with reason to TUI and doey-ctl
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Add 'deferred' as a valid subtask status in doey-ctl and Go TUI. Currently skipped subtasks show as 'skipped' with no context. Changes: (1) Add 'deferred' to valid subtask statuses in commands.go, (2) Add --reason flag to subtask update command so you can store WHY (e.g. doey task subtask update 300 3 deferred --reason 'Lower priority'), (3) Store reason in SQLite subtask table (add reason column if needed), (4) TUI renders deferred distinctly from skipped — different color/icon + shows the reason text, (5) Update subtask detail in task inspect view to display deferred reason when present.
+TASK_ACCEPTANCE_CRITERIA=doey task subtask update N M deferred --reason 'text' works; TUI shows deferred in distinct color with reason; Go build passes
+TASK_SUBTASKS=1:W3.1: Research doey-ctl subtask status handling — valid statuses, SQLite schema, subtask update command structure:done\n2:W3.2: Research TUI subtask rendering — status colors/icons, task inspect detail view, subtask display:done\n3:W3.1: Implement store + CLI — add deferred status, reason column, --reason flag:done\n4:W3.2: Implement TUI rendering — deferred status in all 8 switch blocks + reason display:done\n5:W3.2: Verify no duplicate deferred cases + wire reason text display in TUI detail view:done
+TASK_TIMESTAMPS=created=1775427428
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775427428
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research doey-ctl subtask status handling — valid statuses, SQLite schema, subtask update command structure
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research TUI subtask rendering — status colors/icons, task inspect detail view, subtask display
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Implement store + CLI — add deferred status, reason column, --reason flag
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Implement TUI rendering — deferred status in all 8 switch blocks + reason display
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.2: Verify no duplicate deferred cases + wire reason text display in TUI detail view
+TASK_SUBTASK_5_STATUS=done

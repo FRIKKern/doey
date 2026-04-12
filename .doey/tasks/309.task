@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=309
+TASK_TITLE=Improve Tasks tab spacing and lines to match Agents tab
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_DESCRIPTION=3 changes applied: (1) Card spacing 0→1 in CardDelegate for breathing room between cards, (2) Blank line separator after header metadata in ExpandedCard, (3) Focus-aware BorderLeft on expanded right panel. Build verified.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775433132
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775433132

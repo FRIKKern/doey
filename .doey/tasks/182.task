@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=182
+TASK_TITLE=Fix message delivery — pane ID normalization + auto-nudge
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TAGS=shell,hooks,infrastructure
+TASK_TEAM=3
+TASK_DESCRIPTION=Fix message delivery by adding trigger-file firing for user panes and polling for Boss/Subtaskmasters.
+TASK_SUBTASKS=1:Dispatch to Team 3 (W3):done\n2:W3.1: Research — trace msg send/read Go handlers, find pane ID mismatch:done\n3:W3.2:done\n4:W3.3:done\n5:W3.4:done
+TASK_TIMESTAMPS=created=1775252392
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775254800
+TASK_SUBTASK_1_TITLE=Dispatch to Team 3 (W3)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1
+TASK_SUBTASK_2_STATUS= Research — trace msg send/read Go handlers, find pane ID mismatch:done
+TASK_SUBTASK_3_TITLE=W3.2
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.3
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.4
+TASK_SUBTASK_5_STATUS=done

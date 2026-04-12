@@ -6,17 +6,12 @@ TASK_TYPE=improvement
 TASK_TAGS=go,tui,agents,shell
 TASK_ASSIGNED_TO=W3
 TASK_DESCRIPTION=Three concerns: (1) doey-ctl task update API — add --id and --status convenience flags as aliases for the positional-arg + -field/-value pattern. Add --help output that shows examples. Improve error messages to suggest correct syntax when wrong flags are used (e.g., 'did you mean: doey-ctl task update -field status -value done 118'). (2) Boss agent template — update doey-boss.md.tmpl with correct doey-ctl syntax examples. The current template shows '--id N --status done' which doesn't exist. Fix all doey-ctl examples to match actual API. (3) Error resilience — doey-ctl should not exit(1) on non-critical field mismatches. If TASK_STATUS is passed instead of status, map it automatically.
-TASK_DECISION_LOG=1775164877:Created task\n1775165126:Status changed to done\n1775165213:-type completion -title Task 142 Complete -body All 3 concerns addressed. Go: --id/--status convenience flags, normalizeFieldName() for TASK_ prefix stripping, Levenshtein-based did-you-mean suggestions. Template: Boss agent shows both positional and convenience syntax. 5 files changed, 136 insertions. Build OK, bash compat passes. -author Manager_W3\n1775165484:Status changed to done\n1775165664:Status changed to done\n1775166182:Status changed to done\n1775166533:Status changed to done\n1775167782:Status changed to done\n1775170164:Status changed to done
 TASK_SUBTASKS=1:W3.1: Go — doey-ctl convenience flags, TASK_ prefix stripping, helpful errors:-status\n2:W3.2: Template — fix Boss agent doey-ctl examples + expand-templates:-status
-TASK_TIMESTAMPS=created=1775164877|completed=1775170174
+TASK_TIMESTAMPS=created=1775164877
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775164877
-TASK_REVIEW_VERDICT=PASS
-TASK_REVIEW_FINDINGS=All 3 concerns addressed: convenience flags, TASK_ prefix stripping, Levenshtein suggestions. Template correct. Go compiles. Bash compat passes. WARN: bare TASK_ prefix edge case (trivial).
-TASK_REVIEW_TIMESTAMP=2026-04-02T16:45:00Z
-TASK_ATTACHMENTS=.doey/tasks/142.result.json
-TASK_SUBTASK_137_STATUS=done
-TASK_SUBTASK_137_COMPLETED_AT=1775170164
-
-review_timestamp=2026-04-03T07:16:39Z
+TASK_SUBTASK_1_TITLE=W3.1
+TASK_SUBTASK_1_STATUS= Go — doey-ctl convenience flags, TASK_ prefix stripping, helpful errors:-status
+TASK_SUBTASK_2_TITLE=W3.2
+TASK_SUBTASK_2_STATUS= Template — fix Boss agent doey-ctl examples + expand-templates:-status

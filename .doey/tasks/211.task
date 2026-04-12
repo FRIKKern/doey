@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=211
+TASK_TITLE=Fix Reserved Freelancer button — should spawn 6 freelancers (2 per column), only spawns 2
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=The Reserved Freelancer button on the Go TUI Dashboard only spawns 2 freelancers. Expected: 6 freelancers in a 3x2 grid (2 per column, 3 columns). Find where the freelancer count is configured for this button action and fix it to spawn 6.
+TASK_SUBTASKS=1:Dispatch to W2 — fix freelancer spawn count:done\n2:W2.1: Find and fix freelancer spawn count (2→6), rebuild binary:done
+TASK_TIMESTAMPS=created=1775295752
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775295752
+TASK_SUBTASK_1_TITLE=Dispatch to W2 — fix freelancer spawn count
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Find and fix freelancer spawn count (2→6), rebuild binary
+TASK_SUBTASK_2_STATUS=done

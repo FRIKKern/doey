@@ -1,0 +1,24 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=300
+TASK_TITLE=Masterplan Phase 4: Measurement + Shell Migration
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Phase 4 of AI-Friendly CLI masterplan. Add error rate tracking in hooks (CLI success/failure counter). Migrate 9 shell text-parsing hotspots to --json+jq. Define semantic exit codes (0=success, 1=general, 2=usage, 3=not-found, 4=conflict). Needs Phase 1 --json working first. Research: /tmp/doey/doey/masterplan-20260405-205417/
+TASK_ACCEPTANCE_CRITERIA=Error rate counter in hooks; 9 shell hotspots migrated to --json+jq; semantic exit codes defined
+TASK_SUBTASKS=1:W3.1: Research — identify all sed/awk/grep text-parsing hotspots in shell scripts that parse doey-ctl output, map current exit codes across doey-ctl:deferred\n2:W3.2: Research — audit hook CLI call patterns, identify where error tracking should be added, find all exit code usage in doey-ctl:deferred\n3:W3.1: Error rate tracking in hooks + semantic exit codes in doey-ctl + metrics command:deferred\n4:W3.2: Migrate 9 shell text-parsing hotspots from sed/awk to --json+jq:deferred\n5:W3.1: Add semantic exit code constants to commands.go and main.go, replace os.Exit(1) with appropriate codes, verify build:done
+TASK_TIMESTAMPS=created=1775423626
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775423626
+TASK_PLAN_ID=29
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research — identify all sed/awk/grep text-parsing hotspots in shell scripts that parse doey-ctl output, map current exit codes across doey-ctl
+TASK_SUBTASK_1_STATUS=deferred
+TASK_SUBTASK_2_TITLE=W3.2: Research — audit hook CLI call patterns, identify where error tracking should be added, find all exit code usage in doey-ctl
+TASK_SUBTASK_2_STATUS=deferred
+TASK_SUBTASK_3_TITLE=W3.1: Error rate tracking in hooks + semantic exit codes in doey-ctl + metrics command
+TASK_SUBTASK_3_STATUS=deferred
+TASK_SUBTASK_4_TITLE=W3.2: Migrate 9 shell text-parsing hotspots from sed/awk to --json+jq
+TASK_SUBTASK_4_STATUS=deferred
+TASK_SUBTASK_5_TITLE=W3.1: Add semantic exit code constants to commands.go and main.go, replace os.Exit(1) with appropriate codes, verify build
+TASK_SUBTASK_5_STATUS=done

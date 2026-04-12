@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=333
+TASK_TITLE=Show subtask title on Dashboard ASCII grid worker cells
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TEAM=W2
+TASK_DESCRIPTION=Worker cells in the Dashboard ASCII grid show subtask ID but not the title text. Look up the subtask title from the task system and render it in each worker cell below the role/status line. File: tui/internal/model/dashboard.go — the worker cell rendering function. Related: task 328 added subtask IDs per worker but title is missing.
+TASK_SUBTASKS=1:Dispatch to W2 Subtaskmaster:done
+TASK_TIMESTAMPS=created=1775472115
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775472115
+TASK_FILES=.claude/hooks/stop-results.sh,agents/doey-worker.md,agents/doey-worker.md.tmpl,tui/go.mod,tui/go.sum,tui/internal/model/tasks.go,tui/internal/runtime/tasks_config.go,tui/internal/taskcard/taskcard.go
+TASK_SUBTASK_1_TITLE=Dispatch to W2 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done

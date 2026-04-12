@@ -1,0 +1,38 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=514
+TASK_TITLE=E2E test: masterplan Phases 1+2 (interview-first + real-time rendering)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=test
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=CATEGORY: deep
+
+Run a real end-to-end test of the masterplan Phases 1+2 shipped in task #512.
+
+TEST PROCEDURE:
+1. Invoke /doey-masterplan with an INTENTIONALLY VAGUE goal (e.g. 'make doey better') and verify it triggers the interview-first path — confirm the doey-interviewer agent is spawned and the ambiguity heuristic activated
+2. Invoke /doey-masterplan --quick with a CONCRETE goal and verify it skips the interview, jumps straight to Planner
+3. Verify the new plan viewer (tui/cmd/doey-masterplan-tui) renders structured phase cards with status badges, checkboxes, and the ● LIVE pulse when the plan file is being written
+4. Use the planparse test plan file or write a small synthetic canonical-format plan and confirm planparse parses it correctly into Plan/Phase/Step structures
+5. Verify glamour fallback works on a non-canonical plan
+
+DELIVERABLES:
+- Pass/fail report for each test step
+- Screenshots or capture-pane output proving the viewer renders correctly
+- Any bugs found, with specific line numbers and reproduction steps
+- Recommendation: ship as-is, or list fixes needed
+
+DO NOT make any code changes unless absolutely necessary to unblock testing. Report issues, don't silently fix.
+TASK_SUBTASKS=1:W3.1: Test interview-first + --quick path (steps 1-2):done\n2:W3.2: Test viewer + planparse + glamour fallback (steps 3-5):done
+TASK_TIMESTAMPS=created=1775894243
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775894243
+TASK_SUBTASK_1_TITLE=W3.1: Test interview-first + --quick path (steps 1-2)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775894465
+TASK_SUBTASK_1_COMPLETED_AT=1775894852
+TASK_SUBTASK_2_TITLE=W3.2: Test viewer + planparse + glamour fallback (steps 3-5)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775894466
+TASK_SUBTASK_2_COMPLETED_AT=1775894852

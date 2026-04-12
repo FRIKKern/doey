@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=237
+TASK_TITLE=Fix ASCII splash persistence — stay visible until tmux attach
+TASK_STATUS=cancelled
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Splash must stay visible through ALL setup and only clear at tmux attach. Fix shell/doey.sh splash lifecycle — tie to attach, not timer. Prior #229/#232/#234 fixed duration but not root cause.
+TASK_ACCEPTANCE_CRITERIA=1. Splash visible from first moment through ALL setup. 2. Splash clears ONLY at attach-session/switch-client. 3. No sleep/timer clearing splash. 4. test-bash-compat.sh passes.
+TASK_SUBTASKS=1:W3.1: Research splash lifecycle in doey.sh:done\n2:W3.1: Implement splash persistence fix in both launch paths:done\n3:W3.2: Verify splash fix — bash compat + logic review:done
+TASK_TIMESTAMPS=created=1775313219
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775313219
+TASK_SUBTASK_1_TITLE=W3.1: Research splash lifecycle in doey.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Implement splash persistence fix in both launch paths
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Verify splash fix — bash compat + logic review
+TASK_SUBTASK_3_STATUS=done

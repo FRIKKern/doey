@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=214
+TASK_TITLE=Unify all team spawn paths — use Go TUI Dashboard spawn technique everywhere
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=The Go TUI Dashboard 'Spawn Team' button has the smartest and most efficient team spawning technique. But there are multiple other spawn paths (CLI doey add-team, skills like /doey-add-team and /doey-add-window, freelancer spawn, etc.) that may use older or different approaches. Audit ALL team spawn entry points, identify which technique the TUI Dashboard uses, and make every other spawn path use the same technique. One efficient spawn method everywhere.
+TASK_SUBTASKS=1:Dispatch to W2 — research + unify spawn paths:done\n2:W2.1: Research all spawn paths and compare to TUI Dashboard technique:done\n3:W2.2: P0 — Pass --reserved flag through _add_window to add_dynamic_team_window:done\n4:W2.3: P1 — Rewrite /doey-add-window skill to use CLI:done\n5:W2.4: P1 — Rewrite /doey-add-team skill to CLI-only:done
+TASK_TIMESTAMPS=created=1775296082
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775296082
+TASK_SUBTASK_1_TITLE=Dispatch to W2 — research + unify spawn paths
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Research all spawn paths and compare to TUI Dashboard technique
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: P0 — Pass --reserved flag through _add_window to add_dynamic_team_window
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.3: P1 — Rewrite /doey-add-window skill to use CLI
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.4: P1 — Rewrite /doey-add-team skill to CLI-only
+TASK_SUBTASK_5_STATUS=done

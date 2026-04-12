@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=410
+TASK_TITLE=Phase G: acceptance test suite
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=8-case end-to-end acceptance matrix: (1) doey tsk lst -> doey task list with stderr notice. (2) doey msg snd --t 1.0 --bdy hi -> msg send --to --body. (3) doey unknownthing -> 1-3 suggestions. (4) DOEY_NO_INTENT_FALLBACK=1 doey tsk lst -> bare error, no API call. (5) Typo inside a Worker pane -> auto-corrects, hooks don't break. (6) doey kill-tem 2 -> correction + [y/N] prompt. (7) Offline (block api.anthropic.com) -> bare error, no hang >2.5s. (8) doey tsk lst < /dev/null > /tmp/out from script -> no fallback. Capture each in /tmp/doey/doey/masterplan-20260407-061007/acceptance/.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545546
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545546
+TASK_PLAN_ID=1003

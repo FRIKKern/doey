@@ -2,36 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=38
 TASK_TITLE=Logs tab group in Go TUI — Logs, Messages, Debug, Info sub-tabs
 TASK_STATUS=done
-TASK_CREATED=1743350400
 TASK_TYPE=feature
-TASK_DESCRIPTION=Add a new top-level tab group to the Go TUI called "Logs" (or similar) that contains four sub-views accessible from a left-column selector — exactly like how Agents, Tasks, Teams, and Connections tabs work with the split-pane pattern (task 36).
-
-SUB-VIEWS:
-1. Logs — Live log stream from runtime. Read from RUNTIME_DIR log files (hook output, lifecycle events, worker logs). Auto-scroll, filterable.
-2. Messages — IPC message history. Read .msg files from RUNTIME_DIR/messages/. Show FROM, SUBJECT, timestamp, body. Chronological order, newest at bottom.
-3. Debug — Debug flight recorder output (from /doey-debug). Show hook timing, state transitions, IPC events. Read from RUNTIME_DIR/debug/ if debug mode is active, otherwise show "Debug mode inactive — run /doey-debug on to start recording."
-4. Info — Session info dump. Show: session name, project dir, team windows, grid config, runtime dir, uptime, token status, team count, worker count. Basically a rich version of what the Info Panel shell script shows.
-
-LAYOUT:
-- Left column: vertical list of the 4 sub-views (Logs, Messages, Debug, Info). Selectable, highlighted current.
-- Right panel: content for the selected sub-view. Scrollable.
-- Same split-pane pattern used in Connections tab (task 27) and applied to other tabs (task 36).
-- Navigation: up/down to select sub-view in left column, right/enter to focus content, left to return to selector.
-
-TECHNICAL:
-- Register as a new top-level tab in root.go (alongside Dashboard, Tasks, Agents, Teams, Connections)
-- Each sub-view reads from RUNTIME_DIR files — the TUI needs to know the runtime path (likely from env or config)
-- Auto-refresh on an interval for Logs and Messages (poll every 2-3s for new content)
-- Scrolling must work correctly per task 23 patterns
-- Follow existing Lip Gloss styling patterns
-
-RUNTIME FILE SOURCES:
-- Logs: RUNTIME_DIR/*.log, RUNTIME_DIR/hooks/*.log (whatever exists)
-- Messages: RUNTIME_DIR/messages/*.msg
-- Debug: RUNTIME_DIR/debug/* (if exists)
-- Info: RUNTIME_DIR/session.env + RUNTIME_DIR/team_*.env + RUNTIME_DIR/status/*.status
 TASK_TAGS=tui,dashboard,infrastructure,logs
 TASK_TEAM=W2
-TASK_LOG_1774880369=COMPLETED: Committed as bec6f72 — logsgroup.go (new), root.go (modified)
-TASK_RESULT=Added LogsGroup tab consolidating 4 views into split-pane layout. 9→6 tabs. Build clean.
-TASK_FILES=tui/internal/model/logsgroup.go,tui/internal/model/root.go
+TASK_DESCRIPTION=Add a new top-level tab group to the Go TUI called "Logs" (or similar) that contains four sub-views accessible from a left-column selector — exactly like how Agents, Tasks, Teams, and Connections tabs work with the split-pane pattern (task 36).
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

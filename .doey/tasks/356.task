@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=356
+TASK_TITLE=Add clickable + button to right of tab bar in Go TUI console
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=In the Go TUI running in the Core Team window, add a clickable '+' button to the right side of the tab bar (next to the existing tabs). When clicked, it should trigger adding a new team/window. This is a standard UX pattern for tabbed interfaces. The button should be visually consistent with the existing tab styling but clearly distinct as an action button, not a tab.
+TASK_SUBTASKS=1:W3.1: Research tab bar rendering, mouse zones, and click handling in Go TUI:done\n2:W3.1: Implement + button in tabbar.go and root.go:done\n3:W3.2: Verify + button implementation builds and is correct:done
+TASK_TIMESTAMPS=created=1775486020
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775486020
+TASK_FILES=tui/internal/model/root.go,tui/internal/model/tabbar.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research tab bar rendering, mouse zones, and click handling in Go TUI
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Implement + button in tabbar.go and root.go
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Verify + button implementation builds and is correct
+TASK_SUBTASK_3_STATUS=done

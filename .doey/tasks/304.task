@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=304
+TASK_TITLE=Live ASCII team grid on TUI Dashboard — real-time team visualization
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Bring the ASCII art team grid from the startup loading screen to the Go TUI Dashboard as a permanent live widget. Instead of static art, it should show actual teams in real-time: which teams exist, their window/pane layout, worker status (BUSY/READY/FINISHED/RESERVED), and role labels. Think of it as a visual map of the tmux session — the user can see at a glance who's working, who's idle, and the overall grid shape. Research the current startup ASCII art (tui/cmd/doey-loading/ or shell startup code), then design a live version that polls team/pane status and renders on the Dashboard tab. Should look beautiful with Charmbracelet styling — box-drawing, colors per status, role icons.
+TASK_SUBTASKS=1:W5.1: Research ASCII art loading screen code and team/pane data sources:done\n2:W5.2: Research Go TUI Dashboard architecture — widget system, data flow, rendering:done\n3:Dispatched to team 5 (2 workers):done\n4:W5.1: Implement renderTeamGrid() in dashboard.go — live team grid widget:done\n5:W5.2: Verify — build, review correctness, test rendering:done
+TASK_TIMESTAMPS=created=1775431177
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775436644
+TASK_SUBTASK_1_TITLE=W5.1: Research ASCII art loading screen code and team/pane data sources
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Research Go TUI Dashboard architecture — widget system, data flow, rendering
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to team 5 (2 workers)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W5.1: Implement renderTeamGrid() in dashboard.go — live team grid widget
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W5.2: Verify — build, review correctness, test rendering
+TASK_SUBTASK_5_STATUS=done

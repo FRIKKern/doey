@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=305
+TASK_TITLE=Block task completion unless all subtasks done or deferred
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Add a validation gate in doey-ctl: when transitioning a task to done or pending_user_confirmation, check that ALL subtasks are either 'done' or 'deferred'. If any subtask is still pending/in_progress/review/skipped, block the transition and print which subtasks need attention. This prevents stale incomplete ratios (like 1/5, 3/5) showing in the TUI on completed tasks. The gate should apply to: task done, task update --status done, task update --status pending_user_confirmation. It should NOT block cancel or failed transitions.
+TASK_SUBTASKS=1:W3.1: Implement subtask completion gate in commands.go — block done/pending_user_confirmation when non-terminal subtasks exist:done\n2:Dispatched to team 3:done\n3:W3.2: Verify — build, test gate behavior, confirm runTaskDone is also gated:done
+TASK_TIMESTAMPS=created=1775432068
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775432068
+TASK_FILES=.doey/tasks/1.task,tui/cmd/doey-ctl/commands.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Implement subtask completion gate in commands.go — block done/pending_user_confirmation when non-terminal subtasks exist
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to team 3
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Verify — build, test gate behavior, confirm runTaskDone is also gated
+TASK_SUBTASK_3_STATUS=done

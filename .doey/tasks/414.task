@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=414
+TASK_TITLE=Phase A: shell/intent-fallback.sh helper
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=Standalone bash function intent_fallback(typed,err,schema,recent) using claude-haiku-4-5-20251001 + output_config.format JSON schema. curl --max-time 2.5 --connect-timeout 1.0. Silent fallthrough on any failure. Bash 3.2 compat. New file: shell/intent-fallback.sh. Test: tests/test-intent-fallback.sh with mocked curl fixture. See research/worker-3-haiku-api.md for ready-to-drop code.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545588
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545588
+TASK_PLAN_ID=1003

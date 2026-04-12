@@ -1,0 +1,77 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=444
+TASK_TITLE=Mouse UX: text selection, copy, and standard terminal mouse behavior in doey tmux
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=User wants standard terminal mouse behaviors in doey tmux sessions: select text with mouse, copy with Ctrl+C, scroll with mousewheel, etc. Currently tmux mouse mode likely captures events for pane operations, breaking text selection.
+
+What needs to work:
+1. Click and drag to select text in any pane
+2. Ctrl+C (or Cmd+C on macOS terminal) to copy selected text to system clipboard
+3. Mousewheel scroll through pane history/scrollback
+4. Right-click paste (if terminal supports it)
+5. Double-click to select word, triple-click to select line
+6. All of this without breaking: pane switching, pane resizing, tmux status bar clicks
+
+RESEARCH:
+- What is doey's current tmux mouse config? Check shell/doey.sh and shell/tmux-statusbar.sh for 'set -g mouse' or 'set-option' mouse settings
+- What tmux version is on this box? (tmux -V)
+- What terminal emulator does the user connect with? (SSH client + terminal app)
+- tmux mouse mode trade-offs: 'set -g mouse on' enables pane click/resize/scroll but captures mouse from terminal, breaking text selection. Fix options:
+  a) Hold Shift while selecting (tmux passes Shift+click through to terminal) — works but user must know the trick
+  b) tmux copy-mode: mouse drag enters copy mode, selection copies to tmux buffer, then pipe to system clipboard via 'tmux save-buffer - | xclip' or similar
+  c) tmux 3.1+ has 'copy-pipe-and-cancel' for mouse drag -> system clipboard
+  d) set-option -g mouse off in doey config (gives terminal back full mouse, but loses pane click/resize)
+  e) Hybrid: mouse on, but configure copy-mode-vi or copy-mode-emacs with mouse drag -> clipboard bindings
+  f) Conditional: hold a modifier key to toggle behavior
+
+RECOMMENDED APPROACH: tmux copy-mode with clipboard integration. When user drags mouse:
+  1. tmux enters copy-mode
+  2. Selection highlights text
+  3. On mouse release: copy selection to system clipboard (via OSC 52 escape sequence for SSH, or xclip/pbcopy for local)
+  4. Exit copy-mode automatically
+  This gives the user mouse select + copy without losing pane click/resize.
+
+OSC 52 is KEY for remote/SSH usage — it tells the terminal to set clipboard directly, bypassing the need for xclip on the server. Most modern terminals support it (iTerm2, kitty, alacritty, WezTerm, Windows Terminal, ghostty).
+
+IMPLEMENTATION: Add tmux config to doey session initialization (shell/doey.sh or wherever tmux options are set for the session). Something like:
+  set -g mouse on
+  set -g set-clipboard on
+  bind-key -T copy-mode MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel
+  bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel
+  (Exact bindings depend on tmux version — 3.1+ vs 2.x have different syntax)
+
+Also configure Ctrl+C in copy-mode to cancel selection (not kill process).
+
+ACCEPTANCE:
+1. In a doey session, mouse-drag to select text in a pane — text highlights
+2. Release mouse — selection copies to clipboard (verify with paste in another app)
+3. Mousewheel scrolls pane history
+4. Clicking a different pane still switches to it
+5. Pane border drag still resizes
+6. Ctrl+C on running process still sends SIGINT (not captured by copy mode)
+7. Works over SSH from user's laptop terminal
+8. Fresh-install: config applied by doey session startup, not user-local tmux.conf
+TASK_SUBTASKS=1:W2.1: Research tmux mouse config + implement mouse UX (select, copy, clipboard, OSC 52):skipped\n2:W2.1: Implement Bubbletea mouse support in Go TUI (click rows, tabs, scroll, detail view):done\n3:W2.2: Verify mouse support already exists in Go TUI — confirm tea.WithMouseCellMotion, MouseMsg handling, click/scroll in all components:done
+TASK_TIMESTAMPS=created=1775734680
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775734680
+TASK_FILES=.claude/hooks/taskmaster-wait.sh,.claude/skills/doey-respawn-me/SKILL.md,install.sh,shell/doey-intent-dispatch.sh,shell/tmux-theme.sh
+TASK_SUBTASK_1_TITLE=W2.1: Research tmux mouse config + implement mouse UX (select, copy, clipboard, OSC 52)
+TASK_SUBTASK_1_STATUS=skipped
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775734884
+TASK_SUBTASK_1_COMPLETED_AT=1775734906
+TASK_SUBTASK_2_TITLE=W2.1: Implement Bubbletea mouse support in Go TUI (click rows, tabs, scroll, detail view)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775734995
+TASK_SUBTASK_2_COMPLETED_AT=1775735012
+TASK_SUBTASK_3_TITLE=W2.2: Verify mouse support already exists in Go TUI — confirm tea.WithMouseCellMotion, MouseMsg handling, click/scroll in all components
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1775735093
+TASK_SUBTASK_3_COMPLETED_AT=1775735176

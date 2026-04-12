@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=353
+TASK_TITLE=Remove redundant 'done' text from subtasks — green check is enough
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=fix
+TASK_TEAM=W3
+TASK_DESCRIPTION=In the TUI task detail view, subtasks that are complete show both a green checkmark AND the word 'done' as text. This is redundant — the green check already communicates completion. Remove the 'done' text label from subtask items, keeping only the green checkmark icon. Screenshot saved at .doey/tasks/attachments/task-353/subtask-double-done-badge.png for reference.
+TASK_SUBTASKS=1:W3.1: Research — find where 'done' text still appears in subtask rendering:done\n2:W3.2: Implement — add done guard to persistentSubtaskRow status badge:done\n3:W3.1: Verify — confirm done guard fix in persistentSubtaskRow, build passes:done
+TASK_TIMESTAMPS=created=1775484515
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775484515
+TASK_FILES=tui/internal/model/root.go,tui/internal/model/tabbar.go,tui/internal/taskcard/taskcard.go,tui/internal/term/model.go,tui/internal/term/tabbar.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research — find where 'done' text still appears in subtask rendering
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Implement — add done guard to persistentSubtaskRow status badge
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Verify — confirm done guard fix in persistentSubtaskRow, build passes
+TASK_SUBTASK_3_STATUS=done

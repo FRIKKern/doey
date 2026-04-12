@@ -1,0 +1,32 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=393
+TASK_TITLE=Masterplan: Fix Masterplan flow — interactive intent, parameterized research, live visibility, final plan
+TASK_STATUS=pending
+TASK_TYPE=feature
+TASK_DESCRIPTION=Fix Masterplan to reach our ambitions.
+
+When the user runs `doey masterplan`, the Masterplanner should open with a clear initial message and immediately:
+
+1. Ask the user 1-3 targeted questions that will pivot HOW the 4 researcher workers are utilised (what to research, what angles, what depth).
+2. Dispatch the 4 researchers in parallel based on the answers.
+3. Collect the research reports.
+4. Synthesize and utilize the reports.
+5. Ask the user 1-3 follow-up questions to lock in scope and trade-offs before creating the final masterplan.
+6. Produce the ultimate masterplan.
+
+Throughout, the Planner window must show real-time details about the research — which researcher is doing what, progress, partial findings — not a black box.
+
+Acceptance:
+- `doey masterplan "<goal>"` opens Masterplanner with a non-empty briefing including the goal.
+- Masterplanner asks 1-3 intent questions BEFORE spawning research.
+- Research is parameterized by the user's answers.
+- Research progress is visible live in the planner window (per-worker status, what each is researching, partial output).
+- After research, Masterplanner asks 1-3 scope questions BEFORE writing the final plan.
+- Final plan is written to the plan file and surfaces in the TUI Plans tab.
+- Works on fresh install, every project, every invocation.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775540391
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775540391
+TASK_PLAN_ID=1002

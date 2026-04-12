@@ -1,0 +1,33 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=549
+TASK_TITLE=Verify task 479: tmux popup attachment viewer in Go TUI
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=test
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Task 479 sits in pending_user_confirmation. Implementation was reported done by W4.1 on 2026-04-09 but never verified by user.
+
+Goal: prove it actually works end-to-end.
+
+Steps:
+1. Find a task that has attachments (e.g. .doey/tasks/<id>-attachments/*.md or .doey/tasks/<id>/attachments/). Task 477 has attachments per grep — confirm.
+2. Locate the TUI code that detects attachments and opens the popup. Verify it compiles (cd tui && go build ./...).
+3. Actually exercise it: launch the TUI in a test tmux pane, navigate to a task with attachments, trigger the popup keybind, confirm the .md content renders readably and is scrollable.
+4. Capture proof: screenshot or pane capture of the popup showing rendered markdown.
+5. If it works → recommend marking 479 done. If broken → file specific bug with repro steps.
+
+Deliverable: pass/fail report + proof artifact + recommendation.
+TASK_SUBTASKS=1:W2.1: Verify task 479 tmux popup attachment viewer end-to-end:done
+TASK_TIMESTAMPS=created=1775924503
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775924503
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-stats-allowlist.txt,shell/doey-team-mgmt.sh,shell/doey.sh,tui/cmd/doey-ctl/doey-stats-allowlist.txt,tui/cmd/doey-ctl/stats_tasks.go
+TASK_SUBTASK_1_TITLE=W2.1: Verify task 479 tmux popup attachment viewer end-to-end
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775924610
+TASK_SUBTASK_1_COMPLETED_AT=1775925406

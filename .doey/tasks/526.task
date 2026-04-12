@@ -1,0 +1,47 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=526
+TASK_TITLE=Bug: Agents tab selection resets every few seconds in Go TUI
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W6
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+User report: In the Go TUI, Agents tab (tui/internal/...). User selects an agent in the list, and a few seconds later the selection resets (cursor jumps back to top / selected item clears).
+
+LIKELY ROOT CAUSE:
+Refresh/polling cycle in the Agents view re-initializes the list model instead of preserving selection state across refreshes. Common bubbletea mistake — rebuilding the list.Model on each tick instead of updating its items in place.
+
+Related context: commit 77a936c (task 520) just changed agent loading: 'reader.go reads agent files first, falls back to store'. The fix may have introduced or exacerbated a refresh loop. Check if reader.go is now called on every tick and rebuilds the model.
+
+INVESTIGATION:
+1) Reproduce: open TUI, go to Agents tab, highlight an agent, wait ~5-10s, observe cursor reset
+2) Find the Agents view model in tui/internal/ (grep for 'Agents' tab handler, agents list model, bubbletea List usage for agents)
+3) Trace the refresh path: who triggers re-fetch? timer? file watcher? tick msg?
+4) Identify where the list.Model gets rebuilt vs updated
+5) Fix: preserve selection by either:
+   - Remembering the selected agent name/ID before refresh, restoring after
+   - Updating list items in-place via SetItems instead of rebuilding the model
+   - Debouncing refreshes so rapid ticks don't trash user interaction
+6) Verify: cd tui && go build ./...
+7) Manual test: select agent, wait 30s, confirm selection persists
+
+DELIVERABLE:
+- Root cause diagnosis (short note)
+- Fix in tui/internal/...
+- go build passes
+- Manual reproduction confirms selection persists
+
+Scope: small, single-file or few-file fix. 1 worker.
+TASK_SUBTASKS=1:W6.1: Fix Agents tab selection reset — preserve cursor across refreshes:done
+TASK_TIMESTAMPS=created=1775904104
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775904104
+TASK_FILES=tui/internal/model/agents.go
+TASK_SUBTASK_1_TITLE=W6.1: Fix Agents tab selection reset — preserve cursor across refreshes
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_6_1
+TASK_SUBTASK_1_CREATED_AT=1775904221
+TASK_SUBTASK_1_COMPLETED_AT=1775904336

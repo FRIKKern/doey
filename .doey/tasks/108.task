@@ -6,8 +6,8 @@ TASK_TYPE=audit
 TASK_CREATED_BY=Boss
 TASK_ASSIGNED_TO=W1
 TASK_DESCRIPTION=Verify the Unified SQLite Data Layer (task 107) didn't break Doey startup or install. Run: (1) go build ./... in tui/ — must pass, (2) bash tests/test-bash-compat.sh — must pass, (3) check doey.sh sources correctly and _init_doey_session works, (4) verify shell/doey-task-helpers.sh and shell/doey-ipc-helpers.sh still function — if they now call doey-ctl, verify doey-ctl binary exists, (5) check hooks that were modified reference files/functions that exist, (6) Would ./install.sh work on a fresh machine? Report any breakage found.
-TASK_DECISION_LOG=1775132786:Created task
-TASK_TIMESTAMPS=created=1775132786
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131950
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775132786

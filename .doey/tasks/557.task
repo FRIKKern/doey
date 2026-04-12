@@ -1,0 +1,62 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=557
+TASK_TITLE=Add doey new command + smarter intent fallback for project creation
+TASK_STATUS=in_progress
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+TWO DELIVERABLES:
+
+1. doey new <project-name> COMMAND
+   - Creates project directory (~/projects/<name> or specified path)
+   - Inits git repo
+   - Creates minimal project structure (README, .gitignore)
+   - Launches doey session in the new directory
+   - Usage: doey new my-tui-app
+   - Optional: doey new my-tui-app --path /custom/path
+   - Should work from anywhere (no active session needed)
+
+2. SMARTER INTENT FALLBACK
+   - Current problem: user says 'doey we want to create a project about X' and fallback routes to 'doey masterplan' which requires an active session
+   - Fix: teach shell/intent-fallback.sh and shell/doey-intent-dispatch.sh to detect 'new project' / 'create a project' / 'start a project' intent
+   - When detected: route to 'doey new <extracted-name>' instead of masterplan
+   - The Haiku model in intent-fallback.sh needs better prompt engineering to distinguish:
+     a) 'create/start/new project' → doey new
+     b) 'plan this feature' → doey masterplan (needs active session)
+     c) 'do this task' → doey masterplan or instant-task (needs active session)
+   - Should also handle: pass the project description/context to the Boss as the first message after session starts
+
+BUG CONTEXT: User ran from home dir with no session. Fallback incorrectly mapped to masterplan which failed with 'Session doey-doey-2 not running'. The intent was clearly 'create a new project and start working on it'.
+
+KEY FILES:
+- shell/doey.sh — CLI entry, command routing
+- shell/intent-fallback.sh — Haiku-powered intent classification
+- shell/doey-intent-dispatch.sh — maps classified intent to commands
+- docs/intent-fallback.md — intent fallback docs
+TASK_SUBTASKS=1:Dispatched to W3 Subtaskmaster — 2 workers, parallel mode:pending\n2:W3.1: Implement doey new <project-name> command in shell/doey.sh:done\n3:W3.2: Smarter intent fallback — detect project creation intent, route to doey new:done\n4:W3.1: Verify doey new + intent fallback implementations:done
+TASK_TIMESTAMPS=created=1775982904
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775982904
+TASK_FILES=.claude/skills/deep-interview/SKILL.md,.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,.claude/skills/doey-repair/SKILL.md,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/100.task,.doey/tasks/101.task,.doey/tasks/102.task,.doey/tasks/103.task,.doey/tasks/104.task,.doey/tasks/105.task,.doey/tasks/106.task,.doey/tasks/107.task,.doey/tasks/108.task,.doey/tasks/109.task,.doey/tasks/11.task,.doey/tasks/110.task
+TASK_SUBTASK_1_TITLE=Dispatched to W3 Subtaskmaster — 2 workers, parallel mode
+TASK_SUBTASK_1_STATUS=pending
+TASK_SUBTASK_1_CREATED_AT=1775982995
+TASK_SUBTASK_2_TITLE=W3.1: Implement doey new <project-name> command in shell/doey.sh
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_3_1
+TASK_SUBTASK_2_CREATED_AT=1775982996
+TASK_SUBTASK_2_COMPLETED_AT=1775983283
+TASK_SUBTASK_3_TITLE=W3.2: Smarter intent fallback — detect project creation intent, route to doey new
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_3_2
+TASK_SUBTASK_3_CREATED_AT=1775982996
+TASK_SUBTASK_3_COMPLETED_AT=1775983102
+TASK_SUBTASK_4_TITLE=W3.1: Verify doey new + intent fallback implementations
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_3_1
+TASK_SUBTASK_4_CREATED_AT=1775983405
+TASK_SUBTASK_4_COMPLETED_AT=1775983519

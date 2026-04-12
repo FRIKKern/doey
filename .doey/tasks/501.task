@@ -1,0 +1,44 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=501
+TASK_TITLE=Redesign TUI timeline: structured, clean, beautiful
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+The task detail panel's timeline view in the Go TUI is currently a messy wall of raw log entries with no visual hierarchy, inconsistent formatting, and hard to parse at a glance.
+
+USER WANTS:
+- Much more structured timeline layout
+- Remove visual mess/clutter
+- Consistent formatting across all event types
+- Beautiful, polished appearance
+
+WHAT: Redesign the timeline rendering in the TUI detail panel
+WHY: Current timeline is raw unformatted log entries — ugly, inconsistent, hard to read
+WHERE: tui/ — likely internal/ui/ or internal/components/ for the detail/timeline view
+
+Screenshot of current state saved at: .doey/task-attachments/timeline-ugly-screenshot.png
+
+Key improvements needed:
+1. Group/categorize timeline events visually (status changes, worker assignments, completions)
+2. Consistent timestamp formatting
+3. Visual separators or indentation for hierarchy
+4. Clean up raw field dumps — show human-readable summaries
+5. Use color/styling intentionally for event types
+6. Remove noise — only show meaningful state transitions
+
+Related prior work: Task #354 (Masterplan: Unified Timeline component) and Task #477 (wider layout) — but this is a fresh visual overhaul focused on making the existing timeline beautiful.
+TASK_SUBTASKS=1:Dispatch to W2 (charmbracelet team):done
+TASK_TIMESTAMPS=created=1775776083
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775776083
+TASK_FILES=tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatch to W2 (charmbracelet team)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775776180
+TASK_SUBTASK_1_COMPLETED_AT=1775777053

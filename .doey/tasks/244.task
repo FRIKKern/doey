@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=244
+TASK_TITLE=Fix startup reliability — workers stuck BOOTING
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=P1: Workers get stuck at BOOTING status and never transition to READY. Causes silent failures where tasks go unworked.
+TASK_SUBTASKS=1:W3.1: Research on-session-start.sh BOOTING transition:done\n2:W3.2: Research spawn paths and boot health monitoring:done\n3:W3.1: Fix add_team_from_def to write READY + boot timeout:done\n4:W3.2: Add boot-timeout watchdog to _launch_team_manager:done\n5:W3.3: Add _check_stale_booting to taskmaster-wait.sh:done\n6:W3.4: Validation — bash-compat + go build:done
+TASK_TIMESTAMPS=created=1775338407
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775338407
+TASK_SUBTASK_1_TITLE=W3.1: Research on-session-start.sh BOOTING transition
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research spawn paths and boot health monitoring
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Fix add_team_from_def to write READY + boot timeout
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Add boot-timeout watchdog to _launch_team_manager
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.3: Add _check_stale_booting to taskmaster-wait.sh
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.4: Validation — bash-compat + go build
+TASK_SUBTASK_6_STATUS=done

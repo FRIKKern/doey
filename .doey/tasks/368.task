@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=368
+TASK_TITLE=Fix masterplan team spawn — workers don't get Claude launched
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_TEAM=W2
+TASK_DESCRIPTION=When doey add-team masterplan runs, it creates panes 2-5 but Claude never starts on them. They remain bare bash shells. The add_team_from_def function in shell/doey-team-mgmt.sh has the worker launch code (lines ~985-1005) that calls doey_send_command for each worker pane, but it exits with code 2 and workers stay at bash prompt. The manager (pane 0) launches fine. Need to debug why worker launch fails for masterplan teams specifically.
+TASK_SUBTASKS=1:W2.1: Research add_team_from_def() worker launch loop in doey-team-mgmt.sh (~lines 985-1005):done\n2:W2.2: Research local goal outside function in doey.sh ~line 322:done\n3:W2.1: Fix worker launch crash in add_team_from_def() line 999 + create per-worker prompts:done\n4:W2.2: Remove local keyword from 6 lines in doey.sh (237, 322, 325, 326, 328, 333):done\n5:W2.2: Verify both fixes — check line 237 fix, run bash -n, test-bash-compat, test masterplan scenario:done
+TASK_TIMESTAMPS=created=1775505610
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775505610
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research add_team_from_def() worker launch loop in doey-team-mgmt.sh (~lines 985-1005)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research local goal outside function in doey.sh ~line 322
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Fix worker launch crash in add_team_from_def() line 999 + create per-worker prompts
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Remove local keyword from 6 lines in doey.sh (237, 322, 325, 326, 328, 333)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.2: Verify both fixes — check line 237 fix, run bash -n, test-bash-compat, test masterplan scenario
+TASK_SUBTASK_5_STATUS=done

@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=174
+TASK_TITLE=Fix Plans tab STILL stuck at bottom — viewport reset not working
+TASK_STATUS=cancelled
+TASK_TYPE=bugfix
+TASK_TEAM=W3
+TASK_DESCRIPTION=Task 173 attempted a fix (commit 2b7b834) but the Plans tab is STILL stuck at the bottom when opened. The previous fix tried GotoTop after SetContent + viewport re-sync but it did not work. The worker needs to actually reproduce the issue, understand WHY the viewport ends up at the bottom, and apply a real fix. Key areas: check how the viewport offset is set when switching to the Plans tab, ensure GotoTop is called AFTER all content is loaded and rendered, check if the viewport height is calculated correctly. Compare with other tabs that work correctly (Tasks, Teams). The fix must be verified by building and running the TUI.
+TASK_SUBTASKS=1:Dispatched to W3 — fresh team for P0 viewport fix:pending\n2:W3.1: Debug and fix Plans tab viewport stuck-at-bottom bug in plans.go:pending
+TASK_TIMESTAMPS=created=1775220060
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775220060
+TASK_SUBTASK_1_TITLE=Dispatched to W3 — fresh team for P0 viewport fix
+TASK_SUBTASK_1_STATUS=pending
+TASK_SUBTASK_2_TITLE=W3.1
+TASK_SUBTASK_2_STATUS= Debug and fix Plans tab viewport stuck-at-bottom bug in plans.go:pending

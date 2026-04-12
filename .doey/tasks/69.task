@@ -2,94 +2,14 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=69
 TASK_TITLE=Charmbracelet luxury upgrade for doey CLI
 TASK_STATUS=done
-TASK_CREATED=1774965403
 TASK_TYPE=feature
-TASK_DESCRIPTION=Comprehensive upgrade of the doey CLI command using Charmbracelet tools (gum, lipgloss, glamour, etc.) to create a premium, polished terminal experience. This covers the full doey command surface — startup, prompts, menus, output formatting, error messages, progress indicators, the wizard, doctor, status displays, and any other user-facing CLI interactions. Goal: make doey feel like a luxury product in the terminal.
 TASK_TAGS=shell,tui,install
 TASK_TEAM=W1
-TASK_LOG_1774965441=PROGRESS: Dispatched to Team 1 for implementation
-TASK_UPDATED=1774967477
-TASK_DECISION_LOG=1774965475:Manager W1 received task. Starting with research wave to audit all user-facing output in doey CLI before planning implementation.
-1774965529:W2 Wave 1: 4 parallel research workers. W2.1=doey.sh audit, W2.2=secondary scripts, W2.3=charmbracelet tools, W2.4=dependency/install strategy
-1774965747:Wave 1 research complete. Planning implementation in 3 phases: Phase 1 = foundation (gum helpers + install.sh + doctor), Phase 2 = high-impact surfaces (banner, menus, progress, tables), Phase 3 = error/status polish + secondary files.
-1774965809:Wave 2: Foundation. W1=doey.sh helpers, W2=install.sh+doctor, W3=install gum. Sequential doey.sh edits.
-1774965956:Wave 2 complete. Moving to Wave 3: high-impact surface upgrades in doey.sh (banners, menus, progress, tables). Single worker on doey.sh.
-1774965963:Wave 1 complete: 4/4 workers finished. All attachments delivered. W2.1=1009 lines, W2.2=551 lines, W2.3=285 lines, W2.4=310 lines. Proceeding to Wave 2: synthesis.
-1774966238:Wave 2 complete: consolidated report produced (261 lines). All 5 research questions answered with attachments.
-1774966403:Wave 4: Validation. W1=doctor+compat, W2=visual verification of gum output.
-1774966529:P0 feedback: current upgrade is too conservative. Wave 5 will be a deep pass converting ALL remaining echo/printf to gum. Focus areas: startup sequence, project selector, every prompt/error/status message.
+TASK_DESCRIPTION=Comprehensive upgrade of the doey CLI command using Charmbracelet tools (gum, lipgloss, glamour, etc.) to create a premium, polished terminal experience. This covers the full doey command surface — startup, prompts, menus, output formatting, error messages, progress indicators, the wizard, doctor, status displays, and any other user-facing CLI interactions. Goal: make doey feel like a luxury product in the terminal.
 TASK_SUBTASKS=1:W1.1: Research — audit all user-facing output in shell/doey.sh:done
-2:W1.2: Research — check gum/charmbracelet status & install.sh:done
-3:W1.3: Research — audit secondary shell files for user-facing output:done
-4:W2.1: Audit doey.sh user-facing interactions (lines, types, formats):pending
-5:W2.2: Audit info-panel.sh, install.sh, other shell/ scripts:pending
-6:W2.3: Charmbracelet tools inventory and mapping:pending
-7:W2.4: Dependency strategy, install-path impact, fallback plan:pending
-8:W1.1: Add gum helpers & HAS_GUM detection to doey.sh:done
-9:W1.2: Add gum check to install.sh and doctor:done
-10:W1.3: Install gum on dev system:done
-11:W2.1: Wave 2 — compile opportunity map + consolidated report from all 4 research outputs:pending
-12:W1.1: Upgrade doey.sh banners, menus, progress, doctor to use gum helpers:done
-13:W1.2: Upgrade pre-push-gate.sh with gum styling:done
-14:W1.3: Upgrade doey-render-task.sh with gum styling:done
-15:W1.4: Upgrade info-panel.sh with gum styling:done
-16:W1.1: Run doey doctor and full bash 3.2 compat test:pending
-17:W1.2: Run doey --help, doey list, doey version to verify gum output:pending
-18:W1.1: Deep luxury pass on doey.sh — startup sequence, project selector, ALL remaining plain output:done
-19:W1.2: Deep luxury pass on info-panel.sh — ALL sections must use gum:done
-20:W1.3: Deep luxury pass on pre-push-gate.sh and doey-render-task.sh — total coverage:done
-21:W1.4: Deep luxury pass on context-audit.sh and doey-task-helpers.sh:done
-TASK_UPDATE_1_TIMESTAMP=1774965500
-TASK_UPDATE_1_AUTHOR=SM
-TASK_UPDATE_1_TEXT=Boss requested research audit before implementation. Dispatching research to Team 2 in parallel with Team 1 planning.
-TASK_PHASE=research
-TASK_REPORT_1_TIMESTAMP=1774965747
-TASK_REPORT_1_AUTHOR=Manager_W1
-TASK_REPORT_1_TYPE=progress
-TASK_REPORT_1_TITLE=Wave 1 Research Complete
-TASK_REPORT_1_BODY=3/3 research workers finished. doey.sh has 207 user-facing output points across 8 categories. gum not installed but available via brew. Follow jq/doey-tui pattern for graceful degradation.
-TASK_REPORT_2_TIMESTAMP=1774965956
-TASK_REPORT_2_AUTHOR=Manager_W1
-TASK_REPORT_2_TYPE=progress
-TASK_REPORT_2_TITLE=Wave 2 Foundation Complete
-TASK_REPORT_2_BODY=3/3 workers done. gum v0.17.0 installed. doey.sh has HAS_GUM detection + 13 wrapper functions (doey_style/header/confirm/choose/input/spin/success/warn/error/info/banner/divider + confirm_default_yes). install.sh has optional gum check after jq. Bash 3.2 compat: PASS.
-TASK_REPORT_3_TIMESTAMP=1774966238
-TASK_REPORT_3_AUTHOR=Manager_W2
-TASK_REPORT_3_TYPE=completion
-TASK_REPORT_3_TITLE=Research Phase Complete
-TASK_REPORT_3_BODY=Team W2 delivered 5 attachments (2416 total lines): doey.sh audit, secondary scripts audit, charmbracelet inventory, dependency strategy, consolidated opportunity map. Key findings: gum is the only must-have tool, ~460 user-facing interactions across 17 scripts, recommended 4-phase implementation starting with doey-ui.sh wrapper library.
-TASK_REPORT_4_TIMESTAMP=1774966280
-TASK_REPORT_4_AUTHOR=SM
-TASK_REPORT_4_TYPE=progress
-TASK_REPORT_4_TITLE=Research phase complete
-TASK_REPORT_4_BODY=Team 2 produced 5 reports covering all 5 sections. ~460 user-facing interactions cataloged across 17 scripts. gum is the key tool. 4-phase implementation plan ready.
-TASK_REPORT_5_TIMESTAMP=1774966378
-TASK_REPORT_5_AUTHOR=Manager_W1
-TASK_REPORT_5_TYPE=progress
-TASK_REPORT_5_TITLE=Wave 3 High-Impact Upgrades Complete
-TASK_REPORT_5_BODY=4/4 workers done. doey.sh: 28 edits (banners, headers, confirms, menus, progress, status msgs). pre-push-gate.sh: gum banner+verdict+check results. doey-render-task.sh: gum task cards with status-colored borders. info-panel.sh: gum banner+section headers. All bash 3.2 compat PASS.
-TASK_REPORT_6_TIMESTAMP=1774966493
-TASK_REPORT_6_AUTHOR=Boss
-TASK_REPORT_6_TYPE=conversation
-TASK_REPORT_6_TITLE=User feedback — luxury bar not met
-TASK_REPORT_6_BODY=User says project selector, startup sequence, and ALL user-facing output must feel premium Charmbracelet. No plain text anywhere. P0 priority escalation.
-TASK_PRIORITY=P0
-TASK_LOG_1774966499=PROGRESS: P0 user feedback — not luxury enough. Escalating to Team 1.
-TASK_REPORT_7_TIMESTAMP=1774966528
-TASK_REPORT_7_AUTHOR=SessionManager
-TASK_REPORT_7_TYPE=conversation
-TASK_REPORT_7_TITLE=P0 User Feedback
-TASK_REPORT_7_BODY=User says upgrade is NOT luxury enough. Demands: (1) premium project selector with gum filter, (2) animated startup sequence, (3) EVERY echo/printf must use gum. No plain text anywhere user can see.
-TASK_REPORT_8_TIMESTAMP=1774967334
-TASK_REPORT_8_AUTHOR=Manager_W1
-TASK_REPORT_8_TYPE=progress
-TASK_REPORT_8_TITLE=Wave 5 Deep Luxury Pass Complete
-TASK_REPORT_8_BODY=4/4 workers done. doey.sh: 255 gum wrapper calls covering startup, menus, all status/error/warn/info/success messages, all sections. info-panel.sh: full gum styling on all sections. pre-push-gate.sh: all check output styled. doey-render-task.sh: all sections styled. context-audit.sh: styled output. doey-task-helpers.sh: styled list output. Bash 3.2 compat: 38 files 0 violations.
-TASK_REPORT_9_TIMESTAMP=1774967477
-TASK_REPORT_9_AUTHOR=Manager_W1
-TASK_REPORT_9_TYPE=completion
-TASK_REPORT_9_TITLE=Task #69 Complete
-TASK_REPORT_9_BODY=Charmbracelet luxury upgrade done. 7 files modified: doey.sh (250 gum lines, 14 wrappers), info-panel.sh (58 gum lines), pre-push-gate.sh (12 gum lines), doey-render-task.sh, context-audit.sh, doey-task-helpers.sh, install.sh. All validated: bash 3.2 compat PASS (38 files, 0 violations), syntax PASS (7/7), doey doctor PASS, graceful degradation verified. Action needed: run install.sh to deploy.
-TASK_RESULT=Charmbracelet luxury upgrade complete. 250+ gum wrappers, 14 helpers, graceful fallback. 5 waves, 7 files.
-TASK_FILES=shell/doey.sh,shell/info-panel.sh,shell/pre-push-gate.sh,shell/doey-render-task.sh,shell/context-audit.sh,install.sh
-TASK_LOG_1774967552=COMPLETE: Committed e7004d1. Pending user confirmation.
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1774967477
+TASK_SUBTASK_1_TITLE=W1.1
+TASK_SUBTASK_1_STATUS= Research — audit all user-facing output in shell/doey.sh:done

@@ -1,0 +1,56 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=453
+TASK_TITLE=Intent fallback: project-aware, no confirmation, instant fuzzy open
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=improvement
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Current intent fallback broken in multiple ways on 'doey please open kronprinsparets fond monorepo': (1) stripped 'please' and ran the rest as literal command, (2) still asked [y/N] confirmation, (3) fell through to generic 'Unknown command' suggestions instead of actually opening a project.
+
+Required behavior:
+- Fallback should scan viable project locations (home dir, known parents like ~/code, ~/projects, ~/dev, git-tracked dirs) and build a candidate list
+- Fuzzy-match user's natural language against project dir names (e.g. 'kronprinsparets fond monorepo' → ~/something/kronprinsparets-fond-monorepo or similar)
+- Execute the correct action (cd into it and launch doey session, or tmux attach existing) WITHOUT any [y/N] confirmation
+- Must be fast — sub-second from command to session attach
+- Zero confirmation prompts for non-destructive intents like 'open X'; reserve confirmation only for destructive ops
+- Handle natural language politeness ('please', 'can you', 'would you') by stripping before intent classification
+
+This task supersedes/coordinates with #448 (fallback not triggering at all), #450 (speed), #451 (Charmbracelet UX). Implementer should bundle these where sensible. See shell/intent-fallback.sh, shell/doey-intent-dispatch.sh, docs/intent-fallback.md.
+TASK_SUBTASKS=1:W3.1: Research intent-fallback.sh + doey-intent-dispatch.sh current flow:done\n2:W3.2: Research command-expert-system-prompt.txt + intent-schema.json + existing project handling:done\n3:W3.1: Implement find_project_by_name() in doey-helpers.sh + open) case in doey.sh:done\n4:W3.2: Politeness stripping + project fast-path in dispatch + open_project in system prompt:done\n5:W3.1: Verify all 3 original failure cases fixed + non-regression:done\n6:W3.2: Add 'open' to intent-fallback.sh command lists and system prompt:done
+TASK_TIMESTAMPS=created=1775744578
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_NOTES=CORRECTION from user: Do NOT strip natural language — the AI should understand it natively, faster and smarter. The point is better comprehension, not preprocessing. Keep the full user input intact.
+TASK_UPDATED=1775744578
+TASK_FILES=install.sh,shell/doey-helpers.sh,shell/doey-intent-dispatch.sh,shell/doey-tunnel.sh,shell/doey.sh,shell/intent-fallback.sh,tui/internal/model/actions.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research intent-fallback.sh + doey-intent-dispatch.sh current flow
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_3_1
+TASK_SUBTASK_1_CREATED_AT=1775745037
+TASK_SUBTASK_1_COMPLETED_AT=1775745059
+TASK_SUBTASK_2_TITLE=W3.2: Research command-expert-system-prompt.txt + intent-schema.json + existing project handling
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_3_2
+TASK_SUBTASK_2_CREATED_AT=1775745038
+TASK_SUBTASK_2_COMPLETED_AT=1775745059
+TASK_SUBTASK_3_TITLE=W3.1: Implement find_project_by_name() in doey-helpers.sh + open) case in doey.sh
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_3_1
+TASK_SUBTASK_3_CREATED_AT=1775745306
+TASK_SUBTASK_3_COMPLETED_AT=1775745378
+TASK_SUBTASK_4_TITLE=W3.2: Politeness stripping + project fast-path in dispatch + open_project in system prompt
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_3_2
+TASK_SUBTASK_4_CREATED_AT=1775745307
+TASK_SUBTASK_4_COMPLETED_AT=1775745380
+TASK_SUBTASK_5_TITLE=W3.1: Verify all 3 original failure cases fixed + non-regression
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_3_1
+TASK_SUBTASK_5_CREATED_AT=1775745538
+TASK_SUBTASK_5_COMPLETED_AT=1775745578
+TASK_SUBTASK_6_TITLE=W3.2: Add 'open' to intent-fallback.sh command lists and system prompt
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_3_2
+TASK_SUBTASK_6_CREATED_AT=1775745862
+TASK_SUBTASK_6_COMPLETED_AT=1775745884

@@ -5,9 +5,8 @@ TASK_STATUS=done
 TASK_TYPE=audit
 TASK_CREATED_BY=Boss
 TASK_DESCRIPTION=Verify the Go TUI is actually reading from SQLite (.doey/doey.db). Check: (1) Does .doey/doey.db exist and have data? Run doey-ctl db-task list or sqlite3 .doey/doey.db to check task count. (2) Does go build ./... pass in tui/? (3) In tui/internal/runtime/store_reader.go or reader.go, confirm ReadSnapshot calls SQLite store not just file readers. (4) Check if TUI binary uses store_reader.go. Report what works and what's missing.
-TASK_DECISION_LOG=1775141094:Created task\n1775141255:Status changed to done\n1775141258:Status changed to done\n1775141278:Status changed to done\n1775141344:Status changed to done\n1775143384:Status changed to done\n1775143517:Status changed to done\n1775143737:Status changed to done\n1775144223:Status changed to done\n1775144293:Status changed to done\n1775146430:Status changed to done\n1775146498:Status changed to done\n1775146870:Status changed to done
-TASK_TIMESTAMPS=created=1775141094|completed=1775146888
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775145272
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775141094
-TASK_ATTACHMENTS=.doey/tasks/118.result.json

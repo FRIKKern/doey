@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=302
+TASK_TITLE=Show deferred subtask count in Go TUI task list
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=The task list view in the Go TUI shows subtask ratios like 2/4, 3/5 — but deferred subtasks (added in task 301, commit cd7cd3a) need to be visually distinct in the list. Currently the list item probably counts deferred as incomplete. The list should show something like '2/4 (2 deferred)' or use a different color/icon so the user can tell at a glance that the ratio isn't incomplete work — it's intentionally deferred. Check how the task list renders subtask counts and make deferred subtasks visually clear.
+TASK_SUBTASKS=1:W3.1: Research — find exact rendering code for subtask ratios in task list items:done\n2:Dispatched to team 3, worker 3.1:done
+TASK_TIMESTAMPS=created=1775429080
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775429080
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research — find exact rendering code for subtask ratios in task list items
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to team 3, worker 3.1
+TASK_SUBTASK_2_STATUS=done

@@ -1,0 +1,64 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=552
+TASK_TITLE=Harden pane activity observation: canonical status signal + Boss protocol fix
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Prevent Boss from ever again mistaking an idle pane for an active one. Root cause: ctx% in the tmux status bar was used as an activity signal — it's not. Idle panes at the ❯ prompt can have any ctx%.
+
+MUST QUEUE BEHIND TASK 551 — 551 is touching .claude/hooks/, shell/, CLAUDE.md, agents/. Do not start until 551 Phase 3 integration commits.
+
+THREE DELIVERABLES:
+
+1. Canonical activity signal — new Go subcommand 'doey-ctl status observe <pane>' (or equivalent shell tool) that returns structured JSON:
+   {
+     active: bool,
+     indicator: 'Sketching'|'Running'|'Cogitated'|'thinking'|'idle'|null,
+     ctx_pct: N,
+     last_output_age_sec: N,
+     status_file_age_sec: N,
+     heartbeat_age_sec: N | null
+   }
+   Logic: active = (spinner glyph found in last 30 pane lines) OR (status==BUSY AND updated_at < 10s ago) OR (heartbeat < 15s ago).
+   Spinner glyphs to detect: ✻ ● ⎿ with verbs Sketching|Running|Cogitated|Baked|Sautéed|Brewed|Cooked|Thinking|Frolicking|Crystallizing|etc. Use a regex matching the standard Claude Code spinner format.
+   Capture at least 30 lines, not 4.
+
+2. Worker heartbeat — minimal PostToolUse hook addition that touches /tmp/doey/doey/heartbeat/<pane_safe>.heartbeat on every tool call. File mtime = last activity. Zero overhead. Existing hooks should be extended, not new files created if avoidable.
+
+3. Boss protocol update in CLAUDE.md (STATUS CHECK PROTOCOL section) and agents/doey-boss.md:
+   - Add explicit rule: 'ctx% is NOT an activity signal — ignore it for activity determination'
+   - List spinner indicators Boss should look for
+   - Require minimum 20-line capture for status checks (not 4)
+   - Point Boss at 'doey-ctl status observe' as the preferred tool when available
+   - Define the idle signature: pane ends with ❯ prompt and no trailing spinner
+
+4. Boss memory file at /home/doey/.claude/agent-memory/doey-boss/feedback_status_signals.md — user-level memory, not project file. Content: the rule above plus the why (user corrected me on this). Also add index line to /home/doey/.claude/agent-memory/doey-boss/MEMORY.md.
+
+VERIFICATION:
+- go build ./... in tui/ must PASS
+- tests/test-bash-compat.sh must PASS
+- Manual test: run 'doey-ctl status observe 2.0' against a known-busy pane → active:true. Against a known-idle pane → active:false.
+- Commit per deliverable.
+
+DO NOT touch anything task 551 is touching until 551 lands.
+TASK_SUBTASKS=1:W2.1: Go observe subcommand + PostToolUse heartbeat hook extension:done\n2:W2.2: CLAUDE.md + doey-boss.md protocol update + Boss memory file:done
+TASK_TIMESTAMPS=created=1775946154
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775946154
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-compact.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,.claude/settings.json,.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-repair/SKILL.md,CLAUDE.md,agents/doey-boss.md,agents/doey-boss.md.tmpl,agents/test-driver.md,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-stats-allowlist.txt,shell/doey-team-mgmt.sh,shell/doey.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Go observe subcommand + PostToolUse heartbeat hook extension
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775946764
+TASK_SUBTASK_1_COMPLETED_AT=1775947465
+TASK_SUBTASK_2_TITLE=W2.2: CLAUDE.md + doey-boss.md protocol update + Boss memory file
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1775946764
+TASK_SUBTASK_2_COMPLETED_AT=1775946967

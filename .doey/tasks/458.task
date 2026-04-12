@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=458
+TASK_TITLE=Consolidated re-implementation: Tasks 451+455+456 into intent-fallback + dispatch
+TASK_STATUS=cancelled
+TASK_TYPE=feature
+TASK_CREATED_BY=team_lead
+TASK_TEAM=6
+TASK_DESCRIPTION=Re-apply lost changes from 3 tasks to shell/intent-fallback.sh and shell/doey-intent-dispatch.sh. Must be done by single worker, verified, and committed immediately.
+TASK_SUBTASKS=1:W6.1: Research current state of both files (baseline from commit 56e9ace):pending\n2:W6.1: Implement all 3 tasks into both files:done\n3:W6.2: Verify implementation meets all criteria:done
+TASK_TIMESTAMPS=created=1775749087
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775749087
+TASK_FILES=shell/doey-intent-dispatch.sh,shell/intent-fallback.sh
+TASK_SUBTASK_1_TITLE=W6.1: Research current state of both files (baseline from commit 56e9ace)
+TASK_SUBTASK_1_STATUS=pending
+TASK_SUBTASK_1_CREATED_AT=1775749092
+TASK_SUBTASK_2_TITLE=W6.1: Implement all 3 tasks into both files
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_6_1
+TASK_SUBTASK_2_CREATED_AT=1775749092
+TASK_SUBTASK_2_COMPLETED_AT=1775749137
+TASK_SUBTASK_3_TITLE=W6.2: Verify implementation meets all criteria
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_6_2
+TASK_SUBTASK_3_CREATED_AT=1775749092
+TASK_SUBTASK_3_COMPLETED_AT=1775749443

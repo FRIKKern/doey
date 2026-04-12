@@ -1,0 +1,55 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=446
+TASK_TITLE=Fix Task Reviewer spin loop: wakes on ACTIVE_TASKS but has no work, burns tokens for hours
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=COST DRAIN BUG. The Task Reviewer (pane 1.1) enters an infinite wake-check-sleep loop that runs for 4+ hours burning tokens continuously.
+
+THE LOOP:
+  1. reviewer-wait.sh fires, returns WAKE_REASON=ACTIVE_TASKS
+  2. Reviewer checks msg count -> 0 messages
+  3. Reviewer calls reviewer-wait.sh again
+  4. reviewer-wait.sh fires immediately again with WAKE_REASON=ACTIVE_TASKS (because tasks still exist)
+  5. Goto 2
+
+ROOT CAUSE: reviewer-wait.sh wakes on ANY active task in the system, but the reviewer only has work when it receives a message. So if there are active tasks (which there almost always are) the wait hook always triggers immediately, but the reviewer has nothing to do. This creates a tight loop.
+
+Observed on: kronprinsparets_fond_monorepo pane 1.1. Duration: 4h+ before user noticed. Token cost: significant (every cycle costs a prompt+response turn).
+
+FIX OPTIONS (evaluate all, pick best):
+1. reviewer-wait.sh should NOT use ACTIVE_TASKS as a wake reason for the reviewer. The reviewer should ONLY wake on: (a) new message in its inbox, (b) explicit nudge. Active tasks in the system are irrelevant — the reviewer has no way to know which tasks need review without being told.
+2. Backoff: if reviewer wakes and finds nothing to do, exponentially increase sleep time (5s -> 10s -> 30s -> 60s -> 5min cap). Resets on actual message received.
+3. Message-only mode: reviewer-wait.sh should have a role-specific mode that ONLY watches the message inbox trigger file, ignoring task-count-based wake reasons entirely.
+4. Guard in the reviewer agent: if no messages after N consecutive wake cycles, go dormant (stop calling reviewer-wait.sh) until explicitly nudged.
+
+BEST FIX is probably #1 + #3: make reviewer-wait.sh role-aware so the reviewer's wait only fires on messages/nudges, not on system-wide task activity. This is the correct semantic — the reviewer is passive, it waits for work to be sent to it.
+
+ALSO CHECK: does this same spin-loop pattern affect other passive roles? (Deployment pane 1.2, Doey Expert 1.3?) If so, fix all of them with the same role-aware wait.
+
+ACCEPTANCE:
+1. Start a doey session with active tasks
+2. Observe reviewer pane for 5 minutes
+3. It should be dormant (not cycling), waiting for a message
+4. Send it a review request via doey msg send
+5. It wakes, does the review, goes back to dormant
+6. No spinning, no token burn during idle
+
+Fresh-install safe: fix ships in .claude/hooks/reviewer-wait.sh or equivalent.
+TASK_SUBTASKS=1:W3.1: Research reviewer-wait.sh and all wait mechanisms for passive roles (reviewer, deployment, expert). Find the spin loop cause and report file paths, line numbers, and wake logic.:done\n2:W3.2: Verify the passive role fast path fix in taskmaster-wait.sh — confirm passive roles only wake on MSG, Taskmaster unchanged, bash compat passes.:done
+TASK_TIMESTAMPS=created=1775735841
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775735841
+TASK_FILES=.claude/hooks/taskmaster-wait.sh,shell/tmux-theme.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research reviewer-wait.sh and all wait mechanisms for passive roles (reviewer, deployment, expert). Find the spin loop cause and report file paths, line numbers, and wake logic.
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_3_1
+TASK_SUBTASK_1_CREATED_AT=1775736000
+TASK_SUBTASK_1_COMPLETED_AT=1775736019
+TASK_SUBTASK_2_TITLE=W3.2: Verify the passive role fast path fix in taskmaster-wait.sh — confirm passive roles only wake on MSG, Taskmaster unchanged, bash compat passes.
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775736693
+TASK_SUBTASK_2_COMPLETED_AT=1775736845

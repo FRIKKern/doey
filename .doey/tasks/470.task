@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=470
+TASK_TITLE=Improve intent fallback streaming output — show thinking/progress
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=coordinator
+TASK_TEAM=W4
+TASK_DESCRIPTION=The intent fallback CLI feels like a black box. Improve streaming output to show what Opus is doing: thinking indicators, tool calls, progress. Research claude CLI streaming options (--stream-text, --verbose, --output-format stream-json, event types) and implement richer real-time output. User should see what is happening during the fallback call.
+TASK_SUBTASKS=1:Direct dispatch to W4.1 — research + implement streaming output:done\n2:Direct dispatch to W4.1 — streaming + proactive tool use:done
+TASK_TIMESTAMPS=created=1775757965
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775757965
+TASK_FILES=shell/doey-headless.sh,shell/doey-intent-dispatch.sh,shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Direct dispatch to W4.1 — research + implement streaming output
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775758065
+TASK_SUBTASK_1_COMPLETED_AT=1775758915
+TASK_SUBTASK_2_TITLE=Direct dispatch to W4.1 — streaming + proactive tool use
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775758887
+TASK_SUBTASK_2_COMPLETED_AT=1775759218
