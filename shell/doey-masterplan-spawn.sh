@@ -30,6 +30,9 @@ if [ -z "$PLAN_ID" ]; then
   exit 1
 fi
 
+# Stats: record skill entry (category=skill, cmd=masterplan)
+(command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill skill_invoked cmd=masterplan &) 2>/dev/null || true
+
 SESSION_NAME="$(tmux display-message -p '#S' 2>/dev/null || true)"
 if [ -z "$SESSION_NAME" ]; then
   printf 'ERROR: no tmux session (run inside a doey session)\n' >&2

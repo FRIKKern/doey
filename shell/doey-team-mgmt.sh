@@ -1322,6 +1322,11 @@ kill_team_window() {
   [ -f "$team_env" ] || { printf "  ${ERROR}No team env for window %s${RESET}\n" "$window"; return 1; }
   [ "$window" != "0" ] || { printf "  ${ERROR}Cannot kill window 0 — use 'doey stop'${RESET}\n"; return 1; }
 
+  # Stats (task #521 Phase 2): capture team name BEFORE teardown removes team_env.
+  local _ktw_team_name=""
+  _ktw_team_name=$(_env_val "$team_env" TEAM_NAME 2>/dev/null) || _ktw_team_name=""
+  [ -z "$_ktw_team_name" ] && _ktw_team_name="team_${window}"
+
   printf "  ${DIM}Killing team window %s...${RESET}\n" "$window"
 
   # Clean up MCP servers and configs for this team
@@ -1355,6 +1360,11 @@ kill_team_window() {
   _unregister_team_window "$runtime_dir" "$window"
 
   printf "  ${SUCCESS}Team window %s killed and cleaned up${RESET}\n" "$window"
+
+  # Stats emit (task #521 Phase 2) — team window killed
+  if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+    (doey-stats-emit.sh worker team_killed "team=${_ktw_team_name:-unknown}" "window=${window:-0}" &) 2>/dev/null || true
+  fi
 }
 
 list_team_windows() {
