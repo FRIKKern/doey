@@ -231,6 +231,32 @@ if is_worker; then
   else
     _notify_pane "$_target" "$_subject" "$MSG"
   fi
+  # Touch SM trigger so passive wait path wakes
+  _target_safe=$(echo "$_target" | tr ':.-' '_')
+  mkdir -p "${RUNTIME_DIR}/triggers" 2>/dev/null
+  touch "${RUNTIME_DIR}/triggers/${_target_safe}.trigger"
+
+  # Check if all workers in team are done
+  _all_done=true
+  _team_env="${RUNTIME_DIR}/team_${WINDOW_INDEX}.env"
+  if [ -f "$_team_env" ]; then
+    _w_panes=$(grep '^WORKER_PANES=' "$_team_env" | sed 's/^WORKER_PANES=//;s/"//g')
+    for _wp in $(echo "$_w_panes" | tr ',' ' '); do
+      _wp_safe=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${_wp}" | tr ':.-' '_')
+      _wp_st=$(grep '^STATUS=' "${RUNTIME_DIR}/status/${_wp_safe}.status" 2>/dev/null | head -1 | cut -d= -f2)
+      case "$_wp_st" in
+        FINISHED|RESERVED) ;;
+        *) _all_done=false; break ;;
+      esac
+    done
+    if [ "$_all_done" = "true" ]; then
+      doey msg send --to "$_target" --from "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" \
+        --subject "all_workers_done" \
+        --body "All workers in W${WINDOW_INDEX} have FINISHED." 2>/dev/null || true
+      touch "${RUNTIME_DIR}/triggers/${_target_safe}.trigger"
+    fi
+  fi
+
   _debug_sent "$_target" "$_subject"
   { [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
   _log "stop-notify: sent ${_subject} to ${_target}"
