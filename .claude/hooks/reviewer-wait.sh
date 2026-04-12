@@ -84,7 +84,7 @@ _check_work() {
 _check_work "0" || true
 
 # No work found — sleep
-_sleep_dur=60
+_sleep_dur=600
 if command -v inotifywait >/dev/null 2>&1; then
   mkdir -p "${RUNTIME_DIR}/triggers" 2>/dev/null
   inotifywait -qq -t "$_sleep_dur" -e create,modify \
