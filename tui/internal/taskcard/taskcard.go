@@ -399,6 +399,7 @@ type ExpandedCard struct {
 	Theme         styles.Theme
 	Width         int // available width
 	Height        int // available height
+	Focused       bool              // true when the detail pane has focus
 	SubtaskCursor int               // which subtask is highlighted (-1 = none)
 	Messages      []runtime.Message // IPC messages related to this task
 
@@ -452,6 +453,28 @@ func (e *ExpandedCard) loadSidecar() {
 	}
 }
 
+// renderRule returns a faint horizontal rule spanning width.
+func (e *ExpandedCard) renderRule() string {
+	w := e.Width - 2
+	if w < 4 {
+		w = 4
+	}
+	if w > styles.MaxCardWidth-2 {
+		w = styles.MaxCardWidth - 2
+	}
+	return lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render(strings.Repeat("─", w))
+}
+
+// formatTimestampHybrid returns a hybrid "relative (absolute)" timestamp.
+func formatTimestampHybrid(epoch int64) string {
+	if epoch <= 0 {
+		return ""
+	}
+	relative := styles.FormatTimelineTime(epoch)
+	absolute := time.Unix(epoch, 0).Format("Jan 02, 15:04")
+	return relative + " (" + absolute + ")"
+}
+
 // Render draws the full expanded card content as a styled string.
 func (e *ExpandedCard) Render() string {
 	e.loadSidecar()
@@ -467,32 +490,38 @@ func (e *ExpandedCard) Render() string {
 	var sections []string
 
 	// --- Header: title + compact metadata line ---
-	title := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text).Render(task.Title)
-	sections = append(sections, title)
+	titleText := lipgloss.NewStyle().Bold(true).Foreground(e.Theme.Text).Render(task.Title)
+	if e.Focused {
+		focusGlyph := lipgloss.NewStyle().Foreground(e.Theme.Primary).Bold(true).Render("▸")
+		titleText = focusGlyph + " " + titleText
+	}
+	sections = append(sections, titleText)
 
 	// Compact metadata: status · team · priority · type on one line
-	metaStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted)
+	dimStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true)
 	statusClr := styles.StatusAccentColor(e.Theme, task.Status)
 	stIcon := lipgloss.NewStyle().Foreground(statusClr).Render("◆")
+	statusLabel := lipgloss.NewStyle().Foreground(statusClr).Render(task.Status)
 	var metaParts []string
-	metaParts = append(metaParts, stIcon+" "+task.Status)
+	metaParts = append(metaParts, stIcon+" "+statusLabel)
 	if task.Team != "" {
-		metaParts = append(metaParts, task.Team)
+		metaParts = append(metaParts, dimStyle.Render(task.Team))
 	}
 	if task.Priority >= 0 && task.Priority <= 2 {
 		priNames := []string{"P0", "P1", "P2"}
-		metaParts = append(metaParts, priNames[task.Priority])
+		metaParts = append(metaParts, dimStyle.Render(priNames[task.Priority]))
 	}
 	if task.Type != "" {
-		metaParts = append(metaParts, task.Type)
+		metaParts = append(metaParts, dimStyle.Render(task.Type))
 	}
-	sections = append(sections, metaStyle.Render(strings.Join(metaParts, " · ")))
+	sep := dimStyle.Render(" · ")
+	sections = append(sections, strings.Join(metaParts, sep))
 
 	if task.Created > 0 {
-		sections = append(sections, metaStyle.Faint(true).Render("Created: "+time.Unix(task.Created, 0).Format("2006-01-02 15:04")))
+		sections = append(sections, dimStyle.Render("Created "+formatTimestampHybrid(task.Created)))
 	}
 	if task.Updated > 0 && task.Updated != task.Created {
-		sections = append(sections, metaStyle.Faint(true).Render("Updated: "+time.Unix(task.Updated, 0).Format("2006-01-02 15:04")))
+		sections = append(sections, dimStyle.Render("Updated "+formatTimestampHybrid(task.Updated)))
 	}
 	if task.Phase != "" {
 		sections = append(sections, styles.TaskPhaseBadge(e.Theme, task.Phase))
@@ -513,8 +542,8 @@ func (e *ExpandedCard) Render() string {
 		sections = append(sections, recovery)
 	}
 
-	// Breathing room between header and content — matches Agents panel spacing
-	sections = append(sections, "")
+	// Rule between header and content
+	sections = append(sections, e.renderRule())
 
 	// --- Meta ---
 	if task.PlanID != "" {
@@ -595,7 +624,7 @@ func (e *ExpandedCard) Render() string {
 
 	// --- Reports ---
 	if len(task.Reports) > 0 {
-		sections = append(sections, "")
+		sections = append(sections, e.renderRule())
 		sections = append(sections, styles.SectionTitle(e.Theme, fmt.Sprintf("Reports (%d)", len(task.Reports))))
 		if e.ExpandedReports == nil {
 			e.ExpandedReports = make(map[int]bool)
@@ -677,7 +706,7 @@ func (e *ExpandedCard) Render() string {
 
 	// --- Subtasks (prefer persistent subtasks with assignees, fall back to runtime) ---
 	if len(task.Subtasks) > 0 {
-		sections = append(sections, "")
+		sections = append(sections, e.renderRule())
 		sections = append(sections, styles.SectionTitle(e.Theme, "Subtasks"))
 		// Count done for progress bar.
 		pDone := 0
@@ -698,7 +727,7 @@ func (e *ExpandedCard) Render() string {
 			sections = append(sections, zone.Mark(fmt.Sprintf("subtask-%d", i), row))
 		}
 	} else if len(e.Item.Subtasks) > 0 {
-		sections = append(sections, "")
+		sections = append(sections, e.renderRule())
 		sections = append(sections, styles.SectionTitle(e.Theme, "Subtasks"))
 		sections = append(sections, styles.ExpandedProgressBar(e.Theme, e.Item.SubtaskDone, e.Item.SubtaskTotal, contentWidth))
 		for i, st := range e.Item.Subtasks {
@@ -734,7 +763,7 @@ func (e *ExpandedCard) Render() string {
 
 	// --- Unified Timeline ---
 	if timelineRows := e.renderUnifiedTimeline(contentWidth); len(timelineRows) > 0 {
-		sections = append(sections, "")
+		sections = append(sections, e.renderRule())
 		sections = append(sections, timelineRows...)
 	}
 
