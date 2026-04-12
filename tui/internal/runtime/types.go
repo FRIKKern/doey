@@ -241,6 +241,7 @@ type PaneResult struct {
 type AgentDef struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
+	Body        string   `json:"body"`
 	Model       string   `json:"model"`
 	Color       string   `json:"color"`
 	Memory      string   `json:"memory"`

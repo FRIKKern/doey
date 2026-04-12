@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
@@ -48,6 +49,11 @@ type AgentsModel struct {
 	focused          bool
 	scrollOffset     int
 	collapsedDomains map[string]bool
+
+	// Glamour rendering cache
+	mdCache string
+	mdBody  string
+	mdWidth int
 }
 
 // NewAgentsModel creates an agents panel with the left list focused.
@@ -523,44 +529,63 @@ func (m AgentsModel) renderDetailContent(w int) string {
 		return ""
 	}
 
-	// Detail fields
 	labelStyle := t.StatLabel.Copy().Width(14)
 	valueStyle := t.Body
+	ruleStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
 
-	var fields []string
+	ruleW := w - 4
+	if ruleW < 10 {
+		ruleW = 10
+	}
+	rule := ruleStyle.Render(strings.Repeat("─", ruleW))
 
-	fields = append(fields, labelStyle.Render("Name")+"  "+valueStyle.Render(agent.Name))
-	fields = append(fields, labelStyle.Render("Model")+"  "+valueStyle.Render(agent.Model))
-	fields = append(fields, labelStyle.Render("Domain")+"  "+valueStyle.Render(agent.Domain))
+	var sections []string
 
+	// Group 1: Identity — model + domain
+	sections = append(sections, labelStyle.Render("Model")+"  "+valueStyle.Render(agent.Model))
+	sections = append(sections, labelStyle.Render("Domain")+"  "+valueStyle.Render(agent.Domain))
+
+	// Group 2: Appearance — color + memory
+	var group2 []string
 	if agent.Color != "" {
 		colorDot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
-		fields = append(fields, labelStyle.Render("Color")+"  "+colorDot+" "+t.Dim.Render(agent.Color))
+		group2 = append(group2, labelStyle.Render("Color")+"  "+colorDot+" "+t.Dim.Render(agent.Color))
 	}
-
 	if agent.Memory != "" {
-		fields = append(fields, labelStyle.Render("Memory")+"  "+valueStyle.Render(agent.Memory))
+		group2 = append(group2, labelStyle.Render("Memory")+"  "+valueStyle.Render(agent.Memory))
+	}
+	if len(group2) > 0 {
+		sections = append(sections, "")
+		sections = append(sections, strings.Join(group2, "\n"))
 	}
 
+	// Group 3: Description (with breathing room)
 	if agent.Description != "" {
 		descWidth := w - 24
 		if descWidth < 20 {
 			descWidth = 20
 		}
-		fields = append(fields, labelStyle.Render("Description")+"  "+
-			lipgloss.NewStyle().Foreground(t.Text).Width(descWidth).Render(agent.Description))
+		sections = append(sections, "")
+		sections = append(sections, labelStyle.Render("Description"))
+		sections = append(sections, lipgloss.NewStyle().Foreground(t.Text).Width(descWidth).PaddingLeft(2).Render(agent.Description))
+		sections = append(sections, "")
 	}
 
+	// Group 4: References — teams + file path (dimmed)
+	var group4 []string
 	if len(agent.UsedByTeams) > 0 {
 		teams := strings.Join(agent.UsedByTeams, ", ")
-		fields = append(fields, labelStyle.Render("Used by")+"  "+valueStyle.Render(teams))
+		group4 = append(group4, labelStyle.Render("Used by")+"  "+valueStyle.Render(teams))
 	}
-
 	if agent.FilePath != "" {
-		fields = append(fields, labelStyle.Render("File")+"  "+t.Dim.Render(agent.FilePath))
+		group4 = append(group4, labelStyle.Render("File")+"  "+ruleStyle.Render(agent.FilePath))
+	}
+	if len(group4) > 0 {
+		sections = append(sections, rule)
+		sections = append(sections, strings.Join(group4, "\n"))
 	}
 
-	return strings.Join(fields, "\n")
+	return strings.Join(sections, "\n")
 }
 
 // maxRightScroll returns the maximum valid rightScroll value for the current state.
@@ -588,6 +613,12 @@ func (m AgentsModel) maxRightScroll() int {
 	}
 
 	// Replicate the section-building logic from renderRightPanel
+	ruleStyle := lipgloss.NewStyle().Foreground(m.theme.Muted).Faint(true)
+	ruleW := rightW - 6
+	if ruleW < 10 {
+		ruleW = 10
+	}
+
 	var sections []string
 	var dotColor lipgloss.TerminalColor = lipgloss.Color(agent.Color)
 	if agent.Color == "" {
@@ -601,13 +632,22 @@ func (m AgentsModel) maxRightScroll() int {
 			Foreground(m.theme.BgText).Background(m.theme.Accent).Padding(0, 1).
 			Render(agent.Model))
 	}
+	sections = append(sections, ruleStyle.Render(strings.Repeat("─", ruleW)))
 	sections = append(sections, "")
 	detailContent := m.renderDetailContent(rightW)
 	if detailContent != "" {
 		sections = append(sections, detailContent)
 	}
+	if agent.Body != "" {
+		sections = append(sections, "")
+		sections = append(sections, ruleStyle.Render(strings.Repeat("─", ruleW)))
+		sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Render("Agent Instructions"))
+		// Estimate body lines (glamour not used here — just count raw lines for scroll calc)
+		bodyLines := strings.Count(agent.Body, "\n") + 5
+		sections = append(sections, strings.Repeat("\n", bodyLines))
+	}
 	sections = append(sections, "")
-	sections = append(sections, lipgloss.NewStyle().Foreground(m.theme.Muted).Faint(true).Render("hint"))
+	sections = append(sections, ruleStyle.Render("hint"))
 
 	lines := strings.Split(strings.Join(sections, "\n"), "\n")
 	viewport := h - 2
@@ -619,6 +659,41 @@ func (m AgentsModel) maxRightScroll() int {
 		maxScroll = 0
 	}
 	return maxScroll
+}
+
+// renderMarkdown renders a markdown body with glamour, caching the result.
+func (m *AgentsModel) renderMarkdown(body string, width int) string {
+	if width < 20 {
+		width = 20
+	}
+
+	if body == m.mdBody && width == m.mdWidth && m.mdCache != "" {
+		return m.mdCache
+	}
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		m.mdCache = "\n" + body
+		m.mdBody = body
+		m.mdWidth = width
+		return m.mdCache
+	}
+
+	rendered, err := renderer.Render(body)
+	if err != nil {
+		m.mdCache = "\n" + body
+		m.mdBody = body
+		m.mdWidth = width
+		return m.mdCache
+	}
+
+	m.mdCache = rendered
+	m.mdBody = body
+	m.mdWidth = width
+	return rendered
 }
 
 // renderRightPanel renders the detail pane for the selected agent.
@@ -654,6 +729,12 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 	// Build detail content
 	var sections []string
 
+	ruleStyle := lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+	ruleW := w - 6
+	if ruleW < 10 {
+		ruleW = 10
+	}
+
 	// Title
 	var dotColor lipgloss.TerminalColor = lipgloss.Color(agent.Color)
 	if agent.Color == "" {
@@ -672,12 +753,23 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 			Render(agent.Model)
 		sections = append(sections, modelBadge)
 	}
+
+	// Separator between title and detail fields
+	sections = append(sections, ruleStyle.Render(strings.Repeat("─", ruleW)))
 	sections = append(sections, "")
 
 	// Detail fields
 	detailContent := m.renderDetailContent(w)
 	if detailContent != "" {
 		sections = append(sections, detailContent)
+	}
+
+	// Markdown body (agent instructions)
+	if agent.Body != "" {
+		sections = append(sections, "")
+		sections = append(sections, ruleStyle.Render(strings.Repeat("─", ruleW)))
+		sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render("Agent Instructions"))
+		sections = append(sections, m.renderMarkdown(agent.Body, w-4))
 	}
 
 	// Nav hint
@@ -687,7 +779,7 @@ func (m AgentsModel) renderRightPanel(w, h int) string {
 		if m.leftFocused {
 			hint = "→ or enter for details"
 		}
-		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
+		sections = append(sections, ruleStyle.Render(hint))
 	}
 
 	fullContent := strings.Join(sections, "\n")

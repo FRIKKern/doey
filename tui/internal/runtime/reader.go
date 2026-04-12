@@ -984,7 +984,7 @@ func (r *Reader) readAgentDefs(projectDir string) []AgentDef {
 	}
 
 	for _, path := range matches {
-		fm := parseFrontmatter(path)
+		fm, body := parseFrontmatter(path)
 		if fm == nil {
 			continue
 		}
@@ -997,6 +997,7 @@ func (r *Reader) readAgentDefs(projectDir string) []AgentDef {
 		agents = append(agents, AgentDef{
 			Name:        name,
 			Description: fm["description"],
+			Body:        body,
 			Model:       fm["model"],
 			Color:       validatedHexColor(fm["color"]),
 			Memory:      fm["memory"],
@@ -1042,7 +1043,7 @@ func (r *Reader) readTeamDefs(projectDir string) []TeamDef {
 
 // parseTeamDef parses a single .team.md file into a TeamDef
 func parseTeamDef(path string) (TeamDef, bool) {
-	fm := parseFrontmatter(path)
+	fm, _ := parseFrontmatter(path)
 	if fm == nil {
 		return TeamDef{}, false
 	}
@@ -1191,11 +1192,12 @@ func agentDomain(name string) string {
 	return "Utility"
 }
 
-// parseFrontmatter reads YAML frontmatter (between --- markers) as key:value pairs
-func parseFrontmatter(path string) map[string]string {
+// parseFrontmatter reads YAML frontmatter (between --- markers) as key:value pairs.
+// Returns the frontmatter map and the markdown body after the closing ---.
+func parseFrontmatter(path string) (map[string]string, string) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, ""
 	}
 	defer f.Close()
 
@@ -1204,13 +1206,15 @@ func parseFrontmatter(path string) map[string]string {
 
 	// First line must be ---
 	if !scanner.Scan() || strings.TrimSpace(scanner.Text()) != "---" {
-		return nil
+		return nil, ""
 	}
 
+	foundClose := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.TrimSpace(line) == "---" {
-			return fm
+			foundClose = true
+			break
 		}
 		idx := strings.IndexByte(line, ':')
 		if idx < 0 {
@@ -1228,7 +1232,18 @@ func parseFrontmatter(path string) map[string]string {
 		fm[key] = val
 	}
 
-	return nil // never found closing ---
+	if !foundClose {
+		return nil, "" // never found closing ---
+	}
+
+	// Collect remaining lines as body
+	var bodyLines []string
+	for scanner.Scan() {
+		bodyLines = append(bodyLines, scanner.Text())
+	}
+	body := strings.TrimSpace(strings.Join(bodyLines, "\n"))
+
+	return fm, body
 }
 
 // validatedHexColor returns color if it is a valid 7-char hex color (e.g. "#A1B2C3"),
