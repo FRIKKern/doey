@@ -89,6 +89,12 @@ func (m AgentsModel) Update(msg tea.Msg) (AgentsModel, tea.Cmd) {
 
 // updateMouse handles all mouse interactions for the agents panel.
 func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
+	// Panel split point for position-based routing
+	leftW := m.width * 33 / 100
+	if leftW < 24 {
+		leftW = 24
+	}
+
 	// Click release — check interactive zones
 	if msg.Action == tea.MouseActionRelease {
 		// Domain headers — toggle collapse
@@ -116,32 +122,40 @@ func (m AgentsModel) updateMouse(msg tea.MouseMsg) (AgentsModel, tea.Cmd) {
 				flatIdx++
 			}
 		}
+
+		// Click on right panel — focus detail pane
+		if msg.X > leftW && len(m.agents) > 0 {
+			m.leftFocused = false
+			return m, nil
+		}
 	}
 
-	// Mouse wheel — route to focused panel
+	// Mouse wheel — route based on mouse position, not keyboard focus
 	if msg.Action == tea.MouseActionPress {
+		mouseOnRight := msg.X > leftW
+
 		if msg.Button == tea.MouseButtonWheelUp {
-			if m.leftFocused {
+			if mouseOnRight {
+				if m.rightScroll > 0 {
+					m.rightScroll--
+				}
+			} else {
 				if m.cursor > 0 {
 					m.cursor--
 					m.rightScroll = 0
-				}
-			} else {
-				if m.rightScroll > 0 {
-					m.rightScroll--
 				}
 			}
 			return m, nil
 		}
 		if msg.Button == tea.MouseButtonWheelDown {
-			if m.leftFocused {
+			if mouseOnRight {
+				if ms := m.maxRightScroll(); m.rightScroll < ms {
+					m.rightScroll++
+				}
+			} else {
 				if m.cursor < len(m.agents)-1 {
 					m.cursor++
 					m.rightScroll = 0
-				}
-			} else {
-				if ms := m.maxRightScroll(); m.rightScroll < ms {
-					m.rightScroll++
 				}
 			}
 			return m, nil
@@ -642,12 +656,30 @@ func (m AgentsModel) maxRightScroll() int {
 		sections = append(sections, "")
 		sections = append(sections, ruleStyle.Render(strings.Repeat("─", ruleW)))
 		sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Render("Agent Instructions"))
-		// Estimate body lines (glamour not used here — just count raw lines for scroll calc)
-		bodyLines := strings.Count(agent.Body, "\n") + 5
-		sections = append(sections, strings.Repeat("\n", bodyLines))
+		// Render markdown for accurate scroll bounds
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(rightW-4),
+		)
+		if err == nil {
+			if rendered, rerr := renderer.Render(agent.Body); rerr == nil {
+				sections = append(sections, rendered)
+			} else {
+				sections = append(sections, "\n"+agent.Body)
+			}
+		} else {
+			sections = append(sections, "\n"+agent.Body)
+		}
 	}
+	// Nav hint
 	sections = append(sections, "")
-	sections = append(sections, ruleStyle.Render("hint"))
+	if m.focused {
+		hint := "↳ back to list"
+		if m.leftFocused {
+			hint = "→ or enter for details"
+		}
+		sections = append(sections, ruleStyle.Render(hint))
+	}
 
 	lines := strings.Split(strings.Join(sections, "\n"), "\n")
 	viewport := h - 2
