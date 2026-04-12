@@ -318,7 +318,7 @@ You are a review gate — you sleep until review work arrives. After completing 
 
 ### The Loop
 
-1. **Sleep** — Run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"`. This BLOCKS until a trigger fires. Do NOT scan state before sleeping.
+1. **Sleep** — Run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"` with a **timeout of 660000** (11 minutes). This BLOCKS until a trigger fires. Do NOT scan state before sleeping.
 2. **Wake** — `reviewer-wait.sh` exits with a wake reason on stdout. Read the reason and act:
    - **MSG** — You have unread messages. Go to step 3.
    - **TRIGGERED** — Something explicitly triggered you. Go to step 3.
