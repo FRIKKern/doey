@@ -521,3 +521,215 @@ send_notification() {
   _check_cooldown "${title//[^a-zA-Z0-9]/_}" 60 || return 0
   _send_desktop_notification "$title" "$body"
 }
+
+# ─── Polling-loop detector + circuit breaker (task #525 / #536) ───────
+#
+# Detects panes whose wait hook keeps re-firing without any tool work
+# happening between wakes. Three thresholds inside a 120s rolling window:
+#   consecutive=3 → warn event (observability)
+#   consecutive=5 → breaker event + nudge owner + back off the next wake
+#                   for 30s (latched until reset signal)
+#
+# Reset signal: ${RUNTIME_DIR}/status/<pane_safe>.tool_used_this_turn
+# is touched by on-pre-tool-use.sh on every successful (allow-path) tool
+# invocation. Presence of the sentinel = real work happened, clear the
+# counter. Sentinel is consumed on read.
+#
+# All event writes go through `doey-ctl event log --class violation_polling`
+# (no sqlite3, no jq dependency). Test harnesses set DOEY_VIOLATION_STUB
+# to bypass doey-ctl entirely and append a JSONL line to a file.
+#
+# TEST-ONLY ENV (also documented in docs/violations.md):
+#   DOEY_VIOLATION_STUB  - file path; if set, events appended here instead
+#                          of being sent through doey-ctl
+#   DOEY_TEST_CLOCK      - integer unix seconds; overrides `date +%s`
+#                          for deterministic window-expiry testing
+
+# Emit a violation event. Stub-mode-aware.
+_violation_emit_event() {
+  local severity="$1" wake_reason="$2" consec="$3" window_sec="$4"
+  local session="$5" role="$6" window_id="$7" pane_safe="$8"
+  if [ -n "${DOEY_VIOLATION_STUB:-}" ]; then
+    printf '{"class":"violation_polling","severity":"%s","wake_reason":"%s","consecutive":%s,"window_sec":%s,"session":"%s","role":"%s","window_id":"%s","pane":"%s"}\n' \
+      "$severity" "$wake_reason" "$consec" "$window_sec" "$session" "$role" "$window_id" "$pane_safe" \
+      >> "$DOEY_VIOLATION_STUB" 2>/dev/null || true
+    return 0
+  fi
+  command -v doey-ctl >/dev/null 2>&1 || return 0
+  local _proj
+  _proj=$(_resolve_project_dir 2>/dev/null) || _proj=""
+  [ -z "$_proj" ] && return 0
+  (doey-ctl event log \
+    --class violation_polling \
+    --severity "$severity" \
+    --session "$session" \
+    --role "$role" \
+    --window-id "$window_id" \
+    --wake-reason "$wake_reason" \
+    --consecutive "$consec" \
+    --window-sec "$window_sec" \
+    --project-dir "$_proj" >/dev/null 2>&1 &) || true
+}
+
+# Send the breaker nudge to the owner pane (Boss for Taskmaster
+# self-loops, Taskmaster otherwise). Skipped in stub mode.
+_violation_send_nudge() {
+  local pane_safe="$1" wake_reason="$2" consec="$3" window_sec="$4" session="$5"
+  [ -n "${DOEY_VIOLATION_STUB:-}" ] && return 0
+  command -v doey-ctl >/dev/null 2>&1 || return 0
+  local _proj
+  _proj=$(_resolve_project_dir 2>/dev/null) || _proj=""
+  [ -z "$_proj" ] && return 0
+  local _owner
+  if [ "${DOEY_ROLE:-}" = "${DOEY_ROLE_ID_COORDINATOR:-coordinator}" ]; then
+    _owner="0.1"
+  else
+    local _ctw
+    _ctw=$(get_core_team_window 2>/dev/null) || _ctw="1"
+    _owner="${_ctw}.0"
+  fi
+  local _body="pane=$pane_safe reason=$wake_reason consecutive=$consec window_sec=$window_sec session=$session"
+  (doey-ctl msg send \
+    --to "$_owner" \
+    --from "polling-loop-detector" \
+    --subject "polling_loop_breaker" \
+    --body "$_body" \
+    --project-dir "$_proj" >/dev/null 2>&1 &) || true
+}
+
+# Read a numeric field from the JSON ledger.
+_violation_ledger_int() {
+  local file="$1" field="$2" default="${3:-0}"
+  local val
+  val=$(grep -oE "\"${field}\"[[:space:]]*:[[:space:]]*[0-9]+" "$file" 2>/dev/null \
+        | head -1 | grep -oE '[0-9]+$') || val=""
+  printf '%s' "${val:-$default}"
+}
+
+# Read a string field from the JSON ledger.
+_violation_ledger_str() {
+  local file="$1" field="$2"
+  grep -oE "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$file" 2>/dev/null \
+    | head -1 | sed 's/.*"\([^"]*\)"$/\1/'
+}
+
+# Write the JSON ledger atomically.
+_violation_ledger_write() {
+  local file="$1" reason="$2" consec="$3" win_start="$4" last="$5" next_e="$6" breaker="$7"
+  printf '{"last_wake_reason":"%s","consecutive_count":%s,"window_start_ts":%s,"last_wake_ts":%s,"next_wake_earliest":%s,"breaker_tripped":%s}\n' \
+    "$reason" "$consec" "$win_start" "$last" "$next_e" "$breaker" \
+    > "${file}.tmp" 2>/dev/null && mv "${file}.tmp" "$file" 2>/dev/null || true
+}
+
+# violation_bump_counter — main detector entry point.
+# Args: pane_safe wake_reason session role window_id
+violation_bump_counter() {
+  local pane_safe="${1:-}" wake_reason="${2:-}" session="${3:-}" role="${4:-}" window_id="${5:-}"
+
+  # Step 1: enforcement mode gate
+  local mode="${DOEY_ENFORCE_VIOLATIONS:-on}"
+  case "$mode" in on|shadow|off) ;; *) mode=on ;; esac
+  [ "$mode" = "off" ] && return 0
+
+  # Step 2: doey-ctl gate (stub-mode skips this)
+  if [ -z "${DOEY_VIOLATION_STUB:-}" ] && ! command -v doey-ctl >/dev/null 2>&1; then
+    return 0
+  fi
+
+  [ -n "$pane_safe" ] || return 0
+  [ -n "${RUNTIME_DIR:-}" ] || return 0
+
+  # Step 12b: sanitize wake_reason — only [A-Z_]
+  wake_reason=$(printf '%s' "$wake_reason" | tr -cd 'A-Z_')
+  [ -n "$wake_reason" ] || wake_reason="UNKNOWN"
+
+  local state_file="${RUNTIME_DIR}/wait-state-${pane_safe}.json"
+  local lock_dir="${state_file}.lock"
+  local sentinel="${RUNTIME_DIR}/status/${pane_safe}.tool_used_this_turn"
+
+  # Step 3: acquire lock with stale-recovery + 3 retries @ 50ms
+  local _attempts=0 _locked=false
+  while [ "$_attempts" -lt 3 ]; do
+    if mkdir "$lock_dir" 2>/dev/null; then _locked=true; break; fi
+    if find "$lock_dir" -maxdepth 0 -mmin +0.5 2>/dev/null | grep -q .; then
+      rmdir "$lock_dir" 2>/dev/null || true
+      continue
+    fi
+    sleep 0.05 2>/dev/null || true
+    _attempts=$((_attempts + 1))
+  done
+  if [ "$_locked" != true ]; then
+    _log "violation_lock_contention pane=$pane_safe" 2>/dev/null || true
+    return 0
+  fi
+
+  local now="${DOEY_TEST_CLOCK:-$(date +%s)}"
+
+  # Step 4: sentinel reset (real tool work observed since last wake)
+  if [ -f "$sentinel" ]; then
+    rm -f "$sentinel" 2>/dev/null || true
+    _violation_ledger_write "$state_file" "$wake_reason" 1 "$now" "$now" 0 false
+    rmdir "$lock_dir" 2>/dev/null || true
+    return 0
+  fi
+
+  # Step 6: read existing ledger
+  local last_reason="" consecutive=0 window_start=0 last_wake=0 next_earliest=0 breaker=false
+  if [ -f "$state_file" ]; then
+    last_reason=$(_violation_ledger_str "$state_file" last_wake_reason)
+    consecutive=$(_violation_ledger_int "$state_file" consecutive_count 0)
+    window_start=$(_violation_ledger_int "$state_file" window_start_ts 0)
+    last_wake=$(_violation_ledger_int "$state_file" last_wake_ts 0)
+    next_earliest=$(_violation_ledger_int "$state_file" next_wake_earliest 0)
+    if grep -q '"breaker_tripped"[[:space:]]*:[[:space:]]*true' "$state_file" 2>/dev/null; then
+      breaker=true
+    fi
+  fi
+
+  # Step 5: backoff in progress — short-circuit (after sentinel check)
+  if [ "$next_earliest" -gt 0 ] && [ "$now" -lt "$next_earliest" ]; then
+    rmdir "$lock_dir" 2>/dev/null || true
+    return 0
+  fi
+
+  # Steps 7-9: counter logic
+  if [ "$last_reason" != "$wake_reason" ]; then
+    window_start="$now"
+    consecutive=1
+  elif [ "$((now - window_start))" -gt 120 ]; then
+    window_start="$now"
+    consecutive=1
+  else
+    consecutive=$((consecutive + 1))
+  fi
+  last_wake="$now"
+  local window_sec=$((now - window_start))
+
+  # Step 10: write ledger (mid-state, before any event side effects)
+  _violation_ledger_write "$state_file" "$wake_reason" "$consecutive" \
+    "$window_start" "$last_wake" "$next_earliest" "$breaker"
+
+  # Step 11: warn at 3
+  if [ "$consecutive" = "3" ]; then
+    _violation_emit_event warn "$wake_reason" "$consecutive" "$window_sec" \
+      "$session" "$role" "$window_id" "$pane_safe"
+  fi
+
+  # Step 12 + 13: breaker at 5 (single shot until reset)
+  if [ "$consecutive" -ge 5 ] && [ "$breaker" != true ]; then
+    _violation_emit_event breaker "$wake_reason" "$consecutive" "$window_sec" \
+      "$session" "$role" "$window_id" "$pane_safe"
+    breaker=true
+    if [ "$mode" = "on" ]; then
+      next_earliest=$((now + 30))
+      _violation_send_nudge "$pane_safe" "$wake_reason" "$consecutive" "$window_sec" "$session"
+    fi
+    # Re-write ledger with breaker latch + (in `on`) backoff window
+    _violation_ledger_write "$state_file" "$wake_reason" "$consecutive" \
+      "$window_start" "$last_wake" "$next_earliest" "$breaker"
+  fi
+
+  # Step 14: release lock
+  rmdir "$lock_dir" 2>/dev/null || true
+  return 0
+}

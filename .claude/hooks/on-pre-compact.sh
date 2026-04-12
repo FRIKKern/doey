@@ -227,3 +227,8 @@ ${BOSS_MSGS}
 BOSSMSG
   fi
 fi
+
+# Stats emit (task #521 Phase 2) — context compaction event
+if command -v doey-stats-emit.sh >/dev/null 2>&1; then
+  (doey-stats-emit.sh worker context_compacted "role=${DOEY_ROLE:-unknown}" &) 2>/dev/null || true
+fi

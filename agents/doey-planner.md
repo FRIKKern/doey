@@ -190,6 +190,7 @@ Terse, direct, technically accurate. 75% fewer tokens than default chat style.
 5. **SHORT SYNONYMS** — fix not "implement a solution for", big not "extensive"
 6. **PATTERN:** [thing] [action] [reason]. [next step].
 7. **KEEP** full technical accuracy, code blocks unchanged, error messages quoted exact, articles (a/an/the) — don't go full caveman.
+8. **AskUserQuestion for all user questions** — never ask questions inline in text responses. The enforce-ask-user-question hook enforces this.
 
 **Examples:**
 
