@@ -40,6 +40,7 @@ var spinnerRegex = func() *regexp.Regexp {
 type observeResult struct {
 	Active           bool    `json:"active"`
 	Indicator        *string `json:"indicator"`
+	Stale            *bool   `json:"stale,omitempty"`
 	CtxPct           int     `json:"ctx_pct"`
 	LastOutputAgeSec int     `json:"last_output_age_sec"`
 	StatusFileAgeSec int     `json:"status_file_age_sec"`
@@ -197,12 +198,19 @@ func statusObserve(args []string) {
 	target := session + ":" + wp
 
 	lines := capturePane(target)
-	verb := findSpinner(lines)
+	idlePrompt := hasIdlePrompt(lines)
+
+	// Prompt priority: idle prompt overrides stale spinner glyphs
+	verb := ""
+	if !idlePrompt {
+		verb = findSpinner(lines)
+	}
+
 	var indicator string
 	switch {
 	case verb != "":
 		indicator = verb
-	case hasIdlePrompt(lines):
+	case idlePrompt:
 		indicator = "idle"
 	case len(lines) > 0:
 		indicator = "thinking"
@@ -221,9 +229,23 @@ func statusObserve(args []string) {
 		hbAgePtr = &hb
 	}
 
+	ctxPct := readCtxPct(runtime, wp, paneSafe)
+	lastOutputAge := paneOutputAge(target)
+
 	active := false
+	var stalePtr *bool
+
 	if verb != "" {
 		active = true
+		// Staleness override: glyph visible but no recent output or heartbeat
+		if lastOutputAge > 60 && (hbAgePtr == nil || *hbAgePtr > 60) {
+			active = false
+			staleVal := true
+			stalePtr = &staleVal
+		} else {
+			staleVal := false
+			stalePtr = &staleVal
+		}
 	}
 	if statusVal == "BUSY" && statusAge >= 0 && statusAge < 10 {
 		active = true
@@ -232,13 +254,11 @@ func statusObserve(args []string) {
 		active = true
 	}
 
-	ctxPct := readCtxPct(runtime, wp, paneSafe)
-	lastOutputAge := paneOutputAge(target)
-
 	indicatorPtr := &indicator
 	result := observeResult{
 		Active:           active,
 		Indicator:        indicatorPtr,
+		Stale:            stalePtr,
 		CtxPct:           ctxPct,
 		LastOutputAgeSec: lastOutputAge,
 		StatusFileAgeSec: statusAge,
