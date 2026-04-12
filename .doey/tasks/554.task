@@ -1,0 +1,89 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=554
+TASK_TITLE=Finish orphaned phases: 544 (522-P5) + 536 (525-P4) + 546 (521-P4) + 547 (521-P5)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W4
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Reopen and complete 4 trailing incomplete phases. 17 uncommitted files + 1 untracked are orphaned WIP from prior sessions. Workers must assess the WIP (git diff each file), determine what is usable, finish the work, commit, push.
+
+SEQUENTIAL EXECUTION (file overlaps between phases):
+
+Phase A — Task 544 (#522 P5): docs/enforce-ask-user-question.md + agent pointers
+- Current state: doc is 26-line stub, agent pointers absent, zero commits for 544
+- WIP files: common.sh, on-pre-compact.sh, on-session-start.sh, skill .md files, agents/test-driver.md, tests/test-enforce-ask-user-question.sh
+- Finish: fill doc body (3 modes, detection heuristic, violations-log, block-flip procedure, retry-cap semantics, smoke test, rollout plan), add pointer in Boss + Planner agent .md.tmpl files, run expand-templates.sh, commit, mark 544 done
+
+Phase B — Task 536 (TASK_525 P4): Detection + circuit breaker in wait hooks
+- Current state: research done, implementation never started
+- WIP files: reviewer-wait.sh, taskmaster-wait.sh
+- Finish: implement detection + circuit breaker per the research findings, test, commit, mark 536 done
+
+Phase C — Task 546 (Task 521 P4): TUI Stats sub-tab
+- Current state: pending, never started
+- WIP files: doey-stats-allowlist.txt (both copies), stats_tasks.go
+- Finish: complete the stats sub-tab work, go build, commit, mark 546 done
+
+Phase D — Task 547 (Task 521 P5): docs, privacy audit, fresh-install proof
+- Depends on Phase C output
+- Finish: docs, privacy audit, fresh-install verification, commit, mark 547 done
+
+Phase E — Cleanup: remaining uncommitted files
+- git diff any remaining modified files (doey-doctor.sh, doey-intent-dispatch.sh, doey-masterplan-spawn.sh, doey-team-mgmt.sh, doey.sh)
+- Determine: are these from completed tasks and should have been committed? Or stale WIP to discard?
+- Commit useful changes, git checkout -- stale ones
+- Final: git status must be CLEAN (no modified, no untracked except .doey/)
+
+VERIFICATION (after all phases):
+- go build ./... in tui/ PASS
+- tests/test-bash-compat.sh PASS
+- git status clean
+- All 4 tasks (544, 536, 546, 547) marked done or pending_user_confirmation
+TASK_SUBTASKS=1:W4.1: Phase A research — examine WIP diffs for task 544 files (common.sh, on-pre-compact.sh, on-session-start.sh, skills, test-driver.md, enforce-ask-user-question test+doc):done\n2:W4.3: Phase A impl — complete docs/enforce-ask-user-question.md with all 8 sections:done\n3:W4.4: Phase A impl — add AUQ pointer to Planner template + expand-templates.sh:done\n4:W4.2: Phase A commit — stage and commit Phase A files:done\n5:W4.3: Phase B — implement polling-loop detection + circuit breaker in reviewer-wait.sh and taskmaster-wait.sh (task 536):done\n6:W4.4: Phase C verify — go build + bash compat for stats sub-tab changes:done\n7:W4.3: Phase D — task 547 docs, privacy audit, fresh-install proof for stats feature:done\n8:W4.4: Phase E — analyze 5 remaining shell diffs, determine useful vs stale, report:done
+TASK_TIMESTAMPS=created=1775975514
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775975514
+TASK_FILES=shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-team-mgmt.sh,shell/doey.sh
+TASK_SUBTASK_1_TITLE=W4.1: Phase A research — examine WIP diffs for task 544 files (common.sh, on-pre-compact.sh, on-session-start.sh, skills, test-driver.md, enforce-ask-user-question test+doc)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_4_2
+TASK_SUBTASK_1_CREATED_AT=1775975660
+TASK_SUBTASK_1_COMPLETED_AT=1775975793
+TASK_SUBTASK_2_TITLE=W4.3: Phase A impl — complete docs/enforce-ask-user-question.md with all 8 sections
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_4_3
+TASK_SUBTASK_2_CREATED_AT=1775976030
+TASK_SUBTASK_2_COMPLETED_AT=1775976054
+TASK_SUBTASK_3_TITLE=W4.4: Phase A impl — add AUQ pointer to Planner template + expand-templates.sh
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_4_4
+TASK_SUBTASK_3_CREATED_AT=1775976030
+TASK_SUBTASK_3_COMPLETED_AT=1775976143
+TASK_SUBTASK_4_TITLE=W4.2: Phase A commit — stage and commit Phase A files
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_4_2
+TASK_SUBTASK_4_CREATED_AT=1775976255
+TASK_SUBTASK_4_COMPLETED_AT=1775976308
+TASK_SUBTASK_5_TITLE=W4.3: Phase B — implement polling-loop detection + circuit breaker in reviewer-wait.sh and taskmaster-wait.sh (task 536)
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_4_3
+TASK_SUBTASK_5_CREATED_AT=1775976436
+TASK_SUBTASK_5_COMPLETED_AT=1775976639
+TASK_SUBTASK_6_TITLE=W4.4: Phase C verify — go build + bash compat for stats sub-tab changes
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_4_4
+TASK_SUBTASK_6_CREATED_AT=1775976771
+TASK_SUBTASK_6_COMPLETED_AT=1775976832
+TASK_SUBTASK_7_TITLE=W4.3: Phase D — task 547 docs, privacy audit, fresh-install proof for stats feature
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_WORKER=doey_doey_4_3
+TASK_SUBTASK_7_CREATED_AT=1775976882
+TASK_SUBTASK_7_COMPLETED_AT=1775976981
+TASK_SUBTASK_8_TITLE=W4.4: Phase E — analyze 5 remaining shell diffs, determine useful vs stale, report
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_CREATED_AT=1775977075
+TASK_SUBTASK_8_COMPLETED_AT=1775977213

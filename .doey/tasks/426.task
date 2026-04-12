@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=426
+TASK_TITLE=Status format mismatch: Go ctl.WriteStatus writes STATUS=BUSY, shell readers grep '^STATUS: '
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_ASSIGNED_TO=doey_doey_4_1
+TASK_TEAM=0
+TASK_DESCRIPTION=Doey Expert found this during 425. Go writers and shell readers use different status file formats; Go-format files silently dropped by shell readers. Either standardize on one format or make readers accept both. Low risk, high payoff for status DB reliability.
+TASK_SUBTASKS=1:W2.1: Standardize status file format on 'STATUS: BUSY' (colon+space). Update Go ctl.WriteStatus and any other Go writers under tui/cmd/doey-ctl/ to write the colon+space format. Verify all shell readers in .claude/hooks/ and shell/ work. Run tests/test-bash-compat.sh.:done
+TASK_TIMESTAMPS=created=1775585113
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775585113
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-tool-use.sh,.claude/settings.json,install.sh,shell/doey-doctor.sh,shell/doey.sh,shell/info-panel.sh,tui/cmd/doey-ctl/commands.go,tui/cmd/doey-ctl/main.go,tui/internal/ctl/status.go
+TASK_SUBTASK_1_TITLE=W2.1: Standardize status file format on 'STATUS: BUSY' (colon+space). Update Go ctl.WriteStatus and any other Go writers under tui/cmd/doey-ctl/ to write the colon+space format. Verify all shell readers in .claude/hooks/ and shell/ work. Run tests/test-bash-compat.sh.
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775593731
+TASK_SUBTASK_1_COMPLETED_AT=1775594341

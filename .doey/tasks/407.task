@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=407
+TASK_TITLE=Phase D: doey-ctl Go integration (fatalCode + suggestSubcommand)
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=Two edits: (1) tui/cmd/doey-ctl/main.go:1003 wrap fatalCode — on code==ExitUsage and shouldUseLLMFallback(), call intentFallback which shells out to shell/intent-fallback.sh. (2) tui/cmd/doey-ctl/commands.go:1338 suggestSubcommand case 0 — extend no-match branch to call Haiku restricted to valid []string. Reuse bash helper, no second HTTP client in Go. shouldUseLLMFallback checks ANTHROPIC_API_KEY set, DOEY_NO_INTENT_FALLBACK unset, stdout is tty OR DOEY_ROLE set. Agent panes exec immediately. New file: tui/cmd/doey-ctl/intent_fallback.go.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545546
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545546
+TASK_PLAN_ID=1003

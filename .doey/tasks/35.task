@@ -2,10 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=35
 TASK_TITLE=Wire Quick Action buttons to Boss send-keys and TUI navigation
 TASK_STATUS=done
-TASK_CREATED=1743307200
 TASK_TYPE=feature
-TASK_DESCRIPTION=The TUI dashboard Quick Action buttons need to be wired up to perform real actions instead of being decorative. Three buttons need work: (1) "Spawn Freelancer" — when clicked, should send-keys to the Boss pane (0.1) with the perfect pre-filled prompt/instructions to spawn a freelancer pool (e.g. the /doey-add-window slash command with freelancer flags). (2) "View Tasks" — when clicked, should navigate the TUI to open the Tasks pane/tab directly (no send-keys needed, just TUI navigation). (3) "Create Team" — when clicked, should open the Teams tab in the TUI AND send-keys to Boss pane (0.1) with a prompt that triggers the Boss to guide the user through team creation interactively (e.g. asking what kind of team, how many workers, worktree isolation, etc.). The send-keys commands should contain the exact right instructions so the user just has to press Enter. Research current Quick Action implementation in the TUI code first, then implement all three.
 TASK_TAGS=tui,dashboard,shell,hooks
 TASK_TEAM=W1
-TASK_LOG_1774872975=PROGRESS: Dispatched to W1
-TASK_LOG_1774873448=COMPLETE: Committed 0e8679a. 2 files, 61 insertions.
+TASK_DESCRIPTION=The TUI dashboard Quick Action buttons need to be wired up to perform real actions instead of being decorative. Three buttons need work: (1) "Spawn Freelancer" — when clicked, should send-keys to the Boss pane (0.1) with the perfect pre-filled prompt/instructions to spawn a freelancer pool (e.g. the /doey-add-window slash command with freelancer flags). (2) "View Tasks" — when clicked, should navigate the TUI to open the Tasks pane/tab directly (no send-keys needed, just TUI navigation). (3) "Create Team" — when clicked, should open the Teams tab in the TUI AND send-keys to Boss pane (0.1) with a prompt that triggers the Boss to guide the user through team creation interactively (e.g. asking what kind of team, how many workers, worktree isolation, etc.). The send-keys commands should contain the exact right instructions so the user just has to press Enter. Research current Quick Action implementation in the TUI code first, then implement all three.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

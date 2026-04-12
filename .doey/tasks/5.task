@@ -4,8 +4,8 @@ TASK_TITLE=Codebase simplification
 TASK_STATUS=done
 TASK_TYPE=maintenance
 TASK_DESCRIPTION=Codebase-wide simplification pass. Reduced hooks/skills/agents/docs by 655 lines (-8%). Zero behavior changes.
-TASK_CREATED=2026-03-28T00:00:00Z
-TASK_LOG_1774818339=REPORT_W2: Wave1 complete. Results: common.sh 322->275 (-15%), on-pre-tool-use.sh IN PROGRESS, stop-notify.sh 243->221 (-9%), on-pre-compact.sh 220->205 (-7%). Wave2 dispatching: W1->session-mgr-wait+stop-results, W3->post-tool-lint+stop-status+on-prompt-submit+on-notification+watchdog, W4->on-session-start (already dispatched)
-TASK_LOG_1774818426=PROGRESS: W1 shell domain complete. 8976→8857 lines (-119). bash -n PASS, test-bash-compat PASS. Files: doey.sh, settings-panel.sh, doey-task-helpers.sh
-TASK_LOG_1774819090=REPORT_W2: COMPLETE. 8312->7657 lines (-655, -8%). Hooks -193 (-11%), Agents -200 (-8%), Skills -64 (-3%), Docs -198 (-10%). All 13 .sh files pass bash -n. Zero behavior changes. Report: /tmp/doey/doey/reports/simplify_team_W2.md
-TASK_LOG_1774819248=COMPLETE: All waves done. 86a8b9d committed. -655 lines (-8%) across hooks/skills/agents/docs. Zero behavior changes.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

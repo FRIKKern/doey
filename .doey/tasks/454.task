@@ -1,0 +1,52 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=454
+TASK_TITLE=Interactive TUI for intent fallback — dynamic questions, selectable options
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=When the doey intent fallback needs clarification, instead of dumb [y/N] or free-text prompts, render a dynamic interactive TUI using Bubble Tea (Go TUI in tui/). Examples:
+- 'doey open kronprins...' → TUI shows fuzzy-matched project list, user arrows to pick one
+- Ambiguous command → TUI presents option cards (did you mean: open project / init new / list matching?)
+- Multi-step intents → wizard-style flow with selectable steps
+
+Key requirements:
+- The AI comprehension must be fast and smart — understand natural language natively, no stripping/preprocessing
+- When confident (high match), act instantly with no prompts
+- When ambiguous, render interactive Bubble Tea selection UI
+- Must feel instant — stream-first, show options as they resolve
+- Integrates with shell/intent-fallback.sh calling into Go TUI binary for the interactive parts
+
+Related: #453 (smarter fallback), #450 (speed), #451 (Charmbracelet UX patterns — Bubble Tea is Charmbracelet). This is the UX layer on top of the intelligence layer.
+TASK_SUBTASKS=1:W4.1: Research Go TUI structure — tui/ layout, existing Bubble Tea deps, binary build, charmbracelet imports:done\n2:W4.2: Research shell integration — doey-intent-dispatch.sh, intent-fallback.sh, install.sh binary copy:done\n3:W4.1: Implement Go TUI intentselect package + doey-tui subcommand (confirm/select/info modes):done\n4:W4.2: Implement shell integration in doey-intent-dispatch.sh — TUI call for MEDIUM/NONE with fallback:done\n5:W4.1: Verify Go TUI compilation + all 3 modes + shell integration + bash compat:done
+TASK_TIMESTAMPS=created=1775745854
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775745854
+TASK_FILES=install.sh,shell/doey-helpers.sh,shell/doey-intent-dispatch.sh,shell/doey-tunnel.sh,shell/doey.sh,shell/intent-fallback.sh,tui/cmd/doey-tui/main.go,tui/internal/model/actions.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Research Go TUI structure — tui/ layout, existing Bubble Tea deps, binary build, charmbracelet imports
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_4_1
+TASK_SUBTASK_1_CREATED_AT=1775746022
+TASK_SUBTASK_1_COMPLETED_AT=1775746183
+TASK_SUBTASK_2_TITLE=W4.2: Research shell integration — doey-intent-dispatch.sh, intent-fallback.sh, install.sh binary copy
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_4_2
+TASK_SUBTASK_2_CREATED_AT=1775746022
+TASK_SUBTASK_2_COMPLETED_AT=1775746197
+TASK_SUBTASK_3_TITLE=W4.1: Implement Go TUI intentselect package + doey-tui subcommand (confirm/select/info modes)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_4_1
+TASK_SUBTASK_3_CREATED_AT=1775746255
+TASK_SUBTASK_3_COMPLETED_AT=1775746522
+TASK_SUBTASK_4_TITLE=W4.2: Implement shell integration in doey-intent-dispatch.sh — TUI call for MEDIUM/NONE with fallback
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_4_2
+TASK_SUBTASK_4_CREATED_AT=1775746255
+TASK_SUBTASK_4_COMPLETED_AT=1775746407
+TASK_SUBTASK_5_TITLE=W4.1: Verify Go TUI compilation + all 3 modes + shell integration + bash compat
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_4_2
+TASK_SUBTASK_5_CREATED_AT=1775746569
+TASK_SUBTASK_5_COMPLETED_AT=1775746767

@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=168
+TASK_TITLE=Fix doey-ctl messaging pane ID mismatch — messages sent but never found
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Messages sent via 'doey msg send --to SESSION:PANE' are never found by 'doey msg read --pane PANE'. The pane ID format stored in the DB does not match what the reader queries for. Example: Boss sends to 'doey-doey:1.0' but Taskmaster reads from '1.0' — no match. This is why send-keys is the only reliable delivery. Fix the Go CLI msg send/read to normalize pane IDs consistently (strip session prefix, or always include it, or match both).
+TASK_SUBTASKS=1:W2.1: Fix doey-ctl 'done' subcommand to accept multiple task IDs:done\n2:W2.1: Add fuzzy-match suggestions for unknown fields, types, statuses:done
+TASK_TIMESTAMPS=created=1775213523
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775213695
+TASK_SUBTASK_1_TITLE=W2.1
+TASK_SUBTASK_1_STATUS= Fix doey-ctl 'done' subcommand to accept multiple task IDs:done
+TASK_SUBTASK_2_TITLE=W2.1
+TASK_SUBTASK_2_STATUS= Add fuzzy-match suggestions for unknown fields, types, statuses:done

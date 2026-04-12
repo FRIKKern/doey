@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=161
+TASK_TITLE=Smart nudge system — core communication primitive
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Make nudging a core system primitive with intelligence. Central doey nudge command that: (1) Always sends Escape before send-keys, (2) Checks pane state before nudging — if BUSY skip, if high context compact instead, if Boss never nudge, (3) Auto-nudge triggers: after msg send, when worker finishes (nudge SM), when all workers finish (nudge Taskmaster), when pane idle too long, (4) Replace all ad-hoc send-keys patterns in templates with doey nudge calls, (5) Nudge cascade: worker→SM→Taskmaster chain. This replaces task #160 (Escape fix) as the broader solution.
+TASK_SUBTASKS=1:W2.1: Go — enhanced state-aware nudge command + cascade:done\n2:W2.2: Go — auto-trigger nudges (on-finish, all-finished flags):done\n3:W2.3: Shell/templates — replace ad-hoc send-keys with doey nudge:done
+TASK_TIMESTAMPS=created=1775205192
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775205192
+TASK_SUBTASK_1_TITLE=W2.1
+TASK_SUBTASK_1_STATUS= Go — enhanced state-aware nudge command + cascade:done
+TASK_SUBTASK_2_TITLE=W2.2
+TASK_SUBTASK_2_STATUS= Go — auto-trigger nudges (on-finish, all-finished flags):done
+TASK_SUBTASK_3_TITLE=W2.3
+TASK_SUBTASK_3_STATUS= Shell/templates — replace ad-hoc send-keys with doey nudge:done

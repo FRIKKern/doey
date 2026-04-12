@@ -1,0 +1,106 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=522
+TASK_TITLE=Stop hook: enforce AskUserQuestion for Boss and Planner
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Goal: Enforce that user-facing agents (Boss + Planner) always use the AskUserQuestion tool when asking the user questions. Inline text questions get missed by users — native Claude Code TUI question UI must be used.
+
+Scope is locked to TWO roles: Boss and Planner. Not Taskmaster, not Subtaskmaster, not Workers.
+
+Mechanism: new Stop hook that scans the final assistant message for question patterns, checks whether AskUserQuestion was called in the same turn, and blocks the stop with feedback (exit 2) if a question was asked without the tool.
+
+REQUIREMENTS:
+
+1) New hook file: .claude/hooks/stop-enforce-ask-user-question.sh
+   - Bash 3.2 compatible (will be linted by post-tool-lint.sh)
+   - set -euo pipefail
+   - Sources common.sh for init_hook + role helpers
+
+2) Role gate — run ONLY for Boss and Planner:
+   - Boss: DOEY_ROLE_ID=boss (already set by on-session-start.sh)
+   - Planner: the /doey-masterplan skill spawns a Planner. VERIFY how that pane/agent is identified. Check agents/doey-planner.md and .claude/skills/doey-masterplan/ to understand how Planner runs. It may need a new DOEY_ROLE_ID=planner assignment when the masterplan window is created. If planner role isn't currently tagged in the role system, wire it in via shell/doey-roles.sh and on-session-start.sh.
+   - For all other roles: exit 0 immediately.
+
+3) Detection heuristic (tier 1 only for v1):
+   - Parse the transcript JSONL (.claude/projects/<slug>/<session>.jsonl)
+   - Extract the last assistant message text
+   - Strip fenced code blocks (), inline code (), quoted blocks (> ...), and markdown headers (^#+ )
+   - Check the last non-empty line of the stripped text
+   - If it ends with '?' AND starts with a second-person trigger (case-insensitive, after trimming leading bullets/dashes):
+     * Should I
+     * Do you
+     * Would you
+     * Which
+     * Can you / Can I
+     * Want me to
+     * Or (as conjunction-question)
+   - → that's a violation
+
+4) Tool-call check:
+   - In the same turn (from the last 'user' entry forward), parse tool_use events in the transcript
+   - If AskUserQuestion was called → pass (not a violation)
+   - If detected violation AND tool NOT called → block
+
+5) Block behavior (exit 2 with stderr feedback):
+   Message:
+   BLOCKED: Your response ends with a question to the user, but you didn't call AskUserQuestion.
+   Questions to users MUST use the AskUserQuestion tool so they render in the native Claude Code UI. Plain-text questions get missed.
+   Detected pattern: "<excerpt of the offending line>"
+   Action: Retry your response. Keep the explanation text, but replace the question with an AskUserQuestion tool call. You may ask up to 4 questions per call, with 2-4 options per question.
+
+6) Shadow mode (MANDATORY — do not ship blocking on day 1):
+   - Env var: DOEY_ENFORCE_QUESTIONS with values shadow|block|off
+   - Default: shadow
+   - shadow: detect violations, append to .doey/violations/ask-user-question.jsonl, do NOT block
+   - block: detect + actively block via exit 2
+   - off: skip hook entirely
+   - Violation log format: one JSON object per line with {ts, role, session, excerpt, tier}
+
+7) Retry cap:
+   - When in block mode, if the same pane is blocked twice in a row for this rule, log a 'retry_cap_hit' event and allow through on the third try with a warning. Prevents infinite loops.
+   - Track via a small counter file in /tmp/doey/<session>/enforce-retry-<pane>.count, cleared on successful non-violating response.
+
+8) Settings wiring:
+   - Register the new hook in the appropriate hook loader (check how existing stop-*.sh hooks are wired — probably via .claude/settings.json or install.sh)
+   - Fresh install compatible: DOEY_ENFORCE_QUESTIONS=shadow must be the default after curl|bash, with no manual setup
+   - Document in docs/ and in agents/doey-boss.md + agents/doey-planner.md (pointer to the rule)
+
+9) Testing:
+   - tests/test-bash-compat.sh must pass
+   - Add a unit test or E2E scenario: Boss responds with 'Should I proceed?' in shadow mode → .doey/violations/ask-user-question.jsonl entry written, no block. Same in block mode → exit 2 + feedback in stderr.
+   - Verify Planner role detection works when /doey-masterplan is invoked — create a Planner window, have it emit a test response with a question, confirm the hook fires.
+
+10) Rollout plan (ship, then tune):
+    - Ship with DOEY_ENFORCE_QUESTIONS=shadow
+    - After 3 real sessions, review .doey/violations/ask-user-question.jsonl for false positives
+    - Tune heuristic if needed (tier 1 patterns)
+    - Flip default to 'block' in a follow-up task
+    - DO NOT flip to block in this task — shadow only for the first ship
+
+CONSTRAINTS:
+- Bash 3.2 compatible (no associative arrays, no mapfile, etc.)
+- Respect fresh-install invariant
+- No new dependencies
+- One worker per file (this should be single-worker scope anyway)
+
+DELIVERABLES:
+- .claude/hooks/stop-enforce-ask-user-question.sh
+- Role wiring for Planner if needed (shell/doey-roles.sh, on-session-start.sh)
+- Settings registration (.claude/settings.json or install.sh update)
+- Violation log directory creation
+- Unit/E2E test
+- docs/enforce-ask-user-question.md explaining the rule, env var, shadow mode, and how to tune
+- Updated agents/doey-boss.md and agents/doey-planner.md with rule pointer
+
+Plan first — this is PLANNED because: (a) requires investigating how Planner is identified today, (b) touches hook loader + role system + agent definitions, (c) has a shadow→block rollout strategy. Interview/research phase should verify Planner role identification BEFORE writing the hook.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775901591
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775901591
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-session-start.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh,shell/doey-masterplan-spawn.sh,shell/doey-stats-allowlist.txt,shell/doey-team-mgmt.sh,shell/doey.sh,tui/cmd/doey-ctl/doey-stats-allowlist.txt,tui/cmd/doey-ctl/stats_tasks.go,tui/internal/model/logsgroup.go

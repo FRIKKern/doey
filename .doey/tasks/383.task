@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=383
+TASK_TITLE=Masterplan TUI Phase 2: research progress panel + worker status
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Add research progress panel to doey-masterplan-tui. Show which workers are researching what, their status (dispatched/working/finished), and when reports arrive in the research/ directory. Read worker status from runtime status files and research dir. Display as a sidebar or bottom panel alongside the plan markdown. File: tui/cmd/doey-masterplan-tui/main.go.
+TASK_SUBTASKS=1:W4.1: Implement research progress panel + worker status in doey-masterplan-tui:done\n2:Dispatched to window 4 (1 worker): research progress panel for masterplan-tui:done
+TASK_TIMESTAMPS=created=1775515867
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775515867
+TASK_FILES=tui/cmd/doey-masterplan-tui/main.go,tui/internal/bubbleterm/keys.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Implement research progress panel + worker status in doey-masterplan-tui
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to window 4 (1 worker): research progress panel for masterplan-tui
+TASK_SUBTASK_2_STATUS=done

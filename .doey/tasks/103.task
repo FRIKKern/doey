@@ -3,23 +3,17 @@ TASK_ID=103
 TASK_TITLE=Fix TUI Plans tab mouse lock — clicks trapped after entering Plans
 TASK_STATUS=done
 TASK_TYPE=bugfix
-TASK_PRIORITY=P1
-TASK_CREATED=1743566880
-TASK_UPDATED=1743566880
 TASK_DESCRIPTION=Entering the Plans tab disables mouse click navigation on the tab bar, trapping the user. Plans view likely captures all mouse events or fails to delegate tab-bar clicks back to the parent.
-TASK_ASSIGNED_TEAM=W1
-
 TASK_SUBTASKS=1:W1.1: Research Plans tab mouse event handling --project-dir /home/doey/doey:done\n2:W1.2: Research parent tab routing and mouse event flow --project-dir /home/doey/doey:done\n3:W1.1: Implement fix — cardHeight, headerLines, GotoTop, mouse passthrough in plans.go --project-dir /home/doey/doey:done\n4:W1.3: Implement task inspect scroll support (task 104) in tasks.go --project-dir /home/doey/doey:done
-TASK_TIMESTAMPS=|completed=1775128102
-TASK_DECISION_LOG=1775127764:Status changed to done\n1775127948:Status changed to done\n1775127974:Wave 1 Research: Root cause is cardHeight mismatch (3 vs 2) in plans.go:358, headerLines may be wrong, missing GotoTop on select, and silent event consumption. Tab bar routing is NOT the issue — root.go handles it correctly. Fix targets: plans.go lines 356-392.\n1775128102:Status changed to done\n1775128136:Wave 2 Implementation: Worker 1 fixed plans.go — cardHeight 2→3, headerLines=1 confirmed correct, added GotoTop(). Build passes.
-TASK_ATTACHMENTS=.doey/tasks/103.result.json
-TASK_REPORT_1_TIMESTAMP=1775128136
-TASK_REPORT_1_AUTHOR=Manager_W1
-TASK_REPORT_1_TYPE=progress
-TASK_REPORT_1_TITLE=Task 103 Implementation Complete
-TASK_REPORT_1_BODY=Fixed cardHeight mismatch (2→3), added GotoTop() on card select. Build passes. headerLines=1 verified correct.
-TASK_REPORT_2_TIMESTAMP=1775128206
-TASK_REPORT_2_AUTHOR=Manager_W1
-TASK_REPORT_2_TYPE=completion
-TASK_REPORT_2_TITLE=Task 103 Complete
-TASK_REPORT_2_BODY=Fixed Plans tab mouse lock: cardHeight 2→3, added GotoTop() on card select. Build passes.
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1743566880
+TASK_SUBTASK_1_TITLE=W1.1
+TASK_SUBTASK_1_STATUS= Research Plans tab mouse event handling --project-dir /home/doey/doey:done
+TASK_SUBTASK_2_TITLE=W1.2
+TASK_SUBTASK_2_STATUS= Research parent tab routing and mouse event flow --project-dir /home/doey/doey:done
+TASK_SUBTASK_3_TITLE=W1.1
+TASK_SUBTASK_3_STATUS= Implement fix — cardHeight, headerLines, GotoTop, mouse passthrough in plans.go --project-dir /home/doey/doey:done
+TASK_SUBTASK_4_TITLE=W1.3
+TASK_SUBTASK_4_STATUS= Implement task inspect scroll support (task 104) in tasks.go --project-dir /home/doey/doey:done

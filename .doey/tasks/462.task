@@ -1,0 +1,31 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=462
+TASK_TITLE=Boss must use AskUserQuestion tool + desktop notification for pending questions
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=User reports that when Boss asks a question, it's buried in text output and easy to miss. Two fixes needed:
+
+1. AGENT PROMPT FIX — Boss agent definition must strongly emphasize using AskUserQuestion (native Claude Code question UI) for ALL questions, never inline text questions. This is already in the system prompt but needs reinforcing in the agent .md.tmpl.
+
+2. DESKTOP NOTIFICATION — When Boss sends a question via AskUserQuestion, fire a macOS notification so the user knows to check the Boss pane. Use: osascript -e 'display notification "Question waiting" with title "Doey — Boss" sound name "Ping"'
+
+Files: agents/doey-boss.md.tmpl, possibly hooks for notification
+TASK_SUBTASKS=1:W3.1: Research Boss agent template and hooks for AskUserQuestion notification design:done\n2:W3.1: Implement AskUserQuestion mandate in Boss template + desktop notification hook:done
+TASK_TIMESTAMPS=created=1775752728
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775752728
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,agents/doey-boss.md,agents/doey-boss.md.tmpl,shell/doey-intent-dispatch.sh,shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research Boss agent template and hooks for AskUserQuestion notification design
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_3_1
+TASK_SUBTASK_1_CREATED_AT=1775752870
+TASK_SUBTASK_1_COMPLETED_AT=1775753047
+TASK_SUBTASK_2_TITLE=W3.1: Implement AskUserQuestion mandate in Boss template + desktop notification hook
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_3_1
+TASK_SUBTASK_2_CREATED_AT=1775752874
+TASK_SUBTASK_2_COMPLETED_AT=1775753266

@@ -1,0 +1,86 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=442
+TASK_TITLE=Tunnel port detection: Haiku runtime introspection as Tier 1, static parse as Tier 2, defaults as Tier 3
+TASK_STATUS=cancelled
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Extension on #441. Instead of only parsing project config files (which can be wrong — dev scripts often get overridden with --port FLAG at runtime), use Haiku to introspect the ACTUAL runtime state and identify real dev-server ports. Fall back to static parsing and framework defaults when runtime has nothing to offer.
+
+THREE-TIER DETECTION CHAIN (implement in this order inside 'doey tunnel up'):
+
+TIER 1 — Haiku-analyzed runtime reality (ground truth, current state)
+  Collect these live signals and pipe to Haiku as context:
+  1. ss -tlnp  (ports + PIDs + process command names)
+  2. ps -eo pid,ppid,user,args  (full command lines — catches --port 4001, -p 8080, PORT=4001 env overrides)
+  3. tmux pane captures for any pane whose scrollback shows dev-server banners:
+     - 'Local:   http://localhost:PORT'
+     - 'ready - started server on 0.0.0.0:PORT'
+     - 'vite v5.x.x dev server running at http://localhost:PORT'
+     - generic 'listening on :PORT' / 'http://127.0.0.1:PORT'
+     Capture last ~100 lines of each pane, filter for URL-ish lines
+  4. /proc/<pid>/cwd readlinks for each candidate PID -> which project directory that process belongs to
+  5. lsof -iTCP -sTCP:LISTEN -n -P if available (fallback/augment to ss)
+
+  Prompt contract for Haiku (JSON in, JSON out):
+    Input: { runtime: { listeners: [...], processes: [...], tmux_captures: [...] }, project_dir: pwd }
+    Output: { ports: [{ port, process, project_path, confidence, source }], notes }
+
+  If Haiku returns high-confidence matches (>=0.8) -> use those. Ground truth.
+  If low confidence or empty -> fall through to Tier 2.
+
+TIER 2 — Static project file parsing (from task #441)
+  Framework config files, package.json scripts, .env files, docker-compose.
+  Use when nothing is running yet (fresh start) or Haiku returned nothing.
+
+TIER 3 — Framework defaults
+  Pure dependency-based guess: 'next' -> 3000, 'vite' -> 5173, etc.
+  Last resort so brand-new empty projects still get a sensible URL.
+
+BEHAVIOR RULES:
+- Tier 1 is SKIPPED silently if: claude binary missing, ANTHROPIC_API_KEY unset, DOEY_NO_INTENT_FALLBACK=1, or DOEY_TUNNEL_NO_HAIKU=1. No errors, just fall to Tier 2.
+- Tier 1 has a hard timeout (3s max for the Haiku call). Timeout -> Tier 2.
+- Tier 1 results are cached briefly (30s) keyed by pwd + listener signature, to avoid re-calling Haiku on every 'doey tunnel status'.
+- Tier 2 and 3 remain functional with zero runtime dependencies.
+- Combined result: merge tiers with Tier 1 winning on conflicts (runtime reality > static config > defaults).
+- Output format must clearly label each detected port's source: 'runtime' vs 'config' vs 'default', so the user knows what the evidence is.
+
+INTEGRATION:
+- New helper shell/doey-tunnel-detect-runtime.sh for Tier 1
+- Extend shell/doey-tunnel-detect.sh (from #441) to orchestrate the 3-tier chain
+- Reuse shell/intent-fallback.sh's 'claude -p' invocation pattern — do NOT duplicate the call logic, share the helper
+
+FRESH-INSTALL: Must work with no claude binary (skip Tier 1), no tmux (skip tmux captures), no lsof (use ss only). Every optional dependency is detected and degraded.
+
+ACCEPTANCE:
+1. Start 'vite dev --port 4001' in a project — doey tunnel up detects 4001, not 5173
+2. Start nothing in a Next.js project — doey tunnel up detects 3000 from Tier 2/3
+3. DOEY_TUNNEL_NO_HAIKU=1 doey tunnel up — confirms Tier 1 is skipped and Tier 2/3 still works
+4. Unplug network / remove API key — Tier 1 times out or skips, Tier 2/3 still works
+5. Show the 'source' label in output for each port
+TASK_SUBTASKS=1:W2.1: Research existing tunnel-detect.sh, doey-headless.sh, and intent-fallback.sh to understand current state and integration points:done\n2:W2.2: Implement 3-tier tunnel port detection in doey-tunnel-detect.sh + integrate into doey-tunnel.sh and doey.sh:review\n3:W2.1: Verify 3-tier tunnel detection implementation — independent verification of all acceptance criteria:review\n4:W2.2: Fix Tier 2 --port grep bug + regression test (reviewer feedback):done
+TASK_TIMESTAMPS=created=1775731816
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775731816
+TASK_FILES=install.sh,shell/doey-tunnel-detect.sh,shell/doey-tunnel.sh,shell/doey.sh,shell/intent-fallback.sh,tui/internal/model/actions.go,tui/internal/model/banner.go,tui/internal/model/root.go
+TASK_SUBTASK_1_TITLE=W2.1: Research existing tunnel-detect.sh, doey-headless.sh, and intent-fallback.sh to understand current state and integration points
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775738006
+TASK_SUBTASK_1_COMPLETED_AT=1775738188
+TASK_SUBTASK_2_TITLE=W2.2: Implement 3-tier tunnel port detection in doey-tunnel-detect.sh + integrate into doey-tunnel.sh and doey.sh
+TASK_SUBTASK_2_STATUS=review
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1775738226
+TASK_SUBTASK_2_COMPLETED_AT=1775738439
+TASK_SUBTASK_3_TITLE=W2.1: Verify 3-tier tunnel detection implementation — independent verification of all acceptance criteria
+TASK_SUBTASK_3_STATUS=review
+TASK_SUBTASK_3_WORKER=doey_doey_2_1
+TASK_SUBTASK_3_CREATED_AT=1775738506
+TASK_SUBTASK_3_COMPLETED_AT=1775738709
+TASK_SUBTASK_4_TITLE=W2.2: Fix Tier 2 --port grep bug + regression test (reviewer feedback)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_2
+TASK_SUBTASK_4_CREATED_AT=1775739066
+TASK_SUBTASK_4_COMPLETED_AT=1775739201

@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=352
+TASK_TITLE=Auto-save and rename screenshots as permanent task attachments
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=When users share screenshots during a task, they must be automatically saved permanently and attached to the task record. Currently screenshots may be in temp paths that disappear. The system should: (1) detect when a screenshot/image is shared in conversation, (2) copy it to a permanent location (e.g. .doey/tasks/attachments/task-N/), (3) rename it descriptively, (4) record the attachment reference in the task file. This ensures visual evidence survives across sessions and workers can reference it. Research how screenshots currently flow through the system and where the hook/skill integration point should be.
+TASK_SUBTASKS=1:Dispatch to W3 Subtaskmaster:done\n2:W3.1: Research — investigate screenshot/image flow through hooks, temp paths, task file format, and identify integration points:done\n3:W3.1: Implement screenshot detection and persistence in on-pre-tool-use.sh hook:done\n4:W3.2: Add screenshot attachment type to Go TUI (types, emoji, color, reader):done\n5:W3.2: Verify screenshot attachment feature — test hook logic, Go build, bash compat:done
+TASK_TIMESTAMPS=created=1775484236
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775484236
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,tui/internal/model/tasks.go,tui/internal/runtime/reader.go,tui/internal/runtime/tasks_config.go,tui/internal/runtime/types.go,tui/internal/styles/cards.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatch to W3 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Research — investigate screenshot/image flow through hooks, temp paths, task file format, and identify integration points
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Implement screenshot detection and persistence in on-pre-tool-use.sh hook
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Add screenshot attachment type to Go TUI (types, emoji, color, reader)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.2: Verify screenshot attachment feature — test hook logic, Go build, bash compat
+TASK_SUBTASK_5_STATUS=done

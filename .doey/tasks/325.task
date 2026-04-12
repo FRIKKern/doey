@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=325
+TASK_TITLE=Subtaskmaster auto-claim: spawn-with-intent handoff
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=When Taskmaster spawns a team for a specific task, the Subtaskmaster currently wakes up with no context and goes idle waiting for explicit dispatch. This creates a dead gap where Taskmaster has to notice the SM is alive and then send a message. Fix: when a team is spawned with a task intent, the Subtaskmaster should auto-detect and claim that task on startup. Options to explore: (1) write task intent to a file the SM reads on boot, (2) pass task ID via env var during spawn, (3) queue the message before spawn so SM reads it immediately. Must work reliably — no race conditions. The SM agent definition or on-session-start hook are likely the right places to wire this.
+TASK_SUBTASKS=1:W3.1: Research spawn flow — doey.sh add-window, team_W.env, on-session-start.sh:done\n2:W3.2: Research SM boot — agent definition, message queue, existing auto-claim patterns:done\n3:W3.1: Enhance _brief_team() to include task details when TASK_ID set:done\n4:W3.2: Add auto-claim to SM agent template + expand templates:done\n5:W3.1: Verify _brief_team and SM agent auto-claim changes:done
+TASK_TIMESTAMPS=created=1775467074
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775467074
+TASK_FILES=agents/doey-subtaskmaster.md,agents/doey-subtaskmaster.md.tmpl,shell/doey-team-mgmt.sh,tui/internal/model/tasks.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research spawn flow — doey.sh add-window, team_W.env, on-session-start.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research SM boot — agent definition, message queue, existing auto-claim patterns
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Enhance _brief_team() to include task details when TASK_ID set
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Add auto-claim to SM agent template + expand templates
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.1: Verify _brief_team and SM agent auto-claim changes
+TASK_SUBTASK_5_STATUS=done

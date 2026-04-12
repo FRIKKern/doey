@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=198
+TASK_TITLE=Add doey-send.sh install step and .gitignore entry
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_DESCRIPTION=Copy shell/doey-send.sh to ~/.local/bin/ in install.sh, add tui/doey-loading to .gitignore
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775265645
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775265645

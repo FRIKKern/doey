@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=473
+TASK_TITLE=Research: best update/reinstall experience for Doey
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_CREATED_BY=coordinator
+TASK_TEAM=W5
+TASK_DESCRIPTION=Investigate symlink vs copy for install.sh, how doey update should work, hot-reload after update, web-install path. After git pull, installed scripts are stale. Research: (1) What does install.sh copy vs could be symlinked? (2) Symlinks for auto-update on git pull? (3) Trade-offs? (4) How should doey update work? (5) Hot-reload running session? (6) curl|bash users? Deliverable: findings report with recommended approach.
+TASK_SUBTASKS=1:Research dispatch to W5.1 — update/reinstall experience:done
+TASK_TIMESTAMPS=created=1775758761
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775758761
+TASK_SUBTASK_1_TITLE=Research dispatch to W5.1 — update/reinstall experience
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775758887
+TASK_SUBTASK_1_COMPLETED_AT=1775758966

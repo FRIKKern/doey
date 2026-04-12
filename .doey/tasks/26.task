@@ -2,24 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=26
 TASK_TITLE=Connections tab in Go TUI — friendly integration setup
 TASK_STATUS=done
-TASK_CREATED=1743322000
 TASK_TYPE=feature
-TASK_DESCRIPTION=Add a "Connections" tab to the Go TUI dashboard that shows all external services/integrations connected to the project. Examples: Vercel, GitHub Repo, Sanity, Figma, databases, APIs, etc.
-
-The tab should:
-- List all configured connections with status (connected/disconnected/needs auth)
-- Make it very friendly to set up new connections — guided flow, not just config file editing
-- Show connection health/status at a glance (green = connected, red = error, yellow = needs attention)
-- Support common integrations: Vercel, GitHub, Sanity, Figma, and be extensible for more
-- Store connection config in .doey/connections/ or similar (per-project)
-- Each connection entry: service name, icon/emoji, status, last verified, account/project info
-
-UX should be welcoming — this is where users feel the tool is smart about their stack. Think setup wizard vibes, not raw config. Scrolling must work correctly per task 23 patterns.
 TASK_TAGS=tui,dashboard,config,infrastructure
 TASK_TEAM=W2
-TASK_LOG_1774858888=DISPATCHED: Sent to W2 Manager
-TASK_LOG_1774859660=COMPLETE: Committed 4e179a2 — Connections tab with 465-line model, types, reader, root.go registration
+TASK_DESCRIPTION=Add a "Connections" tab to the Go TUI dashboard that shows all external services/integrations connected to the project. Examples: Vercel, GitHub Repo, Sanity, Figma, databases, APIs, etc.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775063622
-TASK_TIMESTAMPS=|completed=1775068471
-TASK_DECISION_LOG=1775063622:Status changed to done\n1775063744:Status changed to done\n1775068471:Status changed to done
-TASK_ATTACHMENTS=.doey/tasks/26.result.json

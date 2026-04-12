@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=547
+TASK_TITLE=Task 521 Phase 5: docs, privacy audit, fresh-install proof
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=doey-planner
+TASK_DESCRIPTION=Finalize task #521. (a) docs/stats.md explaining storage, allow-list, categories, kill-switch, retention-deferred. (b) tests/test-stats-privacy.sh scanning emitted rows for forbidden patterns + 200-char value cap. (c) tests/test-stats-smoke.sh with DOEY_STATS=0 negative branch + unknown-key drop. (d) Fresh-install proof: schema_meta row + session_id existence check. (e) doey doctor --stats-verbose rendering. Plan: /tmp/doey/doey/masterplan-task521-20260411-093040/plan.md
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775910681
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910681

@@ -1,0 +1,49 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=459
+TASK_TITLE=CRITICAL: Stop losing work from branch switching and git operations
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=This is Doey's most devastating recurring problem. When the Taskmaster or Deployment role runs git operations (branch creation, checkout, PR deployment, git clean), it wipes uncommitted changes from workers on other teams who are still working on the same files. This just happened AGAIN — tasks 451/455/456 had their changes to intent-fallback.sh and doey-intent-dispatch.sh destroyed by a deployment git operation for PR #13.
+
+ROOT CAUSE ANALYSIS NEEDED:
+1. Why are git operations touching the working tree while workers are still editing?
+2. Why is there no protection for uncommitted work?
+3. Why does deployment not stash/protect in-flight changes?
+
+POSSIBLE SOLUTIONS TO EVALUATE:
+- Git worktrees: each team gets its own worktree so branch operations are isolated
+- Mandatory stash-before-deploy: deployment must stash all uncommitted changes, deploy, then pop
+- File locking: track which files are being edited by which team, block git operations that would touch them
+- Commit-early pattern: workers commit to feature branches immediately, deployment merges
+- Pre-flight check: before any git operation, scan for dirty files and abort if other teams have uncommitted work
+
+This must be solved at the infrastructure level. Band-aid fixes are not acceptable. Research first, then implement the most robust solution.
+TASK_SUBTASKS=1:W2: Research git destruction vectors, design protection, implement:done\n2:W2.1: Research all git operations in Doey that can destroy uncommitted work:done\n3:W2.2: Design protection mechanism against git-caused work loss:done\n4:W2.3: Implement git safety guards (pre-flight checks + worktree isolation):done\n5:W2.4: Verify solution — test concurrent edits survive deployment git ops:done
+TASK_TIMESTAMPS=created=1775750062
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775750062
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.claude/skills/doey-worktree/SKILL.md,shell/doey-session.sh,shell/doey-team-mgmt.sh,shell/doey-update.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2: Research git destruction vectors, design protection, implement
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775750142
+TASK_SUBTASK_1_COMPLETED_AT=1775752582
+TASK_SUBTASK_2_TITLE=W2.1: Research all git operations in Doey that can destroy uncommitted work
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775750165
+TASK_SUBTASK_2_COMPLETED_AT=1775751323
+TASK_SUBTASK_3_TITLE=W2.2: Design protection mechanism against git-caused work loss
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775750165
+TASK_SUBTASK_3_COMPLETED_AT=1775751323
+TASK_SUBTASK_4_TITLE=W2.3: Implement git safety guards (pre-flight checks + worktree isolation)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775750165
+TASK_SUBTASK_4_COMPLETED_AT=1775751323
+TASK_SUBTASK_5_TITLE=W2.4: Verify solution — test concurrent edits survive deployment git ops
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_CREATED_AT=1775750165
+TASK_SUBTASK_5_COMPLETED_AT=1775751323

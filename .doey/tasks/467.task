@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=467
+TASK_TITLE=Fix reserved team isolation: allow intra-team communication
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=coordinator
+TASK_TEAM=W4
+TASK_DESCRIPTION=doey_send_verified blocks all sends to RESERVED panes regardless of sender. Subtaskmaster in a reserved team cannot send-keys to its own workers. Fix: allow sends when sender is in the same window (intra-team). RESERVED should only block cross-team dispatch.
+TASK_SUBTASKS=1:Direct dispatch to W4.1 — fix RESERVED intra-team block in doey-send.sh:done
+TASK_TIMESTAMPS=created=1775756393
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775756393
+TASK_FILES=shell/doey-send.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Direct dispatch to W4.1 — fix RESERVED intra-team block in doey-send.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775756508
+TASK_SUBTASK_1_COMPLETED_AT=1775756552

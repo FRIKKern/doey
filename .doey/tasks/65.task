@@ -2,11 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=65
 TASK_TITLE=Task updates must set TASK_UPDATED timestamp
 TASK_STATUS=done
-TASK_CREATED=1774959913
 TASK_TYPE=bug
-TASK_DESCRIPTION=When a task file is updated (status change, subtask added, Q&A appended, any mutation), the TASK_UPDATED timestamp is not being set. This means the Go TUI cannot sort by true activity — it has no way to know when a task was last touched. Fix: (1) Every code path that mutates a .task file must set TASK_UPDATED=epoch_timestamp. This includes: status transitions, subtask updates, Q&A appends, report additions, any field change. (2) If TASK_UPDATED field does not exist in the file, add it. (3) The doey-task-helpers.sh functions must enforce this — any helper that writes to a .task file sets TASK_UPDATED. (4) Agent defs that manually write task files must also set TASK_UPDATED. (5) Go TUI should use TASK_UPDATED for activity sorting (task 62 depends on this). This is a bug — the field exists conceptually but is never written.
 TASK_TAGS=task-system,shell,go,tui
 TASK_TEAM=W1
-TASK_LOG_1774959937=DISPATCHED to W1 by SM
-TASK_RESULT=TASK_UPDATED helper, TUI parsing + sorting, creation templates. 5 files, +32 lines. Committed 9f84a32.
-TASK_LOG_1774960312=COMMITTED 9f84a32, status→pending_user_confirmation
+TASK_DESCRIPTION=When a task file is updated (status change, subtask added, Q&A appended, any mutation), the TASK_UPDATED timestamp is not being set. This means the Go TUI cannot sort by true activity — it has no way to know when a task was last touched. Fix: (1) Every code path that mutates a .task file must set TASK_UPDATED=epoch_timestamp. This includes: status transitions, subtask updates, Q&A appends, report additions, any field change. (2) If TASK_UPDATED field does not exist in the file, add it. (3) The doey-task-helpers.sh functions must enforce this — any helper that writes to a .task file sets TASK_UPDATED. (4) Agent defs that manually write task files must also set TASK_UPDATED. (5) Go TUI should use TASK_UPDATED for activity sorting (task 62 depends on this). This is a bug — the field exists conceptually but is never written.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

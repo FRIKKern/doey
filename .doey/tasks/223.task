@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=223
+TASK_TITLE=Fix TUI list viewport — max height constraint so user never starts stuck at bottom
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=W3
+TASK_DESCRIPTION=TUI task list (and other lists) still starts scrolled to the bottom. User gets stuck looking at the end of the list. Fix: all list components in Go TUI need a max visible height constraint and must initialize viewport at the top (offset 0). This is a recurring issue — tasks 39, 177, 212, 213 addressed it partially but it persists. Screenshot: https://gyazo.com/0c78908a4eb1764bf0c9c61aef8d9f7d. Need a systemic fix, not per-tab patches.
+TASK_SUBTASKS=1:Dispatched to W3 Subtaskmaster:done\n2:W3.2: Fix tasks.go viewport — Select(0) + GotoTop after SetItems:done\n3:W3.3: Fix agents.go + connections.go + team.go + files.go viewport reset:done\n4:W3.4: Build and verify all tabs start at top:done
+TASK_TIMESTAMPS=created=1775299726
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775299726
+TASK_SUBTASK_1_TITLE=Dispatched to W3 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Fix tasks.go viewport — Select(0) + GotoTop after SetItems
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.3: Fix agents.go + connections.go + team.go + files.go viewport reset
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.4: Build and verify all tabs start at top
+TASK_SUBTASK_4_STATUS=done

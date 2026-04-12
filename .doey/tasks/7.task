@@ -2,105 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=7
 TASK_TITLE=Beautiful plan visualization in Go TUI — render task plans, research, and reports
 TASK_STATUS=done
-TASK_CREATED=1774818300
 TASK_TYPE=feature
-TASK_DESCRIPTION=Build a complete visualization grammar and rendering system for Doey. Workers and Managers write structured markup blocks into .task files. The Go TUI renders them with full Lip Gloss styling. Plain terminal output gets a simpler Unicode renderer. Same grammar, two renderers.
-
-=== VISUALIZATION GRAMMAR (markup blocks in TASK_LOG entries) ===
-
-Workers write these blocks inside TASK_LOG values:
-
-:::progress
-Phase 1: done
-Phase 2: 67%
-Phase 3: pending
-:::
-
-:::tree
-shell/
-  doey.sh (4885 -> 4200, -14%)
-  info-panel.sh (484 -> 410, -15%)
-hooks/
-  common.sh (322 -> 245, -24%)
-:::
-
-:::flow
-Boss -> SM -> Manager -> Workers
-:::
-
-:::diagram
-[Boss] ----> [SM] ----> [Manager]
-                          |
-                     [W.1]  [W.2]
-:::
-
-:::impact
-doey.sh: 4885 -> 4200
-common.sh: 322 -> 245
-on-pre-tool-use.sh: 307 -> 180
-:::
-
-:::deps
-#9 Hook fix --unblocks--> #6 Scaling --enables--> #7 Plan TUI
-                                                     |
-                                        #8 Tab nav <-+
-:::
-
-=== COMPONENT LIST ===
-1. PROGRESS BARS — phase completion with percentage, checkmarks, spinners
-2. ARCHITECTURE DIAGRAMS — box-and-arrow with Unicode line drawing
-3. FILE IMPACT BARS — before/after with colored bar charts and delta %
-4. DEPENDENCY GRAPHS — task-to-task flow with labeled edges
-5. TREE VIEWS — file hierarchies with metrics per node
-6. FLOW DIAGRAMS — linear step chains with arrows
-7. COLLAPSIBLE SECTIONS — expand/collapse for long plans
-8. COLOR CODING — plan=blue, research=green, report=gold, error=red
-
-=== TWO RENDERERS ===
-TERMINAL RENDERER (for worker/manager output):
-- Basic Unicode: [████████░░░░] 67%
-- Simple box drawing: +----+ | Box | +----+
-- Works in any terminal, no dependencies
-
-TUI RENDERER (Go, Lip Gloss):
-- Full styled borders, rounded corners, gradients
-- Responsive to terminal width
-- Animated progress (optional)
-- Keyboard navigation within diagram sections
-
-=== KEY REQUIREMENTS ===
-1. GRAMMAR PARSER: Go package that parses :::type ... ::: blocks from TASK_LOG strings
-2. TERMINAL RENDERER: Go package that outputs plain Unicode visuals to stdout
-3. TUI RENDERER: Bubble Tea component that renders with Lip Gloss styling
-4. PLAN VIEW: Task detail view shows all visualization blocks beautifully
-5. LIVE UPDATES: TUI re-reads .task files and reflects new entries
-6. NAVIGATION: Expand/collapse sections, scroll, Tab between views (per Task #8)
-
-=== DESIGN DIRECTION ===
-- This should feel like Cursor's Plan mode — structured, scannable, beautiful
-- Plans are living documents — show timestamps as "2m ago" not epoch
-- Color-code by entry type: plan=blue, research=green, report=gold
-- Largest diagrams adapt to terminal width gracefully
-- Charm-quality aesthetics throughout
-
-CONSTRAINTS:
-- Must work with existing .task file format (TASK_LOG_<epoch>=<TYPE>: <content>)
-- Go build must pass before any commit
-- Integrate with existing tui/ architecture
-- Grammar must be simple enough that any Claude worker can write it without instructions
-
-SUCCESS CRITERIA:
-- Workers write :::progress, :::tree, :::flow blocks in task logs
-- Terminal output shows clean Unicode visualizations
-- TUI shows the same data with full Lip Gloss polish
-- Looks stunning at 80x24 and 120x40
-- All 8 component types render correctly
 TASK_TAGS=tui,task-system,dashboard,design,feature
-TASK_DISPATCH_MODE=phased
-TASK_TOTAL_PHASES=2
-TASK_CURRENT_PHASE=1
 TASK_TEAM=W2
-TASK_LOG_1774819619=DISPATCHED: Bundled to W2 Manager with Task #8
-TASK_LOG_1774819650=PLAN_W2: Wave1 - Research + Shared Infrastructure. W1: Research Charm patterns for live-updating lists, polling, inline components. W2: Build grammar parser (tui/internal/grammar/parser.go + types.go). W3: Build tab navigation framework (tui/internal/model/tabbar.go + update root.go). W4: Build terminal renderer (tui/internal/grammar/terminal.go). Wave2 - TUI renderers + integration. All workers build individual block renderers + integrate with task detail view.
-TASK_LOG_1774820308=REPORT_W2: Task #7 COMPLETE. Grammar system built: types.go(95), parser.go(302), parser_test.go(245), terminal.go(244), terminal_test.go(245), tui.go(482). Total new: 1613 lines. 32 tests pass. Go build clean. Integrated into taskcard.go for task detail rendering.
-TASK_LOG_1774820387=COMPLETE: Grammar parser + terminal/TUI renderers. 1613 lines, 32 tests pass. Committed debaa20.
+TASK_DESCRIPTION=Build a complete visualization grammar and rendering system for Doey. Workers and Managers write structured markup blocks into .task files. The Go TUI renders them with full Lip Gloss styling. Plain terminal output gets a simpler Unicode renderer. Same grammar, two renderers.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

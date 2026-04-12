@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=348
+TASK_TITLE=Remove redundant 'done' badge from subtasks in TUI task detail view
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=In the TUI task detail view, subtasks that are complete show both a green checkmark (✓) AND a green 'done' badge/label. The checkmark is sufficient — remove the 'done' text badge entirely. The green check already communicates the status.
+
+See screenshot: /tmp/doey/doey/screenshot-done-label.png — shows subtasks like:
+  ✓ W4.1: Research pane-border-status.sh... [done]
+  ✓ W4.2: Research status file structure... [done]
+
+Should just be:
+  ✓ W4.1: Research pane-border-status.sh...
+  ✓ W4.2: Research status file structure...
+
+Search Go TUI code for subtask rendering in the task detail view — likely appending a 'done' style/badge after the subtask title. Remove it. Rebuild with go build.
+TASK_SUBTASKS=1:W2.1: Remove redundant done badge from subtask rendering in TUI task detail view:done\n2:Dispatched to Team W2:pending
+TASK_TIMESTAMPS=created=1775482390
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775482390
+TASK_FILES=shell/pane-border-status.sh,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Remove redundant done badge from subtask rendering in TUI task detail view
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to Team W2
+TASK_SUBTASK_2_STATUS=pending

@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=249
+TASK_TITLE=Research: send-keys flicker — text appears but never submits
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=User observes send-keys flicker: text appears briefly in the target pane but does not get submitted. Need to trace every send-keys call site, measure timing gaps, identify which calls lack readiness gates or verified submit. Build on task 246 work (doey_wait_for_prompt + doey-send.sh). Deliverable: list of every call site with diagnosis (safe/unsafe) and recommended fix pattern.
+TASK_SUBTASKS=1:W5.1: Full send-keys audit — trace every call site, classify safe/unsafe/exempt, analyze verified primitives timing:done\n2:Dispatched to W5 Subtaskmaster — research audit:done
+TASK_TIMESTAMPS=created=1775349075
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775349075
+TASK_SUBTASK_1_TITLE=W5.1: Full send-keys audit — trace every call site, classify safe/unsafe/exempt, analyze verified primitives timing
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to W5 Subtaskmaster — research audit
+TASK_SUBTASK_2_STATUS=done

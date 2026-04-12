@@ -2,52 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=50
 TASK_TITLE=TUI command buttons that drive Boss actions — action-driven dashboard
 TASK_STATUS=done
-TASK_CREATED=1774934000
 TASK_TYPE=feature
-TASK_DESCRIPTION=ALL task/action buttons in the Go TUI must work by sending commands to Boss (pane 0.1) via tmux send-keys. The TUI is a command surface — Boss is the executor. Every button press translates to a text command sent to Boss's pane via tmux.
-
-ARCHITECTURE:
-- TUI button click → exec tmux send-keys to session:0.1 with the command text + Enter
-- Boss receives the command as user input and acts on it
-- Boss drives ALL actions: spawning teams, getting status, creating tasks, etc.
-
-COMMAND CATALOG (implement all as clickable TUI actions):
-
-1. "Get Status" → sends "status?" to Boss. Boss responds with task/team status report.
-2. "Create Team" → sends "I want to create a new team" to Boss. Boss asks clarifying questions (type, grid, worktree) then spawns.
-3. "Spawn Freelancers" → sends "/doey-add-team freelancer" to Boss. Triggers fast freelancer spawn.
-4. "New Task" → sends "I have a new task: " to Boss (cursor positioned for user to type). Or opens TUI input form.
-5. Task detail actions: "Mark Done" sends "doey task done <id>", "Cancel" sends "Cancel task <id>"
-6. Team actions: "Kill Team" sends "/doey-kill-window <window>", "Restart Team" sends "/doey-clear <window>"
-7. "Compact SM" → sends "/doey-sm-compact" to Boss
-
-IMPLEMENTATION:
-
-A. GO TUI (tui/internal/):
-   - Command sender module that execs: tmux send-keys -t "<session>:0.1" "<escaped cmd>" Enter
-   - Session name from DOEY_SESSION env or runtime config
-   - Each Quick Action / button calls the sender with its command string
-   - Properly escape commands for tmux (quotes, special chars)
-   - Show brief feedback after sending ("Command sent ✓")
-   - Update dashboard.go Quick Actions + task detail actions
-
-B. BUTTON RENDERING:
-   - Styled with Lip Gloss, visually clear
-   - Grouped: Session (Status, Compact SM), Teams (Create, Spawn, Kill), Tasks (New Task)
-   - Keyboard shortcuts: s=status, t=new task, etc.
-
-C. CONSTRAINTS:
-   - TUI runs in pane 0.0, sends to pane 0.1 (Boss)
-   - Use SESSION_NAME from env, never hardcode
-   - Shell-escape tmux commands properly
-   - Must work on fresh install, bash 3.2 compatible for shell calls
-   - Must compile: cd tui/ && go build ./...
-
-D. TESTING:
-   - Build TUI binary, verify each button generates correct tmux command
-   - Test special char escaping
-   - Verify feedback shown after sending
-
-This is the foundation of TUI-to-Boss interaction — every user action flows through Boss.
 TASK_TAGS=tui,dashboard,boss,commands,architecture,ux
 TASK_TEAM=W2
+TASK_DESCRIPTION=ALL task/action buttons in the Go TUI must work by sending commands to Boss (pane 0.1) via tmux send-keys. The TUI is a command surface — Boss is the executor. Every button press translates to a text command sent to Boss's pane via tmux.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

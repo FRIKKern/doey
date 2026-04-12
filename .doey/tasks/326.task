@@ -1,0 +1,16 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=326
+TASK_TITLE=Fix TUI not connecting to SQLite database — all tabs empty
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=The TUI process (doey-tui /tmp/doey/doey) has zero open file descriptors to the SQLite DB. The DB exists at PROJECT_DIR/.doey/doey.db (53MB, full of tasks/plans/teams data), and doey-ctl reads it fine, but the TUI binary never opens it. Result: all tabs show empty (Dashboard, Tasks, Plans, Teams — all blank). The TUI gets runtime dir as its CLI arg and can read PROJECT_DIR from session.env. Likely the DB path resolution in the TUI Go code is broken — either it looks in the wrong directory or silently fails to open. Check how the TUI resolves the DB path vs how doey-ctl resolves it. doey-ctl works, TUI does not. Fix the path resolution so TUI connects to the same DB.
+TASK_SUBTASKS=1:W3.1: Research and fix TUI DB path resolution:skipped\n2:W2.1: Research TUI DB path resolution vs doey-ctl:done
+TASK_TIMESTAMPS=created=1775467986
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775467986
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research and fix TUI DB path resolution
+TASK_SUBTASK_1_STATUS=skipped
+TASK_SUBTASK_2_TITLE=W2.1: Research TUI DB path resolution vs doey-ctl
+TASK_SUBTASK_2_STATUS=done

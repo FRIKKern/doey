@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=487
+TASK_TITLE=Deep Interview: Make Deep Interview stronger and more like original research
+TASK_STATUS=done
+TASK_TYPE=interview
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=Structured clarification interview for: Making Deep Interview even stronger and more like the original from the research
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775767086
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775767086
+TASK_FILES=agents/doey-subtaskmaster.md,agents/doey-subtaskmaster.md.tmpl,agents/doey-taskmaster.md,agents/doey-taskmaster.md.tmpl

@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=256
+TASK_TITLE=Masterplan Phase 2: Root Patterns — terminology, dead code, tea.Cmd
+TASK_STATUS=done
+TASK_TYPE=refactor
+TASK_DESCRIPTION=Phase 2 of Audit Report Masterplan. Fix Manager terminology in all templates + regenerate, batch delete ~400 lines dead code, fix discarded tea.Cmd returns, fix stop-results bug. BLOCKED until Phase 1 gate passes. Full plan: .doey/masterplan-20260405-013021/phases.md
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775356507
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775356507

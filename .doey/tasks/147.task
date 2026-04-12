@@ -4,13 +4,8 @@ TASK_TITLE=Audit + fix all agent template doey-ctl command references
 TASK_STATUS=done
 TASK_TYPE=improvement
 TASK_DESCRIPTION=Full audit of every .md.tmpl agent template. For each: (1) Find every doey-ctl command reference, (2) Verify syntax matches the actual API (post-task-146 fuzzy tolerance), (3) Fix any mismatches, (4) Add missing command examples where agents need them but don't have them. Key agents to check: doey-boss, doey-taskmaster, doey-subtaskmaster, doey-deployment, doey-task-reviewer, doey-doey-expert, doey-worker. After fixes, run expand-templates.sh and verify generated .md files are correct.
-TASK_DECISION_LOG=1775169776:Created task
+TASK_SUBTASKS=
 TASK_TIMESTAMPS=created=1775169776
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_REVIEW_VERDICT=PASS
-TASK_REVIEW_FINDINGS=--task-id→--id fix correct for task update. Cross-template audit: zero remaining mismatches across 7 templates. All flag references match actual Go API.
-TASK_REVIEW_TIMESTAMP=2026-04-02T17:35:00Z
 TASK_UPDATED=1775169776
-
-assigned_to=W3

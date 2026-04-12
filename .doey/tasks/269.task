@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=269
+TASK_TITLE=Fix Plans tab viewport — match Tasks tab pattern, start at top
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Plans tab in Go TUI is stuck at bottom when opened. Tasks tab works correctly (starts at top, scrolls properly). Plans must use the identical viewport pattern. This has been attempted 14+ times (tasks 212, 213, 231, 238, 239, 248, 265, 266, 267, 268). Root cause is always the viewport height formula or initial scroll position. Task 267 extracted a shared SplitPaneModel — Plans must use it identically to Tasks. Worker must: (1) read how Tasks tab sets up its viewport in SplitPaneModel, (2) compare Plans tab usage, (3) make Plans match exactly, (4) build and verify with go build.
+TASK_SUBTASKS=1:Dispatch to W5 — fix Plans tab viewport:done\n2:W5.1: Research Tasks tab SplitPaneModel — extract exact viewport setup pattern:done\n3:W5.2: Research Plans tab SplitPaneModel — find divergence from Tasks pattern:done\n4:W5.1: Implement fix — add SetContent in renderRightPanel + fix rightW double-subtraction:done\n5:W5.1: Implement fix — add SetContent in renderRightPanel + fix rightW:done\n6:W5.2: Verify fix — go build, go vet, confirm Plans matches Tasks pattern:done
+TASK_TIMESTAMPS=created=1775388426
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775388426
+TASK_SUBTASK_1_TITLE=Dispatch to W5 — fix Plans tab viewport
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.1: Research Tasks tab SplitPaneModel — extract exact viewport setup pattern
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W5.2: Research Plans tab SplitPaneModel — find divergence from Tasks pattern
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W5.1: Implement fix — add SetContent in renderRightPanel + fix rightW double-subtraction
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W5.1: Implement fix — add SetContent in renderRightPanel + fix rightW
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W5.2: Verify fix — go build, go vet, confirm Plans matches Tasks pattern
+TASK_SUBTASK_6_STATUS=done

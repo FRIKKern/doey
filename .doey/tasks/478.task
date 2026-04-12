@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=478
+TASK_TITLE=Update pre-tool-use hook: allow Deployment to push directly to main
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=coordinator
+TASK_TEAM=1
+TASK_DESCRIPTION=on-pre-tool-use.sh blocks 'git push origin main' for workers. Standing rule says all commits go to main, no branches. Fix: allow the Deployment role (pane 1.2) to push directly to main. Keep the block for workers (they shouldnt push at all).
+TASK_SUBTASKS=1:Direct dispatch to W3.1 — fix pre-tool-use hook for main push:done
+TASK_TIMESTAMPS=created=1775761776
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775761776
+TASK_SUBTASK_1_TITLE=Direct dispatch to W3.1 — fix pre-tool-use hook for main push
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775761800
+TASK_SUBTASK_1_COMPLETED_AT=1775761903

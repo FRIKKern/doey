@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=275
+TASK_TITLE=Masterplan Phase 1: PoC Data Foundation — schema + import pipeline
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Phase 1 of masterplan #27: Proof of Completion in Go TUI. Add proof columns to SQLite schema (proof_type, proof_content, verification_status, files_changed, commit_hash, build_status). Fix stop-results.sh to import proof data to SQLite via doey-ctl. Workers must emit PROOF blocks on completion. Plan: /tmp/doey/doey/masterplan-20260405-132819/plan-27.md Research: /tmp/doey/doey/masterplan-20260405-132819/research/
+TASK_SUBTASKS=1:Add proof columns to SQLite schema (ALTER TABLE):done\n2:Fix stop-results.sh to import proof data to SQLite:done\n3:Workers emit PROOF block (files_changed, commit_hash minimum):done\n4:Verify: doey-ctl task get shows proof fields after completion:done
+TASK_TIMESTAMPS=created=1775396647
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775396647
+TASK_PLAN_ID=27
+TASK_SUBTASK_1_TITLE=Add proof columns to SQLite schema (ALTER TABLE)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Fix stop-results.sh to import proof data to SQLite
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Workers emit PROOF block (files_changed, commit_hash minimum)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Verify: doey-ctl task get shows proof fields after completion
+TASK_SUBTASK_4_STATUS=done

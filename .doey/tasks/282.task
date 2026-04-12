@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=282
+TASK_TITLE=Masterplan: Refactor doey.sh — 10-angle research swarm
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Phase 1 of masterplan to decompose the 6200-line doey.sh monolith. Run 10 parallel research agents covering: state of art, user journey, architecture, risks, dependencies, simplification, testing, edge cases, prior art, devils advocate. All reports go to /tmp/doey/doey/masterplan-20260405-160440/research/. Intent doc at /tmp/doey/doey/masterplan-20260405-160440/intent.md.
+TASK_SUBTASKS=1:Dispatch to W2 Subtaskmaster — 6-worker research swarm:done\n2:W2.1: State of Art + Prior Art — map doey.sh, doey-ctl, Go structure, task 159 research:done\n3:W2.2: User Journey + Edge Cases — trace all user paths, fresh install, missing deps:done\n4:W2.3: Architecture + Dependencies — map all functions by domain, call graph, leaf vs hub:done\n5:W2.4: Risks + Devils Advocate — failure modes, argue against the approach:done\n6:W2.5: Simplification + Testing — minimum viable decomposition, dead code, test strategy:done\n7:W2.6: Synthesize 10 research reports into MASTERPLAN.md:done
+TASK_TIMESTAMPS=created=1775405230
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775405230
+TASK_SUBTASK_1_TITLE=Dispatch to W2 Subtaskmaster — 6-worker research swarm
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: State of Art + Prior Art — map doey.sh, doey-ctl, Go structure, task 159 research
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: User Journey + Edge Cases — trace all user paths, fresh install, missing deps
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.3: Architecture + Dependencies — map all functions by domain, call graph, leaf vs hub
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.4: Risks + Devils Advocate — failure modes, argue against the approach
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.5: Simplification + Testing — minimum viable decomposition, dead code, test strategy
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W2.6: Synthesize 10 research reports into MASTERPLAN.md
+TASK_SUBTASK_7_STATUS=done

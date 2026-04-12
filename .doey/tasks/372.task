@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=372
+TASK_TITLE=Intent-aware routing: auto-forward instead of blocking
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=When a role attempts an action that belongs to another role, the system should auto-route it to the correct role instead of hard-blocking with an error. Makes the API forgiving and intention-aware rather than punitive.
+TASK_SUBTASKS=1:W2.1: Research on-pre-tool-use.sh blocking logic, exit codes, role guards, and routing table structure:done\n2:W2.2: Research IPC messaging infrastructure, doey msg send, message routing, and response patterns:done\n3:W2.1: Implement _forward_action() function and convert forwardable blocks in on-pre-tool-use.sh:done\n4:W2.2: Verify _forward_action() implementation — syntax, compat, logic review:done
+TASK_TIMESTAMPS=created=1775508648
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775508648
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research on-pre-tool-use.sh blocking logic, exit codes, role guards, and routing table structure
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research IPC messaging infrastructure, doey msg send, message routing, and response patterns
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Implement _forward_action() function and convert forwardable blocks in on-pre-tool-use.sh
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Verify _forward_action() implementation — syntax, compat, logic review
+TASK_SUBTASK_4_STATUS=done

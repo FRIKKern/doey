@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=166
+TASK_TITLE=Make doey-ctl task/subtask CLI forgiving and helpful
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=CLI commands like 'doey task subtask update' fail hard with unhelpful errors (e.g. 'subtask 189 not found for task 164 — task may have no subtasks'). Problems: (1) Error message says 'task may have no subtasks' even when subtasks exist but the ID is wrong — misleading. (2) No suggestions — should list actual subtask IDs when lookup fails. (3) Should accept subtask by seq number or title match, not just internal DB ID. (4) Should auto-list available subtasks on failure. Goal: when a CLI command fails, it should tell you exactly what exists and suggest the correct command. Example: 'Subtask 189 not found for task 164. Available subtasks: 1 (pending): Phase 1 hook emission, 2 (pending): Go TUI phases 2-5. Did you mean: doey task subtask update --task-id 164 --subtask-id 1 --status done'
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775208750
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775209773

@@ -1,0 +1,50 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=511
+TASK_TITLE=Beautify all agent definitions — colors, descriptions, TUI polish
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=CATEGORY: deep
+
+Based on the audit report at /tmp/doey/doey/reports/task_506_agent_audit.md (task #506), beautify ALL 35 agent definitions for the Go TUI agents tab.
+
+Required fixes:
+1. COLORS: Assign a unique valid hex color (#rrggbb format) to every agent. Avoid collisions. Use a semantic palette — group by role tier (Boss/Taskmaster tier, Subtaskmaster tier, Worker tiers, Specialist tier). Suggest warm/bright for user-facing, cool for coordinators, distinct accents for specialists.
+2. FIX: 6 agents currently use named colors (red, blue, etc.) that validatedHexColor() rejects — replace with hex
+3. FIX: Eliminate the 15 hex collisions across 14 unique values
+4. DESCRIPTIONS: Enrich any agent with <10 word description. Every agent should have a clear, distinctive description that tells the user what this agent does and when to use it.
+5. MEMORY: Standardize the 2 non-standard memory values (true/false → user/none)
+6. TEMPLATES: Create .md.tmpl templates for the 12 agents missing them (so future regenerations work)
+7. STORE READER BUG: Fix tui/internal/stores/store_reader.go:255 where the Memory field is never populated from the parsed frontmatter
+
+Deliverables:
+- All .md.tmpl templates updated (NEVER edit generated .md directly)
+- Run shell/expand-templates.sh to regenerate .md files
+- Go build passes: cd tui && go build ./...
+- Visual verification in the TUI agents tab — all agents show distinct colors
+- Commit and push
+
+The goal is: when I open the TUI agents tab, every agent has a distinct color, a clear description, and the list/detail views look beautiful and professional.
+TASK_SUBTASKS=1:W3.1: Assign unique hex colors to all 35 agents (fix 6 named colors + 15 collisions) — edit .md.tmpl only:done\n2:W3.2: Enrich descriptions, standardize memory values, create 12 missing .md.tmpl templates:done\n3:W3.3: Run expand-templates.sh, test-bash-compat.sh, verify all 35 agents parse:done\n4:W3.4: Fix store_reader.go:255 Memory field never populated from frontmatter:done
+TASK_TIMESTAMPS=created=1775867151
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775867151
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Assign unique hex colors to all 35 agents (fix 6 named colors + 15 collisions) — edit .md.tmpl only
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775867345
+TASK_SUBTASK_1_COMPLETED_AT=1775868423
+TASK_SUBTASK_2_TITLE=W3.2: Enrich descriptions, standardize memory values, create 12 missing .md.tmpl templates
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775867345
+TASK_SUBTASK_2_COMPLETED_AT=1775868423
+TASK_SUBTASK_3_TITLE=W3.3: Run expand-templates.sh, test-bash-compat.sh, verify all 35 agents parse
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775867346
+TASK_SUBTASK_3_COMPLETED_AT=1775868423
+TASK_SUBTASK_4_TITLE=W3.4: Fix store_reader.go:255 Memory field never populated from frontmatter
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775867346
+TASK_SUBTASK_4_COMPLETED_AT=1775868423

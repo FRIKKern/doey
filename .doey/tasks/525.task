@@ -1,0 +1,102 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=525
+TASK_TITLE=Permanent fix: polling-loop class bugs + violations log + TUI Logs surface
+TASK_STATUS=pending
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+INCIDENT THAT TRIGGERED THIS:
+Task 523 W5 Subtaskmaster entered a 14+ minute forever loop burning 8k+ tokens. Pattern:
+1. taskmaster-wait.sh fires WAKE_REASON=MSG
+2. SM runs 'doey msg list --to 5.0 --unread' — lists 3 msgs but does NOT mark them read
+3. SM re-enters wait
+4. Wait hook sees same unread msgs, fires WAKE_REASON=MSG again
+5. Infinite loop, no progress
+
+The 3 msgs were subtask_review_passed + two worker_finished — all signals the task was DONE. SM had everything it needed to close the task but couldn't because its wait protocol uses list-only semantics instead of read/consume semantics.
+
+Boss force-cleared the queue via 'msg read-all --pane 5.0' to break the loop.
+
+THIS MUST NEVER HAPPEN AGAIN. User direction: permanent fixes, not band-aids.
+
+DELIVERABLE — THREE LOCKED PHASES:
+
+PHASE A — Audit and permanent fix of the polling-loop class:
+1) Audit every wait/polling protocol across the codebase:
+   - agents/doey-subtaskmaster.md wait protocol
+   - agents/doey-taskmaster.md wait protocol
+   - agents/doey-boss.md status check / post-dispatch verification
+   - .claude/hooks/taskmaster-wait.sh
+   - Any other .sh that invokes 'msg list --unread' or similar peek-without-consume patterns
+   - Any agent instructions that tell the agent to 'check messages' without consuming
+2) Identify every place that uses list-semantics where read-semantics is required
+3) Replace with the correct consuming pattern:
+   - 'doey msg read --pane X' (marks as read while listing)
+   - OR 'doey msg list --unread' followed immediately by 'doey msg mark-read --ids ...'
+4) Update agent definitions (.md + .md.tmpl) so the wait protocol is unambiguous:
+   - MUST consume messages on every wake
+   - MUST check for fresh work before re-entering wait
+   - MUST NOT loop on the same unread set
+5) Run shell/expand-templates.sh to regenerate .md from .tmpl
+6) Bash 3.2 compat check
+
+PHASE B — Violations detection + logging (observe the pattern everywhere):
+1) Create .doey/violations/ directory, JSONL files per violation class:
+   - .doey/violations/polling-loops.jsonl
+   - (future: .doey/violations/ask-user-question.jsonl from task #522)
+   - (future: other classes as they're identified)
+2) Detection logic in taskmaster-wait.sh (and any other wait hook):
+   - Track consecutive wakes per pane with same WAKE_REASON and no tool activity between wakes
+   - If >3 consecutive wakes with identical reason within 2 minutes AND zero tool calls between them → emit polling-loop violation event
+   - Fields: {ts, pane, role, wake_reason, consecutive_count, window_sec, session, unread_msg_ids}
+3) Hard circuit breaker: after 5 consecutive same-reason wakes, force a long sleep (30s+) and nudge the pane's owner (Taskmaster or Boss) with an escalation msg
+4) State tracking file per pane: /tmp/doey/<session>/wait-state-<pane>.json
+5) Cleanup: state files cleared on successful tool activity
+
+PHASE C — Go TUI: Logs tab Violations sub-view:
+1) New sub-tab or filter under the existing Logs tab in tui/internal/... called 'Violations' (or merge with the Stats sub-tab from task #521 if already built — coordinate)
+2) Tails .doey/violations/*.jsonl files
+3) Shows:
+   - Counters per violation class (polling_loop: N, ask_user_question: N, ...)
+   - Recent violations table with ts, class, pane, role, summary
+   - Filter by class
+4) Reads directly from JSONL via Go file tailing (no cgo, no new deps)
+5) Fresh-install compatible (.doey/violations/ created on first session_start if missing)
+
+INTEGRATION NOTES:
+- This overlaps with task #521 (stats system with SQLite + TUI Stats sub-tab). Coordinate: the events.jsonl / violations.jsonl format should be consistent. If #521 has already landed, extend the Stats sub-tab rather than creating a new view. If not, define the schema here and #521 inherits it.
+- This is the foundation for the daemon work discussed with Boss — flow-keeping daemon will consume these violation events. Event log lock-in matters.
+- Don't wait for the daemon — ship the polling fix + detection + TUI now. Daemon uses them later.
+
+CONSTRAINTS:
+- Bash 3.2 compatible
+- Fresh install works (no manual setup)
+- Zero network I/O
+- tests/test-bash-compat.sh must pass
+- cd tui && go build ./... must pass
+- Violation detection must not itself become a polling loop (the great irony would be a bug hunter that burns tokens hunting bugs)
+
+DELIVERABLES:
+- Audit report: which files had the bad pattern, what was fixed
+- Patched agent definitions (via .tmpl)
+- Patched wait hooks with detection + circuit breaker
+- Violation JSONL writer
+- Go TUI Violations view
+- docs/violations.md explaining the system
+- Repro test: simulate a polling loop, verify detection fires within 5 wakes, verify circuit breaker caps it
+- Task 523 manual verification: despawn W5, confirm it doesn't come back
+
+PLANNED because: architectural change touching agent protocols + hooks + Go TUI + new subsystem. Interview + masterplan phases required. 3 phases can run partly in parallel (A is foundational, B and C can start once A's audit is done).
+TASK_SUBTASKS=1:Dispatched to masterplan team W5. Planner running interview→research→draft→consensus. Awaiting plan_ready before implementation.:done
+TASK_TIMESTAMPS=created=1775903267
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775903267
+TASK_FILES=.claude/hooks/on-pre-compact.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/post-tool-lint.sh,.claude/hooks/reviewer-wait.sh,.claude/hooks/taskmaster-wait.sh,agents/doey-boss.md,agents/doey-boss.md.tmpl,agents/doey-deployment.md,agents/doey-deployment.md.tmpl,agents/doey-freelancer.md,agents/doey-freelancer.md.tmpl,agents/doey-planner.md,agents/doey-planner.md.tmpl,agents/doey-subtaskmaster.md,agents/doey-subtaskmaster.md.tmpl,agents/doey-task-reviewer.md,agents/doey-task-reviewer.md.tmpl,docs/violations.md,shell/doey-doctor.sh,shell/doey-intent-dispatch.sh
+TASK_SUBTASK_1_TITLE=Dispatched to masterplan team W5. Planner running interview→research→draft→consensus. Awaiting plan_ready before implementation.
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775903394
+TASK_SUBTASK_1_COMPLETED_AT=1775911730

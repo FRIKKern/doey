@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=155
+TASK_TITLE=Change default team worker count from 7 to 6 in TUI Dashboard
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=The Dashboard TUI spawns regular teams with 7 workers by default. Change this to 6 workers. Look in the tui/ Go code for the default worker count when spawning a regular team from the Dashboard.
+TASK_SUBTASKS=1:Dispatch to W2 — change worker count 7 to 6:done\n2:W2.1: Change default worker count from 7 to 6 in TUI Dashboard Go code:done
+TASK_TIMESTAMPS=created=1775200454
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775200454
+TASK_SUBTASK_1_TITLE=Dispatch to W2 — change worker count 7 to 6
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1
+TASK_SUBTASK_2_STATUS= Change default worker count from 7 to 6 in TUI Dashboard Go code:done

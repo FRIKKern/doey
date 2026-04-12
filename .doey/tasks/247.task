@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=247
+TASK_TITLE=Fix startup send-keys reliability — bulletproof verified-send primitive
+TASK_STATUS=cancelled
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Three bugs: (1) messages sent before Claude ready, (2) Enter not registered, (3) first char eaten by Escape. SYSTEMIC FIX: create one verified-send function, replace ALL raw send-keys calls. Has recurred across 7+ tasks.
+TASK_SUBTASKS=1:W4.1: Research all send-keys call sites in shell/doey.sh, shell/doey-send.sh, shell/doey-ipc-helpers.sh, .claude/hooks/, .claude/skills/:done\n2:W4.2: Implement bulletproof doey_send_verified primitive and replace all raw send-keys calls:done
+TASK_TIMESTAMPS=created=1775343390
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775343390
+TASK_SUBTASK_1_TITLE=W4.1: Research all send-keys call sites in shell/doey.sh, shell/doey-send.sh, shell/doey-ipc-helpers.sh, .claude/hooks/, .claude/skills/
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.2: Implement bulletproof doey_send_verified primitive and replace all raw send-keys calls
+TASK_SUBTASK_2_STATUS=done

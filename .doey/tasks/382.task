@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=382
+TASK_TITLE=doey-term Phase 2: complete keyboard coverage — Ctrl+letter, Alt+key, Shift+arrow
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Masterplan Phase 2 for doey-term. File: tui/internal/bubbleterm/keys.go. (1) Add generic Ctrl+letter handler — if key matches ctrl+X, send byte X-a+1. Critical: Ctrl+A/E/R/U/K/W for shell editing. (2) Add Alt+key combos — send ESC + letter. Coordinate with term/model.go which intercepts alt+1..9 for tabs. (3) Add Shift+arrow and Ctrl+arrow sequences. (4) Fix Delete key — send ESC[3~ instead of 0x7f. (5) Fix PageUp/PageDown — Bubble Tea v2 uses pgup/pgdown not pageup/pagedown. Verify: bash readline shortcuts, vim Ctrl combos, Alt+B/F word navigation.
+TASK_SUBTASKS=1:W3.1: Implement all keyboard fixes in keys.go — Ctrl+letter, Alt+key, Shift/Ctrl+arrow, Delete, PageUp/PageDown:done\n2:W3.2: Verify keyboard mappings, audit completeness, run builds and tests:skipped\n3:Dispatched to window 3 (2 workers): W1 implements keyboard fixes, W2 verifies:done
+TASK_TIMESTAMPS=created=1775515867
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775515867
+TASK_FILES=tui/internal/bubbleterm/bubbleterm.go,tui/internal/bubbleterm/emulator/emulator.go,tui/internal/term/model.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Implement all keyboard fixes in keys.go — Ctrl+letter, Alt+key, Shift/Ctrl+arrow, Delete, PageUp/PageDown
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Verify keyboard mappings, audit completeness, run builds and tests
+TASK_SUBTASK_2_STATUS=skipped
+TASK_SUBTASK_3_TITLE=Dispatched to window 3 (2 workers): W1 implements keyboard fixes, W2 verifies
+TASK_SUBTASK_3_STATUS=done

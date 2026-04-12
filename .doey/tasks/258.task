@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=258
+TASK_TITLE=Masterplan Phase 4: Hardening — error handling, hook safety, IPC
+TASK_STATUS=done
+TASK_TYPE=refactor
+TASK_DESCRIPTION=Phase 4 of Audit Report Masterplan. Per-hook ERR trap overrides, fix on-pre-tool-use.sh dependency, fix IPC error handling, unify session-name resolution. BLOCKED until Phase 3 gate passes. Full plan: .doey/masterplan-20260405-013021/phases.md
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775356508
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775356508
+TASK_REVIEW_VERDICT=PASS

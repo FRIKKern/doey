@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=421
+TASK_TITLE=Phase H: documentation
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=docs/intent-fallback.md (what/when/opt-out/auth/cost/destructive-policy/log). CLAUDE.md: one-line under Hooks. README.md: feature bullet.
+TASK_SUBTASKS=1:W6.1: Create docs/intent-fallback.md, update CLAUDE.md Hooks section, README.md feature bullet:done
+TASK_TIMESTAMPS=created=1775545588
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545588
+TASK_PLAN_ID=1003
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.claude/settings.json,CLAUDE.md,README.md,agents/doey-claude-expert.md,agents/doey-critic.md,agents/doey-platform-expert.md,agents/test-driver.md,install.sh,shell/doey-doctor.sh,shell/doey.sh,tui/cmd/doey-ctl/commands.go,tui/cmd/doey-ctl/main.go,tui/internal/model/agents.go,tui/internal/runtime/store_reader.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W6.1: Create docs/intent-fallback.md, update CLAUDE.md Hooks section, README.md feature bullet
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_6_1
+TASK_SUBTASK_1_CREATED_AT=1775599213
+TASK_SUBTASK_1_COMPLETED_AT=1775599340

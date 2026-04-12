@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=479
+TASK_TITLE=Go TUI: show task attachments with tmux popup viewer
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=coordinator
+TASK_TEAM=1
+TASK_DESCRIPTION=When a task has attachments (e.g. .doey/tasks/475-attachments/*.md), list them in task detail panel. On enter/click: open tmux display-popup rendering the .md content — readable, scrollable, nice formatting. Makes research reports first-class in TUI. In tui/ Go code. go build to verify. Commit to main.
+TASK_SUBTASKS=1:Direct dispatch to W4.1 — TUI attachment viewer:done
+TASK_TIMESTAMPS=created=1775762104
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775762104
+TASK_SUBTASK_1_TITLE=Direct dispatch to W4.1 — TUI attachment viewer
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775762123
+TASK_SUBTASK_1_COMPLETED_AT=1775762474

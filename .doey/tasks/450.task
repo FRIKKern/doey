@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=450
+TASK_TITLE=Speed up doey intent fallback response time
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=improvement
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=The intent fallback (shell/intent-fallback.sh + shell/doey-intent-dispatch.sh) currently uses Haiku but feels slow. Investigate: (1) what model is actually being called, (2) can we use a faster model (claude-haiku-4-5, or fastest available), (3) reduce prompt size, (4) stream response, (5) cut cold-start overhead. User suggested 'opus instant' — likely meant fastest/lowest-latency model available. Goal: sub-second response for typical unknown-command corrections. See docs/intent-fallback.md.
+TASK_SUBTASKS=1:W7.1: Profile and optimize intent fallback — add --model haiku, trim prompt, measure before/after (sub-second target):done
+TASK_TIMESTAMPS=created=1775743466
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775743466
+TASK_FILES=install.sh,shell/doey-tunnel.sh,shell/doey.sh,shell/intent-fallback.sh,tui/internal/model/actions.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W7.1: Profile and optimize intent fallback — add --model haiku, trim prompt, measure before/after (sub-second target)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_7_1
+TASK_SUBTASK_1_CREATED_AT=1775743805
+TASK_SUBTASK_1_COMPLETED_AT=1775745358

@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=466
+TASK_TITLE=Research: Make intent fallback Opus faster
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=Research ways to reduce latency of the Opus-powered intent fallback CLI. Current flow: user types unknown doey command → intent-fallback.sh calls Claude Opus to interpret. User wants to explore: warm-up strategies, pre-loading, caching, model selection, prompt optimization, streaming tricks, or any other technique to make the response feel instant. Deliverable: findings report with specific, actionable recommendations ranked by impact.
+TASK_SUBTASKS=1:Research dispatch to W2.1 — investigate Opus latency reduction:done
+TASK_TIMESTAMPS=created=1775756192
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775756192
+TASK_SUBTASK_1_TITLE=Research dispatch to W2.1 — investigate Opus latency reduction
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775756357
+TASK_SUBTASK_1_COMPLETED_AT=1775756770

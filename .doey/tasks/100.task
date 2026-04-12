@@ -1,45 +1,38 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=100
-TASK_SUBTASKS=2:Phase 0 - Centralize hardcoded strings (status values, msg subjects, path conventions, pane layout, task fields) into Go constants + generate doey-constants.sh:pending\n3:W3.1: Create internal/ctl/constants.go — status, msg subjects, paths, pane layout, task fields:pending\n4:W3.2: Create cmd/gen-constants/main.go + doey-constants.sh generation (gen-roles pattern):pending\n5:Step 1: Build + install doey-ctl binary to PATH:pending\n6:Step 2: Add doey-ctl fast-path to hook health checks (common.sh / skill templates):pending\n7:Step 3: Add doey-ctl fast-path for status set/get in stop-status.sh, on-prompt-submit.sh, taskmaster-wait.sh:pending\n8:Step 4: Run go test, bash compat tests, smoke test all subcommands:pending\n9:Step 5: Verify install.sh builds doey-ctl correctly:pending\n10:W1.1: Build + install doey-ctl binary to ~/.local/bin/ --project-dir /home/doey/doey:done\n11:W1.2: Hook health check fast-path (common.sh) --project-dir /home/doey/doey:done\n12:W1.3: Hook status set/get fast-path (stop-status.sh, on-prompt-submit.sh, taskmaster-wait.sh) --project-dir /home/doey/doey:done\n13:W1.1: Run tests — go test, bash compat, smoke test --project-dir /home/doey/doey:done\n14:W1.4: Verify install.sh builds doey-ctl --project-dir /home/doey/doey:done
 TASK_TITLE=doey-ctl — Go CLI for fast, safe orchestration
 TASK_STATUS=done
 TASK_TYPE=infrastructure
 TASK_CREATED_BY=Boss
 TASK_DESCRIPTION=Build a compiled Go CLI (doey-ctl) that replaces shell-based orchestration with atomic, race-free operations. Currently IPC (msg files), status management, health checks, task CRUD, and tmux interaction are all bash — slow, race-prone, fragile. Go foundation already exists in tui/internal/runtime/ (Reader, SessionConfig, PaneStatus types).
-
-PHASE 1 — Core Library (tui/internal/ctl/):
-  • ipc.go: Atomic msg write (tmp+rename), msg read+cleanup, trigger fire
-  • status.go: Status read/write with proper time parsing, liveness checks
-  • tmux.go: Tmux wrapper — exec commands, parse output, cache pane lists
-  • task.go: Task CRUD with file locking, schema v3 compliant
-
-PHASE 2 — CLI Binary (tui/cmd/doey-ctl/main.go):
-  • Subcommands: msg send/read, status get/set, health check, task create/update/list/subtask, tmux panes/send
-  • JSON + human-readable output (--json flag)
-
-PHASE 3 — Shell Integration:
-  • Replace send_msg_to_taskmaster() with doey-ctl msg send
-  • Replace health check blocks with doey-ctl health check
-  • Replace task_create/task_subtask_add with doey-ctl task create
-  • Replace status reads/writes in hooks with doey-ctl status set/get
-
-PHASE 4 — Verification:
-  • Go tests for internal/ctl/ packages
-  • Parallel write stress test
-  • install.sh builds doey-ctl
-  • E2E full session with Go IPC
-
-RISKS: macOS flock unavailable (use rename pattern), tmux version diffs (parse defensively), binary needs Go toolchain to build.
-
-ARCHITECTURE: New binary tui/cmd/doey-ctl/ — shares internal/ with TUI, separate concerns. Go module already at tui/go.mod.
-TASK_DECISION_LOG=1775125357:Created task\n1775125744:Phase 0 Wave 1: constants.go (W3.1) + gen-constants (W3.2) in parallel. Non-overlapping files.\n1775125871:Status changed to done\n1775125931:Status changed to done\n1775126108:Status changed to done\n1775126159:Status changed to done\n1775126330:Status changed to done\n1775126377:Status changed to done\n1775126516:Status changed to done\n1775126528:Status changed to done\n1775126761:Status changed to done\n1775126777:Status changed to done\n1775128545:Phase 3 plan: Wave 1 (build+install), Wave 2 (parallel hook integration), Wave 3 (test+verify)\n1775128584:Status changed to done\n1775128627:Status changed to done\n1775128660:Subtask 5 (build+install): doey-ctl built and installed to ~/.local/bin/. All subcommands work. Proceeding to Wave 2: parallel hook integration.\n1775129103:Wave 2 complete: Hook integration done. common.sh has 3 shared utilities, stop-status/on-prompt-submit/taskmaster-wait all have doey-ctl fast-paths. All syntax+compat pass.\n1775129271:Wave 3 complete: Go tests 12/12 pass, bash compat 0 violations, all smoke tests work (health check 'stale' + tmux panes 'missing window index' are expected). install.sh correctly builds doey-ctl.
-TASK_TIMESTAMPS=created=1775125357|completed=1775128627
+TASK_SUBTASKS=1:Phase 0 - Centralize hardcoded strings (status values, msg subjects, path conventions, pane layout, task fields) into Go constants + generate doey-constants.sh:done\n2:W3.1:done\n3:W3.2:done\n4:Step 1:done\n5:Step 2:done\n6:Step 3:done\n7:Step 4:done\n8:Step 5:done\n9:W1.1: Build + install doey-ctl binary to ~/.local/bin/ --project-dir /home/doey/doey:done\n10:W1.2: Hook health check fast-path (common.sh) --project-dir /home/doey/doey:done\n11:W1.3: Hook status set/get fast-path (stop-status.sh, on-prompt-submit.sh, taskmaster-wait.sh) --project-dir /home/doey/doey:done\n12:W1.1: Run tests — go test, bash compat, smoke test --project-dir /home/doey/doey:done\n13:W1.4: Verify install.sh builds doey-ctl --project-dir /home/doey/doey:done
+TASK_TIMESTAMPS=created=1775125357
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775125357
-TASK_ATTACHMENTS=.doey/tasks/100.result.json
-TASK_REPORT_1_TIMESTAMP=1775129271
-TASK_REPORT_1_AUTHOR=Manager_W1
-TASK_REPORT_1_TYPE=completion
-TASK_REPORT_1_TITLE=Task 100 Phase 3 Complete
-TASK_REPORT_1_BODY=doey-ctl hook integration + install verification done. Binary built, hooks integrated (common.sh, stop-status.sh, on-prompt-submit.sh, taskmaster-wait.sh), all tests pass, install.sh verified.
+TASK_SUBTASK_1_TITLE=Phase 0 - Centralize hardcoded strings (status values, msg subjects, path conventions, pane layout, task fields) into Go constants + generate doey-constants.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Step 1
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Step 2
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=Step 3
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=Step 4
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_8_TITLE=Step 5
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_9_TITLE=W1.1
+TASK_SUBTASK_9_STATUS= Build + install doey-ctl binary to ~/.local/bin/ --project-dir /home/doey/doey:done
+TASK_SUBTASK_10_TITLE=W1.2
+TASK_SUBTASK_10_STATUS= Hook health check fast-path (common.sh) --project-dir /home/doey/doey:done
+TASK_SUBTASK_11_TITLE=W1.3
+TASK_SUBTASK_11_STATUS= Hook status set/get fast-path (stop-status.sh, on-prompt-submit.sh, taskmaster-wait.sh) --project-dir /home/doey/doey:done
+TASK_SUBTASK_12_TITLE=W1.1
+TASK_SUBTASK_12_STATUS= Run tests — go test, bash compat, smoke test --project-dir /home/doey/doey:done
+TASK_SUBTASK_13_TITLE=W1.4
+TASK_SUBTASK_13_STATUS= Verify install.sh builds doey-ctl --project-dir /home/doey/doey:done

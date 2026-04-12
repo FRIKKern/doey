@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=337
+TASK_TITLE=Masterplan: Quality Gates — 9 criteria for self-correcting masterplans
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Run the full masterplan process: research swarm (10 agents), synthesis, phase design, then implement quality gates in /doey-masterplan skill. Intent doc at /tmp/doey/doey/masterplan-20260406-115508/intent.md. The 9 criteria: specific title, outcome-based goal, explicit decisions, concrete files/systems, ordered implementation plan, testable validation, honest risks, visible open questions, actionable todos. Both tighten generation prompts (prevention) AND add validation pass between Phase 3-4 (detection).
+TASK_SUBTASKS=1:W2.1: Research current /doey-masterplan SKILL.md.tmpl structure, phases, and prompt patterns:done\n2:W2.2: Implement prevention (tighter prompts) + detection (quality gate) in SKILL.md.tmpl:done\n3:W2.3: Verify changes + run expand-templates.sh + bash compat check:done
+TASK_TIMESTAMPS=created=1775476628
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775476628
+TASK_FILES=.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl
+TASK_SUBTASK_1_TITLE=W2.1: Research current /doey-masterplan SKILL.md.tmpl structure, phases, and prompt patterns
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Implement prevention (tighter prompts) + detection (quality gate) in SKILL.md.tmpl
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.3: Verify changes + run expand-templates.sh + bash compat check
+TASK_SUBTASK_3_STATUS=done

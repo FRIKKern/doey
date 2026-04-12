@@ -1,0 +1,40 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=188
+TASK_TITLE=Fix Taskmaster message delivery on startup — product-level reliability
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_TEAM=2
+TASK_DESCRIPTION=PROBLEM: Every session startup, messages sent to Taskmaster sit unread. Taskmaster shows BUSY but never processes incoming messages. Tasks stay pending forever until manually compacted/nudged. This affects all Doey users, not just this session.
+
+ROOT CAUSE INVESTIGATION NEEDED:
+1. Why does Taskmaster show BUSY but not process messages after startup?
+2. Is the message delivery path (doey msg send) actually reaching the Taskmaster pane?
+3. Is Taskmaster stuck in its initial prompt/compaction and not checking messages?
+4. Does taskmaster-wait.sh properly wake on new messages?
+5. Is there a race condition where Boss sends before Taskmaster is ready to receive?
+
+FIX REQUIREMENTS:
+- Taskmaster must reliably process messages within 30s of delivery
+- If Taskmaster is not ready on startup, messages must queue and be processed once ready
+- The system must have a delivery confirmation mechanism — not fire-and-forget
+- Fresh install users must get reliable delivery without any special setup
+- Consider: startup readiness gate (Taskmaster signals READY before Boss dispatches), message queue replay on wake, or heartbeat-based delivery confirmation
+TASK_SUBTASKS=1:Dispatch to W2 — research + fix message delivery:done\n2:W2.1: Research taskmaster-wait.sh — trigger mechanism, race conditions, wake reliability:done\n3:W2.2: Research message delivery path — doey-ctl msgSend, trigger file creation, nudge mechanism:done\n4:W2.3: Research Taskmaster startup sequence — agent instructions, BUSY state, first sleep entry:done\n5:W2.1: Fix taskmaster-wait.sh — add triggers/ to inotifywait, reduce idle sleep to 15s:done\n6:W2.2: Fix doey-ctl msgNudgePane — remove BUSY-skip, add redundant trigger touch in watched dir:done\n7:W2.3: Fix on-session-start.sh — write BOOTING status for Taskmaster pane on startup:done
+TASK_TIMESTAMPS=created=1775257865
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257865
+TASK_SUBTASK_1_TITLE=Dispatch to W2 — research + fix message delivery
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Research taskmaster-wait.sh — trigger mechanism, race conditions, wake reliability
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Research message delivery path — doey-ctl msgSend, trigger file creation, nudge mechanism
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.3: Research Taskmaster startup sequence — agent instructions, BUSY state, first sleep entry
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.1: Fix taskmaster-wait.sh — add triggers/ to inotifywait, reduce idle sleep to 15s
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.2: Fix doey-ctl msgNudgePane — remove BUSY-skip, add redundant trigger touch in watched dir
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W2.3: Fix on-session-start.sh — write BOOTING status for Taskmaster pane on startup
+TASK_SUBTASK_7_STATUS=done

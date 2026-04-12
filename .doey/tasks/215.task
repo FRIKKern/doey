@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=215
+TASK_TITLE=Task attachments in Go TUI — plans, reports, images, research visible in task detail
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Tasks should display their associated attachments directly in the Go TUI task detail view. Attachments include: plans (from .doey/plans/), research reports, worker reports, images/screenshots, and any other files linked to a task. Currently these exist as files but are not surfaced in the TUI. Need: 1) A way to link attachments to tasks (plan_id already exists, reports are in task files), 2) An attachments section in the task detail view showing linked files, 3) Ability to inspect/read attachment content inline, 4) Support for different attachment types — markdown renders nicely, images show a path/thumbnail reference.
+TASK_SUBTASKS=1:Dispatch to W3 — task attachments in TUI detail view:done
+TASK_TIMESTAMPS=created=1775296268
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775296268
+TASK_SUBTASK_1_TITLE=Dispatch to W3 — task attachments in TUI detail view
+TASK_SUBTASK_1_STATUS=done

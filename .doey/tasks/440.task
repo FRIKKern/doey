@@ -1,0 +1,84 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=440
+TASK_TITLE=Scope correction: Intent fallback is natural-language router, not typo fixer
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=CRITICAL SCOPE CORRECTION on parent #439. The existing implementation (shell/intent-fallback.sh via Haiku) is built as a typo corrector — it matches misspellings to known commands. USER CLARIFIED THE REAL INTENT: it must be a full natural-language command router that understands intent from ANY phrasing, not just typos, and resolves arguments by querying doey state.
+
+User's example: 'doey start <project> please' -> must (a) recognize start-project intent, (b) find the actual project by name/fuzzy match against a project registry, (c) invoke 'doey' in that project directory. The 'please' is irrelevant, the project name needs resolution, and there's no typo to correct.
+
+More examples (behavior spec):
+- 'doey start my-site please' -> find my-site project, cd there, launch doey
+- 'doey show me what is running' -> doey task list OR doey status team
+- 'doey kill everything' -> doey kill-all-sessions (PROMPT because destructive)
+- 'doey open the dashboard' -> attach to window 0 of current session
+- 'doey i wanna work on frontend' -> resolve frontend project, launch
+- 'doey tsk lst' (old typo case) -> still works, as a trivial subset
+
+WHAT NEEDS TO CHANGE (design):
+
+1. Command schema dump for Haiku/Sonnet. Every subcommand + args + purpose, machine-readable, fed into the prompt as the action vocabulary. Source of truth = auto-generated from doey.sh help or a new doey-ctl schema command. Must stay in sync automatically (not hand-maintained).
+
+2. Project registry. doey needs to know what projects exist. Options to evaluate:
+   a) Config file user populates: ~/.config/doey/projects.yaml
+   b) Auto-discovery: scan ~/code ~/projects ~/src ~/Github ~/GitHub for git repos, cache
+   c) Recent-projects tracking: every doey launch records cwd to ~/.config/doey/recent-projects
+   d) Hybrid — auto-discovery + recent + manual overrides
+   Recommend (d). Registry feeds Haiku with a candidate list so it can match names.
+
+3. Context data injected into the prompt: current session, running teams, recent projects, pwd, tailnet hostname, etc. So the model can resolve 'here', 'this session', 'the frontend', etc.
+
+4. Execution surface. Not just 'run command X'. Must be able to pass RESOLVED arguments. Output JSON contract from model:
+   { "action": "start_project", "args": { "path": "/home/doey/projects/my-site" }, "confidence": 0.92, "explanation": "...", "destructive": false }
+   Dispatcher then maps action -> real doey command with resolved args.
+
+5. Confidence tiers:
+   - >=0.85 and non-destructive -> auto-execute, print what's being run
+   - 0.60-0.85 OR destructive -> print 'Will run: <command>' and require [y/N]
+   - <0.60 -> print top 3 guesses as suggestions, do not execute
+
+6. Model selection. Haiku may be insufficient for argument resolution + fuzzy project matching. Evaluate: Haiku for pure command routing (fast path), escalate to Sonnet when action requires argument resolution. Or always use Sonnet for simplicity and accept ~2s latency on the error path.
+
+7. Destructive action list must be explicit (kill-all-sessions, stop, reset, uninstall, rm, trash, etc.) — model-reported 'destructive' flag is advisory, not authoritative.
+
+8. Fallback chain when claude binary missing or API key absent: degrade to current hard error, NOT crash. Zero regression.
+
+9. Existing shell/intent-fallback.sh + shell/doey-intent-dispatch.sh must be reused where possible, rewritten where scope demands. Keep opt-out DOEY_NO_INTENT_FALLBACK=1 working.
+
+10. Wire it in. The current implementation is NOT called from shell/doey.sh unknown-command handler (verified live: 'doey tsk lst' returns raw Unknown command, no log file written). Root-cause and fix the wiring FIRST, then extend scope — otherwise the scope extension won't land either.
+
+PHASES:
+- Phase 1 (immediate): Fix the wiring bug so the current narrow typo-corrector at least runs. Prove end-to-end: 'doey tsk lst' -> suggestion -> execution -> log file exists.
+- Phase 2 (this task): Scope expansion per above. Schema dump, project registry (recent + auto-discovery), context injection, JSON action contract, confidence tiers, destructive guard.
+- Phase 3: Acceptance test suite covering 10+ real-world phrasings. Every phrasing must be runnable from a test script with mock claude -p where needed.
+
+FRESH-INSTALL: must work after curl | bash. No API key -> hard-fail with current behavior. claude binary missing -> same. All new files ship via install.sh.
+
+USER IS FRUSTRATED with the 'ship sweep passed but happy path was never tested' pattern. Acceptance criteria for this task includes a live end-to-end demo: run 'doey start <real-project> please' and show it actually launches doey in that project dir.
+TASK_SUBTASKS=1:Phase 1: Fix wiring bug so current intent-fallback.sh actually runs from doey.sh unknown-command handler. End-to-end validation required. IN-FLIGHT as 439 subtask 478419 on W3.1.:done\n2:Phase 2: Scope expansion design. Command schema dump (auto-generated from doey.sh), project registry (hybrid auto-discover + recent + manual), context injection, JSON action contract {action,args,confidence,explanation,destructive}, confidence tiers (>=0.85 auto, 0.60-0.85 or destructive confirm, <0.60 suggest).:done\n3:Phase 2: Implementation. Rewrite shell/intent-fallback.sh + shell/doey-intent-dispatch.sh per expanded scope. Reuse where possible. Opt-out DOEY_NO_INTENT_FALLBACK=1 preserved.:done\n4:Phase 3: Acceptance test suite — 10+ real-world phrasings with mock claude -p. Live end-to-end demo: 'doey start <real-project> please' launches doey in project dir.:done\n5:Fresh-install verification: install.sh copies all new files; doey doctor passes; no API key / no claude binary -> graceful hard-fail with current behavior (zero regression).:done
+TASK_TIMESTAMPS=created=1775731557
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775731557
+TASK_SUBTASK_1_TITLE=Phase 1: Fix wiring bug so current intent-fallback.sh actually runs from doey.sh unknown-command handler. End-to-end validation required. IN-FLIGHT as 439 subtask 478419 on W3.1.
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775731601
+TASK_SUBTASK_1_COMPLETED_AT=1775732562
+TASK_SUBTASK_2_TITLE=Phase 2: Scope expansion design. Command schema dump (auto-generated from doey.sh), project registry (hybrid auto-discover + recent + manual), context injection, JSON action contract {action,args,confidence,explanation,destructive}, confidence tiers (>=0.85 auto, 0.60-0.85 or destructive confirm, <0.60 suggest).
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775731602
+TASK_SUBTASK_2_COMPLETED_AT=1775735215
+TASK_SUBTASK_3_TITLE=Phase 2: Implementation. Rewrite shell/intent-fallback.sh + shell/doey-intent-dispatch.sh per expanded scope. Reuse where possible. Opt-out DOEY_NO_INTENT_FALLBACK=1 preserved.
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775731602
+TASK_SUBTASK_3_COMPLETED_AT=1775735215
+TASK_SUBTASK_4_TITLE=Phase 3: Acceptance test suite — 10+ real-world phrasings with mock claude -p. Live end-to-end demo: 'doey start <real-project> please' launches doey in project dir.
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775731602
+TASK_SUBTASK_4_COMPLETED_AT=1775735216
+TASK_SUBTASK_5_TITLE=Fresh-install verification: install.sh copies all new files; doey doctor passes; no API key / no claude binary -> graceful hard-fail with current behavior (zero regression).
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_CREATED_AT=1775731602
+TASK_SUBTASK_5_COMPLETED_AT=1775735216

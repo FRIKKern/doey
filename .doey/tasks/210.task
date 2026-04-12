@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=210
+TASK_TITLE=Agent prompt efficiency — audit all agents, reduce instructions, optimize context
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Audit all Doey agent prompts for instruction bloat, research 72-instruction limit, design context-efficiency methods (lazy skills, reference cards, shared libraries, tiered instructions)
+TASK_SUBTASKS=1:W3.1: Audit & Counting — read all agents/*.md.tmpl, count instructions per agent, flag bloat, find redundancies:done\n2:W3.2: Research & Design — 72-instruction limit research, extraction opportunities, context-efficiency methods, slimming plan:done
+TASK_TIMESTAMPS=created=1775295082
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775295082
+TASK_SUBTASK_1_TITLE=W3.1: Audit & Counting — read all agents/*.md.tmpl, count instructions per agent, flag bloat, find redundancies
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research & Design — 72-instruction limit research, extraction opportunities, context-efficiency methods, slimming plan
+TASK_SUBTASK_2_STATUS=done

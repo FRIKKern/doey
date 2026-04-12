@@ -3,11 +3,10 @@ TASK_ID=139
 TASK_TITLE=Wire Task Reviewer into completion flow — auto-review every task
 TASK_STATUS=done
 TASK_TYPE=feature
+TASK_TEAM=W3
 TASK_DESCRIPTION=The Task Reviewer (pane 1.1, doey-task-reviewer agent) must be triggered automatically whenever a task is completed. It should review: (1) code quality and elegance, (2) task completeness vs acceptance criteria, (3) no regressions or rough edges. The reviewer should be notified via the stop-notify.sh chain or Taskmaster routing. When a worker finishes, the completion should flow through Task Reviewer before being marked pending_user_confirmation. Update the doey-task-reviewer.md.tmpl agent prompt to define review criteria focused on elegance, quality, and correctness. Wire the trigger mechanism so it fires on every task completion.
-TASK_DECISION_LOG=1775160930:Created task
+TASK_SUBTASKS=
 TASK_TIMESTAMPS=created=1775160930
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775160930
-TASK_TEAM=W3
-TASK_LOG_1775161140=COMMITTED: 960ca9e — Task Reviewer wired into completion flow

@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=291
+TASK_TITLE=Masterplan Phase 7: Session Launch Core extraction
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Extract doey-session.sh (~800L). The hardest extraction — launch_session_dynamic() is 321 lines with deep state. doey.sh becomes ~400-line thin dispatcher. Gate: all launch modes, reload, update re-exec. Skippable — 80% value already delivered.
+TASK_SUBTASKS=1:W2.1: Create doey-session.sh (~800L):done\n2:W2.2: Surgery — doey.sh thin dispatcher (~400L), install.sh, verify:done\n3:W2.2: Create doey-session.sh + doey.sh surgery + install.sh + tests + verification:done
+TASK_TIMESTAMPS=created=1775409735
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775409735
+TASK_PLAN_ID=28
+TASK_SUBTASK_1_TITLE=W2.1: Create doey-session.sh (~800L)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Surgery — doey.sh thin dispatcher (~400L), install.sh, verify
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Create doey-session.sh + doey.sh surgery + install.sh + tests + verification
+TASK_SUBTASK_3_STATUS=done

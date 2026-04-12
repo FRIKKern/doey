@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=314
+TASK_TITLE=Fix doey_send_verified — long messages fail verification
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=doey_send_verified pastes message via tmux send-keys then verifies by capturing last 10 lines (-S -10) and checking for first 40 chars of message. Long messages scroll the snippet off-screen, causing false 'text not visible' failures. Fix: use a shorter unique marker, increase capture range, or verify via status file change instead of text matching. File: ~/.local/bin/doey-send.sh lines 150-165.
+TASK_SUBTASKS=1:W4.1: Fix doey_send_verified verification logic for long messages — check last 40 chars instead of first, increase capture range, ensure bash 3.2 compat:done\n2:Dispatched to W4 Subtaskmaster — fix doey_send_verified:done
+TASK_TIMESTAMPS=created=1775436101
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775436101
+TASK_FILES=shell/doey-send.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Fix doey_send_verified verification logic for long messages — check last 40 chars instead of first, increase capture range, ensure bash 3.2 compat
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched to W4 Subtaskmaster — fix doey_send_verified
+TASK_SUBTASK_2_STATUS=done

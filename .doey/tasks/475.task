@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=475
+TASK_TITLE=Research oh-my-codex (OMX) — deep competitive analysis
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_CREATED_BY=coordinator
+TASK_TEAM=1
+TASK_DESCRIPTION=Clone Yeachan-Heo/oh-my-codex to ~/GitHub/oh-my-codex. Deep analysis of OMX workflow: (1) deep-interview clarification, (2) ralplan approval, (3) ralph completion loop, (4) team N:executor parallelism, (5) .omx/ durable state, (6) AGENTS.md vs CLAUDE.md, (7) specialist roles, (8) madmax/high modes. Deliverable: ranked recommendations for Doey.
+TASK_SUBTASKS=1:Dispatch to W2 Subtaskmaster — 2 workers for OMX research:done\n2:W2.1: Research OMX workflow & UX patterns (deep-interview, ralplan, ralph, madmax/high):done\n3:W2.2: Research OMX architecture & coordination (.omx/ state, AGENTS.md, specialists, team parallel):done
+TASK_TIMESTAMPS=created=1775761226
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775761226
+TASK_SUBTASK_1_TITLE=Dispatch to W2 Subtaskmaster — 2 workers for OMX research
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775761269
+TASK_SUBTASK_1_COMPLETED_AT=1775761689
+TASK_SUBTASK_2_TITLE=W2.1: Research OMX workflow & UX patterns (deep-interview, ralplan, ralph, madmax/high)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775761295
+TASK_SUBTASK_2_COMPLETED_AT=1775761562
+TASK_SUBTASK_3_TITLE=W2.2: Research OMX architecture & coordination (.omx/ state, AGENTS.md, specialists, team parallel)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1775761295
+TASK_SUBTASK_3_COMPLETED_AT=1775761571

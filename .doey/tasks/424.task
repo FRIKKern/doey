@@ -1,0 +1,81 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=424
+TASK_TITLE=Masterplan overhaul: Cursor-style live plan rendering with DB-backed 1+3 worker split
+TASK_STATUS=pending
+TASK_TYPE=feature
+TASK_DESCRIPTION=GOAL: Serious overhaul of /doey-masterplan to render a Cursor-style live plan as 4 workers build it.
+
+USER VISION:
+- /masterplan opens a window. Top-right pane = live-rendering plan view (think Cursor's plan panel).
+- 4 workers, all writing concurrently:
+  * 1 SURFACE worker — covers preflight, the original issue, the goal of the task, the desired after-state, and all "Cursor-style" plan criteria (success criteria, risks, rollback, scope, out-of-scope, validation steps).
+  * 3 DEEP workers — each owns one of the most complicated sub-areas of the problem and goes deep.
+- Live updates: as workers write, the top-right pane re-renders. Like watching a plan take form.
+
+CONCURRENCY MODEL (user-specified):
+- Workers do NOT write to the same markdown file.
+- All plan content lives in the DB (rows for sections, status, last_updated, owner_pane).
+- The top-right pane is a renderer that streams from the DB and re-renders live.
+- This is intentionally aligned with task 423 (DB as source of truth) — the Masterplan should be the first consumer of that pattern.
+
+DELIVERABLES (from Taskmaster — as a plan, no code yet):
+1. Schema for plan + plan_section + plan_event tables (sketch).
+2. Worker contract: which worker writes which sections, how locking/ownership works at row level.
+3. Renderer design: how the top-right pane subscribes to changes (poll-loop vs sqlite hook vs trigger file). What it shows when sections are empty / streaming / done.
+4. Layout of the masterplan window (panes, sizes, who lives where).
+5. Surface vs deep prompts: what each worker is told to produce.
+6. Cursor-style criteria checklist the surface worker must fill (preflight, problem, goal, after-state, success criteria, risks, rollback, scope, validation).
+7. How the user interacts: can they edit sections? approve? request rerun on one section?
+8. Phased rollout: what ships in phase 1 vs later.
+
+NON-GOALS for this task: writing code, picking a TUI library beyond what's already in tui/, reshaping the existing /masterplan skill until the plan is approved.
+
+PRIORITY: P1 — this is core product direction.
+
+---
+
+REFINEMENT (from user, after initial dispatch):
+
+Layered cascading worker model — replaces the flat "1 surface + 3 deep parallel" picture:
+
+PHASE 0 — Instant skeleton (~20s)
+- Worker A0: VERY surface level. Fires immediately on /masterplan launch.
+- Job: dump a skeleton plan into the DB so the top-right pane has SOMETHING to render within seconds.
+- Sections: title, one-line goal, rough phases, placeholders for everything else.
+- User sees the plan "appear" instantly. This is the Cursor-style instant-feedback moment.
+
+PHASE 1 — Surface overhaul
+- Worker A1: Surface-level. Starts when A0 is done (~20s in).
+- Job: overhaul the skeleton with proper Cursor-style criteria — preflight, problem statement, goal, after-state, success criteria, risks, rollback, scope, validation. Fills out everything except the deepest technical sections.
+- Updates the same DB rows so the renderer reflects the upgrade live.
+
+PHASE 2 — Deep research (parallel)
+- Workers D1, D2, D3: each owns one of the most complicated sub-areas.
+- Run in parallel while A1 is working / after A1 finishes.
+- They DO NOT write into plan sections yet — they research and stash findings.
+
+PHASE 3 — Fill-down
+- Wait barrier: all deep workers must finish researching.
+- Then they "fill down to details" — write their researched depth into the corresponding plan sections in the DB.
+- Renderer now shows a fully detailed plan.
+
+PHASE 4 — Handoff to Masterplanner
+- Once fill-down completes, the whole DB-backed plan is handed to the Masterplanner.
+- Masterplanner does a final pass: coherence check, dedupe, ordering, executive summary, ship-readiness verdict.
+
+KEY PROPERTIES:
+- User never stares at an empty pane. ~20s to first render.
+- Each phase strictly upgrades the previous — the renderer is monotonic (sections only get better).
+- Cascade is sequential at the section level, parallel at the research level.
+- Plan exists in DB throughout — Masterplanner just polishes the final state.
+
+PLEASE INCLUDE in the plan deliverable:
+- The phase 0/1/2/3/4 timing diagram.
+- How the renderer distinguishes "skeleton / surface / detailed / final" so the user can see progress.
+- How the wait-barrier between phase 2 and phase 3 is implemented (DB flag? trigger file?).
+- What Masterplanner is allowed to change vs only annotate.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775577483
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775577483

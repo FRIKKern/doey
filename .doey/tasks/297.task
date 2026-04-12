@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=297
+TASK_TITLE=Masterplan Phase 1: Fix Broken CLI Infrastructure
+TASK_STATUS=done
+TASK_TYPE=fix
+TASK_DESCRIPTION=Phase 1 of AI-Friendly CLI masterplan. Register --json flag on ALL task subcommand FlagSets (currently dead code). Add JSON output to silent commands (task update, transitions, log add). Fix nudge --on-finish ghost flag in stop-notify.sh. Fix doey wrapper forwarding gap for interaction and briefing subcommands. ~80 lines Go + 2 shell fixes. Research: /tmp/doey/doey/masterplan-20260405-205417/
+TASK_ACCEPTANCE_CRITERIA=--json works on all task subcommands; nudge --on-finish fixed; doey wrapper forwards interaction and briefing; Go build passes
+TASK_SUBTASKS=1:W3.1: Register --json flag on ALL task subcommand FlagSets + add JSON output to silent commands (task update, transitions, task log add):done\n2:W3.2: Fix nudge --on-finish ghost flag in stop-notify.sh + add interaction|briefing to doey wrapper forwarding:done
+TASK_TIMESTAMPS=created=1775423626
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775423626
+TASK_PLAN_ID=29
+TASK_SUBTASK_1_TITLE=W3.1: Register --json flag on ALL task subcommand FlagSets + add JSON output to silent commands (task update, transitions, task log add)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Fix nudge --on-finish ghost flag in stop-notify.sh + add interaction|briefing to doey wrapper forwarding
+TASK_SUBTASK_2_STATUS=done

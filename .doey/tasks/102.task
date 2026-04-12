@@ -8,9 +8,8 @@ TASK_CREATED_BY=Boss
 TASK_TEAM=W1
 TASK_DESCRIPTION=Fix taskmaster-wait.sh task scan: dispatched tasks (with TASK_TEAM set) should not count as needing Taskmaster attention.
 TASK_ACCEPTANCE_CRITERIA=taskmaster-wait.sh only wakes for unrouted tasks|bash compat passes
-TASK_RELATED_FILES=.claude/hooks/taskmaster-wait.sh
-TASK_TIMESTAMPS=created=$(date +%s)
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_NOTES=P0 URGENT
-TASK_UPDATED=$(date +%s)
+TASK_UPDATED=1775257534

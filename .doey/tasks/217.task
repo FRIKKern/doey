@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=217
+TASK_TITLE=File tree in Go TUI task detail — beautiful tree of all edited files per task
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Each task should show a file tree in the Go TUI task detail view displaying all files that were edited/created during that task. Workers already report FILES_CHANGED in their results. Render these as a collapsible file tree (like VS Code sidebar) grouped by directory, not a flat list. Should be beautiful, using Charmbracelet tree rendering. Show the tree in the task detail view alongside other task info.
+TASK_SUBTASKS=1:Dispatch to W3 — file tree in TUI task detail:done
+TASK_TIMESTAMPS=created=1775296582
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775296582
+TASK_SUBTASK_1_TITLE=Dispatch to W3 — file tree in TUI task detail
+TASK_SUBTASK_1_STATUS=done

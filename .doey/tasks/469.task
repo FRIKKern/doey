@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=469
+TASK_TITLE=Fix intent fallback max-turns limit killing multi-turn conversation
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=coordinator
+TASK_TEAM=W4
+TASK_DESCRIPTION=Intent fallback Opus hits 'Reached max turns (1)' after follow-up prompts. The fallback CLI launches claude with --max-turns 1 which prevents multi-turn conversation. Fix: increase max turns for chat/conversation mode in intent-fallback.sh. The single-shot correction mode can stay at --max-turns 1 but conversation/chat mode needs higher (e.g. 5-10). Reinstall with ./install.sh and test.
+TASK_SUBTASKS=1:Direct dispatch to W4.1 — fix max-turns limit:done
+TASK_TIMESTAMPS=created=1775757741
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775757741
+TASK_FILES=shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Direct dispatch to W4.1 — fix max-turns limit
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775757822
+TASK_SUBTASK_1_COMPLETED_AT=1775757866

@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=320
+TASK_TITLE=Fix doey_send_verified paste-buffer transport
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Replace send-keys with paste-buffer
+TASK_SUBTASKS=1:W2.1: Research doey_send_verified implementation — read shell/doey-send.sh, understand current transport, map verification logic:done\n2:W2.2: Find ALL callers of doey_send_verified and doey_send_command across shell/ agents/ hooks/ skills/ .claude/:done\n3:W2.1: Implement paste-buffer transport in shell/doey-send.sh — replace dual-path with unified buffer approach:done\n4:W2.2: Verify paste-buffer transport fix — read edited file, run tests, test actual delivery:done
+TASK_TIMESTAMPS=created=1775463044
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775463044
+TASK_FILES=shell/doey-send.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research doey_send_verified implementation — read shell/doey-send.sh, understand current transport, map verification logic
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Find ALL callers of doey_send_verified and doey_send_command across shell/ agents/ hooks/ skills/ .claude/
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Implement paste-buffer transport in shell/doey-send.sh — replace dual-path with unified buffer approach
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Verify paste-buffer transport fix — read edited file, run tests, test actual delivery
+TASK_SUBTASK_4_STATUS=done

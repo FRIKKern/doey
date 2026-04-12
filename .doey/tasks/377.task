@@ -1,0 +1,24 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=377
+TASK_TITLE=Masterplan spawns task + Go TUI plan viewer in pane 1
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Plan 21: (1) /doey-masterplan should auto-create a task when spawning — the plan IS a tracked task. (2) Replace bash masterplan-viewer.sh with doey-tui in masterplan pane 1 so the Go TUI Plans tab renders the plan live. (3) Ensure plan file writes sync to DB so the TUI can display them in real-time.
+TASK_SUBTASKS=1:Update /doey-masterplan skill to create task on spawn:done\n2:Replace masterplan-viewer.sh with doey-tui in teams/masterplan.team.md pane 1:done\n3:Ensure plan file writes sync to DB for TUI display:done\n4:Clean up masterplan-viewer.sh if fully replaced:done\n5:Dispatched to window 3 (2 workers):skipped
+TASK_TIMESTAMPS=created=1775512891
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775512891
+TASK_PLAN_ID=21
+TASK_FILES=.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,shell/masterplan-viewer.sh,teams/masterplan.team.md,tui/internal/runtime/plans_config.go,tui/internal/store/migrate.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Update /doey-masterplan skill to create task on spawn
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Replace masterplan-viewer.sh with doey-tui in teams/masterplan.team.md pane 1
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Ensure plan file writes sync to DB for TUI display
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Clean up masterplan-viewer.sh if fully replaced
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Dispatched to window 3 (2 workers)
+TASK_SUBTASK_5_STATUS=skipped

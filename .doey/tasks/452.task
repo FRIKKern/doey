@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=452
+TASK_TITLE=Task Reviewer spin loop: wake→msg count 0→wake repeats, wastes context
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Task Reviewer (pane 1.1) is stuck in a tight spin loop: calls 'doey msg count --to 1.1' → 0 messages → runs reviewer-wait.sh → returns WAKE_REASON=ACTIVE_TASKS → loops immediately again. This burns context for nothing. Commit bfe7673 claimed to add a passive-role fast path to taskmaster-wait.sh to prevent this for reviewer/deployment/expert — but the reviewer is still doing it. Either: (1) reviewer-wait.sh itself is missing the passive fast path, (2) ACTIVE_TASKS wake reason is firing when there's no work actually assigned to the reviewer, (3) the wake hook isn't sleeping/blocking long enough. Fix: reviewer should only wake when a task is explicitly assigned to it for review, not on any ACTIVE_TASKS signal. Investigate .claude/hooks/reviewer-wait.sh and taskmaster-wait.sh passive fast path.
+TASK_SUBTASKS=1:W4.1: investigate reviewer-wait path + fix passive-role fast path to prevent spin loop:done
+TASK_TIMESTAMPS=created=1775743980
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775743980
+TASK_FILES=.claude/hooks/reviewer-wait.sh,install.sh,shell/doey-tunnel.sh,shell/doey.sh,tui/internal/model/actions.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: investigate reviewer-wait path + fix passive-role fast path to prevent spin loop
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_4_1
+TASK_SUBTASK_1_CREATED_AT=1775744129
+TASK_SUBTASK_1_COMPLETED_AT=1775744690

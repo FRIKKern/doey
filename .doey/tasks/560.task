@@ -1,0 +1,33 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=560
+TASK_TITLE=Commit + push unstaged #557 changes (doey new + intent fallback)
+TASK_STATUS=in_progress
+TASK_TYPE=chore
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+
+Commit and push the unstaged changes left over from task #557 which was killed before deployment.
+
+THREE COMMITS needed:
+
+1. feat(557): doey new command + intent fallback for project creation
+   Files: shell/doey-new.sh (NEW), shell/doey.sh, shell/intent-fallback.sh, shell/doey-intent-dispatch.sh, docs/intent-fallback.md
+   
+2. chore: update skill files
+   Files: .claude/skills/deep-interview/SKILL.md, .claude/skills/doey-add-team/SKILL.md, .claude/skills/doey-add-window/SKILL.md, .claude/skills/doey-masterplan/SKILL.md, .claude/skills/doey-masterplan/SKILL.md.tmpl, .claude/skills/doey-repair/SKILL.md
+
+3. chore: sync task files from SQLite export
+   Files: .doey/tasks/*.task
+
+PRE-COMMIT CHECKS: run go build ./... in tui/ and bash tests/test-bash-compat.sh before committing. Push all to main.
+TASK_SUBTASKS=1:Routed directly to Deployment (1.2) — VCS-only task:done
+TASK_TIMESTAMPS=created=1775990070
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775990070
+TASK_SUBTASK_1_TITLE=Routed directly to Deployment (1.2) — VCS-only task
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775990137
+TASK_SUBTASK_1_COMPLETED_AT=1775990234

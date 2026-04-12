@@ -2,10 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=43
 TASK_TITLE=Show latest ordered task on top in Go TUI
 TASK_STATUS=done
-TASK_CREATED=1774901543
 TASK_TYPE=bugfix
-TASK_DESCRIPTION=In the Go TUI (tui/ directory), when displaying tasks (e.g. in a list or selection view), the most recently created/ordered task should appear at the TOP of the list, not the bottom. This is reverse-chronological ordering — newest first. Check wherever tasks are listed or rendered and ensure the sort order puts the highest ID or most recent timestamp first. Must compile: cd tui/ && go build ./...
 TASK_TAGS=tui,ux,tasks
 TASK_TEAM=W1
-TASK_RESULT=Changed tui/internal/model/tasks.go:220 — reversed ID sort (a.ID < b.ID → a.ID > b.ID). Committed as 561957b.
-TASK_FILES=tui/internal/model/tasks.go
+TASK_DESCRIPTION=In the Go TUI (tui/ directory), when displaying tasks (e.g. in a list or selection view), the most recently created/ordered task should appear at the TOP of the list, not the bottom. This is reverse-chronological ordering — newest first. Check wherever tasks are listed or rendered and ensure the sort order puts the highest ID or most recent timestamp first. Must compile: cd tui/ && go build ./...
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536

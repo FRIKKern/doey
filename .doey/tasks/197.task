@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=197
+TASK_TITLE=Fix install.sh — missing doey-send.sh copy to ~/.local/bin/
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=install.sh does not copy shell/doey-send.sh to ~/.local/bin/doey-send.sh. Agent templates reference this path. Currently works via in-repo fallback but breaks on fresh install if agents resolve the installed path first. Should be installed alongside doey-roles.sh for completeness.
+TASK_ACCEPTANCE_CRITERIA=install.sh copies shell/doey-send.sh to ~/.local/bin/doey-send.sh; doey doctor validates it exists; fresh install works without in-repo fallback
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775265544
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775265544

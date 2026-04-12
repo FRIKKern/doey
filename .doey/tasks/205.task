@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=205
+TASK_TITLE=Fix startup hang — Team 3 setup blocks loading screen
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=Doey tmux startup gets stuck when setting up Team 3. Loading screen never completes without user pressing Q or clicking around. Previously fixed similar issue in tasks 201/202 (reduced DOEY_INITIAL_TEAMS 2→1) but problem persists. Need to: 1) Trace startup flow to find exact blocking point during Team 3 setup, 2) Determine why pressing Q or clicking unblocks it, 3) Fix so startup completes autonomously with zero user interaction.
+TASK_SUBTASKS=1:Research: trace startup flow in doey.sh — find exact blocking point during Team 3 setup:done\n2:Research: why does pressing Q or clicking unblock the hang — input wait? tmux focus event?:done\n3:Identify root cause — race condition, Claude waiting for input, tmux layout block, or loading screen detection failure:done\n4:Implement fix — startup must complete autonomously without user interaction:done\n5:Verify — fresh doey launch completes loading screen, all teams spawn, no regressions:done\n6:Dispatch to W2 Subtaskmaster — research + fix startup hang:done\n7:W2.1: Research startup flow — find exact blocking point:done
+TASK_TIMESTAMPS=created=1775294427
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775294427
+TASK_SUBTASK_1_TITLE=Research: trace startup flow in doey.sh — find exact blocking point during Team 3 setup
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Research: why does pressing Q or clicking unblock the hang — input wait? tmux focus event?
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Identify root cause — race condition, Claude waiting for input, tmux layout block, or loading screen detection failure
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Implement fix — startup must complete autonomously without user interaction
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Verify — fresh doey launch completes loading screen, all teams spawn, no regressions
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=Dispatch to W2 Subtaskmaster — research + fix startup hang
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=W2.1: Research startup flow — find exact blocking point
+TASK_SUBTASK_7_STATUS=done

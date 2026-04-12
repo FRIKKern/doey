@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=471
+TASK_TITLE=Make intent fallback proactive — use tools to answer questions
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=coordinator
+TASK_TEAM=W4
+TASK_DESCRIPTION=The intent fallback Opus should proactively use tools/commands to answer questions instead of giving static responses. When user asks about projects, it should run find/ls, check doey list, scan for package.json/go.mod/Cargo.toml etc. Requirements: (1) Remove --no-tools from fallback Opus calls so it can use tools. (2) Increase max-turns enough for useful multi-step work. (3) Enrich system prompt to encourage proactive tool use and filesystem exploration. (4) It should know about doey projects via doey list command.
+TASK_SUBTASKS=1:Bundled with task 470:done
+TASK_TIMESTAMPS=created=1775758235
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775758235
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Bundled with task 470
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775758995
+TASK_SUBTASK_1_COMPLETED_AT=1775758995

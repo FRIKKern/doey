@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=528
+TASK_TITLE=TASK_525 P1: Schema migration + store extension
+TASK_STATUS=cancelled
+TASK_TYPE=task
+TASK_CREATED_BY=cli
+TASK_DESCRIPTION=Append transactional migration to tui/internal/store/schema.go (10 ALTER TABLE + 2 indexes wrapped in BEGIN/COMMIT). Extend store.Event + add store.ViolationPolling const + ListEventsByClass. Add PRAGMA table_info(events) column cache in store.Open for pre-migration readers. Refactor SELECT/INSERT builders to only touch columns that exist. Test: TestJSON1Available, TestEventsColumnCachePartialDB. Full plan: /tmp/doey/masterplan-task525-20260411-102957/plan.md (Phase 1). Part of parent task 525.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775910122
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910122

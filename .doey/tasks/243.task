@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=243
+TASK_TITLE=Research: Full audit of Doey startup flow
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Full audit of Doey startup flow — map shell/doey.sh entry-to-session path, env var setup and config hierarchy, hook firing order and dead code. 3 parallel workers covering 9 sections.
+TASK_ACCEPTANCE_CRITERIA=All 9 sections covered with verifiable file paths and line numbers
+TASK_SUBTASKS=1:W2.1: doey.sh entry point — startup sequence, entry points, splash flow:done\n2:W2.2: Team spawning and environment — Core Team, worker teams, env vars, config hierarchy:done\n3:W2.3: Hooks during startup + dead code — hook firing order, race conditions, dead code:done
+TASK_TIMESTAMPS=created=1775337707
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775337707
+TASK_SUBTASK_1_TITLE=W2.1: doey.sh entry point — startup sequence, entry points, splash flow
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Team spawning and environment — Core Team, worker teams, env vars, config hierarchy
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.3: Hooks during startup + dead code — hook firing order, race conditions, dead code
+TASK_SUBTASK_3_STATUS=done

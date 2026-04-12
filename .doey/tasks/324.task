@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=324
+TASK_TITLE=Fix Tasks tab list viewport — user stuck at bottom of list
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=The Tasks tab in the Go TUI still forces the user to the bottom of the task list. The list needs a max viewport height so the user sees the top of the list by default, not the bottom. Prior attempts (#321, #322) fixed related issues but this core problem persists. The list container must have a bounded viewport that starts at the top. Look at how other tabs (Teams, Plans) handle their list viewport for the correct pattern.
+TASK_SUBTASKS=1:W2.1: Research viewport pattern — compare Tasks tab vs Teams/Plans tabs:done\n2:W2.2: Research viewport pattern — Tasks vs Teams/Plans tabs:done\n3:W2.1: Implement viewport fix — MaxHeight + section overhead in tasks.go:done\n4:W2.2: Verify viewport fix — build, test, code review:done
+TASK_TIMESTAMPS=created=1775466860
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775466860
+TASK_FILES=agents/doey-subtaskmaster.md,agents/doey-subtaskmaster.md.tmpl,shell/doey-team-mgmt.sh,tui/internal/model/tasks.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research viewport pattern — compare Tasks tab vs Teams/Plans tabs
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research viewport pattern — Tasks vs Teams/Plans tabs
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Implement viewport fix — MaxHeight + section overhead in tasks.go
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Verify viewport fix — build, test, code review
+TASK_SUBTASK_4_STATUS=done

@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=428
+TASK_TITLE=Cleanup BUSY on pane kill/crash — no counterpart for prompt-submit
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Doey Expert finding from 425. on-prompt-submit.sh sets BUSY, stop-status.sh clears it on normal stop, but kill/crash leaves BUSY orphaned forever. Need a kill/crash cleanup path — possibly a tmux pane-died hook or a watchdog reconciler trigger.
+TASK_SUBTASKS=1:W5.1: Verify 427 orphan GC handles BUSY cleanup; extend if needed:done
+TASK_TIMESTAMPS=created=1775585113
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775585113
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-prompt-submit.sh,.claude/settings.json,install.sh,shell/doey-doctor.sh,shell/doey.sh,shell/info-panel.sh,tui/cmd/doey-ctl/commands.go,tui/cmd/doey-ctl/main.go,tui/internal/store/store_test.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Verify 427 orphan GC handles BUSY cleanup; extend if needed
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_5_1
+TASK_SUBTASK_1_CREATED_AT=1775595521
+TASK_SUBTASK_1_COMPLETED_AT=1775595547

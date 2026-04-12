@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=373
+TASK_TITLE=Unified error tracking — log every error across all hooks and roles
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Every error in the system must be captured, stored, and queryable. Hook blocks, message delivery failures, false completions, worker crashes, silent failures — all of it. Persistent log that survives reboots. Feeds into the future web dashboard and enables systematic bug fixing.
+TASK_SUBTASKS=1:W3.1: Research hook error paths — common.sh, on-pre-tool-use.sh, stop-status.sh, stop-notify.sh, existing doey-ctl event system:done\n2:W3.2: Research CLI error commands — doey.sh, doey-ctl Go binary, event table schema, query patterns:done\n3:W3.1: Implement doey_log_error() in common.sh + wire into on-pre-tool-use.sh, stop-status.sh, stop-notify.sh:done\n4:W3.2: Implement doey error list command in Go CLI + doey.sh proxy:done
+TASK_TIMESTAMPS=created=1775509096
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775509096
+TASK_SUBTASK_1_TITLE=W3.1: Research hook error paths — common.sh, on-pre-tool-use.sh, stop-status.sh, stop-notify.sh, existing doey-ctl event system
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research CLI error commands — doey.sh, doey-ctl Go binary, event table schema, query patterns
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Implement doey_log_error() in common.sh + wire into on-pre-tool-use.sh, stop-status.sh, stop-notify.sh
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.2: Implement doey error list command in Go CLI + doey.sh proxy
+TASK_SUBTASK_4_STATUS=done

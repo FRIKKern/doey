@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=219
+TASK_TITLE=Instant ASCII loading screen on startup — pre-session splash + early doey-loading
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Loading screen must appear within 1 second of running doey. Currently doey-loading runs AFTER all setup completes. Fix: (1) Print instant ASCII splash as first output before session creation, (2) Start doey-loading right after _init_doey_session, (3) Run all remaining setup behind it, (4) Suppress step output when loading is active. Apply to both launch_session_dynamic and launch_session. Plan 23.
+TASK_ACCEPTANCE_CRITERIA=ASCII visible within 1 second, no step output visible, works for dynamic and static grid paths
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster:done\n2:W2.2: Implement instant ASCII splash + early doey-loading in shell/doey.sh (both launch paths):done
+TASK_TIMESTAMPS=created=1775299320
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775299320
+TASK_PLAN_ID=23
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Implement instant ASCII splash + early doey-loading in shell/doey.sh (both launch paths)
+TASK_SUBTASK_2_STATUS=done

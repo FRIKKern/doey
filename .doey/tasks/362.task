@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=362
+TASK_TITLE=Respawn Phase 1: /doey-respawn-me skill + flag file
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Create the /doey-respawn-me skill that agents invoke to request respawn. Skill validates caller is a worker, writes atomic request file to RUNTIME/respawn/<pane>.request (tmp+rename pattern), sets PROOF_TYPE: respawn, and instructs agent to stop. Reference: synthesis at /tmp/doey/doey/masterplan-20260406-183746/synthesis.md, research at /tmp/doey/doey/masterplan-20260406-183746/research/. Existing blueprints: /doey-clear skill, doey_send_command in doey-send.sh. Gate: skill invocation creates correct flag file.
+TASK_SUBTASKS=1:Dispatched Phase 1 to W3 Subtaskmaster (4 workers: skill + hooks + respawn + verify):done\n2:W3.1: Create /doey-respawn-me skill (SKILL.md + SKILL.md.tmpl):done\n3:W3.2: Modify stop-status.sh and stop-notify.sh for RESPAWNING status:done\n4:W3.3: Create new stop-respawn.sh async hook (relaunch logic):done\n5:All 4 deliverables complete. Sent to Task Reviewer.:done\n6:W3.4: Verify + fix issues (missing tmpl, respawn_reason parse bug, full compat test):done
+TASK_TIMESTAMPS=created=1775502299
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775502299
+TASK_FILES=.claude/hooks/stop-notify.sh,.claude/hooks/stop-status.sh,shell/doey-doctor.sh,shell/doey.sh,tui/internal/ctl/constants.go,tui/internal/styles/status.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched Phase 1 to W3 Subtaskmaster (4 workers: skill + hooks + respawn + verify)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.1: Create /doey-respawn-me skill (SKILL.md + SKILL.md.tmpl)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.2: Modify stop-status.sh and stop-notify.sh for RESPAWNING status
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.3: Create new stop-respawn.sh async hook (relaunch logic)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=All 4 deliverables complete. Sent to Task Reviewer.
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.4: Verify + fix issues (missing tmpl, respawn_reason parse bug, full compat test)
+TASK_SUBTASK_6_STATUS=done

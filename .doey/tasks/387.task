@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=387
+TASK_TITLE=doey-term Phase 6: parity testing — validate with real-world programs
+TASK_STATUS=done
+TASK_TYPE=test
+TASK_DESCRIPTION=Masterplan Phase 6 (final) for doey-term. Launch doey-term and verify full native terminal parity by testing real programs: (1) bash — readline shortcuts Ctrl+A/E/R/U/K/W, history, tab completion. (2) vim/nvim — all modes, cursor movement, syntax, splits. (3) htop — color, mouse clicks, resize. (4) less — scrolling, search. (5) fish — autosuggestions, unicode prompt. (6) zsh + oh-my-zsh — prompts, git, completions. (7) tmux nested — full passthrough. (8) Unicode: echo Japanese Arabic Korean emoji. Write PASS/FAIL report per program. Fix any critical issues found. Plan: .doey/plans/masterplan-20260406-222042.md Phase 6.
+TASK_SUBTASKS=1:W2.1: build doey-term, test 8 programs, write parity report, fix in-scope P1 bugs:done
+TASK_TIMESTAMPS=created=1775519434
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775538943
+TASK_FILES=tui/internal/bubbleterm/emulator/emulator.go
+TASK_REVIEW_VERDICT=accepted
+TASK_SUBTASK_1_TITLE=W2.1: build doey-term, test 8 programs, write parity report, fix in-scope P1 bugs
+TASK_SUBTASK_1_STATUS=done

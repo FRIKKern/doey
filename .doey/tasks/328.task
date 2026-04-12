@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=328
+TASK_TITLE=Show active subtask per worker on Dashboard ASCII grid
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=On the Go TUI Dashboard tab, the ASCII team grid shows workers but not what they're working on. Each worker cell should display its current subtask title/ID. The data is available — workers have assigned subtasks tracked in the task system. Read the worker's current subtask from the DB/status and render it (truncated) in the worker's grid cell on the Dashboard. Look at how the existing ASCII grid renders worker cells in the Dashboard tab code.
+TASK_SUBTASKS=1:W2.1: Research Dashboard ASCII grid rendering — find how worker cells are built in Go TUI:done\n2:W2.2: Research subtask data availability — how worker subtask assignments are stored and queryable:done\n3:W2.1: Implement subtask ID prefix in Dashboard grid worker cells — dashboard.go:695-697:done\n4:W2.2: Verify subtask ID prefix implementation — build, code review, test:done
+TASK_TIMESTAMPS=created=1775468758
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775468758
+TASK_FILES=tui/go.mod,tui/go.sum,tui/internal/model/dashboard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research Dashboard ASCII grid rendering — find how worker cells are built in Go TUI
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Research subtask data availability — how worker subtask assignments are stored and queryable
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.1: Implement subtask ID prefix in Dashboard grid worker cells — dashboard.go:695-697
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2: Verify subtask ID prefix implementation — build, code review, test
+TASK_SUBTASK_4_STATUS=done

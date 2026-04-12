@@ -1,0 +1,33 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=503
+TASK_TITLE=Unify CLI: route doey-ctl commands through doey
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+
+doey-ctl is the core implementation, but agents should only need to use 'doey' as the single CLI entry point. Two changes needed:
+
+1. In doey.sh (the main CLI), add passthrough routing for doey-ctl subcommands: msg, status, nudge, and any other doey-ctl commands. When a user runs 'doey msg send ...' it should delegate to 'doey-ctl msg send ...'.
+
+2. Update ALL agent .md files (and .md.tmpl templates where applicable) to replace 'doey-ctl' references with 'doey'. Remember: edit .md.tmpl templates, not generated .md files, then run expand-templates.sh.
+
+The doey-ctl binary stays — doey just wraps it.
+TASK_SUBTASKS=1:W2.1: Add passthrough routing in doey.sh for doey-ctl subcommands (msg, status, nudge, etc.):done\n2:W2.2: Update all .md.tmpl templates, skills, and hooks to replace doey-ctl with doey:done
+TASK_TIMESTAMPS=created=1775853049
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775853049
+TASK_FILES=.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,agents/doey-boss.md,agents/doey-boss.md.tmpl,agents/doey-claude-expert.md,agents/doey-critic.md,agents/doey-freelancer.md,agents/doey-freelancer.md.tmpl,agents/doey-taskmaster.md,agents/doey-worker-deep.md,agents/doey-worker-quick.md,agents/doey-worker-research.md,agents/test-driver.md,shell/doey.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Add passthrough routing in doey.sh for doey-ctl subcommands (msg, status, nudge, etc.)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775853122
+TASK_SUBTASK_1_COMPLETED_AT=1775853198
+TASK_SUBTASK_2_TITLE=W2.2: Update all .md.tmpl templates, skills, and hooks to replace doey-ctl with doey
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1775853122
+TASK_SUBTASK_2_COMPLETED_AT=1775853198

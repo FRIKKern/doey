@@ -1,57 +1,15 @@
 TASK_SCHEMA_VERSION=3
 TASK_ID=58
-TASK_RESULT=P0 fix: added passthrough loop in task_upgrade_schema() preserving all TASK_* extension fields. Committed and pushed.
-TASK_UPDATED=1774964380
 TASK_TITLE=Enforce task dedup and structure — system-level, not memory-level
 TASK_STATUS=done
-TASK_CREATED=1774910158
 TASK_TYPE=feature
-TASK_DESCRIPTION=The task system must enforce good structure so ANY Boss instance (fresh install, no memory) naturally deduplicates and nests subtasks. Three enforcement points: (1) TASK CREATION HELPERS (doey-task-helpers.sh) — before creating a new task, search existing active tasks by fuzzy title/tag match. If a match is found, return the existing task ID instead of creating a new one. Expose a search function like task_find_similar(). (2) BOSS AGENT DEF — the Boss agent definition must instruct: always call task_find_similar before task_create. Same concern = subtask, never a sibling. One parent per initiative. (3) SM VALIDATION — SM should reject dispatches that create obvious duplicates. If a dispatch references a new task whose title overlaps >80% with an active task, SM escalates back to Boss for consolidation. This is product infrastructure, not personal discipline.
 TASK_TAGS=agent-defs,task-system
-TASK_LOG_1774910206=DISPATCHED: Sent to W1.0 for direct edit
-TASK_LOG_1774910229=RE-QUEUED: W1.0 has identity issue, waiting for idle worker
-TASK_LOG_1774910266=DISPATCHED: Sent to W1.1 worker directly
-TASK_FILES=agents/doey-boss.md
-TASK_LOG_1774961455=QUEUED: Expanded scope from Boss. Both teams busy (W1:#67, W2:#68). Will dispatch when team frees up.
 TASK_TEAM=W2
-TASK_SUBTASK_1_TITLE=Dispatch to Team W2
-TASK_SUBTASK_1_STATUS=pending
-TASK_SUBTASK_1_ASSIGNEE=Manager_W2
-TASK_UPDATE_1_TIMESTAMP=1774961563
-TASK_UPDATE_1_AUTHOR=SM
-TASK_UPDATE_1_TEXT=Dispatching task dedup enforcement to W2
+TASK_DESCRIPTION=The task system must enforce good structure so ANY Boss instance (fresh install, no memory) naturally deduplicates and nests subtasks. Three enforcement points: (1) TASK CREATION HELPERS (doey-task-helpers.sh) — before creating a new task, search existing active tasks by fuzzy title/tag match. If a match is found, return the existing task ID instead of creating a new one. Expose a search function like task_find_similar(). (2) BOSS AGENT DEF — the Boss agent definition must instruct: always call task_find_similar before task_create. Same concern = subtask, never a sibling. One parent per initiative. (3) SM VALIDATION — SM should reject dispatches that create obvious duplicates. If a dispatch references a new task whose title overlaps >80% with an active task, SM escalates back to Boss for consolidation. This is product infrastructure, not personal discipline.
 TASK_SUBTASKS=1:W2.1: task_find_similar() in doey-task-helpers.sh:done
-2:W2.2: Boss agent def dedup instructions:done
-3:W2.3: SM validation for duplicate tasks:done
-TASK_DECISION_LOG=1774961922:Wave 1 complete: all 3 enforcement points implemented. W2.1: task_find_similar+task_find_or_create in helpers. W2.2: Boss hard rule for dedup before create. W2.3: SM validation gate before dispatch.
-TASK_REPORT_1_TIMESTAMP=1774961922
-TASK_REPORT_1_AUTHOR=Manager_W2
-TASK_REPORT_1_TYPE=completion
-TASK_REPORT_1_TITLE=All 3 Enforcement Points Implemented
-TASK_REPORT_1_BODY=1) task_find_similar() added to doey-task-helpers.sh — fuzzy keyword overlap, bash 3.2 compatible, plus task_find_or_create() wrapper. 2) Boss agent def updated with HARD RULE: must search before creating tasks. 3) SM agent def updated with dedup validation gate before dispatch. All workers verified bash 3.2 compat.
-TASK_REPORT_2_TIMESTAMP=1774962014
-TASK_REPORT_2_AUTHOR=SM
-TASK_REPORT_2_TYPE=completion
-TASK_REPORT_2_TITLE=Task #58 committed
-TASK_REPORT_2_BODY=feat(task-58): system-level task dedup enforcement — 00532d6
-TASK_UPDATE_2_TIMESTAMP=1774963074
-TASK_UPDATE_2_AUTHOR=SM
-TASK_UPDATE_2_TEXT=URGENT: Boss reports task data disappearing. Dispatching research to W1 to audit all .task mutation paths.
-TASK_SUBTASK_2_TITLE=Research: audit all .task file mutation paths
-TASK_SUBTASK_2_STATUS=pending
-TASK_SUBTASK_2_ASSIGNEE=Manager_W1
-TASK_UPDATE_3_TIMESTAMP=1774963358
-TASK_UPDATE_3_AUTHOR=SM
-TASK_UPDATE_3_TEXT=Research complete. Root cause: task_upgrade_schema() drops numbered extension fields (TASK_REPORT_*, TASK_UPDATE_*, etc.). P0 fix needed.
-TASK_REPORT_3_TIMESTAMP=1774963358
-TASK_REPORT_3_AUTHOR=SM
-TASK_REPORT_3_TYPE=decision
-TASK_REPORT_3_TITLE=Root cause identified
-TASK_REPORT_3_BODY=task_upgrade_schema() at doey-task-helpers.sh:823 silently drops TASK_REPORT_*, TASK_UPDATE_*, TASK_RECOVERY_*, TASK_SUBTASK_* fields. Fix: add passthrough for all TASK_* lines not in base set.
-TASK_UPDATE_4_TIMESTAMP=1774964379
-TASK_UPDATE_4_AUTHOR=SM
-TASK_UPDATE_4_TEXT=P0 FIX dispatched to W1. Fix task_upgrade_schema() to preserve all TASK_* fields.
-TASK_SUBTASK_3_TITLE=P0 fix: task_upgrade_schema passthrough
-TASK_SUBTASK_3_STATUS=pending
-TASK_SUBTASK_3_ASSIGNEE=Manager_W1
-TASK_LOG_1774964598=COMPLETE: P0 fix committed (633b164) and pushed. task_upgrade_schema now preserves extension fields.
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1774964380
+TASK_SUBTASK_1_TITLE=W2.1
+TASK_SUBTASK_1_STATUS= task_find_similar() in doey-task-helpers.sh:done

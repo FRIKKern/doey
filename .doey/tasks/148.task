@@ -4,7 +4,7 @@ TASK_TITLE=Clean git state — untrack .doey/tasks/ and commit stray test file
 TASK_STATUS=done
 TASK_TYPE=chore
 TASK_DESCRIPTION=Two things: (1) .doey/tasks/ files are tracked in git despite .doey/ being in .gitignore — they were committed before the gitignore entry existed. Run git rm -r --cached .doey/tasks/ to untrack them. (2) tests/test-vcs-false-positives.sh is an untracked test file from task 141 that should be committed. Commit both changes, push to main.
-TASK_DECISION_LOG=1775170542:Created task
+TASK_SUBTASKS=
 TASK_TIMESTAMPS=created=1775170542
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0

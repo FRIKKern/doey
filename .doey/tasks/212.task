@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=212
+TASK_TITLE=Fix Plans tab viewport — stuck at bottom, must match Tasks tab behavior
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=Plans tab in Go TUI has its list viewport stuck at the bottom showing oldest plans. Teams and Tasks tabs both work correctly — list starts at top, newest first. Plans tab must learn from Tasks tab implementation: 1) Viewport starts at top on open, 2) Most recent plans shown first, 3) Scroll works naturally. Screenshots provided showing the contrast. This has been attempted before (tasks 172-177) but keeps regressing. The fix should directly copy the viewport/list initialization pattern from the Tasks tab code.
+TASK_SUBTASKS=1:Dispatch to W3 — fix Plans tab viewport:done
+TASK_TIMESTAMPS=created=1775295971
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775295971
+TASK_SUBTASK_1_TITLE=Dispatch to W3 — fix Plans tab viewport
+TASK_SUBTASK_1_STATUS=done

@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=177
+TASK_TITLE=Fix Plans tab list stuck at bottom — viewport must start at top
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=W2
+TASK_DESCRIPTION=Plans tab in Go TUI shows plan list stuck at the bottom instead of starting at the top. The list selection/viewport should start at the first item (top) when the Plans tab is opened or first populated. A similar fix was applied in commit 68137c6 (Select(0) on first population) but the problem persists — the fix is either incomplete or regressed. Investigate and fix properly.
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster for research + fix:done\n2:W2.1:done\n3:W2.3:done
+TASK_TIMESTAMPS=created=1775230746
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775230746
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster for research + fix
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.3
+TASK_SUBTASK_3_STATUS=done

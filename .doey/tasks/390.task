@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=390
+TASK_TITLE=Masterplan must convey user intent to Masterplanner on open
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=PERMANENT FIX in Masterplanner spawn pipeline. User intent (CLI arg / skill input) must always be passed through to the Masterplanner pane on spawn — wired into the spawn flow itself, not a workaround. Every masterplan invocation, every project, fresh install. Acceptance: 'doey masterplan "build X"' always results in Masterplanner pane immediately seeing 'build X' as starting context.
+TASK_SUBTASKS=1:W3.1: Research masterplan flow — find CLI handler, pane spawn, goal capture, READY-poll pattern:done\n2:Dispatched permanent-fix brief to T3 Subtaskmaster (window 3):done\n3:W3.2: Implement permanent goal-briefing in masterplan CLI spawn path (shell/doey.sh:319-357):done\n4:W3.1: Verify masterplan CLI goal-briefing fix — fresh eyes, independent run:done
+TASK_TIMESTAMPS=created=1775539431
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775539431
+TASK_SUBTASK_1_TITLE=W3.1: Research masterplan flow — find CLI handler, pane spawn, goal capture, READY-poll pattern
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Dispatched permanent-fix brief to T3 Subtaskmaster (window 3)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_COMPLETED_AT=1775587256
+TASK_SUBTASK_3_TITLE=W3.2: Implement permanent goal-briefing in masterplan CLI spawn path (shell/doey.sh:319-357)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.1: Verify masterplan CLI goal-briefing fix — fresh eyes, independent run
+TASK_SUBTASK_4_STATUS=done

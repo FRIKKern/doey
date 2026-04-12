@@ -1,0 +1,52 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=518
+TASK_TITLE=Bake terse direct communication into all core Doey agents
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W5
+TASK_DESCRIPTION=CATEGORY: deep
+
+Apply caveman-inspired terse communication principles to ALL core Doey agent definitions. Goal: 75% token reduction in agent outputs without losing technical accuracy.
+
+PRINCIPLES TO ADD (each agent .md.tmpl gets a Communication Style section):
+1. NO FILLER: drop just/really/basically/actually/simply
+2. NO PLEASANTRIES: drop sure/certainly/of course/happy to
+3. NO HEDGING: drop maybe/perhaps/might want to/could possibly
+4. FRAGMENTS OK when clear
+5. SHORT SYNONYMS: fix not 'implement a solution for', big not 'extensive'
+6. PATTERN: [thing] [action] [reason]. [next step].
+7. KEEP: full technical accuracy, code blocks unchanged, error messages quoted exact, articles (a/an/the) — don't go full caveman
+
+EXAMPLES TO INCLUDE IN EACH AGENT:
+NO: 'Sure! I'd be happy to help. The issue you're experiencing is likely caused by an authentication middleware bug.'
+YES: 'Bug in auth middleware. Token expiry check uses < not <=. Fix:'
+
+NO: 'I just wanted to let you know that I have basically completed the task and everything looks really good now.'
+YES: 'Task done. All checks pass.'
+
+WHICH AGENTS:
+Every .md.tmpl in agents/ — Boss, Taskmaster, Subtaskmaster, all Worker variants, Critic, Task Reviewer, Deployment, Doey Expert, all specialists, Interviewer, Planner, etc. Reference shell/doey-roles.sh for the canonical list.
+
+DELIVERABLES:
+- Communication Style section added to every agents/*.md.tmpl
+- Run shell/expand-templates.sh to regenerate all .md files
+- Spot-check 3 random agents to confirm new section is present and clear
+- bash tests/test-bash-compat.sh PASS
+- Commit and push
+
+DO NOT modify task descriptions, dispatch contracts, or behavioral protocols. Only add the communication style section. The terse principle applies to how agents talk, not what they do.
+TASK_SUBTASKS=1:W5.1: Add Communication Style section to 19 agent templates (A-subtaskmaster):done\n2:W5.2: Add Communication Style section to 19 agent templates (taskmaster-visual) + verify:done
+TASK_TIMESTAMPS=created=1775896708
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775896708
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Add Communication Style section to 19 agent templates (A-subtaskmaster)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775896827
+TASK_SUBTASK_1_COMPLETED_AT=1775897304
+TASK_SUBTASK_2_TITLE=W5.2: Add Communication Style section to 19 agent templates (taskmaster-visual) + verify
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775896828
+TASK_SUBTASK_2_COMPLETED_AT=1775897304

@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=222
+TASK_TITLE=Codebase quality audit — score 1-10 with breakdown
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Scan the entire Doey codebase and produce a rough 1-10 quality score. Evaluate: (1) Code organization and structure, (2) Consistency of patterns, (3) Error handling, (4) Documentation/comments, (5) Test coverage, (6) Dead code and tech debt, (7) Naming conventions, (8) Shell script quality (bash 3.2 compat, set -euo pipefail), (9) Go code quality, (10) Overall maintainability. Give a score per category and an overall score. Be honest and critical.
+TASK_SUBTASKS=1:Dispatched to W2 worker 2.2 (freelancer research):done\n2:W6.1: Full codebase quality audit — scan and score 10 categories 1-10:done\n3:Dispatched to W6 Subtaskmaster (research):done
+TASK_TIMESTAMPS=created=1775299476
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775299476
+TASK_SUBTASK_1_TITLE=Dispatched to W2 worker 2.2 (freelancer research)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W6.1: Full codebase quality audit — scan and score 10 categories 1-10
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to W6 Subtaskmaster (research)
+TASK_SUBTASK_3_STATUS=done

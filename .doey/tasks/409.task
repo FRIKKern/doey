@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=409
+TASK_TITLE=Phase F: install.sh + doey doctor integration
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=install.sh: verify jq is installed (add to deps if missing). shell/doey-doctor.sh: add row 'Haiku intent fallback: enabled/disabled (reason)' based on ANTHROPIC_API_KEY and DOEY_NO_INTENT_FALLBACK. Fresh-install test: doey uninstall && ./install.sh && ANTHROPIC_API_KEY=xxx doey tsk lst works; no-key variant shows disabled message.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545546
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545546
+TASK_PLAN_ID=1003

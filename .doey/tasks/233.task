@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=233
+TASK_TITLE=Permanent fix: lazy Taskmaster — never sleep with pending work
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Taskmaster repeatedly goes idle when it has pending work. Pattern: Boss sends task -> Taskmaster wakes -> reads message -> says 'waiting' -> sleeps WITHOUT dispatching. Failed fixes: #131, #115, #102, #165, #188. PLAN: 1) Audit taskmaster-wait.sh wake/sleep logic 2) Add pre-sleep guard checking unread messages + undispatched tasks 3) Fix Taskmaster agent prompt with explicit must-dispatch-before-sleep rule 4) Fix message lifecycle so messages are not marked read until acted on 5) Add startup drain to catch queued work after compaction/restart. ACCEPTANCE: Taskmaster NEVER sleeps with unread messages or undispatched tasks.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775304057
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775304057

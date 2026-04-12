@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=538
+TASK_TITLE=TASK_525 P6: Go TUI Logs>Violations sub-view
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_CREATED_BY=cli
+TASK_TEAM=W4
+TASK_DESCRIPTION=Append {icon:⛔,name:Violations} to logsGroupItems in tui/internal/model/logsgroup.go. Extend all switch m.cursor blocks (~6 sites per W2 research). Implement tui/internal/model/violations.go mirroring activity.go: list+detail, cursor+offset+autoScroll, severity pills via styles/status.go, bubblezone ids viol-<i>. Header counter 'polling: N warn / M breaker'. 'f' filter cycle all/warn/breaker. Empty-state placeholder on fresh install. Ride existing 2s SnapshotMsg — no new ticker. Standalone commit. Plan Phase 6.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775910172
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910172
+TASK_REVIEW_VERDICT=PASS

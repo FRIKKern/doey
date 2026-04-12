@@ -1,0 +1,44 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=520
+TASK_TITLE=Reopen: audit agent colors — prior no-op was wrong
+TASK_STATUS=done
+TASK_TYPE=chore
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+
+REOPENING task #519. The previous Subtaskmaster reported no-op based on a grep that 'all agents have color:'. The user disagrees — screenshot at .doey/task-attachments/agents-need-color.png clearly shows some agents with colored diamonds (blue, purple, yellow, orange) and others with plain/default diamonds in the TUI Agents tab.
+
+EXPLICIT INSTRUCTIONS — do NOT trust a single grep:
+1. For EVERY file in agents/*.md (and agents/*.md.tmpl), extract the frontmatter 'color:' field and print filename + value as a table. Include missing values and empty values.
+2. Report the table to Boss BEFORE making changes, so we can verify agent-by-agent.
+3. Any agent missing a color, or with an empty/placeholder color, gets a sensible hex assigned — grouped by domain:
+   - Doey Infrastructure — blues/cyans
+   - SEO — greens
+   - Visual QA — purples/pinks
+   - Utility — oranges/yellows
+4. If a .md.tmpl exists for an agent, edit the template, NOT the generated .md. Run shell/expand-templates.sh after.
+5. Confirm with the user via Boss that the table looks right BEFORE mass-editing if ambiguous.
+
+Deliverable: full audit table + commit with updated frontmatter so every agent has a real color value.
+TASK_SUBTASKS=1:Dispatched to W2 — REOPEN with strict per-file audit protocol:done\n2:W2.1: Audit + fix agent colors (parser-based):done\n3:Sent to Task Reviewer (1.1) — fix in tui/internal/runtime/reader.go reverses store/file order:done
+TASK_TIMESTAMPS=created=1775898802
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775898802
+TASK_FILES=tui/internal/runtime/reader.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W2 — REOPEN with strict per-file audit protocol
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775898912
+TASK_SUBTASK_1_COMPLETED_AT=1775899475
+TASK_SUBTASK_2_TITLE=W2.1: Audit + fix agent colors (parser-based)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775898916
+TASK_SUBTASK_2_COMPLETED_AT=1775899170
+TASK_SUBTASK_3_TITLE=Sent to Task Reviewer (1.1) — fix in tui/internal/runtime/reader.go reverses store/file order
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775899422
+TASK_SUBTASK_3_COMPLETED_AT=1775899475

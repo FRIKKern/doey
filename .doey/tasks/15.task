@@ -2,10 +2,12 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=15
 TASK_TITLE=Align git commit messages with task metadata
 TASK_STATUS=done
-TASK_CREATED=1774822432
 TASK_TYPE=infrastructure
-TASK_DESCRIPTION=When work for a task is committed, the commit message should directly reflect the task — include the task ID, title, type, and a summary derived from the task description. The commit and the task should read as the same piece of work. Currently commits are ad-hoc prose that may not reference the task at all. Update the workflow so that commits for task work automatically incorporate task metadata: "feat(task-15): <task title> — <summary>". This applies to hooks or helpers that produce commit messages (stop-results.sh, doey-task-helpers.sh, or wherever commits are generated). The task ID should be traceable from git log back to .doey/tasks/<id>.task.
 TASK_TAGS=task-system,hooks,shell
 TASK_TEAM=W2
-TASK_LOG_1774824367=DISPATCHED: Sent to W2 Manager (P2 commit alignment)
-TASK_LOG_1774824640=COMPLETE: Committed 6545510. task_commit_msg enhanced with conventional format.
+TASK_DESCRIPTION=When work for a task is committed, the commit message should directly reflect the task — include the task ID, title, type, and a summary derived from the task description. The commit and the task should read as the same piece of work. Currently commits are ad-hoc prose that may not reference the task at all. Update the workflow so that commits for task work automatically incorporate task metadata: "feat(task-15): <task title> — <summary>". This applies to hooks or helpers that produce commit messages (stop-results.sh, doey-task-helpers.sh, or wherever commits are generated). The task ID should be traceable from git log back to .doey/tasks/<id>.task.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257535

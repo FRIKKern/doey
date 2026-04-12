@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=449
+TASK_TITLE=Dashboard 'Team' button should spawn reserved team (1 lead + 6 workers)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=On the Dashboard, clicking the 'Team' button should spawn a reserved team consisting of 1 Subtaskmaster (team lead) and 6 Workers. Investigate the current Team button handler in the dashboard (shell/info-panel.sh or tui/) and wire it to the team-spawn path with reserved=true, workers=6.
+TASK_SUBTASKS=1:W5.1: Investigate Team button handler, wire to reserved 6-worker spawn, verify end-to-end:done
+TASK_TIMESTAMPS=created=1775741770
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775741770
+TASK_FILES=shell/doey-tunnel.sh,shell/doey.sh,tui/internal/model/actions.go,tui/internal/model/banner.go,tui/internal/model/root.go
+TASK_SUBTASK_1_TITLE=W5.1: Investigate Team button handler, wire to reserved 6-worker spawn, verify end-to-end
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_5_1
+TASK_SUBTASK_1_CREATED_AT=1775741913
+TASK_SUBTASK_1_COMPLETED_AT=1775742678

@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=339
+TASK_TITLE=Test doey-daemon — build, run, verify observability
+TASK_STATUS=done
+TASK_TYPE=test
+TASK_DESCRIPTION=Verify the doey-daemon (task 338) actually works end-to-end. Steps: (1) Build the binary with go build in tui/. (2) Run it against the current session and check it starts without errors. (3) Verify it produces stats output — JSON file or terminal display. (4) Check PID management and signal handling (clean shutdown). (5) Report any bugs, crashes, or missing functionality. This is a verification task — report findings, fix nothing.
+TASK_SUBTASKS=1:Dispatched to Team W2 (Subtaskmaster at 2.0):done\n2:W2.1: Build doey-daemon, run against live session, verify stats output:done\n3:W2.2: Test PID management, signal handling, clean shutdown:done
+TASK_TIMESTAMPS=created=1775478843
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775478843
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to Team W2 (Subtaskmaster at 2.0)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Build doey-daemon, run against live session, verify stats output
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Test PID management, signal handling, clean shutdown
+TASK_SUBTASK_3_STATUS=done

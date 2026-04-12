@@ -1,0 +1,20 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=276
+TASK_TITLE=Masterplan Phase 2: PoC TUI Visibility — proof section in task detail
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Phase 2 of masterplan #27. Add Proof of Completion section to Go TUI task detail view (tasks.go). Show files changed, commit hash, build status, reviewer verdict from SQLite. Unverified badge on tasks without proof.
+TASK_SUBTASKS=1:Add PoC section to task detail view in tasks.go:done\n2:Render files changed, commit hash, build status, reviewer verdict:done\n3:Unverified badge on tasks without proof:done\n4:Verify: TUI renders real proof data, go build passes:done
+TASK_TIMESTAMPS=created=1775396647
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775396647
+TASK_PLAN_ID=27
+TASK_SUBTASK_1_TITLE=Add PoC section to task detail view in tasks.go
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Render files changed, commit hash, build status, reviewer verdict
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Unverified badge on tasks without proof
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Verify: TUI renders real proof data, go build passes
+TASK_SUBTASK_4_STATUS=done

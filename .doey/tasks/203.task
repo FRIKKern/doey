@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=203
+TASK_TITLE=Proof of Completion as core gate — task-based, two-tier verification
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TEAM=W2,W3
+TASK_DESCRIPTION=Make Proof of Completion a central part of the task system. Every completed task MUST include proof that it works.
+
+Two tiers:
+1. AGENT-VERIFIABLE: Command output, test results, before/after, build success — things the agent can confirm autonomously.
+2. HUMAN-VERIFIABLE: For visual/UI tasks where agents can't fully verify — describe what the human should check, provide simulation/description, mark clearly as needs-human-eyes.
+
+Rules:
+- Every task completion must include a PROOF section in the task report
+- Proof type is determined by task type (bug=reproduction+fix, feature=demo output, UI=human checklist+agent best-effort, config=verification command)
+- Task Reviewer must check for proof and flag weak/missing proof — strong emphasis, not a hard reject, but always push for the strongest possible evidence
+- Workers must be instructed in their agent prompt to always produce proof
+- Proof must be visible in TUI task detail view
+
+This touches: worker agent prompts, Task Reviewer agent prompt, task file schema (PROOF section), stop hooks (capture proof output), TUI rendering.
+TASK_SUBTASKS=1:Dispatched to W2 — agent prompts, task schema, stop hooks, TUI:done
+TASK_TIMESTAMPS=created=1775268750
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775268750
+TASK_SUBTASK_1_TITLE=Dispatched to W2 — agent prompts, task schema, stop hooks, TUI
+TASK_SUBTASK_1_STATUS=done

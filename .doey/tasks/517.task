@@ -1,0 +1,56 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=517
+TASK_TITLE=Masterplan Phase 4: Interactive Plan Elements (clickable checkboxes, reorder, plan→task pipeline)
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W4
+TASK_DESCRIPTION=CATEGORY: deep
+
+Reference plan: /home/doey/doey/.doey/plans/masterplan-20260410-212617.md (Phase 4 section)
+
+Final phase of the masterplan upgrade. Make the plan viewer INTERACTIVE — not just a renderer.
+
+REQUIRED FEATURES:
+1. CLICKABLE CHECKBOXES: User can toggle phase steps as done/undone with mouse clicks or keyboard. State persists to the plan file.
+2. KEYBOARD NAVIGATION: arrow keys to move between phases/steps, space to toggle, enter to expand details.
+3. PHASE REORDERING: User can move phases up/down (J/K or shift+arrows) — saves to plan file.
+4. PLAN → TASK PIPELINE: A 'Send to Tasks' command (button or keybind) that converts the current plan into doey tasks via 'doey task create' calls. Each phase becomes a task, each step becomes a subtask. The plan is then linked to the parent task.
+5. VISUAL POLISH: progress bar showing overall plan completion percentage, distinct styles for done/in-progress/pending phases, smooth focus transitions.
+
+REQUIRED CHANGES:
+- tui/cmd/doey-masterplan-tui/main.go: switch to bubbletea Model with Update/View, add focus state, key bindings, mouse handling
+- tui/internal/planparse/planparse.go: add Marshal() to write structured plans back to disk
+- Add a 'doey plan to-tasks' subcommand or wire 'doey task create --from-plan PLAN_FILE'
+- Update teams/masterplan.team.md docs to mention interactive controls
+
+DELIVERABLES:
+- Interactive viewer with checkboxes, reorder, keyboard nav
+- Marshal round-trip: parse plan → render → user edits → marshal back to disk → re-parse equals modified state
+- plan→task pipeline with one-shot creation of all derived tasks
+- All tests pass: go build/vet/test, bash compat
+- Commit and push
+
+NOTE: This depends on Phase 3 (task #515) being merged first if it changes plan format. Coordinate with that team — if conflict, rebase after #515 lands.
+TASK_SUBTASKS=1:W4.1: Research Phase 4 — read planparse.go, main.go, reference plan, consensus pattern from 515, produce implementation spec:done\n2:W4.2: Interactive viewer — bubbletea Update/View, keyboard nav (arrows/space/enter), mouse clickable checkboxes, J/K reorder, focus state, visual polish (progress bar, styles):done\n3:W4.3: planparse.Marshal() round-trip — write structured plans back to disk; plan-file persistence on toggle/reorder:done\n4:W4.4: Plan→Task pipeline — 'doey plan to-tasks' subcommand converting phases→tasks, steps→subtasks; refuse unless CONSENSUS_STATE=CONSENSUS; link back to parent; teams/masterplan.team.md docs update:done
+TASK_TIMESTAMPS=created=1775895254
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775895254
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Research Phase 4 — read planparse.go, main.go, reference plan, consensus pattern from 515, produce implementation spec
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775896430
+TASK_SUBTASK_1_COMPLETED_AT=1775897547
+TASK_SUBTASK_2_TITLE=W4.2: Interactive viewer — bubbletea Update/View, keyboard nav (arrows/space/enter), mouse clickable checkboxes, J/K reorder, focus state, visual polish (progress bar, styles)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775896430
+TASK_SUBTASK_2_COMPLETED_AT=1775896920
+TASK_SUBTASK_3_TITLE=W4.3: planparse.Marshal() round-trip — write structured plans back to disk; plan-file persistence on toggle/reorder
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775896430
+TASK_SUBTASK_3_COMPLETED_AT=1775896920
+TASK_SUBTASK_4_TITLE=W4.4: Plan→Task pipeline — 'doey plan to-tasks' subcommand converting phases→tasks, steps→subtasks; refuse unless CONSENSUS_STATE=CONSENSUS; link back to parent; teams/masterplan.team.md docs update
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775896430
+TASK_SUBTASK_4_COMPLETED_AT=1775896920

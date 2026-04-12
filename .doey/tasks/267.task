@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=267
+TASK_TITLE=Masterplan Phase 2: Extract shared SplitPaneModel for Plans+Tasks
+TASK_STATUS=done
+TASK_TYPE=refactor
+TASK_TEAM=2
+TASK_DESCRIPTION=Phase 2 of masterplan #25: Fix Plans Tab Permanently. Extract shared SplitPaneModel from tasks.go, refactor both plans.go and tasks.go to use it. Both tabs must use identical viewport/scroll/list logic so they can never diverge again. Gate: both tabs work identically, Go build passes. Plan: /home/doey/doey/.doey/plans/25.md
+TASK_SUBTASKS=1:Dispatched to team 2 Subtaskmaster:done\n2:W2.1: Implement shared SplitPaneModel — create splitpane.go, refactor plans.go and tasks.go:done\n3:W2.2: Verify refactor — build, test, compare Plans/Tasks behavior:done
+TASK_TIMESTAMPS=created=1775384059
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775384059
+TASK_PLAN_ID=25
+TASK_SUBTASK_1_TITLE=Dispatched to team 2 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Implement shared SplitPaneModel — create splitpane.go, refactor plans.go and tasks.go
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Verify refactor — build, test, compare Plans/Tasks behavior
+TASK_SUBTASK_3_STATUS=done

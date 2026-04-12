@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=408
+TASK_TITLE=Phase E: JSONL logging pipeline
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=Subtaskmaster_W2
+TASK_DESCRIPTION=Append one JSON line per intent_fallback call to /tmp/doey/<project>/intent-log.jsonl with {ts, pane, role, typed, err, action, command, latency_ms, accepted}. Redact sensitive flag values (--body, --token, --key contents -> ***). Never log API key. Log file cleared on doey stop. Woven into Phase A but formalized + tested here.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775545546
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775545546
+TASK_PLAN_ID=1003

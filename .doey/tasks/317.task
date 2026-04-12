@@ -1,0 +1,29 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=317
+TASK_TITLE=Dashboard ASCII grid — flex-wrap layout, consistent gaps
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=The Dashboard TEAMS grid has awkward layout issues (see screenshot). Cards are arranged in a rigid 2-column grid causing:
+- Massive vertical gaps between rows (short Boss card paired with tall Core Team card)
+- Orphaned cards on the bottom row with empty space beside them
+- Jagged, wasteful spacing
+
+DESIRED BEHAVIOR — flex-wrap style:
+- Cards flow left-to-right, wrapping to next line when they dont fit the width
+- Consistent small gap between all cards (same horizontal and vertical gap)
+- No rigid columns — a short card next to a short card, tall cards take their natural height
+- Cards pack tightly like CSS flex-wrap: wrap
+- Responsive to terminal width
+
+Look at tui/internal/ui/ dashboard grid rendering. The current implementation likely uses a fixed 2-column layout. Change to a flow layout that measures card widths and wraps naturally.
+TASK_SUBTASKS=1:Dispatched to W4 — flex-wrap grid layout:done\n2:W4.1: Fix Dashboard TEAMS grid — replace 2-column layout with CSS flex-wrap style packing in renderTeamGrid():done
+TASK_TIMESTAMPS=created=1775437429
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775437429
+TASK_FILES=tui/internal/model/dashboard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W4 — flex-wrap grid layout
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.1: Fix Dashboard TEAMS grid — replace 2-column layout with CSS flex-wrap style packing in renderTeamGrid()
+TASK_SUBTASK_2_STATUS=done

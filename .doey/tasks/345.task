@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=345
+TASK_TITLE=Fix remaining Unverified badges — rebuild TUI and verify clean UI
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=Task 342 (commit 1fd7221) attempted to remove Unverified badges from TUI task cards but they still appear everywhere. See screenshot at /tmp/doey/doey/screenshot-unverified.png.
+
+The fix needs to:
+1. Search ALL Go TUI code for any remaining 'Unverified', 'unverified', 'UNVERIFIED' strings — task cards, detail views, list items, everywhere
+2. Remove ALL instances — if proof_of_success is empty, show NOTHING (no badge, no label, no placeholder)
+3. Also check for 'Proof of Completion' section header — if proof is empty, hide the entire section, dont show an empty section with Unverified
+4. Rebuild with go build in tui/
+5. Verify the built binary shows NO Unverified text anywhere
+
+Previous attempt: commit 1fd7221 — was incomplete, missed locations.
+TASK_SUBTASKS=1:W2.1: Research + implement — grep all 'unverified' in TUI Go code, remove badges/labels/sections, rebuild:done\n2:W2.2: Verify — fresh grep confirms zero unverified in render code, go build/vet clean, binary installed:done\n3:Dispatched to Team W2 (P0 urgent):done
+TASK_TIMESTAMPS=created=1775481724
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775481724
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Research + implement — grep all 'unverified' in TUI Go code, remove badges/labels/sections, rebuild
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Verify — fresh grep confirms zero unverified in render code, go build/vet clean, binary installed
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to Team W2 (P0 urgent)
+TASK_SUBTASK_3_STATUS=done

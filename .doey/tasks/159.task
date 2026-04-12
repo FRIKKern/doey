@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=159
+TASK_TITLE=Migrate doey.sh to Go — Phase 1: Research & Inventory
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Plan #15 Phase 1. Inventory all functions in shell/doey.sh (~3000 lines). For each function: name, line range, purpose, what it calls, what calls it. Group into domains (session launch, team creation, pane management, grid layout, worker spawning, status, CLI routing). Map the call graph. Identify which functions already have Go equivalents in tui/ or doey-ctl. Propose migration order: independence first, most fragile first, smallest first. Deliverable: migration roadmap document at /tmp/doey/doey/reports/task_<ID>_go_migration.md
+TASK_SUBTASKS=1:W4.1: Full function inventory of shell/doey.sh + Go migration report:done
+TASK_TIMESTAMPS=created=1775204267
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775204267
+TASK_SUBTASK_1_TITLE=W4.1
+TASK_SUBTASK_1_STATUS= Full function inventory of shell/doey.sh + Go migration report:done

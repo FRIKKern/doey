@@ -1,0 +1,18 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=477
+TASK_TITLE=Go TUI layout: wider task list, spacious detail panel
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=task
+TASK_CREATED_BY=coordinator
+TASK_TEAM=1
+TASK_DESCRIPTION=TUI layout adjustment: (1) Give tasks list panel more width — too narrow. (2) Detail panel restricts content width too aggressively — let content use all available horizontal space, only truncate on actual overflow. In tui/ Go code (layout/view components). Run go build after.
+TASK_SUBTASKS=1:Direct dispatch to W4.1 — TUI layout widening:done
+TASK_TIMESTAMPS=created=1775761609
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775761609
+TASK_FILES=agents/doey-subtaskmaster.md,agents/doey-subtaskmaster.md.tmpl,tui/internal/model/tasks.go,tui/internal/runtime/tasks_config.go,tui/internal/taskcard/taskcard.go
+TASK_SUBTASK_1_TITLE=Direct dispatch to W4.1 — TUI layout widening
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775761644
+TASK_SUBTASK_1_COMPLETED_AT=1775761903

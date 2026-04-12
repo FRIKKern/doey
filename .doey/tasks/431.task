@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=431
+TASK_TITLE=Reduce sloppy bash errors across roles (exit 2 from chained pipes / missing dirs)
+TASK_STATUS=pending
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Recurring problem: roles run chained Bash commands like 'doey msg read | tail; ls $RUNTIME_DIR/results; ...' where one stage fails (missing dir, unset var, pipe SIGPIPE) and the whole call exits non-zero, polluting logs and wasting context. Example caught 2026-04-07: Taskmaster ran a multi-stage probe that exited 2 because a downstream ls hit a missing directory.
+
+Required fixes:
+- Audit common probe patterns used by Boss/Taskmaster/Subtaskmaster hooks and shell helpers
+- Guard every chained stage with '|| true' OR split into separate calls
+- Use 'shopt -s nullglob' or '2>/dev/null' for ls/glob probes
+- Prefer dedicated doey-ctl subcommands over ad-hoc shell pipelines (zero-error contract)
+- Add a lint/test that flags chained probes without guards in agent prompts
+- Document the pattern in agent memory + role briefings
+
+Acceptance: zero 'Exit code 2' from probe-style Bash calls in a 1-hour session.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775593815
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775593815

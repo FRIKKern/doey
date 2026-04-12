@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=371
+TASK_TITLE=Make /doey-respawn-me work for all roles, not just workers
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=The /doey-respawn-me skill currently rejects non-worker roles (Taskmaster, Subtaskmaster, Boss). It should work for ANY Claude instance that wants to respawn itself. Remove the role check that blocks non-workers.
+TASK_SUBTASKS=1:W3.1: Remove worker-only role guard from /doey-respawn-me SKILL.md.tmpl, run expand-templates.sh, verify both files updated:done
+TASK_TIMESTAMPS=created=1775508296
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775508296
+TASK_SUBTASK_1_TITLE=W3.1: Remove worker-only role guard from /doey-respawn-me SKILL.md.tmpl, run expand-templates.sh, verify both files updated
+TASK_SUBTASK_1_STATUS=done

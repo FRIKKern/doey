@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=349
+TASK_TITLE=Remove task ID from title line in TUI task list — keep only on subtitle
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=Task 346 added the task ID (#N) to the subtitle/second line of task cards in the TUI task list. But the ID also appears on the top/title line, making it redundant. Remove the task ID from the title/top line — the subtitle line is sufficient.
+
+Search Go TUI code for task list item rendering. The title line likely prepends or includes the task ID — remove it from there. The subtitle line (added in task 346) should be the only place showing #N.
+
+Rebuild with go build. Screenshot reference: /tmp/doey/doey/screenshot-done-label.png
+TASK_SUBTASKS=1:W2.1: Find and remove task ID from title line in taskcard.go, verify subtitle still shows #N, build+vet clean:done\n2:W2.2: Verify task ID removed from title, subtitle still shows #N, build+vet clean:done
+TASK_TIMESTAMPS=created=1775482859
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775482859
+TASK_FILES=tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Find and remove task ID from title line in taskcard.go, verify subtitle still shows #N, build+vet clean
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Verify task ID removed from title, subtitle still shows #N, build+vet clean
+TASK_SUBTASK_2_STATUS=done

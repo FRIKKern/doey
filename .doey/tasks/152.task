@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=152
+TASK_TITLE=Enforce send-keys on every message delivery
+TASK_STATUS=cancelled
+TASK_TYPE=feature
+TASK_DESCRIPTION=Make doey-ctl msg send automatically nudge target pane via tmux send-keys after writing to DB. Add --no-nudge flag. Skip nudge if target is BUSY.
+TASK_SUBTASKS=1:W3.2: Add tmux send-keys nudge after msg send in commands.go:done
+TASK_TIMESTAMPS=created=1775174072
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775174072
+TASK_SUBTASK_1_TITLE=W3.2
+TASK_SUBTASK_1_STATUS= Add tmux send-keys nudge after msg send in commands.go:done

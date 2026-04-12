@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=505
+TASK_TITLE=Masterplan: get
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=worker
+TASK_TEAM=2
+TASK_DESCRIPTION=get
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775853412
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775853412
+TASK_FILES=.claude/hooks/taskmaster-wait.sh,.claude/skills/doey-monitor/SKILL.md,agents/doey-subtaskmaster.md,agents/doey-subtaskmaster.md.tmpl

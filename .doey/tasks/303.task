@@ -1,0 +1,22 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=303
+TASK_TITLE=TUI task inspect live refresh — update subtasks without resetting view
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=When viewing a task in the Go TUI inspect/detail view, subtask status changes (e.g. skipped→deferred, pending→done) don't appear until the user restarts the TUI. The inspect view should poll and refresh subtask data in real-time while preserving the user's scroll position and selected task. The task LIST already refreshes live — the inspect/detail pane needs the same treatment. Key: preserve viewport scroll position and selected item across refreshes.
+TASK_SUBTASKS=1:W3.1: Research TUI task inspect/detail view — how it renders subtasks, what triggers updates, why it doesn't refresh live:done\n2:W3.2: Research TUI task list live refresh — how tick/polling works, what messages trigger re-fetch, how scroll is preserved:deferred\n3:Dispatched to team 3, SM processing:deferred\n4:Re-dispatched to team 3 (2nd attempt):done\n5:W3.1: Fix detail viewport scroll reset — save/restore YOffset in loadSelectedDetail() and renderExpandedRightPanel():done
+TASK_TIMESTAMPS=created=1775430851
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775430851
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research TUI task inspect/detail view — how it renders subtasks, what triggers updates, why it doesn't refresh live
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Research TUI task list live refresh — how tick/polling works, what messages trigger re-fetch, how scroll is preserved
+TASK_SUBTASK_2_STATUS=deferred
+TASK_SUBTASK_3_TITLE=Dispatched to team 3, SM processing
+TASK_SUBTASK_3_STATUS=deferred
+TASK_SUBTASK_4_TITLE=Re-dispatched to team 3 (2nd attempt)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.1: Fix detail viewport scroll reset — save/restore YOffset in loadSelectedDetail() and renderExpandedRightPanel()
+TASK_SUBTASK_5_STATUS=done

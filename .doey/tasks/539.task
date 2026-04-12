@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=539
+TASK_TITLE=TASK_525 P7: Repro test + test-unread-audit + docs/violations.md + manual verify
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_CREATED_BY=cli
+TASK_DESCRIPTION=tests/test-polling-loop-detection.sh with DOEY_VIOLATION_STUB + DOEY_SKIP_MSG_COUNT + DOEY_TEST_CLOCK stub env. Arms: on/shadow/off. tests/test-unread-audit.sh regression guard (±5-line whitelist for Taskmaster). docs/violations.md: schema, class taxonomy, env knobs, latch contract, troubleshooting, #521 contract. Manual verify despawn-worker + HOME=/tmp/doey-fresh-525 fresh install. Final commit. Plan Phase 7.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775910173
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910173

@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=351
+TASK_TITLE=Apply neutral dark highlight style to Teams, Logs, Connections tabs
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=fix
+TASK_DESCRIPTION=The task list tab was fixed (task 350) to use a neutral dark background for selected items instead of bright blue. The same fix needs to be applied to the Teams tab, Logs tab, and Connections tab. Workers must first read the current highlight style used in the Tasks tab (the fix from task 350) and replicate the exact same pattern across all other tabs. The goal is consistent, non-jarring selection highlighting across the entire TUI.
+TASK_SUBTASKS=1:Dispatch to W2 Subtaskmaster:done\n2:W2.1: Fix Teams tab and Logs tab highlight styles to use #1A1D27:done\n3:W2.2: Fix Connections tab highlight style and verify all tabs match:done\n4:Sent to Task Reviewer (1.1):done
+TASK_TIMESTAMPS=created=1775483935
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775483935
+TASK_FILES=tui/internal/model/connections.go,tui/internal/model/logsgroup.go,tui/internal/model/team.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatch to W2 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Fix Teams tab and Logs tab highlight styles to use #1A1D27
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Fix Connections tab highlight style and verify all tabs match
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Sent to Task Reviewer (1.1)
+TASK_SUBTASK_4_STATUS=done

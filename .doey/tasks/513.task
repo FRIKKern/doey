@@ -1,0 +1,48 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=513
+TASK_TITLE=Fix Subtaskmaster: reactive event model, eliminate polling loops
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=CATEGORY: deep
+
+PROBLEM: Subtaskmasters burn huge amounts of context by actively polling worker state — repeated 'cat status.status', 'tmux capture-pane', grep-based liveness checks. This information is already being pushed to them via worker_finished messages and router notifications.
+
+REQUIRED BEHAVIOR: Subtaskmaster must be REACTIVE, not polling.
+
+- Idle between meaningful events using taskmaster-wait.sh (or equivalent wait hook that blocks on triggers)
+- React ONLY to: new messages from router/workers, worker_finished signals, FINISHED status file writes, user/Taskmaster messages
+- Workers are responsible for self-reporting — if a worker doesn't report, nudge ONCE via doey nudge, then wait
+- No polling loops
+- No repeated status file reads
+- No 'let me check again in 10s' patterns
+- No manual pane scans unless specifically escalated
+
+WHERE TO CHANGE:
+1. agents/doey-subtaskmaster.md.tmpl — rewrite the behavioral instructions to emphasize reactive model
+2. Remove/rewrite any polling patterns in example workflows
+3. .claude/skills/doey-monitor/SKILL.md — ensure it's only invoked on explicit need, not as a background loop
+4. Check stop hooks emit correct triggers for Subtaskmaster wake
+
+DELIVERABLES:
+- Updated .md.tmpl template with reactive-only behavior
+- Regenerated .md via shell/expand-templates.sh
+- Verify with: tmux capture-pane on a running Subtaskmaster during task execution should show minimal checking activity — mostly idle between events
+- Commit and push
+
+NOTE: Task #507 already fixed the over-aggressive killing. This task is about eliminating the polling that precedes those kills in the first place.
+TASK_SUBTASKS=1:W3.1: Rewrite agents/doey-subtaskmaster.md.tmpl for reactive event model + regen templates:done\n2:W3.2: Verify doey-monitor skill explicit-invocation + stop hook wake triggers:done
+TASK_TIMESTAMPS=created=1775868579
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775868579
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Rewrite agents/doey-subtaskmaster.md.tmpl for reactive event model + regen templates
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775868721
+TASK_SUBTASK_1_COMPLETED_AT=1775869379
+TASK_SUBTASK_2_TITLE=W3.2: Verify doey-monitor skill explicit-invocation + stop hook wake triggers
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775868721
+TASK_SUBTASK_2_COMPLETED_AT=1775869379

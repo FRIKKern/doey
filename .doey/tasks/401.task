@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=401
+TASK_TITLE=Respawn broken — stop-respawn.sh not registered in .claude/settings.json
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=ROOT CAUSE: /doey-respawn-me writes a request file to ${RUNTIME_DIR}/respawn/, then Stop hooks should detect it and kill+relaunch Claude. But .claude/hooks/stop-respawn.sh is NOT registered in .claude/settings.json — only stop-status.sh and stop-notify.sh are. So the request file is written, status flips to RESPAWNING, but the actual respawn (kill old Claude, run launch_cmd) NEVER fires. Old Claude sits idle at its prompt, no fresh context. Tasks 360-365 (Respawn Phases 1-4) all sit at pending_user_confirmation but the wiring in settings.json was never done. FIX: Add stop-respawn.sh to the Stop hook chain in /home/doey/doey/.claude/settings.json (after stop-status.sh, before/parallel to stop-notify.sh). VERIFY: Run /doey-respawn-me on Taskmaster, observe Claude actually exits and relaunches with fresh 0% ctx. Also verify on a worker. Make sure cooldown logic still works. Acceptance: /doey-respawn-me works on Taskmaster, workers, and any agent on a fresh install.
+TASK_SUBTASKS=1:W3.1: Research settings.json Stop hook chain + fresh-install source of truth for stop-respawn.sh registration:done\n2:W3.2: Register stop-respawn.sh in .claude/settings.json Stop hook chain:done\n3:W3.1: Verify stop-respawn.sh registration — JSON valid, hook reachable, end-to-end respawn works:done
+TASK_TIMESTAMPS=created=1775541972
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775541972
+TASK_SUBTASK_1_TITLE=W3.1: Research settings.json Stop hook chain + fresh-install source of truth for stop-respawn.sh registration
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Register stop-respawn.sh in .claude/settings.json Stop hook chain
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.1: Verify stop-respawn.sh registration — JSON valid, hook reachable, end-to-end respawn works
+TASK_SUBTASK_3_STATUS=done

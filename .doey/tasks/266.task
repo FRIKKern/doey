@@ -1,0 +1,31 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=266
+TASK_TITLE=Masterplan Phase 1: Fix Plans viewport height + API misuse
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_TEAM=2
+TASK_DESCRIPTION=Phase 1 of masterplan #25: Fix Plans Tab Permanently. CRITICAL FIX — 4 edits in plans.go. Research found Plans uses h-7 viewport height vs Tasks h-3. This 4-line difference is the root cause of 14+ failed fix attempts. Changes: (1) plans.go:211 change h-7 to h-3, (2) plans.go:932 change h-7 to h-3, (3) plans.go:994-997 remove line-clipping hack, (4) plans.go:409,:454,:459,:768 replace YOffset=0 with GotoTop(). Verify line numbers before editing — they may have shifted. Plan: /home/doey/doey/.doey/plans/25.md. Research: /tmp/doey/doey/masterplan-20260405-044844/research/
+TASK_SUBTASKS=1:Fix viewport height: change h-7 to h-3 at plans.go:211 and :932:done\n2:Remove line-clipping hack at plans.go:994-997:done\n3:Replace YOffset=0 with GotoTop() at plans.go:409,:454,:459,:768:done\n4:Verify: Plans viewport starts at top, scroll works, no mouse traps:done\n5:Verify: Works on small terminal (<40 rows):done\n6:Verify: Tasks tab has no regression:done\n7:Verify: Go build passes:done\n8:W2.1: Implement all 3 fixes in plans.go — h-7→h-3, remove clipping hack, YOffset→GotoTop:done\n9:Dispatched to team 2 Subtaskmaster:done
+TASK_TIMESTAMPS=created=1775384059
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775384059
+TASK_PLAN_ID=25
+TASK_SUBTASK_1_TITLE=Fix viewport height: change h-7 to h-3 at plans.go:211 and :932
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Remove line-clipping hack at plans.go:994-997
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Replace YOffset=0 with GotoTop() at plans.go:409,:454,:459,:768
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=Verify: Plans viewport starts at top, scroll works, no mouse traps
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=Verify: Works on small terminal (<40 rows)
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=Verify: Tasks tab has no regression
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=Verify: Go build passes
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_8_TITLE=W2.1: Implement all 3 fixes in plans.go — h-7→h-3, remove clipping hack, YOffset→GotoTop
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_9_TITLE=Dispatched to team 2 Subtaskmaster
+TASK_SUBTASK_9_STATUS=done

@@ -1,0 +1,14 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=510
+TASK_TITLE=Masterplan: create
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=create
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775856427
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775856427
+TASK_FILES=agents/doey-architect.md,agents/doey-architect.md.tmpl,agents/doey-boss.md,agents/doey-boss.md.tmpl,agents/doey-claude-expert.md,agents/doey-claude-expert.md.tmpl,agents/doey-critic.md,agents/doey-critic.md.tmpl,agents/doey-deployment.md,agents/doey-deployment.md.tmpl,agents/doey-doey-expert.md,agents/doey-doey-expert.md.tmpl,agents/doey-freelancer.md,agents/doey-freelancer.md.tmpl,agents/doey-interview-researcher.md,agents/doey-interview-researcher.md.tmpl,agents/doey-interviewer.md,agents/doey-interviewer.md.tmpl,agents/doey-masterplan-critic.md,agents/doey-masterplan-critic.md.tmpl

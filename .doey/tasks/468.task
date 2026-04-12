@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=468
+TASK_TITLE=Replace intent fallback spinner words with gibberish sounds
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=coordinator
+TASK_TEAM=W2
+TASK_DESCRIPTION=Replace the cozy spinner/thinking words in intent fallback (snoofling, moonwalking, levitating, etc.) with playful nonsense sounds: bibbetibipp, babbetitibibb, bibitibopp, and similar variations. Find where spinner words are defined (likely intent-fallback.sh or doey-headless.sh). Reinstall with ./install.sh and test before complete.
+TASK_SUBTASKS=1:Direct dispatch to W2.1 — replace spinner words with gibberish sounds:done
+TASK_TIMESTAMPS=created=1775756864
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775756864
+TASK_FILES=shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Direct dispatch to W2.1 — replace spinner words with gibberish sounds
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775756937
+TASK_SUBTASK_1_COMPLETED_AT=1775757028

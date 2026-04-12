@@ -1,0 +1,34 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=313
+TASK_TITLE=Show Boss + Core Team in TUI Dashboard ASCII grid
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Extend the Go TUI Dashboard ASCII team grid to show ALL windows including Dashboard (win 0) and Core Team (win 1), not just worker teams (2+).
+
+KEY DESIGN DIRECTION (from user):
+- Each WINDOW in the grid represents a TASK — show task title, ID, status, and progress prominently
+- Each WORKER pane within a window maps to a SUBTASK — show subtask title and status
+- The grid should be task-centric: the primary data shown is what task/subtask each team is working on
+- Boss + Core Team window should show the current top-level task being coordinated
+- Worker team windows show their assigned task with subtask breakdown per worker
+
+So the ASCII grid becomes a live task execution map: windows = tasks, panes = subtasks, with real-time status.
+TASK_SUBTASKS=1:Dispatched to W2 Subtaskmaster — research then implement:done\n2:W2.1: Research TUI dashboard grid rendering — how renderTeamGrid works, snapshot data structure, window 0/1 pane data availability:done\n3:W2.2: Implement Boss + Core Team cards in TUI dashboard grid:done\n4:W2.1: Implement data layer — add Role to PaneStatus, read .role files, inject window 0/1 into snapshot (types.go + reader.go):done\n5:W2.2: Implement rendering — role display names, icons, Boss+Core Team card rendering in dashboard.go:done\n6:W2.1: Verify combined changes — go build, go vet, check for conflicts between workers, verify Boss/Core Team/Worker rendering logic:done
+TASK_TIMESTAMPS=created=1775435828
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775435828
+TASK_FILES=tui/internal/model/dashboard.go,tui/internal/model/tasks.go,tui/internal/runtime/reader.go,tui/internal/runtime/reader_test.go,tui/internal/runtime/types.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to W2 Subtaskmaster — research then implement
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Research TUI dashboard grid rendering — how renderTeamGrid works, snapshot data structure, window 0/1 pane data availability
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Implement Boss + Core Team cards in TUI dashboard grid
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.1: Implement data layer — add Role to PaneStatus, read .role files, inject window 0/1 into snapshot (types.go + reader.go)
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.2: Implement rendering — role display names, icons, Boss+Core Team card rendering in dashboard.go
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.1: Verify combined changes — go build, go vet, check for conflicts between workers, verify Boss/Core Team/Worker rendering logic
+TASK_SUBTASK_6_STATUS=done

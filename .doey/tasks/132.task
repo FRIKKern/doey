@@ -4,11 +4,10 @@ TASK_TITLE=TUI task list must refresh and re-sort live in real-time
 TASK_STATUS=done
 TASK_TYPE=bugfix
 TASK_ASSIGNED_TO=W1
+TASK_TEAM=W1
 TASK_DESCRIPTION=The Go TUI task list should update in real-time when tasks change — newly updated tasks must bubble to the top immediately (sorted by TASK_UPDATED descending). Currently the list appears stale and doesn't reflect live changes. The TUI polls .task files or SQLite — ensure the polling interval is fast enough and that re-sorting happens on every data refresh. Check tui/internal/model/tasks.go for the refresh/sort logic.
-TASK_DECISION_LOG=1775152959:Created task\n1775153152:Status changed to done
-TASK_TIMESTAMPS=created=1775152959|completed=1775153152
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775152959
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775153002
-TASK_TEAM=W1
-TASK_ATTACHMENTS=.doey/tasks/132.result.json

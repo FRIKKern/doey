@@ -1,0 +1,12 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=531
+TASK_TITLE=TASK_525 P3: Audit fix --unread in 6 agent templates + masterplan team
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_CREATED_BY=cli
+TASK_DESCRIPTION=Append --unread to: agents/doey-deployment.md.tmpl:27 (FIRST, destructive-risk), doey-planner.md.tmpl:54, doey-subtaskmaster.md.tmpl:385+403, doey-task-reviewer.md.tmpl:216+325, doey-freelancer.md.tmpl:28 (also add missing --pane), doey-boss.md.tmpl:153+160, teams/masterplan.team.md:50 (non-templated). DO NOT touch doey-taskmaster.md.tmpl (already correct). Pre-condition: git status agents/*.md.tmpl clean. Run shell/expand-templates.sh to regenerate .md twins. test-bash-compat.sh passes. Standalone hotfix commit. Plan Phase 3.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775910141
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775910141

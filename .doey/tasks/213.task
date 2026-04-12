@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=213
+TASK_TITLE=Fix Plans tab viewport — stuck at bottom, must match Tasks tab
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Plans tab Go TUI viewport stuck at bottom. Copy Tasks tab working pattern exactly. Has regressed multiple times (tasks 172-177).
+TASK_SUBTASKS=1:W3.3: Fix Plans tab viewport — mirror Tasks tab pattern, sort newest-first, rebuild binary:done
+TASK_TIMESTAMPS=created=1775296007
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775296007
+TASK_SUBTASK_1_TITLE=W3.3: Fix Plans tab viewport — mirror Tasks tab pattern, sort newest-first, rebuild binary
+TASK_SUBTASK_1_STATUS=done

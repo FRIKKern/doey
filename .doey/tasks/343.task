@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=343
+TASK_TITLE=Fix task completion gate — allow closing tasks without proof_of_success
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_DESCRIPTION=doey-ctl task done and doey task done refuse to close tasks that have subtasks, even when all subtasks are marked done. The error says 'N subtask(s) need resolution' but all subtasks show :done status. This is blocking bulk-closing old tasks.
+
+The completion gate (likely in tui/ Go code, probably in the task store or commands) needs to:
+1. Allow closing tasks when all subtasks are done — no proof_of_success required
+2. Add a --force flag to bypass subtask checks entirely for bulk operations
+3. After fixing, bulk-close these 8 stuck tasks: 150 183 185 263 326 332 334 335
+
+Search for 'need resolution' or 'Cannot complete' in the Go code to find the gate logic.
+TASK_SUBTASKS=1:W4.1: Research — find gate logic for 'need resolution' in tui/ Go code:done\n2:W4.2: Research — find CLI flag patterns and task done command flow:done\n3:Dispatched to Team W4 (SM at 4.0) — P0 urgent:done\n4:W4.1: Implement gate fix + --force flag in commands.go:done
+TASK_TIMESTAMPS=created=1775480358
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775480358
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Research — find gate logic for 'need resolution' in tui/ Go code
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W4.2: Research — find CLI flag patterns and task done command flow
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to Team W4 (SM at 4.0) — P0 urgent
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W4.1: Implement gate fix + --force flag in commands.go
+TASK_SUBTASK_4_STATUS=done

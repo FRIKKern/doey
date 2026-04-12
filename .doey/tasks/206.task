@@ -1,0 +1,13 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=206
+TASK_TITLE=Harden send-keys — always verify submission after dispatching messages
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_DESCRIPTION=When Boss (or any role) uses tmux send-keys to deliver messages, the Enter at the end sometimes does not register, leaving the message typed but never submitted. User caught this happening live. Fix: update the doey-send.sh utility or create a reliable send-keys wrapper that always verifies submission. Options: 1) Follow every send-keys Enter with a separate delayed Enter as safety net, 2) Use tmux load-buffer + paste-buffer for long messages instead of inline send-keys, 3) Add a verification step that checks the pane content after sending. This must be fixed at the system level so all roles benefit.
+TASK_SUBTASKS=1:Dispatch to W3 Subtaskmaster — harden doey-send.sh:done
+TASK_TIMESTAMPS=created=1775294578
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775294578
+TASK_SUBTASK_1_TITLE=Dispatch to W3 Subtaskmaster — harden doey-send.sh
+TASK_SUBTASK_1_STATUS=done

@@ -1,0 +1,40 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=507
+TASK_TITLE=Fix Subtaskmaster: require strong proof before killing workers
+TASK_STATUS=done
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W3
+TASK_DESCRIPTION=CATEGORY: deep
+
+The Subtaskmaster currently kills workers too aggressively. It sees a worker at the prompt (❯) and assumes 'stuck', but the worker could be:
+- Mid-thought (Claude thinking phase shows no output)
+- About to act (just finished thinking)
+- Processing a long tool result
+
+Current behavior: Subtaskmaster captures pane, sees idle prompt, immediately kills and relaunches.
+
+Required fix — Subtaskmaster must have STRONG proof before killing a worker:
+1. Multiple idle checks over time (e.g., 2-3 checks spaced 30+ seconds apart showing the same idle state)
+2. Check if worker sent a worker_finished message — if yes, it's done, not stuck
+3. Check if status file shows FINISHED — respect it
+4. Check if there's been ANY tool output or text change between checks — if something changed, the worker is alive
+5. Only kill after confirmed stall: same exact pane content across multiple checks AND no messages sent AND no status change
+
+This is in the Subtaskmaster agent definition (agents/doey-subtaskmaster or its .md.tmpl template) and possibly in monitoring/dispatch logic.
+
+The bias should be: KEEP the worker alive unless there is undeniable proof of a stall. Lost work from a premature kill is worse than waiting an extra minute.
+TASK_SUBTASKS=1:W3.1: Edit agents/doey-subtaskmaster.md.tmpl to add strict multi-check kill-proof requirements, then run expand-templates.sh:done\n2:W3.2: Audit hooks and shell scripts for aggressive worker kill logic, apply strong-proof requirements:done
+TASK_TIMESTAMPS=created=1775855731
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775855731
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Edit agents/doey-subtaskmaster.md.tmpl to add strict multi-check kill-proof requirements, then run expand-templates.sh
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775855798
+TASK_SUBTASK_1_COMPLETED_AT=1775856284
+TASK_SUBTASK_2_TITLE=W3.2: Audit hooks and shell scripts for aggressive worker kill logic, apply strong-proof requirements
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775855800
+TASK_SUBTASK_2_COMPLETED_AT=1775856284

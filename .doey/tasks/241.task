@@ -1,0 +1,35 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=241
+TASK_TITLE=Research: Doey startup flow — full audit of every pathway, concept, and caveat
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Deep research into the entire Doey startup sequence. The user has been burned by confusion about where things are, what runs when, and dead/unused pathways during startup fixes. This research must produce a complete map.
+
+DELIVERABLE: A structured report covering:
+
+1. STARTUP SEQUENCE MAP — Every step from the user typing 'doey' to a fully running session, in exact order. Include: what script/function runs, what it does, what it waits for, what env vars it sets, what files it creates.
+
+2. ENTRY POINTS — All the different ways a session can start (fresh launch, reattach, doey reload, etc.) and how the paths diverge.
+
+3. LOADING SCREEN / SPLASH — How the ASCII splash works, when it shows, what controls its duration, the handoff to tmux attach. Include the recent fixes (tasks 232, 236).
+
+4. TEAM SPAWNING — How Core Team, worker teams, and freelancers get created during startup vs on-demand. The _create_core_team flow, _create_team flow, the TUI Dashboard spawn path. Where do these diverge? Are any redundant?
+
+5. SESSION ENVIRONMENT — How DOEY_* env vars get set (session.env, on-session-start.sh, etc). What sets them, when, and what depends on them.
+
+6. HOOKS DURING STARTUP — Which hooks fire during startup and in what order. Any ordering dependencies or race conditions.
+
+7. DEAD CODE / UNUSED PATHWAYS — Anything in the startup path that is vestigial, redundant, or confusing. Old patterns that were replaced but not fully removed. Config options that do nothing.
+
+8. KNOWN CAVEATS — Race conditions, timing issues, things that break if order changes, assumptions that are fragile.
+
+9. CONCEPTS THAT MAY BE ELIMINABLE — Pathways or abstractions that add complexity but may not earn their keep. Be honest about what could be simplified.
+
+FORMAT: Structured markdown with clear sections. Include file paths and line numbers for every claim. This must be verifiable, not hand-wavy.
+TASK_SUBTASKS=1:Dispatched to Team 2 (Subtaskmaster 2.0) — 3 workers for parallel research:done
+TASK_TIMESTAMPS=created=1775337270
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775337270
+TASK_SUBTASK_1_TITLE=Dispatched to Team 2 (Subtaskmaster 2.0) — 3 workers for parallel research
+TASK_SUBTASK_1_STATUS=done

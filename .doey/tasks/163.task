@@ -1,0 +1,11 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=163
+TASK_TITLE=Task-Obsessed TUI — Live Activity Feed & Rich Task Lifecycle
+TASK_STATUS=cancelled
+TASK_TYPE=feature
+TASK_DESCRIPTION=Make the Go TUI the live nerve center for all task activity. Surface subtask changes, status transitions, worker assignments, decisions, errors, and progress in real-time. Plan 16. 5 phases: (1) Hook event emission to SQLite, (2) Activity Feed tab, (3) Task detail Timeline section, (4) Enriched task cards, (5) Deep subtask visibility.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775208246
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775208522

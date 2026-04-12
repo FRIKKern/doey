@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=311
+TASK_TITLE=Dashboard team grid — real data, real-time, high quality visualization
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Task 304 added a basic team grid to the Dashboard. Now upgrade it to show REAL data in real-time at very high quality. The grid must show: (1) REAL PANE DATA — each cell shows the actual pane role (Boss, Taskmaster, Worker, etc.), its current status (BUSY/READY/FINISHED/RESERVED) with live color, and what task it's working on (task ID + short title). (2) REAL-TIME UPDATES — poll status files and doey-ctl every 2s, animate status transitions. (3) HIGH QUALITY RENDERING — premium Charmbracelet styling: box-drawing borders, subtle gradients via lipgloss, status pulse indicators, role icons. The grid should look like a mission control display — at a glance you see your entire team, who's working, who's idle, what each agent is doing. This is the hero widget of the Dashboard.
+TASK_SUBTASKS=1:W5.1: Research — current grid code, data sources, status file format, snapshot population:done\n2:W5.2: Implementation — upgrade grid to real data, real-time polling, premium styling:done\n3:W5.1: Verify — build, code review, check grid renders correctly with real data:done
+TASK_TIMESTAMPS=created=1775433888
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775433888
+TASK_FILES=.doey/tasks/1.task,tui/internal/model/dashboard.go,tui/internal/styles/cards.go,tui/internal/styles/status.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Research — current grid code, data sources, status file format, snapshot population
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Implementation — upgrade grid to real data, real-time polling, premium styling
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W5.1: Verify — build, code review, check grid renders correctly with real data
+TASK_SUBTASK_3_STATUS=done

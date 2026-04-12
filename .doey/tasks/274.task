@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=274
+TASK_TITLE=Masterplan: Proof of Completion in Go TUI — research swarm
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=10-angle deep research for masterplan: Make Proof of Completion visible and trustworthy in Go TUI task detail. Research what exists, what's missing, and how to build it. Intent doc at /tmp/doey/doey/masterplan-20260405-132819/intent.md
+TASK_SUBTASKS=1:W5.1: Research task 203 commits + stop-results.sh capture fields:done\n2:W5.2: Research DB schema PoC fields + task reviewer flow:done\n3:F5.0: Audit task 203 + existing PoC infrastructure:done\n4:F5.1: TUI task detail rendering — what PoC data shown today:done\n5:F5.2: Data pipeline — SQLite schema, store, task fields for PoC:done\n6:F5.3: Enforcement — completion pipeline PoC gates:done
+TASK_TIMESTAMPS=created=1775395767
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775395767
+TASK_SUBTASK_1_TITLE=W5.1: Research task 203 commits + stop-results.sh capture fields
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W5.2: Research DB schema PoC fields + task reviewer flow
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=F5.0: Audit task 203 + existing PoC infrastructure
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=F5.1: TUI task detail rendering — what PoC data shown today
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=F5.2: Data pipeline — SQLite schema, store, task fields for PoC
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=F5.3: Enforcement — completion pipeline PoC gates
+TASK_SUBTASK_6_STATUS=done

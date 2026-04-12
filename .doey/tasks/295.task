@@ -1,0 +1,25 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=295
+TASK_TITLE=Masterplan: AI-Friendly CLI — 10-angle research swarm
+TASK_STATUS=done
+TASK_TYPE=research
+TASK_DESCRIPTION=Phase 1 of masterplan: Launch 10 parallel research agents to deeply explore how to make doey-ctl maximally AI-friendly. Each agent explores one angle. Intent doc at /tmp/doey/doey/masterplan-20260405-205417/intent.md. Research output to /tmp/doey/doey/masterplan-20260405-205417/research/
+TASK_ACCEPTANCE_CRITERIA=10 research reports written to /tmp/doey/doey/masterplan-20260405-205417/research/, covering: state-of-art, user-journey, architecture, risks, dependencies, simplification, testing, edge-cases, prior-art, devils-advocate
+TASK_SUBTASKS=1:W3.1: Research current failure taxonomy — grep error logs, hook blocks, and agent CLI failures to categorize failure modes:done\n2:W3.2: Audit doey-ctl subcommand API — map every subcommand, flags, required params, undocumented behaviors:done\n3:W3.3: Review task 294 fuzzy matching — how it works, code location, what it covers, gaps:done\n4:W3.4: Industry best practices for AI-friendly CLIs — research gh, jq, kubectl patterns for forgiveness:done\n5:W3.5: Agent prompt audit — grep all agent .md files for doey-ctl commands, find mismatches with actual API:done\n6:W3.6: Structured JSON output research — which commands agents use most, what JSON schema each should emit:done
+TASK_TIMESTAMPS=created=1775422695
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775422695
+TASK_PLAN_ID=29
+TASK_SUBTASK_1_TITLE=W3.1: Research current failure taxonomy — grep error logs, hook blocks, and agent CLI failures to categorize failure modes
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Audit doey-ctl subcommand API — map every subcommand, flags, required params, undocumented behaviors
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W3.3: Review task 294 fuzzy matching — how it works, code location, what it covers, gaps
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W3.4: Industry best practices for AI-friendly CLIs — research gh, jq, kubectl patterns for forgiveness
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W3.5: Agent prompt audit — grep all agent .md files for doey-ctl commands, find mismatches with actual API
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W3.6: Structured JSON output research — which commands agents use most, what JSON schema each should emit
+TASK_SUBTASK_6_STATUS=done

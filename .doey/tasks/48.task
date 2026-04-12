@@ -2,31 +2,26 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=48
 TASK_TITLE=Fix Huh startup wizard — completely broken on session restart
 TASK_STATUS=done
-TASK_CREATED=1774933200
 TASK_TYPE=bugfix
-TASK_DESCRIPTION=CRITICAL: The Huh startup wizard (task 41) does not work AT ALL. When the user restarts a session (r1 from the launcher), the wizard never appears or produces output that doey.sh cannot consume. This was shipped as "complete" without real testing.
-
-INVESTIGATION REQUIRED — find and fix ALL of these potential failure points:
-
-1. DOES THE WIZARD BINARY GET CALLED? — Check doey.sh to see where/how it invokes the TUI wizard (likely `doey-tui setup` or similar subcommand). Trace the exact code path from session launch to wizard invocation. Is the binary built and in PATH? Is the subcommand registered? Does the call happen before tmux session creation?
-
-2. DOES THE WIZARD ACTUALLY RUN? — Run the wizard binary manually from the terminal. Does it display the Huh form? Does it accept input? Does it produce JSON output on stdout? Test each step.
-
-3. DOES doey.sh CONSUME THE OUTPUT? — The wizard outputs JSON describing teams. doey.sh parses this (likely with Python/jq). Check: does the JSON format match what the parser expects? (Task 46 fixed json tags — verify that fix actually works.) Does the parser read from the right fd/pipe?
-
-4. DOES THE SESSION BUILD FROM WIZARD OUTPUT? — Even if JSON is correct, does doey.sh actually use it to create teams instead of falling back to defaults? Trace the code path from JSON parse to team creation.
-
-FIX EVERYTHING FOUND. Then:
-
-MANDATORY TESTING (do not skip):
-- Build the TUI: cd tui/ && go build -o doey-tui ./cmd/doey-tui/
-- Run the wizard standalone: ./tui/doey-tui setup — verify it shows the form, accepts input, prints valid JSON
-- Trace doey.sh wizard integration — verify the binary path, invocation, and JSON consumption are all wired correctly
-- If possible, do a dry-run of the full launch path
-
-DO NOT mark complete unless the wizard actually runs and produces consumable output. "It compiles" is NOT sufficient.
 TASK_TAGS=tui,huh,startup,bugfix,critical
 TASK_TEAM=W1
+TASK_DESCRIPTION=CRITICAL: The Huh startup wizard (task 41) does not work AT ALL. When the user restarts a session (r1 from the launcher), the wizard never appears or produces output that doey.sh cannot consume. This was shipped as "complete" without real testing.
 TASK_SUBTASKS=1:W1.1: Trace doey.sh wizard invocation & JSON consumption:done\n2:W1.2: Build & run wizard binary standalone:done\n3:W1.3: Deep-dive TUI setup source for bugs:done\n4:W1.4: Investigate premade teams & integration:done\n5:W1.1: Rewrite wizard.go — huh.Form.Run() + tty output:done\n6:W1.3: Fix premade workers=0 + error handling in main.go + teams.go:done\n7:W1.4: Build, test, verify end-to-end:done
-TASK_DECISION_LOG=1774904648:Wave 1 complete: 2 critical bugs found (stdout pollution + value semantics). Rewriting wizard to use huh.Form.Run() directly.\n1774905050:All fixes verified: 2 critical bugs (stdout pollution + value bindings) + 4 moderate bugs. Build clean, vet clean, JSON contract intact.
-TASK_RESULT=Wizard rewritten: removed bubbletea (stdout corruption fix), switched to huh.Form.Run() (value binding fix), premade worker count fixed, --help added. Build/vet/runtime verified. Committed and pushed.
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257536
+TASK_SUBTASK_1_TITLE=W1.1
+TASK_SUBTASK_1_STATUS= Trace doey.sh wizard invocation & JSON consumption:done
+TASK_SUBTASK_2_TITLE=W1.2
+TASK_SUBTASK_2_STATUS= Build & run wizard binary standalone:done
+TASK_SUBTASK_3_TITLE=W1.3
+TASK_SUBTASK_3_STATUS= Deep-dive TUI setup source for bugs:done
+TASK_SUBTASK_4_TITLE=W1.4
+TASK_SUBTASK_4_STATUS= Investigate premade teams & integration:done
+TASK_SUBTASK_5_TITLE=W1.1
+TASK_SUBTASK_5_STATUS= Rewrite wizard.go — huh.Form.Run() + tty output:done
+TASK_SUBTASK_6_TITLE=W1.3
+TASK_SUBTASK_6_STATUS= Fix premade workers=0 + error handling in main.go + teams.go:done
+TASK_SUBTASK_7_TITLE=W1.4
+TASK_SUBTASK_7_STATUS= Build, test, verify end-to-end:done

@@ -6,9 +6,14 @@ TASK_TYPE=refactor
 TASK_CREATED_BY=Session Manager
 TASK_ASSIGNED_TO=All Teams
 TASK_DESCRIPTION=Full codebase simplification across 3 teams. Reduce cognitive load, cut ceremony, DRY repeated logic, align patterns.
-TASK_DECISION_LOG=1775034960:Created task\n1775034960:Status changed to in_progress\n1775036047:Team 3 complete: 93 files changed, -3647 net lines. W1-W6 all finished, W7 hit API error (docs partial). Report: /tmp/doey/doey/reports/simplify_team_3.md\n1775036051:Team 3 complete: 93 files, -3647 net lines. Report at /tmp/doey/doey/reports/simplify_team_3.md
 TASK_SUBTASKS=1:Team 1 - Shell core + hooks simplification:done\n2:Team 2 - Agents + skills + docs simplification:done\n3:Team 3 - Remaining files simplification:done
-TASK_TIMESTAMPS=created=1775034960|started=1775034960
+TASK_TIMESTAMPS=created=1775034960
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
 TASK_UPDATED=1775034960
+TASK_SUBTASK_1_TITLE=Team 1 - Shell core + hooks simplification
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=Team 2 - Agents + skills + docs simplification
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Team 3 - Remaining files simplification
+TASK_SUBTASK_3_STATUS=done

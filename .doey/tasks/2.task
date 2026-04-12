@@ -2,45 +2,14 @@ TASK_SCHEMA_VERSION=3
 TASK_ID=2
 TASK_TITLE=Elevate task TUI — Kancli/omm/Zachkp-todo inspired redesign
 TASK_STATUS=done
-TASK_CREATED=1743275100
 TASK_TYPE=feature
-TASK_DESCRIPTION=Redesign Doey's task system TUI (the Go dashboard task view) with inspiration from three Charmbracelet exemplars. Goal: simple, elegant, glamorous — subtract rather than add. Better layout distribution, elevated UX, polished feel. NOT a feature dump — a refinement pass.
-
-INSPIRATION SOURCES (must study source code first):
-1. Kancli (github.com/charmbracelet/kancli) — Kanban layout architecture, column focus/blur, clean borders, task movement feel
-2. omm (github.com/dhth/omm) — Radical simplicity, theming, prefix filtering, the "just enough" philosophy
-3. Zachkp/todo (github.com/zachkp/todo) — Visual design, sub-todo progress indicators, multi-view elegance
-
-DESIGN PRINCIPLES:
-- Simple > feature-rich. Remove noise before adding chrome
-- Better layout distribution — use available terminal space intelligently
-- Glamorous = polished details (spacing, alignment, color harmony, transitions)
-- Stay true to Doey's existing architecture — enhance, don't rebuild
-
-PHASES:
-Phase 1 (Research): Clone/study Kancli, omm, Zachkp/todo source. Extract specific patterns worth adopting — layout math, color schemes, component composition, UX micro-interactions
-Phase 2 (Design): Propose concrete changes to Doey's task TUI. Diff against current state. Keep it minimal
-Phase 3 (Implement): Apply changes. One worker per file. Validate rendering at common terminal sizes
-
-SUCCESS CRITERIA:
-- Task view looks noticeably more polished and spacious
-- No new features added that aren't in the inspiration sources
-- Existing task functionality preserved (list, add, transition, subtasks)
-- Clean at 80x24 and 120x40 terminal sizes
 TASK_TAGS=tui,task-system,dashboard,design
 TASK_TEAM=W2
-TASK_LOG_1774814776=PROGRESS: Dispatched to W2 — Go build gate enforcement
-TASK_LOG_1774815166=COMPLETE: Go build gate enforced. Commit 482628b. Files: shell/pre-commit-go.sh, .claude/hooks/on-pre-tool-use.sh
-TASK_RESULT=Pre-commit hook fixed with PATH discovery + defense-in-depth hook. Bash 3.2 compatible, fresh-install safe.
-TASK_FILES=shell/pre-commit-go.sh,.claude/hooks/on-pre-tool-use.sh
-TASK_ATTACHMENTS=.doey/tasks/2.result.json
-TASK_UPDATED=1775575643
-TASK_TIMESTAMPS=completed=1775574778|completed=1775574965|completed=1775575031|completed=1775575642
-TASK_SUBTASK_9_STATUS=done
-TASK_SUBTASK_9_COMPLETED_AT=1775574779
-TASK_SUBTASK_10_STATUS=done
-TASK_SUBTASK_10_COMPLETED_AT=1775574966
-TASK_SUBTASK_11_STATUS=done
-TASK_SUBTASK_11_COMPLETED_AT=1775575031
-TASK_SUBTASK_13_STATUS=done
-TASK_SUBTASK_13_COMPLETED_AT=1775575643
+TASK_DESCRIPTION=Redesign Doey's task system TUI (the Go dashboard task view) with inspiration from three Charmbracelet exemplars. Goal: simple, elegant, glamorous — subtract rather than add. Better layout distribution, elevated UX, polished feel. NOT a feature dump — a refinement pass.
+TASK_SUBTASKS=1:W2.4: Fix Activity tab text wrapping — truncate/word-wrap to viewport width:done
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257535
+TASK_SUBTASK_1_TITLE=W2.4
+TASK_SUBTASK_1_STATUS= Fix Activity tab text wrapping — truncate/word-wrap to viewport width:done

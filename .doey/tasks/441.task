@@ -1,0 +1,78 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=441
+TASK_TITLE=doey tunnel up: auto-detect obvious dev ports from project files
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Extension on #438. When user runs 'doey tunnel up' with no tunnel config, instead of requiring manual setup, inspect the current project directory and infer the obvious dev-server ports from framework conventions.
+
+Desired UX:
+  $ cd ~/projects/my-nextjs-app
+  $ doey tunnel up
+    Detected project: Next.js (from next.config.js)
+    Expected ports: 3000 (next dev)
+    Tunnel ready:
+      -> http://doey-server.tailf1b8c6.ts.net:3000  (next dev)
+    Start your dev server — port watcher will confirm when it is live.
+
+Detection rules (add to a new shell/doey-tunnel-detect.sh or into the existing doey-tunnel-cli.sh 'up' handler):
+
+1. package.json: parse 'scripts' for dev|start|serve, look for --port/-p flags, extract. Also parse dependencies for framework hints:
+   - 'next' -> port 3000 (or from script flag)
+   - 'vite' / '@vitejs/plugin-*' -> 5173 (or from vite.config server.port)
+   - 'nuxt' / 'nuxt3' -> 3000
+   - 'astro' -> 4321
+   - '@sveltejs/kit' -> 5173
+   - 'react-scripts' (CRA) -> 3000
+   - '@remix-run/*' -> 3000
+   - 'gatsby' -> 8000
+   - 'storybook' / '@storybook/*' -> 6006
+
+2. Config files (read if present, parse defensively — regex for server.port: NNNN):
+   - vite.config.{js,ts,mjs}
+   - next.config.{js,ts,mjs}
+   - nuxt.config.{js,ts}
+   - astro.config.{js,ts,mjs}
+   - svelte.config.js
+   - remix.config.js
+
+3. Env files: .env, .env.local, .env.development — grep ^(PORT|VITE_PORT|NEXT_PUBLIC_PORT|SERVER_PORT)=
+
+4. docker-compose.yml / compose.yaml: parse 'ports:' entries (use yq if present, else awk — be defensive)
+
+5. Cargo.toml + main.rs grep for .bind(":PORT") or axum::Server on port literals
+
+6. Go: go.mod present + grep main.go for :PORT literals (http.ListenAndServe)
+
+7. Python: pyproject.toml/requirements.txt -> if django manage.py present default 8000, fastapi/uvicorn default 8000, flask default 5000
+
+8. Monorepo awareness: if pwd has packages/ or apps/ subdirs with their own package.json, recursively detect and list per-package.
+
+Behavior:
+
+- 'doey tunnel up' with no args: run detection in pwd, list detected ports, show ready URLs, start port watcher to confirm actual listeners as dev servers boot
+- 'doey tunnel up --quiet' / DOEY_TUNNEL_QUIET=1: no detection output, just run watcher
+- Detection is advisory only — port watcher (ss -tlnp polling) remains the source of truth for what is actually listening. Detection just gives instant proactive URLs so user does not have to wait for the dev server to boot before getting the tunnel link.
+- Fresh-install safe: detection uses only tools guaranteed to exist (bash, grep, awk, sed). Optional upgrades (jq for package.json, yq for compose) if present, fall back to grep if not.
+- Empty project (nothing detected) -> print 'No framework detected. Port watcher is running and will show ports as dev servers start.' Do not error.
+
+Also fix the current 'doey tunnel up' bug where DOEY_TUNNEL_ENABLED must be set before up works (reported in prior dispatch). The 'up' command should be the thing that enables the watcher, not gated by the flag.
+
+Acceptance: run 'doey tunnel up' in three project dirs (a Next.js repo, a Vite repo, a Go backend) and show detection working end-to-end with actual port numbers printed. Screenshot or copy-paste into task log. No subtask closes without the live run evidence.
+TASK_SUBTASKS=1:W2.1: Create shell/doey-tunnel-detect.sh with framework/port detection rules:done\n2:W2.2: Wire detect_pwd into doey_tunnel_up() + happy-path live runs:done
+TASK_TIMESTAMPS=created=1775731701
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775731701
+TASK_FILES=install.sh,shell/doey.sh
+TASK_SUBTASK_1_TITLE=W2.1: Create shell/doey-tunnel-detect.sh with framework/port detection rules
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_2
+TASK_SUBTASK_1_CREATED_AT=1775731930
+TASK_SUBTASK_1_COMPLETED_AT=1775732462
+TASK_SUBTASK_2_TITLE=W2.2: Wire detect_pwd into doey_tunnel_up() + happy-path live runs
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1775731930
+TASK_SUBTASK_2_COMPLETED_AT=1775732281

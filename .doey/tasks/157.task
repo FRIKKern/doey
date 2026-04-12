@@ -1,0 +1,23 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=157
+TASK_TITLE=Merge doey-ctl into doey CLI as subcommands
+TASK_STATUS=done
+TASK_TYPE=refactor
+TASK_DESCRIPTION=Currently doey-ctl is a separate Go binary with its own commands (msg, task, status, nudge, etc.). Merge it into the main doey CLI so users run 'doey msg send', 'doey task list', 'doey status get' instead of 'doey-ctl msg send', etc. This touches: (1) Go code — move doey-ctl command tree under the doey binary, (2) all agent templates that reference doey-ctl, (3) all hooks that call doey-ctl, (4) shell scripts and helpers, (5) install.sh, (6) documentation. Research first: inventory all doey-ctl references, plan the migration path, identify if doey-ctl should become a symlink/alias for backward compat during transition.
+TASK_SUBTASKS=1:Research phase — inventory doey-ctl references, plan migration:done\n2:W2.2: Research — inventory all doey-ctl references, plan merge into doey CLI:done\n3:Phase 1:done\n4:W2.1: Phase 1 — Add shell routing layer in doey.sh for ctl subcommands:done\n5:Phase 2:done\n6:W2.1: Phase 3 — Backward-compat symlink, install.sh update, doctor messages:done
+TASK_TIMESTAMPS=created=1775200596
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775200596
+TASK_SUBTASK_1_TITLE=Research phase — inventory doey-ctl references, plan migration
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2
+TASK_SUBTASK_2_STATUS= Research — inventory all doey-ctl references, plan merge into doey CLI:done
+TASK_SUBTASK_3_TITLE=Phase 1
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.1
+TASK_SUBTASK_4_STATUS= Phase 1 — Add shell routing layer in doey.sh for ctl subcommands:done
+TASK_SUBTASK_5_TITLE=Phase 2
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.1
+TASK_SUBTASK_6_STATUS= Phase 3 — Backward-compat symlink, install.sh update, doctor messages:done

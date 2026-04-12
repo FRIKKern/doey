@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=164
+TASK_TITLE=Task-Obsessed TUI — Live Activity Feed & Rich Task Lifecycle
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_TAGS=tui,go,dashboard,bubble,lipgloss,hooks,shell
+TASK_TEAM=W2,W3
+TASK_DESCRIPTION=Make the Go TUI the live nerve center for all task activity. Surface events, timeline, enriched cards, subtask visibility. 5 phases: event emission (hooks), activity feed tab, task detail timeline, card enrichment, subtask deep visibility.
+TASK_SUBTASKS=1:Phase 1: Hook event emission (W3 — 2 workers):done\n2:Phases 2-5: Go TUI activity feed, timeline, cards, subtasks (W2 — 2 workers):done\n3:W2.1:done\n4:W2.2:done
+TASK_TIMESTAMPS=created=1775208522
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775209513
+TASK_SUBTASK_1_TITLE=Phase 1
+TASK_SUBTASK_1_STATUS= Hook event emission (W3 — 2 workers):done
+TASK_SUBTASK_2_TITLE=Phases 2-5
+TASK_SUBTASK_2_STATUS= Go TUI activity feed, timeline, cards, subtasks (W2 — 2 workers):done
+TASK_SUBTASK_3_TITLE=W2.1
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.2
+TASK_SUBTASK_4_STATUS=done

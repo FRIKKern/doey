@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=153
+TASK_TITLE=Fix auto-nudge: skip send-keys to Boss pane 0.1
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=The auto-nudge feature added in task #151 (commit f740c5e) fires tmux send-keys to ALL message recipients after doey-ctl msg send. But Boss pane (0.1) is user-facing — injecting text there corrupts whatever the user is typing. Add a guard in the Go code: if the recipient pane ends with 0.1 (Boss), skip the send-keys nudge. The send-keys communication model is strictly: Boss→Taskmaster, Taskmaster→Subtaskmasters/CoreTeam/Freelancers, Subtaskmasters→Taskmaster+Workers. Nothing ever sends keys TO Boss.
+TASK_SUBTASKS=1:Dispatch to W2 — fix auto-nudge Boss pane guard:done\n2:W2.1: Add guard to skip send-keys nudge when recipient pane is window 0 pane 1 (Boss):done
+TASK_TIMESTAMPS=created=1775200234
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775200234
+TASK_SUBTASK_1_TITLE=Dispatch to W2 — fix auto-nudge Boss pane guard
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1
+TASK_SUBTASK_2_STATUS= Add guard to skip send-keys nudge when recipient pane is window 0 pane 1 (Boss):done

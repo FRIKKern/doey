@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=196
+TASK_TITLE=Fix send-keys message delivery reliability
+TASK_STATUS=done
+TASK_TYPE=task
+TASK_DESCRIPTION=Send-keys broken: multi-line mangling, first-char eaten, single-line failures. Establish canonical doey_send_verified() helper with delivery verification and retry.
+TASK_SUBTASKS=1:W2.1: Research+Fix — Audit all send-keys call sites, map patterns, create canonical doey_send_verified() helper with delivery verification:done\n2:W2.2: Testing+Validation — Reproduce failures, create test script, verify 10/10 delivery after fixes, run bash compat tests:done\n3:W2.3: Validation — Run test-send-keys.sh with doey-send.sh helper, verify all tests pass including verified delivery tests:done
+TASK_TIMESTAMPS=created=1775264310
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775264310
+TASK_SUBTASK_1_TITLE=W2.1: Research+Fix — Audit all send-keys call sites, map patterns, create canonical doey_send_verified() helper with delivery verification
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.2: Testing+Validation — Reproduce failures, create test script, verify 10/10 delivery after fixes, run bash compat tests
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.3: Validation — Run test-send-keys.sh with doey-send.sh helper, verify all tests pass including verified delivery tests
+TASK_SUBTASK_3_STATUS=done

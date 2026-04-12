@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=388
+TASK_TITLE=Verify masterplan team spawn — workers actually launch Claude
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=verification
+TASK_DESCRIPTION=Tasks 368 and 369 attempted to fix a bug where masterplan team workers do not get Claude launched. 369 is a REDO of 368 because original changes never applied. Both at pending_user_confirmation with no recent commits visible. Verify end-to-end that running doey masterplan spawns the Masterplanner window AND worker panes actually have Claude running, not empty shells. If broken, find root cause and fix. Acceptance: dispatch a real masterplan, observe worker panes show Claude prompts, capture pane snapshot proof. Report findings and either close 368 369 as verified or open a fix task.
+TASK_SUBTASKS=1:Dispatched to T2 Subtaskmaster (window 2) for verification:done\n2:W2.1: Research masterplan spawn path — verify task 368 fix actually present in shell/doey.sh + shell/doey-team-mgmt.sh; identify Claude launch step per worker pane:done\n3:W2.2: Live test — spawn doey masterplan against tiny test goal, capture pane content from each worker pane via tmux capture-pane, report whether Claude is running or empty shells:done
+TASK_TIMESTAMPS=created=1775539154
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775539154
+TASK_SUBTASK_1_TITLE=Dispatched to T2 Subtaskmaster (window 2) for verification
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Research masterplan spawn path — verify task 368 fix actually present in shell/doey.sh + shell/doey-team-mgmt.sh; identify Claude launch step per worker pane
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Live test — spawn doey masterplan against tiny test goal, capture pane content from each worker pane via tmux capture-pane, report whether Claude is running or empty shells
+TASK_SUBTASK_3_STATUS=done

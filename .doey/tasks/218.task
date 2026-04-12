@@ -1,0 +1,15 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=218
+TASK_TITLE=File tree in Go TUI task detail — beautiful tree of edited files
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Render FILES_CHANGED as a visual directory tree in task detail view. Research data flow, implement tree rendering, rebuild binary.
+TASK_SUBTASKS=1:W3.1: Research — FILES_CHANGED data flow, storage, current detail view, lipgloss/tree availability:done\n2:W3.2: Implement — file tree section in task detail, tree rendering, rebuild binary:done
+TASK_TIMESTAMPS=created=1775296877
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775296877
+TASK_SUBTASK_1_TITLE=W3.1: Research — FILES_CHANGED data flow, storage, current detail view, lipgloss/tree availability
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Implement — file tree section in task detail, tree rendering, rebuild binary
+TASK_SUBTASK_2_STATUS=done

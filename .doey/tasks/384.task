@@ -1,0 +1,21 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=384
+TASK_TITLE=doey-term Phase 3: rendering fixes — width offset, cursor, event-driven
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_DESCRIPTION=Masterplan Phase 3 for doey-term. (1) Fix width-2 offset in bubbleterm/messages.go:65 — emu.Resize(width-2, height) makes PTY 2 columns narrow, causing wrapping misalignment. (2) Add cursor rendering in bubbleterm/bubbleterm.go View() — query emulator.CursorPosition() and render visible cursor. (3) Switch from 33ms tick polling to event-driven updates in term/model.go — PTY goroutine sends tea.Msg via p.Send() when data arrives. Plan: .doey/plans/masterplan-20260406-222042.md Phase 3.
+TASK_SUBTASKS=1:W3.1: Fix width-2 offset in messages.go + add cursor rendering in bubbleterm.go View():done\n2:W3.2: Replace 33ms tick polling with event-driven PTY updates in term/model.go:done\n3:Dispatched to window 3 (2 workers): W1 width+cursor, W2 event-driven updates:skipped\n4:Review Gate — sent to Task Reviewer:skipped
+TASK_TIMESTAMPS=created=1775516439
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775516439
+TASK_FILES=tui/internal/bubbleterm/bubbleterm.go,tui/internal/bubbleterm/emulator/emulator.go,tui/internal/bubbleterm/messages.go,tui/internal/term/model.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Fix width-2 offset in messages.go + add cursor rendering in bubbleterm.go View()
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W3.2: Replace 33ms tick polling with event-driven PTY updates in term/model.go
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=Dispatched to window 3 (2 workers): W1 width+cursor, W2 event-driven updates
+TASK_SUBTASK_3_STATUS=skipped
+TASK_SUBTASK_4_TITLE=Review Gate — sent to Task Reviewer
+TASK_SUBTASK_4_STATUS=skipped

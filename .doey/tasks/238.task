@@ -1,0 +1,27 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=238
+TASK_TITLE=Fix Plans tab viewport — permanent root cause fix (8th attempt)
+TASK_STATUS=done
+TASK_TYPE=bugfix
+TASK_DESCRIPTION=Plans tab in Go TUI starts scrolled to bottom. 7+ prior fixes failed (#103,#113,#172-177,#212,#213,#231). All were superficial (Select(0), GotoTop). Must find and fix the actual root cause. Research-first: compare with working Tasks tab, trace all SetItems/viewport code paths in plans.go.
+TASK_SUBTASKS=1:ROOT CAUSE RESEARCH — Read plans.go end-to-end, map every SetItems/Select/GotoTop/GotoBottom call, trace data flow from SQLite to render:done\n2:COMPARE WITH TASKS TAB — Diff plans.go vs tasks.go patterns, find what fix stuck in Tasks and why it wasnt applied to Plans:done\n3:CHECK DATA ORDERING — Verify SQLite query sort order for plans, check if ascending order causes list to end at bottom:done\n4:IMPLEMENT permanent fix — handle initial load, live refresh, tab switching, window resize:done\n5:VERIFY — go build passes, Plans opens at top, small terminals work, Tasks tab not regressed:done\n6:Dispatched to W3 Subtaskmaster — research-first approach:done\n7:Review request sent to Task Reviewer (1.1):done\n8:Deployment covered by task #240 (Boss combined commit):done
+TASK_TIMESTAMPS=created=1775316052
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775316052
+TASK_SUBTASK_1_TITLE=ROOT CAUSE RESEARCH — Read plans.go end-to-end, map every SetItems/Select/GotoTop/GotoBottom call, trace data flow from SQLite to render
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=COMPARE WITH TASKS TAB — Diff plans.go vs tasks.go patterns, find what fix stuck in Tasks and why it wasnt applied to Plans
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=CHECK DATA ORDERING — Verify SQLite query sort order for plans, check if ascending order causes list to end at bottom
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=IMPLEMENT permanent fix — handle initial load, live refresh, tab switching, window resize
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=VERIFY — go build passes, Plans opens at top, small terminals work, Tasks tab not regressed
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=Dispatched to W3 Subtaskmaster — research-first approach
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=Review request sent to Task Reviewer (1.1)
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_8_TITLE=Deployment covered by task #240 (Boss combined commit)
+TASK_SUBTASK_8_STATUS=done

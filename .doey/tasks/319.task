@@ -1,0 +1,52 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=319
+TASK_TITLE=Tasks tab visual quality — match Teams tab polish (round 2)
+TASK_STATUS=done
+TASK_TYPE=feature
+TASK_DESCRIPTION=Previous attempt (task 318) didn't achieve the desired quality. User shared screenshots for comparison.
+
+REFERENCE IMAGES:
+- Teams tab (THE GOAL): /tmp/doey/doey/task-attachments/teams-tab-reference.png
+- Tasks tab (CURRENT): /tmp/doey/doey/task-attachments/tasks-tab-current.png
+
+WHAT THE TEAMS TAB DOES RIGHT (from screenshot analysis):
+1. Clean two-panel split — left sidebar list, right detail panel
+2. Section headers (STARRED, RUNNING, AVAILABLE) with clear visual grouping and spacing
+3. Colored dot indicators (green=running, hollow=available) — simple, consistent
+4. Star symbols for flagged items
+5. Summary line at top: '14 total, 5 running, star-1'
+6. Detail panel has clean LABEL-VALUE pairs with generous column alignment (Status, Type, Workers, Flags, Description, Grid, Manager Model, Worker Model)
+7. Named sections in detail: PANE ROSTER, WORKFLOWS, BRIEFING — each with clear headers
+8. Action keys displayed at bottom: 's = unstar  a = startup  e = edit  enter = launch'
+9. Generous vertical spacing — not cramped
+10. File path shown cleanly
+
+WHAT THE TASKS TAB NEEDS TO MATCH:
+- Same level of visual breathing room and spacing
+- Clean section headers in the detail panel (not just a wall of text)
+- Consistent label-value alignment in the detail view
+- Clear action keys at the bottom
+- Task list items should be as clean as team list items — colored indicators, concise info
+- Summary line at top of task list (like '14 total, 5 running')
+- Section grouping in the task list should be as visually distinct as STARRED/RUNNING/AVAILABLE
+
+Worker must READ both PNG files to see the actual screenshots before coding.
+TASK_SUBTASKS=1:Dispatched to team W2 Subtaskmaster:done\n2:W2.1: Research Teams tab rendering code (gold standard):done\n3:W2.2: Research Tasks tab rendering code (current state):done\n4:W2.1: Implement tasks.go changes — separator, padding, action keys, nav hint, summary line:done\n5:W2.2: Implement taskcard.go + cards.go changes — card spacing, section header gaps, label width:done\n6:W2.1: Verify all changes compile, no regressions, visual quality:done
+TASK_TIMESTAMPS=created=1775461910
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775461910
+TASK_FILES=tui/internal/model/tasks.go,tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatched to team W2 Subtaskmaster
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Research Teams tab rendering code (gold standard)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Research Tasks tab rendering code (current state)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.1: Implement tasks.go changes — separator, padding, action keys, nav hint, summary line
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.2: Implement taskcard.go + cards.go changes — card spacing, section header gaps, label width
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.1: Verify all changes compile, no regressions, visual quality
+TASK_SUBTASK_6_STATUS=done

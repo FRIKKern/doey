@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=429
+TASK_TITLE=send-keys reliability: multi-line paste swallows Enter, agents go silent
+TASK_STATUS=pending
+TASK_TYPE=bug
+TASK_CREATED_BY=coordinator
+TASK_TEAM=1
+TASK_DESCRIPTION=Repro: Boss dispatched a 14-line message to Taskmaster via tmux send-keys with Enter appended. Body landed as a [Pasted text +14 lines] block but was never submitted; Taskmaster sat in taskmaster-wait loop for ~16 minutes with WAKE_REASON=TIMEOUT. User noticed nothing was happening.
+
+Root cause hypothesis: when send-keys delivers a multi-line body in one call, the trailing Enter is consumed by the paste buffer rather than submitting the prompt.
+
+Fix: shared send-keys helper must (1) paste body, (2) send Enter as a separate keystroke, (3) capture-pane to verify input box cleared, (4) retry once on failure. ALL roles must route through this helper. Add regression test.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775592750
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775592750

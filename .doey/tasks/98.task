@@ -9,8 +9,8 @@ TASK_ASSIGNED_TO=W1
 TASK_TEAM=W1
 TASK_DESCRIPTION=CRITICAL P0 — doey cannot start. (1) install.sh does not copy shell/doey-roles.sh to ~/.local/bin/. doey.sh sources it but file is missing after install. (2) Go build failing in tui/ — likely roles code from task 97. Verify: install.sh clean, doey doctor passes, go build ./... passes, doey launches.
 TASK_ACCEPTANCE_CRITERIA=install.sh copies doey-roles.sh|doey doctor passes|go build ./... passes in tui/|doey launches successfully
-TASK_RELATED_FILES=install.sh|shell/doey-roles.sh|tui/
-TASK_TIMESTAMPS=created=$(date +%s)
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=$(date +%s)
+TASK_UPDATED=1775257536

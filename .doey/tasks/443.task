@@ -1,0 +1,121 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=443
+TASK_TITLE=Extract Claude Harness 'headless <message>' pattern as doey's one canonical Haiku primitive
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=FOUNDATIONAL. User wants the Claude Harness 'harness headless <message>' invocation pattern to be the single canonical primitive for every Haiku/Claude call in doey. Current state is fragmented: shell/intent-fallback.sh has its own claude -p invocation, #442 plans a runtime detector with its own call path, future features will each reinvent. This creates duplicated retry logic, duplicated timeout handling, duplicated output parsing, and duplicated failure modes (exactly the class of bug user is frustrated with).
+
+PHASE 1 — RE-READ Claude Harness repo (locate it: /GitHub, ~/GitHub, /home/doey/GitHub, /Users/*/GitHub — whichever was found in task #439 research). Focus specifically on:
+  1. How 'harness headless <message>' works end-to-end
+  2. What binary/script is the entrypoint
+  3. How it passes the message (argv? stdin? temp file?)
+  4. How it selects model (Haiku vs Sonnet vs Opus)
+  5. How it collects output (plain text? JSON stream? structured result?)
+  6. How it handles: timeouts, retries, rate limits, API errors, missing API key, missing binary
+  7. System prompt injection: does harness support a --system flag or context file?
+  8. Tool use: does headless mode support tools, or is it pure text completion?
+  9. Caching: any request deduplication or prompt caching?
+  10. Cost control: token limits, cost estimation, log of spend?
+
+PHASE 2 — DESIGN doey's canonical primitive. Shell + Go TUI both need to use it. Proposed shape:
+  shell/doey-headless.sh  — single source of truth
+    Usage: doey-headless <message> [--model haiku|sonnet|opus] [--system <file>] [--json] [--timeout N]
+    Reads message from argv or stdin (- as arg = stdin)
+    Returns on stdout: plain text (default) or JSON (with --json)
+    Exit codes: 0 ok, 1 generic error, 2 missing binary, 3 missing API key, 4 timeout, 5 rate limit, 6 invalid JSON response
+    Logs every call to /tmp/doey/<project>/headless.log with timestamp, model, token-ish size, latency
+    Environment overrides: DOEY_HEADLESS_MODEL, DOEY_HEADLESS_TIMEOUT, DOEY_HEADLESS_DISABLE
+  
+  tui/internal/headless/headless.go  — Go wrapper that shells out to shell/doey-headless.sh so there's exactly ONE code path
+  
+  EVERY existing claude -p call in the codebase must migrate to this primitive. Candidates to audit and migrate:
+    - shell/intent-fallback.sh
+    - shell/doey-intent-dispatch.sh
+    - any future #442 runtime detection code
+    - any other doey-ctl or TUI code that shells out to claude
+
+PHASE 3 — MIGRATE existing call sites to the primitive, delete duplicated logic. Acceptance: grep for 'claude -p' across the repo returns ZERO hits outside shell/doey-headless.sh.
+
+PHASE 4 — WIRING. Ensure shell/doey.sh unknown-command handler actually calls intent-fallback.sh (this is the #439 wiring bug already dispatched — confirm or fix). Run end-to-end: doey tsk lst -> headless primitive -> Haiku -> suggestion -> execution. Log file must exist.
+
+DELIVERABLES:
+1. Research report: Claude Harness headless pattern summary with pointers to source files
+2. shell/doey-headless.sh implementing the canonical primitive
+3. Go wrapper tui/internal/headless/headless.go (if TUI needs it now, else deferred stub)
+4. Migration of existing call sites
+5. Tests: unit test mocking claude binary, integration test hitting real API if ANTHROPIC_API_KEY set
+6. Documentation in docs/headless.md
+
+FRESH-INSTALL: missing claude binary -> exit code 2, no crash. Missing API key -> exit code 3, no crash. Every caller must handle these gracefully (fall to Tier 2/3 detection, or skip intent fallback silently).
+
+CONSTRAINT: NO copy of harness code — extract the PATTERN only, implement fresh in doey's style. Attribution in comments is fine.
+
+USER IS FRUSTRATED with prior 'ship sweep passed but feature never tested' failures. Acceptance criteria for this task includes a live end-to-end demo: run doey-headless 'what year is it' and show a real Haiku response. Every migrated caller must be tested end-to-end too — no subtask closes without an actual run.
+TASK_SUBTASKS=1:W6.1: Phase 1 Research — run harness headless, capture output format, flags, confirm binary location and behavior:done\n2:W6.1: Phase 2a — CREATE shell/doey-headless.sh canonical primitive + install.sh cp line:done\n3:W6.2: Phase 2b — MIGRATE intent-fallback.sh to doey-headless + fix doey.sh wiring:done\n4:W6.1: Phase 3 — E2E validation of doey-headless and intent-fallback integration:done\n5:W6.1: Rewrite doey-headless.sh to wrap claude CLI directly (NOT harness), remove all harness references:done\n6:W6.1: Rewrite doey.sh unknown-command handler to route to doey-headless with system context:done\n7:W2.1: Fix install gap — commit untracked files, add missing install.sh copies, verify doey yo works:skipped\n8:W2.2: P0 fix command interception — fallback fires before case statement, plus install gap:skipped\n9:W2.1: P0 full scope — command expert fallback, auto-execute, command reference, routing fix, install gap:done\n10:W3.1: Research current doey-headless.sh, intent-fallback.sh, and install.sh to understand SDK rewrite scope:done\n11:W3.1: SDK rewrite — rewrite doey-headless.sh, create intent-schema.json + command-expert-system-prompt.txt, update intent-fallback.sh and install.sh:done\n12:W3.2: Verify SDK rewrite — check --bare, --json-schema, jq parsing, bash-compat, install works:done
+TASK_TIMESTAMPS=created=1775732272
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775732272
+TASK_FILES=install.sh,shell/doey-headless.sh,shell/doey-intent-dispatch.sh,shell/doey-tunnel.sh,shell/doey.sh,shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W6.1: Phase 1 Research — run harness headless, capture output format, flags, confirm binary location and behavior
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_6_1
+TASK_SUBTASK_1_CREATED_AT=1775732539
+TASK_SUBTASK_1_COMPLETED_AT=1775732564
+TASK_SUBTASK_2_TITLE=W6.1: Phase 2a — CREATE shell/doey-headless.sh canonical primitive + install.sh cp line
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_6_1
+TASK_SUBTASK_2_CREATED_AT=1775732859
+TASK_SUBTASK_2_COMPLETED_AT=1775732910
+TASK_SUBTASK_3_TITLE=W6.2: Phase 2b — MIGRATE intent-fallback.sh to doey-headless + fix doey.sh wiring
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_6_2
+TASK_SUBTASK_3_CREATED_AT=1775732859
+TASK_SUBTASK_3_COMPLETED_AT=1775733959
+TASK_SUBTASK_4_TITLE=W6.1: Phase 3 — E2E validation of doey-headless and intent-fallback integration
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_CREATED_AT=1775733993
+TASK_SUBTASK_4_COMPLETED_AT=1775734053
+TASK_SUBTASK_5_TITLE=W6.1: Rewrite doey-headless.sh to wrap claude CLI directly (NOT harness), remove all harness references
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_6_1
+TASK_SUBTASK_5_CREATED_AT=1775734244
+TASK_SUBTASK_5_COMPLETED_AT=1775734334
+TASK_SUBTASK_6_TITLE=W6.1: Rewrite doey.sh unknown-command handler to route to doey-headless with system context
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_6_1
+TASK_SUBTASK_6_CREATED_AT=1775734835
+TASK_SUBTASK_6_COMPLETED_AT=1775734904
+TASK_SUBTASK_7_TITLE=W2.1: Fix install gap — commit untracked files, add missing install.sh copies, verify doey yo works
+TASK_SUBTASK_7_STATUS=skipped
+TASK_SUBTASK_7_WORKER=doey_doey_2_1
+TASK_SUBTASK_7_CREATED_AT=1775736792
+TASK_SUBTASK_7_COMPLETED_AT=1775736806
+TASK_SUBTASK_8_TITLE=W2.2: P0 fix command interception — fallback fires before case statement, plus install gap
+TASK_SUBTASK_8_STATUS=skipped
+TASK_SUBTASK_8_WORKER=doey_doey_2_2
+TASK_SUBTASK_8_CREATED_AT=1775737188
+TASK_SUBTASK_8_COMPLETED_AT=1775737200
+TASK_SUBTASK_9_TITLE=W2.1: P0 full scope — command expert fallback, auto-execute, command reference, routing fix, install gap
+TASK_SUBTASK_9_STATUS=done
+TASK_SUBTASK_9_WORKER=doey_doey_2_1
+TASK_SUBTASK_9_CREATED_AT=1775737278
+TASK_SUBTASK_9_COMPLETED_AT=1775737287
+TASK_SUBTASK_10_TITLE=W3.1: Research current doey-headless.sh, intent-fallback.sh, and install.sh to understand SDK rewrite scope
+TASK_SUBTASK_10_STATUS=done
+TASK_SUBTASK_10_WORKER=doey_doey_3_1
+TASK_SUBTASK_10_CREATED_AT=1775738180
+TASK_SUBTASK_10_COMPLETED_AT=1775738189
+TASK_SUBTASK_11_TITLE=W3.1: SDK rewrite — rewrite doey-headless.sh, create intent-schema.json + command-expert-system-prompt.txt, update intent-fallback.sh and install.sh
+TASK_SUBTASK_11_STATUS=done
+TASK_SUBTASK_11_WORKER=doey_doey_3_1
+TASK_SUBTASK_11_CREATED_AT=1775738372
+TASK_SUBTASK_11_COMPLETED_AT=1775738473
+TASK_SUBTASK_12_TITLE=W3.2: Verify SDK rewrite — check --bare, --json-schema, jq parsing, bash-compat, install works
+TASK_SUBTASK_12_STATUS=done
+TASK_SUBTASK_12_WORKER=doey_doey_3_2
+TASK_SUBTASK_12_CREATED_AT=1775738702
+TASK_SUBTASK_12_COMPLETED_AT=1775738825

@@ -1,16 +1,12 @@
+TASK_SCHEMA_VERSION=3
 TASK_ID=13
 TASK_TITLE=Scientific Task Architecture — Phase 0+1: Role Map Audit + Structured Task Schema
 TASK_STATUS=done
-TASK_CREATED=1774821702
 TASK_TYPE=infrastructure
-TASK_OWNER=Boss
-TASK_PRIORITY=high
-TASK_SUMMARY=Normalize the canonical role map across all docs/agents/scripts, deprecate Watchdog references, then implement the dual-file structured task schema (.task + .json)
-TASK_SCHEMA_VERSION=3
 TASK_TAGS=task-system,agent-defs,docs,shell,hooks
-TASK_LOG_1774821756=DISPATCHED: Phased task. Phase 0 queued for next available managed team.
 TASK_TEAM=W3
-TASK_LOG_1774821896=DISPATCHED: Phase 0 to W3 Manager (auto-spawned team)
-TASK_LOG_1774822573=PHASE 0 complete, dispatching Phase 1 to W3
-TASK_LOG_1774823770=COMPLETE: Both phases done. Phase 0: watchdog deprecation (01d1fb9). Phase 1: structured task schema (24146f1).
-TASK_RESULT=All phases complete. Phase 0: removed watchdog code, renamed sm-compact skill. Phase 1: added JSON task helpers, refactored skill+tests. Commits: 01d1fb9, 24146f1.
+TASK_SUBTASKS=
+TASK_TIMESTAMPS=created=1775131090
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775257535

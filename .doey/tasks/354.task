@@ -1,0 +1,33 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=354
+TASK_TITLE=Masterplan: Unified Timeline component in TUI Task Details
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_TEAM=W2
+TASK_DESCRIPTION=Merge Activity Log, Messages, and Decisions in the Go TUI Task Details view into a single unified timeline component. Each entry retains visual type distinction (icon/badge/color) while appearing chronologically interleaved in one scroll. Optional type filtering preserved.
+
+Intent document: /tmp/doey/doey/masterplan-20260406-140957/intent.md
+Working directory: /tmp/doey/doey/masterplan-20260406-140957/
+TASK_SUBTASKS=1:Dispatch to W2 Subtaskmaster (3 workers, parallel research):done\n2:W2.1: Research state of art - current rendering of Activity Log, Messages, Decisions in Task Details:done\n3:W2.2: Research architecture - data models, component hierarchy, timestamp formats:done\n4:W2.3: Research risks - timestamp consistency, performance, simplification opportunities:done\n5:W2.1: Implement unified Timeline in taskcard.go — TimelineEntry type, buildTimeline(), renderUnifiedTimeline(), replace 4 sections:done\n6:W2.2: Verify unified Timeline builds and renders correctly — fresh worker verification:done\n7:Sent to Task Reviewer (1.1):done\n8:W2.1: Cleanup dead code — remove old renderEventsTimeline and renderQARelayChain functions (~160 lines):done
+TASK_TIMESTAMPS=created=1775484721
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775484721
+TASK_FILES=tui/internal/taskcard/taskcard.go
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Dispatch to W2 Subtaskmaster (3 workers, parallel research)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_2_TITLE=W2.1: Research state of art - current rendering of Activity Log, Messages, Decisions in Task Details
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_3_TITLE=W2.2: Research architecture - data models, component hierarchy, timestamp formats
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_4_TITLE=W2.3: Research risks - timestamp consistency, performance, simplification opportunities
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_5_TITLE=W2.1: Implement unified Timeline in taskcard.go — TimelineEntry type, buildTimeline(), renderUnifiedTimeline(), replace 4 sections
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_6_TITLE=W2.2: Verify unified Timeline builds and renders correctly — fresh worker verification
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_7_TITLE=Sent to Task Reviewer (1.1)
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_8_TITLE=W2.1: Cleanup dead code — remove old renderEventsTimeline and renderQARelayChain functions (~160 lines)
+TASK_SUBTASK_8_STATUS=done

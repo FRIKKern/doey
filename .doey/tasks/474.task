@@ -1,0 +1,19 @@
+TASK_SCHEMA_VERSION=3
+TASK_ID=474
+TASK_TITLE=Re-apply gibberish spinner words (task #468 regression)
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=coordinator
+TASK_TEAM=1
+TASK_DESCRIPTION=PR #23 (tasks 470+471) overwrote the gibberish spinner words from task #468 due to parallel worker conflict. Re-apply the 18 gibberish sounds in shell/intent-fallback.sh spinner array. Reference: PR #21 branch feat/task-468-gibberish-spinner has the correct values.
+TASK_SUBTASKS=1:Direct dispatch to W4.1 — re-apply gibberish spinner words:done
+TASK_TIMESTAMPS=created=1775759929
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1775759929
+TASK_FILES=shell/intent-fallback.sh
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Direct dispatch to W4.1 — re-apply gibberish spinner words
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775760081
+TASK_SUBTASK_1_COMPLETED_AT=1775760123
