@@ -85,6 +85,9 @@ source "${SCRIPT_DIR}/doey-session.sh"
 # shellcheck source=doey-headless.sh
 source "${SCRIPT_DIR}/doey-headless.sh"
 
+# shellcheck source=doey-new.sh
+source "${SCRIPT_DIR}/doey-new.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 _doey_load_config
 
@@ -174,6 +177,7 @@ case "${1:-}" in
 
   Commands:
     (none)     Smart launch — auto-attach or show project picker
+    new NAME   Create a new project, init git, and launch Doey
     init       Register current directory as a project
     list       Show all registered projects and their status
     purge      Scan and clean stale runtime files, audit context bloat
@@ -207,6 +211,7 @@ case "${1:-}" in
 
   Examples:
     doey              # smart launch
+    doey new my-app   # create ~/projects/my-app and launch
     doey init         # register current dir
     doey 4x3          # launch with 4x3 grid
     doey dynamic      # launch with dynamic grid
@@ -296,6 +301,13 @@ HELP
     register_project "$(pwd)"
     dir="$(pwd)"; name="$(find_project "$dir")"
     [[ -n "$name" ]] && launch_with_grid "$name" "$dir" "$grid"
+    exit 0
+    ;;
+  new)
+    _check_prereqs
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill project_new &) 2>/dev/null || true
+    shift
+    _doey_new "$@"
     exit 0
     ;;
   purge)

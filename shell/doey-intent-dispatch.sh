@@ -139,6 +139,34 @@ _doey_intent_dispatch() {
   (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill intent_fallback "cmd=${typed}" "mapped_cmd=${command}" &) 2>/dev/null || true
 
   case "$confidence" in
+    NEW_PROJECT)
+      # User wants to create a new project — route to doey new <slug>
+      local slug="$command"
+      local description="$explanation"
+
+      # Sanitize slug: lowercase, replace spaces/special chars with hyphens, trim
+      slug=$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+
+      # Fallback if slug is empty or too generic
+      if [ -z "$slug" ] || [ "$slug" = "new-project" ] || [ ${#slug} -lt 2 ]; then
+        if _intent_fb_is_tty; then
+          printf "  What should we call this project? " >&2
+          read -r slug < /dev/tty 2>/dev/null || slug=""
+          slug=$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+        fi
+        [ -z "$slug" ] && slug="new-project"
+      fi
+
+      if _intent_fb_is_tty; then
+        printf "  Creating project: ${_IFB_BLD}%s${_IFB_RST}\n" "$slug" >&2
+        if [ -n "$description" ]; then
+          printf "  (%s)\n" "$description" >&2
+        fi
+        eval "doey new ${slug}"
+      else
+        printf '  → doey new %s\n' "$slug" >&2
+      fi
+      ;;
     HIGH)
       if _intent_fb_is_destructive "$command"; then
         # Destructive commands always require explicit confirmation
