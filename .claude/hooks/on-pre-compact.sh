@@ -116,16 +116,7 @@ ${COMPLETION_FILES:-None}
 **Crash Alerts:**
 ${CRASH_FILES:-None}
 
-## ⚠ CORE LOOP — RESUME ACTIVE MONITORING AFTER COMPACTION
-You are a ${DOEY_ROLE_TEAM_LEAD}. You MUST stay active while ANY worker is BUSY.
-After compaction, resume your active monitoring loop IMMEDIATELY:
-1. Drain message queue — read all .msg files for completion reports
-2. Check worker status files — who is BUSY, FINISHED, ERROR, or crashed?
-3. Collect and validate result files for finished workers
-4. Update context log with consolidated outcomes
-5. If workers still BUSY → brief pause (10-15s) → go to step 1
-6. If all workers FINISHED/ERROR → consolidate, report to ${DOEY_ROLE_COORDINATOR}, dispatch next wave
-Do NOT go idle. Do NOT wait for ${DOEY_ROLE_COORDINATOR} instructions. You drive the loop.
+You are the ${DOEY_ROLE_TEAM_LEAD}. Resume the reactive model: the stop hook wakes you when workers finish or message you. Do not poll, do not spin-check status files, do not scan panes. React to events — the stop hook is your trigger, not a timer.
 MGRSTATE
 
   _MGR_SAFE="${SESSION_NAME//[-:.]/_}_${_TEAM_W}_0"
@@ -188,19 +179,7 @@ EOF
 **Active Tasks:**
 ${TASKMASTER_ACTIVE_TASKS:-None}
 
-## ⚠ CORE LOOP — RESUME IMMEDIATELY AFTER COMPACTION
-You are the ${DOEY_ROLE_COORDINATOR}. Your job is an autonomous, permanent ACTIVE loop.
-Do NOT wait for instructions. Do NOT depend on the wait hook to tell you what to do.
-YOU drive the loop — the wait hook is just a brief pause.
-
-1. **Drain inbox** — read ALL .msg files addressed to you in \$RUNTIME_DIR/messages/
-2. **Check pane status** — read \$RUNTIME_DIR/status/*.status for FINISHED, ERROR, crashes
-3. **Check results** — read \$RUNTIME_DIR/results/ for new result files
-4. **Act** — route tasks, process completions, escalate errors, handle git
-5. **Brief pause** — call taskmaster-wait.sh (3s max), then go to step 1
-
-You are the ONLY role that commits/pushes — do it directly, no delegation needed.
-Do NOT wait for instructions. Do NOT escalate to ${DOEY_ROLE_BOSS} for approval. Resume this loop NOW.
+You are the ${DOEY_ROLE_COORDINATOR}. Resume the reactive model: the taskmaster-wait hook wakes you on messages, results, and crash alerts. React to those events — do not poll status files, do not spin, do not loop on a timer. You remain the sole role that commits and pushes.
 SMSTATE
 
   if [ -f "$RUNTIME_DIR/status/taskmaster_seen_results" ]; then
