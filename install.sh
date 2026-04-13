@@ -183,7 +183,37 @@ fi
 if has jq; then
   check_ok "jq"
 else
-  warn_msg "jq not found (optional — hooks will use python3 fallback)"
+  # jq is used by auto-trust (settings.json) and the doey-doctor check.
+  # Try to install it silently; fall back to a warning if we can't.
+  _jq_installed=false
+  case "$PLATFORM" in
+    macos)
+      if [ "$HAS_BREW" = true ]; then
+        printf "  ${DIM}→ installing jq via Homebrew...${RESET}\n"
+        brew install jq >/dev/null 2>&1 && _jq_installed=true || true
+      fi
+      ;;
+    linux)
+      if command -v apt-get >/dev/null 2>&1; then
+        printf "  ${DIM}→ installing jq via apt...${RESET}\n"
+        if [ "$(id -u)" = "0" ]; then
+          apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq jq >/dev/null 2>&1 && _jq_installed=true || true
+        else
+          sudo -n apt-get update -qq >/dev/null 2>&1 && sudo -n apt-get install -y -qq jq >/dev/null 2>&1 && _jq_installed=true || true
+        fi
+      elif command -v dnf >/dev/null 2>&1; then
+        ( [ "$(id -u)" = "0" ] && dnf install -y jq >/dev/null 2>&1 ) && _jq_installed=true || true
+      elif command -v apk >/dev/null 2>&1; then
+        ( [ "$(id -u)" = "0" ] && apk add --no-cache jq >/dev/null 2>&1 ) && _jq_installed=true || true
+      fi
+      ;;
+  esac
+  if [ "$_jq_installed" = true ] && has jq; then
+    check_ok "jq ${DIM}(auto-installed)${RESET}"
+  else
+    warn_msg "jq not found (optional — hooks will use python3 fallback)"
+  fi
+  unset _jq_installed
 fi
 
 # Detect Go binary — sets GO_BIN or leaves it empty.
