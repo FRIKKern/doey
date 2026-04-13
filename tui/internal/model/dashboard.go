@@ -15,6 +15,7 @@ import (
 	"github.com/doey-cli/doey/tui/internal/keys"
 	"github.com/doey-cli/doey/tui/internal/runtime"
 	"github.com/doey-cli/doey/tui/internal/styles"
+	"github.com/doey-cli/doey/tui/internal/taskcard"
 )
 
 // SwitchToTaskMsg requests the root model switch to the Tasks tab and select a task.
@@ -710,9 +711,11 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 			subtaskTitle := ""
 			if winIdx >= 2 && pIdx > 0 && team.TaskID != "" {
 				if st := m.subtaskForPane(team.TaskID, shortKey); st != nil {
-					subtaskTitle = st.Title
-					if st.Status == "done" || st.Status == "failed" {
-						subtaskTitle += " [" + st.Status + "]"
+					if cleaned := taskcard.CleanSubtaskTitle(st.Title); cleaned != "" {
+						subtaskTitle = cleaned
+						if st.Status == "done" || st.Status == "failed" {
+							subtaskTitle += " [" + st.Status + "]"
+						}
 					}
 				}
 			}
@@ -984,6 +987,10 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		}
 		// Render active and pending subtasks in full
 		for _, st := range activeSubtasks {
+			cleaned := taskcard.CleanSubtaskTitle(st.Title)
+			if cleaned == "" {
+				continue
+			}
 			var icon string
 			var lineStyle lipgloss.Style
 			switch st.Status {
@@ -994,7 +1001,7 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 				icon = lipgloss.NewStyle().Foreground(t.Muted).Render("□")
 				lineStyle = lipgloss.NewStyle().Foreground(t.Muted)
 			}
-			title := truncateStr(st.Title, contentW)
+			title := truncateStr(cleaned, contentW)
 			subtaskLines = append(subtaskLines, "  "+icon+" "+lineStyle.Render(title))
 		}
 		// Collapse done subtasks into "+N completed" summary
@@ -1002,8 +1009,12 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 			if len(activeSubtasks) == 0 {
 				// All done — show them individually
 				for _, st := range doneSubtasks {
+					cleaned := taskcard.CleanSubtaskTitle(st.Title)
+					if cleaned == "" {
+						continue
+					}
 					icon := lipgloss.NewStyle().Foreground(t.Success).Faint(true).Render("✔")
-					title := truncateStr(st.Title, contentW)
+					title := truncateStr(cleaned, contentW)
 					styled := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Strikethrough(true).Render(title)
 					subtaskLines = append(subtaskLines, "  "+icon+" "+styled)
 				}
@@ -1011,10 +1022,12 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 				// Mixed — show one example done + collapsed count
 				if len(doneSubtasks) == 1 {
 					st := doneSubtasks[0]
-					icon := lipgloss.NewStyle().Foreground(t.Success).Faint(true).Render("✔")
-					title := truncateStr(st.Title, contentW)
-					styled := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Strikethrough(true).Render(title)
-					subtaskLines = append(subtaskLines, "  "+icon+" "+styled)
+					if cleaned := taskcard.CleanSubtaskTitle(st.Title); cleaned != "" {
+						icon := lipgloss.NewStyle().Foreground(t.Success).Faint(true).Render("✔")
+						title := truncateStr(cleaned, contentW)
+						styled := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Strikethrough(true).Render(title)
+						subtaskLines = append(subtaskLines, "  "+icon+" "+styled)
+					}
 				} else {
 					summary := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
 						fmt.Sprintf("  … +%d completed", len(doneSubtasks)))

@@ -326,7 +326,7 @@ When workers finish and files have changed, send a `commit_request` `.msg` to Ta
 
 Before dispatching ANY worker, create and track a subtask:
 
-1. **Create subtask:** `doey task subtask add --task-id $TASK_ID --description "W${DOEY_TEAM_WINDOW}.N: description"`
+1. **Create subtask:** `doey task subtask add --task-id $TASK_ID --description "description"` — use the plain subtask title. Do NOT prefix with `WN.M`. The worker assignment is tracked separately via the assignee/worker field, not baked into the description.
 2. **Write subtask ID:** Write the subtask ID to the runtime status dir and include it in the worker prompt:
    ```bash
    PANE_SAFE=$(echo "$PANE" | tr ':.-' '_')
@@ -650,7 +650,7 @@ If after startup checks you have NO TASK_ID (env var empty, no task in messages,
 
 Use `doey` for task lifecycle updates:
 
-1. **Plan waves** — `doey task subtask add --task-id $TASK_ID --description "W${DOEY_TEAM_WINDOW}.1: description"`
+1. **Plan waves** — `doey task subtask add --task-id $TASK_ID --description "description"` (plain title — do NOT prefix with `WN.M`; worker assignment is tracked separately)
 2. **Worker done** — `doey task subtask update --task-id $TASK_ID --subtask-id $S1 --status review` then send review request to Task Reviewer (valid: pending|in_progress|review|done|skipped)
 3. **Wave decisions** — `doey task decision --task-id $TASK_ID --title "Wave 1" --body "2/3 passed. Proceeding."`
 4. **Wave report** — `doey task log add --task-id $TASK_ID --type progress --title "Wave N Complete" --body "Summary" --author "Subtaskmaster_W${DOEY_TEAM_WINDOW}"`
