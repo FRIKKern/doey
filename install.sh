@@ -154,7 +154,9 @@ if [ "$HAS_NODE" = false ] && ask_install "Node.js"; then
       ;;
     linux)
       if command -v apt-get >/dev/null 2>&1; then
-        run_install "Node.js" "sudo apt-get update -qq && sudo apt-get install -y nodejs npm" && HAS_NODE=true
+        # Ubuntu/Debian apt only ships old Node.js (often v12). Use NodeSource
+        # for Node.js 22 LTS which satisfies Claude Code's 18+ requirement.
+        run_install "Node.js" "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs" && HAS_NODE=true
       else
         printf "     ${BRAND}curl -fsSL https://fnm.vercel.app/install | bash && fnm install 22${RESET}\n"
         printf "     ${DIM}Then re-run this installer.${RESET}\n"
