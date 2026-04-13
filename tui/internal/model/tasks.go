@@ -1609,32 +1609,31 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			sections = append(sections, "")
 			sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("RESEARCH (%d)", len(research))))
 			for _, att := range research {
-				titleText := att.Title
-				if titleText == "" {
-					titleText = att.Filename
-				}
+				titleText := taskcard.CleanAttachmentTitle(att)
 				title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
 				meta := ""
-				if att.Author != "" {
-					meta += " — " + lipgloss.NewStyle().Foreground(t.Muted).Render(att.Author)
-				}
 				if att.Timestamp > 0 {
 					elapsed := now.Sub(time.Unix(att.Timestamp, 0))
-					meta += ", " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+					meta += " — " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
 				}
 				sections = append(sections, fmt.Sprintf("  %s %s%s", attachmentEmoji("research"), title, meta))
 
-				// Body preview — first 5 non-empty lines for research
+				// Body preview — first 5 non-empty, non-noise lines for research
 				if att.Body != "" {
 					lines := strings.Split(att.Body, "\n")
 					shown := 0
+					total := 0
 					for _, line := range lines {
+						if taskcard.IsBodyLineNoise(line) {
+							continue
+						}
+						total++
 						if strings.TrimSpace(line) == "" {
 							continue
 						}
 						if shown >= 5 {
 							sections = append(sections, bodyStyle.Render(
-								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", len(lines)-shown))))
+								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", total-shown))))
 							break
 						}
 						sections = append(sections, bodyStyle.Render(line))
@@ -1658,33 +1657,41 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 				typeColor := styles.AttachmentTypeColor(t, att.Type)
 				badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
 
-				titleText := att.Title
-				if titleText == "" {
-					titleText = att.Filename
-				}
+				titleText := taskcard.CleanAttachmentTitle(att)
 				title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
 
 				meta := ""
-				if att.Author != "" {
+				// Hide generic worker author for completion/progress types
+				if att.Author != "" && att.Type != "completion" && att.Type != "progress" {
 					meta += " — " + lipgloss.NewStyle().Foreground(t.Muted).Render(att.Author)
 				}
 				if att.Timestamp > 0 {
 					elapsed := now.Sub(time.Unix(att.Timestamp, 0))
-					meta += ", " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+					age := lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed) + " ago")
+					if meta != "" {
+						meta += ", " + age
+					} else {
+						meta += " — " + age
+					}
 				}
 				sections = append(sections, fmt.Sprintf("  %s %s%s", badge, title, meta))
 
-				// Body preview — first 4 non-empty lines
+				// Body preview — first 4 non-empty, non-noise lines
 				if att.Body != "" {
 					lines := strings.Split(att.Body, "\n")
 					shown := 0
+					total := 0
 					for _, line := range lines {
+						if taskcard.IsBodyLineNoise(line) {
+							continue
+						}
+						total++
 						if strings.TrimSpace(line) == "" {
 							continue
 						}
 						if shown >= 4 {
 							sections = append(sections, bodyStyle.Render(
-								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", len(lines)-shown))))
+								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", total-shown))))
 							break
 						}
 						sections = append(sections, bodyStyle.Render(line))
