@@ -68,7 +68,7 @@ func (m *LogViewModel) SetFocused(focused bool) { m.focused = focused }
 func (m *LogViewModel) SetSnapshot(snap runtime.Snapshot) {
 	m.entries = m.entries[:0]
 	for _, res := range snap.Results {
-		output := firstNLines(res.LastOutput, 2)
+		output := firstNLines(res.LastOutput.Text, 2)
 		files := ""
 		if len(res.FilesChanged) > 0 {
 			files = strings.Join(res.FilesChanged, ", ")

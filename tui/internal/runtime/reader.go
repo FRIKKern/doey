@@ -435,6 +435,10 @@ func (r *Reader) ParseTasks() []Task {
 			AcceptanceCriteria: strings.ReplaceAll(env["TASK_ACCEPTANCE_CRITERIA"], "\\n", "\n"),
 			Hypotheses:         strings.ReplaceAll(env["TASK_HYPOTHESES"], "\\n", "\n"),
 			DecisionLog:        strings.ReplaceAll(env["TASK_DECISION_LOG"], "\\n", "\n"),
+			// v4 fields
+			SuccessCriteria: strings.ReplaceAll(env["TASK_SUCCESS_CRITERIA"], "\\n", "\n"),
+			Constraints:     strings.ReplaceAll(env["TASK_CONSTRAINTS"], "\\n", "\n"),
+			RunningSummary:  strings.ReplaceAll(env["TASK_RUNNING_SUMMARY"], "\\n", "\n"),
 			Blockers:           env["TASK_BLOCKERS"],
 			Timestamps:         env["TASK_TIMESTAMPS"],
 			Notes:              strings.ReplaceAll(env["TASK_NOTES"], "\\n", "\n"),
@@ -487,34 +491,6 @@ func (r *Reader) ParseTasks() []Task {
 				if tag != "" {
 					t.Tags = append(t.Tags, tag)
 				}
-			}
-		}
-
-		// Parse inline TASK_SUBTASKS field (v3: "index:title:status\nindex:title:status")
-		if stRaw := env["TASK_SUBTASKS"]; stRaw != "" {
-			for _, entry := range strings.Split(strings.ReplaceAll(stRaw, "\\n", "\n"), "\n") {
-				entry = strings.TrimSpace(entry)
-				if entry == "" {
-					continue
-				}
-				parts := strings.SplitN(entry, ":", 3)
-				if len(parts) < 3 {
-					continue
-				}
-				st := Subtask{
-					TaskID: t.ID,
-					Pane:   parts[0], // index used as identifier
-					Title:  parts[1],
-					Status: parts[2],
-				}
-				// Extract worker pane from title prefix like "W2.1: ..."
-				if strings.Contains(st.Title, ": ") {
-					prefix := strings.SplitN(st.Title, ": ", 2)[0]
-					if len(prefix) >= 3 && prefix[0] == 'W' && strings.ContainsAny(prefix[1:], "0123456789") {
-						st.Worker = prefix
-					}
-				}
-				t.Subtasks = append(t.Subtasks, st)
 			}
 		}
 
@@ -575,6 +551,32 @@ func (r *Reader) ParseTasks() []Task {
 			sort.Ints(idxs)
 			for _, idx := range idxs {
 				t.Subtasks = append(t.Subtasks, *subtaskMap[idx])
+			}
+		} else if stRaw := env["TASK_SUBTASKS"]; stRaw != "" {
+			// v3 fallback: parse inline TASK_SUBTASKS only if no expanded form present
+			// (v4 canonical form is TASK_SUBTASK_N_*)
+			for _, entry := range strings.Split(strings.ReplaceAll(stRaw, "\\n", "\n"), "\n") {
+				entry = strings.TrimSpace(entry)
+				if entry == "" {
+					continue
+				}
+				parts := strings.SplitN(entry, ":", 3)
+				if len(parts) < 3 {
+					continue
+				}
+				st := Subtask{
+					TaskID: t.ID,
+					Pane:   parts[0],
+					Title:  parts[1],
+					Status: parts[2],
+				}
+				if strings.Contains(st.Title, ": ") {
+					prefix := strings.SplitN(st.Title, ": ", 2)[0]
+					if len(prefix) >= 3 && prefix[0] == 'W' && strings.ContainsAny(prefix[1:], "0123456789") {
+						st.Worker = prefix
+					}
+				}
+				t.Subtasks = append(t.Subtasks, st)
 			}
 		}
 

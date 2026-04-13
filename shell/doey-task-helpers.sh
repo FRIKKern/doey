@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# doey-task-helpers.sh — Schema v3 persistent task management library
+# doey-task-helpers.sh — Schema v4 persistent task management library
 # Sourceable library, not standalone. Tasks stored in .doey/tasks/ (persistent).
 # Exit codes: query functions return 0 always; mutation functions return 1 on error.
 # Guard parallel Bash calls: bash -c 'source helpers.sh; func ... || true'
@@ -16,7 +16,7 @@ command -v gum >/dev/null 2>&1 && HAS_GUM=true
 _TASK_VALID_STATUSES="draft active in_progress paused blocked pending_user_confirmation done cancelled"
 _TASK_VALID_TYPES="bug feature bugfix refactor research audit docs infrastructure"
 _TASK_VALID_SUBTASK_STATUSES="pending in_progress done skipped failed"
-_TASK_SCHEMA_VERSION_CURRENT="3"
+_TASK_SCHEMA_VERSION_CURRENT="4"
 
 # Styled output helpers (gum when available, plain fallback)
 _task_err() {
@@ -48,17 +48,29 @@ _touch_task_updated() { # task_file → upsert TASK_UPDATED=epoch
   fi
 }
 
-_write_v3_fields() { # output_file → write all v3 TASK_* fields from caller vars
+_write_v4_fields() { # output_file → write all v4 TASK_* fields from caller vars
+  # v4 canonical shape:
+  #   - TASK_SUBTASKS (inline compact form) is NOT written here. Subtasks are
+  #     persisted solely via TASK_SUBTASK_<N>_* extension fields, which
+  #     survive the rewrite because task_update_field preserves unknown lines.
+  #   - TASK_SUCCESS_CRITERIA, TASK_CONSTRAINTS, TASK_RUNNING_SUMMARY are
+  #     multi-line (literal "\n" separated) free-form fields, same style as
+  #     existing TASK_DECISION_LOG / TASK_HYPOTHESES.
   local _out="$1" _f _val
   printf 'TASK_SCHEMA_VERSION=%s\n' "$_TASK_SCHEMA_VERSION_CURRENT" > "$_out"
   for _f in ID TITLE STATUS TYPE TAGS CREATED_BY ASSIGNED_TO DESCRIPTION \
-            ACCEPTANCE_CRITERIA HYPOTHESES DECISION_LOG SUBTASKS \
+            ACCEPTANCE_CRITERIA HYPOTHESES DECISION_LOG \
             RELATED_FILES BLOCKERS TIMESTAMPS CURRENT_PHASE TOTAL_PHASES \
-            NOTES UPDATED SUCCESS_CRITERIA SHORTNAME; do
+            NOTES UPDATED SUCCESS_CRITERIA CONSTRAINTS RUNNING_SUMMARY \
+            SHORTNAME; do
     eval "_val=\"\${TASK_${_f}:-}\""
     printf 'TASK_%s=%s\n' "$_f" "$_val"
   done >> "$_out"
 }
+
+# Back-compat shim: legacy v3 writer alias. Callers that still reference
+# _write_v3_fields get the v4 layout (no inline TASK_SUBTASKS).
+_write_v3_fields() { _write_v4_fields "$@"; }
 
 task_dir() { # project_dir → echo .doey/tasks/ path (auto-creates)
   local project_dir="$1"
@@ -92,8 +104,8 @@ _generate_shortname() { # title → echo slug (max 16 chars, lowercase, no stop 
 }
 
 task_create() { # project_dir title [type] [created_by] [description] → echo task ID
-  # Fast path: use doey if available
-  if command -v doey-ctl >/dev/null 2>&1; then
+  # Fast path: use doey if available AND a DB exists for this project
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "$1/.doey/doey.db" ]; then
     local _result
     _result=$(doey task create --title "$2" --type "${3:-feature}" --created-by "${4:-Boss}" --description "${5:-}" --project-dir "$1" 2>/dev/null) && {
       echo "$_result"
@@ -112,12 +124,13 @@ task_create() { # project_dir title [type] [created_by] [description] → echo t
   TASK_ID="$id" TASK_TITLE="$title" TASK_STATUS="active" TASK_TYPE="$task_type"
   TASK_TAGS="" TASK_CREATED_BY="$created_by" TASK_ASSIGNED_TO=""
   TASK_DESCRIPTION="$description" TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES=""
-  TASK_DECISION_LOG="${now}:Created task" TASK_SUBTASKS="" TASK_RELATED_FILES=""
+  TASK_DECISION_LOG="${now}:Created task" TASK_RELATED_FILES=""
   TASK_BLOCKERS="" TASK_TIMESTAMPS="created=${now}" TASK_CURRENT_PHASE="0"
   TASK_TOTAL_PHASES="0" TASK_NOTES="" TASK_UPDATED="$now" TASK_SUCCESS_CRITERIA=""
+  TASK_CONSTRAINTS="" TASK_RUNNING_SUMMARY=""
   TASK_SHORTNAME="$shortname"
 
-  _write_v3_fields "${task_file}.tmp"
+  _write_v4_fields "${task_file}.tmp"
   mv "${task_file}.tmp" "$task_file"
   echo "$id"
 }
@@ -126,11 +139,11 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
   local file="$1"
   [ -s "$file" ] || return 1
 
-  # DB fast path: try doey-ctl first
-  if command -v doey-ctl >/dev/null 2>&1; then
-    local _tr_id _tr_pd _tr_out
+  # DB fast path: only when a DB exists for this project
+  local _tr_id _tr_pd _tr_out
+  _tr_pd=$(cd "$(dirname "$file")/../.." 2>/dev/null && pwd)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "${_tr_pd}/.doey/doey.db" ]; then
     _tr_id=$(basename "$file" .task)
-    _tr_pd=$(cd "$(dirname "$file")/../.." 2>/dev/null && pwd)
     _tr_out=$(doey-ctl task get --id "$_tr_id" --project-dir "$_tr_pd" 2>/dev/null) && [ -n "$_tr_out" ] && {
       TASK_SCHEMA_VERSION="" TASK_ID="" TASK_TITLE="" TASK_STATUS="" TASK_TYPE=""
       TASK_TAGS="" TASK_CREATED_BY="" TASK_ASSIGNED_TO="" TASK_DESCRIPTION=""
@@ -175,7 +188,8 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
   TASK_ACCEPTANCE_CRITERIA="" TASK_HYPOTHESES="" TASK_DECISION_LOG=""
   TASK_SUBTASKS="" TASK_RELATED_FILES="" TASK_BLOCKERS="" TASK_TIMESTAMPS=""
   TASK_CURRENT_PHASE="" TASK_TOTAL_PHASES="" TASK_NOTES="" TASK_CREATED=""
-  TASK_SUCCESS_CRITERIA="" TASK_SHORTNAME=""
+  TASK_SUCCESS_CRITERIA="" TASK_CONSTRAINTS="" TASK_RUNNING_SUMMARY=""
+  TASK_SHORTNAME=""
 
   local line
   while IFS= read -r line || [ -n "$line" ]; do
@@ -200,6 +214,8 @@ task_read() { # task_file → sets TASK_* vars; returns 1 if missing/malformed
       TASK_TOTAL_PHASES)        TASK_TOTAL_PHASES="${line#*=}" ;;
       TASK_NOTES)               TASK_NOTES="${line#*=}" ;;
       TASK_SUCCESS_CRITERIA)    TASK_SUCCESS_CRITERIA="${line#*=}" ;;
+      TASK_CONSTRAINTS)         TASK_CONSTRAINTS="${line#*=}" ;;
+      TASK_RUNNING_SUMMARY)     TASK_RUNNING_SUMMARY="${line#*=}" ;;
       TASK_SHORTNAME)           TASK_SHORTNAME="${line#*=}" ;;
     esac
   done < "$file" || true
@@ -277,8 +293,10 @@ task_update_field() { # task_file field_name new_value → atomic upsert
 }
 
 _task_read_field() { # task_file field_name → echo field value
-  # DB fast path: map field name to doey-ctl output key
-  if command -v doey-ctl >/dev/null 2>&1; then
+  # DB fast path: map field name to doey-ctl output key (only when DB exists)
+  local _trf_pd_guard
+  _trf_pd_guard=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "${_trf_pd_guard}/.doey/doey.db" ]; then
     local _trf_key=""
     case "$2" in
       TASK_STATUS) _trf_key="Status" ;; TASK_TITLE) _trf_key="Title" ;;
@@ -343,9 +361,9 @@ _task_append_timestamp() { # task_file key epoch
 }
 
 task_update_status() { # project_dir task_id new_status
-  # Fast path: use doey if available
-  if command -v doey-ctl >/dev/null 2>&1; then
-    doey task update "$2" --field TASK_STATUS --value "$3" --project-dir "$1" 2>/dev/null && return 0
+  # Fast path: use doey if a DB exists for this project
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "$1/.doey/doey.db" ]; then
+    doey task update --project-dir "$1" --id "$2" --field status --value "$3" 2>/dev/null && return 0
   fi
   # Fallback: shell implementation continues below
   local project_dir="$1" task_id="$2" new_status="$3"
@@ -378,8 +396,8 @@ _task_age_str() { # epoch → echo human-readable age (e.g., "3h")
 task_list() { # project_dir [--status filter] [--all]
   local project_dir="$1"; shift
 
-  # DB fast path: try doey-ctl first (no --status/--all filtering support yet)
-  if command -v doey-ctl >/dev/null 2>&1 && [ $# -eq 0 ]; then
+  # DB fast path: only when DB exists and no filters requested
+  if command -v doey-ctl >/dev/null 2>&1 && [ $# -eq 0 ] && [ -f "${project_dir}/.doey/doey.db" ]; then
     local _tl_out
     _tl_out=$(doey-ctl task list --project-dir "$project_dir" 2>/dev/null) && [ -n "$_tl_out" ] && {
       printf '%s\n' "$_tl_out"
@@ -458,138 +476,77 @@ task_list() { # project_dir [--status filter] [--all]
 }
 
 task_add_decision() { # task_file entry_text → append timestamped decision
-  if command -v doey-ctl >/dev/null 2>&1; then
-    local _id _pd
+  local _pd _id
+  _pd=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "${_pd}/.doey/doey.db" ]; then
     _id=$(basename "$1" .task)
-    _pd=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
-    doey task log add "$_id" --type decision --author "${DOEY_ROLE:-unknown}" --title "$2" --project-dir "$_pd" 2>/dev/null && return 0
+    doey task log add --project-dir "$_pd" --task-id "$_id" --type decision --author "${DOEY_ROLE:-unknown}" --title "$2" 2>/dev/null && return 0
   fi
   local now; now=$(date +%s); _task_append_to_field "$1" "TASK_DECISION_LOG" "${now}:${2}"
 }
 
 task_add_note() { # task_file note_text
-  if command -v doey-ctl >/dev/null 2>&1; then
-    local _id _pd
+  local _pd _id
+  _pd=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "${_pd}/.doey/doey.db" ]; then
     _id=$(basename "$1" .task)
-    _pd=$(cd "$(dirname "$1")/../.." 2>/dev/null && pwd)
-    doey task log add "$_id" --type note --author "${DOEY_ROLE:-unknown}" --title "$2" --project-dir "$_pd" 2>/dev/null && return 0
+    doey task log add --project-dir "$_pd" --task-id "$_id" --type note --author "${DOEY_ROLE:-unknown}" --title "$2" 2>/dev/null && return 0
   fi
   _task_append_to_field "$1" "TASK_NOTES" "$2"
 }
 
-task_update_subtask() { # task_file subtask_id new_status (format: id:title:status\\n...)
+task_update_subtask() { # task_file subtask_id new_status (v4: TASK_SUBTASK_N_STATUS)
   local task_file="$1" subtask_id="$2" new_status="$3"
-  # Fast path: doey task subtask update
-  if command -v doey-ctl >/dev/null 2>&1; then
-    local _pd
-    _pd=$(cd "$(dirname "$task_file")/../.." 2>/dev/null && pwd)
-    doey task subtask update "$subtask_id" --status "$new_status" --project-dir "$_pd" 2>/dev/null && return 0
+  # Fast path: doey task subtask update — only when a DB exists for this project.
+  local _pd
+  _pd=$(cd "$(dirname "$task_file")/../.." 2>/dev/null && pwd)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "${_pd}/.doey/doey.db" ]; then
+    local _tid
+    _tid=$(basename "$task_file" .task)
+    doey task subtask update --project-dir "$_pd" --task-id "$_tid" --subtask-id "$subtask_id" --status "$new_status" 2>/dev/null && return 0
   fi
 
   _validate_subtask_status "$new_status" || return 1
 
-  local current_subtasks
-  current_subtasks="$(_task_read_field "$task_file" "TASK_SUBTASKS")"
-
-  if [ -z "$current_subtasks" ]; then
-    printf 'Error: no subtasks found in task\n' >&2
-    return 1
-  fi
-
-  # Rebuild subtasks with updated status
-  # Format: id:title:status\nid:title:status
-  local updated="" found=0
-  local remaining="$current_subtasks"
-  while [ -n "$remaining" ]; do
-    local entry
-    case "$remaining" in
-      *\\n*)
-        entry="${remaining%%\\n*}"
-        remaining="${remaining#*\\n}"
-        ;;
-      *)
-        entry="$remaining"
-        remaining=""
-        ;;
-    esac
-
-    # Parse entry: id:title:status
-    local eid etitle estatus
-    eid="${entry%%:*}"
-    local rest="${entry#*:}"
-    etitle="${rest%:*}"
-    estatus="${rest##*:}"
-
-    if [ "$eid" = "$subtask_id" ]; then
-      estatus="$new_status"
-      found=1
-    fi
-
-    local rebuilt="${eid}:${etitle}:${estatus}"
-    if [ -n "$updated" ]; then
-      updated="${updated}\\n${rebuilt}"
-    else
-      updated="$rebuilt"
-    fi
-  done
-
-  if [ "$found" -eq 0 ]; then
+  # v4: subtasks live in TASK_SUBTASK_<N>_TITLE / _STATUS / _WORKER / ...
+  # We locate the matching entry by sequence number.
+  if ! grep -q "^TASK_SUBTASK_${subtask_id}_TITLE=" "$task_file" 2>/dev/null; then
     printf 'Error: subtask %s not found\n' "$subtask_id" >&2
     return 1
   fi
 
-  task_update_field "$task_file" "TASK_SUBTASKS" "$updated"
+  task_update_field "$task_file" "TASK_SUBTASK_${subtask_id}_STATUS" "$new_status"
+  case "$new_status" in
+    done|failed)
+      task_update_field "$task_file" "TASK_SUBTASK_${subtask_id}_COMPLETED_AT" "$(date +%s)"
+      ;;
+  esac
 }
 
-task_add_subtask() { # task_file title → echo new subtask ID
-  # Fast path: use doey if available
-  if command -v doey-ctl >/dev/null 2>&1; then
-    local _task_id _project_dir _result
+task_add_subtask() { # task_file title → echo new subtask ID (v4 expanded shape)
+  # Fast path: use doey if a DB exists for this project.
+  local _project_dir
+  _project_dir=$(cd "$(dirname "$1")/../.." && pwd)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "${_project_dir}/.doey/doey.db" ]; then
+    local _task_id _result
     _task_id=$(basename "$1" .task)
-    _project_dir=$(cd "$(dirname "$1")/../.." && pwd)
-    _result=$(doey task subtask add "$_task_id" "$2" --project-dir "$_project_dir" 2>/dev/null) && {
+    _result=$(doey task subtask add --project-dir "$_project_dir" --task-id "$_task_id" --title "$2" 2>/dev/null) && {
       echo "$_result"
       return 0
     }
   fi
-  # Fallback: shell implementation continues below
+  # Fallback: shell implementation — appends TASK_SUBTASK_<N>_* fields.
   local task_file="$1" title="$2"
 
-  local current_subtasks
-  current_subtasks="$(_task_read_field "$task_file" "TASK_SUBTASKS")"
+  # Next sequence number: 1 + count of existing TASK_SUBTASK_*_TITLE lines.
+  local count; count=$(_count_field_lines "$task_file" "TASK_SUBTASK_*_TITLE=*")
+  local new_id=$((count + 1))
+  local now; now=$(date +%s)
 
-  local max_id=0
-  if [ -n "$current_subtasks" ]; then
-    local remaining="$current_subtasks"
-    while [ -n "$remaining" ]; do
-      local entry
-      case "$remaining" in
-        *\\n*)
-          entry="${remaining%%\\n*}"
-          remaining="${remaining#*\\n}"
-          ;;
-        *)
-          entry="$remaining"
-          remaining=""
-          ;;
-      esac
-      local eid="${entry%%:*}"
-      if [ "$eid" -gt "$max_id" ] 2>/dev/null; then
-        max_id="$eid"
-      fi
-    done
-  fi
-
-  local new_id=$((max_id + 1))
-  local new_entry="${new_id}:${title}:pending"
-
-  if [ -n "$current_subtasks" ]; then
-    current_subtasks="${current_subtasks}\\n${new_entry}"
-  else
-    current_subtasks="$new_entry"
-  fi
-
-  task_update_field "$task_file" "TASK_SUBTASKS" "$current_subtasks"
+  printf 'TASK_SUBTASK_%s_TITLE=%s\n' "$new_id" "$title" >> "$task_file"
+  printf 'TASK_SUBTASK_%s_STATUS=pending\n' "$new_id" >> "$task_file"
+  printf 'TASK_SUBTASK_%s_CREATED_AT=%s\n' "$new_id" "$now" >> "$task_file"
+  _touch_task_updated "$task_file"
   echo "$new_id"
 }
 
@@ -764,7 +721,16 @@ task_commit_msg() { # project_dir task_id → echo conventional commit message
   fi
 }
 
-task_upgrade_schema() { # task_file → upgrade v1/v2 to v3 (idempotent)
+task_upgrade_schema() { # task_file → upgrade v1/v2/v3 to v4 (idempotent)
+  # v4 canonical subtask shape is the expanded TASK_SUBTASK_<N>_* form.
+  # Migration rules:
+  #   - If both inline TASK_SUBTASKS= and expanded TASK_SUBTASK_N_* exist,
+  #     drop the inline copy (the expanded form wins because it carries
+  #     richer per-subtask metadata — worker, timestamps, assignee).
+  #   - If only inline TASK_SUBTASKS= exists, expand it into TASK_SUBTASK_N_*
+  #     entries and drop the inline copy.
+  #   - If TASK_CONSTRAINTS / TASK_RUNNING_SUMMARY are missing, add empty
+  #     placeholders so downstream tools can count on them.
   local file="$1"
   [ -f "$file" ] || { printf 'Error: file not found: %s\n' "$file" >&2; return 1; }
   [ -s "$file" ] || return 1
@@ -773,8 +739,9 @@ task_upgrade_schema() { # task_file → upgrade v1/v2 to v3 (idempotent)
   local TASK_CREATED_BY TASK_ASSIGNED_TO TASK_DESCRIPTION TASK_ACCEPTANCE_CRITERIA
   local TASK_HYPOTHESES TASK_DECISION_LOG TASK_SUBTASKS TASK_RELATED_FILES
   local TASK_BLOCKERS TASK_TIMESTAMPS TASK_NOTES TASK_CREATED
+  local TASK_SUCCESS_CRITERIA TASK_CONSTRAINTS TASK_RUNNING_SUMMARY TASK_SHORTNAME
   task_read "$file"
-  [ "$TASK_SCHEMA_VERSION" = "3" ] && return 0
+  [ "$TASK_SCHEMA_VERSION" = "4" ] && return 0
 
   # Read legacy fields that task_read doesn't know about
   local legacy_owner="" legacy_priority="" legacy_summary="" legacy_attachments="" legacy_created_ts=""
@@ -798,23 +765,65 @@ task_upgrade_schema() { # task_file → upgrade v1/v2 to v3 (idempotent)
 
   [ -n "$legacy_attachments" ] && [ -z "$TASK_NOTES" ] && TASK_NOTES="Migrated attachments: ${legacy_attachments}"
 
-  TASK_UPDATED="$(date +%s)"
-  local tmp="${file}.tmp"
-  _write_v3_fields "$tmp"
+  # Does this file already carry any expanded subtask entries?
+  local has_expanded_subtasks=0
+  if grep -q '^TASK_SUBTASK_[0-9][0-9]*_TITLE=' "$file" 2>/dev/null; then
+    has_expanded_subtasks=1
+  fi
 
-  # Preserve extension fields (TASK_REPORT_*, TASK_SUBTASK_N_*, etc.)
+  # Expanded-form entries we'll append at the end (only populated when we
+  # need to synthesize them from an inline TASK_SUBTASKS value).
+  local synth_subtasks=""
+  if [ "$has_expanded_subtasks" = "0" ] && [ -n "$TASK_SUBTASKS" ]; then
+    local _rem="$TASK_SUBTASKS" _entry _eid _rest _etitle _estatus _now
+    _now=$(date +%s)
+    while [ -n "$_rem" ]; do
+      case "$_rem" in
+        *\\n*) _entry="${_rem%%\\n*}"; _rem="${_rem#*\\n}" ;;
+        *)     _entry="$_rem"; _rem="" ;;
+      esac
+      [ -z "$_entry" ] && continue
+      _eid="${_entry%%:*}"
+      _rest="${_entry#*:}"
+      _etitle="${_rest%:*}"
+      _estatus="${_rest##*:}"
+      case "$_eid" in *[!0-9]*|"") continue ;; esac
+      synth_subtasks="${synth_subtasks}TASK_SUBTASK_${_eid}_TITLE=${_etitle}"$'\n'
+      synth_subtasks="${synth_subtasks}TASK_SUBTASK_${_eid}_STATUS=${_estatus}"$'\n'
+      synth_subtasks="${synth_subtasks}TASK_SUBTASK_${_eid}_CREATED_AT=${_now}"$'\n'
+    done
+  fi
+
+  TASK_UPDATED="$(date +%s)"
+  # Drop the inline copy — v4 keeps subtasks only in TASK_SUBTASK_N_* form.
+  TASK_SUBTASKS=""
+
+  local tmp="${file}.tmp"
+  _write_v4_fields "$tmp"
+
+  # Preserve extension fields (TASK_REPORT_*, TASK_SUBTASK_N_*, TASK_UPDATE_*,
+  # TASK_RECOVERY_*, TASK_FILES, TASK_REVIEW_*, TASK_TEAM, ...).
   while IFS= read -r line || [ -n "$line" ]; do
     case "${line%%=*}" in
       TASK_SCHEMA_VERSION|TASK_ID|TASK_TITLE|TASK_STATUS|TASK_TYPE|\
       TASK_TAGS|TASK_CREATED_BY|TASK_ASSIGNED_TO|TASK_DESCRIPTION|\
       TASK_ACCEPTANCE_CRITERIA|TASK_HYPOTHESES|TASK_DECISION_LOG|\
       TASK_SUBTASKS|TASK_RELATED_FILES|TASK_BLOCKERS|TASK_TIMESTAMPS|\
-      TASK_CURRENT_PHASE|TASK_TOTAL_PHASES|TASK_NOTES|TASK_UPDATED)
+      TASK_CURRENT_PHASE|TASK_TOTAL_PHASES|TASK_NOTES|TASK_UPDATED|\
+      TASK_SUCCESS_CRITERIA|TASK_CONSTRAINTS|TASK_RUNNING_SUMMARY|\
+      TASK_SHORTNAME)
         ;; # already written above — skip
       TASK_OWNER|TASK_PRIORITY|TASK_CREATED) ;; # legacy — drop
       TASK_*) printf '%s\n' "$line" ;; # preserve extension fields
     esac
   done < "$file" >> "$tmp"
+
+  # Append any synthesized subtask entries (only when we had to expand an
+  # inline TASK_SUBTASKS value).
+  if [ -n "$synth_subtasks" ]; then
+    printf '%s' "$synth_subtasks" >> "$tmp"
+  fi
+
   mv "$tmp" "$file"
 
   local json_file="${file%.task}.json"
@@ -1059,8 +1068,8 @@ _tokenize() { # text stop_words → sets _TKN_KEYS and _TKN_COUNT in caller
 task_find_similar() { # project_dir title_string → echo matching TASK_ID or empty
   local project_dir="$1" title_string="$2"
 
-  # DB fast path: grep doey-ctl task list output
-  if command -v doey-ctl >/dev/null 2>&1; then
+  # DB fast path: grep doey-ctl task list output (only when DB exists)
+  if command -v doey-ctl >/dev/null 2>&1 && [ -f "${project_dir}/.doey/doey.db" ]; then
     local _tfs_out _tfs_match
     _tfs_out=$(doey-ctl task list --project-dir "$project_dir" 2>/dev/null) && [ -n "$_tfs_out" ] && {
       _tfs_match=$(printf '%s\n' "$_tfs_out" | grep -i "$title_string" | head -1) && [ -n "$_tfs_match" ] && {

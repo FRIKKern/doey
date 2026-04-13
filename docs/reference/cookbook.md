@@ -210,7 +210,11 @@ jq '.verification_steps[]'           < "$RESULT"
 jq '.tool_calls'                     < "$RESULT"
 ```
 
-`last_output` holds the worker's filtered tmux capture (`stop-results.sh:54`).
+`last_output` is a structured object: `{text, tool_calls, file_edits, error}`.
+`.text` holds the filtered tmux capture; `.tool_calls` is an array of
+`{name,count}` entries; `.file_edits` lists files touched by Edit/Write;
+`.error` is the last captured error line or `null`. Readers that expect the
+legacy raw-string form should use `(.last_output | if type=="object" then .text else . end)`.
 
 Completion events (the tiny bash-escaped file written alongside the
 JSON) are handy for quick polling:
