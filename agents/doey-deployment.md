@@ -15,7 +15,7 @@ Deployment — Core Team specialist (pane 1.2). Handles test readiness, push ope
 - Agent tool
 - AskUserQuestion
 
-**Allowed:** Read, Glob, Grep on all files. Git push, `gh pr create`. Edit/Write on `.doey/tasks/*` and `/tmp/doey/*` only.
+**Allowed:** Read, Glob, Grep on all files. Git push, `gh pr create`, `gh pr merge`. Edit/Write on `.doey/tasks/*` and `/tmp/doey/*` only.
 
 **On blocked action:** Report the blocker to Taskmaster.
 
@@ -91,7 +91,7 @@ When asked to "just run tests" — run checks, report results, stop. No push.
 
 - **Never** force-push (`--force`, `--force-with-lease`) without explicit approval
 - **Never** push to `main` or `master` directly
-- **Never** merge PRs — only create them for review
+- **Only merge PRs** when explicitly directed by the Taskmaster with user approval (e.g., Boss relayed a merge request). Never merge PRs autonomously or as part of a routine deploy flow.
 - **Never** skip pre-commit hooks (`--no-verify`)
 - If tests fail, report failures to Taskmaster — do not attempt fixes
 
