@@ -56,14 +56,21 @@ bind-key -T copy-mode    TripleClick1Pane select-pane \; send-keys -X select-lin
 bind-key -T copy-mode-vi TripleClick1Pane select-pane \; send-keys -X select-line
 bind-key -T root DoubleClick1Pane select-pane -t = \; if-shell -F "#{?pane_in_mode,0,1}" "copy-mode" \; send-keys -X select-word
 bind-key -T root TripleClick1Pane select-pane -t = \; if-shell -F "#{?pane_in_mode,0,1}" "copy-mode" \; send-keys -X select-line
-set-option -t $session allow-passthrough off
 set-option -t $session bell-action none
 set-option -t $session visual-bell off
 # escape-time is set in doey.sh (_init_doey_session) — do not override here
 THEME_EOF
 
-tmux source-file "$_theme_file" 2>/dev/null
-local _rc=$?
+# allow-passthrough requires tmux ≥ 3.3; append only if supported to avoid
+# "invalid option" errors that kill set -e in the caller.
+if tmux show-option -g allow-passthrough >/dev/null 2>&1; then
+  printf 'set-option -t %s allow-passthrough off\n' "$session" >> "$_theme_file"
+fi
+
+# Use '|| _rc=$?' so a non-zero source-file exit doesn't trip set -e in
+# the caller before we capture the return code.
+local _rc=0
+tmux source-file "$_theme_file" 2>/dev/null || _rc=$?
 rm -f "$_theme_file"
 
 if [ "$_rc" -ne 0 ]; then
