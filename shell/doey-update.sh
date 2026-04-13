@@ -132,11 +132,19 @@ _update_contributor() {
 
   # Step 3: Run install
   doey_step "3/6" "Running install..."
-  if ! _spin "Installing files..." bash "$repo_dir/install.sh"; then
+  local install_log
+  install_log="$(mktemp -t doey-install.XXXXXX.log)"
+  if ! _spin "Installing files..." bash -c "bash '$repo_dir/install.sh' >'$install_log' 2>&1"; then
     doey_error "Install failed"
+    doey_info "Output (${install_log}):"
+    printf '\n'
+    tail -40 "$install_log" >&2 || true
+    printf '\n'
+    doey_info "Full log: $install_log"
     doey_info "Try manually: cd $repo_dir && ./install.sh"
     return 1
   fi
+  rm -f "$install_log"
   doey_success "Files installed"
 
   # Step 4: Rebuild Go binaries
@@ -185,12 +193,20 @@ _update_normal() {
 
   # Step 2: Run install
   doey_step "2/5" "Running install..."
-  if ! _spin "Installing files..." bash "$install_dir/install.sh"; then
+  local install_log
+  install_log="$(mktemp -t doey-install.XXXXXX.log)"
+  if ! _spin "Installing files..." bash -c "bash '$install_dir/install.sh' >'$install_log' 2>&1"; then
     doey_error "Install failed"
+    doey_info "Output (${install_log}):"
+    printf '\n'
+    tail -40 "$install_log" >&2 || true
+    printf '\n'
+    doey_info "Full log: $install_log"
     doey_info "Try downloading again: curl -fsSL https://raw.githubusercontent.com/FRIKKern/doey/main/web-install.sh | bash"
     rm -rf "$install_dir"
     return 1
   fi
+  rm -f "$install_log"
   doey_success "Installed"
 
   # Step 3: Rebuild Go binaries
@@ -296,11 +312,19 @@ _post_update() {
   printf '\n'
 
   doey_step "1/4" "Running install from updated code..."
-  if ! _spin "Installing..." bash "$install_dir/install.sh"; then
+  local install_log
+  install_log="$(mktemp -t doey-install.XXXXXX.log)"
+  if ! _spin "Installing..." bash -c "bash '$install_dir/install.sh' >'$install_log' 2>&1"; then
     doey_error "Install failed"
+    doey_info "Output (${install_log}):"
+    printf '\n'
+    tail -40 "$install_log" >&2 || true
+    printf '\n'
+    doey_info "Full log: $install_log"
     [[ "$install_dir" == /tmp/* ]] && rm -rf "$install_dir"
     exit 1
   fi
+  rm -f "$install_log"
   doey_success "Installed"
 
   doey_step "2/4" "Rebuilding Go binaries..."
