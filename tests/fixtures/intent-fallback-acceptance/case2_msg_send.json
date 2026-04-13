@@ -1,0 +1,1 @@
+{"id":"msg_case2","type":"message","role":"assistant","model":"claude-haiku-4-5-20251001","content":[{"type":"text","text":"{\"action\":\"auto_correct\",\"command\":\"doey msg send --to 1.0 --body hi\",\"reason\":\"expand snd->send and short flags --t/--bdy\"}"}],"stop_reason":"end_turn","usage":{"input_tokens":440,"output_tokens":40}}

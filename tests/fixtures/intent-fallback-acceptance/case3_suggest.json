@@ -1,0 +1,1 @@
+{"id":"msg_case3","type":"message","role":"assistant","model":"claude-haiku-4-5-20251001","content":[{"type":"text","text":"{\"action\":\"suggest\",\"options\":[\"doey task list\",\"doey status\",\"doey run\"],\"reason\":\"no close match - offering top-3 related verbs\"}"}],"stop_reason":"end_turn","usage":{"input_tokens":410,"output_tokens":36}}

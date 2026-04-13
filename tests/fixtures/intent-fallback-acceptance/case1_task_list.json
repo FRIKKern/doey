@@ -1,0 +1,1 @@
+{"id":"msg_case1","type":"message","role":"assistant","model":"claude-haiku-4-5-20251001","content":[{"type":"text","text":"{\"action\":\"auto_correct\",\"command\":\"doey task list\",\"reason\":\"tsk lst -> task list (abbreviation expansion)\"}"}],"stop_reason":"end_turn","usage":{"input_tokens":420,"output_tokens":34}}
