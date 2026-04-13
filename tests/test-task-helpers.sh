@@ -46,7 +46,10 @@ ID=$(task_create "$TEST_DIR" "Build login page" "feature" "Boss" "Full login flo
 _test "task_create returns an ID" test -n "$ID"
 _test ".task file exists" test -f "${TEST_DIR}/.doey/tasks/${ID}.task"
 _test "TASK_ID is set in .task" grep -q "TASK_ID=${ID}" "${TEST_DIR}/.doey/tasks/${ID}.task"
-_test "TASK_SCHEMA_VERSION=3 in .task" grep -q "TASK_SCHEMA_VERSION=3" "${TEST_DIR}/.doey/tasks/${ID}.task"
+_test "TASK_SCHEMA_VERSION=4 in .task" grep -q "TASK_SCHEMA_VERSION=4" "${TEST_DIR}/.doey/tasks/${ID}.task"
+_test "TASK_CONSTRAINTS present (v4)" grep -q "^TASK_CONSTRAINTS=" "${TEST_DIR}/.doey/tasks/${ID}.task"
+_test "TASK_RUNNING_SUMMARY present (v4)" grep -q "^TASK_RUNNING_SUMMARY=" "${TEST_DIR}/.doey/tasks/${ID}.task"
+_test_fails "no inline TASK_SUBTASKS in fresh v4 task" grep -q "^TASK_SUBTASKS=" "${TEST_DIR}/.doey/tasks/${ID}.task"
 
 # ── 2. task_create defaults ─────────────────────────────────────────
 echo ""
@@ -110,7 +113,7 @@ _test "TASK_ID set" test "$TASK_ID" = "$READ_ID"
 _test "TASK_TITLE set" test "$TASK_TITLE" = "Read me"
 _test "TASK_STATUS set" test "$TASK_STATUS" = "active"
 _test "TASK_TYPE set" test "$TASK_TYPE" = "bug"
-_test "TASK_SCHEMA_VERSION set" test "$TASK_SCHEMA_VERSION" = "3"
+_test "TASK_SCHEMA_VERSION set" test "$TASK_SCHEMA_VERSION" = "4"
 
 # ── 6. task_read legacy v1 ──────────────────────────────────────────
 echo ""
@@ -148,12 +151,70 @@ printf 'TASK_ID=88\nTASK_TITLE=Upgrade me\nTASK_STATUS=active\nTASK_CREATED=1700
 
 task_upgrade_schema "$V1_UPG"
 
-_test "upgraded to TASK_SCHEMA_VERSION=3" grep -q "TASK_SCHEMA_VERSION=3" "$V1_UPG"
+_test "upgraded to TASK_SCHEMA_VERSION=4" grep -q "TASK_SCHEMA_VERSION=4" "$V1_UPG"
 _test ".json companion created" test -f "${TEST_DIR}/.doey/tasks/88.json"
 
 # Idempotent — call again
 task_upgrade_schema "$V1_UPG"
 _test "idempotent upgrade (no error)" test $? -eq 0
+
+# ── 8b. task_upgrade_schema v3→v4: drop inline when expanded present ─
+echo ""
+echo "=== Test: task_upgrade_schema v3→v4 (double-encoding collapse) ==="
+
+V3_BOTH="${TEST_DIR}/.doey/tasks/8801.task"
+cat > "$V3_BOTH" <<'EOF'
+TASK_SCHEMA_VERSION=3
+TASK_ID=8801
+TASK_TITLE=Both forms
+TASK_STATUS=active
+TASK_TYPE=feature
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=
+TASK_TIMESTAMPS=created=1776000000
+TASK_SUBTASKS=1:Old inline:done\n2:Another:pending
+TASK_UPDATED=1776000000
+TASK_SUBTASK_1_TITLE=Canonical first
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_4_1
+TASK_SUBTASK_2_TITLE=Canonical second
+TASK_SUBTASK_2_STATUS=pending
+EOF
+
+task_upgrade_schema "$V3_BOTH"
+
+_test "v4 version bumped" grep -q "^TASK_SCHEMA_VERSION=4" "$V3_BOTH"
+_test_fails "inline TASK_SUBTASKS dropped when expanded present" grep -q "^TASK_SUBTASKS=1:Old inline" "$V3_BOTH"
+_test "expanded TASK_SUBTASK_1_TITLE preserved" grep -q "^TASK_SUBTASK_1_TITLE=Canonical first" "$V3_BOTH"
+_test "expanded TASK_SUBTASK_2_TITLE preserved" grep -q "^TASK_SUBTASK_2_TITLE=Canonical second" "$V3_BOTH"
+_test "TASK_CONSTRAINTS added" grep -q "^TASK_CONSTRAINTS=" "$V3_BOTH"
+_test "TASK_RUNNING_SUMMARY added" grep -q "^TASK_RUNNING_SUMMARY=" "$V3_BOTH"
+
+# ── 8c. task_upgrade_schema v3→v4: expand inline when no expanded ────
+echo ""
+echo "=== Test: task_upgrade_schema v3→v4 (inline → expanded) ==="
+
+V3_INLINE="${TEST_DIR}/.doey/tasks/8802.task"
+cat > "$V3_INLINE" <<'EOF'
+TASK_SCHEMA_VERSION=3
+TASK_ID=8802
+TASK_TITLE=Inline only
+TASK_STATUS=active
+TASK_TYPE=feature
+TASK_CREATED_BY=Boss
+TASK_DESCRIPTION=
+TASK_TIMESTAMPS=created=1776000000
+TASK_SUBTASKS=1:First:done\n2:Second:pending
+TASK_UPDATED=1776000000
+EOF
+
+task_upgrade_schema "$V3_INLINE"
+
+_test "v4 version bumped (inline→expanded)" grep -q "^TASK_SCHEMA_VERSION=4" "$V3_INLINE"
+_test_fails "inline TASK_SUBTASKS dropped after expansion" grep -q "^TASK_SUBTASKS=1:First" "$V3_INLINE"
+_test "subtask 1 expanded" grep -q "^TASK_SUBTASK_1_TITLE=First" "$V3_INLINE"
+_test "subtask 1 status expanded" grep -q "^TASK_SUBTASK_1_STATUS=done" "$V3_INLINE"
+_test "subtask 2 expanded" grep -q "^TASK_SUBTASK_2_TITLE=Second" "$V3_INLINE"
 
 # ── 9. task_dispatch_msg ────────────────────────────────────────────
 echo ""
@@ -340,37 +401,30 @@ SUB_FILE="${TEST_DIR}/.doey/tasks/${SUB_ID}.task"
 
 S1=$(task_add_subtask "$SUB_FILE" "First subtask")
 _test "add_subtask returns 1" test "$S1" = "1"
-_test "subtask 1 stored in TASK_SUBTASKS" grep -q "TASK_SUBTASKS=1:First subtask:pending" "$SUB_FILE"
+_test "subtask 1 stored as TASK_SUBTASK_1_TITLE" grep -q "^TASK_SUBTASK_1_TITLE=First subtask$" "$SUB_FILE"
+_test "subtask 1 initial status pending" grep -q "^TASK_SUBTASK_1_STATUS=pending$" "$SUB_FILE"
 
 S2=$(task_add_subtask "$SUB_FILE" "Second subtask")
 _test "add_subtask returns 2" test "$S2" = "2"
-_test "subtask 2 appended" grep -q "2:Second subtask:pending" "$SUB_FILE"
+_test "subtask 2 appended (expanded)" grep -q "^TASK_SUBTASK_2_TITLE=Second subtask$" "$SUB_FILE"
 
-# Verify subtask count via parsing
-SUB_RAW=$(grep "^TASK_SUBTASKS=" "$SUB_FILE" | head -1)
-SUB_VAL="${SUB_RAW#TASK_SUBTASKS=}"
-# Count entries separated by literal \n
-SUB_COUNT=1
-_sub_rem="$SUB_VAL"
-while true; do
-  case "$_sub_rem" in
-    *\\n*) SUB_COUNT=$((SUB_COUNT + 1)); _sub_rem="${_sub_rem#*\\n}" ;;
-    *) break ;;
-  esac
-done
+# Verify subtask count
+SUB_COUNT=$(grep -c '^TASK_SUBTASK_[0-9][0-9]*_TITLE=' "$SUB_FILE")
 _test "subtask count is 2" test "$SUB_COUNT" -eq 2
+
+_test_fails "canonical v4 form — no inline TASK_SUBTASKS" grep -q "^TASK_SUBTASKS=" "$SUB_FILE"
 
 # ── 17. task_update_subtask ────────────────────────────────────────
 echo ""
 echo "=== Test: task_update_subtask ==="
 
 task_update_subtask "$SUB_FILE" 1 in_progress
-_test "subtask 1 status -> in_progress" grep -q "1:First subtask:in_progress" "$SUB_FILE"
+_test "subtask 1 status -> in_progress" grep -q "^TASK_SUBTASK_1_STATUS=in_progress$" "$SUB_FILE"
 
 task_update_subtask "$SUB_FILE" 1 done
-_test "subtask 1 status -> done" grep -q "1:First subtask:done" "$SUB_FILE"
+_test "subtask 1 status -> done" grep -q "^TASK_SUBTASK_1_STATUS=done$" "$SUB_FILE"
 
-_test "subtask 2 still pending" grep -q "2:Second subtask:pending" "$SUB_FILE"
+_test "subtask 2 still pending" grep -q "^TASK_SUBTASK_2_STATUS=pending$" "$SUB_FILE"
 
 _test_fails "invalid subtask status rejected" task_update_subtask "$SUB_FILE" 1 "bogus"
 
@@ -408,7 +462,7 @@ echo "=== Test: original fields intact ==="
 _test "TASK_ID still intact" grep -q "TASK_ID=${SUB_ID}" "$SUB_FILE"
 _test "TASK_TITLE still intact" grep -q "TASK_TITLE=Subtask host" "$SUB_FILE"
 _test "TASK_STATUS still intact" grep -q "TASK_STATUS=active" "$SUB_FILE"
-_test "TASK_SCHEMA_VERSION still intact" grep -q "TASK_SCHEMA_VERSION=3" "$SUB_FILE"
+_test "TASK_SCHEMA_VERSION still intact" grep -q "TASK_SCHEMA_VERSION=4" "$SUB_FILE"
 
 # ── Results ─────────────────────────────────────────────────────────
 echo ""
