@@ -111,9 +111,23 @@ _doey_send_precheck() {
   fi
 
   # Check reservation status — reserved panes cannot receive dispatched work
+  # Exception: intra-team sends (same tmux window) are allowed through reservation
   if [ -f "${runtime}/status/${target_safe}.reserved" ]; then
-    echo "doey_send_verified: target $target is RESERVED — skipping" >&2
-    return 2
+    local sender_window="" target_window=""
+    sender_window="${DOEY_WINDOW_INDEX:-}"
+    if [ -z "$sender_window" ]; then
+      local pane_id="${PANE:-}"
+      if [ -n "$pane_id" ]; then
+        sender_window="${pane_id#*:}"
+        sender_window="${sender_window%%.*}"
+      fi
+    fi
+    target_window="${target#*:}"
+    target_window="${target_window%%.*}"
+    if [ -z "$sender_window" ] || [ "$sender_window" != "$target_window" ]; then
+      echo "doey_send_verified: target $target is RESERVED — skipping (cross-team)" >&2
+      return 2
+    fi
   fi
 
   return 0
