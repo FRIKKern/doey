@@ -1185,6 +1185,10 @@ launch_session_dynamic() {
   (
     exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
 
+    # Surface any failure: on non-zero exit, mark progress with an ERROR step
+    # so the foreground poller bails out immediately instead of timing out at 60s.
+    trap '__rc=$?; if [ "$__rc" -ne 0 ]; then echo "STEP: ERROR rc=${__rc} line=${LINENO} — see ${runtime_dir}/logs/startup.log" >> "$progress_file"; fi' EXIT
+
     echo "STEP: Creating session" >> "$progress_file"
     STEP_TOTAL=7
     step_start 1 "Creating session for ${name}..."
