@@ -50,7 +50,14 @@ _last_msg=$(parse_field "last_assistant_message") || _last_msg=""
 _last_output=""
 if [ -f "$_result_file" ]; then
   if command -v jq >/dev/null 2>&1; then
-    _last_output=$(jq -r '.last_output // ""' "$_result_file" 2>/dev/null) || _last_output=""
+    # last_output may be a legacy string or a structured object {text,tool_calls,file_edits,error}
+    _last_output=$(jq -r '
+      (.last_output // "")
+      | if type == "object" then
+          ((.text // "") + (if (.error // null) != null then " " + .error else "" end))
+        else .
+        end
+    ' "$_result_file" 2>/dev/null) || _last_output=""
   fi
 fi
 _error_text="${_last_msg} ${_last_output}"

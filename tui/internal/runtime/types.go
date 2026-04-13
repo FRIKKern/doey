@@ -1,10 +1,53 @@
 package runtime
 
 import (
+	"bytes"
+	"encoding/json"
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/store"
 )
+
+// ToolCall is one aggregated tool-invocation entry inside LastOutput.
+type ToolCall struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// LastOutput is the structured worker capture written by stop-results.sh.
+// UnmarshalJSON accepts both the new object form and the legacy raw-string
+// form (which is wrapped as {text: <string>, tool_calls: [], file_edits: [], error: null}).
+type LastOutput struct {
+	Text      string     `json:"text"`
+	ToolCalls []ToolCall `json:"tool_calls"`
+	FileEdits []string   `json:"file_edits"`
+	Error     string     `json:"error,omitempty"`
+}
+
+// UnmarshalJSON handles the schema migration: old result files have
+// last_output as a JSON string; new files have it as an object.
+func (l *LastOutput) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		*l = LastOutput{}
+		return nil
+	}
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err != nil {
+			return err
+		}
+		*l = LastOutput{Text: s}
+		return nil
+	}
+	type alias LastOutput
+	var a alias
+	if err := json.Unmarshal(trimmed, &a); err != nil {
+		return err
+	}
+	*l = LastOutput(a)
+	return nil
+}
 
 // SessionConfig from session.env
 type SessionConfig struct {
@@ -129,7 +172,7 @@ type Attachment struct {
 	ImagePath string // path to binary image file (from sidecar frontmatter)
 }
 
-// Task from tasks/*.task (v3 schema)
+// Task from tasks/*.task (v4 schema)
 type Task struct {
 	ID                 string
 	Title              string
@@ -158,6 +201,9 @@ type Task struct {
 	CreatedBy          string    // v3: who created it
 	AssignedTo         string    // v3: who/what team
 	SchemaVersion      int       // v3: schema version number
+	SuccessCriteria    string    // v4: bulleted success criteria (prioritized)
+	Constraints        string    // v4: ranked constraints (priority-ordered)
+	RunningSummary     string    // v4: current short digest of progress so far
 	Reports           []Report             // from TASK_REPORT_N_* fields
 	TaskAttachments   []Attachment         // from .doey/tasks/<id>/attachments/*.md
 	RecoveryLog       []RecoveryEvent      // from TASK_RECOVERY_N_* fields
@@ -229,7 +275,7 @@ type PaneResult struct {
 	Timestamp    int64    `json:"timestamp"`
 	FilesChanged []string `json:"files_changed"`
 	ToolCalls    int      `json:"tool_calls"`
-	LastOutput   string   `json:"last_output"`
+	LastOutput   LastOutput `json:"last_output"`
 	ProofType          string   `json:"proof_type,omitempty"`
 	ProofContent       string   `json:"proof_content,omitempty"`
 	VerificationSteps  string   `json:"verification_steps,omitempty"`

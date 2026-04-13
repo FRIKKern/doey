@@ -128,6 +128,9 @@ type PersistentTask struct {
 	AcceptanceCriteria string `json:"acceptance_criteria,omitempty"` // bulleted criteria
 	DecisionLog        string   `json:"decision_log,omitempty"`        // timestamped decisions
 	Notes              string   `json:"notes,omitempty"`               // free-form journal
+	// v4 schema fields
+	Constraints    string `json:"constraints,omitempty"`     // ranked constraints (priority-ordered)
+	RunningSummary string `json:"running_summary,omitempty"` // short digest of progress
 	// Plan linkage
 	PlanID    string `json:"plan_id,omitempty"`    // links task to a plan
 	PlanTitle string `json:"plan_title,omitempty"` // plan title for display
@@ -308,6 +311,8 @@ func storeTaskToPersistent(st store.Task) PersistentTask {
 		BuildStatus:        st.BuildStatus,
 		VerificationSteps:  st.VerificationSteps,
 		SuccessCriteria:    st.SuccessCriteria,
+		Constraints:        st.Constraints,
+		RunningSummary:     st.RunningSummary,
 		ProofOfSuccess:     st.ProofOfSuccess,
 		ReviewVerdict:      st.ReviewVerdict,
 		Created:            st.CreatedAt,
@@ -414,6 +419,8 @@ func syncTaskStoreToSQLite(projectDir string, ts TaskStore) {
 			BuildStatus:        pt.BuildStatus,
 			VerificationSteps:  pt.VerificationSteps,
 			SuccessCriteria:    pt.SuccessCriteria,
+			Constraints:        pt.Constraints,
+			RunningSummary:     pt.RunningSummary,
 			ProofOfSuccess:     pt.ProofOfSuccess,
 			ReviewVerdict:      pt.ReviewVerdict,
 			CreatedAt:          pt.Created,
@@ -699,6 +706,15 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 	if rt.DecisionLog != "" {
 		pt.DecisionLog = rt.DecisionLog
 	}
+	if rt.SuccessCriteria != "" {
+		pt.SuccessCriteria = rt.SuccessCriteria
+	}
+	if rt.Constraints != "" {
+		pt.Constraints = rt.Constraints
+	}
+	if rt.RunningSummary != "" {
+		pt.RunningSummary = rt.RunningSummary
+	}
 	if rt.Notes != "" {
 		pt.Notes = rt.Notes
 	}
@@ -797,6 +813,9 @@ func (s *TaskStore) MergeRuntimeTasks(runtimeTasks []Task) {
 			AssignedTo:         rt.AssignedTo,
 			AcceptanceCriteria: rt.AcceptanceCriteria,
 			DecisionLog:        rt.DecisionLog,
+			SuccessCriteria:    rt.SuccessCriteria,
+			Constraints:        rt.Constraints,
+			RunningSummary:     rt.RunningSummary,
 			Notes:              rt.Notes,
 			PlanID:             rt.PlanID,
 			PlanTitle:          rt.PlanTitle,

@@ -190,6 +190,9 @@ func ensureSchema(db *sql.DB) error {
 		`ALTER TABLE agents ADD COLUMN color TEXT DEFAULT ''`,
 		// agent memory field (task #511)
 		`ALTER TABLE agents ADD COLUMN memory TEXT DEFAULT ''`,
+		// schema v4: constraints + running summary (task #575)
+		`ALTER TABLE tasks ADD COLUMN constraints TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN running_summary TEXT DEFAULT ''`,
 	}
 	for _, stmt := range migrations {
 		tx.Exec(stmt) // ignore "duplicate column" errors

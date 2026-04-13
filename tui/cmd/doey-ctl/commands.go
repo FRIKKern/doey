@@ -886,17 +886,21 @@ func runSubtaskAdd(args []string) {
 			Worker:    *worker,
 			CreatedAt: time.Now().Unix(),
 		}
-		id, err := s.CreateSubtask(st)
+		_, err := s.CreateSubtask(st)
 		if err != nil {
 			fatal("task subtask add: %v", err)
 		}
 		s.LogEvent(&store.Event{Type: "subtask_added", Source: eventSource(), TaskID: &taskID, Data: subtaskTitle})
 		emitTaskStat(pd, "subtask_added", strconv.FormatInt(taskID, 10), nil)
 
+		// Re-export .task file so shell consumers see the new expanded subtask entry.
+		autoExportTask(s, taskID, pd)
+
+		// Echo the seq index (expected by shell callers), not the DB rowid.
 		if jsonOutput {
-			printJSON(map[string]int64{"id": id})
+			printJSON(map[string]int{"index": st.Seq})
 		} else {
-			fmt.Println(id)
+			fmt.Println(st.Seq)
 		}
 		return
 	}
@@ -1053,6 +1057,9 @@ func runSubtaskUpdate(args []string) {
 			_subStatPayload["reason"] = *reasonFlag
 		}
 		emitTaskStat(pd, "subtask_updated", strconv.FormatInt(taskID, 10), _subStatPayload)
+
+		// Re-export .task so shell consumers see the updated TASK_SUBTASK_N_STATUS.
+		autoExportTask(s, taskID, pd)
 
 		if jsonOutput {
 			printJSON(map[string]string{"status": "updated", "seq": strconv.Itoa(resolved.Seq)})
@@ -2184,10 +2191,11 @@ func exportTask(s *store.Store, t store.Task) string {
 		fmt.Fprintf(&buf, "%s=%d\n", key, val)
 	}
 
-	// Core fields (always written)
+	// Core fields (always written). v4: schema version bumped; canonical
+	// subtask shape is TASK_SUBTASK_<N>_* only (no inline TASK_SUBTASKS).
 	sv := t.SchemaVersion
-	if sv == 0 {
-		sv = 3
+	if sv < 4 {
+		sv = 4
 	}
 	writeInt("TASK_SCHEMA_VERSION", sv)
 	fmt.Fprintf(&buf, "TASK_ID=%d\n", t.ID)
@@ -2200,20 +2208,15 @@ func exportTask(s *store.Store, t store.Task) string {
 	writeStr("TASK_TEAM", t.Team)
 	writeStr("TASK_DESCRIPTION", t.Description)
 	writeStr("TASK_ACCEPTANCE_CRITERIA", t.AcceptanceCriteria)
+	writeStr("TASK_SUCCESS_CRITERIA", t.SuccessCriteria)
+	writeStr("TASK_CONSTRAINTS", t.Constraints)
+	writeStr("TASK_RUNNING_SUMMARY", t.RunningSummary)
 	writeStr("TASK_HYPOTHESES", t.Hypotheses)
 	writeStr("TASK_DECISION_LOG", t.DecisionLog)
 
-	// Build inline subtask string from DB subtasks
+	// Subtasks are written only in the expanded form below (TASK_SUBTASK_N_*).
+	// v4 intentionally does not emit the inline TASK_SUBTASKS compact field.
 	subtasks, _ := s.ListSubtasks(t.ID)
-	if len(subtasks) > 0 {
-		var parts []string
-		for _, st := range subtasks {
-			parts = append(parts, fmt.Sprintf("%d:%s:%s", st.Seq, st.Title, st.Status))
-		}
-		writeAlways("TASK_SUBTASKS", strings.Join(parts, `\n`))
-	} else {
-		writeAlways("TASK_SUBTASKS", "")
-	}
 
 	writeStr("TASK_RELATED_FILES", t.RelatedFiles)
 	writeStr("TASK_BLOCKERS", t.Blockers)

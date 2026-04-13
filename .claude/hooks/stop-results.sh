@@ -7,6 +7,24 @@ init_named_hook "stop-results"
 mkdir -p "${RUNTIME_DIR}/errors" 2>/dev/null || true
 trap '_err=$?; printf "[%s] ERR in stop-results at line %s (exit %s)\n" "$(date +%H:%M:%S)" "$LINENO" "$_err" >> "${RUNTIME_DIR}/errors/errors.log" 2>/dev/null; exit 0' ERR
 
+# Scrub common secret patterns from text. Reads stdin, writes scrubbed text to stdout.
+# Bash 3.2 safe — pure sed pipeline. Worker 2 (summary) and Worker 4
+# (last_output structure) must pipe any text field through this function before writing.
+doey_scrub_secrets() {
+  sed -E \
+    -e 's/sk-[A-Za-z0-9_-]{20,}/[REDACTED:openai]/g' \
+    -e 's/ghp_[A-Za-z0-9]{20,}/[REDACTED:github]/g' \
+    -e 's/gho_[A-Za-z0-9]{20,}/[REDACTED:github]/g' \
+    -e 's/ghu_[A-Za-z0-9]{20,}/[REDACTED:github]/g' \
+    -e 's/ghs_[A-Za-z0-9]{20,}/[REDACTED:github]/g' \
+    -e 's/ghr_[A-Za-z0-9]{20,}/[REDACTED:github]/g' \
+    -e 's/xox[baprs]-[A-Za-z0-9-]{10,}/[REDACTED:slack]/g' \
+    -e 's/AKIA[0-9A-Z]{16}/[REDACTED:aws-key]/g' \
+    -e 's/Bearer [A-Za-z0-9._-]{20,}/Bearer [REDACTED:bearer]/g' \
+    -e 's#[Aa][Ww][Ss][^=]{0,40}=[[:space:]]*["'"'"']?[A-Za-z0-9/+=]{40}#[REDACTED:aws-secret]#g' \
+    -e 's/(API_KEY|SECRET|TOKEN|PASSWORD)[[:space:]]*=[[:space:]]*[^[:space:]]+/\1=[REDACTED:envvar]/g'
+}
+
 is_worker || exit 0
 
 mkdir -p "$RUNTIME_DIR/tasks" 2>/dev/null || true
@@ -49,12 +67,32 @@ fi
 FILTERED=""
 STATUS="done"
 TOOL_COUNT=0
-# Pass 1: build FILTERED output and count tools (no error detection here)
+_TOOL_NAMES_RAW=""   # newline list of tool names (one per call, for aggregation)
+_FILE_EDITS_RAW=""   # newline list of files touched by Edit/Write
+_error_line=""       # populated in Pass 2 when an error signature matches
+# Pass 1: build FILTERED output, count tools, record tool/file-edit details
 # No structured tool count exists — on-pre-tool-use.sh only tracks last tool name, not a count
 while IFS= read -r line; do
+  _tool_name=""
   case "$line" in
-    *"Read("*|*"Edit("*|*"Write("*|*"Bash("*|*"Grep("*|*"Glob("*|*"Agent("*) TOOL_COUNT=$((TOOL_COUNT + 1)) ;;
+    *"Read("*)  _tool_name="Read" ;;
+    *"Edit("*)  _tool_name="Edit" ;;
+    *"Write("*) _tool_name="Write" ;;
+    *"Bash("*)  _tool_name="Bash" ;;
+    *"Grep("*)  _tool_name="Grep" ;;
+    *"Glob("*)  _tool_name="Glob" ;;
+    *"Agent("*) _tool_name="Agent" ;;
   esac
+  if [ -n "$_tool_name" ]; then
+    TOOL_COUNT=$((TOOL_COUNT + 1))
+    _TOOL_NAMES_RAW="${_TOOL_NAMES_RAW}${_tool_name}${NL}"
+    case "$_tool_name" in
+      Edit|Write)
+        _f=$(printf '%s' "$line" | sed -n "s/.*${_tool_name}(\\([^)]*\\)).*/\\1/p" | head -1)
+        [ -n "$_f" ] && _FILE_EDITS_RAW="${_FILE_EDITS_RAW}${_f}${NL}"
+        ;;
+    esac
+  fi
   case "$line" in
     *"❯"*|*"───"*|*"Ctx █"*|*"bypass permissions"*|*"shift+tab"*|*"MCP server"*|*/doctor*) continue ;;
   esac
@@ -62,6 +100,11 @@ while IFS= read -r line; do
 done <<HEREDOC_EOF
 $OUTPUT
 HEREDOC_EOF
+
+# Scrub secrets from FILTERED before any downstream consumer sees it.
+# All paths that read FILTERED (last_output JSON, completion attachment,
+# verification step extraction) now get the redacted version.
+FILTERED=$(printf '%s' "$FILTERED" | doey_scrub_secrets)
 
 # Structured error check: read status file written by synchronous stop-status.sh
 _status_from_file=$(_read_pane_status "$PANE_SAFE") || _status_from_file=""
@@ -84,7 +127,7 @@ while IFS= read -r line; do
     *"stop hooks"*) continue ;;
   esac
   case "$line" in
-    *[Ee]rror*|*ERROR*|*[Ff]ailed*|*FAILED*|*[Ee]xception*|*EXCEPTION*) _found_error="true"; break ;;
+    *[Ee]rror*|*ERROR*|*[Ff]ailed*|*FAILED*|*[Ee]xception*|*EXCEPTION*) _found_error="true"; _error_line="$line"; break ;;
   esac
 done <<HEREDOC_TAIL
 $_tail_lines
@@ -93,7 +136,7 @@ HEREDOC_TAIL
 # Positive completion signals override incidental error mentions
 if [ "$_found_error" = "true" ]; then
   case "$_tail_lines" in
-    *"completed"*|*"successfully"*|*"All tests passed"*|*"Done"*|*"Finished"*) _found_error="" ;;
+    *"completed"*|*"successfully"*|*"All tests passed"*|*"Done"*|*"Finished"*) _found_error=""; _error_line="" ;;
   esac
 fi
 [ "$_found_error" = "true" ] && STATUS="error"
@@ -286,9 +329,44 @@ if [ -n "$_auto_output" ]; then
 fi
 
 PANE_TITLE=$(tmux display-message -t "$PANE" -p '#{pane_title}' 2>/dev/null) || PANE_TITLE="worker-$PANE_INDEX"
-LAST_JSON=$(printf '%s' "$FILTERED" | jq -Rs '.' 2>/dev/null) || \
-  LAST_JSON=$(printf '%s' "$FILTERED" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
-  LAST_JSON='""'
+# FILTERED is already scrubbed (doey_scrub_secrets applied in Pass 1 post-processing).
+LAST_TEXT_JSON=$(printf '%s' "$FILTERED" | jq -Rs '.' 2>/dev/null) || \
+  LAST_TEXT_JSON=$(printf '%s' "$FILTERED" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) || \
+  LAST_TEXT_JSON='""'
+
+# Aggregate tool calls into [{name,count}, ...]
+_TOOL_CALLS_JSON="[]"
+if [ -n "$_TOOL_NAMES_RAW" ]; then
+  _TOOL_CALLS_JSON=$(printf '%s' "$_TOOL_NAMES_RAW" \
+    | awk 'NF' \
+    | sort \
+    | uniq -c \
+    | awk '{printf "%s\t%d\n", $2, $1}' \
+    | jq -Rsc 'split("\n") | map(select(length>0) | split("\t") | {name: .[0], count: (.[1]|tonumber)})' 2>/dev/null) || _TOOL_CALLS_JSON="[]"
+  [ -z "$_TOOL_CALLS_JSON" ] && _TOOL_CALLS_JSON="[]"
+fi
+
+# Dedup file-edit list
+_FILE_EDITS_JSON="[]"
+if [ -n "$_FILE_EDITS_RAW" ]; then
+  _FILE_EDITS_JSON=$(printf '%s' "$_FILE_EDITS_RAW" \
+    | awk 'NF' \
+    | sort -u \
+    | jq -Rsc 'split("\n") | map(select(length>0))' 2>/dev/null) || _FILE_EDITS_JSON="[]"
+  [ -z "$_FILE_EDITS_JSON" ] && _FILE_EDITS_JSON="[]"
+fi
+
+# Error field — null when no error line captured
+_LAST_ERROR_JSON="null"
+if [ -n "$_error_line" ]; then
+  _scrubbed_err=$(printf '%s' "$_error_line" | doey_scrub_secrets)
+  _LAST_ERROR_JSON=$(printf '%s' "$_scrubbed_err" | jq -Rs '.' 2>/dev/null) || _LAST_ERROR_JSON="null"
+fi
+
+# Compose structured last_output object (schema v2)
+LAST_OUTPUT_JSON=$(printf '{"text":%s,"tool_calls":%s,"file_edits":%s,"error":%s}' \
+  "$LAST_TEXT_JSON" "$_TOOL_CALLS_JSON" "$_FILE_EDITS_JSON" "$_LAST_ERROR_JSON")
+
 TITLE_JSON=$(printf '%s' "$PANE_TITLE" | jq -Rs '.' 2>/dev/null) || TITLE_JSON='"worker-'"$PANE_INDEX"'"'
 PROOF_TYPE_JSON=$(printf '%s' "$PROOF_TYPE" | jq -Rs '.' 2>/dev/null) || PROOF_TYPE_JSON='""'
 PROOF_CONTENT_JSON=$(printf '%s' "$PROOF_CONTENT" | jq -Rs '.' 2>/dev/null) || PROOF_CONTENT_JSON='""'
@@ -318,7 +396,32 @@ if [ -z "$local_task_id" ]; then
 fi
 local_subtask_id=$(cat "${RUNTIME_DIR}/status/${PANE_SAFE}.subtask_id" 2>/dev/null) || local_subtask_id=""
 # Note: task_id/subtask_id files preserved for parallel async hooks
+
+# ── Mandatory DOEY_SUMMARY (task 575 / subtask 261761) ────────────
+# Priority: (a) DOEY_SUMMARY env, (b) first line of last assistant
+# message in pane tail, (c) "[no summary provided]" placeholder.
+# Placeholder triggers an issue file under ${RUNTIME_DIR}/issues/.
 local_summary="${DOEY_SUMMARY:-}"
+_summary_source="env"
+if [ -z "$local_summary" ]; then
+  local_summary=$(printf '%s\n' "$FILTERED" | tail -20 | awk 'NF>0 && !/^[[:space:]]*[>$#]/ {sub(/^[[:space:]]+/,""); sub(/[[:space:]]+$/,""); print; exit}')
+  [ -n "$local_summary" ] && _summary_source="last_message"
+fi
+if [ -z "$local_summary" ]; then
+  local_summary="[no summary provided]"
+  _summary_source="placeholder"
+  mkdir -p "${RUNTIME_DIR}/issues" 2>/dev/null || true
+  _issue_ts=$(date +%s)
+  _issue_file="${RUNTIME_DIR}/issues/${_issue_ts}_pane_${WINDOW_INDEX}_${PANE_INDEX}_no_summary.txt"
+  {
+    printf 'pane=%s.%s\n' "$WINDOW_INDEX" "$PANE_INDEX"
+    printf 'task_id=%s\n' "${local_task_id:-}"
+    printf 'subtask_id=%s\n' "${local_subtask_id:-}"
+    printf 'timestamp=%s\n' "$_issue_ts"
+    printf 'reason=%s\n' "worker stopped with no DOEY_SUMMARY env and no usable tail line"
+  } > "$_issue_file" 2>/dev/null || true
+  _log "stop-results: summary placeholder used, issue logged to $_issue_file"
+fi
 local_summary_escaped=$(printf '%s' "$local_summary" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a' -e 'N' -e '$!ba' -e 's/\n/\\n/g' -e 's/	/\\t/g')
 
 cat > "$TMPFILE" <<EOF
@@ -331,7 +434,7 @@ cat > "$TMPFILE" <<EOF
   "timestamp": $(date +%s),
   "files_changed": $FILES_JSON,
   "tool_calls": $TOOL_COUNT,
-  "last_output": $LAST_JSON,
+  "last_output": $LAST_OUTPUT_JSON,
   "task_id": "$local_task_id",
   "subtask_id": "$local_subtask_id",
   "hypothesis_updates": ${DOEY_HYPOTHESIS_UPDATES:-[]},

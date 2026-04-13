@@ -47,6 +47,8 @@ type Task struct {
 	BuildStatus        string `json:"build_status,omitempty"`
 	VerificationSteps  string `json:"verification_steps,omitempty"`
 	SuccessCriteria    string `json:"success_criteria,omitempty"`
+	Constraints        string `json:"constraints,omitempty"`
+	RunningSummary     string `json:"running_summary,omitempty"`
 	ProofOfSuccess     string `json:"proof_of_success,omitempty"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
@@ -111,9 +113,9 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 			 review_timestamp, attachments, priority, depends_on, merged_into,
 			 dispatch_mode, summary, phase, intent,
 			 proof_type, proof_content, verification_status, build_status,
-			 verification_steps, success_criteria, proof_of_success,
+			 verification_steps, success_criteria, constraints, running_summary, proof_of_success,
 			 origin_prompt, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			t.ID, t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 			t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 			t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
@@ -121,7 +123,7 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 			t.ReviewTimestamp, t.Attachments, t.Priority, t.DependsOn, t.MergedInto,
 			t.DispatchMode, t.Summary, t.Phase, t.Intent,
 			t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
-			t.VerificationSteps, t.SuccessCriteria, t.ProofOfSuccess,
+			t.VerificationSteps, t.SuccessCriteria, t.Constraints, t.RunningSummary, t.ProofOfSuccess,
 			t.OriginPrompt, t.CreatedAt, t.UpdatedAt,
 		)
 		if err != nil {
@@ -138,9 +140,9 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		 review_timestamp, attachments, priority, depends_on, merged_into,
 		 dispatch_mode, summary, phase, intent,
 		 proof_type, proof_content, verification_status, build_status,
-		 verification_steps, success_criteria, proof_of_success,
+		 verification_steps, success_criteria, constraints, running_summary, proof_of_success,
 		 origin_prompt, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Title, t.Shortname, t.Status, t.Type, t.Description, t.CreatedBy, t.AssignedTo, t.Team,
 		t.PlanID, t.Tags, t.AcceptanceCriteria, t.CurrentPhase, t.TotalPhases,
 		t.Notes, t.Blockers, t.RelatedFiles, t.Hypotheses, t.DecisionLog, t.Result,
@@ -148,7 +150,7 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		t.ReviewTimestamp, t.Attachments, t.Priority, t.DependsOn, t.MergedInto,
 		t.DispatchMode, t.Summary, t.Phase, t.Intent,
 		t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
-		t.VerificationSteps, t.SuccessCriteria, t.ProofOfSuccess,
+		t.VerificationSteps, t.SuccessCriteria, t.Constraints, t.RunningSummary, t.ProofOfSuccess,
 		t.OriginPrompt, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
@@ -171,6 +173,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		dispatchMode, summary, phase, intent            sql.NullString
 		proofType, proofContent, verificationStatus, buildStatus sql.NullString
 		verificationSteps, successCriteria, proofOfSuccess      sql.NullString
+		constraints, runningSummary                             sql.NullString
 		originPrompt                                            sql.NullString
 	)
 	err := scanner.Scan(
@@ -181,7 +184,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 		&reviewTimestamp, &attachments, &t.Priority, &dependsOn, &mergedInto,
 		&dispatchMode, &summary, &phase, &intent,
 		&proofType, &proofContent, &verificationStatus, &buildStatus,
-		&verificationSteps, &successCriteria, &proofOfSuccess,
+		&verificationSteps, &successCriteria, &constraints, &runningSummary, &proofOfSuccess,
 		&originPrompt, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
@@ -219,6 +222,8 @@ func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 	t.BuildStatus = buildStatus.String
 	t.VerificationSteps = verificationSteps.String
 	t.SuccessCriteria = successCriteria.String
+	t.Constraints = constraints.String
+	t.RunningSummary = runningSummary.String
 	t.ProofOfSuccess = proofOfSuccess.String
 	t.OriginPrompt = originPrompt.String
 	return t, nil
@@ -233,7 +238,7 @@ func (s *Store) GetTask(id int64) (*Task, error) {
 		review_timestamp, attachments, priority, depends_on, merged_into,
 		dispatch_mode, summary, phase, intent,
 		proof_type, proof_content, verification_status, build_status,
-		verification_steps, success_criteria, proof_of_success,
+		verification_steps, success_criteria, constraints, running_summary, proof_of_success,
 		origin_prompt, created_at, updated_at
 		FROM tasks WHERE id = ?`, id)
 	t, err := scanTask(row)
@@ -255,7 +260,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			review_timestamp, attachments, priority, depends_on, merged_into,
 			dispatch_mode, summary, phase, intent,
 			proof_type, proof_content, verification_status, build_status,
-			verification_steps, success_criteria, proof_of_success,
+			verification_steps, success_criteria, constraints, running_summary, proof_of_success,
 			origin_prompt, created_at, updated_at
 			FROM tasks ORDER BY updated_at DESC`)
 	} else {
@@ -267,7 +272,7 @@ func (s *Store) ListTasks(status string) ([]Task, error) {
 			review_timestamp, attachments, priority, depends_on, merged_into,
 			dispatch_mode, summary, phase, intent,
 			proof_type, proof_content, verification_status, build_status,
-			verification_steps, success_criteria, proof_of_success,
+			verification_steps, success_criteria, constraints, running_summary, proof_of_success,
 			origin_prompt, created_at, updated_at
 			FROM tasks WHERE status = ? ORDER BY updated_at DESC`, status)
 	}
@@ -301,7 +306,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		priority = ?, depends_on = ?, merged_into = ?, dispatch_mode = ?,
 		summary = ?, phase = ?, intent = ?,
 		proof_type = ?, proof_content = ?, verification_status = ?, build_status = ?,
-		verification_steps = ?, success_criteria = ?, proof_of_success = ?,
+		verification_steps = ?, success_criteria = ?, constraints = ?, running_summary = ?, proof_of_success = ?,
 		origin_prompt = ?,
 		updated_at = ?
 		WHERE id = ?`,
@@ -314,7 +319,7 @@ func (s *Store) UpdateTask(t *Task) error {
 		t.Priority, t.DependsOn, t.MergedInto, t.DispatchMode,
 		t.Summary, t.Phase, t.Intent,
 		t.ProofType, t.ProofContent, t.VerificationStatus, t.BuildStatus,
-		t.VerificationSteps, t.SuccessCriteria, t.ProofOfSuccess,
+		t.VerificationSteps, t.SuccessCriteria, t.Constraints, t.RunningSummary, t.ProofOfSuccess,
 		t.OriginPrompt,
 		t.UpdatedAt,
 		t.ID,
