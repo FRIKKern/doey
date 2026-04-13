@@ -67,8 +67,9 @@ _task_create() {
   local _id
   _id="$(task_create "$_proj_dir" "$_title" "feature" "user" "$_description")"
   # Append legacy TASK_ATTACHMENTS if provided (not in helpers schema)
+  # Use append semantics so pre-existing attachments are preserved.
   if [ -n "$_attachments" ]; then
-    task_update_field "${_tasks_dir}/${_id}.task" "TASK_ATTACHMENTS" "$_attachments"
+    _task_append_to_field "${_tasks_dir}/${_id}.task" "TASK_ATTACHMENTS" "$_attachments" "|"
   fi
   echo "$_id"
 }

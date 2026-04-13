@@ -354,14 +354,28 @@ _FILES_COUNT=0
 [ -n "$FILES_LIST" ] && _FILES_COUNT=$(printf '%s\n' "$FILES_LIST" | wc -l | tr -d ' ')
 
 if [ -n "$local_task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
+  # "Latest" pointer — readers (Go TUI, reviewer) expect this exact path.
   cp "$RESULT_FILE" "${PROJECT_DIR}/.doey/tasks/${local_task_id}.result.json" 2>/dev/null || true
+  # History copy — append-only, one file per invocation. Preserves prior runs.
+  _HIST_TS=$(date +%s)
+  _HIST_PANE="${WINDOW_INDEX}_${PANE_INDEX}"
+  _RESULT_HIST_DIR="${PROJECT_DIR}/.doey/tasks/${local_task_id}/results"
+  mkdir -p "$_RESULT_HIST_DIR" 2>/dev/null || true
+  cp "$RESULT_FILE" "${_RESULT_HIST_DIR}/${_HIST_TS}_${_HIST_PANE}.json" 2>/dev/null || true
   _local_task_file="${PROJECT_DIR}/.doey/tasks/${local_task_id}.task"
   _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}.result.json" 2>/dev/null || true
+  _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}/results/${_HIST_TS}_${_HIST_PANE}.json" 2>/dev/null || true
 
   _local_report="${RUNTIME_DIR}/reports/pane_${WINDOW_INDEX}_${PANE_INDEX}.report"
   if [ -f "$_local_report" ]; then
+    # "Latest" report pointer (preserved for readers)
     cp "$_local_report" "${PROJECT_DIR}/.doey/tasks/${local_task_id}.report" 2>/dev/null || true
+    # History copy — one per invocation
+    _REPORT_HIST_DIR="${PROJECT_DIR}/.doey/tasks/${local_task_id}/reports"
+    mkdir -p "$_REPORT_HIST_DIR" 2>/dev/null || true
+    cp "$_local_report" "${_REPORT_HIST_DIR}/${_HIST_TS}_${_HIST_PANE}.report" 2>/dev/null || true
     _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}.report" 2>/dev/null || true
+    _append_attachment "$_local_task_file" ".doey/tasks/${local_task_id}/reports/${_HIST_TS}_${_HIST_PANE}.report" 2>/dev/null || true
   fi
 
   if [ -n "$FILTERED" ]; then
