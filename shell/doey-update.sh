@@ -134,7 +134,7 @@ _update_contributor() {
   doey_step "3/6" "Running install..."
   local install_log
   install_log="$(mktemp -t doey-install.XXXXXX.log)"
-  if ! _spin "Installing files..." bash -c "bash '$repo_dir/install.sh' >'$install_log' 2>&1"; then
+  if ! _spin "Installing files..." bash -c "DOEY_ASSUME_YES=1 bash '$repo_dir/install.sh' </dev/null >'$install_log' 2>&1"; then
     doey_error "Install failed"
     doey_info "Output (${install_log}):"
     printf '\n'
@@ -195,7 +195,7 @@ _update_normal() {
   doey_step "2/5" "Running install..."
   local install_log
   install_log="$(mktemp -t doey-install.XXXXXX.log)"
-  if ! _spin "Installing files..." bash -c "bash '$install_dir/install.sh' >'$install_log' 2>&1"; then
+  if ! _spin "Installing files..." bash -c "DOEY_ASSUME_YES=1 bash '$install_dir/install.sh' </dev/null >'$install_log' 2>&1"; then
     doey_error "Install failed"
     doey_info "Output (${install_log}):"
     printf '\n'
@@ -314,7 +314,7 @@ _post_update() {
   doey_step "1/4" "Running install from updated code..."
   local install_log
   install_log="$(mktemp -t doey-install.XXXXXX.log)"
-  if ! _spin "Installing..." bash -c "bash '$install_dir/install.sh' >'$install_log' 2>&1"; then
+  if ! _spin "Installing..." bash -c "DOEY_ASSUME_YES=1 bash '$install_dir/install.sh' </dev/null >'$install_log' 2>&1"; then
     doey_error "Install failed"
     doey_info "Output (${install_log}):"
     printf '\n'

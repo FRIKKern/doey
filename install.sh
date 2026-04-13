@@ -63,9 +63,14 @@ IS_INTERACTIVE=false
 ask_install() {
   local name="$1"
   printf "  ${WARN}⚠${RESET}  ${BOLD}%s${RESET} is not installed.\n" "$name"
+  if [ "${DOEY_ASSUME_YES:-0}" = "1" ]; then
+    printf "     ${DIM}DOEY_ASSUME_YES=1 — installing without prompt${RESET}\n"
+    return 0
+  fi
   if [ "$IS_INTERACTIVE" = true ]; then
     printf "     Install it now? ${DIM}[Y/n]${RESET} "
-    read -r reply
+    local reply=""
+    read -r reply || reply=""
     case "$reply" in
       [Nn]*) return 1 ;;
       *)     return 0 ;;
