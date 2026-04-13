@@ -1311,6 +1311,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			Padding(2, 3).
 			Width(w).
 			Height(h).
+			MaxHeight(h).
 			Render("No task selected")
 		return empty
 	}
@@ -1948,6 +1949,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 	panelStyle := lipgloss.NewStyle().
 		Width(w).
 		Height(h).
+		MaxHeight(h).
 		Padding(1, 2).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
@@ -1974,6 +1976,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 			Padding(2, 3).
 			Width(w).
 			Height(h).
+			MaxHeight(h).
 			Render("No task selected")
 		return empty
 	}
@@ -1983,7 +1986,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	if expanded == nil {
 		item := m.list.SelectedItem()
 		if item == nil {
-			return lipgloss.NewStyle().Width(w).Height(h).Render("")
+			return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render("")
 		}
 		ti := item.(taskcard.TaskItem)
 		task := m.entries[idx]
@@ -2073,6 +2076,7 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 	return lipgloss.NewStyle().
 		Width(w).
 		Height(h).
+		MaxHeight(h).
 		Padding(1, 2).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
