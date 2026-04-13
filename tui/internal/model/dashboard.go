@@ -418,7 +418,18 @@ func (m DashboardModel) renderActiveTasks(w int) string {
 		return "\n" + header + "\n" + rule + "\n" + empty + "\n"
 	}
 
-	cardW := w - 4
+	// Flex-wrap grid: calculate columns dynamically from available width
+	const minCardW = 50
+	const gapH = 2
+	availW := w - 4
+	cols := (availW + gapH) / (minCardW + gapH)
+	if cols < 1 {
+		cols = 1
+	}
+	if cols > 3 {
+		cols = 3
+	}
+	cardW := availW/cols - gapH
 	if cardW < 40 {
 		cardW = 40
 	}
@@ -460,9 +471,28 @@ func (m DashboardModel) renderActiveTasks(w int) string {
 		cards = append(cards, zone.Mark("dash-view-tasks", more))
 	}
 
+	// Grid layout: group cards into rows of 'cols' each
+	spacer := strings.Repeat(" ", gapH)
+	var rows []string
+	for i := 0; i < len(cards); i += cols {
+		end := i + cols
+		if end > len(cards) {
+			end = len(cards)
+		}
+		var parts []string
+		for j, c := range cards[i:end] {
+			if j > 0 {
+				parts = append(parts, spacer)
+			}
+			parts = append(parts, lipgloss.NewStyle().Width(cardW).Render(c))
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, parts...))
+	}
+
+	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
 	body := lipgloss.NewStyle().
 		Padding(1, 1).
-		Render(strings.Join(cards, "\n\n"))
+		Render(grid)
 
 	return "\n" + header + "\n" + rule + "\n" + body
 }
