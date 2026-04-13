@@ -4,6 +4,31 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+FRAGMENTS_DIR="$PROJECT_DIR/agents/_fragments"
+
+# expand_includes — resolve `{{include:<name>}}` lines by inlining
+# $FRAGMENTS_DIR/<name>.md. One include per line; recursive includes are
+# not supported (an included fragment's own include lines pass through
+# literally). Unknown fragments abort the run.
+expand_includes() {
+  awk -v fragdir="$FRAGMENTS_DIR" '
+    /^\{\{include:[A-Za-z0-9_-]+\}\}[ \t]*$/ {
+      name = $0
+      sub(/^\{\{include:/, "", name)
+      sub(/\}\}[ \t]*$/, "", name)
+      fpath = fragdir "/" name ".md"
+      if ((getline probe < fpath) < 0) {
+        printf "ERROR: fragment not found: %s\n", fpath > "/dev/stderr"
+        exit 2
+      }
+      print probe
+      while ((getline line < fpath) > 0) print line
+      close(fpath)
+      next
+    }
+    { print }
+  ' "$1"
+}
 
 # shellcheck source=doey-roles.sh
 source "$SCRIPT_DIR/doey-roles.sh"
@@ -60,7 +85,7 @@ for tmpl in "$PROJECT_DIR"/agents/*.md.tmpl "$PROJECT_DIR"/.claude/skills/*/*.md
       STALE=$((STALE + 1))
       continue
     fi
-    expected=$(sed "$SED_EXPR" < "$tmpl")
+    expected=$(expand_includes "$tmpl" | sed "$SED_EXPR")
     actual=$(cat "$output")
     if [ "$expected" != "$actual" ]; then
       echo "STALE: ${output#"$PROJECT_DIR"/} differs from template"
@@ -79,7 +104,7 @@ for tmpl in "$PROJECT_DIR"/agents/*.md.tmpl "$PROJECT_DIR"/.claude/skills/*/*.md
   fi
 
   echo "Expanding: $rel_tmpl -> $rel_out"
-  sed "$SED_EXPR" < "$tmpl" > "$output"
+  expand_includes "$tmpl" | sed "$SED_EXPR" > "$output"
   EXPANDED=$((EXPANDED + 1))
 done
 
