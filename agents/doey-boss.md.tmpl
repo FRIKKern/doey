@@ -98,35 +98,15 @@ That's it for dispatch. Now run the Post-Dispatch Follow-Up below. The {{DOEY_RO
 
 ### Post-Dispatch Follow-Up
 
-After every dispatch to {{DOEY_ROLE_COORDINATOR}}, run this one-shot verification protocol (20 seconds total, NOT a loop):
+Dispatch is fire-and-forget. Do NOT poll after sending — {{DOEY_ROLE_COORDINATOR}} is reactive and will respond on its own. Blocking `sleep` in Boss burns context and violates the reactive doctrine.
 
-**At 5 seconds** — Check {{DOEY_ROLE_COORDINATOR}} status:
+After `doey msg send` returns success, tell the user "Sent to {{DOEY_ROLE_COORDINATOR}}." and return to idle. {{DOEY_ROLE_COORDINATOR}} will push a reply message back into Boss's inbox when work progresses — Boss reads it on the next turn via `doey msg read --unread`. No status polling, no capture-pane inspection, no timed checks.
+
+If the user asks "did they pick it up?" check once:
 ```bash
-sleep 5
-_tm_safe=$(echo "{{DOEY_TASKMASTER_PANE}}" | tr '.' '_')
-_status=$(cat "${RUNTIME_DIR}/status/${SESSION_SAFE}_${_tm_safe}.status" 2>/dev/null | grep '^STATUS=' | cut -d= -f2)
+doey status get {{DOEY_TASKMASTER_PANE}} 2>/dev/null | grep '^STATUS: ' | head -1
 ```
-If STATUS=BUSY, {{DOEY_ROLE_COORDINATOR}} picked it up. Skip to the 20s report.
-
-**At 10 seconds** — Nudge if idle:
-```bash
-sleep 5
-if [ "$_status" != "BUSY" ]; then
-  doey nudge {{DOEY_TASKMASTER_PANE}} 2>/dev/null || true
-fi
-```
-
-**At 15 seconds** — Capture last 5 lines of {{DOEY_ROLE_COORDINATOR}} output:
-```bash
-sleep 5
-tmux capture-pane -t "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" -p -S -5
-```
-
-**At 20 seconds** — Report to user:
-- If BUSY: "{{DOEY_ROLE_COORDINATOR}} picked up the task."
-- If still idle after nudge: "{{DOEY_ROLE_COORDINATOR}} hasn't responded. Captured output: [last 5 lines]. You may want to check window 1."
-
-This is a ONE-SHOT protocol triggered by each dispatch. Not a monitoring loop. After the 20s report, return to normal reactive behavior.
+Report the single line. No sleeps, no retries.
 
 ### {{DOEY_ROLE_COORDINATOR}} Health Check
 
@@ -142,7 +122,6 @@ if [ "$_sm_alive" = false ]; then
     source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
     doey_send_verified "${SESSION_NAME}:{{DOEY_TASKMASTER_PANE}}" "Check your messages and resume."
   fi
-  sleep 3
 fi
 ```
 

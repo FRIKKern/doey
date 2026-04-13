@@ -31,9 +31,9 @@ Phase 3: Write report to ${REPORT_PATH} — Summary, Findings, Key Files, Plan (
 Phase 4: Persist report — run: mkdir -p ${PROJECT_DIR}/.doey/tasks/${TASK_ID}/attachments && cp ${REPORT_PATH} ${PROJECT_DIR}/.doey/tasks/${TASK_ID}/attachments/$(date +%s)_research_$(basename ${REPORT_PATH})
 Stop hook blocks until report exists.
 ```
-Settle by line count (>200: 2s, >100: 1.5s, else 0.5s).
+Short settle only (≤1s): `sleep 0.5` for small payloads, `sleep 1` for >200 lines.
 
-### 4. Verify (sleep 5, grep `Read|Edit|Bash|thinking`, retry once)
+### 4. Verify (reactive: poll pane 10× at 0.5s for `Read|Edit|Bash|thinking` before retry)
 
 ### 5. Read report → present summary → ask A or B → `/doey-dispatch`
 

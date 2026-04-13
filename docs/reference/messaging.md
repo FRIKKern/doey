@@ -174,7 +174,7 @@ grep -rE '"--subject"|--subject [a-zA-Z_:-]+' \
 | `deployment_failed` | Deployment → Taskmaster | Deployment pipeline failed. | hooks |
 | `interview_complete` | Interviewer (team_lead/team_role=interviewer) → Taskmaster | Deep-interview output ready, plan created. | `agents/doey-interviewer.md` |
 | `masterplan_spawned` | masterplan launcher → Taskmaster | New masterplan team window spawned. | `shell/doey-masterplan-spawn.sh` |
-| `stale_recovery` | watchdog / Taskmaster | Recover a pane reported stale (heartbeat too old). | hooks |
+| `stale_recovery` | Taskmaster | Recover a pane reported stale (heartbeat too old). | hooks |
 | `polling_loop_breaker` | `common.sh:594` | Anti-polling guard: forces wait-loop break when a role is spinning. | `.claude/hooks/common.sh:594` |
 | `action_request` | `on-pre-tool-use.sh:189-203` | A blocked role is forwarding a tool-use request to its coordinator. Body includes the original tool name and arguments. | `.claude/hooks/on-pre-tool-use.sh:189-203` |
 
@@ -246,7 +246,7 @@ exiting 0:
 | WAKE_REASON | Trigger |
 |---|---|
 | `MSG` | New unread message for this pane (counted via `doey msg count` or by enumerating `messages/`). |
-| `TRIGGERED` | A trigger file (per-pane or `taskmaster_trigger`) was found and consumed. Used by `stop-notify.sh`, `on-pre-tool-use.sh`, and the cycle-tick watchdog. |
+| `TRIGGERED` | A trigger file (per-pane or `taskmaster_trigger`) was found and consumed. Used by `stop-notify.sh` and `on-pre-tool-use.sh`. |
 | `FINISHED` | New worker result JSON appeared in `<runtime>/results/`. |
 | `CRASH` | A `<runtime>/status/crash_pane_*` file appeared. |
 | `STALE` | `_check_stale_heartbeats` matched. |

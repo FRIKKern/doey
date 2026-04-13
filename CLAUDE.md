@@ -99,8 +99,6 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 | `stop-plan-tracking.sh` | On stop (async) | Plan tracking on stop |
 | `on-notification.sh` | Notification | Notification routing |
 | `post-push-complete.sh` | After git push | Post-push operations |
-| ~~`watchdog-scan.sh`~~ | Watchdog cycle | DEPRECATED |
-| ~~`watchdog-wait.sh`~~ | Watchdog idle | DEPRECATED |
 | `taskmaster-wait.sh` | Taskmaster idle | Multi-trigger sleep: messages, results, crash alerts |
 
 Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback

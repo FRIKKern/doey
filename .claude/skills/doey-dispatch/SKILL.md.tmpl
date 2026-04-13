@@ -23,7 +23,7 @@ if [ "$(grep '^GRID=' "${RD}/session.env" 2>/dev/null | cut -d= -f2)" = "dynamic
     case "$_W_STATUS" in READY|FINISHED) HAS_IDLE=true; break ;; esac
   done
   if [ "$HAS_IDLE" = "false" ] && [ "${WORKER_COUNT:-0}" -lt "${MAX_WORKERS:-20}" ]; then
-    doey add 2>/dev/null; sleep 10
+    doey add 2>/dev/null
     source "${RD}/session.env"; [ -f "${RD}/team_${W}.env" ] && source "${RD}/team_${W}.env"
   fi
 fi
@@ -109,9 +109,15 @@ ALREADY_READY=false
 
 # Not ready AND not delegating → kill + restart
 if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
-  [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null; sleep 3
+  if [ -n "$CHILD_PID" ]; then
+    kill "$CHILD_PID" 2>/dev/null || true
+    for _i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+      kill -0 "$CHILD_PID" 2>/dev/null || break
+      sleep 0.25
+    done
+  fi
   CHILD_PID=$(pgrep -P "$PANE_PID" 2>/dev/null)
-  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 1
+  [ -n "$CHILD_PID" ] && kill -9 "$CHILD_PID" 2>/dev/null && sleep 0.5
   tmux copy-mode -q -t "$PANE" 2>/dev/null || true
   PANE_IDX="${PANE##*.}"
   WORKER_PROMPT=$(grep -l "pane ${W}\.${PANE_IDX} " "${RD}/worker-system-prompt-"*.md 2>/dev/null | head -1)
@@ -120,7 +126,13 @@ if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
   [ -n "$WORKER_AGENT" ] && CMD="${CMD} --agent \"${WORKER_AGENT}\""
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
   source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
-  doey_send_command "$PANE" "$CMD"; sleep 8
+  doey_send_command "$PANE" "$CMD"
+  # Reactive wait: poll pane for Claude readiness (❯ + bypass permissions banner)
+  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    _OUT=$(tmux capture-pane -t "$PANE" -p -S -10 2>/dev/null) || _OUT=""
+    echo "$_OUT" | grep -q 'bypass permissions' && echo "$_OUT" | grep -q '❯' && break
+    sleep 0.5
+  done
   tmux copy-mode -q -t "$PANE" 2>/dev/null
 fi
 
