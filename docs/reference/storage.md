@@ -295,7 +295,12 @@ Schema:
   "timestamp":        1776104142,
   "files_changed":    ["path/one.sh", "path/two.md"],
   "tool_calls":       14,
-  "last_output":      "…tmux capture-pane -S -80, filtered…",
+  "last_output":      {
+    "text":       "…tmux capture-pane -S -80, filtered…",
+    "tool_calls": [{"name": "Edit", "count": 3}, {"name": "Read", "count": 7}],
+    "file_edits": ["path/one.sh"],
+    "error":      null
+  },
   "task_id":          "576",
   "subtask_id":       "261752",
   "hypothesis_updates": [],

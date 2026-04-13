@@ -81,10 +81,63 @@ func parseTask(content string) (*TaskEntry, error) {
 	if v, err := strconv.Atoi(fields[FieldTaskSchemaVersion]); err == nil {
 		t.SchemaVersion = v
 	}
-	if raw := fields[FieldTaskSubtasks]; raw != "" {
+	// v4 expanded form takes precedence: TASK_SUBTASK_<N>_TITLE / _STATUS
+	expanded := parseExpandedSubtasks(fields)
+	if len(expanded) > 0 {
+		t.Subtasks = expanded
+	} else if raw := fields[FieldTaskSubtasks]; raw != "" {
+		// v3 fallback: inline TASK_SUBTASKS
 		t.Subtasks = parseSubtasks(raw)
 	}
 	return t, nil
+}
+
+// parseExpandedSubtasks reads TASK_SUBTASK_<N>_TITLE / _STATUS entries
+// from the parsed fields map and returns them ordered by index.
+func parseExpandedSubtasks(fields map[string]string) []SubtaskEntry {
+	byIdx := make(map[int]*SubtaskEntry)
+	for key, val := range fields {
+		if !strings.HasPrefix(key, "TASK_SUBTASK_") {
+			continue
+		}
+		rest := strings.TrimPrefix(key, "TASK_SUBTASK_")
+		// rest like "1_TITLE" or "12_STATUS"
+		under := strings.IndexByte(rest, '_')
+		if under < 0 {
+			continue
+		}
+		idx, err := strconv.Atoi(rest[:under])
+		if err != nil {
+			continue
+		}
+		if byIdx[idx] == nil {
+			byIdx[idx] = &SubtaskEntry{Index: idx, Status: "pending"}
+		}
+		switch rest[under+1:] {
+		case "TITLE":
+			byIdx[idx].Description = val
+		case "STATUS":
+			byIdx[idx].Status = val
+		}
+	}
+	if len(byIdx) == 0 {
+		return nil
+	}
+	idxs := make([]int, 0, len(byIdx))
+	for i := range byIdx {
+		idxs = append(idxs, i)
+	}
+	// Simple insertion sort — count is tiny.
+	for i := 1; i < len(idxs); i++ {
+		for j := i; j > 0 && idxs[j-1] > idxs[j]; j-- {
+			idxs[j-1], idxs[j] = idxs[j], idxs[j-1]
+		}
+	}
+	out := make([]SubtaskEntry, 0, len(idxs))
+	for _, i := range idxs {
+		out = append(out, *byIdx[i])
+	}
+	return out
 }
 
 // parseSubtasks parses the escaped \n-delimited subtask string.
@@ -114,15 +167,6 @@ func parseSubtasks(raw string) []SubtaskEntry {
 		out = append(out, SubtaskEntry{Index: idx, Description: desc, Status: status})
 	}
 	return out
-}
-
-// formatSubtasks serializes subtask entries back to the escaped \n format.
-func formatSubtasks(subs []SubtaskEntry) string {
-	parts := make([]string, len(subs))
-	for i, s := range subs {
-		parts[i] = fmt.Sprintf("%d:%s:%s", s.Index, s.Description, s.Status)
-	}
-	return strings.Join(parts, `\n`)
 }
 
 // CreateTask creates a new task file with an auto-incremented ID.
@@ -155,7 +199,7 @@ func CreateTask(projectDir, title, taskType, createdBy, description string, shor
 	}
 
 	var b strings.Builder
-	b.WriteString(FieldTaskSchemaVersion + "=3\n")
+	b.WriteString(FieldTaskSchemaVersion + "=4\n")
 	b.WriteString(FieldTaskID + "=" + taskID + "\n")
 	b.WriteString(FieldTaskTitle + "=" + title + "\n")
 	b.WriteString(FieldTaskShortname + "=" + sn + "\n")
@@ -166,9 +210,12 @@ func CreateTask(projectDir, title, taskType, createdBy, description string, shor
 	b.WriteString(FieldTaskAssignedTo + "=\n")
 	b.WriteString(FieldTaskDescription + "=" + description + "\n")
 	b.WriteString(FieldTaskAcceptance + "=\n")
+	b.WriteString(FieldTaskSuccessCriteria + "=\n")
+	b.WriteString(FieldTaskConstraints + "=\n")
+	b.WriteString(FieldTaskRunningSummary + "=\n")
 	b.WriteString(FieldTaskHypotheses + "=\n")
 	b.WriteString(FieldTaskDecisionLog + "=" + now + ":Created task\n")
-	b.WriteString(FieldTaskSubtasks + "=\n")
+	// v4: no inline TASK_SUBTASKS — canonical shape is TASK_SUBTASK_N_*
 	b.WriteString(FieldTaskRelatedFiles + "=\n")
 	b.WriteString(FieldTaskBlockers + "=\n")
 	b.WriteString(FieldTaskTimestamps + "=created=" + now + "\n")
@@ -206,7 +253,7 @@ func UpdateTaskField(projectDir, taskID, field, value string) error {
 	return nil
 }
 
-// AddSubtask appends a new subtask and returns its index.
+// AddSubtask appends a new subtask (v4 expanded form) and returns its index.
 func AddSubtask(projectDir, taskID, description string) (int, error) {
 	task, err := ReadTask(projectDir, taskID)
 	if err != nil {
@@ -221,16 +268,27 @@ func AddSubtask(projectDir, taskID, description string) (int, error) {
 		}
 	}
 	newIdx := maxIdx + 1
-	task.Subtasks = append(task.Subtasks, SubtaskEntry{
-		Index:       newIdx,
-		Description: description,
-		Status:      "pending",
-	})
 
-	return newIdx, UpdateTaskField(projectDir, taskID, FieldTaskSubtasks, formatSubtasks(task.Subtasks))
+	path := taskPath(projectDir, taskID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("ctl: add subtask %s: %w", taskID, err)
+	}
+	content := string(data)
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	now := strconv.FormatInt(time.Now().Unix(), 10)
+	content += fmt.Sprintf("TASK_SUBTASK_%d_TITLE=%s\n", newIdx, description)
+	content += fmt.Sprintf("TASK_SUBTASK_%d_STATUS=pending\n", newIdx)
+	content += fmt.Sprintf("TASK_SUBTASK_%d_CREATED_AT=%s\n", newIdx, now)
+	if err := atomicWrite(path, []byte(content)); err != nil {
+		return 0, fmt.Errorf("ctl: add subtask %s: %w", taskID, err)
+	}
+	return newIdx, nil
 }
 
-// UpdateSubtaskStatus updates the status of a specific subtask by index.
+// UpdateSubtaskStatus updates TASK_SUBTASK_<index>_STATUS (v4 expanded form).
 func UpdateSubtaskStatus(projectDir, taskID string, index int, status string) error {
 	task, err := ReadTask(projectDir, taskID)
 	if err != nil {
@@ -240,7 +298,6 @@ func UpdateSubtaskStatus(projectDir, taskID string, index int, status string) er
 	found := false
 	for i := range task.Subtasks {
 		if task.Subtasks[i].Index == index {
-			task.Subtasks[i].Status = status
 			found = true
 			break
 		}
@@ -249,7 +306,7 @@ func UpdateSubtaskStatus(projectDir, taskID string, index int, status string) er
 		return fmt.Errorf("ctl: subtask %d not found in task %s", index, taskID)
 	}
 
-	return UpdateTaskField(projectDir, taskID, FieldTaskSubtasks, formatSubtasks(task.Subtasks))
+	return UpdateTaskField(projectDir, taskID, fmt.Sprintf("TASK_SUBTASK_%d_STATUS", index), status)
 }
 
 // AddDecision appends a timestamped entry to the decision log.

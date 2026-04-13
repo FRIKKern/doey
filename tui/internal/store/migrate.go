@@ -322,7 +322,7 @@ func (s *Store) SyncTaskFiles(tasksDir string) (int, []string) {
 	return count, warnings
 }
 
-// ExportTaskToFile writes a single task to a .task file in v3 format.
+// ExportTaskToFile writes a single task to a .task file in v4 format.
 func (s *Store) ExportTaskToFile(t Task, tasksDir string) error {
 	var b strings.Builder
 
@@ -339,8 +339,8 @@ func (s *Store) ExportTaskToFile(t Task, tasksDir string) error {
 	}
 
 	sv := t.SchemaVersion
-	if sv == 0 {
-		sv = 3
+	if sv < 4 {
+		sv = 4
 	}
 	writeInt("TASK_SCHEMA_VERSION", sv)
 	fmt.Fprintf(&b, "TASK_ID=%d\n", t.ID)
@@ -353,19 +353,15 @@ func (s *Store) ExportTaskToFile(t Task, tasksDir string) error {
 	writeStr("TASK_TEAM", t.Team)
 	writeStr("TASK_DESCRIPTION", t.Description)
 	writeStr("TASK_ACCEPTANCE_CRITERIA", t.AcceptanceCriteria)
+	writeStr("TASK_SUCCESS_CRITERIA", t.SuccessCriteria)
+	writeStr("TASK_CONSTRAINTS", t.Constraints)
+	writeStr("TASK_RUNNING_SUMMARY", t.RunningSummary)
 	writeStr("TASK_HYPOTHESES", t.Hypotheses)
 	writeStr("TASK_DECISION_LOG", t.DecisionLog)
 
+	// Subtasks are written only in the expanded form below (TASK_SUBTASK_N_*).
+	// v4 intentionally does not emit the inline TASK_SUBTASKS compact field.
 	subtasks, _ := s.ListSubtasks(t.ID)
-	if len(subtasks) > 0 {
-		var parts []string
-		for _, st := range subtasks {
-			parts = append(parts, fmt.Sprintf("%d:%s:%s", st.Seq, st.Title, st.Status))
-		}
-		writeAlways("TASK_SUBTASKS", strings.Join(parts, `\n`))
-	} else {
-		writeAlways("TASK_SUBTASKS", "")
-	}
 
 	writeStr("TASK_RELATED_FILES", t.RelatedFiles)
 	writeStr("TASK_BLOCKERS", t.Blockers)

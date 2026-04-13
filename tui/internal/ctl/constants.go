@@ -99,6 +99,10 @@ const (
 	FieldTaskTotalPhases   = "TASK_TOTAL_PHASES"
 	FieldTaskFiles         = "TASK_FILES"
 	FieldTaskCommits       = "TASK_COMMITS"
+	// v4 schema fields
+	FieldTaskSuccessCriteria = "TASK_SUCCESS_CRITERIA"
+	FieldTaskConstraints     = "TASK_CONSTRAINTS"
+	FieldTaskRunningSummary  = "TASK_RUNNING_SUMMARY"
 )
 
 // Task lifecycle statuses (distinct from pane statuses).
