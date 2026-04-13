@@ -127,8 +127,8 @@ func main() {
 		}
 		log.SetOutput(f)
 		// Redirect stdout and stderr to the log file
-		syscall.Dup2(int(f.Fd()), int(os.Stdout.Fd()))
-		syscall.Dup2(int(f.Fd()), int(os.Stderr.Fd()))
+		syscall.Dup3(int(f.Fd()), int(os.Stdout.Fd()), 0)
+		syscall.Dup3(int(f.Fd()), int(os.Stderr.Fd()), 0)
 	}
 
 	if *runtimeDir == "" || *projectDir == "" {
