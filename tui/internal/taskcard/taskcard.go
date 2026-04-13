@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1381,6 +1382,81 @@ func renderMarkdown(body string, width int, cache *markdownCache) string {
 	return rendered
 }
 
+// attachmentNoisePatterns are substrings that indicate terminal noise in attachment body lines.
+var attachmentNoisePatterns = []string{
+	"doey@", "Claude Code", "███", "▐▛", "▝▜", "▘▘",
+	"read -t 1", "claude --dangerously", "bypass permissions",
+	"Ready. Waiting", "Tip:", "shift+tab",
+}
+
+// IsBodyLineNoise returns true if a body line is terminal noise that should be hidden.
+func IsBodyLineNoise(line string) bool {
+	for _, p := range attachmentNoisePatterns {
+		if strings.Contains(line, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// CleanAttachmentTitle extracts a meaningful title for an attachment.
+// For non-generic titles (not "Worker X.Y ..."), returns the title as-is.
+// For generic worker titles, extracts the first meaningful line from Body.
+// Falls back to Filename.
+func CleanAttachmentTitle(att runtime.PersistentAttachment) string {
+	if att.Title != "" && !strings.HasPrefix(att.Title, "Worker ") {
+		return att.Title
+	}
+	if att.Body != "" {
+		for _, line := range strings.Split(att.Body, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || line == "---" {
+				continue
+			}
+			if IsBodyLineNoise(line) {
+				continue
+			}
+			if len(line) > 80 {
+				line = line[:77] + "..."
+			}
+			return line
+		}
+	}
+	if att.Filename != "" {
+		return att.Filename
+	}
+	return att.Title
+}
+
+var subtaskPanePrefixRe = regexp.MustCompile(`^W\d+\.\d+[:\s]\s*`)
+var subtaskBarePaneRe = regexp.MustCompile(`^W\d+\.\d+\s*$`)
+
+// CleanSubtaskTitle strips internal routing metadata and pane-ID prefixes from subtask titles.
+// Returns empty string if the title is entirely routing noise (caller should hide the subtask).
+func CleanSubtaskTitle(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	if strings.HasPrefix(title, "Dispatched to ") ||
+		strings.HasPrefix(title, "Routed directly to ") ||
+		strings.HasPrefix(title, "Dispatch to ") {
+		return ""
+	}
+	stripped := subtaskPanePrefixRe.ReplaceAllString(title, "")
+	if stripped != title {
+		stripped = strings.TrimSpace(stripped)
+		if stripped == "" {
+			return ""
+		}
+		return stripped
+	}
+	if subtaskBarePaneRe.MatchString(title) {
+		return ""
+	}
+	return title
+}
+
 // attachmentTypeEmoji returns an emoji badge for the attachment type.
 func attachmentTypeEmoji(t string) string {
 	switch t {
@@ -1428,19 +1504,22 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 		typeColor := styles.AttachmentTypeColor(e.Theme, att.Type)
 		badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
 
-		titleText := att.Title
-		if titleText == "" {
-			titleText = att.Filename
-		}
+		titleText := CleanAttachmentTitle(att)
 		title := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true).Render(titleText)
 
 		meta := ""
-		if att.Author != "" {
+		// Hide generic worker author for completion/progress types
+		if att.Author != "" && att.Type != "completion" && att.Type != "progress" {
 			meta += " — " + lipgloss.NewStyle().Foreground(e.Theme.Muted).Render(att.Author)
 		}
 		if att.Timestamp > 0 {
 			elapsed := time.Since(time.Unix(att.Timestamp, 0))
-			meta += ", " + lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
+			age := lipgloss.NewStyle().Foreground(e.Theme.Subtle).Faint(true).Render(formatAge(elapsed) + " ago")
+			if meta != "" {
+				meta += ", " + age
+			} else {
+				meta += " — " + age
+			}
 		}
 
 		// Focus indicator
@@ -1457,8 +1536,16 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 		// Expandable body
 		if att.Body != "" {
 			expanded := e.ExpandedAttachments[i]
-			bodyLines := strings.Split(att.Body, "\n")
 			bodyStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).PaddingLeft(4)
+
+			// Filter noise lines from body
+			var cleanLines []string
+			for _, bl := range strings.Split(att.Body, "\n") {
+				if !IsBodyLineNoise(bl) {
+					cleanLines = append(cleanLines, bl)
+				}
+			}
+			cleanBody := strings.Join(cleanLines, "\n")
 
 			if expanded {
 				// Wrap body to width
@@ -1466,7 +1553,7 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 				if bodyWidth < 20 {
 					bodyWidth = 20
 				}
-				wrappedBody := lipgloss.NewStyle().Width(bodyWidth).Render(att.Body)
+				wrappedBody := lipgloss.NewStyle().Width(bodyWidth).Render(cleanBody)
 				for _, line := range strings.Split(wrappedBody, "\n") {
 					sections = append(sections, bodyStyle.Render(line))
 				}
@@ -1474,19 +1561,23 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 					Render("[-] Show less")
 				sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
 			} else {
-				// Truncated preview: 3 lines max
-				showLines := bodyLines
+				// Truncated preview: 3 non-empty lines max
+				shown := 0
 				truncated := false
-				if len(showLines) > 3 {
-					showLines = showLines[:3]
-					truncated = true
-				}
-				for _, line := range showLines {
-					sections = append(sections, bodyStyle.Render(line))
+				for _, bl := range cleanLines {
+					if strings.TrimSpace(bl) == "" {
+						continue
+					}
+					if shown >= 3 {
+						truncated = true
+						break
+					}
+					sections = append(sections, bodyStyle.Render(bl))
+					shown++
 				}
 				if truncated {
 					toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
-						Render(fmt.Sprintf("[+] Show more (%d lines)", len(bodyLines)))
+						Render(fmt.Sprintf("[+] Show more (%d lines)", len(cleanLines)))
 					sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
 				}
 			}
