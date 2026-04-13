@@ -225,8 +225,12 @@ _show_startup_progress() {
   local progress_file="$1"
   local timeout_sec="${2:-60}"
   if command -v doey-tui >/dev/null 2>&1; then
-    if doey-tui startup --progress "$progress_file" --timeout "$timeout_sec" </dev/tty >/dev/tty 2>/dev/null; then
-      return 0
+    # Probe /dev/tty before using it — containers and some SSH contexts
+    # have the node but can't open it (ENXIO / "No such device or address")
+    if (exec 3</dev/tty) 2>/dev/null && (exec 4>/dev/tty) 2>/dev/null; then
+      if doey-tui startup --progress-file "$progress_file" --timeout "$timeout_sec" </dev/tty >/dev/tty 2>/dev/null; then
+        return 0
+      fi
     fi
   fi
   _startup_progress_fallback "$progress_file" "$timeout_sec"
@@ -258,6 +262,12 @@ SPLASH
           printf "   \033[32m%s\033[0m\n" "$msg"
           return 0
         fi
+        case "$msg" in
+          ERROR*)
+            printf "   \033[31m✗ %s\033[0m\n" "$msg"
+            return 1
+            ;;
+        esac
         printf "   \033[2m%s\033[0m\n" "$msg"
         last_step="$current"
       fi
