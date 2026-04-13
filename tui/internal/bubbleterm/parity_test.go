@@ -134,13 +134,13 @@ func write(t *testing.T, m *Model, s string) {
 
 // TestParity_Bash exercises common readline keystrokes against an interactive
 // bash. We use --norc/--noprofile so the prompt is the deterministic
-// "bash-X.Y$ ".
+// "bash-X.Y$ " (or "bash-X.Y# " when running as root).
 func TestParity_Bash(t *testing.T) {
 	m := newSession(t, "/bin/bash", "--norc", "--noprofile", "-i")
 	defer m.Close()
 
-	out := settle(t, m, "$", 2*time.Second)
-	if !strings.Contains(out, "$") {
+	out := settle(t, m, "bash-", 2*time.Second)
+	if !strings.Contains(out, "bash-") {
 		t.Fatalf("bash prompt did not appear; got:\n%s", out)
 	}
 
@@ -353,8 +353,8 @@ func TestParity_NestedTmux(t *testing.T) {
 		"bash --norc --noprofile -i")
 	defer m.Close()
 
-	out := settle(t, m, "$", 3*time.Second)
-	if !strings.Contains(out, "$") {
+	out := settle(t, m, "bash-", 3*time.Second)
+	if !strings.Contains(out, "bash-") {
 		t.Fatalf("nested tmux: bash prompt did not appear; got:\n%s", out)
 	}
 	// Status bar should be visible at the bottom row.
@@ -379,7 +379,7 @@ func TestParity_NestedTmux(t *testing.T) {
 func TestParity_Unicode(t *testing.T) {
 	m := newSession(t, "/bin/bash", "--norc", "--noprofile", "-i")
 	defer m.Close()
-	settle(t, m, "$", 2*time.Second)
+	settle(t, m, "bash-", 2*time.Second)
 
 	const want = "日本語 العربية 한국어 😀🎉"
 	write(t, m, "echo \""+want+"\"\r")
