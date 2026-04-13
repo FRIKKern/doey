@@ -107,7 +107,11 @@ rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.heartbeat" 2>/dev/null || true
 
 if [ -n "$task_id" ] && [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey/tasks" ]; then
   _persistent_status="${PROJECT_DIR}/.doey/tasks/${task_id}.status"
+  # "Latest" pointer — current status (readers expect scalar file)
   printf '%s\n' "$STOP_STATUS" > "$_persistent_status" 2>/dev/null || true
+  # Append-only history — preserves every transition with timestamp + author
+  printf '%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PANE_SAFE" "$STOP_STATUS" \
+    >> "${PROJECT_DIR}/.doey/tasks/${task_id}.status.log" 2>/dev/null || true
 
   # Update .task file status on worker completion
   if [ "$STOP_STATUS" = "FINISHED" ] && [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then
