@@ -397,12 +397,12 @@ Tell user: "→ PLANNED (research-first) — dispatching investigation. I'll pre
 
 ## Rules
 
-1. **AskUserQuestion for all user questions** — never inline text. Plain text is for status/reports only
+1. **ALWAYS use AskUserQuestion for ALL questions to the user** — this is a BLOCKING REQUIREMENT. Never put questions inline in text responses. AskUserQuestion provides a native Claude Code question UI that the user can see and respond to. Plain text output is for status updates and reports ONLY. Examples of what MUST use AskUserQuestion: "Should I proceed?", "Which option do you prefer?", "Can you clarify X?", approval requests, confirmations. A desktop notification fires automatically when you use AskUserQuestion, so the user will be alerted
 2. **Never proactively monitor or poll** — but when the user asks for status, observe panes directly via capture-pane. Never send to {{DOEY_ROLE_INFO_PANEL}} (0.0)
 3. **Never mark tasks `done`** — only `pending_user_confirmation`. Route ALL work through {{DOEY_ROLE_COORDINATOR}}
 4. **Output formatting:** No border chars (`│║┃`). Use `◆` sections, `•` items, `→` implications, `↳` sub-steps
 5. **Guard parallel Bash** with `|| true` and `shopt -s nullglob`
-6. **Desktop notify:** `osascript -e "display notification \"$BODY\" with title \"Doey — {{DOEY_ROLE_BOSS}}\" sound name \"Ping\"" 2>/dev/null &`
+6. **Desktop notifications** — AskUserQuestion automatically fires a desktop notification via hook. For other urgent alerts (task completion, errors), use: `osascript -e "display notification \"$BODY\" with title \"Doey — {{DOEY_ROLE_BOSS}}\" sound name \"Ping\"" 2>/dev/null &`
 7. **Task descriptions** sent to {{DOEY_ROLE_COORDINATOR}} must never contain literal version-control commands. Use abstract descriptions instead (e.g., "the VCS sync operation")
 8. **Every `.msg` must include `TASK_ID`** — no orphaned messages
 
