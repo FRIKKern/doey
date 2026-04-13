@@ -191,9 +191,63 @@ func ReadTaskStore() (TaskStore, error) {
 		if s, err := store.Open(dbPath); err == nil {
 			defer s.Close()
 			if storeTasks, err := s.ListTasks(""); err == nil && len(storeTasks) > 0 {
+				// Also load the JSON store so we can merge append-only
+				// history fields (Reports, Logs, TaskAttachments, ...)
+				// that are not stored in the SQLite schema. Without this
+				// merge, reading from SQL and writing back through
+				// WriteTaskStore would silently drop history.
+				jsonStore := readJSONTaskStore()
+				jsonByID := make(map[string]*PersistentTask, len(jsonStore.Tasks))
+				for i := range jsonStore.Tasks {
+					jsonByID[jsonStore.Tasks[i].ID] = &jsonStore.Tasks[i]
+				}
+
 				ts.Tasks = make([]PersistentTask, 0, len(storeTasks))
 				for _, st := range storeTasks {
 					pt := storeTaskToPersistent(st)
+
+					// Pull logs from SQL task_log (itself append-only by
+					// construction) so the round-trip through the JSON
+					// store doesn't need to be the sole source of truth.
+					if sqlLogs, err := s.ListTaskLog(st.ID); err == nil {
+						for _, l := range sqlLogs {
+							entry := l.Body
+							if entry == "" {
+								entry = l.Title
+							}
+							if l.Author != "" {
+								entry = "[" + l.Author + "] " + entry
+							}
+							pt.Logs = append(pt.Logs, PersistentTaskLog{
+								Timestamp: l.CreatedAt,
+								Entry:     entry,
+							})
+						}
+					}
+
+					// Merge rich history fields that only the JSON file
+					// carries. These must be additive — never replace.
+					if jt, ok := jsonByID[pt.ID]; ok {
+						pt.Logs = mergePersistentLogs(pt.Logs, jt.Logs)
+						pt.Reports = mergeReports(pt.Reports, jt.Reports)
+						pt.TaskAttachments = mergeAttachments(pt.TaskAttachments, jt.TaskAttachments)
+						if len(pt.Subtasks) == 0 && len(jt.Subtasks) > 0 {
+							pt.Subtasks = jt.Subtasks
+						}
+						if len(pt.RecoveryLog) == 0 && len(jt.RecoveryLog) > 0 {
+							pt.RecoveryLog = jt.RecoveryLog
+						}
+						if len(pt.QAThread) == 0 && len(jt.QAThread) > 0 {
+							pt.QAThread = jt.QAThread
+						}
+						if len(pt.Updates) == 0 && len(jt.Updates) > 0 {
+							pt.Updates = jt.Updates
+						}
+						if pt.OriginPrompt == "" && jt.OriginPrompt != "" {
+							pt.OriginPrompt = jt.OriginPrompt
+						}
+					}
+
 					ts.Tasks = append(ts.Tasks, pt)
 					if id, _ := strconv.Atoi(pt.ID); id >= ts.NextID {
 						ts.NextID = id + 1
@@ -492,6 +546,102 @@ func mergeLogs(existing []PersistentTaskLog, incoming []TaskLog) []PersistentTas
 	return existing
 }
 
+// mergePersistentLogs unions two PersistentTaskLog slices, deduplicating by
+// (timestamp, entry). History is append-only: entries that already exist in
+// either slice survive the merge.
+func mergePersistentLogs(a, b []PersistentTaskLog) []PersistentTaskLog {
+	if len(b) == 0 {
+		return a
+	}
+	type key struct {
+		ts    int64
+		entry string
+	}
+	seen := make(map[key]bool, len(a)+len(b))
+	out := make([]PersistentTaskLog, 0, len(a)+len(b))
+	for _, l := range a {
+		k := key{l.Timestamp, l.Entry}
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, l)
+		}
+	}
+	for _, l := range b {
+		k := key{l.Timestamp, l.Entry}
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// mergeReports unions existing reports with incoming ones, keyed by
+// (Index, Author, Created). Existing entries are never dropped.
+func mergeReports(existing []PersistentReport, incoming []PersistentReport) []PersistentReport {
+	if len(incoming) == 0 {
+		return existing
+	}
+	type key struct {
+		idx     int
+		author  string
+		created int64
+	}
+	seen := make(map[key]bool, len(existing)+len(incoming))
+	out := make([]PersistentReport, 0, len(existing)+len(incoming))
+	for _, r := range existing {
+		k := key{r.Index, r.Author, r.Created}
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, r)
+		}
+	}
+	for _, r := range incoming {
+		k := key{r.Index, r.Author, r.Created}
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// mergeAttachments unions existing attachments with incoming, keyed by Filename.
+func mergeAttachments(existing []PersistentAttachment, incoming []PersistentAttachment) []PersistentAttachment {
+	if len(incoming) == 0 {
+		return existing
+	}
+	seen := make(map[string]bool, len(existing)+len(incoming))
+	out := make([]PersistentAttachment, 0, len(existing)+len(incoming))
+	for _, a := range existing {
+		if !seen[a.Filename] {
+			seen[a.Filename] = true
+			out = append(out, a)
+		}
+	}
+	for _, a := range incoming {
+		if !seen[a.Filename] {
+			seen[a.Filename] = true
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// readJSONTaskStore loads the persistent task store directly from the JSON
+// file, ignoring any SQLite data. Used by ReadTaskStore to merge in rich
+// history fields (Reports, Logs, TaskAttachments, ...) that the SQL path
+// cannot reconstruct on its own.
+func readJSONTaskStore() TaskStore {
+	var ts TaskStore
+	data, err := os.ReadFile(taskConfigPath())
+	if err != nil {
+		return ts
+	}
+	_ = json.Unmarshal(data, &ts)
+	return ts
+}
+
 // mergeRuntimeIntoPersistent updates a persistent task with non-empty runtime fields.
 // Preserves existing persistent data when the runtime field is empty/zero.
 func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
@@ -565,23 +715,25 @@ func mergeRuntimeIntoPersistent(pt *PersistentTask, rt Task) {
 		pt.Commits = rt.Commits
 	}
 	if len(rt.Reports) > 0 {
-		pt.Reports = nil
+		incoming := make([]PersistentReport, 0, len(rt.Reports))
 		for _, r := range rt.Reports {
-			pt.Reports = append(pt.Reports, PersistentReport{
+			incoming = append(incoming, PersistentReport{
 				Index: r.Index, Author: r.Author, Type: r.Type,
 				Title: r.Title, Body: r.Body, Created: r.Created,
 			})
 		}
+		pt.Reports = mergeReports(pt.Reports, incoming)
 	}
 	if len(rt.TaskAttachments) > 0 {
-		pt.TaskAttachments = nil
+		incoming := make([]PersistentAttachment, 0, len(rt.TaskAttachments))
 		for _, a := range rt.TaskAttachments {
-			pt.TaskAttachments = append(pt.TaskAttachments, PersistentAttachment{
+			incoming = append(incoming, PersistentAttachment{
 				Filename: a.Filename, Type: a.Type, Title: a.Title,
 				Author: a.Author, Timestamp: a.Timestamp,
 				Body: a.Body, FilePath: a.FilePath, ImagePath: a.ImagePath,
 			})
 		}
+		pt.TaskAttachments = mergeAttachments(pt.TaskAttachments, incoming)
 	}
 	// Merge subtasks: only when runtime has more than persistent (don't overwrite richer data)
 	if len(rt.Subtasks) > 0 && len(rt.Subtasks) > len(pt.Subtasks) {
