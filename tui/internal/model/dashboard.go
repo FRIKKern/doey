@@ -947,23 +947,7 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		blockedLine = lipgloss.NewStyle().Foreground(t.Danger).Bold(true).Render("⚠ Blocked: " + firstLine)
 	}
 
-	// --- Line 3: description excerpt (first 2-3 lines, dimmed) ---
-	descLine := ""
-	if task.Description != "" {
-		desc := task.Description
-		descLines := strings.SplitN(desc, "\n", 4)
-		if len(descLines) > 3 {
-			descLines = descLines[:3]
-		}
-		descText := strings.Join(descLines, "\n")
-		contentW := w - 4
-		if contentW > 0 && len(descText) > contentW*3 {
-			descText = descText[:contentW*3-3] + "..."
-		}
-		descLine = t.Dim.Render(descText)
-	}
-
-	// --- Line 4: subtask progress bar ---
+	// --- Line 3: subtask progress bar ---
 	progressLine := ""
 	if len(task.Subtasks) > 0 {
 		done := 0
@@ -980,6 +964,47 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		bar := styles.ExpandedProgressBar(t, done, total, barWidth)
 		label := styles.CardMetaStyle(t).Render(fmt.Sprintf("  %d/%d subtasks", done, total))
 		progressLine = bar + label
+	}
+
+	// --- Line 4: compact subtask list ---
+	var subtaskLines []string
+	if len(task.Subtasks) > 0 {
+		const maxVisible = 8
+		shown := task.Subtasks
+		overflow := 0
+		if len(shown) > maxVisible {
+			overflow = len(shown) - (maxVisible - 1)
+			shown = shown[:maxVisible-1]
+		}
+		contentW := w - 6
+		if contentW < 20 {
+			contentW = 20
+		}
+		for _, st := range shown {
+			var icon string
+			var lineStyle lipgloss.Style
+			switch st.Status {
+			case "done":
+				icon = lipgloss.NewStyle().Foreground(t.Success).Render("✓")
+				lineStyle = lipgloss.NewStyle().Foreground(t.Success).Faint(true)
+			case "in_progress":
+				icon = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+				lineStyle = lipgloss.NewStyle().Foreground(t.Warning)
+			case "pending":
+				icon = lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+				lineStyle = lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+			default:
+				icon = lipgloss.NewStyle().Foreground(t.Muted).Render("—")
+				lineStyle = lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+			}
+			title := truncateStr(st.Title, contentW)
+			subtaskLines = append(subtaskLines, "  "+icon+" "+lineStyle.Render(title))
+		}
+		if overflow > 0 {
+			more := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
+				fmt.Sprintf("  … and %d more", overflow))
+			subtaskLines = append(subtaskLines, more)
+		}
 	}
 
 	// --- Line 5: heartbeat line ---
@@ -1027,8 +1052,6 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 			}
 		}
 		heartbeatLine = parts
-	} else {
-		heartbeatLine = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("● waiting for activity...")
 	}
 
 	// --- Line 6: latest update ---
@@ -1050,88 +1073,21 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		updateLine = styles.CardMetaStyle(t).Render(ts) + author + t.Dim.Render(text)
 	}
 
-	// --- Line 7: files changed ---
-	filesLine := ""
-	if len(task.FilesChanged) > 0 {
-		shown := task.FilesChanged
-		suffix := ""
-		if len(shown) > 3 {
-			shown = shown[:3]
-			suffix = fmt.Sprintf(" +%d more", len(task.FilesChanged)-3)
-		}
-		filesLine = styles.CardMetaStyle(t).Render("files: " + strings.Join(shown, ", ") + suffix)
-	}
-
-	// --- Activity: recent messages relevant to this task ---
-	var activityLines []string
-	if len(m.snapshot.Messages) > 0 {
-		taskID := task.ID
-		taskIDHash := "#" + taskID
-		teamName := task.Team
-
-		// Filter messages matching this task
-		var matched []runtime.Message
-		for _, msg := range m.snapshot.Messages {
-			if strings.Contains(msg.Body, taskIDHash) || strings.Contains(msg.Body, taskID) ||
-				strings.Contains(msg.Subject, taskIDHash) || strings.Contains(msg.Subject, taskID) ||
-				(teamName != "" && strings.Contains(msg.From, teamName)) {
-				matched = append(matched, msg)
-			}
-		}
-
-		// Sort descending by timestamp, take at most 3
-		sort.Slice(matched, func(i, j int) bool {
-			return matched[i].Timestamp > matched[j].Timestamp
-		})
-		if len(matched) > 3 {
-			matched = matched[:3]
-		}
-
-		if len(matched) > 0 {
-			activityHeader := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("Activity")
-			activityLines = append(activityLines, activityHeader)
-			for _, msg := range matched {
-				from := lipgloss.NewStyle().Foreground(t.Primary).Render(msg.From)
-				subj := lipgloss.NewStyle().Foreground(t.Muted).Render(msg.Subject)
-				body := strings.ReplaceAll(msg.Body, "\n", " ")
-				maxBody := w - 30
-				if maxBody < 20 {
-					maxBody = 20
-				}
-				if len(body) > maxBody {
-					body = body[:maxBody-3] + "..."
-				}
-				bodyTxt := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(body)
-				line := "  → " + from + " · " + subj
-				if body != "" {
-					line += " — " + bodyTxt
-				}
-				activityLines = append(activityLines, line)
-			}
-		}
-	}
-
 	// Assemble all non-empty lines
 	var lines []string
 	lines = append(lines, line1, line2)
 	if blockedLine != "" {
 		lines = append(lines, blockedLine)
 	}
-	if descLine != "" {
-		lines = append(lines, descLine)
-	}
 	if progressLine != "" {
 		lines = append(lines, progressLine)
+	}
+	if len(subtaskLines) > 0 {
+		lines = append(lines, subtaskLines...)
 	}
 	lines = append(lines, heartbeatLine)
 	if updateLine != "" {
 		lines = append(lines, updateLine)
-	}
-	if filesLine != "" {
-		lines = append(lines, filesLine)
-	}
-	if len(activityLines) > 0 {
-		lines = append(lines, activityLines...)
 	}
 
 	content := strings.Join(lines, "\n")
