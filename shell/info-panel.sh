@@ -6,6 +6,8 @@ set -uo pipefail
 _ROLES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=doey-roles.sh
 source "${_ROLES_DIR}/doey-roles.sh" 2>/dev/null || true
+# shellcheck source=doey-status-reconcile.sh
+source "${_ROLES_DIR}/doey-status-reconcile.sh" 2>/dev/null || true
 
 RUNTIME_DIR="${1:-${DOEY_RUNTIME:-}}"
 if [ -z "$RUNTIME_DIR" ]; then
@@ -128,12 +130,51 @@ read_pane_status() {
   printf '%s' "$status"
 }
 
+# Cached newline-delimited set of canonical pane-safe IDs currently in tmux.
+# Rebuilt once per outer loop iteration by refresh_live_panes_cache.
+_LIVE_PANES_CACHE=""
+
+# refresh_live_panes_cache — snapshot `tmux list-panes -a` into the cache.
+# Each line is normalized into canonical pane-safe form (session_W_P) so it
+# matches the names of the status files under ${RUNTIME_DIR}/status/.
+# On tmux failure the cache is cleared, which makes is_live_pane fail-open
+# (orphan filter is skipped) — mirroring store.ListPaneStatuses behavior.
+refresh_live_panes_cache() {
+  _LIVE_PANES_CACHE=$(tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
+    | tr -- '-:.' '___') || _LIVE_PANES_CACHE=""
+}
+
+# is_live_pane <pane_safe> — 0 if pane is in the cached live set.
+# When the cache is empty (tmux failure) this returns 0 so counts fail-open
+# and never mass-demote legitimate panes on a transient tmux error.
+is_live_pane() {
+  local target="$1"
+  [ -z "$_LIVE_PANES_CACHE" ] && return 0
+  case "
+${_LIVE_PANES_CACHE}
+" in
+    *"
+${target}
+"*) return 0 ;;
+  esac
+  return 1
+}
+
 # Count workers in a given state for a team. Uses _CACHED_SESSION_NAME from outer scope.
+# Orphan filter: a pane whose tmux entry is gone is counted as idle, matching
+# the GC in store.ListPaneStatuses (tui/internal/store/teams.go, task 427/428).
+# This hides orphaned BUSY status files from workers that died without firing
+# their Stop hook.
 count_team_workers() {
   local window="$1" worker_panes="$2" state="$3"
-  local count=0 pane_status
+  local count=0 pane_status pane_safe
   for p in $(echo "$worker_panes" | tr ',' ' '); do
-    pane_status=$(read_pane_status "${RUNTIME_DIR}/status/${_CACHED_SESSION_NAME}_${window}_${p}.status")
+    pane_safe="${_CACHED_SESSION_NAME}_${window}_${p}"
+    if ! is_live_pane "$pane_safe"; then
+      case "$state" in idle) count=$((count + 1)) ;; esac
+      continue
+    fi
+    pane_status=$(read_pane_status "${RUNTIME_DIR}/status/${pane_safe}.status")
     case "$state" in
       idle)     case "$pane_status" in READY|FINISHED|"?") count=$((count + 1)) ;; esac ;;
       busy)     case "$pane_status" in BUSY|WORKING) count=$((count + 1)) ;; esac ;;
@@ -232,6 +273,45 @@ get_block_char() {
 while true; do
   printf '\033[2J\033[H'
 
+  # Safety-net reconciler: flip stale BUSY→READY panes back to truth.
+  # Gated to run at most once every 30s; uses a lockfile with an age cap so
+  # a crashed run can't wedge future cycles. Silent on success, logs to
+  # ${RUNTIME_DIR}/logs/reconcile.log on failure.
+  _now_ts=$(date +%s)
+  _last_file="${RUNTIME_DIR}/last-reconcile"
+  _last_ts=0
+  [ -f "$_last_file" ] && _last_ts=$(cat "$_last_file" 2>/dev/null || echo 0)
+  case "$_last_ts" in ''|*[!0-9]*) _last_ts=0 ;; esac
+  if [ "$((_now_ts - _last_ts))" -ge 30 ]; then
+    _lockdir="${RUNTIME_DIR}/reconcile.lock"
+    _run_it=false
+    if mkdir "$_lockdir" 2>/dev/null; then
+      _run_it=true
+    else
+      # Stale-lock breaker: if the lock dir is older than 60s, steal it.
+      _lock_mtime=0
+      if stat -f '%m' "$_lockdir" >/dev/null 2>&1; then
+        _lock_mtime=$(stat -f '%m' "$_lockdir" 2>/dev/null || echo 0)
+      else
+        _lock_mtime=$(stat -c '%Y' "$_lockdir" 2>/dev/null || echo 0)
+      fi
+      if [ "$((_now_ts - _lock_mtime))" -gt 60 ]; then
+        rm -rf "$_lockdir" 2>/dev/null || true
+        mkdir "$_lockdir" 2>/dev/null && _run_it=true
+      fi
+    fi
+    if [ "$_run_it" = true ]; then
+      mkdir -p "${RUNTIME_DIR}/logs" 2>/dev/null || true
+      if type doey_status_reconcile >/dev/null 2>&1; then
+        doey_status_reconcile 2>>"${RUNTIME_DIR}/logs/reconcile.log" >/dev/null || true
+      elif command -v doey >/dev/null 2>&1; then
+        doey status reconcile 2>>"${RUNTIME_DIR}/logs/reconcile.log" >/dev/null || true
+      fi
+      printf '%s\n' "$_now_ts" > "$_last_file" 2>/dev/null || true
+      rm -rf "$_lockdir" 2>/dev/null || true
+    fi
+  fi
+
   if [ ! -f "$SESSION_ENV" ]; then
     if [ "$HAS_GUM" = true ]; then
       gum style --foreground 8 --italic "  Waiting for session.env..."
@@ -270,6 +350,11 @@ while true; do
 
   TOTAL_WORKERS=0; TOTAL_IDLE=0; TOTAL_BUSY=0; TOTAL_RESERVED=0
   TEAM_COUNT=0; TEAM_LINE_COUNT=0
+
+  # Snapshot the live tmux pane set so count_team_workers can filter
+  # orphaned status files (pane crashed/killed without firing Stop hook).
+  # Matches the orphan GC in store.ListPaneStatuses (tui/internal/store/teams.go).
+  refresh_live_panes_cache
 
   for W in $(echo "${TEAM_WINDOWS:-}" | tr ',' ' '); do
     [ -z "$W" ] && continue
