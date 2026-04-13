@@ -314,13 +314,6 @@ Hooks are registered via `~/.claude/settings.json` (set up by `install.sh` and
 | `on-notification.sh` | `Notification` | `0` | Notification routing into the desktop notification chain. |
 | `post-push-complete.sh` | After `git push` | `0` | Post-push housekeeping. |
 
-Deprecated, kept for compatibility:
-
-| Hook | Status |
-|---|---|
-| `watchdog-scan.sh` | DEPRECATED (kept on disk; not invoked). |
-| `watchdog-wait.sh` | DEPRECATED. |
-
 ### 4.3 Hook exit-code convention
 
 | Code | Meaning |

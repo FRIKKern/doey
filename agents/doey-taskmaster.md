@@ -193,8 +193,10 @@ doey_send_verified "$TARGET" "Your task description here"
 
 ```bash
 # --- Post-dispatch verification (MANDATORY after every doey_send_verified) ---
-# TARGET and TARGET_SAFE must be set from the dispatch above
-CUR_STATUS=$(awk '/^STATUS:/{print $2; exit}' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null || true)
+# TARGET and TARGET_SAFE must be set from the dispatch above.
+# Safety: derive TARGET_SAFE from TARGET if unset so the verification block never reads an empty path.
+: "${TARGET_SAFE:=$(printf '%s' "${TARGET:-}" | tr '.:-' '___')}"
+CUR_STATUS=$(awk '/^STATUS:/{print $2; exit}' "$RUNTIME_DIR/status/${TARGET_SAFE:-}.status" 2>/dev/null || true)
 CAPTURED=$(tmux capture-pane -t "$TARGET" -p -S -20 2>/dev/null) || CAPTURED=""
 if [ "$CUR_STATUS" = "BUSY" ] || printf '%s' "$CAPTURED" | grep -qE '(thinking|Thinking|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent|TASK)'; then
   echo "Dispatch verified — target $TARGET is active (status: ${CUR_STATUS:-unknown})"
@@ -202,7 +204,7 @@ else
   echo "Dispatch NOT confirmed — retrying via doey_send_verified"
   source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
   doey_send_verified "$TARGET" "$DISPATCH_MSG"
-  CUR_STATUS=$(awk '/^STATUS:/{print $2; exit}' "$RUNTIME_DIR/status/${TARGET_SAFE}.status" 2>/dev/null || true)
+  CUR_STATUS=$(awk '/^STATUS:/{print $2; exit}' "$RUNTIME_DIR/status/${TARGET_SAFE:-}.status" 2>/dev/null || true)
   CAPTURED=$(tmux capture-pane -t "$TARGET" -p -S -20 2>/dev/null) || CAPTURED=""
   if [ "$CUR_STATUS" = "BUSY" ] || printf '%s' "$CAPTURED" | grep -qE '(thinking|Thinking|● |Reading|Writing|Editing|Searching|Running)'; then
     echo "Dispatch verified on retry"
