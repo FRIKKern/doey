@@ -805,22 +805,26 @@ _cleanup_old_session() {
   # Clean up all MCP servers and configs
   doey_mcp_cleanup_session "$runtime_dir" || true
   rm -rf "$runtime_dir"
-  git worktree prune 2>/dev/null || true
-  # Delete doey/team-* branches whose worktrees no longer exist
-  git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' | while read -r b; do
-    # Keep branches that still have an active worktree
-    if git worktree list --porcelain 2>/dev/null | grep -q "branch refs/heads/${b}$"; then
-      continue
-    fi
-    # Check for unmerged commits before deleting
-    local unmerged
-    unmerged=$(git rev-list --count "HEAD..${b}" 2>/dev/null || echo 0)
-    if [ "$unmerged" -gt 0 ] 2>/dev/null; then
-      printf 'WARNING: Branch %s has %s unmerged commit(s). Creating safety ref.\n' "$b" "$unmerged" >&2
-      git tag "doey/safety/${b}_$(date +%s)" "$b" 2>/dev/null || true
-    fi
-    git branch -D "$b" 2>/dev/null || true
-  done
+  # Only run git worktree/branch cleanup inside a git repo; otherwise git
+  # commands trip pipefail and kill the background subshell.
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git worktree prune 2>/dev/null || true
+    # Delete doey/team-* branches whose worktrees no longer exist
+    git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' 2>/dev/null | while read -r b; do
+      # Keep branches that still have an active worktree
+      if git worktree list --porcelain 2>/dev/null | grep -q "branch refs/heads/${b}$"; then
+        continue
+      fi
+      # Check for unmerged commits before deleting
+      local unmerged
+      unmerged=$(git rev-list --count "HEAD..${b}" 2>/dev/null || echo 0)
+      if [ "$unmerged" -gt 0 ] 2>/dev/null; then
+        printf 'WARNING: Branch %s has %s unmerged commit(s). Creating safety ref.\n' "$b" "$unmerged" >&2
+        git tag "doey/safety/${b}_$(date +%s)" "$b" 2>/dev/null || true
+      fi
+      git branch -D "$b" 2>/dev/null || true
+    done || true
+  fi
   mkdir -p "${runtime_dir}"/{messages,broadcasts,status,logs,mcp,mcp/pids}
   : > "${runtime_dir}/logs/doey-router.log" 2>/dev/null
   : > "${runtime_dir}/logs/doey-daemon.log" 2>/dev/null
@@ -1187,12 +1191,17 @@ launch_session_dynamic() {
 
     # Surface any failure: on non-zero exit, mark progress with an ERROR step
     # so the foreground poller bails out immediately instead of timing out at 60s.
-    trap '__rc=$?; if [ "$__rc" -ne 0 ]; then echo "STEP: ERROR rc=${__rc} line=${LINENO} — see ${runtime_dir}/logs/startup.log" >> "$progress_file"; fi' EXIT
+    # Recreate the runtime dir first in case an earlier rm -rf blew it away.
+    trap '__rc=$?; if [ "$__rc" -ne 0 ]; then mkdir -p "${runtime_dir}/logs" 2>/dev/null || true; echo "STEP: ERROR rc=${__rc} line=${LINENO} — see ${runtime_dir}/logs/startup.log" >> "$progress_file" 2>/dev/null || true; fi' EXIT
 
     echo "STEP: Creating session" >> "$progress_file"
     STEP_TOTAL=7
     step_start 1 "Creating session for ${name}..."
     _init_doey_session "$session" "$runtime_dir" "$dir" "$name"
+    # _cleanup_old_session rm -rf's runtime_dir, which orphans our log fd.
+    # Re-open so subsequent writes land on disk and errors become visible.
+    mkdir -p "${runtime_dir}/logs"
+    exec 1>>"${runtime_dir}/logs/startup.log" 2>&1
     step_done
 
     echo "STEP: Applying theme" >> "$progress_file"
