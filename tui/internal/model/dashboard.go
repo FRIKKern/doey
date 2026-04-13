@@ -966,44 +966,61 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		progressLine = bar + label
 	}
 
-	// --- Line 4: compact subtask list ---
+	// --- Line 4: compact subtask list (Claude Code style) ---
 	var subtaskLines []string
 	if len(task.Subtasks) > 0 {
-		const maxVisible = 8
-		shown := task.Subtasks
-		overflow := 0
-		if len(shown) > maxVisible {
-			overflow = len(shown) - (maxVisible - 1)
-			shown = shown[:maxVisible-1]
-		}
 		contentW := w - 6
 		if contentW < 20 {
 			contentW = 20
 		}
-		for _, st := range shown {
+		// Separate active/pending from done
+		var activeSubtasks, doneSubtasks []runtime.PersistentSubtask
+		for _, st := range task.Subtasks {
+			if st.Status == "done" {
+				doneSubtasks = append(doneSubtasks, st)
+			} else {
+				activeSubtasks = append(activeSubtasks, st)
+			}
+		}
+		// Render active and pending subtasks in full
+		for _, st := range activeSubtasks {
 			var icon string
 			var lineStyle lipgloss.Style
 			switch st.Status {
-			case "done":
-				icon = lipgloss.NewStyle().Foreground(t.Success).Render("✓")
-				lineStyle = lipgloss.NewStyle().Foreground(t.Success).Faint(true)
 			case "in_progress":
-				icon = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-				lineStyle = lipgloss.NewStyle().Foreground(t.Warning)
-			case "pending":
-				icon = lipgloss.NewStyle().Foreground(t.Muted).Render("○")
-				lineStyle = lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
-			default:
-				icon = lipgloss.NewStyle().Foreground(t.Muted).Render("—")
-				lineStyle = lipgloss.NewStyle().Foreground(t.Muted).Faint(true)
+				icon = lipgloss.NewStyle().Foreground(t.Warning).Render("■")
+				lineStyle = lipgloss.NewStyle().Foreground(t.Text)
+			default: // pending and others
+				icon = lipgloss.NewStyle().Foreground(t.Muted).Render("□")
+				lineStyle = lipgloss.NewStyle().Foreground(t.Muted)
 			}
 			title := truncateStr(st.Title, contentW)
 			subtaskLines = append(subtaskLines, "  "+icon+" "+lineStyle.Render(title))
 		}
-		if overflow > 0 {
-			more := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
-				fmt.Sprintf("  … and %d more", overflow))
-			subtaskLines = append(subtaskLines, more)
+		// Collapse done subtasks into "+N completed" summary
+		if len(doneSubtasks) > 0 {
+			if len(activeSubtasks) == 0 {
+				// All done — show them individually
+				for _, st := range doneSubtasks {
+					icon := lipgloss.NewStyle().Foreground(t.Success).Faint(true).Render("✔")
+					title := truncateStr(st.Title, contentW)
+					styled := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Strikethrough(true).Render(title)
+					subtaskLines = append(subtaskLines, "  "+icon+" "+styled)
+				}
+			} else {
+				// Mixed — show one example done + collapsed count
+				if len(doneSubtasks) == 1 {
+					st := doneSubtasks[0]
+					icon := lipgloss.NewStyle().Foreground(t.Success).Faint(true).Render("✔")
+					title := truncateStr(st.Title, contentW)
+					styled := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Strikethrough(true).Render(title)
+					subtaskLines = append(subtaskLines, "  "+icon+" "+styled)
+				} else {
+					summary := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
+						fmt.Sprintf("  … +%d completed", len(doneSubtasks)))
+					subtaskLines = append(subtaskLines, summary)
+				}
+			}
 		}
 	}
 
@@ -1097,26 +1114,10 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 		content = lipgloss.NewStyle().Faint(true).Render(content)
 	}
 
-	// Card border color based on health + blocked state
-	borderColor := accent // default: category accent (prominent)
-	switch {
-	case isBlocked:
-		borderColor = t.Danger
-	case isDone:
-		borderColor = t.Muted
-	case health == "stale":
-		borderColor = t.Muted
-	case health == "degraded":
-		borderColor = t.Warning
-	case health == "idle":
-		borderColor = t.Subtle
-	}
-
+	// No card border — clean list style like Claude Code
 	cardStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor).
 		Padding(0, 1).
-		Width(w - 2)
+		Width(w)
 
 	rendered := cardStyle.Render(content)
 	return zone.Mark(fmt.Sprintf("dash-task-%s", task.ID), rendered)
