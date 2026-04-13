@@ -244,7 +244,7 @@ func (m SplitPaneModel) RenderLeftPanel(header string, emptyState string, aboveL
 		if belowList != "" {
 			content += "\n" + belowList
 		}
-		return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+		return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
 	}
 
 	listH := h - m.config.HeaderLines
@@ -268,7 +268,7 @@ func (m SplitPaneModel) RenderLeftPanel(header string, emptyState string, aboveL
 		content += "\n" + belowList
 	}
 
-	return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+	return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
 }
 
 // RenderRightPanel renders the detail viewport with header, scroll percent,
@@ -290,7 +290,7 @@ func (m SplitPaneModel) RenderRightPanel(header string, emptyHint string, belowV
 			Width(w).
 			PaddingTop(4).
 			Render(emptyHint)
-		return lipgloss.NewStyle().Width(w).Height(h).Render(headerLine + "\n" + hint)
+		return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(headerLine + "\n" + hint)
 	}
 
 	vpH := h - m.config.VPHeightOffset
@@ -312,7 +312,7 @@ func (m SplitPaneModel) RenderRightPanel(header string, emptyHint string, belowV
 		content += "\n" + belowViewport
 	}
 
-	return lipgloss.NewStyle().Width(w).Height(h).Render(content)
+	return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
 }
 
 // RenderPanels joins left and right panels, adding a vertical separator if configured.
