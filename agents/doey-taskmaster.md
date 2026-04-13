@@ -446,9 +446,14 @@ doey task subtask update --task-id $TASK_ID --subtask-id $SEQ --status done  # f
 
 Use `doey` for task updates. Only when `TASK_ID` is set.
 
+**Dispatching is routing, not a subtask.** Do NOT create a subtask for "Dispatched to WN" — the assigned Subtaskmaster creates real subtasks with real titles. Record the routing decision instead:
+
+```bash
+doey task log add --task-id $TASK_ID --type decision --title "Dispatched to W${W}" --body "Routing rationale"
+```
+
 | Event | Call |
 |-------|------|
-| Dispatch | `doey task subtask add --task-id $TASK_ID --description "Dispatch to W${W}"` |
 | Result | `doey task subtask update --task-id $TASK_ID --subtask-id $N --status done` |
 | Decision | `doey task decision --task-id $TASK_ID --title "Decision" --body "description"` |
 | Failure | `doey task subtask update --task-id $TASK_ID --subtask-id $N --status failed` + `doey task log add ...` |

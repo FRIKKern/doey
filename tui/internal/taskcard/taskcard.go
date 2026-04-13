@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1425,6 +1426,35 @@ func CleanAttachmentTitle(att runtime.PersistentAttachment) string {
 		return att.Filename
 	}
 	return att.Title
+}
+
+var subtaskPanePrefixRe = regexp.MustCompile(`^W\d+\.\d+[:\s]\s*`)
+var subtaskBarePaneRe = regexp.MustCompile(`^W\d+\.\d+\s*$`)
+
+// CleanSubtaskTitle strips internal routing metadata and pane-ID prefixes from subtask titles.
+// Returns empty string if the title is entirely routing noise (caller should hide the subtask).
+func CleanSubtaskTitle(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	if strings.HasPrefix(title, "Dispatched to ") ||
+		strings.HasPrefix(title, "Routed directly to ") ||
+		strings.HasPrefix(title, "Dispatch to ") {
+		return ""
+	}
+	stripped := subtaskPanePrefixRe.ReplaceAllString(title, "")
+	if stripped != title {
+		stripped = strings.TrimSpace(stripped)
+		if stripped == "" {
+			return ""
+		}
+		return stripped
+	}
+	if subtaskBarePaneRe.MatchString(title) {
+		return ""
+	}
+	return title
 }
 
 // attachmentTypeEmoji returns an emoji badge for the attachment type.
