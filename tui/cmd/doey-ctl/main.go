@@ -133,10 +133,12 @@ func main() {
 		runBriefingCmd(os.Args[2:])
 	case "stats":
 		runStatsCmd(os.Args[2:])
+	case "lifecycle":
+		runLifecycleCmd(os.Args[2:])
 	case "--help", "-h", "help":
 		printUsage()
 	default:
-		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "error", "interaction", "nudge", "migrate", "briefing", "stats"}
+		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "error", "interaction", "nudge", "migrate", "briefing", "stats", "lifecycle"}
 		corrected, err := suggestSubcommand(os.Args[1], knownCmds)
 		if err != nil {
 			fatalCode(ExitUsage, "unknown command: %q (%v)\nRun 'doey-ctl --help' for usage.\n", os.Args[1], err)
@@ -166,7 +168,8 @@ Commands:
   nudge    Unstick Claude instances (Escape + re-prompt)
   migrate  Run database migrations
   briefing Live state dashboard (tasks, workers, activity)
-  stats    Record and query local stats (emit, query)
+  stats      Record and query local stats (emit, query)
+  lifecycle  Query task lifecycle events and alerts
 
 Environment:
   DOEY_RUNTIME   Runtime directory (default: /tmp/doey/<project>/)

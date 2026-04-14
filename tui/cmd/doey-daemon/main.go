@@ -20,6 +20,7 @@ func main() {
 	projectDir := flag.String("project-dir", "", "Project directory (required)")
 	logFile := flag.String("log-file", "", "Log file path (if set, all output redirected here)")
 	pollInterval := flag.Duration("poll-interval", 3*time.Second, "Polling interval for collect/aggregate/write cycle")
+	watchdogInterval := flag.Duration("watchdog-interval", 10*time.Second, "Watchdog check interval")
 	statsFile := flag.String("stats-file", "", "Stats output file (default: $runtime/daemon/stats.json)")
 	terminal := flag.Bool("terminal", false, "Enable live terminal output")
 	flag.Parse()
@@ -75,8 +76,18 @@ func main() {
 	aggregator := daemon.NewAggregator()
 	writer := daemon.NewWriter(*statsFile, *terminal)
 
-	log.Printf("doey-daemon: started (pid=%d, runtime=%s, project=%s, poll=%s, stats=%s, terminal=%v)",
-		os.Getpid(), *runtimeDir, *projectDir, *pollInterval, *statsFile, *terminal)
+	// Start watchdog in background goroutine
+	watchdog := daemon.NewWatchdog(*runtimeDir, *watchdogInterval)
+	watchdogStop := make(chan struct{})
+	go watchdog.Run(watchdogStop)
+	go func() {
+		for a := range watchdog.Alerts() {
+			log.Printf("watchdog [%s] %s: %s", a.Severity, a.Type, a.Message)
+		}
+	}()
+
+	log.Printf("doey-daemon: started (pid=%d, runtime=%s, project=%s, poll=%s, watchdog=%s, stats=%s, terminal=%v)",
+		os.Getpid(), *runtimeDir, *projectDir, *pollInterval, *watchdogInterval, *statsFile, *terminal)
 
 	// Main poll loop
 	ticker := time.NewTicker(*pollInterval)
@@ -85,6 +96,9 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
+			// Stop watchdog
+			close(watchdogStop)
+
 			// Flush final stats before exit
 			raw, err := collector.Collect(ctx)
 			if err == nil {

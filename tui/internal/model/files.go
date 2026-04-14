@@ -451,7 +451,7 @@ func (m FilesModel) renderLeftPanel(w, h int) string {
 	if len(m.visible) == 0 {
 		icon := styles.EmptyStateIcon(t)
 		title := lipgloss.NewStyle().Foreground(t.Muted).Bold(true).Render("No files")
-		hint := lipgloss.NewStyle().Foreground(t.Muted).Render("Directory is empty")
+		hint := t.RenderDim("Directory is empty")
 
 		emptyBox := lipgloss.NewStyle().
 			Align(lipgloss.Center).
@@ -544,13 +544,13 @@ func (m FilesModel) renderTreeNode(node *FileNode, index, maxW int) string {
 func fileGitIcon(status string, t styles.Theme) string {
 	switch status {
 	case "M":
-		return lipgloss.NewStyle().Foreground(t.Success).Render("◆")
+		return t.RenderSuccess("◆")
 	case "A":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+		return t.RenderWarning("●")
 	case "?":
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+		return t.RenderDim("○")
 	case "!":
-		return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("·")
+		return t.RenderFaint("·")
 	default:
 		return lipgloss.NewStyle().Foreground(t.Subtle).Render("·")
 	}

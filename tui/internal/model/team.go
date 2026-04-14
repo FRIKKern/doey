@@ -590,11 +590,11 @@ func (m TeamModel) renderLeftPanel(w, h int) string {
 	countParts := []string{fmt.Sprintf("%d total", len(m.entries))}
 	if running > 0 {
 		countParts = append(countParts,
-			lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d running", running)))
+			t.RenderSuccess(fmt.Sprintf("%d running", running)))
 	}
 	if starred > 0 {
 		countParts = append(countParts,
-			lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("★%d", starred)))
+			t.RenderWarning(fmt.Sprintf("★%d", starred)))
 	}
 	countText := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(1).
 		Render(strings.Join(countParts, ", "))
@@ -655,7 +655,7 @@ func (m TeamModel) renderLeftPanel(w, h int) string {
 		if scrollHint != "" {
 			scrollHint += "  "
 		}
-		scrollHint += lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("↓ more")
+		scrollHint += t.RenderFaint("↓ more")
 	}
 
 	content := header + "\n" + countText + "\n" + body
@@ -681,16 +681,15 @@ func (m TeamModel) renderLeftItem(e runtime.TeamEntry, idx int, w int, selected 
 	// Star indicator
 	star := ""
 	if e.Starred {
-		star = lipgloss.NewStyle().Foreground(t.Warning).Render("★") + " "
+		star = t.RenderWarning("★") + " "
 	}
 
 	// Status dot
-	var dot string
+	dotStatus := "reserved"
 	if e.Running {
-		dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
-	} else {
-		dot = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
+		dotStatus = "ready"
 	}
+	dot := styles.WorkerStatusIcon(dotStatus, t)
 
 	// Name
 	displayName := d.Name
@@ -710,7 +709,7 @@ func (m TeamModel) renderLeftItem(e runtime.TeamEntry, idx int, w int, selected 
 	}
 
 	// Worker count
-	workerInfo := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("%dw", d.Workers))
+	workerInfo := t.RenderDim(fmt.Sprintf("%dw", d.Workers))
 
 	line := fmt.Sprintf(" %s %s%s %s", dot, star, nameStyle.Render(displayName), workerInfo)
 
@@ -756,12 +755,11 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 	if entry.Label != "" {
 		displayName = entry.Label
 	}
-	var statusDotStr string
+	detailDotStatus := "reserved"
 	if entry.Running {
-		statusDotStr = lipgloss.NewStyle().Foreground(t.Success).Render("●")
-	} else {
-		statusDotStr = lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
+		detailDotStatus = "ready"
 	}
+	statusDotStr := styles.WorkerStatusIcon(detailDotStatus, t)
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(displayName)
 	sections = append(sections, statusDotStr+" "+title)
 	sections = append(sections, "")
@@ -771,9 +769,9 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 	valueStyle := lipgloss.NewStyle().Foreground(t.Text)
 
 	// Status
-	statusStr := lipgloss.NewStyle().Foreground(t.Muted).Render("Available")
+	statusStr := t.RenderDim("Available")
 	if entry.Running {
-		statusStr = lipgloss.NewStyle().Foreground(t.Success).Render("Running")
+		statusStr = t.RenderSuccess("Running")
 	}
 	sections = append(sections, labelStyle.Render("Status")+"  "+statusStr)
 
@@ -784,12 +782,12 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 
 	// Workers
 	sections = append(sections, labelStyle.Render("Workers")+"  "+
-		lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d", d.Workers)))
+		t.RenderSuccess(fmt.Sprintf("%d", d.Workers)))
 
 	// Flags
 	flagParts := []string{}
 	if entry.Starred {
-		flagParts = append(flagParts, lipgloss.NewStyle().Foreground(t.Warning).Render("★ Starred"))
+		flagParts = append(flagParts, t.RenderWarning("★ Starred"))
 	}
 	if entry.Startup {
 		flagParts = append(flagParts, lipgloss.NewStyle().Foreground(t.Primary).Render("Auto-launch"))
@@ -809,7 +807,7 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 			desc = desc[:descWidth-1] + "…"
 		}
 		sections = append(sections, labelStyle.Render("Description")+"  "+
-			lipgloss.NewStyle().Foreground(t.Muted).Render(desc))
+			t.RenderDim(desc))
 	}
 
 	// Grid / Models
@@ -831,15 +829,15 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 			role := lipgloss.NewStyle().Foreground(t.Primary).Render(p.Role)
 			name := ""
 			if p.Name != "" {
-				name = " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("("+p.Name+")")
+				name = " " + t.RenderFaint("("+p.Name+")")
 			}
 			agent := ""
 			if p.Agent != "" {
-				agent = " " + lipgloss.NewStyle().Foreground(t.Accent).Render("→ "+p.Agent)
+				agent = " " + t.RenderAccent("→ "+p.Agent)
 			}
 			model := ""
 			if p.Model != "" {
-				model = " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("["+p.Model+"]")
+				model = " " + t.RenderFaint("["+p.Model+"]")
 			}
 			sections = append(sections, fmt.Sprintf("  %d. %s%s%s%s", p.Index, role, name, agent, model))
 		}
@@ -850,12 +848,12 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 		sections = append(sections, "")
 		sections = append(sections, t.SectionHeader.Copy().Render("WORKFLOWS"))
 		for _, wf := range d.Workflows {
-			trigger := lipgloss.NewStyle().Foreground(t.Warning).Render(wf.Trigger)
+			trigger := t.RenderWarning(wf.Trigger)
 			from := valueStyle.Render(wf.From)
-			to := lipgloss.NewStyle().Foreground(t.Success).Render(wf.To)
+			to := t.RenderSuccess(wf.To)
 			subject := ""
 			if wf.Subject != "" {
-				subject = " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("re: "+wf.Subject)
+				subject = " " + t.RenderFaint("re: "+wf.Subject)
 			}
 			sections = append(sections, fmt.Sprintf("  %s: %s → %s%s", trigger, from, to, subject))
 		}
@@ -887,7 +885,7 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 	if d.FilePath != "" {
 		sections = append(sections, "")
 		sections = append(sections, labelStyle.Render("File")+"  "+
-			lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(d.FilePath))
+			t.RenderFaint(d.FilePath))
 	}
 
 	// Action buttons
@@ -901,7 +899,7 @@ func (m TeamModel) renderRightPanel(w, h int) string {
 		if m.leftFocused {
 			hint = "→ or enter for details"
 		}
-		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
+		sections = append(sections, t.RenderFaint(hint))
 	}
 
 	// Dispatch bar
@@ -957,16 +955,16 @@ func (m TeamModel) renderRightActions(entry runtime.TeamEntry) string {
 	if entry.Starred {
 		starLabel = "s = unstar"
 	}
-	parts = append(parts, zone.Mark("team-star", lipgloss.NewStyle().Foreground(t.Warning).Render(starLabel)))
-	parts = append(parts, lipgloss.NewStyle().Foreground(t.Muted).Render("a = startup"))
-	parts = append(parts, lipgloss.NewStyle().Foreground(t.Muted).Render("e = edit"))
+	parts = append(parts, zone.Mark("team-star", t.RenderWarning(starLabel)))
+	parts = append(parts, t.RenderDim("a = startup"))
+	parts = append(parts, t.RenderDim("e = edit"))
 
 	if entry.Running {
 		parts = append(parts, lipgloss.NewStyle().Foreground(t.Primary).Render("d = dispatch"))
-		parts = append(parts, zone.Mark("team-restart", lipgloss.NewStyle().Foreground(t.Warning).Render("r = restart")))
-		parts = append(parts, zone.Mark("team-stop", lipgloss.NewStyle().Foreground(t.Danger).Render("x = stop")))
+		parts = append(parts, zone.Mark("team-restart", t.RenderWarning("r = restart")))
+		parts = append(parts, zone.Mark("team-stop", t.RenderDanger("x = stop")))
 	} else {
-		parts = append(parts, zone.Mark("team-launch", lipgloss.NewStyle().Foreground(t.Success).Render("enter = launch")))
+		parts = append(parts, zone.Mark("team-launch", t.RenderSuccess("enter = launch")))
 	}
 
 	return strings.Join(parts, "  ")

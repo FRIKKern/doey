@@ -114,7 +114,7 @@ _parse_tool_field() {  # Parse field from tool hook JSON (jq preferred, grep fal
 
 _ensure_dirs() {
   [ -f "${RUNTIME_DIR}/.dirs_created" ] && return 0
-  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs,errors}
+  mkdir -p "${RUNTIME_DIR}"/{status,research,reports,results,messages,logs,errors,lifecycle}
   touch "${RUNTIME_DIR}/.dirs_created"
 }
 
@@ -463,6 +463,25 @@ transition_state() {  # Validate and execute a pane status transition against th
 
 NL='
 '
+
+# ── Lifecycle event emission (task #49) ──────────────────────────────
+# Append a JSONL line to ${RUNTIME_DIR}/lifecycle/events.jsonl.
+# Args: event_type source_pane [task_id] [subtask_id] [data_json]
+# Fast path: builtins + printf only, no subshell on hot path.
+emit_lifecycle_event() {
+  local etype="${1:-}" esource="${2:-}" etask="${3:-}" esubtask="${4:-}" edata="${5:-"{}"}"
+  [ -z "$etype" ] && return 0
+  [ -z "${RUNTIME_DIR:-}" ] && return 0
+  local edir="${RUNTIME_DIR}/lifecycle"
+  [ -d "$edir" ] || mkdir -p "$edir" 2>/dev/null || return 0
+  local ets; ets=$(_ms_now)
+  local etask_f="null"; [ -n "$etask" ] && etask_f="$etask"
+  local esubtask_f="null"; [ -n "$esubtask" ] && esubtask_f="$esubtask"
+  local esid="${DOEY_SESSION_ID:-}"
+  printf '{"ts":%s,"type":"%s","source":"%s","task_id":%s,"subtask_id":%s,"data":%s,"session_id":"%s"}\n' \
+    "$ets" "$etype" "$esource" "$etask_f" "$esubtask_f" "$edata" "$esid" \
+    >> "${edir}/events.jsonl" 2>/dev/null
+}
 
 is_numeric() { case "$1" in *[!0-9]*|'') return 1 ;; esac; }
 

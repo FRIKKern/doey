@@ -186,7 +186,7 @@ func (m DefaultsModel) View() string {
 	if m.loading {
 		body = m.spinner.View() + " Loading regions and server types..."
 	} else if m.errMsg != "" {
-		body = lipgloss.NewStyle().Foreground(t.Danger).Render("  " + m.errMsg)
+		body = t.RenderDanger("  " + m.errMsg)
 	} else {
 		body = m.renderPickers()
 	}
@@ -237,7 +237,7 @@ func (m DefaultsModel) renderPickers() string {
 			style = style.Bold(true)
 		}
 		sections = append(sections, prefix+style.Render(r.Name)+
-			lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("  %s, %s", r.City, r.Country))+
+			t.RenderDim(fmt.Sprintf("  %s, %s", r.City, r.Country))+
 			m.latencyHint(r))
 	}
 
@@ -266,12 +266,12 @@ func (m DefaultsModel) renderPickers() string {
 		desc := fmt.Sprintf("%d vCPU, %.0f GB RAM", s.VCPUs, s.MemoryGB)
 		recommended := ""
 		if s.Name == "cx22" {
-			recommended = lipgloss.NewStyle().Foreground(t.Success).Render(" (recommended)")
+			recommended = t.RenderSuccess(" (recommended)")
 		}
 
 		line := prefix + style.Render(s.Name) +
-			lipgloss.NewStyle().Foreground(t.Muted).Render("  "+desc+"  ") +
-			lipgloss.NewStyle().Foreground(t.Warning).Render(s.PriceMonthly) +
+			t.RenderDim("  "+desc+"  ") +
+			t.RenderWarning(s.PriceMonthly) +
 			recommended
 		sections = append(sections, line)
 	}

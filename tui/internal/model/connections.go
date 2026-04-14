@@ -269,16 +269,7 @@ func (m ConnectionsModel) View() string {
 
 // statusDot returns a colored status indicator.
 func statusDot(status string, t styles.Theme) string {
-	switch status {
-	case "connected":
-		return lipgloss.NewStyle().Foreground(t.Success).Render("●")
-	case "error":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("●")
-	case "pending":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-	default:
-		return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
-	}
+	return styles.ConnectionStatusDot(status, t)
 }
 
 // typeBadge returns a styled type label.
@@ -388,7 +379,7 @@ func (m ConnectionsModel) renderLeftPanel(w, h int) string {
 		if scrollHint != "" {
 			scrollHint += "  "
 		}
-		scrollHint += lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("↓ more")
+		scrollHint += t.RenderFaint("↓ more")
 	}
 
 	content := header + "\n" + countText + "\n" + body
@@ -460,7 +451,7 @@ func (m ConnectionsModel) renderRightPanel(w, h int) string {
 	if conn.URL != "" {
 		sections = append(sections, labelStyle.Render("URL")+"  "+valueStyle.Render(conn.URL))
 	} else {
-		placeholder := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("Enter URL to connect")
+		placeholder := t.RenderFaint("Enter URL to connect")
 		sections = append(sections, labelStyle.Render("URL")+"  "+placeholder)
 	}
 
@@ -473,7 +464,7 @@ func (m ConnectionsModel) renderRightPanel(w, h int) string {
 		masked := strings.Repeat("•", 8) + apiKey[max(0, len(apiKey)-4):]
 		sections = append(sections, labelStyle.Render("API Key")+"  "+valueStyle.Render(masked))
 	} else {
-		placeholder := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("Enter your API key to connect")
+		placeholder := t.RenderFaint("Enter your API key to connect")
 		sections = append(sections, labelStyle.Render("API Key")+"  "+placeholder)
 	}
 
@@ -530,7 +521,7 @@ func (m ConnectionsModel) renderRightPanel(w, h int) string {
 			sections = append(sections, "")
 			sections = append(sections, lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render("Metadata"))
 			for _, k := range metaKeys {
-				sections = append(sections, labelStyle.Render(k)+"  "+lipgloss.NewStyle().Foreground(t.Muted).Render(conn.Metadata[k]))
+				sections = append(sections, labelStyle.Render(k)+"  "+t.RenderDim(conn.Metadata[k]))
 			}
 		}
 	}
@@ -542,7 +533,7 @@ func (m ConnectionsModel) renderRightPanel(w, h int) string {
 		if m.leftFocused {
 			hint = "→ or enter for details"
 		}
-		sections = append(sections, lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hint))
+		sections = append(sections, t.RenderFaint(hint))
 	}
 
 	fullContent := strings.Join(sections, "\n")
