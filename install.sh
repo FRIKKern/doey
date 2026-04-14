@@ -45,6 +45,17 @@ install_md_files() {
   clean_orphans "$dest" "$src"
 }
 
+# Compute a content hash — prefers shasum (macOS/Linux), falls back gracefully.
+_compute_hash() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | cut -d' ' -f1
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | cut -d' ' -f1
+  else
+    md5sum 2>/dev/null | cut -d' ' -f1 || md5 -q 2>/dev/null
+  fi
+}
+
 echo ""
 printf "${BRAND}┌────────────────────────────────────────────┐${RESET}\n"
 printf "${BRAND}│${RESET}  ${BOLD}Doey Installer${RESET}                             ${BRAND}│${RESET}\n"
@@ -320,6 +331,9 @@ install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/7" "agent definitions"
 AGENT_COUNT=$_COUNT
 for f in "${_files[@]}"; do detail "$(basename "$f" .md)"; done
 
+# Write agent manifest hash for staleness detection
+bash -c 'cat ~/.claude/agents/doey-*.md 2>/dev/null' | _compute_hash > ~/.claude/doey/agents.hash
+
 printf "  ${BRAND}[3/7]${RESET} Installing premade teams..."
 shopt -s nullglob
 _team_files=("$SCRIPT_DIR/teams/"*.team.md)
@@ -392,6 +406,9 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   done
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
 detail "~/.local/bin/doey"
+
+# Write shell script manifest hash for staleness detection
+bash -c 'cat ~/.local/bin/doey*.sh ~/.local/bin/doey 2>/dev/null' | _compute_hash > ~/.claude/doey/shell.hash
 
 # Install default config template if user has no config yet
 if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-config-default.sh" ]; then
