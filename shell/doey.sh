@@ -66,6 +66,9 @@ source "${SCRIPT_DIR}/doey-update.sh"
 # shellcheck source=doey-doctor.sh
 source "${SCRIPT_DIR}/doey-doctor.sh"
 
+# shellcheck source=doey-agents.sh
+source "${SCRIPT_DIR}/doey-agents.sh"
+
 # shellcheck source=doey-task-cli.sh
 source "${SCRIPT_DIR}/doey-task-cli.sh"
 
@@ -248,6 +251,11 @@ HELP
     shift
     check_doctor "$@"
     exit 0
+    ;;
+  agents)
+    shift
+    doey_agents "$@"
+    exit $?
     ;;
   version|--version|-v) show_version; exit 0 ;;
   uninstall)

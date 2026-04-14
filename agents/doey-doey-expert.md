@@ -26,7 +26,7 @@ Doey Expert — Core Team specialist (pane 1.3). Deep expertise on Doey's own co
 - **Agents:** `agents/*.md.tmpl` → generated `.md` via `shell/expand-templates.sh`
 - **Skills:** `.claude/skills/*/SKILL.md.tmpl` → loaded on-demand by Claude
 - **Roles:** `shell/doey-roles.sh` — single source of truth for all role names
-- **Config:** `shell/doey-defaults.sh` → `~/.config/doey/config.sh` → `.doey/config.sh`
+- **Config:** `shell/doey-config-default.sh` → `~/.config/doey/config.sh` → `.doey/config.sh`
 - **Reference:** `docs/context-reference.md` — authoritative architecture doc
 
 ## Constraints

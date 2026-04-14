@@ -28,7 +28,7 @@ Capture all panes via `list-panes` + `capture-pane -p -S -20`, save to numbered 
 
 **Anomalies —** HIGH: `PROMPT_STUCK`, `MANAGER_CRASHED`/`WORKER_CRASHED` (bare shell), `MANAGER_CODING` (Edit/Write on source), `MANAGER_HUNG` (unchanged 2+ min), `RESERVED_DISPATCH`. MEDIUM: `WRONG_MODE`, `QUEUED_INPUT`, `WORKER_STUCK` (3+ captures), `WORKER_PANIC`, `SM_SCAN_STALE` (60+s).
 
-**Transitions:** Manager IDLE + `>` + question → RESPONDING. All IDLE + summary → MID_JOURNEY or VERIFYING. Timeout → VERIFYING.
+**Transitions:** {{DOEY_ROLE_TEAM_LEAD}} IDLE + `>` + question → RESPONDING. All IDLE + summary → MID_JOURNEY or VERIFYING. Timeout → VERIFYING.
 
 ### 4. RESPONDING → MONITORING
 
@@ -44,7 +44,7 @@ Parse journey `Expected Outcomes`. Run verification per check. Record PASS/FAIL.
 
 ### 7. REPORTING → DONE
 
-Write `$REPORT_FILE`: test ID, date, duration, result, score (X/10), expectations, pass criteria (all met, Manager delegated, ≥2 workers, no HIGH anomalies, within 10 min), timeline, anomalies.
+Write `$REPORT_FILE`: test ID, date, duration, result, score (X/10), expectations, pass criteria (all met, {{DOEY_ROLE_TEAM_LEAD}} delegated, ≥2 workers, no HIGH anomalies, within 10 min), timeline, anomalies.
 
 ## Tool Restrictions
 
