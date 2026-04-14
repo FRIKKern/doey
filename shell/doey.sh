@@ -588,7 +588,7 @@ MPEOF
         ;;
       down|stop)
         if [ -f "$_tunnel_env" ]; then
-          _tpid="$(grep '^TUNNEL_PID=' "$_tunnel_env" 2>/dev/null | head -1 | cut -d= -f2-)"
+          _tpid="$(grep '^TUNNEL_PID=' "$_tunnel_env" 2>/dev/null | head -1 | cut -d= -f2- || true)"
           if [ -n "$_tpid" ] && kill -0 "$_tpid" 2>/dev/null; then
             kill "$_tpid" 2>/dev/null || true
             rm -f "$_tunnel_env"
@@ -612,7 +612,7 @@ MPEOF
       detect)
         # shellcheck disable=SC1091
         source "${SCRIPT_DIR}/doey-tunnel-detect.sh"
-        _detect_ports_all "$(pwd)"
+        doey_tunnel_detect_pwd "$(pwd)"
         ;;
       *)
         printf '  Usage: doey tunnel <up|down|status|detect>\n'

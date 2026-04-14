@@ -24,7 +24,7 @@ else
   if [ -f "$_td_script" ]; then
     # shellcheck disable=SC1090
     source "$_td_script"
-    TUNNEL_PORTS="$(_detect_ports_all "$(dirname "${RUNTIME_DIR}")" 2>/dev/null)" || TUNNEL_PORTS="3000"
+    TUNNEL_PORTS="$(doey_tunnel_detect_pwd "$(dirname "${RUNTIME_DIR}")" 2>/dev/null | awk -F'\t' 'NF{if(out!="")out=out","; out=out $1} END{print out}')" || TUNNEL_PORTS="3000"
     [ -n "$TUNNEL_PORTS" ] || TUNNEL_PORTS="3000"
   else
     TUNNEL_PORTS="3000"
@@ -37,7 +37,7 @@ TUNNEL_ENV="${RUNTIME_DIR}/tunnel.env"
 # --- Helpers ---
 
 _read_tunnel_pid() {
-    grep '^TUNNEL_PID=' "$TUNNEL_ENV" 2>/dev/null | head -1 | cut -d= -f2-
+    grep '^TUNNEL_PID=' "$TUNNEL_ENV" 2>/dev/null | head -1 | cut -d= -f2- || true
 }
 
 # --- Idempotency: exit early if tunnel already running ---
