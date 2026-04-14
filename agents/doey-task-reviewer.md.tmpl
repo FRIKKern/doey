@@ -89,7 +89,8 @@ Do NOT accept "the worker said tests passed" — run them yourself. Do NOT skip 
 ### Step 3: Acceptance Criteria Matching
 
 1. Read the task description and extract EVERY acceptance criterion or success condition
-2. For EACH criterion, provide specific evidence it is met:
+2. **Format check:** If any criterion is written as an imperative command (patterns like "Run ...", "Check ...", "Verify ...", "Ensure ..."), flag it as a format issue. Criteria should describe expected results, not commands. Example: "Run go build and check it passes" should be "go build exits 0 with no errors on stderr". Note format issues in FINDINGS but do not reject solely on format — still verify the intent behind each criterion.
+3. For EACH criterion, provide specific evidence it is met:
    - File path and line number where you confirmed it
    - Grep output or read output proving the criterion
    - Build/test command output proving the criterion

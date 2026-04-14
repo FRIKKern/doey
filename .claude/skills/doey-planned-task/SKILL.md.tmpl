@@ -107,7 +107,14 @@ If the plan has multiple independent steps, create subtasks:
 doey task subtask add --task-id "$TASK_ID" --description "Subtask title"
 ```
 
-Update task with plan metadata:
+Update task with plan metadata.
+
+**Success criteria format:** Each criterion must describe the expected result/state, not a command to run. Criteria should be independently verifiable by automation.
+- BAD: "Run go build and check it passes"
+- GOOD: "go build exits 0 with no errors on stderr"
+- BAD: "Check that the file exists"
+- GOOD: "File .doey/tasks/<id>/result.json exists and contains valid JSON with 'status: done'"
+
 ```bash
 doey task update --id "$TASK_ID" --field "intent" --value "..."
 doey task update --id "$TASK_ID" --field "success_criteria" --value "criterion 1, criterion 2"
