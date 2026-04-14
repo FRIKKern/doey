@@ -547,6 +547,18 @@ check_claude_auth() {
     doey_error "claude CLI not found"
     return 1
   fi
+
+  # TTL-based cache (5 min) — skip the slow claude auth status fork
+  local _cache_dir="${TMPDIR:-/tmp}/doey"
+  local _cache_file="${_cache_dir}/auth-cache"
+  if [ -f "$_cache_file" ]; then
+    local _cache_age
+    _cache_age=$(( $(date +%s) - $(stat -f %m "$_cache_file" 2>/dev/null || stat -c %Y "$_cache_file" 2>/dev/null || echo 0) ))
+    if [ "$_cache_age" -lt 300 ]; then
+      return 0
+    fi
+  fi
+
   local _auth_result
   if _auth_result=$(_parse_auth_status); then
     local _auth_method _auth_email _auth_sub
@@ -555,8 +567,13 @@ check_claude_auth() {
     # $1=ok, $2=method, $3=email, $4=sub
     _auth_method="${2:-}" _auth_email="${3:-}" _auth_sub="${4:-}"
     doey_success "Authenticated (${_auth_method} · ${_auth_email} · ${_auth_sub})"
+    # Cache successful auth check
+    mkdir -p "$_cache_dir"
+    touch "$_cache_file"
     return 0
   else
+    # Remove stale cache on auth failure
+    rm -f "$_cache_file" 2>/dev/null || true
     printf '\n'
     doey_error "Not logged in"
     doey_info "All Claude instances share one auth session."
@@ -756,7 +773,7 @@ launch_session() {
   local runtime_dir="${TMPDIR:-/tmp}/doey/${name}"
 
   doey_splash
-  _splash_wait_minimum 6
+  _splash_wait_minimum 1
 
   ensure_project_trusted "$dir"
 

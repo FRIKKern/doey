@@ -204,9 +204,13 @@ SPLASH
   printf '\n   \033[2mStarting...\033[0m\n\n'
 }
 
-# Ensure the splash screen stays visible for at least 6 seconds
+# Ensure the splash screen stays visible for a minimum time (capped at 1s)
 _splash_wait_minimum() {
-  local min_seconds="${1:-6}"
+  local min_seconds="${1:-1}"
+  # Cap at 1 second regardless of argument
+  if [ "$min_seconds" -gt 1 ]; then
+    min_seconds=1
+  fi
   if [ -n "${_DOEY_SPLASH_START:-}" ]; then
     local now elapsed remaining
     now="$(date +%s)"
