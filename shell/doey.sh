@@ -158,7 +158,7 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 #   config — subcommands (get/set/list/delete) → doey-ctl,
 #            flags (--show/--global/--reset) or bare → local editor
 case "${1:-}" in
-  msg|status|health|task|tmux|team|agent|event|error|nudge|migrate|interaction|briefing)
+  msg|status|health|task|tmux|team|agent|event|error|nudge|migrate|interaction|briefing|lifecycle)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else
@@ -672,6 +672,7 @@ esac
 
 _check_prereqs
 check_for_updates
+check_agent_freshness
 
 dir="$(pwd)"
 name="$(find_project "$dir")"
