@@ -618,6 +618,45 @@ show_version() {
   printf '\n'
 }
 
+# ── Agent/shell freshness check ──────────────────────────────────────
+
+# Compute a content hash — prefers shasum (macOS/Linux), falls back gracefully.
+_freshness_hash() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | cut -d' ' -f1
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | cut -d' ' -f1
+  else
+    md5sum 2>/dev/null | cut -d' ' -f1 || md5 -q 2>/dev/null
+  fi
+}
+
+# Compare installed agent/shell hashes against install-time manifests.
+# Silent if no manifest exists (pre-manifest install). Fast: <10ms.
+check_agent_freshness() {
+  local state_dir="$HOME/.claude/doey"
+
+  # Check agents
+  if [ -f "$state_dir/agents.hash" ]; then
+    local _af_saved _af_current
+    _af_saved="$(cat "$state_dir/agents.hash")"
+    _af_current="$(bash -c 'cat ~/.claude/agents/doey-*.md 2>/dev/null' | _freshness_hash)"
+    if [ "$_af_saved" != "$_af_current" ]; then
+      printf '  %b⚠ Installed agents are out of date — run: doey update%b\n' "$WARN" "$RESET"
+    fi
+  fi
+
+  # Check shell scripts
+  if [ -f "$state_dir/shell.hash" ]; then
+    local _sf_saved _sf_current
+    _sf_saved="$(cat "$state_dir/shell.hash")"
+    _sf_current="$(bash -c 'cat ~/.local/bin/doey*.sh ~/.local/bin/doey 2>/dev/null' | _freshness_hash)"
+    if [ "$_sf_saved" != "$_sf_current" ]; then
+      printf '  %b⚠ Installed shell scripts are out of date — run: doey update%b\n' "$WARN" "$RESET"
+    fi
+  fi
+}
+
 # ── Auto-update check ────────────────────────────────────────────────
 check_for_updates() {
   local state_dir="$HOME/.claude/doey"
