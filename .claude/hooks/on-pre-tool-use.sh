@@ -782,6 +782,37 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__
       echo "The --no-verify flag is not allowed." >&2
       exit 2 ;;
   esac
+
+  # Branch-switch guard: block checkout/switch/merge in shared worktree
+  _in_worktree=false
+  _wt_git_dir=$(git rev-parse --git-dir 2>/dev/null) || true
+  _wt_common=$(git rev-parse --git-common-dir 2>/dev/null) || true
+  [ -n "$_wt_git_dir" ] && [ -n "$_wt_common" ] && [ "$_wt_git_dir" != "$_wt_common" ] && _in_worktree=true
+  [ -n "${DOEY_WORKTREE:-}" ] && _in_worktree=true
+  if [ "$_in_worktree" = "false" ]; then
+    case "$_gsafe" in
+      *"git checkout "*)
+        case "$_gsafe" in *" -- "*) ;; *)
+          _DOEY_BLOCK_REASON="branch_switch"
+          _log_block "TOOL_BLOCKED" "Branch switching blocked in shared worktree" "$_BASH_CMD"
+          _dbg_write "block_branch_switch"
+          echo "BLOCKED: git checkout (branch switch) is not allowed in the shared worktree. Use the Agent tool with isolation: worktree, or /doey-worktree." >&2
+          exit 2
+        ;; esac ;;
+      *"git switch "*)
+        _DOEY_BLOCK_REASON="branch_switch"
+        _log_block "TOOL_BLOCKED" "Branch switching blocked in shared worktree" "$_BASH_CMD"
+        _dbg_write "block_branch_switch"
+        echo "BLOCKED: git switch is not allowed in the shared worktree. Use the Agent tool with isolation: worktree, or /doey-worktree." >&2
+        exit 2 ;;
+      *"git merge "*)
+        _DOEY_BLOCK_REASON="branch_merge"
+        _log_block "TOOL_BLOCKED" "Branch merge blocked in shared worktree" "$_BASH_CMD"
+        _dbg_write "block_branch_merge"
+        echo "BLOCKED: git merge is not allowed in the shared worktree. Use the Agent tool with isolation: worktree, or /doey-worktree." >&2
+        exit 2 ;;
+    esac
+  fi
 fi
 
 # Doey Expert: can only access Doey source files (shell/, agents/, .claude/, docs/, tests/)

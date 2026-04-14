@@ -111,6 +111,14 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 - **Skills:** YAML frontmatter in `.claude/skills/<name>/SKILL.md`
 - **Naming:** sessions `doey-<project>`, runtime `/tmp/doey/<project>/`. Always "Taskmaster" and "Subtaskmaster" — never SM, TM, WM, or other abbreviations
 
+## Branch Safety
+
+Branch switching (`git checkout <branch>`, `git switch`, `git merge`) is blocked in the shared worktree by `on-pre-tool-use.sh`. This prevents workers from disrupting each other's work by changing the checked-out branch mid-session.
+
+- `git checkout -- <file>` (file restore) is allowed — only branch switches are blocked
+- To work on a different branch, use `Agent` with `isolation: "worktree"` or `/doey-worktree`
+- The guard detects worktrees via `git rev-parse --git-dir` vs `--git-common-dir`, and also respects the `DOEY_WORKTREE` env var
+
 ## Role Naming System
 
 All role names are centralized in `shell/doey-roles.sh` — the single source of truth. Three tiers:
