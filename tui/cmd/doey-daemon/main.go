@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/daemon"
+	"github.com/doey-cli/doey/tui/internal/fdutil"
 )
 
 func main() {
@@ -31,8 +32,8 @@ func main() {
 			os.Exit(1)
 		}
 		log.SetOutput(f)
-		syscall.Dup3(int(f.Fd()), int(os.Stdout.Fd()), 0)
-		syscall.Dup3(int(f.Fd()), int(os.Stderr.Fd()), 0)
+		fdutil.RedirectFD(int(f.Fd()), int(os.Stdout.Fd()))
+		fdutil.RedirectFD(int(f.Fd()), int(os.Stderr.Fd()))
 	}
 
 	if *runtimeDir == "" || *projectDir == "" {
