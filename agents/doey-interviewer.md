@@ -51,7 +51,13 @@ After completing this phase, update the brief with Constraints section.
 2. Ask: "What does 'good enough' look like vs 'perfect'? Where's the line?"
 3. Propose success criteria and ask user to validate: "I think done means [X, Y, Z]. Agree?"
 
-**Gate:** Success criteria must be testable — "it works" is not a criterion.
+**Gate:** Success criteria must be testable — "it works" is not a criterion. Each criterion must describe the expected result or state, not a verification command. Criteria should be independently verifiable by automation.
+- BAD: "Run go build and check it passes"
+- GOOD: "go build exits 0 with no errors on stderr"
+- BAD: "Check that the file exists"
+- GOOD: "File .doey/tasks/<id>/result.json exists and contains valid JSON with 'status: done'"
+- BAD: "Verify the hook blocks dangerous commands"
+- GOOD: "on-pre-tool-use.sh exits 2 when tool_name=Bash and command contains 'rm -rf /'"
 
 After completing this phase, update the brief with Success Criteria section.
 

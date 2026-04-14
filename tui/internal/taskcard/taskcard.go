@@ -1457,6 +1457,13 @@ func CleanSubtaskTitle(title string) string {
 	return title
 }
 
+// wrapHyperlink wraps already-rendered text with OSC 8 hyperlink escape sequences.
+// Terminals that support OSC 8 (iTerm2, WezTerm, Kitty, Terminal.app on Sequoia+)
+// make the text clickable. Unsupported terminals show the text unchanged.
+func wrapHyperlink(url, rendered string) string {
+	return "\033]8;;" + url + "\033\\" + rendered + "\033]8;;\033\\"
+}
+
 // attachmentTypeEmoji returns an emoji badge for the attachment type.
 func attachmentTypeEmoji(t string) string {
 	switch t {
@@ -1505,7 +1512,15 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 		badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
 
 		titleText := CleanAttachmentTitle(att)
-		title := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true).Render(titleText)
+		titleStyle := lipgloss.NewStyle().Foreground(e.Theme.Text).Bold(true)
+		title := titleStyle.Render(titleText)
+		if att.FilePath != "" {
+			title = wrapHyperlink("file://"+att.FilePath, title)
+		}
+		if att.ImagePath != "" {
+			imgLabel := lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render(" [img]")
+			title += wrapHyperlink("file://"+att.ImagePath, imgLabel)
+		}
 
 		meta := ""
 		// Hide generic worker author for completion/progress types

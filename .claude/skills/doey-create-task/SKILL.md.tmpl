@@ -33,7 +33,14 @@ TASK_ID=$(doey task create --title "TITLE" --type "TYPE" --description "DESCRIPT
 echo "Created task #${TASK_ID}"
 ```
 
-Update task with compiled fields:
+Update task with compiled fields.
+
+**Success criteria format:** Each criterion must describe the expected result/state, not a command to run. Criteria should be independently verifiable by automation.
+- BAD: "Run go build and check it passes"
+- GOOD: "go build exits 0 with no errors on stderr"
+- BAD: "Check that the file exists"
+- GOOD: "File .doey/tasks/<id>/result.json exists and contains valid JSON with 'status: done'"
+
 ```bash
 doey task update --id "$TASK_ID" --field "intent" --value "..."
 doey task update --id "$TASK_ID" --field "hypotheses" --value "H1: ..."
