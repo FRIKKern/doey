@@ -86,7 +86,7 @@ func (m TabBarModel) View() string {
 		Padding(0, 2).
 		MarginRight(1)
 
-	activityDot := lipgloss.NewStyle().Foreground(t.Warning).Render("*")
+	activityDot := t.RenderWarning("*")
 
 	var parts []string
 	for i, tab := range m.tabs {

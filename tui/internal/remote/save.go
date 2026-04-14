@@ -114,8 +114,8 @@ func (m SaveModel) View() string {
 		}, "\n")
 	} else if m.err != nil {
 		errIcon := lipgloss.NewStyle().Foreground(t.Danger).Bold(true).Render("✗")
-		errMsg := lipgloss.NewStyle().Foreground(t.Danger).Render(fmt.Sprintf("Failed to save: %v", m.err))
-		hint := lipgloss.NewStyle().Foreground(t.Muted).Render("Press q to exit")
+		errMsg := t.RenderDanger(fmt.Sprintf("Failed to save: %v", m.err))
+		hint := t.RenderDim("Press q to exit")
 		content = strings.Join([]string{
 			"",
 			errIcon + " " + errMsg,
@@ -124,10 +124,10 @@ func (m SaveModel) View() string {
 		}, "\n")
 	} else {
 		check := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("✓")
-		saved := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render("Configuration saved!")
-		path := lipgloss.NewStyle().Foreground(t.Muted).Render(m.configPath)
+		saved := t.RenderBold("Configuration saved!")
+		path := t.RenderDim(m.configPath)
 		cmd := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("doey remote <project>")
-		hint := lipgloss.NewStyle().Foreground(t.Muted).Render("Press Enter or q to exit")
+		hint := t.RenderDim("Press Enter or q to exit")
 
 		content = strings.Join([]string{
 			"",

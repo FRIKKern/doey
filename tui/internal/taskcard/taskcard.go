@@ -2475,7 +2475,7 @@ func (e *ExpandedCard) renderResultSection(w int) string {
 			}
 			sections = append(sections, styles.HypothesisRow(t, label, hu.Confidence, w))
 			if hu.Evidence != "" {
-				evidence := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(hu.Evidence)
+				evidence := t.RenderFaint(hu.Evidence)
 				sections = append(sections, "    "+evidence)
 			}
 		}

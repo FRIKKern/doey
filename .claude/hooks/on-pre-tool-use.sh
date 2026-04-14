@@ -14,6 +14,13 @@ _doey_stats_on_exit() {
   if [ "$_doey_exit_code" = "2" ] && command -v doey-stats-emit.sh >/dev/null 2>&1; then
     (doey-stats-emit.sh worker tool_blocked "reason=${_DOEY_BLOCK_REASON:-deny}" &) 2>/dev/null || true
   fi
+  if [ "$_doey_exit_code" = "2" ] && [ -n "${_RD:-}" ]; then
+    local _ledir="${_RD}/lifecycle"
+    [ -d "$_ledir" ] || mkdir -p "$_ledir" 2>/dev/null || true
+    printf '{"ts":%s,"type":"tool_blocked","source":"%s","task_id":null,"subtask_id":null,"data":{"tool":"%s","reason":"%s"},"session_id":"%s"}\n' \
+      "$(date +%s)000" "${_PS:-unknown}" "${TOOL_NAME:-unknown}" "${_DOEY_BLOCK_REASON:-deny}" "${DOEY_SESSION_ID:-}" \
+      >> "${_ledir}/events.jsonl" 2>/dev/null
+  fi
   if [ "$_doey_exit_code" = "0" ] && [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
     : > "${_RD}/status/${_PS}.tool_used_this_turn" 2>/dev/null || true
   fi
@@ -85,6 +92,8 @@ _log_block() {
       (doey event log --type "error_hook_block" --source "$_pid" --data "${msg} | ${_evt_data}" --project-dir "$_proj" &) 2>/dev/null
     fi
   fi
+  # Emit structured lifecycle event for tool_blocked
+  emit_lifecycle_event "tool_blocked" "${DOEY_PANE_SAFE:-unknown}" "${DOEY_TASK_ID:-}" "${DOEY_SUBTASK_ID:-}" "{\"tool\":\"${TOOL_NAME:-unknown}\"}"
 }
 
 _json_str() {

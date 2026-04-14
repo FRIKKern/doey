@@ -193,15 +193,15 @@ func (m AuthModel) View() string {
 
 	var extra string
 	if m.showInput {
-		extra = "\n" + lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render("API Key:") +
+		extra = "\n" + t.RenderBold("API Key:") +
 			"\n" + m.input.View()
 		if m.errMsg != "" {
-			extra += "\n" + lipgloss.NewStyle().Foreground(t.Danger).Render("  "+m.errMsg)
+			extra += "\n" + t.RenderDanger("  "+m.errMsg)
 		}
-		extra += "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("Press Enter to confirm, Esc to cancel")
+		extra += "\n" + t.RenderDim("Press Enter to confirm, Esc to cancel")
 	}
 
-	nav := lipgloss.NewStyle().Foreground(t.Muted).Render("j/k navigate  |  Enter select  |  Esc back")
+	nav := t.RenderDim("j/k navigate  |  Enter select  |  Esc back")
 
 	content := strings.Join([]string{
 		"",

@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/doey-cli/doey/tui/internal/bubbleterm"
+	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
 // tickMsg is sent by the centralized ticker as a fallback for resize/status updates.
@@ -32,6 +33,7 @@ type Model struct {
 	ready          bool
 	tabCount       int
 	tabLayout      tabBarLayout  // click zones from last render
+	theme          styles.Theme
 	ptyNotify      chan struct{} // event-driven PTY data notifications
 	viewportOffset int           // 0 = live bottom, >0 = scrolled back N lines
 }
@@ -43,6 +45,7 @@ const tabBarHeight = 1
 func New(shell string) *Model {
 	return &Model{
 		shell:     shell,
+		theme:     styles.DefaultTheme(),
 		ptyNotify: make(chan struct{}, 1),
 	}
 }
@@ -409,7 +412,7 @@ func (m *Model) View() tea.View {
 		return tea.NewView("Starting...")
 	}
 
-	bar, layout := renderTabBar(m.tabs, m.activeTab, m.width)
+	bar, layout := renderTabBar(m.tabs, m.activeTab, m.width, m.theme)
 	m.tabLayout = layout
 	content := m.tabs[m.activeTab].Term.ViewAt(m.viewportOffset)
 

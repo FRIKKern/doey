@@ -253,13 +253,7 @@ func (m InteractionsModel) viewList() string {
 	rule := t.Faint.Render(strings.Repeat("\u2500", w))
 
 	if len(m.interactions) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No interactions recorded yet")
-		content := header + "\n" + rule + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
+		return styles.RenderListFrame([]string{header, rule, styles.RenderEmptyState("No interactions recorded yet", t)}, w, m.height)
 	}
 
 	// Count + live indicator
@@ -267,14 +261,7 @@ func (m InteractionsModel) viewList() string {
 	count := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
 		Render(countText)
 
-	scrollInd := ""
-	if m.autoScroll {
-		scrollInd = zone.Mark("interactions-follow",
-			lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
-	} else {
-		scrollInd = zone.Mark("interactions-follow",
-			lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
-	}
+	scrollInd := styles.ScrollIndicator(m.autoScroll, "interactions-follow", t)
 
 	// Render visible entries
 	viewH := m.viewportHeight()
@@ -311,8 +298,7 @@ func (m InteractionsModel) viewList() string {
 			Render("enter = detail  " + followBtn + "  G = top")
 	}
 
-	content := header + "\n" + rule + "\n" + count + scrollInd + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
+	return styles.RenderListFrame([]string{header, rule, count + scrollInd, body, hint}, w, m.height)
 }
 
 // interactionTypeBadge returns a colored pill for the interaction type.

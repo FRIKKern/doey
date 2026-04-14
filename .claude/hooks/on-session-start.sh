@@ -97,7 +97,7 @@ esac
 FULL_PANE_ID="${PROJECT_ACRONYM}-${PANE_ID}"
 
 PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.-' '_')
-mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/scratchpad"
+mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/scratchpad" "${RUNTIME_DIR}/lifecycle"
 atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
 
 # Write BOOTING status so other components know this pane exists but isn't ready yet.
@@ -112,6 +112,7 @@ if [ "$ROLE" != "info_panel" ]; then
   if [ "$_existing_status" != "READY" ]; then
     transition_state "$PANE_SAFE" "BOOTING"
   fi
+  emit_lifecycle_event "pane_boot" "$PANE_SAFE" "" "" "{\"role\":\"${ROLE}\"}"
 fi
 
 # Save launch command for respawn replay (stop-respawn.sh reads this)
@@ -277,5 +278,7 @@ unset _sf _tmp _id
 #    install_run sentinel is owned by doey-stats-emit.sh (fires once per
 #    runtime dir after the first session_start).
 (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh session session_start "role=${ROLE:-unknown}" "window=${WINDOW_INDEX:-0}" "pane=${PANE_INDEX:-0}" &) 2>/dev/null || true
+
+emit_lifecycle_event "pane_ready" "$PANE_SAFE" "" "" "{\"role\":\"${ROLE}\"}"
 
 exit 0

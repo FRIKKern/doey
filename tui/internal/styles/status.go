@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 var defaultTheme = DefaultTheme()
@@ -76,28 +77,25 @@ func TeamBadge(kind string) string {
 	}
 }
 
-// TaskIcon returns a styled icon for task status — subtle, muted indicators.
-func TaskIcon(status string) string {
-	dim := func(c lipgloss.AdaptiveColor) lipgloss.Style {
-		return lipgloss.NewStyle().Foreground(c).Faint(true)
-	}
+// TaskIcon returns a styled icon for task status.
+func TaskIcon(status string, t Theme) string {
 	switch status {
 	case "active":
-		return dim(defaultTheme.Muted).Render("○")
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
 	case "in_progress":
-		return lipgloss.NewStyle().Foreground(defaultTheme.Warning).Render("●")
+		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
 	case "pending_user_confirmation":
-		return lipgloss.NewStyle().Foreground(defaultTheme.Warning).Render("◉")
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
 	case "done":
-		return dim(defaultTheme.Success).Render("✓")
+		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
 	case "cancelled":
-		return dim(defaultTheme.Muted).Render("○")
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("—")
 	case "failed":
-		return lipgloss.NewStyle().Foreground(defaultTheme.Danger).Render("✗")
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
 	case "deferred":
-		return lipgloss.NewStyle().Foreground(defaultTheme.Warning).Render("⏸")
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("⏸")
 	default:
-		return dim(defaultTheme.Muted).Render("○")
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
 	}
 }
 
@@ -279,4 +277,58 @@ func LogPaneLabel(theme Theme, pane string) string {
 		Foreground(theme.Muted).
 		Faint(true).
 		Render(pane)
+}
+
+// WorkerStatusIcon returns a colored dot for worker/subtask status.
+func WorkerStatusIcon(status string, t Theme) string {
+	switch status {
+	case "ready", "finished", "done":
+		return lipgloss.NewStyle().Foreground(t.Success).Render("●")
+	case "busy", "active":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+	case "error", "failed":
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
+	case "deferred":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("⏸")
+	case "reserved":
+		return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
+	default:
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
+	}
+}
+
+// ConnectionStatusDot returns a colored dot for connection status.
+func ConnectionStatusDot(status string, t Theme) string {
+	switch status {
+	case "connected":
+		return lipgloss.NewStyle().Foreground(t.Success).Render("●")
+	case "error":
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("●")
+	case "pending", "connecting":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+	default:
+		return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
+	}
+}
+
+// HealthDot returns a colored dot for a health status string.
+func HealthDot(health string, t Theme) string {
+	switch health {
+	case "green", "healthy":
+		return lipgloss.NewStyle().Foreground(t.Success).Render("●")
+	case "amber", "degraded":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
+	case "idle":
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("●")
+	default:
+		return lipgloss.NewStyle().Foreground(t.Danger).Render("●")
+	}
+}
+
+// ScrollIndicator returns a clickable LIVE/PAUSED scroll indicator.
+func ScrollIndicator(autoFollow bool, zoneID string, t Theme) string {
+	if autoFollow {
+		return zone.Mark(zoneID, lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
+	}
+	return zone.Mark(zoneID, lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
 }

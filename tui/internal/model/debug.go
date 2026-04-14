@@ -428,13 +428,7 @@ func (m DebugModel) viewList() string {
 		if m.severityFilter != "" || m.typeFilter != "" || m.searchQuery != "" {
 			emptyMsg = "No events match current filters"
 		}
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render(emptyMsg)
-		content := header + "\n" + rule + "\n" + filterBar + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+		return styles.RenderListFrame([]string{header, rule, filterBar, styles.RenderEmptyState(emptyMsg, t)}, w, m.height)
 	}
 
 	// Entry count + live indicator
@@ -445,12 +439,7 @@ func (m DebugModel) viewList() string {
 	count := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
 		Render(countText)
 
-	scrollInd := ""
-	if m.autoScroll {
-		scrollInd = zone.Mark("debug-follow", lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
-	} else {
-		scrollInd = zone.Mark("debug-follow", lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
-	}
+	scrollInd := styles.ScrollIndicator(m.autoScroll, "debug-follow", t)
 
 	// Render visible entries
 	viewH := m.viewportHeight()
@@ -489,8 +478,7 @@ func (m DebugModel) viewList() string {
 			Render("enter = detail  s = severity  t = type  " + searchBtn + "  " + followBtn + "  c = clear")
 	}
 
-	content := header + "\n" + rule + "\n" + count + scrollInd + "\n" + filterBar + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return styles.RenderListFrame([]string{header, rule, count + scrollInd, filterBar, body, hint}, w, m.height)
 }
 
 // renderFilterBar shows active filters.

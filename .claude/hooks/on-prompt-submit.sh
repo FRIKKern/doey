@@ -65,6 +65,7 @@ else
   transition_state "$PANE_SAFE" "BUSY"
 fi
 type _debug_log >/dev/null 2>&1 && _debug_log state "transition" "from=READY" "to=BUSY" "trigger=prompt-submit"
+emit_lifecycle_event "task_started" "$PANE_SAFE" "${DOEY_TASK_ID:-}" "" "{\"prompt_length\":${#PROMPT}}"
 if [ -n "${DOEY_PANE_ID:-}" ]; then
   if command -v doey-ctl >/dev/null 2>&1; then
     doey status set "${DOEY_PANE_ID}" "BUSY"

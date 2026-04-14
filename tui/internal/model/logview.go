@@ -265,12 +265,7 @@ func (m LogViewModel) viewList() string {
 	rule := styles.ThinSeparator(t, w)
 
 	if len(m.entries) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).PaddingTop(1).
-			Render("No worker results yet")
-		content := header + "\n" + rule + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+		return styles.RenderListFrame([]string{header, rule, styles.RenderEmptyState("No worker results yet", t)}, w, m.height)
 	}
 
 	// Summary bar — colored counts per status
@@ -307,13 +302,7 @@ func (m LogViewModel) viewList() string {
 		summary += "  " + strings.Join(counts, " ")
 	}
 
-	scrollInd := ""
-	if m.autoScroll {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render(" \u25CF LIVE")
-	} else {
-		scrollInd = lipgloss.NewStyle().Foreground(t.Warning).Render(" \u25CB PAUSED")
-	}
-	scrollInd = zone.Mark("log-follow-toggle", scrollInd)
+	scrollInd := styles.ScrollIndicator(m.autoScroll, "log-follow-toggle", t)
 
 	summaryRule := styles.ThinSeparator(t, w)
 
@@ -352,8 +341,7 @@ func (m LogViewModel) viewList() string {
 			Render("enter = detail  f = follow  G = go to top")
 	}
 
-	content := header + "\n" + rule + "\n" + summary + scrollInd + "\n" + summaryRule + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return styles.RenderListFrame([]string{header, rule, summary + scrollInd, summaryRule, body, hint}, w, m.height)
 }
 
 func (m LogViewModel) renderLine(e logEntry, maxW int) string {
@@ -393,7 +381,7 @@ func (m LogViewModel) renderLine(e logEntry, maxW int) string {
 	pane := styles.LogPaneLabel(t, e.Pane)
 
 	// Tool calls — faint metadata
-	tools := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(fmt.Sprintf("%dt", e.ToolCalls))
+	tools := t.RenderFaint(fmt.Sprintf("%dt", e.ToolCalls))
 
 	// Build prefix
 	prefix := icon + " " + ts + " " + badge + " "
@@ -417,17 +405,7 @@ func (m LogViewModel) renderLine(e logEntry, maxW int) string {
 }
 
 func (m LogViewModel) statusIcon(status string) string {
-	t := m.theme
-	switch status {
-	case "BUSY", "WORKING":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-	case "FINISHED":
-		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
-	case "ERROR":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
-	default:
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
-	}
+	return styles.LogStatusIcon(status, m.theme)
 }
 
 func (m LogViewModel) viewDetail() string {
