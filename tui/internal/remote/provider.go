@@ -51,8 +51,8 @@ func (m ProviderModel) View() string {
 		Render("Select Cloud Provider")
 
 	check := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("[x]")
-	providerName := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(" Hetzner Cloud")
-	providerDesc := lipgloss.NewStyle().Foreground(t.Muted).Render("      High-performance cloud servers in Europe and US")
+	providerName := t.RenderBold(" Hetzner Cloud")
+	providerDesc := t.RenderDim("      High-performance cloud servers in Europe and US")
 
 	selected := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

@@ -451,6 +451,7 @@ EOF
 [ "$TMPFILE" != "$RESULT_FILE" ] && mv "$TMPFILE" "$RESULT_FILE"
 TMPFILE=""
 _log "stop-results: wrote result to $RESULT_FILE (status=$STATUS, tools=$TOOL_COUNT)"
+emit_lifecycle_event "result_captured" "$PANE_SAFE" "${local_task_id:-}" "${local_subtask_id:-}" "{\"proof_type\":\"${PROOF_TYPE:-}\"}"
 
 # Compute files changed count (used outside the task block below)
 _FILES_COUNT=0

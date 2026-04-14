@@ -172,7 +172,7 @@ func SubtaskCheckbox(theme Theme, done bool) string {
 	if done {
 		return lipgloss.NewStyle().Foreground(theme.Success).Faint(true).Render("✓")
 	}
-	return lipgloss.NewStyle().Foreground(theme.Muted).Faint(true).Render("○")
+	return theme.RenderFaint("○")
 }
 
 // SubtaskRow renders a subtask row with indent, checkbox, and title.
@@ -307,7 +307,7 @@ func ExpandedProgressBar(theme Theme, done int, total int, width int) string {
 	bar := filledStyle.Render(strings.Repeat("━", filled)) +
 		emptyStyle.Render(strings.Repeat("─", empty))
 
-	labelStyled := lipgloss.NewStyle().Foreground(theme.Muted).Render(label)
+	labelStyled := theme.RenderDim(label)
 	return fmt.Sprintf("%s %s", labelStyled, bar)
 }
 
@@ -437,7 +437,7 @@ func BulletList(t Theme, items []string, width int) string {
 	if len(items) == 0 {
 		return ""
 	}
-	bullet := lipgloss.NewStyle().Foreground(t.Muted).Render("  • ")
+	bullet := t.RenderDim("  • ")
 	contentStyle := lipgloss.NewStyle().
 		Foreground(t.Text).
 		Width(width - 6)
@@ -1002,7 +1002,7 @@ func AgentAssignmentLine(t Theme, workerNames []string, width int) string {
 	labelStyle := lipgloss.NewStyle().Foreground(t.Subtle).Bold(true)
 	if len(workerNames) == 0 {
 		return labelStyle.Render("Workers:") + " " +
-			lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("none")
+			t.RenderFaint("none")
 	}
 	names := lipgloss.NewStyle().
 		Foreground(t.Text).
@@ -1016,7 +1016,7 @@ func SpinnerDot(t Theme, active bool) string {
 	if active {
 		return lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("●")
 	}
-	return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("○")
+	return t.RenderFaint("○")
 }
 
 // StaleIndicator renders a muted "stale" label for tasks with no recent activity.

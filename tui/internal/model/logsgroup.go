@@ -274,14 +274,14 @@ func (m LogsGroupModel) renderLeftPanel(w, h int) string {
 	for i, entry := range logsGroupItems {
 		selected := m.focused && i == m.cursor
 
-		icon := lipgloss.NewStyle().Foreground(t.Accent).Render(entry.icon)
+		icon := t.RenderAccent(entry.icon)
 		nameStyle := lipgloss.NewStyle().Foreground(t.Text)
 		if selected {
 			nameStyle = nameStyle.Bold(true)
 		}
 
 		line := fmt.Sprintf(" %s  %s", icon, nameStyle.Render(entry.name))
-		desc := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("    " + entry.desc)
+		desc := t.RenderFaint("    " + entry.desc)
 
 		rowStyle := lipgloss.NewStyle().Width(w - 2).PaddingLeft(1)
 		if selected {

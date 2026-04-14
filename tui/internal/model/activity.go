@@ -237,13 +237,7 @@ func (m ActivityModel) viewList() string {
 	rule := t.Faint.Render(strings.Repeat("─", w))
 
 	if len(m.events) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No events recorded yet")
-		content := header + "\n" + rule + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+		return styles.RenderListFrame([]string{header, rule, styles.RenderEmptyState("No events recorded yet", t)}, w, m.height)
 	}
 
 	// Count + live indicator
@@ -251,14 +245,7 @@ func (m ActivityModel) viewList() string {
 	count := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
 		Render(countText)
 
-	scrollInd := ""
-	if m.autoScroll {
-		scrollInd = zone.Mark("activity-follow",
-			lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
-	} else {
-		scrollInd = zone.Mark("activity-follow",
-			lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
-	}
+	scrollInd := styles.ScrollIndicator(m.autoScroll, "activity-follow", t)
 
 	// Render visible entries
 	viewH := m.viewportHeight()
@@ -295,8 +282,7 @@ func (m ActivityModel) viewList() string {
 			Render("enter = detail  " + followBtn + "  G = top")
 	}
 
-	content := header + "\n" + rule + "\n" + count + scrollInd + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return styles.RenderListFrame([]string{header, rule, count + scrollInd, body, hint}, w, m.height)
 }
 
 // renderEntryLine renders a single event as a one-liner. Preserves the

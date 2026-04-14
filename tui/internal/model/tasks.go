@@ -59,24 +59,7 @@ func sectionOfStatus(status string) string {
 
 // statusIcon returns a colored icon for a task status.
 func statusIcon(status string, t styles.Theme) string {
-	switch status {
-	case "active":
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("○")
-	case "in_progress":
-		return lipgloss.NewStyle().Foreground(t.Primary).Render("●")
-	case "pending_user_confirmation":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("◉")
-	case "done":
-		return lipgloss.NewStyle().Foreground(t.Success).Render("✓")
-	case "cancelled":
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("—")
-	case "failed":
-		return lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
-	case "deferred":
-		return lipgloss.NewStyle().Foreground(t.Warning).Render("⏸")
-	default:
-		return lipgloss.NewStyle().Foreground(t.Muted).Render("·")
-	}
+	return styles.TaskIcon(status, t)
 }
 
 // formatAge returns a human-readable age string.
@@ -245,7 +228,7 @@ func renderFileTree(t styles.Theme, taskFiles []string, result *runtime.TaskResu
 	}
 
 	if overflow > 0 {
-		lines = append(lines, sep.Render("│  ")+lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(fmt.Sprintf("... and %d more", overflow)))
+		lines = append(lines, sep.Render("│  ")+t.RenderFaint(fmt.Sprintf("... and %d more", overflow)))
 	}
 	lines = append(lines, sep.Render("╰"))
 
@@ -1407,7 +1390,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 	}
 	if task.MergedInto != "" {
 		sections = append(sections, styles.MetaLine(t, "Merged into",
-			lipgloss.NewStyle().Foreground(t.Accent).Render("#"+task.MergedInto)))
+			t.RenderAccent("#"+task.MergedInto)))
 	}
 	if task.ParentTaskID != "" {
 		sections = append(sections, styles.MetaLine(t, "Parent", t.Dim.Render("#"+task.ParentTaskID)))
@@ -1507,10 +1490,10 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 				typeColor = t.Muted
 			}
 			badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render("[" + report.Type + "]")
-			titleText := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(report.Title)
+			titleText := t.RenderBold(report.Title)
 			author := ""
 			if report.Author != "" {
-				author = "  " + lipgloss.NewStyle().Foreground(t.Muted).Render(report.Author)
+				author = "  " + t.RenderDim(report.Author)
 			}
 			timeStr := ""
 			if report.Created > 0 {
@@ -1549,8 +1532,8 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		if total > 0 {
 			filled = (doneCount * barWidth) / total
 		}
-		bar := lipgloss.NewStyle().Foreground(t.Success).Render(strings.Repeat("█", filled)) +
-			lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("░", barWidth-filled))
+		bar := t.RenderSuccess(strings.Repeat("█", filled)) +
+			t.RenderDim(strings.Repeat("░", barWidth-filled))
 		progressLabel := fmt.Sprintf(" %d/%d", doneCount, total)
 
 		sections = append(sections, "")
@@ -1559,18 +1542,8 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 
 		now := time.Now()
 		for i, st := range subs {
-			dot := lipgloss.NewStyle().Foreground(t.Muted).Render("○")
-			switch st.Status {
-			case "done":
-				dot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
-			case "active":
-				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-			case "failed":
-				dot = lipgloss.NewStyle().Foreground(t.Danger).Render("✗")
-			case "deferred":
-				dot = lipgloss.NewStyle().Foreground(t.Warning).Render("⏸")
-			}
-			pane := lipgloss.NewStyle().Foreground(t.Accent).Render(st.Pane)
+			dot := styles.WorkerStatusIcon(st.Status, t)
+			pane := t.RenderAccent(st.Pane)
 			stTitle := t.Body.Render(st.Title)
 			age := ""
 			if st.Created > 0 {
@@ -1610,7 +1583,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("RESEARCH (%d)", len(research))))
 			for _, att := range research {
 				titleText := taskcard.CleanAttachmentTitle(att)
-				title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
+				title := t.RenderBold(titleText)
 				meta := ""
 				if att.Timestamp > 0 {
 					elapsed := now.Sub(time.Unix(att.Timestamp, 0))
@@ -1658,12 +1631,12 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 				badge := lipgloss.NewStyle().Foreground(typeColor).Bold(true).Render(emoji)
 
 				titleText := taskcard.CleanAttachmentTitle(att)
-				title := lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(titleText)
+				title := t.RenderBold(titleText)
 
 				meta := ""
 				// Hide generic worker author for completion/progress types
 				if att.Author != "" && att.Type != "completion" && att.Type != "progress" {
-					meta += " — " + lipgloss.NewStyle().Foreground(t.Muted).Render(att.Author)
+					meta += " — " + t.RenderDim(att.Author)
 				}
 				if att.Timestamp > 0 {
 					elapsed := now.Sub(time.Unix(att.Timestamp, 0))
@@ -1704,7 +1677,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(t, "LINKS & ATTACHMENTS"))
 		for _, att := range task.Attachments {
-			sections = append(sections, lipgloss.NewStyle().Foreground(t.Accent).Render("→ "+att))
+			sections = append(sections, t.RenderAccent("→ "+att))
 		}
 	}
 
@@ -1919,7 +1892,7 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 			if entry.Timestamp > 0 {
 				age = fmt.Sprintf("%-5s", formatAge(now.Sub(time.Unix(entry.Timestamp, 0))))
 			}
-			logLines = append(logLines, lipgloss.NewStyle().Foreground(t.Muted).Render(age+" "+entry.Entry))
+			logLines = append(logLines, t.RenderDim(age+" "+entry.Entry))
 		}
 		sections = append(sections, "")
 		sections = append(sections, styles.SectionTitle(t, "ACTIVITY LOG"))
@@ -2055,21 +2028,21 @@ func (m TasksModel) renderExpandedRightPanel(w, h int) string {
 			status := task.Status
 
 			if status == "done" {
-				parts = append(parts, zone.Mark("task-undo-btn", lipgloss.NewStyle().Foreground(t.Warning).Render("u = undo")))
+				parts = append(parts, zone.Mark("task-undo-btn", t.RenderWarning("u = undo")))
 			} else if status == "pending_user_confirmation" {
-				parts = append(parts, zone.Mark("task-accept-btn", lipgloss.NewStyle().Foreground(t.Success).Render("a = accept")))
-				parts = append(parts, zone.Mark("task-deny-btn", lipgloss.NewStyle().Foreground(t.Danger).Render("d = deny")))
-				parts = append(parts, zone.Mark("task-skip-btn", lipgloss.NewStyle().Foreground(t.Muted).Render("s = skip")))
+				parts = append(parts, zone.Mark("task-accept-btn", t.RenderSuccess("a = accept")))
+				parts = append(parts, zone.Mark("task-deny-btn", t.RenderDanger("d = deny")))
+				parts = append(parts, zone.Mark("task-skip-btn", t.RenderDim("s = skip")))
 			} else {
 				if status != "done" && status != "cancelled" {
 					parts = append(parts, zone.Mark("task-move-btn", lipgloss.NewStyle().Foreground(t.Primary).Render("m = move")))
 				}
 				if status == "in_progress" || status == "active" || status == "pending" || status == "ready" {
-					parts = append(parts, zone.Mark("task-dispatch-btn", lipgloss.NewStyle().Foreground(t.Accent).Render("d = dispatch")))
+					parts = append(parts, zone.Mark("task-dispatch-btn", t.RenderAccent("d = dispatch")))
 				}
-				parts = append(parts, zone.Mark("task-status-btn", lipgloss.NewStyle().Foreground(t.Muted).Render("s = status")))
+				parts = append(parts, zone.Mark("task-status-btn", t.RenderDim("s = status")))
 				if status != "cancelled" {
-					parts = append(parts, zone.Mark("task-cancel-btn", lipgloss.NewStyle().Foreground(t.Danger).Render("x = cancel")))
+					parts = append(parts, zone.Mark("task-cancel-btn", t.RenderDanger("x = cancel")))
 				}
 			}
 
@@ -2166,11 +2139,11 @@ func (m TasksModel) taskSummary() string {
 	countParts := []string{fmt.Sprintf("%d total", len(m.entries))}
 	if active > 0 {
 		countParts = append(countParts,
-			lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d active", active)))
+			t.RenderSuccess(fmt.Sprintf("%d active", active)))
 	}
 	if complete > 0 {
 		countParts = append(countParts,
-			lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("%d done", complete)))
+			t.RenderDim(fmt.Sprintf("%d done", complete)))
 	}
 
 	busyWorkers := 0
@@ -2183,7 +2156,7 @@ func (m TasksModel) taskSummary() string {
 			label += "s"
 		}
 		countParts = append(countParts,
-			lipgloss.NewStyle().Foreground(t.Warning).Render(label+" active"))
+			t.RenderWarning(label+" active"))
 	}
 
 	return lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(1).
@@ -2198,18 +2171,13 @@ func (m TasksModel) workerSummaryForTask(taskID string) string {
 		return ""
 	}
 
-	dot := lipgloss.NewStyle().Foreground(t.Success).Render("●")
-	if hs.Health == "degraded" || hs.Health == "amber" {
-		dot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-	} else if hs.Health == "stale" || hs.Health == "red" {
-		dot = lipgloss.NewStyle().Foreground(t.Danger).Render("●")
-	}
+	dot := styles.HealthDot(hs.Health, t)
 
 	label := fmt.Sprintf("%d worker", hs.ActiveWorkers)
 	if hs.ActiveWorkers != 1 {
 		label += "s"
 	}
-	return dot + " " + lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(label+" active")
+	return dot + " " + t.RenderFaint(label+" active")
 }
 
 // sectionLabel returns the display name for a derived section.

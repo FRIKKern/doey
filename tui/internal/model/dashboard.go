@@ -652,17 +652,17 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 		case 0:
 			// Boss card
 			titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Warning).Render("★ Boss") +
-				lipgloss.NewStyle().Foreground(t.Muted).Render(" W0")
+				t.RenderDim(" W0")
 		case 1:
 			// Core Team card
 			titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Info).Render("◈ Core Team") +
-				lipgloss.NewStyle().Foreground(t.Muted).Render(" W1")
+				t.RenderDim(" W1")
 		default:
 			// Worker team: task-centric header
 			badge := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf(" W%d", winIdx))
 			freelancerBadge := ""
 			if team.TeamType == "freelancer" {
-				freelancerBadge = lipgloss.NewStyle().Foreground(t.Accent).Render(" [F]")
+				freelancerBadge = t.RenderAccent(" [F]")
 			}
 
 			// Try to show task title + ID in header
@@ -672,7 +672,7 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 					taskTitle = truncateStr(taskTitle, 30)
 					titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(
 						fmt.Sprintf("Task #%s", team.TaskID)) + badge + freelancerBadge + "\n" +
-						lipgloss.NewStyle().Foreground(t.Muted).Render("  "+taskTitle)
+						t.RenderDim("  "+taskTitle)
 				} else {
 					titleLine = lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(
 						fmt.Sprintf("Task #%s", team.TaskID)) + badge + freelancerBadge
@@ -731,10 +731,10 @@ func (m DashboardModel) renderTeamGrid(w int) string {
 				if ps != nil && ps.SubtaskID != "" {
 					label = "#" + ps.SubtaskID + " " + subtaskTitle
 				}
-				stLine := lipgloss.NewStyle().Foreground(t.Muted).Render("    " + truncateStr(label, 28))
+				stLine := t.RenderDim("    " + truncateStr(label, 28))
 				paneLines = append(paneLines, stLine)
 			} else if ps != nil && ps.Task != "" && winIdx >= 2 {
-				taskLine := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("    Task #%s", ps.Task))
+				taskLine := t.RenderDim(fmt.Sprintf("    Task #%s", ps.Task))
 				paneLines = append(paneLines, taskLine)
 			}
 
@@ -878,8 +878,8 @@ func renderContextBar(pct int, barWidth int, t styles.Theme) string {
 	}
 
 	filledStr := lipgloss.NewStyle().Foreground(barColor).Render(strings.Repeat("▓", filled))
-	emptyStr := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(strings.Repeat("░", barWidth-filled))
-	pctStr := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" %d%%", pct))
+	emptyStr := t.RenderFaint(strings.Repeat("░", barWidth-filled))
+	pctStr := t.RenderDim(fmt.Sprintf(" %d%%", pct))
 	return filledStr + emptyStr + pctStr
 }
 
@@ -897,7 +897,7 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 	isFaint := isDone || health == "stale" || (health == "idle" && !isDone)
 
 	// --- Line 1: icon + #ID bold + Title ---
-	icon := styles.TaskIcon(task.Status)
+	icon := styles.TaskIcon(task.Status, t)
 	idTag := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(fmt.Sprintf("#%s", task.ID))
 	title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(task.Title)
 	line1 := icon + " " + idTag + " " + title
@@ -995,10 +995,10 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 			var lineStyle lipgloss.Style
 			switch st.Status {
 			case "in_progress":
-				icon = lipgloss.NewStyle().Foreground(t.Warning).Render("■")
+				icon = t.RenderWarning("■")
 				lineStyle = lipgloss.NewStyle().Foreground(t.Text)
 			default: // pending and others
-				icon = lipgloss.NewStyle().Foreground(t.Muted).Render("□")
+				icon = t.RenderDim("□")
 				lineStyle = lipgloss.NewStyle().Foreground(t.Muted)
 			}
 			title := truncateStr(cleaned, contentW)
@@ -1029,7 +1029,7 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 						subtaskLines = append(subtaskLines, "  "+icon+" "+styled)
 					}
 				} else {
-					summary := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(
+					summary := t.RenderFaint(
 						fmt.Sprintf("  … +%d completed", len(doneSubtasks)))
 					subtaskLines = append(subtaskLines, summary)
 				}
@@ -1040,17 +1040,7 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 	// --- Line 5: heartbeat line ---
 	heartbeatLine := ""
 	if hs, ok := m.heartbeats[task.ID]; ok && hs.ActiveWorkers > 0 {
-		var healthDot string
-		switch hs.Health {
-		case "green", "healthy":
-			healthDot = lipgloss.NewStyle().Foreground(t.Success).Render("●")
-		case "amber", "degraded":
-			healthDot = lipgloss.NewStyle().Foreground(t.Warning).Render("●")
-		case "idle":
-			healthDot = lipgloss.NewStyle().Foreground(t.Muted).Render("●")
-		default:
-			healthDot = lipgloss.NewStyle().Foreground(t.Danger).Render("●")
-		}
+		healthDot := styles.HealthDot(hs.Health, t)
 
 		// Spinner active indicator
 		spinnerPrefix := ""
@@ -1074,9 +1064,9 @@ func (m DashboardModel) renderHeartbeatCard(task runtime.PersistentTask, w int) 
 			case elapsed < 10*time.Second:
 				parts += lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("  now")
 			case elapsed < 60*time.Second:
-				parts += lipgloss.NewStyle().Foreground(t.Success).Render("  " + ageText)
+				parts += t.RenderSuccess("  " + ageText)
 			case elapsed < 120*time.Second:
-				parts += lipgloss.NewStyle().Foreground(t.Warning).Render("  " + ageText)
+				parts += t.RenderWarning("  " + ageText)
 			default:
 				parts += lipgloss.NewStyle().Foreground(t.Danger).Faint(true).Render("  " + ageText)
 			}

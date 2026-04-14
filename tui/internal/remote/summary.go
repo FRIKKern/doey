@@ -72,7 +72,7 @@ func (m SummaryModel) View() string {
 	var table []string
 	for _, r := range rows {
 		if r.value == "" {
-			r.value = lipgloss.NewStyle().Foreground(t.Muted).Render("(not set)")
+			r.value = t.RenderDim("(not set)")
 		} else {
 			r.value = valStyle.Render(r.value)
 		}
@@ -81,7 +81,7 @@ func (m SummaryModel) View() string {
 
 	cost := estimateMonthlyCost(m.config.ServerType)
 	costLine := labelStyle.Render("Est. Cost:") + "  " +
-		lipgloss.NewStyle().Foreground(t.Warning).Render(cost)
+		t.RenderWarning(cost)
 	table = append(table, "")
 	table = append(table, costLine)
 

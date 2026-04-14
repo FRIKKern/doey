@@ -344,25 +344,14 @@ func (m MessagesModel) viewMsgList() string {
 		if m.subjectFilter != "" || m.searchQuery != "" {
 			emptyMsg = "No messages match current filters"
 		}
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render(emptyMsg)
-		content := header + "\n" + rule + "\n" + filterBar + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
+		return styles.RenderListFrame([]string{header, rule, filterBar, styles.RenderEmptyState(emptyMsg, t)}, w, m.height)
 	}
 
 	// Summary bar with subject counts
 	summaryBar := m.renderSummaryBar()
 
 	// Auto-scroll indicator (clickable)
-	scrollInd := ""
-	if m.autoScroll {
-		scrollInd = zone.Mark("msg-follow", lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
-	} else {
-		scrollInd = zone.Mark("msg-follow", lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
-	}
+	scrollInd := styles.ScrollIndicator(m.autoScroll, "msg-follow", t)
 
 	// Render visible entries
 	viewH := m.msgViewportHeight()
@@ -400,8 +389,7 @@ func (m MessagesModel) viewMsgList() string {
 			Render("enter = detail  s = subject  " + searchBtn + "  " + followBtn + "  c = clear")
 	}
 
-	content := header + "\n" + rule + "\n" + summaryBar + scrollInd + "\n" + filterBar + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).MaxHeight(m.height).Render(content)
+	return styles.RenderListFrame([]string{header, rule, summaryBar + scrollInd, filterBar, body, hint}, w, m.height)
 }
 
 // renderSummaryBar shows message counts by subject type.
@@ -490,7 +478,7 @@ func (m MessagesModel) renderMsgLine(msg runtime.Message, maxW int) string {
 	subjBadge := lipgloss.NewStyle().Foreground(subjColor).Width(9).Render(subjText)
 
 	// Direction: From → To
-	arrow := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(" \u2192 ")
+	arrow := t.RenderFaint(" \u2192 ")
 	from := lipgloss.NewStyle().Foreground(t.Text).Render(msg.From)
 	to := lipgloss.NewStyle().Foreground(t.Text).Render(msg.To)
 	direction := from + arrow + to
