@@ -1,13 +1,24 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=27
-TASK_TITLE=Connections tab redesign + fix left/right keybinds
+TASK_TITLE=Deployment agent must notify and ask user before commit/push
 TASK_STATUS=done
 TASK_TYPE=feature
-TASK_TAGS=tui,dashboard,connections,keybinds,ux
-TASK_TEAM=W2
-TASK_DESCRIPTION=Two concerns in the Go TUI:
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=The Deployment agent (pane 1.2) must: (1) Always send desktop notification when about to commit or push. (2) Use AskUserQuestion (native Claude TUI question UI) to confirm with the user before executing any commit or push. Never auto-commit or auto-push silently. The user must always approve deployment actions.
+TASK_TIMESTAMPS=created=1775655683
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257535
+TASK_UPDATED=1775655683
+TASK_FILES=.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/20.task,.doey/tasks/21.task,.doey/tasks/22.task,.doey/tasks/23.task,.doey/tasks/24.task,.doey/tasks/25.task,.doey/tasks/27.task,.doey/tasks/3.task,.doey/tasks/4.task,.doey/tasks/5.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W5.1: Research deployment agent template and implement notify+confirm protocol
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_5_2
+TASK_SUBTASK_1_CREATED_AT=1775655865
+TASK_SUBTASK_1_COMPLETED_AT=1775656007
+TASK_SUBTASK_2_TITLE=W5.1: Verify deployment agent template changes
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_5_1
+TASK_SUBTASK_2_CREATED_AT=1775656260
+TASK_SUBTASK_2_COMPLETED_AT=1775656635

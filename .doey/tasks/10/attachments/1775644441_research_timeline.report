@@ -1,0 +1,222 @@
+# Research Report: Go TUI Timeline Noise Filtering
+
+## Summary
+
+The TUI task detail timeline (`tui/internal/taskcard/taskcard.go`) renders entries from 7 sources (logs, events, messages, updates, QA, reports, recovery) into a unified chronological view. The primary noise comes from (1) broken `note` type entries in task_log where raw CLI args leaked into the title field, (2) triple-entry duplication per worker stop, (3) low-value `activity_status_change`/`lifecycle_READY` events, and (4) `<task-notification>` XML blocks in IPC messages. Filtering at display time in the Go TUI is the recommended approach — it's non-destructive, immediately effective, and doesn't risk breaking the notification chain.
+
+## Findings
+
+### 1. Timeline Renderer
+
+**Core file:** `tui/internal/taskcard/taskcard.go`
+
+- `TimelineEntryKind` (line 362): 7 kinds — `log`, `event`, `message`, `update`, `qa`, `report`, `recovery`
+- `TimelineEntry` struct (line 376): Union type with `Timestamp`, `Kind`, and one non-nil pointer per entry
+- `ExpandedCard` struct (line 396): Holds `Events []runtime.Event`, `Messages []runtime.Message`, `TimelineFilter map[TimelineEntryKind]bool`
+- `buildTimeline()` (line 737): Collects all entries, applies optional kind filter, sorts chronologically, caps at 100 entries
+- `renderUnifiedTimeline()` (line 836): Iterates entries, dispatches to kind-specific render functions
+- `renderTimelineLog()` (line 868): Renders `PersistentTaskLog` — splits prefix/body, uses grammar parser for visualization blocks
+- `renderTimelineEvent()` (line 903): Renders `Event` — dot + timestamp + badge + data
+- `renderTimelineMessage()` (line 939): Renders `Message` — timestamp + subject badge + "From: X" + first-line body preview
+
+**Existing filter mechanism:** `TimelineFilter` (line 430) is a `map[TimelineEntryKind]bool` — when non-empty, only entries whose kind is in the map are shown. This only filters by kind (log vs event vs message), NOT by content within a kind.
+
+### 2. Timeline Data Model
+
+**Persistent types** in `tui/internal/runtime/tasks_config.go`:
+- `PersistentTaskLog` (line 29): `{Timestamp int64, Entry string}` — flat text entry
+- `PersistentUpdate` (line 46): `{Index, Timestamp, Author, Text}`
+- `PersistentReport` (line 54): `{Index, Author, Type, Title, Body, Created}`
+- `PersistentRecoveryEvent` (line 76): `{Index, Timestamp, Event, FailedAgent, NewAgent, Description}`
+- `PersistentQAEntry` (line 94): `{TrackingID, Question, Answer, Status, Hops, Created, Answered}`
+
+**Runtime types** in `tui/internal/runtime/types.go`:
+- `Event` (store_reader_extras.go:11): `{ID, Type, Source, Target, TaskID, Data, Timestamp}`
+- `Message` (types.go:208): `{ID, From, To, ToRaw, Subject, Body, Timestamp, Filename}`
+- `Task` (types.go:129): Contains `Logs []TaskLog`, `Reports []Report`, `RecoveryLog []RecoveryEvent`, `QAThread []QAEntry`
+
+**Data loading:**
+- `.task` files: `TASK_LOG_<epoch>=<text>` key-value pairs, parsed in `reader.go:~700`
+- SQLite `task_log` table: `{id, task_id, type, author, title, body, created_at}`, read via `store.ListTaskLog()` (tasks.go:419)
+- SQLite `events` table: `{id, type, source, target, task_id, data, created_at}`, read via `store.ListEvents()` (events.go)
+- SQLite `messages` table: `{id, from_pane, to_pane, subject, body, created_at}`, read via `storeReader.readMessages()` (store_reader.go:194)
+- `.msg` files: Parsed from runtime `messages/` directory by `reader.parseMessages()` (reader.go:1299)
+
+**Merge path:** `tasks_config.go:473 mergeLogs()` deduplicates by timestamp. `mergeRuntimeIntoPersistent()` (line 494) merges runtime Task fields into PersistentTask.
+
+### 3. Entry Sources (What Creates Timeline Noise)
+
+**stop-status.sh** (line 126-128): On worker stop, runs:
+```bash
+doey-ctl task log add --task-id "$task_id" --type "completion" \
+  --author "${PANE_SAFE:-worker}" --title "Worker completed task" \
+  --project-dir "$PROJECT_DIR"
+```
+This is the ONE correct entry per worker stop.
+
+**stop-notify.sh** (line 202-226): Builds `<task-notification>` XML message and sends it via `doey msg send` to the manager pane (Subtaskmaster for workers, Taskmaster for Subtaskmaster). This creates an IPC message entry in the messages table/directory.
+
+**Agent instructions** (agents/doey-worker.md:104, doey-subtaskmaster.md:461, doey-freelancer.md:91):
+Workers, Subtaskmasters, and Freelancers are instructed to call `doey-ctl task log add` for milestones, reports, and completion.
+
+**Hook-generated events** (stop-status.sh:137-139):
+```bash
+doey-ctl event log --type "lifecycle_FINISHED" ...
+```
+Creates `lifecycle_*` and `activity_status_change` events in the events table.
+
+### 4. Sample Noise Data (from task #8 in SQLite)
+
+**Triple-entry pattern** — Each worker stop at the SAME timestamp creates 3 entries:
+```
+121|note|     |--type report:completion --author worker_2_1 --title Worker 2.1 done --body ...|1775640543
+122|note|     |--type decision --author unknown --title Status changed to done --project-dir...|1775640543
+123|completion|doey_doey_2_1|Worker completed task|1775640544
+```
+Pattern repeats 4x for task #8 (workers 2.1, 2.2 stopping multiple times = 12 noise entries + 3 real entries).
+
+**Broken `note` entries** — type=`note`, author=empty, title contains raw CLI args:
+- `--type decision --author unknown --title Status changed to done --project-dir /Users/...`
+- `--type report:completion --author worker_2_1 --title Worker 2.1 done --body Worker 2.1 completed with...`
+
+These are malformed `doey-ctl task log add` calls where args weren't parsed correctly by the shell (possibly an argument quoting bug in stop-status.sh).
+
+**Low-value events** from events table:
+```
+activity_status_change|doey_doey_0_1||{"status":"READY"}
+lifecycle_READY|doey_doey_0_1|taskmaster|{"team":"W0","detail":""}
+```
+
+**`<task-notification>` XML** in messages:
+```
+worker_finished|<task-notification>
+  <pane>3.1</pane>
+  <pane-id>doey_doey_3_1</pane-id>
+  <status>FINISHED</status>
+  <summary>...</summary>
+  ...
+</task-notification>
+```
+
+## Key Files
+
+| File | Lines | Role |
+|------|-------|------|
+| `tui/internal/taskcard/taskcard.go` | 362-865 | Timeline types, building, rendering |
+| `tui/internal/runtime/tasks_config.go` | 28-151 | Persistent data types, merge logic |
+| `tui/internal/runtime/store_reader_extras.go` | 11-63 | Event type, store → runtime conversion |
+| `tui/internal/runtime/types.go` | 87-217 | Runtime types (TaskLog, Message, Event) |
+| `tui/internal/runtime/reader.go` | 193-210, 1296-1375 | Message parsing, snapshot assembly |
+| `tui/internal/store/tasks.go` | 83-90, 408-434 | TaskLogEntry type, AddTaskLog, ListTaskLog |
+| `.claude/hooks/stop-status.sh` | 120-139 | Worker stop → task log add + event log |
+| `.claude/hooks/stop-notify.sh` | 200-230 | Worker stop → IPC notification message |
+
+## Plan A: Display Filter in Go TUI (Recommended)
+
+### What
+Add content-based noise filtering in `buildTimeline()` after collecting entries but before sorting. Filter out:
+1. **Broken `note` entries**: Log entries whose `Entry` text starts with `--type` (raw CLI args)
+2. **Low-value events**: Events with type `activity_status_change` or `lifecycle_READY`
+3. **`<task-notification>` messages**: Messages with subject `worker_finished` or `specialist_finished` whose body starts with `<task-notification>`
+4. **Duplicate worker completions**: Deduplicate `completion` type entries from same author at same timestamp
+
+### Where to implement
+
+**File:** `tui/internal/taskcard/taskcard.go`
+**Function:** `buildTimeline()` at line 810 (after optional type filter, before sort)
+
+Add a new function:
+
+```go
+// isNoisy returns true for timeline entries that should be hidden from display.
+func isNoisy(ent TimelineEntry) bool {
+    switch ent.Kind {
+    case TimelineLog:
+        // Broken CLI entries where raw args leaked into entry text
+        if strings.HasPrefix(ent.Log.Entry, "--type ") {
+            return true
+        }
+    case TimelineEvent:
+        // Low-value status transitions
+        switch ent.Event.Type {
+        case "activity_status_change", "lifecycle_READY", "lifecycle_FINISHED":
+            return true
+        }
+    case TimelineMessage:
+        // Worker notification XML meant for machine consumption
+        if (ent.Message.Subject == "worker_finished" || ent.Message.Subject == "specialist_finished") &&
+            strings.Contains(ent.Message.Body, "<task-notification>") {
+            return true
+        }
+    }
+    return false
+}
+```
+
+Insert filtering call in `buildTimeline()` at line ~820 (after the existing `TimelineFilter` block):
+
+```go
+// Filter noisy entries
+filtered2 := entries[:0]
+for _, ent := range entries {
+    if !isNoisy(ent) {
+        filtered2 = append(filtered2, ent)
+    }
+}
+entries = filtered2
+```
+
+### Implementation prompt (dispatch-ready)
+
+```
+Edit tui/internal/taskcard/taskcard.go:
+
+1. Add func isNoisy(ent TimelineEntry) bool after line 833 (after buildTimeline ends).
+   Filter rules:
+   - TimelineLog: return true if ent.Log.Entry starts with "--type "
+   - TimelineEvent: return true if ent.Event.Type is "activity_status_change", "lifecycle_READY", or "lifecycle_FINISHED"
+   - TimelineMessage: return true if Subject is "worker_finished" or "specialist_finished" AND Body contains "<task-notification>"
+
+2. In buildTimeline(), after the TimelineFilter block (line 820) and before the sort (line 823), add:
+   clean := entries[:0]
+   for _, ent := range entries {
+       if !isNoisy(ent) {
+           clean = append(clean, ent)
+       }
+   }
+   entries = clean
+
+3. Run: cd /Users/frikk.jarl/Documents/GitHub/doey/tui && go build ./...
+```
+
+## Plan B: Ingest Filter in Shell Hooks
+
+### What
+Fix the root cause — the broken `note` entries are created by malformed `doey-ctl` calls in stop-status.sh. Fix the shell hooks so they don't create noise in the first place.
+
+### Where to implement
+
+**File:** `.claude/hooks/stop-status.sh` around line 120-128
+
+The broken entries suggest a second code path (possibly a `doey-ctl task log add` call elsewhere in stop-status.sh or another hook) is being called with incorrect argument parsing. The `--type decision --author unknown --title Status changed to done` and `--type report:completion --author worker_X_Y` entries have their entire arg string stuffed into the `title` field with type `note`.
+
+Investigate:
+1. Search for other `doey-ctl task log add` calls that might be using incorrect quoting
+2. Fix argument parsing in the shell to ensure `--type`, `--author`, `--title` are parsed as separate flags
+3. Remove or guard the redundant "Status changed to done" log entry
+
+**Caveat:** This only fixes Pattern 1 (broken notes) and Pattern 2 (triple entries). It does NOT fix Pattern 3 (event noise) or Pattern 4 (message XML noise). Those require either Plan A or changes to event-logging hooks.
+
+### Why Plan A is better
+- **Non-destructive**: Doesn't change the notification chain — messages/events still exist for Subtaskmasters to process
+- **Immediately effective**: Filters ALL historical noise, not just future entries
+- **Single change**: One function in one file vs. multiple hook files
+- **Reversible**: Easy to remove or adjust filter rules
+- **Complementary**: Plan B can be done later to stop noise at the source
+
+## Risks
+
+1. **Over-filtering**: The `isNoisy()` function might hide entries that are occasionally useful. Mitigate: keep filter rules narrow and documented.
+2. **Under-filtering**: New noise patterns may emerge from future hook changes. Mitigate: the filter function is easy to extend.
+3. **Plan B shell changes**: Fixing stop-status.sh could break the stop hook chain if argument parsing is changed incorrectly. The hooks are deeply interconnected — test thoroughly.
+4. **Existing `TimelineFilter` interaction**: The new content filter should run AFTER the existing kind filter to avoid conflicts. Current implementation order is correct (kind filter first, then noise filter).

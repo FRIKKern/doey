@@ -1,13 +1,29 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=55
-TASK_TITLE=Redesign Huh wizard — fewer steps, charmbracelet polish, actually spawn teams
-TASK_STATUS=done
-TASK_TYPE=feature
-TASK_TAGS=tui,shell,install
-TASK_TEAM=W1
-TASK_DESCRIPTION=The "Huh" setup wizard shown on first launch needs a complete overhaul. Three problems: (1) It has too many steps — consolidate into fewer, snappier screens. (2) The visual quality is low — make it charmbracelet-level polished (clean typography, good use of color, smooth flow). (3) It's broken — the teams it promises to start never actually get spawned. After the wizard completes, the teams it configured MUST actually be launched. Research the current wizard code first to understand the flow, then redesign and fix. The wizard lives somewhere in shell/ (likely doey.sh or a related file). Key acceptance criteria: fewer wizard steps, visually impressive output, and teams actually start after wizard completes.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Commit all uncommitted changes on current branch (main)
+TASK_STATUS=in_progress
+TASK_TYPE=chore
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+
+User confirmed: add and commit everything currently uncommitted on the CURRENT branch (main). Stay on main — do NOT switch branches.
+
+WHAT TO COMMIT:
+- Modified: 51 task files in .doey/tasks/*.task, .gitignore, agents/doey-architect.md
+- Untracked: all .doey/tasks/*.result.json, *.status, *.status.log, per-task directories, .doey/plans/masterplan-*.md, research-audit artifacts
+
+PROCEDURE:
+1. Stay on main — do NOT checkout any branch
+2. git add -A (add everything)
+3. BEFORE committing: verify no secrets, credentials, .env files are being added. Abort if any found.
+4. Commit with a clean message: 'chore: sync task system runtime state and artifacts'
+5. Do NOT push unless explicitly approved — just commit locally
+6. Do NOT add Co-Authored-By lines (per project convention)
+
+Success criteria (proof): git status shows clean working tree, git log shows new commit on main with all the task runtime files included.
+TASK_TIMESTAMPS=created=1776174350
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1774961366
+TASK_UPDATED=1776174350

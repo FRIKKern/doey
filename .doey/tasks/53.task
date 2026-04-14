@@ -1,19 +1,41 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=53
-TASK_TITLE=Implement fast spawn — Phase 1 quick wins + Phase 2 structural improvements
+TASK_TITLE=Increase file preview size limit in TUI Files tab
 TASK_STATUS=done
-TASK_TYPE=infrastructure
-TASK_TAGS=performance,shell,spawn,tmux,infrastructure
-TASK_TEAM=W1
-TASK_DESCRIPTION=Based on the research report (.doey/tasks/52/research-report.md), implement spawn optimizations. Current default launch: ~42-50s. Target: ~8s perceived, ~20s total.
-TASK_SUBTASKS=1:W1.1: doey.sh Phase 1 quick wins + Phase 2 structural:done\n2:W1.2: tmux-theme.sh source-file batching:done\n3:W1.3: Build + bash compat verification:done
-TASK_TIMESTAMPS=created=1775131090
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+
+In the TUI Files tab, the file preview panel has a size limit of ~10KB. Files larger than this are truncated or not shown. User wants to preview larger files.
+
+WHAT: Increase or remove the file preview size limit in the TUI Files tab.
+WHY: Many source files exceed 10KB — agents, hooks, scripts. Users need to preview them without hitting a cutoff.
+WHERE: Likely in tui/ — look for the file preview component, find the size limit constant, and increase it significantly (e.g., 100KB or 500KB).
+
+Research:
+1. Find the file preview code in tui/ — search for size limit, max bytes, truncation logic
+2. Understand why the limit exists (performance? memory? rendering?)
+3. Increase the limit appropriately — balance between usability and performance
+4. Consider: lazy loading, virtual scrolling, or paginated preview for very large files
+
+Success criteria: Files well above 10KB render in the preview pane without truncation.
+TASK_TIMESTAMPS=created=1776171744
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
-TASK_SUBTASK_1_TITLE=W1.1
-TASK_SUBTASK_1_STATUS= doey.sh Phase 1 quick wins + Phase 2 structural:done
-TASK_SUBTASK_2_TITLE=W1.2
-TASK_SUBTASK_2_STATUS= tmux-theme.sh source-file batching:done
-TASK_SUBTASK_3_TITLE=W1.3
-TASK_SUBTASK_3_STATUS= Build + bash compat verification:done
+TASK_UPDATED=1776171744
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/2.task,.doey/tasks/20.task,.doey/tasks/21.task,.doey/tasks/22.task,.doey/tasks/23.task,.doey/tasks/24.task,.doey/tasks/25.task,.doey/tasks/27.task
+TASK_REVIEW_VERDICT=PASS
+TASK_REVIEW_FINDINGS=maxPreviewBytes changed from 10*1024 to 100*1024 at filepreview.go:22. go build passes. Single constant change.
+TASK_REVIEW_TIMESTAMP=2026-04-14T13:11:54Z
+TASK_SUBTASK_1_TITLE=Find and increase file preview size limit in TUI Files tab
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1776171801
+TASK_SUBTASK_1_COMPLETED_AT=1776171846
+TASK_SUBTASK_2_TITLE=Verify file preview size limit change and go build
+TASK_SUBTASK_2_STATUS=review
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1776171927
+TASK_SUBTASK_2_COMPLETED_AT=1776171982

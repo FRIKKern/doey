@@ -1,13 +1,97 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=50
-TASK_TITLE=TUI command buttons that drive Boss actions — action-driven dashboard
-TASK_STATUS=done
+TASK_TITLE=Detect stale agents on startup — notify user and offer rapid fix
+TASK_STATUS=pending_user_confirmation
 TASK_TYPE=feature
-TASK_TAGS=tui,dashboard,boss,commands,architecture,ux
-TASK_TEAM=W2
-TASK_DESCRIPTION=ALL task/action buttons in the Go TUI must work by sending commands to Boss (pane 0.1) via tmux send-keys. The TUI is a command surface — Boss is the executor. Every button press translates to a text command sent to Boss's pane via tmux.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_CREATED_BY=boss
+TASK_TEAM=W4
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+EXPANDED SCOPE — bulletproof update system with atomic swap + remote-fetched installer.
+
+ARCHITECTURE (user-confirmed):
+
+1. ATOMIC SWAP — Never update files in place:
+   - Stage all new files in a temp directory (~/.config/doey/.staging/)
+   - Verify everything built/copied correctly
+   - Swap entire install dirs in one mv operation (agents, bin, etc.)
+   - Either fully old or fully new — never a mix
+   - Keep previous version as backup (~/.config/doey/.previous/) for rollback
+
+2. REMOTE-FETCHED INSTALLER — The updater fetches itself fresh from GitHub:
+   - 'doey update' fetches the latest install script from the repo (like web-install.sh pattern)
+   - This means even if install.sh itself is completely rewritten, the update still works
+   - The local 'doey update' command is a thin wrapper that fetches + executes the remote script
+   - Pattern: curl the latest installer → run it in staging mode → atomic swap
+
+3. DETECTION (from task 50 original scope):
+   - On startup, fast checksum compare of installed vs repo agents
+   - Warn user if stale, offer 'doey update'
+   - Sub-100ms detection, no startup delay
+
+4. DESIGN PRINCIPLES:
+   - Idempotent — running update twice produces same result
+   - Self-healing — even a corrupted install can be fixed by 'doey update' (fetches everything fresh)
+   - Offline fallback — if no internet, use local repo copy
+   - No partial state — atomic swap guarantees this
+
+RESEARCH PHASE:
+- What files does install.sh currently install and where?
+- What's the current web-install.sh pattern? Can we reuse it?
+- How to handle the atomic swap for files spread across multiple directories?
+- Edge cases: permissions, symlinks, running processes using old files
+
+Success criteria:
+- 'doey update' fetches fresh from GitHub and atomically swaps all installed files
+- A crash during update leaves the old version intact (not a mix)
+- Large rewrites (new files, removed files, restructured dirs) all handled correctly
+- Stale agent detection on startup warns user
+- Works on fresh install and on update from any previous version
+TASK_TIMESTAMPS=created=1776167451
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1776167451
+TASK_FILES=.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/2.task,.doey/tasks/20.task,.doey/tasks/21.task,.doey/tasks/22.task,.doey/tasks/23.task,.doey/tasks/24.task,.doey/tasks/25.task,.doey/tasks/27.task,.doey/tasks/3.task
+TASK_REVIEW_VERDICT=FAIL
+TASK_REVIEW_FINDINGS=Phase 1 RESTORED and working. Phase 2 ABSENT — atomic swap, rollback, remote fetch, pre-flight verify all missing. Fix workers reverted to Phase 1 state without preserving Phase 2 additions.
+TASK_REVIEW_TIMESTAMP=2026-04-14T12:50:08Z
+TASK_SUBTASK_1_TITLE=Research: agent install flow, update behavior, detection strategy, startup insertion point
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1776167547
+TASK_SUBTASK_1_COMPLETED_AT=1776168879
+TASK_SUBTASK_2_TITLE=Implement manifest hash: install.sh writes hash, doey-update.sh checks at startup, doey-doctor.sh checks freshness
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_4_1
+TASK_SUBTASK_2_CREATED_AT=1776167835
+TASK_SUBTASK_2_COMPLETED_AT=1776167887
+TASK_SUBTASK_3_TITLE=Verify: stale agent detection works end-to-end, bash compat, no regressions
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_4_2
+TASK_SUBTASK_3_CREATED_AT=1776168138
+TASK_SUBTASK_3_COMPLETED_AT=1776168822
+TASK_SUBTASK_4_TITLE=Research: current update flow details, GitHub remote URL, atomic swap requirements
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_4_1
+TASK_SUBTASK_4_CREATED_AT=1776169061
+TASK_SUBTASK_4_COMPLETED_AT=1776169095
+TASK_SUBTASK_5_TITLE=Implement atomic swap + remote fetch + pre-flight verify + rollback in doey-update.sh
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_4_1
+TASK_SUBTASK_5_CREATED_AT=1776169320
+TASK_SUBTASK_5_COMPLETED_AT=1776169368
+TASK_SUBTASK_6_TITLE=Verify: atomic update system — code review, bash compat, functional test of rollback and remote fetch
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_4_2
+TASK_SUBTASK_6_CREATED_AT=1776169656
+TASK_SUBTASK_6_COMPLETED_AT=1776169704
+TASK_SUBTASK_7_TITLE=Restore Phase 1 stale detection code deleted by Phase 2 workers — merge both phases
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_WORKER=doey_doey_4_1
+TASK_SUBTASK_7_CREATED_AT=1776170356
+TASK_SUBTASK_7_COMPLETED_AT=1776170406
+TASK_SUBTASK_8_TITLE=Verify: both Phase 1 and Phase 2 code present and functional in all 4 files
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_WORKER=doey_doey_4_2
+TASK_SUBTASK_8_CREATED_AT=1776170669
+TASK_SUBTASK_8_COMPLETED_AT=1776170760

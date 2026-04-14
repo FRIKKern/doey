@@ -1,9 +1,8 @@
 .DS_Store
 .beads/
 .claude/scheduled_tasks.lock
-.doey/
+.doey/*
 !.doey/tasks/
-!.doey/tasks/*.task
 !.doey/plans/
 !.doey/plans/*.md
 !.doey/context/
@@ -11,6 +10,33 @@
 !.doey/config.sh
 !.doey/cleanup-tasks.sh
 !.doey/*.team.md
+
+# Inside tasks: ignore all, then whitelist specific patterns
+.doey/tasks/*
+!.doey/tasks/*.task
+!.doey/tasks/*.result.json
+!.doey/tasks/*.report
+!.doey/tasks/*.status
+!.doey/tasks/*.status.log
+!.doey/tasks/*/
+
+# Inside task subdirs: ignore all, then whitelist artifact dirs
+.doey/tasks/*/*
+!.doey/tasks/*/attachments/
+!.doey/tasks/*/results/
+!.doey/tasks/*/reports/
+
+# Inside artifact dirs: ignore all, then whitelist by extension
+.doey/tasks/*/attachments/*
+!.doey/tasks/*/attachments/*.md
+!.doey/tasks/*/attachments/*.report
+.doey/tasks/*/results/*
+!.doey/tasks/*/results/*.json
+.doey/tasks/*/reports/*
+!.doey/tasks/*/reports/*.report
+
+# Exclude temp files
+.doey/tasks/*.task.tmp.*
 tui/doey-ctl
 tui/cmd/doey-ctl/doey-ctl
 tui/doey-loading

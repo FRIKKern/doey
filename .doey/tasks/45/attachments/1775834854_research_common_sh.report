@@ -1,0 +1,311 @@
+# Research Report: common.sh Role Hierarchy & Planner Sub-Role Integration
+
+## Task: Research common.sh role hierarchy and on-pre-tool-use.sh blocking patterns for planner sub-role
+## Task ID: 45, Subtask: 98
+## Date: 2026-04-10
+
+---
+
+## Summary
+
+The role detection system uses a two-tier model: **base roles** (`DOEY_ROLE`) determined by pane position, and **team roles** (`DOEY_TEAM_ROLE`) from team definition files. The `interviewer` team role is the existing precedent for granting sub-role exceptions to Subtaskmaster restrictions. No planner-related roles exist yet. The cleanest integration path is to add a `planner` team role following the exact `interviewer` pattern.
+
+---
+
+## 1. How Role Detection Works
+
+### Base Role Detection (on-session-start.sh:45-75)
+
+Roles are determined by **window index + pane index**:
+
+```bash
+# on-session-start.sh:45
+ROLE="$DOEY_ROLE_ID_WORKER"  # default
+
+# Window 0 = Dashboard
+if [ "$WINDOW_INDEX" = "0" ]; then
+  case "$PANE_INDEX" in
+    0) ROLE="info_panel" ;;
+    1) ROLE="$DOEY_ROLE_ID_BOSS" ;;
+  esac
+# Core Team window (from TASKMASTER_PANE)
+elif [ "$WINDOW_INDEX" = "$_core_team_window" ]; then
+  case "$PANE_INDEX" in
+    0) ROLE="$DOEY_ROLE_ID_COORDINATOR" ;;
+    1) ROLE="$DOEY_ROLE_ID_TASK_REVIEWER" ;;
+    2) ROLE="$DOEY_ROLE_ID_DEPLOYMENT" ;;
+    3) ROLE="$DOEY_ROLE_ID_DOEY_EXPERT" ;;
+  esac
+else
+  # Worker teams: pane 0 = team_lead, others = worker
+  mgr_pane=$(_read_team_key "$_team_file" MANAGER_PANE)
+  [ "$PANE_INDEX" = "${mgr_pane:-0}" ] && ROLE="$DOEY_ROLE_ID_TEAM_LEAD"
+fi
+```
+
+The role is written to both `$CLAUDE_ENV_FILE` (env var `DOEY_ROLE`) and `${RUNTIME_DIR}/status/${PANE_SAFE}.role`.
+
+### Team Role Detection (on-session-start.sh:195-206)
+
+A secondary `DOEY_TEAM_ROLE` is read from team definition files:
+
+```bash
+# on-session-start.sh:199
+_team_role=$(grep "^PANE_${PANE_INDEX}_ROLE=" "$_teamdef_env" | cut -d= -f2-)
+# Written to env and status file:
+echo "DOEY_TEAM_ROLE=$_team_role" >> "$CLAUDE_ENV_FILE"
+echo "$_team_role" > "${RUNTIME_DIR}/status/${PANE_SAFE}.team_role"
+```
+
+### Role Reading in on-pre-tool-use.sh (lines 455-501)
+
+The hook reads both tiers:
+
+```bash
+# on-pre-tool-use.sh:455-466 — Base role from env or .role file
+_DOEY_ROLE="${DOEY_ROLE:-}"
+if [ -n "${TMUX_PANE:-}" ]; then
+  # ... resolves _RD (runtime dir), _WP (window.pane), _PS (pane_safe)
+  [ -f "${_RD}/status/${_PS}.role" ] && _DOEY_ROLE=$(cat "${_RD}/status/${_PS}.role")
+fi
+
+# on-pre-tool-use.sh:468-494 — Fallback: derive role from position
+if [ -z "$_DOEY_ROLE" ]; then
+  # ... same window/pane logic as on-session-start.sh
+fi
+
+# on-pre-tool-use.sh:498-501 — Team role
+_DOEY_TEAM_ROLE="${DOEY_TEAM_ROLE:-}"
+if [ -z "$_DOEY_TEAM_ROLE" ] && [ -n "${_RD:-}" ] && [ -n "${_PS:-}" ]; then
+  [ -f "${_RD}/status/${_PS}.team_role" ] && _DOEY_TEAM_ROLE=$(cat "${_RD}/status/${_PS}.team_role")
+fi
+```
+
+---
+
+## 2. Role Functions in common.sh
+
+| Function | File:Line | Detection Method |
+|----------|-----------|-----------------|
+| `team_role()` | common.sh:226 | Returns `$DOEY_TEAM_ROLE` or falls back to `$DOEY_ROLE` |
+| `is_manager()` | common.sh:234 | Checks pane index against MANAGER_PANE in team env |
+| `is_taskmaster()` | common.sh:245 | Matches window.pane against TASKMASTER_PANE from session.env |
+| `is_boss()` | common.sh:253 | Window 0, pane 1 |
+| `is_worker()` | common.sh:257 | Not window 0, not core team, not manager |
+| `is_core_team()` | common.sh:280 | Window matches core team window |
+| `is_task_reviewer()` | common.sh:286 | Core team, pane 1 |
+| `is_deployment()` | common.sh:290 | Core team, pane 2 |
+| `is_doey_expert()` | common.sh:294 | Core team, pane 3 |
+
+**No `is_planner()` or similar function exists.**
+
+---
+
+## 3. Boss & Taskmaster Blocking in on-pre-tool-use.sh
+
+### The Unified Boss/Taskmaster/Subtaskmaster Block (line 598-641)
+
+All three roles share a single blocking section:
+
+```bash
+# on-pre-tool-use.sh:598
+if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || \
+     [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || \
+     [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; } && \
+   [ "$TOOL_NAME" != "Bash" ]; then
+  case "$TOOL_NAME" in
+    Agent)
+      # EXCEPTION: interviewer team_role may spawn agents
+      if [ "${_DOEY_TEAM_ROLE:-}" = "interviewer" ]; then
+        exit 0   # <--- team_role exception pattern
+      fi
+      # Block + forward
+      exit 2 ;;
+    Read|Edit|Write|Glob|Grep)
+      _CHK_PATH=$(_json_str tool_input.file_path)
+      # Boss can Read image files at any path
+      if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Read" ]; then
+        case "${_CHK_PATH:-}" in
+          *.png|*.jpg|...) exit 0 ;;  # <--- Boss image exception
+        esac
+      fi
+      # PATH EXCEPTIONS: .doey/tasks/ and runtime dirs are always allowed
+      case "${_CHK_PATH:-}" in
+        */.doey/tasks/*|*/.doey/tasks|\
+        "${_RD:-__none__}"/*|*/tmp/doey/*)
+          exit 0 ;;   # <--- KEY PATH EXCEPTION PATTERN
+      esac
+      # Block everything else + forward
+      exit 2 ;;
+  esac
+fi
+```
+
+### Key Path Exception Pattern (line 626-629)
+
+This is the critical pattern for the planner integration:
+
+```bash
+case "${_CHK_PATH:-}" in
+  */.doey/tasks/*|*/.doey/tasks|\
+  "${_RD:-__none__}"/*|*/tmp/doey/*)
+    _dbg_write "allow_${_DOEY_ROLE}_taskfile_${TOOL_NAME}"; exit 0 ;;
+esac
+```
+
+**Currently allowed paths for Boss/Taskmaster/Subtaskmaster:**
+- `*/.doey/tasks/*` — task files
+- `${_RD}/*` — runtime directory (resolved from DOEY_RUNTIME)
+- `*/tmp/doey/*` — temp doey files
+
+**Everything else (project source) is BLOCKED with forward-to-coordinator.**
+
+### Scratchpad Bypass (line 577-590)
+
+All roles can access scratchpad:
+
+```bash
+# on-pre-tool-use.sh:577-590
+case "$TOOL_NAME" in
+  Read|Edit|Write|Glob|Grep)
+    case "${_SP_PATH:-}" in
+      "${_RD}/scratchpad/"*|"${_RD}/scratchpad")
+        exit 0 ;;  # ALL roles bypass
+    esac ;;
+esac
+```
+
+---
+
+## 4. Existing Team Role Exception: The `interviewer` Pattern
+
+The `interviewer` team_role is the **only existing sub-role exception**. It appears at two points:
+
+### Exception 1: Agent tool (line 601-605)
+```bash
+# Inside the Boss/Taskmaster/Subtaskmaster block for Agent tool:
+if [ "${_DOEY_TEAM_ROLE:-}" = "interviewer" ]; then
+  _dbg_write "allow_interviewer_agent"
+  exit 0
+fi
+```
+
+### Exception 2: AskUserQuestion (line 773-775)
+```bash
+# Stand-alone check before general AskUserQuestion block:
+if [ "$TOOL_NAME" = "AskUserQuestion" ] && [ "${_DOEY_TEAM_ROLE:-}" = "interviewer" ]; then
+  _dbg_write "allow_interviewer_ask_user"
+  exit 0
+fi
+```
+
+**This is the exact pattern to replicate for `planner`.**
+
+---
+
+## 5. All Role Definitions in doey-roles.sh
+
+### Display Names (user-facing)
+| Variable | Value |
+|----------|-------|
+| `DOEY_ROLE_COORDINATOR` | "Taskmaster" |
+| `DOEY_ROLE_TEAM_LEAD` | "Subtaskmaster" |
+| `DOEY_ROLE_BOSS` | "Boss" |
+| `DOEY_ROLE_WORKER` | "Worker" |
+| `DOEY_ROLE_FREELANCER` | "Freelancer" |
+| `DOEY_ROLE_INFO_PANEL` | "Info Panel" |
+| `DOEY_ROLE_TEST_DRIVER` | "Test Driver" |
+| `DOEY_ROLE_TASK_REVIEWER` | "Task Reviewer" |
+| `DOEY_ROLE_DEPLOYMENT` | "Deployment" |
+| `DOEY_ROLE_DOEY_EXPERT` | "Doey Expert" |
+
+### Internal IDs (stable, for logic)
+| Variable | Value |
+|----------|-------|
+| `DOEY_ROLE_ID_COORDINATOR` | "coordinator" |
+| `DOEY_ROLE_ID_TEAM_LEAD` | "team_lead" |
+| `DOEY_ROLE_ID_BOSS` | "boss" |
+| `DOEY_ROLE_ID_WORKER` | "worker" |
+| `DOEY_ROLE_ID_FREELANCER` | "freelancer" |
+| `DOEY_ROLE_ID_INFO_PANEL` | "info_panel" |
+| `DOEY_ROLE_ID_TEST_DRIVER` | "test_driver" |
+| `DOEY_ROLE_ID_TASK_REVIEWER` | "task_reviewer" |
+| `DOEY_ROLE_ID_DEPLOYMENT` | "deployment" |
+| `DOEY_ROLE_ID_DOEY_EXPERT` | "doey_expert" |
+
+### File Patterns
+| Variable | Value |
+|----------|-------|
+| `DOEY_ROLE_FILE_COORDINATOR` | "doey-taskmaster" |
+| `DOEY_ROLE_FILE_TEAM_LEAD` | "doey-subtaskmaster" |
+| etc. | |
+
+**No DOEY_ROLE_PLANNER, DOEY_ROLE_ID_PLANNER, or DOEY_ROLE_FILE_PLANNER exists.**
+
+---
+
+## 6. Agent Name Availability in Hooks
+
+The agent name is available as:
+- **`CLAUDE_AGENT_NAME`** — set by Claude Code itself when an agent definition is loaded
+- **`DOEY_TEAM_ROLE`** — set by on-session-start.sh from team definition files (line 199-206)
+- **`${_RD}/status/${_PS}.team_role`** — persisted file, read by on-pre-tool-use.sh (line 500)
+
+The `DOEY_TEAM_ROLE` is the mechanism used for the `interviewer` exception and is the correct lever for a `planner` sub-role.
+
+---
+
+## 7. Integration Plan: Adding a Planner Sub-Role
+
+### Option A: Team Role Exception (RECOMMENDED — minimal change)
+
+Follow the `interviewer` pattern exactly:
+
+**Step 1: on-pre-tool-use.sh** — Add planner exception inside the Read|Edit|Write|Glob|Grep case (around line 614):
+
+```bash
+# After the Agent case and before the Read|Edit|Write|Glob|Grep case:
+Read|Edit|Write|Glob|Grep)
+  _CHK_PATH=$(_json_str tool_input.file_path)
+  # ... existing boss image exception ...
+
+  # Planner sub-role: allow read-only access to project source for planning
+  if [ "${_DOEY_TEAM_ROLE:-}" = "planner" ] && [ "$TOOL_NAME" = "Read" -o "$TOOL_NAME" = "Glob" -o "$TOOL_NAME" = "Grep" ]; then
+    _dbg_write "allow_planner_read_${TOOL_NAME}"
+    exit 0
+  fi
+
+  # existing path exceptions...
+```
+
+**Step 2: No changes needed to doey-roles.sh** — `planner` would be a team_role, not a base role. It runs on a pane that is a Subtaskmaster (team_lead base role) with team_role=planner.
+
+**Step 3: Team definition** — Set `PANE_0_ROLE=planner` in the team definition .env file.
+
+### Option B: Full Role (NOT recommended)
+
+Would require changes to doey-roles.sh, on-session-start.sh, on-pre-tool-use.sh, common.sh, expand-templates.sh, and Go TUI. Much higher blast radius for what is essentially a Subtaskmaster with read access.
+
+### Why Option A is cleanest:
+1. Only 1 file changed (on-pre-tool-use.sh)
+2. Follows proven `interviewer` precedent
+3. No template regeneration needed
+4. Planner inherits all Subtaskmaster restrictions except read access to source
+5. Can still be blocked from Edit/Write (read-only planning)
+
+---
+
+## Key Files & Line Numbers
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `shell/doey-roles.sh` | 1-53 | All role definitions (no planner exists) |
+| `.claude/hooks/common.sh` | 226-232 | `team_role()` function |
+| `.claude/hooks/common.sh` | 234-261 | Role detection functions (is_manager, is_worker, etc.) |
+| `.claude/hooks/on-session-start.sh` | 45-75 | Base role assignment by position |
+| `.claude/hooks/on-session-start.sh` | 195-206 | Team role assignment from team definition |
+| `.claude/hooks/on-pre-tool-use.sh` | 455-501 | Role + team_role reading |
+| `.claude/hooks/on-pre-tool-use.sh` | 598-641 | Boss/Taskmaster/Subtaskmaster blocking (THE insertion point) |
+| `.claude/hooks/on-pre-tool-use.sh` | 601-605 | Interviewer exception (the pattern to follow) |
+| `.claude/hooks/on-pre-tool-use.sh` | 626-629 | Path exception pattern (.doey/tasks, runtime, /tmp/doey) |
+| `.claude/hooks/on-pre-tool-use.sh` | 773-775 | Second interviewer exception (AskUserQuestion) |

@@ -1,13 +1,89 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=52
-TASK_TITLE=Research: Fast and smooth team/session spawning — find every bottleneck
-TASK_STATUS=done
-TASK_TYPE=research
-TASK_TAGS=research,performance,shell,tmux,spawn,infrastructure
-TASK_TEAM=W3
-TASK_DESCRIPTION=RESEARCH ONLY — no code changes. Produce a detailed report.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=P0: Ban branch switching — enforce worktrees for all branch work
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W5
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+PRIORITY: P0 — system integrity
+
+PROBLEM: In a multi-agent tmux session, all panes share one git working directory. ANY branch switch (git checkout, git switch) changes files under every running team simultaneously. This causes:
+- Workers mid-edit lose their files
+- Builds break mid-compilation
+- Merge conflicts from phantom changes
+- Silent corruption of in-progress work
+
+RULES TO ENFORCE:
+
+1. NEVER switch branches in the shared working directory. All agents stay on whatever branch they started on.
+
+2. NEVER commit to other branches from the main worktree. No 'git checkout other-branch && commit && checkout back' patterns.
+
+3. For any work that REQUIRES a different branch: use git worktrees. The Agent tool supports isolation: 'worktree' mode which creates a temporary worktree. This is the ONLY safe way.
+
+4. Deployment agent, Taskmaster, and any role that currently does branch operations must be audited and fixed.
+
+WHERE TO FIX:
+
+A. HOOK ENFORCEMENT (on-pre-tool-use.sh):
+   - Block 'git checkout', 'git switch', 'git checkout -b' in Bash commands for ALL roles
+   - Only exception: explicit user override flag
+   - Block 'git merge' in the main worktree (merges should happen in worktrees too)
+
+B. AGENT INSTRUCTIONS:
+   - Audit ALL agent .md files for any mention of branch switching, checkout, merge
+   - Remove or replace with worktree-based instructions
+   - Deployment agent especially — it likely does branch work for PRs
+
+C. SKILL INSTRUCTIONS:
+   - Audit all skills for branch-switching patterns
+   - Replace with worktree-based alternatives
+
+D. DOCUMENTATION:
+   - CLAUDE.md should state this rule clearly
+   - Add to the conventions section
+
+WORKTREE PATTERN (the safe alternative):
+- Agent tool with isolation: 'worktree' creates an isolated copy
+- Work happens in the worktree, commits happen there
+- Main working directory is never touched
+- Worktree is cleaned up automatically
+
+Success criteria:
+- git checkout/switch/merge are BLOCKED by hooks in the main worktree (all roles)
+- All agent/skill instructions updated — zero references to branch switching
+- Deployment workflow uses worktrees for branch operations
+- CLAUDE.md documents the rule
+- Existing teams are not disrupted during the fix (ironic if this fix itself switches branches)
+TASK_TIMESTAMPS=created=1776170482
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1776170482
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/2.task,.doey/tasks/20.task,.doey/tasks/21.task,.doey/tasks/22.task,.doey/tasks/23.task,.doey/tasks/24.task,.doey/tasks/25.task,.doey/tasks/27.task
+TASK_REVIEW_VERDICT=PASS
+TASK_REVIEW_FINDINGS=Branch-switch guard verified at on-pre-tool-use.sh:786-815. Blocks checkout/switch/merge in shared worktree, allows file restore and worktree operations. CLAUDE.md documented. No agents reference branch switching.
+TASK_REVIEW_TIMESTAMP=2026-04-14T13:11:28Z
+TASK_SUBTASK_1_TITLE=Research: on-pre-tool-use.sh current branch-switch guards
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1776170573
+TASK_SUBTASK_1_COMPLETED_AT=1776171741
+TASK_SUBTASK_2_TITLE=Research: audit agents/ and skills/ for branch-switch patterns
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1776170574
+TASK_SUBTASK_2_COMPLETED_AT=1776171741
+TASK_SUBTASK_3_TITLE=Research: deployment agent branch workflow analysis
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1776170574
+TASK_SUBTASK_3_COMPLETED_AT=1776171741
+TASK_SUBTASK_4_TITLE=Implement branch-switch guard in on-pre-tool-use.sh + CLAUDE.md rule
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_5_1
+TASK_SUBTASK_4_CREATED_AT=1776171054
+TASK_SUBTASK_4_COMPLETED_AT=1776171328
+TASK_SUBTASK_5_TITLE=Verify branch-switch guard works correctly
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_5_4
+TASK_SUBTASK_5_CREATED_AT=1776171061
+TASK_SUBTASK_5_COMPLETED_AT=1776171715

@@ -1,0 +1,392 @@
+# Doey Codebase Audit: Areas 1-6
+
+Audited: 2026-04-08 | Auditor: Worker 2.1 (d-t2-w1)
+
+---
+
+## Area 1: Architecture — Score: 8/10
+
+### Pros
+- **Well-decomposed module structure.** The original monolithic `doey.sh` (noted as ~6100 lines in CLAUDE.md) has been thoroughly factored into 38 focused shell scripts totaling ~12,620 lines across `shell/`. The entry point `doey.sh` is now only 461 lines — a thin dispatcher that sources libraries. (`shell/doey.sh:30-82`)
+- **Clear layer separation.** Four distinct layers — `shell/` (CLI/launcher), `agents/` (LLM personas), `.claude/hooks/` (lifecycle events), `tui/` (Go companion) — each with a well-defined responsibility boundary. No cross-contamination observed.
+- **Centralized role system.** `shell/doey-roles.sh` provides a three-tier naming scheme (display, internal ID, file pattern) with a documented rename workflow through template expansion and Go code generation. (`shell/doey-roles.sh:1-52`, `shell/expand-templates.sh`, `tui/cmd/gen-roles/main.go`)
+- **Robust IPC design.** Status files, message files, lifecycle events, and SQLite events provide multiple communication channels. The `doey-send.sh` library offers verified delivery with retry logic. (`shell/doey-send.sh:1-60`, `.claude/hooks/common.sh:354-407`)
+- **Core Team window concept.** Separating the coordination layer (Taskmaster, Task Reviewer, Deployment, Doey Expert) from worker teams is architecturally clean. (`docs/context-reference.md:23-29`)
+
+### Cons
+- **Role resolution code duplication.** `on-pre-tool-use.sh` duplicates the entire 20-line role resolution block from `common.sh` (lines 7-48 vs common.sh lines 7-38) because it must be "self-contained for speed." This creates maintenance burden — any change to role resolution must be made in two places. (`on-pre-tool-use.sh:23-48`, `common.sh:7-38`)
+- **Dual persistence layer (file + SQLite).** Functions like `write_pane_status()`, `write_activity()`, `notify_taskmaster()` all write to both flat files AND SQLite "for backward compat." This doubles write I/O and doubles the surface area for bugs. (`common.sh:354-407`)
+- **Large session script.** `doey-session.sh` at 1,717 lines is the new "god script." It handles launch, hook installation, team creation, grid layout, and lifecycle — several of these could be further decomposed. (`shell/doey-session.sh`)
+
+### Quick Wins
+- Extract the role resolution block into a standalone `_resolve_roles.sh` that both `common.sh` and `on-pre-tool-use.sh` can source, eliminating the duplication
+- Set a deprecation deadline for the flat-file IPC layer and remove the dual-write pattern once SQLite is proven stable
+- Break `doey-session.sh` into session-launch vs session-lifecycle modules
+
+---
+
+## Area 2: Code Quality — Score: 7/10
+
+### Pros
+- **Consistent shebang and safety.** All 38 shell scripts in `shell/` use `#!/usr/bin/env bash`. 28/38 have `set -euo pipefail` (the exceptions are justified: `doey-statusline.sh` uses `#!/bin/sh` for portability, `doey-constants.sh` is a generated data file, `info-panel.sh` and `pane-border-status.sh` use `set -uo pipefail` without `-e` to tolerate transient tmux failures — each annotated with a comment). All 16 hook scripts also use proper shebangs and `set -euo pipefail`. (`shell/*.sh:1-2`, `.claude/hooks/*.sh:1-4`)
+- **Documented intentional deviations.** `pane-border-status.sh:3` explicitly notes "No -e: tmux callbacks must not crash on transient failures." This is good engineering practice.
+- **Naming consistency.** Shell libraries follow `doey-<domain>.sh` pattern. Hooks follow `on-<event>.sh` / `stop-<action>.sh` pattern. Agent files follow `doey-<role>.md` pattern. All consistent.
+- **ERR trap pattern.** `common.sh:41` installs a structured ERR trap that logs to errors.log — provides crash forensics without silently swallowing errors.
+- **Helper decomposition.** Small, focused helper libraries: `doey-helpers.sh` (147 lines), `doey-ipc-helpers.sh` (110 lines), `doey-send.sh` (184 lines), `doey-go-helpers.sh` (195 lines).
+
+### Cons
+- **parse_field duplication.** `common.sh` exposes both `_parse_tool_field()` (line 85) and `parse_field()` (line 210) — two slightly different JSON field parsers doing almost the same thing with slightly different jq fallback logic. Confusing which to call.
+- **Large files in TUI.** `tui/cmd/doey-ctl/commands.go` at 2,257 lines and `tui/internal/taskcard/taskcard.go` at 2,349 lines are very large single files. `doey-ctl/main.go` at 1,299 lines adds to this. The CLI command handler could benefit from splitting by command group.
+- **CLAUDE.md line count discrepancy.** CLAUDE.md states doey.sh is "~6100 lines" but the actual file is 461 lines. The factoring was done but the documentation wasn't updated. (`CLAUDE.md:line referencing "shell/doey.sh (CLI entry ~6100 lines)"`)
+- **Inconsistent comment density.** Some scripts like `doey-send.sh` have excellent header comments and function docstrings. Others like `doey-grid.sh` and `doey-menu.sh` have minimal documentation.
+
+### Quick Wins
+- Consolidate `_parse_tool_field()` and `parse_field()` into a single function
+- Update CLAUDE.md to reflect current doey.sh size and note the factoring into separate libraries
+- Split `commands.go` by command category (task commands, store commands, status commands — some splitting has already started with `store_cmds.go` and `interaction_cmds.go`)
+
+---
+
+## Area 3: Shell Scripts — Score: 8/10
+
+### Pros
+- **Bash 3.2 compatibility lint.** `tests/test-bash-compat.sh` checks 13 specific violation patterns (declare -A/-n/-l/-u, mapfile, readarray, |&, &>>, coproc, read -a, BASH_REMATCH, printf time format). Scans all `.sh` files recursively. Self-excludes to avoid false positives from pattern string literals. (`tests/test-bash-compat.sh:1-57`)
+- **Post-write lint hook.** `post-tool-lint.sh` runs the same bash 3.2 checks automatically after any Write/Edit on `.sh` files — catches violations at write time, not just in CI. (`CLAUDE.md: "post-tool-lint.sh | After Write/Edit on .sh"`)
+- **Portable utility patterns.** `_ms_now()` uses Perl's `Time::HiRes` with a `date +%s` fallback — pragmatic approach to millisecond timestamps on macOS bash 3.2. (`common.sh:129-132`)
+- **Atomic writes.** `atomic_write()` function uses write-to-tmp + mv pattern to prevent torn reads from concurrent processes. (`common.sh:352`)
+- **jq-with-fallback pattern.** JSON parsing consistently offers jq → python3 → grep fallback chain, ensuring hooks work even without jq installed. (`on-pre-tool-use.sh:74-93`, `common.sh:85-94`)
+
+### Cons
+- **No shellcheck CI gate.** While individual scripts have `# shellcheck source=` directives, there's no CI workflow running shellcheck across the codebase. Some scripts may have undetected portability issues beyond the bash 3.2 patterns.
+- **`info-panel.sh` uses `set -uo pipefail` without `-e`.** While justified by the comment pattern, this is a 657-line script where silent error propagation could mask bugs. A more targeted approach (trap or per-command `|| true`) would be safer.
+- **Deprecated scripts still present.** `watchdog-scan.sh` (7 lines) and `watchdog-wait.sh` (8 lines) are marked deprecated in CLAUDE.md but still ship in `.claude/hooks/`. They're tiny stubs but add confusion.
+
+### Quick Wins
+- Add a shellcheck pass to the test suite (even a simple `find . -name '*.sh' -exec shellcheck {} +`)
+- Remove deprecated `watchdog-scan.sh` and `watchdog-wait.sh` stubs
+- Consider adding `-e` back to `info-panel.sh` with explicit `|| true` on tmux commands that may fail transiently
+
+---
+
+## Area 4: Go TUI — Score: 7/10
+
+### Pros
+- **Clean package structure.** 16 internal packages (`bubbleterm`, `ctl`, `daemon`, `grammar`, `keys`, `model`, `picker`, `remote`, `roles`, `runtime`, `setup`, `startup`, `store`, `styles`, `taskcard`, `term`) — each with a clear domain. Well-organized `cmd/` directory with 7 binaries. (`tui/internal/`)
+- **SQLite persistence layer.** `tui/internal/store/` with comprehensive test coverage (636 lines in `store_test.go`) covering CRUD, queries, edge cases. Uses `modernc.org/sqlite` (pure Go, no CGO). (`tui/internal/store/store_test.go:1-50`, `tui/go.mod:19`)
+- **Code generation pipeline.** `gen-roles` reads `doey-roles.sh` and generates Go constants; `gen-constants` generates shell constants from Go. Bidirectional code gen keeps shell/Go in sync. (`tui/cmd/gen-roles/main.go`, `tui/cmd/gen-constants/main.go`)
+- **Modern Charm stack.** Uses BubbleTea v2, Lipgloss v2, Huh, and Glamour — current and well-maintained TUI libraries. (`tui/go.mod:6-14`)
+- **Terminal emulator package.** `tui/internal/bubbleterm/` provides an in-process terminal emulator with 408-line parity test. Non-trivial technical capability. (`tui/internal/bubbleterm/parity_test.go`)
+
+### Cons
+- **Low test coverage ratio.** 7 test files (2,193 lines) covering 110 source files (~40,538 lines) = ~6.4% test-to-source ratio by file count. Key untested areas: `model/` (14 files, 0 tests), `daemon/` (4 files, 0 tests), `remote/` (10 files, 0 tests), `startup/` (0 tests), `cmd/` binaries (0 tests).
+- **Large single files.** `taskcard.go` (2,349 lines), `commands.go` (2,257 lines), `main.go` (1,299 lines) are unwieldy. These suggest business logic that should be decomposed into smaller units.
+- **Go 1.26 dependency.** `go.mod` specifies `go 1.26` — this is bleeding-edge and limits contributor access. Most users will be on 1.22-1.24. (`tui/go.mod:3`)
+
+### Quick Wins
+- Add tests for `store/` edge cases (the test file is solid but other packages need coverage)
+- Split `commands.go` and `taskcard.go` into smaller files by functional area
+- Consider lowering the Go version requirement to 1.24 or documenting why 1.26 is required
+
+---
+
+## Area 5: Testing — Score: 5/10
+
+### Pros
+- **Good test variety.** 12 test scripts covering different concerns: bash compat, config loading, dispatch chain, doey-ctl fuzzy matching, error logging, extraction, hook worker acceptance, performance baseline, send-keys reliability, task helpers, task rendering, VCS false positives. (`tests/`)
+- **Test scripts are substantial.** Total 2,136 lines across tests. `test-task-helpers.sh` (423 lines) and `test-dispatch-chain.sh` (338 lines) show thorough coverage of their domains.
+- **E2E journey spec.** `tests/e2e/journey.md` documents end-to-end test scenarios. (`tests/e2e/journey.md`)
+- **Performance baseline test.** `test-perf-baseline.sh` (105 lines) establishes timing expectations — unusual and valuable for a shell project.
+- **Go tests cover critical paths.** SQLite store CRUD, parser correctness, terminal parity, runtime reader, and ctl commands all have dedicated tests. (`tui/internal/store/store_test.go`, `tui/internal/grammar/*_test.go`)
+
+### Cons
+- **No CI/CD pipeline.** Zero files in `.github/workflows/`. No automated test execution on push or PR. Tests are only run manually. This is the single biggest testing gap.
+- **No test runner/harness.** Tests must be run individually — no `make test` or unified runner. `doey test` exists for E2E but unit tests are ad-hoc.
+- **Go test coverage unknown.** No `go test -coverprofile` integration. The 6.4% file coverage ratio suggests many code paths are untested.
+- **Shell tests require tmux.** Most test scripts (dispatch-chain, send-keys, hook-worker-accept) depend on a running tmux session, making them impractical for CI or contributor machines without tmux.
+- **No integration test for install path.** CLAUDE.md emphasizes "fresh install" testing but there's no automated test that runs `./install.sh` → `doey doctor` → validates.
+
+### Quick Wins
+- Add a minimal GitHub Actions workflow: `bash tests/test-bash-compat.sh` + `cd tui && go test ./...` (no tmux needed)
+- Create a `Makefile` or `test.sh` runner that discovers and runs all tests
+- Add `go test -cover ./...` to surface coverage gaps
+
+---
+
+## Area 6: Documentation — Score: 8/10
+
+### Pros
+- **Comprehensive CLAUDE.md.** Covers architecture, role naming, hook inventory, tool restrictions, config hierarchy, testing procedures, philosophy, and conventions. Serves as both onboarding doc and development contract. Well-structured with tables and clear sections. (`CLAUDE.md`)
+- **Context reference as single source of truth.** `docs/context-reference.md` provides a compact, authoritative architecture reference covering agent definitions, settings merge order, hooks, skills, and persistent memory — exactly what an LLM agent needs at startup. (`docs/context-reference.md:1-80`)
+- **Specialized docs for each deployment target.** `docs/hetzner-setup.md`, `docs/linode-setup.md`, `docs/linux-server.md`, `docs/windows-wsl2.md` — practical guides for different environments.
+- **Design docs for features.** `docs/debug-mode-design.md`, `docs/visualization-grammar.md`, `docs/context-overlays.md` — show design thinking before/alongside implementation.
+- **Research artifacts preserved.** `docs/research/` contains investigation reports (task-55, task-59) that provide context for past decisions.
+
+### Cons
+- **CLAUDE.md line count outdated.** States `doey.sh` is "~6100 lines" but it's actually 461 lines after factoring. The total across all shell scripts is ~12,620 lines. This could mislead new contributors. (`CLAUDE.md: "shell/doey.sh (CLI entry ~6100 lines)"`)
+- **No README.md.** The repo has no top-level README for GitHub visitors. `CLAUDE.md` serves as the development reference but a public-facing README with install instructions, screenshots, and quick-start is absent.
+- **Agent docs are prompt-only.** Agent `.md` files serve as system prompts but lack developer documentation about when/why to modify them. The template system (`*.md.tmpl`) is documented in CLAUDE.md but not in the agents directory itself.
+- **Some docs may be stale.** `docs/test-worktree.md` — unclear if this is current or from an earlier iteration. Research docs reference specific task IDs that may not map to current tracking.
+
+### Quick Wins
+- Update CLAUDE.md to reflect current `doey.sh` size and note the library decomposition
+- Add a brief `README.md` with install instructions, project overview, and link to CLAUDE.md
+- Add a one-line comment in `agents/` (or a small `agents/README.md`) pointing to the template workflow
+
+---
+
+## Summary
+
+| Area | Score | Status |
+|------|-------|--------|
+| 1. Architecture | 8/10 | Strong modularity, clean separation. Dual-write IPC is main debt |
+| 2. Code Quality | 7/10 | Consistent conventions, some large files and minor duplication |
+| 3. Shell Scripts | 8/10 | Excellent bash 3.2 discipline, automated lint. No shellcheck CI |
+| 4. Go TUI | 7/10 | Clean packages, modern stack. Low test coverage, large files |
+| 5. Testing | 5/10 | Good test variety but no CI, no unified runner, tmux-dependent |
+| 6. Documentation | 8/10 | CLAUDE.md is excellent. Missing README, one stale line count |
+
+**Overall: 7.2/10**
+
+**Top 3 priorities:**
+1. **Add CI pipeline** (GitHub Actions) — bash compat + Go tests. Biggest bang for effort.
+2. **Eliminate dual-write IPC** — set deprecation date for flat files, reduce write I/O and bug surface.
+3. **Update CLAUDE.md line counts** — small fix, prevents confusion for all future contributors/agents.
+# Doey Codebase Audit — Areas 7-12
+
+Audited by Worker 2.2 (d-t2-w2) on 2026-04-08.
+
+---
+
+## Area 7: Fresh-Install Experience — Score: 7/10
+
+### Pros
+- **Comprehensive prerequisite checking** — `install.sh:110-188` checks git, tmux, node, claude CLI, jq, gum with version validation and interactive install offers
+- **Cross-platform support** — macOS (Homebrew) and Linux (apt) install paths (`install.sh:93-108`) with clear fallback messaging
+- **Idempotent reinstalls** — `install.sh:245-249` detects existing install and warns before overwrite
+- **7-step progress display** — Clear visual feedback with step numbering, success/fail indicators, and a polished ASCII art summary box (`install.sh:253-551`)
+- **Orphan cleanup** — `clean_orphans()` at `install.sh:27-33` removes stale agent files that no longer exist in source
+- **Web installer works** — `web-install.sh` is a clean shallow-clone-then-delegate pattern with proper `trap` cleanup
+- **Doctor command is thorough** — `shell/doey-doctor.sh:47-317` checks 15+ health indicators including auth, PATH, versions, context audit, task counter, respawn subsystem, Taskmaster responsiveness, Go binary freshness
+- **Version tracking** — `install.sh:269-275` writes version/date/repo to `~/.claude/doey/version`
+
+### Cons
+- **`rm -f` instead of `trash`** — `install.sh:29` and `install.sh:259` use `rm -f` for orphan cleanup and old commands, violating the CLAUDE.md rule "Use `trash` not `rm`"
+- **No rollback on partial failure** — If step 5 succeeds but step 6 fails, the install is left in a half-baked state with no way to recover to the previous version
+- **TUI build failure is a warning, not an error** — `install.sh:381` silently falls back to info-panel.sh. Users may not notice they're running degraded until much later
+- **No checksum/integrity verification** — Web install (`web-install.sh`) clones over HTTPS but doesn't verify commit signatures or checksums
+- **PATH warning could be more actionable** — `install.sh:467-474` just prints instructions; it could offer to append to shell config automatically (interactive mode)
+- **Doctor marks gum as `fail` not `warn`** — `doey-doctor.sh:131` marks missing gum as `fail` even though it's optional (the installer itself says "optional")
+
+### Quick Wins
+- Replace `rm -f` in `install.sh` with `trash` or add a comment explaining why `rm` is acceptable here (install-time cleanup of managed files)
+- Downgrade gum from `fail` to `warn` in doctor output for consistency with installer messaging
+- Add `--rollback` flag or snapshot mechanism before overwriting installed files
+
+---
+
+## Area 8: Hook System — Score: 8/10
+
+### Pros
+- **Robust common library** — `common.sh` provides `init_hook()`, role detection (`is_worker`, `is_manager`, `is_taskmaster`, `is_boss`), atomic writes, status management, debug logging, error logging with structured format — all via a single `source`
+- **ERR trap prevents accidental cascading failures** — `common.sh:41` catches errors and logs them rather than crashing the session. `on-pre-tool-use.sh:3` uses `trap 'exit 0' ERR` to fail-open on the hot path
+- **Role-based security guards are comprehensive** — `on-pre-tool-use.sh:455-544` enforces granular restrictions: Boss/Subtaskmaster/Taskmaster blocked from project source, workers blocked from VCS, Task Reviewer read-only, Doey Expert scoped to Doey files
+- **Self-healing hooks** — `on-pre-tool-use.sh:8-21` detects deleted hooks (e.g. gitignore + branch switch) and re-copies them from repo
+- **Bash 3.2 lint on every Write/Edit** — `post-tool-lint.sh` catches 14+ bash 4+ patterns (declare -A, mapfile, |&, etc.) and blocks with actionable feedback
+- **Pre-compaction state preservation** — `on-pre-compact.sh` saves task context, role identity, recent files, unread messages, and orchestration state for managers/Taskmaster/Boss
+- **Stop hook pipeline is well-decomposed** — Sync (`stop-status.sh`) for status + blocking proof gate, async (`stop-results.sh`) for result capture + verification, async (`stop-notify.sh`) for notification routing. Clean separation of concerns
+- **Debug flight recorder** — `common.sh:134-171` provides per-pane JSONL debug logging with millisecond timestamps and log rotation at 500KB
+- **Heartbeat-based stale detection** — `on-pre-tool-use.sh:384-393` writes heartbeats throttled to 10s intervals; `taskmaster-wait.sh:69-83` checks for 90s staleness
+- **Forward action pattern** — `on-pre-tool-use.sh:121-189` forwards blocked actions to the appropriate coordinator instead of just blocking, with both doey-ctl and file-based IPC fallbacks
+
+### Cons
+- **on-pre-tool-use.sh is 544+ lines** — This hot-path hook (runs on EVERY tool call) duplicates role-detection logic from `common.sh` for speed. The duplication is intentional but makes maintenance harder — any role-detection bug must be fixed in two places
+- **Heredoc stripping in VCS detection is complex** — `on-pre-tool-use.sh:211-237` uses an inline awk program to strip heredoc bodies. While necessary (task #141 false positives), it's fragile and hard to test. Only 1 test file covers this: `tests/test-vcs-false-positives.sh`
+- **stop-results.sh is 477 lines** — Heavy with proof-of-success verification, auto-build checks, attachment management, and SQLite bridge. A single error in this async hook could silently lose worker results
+- **Dual-write pattern (file + SQLite) everywhere** — Nearly every hook writes both to flat files AND calls `doey-ctl` for DB persistence. This is defensive but doubles write overhead and creates eventual consistency concerns
+- **No hook execution timeout** — Hooks run synchronously for the tool pipeline. A hung hook (e.g. `go build` in stop-results.sh) could block the tool for 10+ seconds. The `timeout 2` on git diff (`stop-results.sh:38`) is good, but `go build` and `go test` use `timeout 10` (`stop-results.sh:129-130`)
+- **Race in skill sync** — `on-session-start.sh:151-165` uses `mkdir` as a lock but only waits 1 second on contention before proceeding without the lock
+
+### Quick Wins
+- Extract the VCS-detection logic from `on-pre-tool-use.sh` into a testable function file (or at least add more test coverage in `tests/`)
+- Add a configurable timeout for `go build`/`go test` in stop-results.sh (default 10s, allow override via `DOEY_BUILD_TIMEOUT`)
+- Consider splitting stop-results.sh: core result capture vs. proof verification vs. attachment management
+
+---
+
+## Area 9: Agent/Skill System — Score: 8/10
+
+### Pros
+- **Template system is clean and effective** — `shell/expand-templates.sh` does sed substitution of `{{DOEY_ROLE_*}}` placeholders from `.md.tmpl` files. Supports `--check` (stale detection) and `--dry-run` modes
+- **13 agent templates, 24 agent definitions** — All core Doey roles plus specialized teams (SEO, Visual, Settings Editor). Each has YAML frontmatter (name, model, color, memory, description)
+- **31+ skills** — Comprehensive coverage: session management (kill-session, kill-all, kill-window), task management (task, create-task, planned-task, instant-task, masterplan), team management (add-team, add-window, worktree), operations (dispatch, monitor, status, nudge, clear, stop, reload), debugging (debug, repair, purge), and deployment (simplify-everything, research, reserve)
+- **Role naming system is properly centralized** — `shell/doey-roles.sh:1-50` defines 3 tiers (display, internal ID, file pattern) for all roles. Template expansion, Go generation, and shell scripts all derive from this single source
+- **Agent definitions are well-structured** — `doey-worker.md` has 125 lines of clear instructions including mandatory success criteria, tool restrictions, live task updates, and subtask tracking protocol
+- **Subtaskmaster agent has anti-patterns** — `doey-subtaskmaster.md:26-60` explicitly shows bad vs. good dispatch prompts, teaching the "never delegate understanding" principle
+- **SEO and Visual teams as reusable modules** — 5 SEO agents (manager, content, technical, sitemap, reporter) and 5 visual agents (manager, investigator, reviewer, reporter, a11y) demonstrate the extensibility model
+- **Skills are project-level** — Auto-discovered from `.claude/skills/`, no install step needed beyond file presence
+
+### Cons
+- **No validation on agent frontmatter** — Nothing checks that required fields (name, model, description) are present or that model values are valid. A typo in model ("opsu") would silently fail at Claude launch time
+- **Template expansion runs silently in install** — `install.sh:278-279` runs `expand-templates.sh >/dev/null 2>&1 || true`. Template errors are swallowed — stale templates could ship without anyone knowing
+- **No agent versioning** — When agents are updated, there's no changelog or diff tracking. Old agent definitions in `~/.claude/agents/` are silently overwritten
+- **Skill CHANGELOG.md exists but is manual** — `.claude/skills/CHANGELOG.md` requires manual updates, likely to drift from actual skill changes
+- **Some agents lack templates** — `agents/doey-platform-expert.md`, `agents/doey-tmux.md`, `agents/doey-claude-expert.md`, and all SEO/Visual agents have no `.md.tmpl` — they hardcode role names. Only the core Doey agents use templates
+
+### Quick Wins
+- Add frontmatter validation to `context-audit.sh` or `doey doctor` — check required fields and valid model names
+- Make template expansion non-silent in install.sh — log warnings to a file at minimum
+- Add `.md.tmpl` templates for the remaining agents that reference role names (platform-expert, tmux, claude-expert) or document why they don't need them
+
+---
+
+## Area 10: Task System — Score: 7/10
+
+### Pros
+- **Schema-versioned flat files** — `.doey/tasks/*.task` files use `TASK_SCHEMA_VERSION=3` with 20+ fields including subtasks, success criteria, decision log, phases, blockers, attachments. Survives reboots (in-repo)
+- **150+ tasks accumulated** — `.doey/tasks/` has files from 4.task to 150.task, demonstrating real production use
+- **Dual persistence (file + SQLite)** — `doey-task-helpers.sh:83-88` tries `doey-ctl` first, falls back to shell implementation. Both paths create the same `.task` file format
+- **Auto-incrementing IDs** — `task_next_id()` at `doey-task-helpers.sh:70-79` uses `.next_id` counter file with atomic read-increment-write
+- **Rich lifecycle** — Valid statuses: `draft, active, in_progress, paused, blocked, pending_user_confirmation, done, cancelled`. Subtask statuses: `pending, in_progress, done, skipped, failed`
+- **Task attachments** — `stop-results.sh:19-30` appends result JSON, reports, research files, and screenshots as task attachments with atomic update pattern
+- **Task ID propagation** — `on-prompt-submit.sh:107-138` persists task ID from dispatch message to file, making it available to stop hooks even after env var loss
+- **Doctor validates task counter** — `doey-doctor.sh:247-256` checks `.next_id` is a valid positive integer
+
+### Cons
+- **No file locking on `.task` files** — `task_update_field()` reads, seds, and writes with a `.tmp.$$` pattern. Two concurrent workers updating the same task file could race. The PID suffix helps but doesn't eliminate the window
+- **150+ task files in one flat directory** — No subdirectory structure. `ls .doey/tasks/` lists 150+ files. `task_next_id` reads/writes `.next_id` on every create, risking contention at scale
+- **`_write_v3_fields` uses `eval`** — `doey-task-helpers.sh:57` uses `eval "_val=\"\${TASK_${_f}:-}\""` to read dynamic variable names. While controlled, `eval` is a maintenance risk in shell code
+- **Subtask data is embedded in the .task file** — Subtask lines are appended as `SUBTASK_N=...` inside the task file rather than being separate records. Parsing and updating specific subtasks requires grepping through the file
+- **No garbage collection** — Completed/cancelled tasks accumulate forever in `.doey/tasks/`. No archiving or cleanup mechanism
+- **task_read() is 80+ lines** — The dual-path (doey-ctl + file fallback) reading function is complex and must stay synchronized with both storage backends
+
+### Quick Wins
+- Add a `doey task archive` command to move completed tasks to `.doey/tasks/archive/`
+- Consider using `flock` for concurrent `.task` file updates (available on both macOS and Linux)
+- Add a task count/summary to `doey doctor` output
+
+---
+
+## Area 11: Error Handling and Resilience — Score: 7/10
+
+### Pros
+- **Structured error logging** — `common.sh:180-188` writes pipe-delimited error records with timestamp, category, pane, role, hook, tool, detail, message to `errors/errors.log`. Also bridges to SQLite via `doey_log_error()` at line 192
+- **ERR traps in every hook** — `common.sh:41` catches errors and logs them. `stop-status.sh:8` has a comprehensive ERR trap that writes ERROR status AND logs to SQLite. `stop-results.sh:8` similarly logs ERR and exits cleanly
+- **Crash detection via multiple signals** — `taskmaster-wait.sh:69-113` checks: stale heartbeats (90s), stuck BOOTING panes (configurable timeout, default 60s). Writes `crash_pane_*` files that trigger Taskmaster wake
+- **Fail-open on task accountability** — `on-prompt-submit.sh:49-51` warns but doesn't block workers without task assignment, preventing false rejections
+- **Auto-restart Taskmaster at high context** — `taskmaster-wait.sh:156-208` monitors context % and auto-compacts at 70%, kills and relaunches with re-briefing at 85%. Includes cooldown (5 minutes) to prevent thrashing
+- **Proof gate blocks incomplete work** — `stop-status.sh:24-43` requires workers to emit `PROOF_TYPE` before finishing, with file-based and terminal output fallback checks. Exempt for respawning workers
+- **Respawn subsystem** — `doey-respawn-me` skill + `stop-status.sh` respawn detection. Doctor validates both skill and hook exist and are syntactically correct
+- **Log rotation** — `common.sh:102-110` rotates logs at 500KB, keeping last 200 lines
+- **Delivery failure handling** — `stop-notify.sh:39-48` tries file-based IPC first, falls back to send-keys, logs structured error if both fail
+
+### Cons
+- **No orphan process cleanup** — If a Claude process dies without triggering stop hooks (e.g., SIGKILL), the heartbeat goes stale but there's no automatic process cleanup. The stale heartbeat is detected but only triggers a Taskmaster wake, not a respawn
+- **Crash detection is passive** — `crash_pane_*` files are written but only checked when Taskmaster runs its wait loop (every 15 seconds at best). A crashed worker could sit idle for 15+ seconds before detection
+- **No circuit breaker on notification delivery** — `stop-notify.sh` retries send-keys on file delivery failure but doesn't track repeated failures. A dead manager pane could accumulate hundreds of failed delivery logs
+- **Error recovery is Taskmaster-dependent** — If the Taskmaster itself crashes, the auto-restart mechanism in `taskmaster-wait.sh` only works for context exhaustion. A true crash (SIGKILL, OOM) has no watchdog
+- **ERR traps exit 0** — All ERR traps exit with code 0 to prevent hook failures from blocking Claude operations. This is correct for resilience but means genuine errors are silently swallowed into log files that nobody may check
+- **`timeout` command availability varies** — `stop-results.sh:38` and `taskmaster-wait.sh` check for both `timeout` and `gtimeout`. On some systems neither exists, causing unguarded long-running commands
+
+### Quick Wins
+- Add a `doey health` command that checks for stale heartbeats, crash files, and orphan processes from the CLI (outside the session)
+- Add max-retry count to `stop-notify.sh` delivery fallback to prevent log flooding on dead panes
+- Consider a simple watchdog cron job or launchd plist that checks if the Taskmaster pane is alive every 60 seconds
+
+---
+
+## Area 12: Developer Ergonomics — Score: 7/10
+
+### Pros
+- **Adding a new agent is straightforward** — Create `agents/new-agent.md` with YAML frontmatter, optionally create `.md.tmpl` template, run `install.sh`. The install script auto-discovers all `.md` files in `agents/`
+- **Adding a new skill is zero-config** — Create `.claude/skills/new-skill/SKILL.md` with YAML frontmatter. Skills are auto-discovered by Claude Code at runtime. No registration needed
+- **Adding a new hook follows a clear pattern** — Source `common.sh`, call `init_named_hook`, use provided utilities. All hooks in `.claude/hooks/` are auto-registered by Claude's settings
+- **`doey doctor` validates the full stack** — 15+ checks give immediate feedback on installation health. Running it after changes catches common mistakes
+- **Bash 3.2 compat test suite** — `tests/test-bash-compat.sh` catches forbidden patterns. Post-tool-lint hook catches violations in real-time during development
+- **Debug flight recorder** — `/doey-debug on` enables per-pane JSONL logging of hooks, state transitions, lifecycle events, and IPC messages. Status command shows log sizes and last entries
+- **Context audit** — `shell/context-audit.sh` validates agent/skill consistency, runs during install and doctor
+- **Template check mode** — `shell/expand-templates.sh --check` detects stale generated files without modifying anything
+- **13 test files covering key subsystems** — VCS false positives, bash compat, task helpers, dispatch chain, hook worker acceptance, extraction, performance baseline, send-keys, config, error logging, task rendering, doey-ctl fuzzy
+- **CLAUDE.md is comprehensive** — Architecture, conventions, testing matrix, role naming system, rename procedure, hook documentation — all in one place
+
+### Cons
+- **No automated CI pipeline** — Tests exist but there's no GitHub Actions, Makefile, or `doey test-all` command that runs the full suite. Contributors must know which tests to run manually
+- **Development workflow is undocumented** — No CONTRIBUTING.md. The CLAUDE.md "Testing Changes" table helps but doesn't cover the full development loop (branch, change, test, PR)
+- **Large monolithic files** — `shell/doey.sh` is ~6100 lines. New contributors have to grep/search to find relevant code. No function index or section markers are visible from the file listing
+- **Team definition files are undocumented** — `.team.md` format (used by `doey-add-team` skill) has no schema documentation or examples beyond the premade teams
+- **Hook testing requires a running session** — Hooks depend on `$TMUX_PANE`, `$DOEY_RUNTIME`, and other env vars. There's no mock/harness for testing hooks in isolation. The test files that exist are unit-level, not integration
+- **Error log requires manual checking** — `$RUNTIME_DIR/errors/errors.log` accumulates but there's no `doey errors` command or dashboard integration to surface them to developers
+- **Skill CHANGELOG is manual** — `.claude/skills/CHANGELOG.md` must be hand-maintained, likely to fall behind
+
+### Quick Wins
+- Add a `Makefile` or `doey test-all` command that runs all tests in sequence (bash compat, task helpers, VCS false positives, etc.)
+- Add a CONTRIBUTING.md with the development workflow: clone, install, branch, change, test, PR
+- Add `doey errors` CLI command to tail/filter the error log
+- Add section markers or a function index comment block at the top of `shell/doey.sh` to aid navigation
+
+---
+
+## Summary
+
+| Area | Score | Verdict |
+|------|-------|---------|
+| 7. Fresh-Install Experience | 7/10 | Solid with good UX, needs rollback and minor consistency fixes |
+| 8. Hook System | 8/10 | Excellent decomposition and safety, complexity is the tradeoff |
+| 9. Agent/Skill System | 8/10 | Well-designed template system, good coverage, needs validation |
+| 10. Task System | 7/10 | Functional dual-persistence, needs concurrency and scale work |
+| 11. Error Handling and Resilience | 7/10 | Good detection, passive recovery, Taskmaster is a SPOF |
+| 12. Developer Ergonomics | 7/10 | Good tools exist, missing CI/CONTRIBUTING/error surfacing |
+
+**Overall average: 7.3/10**
+
+**Top 3 cross-cutting concerns:**
+1. **Dual-write complexity** — File + SQLite persistence everywhere increases maintenance burden and creates subtle consistency risks
+2. **Taskmaster as SPOF** — If Taskmaster crashes hard (not context exhaustion), there's no external watchdog to recover
+3. **No CI pipeline** — 13 test files exist but no automated runner, meaning regressions can ship undetected
+
+---
+
+# Combined Analysis
+
+## Overall Scores
+
+| # | Area | Score |
+|---|------|-------|
+| 1 | Architecture | 8/10 |
+| 2 | Code Quality | 7/10 |
+| 3 | Shell Scripts | 8/10 |
+| 4 | Go TUI | 7/10 |
+| 5 | Testing | 5/10 |
+| 6 | Documentation | 8/10 |
+| 7 | Fresh-Install Experience | 7/10 |
+| 8 | Hook System | 8/10 |
+| 9 | Agent/Skill System | 8/10 |
+| 10 | Task System | 7/10 |
+| 11 | Error Handling & Resilience | 7/10 |
+| 12 | Developer Ergonomics | 7/10 |
+
+**Overall Average: 7.25/10**
+
+## Top 5 Technical Debt Items
+
+1. **Dual-write IPC (file + SQLite everywhere)** — Every hook writes to both flat files AND SQLite. Doubles write I/O, creates consistency risks, and doubles maintenance surface. Set a deprecation deadline for flat files.
+2. **Role resolution code duplication** — `on-pre-tool-use.sh` duplicates the 20-line role resolution block from `common.sh` for speed. Any role-detection change must be made in two places.
+3. **Large monolithic files** — `doey-session.sh` (1,717 lines), `taskcard.go` (2,349 lines), `commands.go` (2,257 lines). Hard to navigate, high merge conflict risk.
+4. **CLAUDE.md stale line count** — States doey.sh is "~6100 lines" but it's actually 461 lines after factoring. Misleading for contributors.
+5. **No garbage collection on .task files** — 150+ tasks accumulate in flat directory with no archiving mechanism.
+
+## Top 5 Risks
+
+1. **No CI pipeline** — 13 test files exist but no GitHub Actions. Regressions can ship undetected. Bash compat violations, Go test failures — all manual.
+2. **Taskmaster as SPOF** — Context exhaustion is handled (auto-restart at 85%), but hard crashes (SIGKILL, OOM) have no external watchdog.
+3. **TUI build failure is silent** — install.sh falls back to info-panel.sh when Go build fails, but only shows a warning. Users may not realize they're running degraded.
+4. **No rollback on partial install failure** — If step 5 succeeds but step 6 fails, install is half-baked with no recovery path.
+5. **Race condition in .task file updates** — `task_update_field()` uses PID-suffixed temp files but no `flock`. Concurrent worker updates could race.
+
+## Top 5 Opportunities
+
+1. **Add GitHub Actions CI** (effort: low, impact: high) — `bash tests/test-bash-compat.sh` + `cd tui && go test ./...` catches most regressions automatically.
+2. **Unify IPC to SQLite-only** (effort: medium, impact: high) — Eliminate flat-file dual-writes. Reduces hook complexity by ~30%, halves I/O.
+3. **Add `doey errors` CLI command** (effort: low, impact: medium) — Surface runtime errors to developers. Currently buried in `$RUNTIME_DIR/errors/errors.log`.
+4. **Add CONTRIBUTING.md** (effort: low, impact: medium) — Document the development workflow. Currently tribal knowledge.
+5. **Split large Go files** (effort: low, impact: medium) — `commands.go` by command group, `taskcard.go` by render phase. Better maintainability and review ergonomics.
+

@@ -1,13 +1,12 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=11
-TASK_TITLE=Redesign Window Manager — coordinator only, never does work itself
-TASK_STATUS=done
-TASK_TYPE=refactor
-TASK_TAGS=agents,hooks,architecture,manager,critical
-TASK_TEAM=W1
-TASK_DESCRIPTION=Window Managers currently try to do research and implementation themselves. This is wrong. They must operate like Session Manager — pure coordination, zero execution.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Fix message delivery reliability — eliminate retry loops and interrupts
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bugfix
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Taskmaster message delivery to Subtaskmasters is unreliable. Observed: messages too long cause interrupts, doey-send retries multiple times, paste-buffer approach has timing issues, SM gets interrupted mid-prompt by repeated sends. The delivery path (doey-send.sh, load-buffer, paste-buffer, Enter) needs to be bulletproof — single attempt, confirmed delivery, no awkward retry loops.
+TASK_TIMESTAMPS=created=1775644199
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257535
+TASK_UPDATED=1775644199

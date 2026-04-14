@@ -1,13 +1,15 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=22
-TASK_TITLE=Go TUI GUI-style mouse experience overhaul
-TASK_STATUS=done
-TASK_TYPE=feature
-TASK_TAGS=tui,mouse,ux,feature
-TASK_TEAM=W2
-TASK_DESCRIPTION=Overhaul the Go TUI to feel like a traditional GUI application, not a terminal dashboard. Key design principles: (1) Back button in top-left corner — standard GUI navigation pattern. (2) Larger, more clickable buttons throughout — sized for comfortable mouse targeting, not minimal terminal aesthetics. (3) Apply standard GUI layout principles — consistent placement of navigation, actions, and content areas. (4) Cursor should feel natural — mouse interaction should be the primary input method, not an afterthought. The goal is that a user who has never used a terminal tool should feel at home — it should look and behave like a desktop app that happens to run in a terminal. Research the current TUI codebase first to understand existing mouse handling and component layout before proposing changes.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Ensure subtasks sync to DB immediately for live TUI updates
+TASK_STATUS=pending
+TASK_TYPE=bugfix
+TASK_CREATED_BY=team_lead
+TASK_TEAM=2
+TASK_DESCRIPTION=Go TUI reads SQLite DB directly. Subtask mutations via CLI may not write to DB immediately, causing invisible subtasks in TUI.
+TASK_TIMESTAMPS=created=1775651769
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257535
+TASK_UPDATED=1775651769
+TASK_SUBTASK_1_TITLE=final verify
+TASK_SUBTASK_1_STATUS=pending
+TASK_SUBTASK_1_CREATED_AT=1775653233

@@ -1,14 +1,26 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=3
-TASK_TITLE=Fix SM phase-forwarding — auto-push next phase when teams finish
-TASK_STATUS=done
-TASK_TYPE=bugfix
-TASK_TAGS=infrastructure,hooks,session-manager,ipc
-TASK_DESCRIPTION=When a phased task completes Phase N, Session Manager currently goes idle and waits for Boss to kick Phase N+1. This is wrong — SM should autonomously detect phase completion and dispatch the next phase immediately.
-TASK_SUBTASKS=1:W2.5: Fix projectDir walk-up for task list:done
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Codebase state audit — pros, cons, scoring
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=research
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Comprehensive audit of the Doey codebase. Score 0-10 across key areas (architecture, code quality, testing, documentation, fresh-install experience, developer ergonomics, error handling, extensibility). List pros and cons for each area. Identify technical debt, risks, and opportunities.
+TASK_TIMESTAMPS=created=1775630106
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
-TASK_SUBTASK_1_TITLE=W2.5
-TASK_SUBTASK_1_STATUS= Fix projectDir walk-up for task list:done
+TASK_UPDATED=1775630106
+TASK_FILES=.doey/tasks/3.task
+TASK_SUBTASK_1_TITLE=W2.1: Audit areas 1-6 (architecture, code quality, shell scripts, Go TUI, testing, documentation)
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775630203
+TASK_SUBTASK_1_COMPLETED_AT=1775630231
+TASK_SUBTASK_2_TITLE=W2.2: Audit areas 7-12 (fresh-install, hooks, agents/skills, tasks, error handling, ergonomics)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1775630203
+TASK_SUBTASK_2_COMPLETED_AT=1775630238
+TASK_SUBTASK_3_TITLE=Dispatched to Team 2 (Subtaskmaster + 2 workers) for parallel research
+TASK_SUBTASK_3_STATUS=pending
+TASK_SUBTASK_3_CREATED_AT=1775630214

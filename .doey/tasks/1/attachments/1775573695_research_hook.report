@@ -1,0 +1,229 @@
+# Research Report: on-session-start.sh Hook for Context Overlay Injection
+
+## Summary
+
+The on-session-start.sh hook detects roles via window/pane position, then injects environment variables into Claude Code sessions via `CLAUDE_ENV_FILE`. There is **no existing context overlay mechanism** — no `.doey/context/` directory, no per-role context injection, no custom instructions beyond agent definitions. The hook has a clean insertion point at line 192 (after env var injection, before team definition processing) where overlay injection can be added with ~15 lines of bash.
+
+---
+
+## Findings
+
+### Q1: How does on-session-start.sh detect the current role?
+
+**Mechanism:** Position-based detection using `WINDOW_INDEX` and `PANE_INDEX` (lines 45-75).
+
+**Default:** `ROLE="$DOEY_ROLE_ID_WORKER"` (line 45) — every pane starts as a worker.
+
+**Role assignment logic:**
+- Window 0, pane 0 → `info_panel`
+- Window 0, pane 1 → `$DOEY_ROLE_ID_BOSS` = `"boss"`
+- Core Team window (from TASKMASTER_PANE), pane 0 → `$DOEY_ROLE_ID_COORDINATOR` = `"coordinator"`
+- Core Team window, pane 1 → `$DOEY_ROLE_ID_TASK_REVIEWER` = `"task_reviewer"`
+- Core Team window, pane 2 → `$DOEY_ROLE_ID_DEPLOYMENT` = `"deployment"`
+- Core Team window, pane 3 → `$DOEY_ROLE_ID_DOEY_EXPERT` = `"doey_expert"`
+- Worker team window, manager pane → `$DOEY_ROLE_ID_TEAM_LEAD` = `"team_lead"`
+- All other panes → stay as `$DOEY_ROLE_ID_WORKER` = `"worker"`
+
+**Variable:** `ROLE` holds the internal ID string. Exported as `DOEY_ROLE` via CLAUDE_ENV_FILE (line 173).
+
+### Q2: How does it inject environment variables?
+
+**Mechanism:** `CLAUDE_ENV_FILE` — a file path provided by Claude Code (lines 167-192).
+
+The hook appends `export VAR="value"` lines to this file via heredoc. Claude Code reads this file after the hook exits and makes those variables available in the session.
+
+**Key env vars injected:**
+- `DOEY_ROLE` — internal role ID (e.g., `"worker"`, `"coordinator"`, `"boss"`)
+- `DOEY_TEAM_DIR` — working directory (worktree or project dir)
+- `DOEY_PANE_ID` — human-readable pane identifier (e.g., `"t2-w1"`, `"taskmaster"`)
+- `DOEY_FULL_PANE_ID` — project-prefixed (e.g., `"d-t2-w1"`)
+- `DOEY_WINDOW_INDEX`, `DOEY_PANE_INDEX` — numeric position
+
+Additional env vars are appended after the main block:
+- `DOEY_TASK_ID` — if team has a task assignment (line 190)
+- `DOEY_TEAM_ROLE` — from team definition files (line 201)
+- `DOEY_TEAM_PANE_NAME` — from team definition files (line 202)
+
+### Q3: Is there any existing mechanism for injecting custom context?
+
+**No.** There is no existing overlay/context injection system. Specifically:
+- No `.doey/context/` directory exists or is referenced anywhere in the codebase
+- No `CONTEXT_OVERLAY` or similar env var exists
+- No mechanism to inject per-role markdown/instructions into the Claude session from the hook
+
+**Adjacent mechanisms that exist but don't solve this:**
+- **Agent definitions** (`agents/`): Set system prompts per role, but are static and not project-customizable
+- **Skill syncing** (lines 147-165): Copies skill directories from repo to project, but not context
+- **Team definition env** (lines 194-207): Injects `DOEY_TEAM_ROLE` and `DOEY_TEAM_PANE_NAME` — role-specific but env-var-only
+- **on-pre-compact.sh**: Outputs context preservation text during compaction, but only fires on compact events
+
+### Q4: What is the exact role ID format used?
+
+From `shell/doey-roles.sh`, the **internal IDs** (used as `DOEY_ROLE` values):
+
+| Role | Internal ID (`DOEY_ROLE_ID_*`) | Suggested filename |
+|------|-------------------------------|-------------------|
+| Boss | `boss` | `boss.md` |
+| Taskmaster | `coordinator` | `coordinator.md` |
+| Subtaskmaster | `team_lead` | `team_lead.md` |
+| Worker | `worker` | `worker.md` |
+| Freelancer | `freelancer` | `freelancer.md` |
+| Task Reviewer | `task_reviewer` | `task_reviewer.md` |
+| Deployment | `deployment` | `deployment.md` |
+| Doey Expert | `doey_expert` | `doey_expert.md` |
+| Info Panel | `info_panel` | `info_panel.md` |
+
+**The filename should match `DOEY_ROLE` exactly** — i.e., use `${ROLE}.md` which maps to the internal ID.
+
+Additionally, `DOEY_TEAM_ROLE` (from team definitions) may hold custom role names like `"seo-technical"`, `"visual-investigator"`, etc. An overlay lookup should check `DOEY_TEAM_ROLE` first, then fall back to `DOEY_ROLE`.
+
+### Q5: Where in the hook would overlay injection best fit?
+
+**Recommended insertion point: After line 192, before line 194.**
+
+This is after:
+- Role detection is complete (lines 45-75) — `ROLE` is set
+- Main env var block is written (lines 167-192) — `DOEY_ROLE` is in CLAUDE_ENV_FILE
+- Task ID propagation (lines 189-191)
+
+And before:
+- Team definition processing (lines 194-207) — which may override DOEY_TEAM_ROLE
+- Pane title setting (lines 209-219)
+
+**Why this location:**
+1. `ROLE` variable is finalized and won't change
+2. `PROJECT_DIR` and `wt_dir` are available for path resolution
+3. `CLAUDE_ENV_FILE` is writable and already open for appending
+4. Team definition may add `DOEY_TEAM_ROLE` later — a second overlay lookup after line 207 could handle team-role-specific overlays
+
+---
+
+## Key Files
+
+| File | Purpose | Lines of interest |
+|------|---------|-------------------|
+| `.claude/hooks/on-session-start.sh` | Main target — inject overlay here | 45-75 (role detection), 167-192 (env injection), **192 (insertion point)** |
+| `.claude/hooks/common.sh` | Shared utilities — role check functions | 226-232 (`team_role()`), 234-243 (`is_manager()`) |
+| `shell/doey-roles.sh` | Role ID definitions | 16-22 (internal IDs) |
+| `.claude/hooks/on-pre-compact.sh` | Compaction — may need overlay content too | 28-42 (role label, context output) |
+
+---
+
+## Plan
+
+### Option A (Recommended): CLAUDE_ENV_FILE env var pointing to overlay file
+
+**Approach:** After role detection, check if `.doey/context/${ROLE}.md` exists in the project. If so, set `DOEY_CONTEXT_OVERLAY=<absolute_path>` in CLAUDE_ENV_FILE. Agent definitions and on-pre-compact.sh can then reference this env var to load the content.
+
+**Implementation (insert after line 192 in on-session-start.sh):**
+
+```bash
+# Context overlay injection — project-specific per-role context
+_overlay_base="${wt_dir:-$PROJECT_DIR}/.doey/context"
+_overlay_file=""
+# Priority 1: team role overlay (e.g., "seo-technical.md")
+if [ -n "${_team_role:-}" ] && [ -f "${_overlay_base}/${_team_role}.md" ]; then
+  _overlay_file="${_overlay_base}/${_team_role}.md"
+# Priority 2: base role overlay (e.g., "worker.md", "coordinator.md")
+elif [ -f "${_overlay_base}/${ROLE}.md" ]; then
+  _overlay_file="${_overlay_base}/${ROLE}.md"
+fi
+if [ -n "$_overlay_file" ] && [ -w "$CLAUDE_ENV_FILE" ]; then
+  echo "export DOEY_CONTEXT_OVERLAY=\"${_overlay_file}\"" >> "$CLAUDE_ENV_FILE"
+fi
+```
+
+**Note:** `_team_role` is set later (line 198), so the team-role check should be in a second block after line 207. Alternatively, move the entire overlay injection to after line 207.
+
+**Revised insertion point: After line 207** (after team definition processing). This ensures both `ROLE` and `_team_role` are available.
+
+**Consuming the overlay:**
+- Agent definitions can include: `If DOEY_CONTEXT_OVERLAY is set, read that file for project-specific instructions`
+- on-pre-compact.sh can cat the file into compaction context
+- on-prompt-submit.sh could output it as feedback (exit 2) on first prompt — but this is aggressive
+
+**Pros:** Clean, non-invasive, follows existing pattern. Env var is visible to all hooks and the agent.
+**Cons:** Requires consumer-side changes (agent defs or hooks must read the file). Env var alone doesn't inject content into Claude's conversation.
+
+### Option B (Alternative): Direct stdout output from on-session-start.sh
+
+**Approach:** Read the overlay file content and output it to stdout from the hook. Claude Code session-start hooks can provide feedback text this way.
+
+**Implementation (insert after line 207):**
+
+```bash
+# Context overlay — output to Claude session as initial context
+_overlay_base="${wt_dir:-$PROJECT_DIR}/.doey/context"
+_overlay_file=""
+if [ -n "${_team_role:-}" ] && [ -f "${_overlay_base}/${_team_role}.md" ]; then
+  _overlay_file="${_overlay_base}/${_team_role}.md"
+elif [ -f "${_overlay_base}/${ROLE}.md" ]; then
+  _overlay_file="${_overlay_base}/${ROLE}.md"
+fi
+if [ -n "$_overlay_file" ]; then
+  echo "export DOEY_CONTEXT_OVERLAY=\"${_overlay_file}\"" >> "$CLAUDE_ENV_FILE"
+fi
+```
+
+**Pros:** Simpler — single location handles everything.
+**Cons:** on-session-start may not support stdout feedback in the same way as other hooks (needs testing). If it doesn't, falls back to Option A's env-var-only approach.
+
+### Recommended Approach: Option A with two changes
+
+1. **Insert overlay env var after line 207** (after team defs, so `_team_role` is available)
+2. **Add overlay content to on-pre-compact.sh** (so context survives compaction)
+3. **Update agent definitions** to reference `DOEY_CONTEXT_OVERLAY` (optional — agents can `cat $DOEY_CONTEXT_OVERLAY` if set)
+
+---
+
+## Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Overlay file doesn't exist → no-op | Low | Guard with `[ -f ]` check — already in plan |
+| Worktree path differs from project dir | Medium | Use `${wt_dir:-$PROJECT_DIR}` — consistent with existing pattern |
+| Large overlay files bloat context | Medium | Document max recommended size (e.g., 500 lines). Optional: truncate in hook |
+| Team role not set when overlay runs | Low | **Fixed by inserting after line 207** where `_team_role` is populated |
+| Concurrent workers reading same overlay | None | Read-only access — no conflict possible |
+| bash 3.2 compatibility | Low | Only uses `[ -f ]`, `echo`, `cat` — all bash 3.2 safe |
+| `.doey/context/` doesn't exist in project | None | Guard with `[ -d ]` or just `[ -f ]` on specific file |
+
+---
+
+## Implementation Prompts (dispatch-ready)
+
+### Worker Task: Add overlay injection to on-session-start.sh
+
+```
+Edit /Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-session-start.sh
+
+Insert AFTER line 207 (after the `fi` that closes the team definition block), BEFORE line 209 (`_TITLE=""`):
+
+# Context overlay — set env var pointing to project-specific per-role context file
+_overlay_base="${wt_dir:-$PROJECT_DIR}/.doey/context"
+_overlay_file=""
+# Priority 1: team-specific role overlay (e.g., seo-technical.md)
+[ -n "${_team_role:-}" ] && [ -f "${_overlay_base}/${_team_role}.md" ] && _overlay_file="${_overlay_base}/${_team_role}.md"
+# Priority 2: base role overlay (e.g., worker.md, coordinator.md)
+[ -z "$_overlay_file" ] && [ -f "${_overlay_base}/${ROLE}.md" ] && _overlay_file="${_overlay_base}/${ROLE}.md"
+# Priority 3: catch-all overlay
+[ -z "$_overlay_file" ] && [ -f "${_overlay_base}/all.md" ] && _overlay_file="${_overlay_base}/all.md"
+if [ -n "$_overlay_file" ] && [ -w "${CLAUDE_ENV_FILE:-/dev/null}" ]; then
+  echo "export DOEY_CONTEXT_OVERLAY=\"${_overlay_file}\"" >> "$CLAUDE_ENV_FILE"
+fi
+```
+
+### Worker Task: Add overlay content to on-pre-compact.sh
+
+```
+Edit /Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-pre-compact.sh
+
+After the initial context block (after line 43, before `_list_files()`), add:
+
+# Include context overlay content if set
+if [ -n "${DOEY_CONTEXT_OVERLAY:-}" ] && [ -f "$DOEY_CONTEXT_OVERLAY" ]; then
+  echo ""
+  echo "## Project Context Overlay"
+  head -200 "$DOEY_CONTEXT_OVERLAY"
+fi
+```

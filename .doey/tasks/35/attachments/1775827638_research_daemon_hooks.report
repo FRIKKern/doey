@@ -1,0 +1,203 @@
+# Research Report: Prompt-Submit Hooks, Confirmation, and Daemon/Unattended Mode
+
+**Task:** 35 | **Subtask:** 74
+**Date:** 2026-04-10
+**Author:** Worker d-t4-w1
+
+---
+
+## Summary
+
+The `on-prompt-submit.sh` hook **always exits 0** — it never blocks. The `<user-prompt-submit-hook>` system-reminder that appears in conversations is Claude Code's **built-in notification** injected when any UserPromptSubmit hook runs, not a confirmation prompt. All Doey workers already run with `--dangerously-skip-permissions`, which auto-accepts tool permissions but **does NOT skip hooks** — hooks always run regardless. There is no existing daemon/unattended mode detection in the codebase. The system-reminder output is informational and non-blocking; no fix is needed for hook auto-acceptance.
+
+---
+
+## 1. on-prompt-submit.sh Behavior
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-prompt-submit.sh` (157 lines)
+
+### What it does:
+1. **Line 19-28**: Slash command fast-path — `/compact` sets status to READY; `/simplify`, `/loop`, `/rename`, `/exit`, `/help`, `/status`, `/doey*` exit immediately
+2. **Lines 30-54**: Task accountability check for workers — verifies task assignment exists. **Fail-open** (line 49): warns but does NOT block if no task found
+3. **Lines 56-68**: Sets pane status to BUSY via `doey-ctl` or `transition_state`
+4. **Lines 70-77**: Appends ACTIVITY and SINCE fields to status file for live monitoring
+5. **Lines 79-105**: Boss interaction capture — logs user messages to SQLite (Boss only)
+6. **Lines 107-113**: Activity logging and Taskmaster notification
+7. **Lines 116-147**: Task ID persistence — extracts `Task #N` and `Subtask #N` from prompt
+8. **Lines 149-155**: Restores collapsed pane columns
+
+### Exit codes:
+- **Line 26**: `exit 0` (slash command fast-path)
+- **Line 27**: `exit 0` (slash command fast-path)
+- **Line 157**: `exit 0` (final, always reached)
+- **No `exit 1` or `exit 2` anywhere in the file** — this hook NEVER blocks
+
+### Blocking conditions:
+**None.** The hook is purely observational — it sets status, logs activity, and persists task IDs. Even the task accountability check (lines 30-54) is fail-open with a warning only (line 49-51).
+
+---
+
+## 2. Claude Code Hook Confirmation Mechanism
+
+### Hook exit code semantics (from docs/context-reference.md:46):
+```
+Exit codes: 0=allow, 1=block+error, 2=block+feedback
+```
+
+- **Exit 0**: Hook succeeds, operation proceeds. Claude Code shows the hook's stdout as a `<system-reminder>` tag in the conversation.
+- **Exit 1**: Hook blocks with error — operation is cancelled, stderr shown as error
+- **Exit 2**: Hook blocks with feedback — operation is cancelled, stderr shown as feedback to the model
+
+### The `<user-prompt-submit-hook>` system-reminder:
+The message `"UserPromptSubmit hook success: written"` that appears in conversations is **Claude Code's standard notification** when a UserPromptSubmit hook runs successfully (exit 0). This is:
+- **Not a confirmation prompt** — it does not ask "proceed?"
+- **Not blocking** — the prompt is already submitted, the hook ran as a side-effect
+- **Informational only** — tells the model that hooks ran
+
+### Does Claude Code ever ask "proceed?" for hooks?
+**No.** Unlike tool permissions (which can show accept/deny UI), hooks are **always executed automatically**:
+- Exit 0 hooks run silently (with system-reminder output)
+- Exit 1/2 hooks block the action without asking — the user can't override
+- There is no "confirm hook" UI in Claude Code
+
+### Key distinction: Hooks vs. Tool Permissions
+| Mechanism | `--dangerously-skip-permissions` effect | User confirmation? |
+|-----------|----------------------------------------|-------------------|
+| Tool permissions | Auto-accepted | Skipped |
+| Hooks | **No effect** — hooks always run | Never asked |
+
+---
+
+## 3. `--dangerously-skip-permissions` and Hooks
+
+### Worker launch commands (from shell/doey-team-mgmt.sh and shell/doey-session.sh):
+
+All Doey roles are launched with `--dangerously-skip-permissions`:
+
+```bash
+# Workers (shell/doey-team-mgmt.sh:474)
+claude --dangerously-skip-permissions --effort high --model $_bbw_worker_model --name "T${team_window} W${worker_num}"
+
+# Subtaskmaster (shell/doey-team-mgmt.sh:776)
+claude --dangerously-skip-permissions --model $mgr_model --name "${_mgr_name}" --agent "$mgr_agent"
+
+# Boss (shell/doey-session.sh:143)
+claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name "Boss" --agent doey-boss
+
+# Taskmaster, Task Reviewer, Deployment — all have --dangerously-skip-permissions
+```
+
+### Effect on hooks:
+`--dangerously-skip-permissions` **only affects tool permission prompts** (the "Allow Claude to run this command? [y/N]" UI). It does NOT:
+- Skip hook execution
+- Auto-accept hook blocks (exit 1/2)
+- Suppress hook system-reminders
+
+**Hooks always run regardless of permission mode.** This is by design — hooks are project-level safety guardrails that cannot be bypassed.
+
+---
+
+## 4. Existing Daemon/Unattended Mode Detection
+
+### Search results:
+- **No `DOEY_DAEMON` env var** exists anywhere in hooks or session-start
+- **No `unattended` or `auto-accept`** detection in any hook
+- The `doey-daemon` references in `shell/doey-session.sh` (lines 392-395, 645-653) refer to a **separate observability daemon binary** (`doey-daemon`), not a "daemon mode" for Claude Code instances
+- No hook checks for headless/non-interactive state
+
+### What on-session-start.sh exports (lines 164-188):
+The env file includes role, runtime, project info, but nothing related to daemon/unattended mode:
+```bash
+DOEY_RUNTIME, SESSION_NAME, PROJECT_DIR, PROJECT_NAME,
+DOEY_ROLE, DOEY_PANE_INDEX, DOEY_WINDOW_INDEX,
+DOEY_TEAM_WINDOW, DOEY_TEAM_DIR, DOEY_PANE_ID, etc.
+```
+
+---
+
+## 5. Analysis: Is There Actually a Problem?
+
+### The `<user-prompt-submit-hook>` system-reminder is NOT a blocker
+
+Looking at the system-reminders in this conversation:
+```
+<system-reminder>
+UserPromptSubmit hook success: written
+logged event 1859
+</system-reminder>
+```
+
+This is injected by Claude Code after the hook runs successfully (exit 0). It:
+- Does not pause execution
+- Does not require acknowledgment
+- Does not consume a "turn"
+- Is equivalent to a log line visible to the model
+
+### Workers already auto-proceed through hooks
+Since:
+1. `on-prompt-submit.sh` always exits 0
+2. `--dangerously-skip-permissions` handles tool permissions
+3. Hooks run automatically without confirmation
+
+**Workers already auto-accept prompt-submit hooks without blocking.** There is no actual blocking issue.
+
+---
+
+## 6. Potential Concerns and Edge Cases
+
+### If the task is about stop hooks blocking:
+The **Stop hooks** (stop-status.sh, stop-results.sh) DO use exit 2 to block stopping until conditions are met (e.g., report written, proof emitted). This is intentional — the model retries after receiving the feedback.
+
+### If workers seem "stuck" on hook output:
+The system-reminder appearing in context could:
+1. Consume context window space (minimal — ~50 chars per reminder)
+2. Confuse models into thinking they need to "respond" to the reminder (unlikely with well-crafted agents)
+
+### If a future hook needs to block selectively:
+A daemon mode env var could be useful:
+```bash
+# In on-session-start.sh, add:
+export DOEY_UNATTENDED="true"  # All non-Boss panes
+
+# In hooks that might block:
+[ "${DOEY_UNATTENDED:-}" = "true" ] && exit 0  # skip blocking for workers
+```
+
+But this is speculative — no current hook blocks workers inappropriately.
+
+---
+
+## 7. Recommended Approach
+
+### If the goal is "workers should never be blocked by prompt-submit hooks":
+**No change needed.** `on-prompt-submit.sh` already always exits 0. Workers are never blocked.
+
+### If the goal is "add daemon mode detection for future use":
+Add `DOEY_UNATTENDED=true` to env exports for non-Boss, non-interactive panes:
+
+```bash
+# In on-session-start.sh, around line 183, add:
+if [ "$ROLE" != "$DOEY_ROLE_ID_BOSS" ] && [ "$ROLE" != "info_panel" ]; then
+  echo "export DOEY_UNATTENDED=true" >> "$CLAUDE_ENV_FILE"
+fi
+```
+
+Then hooks that might need conditional blocking can check:
+```bash
+[ "${DOEY_UNATTENDED:-}" = "true" ] && exit 0
+```
+
+### If the goal is "reduce noise from system-reminders":
+This would require changes to Claude Code itself (not Doey). The system-reminder injection is built into Claude Code's hook handling.
+
+---
+
+## Files Examined
+
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-prompt-submit.sh` (157 lines)
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/common.sh` (488 lines)
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-session-start.sh` (252 lines)
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/settings.json` (107 lines)
+- `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey-team-mgmt.sh` (grep)
+- `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey-session.sh` (grep)
+- `/Users/frikk.jarl/Documents/GitHub/doey/docs/context-reference.md` (grep)

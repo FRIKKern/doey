@@ -1,0 +1,239 @@
+# Research Report: doey add-window --task-id, Team Env Files, and Task Binding
+
+**Task:** 37 | **Subtask:** 80
+**Date:** 2026-04-10
+**Author:** Worker d-t4-w1
+
+---
+
+## Summary
+
+The `doey add-window --task-id` pipeline works correctly end-to-end. The flag is parsed in `doey.sh:384`, passed through `add_dynamic_team_window()` (doey-team-mgmt.sh:1126), and written to `team_*.env` via `write_team_env()` (doey-team-mgmt.sh:22). The `_name_team_window()` function (doey-team-mgmt.sh:835) reads TASK_ID from the env file and uses it in the window name. Task binding (`doey task update --field team --value W${NEW_W}`) is **documented in the Taskmaster agent** but is **NOT automated** in the shell code — the Taskmaster must call it manually after spawn.
+
+---
+
+## 1. add-window Command Handler
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey.sh`
+**Lines:** 371-408
+
+### --task-id Parsing (line 384):
+```bash
+--task-id) shift; _aw_task_id="${1:-}" ;;
+```
+Clean, standard flag parsing. The variable `_aw_task_id` is initialized as empty at line 374.
+
+### Forwarding to add_dynamic_team_window:
+All three code paths (freelancer, worktree/grid, default) pass `$_aw_task_id` as the **last argument** (12th positional):
+- Line 399: `add_dynamic_team_window ... "$_aw_task_id"` (freelancer)
+- Line 403: `add_dynamic_team_window ... "$_aw_task_id"` (worktree/grid)
+- Line 406: `add_dynamic_team_window ... "$_aw_task_id"` (default)
+
+**Verdict: CORRECT** — --task-id is properly parsed and forwarded.
+
+---
+
+## 2. add_dynamic_team_window()
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey-team-mgmt.sh`
+**Lines:** 1126-1245
+
+### Parameter reception (line 1132):
+```bash
+local task_id="${12:-}"
+```
+
+### write_team_env call (line 1180):
+```bash
+write_team_env "$runtime_dir" "$window_index" "dynamic" "" "0" "$mgr_pane" \
+  "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" \
+  "$worker_model" "$manager_model" "$team_type" "" "$reserved" "$task_id"
+```
+`$task_id` is passed as the 16th argument (position matches `write_team_env`'s parameter list).
+
+### Second write_team_env call for freelancers (line 1225):
+```bash
+write_team_env "$runtime_dir" "$window_index" "dynamic" "" "$_fl_worker_count" "$mgr_pane" \
+  "$wt_dir_for_env" "$worktree_branch" "$team_name" "$team_role" \
+  "$worker_model" "$manager_model" "$team_type" "" "$reserved" "$task_id"
+```
+Also correctly passes `$task_id`.
+
+**Verdict: CORRECT** — task_id flows through both calls.
+
+---
+
+## 3. write_team_env()
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey-team-mgmt.sh`
+**Lines:** 22-58
+
+### Parameter reception (line 37):
+```bash
+local task_id="${16:-}"
+```
+
+### TASK_ID in env file output (line 55):
+```bash
+TASK_ID="${task_id}"
+```
+
+### Resulting file (verified from live team_4.env):
+```
+WINDOW_INDEX="4"
+GRID="dynamic"
+MANAGER_PANE="0"
+WORKER_PANES="1,2"
+WORKER_COUNT="2"
+SESSION_NAME="doey-doey"
+WORKTREE_DIR=""
+WORKTREE_BRANCH=""
+TEAM_NAME="Task 32"
+TEAM_ROLE=""
+WORKER_MODEL=""
+MANAGER_MODEL=""
+TEAM_TYPE=""
+TEAM_DEF=""
+RESERVED="false"
+TASK_ID="37"
+```
+
+**Verdict: CORRECT** — TASK_ID is written to the env file.
+
+---
+
+## 4. Window Naming
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey-team-mgmt.sh`
+**Function:** `_name_team_window()` (lines 835-871)
+
+### Task-aware naming logic (lines 846-859):
+```bash
+_ntw_tid=$(_env_val "$_te" TASK_ID)
+if [ -n "$_ntw_tid" ]; then
+  local _ntw_tf="${_proj:+$(pwd)/.doey/tasks/${_ntw_tid}.task}"
+  if [ -n "$_ntw_tf" ] && [ -f "$_ntw_tf" ]; then
+    _ntw_sn=$(grep '^TASK_SHORTNAME=' "$_ntw_tf" 2>/dev/null | head -1)
+    _ntw_sn="${_ntw_sn#TASK_SHORTNAME=}"
+  fi
+  if [ -n "$_ntw_sn" ]; then
+    label="Task ${_ntw_tid}: ${_ntw_sn}"
+  else
+    label="Task ${_ntw_tid}"
+  fi
+fi
+```
+
+### Naming priority:
+1. If `TEAM_NAME` is set and non-"generic" → use it directly
+2. If `TASK_ID` is set and `.task` file has `TASK_SHORTNAME` → "Task 37: escalation-fix"
+3. If `TASK_ID` is set but no shortname → "Task 37"
+4. If TEAM_TYPE=freelancer → "Freelancers"
+5. If worktree → "Worktree Team"
+6. Fallback → "Regular Team"
+
+**Note:** The `--name` flag (e.g., `--name "Task 32"`) takes priority over TASK_ID-based naming because it's checked first at line 842. The Taskmaster typically passes both `--name "Task $ID"` and `--task-id $ID`.
+
+**Verdict: CORRECT** — window naming uses task info when available.
+
+---
+
+## 5. Task Binding (doey task update)
+
+### In shell code:
+`add_dynamic_team_window()` does **NOT** call `doey task update` to bind the team to the task. The function:
+1. Writes TASK_ID to team env ✅
+2. Names the window with task info ✅
+3. Calls `_register_team_window` (adds to TEAM_WINDOWS in session.env) ✅
+4. Does **NOT** call `doey task update --field team --value W${window_index}` ❌
+
+### In Taskmaster agent (lines 263-275):
+The agent documentation instructs the Taskmaster to manually bind:
+```bash
+doey task update --id $TASK_ID --field "team" --value "W${NEW_W}"
+```
+
+This is a **manual step** in the Taskmaster's playbook, not automated. The `doey task update` CLI exists (via doey-ctl):
+```
+doey-ctl task update -field team -value W4 37
+```
+
+### Is this a gap?
+**Partially.** The team env file has the TASK_ID (shell knows which task), and the Taskmaster is instructed to update the task (task knows which team). But:
+- If the Taskmaster forgets or the send-keys fails, the task file has no TASK_TEAM field
+- `doey task list` won't show the team assignment
+- Task cleanup on `kill-window` can't reliably unbind
+
+### Recommendation:
+Automate the task binding in `add_dynamic_team_window()` after the `write_team_env` call (around line 1188):
+```bash
+# Auto-bind task to team window
+if [ -n "$task_id" ] && command -v doey-ctl >/dev/null 2>&1; then
+  doey-ctl task update -field team -value "W${window_index}" "$task_id" \
+    --project-dir "$dir" 2>/dev/null || true
+fi
+```
+
+---
+
+## 6. on-session-start.sh Task ID Propagation
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-session-start.sh`
+**Lines:** 131, 186-188
+
+When a worker starts in a team with TASK_ID, on-session-start.sh reads it from the team env and exports it:
+```bash
+_team_task_id=$(_read_team_key "${RUNTIME_DIR}/team_${TEAM_WINDOW}.env" TASK_ID)
+# ...
+if [ -n "${_team_task_id:-}" ]; then
+  echo "export DOEY_TASK_ID=\"${_team_task_id}\"" >> "$CLAUDE_ENV_FILE"
+fi
+```
+
+**Verdict: CORRECT** — workers inherit the task ID from their team env.
+
+---
+
+## 7. How Taskmaster Uses add-window
+
+From the agent definition (`agents/doey-taskmaster.md:237`):
+```bash
+doey add-window --workers $WORKERS --name "Task $TASK_ID" --task-id $TASK_ID
+```
+
+The Taskmaster:
+1. Counts subtasks to determine worker count
+2. Spawns the team with `doey add-window --workers N --name "Task $ID" --task-id $ID`
+3. Polls until Subtaskmaster is READY
+4. Manually calls `doey task update --id $ID --field team --value W${NEW_W}`
+5. Dispatches the task to W.0 via send-keys
+
+---
+
+## 8. Gaps and Recommendations
+
+### Gap 1: Task binding is manual (medium priority)
+**What:** `doey task update --field team --value W${NEW_W}` is not called automatically during `add-window`.
+**Risk:** If Taskmaster forgets, task has no team binding. `doey task list` won't show team assignment.
+**Fix:** Add `doey-ctl task update -field team -value "W${window_index}" "$task_id"` in `add_dynamic_team_window()` at line ~1188.
+
+### Gap 2: No task unbinding on kill-window (low priority)
+**What:** `kill_team_window()` does not clear the task's team field.
+**Risk:** Stale team bindings after window teardown.
+**Fix:** In `kill_team_window()`, read TASK_ID from team env before deleting, then `doey-ctl task update -field team -value "" "$task_id"`.
+
+### Gap 3: TASK_ID in env but not in _name_team_window pwd (cosmetic)
+**What:** Line 849 uses `$(pwd)` to find the task file, which may not be the project dir.
+**Risk:** In worktree setups, `pwd` might point to the worktree, not the main project where `.doey/tasks/` lives.
+**Fix:** Use `$dir` (the project dir argument) instead of `$(pwd)`.
+
+---
+
+## Files Examined
+
+- `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey.sh` (lines 371-408)
+- `/Users/frikk.jarl/Documents/GitHub/doey/shell/doey-team-mgmt.sh` (lines 22-58, 726-755, 835-871, 1126-1245)
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-session-start.sh` (lines 131, 186-188)
+- `/Users/frikk.jarl/Documents/GitHub/doey/agents/doey-taskmaster.md` (lines 230-276)
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/skills/doey-add-window/SKILL.md`
+- `/var/folders/kd/d32ck4c53s12vz0m82sczyzh0000gn/T//doey/doey/team_4.env` (live reference)

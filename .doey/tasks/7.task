@@ -1,13 +1,23 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=7
-TASK_TITLE=Beautiful plan visualization in Go TUI — render task plans, research, and reports
-TASK_STATUS=done
-TASK_TYPE=feature
-TASK_TAGS=tui,task-system,dashboard,design,feature
-TASK_TEAM=W2
-TASK_DESCRIPTION=Build a complete visualization grammar and rendering system for Doey. Workers and Managers write structured markup blocks into .task files. The Go TUI renders them with full Lip Gloss styling. Plain terminal output gets a simpler Unicode renderer. Same grammar, two renderers.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Fix: Freelancers blocked from git operations by pre-tool-use hook
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bugfix
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Freelancers are being blocked from git commit/push by on-pre-tool-use.sh — the hook treats them like managed workers and forwards VCS requests to Subtaskmaster. Freelancers are independent and managerless — they must be able to do everything including git operations. The hook needs to detect freelancer role and skip the VCS forwarding restriction.
+TASK_TIMESTAMPS=created=1775637669
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1775637669
+TASK_FILES=.claude/hooks/on-pre-tool-use.sh,.doey/tasks/3.task,.doey/tasks/4.task,.doey/tasks/5.task,.doey/tasks/6.task,.doey/tasks/7.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W2.1: Fix on-pre-tool-use.sh to allow freelancer VCS operations
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1775637966
+TASK_SUBTASK_1_COMPLETED_AT=1775638167
+TASK_SUBTASK_2_TITLE=Dispatched to Team 2 (W2)
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775637971
+TASK_SUBTASK_2_COMPLETED_AT=1775638462

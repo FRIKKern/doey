@@ -1,13 +1,41 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=47
-TASK_TITLE=Beautiful heartbeat task cards on Go TUI Dashboard — active tasks only
-TASK_STATUS=done
-TASK_TYPE=feature
-TASK_TAGS=tui,dashboard,lipgloss,charmbracelet,ux,tasks
+TASK_TITLE=Fix syscall.Dup3 Linux-only blocker — breaks macOS builds
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
 TASK_TEAM=W2
-TASK_DESCRIPTION=Redesign the Dashboard tab in the Go TUI (tui/internal/model/dashboard.go) to feature beautiful, large, detailed "heartbeat" task cards for all ACTIVE tasks (status=active or in_progress only — exclude done, cancelled, pending_user_confirmation).
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+PRIORITY: P0 — blocks ALL pushes
+
+syscall.Dup3 is Linux-only. It is used in:
+- tui/cmd/doey-daemon/main.go lines 34-35
+- tui/cmd/doey-router/main.go lines 130-131
+
+This prevents compilation on macOS, which blocks every push since pre-push runs go build.
+
+FIX: Use build-tag-guarded platform files:
+- Create dup3_linux.go with the Dup3 call
+- Create dup3_darwin.go with the macOS equivalent (syscall.Dup2 is available on macOS/darwin)
+- Or use a build-tagged approach: move the fd redirect logic into platform-specific files with //go:build linux and //go:build darwin
+
+The key: syscall.Dup2 is the macOS/BSD equivalent of Dup3. Both redirect file descriptors. Dup3 adds O_CLOEXEC flag support which Dup2 lacks, but for daemon fd redirection Dup2 is sufficient on darwin.
+
+Success criteria: go build ./... passes on macOS (darwin/arm64).
+TASK_TIMESTAMPS=created=1776164809
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1776164809
+TASK_FILES=.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/2.task,.doey/tasks/20.task,.doey/tasks/21.task,.doey/tasks/22.task,.doey/tasks/23.task,.doey/tasks/24.task,.doey/tasks/25.task,.doey/tasks/27.task,.doey/tasks/3.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Replace syscall.Dup3 with platform-aware fd redirect in daemon and router
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1776164882
+TASK_SUBTASK_1_COMPLETED_AT=1776164903
+TASK_SUBTASK_2_TITLE=Verify go build and go vet pass after Dup3 fix
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_2
+TASK_SUBTASK_2_CREATED_AT=1776165116
+TASK_SUBTASK_2_COMPLETED_AT=1776165173

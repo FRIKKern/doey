@@ -1,0 +1,158 @@
+# Research Report: taskmaster-wait.sh Infinite Wake Loop Bug
+
+**Task:** #14 — Investigate Taskmaster stuck in infinite wake loop
+**Worker:** d-t2-w1 (pane 2.1)
+**Date:** 2026-04-08
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/taskmaster-wait.sh`
+
+---
+
+## Summary
+
+The Taskmaster enters an infinite wake loop because the cycle counter reset at the compact-interval threshold is immediately overwritten by `_wake()`, which unconditionally calls `_taskmaster_bump_cycle()`. Once the counter crosses `COMPACT_INTERVAL` (default 20), it can never reset below the threshold, causing every subsequent invocation to fire `_wake "TRIGGERED"` instantly with zero sleep. Additionally, the idle sleep duration is only 15 seconds, the active-tasks path always wakes unconditionally, and `_wake()` bumps the cycle counter on every wake regardless of type.
+
+---
+
+## Findings
+
+### BUG 1 (Critical): Cycle counter reset overwritten — lines 43, 115-123, 309-311
+
+The compact interval check at **line 309-311**:
+```bash
+if [ "$((_taskmaster_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
+  echo "0" > "$CYCLE_FILE"; _wake "TRIGGERED"
+fi
+```
+
+Resets the **file** to `0`, then calls `_wake()` (**line 43**):
+```bash
+_wake() { _taskmaster_bump_cycle; _taskmaster_dbg_wake "$1" "${2:-0}"; echo "WAKE_REASON=$1"; exit 0; }
+```
+
+Which calls `_taskmaster_bump_cycle()` (**lines 120-123**):
+```bash
+_taskmaster_bump_cycle() {
+  _taskmaster_cycle=$((_taskmaster_cycle + 1))
+  echo "$_taskmaster_cycle" > "$CYCLE_FILE"
+}
+```
+
+**Trace with COMPACT_INTERVAL=20:**
+1. `_taskmaster_cycle` = 19. Check: `(19+1) >= 20` → true
+2. File reset to `0`. But `_taskmaster_bump_cycle` sets `_taskmaster_cycle = 19+1 = 20` and writes `20` to file
+3. Next invocation reads `20`. Check: `(20+1) >= 20` → true → same path → writes `21`
+4. **Infinite loop** — counter grows unbounded, fires TRIGGERED every invocation with no sleep
+
+**Root cause:** The in-memory `_taskmaster_cycle` is not reset before `_wake()` overwrites the file.
+
+### BUG 2 (Medium): `_wake()` unconditionally bumps cycle — line 43
+
+Every call to `_wake()` increments the cycle counter, including for real events (MSG, CRASH, FINISHED, STALE). The cycle counter was designed to track idle cycles for compact-interval timing, but it conflates idle cycles with event-driven wakes.
+
+**Impact:** Compact/context-check triggers fire earlier than configured because real events accelerate the counter.
+
+### BUG 3 (Medium): Active tasks always wake QUEUED at 15s — lines 318-328
+
+```bash
+if [ "$_has_active" = "true" ]; then
+  _taskmaster_bump_cycle
+  sleep 15
+  _check_work "15" || true
+  echo "WAKE_REASON=QUEUED"
+  exit 0
+fi
+```
+
+If ANY unassigned active task exists, the hook always exits with QUEUED after 15s, even if nothing changed. This forces the Taskmaster to wake and process every 15s regardless of whether the task state changed. Combined with BUG 1, if the cycle counter is stuck above threshold, this path is never even reached — the TRIGGERED wake fires first.
+
+### BUG 4 (Low): Idle sleep duration too short — line 341
+
+```bash
+_sleep_dur=15
+```
+
+When fully idle (no active tasks), the hook sleeps only 15 seconds before waking with TIMEOUT. Should be 60s+ for true idle state. The `inotifywait` path (line 343-349) also uses this 15s timeout.
+
+### NOT a bug: Trigger file consumption
+
+Trigger files ARE correctly deleted at **line 226** (`_check_work`) and **line 358** (post-sleep). This was suspected but is not an issue.
+
+---
+
+## Key Files
+
+| File | Role |
+|------|------|
+| `.claude/hooks/taskmaster-wait.sh` | **Primary** — the wait/wake loop with all 4 bugs |
+| `.claude/hooks/stop-notify.sh:28,32,100,228` | Trigger writer — creates `triggers/*.trigger` and `status/taskmaster_trigger` on worker/manager stop |
+| `.claude/hooks/stop-status.sh:168-169` | Trigger writer — Taskmaster self-wake after its own stop hook |
+| `.claude/hooks/on-pre-tool-use.sh:177,187` | Trigger writer — VCS write interception by workers |
+| `shell/doey-ipc-helpers.sh:51,90,97-105` | Trigger writer — `send_msg_to_taskmaster()` and `ensure_taskmaster_alive()` |
+
+---
+
+## Plan
+
+### Option A: Minimal fix (recommended)
+
+**3 changes, all in `taskmaster-wait.sh`:**
+
+1. **Fix cycle reset (line 309-311)** — Reset the in-memory variable before calling `_wake`:
+   ```bash
+   if [ "$((_taskmaster_cycle + 1))" -ge "$COMPACT_INTERVAL" ]; then
+     _taskmaster_cycle=-1  # _wake() bumps to 0; file will be written as 0
+     echo "0" > "$CYCLE_FILE"; _wake "TRIGGERED"
+   fi
+   ```
+   Setting to `-1` so that `_taskmaster_bump_cycle` (called inside `_wake`) increments to `0` and writes `0` to the file.
+
+2. **Increase idle sleep (line 341)** — Change to 60s:
+   ```bash
+   _sleep_dur=60
+   ```
+
+3. **Only bump cycle on idle/scheduled wakes** — Remove `_taskmaster_bump_cycle` from `_wake()` and keep it only in the explicit idle paths (line 319 active-tasks path, and add to the TIMEOUT exit at line 366). Change line 43:
+   ```bash
+   _wake() { _taskmaster_dbg_wake "$1" "${2:-0}"; echo "WAKE_REASON=$1"; exit 0; }
+   ```
+   And add a bump before the TIMEOUT at line 365-366:
+   ```bash
+   _taskmaster_bump_cycle
+   _taskmaster_dbg_wake "idle" "$_sleep_dur"
+   echo "WAKE_REASON=TIMEOUT"
+   ```
+
+**Estimated impact:** Eliminates the infinite loop, reduces idle wake frequency from ~4/min to ~1/min, keeps cycle counter meaningful.
+
+### Option B: Thorough fix
+
+Everything in Option A, plus:
+
+4. **Graduated idle sleep** — Scale sleep duration based on consecutive idle cycles:
+   ```bash
+   if [ "$_taskmaster_cycle" -le 3 ]; then _sleep_dur=15
+   elif [ "$_taskmaster_cycle" -le 10 ]; then _sleep_dur=30
+   elif [ "$_taskmaster_cycle" -le 20 ]; then _sleep_dur=60
+   else _sleep_dur=120; fi
+   ```
+
+5. **Debounce active-tasks wake** — Don't wake QUEUED if the same task list was already reported in the last 2 cycles. Store a hash of the active task list and compare.
+
+6. **Split `_wake` into `_wake_event` / `_wake_idle`** — Make the distinction explicit in code so future maintenance doesn't re-introduce the bug.
+
+---
+
+## Risks
+
+| Risk | Mitigation |
+|------|-----------|
+| Increasing idle sleep delays real event response | `inotifywait` path handles instant wake for file events; only poll-based systems (macOS without inotifywait) are affected |
+| Removing bump from `_wake()` changes compact-interval semantics | Compact interval now counts only idle cycles, not all cycles — this is actually the correct semantic |
+| Option B graduated sleep could miss urgent tasks in long idle | Pre-sleep guard at line 339 catches triggers; `inotifywait` watches all event directories |
+| Concurrent hook invocations could race on CYCLE_FILE | Existing risk, not introduced by this fix; could add `flock` in Option B but is low priority |
+
+---
+
+## Recommendation
+
+**Implement Option A immediately.** It's 3 surgical changes in one file, eliminates the root cause (BUG 1), and provides meaningful improvement on BUGs 2-4. Option B can follow as a separate task if idle token burn remains a concern after A ships.

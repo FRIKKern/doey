@@ -1,0 +1,164 @@
+# Agent Color Pipeline Research Report
+## Task 43 / Subtask 95 — Confirm line numbers and code patterns
+
+Generated: 2026-04-10
+
+---
+
+## Summary
+
+All 5 files verified. Line numbers from the earlier task brief are accurate (within 0-2 lines). There are **4 sites** in agents.go that pass `agent.Color` to `lipgloss.Color()`. Only **1 of 4** has an empty-string guard (line 500). The other 3 will pass empty strings directly to `lipgloss.Color("")`, which renders as the terminal default (no visible color — the dot becomes invisible or blends with background). No validation exists anywhere in the parse or store pipeline.
+
+---
+
+## Findings per File
+
+### 1. tui/internal/model/agents.go — Color Render Sites
+
+**Site A: Line 391** — Agent list dot (left panel)
+```go
+// Line 389-396
+selected := m.focused && m.leftFocused && flatIdx == m.cursor
+
+// Agent row: colored dot + name
+dot := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Color)).Render("◆")
+nameStyle := lipgloss.NewStyle().Foreground(t.Text)
+if selected {
+    nameStyle = nameStyle.Bold(true)
+}
+```
+- **Guard:** NONE. Passes `a.Color` directly.
+- **Fallback:** `lipgloss.Color("")` → terminal default foreground → dot may be invisible.
+
+**Site B: Lines 500-503** — Detail panel color field (right panel)
+```go
+// Line 500-503
+if agent.Color != "" {
+    colorDot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+    fields = append(fields, labelStyle.Render("Color")+"  "+colorDot+" "+t.Dim.Render(agent.Color))
+}
+```
+- **Guard:** YES — `if agent.Color != ""` wrapping the entire block.
+- **Fallback:** Skips rendering the Color field entirely if empty.
+- **This is the pattern to replicate at the other 3 sites.**
+
+**Site C: Line 556** — Right panel title dot (scrollHeight calculation)
+```go
+// Line 554-558
+// Replicate the section-building logic from renderRightPanel
+var sections []string
+dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Render(agent.Name)
+sections = append(sections, dot+" "+title)
+```
+- **Guard:** NONE. Passes `agent.Color` directly.
+- **Fallback:** `lipgloss.Color("")` → invisible dot.
+
+**Site D: Line 618** — Right panel detail content rendering
+```go
+// Line 616-620
+var sections []string
+
+// Title
+dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+title := lipgloss.NewStyle().Bold(true).Foreground(t.Text).Render(agent.Name)
+```
+- **Guard:** NONE. Passes `agent.Color` directly.
+- **Fallback:** `lipgloss.Color("")` → invisible dot.
+
+### 2. tui/internal/runtime/reader.go — parseFrontmatter (line 1193)
+
+```go
+// Line 1192-1230
+func parseFrontmatter(path string) map[string]string {
+    // ... reads key:value pairs between --- markers
+    // Strips surrounding quotes from values
+    fm[key] = val
+}
+```
+
+Color assignment at **line 999**:
+```go
+Color: fm["color"],
+```
+
+- **Validation:** NONE. Whatever string is in the `color` YAML field (including empty) is stored verbatim.
+- **Quote stripping:** Yes — surrounding `"` or `'` are removed (lines 1220-1225).
+- **No hex validation, no fallback default.**
+
+### 3. tui/internal/store/migrate.go — Agent color in DB migration (line 440-441)
+
+```go
+// Line 440-441
+_, err = s.db.Exec(`INSERT OR IGNORE INTO agents (name, display_name, model, description, color, file_path) VALUES (?, ?, ?, ?, ?, ?)`,
+    name, fm["display_name"], fm["model"], fm["description"], fm["color"], path)
+```
+
+- **parseFrontmatter** in this file is at **line 658** — different signature from reader.go: `func parseFrontmatter(path string) (map[string]string, string, error)` (returns fm, body, error).
+- **Validation:** NONE. `fm["color"]` passed directly to SQL INSERT.
+- **No default color, no empty-string handling.**
+
+### 4. tui/internal/runtime/types.go — AgentDef struct (line 241)
+
+```go
+// Line 237-246
+type AgentDef struct {
+    Name        string   `json:"name"`
+    Description string   `json:"description"`
+    Model       string   `json:"model"`
+    Color       string   `json:"color"`
+    Memory      string   `json:"memory"`
+    Domain      string   `json:"domain"`
+    FilePath    string   `json:"filepath"`
+    UsedByTeams []string `json:"used_by_teams"`
+}
+```
+
+- **Type:** Plain `string`. No custom type, no validation method.
+- **Zero value:** `""` (empty string) — this is what flows through when YAML has no `color:` field.
+
+### 5. tui/internal/styles/theme.go — Default/fallback colors
+
+- **No agent-color fallback constant exists.** Theme provides `Primary`, `Muted`, `Accent`, etc. as `lipgloss.AdaptiveColor` values.
+- Good candidates for a fallback:
+  - `theme.Muted` (`#9CA3AF` both light/dark) — neutral gray, won't draw attention
+  - `theme.Primary` (`#475569` light / `#94A3B8` dark) — subtle but visible
+  - `theme.Accent` (`#6D28D9` light / `#A78BFA` dark) — purple, stands out
+
+---
+
+## Key Patterns
+
+### The Existing Guard Pattern (line 500)
+```go
+if agent.Color != "" {
+    colorDot := lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+    // ... use colorDot
+}
+```
+This pattern **skips rendering** the color element entirely when empty. For the detail panel's Color field row, this makes sense (don't show "Color: " if there's no color). But for the dot in list items and titles (Sites A, C, D), skipping the dot entirely would break alignment.
+
+### Recommended Guard Pattern for List/Title Dots
+For Sites A, C, D where the dot must always render:
+```go
+dotColor := lipgloss.Color(agent.Color)
+if agent.Color == "" {
+    dotColor = t.Muted  // or t.Primary — theme-consistent fallback
+}
+dot := lipgloss.NewStyle().Foreground(dotColor).Render("◆")
+```
+
+### Two parseFrontmatter Functions
+- `runtime/reader.go:1193` — returns `map[string]string` (simpler, used for live reads)
+- `store/migrate.go:658` — returns `(map[string]string, string, error)` (includes body, used for DB migration)
+Neither validates the `color` value. Both are potential sites for hex validation if desired.
+
+---
+
+## Recommendations
+
+1. **Add empty-string guards at lines 391, 556, 618** in agents.go using a theme fallback color (e.g., `t.Muted`).
+2. **Keep the existing guard at line 500** — it correctly hides the Color detail row when empty.
+3. **Optional:** Add hex validation in parseFrontmatter (reader.go) or at the AgentDef construction site (reader.go:996-1002) to reject malformed color values early.
+4. **Optional:** Add a `DefaultAgentColor` constant to theme.go for consistent fallback across all sites.
+5. Sites C (line 556) and D (line 618) are near-duplicates (scrollHeight calculation mirrors the actual render). Any fix must be applied to both to keep them in sync.

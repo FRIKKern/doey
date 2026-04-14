@@ -1,0 +1,135 @@
+# Research Report: taskmaster-wait.sh Wake Triggers
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/taskmaster-wait.sh`
+**Total lines:** 541
+
+---
+
+## Summary
+
+`taskmaster-wait.sh` is the Taskmaster's idle-loop hook. It scans for pending work (messages, results, crashes, queued tasks), sleeps if idle, then wakes with a reason string. The script has two distinct code paths: a **passive fast path** (lines 33-95) for Core Team specialists (non-Taskmaster panes reusing this hook), and the **main Taskmaster path** (lines 98-541). Wake reasons are emitted via `echo "WAKE_REASON=<reason>"` to stdout, which the Claude harness reads.
+
+---
+
+## 1. How QUEUED vs TIMEOUT Is Decided
+
+**QUEUED** is emitted when there are unassigned active tasks (status=active, no TASK_TEAM assigned). The script performs a "task scan" (lines 422-480) that sets two booleans: `_has_queued` and `_has_active`. A task qualifies as QUEUED only if:
+- Its status is `active` (not `in_progress`)
+- It has no team assignment (`TASK_TEAM` is empty/missing)
+- It was created/updated more than 30 seconds ago (debounce to avoid racing with task creation)
+
+**TIMEOUT** is emitted as the final fallback — when the script reaches the end of its sleep cycle with no work found.
+
+---
+
+## 2. What Triggers Cause a QUEUED Wake
+
+QUEUED specifically means "there are unassigned active tasks waiting for dispatch." The triggers:
+
+1. **DB path (doey-ctl, lines 426-449):** Queries `doey-ctl task list --status active`, checks each task has no `Team:` field, and verifies the task is at least 30s old.
+2. **File fallback (lines 453-480):** Scans `.doey/tasks/*.task` files for `TASK_STATUS=active` without a `TASK_TEAM=` line, with the same 30s age gate.
+
+Once `_has_queued=true` is set, it is checked at line 417 inside `_check_work()` and also at lines 492-501 in the post-sleep active-tasks block.
+
+---
+
+## 3. Exact Line Numbers for TIMEOUT vs QUEUED Emission
+
+### QUEUED emissions:
+- **Line 417:** `[ "$_has_queued" = true ] && _wake "QUEUED" "$elapsed"` — inside `_check_work()`, called at lines 487, 495, 512, 538
+- **Line 498:** `echo "WAKE_REASON=QUEUED"` — direct echo in the post-sleep active-tasks block (lines 492-501). This fires when `_has_active=true` but no urgent work (MSG/CRASH/TRIGGER) interrupted the 15s sleep.
+
+### TIMEOUT emissions:
+- **Line 93:** `echo "WAKE_REASON=TIMEOUT"` — passive role fast path (after 30s sleep with no messages/triggers)
+- **Line 541:** `echo "WAKE_REASON=TIMEOUT"` — main Taskmaster path, final line of script. Reached after the full 60s sleep with no work found.
+
+---
+
+## 4. How Wake Reason Is Output/Returned
+
+The wake reason is printed to **stdout** as `WAKE_REASON=<reason>`. Two mechanisms:
+
+1. **`_wake()` helper (line 108):** `echo "WAKE_REASON=$1"; exit 0` — also logs to debug JSONL if debug mode is on. Used for all early exits in `_check_work()`.
+2. **Direct `echo` + `exit 0`:** Lines 93, 498, 534, 541 — used at script boundaries where `_wake()` isn't called.
+
+The Claude harness captures stdout and injects it as context for the Taskmaster's next prompt cycle.
+
+---
+
+## 5. All Wake Reasons (Complete List)
+
+| Reason | Where | Meaning |
+|--------|-------|---------|
+| `TRIGGERED` | Lines 54, 56, 82, 398, 484, 534 | Explicit trigger file written (e.g., by `doey-ctl trigger`) |
+| `MSG` | Lines 62, 65, 86, 89, 403, 408 | Unread message for this pane |
+| `FINISHED` | Line 411 | New worker result JSON appeared |
+| `CRASH` | Line 413 | Crash marker file detected |
+| `STALE` | Line 414 | Worker heartbeat exceeded timeout |
+| `RESTART` | Line 415 | Stale worker was auto-restarted |
+| `BOOT_STUCK` | Line 416 | Worker stuck in BOOTING state too long |
+| `QUEUED` | Lines 417, 498 | Unassigned active tasks waiting for dispatch |
+| `TIMEOUT` | Lines 93, 541 | No work found after sleep cycle |
+
+Passive roles only emit: `TRIGGERED`, `MSG`, `TIMEOUT`.
+
+---
+
+## 6. Where to Add a Check for Unassigned Active Tasks
+
+The task scan already identifies unassigned active tasks (lines 422-480). If you need to add **additional** checking for unassigned tasks beyond what exists:
+
+**Best insertion point: Inside `_check_work()` at line 417.**
+
+Currently the check at line 417 only fires if the task scan (lines 422-480) already ran and set `_has_queued=true`. The task scan runs **once** before the first `_check_work()` call (line 487). After the sleep cycles (lines 495, 538), `_check_work()` is called again but `_has_queued` is never re-evaluated — it uses the stale pre-sleep value.
+
+**Recommendation:** If you want to detect tasks that became unassigned *during* the sleep window (e.g., a team finished and released a task back to the queue), you should either:
+
+1. **Re-run the task scan inside `_check_work()`** — move the scan logic (lines 422-480) into a function and call it at the top of `_check_work()`. This would catch newly-queued tasks that appeared during the 15s or 60s sleep.
+
+2. **Add a lightweight file-based signal** — have the task system write a trigger file when a task transitions to `active` with no team, so it's caught by the existing trigger check (line 396-398) without needing a full rescan.
+
+Option 2 is preferred for performance (avoids shelling out to `doey-ctl` on every `_check_work()` call). The trigger mechanism already exists and is fast.
+
+**For the specific case of "unassigned active tasks at wake time":** The current lines 492-501 already handle this — when `_has_active=true`, the script emits `WAKE_REASON=QUEUED` with an `ACTIVE_TASKS` list on line 499. The Taskmaster then sees both the reason and the task IDs.
+
+---
+
+## Logic Flow Diagram
+
+```
+START
+  |
+  v
+[Passive role?] --yes--> check triggers/msgs, sleep 30s, re-check, emit MSG|TRIGGERED|TIMEOUT, exit
+  |no
+  v
+[Task scan: set _has_queued, _has_active] (lines 422-480)
+  |
+  v
+[Compact interval reached?] --yes--> emit TRIGGERED, exit
+  |no
+  v
+[_check_work(0)] -- checks: triggers, msgs, results, crashes, stale, boot_stuck, queued
+  |                  any found -> emit reason, exit
+  |none
+  v
+[Context % check] -- 85%+ restart, 70%+ compact
+  |
+  v
+[_has_active?] --yes--> sleep 15s, _check_work(15), emit QUEUED + ACTIVE_TASKS, exit
+  |no
+  v
+[Send sleep_report to Boss (once)]
+  |
+  v
+[_check_work(0)] -- final pre-sleep guard
+  |none
+  v
+[Sleep 60s (inotifywait or plain sleep)]
+  |
+  v
+[Post-sleep: check triggers, _check_work(60)]
+  |none
+  v
+emit TIMEOUT, exit
+```

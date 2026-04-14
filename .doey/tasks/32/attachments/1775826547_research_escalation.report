@@ -1,0 +1,219 @@
+# Research Report: Escalation Message Construction in on-pre-tool-use.sh
+
+**Task:** 32 | **Subtask:** 55
+**Date:** 2026-04-10
+**Author:** Worker d-t4-w1
+
+---
+
+## Summary
+
+Escalation messages are built by the `_forward_action()` function (lines 121-189) in `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-pre-tool-use.sh`. The COMMAND field is empty for **Agent** and **AskUserQuestion** tool blocks because the call sites pass an empty string `""` as the `_cmd` argument. The tool input JSON *does* contain the relevant data (e.g., `tool_input.description`, `tool_input.prompt` for Agent), but the hook never extracts it for these tools.
+
+---
+
+## 1. The `_forward_action()` Function (lines 121-189)
+
+This is the sole escalation message constructor. It:
+1. Determines the target pane based on role (line 135-148)
+2. Builds a structured message body (lines 160-166)
+3. Sends via `doey-ctl msg send` or falls back to file-based IPC (lines 168-188)
+
+### Message body construction (lines 160-166):
+
+```bash
+local _cmd_trunc; _cmd_trunc=$(printf '%.500s' "$_cmd")
+local _body; _body=$(printf 'ACTION_TYPE: %s\nTOOL: %s\nCOMMAND: %s\nREQUESTER_PANE: %s\nREASON: %s' \
+  "$_reason" "$_tool" "$_cmd_trunc" "${_WP:-unknown}" "$_reason")
+```
+
+The COMMAND field is populated from `$_cmd` (the 2nd argument to `_forward_action`).
+
+---
+
+## 2. All `_forward_action` Call Sites — COMMAND Value Analysis
+
+| Line | Tool | `_cmd` argument | COMMAND populated? |
+|------|------|-----------------|-------------------|
+| 564 | Bash (Boss send-keys) | `"$_BOSS_CMD"` | YES — full bash command |
+| 608 | Agent | `""` | **NO — hardcoded empty** |
+| 630 | Read/Edit/Write/Glob/Grep | `"${_CHK_PATH:-}"` | PARTIAL — file path only, not full tool params |
+| 776 | AskUserQuestion | `""` | **NO — hardcoded empty** |
+| 879 | Bash (worker git) | `"$_BASH_CMD"` | YES — full bash command |
+| 882 | Bash (non-worker git) | `"$_BASH_CMD"` | YES — full bash command |
+| 1022 | Bash (worker blocked) | `"$TOOL_COMMAND"` | YES — full bash command |
+
+**Root cause:** Only Bash tool blocks extract and pass the command. Agent and AskUserQuestion pass `""`. Source-access blocks pass only the file path.
+
+---
+
+## 3. JSON Input Structure (stdin to hook)
+
+The hook receives JSON via stdin. The structure (from Claude Code PreToolUse hook spec) is:
+
+```json
+{
+  "tool_name": "<ToolName>",
+  "tool_input": {
+    "<param1>": "<value1>",
+    "<param2>": "<value2>"
+  }
+}
+```
+
+### Per-tool fields in `tool_input`:
+
+| Tool | Key fields in `tool_input` | Currently extracted? |
+|------|---------------------------|---------------------|
+| **Bash** | `command` | YES — line 453: `_BASH_CMD=$(_json_str tool_input.command)` |
+| **Read** | `file_path`, `offset`, `limit` | YES (file_path) — line 612: `_CHK_PATH=$(_json_str tool_input.file_path)` |
+| **Edit** | `file_path`, `old_string`, `new_string` | YES (file_path) — same pattern |
+| **Write** | `file_path`, `content` | YES (file_path) — same pattern |
+| **Glob** | `pattern`, `path` | YES (path/pattern) — lines 581-582, 614, 746 |
+| **Grep** | `pattern`, `path`, `type`, `glob` | YES (path) — same pattern |
+| **Agent** | `description`, `prompt`, `subagent_type`, `name`, `mode` | **NO — never extracted** |
+| **AskUserQuestion** | `question` (or `text`) | **NO — never extracted** |
+| **send-keys** | N/A (embedded in Bash `command` string) | Parsed from `_BASH_CMD` string |
+
+### JSON parsing function — `_json_str` (lines 74-93):
+
+Uses jq if available, python3 fallback, or grep for top-level fields. Supports nested fields via dot notation (e.g., `tool_input.command`) only with jq or python3.
+
+---
+
+## 4. Why COMMAND Is Empty — Specific Code Paths
+
+### Agent tool (line 608):
+```bash
+_forward_action "Agent" "" "agent spawn" || true
+```
+The 2nd argument is `""`. Available but unused fields:
+- `tool_input.description` — short task description
+- `tool_input.prompt` — full task prompt
+- `tool_input.subagent_type` — agent type
+
+### AskUserQuestion (line 776):
+```bash
+_forward_action "AskUserQuestion" "" "user question" "$_boss_safe" || true
+```
+The 2nd argument is `""`. Available but unused fields:
+- `tool_input.question` — the question text
+
+### Source access tools (line 630):
+```bash
+_forward_action "$TOOL_NAME" "${_CHK_PATH:-}" "source access" || true
+```
+Passes the file path, which is useful but incomplete — for Grep, the `pattern` is also important; for Edit, the `old_string`/`new_string` matters.
+
+---
+
+## 5. Recommended Fix Approach
+
+### Fix 1: Extract tool-specific identifiers before `_forward_action` calls
+
+At the top of the non-Bash block (around line 598), extract relevant fields:
+
+```bash
+# Near line 598, after entering the non-Bash tool block:
+_AGENT_DESC=""
+_AGENT_PROMPT=""
+_ASK_QUESTION=""
+case "$TOOL_NAME" in
+  Agent)
+    _AGENT_DESC=$(_json_str tool_input.description)
+    _AGENT_PROMPT=$(_json_str tool_input.prompt)
+    ;;
+  AskUserQuestion)
+    _ASK_QUESTION=$(_json_str tool_input.question)
+    ;;
+esac
+```
+
+### Fix 2: Update call sites to pass meaningful COMMAND values
+
+**Line 608 (Agent):**
+```bash
+# Before:
+_forward_action "Agent" "" "agent spawn" || true
+
+# After:
+_forward_action "Agent" "${_AGENT_DESC:+[${_AGENT_DESC}] }${_AGENT_PROMPT:-}" "agent spawn" || true
+```
+
+**Line 776 (AskUserQuestion):**
+```bash
+# Before:
+_forward_action "AskUserQuestion" "" "user question" "$_boss_safe" || true
+
+# After:
+_forward_action "AskUserQuestion" "${_ASK_QUESTION:-}" "user question" "$_boss_safe" || true
+```
+
+**Line 630 (source access — optional enrichment for Grep):**
+```bash
+# Before:
+_forward_action "$TOOL_NAME" "${_CHK_PATH:-}" "source access" || true
+
+# After (for Grep, include pattern):
+_fwd_detail="${_CHK_PATH:-}"
+if [ "$TOOL_NAME" = "Grep" ]; then
+  _grep_pat=$(_json_str tool_input.pattern)
+  [ -n "$_grep_pat" ] && _fwd_detail="${_CHK_PATH:-} (pattern: ${_grep_pat})"
+fi
+_forward_action "$TOOL_NAME" "$_fwd_detail" "source access" || true
+```
+
+### Fix 3: Consider a generic fallback in `_forward_action`
+
+As a safety net, if `_cmd` is empty, `_forward_action` could attempt to extract a summary from `$INPUT` directly:
+
+```bash
+# In _forward_action, after line 161:
+if [ -z "$_cmd" ] && [ -n "${INPUT:-}" ]; then
+  _cmd_trunc=$(_json_str tool_input.description)
+  [ -z "$_cmd_trunc" ] && _cmd_trunc=$(_json_str tool_input.file_path)
+  [ -z "$_cmd_trunc" ] && _cmd_trunc=$(_json_str tool_input.command)
+  _cmd_trunc=$(printf '%.500s' "${_cmd_trunc:-}")
+fi
+```
+
+### Performance note
+The `_json_str` calls for Agent/AskUserQuestion fields only happen on the blocked path (not on allow), so they don't impact hot-path performance.
+
+---
+
+## 6. Message Delivery Mechanism
+
+Two transports, tried in order:
+
+1. **doey-ctl msg send** (line 170) — SQLite-backed message queue
+   - `--from`, `--to`, `--subject "action_request"`, `--body`, `--runtime`, `--no-nudge`
+   - Followed by trigger file touch
+
+2. **File-based IPC** (line 183) — flat file fallback
+   - Writes to `${RUNTIME_DIR}/messages/${target}_${timestamp}_$$.msg`
+   - Format: `FROM: ...\nSUBJECT: action_request\n{body}`
+
+Both transports carry the same body content, so the empty COMMAND affects both.
+
+---
+
+## 7. Routing Targets
+
+`_forward_action` routes based on the blocked role (lines 135-148):
+
+| Blocked role | Escalates to |
+|-------------|-------------|
+| Boss | Taskmaster (window 1, pane 0) |
+| Worker | Subtaskmaster (same window, pane 0) |
+| Coordinator | First worker team (window 2, pane 0) |
+| Team Lead | Taskmaster (window 1, pane 0) |
+| Other | Same window, pane 0 |
+
+---
+
+## Files Examined
+
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/on-pre-tool-use.sh` (1032 lines)
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/common.sh` (488 lines)
+- `/Users/frikk.jarl/Documents/GitHub/doey/.claude/settings.json` (hook registration)

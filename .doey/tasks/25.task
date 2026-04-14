@@ -1,13 +1,24 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=25
-TASK_TITLE=Rich task detail — full task directory + TUI detail view
+TASK_TITLE=Purge all role abbreviations — enforce full names everywhere
 TASK_STATUS=done
-TASK_TYPE=feature
-TASK_TAGS=tui,task-system,hooks,dashboard,infrastructure
-TASK_TEAM=W2
-TASK_DESCRIPTION=Tasks must be the single source of truth for everything that happened during execution. This is a two-part feature:
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TYPE=bugfix
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=ZERO TOLERANCE: No SM, TM, WM, STM, or any other role abbreviation anywhere in the codebase. Always: Boss, Taskmaster, Subtaskmaster, Worker, Task Reviewer, Freelancer. Full names only. Audit and fix: all agent templates, all hook scripts, all shell scripts, all Go code, all docs, all skill files. This prevents confusion for both humans and LLMs.
+TASK_TIMESTAMPS=created=1775655460
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257535
+TASK_UPDATED=1775655460
+TASK_FILES=.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/20.task,.doey/tasks/21.task,.doey/tasks/22.task,.doey/tasks/23.task,.doey/tasks/24.task,.doey/tasks/25.task,.doey/tasks/27.task,.doey/tasks/3.task,.doey/tasks/4.task,.doey/tasks/5.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W4.1: Purge role abbreviations in agents/ and .claude/ directories
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_4_1
+TASK_SUBTASK_1_CREATED_AT=1775655656
+TASK_SUBTASK_1_COMPLETED_AT=1775655748
+TASK_SUBTASK_2_TITLE=W4.2: Purge role abbreviations in shell/, docs/, tui/, tests/ directories
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_4_2
+TASK_SUBTASK_2_CREATED_AT=1775655657
+TASK_SUBTASK_2_COMPLETED_AT=1775655947
