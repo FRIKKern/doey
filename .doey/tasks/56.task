@@ -1,13 +1,37 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=56
-TASK_TITLE=Dashboard TUI — reduce actions to 3, rename to Spawn Teams
-TASK_STATUS=done
+TASK_TITLE=Splash screen: ensure background startup + auto-dismiss within 5s
+TASK_STATUS=in_progress
 TASK_TYPE=feature
-TASK_TAGS=tui,dashboard
+TASK_CREATED_BY=boss
 TASK_TEAM=W2
-TASK_DESCRIPTION=The Go TUI dashboard front page has 5 Quick Actions — too cluttered. Reduce to 3 and rename the section. New actions: "Reserved Freelancers", "Regular Team", "Specialized Team". Section title: "Spawn Teams" instead of "Quick Actions". Keep it clean and minimal. Code is in tui/ directory.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+The DOEY splash/opening screen (shown during session start) must:
+1. Actually kick off all background startup work while it is displayed (don't just idle for 5s — use the time to initialize panes/agents/hooks/env)
+2. Auto-dismiss within 5 seconds regardless of whether startup finished (or as soon as startup completes, whichever is sooner)
+3. 'Press q to skip' behavior preserved
+
+Investigate current splash implementation (likely in tui/ or shell/info-panel.sh / on-session-start.sh), confirm what 'Starting... 5s' actually gates vs. what runs in parallel, and wire startup tasks to run concurrently with the countdown. Dismiss after max(5s, startup_complete_signal)=min.
+TASK_TIMESTAMPS=created=1776178691
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1776178691
+TASK_FILES=.doey/tasks/55.task,.doey/tasks/56.task,shell/doey-session.sh,tui/cmd/doey-loading/main.go
+TASK_REVIEW_VERDICT=PASS
+TASK_REVIEW_FINDINGS=All 3 subtasks verified; go build/vet clean; bash-compat PASS; all 6 acceptance criteria met with file:line evidence. Plan A implemented correctly with min-display floor and startup_complete marker on all quit paths.
+TASK_REVIEW_TIMESTAMP=2026-04-14T15:16:48Z
+TASK_SUBTASK_1_TITLE=Phase 1: Research splash + startup sequence, produce change plan
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1776178755
+TASK_SUBTASK_1_COMPLETED_AT=1776179134
+TASK_SUBTASK_2_TITLE=Phase 2: Implement Plan A — cap doey-loading at 5s, add min-display floor, emit startup_complete marker
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1776179134
+TASK_SUBTASK_2_COMPLETED_AT=1776179380
+TASK_SUBTASK_3_TITLE=Phase 3: Verify — build, vet, bash-compat, doey doctor, install.sh target
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1776179491
+TASK_SUBTASK_3_COMPLETED_AT=1776179491

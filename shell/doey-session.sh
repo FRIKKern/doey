@@ -787,10 +787,10 @@ launch_session() {
   # Start loading screen on real terminal (stdout is redirected to log)
   local _loading_pid=""
   if command -v doey-loading >/dev/null 2>&1; then
-    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
+    doey-loading --session "$session" --runtime "$runtime_dir" --timeout 5 --min-display 800ms >&3 2>&4 &
     _loading_pid=$!
   elif [ -x "${HOME}/.local/bin/doey-loading" ]; then
-    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 45 >&3 2>&4 &
+    "${HOME}/.local/bin/doey-loading" --session "$session" --runtime "$runtime_dir" --timeout 5 --min-display 800ms >&3 2>&4 &
     _loading_pid=$!
   fi
 
@@ -799,6 +799,7 @@ launch_session() {
   if [ -n "$_loading_pid" ]; then
     wait "$_loading_pid" 2>/dev/null || true
   fi
+  [ -f "${runtime_dir}/startup_complete" ] || : > "${runtime_dir}/startup_complete"
 
   attach_or_switch "$session"
 }
