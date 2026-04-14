@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/doey-cli/doey/tui/internal/ctl"
+	"github.com/doey-cli/doey/tui/internal/fdutil"
 	"github.com/doey-cli/doey/tui/internal/store"
 )
 
@@ -127,8 +128,8 @@ func main() {
 		}
 		log.SetOutput(f)
 		// Redirect stdout and stderr to the log file
-		syscall.Dup3(int(f.Fd()), int(os.Stdout.Fd()), 0)
-		syscall.Dup3(int(f.Fd()), int(os.Stderr.Fd()), 0)
+		fdutil.RedirectFD(int(f.Fd()), int(os.Stdout.Fd()))
+		fdutil.RedirectFD(int(f.Fd()), int(os.Stderr.Fd()))
 	}
 
 	if *runtimeDir == "" || *projectDir == "" {
