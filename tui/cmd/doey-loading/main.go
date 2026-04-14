@@ -32,20 +32,24 @@ type pollMsg struct {
 // timeoutMsg signals the timeout has elapsed.
 type timeoutMsg struct{}
 
+// readyHoldMsg signals the min-display floor has elapsed after readiness.
+type readyHoldMsg struct{}
+
 // model is the root Bubble Tea model for the loading screen.
 type model struct {
-	theme     styles.Theme
-	session   string
-	runtime   string
-	timeout   time.Duration
-	width     int
-	height    int
-	ready     bool
-	startTime time.Time
-	spinner   spinner.Model
-	panes     []paneState
-	done      bool
-	exitCode  int
+	theme      styles.Theme
+	session    string
+	runtime    string
+	timeout    time.Duration
+	minDisplay time.Duration
+	width      int
+	height     int
+	ready      bool
+	startTime  time.Time
+	spinner    spinner.Model
+	panes      []paneState
+	done       bool
+	exitCode   int
 }
 
 // ── Pane discovery ─────────────────────────────────────────────────────
@@ -190,7 +194,7 @@ func timeoutCmd(d time.Duration) tea.Cmd {
 
 // ── Model ──────────────────────────────────────────────────────────────
 
-func newModel(session, runtimeDir string, timeout time.Duration) model {
+func newModel(session, runtimeDir string, timeout, minDisplay time.Duration) model {
 	theme := styles.DefaultTheme()
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -199,13 +203,14 @@ func newModel(session, runtimeDir string, timeout time.Duration) model {
 	panes := discoverPanes(runtimeDir, session)
 
 	return model{
-		theme:     theme,
-		session:   session,
-		runtime:   runtimeDir,
-		timeout:   timeout,
-		startTime: time.Now(),
-		spinner:   sp,
-		panes:     panes,
+		theme:      theme,
+		session:    session,
+		runtime:    runtimeDir,
+		timeout:    timeout,
+		minDisplay: minDisplay,
+		startTime:  time.Now(),
+		spinner:    sp,
+		panes:      panes,
 	}
 }
 
@@ -230,6 +235,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c", "esc":
 			m.done = true
 			m.exitCode = 1
+			writeStartupComplete(m.runtime, "skip", time.Since(m.startTime))
 			return m, tea.Quit
 		}
 
@@ -241,18 +247,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pollMsg:
 		m.applyStatuses(msg.statuses)
 		if m.allKeyPanesReady() {
-			m.done = true
-			m.exitCode = 0
-			return m, tea.Quit
+			elapsed := time.Since(m.startTime)
+			if elapsed >= m.minDisplay {
+				m.done = true
+				m.exitCode = 0
+				writeStartupComplete(m.runtime, "ready", elapsed)
+				return m, tea.Quit
+			}
+			return m, tea.Tick(m.minDisplay-elapsed, func(_ time.Time) tea.Msg {
+				return readyHoldMsg{}
+			})
 		}
 		return m, pollStatusCmd(m.runtime)
+
+	case readyHoldMsg:
+		m.done = true
+		m.exitCode = 0
+		writeStartupComplete(m.runtime, "ready", time.Since(m.startTime))
+		return m, tea.Quit
 
 	case timeoutMsg:
 		m.done = true
 		m.exitCode = 2
+		writeStartupComplete(m.runtime, "timeout", time.Since(m.startTime))
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+// writeStartupComplete writes a marker file signalling the loading screen
+// has exited. Called before every tea.Quit. Errors are ignored on purpose —
+// the marker is a best-effort signal for downstream shell tooling.
+func writeStartupComplete(runtimeDir, reason string, elapsed time.Duration) {
+	path := filepath.Join(runtimeDir, "startup_complete")
+	body := fmt.Sprintf("reason=%s\nelapsed_ms=%d\n", reason, elapsed.Milliseconds())
+	_ = os.WriteFile(path, []byte(body), 0644)
 }
 
 // applyStatuses maps polled STATUS values to pane states.
@@ -321,7 +350,7 @@ func (m model) View() string {
 	progress := m.renderProgress()
 
 	// Hint
-	hint := lipgloss.NewStyle().Foreground(m.theme.Muted).Faint(true).Render("Press q to skip")
+	hint := lipgloss.NewStyle().Foreground(m.theme.Muted).Faint(true).Render("Press q to skip (auto-dismisses in 5s)")
 
 	// Compose group boxes into a grid (2 columns)
 	grid := m.layoutGrid(boxes)
@@ -551,14 +580,15 @@ func main() {
 	session := flag.String("session", "", "tmux session name (e.g., doey-myproject)")
 	runtimeDir := flag.String("runtime", "", "runtime directory (e.g., /tmp/doey/myproject)")
 	timeout := flag.Int("timeout", 30, "max wait time in seconds")
+	minDisplay := flag.Duration("min-display", 0, "minimum time to keep the loading screen on-screen even if ready")
 	flag.Parse()
 
 	if *session == "" || *runtimeDir == "" {
-		fmt.Fprintf(os.Stderr, "Usage: doey-loading --session <name> --runtime <dir> [--timeout <seconds>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: doey-loading --session <name> --runtime <dir> [--timeout <seconds>] [--min-display <duration>]\n")
 		os.Exit(1)
 	}
 
-	m := newModel(*session, *runtimeDir, time.Duration(*timeout)*time.Second)
+	m := newModel(*session, *runtimeDir, time.Duration(*timeout)*time.Second, *minDisplay)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	finalModel, err := p.Run()
@@ -570,4 +600,3 @@ func main() {
 	fm := finalModel.(model)
 	os.Exit(fm.exitCode)
 }
-
