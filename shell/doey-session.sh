@@ -553,7 +553,10 @@ check_claude_auth() {
   local _cache_file="${_cache_dir}/auth-cache"
   if [ -f "$_cache_file" ]; then
     local _cache_age
-    _cache_age=$(( $(date +%s) - $(stat -f %m "$_cache_file" 2>/dev/null || stat -c %Y "$_cache_file" 2>/dev/null || echo 0) ))
+    # Linux (GNU stat -c) first, then macOS/BSD (stat -f %m). Order matters:
+    # on Linux, `stat -f %m` emits filesystem info on stdout before failing,
+    # and that garbage ("File: ...") would poison the arithmetic below.
+    _cache_age=$(( $(date +%s) - $(stat -c %Y "$_cache_file" 2>/dev/null || stat -f %m "$_cache_file" 2>/dev/null || echo 0) ))
     if [ "$_cache_age" -lt 300 ]; then
       return 0
     fi
