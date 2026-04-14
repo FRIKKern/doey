@@ -80,13 +80,13 @@ func (m HeaderModel) View() string {
 	uptimeVal := lipgloss.NewStyle().Foreground(t.Text).Render(formatDuration(m.uptime))
 
 	teamsLabel := t.StatLabel.Render("TEAMS")
-	teamsVal := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("%d", m.teamCount))
+	teamsVal := t.RenderAccent(fmt.Sprintf("%d", m.teamCount))
 
 	workersLabel := t.StatLabel.Render("WORKERS")
-	workersVal := lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d", m.workerCount))
+	workersVal := t.RenderSuccess(fmt.Sprintf("%d", m.workerCount))
 	busyVal := ""
 	if m.busyCount > 0 {
-		busyVal = lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf(" (%d busy)", m.busyCount))
+		busyVal = t.RenderWarning(fmt.Sprintf(" (%d busy)", m.busyCount))
 	}
 
 	line := "  " +

@@ -191,10 +191,10 @@ func (m SSHKeyModel) View() string {
 
 	var status string
 	if m.errMsg != "" {
-		status = lipgloss.NewStyle().Foreground(t.Danger).Render("  " + m.errMsg)
+		status = t.RenderDanger("  " + m.errMsg)
 	}
 
-	nav := lipgloss.NewStyle().Foreground(t.Muted).Render("j/k navigate  |  Enter select  |  Esc back")
+	nav := t.RenderDim("j/k navigate  |  Enter select  |  Esc back")
 
 	content := strings.Join([]string{
 		"",
@@ -234,7 +234,7 @@ func (m SSHKeyModel) renderKeyList() string {
 			style = style.Bold(true)
 		}
 		name := style.Render(key.Name)
-		fp := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + key.Fingerprint)
+		fp := t.RenderDim("  " + key.Fingerprint)
 		lines = append(lines, prefix+name+fp)
 	}
 

@@ -239,12 +239,12 @@ func (m WelcomeModel) renderTeamStatus(w int) string {
 			badge = " " + styles.TeamBadge("worktree")
 		}
 
-		busyStr := lipgloss.NewStyle().Foreground(t.Warning).Render(fmt.Sprintf("%d busy", busy))
-		idleStr := lipgloss.NewStyle().Foreground(t.Success).Render(fmt.Sprintf("%d idle", idle))
+		busyStr := t.RenderWarning(fmt.Sprintf("%d busy", busy))
+		idleStr := t.RenderSuccess(fmt.Sprintf("%d idle", idle))
 
 		summary := fmt.Sprintf("%dW (%s, %s", tc.WorkerCount, busyStr, idleStr)
 		if reserved > 0 {
-			rsvStr := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("%d rsv", reserved))
+			rsvStr := t.RenderAccent(fmt.Sprintf("%d rsv", reserved))
 			summary += ", " + rsvStr
 		}
 		summary += ")"

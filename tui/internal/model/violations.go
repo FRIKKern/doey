@@ -288,16 +288,10 @@ func (m ViolationsModel) viewList() string {
 	view := m.visible()
 
 	if len(view) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(t.Muted).
-			PaddingLeft(3).
-			PaddingTop(1).
-			Render("No violations recorded.")
 		filterPill := zone.Mark("viol-filter",
 			lipgloss.NewStyle().Foreground(t.Muted).Faint(true).
 				Padding(0, 2).Render("filter: "+m.filter.label()))
-		content := header + "\n" + rule + "\n" + filterPill + "\n" + empty
-		return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+		return styles.RenderListFrame([]string{header, rule, filterPill, styles.RenderEmptyState("No violations recorded.", t)}, w, m.height)
 	}
 
 	warn, breaker := m.counts(view)
@@ -305,16 +299,9 @@ func (m ViolationsModel) viewList() string {
 	count := lipgloss.NewStyle().Bold(true).Foreground(t.Text).PaddingLeft(2).
 		Render(countText)
 
-	scrollInd := ""
-	if m.autoScroll {
-		scrollInd = zone.Mark("viol-follow",
-			lipgloss.NewStyle().Foreground(t.Success).Render(" LIVE"))
-	} else {
-		scrollInd = zone.Mark("viol-follow",
-			lipgloss.NewStyle().Foreground(t.Warning).Render(" PAUSED"))
-	}
+	scrollInd := styles.ScrollIndicator(m.autoScroll, "viol-follow", t)
 	filterPill := zone.Mark("viol-filter",
-		lipgloss.NewStyle().Foreground(t.Accent).Render("  ["+m.filter.label()+"]"))
+		t.RenderAccent("  ["+m.filter.label()+"]"))
 
 	viewH := m.viewportHeight()
 	selectedBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#374151"}
@@ -347,8 +334,7 @@ func (m ViolationsModel) viewList() string {
 			Render("enter = detail  " + filterBtn + "  " + followBtn + "  G = top")
 	}
 
-	content := header + "\n" + rule + "\n" + count + scrollInd + filterPill + "\n" + body + "\n" + hint
-	return lipgloss.NewStyle().Width(w).Height(m.height).Render(content)
+	return styles.RenderListFrame([]string{header, rule, count + scrollInd + filterPill, body, hint}, w, m.height)
 }
 
 // renderEntryLine renders one violation as: TS  [SEV] pane  reason  ×N  ⛔
@@ -398,7 +384,7 @@ func (m ViolationsModel) renderEntryLine(e store.Event, maxW int) string {
 
 	breakerMark := ""
 	if breakerTripped(e) {
-		breakerMark = lipgloss.NewStyle().Foreground(t.Danger).Render(" ⛔")
+		breakerMark = t.RenderDanger(" ⛔")
 	}
 
 	parts := []string{tsStyled, sevPill, paneStyled, reasonStyled}

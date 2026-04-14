@@ -49,6 +49,7 @@ _notify_pane() {
     if ! send_to_pane "$target_pane" "$body" 2>/dev/null; then
       _log_error "DELIVERY_FAILED" "Both file and send-keys delivery failed" "target=$target_pane subject=$subject"
       doey_log_error "delivery" "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "Both file and send-keys delivery failed" "${DOEY_TASK_ID:-}" "target=$target_pane subject=$subject"
+      emit_lifecycle_event "notification_failed" "${PANE_SAFE:-unknown}" "${DOEY_TASK_ID:-}" "" "{\"target\":\"${target_pane}\",\"subject\":\"${subject}\"}"
       return 1
     fi
   fi
@@ -258,6 +259,7 @@ if is_worker; then
   fi
 
   _debug_sent "$_target" "$_subject"
+  emit_lifecycle_event "notification_sent" "$PANE_SAFE" "${DOEY_TASK_ID:-}" "" "{\"target\":\"${_target}\",\"subject\":\"${_subject}\"}"
   { [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
   _log "stop-notify: sent ${_subject} to ${_target}"
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"

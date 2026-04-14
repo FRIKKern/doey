@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
 // tabZone records the horizontal column range of a clickable region.
@@ -23,56 +25,65 @@ type tabBarLayout struct {
 // renderTabBar draws a horizontal row of tab labels with optional close
 // buttons and a trailing "+" button. Returns the rendered string and a layout
 // for mouse hit-testing.
-func renderTabBar(tabs []Tab, active int, width int) (string, tabBarLayout) {
+func renderTabBar(tabs []Tab, active int, width int, theme styles.Theme) (string, tabBarLayout) {
 	layout := tabBarLayout{}
 	if len(tabs) == 0 {
 		return "", layout
 	}
+
+	// Theme colors (AdaptiveColor — lipgloss resolves light/dark automatically).
+	activeFg := theme.TabActiveFg
+	activeBg := theme.TabActiveBg
+	inactiveFg := theme.TabInactiveFg
+	inactiveBg := theme.TabInactiveBg
+	closeActiveFg := theme.TabCloseActiveFg
+	closeInactiveFg := theme.TabCloseInactiveFg
+	plusFg := theme.TabPlusFg
 
 	showClose := len(tabs) > 1
 
 	// Styles for tab name portion (left-padded only).
 	activeNameStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#5F5FD7")).
+		Foreground(activeFg).
+		Background(activeBg).
 		PaddingLeft(1)
 
 	inactiveNameStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#AAAAAA")).
-		Background(lipgloss.Color("#333333")).
+		Foreground(inactiveFg).
+		Background(inactiveBg).
 		PaddingLeft(1)
 
 	// Styles for the close glyph (no padding — just the character).
 	closeActiveStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF8888")).
-		Background(lipgloss.Color("#5F5FD7"))
+		Foreground(closeActiveFg).
+		Background(activeBg)
 
 	closeInactiveStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#777777")).
-		Background(lipgloss.Color("#333333"))
+		Foreground(closeInactiveFg).
+		Background(inactiveBg)
 
 	// Right-padding segments to match backgrounds.
-	activePad := lipgloss.NewStyle().Background(lipgloss.Color("#5F5FD7"))
-	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("#333333"))
+	activePad := lipgloss.NewStyle().Background(activeBg)
+	inactivePad := lipgloss.NewStyle().Background(inactiveBg)
 
 	// Full-tab styles (used when close button is hidden — single tab).
 	activeFullStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Background(lipgloss.Color("#5F5FD7")).
+		Foreground(activeFg).
+		Background(activeBg).
 		PaddingLeft(1).
 		PaddingRight(1)
 
 	inactiveFullStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#AAAAAA")).
-		Background(lipgloss.Color("#333333")).
+		Foreground(inactiveFg).
+		Background(inactiveBg).
 		PaddingLeft(1).
 		PaddingRight(1)
 
 	plusStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#88FF88")).
-		Background(lipgloss.Color("#333333")).
+		Foreground(plusFg).
+		Background(inactiveBg).
 		PaddingLeft(1).
 		PaddingRight(1)
 
@@ -146,7 +157,7 @@ func renderTabBar(tabs []Tab, active int, width int) (string, tabBarLayout) {
 	barWidth := lipgloss.Width(bar)
 	if barWidth < width {
 		fill := lipgloss.NewStyle().
-			Background(lipgloss.Color("#222222")).
+			Background(theme.TabFillBg).
 			Width(width - barWidth)
 		bar += fill.Render("")
 	}

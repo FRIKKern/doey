@@ -520,7 +520,7 @@ func (m AgentsModel) renderLeftPanel(w, h int) string {
 		if scrollHint != "" {
 			scrollHint += "  "
 		}
-		scrollHint += lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render("› below")
+		scrollHint += t.RenderFaint("› below")
 	}
 
 	content := header + "\n" + countText + "\n" + body

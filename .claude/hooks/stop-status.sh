@@ -154,6 +154,10 @@ if [ -n "$task_id" ] && command -v doey-ctl >/dev/null 2>&1; then
       ;;
   esac
 fi
+case "$STOP_STATUS" in
+  FINISHED) emit_lifecycle_event "task_completed" "$PANE_SAFE" "$task_id" "$subtask_id" "{\"status\":\"FINISHED\"}" ;;
+  ERROR)    emit_lifecycle_event "task_failed" "$PANE_SAFE" "$task_id" "$subtask_id" "{\"status\":\"ERROR\"}" ;;
+esac
 
 # --- Stats emits (task #521 Phase 2) — additive, silent-fail, non-blocking ---
 _dur_ms=""

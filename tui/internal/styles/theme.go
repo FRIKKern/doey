@@ -22,6 +22,16 @@ type Theme struct {
 	Subtle    lipgloss.AdaptiveColor // very faint text for timestamps/metadata
 	Separator lipgloss.AdaptiveColor // very dim line/border color
 
+	// Tab bar colors (used by the terminal tab bar).
+	TabActiveFg        lipgloss.AdaptiveColor
+	TabActiveBg        lipgloss.AdaptiveColor
+	TabInactiveFg      lipgloss.AdaptiveColor
+	TabInactiveBg      lipgloss.AdaptiveColor
+	TabCloseActiveFg   lipgloss.AdaptiveColor
+	TabCloseInactiveFg lipgloss.AdaptiveColor
+	TabPlusFg          lipgloss.AdaptiveColor
+	TabFillBg          lipgloss.AdaptiveColor
+
 	Title         lipgloss.Style
 	Subtitle      lipgloss.Style
 	Body          lipgloss.Style
@@ -57,6 +67,41 @@ func (t Theme) DottedLeader(name, desc string, maxWidth int) string {
 	return name + dots + desc
 }
 
+// RenderDim renders text in muted foreground color.
+func (t Theme) RenderDim(s string) string {
+	return lipgloss.NewStyle().Foreground(t.Muted).Render(s)
+}
+
+// RenderFaint renders text in muted foreground with faint attribute.
+func (t Theme) RenderFaint(s string) string {
+	return lipgloss.NewStyle().Foreground(t.Muted).Faint(true).Render(s)
+}
+
+// RenderBold renders text in text foreground with bold attribute.
+func (t Theme) RenderBold(s string) string {
+	return lipgloss.NewStyle().Foreground(t.Text).Bold(true).Render(s)
+}
+
+// RenderSuccess renders text in success foreground color.
+func (t Theme) RenderSuccess(s string) string {
+	return lipgloss.NewStyle().Foreground(t.Success).Render(s)
+}
+
+// RenderDanger renders text in danger foreground color.
+func (t Theme) RenderDanger(s string) string {
+	return lipgloss.NewStyle().Foreground(t.Danger).Render(s)
+}
+
+// RenderWarning renders text in warning foreground color.
+func (t Theme) RenderWarning(s string) string {
+	return lipgloss.NewStyle().Foreground(t.Warning).Render(s)
+}
+
+// RenderAccent renders text in accent foreground color.
+func (t Theme) RenderAccent(s string) string {
+	return lipgloss.NewStyle().Foreground(t.Accent).Render(s)
+}
+
 // DefaultTheme returns the standard Doey color theme with warmer, more
 // saturated terminal-inspired colors that work in both light and dark terminals.
 func DefaultTheme() Theme {
@@ -74,6 +119,15 @@ func DefaultTheme() Theme {
 	subtle := lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#4B5563"}
 	separator := lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#334155"}
 
+	tabActiveFg := lipgloss.AdaptiveColor{Light: "#1F2937", Dark: "#FFFFFF"}
+	tabActiveBg := lipgloss.AdaptiveColor{Light: "#818CF8", Dark: "#5F5FD7"}
+	tabInactiveFg := lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#AAAAAA"}
+	tabInactiveBg := lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#333333"}
+	tabCloseActiveFg := lipgloss.AdaptiveColor{Light: "#DC2626", Dark: "#FF8888"}
+	tabCloseInactiveFg := lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#777777"}
+	tabPlusFg := lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#88FF88"}
+	tabFillBg := lipgloss.AdaptiveColor{Light: "#F3F4F6", Dark: "#222222"}
+
 	return Theme{
 		Primary:   primary,
 		Success:   success,
@@ -88,6 +142,15 @@ func DefaultTheme() Theme {
 		Highlight: highlight,
 		Subtle:    subtle,
 		Separator: separator,
+
+		TabActiveFg:        tabActiveFg,
+		TabActiveBg:        tabActiveBg,
+		TabInactiveFg:      tabInactiveFg,
+		TabInactiveBg:      tabInactiveBg,
+		TabCloseActiveFg:   tabCloseActiveFg,
+		TabCloseInactiveFg: tabCloseInactiveFg,
+		TabPlusFg:          tabPlusFg,
+		TabFillBg:          tabFillBg,
 
 		Title: lipgloss.NewStyle().
 			Foreground(primary).

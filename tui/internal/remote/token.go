@@ -169,10 +169,10 @@ func (m TokenModel) View() string {
 	} else if m.validated {
 		status = lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("  Token valid")
 	} else if m.errMsg != "" {
-		status = lipgloss.NewStyle().Foreground(t.Danger).Render("  " + m.errMsg)
+		status = t.RenderDanger("  " + m.errMsg)
 	}
 
-	nav := lipgloss.NewStyle().Foreground(t.Muted).Render("Enter to validate  |  Esc to go back")
+	nav := t.RenderDim("Enter to validate  |  Esc to go back")
 
 	content := strings.Join([]string{
 		"",

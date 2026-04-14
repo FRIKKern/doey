@@ -132,6 +132,7 @@ _wake() {
   if command -v doey-stats-emit.sh >/dev/null 2>&1 && _check_cooldown "taskmaster_wake" 30 2>/dev/null; then
     (doey-stats-emit.sh worker taskmaster_wake "reason=${1:-unknown}" &) 2>/dev/null || true
   fi
+  emit_lifecycle_event "wake_event" "$TASKMASTER_SAFE" "" "" "{\"wake_reason\":\"${1:-unknown}\"}"
   echo "WAKE_REASON=$1"; exit 0
 }
 
@@ -183,6 +184,7 @@ _check_stale_heartbeats() {
     fi
     printf '%s %s %s %s\n' "$_pane_id" "$_task_id" "$_hb_time" "$_age" \
       > "${RUNTIME_DIR}/status/stale_${_pane_id}" 2>/dev/null || true
+    emit_lifecycle_event "stale_detected" "$TASKMASTER_SAFE" "$_task_id" "" "{\"stale_pane\":\"${_pane_id}\",\"age\":${_age}}"
     _found=true
   done
   [ "$_found" = true ]
