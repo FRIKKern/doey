@@ -239,6 +239,21 @@ check_doctor() {
     else _doc_check fail "$_label missing" "${_f/#$HOME/~}"; fi
   done
 
+  # Agent freshness (manifest hash from install.sh)
+  local _af_hash_file="$HOME/.claude/doey/agents.hash"
+  if [ -f "$_af_hash_file" ]; then
+    local _af_saved _af_current
+    _af_saved="$(cat "$_af_hash_file")"
+    _af_current="$(bash -c 'cat ~/.claude/agents/doey-*.md 2>/dev/null' | _freshness_hash)"
+    if [ "$_af_saved" = "$_af_current" ]; then
+      _doc_check ok "Agent freshness" "installed agents match manifest"
+    else
+      _doc_check warn "Agent freshness" "installed agents differ from manifest — run: doey update"
+    fi
+  else
+    _doc_check skip "Agent freshness" "no manifest hash (pre-manifest install)"
+  fi
+
   # Masterplan spawn helper — wired by install.sh but missing on systems that
   # haven't reinstalled since it was added. Required for /doey-masterplan.
   local _mp_spawn="$HOME/.local/bin/doey-masterplan-spawn.sh"
