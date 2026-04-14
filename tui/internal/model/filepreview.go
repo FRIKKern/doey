@@ -19,7 +19,7 @@ import (
 	"github.com/doey-cli/doey/tui/internal/styles"
 )
 
-const maxPreviewBytes = 10 * 1024 // 10KB
+const maxPreviewBytes = 100 * 1024 // 100KB
 
 // PreviewCache caches rendered file previews keyed by (path, width, mtime).
 type PreviewCache struct {
