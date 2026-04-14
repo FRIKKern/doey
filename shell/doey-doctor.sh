@@ -294,6 +294,18 @@ check_doctor() {
     _doc_check fail "Gum missing" "run: go install github.com/charmbracelet/gum@latest"
   fi
 
+  # cloudflared (optional tunnel provider — pure diagnosis, never FAIL)
+  if command -v cloudflared >/dev/null 2>&1; then
+    _doc_check ok "cloudflared" "$(cloudflared --version 2>/dev/null | head -1 || echo 'installed')"
+  elif command -v ngrok >/dev/null 2>&1 || command -v bore >/dev/null 2>&1; then
+    local _alt=""
+    command -v ngrok >/dev/null 2>&1 && _alt="ngrok"
+    command -v bore  >/dev/null 2>&1 && _alt="${_alt:+$_alt/}bore"
+    _doc_check skip "cloudflared not installed" "using ${_alt} for tunnels"
+  else
+    _doc_check warn "cloudflared not installed" "no tunnel provider — run: bash ${_doey_repo}/shell/doey-install-cloudflared.sh"
+  fi
+
   # Version
   local version_file="$HOME/.claude/doey/version"
   if [[ -f "$version_file" ]]; then

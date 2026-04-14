@@ -54,6 +54,33 @@ fi
 
 # --- Tool detection ---
 
+# Lazy cloudflared install: if no tunnel tool is found and the requested
+# provider is compatible, source the installer helper and prompt the user.
+# Returns 0 if cloudflared ended up present, non-zero to fall through to the
+# existing no_tunnel_tool_found safety net.
+_ensure_cloudflared() {
+    case "$TUNNEL_PROVIDER" in
+        auto|cloudflared) : ;;
+        *) return 1 ;;
+    esac
+
+    local helper="${BASH_SOURCE[0]%/*}/doey-install-cloudflared.sh"
+    if [ ! -f "$helper" ]; then
+        return 1
+    fi
+
+    # shellcheck disable=SC1090
+    . "$helper"
+
+    if command -v _doey_install_cloudflared_interactive >/dev/null 2>&1; then
+        _doey_install_cloudflared_interactive || return 1
+    else
+        return 1
+    fi
+
+    command -v cloudflared >/dev/null 2>&1
+}
+
 _detect_tunnel_tool() {
     if [ "$TUNNEL_PROVIDER" != "auto" ]; then
         if command -v "$TUNNEL_PROVIDER" >/dev/null 2>&1; then
@@ -231,6 +258,15 @@ _health_check() {
 # --- Main ---
 
 tool=$(_detect_tunnel_tool)
+if [ -z "$tool" ]; then
+    # Lazy-install: synchronously (before _start_tunnel backgrounds anything)
+    # prompt the user to install cloudflared. On success, re-run detection
+    # and continue. On decline / unattended-without-consent, fall through to
+    # the existing no_tunnel_tool_found safety net below.
+    if _ensure_cloudflared; then
+        tool=$(_detect_tunnel_tool)
+    fi
+fi
 if [ -z "$tool" ]; then
     echo "[tunnel] No tunnel tool found (checked: cloudflared, ngrok, bore)"
     cat > "$TUNNEL_ENV" <<EOF
