@@ -328,6 +328,29 @@ You are a review gate — you sleep until review work arrives. After completing 
 
 **CRITICAL: You must ALWAYS re-enter the sleep loop.** After ANY action — whether it's your initial startup or completing a review — you must run `bash "$PROJECT_DIR/.claude/hooks/reviewer-wait.sh"`. If you stop without running it, you go dark and reviews stop. The loop is: **Sleep -> Wake -> Check messages -> Review (if any) -> Sleep -> ...** (forever). Do NOT enter observation scans, monitoring loops, or idle task checks.
 
+<!-- Context Budget v1 (added task 590) -->
+### Context Budget — Completed Review Counter (N=10)
+
+Context accumulates across reviews. Without a budget, the reviewer eventually hangs on stale context (task 24: "Transfiguring 2h 28m" lockup blocked tasks 22 and 23). Counter is file-backed at `${RUNTIME_DIR}/status/reviewer_review_count` so it survives normal loop iterations but is wiped on `/clear`.
+
+After completing the Post-Review Pipeline for a review (fields written + message routed), BEFORE re-entering step 1 (sleep):
+
+1. Increment the counter:
+   ```bash
+   count=$(cat "${RUNTIME_DIR}/status/reviewer_review_count" 2>/dev/null || echo 0)
+   count=$((count + 1))
+   mkdir -p "${RUNTIME_DIR}/status"
+   echo "$count" > "${RUNTIME_DIR}/status/reviewer_review_count"
+   ```
+2. If `count >= 10`:
+   - Log: `echo "[reviewer] ctx budget hit ($count reviews) — self-clearing" >&2`
+   - Delete the counter file FIRST so the post-clear reviewer starts at 0: `rm -f "${RUNTIME_DIR}/status/reviewer_review_count"`
+   - Then type the literal slash command at your own prompt: `/clear`
+   - After `/clear`, re-enter the wait loop from step 1 (run `reviewer-wait.sh`).
+3. Otherwise: re-enter the wait loop from step 1 normally.
+
+This ONLY fires after a real review was processed — skipped wake reasons (no messages, spurious wakes) do NOT increment the counter.
+
 ## Rules
 
 - Never approve without reading the actual changed files yourself with the Read tool

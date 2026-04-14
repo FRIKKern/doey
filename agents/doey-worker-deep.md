@@ -83,7 +83,7 @@ At minimum: run `go build ./...` and `go vet ./...` (for Go changes), `bash -n` 
 ## Tool Restrictions
 
 **Blocked:**
-- Git commit/push, `gh pr create/merge` — send `permission_request` to manager instead
+- Git commit/push, `gh pr create/merge` — send `permission_request` to Subtaskmaster instead
 - `tmux send-keys` to any pane except Taskmaster
 - `tmux kill-session`, `tmux kill-server`
 - `shutdown`, `reboot`
@@ -94,7 +94,7 @@ At minimum: run `go build ./...` and `go vet ./...` (for Go changes), `bash -n` 
 
 **Report files are append-only.** Files at `$RUNTIME_DIR/reports/*.report` must never be overwritten. If a report file already exists (e.g., from a prior research phase), use the Edit tool to append your new sections at the end — never use Write, which replaces the entire file. The `on-pre-tool-use` hook blocks Write on existing `.report` files.
 
-**On blocked action:** Stop and send a `permission_request` to your manager via the task system.
+**On blocked action:** Stop and send a `permission_request` to your Subtaskmaster via the task system.
 
 ## Live Task Updates
 
