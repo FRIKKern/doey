@@ -1201,9 +1201,12 @@ launch_session_dynamic() {
   install_doey_hooks "$dir" "   "
 
   # ── Progress-file startup ────────────────────────────────────────────
+  # progress_file MUST live outside runtime_dir: _init_doey_session below
+  # rm -rf's runtime_dir, which would destroy the inode the foreground
+  # poller is tailing and strand the splash until its 60s timeout (H1).
   mkdir -p "${runtime_dir}/logs"
-  local progress_file="${runtime_dir}/startup-progress"
-  rm -f "$progress_file"
+  local progress_file
+  progress_file=$(mktemp "${TMPDIR:-/tmp}/doey-splash-XXXXXX") || progress_file="/tmp/doey-splash-$$"
   : > "$progress_file"
 
   # Fork actual setup into background — writes STEP lines to progress file
@@ -1462,6 +1465,7 @@ MANIFEST
 
   # Foreground: display startup progress (doey-tui or text fallback)
   _show_startup_progress "$progress_file" 60
+  rm -f "$progress_file" 2>/dev/null || true
 
   # Attach — session and first team are ready
   tmux select-window -t "$session:0"

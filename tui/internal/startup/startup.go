@@ -51,6 +51,7 @@ type model struct {
 // tailProgress reads the progress file and sends STEP lines on the channel.
 // It opens the file, seeks to end, and tails for new lines.
 func tailProgress(path string, ch chan<- string, done <-chan struct{}) {
+	defer close(ch)
 	// Wait for the file to exist (up to 30s)
 	var f *os.File
 	for i := 0; i < 300; i++ {
