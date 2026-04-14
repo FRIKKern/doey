@@ -1,0 +1,254 @@
+# Research Report: Freelancer Isolation from Taskmaster Dispatch
+
+## Summary
+
+The Taskmaster agent template (`agents/doey-taskmaster.md.tmpl`) currently treats freelancer teams as first-class dispatch targets. It explicitly instructs the Taskmaster to: (1) dispatch directly to freelancer panes for WORKERS_NEEDED=1 tasks, (2) use freelancers for research, (3) handle `freelancer_finished` messages, and (4) route errors from freelancers to Boss. The freelancer agent template (`agents/doey-freelancer.md.tmpl`) describes freelancers as "independent, managerless workers" with self-directed task lifecycle, but the Team Briefing in `teams/freelancer.team.md` explicitly says they "receive tasks directly from the Taskmaster or other Subtaskmasters." To isolate freelancers from Taskmaster dispatch, changes are needed in the Taskmaster template (primary), the freelancer team definition (secondary), and possibly the freelancer agent template.
+
+## File Contents
+
+### 1. agents/doey-taskmaster.md.tmpl — Key Freelancer References
+
+**Line 19** — Research dispatch to freelancers:
+```
+**Instead:** Need codebase info → send a freelancer to research. Communicate with {{DOEY_ROLE_BOSS}} → `doey msg send`. Scratch data → `$DOEY_SCRATCHPAD`.
+```
+
+**Line 23** — Setup section defines freelancer team dispatch:
+```
+**{{DOEY_ROLE_FREELANCER}} teams** (TEAM_TYPE=freelancer): ALL panes are workers, no {{DOEY_ROLE_TEAM_LEAD}} — dispatch directly.
+```
+
+**Lines 83-86** — Entire "Reserved Freelancer Pool" section:
+```
+## Reserved {{DOEY_ROLE_FREELANCER}} Pool
+
+{{DOEY_ROLE_FREELANCER}} teams (`TEAM_TYPE=freelancer` in `team_*.env`) are managerless, born-reserved worker pools. Dispatch directly (no {{DOEY_ROLE_TEAM_LEAD}}). Prompts must be self-contained.
+```
+
+**Lines 108** — Guard against despawning freelancer teams:
+```
+3. **Guard protected teams** — **Never despawn Core Team (window 1) or Reserved {{DOEY_ROLE_FREELANCER}} teams** (`TEAM_TYPE=freelancer` with `RESERVED` status). Only despawn ephemeral task teams (window 2+, non-reserved).
+```
+
+**Lines 189-207** — Direct Dispatch section (WORKERS_NEEDED=1) spawns freelancer teams:
+```
+#### Direct Dispatch (WORKERS_NEEDED=1)
+
+When `WORKERS_NEEDED=1` (simple single-file tasks, bug fixes, config changes), **skip the {{DOEY_ROLE_TEAM_LEAD}}** and dispatch directly to a worker. This eliminates the {{DOEY_ROLE_TEAM_LEAD}} hop...
+
+1. **Spawn a 1-worker freelancer team:**
+   doey add-window --workers 1 --freelancer --name "Task $TASK_ID" --task-id $TASK_ID
+...
+5. **On `freelancer_finished`** — Read the worker's result JSON, then route through the normal Review Gate
+```
+
+**Line 282** — Message processing table:
+```
+| `task` | {{DOEY_ROLE_BOSS}} | Plan which team(s) to assign, dispatch to {{DOEY_ROLE_TEAM_LEAD}}(s) or freelancers |
+```
+
+**Line 284** — Freelancer finished handling:
+```
+| `freelancer_finished` | {{DOEY_ROLE_FREELANCER}} | Read report, act on findings |
+```
+
+**Line 285** — Research via freelancer:
+```
+| `question` | {{DOEY_ROLE_TEAM_LEAD}} | Decide autonomously (research if needed via freelancer). Never escalate to {{DOEY_ROLE_BOSS}} |
+```
+
+**Lines 347-348** — Monitoring section:
+```
+| `FINISHED` | ... For managed teams, {{DOEY_ROLE_TEAM_LEAD}} already routed — check for follow-ups. For freelancers, act directly |
+| `ERROR` | ... For managed teams, notify {{DOEY_ROLE_TEAM_LEAD}}. For freelancers, escalate to {{DOEY_ROLE_BOSS}} |
+```
+
+**Line 435** — Rules section:
+```
+1. Managed teams: dispatch through {{DOEY_ROLE_TEAM_LEAD}}s. {{DOEY_ROLE_FREELANCER}}s: dispatch directly
+```
+
+### 2. agents/doey-freelancer.md.tmpl — Key Sections
+
+**Lines 1-7** — Frontmatter:
+```yaml
+name: doey-freelancer
+model: opus
+color: "#E67E22"
+memory: none
+description: "{{DOEY_ROLE_FREELANCER}} — independent, managerless worker with full task lifecycle management via doey-ctl. Self-directed: finds, creates, updates, and completes tasks without a {{DOEY_ROLE_TEAM_LEAD}}."
+```
+
+**Lines 9-15** — Introduction says "independent worker" but doesn't explicitly block Taskmaster dispatch:
+```
+Doey {{DOEY_ROLE_FREELANCER}}. Independent worker — no {{DOEY_ROLE_TEAM_LEAD}}, no manager. You own your task lifecycle end-to-end.
+```
+
+**Lines 19-31** — Task Hunting section — uses `doey-ctl` (not `doey msg read` from Taskmaster):
+```
+1. Check for unassigned tasks: doey-ctl task list --status ready
+2. Claim a match...
+3. If no ready tasks, check messages: doey-ctl msg read
+```
+
+**Lines 113-122** — Workflow section lists dispatch as one source of work:
+```
+1. **Receive dispatch** or **find work** via `doey-ctl task list`
+```
+
+### 3. teams/freelancer.team.md — Full Content
+
+```
+---
+name: freelancer
+description: "Fast freelancer pool"
+grid: 3x2
+workers: 6
+type: freelancer
+worker_model: opus
+---
+
+## Panes
+| Pane | Role | Agent | Name | Model |
+| 0-5 | worker | - | Freelancer 1-6 | opus |
+
+## Team Briefing
+Managerless pool of 6 independent workers. No coordinator — each freelancer receives tasks directly from the Taskmaster or other Subtaskmasters. Use for parallel, independent work that doesn't need cross-worker coordination.
+```
+
+**Note:** Line 23 explicitly says "receives tasks directly from the Taskmaster or other Subtaskmasters."
+
+### 4. shell/doey-roles.sh — Freelancer Definitions
+
+**Line 11:** `DOEY_ROLE_FREELANCER="Freelancer"` (display name)
+**Line 20:** `DOEY_ROLE_ID_FREELANCER="freelancer"` (internal ID)
+**Line 29:** `DOEY_ROLE_FILE_FREELANCER="doey-freelancer"` (file pattern)
+
+No TEAM_TYPE constants defined here — TEAM_TYPE is set at team-spawn time in doey.sh.
+
+### 5. Other Team Definitions in teams/
+
+- `teams/generic.team.md` — No `type` field (defaults to managed)
+- `teams/seo.team.md` — SEO specialist team
+- `teams/visual.team.md` — Visual review team
+- `teams/rd.team.md` — R&D team (type: local)
+- `teams/charmbracelet.team.md` — Charmbracelet team
+- `teams/deploy.team.md` — Deployment team
+- `teams/masterplan.team.md` — Strategic planning
+- `teams/review.team.md` — Review team
+- `.doey/go-tui.team.md` — Go TUI team (type: local)
+- `.doey/infra.team.md` — Infrastructure team (type: local)
+- `.doey/shell.team.md` — Shell scripts team (type: local)
+
+Only `teams/freelancer.team.md` has `type: freelancer`. None of the other teams accept Taskmaster dispatch — they all use manager/Subtaskmaster pattern.
+
+### 6. Hooks — Freelancer Detection
+
+**`.claude/hooks/on-pre-tool-use.sh` line 488-493** — Role detection uses TEAM_TYPE to distinguish freelancers from managed teams:
+```bash
+_di_tt=$(_rk TEAM_TYPE "${_RD}/team_${_di_wi}.env")
+if [ "$_di_tt" != "$DOEY_ROLE_ID_FREELANCER" ]; then
+  _di_mp=$(_rk MANAGER_PANE "${_RD}/team_${_di_wi}.env")
+  [ "$_di_pi" = "${_di_mp:-0}" ] && _DOEY_ROLE="$DOEY_ROLE_ID_TEAM_LEAD"
+fi
+[ -z "$_DOEY_ROLE" ] && _DOEY_ROLE="$DOEY_ROLE_ID_WORKER"
+```
+
+**`.claude/hooks/stop-notify.sh` lines 161-170** — Freelancer stop notifications go directly to Taskmaster:
+```bash
+if [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] || [ "$_team_env_exists" = "false" ]; then
+    _taskmaster_pane=$(_read_team_key "${RUNTIME_DIR}/session.env" TASKMASTER_PANE)
+    _target="$SESSION_NAME:${_taskmaster_pane:-$(get_taskmaster_pane)}"
+    ...
+    _subject="freelancer_finished"
+```
+
+## Key Findings
+
+1. **The Taskmaster template is the primary source of freelancer dispatch behavior.** It contains ~15 references to freelancers, instructing the Taskmaster to dispatch directly to freelancer teams for: single-worker tasks (WORKERS_NEEDED=1), research tasks, and direct work.
+
+2. **The freelancer agent template is already mostly self-directed.** It uses `doey-ctl` for task hunting and lifecycle, and describes itself as independent. However, it does accept dispatch ("Receive dispatch or find work").
+
+3. **The freelancer team definition explicitly names Taskmaster as a dispatch source** (line 23 of `teams/freelancer.team.md`).
+
+4. **The stop-notify hook hardcodes `freelancer_finished` notifications to Taskmaster** (`.claude/hooks/stop-notify.sh:169`). If freelancers should be isolated, this notification path needs changing or the Taskmaster needs to ignore/forward these.
+
+5. **The Direct Dispatch section (lines 189-207) is the biggest concern** — it has the Taskmaster spawning single-worker freelancer teams for every WORKERS_NEEDED=1 task. This is the main mechanism by which the Taskmaster directly controls freelancers.
+
+6. **No shell-level enforcement exists** — TEAM_TYPE is used for role detection in hooks, but there's no hook logic that blocks Taskmaster from sending keys to freelancer panes.
+
+## Recommended Changes
+
+### Change 1: Taskmaster Template — Remove Direct Freelancer Dispatch
+
+**File:** `agents/doey-taskmaster.md.tmpl`
+
+**Line 19** — Remove freelancer research mention:
+- Before: `**Instead:** Need codebase info → send a freelancer to research.`
+- After: `**Instead:** Need codebase info → dispatch a research worker via /doey-research.`
+
+**Line 23** — Remove freelancer dispatch instruction:
+- Before: `**{{DOEY_ROLE_FREELANCER}} teams** (TEAM_TYPE=freelancer): ALL panes are workers, no {{DOEY_ROLE_TEAM_LEAD}} — dispatch directly.`
+- After: Remove this sentence entirely.
+
+**Lines 83-86** — Remove entire "Reserved Freelancer Pool" section.
+
+**Lines 189-207** — Rewrite "Direct Dispatch (WORKERS_NEEDED=1)" section to spawn a **1-worker managed team** (not a freelancer team):
+- Before: `doey add-window --workers 1 --freelancer --name "Task $TASK_ID" --task-id $TASK_ID`
+- After: `doey add-window --workers 1 --name "Task $TASK_ID" --task-id $TASK_ID`
+- Remove `freelancer_finished` reference; use standard `worker_finished` flow.
+
+**Line 282** — Remove freelancer from task routing:
+- Before: `Plan which team(s) to assign, dispatch to {{DOEY_ROLE_TEAM_LEAD}}(s) or freelancers`
+- After: `Plan which team(s) to assign, dispatch to {{DOEY_ROLE_TEAM_LEAD}}(s)`
+
+**Line 284** — Remove `freelancer_finished` message handler OR change to ignore/log-only.
+
+**Line 285** — Remove "research if needed via freelancer":
+- Before: `Decide autonomously (research if needed via freelancer)`
+- After: `Decide autonomously (research if needed via /doey-research)`
+
+**Lines 347-348** — Remove freelancer-specific monitoring actions.
+
+**Line 435** — Remove freelancer dispatch rule:
+- Before: `1. Managed teams: dispatch through {{DOEY_ROLE_TEAM_LEAD}}s. {{DOEY_ROLE_FREELANCER}}s: dispatch directly`
+- After: `1. Dispatch through {{DOEY_ROLE_TEAM_LEAD}}s. Never dispatch to {{DOEY_ROLE_FREELANCER}} teams — they are self-directed`
+
+### Change 2: Freelancer Team Definition
+
+**File:** `teams/freelancer.team.md`
+
+**Line 23** — Update Team Briefing:
+- Before: `each freelancer receives tasks directly from the Taskmaster or other Subtaskmasters`
+- After: `each freelancer self-directs by hunting for unassigned tasks via doey-ctl. The Taskmaster does NOT dispatch to this pool`
+
+### Change 3: Freelancer Agent Template (Optional Enhancement)
+
+**File:** `agents/doey-freelancer.md.tmpl`
+
+**Line 115** — Clarify dispatch source:
+- Before: `1. **Receive dispatch** or **find work** via doey-ctl task list`
+- After: `1. **Find work** via doey-ctl task list --status ready (self-directed — no Taskmaster dispatch)`
+
+### Change 4: Stop-Notify Hook (Decision Required)
+
+**File:** `.claude/hooks/stop-notify.sh` lines 161-170
+
+The `freelancer_finished` notification to Taskmaster is currently the only way the Taskmaster knows a freelancer completed work. Options:
+- **Option A:** Keep the notification but have Taskmaster ignore it (just log, don't act). Simplest.
+- **Option B:** Change notification target from Taskmaster to Boss (pane 0.1). Freelancers report to user.
+- **Option C:** Remove notification entirely — freelancers mark their own tasks done via doey-ctl.
+
+**Recommendation:** Option A for now — keep hook unchanged, just update Taskmaster template to log-only on `freelancer_finished`. This minimizes blast radius.
+
+## Risks
+
+1. **Breaking WORKERS_NEEDED=1 flow** — This is the most-used dispatch path. Changing from `--freelancer` to managed team means a Subtaskmaster is created even for single-file tasks. This adds overhead. Mitigation: The "Direct Dispatch" section already describes dispatching directly to the worker pane without a Subtaskmaster — just remove the `--freelancer` flag.
+
+2. **Orphaned freelancer notifications** — If `freelancer_finished` still fires but Taskmaster ignores it, unread messages pile up. Mitigation: Taskmaster should acknowledge/log these.
+
+3. **Template regeneration required** — After editing `.md.tmpl` files, must run `bash shell/expand-templates.sh` to regenerate the actual `.md` agent files.
+
+4. **Existing freelancer teams in running sessions** — Currently running freelancer teams will still have the old behavior until the session is restarted. No migration needed — this is a template/agent change.
+
+5. **Research dispatch gap** — The Taskmaster currently uses freelancers for ad-hoc research. Removing this means research must go through `/doey-research` (which dispatches to workers, not freelancers). Verify this path works before removing the freelancer research option.

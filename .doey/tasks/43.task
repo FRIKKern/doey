@@ -1,13 +1,25 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=43
-TASK_TITLE=Show latest ordered task on top in Go TUI
-TASK_STATUS=done
-TASK_TYPE=bugfix
-TASK_TAGS=tui,ux,tasks
-TASK_TEAM=W1
-TASK_DESCRIPTION=In the Go TUI (tui/ directory), when displaying tasks (e.g. in a list or selection view), the most recently created/ordered task should appear at the TOP of the list, not the bottom. This is reverse-chronological ordering — newest first. Check wherever tasks are listed or rendered and ensure the sort order puts the highest ID or most recent timestamp first. Must compile: cd tui/ && go build ./...
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Fix agent colors in TUI — add validation, empty guard, and theme integration
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=task
+TASK_CREATED_BY=coordinator
+TASK_TEAM=W3
+TASK_DESCRIPTION=Based on research (task #41): (1) Add hex color validation in parseFrontmatter(). (2) Guard empty color at agents.go:391 (left panel dot renders invisible). (3) Consider AdaptiveColor integration. Key files: tui/internal/model/agents.go (4 render sites: 391, 501, 556, 618), tui/internal/runtime/reader.go:1193 (parser), tui/internal/store/migrate.go:658 (migration parser).
+TASK_TIMESTAMPS=created=1775834497
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1775834497
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=W3.1: Research — confirm exact line numbers and code patterns at all 4 render sites, 2 parser functions
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_CREATED_AT=1775834562
+TASK_SUBTASK_1_COMPLETED_AT=1775835087
+TASK_SUBTASK_2_TITLE=W3.1: Implement color validation, empty guards, and theme fallback
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_CREATED_AT=1775834709
+TASK_SUBTASK_2_COMPLETED_AT=1775835087
+TASK_SUBTASK_3_TITLE=W3.2: Verify — build, vet, check all changes match spec
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1775834963
+TASK_SUBTASK_3_COMPLETED_AT=1775835087

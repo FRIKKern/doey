@@ -1,0 +1,251 @@
+# Research Report: Go TUI Timeline Noise Filtering
+
+## Summary
+
+The timeline in the TUI task detail view is rendered by `buildTimeline()` and `renderUnifiedTimeline()` in `tui/internal/taskcard/taskcard.go`. It aggregates 7 entry types (logs, events, messages, updates, QA, reports, recovery) into a chronological list capped at 100 entries. The primary noise source is verbose TASK_LOG entries — especially multi-paragraph research notes (task #10 has 26 research entries of 100+ words each) and redundant completion signals from the stop-status/post-push-complete hooks. Filtering can be added either at display time (Go TUI, recommended) or at ingest time (shell hooks).
+
+## Findings
+
+### 1. Timeline Renderer
+
+**File:** `tui/internal/taskcard/taskcard.go`
+
+- **`buildTimeline()` (lines 737-833):** Collects all timestamped entries from Updates, Logs, Events, Messages, QA, Reports, and RecoveryLog into a `[]TimelineEntry`. Applies optional `TimelineFilter` map. Sorts chronologically. Caps at 100.
+
+- **`renderUnifiedTimeline()` (lines 836-865):** Calls `buildTimeline()`, then switches on `ent.Kind` to call type-specific renderers. Returns `[]string` of rendered lines.
+
+- **`renderTimelineLog()` (lines 868-900):** Renders a single log entry. Calls `splitLogPrefix()` to separate the prefix (e.g., "REPORT_W2", "PROGRESS", "COMPLETE") from the body. Passes body through `grammar.Parse()` for visualization blocks, then renders with `styles.ActivityEntry()` or `styles.LogEventBadge()`.
+
+- **Entry types and renderers:**
+  | Kind | Renderer | Lines |
+  |------|----------|-------|
+  | `TimelineLog` | `renderTimelineLog()` | 868-900 |
+  | `TimelineEvent` | `renderTimelineEvent()` | 903-936 |
+  | `TimelineMessage` | `renderTimelineMessage()` | 938-978 |
+  | `TimelineUpdate` | `renderTimelineUpdate()` | 980-995 |
+  | `TimelineQA` | `renderTimelineQA()` | 997-1070 |
+  | `TimelineReport` | `renderTimelineReport()` | 1072-1100 |
+  | `TimelineRecovery` | `renderTimelineRecovery()` | 1102-1118 |
+
+### 2. Timeline Data Model
+
+**Struct:** `TimelineEntry` (lines 376-386 in taskcard.go)
+```go
+type TimelineEntry struct {
+    Timestamp int64
+    Kind      TimelineEntryKind
+    Log       *runtime.PersistentTaskLog
+    Event     *runtime.Event
+    Message   *runtime.Message
+    Update    *runtime.PersistentUpdate
+    QA        *runtime.PersistentQAEntry
+    Report    *runtime.PersistentReport
+    Recovery  *runtime.PersistentRecoveryEvent
+}
+```
+
+**Kind constants** (lines 364-372): `log`, `event`, `message`, `update`, `qa`, `report`, `recovery`
+
+**Log entry struct** (`tui/internal/runtime/tasks_config.go:28-32`):
+```go
+type PersistentTaskLog struct {
+    Timestamp int64  `json:"ts"`
+    Entry     string `json:"entry"`
+}
+```
+
+**Existing filter mechanism** (lines 429-430 in taskcard.go):
+```go
+TimelineFilter map[TimelineEntryKind]bool
+```
+When any key is `true`, only those kinds are shown. This is a type-level filter, not a content-level filter.
+
+### 3. Entry Sources
+
+**Parsing** (`tui/internal/runtime/reader.go:519-532`):
+- Reads `TASK_LOG_<timestamp>=<text>` entries from `.task` files
+- Key format: `TASK_LOG_1774818339=REPORT_W2: Wave1 complete...`
+- Sorted chronologically after parsing
+
+**Shell hooks that create TASK_LOG entries:**
+
+| Source | File | Lines | Mechanism |
+|--------|------|-------|-----------|
+| Worker stop | `.claude/hooks/stop-status.sh` | 126-128 | `doey-ctl task log add --type completion` |
+| Git push | `.claude/hooks/post-push-complete.sh` | 67-68 | Raw `printf >> .task` file (bypasses doey-ctl) |
+| Agent instructions | `agents/doey-worker.md` | 104-114 | Workers call `doey task log add` for progress/reports |
+| Agent instructions | `agents/doey-subtaskmaster.md` | 461-462 | Subtaskmasters call `doey task log add` for wave reports |
+| Agent instructions | `agents/doey-freelancer.md` | 91-97 | Freelancers call `doey-ctl task log add` for progress |
+| Shell helpers | `shell/doey-task-helpers.sh` | 486, 496, 984, 1011 | `task_add_decision()`, `task_add_note()`, `task_add_report()`, `task_add_recovery()` |
+
+**doey-ctl implementation** (`tui/cmd/doey-ctl/commands.go:1132-1222`):
+- `doey-ctl task log add` command with `--type`, `--title`, `--body`, `--author` flags
+- Valid types auto-corrected via fuzzy match
+- Writes to both SQLite store and `.task` file
+
+### 4. Sample Noise Data
+
+**Task #10 (Charmbracelet research)** — 30 TASK_LOG entries. The noise:
+
+```
+TASK_LOG_1774830100=BUBBLE_TEA_CORE_ARCHITECTURE: Bubble Tea follows The Elm Architecture with three methods: Init() tea.Cmd, Update(tea.Msg) (tea.Model, tea.Cmd), View() tea.View. In v2, View() returns a tea.View struct (not string) via tea.NewView(content). tea.Msg is a type alias for uv.Event...
+TASK_LOG_1774830101=TEA_TICK_AND_TEA_EVERY: tea.Tick(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd — fires once after duration d using time.NewTimer...
+TASK_LOG_1774830102=TEA_BATCH_AND_SEQUENCE: tea.Batch(cmds ...tea.Cmd) tea.Cmd — executes multiple commands concurrently...
+[...24 more entries of 100-300 words each...]
+TASK_LOG_1774830125=KEY_CODE_PATTERNS_SUMMARY: (1) Tick loop: func tickCmd() tea.Cmd...
+```
+
+These 26 research entries (~5000+ words total) dominate the timeline and push actionable entries (DISPATCHED, PROGRESS, COMPLETE) below the fold.
+
+**Task #5 (simplification)** — 4 TASK_LOG entries. Clean, no noise:
+```
+TASK_LOG_1774818339=REPORT_W2: Wave1 complete...
+TASK_LOG_1774818426=PROGRESS: W1 shell domain complete...
+TASK_LOG_1774819090=REPORT_W2: COMPLETE...
+TASK_LOG_1774819248=COMPLETE: All waves done...
+```
+
+**Noise categories identified:**
+1. **Research dumps** — Multi-paragraph knowledge dumps stored as TASK_LOG (task #10)
+2. **Redundant completion** — `stop-status.sh` creates a completion log AND `post-push-complete.sh` creates AUTO_COMPLETE (both for same finish event)
+3. **Status duplication** — `TASK_TIMESTAMPS=completed=...|completed=...|completed=...|completed=...` shows 4 identical timestamps
+
+## Key Files
+
+| File | Role | Needs modification |
+|------|------|--------------------|
+| `tui/internal/taskcard/taskcard.go` | Timeline rendering + filtering | Yes (Plan A) |
+| `tui/internal/runtime/tasks_config.go` | Data structs | Maybe (Plan A) |
+| `tui/internal/runtime/reader.go` | .task file parsing | Maybe (Plan A) |
+| `.claude/hooks/stop-status.sh` | Completion logging | Yes (Plan B) |
+| `.claude/hooks/post-push-complete.sh` | Auto-complete logging | Yes (Plan B) |
+| `agents/doey-worker.md` | Worker log instructions | Maybe (Plan B) |
+| `agents/doey-freelancer.md` | Freelancer log instructions | Maybe (Plan B) |
+
+## Plan A: Display-Side Filtering (RECOMMENDED)
+
+**Rationale:** Preserves all data in .task files (audit trail), only hides noise in TUI. Non-destructive. Single codebase change. Can be toggled by user.
+
+### Implementation
+
+**File:** `tui/internal/taskcard/taskcard.go`
+
+**Step 1: Add content-level noise filter function** (after line 833, before `renderUnifiedTimeline`)
+
+```go
+// isNoisyLogEntry returns true if the log entry should be hidden from the
+// default timeline view. Noisy entries include verbose research dumps,
+// redundant completion signals, and auto-generated status updates.
+func isNoisyLogEntry(entry string) bool {
+    // Research dumps: entries > 300 chars with ALL_CAPS_PREFIX pattern
+    prefix, body := splitLogPrefix(entry)
+    upperPrefix := strings.ToUpper(prefix)
+
+    // Skip verbose research entries (long body with technical prefix)
+    if len(body) > 300 && prefix == upperPrefix && prefix != "COMPLETE" && prefix != "PROGRESS" && prefix != "REPORT" {
+        return true
+    }
+
+    // Skip auto-complete duplicates
+    if strings.HasPrefix(entry, "AUTO_COMPLETE:") {
+        return true
+    }
+
+    return false
+}
+```
+
+**Step 2: Apply filter in `buildTimeline()`** (modify lines 754-760)
+
+Add noise filtering after the existing `TimelineFilter` check (after line 820):
+
+```go
+// Apply content-level noise filter for log entries
+{
+    filtered := entries[:0]
+    for _, ent := range entries {
+        if ent.Kind == TimelineLog && ent.Log != nil && isNoisyLogEntry(ent.Log.Entry) {
+            continue
+        }
+        filtered = append(filtered, ent)
+    }
+    entries = filtered
+}
+```
+
+**Step 3: Add "show all" toggle** — Extend `ExpandedCard` with `ShowAllTimeline bool` field. When true, skip the noise filter. Toggle with a keybinding (e.g., `a` for "all").
+
+### Dispatch-Ready Prompt (Plan A)
+
+```
+Edit tui/internal/taskcard/taskcard.go:
+
+1. Add `ShowAllTimeline bool` field to ExpandedCard struct (after line 430)
+
+2. Add isNoisyLogEntry() function after line 833. Filter criteria:
+   - Entry text > 300 chars AND prefix is ALL_CAPS but not COMPLETE/PROGRESS/REPORT/DISPATCHED
+   - Entry starts with "AUTO_COMPLETE:"
+
+3. In buildTimeline(), after the TimelineFilter block (after line 820), add content filter:
+   - Skip if e.ShowAllTimeline is true
+   - Remove entries where Kind==TimelineLog and isNoisyLogEntry returns true
+
+4. In renderUnifiedTimeline() section title (line 844), show filtered count:
+   - "Timeline (5 of 30)" when filtering is active
+
+Key structs: TimelineEntry (line 376), ExpandedCard (line 396), PersistentTaskLog (tasks_config.go:28)
+Key functions: buildTimeline() (line 737), renderUnifiedTimeline() (line 836), splitLogPrefix() (used at line 873)
+```
+
+## Plan B: Ingest-Side Filtering
+
+**Rationale:** Prevent noise at source. Fewer entries written, smaller .task files. But destructive — filtered data is lost forever.
+
+### Implementation
+
+**Step 1:** Modify `agents/doey-worker.md` and `agents/doey-freelancer.md` to instruct agents to use `--type research` for verbose findings, separating them from progress updates.
+
+**Step 2:** In `.claude/hooks/post-push-complete.sh` (line 67-68), check if a completion log already exists before writing AUTO_COMPLETE:
+```bash
+if ! grep -q "^TASK_LOG_.*=COMPLETE:" "$TASK_FILE" 2>/dev/null; then
+    printf 'TASK_LOG_%s=AUTO_COMPLETE: Marked done after push (commit %s)\n' \
+        "$(date +%s)" "$SHORT_HASH" >> "$TASK_FILE" 2>/dev/null || true
+fi
+```
+
+**Step 3:** In `doey-ctl task log add` (`tui/cmd/doey-ctl/commands.go:1132+`), add a `--max-length` flag that truncates body at 300 chars, appending "... (truncated)".
+
+### Dispatch-Ready Prompt (Plan B)
+
+```
+1. Edit .claude/hooks/post-push-complete.sh:
+   - Lines 67-68: Wrap in guard checking for existing COMPLETE: entry
+
+2. Edit agents/doey-worker.md lines 104-114:
+   - Add guidance: "Use --type research for verbose findings (these are filtered in timeline)"
+
+3. Edit tui/cmd/doey-ctl/commands.go:
+   - Near line 1132: Add --max-length flag to task log add subcommand
+   - Default to 500 chars for non-research types
+```
+
+## Risks
+
+1. **Plan A false positives** — The 300-char + ALL_CAPS heuristic could hide legitimate long progress entries. Mitigation: whitelist known prefixes (COMPLETE, PROGRESS, REPORT, DISPATCHED).
+
+2. **Plan A performance** — Adding a string scan per entry is O(n) per entry. With cap at 100, this is negligible.
+
+3. **Plan B data loss** — Truncating at ingest means research details are gone. If someone later wants to review the full research, it's lost.
+
+4. **Plan B coordination** — Changing agent instructions requires restarting all workers. Changing hooks requires `doey reload --workers`.
+
+5. **Both plans** — The existing `TimelineFilter` (type-level) already provides some filtering. Plan A's content filter is orthogonal and composes cleanly with it.
+
+## Recommendation
+
+**Plan A (display filter)** is strongly recommended because:
+- Non-destructive (all data preserved)
+- Single file change (`taskcard.go`)
+- User-toggleable ("show all" mode)
+- No coordination needed (no hook/agent restarts)
+- Can be refined iteratively without risk

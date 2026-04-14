@@ -1,0 +1,144 @@
+# Research Report: How the Go TUI Renders the Agents Tab — Color Application
+
+## Summary
+
+The Agents tab (`tui/internal/model/agents.go`) renders agent colors via a direct, zero-transformation pipeline: the raw hex color string from agent frontmatter (e.g. `"#FF6B35"`) is passed straight to `lipgloss.Color()` and applied as a `Foreground` style to a diamond glyph (`◆`). There is **no color validation, normalization, fallback, palette mapping, or theme integration** — the string is used as-is. If the string is empty, lipgloss receives `lipgloss.Color("")` which renders as the terminal's default foreground color (no color applied). There is no color palette or theme system that agent colors plug into — they are independent of the `styles.Theme` system.
+
+## Findings
+
+### 1. Color Data Flow: Frontmatter → AgentDef → Renderer
+
+**Source:** Agent `.md` files in `agents/` have YAML frontmatter with a `color` field:
+```yaml
+color: "#FF6B35"
+```
+
+**Parsing (file-based):** `tui/internal/runtime/reader.go:976-1013` — `readAgentDefs()` calls `parseFrontmatter()` which reads key-value pairs, strips surrounding quotes, and stores the raw string:
+```go
+Color: fm["color"],   // reader.go:999
+```
+
+**Parsing (store-based):** `tui/internal/runtime/store_reader.go:248-265` — `readAgents()` reads from SQLite `agents` table (column `color TEXT NOT NULL DEFAULT ''`) and maps directly:
+```go
+Color: sa.Color,   // store_reader.go:259
+```
+
+**Frontmatter parser:** `tui/internal/runtime/reader.go:1192-1226` — Simple line-by-line `key: value` parser. Strips surrounding `"` or `'` quotes. No type coercion or validation.
+
+**Data type:** `runtime.AgentDef.Color` is a plain `string` (`tui/internal/runtime/types.go:240`). No color type, no validation.
+
+### 2. Where Colors Are Rendered (4 call sites in agents.go)
+
+All four sites use the identical pattern:
+```go
+lipgloss.NewStyle().Foreground(lipgloss.Color(agent.Color)).Render("◆")
+```
+
+| Location | Context | Line |
+|----------|---------|------|
+| `renderLeftPanel()` | Agent list — colored dot next to name | `agents.go:391` |
+| `renderDetailContent()` | Detail panel — color swatch field (only if `agent.Color != ""`) | `agents.go:501` |
+| `maxRightScroll()` | Scroll calculation (replicates right panel rendering) | `agents.go:556` |
+| `renderRightPanel()` | Detail panel header — colored dot next to title | `agents.go:618` |
+
+### 3. How lipgloss.Color() Works with These Values
+
+`lipgloss.Color(string)` is a type alias — it accepts:
+- **Hex colors:** `"#FF6B35"` → 24-bit true color (if terminal supports it)
+- **ANSI color names:** `"red"`, `"blue"` etc.
+- **ANSI 256-color numbers:** `"196"`, `"33"` etc.
+- **Empty string `""`:** No color applied — terminal default foreground is used
+
+The color string from frontmatter is passed **directly** to `lipgloss.Color()` with no validation, parsing, or conversion. lipgloss internally handles terminal capability detection and color degradation (true color → 256 → 16 → none).
+
+### 4. No Fallback / Default Logic
+
+**Left panel (`agents.go:391`):** Renders `lipgloss.Color(a.Color)` unconditionally — even if `a.Color` is `""`. This means agents with no color defined get a diamond rendered in the terminal's default foreground color (no visual distinction).
+
+**Detail panel (`agents.go:500-502`):** Has a guard: `if agent.Color != ""` — only shows the "Color" field row when a color is defined. But the **header dot** at line 618 still renders with `lipgloss.Color(agent.Color)` unconditionally.
+
+**There is no default color, no fallback to a theme color, and no per-domain color assignment.** If an agent has no color, its dot is invisible/indistinguishable from the text.
+
+### 5. No Color Palette or Theme Integration
+
+Agent colors are **completely independent** of the `styles.Theme` system (`tui/internal/styles/theme.go:10-154`). The theme defines `Primary`, `Success`, `Warning`, `Danger`, `Muted`, `Accent` as `lipgloss.AdaptiveColor` values, but agent colors are raw `lipgloss.Color` strings — a different type. They don't participate in light/dark mode adaptation.
+
+The `styles.Theme` is used in the Agents tab for:
+- Section headers, labels, text colors, muted text, separators
+- Selected row background highlight
+- Panel borders, nav hints
+
+But the agent's own color dot is always a raw `lipgloss.Color()` call, not theme-aware.
+
+### 6. Domain Grouping (Relevant Context)
+
+Agents are grouped by domain (`tui/internal/runtime/reader.go:1179-1190`):
+- `doey-*` → "Doey Infrastructure"
+- `seo-*` → "SEO"
+- `visual-*` → "Visual QA"
+- Everything else → "Utility"
+
+Domain assignment is name-prefix based, not color based. Each domain header is rendered with `t.Text` foreground (theme text color), not with any domain-specific color.
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `tui/internal/model/agents.go` | **Primary:** Agents tab rendering — split-panel layout, all 4 color render sites |
+| `tui/internal/runtime/types.go:236-246` | `AgentDef` struct definition with `Color string` field |
+| `tui/internal/runtime/reader.go:976-1013` | File-based agent reader — reads frontmatter, populates `Color` |
+| `tui/internal/runtime/reader.go:1192-1226` | `parseFrontmatter()` — raw string extraction from YAML |
+| `tui/internal/runtime/store_reader.go:248-265` | Store-based agent reader — reads from SQLite |
+| `tui/internal/store/agents.go` | SQLite agent CRUD — `color TEXT NOT NULL DEFAULT ''` |
+| `tui/internal/styles/theme.go` | Theme system — `AdaptiveColor` palette, not used for agent colors |
+| `tui/internal/styles/status.go` | Status/category color helpers — shows how theme colors are normally used |
+
+## Plan
+
+### Option A (Recommended): Direct Enhancement — Add Color Fallback
+
+Add a fallback to the rendering layer so agents without a `color` field get a visually distinct dot:
+
+1. In `agents.go`, create a helper function:
+   ```go
+   func agentDotColor(color string) lipgloss.TerminalColor {
+       if color != "" {
+           return lipgloss.Color(color)
+       }
+       return lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#9CA3AF"} // theme.Muted equivalent
+   }
+   ```
+
+2. Replace all 4 `lipgloss.Color(a.Color)` / `lipgloss.Color(agent.Color)` calls with `agentDotColor(a.Color)`.
+
+3. This gives empty-color agents a muted gray diamond instead of invisible/default.
+
+**Effort:** ~15 lines changed in `agents.go`. No new files.
+
+### Option B: Theme-Aware Agent Colors with Light/Dark Adaptation
+
+Wrap agent colors in `lipgloss.AdaptiveColor` for light/dark terminal support:
+
+1. Add a color utility that converts hex to `AdaptiveColor`:
+   ```go
+   func adaptiveAgentColor(hex string) lipgloss.AdaptiveColor {
+       if hex == "" {
+           return theme.Muted
+       }
+       return lipgloss.AdaptiveColor{Light: hex, Dark: hex}
+   }
+   ```
+
+2. This doesn't add actual light/dark adaptation (would need paired colors), but establishes the type compatibility with the theme system.
+
+**Full light/dark adaptation** would require each agent to define two colors (one for light terminals, one for dark), or a programmatic lightening/darkening algorithm. This is significantly more complex and may not be needed since most users use dark terminals.
+
+## Risks
+
+1. **Empty color string renders invisible dot:** The left panel (`agents.go:391`) passes `lipgloss.Color("")` which produces no color styling. The diamond glyph renders in default terminal foreground, making it blend with the agent name text. This is a minor visual inconsistency, not a crash.
+
+2. **No color validation:** Invalid hex strings (e.g. `"not-a-color"`, `"#GGG"`) are passed to `lipgloss.Color()` which silently falls back to no color. No error is raised. This means typos in agent frontmatter produce invisible dots without warning.
+
+3. **No light/dark adaptation:** Agent colors are raw hex values. A color like `"#1E293B"` (dark slate) would be invisible on a dark terminal. The theme system uses `AdaptiveColor` for exactly this reason, but agent colors bypass it entirely.
+
+4. **Store vs file divergence:** The store path (`store_reader.go`) doesn't carry `Memory` or `UsedByTeams` fields — only the file path does. But for color rendering, both paths produce the same `Color` string, so no divergence there.

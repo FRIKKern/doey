@@ -1,0 +1,194 @@
+# Research Report: Agent Color Definition & TUI Parsing Pipeline
+
+**Task:** 41 | **Subtask:** 92
+**Worker:** d-t2-w1 (pane 2.1)
+**Date:** 2026-04-10
+
+## Summary
+
+Agent colors are defined as hex strings (e.g. `"#FF6B35"`) in YAML frontmatter of `.md` files in `agents/`. The Go TUI parses these with a lightweight custom frontmatter parser (not a full YAML library), stores the raw hex string in both an SQLite database and in-memory structs, and passes it directly to `lipgloss.Color()` for terminal rendering. **There is no validation, transformation, or normalization of the color value anywhere in the pipeline.**
+
+## Findings
+
+### 1. Color Definition in Agent .md Files
+
+**Format:** Hex color strings with `#` prefix, quoted in YAML frontmatter.
+
+| Agent | Color | File |
+|-------|-------|------|
+| doey-taskmaster | `#FF6B35` | `agents/doey-taskmaster.md:4` |
+| doey-subtaskmaster | `#2ECC71` | `agents/doey-subtaskmaster.md:4` |
+| doey-worker | `#3498DB` | `agents/doey-worker.md:4` |
+| doey-critic | `#E74C3C` | `agents/doey-critic.md:4` |
+| seo-manager | `#27AE60` | `agents/seo-manager.md:4` |
+| visual-manager | `#9B59B6` | `agents/visual-manager.md:4` |
+
+All inspected agents use **uppercase 6-digit hex** with `#` prefix, quoted with double quotes. The YAML field is simply `color: "#RRGGBB"`.
+
+### 2. Frontmatter Parsing (Go)
+
+Two independent parsers exist:
+
+**A. Runtime reader parser** (`tui/internal/runtime/reader.go:1193-1230`):
+- Function: `parseFrontmatter(path string) map[string]string`
+- Reads lines between `---` delimiters
+- Splits on first `:`, trims whitespace
+- Strips surrounding `"` or `'` quotes
+- Returns raw `map[string]string` — no type coercion, no validation
+- Color value is stored as-is (e.g. `"#FF6B35"` after quote stripping)
+
+**B. Store migration parser** (`tui/internal/store/migrate.go:658-705`):
+- Function: `parseFrontmatter(path string) (map[string]string, string, error)`
+- Also returns the body text after frontmatter
+- Same key:value split-on-first-colon approach
+- Strips `"` and `'` quotes via `strings.Trim(v, "\"'")`
+- Used during DB migration to seed agent records
+
+### 3. Data Model / Structs
+
+**Runtime AgentDef** (`tui/internal/runtime/types.go:237-246`):
+```go
+type AgentDef struct {
+    Name        string   `json:"name"`
+    Description string   `json:"description"`
+    Model       string   `json:"model"`
+    Color       string   `json:"color"`        // raw hex string
+    Memory      string   `json:"memory"`
+    Domain      string   `json:"domain"`
+    FilePath    string   `json:"filepath"`
+    UsedByTeams []string `json:"used_by_teams"`
+}
+```
+
+**Store Agent** (`tui/internal/store/agents.go:4-11`):
+```go
+type Agent struct {
+    Name        string `json:"name"`
+    DisplayName string `json:"display_name"`
+    Model       string `json:"model,omitempty"`
+    Description string `json:"description,omitempty"`
+    Color       string `json:"color,omitempty"`     // raw hex string
+    FilePath    string `json:"file_path,omitempty"`
+}
+```
+
+### 4. Storage Layer (SQLite)
+
+**Schema** (`tui/internal/store/schema.go:104-110`):
+```sql
+CREATE TABLE IF NOT EXISTS agents (
+    name TEXT PRIMARY KEY,
+    display_name TEXT,
+    model TEXT,
+    description TEXT,
+    color TEXT NOT NULL DEFAULT '',
+    file_path TEXT
+);
+```
+
+The `color` column was added via migration (`schema.go:186`):
+```sql
+ALTER TABLE agents ADD COLUMN color TEXT DEFAULT ''
+```
+
+**Agent CRUD** (`tui/internal/store/agents.go`):
+- `UpsertAgent()` — INSERT OR REPLACE, stores color as raw text
+- `GetAgent()` — SELECT, reads color back as raw text
+- `ListAgents()` — SELECT all, color as raw text
+- No color validation at the store level
+
+### 5. Data Flow: .md File -> TUI Rendering
+
+```
+agents/*.md  (color: "#FF6B35")
+     |
+     v
+parseFrontmatter()  [reader.go:1193 OR migrate.go:658]
+     |  strips quotes -> "#FF6B35"
+     v
+readAgentDefs()  [reader.go:976] ─── creates AgentDef{Color: "#FF6B35"}
+     |                                      OR
+migrateOneAgent()  [migrate.go:429] ── INSERT INTO agents ... color="#FF6B35"
+     |                                      |
+     v                                      v
+Snapshot.AgentDefs               storeReader.readAgents() [store_reader.go:248]
+     |                                      |
+     ├── tried first (store) ───────────────┘
+     |
+     v
+model.AgentsModel.View()  [agents.go:275+]
+     |
+     v
+lipgloss.Color(agent.Color)  [agents.go:391, 501, 556, 618]
+     |
+     v
+Terminal renders the color (ANSI true-color escape)
+```
+
+**Snapshot loading priority** (`reader.go:173-179`):
+1. Try store: `r.sr.readAgents()` — converts `store.Agent` -> `runtime.AgentDef`
+2. Fallback to files: `r.readAgentDefs(projectDir)` — parses `.md` frontmatter directly
+
+### 6. Color Rendering in TUI
+
+The color string is passed directly to `lipgloss.Color()` in four places in `agents.go`:
+
+- **Line 391:** Left panel agent list — colored `◆` dot next to agent name
+- **Line 501:** Detail panel — colored `◆` dot next to "Color" label + dim hex text
+- **Line 556:** `maxRightScroll()` calculation — replicates title dot styling
+- **Line 618:** Right panel header — colored `◆` dot before agent name title
+
+`lipgloss.Color()` accepts: hex (`#RRGGBB`, `#RGB`), ANSI 256 colors (`0`-`255`), or named CSS colors. There is no Doey-side validation — invalid strings would silently render as default terminal color.
+
+### 7. Shell-side Usage
+
+The settings panel (`shell/settings-panel.sh:648-696`) also reads agent colors:
+- Parses frontmatter with `_parse_agent_all()`
+- Displays color value as plain text in the detail view (line 688, 743)
+- Does NOT render the color visually in shell — just prints the hex string
+
+## Key Files
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `agents/*.md` | 1-6 | Color defined in YAML frontmatter |
+| `tui/internal/runtime/types.go` | 237-246 | `AgentDef` struct with `Color string` |
+| `tui/internal/store/agents.go` | 1-62 | `Agent` struct + CRUD (no validation) |
+| `tui/internal/store/schema.go` | 104-110, 186 | SQLite schema + migration |
+| `tui/internal/runtime/reader.go` | 976-1014 | `readAgentDefs()` — file-based parser |
+| `tui/internal/runtime/reader.go` | 1193-1230 | `parseFrontmatter()` — generic parser |
+| `tui/internal/store/migrate.go` | 412-447 | `migrateAgents()` — seeds DB from files |
+| `tui/internal/store/migrate.go` | 658-705 | `parseFrontmatter()` (store variant) |
+| `tui/internal/runtime/store_reader.go` | 248-265 | `readAgents()` — DB -> AgentDef |
+| `tui/internal/model/agents.go` | 275-686 | TUI rendering, `lipgloss.Color()` usage |
+| `tui/internal/styles/theme.go` | 1-155 | Theme colors (separate from agent colors) |
+| `shell/settings-panel.sh` | 648-760 | Shell settings panel agent display |
+
+## Plan
+
+### Option A (Recommended): No changes needed for current color pipeline
+
+The current pipeline is clean and correct:
+1. Colors are already in hex format (`#RRGGBB`) — the optimal format for `lipgloss.Color()`
+2. lipgloss natively handles hex-to-ANSI conversion for the terminal
+3. No validation needed at the Doey layer — lipgloss gracefully handles invalid values
+4. The two parsers (runtime + store) both correctly strip quotes and pass through the raw hex
+
+If the goal is to add color rendering elsewhere (e.g., tmux pane borders, status bar), the hex values are already available from the store or AgentDef struct and can be converted to tmux color format (also hex) directly.
+
+### Option B (If color normalization/validation is needed):
+
+Add a `normalizeColor(s string) string` function in `tui/internal/runtime/reader.go` that:
+1. Validates hex format (`#RGB` or `#RRGGBB`)
+2. Normalizes `#RGB` to `#RRGGBB`
+3. Falls back to a default color (e.g. theme Muted) for invalid values
+4. Call it in both `readAgentDefs()` and `storeReader.readAgents()`
+
+This would be ~15 lines of code. Only worth adding if agents may have non-hex color values in the future.
+
+## Risks
+
+1. **No color validation** — If someone writes `color: "red"` or `color: "invalid"`, lipgloss will silently fall back to default terminal color. Not a crash risk but could confuse users.
+2. **Two frontmatter parsers** — `runtime/reader.go:1193` and `store/migrate.go:658` are independent implementations. Quote stripping differs slightly (`Trim` vs conditional `[1:len-1]`). Both work for the current `"#RRGGBB"` format but could diverge on edge cases.
+3. **Store migration uses INSERT OR IGNORE** — If an agent was initially migrated without a color, updating the `.md` file won't update the DB. The `UpsertAgent` (INSERT OR REPLACE) path is not called during migration. This means stale color values could persist in the DB until a full re-migration or manual update.
+4. **No DisplayName in runtime path** — The `readAgentDefs()` file parser doesn't extract `display_name`, while the migration path does. The store `Agent` struct has `DisplayName` but `AgentDef` doesn't. Minor inconsistency.

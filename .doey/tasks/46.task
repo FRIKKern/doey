@@ -1,13 +1,48 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=46
-TASK_TITLE=Fix Huh wizard JSON field casing mismatch
-TASK_STATUS=done
-TASK_TYPE=bugfix
-TASK_TAGS=tui,huh,bugfix,startup
-TASK_TEAM=W1
-TASK_DESCRIPTION=The Huh startup wizard (tui/internal/setup/) outputs JSON with uppercase field names (Type, Name, Workers, Def) because the Go structs lack json tags. doey.sh parses these with Python expecting lowercase (t.get('type'), t.get('name'), etc.), so the wizard output is silently ignored and Doey falls back to defaults.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Cap Doey startup loading screen to 2-3 seconds
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+User wants the Doey loading/splash screen at startup to complete within 2-3 seconds max. Currently it likely takes longer.
+
+WHAT: Optimize or cap the startup loading sequence so the user sees the working session within 2-3 seconds of running 'doey'.
+WHY: Slow startup feels sluggish — the loading screen should be brief, not a bottleneck.
+WHERE: Likely shell/doey.sh (launcher), shell/info-panel.sh (dashboard), any startup animation or initialization sequence.
+
+Research needed:
+1. What currently runs during startup that the user sees as 'loading'? (splash screen, info panel init, tmux setup, agent launches)
+2. Where is time being spent? Profile the startup path.
+3. Which parts can be parallelized, deferred, or removed to hit the 2-3s target.
+
+Success criteria: From running 'doey' to seeing the interactive session, the loading/splash phase completes in ≤3 seconds on a typical machine.
+TASK_TIMESTAMPS=created=1776163120
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1776163120
+TASK_FILES=.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/2.task,.doey/tasks/20.task,.doey/tasks/21.task,.doey/tasks/22.task,.doey/tasks/23.task,.doey/tasks/24.task,.doey/tasks/25.task,.doey/tasks/27.task,.doey/tasks/3.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Profile startup path and produce timing breakdown
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1776163206
+TASK_SUBTASK_1_COMPLETED_AT=1776163290
+TASK_SUBTASK_2_TITLE=Cap splash wait + cache auth check
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1776163563
+TASK_SUBTASK_2_COMPLETED_AT=1776163827
+TASK_SUBTASK_3_TITLE=Reduce delay defaults (brief/launch/worker)
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_WORKER=doey_doey_2_2
+TASK_SUBTASK_3_CREATED_AT=1776163563
+TASK_SUBTASK_3_COMPLETED_AT=1776163794
+TASK_SUBTASK_4_TITLE=Verify all startup optimizations
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_2
+TASK_SUBTASK_4_CREATED_AT=1776163865
+TASK_SUBTASK_4_COMPLETED_AT=1776164110

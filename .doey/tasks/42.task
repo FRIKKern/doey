@@ -1,13 +1,14 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=42
-TASK_TITLE=Use only elegant icons in Go TUI
+TASK_TITLE=Masterplan: We need a Go TUI pane in Doey for Scaffy commands — a dedicated view/tab in the TUI that lets users browse, run, and manage scaffy templates directly from the Doey interface. This should integrate with the existing scaffy sub-package (tui/cmd/scaffy/ + tui/internal/scaffy/) and provide a first-class experience for template discovery, creation, auditing, and execution without leaving the TUI.
 TASK_STATUS=done
-TASK_TYPE=bugfix
-TASK_TAGS=tui,ux,polish
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
 TASK_TEAM=W2
-TASK_DESCRIPTION=The Go TUI (tui/ directory) should use only elegant, minimal icons throughout — no crude ASCII fallbacks, no emoji clutter. Review all string literals, labels, and decorative characters in the TUI code. Replace any ugly or inconsistent icons with elegant Unicode symbols (e.g., ◆, →, •, ↳, ✓, ✗, ⟫, ›, etc.). The aesthetic should feel polished and intentional — like a premium CLI tool. Check Huh form titles, descriptions, option labels, status indicators, and any spinner/progress characters. Must compile cleanly after changes (run `cd tui/ && go build ./...`).
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_DESCRIPTION=Masterplan: We need a Go TUI pane in Doey for Scaffy commands — a dedicated view/tab in the TUI that lets users browse, run, and manage scaffy templates directly from the Doey interface. This should integrate with the existing scaffy sub-package (tui/cmd/scaffy/ + tui/internal/scaffy/) and provide a first-class experience for template discovery, creation, auditing, and execution without leaving the TUI.
+TASK_TIMESTAMPS=created=1775833300
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
+TASK_UPDATED=1775833300
+TASK_PLAN_ID=1000
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-tool-use.sh,.doey/tasks/41.task,.doey/tasks/42.task,agents/doey-boss.md,shell/doey-roles.sh,teams/masterplan.team.md,tui/internal/model/agents.go,tui/internal/runtime/reader.go,tui/internal/store/migrate.go

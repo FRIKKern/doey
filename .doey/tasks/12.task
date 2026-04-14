@@ -1,13 +1,12 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=12
-TASK_TITLE=Beautify activity log and task descriptions in Go TUI dashboard
-TASK_STATUS=done
+TASK_TITLE=Proof of Success — research-first, test-obsessed task lifecycle
+TASK_STATUS=pending
 TASK_TYPE=feature
-TASK_TAGS=tui,dashboard
-TASK_TEAM=W2
-TASK_DESCRIPTION=The Go TUI dashboard (info panel, pane 0.0) currently displays the activity log and task descriptions in a plain/utilitarian way. Make them significantly more beautiful — better formatting, visual hierarchy, use of color, spacing, and Charmbracelet/Lipgloss styling. The activity log entries and task description text should be easy to scan, visually appealing, and feel polished. Focus on typography, color palette, alignment, and whitespace. Do NOT change functionality — purely visual enhancement.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Overhaul the Doey task lifecycle to enforce: (1) Preflight research that reproduces the problem and proves it exists before any code is written, (2) Clear success criteria with both AI-verifiable tests and human step-by-step verification guides, (3) Post-completion Proof of Success artifact showing before/after evidence. Touches: Subtaskmaster agent (planning), Worker agent (execution), Task Reviewer agent (validation), and task file format.
+TASK_TIMESTAMPS=created=1775644721
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257535
+TASK_UPDATED=1775644721

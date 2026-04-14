@@ -1,27 +1,73 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=48
-TASK_TITLE=Fix Huh startup wizard — completely broken on session restart
-TASK_STATUS=done
-TASK_TYPE=bugfix
-TASK_TAGS=tui,huh,startup,bugfix,critical
-TASK_TEAM=W1
-TASK_DESCRIPTION=CRITICAL: The Huh startup wizard (task 41) does not work AT ALL. When the user restarts a session (r1 from the launcher), the wizard never appears or produces output that doey.sh cannot consume. This was shipped as "complete" without real testing.
-TASK_SUBTASKS=1:W1.1: Trace doey.sh wizard invocation & JSON consumption:done\n2:W1.2: Build & run wizard binary standalone:done\n3:W1.3: Deep-dive TUI setup source for bugs:done\n4:W1.4: Investigate premade teams & integration:done\n5:W1.1: Rewrite wizard.go — huh.Form.Run() + tty output:done\n6:W1.3: Fix premade workers=0 + error handling in main.go + teams.go:done\n7:W1.4: Build, test, verify end-to-end:done
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=DRY refactor of TUI — extract shared patterns into reusable components
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+User observes the TUI has standardized behavior patterns that are duplicated across views/components. Wants a DRY refactor so common concepts are reused, making the TUI more concise, easier to maintain, and ensuring a fix in one place applies everywhere.
+
+PHASE 1 — RESEARCH (must complete before any code changes):
+1. Audit tui/ for duplicated patterns: rendering logic, input handling, state management, styling, layout, list/table patterns, status display, key bindings
+2. Map which files share similar structures — quantify the duplication
+3. Identify candidate abstractions: shared components, common renderers, base models, style constants, layout helpers
+4. Propose a refactor plan with specific extractions, ordered by impact
+
+PHASE 2 — IMPLEMENTATION (after research review):
+- Extract shared components/helpers
+- Refactor views to use shared abstractions
+- Ensure all existing behavior is preserved (no regressions)
+
+Success criteria:
+- Measurable reduction in duplicated code
+- Common patterns extracted into reusable packages/functions
+- A bug fix in a shared component automatically applies to all consumers
+- No behavioral regressions
+TASK_TIMESTAMPS=created=1776166993
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
-TASK_SUBTASK_1_TITLE=W1.1
-TASK_SUBTASK_1_STATUS= Trace doey.sh wizard invocation & JSON consumption:done
-TASK_SUBTASK_2_TITLE=W1.2
-TASK_SUBTASK_2_STATUS= Build & run wizard binary standalone:done
-TASK_SUBTASK_3_TITLE=W1.3
-TASK_SUBTASK_3_STATUS= Deep-dive TUI setup source for bugs:done
-TASK_SUBTASK_4_TITLE=W1.4
-TASK_SUBTASK_4_STATUS= Investigate premade teams & integration:done
-TASK_SUBTASK_5_TITLE=W1.1
-TASK_SUBTASK_5_STATUS= Rewrite wizard.go — huh.Form.Run() + tty output:done
-TASK_SUBTASK_6_TITLE=W1.3
-TASK_SUBTASK_6_STATUS= Fix premade workers=0 + error handling in main.go + teams.go:done
-TASK_SUBTASK_7_TITLE=W1.4
-TASK_SUBTASK_7_STATUS= Build, test, verify end-to-end:done
+TASK_UPDATED=1776166993
+TASK_FILES=.claude/hooks/common.sh,.claude/hooks/on-pre-tool-use.sh,.claude/hooks/on-prompt-submit.sh,.claude/hooks/on-session-start.sh,.claude/hooks/stop-notify.sh,.claude/hooks/stop-results.sh,.claude/hooks/stop-status.sh,.claude/hooks/taskmaster-wait.sh,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/11.task,.doey/tasks/12.task,.doey/tasks/13.task,.doey/tasks/14.task,.doey/tasks/15.task,.doey/tasks/16.task,.doey/tasks/17.task,.doey/tasks/18.task,.doey/tasks/19.task,.doey/tasks/2.task
+TASK_REVIEW_VERDICT=PASS
+TASK_SUBTASK_1_TITLE=Audit tui/ for duplicated patterns and propose refactor plan
+TASK_SUBTASK_1_STATUS=done
+TASK_SUBTASK_1_WORKER=doey_doey_2_2
+TASK_SUBTASK_1_CREATED_AT=1776167058
+TASK_SUBTASK_1_COMPLETED_AT=1776167083
+TASK_SUBTASK_2_TITLE=Extract unified status icon system into styles/status.go
+TASK_SUBTASK_2_STATUS=done
+TASK_SUBTASK_2_WORKER=doey_doey_2_1
+TASK_SUBTASK_2_CREATED_AT=1776167529
+TASK_SUBTASK_2_COMPLETED_AT=1776167951
+TASK_SUBTASK_3_TITLE=Extract LIVE/PAUSED scroll indicator helper into styles/status.go
+TASK_SUBTASK_3_STATUS=done
+TASK_SUBTASK_3_CREATED_AT=1776167529
+TASK_SUBTASK_3_COMPLETED_AT=1776169599
+TASK_SUBTASK_4_TITLE=Migrate term/tabbar.go hardcoded colors to theme system
+TASK_SUBTASK_4_STATUS=done
+TASK_SUBTASK_4_WORKER=doey_doey_2_3
+TASK_SUBTASK_4_CREATED_AT=1776167530
+TASK_SUBTASK_4_COMPLETED_AT=1776168004
+TASK_SUBTASK_5_TITLE=Verify Wave 1: build, vet, no regressions, correct abstractions
+TASK_SUBTASK_5_STATUS=done
+TASK_SUBTASK_5_WORKER=doey_doey_2_4
+TASK_SUBTASK_5_CREATED_AT=1776168035
+TASK_SUBTASK_5_COMPLETED_AT=1776168289
+TASK_SUBTASK_6_TITLE=Add theme render helpers (RenderDim, RenderFaint, RenderBold, etc.) and sweep consumers
+TASK_SUBTASK_6_STATUS=done
+TASK_SUBTASK_6_WORKER=doey_doey_2_1
+TASK_SUBTASK_6_CREATED_AT=1776168305
+TASK_SUBTASK_6_COMPLETED_AT=1776169089
+TASK_SUBTASK_7_TITLE=Extract shared list view frame helper for 6 scrollable list views
+TASK_SUBTASK_7_STATUS=done
+TASK_SUBTASK_7_WORKER=doey_doey_2_3
+TASK_SUBTASK_7_CREATED_AT=1776168305
+TASK_SUBTASK_7_COMPLETED_AT=1776169412
+TASK_SUBTASK_8_TITLE=Final verification: build, vet, duplication count, no regressions
+TASK_SUBTASK_8_STATUS=done
+TASK_SUBTASK_8_WORKER=doey_doey_2_2
+TASK_SUBTASK_8_CREATED_AT=1776169423
+TASK_SUBTASK_8_COMPLETED_AT=1776169572

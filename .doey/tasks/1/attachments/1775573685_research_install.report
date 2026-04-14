@@ -1,0 +1,166 @@
+# Research Report: install.sh and doey.sh — Context Overlay Protection
+## Task 1 / Subtask 2
+
+---
+
+## Summary
+
+**install.sh does NOT touch the project `.doey/` directory at all.** It only writes to `~/.claude/`, `~/.local/bin/`, `~/.config/doey/`, and `~/.local/share/doey/`. The `.doey/` directory is a project-level, user-owned directory that is already gitignored (partially — tasks and plans are tracked). A new `.doey/context/` directory would be completely safe from install/update operations. No explicit protection is needed in install.sh or the update mechanism.
+
+---
+
+## Findings
+
+### Q1: How does install.sh handle updates? Does it overwrite files in .doey/?
+
+**No.** install.sh never references `.doey/` at all (zero matches for `.doey` in install.sh). It writes exclusively to:
+
+| Destination | What it writes |
+|---|---|
+| `~/.claude/agents/` | Agent definition `.md` files (copies from `agents/`, cleans orphans) |
+| `~/.claude/doey/` | `repo-path`, `version` files |
+| `~/.local/bin/` | Shell scripts (`doey`, helpers, panel scripts) |
+| `~/.config/doey/config.sh` | Default config template (only if not already present — preserves existing) |
+| `~/.local/share/doey/teams/` | Premade team definitions |
+| `.git/hooks/` | Pre-commit/pre-push hooks for Go builds |
+
+The `install_md_files()` function copies `.md` files and runs `clean_orphans()` which removes `doey-*.md` files from the destination that no longer exist in source. This only affects `~/.claude/agents/`.
+
+### Q2: Is there already a .doey/ directory convention? What lives there?
+
+Yes. The `.doey/` directory is well-established as the **project-level state directory**:
+
+| Path | Purpose |
+|---|---|
+| `.doey/config.sh` | Project-specific config overrides |
+| `.doey/tasks/` | Task files (`.task` format, 146+ files in this project) |
+| `.doey/plans/` | Plan documents (16 `.md` files) |
+| `.doey/doey.db` | SQLite database (task/subtask DB) |
+| `.doey/*.team.md` | Project-specific team definitions |
+| `.doey/cleanup-tasks.sh` | Task cleanup script |
+
+The `.gitignore` has:
+```
+.doey/                    # Gitignored by default
+!.doey/tasks/             # But task files ARE tracked
+!.doey/tasks/*.task
+!.doey/plans/             # And plans ARE tracked
+!.doey/plans/*.md
+```
+
+**Key insight:** `.doey/context/` would be gitignored by default (caught by `.doey/` rule). If context overlays should be tracked in git, an explicit `!.doey/context/` exception would be needed in `.gitignore`.
+
+### Q3: Does doey.sh have a "context" or "config" subcommand?
+
+**Config yes, context no.** The `doey config` subcommand (`doey-session.sh:1487`) manages configuration:
+- `doey config` — opens project config (`.doey/config.sh`) or global config in `$EDITOR`
+- `doey config --show` — displays current config values and which files are loaded
+- `doey config --global` — edits global config specifically
+- `doey config --reset` — resets config from template
+
+There is no existing `doey context` subcommand. A new one could be added following the same pattern.
+
+### Q4: How does the agents/ directory get installed? Would .doey/context/ need similar treatment?
+
+Agents are installed via `install_md_files()` at line 282:
+```bash
+install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/7" "agent definitions"
+```
+
+This copies all `.md` files from `agents/` to `~/.claude/agents/` and removes orphans. The agents are **system-level** (shared across all projects).
+
+**`.doey/context/` would NOT need similar treatment** because:
+1. Context overlays are **project-level** (stay in the project repo)
+2. They are consumed by hooks/agents at runtime, not installed system-wide
+3. The closest analogue is `.doey/config.sh` (project-level, loaded at runtime, never copied by install.sh)
+
+### Q5: Is there a doey update mechanism? What does it overwrite vs preserve?
+
+Yes — `doey update` (implemented in `shell/doey-update.sh`):
+
+**Contributor path** (has local git repo):
+1. Check working tree, stash if dirty
+2. `git pull --ff-only origin main`
+3. Re-exec from updated code (if code changed)
+4. Run `install.sh` (which copies agents, scripts, teams to system dirs)
+5. Rebuild Go binaries
+6. Verify with `doey doctor`
+
+**Normal user path** (no local repo):
+1. `git clone --depth 1` to temp dir
+2. Run `install.sh` from temp dir
+3. Rebuild Go binaries
+4. Clean up temp dir
+
+**Preserved during update:**
+- `~/.config/doey/config.sh` (only created if absent)
+- `~/.claude/agent-memory/` (explicitly preserved)
+- Project `.doey/` directory (never touched)
+- `/tmp/doey/` runtime (never touched)
+
+**Overwritten during update:**
+- `~/.claude/agents/doey-*.md` (always replaced)
+- `~/.local/bin/doey` and all helper scripts (always replaced)
+- `~/.local/share/doey/teams/` (always replaced)
+- `~/.claude/doey/version` (always replaced)
+
+---
+
+## Key Files
+
+| File | Relevance |
+|---|---|
+| `install.sh` (552 lines) | Installer — writes to ~/.claude, ~/.local/bin, ~/.config. Never touches .doey/ |
+| `shell/doey-update.sh` (634 lines) | Update mechanism — runs install.sh, never touches .doey/ |
+| `shell/doey-session.sh:1487` | `doey_config()` — config subcommand, shows pattern for .doey/ interaction |
+| `shell/doey-config-default.sh` | Config template — copied to ~/.config/doey/ or .doey/ |
+| `.doey/config.sh` | Project config — existing convention for project-level .doey/ files |
+| `.gitignore` | Controls .doey/ tracking — tasks/plans tracked, rest gitignored |
+
+---
+
+## Plan
+
+### Plan A: Minimal — .doey/context/ as a convention directory
+
+1. **Create `.doey/context/` as a new convention** — no install.sh changes needed
+2. **Add gitignore exception** if context files should be tracked:
+   ```
+   !.doey/context/
+   !.doey/context/*.md
+   ```
+3. **Load context overlays in hooks** — `on-session-start.sh` or `on-prompt-submit.sh` reads `.doey/context/*.md` and injects into agent prompts
+4. **Document the convention** in CLAUDE.md project layout table
+
+**Why this works:** install.sh and doey update are completely blind to `.doey/`. No protection code is needed. The directory is naturally safe.
+
+### Plan B: With CLI support
+
+Everything in Plan A, plus:
+1. **Add `doey context` subcommand** (following `doey config` pattern in doey-session.sh):
+   - `doey context` — list context overlays
+   - `doey context add <name>` — create a new context overlay from template
+   - `doey context edit <name>` — open in $EDITOR
+   - `doey context rm <name>` — remove an overlay
+2. **Template for overlays** in `shell/doey-context-template.md`
+
+---
+
+## Risks
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| `.doey/context/` is gitignored by default | Low | Add explicit `!.doey/context/` to `.gitignore` if tracking desired |
+| No risk from install/update overwriting | None | install.sh has zero `.doey/` references |
+| Concurrent worker edits to context files | Medium | Context files should be read-only at runtime; only user/Boss modifies |
+| Context bloat (too many overlays) | Low | Hooks should have a max total size check |
+| `.doey/` not created by install.sh | Low | `doey init` or first task creation creates it; context commands should `mkdir -p` |
+
+---
+
+## Conclusion
+
+**No explicit protection is needed.** The `.doey/` directory is already completely untouched by install.sh and the update mechanism. A new `.doey/context/` directory would be naturally safe. The main decisions are:
+1. Should context overlays be git-tracked? (Probably yes — add gitignore exception)
+2. Should there be a `doey context` CLI? (Nice-to-have, not required for MVP)
+3. How are overlays injected? (Hook-based loading in `on-session-start.sh` or `on-prompt-submit.sh`)

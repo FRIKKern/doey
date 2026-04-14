@@ -1,29 +1,31 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=51
-TASK_TITLE=Live task reports in Go TUI — real-time updates, expandable detail
-TASK_STATUS=done
+TASK_TITLE=Merge all completed task branches to main
+TASK_STATUS=pending_user_confirmation
 TASK_TYPE=feature
-TASK_TAGS=tui,tasks,reports,ux,shell,agents,infrastructure
-TASK_TEAM=W1
-TASK_DESCRIPTION=Reports are a core part of Doey. Every task must accumulate reports as work progresses, and the Go TUI must show these reports in real time — updated live, expandable, rich.
-TASK_SUBTASKS=1:W1.1: Research doey-task-helpers.sh:done\n2:W1.2: Research tasks_config.go + types:done\n3:W1.3: Research model/tasks.go + taskcard:done\n4:W1.4: Research agent defs:done\n5:W1.1: Implement task_add_report shell helper:done\n6:W1.2: Add Report struct + parsing in Go runtime:done\n7:W1.3: Add report rendering in TUI task views:done\n8:W1.4: Update agent defs with report instructions:done
-TASK_TIMESTAMPS=created=1775131090
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=CATEGORY: quick
+MODEL: sonnet
+
+User wants all completed feature/fix branches merged to main. 
+
+Branches to merge (in dependency order — P0 fix first):
+1. fix/task-47-syscall-dup3 (P0 build fix — merge first, others may depend on it)
+2. feat/task-46-startup-cap (startup perf)
+3. feat/fix-agent-colors-validation (tasks 43/44 — agent colors + plan viewer)
+4. feat/task-49-lifecycle-watchdog (lifecycle watchdog)
+5. feat/task-50-stale-agent-detection (stale agent detection)
+6. feat/grand-rename-and-dev-sync (older rename work — check if still relevant)
+
+PROCEDURE:
+- Merge in order, resolving conflicts as they arise
+- Build + test after each merge (go build ./... && tests/test-bash-compat.sh)
+- If a branch has conflicts that are non-trivial, skip it and report
+- Push main after all merges
+
+Success criteria: All completed branches merged to main, build passes, tests pass, main is pushed.
+TASK_TIMESTAMPS=created=1776170211
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257536
-TASK_SUBTASK_1_TITLE=W1.1
-TASK_SUBTASK_1_STATUS= Research doey-task-helpers.sh:done
-TASK_SUBTASK_2_TITLE=W1.2
-TASK_SUBTASK_2_STATUS= Research tasks_config.go + types:done
-TASK_SUBTASK_3_TITLE=W1.3
-TASK_SUBTASK_3_STATUS= Research model/tasks.go + taskcard:done
-TASK_SUBTASK_4_TITLE=W1.4
-TASK_SUBTASK_4_STATUS= Research agent defs:done
-TASK_SUBTASK_5_TITLE=W1.1
-TASK_SUBTASK_5_STATUS= Implement task_add_report shell helper:done
-TASK_SUBTASK_6_TITLE=W1.2
-TASK_SUBTASK_6_STATUS= Add Report struct + parsing in Go runtime:done
-TASK_SUBTASK_7_TITLE=W1.3
-TASK_SUBTASK_7_STATUS= Add report rendering in TUI task views:done
-TASK_SUBTASK_8_TITLE=W1.4
-TASK_SUBTASK_8_STATUS= Update agent defs with report instructions:done
+TASK_UPDATED=1776170442

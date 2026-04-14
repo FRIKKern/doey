@@ -1,0 +1,186 @@
+# Research Report: taskmaster-wait.sh Wake Trigger Logic
+
+**File:** `/Users/frikk.jarl/Documents/GitHub/doey/.claude/hooks/taskmaster-wait.sh`
+**Total lines:** 541
+
+---
+
+## 1. All Wake Reasons
+
+The script emits **9 distinct wake reasons** (not just QUEUED/TIMEOUT):
+
+| Wake Reason    | Line(s)      | Trigger Condition                                           |
+|----------------|--------------|-------------------------------------------------------------|
+| `TRIGGERED`    | 398, 484, 534| Trigger files exist in `$RUNTIME_DIR/triggers/` or `$TRIGGER` |
+| `MSG`          | 403, 408-409 | Unread messages for Taskmaster pane (doey-ctl or file-based) |
+| `FINISHED`     | 411          | New result files in `$RUNTIME_DIR/results/pane_*.json`      |
+| `CRASH`        | 413          | `crash_pane_*` files exist in status dir                    |
+| `STALE`        | 414          | Worker heartbeats exceeded timeout (300s workers, 600s managers) |
+| `RESTART`      | 415          | Stale workers were auto-restarted by `_enforce_stale_restart()` |
+| `BOOT_STUCK`   | 416          | Panes stuck in BOOTING state beyond `$DOEY_BOOT_TIMEOUT` (60s) |
+| `QUEUED`       | 417, 498     | Unassigned active tasks older than 30 seconds               |
+| `TIMEOUT`      | 541          | Nothing happened during the entire sleep cycle              |
+
+Passive roles (Task Reviewer, Deployment, Doey Expert) only use: `TRIGGERED`, `MSG`, `TIMEOUT` (lines 47-94).
+
+---
+
+## 2. QUEUED vs TIMEOUT Decision Logic
+
+### How QUEUED is determined
+
+**Phase 1 — Task scan (lines 422-480):** Runs once before `_check_work()`. Sets two booleans: `_has_queued` and `_has_active`.
+
+**DB fast path (lines 426-449):**
+```bash
+# For each task with status "active" or "in_progress":
+_tteam=$(echo "$_tinfo" | sed -n 's/^Team:[[:space:]]*//p')
+[ -n "$_tteam" ] && continue  # assigned to a team — skip
+```
+- Skips tasks that have a `Team:` field (already assigned)
+- For `active` unassigned tasks: checks if created >30s ago → sets `_has_queued=true`
+- For `in_progress` unassigned tasks: only adds to `_active_list`, does NOT set `_has_queued`
+
+**File fallback (lines 453-479):**
+- Same logic: reads `.task` files, checks `TASK_STATUS=active` without `TASK_TEAM=`
+- Sets `_has_queued=true` if task is >30s old
+
+### Where QUEUED is emitted
+
+**Path A — `_check_work()` line 417:**
+```bash
+[ "$_has_queued" = true ] && _wake "QUEUED" "$elapsed"
+```
+This is checked at line 487 (immediate), line 495 (after 15s sleep), and line 538 (after 60s sleep).
+
+**Path B — Active tasks fallback, lines 492-501:**
+```bash
+if [ "$_has_active" = "true" ]; then
+  _taskmaster_bump_cycle
+  sleep 15
+  _check_work "15" || true          # re-checks urgent signals
+  echo "WAKE_REASON=QUEUED"         # always emits QUEUED if _has_active
+  printf 'ACTIVE_TASKS %b' "$_active_list"
+  exit 0
+fi
+```
+If `_has_active=true` but `_check_work` didn't exit early, it unconditionally emits `QUEUED` with the active task list after a 15s delay. This means any unassigned in_progress task also results in QUEUED via this path.
+
+### How TIMEOUT is determined
+
+**Line 541:** The very last line of the script. Only reached if:
+1. No triggers, messages, results, crashes, stale heartbeats, or queued tasks were found
+2. `_has_active` is false (no unassigned active/in_progress tasks)
+3. The 60-second sleep (or inotifywait) completed without new events
+4. Post-sleep re-checks found nothing
+
+```bash
+echo "WAKE_REASON=TIMEOUT"
+```
+
+---
+
+## 3. Flow Summary
+
+```
+Task scan (lines 422-480) → sets _has_queued, _has_active
+    ↓
+_check_work("0") at line 487 → checks TRIGGERED/MSG/FINISHED/CRASH/STALE/RESTART/BOOT_STUCK/QUEUED
+    ↓ (no wake)
+Context check at line 490 → may auto-compact or restart Taskmaster
+    ↓
+If _has_active → sleep 15s → _check_work("15") → emit QUEUED + ACTIVE_TASKS → exit
+    ↓ (no active tasks)
+Sleep report to Boss (first time only, lines 504-510)
+    ↓
+Pre-sleep _check_work("0") at line 512
+    ↓
+Block-wait 60s (inotifywait or sleep) at lines 515-526
+    ↓
+Post-sleep trigger check → may emit TRIGGERED
+    ↓
+Post-sleep _check_work("$_sleep_dur") at line 538
+    ↓
+Emit TIMEOUT at line 541
+```
+
+---
+
+## 4. Assessment: Adding Unassigned-Task Check for QUEUED Instead of TIMEOUT
+
+### Current behavior gap
+
+The current logic **already handles this well** for most cases:
+- Unassigned `active` tasks >30s old → `_has_queued=true` → emits `QUEUED`
+- Unassigned `in_progress` tasks → `_has_active=true` → emits `QUEUED` via Path B (lines 492-501)
+
+### Where it could miss
+
+The only scenario where TIMEOUT is emitted despite unassigned tasks:
+- A new `active` task created <30s before the scan (the 30s debounce at lines 443, 466 prevents premature waking)
+- This is intentional — gives the task creator a window before the Taskmaster picks it up
+
+### Recommended approach for adding a check
+
+If the goal is to ensure Taskmaster wakes with `QUEUED` when unassigned active tasks exist (even during the deep sleep path):
+
+1. **Move task scan into `_check_work()`** — Currently the task scan runs once (lines 422-480) and `_check_work()` only reads the cached `_has_queued`. If tasks are created during the 60s sleep, they won't be detected until the next cycle. Fix: re-scan tasks inside the post-sleep `_check_work()` call, or at minimum re-check before the final TIMEOUT emit.
+
+2. **Add a task re-scan before line 541** — Insert a lightweight task check (just checking for unassigned active tasks in `.doey/tasks/`) right before the TIMEOUT emit. If found, emit QUEUED instead:
+
+```bash
+# Suggested insertion point: between line 538 and 541
+# Re-scan for newly created tasks during sleep
+_late_queued=false
+if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
+  _late_count=$(doey-ctl task list --status active --project-dir "$PROJECT_DIR" 2>/dev/null | awk 'NR>1 && /^[0-9]/{c++}END{print c+0}')
+  [ "${_late_count:-0}" -gt 0 ] && _late_queued=true
+elif [ -d "${PROJECT_DIR:-.}/.doey/tasks" ]; then
+  for _tf in "${PROJECT_DIR:-.}"/.doey/tasks/*.task; do
+    [ -f "$_tf" ] || continue
+    grep -q '^TASK_STATUS=active' "$_tf" 2>/dev/null && ! grep -q 'TASK_TEAM=' "$_tf" 2>/dev/null && { _late_queued=true; break; }
+  done
+fi
+[ "$_late_queued" = true ] && { _taskmaster_dbg_wake "late_queued" "$_sleep_dur"; echo "WAKE_REASON=QUEUED"; exit 0; }
+```
+
+3. **inotifywait already helps** — On systems with inotifywait, the script watches `$RUNTIME_DIR/status/` and `$RUNTIME_DIR/triggers/`. If tasks create trigger files (which `doey-ctl task create` should do), the sleep breaks early. The real gap is only on systems without inotifywait, or if task creation doesn't write a trigger file.
+
+### Risk assessment
+
+- Adding the re-scan is low-risk — it's a read-only check at the end of the script
+- The 30s debounce should be preserved to prevent tight loops
+- Must remain bash 3.2 compatible (the suggested code above is compatible)
+
+---
+
+## 5. Key Code Snippets
+
+**`_wake()` helper (line 108):**
+```bash
+_wake() { _taskmaster_dbg_wake "$1" "${2:-0}"; echo "WAKE_REASON=$1"; exit 0; }
+```
+
+**QUEUED check in `_check_work()` (line 417):**
+```bash
+[ "$_has_queued" = true ] && _wake "QUEUED" "$elapsed"
+```
+
+**Active tasks fallback QUEUED (lines 492-501):**
+```bash
+if [ "$_has_active" = "true" ]; then
+  _taskmaster_bump_cycle
+  sleep 15
+  _check_work "15" || true
+  _taskmaster_dbg_wake "active_tasks_idle" "15"
+  echo "WAKE_REASON=QUEUED"
+  printf 'ACTIVE_TASKS %b' "$_active_list"
+  rm -f "${RUNTIME_DIR}/status/taskmaster_sleep_reported" 2>/dev/null
+  exit 0
+fi
+```
+
+**Final TIMEOUT (line 541):**
+```bash
+echo "WAKE_REASON=TIMEOUT"
+```

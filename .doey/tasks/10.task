@@ -1,13 +1,12 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=10
-TASK_TITLE=Charmbracelet deep research for live heartbeat TUI
-TASK_STATUS=done
-TASK_TYPE=research
-TASK_TAGS=research,tui,go,charmbracelet,task-8-dependency
-TASK_TEAM=W1
-TASK_DESCRIPTION=Deep research into the Charmbracelet ecosystem (Bubble Tea, Bubbles, Lip Gloss, Gum) for building a live heartbeat task list in Go TUI. Covers official apps, component patterns, polling/subscription architecture, styling, community examples, and performance best practices.
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Fix spammy timeline in Go TUI task details
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=bugfix
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=The Timeline view in task details is flooded with repetitive low-value entries: dozens of '<task-notification>' and 'done From: doey_doey_X_Y' lines that add no information. Meaningful events (task completed, dispatched, review passed) are buried. Need to deduplicate, collapse, or filter the timeline to show only meaningful state transitions.
+TASK_TIMESTAMPS=created=1775643955
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257534
+TASK_UPDATED=1775643955

@@ -1,12 +1,12 @@
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=20
-TASK_TITLE=Fix Manager agent tool restrictions — make blocked tools prominent
-TASK_STATUS=done
-TASK_TYPE=fix
-TASK_TAGS=agent-defs
-TASK_TEAM=W2
-TASK_SUBTASKS=
-TASK_TIMESTAMPS=created=1775131090
+TASK_TITLE=Honest status — real tmux observation + hook-driven agent status
+TASK_STATUS=pending_user_confirmation
+TASK_TYPE=feature
+TASK_CREATED_BY=boss
+TASK_TEAM=0
+TASK_DESCRIPTION=Two changes: (1) Boss status checks must actually observe tmux windows, capture pane output, verify agents are moving — not just read status files. (2) Add pre-hook and post-hook on every agent action that updates real status — so status is always truthful, set by the system, not self-reported by agents.
+TASK_TIMESTAMPS=created=1775648482
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775257535
+TASK_UPDATED=1775648482

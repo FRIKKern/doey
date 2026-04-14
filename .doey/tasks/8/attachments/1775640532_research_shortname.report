@@ -1,0 +1,241 @@
+# Research Report: TASK_SHORTNAME Field — All Code Locations
+
+## Summary
+
+Adding a `TASK_SHORTNAME` field (max 16 chars, auto-generated from title) requires changes across **4 layers**: shell task helpers, Go ctl/store, Go TUI display, and tmux window naming. No existing SHORTNAME references exist — this is a clean addition.
+
+The recommended approach (Option A) touches **10 files** with minimal risk. The extended approach (Option B) adds **4 more files** for full TUI integration.
+
+---
+
+## Findings by Area
+
+### 1. Task File Format (V3 Schema)
+
+**Current V3 fields written to `.task` files** (20 fields):
+`TASK_SCHEMA_VERSION, TASK_ID, TASK_TITLE, TASK_STATUS, TASK_TYPE, TASK_TAGS, TASK_CREATED_BY, TASK_ASSIGNED_TO, TASK_DESCRIPTION, TASK_ACCEPTANCE_CRITERIA, TASK_HYPOTHESES, TASK_DECISION_LOG, TASK_SUBTASKS, TASK_RELATED_FILES, TASK_BLOCKERS, TASK_TIMESTAMPS, TASK_CURRENT_PHASE, TASK_TOTAL_PHASES, TASK_NOTES, TASK_UPDATED, TASK_SUCCESS_CRITERIA`
+
+**Writer function:** `shell/doey-task-helpers.sh:51-61` — `_write_v3_fields()`
+- Line 54-57: Field list loop — **add SHORTNAME here**
+- Fields are written as `TASK_FIELDNAME=value` format
+
+### 2. Task Creation
+
+**Shell:** `shell/doey-task-helpers.sh:81-108` — `task_create()`
+- Lines 98-103: All TASK_ vars set before writing
+- **Add:** `TASK_SHORTNAME=$(_generate_shortname "$title")` before line 105
+
+**Go:** `tui/internal/ctl/task.go:126-182` — `CreateTask()`
+- Lines 148-168: Field writes via `strings.Builder`
+- **Add:** `b.WriteString(FieldTaskShortname + "=" + shortname + "\n")` after line 151 (title)
+
+### 3. Task Parsing/Reading
+
+**Shell:** `shell/doey-task-helpers.sh:110-209` — `task_read()`
+- Lines 165-186: `case` statement parsing KEY=VALUE — **add TASK_SHORTNAME case**
+
+**Go:** `tui/internal/ctl/task.go:54-86` — `parseTask()`
+- Lines 67-78: Field mapping to `TaskEntry` struct — **add Shortname field**
+
+### 4. Field Constants
+
+**Shell:** `shell/doey-constants.sh:59-84` — `DOEY_FIELD_TASK_*`
+- **Add:** `DOEY_FIELD_TASK_SHORTNAME="TASK_SHORTNAME"` after line 60
+
+**Go:** `tui/internal/ctl/constants.go:74-101` — `FieldTask*`
+- **Add:** `FieldTaskShortname = "TASK_SHORTNAME"` after line 76
+
+### 5. Task Display — CLI
+
+**Shell show:** `shell/doey-task-cli.sh:189-216` — `_task_show()`
+- **Add:** `_tsf "Shortname:" "$TASK_SHORTNAME"` after line 197 (Title)
+
+**Shell list:** `shell/doey-task-helpers.sh:410-430` — `task_list()`
+- Lines 425-428: Format string — optionally include shortname in list output
+
+**Go task get:** `tui/cmd/doey-ctl/commands.go:631-730` — `runTaskGet()`
+- Line 674: `fmt.Printf("Title: ...")` — **add Shortname line after it**
+- Line 721: File fallback display — **add Shortname line**
+
+**Go task list:** `tui/cmd/doey-ctl/commands.go:572-629` — `runTaskList()`
+- Line 597: Column header `"%-6s %-14s %-12s %s\n"` — optionally add SHORTNAME column
+- Line 625: File fallback header — optionally add SHORTNAME column
+
+### 6. Window Naming (PRIMARY USE CASE)
+
+**Team window naming:** `shell/doey-team-mgmt.sh:793-812` — `_name_team_window()`
+- Line 811: `tmux rename-window -t "${session}:${window_index}" "$label"`
+- **Change:** When task is assigned, set label to `"Task N: shortname"` instead of TEAM_NAME
+- Lines 764-776: Task-to-team assignment reads task details — **add shortname lookup**
+
+**Other rename-window calls (no change needed):**
+- `shell/doey-session.sh:146` — Dashboard (static)
+- `shell/doey-session.sh:157` — Core Team (static)
+- `shell/doey-session.sh:1287` — Local Team initial name (overridden by `_name_team_window`)
+- `shell/doey-session.sh:1321` — Config override name
+
+### 7. Go Structs
+
+**TaskEntry (ctl):** `tui/internal/ctl/task.go:12-26`
+- **Add:** `Shortname string` field
+
+**Task (store):** `tui/internal/store/tasks.go:8-51`
+- **Add:** `Shortname string \`json:"shortname,omitempty"\`` field
+
+### 8. Database Schema
+
+**Schema:** `tui/internal/store/schema.go:13-41` — CREATE TABLE
+- No change needed (column added via migration)
+
+**Migrations:** `tui/internal/store/schema.go:147-180`
+- **Add:** `ALTER TABLE tasks ADD COLUMN shortname TEXT DEFAULT ''`
+
+### 9. Other Consumers (Display/Rendering)
+
+**Info panel:** `shell/info-panel.sh:446-540` — Dashboard active tasks
+- Lines 514-540: File fallback reads task fields — add SHORTNAME for display
+
+**Render task:** `shell/doey-render-task.sh:101-158` — Terminal visualization
+- Reads TASK_ID, TASK_TITLE, TASK_STATUS — add SHORTNAME
+
+**TUI task cards:** `tui/internal/taskcard/taskcard.go:120-198`
+- Line 153: Title truncation — could use shortname as alternative
+
+**TUI dashboard:** `tui/internal/model/dashboard.go:853` — Heartbeat cards
+**TUI team view:** `tui/internal/model/team.go:1038` — Pane status
+**TUI runtime:** `tui/internal/runtime/readers.go:50` — PaneStatus.TaskTitle
+
+---
+
+## Key Files (Ordered by Priority)
+
+| # | File | Lines | Change |
+|---|------|-------|--------|
+| 1 | `shell/doey-task-helpers.sh` | 51-61, 81-108, 110-209 | Add to writer, creator, reader |
+| 2 | `shell/doey-constants.sh` | 59-84 | Add field constant |
+| 3 | `tui/internal/ctl/constants.go` | 74-101 | Add Go field constant |
+| 4 | `tui/internal/ctl/task.go` | 12-26, 54-86, 126-182 | Add to struct, parser, creator |
+| 5 | `shell/doey-team-mgmt.sh` | 764-812 | Window naming with shortname |
+| 6 | `shell/doey-task-cli.sh` | 189-216 | Add to show display |
+| 7 | `tui/cmd/doey-ctl/commands.go` | 572-730 | Add to list/get output |
+| 8 | `tui/internal/store/tasks.go` | 8-51 | Add to DB struct |
+| 9 | `tui/internal/store/schema.go` | 147-180 | Add DB migration |
+| 10 | `shell/info-panel.sh` | 514-540 | Dashboard display |
+
+---
+
+## Plan
+
+### Option A — Minimal (Recommended) — 10 files
+
+**Worker 1: Shell task system (4 files)**
+```
+Files:
+  shell/doey-task-helpers.sh — lines 51-61, 81-108, 110-209
+  shell/doey-constants.sh — line 60 area
+  shell/doey-task-cli.sh — lines 189-216
+  shell/doey-team-mgmt.sh — lines 764-812
+
+Tasks:
+1. Add shortname generation function:
+   _generate_shortname() — take title, lowercase, replace spaces with hyphens,
+   strip non-alnum/hyphen, truncate to 16 chars, trim trailing hyphens
+
+2. shell/doey-constants.sh: Add DOEY_FIELD_TASK_SHORTNAME="TASK_SHORTNAME" after line 60
+
+3. shell/doey-task-helpers.sh:
+   - Line 54-57: Add SHORTNAME to field list in _write_v3_fields()
+   - Lines 98-103: Add TASK_SHORTNAME=$(_generate_shortname "$title") in task_create()
+   - Lines 165-186: Add TASK_SHORTNAME to case statement in task_read()
+
+4. shell/doey-task-cli.sh line 197: Add _tsf "Shortname:" "$TASK_SHORTNAME"
+
+5. shell/doey-team-mgmt.sh lines 793-812: In _name_team_window(), when TASK_ID
+   is assigned to the team, read TASK_SHORTNAME and set window title to
+   "Task N: shortname" format
+```
+
+**Worker 2: Go ctl + store (4 files)**
+```
+Files:
+  tui/internal/ctl/constants.go — line 76 area
+  tui/internal/ctl/task.go — lines 12-26, 54-86, 126-182
+  tui/internal/store/tasks.go — lines 8-51
+  tui/internal/store/schema.go — lines 147-180
+
+Tasks:
+1. tui/internal/ctl/constants.go: Add FieldTaskShortname = "TASK_SHORTNAME"
+   after FieldTaskTitle (line 76)
+
+2. tui/internal/ctl/task.go:
+   - Line 15 area: Add Shortname string to TaskEntry struct
+   - Line 69 area: Add Shortname: fields[FieldTaskShortname] in parseTask()
+   - Line 151 area: Add shortname generation + write in CreateTask()
+   - Add generateShortname() helper function
+
+3. tui/internal/store/tasks.go: Add Shortname field to Task struct (line 10 area)
+
+4. tui/internal/store/schema.go: Add migration
+   `ALTER TABLE tasks ADD COLUMN shortname TEXT DEFAULT ''` (line 179 area)
+```
+
+**Worker 3: CLI display (1 file)**
+```
+File: tui/cmd/doey-ctl/commands.go — lines 572-730
+
+Tasks:
+1. runTaskGet() line 674 area: Add fmt.Printf("Shortname:   %s\n", t.Shortname)
+   for DB path
+2. runTaskGet() line 721 area: Add Shortname line for file fallback
+3. runTaskList() line 597: Optionally add shortname column (or skip — list is compact)
+```
+
+**Worker 4: Dashboard display (1 file)**
+```
+File: shell/info-panel.sh — lines 514-540
+
+Task: Add TASK_SHORTNAME to file fallback reads for dashboard rendering
+```
+
+### Option B — Extended (adds 4 more files)
+
+All of Option A, plus:
+
+- `tui/internal/taskcard/taskcard.go` — Show shortname in task card subtitle
+- `tui/internal/model/dashboard.go` — Show shortname in heartbeat cards
+- `tui/internal/model/team.go` — Show shortname in pane status
+- `tui/internal/runtime/readers.go` — Add TaskShortname to PaneStatus
+
+Also update DB scan queries in `tui/internal/store/tasks.go` ListTasks/GetTask to include shortname column.
+
+---
+
+## Shortname Generation Algorithm
+
+```
+input:  "Add TASK_SHORTNAME field to task system"
+output: "add-shortname"
+
+Steps:
+1. Lowercase the title
+2. Replace spaces/underscores with hyphens
+3. Strip non-alphanumeric/non-hyphen characters
+4. Remove common filler words (the, a, an, to, for, and, in, of, with)
+5. Collapse multiple hyphens
+6. Truncate to 16 characters
+7. Trim trailing hyphens
+```
+
+---
+
+## Risks
+
+1. **Schema version bump** — Adding SHORTNAME to V3 field list changes the file format. Existing tasks won't have the field. Mitigation: treat empty SHORTNAME gracefully (fall back to truncated title).
+
+2. **Concurrent edits** — Shell and Go both create tasks. Shortname generation must be identical in both. Mitigation: keep algorithm simple (lowercase + hyphenate + truncate).
+
+3. **Window naming race** — `_name_team_window()` runs during team creation. If task is assigned later, window won't update until next rename. Mitigation: also update window name when task is dispatched (in dispatch code).
+
+4. **Go build** — Adding DB migration + struct fields requires `go build ./...` verification. No existing tests for task CRUD, so compilation is the main gate.
+
+5. **Bash 3.2 compat** — Shortname generation must avoid `${var,,}` (bash 4+). Use `tr '[:upper:]' '[:lower:]'` instead. Run `tests/test-bash-compat.sh` after changes.
