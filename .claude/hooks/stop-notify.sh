@@ -49,7 +49,6 @@ _notify_pane() {
     if ! send_to_pane "$target_pane" "$body" 2>/dev/null; then
       _log_error "DELIVERY_FAILED" "Both file and send-keys delivery failed" "target=$target_pane subject=$subject"
       doey_log_error "delivery" "${DOEY_PANE_ID:-${PANE_SAFE:-unknown}}" "Both file and send-keys delivery failed" "${DOEY_TASK_ID:-}" "target=$target_pane subject=$subject"
-      emit_lifecycle_event "notification_failed" "${PANE_SAFE:-unknown}" "${DOEY_TASK_ID:-}" "" "{\"target\":\"${target_pane}\",\"subject\":\"${subject}\"}"
       return 1
     fi
   fi
@@ -120,6 +119,36 @@ if is_core_team && ! is_taskmaster; then
   _debug_sent "$_target" "specialist_finished"
   _log "stop-notify: sent specialist_finished to ${DOEY_ROLE_COORDINATOR} at $_target"
   _wake_taskmaster
+
+  # Context budget fallback (task 24): core-team specialists (reviewer 1.1, deployment 1.2)
+  # ask Taskmaster to compact or respawn when ctx% is high. Cannot kill own pane from
+  # inside this hook — Taskmaster owns the action. 5-min cooldown per pane.
+  _ctx_file="${RUNTIME_DIR}/status/context_pct_${WINDOW_INDEX}_${PANE_INDEX}"
+  _ctx_pct=0
+  if [ -f "$_ctx_file" ]; then
+    _ctx_raw=$(cat "$_ctx_file" 2>/dev/null | tr -dc '0-9' || true)
+    [ -n "${_ctx_raw:-}" ] && _ctx_pct="$_ctx_raw"
+  fi
+  _ctx_cooldown_file="${RUNTIME_DIR}/status/ctx_cooldown_${PANE_SAFE}"
+  _ctx_cooldown_active=false
+  if [ -f "$_ctx_cooldown_file" ]; then
+    _cd_ts=$(stat -c%Y "$_ctx_cooldown_file" 2>/dev/null || stat -f%m "$_ctx_cooldown_file" 2>/dev/null || echo 0)
+    _now_ts=$(date +%s 2>/dev/null || echo 0)
+    [ $((_now_ts - _cd_ts)) -lt 300 ] 2>/dev/null && _ctx_cooldown_active=true
+  fi
+  if [ "$_ctx_cooldown_active" = "false" ] && [ "$_ctx_pct" -ge 70 ] 2>/dev/null; then
+    _ctx_subject="specialist_compact_request"
+    [ "$_ctx_pct" -ge 85 ] 2>/dev/null && _ctx_subject="specialist_respawn_request"
+    _ctx_body="PANE: ${WINDOW_INDEX}.${PANE_INDEX}
+ROLE: ${_specialist_role}
+REASON: ctx_budget_exceeded
+CTX_PCT: ${_ctx_pct}"
+    _notify_pane "$_target" "$_ctx_subject" "$_ctx_body" 2>/dev/null || :
+    _log "stop-notify: sent ${_ctx_subject} (ctx=${_ctx_pct}%) to ${_target}"
+    mkdir -p "${RUNTIME_DIR}/status" 2>/dev/null || :
+    touch "$_ctx_cooldown_file" 2>/dev/null || :
+  fi
+
   exit 0
 fi
 
@@ -259,7 +288,6 @@ if is_worker; then
   fi
 
   _debug_sent "$_target" "$_subject"
-  emit_lifecycle_event "notification_sent" "$PANE_SAFE" "${DOEY_TASK_ID:-}" "" "{\"target\":\"${_target}\",\"subject\":\"${_subject}\"}"
   { [ "$_team_type" = "$DOEY_ROLE_ID_FREELANCER" ] && touch "${RUNTIME_DIR}/status/taskmaster_trigger" 2>/dev/null; } || true
   _log "stop-notify: sent ${_subject} to ${_target}"
   _dispatch_workflow_hooks "$RUNTIME_DIR" "$WINDOW_INDEX" "$PANE_INDEX"

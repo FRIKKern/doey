@@ -50,6 +50,30 @@ if [ "$_IS_PASSIVE" = true ]; then
   trap '' EXIT
   _passive_wake() { echo "WAKE_REASON=$1"; exit 0; }
 
+  # Scan for expired review-request deadlines owned by the calling pane.
+  # Markers are written by Subtaskmasters before sending subtask_review_request
+  # to the Task Reviewer (1.1). Format: line1=epoch deadline, line2=TASK_ID,
+  # line3=SUBTASK_ID. Expired markers are removed and wake fires REVIEW_TIMEOUT
+  # so the Subtaskmaster can escalate to Taskmaster instead of blocking forever.
+  _check_review_timeouts() {
+    local _pane_short _rr_dir _f _line1 _now _any=false
+    _pane_short="${_CALLER_PANE//[-:.]/_}"
+    _rr_dir="${RUNTIME_DIR}/review_requests"
+    [ -d "$_rr_dir" ] || return 1
+    _now=$(date +%s)
+    for _f in "$_rr_dir"/${_pane_short}_*.pending; do
+      [ -f "$_f" ] || continue
+      _line1=$(head -n1 "$_f" 2>/dev/null) || continue
+      [ -n "$_line1" ] || continue
+      case "$_line1" in ''|*[!0-9]*) continue ;; esac
+      if [ "$_now" -ge "$_line1" ]; then
+        rm -f "$_f" 2>/dev/null || true
+        _any=true
+      fi
+    done
+    [ "$_any" = true ]
+  }
+
   # Check for triggers
   [ -f "$TRIGGER" ] && { rm -f "$TRIGGER" 2>/dev/null; _passive_wake "TRIGGERED"; }
   for _tf in "${RUNTIME_DIR}/triggers/"*; do
@@ -65,6 +89,9 @@ if [ "$_IS_PASSIVE" = true ]; then
       [ -f "$_mf" ] && _passive_wake "MSG"
     done
   fi
+
+  # Check for expired review-request deadlines (pre-sleep, fires immediately)
+  _check_review_timeouts && _passive_wake "REVIEW_TIMEOUT"
 
   # No work — block-wait (longer interval than Taskmaster's 15s)
   _passive_sleep=30
@@ -89,6 +116,9 @@ if [ "$_IS_PASSIVE" = true ]; then
       [ -f "$_mf" ] && _passive_wake "MSG"
     done
   fi
+
+  # Re-check for expired review-request deadlines (post-sleep)
+  _check_review_timeouts && _passive_wake "REVIEW_TIMEOUT"
 
   # Safety net: check if all workers in team are done before TIMEOUT
   _caller_window=$(echo "$_CALLER_PANE" | cut -d. -f1)
@@ -132,7 +162,6 @@ _wake() {
   if command -v doey-stats-emit.sh >/dev/null 2>&1 && _check_cooldown "taskmaster_wake" 30 2>/dev/null; then
     (doey-stats-emit.sh worker taskmaster_wake "reason=${1:-unknown}" &) 2>/dev/null || true
   fi
-  emit_lifecycle_event "wake_event" "$TASKMASTER_SAFE" "" "" "{\"wake_reason\":\"${1:-unknown}\"}"
   echo "WAKE_REASON=$1"; exit 0
 }
 
@@ -160,6 +189,63 @@ _mark_results_seen() {
   echo "$_seen_results" > "$SEEN_FILE"
 }
 
+# ── Core-team specialist escalation ladder (task 24) ──────────────────
+# Reviewer (<coreWin>.1) and Deployment (<coreWin>.2) get a three-tier
+# stale-heartbeat escalation instead of jumping straight from 300s silent
+# to hard restart. Tier 1 at 180s nudges. Tier 2 at 360s sends /clear to
+# drop context. Tier 3 at 600s falls through to the normal stale_pending
+# → _enforce_stale_restart path. Worker panes retain their original 300s
+# single-tier behavior.
+_is_core_specialist() {
+  local _pid="$1" _cw _w _p
+  _cw=$(get_core_team_window 2>/dev/null || echo 1)
+  _w=$(printf '%s' "$_pid" | awk -F_ '{print $(NF-1)}')
+  _p=$(printf '%s' "$_pid" | awk -F_ '{print $NF}')
+  [ "$_w" = "$_cw" ] && { [ "$_p" = "1" ] || [ "$_p" = "2" ]; }
+}
+
+_core_tier_cooldown_ok() {
+  # $1=breadcrumb path, $2=cooldown seconds. Returns 0 if ok to fire.
+  local _bc="$1" _cd="$2" _now _mt
+  [ -f "$_bc" ] || return 0
+  _now=$(date +%s)
+  _mt=$(stat -c%Y "$_bc" 2>/dev/null || stat -f%m "$_bc" 2>/dev/null || echo 0)
+  [ $((_now - _mt)) -ge "$_cd" ]
+}
+
+_core_tier_nudge() {
+  local _pid="$1" _bc _now
+  _bc="${RUNTIME_DIR}/recovery/${_pid}.nudge_tier1"
+  mkdir -p "${RUNTIME_DIR}/recovery" "${RUNTIME_DIR}/triggers" 2>/dev/null
+  _core_tier_cooldown_ok "$_bc" 180 || return 0
+  _now=$(date +%s)
+  touch "${RUNTIME_DIR}/triggers/${_pid}.trigger" 2>/dev/null || true
+  printf '%s nudge\n' "$_now" > "${_bc}.tmp" 2>/dev/null && mv "${_bc}.tmp" "$_bc" 2>/dev/null || true
+  _log_restart "$_pid" "tier1_nudge" "age-tier nudge at 180s — trigger touched"
+}
+
+_core_tier_softclear() {
+  local _pid="$1" _bc _now _w _p _tgt
+  _bc="${RUNTIME_DIR}/recovery/${_pid}.softclear_tier2"
+  mkdir -p "${RUNTIME_DIR}/recovery" 2>/dev/null
+  _core_tier_cooldown_ok "$_bc" 120 || return 0
+  _now=$(date +%s)
+  _w=$(printf '%s' "$_pid" | awk -F_ '{print $(NF-1)}')
+  _p=$(printf '%s' "$_pid" | awk -F_ '{print $NF}')
+  _tgt="${SESSION_NAME}:${_w}.${_p}"
+  tmux copy-mode -q -t "$_tgt" 2>/dev/null || :
+  if ! type doey_send_command >/dev/null 2>&1; then
+    [ -f "$HOME/.local/bin/doey-send.sh" ] && . "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
+  fi
+  if type doey_send_command >/dev/null 2>&1; then
+    doey_send_command "$_tgt" "/clear" 2>/dev/null || true
+  else
+    tmux send-keys -t "$_tgt" "/clear" Enter 2>/dev/null || true
+  fi
+  printf '%s softclear\n' "$_now" > "${_bc}.tmp" 2>/dev/null && mv "${_bc}.tmp" "$_bc" 2>/dev/null || true
+  _log_restart "$_pid" "tier2_softclear" "age-tier /clear at 360s — context dropped in place"
+}
+
 _check_stale_heartbeats() {
   local _hb _now _hb_time _task_id _pane_id _age _found=false
   _now=$(date +%s)
@@ -168,12 +254,45 @@ _check_stale_heartbeats() {
     read -r _hb_time _task_id _pane_id < "$_hb" 2>/dev/null || continue
     [ -z "$_hb_time" ] && continue
     _age=$(( _now - _hb_time ))
+
+    # ── Core-team specialist escalation (tiers 1 & 2) ────────────────
+    # For reviewer/deployment, run sub-600s tiers before the main
+    # threshold check. Tier 3 (>=600s) falls through to the generic
+    # stale-marker path below with threshold overridden to 600.
+    local _is_core=false
+    if _is_core_specialist "$_pane_id"; then
+      _is_core=true
+      # Skip terminal states early — do not nudge/clear a done pane
+      local _core_sf="${RUNTIME_DIR}/status/${_pane_id}.status"
+      if [ -f "$_core_sf" ]; then
+        local _core_st
+        _core_st=$(grep '^STATUS: ' "$_core_sf" 2>/dev/null | head -1 | sed 's/^STATUS: //') || _core_st=""
+        case "$_core_st" in FINISHED|RESERVED) continue ;; esac
+      fi
+      if [ "$_age" -ge 180 ] && [ "$_age" -lt 360 ]; then
+        _core_tier_nudge "$_pane_id"
+        continue
+      fi
+      if [ "$_age" -ge 360 ] && [ "$_age" -lt 600 ]; then
+        _core_tier_softclear "$_pane_id"
+        continue
+      fi
+      # age >= 600 → clear cooldown breadcrumbs and fall through to
+      # the hard-restart path with a fixed 600s threshold.
+      rm -f "${RUNTIME_DIR}/recovery/${_pane_id}.nudge_tier1" \
+            "${RUNTIME_DIR}/recovery/${_pane_id}.softclear_tier2" 2>/dev/null || true
+    fi
+
     # Managers (pane index 0) get a longer timeout than workers
     local _threshold
-    case "$_pane_id" in
-      *_0) _threshold="${DOEY_STALE_MANAGER_TIMEOUT:-600}" ;;
-      *)   _threshold="${DOEY_STALE_WORKER_TIMEOUT:-300}" ;;
-    esac
+    if [ "$_is_core" = true ]; then
+      _threshold=600
+    else
+      case "$_pane_id" in
+        *_0) _threshold="${DOEY_STALE_MANAGER_TIMEOUT:-600}" ;;
+        *)   _threshold="${DOEY_STALE_WORKER_TIMEOUT:-300}" ;;
+      esac
+    fi
     [ "$_age" -ge "$_threshold" ] || continue
     # Skip FINISHED/RESERVED workers — they are done, not stale
     local _hb_status_file="${RUNTIME_DIR}/status/${_pane_id}.status"
@@ -184,7 +303,6 @@ _check_stale_heartbeats() {
     fi
     printf '%s %s %s %s\n' "$_pane_id" "$_task_id" "$_hb_time" "$_age" \
       > "${RUNTIME_DIR}/status/stale_${_pane_id}" 2>/dev/null || true
-    emit_lifecycle_event "stale_detected" "$TASKMASTER_SAFE" "$_task_id" "" "{\"stale_pane\":\"${_pane_id}\",\"age\":${_age}}"
     _found=true
   done
   [ "$_found" = true ]
