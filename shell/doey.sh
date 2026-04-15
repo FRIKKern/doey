@@ -91,6 +91,9 @@ source "${SCRIPT_DIR}/doey-headless.sh"
 # shellcheck source=doey-new.sh
 source "${SCRIPT_DIR}/doey-new.sh"
 
+# shellcheck source=doey-reviewer.sh
+source "${SCRIPT_DIR}/doey-reviewer.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 _doey_load_config
 
@@ -301,6 +304,11 @@ HELP
       printf 'Error: doey-scaffy not installed. Run "doey doctor" or reinstall.\n' >&2
       exit 1
     fi
+    ;;
+  reviewer)
+    shift
+    doey_reviewer "$@"
+    exit $?
     ;;
   # Everything below requires tmux + claude — check prerequisites:
   init)
