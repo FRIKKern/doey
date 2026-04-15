@@ -29,6 +29,7 @@ var logsGroupItems = []logsGroupEntry{
 	{icon: "⚡", name: "Activity", desc: "Event feed"},
 	{icon: "◇", name: "Interactions", desc: "Boss interactions"},
 	{icon: "⛔", name: "Violations", desc: "Polling-loop offenders"},
+	{icon: "⟳", name: "Lifecycle", desc: "Status transitions & alerts"},
 }
 
 // LogsGroupModel groups Logs, Messages, Debug, and Info sub-models under
@@ -41,6 +42,7 @@ type LogsGroupModel struct {
 	activity     ActivityModel
 	interactions InteractionsModel
 	violations   ViolationsModel
+	lifecycle    LifecycleModel
 
 	theme   styles.Theme
 	cursor  int
@@ -51,7 +53,7 @@ type LogsGroupModel struct {
 }
 
 // NewLogsGroupModel creates a logs group panel with the first sub-view selected.
-func NewLogsGroupModel(theme styles.Theme) LogsGroupModel {
+func NewLogsGroupModel(runtimeDir string, theme styles.Theme) LogsGroupModel {
 	return LogsGroupModel{
 		logs:         NewLogViewModel(theme),
 		messages:     NewMessagesModel(theme),
@@ -60,6 +62,7 @@ func NewLogsGroupModel(theme styles.Theme) LogsGroupModel {
 		activity:     NewActivityModel(theme),
 		interactions: NewInteractionsModel(theme),
 		violations:   NewViolationsModel(theme),
+		lifecycle:    NewLifecycleModel(runtimeDir, theme),
 		theme:        theme,
 		keyMap:       keys.DefaultKeyMap(),
 	}
@@ -142,6 +145,8 @@ func (m LogsGroupModel) delegateUpdate(msg tea.Msg) (LogsGroupModel, tea.Cmd) {
 		m.interactions, cmd = m.interactions.Update(msg)
 	case 6:
 		m.violations, cmd = m.violations.Update(msg)
+	case 7:
+		m.lifecycle, cmd = m.lifecycle.Update(msg)
 	}
 	return m, cmd
 }
@@ -155,6 +160,10 @@ func (m *LogsGroupModel) SetSnapshot(snap runtime.Snapshot) {
 	m.activity.SetSnapshot(snap)
 	m.interactions.SetSnapshot(snap)
 	m.violations.SetSnapshot(snap)
+	if snap.Session.RuntimeDir != "" {
+		m.lifecycle.SetRuntimeDir(snap.Session.RuntimeDir)
+	}
+	m.lifecycle.Reload()
 }
 
 // SetSize stores dimensions and propagates to the active sub-model.
@@ -181,6 +190,7 @@ func (m *LogsGroupModel) updateSubFocus() {
 	m.activity.SetFocused(active && m.cursor == 4)
 	m.interactions.SetFocused(active && m.cursor == 5)
 	m.violations.SetFocused(active && m.cursor == 6)
+	m.lifecycle.SetFocused(active && m.cursor == 7)
 }
 
 // propagateSizeToActive calculates the right-panel dimensions and sets them
@@ -219,6 +229,8 @@ func (m *LogsGroupModel) propagateSizeToActive() {
 		m.interactions.SetSize(rightW, h)
 	case 6:
 		m.violations.SetSize(rightW, h)
+	case 7:
+		m.lifecycle.SetSize(rightW, h)
 	}
 }
 
@@ -330,6 +342,9 @@ func (m LogsGroupModel) renderRightPanel(w, h int) string {
 	case 6:
 		m.violations.SetSize(w, h)
 		return m.violations.View()
+	case 7:
+		m.lifecycle.SetSize(w, h)
+		return m.lifecycle.View()
 	}
 
 	// Fallback (shouldn't happen)
