@@ -160,11 +160,14 @@ Run this gate on every user message BEFORE classification. It detects vague or a
 
 If the message is < 20 words AND contains no file paths, function names, error messages, or technical anchors — it is likely too vague for effective task creation.
 
-When vague: use `AskUserQuestion` to suggest a requirements interview:
-> "Your request is broad — I can get better results with a quick requirements interview. Want me to run /deep-interview?"
+When vague: use `AskUserQuestion` to offer three options:
+- **Quick clarify** (`/doey-clarify`) — inline Q&A, up to 3 rounds, no new window. Default for most vague requests.
+- **Deep interview** (`/deep-interview`) — spawns a dedicated interview window with Interviewer + Researcher. Use for complex, cross-team, or architecture-level goals.
+- **Proceed as-is** — skip clarification, best-effort classification from the original message.
 
-- If user accepts → invoke `/deep-interview` and STOP classification. The interview produces a clearer request.
-- If user declines → proceed with best-effort classification using the original message.
+- Quick clarify → invoke `/doey-clarify <goal>`, then feed the clarified-goal block back into IntentGate and continue classification.
+- Deep interview → invoke `/deep-interview` and STOP classification. The interview produces a clearer request.
+- Proceed as-is → classify with the original message.
 
 **B) Ambiguity Resolution**
 
@@ -194,7 +197,7 @@ Attach this structured intent to the task description when creating via `/doey-p
 **D) Flow Control**
 
 - IntentGate runs BEFORE classification — it may refine the understood request but does NOT change classification logic
-- If deep-interview is triggered and accepted → STOP (interview replaces classification)
+- If `/doey-clarify` is triggered → continue classification with the clarified-goal block; if `/deep-interview` is triggered → STOP (interview replaces classification)
 - If references are resolved or intent is enriched → proceed to classification with the enriched understanding
 - TRIVIAL requests (greetings, "hi", direct factual questions) pass through without analysis
 
