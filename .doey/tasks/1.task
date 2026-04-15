@@ -1,53 +1,43 @@
 TASK_SCHEMA_VERSION=4
 TASK_ID=1
-TASK_TITLE=Context overlay system for per-project agent customization
-TASK_STATUS=pending_user_confirmation
+TASK_TITLE=Add core Boss clarification skill (interview loop, quality-first questions)
+TASK_STATUS=in_progress
 TASK_TYPE=feature
 TASK_CREATED_BY=boss
-TASK_TEAM=0
-TASK_DESCRIPTION=Add a .doey/context/ overlay system so projects can extend core agent definitions with project-specific knowledge that survives doey updates. Structure: one .md file per role (taskmaster.md, worker.md, etc.) plus optional all.md for shared context. Injected at session start via on-session-start.sh hook. Core agents refresh on update; overlays persist in project repo.
-TASK_SUCCESS_CRITERIA=overlay injection works, fresh install safe, CLI subcommand, bash 3.2 compat
-TASK_TIMESTAMPS=created=1775573346
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+Create a NEW core Doey skill that makes the Boss role conduct a multi-round clarification interview before dispatching non-trivial tasks. Must ship as part of core Doey (not a memory/local config).
+
+Requirements:
+1. NEW skill at .claude/skills/<name>/SKILL.md (do not modify existing /deep-interview).
+2. Full interview loop — Boss asks 2-4 questions per round via AskUserQuestion, then continues looping until confident requirements are clear.
+3. Quality over quantity. The user cited Douglas Adams — getting the RIGHT question is more important than asking many. The skill prompt should explicitly coach Boss on:
+   - Identifying the actual ambiguity (scope, success criteria, constraints, hidden assumptions)
+   - Avoiding redundant or yes/no-answerable questions
+   - Stopping the loop as soon as the picture is clear (no padding)
+4. Wire into Boss agent flow — Boss should reach for this skill on PLANNED tasks. Update agents/doey-boss.md (or .tmpl) accordingly. Run shell/expand-templates.sh after template edits.
+5. Must work fresh-install — ships in repo, installed by install.sh path.
+6. Bash 3.2 safe if any shell involved.
+
+Suggested name: /doey-clarify or /doey-interview-light. Subtaskmaster decides final name.
+TASK_TIMESTAMPS=created=1776273453
 TASK_CURRENT_PHASE=0
 TASK_TOTAL_PHASES=0
-TASK_UPDATED=1775573346
-TASK_PLAN_ID=14
-TASK_FILES=.claude/hooks/on-pre-compact.sh,.claude/hooks/on-session-start.sh,.doey/tasks/1.task,.gitignore
+TASK_UPDATED=1776273453
 TASK_REVIEW_VERDICT=PASS
-TASK_SUBTASK_1_TITLE=W2.1: Research on-session-start.sh hook — role detection, env injection, where overlay injection fits
+TASK_REVIEW_FINDINGS=PASS — SKILL.md present (45L), IntentGate three-option wiring expanded correctly in doey-boss.md L161-197, install.sh auto-discovers via .claude/skills/doey-*/, bash compat 0 violations, doey.sh parses clean.
+TASK_REVIEW_TIMESTAMP=2026-04-15T17:35:47Z
+TASK_SUBTASK_1_TITLE=Research: deep-interview skill, boss agent tmpl, install.sh skill path, skill conventions
 TASK_SUBTASK_1_STATUS=done
-TASK_SUBTASK_1_WORKER=doey_doey_2_1
-TASK_SUBTASK_1_CREATED_AT=1775573508
-TASK_SUBTASK_1_COMPLETED_AT=1775573716
-TASK_SUBTASK_2_TITLE=W2.2: Research install.sh and shell/doey.sh — update mechanism, .doey/ protection, context subcommand
+TASK_SUBTASK_1_CREATED_AT=1776273585
+TASK_SUBTASK_1_COMPLETED_AT=1776273758
+TASK_SUBTASK_2_TITLE=Implement: create doey-clarify/SKILL.md, patch doey-boss.md.tmpl, run expand-templates.sh
 TASK_SUBTASK_2_STATUS=done
-TASK_SUBTASK_2_WORKER=doey_doey_2_2
-TASK_SUBTASK_2_CREATED_AT=1775573509
-TASK_SUBTASK_2_COMPLETED_AT=1775573701
-TASK_SUBTASK_3_TITLE=Dispatched to Team 2 (Subtaskmaster + 2 workers)
+TASK_SUBTASK_2_CREATED_AT=1776273753
+TASK_SUBTASK_2_COMPLETED_AT=1776274162
+TASK_SUBTASK_3_TITLE=Verify: revert architect.md, re-expand doey-boss.md with include fragments, review skill quality
 TASK_SUBTASK_3_STATUS=done
-TASK_SUBTASK_3_CREATED_AT=1775573535
-TASK_SUBTASK_3_COMPLETED_AT=1775574229
-TASK_SUBTASK_4_TITLE=W2.1: Implement overlay injection in on-session-start.sh and on-pre-compact.sh
-TASK_SUBTASK_4_STATUS=done
-TASK_SUBTASK_4_WORKER=doey_doey_2_1
-TASK_SUBTASK_4_CREATED_AT=1775573746
-TASK_SUBTASK_4_COMPLETED_AT=1775573836
-TASK_SUBTASK_5_TITLE=W2.2: Add .gitignore exceptions and create .doey/context/ sample templates
-TASK_SUBTASK_5_STATUS=done
-TASK_SUBTASK_5_WORKER=doey_doey_2_2
-TASK_SUBTASK_5_CREATED_AT=1775573746
-TASK_SUBTASK_5_COMPLETED_AT=1775573842
-TASK_SUBTASK_6_TITLE=W2.2: Verify overlay system — syntax, compat, fresh-install test, file content review
-TASK_SUBTASK_6_STATUS=done
-TASK_SUBTASK_6_WORKER=doey_doey_2_2
-TASK_SUBTASK_6_CREATED_AT=1775573956
-TASK_SUBTASK_6_COMPLETED_AT=1775574053
-TASK_SUBTASK_7_TITLE=Review request sent to Task Reviewer (1.1)
-TASK_SUBTASK_7_STATUS=done
-TASK_SUBTASK_7_CREATED_AT=1775574148
-TASK_SUBTASK_7_COMPLETED_AT=1775574440
-TASK_SUBTASK_8_TITLE=Review PASSED — deploy request sent to Deployment (1.2)
-TASK_SUBTASK_8_STATUS=done
-TASK_SUBTASK_8_CREATED_AT=1775574280
-TASK_SUBTASK_8_COMPLETED_AT=1775574440
+TASK_SUBTASK_3_CREATED_AT=1776274162
+TASK_SUBTASK_3_COMPLETED_AT=1776274335
