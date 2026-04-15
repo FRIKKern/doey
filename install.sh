@@ -234,6 +234,19 @@ else
   unset _jq_installed
 fi
 
+# ── cloudflared (optional tunnel provider) ───────────────────────────
+if has cloudflared; then
+  check_ok "cloudflared ${DIM}($(cloudflared --version 2>/dev/null | head -1 || echo "installed"))${RESET}"
+else
+  # Source the install helper (it sources doey-platform.sh transitively)
+  source "$SCRIPT_DIR/shell/doey-install-cloudflared.sh"
+  if _doey_install_cloudflared_interactive; then
+    check_ok "cloudflared ${DIM}(auto-installed to ~/.local/bin/)${RESET}"
+  else
+    warn_msg "cloudflared not installed (optional — tunnels will not be available)"
+  fi
+fi
+
 # Detect Go binary — sets GO_BIN or leaves it empty.
 _find_go() {
   if type _find_go_bin >/dev/null 2>&1; then
