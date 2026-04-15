@@ -116,7 +116,7 @@ show_menu() {
 _show_menu_shell() {
   local grid="$1"
 
-  doey_header "Doey"
+  doey_header "Doey — Project Picker"
   doey_warn "No project registered for $(pwd)"
   printf '\n'
 

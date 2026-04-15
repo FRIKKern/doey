@@ -7,6 +7,9 @@ set -euo pipefail
 [ "${__doey_ui_sourced:-}" = "1" ] && return 0
 __doey_ui_sourced=1
 
+# Load shared ASCII art
+source "${BASH_SOURCE[0]%/*}/doey-splash-art.sh"
+
 # ── Color palette ─────────────────────────────────────────────────────
 BRAND='\033[1;36m'    # Bold cyan
 SUCCESS='\033[0;32m'  # Green
@@ -147,42 +150,7 @@ doey_info() {
 doey_banner() {
   # Render the doey banner with luxury styling
   if [ "$HAS_GUM" = true ]; then
-    cat << 'DOEY_ART' | gum style --foreground 6 --bold --border rounded --border-foreground 6 --padding "1 3" --margin "1 0"
-
-            .
-           ...      :-=++++==--:
-               .-***=-:.   ..:=+#%*:
-    .     :=----=.               .=%*=:
-    ..   -=-                     .::. :#*:
-      .+=    := .-+**+:        :#@%%@%- :*%=
-      *+.    @.*@**@@@@#.      %@=  *@@= :*=
-    :*:     .@=@=  *@@@@%      #@%+#@%#@  :-+
-   .%++      #*@@#%@@#%@@      :@@@@@*+@  :%#
-    %#       ==%@@@@@=+@+       :*%@@@#: :=*
-   .@--     -+=.+%@@@@*:            :.:--:-.
-   .@%#    ##*  ...:.:                 +=
-    .-@- .#*.   . ..                   :%
-      :+++%.:       .=.                 #+
-          =**        .*=                :@.
-       .   .@:+.       +#:               =%
-            :*:+:--.   =+%*.              *+
-                .- :-=:-+:+%=              #:
-                           .*%-            .%.
-                             :%#:        ...-#
-                               =%*.   =#@%@@@@*
-                                 =%+.-@@#=%@@@@-
-                                   -#*@@@@@@@@@.
-                                     .=#@@@@%+.
-
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-
-   Let me Doey for you
-DOEY_ART
+    printf '\n%s\n\n%s\n\n   Let me Doey for you\n' "$DOEY_DOG_ART" "$DOEY_SPLASH_ART" | gum style --foreground 6 --bold --border rounded --border-foreground 6 --padding "1 3" --margin "1 0"
   else
     _print_full_banner
   fi
@@ -192,14 +160,7 @@ doey_splash() {
   _DOEY_SPLASH_START="$(date +%s)"
   printf '\033[2J\033[H'  # Clear screen, cursor top
   printf '\033[36m'       # Cyan
-  cat << 'SPLASH'
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-SPLASH
+  printf '%s\n' "$DOEY_SPLASH_ART"
   printf '\033[0m'
   printf '\n   \033[2mStarting...\033[0m\n\n'
 }
@@ -247,14 +208,7 @@ _startup_progress_fallback() {
   start_time="$(date +%s)"
   printf '\033[2J\033[H'
   printf '\033[36m'
-  cat << 'SPLASH'
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-SPLASH
+  printf '%s\n' "$DOEY_SPLASH_ART"
   printf '\033[0m\n'
   while true; do
     if [ -f "$progress_file" ]; then
@@ -318,14 +272,7 @@ doey_step() {
 
 _print_doey_banner() {
   printf "${BRAND}"
-  cat << 'BANNER'
-   ██████╗  ██████╗ ███████╗██╗   ██╗
-   ██╔══██╗██╔═══██╗██╔════╝╚██╗ ██╔╝
-   ██║  ██║██║   ██║█████╗   ╚████╔╝
-   ██║  ██║██║   ██║██╔══╝    ╚██╔╝
-   ██████╔╝╚██████╔╝███████╗   ██║
-   ╚═════╝  ╚═════╝ ╚══════╝   ╚═╝
-BANNER
+  printf '%s\n' "$DOEY_SPLASH_ART"
   printf "${RESET}"
 }
 
@@ -333,32 +280,7 @@ _print_full_banner() {
   local tagline="${1:-Let me Doey for you}"
   printf '\n'
   printf "${BRAND}"
-  cat << 'DOG'
-            .
-           ...      :-=++++==--:
-               .-***=-:.   ..:=+#%*:
-    .     :=----=.               .=%*=:
-    ..   -=-                     .::. :#*:
-      .+=    := .-+**+:        :#@%%@%- :*%=
-      *+.    @.*@**@@@@#.      %@=  *@@= :*=
-    :*:     .@=@=  *@@@@%      #@%+#@%#@  :-+
-   .%++      #*@@#%@@#%@@      :@@@@@*+@  :%#
-    %#       ==%@@@@@=+@+       :*%@@@#: :=*
-   .@--     -+=.+%@@@@*:            :.:--:-.
-   .@%#    ##*  ...:.:                 +=
-    .-@- .#*.   . ..                   :%
-      :+++%.:       .=.                 #+
-          =**        .*=                :@.
-       .   .@:+.       +#:               =%
-            :*:+:--.   =+%*.              *+
-                .- :-=:-+:+%=              #:
-                           .*%-            .%.
-                             :%#:        ...-#
-                               =%*.   =#@%@@@@*
-                                 =%+.-@@#=%@@@@-
-                                   -#*@@@@@@@@@.
-                                     .=#@@@@%+.
-DOG
+  printf '%s\n' "$DOEY_DOG_ART"
   printf '\n'
   _print_doey_banner
   printf "   ${DIM}${tagline}${RESET}\n"

@@ -177,9 +177,13 @@ check_doctor() {
     esac
   done
 
-  doey_header "Doey — System Check"
+  printf '\n'
+  _print_doey_banner
+  doey_header "System Check"
+  doey_divider
   printf '\n'
 
+  doey_step "1/6" "Required tools"
   # Required commands — offer install if missing
   if command -v tmux >/dev/null 2>&1; then
     _doc_check ok "tmux" "$(tmux -V)"
@@ -224,6 +228,8 @@ check_doctor() {
     _doc_check fail "Claude auth" "Not logged in — run 'claude' to authenticate"
   fi
 
+  printf '\n'
+  doey_step "2/6" "Installation"
   # PATH check
   if echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then _doc_check ok "~/.local/bin in PATH"
   else _doc_check warn "~/.local/bin not in PATH"; fi
@@ -283,6 +289,8 @@ check_doctor() {
     _doc_check fail "Repo not registered" "~/.claude/doey/repo-path missing"
   fi
 
+  printf '\n'
+  doey_step "3/6" "Optional tools"
   # Optional: jq
   if command -v jq >/dev/null 2>&1; then _doc_check ok "jq" "$(jq --version 2>/dev/null || echo 'unknown')"
   else _doc_check warn "jq not found — auto-trust skipped"; fi
@@ -314,6 +322,8 @@ check_doctor() {
     _doc_check warn "No version file" "Run 'doey update'"
   fi
 
+  printf '\n'
+  doey_step "4/6" "Go binaries"
   # TUI dashboard
   if command -v doey-tui >/dev/null 2>&1; then
     _doc_check ok "doey-tui" "$(doey-tui --version 2>/dev/null || echo 'installed')"
@@ -368,6 +378,8 @@ check_doctor() {
     fi
   fi
 
+  printf '\n'
+  doey_step "5/6" "Subsystems"
   # Context audit
   if [[ -n "$repo_dir" ]] && [[ -f "$repo_dir/shell/context-audit.sh" ]]; then
     local audit_output
@@ -482,6 +494,8 @@ check_doctor() {
     _doc_check skip "Taskmaster alive" "no running session for $(pwd)"
   fi
 
+  printf '\n'
+  doey_step "6/6" "Stats"
   # ── Stats subsystem (Phase 3, task #521) ──
   check_stats
 
@@ -490,14 +504,23 @@ check_doctor() {
 
   # ── Summary footer ──
   printf '\n'
-  local _doc_total=$((_DOC_OK + _DOC_WARN + _DOC_FAIL))
+  doey_divider
+  printf '\n'
+  if [ "$_DOC_FAIL" -gt 0 ]; then
+    doey_error "Doctor found ${_DOC_FAIL} issue(s) — run 'doey update' or check fixes above"
+  elif [ "$_DOC_WARN" -gt 0 ]; then
+    doey_warn "All checks passed with ${_DOC_WARN} warning(s)"
+  else
+    doey_success "All systems operational"
+  fi
+  printf '\n'
   if [ "$HAS_GUM" = true ]; then
     local _doc_summary=""
     _doc_summary="$(gum style --foreground 2 "${_DOC_OK} passed")"
     [ "$_DOC_WARN" -gt 0 ] && _doc_summary="${_doc_summary}  $(gum style --foreground 3 "${_DOC_WARN} warnings")"
     [ "$_DOC_FAIL" -gt 0 ] && _doc_summary="${_doc_summary}  $(gum style --foreground 1 --bold "${_DOC_FAIL} failed")"
     [ "$_DOC_SKIP" -gt 0 ] && _doc_summary="${_doc_summary}  $(gum style --foreground 240 "${_DOC_SKIP} skipped")"
-    gum style --padding "0 1" "$_doc_summary"
+    gum style --border rounded --border-foreground 6 --padding "0 2" --margin "0 1" "$_doc_summary"
   else
     printf "  ${SUCCESS}%d passed${RESET}" "$_DOC_OK"
     [ "$_DOC_WARN" -gt 0 ] && printf "  ${WARN}%d warnings${RESET}" "$_DOC_WARN"
