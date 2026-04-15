@@ -1722,6 +1722,7 @@ doey_settings() {
 
 _attach_session() {
   local session="$1"
+  [ -z "${TMUX:-}" ] && doey_header "Doey — ${session#doey-}"
   doey_ok "Attaching to ${session}..."
   tmux select-window -t "$session:0"
   attach_or_switch "$session"

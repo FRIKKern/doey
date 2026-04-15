@@ -903,14 +903,17 @@ _print_team_created() {
 add_team_from_def() {
   local session="$1" runtime_dir="$2" dir="$3" team_name="$4" type_override="${5:-}"
 
+  doey_header "Creating team: $team_name"
+
   # Find and parse definition
   local def_file
   if ! def_file=$(_find_team_def "$team_name"); then
-    printf "  ${ERROR}Team definition '%s' not found${RESET}\n" "$team_name" >&2
+    doey_error "Team definition '$team_name' not found"
     printf "  Searched: .doey/teams/ → teams/ → ~/.config/doey/teams/ → repo teams/\n" >&2
     return 1
   fi
-  printf "  ${DIM}Loading team definition: %s${RESET}\n" "$def_file"
+  doey_step "1/5" "Parsing team definition"
+  doey_info "Loading team definition: $def_file"
 
   local env_file
   env_file=$(_parse_team_def "$def_file" "$runtime_dir") || return 1
@@ -931,9 +934,10 @@ add_team_from_def() {
   td_briefing=$(_env_val "$env_file" BRIEFING_FILE "")
 
   # Create tmux window
+  doey_step "2/5" "Creating tmux window"
   local window_index
   window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
-  printf "  ${DIM}Creating team '%s' in window %s...${RESET}\n" "$td_name" "$window_index"
+  doey_info "Creating team '$td_name' in window $window_index"
 
   # Determine pane count from definition (find highest PANE_N key)
   # Also detect whether any pane has role=manager for fast-path decision
@@ -989,12 +993,13 @@ add_team_from_def() {
     rebalance_grid_layout "$session" "$window_index" "$runtime_dir"
     _name_team_window "$session" "$window_index" "" "$runtime_dir"
 
-    printf "  \033[0;32mTeam '%s' created in window %s (%s workers, managerless)\033[0m\n" \
-      "$td_name" "$window_index" "$_fp_count"
+    doey_success "Team '$td_name' created in window $window_index ($_fp_count workers, managerless)"
     return 0
   fi
 
   # ── Standard path: teams with a manager ───────────────────────────────
+  doey_divider
+  doey_step "3/5" "Launching Claude instances"
 
   # Build worker panes (pane 0 = manager, rest are workers)
   local worker_pane_list="" worker_count=0 _wp_i=1
@@ -1123,6 +1128,7 @@ add_team_from_def() {
   _name_team_window "$session" "$window_index" "" "$runtime_dir"
 
   # Brief manager with team layout + briefing content
+  doey_step "4/5" "Briefing Subtaskmaster"
   if [ -n "$td_briefing" ] && [ -f "$td_briefing" ]; then
     local _brief_text _layout=""
     _layout="Team: ${td_name} | Window: ${window_index} | Workers: ${worker_count}\nPanes:"
@@ -1142,8 +1148,8 @@ add_team_from_def() {
     ) &
   fi
 
-  printf "  \033[0;32mTeam '%s' created in window %s (%s workers)\033[0m\n" \
-    "$td_name" "$window_index" "$worker_count"
+  doey_step "5/5" "Team ready"
+  doey_success "Team '$td_name' created in window $window_index ($worker_count workers)"
 
   # Stats emit (task #521 Phase 2) — team spawned from def
   if command -v doey-stats-emit.sh >/dev/null 2>&1; then
@@ -1157,6 +1163,8 @@ add_dynamic_team_window() {
   local team_name="${6:-}" team_role="${7:-}" worker_model="${8:-}" manager_model="${9:-}"
   local team_type="${10:-}"
   local reserved="${11:-false}"
+
+  doey_header "Adding team window"
   local task_id="${12:-}"
   # --reserved implies freelancer team type if not already set
   if [ "$reserved" = "true" ] && [ -z "$team_type" ]; then
@@ -1178,6 +1186,7 @@ add_dynamic_team_window() {
     fi
   fi
 
+  doey_step "1/3" "Creating window"
   local window_index
   window_index=$(tmux new-window -t "$session" -c "$dir" -P -F '#{window_index}')
 
@@ -1185,7 +1194,7 @@ add_dynamic_team_window() {
     local _wt_branch_arg=""
     [ "$worktree_spec" = "auto" ] || _wt_branch_arg="$worktree_spec"
     team_dir=$(create_team_worktree "$dir" "$window_index" "$_wt_branch_arg") || {
-      printf "  ${WARN}Worktree creation failed for team %s — falling back to shared repo${RESET}\n" "$window_index"
+      doey_warn "Worktree creation failed for team $window_index — falling back to shared repo"
       team_dir="$dir"; worktree_spec=""
     }
     if [ -n "$worktree_spec" ]; then
@@ -1199,7 +1208,8 @@ add_dynamic_team_window() {
 
   local _team_label="team"
   [ "$is_freelancer" = "true" ] && _team_label="freelancer team"
-  printf "  ${DIM}Creating dynamic %s window %s...${RESET}\n" "$_team_label" "$window_index"
+  doey_step "2/3" "Launching workers"
+  doey_info "Creating dynamic $_team_label window $window_index"
 
   # Freelancer teams: no manager, all panes are workers. MANAGER_PANE is empty.
   local mgr_pane="0"
@@ -1267,8 +1277,7 @@ add_dynamic_team_window() {
     _feasible_max_cols="${_feasibility%% *}"
   fi
   if [ "$_feasible_max_cols" -lt "$initial_cols" ]; then
-    printf "  %s Requested %s worker columns but only %s fit — reducing%s\n" \
-      "${WARN:-}" "$initial_cols" "$_feasible_max_cols" "${RESET:-}" >&2
+    doey_warn "Requested $initial_cols worker columns but only $_feasible_max_cols fit — reducing"
     initial_cols="$_feasible_max_cols"
   fi
 
@@ -1295,6 +1304,8 @@ add_dynamic_team_window() {
     done
     IFS="$_rv_old_ifs"
   fi
+
+  doey_step "3/3" "Window ready"
 
   local worker_count wt_brief
   worker_count=$(_env_val "${runtime_dir}/team_${window_index}.env" WORKER_COUNT)
