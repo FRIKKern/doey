@@ -1575,9 +1575,8 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 		}
 
 		now := time.Now()
-		bodyStyle := lipgloss.NewStyle().Foreground(t.Muted).PaddingLeft(4)
 
-		// Research section — shown first with extended preview
+		// Research section — compact one-liners
 		if len(research) > 0 {
 			sections = append(sections, "")
 			sections = append(sections, styles.SectionTitle(t, fmt.Sprintf("RESEARCH (%d)", len(research))))
@@ -1585,35 +1584,19 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 				titleText := taskcard.CleanAttachmentTitle(att)
 				title := t.RenderBold(titleText)
 				meta := ""
+				if att.Author != "" {
+					meta += " — " + t.RenderDim(att.Author)
+				}
 				if att.Timestamp > 0 {
 					elapsed := now.Sub(time.Unix(att.Timestamp, 0))
-					meta += " — " + lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed)+" ago")
-				}
-				sections = append(sections, fmt.Sprintf("  %s %s%s", attachmentEmoji("research"), title, meta))
-
-				// Body preview — first 5 non-empty, non-noise lines for research
-				if att.Body != "" {
-					lines := strings.Split(att.Body, "\n")
-					shown := 0
-					total := 0
-					for _, line := range lines {
-						if taskcard.IsBodyLineNoise(line) {
-							continue
-						}
-						total++
-						if strings.TrimSpace(line) == "" {
-							continue
-						}
-						if shown >= 5 {
-							sections = append(sections, bodyStyle.Render(
-								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", total-shown))))
-							break
-						}
-						sections = append(sections, bodyStyle.Render(line))
-						shown++
+					age := lipgloss.NewStyle().Foreground(t.Subtle).Faint(true).Render(formatAge(elapsed) + " ago")
+					if meta != "" {
+						meta += ", " + age
+					} else {
+						meta += " — " + age
 					}
 				}
-				sections = append(sections, "")
+				sections = append(sections, fmt.Sprintf("  %s %s%s", attachmentEmoji("research"), title, meta))
 			}
 		}
 
@@ -1648,29 +1631,6 @@ func (m TasksModel) renderRightPanel(w, h int) string {
 					}
 				}
 				sections = append(sections, fmt.Sprintf("  %s %s%s", badge, title, meta))
-
-				// Body preview — first 4 non-empty, non-noise lines
-				if att.Body != "" {
-					lines := strings.Split(att.Body, "\n")
-					shown := 0
-					total := 0
-					for _, line := range lines {
-						if taskcard.IsBodyLineNoise(line) {
-							continue
-						}
-						total++
-						if strings.TrimSpace(line) == "" {
-							continue
-						}
-						if shown >= 4 {
-							sections = append(sections, bodyStyle.Render(
-								lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("… +%d more lines", total-shown))))
-							break
-						}
-						sections = append(sections, bodyStyle.Render(line))
-						shown++
-					}
-				}
 			}
 		}
 	} else if len(task.Attachments) > 0 {

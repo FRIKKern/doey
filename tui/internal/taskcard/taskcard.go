@@ -1546,11 +1546,18 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 		if i == e.AttachmentCursor && att.FilePath != "" {
 			line += lipgloss.NewStyle().Foreground(e.Theme.Muted).Faint(true).Render("  Enter to view")
 		}
-		sections = append(sections, line)
-
-		// Expandable body
+		// Expand/collapse toggle hint on the header line
 		if att.Body != "" {
-			expanded := e.ExpandedAttachments[i]
+			if e.ExpandedAttachments[i] {
+				line += lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).Render(" [-]")
+			} else {
+				line += lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).Render(" [+]")
+			}
+		}
+		sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), line))
+
+		// Expanded: show full body content below the header
+		if att.Body != "" && e.ExpandedAttachments[i] {
 			bodyStyle := lipgloss.NewStyle().Foreground(e.Theme.Muted).PaddingLeft(4)
 
 			// Filter noise lines from body
@@ -1562,42 +1569,15 @@ func (e *ExpandedCard) renderAttachments(width int) string {
 			}
 			cleanBody := strings.Join(cleanLines, "\n")
 
-			if expanded {
-				// Wrap body to width
-				bodyWidth := width - 6
-				if bodyWidth < 20 {
-					bodyWidth = 20
-				}
-				wrappedBody := lipgloss.NewStyle().Width(bodyWidth).Render(cleanBody)
-				for _, line := range strings.Split(wrappedBody, "\n") {
-					sections = append(sections, bodyStyle.Render(line))
-				}
-				toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
-					Render("[-] Show less")
-				sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
-			} else {
-				// Truncated preview: 3 non-empty lines max
-				shown := 0
-				truncated := false
-				for _, bl := range cleanLines {
-					if strings.TrimSpace(bl) == "" {
-						continue
-					}
-					if shown >= 3 {
-						truncated = true
-						break
-					}
-					sections = append(sections, bodyStyle.Render(bl))
-					shown++
-				}
-				if truncated {
-					toggle := lipgloss.NewStyle().Foreground(e.Theme.Accent).Faint(true).PaddingLeft(4).
-						Render(fmt.Sprintf("[+] Show more (%d lines)", len(cleanLines)))
-					sections = append(sections, zone.Mark(fmt.Sprintf("attachment-toggle-%d", i), toggle))
-				}
+			bodyWidth := width - 6
+			if bodyWidth < 20 {
+				bodyWidth = 20
+			}
+			wrappedBody := lipgloss.NewStyle().Width(bodyWidth).Render(cleanBody)
+			for _, line := range strings.Split(wrappedBody, "\n") {
+				sections = append(sections, bodyStyle.Render(line))
 			}
 		}
-		sections = append(sections, "")
 	}
 
 	return strings.Join(sections, "\n")
