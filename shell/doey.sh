@@ -94,6 +94,12 @@ source "${SCRIPT_DIR}/doey-new.sh"
 # shellcheck source=doey-reviewer.sh
 source "${SCRIPT_DIR}/doey-reviewer.sh"
 
+# shellcheck source=doey-env.sh
+source "${SCRIPT_DIR}/doey-env.sh"
+
+# shellcheck source=doey-wait.sh
+source "${SCRIPT_DIR}/doey-wait.sh"
+
 # ── Configuration ───────────────────────────────────────────────────
 _doey_load_config
 
@@ -207,6 +213,8 @@ case "${1:-}" in
     remote     Manage remote Hetzner servers (list/provision/stop/status)
     scaffy     Run scaffy template engine subcommands
     settings   Open interactive settings editor window
+    env        Print export lines for this session's env (eval "$(doey env)")
+    wait-for-ready PANE  Block until pane WINDOW.PANE emits its ready marker
     version    Show version and installation info
     --help     Show this help
 
@@ -274,6 +282,23 @@ HELP
     unset _doey_stats_ver
     update_system
     exit 0
+    ;;
+  install)
+    shift
+    case "${1:-}" in
+      --agents)
+        _doey_install_agents_only
+        exit $?
+        ;;
+      ""|--full)
+        update_system
+        exit 0
+        ;;
+      *)
+        printf 'Usage: doey install [--agents|--full]\n' >&2
+        exit 2
+        ;;
+    esac
     ;;
   build)
     printf "  %bBuilding Go binaries...%b\n" "$BRAND" "$RESET"
@@ -345,6 +370,15 @@ HELP
     exit $?
     ;;
   settings)     doey_settings; exit 0 ;;
+  env)
+    doey_env_cmd
+    exit $?
+    ;;
+  wait-for-ready)
+    shift
+    doey_wait_for_ready "$@"
+    exit $?
+    ;;
   config)
     _cfg_sub="${2:-bare}"
     case "$_cfg_sub" in

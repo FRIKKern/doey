@@ -394,6 +394,11 @@ _kill_doey_session() {
     kill "$(cat "$_rt/doey-daemon.pid")" 2>/dev/null || true
     rm -f "$_rt/doey-daemon.pid"
   fi
+  # Stop trust-watcher
+  if [ -f "$_rt/trust-watcher.pid" ]; then
+    kill "$(cat "$_rt/trust-watcher.pid")" 2>/dev/null || true
+    rm -f "$_rt/trust-watcher.pid"
+  fi
   # Clean up all MCP servers and configs
   doey_mcp_cleanup_session "$_rt" || true
   rm -rf "$_rt" 2>/dev/null || true
@@ -822,6 +827,11 @@ _cleanup_old_session() {
   if [ -f "$runtime_dir/doey-daemon.pid" ]; then
     kill "$(cat "$runtime_dir/doey-daemon.pid")" 2>/dev/null || true
     rm -f "$runtime_dir/doey-daemon.pid"
+  fi
+  # Stop trust-watcher
+  if [ -f "$runtime_dir/trust-watcher.pid" ]; then
+    kill "$(cat "$runtime_dir/trust-watcher.pid")" 2>/dev/null || true
+    rm -f "$runtime_dir/trust-watcher.pid"
   fi
   # Clean up all MCP servers and configs
   doey_mcp_cleanup_session "$runtime_dir" || true
@@ -1290,6 +1300,22 @@ MANIFEST
         --log-file "${runtime_dir}/logs/doey-daemon.log" \
         --stats-file "${runtime_dir}/daemon/stats.json" >/dev/null 2>&1 &
       echo $! > "${runtime_dir}/doey-daemon.pid"
+    fi
+
+    # Launch trust-prompt watcher — auto-accepts Claude Code's first-run trust dialog.
+    # Self-exits when session or runtime disappears. See shell/trust-watcher.sh.
+    local _tw_bin=""
+    if [ -x "${HOME}/.local/bin/trust-watcher.sh" ]; then
+      _tw_bin="${HOME}/.local/bin/trust-watcher.sh"
+    elif [ -x "${SESSION_SCRIPT_DIR}/trust-watcher.sh" ]; then
+      _tw_bin="${SESSION_SCRIPT_DIR}/trust-watcher.sh"
+    fi
+    if [ -n "$_tw_bin" ]; then
+      mkdir -p "${runtime_dir}/logs"
+      DOEY_RUNTIME="$runtime_dir" SESSION_NAME="$session" \
+        "$_tw_bin" --runtime "$runtime_dir" --session "$session" \
+        >> "${runtime_dir}/logs/trust-watcher.log" 2>&1 &
+      echo $! > "${runtime_dir}/trust-watcher.pid"
     fi
 
     # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
@@ -1844,8 +1870,39 @@ _check_prereqs() {
     fi
   fi
 
+  # Preflight: required Doey agents must be installed.
+  if ! _doey_preflight_agents; then
+    missing=true
+  fi
+
   if [ "$missing" = true ]; then
     doey_info "After installing, re-run: doey"
     exit 1
   fi
+}
+
+# Verify the minimum required Doey agents exist in ~/.claude/agents/.
+# Returns 0 if all present, 1 otherwise. Prints an actionable error on failure.
+_doey_preflight_agents() {
+  local agents_dir="$HOME/.claude/agents"
+  local required="doey-boss doey-taskmaster doey-task-reviewer doey-deployment doey-doey-expert doey-subtaskmaster doey-worker doey-worker-deep doey-worker-quick doey-worker-research doey-freelancer"
+  local missing_agents="" total=0 present=0 a
+  for a in $required; do
+    total=$((total + 1))
+    if [ -f "${agents_dir}/${a}.md" ]; then
+      present=$((present + 1))
+    else
+      missing_agents="${missing_agents:+${missing_agents} }${a}"
+    fi
+  done
+  if [ "$present" -lt "$total" ]; then
+    printf '\n'
+    doey_error "Doey agents missing (${present}/${total} installed)"
+    doey_info "Expected in ~/.claude/agents/. Missing: ${missing_agents}"
+    printf '\n'
+    printf "  ${BOLD}Fix:${RESET}  ${BRAND}doey install --agents${RESET}  ${DIM}(re-copies agent files only)${RESET}\n"
+    printf "        ${DIM}or${RESET}  ${BRAND}doey update${RESET}               ${DIM}(full reinstall)${RESET}\n\n"
+    return 1
+  fi
+  return 0
 }

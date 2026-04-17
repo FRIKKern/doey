@@ -237,8 +237,27 @@ check_doctor() {
   # Installed files
   local _f _label _doey_repo
   _doey_repo="$(resolve_repo_dir)"
-  for _f in "$HOME/.claude/agents/doey-subtaskmaster.md:Agents" \
-            "$_doey_repo/.claude/skills/doey-dispatch/SKILL.md:Skills" \
+  # Agents — check the required set, not just one file.
+  local _required_agents="doey-boss doey-taskmaster doey-task-reviewer doey-deployment doey-doey-expert doey-subtaskmaster doey-worker doey-worker-deep doey-worker-quick doey-worker-research doey-freelancer"
+  local _agents_total=0 _agents_present=0 _agents_missing="" _a
+  for _a in $_required_agents; do
+    _agents_total=$((_agents_total + 1))
+    if [ -f "$HOME/.claude/agents/${_a}.md" ]; then
+      _agents_present=$((_agents_present + 1))
+    else
+      _agents_missing="${_agents_missing:+${_agents_missing}, }${_a}"
+    fi
+  done
+  if [ "$_agents_present" -eq "$_agents_total" ]; then
+    _doc_check ok "Agents installed" "${_agents_present}/${_agents_total} present"
+  elif [ "$_agents_present" -eq 0 ]; then
+    _doc_check fail "Agents installed" "0/${_agents_total} — run: doey install --agents"
+  else
+    _doc_check fail "Agents installed" "${_agents_present}/${_agents_total} — missing: ${_agents_missing}"
+  fi
+
+  # Skills & CLI (unchanged)
+  for _f in "$_doey_repo/.claude/skills/doey-dispatch/SKILL.md:Skills" \
             "$HOME/.local/bin/doey:CLI"; do
     _label="${_f##*:}"; _f="${_f%:*}"
     if [[ -f "$_f" ]]; then _doc_check ok "$_label installed" "${_f/#$HOME/~}"

@@ -337,7 +337,8 @@ VEOF
 
 # Expand role templates before installing agents
 if [ -x "$SCRIPT_DIR/shell/expand-templates.sh" ]; then
-  bash "$SCRIPT_DIR/shell/expand-templates.sh" >/dev/null 2>&1 || true
+  bash "$SCRIPT_DIR/shell/expand-templates.sh" >/dev/null || die "Template expansion failed" \
+    "Run: bash $SCRIPT_DIR/shell/expand-templates.sh"
 fi
 
 install_md_files "$SCRIPT_DIR/agents" ~/.claude/agents "2/7" "agent definitions"
@@ -421,7 +422,7 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   install_script "$SCRIPT_DIR/shell/doey-masterplan-ambiguity.sh" "$HOME/.local/bin/doey-masterplan-ambiguity.sh"
   install_script "$SCRIPT_DIR/shell/plan-to-tasks.sh" "$HOME/.local/bin/plan-to-tasks.sh"
   ln -sf "$HOME/.local/bin/plan-to-tasks.sh" "$HOME/.local/bin/doey-plan-to-tasks" 2>/dev/null || true
-  for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh; do
+  for s in tmux-statusbar.sh tmux-theme.sh pane-border-status.sh info-panel.sh settings-panel.sh tmux-settings-btn.sh doey-statusline.sh doey-remote-provision.sh trust-watcher.sh; do
     install_script "$SCRIPT_DIR/shell/$s" "$HOME/.local/bin/$s"
   done
 } && step_ok || { step_fail; die "Failed to install doey to ~/.local/bin."; }
