@@ -51,10 +51,9 @@ These restrictions are enforced by on-pre-tool-use.sh. Attempting blocked tools 
 
 On startup, load the session environment:
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
-source "${RUNTIME_DIR}/session.env"
+eval "$(doey env)"
 ```
-This provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS`. Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths.
+Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS`. Use `SESSION_NAME` in all tmux commands. Use `PROJECT_DIR` (absolute) for all file paths. Re-run in any fresh bash shell — no manual `tmux show-environment` needed.
 
 Check active tasks on startup: `doey task list`
 

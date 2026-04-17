@@ -45,7 +45,7 @@ Warn if delays > 300s or refresh > 3600s.
 
 CLI: `doey config` (project), `doey config --global`, `doey config --reset`. Or Edit tool, then touch refresh trigger:
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+eval "$(doey env)"
 touch "${RUNTIME_DIR}/status/settings_refresh_trigger"
 ```
 
@@ -57,7 +57,7 @@ Template: `$(cat ~/.claude/doey/repo-path)/shell/doey-config-default.sh`. Copy t
 
 Views: `settings`, `teams`, `agents`, `agents:<name>`. Switch view BEFORE explaining changes:
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
+eval "$(doey env)"
 echo "teams" > "${RUNTIME_DIR}/status/settings_view"
 touch "${RUNTIME_DIR}/status/settings_refresh_trigger"
 ```

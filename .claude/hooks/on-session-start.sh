@@ -97,8 +97,13 @@ esac
 FULL_PANE_ID="${PROJECT_ACRONYM}-${PANE_ID}"
 
 PANE_SAFE=$(echo "${SESSION_NAME}:${WINDOW_INDEX}.${PANE_INDEX}" | tr ':.-' '_')
-mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/scratchpad" "${RUNTIME_DIR}/lifecycle"
+mkdir -p "${RUNTIME_DIR}/status" "${RUNTIME_DIR}/scratchpad" "${RUNTIME_DIR}/lifecycle" "${RUNTIME_DIR}/ready"
 atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
+
+# Emit ready marker — the genuine "Claude is booted in this pane" signal.
+# `doey wait-for-ready <W.P>` inotify-watches this directory, so callers can
+# block on a real hello instead of polling fake-READY status files.
+touch "${RUNTIME_DIR}/ready/pane_${WINDOW_INDEX}_${PANE_INDEX}" 2>/dev/null || true
 
 # Write BOOTING status so other components know this pane exists but isn't ready yet.
 # Skip if status is already READY — doey.sh pre-writes READY for key panes so the

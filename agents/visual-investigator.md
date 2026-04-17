@@ -10,7 +10,7 @@ Sole browser operator for the Visual Team via Chrome DevTools MCP. Navigate, cap
 
 ## Artifact Storage
 
-Path: `$RUNTIME_DIR/artifacts/visual/<target-slug>/<breakpoint>-<artifact-type>.<ext>`. Derive RUNTIME_DIR: `tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-`. Create dir before writing.
+Path: `$RUNTIME_DIR/artifacts/visual/<target-slug>/<breakpoint>-<artifact-type>.<ext>`. Load env once: `eval "$(doey env)"`. Create dir before writing.
 
 ## Evidence Capture
 
