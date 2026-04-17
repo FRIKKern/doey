@@ -125,8 +125,10 @@ func runTaskCmd(args []string) {
 		runTaskDecision(args[1:])
 	case "export":
 		runTaskExport(args[1:])
+	case "fields":
+		runTaskFields(args[1:])
 	default:
-		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision", "export",
+		validTaskSubs := []string{"create", "update", "list", "get", "delete", "subtask", "log", "decision", "export", "fields",
 			"done", "start", "pause", "block", "confirm", "pending", "ready", "activate", "failed", "cancel"}
 		corrected, err := suggestSubcommand(args[0], validTaskSubs)
 		if err != nil {
@@ -310,7 +312,7 @@ func runTaskUpdate(args []string) {
 			id := t.ID
 
 			// Fuzzy field-name matching: auto-correct typos before the switch.
-			validFields := []string{"title", "status", "type", "description", "assigned_to", "team", "tags", "acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files", "hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by", "plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority", "depends_on", "merged_into", "dispatch_mode", "summary", "phase", "intent", "proof_type", "proof_content", "verification_status", "build_status", "verification_steps", "success_criteria", "proof_of_success", "origin_prompt"}
+			validFields := taskUpdateFields()
 			isExact := false
 			for _, vf := range validFields {
 				if *field == vf {
@@ -334,6 +336,8 @@ func runTaskUpdate(args []string) {
 			switch *field {
 			case "title":
 				t.Title = *value
+			case "shortname":
+				t.Shortname = *value
 			case "status":
 				validStatuses := []string{"pending", "active", "in_progress", "done", "paused", "blocked", "cancelled", "failed", "pending_user_confirmation"}
 				isValid := false
@@ -2049,6 +2053,37 @@ func runTmuxEnv(args []string) {
 	}
 }
 
+// taskUpdateFields returns the canonical allowlist of field names accepted by
+// 'task update --field'. Must stay in sync with the switch in runTaskUpdate
+// and the TaskEntry / store.Task structs.
+func taskUpdateFields() []string {
+	return []string{
+		"title", "shortname", "status", "type", "description", "assigned_to", "team", "tags",
+		"acceptance_criteria", "current_phase", "total_phases", "notes", "blockers", "related_files",
+		"hypotheses", "decision_log", "result", "files", "commits", "schema_version", "created_by",
+		"plan_id", "review_verdict", "review_findings", "review_timestamp", "attachments", "priority",
+		"depends_on", "merged_into", "dispatch_mode", "summary", "phase", "intent", "proof_type",
+		"proof_content", "verification_status", "build_status", "verification_steps", "success_criteria",
+		"proof_of_success", "origin_prompt",
+	}
+}
+
+// runTaskFields prints the valid field names for 'task update --field'.
+func runTaskFields(args []string) {
+	fs := flag.NewFlagSet("task fields", flag.ExitOnError)
+	fs.BoolVar(&jsonOutput, "json", false, "JSON output")
+	fs.Parse(args)
+
+	fields := taskUpdateFields()
+	if jsonOutput {
+		printJSON(map[string]any{"fields": fields})
+		return
+	}
+	for _, f := range fields {
+		fmt.Println(f)
+	}
+}
+
 func printTaskHelp() {
 	fmt.Fprintf(os.Stderr, `Usage: doey-ctl task <subcommand> [flags]
 
@@ -2062,6 +2097,7 @@ Subcommands:
   log       Manage task log entries (add, list)
   decision  Add a decision log entry
   export    Export tasks to JSON
+  fields    List valid field names for 'task update --field'
 
 Transitions (accept multiple IDs):
   done      Mark tasks done

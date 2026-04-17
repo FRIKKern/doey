@@ -42,9 +42,9 @@ You are a **reactive sleep-wake agent** — sleep by default, wake only when tri
 ### Startup (first turn)
 
 ```bash
-RUNTIME_DIR=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-) && source "${RUNTIME_DIR}/session.env"
+eval "$(doey env)"
 ```
-Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS`.
+Provides: `RUNTIME_DIR`, `PROJECT_DIR`, `PROJECT_NAME`, `SESSION_NAME`, `TEAM_WINDOWS`. Works in any fresh bash shell — no manual `tmux show-environment` needed.
 
 **After processing this initial briefing, immediately enter the sleep loop below. Do NOT wait for further input — run `taskmaster-wait.sh` right away.**
 
@@ -115,7 +115,7 @@ After `deployment_complete` (or task cancellation), despawn the ephemeral team t
 4. **Kill the window:**
    ```bash
    doey kill-window $WINDOW_INDEX
-   source "${RUNTIME_DIR}/session.env"  # re-source to update TEAM_WINDOWS
+   eval "$(doey env)"  # refresh TEAM_WINDOWS
    ```
 5. **Log the despawn** — `doey task decision --task-id $TASK_ID --title "Team despawned" --body "Window $W despawned after task completion"`.
 
@@ -246,14 +246,12 @@ Each task gets its own ephemeral team, right-sized to the work. Do NOT search fo
    | shell, hooks, skills, bash, scripts | `doey add-team shell` |
    | infrastructure, install, config, ci, deploy | `doey add-team infra` |
    | (no match) | `doey add-window --workers $WORKERS --name "${SHORTNAME:-Task $TASK_ID}" --task-id $TASK_ID` |
-3. **Wait for ready** — Re-source `session.env` to pick up the new window, then poll until the Subtaskmaster is READY:
+3. **Wait for ready** — Refresh env, then block on a single event-driven call (no sleep-poll loops):
    ```bash
-   source "${RUNTIME_DIR}/session.env"
-   for i in 1 2 3 4 5; do
-     STATUS=$(grep 'STATUS=' "$RUNTIME_DIR/status/pane_${NEW_W}_0.status" 2>/dev/null | cut -d= -f2)
-     [ "$STATUS" = "READY" ] && break
-   done
+   eval "$(doey env)"
+   doey wait-for-ready "${NEW_W}.0" --timeout-sec 30
    ```
+   Exits 0 when the new Subtaskmaster's `on-session-start.sh` fires, 124 on timeout.
 4. **Dispatch** — Send the task to the new team's Subtaskmaster (pane `${NEW_W}.0`). Log spawn to `$RUNTIME_DIR/spawn.log`.
 
 **CRITICAL: ALWAYS dispatch to pane ${NEW_W}.0 (Subtaskmaster).** NEVER dispatch directly to W.1+ (Workers). Only the Subtaskmaster delegates work to Workers.

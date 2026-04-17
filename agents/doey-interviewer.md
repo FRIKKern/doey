@@ -117,8 +117,8 @@ MP_ID="$(tmux show-environment DOEY_MASTERPLAN_PENDING 2>/dev/null | cut -d= -f2
 # If the env var is empty, use the plan ID from your briefing message
 MP_ID="${MP_ID:-<plan-id-from-your-briefing>}"
 
-RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"
-MP_ENV="${RD}/${MP_ID}/masterplan.env"
+eval "$(doey env)"
+MP_ENV="${RUNTIME_DIR}/${MP_ID}/masterplan.env"
 BRIEF_TARGET="$(grep '^BRIEF_FILE=' "$MP_ENV" 2>/dev/null | cut -d= -f2-)"
 
 cp "${DOEY_INTERVIEW_DIR}/brief.md" "${BRIEF_TARGET}"
