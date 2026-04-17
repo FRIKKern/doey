@@ -657,6 +657,50 @@ check_agent_freshness() {
   fi
 }
 
+# ── Agents-only repair ───────────────────────────────────────────────
+# Copy agent files only. Idempotent. Exits 0 on success, 1 on failure.
+# Runs expand-templates.sh THEN copies agents/*.md to ~/.claude/agents/.
+# Does not touch config, hooks, skills, CLI binaries, or any state
+# beyond ~/.claude/doey/agents.hash.
+_doey_install_agents_only() {
+  local repo_dir
+  repo_dir="$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null || true)"
+  if [ -z "$repo_dir" ] || [ ! -d "$repo_dir/agents" ]; then
+    printf 'Error: repo path not registered or agents/ missing\n' >&2
+    printf '       Run: doey update\n' >&2
+    return 1
+  fi
+  mkdir -p "$HOME/.claude/agents"
+  if [ -x "$repo_dir/shell/expand-templates.sh" ]; then
+    if ! bash "$repo_dir/shell/expand-templates.sh" >/dev/null; then
+      printf 'Error: template expansion failed — run: bash %s/shell/expand-templates.sh\n' "$repo_dir" >&2
+      return 1
+    fi
+  fi
+  local src _copied=0 f
+  src="$repo_dir/agents"
+  shopt -s nullglob
+  for f in "$src"/*.md; do
+    [ -f "$f" ] || continue
+    if cp "$f" "$HOME/.claude/agents/"; then
+      _copied=$((_copied + 1))
+    else
+      shopt -u nullglob
+      printf 'Error: failed to copy %s\n' "$f" >&2
+      return 1
+    fi
+  done
+  shopt -u nullglob
+  if [ "$_copied" -eq 0 ]; then
+    printf 'Error: no agent .md files found in %s/\n' "$src" >&2
+    return 1
+  fi
+  bash -c "cat $HOME/.claude/agents/doey-*.md 2>/dev/null" | _freshness_hash \
+    > "$HOME/.claude/doey/agents.hash"
+  printf '  ✓ Installed %d agent definitions to ~/.claude/agents/\n' "$_copied"
+  return 0
+}
+
 # ── Auto-update check ────────────────────────────────────────────────
 check_for_updates() {
   local state_dir="$HOME/.claude/doey"
