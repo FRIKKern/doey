@@ -63,7 +63,7 @@ printf 'Run interview: %s (classification=%s)\n' "$RUN_INTERVIEW" "$CLASSIFICATI
 
 ### Step 3: Setup Masterplan Working Directory (common to both modes)
 
-Create the masterplan working directory, write the goal file, create the tracked task, and write `masterplan.env` — this is what `doey-masterplan-spawn.sh` will consume later (whether the Interviewer calls it post-brief, or this skill calls it directly in quick mode).
+Create the masterplan working directory, write the goal file, create the tracked task, and write `masterplan.env` — this is what `doey-masterplan-spawn.sh` will consume in Step 3.5 when it spawns the masterplan team window.
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
@@ -117,13 +117,34 @@ DOEY_TASK_ID=${DOEY_TASK_ID:-}
 PLAN_DB_ID=${PLAN_DB_ID:-}
 ENV_EOF
 echo "Masterplan env written to ${MP_DIR}/masterplan.env"
+
+# Stub the plan file so the Go TUI (doey-masterplan-tui) has a readable
+# empty file to tail — prevents "cannot read plan" error when the viewer
+# pane boots before the Planner has written anything.
+touch "${PLAN_FILE}"
+echo "Plan file stub created at ${PLAN_FILE}"
+```
+
+### Step 3.5 — Spawn masterplan team window immediately (always, before interview)
+
+The masterplan team window hosts the Go TUI plan viewer (top-right pane). Spawn it
+now so the pane is visible from the moment the user invokes /doey-masterplan. The
+Planner will display "Waiting for brief…" until the interview completes.
+
+```bash
+bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${PLAN_ID}"
+
+# Capture the newly created window index for later reference
+MP_WIN="$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name}' 2>/dev/null \
+  | awk '$2=="masterplan"{w=$1} END{print w}')"
+echo "Masterplan window: ${MP_WIN:-none}"
 ```
 
 ### Step 4A: Interview-First Path (default, when RUN_INTERVIEW=1)
 
 Spawn the Deep Interview team window and brief the Interviewer to:
 1. Write the brief to the masterplan-specific location (`${BRIEF_FILE}`), not the default interview location.
-2. After Phase 5 (brief approved by user), invoke `doey-masterplan-spawn.sh ${PLAN_ID}` which will spawn the Planner team with the brief wired in.
+2. After Phase 5 (brief approved by user), send a `brief_ready` message to the already-live masterplan Planner (spawned in Step 3.5) pointing at the brief file. Do NOT call `doey-masterplan-spawn.sh` — the window is already up.
 
 Skip this entire section if `RUN_INTERVIEW=0` — jump to Step 4B.
 
@@ -166,20 +187,26 @@ ${DOEY_TASK_ID:-none}
 
 1. Run the full 5-phase interview protocol from your agent definition.
 2. Keep the live brief at \${DOEY_INTERVIEW_DIR}/brief.md updated as usual so the pane-2 viewer stays fresh.
-3. **In Phase 5, after the user approves the final brief, ALSO copy it to the masterplan brief path:**
+3. **In Phase 5, after the user approves the final brief, copy it to the masterplan brief path:**
 
    cp \"\${DOEY_INTERVIEW_DIR}/brief.md\" \"${BRIEF_FILE}\"
 
-4. **Then spawn the masterplan Planner team by running:**
+4. **Then notify the already-live masterplan Planner that the brief is ready:**
 
-   bash \"\$HOME/.local/bin/doey-masterplan-spawn.sh\" ${PLAN_ID}
+   doey msg send --to ${SESSION_NAME}:${MP_WIN}.0 \\
+                 --from ${INTERVIEWER_PANE} \\
+                 --subject brief_ready \\
+                 --body \"BRIEF_FILE: ${BRIEF_FILE}\"
+   doey msg trigger --pane ${SESSION_NAME}:${MP_WIN}.0
 
-   This helper creates the masterplan window, boots the Planner, and briefs it with the goal and brief you just produced. Do NOT manually run \`doey add-team masterplan\` — the helper handles everything.
+   Do NOT call doey-masterplan-spawn.sh — the masterplan window was spawned at
+   skill invocation and is already live at ${SESSION_NAME}:${MP_WIN}.
 
-5. After the helper returns successfully, notify the Taskmaster with subject \`interview_complete\` (your normal post-interview notification) and include:
+5. After notifying the Planner, notify the Taskmaster with subject \`interview_complete\` (your normal post-interview notification) and include:
    - MASTERPLAN_ID: ${PLAN_ID}
    - BRIEF: ${BRIEF_FILE}
-   - NEXT_STEP: masterplan team spawned (see masterplan_spawned message)
+   - MASTERPLAN_WINDOW: ${MP_WIN}
+   - NEXT_STEP: Planner notified via brief_ready message
 
 6. Begin with Phase 1: Intent Extraction. Use AskUserQuestion for all questions."
 
@@ -195,7 +222,7 @@ INTERVIEW_WIN: ${IV_WIN}
 INTERVIEW_DIR: ${INTERVIEW_DIR}
 GOAL: $(head -3 "${MP_DIR}/goal.md")
 
-A masterplan-pre-interview is running in window ${IV_WIN}. After the brief is approved, the Interviewer will spawn the masterplan planning team automatically via doey-masterplan-spawn.sh." 2>/dev/null || true
+A masterplan-pre-interview is running in window ${IV_WIN}; the masterplan planning team is already live in window ${MP_WIN} with the Planner waiting for the brief. After the brief is approved, the Interviewer will notify the Planner via a brief_ready message." 2>/dev/null || true
   doey msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}" 2>/dev/null || true
 
   cat << REPORT_EOF
@@ -204,11 +231,12 @@ A masterplan-pre-interview is running in window ${IV_WIN}. After the brief is ap
 **Plan ID:** ${PLAN_ID}
 **Task ID:** ${DOEY_TASK_ID:-none}
 **Interview window:** ${IV_WIN}
+**Masterplan window:** ${MP_WIN} (Planner waiting for brief)
 **Goal file:** ${MP_DIR}/goal.md
 **Brief target:** ${BRIEF_FILE} (will be written by Interviewer)
 **Masterplan env:** ${MP_DIR}/masterplan.env
 
-The Deep Interviewer is now running in window ${IV_WIN}. Once the brief is approved, it will automatically spawn the masterplan planning team (new window) and brief the Planner with the interview findings.
+The Deep Interviewer is running in window ${IV_WIN} and the masterplan Planner is already live in window ${MP_WIN} (waiting for the brief). Once the brief is approved, the Interviewer will notify the Planner via a \`brief_ready\` message and the plan will begin.
 
 No further action from you — the flow is autonomous.
 REPORT_EOF

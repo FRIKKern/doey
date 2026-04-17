@@ -91,20 +91,53 @@ if [ -f "$BRIEF_FILE" ]; then
   tmux set-environment -t "$SESSION_NAME" BRIEF_FILE "$BRIEF_FILE" 2>/dev/null || true
 fi
 
-printf 'Spawning masterplan team window for plan %s...\n' "$PLAN_ID"
-if ! doey add-team masterplan; then
-  printf 'ERROR: doey add-team masterplan failed\n' >&2
-  exit 1
+# Idempotency: if a masterplan team window already exists for this PLAN_ID
+# (recorded via MASTERPLAN_ID in the team env), reuse it instead of spawning.
+MP_WIN=""
+MP_REUSED=0
+for _mp_env in "${RD}"/team_*.env; do
+  [ -f "$_mp_env" ] || continue
+  _mp_id="$(grep '^MASTERPLAN_ID=' "$_mp_env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)"
+  [ -z "$_mp_id" ] && continue
+  if [ "$_mp_id" = "$PLAN_ID" ]; then
+    MP_WIN="$(grep '^WINDOW_INDEX=' "$_mp_env" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)"
+    if [ -n "$MP_WIN" ] && tmux list-windows -t "$SESSION_NAME" -F '#{window_index}' 2>/dev/null | grep -qx "$MP_WIN"; then
+      MP_REUSED=1
+      break
+    fi
+    MP_WIN=""
+  fi
+done
+
+if [ "$MP_REUSED" = "1" ]; then
+  printf 'Masterplan window already live for plan %s — reusing window %s\n' "$PLAN_ID" "$MP_WIN"
+else
+  printf 'Spawning masterplan team window for plan %s...\n' "$PLAN_ID"
+  if ! doey add-team masterplan; then
+    printf 'ERROR: doey add-team masterplan failed\n' >&2
+    exit 1
+  fi
+
+  # Find the masterplan window (exact name match — "masterplan", not "masterplan-*")
+  MP_WIN="$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name}' 2>/dev/null \
+    | awk '$2=="masterplan"{w=$1} END{print w}')"
+  if [ -z "$MP_WIN" ]; then
+    printf 'ERROR: masterplan window not found after add-team\n' >&2
+    exit 1
+  fi
+  printf 'Masterplan window: %s (newly created)\n' "$MP_WIN"
+
+  # Tag the team env with MASTERPLAN_ID so future calls can detect and reuse.
+  _mp_new_env="${RD}/team_${MP_WIN}.env"
+  if [ -f "$_mp_new_env" ] && ! grep -q '^MASTERPLAN_ID=' "$_mp_new_env" 2>/dev/null; then
+    printf 'MASTERPLAN_ID="%s"\n' "$PLAN_ID" >> "$_mp_new_env"
+  fi
 fi
 
-# Find the masterplan window (most recently created with that name)
-MP_WIN="$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name}' 2>/dev/null \
-  | grep -i 'masterplan' | tail -1 | awk '{print $1}')"
-if [ -z "$MP_WIN" ]; then
-  printf 'ERROR: masterplan window not found after add-team\n' >&2
-  exit 1
+if [ "$MP_REUSED" = "1" ]; then
+  printf 'Masterplan spawn: reused existing window=%s plan=%s (Planner already briefed, skipping re-briefing)\n' "$MP_WIN" "$PLAN_ID"
+  exit 0
 fi
-printf 'Masterplan window: %s\n' "$MP_WIN"
 
 # Wait for Planner to boot
 sleep "${DOEY_MANAGER_BRIEF_DELAY:-10}"
