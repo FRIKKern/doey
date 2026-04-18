@@ -55,6 +55,7 @@ WT_OUTPUT=$(git -C "$PROJECT_DIR" worktree add "$WT_DIR" -b "$BRANCH" 2>&1) || {
 TMPENV=$(mktemp "${RD}/team_${TARGET_WIN}.env.tmp_XXXXXX")
 cat "$TEAM_ENV" > "$TMPENV"; printf 'WORKTREE_DIR=%s\nWORKTREE_BRANCH=%s\n' "$WT_DIR" "$BRANCH" >> "$TMPENV"
 mv "$TMPENV" "$TEAM_ENV"; TARGET_DIR="$WT_DIR"
+echo "export DOEY_ALLOW_AGENT_WORKTREE=1" >> "$TEAM_ENV"
 ```
 
 ### 3b. Remove worktree (auto-commit dirty, log, remove, strip env)
