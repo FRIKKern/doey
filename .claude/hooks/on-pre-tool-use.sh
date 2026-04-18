@@ -590,6 +590,14 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] && [ "$TOOL_NAME" = "Bash" ]; then
   _BOSS_CMD="$_BASH_CMD"
   _boss_tm_pane="${DOEY_TASKMASTER_PANE:-1.0}"
   _boss_tm_safe=$(echo "$_boss_tm_pane" | tr '.' '_')
+  # Block taskmaster-wait.sh — it is a Taskmaster/passive-pane hook, not a Boss hook.
+  # Boss is user-facing and reactive to user prompts only; it must never enter a wait/poll loop.
+  case "$_BOSS_CMD" in *"taskmaster-wait.sh"*|*"reviewer-wait.sh"*)
+    _log_block "TOOL_BLOCKED" "${DOEY_ROLE_BOSS} must not run wait/poll hooks" "$_BOSS_CMD"
+    _dbg_write "block_boss_taskmaster_wait"
+    echo "BLOCKED: ${DOEY_ROLE_BOSS} must not run taskmaster-wait.sh (or any wait/poll hook). ${DOEY_ROLE_BOSS} is reactive to user prompts only — after replying, return to prompt and wait for the next user message. Incoming messages arrive as wake events; check inbox ONCE at the start of each user turn via 'doey msg read --pane 0.1 --unread', never in a loop." >&2
+    exit 2 ;;
+  esac
   case "$_BOSS_CMD" in *"send-keys"*"-t"*)
     _boss_target=$(echo "$_BOSS_CMD" | sed 's/.*send-keys[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
     case "$_boss_target" in
@@ -631,6 +639,20 @@ fi
 if [ "$TOOL_NAME" = "Read" ]; then
   _ss_fp="${_SP_PATH:-$(_json_str tool_input.file_path)}"
   _save_screenshot_attachment "${_ss_fp:-}" || true
+fi
+
+# Agent tool isolation:"worktree" guard — applies to ALL roles.
+# Claude's Agent tool with isolation:"worktree" silently creates a new branch via
+# the harness. /doey-worktree is the sanctioned escape hatch and sets DOEY_ALLOW_AGENT_WORKTREE=1.
+if [ "$TOOL_NAME" = "Agent" ]; then
+  _agent_iso=$(_json_str tool_input.isolation)
+  if [ "$_agent_iso" = "worktree" ] && [ -z "${DOEY_ALLOW_AGENT_WORKTREE:-}" ]; then
+    _DOEY_BLOCK_REASON="agent_isolation_worktree"
+    _log_block "TOOL_BLOCKED" "Agent isolation:worktree blocked" ""
+    _dbg_write "block_agent_isolation_worktree"
+    echo "BLOCKED: Agent with isolation:\"worktree\" creates a branch autonomously. Stay on main. Use /doey-worktree if you need an isolated branch." >&2
+    exit 2
+  fi
 fi
 
 if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_COORDINATOR" ]; } && [ "$TOOL_NAME" != "Bash" ]; then
@@ -796,20 +818,36 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__
           _DOEY_BLOCK_REASON="branch_switch"
           _log_block "TOOL_BLOCKED" "Branch switching blocked in shared worktree" "$_BASH_CMD"
           _dbg_write "block_branch_switch"
-          echo "BLOCKED: git checkout (branch switch) is not allowed in the shared worktree. Use the Agent tool with isolation: worktree, or /doey-worktree." >&2
+          echo "BLOCKED: git checkout (branch switch) is not allowed in the shared worktree. Commit on the current branch, or ask the user to run /doey-worktree." >&2
           exit 2
         ;; esac ;;
       *"git switch "*)
         _DOEY_BLOCK_REASON="branch_switch"
         _log_block "TOOL_BLOCKED" "Branch switching blocked in shared worktree" "$_BASH_CMD"
         _dbg_write "block_branch_switch"
-        echo "BLOCKED: git switch is not allowed in the shared worktree. Use the Agent tool with isolation: worktree, or /doey-worktree." >&2
+        echo "BLOCKED: git switch is not allowed in the shared worktree. Commit on the current branch, or ask the user to run /doey-worktree." >&2
         exit 2 ;;
       *"git merge "*)
         _DOEY_BLOCK_REASON="branch_merge"
         _log_block "TOOL_BLOCKED" "Branch merge blocked in shared worktree" "$_BASH_CMD"
         _dbg_write "block_branch_merge"
-        echo "BLOCKED: git merge is not allowed in the shared worktree. Use the Agent tool with isolation: worktree, or /doey-worktree." >&2
+        echo "BLOCKED: git merge is not allowed in the shared worktree. Ask the user to run /doey-worktree." >&2
+        exit 2 ;;
+      *"git branch "*)
+        case "$_gsafe" in
+          *" -l"*|*" -d"*|*" -D"*|*" --list"*|*" --show-current"*|*" -v"*|*" -vv"*|*" -a"*|*" -r"*|*" --contains"*|*" --merged"*|*" --no-merged"*|*" -m"*|*" -M"*) ;;
+          *)
+            _DOEY_BLOCK_REASON="branch_create"
+            _log_block "TOOL_BLOCKED" "Branch creation blocked in shared worktree" "$_BASH_CMD"
+            _dbg_write "block_branch_create"
+            echo "BLOCKED: creating a new branch is not allowed. Stay on the session's starting branch. Use /doey-worktree if you need an isolated branch." >&2
+            exit 2 ;;
+        esac ;;
+      *"git worktree add"*)
+        _DOEY_BLOCK_REASON="worktree_add"
+        _log_block "TOOL_BLOCKED" "Worktree creation blocked" "$_BASH_CMD"
+        _dbg_write "block_worktree_add"
+        echo "BLOCKED: creating a new worktree is not allowed from within Claude. Use /doey-worktree or 'doey add-window --worktree'." >&2
         exit 2 ;;
     esac
   fi
