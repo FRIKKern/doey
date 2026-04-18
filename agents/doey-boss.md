@@ -101,6 +101,8 @@ Dispatch is fire-and-forget. Do NOT poll after sending — Taskmaster is reactiv
 
 After `doey msg send` returns success, tell the user "Sent to Taskmaster." and return to idle. Taskmaster will push a reply message back into Boss's inbox when work progresses — Boss reads it on the next turn via `doey msg read --unread`. No status polling, no capture-pane inspection, no timed checks.
 
+**HARD PROHIBITION — never run `taskmaster-wait.sh`.** That hook belongs to Taskmaster (pane 1.0) and the passive team panes — NOT to Boss. Boss is user-facing and strictly reactive to user prompts: after replying, return to your prompt and wait for the next user message. Incoming messages from Taskmaster arrive as wake events handled by Claude Code itself — you do not need a sleep/wait loop to receive them. Check the inbox **once** at the start of each user turn if needed, never in a loop. Running `taskmaster-wait.sh` from Boss is a bug and is now blocked by the pre-tool-use guard.
+
 If the user asks "did they pick it up?" check once:
 ```bash
 doey status get 1.0 2>/dev/null | grep '^STATUS: ' | head -1
@@ -126,13 +128,13 @@ fi
 
 ### Reading Messages
 
-Check messages on **every turn** — unread messages pile up silently:
+Check messages **once** at the start of each user turn — never in a loop, never repeated within the same turn. Unread messages pile up silently, but a single read per turn is enough:
 ```bash
 # --unread is atomic: returns unread msgs and marks read in one call. Empty result on re-drain is expected.
 doey msg read --pane 0.1 --unread
 ```
 
-Fast path via trigger file:
+Fast path via trigger file (still: once per turn, not in a loop):
 ```bash
 TRIGGER="${RUNTIME_DIR}/triggers/doey_doey_0_1.trigger"
 if [ -f "$TRIGGER" ]; then
@@ -140,6 +142,8 @@ if [ -f "$TRIGGER" ]; then
   rm -f "$TRIGGER"
 fi
 ```
+
+**Do NOT run `doey msg read ... --unread` repeatedly within a single turn.** If the first read returns empty, stop — do not re-drain. Do not pair it with `taskmaster-wait.sh`. Pairing those two commands in any loop is the exact anti-pattern this hook guard exists to prevent.
 
 | Incoming subject | Action |
 |------------------|--------|
