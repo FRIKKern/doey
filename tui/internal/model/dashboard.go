@@ -450,7 +450,7 @@ func (m DashboardModel) renderActiveTasks(w int) string {
 		return timeI.After(timeJ)
 	})
 
-	const maxDashTasks = 6
+	const maxDashTasks = 3
 	shown := m.tasks
 	overflow := 0
 	if len(shown) > maxDashTasks {
