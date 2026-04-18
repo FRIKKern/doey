@@ -201,3 +201,18 @@
 
 # Custom domain for tunnel (provider-specific, optional)
 # DOEY_TUNNEL_DOMAIN=
+
+# ─────────────────────────────────────────────
+# Intent Fallback (clone+open, clarify)
+# ─────────────────────────────────────────────
+# Where `doey <something>` clones new GitHub repos when the intent fallback
+# resolves a CLONE_OPEN. If unset, the dispatcher probes (in order):
+#   $HOME/GitHub → $HOME/Projects → $HOME/src → $HOME/projects → $HOME/GitHub (mkdir)
+# DOEY_GITHUB_DIR="$HOME/GitHub"
+
+# Allow the intent classifier to escalate ambiguous cases to the doey-fallback
+# agent for a second pass. Set to 0 to stay shell-only. Default: 1.
+# DOEY_INTENT_ESCALATE=1
+
+# Seconds before a pending CLARIFY state is treated as stale and discarded.
+# DOEY_INTENT_CLARIFY_TTL=300

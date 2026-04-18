@@ -314,6 +314,19 @@ check_doctor() {
   if command -v jq >/dev/null 2>&1; then _doc_check ok "jq" "$(jq --version 2>/dev/null || echo 'unknown')"
   else _doc_check warn "jq not found — auto-trust skipped"; fi
 
+  # Optional: gh (used by intent-fallback for clone+open actions). Warn-only.
+  if command -v gh >/dev/null 2>&1; then
+    local _gh_ver
+    _gh_ver=$(gh --version 2>/dev/null | head -1 | awk '{print $3}')
+    if gh auth status >/dev/null 2>&1; then
+      _doc_check ok "gh CLI" "${_gh_ver:-installed} · authed"
+    else
+      _doc_check warn "gh CLI" "${_gh_ver:-installed} — not authed (run: gh auth login)"
+    fi
+  else
+    _doc_check warn "gh not found" "optional — intent fallback will use 'git clone' as fallback"
+  fi
+
   # gum (optional luxury CLI)
   if command -v gum >/dev/null 2>&1; then
     _doc_check ok "gum" "$(gum --version 2>/dev/null || echo 'unknown')"
