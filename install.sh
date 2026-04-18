@@ -234,6 +234,13 @@ else
   unset _jq_installed
 fi
 
+# ── gh CLI (optional — used by intent-fallback for clone+open) ────────
+if has gh; then
+  check_ok "gh ${DIM}($(gh --version 2>/dev/null | head -1 | awk '{print $3}' || echo 'installed'))${RESET}"
+else
+  warn_msg "gh CLI not found (optional — 'doey' intent fallback will use 'git clone'; install: brew install gh  /  sudo apt install gh)"
+fi
+
 # ── cloudflared (optional tunnel provider) ───────────────────────────
 if has cloudflared; then
   check_ok "cloudflared ${DIM}($(cloudflared --version 2>/dev/null | head -1 || echo "installed"))${RESET}"
@@ -412,6 +419,7 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   install_script "$SCRIPT_DIR/shell/reviewer-baseline.sh" "$HOME/.local/bin/reviewer-baseline.sh"
   install_script "$SCRIPT_DIR/shell/intent-fallback.sh" "$HOME/.local/bin/intent-fallback.sh"
   install_script "$SCRIPT_DIR/shell/doey-intent-dispatch.sh" "$HOME/.local/bin/doey-intent-dispatch.sh"
+  install_script "$SCRIPT_DIR/shell/intent-clarify-state.sh" "$HOME/.local/bin/intent-clarify-state.sh"
   install_script "$SCRIPT_DIR/shell/doey-tunnel.sh" "$HOME/.local/bin/doey-tunnel.sh"
   install_script "$SCRIPT_DIR/shell/doey-tunnel-detect.sh" "$HOME/.local/bin/doey-tunnel-detect.sh"
   install_script "$SCRIPT_DIR/shell/doey-install-cloudflared.sh" "$HOME/.local/bin/doey-install-cloudflared.sh"

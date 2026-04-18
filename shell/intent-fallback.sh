@@ -205,17 +205,49 @@ INTENT CLASSIFICATION:
   When the user wants to PLAN or WORK ON something in an EXISTING project, classify as masterplan or a regular command.
   - "plan the auth system" (in existing project) → masterplan
 
+REPO DETECTION:
+  When the user asks to open, set up, grab, clone, pull, or launch a GitHub-style
+  repository (either `owner/repo` form or a human-readable repo name like
+  "Spreadsheet Wizard"), classify as LOCAL_OPEN or CLONE_OPEN.
+  - If the owner is known (e.g. "frikkern/spreadsheet-wizard") and the user wants
+    setup/open → CLONE_OPEN|<owner/repo>|<absolute-target-dir>|<reason>
+  - If the repo likely already exists locally (user says "open my X repo") →
+    LOCAL_OPEN|<absolute-dir>|<reason>
+  - If the owner is ambiguous for a human name → CLARIFY
+  - If you genuinely cannot decide and want the fallback agent to try →
+    ESCALATE||<why>
+  Absolute target dir convention: "$HOME/GitHub/<repo>" (the shell rewrites this
+  if the host uses $HOME/Projects, $HOME/src, or $HOME/projects).
+
 RESPONSE FORMAT — respond with EXACTLY one line:
   HIGH|<full command>|<brief explanation>
   MEDIUM|<full command>|<brief explanation>
   NEW_PROJECT|<slug>|<original description>
+  LOCAL_OPEN|<absolute-dir>|<reason>
+  CLONE_OPEN|<owner/repo>|<absolute-target-dir>|<reason>
+  CLARIFY|<one-sentence-question>
+  ESCALATE||<why-the-classifier-cannot-decide>
   CHAT||<warm friendly response to the user>
   NONE||<comma-separated list of closest commands, e.g. "Try: doey task list, doey task add, or doey task show">
+
+Examples:
+  HIGH|doey task list|listing tasks
+  NEW_PROJECT|weather-app|build a weather app
+  LOCAL_OPEN|/Users/me/GitHub/doey|repo already cloned locally
+  LOCAL_OPEN|/home/alice/Projects/ampu|user has ampu cloned under ~/Projects
+  CLONE_OPEN|frikkern/spreadsheet-wizard|/Users/me/GitHub/spreadsheet-wizard|clone and open
+  CLONE_OPEN|anthropics/claude-code|/home/me/GitHub/claude-code|clone upstream and open
+  CLARIFY|Which org owns the Spreadsheet Wizard repo?
+  ESCALATE||ambiguous repo name; needs filesystem evidence
 
 Rules:
 - HIGH: confident single match. Command MUST exist in the reference.
 - MEDIUM: probable but ambiguous. Still a real command.
 - NEW_PROJECT: user wants to create a new project. Extract a short kebab-case slug from the description (e.g. "cli-tool", "weather-app"). If no clear name, use "new-project". Put the full original description in the explanation field.
+- LOCAL_OPEN: only when the user clearly references an existing local repo.
+- CLONE_OPEN: only when <owner/repo> matches [A-Za-z0-9._-]+/[A-Za-z0-9._-]+; target dir must be absolute.
+- CLARIFY: one question, no more. Used when the repo name is ambiguous without more info.
+- ESCALATE: escape hatch. Use only when you can't produce any of the above confidently.
 - CHAT: the input is clearly conversational — a greeting, question about doey, casual chat, or anything that is NOT a mistyped command. Respond warmly as doey's friendly companion personality. Keep responses concise (under 200 chars).
 - NONE: no match. List the 2-3 closest commands comma-separated in the explanation. Example: NONE||Try: doey task list, doey task add, or doey task show
 - Never invent commands not in the reference.
@@ -259,7 +291,7 @@ _doey_intent_lookup() {
 
   # Extract the first line matching our format
   local line
-  line=$(printf '%s\n' "$resp" | grep -E '^(HIGH|MEDIUM|NONE|CHAT|NEW_PROJECT)\|' | head -1)
+  line=$(printf '%s\n' "$resp" | grep -E '^(HIGH|MEDIUM|NONE|CHAT|NEW_PROJECT|LOCAL_OPEN|CLONE_OPEN|CLARIFY|ESCALATE)\|' | head -1)
 
   if [ -z "$line" ]; then
     # Claude didn't follow format — treat as no match with its text as explanation

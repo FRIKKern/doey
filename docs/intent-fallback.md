@@ -1,93 +1,100 @@
 # Intent Fallback
 
-A Haiku-powered safety net for the `doey` CLI. When you type a command that doesn't exist or doesn't parse, Doey can ask Claude Haiku what you probably meant — and either run it for you, offer a short menu of options, or ask one clarifying question.
+A Claude-powered safety net for the `doey` CLI. When you type a command that doesn't exist or doesn't parse, Doey can ask Claude what you probably meant — correct typos, create a new project, open or clone a GitHub repo, ask one clarifying question, or chat back at you.
 
 It's silent on every failure path. If the network is down, your API key isn't set, or anything else goes wrong, you get the original error — never a slower or more confusing one.
 
 ## What it does
 
-When `doey <something>` fails because the command is unknown or the arguments don't match, the dispatcher hands the typed line, the error, and the CLI schema to Haiku and asks for one of four responses:
+`shell/doey.sh`'s default `*)` branch forwards any unknown `doey <...>` invocation to `doey-intent-dispatch.sh`, which:
 
-| Action | Behaviour |
-|--------|-----------|
-| `auto_correct` | Replaces this process with the corrected command via `exec` |
-| `suggest` | Prints up to 3 numbered options; you pick one with `1`/`2`/`3` |
-| `new_project` | Detects "create/start/build a project" intent and routes to `doey new <slug>` — works without an active session |
-| `clarify` | Prints one question and exits with status 1 |
-| `unknown` | Falls through to the original error message |
+1. Strips politeness prefixes (`please`, `pls`, `can you`, …).
+2. Checks the opt-out (`DOEY_NO_INTENT_FALLBACK=1`) and bails early if set.
+3. If a pending clarify answer is on disk, stitches the previous typed line with the current reply.
+4. Fast-paths `open|switch|attach <name>` locally (no API call) if the name resolves.
+5. Otherwise hands the typed line to `_doey_intent_lookup`, which calls `doey_headless` with the classifier system prompt.
+6. Parses the one-line response and dispatches.
 
-The model is pinned to `claude-haiku-4-5-20251001` and capped at 200 output tokens. Round-trip latency is hard-bounded by `--max-time 2.5` and `--connect-timeout 1.0`, so a slow API can't hang the CLI.
+The classifier runs on **Opus** (not Haiku — the older docs were wrong) via `claude -p --model opus --no-tools --max-turns 20 --timeout 20`. Its output grammar:
 
-## When it triggers
+| Action | Form | Shell behaviour |
+|--------|------|-----------------|
+| `HIGH` | `HIGH\|<doey cmd>\|<why>` | Auto-run on TTY; print-only off-TTY. Destructive verbs (`uninstall`, `stop`, `kill`, `purge`, `reset`) always prompt `[y/N]`. |
+| `MEDIUM` | `MEDIUM\|<doey cmd>\|<why>` | Prompt `[y/N]` (or TUI) before running. |
+| `NEW_PROJECT` | `NEW_PROJECT\|<slug>\|<description>` | Routes to `doey new <slug>`. |
+| `LOCAL_OPEN` | `LOCAL_OPEN\|<absdir>\|<reason>` | If `<absdir>` is a git repo, `cd` + `exec doey`. |
+| `CLONE_OPEN` | `CLONE_OPEN\|<owner/repo>\|<absdir>\|<reason>` | Prompt, then `gh repo clone` (if gh+auth) or `git clone https://github.com/<owner>/<repo>`, `cd`, `exec doey`. |
+| `CLARIFY` | `CLARIFY\|<question>` | Write pending state to `${DOEY_RUNTIME}/<project>/intent-clarify.json`, print the question. Next `doey <answer>` auto-resumes. |
+| `ESCALATE` | `ESCALATE\|\|<why>` | Hand off to the `doey-fallback` agent for a second look. One hop max. |
+| `CHAT` | `CHAT\|\|<message>` | Enter the streaming chat REPL. |
+| `NONE` | `NONE\|\|<suggestions>` | Print suggestions. |
 
-Only when **all** of these are true:
+Unknown prefixes are silently demoted to `NONE` — this is the rollback guarantee: a stale dispatcher running against a new classifier response never executes anything it doesn't recognize.
 
-1. The typed `doey` command failed to match a known subcommand or its arguments.
-2. `DOEY_NO_INTENT_FALLBACK` is unset (or not `1`).
-3. `ANTHROPIC_API_KEY` is set in the environment.
-4. `jq` and `curl` are both installed.
-5. Either an agent is running it (`DOEY_ROLE` is set) **or** stdout is a real tty.
+## Canonical example: `doey Please set up my Spreadsheet Wizard repo`
 
-The last rule means non-interactive scripts piping `doey` somewhere will *not* hit the fallback — they get the original error and exit code, the same as before this feature existed.
+1. Politeness prefix `Please ` is stripped.
+2. Classifier receives `doey set up my Spreadsheet Wizard repo`.
+3. Four possible outcomes:
+   - **Classifier knows the owner** (e.g. from context or a clear `frikkern/spreadsheet-wizard` typed line) → `CLONE_OPEN|frikkern/spreadsheet-wizard|$HOME/GitHub/spreadsheet-wizard|clone and open`.
+   - **Repo already on disk** under `~/GitHub`, `~/Projects`, `~/src`, or `~/projects` → `LOCAL_OPEN|/home/you/GitHub/spreadsheet-wizard|already cloned`.
+   - **Owner ambiguous** → `CLARIFY|Which org owns the Spreadsheet Wizard repo?` State is persisted; your next `doey my-org` (or similar) resumes.
+   - **Classifier unsure** → `ESCALATE||need filesystem evidence`. The `doey-fallback` agent gets one chance with an `ls` snapshot of the candidate parents; it returns `RUN|<whitelisted cmd>|<why>`, `CLARIFY|<q>`, or `GIVE_UP|<reason>`. The shell re-validates the RUN command against the same whitelist before running.
+4. TTY prompt `[y/N]` guards any clone.
+5. On success, your shell is replaced by `doey` running inside the repo.
 
-## Opt out
+## Repo destination lookup
 
-Set the kill switch in your shell, your `~/.config/doey/config.sh`, or per-invocation:
+Clones land under the first directory that exists:
 
-```bash
-export DOEY_NO_INTENT_FALLBACK=1
-# or
-DOEY_NO_INTENT_FALLBACK=1 doey somecommand
-```
+1. `$DOEY_GITHUB_DIR` (if set)
+2. `$HOME/GitHub`
+3. `$HOME/Projects`
+4. `$HOME/src`
+5. `$HOME/projects`
 
-When set, `intent_fallback` returns immediately without contacting the API and without writing a log line.
+If none exist, `$HOME/GitHub` is created on demand. Local-repo detection walks the same list in order.
 
-## Authentication
+## Opt-out and tuning
 
-The fallback reuses your existing `ANTHROPIC_API_KEY` — the same key Claude Code uses. No extra setup, no separate billing, no new file to manage. If the variable is empty or missing, the fallback short-circuits silently.
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `DOEY_NO_INTENT_FALLBACK` | unset | Set to `1` to disable the entire fallback (prints "Unknown command" immediately). |
+| `DOEY_INTENT_FALLBACK` | `1` | Set to `0` — same effect as above. |
+| `DOEY_GITHUB_DIR` | unset | Override the clone destination. Takes precedence over the `$HOME/GitHub` → `$HOME/projects` search chain. |
+| `DOEY_INTENT_ESCALATE` | `1` | Set to `0` to disable the `ESCALATE → doey-fallback agent` hop. |
+| `DOEY_INTENT_CLARIFY_TTL` | `300` | Seconds before a pending clarify is considered stale and discarded. |
+| `DOEY_FALLBACK_AGENT` | `doey-fallback` | Override which agent handles escalation. |
+| `DOEY_FALLBACK_MODEL` | `sonnet` | Override the escalation model. |
+| `DOEY_HEADLESS_DISABLE` | unset | Set to `1` to disable the underlying classifier (tools/headless layer). |
 
-## Cost
+## TTY gating
 
-Each call sends a small system prompt plus your typed command, the CLI schema, and the last 5 shell history lines, capped at 200 output tokens. With Claude Haiku 4.5 pricing this works out to roughly **$0.0001 per call** — a rough estimate, but the right order of magnitude. You'd have to mistype thousands of commands to spend a cent.
+The dispatcher checks stdin+stderr for a TTY:
 
-## New project detection
-
-When the user types something like `doey we want to create a project about X` or `doey build a CLI tool` without an active session, the fallback classifies this as a `new_project` intent instead of routing to `masterplan` (which requires a running session).
-
-The classifier extracts a kebab-case slug from the description (e.g. "cli-tool", "weather-app") and routes to `doey new <slug>`. If no clear name can be extracted, it prompts the user interactively (TTY) or falls back to "new-project".
-
-Examples:
-- `doey create a project about building a weather app` → `doey new weather-app`
-- `doey start a new CLI tool` → `doey new cli-tool`
-- `doey we want to build an API for tracking orders` → `doey new order-tracking-api`
+- **TTY**: the confident `HIGH` path auto-executes; `CLONE_OPEN` prompts `[y/N]` before running.
+- **No TTY**: nothing executes. `LOCAL_OPEN` and `CLONE_OPEN` print the command they *would* have run, and the fallback exits 0.
 
 ## Destructive-action policy
 
-Some corrections are too dangerous to run silently. The dispatcher carries a blocklist that matches both `doey` subcommands and raw shell footguns:
+`HIGH`-class destructive verbs (`uninstall stop kill purge reset`) always prompt `[y/N]` even on TTY. The `LOCAL_OPEN` / `CLONE_OPEN` / `CLARIFY` / `ESCALATE` branches only ever run `cd`, `git clone`, `gh repo clone`, or `doey` — the grammar makes `rm`/`sudo`/`tmux kill-*` structurally unreachable (the classifier prompt forbids them, the shell regex-validates every arg, and the ESCALATE RUN path matches against a fixed four-template whitelist).
 
-```
-doey uninstall | kill-window | kill-team | kill-session | purge | remote-destroy | stop
-rm -rf ... | git push --force | git reset --hard | tmux kill-server | tmux kill-session
-```
+No `eval`ed LLM output on the new branches.
 
-If Haiku's correction matches any of those:
+## Files
 
-- **Interactive tty:** you get a `⚠ destructive command: <cmd>` warning and a `[y/N]` prompt. Default is no — anything other than `y`/`yes` aborts.
-- **No tty (e.g. running under an agent):** the dispatcher refuses entirely, prints `↳ refused destructive auto-correct: <cmd>`, and falls through to the original error. **No silent destructive actions, ever.**
+| File | Role |
+|------|------|
+| `shell/doey.sh` | Entry; `*)` case forwards to dispatch. |
+| `shell/doey-intent-dispatch.sh` | Case-by-case dispatcher. |
+| `shell/intent-fallback.sh` | Classifier system prompt + response parser. |
+| `shell/intent-clarify-state.sh` | Clarify state read/write (`{typed, question, ts}`). |
+| `shell/doey-headless.sh` | Shared `claude -p` wrapper. |
+| `agents/doey-fallback.md` | Escalation agent definition. |
 
-The same check runs on `suggest` choices before exec'ing them.
+## Cost
 
-## Logs
-
-Successful calls are appended as JSON Lines to:
-
-```
-/tmp/doey/<project>/intent-log.jsonl
-```
-
-Each line records `ts`, `pane`, `role`, `project`, `typed`, `err`, `action`, `command`, `latency_ms`, `http_status`, `accepted`, and `reason`. Sensitive flag values (`--body`, `--token`, `--key`, `--password`, `--secret`, `--auth`) are redacted to `***` before the line is written, and a literal `ANTHROPIC_API_KEY` match in the rendered line is replaced with `{"error":"api_key_leak_prevented"}`.
-
-The log rotates at 1 MB into `intent-log.jsonl.{1,2,3}` and the runtime dir is wiped by `doey stop`, so nothing accumulates across sessions.
+Each classifier call: one `claude -p` round-trip on Opus, no tools, capped at 20 seconds. Escalation adds one `sonnet` round-trip at 60-second cap. Both are silent on failure — budget exhaustion never produces a worse UX than the old "Unknown command" error.
 
 ## Disabling per project
 
@@ -98,4 +105,4 @@ Drop the kill switch into your project config:
 export DOEY_NO_INTENT_FALLBACK=1
 ```
 
-That's it. Fresh installs and CI environments without `ANTHROPIC_API_KEY` get the same effect for free — no flag needed.
+Fresh installs and CI environments without a Claude auth get the same effect automatically — `doey_headless` returns empty and the dispatcher falls through to the plain "Unknown command".
