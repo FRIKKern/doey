@@ -1,0 +1,124 @@
+# Perf Review — W4 Dimension: Correctness / Waste + Branch/Git Cross-Cut
+
+**Reviewer:** Worker 4 (d-t4-w4) · Task 604 / Subtask 4
+**Date:** 2026-04-18
+**Scope:** where Doey ships bad work, re-does tasks, or wastes effort; plus branch/git workflow cross-cut with task 603.
+
+---
+
+## [F-W4-1] Proof gate is syntactic-only — no build/test linkage
+- **Category:** correctness
+- **Severity:** P0
+- **Evidence:** `.claude/hooks/stop-status.sh:24-36` — gate is `grep '^PROOF_TYPE:' $proof_file | tail -1`. Any two-line file with `PROOF_TYPE:x` and `PROOF:y` passes. No verification that the claimed proof type (e.g. `build-ok`, `tests-pass`) corresponds to an actually-executed artifact. `DOEY_PROOF_EXEMPT=1` (used by this very worker) flips the whole check off with no audit log.
+- **Proposed fix:** Tier the proof types and require a correlating artifact path for each:
+  - `build-ok` → require `BUILD_LOG: <file>` pointing to a log with exit-0 footer
+  - `tests-pass` → require `TEST_LOG:` with a parseable pass count
+  - `diff-only` → require `DIFF: <commit-or-path>` that resolves in the repo
+  - `research` → allowed only when `DOEY_PROOF_EXEMPT=1`, and that exemption is logged to `RUNTIME/audit/proof_exempt.log` with pane+task+timestamp.
+- **Estimated impact:** workers can no longer satisfy the gate with a throwaway string. Prevents false-positive FINISHED transitions that cascade into ship-broken-build bugs.
+- **Follow-up task:** *Tiered proof gate with artifact binding*, scope = rewrite `stop-status.sh` proof block + define proof-type vocabulary in `shell/doey-proof.sh`, workers = 1 deep-worker, model = sonnet.
+- **Cross-ref 603:** no.
+
+## [F-W4-2] No build-before-commit enforcement in any role
+- **Category:** correctness
+- **Severity:** P0
+- **Evidence:** `agents/doey-deployment.md` — grep for `build|test|verify|compile` returns zero matches (see W4 investigation log). Worker agents mention `test` lexically but none hard-gate via hook. Nothing in `on-pre-tool-use.sh` ties a `git commit` to a preceding `go build`, `bash tests/test-bash-compat.sh`, or any project-specific check.
+- **Proposed fix:** Add a pre-commit hook check in `.claude/hooks/on-pre-tool-use.sh` (or a dedicated `pre-commit-check.sh`) that blocks `git commit` unless a `RUNTIME/build/<pane>.ok` stamp exists (≤ N minutes old) and was produced by a sanctioned build command. Tie the stamp generator to the file-type changed: `.sh` → `tests/test-bash-compat.sh`; `tui/**` → `go build ./...`.
+- **Estimated impact:** eliminates the "worker merges a file that breaks the build" class. One of the two highest-impact fixes in the dimension.
+- **Follow-up task:** *Build-before-commit enforcement stamp*, scope = new hook + stamp writer in `shell/doey-build-stamp.sh` + doctor check, workers = 1 deep-worker, model = sonnet.
+- **Cross-ref 603:** no.
+
+## [F-W4-3] Re-dispatch churn on tasks 596 & 599 — silent rework
+- **Category:** waste
+- **Severity:** P1
+- **Evidence:** `.doey/tasks/596.status.log` — pane `doey_doey_2_1` transitions to FINISHED **6 times** between 21:16Z and 21:45Z (a 2-subtask task). `.doey/tasks/599.status.log` — **10 unique worker panes across 3 teams** (`5_*`, `2_*`, `3_*`) FINISHED events for a 5-subtask task; team-hop pattern indicates the first team stalled and the Subtaskmaster re-dispatched wholesale to another team.
+- **Proposed fix:** Task status log must record *why* a worker re-finished (reused pane, new subtask, rework, etc.). Add a `REASON` column to the tab-separated log and require Subtaskmasters to emit `doey task rework --reason=<enum>` when re-assigning work. Emit a `task_rework_ratio` stat to surface it.
+- **Estimated impact:** visibility alone will shame Subtaskmasters into fewer blind re-dispatches; T599's 2× over-churn pays for the fix many times over in token spend.
+- **Follow-up task:** *Status-log rework provenance + rework-ratio metric*, scope = `stop-status.sh` + `doey-ctl task log` schema + TUI column, workers = 1 quick + 1 deep, model = sonnet.
+- **Cross-ref 603:** no.
+
+## [F-W4-4] Duplicate subtask titles inside one task (T596)
+- **Category:** correctness
+- **Severity:** P2
+- **Evidence:** `.doey/tasks/596.task` — `TASK_SUBTASK_1_TITLE` and `TASK_SUBTASK_3_TITLE` are **byte-identical** ("R1/R3/R5/R6: Capture trust dialog signature…"). Two workers (different panes) would each think they own the same scope. No check in `doey_task_add_subtask` (shell/doey-task-helpers.sh:520-551) for title collision — only `task_add_related_file` has dedup logic (line 559).
+- **Proposed fix:** in `doey_task_add_subtask`, reject identical trimmed-title within the same task (or prefix with `(dup-N)` and warn). Log the collision.
+- **Estimated impact:** prevents silent double-work on planned tasks; cheap.
+- **Follow-up task:** *Subtask-title dedup + collision log*, scope = `shell/doey-task-helpers.sh`, workers = 1 quick, model = haiku.
+- **Cross-ref 603:** no.
+
+## [F-W4-5] Duplicate task-level titles — create-path dedup missing
+- **Category:** waste
+- **Severity:** P2
+- **Evidence:** `grep TASK_TITLE= .doey/tasks/*.task | sort | uniq -c | sort -rn` shows: 3× "Masterplan: <interactive>", 2× "Task-Obsessed TUI — Live Activity Feed…", 2× "send-keys reliability: multi-line paste swallows Enter…", 2× "TASK_525 P1: Schema migration + store extension", plus 6 other exact-duplicate titles. The `Masterplan: <interactive>` run is almost certainly scaffolding debris — not user-authored duplicates — which means the Masterplan skill is creating placeholder tasks that never get reused or cleaned up.
+- **Proposed fix:** (a) add title+description-hash dedup warning in `/doey-create-task` and `/doey-instant-task`; on collision, prompt "Reuse T<id> or force new?". (b) audit the Masterplan skill's task-create code path for the `<interactive>` stub and either populate it from the interview output or skip persistence until the goal is known.
+- **Estimated impact:** cleaner task list; prevents "I already asked for that" confusion; reduces reviewer cognitive load.
+- **Follow-up task:** *Task-create dedup probe + masterplan stub cleanup*, scope = skill create path + Masterplan SKILL.md, workers = 1 deep, model = sonnet.
+- **Cross-ref 603:** no.
+
+## [F-W4-6] Task 600 status drift — committed but still `pending_user_confirmation`
+- **Category:** correctness
+- **Severity:** P1
+- **Evidence:** `git log --oneline` shows `9af24f1 feat(fallback): task-executing bridge … (task 600)` committed and pushed. `.doey/tasks/600.task` still has `TASK_STATUS=pending_user_confirmation` and **zero recorded workers** in subtask fields despite three subtasks listed. Either (a) the completion event didn't propagate from Taskmaster, (b) the worker never ran `doey task update` because no subtask was assigned, or (c) the commit happened outside the worker lifecycle (direct Taskmaster action).
+- **Proposed fix:** After `git commit -m "... (task <N>)"`, a post-commit hook should (a) look up `.doey/tasks/<N>.task`, (b) if status ≠ done, either auto-flip to `review` or emit a "status/commit mismatch" alert. The existing `post-push-complete.sh` is the obvious home; extend it with a status-reconciliation pass.
+- **Estimated impact:** eliminates the "work is shipped but task pane thinks we're still waiting" class of stale dashboards and prevents duplicate re-ship.
+- **Follow-up task:** *Post-commit task-status reconciliation*, scope = `post-push-complete.sh` + `shell/doey-task-helpers.sh` hook, workers = 1 deep, model = sonnet.
+- **Cross-ref 603:** no.
+
+## [F-W4-7] Main-branch push guard has a false-positive substring match
+- **Category:** correctness / branch
+- **Severity:** P2
+- **Evidence:** `.claude/hooks/on-pre-tool-use.sh:777` — pattern `*"git push"*" main"*` fires on any branch beginning with "main", e.g. `git push origin main-rebase-staging` or `git push origin mainframe`. Currently harmless because no such branch exists, but it's a latent false positive. Likewise `*" main"*` also catches literal `" maintain"` etc. in heredoc-stripped output.
+- **Proposed fix:** anchor the match: use a pattern that requires end-of-string or whitespace after `main` (e.g. pre-strip the command then use a case with `" main"|" main "|":main"|":main "|" main:"` etc., or use a small awk/regex). Add a test in `tests/test-branch-safety.sh`.
+- **Estimated impact:** small but the kind of latent bug that breaks a user's day when they eventually pick a `main-*` branch name.
+- **Follow-up task:** *Anchor main-push guard + test*, scope = `on-pre-tool-use.sh` case + test, workers = 1 quick, model = haiku.
+- **Cross-ref 603:** yes — same hook file is the locus for the 603 follow-ups; package as a single follow-up commit with 603 changes to avoid conflicting edits.
+
+## [F-W4-8] Branch guard does not block `-b`, `-c`, `git branch <new>`, `git worktree add`
+- **Category:** branch
+- **Severity:** P0
+- **Evidence:** `.claude/hooks/on-pre-tool-use.sh:794-823` blocks only `git checkout `, `git switch `, `git merge `. The case `*"git checkout "*` is followed by an inner `case *" -- "*) ;;` that whitelists file-restore, so `git checkout -b new` does block — **but** `git switch -c new` *also* blocks (good) while `git branch <newname>` and `git worktree add <path>` are NOT blocked. Consequence: 40+ local `feat/task-*` and `fix/task-*` branches exist today from historical autonomous Agent-isolation worktree use (evidence: task 603 W1 completion log, `.doey/tasks/603/attachments/1776505818_completion_3_1.md:109-113`).
+- **Proposed fix:** exactly what task 603 W1 proposed — add `*"git branch "*` case (whitelist read-only forms), add `*"git worktree add"*` unconditional block, add Agent `tool_input.isolation=worktree` check with `DOEY_ALLOW_AGENT_WORKTREE=1` escape hatch set by `/doey-worktree`. Do not duplicate the work here; adopt 603's patch.
+- **Estimated impact:** stops the autonomous-branch churn that's been masking phase-to-phase data loss (stated user pain).
+- **Follow-up task:** **MERGE INTO 603** — no new task. Ensure 603's W2 also updates error message wording (L807/814/820) that currently advertises the autonomous path.
+- **Cross-ref 603:** **yes, fully overlaps**. W4 adds no new scope; we validate and endorse 603's fix and reinforce urgency.
+
+## [F-W4-9] Force-push guard blocks `--force-with-lease` (the safer form)
+- **Category:** branch
+- **Severity:** P2
+- **Evidence:** `.claude/hooks/on-pre-tool-use.sh:770` blocks both `--force` and `--force-with-lease`. The latter is the industry-recommended safer alternative (refuses if upstream has moved), so treating them identically nudges users toward worse workarounds.
+- **Proposed fix:** permit `--force-with-lease` with an explicit log-write (not a block). Keep `--force` and `--force-if-includes` flags behaviour as-is (block).
+- **Estimated impact:** small; removes a paper-cut for legitimate rebase flows on the few feature branches that still exist.
+- **Follow-up task:** *Allow --force-with-lease with audit log*, scope = single case-arm edit, workers = 1 quick, model = haiku.
+- **Cross-ref 603:** yes (same file) — bundle.
+
+## [F-W4-10] Worker-count vs. scope mismatch undetected (over/under-spawn)
+- **Category:** waste
+- **Severity:** P2
+- **Evidence:** No tooling in the repo correlates `TASK_SUBTASK_N_WORKER` counts with file-diff size. Sample: T599 (masterplan pane spawn) listed 5 subtasks but consumed 10 worker panes across 3 teams — over 2× the planned concurrency — without any tooling flagging it. Conversely, there's no ex-post check for "1 worker assigned to a multi-file refactor" — tasks simply complete and the subtaskmaster's decomposition judgment is never measured.
+- **Proposed fix:** after task completion, `post-push-complete.sh` (or a new `task-sizing-audit.sh`) computes (unique-worker-count, files-changed, subtask-count) from the status log + git diff, stores a per-task `.sizing` JSON, and flags extreme ratios (>3× workers/subtask, or >8 files / 1 worker). Surface in TUI task inspect view.
+- **Estimated impact:** closes the feedback loop that today makes decomposition-quality invisible.
+- **Follow-up task:** *Task sizing audit stamp*, scope = new shell helper + TUI column, workers = 1 deep, model = sonnet.
+- **Cross-ref 603:** no.
+
+---
+
+## Cross-cut summary (for task 603 integration)
+
+| Finding | Overlap with 603 | Recommended bundle |
+|---|---|---|
+| F-W4-7 main-push guard regex | same hook file | yes — single PR |
+| F-W4-8 branch/worktree guard gap | **identical scope** | yes — drop W4 duplicate, endorse 603 |
+| F-W4-9 `--force-with-lease` | same hook file | yes — bundle |
+
+603's W1 investigation is authoritative for the branch-creation taxonomy; this review adds only the operational observations (re-dispatch churn, status drift, duplicate subtasks, missing build gates) that are orthogonal to branch handling.
+
+---
+
+## Anti-recommendations
+
+1. **Do NOT add more agents, models, or worker tiers** to "catch" bad commits. The fix is a deterministic build-stamp hook (F-W4-2), not another LLM judge. An LLM-based quality gate will itself need a quality gate.
+2. **Do NOT expand `DOEY_PROOF_EXEMPT=1`** into a menu of skip flags. One exemption, logged. More flags = more ways for Subtaskmasters to short-circuit the gate.
+3. **Do NOT auto-delete the 40+ stale `feat/task-*` / `fix/task-*` local branches** as part of the 603 fix. The branches contain archaeological value (reflog anchors for past work) and deleting them is a separate, reversible cleanup task that needs user confirmation — not something to bundle into a hook patch.
+4. **Do NOT introduce per-phase branches** as a "solution" to the phase-2-can't-see-phase-1 complaint. User invariant is single-branch main. Fix the autonomous-branch leak; keep the workflow on one branch.
+5. **Do NOT add a "retry counter" that auto-kills workers** after N re-dispatches — premature worker kills are already called out as a known-bad pattern (memory: `feedback_no_premature_kills.md`). Measure first; act only after the metric makes the problem legible.
+6. **Do NOT re-design the Masterplan skill** to eliminate the `<interactive>` stub task — audit it first. The three copies may be legitimate placeholders from a deliberate test-fixtures flow.

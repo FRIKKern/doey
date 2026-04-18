@@ -1,0 +1,150 @@
+# Perf Review — W2 Findings (Latency / Throughput)
+
+**Author:** Worker 2 (d-t4-w2), task 604
+**Date:** 2026-04-18
+**Scope:** sequential-vs-parallel, coordination hops, blocking waits, hook exec time, worker startup cost, stop-hook chain duration
+
+---
+
+## Executive summary (top 5, ranked by impact)
+
+1. **Stop-hook chain runs expensive build/vet/bash-n sequentially on every worker completion** (P0)
+2. **`on-pre-tool-use.sh` is 1132 lines and runs on every tool call** (P0)
+3. **`taskmaster-wait.sh` N+1 DB queries + full status-dir scan per idle cycle** (P1)
+4. **`doey_send_verified` 4-retry chain with exponential backoff per message** (P1)
+5. **Coordination roundtrips (User→Boss→Taskmaster→Subtaskmaster→Worker) with no-inotify fallback blocks up to 60s per hop** (P1)
+
+---
+
+## Findings
+
+### P0-1. Stop-hook chain: CI-grade checks on every worker stop, serialized
+
+- **Category:** latency, correctness/waste
+- **Evidence:** `.claude/hooks/stop-results.sh:210-246`
+  - Runs `go build ./...` then `go vet ./...` (sequential) for any `.go` file touched, with `timeout 10` each
+  - Loops over every changed `.sh` file and runs `bash -n` sequentially (lines 231-245)
+  - Total worst-case ~20–40s added to every worker stop on a multi-file Go change
+- **Also:** 8 stop hooks fire per stop: `stop-enforce-ask-user-question` (129), `stop-notify` (369), `stop-plan-tracking` (42), `stop-recovery` (226), `stop-respawn` (109), `stop-results` (607), `stop-reviewer-metrics` (123), `stop-status` (209). That is 2014 total shell lines parsed per stop.
+- **Proposed fix:**
+  - Gate build/vet behind actual changed-path scope (`go build ./<pkg>` not `./...`), OR run them in background with `&` and a shared `wait` before emitting final proof_of_success
+  - Parallelize the `bash -n` loop: `echo "$FILES_LIST" | xargs -P 4 -n 1 bash -n` (Bash 3.2-safe via `xargs`)
+  - Consider a consolidated `stop-post.sh` that sources the smaller hooks instead of exec'ing 8 separate scripts
+- **Estimated impact:** 5–30s saved per worker stop on code tasks; cascades to faster Subtaskmaster consolidation
+
+### P0-2. `on-pre-tool-use.sh` hot-path overhead
+
+- **Category:** latency, token efficiency (via slower tool acks)
+- **Evidence:** `.claude/hooks/on-pre-tool-use.sh` is 1132 lines; runs synchronously before EVERY tool call
+  - jq or python3 subprocess spawn per call (`_json_str`, lines 99-118)
+  - `tmux show-environment DOEY_RUNTIME` fallback when env missing (line 483)
+  - `tmux display-message` for pane id (line 485)
+  - 2x `git rev-parse` for worktree detection on every Bash command (lines 796-797)
+  - `_is_direct_vcs_cmd` runs awk + sed + tr pipelines on every Bash command, even `ls` (line 229)
+  - Heartbeat file write + status-file rewrite (sed + grep + mv) every 10s (lines 534-553)
+  - Background stats emit + lifecycle event write on every allow (lines 12-28)
+- **Proposed fix:**
+  - Cache resolved `_PS` / `_DOEY_ROLE` / `_in_worktree` in `$_RD/pane_cache/$PS.env`, source once, skip re-resolution for 60s
+  - Fast-path non-Bash tools: current script flows through ~900 lines even for a simple `Read` that exits at line 881
+  - Replace `_json_str tool_name` python3 fallback with bash parameter expansion when the field is at a known position
+  - Move `_is_direct_vcs_cmd` behind a cheap `case "$cmd" in *git*|*gh*)` pre-filter
+- **Estimated impact:** 50–200ms shaved per tool call; across ~1000 tool calls/session, 1–3 minutes of wall time back
+
+### P1-3. `taskmaster-wait.sh` expensive idle cycle
+
+- **Category:** latency, token efficiency (keeps Taskmaster context pollution low but burns fork-exec budget)
+- **Evidence:** `.claude/hooks/taskmaster-wait.sh:636-690`
+  - For each status `{active, in_progress}`: `doey-ctl task list` → for each task id: `doey-ctl task get` (N+1 pattern, two passes)
+  - After sleep, late-queued scan repeats a variant of the same scan (lines 753-770)
+  - `_check_stale_heartbeats` iterates every `status/*.heartbeat` twice (nudge-tier check + threshold check)
+  - Each `doey-ctl` invocation is a Go binary fork
+- **Proposed fix:**
+  - Add a single `doey-ctl task list --unassigned --status active,in_progress --json` query that returns type + updated in one pass; drop the per-task `task get`
+  - Merge pre/post-sleep task scan into one helper
+  - Use inotify watches on `.doey/tasks/` so status changes wake Taskmaster deterministically instead of polling
+- **Estimated impact:** 200–800ms per wake cycle; at 1 wake/15s with active tasks, ~3s/min reclaimed
+
+### P1-4. `doey_send_verified` retries with settle delays
+
+- **Category:** latency
+- **Evidence:** `shell/doey-send.sh:217-316`
+  - Up to 4 attempts, exponential backoff 0.5 → 1.0 → 2.0s between retries
+  - Per attempt: `doey_wait_for_prompt` (up to 30s, 10s on retries), 800ms `PASTE_SETTLE_MS` before Enter, 3s BUSY/activity poll after
+  - Best-case first-attempt send: ~3.5s (prompt check + settle + submission poll)
+  - Worst-case: ~50s before giving up
+- **Proposed fix:**
+  - First-attempt submission poll is already trusted at line 307 ("trust delivery even without confirmation") — skip the 3s poll on the first attempt, only gate on retry
+  - Cut `max_retries` from 4 to 2; Claude CLI rarely benefits from >2 retries
+  - Default `PASTE_SETTLE_MS` from 800 to 250ms; tmux paste-buffer is atomic
+- **Estimated impact:** 2–3s saved per dispatched message across the entire coordination graph; given O(10) messages per task completion, ~20–30s per task
+
+### P1-5. Coordination hop cost under degraded conditions
+
+- **Category:** coordination latency
+- **Evidence:** User → Boss → Taskmaster → Subtaskmaster → Worker chain
+  - Each pane's `*-wait.sh` blocks on `inotifywait` with `sleep N` fallback
+  - `taskmaster-wait.sh:734-736`: 60s sleep if `inotifywait` missing; `reviewer-wait.sh`: 30s; `on-prompt-submit.sh` precheck paths add 1-3s
+  - Install doesn't guarantee `inotifywait` — `taskmaster-wait.sh:98` just tests for it and falls through to `sleep`
+  - On fresh macOS installs there's no inotify-tools; wakes depend solely on `sleep` intervals
+- **Proposed fix:**
+  - Add `inotifywait` to macOS install path via `fswatch` shim (`fswatch -1 dir` ≈ `inotifywait -qq`), written once in `common.sh`
+  - For Linux, make `apt-get install inotify-tools` part of `doey doctor --fix`
+  - Lower idle sleep from 60s → 30s when fallback is sleep-only (user-perceived coordination latency matters more than poll overhead)
+- **Estimated impact:** 5–30s typical hop latency reduction on fallback systems
+
+### P1-6. No parallelism between independent stop-hook checks
+
+- **Category:** latency
+- **Evidence:** Stop hooks fire as `matcher: "*"` in settings; Claude Code runs them in parallel per hook-event, BUT `stop-results.sh` internally serializes build+vet+bash-n+git diff+proof_of_success JSON assembly
+- **Proposed fix:** Inside `stop-results.sh`, launch each auto-verify (go build, go vet, bash -n per file, git diff --stat) as background jobs; `wait`; assemble JSON from saved outputs
+- **Estimated impact:** 5-15s per worker stop on Go tasks
+
+### P2-7. Worker startup cost — no warm-worker pool
+
+- **Category:** throughput
+- **Evidence:** Each new worker pane is launched via `claude --dangerously-skip-permissions --model ... --agent ...` → `doey_wait_for_prompt` (up to 30s) → first briefing message. No pool.
+- **Proposed fix:** Pre-launch N+1 workers per team window on team creation; keep a "BOOTED, IDLE" status; dispatch reuses rather than spawns. Already partially the case since teams are static — but Subtaskmaster-driven spin-ups (via `doey add-window`) pay full boot cost every time.
+- **Estimated impact:** Boot time for a fresh pane ~5-15s. Marginal unless teams grow dynamically.
+
+### P2-8. Subtaskmaster system prompt is 735 lines
+
+- **Category:** token efficiency, latency (prompt processing time)
+- **Evidence:** `agents/doey-subtaskmaster.md` 735 lines; Taskmaster 521; Boss 416. These load on every pane startup AND are re-sent in every prompt submit (system prompt).
+- **Proposed fix:** Split into tiered loading: core mandate (~200 lines) in system prompt, delegation recipes in a skill loaded via `/doey-dispatch` only when needed. Cross-reference: this is largely W1 scope (token efficiency) — include here because prompt size directly affects first-token latency.
+- **Estimated impact:** 10-20% first-response latency reduction on Subtaskmaster turns
+
+### P2-9. Taskmaster self-trigger post-stop creates a wake-loop
+
+- **Category:** latency (minor benefit), CPU waste (minor cost)
+- **Evidence:** `stop-status.sh:192-207` — after Taskmaster stop, a backgrounded subshell sleeps 3s then checks if Taskmaster is BUSY; if not, writes a trigger file to wake it
+- **Assessment:** Probably correct behavior — prevents Taskmaster from going silent after a batch. 3s is a reasonable breathing room.
+- **Proposed fix:** none; keep.
+
+---
+
+## Anti-recommendations
+
+1. **Don't collapse Boss and Taskmaster into one role.** The relay adds a hop but gives user-scoped boundary: user input goes through Boss who can filter/clarify; Taskmaster stays deterministic. Merging saves ~2s/message but loses the boundary.
+2. **Don't remove `doey_wait_for_prompt` readiness gating.** The `PASTE_SETTLE_MS`/retry chain looks expensive but prevents lost messages when panes are mid-output. Tune values, don't remove.
+3. **Don't background `stop-status.sh`.** It's the only synchronous gate that enforces proof — async would let unproven work report FINISHED.
+4. **Don't raise `_passive_sleep` in `taskmaster-wait.sh` beyond 30s.** Passive-role wake latency matters more than poll overhead since the review path is on the hot loop for dispatched work.
+
+---
+
+## Recommended follow-up tasks
+
+| # | Title | Scope | Workers / Model |
+|---|-------|-------|-----------------|
+| 1 | Parallelize stop-results auto-verify (go build / go vet / bash -n) with `&`+`wait` | stop-results.sh lines 210-246 | 1 worker, sonnet |
+| 2 | Cache pane role/worktree resolution in `$_RD/pane_cache/` | on-pre-tool-use.sh lines 475-520 + common.sh | 1 worker, sonnet |
+| 3 | Single-pass task scan in taskmaster-wait.sh using `doey-ctl task list --json` | taskmaster-wait.sh 636-660 + 752-770 | 1 worker, sonnet |
+| 4 | Reduce `doey_send_verified` max_retries to 2; skip first-attempt 3s poll; default PASTE_SETTLE_MS=250 | doey-send.sh 217-316 | 1 worker, haiku |
+| 5 | Add `fswatch`-based inotify shim; install `inotify-tools` via `doey doctor --fix` | common.sh, install.sh, doey-doctor.sh | 1 worker, sonnet |
+| 6 | Gate go build/vet in stop-results to changed package only (`./<pkg>` not `./...`) | stop-results.sh 210-226 | 1 worker, haiku |
+| 7 | Fast-path non-Bash tools in on-pre-tool-use.sh (skip VCS/heartbeat logic) | on-pre-tool-use.sh | 1 worker, sonnet |
+
+---
+
+## PROOF
+
+File path: `/home/doey/doey/.doey/scratch/perf-review-w2-latency.md`

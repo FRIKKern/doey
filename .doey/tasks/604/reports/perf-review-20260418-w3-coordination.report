@@ -1,0 +1,204 @@
+# Performance Review — Coordination Quality (W3)
+
+**Task:** 604 / Subtask 3
+**Worker:** W3 (team W4)
+**Date:** 2026-04-18
+**Scope:** Out-of-scope work, dispatch decisions, phase serialization, ambiguous message subjects, stale worker handling.
+
+---
+
+## Executive Summary — Top 5 Coordination-Quality Findings
+
+1. **[P0] Subject-name mismatch between `/doey-instant-task` and Taskmaster.** Skill sends `--subject "new_task"`; Taskmaster's message-routing table only lists `task` and `dispatch_task`. Instant tasks reach the queue but have no routing rule — Taskmaster falls through or misroutes. `.claude/skills/doey-instant-task/SKILL.md:41` vs `agents/doey-taskmaster.md:318-326`.
+2. **[P0] Two contradictory review-pass paths.** Taskmaster's Completion Pipeline expects reviewer to return `review_result` so Taskmaster forwards `deploy_request` (1.0→1.2). But `agents/doey-task-reviewer.md:298-308` sends `deployment_request` directly 1.1→1.2, bypassing Taskmaster AND using a different subject (`deployment_request` vs `deploy_request`). Taskmaster never gets a wake on PASS → task hangs in `in_progress` forever; Deployment listens for one of the two subjects and silently drops the other.
+3. **[P0] Mega system prompts for every coordinator.** Subtaskmaster 735 lines, Taskmaster 521, Boss 416, Task Reviewer 388 — every team spawn loads ~2100 lines of coordinator prose before a single task is processed. The same "Communication Style" + "CAVEMAN" example block is duplicated verbatim in 7+ agents.
+4. **[P1] Subtask review AND task review both run over the same diff.** Subtaskmaster sends `subtask_review_request` per subtask (`agents/doey-subtaskmaster.md:344-354`); Taskmaster then re-runs a full `review_request` on `task_complete` (`agents/doey-taskmaster.md:362-368`). Reviewer reviews every change twice.
+5. **[P1] Vague-prompt gate duplicated with different thresholds.** Boss IntentGate bounces <20-word prompts with no anchors (`agents/doey-boss.md:161`). Taskmaster Vague-Prompt Gate bounces <15-word prompts with no anchors (`agents/doey-taskmaster.md:138-143`). Prompts between 15–19 words escape Boss and are then bounced from Taskmaster — user sees two different rejection reasons depending on path.
+
+---
+
+## Full Findings
+
+### F1 — Subject-name drift between `/doey-instant-task` and Taskmaster
+- **Category:** coordination / correctness
+- **Severity:** P0
+- **Evidence:** `.claude/skills/doey-instant-task/SKILL.md:39-47` sends `--subject "new_task"`. `agents/doey-taskmaster.md:318` (`| task | Boss | Plan which team(s) …`) and `agents/doey-taskmaster.md:326` (`| dispatch_task | Boss | TASK_ID, TASK_FILE, … `) are the only documented incoming subjects. `grep` across repo: `new_task` appears only in the skill.
+- **Proposed fix:** Change skill to `--subject "dispatch_task"` and include `DISPATCH_MODE=parallel PRIORITY=P2 WORKERS_NEEDED=1` in the body so Taskmaster's existing `dispatch_task` handler fires. Alternative: add `new_task` as an alias in Taskmaster's table, mapped to the same handler — but aliases breed drift; single canonical subject is better.
+- **Estimated impact:** Every instant task currently relies on Taskmaster fuzzy-matching. Fix = one fewer silent routing path, removes a class of "why did nothing happen?" incidents.
+
+### F2 — Two conflicting review-to-deployment paths
+- **Category:** coordination / correctness
+- **Severity:** P0
+- **Evidence:**
+  - `agents/doey-taskmaster.md:97-102`: on `review_result` PASS, Taskmaster sends `deploy_request` 1.0→1.2.
+  - `agents/doey-task-reviewer.md:300-302`: on PASS, Reviewer sends `deployment_request` 1.1→1.2 directly (skipping Taskmaster) AND uses a different subject.
+  - `agents/doey-deployment.md:46,58,68,72` uses `deployment_complete` / `deployment_failed` — the subject Deployment *replies* with, but which of `deploy_request` vs `deployment_request` it *listens for* is not documented. Either way one path is dead.
+- **Proposed fix:** Pick ONE:
+  - (a) Canonicalise on `deployment_request` (descriptive) AND make Reviewer the one who sends it, bypassing Taskmaster. Remove the Taskmaster "review PASS → deploy_request" branch entirely. This also cuts a hop.
+  - (b) Require all VCS-adjacent traffic to go through Taskmaster: delete Reviewer→Deployment direct path; Reviewer ONLY emits `review_result` to 1.0.
+  - Update `agents/doey-deployment.md` to explicitly list the incoming subject it handles.
+- **Estimated impact:** P0 — currently at least one of the paths is wired to nothing and tasks that pass review may silently stall at `pending_user_confirmation` or never reach it.
+
+### F3 — Coordinator system prompts are enormous and duplicative
+- **Category:** token / coordination
+- **Severity:** P0
+- **Evidence:** `wc -l` on `agents/doey-*.md`:
+  - `doey-subtaskmaster.md` 735 lines
+  - `doey-taskmaster.md` 521 lines
+  - `doey-boss.md` 416 lines
+  - `doey-task-reviewer.md` 388 lines
+  - Every agent ends with the same 20-line "Communication Style" block copied verbatim. "Worker Kill Protection" appears 3× inside Subtaskmaster (intro, section, "Forbidden patterns"). "No polling" rule appears in 10+ places inside Subtaskmaster alone. `doey-boss.md` has a 60-line STATUS CHECK PROTOCOL (lines 275-324) that Boss is then told NOT to use because it's user-only.
+- **Proposed fix:**
+  - Extract shared blocks to `agents/_fragments/` (folder already exists) and reference by include at render time in `shell/expand-templates.sh`. Candidates: communication-style.md.tmpl, status-check-protocol.md.tmpl, reactive-sleep-loop.md.tmpl, no-polling.md.tmpl.
+  - Collapse Subtaskmaster Worker Kill Protection from ~30 lines to ≤8 lines (one rule + one pointer).
+  - Delete Boss STATUS CHECK PROTOCOL block — it duplicates `CLAUDE.md` and Boss should never be doing direct `tmux capture-pane`.
+  - Target: Subtaskmaster ≤ 300 lines, Taskmaster ≤ 250, Boss ≤ 200, Reviewer ≤ 180.
+- **Estimated impact:** ~3000 lines saved across team spawn → ~40-50% reduction in baseline context for coordinators. Team spawns are frequent; this is the largest single coordination-token win available.
+
+### F4 — Subtask and task reviews run back-to-back over the same diff
+- **Category:** coordination / correctness
+- **Severity:** P1
+- **Evidence:**
+  - `agents/doey-subtaskmaster.md:340-358` — "NEVER mark a subtask done yourself. All subtask completion flows through Task Reviewer." Every subtask is reviewed individually.
+  - `agents/doey-taskmaster.md:355-370` — "Every `task_complete` must pass through the Task Reviewer". Full diff reviewed again.
+  - Reviewer has no memory of prior subtask reviews (`memory: session` would help but most Task Reviewers are started fresh each project).
+- **Proposed fix:** Pick one level of review — subtask-level OR task-level — not both. Recommend keeping subtask-level (finer feedback, faster rejects) and replacing task-level with a lightweight "aggregate check" (subtasks all `done`? diff matches? proof lines present?) that Taskmaster runs without asking Reviewer.
+- **Estimated impact:** Roughly halves Reviewer traffic for multi-subtask tasks. Faster throughput, less Reviewer context-saturation (which Task 590 context-budget counter was added to patch — see `doey-task-reviewer.md:331`).
+
+### F5 — Vague-prompt gate duplicated with drift
+- **Category:** coordination / correctness
+- **Severity:** P1
+- **Evidence:** `agents/doey-boss.md:161` "< 20 words AND contains no … anchors" vs `agents/doey-taskmaster.md:138-143` "It is **under 15 words** (short AND unanchored)". Prompts of 15-19 words pass Boss, fail Taskmaster. User sees two different rejection mechanics depending on path.
+- **Proposed fix:** Single source of truth. Either delete the Taskmaster gate (Boss already intercepts), OR replace both with a shared shell helper in `shell/doey-task-helpers.sh` that both call.
+- **Estimated impact:** Fewer user-visible inconsistencies; removes ~40 lines from Taskmaster.
+
+### F6 — Duplicate detection runs 3 times for one task
+- **Category:** latency / coordination
+- **Severity:** P1
+- **Evidence:**
+  - Boss: `task_find_similar` before `task create` (`agents/doey-boss.md:246-249`).
+  - Taskmaster: "Duplicate check (REQUIRED gate)" via `task_find_similar` on `dispatch_task` (`agents/doey-taskmaster.md:332`).
+  - Task Reviewer: "Duplicate Detection" on every review (`agents/doey-task-reviewer.md:269-282`).
+- **Proposed fix:** Dedup = Boss's responsibility at `create` time. Remove from Taskmaster and Reviewer. Add a single CLI flag `doey task create --check-dup` that's the canonical path.
+- **Estimated impact:** 2 fewer Bash roundtrips per task. Significant at scale — 597 tasks in `.doey/tasks/` today.
+
+### F7 — Reviewer subtask reply path skips Taskmaster, task reply path doesn't
+- **Category:** coordination / correctness
+- **Severity:** P1
+- **Evidence:** `agents/doey-task-reviewer.md:237-242` (subtask PASS → W.0 directly) vs `agents/doey-task-reviewer.md:300-308` (task PASS → 1.2 directly, task FAIL → 1.0). Two different routing conventions for one agent's output.
+- **Proposed fix:** Standardise on "Reviewer always talks to the originator" (Subtaskmaster for subtask reviews, Taskmaster for task reviews) and let each originator forward as needed. Cleaner mental model.
+- **Estimated impact:** Mostly clarity; removes a frequent source of "who do I reply to?" confusion in Reviewer output.
+
+### F8 — Boss has a 60-line STATUS CHECK PROTOCOL it isn't supposed to run
+- **Category:** coordination / scope
+- **Severity:** P1
+- **Evidence:** `agents/doey-boss.md:275-324` lists tmux capture-pane sequences and multi-step pane observation. `agents/doey-boss.md:383` Rule 2: "Never proactively monitor or poll — but when the user asks for status, observe panes directly via capture-pane". The whole section exists for the "user asks" edge case. It's scope creep into coordinator work.
+- **Proposed fix:** Delete the block. Replace with: "If user asks for status, send `status_report_request` to Taskmaster; Taskmaster compiles and replies. Boss never reads panes directly." This also eliminates the `ctx% vs spinner` confusion already re-documented inside the section.
+- **Estimated impact:** −50 lines from Boss; removes a role-boundary violation; ensures pane observation is centralised in Taskmaster (already has the STATUS CHECK PROTOCOL in `CLAUDE.md`).
+
+### F9 — Dispatch Verification Protocol reimplements `doey_send_verified`
+- **Category:** latency / token
+- **Severity:** P1
+- **Evidence:** `agents/doey-taskmaster.md:189-216` — after calling `doey_send_verified` (which already retries 3× with exponential backoff and verifies delivery), Taskmaster is instructed to run another 20-line verification block that captures the pane, greps for activity indicators, and retries on failure. Double-verification doubles the post-dispatch Bash calls.
+- **Proposed fix:** Trust `doey_send_verified` — if it returns 0, delivery is confirmed. If the helper is unreliable, harden the helper rather than papering over with per-caller retry. Reduce the block to: `doey_send_verified "$TARGET" "$DISPATCH_MSG" || escalate_to_boss`.
+- **Estimated impact:** ~25 lines saved in Taskmaster, ~1 extra Bash call per dispatch removed, fewer `tmux capture-pane` races.
+
+### F10 — Phase serialization: every task walks 6 serial phases
+- **Category:** latency / throughput
+- **Severity:** P1
+- **Evidence:** `agents/doey-subtaskmaster.md:106-176` hard-enforces Research → Synthesis → Implementation → Verification + "Completion Verification Loop" (lines 529-577) + Review Gate upstream. For a single-file bug with file:line in the task, phases 1 and 4 are pure ceremony.
+- **Proposed fix:** Make phases conditional on task type. The Boss/Taskmaster already classify CATEGORY (quick|deep|visual|infrastructure) — add a corresponding PHASES field:
+  - `quick` → skip Research (implement directly), skip Verification (Reviewer covers)
+  - `deep` → full 4 phases
+  - `research` → Research only
+  Encode in task JSON `dispatch_plan.phases` and let Subtaskmaster honour it.
+- **Estimated impact:** For the common "quick fix" path (majority of tasks), 2 fewer worker spawns and 1 fewer synthesis turn per task.
+
+### F11 — `phased` DISPATCH_MODE is dead
+- **Category:** correctness / scope
+- **Severity:** P2
+- **Evidence:** Taskmaster `Processing dispatch_task` (line 335) lists modes `parallel | sequential | phased`. Phased handling described in lines 346-349. But `agents/doey-boss.md` examples only emit `parallel` or `sequential`. No caller ever sends `phased`. Code/spec weight for a path nothing uses.
+- **Proposed fix:** Either (a) delete `phased` support and simplify Taskmaster, or (b) document which Boss flows choose it (e.g. plan-first tasks).
+- **Estimated impact:** Small — removing dead mode clears ~20 lines and reduces decision surface.
+
+### F12 — Stale-worker detection runs on Taskmaster but kill authority is on Subtaskmaster
+- **Category:** coordination / correctness
+- **Severity:** P1
+- **Evidence:**
+  - `.claude/hooks/taskmaster-wait.sh` (main) emits `stale_*` alerts, consumed by Taskmaster (`agents/doey-taskmaster.md:283-295`).
+  - Subtaskmaster Worker Kill Protection: "only kill on explicit stale alert from Taskmaster" (`agents/doey-subtaskmaster.md:460-464`). Requires Taskmaster to forward alert → Subtaskmaster.
+  - Taskmaster recovery (line 287-292): re-queues via `TASK_RECOVERY_*`, clears stale file, notifies Boss — does NOT forward to Subtaskmaster. So Subtaskmaster never gets the kill directive; kills never happen unless Taskmaster manually messages.
+- **Proposed fix:** On stale detection, Taskmaster should send an explicit `kill_worker` message to the affected Subtaskmaster in addition to the Boss notification. Alternatively, give Taskmaster direct kill authority (it already handles despawn) and remove the Subtaskmaster kill path entirely.
+- **Estimated impact:** Stuck workers don't get killed today even when detected. Fix recovers orphaned work automatically.
+
+### F13 — `WORKERS_NEEDED` decided twice with divergent policy
+- **Category:** coordination / scope
+- **Severity:** P2
+- **Evidence:** Boss body includes `WORKERS_NEEDED=N` (`agents/doey-boss.md:85`). Taskmaster then says "If Boss included `WORKERS_NEEDED`, use that count. Otherwise: `WORKERS = max(subtask_count, 1)`, capped at 6" (`agents/doey-taskmaster.md:233`). Two decision sites with different information (Boss knows intent, Taskmaster knows subtask count).
+- **Proposed fix:** Taskmaster owns worker count — it sees the decomposed plan. Remove `WORKERS_NEEDED` from Boss dispatch body; keep it only as an optional override with explicit `WORKERS_HINT=N`.
+- **Estimated impact:** Minor; removes one source of over/under-spawning.
+
+### F14 — Freelancer-isolation rule repeated 5+ times in Taskmaster
+- **Category:** token
+- **Severity:** P2
+- **Evidence:** `agents/doey-taskmaster.md` mentions "never dispatch to freelancer(s)" in: setup (line 29), Freelancer Isolation section (89-91), Rules (478), message table (319 `freelancer_finished` — log only), startup table (Freelancers OFF LIMITS). Same rule, 5 restatements.
+- **Proposed fix:** Keep one authoritative paragraph. Remove duplicates. Same treatment for other rules that appear 3+ times.
+- **Estimated impact:** Token cleanup; combines well with F3.
+
+### F15 — Message subjects are an unversioned, undocumented protocol
+- **Category:** coordination / correctness
+- **Severity:** P1
+- **Evidence:** 20+ subject strings scattered across 7+ agents with no canonical registry. Drift examples already found: `new_task` vs `dispatch_task`, `deploy_request` vs `deployment_request`, `subtask_review_passed` vs `review_result`. No `docs/messages.md` or similar schema.
+- **Proposed fix:** Create `docs/message-subjects.md` listing every subject, sender, receiver, required body fields, and reply subject. Add a hook-time check in `doey msg send` that warns on unknown subjects.
+- **Estimated impact:** High long-term — prevents recurrence of F1/F2. Low short-term effort.
+
+### F16 — `on-pre-tool-use.sh` is 1132 lines
+- **Category:** latency / cross-cutting
+- **Severity:** P1 (flagged for cross-ref with W1/W2)
+- **Evidence:** `wc -l .claude/hooks/on-pre-tool-use.sh` = 1132. Runs before every single tool call in every pane. Any per-call cost is multiplied by tool-call-rate × pane-count.
+- **Proposed fix:** Move agent-specific blocks (e.g., Boss-only send-keys check, Worker-only git-push check) into dedicated smaller hooks selected by `DOEY_ROLE`; short-circuit early.
+- **Estimated impact:** Coordination-quality side-effect: hook latency shows up as "slow dispatch" and triggers the retry protocols in F9.
+
+---
+
+## Anti-Recommendations (do NOT fix)
+
+- **Do not remove IntentGate/Vague-Prompt Gate entirely.** Despite duplication (F5), bouncing vague prompts before they reach workers saves significantly more than the gate costs. Fix is dedup, not deletion.
+- **Do not collapse Boss ↔ Taskmaster into one role.** The separation (user-facing vs coordinator) is load-bearing — Boss's AskUserQuestion exclusivity and Taskmaster's autonomy are the reason Boss doesn't block on user input during work. Tempting but wrong.
+- **Do not remove Subtaskmaster's "no polling" rules.** They look duplicative (F3 mentions 10+ restatements) but every restatement patched a concrete past incident. Consolidate (one location, clear wording) — don't delete.
+- **Do not remove PROOF emission from workers.** It looks like coordination overhead but is load-bearing for Reviewer verdicts; removing it would cascade into F4/F7 becoming worse.
+
+---
+
+## Recommended Follow-up Tasks
+
+| # | Title | Scope | Workers | Model |
+|---|-------|-------|---------|-------|
+| 1 | Fix `/doey-instant-task` subject drift (F1) | Skill + verification | 1 | sonnet |
+| 2 | Canonicalise review→deploy path (F2) | Reviewer + Taskmaster + Deployment agents | 1 | opus |
+| 3 | Extract shared agent fragments (F3) | expand-templates.sh + _fragments/ | 2 | opus |
+| 4 | Unify subtask vs task review policy (F4, F7) | Reviewer + Subtaskmaster + Taskmaster | 1 | opus |
+| 5 | Consolidate vague-prompt gate into shared helper (F5) | doey-task-helpers.sh + agent edits | 1 | sonnet |
+| 6 | Dedup duplicate-check to single site (F6) | Boss + Taskmaster + Reviewer | 1 | sonnet |
+| 7 | Delete Boss STATUS CHECK PROTOCOL (F8) | Boss agent + CLAUDE.md cross-ref | 1 | sonnet |
+| 8 | Simplify Dispatch Verification to trust `doey_send_verified` (F9) | Taskmaster agent + helper audit | 1 | sonnet |
+| 9 | Make phases conditional on CATEGORY (F10) | Subtaskmaster + Boss category mapping | 2 | opus |
+| 10 | Delete unused `phased` DISPATCH_MODE (F11) | Taskmaster agent + dispatch_task handler | 1 | sonnet |
+| 11 | Wire stale-worker detection to kill path (F12) | taskmaster-wait.sh + Taskmaster + Subtaskmaster | 1 | opus |
+| 12 | Remove `WORKERS_NEEDED` from Boss body (F13) | Boss + Taskmaster | 1 | sonnet |
+| 13 | Collapse duplicate freelancer-isolation rule (F14) | Taskmaster agent | 1 | sonnet |
+| 14 | Document message-subject protocol + add hook check (F15) | docs/message-subjects.md + doey msg send guard | 2 | opus |
+| 15 | Split `on-pre-tool-use.sh` by role (F16 — cross-team with W1/W2) | hook refactor | 2 | opus |
+
+---
+
+## Proof
+
+PROOF_CRITERION: Report committed to `.doey/reports/` with W3 findings
+PROOF_STATUS: pass
+PROOF_EVIDENCE: This file at `.doey/reports/perf-review-20260418-W3-coordination.md`, 16 findings + anti-recommendations + follow-up task list, all citations reference file:line in repo. Append-only: did not overwrite existing `task-387-parity.md`.
+---
+PROOF_CRITERION: DOEY_PROOF_EXEMPT respected (research task)
+PROOF_STATUS: pass
+PROOF_EVIDENCE: DOEY_PROOF_EXEMPT=1 set in env; this is a research deliverable, not code; minimal proof block included anyway for reviewer clarity.
+---
