@@ -55,7 +55,7 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 
 | Role | Blocked |
 |------|---------|
-| Subtaskmaster | Read/Edit/Write/Glob/Grep on project source; Agent; implementation work (send-keys allowed) |
+| Subtaskmaster | Read/Edit/Write/Glob/Grep on project source; Agent (except `subagent_type: "doey-worker-research"` for synthesis); implementation work (send-keys allowed) |
 | Taskmaster | Read/Edit/Write/Glob/Grep on project source; Agent |
 | Boss | Read/Edit/Write/Glob/Grep on project source; send-keys; Agent; implementation work |
 | Workers | git push, gh pr create/merge, ALL send-keys¹, tmux kill, rm -rf /, ~, $HOME, shutdown |
@@ -116,7 +116,7 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 Branch switching (`git checkout <branch>`, `git switch`, `git merge`) is blocked in the shared worktree by `on-pre-tool-use.sh`. This prevents workers from disrupting each other's work by changing the checked-out branch mid-session.
 
 - `git checkout -- <file>` (file restore) is allowed — only branch switches are blocked
-- To work on a different branch, use `Agent` with `isolation: "worktree"` or `/doey-worktree`
+- Stay on the session's starting branch. `/doey-worktree` is the ONLY sanctioned way to create a branch in a Doey session. Do NOT use the `Agent` tool with `isolation: "worktree"` — it creates a branch autonomously and breaks multi-phase workflows.
 - The guard detects worktrees via `git rev-parse --git-dir` vs `--git-common-dir`, and also respects the `DOEY_WORKTREE` env var
 
 ## Role Naming System

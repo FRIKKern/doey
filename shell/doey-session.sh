@@ -678,6 +678,9 @@ MANIFEST
     echo $! > "${runtime_dir}/doey-daemon.pid"
   fi
 
+  # Launch trust-prompt watcher — auto-accepts Claude Code's first-run trust dialog.
+  _start_trust_watcher "$runtime_dir" "$session"
+
   write_team_env "$runtime_dir" "$team_window" "$grid" "$worker_panes_csv" "$worker_count" "0" "" ""
 
   setup_dashboard "$session" "$dir" "$runtime_dir" 1
@@ -813,6 +816,25 @@ launch_session() {
 }
 
 # _print_doey_banner, _print_full_banner → doey-ui.sh
+
+# Fork the trust-prompt watcher daemon for this session. Idempotent: safe to call
+# from either static (_launch_session_core) or dynamic (launch_session_dynamic)
+# launch paths. Self-exits when session or runtime_dir disappears.
+_start_trust_watcher() {
+  local runtime_dir="$1"
+  local session="$2"
+  local _tw_bin="${HOME}/.local/bin/trust-watcher.sh"
+  if [ ! -x "$_tw_bin" ] && [ -x "${SESSION_SCRIPT_DIR}/trust-watcher.sh" ]; then
+    _tw_bin="${SESSION_SCRIPT_DIR}/trust-watcher.sh"
+  fi
+  if [ -x "$_tw_bin" ]; then
+    mkdir -p "${runtime_dir}/logs"
+    DOEY_RUNTIME="$runtime_dir" SESSION_NAME="$session" \
+      "$_tw_bin" --runtime "$runtime_dir" --session "$session" \
+      >> "${runtime_dir}/logs/trust-watcher.log" 2>&1 &
+    echo $! > "${runtime_dir}/trust-watcher.pid"
+  fi
+}
 
 # Clean up old session, runtime dir, and stale worktree branches
 _cleanup_old_session() {
@@ -1303,20 +1325,7 @@ MANIFEST
     fi
 
     # Launch trust-prompt watcher — auto-accepts Claude Code's first-run trust dialog.
-    # Self-exits when session or runtime disappears. See shell/trust-watcher.sh.
-    local _tw_bin=""
-    if [ -x "${HOME}/.local/bin/trust-watcher.sh" ]; then
-      _tw_bin="${HOME}/.local/bin/trust-watcher.sh"
-    elif [ -x "${SESSION_SCRIPT_DIR}/trust-watcher.sh" ]; then
-      _tw_bin="${SESSION_SCRIPT_DIR}/trust-watcher.sh"
-    fi
-    if [ -n "$_tw_bin" ]; then
-      mkdir -p "${runtime_dir}/logs"
-      DOEY_RUNTIME="$runtime_dir" SESSION_NAME="$session" \
-        "$_tw_bin" --runtime "$runtime_dir" --session "$session" \
-        >> "${runtime_dir}/logs/trust-watcher.log" 2>&1 &
-      echo $! > "${runtime_dir}/trust-watcher.pid"
-    fi
+    _start_trust_watcher "$runtime_dir" "$session"
 
     # Check if team 1 has a definition file — if so, use add_team_from_def instead of dynamic grid
     local _team1_def=""
@@ -1420,7 +1429,7 @@ MANIFEST
           _ptc_mm=$(_read_team_config "$_ptc_i" "MANAGER_MODEL" "")
 
           if [ -z "$_ptc_type" ]; then
-            if [ "$_ptc_i" -le "${DOEY_INITIAL_TEAMS:-2}" ]; then _ptc_type="local"; else _ptc_type="worktree"; fi
+            _ptc_type="local"
           fi
           [ -z "$_ptc_workers" ] && _ptc_workers=$(( ${DOEY_INITIAL_WORKER_COLS:-1} * 2 ))
           _ptc_cols=$(( (_ptc_workers + 1) / 2 ))

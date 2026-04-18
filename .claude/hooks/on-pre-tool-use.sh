@@ -663,6 +663,16 @@ if { [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_BOSS" ] || [ "$_DOEY_ROLE" = "$DOEY_ROLE_I
         _dbg_write "allow_interviewer_agent"
         exit 0
       fi
+      # Team Lead (Subtaskmaster) may spawn doey-worker-research for synthesis —
+      # distills raw worker reports in a fresh subagent context so the Subtaskmaster
+      # stays lean across phases.
+      if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ]; then
+        _agent_subtype=$(_json_str tool_input.subagent_type)
+        if [ "$_agent_subtype" = "doey-worker-research" ]; then
+          _dbg_write "allow_team_lead_synthesis_agent"
+          exit 0
+        fi
+      fi
       _log_block "TOOL_BLOCKED" "${_DOEY_ROLE} cannot use Agent tool" ""
       _dbg_write "block_${_DOEY_ROLE}_agent"
       _agent_desc=$(_json_str tool_input.description)
