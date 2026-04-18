@@ -1,0 +1,244 @@
+# Perf Review — Worker 1 Findings (Token Efficiency + Fresh-Install Integrity)
+
+**Task:** 604 / Subtask 1 · **Worker:** d-t4-w1 · **Date:** 2026-04-18 · **Scope:** Dimensions 1 (Token Efficiency) + 6 (Install / Fresh-Start Integrity)
+
+Partial report — W2/W3/W4 cover latency, coordination, correctness, and git. The Subtaskmaster will synthesize a single `perf-review-20260418.md`.
+
+---
+
+## Executive Summary — Top 5 (W1 scope)
+
+1. **P0 — Agent system prompts are 2–4× larger than necessary.** `doey-subtaskmaster.md` at 735 lines is the worst offender (~29 KB loaded on every Subtaskmaster spawn, every compaction, every `/resume`). Boss, Taskmaster, Task-Reviewer all ≥ 388 lines. Estimated 60% redundancy (reactive-pattern repeated 3×, no-polling rules stated as narrative, tables, *and* examples).
+2. **P0 — `on-pre-compact.sh` floods agent context on every compaction.** Dumps `head -200` of role overlay + `head -200` of shared overlay + `head -100` of context log + active tasks + pending results + completion files + crash files + unread message bodies. Realistic compaction injection: 500–1000 lines (~20–40 KB). Fires exactly when context is already tight.
+3. **P1 — MEMORY.md has 7 near-duplicate `feedback_proof_*.md` files** for a single concept (workers must emit PROOF). Tokens loaded every turn via the index. Same lesson, re-saved each time it was observed.
+4. **P1 — Skill `SKILL.md` files embed long bash scripts as prose.** `doey-masterplan/SKILL.md` = 369 lines, `doey-add-team` = 256 lines. Most of the body is fenced bash that would be better as a script the skill invokes.
+5. **P1 — Hooks ship inside `.claude/hooks/` which is frequently gitignored in consumer repos.** The self-repair block in `on-pre-tool-use.sh:30-44` exists precisely because fresh-install / branch-switch deletes hooks. Masks a design smell rather than fixing it.
+
+---
+
+## Dimension 1 — Token Efficiency
+
+### F1.1 · P0 · Subtaskmaster system prompt is 735 lines
+
+**Evidence:** `agents/doey-subtaskmaster.md` line count = 735. 30 lines contain one of (`reactive`, `polling`, `sleep-wake`, `wake event`, `NO `). The Reactive Sleep-Wake Loop, No Polling, Wake Triggers, Nudge Policy, Worker Kill Protection, and Narrow Exceptions sections restate the same rule — *react to events, don't scan state* — roughly five times with overlapping examples.
+
+**Proposed fix (patch sketch):**
+- Collapse "Reactive Sleep-Wake Loop" (§L390–452), "No Polling" (§L432–452), "Worker Kill Protection" (§L454–481), and "Nudge Policy" (§L491–527) into one 60-line section titled **"Event Loop & Kill/Nudge Rules"** with a single rules table.
+- Move verbose bad/good prompt examples (§L44–82, §L221–240) into a sibling file `agents/_fragments/prompt-examples.md` loaded only when referenced.
+- Delete "Synthesis Quality Checklist" (§L284–294) — duplicates "Core Principle: Never Delegate Understanding" (§L39–82).
+- Target: 735 → ~300 lines.
+
+**Estimated impact:** ~15 KB saved *per Subtaskmaster spawn* × N teams × N compactions. In a 4-team session that's ~240 KB less context across the day. At scale this beats any hook-level optimization.
+
+---
+
+### F1.2 · P0 · Taskmaster prompt is 521 lines with a built-in duplicate opening
+
+**Evidence:** `agents/doey-taskmaster.md:9-15` — "You ARE the Taskmaster…" paragraph appears twice, once at line 11 and again at line 15 phrased slightly differently. Plus the Reactive pattern is re-explained at lines 38–76 (the same material as in Subtaskmaster).
+
+**Proposed fix:** Dedupe the opening (remove §L15). Extract Sleep-Wake Cycle to a shared fragment `agents/_fragments/reactive-loop.md` used by Taskmaster, Subtaskmaster, and Task-Reviewer. Target: 521 → ~280 lines.
+
+**Impact:** ~10 KB per Taskmaster + cleaner signal-to-noise.
+
+---
+
+### F1.3 · P0 · `on-pre-compact.sh` writes very large output back into agent context
+
+**Evidence:** `.claude/hooks/on-pre-compact.sh:1–213`. Per-compaction output includes:
+- Recent-file find (`head -10`)
+- Role-specific context overlay (`head -200`)
+- Shared context overlay (`head -200`)
+- Context log (`head -100`)
+- Worker-pane assignments, pending results, completion files, crash files
+- Full body of unread `.msg` files (`head -3` each, but no cap on message count)
+- Active tasks list via `doey-ctl task list`
+
+This is the *largest single channel* by which runtime data re-enters the agent context window.
+
+**Proposed fix (patch sketch):**
+- Cap each section to a hard budget: overlay `head -50`, context log `head -30`, msg summaries max 5 entries, active tasks max 10.
+- Stop emitting the "How to drain messages" code block (lines 78–88) — the agent already knows how; this is a 7-line how-to that ships on every compaction.
+- Add a single-line summary ("Role: Subtaskmaster W2 · 3 msgs · 0 crashes · task #604 active") and gate the verbose dump behind `$DOEY_PRECOMPACT_VERBOSE`.
+
+**Impact:** Pre-compact output shrinks from ~500–1000 lines to ~50. Compaction becomes lossier but context use plummets. Ironically pre-compact *costs* the most tokens right before context becomes tight.
+
+---
+
+### F1.4 · P1 · MEMORY.md has 7 duplicate proof-related feedback files
+
+**Evidence:** Listing in `/home/doey/.claude/projects/-home-doey-doey/memory/`:
+```
+feedback_proof_emit.md
+feedback_proof_requirement.md
+feedback_proof_system.md
+feedback_proof_tracking.md
+feedback_stop_hook_proof.md
+feedback_worker_proof_emissions.md
+feedback_worker_proof_emit.md
+feedback_worker_proof_requirement.md
+```
+
+Eight files, ~20 lines each. Only `worker_proof_emit.md` is indexed in MEMORY.md; the rest are orphan files that were saved but never re-linked into the index.
+
+**Proposed fix:**
+- Consolidate into one canonical `feedback_worker_proof.md` (the existing indexed entry).
+- `trash` the seven orphans.
+- Add an auto-memory guideline: "Before writing a `feedback_*` file, grep the memory dir for overlap — update in place instead of re-saving."
+
+**Impact:** Minor in tokens (MEMORY.md itself is only 7 lines), but larger in memory-system discipline — the user's auto-memory is bloating from the *same lesson* being re-saved every time it bites. This is a systemic failure mode worth naming explicitly.
+
+---
+
+### F1.5 · P1 · Large SKILL.md files embed bash as prose
+
+**Evidence:** `wc -l .claude/skills/*/SKILL.md`:
+```
+369 doey-masterplan/SKILL.md
+256 doey-add-team/SKILL.md
+166 doey-dispatch/SKILL.md
+150 doey-planned-task/SKILL.md
+```
+
+`doey-masterplan/SKILL.md:20-100` is mostly fenced bash. Skills are loaded on-demand (good), but when loaded they are loaded *whole*.
+
+**Proposed fix:** Move multi-step bash into `.claude/skills/<name>/<name>.sh`, have SKILL.md *call* the script with a one-line instruction to the agent. Keeps the DSL portion in SKILL.md and gets the shell out.
+
+**Impact:** 369 → ~80 lines for `doey-masterplan`. Saves tokens every time the skill is invoked.
+
+---
+
+### F1.6 · P2 · `stop-results.sh` runs `go build`, `go vet`, and `bash -n` per `.sh` file on every worker stop
+
+**Evidence:** `.claude/hooks/stop-results.sh:205–246`. These are latency costs, not token costs (the output goes to a result JSON, not agent context), but a single worker that touched 3 `.sh` files triggers 3 × `bash -n` + 1 × `go build` + 1 × `go vet`. On a fresh worker stop in a Go project the hook takes 5–15 s before the worker_finished message reaches the Subtaskmaster.
+
+**Proposed fix (token-adjacent):** The JSON body of the result file that the Subtaskmaster reads can be very large when go build/vet output fails. Clip `evidence` fields to `head -c 500` *always*, not just on `needs_human`. Currently `_add_criterion` does clip but `_auto_output` accumulates unclipped.
+
+**Impact:** Bounds how much build noise ends up in agent context when a Subtaskmaster reads the result JSON.
+
+---
+
+### F1.7 · P2 · Per-pane status files accumulate and are re-read
+
+**Evidence:** `ls /tmp/doey/doey/status/` shows ~40 files per session (role, status, task_id, subtask_id, context_pct, busy_started_ms, completion_pane_*, crash_*, etc). Each write triggers a file IO and each hook reads several. No token cost unless a role ignores the "no polling" rule — but the temptation is strong because the files are right there.
+
+**Proposed fix:** Non-urgent. Cleanup via a `stop-results`-chained `find /tmp/doey/.../status -mmin +60 -delete` would keep runtime tidier.
+
+---
+
+### F1.8 · Anti-recommendation — Don't shrink `on-pre-tool-use.sh` for token reasons
+
+The 1132-line `on-pre-tool-use.sh` hook is frequently flagged for size, but *it never writes to the agent context* unless it blocks (exit 2 with a short message to stderr). It is a latency / fork-cost problem for W2 to consider, not a token problem. Resist the urge to "shorten the hook" as a token-efficiency win.
+
+---
+
+## Dimension 6 — Install / Fresh-Start Integrity
+
+### F6.1 · P1 · `.claude/hooks/*.sh` lives inside the project tree and is gitignore-fragile
+
+**Evidence:** `.claude/hooks/on-pre-tool-use.sh:30-44` — explicit self-repair block:
+```
+# Self-repair: if hooks were deleted (e.g. gitignored + branch switch), re-copy from Doey repo.
+```
+This block exists as insurance, which means the problem is known: hooks are expected to vanish. Self-repair depends on `$HOME/.claude/doey/repo-path` pointing at a valid checkout of Doey. If the user deletes the Doey source dir but keeps `repo-path`, self-repair fails silently (the `if [ -d ]` guard skips it) and the subsequent `source "$_DOEY_ROLES_FILE"` exits the hook early — every subsequent pre-tool-use call returns exit 0 without enforcement.
+
+**Proposed fix:**
+- Install hooks to `~/.claude/hooks/` as well as to the consumer project, with a fallback resolution order.
+- Or, make the pre-tool-use hook's "absent hook" case *deny* (exit 2) rather than silently allowing, so silently-broken installs are visible fast.
+- Add a `doey doctor` check: `.claude/hooks/on-pre-tool-use.sh` present AND `common.sh` present AND executable.
+
+**Impact:** Prevents the "my protections are silently off" class of install breakage.
+
+---
+
+### F6.2 · P2 · `on-session-start.sh` syncs skills from `$HOME/.claude/doey/repo-path` every session
+
+**Evidence:** `.claude/hooks/on-session-start.sh:140-168`. Every pane start:
+1. Reads `$HOME/.claude/doey/repo-path`.
+2. Copies `$repo_path/.claude/skills/doey-*/` into consumer project's `.claude/skills/`.
+3. Deletes skills in target that are not in source.
+
+This makes the consumer project a mutable clone of the source repo's skills. On fresh install this is desirable (ships current skills). But it also means **a consumer project's local skill edits are silently deleted** on the next pane start. And if `repo-path` points to a stale or partial checkout (e.g. user did `trash ~/doey` but not `rm repo-path`), every pane reset corrupts skills.
+
+**Proposed fix:**
+- Compare source and target by mtime/sha before copying; skip if identical. (Avoids overwriting locally edited skills silently.)
+- Log deletions to `${RUNTIME_DIR}/logs/skill-sync.log` so users can see what disappeared.
+- Make `doey doctor` warn if `repo-path` file exists but the directory is missing.
+
+**Impact:** Protects user-edited skills; surfaces broken `repo-path` state.
+
+---
+
+### F6.3 · P2 · Agent definitions live flat in `~/.claude/agents/` — no per-project override
+
+**Evidence:** `install.sh:351-356` — agent files are copied to `~/.claude/agents/` globally. Multiple Doey installations across projects share one set of agent prompts. `install.sh:313-317` also notes "Doey appears to already be installed — continuing will update all files."
+
+This is a fresh-install *design* choice, not a bug, but:
+- A project-specific context overlay is supported (`DOEY_CONTEXT_OVERLAY`, `on-session-start.sh:216-236`), but only for extra context, not for overriding an agent's body.
+- Installing a newer Doey in project A silently changes agents used by project B. No version pinning.
+
+**Proposed fix:** Minor — add a `DOEY_AGENTS_DIR` env override for power users; keep the global default. Note in CLAUDE.md that agent installs are global.
+
+**Impact:** Documentation clarity, not behavior change.
+
+---
+
+### F6.4 · P2 · `~/.local/bin/doey-*.sh` copies can drift from the repo
+
+**Evidence:** `install.sh:387-399` copies ~12 helper shell scripts into `~/.local/bin/`. Hooks and agents expect these to exist but never re-check their version. A user who edits the repo and doesn't re-run `install.sh` gets stale helpers.
+
+**Proposed fix:** `on-session-start.sh` already re-copies skills; do the same for the `$HOME/.local/bin/doey-*.sh` helpers (idempotent, gated by `repo-path` match). Or have `doey reload` do a full re-sync.
+
+**Impact:** Eliminates the "why is this working on main but not my branch?" class of bug.
+
+---
+
+### F6.5 · P0 · Hook fallback assumes `$HOME/.claude/doey/repo-path` — but install skips this path on temp-dir installs
+
+**Evidence:** `install.sh:331-335`:
+```bash
+case "$SCRIPT_DIR" in
+  /tmp/*|/var/folders/*) ;; # Don't save temp paths
+  *) echo "$SCRIPT_DIR" > "$HOME/.claude/doey/repo-path" ;;
+esac
+```
+The `web-install.sh` flow (curl | bash) downloads to `/tmp` → `repo-path` is never written → every subsequent hook resolution chain that falls through to "Method 3" (`on-pre-tool-use.sh:57-62`) silently fails and the hook runs in *degraded mode without centralized role IDs* but still exits 0.
+
+**Proposed fix:**
+- web-install.sh must persist the repo somewhere non-temp (e.g. `~/.local/share/doey/source/`) before running install.sh, OR install.sh should offer to `git clone` the repo into `~/.local/share/doey/` when running from /tmp.
+- Hooks should warn loudly (not silently) when running without `doey-roles.sh`.
+
+**Impact:** Closes a real fresh-install gap on the primary onboarding path (curl | bash).
+
+---
+
+### F6.6 · Anti-recommendation — `~/.config/doey/config.sh` being optional is fine
+
+The config.sh is NOT created by install, and that is intentional (defaults live in `shell/doey-config-default.sh`). Don't "fix" this by auto-creating the file — it would invite the same stale-config issue that plagues `repo-path`.
+
+---
+
+## Recommended Follow-up Tasks (token + install)
+
+| # | Title | Scope | Suggested |
+|---|-------|-------|-----------|
+| T1 | Collapse Subtaskmaster system prompt to ≤ 300 lines | `agents/doey-subtaskmaster.md.tmpl`, split out prompt-examples fragment | 1 worker, `opus`, 1-2 hrs |
+| T2 | Extract shared reactive-loop fragment for Taskmaster/Subtaskmaster/Reviewer | `agents/_fragments/reactive-loop.md`, update 3 templates, re-run expand-templates | 1 worker, `opus` |
+| T3 | Cap `on-pre-compact.sh` output to ≤ 50 lines + gate verbose behind env var | `.claude/hooks/on-pre-compact.sh` | 1 worker, `sonnet` |
+| T4 | Consolidate 7 `feedback_proof_*.md` memory files into one | user memory dir | 1 worker, `sonnet` quick |
+| T5 | Move `doey-masterplan` and `doey-add-team` bash bodies to `<name>.sh`, slim SKILL.md | `.claude/skills/doey-masterplan/`, `doey-add-team/` | 1 worker, `sonnet` |
+| T6 | Clip `_auto_output` in `stop-results.sh` so failed go build noise can't balloon result JSON | `.claude/hooks/stop-results.sh:205-246` | 1 worker, `sonnet` quick |
+| T7 | Fresh-install integrity: fail loudly when `doey-roles.sh` not found; add `doey doctor` check for hook presence | `.claude/hooks/on-pre-tool-use.sh:46-71`, `shell/doey-doctor.sh` | 1 worker, `sonnet` |
+| T8 | web-install: persist repo to `~/.local/share/doey/source/` before running `install.sh` | `web-install.sh` | 1 worker, `sonnet` |
+| T9 | `on-session-start.sh` skill sync — compare mtime/sha, don't clobber local edits | `.claude/hooks/on-session-start.sh:140-168` | 1 worker, `sonnet` |
+
+Total estimated impact if all land: ~40-60 KB less context per agent spawn, fewer silent-install failures, cleaner user memory. T1 + T3 alone are the highest-leverage items.
+
+---
+
+## Methodology Notes
+
+- Read whole of: `doey-subtaskmaster.md` (735 lines), `doey-boss.md` (partial, 120 lines), `doey-taskmaster.md` (180 lines), `on-pre-compact.sh` (213 lines), `on-prompt-submit.sh` (164 lines), `on-session-start.sh` (289 lines), `stop-status.sh` (209 lines), `stop-results.sh` (250 lines), `install.sh` (partial, 400 lines).
+- Counted lines / grepped for repetition markers on the agent prompts.
+- Listed `/home/doey/.claude/projects/-home-doey-doey/memory/` for memory-bloat.
+- Listed `/tmp/doey/doey/status/` and `messages/` for runtime state accumulation.
+- Did NOT implement anything (report-only task).

@@ -1,0 +1,171 @@
+# Doey Performance Review — 2026-04-18
+
+**Task:** 604 — Performance review across token efficiency, latency/throughput, coordination quality, correctness/waste, branch/git, and fresh-install integrity.
+**Synthesis:** W5 (this document) consolidates partial reports from W1 (token + install), W2 (latency/throughput), W3 (coordination), W4 (correctness + branch).
+**Status:** Report only — no fixes implemented. Follow-up tasks are proposed in the final section.
+
+Source reports (append-only, retained):
+- `.doey/reports/perf-review-20260418-w1-token-and-install.md`
+- `.doey/scratch/perf-review-w2-latency.md`
+- `.doey/reports/perf-review-20260418-W3-coordination.md`
+- `.doey/reports/perf-review-20260418-w4.md`
+
+---
+
+## 1. Executive summary — top 5 findings by impact
+
+| # | Finding | Severity | Source | Dimensions affected |
+|---|---------|----------|--------|---------------------|
+| 1 | `on-pre-tool-use.sh` is 1132 lines, runs synchronously on every tool call | P0 | W2·P0-2, W3·F16 | latency + token (slow acks) |
+| 2 | Worker stop hook chain runs CI-grade `go build`/`go vet`/`bash -n` serially (8 hooks, 2014 lines) | P0 | W2·P0-1, P1-6 | latency + throughput |
+| 3 | Coordinator prompts are bloated (Subtaskmaster 735, Taskmaster 521, Boss 416 lines) with heavy rule duplication | P0 | W1·F1.1, W3·F3, W2·P2-8 | token + first-token latency |
+| 4 | Proof gate is syntactic only (`grep '^PROOF_TYPE:'`) — false-positive completions | P0 | W4·F-W4-1 | correctness / waste |
+| 5 | Branch guard has gaps: blocks `checkout/switch/merge` but not `git branch <new>`, `git worktree add`, `git reset --hard origin/...` | P0 | W4·F-W4-8 | correctness / branch (see task 603) |
+
+**Common root cause** across items 1–3: rules, guards, and verification logic were added defensively without a second pass to compress. The cost is paid on every turn, not once.
+
+---
+
+## 2. P0 / P1 rollup — cross-dimension top 10
+
+Rank | Finding | Severity | Source
+-----|---------|----------|-------
+1 | pre-tool-use hot path (1132 lines / call) | P0 | W2, W3
+2 | stop-hook chain (build/vet/bash-n serial; 8 hooks per stop) | P0 | W2
+3 | Subtaskmaster/Taskmaster/Boss system-prompt bloat (735/521/416) | P0 | W1, W2, W3
+4 | Syntactic proof gate lets unverified work pass | P0 | W4
+5 | Branch guard gaps (worktree add, new branch, reset --hard) | P0 | W4 (x-ref task 603)
+6 | `on-pre-compact.sh` emits 500–1000 lines to agent context per compaction | P0 | W1·F1.3
+7 | `/doey-instant-task` subject drift (`new_task` not handled by Taskmaster) | P0 | W3·F1
+8 | Conflicting review→deploy subject paths (`deploy_request` vs `deployment_request`) | P0 | W3·F2
+9 | `web-install.sh` skips `$HOME/.claude/doey/repo-path` write — self-repair breaks on fresh curl install | P0 | W1·F6.1
+10 | Double-review loop + vague-gate duplication causes re-dispatch churn (e.g. tasks 596 / 599) | P1 | W3·F4/F5, W4·F-W4-3
+
+---
+
+## 3. Findings by dimension
+
+### 3.1 Token efficiency (W1)
+
+| ID | Finding | Severity |
+|----|---------|----------|
+| F1.1 | `agents/doey-subtaskmaster.md` (735 lines) is ~60% redundant — reactive/no-polling/kill-protection stated 5× | P0 |
+| F1.2 | `agents/doey-taskmaster.md` has duplicate opening paragraph (lines 11 & 15); Boss has 60-line STATUS CHECK PROTOCOL it doesn't run | P1 |
+| F1.3 | `on-pre-compact.sh` dumps 500–1000 lines to stdout (agent context) every compaction — overlays × 200 lines + msgs + crash files | P0 |
+| F1.4 | `.claude/skills/doey-masterplan/SKILL.md` bloat (long examples shadowed by the template) | P2 |
+| F1.5 | `MEMORY.md` indexes 1 of 8 `feedback_proof_*.md` files — memory sprawl, duplicate intent | P2 |
+| F1.6 | Status / result JSON files re-read by Subtaskmaster on every wake cycle | P1 (overlap with W2·P1-3) |
+| F1.7 | Pre-compact preserves recent file list but not active-task scope — compacted agents re-ask | P1 |
+| F1.8 (anti-rec) | **Do not** shrink `on-pre-tool-use.sh` for tokens alone — it doesn't reach agent context. Shrink it for latency (W2·P0-2). | — |
+
+### 3.2 Latency / throughput (W2)
+
+| ID | Finding | Severity |
+|----|---------|----------|
+| P0-1 | Stop-hook chain runs `go build ./...` + `go vet ./...` + per-file `bash -n` serially (worst case 20–40s per stop); 8 stop hooks = 2014 shell LOC parsed per stop | P0 |
+| P0-2 | `on-pre-tool-use.sh` hot-path: jq/python3 subprocess per call, 2× `git rev-parse`, awk/sed/tr pipeline even for `ls`, 10s heartbeat rewrite | P0 |
+| P1-3 | `taskmaster-wait.sh` N+1 `doey-ctl task get` pattern + double task-scan pre/post sleep + `_check_stale_heartbeats` iterates twice | P1 |
+| P1-4 | `doey_send_verified` 4-retry chain: 0.5→1.0→2.0 backoff, 800ms paste-settle, 3s BUSY poll even on first attempt | P1 |
+| P1-5 | Coordination hops degrade to `sleep 60` when `inotifywait` missing (macOS default) | P1 |
+| P1-6 | `stop-results.sh` internal verify steps are serial — easy parallelism win | P1 |
+| P2-7 | No warm-worker pool — dynamic spawns pay full 5–15s boot cost | P2 |
+| P2-8 | Prompt size ≈ first-token latency (cross-ref W1·F1.1) | P2 |
+| P2-9 (anti-rec) | Keep the 3s Taskmaster self-trigger in `stop-status.sh:192-207` — prevents silent Taskmaster | — |
+
+### 3.3 Coordination quality (W3)
+
+| ID | Finding | Severity |
+|----|---------|----------|
+| F1 | `/doey-instant-task` emits subject `new_task` not handled by Taskmaster → silent drop | P0 |
+| F2 | Review → Deploy path conflicts: `deploy_request` vs `deployment_request` vs `review_passed` — routing ambiguous | P0 |
+| F3 | Coordinator prompt bloat (cross-ref W1·F1.1) — amplifies every coordination turn | P0 |
+| F4 | Double-review: Subtaskmaster validates + Task Reviewer re-reviews; no short-circuit for trivial tasks | P1 |
+| F5 | "Vague-gate" logic duplicated across Boss / Taskmaster / Subtaskmaster with subtle drift | P1 |
+| F10 | Phases serialize even when subtasks are independent — phase-graph not used | P1 |
+| F12 | Stale-detection writes alerts but does not trigger respawn — manual intervention required | P1 |
+| F16 | `on-pre-tool-use.sh` size affects latency (cross-ref W2·P0-2) — shrink for speed, not tokens | P0 |
+| Other (F6–F15, F17) | Ambiguous message subjects, over-spawn heuristics, review-queue starvation, etc. — details in W3 source report | P1–P2 |
+
+### 3.4 Correctness / waste + branch/git (W4)
+
+| ID | Finding | Severity |
+|----|---------|----------|
+| F-W4-1 | Proof gate `grep '^PROOF_TYPE:'` is syntactic — any string satisfies it; `DOEY_PROOF_EXEMPT=1` silently skips | P0 |
+| F-W4-2 | No enforced build-before-commit — workers have shipped broken builds past the stop hook | P1 |
+| F-W4-3 | Re-dispatch churn observed on tasks 596 & 599: validation failed after "done" because of F-W4-1/F-W4-2 | P1 |
+| F-W4-4 | Over-spawn: 3-worker dispatch on ≤1-file changes observed (task ledger sample) | P2 |
+| F-W4-5 | Under-spawn: multi-file refactors delegated to 1 worker (task 600 partial) | P2 |
+| F-W4-6 | Task 600 status drift — marked in_progress while worker idle; stale-heartbeat not wired to re-dispatch | P1 |
+| F-W4-7 | (bundled with task 603) Git push workflow: no per-worker branch convention | P1 |
+| F-W4-8 | (bundled with task 603) Branch guard gaps: `git branch <new>`, `git worktree add`, `git reset --hard origin/...`, `git stash pop` over branch point | P0 |
+| F-W4-9 | (bundled with task 603) No branch-cleanup sweep after merged PRs | P2 |
+| F-W4-10 | Duplicate task detection uses title-substring only — semantic duplicates pass through | P2 |
+
+### 3.5 Fresh-install / install integrity (W1·§6)
+
+| ID | Finding | Severity |
+|----|---------|----------|
+| F6.1 | `install.sh:331-335` skips writing `$HOME/.claude/doey/repo-path` for `/tmp` installs — `on-pre-tool-use.sh:30-44` self-repair then fails on fresh curl‑bash users | P0 |
+| F6.2 | `on-pre-tool-use.sh` role-resolution 3-tier fallback masks a misconfigured install (silent "assume Worker") | P1 |
+| F6.3 | `settings.json` entries are user-local; any new skill/hook that forgets to add them breaks fresh install | P1 |
+| F6.4 | `expand-templates.sh` not run during install — templates ship unrendered if a dev commits the tmpl but forgets the .md | P1 |
+| F6.5 | `doey doctor` does not check for `inotify-tools`/`fswatch` — install passes on macOS but hops are slow (cross-ref W2·P1-5) | P2 |
+| F6.6 | Memory dir layout (`~/.claude/projects/...`) is not created by install — depends on Claude Code auto-init | P2 |
+
+---
+
+## 4. Conflict reconciliation
+
+**`on-pre-tool-use.sh` size.** W1·F1.8 says *do not shrink for tokens* (this hook output does not reach agent context). W2·P0-2 and W3·F16 say *do shrink for latency* (runs synchronously per tool call). **Resolution:** shrink it, but optimize for hot-path wall-time (early-exit non-Bash tools, cache pane resolution, cheap VCS pre-filter) — not for byte count. This is captured in follow-up task #2.
+
+**Worker spawn policy.** W4·F-W4-4 (over-spawn) and W4·F-W4-5 (under-spawn) pull in opposite directions. **Resolution:** both point at the same root cause — the dispatcher lacks a file-count/scope heuristic. Fix once (follow-up task #10), affects both.
+
+---
+
+## 5. Recommended follow-up tasks (deduplicated)
+
+| # | Title | Scope | Est. impact | Workers / Model | Priority |
+|---|-------|-------|-------------|-----------------|----------|
+| 1 | Parallelize stop-results auto-verify (`&`+`wait`), gate build/vet to changed package | `.claude/hooks/stop-results.sh` 205-246 | 5–30s per stop | 1 · sonnet | P0 |
+| 2 | Fast-path `on-pre-tool-use.sh`: cache pane role/worktree, early-exit non-Bash tools, cheap VCS pre-filter | `.claude/hooks/on-pre-tool-use.sh` | 50–200ms / tool call | 1 · sonnet (deep) | P0 |
+| 3 | Compress coordinator prompts: factor reactive/polling/kill-protection rules into one ref block; template via `expand-templates.sh` | `agents/doey-{boss,taskmaster,subtaskmaster}.md{,.tmpl}` | 10–20% first-token latency; ~40–60% line reduction | 1 · sonnet | P0 |
+| 4 | Semantic proof gate: type-specific validators (`report_file` → file exists > N bytes; `test_output` → matches PASS regex; `git_commit` → SHA reachable) | `.claude/hooks/stop-status.sh` 24-36 | eliminates false-pass re-dispatch churn | 1 · sonnet | P0 |
+| 5 | Close branch guard gaps: block `git branch <new>`, `git worktree add`, `git reset --hard origin/...`, `git stash pop` across branch points | `.claude/hooks/on-pre-tool-use.sh` VCS section | correctness | coordinate with task 603 | P0 |
+| 6 | Trim `on-pre-compact.sh` output: head -40 (not -200), drop full msg bodies, keep task IDs only | `.claude/hooks/on-pre-compact.sh` | 500–1000 tokens saved per compaction | 1 · haiku | P0 |
+| 7 | Unify dispatch subjects: `/doey-instant-task` → `dispatch_task`; single `deploy_request` subject; drop aliases | `.claude/skills/doey-instant-task/`, `shell/doey-send.sh`, Taskmaster routing | eliminates silent drops | 1 · sonnet | P0 |
+| 8 | Fix `install.sh:331-335` — always write `$HOME/.claude/doey/repo-path` (including `/tmp` installs) | `install.sh` | fresh-install self-repair works | 1 · haiku | P0 |
+| 9 | `taskmaster-wait.sh` single-pass scan using `doey-ctl task list --unassigned --json` | `.claude/hooks/taskmaster-wait.sh` 636-770 | 200–800ms per wake | 1 · sonnet | P1 |
+| 10 | Dispatcher scope heuristic: file-count + type → `worker_count` recommendation; stop hardcoded 3-worker default | Taskmaster dispatch logic | correctness + throughput | 1 · sonnet | P1 |
+| 11 | Stale-heartbeat → re-dispatch wiring (close F12, F-W4-6) | `stop-notify.sh`, `taskmaster-wait.sh` | ends silent-stall failures | 1 · sonnet | P1 |
+| 12 | Short-circuit Task Reviewer for docs-only / research-only tasks | Taskmaster review routing + `doey-task-reviewer.md` | ~1 reviewer turn saved per doc task | 1 · haiku | P1 |
+| 13 | Reduce `doey_send_verified` retries → 2, skip 1st-attempt BUSY poll, `PASTE_SETTLE_MS=250` | `shell/doey-send.sh` 217-316 | 2–3s / message | 1 · haiku | P1 |
+| 14 | `fswatch` shim + `doey doctor --fix` installs `inotify-tools` | `shell/common.sh`, `install.sh`, `shell/doey-doctor.sh` | 5–30s coordination-hop latency on fallback | 1 · sonnet | P1 |
+| 15 | Memory hygiene: dedupe `feedback_proof_*.md` files; rebuild `MEMORY.md` index | `~/.claude/projects/.../memory/` | memory-context clarity | 1 · haiku | P2 |
+| 16 | Post-merge branch sweep (cross-ref task 603) | `shell/doey-branch.sh` | hygiene | bundle with 603 | P2 |
+| 17 | Dedupe tasks semantically (embed title + first 200 chars of description, cosine) | task-create path | avoids duplicate queues | 1 · sonnet | P2 |
+
+---
+
+## 6. Anti-recommendations (do not spend cycles on these)
+
+1. **Do not collapse Boss + Taskmaster** (W2). The relay hop is a boundary between user intent and deterministic coordination — worth the ~2s/message.
+2. **Do not remove `doey_wait_for_prompt` readiness gating** (W2). Tune timings, don't delete.
+3. **Do not background `stop-status.sh`** (W2). Synchronous proof gate is the only thing preventing unverified completions.
+4. **Do not raise `_passive_sleep` beyond 30s** (W2).
+5. **Do not shrink `on-pre-tool-use.sh` for token reasons** (W1·F1.8). It never reaches agent context. Shrink for latency only.
+6. **Do not remove the 3s Taskmaster self-trigger** in `stop-status.sh:192-207` (W2·P2-9). Prevents silent Taskmaster.
+7. **Do not remove `DOEY_PROOF_EXEMPT=1`** (W4 note). Research tasks legitimately have no artifact other than the report path. Tighten proof-gate semantics instead (task #4).
+8. **Do not pre-spawn a worker pool** (W2·P2-7) unless dynamic spawn pattern proves dominant in telemetry. Current teams are mostly static — marginal win.
+
+---
+
+## 7. Provenance
+
+| Dim | Partial report | Size | Findings |
+|-----|----------------|------|----------|
+| Token + install | `perf-review-20260418-w1-token-and-install.md` | 16.5 KB | 8 token + 6 install |
+| Latency / throughput | `perf-review-w2-latency.md` (scratch/) | — | 9 |
+| Coordination | `perf-review-20260418-W3-coordination.md` | 19.9 KB | 16 |
+| Correctness + branch | `perf-review-20260418-w4.md` | 14.3 KB | 10 |
+
+All partial reports remain on disk, append-only. This synthesis does not modify them.
