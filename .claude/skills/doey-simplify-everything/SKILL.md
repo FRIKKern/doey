@@ -24,7 +24,7 @@ wc -l "$PROJECT_DIR"/{agents/*.md,CLAUDE.md,.claude/skills/*/SKILL.md,docs/*.md,
 D1: Shell core (`doey.sh`, `install.sh`) | D2: Hooks | D3: Skills | D4: Agents+CLAUDE.md | D5: Docs+README | D6: Shell support+tests
 
 **By team count:** 4+: D1, D2, D3+D4, D5+D6 | 3: D1+D6, D2+D4, D3+D5 | 2: D1+D2+D6, D3+D4+D5 | 1: all
-Worktree for low-conflict (docs, agents). Local for hooks/shell.
+All teams stay on the session's starting branch. Do not spawn worktrees automatically — if the user explicitly asks for isolation, they invoke `/doey-worktree`.
 
 ### Task template (load-buffer/paste-buffer)
 ```
