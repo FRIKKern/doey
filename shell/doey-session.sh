@@ -28,8 +28,14 @@ install_doey_hooks() {
     return 0
   fi
   mkdir -p "$target_dir/.claude/hooks"
-  cp "${repo_dir}"/.claude/hooks/*.sh "$target_dir/.claude/hooks/" 2>/dev/null && \
-    chmod +x "$target_dir"/.claude/hooks/*.sh || true
+  # Force-overwrite so repo updates (added/renamed hooks) always propagate.
+  # Separate cp and chmod so a partial cp doesn't skip chmod on already-copied files.
+  cp -f "${repo_dir}"/.claude/hooks/*.sh "$target_dir/.claude/hooks/" 2>/dev/null || true
+  chmod +x "$target_dir"/.claude/hooks/*.sh 2>/dev/null || true
+  # Drop a marker recording repo hooks mtime — self-heal in on-session-start
+  # uses this to avoid re-syncing every pane.
+  touch -r "${repo_dir}/.claude/hooks" "$target_dir/.claude/hooks/.doey-synced" 2>/dev/null || \
+    touch "$target_dir/.claude/hooks/.doey-synced" 2>/dev/null || true
   # Always write Doey hooks to settings.local.json (Doey owns this file).
   # User hooks belong in their project's settings.json — Claude Code merges both.
   cp "${repo_dir}/.claude/settings.json" "$target_dir/.claude/settings.local.json"
