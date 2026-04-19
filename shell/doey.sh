@@ -21,6 +21,7 @@ set -euo pipefail
 #   doey add          # Add a worker column (2 workers) to dynamic session
 #   doey remove 2     # Remove worker column 2 from dynamic session
 #   doey deploy       # Deploy validation pipeline
+#   doey discord      # Discord integration (status/bind/send/...)
 #   doey remote       # Manage remote Hetzner servers
 #   doey --help       # Show usage
 #
@@ -65,6 +66,9 @@ source "${SCRIPT_DIR}/doey-update.sh"
 
 # shellcheck source=doey-doctor.sh
 source "${SCRIPT_DIR}/doey-doctor.sh"
+
+# shellcheck source=doey-discord.sh
+source "${SCRIPT_DIR}/doey-discord.sh"
 
 # shellcheck source=doey-agents.sh
 source "${SCRIPT_DIR}/doey-agents.sh"
@@ -210,6 +214,7 @@ case "${1:-}" in
     masterplan Start a masterplan team for a goal (alias: plan)
     plan to-tasks   Convert a CONSENSUS masterplan file into tasks+subtasks
     deploy     Deploy validation pipeline (start/status/gate)
+    discord    Discord integration (status, bind, unbind, send, failures, ...)
     remote     Manage remote Hetzner servers (list/provision/stop/status)
     scaffy     Run scaffy template engine subcommands
     settings   Open interactive settings editor window
@@ -333,6 +338,12 @@ HELP
   reviewer)
     shift
     doey_reviewer "$@"
+    exit $?
+    ;;
+  discord)
+    (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill "discord_${2:-help}" &) 2>/dev/null || true
+    shift
+    doey_discord "$@"
     exit $?
     ;;
   # Everything below requires tmux + claude — check prerequisites:

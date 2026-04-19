@@ -445,6 +445,28 @@ if [ ! -f "${HOME}/.config/doey/config.sh" ] && [ -f "$SCRIPT_DIR/shell/doey-con
   detail "installed default config"
 fi
 
+# Ensure <project>/.doey/.gitignore contains discord-binding when install.sh
+# is run from inside a doey-managed project (the common dev/update case).
+# Belt-and-suspenders: on-session-start.sh re-ensures this on every session,
+# which is the primary guarantee for users who install globally via curl|bash.
+_doey_ensure_gitignore() {
+  local proj="$1" gi
+  [ -d "${proj}/.doey" ] || return 0
+  gi="${proj}/.doey/.gitignore"
+  touch "$gi" 2>/dev/null || return 0
+  grep -q '^discord-binding$' "$gi" 2>/dev/null || echo 'discord-binding' >> "$gi" 2>/dev/null || true
+}
+if [ -d "${PWD}/.doey" ]; then
+  _doey_ensure_gitignore "$PWD"
+  detail ".doey/.gitignore ensured (discord-binding)"
+elif [ -d "${SCRIPT_DIR}/.doey" ] && [ "$SCRIPT_DIR" != "$PWD" ]; then
+  _doey_ensure_gitignore "$SCRIPT_DIR"
+  detail ".doey/.gitignore ensured in repo"
+else
+  detail "no project dir — .doey/.gitignore deferred to first session"
+fi
+unset -f _doey_ensure_gitignore
+
 # Build all Go binaries from the centralized target list in doey-go-helpers.sh.
 # Returns 0 on success (doey-tui built), non-zero if doey-tui fails.
 _build_tui() {
