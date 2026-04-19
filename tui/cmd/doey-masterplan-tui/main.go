@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -507,22 +506,79 @@ func loadConsensus(planPath string) string {
 
 // ── Plan discovery ────────────────────────────────────────────────────
 
-// newestMasterplan returns the lexicographically-greatest masterplan-*.md
-// file under .doey/plans/, which (because of the YYYYMMDD-HHMMSS naming)
-// is also the most recent. Returns "" if no plans exist.
+// isMasterplanByFrontmatter reports whether the file at path declares
+// `skill: doey-masterplan` inside its YAML frontmatter. Reads only up to
+// the first ~40 lines and stops at the closing `---`.
+func isMasterplanByFrontmatter(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(string(data), "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return false
+	}
+	limit := len(lines)
+	if limit > 40 {
+		limit = 40
+	}
+	for i := 1; i < limit; i++ {
+		line := lines[i]
+		if strings.TrimSpace(line) == "---" {
+			return false
+		}
+		eq := strings.IndexByte(line, ':')
+		if eq < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.Trim(strings.TrimSpace(line[eq+1:]), `"'`)
+		if key == "skill" && val == "doey-masterplan" {
+			return true
+		}
+	}
+	return false
+}
+
+// newestMasterplan returns the newest-by-mtime plan file under
+// .doey/plans/ whose frontmatter declares `skill: doey-masterplan`. If
+// none match, falls back to the newest plan of any kind. Returns "" if
+// the directory has no plan files at all.
 func newestMasterplan() string {
-	matches, _ := filepath.Glob(".doey/plans/masterplan-*.md")
+	matches, _ := filepath.Glob(".doey/plans/*.md")
 	if len(matches) == 0 {
 		return ""
 	}
-	sort.Strings(matches)
-	return matches[len(matches)-1]
+	var newest string
+	var newestMtime time.Time
+	for _, p := range matches {
+		fi, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if isMasterplanByFrontmatter(p) && fi.ModTime().After(newestMtime) {
+			newest, newestMtime = p, fi.ModTime()
+		}
+	}
+	if newest != "" {
+		return newest
+	}
+	for _, p := range matches {
+		fi, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if fi.ModTime().After(newestMtime) {
+			newest, newestMtime = p, fi.ModTime()
+		}
+	}
+	return newest
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
 
 func main() {
-	planFlag := flag.String("plan", "", "Path to the masterplan markdown file (default: newest .doey/plans/masterplan-*.md)")
+	planFlag := flag.String("plan", "", "Path to the masterplan markdown file (default: newest masterplan in .doey/plans/)")
 	planFileFlag := flag.String("plan-file", "", "Alias for --plan (kept for the existing launcher script)")
 	// Accept and ignore legacy flags so the existing shell launcher
 	// keeps working without a coordinated rewrite.
@@ -539,7 +595,7 @@ func main() {
 		planPath = newestMasterplan()
 	}
 	if planPath == "" {
-		fmt.Fprintln(os.Stderr, "doey-masterplan-tui: no plan file given and no .doey/plans/masterplan-*.md found")
+		fmt.Fprintln(os.Stderr, "doey-masterplan-tui: no plan file given and no plans found in .doey/plans/")
 		os.Exit(1)
 	}
 

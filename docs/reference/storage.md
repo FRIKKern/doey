@@ -30,7 +30,7 @@ read-path for tmux status scripts, shell hooks, and migration.
 | `<project>/.doey/tasks/<id>.result.json` | Copy of final result JSON for a task | `.claude/hooks/stop-results.sh:357` |
 | `<project>/.doey/tasks/<id>.report` | Copy of pane report file | `.claude/hooks/stop-results.sh:363` |
 | `<project>/.doey/tasks/<id>/attachments/` | Completion/research/media attachments | `.claude/hooks/stop-results.sh:370` |
-| `<project>/.doey/plans/` | Masterplan drafts and consensus docs | `shell/masterplan-*.sh` |
+| `<project>/.doey/plans/` | Plan files (`<N>.md` with YAML frontmatter — see [plans.md](plans.md)) | `shell/doey-plan-helpers.sh`, `/doey-masterplan`, `/doey-planned-task` |
 | `<project>/.doey/reports/`, `research/`, `scratch/` | Worker report/research/scratch checked in long-term | hooks + workers |
 | `<project>/.doey/violations/` | Hook rule violations | `.claude/hooks/common.sh` (`_violations_dir`) |
 | `<project>/.doey/config.sh` | Project-scoped config overrides | user |
