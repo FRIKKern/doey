@@ -170,6 +170,10 @@ Phase status values: `planned`, `in-progress`, `done`, `failed`. Optional leadin
 
 Do NOT invent new top-level sections — the parser ignores unknown H2s. Keep prose short; rely on checkboxes and bullets so the viewer can show structure.
 
+### Preserve YAML frontmatter on rewrite
+
+The plan file may be pre-seeded by `/doey-masterplan` with a YAML frontmatter block (the `---` fenced header containing `plan_id`, `task_id`, `title`, `status`, `created`, `updated`, `skill`). **This block MUST be preserved verbatim across every rewrite** — the TUI Plans tab loader (`tui/internal/store/migrate.go`) drops plans without a numeric `plan_id` in frontmatter. On each rewrite, re-emit the existing `---...---` block unchanged except for bumping `updated:` to the current ISO-8601 UTC timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`). If no frontmatter exists, do not invent one.
+
 ## Completion
 
 Once `CONSENSUS_STATE=CONSENSUS` and the user has given the green light:

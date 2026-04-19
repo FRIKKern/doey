@@ -515,32 +515,111 @@ HELP
     (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill masterplan_started &) 2>/dev/null || true
     (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill skill_invoked cmd=masterplan &) 2>/dev/null || true
     require_running_session
-    plan_id="masterplan-$(date +%Y%m%d-%H%M%S)"
-    plan_dir="${runtime_dir}/${plan_id}"
+    mp_ts="$(date +%Y%m%d-%H%M%S)"
+    mp_id="masterplan-${mp_ts}"
+    plan_dir="${runtime_dir}/${mp_id}"
     mkdir -p "$plan_dir"
-    plan_file="${plan_dir}/plan.md"
-    touch "$plan_file"
     printf '%s\n' "$goal" > "${plan_dir}/goal.md"
 
     # Create task
     task_id=$(doey task create --title "Masterplan: ${goal}" --type feature --description "$goal" --project-dir "$dir" 2>/dev/null) || true
 
+    # Derive short title for plan row (first 80 chars, single line).
+    goal_title=$(printf '%s' "$goal" | tr '\n' ' ' | cut -c1-80 | sed 's/"/\\"/g')
+
+    # Allocate canonical numeric plan id via doey-ctl; plan file lives at
+    # <project>/.doey/plans/<N>.md with YAML frontmatter (readable by the Go TUI).
+    plan_id=""
+    if command -v doey-ctl >/dev/null 2>&1; then
+      if [ -n "${task_id:-}" ]; then
+        plan_id=$(doey-ctl plan create --title "Masterplan: ${goal_title}" --task-id "$task_id" --status draft --project-dir "$dir" 2>/dev/null | grep -oE '[0-9]+$' | tail -n1) || true
+      else
+        plan_id=$(doey-ctl plan create --title "Masterplan: ${goal_title}" --status draft --project-dir "$dir" 2>/dev/null | grep -oE '[0-9]+$' | tail -n1) || true
+      fi
+    fi
+
+    plans_dir="${dir}/.doey/plans"
+    mkdir -p "$plans_dir"
+
+    # Fallback: if doey-ctl plan create failed, pick next numeric id from disk.
+    case "${plan_id}" in
+      ''|*[!0-9]*)
+        _next=1
+        for _pf in "$plans_dir"/*.md; do
+          [ -f "$_pf" ] || continue
+          _base=$(basename "$_pf" .md)
+          case "$_base" in *[!0-9]*) continue ;; esac
+          [ "$_base" -ge "$_next" ] && _next=$((_base + 1))
+        done
+        plan_id="$_next"
+        ;;
+    esac
+
+    plan_file="${plans_dir}/${plan_id}.md"
+    now_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    goal_head=$(printf '%s\n' "$goal" | head -n 20)
+
+    cat > "$plan_file" << PLANEOF
+---
+plan_id: ${plan_id}
+task_id: ${task_id:-}
+title: "${goal_title}"
+status: draft
+created: ${now_iso}
+updated: ${now_iso}
+skill: doey-masterplan-shell
+---
+
+# ${goal_title}
+
+## Goal
+${goal_head}
+
+## Context
+_(Planner will fill this in.)_
+
+## Phases
+_(Planner will populate.)_
+
+## Deliverables
+_(Planner will populate.)_
+
+## Risks
+_(Planner will populate.)_
+
+## Success Criteria
+_(Planner will populate.)_
+PLANEOF
+
+    # Back-compat alias for shell/masterplan-tui.sh auto-discovery
+    # (which globs "${RD}/masterplan-*/plan.md").
+    ln -sf "$plan_file" "${plan_dir}/plan.md"
+
+    # Wire plan id to the task row so TUI task↔plan linkage works.
+    if [ -n "${task_id:-}" ]; then
+      doey task update --id "$task_id" --field TASK_PLAN_ID --value "$plan_id" --project-dir "$dir" >/dev/null 2>&1 || true
+    fi
+
     # Export for add_team_from_def (shell scope) and tmux (pane scope)
     export PLAN_FILE="$plan_file"
     export GOAL_FILE="${plan_dir}/goal.md"
-    export MASTERPLAN_ID="$plan_id"
+    export MASTERPLAN_ID="$mp_id"
+    export PLAN_ID="$plan_id"
     export DOEY_TASK_ID="${task_id:-}"
 
     # Set tmux session env so spawned panes inherit these vars
     tmux set-environment -t "$session" PLAN_FILE "$plan_file"
     tmux set-environment -t "$session" GOAL_FILE "${plan_dir}/goal.md"
-    tmux set-environment -t "$session" MASTERPLAN_ID "$plan_id"
+    tmux set-environment -t "$session" MASTERPLAN_ID "$mp_id"
+    tmux set-environment -t "$session" PLAN_ID "$plan_id"
     [ -n "${task_id:-}" ] && tmux set-environment -t "$session" DOEY_TASK_ID "$task_id"
 
     # Write masterplan env (persistent reference for hooks/scripts)
-    cat > "${runtime_dir}/${plan_id}.env" << MPEOF
+    cat > "${runtime_dir}/${mp_id}.env" << MPEOF
 PLAN_FILE=${plan_file}
-MASTERPLAN_ID=${plan_id}
+PLAN_ID=${plan_id}
+MP_DIR=${plan_dir}
+MASTERPLAN_ID=${mp_id}
 TASK_ID=${task_id:-}
 GOAL_FILE=${plan_dir}/goal.md
 MPEOF

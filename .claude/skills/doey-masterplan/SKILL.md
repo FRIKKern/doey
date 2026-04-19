@@ -63,19 +63,21 @@ printf 'Run interview: %s (classification=%s)\n' "$RUN_INTERVIEW" "$CLASSIFICATI
 
 ### Step 3: Setup Masterplan Working Directory (common to both modes)
 
-Create the masterplan working directory, write the goal file, create the tracked task, and write `masterplan.env` — this is what `doey-masterplan-spawn.sh` will consume in Step 3.5 when it spawns the masterplan team window.
+Create the masterplan working directory, write the goal file, allocate a numeric plan ID via `doey plan create`, write a valid frontmatter plan skeleton (so the TUI Plans tab sees it immediately), and write `masterplan.env` — this is what `doey-masterplan-spawn.sh` will consume in Step 3.5 when it spawns the masterplan team window.
+
+The runtime working dir keeps its timestamp-based name (`masterplan-<TS>`), but `PLAN_ID` and the plan file on disk are **numeric** so `tui/internal/store/migrate.go` picks the plan up for the Plans tab.
 
 ```bash
 RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)
 PROJECT_DIR=$(grep '^PROJECT_DIR=' "${RD}/session.env" 2>/dev/null | cut -d= -f2- | tr -d '"')
 PROJECT_DIR="${PROJECT_DIR:-.}"
 PLANS_DIR="${PROJECT_DIR}/.doey/plans"
-PLAN_ID="masterplan-$(date +%Y%m%d-%H%M%S)"
-MP_DIR="${RD}/${PLAN_ID}"
+MP_TS="$(date +%Y%m%d-%H%M%S)"
+MP_NAME="masterplan-${MP_TS}"
+MP_DIR="${RD}/${MP_NAME}"
 SESSION_NAME=$(tmux display-message -p '#S' 2>/dev/null)
 mkdir -p "${MP_DIR}/research" "${PLANS_DIR}"
-echo "Masterplan ID: ${PLAN_ID}"
-echo "Working directory: ${MP_DIR}"
+echo "Masterplan working dir: ${MP_DIR}"
 ```
 
 Write the goal file:
@@ -87,30 +89,50 @@ GOAL_EOF
 echo "Goal written to ${MP_DIR}/goal.md"
 ```
 
-Create the tracked task, the plan DB entry, and write `masterplan.env` with **all** paths the spawn helper will need — including the brief target path (even if quick mode won't produce one):
+Create the tracked task, allocate the numeric plan ID, write the frontmatter stub, and write `masterplan.env`:
 
 ```bash
-PLAN_FILE="${PLANS_DIR}/${PLAN_ID}.md"
-BRIEF_FILE="${PLANS_DIR}/${PLAN_ID}.brief.md"
 GOAL=$(head -1 "${MP_DIR}/goal.md")
+GOAL_TITLE="$(head -n 40 "${MP_DIR}/goal.md" | awk '/^# /{print substr($0,3); exit}')"
+[ -z "$GOAL_TITLE" ] && GOAL_TITLE="$(printf '%.80s' "$GOAL")"
+GOAL_TITLE="$(printf '%s' "$GOAL_TITLE" | tr -d '"')"
 
-DOEY_TASK_ID=$(doey task create --title "Masterplan: ${GOAL}" --type feature --description "Masterplan: ${GOAL}" 2>/dev/null) || true
+DOEY_TASK_ID=$(doey task create --title "Masterplan: ${GOAL_TITLE}" --type feature --description "Masterplan: ${GOAL}" 2>/dev/null) || true
 echo "Task ID: ${DOEY_TASK_ID:-none}"
 
-PLAN_DB_ID=""
-if [ -n "${DOEY_TASK_ID:-}" ]; then
-  PLAN_DB_ID=$(doey plan create --task-id "$DOEY_TASK_ID" --title "Masterplan: ${GOAL}" --status active 2>/dev/null | grep -o '[0-9][0-9]*$') || true
-  echo "Plan DB ID: ${PLAN_DB_ID:-none}"
-fi
+case "${DOEY_TASK_ID:-}" in
+  ''|*[!0-9]*)
+    echo "ERROR: doey task create returned non-numeric id: '${DOEY_TASK_ID}'" >&2
+    exit 1 ;;
+esac
 
-tmux set-environment -t "$SESSION_NAME" DOEY_TASK_ID "${DOEY_TASK_ID:-}" 2>/dev/null || true
-[ -n "${PLAN_DB_ID:-}" ] && tmux set-environment -t "$SESSION_NAME" PLAN_DB_ID "$PLAN_DB_ID" 2>/dev/null || true
+PLAN_CREATE_OUT="$(doey plan create --task-id "$DOEY_TASK_ID" --title "Masterplan: ${GOAL_TITLE}" --status draft 2>&1)" || {
+  echo "ERROR: doey plan create failed: ${PLAN_CREATE_OUT}" >&2
+  exit 1
+}
+PLAN_DB_ID="$(printf '%s\n' "$PLAN_CREATE_OUT" | awk '/^created plan /{print $3; exit}')"
+case "${PLAN_DB_ID:-}" in
+  ''|*[!0-9]*)
+    echo "ERROR: could not parse numeric plan id from doey plan create output:" >&2
+    printf '%s\n' "$PLAN_CREATE_OUT" >&2
+    exit 1 ;;
+esac
+
+PLAN_ID="$PLAN_DB_ID"
+PLAN_FILE="${PLANS_DIR}/${PLAN_ID}.md"
+BRIEF_FILE="${PLANS_DIR}/${PLAN_ID}.brief.md"
+echo "Plan ID (numeric): ${PLAN_ID}"
+
+tmux set-environment -t "$SESSION_NAME" DOEY_TASK_ID "${DOEY_TASK_ID}" 2>/dev/null || true
+tmux set-environment -t "$SESSION_NAME" PLAN_DB_ID "$PLAN_DB_ID" 2>/dev/null || true
+tmux set-environment -t "$SESSION_NAME" PLAN_ID "$PLAN_ID" 2>/dev/null || true
 
 cat > "${MP_DIR}/masterplan.env" << ENV_EOF
 PLAN_ID=${PLAN_ID}
 PLAN_FILE=${PLAN_FILE}
 GOAL_FILE=${MP_DIR}/goal.md
 MP_DIR=${MP_DIR}
+MP_NAME=${MP_NAME}
 PLANS_DIR=${PLANS_DIR}
 BRIEF_FILE=${BRIEF_FILE}
 DOEY_TASK_ID=${DOEY_TASK_ID:-}
@@ -118,11 +140,44 @@ PLAN_DB_ID=${PLAN_DB_ID:-}
 ENV_EOF
 echo "Masterplan env written to ${MP_DIR}/masterplan.env"
 
-# Stub the plan file so the Go TUI (doey-masterplan-tui) has a readable
-# empty file to tail — prevents "cannot read plan" error when the viewer
-# pane boots before the Planner has written anything.
-touch "${PLAN_FILE}"
-echo "Plan file stub created at ${PLAN_FILE}"
+# Write a valid frontmatter skeleton so the Plans tab TUI loader
+# (tui/internal/store/migrate.go) accepts this plan on first scan —
+# non-numeric plan_id / missing frontmatter causes the row to be dropped.
+# The Planner MUST preserve this frontmatter block when it rewrites the file;
+# see agents/doey-planner.md.
+NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+cat > "${PLAN_FILE}" <<PLAN_EOF
+---
+plan_id: ${PLAN_ID}
+task_id: ${DOEY_TASK_ID}
+title: "${GOAL_TITLE}"
+status: draft
+created: ${NOW}
+updated: ${NOW}
+skill: doey-masterplan
+---
+
+# ${GOAL_TITLE}
+
+## Goal
+${GOAL}
+
+## Context
+_(Planner will fill this in.)_
+
+## Phases
+_(Planner will populate.)_
+
+## Deliverables
+_(Planner will populate.)_
+
+## Risks
+_(Planner will populate.)_
+
+## Success Criteria
+_(Planner will populate.)_
+PLAN_EOF
+echo "Plan file skeleton written at ${PLAN_FILE}"
 ```
 
 ### Step 3.5 — Spawn masterplan team window immediately (always, before interview)
@@ -132,7 +187,10 @@ now so the pane is visible from the moment the user invokes /doey-masterplan. Th
 Planner will display "Waiting for brief…" until the interview completes.
 
 ```bash
-bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${PLAN_ID}"
+# doey-masterplan-spawn.sh takes the MP_DIR basename as its argument (not the
+# numeric PLAN_ID): it resolves MP_DIR=${RD}/${MP_NAME}, then sources
+# masterplan.env, which overrides PLAN_ID with the numeric value.
+bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${MP_NAME}"
 
 # Capture the newly created window index for later reference
 MP_WIN="$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name}' 2>/dev/null \
@@ -249,7 +307,9 @@ fi
 Skip the interview entirely — call the spawn helper directly. It loads `masterplan.env`, spawns the planning team, and briefs the Planner with just the goal (no brief file will exist, which the helper handles gracefully).
 
 ```bash
-bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${PLAN_ID}"
+# Pass the MP_DIR basename (timestamp-named) — the helper resolves MP_DIR and
+# then sources masterplan.env which sets PLAN_ID to the numeric DB id.
+bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${MP_NAME}"
 ```
 
 ### Step 5: Report (quick mode only — interview mode reports in Step 4A)
