@@ -52,6 +52,17 @@ if [ -n "$_DOEY_REPO" ] && [ -n "$PROJECT_DIR" ] && [ "$_DOEY_REPO" != "$PROJECT
 fi
 unset _DOEY_REPO
 
+# Ensure .doey/.gitignore contains discord-binding (Phase 1 of Discord integration).
+# Idempotent: grep -q ... || echo >>. Tolerates parallel sessions appending the same
+# line (race only produces at most one duplicate, which `grep -q` will then detect).
+# Silent on failure — never break session start if .doey/ is read-only.
+if [ -n "$PROJECT_DIR" ] && [ -d "${PROJECT_DIR}/.doey" ]; then
+  _gi="${PROJECT_DIR}/.doey/.gitignore"
+  touch "$_gi" 2>/dev/null || true
+  grep -q '^discord-binding$' "$_gi" 2>/dev/null || echo 'discord-binding' >> "$_gi" 2>/dev/null || true
+  unset _gi
+fi
+
 REMOTE=$(grep '^REMOTE=' "$SESSION_ENV" 2>/dev/null | head -1 | cut -d= -f2-) || true
 TUNNEL_URL=""
 [ -f "${RUNTIME_DIR}/tunnel.env" ] && TUNNEL_URL=$(grep '^TUNNEL_URL=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-) || true

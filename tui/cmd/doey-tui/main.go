@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 
+	discordcli "github.com/doey-cli/doey/tui/internal/discord/cli"
 	"github.com/doey-cli/doey/tui/internal/intentselect"
 	"github.com/doey-cli/doey/tui/internal/model"
 	"github.com/doey-cli/doey/tui/internal/picker"
@@ -22,6 +23,14 @@ const version = "doey-tui v0.1.0"
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "discord":
+			// Phase-1 cold-start note (masterplan line 244): this dispatch
+			// runs before the TUI Program/Model is constructed, but the
+			// bubbletea/sqlite/lipgloss imports above still resolve at
+			// process start. Phase 2 may split discord into its own binary
+			// if cold-start exceeds budget. The `discord` code path does
+			// NOT import tui/internal/model or any tea package.
+			os.Exit(discordcli.Run(os.Args[2:], os.Stdout, os.Stderr))
 		case "--version":
 			fmt.Println(version)
 			return

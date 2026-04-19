@@ -163,6 +163,82 @@ check_stats_allowlist() {
   fi
 }
 
+# ── Discord integration check ──────────────────────────────────────────
+# Phase-1 scope (task 612): presence + permissions only, NO network.
+# Outcomes:
+#   No binding → ✓ (Discord is optional)
+#   Binding + creds parse OK + mode 0600 → ✓
+#   Binding + missing/bad-perms/parse-error/unknown-stanza → ✗ with detail
+#   Non-POSIX FS → ⚠ with docs link
+#   flock(2) unsupported → ⚠ with docs link
+check_discord() {
+  printf "\n  ${BOLD}Discord:${RESET}\n"
+
+  local _proj="${PROJECT_DIR:-$(pwd)}"
+  local _binding_file="${_proj}/.doey/discord-binding"
+
+  if [ ! -f "$_binding_file" ]; then
+    _doc_check ok "binding" "no binding (Discord disabled — optional)"
+    return 0
+  fi
+
+  local _stanza
+  _stanza="$(head -n1 "$_binding_file" 2>/dev/null | tr -d '[:space:]')"
+  if [ "$_stanza" != "default" ]; then
+    _doc_check fail "binding" "unknown stanza: '${_stanza}' (expected 'default') — see docs/discord.md"
+    return 0
+  fi
+  _doc_check ok "binding" "stanza=default"
+
+  local _conf="${XDG_CONFIG_HOME:-$HOME/.config}/doey/discord.conf"
+  if [ ! -f "$_conf" ]; then
+    _doc_check fail "creds file" "${_conf/#$HOME/~} missing — see docs/discord.md"
+    return 0
+  fi
+
+  local _mode
+  _mode="$(stat -c '%a' "$_conf" 2>/dev/null || stat -f '%Lp' "$_conf" 2>/dev/null || true)"
+  if [ -z "$_mode" ]; then
+    _doc_check warn "posix fs" "could not stat creds — see docs/discord.md POSIX requirement"
+    return 0
+  fi
+  if [ "$_mode" != "600" ]; then
+    _doc_check fail "creds perms" "mode=${_mode} (expected 600); fix: chmod 600 ${_conf/#$HOME/~}"
+    return 0
+  fi
+  _doc_check ok "creds perms" "mode=600"
+
+  # Quick parse probe — refuse unknown stanzas / missing kind early.
+  # We only need to confirm the first stanza header is [default] and a
+  # kind= line is present; don't re-implement the Go parser.
+  if ! head -n 20 "$_conf" 2>/dev/null | grep -Eq '^\[default\][[:space:]]*$'; then
+    _doc_check fail "creds stanza" "missing [default] header — see docs/discord.md"
+    return 0
+  fi
+  if ! head -n 40 "$_conf" 2>/dev/null | grep -Eq '^kind[[:space:]]*=[[:space:]]*(webhook|bot_dm)'; then
+    _doc_check fail "creds kind" "missing/unknown kind= (expected webhook|bot_dm)"
+    return 0
+  fi
+
+  # flock(2) probe — best-effort; flock binary missing is informational.
+  if command -v flock >/dev/null 2>&1; then
+    local _flock_tmp
+    _flock_tmp="$(mktemp 2>/dev/null || true)"
+    if [ -n "$_flock_tmp" ]; then
+      if flock -n -x "$_flock_tmp" true 2>/dev/null; then
+        _doc_check ok "flock(2)" "supported"
+      else
+        _doc_check warn "flock(2)" "lock failed on tmp fs — see docs/discord.md"
+      fi
+      rm -f "$_flock_tmp"
+    else
+      _doc_check warn "flock(2)" "mktemp failed — see docs/discord.md"
+    fi
+  else
+    _doc_check warn "flock(2)" "flock binary not on PATH — see docs/discord.md"
+  fi
+}
+
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
@@ -533,6 +609,9 @@ check_doctor() {
 
   # ── Stats allowlist sync (shell ↔ Go embed) ──
   check_stats_allowlist "$_doey_repo"
+
+  # ── Discord integration (task 612) ──
+  check_discord
 
   # ── Summary footer ──
   printf '\n'
