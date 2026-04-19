@@ -32,6 +32,26 @@ if [ -f "${PROJECT_DIR}/shell/doey-task-helpers.sh" ]; then DOEY_LIB="${PROJECT_
 elif [ -f "$HOME/.local/bin/doey-task-helpers.sh" ]; then DOEY_LIB="$HOME/.local/bin"
 fi
 
+# Self-heal: ensure the project's hook files are in sync with the doey repo.
+# Projects launched before new hooks were added (e.g. stop-reviewer-metrics.sh)
+# can reference hooks in settings.local.json that don't exist on disk, producing
+# "Stop hook error: ...: not found" errors. Re-sync when the repo hooks dir is
+# newer than our sync marker, or the marker is missing.
+_DOEY_REPO=""
+[ -f "$HOME/.claude/doey/repo-path" ] && _DOEY_REPO=$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null) || true
+if [ -n "$_DOEY_REPO" ] && [ -n "$PROJECT_DIR" ] && [ "$_DOEY_REPO" != "$PROJECT_DIR" ] \
+   && [ -d "${_DOEY_REPO}/.claude/hooks" ] && [ -d "${PROJECT_DIR}/.claude/hooks" ]; then
+  _DOEY_SYNC_MARKER="${PROJECT_DIR}/.claude/hooks/.doey-synced"
+  if [ ! -f "$_DOEY_SYNC_MARKER" ] || [ "${_DOEY_REPO}/.claude/hooks" -nt "$_DOEY_SYNC_MARKER" ]; then
+    cp -f "${_DOEY_REPO}/.claude/hooks/"*.sh "${PROJECT_DIR}/.claude/hooks/" 2>/dev/null || true
+    chmod +x "${PROJECT_DIR}/.claude/hooks/"*.sh 2>/dev/null || true
+    touch -r "${_DOEY_REPO}/.claude/hooks" "$_DOEY_SYNC_MARKER" 2>/dev/null || \
+      touch "$_DOEY_SYNC_MARKER" 2>/dev/null || true
+  fi
+  unset _DOEY_SYNC_MARKER
+fi
+unset _DOEY_REPO
+
 REMOTE=$(grep '^REMOTE=' "$SESSION_ENV" 2>/dev/null | head -1 | cut -d= -f2-) || true
 TUNNEL_URL=""
 [ -f "${RUNTIME_DIR}/tunnel.env" ] && TUNNEL_URL=$(grep '^TUNNEL_URL=' "${RUNTIME_DIR}/tunnel.env" 2>/dev/null | head -1 | cut -d= -f2-) || true
