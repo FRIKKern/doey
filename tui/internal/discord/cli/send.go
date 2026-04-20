@@ -18,6 +18,43 @@ import (
 
 const stdinBodyCap = 64 * 1024
 
+// privacyBodyMaxBytes caps body size in include_body mode. Applied after
+// redaction so a scrubbed placeholder is never cut mid-token.
+const privacyBodyMaxBytes = 200
+
+// privacyMode is the effective privacy tier for a single send call.
+type privacyMode int
+
+const (
+	privacyMetadataOnly privacyMode = iota // strict default — body is dropped
+	privacyIncludeBody                     // body flows through redact+truncate
+)
+
+// resolvePrivacy reads DOEY_DISCORD_METADATA_ONLY and DOEY_DISCORD_INCLUDE_BODY
+// from the process environment. See resolvePrivacyFrom for precedence rules.
+func resolvePrivacy() privacyMode {
+	return resolvePrivacyFrom(os.Getenv)
+}
+
+// resolvePrivacyFrom returns the effective privacy mode from getenv.
+// Precedence (ADR Phase 5):
+//
+//	DOEY_DISCORD_METADATA_ONLY="1" wins unconditionally
+//	DOEY_DISCORD_INCLUDE_BODY="1"  wins when METADATA_ONLY is not "1"
+//	otherwise                      privacyMetadataOnly (strict default)
+//
+// Only the literal string "1" is truthy; any other value (including "0",
+// "true", "yes") is treated as unset.
+func resolvePrivacyFrom(getenv func(string) string) privacyMode {
+	if getenv("DOEY_DISCORD_METADATA_ONLY") == "1" {
+		return privacyMetadataOnly
+	}
+	if getenv("DOEY_DISCORD_INCLUDE_BODY") == "1" {
+		return privacyIncludeBody
+	}
+	return privacyMetadataOnly
+}
+
 // stdinSource is swappable in tests. Returning (nil, false) means no body
 // is available (tty or unusable stdin).
 var stdinSource = func() (io.Reader, bool) {
@@ -144,6 +181,16 @@ func sendCommon(p sendParams, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "discord send: %s\n", redact.Redact(err.Error()))
 		return 1
+	}
+
+	switch resolvePrivacy() {
+	case privacyMetadataOnly:
+		p.body = ""
+	case privacyIncludeBody:
+		if p.body != "" {
+			p.body = redact.Redact(p.body)
+			p.body, _ = sender.TruncateOnRuneBoundary(p.body, privacyBodyMaxBytes)
+		}
 	}
 
 	content := composeContent(p.title, p.event, p.taskID, p.body)

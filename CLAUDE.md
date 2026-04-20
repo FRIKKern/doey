@@ -105,6 +105,14 @@ Hook exit codes: `0` = allow, `1` = block + error, `2` = block + feedback
 
 **Intent Fallback:** Unknown `doey` commands are routed through a Haiku-powered correction layer (`shell/intent-fallback.sh` + `shell/doey-intent-dispatch.sh`). Silent on failure, refuses destructive auto-corrects without a tty `[y/N]`, opt out with `DOEY_NO_INTENT_FALLBACK=1`. See `docs/intent-fallback.md`.
 
+## Notifications
+
+Desktop notifications (osascript / notify-send) for Boss events, with optional Discord forwarding when bound.
+
+- **Call:** `send_notification title body [event_kind]` in `.claude/hooks/common.sh`. Third arg defaults to `generic`. Boss-gated + 60s cooldown.
+- **Discord forwarding:** activates automatically when `$DOEY_PROJECT_DIR/.doey/discord-binding` exists. Body passed via stdin only — argv never carries the body. Privacy default = `metadata_only` (titles/events only, no body) unless `DOEY_DISCORD_INCLUDE_BODY=1`.
+- See `docs/discord.md` for setup (TUI Discord tab `b`), privacy model, troubleshooting, and the opt-in e2e test.
+
 ## Conventions
 
 - **Agents:** YAML frontmatter in `agents/` (name, model, color, memory, description)

@@ -361,7 +361,7 @@ if is_boss; then
   [ -z "$LAST_MSG" ] && exit 0
   _is_spam "$LAST_MSG" && exit 0
 
-  send_notification "Doey — ${DOEY_ROLE_BOSS}" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")"
+  send_notification "Doey — ${DOEY_ROLE_BOSS}" "$(printf '%s' "${LAST_MSG:0:150}" | tr '\n"' " '")" "boss_message"
   _debug_sent "desktop" "desktop_notification" "osascript"
   _log "stop-notify: sent desktop notification"
 fi

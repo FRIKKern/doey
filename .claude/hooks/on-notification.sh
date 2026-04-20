@@ -36,7 +36,22 @@ if [ "${DOEY_NO_AUTO_FOCUS:-0}" != "1" ] && [ -n "${SESSION_NAME:-}" ] && _is_bo
       tmux select-window -t "${SESSION_NAME}:0" 2>/dev/null || true
     fi
     tmux select-pane -t "${SESSION_NAME}:0.1" 2>/dev/null || true
+    # Phase 5 choice: keep _send_desktop_notification (bypasses send_notification's
+    # 60s cooldown — this path already uses a 5s boss_focus cooldown for urgent
+    # questions). Add Discord forward inline below mirroring common.sh block (B).
     _send_desktop_notification "Doey — Boss needs input" "$_MSG_CLEAN"
+    if [ -n "${DOEY_PROJECT_DIR:-}" ] && [ -f "${DOEY_PROJECT_DIR}/.doey/discord-binding" ]; then
+      if command -v doey-tui >/dev/null 2>&1; then
+        _disc_to=""
+        command -v timeout  >/dev/null 2>&1 && _disc_to="timeout 10"
+        command -v gtimeout >/dev/null 2>&1 && _disc_to="gtimeout 10"
+        printf '%s' "$_MSG_CLEAN" | $_disc_to doey-tui discord send --if-bound \
+            --event "boss_question" \
+            --title "Doey — Boss needs input" \
+            --task-id "${DOEY_TASK_ID:-}" \
+            >/dev/null 2>&1 &
+      fi
+    fi
     _log "on-notification: Boss focus switch → ${SESSION_NAME}:0.1 (from window=${_cur_win:-?})"
   fi
   exit 0
