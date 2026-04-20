@@ -82,7 +82,7 @@ func DefaultKeyMap() KeyMap {
 		),
 		PanelNine: key.NewBinding(
 			key.WithKeys("9"),
-			key.WithHelp("9", "activity"),
+			key.WithHelp("9", "discord"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
