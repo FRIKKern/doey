@@ -39,6 +39,21 @@ else
     echo "[doey] WARNING: doey-roles.sh not found — role detection unavailable" >&2
 fi
 
+# --- Optional user/project config (Phase 5 Discord) ---
+# DOEY_DISCORD_* env vars live in user/project config.sh. Sourced here so
+# hook-side send_notification sees them. Idempotent via SOURCED guards —
+# safe under repeated hook invocations in the same shell.
+if [ -z "${_DOEY_USER_CONFIG_SOURCED:-}" ] && [ -f "$HOME/.config/doey/config.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$HOME/.config/doey/config.sh" 2>/dev/null || true
+    _DOEY_USER_CONFIG_SOURCED=1
+fi
+if [ -z "${_DOEY_PROJECT_CONFIG_SOURCED:-}" ] && [ -n "${DOEY_PROJECT_DIR:-}" ] && [ -f "${DOEY_PROJECT_DIR}/.doey/config.sh" ]; then
+    # shellcheck disable=SC1091
+    . "${DOEY_PROJECT_DIR}/.doey/config.sh" 2>/dev/null || true
+    _DOEY_PROJECT_CONFIG_SOURCED=1
+fi
+
 # Enforcement mode for AskUserQuestion hook (shadow|block|off).
 # shadow = log violations, never block. block = log + deny. off = disabled.
 DOEY_ENFORCE_QUESTIONS="${DOEY_ENFORCE_QUESTIONS:-shadow}"
@@ -535,9 +550,31 @@ APPLESCRIPT
 
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"
+  # event_kind: Boss-visible semantic tag forwarded to Discord. arg-based (not
+  # DOEY_NOTIFY_EVENT env) per ADR — explicit per call-site, greppable,
+  # back-compat default "generic".
+  local event_kind="${3:-generic}"
   is_boss || return 0
   _check_cooldown "${title//[^a-zA-Z0-9]/_}" 60 || return 0
   _send_desktop_notification "$title" "$body"
+
+  # Phase 5: Discord forward (Boss events, if bound)
+  if [ -n "${DOEY_PROJECT_DIR:-}" ] && [ -f "${DOEY_PROJECT_DIR}/.doey/discord-binding" ]; then
+    if command -v doey-tui >/dev/null 2>&1; then
+      # Belt-and-suspenders timeout: CLI enforces 10s internally; outer wrapper
+      # mirrors stop-results.sh:58 idiom.
+      local _disc_to=""
+      command -v timeout  >/dev/null 2>&1 && _disc_to="timeout 10"
+      command -v gtimeout >/dev/null 2>&1 && _disc_to="gtimeout 10"
+      # Body arrives via stdin — argv never carries it. CLI handles privacy
+      # gate + truncate + redact.
+      printf '%s' "$body" | $_disc_to doey-tui discord send --if-bound \
+          --event "$event_kind" \
+          --title "$title" \
+          --task-id "${DOEY_TASK_ID:-}" \
+          >/dev/null 2>&1 &
+    fi
+  fi
 }
 
 # ─── Polling-loop detector + circuit breaker (task #525 / #536) ───────

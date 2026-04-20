@@ -303,6 +303,7 @@ func TestSend_StdinBodyReachesHTTP(t *testing.T) {
 	writeWebhookCreds(t, e, srv.URL)
 
 	const marker = "SECRETXYZ123"
+	t.Setenv("DOEY_DISCORD_INCLUDE_BODY", "1")
 	withStdin(t, marker)
 	code, _, stderr := callSend("--title", "T", "--event", "stop")
 	if code != 0 {

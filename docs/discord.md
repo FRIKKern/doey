@@ -135,6 +135,84 @@ The rate-limit state and failure log live under `/tmp/doey/<project>/` so they
 are ephemeral (cleared on reboot) and project-scoped (two projects sharing one
 credential maintain independent rate-limit state — see "Limits" below).
 
+## Hook integration
+
+Doey's notification hooks forward Boss-class events to Discord through a
+single shell helper. No hook calls `doey-tui discord send` directly —
+they go through `send_notification`, which applies the role + cooldown
+gates before forwarding.
+
+- `send_notification(title, body, event_kind)` in `.claude/hooks/common.sh`
+  forwards Boss events to Discord when
+  `$DOEY_PROJECT_DIR/.doey/discord-binding` exists.
+- `event_kind` is an explicit 3rd positional argument with default
+  `generic`. Back-compat is preserved: old two-arg callers still work.
+- Call-sites:
+  - `stop-notify.sh` — `event_kind=boss_message`
+  - `on-notification.sh` — `event_kind=boss_question`
+- Non-Boss events stay desktop-only (ADR-8). Worker/Subtaskmaster stops
+  never reach Discord; only the Boss role triggers the forwarder.
+- CLI invocation: body is supplied on **stdin only**. The `doey-tui discord
+  send` argv never carries body content, so a `ps` snapshot on a
+  multi-tenant host cannot observe the message body. The privacy gate
+  (see next section) is evaluated before the body is truncated and
+  redacted.
+
+## Privacy defaults
+
+The CLI defaults to **metadata-only** sends. Opting in to body content is
+a deliberate action, and the strict opt-out always wins.
+
+Precedence (first match wins):
+
+| Setting | Effect |
+|---|---|
+| `DOEY_DISCORD_METADATA_ONLY=1` | Strict metadata. Always wins, even if `INCLUDE_BODY=1` is also set. |
+| `DOEY_DISCORD_INCLUDE_BODY=1` | Include body for all events. |
+| *(neither set)* | **Default: metadata-only.** |
+
+Where toggles live:
+
+- The TUI Discord tab `p` key cycles the privacy mode: `off → metadata_only
+  → include_body → off`. Cycling writes the current choice to
+  `~/.config/doey/config.sh` (user-level, not `.doey/config.sh`) so that
+  a privacy opt-out is never accidentally committed to a shared repo.
+- Environment variables override the on-disk toggle for the duration of a
+  single invocation.
+
+When `include_body` is active:
+
+- The body is run through the 12-pattern redaction scrubber (see
+  "Known redaction patterns" above) **before** truncation, so a partial
+  match cannot leak a secret that redaction would have caught.
+- After redaction, the content is **rune-bounded truncated to 200 bytes**
+  to fit Discord limits without splitting a UTF-8 codepoint.
+
+## End-to-end test runner
+
+Two scripts under `tests/` exercise the Discord send path. Neither runs
+in CI by default — the e2e probe hits a real webhook, and the argv-leak
+test is a local integrity check.
+
+- **`tests/test-discord-e2e.sh`** — opt-in real-API probe.
+  - Gate: set `DOEY_DISCORD_E2E_WEBHOOK` to a webhook URL of the form
+    `https://discord.com/api/webhooks/<id>/<token>`.
+  - Skips silently (exit 0) when the env var is unset or when `$CI` is
+    truthy (`1`, `true`, `yes`, case-insensitive).
+  - Sends one probe message and asserts `doey-tui discord send` exited 0.
+    Delivery verification is left to a human — the script does not parse
+    the Discord response.
+  - The webhook URL is masked (first 32 chars + ellipsis) before printing.
+  - Example:
+    ```sh
+    DOEY_DISCORD_E2E_WEBHOOK="https://discord.com/api/webhooks/<id>/<token>" \
+      bash tests/test-discord-e2e.sh
+    ```
+- **`tests/test-discord-argv-leak.sh`** — argv leak guard. No env var
+  required. Pipes a unique probe token on stdin, samples `ps` while the
+  send process is live, and fails if the token ever appears in any
+  process's argv. Skips when `doey-tui` is not on PATH.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
