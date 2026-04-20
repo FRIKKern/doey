@@ -90,27 +90,6 @@ func TestSend_IfBound_NoBinding_Exit0(t *testing.T) {
 	}
 }
 
-// ── Send — bot_dm binding → exit 1 Phase 3 message ────────────────────
-
-func TestSend_BotDM_Phase3Message(t *testing.T) {
-	e := newTestEnv(t)
-	e.writeBinding(t, "default")
-	e.writeConf(t, `[default]
-kind=bot_dm
-bot_token=Bot.test.token
-bot_app_id=1234567890
-dm_user_id=1111111111
-dm_channel_id=2222222222
-`, 0o600)
-	code, _, stderr := runCLI("send", "--title", "T", "--event", "stop")
-	if code != 1 {
-		t.Fatalf("exit=%d, want 1; stderr=%q", code, stderr)
-	}
-	if !strings.Contains(stderr, msgPhase3BotDMPending) {
-		t.Fatalf("stderr missing Phase 3 message: %q", stderr)
-	}
-}
-
 // ── Send — bad creds perms → exit 1 perm complaint ────────────────────
 
 func TestSend_BadPerms_ReportsPerm(t *testing.T) {
@@ -213,19 +192,6 @@ webhook_url=https://discord.com/api/webhooks/1/abc1
 	}
 	if !strings.Contains(out, "creds file mode") {
 		t.Fatalf("expected perms note in stdout: %q", out)
-	}
-}
-
-// ── Remaining stub: bind ─────────────────────────────────────────────
-
-func TestStub_Bind(t *testing.T) {
-	_ = newTestEnv(t)
-	code, _, stderr := runCLI("bind")
-	if code != 1 {
-		t.Fatalf("exit=%d, want 1", code)
-	}
-	if !strings.Contains(stderr, "Phase 3") {
-		t.Fatalf("stderr missing Phase 3 tag: %q", stderr)
 	}
 }
 

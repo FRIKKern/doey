@@ -8,7 +8,7 @@
 //   - failures               — tail / prune / retry the failure log
 //   - reset-breaker          — clear circuit breaker under flock
 //   - doctor-network         — 60s cached webhook probe
-//   - bind                   — Phase-3 stub
+//   - bind                   — interactive wizard (webhook | bot_dm)
 //
 // This package must NOT import bubbletea/sqlite/lipgloss or any
 // tui/internal/model/* package. Allowed deps: stdlib,
@@ -37,7 +37,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "send":
 		return runSend(rest, stdout, stderr)
 	case "bind":
-		return runStub("bind", 3, stderr)
+		return runBind(rest, os.Stdin, stdout, stderr)
 	case "unbind":
 		return runUnbind(rest, stdout, stderr)
 	case "send-test":

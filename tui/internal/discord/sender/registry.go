@@ -8,7 +8,7 @@ func SenderRegistered(kind string) bool {
 	case "webhook":
 		return true
 	case "bot_dm":
-		return false
+		return true
 	}
 	return false
 }

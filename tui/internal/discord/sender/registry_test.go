@@ -8,7 +8,7 @@ func TestSenderRegistered(t *testing.T) {
 		want bool
 	}{
 		{"webhook", true},
-		{"bot_dm", false},
+		{"bot_dm", true},
 		{"unknown", false},
 		{"", false},
 	}
