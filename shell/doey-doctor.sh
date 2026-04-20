@@ -237,6 +237,23 @@ check_discord() {
   else
     _doc_check warn "flock(2)" "flock binary not on PATH — see docs/discord.md"
   fi
+
+  # Opt-in network probe — only when --network was passed.
+  # Binding + creds have already been validated above (early returns above
+  # ensure we only reach here on the happy path). The 60s cache lives
+  # inside the Go subcommand; the shell just calls through.
+  if [ "${DOEY_DOCTOR_NETWORK:-0}" = "1" ]; then
+    if command -v doey-tui >/dev/null 2>&1; then
+      local _probe_out
+      if _probe_out=$(doey-tui discord doctor-network 2>&1); then
+        _doc_check ok "network probe" "$_probe_out"
+      else
+        _doc_check warn "network probe" "$_probe_out"
+      fi
+    else
+      _doc_check warn "network probe" "doey-tui not on PATH"
+    fi
+  fi
 }
 
 # ── Doctor — check installation health ────────────────────────────────
@@ -246,9 +263,11 @@ check_doctor() {
 
   # Argument parsing — additive, does not alter any existing check.
   _DOC_STATS_VERBOSE=0
+  DOEY_DOCTOR_NETWORK="${DOEY_DOCTOR_NETWORK:-0}"
   while [ $# -gt 0 ]; do
     case "$1" in
       --stats-verbose) _DOC_STATS_VERBOSE=1; shift ;;
+      --network)       DOEY_DOCTOR_NETWORK=1; export DOEY_DOCTOR_NETWORK; shift ;;
       *) shift ;;
     esac
   done

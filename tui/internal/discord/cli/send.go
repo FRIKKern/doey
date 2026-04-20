@@ -1,92 +1,233 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
+	"github.com/doey-cli/doey/tui/internal/discord"
 	"github.com/doey-cli/doey/tui/internal/discord/binding"
 	"github.com/doey-cli/doey/tui/internal/discord/config"
+	"github.com/doey-cli/doey/tui/internal/discord/redact"
+	"github.com/doey-cli/doey/tui/internal/discord/sender"
 )
 
-// Phase-1 send error messages — LITERAL CONTRACTS. Future workers grep
-// for these strings; do NOT reword without also updating cli_test.go and
-// the masterplan spec (line 239).
-const (
-	msgPhase2SendPending  = "send CLI lands in Phase 2"
-	msgPhase3BotDMPending = "bot_dm support lands in Phase 3 — rebind as webhook"
-)
+// Phase-3 refusal message — LITERAL CONTRACT. Do not reword.
+const msgPhase3BotDMPending = "bot_dm support lands in Phase 3 — rebind as webhook"
 
-// runSend implements `doey-tui discord send` for Phase 1. It is a refusal
-// CLI: both error branches exit 1. The branches are intentionally
-// disjoint so tests assert them independently (masterplan line 239).
-//
-// Branch resolution order:
-//  1. Parse flags. On parse error → exit 2.
-//  2. Drain stdin briefly (≤1KiB) to honor pipe semantics per ADR-4.
-//  3. binding.Read() → ErrNotFound: branch (a).
-//  4. config.Load() failure: exit 1 with the underlying error (creds
-//     problem dominates; caller must fix before we can classify kind).
-//  5. cfg.Kind == KindBotDM: branch (b).
-//  6. Otherwise (webhook present): branch (a) — Phase 1 still refuses.
+const stdinBodyCap = 64 * 1024
+
+// stdinSource is swappable in tests. Returning (nil, false) means no body
+// is available (tty or unusable stdin).
+var stdinSource = func() (io.Reader, bool) {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return nil, false
+	}
+	if fi.Mode()&os.ModeCharDevice != 0 {
+		return nil, false
+	}
+	return os.Stdin, true
+}
+
+// runSend implements `doey-tui discord send` — ADR-4 steps 1-8. Body is
+// read from stdin only (never argv). Exit 1 only on config-shaped errors;
+// send failures exit 0 after appending to the failure log.
 func runSend(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("send", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	title := fs.String("title", "", "notification title")
 	event := fs.String("event", "", "event kind (stop, error, ...)")
 	taskID := fs.String("task-id", "", "associated task id")
-	ifBound := fs.Bool("if-bound", false, "no-op when binding is absent (Phase 2 semantics)")
+	ifBound := fs.Bool("if-bound", false, "no-op when binding is absent")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	_, _, _, _ = title, event, taskID, ifBound
 
-	drainStdin(1024)
+	body := readStdinBody(stdinBodyCap)
 
-	stanza, err := binding.Read(projectDir())
+	return sendCommon(sendParams{
+		title:   *title,
+		event:   *event,
+		taskID:  *taskID,
+		body:    body,
+		ifBound: *ifBound,
+	}, stdout, stderr)
+}
+
+type sendParams struct {
+	title          string
+	event          string
+	taskID         string
+	body           string
+	ifBound        bool
+	bypassCoalesce bool
+	// onDelivered is invoked when the send returns OutcomeSuccess.
+	onDelivered func(w io.Writer)
+	// onFailed is invoked when the send produced a non-success outcome.
+	// err may be nil; the caller should redact before printing.
+	onFailed func(w io.Writer, err error)
+}
+
+// sendCommon runs the full ADR-4 pipeline. Used by runSend and runSendTest.
+func sendCommon(p sendParams, stdout, stderr io.Writer) int {
+	projDir := projectDir()
+
+	stanza, err := binding.Read(projDir)
 	if err != nil {
 		if errors.Is(err, binding.ErrNotFound) {
-			// Branch (a) — no binding. Phase 2 will make this exit 0
-			// when --if-bound is set (per success criterion line 333),
-			// but Phase 1 always refuses so the surface is uniformly
-			// a refusal CLI.
-			fmt.Fprintln(stderr, msgPhase2SendPending)
+			if p.ifBound {
+				return 0
+			}
+			fmt.Fprintln(stderr, "discord send: no binding")
 			return 1
 		}
-		fmt.Fprintf(stderr, "discord send: %v\n", err)
+		fmt.Fprintf(stderr, "discord send: %s\n", redact.Redact(err.Error()))
 		return 1
 	}
 	_ = stanza
 
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(stderr, "discord send: %v\n", err)
+		fmt.Fprintf(stderr, "discord send: %s\n", redact.Redact(err.Error()))
 		return 1
 	}
-
 	if cfg.Kind == config.KindBotDM {
-		// Branch (b) — bot_dm binding present but transport not wired.
 		fmt.Fprintln(stderr, msgPhase3BotDMPending)
 		return 1
 	}
+	if cfg.Kind != config.KindWebhook {
+		fmt.Fprintf(stderr, "discord send: unsupported kind %q\n", string(cfg.Kind))
+		return 1
+	}
 
-	// Webhook binding resolved & creds OK, but no sender wired in Phase 1.
-	fmt.Fprintln(stderr, msgPhase2SendPending)
-	return 1
+	if err := os.MkdirAll(discord.RuntimeDir(projDir), 0o700); err != nil {
+		fmt.Fprintf(stderr, "discord send: %s\n", redact.Redact(err.Error()))
+		return 1
+	}
+
+	credHash := discord.CredHash(cfg)
+	coalesceKey := discord.ComputeCoalesceKey(p.event, p.taskID, p.title)
+	now := time.Now().Unix()
+
+	var decision discord.Decision
+	flockErr := discord.WithFlock(projDir, func(_ int) error {
+		st, lerr := discord.Load(projDir)
+		if lerr != nil || st == nil {
+			st = &discord.RLState{V: discord.RLStateVersion}
+		}
+		d, ns := discord.Decide(st, now, credHash, coalesceKey, p.bypassCoalesce)
+		decision = d
+		return discord.SaveAtomic(projDir, ns)
+	})
+	if flockErr != nil {
+		fmt.Fprintf(stderr, "discord send: %s\n", redact.Redact(flockErr.Error()))
+		return 1
+	}
+
+	switch decision {
+	case discord.DecisionCoalesceSuppress, discord.DecisionPauseSkip:
+		return 0
+	case discord.DecisionBreakerSkip:
+		_ = discord.AppendFailure(projDir, discord.FailureEntry{
+			ID:       discord.GenerateID(),
+			Ts:       time.Now().UTC().Format(time.RFC3339Nano),
+			CredHash: credHash,
+			Kind:     string(cfg.Kind),
+			Event:    p.event,
+			Title:    redact.Redact(p.title),
+			Error:    "breaker-open",
+		})
+		return 0
+	case discord.DecisionSend, discord.DecisionDeferredFlushThenSend:
+		// proceed
+	}
+
+	snd, err := sender.NewSender(cfg)
+	if err != nil {
+		fmt.Fprintf(stderr, "discord send: %s\n", redact.Redact(err.Error()))
+		return 1
+	}
+
+	content := composeContent(p.title, p.event, p.taskID, p.body)
+	ctx, cancel := context.WithTimeout(context.Background(), 11*time.Second)
+	defer cancel()
+	res := snd.Send(ctx, sender.Message{Content: content})
+
+	success := res.Outcome == sender.OutcomeSuccess
+	_ = discord.WithFlock(projDir, func(_ int) error {
+		st, lerr := discord.Load(projDir)
+		if lerr != nil || st == nil {
+			st = &discord.RLState{V: discord.RLStateVersion}
+		}
+		ns := discord.RecordSendResult(st, time.Now().Unix(), success, res.RetryAfterSec, res.Global)
+		return discord.SaveAtomic(projDir, ns)
+	})
+
+	if !success {
+		errText := "unknown"
+		if res.Err != nil {
+			errText = res.Err.Error()
+		}
+		_ = discord.AppendFailure(projDir, discord.FailureEntry{
+			ID:       discord.GenerateID(),
+			Ts:       time.Now().UTC().Format(time.RFC3339Nano),
+			CredHash: credHash,
+			Kind:     string(cfg.Kind),
+			Event:    p.event,
+			Title:    redact.Redact(p.title),
+			Error:    redact.Redact(errText),
+		})
+		_ = discord.LazyPruneIfNeeded(projDir)
+		if p.onFailed != nil {
+			p.onFailed(stdout, res.Err)
+		}
+		return 0
+	}
+
+	if p.onDelivered != nil {
+		p.onDelivered(stdout)
+	}
+	return 0
 }
 
-// drainStdin reads up to maxBytes from stdin if stdin is a pipe, so that
-// upstream writers don't SIGPIPE before we return. Best-effort: ignores
-// errors. Safe when stdin is a tty (stat+mode bit guards the read).
-func drainStdin(maxBytes int64) {
-	fi, err := os.Stdin.Stat()
+// composeContent renders the Discord message body: [event] title [ (task)]
+// followed by a blank line and the body. Redacted first, then truncated
+// so redaction can never be cut mid-token.
+func composeContent(title, event, taskID, body string) string {
+	var header string
+	switch {
+	case event != "" && taskID != "":
+		header = "[" + event + "] " + title + " (" + taskID + ")"
+	case event != "":
+		header = "[" + event + "] " + title
+	case taskID != "":
+		header = title + " (" + taskID + ")"
+	default:
+		header = title
+	}
+	full := header
+	if body != "" {
+		full = header + "\n\n" + body
+	}
+	full = redact.Redact(full)
+	return sender.TruncateContent(full)
+}
+
+// readStdinBody reads up to maxBytes from stdin if stdin is a pipe.
+// Returns "" when stdin is a tty or unreadable.
+func readStdinBody(maxBytes int64) string {
+	r, ok := stdinSource()
+	if !ok {
+		return ""
+	}
+	b, err := io.ReadAll(io.LimitReader(r, maxBytes))
 	if err != nil {
-		return
+		return ""
 	}
-	if fi.Mode()&os.ModeCharDevice != 0 {
-		return // tty — nothing to drain
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(os.Stdin, maxBytes))
+	return string(b)
 }

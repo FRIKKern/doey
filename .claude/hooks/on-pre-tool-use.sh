@@ -324,21 +324,10 @@ EOF
     return 1
   fi
 
-  # Check staged content for secret patterns
-  local diff_content
-  diff_content=$(git diff --cached 2>/dev/null) || return 0
-  [ -z "$diff_content" ] && return 0
-
-  # Filter to added lines only, skip safe files and comments
-  local added_lines
-  added_lines=$(echo "$diff_content" | grep '^+[^+]' | grep -v '^+++' || true)
-  [ -z "$added_lines" ] && return 0
-
-  # Remove comment lines
-  added_lines=$(echo "$added_lines" | grep -v '^+[[:space:]]*#' || true)
-  [ -z "$added_lines" ] && return 0
-
-  # Check each secret pattern
+  # Check staged content for secret patterns — PER FILE so safe-file
+  # exemption reflects the file that actually carries the match. Prior
+  # global `tail -1` attribution misfired when a pattern literal lived in
+  # docs/*.md / redact/* / *_test.go while a non-safe file sorted last.
   local patterns
   patterns="sk-ant-[a-zA-Z0-9]"
   patterns="${patterns}|sk-[a-zA-Z0-9]{20,}"
@@ -351,51 +340,56 @@ EOF
   patterns="${patterns}|(password|passwd|PASSWORD)=[^\$[:space:]]{4,}"
   patterns="${patterns}|(secret|SECRET|client_secret)=[^\$[:space:]]{4,}"
 
-  local hit
-  hit=$(echo "$added_lines" | grep -E "$patterns" | head -1 || true)
-  [ -z "$hit" ] && return 0
+  local staged_file file_added file_hit lower_hit display_hit
+  while IFS= read -r staged_file; do
+    [ -z "$staged_file" ] && continue
 
-  # Strip leading + from diff
-  hit="${hit##+}"
+    # Per-file safe-file exemption. Regex pattern literals legitimately
+    # appear in the redact package and in *_test.go fixtures.
+    case "$staged_file" in
+      test/*|tests/*|docs/*|*.md|*.env.example|*.env.sample|*.env.template|*_test.go)
+        continue ;;
+    esac
+    case "$staged_file" in
+      tui/internal/discord/redact/*|*/discord/redact/*)
+        continue ;;
+    esac
 
-  # Check for placeholder values — skip if found
-  local lower_hit
-  lower_hit=$(echo "$hit" | tr '[:upper:]' '[:lower:]')
-  case "$lower_hit" in
-    *"placeholder"*|*"xxx"*|*"changeme"*|*"your-key-here"*|*"todo"*|*"replace_me"*) return 0 ;;
-  esac
-  # Skip template variable references
-  case "$hit" in
-    *'${'*|*'<'*) return 0 ;;
-  esac
+    file_added=$(git diff --cached -- "$staged_file" 2>/dev/null \
+      | grep '^+[^+]' \
+      | grep -v '^+++' \
+      | grep -v '^+[[:space:]]*#' || true)
+    [ -z "$file_added" ] && continue
 
-  # Check that the match is not in a safe file (test/docs/example files)
-  local safe_file=false diff_file
-  diff_file=$(echo "$diff_content" | grep '^+++ b/' | tail -1 || true)
-  diff_file="${diff_file##+++ b/}"
-  case "$diff_file" in
-    test/*|tests/*|docs/*|*.md|*.env.example|*.env.sample|*.env.template)
-      safe_file=true ;;
-  esac
+    file_hit=$(echo "$file_added" | grep -E "$patterns" | head -1 || true)
+    [ -z "$file_hit" ] && continue
 
-  if [ "$safe_file" = "true" ]; then
-    return 0
-  fi
+    file_hit="${file_hit##+}"
+    lower_hit=$(echo "$file_hit" | tr '[:upper:]' '[:lower:]')
+    case "$lower_hit" in
+      *"placeholder"*|*"xxx"*|*"changeme"*|*"your-key-here"*|*"todo"*|*"replace_me"*) continue ;;
+    esac
+    case "$file_hit" in
+      *'${'*|*'<'*) continue ;;
+    esac
 
-  # Truncate the match for display
-  local display_hit
-  if [ "${#hit}" -gt 80 ]; then
-    display_hit="${hit:0:77}..."
-  else
-    display_hit="$hit"
-  fi
+    if [ "${#file_hit}" -gt 80 ]; then
+      display_hit="${file_hit:0:77}..."
+    else
+      display_hit="$file_hit"
+    fi
 
-  echo "BLOCKED: Potential secret detected in staged files" >&2
-  echo "  File: ${diff_file:-unknown}" >&2
-  echo "  Match: secret pattern in content" >&2
-  echo "  Line: $display_hit" >&2
-  echo "Remove the secret or add the file to .gitignore." >&2
-  return 1
+    echo "BLOCKED: Potential secret detected in staged files" >&2
+    echo "  File: $staged_file" >&2
+    echo "  Match: secret pattern in content" >&2
+    echo "  Line: $display_hit" >&2
+    echo "Remove the secret or add the file to .gitignore." >&2
+    return 1
+  done <<EOF
+$staged_files
+EOF
+
+  return 0
 }
 
 _save_screenshot_attachment() {

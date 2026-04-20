@@ -21,6 +21,7 @@ Subcommands:
   failures [--tail N] [--prune] [--retry ID]
                           Failure log management
   reset-breaker           Clear the circuit breaker
+  doctor-network          Opt-in network probe (GET webhook URL, 60s cached)
   help                    Show this message
 
 See docs/discord.md for setup.
@@ -36,7 +37,7 @@ doey_discord() {
       doey_discord_usage
       return 0
       ;;
-    status|bind|unbind|send|send-test|failures|reset-breaker)
+    status|bind|unbind|send|send-test|failures|reset-breaker|doctor-network)
       if ! command -v doey-tui >/dev/null 2>&1; then
         printf 'doey-tui not found on PATH — run "doey update" to build/install\n' >&2
         return 1

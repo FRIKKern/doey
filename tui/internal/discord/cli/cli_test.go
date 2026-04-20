@@ -9,12 +9,13 @@ import (
 	"testing"
 )
 
-// testEnv creates an isolated project dir + XDG_CONFIG_HOME so tests can
-// run in parallel without touching the developer's real ~/.config.
+// testEnv creates an isolated project dir + XDG_CONFIG_HOME + RUNTIME_DIR
+// so tests can run without touching the developer's real ~/.config.
 type testEnv struct {
 	Project string
 	XDG     string
 	Conf    string
+	Runtime string
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -22,16 +23,21 @@ func newTestEnv(t *testing.T) *testEnv {
 	root := t.TempDir()
 	proj := filepath.Join(root, "proj")
 	xdg := filepath.Join(root, "xdg")
+	run := filepath.Join(root, "runtime")
 	if err := os.MkdirAll(filepath.Join(proj, ".doey"), 0o755); err != nil {
 		t.Fatalf("mkdir proj/.doey: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(xdg, "doey"), 0o700); err != nil {
 		t.Fatalf("mkdir xdg/doey: %v", err)
 	}
+	if err := os.MkdirAll(run, 0o700); err != nil {
+		t.Fatalf("mkdir runtime: %v", err)
+	}
 	conf := filepath.Join(xdg, "doey", "discord.conf")
 	t.Setenv("PROJECT_DIR", proj)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
-	return &testEnv{Project: proj, XDG: xdg, Conf: conf}
+	t.Setenv("RUNTIME_DIR", run)
+	return &testEnv{Project: proj, XDG: xdg, Conf: conf, Runtime: run}
 }
 
 func (e *testEnv) writeBinding(t *testing.T, stanza string) {
@@ -52,31 +58,39 @@ func (e *testEnv) writeConf(t *testing.T, body string, mode os.FileMode) {
 	}
 }
 
-// runCLI invokes Run and returns (code, stdout, stderr). Keeps tests
-// from having to plumb io.Writers repeatedly.
 func runCLI(args ...string) (int, string, string) {
 	var out, errb bytes.Buffer
 	code := Run(args, &out, &errb)
 	return code, out.String(), errb.String()
 }
 
-// ── Send — Branch (a): no binding ────────────────────────────────────
+// ── Send — no binding, no --if-bound → exit 1 "no binding" ────────────
 
-func TestSend_NoBinding_Phase2Message(t *testing.T) {
+func TestSend_NoBinding_Exit1(t *testing.T) {
 	_ = newTestEnv(t)
 	code, _, stderr := runCLI("send", "--title", "T", "--event", "stop")
 	if code != 1 {
 		t.Fatalf("exit=%d, want 1; stderr=%q", code, stderr)
 	}
-	if !strings.Contains(stderr, "send CLI lands in Phase 2") {
-		t.Fatalf("stderr missing Phase 2 message: %q", stderr)
-	}
-	if strings.Contains(stderr, "Phase 3") {
-		t.Fatalf("stderr must NOT mention Phase 3 in branch (a): %q", stderr)
+	if !strings.Contains(stderr, "no binding") {
+		t.Fatalf("stderr missing 'no binding': %q", stderr)
 	}
 }
 
-// ── Send — Branch (b): bot_dm binding ─────────────────────────────────
+// ── Send — no binding, --if-bound → exit 0 silently ───────────────────
+
+func TestSend_IfBound_NoBinding_Exit0(t *testing.T) {
+	_ = newTestEnv(t)
+	code, out, stderr := runCLI("send", "--if-bound", "--title", "T", "--event", "stop")
+	if code != 0 {
+		t.Fatalf("exit=%d, want 0; stderr=%q", code, stderr)
+	}
+	if out != "" || stderr != "" {
+		t.Fatalf("expected silent; out=%q stderr=%q", out, stderr)
+	}
+}
+
+// ── Send — bot_dm binding → exit 1 Phase 3 message ────────────────────
 
 func TestSend_BotDM_Phase3Message(t *testing.T) {
 	e := newTestEnv(t)
@@ -92,33 +106,12 @@ dm_channel_id=2222222222
 	if code != 1 {
 		t.Fatalf("exit=%d, want 1; stderr=%q", code, stderr)
 	}
-	if !strings.Contains(stderr, "bot_dm support lands in Phase 3") {
+	if !strings.Contains(stderr, msgPhase3BotDMPending) {
 		t.Fatalf("stderr missing Phase 3 message: %q", stderr)
 	}
-	if strings.Contains(stderr, "lands in Phase 2") {
-		t.Fatalf("stderr must NOT mention Phase 2 in branch (b): %q", stderr)
-	}
 }
 
-// ── Send — Webhook creds present: still Branch (a) ───────────────────
-
-func TestSend_Webhook_StillRefuses(t *testing.T) {
-	e := newTestEnv(t)
-	e.writeBinding(t, "default")
-	e.writeConf(t, `[default]
-kind=webhook
-webhook_url=https://discord.com/api/webhooks/1/abc1
-`, 0o600)
-	code, _, stderr := runCLI("send", "--title", "T", "--event", "stop")
-	if code != 1 {
-		t.Fatalf("exit=%d, want 1; stderr=%q", code, stderr)
-	}
-	if !strings.Contains(stderr, "send CLI lands in Phase 2") {
-		t.Fatalf("webhook branch (a) message missing: %q", stderr)
-	}
-}
-
-// ── Send — bad creds (missing perms): creds-problem path ─────────────
+// ── Send — bad creds perms → exit 1 perm complaint ────────────────────
 
 func TestSend_BadPerms_ReportsPerm(t *testing.T) {
 	e := newTestEnv(t)
@@ -136,6 +129,16 @@ webhook_url=https://discord.com/api/webhooks/1/abc1
 	}
 }
 
+// ── Send — rejects --body on argv (body is stdin-only) ─────────────────
+
+func TestSend_RejectsBodyArg(t *testing.T) {
+	_ = newTestEnv(t)
+	code, _, _ := runCLI("send", "--body", "SECRET")
+	if code != 2 {
+		t.Fatalf("exit=%d, want 2 (flag parse error)", code)
+	}
+}
+
 // ── Status — no binding ──────────────────────────────────────────────
 
 func TestStatus_NoBinding(t *testing.T) {
@@ -148,8 +151,6 @@ func TestStatus_NoBinding(t *testing.T) {
 		t.Fatalf("expected 'not bound' in stdout: %q", out)
 	}
 }
-
-// ── Status — webhook bound, exposes last-4 redaction ─────────────────
 
 func TestStatus_WebhookRedactedLast4(t *testing.T) {
 	e := newTestEnv(t)
@@ -169,8 +170,6 @@ webhook_url=https://discord.com/api/webhooks/1/SUPER_SECRETabc1
 		t.Fatalf("stdout leaked webhook secret: %q", out)
 	}
 }
-
-// ── Status --json — bot_dm kind ──────────────────────────────────────
 
 func TestStatus_JSON_BotDM(t *testing.T) {
 	e := newTestEnv(t)
@@ -201,8 +200,6 @@ dm_channel_id=2222222222
 	}
 }
 
-// ── Status — bad perms, still exits 0 ────────────────────────────────
-
 func TestStatus_BadPerms_ExitZero(t *testing.T) {
 	e := newTestEnv(t)
 	e.writeBinding(t, "default")
@@ -219,7 +216,7 @@ webhook_url=https://discord.com/api/webhooks/1/abc1
 	}
 }
 
-// ── Stub subcommands — exit 1 with phase tag ─────────────────────────
+// ── Remaining stub: bind ─────────────────────────────────────────────
 
 func TestStub_Bind(t *testing.T) {
 	_ = newTestEnv(t)
@@ -232,14 +229,58 @@ func TestStub_Bind(t *testing.T) {
 	}
 }
 
-func TestStub_Failures(t *testing.T) {
+// ── Unbind — no binding: exit 0 still prints "removed" ───────────────
+
+func TestUnbind_NoBinding(t *testing.T) {
 	_ = newTestEnv(t)
-	code, _, stderr := runCLI("failures")
-	if code != 1 {
-		t.Fatalf("exit=%d, want 1", code)
+	code, out, stderr := runCLI("unbind")
+	if code != 0 {
+		t.Fatalf("exit=%d, want 0; stderr=%q", code, stderr)
 	}
-	if !strings.Contains(stderr, "Phase 2") {
-		t.Fatalf("stderr missing Phase 2 tag: %q", stderr)
+	if !strings.Contains(out, "Discord binding removed") {
+		t.Fatalf("expected removed message; got %q", out)
+	}
+}
+
+// ── Reset-breaker — empty state: creates clean state file ────────────
+
+func TestResetBreaker_EmptyState(t *testing.T) {
+	e := newTestEnv(t)
+	code, out, stderr := runCLI("reset-breaker")
+	if code != 0 {
+		t.Fatalf("exit=%d, want 0; stderr=%q", code, stderr)
+	}
+	if !strings.Contains(out, "circuit breaker reset") {
+		t.Fatalf("expected reset confirmation; got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(e.Runtime, "discord-rl.state")); err != nil {
+		t.Fatalf("state file not created: %v", err)
+	}
+}
+
+// ── Failures — no file, default tail: silent exit 0 ──────────────────
+
+func TestFailures_NoFile(t *testing.T) {
+	_ = newTestEnv(t)
+	code, out, stderr := runCLI("failures")
+	if code != 0 {
+		t.Fatalf("exit=%d, want 0; stderr=%q", code, stderr)
+	}
+	if out != "" {
+		t.Fatalf("expected empty stdout; got %q", out)
+	}
+}
+
+// ── Failures --prune — no file: exit 0, "pruned 0 entries" ───────────
+
+func TestFailures_PruneEmpty(t *testing.T) {
+	_ = newTestEnv(t)
+	code, out, stderr := runCLI("failures", "--prune")
+	if code != 0 {
+		t.Fatalf("exit=%d, want 0; stderr=%q", code, stderr)
+	}
+	if !strings.Contains(out, "pruned 0 entries") {
+		t.Fatalf("expected pruned-0 message; got %q", out)
 	}
 }
 
