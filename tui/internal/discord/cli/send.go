@@ -16,9 +16,6 @@ import (
 	"github.com/doey-cli/doey/tui/internal/discord/sender"
 )
 
-// Phase-3 refusal message — LITERAL CONTRACT. Do not reword.
-const msgPhase3BotDMPending = "bot_dm support lands in Phase 3 — rebind as webhook"
-
 const stdinBodyCap = 64 * 1024
 
 // stdinSource is swappable in tests. Returning (nil, false) means no body
@@ -96,11 +93,7 @@ func sendCommon(p sendParams, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "discord send: %s\n", redact.Redact(err.Error()))
 		return 1
 	}
-	if cfg.Kind == config.KindBotDM {
-		fmt.Fprintln(stderr, msgPhase3BotDMPending)
-		return 1
-	}
-	if cfg.Kind != config.KindWebhook {
+	if cfg.Kind != config.KindWebhook && cfg.Kind != config.KindBotDM {
 		fmt.Fprintf(stderr, "discord send: unsupported kind %q\n", string(cfg.Kind))
 		return 1
 	}

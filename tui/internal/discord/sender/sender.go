@@ -73,7 +73,7 @@ func NewSender(cfg *config.Config) (Sender, error) {
 	case config.KindWebhook:
 		return newWebhookSenderWithClient(cfg.WebhookURL, HTTPClient), nil
 	case config.KindBotDM:
-		return nil, ErrNotImplemented
+		return newBotDMSenderWithClient(cfg, HTTPClient), nil
 	}
 	return nil, ErrUnknownKind
 }
