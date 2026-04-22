@@ -198,3 +198,71 @@ team_state_set() {
 _doey_reload_config() {
   _doey_load_config
 }
+
+# ── Claude PATH Auto-Repair ─────────────────────────────────────────
+# Node version managers (fnm, volta) often place `claude` inside a
+# shell-scoped shim dir (e.g. /run/user/*/fnm_multishells/<pid>/bin)
+# that disappears when the originating shell exits. Long-running Doey
+# subshells that inherited such a PATH then see "claude CLI not found"
+# even though the binary is present on disk.
+#
+# This helper finds claude in known stable locations and symlinks it
+# into ~/.local/bin, which is on PATH in every shell via .profile.
+# Idempotent — returns 0 fast when claude already resolves.
+_doey_repair_claude_path() {
+  local _p
+  _p="$(command -v claude 2>/dev/null || true)"
+  if [ -n "$_p" ] && [ -x "$_p" ]; then
+    return 0
+  fi
+
+  local _link="$HOME/.local/bin/claude"
+  if [ -L "$_link" ] && [ ! -e "$_link" ]; then
+    rm -f "$_link" 2>/dev/null || true
+  fi
+
+  local _target="" _cand
+  local _candidates="
+$HOME/.local/share/fnm/aliases/default/bin/claude
+$HOME/.volta/bin/claude
+$HOME/n/bin/claude
+$HOME/.npm-global/bin/claude
+/usr/local/bin/claude
+/opt/homebrew/bin/claude
+"
+  local _old_ifs="$IFS"
+  IFS='
+'
+  for _cand in $_candidates; do
+    if [ -n "$_cand" ] && [ -x "$_cand" ]; then
+      _target="$_cand"
+      break
+    fi
+  done
+  IFS="$_old_ifs"
+
+  if [ -z "$_target" ] && [ -d "$HOME/.nvm/versions/node" ]; then
+    local _nvm_v
+    _nvm_v=$(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | sort -V | tail -1)
+    if [ -n "$_nvm_v" ] && [ -x "$HOME/.nvm/versions/node/$_nvm_v/bin/claude" ]; then
+      _target="$HOME/.nvm/versions/node/$_nvm_v/bin/claude"
+    fi
+  fi
+
+  [ -z "$_target" ] && return 1
+
+  mkdir -p "$HOME/.local/bin" 2>/dev/null || return 1
+  ln -sf "$_target" "$_link" 2>/dev/null || return 1
+
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) : ;;
+    *) PATH="$HOME/.local/bin:$PATH"; export PATH ;;
+  esac
+
+  # Bash caches command paths — invalidate so a dead shim isn't re-resolved
+  hash -r 2>/dev/null || true
+
+  local _p2
+  _p2="$(command -v claude 2>/dev/null || true)"
+  [ -n "$_p2" ] && [ -x "$_p2" ]
+}
