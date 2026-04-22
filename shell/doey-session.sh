@@ -554,7 +554,10 @@ _spin() {
 # ── Purge functions moved to doey-purge.sh ──
 
 check_claude_auth() {
-  if ! command -v claude >/dev/null 2>&1; then
+  # Auto-repair stale fnm/volta shim paths before failing. fnm_multishells
+  # dirs are wiped when their parent shell exits, leaving inherited PATH
+  # entries dangling in long-running Doey subshells.
+  if ! _doey_repair_claude_path; then
     doey_error "claude CLI not found"
     return 1
   fi

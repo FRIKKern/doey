@@ -83,7 +83,10 @@ doey_headless() {
     return 0
   fi
 
-  # Require claude CLI
+  # Require claude CLI — auto-repair stale fnm/volta shims when available
+  if command -v _doey_repair_claude_path >/dev/null 2>&1; then
+    _doey_repair_claude_path >/dev/null 2>&1 || true
+  fi
   if ! command -v claude >/dev/null 2>&1; then
     echo "doey-headless: claude CLI not found (install: npm i -g @anthropic-ai/claude-code)" >&2
     return 2

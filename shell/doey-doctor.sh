@@ -289,6 +289,8 @@ check_doctor() {
       Linux)  printf "\n         ${DIM}Fix: ${RESET}${BRAND}sudo apt-get install -y tmux${RESET}\n" ;;
     esac
   fi
+  # Auto-repair stale fnm/volta shims before reporting a failure
+  _doey_repair_claude_path >/dev/null 2>&1 || true
   if command -v claude >/dev/null 2>&1; then
     local _claude_ver _claude_raw _claude_latest
     _claude_raw=$(claude --version 2>/dev/null || echo "unknown")
