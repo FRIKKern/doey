@@ -90,6 +90,8 @@ Bootstrap: `doey.sh` → `tmux set-environment DOEY_RUNTIME` → `session.env`.
 
 **Per-window (`team_<W>.env`):** `WINDOW_INDEX`, `GRID`, `MANAGER_PANE`, `WORKER_PANES`, `WORKER_COUNT`, `SESSION_NAME`, `TEAM_TYPE` (`managed`/`freelancer`), `TEAM_DEF`. Loaded via `_read_team_key()`, overrides session.env.
 
+**Notification opt-ins (`send_notification`):** `DOEY_NOTIFY_CMD` (path to executable hook script; default `~/.config/doey/notify-cmd`; receives `DOEY_NOTIFY_TITLE`/`SUBTITLE`/`BODY`/`EVENT` + `DOEY_TASK_ID`, runs in background), `DOEY_NOTIFY_REPLACE=1` (skip built-in desktop/Discord when custom hook ran), `DOEY_NO_FOCUS_SUPPRESS=1` (always notify even when user is focused on the source pane).
+
 
 ## CLI Launch Flags
 
