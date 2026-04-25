@@ -148,7 +148,7 @@ setup_dashboard() {
   # Boss (pane 0.1)
   local _boss_cmd="claude --dangerously-skip-permissions --model ${DOEY_BOSS_MODEL:-$DOEY_TASKMASTER_MODEL} --name \"${DOEY_ROLE_BOSS}\" --agent ${DOEY_ROLE_FILE_BOSS}"
   _append_settings _boss_cmd "$runtime_dir"
-  doey_send_command "$session:0.1" "${_DRAIN_STDIN}${_boss_cmd}"
+  doey_send_launch "$session:0.1" "${_DRAIN_STDIN}${_boss_cmd}" || true
 
   tmux rename-window -t "$session:0" "Dashboard"
   write_pane_status "$runtime_dir" "${session}:0.1" "READY"
@@ -200,13 +200,13 @@ _create_core_team() {
   # Task Reviewer (pane 1.1)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Task Reviewer\" --agent doey-task-reviewer"
   _append_settings _spec_cmd "$runtime_dir"
-  doey_send_command "${session}:1.1" "${_DRAIN_STDIN}${_spec_cmd}"
+  doey_send_launch "${session}:1.1" "${_DRAIN_STDIN}${_spec_cmd}" || true
   write_pane_status "$runtime_dir" "${session}:1.1" "READY"
 
   # Deployment (pane 1.2)
   _spec_cmd="claude --dangerously-skip-permissions --effort high --model $DOEY_WORKER_MODEL --name \"Deployment\" --agent doey-deployment"
   _append_settings _spec_cmd "$runtime_dir"
-  doey_send_command "${session}:1.2" "${_DRAIN_STDIN}${_spec_cmd}"
+  doey_send_launch "${session}:1.2" "${_DRAIN_STDIN}${_spec_cmd}" || true
   write_pane_status "$runtime_dir" "${session}:1.2" "READY"
 
   # Terminal (pane 1.3) — doey-term Bubble Tea container, not a Claude agent
@@ -1003,7 +1003,7 @@ reload_session() {
       mgr_agent=$(generate_team_agent "doey-subtaskmaster" "$tw")
       local _rl_mgr_cmd="claude --dangerously-skip-permissions --model $DOEY_MANAGER_MODEL --name \"T${tw} ${DOEY_ROLE_TEAM_LEAD}\" --agent \"$mgr_agent\""
       _append_settings _rl_mgr_cmd "$runtime_dir"
-      doey_send_command "$mgr_ref" "${_DRAIN_STDIN}${_rl_mgr_cmd}"
+      doey_send_launch "$mgr_ref" "${_DRAIN_STDIN}${_rl_mgr_cmd}" || true
       printf " ${SUCCESS}✓${RESET}\n"
       (
         sleep "$DOEY_MANAGER_BRIEF_DELAY"
@@ -1051,7 +1051,7 @@ reload_session() {
         local worker_prompt
         worker_prompt=$(grep -rl "pane ${tw}\.${wp} " "${runtime_dir}"/worker-system-prompt-*.md 2>/dev/null | head -1)
         [ -n "$worker_prompt" ] && worker_cmd+=" --append-system-prompt-file \"${worker_prompt}\""
-        doey_send_command "$pane_ref" "${_DRAIN_STDIN}${worker_cmd}"
+        doey_send_launch "$pane_ref" "${_DRAIN_STDIN}${worker_cmd}" || true
         printf "    %s.%s ${SUCCESS}✓${RESET}\n" "$tw" "$wp"
         sleep "$DOEY_WORKER_LAUNCH_DELAY"
       done
