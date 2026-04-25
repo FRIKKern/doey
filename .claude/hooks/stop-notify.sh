@@ -226,6 +226,17 @@ if is_worker; then
   _STATUS_LABEL="FINISHED"
   [ "$STATUS" = "error" ] && _STATUS_LABEL="ERROR"
   [ -f "${RUNTIME_DIR}/respawn/${PANE_SAFE}.request" ] && _STATUS_LABEL="RESPAWNING"
+
+  # WIN #2: pane flash + bell + .unread sentinel (opt-out via DOEY_NO_PANE_FLASH=1)
+  if [ -z "${DOEY_NO_PANE_FLASH:-}" ]; then
+    case "$_STATUS_LABEL" in
+      FINISHED) tmux select-pane -t "$PANE" -P 'fg=green,bold' 2>/dev/null || true ;;
+      ERROR)    tmux select-pane -t "$PANE" -P 'fg=magenta,bold' 2>/dev/null || true ;;
+    esac
+    [ -w /dev/tty ] && printf '\a' > /dev/tty 2>/dev/null || true
+    mkdir -p "${RUNTIME_DIR}/status" 2>/dev/null || true
+    touch "${RUNTIME_DIR}/status/${PANE_SAFE}.unread" 2>/dev/null || true
+  fi
   # Extract proof type from result JSON
   _PROOF_TYPE=""
   if [ -f "$RESULT_FILE" ]; then

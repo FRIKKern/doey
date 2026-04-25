@@ -16,6 +16,12 @@ fi
 PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
+# WIN #2: clear pane-flash override + .unread sentinel on focus (opt-out via DOEY_NO_PANE_FLASH=1)
+if [ -z "${DOEY_NO_PANE_FLASH:-}" ]; then
+  tmux select-pane -t "$PANE" -P '' 2>/dev/null || true
+  rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.unread" 2>/dev/null || true
+fi
+
 case "$PROMPT" in
   /compact*)
     if command -v doey-ctl >/dev/null 2>&1; then
