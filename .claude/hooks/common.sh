@@ -566,6 +566,33 @@ send_notification() {
   local event_kind="${3:-generic}"
   is_boss || return 0
   _check_cooldown "${title//[^a-zA-Z0-9]/_}" 60 || return 0
+
+  # CMUX win #5 — suppress notification when user is already focused on source pane.
+  # Opt out: DOEY_NO_FOCUS_SUPPRESS=1.
+  if [ -z "${DOEY_NO_FOCUS_SUPPRESS:-}" ]; then
+    local _active_pane
+    _active_pane=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null)
+    if [ -n "$_active_pane" ] && [ "$_active_pane" = "${PANE:-}" ]; then
+      return 0
+    fi
+  fi
+
+  # CMUX win #3 — custom notify-cmd plugin point.
+  # User-supplied script invoked in background with DOEY_NOTIFY_* env vars.
+  # If DOEY_NOTIFY_REPLACE=1, skip built-in desktop/Discord path entirely.
+  local _notify_cmd="${DOEY_NOTIFY_CMD:-${HOME}/.config/doey/notify-cmd}"
+  if [ -x "$_notify_cmd" ]; then
+    DOEY_NOTIFY_TITLE="$title" \
+    DOEY_NOTIFY_SUBTITLE="$event_kind" \
+    DOEY_NOTIFY_BODY="$body" \
+    DOEY_NOTIFY_EVENT="$event_kind" \
+    DOEY_TASK_ID="${DOEY_TASK_ID:-}" \
+      "$_notify_cmd" </dev/null >/dev/null 2>&1 &
+    if [ -n "${DOEY_NOTIFY_REPLACE:-}" ]; then
+      return 0
+    fi
+  fi
+
   _send_desktop_notification "$title" "$body"
 
   # Phase 5: Discord forward (Boss events, if bound)
