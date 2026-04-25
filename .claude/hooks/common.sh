@@ -534,6 +534,16 @@ notify_taskmaster() {  # Lifecycle event -> Taskmaster wake trigger
 
 _send_desktop_notification() {  # Low-level, no role check, no cooldown
   local title="$1" body="$2"
+  # OSC 9 / OSC 777 terminal-attention escapes (iTerm2/Ghostty/Kitty/WezTerm).
+  # Fires even if osascript denied or terminal is backgrounded.
+  # Opt out: DOEY_NO_OSC_NOTIFY=1. Guarded with || true for non-tty contexts.
+  if [ -z "${DOEY_NO_OSC_NOTIFY:-}" ] && [ -w /dev/tty ]; then
+    local _t _b
+    _t=$(printf '%s' "$title" | tr -d '\n\r')
+    _b=$(printf '%s' "$body"  | tr -d '\n\r')
+    printf '\033]9;%s — %s\007'        "$_t" "$_b" > /dev/tty 2>/dev/null || true
+    printf '\033]777;notify;%s;%s\007' "$_t" "$_b" > /dev/tty 2>/dev/null || true
+  fi
   if command -v osascript >/dev/null 2>&1; then
     osascript - "$title" "$body" <<'APPLESCRIPT' 2>/dev/null &
 on run argv
