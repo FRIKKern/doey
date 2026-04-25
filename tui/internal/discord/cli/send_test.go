@@ -303,6 +303,10 @@ func TestSend_StdinBodyReachesHTTP(t *testing.T) {
 	writeWebhookCreds(t, e, srv.URL)
 
 	const marker = "SECRETXYZ123"
+	// Hermetic against ambient env: METADATA_ONLY wins precedence, so an
+	// inherited DOEY_DISCORD_METADATA_ONLY=1 would suppress the body before
+	// INCLUDE_BODY=1 takes effect. Unset it for this test.
+	t.Setenv("DOEY_DISCORD_METADATA_ONLY", "")
 	t.Setenv("DOEY_DISCORD_INCLUDE_BODY", "1")
 	withStdin(t, marker)
 	code, _, stderr := callSend("--title", "T", "--event", "stop")
