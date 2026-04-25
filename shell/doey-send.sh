@@ -325,3 +325,118 @@ doey_send_command() {
   tmux copy-mode -q -t "$target" 2>/dev/null || true
   tmux send-keys -t "$target" "$cmd" Enter 2>/dev/null || true
 }
+
+# doey_send_launch <target_pane> <cmd_string> [grace_s] [max_kicks]
+#
+# Posts a long worker-launch shell command (e.g. `claude --dangerously-skip...`)
+# to a pane and verifies that the command actually executes. Defends against
+# the bracketed-paste-leak race (task 621): when a stray `\e[200~` arrives in
+# stdin during shell init, readline enters paste mode and a subsequent Enter
+# becomes a literal newline rather than a line-submit — the long claude command
+# sits at the prompt typed but never executed.
+#
+# Strategy:
+#   0. Pre-clear: copy-mode off, send `\e[201~` (close any pending paste),
+#      send C-c (kill input line). Wait briefly for shell to redraw.
+#   1. Send the cmd_string + Enter via tmux send-keys (matches existing pattern).
+#   2. Verify by polling for the Claude prompt (`❯`) for up to grace_s seconds.
+#   3. If `❯` appears → log "launch ok (kicks=N)" and return 0.
+#   4. Otherwise: capture last 5 lines. If the shell prompt and command text
+#      are still visible, kick by sending `\e[201~` + Enter (close any open
+#      paste then submit), and repeat the verify step.
+#   5. After max_kicks failed kicks, log a clear failure stage and return 1.
+#
+# Args:
+#   target     — tmux pane target (session:window.pane)
+#   cmd_string — the shell command line to execute
+#   grace_s    — seconds to wait for `❯` per iteration (default 5)
+#   max_kicks  — number of Enter kicks to attempt after the initial send (default 3)
+#
+# Returns 0 on success, non-zero on failure.
+doey_send_launch() {
+  local target="$1"
+  local cmd_string="$2"
+  local grace_s="${3:-5}"
+  local max_kicks="${4:-3}"
+
+  # ── Step 0: Pre-clear input state ──
+  # Close any pending bracketed paste (\e[201~) then SIGINT to clear the line.
+  # This is the defense against the task-621 bracketed-paste leak.
+  tmux copy-mode -q -t "$target" 2>/dev/null || true
+  tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
+  tmux send-keys -t "$target" C-c 2>/dev/null || true
+  sleep 0.15
+
+  # ── Step 1: Send the command + Enter ──
+  if ! tmux send-keys -t "$target" "$cmd_string" Enter 2>/dev/null; then
+    echo "doey_send_launch: send-keys failed at stage=sent target=$target" >&2
+    return 1
+  fi
+
+  # First-word fingerprint of the command — used to detect whether the line
+  # is still typed at the prompt (i.e. Enter was dropped).
+  local cmd_head
+  cmd_head="${cmd_string%% *}"
+  # Strip any leading `read -t 1 ...; ` _DRAIN_STDIN prefix so the fingerprint
+  # picks the actual binary (e.g. `claude` or `/path/to/marker.sh`).
+  case "$cmd_head" in
+    read) cmd_head="${cmd_string##*; }"; cmd_head="${cmd_head%% *}" ;;
+  esac
+
+  # ── Step 2..4: Verify-then-kick loop ──
+  local kicks=0
+  while [ "$kicks" -le "$max_kicks" ]; do
+    local elapsed=0
+    local interval=1
+    # First check immediately (after the initial send most launches are fast)
+    local cap
+    cap=$(tmux capture-pane -t "$target" -p -S -50 2>/dev/null) || cap=""
+    if printf '%s' "$cap" | grep -qF '❯' 2>/dev/null; then
+      echo "doey_send_launch: launch ok (kicks=$kicks) target=$target" >&2
+      return 0
+    fi
+    while [ "$elapsed" -lt "$grace_s" ]; do
+      sleep "$interval"
+      elapsed=$((elapsed + interval))
+      cap=$(tmux capture-pane -t "$target" -p -S -50 2>/dev/null) || cap=""
+      if printf '%s' "$cap" | grep -qF '❯' 2>/dev/null; then
+        echo "doey_send_launch: launch ok (kicks=$kicks) target=$target" >&2
+        return 0
+      fi
+    done
+
+    if [ "$kicks" -eq 0 ]; then
+      echo "doey_send_launch: stage=first_grace_no_prompt target=$target — kicking" >&2
+    fi
+
+    if [ "$kicks" -ge "$max_kicks" ]; then
+      break
+    fi
+
+    # Kick decision: only kick if shell prompt AND typed command are visible.
+    local last5
+    last5=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || last5=""
+    local prompt_visible=0 cmd_visible=0
+    if printf '%s' "$last5" | grep -qE '(\$|#|>) *$' 2>/dev/null; then
+      prompt_visible=1
+    fi
+    if [ -n "$cmd_head" ] && printf '%s' "$last5" | grep -qF "$cmd_head" 2>/dev/null; then
+      cmd_visible=1
+    fi
+    if [ "$prompt_visible" = "1" ] && [ "$cmd_visible" = "1" ]; then
+      # Close any open bracketed paste, then Enter to submit.
+      tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
+      tmux send-keys -t "$target" Enter 2>/dev/null || true
+      kicks=$((kicks + 1))
+      continue
+    fi
+
+    # Neither prompt+cmd visible nor `❯` found — something else is happening
+    # (e.g. shell still booting, command running but not yet at ❯). Loop again
+    # to keep polling for `❯` rather than kicking blindly.
+    kicks=$((kicks + 1))
+  done
+
+  echo "doey_send_launch: stage=kicks_exhausted target=$target after $max_kicks kicks" >&2
+  return 1
+}

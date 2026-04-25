@@ -493,7 +493,7 @@ _batch_boot_workers() {
     local _bbw_cur_pane _bbw_cur_cmd
     _bbw_cur_pane="${_bbw_pane_arr[$_bbw_i]}"
     _bbw_cur_cmd="${_bbw_cmd_arr[$_bbw_i]}"
-    doey_send_command "$session:${team_window}.${_bbw_cur_pane}" "${_DRAIN_STDIN}${_bbw_cur_cmd}"
+    doey_send_launch "$session:${team_window}.${_bbw_cur_pane}" "${_DRAIN_STDIN}${_bbw_cur_cmd}" || true
     if [ "$_bbw_reserved" = "true" ] || [ "$_bbw_is_freelancer" = "true" ]; then
       write_pane_status "$runtime_dir" "${session}:${team_window}.${_bbw_cur_pane}" "RESERVED"
       local _bbw_safe="${session}:${team_window}.${_bbw_cur_pane}"
@@ -791,7 +791,7 @@ _launch_team_manager() {
   local _mgr_mcp_team="${runtime_dir}/mcp/team_${window_index}.mcp.json"
   [ -f "$_mgr_mcp_team" ] && _mgr_cmd+=" --mcp-config \"${_mgr_mcp_team}\""
 
-  doey_send_command "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}"
+  doey_send_launch "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}" || true
   tmux select-pane -t "${session}:${window_index}.0" -T "$_mgr_pane_title"
   write_pane_status "$runtime_dir" "${session}:${window_index}.0" "READY"
 
@@ -1032,7 +1032,7 @@ add_team_from_def() {
   local mgr_model="${td_manager_model:-$DOEY_MANAGER_MODEL}"
   local _mgr_cmd="claude --dangerously-skip-permissions --model $mgr_model --agent \"$mgr_agent_name\" --name \"${mgr_name}\""
   _append_settings _mgr_cmd "$runtime_dir"
-  doey_send_command "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}"
+  doey_send_launch "${session}:${window_index}.0" "${_DRAIN_STDIN}${_mgr_cmd}" || true
   tmux select-pane -t "${session}:${window_index}.0" -T "$mgr_name"
 
   # Launch workers (panes 1+)
@@ -1100,7 +1100,7 @@ add_team_from_def() {
     [ -f "$_w_mcp_team" ] && _w_cmd+=" --mcp-config \"${_w_mcp_team}\""
 
     sleep "${DOEY_WORKER_LAUNCH_DELAY:-2}"
-    doey_send_command "${session}:${window_index}.${_w_i}" "${_DRAIN_STDIN}${_w_cmd}"
+    doey_send_launch "${session}:${window_index}.${_w_i}" "${_DRAIN_STDIN}${_w_cmd}" || true
     tmux select-pane -t "${session}:${window_index}.${_w_i}" -T "$w_name"
     # Write READY status so Taskmaster/Subtaskmaster can dispatch immediately
     write_pane_status "$runtime_dir" "${session}:${window_index}.${_w_i}" "READY"
