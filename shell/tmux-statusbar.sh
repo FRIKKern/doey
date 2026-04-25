@@ -16,8 +16,12 @@ else
   BUSY=0 READY=0 FINISHED=0 RESERVED=0
 fi
 
+unread_files=("$RUNTIME_DIR/status/"*.unread)
+UNREAD=${#unread_files[@]}
+
 WORKERS=""
-[ "$BUSY" -gt 0 ] && WORKERS="#[fg=cyan]${BUSY}B#[fg=colour248]/"
+[ "$UNREAD" -gt 0 ] && WORKERS="#[fg=yellow,bold]●${UNREAD}#[fg=colour248,nobold] "
+[ "$BUSY" -gt 0 ] && WORKERS+="#[fg=cyan]${BUSY}B#[fg=colour248]/"
 WORKERS+="${READY}R"
 [ "$FINISHED" -gt 0 ] && WORKERS+="/${FINISHED}F"
 [ "$RESERVED" -gt 0 ] && WORKERS+="/#[fg=red]${RESERVED}Rsv#[fg=colour248]"

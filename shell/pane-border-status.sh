@@ -47,7 +47,10 @@ if [ "$WINDOW_IDX" = "0" ]; then
   _prefix_id "$TITLE"; exit 0
 fi
 
-[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { _prefix_id "${TITLE} 🔒"; exit 0; }
+_unread_glyph=""
+[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.unread" ] && _unread_glyph=" ●"
+
+[ -f "${RUNTIME_DIR}/status/${PANE_SAFE}.reserved" ] && { _prefix_id "${TITLE}${_unread_glyph} 🔒"; exit 0; }
 
 # Extract task label from status file for BUSY/WORKING panes
 _task_label=""
@@ -117,4 +120,4 @@ if [ -f "$_subtask_file" ]; then
   fi
 fi
 
-[ -n "$_task_label" ] && _prefix_id "${TITLE} [${_task_label}]" || _prefix_id "$TITLE"
+[ -n "$_task_label" ] && _prefix_id "${TITLE}${_unread_glyph} [${_task_label}]" || _prefix_id "${TITLE}${_unread_glyph}"
