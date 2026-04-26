@@ -16,10 +16,14 @@ fi
 PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
-# WIN #2: clear pane-flash override + .unread sentinel on focus (opt-out via DOEY_NO_PANE_FLASH=1)
-if [ -z "${DOEY_NO_PANE_FLASH:-}" ]; then
-  tmux select-pane -t "$PANE" -P '' 2>/dev/null || true
-  rm -f "${RUNTIME_DIR}/status/${PANE_SAFE}.unread" 2>/dev/null || true
+# WIN #2: clear pane-flash override + .unread sentinel on focus (opt-out via DOEY_NO_PANE_FLASH=1).
+# Gated on .unread sentinel: only redraw pane border when a flash was actually set —
+# unconditional select-pane -P during initial-dispatch races with Claude TUI's alt-screen
+# init and leaves the viewport blank with content stuck in scrollback (task 636).
+_unread_sentinel="${RUNTIME_DIR}/status/${PANE_SAFE}.unread"
+if [ -z "${DOEY_NO_PANE_FLASH:-}" ] && [ -f "$_unread_sentinel" ]; then
+  tmux select-pane -t "$PANE" -P 'default' 2>/dev/null || true
+  rm -f "$_unread_sentinel" 2>/dev/null || true
 fi
 
 case "$PROMPT" in
