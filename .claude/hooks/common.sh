@@ -3,6 +3,10 @@
 
 set -euo pipefail
 
+# Default NOW so write_pane_status works on code paths that don't call init_hook.
+# init_hook overwrites this with the canonical timestamp when invoked.
+NOW="${NOW:-$(date '+%Y-%m-%dT%H:%M:%S%z')}"
+
 # Source centralized role definitions — resolve via multiple fallbacks
 _DOEY_ROLES_FILE=""
 # Method 1: Relative to this hook file (works inside Doey repo)
