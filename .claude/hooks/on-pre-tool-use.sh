@@ -92,8 +92,10 @@ _log_block() {
       (doey event log --type "error_hook_block" --source "$_pid" --data "${msg} | ${_evt_data}" --project-dir "$_proj" &) 2>/dev/null
     fi
   fi
-  # Emit structured lifecycle event for tool_blocked
-  emit_lifecycle_event "tool_blocked" "${DOEY_PANE_SAFE:-unknown}" "${DOEY_TASK_ID:-}" "${DOEY_SUBTASK_ID:-}" "{\"tool\":\"${TOOL_NAME:-unknown}\"}"
+  # Emit structured lifecycle event for tool_blocked (defensive — common.sh not sourced)
+  if command -v emit_lifecycle_event >/dev/null 2>&1; then
+    emit_lifecycle_event "tool_blocked" "${DOEY_PANE_SAFE:-unknown}" "${DOEY_TASK_ID:-}" "${DOEY_SUBTASK_ID:-}" "{\"tool\":\"${TOOL_NAME:-unknown}\"}"
+  fi
 }
 
 _json_str() {
@@ -718,6 +720,22 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TASK_REVIEWER" ] || \
   fi
 fi
 
+# Doey Expert chain-bypass guard (task #618) — block send-keys/paste/load to Boss (0.1)
+if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DOEY_EXPERT" ] && [ "$TOOL_NAME" = "Bash" ]; then
+  case "${_BASH_CMD:-}" in *"tmux send-keys"*|*"tmux paste-buffer"*|*"tmux load-buffer"*)
+    _de_target=$(echo "$_BASH_CMD" | sed 's/.*tmux[[:space:]]*\(send-keys\|paste-buffer\|load-buffer\)[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
+    _de_target_wp="$_de_target"
+    case "$_de_target_wp" in *:*) _de_target_wp="${_de_target_wp#*:}" ;; esac
+    case "$_de_target_wp" in
+      0.1)
+        _log_block "TOOL_BLOCKED" "${DOEY_ROLE_DOEY_EXPERT} chain-bypass: send-keys to ${DOEY_ROLE_BOSS} (0.1) blocked" "$_BASH_CMD"
+        _dbg_write "block_doey_expert_boss_bypass"
+        echo "BLOCKED: ${DOEY_ROLE_DOEY_EXPERT} cannot send-keys to ${DOEY_ROLE_BOSS} (pane 0.1). The Worker → ${DOEY_ROLE_TEAM_LEAD} → ${DOEY_ROLE_COORDINATOR} → ${DOEY_ROLE_BOSS} chain must not be bypassed. Use 'doey msg send --to 0.1' via ${DOEY_ROLE_COORDINATOR}, or escalate to ${DOEY_ROLE_COORDINATOR} (${DOEY_TASKMASTER_PANE:-1.0})." >&2
+        exit 2 ;;
+    esac ;;
+  esac
+fi
+
 # Task Reviewer: read-only project source + task file updates
 if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TASK_REVIEWER" ]; then
   case "$TOOL_NAME" in
@@ -753,6 +771,20 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_DEPLOYMENT" ]; then
           _dbg_write "block_deployment_write"
           echo "BLOCKED: Deployment cannot edit project source. Run tests and create PRs instead." >&2
           exit 2 ;;
+      esac ;;
+    Bash)
+      # Chain-bypass guard (task #618): Deployment may not send-keys to Boss (0.1)
+      case "${_BASH_CMD:-}" in *"tmux send-keys"*|*"tmux paste-buffer"*|*"tmux load-buffer"*)
+        _dep_target=$(echo "$_BASH_CMD" | sed 's/.*tmux[[:space:]]*\(send-keys\|paste-buffer\|load-buffer\)[[:space:]]*-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
+        _dep_target_wp="$_dep_target"
+        case "$_dep_target_wp" in *:*) _dep_target_wp="${_dep_target_wp#*:}" ;; esac
+        case "$_dep_target_wp" in
+          0.1)
+            _log_block "TOOL_BLOCKED" "${DOEY_ROLE_DEPLOYMENT} chain-bypass: send-keys to ${DOEY_ROLE_BOSS} (0.1) blocked" "$_BASH_CMD"
+            _dbg_write "block_deployment_boss_bypass"
+            echo "BLOCKED: ${DOEY_ROLE_DEPLOYMENT} cannot send-keys to ${DOEY_ROLE_BOSS} (pane 0.1). The Worker → ${DOEY_ROLE_TEAM_LEAD} → ${DOEY_ROLE_COORDINATOR} → ${DOEY_ROLE_BOSS} chain must not be bypassed. Use 'doey msg send --to 0.1' via ${DOEY_ROLE_COORDINATOR}, or escalate to ${DOEY_ROLE_COORDINATOR} (${DOEY_TASKMASTER_PANE:-1.0})." >&2
+            exit 2 ;;
+        esac ;;
       esac ;;
   esac
 fi
@@ -938,6 +970,23 @@ if [ "$_DOEY_ROLE" = "$DOEY_ROLE_ID_TEAM_LEAD" ] && [ "$TOOL_NAME" = "Bash" ]; t
     "tmux display-message"*|"tmux copy-mode"*)
       # --- Team-boundary guard: Subtaskmaster can only target own window, Dashboard, or Coordinator ---
       _tl_target=$(echo "$_tmux_stripped" | sed 's/.*[[:space:]]-t[[:space:]]*//;s/[[:space:]].*//;s/^"//;s/"$//')
+      # --- Boss-target guard (task #618): Subtaskmaster MUST NOT send-keys to 0.1 ---
+      # Direct dispatch breaks the Worker → Subtaskmaster → Taskmaster → Boss chain.
+      if [ -n "$_tl_target" ] && [ "$_tl_target" != "$_tmux_stripped" ]; then
+        _tl_tgt_wp_chk="$_tl_target"
+        case "$_tl_tgt_wp_chk" in *:*) _tl_tgt_wp_chk="${_tl_tgt_wp_chk#*:}" ;; esac
+        case "$_tl_tgt_wp_chk" in
+          0.1)
+            _tl_subcmd_b="${_tmux_stripped#tmux }"; _tl_subcmd_b="${_tl_subcmd_b%% *}"
+            case "$_tl_subcmd_b" in
+              send-keys|paste-buffer|load-buffer)
+                _log_block "TOOL_BLOCKED" "${DOEY_ROLE_TEAM_LEAD} chain-bypass: send-keys to ${DOEY_ROLE_BOSS} (0.1) blocked" "$_tmux_stripped"
+                _dbg_write "block_team_lead_boss_bypass"
+                echo "BLOCKED: ${DOEY_ROLE_TEAM_LEAD} cannot send-keys to ${DOEY_ROLE_BOSS} (pane 0.1). The Worker → ${DOEY_ROLE_TEAM_LEAD} → ${DOEY_ROLE_COORDINATOR} → ${DOEY_ROLE_BOSS} chain must not be bypassed. Route through ${DOEY_ROLE_COORDINATOR}: 'doey msg send --to ${DOEY_TASKMASTER_PANE:-1.0} --from <your-pane> --subject status_report --body <...>'." >&2
+                exit 2 ;;
+            esac ;;
+        esac
+      fi
       if [ -n "$_tl_target" ] && [ "$_tl_target" != "$_tmux_stripped" ]; then
         # Extract target window index (handle session:W.P or W.P)
         _tl_tgt_wp="$_tl_target"
