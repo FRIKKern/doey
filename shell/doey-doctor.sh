@@ -283,6 +283,42 @@ _check_launch_bypass() {
   fi
 }
 
+# ── Chain-bypass probe (task 618) — non-Boss roles must not send-keys to 0.1 ──
+# WARN-only. Skips sanctioned files (launcher briefings, Taskmaster→Boss fan-out,
+# Boss/Taskmaster prompts, Boss-invoked skills, focus-only select-pane sites).
+_check_chain_bypass() {
+  local _repo="$1"
+  [ -z "$_repo" ] && return 0
+  [ -d "$_repo" ] || return 0
+  local _hits
+  _hits=$(grep -rnE \
+    -e 'tmux[[:space:]]+(send-keys|paste-buffer|load-buffer)[^|]*[: ]0\.1([^0-9]|$)' \
+    -e 'doey_send_(verified|launch|command)[^|]*[: ]0\.1([^0-9]|$)' \
+    "$_repo/shell" "$_repo/agents" "$_repo/.claude" 2>/dev/null \
+    | grep -v '/doey-session\.sh:' \
+    | grep -v '/stop-notify\.sh:' \
+    | grep -v '/common\.sh:' \
+    | grep -v '/on-pre-tool-use\.sh:' \
+    | grep -v '/on-notification\.sh:' \
+    | grep -v '/doey-boss\.md:' \
+    | grep -v '/doey-taskmaster\.md:' \
+    | grep -v '/doey-masterplan/SKILL\.md:' \
+    | grep -v '/doey-clear/SKILL\.md:' \
+    | grep -v '/doey-rd-team/SKILL\.md:' \
+    | grep -v '\.md\.tmpl:' \
+    || true)
+  if [ -n "$_hits" ]; then
+    local _count
+    _count=$(printf '%s\n' "$_hits" | wc -l | tr -d ' ')
+    _doc_check warn "Chain bypass" "$_count non-sanctioned send-keys/helper site(s) targeting Boss (0.1) (task 618)"
+    printf '%s\n' "$_hits" | head -5 | while IFS= read -r _line; do
+      printf "         ${DIM}WARN: %s${RESET}\n" "$_line"
+    done
+  else
+    _doc_check ok "Chain bypass" "no non-sanctioned send-keys to Boss (0.1)"
+  fi
+}
+
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
@@ -681,6 +717,9 @@ check_doctor() {
 
   # ── Launch-bypass probe (task 617) — Claude launches must use doey_send_launch ──
   _check_launch_bypass "$_doey_repo"
+
+  # ── Chain-bypass probe (task 618) — non-Boss roles must not send-keys to 0.1 ──
+  _check_chain_bypass "$_doey_repo"
 
   # ── Summary footer ──
   printf '\n'
