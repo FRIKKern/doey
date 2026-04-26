@@ -256,6 +256,33 @@ check_discord() {
   fi
 }
 
+# ── Launch-bypass probe (task 617) ────────────────────────────────────
+# Greps for Claude launches that bypass doey_send_launch. WARN-only.
+# Skips shell/doey-send.sh itself (the helper definitions live there).
+_check_launch_bypass() {
+  local _repo="$1"
+  [ -z "$_repo" ] && return 0
+  [ -d "$_repo" ] || return 0
+  local _hits
+  _hits=$(grep -rnE \
+    -e 'tmux send-keys[^|]*claude --dangerously' \
+    -e 'doey_send_command[^|]*claude --dangerously' \
+    "$_repo/shell" "$_repo/.claude/hooks" "$_repo/.claude/skills" 2>/dev/null \
+    | grep -v '/doey-send\.sh:' \
+    | grep -v '\.md\.tmpl:' \
+    || true)
+  if [ -n "$_hits" ]; then
+    local _count
+    _count=$(printf '%s\n' "$_hits" | wc -l | tr -d ' ')
+    _doc_check warn "Launch bypass" "$_count send-keys site(s) bypassing doey_send_launch (task 617)"
+    printf '%s\n' "$_hits" | head -5 | while IFS= read -r _line; do
+      printf "         ${DIM}WARN: %s${RESET}\n" "$_line"
+    done
+  else
+    _doc_check ok "Launch bypass" "all Claude launches use doey_send_launch"
+  fi
+}
+
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
@@ -651,6 +678,9 @@ check_doctor() {
 
   # ── Discord integration (task 612) ──
   check_discord
+
+  # ── Launch-bypass probe (task 617) — Claude launches must use doey_send_launch ──
+  _check_launch_bypass "$_doey_repo"
 
   # ── Summary footer ──
   printf '\n'

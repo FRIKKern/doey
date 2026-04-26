@@ -28,7 +28,7 @@ kill_pane_process() {
 ```bash
 kill_pane_process "${SESSION_NAME}:${W}.0"
 source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
-doey_send_command "${SESSION_NAME}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Subtaskmaster\" --agent \"t${W}-manager\""; sleep 0.5
+doey_send_launch "${SESSION_NAME}:${W}.0" "claude --dangerously-skip-permissions --model opus --name \"T${W} Subtaskmaster\" --agent \"t${W}-manager\""; sleep 0.5
 ```
 
 ### Clear Workers
@@ -42,7 +42,7 @@ for wp in $(echo "$WORKER_PANES" | tr ',' ' '); do
   WP=$(grep -rl "pane ${W}\.${wp} " "${RD}"/worker-system-prompt-*.md 2>/dev/null | head -1 || true)
   CMD="claude --dangerously-skip-permissions --model opus --name \"${W_NAME}\""
   [ -n "$WP" ] && CMD="${CMD} --append-system-prompt-file \"${WP}\""
-  doey_send_command "$PANE" "$CMD"
+  doey_send_launch "$PANE" "$CMD"
   doey status set --pane "$PANE" --status READY --task "cleared"
   echo "  ${W}.${wp} ✓"; sleep 0.5
 done

@@ -126,7 +126,7 @@ if [ "$ALREADY_READY" = "false" ] && [ "$USE_DELEGATE" != "true" ]; then
   [ -n "$WORKER_AGENT" ] && CMD="${CMD} --agent \"${WORKER_AGENT}\""
   [ -n "$WORKER_PROMPT" ] && CMD="${CMD} --append-system-prompt-file \"${WORKER_PROMPT}\""
   source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
-  doey_send_command "$PANE" "$CMD"
+  doey_send_launch "$PANE" "$CMD"
   # Reactive wait: poll pane for Claude readiness (❯ + bypass permissions banner)
   for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
     _OUT=$(tmux capture-pane -t "$PANE" -p -S -10 2>/dev/null) || _OUT=""

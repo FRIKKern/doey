@@ -194,7 +194,7 @@ while IFS='|' read -r _pane _role _agent _name _model; do
   [ -n "$_agent" ] && _agent_flag="--agent \"$_agent\""
   _cmd="claude --dangerously-skip-permissions ${_model_flag} --name \"T${NEW_WIN} ${_name}\" ${_agent_flag}"
   source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
-  doey_send_command "${SESSION_NAME}:${NEW_WIN}.${_pane}" "$_cmd"
+  doey_send_launch "${SESSION_NAME}:${NEW_WIN}.${_pane}" "$_cmd"
   sleep 3
 done << LAUNCH_INPUT
 $(echo "$PANE_DEFS")

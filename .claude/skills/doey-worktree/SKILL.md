@@ -102,7 +102,7 @@ for i in $WPL; do
   WP=$(grep -l "pane ${TARGET_WIN}\.${i} " "${RD}/worker-system-prompt-"*.md 2>/dev/null | head -1 || true)
   CMD="cd \"${TARGET_DIR}\" && claude --dangerously-skip-permissions --model opus --name \"T${TARGET_WIN} W${i}\""
   [ -n "$WP" ] && CMD="${CMD} --append-system-prompt-file \"${WP}\""
-  doey_send_command "${SESSION_NAME}:${TARGET_WIN}.${i}" "$CMD"; sleep 0.5
+  doey_send_launch "${SESSION_NAME}:${TARGET_WIN}.${i}" "$CMD"; sleep 0.5
 done
 ```
 

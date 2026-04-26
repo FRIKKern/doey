@@ -21,6 +21,24 @@ case "$FILE_PATH" in *.sh) ;; *) exit 0 ;; esac
 [ -f "$FILE_PATH" ] || exit 0
 case "$(basename "$FILE_PATH")" in post-tool-lint.sh|test-bash-compat.sh) exit 0 ;; esac
 
+# ── Launch-bypass WARN (task 617) ────────────────────────────────────
+# WARN-only (no block, no exit). Skips doey-send.sh (helper definitions).
+case "$(basename "$FILE_PATH")" in
+  doey-send.sh) ;;
+  *)
+    _bypass_hits=$(grep -nE \
+      -e 'tmux send-keys[^|]*claude --dangerously' \
+      -e 'doey_send_command[^|]*claude --dangerously' \
+      "$FILE_PATH" 2>/dev/null || true)
+    if [ -n "$_bypass_hits" ]; then
+      printf '%s\n' "$_bypass_hits" | while IFS= read -r _hl; do
+        _ln="${_hl%%:*}"
+        printf 'WARN: send-keys claude launch bypassing doey_send_launch (task 617): %s:%s\n' "$FILE_PATH" "$_ln" >&2
+      done
+    fi
+    ;;
+esac
+
 # Bash 4+ features: declare -[Anlu], printf %()T, mapfile/readarray, |&, &>>,
 # coproc, BASH_REMATCH, ${var,,}/^^, ${!prefix@}, shopt globstar/lastpipe, read -t decimal
 COMBINED_PATTERN='declare[[:space:]]+-[Anlu][[:space:]]|printf[[:space:]].*%\(.*\)T|mapfile[[:space:]]|readarray[[:space:]]|\|&|&>>|coproc[[:space:]]|BASH_REMATCH|\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}|\$\{![a-zA-Z_][a-zA-Z0-9_]*@\}|shopt[[:space:]]+-s[[:space:]]+(globstar|lastpipe)|read[[:space:]]+-t[[:space:]]+[0-9]+\.[0-9]'

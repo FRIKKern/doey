@@ -18,5 +18,5 @@ tmux new-window -t "$session" -n "Settings"
 settings_win=$(tmux display-message -t "$session" -p '#{window_index}')
 doey_send_command "$session:${settings_win}.0" "DOEY_SETTINGS_LIVE=1 bash \"\$HOME/.local/bin/settings-panel.sh\""
 tmux split-window -h -t "$session:${settings_win}.0"
-doey_send_command "$session:${settings_win}.1" "claude --agent settings-editor"
+doey_send_launch "$session:${settings_win}.1" "claude --agent settings-editor"
 tmux select-pane -t "$session:${settings_win}.1"
