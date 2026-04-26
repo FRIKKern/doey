@@ -13,11 +13,19 @@
 # Bash 3.2 compatible — no associative arrays, no mapfile, no pipe-ampersand.
 set -euo pipefail
 
+# Resolve grep to an absolute path for prompt/activity detection. Worker shells
+# (Claude Code Bash sandbox) define a `grep` function that wraps the `claude -G`
+# ugrep binary; under some sandbox conditions that wrapper does not behave like
+# real grep on stdin pipes, breaking ❯ detection (task 634). Use $DOEY_GREP in
+# pipe-based detection only — file-reading greps (e.g. status files) keep plain
+# `grep` since the wrapper handles file arguments correctly.
+: "${DOEY_GREP:=$(command -v /bin/grep 2>/dev/null || command -v /usr/bin/grep 2>/dev/null || echo grep)}"
+
 # _doey_send_check_activity <captured_output>
 # Returns 0 if the pane output shows signs of Claude processing.
 _doey_send_check_activity() {
   local captured="$1"
-  printf '%s' "$captured" | grep -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent)' 2>/dev/null
+  printf '%s' "$captured" | "$DOEY_GREP" -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent)' 2>/dev/null
 }
 
 # _doey_send_check_busy <target>
@@ -150,7 +158,7 @@ doey_wait_for_prompt() {
   # capture-pane kept: visual ❯ prompt is the only reliable way to confirm Claude CLI is at input
   local captured
   captured=$(tmux capture-pane -t "$target" -p -S -10 2>/dev/null) || captured=""
-  if printf '%s' "$captured" | grep -qF '❯' 2>/dev/null; then
+  if printf '%s' "$captured" | "$DOEY_GREP" -qF '❯' 2>/dev/null; then
     return 0
   fi
 
@@ -158,7 +166,7 @@ doey_wait_for_prompt() {
     sleep "$interval"
     elapsed=$((elapsed + interval))
     captured=$(tmux capture-pane -t "$target" -p -S -10 2>/dev/null) || captured=""
-    if printf '%s' "$captured" | grep -qF '❯' 2>/dev/null; then
+    if printf '%s' "$captured" | "$DOEY_GREP" -qF '❯' 2>/dev/null; then
       return 0
     fi
     # Widen interval after initial fast checks to reduce polling
@@ -396,7 +404,7 @@ doey_send_launch() {
     # First check immediately (after the initial send most launches are fast)
     local cap
     cap=$(tmux capture-pane -t "$target" -p -S -50 2>/dev/null) || cap=""
-    if printf '%s' "$cap" | grep -qF '❯' 2>/dev/null; then
+    if printf '%s' "$cap" | "$DOEY_GREP" -qF '❯' 2>/dev/null; then
       echo "doey_send_launch: launch ok (kicks=$kicks) target=$target" >&2
       return 0
     fi
@@ -404,7 +412,7 @@ doey_send_launch() {
       sleep "$interval"
       elapsed=$((elapsed + interval))
       cap=$(tmux capture-pane -t "$target" -p -S -50 2>/dev/null) || cap=""
-      if printf '%s' "$cap" | grep -qF '❯' 2>/dev/null; then
+      if printf '%s' "$cap" | "$DOEY_GREP" -qF '❯' 2>/dev/null; then
         echo "doey_send_launch: launch ok (kicks=$kicks) target=$target" >&2
         return 0
       fi
@@ -422,10 +430,10 @@ doey_send_launch() {
     local last5
     last5=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || last5=""
     local prompt_visible=0 cmd_visible=0
-    if printf '%s' "$last5" | grep -qE '(\$|#|>) *$' 2>/dev/null; then
+    if printf '%s' "$last5" | "$DOEY_GREP" -qE '(\$|#|>) *$' 2>/dev/null; then
       prompt_visible=1
     fi
-    if [ -n "$cmd_head" ] && printf '%s' "$last5" | grep -qF "$cmd_head" 2>/dev/null; then
+    if [ -n "$cmd_head" ] && printf '%s' "$last5" | "$DOEY_GREP" -qF "$cmd_head" 2>/dev/null; then
       cmd_visible=1
     fi
     if [ "$prompt_visible" = "1" ] && [ "$cmd_visible" = "1" ]; then
