@@ -254,6 +254,14 @@ silently dropped by `SyncPlansFromFiles`. It is therefore:
 slug as the filename, stop and allocate a numeric id via
 `doey plan create` or `plan_create`.
 
+### Pitfall: Unknown `doey plan` subcommands
+
+The router at `shell/doey.sh` recognises `list|get|show|create|update|delete|to-tasks` as
+plan subcommands. Anything else — typos, `--help`, or stray flags — falls through to the
+masterplan-goal branch and spawns a new team window with the unknown token as the goal.
+Use `doey plan --help` to see the recognised subcommands. (Fixed for `show`/`--help` in
+task 601 Phase 1 — typos like `doey plan dlete` will still spawn a masterplan team.)
+
 ## 12. Cross-references
 
 - Storage overview: [storage.md](storage.md).

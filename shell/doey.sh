@@ -500,6 +500,25 @@ HELP
             exit 1
           fi
           ;;
+        show)
+          # Alias for `get` so users who type 'show' don't trigger masterplan creation.
+          if command -v doey-ctl >/dev/null 2>&1; then
+            shift 2
+            exec doey-ctl plan get "$@"
+          fi
+          printf 'doey plan show: doey-ctl not on PATH\n' >&2
+          exit 1
+          ;;
+        -h|--help|help|"")
+          printf 'Usage: doey plan {list|get|show|create|update|delete|to-tasks} [args]\n' >&2
+          printf '       doey plan "<masterplan goal text>"\n' >&2
+          exit 0
+          ;;
+        -*|--*)
+          # An option-like token is almost certainly a typo, not a goal.
+          printf 'doey plan: unknown option %s (try `doey plan --help`)\n' "${2:-}" >&2
+          exit 2
+          ;;
         to-tasks)
           (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill plan_to_tasks_run &) 2>/dev/null || true
           shift 2
