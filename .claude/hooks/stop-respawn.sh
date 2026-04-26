@@ -88,7 +88,11 @@ sleep 2
 
 # Relaunch Claude in the target pane
 _log "stop-respawn: relaunching ${TARGET_PANE} with: ${LAUNCH_CMD}"
-doey_send_command "$TARGET_PANE" "$LAUNCH_CMD"
+if type doey_send_launch >/dev/null 2>&1; then
+  doey_send_launch "$TARGET_PANE" "$LAUNCH_CMD" || true
+else
+  doey_send_command "$TARGET_PANE" "$LAUNCH_CMD"
+fi
 
 # Write cooldown timestamp (atomic)
 mkdir -p "$RESPAWN_DIR" 2>/dev/null || true

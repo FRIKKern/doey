@@ -472,11 +472,19 @@ _enforce_stale_restart() {
       continue
     }
 
-    tmux send-keys -t "$_tmux_target" "$_launch_cmd" Enter 2>/dev/null || {
-      _log_restart "$_pane_id" "failed" "tmux send-keys failed"
-      rm -f "$_marker"
-      continue
-    }
+    if type doey_send_launch >/dev/null 2>&1; then
+      doey_send_launch "$_tmux_target" "$_launch_cmd" || {
+        _log_restart "$_pane_id" "failed" "doey_send_launch failed"
+        rm -f "$_marker"
+        continue
+      }
+    else
+      tmux send-keys -t "$_tmux_target" "$_launch_cmd" Enter 2>/dev/null || {
+        _log_restart "$_pane_id" "failed" "tmux send-keys failed"
+        rm -f "$_marker"
+        continue
+      }
+    fi
 
     _log_restart "$_pane_id" "restarted" "Auto-restart #$((_count + 1))/$_max_restarts"
     _any_restarted=true
@@ -556,7 +564,11 @@ _taskmaster_context_check() {
     _proj="${SESSION_NAME#doey-}"
     local _relaunch="claude --dangerously-skip-permissions --model ${_tm_model} --name \"${DOEY_ROLE_COORDINATOR:-Taskmaster}\" --agent \"${_tm_agent}\""
     [ -f "${RUNTIME_DIR}/doey-settings.json" ] && _relaunch="${_relaunch} --settings \"${RUNTIME_DIR}/doey-settings.json\""
-    doey_send_command "$_full_pane" "$_relaunch"
+    if type doey_send_launch >/dev/null 2>&1; then
+      doey_send_launch "$_full_pane" "$_relaunch" || true
+    else
+      doey_send_command "$_full_pane" "$_relaunch"
+    fi
 
     # Wait for Claude to boot, then re-brief with active tasks
     sleep 8

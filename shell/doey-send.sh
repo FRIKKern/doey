@@ -275,8 +275,11 @@ _doey_send_verified_inner() {
     # No text-matching verification: by the time capture-pane runs, Claude
     # has often already consumed the input, causing false negatives.
     local settle_s
-    settle_s=$(awk "BEGIN {printf \"%.3f\", ${PASTE_SETTLE_MS:-800}/1000}")
+    # LC_ALL=C: avoid LC_NUMERIC producing "0,800" instead of "0.800" — task 617 / feedback_send_verified_locale_bug
+    settle_s=$(LC_ALL=C awk 'BEGIN {printf "%.3f", '"${PASTE_SETTLE_MS:-800}"'/1000}')
     sleep "$settle_s"
+    # Close any leaked bracketed-paste before Enter so submission isn't swallowed as literal newline (task 617).
+    tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
     tmux send-keys -t "$target" Enter 2>/dev/null || true
 
     # ── Step 5: Confirm submission via BUSY status or activity ──
@@ -298,6 +301,8 @@ _doey_send_verified_inner() {
       # Halfway: recovery in case Enter didn't register (modal state)
       if [ "$v" -eq 3 ]; then
         tmux copy-mode -q -t "$target" 2>/dev/null || true
+        # Close any leaked bracketed-paste before recovery (task 617).
+        tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
         tmux send-keys -t "$target" Escape 2>/dev/null || true
         sleep 0.15
         tmux send-keys -t "$target" Enter 2>/dev/null || true

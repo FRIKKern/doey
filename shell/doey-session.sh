@@ -1757,7 +1757,7 @@ doey_settings() {
 
   # Split right — pane 1 becomes the Claude config editor
   tmux split-window -h -t "$session:${settings_win}.0"
-  doey_send_command "$session:${settings_win}.1" "claude --agent settings-editor"
+  doey_send_launch "$session:${settings_win}.1" "claude --agent settings-editor"
 
   # Focus the right pane (editor)
   tmux select-pane -t "$session:${settings_win}.1"

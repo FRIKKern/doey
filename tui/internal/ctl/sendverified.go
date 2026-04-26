@@ -115,7 +115,9 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 			continue
 		}
 
-		// Text confirmed visible — send Enter
+		// Text confirmed visible — send Enter.
+		// Close any leaked bracketed-paste first so Enter isn't swallowed as literal newline (task 617).
+		t.SendKeys(pane, "\x1b[201~")
 		t.SendKeys(pane, "Enter")
 
 		// --- Verify delivery ---
@@ -145,6 +147,8 @@ func (t *TmuxClient) SendVerified(pane string, message string) error {
 
 		// --- Stuck-text recovery ---
 		t.runQuiet("copy-mode", "-q", "-t", t.paneTarget(pane))
+		// Close any leaked bracketed-paste before recovery (task 617).
+		t.SendKeys(pane, "\x1b[201~")
 		t.SendKeys(pane, "Escape")
 		time.Sleep(150 * time.Millisecond)
 		t.SendKeys(pane, "Enter")

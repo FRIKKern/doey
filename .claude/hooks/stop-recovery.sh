@@ -206,13 +206,17 @@ if ! type doey_send_command >/dev/null 2>&1; then
   done
 fi
 
-if type doey_send_command >/dev/null 2>&1; then
-  doey_send_command "$PANE" "$_launch_cmd"
+if type doey_send_launch >/dev/null 2>&1; then
+  doey_send_launch "$PANE" "$_launch_cmd" || true
   _log "stop-recovery: relaunched ${PANE_SAFE} with saved launch command"
   _recovery_log "$_error_type" "relaunched" "command sent"
+elif type doey_send_command >/dev/null 2>&1; then
+  doey_send_command "$PANE" "$_launch_cmd"
+  _log "stop-recovery: relaunched ${PANE_SAFE} with saved launch command (fallback)"
+  _recovery_log "$_error_type" "relaunched" "command sent (fallback)"
 else
-  _log_error "RECOVERY" "doey_send_command not available — cannot relaunch" "pane=$PANE_SAFE"
-  _recovery_log "$_error_type" "failed" "doey_send_command not found"
+  _log_error "RECOVERY" "doey_send_launch/command not available — cannot relaunch" "pane=$PANE_SAFE"
+  _recovery_log "$_error_type" "failed" "doey_send_launch not found"
   rm -f "${RUNTIME_DIR}/recovery/${PANE_SAFE}.recovering" 2>/dev/null || true
 fi
 
