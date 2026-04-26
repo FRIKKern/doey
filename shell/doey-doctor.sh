@@ -569,6 +569,24 @@ check_doctor() {
     fi
   fi
 
+  # Hook-presence check — repo hooks must all exist; project hooks should be in sync.
+  # Fallback wrapper in settings.json papers over missing project hooks, but a missing
+  # project hook still means self-heal failed and is worth surfacing.
+  if [ -n "$repo_dir" ]; then
+    local _hooks_required="stop-status stop-results stop-reviewer-metrics stop-recovery stop-notify stop-plan-tracking stop-enforce-ask-user-question on-session-start on-prompt-submit on-pre-tool-use on-pre-compact post-tool-lint post-push-complete on-notification"
+    local _hooks_repo="$repo_dir/.claude/hooks"
+    local _hooks_proj="$PROJECT_DIR/.claude/hooks"
+    local _missing_repo="" _missing_proj="" _h
+    for _h in $_hooks_required; do
+      [ -x "$_hooks_repo/$_h.sh" ] || _missing_repo="${_missing_repo:+$_missing_repo, }$_h"
+      [ -x "$_hooks_proj/$_h.sh" ] || _missing_proj="${_missing_proj:+$_missing_proj, }$_h"
+    done
+    if [ -z "$_missing_repo" ]; then _doc_check ok "Doey hooks (repo)" "all present"
+    else _doc_check fail "Doey hooks (repo)" "missing: $_missing_repo"; fi
+    if [ -z "$_missing_proj" ]; then _doc_check ok "Project hooks" "in sync"
+    else _doc_check warn "Project hooks" "missing: $_missing_proj — re-launch session or run install"; fi
+  fi
+
   # Task counter — validate .next_id if .doey/tasks/ exists
   local _tasks_dir="${PROJECT_DIR}/.doey/tasks"
   if [[ -d "$_tasks_dir" ]] && [[ -f "${_tasks_dir}/.next_id" ]]; then
