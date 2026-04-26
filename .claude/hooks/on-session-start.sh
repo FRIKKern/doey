@@ -40,15 +40,22 @@ fi
 _DOEY_REPO=""
 [ -f "$HOME/.claude/doey/repo-path" ] && _DOEY_REPO=$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null) || true
 if [ -n "$_DOEY_REPO" ] && [ -n "$PROJECT_DIR" ] && [ "$_DOEY_REPO" != "$PROJECT_DIR" ] \
-   && [ -d "${_DOEY_REPO}/.claude/hooks" ] && [ -d "${PROJECT_DIR}/.claude/hooks" ]; then
+   && [ -d "${_DOEY_REPO}/.claude/hooks" ]; then
   _DOEY_SYNC_MARKER="${PROJECT_DIR}/.claude/hooks/.doey-synced"
-  if [ ! -f "$_DOEY_SYNC_MARKER" ] || [ "${_DOEY_REPO}/.claude/hooks" -nt "$_DOEY_SYNC_MARKER" ]; then
+  _DOEY_NEED_SYNC=0
+  if [ ! -d "${PROJECT_DIR}/.claude/hooks" ]; then
+    mkdir -p "${PROJECT_DIR}/.claude/hooks" 2>/dev/null || true
+    _DOEY_NEED_SYNC=1
+  elif [ ! -f "$_DOEY_SYNC_MARKER" ] || [ "${_DOEY_REPO}/.claude/hooks" -nt "$_DOEY_SYNC_MARKER" ]; then
+    _DOEY_NEED_SYNC=1
+  fi
+  if [ "$_DOEY_NEED_SYNC" = "1" ] && [ -d "${PROJECT_DIR}/.claude/hooks" ]; then
     cp -f "${_DOEY_REPO}/.claude/hooks/"*.sh "${PROJECT_DIR}/.claude/hooks/" 2>/dev/null || true
     chmod +x "${PROJECT_DIR}/.claude/hooks/"*.sh 2>/dev/null || true
     touch -r "${_DOEY_REPO}/.claude/hooks" "$_DOEY_SYNC_MARKER" 2>/dev/null || \
       touch "$_DOEY_SYNC_MARKER" 2>/dev/null || true
   fi
-  unset _DOEY_SYNC_MARKER
+  unset _DOEY_SYNC_MARKER _DOEY_NEED_SYNC
 fi
 unset _DOEY_REPO
 

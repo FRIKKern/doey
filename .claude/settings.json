@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/on-session-start.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/on-session-start.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/on-session-start.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/on-prompt-submit.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/on-prompt-submit.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/on-prompt-submit.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/on-pre-tool-use.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/on-pre-tool-use.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/on-pre-tool-use.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-tool-lint.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-tool-lint.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/post-tool-lint.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       },
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-push-complete.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-push-complete.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/post-push-complete.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       }
@@ -59,31 +59,31 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-status.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-status.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/stop-status.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-results.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-results.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/stop-results.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-reviewer-metrics.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-reviewer-metrics.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/stop-reviewer-metrics.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-recovery.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-recovery.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/stop-recovery.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-notify.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-notify.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/stop-notify.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-plan-tracking.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-plan-tracking.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/stop-plan-tracking.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-enforce-ask-user-question.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-enforce-ask-user-question.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/stop-enforce-ask-user-question.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       }
@@ -94,7 +94,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/on-pre-compact.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/on-pre-compact.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/on-pre-compact.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       }
@@ -105,7 +105,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/on-notification.sh"
+            "command": "bash -c 'h=\"$CLAUDE_PROJECT_DIR/.claude/hooks/on-notification.sh\"; if [ ! -x \"$h\" ]; then r=$(cat \"$HOME/.claude/doey/repo-path\" 2>/dev/null); h=\"$r/.claude/hooks/on-notification.sh\"; fi; [ -x \"$h\" ] && exec \"$h\" \"$@\" || exit 0' --"
           }
         ]
       }

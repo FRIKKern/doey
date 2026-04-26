@@ -30,8 +30,12 @@ install_doey_hooks() {
   mkdir -p "$target_dir/.claude/hooks"
   # Force-overwrite so repo updates (added/renamed hooks) always propagate.
   # Separate cp and chmod so a partial cp doesn't skip chmod on already-copied files.
-  cp -f "${repo_dir}"/.claude/hooks/*.sh "$target_dir/.claude/hooks/" 2>/dev/null || true
-  chmod +x "$target_dir"/.claude/hooks/*.sh 2>/dev/null || true
+  # Append cp/chmod stderr to a log file so install failures are visible to doctor
+  # without breaking the session. Keep `|| true` so non-fatal.
+  local _install_log="${RUNTIME_DIR:-/tmp/doey}/install_hooks.log"
+  mkdir -p "$(dirname "$_install_log")" 2>/dev/null || true
+  cp -f "${repo_dir}"/.claude/hooks/*.sh "$target_dir/.claude/hooks/" 2>>"$_install_log" || true
+  chmod +x "$target_dir"/.claude/hooks/*.sh 2>>"$_install_log" || true
   # Drop a marker recording repo hooks mtime — self-heal in on-session-start
   # uses this to avoid re-syncing every pane.
   touch -r "${repo_dir}/.claude/hooks" "$target_dir/.claude/hooks/.doey-synced" 2>/dev/null || \
