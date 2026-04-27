@@ -32,6 +32,12 @@ func (d *Demo) Read(ctx context.Context) (Snapshot, error) {
 	return Snapshot{}, ErrNotImplemented
 }
 
+// Updates returns nil. Demo fixtures are static — ranging over a nil
+// channel blocks forever, which is the contract callers expect.
+func (d *Demo) Updates() <-chan Snapshot {
+	return nil
+}
+
 // Close releases fixture handles. Phase 1: no-op.
 func (d *Demo) Close() error {
 	return nil
