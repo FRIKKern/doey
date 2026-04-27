@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha1"
 	"encoding/json"
@@ -13,6 +14,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -69,6 +72,10 @@ type model struct {
 	height         int
 	// legacyMode is honoured by Phase 2 (skip fsnotify/tick wiring). Phase 1 lands the flag with no behavioural effect.
 	legacyMode bool
+
+	// goal is the optional --goal text surfaced as a subtitle when running
+	// in standalone mode (no consensus.state sibling). Informational only.
+	goal string
 
 	source         planview.Source   // Source of truth for live or demo data. Phase 1: planview.Live with snapshot-only Read.
 	snapshot       planview.Snapshot // Cached most-recent Source.Read() result. Phase 2 will refresh on tick + fsnotify events.
@@ -452,6 +459,10 @@ func (m model) sendToTasks() (tea.Model, tea.Cmd) {
 			m.consensus = snap.Consensus.State
 		}
 	}
+	if m.consensusState.Standalone {
+		m.lastFlash = "refused: no consensus state machine attached"
+		return m, clearFlashAfter(5 * time.Second)
+	}
 	state := m.consensusState.State
 	if !planview.IsConsensusReached(state) {
 		if state == "" {
@@ -495,9 +506,18 @@ func (m model) View() string {
 		badgeState = m.consensus
 	}
 	header := StyleHeader.Render(title) + "  " + RenderConsensusBadge(badgeState)
+	if m.consensusState.Standalone {
+		header += "  " + StyleConsensusWarn.Render("STATE: standalone (no consensus)")
+	}
 	b.WriteString(header)
 	b.WriteByte('\n')
 	y++
+
+	if m.consensusState.Standalone && strings.TrimSpace(m.goal) != "" {
+		b.WriteString(StyleHelp.Render("goal: " + strings.TrimSpace(m.goal)))
+		b.WriteByte('\n')
+		y++
+	}
 
 	// Progress bar.
 	done, total := ComputePlanProgress(m.plan)
@@ -670,6 +690,137 @@ func isMasterplanByFrontmatter(path string) bool {
 	return false
 }
 
+// canonicalMasterplanRe matches the canonical
+// `masterplan-YYYYMMDD-HHMMSS.md` form used by the spawn script. Sidecar
+// files like `masterplan-*.brief.md` or `*.architect.md` are excluded.
+var canonicalMasterplanRe = regexp.MustCompile(`^masterplan-\d{8}-\d{6}\.md$`)
+
+// parseTeamEnv reads a shell-style KEY=VALUE file (no shell-out) and
+// returns the parsed map. Tolerates `export KEY=VAL`, surrounding
+// double/single quotes, blank lines, and `#` comments. Soft-fails on
+// missing or unreadable files (returns an empty map).
+func parseTeamEnv(path string) map[string]string {
+	out := map[string]string{}
+	f, err := os.Open(path)
+	if err != nil {
+		return out
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 4096), 1<<16)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.TrimPrefix(line, "export ")
+		eq := strings.IndexByte(line, '=')
+		if eq < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
+		val = strings.Trim(val, `"'`)
+		out[key] = val
+	}
+	return out
+}
+
+// resolvePlanPath walks the Phase 3 fallback chain and returns the
+// first hit plus the list of attempts (for diagnostic output on miss).
+//
+// Priority:
+//  1. --plan or --plan-file (CLI-supplied)
+//  2. team_<W>.env MASTERPLAN_ID → <runtime>/masterplan-<id>/plan.md, then
+//     <PLAN_DIR>/plan.md when PLAN_DIR is set in the env file
+//  3. Newest canonical .doey/plans/masterplan-YYYYMMDD-HHMMSS.md by mtime
+func resolvePlanPath(planFlag, planFileFlag, runtimeDir, teamWindow string) (string, []string) {
+	var attempts []string
+
+	if p := strings.TrimSpace(planFlag); p != "" {
+		attempts = append(attempts, "--plan="+p)
+		if fileExists(p) {
+			return p, attempts
+		}
+	}
+	if p := strings.TrimSpace(planFileFlag); p != "" {
+		attempts = append(attempts, "--plan-file="+p)
+		if fileExists(p) {
+			return p, attempts
+		}
+	}
+
+	if teamWindow != "" && runtimeDir != "" {
+		envPath := filepath.Join(runtimeDir, "team_"+teamWindow+".env")
+		attempts = append(attempts, "team env: "+envPath)
+		env := parseTeamEnv(envPath)
+		if id := strings.TrimSpace(env["MASTERPLAN_ID"]); id != "" {
+			candidate := filepath.Join(runtimeDir, "masterplan-"+id, "plan.md")
+			attempts = append(attempts, "  → "+candidate)
+			if fileExists(candidate) {
+				return candidate, attempts
+			}
+		}
+		if dir := strings.TrimSpace(env["PLAN_DIR"]); dir != "" {
+			candidate := filepath.Join(dir, "plan.md")
+			attempts = append(attempts, "  → "+candidate)
+			if fileExists(candidate) {
+				return candidate, attempts
+			}
+		}
+	}
+
+	if p := newestCanonicalMasterplan(); p != "" {
+		attempts = append(attempts, "newest .doey/plans/masterplan-*.md = "+p)
+		return p, attempts
+	}
+	attempts = append(attempts, "newest .doey/plans/masterplan-*.md (none found)")
+
+	if p := newestMasterplan(); p != "" {
+		attempts = append(attempts, "newest .doey/plans/*.md fallback = "+p)
+		return p, attempts
+	}
+	return "", attempts
+}
+
+// fileExists reports whether path resolves to a regular file.
+func fileExists(path string) bool {
+	st, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !st.IsDir()
+}
+
+// newestCanonicalMasterplan returns the newest-by-mtime canonical
+// masterplan-YYYYMMDD-HHMMSS.md file under .doey/plans/. Sidecars like
+// `*.brief.md`, `*.architect.md`, `*.critic.md` are excluded by the
+// strict regex.
+func newestCanonicalMasterplan() string {
+	matches, _ := filepath.Glob(".doey/plans/masterplan-*.md")
+	type cand struct {
+		path  string
+		mtime time.Time
+	}
+	var pool []cand
+	for _, p := range matches {
+		base := filepath.Base(p)
+		if !canonicalMasterplanRe.MatchString(base) {
+			continue
+		}
+		st, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		pool = append(pool, cand{p, st.ModTime()})
+	}
+	if len(pool) == 0 {
+		return ""
+	}
+	sort.Slice(pool, func(i, j int) bool { return pool[i].mtime.After(pool[j].mtime) })
+	return pool[0].path
+}
+
 // newestMasterplan returns the newest-by-mtime plan file under
 // .doey/plans/ whose frontmatter declares `skill: doey-masterplan`. If
 // none match, falls back to the newest plan of any kind. Returns "" if
@@ -712,11 +863,9 @@ func main() {
 	planFileFlag := flag.String("plan-file", "", "Alias for --plan (kept for the existing launcher script)")
 	legacyFlag := flag.Bool("legacy", false, "disable live refresh and run in snapshot-only mode (single-release rollback escape hatch)")
 	debugStateFlag := flag.Bool("debug-state", false, "dump the current data snapshot as JSON to stdout and exit (debugging Phase 2 plumbing)")
-	// Accept and ignore legacy flags so the existing shell launcher
-	// keeps working without a coordinated rewrite.
-	_ = flag.String("runtime-dir", "", "(deprecated, ignored)")
-	_ = flag.String("goal", "", "(deprecated, ignored)")
-	_ = flag.Int("team-window", 0, "(deprecated, ignored)")
+	runtimeDirFlag := flag.String("runtime-dir", "", "Runtime directory base (default: $DOEY_RUNTIME). Used as the search base for team_<W>.env and masterplan-* dirs.")
+	teamWindowFlag := flag.String("team-window", "", "Tmux window index of the planning team. When set, MASTERPLAN_ID is read from <runtime>/team_<W>.env to resolve the plan path.")
+	goalFlag := flag.String("goal", "", "Optional goal text shown as a subtitle in standalone mode (no consensus.state).")
 	flag.Parse()
 
 	legacyMode := *legacyFlag
@@ -727,15 +876,21 @@ func main() {
 		}
 	}
 
-	planPath := *planFlag
-	if planPath == "" {
-		planPath = *planFileFlag
+	runtimeDir := strings.TrimSpace(*runtimeDirFlag)
+	if runtimeDir == "" {
+		runtimeDir = os.Getenv("DOEY_RUNTIME")
 	}
-	if planPath == "" {
-		planPath = newestMasterplan()
+	teamWindow := strings.TrimSpace(*teamWindowFlag)
+	if teamWindow == "" {
+		teamWindow = os.Getenv("DOEY_TEAM_WINDOW")
 	}
+
+	planPath, attempts := resolvePlanPath(*planFlag, *planFileFlag, runtimeDir, teamWindow)
 	if planPath == "" {
-		fmt.Fprintln(os.Stderr, "doey-masterplan-tui: no plan file given and no plans found in .doey/plans/")
+		fmt.Fprintln(os.Stderr, "doey-masterplan-tui: could not resolve a plan file. Tried:")
+		for _, a := range attempts {
+			fmt.Fprintln(os.Stderr, "  - "+a)
+		}
 		os.Exit(1)
 	}
 
@@ -767,16 +922,13 @@ func main() {
 		focusStep:      -1,
 		expandedPhases: expanded,
 		legacyMode:     legacyMode,
+		goal:           strings.TrimSpace(*goalFlag),
 		hitRows:        make(map[int]hitRegion, 64),
 	}
 	m.evictOrphanExpansions()
 
-	// Runtime/team-window come from environment for Phase 2; Phase 3
-	// wires the explicit --runtime-dir / --team-window flags. Empty
-	// strings are acceptable — workers won't be discovered without a
-	// team window, which is fine for Phase 2.
-	runtimeDir := os.Getenv("DOEY_RUNTIME")
-	teamWindow := os.Getenv("DOEY_TEAM_WINDOW")
+	// Phase 3: --runtime-dir and --team-window flags drive the live
+	// data plumbing. Fall back to env when unset (already resolved above).
 	var src planview.Source
 	if legacyMode {
 		src = planview.NewLiveLegacy(planPath, runtimeDir, teamWindow)

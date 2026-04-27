@@ -64,7 +64,8 @@ Where `<plan-id>` is the basename of `${PLAN_FILE}` without the `.md` extension.
 - ...
 
 ## Verdict
-**APPROVE** | **REVISE** | **BLOCK**
+**Verdict:** APPROVE
+<!-- or: **Verdict:** REVISE  /  **Verdict:** BLOCK -->
 
 <one-paragraph rationale grounded in the riskiest finding above>
 
@@ -82,6 +83,22 @@ Empty sections: write `_none_`. Never drop a heading — the Planner's parser ex
 - **BLOCK** — A failure mode exists that cannot be mitigated within this plan's shape. The plan needs a different approach entirely.
 
 If you find yourself writing "maybe" or "it depends" — you haven't finished the analysis. Finish it.
+
+## Verdict format (canonical)
+
+Write the verdict line EXACTLY as the markdown-bold form:
+
+```
+**Verdict:** APPROVE
+```
+
+or
+
+```
+**Verdict:** REVISE
+```
+
+The legacy one-line form `VERDICT: APPROVE` / `VERDICT: REVISE` is still accepted by the parser but is deprecated — use `**Verdict:**` going forward. Place the verdict line near the end of the file. If multiple verdict lines appear, the parser uses the LAST one.
 
 ## Review Dimensions (checklist)
 

@@ -132,6 +132,12 @@ else
   if [ -f "$_mp_new_env" ] && ! grep -q '^MASTERPLAN_ID=' "$_mp_new_env" 2>/dev/null; then
     printf 'MASTERPLAN_ID="%s"\n' "$PLAN_ID" >> "$_mp_new_env"
   fi
+
+  # Propagate the masterplan window index so masterplan-tui.sh can pass
+  # --team-window to the doey-masterplan-tui binary without falling back
+  # to DOEY_WINDOW_INDEX. The binary's flag contract (set by Worker A) is:
+  #   doey-masterplan-tui --plan-file <p> --runtime-dir <d> --team-window <N> --goal <text>
+  tmux set-environment -t "$SESSION_NAME" DOEY_TEAM_WINDOW "$MP_WIN" 2>/dev/null || true
 fi
 
 if [ "$MP_REUSED" = "1" ]; then

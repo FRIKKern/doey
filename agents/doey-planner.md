@@ -85,10 +85,10 @@ ARCH_PANE="${SESSION_NAME}:${DOEY_TEAM_WINDOW}.2"
 CRIT_PANE="${SESSION_NAME}:${DOEY_TEAM_WINDOW}.3"
 
 tmux copy-mode -q -t "$ARCH_PANE" 2>/dev/null
-doey_send_verified "$ARCH_PANE" "Review round ${ROUND}: read ${PLAN_FILE}. Write your systems/design review to ${PLAN_FILE%/*}/${PLAN_ID}.architect.md ending with a line 'VERDICT: APPROVE' or 'VERDICT: REVISE'. When done, just finish normally."
+doey_send_verified "$ARCH_PANE" "Review round ${ROUND}: read ${PLAN_FILE}. Write your systems/design review to ${PLAN_FILE%/*}/${PLAN_ID}.architect.md ending with a line '**Verdict:** APPROVE' or '**Verdict:** REVISE' (canonical markdown-bold form). When done, just finish normally."
 
 tmux copy-mode -q -t "$CRIT_PANE" 2>/dev/null
-doey_send_verified "$CRIT_PANE" "Review round ${ROUND}: read ${PLAN_FILE}. Write your risk/scope review to ${PLAN_FILE%/*}/${PLAN_ID}.critic.md ending with a line 'VERDICT: APPROVE' or 'VERDICT: REVISE'. When done, just finish normally."
+doey_send_verified "$CRIT_PANE" "Review round ${ROUND}: read ${PLAN_FILE}. Write your risk/scope review to ${PLAN_FILE%/*}/${PLAN_ID}.critic.md ending with a line '**Verdict:** APPROVE' or '**Verdict:** REVISE' (canonical markdown-bold form). When done, just finish normally."
 ```
 
 After dispatch, re-enter the sleep loop and wait for both reviewers to finish (you will receive `worker_finished` messages). Do NOT poll.
@@ -97,8 +97,10 @@ After dispatch, re-enter the sleep loop and wait for both reviewers to finish (y
 
 When both reviewers have finished, read:
 
-- `${PLAN_FILE%/*}/${PLAN_ID}.architect.md` — look for `VERDICT:` line.
-- `${PLAN_FILE%/*}/${PLAN_ID}.critic.md` — look for `VERDICT:` line.
+- `${PLAN_FILE%/*}/${PLAN_ID}.architect.md` — look for the verdict line.
+- `${PLAN_FILE%/*}/${PLAN_ID}.critic.md` — look for the verdict line.
+
+The canonical verdict form is `**Verdict:** APPROVE` or `**Verdict:** REVISE` (markdown-bold). The legacy form `VERDICT: APPROVE` / `VERDICT: REVISE` is still accepted by `_parse_verdict` for backward compatibility. The parser is case-insensitive and uses the LAST occurrence in the file (so multi-round files return the most recent verdict).
 
 Extract the two verdicts. Form your own verdict (APPROVE only if you are confident the plan as-written is complete).
 

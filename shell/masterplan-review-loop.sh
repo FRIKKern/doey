@@ -46,11 +46,23 @@ CRIT_PANE="${SESSION_NAME}:${TEAM_WIN}.3"
 . "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
 
 _parse_verdict() {
+  # Accept BOTH canonical forms (case-insensitive, whitespace tolerant):
+  #   **Verdict:** APPROVE | REVISE   (markdown-bold canonical form)
+  #   VERDICT: APPROVE | REVISE       (legacy one-line form)
+  # Last occurrence in the file wins (so multi-round files return the most
+  # recent verdict). Bash 3.2 safe — uses grep + sed instead of regex captures.
   local file="$1"
-  [ -f "$file" ] || { printf ''; return 0; }
-  local line
-  line="$(grep -m1 -E '^\*\*Verdict:\*\*' "$file" 2>/dev/null || true)"
-  printf '%s' "${line#*Verdict:**}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+  [ -f "$file" ] || { printf ''; return 1; }
+  local line word
+  line="$(grep -iE '(\*\*verdict:\*\*|^[[:space:]]*verdict:)[[:space:]]*(approve|revise)' "$file" 2>/dev/null | tail -1 || true)"
+  [ -z "$line" ] && return 1
+  word="$(printf '%s' "$line" \
+    | tr '[:lower:]' '[:upper:]' \
+    | sed -E 's/.*(APPROVE|REVISE).*/\1/')"
+  case "$word" in
+    APPROVE|REVISE) printf '%s' "$word"; return 0 ;;
+    *)              return 1 ;;
+  esac
 }
 
 _dispatch_reviewer() {
