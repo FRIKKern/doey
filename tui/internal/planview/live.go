@@ -514,10 +514,12 @@ func parseUnix(s string) (time.Time, error) {
 	return time.Unix(n, 0), nil
 }
 
-// loadTaskFooter populates the TaskFooter from $DOEY_TASK_ID. Phase 8
-// owns full task footer enrichment (DB join, subtask roll-up).
+// loadTaskFooter populates the TaskFooter from $DOEY_TASK_ID and
+// enriches it from .doey/tasks/<id>.task (file authoritative) plus the
+// SQLite plans table (DB fallback). Phase 8 owns the enrichment — see
+// LoadTaskFooter in task_footer.go for the resolution order.
 func loadTaskFooter() TaskFooter {
-	return TaskFooter{TaskID: os.Getenv("DOEY_TASK_ID")}
+	return LoadTaskFooter(os.Getenv("DOEY_PROJECT_DIR"), os.Getenv("DOEY_TASK_ID"))
 }
 
 // waitForStableSize polls os.Stat at ~25ms intervals and returns once
