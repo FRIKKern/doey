@@ -232,6 +232,206 @@ func TestGoldenConsensusHeader(t *testing.T) {
 	}
 }
 
+// ── Phase 7: reviewer card goldens ────────────────────────────────────
+
+// goldenReviewerCase pins a reviewer-card render for one of the four
+// states the card matrix supports (no_file / no_verdict / approve /
+// revise) for a single reviewer (Architect or Critic). The verdict
+// file (if any) is written to a per-test temp dir whose layout
+// matches Track A's ReviewerVerdictPath:
+//
+//	<runtimeDir>/<MASTERPLAN_ID>/<MASTERPLAN_ID>.<role>.md
+//
+// All file mtimes are set to a far-future timestamp so
+// formatMtimeAge collapses to "just now" — making the rendered output
+// independent of wall-clock drift between test runs.
+type goldenReviewerCase struct {
+	name        string
+	role        string // "Architect" | "Critic"
+	state       ReviewerVerdictState
+	verdictBody string // body to write; empty when state == ReviewerStateNoFile
+	platform    string
+	goldenPath  string
+}
+
+var goldenReviewerCases = []goldenReviewerCase{
+	{
+		name:       "TestRenderReviewerCard_Architect_NoFile",
+		role:       "Architect",
+		state:      ReviewerStateNoFile,
+		platform:   "linux",
+		goldenPath: "testdata/golden/reviewer_architect_nofile_truecolor_linux.golden",
+	},
+	{
+		name:        "TestRenderReviewerCard_Architect_FileNoVerdict",
+		role:        "Architect",
+		state:       ReviewerStateNoVerdict,
+		verdictBody: "# Architect review\n\nStill drafting — no verdict line yet.\n",
+		platform:    "linux",
+		goldenPath:  "testdata/golden/reviewer_architect_filenoverdict_truecolor_linux.golden",
+	},
+	{
+		name:        "TestRenderReviewerCard_Architect_Approve",
+		role:        "Architect",
+		state:       ReviewerStateApprove,
+		verdictBody: "# Architect review\n\nPhase ordering and interface seams are clean.\n\n**Verdict:** APPROVE\n",
+		platform:    "linux",
+		goldenPath:  "testdata/golden/reviewer_architect_approve_truecolor_linux.golden",
+	},
+	{
+		name:        "TestRenderReviewerCard_Architect_Revise",
+		role:        "Architect",
+		state:       ReviewerStateRevise,
+		verdictBody: "# Architect review\n\nPhase 6 needs an explicit fsnotify budget guard before we can ship.\n\n**Verdict:** REVISE\n",
+		platform:    "linux",
+		goldenPath:  "testdata/golden/reviewer_architect_revise_truecolor_linux.golden",
+	},
+	{
+		name:       "TestRenderReviewerCard_Critic_NoFile",
+		role:       "Critic",
+		state:      ReviewerStateNoFile,
+		platform:   "linux",
+		goldenPath: "testdata/golden/reviewer_critic_nofile_truecolor_linux.golden",
+	},
+	{
+		name:        "TestRenderReviewerCard_Critic_FileNoVerdict",
+		role:        "Critic",
+		state:       ReviewerStateNoVerdict,
+		verdictBody: "# Critic review\n\nMid-pass — risks register still being assembled.\n",
+		platform:    "linux",
+		goldenPath:  "testdata/golden/reviewer_critic_filenoverdict_truecolor_linux.golden",
+	},
+	{
+		name:        "TestRenderReviewerCard_Critic_Approve",
+		role:        "Critic",
+		state:       ReviewerStateApprove,
+		verdictBody: "# Critic review\n\nRisk register is comprehensive and proportional.\n\n**Verdict:** APPROVE\n",
+		platform:    "linux",
+		goldenPath:  "testdata/golden/reviewer_critic_approve_truecolor_linux.golden",
+	},
+	{
+		name:        "TestRenderReviewerCard_Critic_Revise",
+		role:        "Critic",
+		state:       ReviewerStateRevise,
+		verdictBody: "# Critic review\n\nWatch-budget exhaustion fallback is unspecified — please address.\n\n**Verdict:** REVISE\n",
+		platform:    "linux",
+		goldenPath:  "testdata/golden/reviewer_critic_revise_truecolor_linux.golden",
+	},
+}
+
+// TestGoldenReviewerCards pins the Phase 7 reviewer-card rendering for
+// the four-state × two-reviewer matrix. Determinism strategy:
+//
+//   - runtimeDir is a fresh t.TempDir() so per-pane status / verdict
+//     files cannot leak between cases.
+//   - MASTERPLAN_ID is set via t.Setenv so ReviewerVerdictPath resolves
+//     deterministically into the temp dir.
+//   - Verdict-file mtimes are stamped to (now + 1h) so formatMtimeAge
+//     collapses to "just now". Tests do NOT rely on the actual wall
+//     clock anywhere inside the rendered output.
+//   - LC_ALL/LANG are pinned to C.UTF-8 so clipperhouse/displaywidth
+//     resolves grapheme widths identically to the Phase 5 goldens.
+//   - bubblezone.NewGlobal() reset per case.
+func TestGoldenReviewerCards(t *testing.T) {
+	for _, tc := range goldenReviewerCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.platform != "" && runtime.GOOS != tc.platform {
+				t.Skipf("golden %s is locked to GOOS=%s (current: %s); Phase 9 broadens the matrix",
+					tc.name, tc.platform, runtime.GOOS)
+			}
+			t.Setenv("LC_ALL", "C.UTF-8")
+			t.Setenv("LANG", "C.UTF-8")
+			lipgloss.SetColorProfile(termenv.TrueColor)
+			zone.NewGlobal()
+
+			runtimeDir := t.TempDir()
+			planID := "demo-plan"
+			t.Setenv("MASTERPLAN_ID", planID)
+			t.Setenv("PLAN_ID", "")
+
+			// ReviewerInfo with deterministic identity — non-fallback
+			// (ViaIndex=false) so the header omits the [via-idx] flag
+			// and the goldens stay focused on the state matrix.
+			info := ReviewerInfo{
+				Role:      tc.role,
+				PaneSafe:  reviewerGoldenPaneSafe(tc.role),
+				PaneIndex: reviewerGoldenPaneIndex(tc.role),
+				ViaIndex:  false,
+			}
+
+			// Status file pinned to BUSY so the badge always renders
+			// the same — header layout becomes mtime/state-driven only.
+			writeReviewerGoldenStatus(t, runtimeDir, info.PaneSafe, "BUSY")
+
+			if tc.state != ReviewerStateNoFile {
+				path := filepath.Join(runtimeDir, planID, planID+"."+strings.ToLower(tc.role)+".md")
+				writeReviewerGoldenVerdict(t, path, tc.verdictBody)
+			}
+
+			out := RenderReviewerCardWithBody(info, runtimeDir, 50, false, "")
+			scanned := zone.Scan(out)
+			compareOrUpdateGolden(t, tc.goldenPath, []byte(scanned))
+		})
+	}
+}
+
+// reviewerGoldenPaneSafe returns the canonical PANE_SAFE for the given
+// reviewer at window 2 / pane 2 (Architect) or 3 (Critic). Mirrors
+// shell/common.sh:paneSafe so the badge derivation matches live output.
+func reviewerGoldenPaneSafe(role string) string {
+	switch role {
+	case "Architect":
+		return "doey_doey_2_2"
+	case "Critic":
+		return "doey_doey_2_3"
+	default:
+		return "doey_doey_2_x"
+	}
+}
+
+func reviewerGoldenPaneIndex(role string) string {
+	switch role {
+	case "Architect":
+		return "2.2"
+	case "Critic":
+		return "2.3"
+	default:
+		return "2.x"
+	}
+}
+
+// writeReviewerGoldenStatus stamps a per-pane status file with a known
+// STATUS value so the badge in the card header is deterministic.
+func writeReviewerGoldenStatus(t *testing.T, runtimeDir, paneSafe, status string) {
+	t.Helper()
+	statusDir := filepath.Join(runtimeDir, "status")
+	if err := os.MkdirAll(statusDir, 0o755); err != nil {
+		t.Fatalf("mkdir status: %v", err)
+	}
+	body := fmt.Sprintf("STATUS: %s\n", status)
+	if err := os.WriteFile(filepath.Join(statusDir, paneSafe+".status"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write status: %v", err)
+	}
+}
+
+// writeReviewerGoldenVerdict writes the verdict body and pins its
+// mtime to one hour in the future so formatMtimeAge collapses to
+// "just now" regardless of when the suite runs.
+func writeReviewerGoldenVerdict(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir verdict parent: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write verdict: %v", err)
+	}
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatalf("chtimes verdict: %v", err)
+	}
+}
+
 // compareOrUpdateGolden either rewrites the golden file (when -update
 // is set) or reads it and byte-compares against the captured output,
 // reporting a unified-style diff with line numbers on mismatch.

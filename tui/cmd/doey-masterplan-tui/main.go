@@ -91,6 +91,17 @@ type model struct {
 	overlaySnapshot string
 	overlayTitle    string
 	overlaySection  string
+
+	// Reviewer card focus — Phase 7 of masterplan-20260426-203854.
+	// reviewerFocus tracks which reviewer card (if any) is selected
+	// for keyboard interaction: -1 = no card focused (phase list has
+	// focus), 0 = Architect, 1 = Critic. `tab` rotates through the
+	// three states. `enter` on a focused reviewer card opens the
+	// reviewer-verdict full-screen overlay (renderOverlay re-uses the
+	// Phase 5 overlay infra). Discovery is recomputed on every render
+	// from the live runtime — cheap (<10 stat calls) and reactive
+	// without a polling loop.
+	reviewerFocus int
 }
 
 // phaseIdentityKey returns a stable key for expandedPhases that
@@ -273,6 +284,36 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.overlaySnapshot = ""
 			m.overlayTitle = ""
 			m.overlaySection = ""
+			return m, nil
+		}
+		if m.reviewerFocus >= 0 {
+			m.reviewerFocus = -1
+		}
+		return m, nil
+
+	case "tab":
+		// tab cycles focus across (phase list) → Architect → Critic →
+		// (phase list). Only advances when at least one reviewer is
+		// known to discovery — otherwise we'd cycle into an empty slot
+		// and confuse the user.
+		reviewers := m.discoverReviewers()
+		if len(reviewers) == 0 {
+			return m, nil
+		}
+		m.reviewerFocus++
+		if m.reviewerFocus >= len(reviewers) {
+			m.reviewerFocus = -1
+		}
+		return m, nil
+
+	case "shift+tab":
+		reviewers := m.discoverReviewers()
+		if len(reviewers) == 0 {
+			return m, nil
+		}
+		m.reviewerFocus--
+		if m.reviewerFocus < -1 {
+			m.reviewerFocus = len(reviewers) - 1
 		}
 		return m, nil
 
@@ -285,6 +326,10 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "enter":
+		if m.reviewerFocus >= 0 {
+			m = m.openReviewerOverlay()
+			return m, nil
+		}
 		if m.plan != nil && len(m.plan.Phases) > 0 {
 			key := phaseIdentityKey(m.plan.Phases[m.focusPhase], m.focusPhase)
 			m.expandedPhases[key] = !m.expandedPhases[key]
@@ -839,8 +884,9 @@ func (m model) renderStallBanner() string {
 	return planview.RenderStallBanner(alerts)
 }
 
-// renderBodyBand renders the middle band: section block + phase/step
-// list, or the overlay snapshot when the 'o' overlay is open.
+// renderBodyBand renders the middle band: section block + reviewer
+// cards row + phase/step list, or the overlay snapshot when the 'o'
+// or reviewer overlay is open.
 func (m model) renderBodyBand(mode planview.LayoutMode, measure int) string {
 	if m.overlayOpen {
 		return m.renderOverlay(measure)
@@ -850,6 +896,9 @@ func (m model) renderBodyBand(mode planview.LayoutMode, measure int) string {
 	if sections := planview.RenderSectionsBlock(m.plan, mode, measure, st); sections != "" {
 		parts = append(parts, sections)
 	}
+	if cards := m.renderReviewerCards(measure); cards != "" {
+		parts = append(parts, cards)
+	}
 	if list := m.renderPhaseList(mode, measure, st); list != "" {
 		parts = append(parts, list)
 	}
@@ -857,6 +906,89 @@ func (m model) renderBodyBand(mode planview.LayoutMode, measure int) string {
 		return ""
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// renderReviewerCards composes the Architect + Critic reviewer cards
+// side by side inside the body band. Discovery is reactive — derived
+// from m.snapshot.Plan.RuntimeDir + .TeamWindow on every render — so
+// the cards stay in sync with watcher-driven snapshot updates without
+// any polling. Returns "" when no reviewers are surfaced (e.g. plan
+// pane runs in legacy/standalone mode without a team window).
+func (m model) renderReviewerCards(measure int) string {
+	reviewers := m.discoverReviewers()
+	if len(reviewers) == 0 {
+		return ""
+	}
+	cardWidth := (measure - 2) / 2
+	if cardWidth < 40 {
+		cardWidth = 40
+	}
+	runtimeDir := m.snapshot.Plan.RuntimeDir
+	rendered := make([]string, 0, len(reviewers))
+	for i, info := range reviewers {
+		focused := m.reviewerFocus == i
+		var body string
+		if focused {
+			if raw, _, err := planview.ReadReviewerVerdict(info, runtimeDir); err == nil {
+				body = planview.RenderGlamourPreview(raw, cardWidth-4)
+			}
+		}
+		rendered = append(rendered,
+			planview.RenderReviewerCardWithBody(info, runtimeDir, cardWidth, focused, body))
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, joinWithGap(rendered, "  ")...)
+}
+
+// joinWithGap interleaves a small horizontal gap string between cards.
+// Returned slice is suitable for lipgloss.JoinHorizontal — preserves
+// per-cell alignment without smearing the gap into the card borders.
+func joinWithGap(parts []string, gap string) []string {
+	if len(parts) <= 1 || gap == "" {
+		return parts
+	}
+	out := make([]string, 0, 2*len(parts)-1)
+	for i, p := range parts {
+		if i > 0 {
+			out = append(out, gap)
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// discoverReviewers is a thin wrapper that scopes discovery to the
+// snapshot's runtime + team window. Pulled into a method so the
+// reviewer-cards renderer, the key handler, and the overlay opener
+// all share one resolution path.
+func (m model) discoverReviewers() []planview.ReviewerInfo {
+	return planview.DiscoverReviewers(
+		m.snapshot.Plan.RuntimeDir,
+		m.snapshot.Plan.TeamWindow,
+	)
+}
+
+// openReviewerOverlay captures a verdict snapshot for the focused
+// reviewer card and opens the Phase 5 overlay infra so the user sees
+// a full-screen glamour-rendered preview. The body is captured once
+// (at open time) so fsnotify-driven re-renders of the underlying
+// verdict file cannot disturb the overlay content while it is open —
+// matching the contract documented on the existing overlay.
+func (m model) openReviewerOverlay() model {
+	reviewers := m.discoverReviewers()
+	if m.reviewerFocus < 0 || m.reviewerFocus >= len(reviewers) {
+		return m
+	}
+	info := reviewers[m.reviewerFocus]
+	width := planview.MeasureMain(m.width)
+	if width < 40 {
+		width = 40
+	}
+	raw, _, _ := planview.ReadReviewerVerdict(info, m.snapshot.Plan.RuntimeDir)
+	m.overlayOpen = true
+	m.overlaySnapshot = planview.ReviewerOverlayBody(info, raw, width-4)
+	m.overlayTitle = planview.ReviewerOverlayTitle(info)
+	m.overlaySection = planview.ReviewerOverlaySectionID(info)
+	return m
 }
 
 // renderPhaseList renders the interactive phase list with bubblezone
@@ -925,7 +1057,7 @@ func (m model) renderOverlay(measure int) string {
 // indicator, and any flash/error messages.
 func (m model) renderFooterBand() string {
 	var b strings.Builder
-	help := "↑/↓ move · space toggle · enter expand · J/K reorder · o overlay · f failed · r recover · s send · q quit"
+	help := "↑/↓ move · space toggle · enter expand/open · tab reviewer · J/K reorder · o overlay · f failed · r recover · s send · q quit"
 	b.WriteString(StyleHelp.Render(help))
 	if live, ok := m.source.(*planview.Live); ok && live.Degraded() {
 		b.WriteString(StyleConsensusWarn.Render(" · WATCH: degraded"))
@@ -1499,6 +1631,7 @@ call site (DECISIONS.md D6). Resolution order:
 		expandedPhases: expanded,
 		legacyMode:     legacyMode,
 		goal:           strings.TrimSpace(*goalFlag),
+		reviewerFocus:  -1,
 	}
 	m.evictOrphanExpansions()
 
@@ -1582,6 +1715,18 @@ func runDemo(scenario string, legacyMode, debugState bool, goal string) {
 		os.Exit(1)
 	}
 
+	// The reviewer-card pillar (Phase 7) resolves verdict-file paths
+	// through ReviewerVerdictPath which reads MASTERPLAN_ID from the
+	// process env. In demo mode the fixture's team.env holds the plan
+	// id; export it before constructing the source so the cards see a
+	// non-empty path. Existing env wins so a real session that happens
+	// to launch with --demo still uses its own plan id.
+	if env := parseTeamEnv(filepath.Join(fixtureDir, "team.env")); env != nil {
+		if id := strings.TrimSpace(env["MASTERPLAN_ID"]); id != "" && os.Getenv("MASTERPLAN_ID") == "" {
+			_ = os.Setenv("MASTERPLAN_ID", id)
+		}
+	}
+
 	src, err := planview.NewDemo(fixtureDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: load %s: %v\n", fixtureDir, err)
@@ -1622,6 +1767,7 @@ func runDemo(scenario string, legacyMode, debugState bool, goal string) {
 		taskFooter:     snap.Task,
 		demoMode:       true,
 		demoScenario:   scenario,
+		reviewerFocus:  -1,
 	}
 	m.evictOrphanExpansions()
 
