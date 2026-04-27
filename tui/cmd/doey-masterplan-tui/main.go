@@ -5,6 +5,9 @@
 package main
 
 import (
+	"context"
+	"crypto/sha1"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -17,6 +20,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/doey-cli/doey/tui/internal/planparse"
+	"github.com/doey-cli/doey/tui/internal/planview"
 )
 
 // ── Messages ──────────────────────────────────────────────────────────
@@ -34,29 +38,69 @@ type sendResultMsg struct {
 // mouse click can translate (y, x) into a (phase, step, checkbox?)
 // triple. stepIdx == -1 means the row is the phase header itself.
 type hitRegion struct {
-	phaseIdx    int
-	stepIdx     int
-	cbStart     int // inclusive column where the [ ]/[x] checkbox begins
-	cbEnd       int // exclusive column where the checkbox ends
+	phaseIdx int
+	stepIdx  int
+	cbStart  int // inclusive column where the [ ]/[x] checkbox begins
+	cbEnd    int // exclusive column where the checkbox ends
 }
 
 // ── Model ─────────────────────────────────────────────────────────────
 
 type model struct {
-	plan           *planparse.Plan
-	planPath       string
-	consensus      string // CONSENSUS / DRAFT / etc., loaded from <plan-dir>/consensus.state
+	plan     *planparse.Plan
+	planPath string
+	// consensus is the legacy snapshot state. Phase 2 will route reads through m.consensusState.State (via Source).
+	consensus      string
 	focusPhase     int
 	focusStep      int // -1 = phase header
-	expandedPhases map[int]bool
+	expandedPhases map[string]bool
 	lastErr        string
 	lastFlash      string
 	width          int
 	height         int
+	// legacyMode is honoured by Phase 2 (skip fsnotify/tick wiring). Phase 1 lands the flag with no behavioural effect.
+	legacyMode bool
+
+	source         planview.Source   // Source of truth for live or demo data. Phase 1: planview.Live with snapshot-only Read.
+	snapshot       planview.Snapshot // Cached most-recent Source.Read() result. Phase 2 will refresh on tick + fsnotify events.
+	reviewState    planview.ReviewState
+	researchIndex  planview.ResearchIndex
+	workerRows     []planview.WorkerRow
+	taskFooter     planview.TaskFooter
+	consensusState planview.ConsensusInfo // Live, mutable. Will be re-read on every gate check (Phase 2 acceptance).
 
 	// hitRows is a reference-typed map mutated in place by View()
 	// (which uses a value receiver). Pre-allocated in main().
 	hitRows map[int]hitRegion
+}
+
+// phaseIdentityKey returns a stable key for expandedPhases that survives
+// phase reordering. The key is "<title-hash-hex>:<slot-fallback>" — the
+// title hash dominates; slot fallback only resolves a duplicate-title
+// collision (rare). On title rename, the old key naturally falls out of
+// the map; we evict orphans by intersecting the current key set with
+// m.expandedPhases on every plan reload.
+func phaseIdentityKey(p planparse.Phase, slot int) string {
+	h := sha1.Sum([]byte(p.Title))
+	return fmt.Sprintf("%x:%d", h[:6], slot)
+}
+
+// evictOrphanExpansions removes any keys from m.expandedPhases that no
+// longer correspond to a phase in the current plan (e.g. after a phase
+// rename or removal on reload).
+func (m *model) evictOrphanExpansions() {
+	if m.plan == nil || m.expandedPhases == nil {
+		return
+	}
+	live := make(map[string]struct{}, len(m.plan.Phases))
+	for i, ph := range m.plan.Phases {
+		live[phaseIdentityKey(ph, i)] = struct{}{}
+	}
+	for k := range m.expandedPhases {
+		if _, ok := live[k]; !ok {
+			delete(m.expandedPhases, k)
+		}
+	}
 }
 
 // ── Commands ──────────────────────────────────────────────────────────
@@ -152,6 +196,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
+		if m.source != nil {
+			_ = m.source.Close()
+		}
 		return m, tea.Quit
 
 	case "up", "k":
@@ -164,7 +211,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		if m.plan != nil && len(m.plan.Phases) > 0 {
-			m.expandedPhases[m.focusPhase] = !m.expandedPhases[m.focusPhase]
+			key := phaseIdentityKey(m.plan.Phases[m.focusPhase], m.focusPhase)
+			m.expandedPhases[key] = !m.expandedPhases[key]
 		}
 		return m, nil
 
@@ -203,7 +251,8 @@ func (m model) moveUp() model {
 	// On phase header → previous phase (last visible row).
 	if m.focusPhase > 0 {
 		m.focusPhase--
-		if m.expandedPhases[m.focusPhase] && len(m.plan.Phases[m.focusPhase].Steps) > 0 {
+		key := phaseIdentityKey(m.plan.Phases[m.focusPhase], m.focusPhase)
+		if m.expandedPhases[key] && len(m.plan.Phases[m.focusPhase].Steps) > 0 {
 			m.focusStep = len(m.plan.Phases[m.focusPhase].Steps) - 1
 		} else {
 			m.focusStep = -1
@@ -217,7 +266,8 @@ func (m model) moveDown() model {
 		return m
 	}
 	cur := m.plan.Phases[m.focusPhase]
-	if m.focusStep == -1 && m.expandedPhases[m.focusPhase] && len(cur.Steps) > 0 {
+	curKey := phaseIdentityKey(cur, m.focusPhase)
+	if m.focusStep == -1 && m.expandedPhases[curKey] && len(cur.Steps) > 0 {
 		m.focusStep = 0
 		return m
 	}
@@ -324,7 +374,7 @@ func (m *model) persist() {
 // ── Send to Tasks ─────────────────────────────────────────────────────
 
 func (m model) sendToTasks() (tea.Model, tea.Cmd) {
-	if !strings.EqualFold(m.consensus, "CONSENSUS") {
+	if !planview.IsConsensusReached(m.consensus) {
 		state := m.consensus
 		if state == "" {
 			state = "DRAFT"
@@ -368,7 +418,7 @@ func (m model) View() string {
 	y++
 
 	// Progress bar.
-	done, _, total := ComputePlanProgress(m.plan)
+	done, total := ComputePlanProgress(m.plan)
 	barW := width - 6
 	if barW < 10 {
 		barW = 10
@@ -387,7 +437,7 @@ func (m model) View() string {
 		if focused {
 			marker = "▸ "
 		}
-		expanded := m.expandedPhases[i]
+		expanded := m.expandedPhases[phaseIdentityKey(ph, i)]
 		caret := "▸"
 		if expanded {
 			caret = "▾"
@@ -397,7 +447,7 @@ func (m model) View() string {
 		// Checkbox spans columns 4..7 (e.g. "[x] " — 4 chars incl. trailing space).
 		row := marker + caret + " " + RenderPhaseStatus(ph)
 		if focused {
-			row = StyleFocused.Render(stripStyleForFocus(marker+caret+" "+plainPhaseStatus(ph)))
+			row = StyleFocused.Render(marker + caret + " " + plainPhaseStatus(ph))
 		}
 		b.WriteString(row)
 		b.WriteByte('\n')
@@ -469,11 +519,6 @@ func plainStepStatus(s planparse.Step) string {
 	}
 	return "[ ] " + s.Title
 }
-
-// stripStyleForFocus is a no-op kept for clarity at the call site:
-// the focus style replaces background/foreground anyway, so the
-// caller passes plain text in.
-func stripStyleForFocus(s string) string { return s }
 
 // ── Consensus loading ─────────────────────────────────────────────────
 
@@ -580,12 +625,22 @@ func newestMasterplan() string {
 func main() {
 	planFlag := flag.String("plan", "", "Path to the masterplan markdown file (default: newest masterplan in .doey/plans/)")
 	planFileFlag := flag.String("plan-file", "", "Alias for --plan (kept for the existing launcher script)")
+	legacyFlag := flag.Bool("legacy", false, "disable live refresh and run in snapshot-only mode (single-release rollback escape hatch)")
+	debugStateFlag := flag.Bool("debug-state", false, "dump the current data snapshot as JSON to stdout and exit (debugging Phase 2 plumbing)")
 	// Accept and ignore legacy flags so the existing shell launcher
 	// keeps working without a coordinated rewrite.
 	_ = flag.String("runtime-dir", "", "(deprecated, ignored)")
 	_ = flag.String("goal", "", "(deprecated, ignored)")
 	_ = flag.Int("team-window", 0, "(deprecated, ignored)")
 	flag.Parse()
+
+	legacyMode := *legacyFlag
+	if !legacyMode {
+		switch strings.ToLower(strings.TrimSpace(os.Getenv("DOEY_PLAN_VIEW_LEGACY"))) {
+		case "1", "true", "yes":
+			legacyMode = true
+		}
+	}
 
 	planPath := *planFlag
 	if planPath == "" {
@@ -614,14 +669,61 @@ func main() {
 		os.Exit(0)
 	}
 
+	expanded := map[string]bool{}
+	if len(plan.Phases) > 0 {
+		expanded[phaseIdentityKey(plan.Phases[0], 0)] = true
+	}
+
 	m := model{
 		plan:           plan,
 		planPath:       planPath,
 		consensus:      loadConsensus(planPath),
 		focusPhase:     0,
 		focusStep:      -1,
-		expandedPhases: map[int]bool{0: true},
+		expandedPhases: expanded,
+		legacyMode:     legacyMode,
 		hitRows:        make(map[int]hitRegion, 64),
+	}
+	m.evictOrphanExpansions()
+
+	// TODO Phase 3: honour --runtime-dir and --team-window flags.
+	src := planview.NewLive(planPath, "", "")
+	snap, err := src.Read(context.Background())
+	if err != nil {
+		// Soft-fail: log and proceed with zero snapshot. Phase 2 will surface this in WATCH: degraded.
+		fmt.Fprintf(os.Stderr, "planview: initial Read failed: %v\n", err)
+	}
+	m.source = src
+	m.snapshot = snap
+	m.consensusState = snap.Consensus
+	m.reviewState = snap.Review
+	m.researchIndex = snap.Research
+	m.workerRows = snap.Workers
+	m.taskFooter = snap.Task
+
+	if *debugStateFlag {
+		// Phase 1 → Phase 2 step: snapshot now holds the full planview.Snapshot. Phase 2 wires fsnotify + tick to keep it fresh.
+		dump := struct {
+			LegacyMode bool              `json:"legacyMode"`
+			PhaseCount int               `json:"phaseCount"`
+			PlanPath   string            `json:"planPath"`
+			Snapshot   planview.Snapshot `json:"snapshot"`
+		}{
+			LegacyMode: m.legacyMode,
+			PhaseCount: len(m.plan.Phases),
+			PlanPath:   m.planPath,
+			Snapshot:   m.snapshot,
+		}
+		out, err := json.MarshalIndent(dump, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "doey-masterplan-tui: marshal snapshot: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(out))
+		if m.source != nil {
+			_ = m.source.Close()
+		}
+		os.Exit(0)
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())

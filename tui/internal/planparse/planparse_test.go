@@ -515,6 +515,183 @@ func TestMarshalNilAndEmpty(t *testing.T) {
 	}
 }
 
+func TestMarshalRoundTripStructural(t *testing.T) {
+	orig := &Plan{
+		Title: "Structural round-trip",
+		Goal: `First paragraph of the goal.
+
+Second paragraph that elaborates further.`,
+		Context: `Background prose.
+
+` + "```" + `go
+fmt.Println("fenced code block")
+` + "```" + `
+
+Trailing paragraph after the fence.`,
+		Deliverables:    []string{"Deliverable A", "Deliverable B", "Deliverable C"},
+		Risks:           []string{"Risk one", "Risk two", "Risk three"},
+		SuccessCriteria: []string{"Criterion alpha", "Criterion beta", "Criterion gamma"},
+		Phases: []Phase{
+			{
+				Title:  "Phase one work",
+				Status: StatusPlanned,
+				Body:   "A short body explaining phase one intent.",
+				Steps: []Step{
+					{Title: "Step 1.1", Done: false},
+					{Title: "Step 1.2", Done: true},
+				},
+			},
+			{
+				Title:  "Phase two work",
+				Status: StatusInProgress,
+				Body:   "Another body paragraph for phase two.",
+				Steps: []Step{
+					{Title: "Step 2.1", Done: true},
+					{Title: "Step 2.2", Done: false},
+					{Title: "Step 2.3", Done: false},
+				},
+			},
+			{
+				Title:  "Phase three work",
+				Status: StatusDone,
+				Body:   "Phase three is done.",
+				Steps: []Step{
+					{Title: "Step 3.1", Done: true},
+				},
+			},
+		},
+	}
+
+	bytes1, err := orig.Marshal()
+	if err != nil {
+		t.Fatalf("first Marshal error = %v", err)
+	}
+	parsed, err := Parse(bytes1)
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+	bytes2, err := parsed.Marshal()
+	if err != nil {
+		t.Fatalf("second Marshal error = %v", err)
+	}
+	if !bytes.Equal(bytes1, bytes2) {
+		t.Errorf("second Marshal not byte-identical:\nfirst:\n%s\nsecond:\n%s", bytes1, bytes2)
+	}
+
+	if parsed.Title != orig.Title {
+		t.Errorf("Title = %q, want %q", parsed.Title, orig.Title)
+	}
+	if parsed.Goal != orig.Goal {
+		t.Errorf("Goal mismatch:\ngot:  %q\nwant: %q", parsed.Goal, orig.Goal)
+	}
+	if parsed.Context != orig.Context {
+		t.Errorf("Context mismatch:\ngot:  %q\nwant: %q", parsed.Context, orig.Context)
+	}
+	if !reflect.DeepEqual(parsed.Deliverables, orig.Deliverables) {
+		t.Errorf("Deliverables = %#v, want %#v", parsed.Deliverables, orig.Deliverables)
+	}
+	if !reflect.DeepEqual(parsed.Risks, orig.Risks) {
+		t.Errorf("Risks = %#v, want %#v", parsed.Risks, orig.Risks)
+	}
+	if !reflect.DeepEqual(parsed.SuccessCriteria, orig.SuccessCriteria) {
+		t.Errorf("SuccessCriteria = %#v, want %#v", parsed.SuccessCriteria, orig.SuccessCriteria)
+	}
+	if len(parsed.Phases) != len(orig.Phases) {
+		t.Fatalf("Phases len = %d, want %d", len(parsed.Phases), len(orig.Phases))
+	}
+	for i := range orig.Phases {
+		gotTitle := stripPhasePrefix(parsed.Phases[i].Title)
+		if gotTitle != orig.Phases[i].Title {
+			t.Errorf("phase %d title = %q, want %q", i, gotTitle, orig.Phases[i].Title)
+		}
+		if parsed.Phases[i].Status != orig.Phases[i].Status {
+			t.Errorf("phase %d status = %v, want %v", i, parsed.Phases[i].Status, orig.Phases[i].Status)
+		}
+		if parsed.Phases[i].Body != orig.Phases[i].Body {
+			t.Errorf("phase %d body mismatch:\ngot:  %q\nwant: %q", i, parsed.Phases[i].Body, orig.Phases[i].Body)
+		}
+		if len(parsed.Phases[i].Steps) != len(orig.Phases[i].Steps) {
+			t.Fatalf("phase %d steps len = %d, want %d", i, len(parsed.Phases[i].Steps), len(orig.Phases[i].Steps))
+		}
+		for j, s := range orig.Phases[i].Steps {
+			if parsed.Phases[i].Steps[j].Done != s.Done {
+				t.Errorf("phase %d step %d done = %v, want %v", i, j, parsed.Phases[i].Steps[j].Done, s.Done)
+			}
+			if parsed.Phases[i].Steps[j].Title != s.Title {
+				t.Errorf("phase %d step %d title = %q, want %q", i, j, parsed.Phases[i].Steps[j].Title, s.Title)
+			}
+		}
+	}
+}
+
+func TestMarshalRoundTripCustomNumbering(t *testing.T) {
+	// Non-canonical phase numbering on input must be canonicalized to
+	// `Phase 1, 2, 3` on Marshal (DECISIONS.md D5). The third heading
+	// uses an alphabetic identifier ("Phase Beta:") — phasePrefixRe only
+	// strips numeric prefixes by design, so the alphabetic identifier
+	// survives inside the title; only the outer heading number is
+	// canonicalized.
+	src := `# Plan: Custom numbering
+
+## Phases
+
+### Phase 7: Foo
+**Status:** planned
+Body for foo.
+- [ ] foo step
+
+### Phase 12: Bar
+**Status:** in-progress
+Body for bar.
+- [x] bar step
+
+### Phase Beta: Baz
+**Status:** done
+Body for baz.
+- [x] baz step
+`
+	parsed, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("Parse error = %v", err)
+	}
+	if len(parsed.Phases) != 3 {
+		t.Fatalf("phases = %d, want 3", len(parsed.Phases))
+	}
+
+	out, err := parsed.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal error = %v", err)
+	}
+	got := string(out)
+	for _, want := range []string{
+		"### Phase 1: Foo",
+		"### Phase 2: Bar",
+		"### Phase 3: Phase Beta: Baz",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("marshalled output missing canonical heading %q.\nfull output:\n%s", want, got)
+		}
+	}
+
+	reparsed, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Re-parse error = %v", err)
+	}
+	if len(reparsed.Phases) != 3 {
+		t.Fatalf("re-parsed phases = %d, want 3", len(reparsed.Phases))
+	}
+	wantBodies := []string{"Body for foo.", "Body for bar.", "Body for baz."}
+	wantTitles := []string{"Foo", "Bar", "Phase Beta: Baz"}
+	for i, ph := range reparsed.Phases {
+		if ph.Body != wantBodies[i] {
+			t.Errorf("phase %d body = %q, want %q", i, ph.Body, wantBodies[i])
+		}
+		if got := stripPhasePrefix(ph.Title); got != wantTitles[i] {
+			t.Errorf("phase %d title = %q, want %q", i, got, wantTitles[i])
+		}
+	}
+}
+
 func TestStatusAliases(t *testing.T) {
 	md := `## Phases
 

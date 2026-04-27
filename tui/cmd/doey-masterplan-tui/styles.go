@@ -40,9 +40,8 @@ var (
 	StylePhasePending    = lipgloss.NewStyle().Foreground(colorPending).Faint(true)
 
 	// Step-level styles — dimmer than phase lines so the hierarchy reads.
-	StyleStepDone       = lipgloss.NewStyle().Foreground(colorDone)
-	StyleStepInProgress = lipgloss.NewStyle().Foreground(colorInProgress)
-	StyleStepPending    = lipgloss.NewStyle().Foreground(colorPending).Faint(true)
+	StyleStepDone    = lipgloss.NewStyle().Foreground(colorDone)
+	StyleStepPending = lipgloss.NewStyle().Foreground(colorPending).Faint(true)
 
 	// Focus indicator for the cursor row (reverse-video accent).
 	StyleFocused = lipgloss.NewStyle().
@@ -146,26 +145,17 @@ func RenderConsensusBadge(state string) string {
 
 // ComputePlanProgress sums step completion across every phase. A phase
 // with no steps contributes a single implicit step whose done-ness tracks
-// Phase.Status. inProgress counts phases currently marked StatusInProgress
-// or that have some-but-not-all steps checked.
-func ComputePlanProgress(plan *planparse.Plan) (done, inProgress, total int) {
+// Phase.Status.
+func ComputePlanProgress(plan *planparse.Plan) (done, total int) {
 	if plan == nil {
-		return 0, 0, 0
+		return 0, 0
 	}
 	for _, ph := range plan.Phases {
 		d, t := countPhaseSteps(ph)
 		total += t
 		done += d
-		switch {
-		case ph.Status == planparse.StatusDone:
-			// counted in done already
-		case ph.Status == planparse.StatusInProgress:
-			inProgress++
-		case t > 0 && d > 0 && d < t:
-			inProgress++
-		}
 	}
-	return done, inProgress, total
+	return done, total
 }
 
 // countPhaseSteps returns (done, total) for a phase. A phase with no
