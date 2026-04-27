@@ -1,0 +1,18 @@
+[1;38;2;226;232;240mGOAL[0m                                                                      
+[38;2;203;213;225mShip the live plan view with watcher plumbing, layered renderer, and[0m      
+[38;2;203;213;225mfixture-backed demo mode.[0m                                                 
+[1;38;2;226;232;240mCONTEXT[0m                                                                   
+[38;2;203;213;225mArchitect and Critic have both approved this plan. The Send-to-Tasks[0m      
+[38;2;203;213;225mgate is open and the user can dispatch the phases into the task system.[0m   
+[1;38;2;226;232;240mDELIVERABLES[0m                                                              
+[38;2;147;163;184m• [0m[38;2;226;232;240m`tui/internal/planview/` package[0m                                        
+[38;2;147;163;184m• [0m[38;2;226;232;240mSix fixture scenarios[0m                                                   
+[38;2;147;163;184m• [0m[38;2;226;232;240m`docs/plan-pane-contract.md`[0m                                            
+[38;2;147;163;184m• [0m[38;2;226;232;240m`shell/check-plan-pane-contract.sh`[0m                                     
+[1;38;2;226;232;240mRISKS[0m                                                                     
+[38;2;147;163;184m• [0m[38;2;226;232;240mFsnotify watch-budget exhaustion under heavy sessions[0m                   
+[38;2;147;163;184m• [0m[38;2;226;232;240mEditor rename-on-save breaking the watcher[0m                              
+[1;38;2;226;232;240mSUCCESS CRITERIA[0m                                                          
+[38;2;147;163;184m• [0m[38;2;226;232;240mLive latency under 200 ms end to end[0m                                    
+[38;2;147;163;184m• [0m[38;2;226;232;240mIdle CPU under 1% over a 60-second quiescent run[0m                        
+[38;2;147;163;184m• [0m[38;2;226;232;240mAll six fixture scenarios render at 80/120/200-col widths[0m               

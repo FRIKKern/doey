@@ -22,6 +22,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 
 	"github.com/doey-cli/doey/tui/internal/planparse"
 	"github.com/doey-cli/doey/tui/internal/planview"
@@ -44,18 +45,6 @@ type tickMsg time.Time
 // Updates() channel. Re-issued from the handler so subscribeCmd loops
 // for the lifetime of the program.
 type snapshotMsg planview.Snapshot
-
-// ── Hit regions ───────────────────────────────────────────────────────
-
-// hitRegion records what was rendered on a given y row so the next
-// mouse click can translate (y, x) into a (phase, step, checkbox?)
-// triple. stepIdx == -1 means the row is the phase header itself.
-type hitRegion struct {
-	phaseIdx int
-	stepIdx  int
-	cbStart  int // inclusive column where the [ ]/[x] checkbox begins
-	cbEnd    int // exclusive column where the checkbox ends
-}
 
 // ── Model ─────────────────────────────────────────────────────────────
 
@@ -93,20 +82,28 @@ type model struct {
 	demoMode     bool
 	demoScenario string
 
-	// hitRows is a reference-typed map mutated in place by View()
-	// (which uses a value receiver). Pre-allocated in main().
-	hitRows map[int]hitRegion
+	// Overlay state for the 'o' focused-section overlay. When
+	// overlayOpen is true, View() renders overlaySnapshot inside the
+	// body band instead of the regular sections+phases content. The
+	// snapshot is captured once at open time so fsnotify-driven
+	// re-renders of the underlying plan cannot disturb the overlay.
+	overlayOpen     bool
+	overlaySnapshot string
+	overlayTitle    string
+	overlaySection  string
 }
 
-// phaseIdentityKey returns a stable key for expandedPhases that survives
-// phase reordering. The key is "<title-hash-hex>:<slot-fallback>" — the
-// title hash dominates; slot fallback only resolves a duplicate-title
-// collision (rare). On title rename, the old key naturally falls out of
-// the map; we evict orphans by intersecting the current key set with
-// m.expandedPhases on every plan reload.
+// phaseIdentityKey returns a stable key for expandedPhases that
+// survives phase reordering. Keyed purely by title hash so swapping
+// two phases preserves each phase's expansion state. Two phases with
+// identical titles share state — acceptable: such collisions are rare
+// and the alternative (slot in the key) bakes in the reorder bug. On
+// title rename, the old key naturally falls out of the map; orphans
+// are evicted on every plan reload via evictOrphanExpansions.
 func phaseIdentityKey(p planparse.Phase, slot int) string {
+	_ = slot // retained for signature compatibility with older call sites
 	h := sha1.Sum([]byte(p.Title))
-	return fmt.Sprintf("%x:%d", h[:6], slot)
+	return fmt.Sprintf("%x", h[:8])
 }
 
 // evictOrphanExpansions removes any keys from m.expandedPhases that no
@@ -253,17 +250,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 			return m, nil
 		}
-		region, ok := m.hitRows[msg.Y]
-		if !ok {
-			return m, nil
-		}
-		m.focusPhase = region.phaseIdx
-		m.focusStep = region.stepIdx
-		// Only toggle if the click landed inside the checkbox column.
-		if msg.X >= region.cbStart && msg.X < region.cbEnd {
-			m = m.toggleCurrent()
-		}
-		return m, nil
+		return m.handleMouse(msg)
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -279,6 +266,15 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = m.source.Close()
 		}
 		return m, tea.Quit
+
+	case "esc":
+		if m.overlayOpen {
+			m.overlayOpen = false
+			m.overlaySnapshot = ""
+			m.overlayTitle = ""
+			m.overlaySection = ""
+		}
+		return m, nil
 
 	case "up", "k":
 		m = m.moveUp()
@@ -307,10 +303,165 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m = m.movePhaseUp()
 		return m, nil
 
+	case "f":
+		m = m.toggleStickyFailed()
+		return m, nil
+
+	case "o":
+		m = m.openOverlay()
+		return m, nil
+
 	case "s":
 		return m.sendToTasks()
 	}
 	return m, nil
+}
+
+// handleMouse routes a left-button press through the bubblezone
+// manager. Each interactive zone kind translates into a focus change
+// and possibly an action (checkbox toggle, overlay open). When no zone
+// is hit the click is ignored.
+func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.plan == nil {
+		return m, nil
+	}
+	// Step checkbox first — narrowest hit wins.
+	for i, ph := range m.plan.Phases {
+		for j := range ph.Steps {
+			if zone.Get(planview.StepCheckboxZoneID(i, j)).InBounds(msg) {
+				m.focusPhase = i
+				m.focusStep = j
+				m = m.toggleCurrent()
+				return m, nil
+			}
+		}
+	}
+	// Phase checkbox.
+	for i := range m.plan.Phases {
+		if zone.Get(planview.PhaseCheckboxZoneID(i)).InBounds(msg) {
+			m.focusPhase = i
+			m.focusStep = -1
+			m = m.toggleCurrent()
+			return m, nil
+		}
+	}
+	// Step row (focus only).
+	for i, ph := range m.plan.Phases {
+		for j := range ph.Steps {
+			if zone.Get(planview.StepZoneID(i, j)).InBounds(msg) {
+				m.focusPhase = i
+				m.focusStep = j
+				return m, nil
+			}
+		}
+	}
+	// Phase header row (focus + toggle expansion).
+	for i, ph := range m.plan.Phases {
+		if zone.Get(planview.PhaseZoneID(i)).InBounds(msg) {
+			m.focusPhase = i
+			m.focusStep = -1
+			key := phaseIdentityKey(ph, i)
+			m.expandedPhases[key] = !m.expandedPhases[key]
+			return m, nil
+		}
+	}
+	// Section overlay triggers.
+	for _, section := range []string{
+		planview.SectionGoal,
+		planview.SectionContext,
+		planview.SectionDeliverables,
+		planview.SectionRisks,
+		planview.SectionSuccessCriteria,
+	} {
+		if zone.Get(planview.OverlayTriggerZoneID(section)).InBounds(msg) {
+			m = m.openOverlayForSection(section)
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+// toggleStickyFailed flips the focused phase between StatusFailed
+// (sticky) and a status derived from its current step distribution.
+// derivePhaseStatus honours the sticky failed state so subsequent
+// step toggles do not silently overwrite it.
+func (m model) toggleStickyFailed() model {
+	if m.plan == nil || len(m.plan.Phases) == 0 {
+		return m
+	}
+	ph := &m.plan.Phases[m.focusPhase]
+	if ph.Status == planparse.StatusFailed {
+		// Recover: drop sticky failed, fall back to derived status.
+		ph.Status = derivePhaseStatusFromSteps(*ph)
+	} else {
+		ph.Status = planparse.StatusFailed
+	}
+	m.persist()
+	return m
+}
+
+// openOverlay captures a snapshot of the focused content for the 'o'
+// overlay. With no explicit section focus, the overlay shows the
+// currently focused phase (title + body + steps).
+func (m model) openOverlay() model {
+	if m.plan == nil || len(m.plan.Phases) == 0 {
+		return m
+	}
+	measure := planview.MeasureMain(m.width)
+	st := planview.DefaultSectionStyles()
+	ph := m.plan.Phases[m.focusPhase]
+	title := ph.Title
+	if title == "" {
+		title = fmt.Sprintf("Phase %d", m.focusPhase+1)
+	}
+	var b strings.Builder
+	b.WriteString(StyleHeader.Render(title))
+	b.WriteByte('\n')
+	if body := planview.RenderPhaseBody(ph, planview.LayoutExpanded, measure, st); body != "" {
+		b.WriteString(body)
+		b.WriteByte('\n')
+	}
+	for _, s := range ph.Steps {
+		b.WriteString(RenderStepStatus(s))
+		b.WriteByte('\n')
+	}
+	m.overlayOpen = true
+	m.overlaySnapshot = b.String()
+	m.overlayTitle = title
+	m.overlaySection = "phase"
+	return m
+}
+
+// openOverlayForSection captures a section snapshot for the 'o'
+// overlay. Used when a section's overlay-trigger glyph is clicked.
+func (m model) openOverlayForSection(section string) model {
+	if m.plan == nil {
+		return m
+	}
+	measure := planview.MeasureMain(m.width)
+	st := planview.DefaultSectionStyles()
+	snap := planview.SectionSnapshot(m.plan, section, measure, st)
+	if strings.TrimSpace(snap) == "" {
+		return m
+	}
+	m.overlayOpen = true
+	m.overlaySnapshot = snap
+	m.overlaySection = section
+	switch section {
+	case planview.SectionGoal:
+		m.overlayTitle = "Goal"
+	case planview.SectionContext:
+		m.overlayTitle = "Context"
+	case planview.SectionDeliverables:
+		m.overlayTitle = "Deliverables"
+	case planview.SectionRisks:
+		m.overlayTitle = "Risks"
+	case planview.SectionSuccessCriteria:
+		m.overlayTitle = "Success Criteria"
+	default:
+		m.overlayTitle = section
+	}
+	return m
 }
 
 // ── Navigation helpers ────────────────────────────────────────────────
@@ -381,10 +532,14 @@ func (m model) toggleCurrent() model {
 		for i := range ph.Steps {
 			ph.Steps[i].Done = newVal
 		}
-		if newVal {
-			ph.Status = planparse.StatusDone
-		} else {
-			ph.Status = planparse.StatusPlanned
+		// Sticky StatusFailed is preserved across step toggles — the
+		// user must clear it explicitly with 'f'.
+		if ph.Status != planparse.StatusFailed {
+			if newVal {
+				ph.Status = planparse.StatusDone
+			} else {
+				ph.Status = planparse.StatusPlanned
+			}
 		}
 	} else if m.focusStep < len(ph.Steps) {
 		ph.Steps[m.focusStep].Done = !ph.Steps[m.focusStep].Done
@@ -395,8 +550,29 @@ func (m model) toggleCurrent() model {
 	return m
 }
 
+// derivePhaseStatus returns the status to record for a phase after a
+// step toggle. It honours the sticky StatusFailed state — once a phase
+// has been marked failed via the 'f' key, normal step distribution
+// changes will not silently overwrite it. To clear the failed state
+// the user must press 'f' again (toggleStickyFailed handles the
+// reverse direction).
 func derivePhaseStatus(ph planparse.Phase) planparse.PhaseStatus {
+	if ph.Status == planparse.StatusFailed {
+		return planparse.StatusFailed
+	}
+	return derivePhaseStatusFromSteps(ph)
+}
+
+// derivePhaseStatusFromSteps computes the phase status purely from
+// step completion counts, without applying sticky-failed protection.
+// Used by toggleStickyFailed when recovering from the failed state.
+func derivePhaseStatusFromSteps(ph planparse.Phase) planparse.PhaseStatus {
 	if len(ph.Steps) == 0 {
+		// No steps to derive from. If currently failed (recovery path),
+		// fall back to planned; otherwise keep the existing status.
+		if ph.Status == planparse.StatusFailed {
+			return planparse.StatusPlanned
+		}
 		return ph.Status
 	}
 	done := 0
@@ -501,25 +677,31 @@ func (m model) sendToTasks() (tea.Model, tea.Cmd) {
 // ── View ──────────────────────────────────────────────────────────────
 
 func (m model) View() string {
-	// Reset hitRows for this render. Maps are reference types so
-	// mutating in place propagates back to the caller.
-	for k := range m.hitRows {
-		delete(m.hitRows, k)
-	}
-
 	if m.plan == nil {
 		return StyleHelp.Render("(no plan loaded)")
 	}
-
 	width := m.width
 	if width <= 0 {
 		width = 80
 	}
+	mode := planview.ClassifyWidth(width)
+	measure := planview.MeasureMain(width)
 
-	var b strings.Builder
-	y := 0
+	header := m.renderHeaderBand(width, measure)
+	body := m.renderBodyBand(mode, measure)
+	footer := m.renderFooterBand()
 
-	// Header line: title + consensus badge.
+	view := planview.JoinLayered(header, body, footer)
+	if width >= planview.BreakpointStandard {
+		view = planview.CenterBand(view, width, measure)
+	}
+	return zone.Scan(view)
+}
+
+// renderHeaderBand renders the top band: title, consensus pill, and
+// progress bar. The pill is a clickable bubblezone region so a future
+// gesture (e.g. click-to-recheck) can hook the same place.
+func (m model) renderHeaderBand(width, measure int) string {
 	title := m.plan.Title
 	if title == "" {
 		title = filepath.Base(m.planPath)
@@ -528,34 +710,56 @@ func (m model) View() string {
 	if badgeState == "" {
 		badgeState = m.consensus
 	}
-	header := StyleHeader.Render(title) + "  " + RenderConsensusBadge(badgeState)
+	pill := zone.Mark(planview.PillZoneID("consensus"), RenderConsensusBadge(badgeState))
+	header := StyleHeader.Render(title) + "  " + pill
 	if m.consensusState.Standalone {
-		header += "  " + StyleConsensusWarn.Render("STATE: standalone (no consensus)")
+		standalone := StyleConsensusWarn.Render("STATE: standalone (no consensus)")
+		header += "  " + zone.Mark(planview.PillZoneID("standalone"), standalone)
 	}
+	var b strings.Builder
 	b.WriteString(header)
-	b.WriteByte('\n')
-	y++
-
 	if m.consensusState.Standalone && strings.TrimSpace(m.goal) != "" {
-		b.WriteString(StyleHelp.Render("goal: " + strings.TrimSpace(m.goal)))
 		b.WriteByte('\n')
-		y++
+		b.WriteString(StyleHelp.Render("goal: " + strings.TrimSpace(m.goal)))
 	}
-
-	// Progress bar.
 	done, total := ComputePlanProgress(m.plan)
-	barW := width - 6
+	barW := measure
 	if barW < 10 {
 		barW = 10
 	}
+	if barW > width-2 {
+		barW = width - 2
+	}
+	b.WriteByte('\n')
 	b.WriteString(RenderProgressBar(done, total, barW))
-	b.WriteByte('\n')
-	y++
+	return b.String()
+}
 
-	b.WriteByte('\n')
-	y++
+// renderBodyBand renders the middle band: section block + phase/step
+// list, or the overlay snapshot when the 'o' overlay is open.
+func (m model) renderBodyBand(mode planview.LayoutMode, measure int) string {
+	if m.overlayOpen {
+		return m.renderOverlay(measure)
+	}
+	st := planview.DefaultSectionStyles()
+	var parts []string
+	if sections := planview.RenderSectionsBlock(m.plan, mode, measure, st); sections != "" {
+		parts = append(parts, sections)
+	}
+	if list := m.renderPhaseList(mode, measure, st); list != "" {
+		parts = append(parts, list)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
 
-	// Phase / step list.
+// renderPhaseList renders the interactive phase list with bubblezone
+// marks for every phase header, phase checkbox, step row, and step
+// checkbox. Replaces the old hardcoded-column hitRegion approach.
+func (m model) renderPhaseList(mode planview.LayoutMode, measure int, st planview.SectionStyles) string {
+	var b strings.Builder
 	for i, ph := range m.plan.Phases {
 		focused := (m.focusPhase == i && m.focusStep == -1)
 		marker := "  "
@@ -567,57 +771,136 @@ func (m model) View() string {
 		if expanded {
 			caret = "▾"
 		}
-		// Layout: "▸ ▾ [x] Phase title"
-		//          0 2  4
-		// Checkbox spans columns 4..7 (e.g. "[x] " — 4 chars incl. trailing space).
-		row := marker + caret + " " + RenderPhaseStatus(ph)
-		if focused {
-			row = StyleFocused.Render(marker + caret + " " + plainPhaseStatus(ph))
-		}
-		b.WriteString(row)
+		checkbox := zone.Mark(planview.PhaseCheckboxZoneID(i), renderPhaseCheckbox(ph))
+		titleSegment := renderPhaseTitle(ph, focused)
+		row := marker + caret + " " + checkbox + " " + titleSegment
+		b.WriteString(zone.Mark(planview.PhaseZoneID(i), row))
 		b.WriteByte('\n')
-		m.hitRows[y] = hitRegion{phaseIdx: i, stepIdx: -1, cbStart: 4, cbEnd: 7}
-		y++
-
+		// Phase body prose (expanded layouts only).
+		if body := planview.RenderPhaseBody(ph, mode, measure, st); body != "" {
+			b.WriteString(body)
+			b.WriteByte('\n')
+		}
 		if !expanded {
 			continue
 		}
-		for j, st := range ph.Steps {
+		for j, sStep := range ph.Steps {
 			stepFocused := (m.focusPhase == i && m.focusStep == j)
 			pad := "      "
-			line := pad + RenderStepStatus(st)
-			if stepFocused {
-				line = StyleFocused.Render(pad + plainStepStatus(st))
-			}
-			b.WriteString(line)
+			cb := zone.Mark(planview.StepCheckboxZoneID(i, j), renderStepCheckbox(sStep))
+			rest := renderStepTitle(sStep, stepFocused)
+			row := pad + cb + " " + rest
+			b.WriteString(zone.Mark(planview.StepZoneID(i, j), row))
 			b.WriteByte('\n')
-			// Checkbox under "      [x] …" → cols 6..9.
-			m.hitRows[y] = hitRegion{phaseIdx: i, stepIdx: j, cbStart: 6, cbEnd: 9}
-			y++
 		}
 	}
+	return strings.TrimRight(b.String(), "\n")
+}
 
-	// Spacer + help strip.
-	b.WriteByte('\n')
-	help := "↑/↓ move · space toggle · enter expand · J/K reorder · s send · q quit"
+// renderOverlay renders the body band as a focused overlay panel
+// containing the snapshot taken when the 'o' key was pressed. The
+// snapshot is held in the model so fsnotify-driven re-renders of the
+// underlying plan cannot disturb the overlay content.
+func (m model) renderOverlay(measure int) string {
+	border := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.AdaptiveColor{Light: "#2563eb", Dark: "#60a5fa"}).
+		Padding(0, 1).
+		Width(measure)
+	hint := StyleHelp.Render("press esc to close")
+	body := m.overlayTitle
+	if body != "" {
+		body = StyleHeader.Render(body) + "\n" + m.overlaySnapshot
+	} else {
+		body = m.overlaySnapshot
+	}
+	return border.Render(body+"\n"+hint)
+}
+
+// renderFooterBand renders the bottom band: help strip, watch-status
+// indicator, and any flash/error messages.
+func (m model) renderFooterBand() string {
+	var b strings.Builder
+	help := "↑/↓ move · space toggle · enter expand · J/K reorder · o overlay · f failed · s send · q quit"
 	b.WriteString(StyleHelp.Render(help))
 	if live, ok := m.source.(*planview.Live); ok && live.Degraded() {
 		b.WriteString(StyleConsensusWarn.Render(" · WATCH: degraded"))
 	}
-	b.WriteByte('\n')
-
 	if m.lastErr != "" {
+		b.WriteByte('\n')
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#b91c1c", Dark: "#f87171"}).
 			Bold(true).
 			Render("error: " + m.lastErr))
-		b.WriteByte('\n')
 	} else if m.lastFlash != "" {
-		b.WriteString(StyleConsensusOK.Render(m.lastFlash))
 		b.WriteByte('\n')
+		b.WriteString(StyleConsensusOK.Render(m.lastFlash))
 	}
-
 	return b.String()
+}
+
+// renderPhaseCheckbox returns the styled checkbox glyph for a phase
+// header — used by the layered renderer so the checkbox cell lives
+// inside its own bubblezone mark.
+func renderPhaseCheckbox(ph planparse.Phase) string {
+	done, total := 0, 0
+	for _, s := range ph.Steps {
+		total++
+		if s.Done {
+			done++
+		}
+	}
+	if ph.Status == planparse.StatusFailed {
+		return StyleConsensusWarn.Render("[!]")
+	}
+	switch {
+	case ph.Status == planparse.StatusDone || (total > 0 && done == total):
+		return StylePhaseDone.Render("[x]")
+	case ph.Status == planparse.StatusInProgress || (total > 0 && done > 0):
+		return StylePhaseInProgress.Render("[~]")
+	default:
+		return StylePhasePending.Render("[ ]")
+	}
+}
+
+// renderPhaseTitle returns the styled title segment for a phase
+// header. When focused, the entire segment is wrapped in
+// StyleFocused (reverse-video accent).
+func renderPhaseTitle(ph planparse.Phase, focused bool) string {
+	if focused {
+		return StyleFocused.Render(ph.Title)
+	}
+	switch ph.Status {
+	case planparse.StatusDone:
+		return StylePhaseDone.Render(ph.Title)
+	case planparse.StatusInProgress:
+		return StylePhaseInProgress.Render(ph.Title)
+	case planparse.StatusFailed:
+		return StyleConsensusWarn.Render(ph.Title)
+	default:
+		return StylePhasePending.Render(ph.Title)
+	}
+}
+
+// renderStepCheckbox returns the styled checkbox glyph for a single
+// step — used by the layered renderer so the checkbox cell lives in
+// its own bubblezone mark.
+func renderStepCheckbox(s planparse.Step) string {
+	if s.Done {
+		return StyleStepDone.Render("[x]")
+	}
+	return StyleStepPending.Render("[ ]")
+}
+
+// renderStepTitle returns the styled title segment for a step.
+func renderStepTitle(s planparse.Step, focused bool) string {
+	if focused {
+		return StyleFocused.Render(s.Title)
+	}
+	if s.Done {
+		return StyleStepDone.Render(s.Title)
+	}
+	return StyleStepPending.Render(s.Title)
 }
 
 // plainPhaseStatus / plainStepStatus return the unstyled checkbox+title
@@ -1112,7 +1395,6 @@ call site (DECISIONS.md D6). Resolution order:
 		expandedPhases: expanded,
 		legacyMode:     legacyMode,
 		goal:           strings.TrimSpace(*goalFlag),
-		hitRows:        make(map[int]hitRegion, 64),
 	}
 	m.evictOrphanExpansions()
 
@@ -1168,6 +1450,7 @@ call site (DECISIONS.md D6). Resolution order:
 		os.Exit(0)
 	}
 
+	zone.NewGlobal()
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "doey-masterplan-tui: %v\n", err)
@@ -1226,7 +1509,6 @@ func runDemo(scenario string, legacyMode, debugState bool, goal string) {
 		expandedPhases: expanded,
 		legacyMode:     legacyMode,
 		goal:           goal,
-		hitRows:        make(map[int]hitRegion, 64),
 		source:         src,
 		snapshot:       snap,
 		consensusState: snap.Consensus,
@@ -1267,6 +1549,7 @@ func runDemo(scenario string, legacyMode, debugState bool, goal string) {
 		os.Exit(0)
 	}
 
+	zone.NewGlobal()
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: %v\n", err)
