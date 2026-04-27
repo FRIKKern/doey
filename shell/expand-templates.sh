@@ -47,18 +47,20 @@ for arg in "$@"; do
   esac
 done
 
-# Build sed expression from all DOEY_ROLE_* and DOEY_CATEGORY_* env vars
-SED_EXPR=""
+# Build sed args (one -e per substitution). A single concatenated script
+# with ~50+ s/// commands separated by ';' overflows BSD sed's regex buffer
+# on macOS ("unterminated substitute pattern"), so pass them individually.
+SED_ARGS=()
 while IFS='=' read -r name value; do
   [ -z "$name" ] && continue
   # Escape sed special chars in value
   safe_value=$(printf '%s' "$value" | sed 's/[&/\]/\\&/g')
-  SED_EXPR="${SED_EXPR}s/{{${name}}}/${safe_value}/g;"
+  SED_ARGS+=(-e "s/{{${name}}}/${safe_value}/g")
 done <<EOF
 $(printenv | grep '^DOEY_ROLE_\|^DOEY_CATEGORY_' | sort)
 EOF
 
-if [ -z "$SED_EXPR" ]; then
+if [ "${#SED_ARGS[@]}" -eq 0 ]; then
   echo "ERROR: No DOEY_ROLE_* or DOEY_CATEGORY_* variables found" >&2
   exit 1
 fi
@@ -70,7 +72,7 @@ if [ "$DOEY_TASKMASTER_PANE" = "1.0" ] && [ -n "${RUNTIME_DIR:-}" ] && [ -f "${R
   [ -n "$_val" ] && DOEY_TASKMASTER_PANE="$_val"
 fi
 safe_value=$(printf '%s' "$DOEY_TASKMASTER_PANE" | sed 's/[&/\]/\\&/g')
-SED_EXPR="${SED_EXPR}s/{{DOEY_TASKMASTER_PANE}}/${safe_value}/g;"
+SED_ARGS+=(-e "s/{{DOEY_TASKMASTER_PANE}}/${safe_value}/g")
 
 # Find all .md.tmpl files
 STALE=0
@@ -85,7 +87,7 @@ for tmpl in "$PROJECT_DIR"/agents/*.md.tmpl "$PROJECT_DIR"/.claude/skills/*/*.md
       STALE=$((STALE + 1))
       continue
     fi
-    expected=$(expand_includes "$tmpl" | sed "$SED_EXPR")
+    expected=$(expand_includes "$tmpl" | sed "${SED_ARGS[@]}")
     actual=$(cat "$output")
     if [ "$expected" != "$actual" ]; then
       echo "STALE: ${output#"$PROJECT_DIR"/} differs from template"
@@ -104,7 +106,7 @@ for tmpl in "$PROJECT_DIR"/agents/*.md.tmpl "$PROJECT_DIR"/.claude/skills/*/*.md
   fi
 
   echo "Expanding: $rel_tmpl -> $rel_out"
-  expand_includes "$tmpl" | sed "$SED_EXPR" > "$output"
+  expand_includes "$tmpl" | sed "${SED_ARGS[@]}" > "$output"
   EXPANDED=$((EXPANDED + 1))
 done
 
