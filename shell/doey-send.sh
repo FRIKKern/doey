@@ -255,6 +255,18 @@ _doey_send_verified_inner() {
       continue
     fi
 
+    # ── Step 1.5: Bracketed-paste readiness settle (task 647) ──
+    # Even after `❯` is visible, the Claude TUI parser may still be in a
+    # transient state where the leading ESC byte of an upcoming bracketed-
+    # paste open sequence (\e[200~) is interpreted as bare ESC = clear-input —
+    # wiping the brief that arrives milliseconds later. A small deterministic
+    # delay ensures the parser is past its input-loop boundary and that
+    # \e[?2004h has been acknowledged before any paste bytes arrive.
+    # LC_ALL=C: avoid LC_NUMERIC producing "0,100" instead of "0.100" (task 617).
+    local gate_s
+    gate_s=$(LC_ALL=C awk 'BEGIN {printf "%.3f", '"${PASTE_GATE_MS:-100}"'/1000}')
+    sleep "$gate_s"
+
     # ── Step 2: Pre-clear input (every attempt — clears residual text from failed retries) ──
     tmux copy-mode -q -t "$target" 2>/dev/null || true
     tmux send-keys -t "$target" Escape 2>/dev/null || true
@@ -286,9 +298,11 @@ _doey_send_verified_inner() {
     # LC_ALL=C: avoid LC_NUMERIC producing "0,800" instead of "0.800" — task 617 / feedback_send_verified_locale_bug
     settle_s=$(LC_ALL=C awk 'BEGIN {printf "%.3f", '"${PASTE_SETTLE_MS:-800}"'/1000}')
     sleep "$settle_s"
-    # Close any leaked bracketed-paste before Enter so submission isn't swallowed as literal newline (task 617).
-    tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
-    tmux send-keys -t "$target" Enter 2>/dev/null || true
+    # Close any leaked bracketed-paste + Enter as ONE atomic write (task 647).
+    # Splitting them risks a parser race where the close ESC is seen alone
+    # before `[201~` arrives. tmux concatenates multi-key send-keys into one
+    # write to the pane's pty — guaranteeing contiguous delivery.
+    tmux send-keys -t "$target" $'\033[201~' Enter 2>/dev/null || true
 
     # ── Step 5: Confirm submission via BUSY status or activity ──
     # Poll for up to 3 seconds. If Enter didn't register (e.g. pane was in
@@ -309,9 +323,9 @@ _doey_send_verified_inner() {
       # Halfway: recovery in case Enter didn't register (modal state)
       if [ "$v" -eq 3 ]; then
         tmux copy-mode -q -t "$target" 2>/dev/null || true
-        # Close any leaked bracketed-paste before recovery (task 617).
-        tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
-        tmux send-keys -t "$target" Escape 2>/dev/null || true
+        # Close any leaked bracketed-paste + Escape as ONE atomic write so the
+        # close ESC isn't seen alone before `[201~` arrives (task 617/647).
+        tmux send-keys -t "$target" $'\033[201~' Escape 2>/dev/null || true
         sleep 0.15
         tmux send-keys -t "$target" Enter 2>/dev/null || true
       fi
@@ -375,9 +389,10 @@ doey_send_launch() {
   # ── Step 0: Pre-clear input state ──
   # Close any pending bracketed paste (\e[201~) then SIGINT to clear the line.
   # This is the defense against the task-621 bracketed-paste leak.
+  # Atomic: combine \e[201~ + C-c into one send-keys so the close ESC isn't
+  # parsed alone before `[201~` arrives (task 647).
   tmux copy-mode -q -t "$target" 2>/dev/null || true
-  tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
-  tmux send-keys -t "$target" C-c 2>/dev/null || true
+  tmux send-keys -t "$target" $'\033[201~' C-c 2>/dev/null || true
   sleep 0.15
 
   # ── Step 1: Send the command + Enter ──
@@ -437,9 +452,9 @@ doey_send_launch() {
       cmd_visible=1
     fi
     if [ "$prompt_visible" = "1" ] && [ "$cmd_visible" = "1" ]; then
-      # Close any open bracketed paste, then Enter to submit.
-      tmux send-keys -t "$target" $'\033[201~' 2>/dev/null || true
-      tmux send-keys -t "$target" Enter 2>/dev/null || true
+      # Close any open bracketed paste, then Enter to submit — ONE atomic
+      # write so the close ESC isn't parsed alone (task 647).
+      tmux send-keys -t "$target" $'\033[201~' Enter 2>/dev/null || true
       kicks=$((kicks + 1))
       continue
     fi
