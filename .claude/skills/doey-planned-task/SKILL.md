@@ -7,6 +7,10 @@ description: Plan-first task creation — research, breakdown, risk analysis, th
 - Plans dir: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); echo "${PD:-.}/.doey/plans"'`
 - Existing plans: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); ls "${PD:-.}/.doey/plans/"*.md 2>/dev/null | head -10 || echo "None"'`
 
+## Worktrees + Branches Are Forbidden By Default
+
+Never suggest `/doey-worktree`, branch creation, or worktree flow in plan output. All phases commit to the session's starting branch (typically main). If — and only if — the user's literal goal text contains the word "worktree", you may surface /doey-worktree as the explicit opt-in path.
+
 Create a plan-first task from a natural-language goal. Goal from ARGUMENTS (if empty, use AskUserQuestion to ask, then stop).
 
 ### 1. Analyze Goal

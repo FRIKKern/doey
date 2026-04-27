@@ -12,7 +12,7 @@ bash: RD=$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-); _sv()
 ### 2. Kill processes (SIGTERM → SIGKILL)
 bash: KILLED=0; for pp in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do C=$(pgrep -P "$pp" 2>/dev/null); [ -n "$C" ] && kill "$C" 2>/dev/null && KILLED=$((KILLED + 1)); done; sleep 3; for pp in $(tmux list-panes -t "${SESSION_NAME}:${TARGET_WIN}" -F '#{pane_pid}' 2>/dev/null); do C=$(pgrep -P "$pp" 2>/dev/null); [ -n "$C" ] && kill -9 "$C" 2>/dev/null; done; sleep 1
 
-### 3. Worktree cleanup
+### 3. Optional worktree teardown (only if window opted into `/doey-worktree`)
 bash: _ev() { grep "^${1}=" "${RD}/team_${TARGET_WIN}.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }; _wd=$(_ev WORKTREE_DIR); _wb=$(_ev WORKTREE_BRANCH); if [ -n "$_wd" ] && [ -d "$_wd" ]; then [ -n "$(git -C "$_wd" status --porcelain 2>/dev/null)" ] && git -C "$_wd" add -A 2>/dev/null && git -C "$_wd" commit -m "doey: auto-save before teardown" 2>/dev/null; [ -n "$_wb" ] && { _a=$(git -C "$PROJECT_DIR" rev-list --count "HEAD..${_wb}" 2>/dev/null || echo 0); [ "$_a" -gt 0 ] 2>/dev/null && echo "Branch $_wb has $_a commit(s). Merge: git merge $_wb"; }; git -C "$PROJECT_DIR" worktree remove "$_wd" --force 2>/dev/null; git -C "$PROJECT_DIR" worktree prune 2>/dev/null; fi
 
 ### 4. Kill window + clean runtime

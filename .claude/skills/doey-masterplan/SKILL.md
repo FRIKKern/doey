@@ -8,6 +8,10 @@ description: Strategic planning with a mandatory interview phase followed by ult
 - Existing plans: !`bash -c 'PD=$(grep "^PROJECT_DIR=" "$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)/session.env" 2>/dev/null | cut -d= -f2- | tr -d "\""); ls "${PD:-.}/.doey/plans/"*.md 2>/dev/null | head -10 || echo "None"'`
 - Team def exists: !`bash -c 'for d in . .doey teams "${HOME}/.config/doey/teams"; do [ -f "${d}/masterplan.team.md" ] && echo "YES: ${d}/masterplan.team.md" && exit 0; done; echo "NOT FOUND"'`
 
+## Worktrees + Branches Are Forbidden By Default
+
+Never suggest `/doey-worktree`, branch creation, or worktree flow in plan output. All phases commit to the session's starting branch (typically main). If — and only if — the user's literal input (the goal text) contains the word "worktree", you may surface /doey-worktree as the explicit opt-in path.
+
 Spawn a Masterplanner team window for strategic planning. Goal from ARGUMENTS (if empty, use AskUserQuestion to ask, then stop).
 
 By default this skill runs a structured **Deep Interview** first so the Planner starts with a clean brief (intent, scope, non-goals, constraints, success criteria). Pass `--quick` to skip the interview for goals that are already concrete.

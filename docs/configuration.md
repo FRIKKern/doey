@@ -26,7 +26,8 @@ Config is loaded twice: once at script start in `_doey_load_config()` and again 
 |---|---|---|---|
 | `DOEY_INITIAL_WORKER_COLS` | `3` | integer | Worker columns per team (each column = 2 workers) |
 | `DOEY_INITIAL_TEAMS` | `0` | integer | Number of managed teams to create at startup |
-| `DOEY_INITIAL_WORKTREE_TEAMS` | `0` | integer | Teams launched in isolated git worktrees |
+| `DOEY_INITIAL_WORKTREE_TEAMS` | `0` | integer | (Opt-in) Teams launched in isolated git worktrees. Ignored unless `DOEY_WORKTREE_OPT_IN=1` is also set; default flow stays on the session's starting branch and never auto-creates branches. |
+| `DOEY_WORKTREE_OPT_IN` | `0` | boolean | Master switch for worktree/branch automation. Worktrees are never created by default — set this to `1` to allow `DOEY_INITIAL_WORKTREE_TEAMS` and `DOEY_TEAM_<N>_TYPE=worktree` to take effect. |
 | `DOEY_INITIAL_FREELANCER_TEAMS` | `0` | integer | Managerless freelancer pools to create |
 | `DOEY_MAX_WORKERS` | `20` | integer | Hard cap on total worker panes across all teams |
 
@@ -81,7 +82,7 @@ When `DOEY_TEAM_COUNT` is set, it replaces the legacy `DOEY_INITIAL_TEAMS` / `DO
 | Variable Pattern | Values | Description |
 |---|---|---|
 | `DOEY_TEAM_COUNT` | integer | Total number of teams to create |
-| `DOEY_TEAM_<N>_TYPE` | `local`, `worktree`, `freelancer`, `premade` | Team isolation mode |
+| `DOEY_TEAM_<N>_TYPE` | `local`, `worktree`, `freelancer`, `premade` | Team isolation mode. `worktree` requires `DOEY_WORKTREE_OPT_IN=1`; otherwise it is silently downgraded to `local` (stays on the session's starting branch — usually `main`, never default). |
 | `DOEY_TEAM_<N>_WORKERS` | integer | Worker count for this team |
 | `DOEY_TEAM_<N>_NAME` | string | Human-readable team name |
 | `DOEY_TEAM_<N>_ROLE` | string | Specialization hint (injected into agent prompts) |
@@ -109,7 +110,7 @@ When the startup wizard is used, it sets `DOEY_TEAM_COUNT` and per-team vars, th
 | `doey add` | Add 1 worker column (2 workers) to team 1 |
 | `doey add-window` | Add a new team window (default 4x2 static grid) |
 | `doey add-window --grid 3x2` | Add a dynamic team with 3 worker columns |
-| `doey add-window --worktree` | Add a team in an isolated git worktree |
+| `/doey-worktree <window>` | Opt-in: isolate an existing team window in a git worktree. The default `add-window` path stays on the session's starting branch (usually `main`); worktrees are never the default. |
 | `doey add-window --type freelancer` | Add a managerless freelancer pool |
 | `doey add-team <name>` | Spawn a team from a `.team.md` definition file |
 
@@ -166,13 +167,15 @@ DOEY_WORKER_LAUNCH_DELAY=2
 
 This creates 3 managed teams (8 workers each) + 2 freelancer pools = 5 team windows.
 
-### Worktree isolation team
+### Worktree isolation team (opt-in)
+
+The default `doey add-window` flow stays on the session's starting branch — usually `main`, never default. Worktrees are explicit, opt-in only:
 
 ```bash
-doey add-window --grid 3x2 --worktree
+/doey-worktree <window-index>
 ```
 
-Adds a team with 3 worker columns in an isolated git worktree branch, preventing merge conflicts with the main tree.
+This isolates the named team window after it has been created. To also enable worktree-typed teams in `DOEY_TEAM_<N>_TYPE` or the legacy `DOEY_INITIAL_WORKTREE_TEAMS` count, set `DOEY_WORKTREE_OPT_IN=1` in your config.
 
 ### Freelancer pool
 
@@ -195,7 +198,7 @@ DOEY_TEAM_1_NAME="Backend"
 DOEY_TEAM_1_ROLE="API and database work"
 DOEY_TEAM_1_WORKER_MODEL=sonnet
 
-DOEY_TEAM_2_TYPE=worktree
+DOEY_TEAM_2_TYPE=local
 DOEY_TEAM_2_WORKERS=4
 DOEY_TEAM_2_NAME="Frontend"
 DOEY_TEAM_2_ROLE="React components and styling"
@@ -205,4 +208,4 @@ DOEY_TEAM_3_WORKERS=2
 DOEY_TEAM_3_NAME="Research"
 ```
 
-This creates three specialized teams: a 6-worker backend team (using Sonnet for cost efficiency), a 4-worker frontend team in an isolated worktree, and a 2-worker freelancer research pool.
+This creates three specialized teams: a 6-worker backend team (using Sonnet for cost efficiency), a 4-worker frontend team, and a 2-worker freelancer research pool. All three stay on the session's starting branch (usually `main`); to put a team in an isolated worktree later, run `/doey-worktree <window>` (or set `DOEY_WORKTREE_OPT_IN=1` and `DOEY_TEAM_2_TYPE=worktree` to opt that team in at startup).
