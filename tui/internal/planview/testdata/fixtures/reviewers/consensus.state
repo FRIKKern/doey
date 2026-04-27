@@ -1,0 +1,5 @@
+# Synthetic consensus.state for the reviewers demo fixture.
+CONSENSUS_STATE=UNDER_REVIEW
+ROUND=2
+ARCHITECT_VERDICT=APPROVE
+CRITIC_VERDICT=REVISE
