@@ -310,6 +310,22 @@ else
   fi
 fi
 
+# ── Go presence check (hard requirement) ─────────────────────────────
+# Doey-tui and the masterplan TUI are Go binaries — Go must be available
+# at install time. Use the shared helper for the platform-aware hint.
+_find_go
+if [ -z "${GO_BIN:-}" ]; then
+  echo ""
+  err_msg "Go is required but not installed."
+  if type _print_go_install_hint >/dev/null 2>&1; then
+    _print_go_install_hint
+  else
+    printf "     ${DIM}Install Go from https://go.dev/dl/${RESET}\n"
+  fi
+  exit 1
+fi
+check_ok "go ${DIM}($("$GO_BIN" version 2>/dev/null | awk '{print $3}' || echo 'installed'))${RESET}"
+
 if [ -f ~/.claude/agents/doey-manager.md ] && [ -f ~/.local/bin/doey ]; then
   echo ""
   warn_msg "Doey appears to already be installed."
@@ -610,12 +626,10 @@ fi
 # in-repo fixtures. Drift here warns but never bricks install; the
 # authoritative gate is `doey doctor`. See docs/plan-pane-contract.md §5.
 if [ -x "$SCRIPT_DIR/shell/check-plan-pane-contract.sh" ] && [ -d "$SCRIPT_DIR/tui/internal/planview/testdata/fixtures" ]; then
-  if ! bash "$SCRIPT_DIR/shell/check-plan-pane-contract.sh" \
-        --fixtures-dir "$SCRIPT_DIR/tui/internal/planview/testdata/fixtures" \
-        --quiet >/dev/null 2>&1; then
-    AUDIT_FAILED=true
-    warn_msg "Plan-pane contract drift detected — run: bash $SCRIPT_DIR/shell/check-plan-pane-contract.sh"
-  fi
+  bash "$SCRIPT_DIR/shell/check-plan-pane-contract.sh" \
+    --fixtures-dir "$SCRIPT_DIR/tui/internal/planview/testdata/fixtures" \
+    --quiet >/dev/null 2>&1 \
+    || echo "[advisory] check-plan-pane-contract.sh reported issues — non-fatal"
 fi
 
 echo ""

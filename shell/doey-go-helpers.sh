@@ -25,6 +25,34 @@ doey-term|tui|./cmd/doey-term/|${HOME}/.local/bin/doey-term
 doey-masterplan-tui|tui|./cmd/doey-masterplan-tui/|${HOME}/.local/bin/doey-masterplan-tui
 doey-scaffy|tui|./cmd/scaffy/|${HOME}/.local/bin/doey-scaffy"
 
+# ── _print_go_install_hint ───────────────────────────────────────────
+# Print a platform-aware Go install hint to stderr. Detects common
+# package managers via command -v and prints the matching install
+# command. Falls back to https://go.dev/dl/ when no manager is found.
+# The phrase "Go is required" is always emitted so install-time tests
+# can grep for it. Pure stdout/stderr — never exits.
+_print_go_install_hint() {
+    printf 'Go is required to build doey-tui and the masterplan TUI.\n' >&2
+    printf 'Detected platform: %s\n' "$(uname -s)" >&2
+    if command -v brew >/dev/null 2>&1; then
+        printf '  brew install go\n' >&2
+    elif command -v apt-get >/dev/null 2>&1; then
+        printf '  sudo apt-get install -y golang-go\n' >&2
+    elif command -v dnf >/dev/null 2>&1; then
+        printf '  sudo dnf install -y golang\n' >&2
+    elif command -v pacman >/dev/null 2>&1; then
+        printf '  sudo pacman -S --noconfirm go\n' >&2
+    elif command -v apk >/dev/null 2>&1; then
+        printf '  sudo apk add go\n' >&2
+    elif command -v zypper >/dev/null 2>&1; then
+        printf '  sudo zypper install -y go\n' >&2
+    elif command -v nix-env >/dev/null 2>&1; then
+        printf '  nix-env -iA nixpkgs.go\n' >&2
+    else
+        printf '  Download from: https://go.dev/dl/\n' >&2
+    fi
+}
+
 # ── _find_go_bin ─────────────────────────────────────────────────────
 # Find the Go binary across common install locations.
 # Prints path on stdout. Returns 0 if found, 1 if not.
