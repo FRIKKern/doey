@@ -965,10 +965,37 @@ func (m model) renderBodyBand(mode planview.LayoutMode, measure int) string {
 	if research := m.renderResearchPillar(mode, measure); research != "" {
 		parts = append(parts, research)
 	}
+	if ticker := m.renderWorkerTickerPillar(mode, measure); ticker != "" {
+		parts = append(parts, ticker)
+	}
 	if len(parts) == 0 {
 		return ""
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// renderWorkerTickerPillar renders the worker activity ticker pillar —
+// Phase 8 Track B of masterplan-20260426-203854. The data already lives
+// on the snapshot (m.workerRows) — we project it into []WorkerStatus and
+// hand it to the renderer. Compact viewports collapse the pillar to a
+// single line; standard and wider viewports get the multi-line layout.
+func (m model) renderWorkerTickerPillar(mode planview.LayoutMode, measure int) string {
+	_ = mode
+	if len(m.workerRows) == 0 {
+		return ""
+	}
+	statuses := make([]planview.WorkerStatus, 0, len(m.workerRows))
+	for _, r := range m.workerRows {
+		statuses = append(statuses, planview.WorkerStatus{
+			PaneSafe:     r.PaneIndex,
+			Status:       r.Status,
+			Activity:     r.Activity,
+			HeartbeatAge: r.HeartbeatAge,
+			HasUnread:    r.HasUnread,
+			Reserved:     r.Reserved,
+		})
+	}
+	return planview.RenderWorkerTicker(statuses, measure)
 }
 
 // renderResearchPillar renders the research index pillar — Phase 8 of
@@ -1162,7 +1189,7 @@ func (m model) renderFooterBand() string {
 		b.WriteString(line)
 		b.WriteByte('\n')
 	}
-	help := "↑/↓ move · space toggle · enter expand/open · tab reviewer · i research · J/K reorder · o overlay · f failed · r recover · s send · q quit"
+	help := "↑/↓ move · space toggle · enter expand/open · tab reviewer · i research · w workers · J/K reorder · o overlay · f failed · r recover · s send · q quit"
 	b.WriteString(StyleHelp.Render(help))
 	if live, ok := m.source.(*planview.Live); ok && live.Degraded() {
 		b.WriteString(StyleConsensusWarn.Render(" · WATCH: degraded"))

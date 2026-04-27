@@ -51,6 +51,16 @@ func (d *Demo) Updates() <-chan Snapshot {
 	return nil
 }
 
+// WorkerStatuses returns the per-pane activity surface for the loaded
+// fixture. The planID parameter is ignored — Demo binds to one
+// fixture directory and the worker rows are baked in at NewDemo
+// time. Returns the empty slice (never an error) so the renderer can
+// soft-fail to "no workers".
+func (d *Demo) WorkerStatuses(planID int64) ([]WorkerStatus, error) {
+	_ = planID
+	return workerRowsToStatuses(d.snapshot.Workers), nil
+}
+
 // Close is a no-op. Idempotent — safe to call multiple times.
 func (d *Demo) Close() error {
 	return nil

@@ -104,6 +104,17 @@ func (l *Live) Updates() <-chan Snapshot {
 	return l.updatesCh
 }
 
+// WorkerStatuses returns the live worker activity for the planning
+// team window the Live source was bound to. The planID parameter is
+// accepted to satisfy the Source interface contract but is unused
+// here — Live's team window is fixed at construction time. Soft-fails
+// to nil when no team window is bound.
+func (l *Live) WorkerStatuses(planID int64) ([]WorkerStatus, error) {
+	_ = planID
+	rows := loadWorkers(l.runtimeDir, l.teamWindow)
+	return workerRowsToStatuses(rows), nil
+}
+
 // Close stops the watcher goroutine and closes the Updates channel.
 // Safe to call multiple times.
 func (l *Live) Close() error {
