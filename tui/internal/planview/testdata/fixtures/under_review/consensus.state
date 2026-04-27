@@ -1,0 +1,3 @@
+# Demo fixture: under_review — round 1, reviewers reading.
+CONSENSUS_STATE=UNDER_REVIEW
+ROUND=1

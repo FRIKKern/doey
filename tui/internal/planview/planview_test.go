@@ -1,7 +1,6 @@
 package planview
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -44,7 +43,7 @@ func TestNewDemoEmptyDir(t *testing.T) {
 	if d != nil {
 		t.Errorf("NewDemo(\"\") returned non-nil Demo: %#v", d)
 	}
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("NewDemo(\"\") err = %v, want ErrNotImplemented", err)
+	if err == nil {
+		t.Errorf("NewDemo(\"\") err = nil, want non-nil")
 	}
 }

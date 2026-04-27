@@ -251,21 +251,28 @@ func (l *Live) loadSnapshot() (Snapshot, error) {
 }
 
 // loadConsensus reads <planDir>/consensus.state and returns a populated
-// ConsensusInfo. Mirrors the legacy loadConsensus in
-// cmd/doey-masterplan-tui/main.go: extracts the CONSENSUS_STATE / STATE
-// key, uppercases the value, and records the file mtime. When the file
-// is absent, Standalone is set to true and State is left empty.
+// ConsensusInfo. Thin wrapper over parseConsensusFile so live and fixture
+// loaders share one code path (Phase 4, see DECISIONS.md D6).
 func loadConsensus(planDir string) ConsensusInfo {
-	statePath := filepath.Join(planDir, "consensus.state")
-	info := ConsensusInfo{RawSource: statePath}
+	return parseConsensusFile(filepath.Join(planDir, "consensus.state"))
+}
 
-	data, err := os.ReadFile(statePath)
+// parseConsensusFile reads a consensus.state file at the given path and
+// returns the populated ConsensusInfo. Extracts the CONSENSUS_STATE /
+// STATE key, uppercases the value, and records the file mtime. When the
+// file is absent, Standalone is set to true and State is left empty.
+// RawSource is always set to path. This is the single shared parser
+// used by both Live and Demo sources (Phase 4).
+func parseConsensusFile(path string) ConsensusInfo {
+	info := ConsensusInfo{RawSource: path}
+
+	data, err := os.ReadFile(path)
 	if err != nil {
 		info.Standalone = true
 		return info
 	}
 
-	if st, statErr := os.Stat(statePath); statErr == nil {
+	if st, statErr := os.Stat(path); statErr == nil {
 		info.UpdatedAt = st.ModTime()
 	}
 

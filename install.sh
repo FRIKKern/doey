@@ -606,6 +606,18 @@ else
   warn_msg "Context audit found issues — review above before launching sessions"
 fi
 
+# Plan-pane file contract (advisory) — runs the validator against the
+# in-repo fixtures. Drift here warns but never bricks install; the
+# authoritative gate is `doey doctor`. See docs/plan-pane-contract.md §5.
+if [ -x "$SCRIPT_DIR/shell/check-plan-pane-contract.sh" ] && [ -d "$SCRIPT_DIR/tui/internal/planview/testdata/fixtures" ]; then
+  if ! bash "$SCRIPT_DIR/shell/check-plan-pane-contract.sh" \
+        --fixtures-dir "$SCRIPT_DIR/tui/internal/planview/testdata/fixtures" \
+        --quiet >/dev/null 2>&1; then
+    AUDIT_FAILED=true
+    warn_msg "Plan-pane contract drift detected — run: bash $SCRIPT_DIR/shell/check-plan-pane-contract.sh"
+  fi
+fi
+
 echo ""
 printf "${BRAND}"
 cat << 'DOG'

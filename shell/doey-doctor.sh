@@ -585,6 +585,21 @@ check_doctor() {
     _doc_check skip "Context audit" "(script not found)"
   fi
 
+  # Plan-pane file contract — hard-fail. Validates the in-repo fixtures
+  # (always) plus any live runtime under DOEY_RUNTIME (skipped silently
+  # when none exists). See docs/plan-pane-contract.md §5.
+  if [[ -n "$repo_dir" ]] && [[ -f "$repo_dir/shell/check-plan-pane-contract.sh" ]] && [[ -d "$repo_dir/tui/internal/planview/testdata/fixtures" ]]; then
+    if bash "$repo_dir/shell/check-plan-pane-contract.sh" \
+         --fixtures-dir "$repo_dir/tui/internal/planview/testdata/fixtures" \
+         --quiet >/dev/null 2>&1; then
+      _doc_check ok "Plan-pane contract" "fixtures + runtime conform"
+    else
+      _doc_check fail "Plan-pane contract drift" "run: bash $repo_dir/shell/check-plan-pane-contract.sh"
+    fi
+  else
+    _doc_check skip "Plan-pane contract" "(validator or fixtures not found)"
+  fi
+
   # Task helpers — verify doey-task-helpers.sh is reachable
   local _task_helpers=""
   if [[ -n "$repo_dir" ]] && [[ -f "$repo_dir/shell/doey-task-helpers.sh" ]]; then
