@@ -8,4 +8,4 @@ description: List all team windows with their status. Use when you need to "show
 - Statuses: !`RD="$(tmux show-environment DOEY_RUNTIME 2>/dev/null | cut -d= -f2-)"; for f in "$RD"/status/*.status; do [ -f "$f" ] && grep -H '^STATUS: ' "$f"; done 2>/dev/null || true`
 
 **Read-only.** Table: `WINDOW | GRID | MGR | WORKERS`. Window 0 = Dashboard; 1+ = Teams.
-Badges: `[worktree]` if WORKTREE_DIR. `[F]` if freelancer. Count BUSY. Graceful fallback.
+Badges: `[F]` if freelancer. Count BUSY. Graceful fallback. With `--all`, also show `[worktree]` for windows with `WORKTREE_DIR` set.

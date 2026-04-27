@@ -871,9 +871,9 @@ _cleanup_old_session() {
   # Clean up all MCP servers and configs
   doey_mcp_cleanup_session "$runtime_dir" || true
   rm -rf "$runtime_dir"
-  # Only run git worktree/branch cleanup inside a git repo; otherwise git
-  # commands trip pipefail and kill the background subshell.
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # Worktree/branch cleanup is opt-in. Default flow stays on the session's
+  # starting branch; only the explicit /doey-worktree path creates branches.
+  if [ "${DOEY_WORKTREE_OPT_IN:-0}" = "1" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git worktree prune 2>/dev/null || true
     # Delete doey/team-* branches whose worktrees no longer exist
     git for-each-ref --format='%(refname:short)' 'refs/heads/doey/team-*' 2>/dev/null | while read -r b; do
@@ -1449,7 +1449,14 @@ MANIFEST
           [ "$_ptc_cols" -lt 1 ] && _ptc_cols=1
 
           _ptc_wt_spec=""
-          [ "$_ptc_type" = "worktree" ] && _ptc_wt_spec="auto"
+          # Worktree-typed teams require explicit opt-in; otherwise stay on the session branch.
+          if [ "$_ptc_type" = "worktree" ]; then
+            if [ "${DOEY_WORKTREE_OPT_IN:-0}" = "1" ]; then
+              _ptc_wt_spec="auto"
+            else
+              _ptc_type="local"
+            fi
+          fi
           local _ptc_team_type=""
           [ "$_ptc_type" = "freelancer" ] && _ptc_team_type="freelancer"
 
@@ -1478,11 +1485,14 @@ MANIFEST
         done
       fi
 
-      local _wt_i
-      for (( _wt_i=0; _wt_i<DOEY_INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
-        add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "auto" || true
-        (( _wt_i < DOEY_INITIAL_WORKTREE_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
-      done
+      # Legacy DOEY_INITIAL_WORKTREE_TEAMS only applies when worktrees are explicitly opted into.
+      if [ "${DOEY_WORKTREE_OPT_IN:-0}" = "1" ]; then
+        local _wt_i
+        for (( _wt_i=0; _wt_i<DOEY_INITIAL_WORKTREE_TEAMS; _wt_i++ )); do
+          add_dynamic_team_window "$session" "$runtime_dir" "$dir" "$DOEY_INITIAL_WORKER_COLS" "auto" || true
+          (( _wt_i < DOEY_INITIAL_WORKTREE_TEAMS - 1 )) && sleep $DOEY_TEAM_LAUNCH_DELAY
+        done
+      fi
 
       if [ "$DOEY_INITIAL_FREELANCER_TEAMS" -gt 0 ]; then
         local _fl_i

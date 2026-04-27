@@ -6,7 +6,7 @@ description: Spawn a Doey R&D product team — Brain, Platform Expert, Claude Ex
 - Session config: !`cat /tmp/doey/*/session.env 2>/dev/null | head -20 || true`
 - Current windows: !`tmux list-windows -F '#{window_index} #{window_name}' 2>/dev/null || true`
 
-Spawn R&D team on **live project directory** (no worktree). **No confirmation.** Modes: default (audit+improve) | `audit` (read-only).
+Spawn R&D team on **live project directory**, on the session's current branch. **No confirmation.** Modes: default (audit+improve) | `audit` (read-only).
 
 ### 1. Load session + create 2×2 grid
 
@@ -38,8 +38,6 @@ TOTAL_PANES=4
 MANAGER_PANE=0
 WORKER_PANES=1,2,3
 WORKER_COUNT=3
-WORKTREE_DIR=
-WORKTREE_BRANCH=
 RD_TEAM=true
 TEAM_EOF
 mv "${RD}/team_${NEW_WIN}.env.tmp" "${RD}/team_${NEW_WIN}.env"

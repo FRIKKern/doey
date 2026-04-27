@@ -841,6 +841,19 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__
       exit 2 ;;
   esac
 
+  # Hard guard (task 649): worktree/branch creation is opt-in only.
+  # Blocks all roles EXCEPT Boss + Taskmaster unless DOEY_WORKTREE_OPT_IN=1.
+  if [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_BOSS" ] && [ "$_DOEY_ROLE" != "$DOEY_ROLE_ID_COORDINATOR" ] && [ "${DOEY_WORKTREE_OPT_IN:-0}" != "1" ]; then
+    case "$_gsafe" in
+      *"git worktree add"*|*"git checkout -b"*|*"git switch -c"*|*"git branch -D"*)
+        _DOEY_BLOCK_REASON="worktree_branch_optin"
+        _log_block "TOOL_BLOCKED" "Worktree/branch creation requires DOEY_WORKTREE_OPT_IN=1" "$_BASH_CMD"
+        _dbg_write "block_worktree_branch_optin"
+        echo "BLOCKED: worktree/branch creation is opt-in only. Set DOEY_WORKTREE_OPT_IN=1 if the user explicitly asked for it (rare)." >&2
+        exit 2 ;;
+    esac
+  fi
+
   # Branch-switch guard: block checkout/switch/merge in shared worktree
   _in_worktree=false
   _wt_git_dir=$(git rev-parse --git-dir 2>/dev/null) || true
@@ -879,12 +892,6 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__
             echo "BLOCKED: creating a new branch is not allowed. Stay on the session's starting branch. Use /doey-worktree if you need an isolated branch." >&2
             exit 2 ;;
         esac ;;
-      *"git worktree add"*)
-        _DOEY_BLOCK_REASON="worktree_add"
-        _log_block "TOOL_BLOCKED" "Worktree creation blocked" "$_BASH_CMD"
-        _dbg_write "block_worktree_add"
-        echo "BLOCKED: creating a new worktree is not allowed from within Claude. Use /doey-worktree or 'doey add-window --worktree'." >&2
-        exit 2 ;;
     esac
   fi
 fi

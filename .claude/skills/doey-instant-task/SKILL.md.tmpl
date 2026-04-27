@@ -5,6 +5,10 @@ description: Quick task creation without planning — create and dispatch immedi
 
 - Current tasks: !`doey task list 2>/dev/null || echo "No tasks"`
 
+## Worktrees + Branches Are Forbidden By Default
+
+Never suggest `/doey-worktree`, branch creation, or worktree flow when creating or describing the task. All commits go to the session's starting branch (typically main). If — and only if — the user's literal goal text contains the word "worktree", you may surface /doey-worktree as the explicit opt-in path.
+
 Create and dispatch a task immediately from a natural-language goal. No planning step. Goal from ARGUMENTS (if empty, use AskUserQuestion to ask, then stop).
 
 For complex multi-step work, suggest `/doey-planned-task` instead.

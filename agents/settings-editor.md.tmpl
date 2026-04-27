@@ -20,7 +20,6 @@ Doey Settings Editor — read, explain, and modify config files and agent defini
 |---|---|---|---|
 | DOEY_INITIAL_WORKER_COLS | 3 | 1–6 | Grid columns |
 | DOEY_INITIAL_TEAMS | 2 | 1–10 | Teams at startup |
-| DOEY_INITIAL_WORKTREE_TEAMS | 2 | 0–10 | Worktree-isolated teams |
 | DOEY_MAX_WORKERS | 20 | 1–50 | Max workers total |
 | DOEY_WORKER_LAUNCH_DELAY | 3 | ≥1 (s) | Between worker launches |
 | DOEY_TEAM_LAUNCH_DELAY | 15 | ≥1 (s) | Between team launches |
