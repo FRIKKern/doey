@@ -21,6 +21,22 @@ fi
 trap 'exit 0' ERR
 source "$(dirname "$0")/common.sh" 2>/dev/null || true
 
+# ── Role guard (task 648) ─────────────────────────────────────────────
+# Subtaskmasters/Planners must use stm-wait.sh — this hook is coordinator-
+# scoped (router triggers, MSG/FINISHED/CRASH/STALE/QUEUED on the
+# Taskmaster pane). When STMs invoke this hook they silently sleep
+# forever because their wake events come from worker-pane status
+# transitions in their own team window. Reject early and let the caller
+# adapt. Empty DOEY_ROLE allowed for legacy/test invocations. Core Team
+# specialists (task_reviewer/deployment/doey_expert) still use the
+# passive-role fast path below — they share the coordinator's signal set.
+case "${DOEY_ROLE:-}" in
+  "${DOEY_ROLE_ID_TEAM_LEAD:-team_lead}"|"${DOEY_ROLE_ID_PLANNER:-planner}"|team_lead|planner)
+    echo "ERROR: ${DOEY_ROLE} must use stm-wait.sh, not taskmaster-wait.sh" >&2
+    exit 0
+    ;;
+esac
+
 TASKMASTER_PANE="${TASKMASTER_PANE:-$(get_taskmaster_pane)}"
 TASKMASTER_SAFE="${SESSION_NAME//[-:.]/_}_${TASKMASTER_PANE//[-:.]/_}"
 PANE="${SESSION_NAME}:${TASKMASTER_PANE}"; PANE_SAFE="$TASKMASTER_SAFE"
