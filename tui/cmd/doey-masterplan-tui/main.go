@@ -102,6 +102,14 @@ type model struct {
 	// from the live runtime — cheap (<10 stat calls) and reactive
 	// without a polling loop.
 	reviewerFocus int
+
+	// Research index focus — Phase 8 of masterplan-20260426-203854.
+	// researchFocus tracks the highlighted research entry: -1 = pillar
+	// unfocused (phase list owns the cursor), 0..N = entry index. The
+	// 'i' key toggles focus onto the pillar; up/down moves through
+	// entries; enter opens a glamour-rendered preview overlay reusing
+	// the Phase 5 overlay infra; esc returns focus to the phase list.
+	researchFocus int
 }
 
 // phaseIdentityKey returns a stable key for expandedPhases that
@@ -289,6 +297,31 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.reviewerFocus >= 0 {
 			m.reviewerFocus = -1
 		}
+		if m.researchFocus >= 0 {
+			m.researchFocus = -1
+		}
+		return m, nil
+
+	case "i":
+		// Toggle focus onto the research index pillar (Phase 8). Only
+		// meaningful when the pillar is actually rendered — the layout
+		// gate hides it below LayoutExpanded — and when at least one
+		// research entry exists. Otherwise the keystroke is a no-op so
+		// pressing 'i' on a narrow terminal doesn't strand the cursor.
+		mode := planview.ClassifyWidth(m.width)
+		if !planview.ResearchIndexLayout(mode) {
+			return m, nil
+		}
+		entries := m.researchIndex.Entries
+		if len(entries) == 0 {
+			return m, nil
+		}
+		if m.researchFocus < 0 {
+			m.researchFocus = 0
+			m.reviewerFocus = -1
+		} else {
+			m.researchFocus = -1
+		}
 		return m, nil
 
 	case "tab":
@@ -318,14 +351,30 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "up", "k":
+		if m.researchFocus >= 0 {
+			if m.researchFocus > 0 {
+				m.researchFocus--
+			}
+			return m, nil
+		}
 		m = m.moveUp()
 		return m, nil
 
 	case "down", "j":
+		if m.researchFocus >= 0 {
+			if m.researchFocus < len(m.researchIndex.Entries)-1 {
+				m.researchFocus++
+			}
+			return m, nil
+		}
 		m = m.moveDown()
 		return m, nil
 
 	case "enter":
+		if m.researchFocus >= 0 {
+			m = m.openResearchOverlay()
+			return m, nil
+		}
 		if m.reviewerFocus >= 0 {
 			m = m.openReviewerOverlay()
 			return m, nil
@@ -410,6 +459,17 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.focusStep = -1
 			key := phaseIdentityKey(ph, i)
 			m.expandedPhases[key] = !m.expandedPhases[key]
+			return m, nil
+		}
+	}
+	// Research list rows — Phase 8. A click both focuses the entry and
+	// opens the preview overlay so the gesture matches the keyboard
+	// cycle (i → enter) without an extra click.
+	for i, ent := range m.researchIndex.Entries {
+		if zone.Get(planview.ResearchListItemZoneID(filepath.Base(ent.Path))).InBounds(msg) {
+			m.reviewerFocus = -1
+			m.researchFocus = i
+			m = m.openResearchOverlay()
 			return m, nil
 		}
 	}
@@ -902,10 +962,30 @@ func (m model) renderBodyBand(mode planview.LayoutMode, measure int) string {
 	if list := m.renderPhaseList(mode, measure, st); list != "" {
 		parts = append(parts, list)
 	}
+	if research := m.renderResearchPillar(mode, measure); research != "" {
+		parts = append(parts, research)
+	}
 	if len(parts) == 0 {
 		return ""
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// renderResearchPillar renders the research index pillar — Phase 8 of
+// masterplan-20260426-203854. Hidden below LayoutExpanded so a narrow
+// terminal isn't crushed by the extra block; visible at >=120 cols
+// where the reviewer cards and phase list have settled into their
+// natural columns.
+func (m model) renderResearchPillar(mode planview.LayoutMode, measure int) string {
+	if !planview.ResearchIndexLayout(mode) {
+		return ""
+	}
+	return planview.RenderResearchIndex(
+		m.researchIndex.Entries,
+		m.researchFocus,
+		measure,
+		time.Now(),
+	)
 }
 
 // renderReviewerCards composes the Architect + Critic reviewer cards
@@ -965,6 +1045,27 @@ func (m model) discoverReviewers() []planview.ReviewerInfo {
 		m.snapshot.Plan.RuntimeDir,
 		m.snapshot.Plan.TeamWindow,
 	)
+}
+
+// openResearchOverlay captures a glamour-rendered preview of the focused
+// research entry and opens the Phase 5 overlay infra so the user sees
+// the full body. The body is captured once at open time so live writes
+// to the underlying file cannot disturb the overlay while it is open.
+func (m model) openResearchOverlay() model {
+	entries := m.researchIndex.Entries
+	if m.researchFocus < 0 || m.researchFocus >= len(entries) {
+		return m
+	}
+	width := planview.MeasureMain(m.width)
+	if width < 40 {
+		width = 40
+	}
+	title, body := planview.ResearchOverlayBody(entries[m.researchFocus], width-4)
+	m.overlayOpen = true
+	m.overlaySnapshot = body
+	m.overlayTitle = title
+	m.overlaySection = "research"
+	return m
 }
 
 // openReviewerOverlay captures a verdict snapshot for the focused
@@ -1053,11 +1154,15 @@ func (m model) renderOverlay(measure int) string {
 	return border.Render(body+"\n"+hint)
 }
 
-// renderFooterBand renders the bottom band: help strip, watch-status
-// indicator, and any flash/error messages.
+// renderFooterBand renders the bottom band: task-wiring footer, help
+// strip, watch-status indicator, and any flash/error messages.
 func (m model) renderFooterBand() string {
 	var b strings.Builder
-	help := "↑/↓ move · space toggle · enter expand/open · tab reviewer · J/K reorder · o overlay · f failed · r recover · s send · q quit"
+	if line := planview.RenderTaskFooter(m.taskFooter, planview.MeasureMain(m.width)); line != "" {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	help := "↑/↓ move · space toggle · enter expand/open · tab reviewer · i research · J/K reorder · o overlay · f failed · r recover · s send · q quit"
 	b.WriteString(StyleHelp.Render(help))
 	if live, ok := m.source.(*planview.Live); ok && live.Degraded() {
 		b.WriteString(StyleConsensusWarn.Render(" · WATCH: degraded"))
@@ -1632,6 +1737,7 @@ call site (DECISIONS.md D6). Resolution order:
 		legacyMode:     legacyMode,
 		goal:           strings.TrimSpace(*goalFlag),
 		reviewerFocus:  -1,
+		researchFocus:  -1,
 	}
 	m.evictOrphanExpansions()
 
@@ -1768,6 +1874,7 @@ func runDemo(scenario string, legacyMode, debugState bool, goal string) {
 		demoMode:       true,
 		demoScenario:   scenario,
 		reviewerFocus:  -1,
+		researchFocus:  -1,
 	}
 	m.evictOrphanExpansions()
 
