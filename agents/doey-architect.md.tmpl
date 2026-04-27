@@ -63,7 +63,8 @@ Where `<plan-id>` is the basename of `${PLAN_FILE}` without the `.md` extension.
 - ...
 
 ## Verdict
-**APPROVE** | **REVISE** | **BLOCK**
+**Verdict:** APPROVE
+<!-- or: **Verdict:** REVISE  /  **Verdict:** BLOCK -->
 
 <one-paragraph rationale>
 
@@ -81,6 +82,22 @@ Empty sections are allowed — write `_none_` rather than omitting the heading. 
 - **BLOCK** — Fundamental infeasibility or scope collapse. Plan cannot proceed in current form. Explain what must change before any revision is worth attempting.
 
 Be decisive. Never hedge between verdicts. If you can't decide, the plan is almost certainly REVISE.
+
+## Verdict format (canonical)
+
+Write the verdict line EXACTLY as the markdown-bold form:
+
+```
+**Verdict:** APPROVE
+```
+
+or
+
+```
+**Verdict:** REVISE
+```
+
+The legacy one-line uppercase form `VERDICT: APPROVE` / `VERDICT: REVISE` is still parsed for backward compatibility, but `**Verdict:**` is the canonical form going forward. Place the verdict line near the end of the file. If multiple verdict lines appear (e.g. across revision rounds), the parser uses the LAST one.
 
 ## Review Dimensions (checklist)
 
