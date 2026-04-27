@@ -516,15 +516,29 @@ check_doctor() {
 
   printf '\n'
   doey_step "4/6" "Go binaries"
+  # Go presence — hard requirement. doey-tui and the masterplan TUI need it.
+  local _go_bin=""
+  if type _find_go_bin >/dev/null 2>&1; then
+    _go_bin="$(_find_go_bin 2>/dev/null || true)"
+  elif command -v go >/dev/null 2>&1; then
+    _go_bin="$(command -v go)"
+  fi
+  if [ -n "$_go_bin" ]; then
+    _doc_check ok "go found" "$_go_bin ($("$_go_bin" version 2>/dev/null | awk '{print $3}' || echo 'unknown'))"
+  else
+    _doc_check fail "go not found" "Go is required to build doey-tui and the masterplan TUI"
+    if type _print_go_install_hint >/dev/null 2>&1; then
+      _print_go_install_hint
+    else
+      printf "         ${DIM}Install Go from https://go.dev/dl/${RESET}\n"
+    fi
+    exit 1
+  fi
   # TUI dashboard
   if command -v doey-tui >/dev/null 2>&1; then
     _doc_check ok "doey-tui" "$(doey-tui --version 2>/dev/null || echo 'installed')"
   else
-    if command -v go >/dev/null 2>&1 || [ -x /usr/local/go/bin/go ] || [ -x /opt/homebrew/bin/go ]; then
-      _doc_check warn "doey-tui not installed" "Go available — run: doey build"
-    else
-      _doc_check skip "doey-tui not installed" "using info-panel.sh fallback"
-    fi
+    _doc_check warn "doey-tui not installed" "run: doey build"
   fi
 
   # Remote setup wizard

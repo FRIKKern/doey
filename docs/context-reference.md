@@ -197,6 +197,15 @@ Root: `/tmp/doey/<project>/`. Created by `doey init`, ensured by `init_hook()`.
 **Research lifecycle:** dispatch → `.task` → worker investigates → Stop hook blocks until `.report` → Subtaskmaster reads.
 
 
+## Plan Pane (`doey-masterplan-tui`)
+
+Live plan-view TUI rendered in the masterplan team's pane 1. Reads the masterplan markdown plus the structured runtime under `<runtime>/<MASTERPLAN_ID>/` (consensus state, reviewer verdicts, research index, worker activity).
+
+- **Fixture mode:** `doey-masterplan-tui --demo <scenario>` (scenarios: `consensus`, `draft`, `escalated`, `reviewers`, `revisions_needed`, `stalled_reviewer`, `under_review`) loads a static directory under `tui/internal/planview/testdata/fixtures/` and short-circuits the live path (read-only — no persist, no send-to-tasks).
+- **Contract validator:** `shell/check-plan-pane-contract.sh` enforces the on-disk shape every fixture and live runtime must satisfy. Wired into `install.sh` (advisory) and `doey doctor` (hard-fail). See [plan-pane-contract.md](plan-pane-contract.md).
+- **Render goldens:** `make smoke-render-golden` is the CI-blocking smoke gate (single fixture × 120 cols × truecolor × Linux). `make test-render-matrix` runs the broader opt-in matrix; `make refresh-render-goldens` regenerates them after intentional changes.
+
+
 ## Debugging
 
 | Symptom | Check |
