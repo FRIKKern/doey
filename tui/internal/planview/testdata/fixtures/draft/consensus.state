@@ -1,0 +1,3 @@
+# Demo fixture: draft state — round 0, no votes yet.
+CONSENSUS_STATE=DRAFT
+ROUND=0

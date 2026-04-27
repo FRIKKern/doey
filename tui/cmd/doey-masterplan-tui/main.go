@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -84,6 +85,13 @@ type model struct {
 	workerRows     []planview.WorkerRow
 	taskFooter     planview.TaskFooter
 	consensusState planview.ConsensusInfo // Live, mutable. Will be re-read on every gate check (Phase 2 acceptance).
+
+	// demoMode is set when the binary is launched with --demo <scenario>.
+	// When true, every write call site in this file MUST short-circuit
+	// (persist, sendToTasks, any DB write) per DECISIONS.md D6 — the
+	// short-circuit lives at the call site, not at the Source boundary.
+	demoMode     bool
+	demoScenario string
 
 	// hitRows is a reference-typed map mutated in place by View()
 	// (which uses a value receiver). Pre-allocated in main().
@@ -431,7 +439,16 @@ func (m model) movePhaseUp() model {
 
 // persist writes the in-memory plan back to disk. Errors are surfaced
 // via lastErr; the next render shows them in the help strip.
+//
+// Demo-mode short-circuit (DECISIONS.md D6): when m.demoMode is true,
+// persist returns immediately without touching disk so a fixture cannot
+// be corrupted by toggling. The short-circuit lives here at the call
+// site rather than behind the Source interface so a future refactor
+// that moves a write path cannot leak it through the watcher.
 func (m *model) persist() {
+	if m.demoMode {
+		return
+	}
 	if m.plan == nil || m.planPath == "" {
 		return
 	}
@@ -450,6 +467,12 @@ func (m *model) persist() {
 // ── Send to Tasks ─────────────────────────────────────────────────────
 
 func (m model) sendToTasks() (tea.Model, tea.Cmd) {
+	if m.demoMode {
+		// Demo-mode short-circuit (DECISIONS.md D6): the dispatch action
+		// is a write surface and must refuse here at the call site.
+		m.lastFlash = "demo mode: send-to-tasks disabled"
+		return m, clearFlashAfter(5 * time.Second)
+	}
 	// Refresh from disk in legacy mode (no Updates stream) so the gate
 	// honours the latest state at the moment of action. In live mode
 	// m.consensusState is kept current by snapshotMsg.
@@ -856,6 +879,142 @@ func newestMasterplan() string {
 	return newest
 }
 
+// ── Validate subcommand ───────────────────────────────────────────────
+
+// runValidate inspects a fixture (or any directory matching the
+// plan-pane file contract) and exits 0 on pass, non-zero on drift.
+// Mirrors the shape rules in shell/check-plan-pane-contract.sh so a
+// single contract definition is enforced from both readers.
+//
+// The function uses planview.LoadFixture as the parser entry point.
+// Phase 1 returns ErrNotImplemented; once Worker A's Track-A code
+// merges, LoadFixture returns a populated Snapshot. ErrNotImplemented
+// is treated as a build-time error here — it never counts as
+// success, so the validator stays safe even if compiled mid-merge.
+func runValidate(dir string) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = dir
+	}
+	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --validate: %s: not a directory\n", abs)
+		os.Exit(2)
+	}
+
+	snap, err := planview.LoadFixture(abs)
+	if err != nil {
+		// ErrNotImplemented is the Phase-1 stub return. Per the
+		// coordination notes, it must NOT be treated as a pass —
+		// surface it as a hard fail with a hint pointing at the
+		// shell validator (which is already complete).
+		if errors.Is(err, planview.ErrNotImplemented) {
+			fmt.Fprintln(os.Stderr, "doey-masterplan-tui --validate: planview.LoadFixture returned ErrNotImplemented (Phase 4 Track A pending).")
+			fmt.Fprintln(os.Stderr, "Use shell/check-plan-pane-contract.sh until LoadFixture lands.")
+			os.Exit(2)
+		}
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --validate: %s: %v\n", abs, err)
+		os.Exit(1)
+	}
+
+	// Cross-check shape rules that LoadFixture might not enforce
+	// itself (so the Go-side validator matches the shell validator
+	// even if LoadFixture grows lenient about shape).
+	if errMsg := validateContractShape(abs, snap); errMsg != "" {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --validate: %s: %s\n", abs, errMsg)
+		os.Exit(1)
+	}
+
+	fmt.Printf("OK %s\n", abs)
+}
+
+// validateContractShape reports the first contract drift detected in
+// the directory tree. Mirrors the rules in
+// shell/check-plan-pane-contract.sh so the two readers cannot diverge
+// silently.
+func validateContractShape(dir string, snap planview.Snapshot) string {
+	planMd := filepath.Join(dir, "plan.md")
+	if _, err := os.Stat(planMd); err != nil {
+		return "plan.md missing at " + planMd
+	}
+	stateFile := filepath.Join(dir, "consensus.state")
+	if _, err := os.Stat(stateFile); err != nil {
+		return "consensus.state missing at " + stateFile
+	}
+	statusDir := filepath.Join(dir, "status")
+	if st, err := os.Stat(statusDir); err != nil || !st.IsDir() {
+		return "status/ directory missing at " + statusDir
+	}
+	// Defer richer state-vs-verdict matching to LoadFixture once it
+	// is implemented; this function's role is the structural floor.
+	_ = snap
+	return ""
+}
+
+// ── Demo fixture resolution ───────────────────────────────────────────
+
+// resolveDemoFixture maps a --demo <scenario> argument to an absolute
+// fixture directory using the resolution order documented on the flag.
+// Returns the directory plus the list of attempts (for error
+// diagnostics).
+func resolveDemoFixture(scenario string) (string, []string, error) {
+	if strings.TrimSpace(scenario) == "" {
+		return "", nil, fmt.Errorf("empty scenario")
+	}
+
+	var attempts []string
+
+	// 1. Absolute path passed as scenario.
+	if filepath.IsAbs(scenario) {
+		attempts = append(attempts, scenario)
+		if dirExists(scenario) {
+			return scenario, attempts, nil
+		}
+		return "", attempts, fmt.Errorf("absolute fixture path %q does not exist", scenario)
+	}
+
+	// 2. Walk up from the executable looking for go.mod.
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		for d := exeDir; d != "/" && d != "." && d != ""; d = filepath.Dir(d) {
+			if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+				cand := filepath.Join(d, "tui", "internal", "planview", "testdata", "fixtures", scenario)
+				attempts = append(attempts, cand)
+				if dirExists(cand) {
+					return cand, attempts, nil
+				}
+				break
+			}
+		}
+	}
+
+	// 3. $DOEY_REPO_DIR.
+	if rd := strings.TrimSpace(os.Getenv("DOEY_REPO_DIR")); rd != "" {
+		cand := filepath.Join(rd, "tui", "internal", "planview", "testdata", "fixtures", scenario)
+		attempts = append(attempts, cand)
+		if dirExists(cand) {
+			return cand, attempts, nil
+		}
+	}
+
+	// 4. Hardcoded fallback to the source-of-truth tree.
+	cand := filepath.Join("/home/doey/doey", "tui", "internal", "planview", "testdata", "fixtures", scenario)
+	attempts = append(attempts, cand)
+	if dirExists(cand) {
+		return cand, attempts, nil
+	}
+
+	return "", attempts, fmt.Errorf("fixture scenario %q not found", scenario)
+}
+
+// dirExists reports whether path resolves to a directory.
+func dirExists(path string) bool {
+	st, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return st.IsDir()
+}
+
 // ── Main ──────────────────────────────────────────────────────────────
 
 func main() {
@@ -866,7 +1025,26 @@ func main() {
 	runtimeDirFlag := flag.String("runtime-dir", "", "Runtime directory base (default: $DOEY_RUNTIME). Used as the search base for team_<W>.env and masterplan-* dirs.")
 	teamWindowFlag := flag.String("team-window", "", "Tmux window index of the planning team. When set, MASTERPLAN_ID is read from <runtime>/team_<W>.env to resolve the plan path.")
 	goalFlag := flag.String("goal", "", "Optional goal text shown as a subtitle in standalone mode (no consensus.state).")
+	validateFlag := flag.String("validate", "", "Validate a fixture/runtime directory against the plan-pane file contract. Prints OK or a diagnostic and exits.")
+	demoFlag := flag.String("demo", "", `Load a fixture scenario instead of live runtime files. Implies read-only:
+persist, send-to-tasks, and any DB write are short-circuited at the
+call site (DECISIONS.md D6). Resolution order:
+  1. an absolute path passed as <scenario>
+  2. relative to the executable's repo root (walking up to find go.mod)
+  3. $DOEY_REPO_DIR/tui/internal/planview/testdata/fixtures/<scenario>
+  4. /home/doey/doey/tui/internal/planview/testdata/fixtures/<scenario>`)
 	flag.Parse()
+
+	// --validate runs the contract check against a fixture/runtime
+	// directory and exits before any normal startup. It uses
+	// planview.LoadFixture so the Go-side reader and the shell
+	// validator share a single shape definition. ErrNotImplemented
+	// (Phase-1 stub) is treated as a build-time error per the Phase-4
+	// coordination notes — it must never count as success.
+	if *validateFlag != "" {
+		runValidate(*validateFlag)
+		return
+	}
 
 	legacyMode := *legacyFlag
 	if !legacyMode {
@@ -874,6 +1052,17 @@ func main() {
 		case "1", "true", "yes":
 			legacyMode = true
 		}
+	}
+
+	// --demo short-circuits the live path: plan resolution, fsnotify,
+	// runtime/team_W.env, and SQLite all bypassed. The Demo source loads
+	// fixtures eagerly and serves a frozen snapshot. --legacy is
+	// orthogonal: the legacyMode flag stays whatever the user set, but
+	// the chosen Source is always Demo when --demo is non-empty
+	// (DECISIONS.md D6).
+	if strings.TrimSpace(*demoFlag) != "" {
+		runDemo(*demoFlag, legacyMode, *debugStateFlag, strings.TrimSpace(*goalFlag))
+		return
 	}
 
 	runtimeDir := strings.TrimSpace(*runtimeDirFlag)
@@ -982,6 +1171,105 @@ func main() {
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "doey-masterplan-tui: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// runDemo handles the --demo <scenario> branch. It resolves the fixture
+// directory, builds a planview.Demo source, and either dumps the
+// snapshot (--debug-state) or starts the TUI in read-only mode.
+//
+// Read-only enforcement lives at the model's call sites
+// (m.persist, m.sendToTasks) — the Source itself never gains a write
+// surface (DECISIONS.md D6). legacyMode is orthogonal: when --legacy
+// is also set, the model's legacyMode field is true (skipping ticks)
+// but the Source remains Demo since the fixture supersedes the live
+// data path.
+func runDemo(scenario string, legacyMode, debugState bool, goal string) {
+	fixtureDir, attempts, err := resolveDemoFixture(scenario)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: %v\n", err)
+		for _, a := range attempts {
+			fmt.Fprintln(os.Stderr, "  - "+a)
+		}
+		os.Exit(1)
+	}
+
+	src, err := planview.NewDemo(fixtureDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: load %s: %v\n", fixtureDir, err)
+		os.Exit(1)
+	}
+
+	snap, err := src.Read(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: read fixture: %v\n", err)
+		os.Exit(1)
+	}
+
+	if !snap.Plan.Plan.HasStructure() {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: fixture %s has no structured sections\n", fixtureDir)
+		os.Exit(0)
+	}
+
+	expanded := map[string]bool{}
+	if len(snap.Plan.Plan.Phases) > 0 {
+		expanded[phaseIdentityKey(snap.Plan.Plan.Phases[0], 0)] = true
+	}
+
+	m := model{
+		plan:           snap.Plan.Plan,
+		planPath:       snap.Plan.PlanPath,
+		consensus:      snap.Consensus.State,
+		focusPhase:     0,
+		focusStep:      -1,
+		expandedPhases: expanded,
+		legacyMode:     legacyMode,
+		goal:           goal,
+		hitRows:        make(map[int]hitRegion, 64),
+		source:         src,
+		snapshot:       snap,
+		consensusState: snap.Consensus,
+		reviewState:    snap.Review,
+		researchIndex:  snap.Research,
+		workerRows:     snap.Workers,
+		taskFooter:     snap.Task,
+		demoMode:       true,
+		demoScenario:   scenario,
+	}
+	m.evictOrphanExpansions()
+
+	if debugState {
+		dump := struct {
+			LegacyMode   bool              `json:"legacyMode"`
+			DemoMode     bool              `json:"demoMode"`
+			DemoScenario string            `json:"demoScenario"`
+			FixtureDir   string            `json:"fixtureDir"`
+			PhaseCount   int               `json:"phaseCount"`
+			PlanPath     string            `json:"planPath"`
+			Snapshot     planview.Snapshot `json:"snapshot"`
+		}{
+			LegacyMode:   m.legacyMode,
+			DemoMode:     m.demoMode,
+			DemoScenario: m.demoScenario,
+			FixtureDir:   fixtureDir,
+			PhaseCount:   len(m.plan.Phases),
+			PlanPath:     m.planPath,
+			Snapshot:     m.snapshot,
+		}
+		out, err := json.MarshalIndent(dump, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: marshal snapshot: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(out))
+		_ = src.Close()
+		os.Exit(0)
+	}
+
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "doey-masterplan-tui --demo: %v\n", err)
 		os.Exit(1)
 	}
 }
