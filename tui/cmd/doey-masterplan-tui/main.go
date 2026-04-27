@@ -32,6 +32,15 @@ type sendResultMsg struct {
 	message string
 }
 
+// tickMsg fires every second to refresh derived age/clock fields and
+// drive any time-based UI re-renders. Skipped in legacy mode.
+type tickMsg time.Time
+
+// snapshotMsg carries a fresh Snapshot delivered by the Source's
+// Updates() channel. Re-issued from the handler so subscribeCmd loops
+// for the lifetime of the program.
+type snapshotMsg planview.Snapshot
+
 // ── Hit regions ───────────────────────────────────────────────────────
 
 // hitRegion records what was rendered on a given y row so the next
@@ -134,6 +143,36 @@ func runSendToTasks(planPath string) tea.Cmd {
 	}
 }
 
+// tickCmd returns a tea.Cmd that fires once after one second. The
+// handler re-issues this command so the tick is self-perpetuating; in
+// legacy mode the model returns nil instead.
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
+// subscribeCmd blocks on src.Updates() and wraps the received snapshot
+// in a snapshotMsg. Returns nil when src is nil or its Updates channel
+// is nil (legacy mode, demo). The Update handler re-issues this command
+// after each snapshotMsg so the subscription lasts the program's life.
+func subscribeCmd(src planview.Source) tea.Cmd {
+	if src == nil {
+		return nil
+	}
+	ch := src.Updates()
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		snap, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return snapshotMsg(snap)
+	}
+}
+
 func firstLine(s, fallback string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -147,7 +186,12 @@ func firstLine(s, fallback string) string {
 
 // ── Tea interface ─────────────────────────────────────────────────────
 
-func (m model) Init() tea.Cmd { return nil }
+func (m model) Init() tea.Cmd {
+	if m.legacyMode {
+		return nil
+	}
+	return tea.Batch(tickCmd(), subscribeCmd(m.source))
+}
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -160,6 +204,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearFlashMsg:
 		m.lastFlash = ""
 		return m, nil
+
+	case tickMsg:
+		if m.legacyMode {
+			return m, nil
+		}
+		return m, tickCmd()
+
+	case snapshotMsg:
+		snap := planview.Snapshot(msg)
+		m.snapshot = snap
+		m.consensusState = snap.Consensus
+		m.reviewState = snap.Review
+		m.researchIndex = snap.Research
+		m.workerRows = snap.Workers
+		m.taskFooter = snap.Task
+		// Keep the legacy m.consensus field in sync so any code path
+		// still reading it (badge render fallback, gate display) sees
+		// the live value.
+		m.consensus = snap.Consensus.State
+		return m, subscribeCmd(m.source)
 
 	case sendResultMsg:
 		if msg.ok {
@@ -364,6 +428,11 @@ func (m *model) persist() {
 	if m.plan == nil || m.planPath == "" {
 		return
 	}
+	// Suppress fsnotify echo of our own write for ~200ms so the next
+	// snapshot doesn't fire from this very save and disrupt the cursor.
+	if live, ok := m.source.(*planview.Live); ok {
+		live.NotifySelfWrite(m.planPath)
+	}
 	if err := m.plan.WriteFile(m.planPath); err != nil {
 		m.lastErr = "save failed: " + err.Error()
 		return
@@ -374,8 +443,17 @@ func (m *model) persist() {
 // ── Send to Tasks ─────────────────────────────────────────────────────
 
 func (m model) sendToTasks() (tea.Model, tea.Cmd) {
-	if !planview.IsConsensusReached(m.consensus) {
-		state := m.consensus
+	// Refresh from disk in legacy mode (no Updates stream) so the gate
+	// honours the latest state at the moment of action. In live mode
+	// m.consensusState is kept current by snapshotMsg.
+	if m.legacyMode && m.source != nil {
+		if snap, err := m.source.Read(context.Background()); err == nil {
+			m.consensusState = snap.Consensus
+			m.consensus = snap.Consensus.State
+		}
+	}
+	state := m.consensusState.State
+	if !planview.IsConsensusReached(state) {
 		if state == "" {
 			state = "DRAFT"
 		}
@@ -412,7 +490,11 @@ func (m model) View() string {
 	if title == "" {
 		title = filepath.Base(m.planPath)
 	}
-	header := StyleHeader.Render(title) + "  " + RenderConsensusBadge(m.consensus)
+	badgeState := m.consensusState.State
+	if badgeState == "" {
+		badgeState = m.consensus
+	}
+	header := StyleHeader.Render(title) + "  " + RenderConsensusBadge(badgeState)
 	b.WriteString(header)
 	b.WriteByte('\n')
 	y++
@@ -476,6 +558,9 @@ func (m model) View() string {
 	b.WriteByte('\n')
 	help := "↑/↓ move · space toggle · enter expand · J/K reorder · s send · q quit"
 	b.WriteString(StyleHelp.Render(help))
+	if live, ok := m.source.(*planview.Live); ok && live.Degraded() {
+		b.WriteString(StyleConsensusWarn.Render(" · WATCH: degraded"))
+	}
 	b.WriteByte('\n')
 
 	if m.lastErr != "" {
@@ -686,8 +771,18 @@ func main() {
 	}
 	m.evictOrphanExpansions()
 
-	// TODO Phase 3: honour --runtime-dir and --team-window flags.
-	src := planview.NewLive(planPath, "", "")
+	// Runtime/team-window come from environment for Phase 2; Phase 3
+	// wires the explicit --runtime-dir / --team-window flags. Empty
+	// strings are acceptable — workers won't be discovered without a
+	// team window, which is fine for Phase 2.
+	runtimeDir := os.Getenv("DOEY_RUNTIME")
+	teamWindow := os.Getenv("DOEY_TEAM_WINDOW")
+	var src planview.Source
+	if legacyMode {
+		src = planview.NewLiveLegacy(planPath, runtimeDir, teamWindow)
+	} else {
+		src = planview.NewLive(planPath, runtimeDir, teamWindow)
+	}
 	snap, err := src.Read(context.Background())
 	if err != nil {
 		// Soft-fail: log and proceed with zero snapshot. Phase 2 will surface this in WATCH: degraded.
@@ -700,6 +795,12 @@ func main() {
 	m.researchIndex = snap.Research
 	m.workerRows = snap.Workers
 	m.taskFooter = snap.Task
+	// Keep the legacy m.consensus field aligned with the live state so
+	// any code path still consulting it sees the same value as the
+	// new m.consensusState.
+	if snap.Consensus.State != "" {
+		m.consensus = snap.Consensus.State
+	}
 
 	if *debugStateFlag {
 		// Phase 1 → Phase 2 step: snapshot now holds the full planview.Snapshot. Phase 2 wires fsnotify + tick to keep it fresh.

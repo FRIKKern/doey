@@ -15,6 +15,7 @@ require (
 	github.com/charmbracelet/x/vt v0.0.0-20260305213658-fe36e8c10185
 	github.com/creack/pty v1.1.24
 	github.com/fatih/color v1.19.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/hetznercloud/hcloud-go/v2 v2.37.0
 	github.com/lrstanley/bubblezone v1.0.0
