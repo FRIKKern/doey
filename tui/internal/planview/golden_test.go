@@ -32,6 +32,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
@@ -143,6 +144,92 @@ func renderForGolden(snap Snapshot, width, height int, profile string) ([]byte, 
 	// Strip zone markers — goldens compare the visible ANSI output only.
 	scanned := zone.Scan(view)
 	return []byte(scanned), nil
+}
+
+// ── Phase 6: consensus header pill goldens ────────────────────────────
+
+// goldenHeaderCase pins a ConsensusInfo input + a fixed `now` reference
+// so the time-since-UPDATED segment renders deterministically. The
+// fixture-driven goldens above can't drive the pill directly because
+// UpdatedAt comes from filesystem mtime (non-deterministic on
+// checkout); the header pill needs the synthetic ConsensusInfo here.
+type goldenHeaderCase struct {
+	name       string
+	info       ConsensusInfo
+	now        time.Time
+	platform   string
+	goldenPath string
+}
+
+var headerNow = time.Date(2026, 4, 26, 12, 0, 0, 0, time.UTC)
+
+var goldenHeaderCases = []goldenHeaderCase{
+	{
+		name: "header_consensus",
+		info: ConsensusInfo{
+			State:           ConsensusStateConsensus,
+			Round:           3,
+			AgreedParties:   []string{"Architect", "Critic"},
+			BlockingParties: nil,
+			UpdatedAt:       headerNow.Add(-12 * time.Minute),
+			RawSource:       "consensus.state",
+		},
+		now:        headerNow,
+		platform:   "linux",
+		goldenPath: "testdata/golden/header_consensus_truecolor_linux.golden",
+	},
+	{
+		name: "header_escalated",
+		info: ConsensusInfo{
+			State:           ConsensusStateEscalated,
+			Round:           4,
+			AgreedParties:   nil,
+			BlockingParties: []string{"Architect", "Critic"},
+			UpdatedAt:       headerNow.Add(-3 * time.Hour),
+			RawSource:       "consensus.state",
+		},
+		now:        headerNow,
+		platform:   "linux",
+		goldenPath: "testdata/golden/header_escalated_truecolor_linux.golden",
+	},
+	{
+		name: "header_under_review_split",
+		info: ConsensusInfo{
+			State:           ConsensusStateUnderReview,
+			Round:           2,
+			AgreedParties:   []string{"Architect"},
+			BlockingParties: []string{"Critic"},
+			UpdatedAt:       headerNow.Add(-45 * time.Second),
+			RawSource:       "consensus.state",
+		},
+		now:        headerNow,
+		platform:   "linux",
+		goldenPath: "testdata/golden/header_under_review_split_truecolor_linux.golden",
+	},
+}
+
+// TestGoldenConsensusHeader pins the Phase 6 consensus pill rendering.
+// Each case is a synthetic ConsensusInfo (not a fixture) so UpdatedAt
+// stays stable across checkouts. Truecolor profile is the only one
+// captured — Phase 9 will fan out the matrix.
+func TestGoldenConsensusHeader(t *testing.T) {
+	for _, tc := range goldenHeaderCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.platform != "" && runtime.GOOS != tc.platform {
+				t.Skipf("golden %s is locked to GOOS=%s (current: %s); Phase 9 broadens the matrix",
+					tc.name, tc.platform, runtime.GOOS)
+			}
+			t.Setenv("LC_ALL", "C.UTF-8")
+			t.Setenv("LANG", "C.UTF-8")
+
+			lipgloss.SetColorProfile(termenv.TrueColor)
+			zone.NewGlobal()
+
+			got := []byte(RenderConsensusHeader(tc.info, tc.now))
+			compareOrUpdateGolden(t, tc.goldenPath, got)
+		})
+	}
 }
 
 // compareOrUpdateGolden either rewrites the golden file (when -update

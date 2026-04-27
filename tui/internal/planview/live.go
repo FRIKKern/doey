@@ -258,11 +258,12 @@ func loadConsensus(planDir string) ConsensusInfo {
 }
 
 // parseConsensusFile reads a consensus.state file at the given path and
-// returns the populated ConsensusInfo. Extracts the CONSENSUS_STATE /
-// STATE key, uppercases the value, and records the file mtime. When the
-// file is absent, Standalone is set to true and State is left empty.
-// RawSource is always set to path. This is the single shared parser
-// used by both Live and Demo sources (Phase 4).
+// returns the populated ConsensusInfo. Extracts CONSENSUS_STATE/STATE,
+// ROUND, the per-reviewer verdict fields (used to derive
+// Agreed/BlockingParties), and the UPDATED epoch (falling back to file
+// mtime). When the file is absent, Standalone is set to true and State
+// is left empty. RawSource is always set to path. This is the single
+// shared parser used by both Live and Demo sources (Phase 4).
 func parseConsensusFile(path string) ConsensusInfo {
 	info := ConsensusInfo{RawSource: path}
 
@@ -276,6 +277,8 @@ func parseConsensusFile(path string) ConsensusInfo {
 		info.UpdatedAt = st.ModTime()
 	}
 
+	var archVerdict, critVerdict string
+	var updatedEpoch int64
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -287,11 +290,45 @@ func parseConsensusFile(path string) ConsensusInfo {
 		}
 		key := strings.TrimSpace(line[:eq])
 		val := strings.Trim(strings.TrimSpace(line[eq+1:]), `"'`)
-		if strings.EqualFold(key, "CONSENSUS_STATE") || strings.EqualFold(key, "STATE") {
+		switch {
+		case strings.EqualFold(key, "CONSENSUS_STATE") || strings.EqualFold(key, "STATE"):
 			info.State = strings.ToUpper(val)
+		case strings.EqualFold(key, "ROUND"):
+			fmt.Sscanf(val, "%d", &info.Round)
+		case strings.EqualFold(key, "ARCHITECT_VERDICT"):
+			archVerdict = strings.ToUpper(val)
+		case strings.EqualFold(key, "CRITIC_VERDICT"):
+			critVerdict = strings.ToUpper(val)
+		case strings.EqualFold(key, "UPDATED"):
+			fmt.Sscanf(val, "%d", &updatedEpoch)
 		}
 	}
+	if updatedEpoch > 0 {
+		info.UpdatedAt = time.Unix(updatedEpoch, 0)
+	}
+	info.AgreedParties, info.BlockingParties = derivePartiesFromVerdicts(archVerdict, critVerdict)
 	return info
+}
+
+// derivePartiesFromVerdicts maps the per-reviewer verdict strings into
+// agreed/blocking party lists. APPROVE → agreed; any non-empty
+// non-APPROVE value (REVISE, BLOCK, …) → blocking. Empty values are
+// "not yet voted" and contribute to neither list.
+func derivePartiesFromVerdicts(arch, crit string) (agreed, blocking []string) {
+	classify := func(role, verdict string) {
+		v := strings.ToUpper(strings.TrimSpace(verdict))
+		switch v {
+		case "":
+			return
+		case "APPROVE", "APPROVED", "ACCEPT", "OK":
+			agreed = append(agreed, role)
+		default:
+			blocking = append(blocking, role)
+		}
+	}
+	classify("Architect", arch)
+	classify("Critic", crit)
+	return agreed, blocking
 }
 
 // loadReview populates the architect/critic VerdictCards by stat'ing

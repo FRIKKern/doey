@@ -313,6 +313,9 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "s":
 		return m.sendToTasks()
+
+	case "r":
+		return m.recoverFromEscalated()
 	}
 	return m, nil
 }
@@ -674,6 +677,84 @@ func (m model) sendToTasks() (tea.Model, tea.Cmd) {
 	return m, runSendToTasks(m.planPath)
 }
 
+// ── ESCALATED recovery ('r' key) ──────────────────────────────────────
+
+// recoverFromEscalated fires the ESCALATED → REVISIONS_NEEDED transition
+// via the existing shell consensus runner. The transition only fires
+// when the current state is ESCALATED — in any other state the action
+// is refused with a flash so a misclick on a CONSENSUS plan cannot
+// undo the gate. Demo mode short-circuits per DECISIONS.md D6.
+func (m model) recoverFromEscalated() (tea.Model, tea.Cmd) {
+	if m.demoMode {
+		m.lastFlash = "demo mode: recovery disabled"
+		return m, clearFlashAfter(5 * time.Second)
+	}
+	state := strings.ToUpper(strings.TrimSpace(m.consensusState.State))
+	if state != planview.ConsensusStateEscalated {
+		m.lastFlash = "refused: 'r' only recovers ESCALATED (current: " + state + ")"
+		return m, clearFlashAfter(5 * time.Second)
+	}
+	planDir := filepath.Dir(m.planPath)
+	m.lastFlash = "recovering: ESCALATED → REVISIONS_NEEDED…"
+	return m, runConsensusRecover(planDir)
+}
+
+// runConsensusRecover shells out to bash sourcing
+// shell/masterplan-consensus.sh and invoking consensus_advance for the
+// ESCALATED → REVISIONS_NEEDED edge. Reports a sendResultMsg back so the
+// model can flash the outcome. Path resolution mirrors resolveDemoFixture:
+// walk up from the executable for go.mod, fall back to $DOEY_REPO_DIR,
+// then the source-tree default.
+func runConsensusRecover(planDir string) tea.Cmd {
+	return func() tea.Msg {
+		script := resolveConsensusScript()
+		if script == "" {
+			return sendResultMsg{
+				ok:      false,
+				message: "recover failed: cannot locate masterplan-consensus.sh",
+			}
+		}
+		cmd := exec.Command("bash", "-c",
+			`. "$1" && consensus_advance "$2" REVISIONS_NEEDED`,
+			"_", script, planDir)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return sendResultMsg{
+				ok:      false,
+				message: "recover failed: " + firstLine(string(out), err.Error()),
+			}
+		}
+		return sendResultMsg{ok: true, message: "recovered → REVISIONS_NEEDED"}
+	}
+}
+
+// resolveConsensusScript locates shell/masterplan-consensus.sh by
+// (1) walking up from the running executable until a go.mod is found,
+// (2) falling back to $DOEY_REPO_DIR/shell, and finally (3) the source
+// tree at /home/doey/doey/shell. Returns "" when no candidate exists.
+func resolveConsensusScript() string {
+	candidates := []string{}
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		for d := dir; d != "/" && d != "." && d != ""; d = filepath.Dir(d) {
+			if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+				candidates = append(candidates, filepath.Join(d, "shell", "masterplan-consensus.sh"))
+				break
+			}
+		}
+	}
+	if rd := strings.TrimSpace(os.Getenv("DOEY_REPO_DIR")); rd != "" {
+		candidates = append(candidates, filepath.Join(rd, "shell", "masterplan-consensus.sh"))
+	}
+	candidates = append(candidates, "/home/doey/doey/shell/masterplan-consensus.sh")
+	for _, c := range candidates {
+		if fileExists(c) {
+			return c
+		}
+	}
+	return ""
+}
+
 // ── View ──────────────────────────────────────────────────────────────
 
 func (m model) View() string {
@@ -698,26 +779,33 @@ func (m model) View() string {
 	return zone.Scan(view)
 }
 
-// renderHeaderBand renders the top band: title, consensus pill, and
-// progress bar. The pill is a clickable bubblezone region so a future
-// gesture (e.g. click-to-recheck) can hook the same place.
+// renderHeaderBand renders the top band: optional stall banner, title +
+// consensus pill, and progress bar. The pill is a clickable bubblezone
+// region so a future gesture (e.g. click-to-recheck) can hook the same
+// place. The Phase 6 consensus pill (Round / parties / age) is rendered
+// by planview.RenderConsensusHeader; the Phase-1 RenderConsensusBadge
+// remains in scope but is no longer used in the header.
 func (m model) renderHeaderBand(width, measure int) string {
 	title := m.plan.Title
 	if title == "" {
 		title = filepath.Base(m.planPath)
 	}
-	badgeState := m.consensusState.State
-	if badgeState == "" {
-		badgeState = m.consensus
+	pillBody := planview.RenderConsensusHeader(m.consensusState, time.Now())
+	pill := zone.Mark(planview.PillZoneID("consensus"), pillBody)
+
+	var b strings.Builder
+	if banner := m.renderStallBanner(); banner != "" {
+		b.WriteString(banner)
+		b.WriteByte('\n')
 	}
-	pill := zone.Mark(planview.PillZoneID("consensus"), RenderConsensusBadge(badgeState))
-	header := StyleHeader.Render(title) + "  " + pill
+	b.WriteString(StyleHeader.Render(title))
+	b.WriteString("  ")
+	b.WriteString(pill)
 	if m.consensusState.Standalone {
 		standalone := StyleConsensusWarn.Render("STATE: standalone (no consensus)")
-		header += "  " + zone.Mark(planview.PillZoneID("standalone"), standalone)
+		b.WriteString("  ")
+		b.WriteString(zone.Mark(planview.PillZoneID("standalone"), standalone))
 	}
-	var b strings.Builder
-	b.WriteString(header)
 	if m.consensusState.Standalone && strings.TrimSpace(m.goal) != "" {
 		b.WriteByte('\n')
 		b.WriteString(StyleHelp.Render("goal: " + strings.TrimSpace(m.goal)))
@@ -733,6 +821,22 @@ func (m model) renderHeaderBand(width, measure int) string {
 	b.WriteByte('\n')
 	b.WriteString(RenderProgressBar(done, total, barW))
 	return b.String()
+}
+
+// renderStallBanner reads the live alerts.jsonl and surfaces the most
+// recent Architect/Critic stall as a single-line banner. Empty string
+// when no alerts apply or when the source/runtime is unavailable
+// (demo mode and standalone fixtures naturally yield "").
+func (m model) renderStallBanner() string {
+	if m.snapshot.Plan.RuntimeDir == "" || m.snapshot.Plan.TeamWindow == "" {
+		return ""
+	}
+	alerts := planview.LoadStallAlerts(
+		m.snapshot.Plan.RuntimeDir,
+		os.Getenv("DOEY_SESSION"),
+		m.snapshot.Plan.TeamWindow,
+	)
+	return planview.RenderStallBanner(alerts)
 }
 
 // renderBodyBand renders the middle band: section block + phase/step
@@ -821,7 +925,7 @@ func (m model) renderOverlay(measure int) string {
 // indicator, and any flash/error messages.
 func (m model) renderFooterBand() string {
 	var b strings.Builder
-	help := "↑/↓ move · space toggle · enter expand · J/K reorder · o overlay · f failed · s send · q quit"
+	help := "↑/↓ move · space toggle · enter expand · J/K reorder · o overlay · f failed · r recover · s send · q quit"
 	b.WriteString(StyleHelp.Render(help))
 	if live, ok := m.source.(*planview.Live); ok && live.Degraded() {
 		b.WriteString(StyleConsensusWarn.Render(" · WATCH: degraded"))
