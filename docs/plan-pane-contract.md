@@ -430,7 +430,79 @@ The contract still applies — `plan.md` must still parse — but
 
 ---
 
-## 10. Cross-references
+## 10. Write authority + last-writer-wins
+
+The plan tree is read by many panes but written by only a few. This
+section names the authoritative writer for each lifecycle file and
+specifies how readers reconcile concurrent writes.
+
+### Authoritative writers
+
+| File                                     | Authoritative writer                          | Other panes |
+|------------------------------------------|------------------------------------------------|-------------|
+| `<plan-dir>/plan.md`                     | Plan pane (Subtaskmaster of the planning team) | read-only   |
+| `<plan-dir>/consensus.state`             | `shell/masterplan-consensus.sh` (any pane invoking it) | read-only   |
+| `<plan-dir>/<plan-id>.architect.md`      | Architect reviewer pane                        | read-only   |
+| `<plan-dir>/<plan-id>.critic.md`         | Critic reviewer pane                           | read-only   |
+| `<runtime>/lifecycle/transitions.jsonl`  | `shell/masterplan-consensus.sh` (append)       | read-only   |
+| `<runtime>/lifecycle/alerts.jsonl`       | stall/heartbeat hook in `.claude/hooks/` (append) | read-only |
+| `status/<PANE_SAFE>.status`              | the pane named by `<PANE_SAFE>`                | read-only   |
+
+`plan.md` is owned by the Subtaskmaster running in the plan pane.
+Reviewers, workers, and the Boss MUST NOT write to it; they record
+their input in their own verdict files or in research markdown under
+`<plan-dir>/research/`. The Subtaskmaster reconciles those inputs into
+the plan body on the next persist.
+
+`lifecycle/transitions.jsonl` and `lifecycle/alerts.jsonl` are
+**append-only** logs — every line is one event with a `ts` (unix
+epoch, monotonic from the writer's clock) and a `pane` field. New
+events are appended via `>>` (or an equivalent atomic append) by the
+authoritative writer; truncation is forbidden. Older entries are
+rotated out by an external janitor, never edited in place.
+
+### Last-writer-wins under atomic rename
+
+When two panes attempt to write the same single-file artifact (most
+commonly `consensus.state` — see §3), conflict resolution is
+**last-writer-wins under atomic rename**:
+
+- Every writer goes through tmp+rename(2) (`consensus_set` for the
+  state file; explicit tmp+mv in any future Go writer).
+- The kernel serialises the two `rename` syscalls. Whichever lands
+  second is the final state on disk.
+- Readers MUST tolerate a momentarily inconsistent view: a fsnotify
+  CHANGE event followed by another within the size-stable window can
+  surface either value, and that is correct behaviour — re-render on
+  the next event and the freshest value wins.
+
+For the append-only lifecycle logs the rule degenerates: both writes
+land, ordered by line position. Readers reconcile by `ts` (latest
+wins) when two entries describe the same logical transition, and by
+sequence position otherwise.
+
+### Reader reconciliation example
+
+Consider two near-simultaneous appends to `lifecycle/transitions.jsonl`
+during an `ESCALATED → REVISIONS_NEEDED` recovery that races with a
+Planner re-dispatch:
+
+```
+{"ts":1714162801,"pane":"1.0","from":"ESCALATED","to":"REVISIONS_NEEDED","by":"recovery_r_key"}
+{"ts":1714162801,"pane":"2.0","from":"ESCALATED","to":"REVISIONS_NEEDED","by":"planner_redispatch"}
+```
+
+Both lines are valid; both writers observed `CONSENSUS_STATE=ESCALATED`
+when they decided to act. The reader picks the entry with the latest
+`ts` as the canonical transition; on tie, the later byte offset wins
+(append order). The viewer surfaces only the winning entry in its
+banner; the loser is preserved in the log for audit. The on-disk
+`consensus.state` value reflects whichever writer's `rename` landed
+second — last-writer-wins is the same rule, applied at the file level.
+
+---
+
+## 11. Cross-references
 
 - ADRs: [`tui/cmd/doey-masterplan-tui/DECISIONS.md`](../tui/cmd/doey-masterplan-tui/DECISIONS.md)
   — D3 (APPROVED↔CONSENSUS aliasing), D4 (legacy rollback), D6
