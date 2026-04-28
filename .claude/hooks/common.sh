@@ -564,6 +564,42 @@ APPLESCRIPT
 
 send_notification() {
   local title="${1:-Claude Code}" body="${2:-Task completed}"
+  local event_kind="${3:-generic}"
+  # OpenClaw fast-path — fresh-install invariant: when openclaw.conf is absent,
+  # behavior is byte-identical to legacy chain. MUST be the first executable
+  # line of any OpenClaw-specific code path (no probes when conf absent).
+  [ -f "$HOME/.config/doey/openclaw.conf" ] || { _send_notification_legacy "$title" "$body" "$event_kind"; return; }
+
+  # Resolve helper: installed copy first, repo fallback second.
+  local _oc_helper=""
+  if [ -x "$HOME/.local/bin/doey-openclaw" ]; then
+    _oc_helper="$HOME/.local/bin/doey-openclaw"
+  elif [ -f "$HOME/.claude/doey/repo-path" ]; then
+    local _oc_repo
+    _oc_repo=$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null) || _oc_repo=""
+    if [ -n "$_oc_repo" ] && [ -f "${_oc_repo}/shell/doey-openclaw.sh" ]; then
+      _oc_helper="${_oc_repo}/shell/doey-openclaw.sh"
+    fi
+  fi
+
+  # Body via stdin, flag-based args (matches oc_notify contract).
+  if [ -n "$_oc_helper" ] && printf '%s' "$body" | bash "$_oc_helper" notify --role "${DOEY_ROLE:-unknown}" --event "$event_kind" --task-id "${DOEY_TASK_ID:-}" --title "$title" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Helper missing or non-zero — fall back to legacy chain unless the project
+  # binding declares legacy_discord_suppressed=true.
+  local _oc_suppress=""
+  if [ -n "${DOEY_PROJECT_DIR:-}" ] && [ -f "${DOEY_PROJECT_DIR}/.doey/openclaw-binding" ]; then
+    _oc_suppress=$(grep '^legacy_discord_suppressed=' "${DOEY_PROJECT_DIR}/.doey/openclaw-binding" 2>/dev/null | head -1 | cut -d= -f2-)
+  fi
+  if [ "$_oc_suppress" != "true" ]; then
+    _send_notification_legacy "$title" "$body" "$event_kind"
+  fi
+}
+
+_send_notification_legacy() {
+  local title="${1:-Claude Code}" body="${2:-Task completed}"
   # event_kind: Boss-visible semantic tag forwarded to Discord. arg-based (not
   # DOEY_NOTIFY_EVENT env) per ADR — explicit per call-site, greppable,
   # back-compat default "generic".

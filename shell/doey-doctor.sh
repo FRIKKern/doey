@@ -256,6 +256,55 @@ check_discord() {
   fi
 }
 
+# ── OpenClaw integration check (task 652 Phase 1) ─────────────────────
+# Silent when ~/.config/doey/openclaw.conf is absent (fresh-install invariant).
+# When configured: warn (never fail) with fix hints in classic doctor style.
+check_openclaw() {
+  local _oc_conf="$HOME/.config/doey/openclaw.conf"
+  [ -f "$_oc_conf" ] || return 0
+
+  printf "\n  ${BOLD}OpenClaw:${RESET}\n"
+
+  # File mode — must be 0600
+  local _oc_mode
+  _oc_mode="$(stat -c '%a' "$_oc_conf" 2>/dev/null || stat -f '%Lp' "$_oc_conf" 2>/dev/null || true)"
+  if [ "$_oc_mode" = "600" ]; then
+    _doc_check ok "config perms" "mode=600"
+  else
+    _doc_check warn "config perms" "mode=${_oc_mode:-unknown}; fix: chmod 600 ${_oc_conf/#$HOME/~}"
+  fi
+
+  # Gateway URL reachable (warn-not-fail, 2s timeout, HEAD only)
+  local _oc_url
+  _oc_url="$(grep '^gateway_url=' "$_oc_conf" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
+  if [ -n "$_oc_url" ]; then
+    if command -v curl >/dev/null 2>&1; then
+      if curl -sSI -m 2 "$_oc_url" >/dev/null 2>&1; then
+        _doc_check ok "gateway reachable" "$_oc_url"
+      else
+        _doc_check warn "gateway unreachable" "$_oc_url (check network or update gateway_url)"
+      fi
+    else
+      _doc_check skip "gateway probe" "curl not on PATH"
+    fi
+  fi
+
+  # Bridge PID liveness (loud warn when binding present but bridge dead)
+  local _oc_proj="${PROJECT_DIR:-$(pwd)}"
+  local _oc_binding="${_oc_proj}/.doey/openclaw-binding"
+  if [ -f "$_oc_binding" ]; then
+    local _oc_runtime="${TMPDIR:-/tmp}/doey/$(basename "$_oc_proj")"
+    local _oc_pidfile="${_oc_runtime}/openclaw-bridge.pid"
+    local _oc_pid=""
+    [ -f "$_oc_pidfile" ] && _oc_pid="$(cat "$_oc_pidfile" 2>/dev/null || true)"
+    if [ -n "$_oc_pid" ] && kill -0 "$_oc_pid" 2>/dev/null; then
+      _doc_check ok "bridge running" "pid=${_oc_pid}"
+    else
+      _doc_check warn "bridge not running" "configured but bridge down — fix: doey openclaw bridge-spawn (or /doey-openclaw-connect)"
+    fi
+  fi
+}
+
 # ── Launch-bypass probe (task 617) ────────────────────────────────────
 # Greps for Claude launches that bypass doey_send_launch. WARN-only.
 # Skips shell/doey-send.sh itself (the helper definitions live there).
@@ -326,14 +375,30 @@ check_doctor() {
 
   # Argument parsing — additive, does not alter any existing check.
   _DOC_STATS_VERBOSE=0
+  _DOC_FIX=0
   DOEY_DOCTOR_NETWORK="${DOEY_DOCTOR_NETWORK:-0}"
   while [ $# -gt 0 ]; do
     case "$1" in
       --stats-verbose) _DOC_STATS_VERBOSE=1; shift ;;
       --network)       DOEY_DOCTOR_NETWORK=1; export DOEY_DOCTOR_NETWORK; shift ;;
+      --fix)           _DOC_FIX=1; shift ;;
       *) shift ;;
     esac
   done
+
+  # --fix: OpenClaw-only path. Fresh install has no openclaw.conf — print a
+  # message and exit (never auto-invoke the wizard).
+  if [ "$_DOC_FIX" = "1" ]; then
+    if [ ! -f "$HOME/.config/doey/openclaw.conf" ]; then
+      printf 'OpenClaw not configured; run /doey-openclaw-connect first\n'
+      exit 0
+    fi
+    if [ -x "$HOME/.local/bin/doey-openclaw" ]; then
+      exec "$HOME/.local/bin/doey-openclaw" doctor --fix
+    fi
+    printf 'doey-openclaw helper not installed; reinstall doey first\n' >&2
+    exit 1
+  fi
 
   printf '\n'
   _print_doey_banner
@@ -743,6 +808,9 @@ check_doctor() {
 
   # ── Discord integration (task 612) ──
   check_discord
+
+  # ── OpenClaw integration (task 652) ──
+  check_openclaw
 
   # ── Launch-bypass probe (task 617) — Claude launches must use doey_send_launch ──
   _check_launch_bypass "$_doey_repo"

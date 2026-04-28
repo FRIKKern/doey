@@ -1,5 +1,7 @@
 # Discord integration
 
+> **OpenClaw integration (v1, opt-in):** see [`docs/openclaw-integration.md`](openclaw-integration.md) for the multi-channel I/O + notification gateway alternative. Coexists with the legacy Discord forwarder; default = legacy chain unbroken.
+
 ## What it does
 
 Doey can optionally route its notifications (task completions, Boss questions,

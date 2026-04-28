@@ -346,6 +346,30 @@ HELP
     doey_discord "$@"
     exit $?
     ;;
+  openclaw)
+    shift
+    _oc_sub="${1:-}"
+    case "$_oc_sub" in
+      notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop) ;;
+      ""|-h|--help|help)
+        printf 'Usage: doey openclaw {notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop} [args]\n' >&2
+        exit 0
+        ;;
+      *)
+        printf 'doey openclaw: unknown subcommand %s\n' "$_oc_sub" >&2
+        printf 'Usage: doey openclaw {notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop} [args]\n' >&2
+        exit 2
+        ;;
+    esac
+    if [ -x "$HOME/.local/bin/doey-openclaw" ]; then
+      exec "$HOME/.local/bin/doey-openclaw" "$@"
+    elif [ -f "${SCRIPT_DIR}/doey-openclaw.sh" ]; then
+      exec bash "${SCRIPT_DIR}/doey-openclaw.sh" "$@"
+    else
+      printf 'Error: doey-openclaw helper not installed. Run "doey doctor" or reinstall.\n' >&2
+      exit 1
+    fi
+    ;;
   # Everything below requires tmux + claude — check prerequisites:
   init)
     _check_prereqs

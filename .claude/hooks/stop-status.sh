@@ -188,6 +188,14 @@ if ! is_taskmaster; then
   notify_taskmaster "$STOP_STATUS"
 fi
 
+# OpenClaw: Boss IDLE marker (gated behind binding presence — preserves
+# fresh-install invariant when OpenClaw is not configured).
+if is_boss && [ "$STOP_STATUS" = "READY" ]; then
+  if [ -f "${DOEY_PROJECT_DIR:-$PWD}/.doey/openclaw-binding" ] && [ -n "${RUNTIME_DIR:-}" ]; then
+    : > "${RUNTIME_DIR}/boss-idle" 2>/dev/null || true
+  fi
+fi
+
 if is_taskmaster; then
   # Taskmaster self-trigger: re-wake after cooldown if not already busy
   (

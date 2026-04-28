@@ -421,6 +421,7 @@ printf "  ${BRAND}[5/7]${RESET} Installing doey command..."
   cp "$SCRIPT_DIR/shell/doey-update.sh" "$HOME/.local/bin/doey-update.sh"
   cp "$SCRIPT_DIR/shell/doey-doctor.sh" "$HOME/.local/bin/doey-doctor.sh"
   cp "$SCRIPT_DIR/shell/doey-discord.sh" "$HOME/.local/bin/doey-discord.sh"
+  [ -f "$SCRIPT_DIR/shell/doey-openclaw.sh" ] && install_script "$SCRIPT_DIR/shell/doey-openclaw.sh" "$HOME/.local/bin/doey-openclaw" || true
   cp "$SCRIPT_DIR/shell/doey-task-cli.sh" "$HOME/.local/bin/doey-task-cli.sh"
   cp "$SCRIPT_DIR/shell/doey-test-runner.sh" "$HOME/.local/bin/doey-test-runner.sh"
   cp "$SCRIPT_DIR/shell/doey-grid.sh" "$HOME/.local/bin/doey-grid.sh"
