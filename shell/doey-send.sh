@@ -28,6 +28,19 @@ _doey_send_check_activity() {
   printf '%s' "$captured" | "$DOEY_GREP" -qE '(⏳|thinking|Thinking|╭─|● |Reading|Writing|Editing|Searching|Running|Bash|Glob|Grep|Agent)' 2>/dev/null
 }
 
+# _doey_send_check_submitted <status_file> <pre_mtime>
+# Authoritative: returns 0 iff status file shows STATUS=BUSY AND mtime advanced
+# past pre_mtime (proves a fresh on-prompt-submit fire, not a stale BUSY).
+_doey_send_check_submitted() {
+  local sf="$1" pre="$2"
+  [ -n "$sf" ] && [ -f "$sf" ] || return 1
+  local cur_mtime cur_status
+  cur_mtime=$(stat -c %Y "$sf" 2>/dev/null || stat -f %m "$sf" 2>/dev/null || echo 0)
+  [ "$cur_mtime" -gt "$pre" ] || return 1
+  cur_status=$(grep '^STATUS:' "$sf" 2>/dev/null | head -1 | sed 's/^STATUS:[[:space:]]*//' || true)
+  [ "$cur_status" = "BUSY" ]
+}
+
 # _doey_send_check_busy <target>
 # Returns 0 if the target pane's status file shows BUSY.
 _doey_send_check_busy() {
@@ -228,6 +241,16 @@ _doey_send_verified_inner() {
   local max_retries=4
   local attempt=0
 
+  # Authoritative submit signal: status file mtime+value transition.
+  # Captured ONCE before any send so per-attempt polls can detect a fresh BUSY.
+  local target_safe_inner
+  target_safe_inner=$(printf '%s' "$target" | tr ':.-' '_')
+  local status_file="${DOEY_RUNTIME:-${RUNTIME_DIR:-}}/status/${target_safe_inner}.status"
+  local pre_mtime=0
+  if [ -f "$status_file" ]; then
+    pre_mtime=$(stat -c %Y "$status_file" 2>/dev/null || stat -f %m "$status_file" 2>/dev/null || echo 0)
+  fi
+
   while [ "$attempt" -lt "$max_retries" ]; do
     attempt=$((attempt + 1))
 
@@ -304,38 +327,39 @@ _doey_send_verified_inner() {
     # write to the pane's pty — guaranteeing contiguous delivery.
     tmux send-keys -t "$target" $'\033[201~' Enter 2>/dev/null || true
 
-    # ── Step 5: Confirm submission via BUSY status or activity ──
-    # Poll for up to 3 seconds. If Enter didn't register (e.g. pane was in
-    # copy-mode), try Escape + Enter recovery at the halfway point.
+    # ── Step 5: Confirm submission — fresh BUSY transition is the gold signal ──
+    # Poll up to 5s (10 x 0.5s). At v=4 and v=7, send a *plain* Enter
+    # (no paste-buffer re-fire, no Escape — paste already landed, only the
+    # submit was lost). After full window with no fresh BUSY, fall through
+    # to outer retry. NEVER silently return 0.
     local v=0
-    while [ "$v" -lt 6 ]; do
+    local enter_kicks=0
+    while [ "$v" -lt 10 ]; do
       sleep 0.5
       v=$((v + 1))
-      if _doey_send_check_busy "$target"; then
+      if _doey_send_check_submitted "$status_file" "$pre_mtime"; then
         return 0
       fi
-      # capture-pane kept: activity indicators (⏳, tool names) appear before status file updates
-      local post_submit
-      post_submit=$(tmux capture-pane -t "$target" -p -S -5 2>/dev/null) || post_submit=""
-      if _doey_send_check_activity "$post_submit"; then
-        return 0
+      # Fallback only when status file is genuinely unavailable.
+      if [ -z "$status_file" ] || [ ! -f "$status_file" ]; then
+        local post_submit
+        post_submit=$(tmux capture-pane -t "$target" -p -S -20 2>/dev/null) || post_submit=""
+        if _doey_send_check_activity "$post_submit"; then
+          return 0
+        fi
       fi
-      # Halfway: recovery in case Enter didn't register (modal state)
-      if [ "$v" -eq 3 ]; then
-        tmux copy-mode -q -t "$target" 2>/dev/null || true
-        # Close any leaked bracketed-paste + Escape as ONE atomic write so the
-        # close ESC isn't seen alone before `[201~` arrives (task 617/647).
-        tmux send-keys -t "$target" $'\033[201~' Escape 2>/dev/null || true
-        sleep 0.15
-        tmux send-keys -t "$target" Enter 2>/dev/null || true
+      # Mid-window plain-Enter kicks. NO Escape (would erase a paste that landed).
+      if [ "$v" -eq 4 ] || [ "$v" -eq 7 ]; then
+        if [ "$enter_kicks" -lt 2 ]; then
+          tmux send-keys -t "$target" Enter 2>/dev/null || true
+          enter_kicks=$((enter_kicks + 1))
+        fi
       fi
     done
 
-    # Paste-buffer + Enter both succeeded — trust delivery even without
-    # explicit BUSY/activity confirmation. Claude may have processed input
-    # too quickly for polling to catch the transition, or the status file
-    # may not be available (e.g. DOEY_RUNTIME unset).
-    return 0
+    # Window exhausted without fresh BUSY. Log to stderr and let outer retry handle it.
+    echo "doey_send_verified: no BUSY transition within 5s on attempt $attempt/$max_retries (target=$target)" >&2
+    # fall through to next iteration of outer while — DO NOT return 0 here.
   done
 
   echo "doey_send_verified: delivery failed after $max_retries attempts to $target" >&2
