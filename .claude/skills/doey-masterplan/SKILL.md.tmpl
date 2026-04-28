@@ -1,6 +1,6 @@
 ---
 name: doey-masterplan
-description: Strategic planning with a mandatory interview phase followed by ultrathink research and vertical phase design. Usage: /doey-masterplan [--quick] <goal>
+description: Strategic planning with an inline interview phase followed by ultrathink research and vertical phase design. Usage: /doey-masterplan [--quick] <goal>
 ---
 
 - Current tasks: !`doey task list 2>/dev/null || echo "No tasks"`
@@ -12,11 +12,11 @@ description: Strategic planning with a mandatory interview phase followed by ult
 
 Never suggest `/doey-worktree`, branch creation, or worktree flow in plan output. All phases commit to the session's starting branch (typically main). If — and only if — the user's literal input (the goal text) contains the word "worktree", you may surface /doey-worktree as the explicit opt-in path.
 
-Spawn a Masterplanner team window for strategic planning. Goal from ARGUMENTS (if empty, use AskUserQuestion to ask, then stop).
+Spawn ONE Masterplanner team window. The Planner agent inside that window runs an inline interview (Phase 0) before research and drafting. There is **no separate interview window** — single window, single flow, no double-questioning.
 
-By default this skill runs a structured **Deep Interview** first so the Planner starts with a clean brief (intent, scope, non-goals, constraints, success criteria). Pass `--quick` to skip the interview for goals that are already concrete.
+Pass `--quick` to skip the inline interview when the goal is already concrete.
 
-This is NOT a quick task planner — it spawns a full team window with a Planner, live plan viewer, and 4 research workers. Use `/doey-planned-task` instead if the goal is a single feature or straightforward change.
+This is NOT a quick task planner — it spawns a full team window with a Planner, live plan viewer, Architect, Critic, and 2 research workers. Use `/doey-planned-task` instead if the goal is a single feature or straightforward change.
 
 ### Step 1: Parse ARGUMENTS and Validate Goal
 
@@ -65,9 +65,9 @@ fi
 printf 'Run interview: %s (classification=%s)\n' "$RUN_INTERVIEW" "$CLASSIFICATION"
 ```
 
-### Step 3: Setup Masterplan Working Directory (common to both modes)
+### Step 3: Setup Masterplan Working Directory
 
-Create the masterplan working directory, write the goal file, allocate a numeric plan ID via `doey plan create`, write a valid frontmatter plan skeleton (so the TUI Plans tab sees it immediately), and write `masterplan.env` — this is what `doey-masterplan-spawn.sh` will consume in Step 3.5 when it spawns the masterplan team window.
+Create the masterplan working directory, write the goal file, allocate a numeric plan ID via `doey plan create`, write a valid frontmatter plan skeleton (so the TUI Plans tab sees it immediately), and write `masterplan.env` — this is what `doey-masterplan-spawn.sh` will consume in Step 4 when it spawns the masterplan team window.
 
 The runtime working dir keeps its timestamp-based name (`masterplan-<TS>`), but `PLAN_ID` and the plan file on disk are **numeric** so `tui/internal/store/migrate.go` picks the plan up for the Plans tab.
 
@@ -141,6 +141,9 @@ PLANS_DIR=${PLANS_DIR}
 BRIEF_FILE=${BRIEF_FILE}
 DOEY_TASK_ID=${DOEY_TASK_ID:-}
 PLAN_DB_ID=${PLAN_DB_ID:-}
+RUN_INTERVIEW=${RUN_INTERVIEW}
+QUICK_MODE=${QUICK_MODE}
+CLASSIFICATION=${CLASSIFICATION}
 ENV_EOF
 echo "Masterplan env written to ${MP_DIR}/masterplan.env"
 
@@ -167,7 +170,7 @@ skill: doey-masterplan
 ${GOAL}
 
 ## Context
-_(Planner will fill this in.)_
+_(Planner will fill this in — starting with inline interview answers if RUN_INTERVIEW=1.)_
 
 ## Phases
 _(Planner will populate.)_
@@ -184,150 +187,33 @@ PLAN_EOF
 echo "Plan file skeleton written at ${PLAN_FILE}"
 ```
 
-### Step 3.5 — Spawn masterplan team window immediately (always, before interview)
+### Step 4 — Spawn the masterplan team window (single window, single flow)
 
-The masterplan team window hosts the Go TUI plan viewer (top-right pane). Spawn it
-now so the pane is visible from the moment the user invokes /doey-masterplan. The
-Planner will display "Waiting for brief…" until the interview completes.
+Hand off to `doey-masterplan-spawn.sh`. The helper spawns the masterplan team window, briefs the Planner, and the Planner takes it from there: if `RUN_INTERVIEW=1` it runs **Phase 0** (inline interview, max ~5 `AskUserQuestion` rounds covering Intent / Scope / Constraints / Success Criteria / Non-goals) before research and drafting. Otherwise it goes straight to research/draft.
+
+There is no separate interview window. The user is questioned at most once, in the Planner pane.
 
 ```bash
 # doey-masterplan-spawn.sh takes the MP_DIR basename as its argument (not the
 # numeric PLAN_ID): it resolves MP_DIR=${RD}/${MP_NAME}, then sources
-# masterplan.env, which overrides PLAN_ID with the numeric value.
-bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${MP_NAME}"
-
-# Capture the newly created window index for later reference
-MP_WIN="$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name}' 2>/dev/null \
-  | awk '$2=="masterplan"{w=$1} END{print w}')"
-echo "Masterplan window: ${MP_WIN:-none}"
-```
-
-### Step 4A: Interview-First Path (default, when RUN_INTERVIEW=1)
-
-Spawn the Deep Interview team window and brief the Interviewer to:
-1. Write the brief to the masterplan-specific location (`${BRIEF_FILE}`), not the default interview location.
-2. After Phase 5 (brief approved by user), send a `brief_ready` message to the already-live masterplan Planner (spawned in Step 3.5) pointing at the brief file. Do NOT call `doey-masterplan-spawn.sh` — the window is already up.
-
-Skip this entire section if `RUN_INTERVIEW=0` — jump to Step 4B.
-
-```bash
-if [ "$RUN_INTERVIEW" = "1" ]; then
-  INTERVIEW_DIR="${MP_DIR}/interview"
-  mkdir -p "${INTERVIEW_DIR}/research"
-  cp "${MP_DIR}/goal.md" "${INTERVIEW_DIR}/goal.md"
-
-  tmux set-environment -t "$SESSION_NAME" DOEY_INTERVIEW_DIR "$INTERVIEW_DIR" 2>/dev/null || true
-  tmux set-environment -t "$SESSION_NAME" DOEY_INTERVIEW_ID  "${PLAN_ID}-interview" 2>/dev/null || true
-  tmux set-environment -t "$SESSION_NAME" DOEY_MASTERPLAN_PENDING "$PLAN_ID" 2>/dev/null || true
-
-  echo "Spawning interview window..."
-  doey add-team interview || { echo "ERROR: doey add-team interview failed"; exit 1; }
-
-  IV_WIN=$(tmux list-windows -t "$SESSION_NAME" -F '#{window_index} #{window_name}' 2>/dev/null | grep -i interview | tail -1 | awk '{print $1}')
-  if [ -z "$IV_WIN" ]; then
-    echo "ERROR: interview window not found after add-team"
-    exit 1
-  fi
-  echo "Interview window: ${IV_WIN}"
-
-  sleep "${DOEY_MANAGER_BRIEF_DELAY:-8}"
-  INTERVIEWER_PANE="${SESSION_NAME}:${IV_WIN}.0"
-  source "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
-
-  IV_BRIEFING="You have a new interview — this is a **masterplan pre-interview**. Your brief will become the Planner's primary input.
-
-## Goal file
-${INTERVIEW_DIR}/goal.md
-
-## Interview directory
-${INTERVIEW_DIR}
-
-## Task ID
-${DOEY_TASK_ID:-none}
-
-## SPECIAL INSTRUCTIONS FOR MASTERPLAN PRE-INTERVIEW
-
-1. Run the full 5-phase interview protocol from your agent definition.
-2. Keep the live brief at \${DOEY_INTERVIEW_DIR}/brief.md updated as usual so the pane-2 viewer stays fresh.
-3. **In Phase 5, after the user approves the final brief, copy it to the masterplan brief path:**
-
-   cp \"\${DOEY_INTERVIEW_DIR}/brief.md\" \"${BRIEF_FILE}\"
-
-4. **Then notify the already-live masterplan Planner that the brief is ready:**
-
-   doey msg send --to ${SESSION_NAME}:${MP_WIN}.0 \\
-                 --from ${INTERVIEWER_PANE} \\
-                 --subject brief_ready \\
-                 --body \"BRIEF_FILE: ${BRIEF_FILE}\"
-   doey msg trigger --pane ${SESSION_NAME}:${MP_WIN}.0
-
-   Do NOT call doey-masterplan-spawn.sh — the masterplan window was spawned at
-   skill invocation and is already live at ${SESSION_NAME}:${MP_WIN}.
-
-5. After notifying the Planner, notify the Taskmaster with subject \`interview_complete\` (your normal post-interview notification) and include:
-   - MASTERPLAN_ID: ${PLAN_ID}
-   - BRIEF: ${BRIEF_FILE}
-   - MASTERPLAN_WINDOW: ${MP_WIN}
-   - NEXT_STEP: Planner notified via brief_ready message
-
-6. Begin with Phase 1: Intent Extraction. Use AskUserQuestion for all questions."
-
-  doey_send_verified "$INTERVIEWER_PANE" "$IV_BRIEFING" && echo "Interviewer briefed" || echo "WARNING: Interviewer briefing delivery failed — will fall back to ${INTERVIEW_DIR}/goal.md"
-
-  # Inform Taskmaster that a masterplan-pre-interview is in progress
-  TASKMASTER_PANE=$(grep '^TASKMASTER_PANE=' "${RD}/session.env" 2>/dev/null | cut -d= -f2-)
-  TASKMASTER_PANE="${TASKMASTER_PANE:-1.0}"
-  doey msg send --to "${SESSION_NAME}:${TASKMASTER_PANE}" --from "${DOEY_PANE_ID:-${SESSION_NAME}:0.1}" \
-    --subject "masterplan_interview_spawned" \
-    --body "MASTERPLAN_ID: ${PLAN_ID}
-INTERVIEW_WIN: ${IV_WIN}
-INTERVIEW_DIR: ${INTERVIEW_DIR}
-GOAL: $(head -3 "${MP_DIR}/goal.md")
-
-A masterplan-pre-interview is running in window ${IV_WIN}; the masterplan planning team is already live in window ${MP_WIN} with the Planner waiting for the brief. After the brief is approved, the Interviewer will notify the Planner via a brief_ready message." 2>/dev/null || true
-  doey msg trigger --pane "${SESSION_NAME}:${TASKMASTER_PANE}" 2>/dev/null || true
-
-  cat << REPORT_EOF
-## Masterplan Interview Spawned
-
-**Plan ID:** ${PLAN_ID}
-**Task ID:** ${DOEY_TASK_ID:-none}
-**Interview window:** ${IV_WIN}
-**Masterplan window:** ${MP_WIN} (Planner waiting for brief)
-**Goal file:** ${MP_DIR}/goal.md
-**Brief target:** ${BRIEF_FILE} (will be written by Interviewer)
-**Masterplan env:** ${MP_DIR}/masterplan.env
-
-The Deep Interviewer is running in window ${IV_WIN} and the masterplan Planner is already live in window ${MP_WIN} (waiting for the brief). Once the brief is approved, the Interviewer will notify the Planner via a \`brief_ready\` message and the plan will begin.
-
-No further action from you — the flow is autonomous.
-REPORT_EOF
-  exit 0
-fi
-```
-
-### Step 4B: Quick Path (when `--quick` or goal is already specific)
-
-Skip the interview entirely — call the spawn helper directly. It loads `masterplan.env`, spawns the planning team, and briefs the Planner with just the goal (no brief file will exist, which the helper handles gracefully).
-
-```bash
-# Pass the MP_DIR basename (timestamp-named) — the helper resolves MP_DIR and
-# then sources masterplan.env which sets PLAN_ID to the numeric DB id.
+# masterplan.env, which overrides PLAN_ID with the numeric value and exposes
+# RUN_INTERVIEW for the Planner briefing.
 bash "$HOME/.local/bin/doey-masterplan-spawn.sh" "${MP_NAME}"
 ```
 
-### Step 5: Report (quick mode only — interview mode reports in Step 4A)
+### Step 5: Report
 
 ```
-## Masterplan Spawned (quick mode — no interview)
+## Masterplan Spawned
 
 **Plan ID:** ${PLAN_ID}
 **Task ID:** ${DOEY_TASK_ID:-none}
 **Plan DB ID:** ${PLAN_DB_ID:-none}
 **Goal file:** ${MP_DIR}/goal.md
 **Plan file:** ${PLAN_FILE}
+**Inline interview:** ${RUN_INTERVIEW} (1 = Planner runs Phase 0; 0 = quick path)
 
-The Masterplanner team is running in its own window. The Planner will clarify scope inline (no upfront interview was performed).
+The Masterplanner team is running in its own window. If RUN_INTERVIEW=1 the Planner will run an inline Phase 0 interview (≤5 AskUserQuestion rounds), then research and draft. Otherwise it goes straight to research/draft.
 ```
 
 ### HARD GATE — Consensus Required Before Execution
@@ -365,9 +251,9 @@ both the Architect and Critic reviewers have returned `**Verdict:** APPROVE`.
 
 ### Rules
 - Always use AskUserQuestion for user interaction — never inline questions
-- The interview is mandatory by default. Only skip it when `--quick` is passed or the goal is already long and file-path-specific.
-- The skill is a launcher — all planning logic lives in the Planner agent (masterplan team) and the Interviewer agent (interview team). Never run research or synthesis inline here.
+- The inline interview is on by default. Only skip it when `--quick` is passed or the goal is already long and file-path-specific.
+- The skill is a launcher — all planning logic (including the inline Phase 0 interview) lives in the Planner agent. Never run research, synthesis, or interview here.
 - Use absolute paths only
-- If any `doey add-team` call fails, report the error and stop — do NOT fall back to running planning inline.
-- The handoff mechanism is `${MP_DIR}/masterplan.env` + `${BRIEF_FILE}` — written here, consumed by `doey-masterplan-spawn.sh` (which is called either by the Interviewer after Phase 5 or directly by this skill in quick mode).
+- If `doey add-team masterplan` (called inside `doey-masterplan-spawn.sh`) fails, report the error and stop — do NOT fall back to running planning inline.
+- The handoff mechanism is `${MP_DIR}/masterplan.env` — written here, consumed by `doey-masterplan-spawn.sh`, which forwards `RUN_INTERVIEW` into the Planner briefing.
 - Works from any caller context (Boss, Taskmaster, or any agent)

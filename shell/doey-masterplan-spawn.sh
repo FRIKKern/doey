@@ -152,40 +152,66 @@ PLANNER_PANE="${SESSION_NAME}:${MP_WIN}.0"
 # shellcheck disable=SC1090
 . "$HOME/.local/bin/doey-send.sh" 2>/dev/null || true
 
-# Build briefing — inject brief path and excerpt if interview produced one
-BRIEF_SECTION=""
-if [ -f "$BRIEF_FILE" ]; then
-  BRIEF_SECTION="
-## Interview Brief (PRIMARY INPUT — read first)
-A structured interview brief has been produced by the Deep Interviewer.
+# RUN_INTERVIEW comes from masterplan.env (set by /doey-masterplan). Default to 1
+# (interview on) if the env is silent — older callers shouldn't accidentally skip
+# the interview just because they predate this flag.
+RUN_INTERVIEW="${RUN_INTERVIEW:-1}"
+QUICK_MODE="${QUICK_MODE:-0}"
+
+# Build briefing — Phase 0 instructions if interview is on AND no pre-existing
+# brief; otherwise tell the Planner the brief is already on disk or skipped.
+INTERVIEW_SECTION=""
+if [ -f "$BRIEF_FILE" ] && [ -s "$BRIEF_FILE" ]; then
+  INTERVIEW_SECTION="
+## Brief Already On Disk (PRIMARY INPUT — read first)
 **Brief file:** ${BRIEF_FILE}
 
-This brief contains the extracted intent, scope, non-goals, constraints, and
-success criteria for the goal. Read it before dispatching any research — it is
-the source of truth for WHAT to plan. Do NOT re-ask the user questions that are
-already answered in the brief."
+A brief is already on disk (legacy hand-off path). Treat it as authoritative for
+intent, scope, non-goals, constraints, and success criteria. Skip Phase 0
+(inline interview) and go straight to Phase 0.5 (Brief Synthesis: re-read,
+summarize into Plan Context, sync to DB)."
+elif [ "$RUN_INTERVIEW" = "1" ]; then
+  INTERVIEW_SECTION="
+## Phase 0 Required — Inline Interview
+RUN_INTERVIEW=1. There is NO separate interview window. You run the interview
+yourself, in this pane, before dispatching research.
+
+- Up to 5 AskUserQuestion rounds covering Intent / Scope / Constraints / Success
+  Criteria / Risks. Stop early if a round answers fully.
+- Do NOT mutate ${PLAN_FILE} during Phase 0.
+- After Phase 0, run Phase 0.5 (Brief Synthesis): write the brief to
+  ${BRIEF_FILE}, summarize into the Plan Context section, sync to DB."
+else
+  INTERVIEW_SECTION="
+## Quick Mode (RUN_INTERVIEW=0)
+The skill classified the goal as already specific (or --quick was passed). Skip
+Phase 0 and go straight to Phase 0.5 — synthesize the brief from the goal text
+alone, then proceed to research and draft."
 fi
 
 BRIEFING="You are the Masterplanner for plan ${PLAN_ID}.
 
 ## Goal
 $(cat "$GOAL_FILE")
-${BRIEF_SECTION}
+${INTERVIEW_SECTION}
 
 ## Context
 - Plan ID: ${PLAN_ID}
 - Goal file: ${GOAL_FILE}
-- Brief file: ${BRIEF_FILE}$( [ -f "$BRIEF_FILE" ] || printf ' (not produced — quick mode)')
+- Brief file: ${BRIEF_FILE}$( [ -f "$BRIEF_FILE" ] && [ -s "$BRIEF_FILE" ] || printf ' (you will write this in Phase 0.5)')
 - Plan file: ${PLAN_FILE}
 - Working directory: ${MP_DIR}
 - Research directory: ${MP_DIR}/research/
 - Plans directory: ${PLANS_DIR}
 - Task ID: ${DOEY_TASK_ID:-none}
 - Plan DB ID: ${PLAN_DB_ID:-none}
+- RUN_INTERVIEW: ${RUN_INTERVIEW}
+- QUICK_MODE: ${QUICK_MODE}
 
-Read the goal file and the brief file (if present), then begin the masterplan
-process. Use workers (panes 2-5) for parallel research. Write the plan to the
-plan file path above — the TUI (pane 1) will display it.
+Read the goal file, then follow Startup → Phase 0 (if applicable) → Phase 0.5 →
+Research Swarm → Consensus Loop, as defined in your agent definition. Use the
+two research workers (panes 4 and 5) for parallel research only AFTER Phase 0.5.
+The TUI viewer (pane 1) live-renders ${PLAN_FILE}.
 
 IMPORTANT: After each major update to the plan file, sync it to the DB so the
 TUI Plans tab stays current:
