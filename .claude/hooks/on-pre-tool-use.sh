@@ -818,10 +818,14 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "${_BASH_CMD:-}" ] && [ "$_BASH_CMD" != "__
   _gsafe=$(printf '%s' "$_gsafe" | sed "s/\"[^\"]*\"//g; s/'[^']*'//g")
   case "$_gsafe" in
     *"git push"*"--force"*|*"git push"*"--force-with-lease"*)
-      _log_block "TOOL_BLOCKED" "Force push blocked" "$_BASH_CMD"
-      _dbg_write "block_force_push"
-      echo "Force push blocked. Use normal push." >&2
-      exit 2 ;;
+      if [ "${DOEY_ALLOW_FORCE_PUSH:-}" = "1" ]; then
+        _dbg_write "allow_force_push_opted_in"
+      else
+        _log_block "TOOL_BLOCKED" "Force push blocked" "$_BASH_CMD"
+        _dbg_write "block_force_push"
+        echo "Force push blocked. Use normal push." >&2
+        exit 2
+      fi ;;
   esac
   case "$_gsafe" in
     *"git push"*" main"*|*"git push"*" master"*|*"git push"*":main"*|*"git push"*":master"*)
