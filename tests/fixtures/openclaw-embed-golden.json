@@ -1,0 +1,22 @@
+{
+  "title": "Approve commit?",
+  "description": "Files: a.go b.go",
+  "color": 3447003,
+  "fields": [
+    {
+      "name": "task_id",
+      "value": "999",
+      "inline": true
+    },
+    {
+      "name": "role",
+      "value": "boss",
+      "inline": true
+    },
+    {
+      "name": "kind",
+      "value": "question",
+      "inline": true
+    }
+  ]
+}

@@ -85,3 +85,36 @@ The agent executes these steps in order. Use `AskUserQuestion` for every user pr
 - Never invoke `doey openclaw doctor --fix` from the wizard with no prior config — that is a no-op-with-message path, not the wizard's job.
 - The skill produces no Co-Authored-By trailers, makes no git commits, and never edits files outside `~/.config/doey/openclaw.conf` and `<project>/.doey/openclaw-binding` (both via the helper).
 - On any helper non-zero exit, surface stderr verbatim (helper redacts secrets in its own logs) and stop.
+
+### Phase 3b: doey-state MCP registration
+
+After `doey openclaw connect` writes its config and idempotently spawns the bridge, the helper now also registers a **read-only Doey state MCP server** with OpenClaw:
+
+```sh
+openclaw mcp set doey-state stdio $HOME/.local/bin/doey-state-mcp
+```
+
+What this gives OpenClaw: a stdio JSON-RPC MCP surface over six tools — `tasks_list`, `task_get`, `pane_layout`, `msg_db_recent`, `status_files_read`, `plan_get`. Read-only in v1; no write tools, no shell, no file writes. OpenClaw can introspect what Doey is currently doing without touching it.
+
+**Redaction model — "convenience telemetry, NOT confidentiality boundary".** Every tool boundary scrubs common secret shapes (`Authorization:`, `token=`, `sk-…`, `gh[pousa]_…`, `xoxb-`, `xoxa-`, `bearer …`, `bridge_hmac_secret`, `gateway_token`) → `[redacted]`. This is a defense against accidental leakage in OpenClaw chat surfaces; treat it as a courtesy filter, not a security boundary. Don't paste real secrets into Doey state files and assume the MCP layer will hide them.
+
+**Idempotency.** `openclaw mcp set` is upsert — re-running the wizard on an already-registered server is a no-op. Failure here (binary missing, openclaw CLI off PATH) is **warn-not-fail**: the wizard prints the warning and continues. The connect flow is not aborted.
+
+**Retroactive registration for pre-3b users.** Users who ran the wizard before Phase 3b shipped will not have `doey-state` registered. They get surfaced by:
+
+```sh
+doey openclaw doctor          # warns: "doey-state MCP not registered with OpenClaw"
+doey openclaw doctor --fix    # invokes register_state_mcp idempotently
+```
+
+`doctor --fix` with no OpenClaw config at all is the existing Phase 1 no-op-with-message — it does NOT trigger MCP registration without prior consent.
+
+**Uninstall.** `doey openclaw unbind` calls `openclaw mcp unset doey-state` before removing the binding/runtime files. `doey openclaw mcp-unregister` is also exposed directly for manual cleanup.
+
+**Verify after connect:**
+
+```sh
+doey openclaw doctor
+# → [openclaw] ok    doey-state MCP registered
+openclaw mcp list | grep doey-state
+```

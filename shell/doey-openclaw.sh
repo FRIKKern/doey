@@ -102,6 +102,45 @@ _oc_bridge_binary() {
   return 1
 }
 
+# ── doey-state MCP binary discovery ──────────────────────────────────
+# Registered as `openclaw mcp set doey-state stdio <path>` by the wizard
+# (Phase 3b). Resolution order mirrors _oc_bridge_binary so dev checkouts
+# and installed users both work. Missing binary = warn + green.
+_OC_MCP_NAME="doey-state"
+
+_oc_doey_state_mcp_binary() {
+  # 1. installed via install.sh
+  if [ -x "$HOME/.local/bin/doey-state-mcp" ]; then
+    echo "$HOME/.local/bin/doey-state-mcp"
+    return 0
+  fi
+  # 2. relative to this script (dev checkout)
+  local here
+  here=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd) || here=""
+  if [ -n "$here" ] && [ -x "${here}/../tui/cmd/doey-state-mcp/doey-state-mcp" ]; then
+    echo "${here}/../tui/cmd/doey-state-mcp/doey-state-mcp"
+    return 0
+  fi
+  # 3. via repo-path pointer
+  if [ -f "$HOME/.claude/doey/repo-path" ]; then
+    local repo
+    repo=$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null) || repo=""
+    if [ -n "$repo" ] && [ -x "${repo}/tui/cmd/doey-state-mcp/doey-state-mcp" ]; then
+      echo "${repo}/tui/cmd/doey-state-mcp/doey-state-mcp"
+      return 0
+    fi
+  fi
+  # 4. project-relative (rare — present when current project IS the doey repo)
+  local proj
+  proj=$(_oc_project_dir)
+  if [ -x "${proj}/tui/cmd/doey-state-mcp/doey-state-mcp" ]; then
+    echo "${proj}/tui/cmd/doey-state-mcp/doey-state-mcp"
+    return 0
+  fi
+  echo ""
+  return 1
+}
+
 # ── SHA1 helper (cross-platform) ──────────────────────────────────────
 
 _oc_sha1() {
@@ -326,6 +365,62 @@ _oc_redact() {
   fi
 }
 
+# ── doey-state MCP registration ───────────────────────────────────────
+# register_state_mcp [<binary_path>]
+#   - Default binary path: $HOME/.local/bin/doey-state-mcp
+#   - Validates binary exists; missing => warn + return 1 (doctor will surface)
+#   - Calls `openclaw mcp set doey-state stdio <path>` (idempotent on
+#     OpenClaw side: same name+args is upsert)
+#   - Returns 0 on success, non-zero with stderr explanation on failure
+register_state_mcp() {
+  local bin="${1:-}"
+  if [ -z "$bin" ]; then
+    bin=$(_oc_doey_state_mcp_binary 2>/dev/null) || bin=""
+    [ -z "$bin" ] && bin="$HOME/.local/bin/doey-state-mcp"
+  fi
+  if [ ! -x "$bin" ]; then
+    echo "[openclaw] register_state_mcp: doey-state-mcp binary missing at ${bin}" >&2
+    return 1
+  fi
+  if ! command -v openclaw >/dev/null 2>&1; then
+    echo "[openclaw] register_state_mcp: openclaw CLI not on PATH — skipping" >&2
+    return 1
+  fi
+  if openclaw mcp set "${_OC_MCP_NAME}" stdio "$bin" >/dev/null 2>&1; then
+    echo "[openclaw] mcp registered: ${_OC_MCP_NAME} stdio ${bin}"
+    return 0
+  fi
+  echo "[openclaw] register_state_mcp: 'openclaw mcp set ${_OC_MCP_NAME} stdio ${bin}' failed" >&2
+  return 1
+}
+
+# unregister_state_mcp — idempotent uninstall counterpart.
+unregister_state_mcp() {
+  if ! command -v openclaw >/dev/null 2>&1; then
+    return 0
+  fi
+  # Best-effort: openclaw mcp unset is a no-op when name not present in
+  # most CLIs; we treat any non-zero as benign and stay silent.
+  if openclaw mcp unset "${_OC_MCP_NAME}" >/dev/null 2>&1; then
+    echo "[openclaw] mcp unregistered: ${_OC_MCP_NAME}"
+  fi
+  return 0
+}
+
+# _oc_mcp_is_registered — detect via `openclaw mcp list` first, then
+# fall back to `openclaw mcp show <name>`. Returns 0 if registered, 1 not.
+_oc_mcp_is_registered() {
+  command -v openclaw >/dev/null 2>&1 || return 1
+  if openclaw mcp list 2>/dev/null \
+       | grep -qE "(^|[[:space:]])${_OC_MCP_NAME}([[:space:]]|$)"; then
+    return 0
+  fi
+  if openclaw mcp show "${_OC_MCP_NAME}" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 # ─────────────────────────────────────────────────────────────────────
 # Subcommands
 # ─────────────────────────────────────────────────────────────────────
@@ -500,6 +595,11 @@ oc_connect() {
   # Idempotently spawn bridge — green-pass when binary not built yet.
   oc_bridge_spawn || true
 
+  # Phase 3b: register the doey-state MCP server with OpenClaw.
+  # Failure here is warn-not-fail (binary may not be built yet on dev
+  # machines, or openclaw CLI may not be on PATH). doctor surfaces it.
+  register_state_mcp || true
+
   echo "[openclaw] connected: $url"
   return 0
 }
@@ -554,6 +654,9 @@ oc_unbind() {
   local bp rt
   bp=$(_oc_binding_path)
   rt=$(_oc_runtime_dir)
+
+  # Phase 3b: best-effort MCP unregister before tearing down state.
+  unregister_state_mcp || true
 
   if [ -f "$bp" ]; then
     if command -v trash >/dev/null 2>&1; then
@@ -645,6 +748,24 @@ oc_doctor() {
       echo "[openclaw] WARN  configured but bridge not running"
       if [ "$fix" = "1" ]; then
         oc_bridge_spawn || true
+      fi
+    fi
+  fi
+
+  # (d) Phase 3b: doey-state MCP server registered with OpenClaw.
+  # Skip when openclaw CLI absent (degrade gracefully).
+  if command -v openclaw >/dev/null 2>&1; then
+    if _oc_mcp_is_registered; then
+      echo "[openclaw] ok    doey-state MCP registered"
+    else
+      echo "[openclaw] WARN  doey-state MCP not registered with OpenClaw"
+      if [ "$fix" = "1" ]; then
+        # Retroactive registration for users who connected pre-3b.
+        if register_state_mcp; then
+          echo "[openclaw] fix   doey-state MCP registered"
+        else
+          echo "[openclaw] WARN  retroactive register_state_mcp failed (see stderr above)"
+        fi
       fi
     fi
   fi
@@ -1082,10 +1203,12 @@ doey_openclaw_main() {
     doctor)        oc_doctor "$@" ;;
     bridge-spawn)  oc_bridge_spawn "$@" ;;
     bridge-stop)   oc_bridge_stop "$@" ;;
+    mcp-register)   register_state_mcp "$@" ;;
+    mcp-unregister) unregister_state_mcp "$@" ;;
     thread-get-or-create) oc_thread_get_or_create "$@" ;;
     correlation-resolve)  oc_correlation_resolve "$@" ;;
     *)
-      echo "[openclaw] usage: doey openclaw {notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop}" >&2
+      echo "[openclaw] usage: doey openclaw {notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop|mcp-register|mcp-unregister}" >&2
       return 2
       ;;
   esac
