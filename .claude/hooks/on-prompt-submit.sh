@@ -16,6 +16,66 @@ fi
 PROMPT=$(parse_field "prompt")
 STATUS_FILE="${RUNTIME_DIR}/status/${PANE_SAFE}.status"
 
+# ── OpenClaw inbound frame verification (Boss only) ───────────────────
+# Pattern: BEGIN nonce=<hex16> [ts=<int>] [hmac=<hex64>] ... END nonce=<hex16>
+# On Boss panes with a binding, any framed prompt MUST authenticate before
+# being submitted to Claude. On any failure: exit 2 (block + feedback).
+# NOTE: Claude Code's UserPromptSubmit hook cannot rewrite the prompt body
+# from this position, so the bridge MUST emit unwrapped bodies after its
+# own framing-verification on the writer side. This branch is a defense-
+# in-depth check: a frame reaching here means the writer did not strip it,
+# so we authenticate before allowing it through.
+if is_boss && [ -n "${PROJECT_DIR:-}" ] && [ -f "${PROJECT_DIR}/.doey/openclaw-binding" ]; then
+  case "$PROMPT" in
+    *"BEGIN nonce="*"END nonce="*)
+      _oc_lib=""
+      if [ -f "$HOME/.local/bin/doey-openclaw.sh" ]; then
+        _oc_lib="$HOME/.local/bin/doey-openclaw.sh"
+      elif [ -f "$HOME/.claude/doey/repo-path" ]; then
+        _oc_repo=$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null) || _oc_repo=""
+        [ -n "$_oc_repo" ] && [ -f "${_oc_repo}/shell/doey-openclaw.sh" ] && _oc_lib="${_oc_repo}/shell/doey-openclaw.sh"
+        unset _oc_repo
+      fi
+      if [ -n "$_oc_lib" ]; then
+        # shellcheck source=/dev/null
+        DOEY_PROJECT_DIR="${PROJECT_DIR}" source "$_oc_lib" 2>/dev/null || true
+      fi
+      _oc_begin=$(printf '%s' "$PROMPT" | grep -oE 'BEGIN nonce=[a-fA-F0-9]+' | head -1 | sed 's/BEGIN nonce=//')
+      _oc_end=$(printf '%s' "$PROMPT" | grep -oE 'END nonce=[a-fA-F0-9]+' | tail -1 | sed 's/END nonce=//')
+      _oc_ts=$(printf '%s' "$PROMPT" | grep -oE 'ts=[0-9]+' | head -1 | sed 's/ts=//')
+      _oc_hmac=$(printf '%s' "$PROMPT" | grep -oE 'hmac=[a-fA-F0-9]+' | head -1 | sed 's/hmac=//')
+      _oc_reason=""
+      if [ -z "$_oc_begin" ] || [ -z "$_oc_end" ]; then
+        _oc_reason="missing nonce"
+      elif [ "$_oc_begin" != "$_oc_end" ]; then
+        _oc_reason="begin/end nonce mismatch"
+      elif ! command -v _oc_nonce_seen_recently >/dev/null 2>&1; then
+        _oc_reason="openclaw lib unavailable"
+      elif ! _oc_nonce_seen_recently "$_oc_begin"; then
+        _oc_reason="unknown/expired nonce"
+      else
+        # Body = content between end-of-BEGIN-line and the END line.
+        _oc_body=$(printf '%s' "$PROMPT" | awk '
+          /^BEGIN nonce=/ { capture=1; next }
+          /^END nonce=/   { capture=0 }
+          capture==1      { print }
+        ')
+        if [ -n "$_oc_hmac" ] && [ -n "$_oc_ts" ]; then
+          if ! _oc_hmac_verify "$_oc_body" "$_oc_ts" "$_oc_hmac"; then
+            _oc_reason="HMAC verify failed"
+          fi
+        fi
+      fi
+      if [ -n "$_oc_reason" ]; then
+        echo "openclaw inbound rejected: ${_oc_reason}" >&2
+        _log "openclaw inbound rejected: ${_oc_reason}"
+        exit 2
+      fi
+      unset _oc_lib _oc_begin _oc_end _oc_ts _oc_hmac _oc_reason _oc_body
+      ;;
+  esac
+fi
+
 # WIN #2: clear pane-flash override + .unread sentinel on focus (opt-out via DOEY_NO_PANE_FLASH=1).
 # Gated on .unread sentinel: only redraw pane border when a flash was actually set —
 # unconditional select-pane -P during initial-dispatch races with Claude TUI's alt-screen

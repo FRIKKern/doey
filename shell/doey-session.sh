@@ -378,6 +378,21 @@ _kill_doey_session() {
     fi
   done
   sleep 0.3
+  # Stop OpenClaw bridge (before tmux kill — bridge needs project dir state)
+  local _oc_proj_name="${session#doey-}"
+  local _oc_rt_pre="${TMPDIR:-/tmp}/doey/${_oc_proj_name}"
+  local _oc_proj_dir=""
+  [ -f "$_oc_rt_pre/session.env" ] && _oc_proj_dir=$(_env_val "$_oc_rt_pre/session.env" PROJECT_DIR)
+  if [ -n "$_oc_proj_dir" ] && [ -f "${_oc_proj_dir}/.doey/openclaw-binding" ]; then
+    if [ -z "${__doey_openclaw_sourced:-}" ]; then
+      local _oc_lib
+      _oc_lib="$(dirname "${BASH_SOURCE[0]}")/doey-openclaw.sh"
+      [ -f "$_oc_lib" ] && DOEY_PROJECT_DIR="$_oc_proj_dir" source "$_oc_lib" 2>/dev/null || true
+    fi
+    if command -v oc_bridge_stop >/dev/null 2>&1; then
+      DOEY_PROJECT_DIR="$_oc_proj_dir" oc_bridge_stop 2>/dev/null || true
+    fi
+  fi
   # Kill the tmux session
   tmux kill-session -t "$session" < /dev/null 2>/dev/null || true
   # Clean up worktrees + runtime dir

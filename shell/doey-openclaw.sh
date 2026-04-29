@@ -652,10 +652,16 @@ oc_doctor() {
   return $rc
 }
 
-# bridge-spawn — STUB for Phase 1.
+# bridge-spawn — Phase 2: launch the openclaw-bridge Go binary detached.
 oc_bridge_spawn() {
-  local pidf bin
+  local pidf bin proj rt
   pidf=$(_oc_bridge_pid_file)
+  proj=$(_oc_project_dir)
+  rt=$(_oc_runtime_root)
+  mkdir -p "$rt" 2>/dev/null || true
+
+  # Already running? (pidfile exists + alive). Lockfile contention: second
+  # spawn-attempt while first holds flock — exit quiet.
   if [ -f "$pidf" ]; then
     local pid
     pid=$(cat "$pidf" 2>/dev/null)
@@ -664,18 +670,31 @@ oc_bridge_spawn() {
     fi
     rm -f "$pidf" 2>/dev/null || true
   fi
-  if ! bin=$(_oc_bridge_binary); then
-    echo "[openclaw] bridge will start on next session (binary not built — Phase 2 deliverable)"
-    return 0
+
+  # Phase 2 build path produced by W4.1.
+  bin="${proj}/tui/openclaw-bridge"
+  if [ ! -x "$bin" ]; then
+    # Fallback: legacy in-tree build dir.
+    local legacy
+    legacy=$(_oc_bridge_binary 2>/dev/null) || legacy=""
+    if [ -n "$legacy" ] && [ -x "$legacy" ]; then
+      bin="$legacy"
+    else
+      echo "openclaw bridge binary not built — run: cd tui && go build -o openclaw-bridge ./cmd/openclaw-bridge" >&2
+      return 0
+    fi
   fi
-  if [ -z "$bin" ] || [ ! -x "$bin" ]; then
-    echo "[openclaw] bridge binary not built (Phase 2 deliverable)"
-    return 0
+
+  local stderr_log="${rt}/openclaw-bridge.stderr.log"
+  # Detached launch; capture pid via subshell.
+  setsid "$bin" --project-dir "$proj" </dev/null >/dev/null 2>"$stderr_log" &
+  local newpid=$!
+  echo "$newpid" > "$pidf"
+  # Brief grace check: if the bridge died instantly due to flock contention
+  # (exit 2), don't leave a stale pidfile.
+  if ! kill -0 "$newpid" 2>/dev/null; then
+    rm -f "$pidf" 2>/dev/null || true
   fi
-  # Spawn detached
-  ( setsid "$bin" </dev/null >/dev/null 2>&1 &
-    echo $! > "$pidf"
-  )
   return 0
 }
 
@@ -696,6 +715,361 @@ oc_bridge_stop() {
   return 0
 }
 
+# oc_bridge_cleanup — alias for oc_bridge_stop, called by `doey stop`.
+oc_bridge_cleanup() {
+  oc_bridge_stop "$@"
+}
+
+# ── Inbound: HMAC + nonce verification + consumer ─────────────────────
+#
+# Canonical byte construction (MUST match Go side byte-for-byte):
+#   message = body_bytes || 0x00 || ts_ascii_decimal_no_padding
+#   mac     = HMAC-SHA256(secret_raw_bytes, message)
+#   hmac_hex = lowercase hex of mac
+# secret stored in openclaw.conf as hex; converted to raw bytes for openssl.
+# Skew window: |now - ts| <= 60s.
+
+_oc_nonce_ledger_path() {
+  local rt
+  rt=$(_oc_runtime_root)
+  mkdir -p "$rt" 2>/dev/null || true
+  echo "${rt}/openclaw-nonces.jsonl"
+}
+
+# Check if nonce appears in current OR rotated (.prev) nonce ledger.
+_oc_nonce_seen_recently() {
+  local nonce="${1:-}"
+  [ -z "$nonce" ] && return 1
+  local current prev
+  current=$(_oc_nonce_ledger_path)
+  prev="${current}.prev"
+  local pat="\"nonce\":\"${nonce}\""
+  if [ -f "$current" ] && grep -qF "$pat" "$current" 2>/dev/null; then
+    return 0
+  fi
+  if [ -f "$prev" ] && grep -qF "$pat" "$prev" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+# Compute HMAC-SHA256 hex over (body || 0x00 || ts_ascii) with hex-encoded secret.
+_oc_hmac_compute() {
+  local body="${1:-}" ts="${2:-}" secret="${3:-}"
+  if [ -z "$secret" ]; then
+    secret=$(_oc_conf_field bridge_hmac_secret)
+  fi
+  [ -z "$secret" ] && return 1
+  local out=""
+  if printf 'test' | openssl mac -macopt "hexkey:${secret}" -digest sha256 HMAC </dev/null >/dev/null 2>&1; then
+    out=$(printf '%s\0%s' "$body" "$ts" \
+      | openssl mac -macopt "hexkey:${secret}" -digest sha256 HMAC 2>/dev/null) || out=""
+    out=$(printf '%s' "$out" | tr 'A-Z' 'a-z' | tr -d ' \n\r')
+  fi
+  if [ -z "$out" ]; then
+    local secret_raw
+    secret_raw=$(printf '%b' "$(printf '%s' "$secret" | sed 's/../\\x&/g')")
+    out=$(printf '%s\0%s' "$body" "$ts" \
+      | openssl dgst -sha256 -hmac "$secret_raw" 2>/dev/null \
+      | awk '{print $NF}' | tr 'A-Z' 'a-z')
+  fi
+  printf '%s' "$out"
+}
+
+# Verify HMAC + skew. Args: <body> <ts> <hmac_hex>
+_oc_hmac_verify() {
+  local body="${1:-}" ts="${2:-}" given="${3:-}"
+  if [ -z "$ts" ] || [ -z "$given" ]; then
+    return 1
+  fi
+  case "$ts" in *[!0-9]*|"") return 1 ;; esac
+  local now
+  now=$(date +%s)
+  local skew=$(( now - ts ))
+  [ "$skew" -lt 0 ] && skew=$(( -skew ))
+  if [ "$skew" -gt 60 ]; then
+    return 2
+  fi
+  local expected
+  expected=$(_oc_hmac_compute "$body" "$ts")
+  [ -z "$expected" ] && return 1
+  given=$(printf '%s' "$given" | tr 'A-Z' 'a-z')
+  if [ "$expected" = "$given" ]; then
+    return 0
+  fi
+  return 1
+}
+
+# Pure-bash JSON field extractor (jq if available, else regex fallback).
+_oc_json_field() {
+  local line="$1" field="$2"
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$line" | jq -r --arg k "$field" '.[$k] // empty' 2>/dev/null
+    return 0
+  fi
+  local val
+  val=$(printf '%s' "$line" \
+    | grep -oE "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
+    | head -1 | sed -e 's/^.*:[[:space:]]*"//' -e 's/"$//')
+  if [ -z "$val" ]; then
+    val=$(printf '%s' "$line" \
+      | grep -oE "\"${field}\"[[:space:]]*:[[:space:]]*[0-9]+" \
+      | head -1 | grep -oE '[0-9]+$')
+  fi
+  printf '%s' "$val"
+}
+
+# oc_inbound_consume — drain inbound-queue.jsonl from cursor, emit valid bodies.
+# Output format per accepted message:
+#   __OC_INBOUND_BEGIN__\n<body>\n__OC_INBOUND_END__\n
+oc_inbound_consume() {
+  local q cur cur_path bound_raw
+  q=$(_oc_inbound_queue_path)
+  cur_path=$(_oc_inbound_cursor_path)
+  [ -f "$q" ] || return 0
+  cur=$(_oc_inbound_cursor_get)
+  case "$cur" in *[!0-9]*|"") cur=0 ;; esac
+
+  bound_raw=$(_oc_binding_field bound_user_ids)
+
+  local idx=0 processed="$cur"
+  local line sender_id body ts hmac nonce msg_id
+  while IFS= read -r line; do
+    idx=$(( idx + 1 ))
+    [ "$idx" -le "$cur" ] && continue
+    if [ -z "$line" ]; then
+      processed=$idx
+      continue
+    fi
+
+    sender_id=$(_oc_json_field "$line" sender_id)
+    body=$(_oc_json_field "$line" body)
+    ts=$(_oc_json_field "$line" ts)
+    hmac=$(_oc_json_field "$line" hmac)
+    nonce=$(_oc_json_field "$line" nonce)
+    msg_id=$(_oc_json_field "$line" msg_id)
+
+    if [ -n "$bound_raw" ]; then
+      local allowed=0 uid
+      while IFS= read -r uid; do
+        [ -z "$uid" ] && continue
+        if [ "$uid" = "$sender_id" ]; then
+          allowed=1
+          break
+        fi
+      done <<EOF
+$(_oc_parse_bound_user_ids "$bound_raw")
+EOF
+      if [ "$allowed" != "1" ]; then
+        echo "[openclaw] inbound: sender ${sender_id:-?} not in bound_user_ids — skipping (msg_id=${msg_id:-?})" >&2
+        processed=$idx
+        continue
+      fi
+    fi
+
+    if ! _oc_hmac_verify "$body" "$ts" "$hmac"; then
+      echo "[openclaw] inbound: HMAC verify failed (msg_id=${msg_id:-?})" >&2
+      processed=$idx
+      continue
+    fi
+
+    if ! _oc_nonce_seen_recently "$nonce"; then
+      echo "[openclaw] inbound: unknown/expired nonce ${nonce:-?} (msg_id=${msg_id:-?})" >&2
+      processed=$idx
+      continue
+    fi
+
+    printf '__OC_INBOUND_BEGIN__\n%s\n__OC_INBOUND_END__\n' "$body"
+    processed=$idx
+  done < "$q"
+
+  _oc_inbound_cursor_set "$processed"
+  return 0
+}
+
+# ── Thread idempotency + correlation ─────────────────────────────────
+# Schema (TSV, tab-separated):
+#   task_id<TAB>thread_id<TAB>created_at<TAB>status[<TAB>resolved_by]
+# status ∈ {open, resolved}. Resolved rows carry a 5th column.
+
+_oc_threads_tsv() {
+  local d
+  d="$(_oc_project_dir)/.doey"
+  mkdir -p "$d" 2>/dev/null || true
+  echo "$d/openclaw-threads.tsv"
+}
+
+_oc_threads_lock() {
+  local d
+  d="$(_oc_project_dir)/.doey"
+  mkdir -p "$d" 2>/dev/null || true
+  echo "$d/openclaw-threads.lock"
+}
+
+# Cross-platform UUID generator (best-effort, dedup-grade).
+_oc_uuid() {
+  if [ -r /proc/sys/kernel/random/uuid ]; then
+    cat /proc/sys/kernel/random/uuid
+    return 0
+  fi
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr 'A-Z' 'a-z'
+    return 0
+  fi
+  # Fallback: synthesize from urandom + pid + epoch.
+  local r
+  if [ -r /dev/urandom ]; then
+    r=$(head -c 16 /dev/urandom 2>/dev/null \
+      | od -An -tx1 2>/dev/null | tr -d ' \n')
+  else
+    r=$(printf '%s%s%s' "$$" "$(date +%s%N 2>/dev/null || date +%s)" "$RANDOM" \
+      | _oc_sha1 | head -c 32)
+  fi
+  printf '%s-%s-%s-%s-%s' "${r:0:8}" "${r:8:4}" "${r:12:4}" "${r:16:4}" "${r:20:12}"
+}
+
+# oc_thread_get_or_create <task_id> [title]
+# Echoes the thread_id on stdout. Returns 0 on success, non-zero on error.
+oc_thread_get_or_create() {
+  local task_id="${1:-}" title="${2:-}"
+  if [ -z "$task_id" ]; then
+    echo "[openclaw] thread_get_or_create: task_id required" >&2
+    return 1
+  fi
+  local tsv lock
+  tsv=$(_oc_threads_tsv)
+  lock=$(_oc_threads_lock)
+  [ -f "$tsv" ] || : > "$tsv"
+  [ -f "$lock" ] || : > "$lock"
+
+  # Acquire exclusive lock with 5s timeout. Use flock if available; otherwise
+  # fall back to mkdir-based spinlock (macOS).
+  local got_lock=0 use_flock=0
+  if command -v flock >/dev/null 2>&1; then
+    use_flock=1
+  fi
+
+  local thread_id=""
+  local now
+  now=$(date +%s)
+  : "${title:=}"  # unused but reserved for future gateway call
+
+  _oc_thread_critical() {
+    # Re-read under lock.
+    local existing
+    existing=$(awk -F'\t' -v t="$task_id" '$1==t && $4=="open" {print $2; exit}' "$tsv" 2>/dev/null) || existing=""
+    if [ -n "$existing" ]; then
+      thread_id="$existing"
+      return 0
+    fi
+    # Generate new thread id (stub — Phase 3 will call gateway thread/create).
+    thread_id=$(_oc_uuid)
+    # Atomic append: write merged TSV to tmp + rename.
+    local tmp="${tsv}.tmp.$$"
+    cp "$tsv" "$tmp" 2>/dev/null || : > "$tmp"
+    printf '%s\t%s\t%s\t%s\n' "$task_id" "$thread_id" "$now" "open" >> "$tmp"
+    mv "$tmp" "$tsv"
+    return 0
+  }
+
+  if [ "$use_flock" = "1" ]; then
+    # 5s timeout, exclusive.
+    {
+      flock -w 5 -x 9 || { echo "[openclaw] thread_get_or_create: flock timeout" >&2; return 1; }
+      _oc_thread_critical
+    } 9>"$lock"
+  else
+    local lockdir="${lock}.d"
+    local i=0
+    while ! mkdir "$lockdir" 2>/dev/null; do
+      i=$((i+1))
+      if [ "$i" -gt 50 ]; then
+        echo "[openclaw] thread_get_or_create: lockdir timeout" >&2
+        return 1
+      fi
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+    _oc_thread_critical
+    rmdir "$lockdir" 2>/dev/null || true
+  fi
+  : "$got_lock"  # silence unused
+
+  printf '%s\n' "$thread_id"
+  return 0
+}
+
+# oc_correlation_resolve <thread_id> <reply_msg_id>
+# Permissive: marks the matching open row as resolved + appends resolved_by.
+# Idempotent: resolving an already-resolved thread is a success no-op.
+# Defensive: if multiple open rows share a task_id, oldest (smallest
+# created_at) wins — but here we resolve by exact thread_id.
+oc_correlation_resolve() {
+  local thread_id="${1:-}" reply_id="${2:-}"
+  if [ -z "$thread_id" ] || [ -z "$reply_id" ]; then
+    echo "[openclaw] correlation_resolve: thread_id and reply_msg_id required" >&2
+    return 1
+  fi
+  local tsv lock
+  tsv=$(_oc_threads_tsv)
+  lock=$(_oc_threads_lock)
+  [ -f "$tsv" ] || : > "$tsv"
+  [ -f "$lock" ] || : > "$lock"
+
+  local use_flock=0
+  command -v flock >/dev/null 2>&1 && use_flock=1
+
+  _oc_correlation_critical() {
+    # Find: among rows with matching thread_id, prefer status=open; if
+    # multiple opens for the same task_id, pick smallest created_at.
+    local found_open
+    found_open=$(awk -F'\t' -v tid="$thread_id" '
+      $2==tid && $4=="open" { print NR"\t"$3 }
+    ' "$tsv" 2>/dev/null | sort -k2,2n | head -1 | cut -f1) || found_open=""
+
+    if [ -z "$found_open" ]; then
+      # Already resolved or unknown → idempotent success.
+      return 0
+    fi
+
+    local tmp="${tsv}.tmp.$$"
+    awk -F'\t' -v target="$found_open" -v rid="$reply_id" '
+      BEGIN { OFS="\t" }
+      NR==target {
+        # Replace status with resolved + append resolved_by.
+        $4="resolved"
+        # Ensure 5 columns.
+        if (NF < 5) { $5=rid } else { $5=rid }
+        print
+        next
+      }
+      { print }
+    ' "$tsv" > "$tmp" 2>/dev/null
+    mv "$tmp" "$tsv"
+    return 0
+  }
+
+  if [ "$use_flock" = "1" ]; then
+    {
+      flock -w 5 -x 9 || { echo "[openclaw] correlation_resolve: flock timeout" >&2; return 1; }
+      _oc_correlation_critical
+    } 9>"$lock"
+  else
+    local lockdir="${lock}.d"
+    local i=0
+    while ! mkdir "$lockdir" 2>/dev/null; do
+      i=$((i+1))
+      if [ "$i" -gt 50 ]; then
+        echo "[openclaw] correlation_resolve: lockdir timeout" >&2
+        return 1
+      fi
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+    _oc_correlation_critical
+    rmdir "$lockdir" 2>/dev/null || true
+  fi
+  return 0
+}
+
 # ── Dispatch entry point ──────────────────────────────────────────────
 doey_openclaw_main() {
   local cmd="${1:-status}"
@@ -708,6 +1082,8 @@ doey_openclaw_main() {
     doctor)        oc_doctor "$@" ;;
     bridge-spawn)  oc_bridge_spawn "$@" ;;
     bridge-stop)   oc_bridge_stop "$@" ;;
+    thread-get-or-create) oc_thread_get_or_create "$@" ;;
+    correlation-resolve)  oc_correlation_resolve "$@" ;;
     *)
       echo "[openclaw] usage: doey openclaw {notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop}" >&2
       return 2
