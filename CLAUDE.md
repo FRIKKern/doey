@@ -164,6 +164,7 @@ Rules for observing whether a pane is active or idle. Apply before telling the u
 - **Minimum capture depth:** `tmux capture-pane -p -S -20` (20 lines, never 4)
 - **Spinner indicators** (glyphs `✻` `●` `⎿` paired with verbs): Sketching, Running, Cogitated, Baked, Sautéed, Brewed, Cooked, Thinking, Frolicking, Crystallizing, Pondering, Mulling, Ruminating, Contemplating, Musing
 - **Idle signature:** pane ends with `❯ ` prompt on the last non-empty line AND no trailing spinner glyph
+- **Limit / quota messages must be FRESH** — Treat `monthly usage limit`, `usage limit`, `rate-limited`, `quota exceeded` strings as a block signal **only** via `doey-ctl status observe --json` (`.limited == true && .limited_stale != true`). The detector scans only the last 5 lines above the trailing `❯ ` prompt and applies a 60-second staleness override (last_output_age > 60s ⇒ stale ⇒ ignore). A limit string anywhere else in the 20-line buffer is stale scrollback. Never grep raw `tmux capture-pane` output for these phrases.
 
 ## Testing Changes
 

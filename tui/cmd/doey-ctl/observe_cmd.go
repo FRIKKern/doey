@@ -41,10 +41,59 @@ type observeResult struct {
 	Active           bool    `json:"active"`
 	Indicator        *string `json:"indicator"`
 	Stale            *bool   `json:"stale,omitempty"`
+	Limited          *bool   `json:"limited,omitempty"`
+	LimitedStale     *bool   `json:"limited_stale,omitempty"`
 	CtxPct           int     `json:"ctx_pct"`
 	LastOutputAgeSec int     `json:"last_output_age_sec"`
 	StatusFileAgeSec int     `json:"status_file_age_sec"`
 	HeartbeatAgeSec  *int    `json:"heartbeat_age_sec"`
+}
+
+// limitPatterns is the case-insensitive substring set used to detect a
+// rate-limit / quota block message in the last few lines above the idle
+// prompt. Strings are lowercase; matching uses strings.Contains on the
+// lowercased line.
+var limitPatterns = []string{
+	"monthly usage limit",
+	"usage limit",
+	"rate-limited",
+	"rate limited",
+	"quota exceeded",
+}
+
+// detectLimit scans the last 5 non-empty lines BEFORE the trailing "❯ "
+// idle prompt for any limitPatterns substring. If no prompt is present in
+// the buffer, the last 5 non-empty lines are scanned. Returns whether any
+// pattern matched.
+func detectLimit(lines []string) bool {
+	// Find the last line that contains the idle-prompt glyph.
+	promptIdx := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "❯") {
+			promptIdx = i
+			break
+		}
+	}
+	scanEnd := len(lines)
+	if promptIdx >= 0 {
+		scanEnd = promptIdx
+	}
+	tail := make([]string, 0, 5)
+	for i := scanEnd - 1; i >= 0 && len(tail) < 5; i-- {
+		if strings.TrimSpace(lines[i]) == "" {
+			continue
+		}
+		tail = append(tail, lines[i])
+	}
+	for _, line := range tail {
+		lower := strings.ToLower(line)
+		for _, pat := range limitPatterns {
+			if strings.Contains(lower, pat) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // parsePaneArg splits "doey-doey:2.0" or "2.0" into (session, "W.P").
@@ -254,11 +303,32 @@ func statusObserve(args []string) {
 		active = true
 	}
 
+	// Limit-detection: structured rate-limit / quota signal. Mirrors the
+	// spinner-staleness override above so callers can trust it instead of
+	// grepping raw `tmux capture-pane` text (which can surface stale
+	// scrollback long after the cap reset).
+	var limitedPtr, limitedStalePtr *bool
+	if detectLimit(lines) {
+		if lastOutputAge > 60 {
+			limitedFalse := false
+			limitedStaleTrue := true
+			limitedPtr = &limitedFalse
+			limitedStalePtr = &limitedStaleTrue
+		} else {
+			limitedTrue := true
+			limitedStaleFalse := false
+			limitedPtr = &limitedTrue
+			limitedStalePtr = &limitedStaleFalse
+		}
+	}
+
 	indicatorPtr := &indicator
 	result := observeResult{
 		Active:           active,
 		Indicator:        indicatorPtr,
 		Stale:            stalePtr,
+		Limited:          limitedPtr,
+		LimitedStale:     limitedStalePtr,
 		CtxPct:           ctxPct,
 		LastOutputAgeSec: lastOutputAge,
 		StatusFileAgeSec: statusAge,

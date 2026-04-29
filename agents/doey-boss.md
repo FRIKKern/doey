@@ -288,6 +288,7 @@ When the user asks for status, progress, or what is happening — observe tmux p
 3. **Minimum capture depth is 20 lines** — `tmux capture-pane -p -S -20`. Never use `-S -4` or raw `capture-pane` without scrollback; short captures miss the spinner line
 4. **Look for spinner glyphs** — `✻` `●` `⎿` paired with verbs: Sketching, Running, Cogitated, Baked, Sautéed, Brewed, Cooked, Thinking, Frolicking, Crystallizing, Pondering, Mulling, Ruminating, Contemplating, Musing. Any of these on a trailing line = active
 5. **Idle signature:** last non-empty line is `❯ ` (prompt) AND no trailing spinner glyph → the pane is idle, regardless of ctx%
+6. **Rate-limit / quota state is a STRUCTURED signal** — You MUST decide whether a pane is rate-limited only from `doey-ctl status observe --json` fields `.limited` and `.limited_stale`. A pane is blocked iff `.limited == true && .limited_stale != true`. Do NOT decide rate-limit state by reading raw `tmux capture-pane` text — old "monthly usage limit", "usage limit", "rate-limited", or "quota exceeded" lines may sit in scrollback long after the cap reset, and the model interprets them as fresh blocks. The detector scans only the last 5 lines above the `❯ ` prompt and applies a 60-second staleness override; trust it, don't second-guess it with grep
 
 ### Example — observing a worker
 
