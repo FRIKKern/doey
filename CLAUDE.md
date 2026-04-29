@@ -44,12 +44,25 @@ Past traps: editing user files that don't ship, session-only env vars, uninstall
 | Workers | `W.1+` | Execute tasks. Skipped if reserved |
 | Freelancers | `F.0+` | Independent workers in managerless teams |
 | Test Driver | external | E2E test runner via `doey test` |
+| OpenClaw bridge | external | Opt-in multi-channel gateway integration (Discord in v1). Outbound: notifications via `shell/doey-openclaw.sh` `oc_notify` path with rate-limit + redact + event-router. Inbound: Go bridge (`tui/cmd/openclaw-bridge/`) handles HMAC-authenticated, nonce-framed messages → Boss pane. Activate via `/doey-openclaw-connect`. |
 
 **Window layout:** `0` = Dashboard (Info Panel + Boss), `1` = Core Team (Taskmaster + specialists), `2+` = Worker teams (Subtaskmaster + Workers)
 
 **Communication:** User → Boss → Taskmaster (relay) | Taskmaster → Subtaskmaster → Workers (dispatch) | Workers → Subtaskmaster (stop hooks) | Subtaskmaster → Taskmaster (cross-team)
 
 **Runtime:** `/tmp/doey/<project>/` — ephemeral, clears on reboot
+
+### OpenClaw integration (opt-in)
+
+Multi-channel notify + inbound Boss messages through a self-hosted gateway daemon. **Activation signal:** `~/.config/doey/openclaw.conf` + `<project>/.doey/openclaw-binding`. Absent = zero behavior change, zero network calls (fresh-install invariant).
+
+- **Outbound:** `shell/doey-openclaw.sh` (`oc_notify`) — rate-limit, redact, event-router, idempotency ledger, token-expiry UX. Fast-path stat in `send_notification` is the only code touched when conf absent.
+- **Inbound:** `tui/cmd/openclaw-bridge/` (Go bridge daemon) — HMAC-authenticated, nonce-framed delivery → Boss pane. PID at `/tmp/doey/<project>/openclaw-bridge.pid`. See `tui/cmd/openclaw-bridge/PROTOCOL.md`.
+- **MCP read-only state:** `tui/cmd/doey-state-mcp/` (`doey-state` server) — registered with OpenClaw via `openclaw mcp set`. Six read-only tools.
+- **Wizard:** `.claude/skills/doey-openclaw-connect/` — host-side filesystem writes via `oc_connect`; never touches files directly.
+- **Portability:** bash 3.2 (shell side), Go 1.21+ (bridge + MCP).
+- **v1 scope:** Discord channel only; multi-channel hooks present but not exercised. Tests: `tests/openclaw-fresh-install.sh` (hard PR-CI gate), `tests/openclaw-e2e.sh` (local-only under `doey test`, 7 E2E scenarios).
+- See `docs/openclaw-integration.md`.
 
 ### Tool Restrictions (`on-pre-tool-use.sh`)
 
@@ -111,7 +124,8 @@ Desktop notifications (osascript / notify-send) for Boss events, with optional D
 
 - **Call:** `send_notification title body [event_kind]` in `.claude/hooks/common.sh`. Third arg defaults to `generic`. Boss-gated + 60s cooldown.
 - **Discord forwarding:** activates automatically when `$DOEY_PROJECT_DIR/.doey/discord-binding` exists. Body passed via stdin only — argv never carries the body. Privacy default = `metadata_only` (titles/events only, no body) unless `DOEY_DISCORD_INCLUDE_BODY=1`.
-- See `docs/discord.md` for setup (TUI Discord tab `b`), privacy model, troubleshooting, and the opt-in e2e test.
+- **OpenClaw forwarding:** opt-in via `/doey-openclaw-connect`. When `~/.config/doey/openclaw.conf` is present, `send_notification` routes through the OpenClaw gateway for multi-channel delivery (Discord in v1) and HMAC-verified Boss inbound. Fresh-install invariant: zero behavior change when conf is absent. Token expiry (401/403) surfaces as a dashboard row + desktop alert pointing back at `/doey-openclaw-connect`.
+- See `docs/discord.md` for legacy Discord setup; `docs/openclaw-integration.md` for the OpenClaw flow.
 
 ## Conventions
 
