@@ -111,6 +111,26 @@ the bridge writes `/tmp/doey/<project>/openclaw-bridge.stuck.json` so
 the user dashboard can surface the outage. The file is removed on the
 first successful poll.
 
+## Replay caps (post-reconnect)
+
+The first non-empty events_wait response after the bridge starts is
+treated as a replay batch. Two caps apply, in order:
+
+1. **Window cap.** Drop events with `ts < now() - 1h`.
+2. **Count cap.** Keep at most the 50 most-recent survivors.
+
+Both skips are logged as `replay truncated: skipped N older events, M
+over-cap (kept K, last_seen_id=… last_seen_ts=…)`. The caps activate
+only when `openclaw-cursor` exists at startup (i.e. the bridge has
+prior drain state). On a fresh install or after the file is deleted,
+no caps are applied — the bridge accepts whatever the gateway returns.
+Subsequent batches in steady state are never capped.
+
+Permissive 1-open correlation is enforced downstream by the consumer
+(`oc_thread_get_or_create` in `shell/doey-openclaw.sh`); replayed
+events flow through the queue file unchanged and inherit dedup at
+thread-creation time.
+
 ## Cursor semantics
 
 - Opaque to the bridge — never parsed, only stored
@@ -124,7 +144,8 @@ first successful poll.
 | Path | Writer | Format |
 |------|--------|--------|
 | `/tmp/doey/<project>/inbound-queue.jsonl` | bridge | one verified Event per line, JSON |
-| `/tmp/doey/<project>/inbound-cursor`      | bridge | opaque string, no newline |
+| `/tmp/doey/<project>/inbound-cursor`      | bridge | opaque gateway cursor string, no newline |
+| `/tmp/doey/<project>/openclaw-cursor`     | bridge | single-line JSON `{"last_event_id","last_event_ts_unix"}` — last successfully drained event; bounds replay batches after reconnect (50 events / 1h window). Missing/malformed → graceful degrade to no-replay. |
 | `/tmp/doey/<project>/openclaw-bridge.pid` | bridge | decimal PID |
 | `/tmp/doey/<project>/openclaw-bridge.lock` | bridge | flock-only, contents irrelevant |
 | `/tmp/doey/<project>/openclaw-bridge.stuck.json` | bridge | dashboard hint, see dashboard.go |

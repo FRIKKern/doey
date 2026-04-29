@@ -17,6 +17,8 @@ type Config struct {
 type Binding struct {
 	BoundUserIDs            []string
 	LegacyDiscordSuppressed bool
+	RecordedDaemonVersion   string
+	MinRequiredVersion      string
 }
 
 func LoadConfig(projectDir string) (*Config, error) {
@@ -61,6 +63,8 @@ func LoadBinding(projectDir string) (*Binding, error) {
 	case "1", "true", "yes":
 		b.LegacyDiscordSuppressed = true
 	}
+	b.RecordedDaemonVersion = strings.TrimSpace(kv["recorded_daemon_version"])
+	b.MinRequiredVersion = strings.TrimSpace(kv["min_required_version"])
 	if len(b.BoundUserIDs) == 0 {
 		return nil, fmt.Errorf("openclaw-binding: bound_user_ids is empty")
 	}

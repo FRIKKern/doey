@@ -23,7 +23,8 @@ doey-loading|tui|./cmd/doey-loading/|${HOME}/.local/bin/doey-loading
 doey-daemon|tui|./cmd/doey-daemon/|${HOME}/.local/bin/doey-daemon
 doey-term|tui|./cmd/doey-term/|${HOME}/.local/bin/doey-term
 doey-masterplan-tui|tui|./cmd/doey-masterplan-tui/|${HOME}/.local/bin/doey-masterplan-tui
-doey-scaffy|tui|./cmd/scaffy/|${HOME}/.local/bin/doey-scaffy"
+doey-scaffy|tui|./cmd/scaffy/|${HOME}/.local/bin/doey-scaffy
+doey-state-mcp|tui|./cmd/doey-state-mcp/|${HOME}/.local/bin/doey-state-mcp"
 
 # ── _print_go_install_hint ───────────────────────────────────────────
 # Print a platform-aware Go install hint to stderr. Detects common

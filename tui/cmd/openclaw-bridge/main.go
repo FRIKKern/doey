@@ -25,6 +25,7 @@ func main() {
 		lockFile   = flag.String("lock-file", "", "path to lock file (default: /tmp/doey/<project>/openclaw-bridge.lock)")
 		queueFile  = flag.String("queue", "", "path to inbound-queue.jsonl (default: /tmp/doey/<project>/inbound-queue.jsonl)")
 		cursorFile = flag.String("cursor", "", "path to inbound-cursor (default: /tmp/doey/<project>/inbound-cursor)")
+		procCursor = flag.String("processed-cursor", "", "path to openclaw-cursor (default: /tmp/doey/<project>/openclaw-cursor) — last successfully drained {event_id,ts}")
 		idleFile   = flag.String("boss-idle", "", "path to boss-idle file (default: /tmp/doey/<project>/boss-idle)")
 		stuckFile  = flag.String("stuck-file", "", "path to stuck dashboard file (default: /tmp/doey/<project>/openclaw-bridge.stuck.json)")
 		ledgerFile = flag.String("nonce-ledger", "", "path to nonce ledger (default: /tmp/doey/<project>/openclaw-nonces.jsonl)")
@@ -73,6 +74,7 @@ func main() {
 	*lockFile = def(*lockFile, "openclaw-bridge.lock")
 	*queueFile = def(*queueFile, "inbound-queue.jsonl")
 	*cursorFile = def(*cursorFile, "inbound-cursor")
+	*procCursor = def(*procCursor, "openclaw-cursor")
 	*idleFile = def(*idleFile, "boss-idle")
 	*stuckFile = def(*stuckFile, "openclaw-bridge.stuck.json")
 	*ledgerFile = def(*ledgerFile, "openclaw-nonces.jsonl")
@@ -98,7 +100,10 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
 	dashboard := NewDashboard(*stuckFile)
-	poller := NewPoller(cfg, *channel, *cursorFile, dashboard)
+	poller := NewPoller(cfg, *channel, *cursorFile, *procCursor, dashboard)
+	cursorWriter := NewCursorWriter(*procCursor)
+	reconnectHandler := NewReconnectHandler(*projectDir, dashboard)
+	poller.OnRecover = func() { reconnectHandler.OnReconnect(ctx) }
 
 	verifier, err := NewHMACVerifier(cfg.HMACSecret, *hmacWindow)
 	if err != nil {
@@ -131,7 +136,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := Drain(ctx, sink, verifier, queueWriter); err != nil && !errors.Is(err, context.Canceled) {
+		if err := Drain(ctx, sink, verifier, queueWriter, cursorWriter); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("drain exited: %v", err)
 		}
 	}()

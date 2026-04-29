@@ -189,7 +189,7 @@ func TestQueueDrainSuccess(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := Drain(ctx, sink, stubVerifier{allow: true}, q); err != nil {
+	if err := Drain(ctx, sink, stubVerifier{allow: true}, q, nil); err != nil {
 		t.Fatalf("drain: %v", err)
 	}
 
@@ -232,7 +232,7 @@ func TestQueueDrainDropsBadHMAC(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_ = Drain(ctx, sink, stubVerifier{allow: false}, q)
+	_ = Drain(ctx, sink, stubVerifier{allow: false}, q, nil)
 
 	if n, _ := countLines(qp); n != 0 {
 		t.Fatalf("queue should be empty for dropped events, got %d", n)

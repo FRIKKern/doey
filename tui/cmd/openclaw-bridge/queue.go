@@ -145,9 +145,11 @@ func countLines(path string) (int, error) {
 
 // Drain consumes events from sink, verifies HMAC, frames with a fresh nonce,
 // records the nonce, and appends to the queue. On verification failure the
-// event is logged to stderr and dropped. Returns when ctx is canceled or sink
-// is closed.
-func Drain(ctx context.Context, sink <-chan Event, v Verifier, q *QueueWriter) error {
+// event is logged to stderr and dropped. After each successful Append, the
+// processed-cursor (if cw is non-nil) is updated so a subsequent reconnect can
+// bound replay to events newer than this point. Returns when ctx is canceled
+// or sink is closed.
+func Drain(ctx context.Context, sink <-chan Event, v Verifier, q *QueueWriter, cw *CursorWriter) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -173,6 +175,9 @@ func Drain(ctx context.Context, sink <-chan Event, v Verifier, q *QueueWriter) e
 			if err := q.Append(ev); err != nil {
 				log.Printf("openclaw-bridge: queue append failed: %v", err)
 				continue
+			}
+			if err := cw.Write(ProcessedCursor{LastEventID: ev.ID, LastEventTs: ev.Ts}); err != nil {
+				log.Printf("openclaw-bridge: processed-cursor write failed (non-fatal): %v", err)
 			}
 		}
 	}

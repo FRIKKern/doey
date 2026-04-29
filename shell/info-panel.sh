@@ -398,6 +398,13 @@ while true; do
   _tunnel_provider="$_ENV_TUNNEL_PROVIDER"
   _tunnel_error="$_ENV_TUNNEL_ERROR"
 
+  # OpenClaw token-expiry surface (Phase 4 subtask 2).
+  # State file under /tmp/doey/<project>/openclaw-token-expired = expired.
+  _openclaw_token_expired=0
+  if [ -f "${RUNTIME_DIR}/openclaw-token-expired" ]; then
+    _openclaw_token_expired=1
+  fi
+
   # Remote mode
   _is_remote=$(tmux show-environment DOEY_REMOTE 2>/dev/null | cut -d= -f2-) || _is_remote=""
 
@@ -524,6 +531,15 @@ while true; do
     printf '  %b TUNNEL%b  %b%s%b\n' "${C_BOLD_YELLOW}" "${C_RESET}" "${C_DIM}" "$_tunnel_error" "${C_RESET}"
   elif [ "$_is_remote" = "true" ]; then
     printf '  %b[REMOTE]%b\n' "${C_BOLD_CYAN}" "${C_RESET}"
+  fi
+
+  # OpenClaw token-expired surface (Phase 4 subtask 2). Always-visible row
+  # when state file present; absent file = no row (clean fresh-install).
+  if [ "${_openclaw_token_expired:-0}" = "1" ]; then
+    printf '  %b OpenClaw%b  %bTOKEN EXPIRED%b %b— /doey-openclaw-connect%b\n' \
+      "${C_BOLD_RED}" "${C_RESET}" \
+      "${C_BOLD_RED}" "${C_RESET}" \
+      "${C_DIM}" "${C_RESET}"
   fi
 
   printf '\n'

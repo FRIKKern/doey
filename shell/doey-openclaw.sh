@@ -21,6 +21,23 @@ set -euo pipefail
 [ "${__doey_openclaw_sourced:-}" = "1" ] && return 0 2>/dev/null || true
 __doey_openclaw_sourced=1
 
+# ── Wave-3 helpers: event-router, rate-limiter, redact ────────────────
+# Sourced once; modules with internal guards skip re-sourcing on their own.
+__oc_helpers_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd) || __oc_helpers_dir=""
+if [ -n "$__oc_helpers_dir" ]; then
+  if [ "${__doey_oc_event_router_sourced:-}" != "1" ] && [ -f "$__oc_helpers_dir/openclaw-event-router.sh" ]; then
+    # shellcheck disable=SC1090,SC1091
+    . "$__oc_helpers_dir/openclaw-event-router.sh" && __doey_oc_event_router_sourced=1
+  fi
+  [ -f "$__oc_helpers_dir/openclaw-rate-limiter.sh" ] && \
+    { . "$__oc_helpers_dir/openclaw-rate-limiter.sh" || true; }
+  if [ "${__doey_oc_redact_sourced:-}" != "1" ] && [ -f "$__oc_helpers_dir/openclaw-redact.sh" ]; then
+    # shellcheck disable=SC1090,SC1091
+    . "$__oc_helpers_dir/openclaw-redact.sh" && __doey_oc_redact_sourced=1
+  fi
+fi
+unset __oc_helpers_dir
+
 # ── Constants ─────────────────────────────────────────────────────────
 
 OPENCLAW_CONF="$HOME/.config/doey/openclaw.conf"
@@ -283,6 +300,76 @@ _oc_inbound_cursor_get() {
   cat "$cur" 2>/dev/null || echo "0"
 }
 
+# ── Token-expiry UX (Phase 4 subtask 2) ───────────────────────────────
+# State file presence at /tmp/doey/<project>/openclaw-token-expired means
+# the gateway last responded with an auth-failure code (401/403) or an
+# explicit token_expired error JSON. Cleared by oc_connect on success.
+# Info panel reads this file to surface a "TOKEN EXPIRED" row to Boss.
+_oc_token_expired_state_file() {
+  local rt
+  rt=$(_oc_runtime_root)
+  mkdir -p "$rt" 2>/dev/null || true
+  echo "${rt}/openclaw-token-expired"
+}
+
+# Fire desktop alert for token expiry. Cooldown via state-file presence:
+# if the file already existed prior to this call we skip the desktop fire
+# (already alerted for this expiry cycle). Boss-gated like other desktop
+# notifications. Body fixed; points user at /doey-openclaw-connect.
+_oc_token_expired_alert() {
+  local f
+  f=$(_oc_token_expired_state_file)
+  local already=0
+  [ -f "$f" ] && already=1
+
+  # Atomic touch (presence = expired).
+  if [ "$already" = "0" ]; then
+    : > "${f}.tmp.$$" 2>/dev/null && mv "${f}.tmp.$$" "$f" 2>/dev/null || \
+      touch "$f" 2>/dev/null || true
+  fi
+
+  # Skip desktop fire if already alerted this cycle.
+  [ "$already" = "1" ] && return 0
+
+  # Boss-gated desktop notification. Use osascript / notify-send directly to
+  # avoid recursion through send_notification → oc_notify path.
+  if [ "${DOEY_ROLE:-}" = "boss" ] || [ "${DOEY_ROLE_ID:-}" = "boss" ]; then
+    local _t="OpenClaw token expired"
+    local _b="Run /doey-openclaw-connect in Boss to refresh."
+    if command -v osascript >/dev/null 2>&1; then
+      osascript - "$_t" "$_b" <<'APPLESCRIPT' 2>/dev/null &
+on run argv
+  display notification (item 2 of argv) with title (item 1 of argv)
+end run
+APPLESCRIPT
+    elif command -v notify-send >/dev/null 2>&1; then
+      notify-send "$_t" "$_b" 2>/dev/null &
+    fi
+  fi
+  return 0
+}
+
+# Clear token-expired state (on successful reconnect).
+_oc_token_expired_clear() {
+  local f
+  f=$(_oc_token_expired_state_file)
+  [ -f "$f" ] || return 0
+  rm -f "$f" 2>/dev/null || true
+}
+
+# Detect token-expiry signals in HTTP response. Args: <code> <body>.
+# Returns 0 when expiry detected, 1 otherwise.
+_oc_is_token_expired() {
+  local code="${1:-}" body="${2:-}"
+  case "$code" in
+    401|403) return 0 ;;
+  esac
+  case "$body" in
+    *token_expired*|*'"error":"expired'*|*expired_token*) return 0 ;;
+  esac
+  return 1
+}
+
 # ── Curl with redaction ───────────────────────────────────────────────
 # Wraps curl with `set +x` around the call so Authorization never leaks
 # into trace logs. Body via stdin only — never argv.
@@ -451,6 +538,39 @@ oc_notify() {
     body=$(cat 2>/dev/null || true)
   fi
 
+  # Wave-3: opt-in xtrace redaction guard (covers callers running with set -x).
+  if [ "${DOEY_OPENCLAW_REDACT_TRACE:-}" = "1" ] && \
+     [ "${__doey_oc_redact_armed:-}" != "1" ] && \
+     command -v oc_redact_trace_setup >/dev/null 2>&1; then
+    oc_redact_trace_setup 2>/dev/null && __doey_oc_redact_armed=1 || true
+  fi
+
+  # Wave-3: rate-limit per (task_id, role). Suppressed events return silently;
+  # an allowed event prepends any pending rolled-up suppression notice.
+  if command -v oc_rate_check >/dev/null 2>&1; then
+    if oc_rate_check "${task_id:-_}" "${role:-_}"; then
+      local _oc_flush
+      if _oc_flush=$(oc_rate_pending_flush "${task_id:-_}" "${role:-_}" pre_emit 2>/dev/null); then
+        if [ -n "$body" ]; then
+          body="${_oc_flush}
+${body}"
+        else
+          body="$_oc_flush"
+        fi
+        oc_rate_consume_flush "${task_id:-_}" "${role:-_}" || true
+      fi
+    else
+      return 0
+    fi
+  fi
+
+  # Wave-3: event-router classification — gateway uses this to pick compact
+  # vs embed rendering. Default to "embed" if helper unavailable.
+  local route="embed"
+  if command -v oc_classify_event >/dev/null 2>&1; then
+    route=$(oc_classify_event "$event")
+  fi
+
   local key
   key=$(_oc_idempotency_key "${role:-unknown}" "$task_id" "$event" "$body")
 
@@ -468,8 +588,8 @@ oc_notify() {
   local title_json
   title_json=$(printf '%s' "$title" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n')
   local payload
-  payload=$(printf '{"role":"%s","event":"%s","task_id":"%s","title":"%s","key":"%s","body":%s}' \
-    "${role:-unknown}" "$event" "${task_id:-}" "$title_json" "$key" \
+  payload=$(printf '{"role":"%s","event":"%s","route":"%s","task_id":"%s","title":"%s","key":"%s","body":%s}' \
+    "${role:-unknown}" "$event" "$route" "${task_id:-}" "$title_json" "$key" \
     "$(printf '%s' "$body" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/' | tr -d '\n')")
 
   local result code
@@ -495,6 +615,13 @@ oc_notify() {
   esac
 
   if [ "$fallback" = "1" ]; then
+    # Token-expiry detection: surface UX (state file + desktop alert) on
+    # 401/403/token_expired so Boss is prompted to re-run the wizard.
+    local _oc_resp_body
+    _oc_resp_body=$(printf '%s' "$result" | tail -n +2)
+    if _oc_is_token_expired "$code" "$_oc_resp_body"; then
+      _oc_token_expired_alert
+    fi
     if [ "$suppressed" = "true" ]; then
       # Silent loss per binding flag (defensive default false handled above).
       return 0
@@ -599,6 +726,9 @@ oc_connect() {
   # Failure here is warn-not-fail (binary may not be built yet on dev
   # machines, or openclaw CLI may not be on PATH). doctor surfaces it.
   register_state_mcp || true
+
+  # Clear any prior token-expired state so dashboard row + Boss alert reset.
+  _oc_token_expired_clear
 
   echo "[openclaw] connected: $url"
   return 0
@@ -1191,6 +1321,121 @@ oc_correlation_resolve() {
   return 0
 }
 
+# ── Per-reconnect daemon-version smoke (Phase 4 subtask 4) ────────────
+# Stable shortname for the dedup key — every reconnect funnels into a
+# single open task with this shortname; the body becomes a log entry.
+OC_RECONNECT_SHORTNAME="openclaw-reconnect-status"
+OC_RECONNECT_TITLE="OpenClaw bridge reconnect status"
+
+# _oc_reconnect_find_open_task <project_dir> → echo task_id (or empty)
+# Searches `doey task list --json` for an open task whose shortname is
+# OC_RECONNECT_SHORTNAME. "Open" = any status NOT in {done, cancelled,
+# failed, deferred, skipped}. Best-effort: if jq/python/doey CLI are
+# missing, returns empty so the caller will try create instead. Note:
+# when `doey-ctl` is absent the helper degrades silently — Go bridge
+# logs the helper's stderr but never blocks.
+_oc_reconnect_find_open_task() {
+  local proj="${1:-}"
+  command -v doey >/dev/null 2>&1 || { echo ""; return 0; }
+  command -v python3 >/dev/null 2>&1 || { echo ""; return 0; }
+  doey task list --json --project-dir "$proj" 2>/dev/null \
+    | OC_RC_SHORTNAME="$OC_RECONNECT_SHORTNAME" python3 -c '
+import json, os, sys
+sn = os.environ.get("OC_RC_SHORTNAME", "")
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+if not isinstance(data, list):
+    sys.exit(0)
+closed = {"done", "cancelled", "failed", "deferred", "skipped"}
+def pick(d, *keys):
+    for k in keys:
+        if k in d and d[k] not in (None, ""):
+            return d[k]
+    return ""
+for t in data:
+    if not isinstance(t, dict):
+        continue
+    short = pick(t, "shortname", "Shortname")
+    status = str(pick(t, "status", "Status")).lower()
+    if short == sn and status not in closed:
+        print(pick(t, "id", "ID"))
+        sys.exit(0)
+' 2>/dev/null
+}
+
+# oc_reconnect_status_task <expected_version> <observed_version> [body]
+# Per-reconnect dedup-creator. If an open status task with shortname
+# OC_RECONNECT_SHORTNAME already exists: appends a log entry of type
+# "progress" and echoes the existing id. Else creates a fresh task with
+# that shortname, then appends the first log entry.
+#
+# Idempotent: N consecutive calls produce exactly 1 task with N log
+# entries. Best-effort everywhere — a missing doey CLI just warns and
+# returns 0 so the bridge reconnect path is never blocked.
+oc_reconnect_status_task() {
+  local expected="${1:-unknown}"
+  local observed="${2:-unknown}"
+  local body="${3:-reconnect expected=${expected} observed=${observed}}"
+  local proj
+  proj=$(_oc_project_dir)
+
+  if ! command -v doey >/dev/null 2>&1; then
+    echo "[openclaw] reconnect-status: doey CLI missing — skipping" >&2
+    return 0
+  fi
+
+  local existing_id
+  existing_id=$(_oc_reconnect_find_open_task "$proj")
+
+  local mismatch="no"
+  if [ "$expected" != "$observed" ] && [ "$expected" != "unknown" ] && [ "$observed" != "unknown" ]; then
+    mismatch="yes"
+  fi
+  local entry_title="Reconnect smoke (mismatch=${mismatch})"
+
+  if [ -n "$existing_id" ]; then
+    doey task log add --task-id "$existing_id" --type progress \
+      --title "$entry_title" --body "$body" \
+      --author openclaw-bridge --project-dir "$proj" >/dev/null 2>&1 || true
+    printf '%s\n' "$existing_id"
+    return 0
+  fi
+
+  local create_out new_id=""
+  create_out=$(doey task create --title "$OC_RECONNECT_TITLE" \
+    --shortname "$OC_RECONNECT_SHORTNAME" \
+    --created-by openclaw-bridge \
+    --type task \
+    --description "Auto-created by openclaw-bridge on reconnect. Tracks per-reconnect daemon-version smoke results. Safe to mark done after operator review." \
+    --project-dir "$proj" --json 2>/dev/null) || create_out=""
+
+  if [ -n "$create_out" ] && command -v python3 >/dev/null 2>&1; then
+    new_id=$(printf '%s' "$create_out" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(d.get("id", ""))
+except Exception:
+    pass
+' 2>/dev/null)
+  fi
+  if [ -z "$new_id" ]; then
+    # Race-safe fallback: re-list and find by shortname.
+    new_id=$(_oc_reconnect_find_open_task "$proj")
+  fi
+  if [ -z "$new_id" ]; then
+    echo "[openclaw] reconnect-status: failed to obtain task id" >&2
+    return 0
+  fi
+  doey task log add --task-id "$new_id" --type progress \
+    --title "$entry_title" --body "$body" \
+    --author openclaw-bridge --project-dir "$proj" >/dev/null 2>&1 || true
+  printf '%s\n' "$new_id"
+  return 0
+}
+
 # ── Dispatch entry point ──────────────────────────────────────────────
 doey_openclaw_main() {
   local cmd="${1:-status}"
@@ -1207,8 +1452,9 @@ doey_openclaw_main() {
     mcp-unregister) unregister_state_mcp "$@" ;;
     thread-get-or-create) oc_thread_get_or_create "$@" ;;
     correlation-resolve)  oc_correlation_resolve "$@" ;;
+    reconnect-status)     oc_reconnect_status_task "$@" ;;
     *)
-      echo "[openclaw] usage: doey openclaw {notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop|mcp-register|mcp-unregister}" >&2
+      echo "[openclaw] usage: doey openclaw {notify|connect|status|unbind|doctor|bridge-spawn|bridge-stop|mcp-register|mcp-unregister|reconnect-status}" >&2
       return 2
       ;;
   esac

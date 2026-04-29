@@ -35,17 +35,29 @@ type Poller struct {
 	TimeoutMS  int
 
 	dashboard *Dashboard
+
+	// replayCursor is loaded once at construction from the openclaw-cursor
+	// file; non-nil means the previous Drain has state on disk and the first
+	// non-empty poll response after startup is treated as a replay batch.
+	replayCursor *ProcessedCursor
+	replayDone   bool
+
+	// OnRecover fires once per failed-to-healthy edge, after backoff is
+	// reset. Used to drive the per-reconnect daemon-version smoke check.
+	// Nil-safe: a nil callback is silently skipped.
+	OnRecover func()
 }
 
-func NewPoller(cfg *Config, channel, cursorPath string, dash *Dashboard) *Poller {
+func NewPoller(cfg *Config, channel, cursorPath, processedCursorPath string, dash *Dashboard) *Poller {
 	return &Poller{
-		BaseURL:    strings.TrimRight(cfg.GatewayURL, "/"),
-		Token:      cfg.GatewayToken,
-		Channel:    channel,
-		CursorPath: cursorPath,
-		HTTP:       &http.Client{Timeout: 60 * time.Second},
-		TimeoutMS:  25000,
-		dashboard:  dash,
+		BaseURL:      strings.TrimRight(cfg.GatewayURL, "/"),
+		Token:        cfg.GatewayToken,
+		Channel:      channel,
+		CursorPath:   cursorPath,
+		HTTP:         &http.Client{Timeout: 60 * time.Second},
+		TimeoutMS:    25000,
+		dashboard:    dash,
+		replayCursor: LoadProcessedCursor(processedCursorPath),
 	}
 }
 
@@ -71,8 +83,13 @@ func (p *Poller) Run(ctx context.Context, sink chan<- Event) error {
 			}
 			continue
 		}
-		if failCount > 0 && p.dashboard != nil {
-			p.dashboard.ClearStuck()
+		if failCount > 0 {
+			if p.dashboard != nil {
+				p.dashboard.ClearStuck()
+			}
+			if p.OnRecover != nil {
+				p.OnRecover()
+			}
 		}
 		failCount = 0
 
@@ -83,7 +100,19 @@ func (p *Poller) Run(ctx context.Context, sink chan<- Event) error {
 				cursor = resp.Cursor
 			}
 		}
-		for _, ev := range resp.Events {
+		events := resp.Events
+		if len(events) > 0 && !p.replayDone {
+			if p.replayCursor != nil {
+				kept, skippedOld, skippedCap := FilterReplayBatch(events, time.Now(), ReplayWindow, ReplayMaxEvents)
+				if skippedOld+skippedCap > 0 {
+					log.Printf("openclaw-bridge: replay truncated: skipped %d older events, %d over-cap (kept %d, last_seen_id=%s last_seen_ts=%d)",
+						skippedOld, skippedCap, len(kept), p.replayCursor.LastEventID, p.replayCursor.LastEventTs)
+				}
+				events = kept
+			}
+			p.replayDone = true
+		}
+		for _, ev := range events {
 			select {
 			case sink <- ev:
 			case <-ctx.Done():

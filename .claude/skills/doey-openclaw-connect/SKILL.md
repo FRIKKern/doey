@@ -58,6 +58,7 @@ The agent executes these steps in order. Use `AskUserQuestion` for every user pr
     3. Atomically writes `<project>/.doey/openclaw-binding`.
     4. Re-runs the daemon-version smoke (if daemon reachable) and rejects below `OPENCLAW_MIN_VERSION`.
     5. Calls `doey openclaw bridge-spawn` (idempotent: no-op if PID file is alive). Until the Phase 2 bridge binary lands, this step logs "bridge will start on next session" and exits green.
+    6. Clears the token-expired state file at `/tmp/doey/<project>/openclaw-token-expired` on success — this dismisses the dashboard warning row and resets the desktop alert cooldown so the next expiry will fire a fresh notification. Wizard must NOT touch this file directly; the helper owns it.
 
     **Rollback contract (helper invariant):** if the helper fails after writing `openclaw.conf` but before `<project>/.doey/openclaw-binding` lands, it deletes `openclaw.conf` so no half-config remains on disk. **Never leave half-config.** If both files wrote successfully but bridge-spawn fails, both files persist (configured-but-dead state) and the helper surfaces a loud "configured but bridge not running" warning that `doey openclaw doctor` will reproduce.
 8. **Confirmation summary** — print resulting state. **Never print secrets** — no `gateway_token`, no `bridge_hmac_secret`, no full URL with embedded credentials.
