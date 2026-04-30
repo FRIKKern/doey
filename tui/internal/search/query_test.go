@@ -253,6 +253,78 @@ func TestTextSearch_Messages(t *testing.T) {
 	}
 }
 
+func TestSanitizeFTS5Query(t *testing.T) {
+	cases := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"plain keyword", "FTS5", `"FTS5"`, false},
+		{"plain word", "openclaw", `"openclaw"`, false},
+		{"multi word phrase", "silent failure detector", `"silent" "failure" "detector"`, false},
+		{"dash token", "auth-flow", `"auth-flow"`, false},
+		{"colon token", "foo:bar", `"foo:bar"`, false},
+		{"apostrophe token", "what's up", `"what's" "up"`, false},
+		{"operator name AND", "foo AND bar", `"foo" "AND" "bar"`, false},
+		{"operator name OR", "foo OR bar", `"foo" "OR" "bar"`, false},
+		{"operator name NOT", "foo NOT bar", `"foo" "NOT" "bar"`, false},
+		{"operator name NEAR", "foo NEAR bar", `"foo" "NEAR" "bar"`, false},
+		{"star token", "foo*", `"foo*"`, false},
+		{"parens and quote mix", `(foo) "bar"`, `"(foo)" """bar"""`, false},
+		{"caret token", "^anchor", `"^anchor"`, false},
+		{"extra whitespace", "  foo   bar  ", `"foo" "bar"`, false},
+		{"empty", "", "", true},
+		{"whitespace only", "   \t\n  ", "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := sanitizeFTS5Query(tc.in)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("sanitizeFTS5Query(%q): want error, got nil (out=%q)", tc.in, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("sanitizeFTS5Query(%q): unexpected error: %v", tc.in, err)
+			}
+			if got != tc.want {
+				t.Errorf("sanitizeFTS5Query(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTextSearchSanitizationRoundTrip drives the full TextSearch path with
+// inputs that previously crashed the FTS5 MATCH expression (column lookup,
+// operator, quote). With sanitization in place the query must execute cleanly
+// and return zero or more results without surfacing an SQL error.
+func TestTextSearchSanitizationRoundTrip(t *testing.T) {
+	db := newQueryTestDB(t)
+	mustExec(t, db, `INSERT INTO tasks (id, title, description, shortname, updated_at) VALUES (1, ?, ?, 'demo', 1)`,
+		"auth-flow refactor", "fix foo:bar handling and what's up token")
+	cases := []string{
+		"auth-flow",
+		"foo:bar",
+		"what's up",
+		"foo AND bar",
+		"foo*",
+		`(foo) "bar"`,
+		"openclaw",
+	}
+	for _, q := range cases {
+		t.Run(q, func(t *testing.T) {
+			if _, err := TextSearch(db, TextSearchOpts{Query: q}); err != nil {
+				t.Errorf("TextSearch(%q): unexpected error: %v", q, err)
+			}
+		})
+	}
+	if _, err := TextSearch(db, TextSearchOpts{Query: "   "}); err == nil {
+		t.Errorf("TextSearch(whitespace): expected error, got nil")
+	}
+}
+
 func mustExec(t *testing.T, db *sql.DB, q string, args ...any) {
 	t.Helper()
 	if _, err := db.Exec(q, args...); err != nil {

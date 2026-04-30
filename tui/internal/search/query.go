@@ -154,9 +154,9 @@ func URLSearch(db *sql.DB, opts URLSearchOpts) ([]SearchResult, error) {
 // returned best-first.
 func TextSearch(db *sql.DB, opts TextSearchOpts) ([]SearchResult, error) {
 	limit := clampLimit(opts.Limit)
-	q := strings.TrimSpace(opts.Query)
-	if q == "" {
-		return nil, fmt.Errorf("TextSearch: empty query")
+	q, err := sanitizeFTS5Query(opts.Query)
+	if err != nil {
+		return nil, err
 	}
 
 	t := strings.ToLower(strings.TrimSpace(opts.Type))
@@ -168,6 +168,25 @@ func TextSearch(db *sql.DB, opts TextSearchOpts) ([]SearchResult, error) {
 	default:
 		return nil, fmt.Errorf("TextSearch: unknown type %q (want task|message)", opts.Type)
 	}
+}
+
+// sanitizeFTS5Query converts raw user input into a safe FTS5 MATCH expression.
+// Each whitespace-separated token is wrapped as a quoted phrase ("token") with
+// internal double-quotes doubled; tokens are joined with single spaces (implicit
+// AND). Operator words (AND/OR/NOT/NEAR) and punctuation (- * : ( ) ^) thus
+// become literal phrase content rather than FTS5 syntax. Empty/whitespace-only
+// input returns a clear error and does not execute SQL.
+func sanitizeFTS5Query(raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", fmt.Errorf("search query is empty")
+	}
+	fields := strings.Fields(raw)
+	parts := make([]string, 0, len(fields))
+	for _, tok := range fields {
+		escaped := strings.ReplaceAll(tok, `"`, `""`)
+		parts = append(parts, `"`+escaped+`"`)
+	}
+	return strings.Join(parts, " "), nil
 }
 
 func textSearchTasks(db *sql.DB, query string, since time.Time, limit int) ([]SearchResult, error) {
