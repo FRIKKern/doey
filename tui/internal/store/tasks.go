@@ -2,8 +2,24 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
+	"os"
 	"time"
+
+	"github.com/doey-cli/doey/tui/internal/search"
 )
+
+// extractTaskURLs is a best-effort enrichment pass: it stores URLs found in
+// content under a stable (taskID, field) key. Errors are logged to stderr and
+// swallowed — URL indexing is enrichment, not on the critical write path.
+func extractTaskURLs(db *sql.DB, taskID int64, field, content string) {
+	if taskID == 0 || content == "" {
+		return
+	}
+	if err := search.StoreURLs(db, taskID, field, content); err != nil {
+		fmt.Fprintf(os.Stderr, "store: extractTaskURLs(task=%d field=%s): %v\n", taskID, field, err)
+	}
+}
 
 type Task struct {
 	ID                 int64  `json:"id"`
@@ -129,6 +145,10 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
+		extractTaskURLs(s.db, t.ID, "title", t.Title)
+		extractTaskURLs(s.db, t.ID, "description", t.Description)
+		extractTaskURLs(s.db, t.ID, "notes", t.Notes)
+		extractTaskURLs(s.db, t.ID, "acceptance_criteria", t.AcceptanceCriteria)
 		return t.ID, nil
 	}
 
@@ -156,7 +176,15 @@ func (s *Store) CreateTask(t *Task) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	extractTaskURLs(s.db, id, "title", t.Title)
+	extractTaskURLs(s.db, id, "description", t.Description)
+	extractTaskURLs(s.db, id, "notes", t.Notes)
+	extractTaskURLs(s.db, id, "acceptance_criteria", t.AcceptanceCriteria)
+	return id, nil
 }
 
 // scanTask scans a task row into a Task struct, handling NULL text columns
@@ -324,7 +352,14 @@ func (s *Store) UpdateTask(t *Task) error {
 		t.UpdatedAt,
 		t.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	extractTaskURLs(s.db, t.ID, "title", t.Title)
+	extractTaskURLs(s.db, t.ID, "description", t.Description)
+	extractTaskURLs(s.db, t.ID, "notes", t.Notes)
+	extractTaskURLs(s.db, t.ID, "acceptance_criteria", t.AcceptanceCriteria)
+	return nil
 }
 
 func (s *Store) DeleteTask(id int64) error {
@@ -349,7 +384,12 @@ func (s *Store) CreateSubtask(st *Subtask) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	extractTaskURLs(s.db, st.TaskID, fmt.Sprintf("subtask:%d:title", st.Seq), st.Title)
+	return id, nil
 }
 
 func (s *Store) ListSubtasks(taskID int64) ([]Subtask, error) {
@@ -379,7 +419,13 @@ func (s *Store) UpdateSubtask(st *Subtask) error {
 	_, err := s.db.Exec(`UPDATE subtasks SET title = ?, status = ?, assignee = ?, worker = ?, created_at = ?, completed_at = ?, review_verdict = ?, review_evidence = ?, reviewer = ?, reason = ? WHERE id = ?`,
 		st.Title, st.Status, st.Assignee, st.Worker, st.CreatedAt, st.CompletedAt, st.ReviewVerdict, st.ReviewEvidence, st.Reviewer, st.Reason, st.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if st.TaskID != 0 && st.Seq != 0 {
+		extractTaskURLs(s.db, st.TaskID, fmt.Sprintf("subtask:%d:title", st.Seq), st.Title)
+	}
+	return nil
 }
 
 // GetSubtaskBySeq returns the subtask for a given task and sequence number.
@@ -423,7 +469,13 @@ func (s *Store) AddTaskLog(entry *TaskLogEntry) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	extractTaskURLs(s.db, entry.TaskID, fmt.Sprintf("log:%d:title", id), entry.Title)
+	extractTaskURLs(s.db, entry.TaskID, fmt.Sprintf("log:%d:body", id), entry.Body)
+	return id, nil
 }
 
 func (s *Store) ListTaskLog(taskID int64) ([]TaskLogEntry, error) {

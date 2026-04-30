@@ -167,14 +167,14 @@ set -- "${_doey_parsed_args[@]+"${_doey_parsed_args[@]}"}"
 # 'doey' is the user-facing CLI. Subcommands below are handled by the
 # doey-ctl binary and forwarded transparently.
 # Direct passthrough: msg status health task tmux team agent event error
-#                     nudge migrate interaction briefing
+#                     nudge migrate interaction briefing lifecycle search
 # Smart routing (handled in main case block with disambiguation):
 #   plan   — subcommands (list/get/create/update/delete) → doey-ctl,
 #            bare goal string → masterplan
 #   config — subcommands (get/set/list/delete) → doey-ctl,
 #            flags (--show/--global/--reset) or bare → local editor
 case "${1:-}" in
-  msg|status|health|task|tmux|team|agent|event|error|nudge|migrate|interaction|briefing|lifecycle)
+  msg|status|health|task|tmux|team|agent|event|error|nudge|migrate|interaction|briefing|lifecycle|search)
     if command -v doey-ctl >/dev/null 2>&1; then
       exec doey-ctl "$@"
     else

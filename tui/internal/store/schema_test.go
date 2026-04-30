@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // TestJSON1Available is insurance against the modernc.org/sqlite build
@@ -134,6 +135,130 @@ func TestEventsSchemaAfterMigration(t *testing.T) {
 		if err != nil {
 			t.Errorf("index %s missing: %v", idx, err)
 		}
+	}
+}
+
+// TestSchemaV4Objects verifies schema_version 4 (task #659) — the URL
+// table, FTS5 virtual tables, and triggers — exist on a freshly opened DB.
+func TestSchemaV4Objects(t *testing.T) {
+	s := testStore(t)
+
+	tables := []string{"task_urls", "tasks_fts", "messages_fts"}
+	for _, name := range tables {
+		var got string
+		err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name=?`, name).Scan(&got)
+		if err != nil {
+			t.Errorf("table %s missing: %v", name, err)
+		}
+	}
+
+	indexes := []string{"idx_task_urls_host_ts", "idx_task_urls_task_id", "idx_task_urls_task_field"}
+	for _, idx := range indexes {
+		var got string
+		err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='index' AND name=?`, idx).Scan(&got)
+		if err != nil {
+			t.Errorf("index %s missing: %v", idx, err)
+		}
+	}
+
+	triggers := []string{
+		"tasks_fts_ai", "tasks_fts_ad", "tasks_fts_au",
+		"messages_fts_ai", "messages_fts_ad", "messages_fts_au",
+	}
+	for _, trg := range triggers {
+		var got string
+		err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='trigger' AND name=?`, trg).Scan(&got)
+		if err != nil {
+			t.Errorf("trigger %s missing: %v", trg, err)
+		}
+	}
+}
+
+// TestSchemaV4FTSTriggerRoundTrip writes a task + message and verifies the
+// FTS5 shadow tables are kept in sync via the AFTER INSERT/UPDATE/DELETE
+// triggers.
+func TestSchemaV4FTSTriggerRoundTrip(t *testing.T) {
+	s := testStore(t)
+
+	// Task INSERT → tasks_fts row.
+	id, err := s.CreateTask(&Task{
+		Title:       "build search prototype",
+		Description: "wire up sqlite fts5 and a small TUI palette",
+		Status:      "active",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hits int
+	if err := s.db.QueryRow(`SELECT count(*) FROM tasks_fts WHERE tasks_fts MATCH 'prototype'`).Scan(&hits); err != nil {
+		t.Fatal(err)
+	}
+	if hits != 1 {
+		t.Errorf("after INSERT tasks_fts MATCH 'prototype' = %d, want 1", hits)
+	}
+
+	// UPDATE → re-indexed under new content (both title and description
+	// are rewritten so old tokens drop out of the index).
+	if _, err := s.db.Exec(`UPDATE tasks SET title=?, description=? WHERE id=?`,
+		"unrelated headline", "now indexed under needle", id); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRow(`SELECT count(*) FROM tasks_fts WHERE tasks_fts MATCH 'needle'`).Scan(&hits); err != nil {
+		t.Fatal(err)
+	}
+	if hits != 1 {
+		t.Errorf("after UPDATE tasks_fts MATCH 'needle' = %d, want 1", hits)
+	}
+	if err := s.db.QueryRow(`SELECT count(*) FROM tasks_fts WHERE tasks_fts MATCH 'prototype'`).Scan(&hits); err != nil {
+		t.Fatal(err)
+	}
+	if hits != 0 {
+		t.Errorf("after UPDATE old token still indexed: %d, want 0", hits)
+	}
+
+	// DELETE → row removed from FTS.
+	if _, err := s.db.Exec(`DELETE FROM tasks WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRow(`SELECT count(*) FROM tasks_fts WHERE tasks_fts MATCH 'needle'`).Scan(&hits); err != nil {
+		t.Fatal(err)
+	}
+	if hits != 0 {
+		t.Errorf("after DELETE tasks_fts row remained: %d, want 0", hits)
+	}
+
+	// messages_fts trigger sanity.
+	if _, err := s.db.Exec(`INSERT INTO messages (from_pane, to_pane, subject, body, created_at) VALUES (?,?,?,?,?)`,
+		"w1.1", "w0", "test", "ping pong haystack", time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRow(`SELECT count(*) FROM messages_fts WHERE messages_fts MATCH 'haystack'`).Scan(&hits); err != nil {
+		t.Fatal(err)
+	}
+	if hits != 1 {
+		t.Errorf("messages_fts MATCH 'haystack' = %d, want 1", hits)
+	}
+}
+
+// TestSchemaV4VersionDefault verifies the schema_version column DEFAULT
+// is bumped to 4 — rows inserted without an explicit schema_version pick
+// up the new default.
+func TestSchemaV4VersionDefault(t *testing.T) {
+	s := testStore(t)
+	res, err := s.db.Exec(`INSERT INTO tasks (title, status) VALUES ('x', 'active')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v int
+	if err := s.db.QueryRow(`SELECT schema_version FROM tasks WHERE id=?`, id).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	if v != 4 {
+		t.Errorf("schema_version DEFAULT = %d, want 4", v)
 	}
 }
 

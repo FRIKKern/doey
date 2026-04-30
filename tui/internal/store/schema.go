@@ -35,7 +35,7 @@ func ensureSchema(db *sql.DB) error {
 			result TEXT,
 			files TEXT,
 			commits TEXT,
-			schema_version INTEGER DEFAULT 3,
+			schema_version INTEGER DEFAULT 4,
 			review_verdict TEXT,
 			review_findings TEXT,
 			review_timestamp TEXT,
@@ -236,6 +236,83 @@ func ensureSchema(db *sql.DB) error {
 	}
 	for _, stmt := range events525 {
 		if _, err := tx.Exec(stmt); err != nil && !isDuplicateColumnErr(err) {
+			return err
+		}
+	}
+
+	// schema v4 (task #659): URL extraction table + FTS5 search.
+	// task_urls indexes URLs found in task title/description/notes/etc., one
+	// row per URL+field. Idempotent re-extract is handled at the application
+	// layer (DELETE WHERE task_id=? AND field=?, then INSERT new set).
+	v4 := []string{
+		`CREATE TABLE IF NOT EXISTS task_urls (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			task_id INTEGER NOT NULL,
+			url TEXT NOT NULL,
+			host TEXT NOT NULL,
+			kind TEXT NOT NULL,
+			field TEXT NOT NULL,
+			ts TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_urls_host_ts ON task_urls(host, ts)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_urls_task_id ON task_urls(task_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_urls_task_field ON task_urls(task_id, field)`,
+
+		// FTS5 full-text search over tasks (title, description, shortname) and messages (body).
+		// task_id / msg_id are UNINDEXED — stored alongside the rowid for query convenience.
+		`CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
+			task_id UNINDEXED,
+			title,
+			description,
+			shortname,
+			tokenize="porter unicode61"
+		)`,
+		`CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+			msg_id UNINDEXED,
+			body,
+			tokenize="porter unicode61"
+		)`,
+
+		// Triggers — keep FTS shadow tables in sync with source rows.
+		`CREATE TRIGGER IF NOT EXISTS tasks_fts_ai AFTER INSERT ON tasks BEGIN
+			INSERT INTO tasks_fts(rowid, task_id, title, description, shortname)
+			VALUES (NEW.id, NEW.id, COALESCE(NEW.title,''), COALESCE(NEW.description,''), COALESCE(NEW.shortname,''));
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS tasks_fts_ad AFTER DELETE ON tasks BEGIN
+			DELETE FROM tasks_fts WHERE rowid = OLD.id;
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS tasks_fts_au AFTER UPDATE ON tasks BEGIN
+			DELETE FROM tasks_fts WHERE rowid = OLD.id;
+			INSERT INTO tasks_fts(rowid, task_id, title, description, shortname)
+			VALUES (NEW.id, NEW.id, COALESCE(NEW.title,''), COALESCE(NEW.description,''), COALESCE(NEW.shortname,''));
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+			INSERT INTO messages_fts(rowid, msg_id, body)
+			VALUES (NEW.id, NEW.id, COALESCE(NEW.body,''));
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+			DELETE FROM messages_fts WHERE rowid = OLD.id;
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+			DELETE FROM messages_fts WHERE rowid = OLD.id;
+			INSERT INTO messages_fts(rowid, msg_id, body)
+			VALUES (NEW.id, NEW.id, COALESCE(NEW.body,''));
+		END`,
+
+		// Backfill existing rows that predate the FTS tables. The triggers
+		// above only fire on future writes; without this, an upgraded DB
+		// would have an empty FTS index until each row is touched.
+		`INSERT INTO tasks_fts(rowid, task_id, title, description, shortname)
+			SELECT id, id, COALESCE(title,''), COALESCE(description,''), COALESCE(shortname,'')
+			FROM tasks
+			WHERE id NOT IN (SELECT rowid FROM tasks_fts)`,
+		`INSERT INTO messages_fts(rowid, msg_id, body)
+			SELECT id, id, COALESCE(body,'')
+			FROM messages
+			WHERE id NOT IN (SELECT rowid FROM messages_fts)`,
+	}
+	for _, stmt := range v4 {
+		if _, err := tx.Exec(stmt); err != nil {
 			return err
 		}
 	}
