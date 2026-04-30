@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+# tests/test-silent-fail-detector.sh — synthetic-fixture coverage for R-1, R-3, R-11.
+set -euo pipefail
+
+DETECTOR="/home/doey/doey/shell/silent-fail-detector.sh"
+[ -x "$DETECTOR" ] || { echo "FAIL: detector not executable at $DETECTOR"; exit 1; }
+
+PASS=0
+FAIL=0
+FAILED_NAMES=""
+
+assert_pass() {
+  local name="$1"; PASS=$((PASS+1))
+  printf '  PASS  %s\n' "$name"
+}
+assert_fail() {
+  local name="$1" reason="$2"; FAIL=$((FAIL+1))
+  FAILED_NAMES="$FAILED_NAMES $name"
+  printf '  FAIL  %s — %s\n' "$name" "$reason"
+}
+
+# Each scenario builds an isolated sandbox.
+make_sandbox() {
+  local root
+  root=$(mktemp -d 2>/dev/null || mktemp -d -t detector)
+  mkdir -p "$root/runtime/status" "$root/runtime/results" "$root/runtime/findings"
+  mkdir -p "$root/bin" "$root/capture"
+  # tmux stub: list-panes returns canned roster, capture-pane reads from $root/capture/W.P.txt
+  cat > "$root/bin/tmux" <<'STUB'
+#!/usr/bin/env bash
+# Minimal tmux stub. Honors STUB_DIR for fixture root.
+STUB_DIR="${STUB_DIR:-}"
+sub="${1:-}"
+shift || true
+case "$sub" in
+  list-panes)
+    if [ -f "$STUB_DIR/list-panes.txt" ]; then
+      cat "$STUB_DIR/list-panes.txt"
+    else
+      echo "doey-test:2.1"
+      echo "doey-test:2.2"
+      echo "doey-test:3.1"
+    fi
+    ;;
+  capture-pane)
+    target=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -t) target="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    pane="${target##*:}"
+    f="$STUB_DIR/capture/$pane.txt"
+    if [ -f "$f" ]; then cat "$f"; fi
+    ;;
+  *) ;;
+esac
+STUB
+  chmod +x "$root/bin/tmux"
+  echo "$root"
+}
+
+run_once() {
+  local root="$1"
+  STUB_DIR="$root" \
+  PATH="$root/bin:$PATH" \
+  RUNTIME_DIR="$root/runtime" \
+  DOEY_SESSION="doey-test" \
+    bash "$DETECTOR" once
+}
+
+count_findings() {
+  local root="$1" rule="$2" n=0 f
+  for f in "$root/runtime/findings/${rule}-"*.json; do
+    [ -f "$f" ] || continue
+    n=$((n+1))
+  done
+  echo "$n"
+}
+
+# ─── R-1 detect ───
+test_r1_detect() {
+  local s; s=$(make_sandbox)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $(($(date +%s) - 30))
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+some prior output
+[Pasted text #2 +5 lines]
+❯
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-1")
+  if [ "$n" -ge 1 ]; then assert_pass "R-1 detect"; else assert_fail "R-1 detect" "expected ≥1 R-1 finding, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── R-1 no-fire (BUSY + fresh mtime) ───
+test_r1_nofire_busy() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: BUSY
+UPDATED: $now
+EOF
+  # touch fresh
+  touch "$s/runtime/status/2_1.status"
+  cat > "$s/capture/2.1.txt" <<EOF
+[Pasted text #1 +5 lines]
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-1")
+  if [ "$n" -eq 0 ]; then assert_pass "R-1 no-fire (BUSY fresh)"; else assert_fail "R-1 no-fire" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-3 detect (skew >120) ───
+test_r3_detect() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local upd=$((now - 300))
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $upd
+EOF
+  touch "$s/runtime/status/2_1.heartbeat"
+  # Backdate status file mtime so spawn-grace passes.
+  touch -d "@$upd" "$s/runtime/status/2_1.status" 2>/dev/null || touch -t "$(date -r "$upd" +%Y%m%d%H%M.%S 2>/dev/null || date +%Y%m%d%H%M.%S)" "$s/runtime/status/2_1.status" 2>/dev/null || true
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-3")
+  if [ "$n" -ge 1 ]; then assert_pass "R-3 detect"; else assert_fail "R-3 detect" "expected ≥1 R-3, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── R-3 no-fire (both fresh) ───
+test_r3_nofire_fresh() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local recent=$((now - 90))
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $recent
+EOF
+  touch "$s/runtime/status/2_1.heartbeat"
+  # backdate both files past spawn-grace, but with matching mtimes ⇒ low skew
+  touch -d "@$recent" "$s/runtime/status/2_1.status" 2>/dev/null || true
+  touch -d "@$recent" "$s/runtime/status/2_1.heartbeat" 2>/dev/null || true
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-3")
+  if [ "$n" -eq 0 ]; then assert_pass "R-3 no-fire (both fresh)"; else assert_fail "R-3 no-fire fresh" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-3 no-fire (spawn-grace, <60s) ───
+test_r3_nofire_grace() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local upd=$((now - 300))
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $upd
+EOF
+  touch "$s/runtime/status/2_1.heartbeat"
+  # Both files freshly created (<60s old) ⇒ grace should suppress.
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-3")
+  if [ "$n" -eq 0 ]; then assert_pass "R-3 no-fire (spawn grace)"; else assert_fail "R-3 no-fire grace" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-11 detect ───
+test_r11_detect() {
+  local s; s=$(make_sandbox)
+  command -v jq >/dev/null 2>&1 || { assert_pass "R-11 detect (skipped: no jq)"; rm -rf "$s"; return 0; }
+  local now; now=$(date +%s)
+  printf '2_1 %s\n' "$now" > "$s/runtime/spawn.log"
+  cat > "$s/runtime/results/pane_2_1.json" <<EOF
+{
+  "pane": "2.1",
+  "tool_calls": 0,
+  "last_output": {"text": "Welcome to Claude Code v2.1.123 — type /help for help"}
+}
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-11")
+  if [ "$n" -ge 1 ]; then assert_pass "R-11 detect"; else assert_fail "R-11 detect" "expected ≥1 R-11, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── R-11 no-fire (tool_calls > 0) ───
+test_r11_nofire() {
+  local s; s=$(make_sandbox)
+  command -v jq >/dev/null 2>&1 || { assert_pass "R-11 no-fire (skipped: no jq)"; rm -rf "$s"; return 0; }
+  local now; now=$(date +%s)
+  printf '2_1 %s\n' "$now" > "$s/runtime/spawn.log"
+  cat > "$s/runtime/results/pane_2_1.json" <<EOF
+{
+  "pane": "2.1",
+  "tool_calls": 5,
+  "last_output": {"text": "Claude Code v2.1.123 banner"}
+}
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-11")
+  if [ "$n" -eq 0 ]; then assert_pass "R-11 no-fire (tool_calls>0)"; else assert_fail "R-11 no-fire" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── Idempotency ───
+test_idempotency() {
+  local s; s=$(make_sandbox)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $(($(date +%s) - 30))
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+[Pasted text #1 +5 lines]
+EOF
+  run_once "$s" >/dev/null 2>&1
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-1")
+  if [ "$n" -eq 1 ]; then assert_pass "idempotency (single R-1 across two ticks)"; else assert_fail "idempotency" "expected 1 R-1, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── JSON validity ───
+test_json_validity() {
+  local s; s=$(make_sandbox)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $(($(date +%s) - 30))
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+[Pasted text #3 +12 lines]
+EOF
+  run_once "$s" >/dev/null 2>&1
+  if ! command -v jq >/dev/null 2>&1; then
+    assert_pass "json validity (skipped: no jq)"
+    rm -rf "$s"; return 0
+  fi
+  local f
+  f=$(ls "$s/runtime/findings/R-1-"*.json 2>/dev/null | head -1)
+  if [ -n "$f" ] && jq -e . "$f" >/dev/null 2>&1; then
+    assert_pass "JSON validity (R-1 finding parses)"
+  else
+    assert_fail "JSON validity" "no parseable R-1 finding emitted"
+  fi
+  rm -rf "$s"
+}
+
+echo "═══ silent-fail-detector tests ═══"
+test_r1_detect
+test_r1_nofire_busy
+test_r3_detect
+test_r3_nofire_fresh
+test_r3_nofire_grace
+test_r11_detect
+test_r11_nofire
+test_idempotency
+test_json_validity
+
+echo "─────────────────────────────────"
+printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
+if [ "$FAIL" -gt 0 ]; then
+  printf 'failed:%s\n' "$FAILED_NAMES"
+  exit 1
+fi
+exit 0

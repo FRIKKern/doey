@@ -748,6 +748,63 @@ while true; do
     fi
   fi
 
+  # ── Silent-Failure Watch (task #663) ──
+  # Findings written by shell/silent-fail-detector.sh. Unread = mtime newer
+  # than $RUNTIME_DIR/findings/.read_marker (missing marker = all unread).
+  _findings_dir="${RUNTIME_DIR}/findings"
+  if [ -d "$_findings_dir" ]; then
+    _sfw_marker="${_findings_dir}/.read_marker"
+    _sfw_unread=0
+    if [ -f "$_sfw_marker" ]; then
+      _sfw_unread=$(find "$_findings_dir" -maxdepth 1 -name '*.json' -newer "$_sfw_marker" 2>/dev/null | wc -l | tr -d ' ')
+    else
+      _sfw_unread=$(find "$_findings_dir" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    [ -z "$_sfw_unread" ] && _sfw_unread=0
+
+    gum_header "$(printf 'Silent-Failure Watch [%s unread]' "$_sfw_unread")" 1 "${C_BOLD_RED}"
+    printf '\n\n'
+
+    _sfw_recent=$(ls -1t "$_findings_dir"/*.json 2>/dev/null | head -3)
+    if [ -z "$_sfw_recent" ]; then
+      printf '    %b(no findings)%b\n\n' "${C_DIM}" "${C_RESET}"
+    else
+      while IFS= read -r _sfw_f; do
+        [ -z "$_sfw_f" ] && continue
+        _sfw_raw=$(cat "$_sfw_f" 2>/dev/null)
+        _sfw_rule=$(printf '%s' "$_sfw_raw" | sed -n 's/.*"rule"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        _sfw_pane=$(printf '%s' "$_sfw_raw" | sed -n 's/.*"pane"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        _sfw_sev=$(printf '%s' "$_sfw_raw" | sed -n 's/.*"severity"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        _sfw_evd=$(printf '%s' "$_sfw_raw" | sed -n 's/.*"evidence"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        _sfw_ts=$(printf '%s' "$_sfw_raw" | sed -n 's/.*"ts"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')
+        [ -z "$_sfw_rule" ] && _sfw_rule="?"
+        [ -z "$_sfw_pane" ] && _sfw_pane="?"
+        [ -z "$_sfw_sev" ] && _sfw_sev="?"
+        [ ${#_sfw_evd} -gt 48 ] && _sfw_evd="${_sfw_evd:0:45}..."
+        _sfw_when=""
+        if [ -n "$_sfw_ts" ]; then
+          _sfw_when=$(date -d "@${_sfw_ts}" '+%H:%M:%S' 2>/dev/null) || \
+            _sfw_when=$(date -r "${_sfw_ts}" '+%H:%M:%S' 2>/dev/null) || _sfw_when=""
+        fi
+        case "$_sfw_sev" in
+          P0) _sfw_col="${C_BOLD_RED}" ;;
+          P1) _sfw_col="${C_BOLD_YELLOW}" ;;
+          *)  _sfw_col="${C_DIM}" ;;
+        esac
+        printf '    %b%-4s%b %b%-7s%b %b%s%b %s' \
+          "${C_BOLD_CYAN}" "$_sfw_rule" "${C_RESET}" \
+          "${C_BOLD_WHITE}" "$_sfw_pane" "${C_RESET}" \
+          "$_sfw_col" "$_sfw_sev" "${C_RESET}" \
+          "$_sfw_evd"
+        [ -n "$_sfw_when" ] && printf ' %b@ %s%b' "${C_DIM}" "$_sfw_when" "${C_RESET}"
+        printf '\n'
+      done <<< "$_sfw_recent"
+      printf '\n'
+    fi
+    unset _sfw_marker _sfw_unread _sfw_recent _sfw_f _sfw_raw _sfw_rule _sfw_pane _sfw_sev _sfw_evd _sfw_ts _sfw_when _sfw_col
+  fi
+  unset _findings_dir
+
   row=0
   while [ "$row" -lt "$LC" ]; do
     _ref="L_${row}"; left_line="${!_ref}"

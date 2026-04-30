@@ -143,6 +143,11 @@ atomic_write "${RUNTIME_DIR}/status/${PANE_SAFE}.role" "$ROLE"
 # block on a real hello instead of polling fake-READY status files.
 touch "${RUNTIME_DIR}/ready/pane_${WINDOW_INDEX}_${PANE_INDEX}" 2>/dev/null || true
 
+# Spawn ledger — single line per pane creation, consumed by silent-failure
+# detector R-11 (briefing-handoff-loss) to compute time-since-spawn.
+[ -n "${RUNTIME_DIR:-}" ] && [ -n "${PANE_SAFE:-}" ] && \
+  echo "$PANE_SAFE $(date +%s)" >> "$RUNTIME_DIR/spawn.log" 2>/dev/null || true
+
 # Write BOOTING status so other components know this pane exists but isn't ready yet.
 # Skip if status is already READY — doey.sh pre-writes READY for key panes so the
 # loading screen can detect them immediately. Overwriting would create a race where
@@ -294,6 +299,27 @@ if [ "${PANE_INDEX:-0}" = "0" ] && [ "${WINDOW_INDEX:-0}" = "0" ]; then
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
     doey migrate --project-dir "$PROJECT_DIR" --runtime "${RUNTIME_DIR:-}" 2>/dev/null &
   fi
+fi
+
+# ── Silent-failure detector daemon (task #663) ────────────────────────
+# Idempotent — daemon's pidfile guard handles double-start. Opt-out via
+# DOEY_DETECTOR_DISABLE=1. Resolved path order: installed (~/.local/bin)
+# → repo dev path → in-project shell/. Never blocks the hook on failure.
+if [ "${DOEY_DETECTOR_DISABLE:-0}" != "1" ]; then
+  _sfd_repo=""
+  [ -f "$HOME/.claude/doey/repo-path" ] && _sfd_repo=$(cat "$HOME/.claude/doey/repo-path" 2>/dev/null) || true
+  _sfd_bin=""
+  if [ -x "$HOME/.local/bin/silent-fail-detector.sh" ]; then
+    _sfd_bin="$HOME/.local/bin/silent-fail-detector.sh"
+  elif [ -n "$_sfd_repo" ] && [ -x "${_sfd_repo}/shell/silent-fail-detector.sh" ]; then
+    _sfd_bin="${_sfd_repo}/shell/silent-fail-detector.sh"
+  elif [ -n "${PROJECT_DIR:-}" ] && [ -x "${PROJECT_DIR}/shell/silent-fail-detector.sh" ]; then
+    _sfd_bin="${PROJECT_DIR}/shell/silent-fail-detector.sh"
+  fi
+  if [ -n "$_sfd_bin" ]; then
+    bash "$_sfd_bin" start >/dev/null 2>&1 || true
+  fi
+  unset _sfd_bin _sfd_repo
 fi
 
 # ── Stats system (task #521 Phase 1) ──────────────────────────────────
