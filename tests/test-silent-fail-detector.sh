@@ -907,6 +907,62 @@ EOF
   rm -rf "$s"
 }
 
+# ─── R-17 type-guard: research task with missing claim must NOT fire (task 674) ───
+# Research tasks describe FUTURE artifacts in DESIGN/PROPOSED sections; their
+# DELIVERABLES listings are proposals, not completion claims. Bug: task #443
+# (type=research) flooded 980+ findings before this guard.
+test_r17_skip_research_type() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/784.task" <<EOF
+TASK_ID=784
+TASK_TYPE=research
+TASK_STATUS=pending_user_confirmation
+TASK_TITLE=investigate widget approach
+DELIVERABLES:
+  - tui/internal/proposed/future.go
+  - docs/proposed-design.md
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -eq 0 ]; then
+    assert_pass "R-17 skips type=research even with missing claims (task 674)"
+  else
+    assert_fail "R-17 skip_research_type" "expected 0, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 type-guard: feature task with missing claim still fires (task 674) ───
+# Type-guard must be precise — action-oriented tasks (feature/bug/task)
+# remain covered. Verifies the guard didn't suppress legitimate mismatches.
+test_r17_fire_feature_type() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/785.task" <<EOF
+TASK_ID=785
+TASK_TYPE=feature
+TASK_STATUS=pending_user_confirmation
+TASK_TITLE=ship widget
+DELIVERABLES:
+  - docs/widget-shipped.md
+  - tests/test-widget-shipped.sh
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -ge 1 ]; then
+    local f; f=$(ls "$s/runtime/findings/R-17-"*.json 2>/dev/null | head -1)
+    if grep -q 'task=785' "$f"; then
+      assert_pass "R-17 still fires on type=feature with missing claims (task 674)"
+    else
+      assert_fail "R-17 fire_feature_type body" "missing task=785 in $f"
+    fi
+  else
+    assert_fail "R-17 fire_feature_type" "expected ≥1 R-17, got $n"
+  fi
+  rm -rf "$s"
+}
+
 echo "═══ silent-fail-detector tests ═══"
 test_r1_detect
 test_r1_nofire_busy
@@ -943,6 +999,8 @@ test_r17_structured_deliverables_missing
 test_r17_ignore_freetext_paths
 test_r17_done_with_structured_missing
 test_r17_skip_users_macos_path
+test_r17_skip_research_type
+test_r17_fire_feature_type
 
 echo "─────────────────────────────────"
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

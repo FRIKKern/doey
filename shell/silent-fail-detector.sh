@@ -566,7 +566,7 @@ _r17_extract_claims() {
 
 _r17_check_task_file() {
   local f="$1" proj="$2" sev="$3"
-  local task_id status content claims claim actual fname
+  local task_id status ttype content claims claim actual fname
 
   content=$(cat "$f" 2>/dev/null || echo "")
   [ -n "$content" ] || return 0
@@ -582,6 +582,22 @@ _r17_check_task_file() {
   case "$status" in
     pending_user_confirmation) ;;
     *) return 0 ;;
+  esac
+
+  # Type guard (task 674) — research/audit/question/interview/masterplan tasks
+  # describe FUTURE artifacts in DESIGN/PROPOSED sections; their DELIVERABLES
+  # listings are proposals, not completion claims. R-17 must skip them.
+  # Bug: task #443 (type=research) flooded 980+ findings claiming proposed
+  # paths from PHASE 2 DESIGN. Use a blocklist so newly-added action types
+  # remain covered by default.
+  ttype=$(printf '%s\n' "$content" | awk -F= '/^TASK_TYPE=/ { print $2; exit }')
+  if [ -z "$ttype" ]; then
+    ttype=$(printf '%s\n' "$content" \
+      | sed -nE 's/.*"type"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
+      | head -1)
+  fi
+  case "$ttype" in
+    research|audit|question|interview|masterplan) return 0 ;;
   esac
 
   # Task id: KEY=VALUE → JSON "id" → filename stem.
