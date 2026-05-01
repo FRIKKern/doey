@@ -11,7 +11,7 @@ DOEY_SESSION="${DOEY_SESSION:-doey-$(basename "$RUNTIME_DIR")}"
 FINDINGS_DIR="$RUNTIME_DIR/findings"
 LOG_FILE="$FINDINGS_DIR/detector.log"
 PID_FILE="$RUNTIME_DIR/silent-fail-detector.pid"
-FP_FILE="$FINDINGS_DIR/.fingerprints"
+DEDUP_WINDOW="${DOEY_DETECTOR_DEDUP_WINDOW:-60}"
 
 DETECTOR_START_TS=""
 
@@ -40,31 +40,25 @@ fingerprint() {
   printf '%s|%s|%s' "$1" "$2" "$3" | cksum 2>/dev/null | awk '{print $1}'
 }
 
-# Prune fingerprint entries older than 60s; return 0 (seen-recently) or 1 (new).
-fp_seen_recent() {
-  local fp="$1" now keep tmp
+# Inspect existing finding files matching this fingerprint; return 0 if any
+# was written within DEDUP_WINDOW seconds (skip emission), 1 otherwise.
+# File mtime is the source of truth — no separate state file, self-healing
+# under daemon restarts and tick drift.
+fp_within_window() {
+  local rule="$1" fp="$2" now existing m latest age
   now=$(now_epoch)
-  [ -f "$FP_FILE" ] || { return 1; }
-  if awk -v now="$now" -v fp="$fp" '
-       { if (now - $1 <= 60 && $2 == fp) found=1 }
-       END { exit (found ? 0 : 1) }' "$FP_FILE"; then
-    return 0
-  fi
+  latest=0
+  for existing in "$FINDINGS_DIR/${rule}-"*"-${fp}.json"; do
+    [ -f "$existing" ] || continue
+    m=$(file_mtime "$existing")
+    [ -n "$m" ] || continue
+    case "$m" in ''|*[!0-9]*) continue ;; esac
+    if [ "$m" -gt "$latest" ]; then latest="$m"; fi
+  done
+  [ "$latest" -gt 0 ] || return 1
+  age=$((now - latest))
+  [ "$age" -le "$DEDUP_WINDOW" ] && return 0
   return 1
-}
-
-fp_record() {
-  local fp="$1" now tmp
-  now=$(now_epoch)
-  ensure_dirs
-  tmp="$FP_FILE.tmp.$$"
-  if [ -f "$FP_FILE" ]; then
-    awk -v now="$now" '{ if (now - $1 <= 60) print }' "$FP_FILE" > "$tmp" 2>/dev/null || :
-  else
-    : > "$tmp"
-  fi
-  printf '%s %s\n' "$now" "$fp" >> "$tmp"
-  mv -f "$tmp" "$FP_FILE" 2>/dev/null || rm -f "$tmp"
 }
 
 # JSON-escape a string for embedding in a single-line JSON value.
@@ -76,10 +70,9 @@ emit_finding() {
   local rule="$1" pane="$2" evidence="$3" severity="$4"
   local fp ts file ev_esc
   fp=$(fingerprint "$rule" "$pane" "$evidence")
-  if fp_seen_recent "$fp"; then return 0; fi
-  fp_record "$fp"
-  ts=$(now_epoch)
   ensure_dirs
+  if fp_within_window "$rule" "$fp"; then return 0; fi
+  ts=$(now_epoch)
   file="$FINDINGS_DIR/${rule}-${ts}-${fp}.json"
   ev_esc=$(json_escape "$evidence")
   printf '{"rule":"%s","pane":"%s","evidence":"%s","severity":"%s","ts":%s}\n' \

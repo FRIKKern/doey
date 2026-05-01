@@ -225,6 +225,64 @@ EOF
   rm -rf "$s"
 }
 
+# ─── Dedup window: 3 successive emissions w/ same (rule,pane,evidence) → 1 file ───
+test_dedup_3x_same_hash() {
+  local s; s=$(make_sandbox)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $(($(date +%s) - 30))
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+[Pasted text #7 +9 lines]
+EOF
+  run_once "$s" >/dev/null 2>&1
+  run_once "$s" >/dev/null 2>&1
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-1")
+  # capture trace artifacts so the proof can be inspected
+  ls "$s/runtime/findings" >"$s/dedup-trace.txt" 2>/dev/null || true
+  if [ "$n" -eq 1 ]; then
+    assert_pass "dedup 3x same (rule,pane,evidence) within window → 1 finding"
+  else
+    assert_fail "dedup 3x" "expected 1 R-1 finding, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── Dedup window: stale finding past window → new emission allowed ───
+test_dedup_window_expiry() {
+  local s; s=$(make_sandbox)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $(($(date +%s) - 30))
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+[Pasted text #4 +3 lines]
+EOF
+  # First emission seeds a finding file with current mtime.
+  run_once "$s" >/dev/null 2>&1
+  local first
+  first=$(ls "$s/runtime/findings/R-1-"*.json 2>/dev/null | head -1)
+  if [ -z "$first" ]; then assert_fail "dedup window expiry" "no seed finding"; rm -rf "$s"; return 0; fi
+  # Rename the seed file so its ts-encoded prefix is old AND backdate mtime
+  # past the dedup window (default 60s). Without renaming, a second emission
+  # in the same epoch-second as the seed would collide on filename.
+  local back=$(($(date +%s) - 120))
+  local fp; fp="${first##*-}"; fp="${fp%.json}"
+  local aged="$s/runtime/findings/R-1-${back}-${fp}.json"
+  mv "$first" "$aged"
+  touch -d "@$back" "$aged" 2>/dev/null || \
+    touch -t "$(date -r "$back" +%Y%m%d%H%M.%S 2>/dev/null || date +%Y%m%d%H%M.%S)" "$aged" 2>/dev/null || true
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-1")
+  if [ "$n" -eq 2 ]; then
+    assert_pass "dedup window expiry (>60s) → new emission"
+  else
+    assert_fail "dedup window expiry" "expected 2 R-1 findings, got $n"
+  fi
+  rm -rf "$s"
+}
+
 # ─── JSON validity ───
 test_json_validity() {
   local s; s=$(make_sandbox)
@@ -259,6 +317,8 @@ test_r3_nofire_grace
 test_r11_detect
 test_r11_nofire
 test_idempotency
+test_dedup_3x_same_hash
+test_dedup_window_expiry
 test_json_validity
 
 echo "─────────────────────────────────"
