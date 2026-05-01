@@ -231,6 +231,69 @@ func textSearchTasks(db *sql.DB, query string, since time.Time, limit int) ([]Se
 	return out, rows.Err()
 }
 
+// MessageSearchResult is a single hit from MessageSearch — full message row
+// fields plus FTS5 snippet/score, sufficient to render a `msg search` listing
+// without a follow-up SELECT.
+type MessageSearchResult struct {
+	ID        int64     `json:"id"`
+	FromPane  string    `json:"from_pane"`
+	ToPane    string    `json:"to_pane"`
+	Subject   string    `json:"subject"`
+	Snippet   string    `json:"snippet"`
+	Score     float64   `json:"score"`
+	TaskID    *int64    `json:"task_id,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// MessageSearch runs an FTS5 MATCH over messages_fts and joins to the
+// messages table so callers get full pane/subject/timestamp fields alongside
+// the BM25 snippet. Reuses sanitizeFTS5Query (#664) so callers do not need
+// to pre-escape user input.
+func MessageSearch(db *sql.DB, rawQuery string, limit int) ([]MessageSearchResult, error) {
+	q, err := sanitizeFTS5Query(rawQuery)
+	if err != nil {
+		return nil, err
+	}
+	limit = clampLimit(limit)
+	sqlStmt := `SELECT m.id,
+	                   COALESCE(m.from_pane,''),
+	                   COALESCE(m.to_pane,''),
+	                   COALESCE(m.subject,''),
+	                   snippet(messages_fts, 1, '<b>', '</b>', '…', 10) AS snip,
+	                   bm25(messages_fts) AS score,
+	                   m.task_id,
+	                   COALESCE(m.created_at, 0)
+	            FROM messages_fts
+	            LEFT JOIN messages m ON m.id = messages_fts.msg_id
+	            WHERE messages_fts MATCH ?
+	            ORDER BY rank
+	            LIMIT ?`
+	rows, err := db.Query(sqlStmt, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []MessageSearchResult
+	for rows.Next() {
+		var r MessageSearchResult
+		var ts int64
+		var taskID sql.NullInt64
+		if err := rows.Scan(&r.ID, &r.FromPane, &r.ToPane, &r.Subject, &r.Snippet, &r.Score, &taskID, &ts); err != nil {
+			return nil, err
+		}
+		if taskID.Valid {
+			t := taskID.Int64
+			r.TaskID = &t
+		}
+		if ts > 0 {
+			r.CreatedAt = time.Unix(ts, 0).UTC()
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func textSearchMessages(db *sql.DB, query string, since time.Time, limit int) ([]SearchResult, error) {
 	args := []any{query}
 	whereSince := ""

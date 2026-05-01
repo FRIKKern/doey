@@ -135,10 +135,12 @@ func main() {
 		runStatsCmd(os.Args[2:])
 	case "lifecycle":
 		runLifecycleCmd(os.Args[2:])
+	case "search":
+		runSearchCmd(os.Args[2:])
 	case "--help", "-h", "help":
 		printUsage()
 	default:
-		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "error", "interaction", "nudge", "migrate", "briefing", "stats", "lifecycle"}
+		knownCmds := []string{"msg", "status", "health", "task", "tmux", "plan", "team", "config", "agent", "event", "error", "interaction", "nudge", "migrate", "briefing", "stats", "lifecycle", "search"}
 		corrected, err := suggestSubcommand(os.Args[1], knownCmds)
 		if err != nil {
 			fatalCode(ExitUsage, "unknown command: %q (%v)\nRun 'doey-ctl --help' for usage.\n", os.Args[1], err)
@@ -170,6 +172,7 @@ Commands:
   briefing Live state dashboard (tasks, workers, activity)
   stats      Record and query local stats (emit, query)
   lifecycle  Query task lifecycle events and alerts
+  search   Full-text search across tasks/messages and URL host search
 
 Environment:
   DOEY_RUNTIME   Runtime directory (default: /tmp/doey/<project>/)
@@ -196,7 +199,7 @@ func openStoreIfExists(dir string) (*store.Store, error) {
 func runMsgCmd(args []string) {
 	if len(args) < 1 {
 		printMsgHelp()
-		fatalCode(ExitUsage, "msg: missing subcommand: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n")
+		fatalCode(ExitUsage, "msg: missing subcommand: send, read, read-all, mark-read, list, count, clean, trigger, search\nRun 'doey-ctl msg --help' for usage.\n")
 	}
 	if isHelp(args[0]) {
 		printMsgHelp()
@@ -219,8 +222,10 @@ func runMsgCmd(args []string) {
 		msgClean(args[1:])
 	case "trigger":
 		msgTrigger(args[1:])
+	case "search":
+		msgSearch(args[1:])
 	default:
-		fatalCode(ExitUsage, "msg: unknown subcommand: %q. Valid: send, read, read-all, mark-read, list, count, clean, trigger\nRun 'doey-ctl msg --help' for usage.\n", args[0])
+		fatalCode(ExitUsage, "msg: unknown subcommand: %q. Valid: send, read, read-all, mark-read, list, count, clean, trigger, search\nRun 'doey-ctl msg --help' for usage.\n", args[0])
 	}
 }
 
@@ -1063,6 +1068,7 @@ Subcommands:
   count      Count unread messages
   clean      Clean processed messages
   trigger    Touch trigger file for pane
+  search     Full-text search messages (FTS5: subject + body)
 
 Run 'doey-ctl msg <subcommand> -h' for help.
 `)

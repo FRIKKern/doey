@@ -169,6 +169,10 @@ DOEY_TEAM_2_WORKER_MODEL=sonnet
 
 Mistyped a command? Doey routes unknown `doey` commands through Claude Haiku, which suggests or auto-runs the right one. Uses your existing `ANTHROPIC_API_KEY`, refuses destructive corrections without a `[y/N]` prompt, and opts out with `DOEY_NO_INTENT_FALLBACK=1`. See [docs/intent-fallback.md](docs/intent-fallback.md).
 
+### Smart Search
+
+Every task, decision, log entry, and message is indexed into SQLite (`.doey/doey.db`) with FTS5 full-text + URL extraction. Query via `doey-ctl search "auth flow"`, `doey-ctl msg search …`, or the `mcp__doey__search` MCP server. See [docs/search.md](docs/search.md).
+
 ## Task Tracking
 
 Built-in task system — tasks show on the dashboard.
