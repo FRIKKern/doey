@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/test-silent-fail-detector.sh — synthetic-fixture coverage for R-1, R-3, R-11, R-14, R-15, R-16.
+# tests/test-silent-fail-detector.sh — synthetic-fixture coverage for R-1, R-3, R-11, R-14, R-15, R-16, R-17.
 set -euo pipefail
 
 DETECTOR="/home/doey/doey/shell/silent-fail-detector.sh"
@@ -63,10 +63,14 @@ STUB
 
 run_once() {
   local root="$1"
+  # Default project dir to a non-existent path so R-17 returns early on
+  # tests that don't exercise it (avoids reading the real .doey/tasks).
+  local proj="${2:-$root/__no_project__}"
   STUB_DIR="$root" \
   PATH="$root/bin:$PATH" \
   RUNTIME_DIR="$root/runtime" \
   DOEY_SESSION="doey-test" \
+  DOEY_PROJECT_DIR="$proj" \
     bash "$DETECTOR" once
 }
 
@@ -584,6 +588,114 @@ EOF
   rm -rf "$s"
 }
 
+# ─── R-17 detect (status not done + missing deliverable) ───
+test_r17_detect_missing() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/999.json" <<EOF
+{
+  "id": 999,
+  "status": "in_progress",
+  "deliverables": [
+    "docs/r17-fixture-missing.md",
+    "tests/test-r17-fixture-glob-*.sh"
+  ],
+  "proof": "PROOF_TYPE=FEATURE_VERIFY"
+}
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -ge 1 ]; then
+    local f; f=$(ls "$s/runtime/findings/R-17-"*.json 2>/dev/null | head -1)
+    if grep -q 'task=999' "$f" && \
+       grep -q 'r17-fixture-missing.md' "$f" && \
+       grep -Eq 'missing|glob-matched-0-entries' "$f"; then
+      assert_pass "R-17 detect (missing deliverables)"
+    else
+      assert_fail "R-17 detect body" "missing required strings in $f"
+    fi
+  else
+    assert_fail "R-17 detect" "expected ≥1 R-17, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 no-fire (all deliverables present) ───
+test_r17_nofire_all_present() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks" "$s/project/docs" "$s/project/tests"
+  touch "$s/project/docs/r17-fixture-present.md"
+  touch "$s/project/tests/test-r17-fixture-glob-1.sh"
+  cat > "$s/project/.doey/tasks/998.json" <<EOF
+{
+  "id": 998,
+  "status": "in_progress",
+  "deliverables": [
+    "docs/r17-fixture-present.md",
+    "tests/test-r17-fixture-glob-*.sh"
+  ]
+}
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -eq 0 ]; then
+    assert_pass "R-17 no-fire (all deliverables present)"
+  else
+    assert_fail "R-17 no-fire" "got $n findings"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 dedup within 60s ───
+test_r17_dedup_within_60s() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/996.json" <<EOF
+{
+  "id": 996,
+  "status": "in_progress",
+  "deliverables": ["docs/r17-fixture-dedup.md"]
+}
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -eq 1 ]; then
+    assert_pass "R-17 dedup (2 ticks → 1 finding)"
+  else
+    assert_fail "R-17 dedup" "expected 1 R-17, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 skips done / pending_user_confirmation ───
+test_r17_skip_done_status() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/995.json" <<EOF
+{
+  "id": 995,
+  "status": "done",
+  "deliverables": ["docs/r17-never-existed.md"]
+}
+EOF
+  cat > "$s/project/.doey/tasks/994.json" <<EOF
+{
+  "id": 994,
+  "status": "pending_user_confirmation",
+  "deliverables": ["tui/cmd/r17-never-existed/"]
+}
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -eq 0 ]; then
+    assert_pass "R-17 skip done / pending_user_confirmation"
+  else
+    assert_fail "R-17 skip done" "got $n findings"
+  fi
+  rm -rf "$s"
+}
+
 echo "═══ silent-fail-detector tests ═══"
 test_r1_detect
 test_r1_nofire_busy
@@ -610,6 +722,10 @@ test_r15_nofire_no_work
 test_r16_detect
 test_r16_nofire_clear_alone
 test_r16_nofire_unread_alone
+test_r17_detect_missing
+test_r17_nofire_all_present
+test_r17_dedup_within_60s
+test_r17_skip_done_status
 
 echo "─────────────────────────────────"
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

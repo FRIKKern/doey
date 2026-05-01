@@ -2,7 +2,8 @@
 # silent-fail-detector.sh — Doey Phase-1 silent-failure detection daemon.
 # Rules: R-1 (paste-no-submit), R-3 (UPDATED/heartbeat skew), R-11 (briefing-handoff loss),
 #        R-14 (STM tight-loop on empty msg-read), R-15 (Claude UX popup blocks pane),
-#        R-16 (coordinator /clear strands in-flight requests).
+#        R-16 (coordinator /clear strands in-flight requests),
+#        R-17 (completion-claim vs filesystem mismatch).
 # Read-only against project state. Writes only $RUNTIME_DIR/findings/* and detector.log.
 set -euo pipefail
 
@@ -445,6 +446,112 @@ check_r16_clear_strands_requests() {
   done
 }
 
+# ────── R-17 completion-claim vs filesystem mismatch ──────
+# Symptom: a task is reported complete (or about to be forwarded as complete)
+# but the artifacts it claims under DELIVERABLES / PROOF do not actually exist
+# on disk. Background: tasks 659/668 — Smart SQLite search was reported shipped
+# while 4 of 7 deliverables (docs/search.md, MCP server, msg search subcommand,
+# tests) were not landed; Boss verification caught the gap and #668 had to
+# retroactively land them.
+#
+# Heuristic: scan task files in $DOEY_PROJECT_DIR/.doey/tasks/, skip
+# done / pending_user_confirmation, extract path-shaped tokens (slash-bearing,
+# ASCII path chars only), and verify each against the filesystem. Glob tokens
+# are checked via `compgen -G`; bare paths via `[ -e ]`. Reuses the shared
+# mtime-based dedup window from #667 (fp_within_window).
+# Severity: P0 default; downgrade with DOEY_R17_SEVERITY=P1.
+check_r17_completion_filesystem_mismatch() {
+  case "${DOEY_DETECTOR_DISABLE:-}" in
+    *R-17*|all|1) return 0 ;;
+  esac
+  local proj="${DOEY_PROJECT_DIR:-${PWD:-.}}"
+  local tasks_dir="$proj/.doey/tasks"
+  [ -d "$tasks_dir" ] || return 0
+  local sev="${DOEY_R17_SEVERITY:-P0}"
+  local f
+  for f in "$tasks_dir"/*.task "$tasks_dir"/*.json; do
+    [ -f "$f" ] || continue
+    _r17_check_task_file "$f" "$proj" "$sev" || true
+  done
+}
+
+_r17_check_task_file() {
+  local f="$1" proj="$2" sev="$3"
+  local task_id status content tokens token actual fname
+
+  content=$(cat "$f" 2>/dev/null || echo "")
+  [ -n "$content" ] || return 0
+
+  # Status: KEY=VALUE (.task) preferred; JSON "status":"..." fallback.
+  status=$(printf '%s\n' "$content" | awk -F= '/^TASK_STATUS=/ { print $2; exit }')
+  if [ -z "$status" ]; then
+    status=$(printf '%s\n' "$content" \
+      | sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
+      | head -1)
+  fi
+  case "$status" in
+    done|pending_user_confirmation) return 0 ;;
+  esac
+
+  # Gate: only tasks that actually claim deliverables / proof.
+  printf '%s\n' "$content" \
+    | grep -Eq '(DELIVERABLES|PROOF|"deliverables"|"proof")' \
+    || return 0
+
+  # Task id: KEY=VALUE → JSON "id" → filename stem.
+  task_id=$(printf '%s\n' "$content" | awk -F= '/^TASK_ID=/ { print $2; exit }')
+  if [ -z "$task_id" ]; then
+    task_id=$(printf '%s\n' "$content" \
+      | sed -nE 's/.*"id"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' \
+      | head -1)
+  fi
+  if [ -z "$task_id" ]; then
+    fname=$(basename "$f")
+    task_id="${fname%.task}"
+    task_id="${task_id%.json}"
+  fi
+  [ -n "$task_id" ] || return 0
+
+  # Strip URLs (avoid host/path false positives) and TASK_FILES= line
+  # (auto-populated changed-file roster, not deliverable claims).
+  content=$(printf '%s\n' "$content" \
+    | sed -E 's|https?://[^[:space:])"]+||g' \
+    | grep -v '^TASK_FILES=' || true)
+
+  # Path-shaped tokens: must contain a slash, ASCII path chars only.
+  tokens=$(printf '%s\n' "$content" \
+    | grep -oE '[A-Za-z_.][A-Za-z0-9_./*+-]*/[A-Za-z0-9_./*+-]*' 2>/dev/null \
+    | sort -u || true)
+  [ -n "$tokens" ] || return 0
+
+  while IFS= read -r token; do
+    [ -n "$token" ] || continue
+    token=$(printf '%s' "$token" | sed -E 's/[.,;:)]+$//')
+    case "$token" in
+      ''|/*|*://*) continue ;;
+    esac
+    case "$token" in
+      */*) ;;
+      *) continue ;;
+    esac
+    [ "${#token}" -ge 5 ] || continue
+    if printf '%s' "$token" | grep -q '\*'; then
+      if ( cd "$proj" 2>/dev/null && compgen -G "$token" >/dev/null 2>&1 ); then
+        continue
+      fi
+      actual="glob-matched-0-entries"
+    else
+      if [ -e "$proj/$token" ]; then continue; fi
+      actual="missing"
+    fi
+    emit_finding "R-17" "task:${task_id}" \
+      "completion_filesystem_mismatch task=${task_id} claim=\"${token}\" actual=${actual}" \
+      "$sev"
+  done <<EOF
+$tokens
+EOF
+}
+
 run_tick() {
   ensure_dirs
   logmsg "TICK start"
@@ -454,6 +561,7 @@ run_tick() {
   detect_r14 || logmsg "ERROR R-14 failed"
   check_r15_claude_ux_popup || logmsg "ERROR R-15 failed"
   check_r16_clear_strands_requests || logmsg "ERROR R-16 failed"
+  check_r17_completion_filesystem_mismatch || logmsg "ERROR R-17 failed"
   logmsg "TICK end"
 }
 
