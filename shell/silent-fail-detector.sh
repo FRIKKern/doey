@@ -470,18 +470,21 @@ check_r16_clear_strands_requests() {
 }
 
 # ────── R-17 completion-claim vs filesystem mismatch ──────
-# Symptom: a task is reported complete (or about to be forwarded as complete)
-# but the artifacts it claims under DELIVERABLES / PROOF do not actually exist
-# on disk. Background: tasks 659/668 — Smart SQLite search was reported shipped
-# while 4 of 7 deliverables (docs/search.md, MCP server, msg search subcommand,
-# tests) were not landed; Boss verification caught the gap and #668 had to
-# retroactively land them.
+# Symptom: a task transitions to pending_user_confirmation but the artifacts
+# it claims as deliverables don't exist on disk. Background: tasks 659/668 —
+# Smart SQLite search was reported shipped while 4 of 7 deliverables were not
+# landed; Boss verification caught the gap and #668 had to retroactively land
+# them. Task 672: naive path-grep produced 299 false positives in hours by
+# treating any slash-token in any task content as a claim.
 #
-# Heuristic: scan task files in $DOEY_PROJECT_DIR/.doey/tasks/, skip
-# done / pending_user_confirmation, extract path-shaped tokens (slash-bearing,
-# ASCII path chars only), and verify each against the filesystem. Glob tokens
-# are checked via `compgen -G`; bare paths via `[ -e ]`. Reuses the shared
-# mtime-based dedup window from #667 (fp_within_window).
+# Trigger: ONLY tasks with status=pending_user_confirmation (the completion
+# claim gate). Skip done (past gate). Skip in_progress / pending (no claim).
+# Claim sources (structured only — never free-text descriptions or logs):
+#   1. JSON "deliverables": [ ... ] arrays (multi-line aware)
+#   2. Lines under DELIVERABLES:/FILES:/ARTIFACTS:/NEW:/MODIFIED: headers
+# Non-local claims skipped: absolute paths, URLs, Users/* (macOS workstation),
+# ~/* (unresolved home), tmp/* (transient).
+# Reuses the shared mtime-based dedup window (fp_within_window).
 # Severity: P0 default; downgrade with DOEY_R17_SEVERITY=P1.
 check_r17_completion_filesystem_mismatch() {
   case "${DOEY_DETECTOR_DISABLE:-}" in
@@ -491,16 +494,77 @@ check_r17_completion_filesystem_mismatch() {
   local tasks_dir="$proj/.doey/tasks"
   [ -d "$tasks_dir" ] || return 0
   local sev="${DOEY_R17_SEVERITY:-P0}"
-  local f
+  local f base
   for f in "$tasks_dir"/*.task "$tasks_dir"/*.json; do
     [ -f "$f" ] || continue
+    # Only canonical per-task files — skip aggregates (tasks.json), result
+    # files (NNN.result.json), tmp save files (NNN.task.tmp.*), and any other
+    # auxiliary file under .doey/tasks/.
+    base=$(basename "$f")
+    case "$base" in
+      [0-9]*.task|[0-9]*.json) ;;
+      *) continue ;;
+    esac
+    case "$base" in
+      *.result.json|*.task.tmp.*) continue ;;
+    esac
     _r17_check_task_file "$f" "$proj" "$sev" || true
   done
 }
 
+# Emit one claim per line. Reads task content on stdin. Two structured sources:
+# JSON "deliverables": [...] arrays, and lines under DELIVERABLES:/FILES:/
+# ARTIFACTS:/NEW:/MODIFIED: headers (terminated by blank line or new header).
+_r17_extract_claims() {
+  awk '
+    BEGIN { in_arr = 0; in_sec = 0 }
+    function emit_quoted(line,   s, tok) {
+      s = line
+      while (match(s, /"[^"]*"/)) {
+        tok = substr(s, RSTART + 1, RLENGTH - 2)
+        if (tok != "") print tok
+        s = substr(s, RSTART + RLENGTH)
+      }
+    }
+    function emit_tokens(line,   n, parts, i, t) {
+      sub(/^[[:space:]]*[-*][[:space:]]*/, "", line)
+      sub(/^[[:space:]]+/, "", line)
+      n = split(line, parts, /[[:space:],]+/)
+      for (i = 1; i <= n; i++) {
+        t = parts[i]
+        gsub(/^["`]+|["`,;.]+$/, "", t)
+        if (t != "") print t
+      }
+    }
+    /"deliverables"[[:space:]]*:[[:space:]]*\[/ {
+      in_arr = 1
+      tail = $0
+      sub(/.*\[/, "", tail)
+      emit_quoted(tail)
+      if (index($0, "]")) in_arr = 0
+      next
+    }
+    in_arr == 1 {
+      emit_quoted($0)
+      if (index($0, "]")) in_arr = 0
+      next
+    }
+    /^[[:space:]]*(DELIVERABLES|FILES|ARTIFACTS|NEW|MODIFIED)[[:space:]]*:/ {
+      in_sec = 1
+      tail = $0
+      sub(/^[[:space:]]*[A-Z_]+[[:space:]]*:[[:space:]]*/, "", tail)
+      if (tail != "") emit_tokens(tail)
+      next
+    }
+    in_sec == 1 && /^[[:space:]]*$/ { in_sec = 0; next }
+    in_sec == 1 && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[:=]/ { in_sec = 0 }
+    in_sec == 1 { emit_tokens($0) }
+  '
+}
+
 _r17_check_task_file() {
   local f="$1" proj="$2" sev="$3"
-  local task_id status content tokens token actual fname
+  local task_id status content claims claim actual fname
 
   content=$(cat "$f" 2>/dev/null || echo "")
   [ -n "$content" ] || return 0
@@ -512,14 +576,11 @@ _r17_check_task_file() {
       | sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
       | head -1)
   fi
+  # Trigger gate — only pending_user_confirmation (the completion claim state).
   case "$status" in
-    done|pending_user_confirmation) return 0 ;;
+    pending_user_confirmation) ;;
+    *) return 0 ;;
   esac
-
-  # Gate: only tasks that actually claim deliverables / proof.
-  printf '%s\n' "$content" \
-    | grep -Eq '(DELIVERABLES|PROOF|"deliverables"|"proof")' \
-    || return 0
 
   # Task id: KEY=VALUE → JSON "id" → filename stem.
   task_id=$(printf '%s\n' "$content" | awk -F= '/^TASK_ID=/ { print $2; exit }')
@@ -535,43 +596,47 @@ _r17_check_task_file() {
   fi
   [ -n "$task_id" ] || return 0
 
-  # Strip URLs (avoid host/path false positives) and TASK_FILES= line
-  # (auto-populated changed-file roster, not deliverable claims).
+  # Strip URLs to avoid host/path false positives leaking into claims.
   content=$(printf '%s\n' "$content" \
-    | sed -E 's|https?://[^[:space:])"]+||g' \
-    | grep -v '^TASK_FILES=' || true)
+    | sed -E 's|https?://[^[:space:])"]+||g')
 
-  # Path-shaped tokens: must contain a slash, ASCII path chars only.
-  tokens=$(printf '%s\n' "$content" \
-    | grep -oE '[A-Za-z_.][A-Za-z0-9_./*+-]*/[A-Za-z0-9_./*+-]*' 2>/dev/null \
-    | sort -u || true)
-  [ -n "$tokens" ] || return 0
+  claims=$(printf '%s\n' "$content" | _r17_extract_claims | sort -u)
+  [ -n "$claims" ] || return 0
 
-  while IFS= read -r token; do
-    [ -n "$token" ] || continue
-    token=$(printf '%s' "$token" | sed -E 's/[.,;:)]+$//')
-    case "$token" in
+  while IFS= read -r claim; do
+    [ -n "$claim" ] || continue
+    claim=$(printf '%s' "$claim" | sed -E 's/[.,;:)]+$//')
+    [ -n "$claim" ] || continue
+    case "$claim" in
       ''|/*|*://*) continue ;;
+      Users/*|tmp/*) continue ;;
+      '~'/*) continue ;;
     esac
-    case "$token" in
+    case "$claim" in
       */*) ;;
       *) continue ;;
     esac
-    [ "${#token}" -ge 5 ] || continue
-    if printf '%s' "$token" | grep -q '\*'; then
-      if ( cd "$proj" 2>/dev/null && compgen -G "$token" >/dev/null 2>&1 ); then
+    # Reject word-pairs ("Pass/fail", "read/consume", "Watchdog/watchdog"):
+    # a real path either has a file extension OR at least two slashes.
+    case "$claim" in
+      *.*|*/*/*) ;;
+      *) continue ;;
+    esac
+    [ "${#claim}" -ge 5 ] || continue
+    if printf '%s' "$claim" | grep -q '\*'; then
+      if ( cd "$proj" 2>/dev/null && compgen -G "$claim" >/dev/null 2>&1 ); then
         continue
       fi
       actual="glob-matched-0-entries"
     else
-      if [ -e "$proj/$token" ]; then continue; fi
+      if [ -e "$proj/$claim" ]; then continue; fi
       actual="missing"
     fi
     emit_finding "R-17" "task:${task_id}" \
-      "completion_filesystem_mismatch task=${task_id} claim=\"${token}\" actual=${actual}" \
+      "completion_filesystem_mismatch task=${task_id} claim=\"${claim}\" actual=${actual}" \
       "$sev"
   done <<EOF
-$tokens
+$claims
 EOF
 }
 

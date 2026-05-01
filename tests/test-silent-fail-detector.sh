@@ -703,7 +703,7 @@ test_r17_detect_missing() {
   cat > "$s/project/.doey/tasks/999.json" <<EOF
 {
   "id": 999,
-  "status": "in_progress",
+  "status": "pending_user_confirmation",
   "deliverables": [
     "docs/r17-fixture-missing.md",
     "tests/test-r17-fixture-glob-*.sh"
@@ -737,7 +737,7 @@ test_r17_nofire_all_present() {
   cat > "$s/project/.doey/tasks/998.json" <<EOF
 {
   "id": 998,
-  "status": "in_progress",
+  "status": "pending_user_confirmation",
   "deliverables": [
     "docs/r17-fixture-present.md",
     "tests/test-r17-fixture-glob-*.sh"
@@ -761,7 +761,7 @@ test_r17_dedup_within_60s() {
   cat > "$s/project/.doey/tasks/996.json" <<EOF
 {
   "id": 996,
-  "status": "in_progress",
+  "status": "pending_user_confirmation",
   "deliverables": ["docs/r17-fixture-dedup.md"]
 }
 EOF
@@ -776,7 +776,9 @@ EOF
   rm -rf "$s"
 }
 
-# ─── R-17 skips done / pending_user_confirmation ───
+# ─── R-17 skips done / in_progress ───
+# After task 672: only pending_user_confirmation triggers R-17.
+# Both done (past gate) and in_progress (no completion claim yet) are skipped.
 test_r17_skip_done_status() {
   local s; s=$(make_sandbox)
   mkdir -p "$s/project/.doey/tasks"
@@ -790,16 +792,117 @@ EOF
   cat > "$s/project/.doey/tasks/994.json" <<EOF
 {
   "id": 994,
-  "status": "pending_user_confirmation",
+  "status": "in_progress",
   "deliverables": ["tui/cmd/r17-never-existed/"]
 }
 EOF
   run_once "$s" "$s/project" >/dev/null 2>&1
   local n; n=$(count_findings "$s" "R-17")
   if [ "$n" -eq 0 ]; then
-    assert_pass "R-17 skip done / pending_user_confirmation"
+    assert_pass "R-17 skip done / in_progress (only pending_user_confirmation fires)"
   else
     assert_fail "R-17 skip done" "got $n findings"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 fires on .task with structured DELIVERABLES section + missing file ───
+# Task 672: claims must come from explicit DELIVERABLES:/FILES:/etc. sections.
+test_r17_structured_deliverables_missing() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/780.task" <<EOF
+TASK_ID=780
+TASK_STATUS=pending_user_confirmation
+TASK_TITLE=ship widget
+TASK_DESCRIPTION=Build the widget feature.
+
+DELIVERABLES:
+  - docs/widget-guide.md
+  - tests/test-widget.sh
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -ge 1 ]; then
+    local f; f=$(ls "$s/runtime/findings/R-17-"*.json 2>/dev/null | head -1)
+    if grep -q 'task=780' "$f" && grep -q '"P0"' "$f"; then
+      assert_pass "R-17 fires on structured DELIVERABLES + missing file (P0)"
+    else
+      assert_fail "R-17 structured fire body" "missing strings in $f"
+    fi
+  else
+    assert_fail "R-17 structured fire" "expected ≥1 R-17, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 ignores path mentions in free-text descriptions ───
+# Random path-like tokens in description body must NOT be parsed as claims.
+test_r17_ignore_freetext_paths() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/781.task" <<EOF
+TASK_ID=781
+TASK_STATUS=pending_user_confirmation
+TASK_TITLE=research notes
+TASK_DESCRIPTION=Investigated docs/missing-thing.md as part of analysis.
+The error message was: cannot find tests/never-built.sh in source tree.
+See also Users/frikk.jarl/Documents/GitHub/doey/old-thing.txt for context.
+No actual deliverables were produced.
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -eq 0 ]; then
+    assert_pass "R-17 ignores free-text path mentions (no DELIVERABLES section)"
+  else
+    assert_fail "R-17 freetext_paths" "expected 0 R-17, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 skips done state even with structured DELIVERABLES + missing ───
+# Past-gate: done tasks are not re-validated.
+test_r17_done_with_structured_missing() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/782.task" <<EOF
+TASK_ID=782
+TASK_STATUS=done
+TASK_TITLE=already shipped
+DELIVERABLES:
+  - docs/never-existed-but-marked-done.md
+  - tests/missing-test.sh
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -eq 0 ]; then
+    assert_pass "R-17 skips done state even with structured-missing claims"
+  else
+    assert_fail "R-17 done_with_structured" "expected 0, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-17 skips non-local Users/ macOS workstation paths in DELIVERABLES ───
+# A claim that starts with Users/ is a stray macOS path, not a local deliverable.
+test_r17_skip_users_macos_path() {
+  local s; s=$(make_sandbox)
+  mkdir -p "$s/project/.doey/tasks"
+  cat > "$s/project/.doey/tasks/783.task" <<EOF
+TASK_ID=783
+TASK_STATUS=pending_user_confirmation
+TASK_TITLE=workstation report
+DELIVERABLES:
+  - Users/frikk.jarl/Documents/GitHub/doey/tests/test-bash-compat.sh
+  - ~/old-stuff/notes.md
+  - tmp/transient-artifact.log
+EOF
+  run_once "$s" "$s/project" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-17")
+  if [ "$n" -eq 0 ]; then
+    assert_pass "R-17 skips non-local claims (Users/, ~/, tmp/)"
+  else
+    assert_fail "R-17 skip_users_macos" "expected 0, got $n"
   fi
   rm -rf "$s"
 }
@@ -836,6 +939,10 @@ test_r17_detect_missing
 test_r17_nofire_all_present
 test_r17_dedup_within_60s
 test_r17_skip_done_status
+test_r17_structured_deliverables_missing
+test_r17_ignore_freetext_paths
+test_r17_done_with_structured_missing
+test_r17_skip_users_macos_path
 
 echo "─────────────────────────────────"
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
