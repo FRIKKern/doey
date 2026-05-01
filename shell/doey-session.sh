@@ -365,6 +365,30 @@ stop_project() {
   esac
 }
 
+# Stop silent-fail-detector daemon for a runtime dir. Idempotent. Graceful
+# TERM, polling wait up to 3s, KILL fallback. Always removes PID file.
+_stop_silent_fail_detector() {
+  local rt="$1"
+  local pid_file="$rt/silent-fail-detector.pid"
+  [ -f "$pid_file" ] || return 0
+  local pid
+  pid=$(cat "$pid_file" 2>/dev/null || echo "")
+  pid="${pid%%[!0-9]*}"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+    local _i=0
+    while [ "$_i" -lt 30 ]; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.1
+      _i=$((_i + 1))
+    done
+    kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
+  fi
+  rm -f "$pid_file" 2>/dev/null || true
+  rm -rf "$rt/silent-fail-detector.spawn.lock" 2>/dev/null || true
+  rm -f "$rt/silent-fail-detector.spawn.lock.f" 2>/dev/null || true
+}
+
 # Kill a doey tmux session gracefully: kill Claude processes first, then session, then cleanup
 _kill_doey_session() {
   local session="$1"
@@ -424,6 +448,9 @@ _kill_doey_session() {
     kill "$(cat "$_rt/trust-watcher.pid")" 2>/dev/null || true
     rm -f "$_rt/trust-watcher.pid"
   fi
+  # Stop silent-fail-detector daemon (task #673). Idempotent: missing PID
+  # file is fine. Graceful TERM, ~3s wait, KILL fallback.
+  _stop_silent_fail_detector "$_rt"
   # Clean up all MCP servers and configs
   doey_mcp_cleanup_session "$_rt" || true
   rm -rf "$_rt" 2>/dev/null || true

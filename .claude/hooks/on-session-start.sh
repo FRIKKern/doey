@@ -317,7 +317,69 @@ if [ "${DOEY_DETECTOR_DISABLE:-0}" != "1" ]; then
     _sfd_bin="${PROJECT_DIR}/shell/silent-fail-detector.sh"
   fi
   if [ -n "$_sfd_bin" ]; then
-    bash "$_sfd_bin" start >/dev/null 2>&1 || true
+    # Atomic spawn lock — prevents N parallel sessions from racing into the
+    # daemon's child fork. Two layers: (1) hold a mutex while we check the
+    # PID file and decide whether to spawn, (2) the daemon itself enforces
+    # singleton via PID file. Lock dir falls back to /tmp/doey/<proj>.
+    _sfd_rt="${RUNTIME_DIR:-${DOEY_RUNTIME_DIR:-/tmp/doey/doey}}"
+    mkdir -p "$_sfd_rt" 2>/dev/null || true
+    _sfd_pid_file="$_sfd_rt/silent-fail-detector.pid"
+    _sfd_lock_dir="$_sfd_rt/silent-fail-detector.spawn.lock"
+    _sfd_lock_file="$_sfd_rt/silent-fail-detector.spawn.lock.f"
+    _sfd_acquired=0
+    if command -v flock >/dev/null 2>&1; then
+      # Linux: file-lock subshell, fd 9, ~5s timeout. Lock auto-releases
+      # when the subshell exits.
+      (
+        exec 9>"$_sfd_lock_file" 2>/dev/null || exit 1
+        flock -w 5 -x 9 2>/dev/null || exit 1
+        # Inside lock: check + spawn.
+        _existing=""
+        if [ -f "$_sfd_pid_file" ]; then
+          _existing=$(cat "$_sfd_pid_file" 2>/dev/null || echo "")
+          _existing="${_existing%%[!0-9]*}"
+        fi
+        if [ -n "$_existing" ] && kill -0 "$_existing" 2>/dev/null; then
+          exit 0
+        fi
+        bash "$_sfd_bin" start >/dev/null 2>&1 || true
+        exit 0
+      ) 2>/dev/null
+    else
+      # macOS / no flock: mkdir-as-mutex (atomic).
+      _sfd_lock_held=0
+      _sfd_attempts=0
+      while [ "$_sfd_attempts" -lt 50 ]; do
+        if mkdir "$_sfd_lock_dir" 2>/dev/null; then
+          _sfd_lock_held=1
+          break
+        fi
+        # Stale lock cleanup: lock dir older than 30s ⇒ assume holder died.
+        if [ -d "$_sfd_lock_dir" ]; then
+          _sfd_lock_age=$(stat -c %Y "$_sfd_lock_dir" 2>/dev/null || stat -f %m "$_sfd_lock_dir" 2>/dev/null || echo 0)
+          _sfd_now=$(date +%s)
+          if [ "$_sfd_now" -gt 0 ] && [ "$_sfd_lock_age" -gt 0 ] \
+             && [ $((_sfd_now - _sfd_lock_age)) -gt 30 ]; then
+            rmdir "$_sfd_lock_dir" 2>/dev/null || rm -rf "$_sfd_lock_dir" 2>/dev/null || true
+          fi
+        fi
+        sleep 0.1
+        _sfd_attempts=$((_sfd_attempts + 1))
+      done
+      if [ "$_sfd_lock_held" = "1" ]; then
+        _existing=""
+        if [ -f "$_sfd_pid_file" ]; then
+          _existing=$(cat "$_sfd_pid_file" 2>/dev/null || echo "")
+          _existing="${_existing%%[!0-9]*}"
+        fi
+        if [ -z "$_existing" ] || ! kill -0 "$_existing" 2>/dev/null; then
+          bash "$_sfd_bin" start >/dev/null 2>&1 || true
+        fi
+        rmdir "$_sfd_lock_dir" 2>/dev/null || true
+      fi
+      unset _sfd_lock_held _sfd_attempts _sfd_lock_age _sfd_now _existing
+    fi
+    unset _sfd_rt _sfd_pid_file _sfd_lock_dir _sfd_lock_file _sfd_acquired
   fi
   unset _sfd_bin _sfd_repo
 fi

@@ -15,8 +15,10 @@ FINDINGS_DIR="$RUNTIME_DIR/findings"
 LOG_FILE="$FINDINGS_DIR/detector.log"
 PID_FILE="$RUNTIME_DIR/silent-fail-detector.pid"
 DEDUP_WINDOW="${DOEY_DETECTOR_DEDUP_WINDOW:-60}"
+DOEY_DETECTOR_RELOAD_EVERY="${DOEY_DETECTOR_RELOAD_EVERY:-10}"
 
 DETECTOR_START_TS=""
+DETECTOR_SCRIPT_MTIME=""
 
 ensure_dirs() {
   mkdir -p "$FINDINGS_DIR" 2>/dev/null || true
@@ -660,37 +662,191 @@ cmd_once() {
   run_tick
 }
 
+# Cmdline check: confirm that a PID is actually a silent-fail-detector
+# process, not a recycled PID belonging to something else. /proc on Linux,
+# `ps` fallback for macOS / other UNIX.
+detector_pid_matches() {
+  local pid="$1"
+  [ -n "$pid" ] || return 1
+  if [ -r "/proc/$pid/cmdline" ]; then
+    tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null \
+      | grep -Fq 'silent-fail-detector' && return 0 || return 1
+  fi
+  ps -p "$pid" -o args= 2>/dev/null | grep -Fq 'silent-fail-detector'
+}
+
+# Atomic PID write: tmp + mv (mv is atomic on the same filesystem).
+write_pid_atomic() {
+  local pid="$1" tmp
+  tmp="${PID_FILE}.tmp.$$"
+  printf '%s\n' "$pid" > "$tmp" 2>/dev/null || return 1
+  mv -f "$tmp" "$PID_FILE" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  return 0
+}
+
+# Atomic check-and-write under a mkdir-mutex. mkdir is atomic in POSIX, so
+# only one caller succeeds. Stale lock dirs older than 30s are reclaimed.
+_acquire_lock_mkdir() {
+  local lock_dir="$1" attempts=0 age now
+  while [ "$attempts" -lt 50 ]; do
+    if mkdir "$lock_dir" 2>/dev/null; then
+      return 0
+    fi
+    if [ -d "$lock_dir" ]; then
+      age=$(stat -c %Y "$lock_dir" 2>/dev/null || stat -f %m "$lock_dir" 2>/dev/null || echo 0)
+      now=$(date +%s)
+      if [ "$age" -gt 0 ] 2>/dev/null && [ $((now - age)) -gt 30 ] 2>/dev/null; then
+        rmdir "$lock_dir" 2>/dev/null || rm -rf "$lock_dir" 2>/dev/null || true
+      fi
+    fi
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  return 1
+}
+
+# Singleton guard. Returns 0 if caller should proceed (we now own PID file),
+# 1 if another detector already owns it (caller must exit silently).
+# Uses $BASHPID — in a subshell, $$ still returns the *parent* shell's PID,
+# which is the bug that caused 30+ duplicate detectors to accumulate.
+# Race-safe: the check-and-write is serialized via a mkdir-mutex so two
+# concurrent detector starts cannot both pass the "is anyone alive?" check.
+acquire_singleton() {
+  ensure_dirs
+  local self_pid="${BASHPID:-$$}"
+  local lock_dir="$RUNTIME_DIR/silent-fail-detector.singleton.lock"
+  local got_lock=0
+  if _acquire_lock_mkdir "$lock_dir"; then got_lock=1; fi
+
+  local existing=""
+  if [ -f "$PID_FILE" ]; then
+    existing=$(cat "$PID_FILE" 2>/dev/null || echo "")
+    existing="${existing%%[!0-9]*}"
+    # Self-detection: after exec, the new process inherits the old PID.
+    # If the PID file already names *us*, treat it as a clean re-entry.
+    if [ -n "$existing" ] && [ "$existing" = "$self_pid" ]; then
+      logmsg "detector: re-entering after exec, pid=$self_pid"
+    elif [ -n "$existing" ] && kill -0 "$existing" 2>/dev/null && detector_pid_matches "$existing"; then
+      logmsg "detector: already running pid=$existing, exiting"
+      [ "$got_lock" = "1" ] && rmdir "$lock_dir" 2>/dev/null || true
+      return 1
+    else
+      logmsg "detector: stale pid file, taking over (was=$existing self=$self_pid)"
+    fi
+  else
+    logmsg "detector: starting, pid=$self_pid"
+  fi
+
+  if ! write_pid_atomic "$self_pid"; then
+    logmsg "ERROR detector: failed to write pid file"
+    [ "$got_lock" = "1" ] && rmdir "$lock_dir" 2>/dev/null || true
+    return 1
+  fi
+
+  [ "$got_lock" = "1" ] && rmdir "$lock_dir" 2>/dev/null || true
+  return 0
+}
+
 cmd_start() {
   ensure_dirs
+  # Pre-check before forking — avoids spawning a child that immediately exits.
   if [ -f "$PID_FILE" ]; then
     local existing
     existing=$(cat "$PID_FILE" 2>/dev/null || echo "")
-    if [ -n "$existing" ] && kill -0 "$existing" 2>/dev/null; then
-      exit 0
+    existing="${existing%%[!0-9]*}"
+    if [ -n "$existing" ] && kill -0 "$existing" 2>/dev/null && detector_pid_matches "$existing"; then
+      return 0
     fi
-    rm -f "$PID_FILE"
   fi
   (
-    trap 'rm -f "$PID_FILE" 2>/dev/null || true' EXIT INT TERM
-    echo $$ > "$PID_FILE"
+    # Disable strict-mode in the daemon loop — individual detectors already
+    # catch their own errors via `|| logmsg ERROR`. set -e in a long-running
+    # loop is a footgun: a single non-zero pipefail can take the whole
+    # daemon down silently.
+    set +e
+    set +o pipefail
+    if ! acquire_singleton; then
+      exit 0
+    fi
+    trap '
+      _file_pid=$(cat "$PID_FILE" 2>/dev/null || echo "")
+      if [ "$_file_pid" = "${BASHPID:-$$}" ]; then rm -f "$PID_FILE" 2>/dev/null || true; fi
+    ' EXIT INT TERM
     DETECTOR_START_TS=$(now_epoch)
-    logmsg "DAEMON start pid=$$"
+    DETECTOR_SCRIPT_MTIME=$(file_mtime "$0")
+    logmsg "DAEMON start pid=${BASHPID:-$$} script=$0 mtime=${DETECTOR_SCRIPT_MTIME}"
+    _tick_n=0
     while :; do
       run_tick
+      _tick_n=$((_tick_n + 1))
+      # Auto-reload on source change every N ticks. exec preserves PID,
+      # so the singleton guard sees its own pid still in PID_FILE on re-entry.
+      if [ "$DOEY_DETECTOR_RELOAD_EVERY" -gt 0 ] 2>/dev/null \
+         && [ $((_tick_n % DOEY_DETECTOR_RELOAD_EVERY)) -eq 0 ]; then
+        _cur_mtime=$(file_mtime "$0")
+        if [ -n "$_cur_mtime" ] && [ -n "$DETECTOR_SCRIPT_MTIME" ] \
+           && [ "$_cur_mtime" != "$DETECTOR_SCRIPT_MTIME" ]; then
+          logmsg "detector: source mtime changed (was=${DETECTOR_SCRIPT_MTIME} now=${_cur_mtime}), reloading via exec"
+          exec "$0" start-foreground
+        fi
+      fi
       sleep "$DOEY_DETECTOR_TICK"
     done
   ) >> "$LOG_FILE" 2>&1 &
   disown 2>/dev/null || true
 }
 
+# Foreground start used by exec-on-reload. Same loop as cmd_start's child
+# but in-process (no double-fork) so the PID is preserved across reloads.
+cmd_start_foreground() {
+  ensure_dirs
+  if ! acquire_singleton; then
+    exit 0
+  fi
+  # Same rationale as cmd_start subshell: don't let strict-mode tear the
+  # daemon down on a transient pipefail inside a detector.
+  set +e
+  set +o pipefail
+  trap '
+    _self_pid=$(cat "$PID_FILE" 2>/dev/null || echo "")
+    if [ "$_self_pid" = "$$" ]; then rm -f "$PID_FILE" 2>/dev/null || true; fi
+  ' EXIT INT TERM
+  DETECTOR_START_TS=$(now_epoch)
+  DETECTOR_SCRIPT_MTIME=$(file_mtime "$0")
+  logmsg "DAEMON start pid=$$ script=$0 mtime=${DETECTOR_SCRIPT_MTIME}"
+  local _tick_n=0
+  while :; do
+    run_tick
+    _tick_n=$((_tick_n + 1))
+    if [ "$DOEY_DETECTOR_RELOAD_EVERY" -gt 0 ] 2>/dev/null \
+       && [ $((_tick_n % DOEY_DETECTOR_RELOAD_EVERY)) -eq 0 ]; then
+      local _cur_mtime
+      _cur_mtime=$(file_mtime "$0")
+      if [ -n "$_cur_mtime" ] && [ -n "$DETECTOR_SCRIPT_MTIME" ] \
+         && [ "$_cur_mtime" != "$DETECTOR_SCRIPT_MTIME" ]; then
+        logmsg "detector: source mtime changed (was=${DETECTOR_SCRIPT_MTIME} now=${_cur_mtime}), reloading via exec"
+        exec "$0" start-foreground
+      fi
+    fi
+    sleep "$DOEY_DETECTOR_TICK"
+  done
+}
+
 cmd_stop() {
   if [ ! -f "$PID_FILE" ]; then echo "not running"; return 0; fi
   local pid
   pid=$(cat "$PID_FILE" 2>/dev/null || echo "")
+  pid="${pid%%[!0-9]*}"
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-    kill "$pid" 2>/dev/null || true
-    sleep 1
-    kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+    kill -TERM "$pid" 2>/dev/null || true
+    # Wait up to ~3s for graceful shutdown.
+    local _i=0
+    while [ "$_i" -lt 30 ]; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.1
+      _i=$((_i + 1))
+    done
+    kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
   fi
   rm -f "$PID_FILE"
   echo "stopped"
@@ -711,11 +867,12 @@ cmd_status() {
 main() {
   local sub="${1:-}"
   case "$sub" in
-    start)  cmd_start ;;
-    stop)   cmd_stop ;;
-    status) cmd_status ;;
-    once)   cmd_once ;;
-    *) echo "usage: $0 start|stop|status|once" >&2; exit 1 ;;
+    start)            cmd_start ;;
+    start-foreground) cmd_start_foreground ;;
+    stop)             cmd_stop ;;
+    status)           cmd_status ;;
+    once)             cmd_once ;;
+    *) echo "usage: $0 start|start-foreground|stop|status|once" >&2; exit 1 ;;
   esac
 }
 

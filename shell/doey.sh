@@ -70,6 +70,9 @@ source "${SCRIPT_DIR}/doey-doctor.sh"
 # shellcheck source=doey-discord.sh
 source "${SCRIPT_DIR}/doey-discord.sh"
 
+# shellcheck source=doey-detector.sh
+source "${SCRIPT_DIR}/doey-detector.sh"
+
 # shellcheck source=doey-agents.sh
 source "${SCRIPT_DIR}/doey-agents.sh"
 
@@ -398,6 +401,11 @@ HELP
     exit $?
     ;;
   reload)       shift; reload_session "$@"; exit 0 ;;
+  detector)
+    shift
+    doey_detector_dispatch "$@"
+    exit $?
+    ;;
   test)
     (command -v doey-stats-emit.sh >/dev/null 2>&1 && doey-stats-emit.sh skill test_run &) 2>/dev/null || true
     shift
