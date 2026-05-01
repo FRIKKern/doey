@@ -128,11 +128,19 @@ _check_workers() {
 }
 
 _check_messages() {
+  # DB is the source of truth for read/unread state. Message files persist
+  # on disk after `doey msg read` consumes them — the DB tracks read state
+  # while file cleanup is deferred until `doey msg clean`. If the DB path
+  # is available, use it exclusively. Falling through to the file glob
+  # caused false MSG wakes (task 665) because orphan .msg files would
+  # signal "messages present" even when the unread count was 0.
   if command -v doey-ctl >/dev/null 2>&1 && [ -n "${PROJECT_DIR:-}" ]; then
     local _unread
     _unread=$(doey msg count --to "$_CALLER_PANE" --project-dir "$PROJECT_DIR" 2>/dev/null) || _unread=0
     [ "${_unread:-0}" -gt 0 ] && return 0
+    return 1
   fi
+  # Fallback: no DB available, glob the file inbox.
   local _mf _short_safe="${_CALLER_PANE//[-:.]/_}"
   for _mf in "$MSG_DIR"/${PANE_SAFE}_*.msg "$MSG_DIR"/${_short_safe}_*.msg; do
     [ -f "$_mf" ] && return 0

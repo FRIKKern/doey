@@ -1,0 +1,17 @@
+TASK_SCHEMA_VERSION=4
+TASK_ID=666
+TASK_TITLE=R-14: STM tight-loop detector
+TASK_STATUS=pending
+TASK_TYPE=task
+TASK_CREATED_BY=cli
+TASK_DESCRIPTION=Spun out of task 665 (stm-wait.sh false MSG wake fix).
+
+Add a silent-failure detector that catches STM tight-loops by symptom rather than cause: pane runs >5 msg-reads/60s with every result being 0 unread → emit crash_pane_<id>.
+
+Mirrors existing R-1/R-3/R-11 detectors landed in commit e6064c1. Even with 665's fix in place, a regression elsewhere in the wake path could re-introduce hot-loops; this detector backstops against that.
+
+Out of scope for 665.
+TASK_TIMESTAMPS=created=1777631108
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1777631108

@@ -1,0 +1,74 @@
+TASK_SCHEMA_VERSION=4
+TASK_ID=665
+TASK_TITLE=P0: STM hot-loop — stm-wait.sh false-wake fires MSG with empty inbox
+TASK_STATUS=in_progress
+TASK_TYPE=bug
+TASK_CREATED_BY=boss
+TASK_TEAM=W2
+TASK_DESCRIPTION=CATEGORY: deep
+MODEL: opus
+
+CRITICAL P0 — Subtaskmaster (STM) hot-loop / false-wake bug
+
+SYMPTOM (observed live in /home/doey/GitHub/frick-monorepo)
+STM repeatedly:
+  1. Calls `bash .claude/hooks/stm-wait.sh` → returns `WAKE_REASON=MSG`
+  2. Calls `doey msg read --pane "2.0" --unread` → empty result
+  3. Loops back to step 1 — STM burns context on every iteration
+
+User-reported impact: "Subtaskmaster is reading too much, burning tokens"
+
+ROOT CAUSE HYPOTHESIS
+`stm-wait.sh` is reporting `MSG` even when there are no unread messages. Likely candidates:
+  - Trigger files left undeleted after read → wait hook treats them as new messages
+  - Message count check is total-count not unread-count
+  - Race: trigger fires, STM reads, but trigger isn't atomically cleared
+  - Or: stm-wait.sh's MSG signal is being triggered by something that isn't an actual unread message (heartbeat update, status file mtime, etc.)
+
+FIRST STEP — DIAGNOSIS (before any fix)
+1. Read `.claude/hooks/stm-wait.sh` end-to-end. Identify exactly what condition causes WAKE_REASON=MSG.
+2. Read related hooks: `taskmaster-wait.sh`, `common.sh` (for shared wait helpers), `stop-status.sh`, `stop-notify.sh`.
+3. Reproduce locally in the Doey project (this repo) by running `stm-wait.sh` against an empty inbox + check what it returns.
+4. Identify the exact trigger condition causing the false MSG wake.
+
+ARCHITECTURAL PRINCIPLE (per user feedback)
+STM should be REACTIVE, never polling. Wake conditions must be limited to:
+  - Worker stop hook fired (worker finished or errored)
+  - Explicit cross-team notify message addressed to this STM
+  - Escalation request from a worker needing feedback
+That's it. No spurious wakes. No "check just in case" loops.
+
+DELIVERABLES
+1. Diagnosis report appended to task file: exact root cause + line numbers in stm-wait.sh
+2. Fix `stm-wait.sh` so:
+   - WAKE_REASON=MSG only fires when there IS at least one unread message addressed to the STM's pane
+   - Trigger files are atomically consumed (no double-fire)
+   - Wait blocks (sleeps) instead of returning immediately when no real signal exists
+3. Add invariant test: `tests/test-stm-wait-no-false-wake.sh`
+   - Setup: empty inbox, no triggers, no stop signals
+   - Run: `stm-wait.sh` with timeout 3s
+   - Assert: returns timeout (no false wake), or blocks for full duration
+4. Detector rule extension (if appropriate): add R-14 "STM tight-loop" to silent-fail-detector.sh — detect STM pane making >5 msg-read calls within 60s with zero unread results. Only add if simple — otherwise file follow-up task.
+5. Pre-commit: bash-compat 148/0 PASS, all existing hook tests PASS
+6. Commit + push to main, reference task #665
+
+CONSTRAINTS
+- Bash 3.2 compat
+- Must not break taskmaster-wait.sh or worker wait hooks
+- Must work in fresh-install (no manual setup)
+- Hook is shipped via install.sh — fix lands in the Doey source repo at .claude/hooks/stm-wait.sh
+- After fix, reinstall via `./install.sh` is what propagates to projects like frick-monorepo
+
+PROOF EMIT
+PROOF_TYPE=BUG_FIX_REPRO
+PROOF=before/after stm-wait.sh behavior with empty inbox; trace showing exact trigger removal; test output 1/1 PASS
+TASK_TIMESTAMPS=created=1777559799
+TASK_CURRENT_PHASE=0
+TASK_TOTAL_PHASES=0
+TASK_UPDATED=1777559799
+TASK_FILES=.claude/skills/doey-add-team/SKILL.md,.claude/skills/doey-add-team/SKILL.md.tmpl,.claude/skills/doey-add-window/SKILL.md,.claude/skills/doey-add-window/SKILL.md.tmpl,.claude/skills/doey-instant-task/SKILL.md,.claude/skills/doey-instant-task/SKILL.md.tmpl,.claude/skills/doey-kill-window/SKILL.md,.claude/skills/doey-list-windows/SKILL.md,.claude/skills/doey-masterplan/SKILL.md,.claude/skills/doey-masterplan/SKILL.md.tmpl,.claude/skills/doey-planned-task/SKILL.md,.claude/skills/doey-planned-task/SKILL.md.tmpl,.claude/skills/doey-rd-team/SKILL.md,.claude/skills/doey-rd-team/SKILL.md.tmpl,.doey/tasks/1.task,.doey/tasks/10.task,.doey/tasks/100.task,.doey/tasks/101.task,.doey/tasks/102.task,.doey/tasks/103.task
+TASK_SUBTASK_1_TITLE=Diagnose + fix stm-wait.sh false-wake; add invariant test
+TASK_SUBTASK_1_STATUS=review
+TASK_SUBTASK_1_WORKER=doey_doey_2_1
+TASK_SUBTASK_1_CREATED_AT=1777630650
+TASK_SUBTASK_1_COMPLETED_AT=1777630665
