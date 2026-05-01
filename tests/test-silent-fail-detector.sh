@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/test-silent-fail-detector.sh — synthetic-fixture coverage for R-1, R-3, R-11.
+# tests/test-silent-fail-detector.sh — synthetic-fixture coverage for R-1, R-3, R-11, R-14.
 set -euo pipefail
 
 DETECTOR="/home/doey/doey/shell/silent-fail-detector.sh"
@@ -308,6 +308,152 @@ EOF
   rm -rf "$s"
 }
 
+# ─── R-14 tight-loop emits (6 calls/60s, all 0 unread) ───
+test_r14_tight_loop_emits() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local i
+  : > "$s/runtime/msg-read.log"
+  for i in 1 2 3 4 5 6; do
+    printf '%s 2.1 0\n' "$((now - 30 + i))" >> "$s/runtime/msg-read.log"
+  done
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-14")
+  if [ "$n" -ge 1 ]; then assert_pass "R-14 tight_loop_emits"; else assert_fail "R-14 tight_loop_emits" "expected >=1 R-14, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── R-14 below threshold (5 calls/60s, all 0) → no emit ───
+test_r14_below_threshold_no_emit() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local i
+  : > "$s/runtime/msg-read.log"
+  for i in 1 2 3 4 5; do
+    printf '%s 2.1 0\n' "$((now - 30 + i))" >> "$s/runtime/msg-read.log"
+  done
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-14")
+  if [ "$n" -eq 0 ]; then assert_pass "R-14 below_threshold_no_emit"; else assert_fail "R-14 below_threshold_no_emit" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-14 mixed (>=6 calls but at least one nonzero unread) → no emit ───
+test_r14_mixed_no_emit() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  : > "$s/runtime/msg-read.log"
+  printf '%s 2.1 0\n' "$((now - 30))" >> "$s/runtime/msg-read.log"
+  printf '%s 2.1 0\n' "$((now - 25))" >> "$s/runtime/msg-read.log"
+  printf '%s 2.1 1\n' "$((now - 20))" >> "$s/runtime/msg-read.log"
+  printf '%s 2.1 0\n' "$((now - 15))" >> "$s/runtime/msg-read.log"
+  printf '%s 2.1 0\n' "$((now - 10))" >> "$s/runtime/msg-read.log"
+  printf '%s 2.1 0\n' "$((now - 5))"  >> "$s/runtime/msg-read.log"
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-14")
+  if [ "$n" -eq 0 ]; then assert_pass "R-14 mixed_no_emit"; else assert_fail "R-14 mixed_no_emit" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-14 dedup within 60s ───
+test_r14_dedup_within_60s() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local i
+  : > "$s/runtime/msg-read.log"
+  for i in 1 2 3 4 5 6; do
+    printf '%s 2.1 0\n' "$((now - 30 + i))" >> "$s/runtime/msg-read.log"
+  done
+  run_once "$s" >/dev/null 2>&1
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-14")
+  if [ "$n" -eq 1 ]; then assert_pass "R-14 dedup_within_60s"; else assert_fail "R-14 dedup_within_60s" "expected 1 R-14, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── R-14 emits crash_pane marker for Taskmaster intervention ───
+test_r14_crash_pane_emitted() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local i
+  : > "$s/runtime/msg-read.log"
+  for i in 1 2 3 4 5 6 7; do
+    printf '%s 2.1 0\n' "$((now - 30 + i))" >> "$s/runtime/msg-read.log"
+  done
+  run_once "$s" >/dev/null 2>&1
+  if [ -f "$s/runtime/status/crash_pane_2_1" ]; then
+    if grep -q '^STM_TIGHT_LOOP 2_1 reads=' "$s/runtime/status/crash_pane_2_1"; then
+      assert_pass "R-14 crash_pane marker written with STM_TIGHT_LOOP body"
+    else
+      assert_fail "R-14 crash_pane body" "missing STM_TIGHT_LOOP signature"
+    fi
+  else
+    assert_fail "R-14 crash_pane" "expected crash_pane_2_1 marker"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-14 no crash_pane on below-threshold ───
+test_r14_no_crash_pane_when_below_threshold() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local i
+  : > "$s/runtime/msg-read.log"
+  for i in 1 2 3 4 5; do
+    printf '%s 2.1 0\n' "$((now - 30 + i))" >> "$s/runtime/msg-read.log"
+  done
+  run_once "$s" >/dev/null 2>&1
+  if [ ! -f "$s/runtime/status/crash_pane_2_1" ]; then
+    assert_pass "R-14 no crash_pane below threshold"
+  else
+    assert_fail "R-14 no crash_pane below threshold" "marker should not exist"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-14 RESERVED pane is skipped ───
+test_r14_reserved_skipped() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local i
+  : > "$s/runtime/msg-read.log"
+  for i in 1 2 3 4 5 6 7; do
+    printf '%s 2.1 0\n' "$((now - 30 + i))" >> "$s/runtime/msg-read.log"
+  done
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: RESERVED
+UPDATED: $now
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-14")
+  if [ "$n" -eq 0 ] && [ ! -f "$s/runtime/status/crash_pane_2_1" ]; then
+    assert_pass "R-14 RESERVED pane skipped (no finding, no crash_pane)"
+  else
+    assert_fail "R-14 RESERVED skipped" "got $n findings, crash_pane_2_1 exists=$([ -f "$s/runtime/status/crash_pane_2_1" ] && echo yes || echo no)"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-14 crash_pane idempotency: existing marker preserved verbatim ───
+test_r14_crash_pane_idempotent() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local i
+  : > "$s/runtime/msg-read.log"
+  for i in 1 2 3 4 5 6 7; do
+    printf '%s 2.1 0\n' "$((now - 30 + i))" >> "$s/runtime/msg-read.log"
+  done
+  # Pre-existing marker — detector must not overwrite.
+  printf 'PRE_EXISTING_MARKER do-not-overwrite\n' > "$s/runtime/status/crash_pane_2_1"
+  run_once "$s" >/dev/null 2>&1
+  if grep -q '^PRE_EXISTING_MARKER' "$s/runtime/status/crash_pane_2_1"; then
+    assert_pass "R-14 crash_pane idempotent (pre-existing marker preserved)"
+  else
+    assert_fail "R-14 crash_pane idempotent" "marker was overwritten"
+  fi
+  rm -rf "$s"
+}
+
 echo "═══ silent-fail-detector tests ═══"
 test_r1_detect
 test_r1_nofire_busy
@@ -320,6 +466,14 @@ test_idempotency
 test_dedup_3x_same_hash
 test_dedup_window_expiry
 test_json_validity
+test_r14_tight_loop_emits
+test_r14_below_threshold_no_emit
+test_r14_mixed_no_emit
+test_r14_dedup_within_60s
+test_r14_crash_pane_emitted
+test_r14_no_crash_pane_when_below_threshold
+test_r14_reserved_skipped
+test_r14_crash_pane_idempotent
 
 echo "─────────────────────────────────"
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

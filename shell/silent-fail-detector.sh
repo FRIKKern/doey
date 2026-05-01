@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # silent-fail-detector.sh — Doey Phase-1 silent-failure detection daemon.
-# Rules: R-1 (paste-no-submit), R-3 (UPDATED/heartbeat skew), R-11 (briefing-handoff loss).
+# Rules: R-1 (paste-no-submit), R-3 (UPDATED/heartbeat skew), R-11 (briefing-handoff loss),
+#        R-14 (STM tight-loop on empty msg-read).
 # Read-only against project state. Writes only $RUNTIME_DIR/findings/* and detector.log.
 set -euo pipefail
 
@@ -252,12 +253,72 @@ detect_r11() {
   done
 }
 
+# ────── R-14 STM tight-loop on empty msg-read ──────
+# Backstop for task 665 (stm-wait.sh false MSG wake fix). Catches the symptom:
+# a pane runs >5 'doey msg read' calls within a 60s window AND every result is
+# 0 unread → STM is busy-looping on phantom messages. Source-of-truth is
+# $RUNTIME_DIR/msg-read.log with one line per call: "<epoch_ts> <pane> <unread_count>".
+# Honors DOEY_DETECTOR_DISABLE (substring match on "R-14", or "all"/"1") and
+# DOEY_DETECTOR_DEDUP_WINDOW (via shared fp_within_window helper).
+detect_r14() {
+  case "${DOEY_DETECTOR_DISABLE:-}" in
+    *R-14*|all|1) return 0 ;;
+  esac
+  local log="$RUNTIME_DIR/msg-read.log"
+  [ -f "$log" ] || return 0
+  local now window_start results pane count
+  now=$(now_epoch)
+  window_start=$((now - 60))
+  # Per-pane: count calls in window; flag any with non-zero unread.
+  # Emit "<pane> <count>" only for panes with count>5 AND every call 0 unread.
+  results=$(awk -v ws="$window_start" '
+    $1 >= ws {
+      pane = $2
+      cnt[pane]++
+      if ($3 != "0") nonzero[pane] = 1
+    }
+    END {
+      for (p in cnt) {
+        if (cnt[p] > 5 && !(p in nonzero)) {
+          print p, cnt[p]
+        }
+      }
+    }
+  ' "$log" 2>/dev/null) || results=""
+  [ -n "$results" ] || return 0
+  while IFS=' ' read -r pane count; do
+    [ -n "$pane" ] || continue
+    # RESERVED guard — match the convention used by R-1/R-3/R-11.
+    local safe st status
+    safe=$(printf '%s' "$pane" | tr '.' '_')
+    st="$RUNTIME_DIR/status/${safe}.status"
+    if [ -f "$st" ]; then
+      status=$(status_field "$st" "STATUS")
+      [ "$status" = "RESERVED" ] && continue
+    fi
+
+    emit_finding "R-14" "$pane" "stm-tight-loop: ${count} zero-msg-reads in 60s" "P0"
+
+    # Escalate to Taskmaster's crash-handling path. Idempotent: the existing
+    # marker is left alone so taskmaster-wait clears it on its own cycle.
+    local crash_file="$RUNTIME_DIR/status/crash_pane_${safe}"
+    if [ ! -f "$crash_file" ]; then
+      printf 'STM_TIGHT_LOOP %s reads=%s window=60s\n' "$safe" "$count" \
+        > "$crash_file" 2>/dev/null || true
+      logmsg "CRASH R-14 pane=$pane reads=${count}"
+    fi
+  done <<EOF
+$results
+EOF
+}
+
 run_tick() {
   ensure_dirs
   logmsg "TICK start"
   detect_r1 || logmsg "ERROR R-1 failed"
   detect_r3 || logmsg "ERROR R-3 failed"
   detect_r11 || logmsg "ERROR R-11 failed"
+  detect_r14 || logmsg "ERROR R-14 failed"
   logmsg "TICK end"
 }
 
