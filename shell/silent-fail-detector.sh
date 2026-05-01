@@ -251,6 +251,29 @@ detect_r11() {
     [ "$delta" -lt 10 ] || continue
     printf '%s' "$last_text" | grep -Eq 'Claude Code v[0-9.]+' || continue
 
+    # Scrollback-freshness guard (mirrors R-3 pattern): the buried-brief signal
+    # must still be visible in the LIVE pane right now, AND the pane must be
+    # actively producing output. Without this, R-11 refires every dedup-window
+    # on stale result files even after the pane has long since recovered (task
+    # 671). Two combined gates:
+    #   (a) tmux capture-pane last 30 lines must contain the "Claude Code v"
+    #       banner — the briefing-loss signal must be visible NOW, not buried
+    #       deep in scrollback above current activity.
+    #   (b) doey-ctl status observe last_output_age_sec must be < 90s — pane
+    #       has not moved past the failure into normal work. If doey-ctl is
+    #       missing or fails to return an age, fail safe and skip emission.
+    local cap_recent age_json age
+    cap_recent=$(tmux capture-pane -t "$DOEY_SESSION:$pane" -p -S -30 2>/dev/null || echo "")
+    [ -n "$cap_recent" ] || continue
+    printf '%s' "$cap_recent" | grep -Eq 'Claude Code v[0-9.]+' || continue
+
+    command -v doey-ctl >/dev/null 2>&1 || continue
+    age_json=$(doey-ctl status observe "$DOEY_SESSION:$pane" --json 2>/dev/null || echo "")
+    [ -n "$age_json" ] || continue
+    age=$(printf '%s' "$age_json" | sed -nE 's/.*"last_output_age_sec"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' | head -1)
+    case "$age" in ''|*[!0-9]*) continue ;; esac
+    [ "$age" -lt 90 ] || continue
+
     emit_finding "R-11" "$pane" "buried-brief: stop ${delta}s post-spawn, 0 tool calls" "P0"
   done
 }

@@ -58,6 +58,25 @@ case "$sub" in
 esac
 STUB
   chmod +x "$root/bin/tmux"
+  # doey-ctl stub: serves last_output_age_sec from $STUB_DIR/observe-age.txt.
+  # If the file is missing the stub exits 1 (the detector must then treat the
+  # signal as stale per its fail-safe semantics).
+  cat > "$root/bin/doey-ctl" <<'OBS'
+#!/usr/bin/env bash
+STUB_DIR="${STUB_DIR:-}"
+sub="${1:-}"; sub2="${2:-}"
+if [ "$sub" = "status" ] && [ "$sub2" = "observe" ]; then
+  age_file="$STUB_DIR/observe-age.txt"
+  if [ -f "$age_file" ]; then
+    age=$(cat "$age_file")
+    printf '{"active":true,"indicator":"idle","last_output_age_sec":%s}\n' "$age"
+    exit 0
+  fi
+  exit 1
+fi
+exit 0
+OBS
+  chmod +x "$root/bin/doey-ctl"
   echo "$root"
 }
 
@@ -187,6 +206,15 @@ test_r11_detect() {
   "last_output": {"text": "Welcome to Claude Code v2.1.123 — type /help for help"}
 }
 EOF
+  # Live pane still shows the briefing-loss banner in last 30 lines AND
+  # last_output_age_sec is fresh (<90s). The freshness gates added in task 671
+  # demand both be present for R-11 to fire.
+  cat > "$s/capture/2.1.txt" <<EOF
+Welcome to Claude Code v2.1.123 — type /help for help
+
+❯
+EOF
+  printf '5\n' > "$s/observe-age.txt"
   run_once "$s" >/dev/null 2>&1
   local n; n=$(count_findings "$s" "R-11")
   if [ "$n" -ge 1 ]; then assert_pass "R-11 detect"; else assert_fail "R-11 detect" "expected ≥1 R-11, got $n"; fi
@@ -209,6 +237,86 @@ EOF
   run_once "$s" >/dev/null 2>&1
   local n; n=$(count_findings "$s" "R-11")
   if [ "$n" -eq 0 ]; then assert_pass "R-11 no-fire (tool_calls>0)"; else assert_fail "R-11 no-fire" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-11 no-fire (stale scrollback: banner buried far above current activity) ───
+# Task 671 — the detector previously refired every dedup-window because it
+# only checked the result file's last_output JSON, which can carry a stale
+# boot banner long after the pane recovered. Guard: capture-pane last 30 lines
+# must contain the banner AND last_output_age_sec < 90s. Here the banner sits
+# on lines 1-3 of a 100-line buffer with fresh activity in lines 80-100, and
+# last_output_age_sec=300 (well past the 90s gate) — both gates fail, so no
+# finding may emit.
+test_r11_nofire_stale_scrollback() {
+  local s; s=$(make_sandbox)
+  command -v jq >/dev/null 2>&1 || { assert_pass "R-11 stale_scrollback (skipped: no jq)"; rm -rf "$s"; return 0; }
+  local now; now=$(date +%s)
+  printf '2_1 %s\n' "$now" > "$s/runtime/spawn.log"
+  cat > "$s/runtime/results/pane_2_1.json" <<EOF
+{
+  "pane": "2.1",
+  "tool_calls": 0,
+  "last_output": {"text": "Welcome to Claude Code v2.1.123 — type /help for help"}
+}
+EOF
+  # Banner buried at the top of a 100-line buffer; current activity below.
+  {
+    printf 'Welcome to Claude Code v2.1.123 — type /help for help\n'
+    printf 'briefing line 2\n'
+    printf 'briefing line 3\n'
+    local i
+    for i in $(seq 4 79); do printf 'old scrollback line %s\n' "$i"; done
+    for i in $(seq 80 99); do printf '✻ Cogitated for %ss · running task #666\n' "$i"; done
+    printf '❯\n'
+  } > "$s/capture/2.1.txt"
+  printf '300\n' > "$s/observe-age.txt"
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-11")
+  if [ "$n" -eq 0 ]; then
+    assert_pass "R-11 no-fire (stale scrollback / age=300s)"
+  else
+    assert_fail "R-11 stale_scrollback" "expected 0, got $n"
+  fi
+  rm -rf "$s"
+}
+
+# ─── R-11 fire (fresh scrollback: banner in last 30 lines + age<90s) ───
+# Companion to the stale-scrollback test: when the buried-brief signal IS
+# present in the most recent 30 lines AND the pane just stopped (age=10s),
+# both freshness gates pass so the detector still emits — confirming the
+# guard does NOT suppress legitimate detection of a current failure.
+test_r11_fire_fresh_scrollback() {
+  local s; s=$(make_sandbox)
+  command -v jq >/dev/null 2>&1 || { assert_pass "R-11 fresh_scrollback (skipped: no jq)"; rm -rf "$s"; return 0; }
+  local now; now=$(date +%s)
+  printf '2_1 %s\n' "$now" > "$s/runtime/spawn.log"
+  cat > "$s/runtime/results/pane_2_1.json" <<EOF
+{
+  "pane": "2.1",
+  "tool_calls": 0,
+  "last_output": {"text": "Welcome to Claude Code v2.1.123 — type /help for help"}
+}
+EOF
+  # 100-line buffer with the banner on lines 95-100 (well inside the last 30).
+  {
+    local i
+    for i in $(seq 1 94); do printf 'older scrollback line %s\n' "$i"; done
+    printf 'Welcome to Claude Code v2.1.123 — type /help for help\n'
+    printf '/help for help, /status for status\n'
+    printf 'briefing waited for input\n'
+    printf '\n'
+    printf '\n'
+    printf '❯\n'
+  } > "$s/capture/2.1.txt"
+  printf '10\n' > "$s/observe-age.txt"
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-11")
+  if [ "$n" -ge 1 ]; then
+    assert_pass "R-11 fire (fresh scrollback / age=10s)"
+  else
+    assert_fail "R-11 fresh_scrollback" "expected ≥1, got $n"
+  fi
   rm -rf "$s"
 }
 
@@ -704,6 +812,8 @@ test_r3_nofire_fresh
 test_r3_nofire_grace
 test_r11_detect
 test_r11_nofire
+test_r11_nofire_stale_scrollback
+test_r11_fire_fresh_scrollback
 test_idempotency
 test_dedup_3x_same_hash
 test_dedup_window_expiry
