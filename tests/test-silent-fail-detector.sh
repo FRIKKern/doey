@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/test-silent-fail-detector.sh — synthetic-fixture coverage for R-1, R-3, R-11, R-14.
+# tests/test-silent-fail-detector.sh — synthetic-fixture coverage for R-1, R-3, R-11, R-14, R-15, R-16.
 set -euo pipefail
 
 DETECTOR="/home/doey/doey/shell/silent-fail-detector.sh"
@@ -454,6 +454,136 @@ test_r14_crash_pane_idempotent() {
   rm -rf "$s"
 }
 
+# ─── R-15 detect (popup line + idle + assigned work + old mtime) ───
+test_r15_detect() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local old=$((now - 400))
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $old
+EOF
+  # Backdate status mtime past the 300s freshness gate.
+  touch -d "@$old" "$s/runtime/status/2_1.status" 2>/dev/null || \
+    touch -t "$(date -r "$old" +%Y%m%d%H%M.%S 2>/dev/null || date +%Y%m%d%H%M.%S)" "$s/runtime/status/2_1.status" 2>/dev/null || true
+  # Assigned-work signal.
+  printf '670\n' > "$s/runtime/status/2_1.task_id"
+  cat > "$s/capture/2.1.txt" <<EOF
+some prior output
+... was that response helpful?
+1: Bad    2: Fine   3: Good   0: Dismiss
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-15")
+  if [ "$n" -ge 1 ]; then assert_pass "R-15 detect"; else assert_fail "R-15 detect" "expected ≥1 R-15, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── R-15 no-fire (no popup line in capture) ───
+test_r15_nofire_no_popup() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local old=$((now - 400))
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $old
+EOF
+  touch -d "@$old" "$s/runtime/status/2_1.status" 2>/dev/null || true
+  printf '670\n' > "$s/runtime/status/2_1.task_id"
+  cat > "$s/capture/2.1.txt" <<EOF
+some prior output
+❯
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-15")
+  if [ "$n" -eq 0 ]; then assert_pass "R-15 no-fire (no popup)"; else assert_fail "R-15 no-fire (no popup)" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-15 no-fire (popup line present but no assigned work) ───
+test_r15_nofire_no_work() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  local old=$((now - 400))
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $old
+EOF
+  touch -d "@$old" "$s/runtime/status/2_1.status" 2>/dev/null || true
+  cat > "$s/capture/2.1.txt" <<EOF
+1: Bad    2: Fine   3: Good   0: Dismiss
+EOF
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-15")
+  if [ "$n" -eq 0 ]; then assert_pass "R-15 no-fire (no assigned work)"; else assert_fail "R-15 no-fire (no work)" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-16 detect (/clear in scrollback + recent READY transition + old unread msg) ───
+test_r16_detect() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $now
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+some prior thinking
+> /clear
+context cleared
+❯
+EOF
+  mkdir -p "$s/runtime/messages"
+  local old=$((now - 120))
+  printf 'FROM: 0.1\nSUBJECT: review\nplease verify\n' > "$s/runtime/messages/2_1_${old}_1234.msg"
+  touch -d "@$old" "$s/runtime/messages/2_1_${old}_1234.msg" 2>/dev/null || true
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-16")
+  if [ "$n" -ge 1 ]; then assert_pass "R-16 detect"; else assert_fail "R-16 detect" "expected ≥1 R-16, got $n"; fi
+  rm -rf "$s"
+}
+
+# ─── R-16 no-fire (/clear alone, no unread msgs) ───
+test_r16_nofire_clear_alone() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $now
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+> /clear
+❯
+EOF
+  mkdir -p "$s/runtime/messages"
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-16")
+  if [ "$n" -eq 0 ]; then assert_pass "R-16 no-fire (/clear alone)"; else assert_fail "R-16 no-fire (/clear alone)" "got $n findings"; fi
+  rm -rf "$s"
+}
+
+# ─── R-16 no-fire (unread alone, no /clear) ───
+test_r16_nofire_unread_alone() {
+  local s; s=$(make_sandbox)
+  local now; now=$(date +%s)
+  cat > "$s/runtime/status/2_1.status" <<EOF
+STATUS: READY
+UPDATED: $now
+EOF
+  cat > "$s/capture/2.1.txt" <<EOF
+some prior output
+❯
+EOF
+  mkdir -p "$s/runtime/messages"
+  local old=$((now - 120))
+  printf 'FROM: 0.1\nSUBJECT: review\nplease verify\n' > "$s/runtime/messages/2_1_${old}_1234.msg"
+  touch -d "@$old" "$s/runtime/messages/2_1_${old}_1234.msg" 2>/dev/null || true
+  run_once "$s" >/dev/null 2>&1
+  local n; n=$(count_findings "$s" "R-16")
+  if [ "$n" -eq 0 ]; then assert_pass "R-16 no-fire (unread alone)"; else assert_fail "R-16 no-fire (unread alone)" "got $n findings"; fi
+  rm -rf "$s"
+}
+
 echo "═══ silent-fail-detector tests ═══"
 test_r1_detect
 test_r1_nofire_busy
@@ -474,6 +604,12 @@ test_r14_crash_pane_emitted
 test_r14_no_crash_pane_when_below_threshold
 test_r14_reserved_skipped
 test_r14_crash_pane_idempotent
+test_r15_detect
+test_r15_nofire_no_popup
+test_r15_nofire_no_work
+test_r16_detect
+test_r16_nofire_clear_alone
+test_r16_nofire_unread_alone
 
 echo "─────────────────────────────────"
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"

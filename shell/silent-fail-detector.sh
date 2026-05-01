@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # silent-fail-detector.sh — Doey Phase-1 silent-failure detection daemon.
 # Rules: R-1 (paste-no-submit), R-3 (UPDATED/heartbeat skew), R-11 (briefing-handoff loss),
-#        R-14 (STM tight-loop on empty msg-read).
+#        R-14 (STM tight-loop on empty msg-read), R-15 (Claude UX popup blocks pane),
+#        R-16 (coordinator /clear strands in-flight requests).
 # Read-only against project state. Writes only $RUNTIME_DIR/findings/* and detector.log.
 set -euo pipefail
 
@@ -312,6 +313,138 @@ $results
 EOF
 }
 
+# ────── R-15 Claude UX feedback popup blocks pane ──────
+# Symptom: Claude's "1: Bad  2: Fine  3: Good  0: Dismiss" feedback popup is
+# rendered in the pane and consumes all keystrokes. Status file says READY/IDLE
+# (the harness believes the pane is free) but real input is blocked.
+# Recovery: send '0' + Enter to dismiss popup.
+check_r15_claude_ux_popup() {
+  case "${DOEY_DETECTOR_DISABLE:-}" in
+    *R-15*|all|1) return 0 ;;
+  esac
+  local status_dir="$RUNTIME_DIR/status"
+  [ -d "$status_dir" ] || return 0
+  local panes_present=""
+  if command -v tmux >/dev/null 2>&1; then
+    panes_present=$(tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || echo "")
+  fi
+  local f base safe pane status mtime now mtime_age cap has_work
+  now=$(now_epoch)
+  for f in "$status_dir"/*.status; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f" .status)
+    if ! printf '%s' "$base" | grep -Eq '^[0-9]+_[0-9]+$'; then continue; fi
+    safe="$base"
+    pane=$(safe_to_pane "$safe")
+    status=$(status_field "$f" "STATUS")
+    [ "$status" = "RESERVED" ] && continue
+    case "$status" in
+      READY|IDLE) ;;
+      *) continue ;;
+    esac
+    mtime=$(file_mtime "$f")
+    [ -n "$mtime" ] || continue
+    mtime_age=$((now - mtime))
+    # Age guard: only fire if pane has been quiet long enough that a popup is
+    # not just transient (>300s).
+    [ "$mtime_age" -gt 300 ] || continue
+
+    # Pane existence check (only if tmux gave us a list).
+    if [ -n "$panes_present" ]; then
+      if ! printf '%s\n' "$panes_present" | grep -Fxq "$DOEY_SESSION:$pane"; then
+        continue
+      fi
+    fi
+
+    # Assigned-work check: task_id file or non-empty TASK_ID in status.
+    has_work=0
+    if [ -f "$status_dir/${safe}.task_id" ]; then has_work=1; fi
+    if [ "$has_work" -eq 0 ]; then
+      local tid
+      tid=$(status_field "$f" "TASK_ID")
+      [ -n "$tid" ] && has_work=1
+    fi
+    [ "$has_work" -eq 1 ] || continue
+
+    # Capture last 30 lines and look for the literal popup signature.
+    cap=$(tmux capture-pane -t "$DOEY_SESSION:$pane" -p -S -30 2>/dev/null || echo "")
+    [ -n "$cap" ] || continue
+    printf '%s' "$cap" | grep -Fq '1: Bad' || continue
+    printf '%s' "$cap" | grep -Fq '0: Dismiss' || continue
+
+    emit_finding "R-15" "$pane" "claude-ux-popup blocks pane; status=${status}; recovery: send '0' + Enter to dismiss popup" "P0"
+  done
+}
+
+# ────── R-16 Coordinator /clear strands in-flight requests ──────
+# Symptom: a coordinator pane (Reviewer/STM/TM) ran `/clear`, dropping all
+# context. Pending inbound .msg files addressed to that pane are now orphaned
+# because the cleared coordinator has no memory of them. Senders sleep waiting
+# for verdicts that never come.
+# Recovery: nudge cleared pane to re-process inbox.
+check_r16_clear_strands_requests() {
+  case "${DOEY_DETECTOR_DISABLE:-}" in
+    *R-16*|all|1) return 0 ;;
+  esac
+  local status_dir="$RUNTIME_DIR/status"
+  local msg_dir="$RUNTIME_DIR/messages"
+  [ -d "$status_dir" ] || return 0
+  [ -d "$msg_dir" ] || return 0
+  local panes_present=""
+  if command -v tmux >/dev/null 2>&1; then
+    panes_present=$(tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || echo "")
+  fi
+  local f base safe pane status mtime now mtime_age cap m_file m_mtime unread_old
+  now=$(now_epoch)
+  for f in "$status_dir"/*.status; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f" .status)
+    if ! printf '%s' "$base" | grep -Eq '^[0-9]+_[0-9]+$'; then continue; fi
+    safe="$base"
+    pane=$(safe_to_pane "$safe")
+    status=$(status_field "$f" "STATUS")
+    [ "$status" = "RESERVED" ] && continue
+    case "$status" in
+      READY|IDLE) ;;
+      *) continue ;;
+    esac
+    mtime=$(file_mtime "$f")
+    [ -n "$mtime" ] || continue
+    mtime_age=$((now - mtime))
+    # Status transition recency: status mtime within last 60s ⇒ recently went READY.
+    [ "$mtime_age" -le 60 ] || continue
+
+    # Pane existence check (only if tmux gave us a list).
+    if [ -n "$panes_present" ]; then
+      if ! printf '%s\n' "$panes_present" | grep -Fxq "$DOEY_SESSION:$pane"; then
+        continue
+      fi
+    fi
+
+    # Scrollback-freshness guard: capture-pane is live, so a literal `/clear`
+    # in last 30 lines paired with a recent status mtime localizes the event.
+    cap=$(tmux capture-pane -t "$DOEY_SESSION:$pane" -p -S -30 2>/dev/null || echo "")
+    [ -n "$cap" ] || continue
+    printf '%s' "$cap" | grep -Eq '(^|[[:space:]])/clear([[:space:]]|$)' || continue
+
+    # Completion-aware: only fire when there is at least one unread .msg
+    # addressed to this pane older than 60s — otherwise no work is stranded.
+    unread_old=0
+    for m_file in "$msg_dir/${safe}_"*.msg; do
+      [ -f "$m_file" ] || continue
+      m_mtime=$(file_mtime "$m_file")
+      [ -n "$m_mtime" ] || continue
+      case "$m_mtime" in ''|*[!0-9]*) continue ;; esac
+      if [ $((now - m_mtime)) -gt 60 ]; then
+        unread_old=$((unread_old + 1))
+      fi
+    done
+    [ "$unread_old" -ge 1 ] || continue
+
+    emit_finding "R-16" "$pane" "coordinator-clear-strand: ${unread_old} stale unread msg(s); recovery: nudge cleared pane to re-process inbox" "P0"
+  done
+}
+
 run_tick() {
   ensure_dirs
   logmsg "TICK start"
@@ -319,6 +452,8 @@ run_tick() {
   detect_r3 || logmsg "ERROR R-3 failed"
   detect_r11 || logmsg "ERROR R-11 failed"
   detect_r14 || logmsg "ERROR R-14 failed"
+  check_r15_claude_ux_popup || logmsg "ERROR R-15 failed"
+  check_r16_clear_strands_requests || logmsg "ERROR R-16 failed"
   logmsg "TICK end"
 }
 
