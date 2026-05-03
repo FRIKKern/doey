@@ -252,6 +252,9 @@ type TasksModel struct {
 	creating  bool
 	inputText string
 
+	// Search overlay (`/` keybind in the task list pane)
+	searchBar taskSearchBar
+
 	// Expanded card (used for subtask nav in right panel)
 	expanded         *taskcard.ExpandedCard
 	expandedSubtasks map[int]bool // tracks which subtasks are toggled open in detail view
@@ -556,9 +559,16 @@ func (m TasksModel) Update(msg tea.Msg) (TasksModel, tea.Cmd) {
 		return m, nil
 	}
 
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case taskStatusClearMsg:
 		m.statusMsg = ""
+		return m, nil
+	case TaskSearchTickMsg:
+		var cmd tea.Cmd
+		m.searchBar, cmd = m.searchBar.HandleTick(msg, dbPathFor(m.projectDir))
+		return m, cmd
+	case TaskSearchResultsMsg:
+		m.searchBar = m.searchBar.HandleResults(msg)
 		return m, nil
 	}
 
@@ -578,6 +588,11 @@ func (m TasksModel) Update(msg tea.Msg) (TasksModel, tea.Cmd) {
 			return m, nil
 		}
 
+		// Search mode swallows all keys until Esc/Enter.
+		if m.searchBar.Active() {
+			return m.updateSearch(msg)
+		}
+
 		// Input mode (creating)
 		if m.creating {
 			return m.updateInput(msg)
@@ -593,6 +608,31 @@ func (m TasksModel) Update(msg tea.Msg) (TasksModel, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// updateSearch routes keystrokes to the search bar. Enter jumps to the
+// selected result; Esc closes the bar and restores normal navigation.
+func (m TasksModel) updateSearch(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
+	if msg.Type == tea.KeyEnter {
+		taskID := m.searchBar.SelectedTaskID()
+		m.searchBar.Close()
+		if taskID == "" {
+			return m, nil
+		}
+		for i, e := range m.entries {
+			if e.ID == taskID {
+				m.list.Select(i)
+				m.leftFocused = false
+				m.detailViewport.GotoTop()
+				m.loadSelectedDetail()
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.searchBar, cmd, _ = m.searchBar.HandleKey(msg, dbPathFor(m.projectDir))
+	return m, cmd
 }
 
 // updateMouse handles all mouse interactions for the tasks panel.
@@ -810,6 +850,12 @@ func (m TasksModel) updateInput(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 
 func (m TasksModel) updateList(msg tea.KeyMsg) (TasksModel, tea.Cmd) {
 	total := len(m.entries)
+	// `/` opens the FTS search bar (vim-style). Works even on an empty list
+	// so users can search archived/cancelled tasks regardless of filter.
+	if msg.String() == "/" {
+		m.searchBar.Open()
+		return m, nil
+	}
 	if total == 0 {
 		if msg.String() == "n" {
 			m.creating = true
@@ -1219,8 +1265,14 @@ func (m TasksModel) renderLeftPanel(w, h int) string {
 	}
 	_ = borderColor // used in panel style below
 
-	// Header
-	header := t.SectionHeader.Copy().Width(w).PaddingLeft(1).Render("TASKS")
+	// Header — append [SEARCH] tag while the bar is active so the pane
+	// border clearly signals that `/` has captured nav keys (plan 1011).
+	headerText := "TASKS"
+	if m.searchBar.Active() {
+		headerText = "TASKS  " + lipgloss.NewStyle().
+			Foreground(t.Warning).Bold(true).Render("[SEARCH]")
+	}
+	header := t.SectionHeader.Copy().Width(w).PaddingLeft(1).Render(headerText)
 
 	if len(m.entries) == 0 {
 		icon := styles.EmptyStateIcon(t)
@@ -1234,9 +1286,23 @@ func (m TasksModel) renderLeftPanel(w, h int) string {
 			Render(icon + "\n\n" + title + "\n" + hint)
 
 		content := header + "\n" + emptyBox
+		if m.searchBar.Active() {
+			content = header + "\n" + m.searchBar.View(t, w) + "\n" +
+				m.searchBar.RenderResults(t, w, h-3)
+			return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
+		}
 		if m.creating {
 			content += "\n" + m.renderInputBar()
 		}
+		return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
+	}
+
+	if m.searchBar.Active() {
+		bar := m.searchBar.View(t, w)
+		results := m.searchBar.RenderResults(t, w, h-3)
+		hint := lipgloss.NewStyle().Foreground(t.Muted).Faint(true).PaddingLeft(1).
+			Render("Enter open · ↑↓ navigate · Esc cancel")
+		content := header + "\n" + bar + "\n" + results + "\n" + hint
 		return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(content)
 	}
 
@@ -2044,6 +2110,7 @@ func (m TasksModel) viewHelp() string {
 		{"Enter / →", "Focus detail panel"},
 		{"Esc / ←", "Focus list panel"},
 		{"↑ / ↓", "Scroll detail panel"},
+		{"/", "Search tasks (FTS5 live filter)"},
 		{"n", "Create new task"},
 		{"m", "Move task (active → in_progress → done)"},
 		{"s", "Cycle statuses / Skip Review (pending)"},

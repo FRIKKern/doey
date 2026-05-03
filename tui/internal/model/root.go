@@ -245,6 +245,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case DispatchTeamResultMsg:
 		cmds = append(cmds, m.readSnapshotCmd())
 
+	case TaskSearchTickMsg:
+		var cmd tea.Cmd
+		m.tasks, cmd = m.tasks.Update(msg)
+		cmds = append(cmds, cmd)
+
+	case TaskSearchResultsMsg:
+		var cmd tea.Cmd
+		m.tasks, cmd = m.tasks.Update(msg)
+		cmds = append(cmds, cmd)
+
 	case CreateTaskMsg:
 		return m, CreateTaskCmd(msg.Title)
 
