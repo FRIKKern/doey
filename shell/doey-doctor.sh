@@ -368,6 +368,56 @@ _check_chain_bypass() {
   fi
 }
 
+# ── FTS drift check (task #659) ───────────────────────────────────────
+# Compares rowcount of tasks_fts vs tasks and messages_fts vs messages.
+# Reports drift on stdout; returns 0 on parity, 1 on drift, 2 on missing
+# DB or sqlite3 binary. Safe on fresh install: a missing DB returns 0
+# (nothing to drift from). Only the project-local DB is inspected — no
+# cross-project search index walk.
+_doctor_fts_check() {
+  local _proj="${PROJECT_DIR:-$(pwd)}"
+  local _db="${_proj}/.doey/doey.db"
+  if [ ! -f "$_db" ]; then
+    printf 'FTS check: no project DB at %s — skipping (fresh install)\n' "$_db"
+    return 0
+  fi
+  if ! command -v sqlite3 >/dev/null 2>&1; then
+    printf 'FTS check: sqlite3 not installed — cannot verify drift\n' >&2
+    return 2
+  fi
+
+  local _t_src _t_fts _m_src _m_fts _drift
+  _t_src=$(sqlite3 "$_db" 'SELECT count(*) FROM tasks' 2>/dev/null || echo "")
+  _t_fts=$(sqlite3 "$_db" 'SELECT count(*) FROM tasks_fts' 2>/dev/null || echo "")
+  _m_src=$(sqlite3 "$_db" 'SELECT count(*) FROM messages' 2>/dev/null || echo "")
+  _m_fts=$(sqlite3 "$_db" 'SELECT count(*) FROM messages_fts' 2>/dev/null || echo "")
+
+  if [ -z "$_t_src" ] || [ -z "$_t_fts" ]; then
+    printf 'FTS check: tasks_fts not present (run latest doey to apply migration)\n' >&2
+    return 1
+  fi
+
+  _drift=0
+  printf 'FTS index check (%s):\n' "$_db"
+  if [ "$_t_src" = "$_t_fts" ]; then
+    printf '  tasks_fts:    %s rows (in sync)\n' "$_t_fts"
+  else
+    printf '  tasks_fts:    DRIFT — tasks=%s tasks_fts=%s\n' "$_t_src" "$_t_fts" >&2
+    _drift=1
+  fi
+  if [ "$_m_src" = "$_m_fts" ]; then
+    printf '  messages_fts: %s rows (in sync)\n' "$_m_fts"
+  else
+    printf '  messages_fts: DRIFT — messages=%s messages_fts=%s\n' "$_m_src" "$_m_fts" >&2
+    _drift=1
+  fi
+  if [ "$_drift" = "1" ]; then
+    printf '\nFix: run `doey-search-backfill -db %s`\n' "$_db" >&2
+    return 1
+  fi
+  return 0
+}
+
 # ── Doctor — check installation health ────────────────────────────────
 check_doctor() {
   PROJECT_DIR="$(pwd)"
@@ -376,15 +426,26 @@ check_doctor() {
   # Argument parsing — additive, does not alter any existing check.
   _DOC_STATS_VERBOSE=0
   _DOC_FIX=0
+  _DOC_FTS_ONLY=0
   DOEY_DOCTOR_NETWORK="${DOEY_DOCTOR_NETWORK:-0}"
   while [ $# -gt 0 ]; do
     case "$1" in
       --stats-verbose) _DOC_STATS_VERBOSE=1; shift ;;
       --network)       DOEY_DOCTOR_NETWORK=1; export DOEY_DOCTOR_NETWORK; shift ;;
       --fix)           _DOC_FIX=1; shift ;;
+      --fts)           _DOC_FTS_ONLY=1; shift ;;
       *) shift ;;
     esac
   done
+
+  # --fts: standalone search-index drift check (task #659). Compares
+  # rowcount of tasks_fts and messages_fts against their source tables.
+  # Returns 0 on parity, non-zero on drift. Used by CI and Subtaskmasters
+  # to verify search index health without running the full doctor.
+  if [ "$_DOC_FTS_ONLY" = "1" ]; then
+    _doctor_fts_check
+    exit $?
+  fi
 
   # --fix: OpenClaw-only path. Fresh install has no openclaw.conf — print a
   # message and exit (never auto-invoke the wizard).

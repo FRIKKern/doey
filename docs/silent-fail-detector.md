@@ -9,7 +9,8 @@ findings to `$RUNTIME_DIR/findings/`. Surfaced in the info-panel.
 Detect failure modes that don't raise errors — work that quietly stalls,
 panes that get stuck pre-launch, briefings that never make it to a fresh
 agent. See task `.doey/tasks/663.task` and research synthesis
-`tasks/662` for the rule catalogue (R-1, R-3, R-11 in MVP).
+`tasks/662` for the rule catalogue (R-1, R-3, R-11 in MVP; R-14 added by
+task 666 as a backstop for the task-665 stm-wait fix).
 
 ## Schema
 
@@ -56,6 +57,24 @@ double-spawn even when fired by every session-start hook.
 
 R-11 (`briefing-handoff-loss`) reads this to compute time-since-spawn for
 panes that stop with zero tool calls.
+
+## Msg-read ledger (R-14 input)
+
+`stm-wait.sh` appends one line per pre-loop entry to
+`$RUNTIME_DIR/msg-read.log`:
+
+```
+<epoch> <pane> <unread_count>
+```
+
+R-14 (`stm-tight-loop`) fires when a pane logs >5 entries in the last 60s
+with `unread_count == 0` for every entry. On fire, it emits a P0 finding
+**and** writes `$RUNTIME_DIR/status/crash_pane_<pane_safe>` so
+`taskmaster-wait` picks it up via the existing CRASH wake mechanism.
+
+The log is bounded to ~500 lines (rolling tail at append time), giving
+several minutes of history at healthy cadence — far more than the 60s
+detection window. Tunable: `DOEY_R14_THRESHOLD` (default `5`).
 
 ## Inspection
 
