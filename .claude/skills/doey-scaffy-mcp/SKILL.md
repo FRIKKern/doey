@@ -33,16 +33,16 @@ team is killed.
 - `scaffy_validate` — Parse a template and (optionally) run strict validation checks.
 - `scaffy_list` — List the templates available in `.doey/scaffy/templates/`.
 - `scaffy_audit` — Report which templates are stale, broken, or missing canonical formatting.
-- `scaffy_discover` — Search the registry by name, domain, tag, or canonical key.
+- `scaffy_discover` — Mine the working tree and git history for scaffolding patterns: structural directory shapes, accretion (injection) files, and refactoring co-creation pairs.
 - `scaffy_new` — Scaffold a new template stub, optionally seeded from existing files.
 - `scaffy_fmt` — Format a template to canonical form (idempotent Parse + Serialize).
 
 ## Resources
 
-- `scaffy://registry` — JSON array of every template in the project registry.
+- `scaffy://registry` — The `.doey/scaffy/REGISTRY.md` catalog, served as `text/markdown`.
 - `scaffy://audit` — JSON report of registry health (stale, broken, drift).
 - `scaffy://template/{name}` — The raw `.scaffy` source of a single template.
-- `scaffy://templates` — Index resource listing all `scaffy://template/{name}` URIs.
+- `scaffy://templates` — A JSON array of RegistryEntry objects (one per discoverable template).
 
 ## Notes
 

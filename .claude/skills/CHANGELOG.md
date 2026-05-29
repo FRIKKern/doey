@@ -11,15 +11,15 @@ Changes to Doey skills, with trigger, description, and expected impact.
 - **Change:** Added 2-3 trigger phrases to each skill description field
 - **Impact:** Better skill matching when users describe tasks in natural language
 
-### All Skills — Added expected step counts
+### All Skills — Expected step counts (REVERTED — never landed)
 - **Triggered by:** Research finding from §7 — step counts give LLMs a completion signal
-- **Change:** Added Expected: N tmux commands, N status writes, ~Ns. to each skill body
-- **Impact:** Workers can self-check if they are over/under-executing
+- **Change:** Proposed adding Expected: N tmux commands, N status writes, ~Ns. to each skill body. This was never applied — no live skill carries an "Expected: N tmux commands" line.
+- **Impact:** None — entry retained for history only.
 
-### doey-dispatch, doey-clear, doey-stop, doey-worktree, doey-add-window, doey-kill-window — Added Gotchas sections
+### doey-dispatch, doey-clear, doey-stop, doey-worktree, doey-add-window, doey-kill-window — Gotchas sections (REVERTED — never landed)
 - **Triggered by:** Research finding from §6 — explicit Do NOT lists prevent known failure modes
-- **Change:** Added Gotchas section with 3-5 prohibitions per skill
-- **Impact:** Reduces repeat failures from known anti-patterns
+- **Change:** Proposed adding a Gotchas section with 3-5 prohibitions per skill. This was never applied — no live skill contains a "Gotchas" section.
+- **Impact:** None — entry retained for history only.
 
 ### doey-dispatch — Added inline error recovery
 - **Triggered by:** Research finding from §13 — inline recovery instructions prevent worker stalls

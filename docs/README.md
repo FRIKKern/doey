@@ -33,7 +33,7 @@ detail.
 - [`debug-mode-design.md`](debug-mode-design.md) — flight-recorder debug mode.
 - [`enforce-ask-user-question.md`](enforce-ask-user-question.md) — the
   `AskUserQuestion` enforcement hook.
-- [`intent-fallback.md`](intent-fallback.md) — Haiku-powered command
+- [`intent-fallback.md`](intent-fallback.md) — Opus-powered command
   correction layer for unknown `doey` subcommands.
 - [`scaffy.md`](scaffy.md) — Scaffy template engine.
 - [`stats.md`](stats.md) — local stats emission and queries.

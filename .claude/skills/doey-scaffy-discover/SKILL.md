@@ -16,7 +16,7 @@ doey-scaffy discover [flags]
 
 ### Flags
 
-- `--depth N` — how many commits of history to walk (default: 50)
+- `--depth N` — how many commits of history to walk (default: 200)
 - `--category structural|injection|refactoring` — restrict to one pattern class
   - **structural** — sibling files that always appear together (handler.go + handler_test.go)
   - **injection** — accretion blocks that grow over time (router tables, plugin registries, init() chains)

@@ -33,7 +33,7 @@ Output is **non-empty** today. Two leak sources:
 
 1. `cmd/doey-masterplan-tui/main.go` itself currently imports
    `tea "github.com/charmbracelet/bubbletea"` and
-   `"github.com/charmbracelet/lipgloss"` (see main.go lines 18–19).
+   `"github.com/charmbracelet/lipgloss"` (see main.go lines 23-24).
    Phase 2 swaps these for the `charm.land/.../v2` paths as part of the
    fsnotify/watcher refactor.
 2. `cmd/doey-loading` (sibling binary) pulls v1 in through its own

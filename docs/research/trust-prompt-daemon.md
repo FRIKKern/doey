@@ -1,9 +1,9 @@
 # Trust-Prompt Daemon — Consolidated Research Report (Task 596)
 
 **Status:** Authoritative. Merges findings from
-[trust-prompt-experimental.md](./trust-prompt-experimental.md) (dialog signature
-+ behavior) and [trust-prompt-integration.md](./trust-prompt-integration.md)
-(codebase integration map). Source reports retained for traceability.
+[trust-prompt-experimental.md](../../_attic/docs/research/trust-prompt-experimental.md) (dialog signature
++ behavior) and [trust-prompt-integration.md](../../_attic/docs/research/trust-prompt-integration.md)
+(codebase integration map). Source reports archived to `_attic/` for traceability.
 
 ## TL;DR
 
@@ -292,5 +292,5 @@ daemon is the correct observer.
 
 ## Sources
 
-- [trust-prompt-experimental.md](./trust-prompt-experimental.md)
-- [trust-prompt-integration.md](./trust-prompt-integration.md)
+- [trust-prompt-experimental.md](../../_attic/docs/research/trust-prompt-experimental.md) (archived)
+- [trust-prompt-integration.md](../../_attic/docs/research/trust-prompt-integration.md) (archived)

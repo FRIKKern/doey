@@ -24,7 +24,7 @@ read-path for tmux status scripts, shell hooks, and migration.
 | `<project>/.doey/doey.db` | SQLite: tasks, messages, pane statuses, events, attachments | `doey-ctl` (tui/cmd/doey-ctl/) |
 | `<project>/.doey/doey.db-wal`, `doey.db-shm` | SQLite WAL + shared-memory index | SQLite |
 | `<project>/.doey/stats.db` (+WAL/SHM) | Stats SQLite | `shell/doey-stats-emit.sh` |
-| `<project>/.doey/tasks/<id>.task` | Task file (bash KEY=VALUE, v3 schema) | `shell/doey-task-helpers.sh` |
+| `<project>/.doey/tasks/<id>.task` | Task file (bash KEY=VALUE, v4 schema) | `shell/doey-task-helpers.sh` |
 | `<project>/.doey/tasks/.next_id` | Next task ID counter | `shell/doey-task-helpers.sh` |
 | `<project>/.doey/tasks/<id>.status` | Terminal status written by `stop-status.sh` | `.claude/hooks/stop-status.sh:110` |
 | `<project>/.doey/tasks/<id>.result.json` | Copy of final result JSON for a task | `.claude/hooks/stop-results.sh:357` |
@@ -89,10 +89,10 @@ Directory creation guarantees live in:
 - `shell/doey.sh:824` — session setup creates
   `messages broadcasts status logs mcp mcp/pids`.
 
-## 2. `.task` file schema (v3)
+## 2. `.task` file schema (v4)
 
 Defined in `shell/doey-task-helpers.sh:19` with
-`_TASK_SCHEMA_VERSION_CURRENT="3"`. Format is a bash `KEY=VALUE` file, one
+`_TASK_SCHEMA_VERSION_CURRENT="4"`. Format is a bash `KEY=VALUE` file, one
 field per line. Values are raw strings — multi-line content is encoded
 with escape markers or pipe-separated.
 
@@ -100,7 +100,7 @@ with escape markers or pipe-separated.
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `TASK_SCHEMA_VERSION` | int | Schema version (`3`). |
+| `TASK_SCHEMA_VERSION` | int | Schema version (`4`). |
 | `TASK_ID` | int | Primary key, matches filename `<id>.task`. |
 | `TASK_TITLE` | string | One-line title. |
 | `TASK_STATUS` | enum | `draft active in_progress paused blocked pending_user_confirmation done cancelled` (+`failed`, CLI-only, see `doey-task-cli.sh:102`). |
@@ -149,7 +149,7 @@ get appended to the task via `doey_task_add_report` (`stop-results.sh:420`).
 ### Minimal example
 
 ```
-TASK_SCHEMA_VERSION=3
+TASK_SCHEMA_VERSION=4
 TASK_ID=576
 TASK_TITLE=Write storage and cookbook docs
 TASK_STATUS=in_progress
@@ -166,7 +166,7 @@ TASK_UPDATED=1776104300
 
 ### Concurrency
 
-`task_update_field` (`doey-task-helpers.sh:238`) performs an atomic
+`task_update_field` (`doey-task-helpers.sh`) performs an atomic
 upsert: `sed` to a `.tmp` copy and `mv` back. One worker per task file
 is enforced socially via the dispatcher — the file format is not
 lock-protected. When `doey-ctl` is available, mutations go through
@@ -459,7 +459,7 @@ not treat agent-memory as a source of truth.
 
 1. **Writes are atomic via `tmp` + `mv`.** See:
    - `write_pane_status` — `.claude/hooks/common.sh:405`
-   - `task_update_field` — `shell/doey-task-helpers.sh:238`
+   - `task_update_field` — `shell/doey-task-helpers.sh`
    - `send_msg_to_taskmaster` — `shell/doey-ipc-helpers.sh:101`
    - `stop-results.sh:307` — `mktemp` then `mv` for the JSON result.
 2. **No shell-level locks.** Coordination is social: "one worker per
@@ -488,7 +488,7 @@ not treat agent-memory as a source of truth.
 |--------------|-----------------|
 | `RUNTIME_DIR/session.env` | `shell/doey-session.sh:607`, `:1206` |
 | `RUNTIME_DIR` directory skeleton | `shell/doey.sh:824`, `.claude/hooks/common.sh:117` |
-| `<project>/.doey/tasks/<id>.task` | `shell/doey-task-helpers.sh:94` (`task_create`), `:238` (`task_update_field`) |
+| `<project>/.doey/tasks/<id>.task` | `shell/doey-task-helpers.sh` (`task_create`, `task_update_field`) |
 | `.doey/doey.db` | `tui/cmd/doey-ctl/` (`store` package) |
 | `.doey/tasks/<id>.status` | `.claude/hooks/stop-status.sh:110` |
 | `.doey/tasks/<id>.result.json` | `.claude/hooks/stop-results.sh:357` |

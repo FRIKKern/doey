@@ -54,7 +54,7 @@ same transaction as `ensureSchema` — partial-migration state is impossible.
 | `task_id` | INTEGER | legacy | — |
 | `data` | TEXT | legacy | free-form |
 | `created_at` | INTEGER | legacy | unix seconds |
-| **`class`** | TEXT | #525 | discriminator: `violation_polling`, `stat_*`, … |
+| **`class`** | TEXT | #525 | discriminator: `violation_polling`, future `violation_*`, … |
 | **`severity`** | TEXT | #525 | `warn` \| `breaker` \| `info` \| `debug` |
 | **`session`** | TEXT | #525 | `SESSION_NAME`; disambiguates across concurrent sessions |
 | **`role`** | TEXT | #525 | role id (e.g. `subtaskmaster`, `coordinator`) |
@@ -115,21 +115,18 @@ crashing with `no such column: class`.
 | `violation_polling` | #525 | **shipped** | Wait-hook polling loop detected |
 | `violation_ask_user` | #522 | reserved | AskUserQuestion misuse (inline questions in text) |
 | `violation_kill_premature` | future | reserved | Worker killed before proof |
-| `stat_session_start` | #521 | shipped | Session start event |
-| `stat_team_spawn` | #521 | shipped | Team spawn event |
-| `stat_task_completed` | #521 | shipped | Task completion event |
-| `stat_intent_fallback` | #521 | shipped | Intent fallback fired |
-| `stat_install_run` | #521 | shipped | install.sh invocation |
 
-The `class` column is the **discriminator**. Two orthogonal namespaces live
-in the same table:
+The `class` column is the **discriminator** for violation rows in the
+`events` table:
 
 - `violation_*` classes represent self-inflicted regressions — expected
   count: zero. Non-zero is an alert.
-- `stat_*` classes represent normal telemetry — expected count: non-zero.
 
-TUI sub-views filter on `class` for their scope. Violations sub-view shows
-only `violation_*`; Stats sub-view shows only `stat_*`.
+The Violations sub-view filters on `class` for its scope, showing only
+`violation_*` rows. Stats telemetry is **not** stored in this table — it
+lives in a separate `.doey/stats.db` file owned by the `statsdb` package
+(see section 11), with its own category/type schema (categories
+`session`, `task`, `worker`, `skill`), not `stat_*` classes here.
 
 ### Adding a new class
 
@@ -452,35 +449,30 @@ session, events will appear in a JSONL file instead of the DB — grep for
 
 ---
 
-## 11. Contract with task #521 (Stats)
+## 11. Relationship to Stats
 
-Task #521 lands a Stats sub-view on the same Logs tab, reading from the
-same `events` table via the same `store` package.
+Stats telemetry is a **separate** subsystem from violations — different
+package, different file. Do not conflate the two.
 
-**Ordering contract.**
+| | Violations | Stats |
+|---|---|---|
+| SQLite file | `.doey/doey.db` (`events` table) | `.doey/stats.db` |
+| Go package | `tui/internal/store` | `tui/internal/statsdb` |
+| Schema | `events` row with `class = 'violation_*'` | category/type rows; categories `session`, `task`, `worker`, `skill` |
+| Reader | Violations sub-view | Stats sub-view / `doey-ctl stats` |
 
-- Whichever task merges first lands the #525 migration columns (they are
-  additive and idempotent).
-- The second task rebases onto the first and finds the columns already
-  present — `ADD COLUMN` errors are silently absorbed.
-- Neither task drops or renames anything.
+**Source of truth.** `tui/cmd/doey-ctl/stats.go` resolves the stats path
+to `<projectDir>/.doey/stats.db` (`statsDBPath`) and opens it via
+`statsdb.Open(...)` — a distinct handle from the `events`/`doey.db` store.
 
-**Read-path contract.**
+**Read-path independence.**
 
-- Stats reads `WHERE class LIKE 'stat_%'`; Violations reads
-  `WHERE class = 'violation_polling'` (and future `violation_*` classes).
-- The two read paths are orthogonal — neither can starve the other.
-- Both ride the existing 2-second `SnapshotMsg` tick. No new tickers.
+- Violations reads `WHERE class = 'violation_polling'` (and future
+  `violation_*` classes) from `events` in `doey.db`.
+- Stats reads from `stats.db` via the `statsdb` package, keyed on its own
+  category/type columns — it does **not** touch the `events` table.
+- The two are physically separate files, so neither can lock out the other.
 
-**Flag-namespace contract.**
-
-- Stats uses `--type`, `--source`, `--data`, `--task-id` (legacy columns).
-- Violations uses `--class`, `--severity`, `--session`, `--role`,
-  `--window-id`, `--wake-reason`, `--unread-msg-ids`, `--extra-json`,
-  `--consecutive`, `--window-sec` (new columns).
-- No collision.
-
-**Invariant.** `.doey/doey.db` is the **single** sqlite file. There is no
-`.doey/stats.db` — earlier drafts of both briefs used that name; it was
-a misnomer. Creating a second file would split locks and break the
-dashboard's single-reader design.
+**Migration discipline.** The #525 violation columns are additive,
+idempotent `ADD COLUMN`s on the `events` table only. They do not affect
+`stats.db`, which carries its own schema and migrations in `statsdb`.

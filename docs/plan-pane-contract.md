@@ -4,7 +4,7 @@ This document is the canonical, machine-checkable specification of the
 file tree the `doey-masterplan-tui` Plan pane reads and the rules every
 producer (shell consensus loop, reviewer agents, planner, worker
 hooks) must obey when writing into that tree. Both the live runtime
-(`/tmp/doey/<project>/masterplan-*/`) and the six fixture scenarios in
+(`/tmp/doey/<project>/masterplan-*/`) and the seven fixture scenarios in
 `tui/internal/planview/testdata/fixtures/` are valid instantiations of
 this contract.
 
@@ -257,7 +257,7 @@ invocation:
 1. **Fixture sweep (always)** — every scenario under `--fixtures-dir`
    is loaded and shape-checked. Currently expected scenarios:
    `draft`, `under_review`, `revisions_needed`, `consensus`,
-   `escalated`, `stalled_reviewer`. A missing scenario or a failing
+   `escalated`, `stalled_reviewer`, `reviewers`. A missing scenario or a failing
    shape check fails the whole run.
 
 2. **Live sweep (skip when no runtime)** — every `masterplan-*` dir
@@ -345,7 +345,7 @@ and SHOULD fail loudly.
 ## 6. Fixture maintenance policy
 
 Fixtures are part of the contract. **Every contract change MUST run
-the six-fixture sweep through the validator** before merging. Updating
+the seven-fixture sweep through the validator** before merging. Updating
 one scenario without the others is contract drift and the validator
 will reject it.
 

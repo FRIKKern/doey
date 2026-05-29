@@ -3,12 +3,12 @@ name: doey-respawn-me
 description: Request a respawn of the current worker pane. Use when you need to "respawn me", "restart myself", "fresh context", or "reset my pane". Writes an atomic respawn request that kills the current Claude process and relaunches with a fresh context.
 ---
 
-- Env: !`echo "ROLE=${DOEY_ROLE:-unset} PANE=${DOEY_PANE_INDEX:-unset} WINDOW=${DOEY_WINDOW_INDEX:-unset} SESSION=${DOEY_SESSION_NAME:-unset} RUNTIME=${DOEY_RUNTIME:-unset}"`
+- Env: !`echo "ROLE=${DOEY_ROLE:-unset} PANE=${DOEY_PANE_INDEX:-unset} WINDOW=${DOEY_WINDOW_INDEX:-unset} SESSION=${SESSION_NAME:-unset} RUNTIME=${DOEY_RUNTIME:-unset}"`
 
 ### Build safe pane ID and runtime paths
 
 ```bash
-SESSION_NAME="${DOEY_SESSION_NAME:?missing DOEY_SESSION_NAME}"
+SESSION_NAME="${SESSION_NAME:-$(tmux display-message -p '#{session_name}')}"
 WINDOW_INDEX="${DOEY_WINDOW_INDEX:?missing DOEY_WINDOW_INDEX}"
 PANE_INDEX="${DOEY_PANE_INDEX:?missing DOEY_PANE_INDEX}"
 RUNTIME_DIR="${DOEY_RUNTIME:?missing DOEY_RUNTIME}"

@@ -23,9 +23,9 @@ don't bind, nothing about Doey changes.
 2. Create a channel — e.g. `#doey-alerts`.
 3. Channel settings → **Integrations** → **Webhooks** → **New Webhook** → **Copy
    Webhook URL**.
-4. `doey discord bind --kind webhook` → paste URL when prompted. *(Phase 3 —
-   coming soon: today, hand-edit `~/.config/doey/discord.conf`; see "Manual
-   bind" below.)*
+4. `doey discord bind --kind webhook` → paste URL when prompted. *(The bind
+   command is shipped; you can also hand-edit `~/.config/doey/discord.conf` —
+   see "Manual bind" below.)*
 5. `doey discord send-test` to verify.
 
 ### Why "personal server"?
@@ -39,9 +39,9 @@ it secret. If the URL leaks, rotate it from the channel's Integrations →
 Webhooks page; Doey will detect the rotation via `cred_hash` and invalidate its
 rate-limit bucket automatically.
 
-## Manual bind (Phase 1)
+## Manual bind
 
-Until the bind wizard lands in Phase 3, write `~/.config/doey/discord.conf` by
+As an alternative to `doey discord bind`, write `~/.config/doey/discord.conf` by
 hand. Doey refuses to read it unless it is mode `0600`:
 
 ```sh
@@ -137,10 +137,11 @@ credential maintain independent rate-limit state — see "Limits" below).
 
 ## Hook integration
 
-Doey's notification hooks forward Boss-class events to Discord through a
-single shell helper. No hook calls `doey-tui discord send` directly —
-they go through `send_notification`, which applies the role + cooldown
-gates before forwarding.
+Doey's notification hooks forward Boss-class events to Discord. Most go
+through `send_notification`, which applies the role + cooldown gates before
+forwarding. One exception: `on-notification.sh:48` calls
+`doey-tui discord send --if-bound --event boss_question` directly for the
+Boss-needs-input event.
 
 - `send_notification(title, body, event_kind)` in `.claude/hooks/common.sh`
   forwards Boss events to Discord when

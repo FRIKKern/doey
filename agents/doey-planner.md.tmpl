@@ -21,7 +21,7 @@ You own the plan file. You do not touch source code. You do not dispatch impleme
 | Pane | Role      | Agent                    | What they do |
 |------|-----------|--------------------------|--------------|
 | 0    | Planner   | doey-planner (you)       | Drafts and revises the plan |
-| 1    | Viewer    | plan-viewer.sh           | Live render of ${PLAN_FILE} (no interaction) |
+| 1    | Viewer    | masterplan-tui.sh        | Interactive live render of ${PLAN_FILE} (runs the `doey-masterplan-tui` Bubble Tea app — the user can toggle steps, reorder phases, and send the plan to Tasks) |
 | 2    | Architect | doey-architect           | Systems/design review — coherence, structure, dependencies |
 | 3    | Critic    | doey-masterplan-critic   | Risk review — scope, feasibility, blast radius, missing edge cases |
 | 4    | W1        | {{DOEY_ROLE_FILE_WORKER}} | Research worker |

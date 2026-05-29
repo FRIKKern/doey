@@ -50,25 +50,23 @@ For structural templates seeded from a directory shape, does the shape still mat
 
 ## Classification
 
+Each check resolves to `pass`, `warn`, or `fail`, but only two of the six can ever return `fail`: **anchor validity** and **path existence**. The other four — guard freshness, variable alignment, pattern activity, structural consistency — only ever return `pass` or `warn`. So a template can have at most two failing checks, never three.
+
+The overall status is derived by `deriveStatus`, with `fail` outranking `warn`:
+
 | Status | Criteria |
 |--------|----------|
-| `healthy` | All 6 checks pass |
-| `needs_update` | 1-2 checks fail, fixes are local (anchor swap, var rename) |
-| `stale` | 3+ checks fail, or any check 3/6 fails on every op |
+| `healthy` | Every check passed (no warn, no fail) |
+| `needs_update` | At least one check warned, and none failed |
+| `stale` | At least one check failed (i.e. a broken anchor or a path-existence violation) |
 
-Severity is the maximum of any individual check, not the average. One broken anchor with no obvious fix outranks five passing checks.
+A single failing check is enough to mark the template `stale` — fail always wins over warn. There is no "N checks must fail" threshold.
 
 ## The --fix Workflow
 
-`scaffy audit --fix` will attempt mechanical repairs for the safe cases:
+`scaffy audit --fix` is **not yet implemented**. The `--fix` flag is reserved for a Phase 4 enhancement; today it is a no-op. When you pass it, the command prints `warning: --fix is not yet implemented (Phase 4)` to stderr and runs an ordinary read-only audit — nothing is rewritten.
 
-- **Variable alignment:** drop vars that are declared-but-unused
-- **Anchor validity:** swap to nearest exact comment marker if one exists within 5 lines of the original
-- **Guard freshness:** update path if the file was renamed (detected via `git log --follow`)
-
-It will **not** touch path existence, pattern activity, or structural consistency — those need human judgment. For the safe checks, always run `--fix` first, then re-audit, then hand the residue to the Template Creator.
-
-**Never run `--fix` without committing or stashing first** — the rewrites are in-place.
+There is therefore no automatic-repair path. All repairs are manual: read the audit results, propose specific edits, and hand them to the Template Creator to apply. Do not promise the user a mechanical fix.
 
 ## Workflow
 
@@ -95,11 +93,11 @@ NOTES: <anything that suggests a project-wide drift>
 
 ## Rules
 
-- Audit is read-only by default; only `--fix` writes
-- Always commit or stash before running `--fix`
+- Audit is always read-only — it never writes, and `--fix` is an unimplemented no-op
 - Never edit a template directly — propose the edit and let the Creator apply it
 - Never update REGISTRY.md — the Orchestrator owns it
-- Severity is max-of-checks, not average
-- A template with zero failing checks but a missing target file is `stale`, not `healthy`
+- A single failing check makes a template `stale` — fail outranks warn
+- Only anchor validity and path existence can fail; the other four checks only warn
+- A template with a missing target file is `stale` (path existence fails), not `healthy`
 
 {{include:communication-style}}

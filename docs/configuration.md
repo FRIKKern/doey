@@ -8,7 +8,7 @@ Doey uses `DOEY_*` environment variables for all configuration. Variables follow
 
 Settings are resolved in this order (last wins):
 
-1. **Hardcoded defaults** — `_doey_load_config()` in `shell/doey.sh`, using `${VAR:-default}` pattern
+1. **Hardcoded defaults** — `_doey_load_config()` in `shell/doey-helpers.sh` (called from `shell/doey.sh`), using `${VAR:-default}` pattern
 2. **Global config** — `~/.config/doey/config.sh` (sourced first by `_doey_load_config()`)
 3. **Project config** — `.doey/config.sh` (found by walking up from `pwd`; sourced second, overrides global)
 4. **Startup wizard** — `doey-tui setup` outputs JSON that sets `DOEY_TEAM_COUNT` + per-team vars, overriding the legacy team variables
@@ -24,14 +24,14 @@ Config is loaded twice: once at script start in `_doey_load_config()` and again 
 
 | Variable | Default | Type | Description |
 |---|---|---|---|
-| `DOEY_INITIAL_WORKER_COLS` | `3` | integer | Worker columns per team (each column = 2 workers) |
+| `DOEY_INITIAL_WORKER_COLS` | `1` | integer | Worker columns per team (each column = 2 workers) |
 | `DOEY_INITIAL_TEAMS` | `0` | integer | Number of managed teams to create at startup |
 | `DOEY_INITIAL_WORKTREE_TEAMS` | `0` | integer | (Opt-in) Teams launched in isolated git worktrees. Ignored unless `DOEY_WORKTREE_OPT_IN=1` is also set; default flow stays on the session's starting branch and never auto-creates branches. |
 | `DOEY_WORKTREE_OPT_IN` | `0` | boolean | Master switch for worktree/branch automation. Worktrees are never created by default — set this to `1` to allow `DOEY_INITIAL_WORKTREE_TEAMS` and `DOEY_TEAM_<N>_TYPE=worktree` to take effect. |
 | `DOEY_INITIAL_FREELANCER_TEAMS` | `0` | integer | Managerless freelancer pools to create |
 | `DOEY_MAX_WORKERS` | `20` | integer | Hard cap on total worker panes across all teams |
 
-Initial workers per team = `DOEY_INITIAL_WORKER_COLS * 2`. With the default of 3, each team starts with 6 workers.
+Initial workers per team = `DOEY_INITIAL_WORKER_COLS * 2`. With the default of 1, each team starts with 2 workers.
 
 ### Timing
 
@@ -39,10 +39,10 @@ Defaults are conservative to avoid Claude API rate-limit errors on session start
 
 | Variable | Default | Type | Description |
 |---|---|---|---|
-| `DOEY_WORKER_LAUNCH_DELAY` | `1` | seconds | Delay between launching individual workers |
-| `DOEY_TEAM_LAUNCH_DELAY` | `2` | seconds | Delay between launching teams |
+| `DOEY_WORKER_LAUNCH_DELAY` | `0.5` | seconds | Delay between launching individual workers |
+| `DOEY_TEAM_LAUNCH_DELAY` | `1` | seconds | Delay between launching teams |
 | `DOEY_MANAGER_LAUNCH_DELAY` | `1` | seconds | Delay before launching a team's Subtaskmaster |
-| `DOEY_MANAGER_BRIEF_DELAY` | `2` | seconds | Delay before sending the Subtaskmaster its initial brief |
+| `DOEY_MANAGER_BRIEF_DELAY` | `0.5` | seconds | Delay before sending the Subtaskmaster its initial brief |
 
 ### Models
 
@@ -64,7 +64,7 @@ Defaults are conservative to avoid Claude API rate-limit errors on session start
 | Variable | Default | Type | Description |
 |---|---|---|---|
 | `DOEY_INFO_PANEL_REFRESH` | `300` | seconds | Info panel auto-refresh interval |
-| `DOEY_PASTE_SETTLE_MS` | `500` | ms | Settle time after tmux paste operations |
+| `DOEY_PASTE_SETTLE_MS` | `800` | ms | Settle time after tmux paste operations |
 
 ### Remote Access
 

@@ -13,14 +13,14 @@ same commit so this stays the source of truth.
 ## 1. `doey` command
 
 Entry point: `shell/doey.sh` (installed to `~/.local/bin/doey`). The dispatch
-table is at `shell/doey.sh:160-669`.
+table is at `shell/doey.sh`.
 
 A first dispatch case forwards a fixed set of subcommands directly to
-`doey-ctl` when the binary is on `PATH` (`shell/doey.sh:160-169`):
+`doey-ctl` when the binary is on `PATH` (`shell/doey.sh`):
 
 ```
 msg | status | health | task | tmux | team | agent | event | error |
-nudge | migrate | interaction | briefing
+nudge | migrate | interaction | briefing | lifecycle
 ```
 
 These are documented under `doey-ctl` (section 2). The rest of this section
@@ -30,63 +30,64 @@ covers the subcommands handled directly inside `shell/doey.sh`.
 
 | Subcommand | Source | Description | Example |
 |---|---|---|---|
-| `doey` (bare) | `shell/doey.sh:671-689` | Smart launch — attach existing session, otherwise launch with default grid, otherwise show project picker. | `doey` |
-| `doey new <name>` | `shell/doey.sh:306-312` (`shell/doey-new.sh`) | Create `~/projects/<name>`, init git, register, launch. | `doey new my-app` |
-| `doey init` | `shell/doey.sh:298-305` | Register the current directory as a project and launch it. | `doey init` |
-| `doey list` | `shell/doey.sh:245` | Show all registered projects and their status. | `doey list` |
-| `doey open <query>` / `doey switch <query>` | `shell/doey.sh:635-660` | Fuzzy-find a registered project by name and attach (or launch). | `doey open my-app` |
-| `doey stop` | `shell/doey.sh:319-323` | Stop the session for the current project. | `doey stop` |
-| `doey reload [--workers]` | `shell/doey.sh:324` | Hot-reload the running session. `--workers` also restarts worker panes. | `doey reload --workers` |
-| `doey purge [...]` | `shell/doey.sh:313-318` (`shell/doey-purge.sh`) | Audit and clean stale runtime files / context bloat. | `doey purge` |
-| `doey doctor` | `shell/doey.sh:246-251` (`shell/doey-doctor.sh`) | Check installation health and prerequisites. | `doey doctor` |
-| `doey version` / `--version` / `-v` | `shell/doey.sh:252` | Show install version. | `doey version` |
-| `doey update` / `doey reinstall` | `shell/doey.sh:259-266` (`shell/doey-update.sh`) | Pull latest changes and reinstall. | `doey update` |
-| `doey uninstall` | `shell/doey.sh:253-257` | Remove all Doey files (keeps git repo and agent memory). | `doey uninstall` |
-| `doey remove [<name>\|<col-num>]` | `shell/doey.sh:396-416` | Remove a worker column (number, dynamic grid only) or unregister a project (name). | `doey remove 2` / `doey remove my-app` |
+| `doey` (bare) | `shell/doey.sh` | Smart launch — attach existing session, otherwise launch with default grid, otherwise show project picker. | `doey` |
+| `doey new <name>` | `shell/doey.sh` (`shell/doey-new.sh`) | Create `~/projects/<name>`, init git, register, launch. | `doey new my-app` |
+| `doey init` | `shell/doey.sh` | Register the current directory as a project and launch it. | `doey init` |
+| `doey list` | `shell/doey.sh` | Show all registered projects and their status. | `doey list` |
+| `doey open <query>` / `doey switch <query>` | `shell/doey.sh` | Fuzzy-find a registered project by name and attach (or launch). | `doey open my-app` |
+| `doey stop` | `shell/doey.sh` | Stop the session for the current project. | `doey stop` |
+| `doey reload [--workers]` | `shell/doey.sh` | Hot-reload the running session. `--workers` also restarts worker panes. | `doey reload --workers` |
+| `doey purge [...]` | `shell/doey.sh` (`shell/doey-purge.sh`) | Audit and clean stale runtime files / context bloat. | `doey purge` |
+| `doey doctor` | `shell/doey.sh` (`shell/doey-doctor.sh`) | Check installation health and prerequisites. | `doey doctor` |
+| `doey version` / `--version` / `-v` | `shell/doey.sh` | Show install version. | `doey version` |
+| `doey update` / `doey reinstall` | `shell/doey.sh` (`shell/doey-update.sh`) | Pull latest changes and reinstall. | `doey update` |
+| `doey uninstall` | `shell/doey.sh` | Remove all Doey files (keeps git repo and agent memory). | `doey uninstall` |
+| `doey remove [<name>\|<col-num>]` | `shell/doey.sh` | Remove a worker column (number, dynamic grid only) or unregister a project (name). | `doey remove 2` / `doey remove my-app` |
 
 ### 1.2 Grid and worker management
 
 | Subcommand | Source | Description | Example |
 |---|---|---|---|
-| `doey NxM` | `shell/doey.sh:629-633` | Launch with an explicit grid (e.g. `4x3`, `6x2`, `3x2`). | `doey 4x3` |
-| `doey dynamic` / `doey d` | `shell/doey.sh:376-390` | Launch with the dynamic grid (start minimal, grow on demand). | `doey dynamic` |
-| `doey add` | `shell/doey.sh:391-395` | Add a worker column (2 workers) to a dynamic-grid session. | `doey add` |
-| `doey add-team <name>` | `shell/doey.sh:417-428` | Add a team window from a `*.team.md` definition. | `doey add-team rd` |
-| `doey add-window [...]` | `shell/doey.sh:503-541` | Add a team window directly. Flags: `--worktree`, `--type <type>`, `--grid NxM`, `--reserved`, `--workers N`, `--name <name>`, `--task-id <id>`. | `doey add-window --type freelancer --workers 4` |
-| `doey kill-window <idx>` / `doey kill-team <idx>` | `shell/doey.sh:542-547` | Kill a team window by window index. | `doey kill-team 2` |
-| `doey list-windows` / `doey list-teams` | `shell/doey.sh:548-552` | Show all team windows and their status. | `doey list-teams` |
-| `doey teams` | `shell/doey.sh:553-576` | List available premade and project team definitions (`*.team.md`). | `doey teams` |
+| `doey NxM` | `shell/doey.sh` | Launch with an explicit grid (e.g. `4x3`, `6x2`, `3x2`). | `doey 4x3` |
+| `doey dynamic` / `doey d` | `shell/doey.sh` | Launch with the dynamic grid (start minimal, grow on demand). | `doey dynamic` |
+| `doey add` | `shell/doey.sh` | Add a worker column (2 workers) to a dynamic-grid session. | `doey add` |
+| `doey add-team <name>` | `shell/doey.sh` | Add a team window from a `*.team.md` definition. | `doey add-team rd` |
+| `doey add-window [...]` | `shell/doey.sh` | Add a team window directly. Flags: `--worktree`, `--type <type>`, `--grid NxM`, `--reserved`, `--workers N`, `--name <name>`, `--task-id <id>`. | `doey add-window --type freelancer --workers 4` |
+| `doey kill-window <idx>` / `doey kill-team <idx>` | `shell/doey.sh` | Kill a team window by window index. | `doey kill-team 2` |
+| `doey list-windows` / `doey list-teams` | `shell/doey.sh` | Show all team windows and their status. | `doey list-teams` |
+| `doey teams` | `shell/doey.sh` | List available premade and project team definitions (`*.team.md`). | `doey teams` |
 
 ### 1.3 Planning, deployment, and remote
 
 | Subcommand | Source | Description | Example |
 |---|---|---|---|
-| `doey masterplan "<goal>"` / `doey plan "<goal>"` | `shell/doey.sh:429-502` | Spawn a masterplan team (interview + planner + critics) for a goal. Creates a task, writes `<runtime>/<plan_id>/plan.md`, and dispatches the `masterplan` team definition. | `doey plan "rewrite onboarding"` |
-| `doey plan list\|get\|create\|update\|delete` | `shell/doey.sh:432-441` | Routed to `doey-ctl plan` (see section 2). | `doey plan list` |
-| `doey plan to-tasks <plan_file>` | `shell/doey.sh:442-460` | Convert a CONSENSUS masterplan markdown file into tasks + subtasks via `plan-to-tasks.sh`. | `doey plan to-tasks /tmp/doey/myproj/masterplan-*.md` |
-| `doey deploy [start\|gate\|...]` | `shell/doey.sh:364-375` | Deployment validation pipeline. Requires a running session. | `doey deploy start` |
-| `doey remote [list\|<name>\|stop <name>\|status <name>\|provision ...]` | `shell/doey.sh:280-287` (`shell/doey-remote.sh`) | Manage remote Hetzner servers. | `doey remote my-app` |
-| `doey tunnel <up\|down\|status\|detect>` | `shell/doey.sh:577-628` | Manage the SSH tunnel for the running session. | `doey tunnel up` |
+| `doey masterplan "<goal>"` / `doey plan "<goal>"` | `shell/doey.sh` | Spawn a masterplan team (interview + planner + critics) for a goal. Creates a task, writes `<runtime>/<plan_id>/plan.md`, and dispatches the `masterplan` team definition. | `doey plan "rewrite onboarding"` |
+| `doey plan list\|get\|create\|update\|delete` | `shell/doey.sh` | Routed to `doey-ctl plan` (see section 2). | `doey plan list` |
+| `doey plan to-tasks <plan_file>` | `shell/doey.sh` | Convert a CONSENSUS masterplan markdown file into tasks + subtasks via `plan-to-tasks.sh`. | `doey plan to-tasks /tmp/doey/myproj/masterplan-*.md` |
+| `doey deploy [start\|gate\|...]` | `shell/doey.sh` | Deployment validation pipeline. Requires a running session. | `doey deploy start` |
+| `doey remote [list\|<name>\|stop <name>\|status <name>\|provision ...]` | `shell/doey.sh` (`shell/doey-remote.sh`) | Manage remote Hetzner servers. | `doey remote my-app` |
+| `doey tunnel <up\|down\|status\|detect>` | `shell/doey.sh` | Manage the SSH tunnel for the running session. | `doey tunnel up` |
+| `doey discord <status\|bind\|unbind\|send\|send-test\|failures\|reset-breaker\|doctor-network>` | `shell/doey.sh` (dispatches `doey_discord` in `shell/doey-discord.sh`) | Manage Discord notification forwarding (bind a channel, send/test, inspect failures, reset the circuit breaker). Subcommands forward to `doey-tui discord`. See `docs/discord.md`. | `doey discord bind --kind webhook` |
 
 ### 1.4 Configuration and tooling
 
 | Subcommand | Source | Description | Example |
 |---|---|---|---|
-| `doey config` (bare) | `shell/doey.sh:332-362` | Open the local config editor (project if `.doey/` exists, else global). |
+| `doey config` (bare) | `shell/doey.sh` | Open the local config editor (project if `.doey/` exists, else global). |
 | `doey config show` | same | Show the resolved config with source attribution. |
 | `doey config --global` / `--reset` | same | Edit global config / reset config to defaults. |
 | `doey config get\|set\|list\|delete` | same | Routed to `doey-ctl config` (DB-backed key/value config). | `doey config set foo=bar` |
-| `doey settings` | `shell/doey.sh:331` | Open the interactive settings editor window. |
-| `doey scaffy <args...>` | `shell/doey.sh:288-296` | Forward to `doey-scaffy` (template engine). |
-| `doey build` | `shell/doey.sh:267-279` | Build the in-tree Go binaries via `_build_all_go_binaries`. |
-| `doey test [...]` | `shell/doey.sh:325-330` (`shell/doey-test-runner.sh`) | Run the E2E integration test. Flags: `--keep`, `--open`, `--grid NxM`. | `doey test --grid 4x3 --keep` |
+| `doey settings` | `shell/doey.sh` | Open the interactive settings editor window. |
+| `doey scaffy <args...>` | `shell/doey.sh` | Forward to `doey-scaffy` (template engine). |
+| `doey build` | `shell/doey.sh` | Build the in-tree Go binaries via `_build_all_go_binaries`. |
+| `doey test [...]` | `shell/doey.sh` (`shell/doey-test-runner.sh`) | Run the E2E integration test. Flags: `--keep`, `--open`, `--grid NxM`. | `doey test --grid 4x3 --keep` |
 | `doey test dispatch` | same | Test the dispatch chain reliability against a running session. |
-| `doey help` / `--help` / `-h` | `shell/doey.sh:171-243` | Print the help block. |
-| `doey --post-update <arg>` | `shell/doey.sh:258` | Internal: post-install hook used by the updater. |
+| `doey help` / `--help` / `-h` | `shell/doey.sh` | Print the help block. |
+| `doey --post-update <arg>` | `shell/doey.sh` | Internal: post-install hook used by the updater. |
 
 Anything that does not match the dispatch table above falls through to the
 intent-fallback layer (`shell/doey-intent-dispatch.sh`, called from
-`shell/doey.sh:661-668`). See `docs/intent-fallback.md`.
+`shell/doey.sh`). See `docs/intent-fallback.md`.
 
 ---
 
@@ -259,7 +260,7 @@ other Doey scripts. Loaded via `shell/doey.sh` and `shell/doey-*.sh` chains.
 | `write_pane_status <file> <status> <task>` | `.claude/hooks/common.sh:391` | Atomic pane status write (used as fallback when `doey-ctl status set` is unavailable). |
 | `transition_state <from> <to>` | `.claude/hooks/common.sh:408` | Validate + execute a pane status transition against the state machine. |
 | `notify_taskmaster <event>` | `.claude/hooks/common.sh:487` | Lifecycle event → Taskmaster wake trigger. (Note: as of `common.sh:498` the explicit Taskmaster wake trigger is removed; `stop-notify.sh` is the sole wake source.) |
-| `send_notification <key> <title> <body>` | `.claude/hooks/common.sh:517` | Cooldown-gated desktop notification. |
+| `send_notification <title> <body> [event_kind=generic]` | `.claude/hooks/common.sh` | Boss-gated, 60s-cooldown desktop notification. `event_kind` is an optional 3rd positional tag forwarded to Discord (default `generic`). |
 | `doey_log_error <category> <message>` | `.claude/hooks/common.sh:211` | Append a structured error to `<runtime>/errors/errors.log`. |
 | `atomic_write <file> <content>` | `.claude/hooks/common.sh:389` | `tmp+mv` atomic file write. |
 

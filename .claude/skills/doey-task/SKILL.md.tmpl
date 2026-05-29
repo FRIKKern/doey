@@ -7,7 +7,7 @@ description: Manage persistent project tasks — list, add, transition, show, su
 
 Persistent task management via `doey`.
 
-### Schema v3
+### Schema v4
 
 ```
 TASK_ID=<int>  TASK_TITLE=<text>  TASK_TYPE=<bug|feature|bugfix|refactor|research|audit|docs|infrastructure>
@@ -48,7 +48,7 @@ doey task update --id "$TASK_ID" --field "TASK_DESCRIPTION" --value "New value"
 
 # Subtasks
 doey task subtask add --task-id "$TASK_ID" --description "Title"
-doey task subtask update --task-id "$TASK_ID" --subtask-id "1" --status "done"  # pending|in_progress|done|skipped
+doey task subtask update --task-id "$TASK_ID" --subtask-id "1" --status "done"  # pending|in_progress|done|skipped|failed
 doey task subtask list --task-id "$TASK_ID"
 
 # Decision log / Notes / Related files
@@ -128,4 +128,4 @@ When listing tasks (`doey task list --json`), the output includes dependency and
 - **Ready indicator:** tasks with no blockers AND phase is approved/executing/unset are ready to dispatch
 
 ### Encoding
-Multiline: `\n` literal. Files: pipe-delimited. Tags: comma-separated. Subtask: `idx:title:status`. Decisions: `epoch:text`. Dependencies: comma-separated task IDs. TodoList: `id:status:text` (`\n`-delimited, status=`pending`|`in_progress`|`done`).
+Multiline: `\n` literal. Files: pipe-delimited. Tags: comma-separated. Subtask: `idx:title:status` (status=`pending`|`in_progress`|`done`|`skipped`|`failed`). Decisions: `epoch:text`. Dependencies: comma-separated task IDs. TodoList: `id:status:text` (`\n`-delimited, status=`pending`|`in_progress`|`done`).

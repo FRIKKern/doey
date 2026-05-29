@@ -15,11 +15,11 @@ doey-scaffy new <name> [flags]
 
 ### Flags
 
-- `--from-files FILE...` — seed the template with CREATE blocks for each file (variables auto-extracted from filenames)
+- `--from-files FILE...` — seed the template with CREATE blocks for each file (variables inferred from repeated identifiers in the files' contents)
 - `--domain <name>` — set the template's DOMAIN field (e.g. `web`, `cli`, `infra`)
-- `--interactive` — walk a guided prompt for variables, anchors, and operations
+- `--interactive` — walk a guided prompt for description, domain, and tags
 - `--force` — overwrite an existing template with the same name
-- `--cwd <dir>` — working directory
+- `--output <path>` — destination `.scaffy` path (default: `.doey/scaffy/templates/<name>.scaffy`)
 
 ### Examples
 

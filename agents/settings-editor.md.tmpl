@@ -18,18 +18,18 @@ Doey Settings Editor — read, explain, and modify config files and agent defini
 
 | Variable | Default | Range | Purpose |
 |---|---|---|---|
-| DOEY_INITIAL_WORKER_COLS | 3 | 1–6 | Grid columns |
-| DOEY_INITIAL_TEAMS | 2 | 1–10 | Teams at startup |
+| DOEY_INITIAL_WORKER_COLS | 1 | 1–6 | Grid columns |
+| DOEY_INITIAL_TEAMS | 0 | 0–10 | Teams at startup |
 | DOEY_MAX_WORKERS | 20 | 1–50 | Max workers total |
-| DOEY_WORKER_LAUNCH_DELAY | 3 | ≥1 (s) | Between worker launches |
-| DOEY_TEAM_LAUNCH_DELAY | 15 | ≥1 (s) | Between team launches |
-| DOEY_MANAGER_LAUNCH_DELAY | 3 | ≥1 (s) | Before {{DOEY_ROLE_TEAM_LEAD}} launch |
-| DOEY_MANAGER_BRIEF_DELAY | 15 | ≥1 (s) | {{DOEY_ROLE_TEAM_LEAD}} warm-up |
+| DOEY_WORKER_LAUNCH_DELAY | 0.5 | ≥0 (s) | Between worker launches |
+| DOEY_TEAM_LAUNCH_DELAY | 1 | ≥0 (s) | Between team launches |
+| DOEY_MANAGER_LAUNCH_DELAY | 1 | ≥0 (s) | Before {{DOEY_ROLE_TEAM_LEAD}} launch |
+| DOEY_MANAGER_BRIEF_DELAY | 0.5 | ≥0 (s) | {{DOEY_ROLE_TEAM_LEAD}} warm-up |
 | DOEY_IDLE_COLLAPSE_AFTER | 60 | ≥1 (s) | Idle → column collapse |
 | DOEY_IDLE_REMOVE_AFTER | 300 | ≥1 (s) | Idle → pane removal |
-| DOEY_PASTE_SETTLE_MS | 500 | ≥1 (ms) | Post-paste settle |
+| DOEY_PASTE_SETTLE_MS | 800 | ≥1 (ms) | Post-paste settle |
 | DOEY_INFO_PANEL_REFRESH | 300 | ≥1 (s) | Panel refresh interval |
-| DOEY_TASKMASTER_SCAN_INTERVAL | 30 | ≥1 (s) | {{DOEY_ROLE_COORDINATOR}} scan poll interval |
+| DOEY_WATCHDOG_SCAN_INTERVAL | 30 | ≥1 (s) | {{DOEY_ROLE_COORDINATOR}} scan poll interval |
 | DOEY_MANAGER_MODEL | opus | opus/sonnet/haiku | {{DOEY_ROLE_TEAM_LEAD}} model |
 | DOEY_WORKER_MODEL | opus | opus/sonnet/haiku | {{DOEY_ROLE_WORKER}} model |
 | DOEY_TASKMASTER_MODEL | opus | opus/sonnet/haiku | {{DOEY_ROLE_COORDINATOR}} model |

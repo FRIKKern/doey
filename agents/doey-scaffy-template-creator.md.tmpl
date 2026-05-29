@@ -33,56 +33,66 @@ Always write under `.doey/scaffy/templates/<name>.scaffy`. Never under `~/.confi
 
 ## The 24-Keyword DSL (summary)
 
-**Header:** `TEMPLATE`, `DOMAIN`, `DESCRIPTION`, `VERSION`, `VAR`, `REQUIRES`
+**Header:** `TEMPLATE`, `DESCRIPTION`, `VERSION`, `AUTHOR`, `DOMAIN`, `CONCEPT`, `TAGS` (all quoted-string values; `TAGS` is a comma-separated list)
 
-**Operations:** `CREATE`, `INSERT`, `REPLACE`, `DELETE`, `INCLUDE`, `FOREACH`
+**Variable block:** `VAR <index> "name"` plus the sub-block keywords `PROMPT`, `HINT`, `DEFAULT`, `EXAMPLES`, `TRANSFORM`
 
-**Anchors:** `BEFORE`, `AFTER`, `AT`, `SURROUND`
+**Operations & structure:** `CREATE` (+ `CONTENT`), `FILE`, `INSERT`, `REPLACE` (+ `WITH`), `INCLUDE`, `FOREACH` (+ `IN`, `END`)
 
-**Guards:** `IF_EXISTS`, `IF_MISSING`, `IF_ANCHOR`, `UNLESS`
+**Anchor positions:** `above`, `below`, `before`, `after` — with optional occurrence selector `first` / `last` / `all`
 
-**Control:** `END`, `WITH`, `AS`, `INTO`, `FROM`, `MATCH`, `SKIP`, `ERROR`
+**Guards & op metadata:** `UNLESS CONTAINS`, `WHEN CONTAINS`, `REASON`, `ID`
 
-Consult doey-scaffy-syntax-reference for exact spellings and block shapes when in doubt.
+There is **no** `DELETE` op, no `BEFORE`/`AFTER`/`AT`/`SURROUND` keyword, no `IF_EXISTS`/`IF_MISSING`/`IF_ANCHOR`, and no `INTO`/`FROM`/`AS`/`MATCH`/`SKIP`/`ERROR`. Consult doey-scaffy-syntax-reference for exact spellings and block shapes when in doubt.
 
 ## The 11 Transforms
 
-When you need to rename, reshape, or rewrite text as it flows through a template, use a transform:
+When you need to reshape a variable's case as it flows through a template, name a transform on the `VAR`'s `TRANSFORM` line. Names are matched case-insensitively. The 11 supported transforms are:
 
-| Transform | Purpose |
-|-----------|---------|
-| `upper` / `lower` | case coercion |
-| `title` / `pascal` | `TitleCase` / `PascalCase` |
-| `camel` / `snake` | `camelCase` / `snake_case` |
-| `kebab` | `kebab-case` |
-| `plural` / `singular` | English inflection |
-| `basename` | strip directory |
-| `ext` | file extension |
+| Transform | Input → Output |
+|-----------|---------------|
+| `PascalCase` | `foo_bar` → `FooBar` |
+| `camelCase` | `foo_bar` → `fooBar` |
+| `kebabCase` | `FooBar` → `foo-bar` |
+| `snakeCase` | `FooBar` → `foo_bar` |
+| `ScreamingSnakeCase` | `FooBar` → `FOO_BAR` |
+| `LowerCase` | `FOO` → `foo` |
+| `UpperCase` | `foo` → `FOO` |
+| `DotCase` | `FooBar` → `foo.bar` |
+| `CapitalizedCase` | `foo` → `Foo` |
+| `SlashCase` | `FooBar` → `foo/bar` |
+| `Raw` | `foo` → `foo` (no change — the default) |
 
-Chain with `|`: `{{name | snake | plural}}`.
+An unknown transform name returns the value unchanged. There is no inflection (no `plural`/`singular`) and no path manipulation (no `basename`/`ext`) — those do not exist.
 
 ## Anchors: When To Use Which
 
-- **BEFORE `<pattern>`** — insert a new line above the matched line. Use for prepending to a list whose first entry is load-bearing.
-- **AFTER `<pattern>`** — insert below. Canonical for appending to registries, routes, imports.
-- **AT `<pattern>`** — replace the anchor line. Use for swapping placeholders.
-- **SURROUND `<open> … <close>`** — inject between two matched lines. Use when a block is explicitly bracketed (`// <generated>` / `// </generated>`).
+`INSERT` takes a position, an optional occurrence selector, then a target: `INSERT <position> [<occurrence>] <"target"|/regex/>`.
 
-**Pattern safety:** anchors are literal substring matches by default. Pick a phrase that is unique in the file and unlikely to churn — comment markers beat code lines.
+- **`above <pattern>`** — insert above the matched line. Use for prepending to a list whose first entry is load-bearing.
+- **`below <pattern>`** — insert below. Canonical for appending to registries, routes, imports.
+- **`before <pattern>`** — insert immediately before the match.
+- **`after <pattern>`** — insert immediately after the match.
+
+To rewrite an existing line, use `REPLACE "pattern" WITH "text"` (or a `/regex/` pattern) rather than an anchor.
+
+**Occurrence selector** (optional; defaults to `first`): `first`, `last`, or `all` — placed between the position and the target, e.g. `INSERT after last "import ("`.
+
+**Pattern safety:** a `"quoted"` target is a literal substring match; a `/regex/` target is a regular expression. Pick a phrase that is unique in the file and unlikely to churn — comment markers beat code lines.
 
 ## Guards
 
-- `IF_EXISTS <path>` — only run if the file is present. Skip silently otherwise.
-- `IF_MISSING <path>` — only run if the file is absent. Canonical for `CREATE`.
-- `IF_ANCHOR <pattern> IN <path>` — only run if the anchor resolves. Prevents "anchor missing" hard errors on partially-scaffolded projects.
-- `UNLESS <expr>` — negation. Commonly `UNLESS VAR.skip_tests`.
+Guards attach to `INSERT` and `REPLACE` ops. Both test the target file's *current contents* — there are only two:
 
-Every `INSERT`/`REPLACE` should pair with an anchor guard so a rerun on an already-applied template is a no-op.
+- `UNLESS CONTAINS "pattern"` — skip the op if the target file already contains the pattern. The idempotency workhorse: guard every write with the marker it inserts.
+- `WHEN CONTAINS "pattern"` — run the op only if the target file already contains the pattern. Use for ops that should fire only when a prerequisite is already present.
+
+`CREATE` does not need a guard — it is already idempotent (skipped at run time if the path exists). Every `INSERT`/`REPLACE` should pair with an `UNLESS CONTAINS` guard so a rerun on an already-applied template is a no-op.
 
 ## INCLUDE vs FOREACH
 
-- **INCLUDE `<other.scaffy>`** — static composition. Use for shared headers (license, common vars) factored out of many templates. Resolves at parse time.
-- **FOREACH `<var> IN <list> { ... }`** — dynamic expansion. Use when the number of generated files depends on user input (e.g. "create one handler per resource").
+- **`INCLUDE "other"`** — expand another template's operations. Use for shared headers (license, common vars) factored out of many templates. Optional `key=value` variable overrides follow the name: `INCLUDE "base" pkg=handlers`.
+- **`FOREACH "var" IN "list"` … `END`** — repeat the body once per list element, binding the element to the loop var. Use when the number of generated files depends on user input (e.g. "create one handler per resource"). The block closes with `END`; its body accepts `CREATE`, `FILE`, `INCLUDE`, and nested `FOREACH`.
 
 If you are tempted to write INCLUDE inside a FOREACH, write the body inline instead — nesting is legal but almost always confusing.
 
